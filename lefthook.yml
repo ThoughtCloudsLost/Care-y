@@ -1,0 +1,12 @@
+# Git hooks managed by Lefthook
+# https://github.com/evilmartians/lefthook
+
+pre-commit:
+  commands:
+    gitleaks:
+      run: gitleaks protect --staged
+
+commit-msg:
+  commands:
+    commitlint:
+      run: npx --no -- commitlint --edit {1}

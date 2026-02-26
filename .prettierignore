@@ -1,0 +1,10 @@
+node_modules
+.svelte-kit
+dist
+coverage
+build
+pnpm-lock.yaml
+.git
+*.svg
+*.txt
+CODEOWNERS

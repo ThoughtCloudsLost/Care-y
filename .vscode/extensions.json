@@ -1,0 +1,17 @@
+{
+  "recommendations": [
+    "svelte.svelte-vscode",
+    "dbaeumer.vscode-eslint",
+    "esbenp.prettier-vscode",
+    "bradlc.vscode-tailwindcss",
+    "editorconfig.editorconfig",
+    "vitest.explorer"
+  ],
+  "unwantedRecommendations": [
+    "prisma.prisma",
+    "drizzle.drizzle-orm-vscode",
+    "hookyqr.beautify",
+    "lonefy.vscode-JS-CSS-HTML-formatter",
+    "ms-vscode.vscode-typescript-tslint-plugin"
+  ]
+}

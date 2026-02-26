@@ -1,0 +1,41 @@
+# Auto-detect text files and normalize line endings (LF in repo, native on checkout)
+* text=auto
+
+# Force LF for files that must be consistent across platforms
+*.ts text eol=lf
+*.js text eol=lf
+*.mjs text eol=lf
+*.cjs text eol=lf
+*.json text eol=lf
+*.svelte text eol=lf
+*.css text eol=lf
+*.html text eol=lf
+*.md text eol=lf
+*.yaml text eol=lf
+*.yml text eol=lf
+*.toml text eol=lf
+*.sql text eol=lf
+*.sh text eol=lf
+*.env* text eol=lf
+Dockerfile text eol=lf
+docker-compose*.yml text eol=lf
+
+# Lockfiles - treat as generated, always LF
+pnpm-lock.yaml text eol=lf -diff linguist-generated
+
+# Binaries - never normalize
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.webp binary
+*.woff binary
+*.woff2 binary
+*.ttf binary
+*.eot binary
+*.pdf binary
+*.wasm binary
+
+# Linguist overrides - keep GitHub stats and diffs clean
+# (reserved for future use)

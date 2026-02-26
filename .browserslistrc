@@ -1,0 +1,10 @@
+# Shared browser targets - consumed by Vite, Tailwind, Autoprefixer
+# Mobile-first: CARE-Y is primarily used on phones by volunteers
+# Baseline: last 2 major versions of evergreen browsers + iOS Safari
+last 2 Chrome versions
+last 2 Firefox versions
+last 2 Safari versions
+last 2 Edge versions
+last 2 ChromeAndroid versions
+last 2 iOS versions
+not dead
