@@ -86,3 +86,10 @@ updates:
     open-pull-requests-limit: 5
     reviewers:
       - ThoughtCloudsLost
+    groups:
+      github-actions:
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
