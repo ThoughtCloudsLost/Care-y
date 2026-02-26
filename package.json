@@ -15,7 +15,9 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
-    "clean": "tsc --build --clean"
+    "clean": "tsc --build --clean",
+    "migrate": "tsx --env-file=.env packages/server/src/db/migrate.ts up",
+    "migrate:down": "tsx --env-file=.env packages/server/src/db/migrate.ts down"
   },
   "pnpm": {
     "onlyBuiltDependencies": [

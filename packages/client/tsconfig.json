@@ -21,5 +21,9 @@
     "declarationMap": true,
     "outDir": "dist"
   },
-  "references": [{ "path": "../shared" }, { "path": "../crypto" }]
+  "references": [
+    { "path": "../shared" },
+    { "path": "../crypto" },
+    { "path": "../server" }
+  ]
 }

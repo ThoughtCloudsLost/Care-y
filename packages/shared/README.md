@@ -10,10 +10,10 @@ See the [root README](../../README.md) for full architecture, stack details, and
 
 ## Tech Stack
 
-| Layer      | Technology | Role                                                         |
-| ---------- | ---------- | ------------------------------------------------------------ |
-| Validation | Zod        | Runtime schema validation + TypeScript type inference        |
-| Language   | TypeScript (strict) | Shared type definitions, enums, branded types       |
+| Layer      | Technology          | Role                                                  |
+| ---------- | ------------------- | ----------------------------------------------------- |
+| Validation | Zod                 | Runtime schema validation + TypeScript type inference |
+| Language   | TypeScript (strict) | Shared type definitions, enums, branded types         |
 
 ---
 

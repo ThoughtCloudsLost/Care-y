@@ -1,33 +1,40 @@
+import { dev } from "$app/environment";
 import type { Handle } from "@sveltejs/kit";
 
 export const handle: Handle = async ({ event, resolve }) => {
   const response = await resolve(event);
 
-  // Content-Security-Policy
+  // --- Content-Security-Policy ---
   // - wasm-unsafe-eval: required by libsodium-wrappers browser WASM build (cannot be avoided)
   // - unsafe-inline in style-src: required by Tailwind CSS / Konsta UI (inline styles at runtime)
+  // - worker-src: explicit allowlist for PWA service worker (falls back to script-src if omitted,
+  //   but wasm-unsafe-eval in script-src should not propagate to workers)
   // - All other directives locked to 'self' or 'none'
-  response.headers.set(
-    "Content-Security-Policy",
-    [
-      "default-src 'self'",
-      "script-src 'self' 'wasm-unsafe-eval'",
-      "style-src 'self' 'unsafe-inline'",
-      "img-src 'self' data:",
-      "connect-src 'self'",
-      "font-src 'self'",
-      "object-src 'none'",
-      "base-uri 'self'",
-      "form-action 'self'",
-      "frame-ancestors 'none'",
-    ].join("; "),
-  );
+  //
+  // In dev mode, Vite's HMR uses WebSocket connections and may inject inline scripts.
+  // The strict CSP would block both, breaking hot reload. Skip CSP in dev only.
+  // All other security headers still apply in dev. They don't interfere with HMR.
+  if (!dev) {
+    response.headers.set(
+      "Content-Security-Policy",
+      [
+        "default-src 'self'",
+        "script-src 'self' 'wasm-unsafe-eval'",
+        "style-src 'self' 'unsafe-inline'",
+        "img-src 'self' data:",
+        "connect-src 'self'",
+        "font-src 'self'",
+        "worker-src 'self'",
+        "object-src 'none'",
+        "base-uri 'self'",
+        "form-action 'self'",
+        "frame-ancestors 'none'",
+      ].join("; "),
+    );
+  }
 
-  // HSTS: 2 years, include subdomains
-  response.headers.set(
-    "Strict-Transport-Security",
-    "max-age=63072000; includeSubDomains",
-  );
+  // TODO: add HSTS header (max-age=63072000; includeSubDomains; preload)
+  // Omit in dev: only set when the domain has a valid TLS cert.
 
   // Prevent MIME-type sniffing
   response.headers.set("X-Content-Type-Options", "nosniff");
