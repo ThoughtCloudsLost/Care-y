@@ -1,0 +1,26 @@
+# CODEOWNERS - require review from designated owners before merge
+# https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+#
+# Update GitHub usernames when the team is established.
+# Until then, this documents which paths are security-sensitive
+# and will require dedicated reviewers.
+
+# Default - all changes require at least one review
+* @ThoughtCloudsLost
+
+# Crypto package - encryption, key derivation, key management
+# Every change here must be reviewed by someone who understands the threat model
+packages/crypto/ @ThoughtCloudsLost
+
+# Auth & session handling
+packages/server/src/auth/ @ThoughtCloudsLost
+
+# Telephony relay endpoints - handle plaintext briefly
+packages/server/src/telephony/ @ThoughtCloudsLost
+
+# Security-critical config files
+SECURITY.md @ThoughtCloudsLost
+.github/workflows/ @ThoughtCloudsLost
+.github/CODEOWNERS @ThoughtCloudsLost
+lefthook.yml @ThoughtCloudsLost
+.npmrc @ThoughtCloudsLost

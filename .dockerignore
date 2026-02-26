@@ -1,0 +1,42 @@
+# Dependencies - rebuilt inside container
+node_modules
+
+# All hidden files and directories (3+ chars) - none needed at runtime
+# Covers: .git, .github, .vscode, .lh, .editorconfig, .npmrc, .nvmrc,
+#         .prettierignore, .browserslistrc, .eslintcache, .svelte-kit, etc.
+.??*
+!.env.example
+!.dockerignore
+
+# Environment files - NEVER bake secrets into image layers
+.env
+.env.*
+*.local
+
+# Build artifacts and caches
+dist
+coverage
+build
+
+# IDE and editor
+*.swp
+*.swo
+
+# Tooling config (not needed at runtime)
+lefthook.yml
+commitlint.config.*
+eslint.config.*
+vitest.config.*
+tsconfig.base.json
+
+# Documentation (not needed at runtime)
+docs
+*.md
+!packages/*/README.md
+LICENSE
+THIRD_PARTY_LICENSES
+
+# Test files (not needed at runtime)
+**/*.test.ts
+**/*.spec.ts
+**/__tests__

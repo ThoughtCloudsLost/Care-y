@@ -1,0 +1,6 @@
+# Commits listed here are hidden from git blame output.
+# After bulk formatting passes (Prettier, ESLint --fix), add the
+# commit SHA here so blame shows the meaningful change, not the reformat.
+#
+# Usage: git config blame.ignoreRevsFile .git-blame-ignore-revs
+# (applied automatically by GitHub's blame UI)

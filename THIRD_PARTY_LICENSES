@@ -1,0 +1,143 @@
+Third-Party Licenses
+====================
+
+CARE-Y uses the following open-source packages. Each package's
+full license text is included in its directory under node_modules/ when
+installed via npm/pnpm.
+
+This file covers direct dependencies only. Transitive dependencies inherit
+their own licenses; notable transitive licenses are called out where they
+differ from the direct dependency.
+
+Generated: 2026-02-25
+
+
+================================================================================
+MIT License
+================================================================================
+
+The following packages are licensed under the MIT License
+(https://opensource.org/licenses/MIT).
+
+The MIT License permits use, copy, modification, merge, publish, distribute,
+sublicense, and/or sale of the software, provided the copyright notice and
+permission notice are included in all copies or substantial portions.
+
+Runtime Dependencies
+--------------------
+
+  konsta                          (c) Vladimir Kharlampidi
+  bits-ui                         (c) Hunter Johnston
+  svelte-gestures                 (c) rezi99
+  @tanstack/svelte-query          (c) Tanner Linsley / Lachlan Collins
+  @tanstack/query-core            (c) Tanner Linsley
+  kysely                          (c) Sami Koskimaki
+  @trpc/client                    (c) KATT (Alex Johansson)
+  @trpc/server                    (c) KATT (Alex Johansson)
+  pg (node-postgres)              (c) Brian Carlson
+  svelte                          (c) Rich Harris and contributors
+  @sveltejs/kit                   (c) Rich Harris and contributors
+
+Build-time Dependencies
+-----------------------
+
+  tailwindcss                     (c) Tailwind Labs, Inc.
+  @tailwindcss/postcss            (c) Tailwind Labs, Inc.
+  postcss                         (c) Andrey Sitnik
+
+Dev Dependencies
+----------------
+
+  vitest                          (c) Anthony Fu and contributors
+  @vitest/coverage-v8             (c) Anthony Fu and contributors
+  fast-check                      (c) Nicolas Dubien
+  eslint-plugin-svelte            (c) Yosuke Ota
+  typescript-eslint               (c) typescript-eslint contributors
+  prettier                        (c) James Long and contributors
+  prettier-plugin-svelte          (c) Svelte contributors
+  @vite-pwa/sveltekit             (c) Anthony Fu
+
+Crypto Dependencies
+-------------------
+
+  sodium-native                   (c) Mathias Buus, Emil Bay, Christophe Diederichs
+
+
+================================================================================
+ISC License
+================================================================================
+
+The following packages are licensed under the ISC License
+(https://opensource.org/licenses/ISC).
+
+The ISC License is functionally equivalent to the MIT License. It permits use,
+copy, modification, and redistribution with or without fee, provided the
+copyright notice and permission notice are preserved.
+
+  libsodium-wrappers              (c) Ahmad Ben Mrad
+  libsodium (transitive)          (c) Ahmad Ben Mrad
+
+  Note: These are JavaScript bindings/compilations of the libsodium C library,
+  which is also ISC-licensed. (c) Frank Denis and contributors.
+
+
+================================================================================
+Apache License 2.0
+================================================================================
+
+The following packages are licensed under the Apache License, Version 2.0
+(https://www.apache.org/licenses/LICENSE-2.0).
+
+Apache-2.0 permits use, reproduction, and distribution with the following
+additional requirements beyond MIT:
+  - Preserve any NOTICE file included with the distribution
+  - State changes if you modify the licensed source code
+  - Includes an express patent grant from contributors
+
+All Apache-2.0 packages in this project are dev-only dependencies that are
+not distributed to end users.
+
+  @playwright/test                (c) Microsoft Corporation
+  playwright-core (transitive)    (c) Microsoft Corporation
+  eslint-plugin-security          (c) Node Security Project contributors
+
+  Note: Playwright's NOTICE file acknowledges code derived from Google's
+  Puppeteer project. See node_modules/playwright-core/NOTICE for details.
+
+
+================================================================================
+Mozilla Public License 2.0 (MPL-2.0)
+================================================================================
+
+The following packages are licensed under the Mozilla Public License 2.0
+(https://www.mozilla.org/en-US/MPL/2.0/).
+
+MPL-2.0 is a file-level weak copyleft license:
+  - If you MODIFY an MPL-licensed source file, the modified file must be
+    released under MPL-2.0
+  - If you USE the library without modifying its source files, your own
+    code is unaffected
+  - New files you write are not subject to MPL-2.0
+  - Output produced by MPL-licensed tools (e.g., processed CSS) is not
+    a derivative work
+
+All MPL-2.0 packages in this project are dev/build-time tools whose source
+files are not modified or distributed. No copyleft obligations apply.
+
+  @axe-core/playwright            (c) Deque Systems, Inc.
+  axe-core (transitive)           (c) Deque Systems, Inc.
+  lightningcss (transitive)       (c) Devon Govett / Parcel Contributors
+
+  Note on lightningcss: This is a transitive dependency of tailwindcss v4
+  (via the Oxide engine). It runs at build time to process CSS and is not
+  distributed. See https://github.com/tailwindlabs/tailwindcss/issues/17668
+
+
+================================================================================
+No Copyleft / No GPL
+================================================================================
+
+This project has NO dependencies (direct or notable transitive) licensed under
+GPL, LGPL, AGPL, or any other strong copyleft license. All licenses in use
+(MIT, ISC, Apache-2.0, MPL-2.0) are permissive or weak copyleft and fully
+compatible with proprietary use.

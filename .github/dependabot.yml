@@ -1,0 +1,88 @@
+version: 2
+
+updates:
+  # Root dependencies (eslint, prettier, vitest, typescript, lefthook, commitlint)
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 10
+    reviewers:
+      - ThoughtCloudsLost
+    groups:
+      lint-and-format:
+        patterns:
+          - "eslint*"
+          - "typescript-eslint"
+          - "prettier*"
+          - "@typescript-eslint/*"
+        update-types:
+          - "minor"
+          - "patch"
+      testing:
+        patterns:
+          - "vitest"
+          - "@vitest/*"
+        update-types:
+          - "minor"
+          - "patch"
+
+  # packages/client (SvelteKit, Svelte, Konsta UI, Bits UI, etc.)
+  - package-ecosystem: "npm"
+    directory: "/packages/client"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 10
+    reviewers:
+      - ThoughtCloudsLost
+    groups:
+      svelte:
+        patterns:
+          - "svelte"
+          - "@sveltejs/*"
+          - "svelte-*"
+        update-types:
+          - "minor"
+          - "patch"
+
+  # packages/server (tRPC, Kysely, etc.)
+  - package-ecosystem: "npm"
+    directory: "/packages/server"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 10
+    reviewers:
+      - ThoughtCloudsLost
+
+  # packages/crypto (libsodium)
+  - package-ecosystem: "npm"
+    directory: "/packages/crypto"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 5
+    reviewers:
+      - ThoughtCloudsLost
+
+  # packages/shared (Zod, shared types)
+  - package-ecosystem: "npm"
+    directory: "/packages/shared"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 5
+    reviewers:
+      - ThoughtCloudsLost
+
+  # GitHub Actions
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 5
+    reviewers:
+      - ThoughtCloudsLost
