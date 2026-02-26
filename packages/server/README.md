@@ -10,16 +10,16 @@ See the [root README](../../README.md) for full architecture, stack details, and
 
 ## Tech Stack
 
-| Layer           | Technology                   | Role                                                              |
-| --------------- | ---------------------------- | ----------------------------------------------------------------- |
-| Runtime         | Node.js 22 LTS               | Server runtime                                                    |
-| API             | tRPC                         | End-to-end type-safe API (consumed by `@care-y/client`)           |
-| Database        | PostgreSQL + Kysely           | SQL query builder, manual auditable migrations, bytea support     |
-| Auth            | Cookie sessions (httpOnly, sameSite=strict) + CSRF tokens | Session management, IP/UA binding  |
-| Crypto          | `@care-y/crypto` + `sodium-native` | Verify encrypted payloads, never decrypt PII                |
-| Telephony       | Twilio (provider interface)  | Inbound webhooks, outbound relay - Twilio → Fonoster swap planned |
-| Real-time       | SSE (built-in Node/SvelteKit) | Push metadata updates to clients                                 |
-| Testing         | Vitest                       | Unit and integration tests (target: >=90% coverage)               |
+| Layer     | Technology                                                | Role                                                              |
+| --------- | --------------------------------------------------------- | ----------------------------------------------------------------- |
+| Runtime   | Node.js 22 LTS                                            | Server runtime                                                    |
+| API       | tRPC                                                      | End-to-end type-safe API (consumed by `@care-y/client`)           |
+| Database  | PostgreSQL + Kysely                                       | SQL query builder, manual auditable migrations, bytea support     |
+| Auth      | Cookie sessions (httpOnly, sameSite=strict) + CSRF tokens | Session management, IP/UA binding                                 |
+| Crypto    | `@care-y/crypto` + `sodium-native`                        | Verify encrypted payloads, never decrypt PII                      |
+| Telephony | Twilio (provider interface)                               | Inbound webhooks, outbound relay - Twilio → Fonoster swap planned |
+| Real-time | SSE (built-in Node/SvelteKit)                             | Push metadata updates to clients                                  |
+| Testing   | Vitest                                                    | Unit and integration tests (target: >=90% coverage)               |
 
 ---
 

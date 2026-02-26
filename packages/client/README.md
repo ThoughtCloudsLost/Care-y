@@ -10,18 +10,18 @@ See the [root README](../../README.md) for full architecture, stack details, and
 
 ## Tech Stack
 
-| Layer          | Technology                              | Role                                                        |
-| -------------- | --------------------------------------- | ----------------------------------------------------------- |
-| Framework      | SvelteKit + Svelte 5 (runes)            | Routing, SSR, build                                         |
-| API client     | Vanilla `@trpc/client` + TanStack Query | Type-safe API calls, stale-while-revalidate caching         |
-| UI shell       | Konsta UI v5                            | Mobile-first components (Tabbar, Sheet Modal, Cards, Navbar) |
-| Accessible UI  | Bits UI                                 | Form primitives only - Dialog, Select, Combobox, Date Picker |
-| Gestures       | svelte-gestures                         | Swipe, long-press, pan via Svelte actions                   |
-| CSS            | Tailwind CSS v4                         | Required by Konsta UI (build-time only)                     |
-| Crypto         | `@care-y/crypto` + `libsodium-wrappers` | All encryption/decryption in the browser                    |
-| Real-time      | SSE (built-in SvelteKit)                | Server-pushed updates - metadata only, never encrypted content |
-| PWA            | `@vite-pwa/sveltekit`                   | Service worker, manifest, offline caching via Workbox       |
-| E2E testing    | Playwright + `@axe-core/playwright`     | Browser testing + WCAG 2.1 AA accessibility checks          |
+| Layer         | Technology                              | Role                                                           |
+| ------------- | --------------------------------------- | -------------------------------------------------------------- |
+| Framework     | SvelteKit + Svelte 5 (runes)            | Routing, SSR, build                                            |
+| API client    | Vanilla `@trpc/client` + TanStack Query | Type-safe API calls, stale-while-revalidate caching            |
+| UI shell      | Konsta UI v5                            | Mobile-first components (Tabbar, Sheet Modal, Cards, Navbar)   |
+| Accessible UI | Bits UI                                 | Form primitives only - Dialog, Select, Combobox, Date Picker   |
+| Gestures      | svelte-gestures                         | Swipe, long-press, pan via Svelte actions                      |
+| CSS           | Tailwind CSS v4                         | Required by Konsta UI (build-time only)                        |
+| Crypto        | `@care-y/crypto` + `libsodium-wrappers` | All encryption/decryption in the browser                       |
+| Real-time     | SSE (built-in SvelteKit)                | Server-pushed updates - metadata only, never encrypted content |
+| PWA           | `@vite-pwa/sveltekit`                   | Service worker, manifest, offline caching via Workbox          |
+| E2E testing   | Playwright + `@axe-core/playwright`     | Browser testing + WCAG 2.1 AA accessibility checks             |
 
 ---
 

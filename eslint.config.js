@@ -59,6 +59,20 @@ export default tseslint.config(
     },
   },
 
+  // Svelte 5 rune modules (.svelte.ts) - use svelte parser for $state/$derived support
+  {
+    files: ["**/*.svelte.ts", "**/*.svelte.js"],
+    languageOptions: {
+      parser: eslintPluginSvelte.parser,
+      parserOptions: {
+        parser: tseslint.parser,
+        projectService: true,
+        tsconfigRootDir: import.meta.dirname,
+        extraFileExtensions: [".svelte"],
+      },
+    },
+  },
+
   // Module boundary enforcement - block deep imports into @care-y/* packages
   {
     rules: {
