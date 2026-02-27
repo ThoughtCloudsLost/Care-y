@@ -1,6 +1,7 @@
 # Security Policy
 
-CARE-Y protects at-risk individuals whose identity, contact information, and case details could endanger them if exposed. Security vulnerabilities in this system are not abstract risks. **They threaten real people.** We take every report seriously.
+CARE-Y protects at-risk individuals whose identity, contact information, and case details could endanger them if exposed.
+Security vulnerabilities in this system are not abstract risks. **They threaten real people.** We take every report seriously.
 
 ## Reporting a Vulnerability
 
@@ -15,6 +16,7 @@ Include:
 - Affected component(s) and version(s)
 - Potential impact assessment
 
+## TODO: add key before release
 If you can, encrypt your report with our PGP key _(key to be published here before first public release)_.
 
 ## What to Expect
@@ -43,7 +45,7 @@ The following are in scope:
 
 The following are out of scope:
 
-- Third-party services (Twilio, Hetzner) - report to those providers directly
+- Third-party services (Twilio, Hetzner): report to those providers directly
 - Social engineering attacks against volunteers (important, but not a code fix)
 - Denial of service via resource exhaustion (accepted risk at current scale)
 

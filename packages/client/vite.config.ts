@@ -37,8 +37,8 @@ export default defineConfig({
   ],
   ssr: {
     // pnpm-linked workspace packages appear in node_modules,
-    // which Vite skips by default during SSR. This ensures
-    // @care-y/* packages are transpiled for server-side rendering.
+    // which Vite skips by default during SSR.
+    // This ensures @care-y/* packages are transpiled for server-side rendering.
     noExternal: [/^@care-y\//],
   },
 });

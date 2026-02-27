@@ -2,7 +2,7 @@
 
 Node.js + tRPC API server for CARE-Y. Handles auth, webhooks, and telephony relay endpoints.
 
-The server stores only ciphertext and never holds the org private key. It cannot decrypt the database. This is intentionally architectural.
+The server stores only ciphertext and ECIES-wrapped ticket keys. It holds no volunteer key material. OPRF shares are held on separate threshold servers (single-server at launch, two-server target for production). Decryption keys are derived ephemerally via OPRF at volunteer login. This is intentionally architectural.
 
 See the [root README](../../README.md) for full architecture, stack details, and setup instructions.
 
@@ -17,7 +17,7 @@ See the [root README](../../README.md) for full architecture, stack details, and
 | Database        | PostgreSQL + Kysely           | SQL query builder, manual auditable migrations, bytea support      |
 | Auth            | Cookie sessions (httpOnly, sameSite=strict) + CSRF tokens | Session management, IP/UA binding      |
 | Crypto          | `@care-y/crypto` + `sodium-native` | Verify encrypted payloads, never decrypt PII                  |
-| Telephony       | Twilio (provider interface)  | Inbound webhooks, outbound relay (Fonoster self-hosted swap planned)|
+| Telephony       | Twilio (provider interface)  | Inbound webhooks, outbound relay (SignalWire hybrid evaluated for self-hosted telephony) |
 | Real-time       | SSE (built-in Node/SvelteKit) | Push metadata updates to clients                                   |
 | Testing         | Vitest                       | Unit and integration tests (target: >=90% coverage)                 |
 
@@ -61,4 +61,4 @@ pnpm vitest run packages/server/src/auth
 - Never use JavaScript strings for relay plaintext. Use Buffer (can be zeroed)
 - Never log request/response bodies on relay endpoints
 - Never skip webhook signature validation, even in development
-- Never put the org private key on the server
+- Never put the org private key or volunteer private keys on the server (server holds only OPRF shares and volunteer public keys)

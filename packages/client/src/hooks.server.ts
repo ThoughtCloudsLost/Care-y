@@ -5,36 +5,25 @@ export const handle: Handle = async ({ event, resolve }) => {
   const response = await resolve(event);
 
   // --- Content-Security-Policy ---
-  // - wasm-unsafe-eval: required by libsodium-wrappers browser WASM build (cannot be avoided)
-  // - unsafe-inline in style-src: required by Tailwind CSS / Konsta UI (inline styles at runtime)
-  // - worker-src: explicit allowlist for PWA service worker (falls back to script-src if omitted,
-  //   but wasm-unsafe-eval in script-src should not propagate to workers)
-  // - All other directives locked to 'self' or 'none'
-  //
-  // In dev mode, Vite's HMR uses WebSocket connections and may inject inline scripts.
-  // The strict CSP would block both, breaking hot reload. Skip CSP in dev only.
-  // All other security headers still apply in dev. They don't interfere with HMR.
+  // CSP is configured in svelte.config.js via kit.csp, NOT here.
+  // SvelteKit manages the CSP header so it can inject nonces (mode: "auto")
+  // into inline <script> tags it generates. Key decisions documented there:
+  //   - script-src: 'self' + 'wasm-unsafe-eval' (libsodium WASM)
+  //   - style-src-attr: 'unsafe-inline' (Konsta UI dynamic style attributes)
+  //   - style-src-elem: 'self' (blocks <style> tag injection, the real attack vector)
+  //   - upgrade-insecure-requests: auto-upgrades HTTP to HTTPS
+
+  // --- HSTS (HTTP Strict Transport Security) ---
+  // Tells browsers to only connect via HTTPS for 2 years, including subdomains.
+  // The preload flag allows submission to hstspreload.org for browser-level enforcement.
+  // Only set in production: dev uses HTTP (no TLS cert), and HSTS on localhost
+  // would lock the browser into HTTPS for the domain.
   if (!dev) {
     response.headers.set(
-      "Content-Security-Policy",
-      [
-        "default-src 'self'",
-        "script-src 'self' 'wasm-unsafe-eval'",
-        "style-src 'self' 'unsafe-inline'",
-        "img-src 'self' data:",
-        "connect-src 'self'",
-        "font-src 'self'",
-        "worker-src 'self'",
-        "object-src 'none'",
-        "base-uri 'self'",
-        "form-action 'self'",
-        "frame-ancestors 'none'",
-      ].join("; "),
+      "Strict-Transport-Security",
+      "max-age=63072000; includeSubDomains; preload",
     );
   }
-
-  // TODO: add HSTS header (max-age=63072000; includeSubDomains; preload)
-  // Omit in dev: only set when the domain has a valid TLS cert.
 
   // Prevent MIME-type sniffing
   response.headers.set("X-Content-Type-Options", "nosniff");

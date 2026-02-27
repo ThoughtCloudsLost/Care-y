@@ -3,6 +3,8 @@ node_modules
 dist
 coverage
 build
+playwright-report
+test-results
 pnpm-lock.yaml
 .git
 *.svg

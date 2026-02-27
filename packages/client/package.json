@@ -1,7 +1,8 @@
 {
   "name": "@care-y/client",
-  "private": true,
   "version": "0.0.0",
+  "license": "AGPL-3.0-only",
+  "private": true,
   "type": "module",
   "scripts": {
     "dev": "vite dev",

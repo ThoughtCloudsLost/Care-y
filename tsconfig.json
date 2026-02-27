@@ -4,6 +4,7 @@
     { "path": "packages/shared" },
     { "path": "packages/crypto" },
     { "path": "packages/server" },
-    { "path": "packages/client" }
+    { "path": "packages/client" },
+    { "path": "e2e" }
   ]
 }

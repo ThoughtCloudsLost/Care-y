@@ -18,7 +18,7 @@ See the [root README](../../README.md) for full architecture, stack details, and
 | Accessible UI  | Bits UI                                 | Form primitives only (Dialog, Select, Combobox, Date Picker) |
 | Gestures       | svelte-gestures                         | Swipe, long-press, pan via Svelte actions                   |
 | CSS            | Tailwind CSS v4                         | Required by Konsta UI (build-time only)                     |
-| Crypto         | `@care-y/crypto` + `libsodium-wrappers` | All encryption/decryption in the browser                    |
+| Crypto         | `@care-y/crypto` + `libsodium-wrappers-sumo` | All encryption/decryption in the browser (sumo build for ristretto255) |
 | Real-time      | SSE (built-in SvelteKit)                | Server-pushed updates (metadata only, never encrypted content) |
 | PWA            | `@vite-pwa/sveltekit`                   | Service worker, manifest, offline caching via Workbox       |
 | E2E testing    | Playwright + `@axe-core/playwright`     | Browser testing + WCAG 2.1 AA accessibility checks          |
@@ -54,7 +54,7 @@ pnpm --filter @care-y/client test:a11y
 
 ## Key Responsibilities
 
-- **Key management:** derives account key from password (Argon2id), decrypts personal private key, decrypts org private key. All keys held in memory for session only.
+- **Key management (dual-tier):** derives `master_key` via threshold OPRF (password -> Argon2id -> OPRF evaluation from both servers -> HKDF), derives `vol_private` for ECIES ticket decryption in Web Worker, unwraps org key for non-PII tier. All keys held in memory for session only; `master_key` and `vol_private` live exclusively in the Worker.
 - **Encryption:** encrypts all PII before sending to server via `@care-y/crypto`
 - **Telephony relay:** decrypts content locally, posts plaintext to one-shot relay endpoint for outbound SMS/calls
 - **PWA:** service worker via `@vite-pwa/sveltekit`, offline caching via Workbox
