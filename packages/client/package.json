@@ -15,7 +15,7 @@
     "@care-y/crypto": "workspace:*",
     "@care-y/server": "workspace:*",
     "@care-y/shared": "workspace:*",
-    "@tanstack/svelte-query": "6.0.18",
+    "@tanstack/svelte-query": "6.1.0",
     "@trpc/client": "11.10.0",
     "bits-ui": "2.16.2",
     "konsta": "5.0.7",
