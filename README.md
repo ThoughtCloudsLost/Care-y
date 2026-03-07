@@ -45,6 +45,13 @@ Each organization gets an isolated PostgreSQL schema. Cross-org queries are stru
 
 CARE-Y encrypts everything before it leaves the volunteer's browser. The server stores only scrambled data it cannot read. Even if someone seizes the server, they get nothing usable.
 
+<picture>
+  <source media="(prefers-color-scheme: light)" srcset="docs/design-ref/mermaids/crypto-v2/simplified-transparent-crypto-v2-mermaid.svg" type="image/svg+xml">
+  <source media="(prefers-color-scheme: dark)" srcset="docs/design-ref/mermaids/crypto-v2/simplified-transparent-crypto-v2-mermaid.svg" type="image/svg+xml">
+  <img src="docs/design-ref/mermaids/crypto-v2/simplified-transparent-crypto-v2-mermaid.png" alt="CARE-Y simplified crypto hierarchy diagram showing how volunteer passwords derive split keys across two servers, producing encryption keys for client data, org resources, and public branding" width="800">
+</picture>
+
+<!-- Mermaid source (hidden, kept for regeneration):
 ```mermaid
 graph TD
     subgraph legend ["Legend"]
@@ -113,6 +120,7 @@ graph TD
     classDef branding fill:#34d399,stroke:#065f46,color:#000
     classDef ops fill:#94a3b8,stroke:#334155,color:#000
 ```
+-->
 
 **What this means in practice:**
 
@@ -148,6 +156,13 @@ graph TD
 
 CARE-Y uses a dual-tier encryption model. PII (tickets, client data) is protected by OPRF-based split-key derivation: the volunteer's password is hardened via a threshold OPRF protocol across two servers in separate jurisdictions, producing a `masterKey` that derives per-volunteer ECIES keys. No per-ticket server round-trip is needed for decryption. Non-PII shared resources (KB articles, org config) use a standard wrapped org key.
 
+<picture>
+  <source media="(prefers-color-scheme: light)" srcset="docs/design-ref/mermaids/crypto-v2/crypto-v2-mermaid-transparent.svg" type="image/svg+xml">
+  <source media="(prefers-color-scheme: dark)" srcset="docs/design-ref/mermaids/crypto-v2/crypto-v2-mermaid-transparent.svg" type="image/svg+xml">
+  <img src="docs/design-ref/mermaids/crypto-v2/crypto-v2-mermaid-transparent.png" alt="CARE-Y full crypto key hierarchy showing OPRF-based split-key derivation, ECIES per-volunteer wrapping, dual-tier encryption for PII and org data, and operational secrets" width="800">
+</picture>
+
+<!-- Mermaid source (hidden, kept for regeneration):
 ```mermaid
 graph TD
     subgraph legend ["Legend"]
@@ -216,6 +231,7 @@ graph TD
     classDef branding fill:#34d399,stroke:#065f46,color:#000
     classDef ops fill:#94a3b8,stroke:#334155,color:#000
 ```
+-->
 
 | Tier | Data | Decryption requires | What's exposed if compromised |
 | ---- | ---- | ------------------- | ----------------------------- |
