@@ -1,0 +1,66 @@
+graph TD
+    subgraph legend ["Legend"]
+        direction LR
+        L1["Password"]:::password ~~~ L2["Derived key"]:::derived ~~~ L3["OPRF"]:::oprf ~~~ L4["PII tier"]:::pii ~~~ L5["Org tier"]:::org ~~~ L6["Branding tier"]:::branding ~~~ L7["Operational"]:::ops
+    end
+
+    legend --> PW & OPS
+
+    PW["<b>Password</b>"]:::password
+    OPS["<b>OPS_SECRETS_KEY</b><br/>256-bit, secrets file, server-only"]:::ops
+    OPSD["<b>Operational Secrets</b><br/>Telephony creds, config"]:::ops
+
+    OPS -->|XSalsa20-Poly1305| OPSD
+
+    ST["<b>stretched</b><br/>Argon2id(password, salt)"]:::derived
+    BL["<b>blinded</b><br/>OPRF.Blind(stretched)"]:::oprf
+
+    PW -->|Argon2id| ST -->|Blind| BL
+
+    linkStyle 6 stroke:none,stroke-width:0
+    linkStyle 7 stroke:none,stroke-width:0
+
+    SA["<b>Server A</b><br/>OPRF share A, Hetzner DE"]:::oprf
+    SB["<b>Server B</b><br/>OPRF share B, Iceland"]:::oprf
+    OO["<b>oprf_output</b><br/>OPRF.Finalize(combined)"]:::oprf
+
+    BL -->|PartialEval| SA & SB
+    SA & SB -->|Lagrange interpolate| OO
+
+    MK["<b>master_key</b><br/>HKDF(oprf_output), Web Worker"]:::derived
+
+    OO -->|HKDF-SHA512| MK
+
+    VP["<b>vol_private</b><br/>ristretto255 scalar"]:::derived
+    VPub["<b>vol_public</b><br/>ristretto255 point, published"]:::derived
+    OUK["<b>org_unwrap_key</b><br/>symmetric unwrap key"]:::derived
+
+    MK -->|"HKDF(ecies-private)"| VP -->|"scalar × base"| VPub
+    MK -->|"HKDF(org-key-unwrap)"| OUK
+
+    TK["<b>tk</b> (ticket key)<br/>256-bit symmetric"]:::pii
+    OrgSK["<b>Org Private Key</b><br/>wrapped per-volunteer"]:::org
+    OrgPub["<b>Org Public Key</b><br/>published"]:::org
+    BK["<b>Branding Key</b><br/>generichash(org public key)"]:::branding
+
+    VPub -->|ECIES wrap| TK
+    VP -.->|ECIES unwrap| TK
+    OUK -->|unwrap| OrgSK
+    OrgSK -.->|public counterpart| OrgPub
+    OrgPub -->|generichash| BK
+
+    PIID["<b>PII Ciphertext</b><br/>Tickets, client data, messages"]:::pii
+    OrgData["<b>Non-PII Ciphertext</b><br/>KB articles, org config"]:::org
+    BD["<b>Client Branding</b><br/>Logo, name, color"]:::branding
+
+    TK -->|XSalsa20-Poly1305| PIID
+    OrgSK -->|XSalsa20-Poly1305| OrgData
+    BK -->|XSalsa20-Poly1305| BD
+
+    classDef password fill:#fbbf24,stroke:#92400e,color:#000
+    classDef derived fill:#60a5fa,stroke:#1e40af,color:#000
+    classDef oprf fill:#f87171,stroke:#991b1b,color:#000
+    classDef pii fill:#fb923c,stroke:#9a3412,color:#000
+    classDef org fill:#a78bfa,stroke:#5b21b6,color:#000
+    classDef branding fill:#34d399,stroke:#065f46,color:#000
+    classDef ops fill:#94a3b8,stroke:#334155,color:#000

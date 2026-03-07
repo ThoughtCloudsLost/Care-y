@@ -1,0 +1,66 @@
+graph TD
+    subgraph legend ["Legend"]
+        direction LR
+        L1["Password"]:::password ~~~ L2["Derived key"]:::derived ~~~ L3["Split verification"]:::oprf ~~~ L4["Client data"]:::pii ~~~ L5["Org resources"]:::org ~~~ L6["Public branding"]:::branding ~~~ L7["Server config"]:::ops
+    end
+
+    legend --> PW & OPS
+
+    PW["<b>Volunteer's Password</b><br/>The only thing you need to remember"]:::password
+    OPS["<b>Server Config Key</b><br/>Stored in a locked file on the server.<br/>Used only for phone system credentials."]:::ops
+    OPSD["<b>Phone System Credentials</b><br/>Twilio account info, encrypted at rest"]:::ops
+
+    OPS -->|encrypts| OPSD
+
+    ST["<b>Hardened Password</b><br/>Your password is strengthened<br/>so it can't be guessed"]:::derived
+    BL["<b>Disguised Password</b><br/>Scrambled so neither server<br/>can see the real password"]:::oprf
+
+    PW -->|strengthen| ST -->|disguise| BL
+
+    linkStyle 6 stroke:none,stroke-width:0
+    linkStyle 7 stroke:none,stroke-width:0
+
+    SA["<b>Server A</b><br/>Germany"]:::oprf
+    SB["<b>Server B</b><br/>Iceland"]:::oprf
+    OO["<b>Combined Result</b><br/>Neither server alone knows<br/>your secret. Both are needed."]:::oprf
+
+    BL -->|"verify (partial)"| SA & SB
+    SA & SB -->|combine| OO
+
+    MK["<b>Your Secret Key</b><br/>Lives only in your browser.<br/>Never sent to any server."]:::derived
+
+    OO -->|derive| MK
+
+    VP["<b>Personal Private Key</b><br/>Unlocks tickets assigned to you"]:::derived
+    VPub["<b>Personal Public Key</b><br/>Shared with the server so others<br/>can lock tickets for you"]:::derived
+    OUK["<b>Org Unlock Key</b><br/>Unlocks shared org resources"]:::derived
+
+    MK -->|derive| VP -->|publish| VPub
+    MK -->|derive| OUK
+
+    TK["<b>Ticket Key</b><br/>Each ticket has its own key.<br/>Locked individually for each volunteer."]:::pii
+    OrgSK["<b>Org Private Key</b><br/>Unlocks KB articles and org settings"]:::org
+    OrgPub["<b>Org Public Key</b><br/>Public. Used to derive the<br/>branding key below."]:::org
+    BK["<b>Branding Key</b><br/>Derived from the org's public key.<br/>Public intake pages can read branding."]:::branding
+
+    VPub -->|lock for you| TK
+    VP -.->|you unlock| TK
+    OUK -->|unlock| OrgSK
+    OrgSK -.->|public counterpart| OrgPub
+    OrgPub -->|derive| BK
+
+    PIID["<b>Client Data (encrypted)</b><br/>Tickets, messages, case notes.<br/>Only assigned volunteers can read."]:::pii
+    OrgData["<b>Org Resources (encrypted)</b><br/>KB articles, org config.<br/>Any logged-in volunteer can read."]:::org
+    BD["<b>Public Branding</b><br/>Logo, name, color.<br/>Visible on intake pages."]:::branding
+
+    TK -->|encrypts| PIID
+    OrgSK -->|encrypts| OrgData
+    BK -->|encrypts| BD
+
+    classDef password fill:#fbbf24,stroke:#92400e,color:#000
+    classDef derived fill:#60a5fa,stroke:#1e40af,color:#000
+    classDef oprf fill:#f87171,stroke:#991b1b,color:#000
+    classDef pii fill:#fb923c,stroke:#9a3412,color:#000
+    classDef org fill:#a78bfa,stroke:#5b21b6,color:#000
+    classDef branding fill:#34d399,stroke:#065f46,color:#000
+    classDef ops fill:#94a3b8,stroke:#334155,color:#000
