@@ -8,19 +8,16 @@ export default defineConfig({
     tailwindcss(),
     sveltekit(),
     SvelteKitPWA({
-      // SW update strategy: leave defaults (skipWaiting: false, clientsClaim: false).
-      // Do NOT enable skipWaiting. It can cause users to receive a new SW mid-session.
+      strategies: "injectManifest",
+      srcDir: "src",
+      filename: "service-worker.ts",
       registerType: "prompt",
-      workbox: {
-        // Exclude tRPC API routes from all caching strategies.
-        // These return live ciphertext blobs that must never be served from cache.
-        navigateFallbackDenylist: [/^\/api\//],
-        runtimeCaching: [
-          // Do NOT add a route for /api/* here.
-          // Shell assets (JS, CSS, fonts, icons) are precached via generateSW defaults.
-        ],
-        // Reject oversized assets to prevent the SW cache from growing unbounded.
-        maximumFileSizeToCacheInBytes: 3 * 1024 * 1024, // 3 MB
+      injectManifest: {
+        // Skip Workbox manifest injection. SvelteKit's $service-worker module
+        // provides build/files/version natively. The plugin still handles
+        // manifest.webmanifest generation and registerSW.js registration.
+        // The plugin checks for falsiness at runtime, but the type only allows string.
+        injectionPoint: undefined as unknown as string,
       },
       manifest: {
         name: "CARE-Y",
