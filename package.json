@@ -17,8 +17,12 @@
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "clean": "tsc --build --clean",
-    "migrate": "tsx --env-file=.env packages/server/src/db/migrate.ts up",
-    "migrate:down": "tsx --env-file=.env packages/server/src/db/migrate.ts down"
+    "migrate": "tsx --env-file=.env packages/server/src/db/migrate.ts --platform",
+    "migrate:down": "tsx --env-file=.env packages/server/src/db/migrate.ts down --platform",
+    "migrate:tenant": "tsx --env-file=.env packages/server/src/db/migrate.ts --schema=",
+    "migrate:tenant:down": "tsx --env-file=.env packages/server/src/db/migrate.ts down --schema=",
+    "migrate:all": "tsx --env-file=.env packages/server/src/db/migrate.ts --all-schemas",
+    "migrate:create-schema": "tsx --env-file=.env packages/server/src/db/schema-create.ts"
   },
   "pnpm": {
     "onlyBuiltDependencies": [

@@ -2,7 +2,7 @@
 
 Shared types, Zod schemas, and enums consumed by all other CARE-Y packages.
 
-This package has no runtime dependencies beyond Zod. It is the single source of truth for data shapes across the client-server boundary.
+This package has no runtime dependencies beyond Zod. All shared data shapes live here. Client, server, and crypto packages import from this package, never from each other.
 
 See the [root README](../../README.md) for full architecture, stack details, and setup instructions.
 

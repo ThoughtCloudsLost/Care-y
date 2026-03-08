@@ -1,7 +1,6 @@
 // Environment variable validation. Import this FIRST in index.ts.
 // Validates required vars at startup and exits with a clear error if any are missing.
-// This schema is the single source of truth for what env vars exist.
-// Add new vars here as features are added.
+// All env vars are declared here. Add new vars as features are built.
 
 import { z } from "zod";
 
