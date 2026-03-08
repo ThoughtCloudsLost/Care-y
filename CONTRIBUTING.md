@@ -18,9 +18,11 @@ pnpm install
 # Install git hooks (commitlint + Gitleaks)
 pnpm lefthook install
 
-# Start dev environment
-docker compose up     # PostgreSQL
-pnpm dev              # Dev server
+# Start dev environment (server + PostgreSQL in Docker, with file sync)
+docker compose watch
+
+# In a separate terminal: SvelteKit client dev server
+pnpm --filter @care-y/client dev
 ```
 
 ## Security Rules for Contributors
