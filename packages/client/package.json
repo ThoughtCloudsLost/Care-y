@@ -18,7 +18,7 @@
     "@care-y/shared": "workspace:*",
     "@tanstack/svelte-query": "6.0.18",
     "@trpc/client": "11.10.0",
-    "bits-ui": "2.16.2",
+    "bits-ui": "2.16.3",
     "konsta": "5.0.7",
     "svelte-gestures": "5.2.2"
   },
