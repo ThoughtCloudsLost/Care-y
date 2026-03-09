@@ -1,4 +1,16 @@
-import "./env.js"; // validates env vars at startup. Must be first import.
+import { validateEnv, EnvValidationError } from "./env.js";
+
+// Validate env vars before anything else. Exits with a clear error if
+// required vars are missing or malformed (same fail-fast as original).
+try {
+  validateEnv();
+} catch (err) {
+  if (err instanceof EnvValidationError) {
+    console.error(err.message);
+    process.exit(1);
+  }
+  throw err;
+}
 
 import { createHTTPServer } from "@trpc/server/adapters/standalone";
 import { initTRPC } from "@trpc/server";
