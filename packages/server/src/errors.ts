@@ -66,6 +66,15 @@ export class InternalError extends AppError {
   }
 }
 
+export class CryptoError extends AppError {
+  readonly code = "CRYPTO_ERROR" as const;
+  readonly httpStatus = 500;
+
+  constructor(message: string) {
+    super(message, false);
+  }
+}
+
 export function isAppError(err: unknown): err is AppError {
   return err instanceof AppError;
 }

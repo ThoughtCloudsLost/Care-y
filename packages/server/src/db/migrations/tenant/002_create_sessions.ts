@@ -1,4 +1,4 @@
-import type { Kysely } from "kysely";
+import { type Kysely, sql } from "kysely";
 
 export async function up(db: Kysely<unknown>): Promise<void> {
   await db.schema
@@ -10,8 +10,8 @@ export async function up(db: Kysely<unknown>): Promise<void> {
     .addColumn("user_id", "uuid", (col) =>
       col.notNull().references("users.id").onDelete("cascade"),
     )
-    .addColumn("ip_address", "text", (col) => col.notNull())
-    .addColumn("user_agent", "text", (col) => col.notNull())
+    .addColumn("encrypted_ip_address", sql`bytea`, (col) => col.notNull())
+    .addColumn("encrypted_user_agent", sql`bytea`, (col) => col.notNull())
     .addColumn("expires_at", "timestamptz", (col) => col.notNull())
     .addColumn("created_at", "timestamptz", (col) =>
       col.notNull().defaultTo(db.fn("now")),

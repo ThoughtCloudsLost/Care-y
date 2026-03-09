@@ -9,7 +9,9 @@
 
 services:
   app:
-    build: .
+    build:
+      context: .
+      target: production
     user: "1001:1001"
     read_only: true
     security_opt:

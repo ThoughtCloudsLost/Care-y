@@ -1,0 +1,29 @@
+# Test compose override. Targets the "test" Dockerfile stage and bind-mounts
+# test infrastructure that .dockerignore (correctly) excludes from production.
+#
+# Usage:
+#   docker compose -f docker-compose.yml -f docker-compose.test.yml watch
+#     (then, in another terminal)
+#   docker compose -f docker-compose.yml -f docker-compose.test.yml exec app pnpm vitest run --project server
+#
+# Or one-shot (no file watching):
+#   docker compose -f docker-compose.yml -f docker-compose.test.yml up -d
+#   docker compose -f docker-compose.yml -f docker-compose.test.yml exec app pnpm vitest run --project server
+
+services:
+  app:
+    build:
+      context: .
+      target: test
+    # Test container is ephemeral and local-only. Relax read_only so
+    # bind mounts and vitest can write temp files.
+    read_only: false
+    volumes:
+      # Vitest config (excluded by .dockerignore, needed for test runner)
+      - ./vitest.config.ts:/app/vitest.config.ts:ro
+      # Source dirs with test files (.dockerignore excludes *.test.ts).
+      # Bind-mount the full src dirs so test files are present alongside
+      # the source they test. :ro because tests don't write to source.
+      - ./packages/server/src:/app/packages/server/src:ro
+      - ./packages/shared/src:/app/packages/shared/src:ro
+      - ./packages/crypto/src:/app/packages/crypto/src:ro

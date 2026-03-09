@@ -4,6 +4,8 @@ import {
   createTestDb,
   createTestUser,
   createTestSession,
+  noopEncryptor,
+  testFieldEncryptor,
   type TestDb,
 } from "../test-utils.js";
 import type { SessionRepository } from "./session-repository.js";
@@ -17,11 +19,11 @@ describe.skipIf(!process.env.DATABASE_URL)("createDbSessionRepository", () => {
 
   beforeAll(async () => {
     testDb = await createTestDb();
-    repo = createDbSessionRepository(testDb.db);
+    repo = createDbSessionRepository(testDb.db, noopEncryptor);
   });
 
   afterAll(async () => {
-    await testDb?.cleanup();
+    await testDb.cleanup();
   });
 
   it("create returns a SessionData with generated id and createdAt", async () => {
@@ -57,9 +59,11 @@ describe.skipIf(!process.env.DATABASE_URL)("createDbSessionRepository", () => {
     const found = await repo.findByToken("tok-find-test");
 
     expect(found).not.toBeNull();
-    expect(found!.id).toBe(created.id);
-    expect(found!.token).toBe("tok-find-test");
-    expect(found!.userId).toBe(user.id);
+    if (found) {
+      expect(found.id).toBe(created.id);
+      expect(found.token).toBe("tok-find-test");
+      expect(found.userId).toBe(user.id);
+    }
   });
 
   it("findByToken returns null for nonexistent token", async () => {
@@ -182,5 +186,40 @@ describe.skipIf(!process.env.DATABASE_URL)("createDbSessionRepository", () => {
     expect(count).toBeGreaterThanOrEqual(1);
     expect(await repo.findByToken("tok-mix-expired")).toBeNull();
     expect(await repo.findByToken("tok-mix-valid")).not.toBeNull();
+  });
+
+  it("stores encrypted bytea, not plaintext", async () => {
+    // Use the real encryptor to verify DB contents are not plaintext.
+    const encRepo = createDbSessionRepository(testDb.db, testFieldEncryptor);
+    const user = await createTestUser(testDb.db);
+
+    await encRepo.create({
+      token: "tok-enc-verify",
+      userId: user.id,
+      ipAddress: "10.20.30.40",
+      userAgent: "SecretAgent/1.0",
+      expiresAt: new Date(Date.now() + 3600_000),
+    });
+
+    // Read raw row to verify ciphertext is not plaintext.
+    const rawRow = await testDb.db
+      .selectFrom("sessions")
+      .selectAll()
+      .where("token", "=", "tok-enc-verify")
+      .executeTakeFirstOrThrow();
+
+    // The raw bytea should not contain the plaintext strings.
+    const ipBytes = rawRow.encrypted_ip_address.toString("utf-8");
+    const uaBytes = rawRow.encrypted_user_agent.toString("utf-8");
+    expect(ipBytes).not.toBe("10.20.30.40");
+    expect(uaBytes).not.toBe("SecretAgent/1.0");
+
+    // But reading through the repo should decrypt correctly.
+    const session = await encRepo.findByToken("tok-enc-verify");
+    expect(session).not.toBeNull();
+    if (session) {
+      expect(session.ipAddress).toBe("10.20.30.40");
+      expect(session.userAgent).toBe("SecretAgent/1.0");
+    }
   });
 });

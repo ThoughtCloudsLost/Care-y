@@ -4,10 +4,15 @@
  * All queries go through a Kysely instance bound to the tenant schema
  * via .withSchema(). The repository is multi-tenancy-unaware; schema
  * scoping is the caller's responsibility (pass tenantDb(orgSchema)).
+ *
+ * IP address and user agent are encrypted at rest via FieldEncryptor.
+ * The domain layer (SessionData) uses plaintext strings; encryption is
+ * an internal persistence concern handled transparently by this repository.
  */
 
 import type { Kysely, Selectable } from "kysely";
 import type { SessionsTable, TenantDatabase } from "../db/types.js";
+import type { FieldEncryptor } from "../crypto/field-encryptor.js";
 
 export interface SessionData {
   readonly id: string;
@@ -35,13 +40,16 @@ export interface SessionRepository {
   deleteExpired(): Promise<number>;
 }
 
-function toSessionData(row: Selectable<SessionsTable>): SessionData {
+function toSessionData(
+  row: Selectable<SessionsTable>,
+  encryptor: FieldEncryptor,
+): SessionData {
   return {
     id: row.id,
     token: row.token,
     userId: row.user_id,
-    ipAddress: row.ip_address,
-    userAgent: row.user_agent,
+    ipAddress: encryptor.decrypt(row.encrypted_ip_address),
+    userAgent: encryptor.decrypt(row.encrypted_user_agent),
     expiresAt: row.expires_at,
     createdAt: row.created_at,
   };
@@ -50,6 +58,7 @@ function toSessionData(row: Selectable<SessionsTable>): SessionData {
 /** Creates a SessionRepository backed by Kysely against the tenant schema. */
 export function createDbSessionRepository(
   db: Kysely<TenantDatabase>,
+  encryptor: FieldEncryptor,
 ): SessionRepository {
   return {
     async create(input: CreateSessionInput): Promise<SessionData> {
@@ -58,14 +67,14 @@ export function createDbSessionRepository(
         .values({
           token: input.token,
           user_id: input.userId,
-          ip_address: input.ipAddress,
-          user_agent: input.userAgent,
+          encrypted_ip_address: encryptor.encrypt(input.ipAddress),
+          encrypted_user_agent: encryptor.encrypt(input.userAgent),
           expires_at: input.expiresAt,
         })
         .returningAll()
         .executeTakeFirstOrThrow();
 
-      return toSessionData(row);
+      return toSessionData(row, encryptor);
     },
 
     async findByToken(token: string): Promise<SessionData | null> {
@@ -76,7 +85,7 @@ export function createDbSessionRepository(
         .executeTakeFirst();
 
       if (!row) return null;
-      return toSessionData(row);
+      return toSessionData(row, encryptor);
     },
 
     async deleteByToken(token: string): Promise<void> {

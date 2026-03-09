@@ -14,3 +14,5 @@ commit-msg:
   commands:
     commitlint:
       run: npx --no -- commitlint --edit {1}
+    banned-patterns:
+      run: if [ -f .githooks/commit-msg ]; then bash .githooks/commit-msg {1}; fi

@@ -4,7 +4,7 @@
 
 > **Pre-alpha.** This project is under active development. No code has been released yet.
 
-CARE-Y is a call intake and support system for at-risk populations actively targeted by powerful groups. It serves mutual-aid nonprofits where clients' identity, contact information, and case details are dangerous in the wrong hands.
+CARE-Y is a call intake and support system for at-risk populations actively targeted by powerful groups. It serves mutual-aid nonprofits where both clients and volunteers are at risk: exposing who seeks help or who provides it can endanger lives equally. Identity, contact information, and case details are dangerous in the wrong hands.
 
 CARE-Y is a full rewrite of the Katie call intake system from DARIA Engineering (Django 2.2, Twilio, Heroku) with **security-first architecture**.
 
@@ -24,6 +24,7 @@ CARE-Y makes bulk decryption architecturally impossible. The server stores only 
 - Compromised volunteer device
 - Rogue admin with server access
 - State-level adversary with legal compulsion powers
+- Network surveillance (identifying who connects to the service)
 
 ---
 
@@ -88,7 +89,7 @@ CARE-Y uses a dual-tier encryption model. PII (tickets, client data) is protecte
 | **PII** (OPRF + ECIES) | Tickets, client data, messages | OPRF-derived `masterKey` (via volunteer password + both OPRF servers) + ECIES per-volunteer wrapping of `tk`. No per-ticket server round-trip. | Nothing. No single server holds enough to decrypt PII. |
 | **Non-PII** (org key) | KB articles, org config | Volunteer's `org_unwrap_key` (derived from `masterKey`) to unwrap org private key | Org configuration only. No PII. |
 | **Client branding** | Public-facing branding | Org public key (intentionally public) | Visual assets only (logo, name, color). Already public by design. |
-| **Operational** | Telephony creds, provider config | `OPS_SECRETS_KEY` (server secrets file) | Telephony provider API access only. No volunteer key material. |
+| **Operational** | Telephony creds, provider config, volunteer identifiers, session metadata | `OPS_SECRETS_KEY` (server secrets file) | Telephony API access and encrypted volunteer/session metadata. No volunteer key material. Full server compromise required to decrypt (DB alone yields ciphertext). |
 
 **How PII decryption works (per ticket):**
 

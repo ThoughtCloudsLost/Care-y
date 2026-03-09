@@ -18,6 +18,14 @@ const envSchema = z.object({
 
   // Database connection
   DATABASE_URL: z.string().min(1, "DATABASE_URL is required"),
+
+  // Field-level PII encryption
+  // HKDF-derived subkeys for blind indexing and field encryption.
+  // Generate with: node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+  OPS_SECRETS_KEY: z
+    .string()
+    .min(64, "OPS_SECRETS_KEY must be at least 64 hex chars (32 bytes)")
+    .regex(/^[0-9a-f]+$/i, "OPS_SECRETS_KEY must be hex-encoded"),
 });
 
 export type EnvVars = z.infer<typeof envSchema>;

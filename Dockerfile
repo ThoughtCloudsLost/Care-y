@@ -1,7 +1,15 @@
-# Dev/prod parity: this container runs with read_only, no bind mounts, no anonymous
-# volumes. Dev uses `docker compose watch` for file sync (SEC-194, SEC-195).
+# Multi-stage build: `production` (default) and `test` targets.
+# Production uses `docker compose watch` for file sync (SEC-194, SEC-195).
+# Test target adds vitest config; test files bind-mounted by docker-compose.test.yml.
 # This avoids pnpm symlink conflicts with bind mounts (SEC-196, SEC-197).
-FROM node:22-alpine AS base
+#
+# Uses node:22-slim (Debian, glibc) instead of Alpine because sodium-native
+# does not ship musl prebuilds. This is the Node.js Docker team's recommended
+# base image for production.
+
+# ── base ─────────────────────────────────────────────────────────────
+# Shared stage. deps installed, source copied, user created.
+FROM node:22-slim AS base
 
 # Shared corepack cache: pre-populate during build so pnpm is available at
 # runtime without needing to download anything (required for read_only: true).
@@ -18,9 +26,13 @@ COPY packages/server/package.json ./packages/server/
 COPY packages/client/package.json ./packages/client/
 COPY packages/shared/package.json ./packages/shared/
 COPY packages/crypto/package.json ./packages/crypto/
-RUN pnpm install --frozen-lockfile
+# --ignore-scripts skips the root postinstall (lefthook install) which needs
+# git. We then explicitly rebuild the native addons we actually need.
+# sodium-native ships glibc prebuilds (linux-x64) that work on Debian slim.
+RUN pnpm install --frozen-lockfile --ignore-scripts \
+    && pnpm rebuild sodium-native esbuild
 
-# Copy source
+# Copy source (.dockerignore excludes test files, vitest config, docs, etc.)
 COPY packages/server ./packages/server
 COPY packages/shared ./packages/shared
 COPY packages/crypto ./packages/crypto
@@ -28,8 +40,21 @@ COPY tsconfig.json tsconfig.base.json ./
 
 # Non-root user (matches container hardening - user 1001)
 # Corepack cache is world-readable so user 1001 can resolve pnpm without downloading.
-RUN addgroup -S appgroup && adduser -S appuser -G appgroup -u 1001 \
+RUN groupadd --system appgroup && useradd --system --gid appgroup --uid 1001 appuser \
     && chmod -R a+rX /app/.corepack
+
+# ── test ─────────────────────────────────────────────────────────────
+# Test files (*.test.ts) and vitest.config.ts are bind-mounted into the
+# container by docker-compose.test.yml, not baked into the image.
+# /app owned by user 1001 so Vite can write temp files (bundled config).
+FROM base AS test
+RUN chown 1001:1001 /app
+USER 1001
+
+CMD ["tail", "-f", "/dev/null"]
+
+# ── production (default target, must be last) ────────────────────────
+FROM base AS production
 USER 1001
 
 # Env vars injected by compose env_file (dev) or orchestrator (prod).

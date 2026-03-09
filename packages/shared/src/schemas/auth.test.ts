@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
   emailSchema,
+  notificationEmailSchema,
   passwordSchema,
   displayNameSchema,
+  identifierSchema,
   loginInputSchema,
   registerInputSchema,
 } from "./auth.js";
@@ -52,6 +54,30 @@ describe("emailSchema", () => {
     expect(emailSchema.safeParse(123).success).toBe(false);
     expect(emailSchema.safeParse(null).success).toBe(false);
     expect(emailSchema.safeParse(undefined).success).toBe(false);
+  });
+});
+
+describe("notificationEmailSchema", () => {
+  it("accepts a valid email", () => {
+    const result = notificationEmailSchema.safeParse("carey@example.com");
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data).toBe("carey@example.com");
+    }
+  });
+
+  it("accepts undefined", () => {
+    const result = notificationEmailSchema.safeParse(undefined);
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data).toBeUndefined();
+    }
+  });
+
+  it("rejects invalid email", () => {
+    expect(notificationEmailSchema.safeParse("not-an-email").success).toBe(
+      false,
+    );
   });
 });
 
@@ -143,27 +169,98 @@ describe("displayNameSchema", () => {
   });
 });
 
+describe("identifierSchema", () => {
+  it("accepts valid identifiers", () => {
+    expect(identifierSchema.safeParse("jane.smith").success).toBe(true);
+    expect(identifierSchema.safeParse("jsmith").success).toBe(true);
+    expect(identifierSchema.safeParse("volunteer42").success).toBe(true);
+    expect(identifierSchema.safeParse("j-s").success).toBe(true);
+    expect(identifierSchema.safeParse("a_b").success).toBe(true);
+  });
+
+  it("normalizes to lowercase", () => {
+    const result = identifierSchema.safeParse("JaneSmith");
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data).toBe("janesmith");
+    }
+  });
+
+  it("trims whitespace", () => {
+    const result = identifierSchema.safeParse("  jsmith  ");
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data).toBe("jsmith");
+    }
+  });
+
+  it("rejects identifiers starting with a digit", () => {
+    expect(identifierSchema.safeParse("1jane").success).toBe(false);
+  });
+
+  it("rejects identifiers starting with a special char", () => {
+    expect(identifierSchema.safeParse("@jane").success).toBe(false);
+    expect(identifierSchema.safeParse(".jane").success).toBe(false);
+    expect(identifierSchema.safeParse("-jane").success).toBe(false);
+  });
+
+  it("rejects identifiers ending with a special char", () => {
+    expect(identifierSchema.safeParse("jane-").success).toBe(false);
+    expect(identifierSchema.safeParse("jane.").success).toBe(false);
+    expect(identifierSchema.safeParse("jane_").success).toBe(false);
+  });
+
+  it("rejects identifiers with spaces", () => {
+    expect(identifierSchema.safeParse("jane smith").success).toBe(false);
+  });
+
+  it("rejects identifiers shorter than 3 characters", () => {
+    expect(identifierSchema.safeParse("j").success).toBe(false);
+    expect(identifierSchema.safeParse("jk").success).toBe(false);
+  });
+
+  it("rejects identifiers longer than 64 characters", () => {
+    expect(identifierSchema.safeParse("a" + "b".repeat(63) + "c").success).toBe(
+      false,
+    );
+  });
+
+  it("accepts identifier at exactly 64 characters", () => {
+    const id = "a" + "b".repeat(62) + "c"; // 64 chars
+    expect(identifierSchema.safeParse(id).success).toBe(true);
+  });
+
+  it("accepts identifier at exactly 3 characters", () => {
+    expect(identifierSchema.safeParse("abc").success).toBe(true);
+  });
+
+  it("rejects non-string input", () => {
+    expect(identifierSchema.safeParse(123).success).toBe(false);
+    expect(identifierSchema.safeParse(null).success).toBe(false);
+  });
+});
+
 describe("loginInputSchema", () => {
   it("validates a complete login input", () => {
     const result = loginInputSchema.safeParse({
-      email: "carey@example.com",
+      identifier: "carey",
       password: "securepassword16",
     });
     expect(result.success).toBe(true);
   });
 
-  it("normalizes email in login input", () => {
+  it("normalizes identifier in login input", () => {
     const result = loginInputSchema.safeParse({
-      email: "CAREY@EXAMPLE.COM",
+      identifier: "CAREY",
       password: "securepassword16",
     });
     expect(result.success).toBe(true);
     if (result.success) {
-      expect(result.data.email).toBe("carey@example.com");
+      expect(result.data.identifier).toBe("carey");
     }
   });
 
-  it("rejects missing email", () => {
+  it("rejects missing identifier", () => {
     const result = loginInputSchema.safeParse({
       password: "securepassword16",
     });
@@ -171,7 +268,7 @@ describe("loginInputSchema", () => {
   });
 
   it("rejects missing password", () => {
-    const result = loginInputSchema.safeParse({ email: "carey@example.com" });
+    const result = loginInputSchema.safeParse({ identifier: "carey" });
     expect(result.success).toBe(false);
   });
 });
@@ -179,16 +276,41 @@ describe("loginInputSchema", () => {
 describe("registerInputSchema", () => {
   it("validates a complete registration input", () => {
     const result = registerInputSchema.safeParse({
-      email: "carey@example.com",
+      identifier: "carey",
       password: "strongpassword16",
       displayName: "New User",
     });
     expect(result.success).toBe(true);
   });
 
+  it("accepts optional notificationEmail", () => {
+    const result = registerInputSchema.safeParse({
+      identifier: "carey",
+      password: "strongpassword16",
+      displayName: "New User",
+      notificationEmail: "carey@example.com",
+    });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.notificationEmail).toBe("carey@example.com");
+    }
+  });
+
+  it("accepts missing notificationEmail", () => {
+    const result = registerInputSchema.safeParse({
+      identifier: "carey",
+      password: "strongpassword16",
+      displayName: "New User",
+    });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.notificationEmail).toBeUndefined();
+    }
+  });
+
   it("rejects missing displayName", () => {
     const result = registerInputSchema.safeParse({
-      email: "carey@example.com",
+      identifier: "carey",
       password: "strongpassword16",
     });
     expect(result.success).toBe(false);
@@ -196,7 +318,7 @@ describe("registerInputSchema", () => {
 
   it("rejects short password in registration", () => {
     const result = registerInputSchema.safeParse({
-      email: "carey@example.com",
+      identifier: "carey",
       password: "short",
       displayName: "New User",
     });
@@ -205,7 +327,7 @@ describe("registerInputSchema", () => {
 
   it("strips extra fields from output", () => {
     const result = registerInputSchema.safeParse({
-      email: "carey@example.com",
+      identifier: "carey",
       password: "strongpassword16",
       displayName: "Carey",
       isAdmin: true,

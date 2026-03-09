@@ -14,7 +14,7 @@
     "format": "prettier --check --ignore-path .prettierignore --ignore-path .prettierignore.local .",
     "format:fix": "prettier --write --ignore-path .prettierignore --ignore-path .prettierignore.local .",
     "test": "vitest run",
-    "test:server:db": "docker compose exec app pnpm vitest run --project server",
+    "test:server:db": "docker compose -f docker-compose.yml -f docker-compose.test.yml exec app pnpm vitest run --project server",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "clean": "tsc --build --clean",
@@ -29,7 +29,8 @@
   "pnpm": {
     "onlyBuiltDependencies": [
       "esbuild",
-      "lefthook"
+      "lefthook",
+      "sodium-native"
     ]
   },
   "devDependencies": {
@@ -41,6 +42,7 @@
     "eslint": "10.0.2",
     "eslint-plugin-security": "4.0.0",
     "eslint-plugin-svelte": "3.15.0",
+    "fast-check": "4.6.0",
     "lefthook": "2.1.1",
     "prettier": "3.8.1",
     "prettier-plugin-svelte": "3.5.0",

@@ -27,11 +27,52 @@ import type {
   UsersTable,
   SessionsTable,
 } from "./db/types.js";
+import {
+  deriveKeys,
+  createFieldEncryptor,
+  createBlindIndexer,
+  createNoopFieldEncryptor,
+  type FieldEncryptor,
+  type BlindIndexer,
+} from "./crypto/field-encryptor.js";
 
 // Override int8 parser (same as db.ts). Must be set before creating the Pool.
 pg.types.setTypeParser(pg.types.builtins.INT8, (val: string) =>
   parseInt(val, 10),
 );
+
+// ---------------------------------------------------------------------------
+// Test crypto helpers
+// ---------------------------------------------------------------------------
+
+// Deterministic 32-byte test key (hardcoded, not from env). Safe to commit
+// because it is only used in ephemeral test schemas that are dropped after
+// each suite. Never used in production.
+export const TEST_OPS_KEY = Buffer.from(
+  "cafebabecafebabecafebabecafebabecafebabecafebabecafebabecafebabe",
+  "hex",
+);
+
+const testDerivedKeys = deriveKeys(TEST_OPS_KEY);
+
+/** Real encryptor backed by a deterministic test key. Use for tests that
+ *  verify ciphertext is not plaintext. */
+export const testFieldEncryptor: FieldEncryptor = createFieldEncryptor(
+  testDerivedKeys.fieldEncryptKey,
+);
+
+/** Real blind indexer backed by a deterministic test key. Default for
+ *  createTestUser because identifier_hash has a UNIQUE constraint. */
+export const testBlindIndexer: BlindIndexer = createBlindIndexer(
+  testDerivedKeys.blindIndexKey,
+);
+
+/** Passthrough encryptor for tests that don't need to verify encryption. */
+export const noopEncryptor: FieldEncryptor = createNoopFieldEncryptor();
+
+// ---------------------------------------------------------------------------
+// Test DB setup
+// ---------------------------------------------------------------------------
 
 /** Thrown when test database setup or teardown fails. */
 class TestSetupError extends Error {
@@ -106,8 +147,9 @@ export async function createTestDb(): Promise<TestDb> {
     // Roll back: drop the schema so we don't leak partial schemas.
     await sql`DROP SCHEMA ${sql.id(schemaName)} CASCADE`.execute(platformDb);
     await pool.end();
+    const msg = error instanceof Error ? error.message : JSON.stringify(error);
     throw new TestSetupError(
-      `Test schema migration failed (${schemaName}): ${String(error)}`,
+      `Test schema migration failed (${schemaName}): ${msg}`,
     );
   }
 
@@ -130,7 +172,12 @@ export async function createTestDb(): Promise<TestDb> {
 // Test data factories
 // ---------------------------------------------------------------------------
 
-type UserOverrides = Partial<Insertable<UsersTable>>;
+export interface CreateTestUserOptions {
+  overrides?: Partial<Insertable<UsersTable>>;
+  encryptor?: FieldEncryptor;
+  indexer?: BlindIndexer;
+}
+
 type SessionOverrides = Partial<Insertable<SessionsTable>> & {
   user_id: string;
 };
@@ -142,30 +189,35 @@ const DEFAULT_PASSWORD_HASH =
   "scrypt:" + "aa".repeat(16) + ":" + "bb".repeat(64);
 
 /**
- * Inserts a user row with sensible defaults. Override any column via the
- * overrides parameter. Returns the full row from RETURNING *.
+ * Inserts a user row with sensible defaults. Override any column via
+ * options.overrides. Returns the full row from RETURNING *.
  *
- * The email and display_name columns are volunteer auth fields (login
- * identifiers), not client PII. They are stored in plaintext by design
- * for credential lookup. Values here are synthetic test fixtures in
- * ephemeral test_* schemas that are dropped after each test suite.
+ * Uses noopEncryptor by default for encrypted columns (most tests don't
+ * need real encryption). Uses the real testBlindIndexer by default because
+ * identifier_hash has a UNIQUE constraint and needs deterministic,
+ * collision-resistant values.
  */
 export async function createTestUser(
   db: Kysely<TenantDatabase>,
-  overrides?: UserOverrides,
+  options?: CreateTestUserOptions,
 ): Promise<Selectable<UsersTable>> {
+  const encryptor = options?.encryptor ?? noopEncryptor;
+  const indexer = options?.indexer ?? testBlindIndexer;
   const uid = crypto.randomUUID().slice(0, 8);
-  // Volunteer auth defaults. email and display_name are login identifiers
-  // (not client PII), stored in plaintext for credential lookup by design.
+  const identifier = `test-${uid}`;
+
   const defaults: Insertable<UsersTable> = {
-    email: `test-${uid}@example.com`,
+    identifier_hash: indexer.hash(identifier),
+    encrypted_identifier: encryptor.encrypt(identifier),
     password_hash: DEFAULT_PASSWORD_HASH,
-    display_name: `Test User ${uid}`,
+    encrypted_display_name: encryptor.encrypt(`Test User ${uid}`),
+    encrypted_notification_addr: null,
     role_id: "volunteer",
   };
+
   return db
     .insertInto("users")
-    .values({ ...defaults, ...overrides })
+    .values({ ...defaults, ...options?.overrides })
     .returningAll()
     .executeTakeFirstOrThrow();
 }
@@ -178,14 +230,16 @@ export async function createTestUser(
 export async function createTestSession(
   db: Kysely<TenantDatabase>,
   overrides: SessionOverrides,
+  encryptor?: FieldEncryptor,
 ): Promise<Selectable<SessionsTable>> {
+  const enc = encryptor ?? noopEncryptor;
   const uid = crypto.randomUUID();
   return db
     .insertInto("sessions")
     .values({
       token: uid,
-      ip_address: "127.0.0.1",
-      user_agent: "test-agent",
+      encrypted_ip_address: enc.encrypt("127.0.0.1"),
+      encrypted_user_agent: enc.encrypt("test-agent"),
       expires_at: new Date(Date.now() + 60 * 60 * 1000), // 1 hour from now
       ...overrides,
     })

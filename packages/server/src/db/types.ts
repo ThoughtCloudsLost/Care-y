@@ -28,9 +28,11 @@ export interface PlatformDatabase {
 
 export interface UsersTable {
   id: Generated<string>;
-  email: string;
+  identifier_hash: string;
+  encrypted_identifier: Buffer;
   password_hash: string;
-  display_name: string;
+  encrypted_display_name: Buffer;
+  encrypted_notification_addr: Buffer | null;
   role_id: string;
   is_active: ColumnType<boolean, boolean | undefined, boolean>;
   created_at: Generated<Date>;
@@ -41,8 +43,8 @@ export interface SessionsTable {
   id: Generated<string>;
   token: string;
   user_id: string;
-  ip_address: string;
-  user_agent: string;
+  encrypted_ip_address: Buffer;
+  encrypted_user_agent: Buffer;
   expires_at: Date;
   created_at: Generated<Date>;
 }

@@ -13,8 +13,10 @@ export {
 
 export {
   emailSchema,
+  notificationEmailSchema,
   passwordSchema,
   displayNameSchema,
+  identifierSchema,
   loginInputSchema,
   registerInputSchema,
 } from "./schemas/auth.js";
