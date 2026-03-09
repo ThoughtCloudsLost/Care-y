@@ -1,0 +1,202 @@
+/**
+ * Org lifecycle service.
+ *
+ * Creates orgs (schema + migrations + default config), finds by slug or id.
+ * Operates on the platform `public.orgs` table and provisions per-org
+ * PostgreSQL schemas with tenant migrations.
+ */
+
+import * as path from "node:path";
+import * as fs from "node:fs/promises";
+import type { Kysely, Selectable } from "kysely";
+import { FileMigrationProvider, Migrator, sql } from "kysely";
+import { randomUUID } from "node:crypto";
+import { orgSlugSchema } from "@care-y/shared";
+import type {
+  PlatformDatabase,
+  TenantDatabase,
+  OrgsTable,
+} from "../db/types.js";
+import { isPgUniqueViolation } from "../db/pg-errors.js";
+import { ValidationError, ConflictError, InternalError } from "../errors.js";
+
+// eslint-disable-next-line @typescript-eslint/no-empty-function -- intentional swallow for best-effort cleanup
+const noop = (): void => {};
+
+export interface OrgRecord {
+  readonly id: string;
+  readonly slug: string;
+  readonly schemaName: string;
+  readonly isActive: boolean;
+  readonly createdAt: Date;
+}
+
+export interface OrgService {
+  createOrg(input: { slug: string }): Promise<OrgRecord>;
+  findBySlug(slug: string): Promise<OrgRecord | null>;
+  findById(id: string): Promise<OrgRecord | null>;
+}
+
+function toOrgRecord(row: Selectable<OrgsTable>): OrgRecord {
+  return {
+    id: row.id,
+    slug: row.slug,
+    schemaName: row.schema_name,
+    isActive: row.is_active,
+    createdAt: row.created_at,
+  };
+}
+
+function parseSlug(raw: string): string {
+  const parsed = orgSlugSchema.safeParse(raw);
+  if (!parsed.success) {
+    throw new ValidationError(
+      parsed.error.issues[0]?.message ?? "Invalid slug",
+    );
+  }
+  return parsed.data;
+}
+
+/** Best-effort cleanup: drop schema (if created) and delete the orgs row. */
+async function rollbackOrg(
+  platformDb: Kysely<PlatformDatabase>,
+  orgId: string,
+  schemaName: string,
+): Promise<void> {
+  await sql`DROP SCHEMA IF EXISTS ${sql.id(schemaName)} CASCADE`
+    .execute(platformDb)
+    .catch(noop);
+  await platformDb
+    .deleteFrom("orgs")
+    .where("id", "=", orgId)
+    .execute()
+    .catch(noop);
+}
+
+async function insertOrgRow(
+  platformDb: Kysely<PlatformDatabase>,
+  orgId: string,
+  slug: string,
+  schemaName: string,
+): Promise<Selectable<OrgsTable>> {
+  try {
+    return await platformDb
+      .insertInto("orgs")
+      .values({ id: orgId, slug, schema_name: schemaName })
+      .returningAll()
+      .executeTakeFirstOrThrow();
+  } catch (err: unknown) {
+    if (isPgUniqueViolation(err)) {
+      throw new ConflictError(`Org slug "${slug}" is already taken`);
+    }
+    throw err;
+  }
+}
+
+async function createPostgresSchema(
+  platformDb: Kysely<PlatformDatabase>,
+  orgId: string,
+  schemaName: string,
+): Promise<void> {
+  try {
+    await platformDb.schema.createSchema(schemaName).execute();
+  } catch (err: unknown) {
+    await platformDb
+      .deleteFrom("orgs")
+      .where("id", "=", orgId)
+      .execute()
+      .catch(noop);
+    throw new InternalError(
+      `Failed to create schema "${schemaName}": ${err instanceof Error ? err.message : String(err)}`,
+    );
+  }
+}
+
+const TENANT_MIGRATION_DIR = path.join(
+  import.meta.dirname,
+  "..",
+  "db",
+  "migrations",
+  "tenant",
+);
+
+async function runTenantMigrations(
+  tenantDb: Kysely<TenantDatabase>,
+  schemaName: string,
+): Promise<void> {
+  const migrator = new Migrator({
+    db: tenantDb,
+    provider: new FileMigrationProvider({
+      fs,
+      path,
+      migrationFolder: TENANT_MIGRATION_DIR,
+    }),
+    migrationTableSchema: schemaName,
+  });
+
+  const { error: migrationError } = await migrator.migrateToLatest();
+  if (migrationError) {
+    if (migrationError instanceof Error) {
+      throw migrationError;
+    }
+    throw new InternalError("Tenant migration returned an unknown error");
+  }
+}
+
+async function insertDefaultOrgConfig(
+  tenantDb: Kysely<TenantDatabase>,
+): Promise<void> {
+  await tenantDb
+    .insertInto("org_config")
+    .values({ pii_retention_days: null })
+    .execute();
+}
+
+export function createOrgService(
+  platformDb: Kysely<PlatformDatabase>,
+  tenantDbFactory: (schema: string) => Kysely<TenantDatabase>,
+): OrgService {
+  return {
+    async createOrg(input: { slug: string }): Promise<OrgRecord> {
+      const slug = parseSlug(input.slug);
+      const orgId = randomUUID();
+      const schemaName = `org_${orgId}`;
+
+      const row = await insertOrgRow(platformDb, orgId, slug, schemaName);
+
+      try {
+        await createPostgresSchema(platformDb, orgId, schemaName);
+        await runTenantMigrations(tenantDbFactory(schemaName), schemaName);
+        await insertDefaultOrgConfig(tenantDbFactory(schemaName));
+      } catch (err: unknown) {
+        await rollbackOrg(platformDb, orgId, schemaName);
+        if (err instanceof InternalError) throw err;
+        throw new InternalError(
+          `Org provisioning failed for "${schemaName}": ${err instanceof Error ? err.message : String(err)}`,
+        );
+      }
+
+      return toOrgRecord(row);
+    },
+
+    async findBySlug(slug: string): Promise<OrgRecord | null> {
+      const row = await platformDb
+        .selectFrom("orgs")
+        .selectAll()
+        .where("slug", "=", slug)
+        .executeTakeFirst();
+
+      return row ? toOrgRecord(row) : null;
+    },
+
+    async findById(id: string): Promise<OrgRecord | null> {
+      const row = await platformDb
+        .selectFrom("orgs")
+        .selectAll()
+        .where("id", "=", id)
+        .executeTakeFirst();
+
+      return row ? toOrgRecord(row) : null;
+    },
+  };
+}

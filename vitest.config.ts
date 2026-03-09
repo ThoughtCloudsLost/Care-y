@@ -41,6 +41,7 @@ export default defineConfig({
         test: {
           name: "server",
           root: "packages/server",
+          globalSetup: ["src/test-global-setup.ts"],
           include: ["src/**/*.test.ts"],
           exclude: ["**/dist/**", "**/node_modules/**"],
           coverage: {
