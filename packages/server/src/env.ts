@@ -26,6 +26,11 @@ const envSchema = z.object({
     .string()
     .min(64, "OPS_SECRETS_KEY must be at least 64 hex chars (32 bytes)")
     .regex(/^[0-9a-f]+$/i, "OPS_SECRETS_KEY must be hex-encoded"),
+
+  // tRPC CORS origin. In dev, the Vite proxy makes this mostly irrelevant
+  // (requests are same-origin from the browser's perspective), but it
+  // applies for production (Caddy reverse proxy) and direct API testing.
+  CORS_ORIGIN: z.string().default("http://localhost:5173"),
 });
 
 export type EnvVars = z.infer<typeof envSchema>;
