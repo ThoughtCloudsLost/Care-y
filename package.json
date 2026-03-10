@@ -31,7 +31,10 @@
       "esbuild",
       "lefthook",
       "sodium-native"
-    ]
+    ],
+    "overrides": {
+      "@types/node": "25.4.0"
+    }
   },
   "devDependencies": {
     "@axe-core/playwright": "4.11.1",

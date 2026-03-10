@@ -1,23 +1,22 @@
 import { dev } from "$app/environment";
-import type { Handle } from "@sveltejs/kit";
+import { sequence } from "@sveltejs/kit/hooks";
+import type { Handle, HandleServerError } from "@sveltejs/kit";
+import {
+  extractSubdomain,
+  readDevSlugHeader,
+} from "$lib/server/org-resolution";
 
-export const handle: Handle = async ({ event, resolve }) => {
+/**
+ * Security headers handle.
+ *
+ * CSP is managed by svelte.config.js (kit.csp) so SvelteKit can inject
+ * nonces into inline scripts. Everything else is set here.
+ */
+const securityHeaders: Handle = async ({ event, resolve }) => {
   const response = await resolve(event);
 
-  // --- Content-Security-Policy ---
-  // CSP is configured in svelte.config.js via kit.csp, NOT here.
-  // SvelteKit manages the CSP header so it can inject nonces (mode: "auto")
-  // into inline <script> tags it generates. Key decisions documented there:
-  //   - script-src: 'self' + 'wasm-unsafe-eval' (libsodium WASM)
-  //   - style-src-attr: 'unsafe-inline' (Konsta UI dynamic style attributes)
-  //   - style-src-elem: 'self' (blocks <style> tag injection, the real attack vector)
-  //   - upgrade-insecure-requests: auto-upgrades HTTP to HTTPS
-
-  // --- HSTS (HTTP Strict Transport Security) ---
-  // Tells browsers to only connect via HTTPS for 2 years, including subdomains.
-  // The preload flag allows submission to hstspreload.org for browser-level enforcement.
-  // Only set in production: dev uses HTTP (no TLS cert), and HSTS on localhost
-  // would lock the browser into HTTPS for the domain.
+  // Production only. Dev uses HTTP and HSTS on localhost would lock
+  // the browser to HTTPS for the domain.
   if (!dev) {
     response.headers.set(
       "Strict-Transport-Security",
@@ -46,4 +45,45 @@ export const handle: Handle = async ({ event, resolve }) => {
   response.headers.set("Cross-Origin-Embedder-Policy", "require-corp");
 
   return response;
+};
+
+/**
+ * Org resolution handle.
+ *
+ * Dev: reads X-Org-Slug header (SOG-07 fallback), then falls back to Host.
+ * Prod: extracts subdomain from Host header (slug.care-y.app -> slug).
+ * Sets event.locals.orgSlug for downstream load functions.
+ */
+const orgResolution: Handle = async ({ event, resolve }) => {
+  const devSlug = dev ? readDevSlugHeader(event.request.headers) : null;
+  const hostSlug = extractSubdomain(event.request.headers.get("host") ?? "");
+
+  event.locals.orgSlug = devSlug ?? hostSlug;
+  return resolve(event);
+};
+
+export const handle: Handle = sequence(securityHeaders, orgResolution);
+
+/**
+ * Global error handler.
+ *
+ * Logs structured JSON server-side for operator correlation.
+ * Returns an opaque { message, id } to the client (no stack, no internals).
+ * Never logs request body (may contain passwords).
+ */
+export const handleError: HandleServerError = ({ error, event, status }) => {
+  const id = crypto.randomUUID();
+
+  console.error(
+    JSON.stringify({
+      errorId: id,
+      status,
+      path: event.url.pathname,
+      method: event.request.method,
+      message: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : undefined,
+    }),
+  );
+
+  return { message: "An error occurred", id };
 };
