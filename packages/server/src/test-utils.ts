@@ -70,6 +70,10 @@ export const testBlindIndexer: BlindIndexer = createBlindIndexer(
 /** Passthrough encryptor for tests that don't need to verify encryption. */
 export const noopEncryptor: FieldEncryptor = createNoopFieldEncryptor();
 
+/** Stable org ID for test factories. Used as the org-scoping salt in blind
+ *  index hashes so that test hashes are deterministic across runs. */
+export const TEST_ORG_ID = "00000000-0000-0000-0000-000000000001";
+
 // ---------------------------------------------------------------------------
 // Test DB setup
 // ---------------------------------------------------------------------------
@@ -176,6 +180,7 @@ export interface CreateTestUserOptions {
   overrides?: Partial<Insertable<UsersTable>>;
   encryptor?: FieldEncryptor;
   indexer?: BlindIndexer;
+  orgId?: string;
 }
 
 type SessionOverrides = Partial<Insertable<SessionsTable>> & {
@@ -203,11 +208,12 @@ export async function createTestUser(
 ): Promise<Selectable<UsersTable>> {
   const encryptor = options?.encryptor ?? noopEncryptor;
   const indexer = options?.indexer ?? testBlindIndexer;
+  const orgId = options?.orgId ?? TEST_ORG_ID;
   const uid = crypto.randomUUID().slice(0, 8);
   const identifier = `test-${uid}`;
 
   const defaults: Insertable<UsersTable> = {
-    identifier_hash: indexer.hash(identifier),
+    identifier_hash: indexer.hash(identifier, orgId),
     encrypted_identifier: encryptor.encrypt(identifier),
     password_hash: DEFAULT_PASSWORD_HASH,
     encrypted_display_name: encryptor.encrypt(`Test User ${uid}`),

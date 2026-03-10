@@ -163,32 +163,40 @@ describe("createFieldEncryptor", () => {
 describe("createBlindIndexer", () => {
   const keys = deriveKeys(TEST_KEY);
   const indexer = createBlindIndexer(keys.blindIndexKey);
+  const ORG_A = "org-a";
+  const ORG_B = "org-b";
 
   it("produces a 64-char hex string (SHA-256)", () => {
-    const h = indexer.hash("test");
+    const h = indexer.hash("test", ORG_A);
     expect(h).toMatch(/^[0-9a-f]{64}$/);
   });
 
   it("is deterministic", () => {
-    expect(indexer.hash("alice")).toBe(indexer.hash("alice"));
+    expect(indexer.hash("alice", ORG_A)).toBe(indexer.hash("alice", ORG_A));
   });
 
   it("is case-insensitive", () => {
-    expect(indexer.hash("Alice")).toBe(indexer.hash("alice"));
-    expect(indexer.hash("ALICE")).toBe(indexer.hash("alice"));
+    expect(indexer.hash("Alice", ORG_A)).toBe(indexer.hash("alice", ORG_A));
+    expect(indexer.hash("ALICE", ORG_A)).toBe(indexer.hash("alice", ORG_A));
   });
 
   it("trims whitespace before hashing", () => {
-    expect(indexer.hash("  alice  ")).toBe(indexer.hash("alice"));
+    expect(indexer.hash("  alice  ", ORG_A)).toBe(indexer.hash("alice", ORG_A));
   });
 
   it("produces different output for different inputs", () => {
-    expect(indexer.hash("alice")).not.toBe(indexer.hash("bob"));
+    expect(indexer.hash("alice", ORG_A)).not.toBe(indexer.hash("bob", ORG_A));
   });
 
   it("produces different output for different keys", () => {
     const altIndexer = createBlindIndexer(deriveKeys(ALT_KEY).blindIndexKey);
-    expect(indexer.hash("alice")).not.toBe(altIndexer.hash("alice"));
+    expect(indexer.hash("alice", ORG_A)).not.toBe(
+      altIndexer.hash("alice", ORG_A),
+    );
+  });
+
+  it("produces different output for same username in different orgs", () => {
+    expect(indexer.hash("alice", ORG_A)).not.toBe(indexer.hash("alice", ORG_B));
   });
 
   it("rejects key with wrong length", () => {
@@ -199,7 +207,7 @@ describe("createBlindIndexer", () => {
   it("is deterministic for arbitrary strings (property-based)", () => {
     fc.assert(
       fc.property(fc.string(), (s: string) => {
-        return indexer.hash(s) === indexer.hash(s);
+        return indexer.hash(s, ORG_A) === indexer.hash(s, ORG_A);
       }),
       { numRuns: 200 },
     );

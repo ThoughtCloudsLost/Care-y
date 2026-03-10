@@ -17,7 +17,7 @@ describe("orgSlugSchema", () => {
     });
   }
 
-  const invalid: Array<{ input: string; reason: string }> = [
+  const invalid: { input: string; reason: string }[] = [
     { input: "ab", reason: "too short (2 chars)" },
     { input: "A-bc", reason: "uppercase letter" },
     { input: "-abc", reason: "starts with hyphen" },

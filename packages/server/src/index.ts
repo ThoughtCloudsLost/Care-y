@@ -82,32 +82,31 @@ export type AppRouter = typeof appRouter;
 // --- HTTP server ---
 // createHTTPHandler returns a RequestListener. We create the http.Server
 // manually so we can intercept OPTIONS preflight before tRPC processes it.
-const trpcHandler = createHTTPHandler({
-  router: appRouter,
-  createContext,
-  responseMeta() {
-    return {
-      headers: {
-        "Access-Control-Allow-Origin": env.CORS_ORIGIN,
-        "Access-Control-Allow-Credentials": "true",
-        "Access-Control-Allow-Headers": "Content-Type, Authorization",
-        "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-      },
-    };
-  },
-});
-
-const corsHeaders = {
+// Shared CORS headers. The preflight handler adds Max-Age; responseMeta
+// attaches the base set to every tRPC response.
+const corsBase = {
   "Access-Control-Allow-Origin": env.CORS_ORIGIN,
   "Access-Control-Allow-Credentials": "true",
   "Access-Control-Allow-Headers": "Content-Type, Authorization",
   "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+} as const;
+
+const preflightHeaders = {
+  ...corsBase,
   "Access-Control-Max-Age": "86400",
 } as const;
 
+const trpcHandler = createHTTPHandler({
+  router: appRouter,
+  createContext,
+  responseMeta() {
+    return { headers: corsBase };
+  },
+});
+
 const server = createServer((req, res) => {
   if (req.method === "OPTIONS") {
-    res.writeHead(204, corsHeaders);
+    res.writeHead(204, preflightHeaders);
     res.end();
     return;
   }

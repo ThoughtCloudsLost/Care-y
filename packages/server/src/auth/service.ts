@@ -84,12 +84,14 @@ export function createAuthService(
   sessions: SessionRepository,
   encryptor: FieldEncryptor,
   indexer: BlindIndexer,
+  orgId: string,
 ): AuthService {
   // Lazy-initialized dummy hash for timing side-channel prevention.
   // On the first failed-lookup login attempt, we hash a throwaway string
   // so that the timing of a "user not found" path matches "wrong password".
   let dummyHashPromise: Promise<string> | null = null;
 
+  // eslint-disable-next-line @typescript-eslint/promise-function-async -- returns a cached promise; async would create a new wrapper on each call
   function getDummyHash(): Promise<string> {
     dummyHashPromise ??= hasher.hash("__timing_pad__");
     return dummyHashPromise;
@@ -124,7 +126,7 @@ export function createAuthService(
     userId: string,
   ): Promise<Selectable<UsersTable> | null> {
     const row = await findUserRowById(userId);
-    if (!row?.is_active) return null;
+    if (row?.is_active !== true) return null;
     return row;
   }
 
@@ -185,12 +187,13 @@ export function createAuthService(
     notificationEmail?: string;
     roleId: string;
   }): Promise<Selectable<UsersTable>> {
-    const identifierHash = indexer.hash(input.identifier);
+    const identifierHash = indexer.hash(input.identifier, orgId);
     const encryptedIdentifier = encryptor.encrypt(input.identifier);
     const encryptedDisplayName = encryptor.encrypt(input.displayName);
-    const encryptedNotificationAddr = input.notificationEmail
-      ? encryptor.encrypt(input.notificationEmail)
-      : null;
+    const encryptedNotificationAddr =
+      input.notificationEmail !== undefined && input.notificationEmail !== ""
+        ? encryptor.encrypt(input.notificationEmail)
+        : null;
     const passwordHash = await hasher.hash(input.password);
 
     try {
@@ -223,7 +226,9 @@ export function createAuthService(
     },
 
     async login(input): Promise<{ user: UserRecord; session: SessionData }> {
-      const row = await findActiveUserByHash(indexer.hash(input.identifier));
+      const row = await findActiveUserByHash(
+        indexer.hash(input.identifier, orgId),
+      );
       const verifiedRow = await verifyCredentials(input.password, row);
       const session = await createSessionForUser(
         verifiedRow.id,

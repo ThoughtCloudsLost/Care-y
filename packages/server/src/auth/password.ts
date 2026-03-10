@@ -8,7 +8,13 @@
 import { scrypt, randomBytes, timingSafeEqual } from "node:crypto";
 import { promisify } from "node:util";
 
-const scryptAsync = promisify(scrypt);
+// promisify(scrypt) resolves to a union of overload signatures.
+// We narrow to the (password, salt, keylen) -> Buffer overload we use.
+const scryptAsync = promisify(scrypt) as (
+  password: string,
+  salt: Buffer,
+  keylen: number,
+) => Promise<Buffer>;
 
 const SALT_BYTES = 16;
 const KEY_BYTES = 64;
@@ -26,7 +32,14 @@ interface ParsedHash {
 
 function parseStoredHash(hash: string): ParsedHash | null {
   const [prefix, saltHex, hashHex, ...rest] = hash.split(":");
-  if (rest.length > 0 || prefix !== HASH_PREFIX || !saltHex || !hashHex) {
+  if (
+    rest.length > 0 ||
+    prefix !== HASH_PREFIX ||
+    saltHex === undefined ||
+    saltHex === "" ||
+    hashHex === undefined ||
+    hashHex === ""
+  ) {
     return null;
   }
 
@@ -53,7 +66,7 @@ export function createScryptHasher(): PasswordHasher {
   return {
     async hash(password: string): Promise<string> {
       const salt = randomBytes(SALT_BYTES);
-      const derived = (await scryptAsync(password, salt, KEY_BYTES)) as Buffer;
+      const derived = await scryptAsync(password, salt, KEY_BYTES);
       return `${HASH_PREFIX}:${salt.toString("hex")}:${derived.toString("hex")}`;
     },
 
@@ -61,11 +74,7 @@ export function createScryptHasher(): PasswordHasher {
       const parsed = parseStoredHash(hash);
       if (!parsed) return false;
 
-      const derived = (await scryptAsync(
-        password,
-        parsed.salt,
-        KEY_BYTES,
-      )) as Buffer;
+      const derived = await scryptAsync(password, parsed.salt, KEY_BYTES);
       return timingSafeEqual(derived, parsed.stored);
     },
   };

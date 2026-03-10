@@ -312,5 +312,32 @@ describe.skipIf(!process.env.DATABASE_URL)(
         .executeTakeFirst();
       expect(row).toBeUndefined();
     });
+
+    it("re-throws non-unique-violation DB errors from insertOrgRow", async () => {
+      // insertOrgRow is called BEFORE the try block in createOrg (line 153),
+      // so a non-unique-violation error propagates directly without wrapping.
+      const insertSpy = vi.spyOn(platformDb, "insertInto").mockReturnValue({
+        values: () => ({
+          returningAll: () => ({
+            executeTakeFirstOrThrow: () =>
+              Promise.reject(new Error("connection reset")),
+          }),
+        }),
+      } as unknown as ReturnType<typeof platformDb.insertInto>);
+
+      function realFactory(schema: string): Kysely<TenantDatabase> {
+        return platformDb.withSchema(
+          schema,
+        ) as unknown as Kysely<TenantDatabase>;
+      }
+
+      const service = createOrgService(platformDb, realFactory);
+
+      await expect(
+        service.createOrg({ slug: "test-insert-rethrow" }),
+      ).rejects.toThrow("connection reset");
+
+      insertSpy.mockRestore();
+    });
   },
 );

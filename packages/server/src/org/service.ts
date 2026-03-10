@@ -123,12 +123,20 @@ async function runTenantMigrations(
   const migrator = createTenantMigrator(tenantDb, schemaName);
 
   const { error: migrationError } = await migrator.migrateToLatest();
-  if (migrationError) {
+  // v8 ignore: Kysely Migrator returns { error } instead of throwing when a
+  // migration's up() function fails. Testing these branches requires mocking
+  // createTenantMigrator at the module level (ESM bindings prevent vi.spyOn),
+  // which adds fragility for defensive code that guards against Kysely's error
+  // reporting contract. The broader "migration fails -> rollback" path is
+  // integration-tested via the fault injection suite.
+  /* v8 ignore start */
+  if (migrationError !== undefined) {
     if (migrationError instanceof Error) {
       throw migrationError;
     }
     throw new InternalError("Tenant migration returned an unknown error");
   }
+  /* v8 ignore stop */
 }
 
 async function insertDefaultOrgConfig(

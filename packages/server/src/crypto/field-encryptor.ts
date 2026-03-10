@@ -24,7 +24,7 @@ export interface FieldEncryptor {
 }
 
 export interface BlindIndexer {
-  hash(input: string): string;
+  hash(input: string, orgId: string): string;
 }
 
 export interface DerivedKeys {
@@ -135,6 +135,8 @@ export function createFieldEncryptor(key: Buffer): FieldEncryptor {
 /**
  * Creates a BlindIndexer using HMAC-SHA256 via Node crypto.
  * Input is normalized (lowercase + trim) before hashing for case-insensitive lookup.
+ * The orgId is prepended to the HMAC input to prevent cross-org correlation:
+ * two users with the same username in different orgs produce different hashes.
  */
 export function createBlindIndexer(key: Buffer): BlindIndexer {
   if (key.length !== REQUIRED_KEY_LENGTH) {
@@ -144,9 +146,11 @@ export function createBlindIndexer(key: Buffer): BlindIndexer {
   }
 
   return {
-    hash(input: string): string {
+    hash(input: string, orgId: string): string {
       const normalized = input.toLowerCase().trim();
-      return createHmac("sha256", key).update(normalized).digest("hex");
+      return createHmac("sha256", key)
+        .update(orgId + ":" + normalized)
+        .digest("hex");
     },
   };
 }

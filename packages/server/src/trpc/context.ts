@@ -28,6 +28,7 @@ import { createDbSessionRepository } from "../auth/session-repository.js";
 import { createAuthService } from "../auth/service.js";
 import { parseCookies } from "../auth/cookies.js";
 import { SESSION_COOKIE_NAME } from "../auth/service.js";
+import { extractClientIp } from "../http/request-utils.js";
 import { tenantDb } from "../db/db.js";
 import { getEnv } from "../env.js";
 
@@ -68,18 +69,18 @@ function extractOrgSlug(req: IncomingMessage): string | null {
   }
 
   const host = req.headers.host;
-  if (!host) return null;
+  if (host === undefined || host === "") return null;
 
   // Strip port if present
   const hostname = host.split(":")[0];
-  if (!hostname) return null;
+  if (hostname === undefined || hostname === "") return null;
 
   // Expect subdomain.domain.tld format (at least 3 parts)
   const parts = hostname.split(".");
   if (parts.length < 3) return null;
 
   const subdomain = parts[0];
-  return subdomain && subdomain.length > 0 ? subdomain : null;
+  return subdomain !== undefined && subdomain.length > 0 ? subdomain : null;
 }
 
 async function resolveOrg(
@@ -87,10 +88,10 @@ async function resolveOrg(
   orgService: OrgService,
 ): Promise<OrgContext | null> {
   const slug = extractOrgSlug(req);
-  if (!slug) return null;
+  if (slug === null) return null;
 
   const org = await orgService.findBySlug(slug);
-  if (!org?.isActive) return null;
+  if (org?.isActive !== true) return null;
 
   return {
     orgId: org.id,
@@ -100,13 +101,21 @@ async function resolveOrg(
   };
 }
 
+/** Minimal deps for constructing a tenant-scoped AuthService. */
+export interface AuthServiceDeps {
+  readonly hasher: PasswordHasher;
+  readonly encryptor: FieldEncryptor;
+  readonly indexer: BlindIndexer;
+}
+
 /**
  * Creates an AuthService scoped to the given org's tenant DB.
- * Called per-request when org is resolved and a session cookie exists.
+ * Used by both the context factory (session validation) and route handlers
+ * (login, register, logout) to avoid repeating the 5-arg constructor call.
  */
-function createScopedAuthService(
+export function createScopedAuthService(
   orgCtx: OrgContext,
-  deps: ContextDeps,
+  deps: AuthServiceDeps,
 ): AuthService {
   const sessions = createDbSessionRepository(orgCtx.tenantDb, deps.encryptor);
   return createAuthService(
@@ -115,6 +124,7 @@ function createScopedAuthService(
     sessions,
     deps.encryptor,
     deps.indexer,
+    orgCtx.orgId,
   );
 }
 
@@ -124,23 +134,13 @@ async function validateSessionFromRequest(
   deps: ContextDeps,
 ): Promise<{ session: SessionData; user: UserRecord } | null> {
   const cookieToken = parseCookies(req.headers.cookie).get(SESSION_COOKIE_NAME);
-  if (!cookieToken) return null;
+  if (cookieToken === undefined) return null;
 
   const authService = createScopedAuthService(orgCtx, deps);
   const ip = extractClientIp(req);
   const ua = req.headers["user-agent"] ?? "unknown";
 
   return authService.validateSession(cookieToken, ip, ua);
-}
-
-/** Extracts client IP, preferring X-Forwarded-For (Caddy sets this). */
-function extractClientIp(req: IncomingMessage): string {
-  const forwarded = req.headers["x-forwarded-for"];
-  if (typeof forwarded === "string") {
-    const first = forwarded.split(",")[0]?.trim();
-    if (first) return first;
-  }
-  return req.socket.remoteAddress ?? "unknown";
 }
 
 /**

@@ -4,6 +4,7 @@ import {
   noopEncryptor,
   testFieldEncryptor,
   testBlindIndexer,
+  TEST_ORG_ID,
   type TestDb,
 } from "../test-utils.js";
 import { createDbSessionRepository } from "./session-repository.js";
@@ -35,6 +36,7 @@ describe.skipIf(!process.env.DATABASE_URL)("AuthService", () => {
       sessions,
       noopEncryptor,
       testBlindIndexer,
+      TEST_ORG_ID,
     );
   });
 
@@ -78,6 +80,7 @@ describe.skipIf(!process.env.DATABASE_URL)("AuthService", () => {
         encSessions,
         testFieldEncryptor,
         testBlindIndexer,
+        TEST_ORG_ID,
       );
 
       await encService.register({
@@ -91,7 +94,11 @@ describe.skipIf(!process.env.DATABASE_URL)("AuthService", () => {
       const rawRow = await testDb.db
         .selectFrom("users")
         .selectAll()
-        .where("identifier_hash", "=", testBlindIndexer.hash("enc-check-user"))
+        .where(
+          "identifier_hash",
+          "=",
+          testBlindIndexer.hash("enc-check-user", TEST_ORG_ID),
+        )
         .executeTakeFirstOrThrow();
 
       expect(rawRow.encrypted_identifier.toString("utf-8")).not.toBe(
@@ -110,7 +117,10 @@ describe.skipIf(!process.env.DATABASE_URL)("AuthService", () => {
         roleId: "volunteer",
       });
 
-      const expectedHash = testBlindIndexer.hash("blind-index-user");
+      const expectedHash = testBlindIndexer.hash(
+        "blind-index-user",
+        TEST_ORG_ID,
+      );
 
       const row = await testDb.db
         .selectFrom("users")
@@ -132,7 +142,11 @@ describe.skipIf(!process.env.DATABASE_URL)("AuthService", () => {
       const row = await testDb.db
         .selectFrom("users")
         .selectAll()
-        .where("identifier_hash", "=", testBlindIndexer.hash("no-email-user"))
+        .where(
+          "identifier_hash",
+          "=",
+          testBlindIndexer.hash("no-email-user", TEST_ORG_ID),
+        )
         .executeTakeFirstOrThrow();
 
       expect(row.encrypted_notification_addr).toBeNull();
@@ -150,7 +164,11 @@ describe.skipIf(!process.env.DATABASE_URL)("AuthService", () => {
       const row = await testDb.db
         .selectFrom("users")
         .selectAll()
-        .where("identifier_hash", "=", testBlindIndexer.hash("has-email-user"))
+        .where(
+          "identifier_hash",
+          "=",
+          testBlindIndexer.hash("has-email-user", TEST_ORG_ID),
+        )
         .executeTakeFirstOrThrow();
 
       // With noopEncryptor, the buffer contains the plaintext.
@@ -176,6 +194,30 @@ describe.skipIf(!process.env.DATABASE_URL)("AuthService", () => {
           roleId: "volunteer",
         }),
       ).rejects.toThrow(ConflictError);
+    });
+
+    it("re-throws non-unique-violation DB errors from insert", async () => {
+      // When insertInto throws an error that isn't a PG unique violation
+      // (e.g., connection reset), insertUserRow re-throws it (line 215).
+      const insertSpy = vi.spyOn(testDb.db, "insertInto").mockReturnValue({
+        values: () => ({
+          returningAll: () => ({
+            executeTakeFirstOrThrow: () =>
+              Promise.reject(new Error("connection reset")),
+          }),
+        }),
+      } as unknown as ReturnType<typeof testDb.db.insertInto>);
+
+      await expect(
+        service.register({
+          identifier: "wont-insert",
+          password: "irrelevantpassword1",
+          displayName: "Wont Insert",
+          roleId: "volunteer",
+        }),
+      ).rejects.toThrow("connection reset");
+
+      insertSpy.mockRestore();
     });
   });
 

@@ -16,6 +16,7 @@ import {
   createTestDb,
   testFieldEncryptor,
   testBlindIndexer,
+  TEST_ORG_ID,
   type TestDb,
 } from "../test-utils.js";
 import { createScryptHasher } from "../auth/password.js";
@@ -80,6 +81,7 @@ function makeTenantDbFactory(
 /** Creates AuthService scoped to the test tenant DB. */
 function makeAuthService(
   tenantDb: Kysely<TenantDatabase>,
+  orgId: string = TEST_ORG_ID,
 ): ReturnType<typeof createAuthService> {
   const sessions = createDbSessionRepository(tenantDb, testFieldEncryptor);
   return createAuthService(
@@ -88,6 +90,7 @@ function makeAuthService(
     sessions,
     testFieldEncryptor,
     testBlindIndexer,
+    orgId,
   );
 }
 
@@ -280,7 +283,7 @@ describe.skipIf(!HAS_DB)("auth + org routers (DB integration)", () => {
   // --- Auth: login ---
 
   it("auth.login returns user and sets cookie", async () => {
-    const authService = makeAuthService(tenantDb);
+    const authService = makeAuthService(tenantDb, orgContext.orgId);
     await authService.register({
       identifier: "loginuser",
       password: "login-password-long-enough",
@@ -383,7 +386,7 @@ describe.skipIf(!HAS_DB)("auth + org routers (DB integration)", () => {
   // --- extractClientIp branches ---
 
   it("auth.login uses x-forwarded-for header for client IP", async () => {
-    const authService = makeAuthService(tenantDb);
+    const authService = makeAuthService(tenantDb, orgContext.orgId);
     await authService.register({
       identifier: "xff-user",
       password: "xff-password-long-enough",
@@ -438,6 +441,72 @@ describe.skipIf(!HAS_DB)("auth + org routers (DB integration)", () => {
         roleId: "volunteer",
       }),
     ).rejects.toThrow("already exists");
+  });
+
+  // --- Branch coverage: user-agent fallback ---
+
+  it("auth.login uses 'unknown' when user-agent header is missing", async () => {
+    const authService = makeAuthService(tenantDb, orgContext.orgId);
+    await authService.register({
+      identifier: "no-ua-user",
+      password: "no-ua-password-long-enough",
+      displayName: "No UA User",
+      roleId: "volunteer",
+    });
+
+    loginLimiter.reset("127.0.0.1");
+
+    // Build caller with no user-agent header to exercise ?? "unknown"
+    const res = mockRes();
+    const socket = new Socket();
+    Object.defineProperty(socket, "remoteAddress", {
+      value: "127.0.0.1",
+      writable: true,
+    });
+    const req = Object.create(IncomingMessage.prototype) as IncomingMessage;
+    Object.defineProperty(req, "socket", { value: socket, writable: false });
+    Object.defineProperty(req, "headers", { value: {}, writable: true });
+
+    const appRouter = buildRouter();
+    const factory = createCallerFactory(appRouter);
+    const ctx: Context = {
+      req,
+      res,
+      org: orgContext,
+      session: null,
+      user: null,
+    };
+    const caller = factory(ctx);
+
+    const result = await caller.auth.login({
+      identifier: "no-ua-user",
+      password: "no-ua-password-long-enough",
+    });
+    expect(result.user.identifier).toBe("no-ua-user");
+  });
+
+  // --- Branch coverage: register with notificationEmail ---
+
+  it("auth.register passes notificationEmail when provided", async () => {
+    const authService = makeAuthService(tenantDb);
+    const admin = await authService.register({
+      identifier: "email-admin",
+      password: "email-admin-password-long-enough",
+      displayName: "Email Admin",
+      roleId: "admin",
+    });
+
+    const { caller } = createAuthedCaller(admin, "email-admin-token");
+    const result = await caller.auth.register({
+      identifier: "email-user",
+      password: "email-user-password-long-enough",
+      displayName: "Email User",
+      notificationEmail: "user@example.com",
+      roleId: "volunteer",
+    });
+
+    expect(result.user.identifier).toBe("email-user");
+    expect(result.user.displayName).toBe("Email User");
   });
 
   // --- Rate limiting ---

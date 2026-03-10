@@ -156,7 +156,7 @@ See [SECURITY.md](SECURITY.md) for vulnerability reporting.
 
 Key security principles:
 
-- **Server cannot decrypt alone:** PII decryption requires the volunteer's password plus OPRF evaluation from both servers. No single server can derive the decryption key.
+- **Server cannot decrypt client data:** Tickets, messages, case notes, display names, and session details are encrypted so the server cannot read them. Decryption requires the volunteer's password plus OPRF evaluation from both threshold servers. The server can read usernames (for login) and opt-in email addresses (for notifications).
 - **E2E for all client-authored content:** encrypted in the browser before transmission
 - **Telephony relay zeroes memory:** `Buffer.fill(0)` in `finally` blocks, no strings, no logging
 - **Webhook signatures always validated**, even in development

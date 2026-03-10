@@ -18,7 +18,8 @@ import {
 const args = process.argv.slice(2);
 const direction = args.includes("down") ? "down" : "up";
 const schemaFlag = args.find((a) => a.startsWith("--schema="));
-const targetSchema = schemaFlag ? schemaFlag.slice("--schema=".length) : null;
+const targetSchema =
+  schemaFlag !== undefined ? schemaFlag.slice("--schema=".length) : null;
 const allSchemas = args.includes("--all-schemas");
 
 async function runMigrator(
@@ -26,9 +27,10 @@ async function runMigrator(
   dir: "up" | "down",
   schemaName?: string,
 ): Promise<void> {
-  const migrator = schemaName
-    ? createTenantMigrator(tenantDb(schemaName), schemaName)
-    : createPlatformMigrator(db);
+  const migrator =
+    schemaName !== undefined
+      ? createTenantMigrator(tenantDb(schemaName), schemaName)
+      : createPlatformMigrator(db);
 
   const { error, results } =
     dir === "down"
@@ -37,7 +39,7 @@ async function runMigrator(
 
   logMigrationResults(label, results, dir);
 
-  if (error) {
+  if (error !== undefined) {
     console.error(`[${label}] Migration failed:`, error);
     process.exit(1);
   }
@@ -45,7 +47,7 @@ async function runMigrator(
 
 // --- Main ---
 
-if (targetSchema) {
+if (targetSchema !== null) {
   // Single tenant schema
   await runMigrator(targetSchema, direction, targetSchema);
 } else if (allSchemas) {

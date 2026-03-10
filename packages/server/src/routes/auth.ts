@@ -10,7 +10,7 @@
  * user's non-sensitive profile.
  */
 
-import type { IncomingMessage } from "node:http";
+import type { ServerResponse } from "node:http";
 import { loginInputSchema, registerInputSchema } from "@care-y/shared";
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
@@ -20,26 +20,22 @@ import {
   authedProcedure,
   throwAsTrpc,
 } from "../trpc/trpc.js";
-import type { PasswordHasher } from "../auth/password.js";
 import type { RateLimiter } from "../ratelimit/rate-limiter.js";
-import type {
-  FieldEncryptor,
-  BlindIndexer,
-} from "../crypto/field-encryptor.js";
-import { createDbSessionRepository } from "../auth/session-repository.js";
 import type { UserRecord } from "../auth/service.js";
-import { createAuthService, SESSION_MAX_AGE_MS } from "../auth/service.js";
+import { SESSION_MAX_AGE_MS } from "../auth/service.js";
 import {
   buildSessionCookie,
   buildClearSessionCookie,
 } from "../auth/cookies.js";
 import { RateLimitError } from "../errors.js";
+import { extractClientIp } from "../http/request-utils.js";
+import {
+  createScopedAuthService,
+  type AuthServiceDeps,
+} from "../trpc/context.js";
 
-export interface AuthRouterDeps {
-  readonly hasher: PasswordHasher;
+export interface AuthRouterDeps extends AuthServiceDeps {
   readonly loginLimiter: RateLimiter;
-  readonly encryptor: FieldEncryptor;
-  readonly indexer: BlindIndexer;
   readonly isSecureCookie: boolean;
 }
 
@@ -58,45 +54,49 @@ function toUserResponse(user: UserRecord): {
   };
 }
 
-function extractClientIp(req: IncomingMessage): string {
-  const forwarded = req.headers["x-forwarded-for"];
-  if (typeof forwarded === "string") {
-    const first = forwarded.split(",")[0]?.trim();
-    if (first) return first;
+/**
+ * Enforces per-IP rate limiting. Throws TOO_MANY_REQUESTS if the limit is
+ * exceeded. Never reveals whether the limit was hit due to IP saturation
+ * or a specific username (timing-safe).
+ */
+function enforceLoginRateLimit(limiter: RateLimiter, ip: string): void {
+  const result = limiter.check(ip);
+  if (!result.allowed) {
+    throw new TRPCError({
+      code: "TOO_MANY_REQUESTS",
+      message: "Too many login attempts. Try again later.",
+      cause: new RateLimitError(
+        "Too many login attempts",
+        Math.ceil(result.retryAfterMs / 1000),
+      ),
+    });
   }
-  return req.socket.remoteAddress ?? "unknown";
+}
+
+/** Sets the session cookie on the response after a successful login. */
+function setSessionCookie(
+  res: ServerResponse,
+  token: string,
+  isSecure: boolean,
+): void {
+  const maxAgeSeconds = Math.floor(SESSION_MAX_AGE_MS / 1000);
+  res.setHeader(
+    "Set-Cookie",
+    buildSessionCookie(token, maxAgeSeconds, isSecure),
+  );
 }
 
 export function createAuthRouter(deps: AuthRouterDeps) {
-  const { hasher, loginLimiter, encryptor, indexer, isSecureCookie } = deps;
+  const { loginLimiter, isSecureCookie } = deps;
 
   return router({
     login: orgProcedure
       .input(loginInputSchema)
       .mutation(async ({ ctx, input }) => {
         const ip = extractClientIp(ctx.req);
+        enforceLoginRateLimit(loginLimiter, ip);
 
-        // Rate limit by IP. Never reveal whether limit was hit due to IP or username.
-        const limitResult = loginLimiter.check(ip);
-        if (!limitResult.allowed) {
-          throw new TRPCError({
-            code: "TOO_MANY_REQUESTS",
-            message: "Too many login attempts. Try again later.",
-            cause: new RateLimitError(
-              "Too many login attempts",
-              Math.ceil(limitResult.retryAfterMs / 1000),
-            ),
-          });
-        }
-
-        const sessions = createDbSessionRepository(ctx.org.tenantDb, encryptor);
-        const authService = createAuthService(
-          ctx.org.tenantDb,
-          hasher,
-          sessions,
-          encryptor,
-          indexer,
-        );
+        const authService = createScopedAuthService(ctx.org, deps);
 
         try {
           const { user, session } = await authService.login({
@@ -106,14 +106,7 @@ export function createAuthRouter(deps: AuthRouterDeps) {
             userAgent: ctx.req.headers["user-agent"] ?? "unknown",
           });
 
-          const maxAgeSeconds = Math.floor(SESSION_MAX_AGE_MS / 1000);
-          const cookie = buildSessionCookie(
-            session.token,
-            maxAgeSeconds,
-            isSecureCookie,
-          );
-          ctx.res.setHeader("Set-Cookie", cookie);
-
+          setSessionCookie(ctx.res, session.token, isSecureCookie);
           return { user: toUserResponse(user) };
         } catch (err: unknown) {
           throwAsTrpc(err);
@@ -123,14 +116,7 @@ export function createAuthRouter(deps: AuthRouterDeps) {
     register: authedProcedure
       .input(registerInputSchema.extend({ roleId: z.string().min(1) }))
       .mutation(async ({ ctx, input }) => {
-        const sessions = createDbSessionRepository(ctx.org.tenantDb, encryptor);
-        const authService = createAuthService(
-          ctx.org.tenantDb,
-          hasher,
-          sessions,
-          encryptor,
-          indexer,
-        );
+        const authService = createScopedAuthService(ctx.org, deps);
 
         try {
           const user = await authService.register({
@@ -150,15 +136,7 @@ export function createAuthRouter(deps: AuthRouterDeps) {
       }),
 
     logout: authedProcedure.mutation(async ({ ctx }) => {
-      const sessions = createDbSessionRepository(ctx.org.tenantDb, encryptor);
-      const authService = createAuthService(
-        ctx.org.tenantDb,
-        hasher,
-        sessions,
-        encryptor,
-        indexer,
-      );
-
+      const authService = createScopedAuthService(ctx.org, deps);
       await authService.logout(ctx.session.token);
       ctx.res.setHeader("Set-Cookie", buildClearSessionCookie());
 

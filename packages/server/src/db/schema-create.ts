@@ -18,7 +18,7 @@ import {
 
 const schemaName = process.argv[2];
 
-if (!schemaName) {
+if (schemaName === undefined || schemaName === "") {
   console.error("Usage: tsx schema-create.ts org_<uuid>");
   process.exit(1);
 }
@@ -46,7 +46,7 @@ const migrator = createTenantMigrator(tenantDb(schemaName), schemaName);
 const { error, results } = await migrator.migrateToLatest();
 logMigrationResults(schemaName, results);
 
-if (error) {
+if (error !== undefined) {
   console.error(`[${schemaName}] Migration failed:`, error);
   console.error(`Rolling back: dropping schema "${schemaName}"`);
   // CASCADE drops any tables created by partial migrations.

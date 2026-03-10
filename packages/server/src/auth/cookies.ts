@@ -16,7 +16,7 @@ export function parseCookies(
   header: string | null | undefined,
 ): Map<string, string> {
   const cookies = new Map<string, string>();
-  if (!header) return cookies;
+  if (header == null || header === "") return cookies;
 
   for (const pair of header.split(";")) {
     const eqIndex = pair.indexOf("=");

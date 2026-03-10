@@ -34,5 +34,6 @@ export const db = new Kysely<PlatformDatabase>({ dialect });
 // .withSchema() preserves the source type parameter. At runtime the instance
 // is identical except for the added plugin.
 export function tenantDb(orgSchema: string): Kysely<TenantDatabase> {
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- .withSchema() preserves source type param; runtime instance is correct, TS can't express the schema swap
   return db.withSchema(orgSchema) as unknown as Kysely<TenantDatabase>;
 }
