@@ -3,11 +3,13 @@ import {
   AppError,
   AuthError,
   ConflictError,
+  CryptoError,
   ForbiddenError,
   InternalError,
   NotFoundError,
   RateLimitError,
   ValidationError,
+  extractErrorMessage,
   isAppError,
 } from "./errors.js";
 
@@ -18,13 +20,13 @@ describe("AppError hierarchy", () => {
     expect(AppError.prototype).toBeInstanceOf(Error);
   });
 
-  const operationalCases: Array<{
+  const operationalCases: {
     name: string;
     create: () => AppError;
     code: string;
     httpStatus: number;
     expectedName: string;
-  }> = [
+  }[] = [
     {
       name: "AuthError",
       create: () => new AuthError("bad creds"),
@@ -162,5 +164,29 @@ describe("isAppError", () => {
     expect(isAppError("string")).toBe(false);
     expect(isAppError(42)).toBe(false);
     expect(isAppError({})).toBe(false);
+  });
+});
+
+describe("extractErrorMessage", () => {
+  it("returns .message from Error instances", () => {
+    expect(extractErrorMessage(new Error("boom"))).toBe("boom");
+  });
+
+  it("returns .message from AppError subclasses", () => {
+    expect(extractErrorMessage(new AuthError("denied"))).toBe("denied");
+    expect(extractErrorMessage(new CryptoError("decrypt failed"))).toBe(
+      "decrypt failed",
+    );
+  });
+
+  it("stringifies non-Error values", () => {
+    expect(extractErrorMessage("raw string")).toBe("raw string");
+    expect(extractErrorMessage(42)).toBe("42");
+    expect(extractErrorMessage(null)).toBe("null");
+    expect(extractErrorMessage(undefined)).toBe("undefined");
+  });
+
+  it("stringifies objects without .message", () => {
+    expect(extractErrorMessage({ code: "ENOENT" })).toBe("[object Object]");
   });
 });

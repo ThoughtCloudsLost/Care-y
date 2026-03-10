@@ -1,4 +1,5 @@
 import { validateEnv, EnvValidationError } from "./env.js";
+import { extractErrorMessage } from "./errors.js";
 
 // Validate env vars before anything else. Exits with a clear error if
 // required vars are missing or malformed (same fail-fast as original).
@@ -24,8 +25,7 @@ try {
   console.log("Database connected");
 } catch (err) {
   // Log only the message. The full error object may contain DATABASE_URL (credentials).
-  const msg = err instanceof Error ? err.message : String(err);
-  console.error("Database connection failed:", msg);
+  console.error("Database connection failed:", extractErrorMessage(err));
   process.exit(1);
 }
 

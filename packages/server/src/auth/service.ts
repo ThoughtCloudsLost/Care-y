@@ -108,17 +108,40 @@ export function createAuthService(
     return row ?? null;
   }
 
-  async function findActiveUserById(
+  async function findUserRowById(
     userId: string,
   ): Promise<Selectable<UsersTable> | null> {
     const row = await db
       .selectFrom("users")
       .selectAll()
       .where("id", "=", userId)
-      .where("is_active", "=", true)
       .executeTakeFirst();
 
     return row ?? null;
+  }
+
+  async function findActiveUserById(
+    userId: string,
+  ): Promise<Selectable<UsersTable> | null> {
+    const row = await findUserRowById(userId);
+    if (!row?.is_active) return null;
+    return row;
+  }
+
+  function isSessionExpired(session: SessionData): boolean {
+    return session.expiresAt.getTime() < Date.now();
+  }
+
+  function logSessionContextChange(
+    session: SessionData,
+    ipAddress: string,
+    userAgent: string,
+  ): void {
+    if (session.ipAddress !== ipAddress || session.userAgent !== userAgent) {
+      console.warn(
+        `Session ${session.id}: IP or user-agent changed since creation`,
+      );
+    }
   }
 
   /** Verify password against stored hash, or dummy hash if user not found. */
@@ -222,7 +245,7 @@ export function createAuthService(
       const session = await sessions.findByToken(token);
       if (!session) return null;
 
-      if (session.expiresAt.getTime() < Date.now()) {
+      if (isSessionExpired(session)) {
         await sessions.deleteByToken(token);
         return null;
       }
@@ -233,24 +256,12 @@ export function createAuthService(
         return null;
       }
 
-      // Log IP/UA mismatch as a warning (session stays valid).
-      // Only the session ID is logged, never the actual IP or UA (PII).
-      if (session.ipAddress !== ipAddress || session.userAgent !== userAgent) {
-        console.warn(
-          `Session ${session.id}: IP or user-agent changed since creation`,
-        );
-      }
-
+      logSessionContextChange(session, ipAddress, userAgent);
       return { user: toUserRecord(userRow, encryptor), session };
     },
 
     async findUserById(userId: string): Promise<UserRecord | null> {
-      const row = await db
-        .selectFrom("users")
-        .selectAll()
-        .where("id", "=", userId)
-        .executeTakeFirst();
-
+      const row = await findUserRowById(userId);
       return row ? toUserRecord(row, encryptor) : null;
     },
   };

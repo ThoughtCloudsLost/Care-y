@@ -31,7 +31,7 @@ const envSchema = z.object({
 export type EnvVars = z.infer<typeof envSchema>;
 
 export class EnvValidationError extends Error {
-  constructor(issues: ReadonlyArray<{ path: PropertyKey[]; message: string }>) {
+  constructor(issues: readonly { path: PropertyKey[]; message: string }[]) {
     const lines = issues.map(
       (i) => `  ${i.path.join(".") || "(root)"}: ${i.message}`,
     );

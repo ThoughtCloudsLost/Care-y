@@ -6,10 +6,8 @@
  * PostgreSQL schemas with tenant migrations.
  */
 
-import * as path from "node:path";
-import * as fs from "node:fs/promises";
 import type { Kysely, Selectable } from "kysely";
-import { FileMigrationProvider, Migrator, sql } from "kysely";
+import { sql } from "kysely";
 import { randomUUID } from "node:crypto";
 import { orgSlugSchema } from "@care-y/shared";
 import type {
@@ -18,7 +16,13 @@ import type {
   OrgsTable,
 } from "../db/types.js";
 import { isPgUniqueViolation } from "../db/pg-errors.js";
-import { ValidationError, ConflictError, InternalError } from "../errors.js";
+import { createTenantMigrator } from "../db/schema-utils.js";
+import {
+  ValidationError,
+  ConflictError,
+  InternalError,
+  extractErrorMessage,
+} from "../errors.js";
 
 // eslint-disable-next-line @typescript-eslint/no-empty-function -- intentional swallow for best-effort cleanup
 const noop = (): void => {};
@@ -107,32 +111,16 @@ async function createPostgresSchema(
       .execute()
       .catch(noop);
     throw new InternalError(
-      `Failed to create schema "${schemaName}": ${err instanceof Error ? err.message : String(err)}`,
+      `Failed to create schema "${schemaName}": ${extractErrorMessage(err)}`,
     );
   }
 }
-
-const TENANT_MIGRATION_DIR = path.join(
-  import.meta.dirname,
-  "..",
-  "db",
-  "migrations",
-  "tenant",
-);
 
 async function runTenantMigrations(
   tenantDb: Kysely<TenantDatabase>,
   schemaName: string,
 ): Promise<void> {
-  const migrator = new Migrator({
-    db: tenantDb,
-    provider: new FileMigrationProvider({
-      fs,
-      path,
-      migrationFolder: TENANT_MIGRATION_DIR,
-    }),
-    migrationTableSchema: schemaName,
-  });
+  const migrator = createTenantMigrator(tenantDb, schemaName);
 
   const { error: migrationError } = await migrator.migrateToLatest();
   if (migrationError) {
@@ -172,7 +160,7 @@ export function createOrgService(
         await rollbackOrg(platformDb, orgId, schemaName);
         if (err instanceof InternalError) throw err;
         throw new InternalError(
-          `Org provisioning failed for "${schemaName}": ${err instanceof Error ? err.message : String(err)}`,
+          `Org provisioning failed for "${schemaName}": ${extractErrorMessage(err)}`,
         );
       }
 

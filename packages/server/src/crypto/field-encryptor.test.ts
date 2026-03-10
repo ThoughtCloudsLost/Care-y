@@ -1,5 +1,6 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import * as fc from "fast-check";
+import sodium from "sodium-native";
 import {
   deriveKeys,
   createFieldEncryptor,
@@ -112,6 +113,20 @@ describe("createFieldEncryptor", () => {
 
   it("rejects empty buffer", () => {
     expect(() => encryptor.decrypt(Buffer.alloc(0))).toThrow(CryptoError);
+  });
+
+  it("wraps unexpected sodium errors as CryptoError", () => {
+    const ct = encryptor.encrypt("test");
+    const spy = vi
+      .spyOn(sodium, "crypto_secretbox_open_easy")
+      .mockImplementation(() => {
+        throw new TypeError("unexpected native error");
+      });
+
+    expect(() => encryptor.decrypt(ct)).toThrow(CryptoError);
+    expect(() => encryptor.decrypt(ct)).toThrow("unexpected native error");
+
+    spy.mockRestore();
   });
 
   it("rejects key with wrong length", () => {

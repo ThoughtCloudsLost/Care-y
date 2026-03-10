@@ -5,7 +5,7 @@ describe("createInMemoryRateLimiter", () => {
   const config = { windowMs: 10_000, maxRequests: 3 };
 
   it("allows requests up to the limit", () => {
-    let time = 1000;
+    const time = 1000;
     const limiter = createInMemoryRateLimiter(config, () => time);
 
     const r1 = limiter.check("ip:1");
@@ -56,7 +56,7 @@ describe("createInMemoryRateLimiter", () => {
   });
 
   it("tracks keys independently", () => {
-    let time = 1000;
+    const time = 1000;
     const limiter = createInMemoryRateLimiter(config, () => time);
 
     limiter.check("ip:1");
@@ -72,7 +72,7 @@ describe("createInMemoryRateLimiter", () => {
   });
 
   it("reset clears a key so it can make requests again", () => {
-    let time = 1000;
+    const time = 1000;
     const limiter = createInMemoryRateLimiter(config, () => time);
 
     limiter.check("ip:1");
@@ -89,7 +89,9 @@ describe("createInMemoryRateLimiter", () => {
 
   it("reset on a nonexistent key does not throw", () => {
     const limiter = createInMemoryRateLimiter(config, () => 1000);
-    expect(() => limiter.reset("never-seen")).not.toThrow();
+    expect(() => {
+      limiter.reset("never-seen");
+    }).not.toThrow();
   });
 
   it("retryAfterMs floors at 0 when window has just expired", () => {

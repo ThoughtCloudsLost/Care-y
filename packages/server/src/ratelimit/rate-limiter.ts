@@ -40,7 +40,7 @@ export function createInMemoryRateLimiter(
     // Timestamps are sorted (push-only). Drop expired entries from the front
     // without allocating a new array.
     const cutoff = now() - config.windowMs;
-    while (timestamps.length > 0 && timestamps[0]! <= cutoff) {
+    while (timestamps.length > 0 && (timestamps[0] ?? Infinity) <= cutoff) {
       timestamps.shift();
     }
 

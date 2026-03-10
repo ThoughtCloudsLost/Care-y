@@ -78,3 +78,7 @@ export class CryptoError extends AppError {
 export function isAppError(err: unknown): err is AppError {
   return err instanceof AppError;
 }
+
+export function extractErrorMessage(err: unknown): string {
+  return err instanceof Error ? err.message : String(err);
+}

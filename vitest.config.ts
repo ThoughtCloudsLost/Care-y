@@ -1,7 +1,20 @@
 import { defineConfig, defineProject } from "vitest/config";
+import { coverageConfigDefaults } from "vitest/config";
 
 export default defineConfig({
   test: {
+    coverage: {
+      exclude: [
+        ...coverageConfigDefaults.exclude,
+        // CLI entry points (side effects, process.exit). Logic extracted to testable modules.
+        "packages/server/src/index.ts",
+        "packages/server/src/db/migrate.ts",
+        "packages/server/src/db/schema-create.ts",
+        // Test infrastructure, not production code.
+        "packages/server/src/test-utils.ts",
+        "packages/server/src/test-global-setup.ts",
+      ],
+    },
     projects: [
       defineProject({
         test: {

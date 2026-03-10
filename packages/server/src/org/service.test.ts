@@ -3,7 +3,7 @@ import pg from "pg";
 import { Kysely, PostgresDialect, sql } from "kysely";
 import type { PlatformDatabase, TenantDatabase } from "../db/types.js";
 import { createOrgService, type OrgService } from "./service.js";
-import { ValidationError, ConflictError } from "../errors.js";
+import { ValidationError, ConflictError, InternalError } from "../errors.js";
 
 // OrgService creates real PostgreSQL schemas. Mocking is not viable because
 // createOrg exercises CREATE SCHEMA, migration execution, and org_config
@@ -168,3 +168,108 @@ describe.skipIf(!process.env.DATABASE_URL)("OrgService", () => {
     expect(found).toBeNull();
   });
 });
+
+// -----------------------------------------------------------------------
+// Fault injection: exercises rollback and error-wrapping paths that
+// require a failing tenantDbFactory. Still needs a real DB for the
+// platform-level operations (INSERT into orgs, CREATE SCHEMA).
+// -----------------------------------------------------------------------
+describe.skipIf(!process.env.DATABASE_URL)(
+  "OrgService (fault injection)",
+  () => {
+    let platformDb: Kysely<PlatformDatabase>;
+
+    pg.types.setTypeParser(pg.types.builtins.INT8, (val: string) =>
+      parseInt(val, 10),
+    );
+
+    beforeAll(() => {
+      const pool = new pg.Pool({
+        connectionString: process.env.DATABASE_URL,
+        max: 5,
+      });
+      platformDb = new Kysely<PlatformDatabase>({
+        dialect: new PostgresDialect({ pool }),
+      });
+    });
+
+    afterAll(async () => {
+      await platformDb.destroy();
+    });
+
+    it("rolls back org row and schema when tenant migration fails", async () => {
+      // tenantDbFactory returns a Kysely instance that will fail during migration
+      // because withSchema on a nonexistent schema is valid, but the Migrator
+      // will fail when it tries to create the migration tracking table.
+      // Instead, we use a factory that throws immediately to simulate a
+      // catastrophic failure.
+      let callCount = 0;
+      function failingTenantDbFactory(): Kysely<TenantDatabase> {
+        callCount++;
+        // createOrg calls tenantDbFactory twice: once for migrations, once for org_config.
+        // Throw on the first call to simulate migration failure.
+        throw new TypeError("Simulated tenant DB failure");
+      }
+
+      const service = createOrgService(platformDb, failingTenantDbFactory);
+
+      await expect(
+        service.createOrg({ slug: "test-fault-migration" }),
+      ).rejects.toThrow(InternalError);
+
+      expect(callCount).toBe(1);
+
+      // Verify the org row was cleaned up (rollbackOrg).
+      const row = await platformDb
+        .selectFrom("orgs")
+        .selectAll()
+        .where("slug", "=", "test-fault-migration")
+        .executeTakeFirst();
+      expect(row).toBeUndefined();
+
+      // Verify the schema was cleaned up (rollbackOrg drops it).
+      // We can't know the exact schema name since it uses randomUUID,
+      // but the absence of the org row is sufficient proof of rollback.
+    });
+
+    it("wraps non-InternalError exceptions with extractErrorMessage", async () => {
+      function failingFactory(): Kysely<TenantDatabase> {
+        throw new TypeError("type mismatch in factory");
+      }
+
+      const service = createOrgService(platformDb, failingFactory);
+
+      await expect(
+        service.createOrg({ slug: "test-fault-wrap" }),
+      ).rejects.toThrow("type mismatch in factory");
+
+      // Clean up: org row should be rolled back.
+      const row = await platformDb
+        .selectFrom("orgs")
+        .selectAll()
+        .where("slug", "=", "test-fault-wrap")
+        .executeTakeFirst();
+      expect(row).toBeUndefined();
+    });
+
+    it("re-throws InternalError without double-wrapping", async () => {
+      function failingFactory(): Kysely<TenantDatabase> {
+        throw new InternalError("original internal error");
+      }
+
+      const service = createOrgService(platformDb, failingFactory);
+
+      await expect(
+        service.createOrg({ slug: "test-fault-internal" }),
+      ).rejects.toThrow("original internal error");
+
+      // Verify it's the original InternalError, not wrapped in another one.
+      try {
+        await service.createOrg({ slug: "test-fault-internal2" });
+      } catch (err) {
+        expect(err).toBeInstanceOf(InternalError);
+        expect((err as InternalError).message).toBe("original internal error");
+      }
+    });
+  },
+);

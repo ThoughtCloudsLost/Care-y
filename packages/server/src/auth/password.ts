@@ -19,6 +19,35 @@ export interface PasswordHasher {
   verify(password: string, hash: string): Promise<boolean>;
 }
 
+interface ParsedHash {
+  readonly salt: Buffer;
+  readonly stored: Buffer;
+}
+
+function parseStoredHash(hash: string): ParsedHash | null {
+  const [prefix, saltHex, hashHex, ...rest] = hash.split(":");
+  if (rest.length > 0 || prefix !== HASH_PREFIX || !saltHex || !hashHex) {
+    return null;
+  }
+
+  // Validate hex lengths before decoding. A 16-byte salt is 32 hex chars,
+  // a 64-byte key is 128 hex chars. Reject anything else early.
+  if (saltHex.length !== SALT_BYTES * 2 || hashHex.length !== KEY_BYTES * 2) {
+    return null;
+  }
+
+  // Buffer.from(badHex, "hex") silently drops invalid hex pairs, producing
+  // a shorter buffer. The length check catches that case.
+  const salt = Buffer.from(saltHex, "hex");
+  const stored = Buffer.from(hashHex, "hex");
+
+  if (salt.length !== SALT_BYTES || stored.length !== KEY_BYTES) {
+    return null;
+  }
+
+  return { salt, stored };
+}
+
 /** Creates a PasswordHasher backed by Node crypto.scrypt. */
 export function createScryptHasher(): PasswordHasher {
   return {
@@ -29,31 +58,15 @@ export function createScryptHasher(): PasswordHasher {
     },
 
     async verify(password: string, hash: string): Promise<boolean> {
-      const [prefix, saltHex, hashHex, ...rest] = hash.split(":");
-      if (rest.length > 0 || prefix !== HASH_PREFIX || !saltHex || !hashHex) {
-        return false;
-      }
+      const parsed = parseStoredHash(hash);
+      if (!parsed) return false;
 
-      // Validate hex lengths before decoding. A 16-byte salt is 32 hex chars,
-      // a 64-byte key is 128 hex chars. Reject anything else early.
-      if (
-        saltHex.length !== SALT_BYTES * 2 ||
-        hashHex.length !== KEY_BYTES * 2
-      ) {
-        return false;
-      }
-
-      // Buffer.from(badHex, "hex") silently drops invalid hex pairs, producing
-      // a shorter buffer. The length check catches that case.
-      const salt = Buffer.from(saltHex, "hex");
-      const stored = Buffer.from(hashHex, "hex");
-
-      if (salt.length !== SALT_BYTES || stored.length !== KEY_BYTES) {
-        return false;
-      }
-
-      const derived = (await scryptAsync(password, salt, KEY_BYTES)) as Buffer;
-      return timingSafeEqual(derived, stored);
+      const derived = (await scryptAsync(
+        password,
+        parsed.salt,
+        KEY_BYTES,
+      )) as Buffer;
+      return timingSafeEqual(derived, parsed.stored);
     },
   };
 }
