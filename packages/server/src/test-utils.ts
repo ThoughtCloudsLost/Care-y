@@ -1,7 +1,9 @@
 /**
  * Test database infrastructure for server integration tests.
  *
- * Provides schema lifecycle (create/migrate/drop) and test data factories.
+ * Provides schema lifecycle (create/migrate/drop), test data factories,
+ * mock HTTP objects (mockReq / mockRes), and assertion helpers.
+ *
  * Each test suite calls createTestDb() in beforeAll and cleanup() in afterAll,
  * getting a fully isolated PostgreSQL schema with all tenant migrations applied.
  *
@@ -12,6 +14,8 @@
 import * as crypto from "node:crypto";
 import * as path from "node:path";
 import * as fs from "node:fs/promises";
+import { IncomingMessage, ServerResponse } from "node:http";
+import { Socket } from "node:net";
 import pg from "pg";
 import {
   Kysely,
@@ -251,4 +255,105 @@ export async function createTestSession(
     })
     .returningAll()
     .executeTakeFirstOrThrow();
+}
+
+// ---------------------------------------------------------------------------
+// Mock HTTP objects
+// ---------------------------------------------------------------------------
+
+export interface MockReqOptions {
+  headers?: Record<string, string>;
+  remoteAddress?: string;
+}
+
+/**
+ * Creates a minimal IncomingMessage stub for testing code that reads
+ * `req.headers`, `req.socket.remoteAddress`, etc.
+ *
+ * Defaults: remoteAddress "127.0.0.1", user-agent "test-agent".
+ * Override any header via `options.headers`.
+ */
+export function mockReq(options?: MockReqOptions): IncomingMessage {
+  const socket = new Socket();
+  Object.defineProperty(socket, "remoteAddress", {
+    value: options?.remoteAddress ?? "127.0.0.1",
+    writable: true,
+  });
+
+  const req = Object.create(IncomingMessage.prototype) as IncomingMessage;
+  Object.defineProperty(req, "socket", { value: socket, writable: false });
+  Object.defineProperty(req, "headers", {
+    value: { "user-agent": "test-agent", ...options?.headers },
+    writable: true,
+  });
+  return req;
+}
+
+export interface MockResWithCookies extends ServerResponse {
+  getCapturedCookies(): string[];
+}
+
+/**
+ * Creates a minimal ServerResponse stub that captures Set-Cookie headers.
+ * Callers that don't need cookie inspection can ignore getCapturedCookies().
+ */
+export function mockRes(): MockResWithCookies {
+  const cookies: string[] = [];
+  const res = Object.create(ServerResponse.prototype) as ServerResponse;
+
+  res.setHeader = ((name: string, value: string | string[]): ServerResponse => {
+    if (name.toLowerCase() === "set-cookie") {
+      if (Array.isArray(value)) cookies.push(...value);
+      else cookies.push(value);
+    }
+    return res;
+  }) as ServerResponse["setHeader"];
+
+  return Object.assign(res, {
+    getCapturedCookies(): string[] {
+      return cookies;
+    },
+  }) as MockResWithCookies;
+}
+
+// ---------------------------------------------------------------------------
+// tRPC assertion helpers
+// ---------------------------------------------------------------------------
+
+import { expect } from "vitest";
+import { TRPCError } from "@trpc/server";
+
+/**
+ * Asserts that a promise rejects with a TRPCError having the expected code.
+ * Optionally checks the message too. Returns the caught error for further
+ * inspection.
+ */
+export async function expectTrpcError(
+  promise: Promise<unknown>,
+  expectedCode: TRPCError["code"],
+  messageMatch?: string | RegExp,
+): Promise<TRPCError> {
+  // rejects.toBeInstanceOf asserts: (1) promise rejects, (2) error is TRPCError
+  await expect(promise).rejects.toBeInstanceOf(TRPCError);
+
+  // Re-await the already-rejected promise to extract the error value.
+  // Safe because we just proved it rejects with TRPCError above.
+  let err: TRPCError | undefined;
+  try {
+    await promise;
+  } catch (caught: unknown) {
+    err = caught as TRPCError;
+  }
+
+  // Narrowing: err is guaranteed defined because rejects.toBeInstanceOf passed
+  const trpcErr = err as TRPCError;
+  expect(trpcErr.code).toBe(expectedCode);
+  if (messageMatch !== undefined) {
+    if (typeof messageMatch === "string") {
+      expect(trpcErr.message).toContain(messageMatch);
+    } else {
+      expect(trpcErr.message).toMatch(messageMatch);
+    }
+  }
+  return trpcErr;
 }

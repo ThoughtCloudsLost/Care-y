@@ -11,14 +11,14 @@
 
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { randomUUID } from "node:crypto";
-import { IncomingMessage, ServerResponse } from "node:http";
-import { Socket } from "node:net";
 import { sql, type Kysely } from "kysely";
 import type { PlatformDatabase, TenantDatabase } from "../db/types.js";
 import {
   createTestDb,
   testFieldEncryptor,
   testBlindIndexer,
+  mockReq,
+  mockRes,
   type TestDb,
 } from "../test-utils.js";
 import { createScryptHasher } from "../auth/password.js";
@@ -40,25 +40,6 @@ function makeTenantDbFactory(
 ): (schema: string) => Kysely<TenantDatabase> {
   return (schema: string) =>
     platformDb.withSchema(schema) as unknown as Kysely<TenantDatabase>;
-}
-
-function mockReq(headers?: Record<string, string>): IncomingMessage {
-  const socket = new Socket();
-  Object.defineProperty(socket, "remoteAddress", {
-    value: "127.0.0.1",
-    writable: true,
-  });
-  const req = Object.create(IncomingMessage.prototype) as IncomingMessage;
-  Object.defineProperty(req, "socket", { value: socket, writable: false });
-  Object.defineProperty(req, "headers", {
-    value: { "user-agent": "test-agent", ...headers },
-    writable: true,
-  });
-  return req;
-}
-
-function mockRes(): ServerResponse {
-  return Object.create(ServerResponse.prototype) as ServerResponse;
 }
 
 describe.skipIf(!HAS_DB)("context factory (DB integration)", () => {
@@ -119,7 +100,7 @@ describe.skipIf(!HAS_DB)("context factory (DB integration)", () => {
   describe("org resolution via slug extraction", () => {
     it("resolves org from X-Org-Slug header in development mode", async () => {
       const factory = createContextFactory(makeDeps());
-      const req = mockReq({ "x-org-slug": orgSlug });
+      const req = mockReq({ headers: { "x-org-slug": orgSlug } });
       const res = mockRes();
       const ctx = await factory({ req, res, info: undefined as never });
 
@@ -137,7 +118,7 @@ describe.skipIf(!HAS_DB)("context factory (DB integration)", () => {
 
       try {
         const factory = createContextFactory(makeDeps());
-        const req = mockReq({ host: `${orgSlug}.care-y.app` });
+        const req = mockReq({ headers: { host: `${orgSlug}.care-y.app` } });
         const res = mockRes();
         const ctx = await factory({ req, res, info: undefined as never });
 
@@ -156,7 +137,7 @@ describe.skipIf(!HAS_DB)("context factory (DB integration)", () => {
 
       try {
         const factory = createContextFactory(makeDeps());
-        const req = mockReq({ host: "care-y.app" });
+        const req = mockReq({ headers: { host: "care-y.app" } });
         const res = mockRes();
         const ctx = await factory({ req, res, info: undefined as never });
 
@@ -174,7 +155,9 @@ describe.skipIf(!HAS_DB)("context factory (DB integration)", () => {
 
       try {
         const factory = createContextFactory(makeDeps());
-        const req = mockReq({ host: `${orgSlug}.care-y.app:3000` });
+        const req = mockReq({
+          headers: { host: `${orgSlug}.care-y.app:3000` },
+        });
         const res = mockRes();
         const ctx = await factory({ req, res, info: undefined as never });
 
@@ -193,7 +176,7 @@ describe.skipIf(!HAS_DB)("context factory (DB integration)", () => {
 
       try {
         const factory = createContextFactory(makeDeps());
-        const req = mockReq({});
+        const req = mockReq();
         const res = mockRes();
         const ctx = await factory({ req, res, info: undefined as never });
 
@@ -206,7 +189,7 @@ describe.skipIf(!HAS_DB)("context factory (DB integration)", () => {
 
     it("returns null org when X-Org-Slug is empty in dev mode", async () => {
       const factory = createContextFactory(makeDeps());
-      const req = mockReq({ "x-org-slug": "" });
+      const req = mockReq({ headers: { "x-org-slug": "" } });
       const res = mockRes();
       const ctx = await factory({ req, res, info: undefined as never });
 
@@ -215,7 +198,9 @@ describe.skipIf(!HAS_DB)("context factory (DB integration)", () => {
 
     it("returns null org when slug does not match any org", async () => {
       const factory = createContextFactory(makeDeps());
-      const req = mockReq({ "x-org-slug": "nonexistent-org-slug" });
+      const req = mockReq({
+        headers: { "x-org-slug": "nonexistent-org-slug" },
+      });
       const res = mockRes();
       const ctx = await factory({ req, res, info: undefined as never });
 
@@ -236,7 +221,7 @@ describe.skipIf(!HAS_DB)("context factory (DB integration)", () => {
         .execute();
 
       const factory = createContextFactory(makeDeps());
-      const req = mockReq({ "x-org-slug": slug });
+      const req = mockReq({ headers: { "x-org-slug": slug } });
       const res = mockRes();
       const ctx = await factory({ req, res, info: undefined as never });
 
@@ -282,8 +267,7 @@ describe.skipIf(!HAS_DB)("context factory (DB integration)", () => {
       const factory = createContextFactory(makeDeps());
       const cookie = `${SESSION_COOKIE_NAME}=${loginResult.session.token}`;
       const req = mockReq({
-        "x-org-slug": orgSlug,
-        cookie,
+        headers: { "x-org-slug": orgSlug, cookie },
       });
       const res = mockRes();
       const ctx = await factory({ req, res, info: undefined as never });
@@ -297,7 +281,7 @@ describe.skipIf(!HAS_DB)("context factory (DB integration)", () => {
 
     it("returns null session when no cookie is present", async () => {
       const factory = createContextFactory(makeDeps());
-      const req = mockReq({ "x-org-slug": orgSlug });
+      const req = mockReq({ headers: { "x-org-slug": orgSlug } });
       const res = mockRes();
       const ctx = await factory({ req, res, info: undefined as never });
 
@@ -309,7 +293,7 @@ describe.skipIf(!HAS_DB)("context factory (DB integration)", () => {
     it("returns null session when cookie token is invalid", async () => {
       const factory = createContextFactory(makeDeps());
       const cookie = `${SESSION_COOKIE_NAME}=bogus-token-that-does-not-exist`;
-      const req = mockReq({ "x-org-slug": orgSlug, cookie });
+      const req = mockReq({ headers: { "x-org-slug": orgSlug, cookie } });
       const res = mockRes();
       const ctx = await factory({ req, res, info: undefined as never });
 
@@ -322,8 +306,7 @@ describe.skipIf(!HAS_DB)("context factory (DB integration)", () => {
       const factory = createContextFactory(makeDeps());
       const cookie = `${SESSION_COOKIE_NAME}=some-token`;
       const req = mockReq({
-        "x-org-slug": "nonexistent-slug",
-        cookie,
+        headers: { "x-org-slug": "nonexistent-slug", cookie },
       });
       const res = mockRes();
       const ctx = await factory({ req, res, info: undefined as never });

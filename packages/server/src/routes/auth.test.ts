@@ -8,7 +8,7 @@
 
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { randomUUID } from "node:crypto";
-import { IncomingMessage, ServerResponse } from "node:http";
+import { IncomingMessage } from "node:http";
 import { Socket } from "node:net";
 import { sql, type Kysely } from "kysely";
 import type { PlatformDatabase, TenantDatabase } from "../db/types.js";
@@ -17,6 +17,9 @@ import {
   testFieldEncryptor,
   testBlindIndexer,
   TEST_ORG_ID,
+  mockReq,
+  mockRes,
+  expectTrpcError,
   type TestDb,
 } from "../test-utils.js";
 import { createScryptHasher } from "../auth/password.js";
@@ -29,47 +32,6 @@ import { createCallerFactory } from "../trpc/trpc.js";
 import type { Context, OrgContext } from "../trpc/context.js";
 
 const HAS_DB = Boolean(process.env.DATABASE_URL);
-
-/** Builds a minimal mock IncomingMessage for tRPC context. */
-function mockReq(headers?: Record<string, string>): IncomingMessage {
-  const socket = new Socket();
-  Object.defineProperty(socket, "remoteAddress", {
-    value: "127.0.0.1",
-    writable: true,
-  });
-
-  const req = Object.create(IncomingMessage.prototype) as IncomingMessage;
-  Object.defineProperty(req, "socket", { value: socket, writable: false });
-  Object.defineProperty(req, "headers", {
-    value: { "user-agent": "test-agent", ...headers },
-    writable: true,
-  });
-
-  return req;
-}
-
-/** Builds a minimal mock ServerResponse that captures Set-Cookie headers. */
-function mockRes(): ServerResponse & { getCapturedCookies: () => string[] } {
-  const cookies: string[] = [];
-  const res = Object.create(ServerResponse.prototype) as ServerResponse;
-
-  res.setHeader = ((name: string, value: string | string[]): ServerResponse => {
-    if (name.toLowerCase() === "set-cookie") {
-      if (Array.isArray(value)) {
-        cookies.push(...value);
-      } else {
-        cookies.push(value);
-      }
-    }
-    return res;
-  }) as ServerResponse["setHeader"];
-
-  return Object.assign(res, {
-    getCapturedCookies(): string[] {
-      return cookies;
-    },
-  });
-}
 
 function makeTenantDbFactory(
   platformDb: Kysely<PlatformDatabase>,
@@ -164,7 +126,9 @@ describe.skipIf(!HAS_DB)("auth + org routers (DB integration)", () => {
     headers?: Record<string, string>;
   }) {
     const res = mockRes();
-    const req = mockReq(overrides?.headers);
+    const req = overrides?.headers
+      ? mockReq({ headers: overrides.headers })
+      : mockReq();
     const appRouter = buildRouter(overrides?.limiter);
     const factory = createCallerFactory(appRouter);
     const ctx: Context = {
@@ -248,14 +212,16 @@ describe.skipIf(!HAS_DB)("auth + org routers (DB integration)", () => {
 
   it("auth.register rejects unauthenticated caller", async () => {
     const { caller } = createTestCaller();
-    await expect(
+    await expectTrpcError(
       caller.auth.register({
         identifier: "newuser",
         password: "a-very-long-password-16",
         displayName: "New User",
         roleId: "volunteer",
       }),
-    ).rejects.toThrow("Not authenticated");
+      "UNAUTHORIZED",
+      "Not authenticated",
+    );
   });
 
   it("auth.register creates user when called by authenticated user", async () => {
@@ -321,12 +287,14 @@ describe.skipIf(!HAS_DB)("auth + org routers (DB integration)", () => {
 
   it("auth.login rejects when org is not resolved", async () => {
     const { caller } = createTestCaller({ org: null });
-    await expect(
+    await expectTrpcError(
       caller.auth.login({
         identifier: "loginuser",
         password: "login-password-long-enough",
       }),
-    ).rejects.toThrow("Organization not found");
+      "NOT_FOUND",
+      "Organization not found",
+    );
   });
 
   // --- Auth: logout ---
@@ -380,7 +348,11 @@ describe.skipIf(!HAS_DB)("auth + org routers (DB integration)", () => {
 
   it("auth.me rejects unauthenticated caller", async () => {
     const { caller } = createTestCaller();
-    await expect(caller.auth.me()).rejects.toThrow("Not authenticated");
+    await expectTrpcError(
+      caller.auth.me(),
+      "UNAUTHORIZED",
+      "Not authenticated",
+    );
   });
 
   // --- extractClientIp branches ---
@@ -530,13 +502,10 @@ describe.skipIf(!HAS_DB)("auth + org routers (DB integration)", () => {
     await expect(tryLogin()).rejects.toThrow();
 
     // Third attempt hits rate limit.
-    try {
-      await tryLogin();
-      expect.fail("Should have thrown");
-    } catch (err: unknown) {
-      expect(err).toBeDefined();
-      const error = err as { message?: string };
-      expect(error.message).toContain("Too many login attempts");
-    }
+    await expectTrpcError(
+      tryLogin(),
+      "TOO_MANY_REQUESTS",
+      "Too many login attempts",
+    );
   });
 });

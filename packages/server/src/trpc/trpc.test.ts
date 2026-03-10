@@ -30,22 +30,9 @@ import {
   InternalError,
 } from "../errors.js";
 import type { Context, OrgContext } from "./context.js";
-import { IncomingMessage, ServerResponse } from "node:http";
-import { Socket } from "node:net";
+import { mockReq, mockRes, expectTrpcError } from "../test-utils.js";
 
 // --- Helpers ---
-
-function stubReq(): IncomingMessage {
-  const socket = new Socket();
-  const req = Object.create(IncomingMessage.prototype) as IncomingMessage;
-  Object.defineProperty(req, "socket", { value: socket, writable: false });
-  Object.defineProperty(req, "headers", { value: {}, writable: true });
-  return req;
-}
-
-function stubRes(): ServerResponse {
-  return Object.create(ServerResponse.prototype) as ServerResponse;
-}
 
 const fakeOrg: OrgContext = {
   orgId: "org-1",
@@ -57,8 +44,8 @@ const fakeOrg: OrgContext = {
 
 function baseCtx(overrides?: Partial<Context>): Context {
   return {
-    req: stubReq(),
-    res: stubRes(),
+    req: mockReq(),
+    res: mockRes(),
     org: fakeOrg,
     session: null,
     user: null,
@@ -177,39 +164,24 @@ describe("errorFormatter", () => {
 
   it("formats operational AppError with code and original message", async () => {
     const caller = factory(baseCtx());
-
-    try {
-      await caller.throwAuthError();
-      expect.fail("Should have thrown");
-    } catch (err) {
-      const trpcErr = err as TRPCError;
-      expect(trpcErr.code).toBe("UNAUTHORIZED");
-    }
+    await expectTrpcError(caller.throwAuthError(), "UNAUTHORIZED");
   });
 
   it("formats non-operational AppError with generic message", async () => {
     const caller = factory(baseCtx());
-
-    try {
-      await caller.throwInternalAppError();
-      expect.fail("Should have thrown");
-    } catch (err) {
-      const trpcErr = err as TRPCError;
-      expect(trpcErr.code).toBe("INTERNAL_SERVER_ERROR");
-    }
+    await expectTrpcError(
+      caller.throwInternalAppError(),
+      "INTERNAL_SERVER_ERROR",
+    );
   });
 
   it("passes through non-AppError shape unchanged", async () => {
     const caller = factory(baseCtx());
-
-    try {
-      await caller.throwPlainError();
-      expect.fail("Should have thrown");
-    } catch (err) {
-      const trpcErr = err as TRPCError;
-      expect(trpcErr.code).toBe("INTERNAL_SERVER_ERROR");
-      expect(trpcErr.message).toBe("something broke");
-    }
+    await expectTrpcError(
+      caller.throwPlainError(),
+      "INTERNAL_SERVER_ERROR",
+      "something broke",
+    );
   });
 });
 
@@ -230,7 +202,11 @@ describe("requireOrg middleware (orgProcedure)", () => {
 
   it("rejects with NOT_FOUND when org is null", async () => {
     const caller = factory(baseCtx({ org: null }));
-    await expect(caller.needsOrg()).rejects.toThrow("Organization not found");
+    await expectTrpcError(
+      caller.needsOrg(),
+      "NOT_FOUND",
+      "Organization not found",
+    );
   });
 });
 
@@ -245,12 +221,20 @@ describe("requireAuth middleware (authedProcedure)", () => {
 
   it("rejects with NOT_FOUND when org is null", async () => {
     const caller = factory(baseCtx({ org: null }));
-    await expect(caller.needsAuth()).rejects.toThrow("Organization not found");
+    await expectTrpcError(
+      caller.needsAuth(),
+      "NOT_FOUND",
+      "Organization not found",
+    );
   });
 
   it("rejects with UNAUTHORIZED when session is null", async () => {
     const caller = factory(baseCtx({ org: fakeOrg, session: null }));
-    await expect(caller.needsAuth()).rejects.toThrow("Not authenticated");
+    await expectTrpcError(
+      caller.needsAuth(),
+      "UNAUTHORIZED",
+      "Not authenticated",
+    );
   });
 
   it("rejects with UNAUTHORIZED when user is null", async () => {
@@ -269,7 +253,11 @@ describe("requireAuth middleware (authedProcedure)", () => {
         user: null,
       }),
     );
-    await expect(caller.needsAuth()).rejects.toThrow("Not authenticated");
+    await expectTrpcError(
+      caller.needsAuth(),
+      "UNAUTHORIZED",
+      "Not authenticated",
+    );
   });
 
   it("allows requests when org, session, and user are present", async () => {

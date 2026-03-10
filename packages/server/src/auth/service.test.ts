@@ -219,6 +219,33 @@ describe.skipIf(!process.env.DATABASE_URL)("AuthService", () => {
 
       insertSpy.mockRestore();
     });
+
+    it("handles concurrent duplicate registrations (one succeeds, one throws ConflictError)", async () => {
+      const results = await Promise.allSettled([
+        service.register({
+          identifier: "race-user",
+          password: "racepassword12345",
+          displayName: "Racer One",
+          roleId: "volunteer",
+        }),
+        service.register({
+          identifier: "race-user",
+          password: "racepassword12345",
+          displayName: "Racer Two",
+          roleId: "volunteer",
+        }),
+      ]);
+
+      const fulfilled = results.filter((r) => r.status === "fulfilled");
+      const rejected = results.filter((r) => r.status === "rejected");
+      expect(fulfilled).toHaveLength(1);
+      expect(rejected).toHaveLength(1);
+
+      // PromiseRejectedResult.reason is typed `any` in TS lib; no way around the cast
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+      const error = (rejected[0] as PromiseRejectedResult).reason;
+      expect(error).toBeInstanceOf(ConflictError);
+    });
   });
 
   // -----------------------------------------------------------------------
