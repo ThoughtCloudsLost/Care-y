@@ -1,6 +1,15 @@
-import { describe, expect, it, vi } from "vitest";
-import { isValidOrgSchemaName, logMigrationResults } from "./schema-utils.js";
+import { describe, expect, it, vi, beforeAll, afterAll } from "vitest";
+import {
+  isValidOrgSchemaName,
+  logMigrationResults,
+  schemaExists,
+  listTenantSchemas,
+  createPlatformMigrator,
+} from "./schema-utils.js";
 import type { MigrationResult } from "kysely";
+import { Kysely, PostgresDialect, sql } from "kysely";
+import pg from "pg";
+import type { PlatformDatabase } from "./types.js";
 
 describe("isValidOrgSchemaName", () => {
   it("accepts a valid org schema name", () => {
@@ -106,5 +115,62 @@ describe("logMigrationResults", () => {
     expect(logSpy).toHaveBeenCalledWith("[org_abc] Success 001_create_users");
     expect(logSpy).toHaveBeenCalledWith("[org_abc] Success 002_add_sessions");
     logSpy.mockRestore();
+  });
+});
+
+// -----------------------------------------------------------------------
+// DB-dependent tests for schemaExists, listTenantSchemas, createPlatformMigrator
+// -----------------------------------------------------------------------
+describe.skipIf(!process.env.DATABASE_URL)("schema-utils (DB)", () => {
+  let platformDb: Kysely<PlatformDatabase>;
+  const testSchema = `org_00000000-0000-0000-0000-test${Date.now().toString(36)}`;
+
+  pg.types.setTypeParser(pg.types.builtins.INT8, (val: string) =>
+    parseInt(val, 10),
+  );
+
+  beforeAll(async () => {
+    const pool = new pg.Pool({
+      connectionString: process.env.DATABASE_URL,
+      max: 3,
+    });
+    platformDb = new Kysely<PlatformDatabase>({
+      dialect: new PostgresDialect({ pool }),
+    });
+  });
+
+  afterAll(async () => {
+    await sql`DROP SCHEMA IF EXISTS ${sql.id(testSchema)} CASCADE`.execute(
+      platformDb,
+    );
+    await platformDb.destroy();
+  });
+
+  it("schemaExists returns false for non-existent schema", async () => {
+    const exists = await schemaExists(
+      platformDb,
+      "org_ffffffff-ffff-ffff-ffff-doesnotexist",
+    );
+    expect(exists).toBe(false);
+  });
+
+  it("schemaExists returns true for public schema", async () => {
+    const exists = await schemaExists(platformDb, "public");
+    expect(exists).toBe(true);
+  });
+
+  it("listTenantSchemas returns array of org_ schemas", async () => {
+    const schemas = await listTenantSchemas(platformDb);
+    expect(Array.isArray(schemas)).toBe(true);
+    // All returned schemas should start with org_
+    for (const s of schemas) {
+      expect(s.startsWith("org_")).toBe(true);
+    }
+  });
+
+  it("createPlatformMigrator returns a Migrator instance", () => {
+    const migrator = createPlatformMigrator(platformDb);
+    expect(migrator).toBeDefined();
+    expect(typeof migrator.migrateToLatest).toBe("function");
   });
 });

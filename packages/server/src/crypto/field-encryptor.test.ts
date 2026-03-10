@@ -129,6 +129,21 @@ describe("createFieldEncryptor", () => {
     spy.mockRestore();
   });
 
+  it("wraps non-Error thrown values as CryptoError with String()", () => {
+    const ct = encryptor.encrypt("test");
+    const spy = vi
+      .spyOn(sodium, "crypto_secretbox_open_easy")
+      .mockImplementation(() => {
+        // eslint-disable-next-line @typescript-eslint/only-throw-error -- intentional non-Error throw for testing
+        throw "string thrown value";
+      });
+
+    expect(() => encryptor.decrypt(ct)).toThrow(CryptoError);
+    expect(() => encryptor.decrypt(ct)).toThrow("string thrown value");
+
+    spy.mockRestore();
+  });
+
   it("rejects key with wrong length", () => {
     expect(() => createFieldEncryptor(Buffer.alloc(16))).toThrow(CryptoError);
   });

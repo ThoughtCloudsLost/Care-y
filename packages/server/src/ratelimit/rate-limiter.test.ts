@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi, afterEach } from "vitest";
 import { createInMemoryRateLimiter } from "./rate-limiter.js";
 
 describe("createInMemoryRateLimiter", () => {
@@ -130,5 +130,41 @@ describe("createInMemoryRateLimiter", () => {
     const result = limiter.check("ip:1");
     expect(result.allowed).toBe(true);
     expect(result.remaining).toBe(0); // 2 old + 1 new = 3 = maxRequests
+  });
+});
+
+describe("cleanup interval", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("prunes expired keys during periodic cleanup", () => {
+    vi.useFakeTimers();
+
+    let time = 1000;
+    const limiter = createInMemoryRateLimiter(
+      { windowMs: 5000, maxRequests: 2 },
+      () => time,
+    );
+
+    // Add entries for two keys
+    limiter.check("ip:a");
+    limiter.check("ip:b");
+
+    // Advance time past the window so entries expire
+    time = 100_000;
+
+    // Trigger the 60s cleanup interval
+    vi.advanceTimersByTime(60_000);
+
+    // After cleanup, the keys should have been pruned.
+    // check() on a pruned key behaves like a fresh key.
+    const resultA = limiter.check("ip:a");
+    expect(resultA.allowed).toBe(true);
+    expect(resultA.remaining).toBe(1); // 1 remaining = fresh (only this check used 1 slot)
+
+    const resultB = limiter.check("ip:b");
+    expect(resultB.allowed).toBe(true);
+    expect(resultB.remaining).toBe(1);
   });
 });

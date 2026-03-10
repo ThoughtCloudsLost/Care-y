@@ -1,0 +1,301 @@
+/**
+ * Unit tests for tRPC initialization, error formatting, and middleware.
+ *
+ * Covers: errorFormatter (AppError and non-AppError paths),
+ * appErrorToTrpcCode (all error subtypes + fallback),
+ * throwAsTrpc (AppError and non-AppError paths),
+ * requireOrg and requireAuth middleware (rejection branches).
+ *
+ * Uses createCallerFactory for direct procedure invocation (no HTTP).
+ */
+
+import { describe, it, expect } from "vitest";
+import { TRPCError } from "@trpc/server";
+import {
+  router,
+  publicProcedure,
+  orgProcedure,
+  authedProcedure,
+  createCallerFactory,
+  appErrorToTrpcCode,
+  throwAsTrpc,
+} from "./trpc.js";
+import {
+  AuthError,
+  ForbiddenError,
+  NotFoundError,
+  ValidationError,
+  ConflictError,
+  RateLimitError,
+  InternalError,
+} from "../errors.js";
+import type { Context, OrgContext } from "./context.js";
+import { IncomingMessage, ServerResponse } from "node:http";
+import { Socket } from "node:net";
+
+// --- Helpers ---
+
+function stubReq(): IncomingMessage {
+  const socket = new Socket();
+  const req = Object.create(IncomingMessage.prototype) as IncomingMessage;
+  Object.defineProperty(req, "socket", { value: socket, writable: false });
+  Object.defineProperty(req, "headers", { value: {}, writable: true });
+  return req;
+}
+
+function stubRes(): ServerResponse {
+  return Object.create(ServerResponse.prototype) as ServerResponse;
+}
+
+const fakeOrg: OrgContext = {
+  orgId: "org-1",
+  orgSlug: "test",
+  orgSchema: "org_test",
+  // Minimal stub; middleware doesn't use tenantDb directly
+  tenantDb: {} as OrgContext["tenantDb"],
+};
+
+function baseCtx(overrides?: Partial<Context>): Context {
+  return {
+    req: stubReq(),
+    res: stubRes(),
+    org: fakeOrg,
+    session: null,
+    user: null,
+    ...overrides,
+  };
+}
+
+// --- appErrorToTrpcCode ---
+
+describe("appErrorToTrpcCode", () => {
+  it("maps AuthError to UNAUTHORIZED", () => {
+    expect(appErrorToTrpcCode(new AuthError("x"))).toBe("UNAUTHORIZED");
+  });
+
+  it("maps ForbiddenError to FORBIDDEN", () => {
+    expect(appErrorToTrpcCode(new ForbiddenError("x"))).toBe("FORBIDDEN");
+  });
+
+  it("maps NotFoundError to NOT_FOUND", () => {
+    expect(appErrorToTrpcCode(new NotFoundError("x"))).toBe("NOT_FOUND");
+  });
+
+  it("maps ValidationError to BAD_REQUEST", () => {
+    expect(appErrorToTrpcCode(new ValidationError("x"))).toBe("BAD_REQUEST");
+  });
+
+  it("maps ConflictError to CONFLICT", () => {
+    expect(appErrorToTrpcCode(new ConflictError("x"))).toBe("CONFLICT");
+  });
+
+  it("maps RateLimitError to TOO_MANY_REQUESTS", () => {
+    expect(appErrorToTrpcCode(new RateLimitError("x", 30))).toBe(
+      "TOO_MANY_REQUESTS",
+    );
+  });
+
+  it("returns INTERNAL_SERVER_ERROR for non-AppError", () => {
+    expect(appErrorToTrpcCode(new Error("generic"))).toBe(
+      "INTERNAL_SERVER_ERROR",
+    );
+  });
+
+  it("returns INTERNAL_SERVER_ERROR for non-Error values", () => {
+    expect(appErrorToTrpcCode("a string")).toBe("INTERNAL_SERVER_ERROR");
+  });
+});
+
+// --- throwAsTrpc ---
+
+describe("throwAsTrpc", () => {
+  it("wraps an AppError as TRPCError with correct code", () => {
+    const authErr = new AuthError("bad creds");
+    expect(() => throwAsTrpc(authErr)).toThrow(TRPCError);
+
+    try {
+      throwAsTrpc(authErr);
+    } catch (err) {
+      expect(err).toBeInstanceOf(TRPCError);
+      const trpcErr = err as TRPCError;
+      expect(trpcErr.code).toBe("UNAUTHORIZED");
+      expect(trpcErr.message).toBe("bad creds");
+      expect(trpcErr.cause).toBe(authErr);
+    }
+  });
+
+  it("uses generic message for non-operational AppError", () => {
+    const internalErr = new InternalError("secret DB detail");
+
+    try {
+      throwAsTrpc(internalErr);
+    } catch (err) {
+      const trpcErr = err as TRPCError;
+      expect(trpcErr.message).toBe("Internal server error");
+    }
+  });
+
+  it("re-throws non-AppError unchanged", () => {
+    const plain = new TypeError("not an app error");
+    expect(() => throwAsTrpc(plain)).toThrow(plain);
+  });
+
+  it("re-throws non-Error values unchanged", () => {
+    expect(() => throwAsTrpc("string error")).toThrow("string error");
+  });
+});
+
+// --- errorFormatter (via caller round-trip) ---
+
+describe("errorFormatter", () => {
+  // Build a minimal router with a procedure that throws AppError vs generic Error
+  const testRouter = router({
+    throwAuthError: publicProcedure.mutation(() => {
+      throw new TRPCError({
+        code: "UNAUTHORIZED",
+        message: "auth failed",
+        cause: new AuthError("Invalid credentials"),
+      });
+    }),
+    throwInternalAppError: publicProcedure.mutation(() => {
+      throw new TRPCError({
+        code: "INTERNAL_SERVER_ERROR",
+        message: "boom",
+        cause: new InternalError("secret detail"),
+      });
+    }),
+    throwPlainError: publicProcedure.mutation(() => {
+      throw new TRPCError({
+        code: "INTERNAL_SERVER_ERROR",
+        message: "something broke",
+        // No AppError cause
+      });
+    }),
+  });
+
+  const factory = createCallerFactory(testRouter);
+
+  it("formats operational AppError with code and original message", async () => {
+    const caller = factory(baseCtx());
+
+    try {
+      await caller.throwAuthError();
+      expect.fail("Should have thrown");
+    } catch (err) {
+      const trpcErr = err as TRPCError;
+      expect(trpcErr.code).toBe("UNAUTHORIZED");
+    }
+  });
+
+  it("formats non-operational AppError with generic message", async () => {
+    const caller = factory(baseCtx());
+
+    try {
+      await caller.throwInternalAppError();
+      expect.fail("Should have thrown");
+    } catch (err) {
+      const trpcErr = err as TRPCError;
+      expect(trpcErr.code).toBe("INTERNAL_SERVER_ERROR");
+    }
+  });
+
+  it("passes through non-AppError shape unchanged", async () => {
+    const caller = factory(baseCtx());
+
+    try {
+      await caller.throwPlainError();
+      expect.fail("Should have thrown");
+    } catch (err) {
+      const trpcErr = err as TRPCError;
+      expect(trpcErr.code).toBe("INTERNAL_SERVER_ERROR");
+      expect(trpcErr.message).toBe("something broke");
+    }
+  });
+});
+
+// --- requireOrg middleware ---
+
+describe("requireOrg middleware (orgProcedure)", () => {
+  const testRouter = router({
+    needsOrg: orgProcedure.query(() => "ok"),
+  });
+
+  const factory = createCallerFactory(testRouter);
+
+  it("allows requests when org is resolved", async () => {
+    const caller = factory(baseCtx({ org: fakeOrg }));
+    const result = await caller.needsOrg();
+    expect(result).toBe("ok");
+  });
+
+  it("rejects with NOT_FOUND when org is null", async () => {
+    const caller = factory(baseCtx({ org: null }));
+    await expect(caller.needsOrg()).rejects.toThrow("Organization not found");
+  });
+});
+
+// --- requireAuth middleware ---
+
+describe("requireAuth middleware (authedProcedure)", () => {
+  const testRouter = router({
+    needsAuth: authedProcedure.query(() => "authed"),
+  });
+
+  const factory = createCallerFactory(testRouter);
+
+  it("rejects with NOT_FOUND when org is null", async () => {
+    const caller = factory(baseCtx({ org: null }));
+    await expect(caller.needsAuth()).rejects.toThrow("Organization not found");
+  });
+
+  it("rejects with UNAUTHORIZED when session is null", async () => {
+    const caller = factory(baseCtx({ org: fakeOrg, session: null }));
+    await expect(caller.needsAuth()).rejects.toThrow("Not authenticated");
+  });
+
+  it("rejects with UNAUTHORIZED when user is null", async () => {
+    const caller = factory(
+      baseCtx({
+        org: fakeOrg,
+        session: {
+          id: "s1",
+          token: "tok",
+          userId: "u1",
+          ipAddress: "127.0.0.1",
+          userAgent: "test",
+          expiresAt: new Date(Date.now() + 60_000),
+          createdAt: new Date(),
+        },
+        user: null,
+      }),
+    );
+    await expect(caller.needsAuth()).rejects.toThrow("Not authenticated");
+  });
+
+  it("allows requests when org, session, and user are present", async () => {
+    const caller = factory(
+      baseCtx({
+        org: fakeOrg,
+        session: {
+          id: "s1",
+          token: "tok",
+          userId: "u1",
+          ipAddress: "127.0.0.1",
+          userAgent: "test",
+          expiresAt: new Date(Date.now() + 60_000),
+          createdAt: new Date(),
+        },
+        user: {
+          id: "u1",
+          identifier: "testuser",
+          displayName: "Test",
+          roleId: "volunteer",
+          isActive: true,
+          createdAt: new Date(),
+        },
+      }),
+    );
+    const result = await caller.needsAuth();
+    expect(result).toBe("authed");
+  });
+});

@@ -158,9 +158,10 @@ describe.skipIf(!HAS_DB)("auth + org routers (DB integration)", () => {
   function createTestCaller(overrides?: {
     org?: OrgContext | null;
     limiter?: ReturnType<typeof createInMemoryRateLimiter>;
+    headers?: Record<string, string>;
   }) {
     const res = mockRes();
-    const req = mockReq();
+    const req = mockReq(overrides?.headers);
     const appRouter = buildRouter(overrides?.limiter);
     const factory = createCallerFactory(appRouter);
     const ctx: Context = {
@@ -377,6 +378,66 @@ describe.skipIf(!HAS_DB)("auth + org routers (DB integration)", () => {
   it("auth.me rejects unauthenticated caller", async () => {
     const { caller } = createTestCaller();
     await expect(caller.auth.me()).rejects.toThrow("Not authenticated");
+  });
+
+  // --- extractClientIp branches ---
+
+  it("auth.login uses x-forwarded-for header for client IP", async () => {
+    const authService = makeAuthService(tenantDb);
+    await authService.register({
+      identifier: "xff-user",
+      password: "xff-password-long-enough",
+      displayName: "XFF User",
+      roleId: "volunteer",
+    });
+
+    const isolatedLimiter = createInMemoryRateLimiter({
+      windowMs: 60_000,
+      maxRequests: 5,
+    });
+    const { caller } = createTestCaller({
+      limiter: isolatedLimiter,
+      headers: { "x-forwarded-for": "203.0.113.42, 10.0.0.1" },
+    });
+
+    const result = await caller.auth.login({
+      identifier: "xff-user",
+      password: "xff-password-long-enough",
+    });
+    expect(result.user.identifier).toBe("xff-user");
+  });
+
+  // --- register error path (throwAsTrpc on duplicate identifier) ---
+
+  it("auth.register throws on duplicate identifier via route", async () => {
+    const authService = makeAuthService(tenantDb);
+    const admin = await authService.register({
+      identifier: "dup-admin",
+      password: "dup-admin-password-long-enough",
+      displayName: "Dup Admin",
+      roleId: "admin",
+    });
+
+    const { caller } = createAuthedCaller(admin, "dup-admin-token");
+
+    // First registration succeeds
+    await caller.auth.register({
+      identifier: "dup-target",
+      password: "dup-target-password-long-enough",
+      displayName: "First",
+      roleId: "volunteer",
+    });
+
+    // Second registration with same identifier fails through throwAsTrpc
+    const { caller: caller2 } = createAuthedCaller(admin, "dup-admin-token");
+    await expect(
+      caller2.auth.register({
+        identifier: "dup-target",
+        password: "dup-target-password-long-enough",
+        displayName: "Second",
+        roleId: "volunteer",
+      }),
+    ).rejects.toThrow("already exists");
   });
 
   // --- Rate limiting ---

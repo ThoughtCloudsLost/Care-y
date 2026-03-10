@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
 import pg from "pg";
 import { Kysely, PostgresDialect, sql } from "kysely";
 import type { PlatformDatabase, TenantDatabase } from "../db/types.js";
@@ -270,6 +270,47 @@ describe.skipIf(!process.env.DATABASE_URL)(
         expect(err).toBeInstanceOf(InternalError);
         expect((err as InternalError).message).toBe("original internal error");
       }
+    });
+
+    it("rolls back org row when CREATE SCHEMA fails", async () => {
+      // Spy on the Kysely prototype's `schema` getter to return a fake
+      // SchemaModule whose createSchema always rejects. This avoids Proxy
+      // issues with Kysely's private #props fields.
+      const realSchema = platformDb.schema;
+      const schemaSpy = vi
+        .spyOn(
+          Object.getPrototypeOf(platformDb) as Record<string, unknown>,
+          "schema",
+          "get",
+        )
+        .mockReturnValue({
+          ...realSchema,
+          createSchema: () => ({
+            execute: () =>
+              Promise.reject(new Error("simulated CREATE SCHEMA failure")),
+          }),
+        });
+
+      function realFactory(schema: string): Kysely<TenantDatabase> {
+        return platformDb.withSchema(
+          schema,
+        ) as unknown as Kysely<TenantDatabase>;
+      }
+
+      const service = createOrgService(platformDb, realFactory);
+      const slug = `test-schema-create-fail-${Date.now()}`;
+
+      await expect(service.createOrg({ slug })).rejects.toThrow(InternalError);
+
+      schemaSpy.mockRestore();
+
+      // Verify org row was cleaned up by the catch block
+      const row = await platformDb
+        .selectFrom("orgs")
+        .selectAll()
+        .where("slug", "=", slug)
+        .executeTakeFirst();
+      expect(row).toBeUndefined();
     });
   },
 );
