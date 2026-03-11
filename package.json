@@ -24,6 +24,7 @@
     "migrate:tenant:down": "tsx --env-file=.env packages/server/src/db/migrate.ts down --schema=",
     "migrate:all": "tsx --env-file=.env packages/server/src/db/migrate.ts --all-schemas",
     "migrate:create-schema": "tsx --env-file=.env packages/server/src/db/schema-create.ts",
+    "seed": "tsx --env-file=.env packages/server/src/scripts/seed.ts",
     "postinstall": "lefthook install"
   },
   "pnpm": {
@@ -38,6 +39,7 @@
   },
   "devDependencies": {
     "@axe-core/playwright": "4.11.1",
+    "@types/node": "25.4.0",
     "@commitlint/cli": "20.4.3",
     "@commitlint/config-conventional": "20.4.3",
     "@playwright/test": "1.58.2",

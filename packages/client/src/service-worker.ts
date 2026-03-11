@@ -118,6 +118,7 @@ async function respond(request: Request, url: URL): Promise<Response> {
     // a cache eviction or if addAll missed an entry). Fire-and-forget: quota
     // errors are swallowed since the asset was already precached on install.
     if (response.status === 200 && KNOWN_ASSETS.has(url.pathname)) {
+      // eslint-disable-next-line @typescript-eslint/no-empty-function -- intentional fire-and-forget
       cache.put(request, response.clone()).catch(() => {});
     }
 

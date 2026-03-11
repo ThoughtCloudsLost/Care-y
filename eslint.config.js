@@ -56,6 +56,9 @@ export default tseslint.config(
       // Svelte 5 {@render} calls trigger false positives - the type
       // checker can't resolve snippet types in template blocks.
       "@typescript-eslint/no-unsafe-call": "off",
+      // Event handler parameters (e.g., SubmitEvent) aren't fully resolved
+      // by the Svelte parser in <script> blocks, triggering false positives.
+      "@typescript-eslint/no-unsafe-member-access": "off",
     },
   },
 
@@ -141,7 +144,10 @@ export default tseslint.config(
       "**/*.test.ts",
       "**/*.spec.ts",
       "**/test-utils.ts",
+      "**/test-setup.ts",
       "**/test-global-setup.ts",
+      "e2e/global-setup.ts",
+      "e2e/global-teardown.ts",
     ],
     rules: {
       // Tests mock complex library types (Kysely, tRPC) with minimal stubs.
@@ -161,6 +167,15 @@ export default tseslint.config(
       "@typescript-eslint/no-dynamic-delete": "off",
       // Spreading class instances to test error properties is a valid pattern.
       "@typescript-eslint/no-misused-spread": "off",
+      // Tests routinely access mock.calls[0]! and similar known-shape objects.
+      "@typescript-eslint/no-non-null-assertion": "off",
+      // Unnecessary type assertions in mock wiring (e.g., `as unknown as Cache`).
+      "@typescript-eslint/no-unnecessary-type-assertion": "off",
+      // Test mocks use `any` in mock return types from vi.fn().
+      "@typescript-eslint/no-unsafe-assignment": "off",
+      "@typescript-eslint/no-unsafe-member-access": "off",
+      // Array<T> in test helper type annotations is fine.
+      "@typescript-eslint/array-type": "off",
       // Template literals with numbers in test labels are harmless.
       "@typescript-eslint/restrict-template-expressions": "off",
       // Test functions may be async for consistency without awaiting.
@@ -179,6 +194,7 @@ export default tseslint.config(
     files: [
       "*.config.{js,ts,mjs,mts}",
       "vitest.config.ts",
+      "**/vitest.config.ts",
       "**/svelte.config.js",
       "**/vite.config.ts",
       // Service worker is compiled by SvelteKit separately with its own

@@ -32,6 +32,15 @@ export default defineConfig({
       },
     }),
   ],
+  server: {
+    proxy: {
+      "/trpc": {
+        target: "http://localhost:3000",
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/trpc/, ""),
+      },
+    },
+  },
   ssr: {
     // pnpm-linked workspace packages appear in node_modules,
     // which Vite skips by default during SSR.

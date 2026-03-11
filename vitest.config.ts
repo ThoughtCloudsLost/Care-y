@@ -72,23 +72,11 @@ export default defineConfig({
           },
         },
       }),
-      defineProject({
-        test: {
-          name: "client",
-          root: "packages/client",
-          include: ["src/**/*.test.ts"],
-          exclude: ["**/dist/**", "**/node_modules/**"],
-          coverage: {
-            provider: "v8",
-            thresholds: {
-              statements: 85,
-              branches: 85,
-              functions: 85,
-              lines: 85,
-            },
-          },
-        },
-      }),
+      // Client uses file-based config so the sveltekit() vite plugin resolves
+      // $app/*, $lib/*, and $service-worker aliases in tests.
+      // Referenced as a directory so vitest sets cwd to packages/client/
+      // before loading the config (sveltekit() needs cwd to find svelte.config.js).
+      "packages/client",
     ],
   },
 });

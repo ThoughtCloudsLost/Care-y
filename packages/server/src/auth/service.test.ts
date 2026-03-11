@@ -241,8 +241,6 @@ describe.skipIf(!process.env.DATABASE_URL)("AuthService", () => {
       expect(fulfilled).toHaveLength(1);
       expect(rejected).toHaveLength(1);
 
-      // PromiseRejectedResult.reason is typed `any` in TS lib; no way around the cast
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
       const error = (rejected[0] as PromiseRejectedResult).reason;
       expect(error).toBeInstanceOf(ConflictError);
     });
