@@ -39,7 +39,7 @@ The following uses are incompatible with the purpose of this project:
 ## Intent
 
 CARE-Y exists because vulnerable people deserve infrastructure that works for them, not
-against them. Every design decision (E2E encryption, the dual-tier Proton model with threshold
+against them. Every design decision (E2E encryption, the dual-tier encryption model with threshold
 decryption for PII, zero plaintext at rest) exists to serve that goal.
 
 Operators who share that goal are welcome to deploy, fork, and adapt this software.

@@ -1,5 +1,6 @@
-// Environment variable validation. Import this FIRST in index.ts.
-// Validates required vars at startup and exits with a clear error if any are missing.
+// Environment variable validation.
+// Exports lazy accessors so importing this module does NOT trigger validation.
+// Call validateEnv() explicitly in index.ts for fail-fast startup behavior.
 // All env vars are declared here. Add new vars as features are built.
 
 import { z } from "zod";
@@ -17,14 +18,51 @@ const envSchema = z.object({
 
   // Database connection
   DATABASE_URL: z.string().min(1, "DATABASE_URL is required"),
+
+  // Field-level PII encryption
+  // HKDF-derived subkeys for blind indexing and field encryption.
+  // Generate with: node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+  OPS_SECRETS_KEY: z
+    .string()
+    .min(64, "OPS_SECRETS_KEY must be at least 64 hex chars (32 bytes)")
+    .regex(/^[0-9a-f]+$/i, "OPS_SECRETS_KEY must be hex-encoded"),
+
+  // tRPC CORS origin. In dev, the Vite proxy makes this mostly irrelevant
+  // (requests are same-origin from the browser's perspective), but it
+  // applies for production (Caddy reverse proxy) and direct API testing.
+  CORS_ORIGIN: z.string().default("http://localhost:5173"),
 });
 
-const parsed = envSchema.safeParse(process.env);
+export type EnvVars = z.infer<typeof envSchema>;
 
-if (!parsed.success) {
-  console.error("Invalid environment variables:");
-  console.error(z.treeifyError(parsed.error));
-  process.exit(1);
+export class EnvValidationError extends Error {
+  constructor(issues: readonly { path: PropertyKey[]; message: string }[]) {
+    const lines = issues.map(
+      (i) => `  ${i.path.join(".") || "(root)"}: ${i.message}`,
+    );
+    super(`Invalid environment variables:\n${lines.join("\n")}`);
+    this.name = "EnvValidationError";
+  }
 }
 
-export const env = parsed.data;
+/** Parses and validates process.env against the schema. Throws EnvValidationError on failure. */
+export function validateEnv(): EnvVars {
+  const parsed = envSchema.safeParse(process.env);
+  if (!parsed.success) {
+    throw new EnvValidationError(parsed.error.issues);
+  }
+  return parsed.data;
+}
+
+let cached: EnvVars | null = null;
+
+/** Returns validated env vars, calling validateEnv() on first access and caching the result. */
+export function getEnv(): EnvVars {
+  cached ??= validateEnv();
+  return cached;
+}
+
+/** Resets the cached env. Test-only: allows re-validation after changing process.env. */
+export function _resetEnvCache(): void {
+  cached = null;
+}

@@ -19,7 +19,17 @@ export default {
     "scope-enum": [
       2,
       "always",
-      ["crypto", "server", "client", "shared", "infra", "deps", "ci", "docs"],
+      [
+        "auth",
+        "crypto",
+        "server",
+        "client",
+        "shared",
+        "infra",
+        "deps",
+        "ci",
+        "docs",
+      ],
     ],
     // Allow empty scope for cross-cutting changes
     "scope-empty": [0],

@@ -5,8 +5,14 @@ pre-commit:
   commands:
     gitleaks:
       run: gitleaks protect --staged
+      skip:
+        - run: "! command -v gitleaks &>/dev/null"
+    banned-patterns:
+      run: if [ -f .githooks/pre-commit ]; then bash .githooks/pre-commit; fi
 
 commit-msg:
   commands:
     commitlint:
       run: npx --no -- commitlint --edit {1}
+    banned-patterns:
+      run: if [ -f .githooks/commit-msg ]; then bash .githooks/commit-msg {1}; fi
