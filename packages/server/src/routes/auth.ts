@@ -39,13 +39,16 @@ export interface AuthRouterDeps extends AuthServiceDeps {
   readonly isSecureCookie: boolean;
 }
 
+/** Safe response shape: no password_hash, no internal fields. */
+export interface UserResponse {
+  readonly id: string;
+  readonly identifier: string;
+  readonly displayName: string;
+  readonly roleId: string;
+}
+
 /** Projects a UserRecord to a safe response shape (no password_hash, no internal fields). */
-function toUserResponse(user: UserRecord): {
-  id: string;
-  identifier: string;
-  displayName: string;
-  roleId: string;
-} {
+function toUserResponse(user: UserRecord): UserResponse {
   return {
     id: user.id,
     identifier: user.identifier,

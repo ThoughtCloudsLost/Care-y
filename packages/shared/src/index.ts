@@ -11,6 +11,9 @@ export {
   createOrgInputSchema,
 } from "./schemas/org.js";
 
+// --- Utilities ---
+export { extractSubdomain } from "./utils/subdomain.js";
+
 export {
   emailSchema,
   notificationEmailSchema,

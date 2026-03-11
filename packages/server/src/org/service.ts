@@ -25,7 +25,7 @@ import {
 } from "../errors.js";
 
 // eslint-disable-next-line @typescript-eslint/no-empty-function -- intentional swallow for best-effort cleanup
-const noop = (): void => {};
+const swallowCleanupError = (): void => {};
 
 export interface OrgRecord {
   readonly id: string;
@@ -69,12 +69,12 @@ async function rollbackOrg(
 ): Promise<void> {
   await sql`DROP SCHEMA IF EXISTS ${sql.id(schemaName)} CASCADE`
     .execute(platformDb)
-    .catch(noop);
+    .catch(swallowCleanupError);
   await platformDb
     .deleteFrom("orgs")
     .where("id", "=", orgId)
     .execute()
-    .catch(noop);
+    .catch(swallowCleanupError);
 }
 
 async function insertOrgRow(
@@ -109,7 +109,7 @@ async function createPostgresSchema(
       .deleteFrom("orgs")
       .where("id", "=", orgId)
       .execute()
-      .catch(noop);
+      .catch(swallowCleanupError);
     throw new InternalError(
       `Failed to create schema "${schemaName}": ${extractErrorMessage(err)}`,
     );

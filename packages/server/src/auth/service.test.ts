@@ -324,7 +324,7 @@ describe.skipIf(!process.env.DATABASE_URL)("AuthService", () => {
       ).rejects.toThrow(AuthError);
     });
 
-    it("cleans expired sessions before creating new one", async () => {
+    it("cleans expired sessions after login (fire-and-forget)", async () => {
       // Create an expired session manually via the factory.
       const user = await service.register({
         identifier: "cleanup-test-user",
@@ -342,13 +342,16 @@ describe.skipIf(!process.env.DATABASE_URL)("AuthService", () => {
         expiresAt: new Date(Date.now() - 60_000),
       });
 
-      // Login triggers deleteExpired.
+      // Login triggers fire-and-forget deleteExpired after session creation.
       await service.login({
         identifier: "cleanup-test-user",
         password: "secretpassword123",
         ipAddress: "10.0.0.2",
         userAgent: "TestAgent/1.0",
       });
+
+      // Yield to the microtask queue so the fire-and-forget cleanup settles.
+      await new Promise((resolve) => setTimeout(resolve, 50));
 
       // The expired session should be gone.
       const found = await sessions.findByToken("expired-tok-cleanup");

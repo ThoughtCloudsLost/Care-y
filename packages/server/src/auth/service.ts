@@ -78,6 +78,13 @@ function generateSessionToken(): string {
   return randomBytes(32).toString("hex");
 }
 
+function logCleanupFailure(err: unknown): void {
+  console.warn(
+    "Failed to purge expired sessions:",
+    err instanceof Error ? err.message : String(err),
+  );
+}
+
 export function createAuthService(
   db: Kysely<TenantDatabase>,
   hasher: PasswordHasher,
@@ -89,12 +96,12 @@ export function createAuthService(
   // Lazy-initialized dummy hash for timing side-channel prevention.
   // On the first failed-lookup login attempt, we hash a throwaway string
   // so that the timing of a "user not found" path matches "wrong password".
-  let dummyHashPromise: Promise<string> | null = null;
+  let timingPadHashPromise: Promise<string> | null = null;
 
   // eslint-disable-next-line @typescript-eslint/promise-function-async -- returns a cached promise; async would create a new wrapper on each call
-  function getDummyHash(): Promise<string> {
-    dummyHashPromise ??= hasher.hash("__timing_pad__");
-    return dummyHashPromise;
+  function getTimingPadHash(): Promise<string> {
+    timingPadHashPromise ??= hasher.hash("__timing_pad__");
+    return timingPadHashPromise;
   }
 
   async function findActiveUserByHash(
@@ -152,7 +159,7 @@ export function createAuthService(
     row: Selectable<UsersTable> | null,
   ): Promise<Selectable<UsersTable>> {
     if (!row) {
-      await hasher.verify(password, await getDummyHash());
+      await hasher.verify(password, await getTimingPadHash());
       throw new AuthError("Invalid credentials");
     }
 
@@ -169,15 +176,19 @@ export function createAuthService(
     ipAddress: string,
     userAgent: string,
   ): Promise<SessionData> {
-    await sessions.deleteExpired();
-
-    return sessions.create({
+    const session = await sessions.create({
       token: generateSessionToken(),
       userId,
       ipAddress,
       userAgent,
       expiresAt: new Date(Date.now() + SESSION_MAX_AGE_MS),
     });
+
+    // Fire-and-forget: purge expired sessions without blocking the login response.
+    // Keeps the security benefit (expired tokens don't linger) without the latency cost.
+    sessions.deleteExpired().catch(logCleanupFailure);
+
+    return session;
   }
 
   async function insertUserRow(input: {

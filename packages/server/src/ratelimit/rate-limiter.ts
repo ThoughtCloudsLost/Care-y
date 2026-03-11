@@ -37,11 +37,21 @@ export function createInMemoryRateLimiter(
     const timestamps = windows.get(key);
     if (!timestamps) return [];
 
-    // Timestamps are sorted (push-only). Drop expired entries from the front
-    // without allocating a new array.
+    // Timestamps are sorted (push-only). Find the first non-expired entry,
+    // then remove all expired ones in a single splice (O(1) amortized vs
+    // O(n) per shift call).
     const cutoff = now() - config.windowMs;
-    while (timestamps.length > 0 && (timestamps[0] ?? Infinity) <= cutoff) {
-      timestamps.shift();
+    let expiredCount = 0;
+    while (
+      expiredCount < timestamps.length &&
+      // eslint-disable-next-line security/detect-object-injection -- expiredCount is a locally controlled integer counter, not user input
+      (timestamps[expiredCount] ?? Infinity) <= cutoff
+    ) {
+      expiredCount++;
+    }
+
+    if (expiredCount > 0) {
+      timestamps.splice(0, expiredCount);
     }
 
     if (timestamps.length === 0) {

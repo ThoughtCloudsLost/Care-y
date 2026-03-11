@@ -29,6 +29,7 @@ import { createAuthService } from "../auth/service.js";
 import { parseCookies } from "../auth/cookies.js";
 import { SESSION_COOKIE_NAME } from "../auth/service.js";
 import { extractClientIp } from "../http/request-utils.js";
+import { extractSubdomain } from "@care-y/shared";
 import { tenantDb } from "../db/db.js";
 import { getEnv } from "../env.js";
 
@@ -71,16 +72,7 @@ function extractOrgSlug(req: IncomingMessage): string | null {
   const host = req.headers.host;
   if (host === undefined || host === "") return null;
 
-  // Strip port if present
-  const hostname = host.split(":")[0];
-  if (hostname === undefined || hostname === "") return null;
-
-  // Expect subdomain.domain.tld format (at least 3 parts)
-  const parts = hostname.split(".");
-  if (parts.length < 3) return null;
-
-  const subdomain = parts[0];
-  return subdomain !== undefined && subdomain.length > 0 ? subdomain : null;
+  return extractSubdomain(host);
 }
 
 async function resolveOrg(
