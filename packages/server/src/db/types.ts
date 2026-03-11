@@ -60,11 +60,21 @@ export interface OrgConfigTable {
   updated_at: ColumnType<Date, Date | undefined, Date>;
 }
 
+// --- Salt Defense (user_keys stub) ---
+// The crypto layer extends this table with vol_public, pq_public, key_version,
+// rotated_at via ALTER TABLE migration. Do NOT add those columns here.
+export interface UserKeysStubTable {
+  user_id: string;
+  salt: Buffer;
+  created_at: Generated<Date>;
+}
+
 export interface TenantDatabase {
   users: UsersTable;
   sessions: SessionsTable;
   org_config: OrgConfigTable;
-  // Cryptography (user_keys, ticket_key_wraps)
+  user_keys: UserKeysStubTable;
+  // Cryptography (ticket_key_wraps)
   // Tickets (tickets, followups, audit_log)
   // Shifts (shifts, shift_occurrences)
   // Client portal (portal_channels)

@@ -262,7 +262,7 @@ export async function createTestSession(
 // ---------------------------------------------------------------------------
 
 export interface MockReqOptions {
-  headers?: Record<string, string>;
+  headers?: Record<string, string | undefined>;
   remoteAddress?: string;
 }
 

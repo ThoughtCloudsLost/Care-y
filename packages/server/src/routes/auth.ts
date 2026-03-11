@@ -10,8 +10,12 @@
  * user's non-sensitive profile.
  */
 
-import type { ServerResponse } from "node:http";
-import { loginInputSchema, registerInputSchema } from "@care-y/shared";
+import type { IncomingMessage, ServerResponse } from "node:http";
+import {
+  loginInputSchema,
+  registerInputSchema,
+  getSaltInputSchema,
+} from "@care-y/shared";
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import {
@@ -33,9 +37,13 @@ import {
   createScopedAuthService,
   type AuthServiceDeps,
 } from "../trpc/context.js";
+import { createSaltDefense } from "../auth/salt-defense.js";
+import type { OrgContext } from "../trpc/context.js";
 
 export interface AuthRouterDeps extends AuthServiceDeps {
   readonly loginLimiter: RateLimiter;
+  readonly saltLimiter: RateLimiter;
+  readonly fakeSaltKey: Buffer;
   readonly isSecureCookie: boolean;
 }
 
@@ -59,17 +67,22 @@ function toUserResponse(user: UserRecord): UserResponse {
 
 /**
  * Enforces per-IP rate limiting. Throws TOO_MANY_REQUESTS if the limit is
- * exceeded. Never reveals whether the limit was hit due to IP saturation
- * or a specific username (timing-safe).
+ * exceeded. The key parameter allows separate rate limit buckets (e.g.
+ * raw IP for login, "salt:<ip>" for the salt endpoint). Never reveals
+ * whether the limit was hit due to IP saturation or a specific username.
  */
-function enforceLoginRateLimit(limiter: RateLimiter, ip: string): void {
-  const result = limiter.check(ip);
+function enforceRateLimit(
+  limiter: RateLimiter,
+  key: string,
+  userMessage: string,
+): void {
+  const result = limiter.check(key);
   if (!result.allowed) {
     throw new TRPCError({
       code: "TOO_MANY_REQUESTS",
-      message: "Too many login attempts. Try again later.",
+      message: `${userMessage}. Try again later.`,
       cause: new RateLimitError(
-        "Too many login attempts",
+        userMessage,
         Math.ceil(result.retryAfterMs / 1000),
       ),
     });
@@ -89,15 +102,54 @@ function setSessionCookie(
   );
 }
 
+/**
+ * Enforces rate limiting, then delegates salt lookup to the SaltDefense
+ * module. Returns the salt as a base64-encoded string for JSON transport.
+ */
+async function handleGetSalt(
+  org: OrgContext,
+  deps: AuthServiceDeps,
+  fakeSaltKey: Buffer,
+  saltLimiter: RateLimiter,
+  req: IncomingMessage,
+  identifier: string,
+): Promise<{ salt: string }> {
+  enforceRateLimit(
+    saltLimiter,
+    `salt:${extractClientIp(req)}`,
+    "Too many requests",
+  );
+  const saltDefense = createSaltDefense(
+    org.tenantDb,
+    { fakeSaltKey, orgUuid: org.orgId },
+    deps.indexer,
+  );
+  const result = await saltDefense.getSalt(identifier);
+  return { salt: result.salt.toString("base64") };
+}
+
 export function createAuthRouter(deps: AuthRouterDeps) {
-  const { loginLimiter, isSecureCookie } = deps;
+  const { loginLimiter, saltLimiter, fakeSaltKey, isSecureCookie } = deps;
 
   return router({
+    getSalt: orgProcedure
+      .input(getSaltInputSchema)
+      .query(async ({ ctx, input }) =>
+        handleGetSalt(
+          ctx.org,
+          deps,
+          fakeSaltKey,
+          saltLimiter,
+          ctx.req,
+          input.identifier,
+        ),
+      ),
+
     login: orgProcedure
       .input(loginInputSchema)
       .mutation(async ({ ctx, input }) => {
         const ip = extractClientIp(ctx.req);
-        enforceLoginRateLimit(loginLimiter, ip);
+        enforceRateLimit(loginLimiter, ip, "Too many login attempts");
 
         const authService = createScopedAuthService(ctx.org, deps);
 

@@ -8,8 +8,6 @@
 
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { randomUUID } from "node:crypto";
-import { IncomingMessage } from "node:http";
-import { Socket } from "node:net";
 import { sql, type Kysely } from "kysely";
 import type { PlatformDatabase, TenantDatabase } from "../db/types.js";
 import {
@@ -103,6 +101,13 @@ describe.skipIf(!HAS_DB)("auth + org routers (DB integration)", () => {
     await testDb.cleanup();
   });
 
+  // Deterministic fake-salt key for test use (32 bytes, all zeros is fine for tests).
+  const testFakeSaltKey = Buffer.alloc(32, 0);
+  const testSaltLimiter = createInMemoryRateLimiter({
+    windowMs: 60_000,
+    maxRequests: 20,
+  });
+
   function buildRouter(limiter?: ReturnType<typeof createInMemoryRateLimiter>) {
     const orgService = createOrgService(
       testDb.platformDb,
@@ -112,6 +117,8 @@ describe.skipIf(!HAS_DB)("auth + org routers (DB integration)", () => {
       authDeps: {
         hasher,
         loginLimiter: limiter ?? loginLimiter,
+        saltLimiter: testSaltLimiter,
+        fakeSaltKey: testFakeSaltKey,
         encryptor: testFieldEncryptor,
         indexer: testBlindIndexer,
         isSecureCookie: false,
@@ -120,17 +127,25 @@ describe.skipIf(!HAS_DB)("auth + org routers (DB integration)", () => {
     });
   }
 
+  /** Shared wiring: builds router, factory, req/res, and returns a caller. */
+  function buildCaller(
+    ctx: Context,
+    limiter?: ReturnType<typeof createInMemoryRateLimiter>,
+  ) {
+    const appRouter = buildRouter(limiter);
+    const factory = createCallerFactory(appRouter);
+    return factory(ctx);
+  }
+
   function createTestCaller(overrides?: {
     org?: OrgContext | null;
     limiter?: ReturnType<typeof createInMemoryRateLimiter>;
-    headers?: Record<string, string>;
+    headers?: Record<string, string | undefined>;
   }) {
     const res = mockRes();
-    const req = overrides?.headers
-      ? mockReq({ headers: overrides.headers })
-      : mockReq();
-    const appRouter = buildRouter(overrides?.limiter);
-    const factory = createCallerFactory(appRouter);
+    const req = mockReq(
+      overrides?.headers ? { headers: overrides.headers } : undefined,
+    );
     const ctx: Context = {
       req,
       res,
@@ -138,7 +153,7 @@ describe.skipIf(!HAS_DB)("auth + org routers (DB integration)", () => {
       session: null,
       user: null,
     };
-    return { caller: factory(ctx), res };
+    return { caller: buildCaller(ctx, overrides?.limiter), res };
   }
 
   function createAuthedCaller(
@@ -153,11 +168,8 @@ describe.skipIf(!HAS_DB)("auth + org routers (DB integration)", () => {
     sessionToken: string,
   ) {
     const res = mockRes();
-    const req = mockReq();
-    const appRouter = buildRouter();
-    const factory = createCallerFactory(appRouter);
     const ctx: Context = {
-      req,
+      req: mockReq(),
       res,
       org: orgContext,
       session: {
@@ -171,7 +183,7 @@ describe.skipIf(!HAS_DB)("auth + org routers (DB integration)", () => {
       },
       user,
     };
-    return { caller: factory(ctx), res };
+    return { caller: buildCaller(ctx), res };
   }
 
   // --- Health ---
@@ -428,27 +440,10 @@ describe.skipIf(!HAS_DB)("auth + org routers (DB integration)", () => {
 
     loginLimiter.reset("127.0.0.1");
 
-    // Build caller with no user-agent header to exercise ?? "unknown"
-    const res = mockRes();
-    const socket = new Socket();
-    Object.defineProperty(socket, "remoteAddress", {
-      value: "127.0.0.1",
-      writable: true,
+    // Override user-agent to undefined to exercise the ?? "unknown" fallback.
+    const { caller } = createTestCaller({
+      headers: { "user-agent": undefined },
     });
-    const req = Object.create(IncomingMessage.prototype) as IncomingMessage;
-    Object.defineProperty(req, "socket", { value: socket, writable: false });
-    Object.defineProperty(req, "headers", { value: {}, writable: true });
-
-    const appRouter = buildRouter();
-    const factory = createCallerFactory(appRouter);
-    const ctx: Context = {
-      req,
-      res,
-      org: orgContext,
-      session: null,
-      user: null,
-    };
-    const caller = factory(ctx);
 
     const result = await caller.auth.login({
       identifier: "no-ua-user",

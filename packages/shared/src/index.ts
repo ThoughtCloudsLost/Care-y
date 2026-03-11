@@ -22,4 +22,5 @@ export {
   identifierSchema,
   loginInputSchema,
   registerInputSchema,
+  getSaltInputSchema,
 } from "./schemas/auth.js";

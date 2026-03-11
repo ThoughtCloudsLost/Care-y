@@ -41,3 +41,7 @@ export const registerInputSchema = z.object({
   displayName: displayNameSchema,
   notificationEmail: notificationEmailSchema,
 });
+
+export const getSaltInputSchema = z.object({
+  identifier: identifierSchema,
+});
