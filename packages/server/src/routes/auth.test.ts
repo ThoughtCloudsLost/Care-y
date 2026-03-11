@@ -180,6 +180,8 @@ describe.skipIf(!HAS_DB)("auth + org routers (DB integration)", () => {
         userAgent: "test-agent",
         expiresAt: new Date(Date.now() + 60 * 60 * 1000),
         createdAt: new Date(),
+        twofaVerified: false,
+        webauthnChallenge: null,
       },
       user,
     };

@@ -141,16 +141,28 @@ export function createAuthService(
     return session.expiresAt.getTime() < Date.now();
   }
 
-  function logSessionContextChange(
+  /**
+   * Detects IP changes on a session. If the IP differs from the creation IP,
+   * clears the 2FA verification flag so the user must re-verify identity.
+   * The session is NOT killed; the user keeps their work.
+   */
+  async function handleIpChange(
     session: SessionData,
     ipAddress: string,
     userAgent: string,
-  ): void {
+  ): Promise<SessionData> {
     if (session.ipAddress !== ipAddress || session.userAgent !== userAgent) {
       console.warn(
         `Session ${session.id}: IP or user-agent changed since creation`,
       );
     }
+
+    if (session.ipAddress !== ipAddress && session.twofaVerified) {
+      await sessions.clearTwoFactorVerified(session.token);
+      return { ...session, twofaVerified: false };
+    }
+
+    return session;
   }
 
   /** Verify password against stored hash, or dummy hash if user not found. */
@@ -272,8 +284,15 @@ export function createAuthService(
         return null;
       }
 
-      logSessionContextChange(session, ipAddress, userAgent);
-      return { user: toUserRecord(userRow, encryptor), session };
+      const updatedSession = await handleIpChange(
+        session,
+        ipAddress,
+        userAgent,
+      );
+      return {
+        user: toUserRecord(userRow, encryptor),
+        session: updatedSession,
+      };
     },
 
     async findUserById(userId: string): Promise<UserRecord | null> {

@@ -249,6 +249,8 @@ describe("requireAuth middleware (authedProcedure)", () => {
           userAgent: "test",
           expiresAt: new Date(Date.now() + 60_000),
           createdAt: new Date(),
+          twofaVerified: false,
+          webauthnChallenge: null,
         },
         user: null,
       }),
@@ -272,6 +274,8 @@ describe("requireAuth middleware (authedProcedure)", () => {
           userAgent: "test",
           expiresAt: new Date(Date.now() + 60_000),
           createdAt: new Date(),
+          twofaVerified: false,
+          webauthnChallenge: null,
         },
         user: {
           id: "u1",
