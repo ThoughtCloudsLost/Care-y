@@ -31,8 +31,6 @@ import {
   type TestDb,
 } from "../test-utils.js";
 
-const HAS_DB = Boolean(process.env.DATABASE_URL);
-
 const SAMPLE_SIZE = 50;
 const WARMUP_COUNT = 5;
 const T_CRITICAL = 2.576; // p > 0.01, two-tailed
@@ -63,7 +61,7 @@ async function measureMs(fn: () => Promise<unknown>): Promise<number> {
   return Number(end - start) / 1_000_000; // ns to ms
 }
 
-describe.skipIf(!HAS_DB)(
+describe.skipIf(!process.env.DATABASE_URL)(
   "salt defense timing indistinguishability",
   { timeout: 30_000 },
   () => {

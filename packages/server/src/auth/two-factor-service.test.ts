@@ -8,7 +8,7 @@
  * DB integration: requires Docker test containers (DATABASE_URL).
  */
 
-import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
 import type { Kysely } from "kysely";
 import type { TenantDatabase } from "../db/types.js";
 import {
@@ -17,12 +17,15 @@ import {
   createTestSession,
   noopEncryptor,
   testFieldEncryptor,
+  createMockEmailSender,
+  registerMethodDirectly,
+  insertWebauthnCredential,
+  enrollTotp,
   type TestDb,
 } from "../test-utils.js";
 import { createDbSessionRepository } from "./session-repository.js";
 import type { SessionRepository } from "./session-repository.js";
 import { createEmailCodeService } from "./email-code.js";
-import type { EmailSender } from "../email/email-sender.js";
 import {
   createTwoFactorService,
   type TwoFactorService,
@@ -30,29 +33,13 @@ import {
 import { generateTotpCode, base32Decode } from "./totp.js";
 import { TwoFactorMethod } from "@care-y/shared";
 import { ValidationError } from "../errors.js";
-
-function createMockEmailSender(): EmailSender {
-  return {
-    async send() {
-      // no-op for tests
-    },
-  };
-}
-
-/**
- * Inserts a row into two_factor_methods. This table has no PII columns;
- * user_id is a UUID FK and method_type is an enum string.
- */
-async function registerMethodDirectly(
-  database: Kysely<TenantDatabase>,
-  userId: string,
-  methodType: string,
-): Promise<void> {
-  await database
-    .insertInto("two_factor_methods")
-    .values({ user_id: userId, method_type: methodType })
-    .execute();
-}
+import * as webauthnVerify from "./webauthn/verify.js";
+import type {
+  RegistrationResponseJSON,
+  AuthenticationResponseJSON,
+  RegistrationResult,
+  AuthenticationResult,
+} from "./webauthn/types.js";
 
 describe.skipIf(!process.env.DATABASE_URL)("TwoFactorService", () => {
   let testDb: TestDb;
@@ -168,14 +155,10 @@ describe.skipIf(!process.env.DATABASE_URL)("TwoFactorService", () => {
 
     it("accepts valid code after enrollment", async () => {
       const user = await createTestUser(db);
-      const setup = await twoFactor.setupTotp(user.id);
+      const secret = await enrollTotp(twoFactor, user.id);
 
-      // Enroll
-      const secret = base32Decode(setup.secret);
+      // Generate a code from the enrolled secret (still within the same 30s window)
       const validCode = generateTotpCode(secret, Date.now());
-      await twoFactor.verifyTotpEnrollment(user.id, validCode);
-
-      // Verify with the same code (still within the same 30s window)
       const result = await twoFactor.verifyTotp(user.id, validCode);
       expect(result).toBe(true);
     });
@@ -273,12 +256,7 @@ describe.skipIf(!process.env.DATABASE_URL)("TwoFactorService", () => {
   describe("removeMethod", () => {
     it("prevents removing last 2FA method", async () => {
       const user = await createTestUser(db);
-
-      // Enroll TOTP
-      const setup = await twoFactor.setupTotp(user.id);
-      const secret = base32Decode(setup.secret);
-      const validCode = generateTotpCode(secret, Date.now());
-      await twoFactor.verifyTotpEnrollment(user.id, validCode);
+      await enrollTotp(twoFactor, user.id);
 
       // Try to remove the only method
       await expect(
@@ -288,12 +266,7 @@ describe.skipIf(!process.env.DATABASE_URL)("TwoFactorService", () => {
 
     it("allows removing method when another exists", async () => {
       const user = await createTestUser(db);
-
-      // Enroll TOTP
-      const setup = await twoFactor.setupTotp(user.id);
-      const secret = base32Decode(setup.secret);
-      const validCode = generateTotpCode(secret, Date.now());
-      await twoFactor.verifyTotpEnrollment(user.id, validCode);
+      await enrollTotp(twoFactor, user.id);
 
       // Register email as second method so TOTP isn't the last one
       await registerMethodDirectly(db, user.id, TwoFactorMethod.EMAIL);
@@ -309,12 +282,7 @@ describe.skipIf(!process.env.DATABASE_URL)("TwoFactorService", () => {
 
     it("removeMethod cleans up TOTP secrets", async () => {
       const user = await createTestUser(db);
-
-      // Enroll TOTP + register a second method
-      const setup = await twoFactor.setupTotp(user.id);
-      const secret = base32Decode(setup.secret);
-      const validCode = generateTotpCode(secret, Date.now());
-      await twoFactor.verifyTotpEnrollment(user.id, validCode);
+      await enrollTotp(twoFactor, user.id);
 
       // Register email as second method so TOTP isn't the last one
       await registerMethodDirectly(db, user.id, TwoFactorMethod.EMAIL);
@@ -406,6 +374,621 @@ describe.skipIf(!process.env.DATABASE_URL)("TwoFactorService", () => {
       // Challenge stored on session
       const found = await sessions.findByToken(session.token);
       expect(found!.webauthnChallenge).toBe(opts.challenge);
+    });
+  });
+
+  // --- WebAuthn registration (mocked verification) ---
+
+  describe("verifyWebauthnRegistration", () => {
+    function fakeRegistration(
+      overrides?: Partial<RegistrationResponseJSON>,
+    ): RegistrationResponseJSON {
+      return {
+        id: "cred-reg-1",
+        rawId: "cred-reg-1",
+        type: "public-key",
+        authenticatorAttachment: "platform",
+        response: {
+          attestationObject: "fake-attestation",
+          authenticatorData: "fake-auth-data",
+          clientDataJSON: "fake-client-data",
+          transports: ["internal"],
+          publicKey: "fake-pk",
+          publicKeyAlgorithm: -7,
+        },
+        ...overrides,
+      };
+    }
+
+    function fakeRegistrationResult(
+      overrides?: Partial<RegistrationResult>,
+    ): RegistrationResult {
+      return {
+        credential: {
+          id: "cred-reg-1",
+          publicKey: "fake-pk-base64url",
+          algorithm: "ES256",
+          transports: ["internal"],
+        },
+        authenticator: {
+          aaguid: "00000000-0000-0000-0000-000000000000",
+          signCount: 0,
+        },
+        synced: false,
+        userVerified: true,
+        ...overrides,
+      };
+    }
+
+    it("stores credential and registers WebAuthn method", async () => {
+      const user = await createTestUser(db);
+      const session = await createTestSession(db, { user_id: user.id });
+
+      // Set challenge on session
+      await twoFactor.getWebauthnRegistrationOptions(
+        session.token,
+        "localhost",
+        "CARE-Y Test",
+      );
+
+      const spy = vi
+        .spyOn(webauthnVerify, "verifyRegistration")
+        .mockResolvedValue(fakeRegistrationResult());
+
+      await twoFactor.verifyWebauthnRegistration(
+        session.token,
+        fakeRegistration(),
+        "https://localhost",
+        "localhost",
+        user.id,
+      );
+
+      spy.mockRestore();
+
+      // Credential should be stored
+      const creds = await db
+        .selectFrom("webauthn_credentials")
+        .selectAll()
+        .where("user_id", "=", user.id)
+        .execute();
+      expect(creds).toHaveLength(1);
+      expect(creds[0]!.credential_id).toBe("cred-reg-1");
+      expect(creds[0]!.public_key).toBe("fake-pk-base64url");
+      expect(creds[0]!.sign_count).toBe(0);
+      expect(creds[0]!.device_type).toBe("platform");
+      expect(creds[0]!.backed_up).toBe(false);
+      expect(creds[0]!.ordinal).toBe(1);
+
+      // WebAuthn method should be active
+      const status = await twoFactor.getStatus(user.id);
+      expect(status.enrolled).toBe(true);
+      expect(status.methods).toHaveLength(1);
+      expect(status.methods[0]!.type).toBe(TwoFactorMethod.WEBAUTHN);
+    });
+
+    it("clears challenge after successful registration", async () => {
+      const user = await createTestUser(db);
+      const session = await createTestSession(db, { user_id: user.id });
+
+      await twoFactor.getWebauthnRegistrationOptions(
+        session.token,
+        "localhost",
+        "CARE-Y Test",
+      );
+
+      const spy = vi
+        .spyOn(webauthnVerify, "verifyRegistration")
+        .mockResolvedValue(
+          fakeRegistrationResult({
+            credential: {
+              id: "cred-clear-test",
+              publicKey: "pk2",
+              algorithm: "ES256",
+              transports: [],
+            },
+          }),
+        );
+
+      await twoFactor.verifyWebauthnRegistration(
+        session.token,
+        fakeRegistration({ id: "cred-clear-test" }),
+        "https://localhost",
+        "localhost",
+        user.id,
+      );
+
+      spy.mockRestore();
+
+      const found = await sessions.findByToken(session.token);
+      expect(found!.webauthnChallenge).toBeNull();
+    });
+
+    it("throws when no challenge exists on session", async () => {
+      const user = await createTestUser(db);
+      const session = await createTestSession(db, { user_id: user.id });
+
+      // No getWebauthnRegistrationOptions call, so no challenge
+
+      await expect(
+        twoFactor.verifyWebauthnRegistration(
+          session.token,
+          fakeRegistration(),
+          "https://localhost",
+          "localhost",
+          user.id,
+        ),
+      ).rejects.toThrow(ValidationError);
+    });
+
+    it("increments ordinal for multiple credentials", async () => {
+      const user = await createTestUser(db);
+      const session = await createTestSession(db, { user_id: user.id });
+
+      // Register first credential
+      await twoFactor.getWebauthnRegistrationOptions(
+        session.token,
+        "localhost",
+        "CARE-Y Test",
+      );
+
+      const spy = vi.spyOn(webauthnVerify, "verifyRegistration");
+
+      spy.mockResolvedValue(
+        fakeRegistrationResult({
+          credential: {
+            id: "cred-ord-1",
+            publicKey: "pk-ord-1",
+            algorithm: "ES256",
+            transports: ["internal"],
+          },
+        }),
+      );
+
+      await twoFactor.verifyWebauthnRegistration(
+        session.token,
+        fakeRegistration({ id: "cred-ord-1" }),
+        "https://localhost",
+        "localhost",
+        user.id,
+      );
+
+      // Register second credential
+      await twoFactor.getWebauthnRegistrationOptions(
+        session.token,
+        "localhost",
+        "CARE-Y Test",
+      );
+
+      spy.mockResolvedValue(
+        fakeRegistrationResult({
+          credential: {
+            id: "cred-ord-2",
+            publicKey: "pk-ord-2",
+            algorithm: "ES256",
+            transports: ["usb"],
+          },
+        }),
+      );
+
+      await twoFactor.verifyWebauthnRegistration(
+        session.token,
+        fakeRegistration({
+          id: "cred-ord-2",
+          authenticatorAttachment: "cross-platform",
+        }),
+        "https://localhost",
+        "localhost",
+        user.id,
+      );
+
+      spy.mockRestore();
+
+      const creds = await db
+        .selectFrom("webauthn_credentials")
+        .selectAll()
+        .where("user_id", "=", user.id)
+        .orderBy("ordinal", "asc")
+        .execute();
+
+      expect(creds).toHaveLength(2);
+      expect(creds[0]!.ordinal).toBe(1);
+      expect(creds[1]!.ordinal).toBe(2);
+    });
+  });
+
+  // --- WebAuthn assertion (mocked verification) ---
+
+  describe("verifyWebauthnAssertion", () => {
+    function fakeAuthentication(
+      credentialId: string,
+    ): AuthenticationResponseJSON {
+      return {
+        id: credentialId,
+        rawId: credentialId,
+        type: "public-key",
+        response: {
+          clientDataJSON: "fake-client-data",
+          authenticatorData: "fake-auth-data",
+          signature: "fake-sig",
+        },
+      };
+    }
+
+    function fakeAuthenticationResult(
+      overrides?: Partial<AuthenticationResult>,
+    ): AuthenticationResult {
+      return {
+        credentialId: "cred-assert-1",
+        userVerified: true,
+        signCount: 1,
+        ...overrides,
+      };
+    }
+
+    it("updates sign count after successful assertion", async () => {
+      const user = await createTestUser(db);
+      const session = await createTestSession(db, { user_id: user.id });
+
+      await insertWebauthnCredential(db, user.id, "cred-assert-1");
+
+      // Set challenge
+      await twoFactor.getWebauthnAssertionOptions(
+        session.token,
+        user.id,
+        "localhost",
+      );
+
+      const spy = vi
+        .spyOn(webauthnVerify, "verifyAuthentication")
+        .mockResolvedValue(fakeAuthenticationResult({ signCount: 5 }));
+
+      await twoFactor.verifyWebauthnAssertion(
+        session.token,
+        fakeAuthentication("cred-assert-1"),
+        "https://localhost",
+        "localhost",
+      );
+
+      spy.mockRestore();
+
+      // Sign count should be updated
+      const cred = await db
+        .selectFrom("webauthn_credentials")
+        .select("sign_count")
+        .where("credential_id", "=", "cred-assert-1")
+        .executeTakeFirstOrThrow();
+
+      expect(cred.sign_count).toBe(5);
+    });
+
+    it("clears challenge after successful assertion", async () => {
+      const user = await createTestUser(db);
+      const session = await createTestSession(db, { user_id: user.id });
+
+      await insertWebauthnCredential(db, user.id, "cred-assert-clear");
+
+      await twoFactor.getWebauthnAssertionOptions(
+        session.token,
+        user.id,
+        "localhost",
+      );
+
+      const spy = vi
+        .spyOn(webauthnVerify, "verifyAuthentication")
+        .mockResolvedValue(
+          fakeAuthenticationResult({ credentialId: "cred-assert-clear" }),
+        );
+
+      await twoFactor.verifyWebauthnAssertion(
+        session.token,
+        fakeAuthentication("cred-assert-clear"),
+        "https://localhost",
+        "localhost",
+      );
+
+      spy.mockRestore();
+
+      const found = await sessions.findByToken(session.token);
+      expect(found!.webauthnChallenge).toBeNull();
+    });
+
+    it("throws when no challenge exists on session", async () => {
+      const user = await createTestUser(db);
+      const session = await createTestSession(db, { user_id: user.id });
+
+      await expect(
+        twoFactor.verifyWebauthnAssertion(
+          session.token,
+          fakeAuthentication("any-cred"),
+          "https://localhost",
+          "localhost",
+        ),
+      ).rejects.toThrow(ValidationError);
+    });
+
+    it("throws for unknown credential ID", async () => {
+      const user = await createTestUser(db);
+      const session = await createTestSession(db, { user_id: user.id });
+
+      await twoFactor.getWebauthnAssertionOptions(
+        session.token,
+        user.id,
+        "localhost",
+      );
+
+      await expect(
+        twoFactor.verifyWebauthnAssertion(
+          session.token,
+          fakeAuthentication("nonexistent-cred"),
+          "https://localhost",
+          "localhost",
+        ),
+      ).rejects.toThrow(ValidationError);
+    });
+  });
+
+  // --- getStatus WebAuthn credential listing ---
+
+  describe("getStatus with WebAuthn credentials", () => {
+    it("lists platform credential with synced label", async () => {
+      const user = await createTestUser(db);
+
+      await registerMethodDirectly(db, user.id, TwoFactorMethod.WEBAUTHN);
+      await db
+        .insertInto("webauthn_credentials")
+        .values({
+          user_id: user.id,
+          credential_id: "cred-status-platform",
+          public_key: "fake-pk",
+          sign_count: 0,
+          transports: ["internal"],
+          device_type: "platform",
+          backed_up: true,
+          aaguid: "00000000-0000-0000-0000-000000000000",
+          ordinal: 1,
+        })
+        .execute();
+
+      const status = await twoFactor.getStatus(user.id);
+      expect(status.methods).toHaveLength(1);
+      expect(status.methods[0]!.label).toBe("Screen lock 1 (synced)");
+      expect(status.methods[0]!.type).toBe(TwoFactorMethod.WEBAUTHN);
+      expect(status.methods[0]!.index).toBe(1);
+    });
+
+    it("lists cross-platform credential as security key", async () => {
+      const user = await createTestUser(db);
+
+      await registerMethodDirectly(db, user.id, TwoFactorMethod.WEBAUTHN);
+      await db
+        .insertInto("webauthn_credentials")
+        .values({
+          user_id: user.id,
+          credential_id: "cred-status-xplat",
+          public_key: "fake-pk",
+          sign_count: 0,
+          transports: ["usb"],
+          device_type: "cross-platform",
+          backed_up: false,
+          aaguid: "00000000-0000-0000-0000-000000000000",
+          ordinal: 2,
+        })
+        .execute();
+
+      const status = await twoFactor.getStatus(user.id);
+      expect(status.methods).toHaveLength(1);
+      expect(status.methods[0]!.label).toBe("Security key 2");
+    });
+
+    it("lists multiple credentials in ordinal order", async () => {
+      const user = await createTestUser(db);
+
+      await registerMethodDirectly(db, user.id, TwoFactorMethod.WEBAUTHN);
+
+      await db
+        .insertInto("webauthn_credentials")
+        .values([
+          {
+            user_id: user.id,
+            credential_id: "cred-multi-1",
+            public_key: "pk1",
+            sign_count: 0,
+            transports: ["internal"],
+            device_type: "platform",
+            backed_up: false,
+            aaguid: "00000000-0000-0000-0000-000000000000",
+            ordinal: 1,
+          },
+          {
+            user_id: user.id,
+            credential_id: "cred-multi-2",
+            public_key: "pk2",
+            sign_count: 0,
+            transports: ["usb"],
+            device_type: "cross-platform",
+            backed_up: false,
+            aaguid: "00000000-0000-0000-0000-000000000000",
+            ordinal: 2,
+          },
+        ])
+        .execute();
+
+      const status = await twoFactor.getStatus(user.id);
+      expect(status.methods).toHaveLength(2);
+      expect(status.methods[0]!.label).toBe("Screen lock 1");
+      expect(status.methods[1]!.label).toBe("Security key 2");
+    });
+  });
+
+  // --- WebAuthn method removal ---
+
+  describe("removeMethod WebAuthn", () => {
+    it("removes a single credential when multiple exist", async () => {
+      const user = await createTestUser(db);
+
+      await registerMethodDirectly(db, user.id, TwoFactorMethod.WEBAUTHN);
+
+      await db
+        .insertInto("webauthn_credentials")
+        .values([
+          {
+            user_id: user.id,
+            credential_id: "cred-rm-1",
+            public_key: "pk1",
+            sign_count: 0,
+            transports: ["internal"],
+            device_type: "platform",
+            backed_up: false,
+            aaguid: "00000000-0000-0000-0000-000000000000",
+            ordinal: 1,
+          },
+          {
+            user_id: user.id,
+            credential_id: "cred-rm-2",
+            public_key: "pk2",
+            sign_count: 0,
+            transports: ["usb"],
+            device_type: "cross-platform",
+            backed_up: false,
+            aaguid: "00000000-0000-0000-0000-000000000000",
+            ordinal: 2,
+          },
+        ])
+        .execute();
+
+      await twoFactor.removeMethod(
+        user.id,
+        TwoFactorMethod.WEBAUTHN,
+        "cred-rm-1",
+      );
+
+      // One credential should remain
+      const creds = await db
+        .selectFrom("webauthn_credentials")
+        .selectAll()
+        .where("user_id", "=", user.id)
+        .execute();
+      expect(creds).toHaveLength(1);
+      expect(creds[0]!.credential_id).toBe("cred-rm-2");
+
+      // Method should still be active (one credential remains)
+      const status = await twoFactor.getStatus(user.id);
+      expect(status.enrolled).toBe(true);
+    });
+
+    it("deactivates WebAuthn method when removing the last credential with another method present", async () => {
+      const user = await createTestUser(db);
+
+      await registerMethodDirectly(db, user.id, TwoFactorMethod.WEBAUTHN);
+      await registerMethodDirectly(db, user.id, TwoFactorMethod.EMAIL);
+
+      await db
+        .insertInto("webauthn_credentials")
+        .values({
+          user_id: user.id,
+          credential_id: "cred-last-1",
+          public_key: "pk1",
+          sign_count: 0,
+          transports: ["internal"],
+          device_type: "platform",
+          backed_up: false,
+          aaguid: "00000000-0000-0000-0000-000000000000",
+          ordinal: 1,
+        })
+        .execute();
+
+      await twoFactor.removeMethod(
+        user.id,
+        TwoFactorMethod.WEBAUTHN,
+        "cred-last-1",
+      );
+
+      // Credential should be deleted
+      const creds = await db
+        .selectFrom("webauthn_credentials")
+        .selectAll()
+        .where("user_id", "=", user.id)
+        .execute();
+      expect(creds).toHaveLength(0);
+
+      // WebAuthn method should be deactivated, but email remains
+      const status = await twoFactor.getStatus(user.id);
+      const types = status.methods.map((m) => m.type);
+      expect(types).not.toContain(TwoFactorMethod.WEBAUTHN);
+      expect(types).toContain(TwoFactorMethod.EMAIL);
+    });
+
+    it("prevents removing last credential when it is the only 2FA method", async () => {
+      const user = await createTestUser(db);
+
+      await registerMethodDirectly(db, user.id, TwoFactorMethod.WEBAUTHN);
+
+      await db
+        .insertInto("webauthn_credentials")
+        .values({
+          user_id: user.id,
+          credential_id: "cred-only-1",
+          public_key: "pk1",
+          sign_count: 0,
+          transports: ["internal"],
+          device_type: "platform",
+          backed_up: false,
+          aaguid: "00000000-0000-0000-0000-000000000000",
+          ordinal: 1,
+        })
+        .execute();
+
+      await expect(
+        twoFactor.removeMethod(
+          user.id,
+          TwoFactorMethod.WEBAUTHN,
+          "cred-only-1",
+        ),
+      ).rejects.toThrow(ValidationError);
+    });
+
+    it("removeMethod without credentialId removes all WebAuthn credentials", async () => {
+      const user = await createTestUser(db);
+
+      await registerMethodDirectly(db, user.id, TwoFactorMethod.WEBAUTHN);
+      await registerMethodDirectly(db, user.id, TwoFactorMethod.EMAIL);
+
+      await db
+        .insertInto("webauthn_credentials")
+        .values([
+          {
+            user_id: user.id,
+            credential_id: "cred-all-1",
+            public_key: "pk1",
+            sign_count: 0,
+            transports: ["internal"],
+            device_type: "platform",
+            backed_up: false,
+            aaguid: "00000000-0000-0000-0000-000000000000",
+            ordinal: 1,
+          },
+          {
+            user_id: user.id,
+            credential_id: "cred-all-2",
+            public_key: "pk2",
+            sign_count: 0,
+            transports: ["usb"],
+            device_type: "cross-platform",
+            backed_up: false,
+            aaguid: "00000000-0000-0000-0000-000000000000",
+            ordinal: 2,
+          },
+        ])
+        .execute();
+
+      await twoFactor.removeMethod(user.id, TwoFactorMethod.WEBAUTHN);
+
+      const creds = await db
+        .selectFrom("webauthn_credentials")
+        .selectAll()
+        .where("user_id", "=", user.id)
+        .execute();
+      expect(creds).toHaveLength(0);
     });
   });
 

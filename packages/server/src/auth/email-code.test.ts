@@ -11,26 +11,14 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import type { Kysely } from "kysely";
 import type { TenantDatabase } from "../db/types.js";
-import { createTestDb, createTestUser, type TestDb } from "../test-utils.js";
+import {
+  createTestDb,
+  createTestUser,
+  createMockEmailSender,
+  type TestDb,
+} from "../test-utils.js";
 import { createEmailCodeService, type EmailCodeService } from "./email-code.js";
-import type { EmailSender } from "../email/email-sender.js";
 import { RateLimitError, ValidationError } from "../errors.js";
-
-function createMockEmailSender(): EmailSender & {
-  calls: { to: string; subject: string; text: string }[];
-} {
-  const calls: { to: string; subject: string; text: string }[] = [];
-  return {
-    calls,
-    async send(message) {
-      calls.push({
-        to: message.to,
-        subject: message.subject,
-        text: message.text,
-      });
-    },
-  };
-}
 
 describe.skipIf(!process.env.DATABASE_URL)("EmailCodeService", () => {
   let testDb: TestDb;
@@ -45,16 +33,14 @@ describe.skipIf(!process.env.DATABASE_URL)("EmailCodeService", () => {
     await testDb.cleanup();
   });
 
-  function makeService(sender?: EmailSender): {
+  function makeService(): {
     service: EmailCodeService;
     sender: ReturnType<typeof createMockEmailSender>;
   } {
-    const mockSender = sender
-      ? (sender as ReturnType<typeof createMockEmailSender>)
-      : createMockEmailSender();
+    const sender = createMockEmailSender();
     return {
-      service: createEmailCodeService(db, mockSender),
-      sender: mockSender,
+      service: createEmailCodeService(db, sender),
+      sender,
     };
   }
 

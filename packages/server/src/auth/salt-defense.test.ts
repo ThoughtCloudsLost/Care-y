@@ -120,9 +120,7 @@ describe("computeFakeSalt", () => {
 // createSaltDefense (DB integration)
 // ---------------------------------------------------------------------------
 
-const HAS_DB = Boolean(process.env.DATABASE_URL);
-
-describe.skipIf(!HAS_DB)("createSaltDefense", () => {
+describe.skipIf(!process.env.DATABASE_URL)("createSaltDefense", () => {
   let testDb: TestDb;
   let tenantDb: Kysely<TenantDatabase>;
   let fakeSaltKey: Buffer;
