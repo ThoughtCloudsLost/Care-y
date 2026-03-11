@@ -12,12 +12,14 @@
     "@care-y/shared": "workspace:*",
     "@trpc/server": "11.10.0",
     "kysely": "0.28.11",
+    "nodemailer": "8.0.2",
     "pg": "8.19.0",
     "sodium-native": "^4.3.1",
     "zod": "4.3.6"
   },
   "devDependencies": {
     "@types/node": "25.4.0",
+    "@types/nodemailer": "7.0.11",
     "@types/pg": "8.16.0",
     "tsx": "4.21.0"
   }

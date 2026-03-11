@@ -1,7 +1,7 @@
 version: 2
 
 updates:
-  # Root dependencies (eslint, prettier, vitest, typescript, lefthook, commitlint)
+  # All npm dependencies (pnpm workspace uses a single root lockfile)
   - package-ecosystem: "npm"
     directory: "/"
     schedule:
@@ -11,6 +11,22 @@ updates:
     reviewers:
       - ThoughtCloudsLost
     groups:
+      svelte:
+        patterns:
+          - "svelte"
+          - "@sveltejs/*"
+          - "svelte-*"
+          - "bits-ui"
+          - "konsta"
+        update-types:
+          - "minor"
+          - "patch"
+      trpc:
+        patterns:
+          - "@trpc/*"
+        update-types:
+          - "minor"
+          - "patch"
       lint-and-format:
         patterns:
           - "eslint*"
@@ -24,58 +40,19 @@ updates:
         patterns:
           - "vitest"
           - "@vitest/*"
+          - "playwright"
+          - "@playwright/*"
+          - "fast-check"
         update-types:
           - "minor"
           - "patch"
-
-  # packages/client (SvelteKit, Svelte, Konsta UI, Bits UI, etc.)
-  - package-ecosystem: "npm"
-    directory: "/packages/client"
-    schedule:
-      interval: "weekly"
-      day: "monday"
-    open-pull-requests-limit: 10
-    reviewers:
-      - ThoughtCloudsLost
-    groups:
-      svelte:
+      crypto:
         patterns:
-          - "svelte"
-          - "@sveltejs/*"
-          - "svelte-*"
+          - "libsodium*"
+          - "sodium-native"
         update-types:
           - "minor"
           - "patch"
-
-  # packages/server (tRPC, Kysely, etc.)
-  - package-ecosystem: "npm"
-    directory: "/packages/server"
-    schedule:
-      interval: "weekly"
-      day: "monday"
-    open-pull-requests-limit: 10
-    reviewers:
-      - ThoughtCloudsLost
-
-  # packages/crypto (libsodium)
-  - package-ecosystem: "npm"
-    directory: "/packages/crypto"
-    schedule:
-      interval: "weekly"
-      day: "monday"
-    open-pull-requests-limit: 5
-    reviewers:
-      - ThoughtCloudsLost
-
-  # packages/shared (Zod, shared types)
-  - package-ecosystem: "npm"
-    directory: "/packages/shared"
-    schedule:
-      interval: "weekly"
-      day: "monday"
-    open-pull-requests-limit: 5
-    reviewers:
-      - ThoughtCloudsLost
 
   # GitHub Actions
   - package-ecosystem: "github-actions"

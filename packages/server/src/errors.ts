@@ -57,6 +57,16 @@ export class RateLimitError extends AppError {
   }
 }
 
+export class EmailDeliveryError extends AppError {
+  readonly code = "EMAIL_DELIVERY_ERROR" as const;
+  readonly httpStatus: number;
+
+  constructor(message: string, httpStatus = 503) {
+    super(message);
+    this.httpStatus = httpStatus;
+  }
+}
+
 export class InternalError extends AppError {
   readonly code = "INTERNAL_ERROR" as const;
   readonly httpStatus = 500;

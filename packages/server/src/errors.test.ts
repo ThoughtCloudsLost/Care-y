@@ -4,6 +4,7 @@ import {
   AuthError,
   ConflictError,
   CryptoError,
+  EmailDeliveryError,
   ForbiddenError,
   InternalError,
   NotFoundError,
@@ -124,6 +125,40 @@ describe("AppError hierarchy", () => {
     });
   });
 
+  describe("EmailDeliveryError", () => {
+    it("defaults to httpStatus 503", () => {
+      const err = new EmailDeliveryError("mail server down");
+      expect(err.code).toBe("EMAIL_DELIVERY_ERROR");
+      expect(err.httpStatus).toBe(503);
+    });
+
+    it("accepts a custom httpStatus", () => {
+      const err = new EmailDeliveryError("bad recipient", 400);
+      expect(err.httpStatus).toBe(400);
+    });
+
+    it("is operational", () => {
+      const err = new EmailDeliveryError("transient failure");
+      expect(err.isOperational).toBe(true);
+    });
+
+    it("has correct name", () => {
+      const err = new EmailDeliveryError("test");
+      expect(err.name).toBe("EmailDeliveryError");
+    });
+
+    it("preserves the message", () => {
+      const err = new EmailDeliveryError("specific failure reason");
+      expect(err.message).toBe("specific failure reason");
+    });
+
+    it("is an instance of Error and AppError", () => {
+      const err = new EmailDeliveryError("test");
+      expect(err).toBeInstanceOf(Error);
+      expect(err).toBeInstanceOf(AppError);
+    });
+  });
+
   describe("InternalError", () => {
     it("is non-operational", () => {
       const err = new InternalError("unexpected failure");
@@ -151,6 +186,7 @@ describe("isAppError", () => {
     expect(isAppError(new ValidationError("test"))).toBe(true);
     expect(isAppError(new ConflictError("test"))).toBe(true);
     expect(isAppError(new RateLimitError("test", 10))).toBe(true);
+    expect(isAppError(new EmailDeliveryError("test"))).toBe(true);
     expect(isAppError(new InternalError("test"))).toBe(true);
   });
 

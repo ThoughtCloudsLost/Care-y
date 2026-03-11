@@ -31,6 +31,11 @@ const envSchema = z.object({
   // (requests are same-origin from the browser's perspective), but it
   // applies for production (Caddy reverse proxy) and direct API testing.
   CORS_ORIGIN: z.string().default("http://localhost:5173"),
+
+  // SMTP (optional, defaults to Mailpit in dev)
+  SMTP_HOST: z.string().optional(),
+  SMTP_PORT: z.coerce.number().int().positive().optional(),
+  SMTP_FROM: z.string().default("noreply@care-y.app"),
 });
 
 export type EnvVars = z.infer<typeof envSchema>;
