@@ -3,6 +3,7 @@
   "compilerOptions": {
     "module": "ESNext",
     "moduleResolution": "bundler",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
     "outDir": "../dist/e2e",
     "noEmit": true
   },

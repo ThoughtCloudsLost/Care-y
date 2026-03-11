@@ -1,5 +1,6 @@
-# Dependencies - rebuilt inside container
-node_modules
+# Dependencies rebuilt inside container (matches nested dirs too)
+# (packages/*/node_modules has pnpm symlinks with host-absolute paths).
+**/node_modules
 
 # All hidden files and directories (3+ chars) - none needed at runtime
 # Covers: .git, .github, .vscode, .lh, .editorconfig, .npmrc, .nvmrc,
@@ -27,7 +28,7 @@ lefthook.yml
 commitlint.config.*
 eslint.config.*
 vitest.config.*
-tsconfig.base.json
+# tsconfig.base.json # needed by tsx for TypeScript resolution (Dockerfile COPY)
 
 # Documentation (not needed at runtime)
 docs

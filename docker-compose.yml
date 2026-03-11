@@ -1,6 +1,17 @@
+# Dev compose. Uses `docker compose watch` for file sync instead of bind mounts.
+# This preserves read_only, avoids pnpm symlink conflicts, and matches prod
+# container isolation. (SEC-194 through SEC-197)
+#
+# Usage:
+#   docker compose watch          (foreground, watches for file changes)
+#   docker compose watch --detach (background)
+#   docker compose up -d          (no file sync, just run)
+
 services:
   app:
-    build: .
+    build:
+      context: .
+      target: production
     user: "1001:1001"
     read_only: true
     security_opt:
@@ -15,11 +26,34 @@ services:
     depends_on:
       db:
         condition: service_healthy
-    volumes:
-      - .:/app # mount source for hot reload (bind mounts are r/w regardless of read_only)
-      - /app/node_modules # prevent host node_modules from overwriting container's
+    env_file: .env
     environment:
       - NODE_ENV=development
+    develop:
+      watch:
+        # Source code: sync into container, tsx --watch restarts automatically
+        - action: sync
+          path: ./packages/server/src
+          target: /app/packages/server/src
+          initial_sync: true
+        - action: sync
+          path: ./packages/shared/src
+          target: /app/packages/shared/src
+          initial_sync: true
+        - action: sync
+          path: ./packages/crypto/src
+          target: /app/packages/crypto/src
+          initial_sync: true
+        # Config changes: sync + restart the process
+        - action: sync+restart
+          path: ./tsconfig.base.json
+          target: /app/tsconfig.base.json
+        - action: sync+restart
+          path: ./packages/server/tsconfig.json
+          target: /app/packages/server/tsconfig.json
+        # Dependency changes: full image rebuild
+        - action: rebuild
+          path: ./pnpm-lock.yaml
 
   db:
     image: postgres:16-alpine

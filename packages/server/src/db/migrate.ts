@@ -1,7 +1,10 @@
-import * as path from "node:path";
-import * as fs from "node:fs/promises";
-import { FileMigrationProvider, Migrator, sql } from "kysely";
 import { db, tenantDb } from "./db.js";
+import {
+  createPlatformMigrator,
+  createTenantMigrator,
+  listTenantSchemas,
+  logMigrationResults,
+} from "./schema-utils.js";
 
 // CLI usage:
 //   migrate.ts [down] [--platform | --schema=org_<uuid> | --all-schemas]
@@ -15,88 +18,48 @@ import { db, tenantDb } from "./db.js";
 const args = process.argv.slice(2);
 const direction = args.includes("down") ? "down" : "up";
 const schemaFlag = args.find((a) => a.startsWith("--schema="));
-const targetSchema = schemaFlag ? schemaFlag.slice("--schema=".length) : null;
+const targetSchema =
+  schemaFlag !== undefined ? schemaFlag.slice("--schema=".length) : null;
 const allSchemas = args.includes("--all-schemas");
 
-const platformDir = path.join(import.meta.dirname, "migrations", "platform");
-const tenantDir = path.join(import.meta.dirname, "migrations", "tenant");
-
-function makePlatformMigrator(): Migrator {
-  return new Migrator({
-    db,
-    provider: new FileMigrationProvider({
-      fs,
-      path,
-      migrationFolder: platformDir,
-    }),
-  });
-}
-
-function makeTenantMigrator(orgSchema: string): Migrator {
-  return new Migrator({
-    db: tenantDb(orgSchema),
-    provider: new FileMigrationProvider({
-      fs,
-      path,
-      migrationFolder: tenantDir,
-    }),
-    // Each tenant schema gets its own kysely_migration tracking table,
-    // co-located in the tenant schema rather than polluting public.
-    migrationTableSchema: orgSchema,
-  });
-}
-
 async function runMigrator(
-  migrator: Migrator,
   label: string,
   dir: "up" | "down",
+  schemaName?: string,
 ): Promise<void> {
+  const migrator =
+    schemaName !== undefined
+      ? createTenantMigrator(tenantDb(schemaName), schemaName)
+      : createPlatformMigrator(db);
+
   const { error, results } =
     dir === "down"
       ? await migrator.migrateDown()
       : await migrator.migrateToLatest();
 
-  if (!results || results.length === 0) {
-    console.log(
-      `[${label}] No migrations to ${dir === "down" ? "roll back" : "apply"}`,
-    );
-  }
-  results?.forEach((r) => {
-    console.log(`[${label}] ${r.status} ${r.migrationName}`);
-  });
-  if (error) {
+  logMigrationResults(label, results, dir);
+
+  if (error !== undefined) {
     console.error(`[${label}] Migration failed:`, error);
     process.exit(1);
   }
 }
 
-async function discoverTenantSchemas(): Promise<string[]> {
-  const rows = await db
-    .selectFrom(
-      sql<{ schema_name: string }>`information_schema.schemata`.as("s"),
-    )
-    .select("schema_name")
-    .where("schema_name", "like", "org_%")
-    .execute();
-  return rows.map((r) => r.schema_name);
-}
-
 // --- Main ---
 
-if (targetSchema) {
+if (targetSchema !== null) {
   // Single tenant schema
-  const migrator = makeTenantMigrator(targetSchema);
-  await runMigrator(migrator, targetSchema, direction);
+  await runMigrator(targetSchema, direction, targetSchema);
 } else if (allSchemas) {
   // Platform first, then all tenant schemas
-  await runMigrator(makePlatformMigrator(), "platform", direction);
-  const schemas = await discoverTenantSchemas();
+  await runMigrator("platform", direction);
+  const schemas = await listTenantSchemas(db);
   for (const schema of schemas) {
-    await runMigrator(makeTenantMigrator(schema), schema, direction);
+    await runMigrator(schema, direction, schema);
   }
 } else {
   // Default: platform only
-  await runMigrator(makePlatformMigrator(), "platform", direction);
+  await runMigrator("platform", direction);
 }
 
 await db.destroy();

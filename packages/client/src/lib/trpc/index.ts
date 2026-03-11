@@ -18,9 +18,18 @@ import type { AppRouter } from "@care-y/server";
 export const trpc: TRPCClient<AppRouter> = createTRPCClient<AppRouter>({
   links: [
     httpBatchLink({
-      // The tRPC server runs on the Node API server (port 3000),
-      // separate from SvelteKit's Vite dev server (port 5173).
-      url: "http://localhost:3000",
+      // Vite proxy in dev (/trpc -> localhost:3000), Caddy route in prod.
+      // Same-origin requests: no CORS, cookies work naturally.
+      url: "/trpc",
+      // tRPC's RequestInitEsque has signal?: AbortSignal | undefined, incompatible
+      // with native fetch's RequestInit under exactOptionalPropertyTypes (trpc/trpc#1904)
+      async fetch(url, options) {
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion
+        return fetch(url, {
+          ...options,
+          credentials: "include",
+        } as RequestInit);
+      },
     }),
   ],
 });

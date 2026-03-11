@@ -16,7 +16,6 @@ The name "CARE-Y" and the CARE-Y logo (when released) are common-law trademarks 
 >
 > Source: https://www.gnu.org/licenses/agpl-3.0.en.html
 
-This policy is modeled after the Nextcloud Trademark Guidelines (https://nextcloud.com/trademarks/) and the Grafana Trademark Policy (https://grafana.com/trademark-policy/).
 
 ---
 

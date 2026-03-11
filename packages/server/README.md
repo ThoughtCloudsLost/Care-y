@@ -40,12 +40,15 @@ pnpm --filter @care-y/server dev
 ## Testing
 
 ```sh
-# All server tests (from root)
-pnpm vitest run packages/server
+# Pure-logic tests (no DB required, runs on host)
+pnpm vitest run --project server
 
-# Single directory
-pnpm vitest run packages/server/src/auth
+# DB integration tests (requires running containers)
+docker compose up -d
+pnpm test:server:db
 ```
+
+DB tests run inside the Docker container via `docker compose exec`. The database is not exposed to the host (SEC-194 through SEC-197). Each test suite creates an isolated `test_<random>` schema, runs migrations, and drops it on cleanup.
 
 ## Key Responsibilities
 

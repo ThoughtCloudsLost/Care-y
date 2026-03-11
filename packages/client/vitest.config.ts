@@ -1,0 +1,42 @@
+import { defineConfig } from "vitest/config";
+import { svelte } from "@sveltejs/vite-plugin-svelte";
+
+export default defineConfig({
+  plugins: [svelte({ hot: false })],
+  resolve: {
+    // $lib is the only alias that maps to a real directory.
+    // $app/* and $service-worker are SvelteKit virtual modules with no
+    // on-disk source. Tests that import code using them must vi.mock()
+    // those modules per-file. See testing-reference.md section 14.
+    alias: {
+      $lib: new URL("./src/lib", import.meta.url).pathname,
+    },
+    // Use browser entry points so Svelte's client-side code resolves
+    // correctly in the Node test runner (per Svelte testing docs).
+    conditions: ["browser"],
+  },
+  test: {
+    name: "client",
+    include: ["src/**/*.test.ts"],
+    exclude: ["**/dist/**", "**/node_modules/**"],
+    setupFiles: ["src/test-setup.ts"],
+    coverage: {
+      provider: "v8",
+      exclude: [
+        // Test infrastructure (setup mocks, not production code).
+        "src/test-setup.ts",
+        // Svelte 5 rune store ($state). Requires vitest-browser-svelte for
+        // component-level testing, deferred per ADR-003.
+        "src/lib/stores/theme.svelte.ts",
+        // Thin @trpc/client wrapper. Testing would test the library, not our code.
+        "src/lib/trpc/index.ts",
+      ],
+      thresholds: {
+        statements: 85,
+        branches: 85,
+        functions: 85,
+        lines: 85,
+      },
+    },
+  },
+});
