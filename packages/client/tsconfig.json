@@ -16,11 +16,20 @@
     "isolatedModules": true,
     "noUncheckedIndexedAccess": true,
     "noFallthroughCasesInSwitch": true,
-    "exactOptionalPropertyTypes": true,
     "declaration": true,
     "declarationMap": true,
     "outDir": "dist"
   },
+  "exclude": [
+    "node_modules/**",
+    "src/service-worker.js",
+    "src/service-worker.ts",
+    "src/service-worker.d.ts",
+    "src/service-worker/**/*.js",
+    "src/service-worker/**/*.ts",
+    "src/service-worker/**/*.d.ts",
+    "src/service-worker.test.ts"
+  ],
   "references": [
     { "path": "../shared" },
     { "path": "../crypto" },

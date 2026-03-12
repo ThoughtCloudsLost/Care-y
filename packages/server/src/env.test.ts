@@ -127,6 +127,76 @@ describe("env validation", () => {
 
       expect(() => validateEnv()).toThrow(EnvValidationError);
     });
+
+    // --- SMTP env vars ---
+
+    it("succeeds without SMTP vars (all optional)", () => {
+      Object.assign(process.env, VALID_ENV);
+      delete process.env.SMTP_HOST;
+      delete process.env.SMTP_PORT;
+      delete process.env.SMTP_FROM;
+
+      const env = validateEnv();
+      expect(env.SMTP_HOST).toBeUndefined();
+      expect(env.SMTP_PORT).toBeUndefined();
+      expect(env.SMTP_FROM).toBe("noreply@care-y.app");
+    });
+
+    it("accepts valid SMTP config", () => {
+      Object.assign(process.env, VALID_ENV);
+      process.env.SMTP_HOST = "smtp.example.com";
+      process.env.SMTP_PORT = "587";
+      process.env.SMTP_FROM = "noreply@example.com";
+
+      const env = validateEnv();
+      expect(env.SMTP_HOST).toBe("smtp.example.com");
+      expect(env.SMTP_PORT).toBe(587);
+      expect(env.SMTP_FROM).toBe("noreply@example.com");
+    });
+
+    it("coerces SMTP_PORT string to number", () => {
+      Object.assign(process.env, VALID_ENV);
+      process.env.SMTP_HOST = "localhost";
+      process.env.SMTP_PORT = "1025";
+
+      const env = validateEnv();
+      expect(env.SMTP_PORT).toBe(1025);
+      expect(typeof env.SMTP_PORT).toBe("number");
+    });
+
+    it("throws when SMTP_PORT is not a positive integer", () => {
+      Object.assign(process.env, VALID_ENV);
+      process.env.SMTP_HOST = "localhost";
+      process.env.SMTP_PORT = "-1";
+
+      expect(() => validateEnv()).toThrow(EnvValidationError);
+    });
+
+    it("throws when SMTP_PORT is zero", () => {
+      Object.assign(process.env, VALID_ENV);
+      process.env.SMTP_HOST = "localhost";
+      process.env.SMTP_PORT = "0";
+
+      expect(() => validateEnv()).toThrow(EnvValidationError);
+    });
+
+    it("throws when SMTP_PORT is a decimal", () => {
+      Object.assign(process.env, VALID_ENV);
+      process.env.SMTP_HOST = "localhost";
+      process.env.SMTP_PORT = "25.5";
+
+      expect(() => validateEnv()).toThrow(EnvValidationError);
+    });
+
+    it("defaults SMTP_FROM when not set", () => {
+      Object.assign(process.env, VALID_ENV);
+      process.env.SMTP_HOST = "localhost";
+      process.env.SMTP_PORT = "1025";
+      delete process.env.SMTP_FROM;
+
+      const env = validateEnv();
+      expect(env.SMTP_FROM).toBe("noreply@care-y.app");
+    });
   });
 
   // --- getEnv caching ---

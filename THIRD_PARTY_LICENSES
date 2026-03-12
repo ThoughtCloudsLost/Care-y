@@ -37,6 +37,15 @@ Runtime Dependencies
   pg (node-postgres)              (c) Brian Carlson
   svelte                          (c) Rich Harris and contributors
   @sveltejs/kit                   (c) Rich Harris and contributors
+  nodemailer                      (c) Andris Reinman
+
+Vendored Source
+---------------
+
+  @passwordless-id/webauthn       (c) Arnaud Dagnelies
+    Server verification only. Forked from v2.3.5 (commit e158fe0) into
+    packages/server/src/auth/webauthn/. Adapted to CARE-Y error types
+    and coding conventions.
 
 Build-time Dependencies
 -----------------------

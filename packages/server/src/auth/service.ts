@@ -19,7 +19,8 @@ import type {
   FieldEncryptor,
   BlindIndexer,
 } from "../crypto/field-encryptor.js";
-import { AuthError, ConflictError } from "../errors.js";
+import { AuthError, ConflictError, NotFoundError } from "../errors.js";
+import { RoleId } from "@care-y/shared";
 
 export interface UserRecord {
   readonly id: string;
@@ -55,6 +56,15 @@ export interface AuthService {
   ): Promise<{ user: UserRecord; session: SessionData } | null>;
 
   findUserById(userId: string): Promise<UserRecord | null>;
+
+  /** Counts active users with the admin role. Used for last-admin demotion protection. */
+  countActiveAdmins(): Promise<number>;
+
+  /** Updates a user's role. Returns the updated user record. */
+  updateUserRole(userId: string, newRoleId: string): Promise<UserRecord>;
+
+  /** Updates the org's PII retention setting in org_config. */
+  setPiiRetentionDays(days: number | null): Promise<void>;
 }
 
 export const SESSION_COOKIE_NAME = "care_y_session" as const;
@@ -141,16 +151,28 @@ export function createAuthService(
     return session.expiresAt.getTime() < Date.now();
   }
 
-  function logSessionContextChange(
+  /**
+   * Detects IP changes on a session. If the IP differs from the creation IP,
+   * clears the 2FA verification flag so the user must re-verify identity.
+   * The session is NOT killed; the user keeps their work.
+   */
+  async function handleIpChange(
     session: SessionData,
     ipAddress: string,
     userAgent: string,
-  ): void {
+  ): Promise<SessionData> {
     if (session.ipAddress !== ipAddress || session.userAgent !== userAgent) {
       console.warn(
         `Session ${session.id}: IP or user-agent changed since creation`,
       );
     }
+
+    if (session.ipAddress !== ipAddress && session.twofaVerified) {
+      await sessions.clearTwoFactorVerified(session.token);
+      return { ...session, twofaVerified: false };
+    }
+
+    return session;
   }
 
   /** Verify password against stored hash, or dummy hash if user not found. */
@@ -230,6 +252,43 @@ export function createAuthService(
     }
   }
 
+  async function countActiveAdmins(): Promise<number> {
+    const result = await db
+      .selectFrom("users")
+      .select(db.fn.countAll<string>().as("count"))
+      .where("role_id", "=", RoleId.ADMIN)
+      .where("is_active", "=", true)
+      .executeTakeFirstOrThrow();
+    // pg driver returns COUNT as string (bigint). Coerce explicitly.
+    return Number(result.count);
+  }
+
+  async function updateUserRole(
+    userId: string,
+    newRoleId: string,
+  ): Promise<UserRecord> {
+    const row = await db
+      .updateTable("users")
+      .set({ role_id: newRoleId })
+      .where("id", "=", userId)
+      .where("is_active", "=", true)
+      .returningAll()
+      .executeTakeFirst();
+
+    if (!row) {
+      throw new NotFoundError("User not found");
+    }
+
+    return toUserRecord(row, encryptor);
+  }
+
+  async function setPiiRetentionDays(days: number | null): Promise<void> {
+    await db
+      .updateTable("org_config")
+      .set({ pii_retention_days: days })
+      .execute();
+  }
+
   return {
     async register(input): Promise<UserRecord> {
       const row = await insertUserRow(input);
@@ -272,13 +331,24 @@ export function createAuthService(
         return null;
       }
 
-      logSessionContextChange(session, ipAddress, userAgent);
-      return { user: toUserRecord(userRow, encryptor), session };
+      const updatedSession = await handleIpChange(
+        session,
+        ipAddress,
+        userAgent,
+      );
+      return {
+        user: toUserRecord(userRow, encryptor),
+        session: updatedSession,
+      };
     },
 
     async findUserById(userId: string): Promise<UserRecord | null> {
       const row = await findUserRowById(userId);
       return row ? toUserRecord(row, encryptor) : null;
     },
+
+    countActiveAdmins,
+    updateUserRole,
+    setPiiRetentionDays,
   };
 }

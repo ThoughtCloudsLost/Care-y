@@ -22,6 +22,8 @@ export interface SessionData {
   readonly userAgent: string;
   readonly expiresAt: Date;
   readonly createdAt: Date;
+  readonly twofaVerified: boolean;
+  readonly webauthnChallenge: string | null;
 }
 
 export interface CreateSessionInput {
@@ -38,6 +40,9 @@ export interface SessionRepository {
   deleteByToken(token: string): Promise<void>;
   deleteByUserId(userId: string): Promise<void>;
   deleteExpired(): Promise<number>;
+  markTwoFactorVerified(token: string): Promise<void>;
+  clearTwoFactorVerified(token: string): Promise<void>;
+  setWebauthnChallenge(token: string, challenge: string | null): Promise<void>;
 }
 
 function toSessionData(
@@ -52,6 +57,8 @@ function toSessionData(
     userAgent: encryptor.decrypt(row.encrypted_user_agent),
     expiresAt: row.expires_at,
     createdAt: row.created_at,
+    twofaVerified: row.twofa_verified,
+    webauthnChallenge: row.webauthn_challenge,
   };
 }
 
@@ -103,6 +110,33 @@ export function createDbSessionRepository(
         .executeTakeFirst();
 
       return Number(result.numDeletedRows);
+    },
+
+    async markTwoFactorVerified(token: string): Promise<void> {
+      await db
+        .updateTable("sessions")
+        .set({ twofa_verified: true })
+        .where("token", "=", token)
+        .execute();
+    },
+
+    async clearTwoFactorVerified(token: string): Promise<void> {
+      await db
+        .updateTable("sessions")
+        .set({ twofa_verified: false })
+        .where("token", "=", token)
+        .execute();
+    },
+
+    async setWebauthnChallenge(
+      token: string,
+      challenge: string | null,
+    ): Promise<void> {
+      await db
+        .updateTable("sessions")
+        .set({ webauthn_challenge: challenge })
+        .where("token", "=", token)
+        .execute();
     },
   };
 }

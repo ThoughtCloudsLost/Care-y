@@ -8,8 +8,6 @@
 
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { randomUUID } from "node:crypto";
-import { IncomingMessage } from "node:http";
-import { Socket } from "node:net";
 import { sql, type Kysely } from "kysely";
 import type { PlatformDatabase, TenantDatabase } from "../db/types.js";
 import {
@@ -20,8 +18,10 @@ import {
   mockReq,
   mockRes,
   expectTrpcError,
+  createMockEmailSender,
   type TestDb,
 } from "../test-utils.js";
+import { RoleId } from "@care-y/shared";
 import { createScryptHasher } from "../auth/password.js";
 import { createInMemoryRateLimiter } from "../ratelimit/rate-limiter.js";
 import { createDbSessionRepository } from "../auth/session-repository.js";
@@ -103,6 +103,13 @@ describe.skipIf(!HAS_DB)("auth + org routers (DB integration)", () => {
     await testDb.cleanup();
   });
 
+  // Deterministic fake-salt key for test use (32 bytes, all zeros is fine for tests).
+  const testFakeSaltKey = Buffer.alloc(32, 0);
+  const testSaltLimiter = createInMemoryRateLimiter({
+    windowMs: 60_000,
+    maxRequests: 20,
+  });
+
   function buildRouter(limiter?: ReturnType<typeof createInMemoryRateLimiter>) {
     const orgService = createOrgService(
       testDb.platformDb,
@@ -112,25 +119,40 @@ describe.skipIf(!HAS_DB)("auth + org routers (DB integration)", () => {
       authDeps: {
         hasher,
         loginLimiter: limiter ?? loginLimiter,
+        saltLimiter: testSaltLimiter,
+        fakeSaltKey: testFakeSaltKey,
         encryptor: testFieldEncryptor,
         indexer: testBlindIndexer,
         isSecureCookie: false,
+        emailSender: createMockEmailSender(),
+      },
+      twoFactorDeps: {
+        emailSender: createMockEmailSender(),
+        encryptor: testFieldEncryptor,
       },
       orgService,
     });
   }
 
+  /** Shared wiring: builds router, factory, req/res, and returns a caller. */
+  function buildCaller(
+    ctx: Context,
+    limiter?: ReturnType<typeof createInMemoryRateLimiter>,
+  ) {
+    const appRouter = buildRouter(limiter);
+    const factory = createCallerFactory(appRouter);
+    return factory(ctx);
+  }
+
   function createTestCaller(overrides?: {
     org?: OrgContext | null;
     limiter?: ReturnType<typeof createInMemoryRateLimiter>;
-    headers?: Record<string, string>;
+    headers?: Record<string, string | undefined>;
   }) {
     const res = mockRes();
-    const req = overrides?.headers
-      ? mockReq({ headers: overrides.headers })
-      : mockReq();
-    const appRouter = buildRouter(overrides?.limiter);
-    const factory = createCallerFactory(appRouter);
+    const req = mockReq(
+      overrides?.headers ? { headers: overrides.headers } : undefined,
+    );
     const ctx: Context = {
       req,
       res,
@@ -138,7 +160,7 @@ describe.skipIf(!HAS_DB)("auth + org routers (DB integration)", () => {
       session: null,
       user: null,
     };
-    return { caller: factory(ctx), res };
+    return { caller: buildCaller(ctx, overrides?.limiter), res };
   }
 
   function createAuthedCaller(
@@ -153,11 +175,8 @@ describe.skipIf(!HAS_DB)("auth + org routers (DB integration)", () => {
     sessionToken: string,
   ) {
     const res = mockRes();
-    const req = mockReq();
-    const appRouter = buildRouter();
-    const factory = createCallerFactory(appRouter);
     const ctx: Context = {
-      req,
+      req: mockReq(),
       res,
       org: orgContext,
       session: {
@@ -168,10 +187,12 @@ describe.skipIf(!HAS_DB)("auth + org routers (DB integration)", () => {
         userAgent: "test-agent",
         expiresAt: new Date(Date.now() + 60 * 60 * 1000),
         createdAt: new Date(),
+        twofaVerified: false,
+        webauthnChallenge: null,
       },
       user,
     };
-    return { caller: factory(ctx), res };
+    return { caller: buildCaller(ctx), res };
   }
 
   // --- Health ---
@@ -217,7 +238,7 @@ describe.skipIf(!HAS_DB)("auth + org routers (DB integration)", () => {
         identifier: "newuser",
         password: "a-very-long-password-16",
         displayName: "New User",
-        roleId: "volunteer",
+        roleId: RoleId.VOLUNTEER,
       }),
       "UNAUTHORIZED",
       "Not authenticated",
@@ -230,7 +251,7 @@ describe.skipIf(!HAS_DB)("auth + org routers (DB integration)", () => {
       identifier: "admin-bootstrap",
       password: "admin-password-long-enough",
       displayName: "Admin Bootstrap",
-      roleId: "admin",
+      roleId: RoleId.ADMIN,
     });
 
     const { caller } = createAuthedCaller(admin, "admin-token");
@@ -238,12 +259,12 @@ describe.skipIf(!HAS_DB)("auth + org routers (DB integration)", () => {
       identifier: "invited-user",
       password: "invited-password-long-enough",
       displayName: "Invited User",
-      roleId: "volunteer",
+      roleId: RoleId.VOLUNTEER,
     });
 
     expect(result.user.identifier).toBe("invited-user");
     expect(result.user.displayName).toBe("Invited User");
-    expect(result.user.roleId).toBe("volunteer");
+    expect(result.user.roleId).toBe(RoleId.VOLUNTEER);
   });
 
   // --- Auth: login ---
@@ -254,7 +275,7 @@ describe.skipIf(!HAS_DB)("auth + org routers (DB integration)", () => {
       identifier: "loginuser",
       password: "login-password-long-enough",
       displayName: "Login User",
-      roleId: "volunteer",
+      roleId: RoleId.VOLUNTEER,
     });
 
     loginLimiter.reset("127.0.0.1");
@@ -266,6 +287,8 @@ describe.skipIf(!HAS_DB)("auth + org routers (DB integration)", () => {
 
     expect(result.user.identifier).toBe("loginuser");
     expect(result.user.displayName).toBe("Login User");
+    expect(result.requiresTwoFactor).toBe(false);
+    expect(result.enrolledMethods).toEqual([]);
 
     const cookies = res.getCapturedCookies();
     expect(cookies.length).toBeGreaterThan(0);
@@ -305,7 +328,7 @@ describe.skipIf(!HAS_DB)("auth + org routers (DB integration)", () => {
       identifier: "logoutuser",
       password: "logout-password-long-enough",
       displayName: "Logout User",
-      roleId: "volunteer",
+      roleId: RoleId.VOLUNTEER,
     });
 
     const loginResult = await authService.login({
@@ -335,7 +358,7 @@ describe.skipIf(!HAS_DB)("auth + org routers (DB integration)", () => {
       identifier: "meuser",
       password: "me-password-long-enough-16",
       displayName: "Me User",
-      roleId: "volunteer",
+      roleId: RoleId.VOLUNTEER,
     });
 
     const { caller } = createAuthedCaller(user, "me-token");
@@ -343,7 +366,7 @@ describe.skipIf(!HAS_DB)("auth + org routers (DB integration)", () => {
 
     expect(result.user.identifier).toBe("meuser");
     expect(result.user.displayName).toBe("Me User");
-    expect(result.user.roleId).toBe("volunteer");
+    expect(result.user.roleId).toBe(RoleId.VOLUNTEER);
   });
 
   it("auth.me rejects unauthenticated caller", async () => {
@@ -363,7 +386,7 @@ describe.skipIf(!HAS_DB)("auth + org routers (DB integration)", () => {
       identifier: "xff-user",
       password: "xff-password-long-enough",
       displayName: "XFF User",
-      roleId: "volunteer",
+      roleId: RoleId.VOLUNTEER,
     });
 
     const isolatedLimiter = createInMemoryRateLimiter({
@@ -390,7 +413,7 @@ describe.skipIf(!HAS_DB)("auth + org routers (DB integration)", () => {
       identifier: "dup-admin",
       password: "dup-admin-password-long-enough",
       displayName: "Dup Admin",
-      roleId: "admin",
+      roleId: RoleId.ADMIN,
     });
 
     const { caller } = createAuthedCaller(admin, "dup-admin-token");
@@ -400,7 +423,7 @@ describe.skipIf(!HAS_DB)("auth + org routers (DB integration)", () => {
       identifier: "dup-target",
       password: "dup-target-password-long-enough",
       displayName: "First",
-      roleId: "volunteer",
+      roleId: RoleId.VOLUNTEER,
     });
 
     // Second registration with same identifier fails through throwAsTrpc
@@ -410,7 +433,7 @@ describe.skipIf(!HAS_DB)("auth + org routers (DB integration)", () => {
         identifier: "dup-target",
         password: "dup-target-password-long-enough",
         displayName: "Second",
-        roleId: "volunteer",
+        roleId: RoleId.VOLUNTEER,
       }),
     ).rejects.toThrow("already exists");
   });
@@ -423,32 +446,15 @@ describe.skipIf(!HAS_DB)("auth + org routers (DB integration)", () => {
       identifier: "no-ua-user",
       password: "no-ua-password-long-enough",
       displayName: "No UA User",
-      roleId: "volunteer",
+      roleId: RoleId.VOLUNTEER,
     });
 
     loginLimiter.reset("127.0.0.1");
 
-    // Build caller with no user-agent header to exercise ?? "unknown"
-    const res = mockRes();
-    const socket = new Socket();
-    Object.defineProperty(socket, "remoteAddress", {
-      value: "127.0.0.1",
-      writable: true,
+    // Override user-agent to undefined to exercise the ?? "unknown" fallback.
+    const { caller } = createTestCaller({
+      headers: { "user-agent": undefined },
     });
-    const req = Object.create(IncomingMessage.prototype) as IncomingMessage;
-    Object.defineProperty(req, "socket", { value: socket, writable: false });
-    Object.defineProperty(req, "headers", { value: {}, writable: true });
-
-    const appRouter = buildRouter();
-    const factory = createCallerFactory(appRouter);
-    const ctx: Context = {
-      req,
-      res,
-      org: orgContext,
-      session: null,
-      user: null,
-    };
-    const caller = factory(ctx);
 
     const result = await caller.auth.login({
       identifier: "no-ua-user",
@@ -465,7 +471,7 @@ describe.skipIf(!HAS_DB)("auth + org routers (DB integration)", () => {
       identifier: "email-admin",
       password: "email-admin-password-long-enough",
       displayName: "Email Admin",
-      roleId: "admin",
+      roleId: RoleId.ADMIN,
     });
 
     const { caller } = createAuthedCaller(admin, "email-admin-token");
@@ -474,7 +480,7 @@ describe.skipIf(!HAS_DB)("auth + org routers (DB integration)", () => {
       password: "email-user-password-long-enough",
       displayName: "Email User",
       notificationEmail: "user@example.com",
-      roleId: "volunteer",
+      roleId: RoleId.VOLUNTEER,
     });
 
     expect(result.user.identifier).toBe("email-user");
