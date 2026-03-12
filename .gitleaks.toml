@@ -1,0 +1,24 @@
+# Gitleaks configuration for CARE-Y
+# Extends the default ruleset with project-specific allowlists.
+
+[extend]
+useDefault = true
+
+[[rules]]
+id = "generic-api-key"
+# Inherit the default generic-api-key rule and add path-scoped allowlists.
+# WebAuthn test fixtures (clientDataJSON, authenticatorData, publicKey) are
+# base64url-encoded binary blobs with high entropy that trip the generic rule.
+# They are not secrets they are ephemeral test data with no privileged access.
+[rules.allowlist]
+  # AND: a finding must match BOTH the regex AND the path to be suppressed.
+  # OR (the default) would suppress any matching regex in production files too.
+  condition = "AND"
+  regexes = [
+    # WebAuthn fields: base64url-encoded binary blobs, not secrets
+    '''(clientDataJSON|authenticatorData|publicKey|rawId|signature)\s*:\s*["'][A-Za-z0-9+/\-_=]{20,}["']''',
+  ]
+  paths = [
+    '''.*\.test\.ts$''',
+    '''.*\.spec\.ts$''',
+  ]
