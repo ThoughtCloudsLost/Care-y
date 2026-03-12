@@ -22,7 +22,7 @@ import {
   router,
   orgProcedure,
   authedProcedure,
-  throwAsTrpc,
+  withErrorWrapping,
 } from "../trpc/trpc.js";
 import type { RateLimiter } from "../ratelimit/rate-limiter.js";
 import type { UserRecord } from "../auth/service.js";
@@ -39,12 +39,15 @@ import {
 } from "../trpc/context.js";
 import { createSaltDefense } from "../auth/salt-defense.js";
 import type { OrgContext } from "../trpc/context.js";
+import type { EmailSender } from "../email/email-sender.js";
+import { createScopedTwoFactorServices } from "./two-factor.js";
 
 export interface AuthRouterDeps extends AuthServiceDeps {
   readonly loginLimiter: RateLimiter;
   readonly saltLimiter: RateLimiter;
   readonly fakeSaltKey: Buffer;
   readonly isSecureCookie: boolean;
+  readonly emailSender: EmailSender;
 }
 
 /** Safe response shape: no password_hash, no internal fields. */
@@ -145,35 +148,43 @@ export function createAuthRouter(deps: AuthRouterDeps) {
         ),
       ),
 
-    login: orgProcedure
-      .input(loginInputSchema)
-      .mutation(async ({ ctx, input }) => {
+    login: orgProcedure.input(loginInputSchema).mutation(
+      withErrorWrapping(async ({ ctx, input }) => {
         const ip = extractClientIp(ctx.req);
         enforceRateLimit(loginLimiter, ip, "Too many login attempts");
 
         const authService = createScopedAuthService(ctx.org, deps);
 
-        try {
-          const { user, session } = await authService.login({
-            identifier: input.identifier,
-            password: input.password,
-            ipAddress: ip,
-            userAgent: ctx.req.headers["user-agent"] ?? "unknown",
-          });
+        const { user, session } = await authService.login({
+          identifier: input.identifier,
+          password: input.password,
+          ipAddress: ip,
+          userAgent: ctx.req.headers["user-agent"] ?? "unknown",
+        });
 
-          setSessionCookie(ctx.res, session.token, isSecureCookie);
-          return { user: toUserResponse(user) };
-        } catch (err: unknown) {
-          throwAsTrpc(err);
-        }
+        setSessionCookie(ctx.res, session.token, isSecureCookie);
+
+        // Query enrolled 2FA methods via service to inform client redirect.
+        const { twoFactor } = createScopedTwoFactorServices(ctx.org, {
+          emailSender: deps.emailSender,
+          encryptor: deps.encryptor,
+        });
+        const enrolledMethods = await twoFactor.getEnrolledMethodTypes(user.id);
+
+        return {
+          user: toUserResponse(user),
+          requiresTwoFactor: enrolledMethods.length > 0,
+          enrolledMethods,
+        };
       }),
+    ),
 
     register: authedProcedure
       .input(registerInputSchema.extend({ roleId: z.string().min(1) }))
-      .mutation(async ({ ctx, input }) => {
-        const authService = createScopedAuthService(ctx.org, deps);
+      .mutation(
+        withErrorWrapping(async ({ ctx, input }) => {
+          const authService = createScopedAuthService(ctx.org, deps);
 
-        try {
           const user = await authService.register({
             identifier: input.identifier,
             password: input.password,
@@ -185,10 +196,8 @@ export function createAuthRouter(deps: AuthRouterDeps) {
           });
 
           return { user: toUserResponse(user) };
-        } catch (err: unknown) {
-          throwAsTrpc(err);
-        }
-      }),
+        }),
+      ),
 
     logout: authedProcedure.mutation(async ({ ctx }) => {
       const authService = createScopedAuthService(ctx.org, deps);

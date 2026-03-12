@@ -119,3 +119,59 @@ export const orgProcedure = publicProcedure.use(requireOrg);
 
 /** Procedure that requires both a resolved org and an authenticated session. */
 export const authedProcedure = orgProcedure.use(requireSession);
+
+/**
+ * Middleware: requires completed 2FA verification on the current session.
+ * Chained after requireSession, so session and user are guaranteed non-null.
+ *
+ * Enrollment and verification routes use plain authedProcedure instead,
+ * since the user needs access before completing 2FA.
+ */
+const require2fa = middleware(async ({ ctx, next }) => {
+  // Runtime guards narrow the types for TypeScript. These checks are
+  // redundant at runtime (requireSession + requireOrg already ran), but
+  // the middleware framework re-widens ctx to the base Context type.
+  if (!ctx.session || !ctx.user || !ctx.org) {
+    throw new TRPCError({
+      code: "UNAUTHORIZED",
+      message: "Not authenticated",
+    });
+  }
+
+  if (!ctx.session.twofaVerified) {
+    throw new TRPCError({
+      code: "UNAUTHORIZED",
+      message: "Two-factor verification required",
+    });
+  }
+
+  return next({
+    ctx: { ...ctx, org: ctx.org, session: ctx.session, user: ctx.user },
+  });
+});
+
+/** Procedure that requires org + auth + completed 2FA verification. */
+export const authed2faProcedure = authedProcedure.use(require2fa);
+
+/**
+ * Wraps a resolver function so that AppErrors thrown by the resolver are
+ * caught and re-thrown as TRPCError with the correct code. Non-AppErrors
+ * propagate unchanged.
+ *
+ * Note: this must be a resolver-level wrapper, not a tRPC middleware.
+ * tRPC v11's internal pipeline catches resolver errors before middleware
+ * catch blocks execute, so middleware-based error wrapping never fires.
+ * A resolver wrapper runs inside the resolver call itself, before tRPC's
+ * error handler, so the TRPCError propagates correctly.
+ */
+export function withErrorWrapping<TArgs, TResult>(
+  fn: (args: TArgs) => Promise<TResult> | TResult,
+): (args: TArgs) => Promise<TResult> {
+  return async (args: TArgs): Promise<TResult> => {
+    try {
+      return await fn(args);
+    } catch (err: unknown) {
+      throwAsTrpc(err);
+    }
+  };
+}

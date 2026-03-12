@@ -122,6 +122,15 @@ export interface TwoFactorService {
     rpId: string,
   ): Promise<void>;
 
+  // Email enrollment
+  verifyEmailEnrollment(userId: string, code: string): Promise<boolean>;
+
+  // Method queries
+  getEnrolledMethodTypes(userId: string): Promise<string[]>;
+
+  // User email resolution (decrypts notification email for 2FA code delivery)
+  resolveUserEmail(userId: string): Promise<string>;
+
   // Method management
   removeMethod(
     userId: string,
@@ -157,26 +166,15 @@ export function createTwoFactorService(
     userId: string,
     method: TwoFactorMethodType,
   ): Promise<void> {
-    // Upsert: if the method was previously deactivated, reactivate it
-    const existing = await db
-      .selectFrom("two_factor_methods")
-      .select("id")
-      .where("user_id", "=", userId)
-      .where("method_type", "=", method)
-      .executeTakeFirst();
-
-    if (existing) {
-      await db
-        .updateTable("two_factor_methods")
-        .set({ is_active: true })
-        .where("id", "=", existing.id)
-        .execute();
-    } else {
-      await db
-        .insertInto("two_factor_methods")
-        .values({ user_id: userId, method_type: method })
-        .execute();
-    }
+    // Single-query upsert via the unique index on (user_id, method_type).
+    // Reactivates previously deactivated methods without a separate SELECT.
+    await db
+      .insertInto("two_factor_methods")
+      .values({ user_id: userId, method_type: method, is_active: true })
+      .onConflict((oc) =>
+        oc.columns(["user_id", "method_type"]).doUpdateSet({ is_active: true }),
+      )
+      .execute();
   }
 
   async function getNextWebauthnOrdinal(userId: string): Promise<number> {
@@ -219,6 +217,57 @@ export function createTwoFactorService(
       .where("is_used", "=", false)
       .executeTakeFirstOrThrow();
     return Number(count);
+  }
+
+  /**
+   * Retrieves the WebAuthn challenge stored on the session. Throws if the
+   * session has no pending challenge (the user didn't request options first).
+   */
+  async function requireWebauthnChallenge(
+    sessionToken: string,
+  ): Promise<string> {
+    const session = await sessions.findByToken(sessionToken);
+    if (
+      session?.webauthnChallenge === undefined ||
+      session.webauthnChallenge === null
+    ) {
+      throw new ValidationError(
+        "No WebAuthn challenge found for this session.",
+      );
+    }
+    return session.webauthnChallenge;
+  }
+
+  /**
+   * Loads and decrypts the TOTP secret for a user. The `verified` parameter
+   * selects whether to load a pending enrollment (false) or a confirmed
+   * secret (true). Returns the decoded secret bytes and the row ID (needed
+   * by enrollment to mark the row as verified).
+   */
+  async function loadTotpSecret(
+    userId: string,
+    verified: boolean,
+  ): Promise<{ secret: Buffer; rowId: string }> {
+    const row = await db
+      .selectFrom("totp_secrets")
+      .selectAll()
+      .where("user_id", "=", userId)
+      .where("verified", "=", verified)
+      .executeTakeFirst();
+
+    if (!row) {
+      throw new ValidationError(
+        verified
+          ? "TOTP is not enrolled."
+          : "No pending TOTP enrollment found.",
+      );
+    }
+
+    // care-y-ignore-next-line server-no-decrypt -- TOTP secrets are operational server-side PII (not E2EE client data)
+    const secretB32 = encryptor.decrypt(row.encrypted_secret);
+    const secret = base32Decode(secretB32);
+
+    return { secret, rowId: row.id };
   }
 
   /** Maps a simple method type (TOTP, email) to its display info. */
@@ -308,12 +357,19 @@ export function createTwoFactorService(
 
   return {
     async getStatus(userId: string): Promise<TwoFactorStatusResult> {
+      // First fetch active methods (needed to build the response).
+      // Then run WebAuthn + backup count in parallel (independent queries).
       const methods = await getActiveMethods(userId);
+
+      const [webauthnCreds, backupCount] = await Promise.all([
+        listWebauthnCredentials(userId),
+        countRemainingBackupCodes(userId),
+      ]);
 
       const enrolledMethods: EnrolledMethodInfo[] = [];
       for (const m of methods) {
         if (m.method_type === TwoFactorMethod.WEBAUTHN) {
-          enrolledMethods.push(...(await listWebauthnCredentials(userId)));
+          enrolledMethods.push(...webauthnCreds);
         } else if (m.method_type === TwoFactorMethod.TOTP) {
           enrolledMethods.push(
             simpleMethodInfo(TwoFactorMethod.TOTP, "Authenticator app"),
@@ -328,7 +384,7 @@ export function createTwoFactorService(
       return {
         enrolled: methods.length > 0,
         methods: enrolledMethods,
-        backupCodesRemaining: await countRemainingBackupCodes(userId),
+        backupCodesRemaining: backupCount,
       };
     },
 
@@ -360,20 +416,7 @@ export function createTwoFactorService(
     },
 
     async verifyTotpEnrollment(userId: string, code: string): Promise<boolean> {
-      const row = await db
-        .selectFrom("totp_secrets")
-        .selectAll()
-        .where("user_id", "=", userId)
-        .where("verified", "=", false)
-        .executeTakeFirst();
-
-      if (!row) {
-        throw new ValidationError("No pending TOTP enrollment found.");
-      }
-
-      // care-y-ignore-next-line server-no-decrypt -- TOTP secrets are operational server-side PII (not E2EE client data)
-      const secretB32 = encryptor.decrypt(row.encrypted_secret);
-      const secret = base32Decode(secretB32);
+      const { secret, rowId } = await loadTotpSecret(userId, false);
 
       if (!verifyTotpCode(secret, code)) {
         return false;
@@ -383,7 +426,7 @@ export function createTwoFactorService(
       await db
         .updateTable("totp_secrets")
         .set({ verified: true })
-        .where("id", "=", row.id)
+        .where("id", "=", rowId)
         .execute();
 
       await registerMethod(userId, TwoFactorMethod.TOTP);
@@ -391,21 +434,7 @@ export function createTwoFactorService(
     },
 
     async verifyTotp(userId: string, code: string): Promise<boolean> {
-      const row = await db
-        .selectFrom("totp_secrets")
-        .selectAll()
-        .where("user_id", "=", userId)
-        .where("verified", "=", true)
-        .executeTakeFirst();
-
-      if (!row) {
-        throw new ValidationError("TOTP is not enrolled.");
-      }
-
-      // care-y-ignore-next-line server-no-decrypt -- TOTP secrets are operational server-side PII (not E2EE client data)
-      const secretB32 = encryptor.decrypt(row.encrypted_secret);
-      const secret = base32Decode(secretB32);
-
+      const { secret } = await loadTotpSecret(userId, true);
       return verifyTotpCode(secret, code);
     },
 
@@ -447,6 +476,9 @@ export function createTwoFactorService(
         throw new ValidationError("No backup codes available.");
       }
 
+      // Sequential by design: scrypt is CPU-bound (saturates the thread pool
+      // under Promise.all), and early return on first match is faster for the
+      // common case (valid code). Route-level rate limiting prevents brute-force.
       for (const row of rows) {
         const valid = await verifyBackupCode(code, row.code_hash);
         if (valid) {
@@ -482,18 +514,10 @@ export function createTwoFactorService(
       rpId: string,
       userId: string,
     ): Promise<void> {
-      const session = await sessions.findByToken(sessionToken);
-      if (
-        session?.webauthnChallenge === undefined ||
-        session.webauthnChallenge === null
-      ) {
-        throw new ValidationError(
-          "No WebAuthn challenge found for this session.",
-        );
-      }
+      const challenge = await requireWebauthnChallenge(sessionToken);
 
       const expected: RegistrationChecks = {
-        challenge: session.webauthnChallenge,
+        challenge,
         origin,
         domain: rpId,
         userVerified: true,
@@ -557,15 +581,7 @@ export function createTwoFactorService(
       origin: string,
       rpId: string,
     ): Promise<void> {
-      const session = await sessions.findByToken(sessionToken);
-      if (
-        session?.webauthnChallenge === undefined ||
-        session.webauthnChallenge === null
-      ) {
-        throw new ValidationError(
-          "No WebAuthn challenge found for this session.",
-        );
-      }
+      const challenge = await requireWebauthnChallenge(sessionToken);
 
       // Look up the credential
       const credRow = await db
@@ -586,7 +602,7 @@ export function createTwoFactorService(
       };
 
       const expected: AuthenticationChecks = {
-        challenge: session.webauthnChallenge,
+        challenge,
         origin,
         domain: rpId,
         userVerified: true,
@@ -607,6 +623,43 @@ export function createTwoFactorService(
         .set({ sign_count: result.signCount })
         .where("credential_id", "=", credRow.credential_id)
         .execute();
+    },
+
+    // --- Email enrollment ---
+
+    async verifyEmailEnrollment(
+      userId: string,
+      code: string,
+    ): Promise<boolean> {
+      const valid = await emailCodes.verifyCode(userId, code);
+      if (valid) {
+        await registerMethod(userId, TwoFactorMethod.EMAIL);
+      }
+      return valid;
+    },
+
+    // --- Method queries ---
+
+    async getEnrolledMethodTypes(userId: string): Promise<string[]> {
+      const methods = await getActiveMethods(userId);
+      return methods.map((m) => m.method_type);
+    },
+
+    async resolveUserEmail(userId: string): Promise<string> {
+      const row = await db
+        .selectFrom("users")
+        .select("encrypted_notification_addr")
+        .where("id", "=", userId)
+        .executeTakeFirst();
+
+      if (!row?.encrypted_notification_addr) {
+        throw new ValidationError(
+          "No notification email configured. Set an email address in your profile first.",
+        );
+      }
+
+      // care-y-ignore-next-line server-no-decrypt -- notification email is operational server-side PII (Tier 2, not E2EE)
+      return encryptor.decrypt(row.encrypted_notification_addr);
     },
 
     // --- Method management ---

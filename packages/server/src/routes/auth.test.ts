@@ -18,6 +18,7 @@ import {
   mockReq,
   mockRes,
   expectTrpcError,
+  createMockEmailSender,
   type TestDb,
 } from "../test-utils.js";
 import { createScryptHasher } from "../auth/password.js";
@@ -122,6 +123,11 @@ describe.skipIf(!HAS_DB)("auth + org routers (DB integration)", () => {
         encryptor: testFieldEncryptor,
         indexer: testBlindIndexer,
         isSecureCookie: false,
+        emailSender: createMockEmailSender(),
+      },
+      twoFactorDeps: {
+        emailSender: createMockEmailSender(),
+        encryptor: testFieldEncryptor,
       },
       orgService,
     });
@@ -280,6 +286,8 @@ describe.skipIf(!HAS_DB)("auth + org routers (DB integration)", () => {
 
     expect(result.user.identifier).toBe("loginuser");
     expect(result.user.displayName).toBe("Login User");
+    expect(result.requiresTwoFactor).toBe(false);
+    expect(result.enrolledMethods).toEqual([]);
 
     const cookies = res.getCapturedCookies();
     expect(cookies.length).toBeGreaterThan(0);

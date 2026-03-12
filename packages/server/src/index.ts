@@ -36,6 +36,7 @@ import {
 import { deriveFakeSaltKey } from "./auth/salt-defense.js";
 import { createContextFactory } from "./trpc/context.js";
 import { createAppRouter } from "./routes/router.js";
+import { createEmailSender } from "./email/email-sender.js";
 
 // --- DB startup probe ---
 
@@ -138,6 +139,12 @@ const createContext = createContextFactory({
   indexer,
 });
 
+const emailSender = createEmailSender(
+  env.SMTP_HOST,
+  env.SMTP_PORT,
+  env.SMTP_FROM,
+);
+
 const appRouter = createAppRouter({
   authDeps: {
     hasher,
@@ -147,6 +154,11 @@ const appRouter = createAppRouter({
     encryptor,
     indexer,
     isSecureCookie: env.NODE_ENV === "production",
+    emailSender,
+  },
+  twoFactorDeps: {
+    emailSender,
+    encryptor,
   },
   orgService,
 });

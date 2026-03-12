@@ -21,6 +21,7 @@ import {
   registerMethodDirectly,
   insertWebauthnCredential,
   enrollTotp,
+  extractEmailCode,
   type TestDb,
 } from "../test-utils.js";
 import { createDbSessionRepository } from "./session-repository.js";
@@ -1023,6 +1024,156 @@ describe.skipIf(!process.env.DATABASE_URL)("TwoFactorService", () => {
       // Encrypted bytes should not equal the plaintext base32 string
       const rawBytes = row.encrypted_secret;
       expect(rawBytes.toString("utf-8")).not.toBe(setup.secret);
+    });
+  });
+
+  // --- resolveUserEmail ---
+
+  describe("resolveUserEmail", () => {
+    it("throws when user has no notification email", async () => {
+      const user = await createTestUser(db);
+      // Default createTestUser sets encrypted_notification_addr to null
+
+      await expect(twoFactor.resolveUserEmail(user.id)).rejects.toThrow(
+        ValidationError,
+      );
+    });
+
+    it("returns decrypted email when notification address is set", async () => {
+      const user = await createTestUser(db, {
+        overrides: {
+          encrypted_notification_addr: noopEncryptor.encrypt("user@test.com"),
+        },
+      });
+
+      const email = await twoFactor.resolveUserEmail(user.id);
+      expect(email).toBe("user@test.com");
+    });
+  });
+
+  // --- getEnrolledMethodTypes ---
+
+  describe("getEnrolledMethodTypes", () => {
+    it("returns empty array for user with no 2FA", async () => {
+      const user = await createTestUser(db);
+      const methods = await twoFactor.getEnrolledMethodTypes(user.id);
+      expect(methods).toEqual([]);
+    });
+
+    it("returns array of active method types", async () => {
+      const user = await createTestUser(db);
+      await enrollTotp(twoFactor, user.id);
+      await registerMethodDirectly(db, user.id, TwoFactorMethod.EMAIL);
+
+      const methods = await twoFactor.getEnrolledMethodTypes(user.id);
+      expect(methods).toContain(TwoFactorMethod.TOTP);
+      expect(methods).toContain(TwoFactorMethod.EMAIL);
+      expect(methods).toHaveLength(2);
+    });
+  });
+
+  // --- verifyEmailEnrollment ---
+
+  describe("verifyEmailEnrollment", () => {
+    it("registers email method when code is valid", async () => {
+      const user = await createTestUser(db);
+      const mockSender = createMockEmailSender();
+      const emailCodes = createEmailCodeService(db, mockSender);
+      const service = createTwoFactorService(
+        db,
+        sessions,
+        emailCodes,
+        noopEncryptor,
+        "CARE-Y Test",
+      );
+
+      // Send a code, then extract it from the captured email
+      await emailCodes.sendCode(user.id, "test@example.com");
+      const code = extractEmailCode(mockSender.calls[0]!.text);
+
+      const result = await service.verifyEmailEnrollment(user.id, code);
+      expect(result).toBe(true);
+
+      // Email method should now be registered
+      const status = await service.getStatus(user.id);
+      expect(status.methods.map((m) => m.type)).toContain(
+        TwoFactorMethod.EMAIL,
+      );
+    });
+
+    it("returns false for invalid code without registering method", async () => {
+      const user = await createTestUser(db);
+      const mockSender = createMockEmailSender();
+      const emailCodes = createEmailCodeService(db, mockSender);
+      const service = createTwoFactorService(
+        db,
+        sessions,
+        emailCodes,
+        noopEncryptor,
+        "CARE-Y Test",
+      );
+
+      await emailCodes.sendCode(user.id, "test@example.com");
+
+      const result = await service.verifyEmailEnrollment(user.id, "000000");
+      expect(result).toBe(false);
+
+      // Email method should not be registered
+      const methods = await service.getEnrolledMethodTypes(user.id);
+      expect(methods).not.toContain(TwoFactorMethod.EMAIL);
+    });
+  });
+
+  // --- getStatus with email method ---
+
+  describe("getStatus with email method", () => {
+    it("shows email method with correct label", async () => {
+      const user = await createTestUser(db);
+      await registerMethodDirectly(db, user.id, TwoFactorMethod.EMAIL);
+
+      const status = await twoFactor.getStatus(user.id);
+      expect(status.enrolled).toBe(true);
+      expect(status.methods).toHaveLength(1);
+      expect(status.methods[0]!.type).toBe(TwoFactorMethod.EMAIL);
+      expect(status.methods[0]!.label).toBe("Email code");
+      expect(status.methods[0]!.index).toBe(1);
+    });
+  });
+
+  // --- Method upsert (reactivation) ---
+
+  describe("method reactivation", () => {
+    it("reactivates a previously deactivated method on re-enrollment", async () => {
+      const user = await createTestUser(db);
+
+      // Enroll TOTP and email
+      await enrollTotp(twoFactor, user.id);
+      await registerMethodDirectly(db, user.id, TwoFactorMethod.EMAIL);
+
+      // Remove TOTP (email stays, so it's allowed)
+      await twoFactor.removeMethod(user.id, TwoFactorMethod.TOTP);
+
+      // Verify TOTP is deactivated
+      let status = await twoFactor.getStatus(user.id);
+      expect(status.methods.map((m) => m.type)).not.toContain(
+        TwoFactorMethod.TOTP,
+      );
+
+      // Re-enroll TOTP (should reactivate the existing row, not create duplicate)
+      await enrollTotp(twoFactor, user.id);
+
+      status = await twoFactor.getStatus(user.id);
+      expect(status.methods.map((m) => m.type)).toContain(TwoFactorMethod.TOTP);
+
+      // Should be exactly one TOTP row in two_factor_methods
+      const rows = await db
+        .selectFrom("two_factor_methods")
+        .selectAll()
+        .where("user_id", "=", user.id)
+        .where("method_type", "=", TwoFactorMethod.TOTP)
+        .execute();
+      expect(rows).toHaveLength(1);
+      expect(rows[0]!.is_active).toBe(true);
     });
   });
 });

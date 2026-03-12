@@ -32,7 +32,7 @@ const testMessage: EmailMessage = {
 
 describe("createConsoleEmailSender", () => {
   it("logs subject and text length but redacts recipient", async () => {
-    const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    const consoleSpy = vi.spyOn(console, "log").mockReturnValue(undefined);
     const sender = createConsoleEmailSender();
 
     await sender.send(testMessage);
@@ -48,7 +48,7 @@ describe("createConsoleEmailSender", () => {
   });
 
   it("resolves without throwing", async () => {
-    const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    const consoleSpy = vi.spyOn(console, "log").mockReturnValue(undefined);
     const sender = createConsoleEmailSender();
 
     await expect(sender.send(testMessage)).resolves.toBeUndefined();
@@ -238,22 +238,21 @@ describe("createEmailSender", () => {
     expect(mockSendMail).toHaveBeenCalledOnce();
   });
 
-  it("returns console sender when host is undefined", () => {
-    const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+  it("returns console sender when host is undefined", async () => {
+    const consoleSpy = vi.spyOn(console, "log").mockReturnValue(undefined);
     const sender = createEmailSender(undefined, undefined, TEST_FROM);
 
-    // Console sender is synchronous in behavior
-    sender.send(testMessage);
+    await sender.send(testMessage);
     expect(consoleSpy).toHaveBeenCalled();
 
     consoleSpy.mockRestore();
   });
 
-  it("returns console sender when port is undefined", () => {
-    const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+  it("returns console sender when port is undefined", async () => {
+    const consoleSpy = vi.spyOn(console, "log").mockReturnValue(undefined);
     const sender = createEmailSender("smtp.test.com", undefined, TEST_FROM);
 
-    sender.send(testMessage);
+    await sender.send(testMessage);
     expect(consoleSpy).toHaveBeenCalled();
 
     consoleSpy.mockRestore();

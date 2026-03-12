@@ -16,7 +16,6 @@
     "isolatedModules": true,
     "noUncheckedIndexedAccess": true,
     "noFallthroughCasesInSwitch": true,
-    "exactOptionalPropertyTypes": true,
     "declaration": true,
     "declarationMap": true,
     "outDir": "dist"

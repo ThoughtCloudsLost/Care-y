@@ -16,6 +16,8 @@ import {
   publicProcedure,
   orgProcedure,
   authedProcedure,
+  authed2faProcedure,
+  withErrorWrapping,
   createCallerFactory,
   appErrorToTrpcCode,
   throwAsTrpc,
@@ -289,5 +291,204 @@ describe("requireAuth middleware (authedProcedure)", () => {
     );
     const result = await caller.needsAuth();
     expect(result).toBe("authed");
+  });
+});
+
+// --- require2fa middleware ---
+
+describe("require2fa middleware (authed2faProcedure)", () => {
+  const testRouter = router({
+    needs2fa: authed2faProcedure.query(() => "verified"),
+  });
+
+  const factory = createCallerFactory(testRouter);
+
+  it("rejects with NOT_FOUND when org is null", async () => {
+    const caller = factory(baseCtx({ org: null }));
+    await expectTrpcError(
+      caller.needs2fa(),
+      "NOT_FOUND",
+      "Organization not found",
+    );
+  });
+
+  it("rejects with UNAUTHORIZED when session is null", async () => {
+    const caller = factory(baseCtx({ org: fakeOrg, session: null }));
+    await expectTrpcError(
+      caller.needs2fa(),
+      "UNAUTHORIZED",
+      "Not authenticated",
+    );
+  });
+
+  it("rejects with UNAUTHORIZED when twofaVerified is false", async () => {
+    const caller = factory(
+      baseCtx({
+        org: fakeOrg,
+        session: {
+          id: "s1",
+          token: "tok",
+          userId: "u1",
+          ipAddress: "127.0.0.1",
+          userAgent: "test",
+          expiresAt: new Date(Date.now() + 60_000),
+          createdAt: new Date(),
+          twofaVerified: false,
+          webauthnChallenge: null,
+        },
+        user: {
+          id: "u1",
+          identifier: "testuser",
+          displayName: "Test",
+          roleId: "volunteer",
+          isActive: true,
+          createdAt: new Date(),
+        },
+      }),
+    );
+    await expectTrpcError(
+      caller.needs2fa(),
+      "UNAUTHORIZED",
+      "Two-factor verification required",
+    );
+  });
+
+  it("allows requests when twofaVerified is true", async () => {
+    const caller = factory(
+      baseCtx({
+        org: fakeOrg,
+        session: {
+          id: "s1",
+          token: "tok",
+          userId: "u1",
+          ipAddress: "127.0.0.1",
+          userAgent: "test",
+          expiresAt: new Date(Date.now() + 60_000),
+          createdAt: new Date(),
+          twofaVerified: true,
+          webauthnChallenge: null,
+        },
+        user: {
+          id: "u1",
+          identifier: "testuser",
+          displayName: "Test",
+          roleId: "volunteer",
+          isActive: true,
+          createdAt: new Date(),
+        },
+      }),
+    );
+    const result = await caller.needs2fa();
+    expect(result).toBe("verified");
+  });
+});
+
+// --- withErrorWrapping resolver wrapper ---
+
+describe("withErrorWrapping resolver wrapper", () => {
+  const authedCtx = baseCtx({
+    org: fakeOrg,
+    session: {
+      id: "s1",
+      token: "tok",
+      userId: "u1",
+      ipAddress: "127.0.0.1",
+      userAgent: "test",
+      expiresAt: new Date(Date.now() + 60_000),
+      createdAt: new Date(),
+      twofaVerified: false,
+      webauthnChallenge: null,
+    },
+    user: {
+      id: "u1",
+      identifier: "testuser",
+      displayName: "Test",
+      roleId: "volunteer",
+      isActive: true,
+      createdAt: new Date(),
+    },
+  });
+
+  it("converts ValidationError to BAD_REQUEST", async () => {
+    const testRouter = router({
+      throwsValidation: authedProcedure.mutation(
+        withErrorWrapping(() => {
+          throw new ValidationError("bad input");
+        }),
+      ),
+    });
+    const caller = createCallerFactory(testRouter)(authedCtx);
+    await expectTrpcError(
+      caller.throwsValidation(),
+      "BAD_REQUEST",
+      "bad input",
+    );
+  });
+
+  it("converts AuthError to UNAUTHORIZED", async () => {
+    const testRouter = router({
+      throwsAuth: authedProcedure.mutation(
+        withErrorWrapping(() => {
+          throw new AuthError("invalid");
+        }),
+      ),
+    });
+    const caller = createCallerFactory(testRouter)(authedCtx);
+    await expectTrpcError(caller.throwsAuth(), "UNAUTHORIZED", "invalid");
+  });
+
+  it("passes through non-AppError unchanged", async () => {
+    const testRouter = router({
+      throwsPlain: authedProcedure.mutation(
+        withErrorWrapping(() => {
+          throw new TypeError("not an app error");
+        }),
+      ),
+    });
+    const caller = createCallerFactory(testRouter)(authedCtx);
+    await expect(caller.throwsPlain()).rejects.toThrow("not an app error");
+  });
+
+  it("returns successful results unchanged", async () => {
+    const testRouter = router({
+      works: authedProcedure.query(withErrorWrapping(() => "success")),
+    });
+    const caller = createCallerFactory(testRouter)(authedCtx);
+    const result = await caller.works();
+    expect(result).toBe("success");
+  });
+
+  it("converts NotFoundError to NOT_FOUND with authed2faProcedure", async () => {
+    const verified2faCtx = baseCtx({
+      org: fakeOrg,
+      session: {
+        id: "s1",
+        token: "tok",
+        userId: "u1",
+        ipAddress: "127.0.0.1",
+        userAgent: "test",
+        expiresAt: new Date(Date.now() + 60_000),
+        createdAt: new Date(),
+        twofaVerified: true,
+        webauthnChallenge: null,
+      },
+      user: {
+        id: "u1",
+        identifier: "testuser",
+        displayName: "Test",
+        roleId: "volunteer",
+        isActive: true,
+        createdAt: new Date(),
+      },
+    });
+    const testRouter = router({
+      throwsNotFound: authed2faProcedure.mutation(
+        withErrorWrapping(() => {
+          throw new NotFoundError("gone");
+        }),
+      ),
+    });
+    const caller = createCallerFactory(testRouter)(verified2faCtx);
+    await expectTrpcError(caller.throwsNotFound(), "NOT_FOUND", "gone");
   });
 });

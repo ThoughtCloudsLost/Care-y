@@ -72,7 +72,7 @@ export function createSmtpEmailSender(
 export function createConsoleEmailSender(): EmailSender {
   return {
     async send(message: EmailMessage): Promise<void> {
-      // eslint-disable-next-line no-console
+      await Promise.resolve();
       console.log(
         `[email] to=<redacted> subject="${message.subject}" length=${String(message.text.length)}`,
       );
@@ -86,7 +86,7 @@ export function createEmailSender(
   smtpPort: number | undefined,
   from: string,
 ): EmailSender {
-  if (smtpHost && smtpPort) {
+  if (smtpHost !== undefined && smtpHost !== "" && smtpPort !== undefined) {
     return createSmtpEmailSender(smtpHost, smtpPort, from);
   }
   return createConsoleEmailSender();

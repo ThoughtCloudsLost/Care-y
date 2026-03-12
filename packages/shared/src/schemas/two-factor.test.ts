@@ -170,6 +170,9 @@ describe("webauthnRegistrationResponseSchema", () => {
     response: {
       clientDataJSON: "eyJ0eXBlIjoiY3JlYXRlIn0",
       attestationObject: "o2NmbXRkbm9uZQ",
+      authenticatorData: "SZYN5YgOjGh0NBcPZHZgW4_krrmihjLHmVzzuoMdl2M",
+      publicKey: "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE",
+      publicKeyAlgorithm: -7,
       transports: ["internal"],
     },
   };
@@ -212,12 +215,11 @@ describe("webauthnRegistrationResponseSchema", () => {
   });
 
   it("accepts without transports (optional)", () => {
+    const { transports: _, ...responseWithoutTransports } =
+      validRegistration.response;
     const noTransports = {
       ...validRegistration,
-      response: {
-        clientDataJSON: validRegistration.response.clientDataJSON,
-        attestationObject: validRegistration.response.attestationObject,
-      },
+      response: responseWithoutTransports,
     };
     expect(
       webauthnRegistrationResponseSchema.safeParse(noTransports).success,
@@ -260,6 +262,40 @@ describe("webauthnRegistrationResponseSchema", () => {
     const result = webauthnRegistrationResponseSchema.safeParse({
       ...validRegistration,
       response: { ...validRegistration.response, attestationObject: "" },
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects empty authenticatorData", () => {
+    const result = webauthnRegistrationResponseSchema.safeParse({
+      ...validRegistration,
+      response: { ...validRegistration.response, authenticatorData: "" },
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects empty publicKey", () => {
+    const result = webauthnRegistrationResponseSchema.safeParse({
+      ...validRegistration,
+      response: { ...validRegistration.response, publicKey: "" },
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects missing publicKeyAlgorithm", () => {
+    const { publicKeyAlgorithm: _, ...responseWithout } =
+      validRegistration.response;
+    const result = webauthnRegistrationResponseSchema.safeParse({
+      ...validRegistration,
+      response: responseWithout,
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects non-number publicKeyAlgorithm", () => {
+    const result = webauthnRegistrationResponseSchema.safeParse({
+      ...validRegistration,
+      response: { ...validRegistration.response, publicKeyAlgorithm: "ES256" },
     });
     expect(result.success).toBe(false);
   });

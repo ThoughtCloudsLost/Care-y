@@ -53,7 +53,13 @@ export const backupCodeVerifySchema = z.object({
 
 /**
  * WebAuthn registration response from the browser.
- * Fields match the PublicKeyCredential shape returned by navigator.credentials.create().
+ *
+ * Includes Level 3 fields (authenticatorData, publicKey, publicKeyAlgorithm)
+ * which modern browsers provide. The vendored server verification code reads
+ * these fields in toRegistrationResult() (parsers.ts).
+ *
+ * authenticatorAttachment is nullable because Firefox historically omits it
+ * and browsers may send null (W3C spec allows it).
  */
 export const webauthnRegistrationResponseSchema = z.object({
   id: z.string().min(1),
@@ -66,13 +72,16 @@ export const webauthnRegistrationResponseSchema = z.object({
   response: z.object({
     clientDataJSON: z.string().min(1),
     attestationObject: z.string().min(1),
+    authenticatorData: z.string().min(1),
+    publicKey: z.string().min(1),
+    publicKeyAlgorithm: z.number(),
     transports: z.array(z.string()).optional(),
   }),
 });
 
 /**
  * WebAuthn assertion response from the browser.
- * Fields match the PublicKeyCredential shape returned by navigator.credentials.get().
+ * authenticatorAttachment and userHandle are nullable (see registration schema).
  */
 export const webauthnAssertionResponseSchema = z.object({
   id: z.string().min(1),

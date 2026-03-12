@@ -15,6 +15,7 @@ import {
   createTestDb,
   createTestUser,
   createMockEmailSender,
+  extractEmailCode,
   type TestDb,
 } from "../test-utils.js";
 import { createEmailCodeService, type EmailCodeService } from "./email-code.js";
@@ -156,9 +157,7 @@ describe.skipIf(!process.env.DATABASE_URL)("EmailCodeService", () => {
       await service.sendCode(user.id, "user@example.com");
 
       // Extract the code from the email body
-      const match = /(\d{6})/.exec(sender.calls[0]!.text);
-      expect(match).not.toBeNull();
-      const code = match![1]!;
+      const code = extractEmailCode(sender.calls[0]!.text);
 
       const result = await service.verifyCode(user.id, code);
       expect(result).toBe(true);

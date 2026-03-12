@@ -113,6 +113,7 @@ export default tseslint.config(
             "createAppRouter",
             "createAuthRouter",
             "createOrgRouter",
+            "createTwoFactorRouter",
           ],
         },
       ],

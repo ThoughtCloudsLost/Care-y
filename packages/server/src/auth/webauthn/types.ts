@@ -59,15 +59,19 @@ export interface AuthenticationResult {
   readonly credentialId: Base64URLString;
   readonly userVerified: boolean;
   readonly signCount: number;
-  readonly authenticatorAttachment?: string | undefined;
+  readonly authenticatorAttachment?: string | null;
 }
 
-/** Registration response JSON from the browser (base64url-encoded fields). */
+/**
+ * Registration response JSON from the browser (base64url-encoded fields).
+ * authenticatorAttachment accepts null because browsers may send null (Firefox
+ * historically omits it, W3C spec allows null). See github/webauthn-json#73.
+ */
 export interface RegistrationResponseJSON {
   readonly id: Base64URLString;
   readonly rawId: Base64URLString;
   readonly type: string;
-  readonly authenticatorAttachment?: string;
+  readonly authenticatorAttachment?: string | null;
   readonly response: {
     readonly attestationObject: Base64URLString;
     readonly authenticatorData: Base64URLString;
@@ -78,17 +82,21 @@ export interface RegistrationResponseJSON {
   };
 }
 
-/** Authentication response JSON from the browser (base64url-encoded fields). */
+/**
+ * Authentication response JSON from the browser (base64url-encoded fields).
+ * See RegistrationResponseJSON for why authenticatorAttachment accepts null.
+ * userHandle is nullable per the WebAuthn spec (absent when no user handle).
+ */
 export interface AuthenticationResponseJSON {
   readonly id: Base64URLString;
   readonly rawId: Base64URLString;
   readonly type: string;
-  readonly authenticatorAttachment?: string;
+  readonly authenticatorAttachment?: string | null;
   readonly response: {
     readonly clientDataJSON: Base64URLString;
     readonly authenticatorData: Base64URLString;
     readonly signature: Base64URLString;
-    readonly userHandle?: Base64URLString;
+    readonly userHandle?: Base64URLString | null;
   };
 }
 

@@ -456,3 +456,15 @@ export async function enrollTotp(
   await twoFactor.verifyTotpEnrollment(userId, validCode);
   return secret;
 }
+
+/**
+ * Extracts a 6-digit verification code from email text.
+ * Throws if no code is found (test should fail, not silently skip).
+ */
+export function extractEmailCode(text: string): string {
+  const match = /(\d{6})/.exec(text);
+  if (!match) {
+    throw new TestSetupError("No 6-digit code found in email text");
+  }
+  return match[1] as string;
+}
