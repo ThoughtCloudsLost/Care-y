@@ -21,6 +21,7 @@ import {
   createMockEmailSender,
   type TestDb,
 } from "../test-utils.js";
+import { RoleId } from "@care-y/shared";
 import { createScryptHasher } from "../auth/password.js";
 import { createInMemoryRateLimiter } from "../ratelimit/rate-limiter.js";
 import { createDbSessionRepository } from "../auth/session-repository.js";
@@ -237,7 +238,7 @@ describe.skipIf(!HAS_DB)("auth + org routers (DB integration)", () => {
         identifier: "newuser",
         password: "a-very-long-password-16",
         displayName: "New User",
-        roleId: "volunteer",
+        roleId: RoleId.VOLUNTEER,
       }),
       "UNAUTHORIZED",
       "Not authenticated",
@@ -250,7 +251,7 @@ describe.skipIf(!HAS_DB)("auth + org routers (DB integration)", () => {
       identifier: "admin-bootstrap",
       password: "admin-password-long-enough",
       displayName: "Admin Bootstrap",
-      roleId: "admin",
+      roleId: RoleId.ADMIN,
     });
 
     const { caller } = createAuthedCaller(admin, "admin-token");
@@ -258,12 +259,12 @@ describe.skipIf(!HAS_DB)("auth + org routers (DB integration)", () => {
       identifier: "invited-user",
       password: "invited-password-long-enough",
       displayName: "Invited User",
-      roleId: "volunteer",
+      roleId: RoleId.VOLUNTEER,
     });
 
     expect(result.user.identifier).toBe("invited-user");
     expect(result.user.displayName).toBe("Invited User");
-    expect(result.user.roleId).toBe("volunteer");
+    expect(result.user.roleId).toBe(RoleId.VOLUNTEER);
   });
 
   // --- Auth: login ---
@@ -274,7 +275,7 @@ describe.skipIf(!HAS_DB)("auth + org routers (DB integration)", () => {
       identifier: "loginuser",
       password: "login-password-long-enough",
       displayName: "Login User",
-      roleId: "volunteer",
+      roleId: RoleId.VOLUNTEER,
     });
 
     loginLimiter.reset("127.0.0.1");
@@ -327,7 +328,7 @@ describe.skipIf(!HAS_DB)("auth + org routers (DB integration)", () => {
       identifier: "logoutuser",
       password: "logout-password-long-enough",
       displayName: "Logout User",
-      roleId: "volunteer",
+      roleId: RoleId.VOLUNTEER,
     });
 
     const loginResult = await authService.login({
@@ -357,7 +358,7 @@ describe.skipIf(!HAS_DB)("auth + org routers (DB integration)", () => {
       identifier: "meuser",
       password: "me-password-long-enough-16",
       displayName: "Me User",
-      roleId: "volunteer",
+      roleId: RoleId.VOLUNTEER,
     });
 
     const { caller } = createAuthedCaller(user, "me-token");
@@ -365,7 +366,7 @@ describe.skipIf(!HAS_DB)("auth + org routers (DB integration)", () => {
 
     expect(result.user.identifier).toBe("meuser");
     expect(result.user.displayName).toBe("Me User");
-    expect(result.user.roleId).toBe("volunteer");
+    expect(result.user.roleId).toBe(RoleId.VOLUNTEER);
   });
 
   it("auth.me rejects unauthenticated caller", async () => {
@@ -385,7 +386,7 @@ describe.skipIf(!HAS_DB)("auth + org routers (DB integration)", () => {
       identifier: "xff-user",
       password: "xff-password-long-enough",
       displayName: "XFF User",
-      roleId: "volunteer",
+      roleId: RoleId.VOLUNTEER,
     });
 
     const isolatedLimiter = createInMemoryRateLimiter({
@@ -412,7 +413,7 @@ describe.skipIf(!HAS_DB)("auth + org routers (DB integration)", () => {
       identifier: "dup-admin",
       password: "dup-admin-password-long-enough",
       displayName: "Dup Admin",
-      roleId: "admin",
+      roleId: RoleId.ADMIN,
     });
 
     const { caller } = createAuthedCaller(admin, "dup-admin-token");
@@ -422,7 +423,7 @@ describe.skipIf(!HAS_DB)("auth + org routers (DB integration)", () => {
       identifier: "dup-target",
       password: "dup-target-password-long-enough",
       displayName: "First",
-      roleId: "volunteer",
+      roleId: RoleId.VOLUNTEER,
     });
 
     // Second registration with same identifier fails through throwAsTrpc
@@ -432,7 +433,7 @@ describe.skipIf(!HAS_DB)("auth + org routers (DB integration)", () => {
         identifier: "dup-target",
         password: "dup-target-password-long-enough",
         displayName: "Second",
-        roleId: "volunteer",
+        roleId: RoleId.VOLUNTEER,
       }),
     ).rejects.toThrow("already exists");
   });
@@ -445,7 +446,7 @@ describe.skipIf(!HAS_DB)("auth + org routers (DB integration)", () => {
       identifier: "no-ua-user",
       password: "no-ua-password-long-enough",
       displayName: "No UA User",
-      roleId: "volunteer",
+      roleId: RoleId.VOLUNTEER,
     });
 
     loginLimiter.reset("127.0.0.1");
@@ -470,7 +471,7 @@ describe.skipIf(!HAS_DB)("auth + org routers (DB integration)", () => {
       identifier: "email-admin",
       password: "email-admin-password-long-enough",
       displayName: "Email Admin",
-      roleId: "admin",
+      roleId: RoleId.ADMIN,
     });
 
     const { caller } = createAuthedCaller(admin, "email-admin-token");
@@ -479,7 +480,7 @@ describe.skipIf(!HAS_DB)("auth + org routers (DB integration)", () => {
       password: "email-user-password-long-enough",
       displayName: "Email User",
       notificationEmail: "user@example.com",
-      roleId: "volunteer",
+      roleId: RoleId.VOLUNTEER,
     });
 
     expect(result.user.identifier).toBe("email-user");

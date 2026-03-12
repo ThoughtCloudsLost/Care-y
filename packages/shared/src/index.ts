@@ -23,7 +23,18 @@ export {
   loginInputSchema,
   registerInputSchema,
   getSaltInputSchema,
+  assignRoleInputSchema,
+  setPiiRetentionInputSchema,
 } from "./schemas/auth.js";
+
+// --- Roles and permissions ---
+export {
+  RoleId,
+  type RoleIdValue,
+  ROLE_ID_VALUES,
+  ROLE_ID_VALUES_TUPLE,
+  Permission,
+} from "./roles.js";
 
 // --- Two-factor authentication ---
 export {

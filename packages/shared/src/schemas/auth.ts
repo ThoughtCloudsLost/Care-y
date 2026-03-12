@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { ROLE_ID_VALUES_TUPLE } from "../roles.js";
 
 export const emailSchema = z
   .string()
@@ -44,4 +45,13 @@ export const registerInputSchema = z.object({
 
 export const getSaltInputSchema = z.object({
   identifier: identifierSchema,
+});
+
+export const assignRoleInputSchema = z.object({
+  userId: z.uuid(),
+  roleId: z.enum(ROLE_ID_VALUES_TUPLE),
+});
+
+export const setPiiRetentionInputSchema = z.object({
+  days: z.number().int().min(1).max(3650).nullable(),
 });

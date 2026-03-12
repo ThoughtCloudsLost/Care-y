@@ -9,6 +9,8 @@
 
 import { initTRPC, TRPCError } from "@trpc/server";
 import type { Context } from "./context.js";
+import { Permission } from "@care-y/shared";
+import { hasPermission } from "../auth/roles.js";
 import {
   isAppError,
   AuthError,
@@ -152,6 +154,52 @@ const require2fa = middleware(async ({ ctx, next }) => {
 
 /** Procedure that requires org + auth + completed 2FA verification. */
 export const authed2faProcedure = authedProcedure.use(require2fa);
+
+/**
+ * Creates a tRPC middleware that requires the authenticated user to have
+ * the specified permission. Must be chained after requireSession + require2fa.
+ *
+ * Throws a generic FORBIDDEN error that does not reveal which permission
+ * was required or what role the user has (prevents role enumeration).
+ */
+// care-y-ignore-next-line missing-return-type -- tRPC's MiddlewareBuilder is an internal generic not exported for annotation; requireOrg/requireSession in this file use the same pattern
+// eslint-disable-next-line @typescript-eslint/explicit-module-boundary-types -- same reason as above
+export function requireRole(permission: Permission) {
+  return middleware(async ({ ctx, next }) => {
+    if (!ctx.session || !ctx.user || !ctx.org) {
+      throw new TRPCError({
+        code: "UNAUTHORIZED",
+        message: "Not authenticated",
+      });
+    }
+
+    if (!hasPermission(ctx.user.roleId, permission)) {
+      throw new TRPCError({
+        code: "FORBIDDEN",
+        message: "Insufficient permissions",
+      });
+    }
+
+    return next({
+      ctx: { ...ctx, org: ctx.org, session: ctx.session, user: ctx.user },
+    });
+  });
+}
+
+/** Procedure that requires org + auth + 2FA + at least volunteer-level permissions. */
+export const volunteerProcedure = authed2faProcedure.use(
+  requireRole(Permission.VIEW_TICKETS),
+);
+
+/** Procedure that requires org + auth + 2FA + manager-level permissions. */
+export const managerProcedure = authed2faProcedure.use(
+  requireRole(Permission.MANAGE_USERS),
+);
+
+/** Procedure that requires org + auth + 2FA + admin-level permissions. */
+export const adminProcedure = authed2faProcedure.use(
+  requireRole(Permission.MANAGE_ROLES),
+);
 
 /**
  * Wraps a resolver function so that AppErrors thrown by the resolver are

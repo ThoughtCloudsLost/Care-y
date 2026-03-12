@@ -15,15 +15,21 @@ import {
   loginInputSchema,
   registerInputSchema,
   getSaltInputSchema,
+  assignRoleInputSchema,
+  setPiiRetentionInputSchema,
+  RoleId,
+  Permission,
 } from "@care-y/shared";
-import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import {
   router,
   orgProcedure,
   authedProcedure,
+  adminProcedure,
   withErrorWrapping,
 } from "../trpc/trpc.js";
+import { hasPermission, getDefaultRoleId } from "../auth/roles.js";
+import { ForbiddenError, NotFoundError, RateLimitError } from "../errors.js";
 import type { RateLimiter } from "../ratelimit/rate-limiter.js";
 import type { UserRecord } from "../auth/service.js";
 import { SESSION_MAX_AGE_MS } from "../auth/service.js";
@@ -31,7 +37,6 @@ import {
   buildSessionCookie,
   buildClearSessionCookie,
 } from "../auth/cookies.js";
-import { RateLimitError } from "../errors.js";
 import { extractClientIp } from "../http/request-utils.js";
 import {
   createScopedAuthService,
@@ -180,11 +185,26 @@ export function createAuthRouter(deps: AuthRouterDeps) {
     ),
 
     register: authedProcedure
-      .input(registerInputSchema.extend({ roleId: z.string().min(1) }))
+      .input(
+        registerInputSchema.extend({
+          roleId: assignRoleInputSchema.shape.roleId.optional(),
+        }),
+      )
       .mutation(
         withErrorWrapping(async ({ ctx, input }) => {
-          const authService = createScopedAuthService(ctx.org, deps);
+          const effectiveRoleId = input.roleId ?? getDefaultRoleId();
 
+          // Non-default roles require MANAGE_ROLES permission.
+          if (
+            effectiveRoleId !== getDefaultRoleId() &&
+            !hasPermission(ctx.user.roleId, Permission.MANAGE_ROLES)
+          ) {
+            throw new ForbiddenError(
+              "Only admins can register users with non-default roles",
+            );
+          }
+
+          const authService = createScopedAuthService(ctx.org, deps);
           const user = await authService.register({
             identifier: input.identifier,
             password: input.password,
@@ -192,7 +212,7 @@ export function createAuthRouter(deps: AuthRouterDeps) {
             ...(input.notificationEmail !== undefined && {
               notificationEmail: input.notificationEmail,
             }),
-            roleId: input.roleId,
+            roleId: effectiveRoleId,
           });
 
           return { user: toUserResponse(user) };
@@ -210,5 +230,45 @@ export function createAuthRouter(deps: AuthRouterDeps) {
     me: authedProcedure.query(({ ctx }) => {
       return { user: toUserResponse(ctx.user) };
     }),
+
+    assignRole: adminProcedure.input(assignRoleInputSchema).mutation(
+      withErrorWrapping(async ({ ctx, input }) => {
+        // Self-assignment protection: admins cannot change their own role.
+        if (input.userId === ctx.user.id) {
+          throw new ForbiddenError("Cannot change your own role");
+        }
+
+        const authService = createScopedAuthService(ctx.org, deps);
+        const targetUser = await authService.findUserById(input.userId);
+        if (!targetUser) {
+          throw new NotFoundError("User not found");
+        }
+
+        // Last-admin protection: if demoting an admin, ensure at least one other remains.
+        if (
+          targetUser.roleId === RoleId.ADMIN &&
+          input.roleId !== RoleId.ADMIN
+        ) {
+          const adminCount = await authService.countActiveAdmins();
+          if (adminCount <= 1) {
+            throw new ForbiddenError("Cannot demote the last admin");
+          }
+        }
+
+        const updated = await authService.updateUserRole(
+          input.userId,
+          input.roleId,
+        );
+        return { user: toUserResponse(updated) };
+      }),
+    ),
+
+    setPiiRetention: adminProcedure.input(setPiiRetentionInputSchema).mutation(
+      withErrorWrapping(async ({ ctx, input }) => {
+        const authService = createScopedAuthService(ctx.org, deps);
+        await authService.setPiiRetentionDays(input.days);
+        return { success: true as const };
+      }),
+    ),
   });
 }

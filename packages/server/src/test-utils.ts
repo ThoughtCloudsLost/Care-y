@@ -222,7 +222,7 @@ export async function createTestUser(
     password_hash: DEFAULT_PASSWORD_HASH,
     encrypted_display_name: encryptor.encrypt(`Test User ${uid}`),
     encrypted_notification_addr: null,
-    role_id: "volunteer",
+    role_id: RoleId.VOLUNTEER,
   };
 
   return db
@@ -325,7 +325,7 @@ import { TRPCError } from "@trpc/server";
 import type { EmailSender, EmailMessage } from "./email/email-sender.js";
 import { generateTotpCode, base32Decode } from "./auth/totp.js";
 import type { TwoFactorService } from "./auth/two-factor-service.js";
-import { TwoFactorMethod } from "@care-y/shared";
+import { TwoFactorMethod, RoleId } from "@care-y/shared";
 
 /**
  * Asserts that a promise rejects with a TRPCError having the expected code.
