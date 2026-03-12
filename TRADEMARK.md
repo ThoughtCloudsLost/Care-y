@@ -2,7 +2,7 @@
 
 **Copyright (c) CARE-Y Org**
 
-*This document will be updated with the legal entity name before public release.*
+_This document will be updated with the legal entity name before public release._
 
 ---
 
@@ -15,7 +15,6 @@ The name "CARE-Y" and the CARE-Y logo (when released) are common-law trademarks 
 > "Declining to grant rights under trademark law for use of some trade names, trademarks, or service marks."
 >
 > Source: https://www.gnu.org/licenses/agpl-3.0.en.html
-
 
 ---
 
@@ -83,6 +82,6 @@ To request permission for a use not covered by this policy, or to report a poten
 
 ## Document History
 
-| Date | Change |
-|------|--------|
+| Date       | Change                                                                           |
+| ---------- | -------------------------------------------------------------------------------- |
 | 2026-03-04 | Initial draft. Copyright holder is a placeholder pending legal entity formation. |

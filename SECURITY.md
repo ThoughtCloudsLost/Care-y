@@ -17,6 +17,7 @@ Include:
 - Potential impact assessment
 
 ## TODO: add key before release
+
 If you can, encrypt your report with our PGP key _(key to be published here before first public release)_.
 
 ## What to Expect
