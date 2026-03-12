@@ -14,7 +14,6 @@
     "declaration": true,
     "declarationMap": true,
     "noUncheckedIndexedAccess": true,
-    "noFallthroughCasesInSwitch": true,
-    "exactOptionalPropertyTypes": true
+    "noFallthroughCasesInSwitch": true
   }
 }

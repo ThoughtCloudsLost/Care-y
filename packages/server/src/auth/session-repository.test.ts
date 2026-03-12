@@ -222,4 +222,74 @@ describe.skipIf(!process.env.DATABASE_URL)("createDbSessionRepository", () => {
       expect(session.userAgent).toBe("SecretAgent/1.0");
     }
   });
+
+  // --- 2FA session extensions ---
+
+  it("new sessions have twofaVerified=false and webauthnChallenge=null", async () => {
+    const user = await createTestUser(testDb.db);
+    const session = await repo.create({
+      token: "tok-2fa-defaults",
+      userId: user.id,
+      ipAddress: "127.0.0.1",
+      userAgent: "test",
+      expiresAt: new Date(Date.now() + 3600_000),
+    });
+
+    expect(session.twofaVerified).toBe(false);
+    expect(session.webauthnChallenge).toBeNull();
+  });
+
+  it("markTwoFactorVerified sets twofaVerified to true", async () => {
+    const user = await createTestUser(testDb.db);
+    const session = await repo.create({
+      token: "tok-mark-2fa",
+      userId: user.id,
+      ipAddress: "127.0.0.1",
+      userAgent: "test",
+      expiresAt: new Date(Date.now() + 3600_000),
+    });
+
+    await repo.markTwoFactorVerified(session.token);
+
+    const found = await repo.findByToken(session.token);
+    expect(found!.twofaVerified).toBe(true);
+  });
+
+  it("clearTwoFactorVerified sets twofaVerified to false", async () => {
+    const user = await createTestUser(testDb.db);
+    const session = await repo.create({
+      token: "tok-clear-2fa",
+      userId: user.id,
+      ipAddress: "127.0.0.1",
+      userAgent: "test",
+      expiresAt: new Date(Date.now() + 3600_000),
+    });
+
+    await repo.markTwoFactorVerified(session.token);
+    await repo.clearTwoFactorVerified(session.token);
+
+    const found = await repo.findByToken(session.token);
+    expect(found!.twofaVerified).toBe(false);
+  });
+
+  it("setWebauthnChallenge stores and clears challenge", async () => {
+    const user = await createTestUser(testDb.db);
+    const session = await repo.create({
+      token: "tok-webauthn-ch",
+      userId: user.id,
+      ipAddress: "127.0.0.1",
+      userAgent: "test",
+      expiresAt: new Date(Date.now() + 3600_000),
+    });
+
+    // Set challenge
+    await repo.setWebauthnChallenge(session.token, "test-challenge-abc");
+    let found = await repo.findByToken(session.token);
+    expect(found!.webauthnChallenge).toBe("test-challenge-abc");
+
+    // Clear challenge
+    await repo.setWebauthnChallenge(session.token, null);
+    found = await repo.findByToken(session.token);
+    expect(found!.webauthnChallenge).toBeNull();
+  });
 });

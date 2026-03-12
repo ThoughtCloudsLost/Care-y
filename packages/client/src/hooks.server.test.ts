@@ -15,6 +15,11 @@ import { handle, handleError } from "./hooks.server.js";
 
 // --- Test helpers ---
 
+interface AppError {
+  id: string;
+  message: string;
+}
+
 interface MockLocals {
   orgSlug: string | null;
 }
@@ -242,7 +247,7 @@ describe("handleError", () => {
       event: event as never,
       status: 500,
       message: "Internal Error",
-    });
+    }) as AppError;
 
     expect(result).toHaveProperty("message", "An error occurred");
     expect(result).toHaveProperty("id");
@@ -266,7 +271,7 @@ describe("handleError", () => {
       event: event as never,
       status: 503,
       message: "Service Unavailable",
-    });
+    }) as AppError;
 
     expect(errorSpy).toHaveBeenCalledOnce();
 
@@ -294,7 +299,7 @@ describe("handleError", () => {
       event: event as never,
       status: 500,
       message: "Internal Error",
-    });
+    }) as AppError;
 
     expect(result.message).toBe("An error occurred");
 

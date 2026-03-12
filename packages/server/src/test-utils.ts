@@ -222,7 +222,7 @@ export async function createTestUser(
     password_hash: DEFAULT_PASSWORD_HASH,
     encrypted_display_name: encryptor.encrypt(`Test User ${uid}`),
     encrypted_notification_addr: null,
-    role_id: "volunteer",
+    role_id: RoleId.VOLUNTEER,
   };
 
   return db
@@ -262,7 +262,7 @@ export async function createTestSession(
 // ---------------------------------------------------------------------------
 
 export interface MockReqOptions {
-  headers?: Record<string, string>;
+  headers?: Record<string, string | undefined>;
   remoteAddress?: string;
 }
 
@@ -322,6 +322,10 @@ export function mockRes(): MockResWithCookies {
 
 import { expect } from "vitest";
 import { TRPCError } from "@trpc/server";
+import type { EmailSender, EmailMessage } from "./email/email-sender.js";
+import { generateTotpCode, base32Decode } from "./auth/totp.js";
+import type { TwoFactorService } from "./auth/two-factor-service.js";
+import { TwoFactorMethod, RoleId } from "@care-y/shared";
 
 /**
  * Asserts that a promise rejects with a TRPCError having the expected code.
@@ -356,4 +360,111 @@ export async function expectTrpcError(
     }
   }
   return trpcErr;
+}
+
+// ---------------------------------------------------------------------------
+// Mock email sender
+// ---------------------------------------------------------------------------
+
+export interface MockEmailSender extends EmailSender {
+  /** Captured send() calls for assertion. */
+  readonly calls: ReadonlyArray<{ to: string; subject: string; text: string }>;
+}
+
+/**
+ * Creates a mock EmailSender that records every send() call.
+ * Tests that need to inspect emails read `.calls`; tests that don't just
+ * ignore it.
+ */
+export function createMockEmailSender(): MockEmailSender {
+  const calls: { to: string; subject: string; text: string }[] = [];
+  return {
+    get calls() {
+      return calls;
+    },
+    async send(message: EmailMessage): Promise<void> {
+      calls.push({
+        to: message.to,
+        subject: message.subject,
+        text: message.text,
+      });
+    },
+  };
+}
+
+// ---------------------------------------------------------------------------
+// 2FA test helpers
+// ---------------------------------------------------------------------------
+
+/**
+ * Inserts a row into two_factor_methods directly (bypasses service logic).
+ * Useful for setting up preconditions where a method is already registered.
+ */
+export async function registerMethodDirectly(
+  db: Kysely<TenantDatabase>,
+  userId: string,
+  methodType: string,
+): Promise<void> {
+  await db
+    .insertInto("two_factor_methods")
+    .values({ user_id: userId, method_type: methodType })
+    .execute();
+}
+
+/**
+ * Inserts a WebAuthn credential row directly and registers the WebAuthn
+ * method. Useful for tests that need a credential present without going
+ * through the full WebAuthn registration flow.
+ */
+export async function insertWebauthnCredential(
+  db: Kysely<TenantDatabase>,
+  userId: string,
+  credentialId: string,
+  signCount = 0,
+  ordinal = 1,
+): Promise<void> {
+  await db
+    .insertInto("webauthn_credentials")
+    .values({
+      user_id: userId,
+      credential_id: credentialId,
+      public_key: "fake-pk",
+      sign_count: signCount,
+      transports: ["internal"],
+      device_type: "platform",
+      backed_up: false,
+      aaguid: "00000000-0000-0000-0000-000000000000",
+      ordinal,
+    })
+    .execute();
+
+  await registerMethodDirectly(db, userId, TwoFactorMethod.WEBAUTHN);
+}
+
+/**
+ * Enrolls TOTP for a user through the full setup+verify flow.
+ * Returns the decoded secret bytes so the caller can generate further
+ * valid codes via `generateTotpCode(secret, timestamp)`.
+ */
+export async function enrollTotp(
+  twoFactor: TwoFactorService,
+  userId: string,
+): Promise<Buffer> {
+  const setup = await twoFactor.setupTotp(userId);
+  const secret = base32Decode(setup.secret);
+  const validCode = generateTotpCode(secret, Date.now());
+  await twoFactor.verifyTotpEnrollment(userId, validCode);
+  return secret;
+}
+
+/**
+ * Extracts a 6-digit verification code from email text.
+ * Throws if no code is found (test should fail, not silently skip).
+ */
+export function extractEmailCode(text: string): string {
+  const match = /(\d{6})/.exec(text);
+  if (!match) {
+    throw new TestSetupError("No 6-digit code found in email text");
+  }
+  return match[1] as string;
 }

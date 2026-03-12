@@ -47,6 +47,8 @@ export interface SessionsTable {
   encrypted_user_agent: Buffer;
   expires_at: Date;
   created_at: Generated<Date>;
+  twofa_verified: ColumnType<boolean, boolean | undefined, boolean>;
+  webauthn_challenge: string | null;
 }
 
 export interface OrgConfigTable {
@@ -60,11 +62,74 @@ export interface OrgConfigTable {
   updated_at: ColumnType<Date, Date | undefined, Date>;
 }
 
+// --- Salt Defense (user_keys stub) ---
+// The crypto layer extends this table with vol_public, pq_public, key_version,
+// rotated_at via ALTER TABLE migration. Do NOT add those columns here.
+export interface UserKeysStubTable {
+  user_id: string;
+  salt: Buffer;
+  created_at: Generated<Date>;
+}
+
+// --- WebAuthn credentials ---
+export interface WebauthnCredentialsTable {
+  id: Generated<string>;
+  user_id: string;
+  credential_id: string;
+  public_key: string;
+  sign_count: ColumnType<number, number | undefined, number>;
+  transports: string[] | null;
+  device_type: string | null;
+  backed_up: ColumnType<boolean, boolean | undefined, boolean>;
+  aaguid: string | null;
+  ordinal: number;
+}
+
+// --- TOTP secrets ---
+export interface TotpSecretsTable {
+  id: Generated<string>;
+  user_id: string;
+  encrypted_secret: Buffer;
+  verified: ColumnType<boolean, boolean | undefined, boolean>;
+}
+
+// --- Email verification codes ---
+export interface EmailCodesTable {
+  id: Generated<string>;
+  user_id: string;
+  code_hash: string;
+  expires_at: Date;
+  attempts: ColumnType<number, number | undefined, number>;
+  consumed: ColumnType<boolean, boolean | undefined, boolean>;
+}
+
+// --- Backup codes ---
+export interface BackupCodesTable {
+  id: Generated<string>;
+  user_id: string;
+  code_hash: string;
+  is_used: ColumnType<boolean, boolean | undefined, boolean>;
+}
+
+// --- 2FA method registry ---
+export interface TwoFactorMethodsTable {
+  id: Generated<string>;
+  user_id: string;
+  method_type: string;
+  is_active: ColumnType<boolean, boolean | undefined, boolean>;
+}
+
 export interface TenantDatabase {
   users: UsersTable;
   sessions: SessionsTable;
   org_config: OrgConfigTable;
-  // Cryptography (user_keys, ticket_key_wraps)
+  user_keys: UserKeysStubTable;
+  webauthn_credentials: WebauthnCredentialsTable;
+  totp_secrets: TotpSecretsTable;
+  email_codes: EmailCodesTable;
+  backup_codes: BackupCodesTable;
+  two_factor_methods: TwoFactorMethodsTable;
+  // Cryptography (ticket_key_wraps)
   // Tickets (tickets, followups, audit_log)
   // Shifts (shifts, shift_occurrences)
   // Client portal (portal_channels)

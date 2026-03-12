@@ -22,4 +22,46 @@ export {
   identifierSchema,
   loginInputSchema,
   registerInputSchema,
+  getSaltInputSchema,
+  assignRoleInputSchema,
+  setPiiRetentionInputSchema,
 } from "./schemas/auth.js";
+
+// --- Roles and permissions ---
+export {
+  RoleId,
+  type RoleIdValue,
+  ROLE_ID_VALUES,
+  ROLE_ID_VALUES_TUPLE,
+  Permission,
+} from "./roles.js";
+
+// --- Two-factor authentication ---
+export {
+  TwoFactorMethod,
+  AVAILABLE_METHODS,
+  STUBBED_METHODS,
+  METHOD_INFO,
+  type TwoFactorMethodType,
+  type WebauthnCategory,
+  type TwoFactorMethodInfo,
+  type EnrolledMethod,
+  type TwoFactorStatus,
+} from "./two-factor-types.js";
+
+export {
+  totpVerifySchema,
+  emailCodeVerifySchema,
+  backupCodeVerifySchema,
+  webauthnRegistrationResponseSchema,
+  webauthnAssertionResponseSchema,
+  removeMethodSchema,
+  enrolledMethodResponseSchema,
+  twoFactorStatusResponseSchema,
+  type TotpVerifyInput,
+  type EmailCodeVerifyInput,
+  type BackupCodeVerifyInput,
+  type WebauthnRegistrationResponse,
+  type WebauthnAssertionResponse,
+  type RemoveMethodInput,
+} from "./schemas/two-factor.js";

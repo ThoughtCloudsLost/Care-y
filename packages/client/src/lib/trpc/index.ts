@@ -24,7 +24,6 @@ export const trpc: TRPCClient<AppRouter> = createTRPCClient<AppRouter>({
       // tRPC's RequestInitEsque has signal?: AbortSignal | undefined, incompatible
       // with native fetch's RequestInit under exactOptionalPropertyTypes (trpc/trpc#1904)
       async fetch(url, options) {
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion
         return fetch(url, {
           ...options,
           credentials: "include",

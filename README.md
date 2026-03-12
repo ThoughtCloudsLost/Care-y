@@ -50,12 +50,12 @@ CARE-Y encrypts everything before it leaves the volunteer's browser. The server 
 
 **What this means in practice:**
 
-| What's protected | Who can read it | What an attacker gets if they seize the server |
-| --- | --- | --- |
+| What's protected                                | Who can read it                                      | What an attacker gets if they seize the server                                                                                    |
+| ----------------------------------------------- | ---------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
 | **Client data** (tickets, messages, case notes) | Only the specific volunteers assigned to that ticket | Nothing. Decryption requires the volunteer's password AND both servers in two countries cooperating. No single seizure is enough. |
-| **Org resources** (KB articles, settings) | Any logged-in volunteer in that org | Nothing. Still requires a volunteer's password to unlock. |
-| **Public branding** (logo, name, color) | Anyone who visits the intake page | Visual identity only. This is intentionally public so clients recognize the org. |
-| **Phone credentials** (Twilio config) | The server itself (automated) | Phone system API access only. No client data, no volunteer keys. |
+| **Org resources** (KB articles, settings)       | Any logged-in volunteer in that org                  | Nothing. Still requires a volunteer's password to unlock.                                                                         |
+| **Public branding** (logo, name, color)         | Anyone who visits the intake page                    | Visual identity only. This is intentionally public so clients recognize the org.                                                  |
+| **Phone credentials** (Twilio config)           | The server itself (automated)                        | Phone system API access only. No client data, no volunteer keys.                                                                  |
 
 **Key guarantees:**
 
@@ -84,12 +84,12 @@ CARE-Y uses a dual-tier encryption model. PII (tickets, client data) is protecte
 
 <img src="docs/images/crypto-v2/crypto-v2-mermaid-transparent.png" alt="CARE-Y full crypto key hierarchy: OPRF-based split-key derivation, ECIES per-volunteer wrapping, dual-tier encryption for PII and org data, and operational secrets" width="800">
 
-| Tier | Data | Decryption requires | What's exposed if compromised |
-| ---- | ---- | ------------------- | ----------------------------- |
-| **PII** (OPRF + ECIES) | Tickets, client data, messages | OPRF-derived `masterKey` (via volunteer password + both OPRF servers) + ECIES per-volunteer wrapping of `tk`. No per-ticket server round-trip. | Nothing. No single server holds enough to decrypt PII. |
-| **Non-PII** (org key) | KB articles, org config | Volunteer's `org_unwrap_key` (derived from `masterKey`) to unwrap org private key | Org configuration only. No PII. |
-| **Client branding** | Public-facing branding | Org public key (intentionally public) | Visual assets only (logo, name, color). Already public by design. |
-| **Operational** | Telephony creds, provider config, volunteer identifiers, session metadata | `OPS_SECRETS_KEY` (server secrets file) | Telephony API access and encrypted volunteer/session metadata. No volunteer key material. Full server compromise required to decrypt (DB alone yields ciphertext). |
+| Tier                   | Data                                                                      | Decryption requires                                                                                                                            | What's exposed if compromised                                                                                                                                      |
+| ---------------------- | ------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **PII** (OPRF + ECIES) | Tickets, client data, messages                                            | OPRF-derived `masterKey` (via volunteer password + both OPRF servers) + ECIES per-volunteer wrapping of `tk`. No per-ticket server round-trip. | Nothing. No single server holds enough to decrypt PII.                                                                                                             |
+| **Non-PII** (org key)  | KB articles, org config                                                   | Volunteer's `org_unwrap_key` (derived from `masterKey`) to unwrap org private key                                                              | Org configuration only. No PII.                                                                                                                                    |
+| **Client branding**    | Public-facing branding                                                    | Org public key (intentionally public)                                                                                                          | Visual assets only (logo, name, color). Already public by design.                                                                                                  |
+| **Operational**        | Telephony creds, provider config, volunteer identifiers, session metadata | `OPS_SECRETS_KEY` (server secrets file)                                                                                                        | Telephony API access and encrypted volunteer/session metadata. No volunteer key material. Full server compromise required to decrypt (DB alone yields ciphertext). |
 
 **How PII decryption works (per ticket):**
 
@@ -116,7 +116,7 @@ CARE-Y uses a dual-tier encryption model. PII (tickets, client data) is protecte
 | Frontend        | SvelteKit (Svelte 5 runes) + Konsta UI (mobile) + Bits UI (accessible forms) |
 | API             | tRPC (end-to-end type safety) + TanStack Query (caching)                     |
 | Database        | PostgreSQL + Kysely (SQL query builder, manual migrations)                   |
-| Crypto          | libsodium (`libsodium-wrappers-sumo` browser, `sodium-native` Node)           |
+| Crypto          | libsodium (`libsodium-wrappers-sumo` browser, `sodium-native` Node)          |
 | Testing         | Vitest + fast-check (property-based) + Playwright + axe-core (a11y)          |
 | Telephony       | Twilio (initial) → SignalWire (future, self-hosted voice)                    |
 | Hosting         | Hetzner VPS (EU), LUKS full-disk encryption, Caddy reverse proxy             |

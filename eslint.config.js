@@ -113,6 +113,7 @@ export default tseslint.config(
             "createAppRouter",
             "createAuthRouter",
             "createOrgRouter",
+            "createTwoFactorRouter",
           ],
         },
       ],
@@ -197,10 +198,11 @@ export default tseslint.config(
       "**/vitest.config.ts",
       "**/svelte.config.js",
       "**/vite.config.ts",
-      // Service worker is compiled by SvelteKit separately with its own
-      // tsconfig (no DOM types, $service-worker module). projectService
-      // can't resolve it from the root tsconfigRootDir.
+      // Service worker and its test are compiled by SvelteKit separately
+      // with their own tsconfig (no DOM types, $service-worker module).
+      // projectService can't resolve them from the root tsconfigRootDir.
       "**/service-worker.ts",
+      "**/service-worker.test.ts",
     ],
     ...tseslint.configs.disableTypeChecked,
   },

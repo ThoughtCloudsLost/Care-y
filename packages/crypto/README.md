@@ -8,12 +8,12 @@ See the [root README](../../README.md) for full architecture, stack details, and
 
 ## Tech Stack
 
-| Layer   | Technology           | Role                                                        |
-| ------- | -------------------- | ----------------------------------------------------------- |
-| Crypto  | libsodium            | All cryptographic primitives                                |
-| Browser | `libsodium-wrappers-sumo` | WASM-compiled libsodium (sumo build for ristretto255 API) |
-| Node.js | `sodium-native`      | Native bindings for server-side use                         |
-| Testing | Vitest + fast-check  | Unit tests + property-based testing (target: 100% coverage) |
+| Layer   | Technology                | Role                                                        |
+| ------- | ------------------------- | ----------------------------------------------------------- |
+| Crypto  | libsodium                 | All cryptographic primitives                                |
+| Browser | `libsodium-wrappers-sumo` | WASM-compiled libsodium (sumo build for ristretto255 API)   |
+| Node.js | `sodium-native`           | Native bindings for server-side use                         |
+| Testing | Vitest + fast-check       | Unit tests + property-based testing (target: 100% coverage) |
 
 ---
 
