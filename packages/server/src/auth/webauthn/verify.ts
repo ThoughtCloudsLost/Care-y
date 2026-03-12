@@ -226,15 +226,39 @@ async function verifySignature({
 }
 
 /**
- * Converts an ECDSA signature from ASN.1 DER to raw R||S format.
- * SubtleCrypto.verify() expects raw format for ECDSA.
+ * Converts an ECDSA signature from ASN.1 DER to raw R||S (IEEE P1363) format.
+ *
+ * Authenticators produce ASN.1 DER; SubtleCrypto.verify() requires IEEE P1363
+ * (SEC-199). DER encodes each INTEGER with an optional leading 0x00 byte when
+ * the high bit is set to distinguish positive from negative values. That padding
+ * must be stripped and each component left-padded to the fixed curve length
+ * (32 bytes for P-256) before concatenation (SEC-198, SEC-200).
+ *
+ * The upstream vendored implementation used fixed offsets that fail when both R
+ * and S carry the 0x00 pad (~25% of real P-256 signatures): sig.slice(sStart)
+ * included S's padding byte, producing a 65-byte result that SubtleCrypto
+ * rejects. This implementation reads DER length fields directly.
+ *
+ * DER layout: 0x30 <seqLen> 0x02 <rLen> [0x00] <r> 0x02 <sLen> [0x00] <s>
  */
 function convertASN1toRaw(signatureBuffer: ArrayBuffer): Uint8Array {
   const sig = new Uint8Array(signatureBuffer);
-  const rStart = sig[4] === 0 ? 5 : 4;
-  const rEnd = rStart + 32;
-  const sStart = sig[rEnd + 2] === 0 ? rEnd + 3 : rEnd + 2;
-  const r = sig.slice(rStart, rEnd);
-  const s = sig.slice(sStart);
-  return new Uint8Array([...r, ...s]);
+  // sig[2] = 0x02 (INTEGER tag for R), sig[3] = rLen
+  const rLen = sig[3] ?? 0;
+  const rBytes = sig.slice(4, 4 + rLen);
+  // S INTEGER tag starts right after R
+  const sLenOffset = 4 + rLen + 1; // +1 to skip 0x02 tag
+  // eslint-disable-next-line security/detect-object-injection -- Uint8Array index, not plain object; no prototype pollution risk
+  const sLen = sig[sLenOffset] ?? 0;
+  const sBytes = sig.slice(sLenOffset + 1, sLenOffset + 1 + sLen);
+
+  // Strip DER positive-integer padding and left-pad to 32 bytes (P-256 curve length)
+  function toFixed32(bytes: Uint8Array): Uint8Array {
+    const stripped = bytes[0] === 0x00 ? bytes.slice(1) : bytes;
+    const out = new Uint8Array(32);
+    out.set(stripped, 32 - stripped.length);
+    return out;
+  }
+
+  return new Uint8Array([...toFixed32(rBytes), ...toFixed32(sBytes)]);
 }
