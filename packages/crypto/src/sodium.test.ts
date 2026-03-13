@@ -3,6 +3,7 @@ import {
   getSodium,
   requireSodium,
   _resetSodiumForTesting,
+  _setSodiumForTesting,
   type SodiumBackend,
 } from "./sodium.js";
 import { SodiumNotReadyError } from "./errors.js";
@@ -27,6 +28,20 @@ describe("sodium abstraction layer", () => {
       const fromAsync = await getSodium();
       const fromSync = requireSodium();
       expect(fromSync).toBe(fromAsync);
+    });
+
+    it("_setSodiumForTesting injects a backend that requireSodium returns", async () => {
+      const real = await getSodium();
+      _resetSodiumForTesting();
+      expect(() => requireSodium()).toThrow(SodiumNotReadyError);
+      _setSodiumForTesting(real);
+      expect(requireSodium()).toBe(real);
+    });
+
+    it("getSodium returns cached instance on subsequent calls", async () => {
+      const first = await getSodium();
+      const second = await getSodium();
+      expect(second).toBe(first);
     });
 
     it("concurrent getSodium calls return the same instance", async () => {
@@ -194,6 +209,47 @@ describe("sodium abstraction layer", () => {
         const mac1 = sodium.crypto_auth_hmacsha512(message, key1);
         const mac2 = sodium.crypto_auth_hmacsha512(message, key2);
         expect(mac1).not.toEqual(mac2);
+      });
+    });
+
+    describe("HMAC-SHA512 streaming", () => {
+      it("streaming matches one-shot for 32-byte key", () => {
+        const key = sodium.randombytes_buf(
+          sodium.crypto_auth_hmacsha512_KEYBYTES,
+        );
+        const message = new TextEncoder().encode("streaming test");
+        const oneShot = sodium.crypto_auth_hmacsha512(message, key);
+        const state = sodium.crypto_auth_hmacsha512_init(key);
+        sodium.crypto_auth_hmacsha512_update(state, message);
+        const streamed = sodium.crypto_auth_hmacsha512_final(state);
+        expect(streamed).toEqual(oneShot);
+      });
+
+      it("accepts variable-length keys (64 bytes)", () => {
+        const key = sodium.randombytes_buf(64);
+        const message = new TextEncoder().encode("long key test");
+        const state = sodium.crypto_auth_hmacsha512_init(key);
+        sodium.crypto_auth_hmacsha512_update(state, message);
+        const mac = sodium.crypto_auth_hmacsha512_final(state);
+        expect(mac.length).toBe(sodium.crypto_auth_hmacsha512_BYTES);
+      });
+
+      it("multi-chunk update produces same result as single update", () => {
+        const key = sodium.randombytes_buf(48);
+        const chunk1 = new TextEncoder().encode("hello ");
+        const chunk2 = new TextEncoder().encode("world");
+        const combined = new TextEncoder().encode("hello world");
+
+        const state1 = sodium.crypto_auth_hmacsha512_init(key);
+        sodium.crypto_auth_hmacsha512_update(state1, combined);
+        const mac1 = sodium.crypto_auth_hmacsha512_final(state1);
+
+        const state2 = sodium.crypto_auth_hmacsha512_init(key);
+        sodium.crypto_auth_hmacsha512_update(state2, chunk1);
+        sodium.crypto_auth_hmacsha512_update(state2, chunk2);
+        const mac2 = sodium.crypto_auth_hmacsha512_final(state2);
+
+        expect(mac2).toEqual(mac1);
       });
     });
 
