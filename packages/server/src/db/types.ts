@@ -17,7 +17,6 @@ export interface OrgsTable {
   slug: string;
   schema_name: string;
   is_active: ColumnType<boolean, boolean | undefined, boolean>;
-  created_at: Generated<Date>;
 }
 
 export interface PlatformDatabase {
@@ -35,8 +34,6 @@ export interface UsersTable {
   encrypted_notification_addr: Buffer | null;
   role_id: string;
   is_active: ColumnType<boolean, boolean | undefined, boolean>;
-  created_at: Generated<Date>;
-  updated_at: ColumnType<Date, Date | undefined, Date>;
 }
 
 export interface SessionsTable {
@@ -46,7 +43,6 @@ export interface SessionsTable {
   encrypted_ip_address: Buffer;
   encrypted_user_agent: Buffer;
   expires_at: Date;
-  created_at: Generated<Date>;
   twofa_verified: ColumnType<boolean, boolean | undefined, boolean>;
   webauthn_challenge: string | null;
 }
@@ -59,7 +55,6 @@ export interface OrgConfigTable {
   encrypted_client_text: Buffer | null;
   client_encrypted_branding: Buffer | null;
   pii_retention_days: number | null;
-  updated_at: ColumnType<Date, Date | undefined, Date>;
 }
 
 // --- Salt Defense (user_keys stub) ---
@@ -68,7 +63,6 @@ export interface OrgConfigTable {
 export interface UserKeysStubTable {
   user_id: string;
   salt: Buffer;
-  created_at: Generated<Date>;
 }
 
 // --- WebAuthn credentials ---

@@ -28,7 +28,6 @@ export interface UserRecord {
   readonly displayName: string;
   readonly roleId: string;
   readonly isActive: boolean;
-  readonly createdAt: Date;
 }
 
 export interface AuthService {
@@ -80,7 +79,6 @@ function toUserRecord(
     displayName: encryptor.decrypt(row.encrypted_display_name),
     roleId: row.role_id,
     isActive: row.is_active,
-    createdAt: row.created_at,
   };
 }
 

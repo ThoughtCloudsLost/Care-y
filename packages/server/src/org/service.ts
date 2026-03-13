@@ -32,7 +32,6 @@ export interface OrgRecord {
   readonly slug: string;
   readonly schemaName: string;
   readonly isActive: boolean;
-  readonly createdAt: Date;
 }
 
 export interface OrgService {
@@ -47,7 +46,6 @@ function toOrgRecord(row: Selectable<OrgsTable>): OrgRecord {
     slug: row.slug,
     schemaName: row.schema_name,
     isActive: row.is_active,
-    createdAt: row.created_at,
   };
 }
 
