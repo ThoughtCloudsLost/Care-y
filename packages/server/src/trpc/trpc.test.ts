@@ -250,7 +250,6 @@ describe("requireAuth middleware (authedProcedure)", () => {
           ipAddress: "127.0.0.1",
           userAgent: "test",
           expiresAt: new Date(Date.now() + 60_000),
-          createdAt: new Date(),
           twofaVerified: false,
           webauthnChallenge: null,
         },
@@ -275,7 +274,6 @@ describe("requireAuth middleware (authedProcedure)", () => {
           ipAddress: "127.0.0.1",
           userAgent: "test",
           expiresAt: new Date(Date.now() + 60_000),
-          createdAt: new Date(),
           twofaVerified: false,
           webauthnChallenge: null,
         },
@@ -285,7 +283,6 @@ describe("requireAuth middleware (authedProcedure)", () => {
           displayName: "Test",
           roleId: "volunteer",
           isActive: true,
-          createdAt: new Date(),
         },
       }),
     );
@@ -332,7 +329,6 @@ describe("require2fa middleware (authed2faProcedure)", () => {
           ipAddress: "127.0.0.1",
           userAgent: "test",
           expiresAt: new Date(Date.now() + 60_000),
-          createdAt: new Date(),
           twofaVerified: false,
           webauthnChallenge: null,
         },
@@ -342,7 +338,6 @@ describe("require2fa middleware (authed2faProcedure)", () => {
           displayName: "Test",
           roleId: "volunteer",
           isActive: true,
-          createdAt: new Date(),
         },
       }),
     );
@@ -364,7 +359,6 @@ describe("require2fa middleware (authed2faProcedure)", () => {
           ipAddress: "127.0.0.1",
           userAgent: "test",
           expiresAt: new Date(Date.now() + 60_000),
-          createdAt: new Date(),
           twofaVerified: true,
           webauthnChallenge: null,
         },
@@ -374,7 +368,6 @@ describe("require2fa middleware (authed2faProcedure)", () => {
           displayName: "Test",
           roleId: "volunteer",
           isActive: true,
-          createdAt: new Date(),
         },
       }),
     );
@@ -395,7 +388,6 @@ describe("withErrorWrapping resolver wrapper", () => {
       ipAddress: "127.0.0.1",
       userAgent: "test",
       expiresAt: new Date(Date.now() + 60_000),
-      createdAt: new Date(),
       twofaVerified: false,
       webauthnChallenge: null,
     },
@@ -405,7 +397,6 @@ describe("withErrorWrapping resolver wrapper", () => {
       displayName: "Test",
       roleId: "volunteer",
       isActive: true,
-      createdAt: new Date(),
     },
   });
 
@@ -468,7 +459,6 @@ describe("withErrorWrapping resolver wrapper", () => {
         ipAddress: "127.0.0.1",
         userAgent: "test",
         expiresAt: new Date(Date.now() + 60_000),
-        createdAt: new Date(),
         twofaVerified: true,
         webauthnChallenge: null,
       },
@@ -478,7 +468,6 @@ describe("withErrorWrapping resolver wrapper", () => {
         displayName: "Test",
         roleId: "volunteer",
         isActive: true,
-        createdAt: new Date(),
       },
     });
     const testRouter = router({

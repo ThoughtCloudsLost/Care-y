@@ -1,14 +1,13 @@
 # Test compose override. Targets the "test" Dockerfile stage and bind-mounts
 # test infrastructure that .dockerignore (correctly) excludes from production.
 #
-# Usage:
-#   docker compose -f docker-compose.yml -f docker-compose.test.yml watch
-#     (then, in another terminal)
-#   docker compose -f docker-compose.yml -f docker-compose.test.yml exec app pnpm vitest run --project server
-#
-# Or one-shot (no file watching):
+# Usage (server only):
 #   docker compose -f docker-compose.yml -f docker-compose.test.yml up -d
-#   docker compose -f docker-compose.yml -f docker-compose.test.yml exec app pnpm vitest run --project server
+#   pnpm test:server:db
+#
+# Usage (all projects with coverage):
+#   docker compose -f docker-compose.yml -f docker-compose.test.yml up -d
+#   pnpm test:coverage
 
 services:
   app:
@@ -27,3 +26,9 @@ services:
       - ./packages/server/src:/app/packages/server/src:ro
       - ./packages/shared/src:/app/packages/shared/src:ro
       - ./packages/crypto/src:/app/packages/crypto/src:ro
+      # Client package bind-mounts for full-project vitest coverage.
+      # The production image skips client source (it runs as a separate SvelteKit
+      # process), but the test target needs it for full-project vitest coverage.
+      - ./packages/client/src:/app/packages/client/src:ro
+      - ./packages/client/vitest.config.ts:/app/packages/client/vitest.config.ts:ro
+      - ./packages/client/svelte.config.js:/app/packages/client/svelte.config.js:ro

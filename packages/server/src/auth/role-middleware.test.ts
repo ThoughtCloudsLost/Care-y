@@ -31,7 +31,6 @@ const stubSession: SessionData = {
   ipAddress: "127.0.0.1",
   userAgent: "test-agent",
   expiresAt: new Date(Date.now() + 60_000),
-  createdAt: new Date(),
   twofaVerified: true,
   webauthnChallenge: null,
 };
@@ -43,7 +42,6 @@ function makeUser(roleId: string): UserRecord {
     displayName: "Test User",
     roleId,
     isActive: true,
-    createdAt: new Date(),
   };
 }
 

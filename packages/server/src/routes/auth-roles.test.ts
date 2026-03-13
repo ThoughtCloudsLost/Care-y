@@ -205,7 +205,6 @@ describe.skipIf(!process.env.DATABASE_URL)(
         ipAddress: "127.0.0.1",
         userAgent: "test-agent",
         expiresAt: new Date(Date.now() + 3_600_000),
-        createdAt: new Date(),
         twofaVerified,
         webauthnChallenge: null,
       };
