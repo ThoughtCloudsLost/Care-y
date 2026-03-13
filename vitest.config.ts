@@ -1,5 +1,11 @@
+import { existsSync } from "node:fs";
 import { defineConfig, defineProject } from "vitest/config";
 import { coverageConfigDefaults } from "vitest/config";
+
+// Client project requires SvelteKit deps (@sveltejs/vite-plugin-svelte) which
+// are only available on the host, not inside the Docker test container. Include
+// the client project only when its dependencies are installed.
+const clientAvailable = existsSync("node_modules/@sveltejs/vite-plugin-svelte");
 
 export default defineConfig({
   test: {
@@ -76,7 +82,8 @@ export default defineConfig({
       // $app/*, $lib/*, and $service-worker aliases in tests.
       // Referenced as a directory so vitest sets cwd to packages/client/
       // before loading the config (sveltekit() needs cwd to find svelte.config.js).
-      "packages/client",
+      // Skipped inside Docker where SvelteKit deps are not installed.
+      ...(clientAvailable ? ["packages/client" as const] : []),
     ],
   },
 });

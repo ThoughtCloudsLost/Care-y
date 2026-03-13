@@ -1,13 +1,15 @@
 # Test compose override. Targets the "test" Dockerfile stage and bind-mounts
 # test infrastructure that .dockerignore (correctly) excludes from production.
 #
-# Usage (server only):
-#   docker compose -f docker-compose.yml -f docker-compose.test.yml up -d
-#   pnpm test:server:db
+# Start with watch mode so lockfile changes trigger automatic image rebuilds:
+#   docker compose -f docker-compose.yml -f docker-compose.test.yml watch
 #
-# Usage (all projects with coverage):
-#   docker compose -f docker-compose.yml -f docker-compose.test.yml up -d
-#   pnpm test:coverage
+# Then run tests from a second terminal:
+#   pnpm test:server:db          (server tests with DB)
+#   pnpm test:coverage           (all Docker-compatible projects with coverage)
+#
+# Client tests run on the host (SvelteKit deps are not in the Docker image):
+#   pnpm vitest run --project client
 
 services:
   app:
@@ -26,9 +28,5 @@ services:
       - ./packages/server/src:/app/packages/server/src:ro
       - ./packages/shared/src:/app/packages/shared/src:ro
       - ./packages/crypto/src:/app/packages/crypto/src:ro
-      # Client package bind-mounts for full-project vitest coverage.
-      # The production image skips client source (it runs as a separate SvelteKit
-      # process), but the test target needs it for full-project vitest coverage.
-      - ./packages/client/src:/app/packages/client/src:ro
-      - ./packages/client/vitest.config.ts:/app/packages/client/vitest.config.ts:ro
-      - ./packages/client/svelte.config.js:/app/packages/client/svelte.config.js:ro
+      # Client tests run on the host (SvelteKit deps not in Docker image).
+      # Use `pnpm vitest run --project client` locally for client coverage.
