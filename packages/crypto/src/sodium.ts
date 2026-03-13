@@ -32,10 +32,16 @@ export interface SodiumBackend {
   readonly crypto_secretbox_KEYBYTES: number;
   readonly crypto_secretbox_MACBYTES: number;
 
-  // --- HMAC-SHA512 (for HKDF) ---
+  // --- HMAC-SHA512 ---
+  // One-shot API (fixed 32-byte key, for authentication)
   crypto_auth_hmacsha512(message: Uint8Array, key: Uint8Array): Uint8Array;
   readonly crypto_auth_hmacsha512_BYTES: number;
   readonly crypto_auth_hmacsha512_KEYBYTES: number;
+  // Streaming API (variable-length key, needed for HKDF where salt and PRK
+  // are not 32 bytes). StateAddress is a number (WASM heap pointer).
+  crypto_auth_hmacsha512_init(key: Uint8Array): number;
+  crypto_auth_hmacsha512_update(state: number, data: Uint8Array): void;
+  crypto_auth_hmacsha512_final(state: number): Uint8Array;
 
   // --- Generic hash (BLAKE2b, for branding key) ---
   crypto_generichash(
