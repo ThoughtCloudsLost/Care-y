@@ -8,6 +8,8 @@ import {
   ForbiddenError,
   InternalError,
   NotFoundError,
+  OprfError,
+  PowRequiredError,
   RateLimitError,
   ValidationError,
   extractErrorMessage,
@@ -176,6 +178,70 @@ describe("AppError hierarchy", () => {
       expect(err.name).toBe("InternalError");
     });
   });
+
+  describe("OprfError", () => {
+    it("is non-operational", () => {
+      const err = new OprfError("process down");
+      expect(err.isOperational).toBe(false);
+    });
+
+    it("has correct code and httpStatus", () => {
+      const err = new OprfError("IPC timeout");
+      expect(err.code).toBe("OPRF_ERROR");
+      expect(err.httpStatus).toBe(503);
+    });
+
+    it("has correct name", () => {
+      const err = new OprfError("canary corruption");
+      expect(err.name).toBe("OprfError");
+    });
+
+    it("preserves the message", () => {
+      const err = new OprfError("specific failure");
+      expect(err.message).toBe("specific failure");
+    });
+
+    it("is an instance of Error and AppError", () => {
+      const err = new OprfError("test");
+      expect(err).toBeInstanceOf(Error);
+      expect(err).toBeInstanceOf(AppError);
+    });
+  });
+
+  describe("PowRequiredError", () => {
+    it("stores challenge and difficulty", () => {
+      const err = new PowRequiredError("abc123", 16);
+      expect(err.challenge).toBe("abc123");
+      expect(err.difficulty).toBe(16);
+    });
+
+    it("has correct code and httpStatus", () => {
+      const err = new PowRequiredError("challenge", 20);
+      expect(err.code).toBe("POW_REQUIRED");
+      expect(err.httpStatus).toBe(429);
+    });
+
+    it("is operational", () => {
+      const err = new PowRequiredError("challenge", 16);
+      expect(err.isOperational).toBe(true);
+    });
+
+    it("has correct name", () => {
+      const err = new PowRequiredError("challenge", 16);
+      expect(err.name).toBe("PowRequiredError");
+    });
+
+    it("has fixed message", () => {
+      const err = new PowRequiredError("challenge", 16);
+      expect(err.message).toBe("Proof-of-work required");
+    });
+
+    it("is an instance of Error and AppError", () => {
+      const err = new PowRequiredError("challenge", 16);
+      expect(err).toBeInstanceOf(Error);
+      expect(err).toBeInstanceOf(AppError);
+    });
+  });
 });
 
 describe("isAppError", () => {
@@ -188,6 +254,8 @@ describe("isAppError", () => {
     expect(isAppError(new RateLimitError("test", 10))).toBe(true);
     expect(isAppError(new EmailDeliveryError("test"))).toBe(true);
     expect(isAppError(new InternalError("test"))).toBe(true);
+    expect(isAppError(new OprfError("test"))).toBe(true);
+    expect(isAppError(new PowRequiredError("challenge", 16))).toBe(true);
   });
 
   it("returns false for plain Error", () => {
