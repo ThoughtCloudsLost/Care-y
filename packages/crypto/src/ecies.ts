@@ -116,21 +116,15 @@ export function eciesDecrypt(
   // 2. Derive wrap key
   const wrapKey = hkdfDerive32(shared, HKDF_LABELS.ECIES_WRAP);
 
-  // 3. Decrypt
-  let plaintext: Uint8Array;
+  // 3. Decrypt, zeroing intermediates on all exit paths
   try {
-    plaintext = sodium.crypto_secretbox_open_easy(ciphertext, nonce, wrapKey);
+    return sodium.crypto_secretbox_open_easy(ciphertext, nonce, wrapKey);
   } catch {
-    sodium.memzero(shared);
-    sodium.memzero(wrapKey);
     throw new DecryptionError(
       "ECIES decryption failed: wrong key or tampered ciphertext",
     );
+  } finally {
+    sodium.memzero(shared);
+    sodium.memzero(wrapKey);
   }
-
-  // 4. Zero intermediates
-  sodium.memzero(shared);
-  sodium.memzero(wrapKey);
-
-  return plaintext;
 }

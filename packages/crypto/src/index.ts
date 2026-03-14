@@ -48,6 +48,7 @@ export {
   generateRefreshScalar,
   computeRefreshDelta,
   applyRefresh,
+  _resetLagrangeCacheForTesting,
 } from "./oprf.js";
 
 // --- Key Derivation ---

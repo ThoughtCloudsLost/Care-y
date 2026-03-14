@@ -113,6 +113,31 @@ describe("key derivation", () => {
       const b = deriveAccountKey(password, salt2);
       expect(a).not.toEqual(b);
     });
+
+    it("handles empty password without crashing", () => {
+      // Argon2id accepts empty passwords (libsodium does not reject them).
+      // In CARE-Y, the server should reject empty passwords before they
+      // reach key derivation, but the crypto layer must not crash.
+      const emptyPassword = new Uint8Array(0);
+      const result = deriveAccountKey(emptyPassword, fixedSalt);
+      expect(result.length).toBe(32);
+    });
+
+    it("partially weak params are individually floor-enforced", () => {
+      const password = new TextEncoder().encode("partial-weak-test");
+      // Only memoryKiB is weak, iterations and parallelism are above floor
+      const partialWeak = {
+        memoryKiB: 1,
+        iterations: ARGON2_MIN_PARAMS.iterations + 2,
+        parallelism: ARGON2_MIN_PARAMS.parallelism + 1,
+      };
+      const result = deriveAccountKey(password, fixedSalt, partialWeak);
+
+      // With iterations and parallelism above floor, the output should differ
+      // from the default (which uses floor values for everything)
+      const withDefaults = deriveAccountKey(password, fixedSalt);
+      expect(result).not.toEqual(withDefaults);
+    });
   });
 
   describe("deriveMasterKey", () => {

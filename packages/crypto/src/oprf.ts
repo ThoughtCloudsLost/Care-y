@@ -18,6 +18,7 @@
 
 import { requireSodium } from "./sodium.js";
 import { InvalidInputError } from "./errors.js";
+import { concatBytes, scalarFromInt } from "./bytes.js";
 import type {
   Scalar,
   RistrettoPoint,
@@ -90,9 +91,7 @@ export function oprfFinalize(
   );
 
   // Hash to output: H(input || unblinded) per RFC 9497 Section 4.1
-  const hashInput = new Uint8Array(input.length + unblinded.length);
-  hashInput.set(input, 0);
-  hashInput.set(unblinded, input.length);
+  const hashInput = concatBytes(input, unblinded);
   const oprfOutput = sodium.crypto_generichash(32, hashInput);
 
   // Zero intermediates (derived from key material)
@@ -101,6 +100,38 @@ export function oprfFinalize(
   sodium.memzero(hashInput);
 
   return oprfOutput;
+}
+
+/**
+ * Cached Lagrange coefficients for 2-of-2 threshold at x=0.
+ * Computed lazily on first call (sodium must be initialized).
+ *
+ *   L_A(0) = (0 - 2) / (1 - 2) = 2
+ *   L_B(0) = (0 - 1) / (2 - 1) = -1 mod group_order
+ */
+let lagrangeCoeffA: Uint8Array | null = null;
+let lagrangeCoeffB: Uint8Array | null = null;
+
+/** @internal Visible for testing: clear cached Lagrange coefficients when sodium is reset. */
+export function _resetLagrangeCacheForTesting(): void {
+  lagrangeCoeffA = null;
+  lagrangeCoeffB = null;
+}
+
+function getLagrangeCoefficients(): {
+  coeffA: Uint8Array;
+  coeffB: Uint8Array;
+} {
+  if (lagrangeCoeffA && lagrangeCoeffB) {
+    return { coeffA: lagrangeCoeffA, coeffB: lagrangeCoeffB };
+  }
+  const sodium = requireSodium();
+  lagrangeCoeffA = scalarFromInt(2);
+  lagrangeCoeffB = sodium.crypto_core_ristretto255_scalar_sub(
+    new Uint8Array(32), // zero
+    scalarFromInt(1),
+  );
+  return { coeffA: lagrangeCoeffA, coeffB: lagrangeCoeffB };
 }
 
 /**
@@ -121,25 +152,15 @@ export function lagrangeInterpolate(
   partialB: RistrettoPoint,
 ): RistrettoPoint {
   const sodium = requireSodium();
+  const { coeffA, coeffB } = getLagrangeCoefficients();
 
-  // L_A = 2 (little-endian scalar)
-  const two = new Uint8Array(32);
-  two[0] = 2;
-  const scaledA = sodium.crypto_scalarmult_ristretto255(two, partialA);
+  const scaledA = sodium.crypto_scalarmult_ristretto255(coeffA, partialA);
+  const scaledB = sodium.crypto_scalarmult_ristretto255(coeffB, partialB);
 
-  // L_B = -1 mod group_order = scalar_sub(0, 1)
-  const one = new Uint8Array(32);
-  one[0] = 1;
-  const negOne = sodium.crypto_core_ristretto255_scalar_sub(
-    new Uint8Array(32),
-    one,
-  );
-  const scaledB = sodium.crypto_scalarmult_ristretto255(negOne, partialB);
-
-  // combined = scaledA + scaledB (point addition)
-  const combined = sodium.crypto_core_ristretto255_add(scaledA, scaledB);
-
-  return combined as RistrettoPoint;
+  return sodium.crypto_core_ristretto255_add(
+    scaledA,
+    scaledB,
+  ) as RistrettoPoint;
 }
 
 // --- Proactive Share Refresh (tested here, deployed later) ---
@@ -186,11 +207,9 @@ export function computeRefreshDelta(
   }
 
   // Multiply scalar by the evaluation point: delta = b * x_i
-  const xScalar = new Uint8Array(32);
-  xScalar[0] = evaluationPoint; // little-endian
   return sodium.crypto_core_ristretto255_scalar_mul(
     refreshScalar,
-    xScalar,
+    scalarFromInt(evaluationPoint),
   ) as Scalar;
 }
 

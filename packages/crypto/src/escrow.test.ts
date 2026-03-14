@@ -91,6 +91,42 @@ describe("escrow encryption", () => {
         InvalidInputError,
       );
     });
+
+    it("empty passphrase error has correct code", () => {
+      const data = sodium.randombytes_buf(32);
+      try {
+        encryptWithPassphrase(data, new Uint8Array(0));
+        expect.fail("should have thrown");
+      } catch (e) {
+        expect(e).toBeInstanceOf(InvalidInputError);
+        expect((e as InvalidInputError).code).toBe("INVALID_INPUT");
+      }
+    });
+
+    it("wrong passphrase error has correct code", () => {
+      const data = sodium.randombytes_buf(32);
+      const passphrase = new TextEncoder().encode("correct");
+      const wrong = new TextEncoder().encode("wrong");
+
+      const blob = encryptWithPassphrase(data, passphrase);
+      try {
+        decryptWithPassphrase(blob, wrong);
+        expect.fail("should have thrown");
+      } catch (e) {
+        expect(e).toBeInstanceOf(DecryptionError);
+        expect((e as DecryptionError).code).toBe("DECRYPTION_FAILED");
+      }
+    }, 60_000);
+
+    it("truncated blob error has correct code", () => {
+      try {
+        deserializeEscrowBlob(new Uint8Array(10));
+        expect.fail("should have thrown");
+      } catch (e) {
+        expect(e).toBeInstanceOf(InvalidInputError);
+        expect((e as InvalidInputError).code).toBe("INVALID_INPUT");
+      }
+    });
   });
 
   describe("serialization", () => {

@@ -130,6 +130,41 @@ describe("content encryption", () => {
     });
   });
 
+  describe("boundary sizes", () => {
+    it("works with single-byte plaintext", () => {
+      const key = generateContentKey();
+      const plaintext = new Uint8Array([0x42]);
+
+      const encrypted = encryptContent(plaintext, key);
+      const decrypted = decryptContent(encrypted, key);
+
+      expect(decrypted).toEqual(plaintext);
+    });
+
+    it("rejects blob that is exactly nonce-length (no MAC, no ciphertext)", () => {
+      const key = generateContentKey();
+      const tooShort = new Uint8Array(
+        sodium.crypto_secretbox_NONCEBYTES,
+      ) as Ciphertext;
+
+      expect(() => decryptContent(tooShort, key)).toThrow(DecryptionError);
+    });
+
+    it("accepts blob that is exactly nonce + MAC length (zero-length plaintext)", () => {
+      const key = generateContentKey();
+      const plaintext = new Uint8Array(0);
+      const encrypted = encryptContent(plaintext, key);
+
+      // Verify the blob is exactly nonce + MAC bytes
+      expect(encrypted.length).toBe(
+        sodium.crypto_secretbox_NONCEBYTES + sodium.crypto_secretbox_MACBYTES,
+      );
+
+      const decrypted = decryptContent(encrypted, key);
+      expect(decrypted).toEqual(plaintext);
+    });
+  });
+
   describe("input validation", () => {
     it("throws InvalidKeyError for wrong-length key on encrypt", () => {
       const shortKey = new Uint8Array(16) as SymmetricKey;

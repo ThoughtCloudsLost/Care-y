@@ -22,6 +22,7 @@
 
 import { requireSodium } from "./sodium.js";
 import { DecryptionError, InvalidInputError } from "./errors.js";
+import { concatBytes } from "./bytes.js";
 import {
   ARGON2_ESCROW_PARAMS,
   type EscrowBlob,
@@ -94,22 +95,15 @@ export function decryptWithPassphrase(
 
   const key = deriveEscrowKey(passphrase, blob.salt);
 
-  let decrypted: Uint8Array;
   try {
-    decrypted = sodium.crypto_secretbox_open_easy(
-      blob.ciphertext,
-      blob.nonce,
-      key,
-    );
+    return sodium.crypto_secretbox_open_easy(blob.ciphertext, blob.nonce, key);
   } catch {
-    sodium.memzero(key);
     throw new DecryptionError(
       "Escrow decryption failed: wrong passphrase or corrupted data",
     );
+  } finally {
+    sodium.memzero(key);
   }
-
-  sodium.memzero(key);
-  return decrypted;
 }
 
 /**
@@ -120,16 +114,7 @@ export function decryptWithPassphrase(
  * @returns Single contiguous byte array
  */
 export function serializeEscrowBlob(blob: EscrowBlob): Uint8Array {
-  const result = new Uint8Array(
-    blob.salt.length + blob.nonce.length + blob.ciphertext.length,
-  );
-  let offset = 0;
-  result.set(blob.salt, offset);
-  offset += blob.salt.length;
-  result.set(blob.nonce, offset);
-  offset += blob.nonce.length;
-  result.set(blob.ciphertext, offset);
-  return result;
+  return concatBytes(blob.salt, blob.nonce, blob.ciphertext);
 }
 
 /**

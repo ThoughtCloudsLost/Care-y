@@ -20,7 +20,8 @@
 import { requireSodium, type SodiumBackend } from "./sodium.js";
 import { InvalidInputError } from "./errors.js";
 
-const MAX_OUTPUT = 255 * 64; // 255 * HashLen (SHA-512 = 64 bytes)
+const HASH_LEN = 64; // SHA-512 output length
+const MAX_OUTPUT = 255 * HASH_LEN;
 
 /** HMAC-SHA512 via streaming API (accepts any key length). */
 function hmacSha512(
@@ -31,6 +32,52 @@ function hmacSha512(
   const state = sodium.crypto_auth_hmacsha512_init(key);
   sodium.crypto_auth_hmacsha512_update(state, data);
   return sodium.crypto_auth_hmacsha512_final(state);
+}
+
+/**
+ * HKDF-Extract (RFC 5869 Section 2.2).
+ * PRK = HMAC-SHA512(salt, IKM)
+ *
+ * Uses the streaming HMAC API because the salt (HMAC key) can be any length.
+ * Default salt is 64 zero bytes per the RFC.
+ */
+function hkdfExtract(
+  sodium: SodiumBackend,
+  ikm: Uint8Array,
+  salt?: Uint8Array,
+): Uint8Array {
+  const effectiveSalt = salt ?? new Uint8Array(HASH_LEN);
+  return hmacSha512(sodium, effectiveSalt, ikm);
+}
+
+/**
+ * HKDF-Expand (RFC 5869 Section 2.3).
+ * T(i) = HMAC-SHA512(PRK, T(i-1) || info || i)
+ * OKM = T(1) || T(2) || ... truncated to length
+ *
+ * Uses the streaming HMAC API because the PRK is 64 bytes (SHA-512 output),
+ * which exceeds the one-shot API's fixed 32-byte key requirement.
+ */
+function hkdfExpand(
+  sodium: SodiumBackend,
+  prk: Uint8Array,
+  info: Uint8Array,
+  length: number,
+): Uint8Array {
+  const n = Math.ceil(length / HASH_LEN);
+  const okm = new Uint8Array(n * HASH_LEN);
+  let prev: Uint8Array = new Uint8Array(0);
+
+  for (let i = 1; i <= n; i++) {
+    const state = sodium.crypto_auth_hmacsha512_init(prk);
+    sodium.crypto_auth_hmacsha512_update(state, prev);
+    sodium.crypto_auth_hmacsha512_update(state, info);
+    sodium.crypto_auth_hmacsha512_update(state, new Uint8Array([i]));
+    prev = sodium.crypto_auth_hmacsha512_final(state);
+    okm.set(prev, (i - 1) * HASH_LEN);
+  }
+
+  return okm.subarray(0, length);
 }
 
 /**
@@ -56,32 +103,11 @@ export function hkdf(
   }
 
   const sodium = requireSodium();
-  const hashLen = sodium.crypto_auth_hmacsha512_BYTES; // 64
+  const prk = hkdfExtract(sodium, ikm, salt);
+  const okm = hkdfExpand(sodium, prk, info, length);
 
-  // Extract: PRK = HMAC-SHA512(salt, IKM)
-  // Uses streaming API because salt (the HMAC key) can be any length.
-  const effectiveSalt = salt ?? new Uint8Array(hashLen);
-  const prk = hmacSha512(sodium, effectiveSalt, ikm);
-
-  // Expand: T(i) = HMAC-SHA512(PRK, T(i-1) || info || counter)
-  // PRK is 64 bytes (SHA-512 output), so the streaming API is required here too.
-  const n = Math.ceil(length / hashLen);
-  const okm = new Uint8Array(n * hashLen);
-  let prev: Uint8Array = new Uint8Array(0);
-
-  for (let i = 1; i <= n; i++) {
-    const state = sodium.crypto_auth_hmacsha512_init(prk);
-    sodium.crypto_auth_hmacsha512_update(state, prev);
-    sodium.crypto_auth_hmacsha512_update(state, info);
-    sodium.crypto_auth_hmacsha512_update(state, new Uint8Array([i]));
-    prev = sodium.crypto_auth_hmacsha512_final(state);
-    okm.set(prev, (i - 1) * hashLen);
-  }
-
-  // Zero intermediate key material
   sodium.memzero(prk);
-
-  return okm.subarray(0, length);
+  return okm;
 }
 
 /**
