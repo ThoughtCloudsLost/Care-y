@@ -1,21 +1,24 @@
 /**
- * Unit tests for requireRole middleware.
+ * Tests for requireRole middleware.
  *
- * Tests the middleware in isolation by constructing minimal tRPC contexts
- * and verifying the correct TRPCError codes are thrown. No DB required.
+ * Uses createCallerFactory to test the middleware through the public tRPC
+ * caller interface rather than reaching into tRPC internals. This means
+ * the tests verify observable behavior (correct HTTP error codes, message
+ * content, access granted/denied) and survive tRPC version upgrades.
  */
 
 import { describe, it, expect } from "vitest";
-import type { TRPCError } from "@trpc/server";
 import { RoleId, Permission } from "@care-y/shared";
-import { requireRole } from "./role-middleware.js";
-import type { Context } from "../trpc/context.js";
-import type { OrgContext } from "../trpc/context.js";
-import type { SessionData } from "./session-repository.js";
-import type { UserRecord } from "./service.js";
+import {
+  router,
+  authed2faProcedure,
+  createCallerFactory,
+  requireRole,
+} from "../trpc/trpc.js";
+import type { Context, OrgContext } from "../trpc/context.js";
+import { mockReq, mockRes, expectTrpcError } from "../test-utils.js";
 
-// Minimal stubs for the middleware context. The middleware only reads
-// ctx.session, ctx.user, and ctx.user.roleId (nothing else).
+// --- Stubs ---
 
 const stubOrg: OrgContext = {
   orgId: "00000000-0000-0000-0000-000000000001",
@@ -24,185 +27,155 @@ const stubOrg: OrgContext = {
   tenantDb: {} as OrgContext["tenantDb"],
 };
 
-const stubSession: SessionData = {
-  id: "session-id",
-  token: "token",
-  userId: "user-id",
-  ipAddress: "127.0.0.1",
-  userAgent: "test-agent",
-  expiresAt: new Date(Date.now() + 60_000),
-  twofaVerified: true,
-  webauthnChallenge: null,
-};
-
-function makeUser(roleId: string): UserRecord {
+function makeCtx(overrides?: Partial<Context>): Context {
   return {
-    id: "user-id",
-    identifier: "testuser",
-    displayName: "Test User",
-    roleId,
-    isActive: true,
+    req: mockReq(),
+    res: mockRes(),
+    org: stubOrg,
+    session: {
+      id: "session-id",
+      token: "token",
+      userId: "user-id",
+      ipAddress: "127.0.0.1",
+      userAgent: "test-agent",
+      expiresAt: new Date(Date.now() + 60_000),
+      twofaVerified: true,
+      webauthnChallenge: null,
+    },
+    user: {
+      id: "user-id",
+      identifier: "testuser",
+      displayName: "Test User",
+      roleId: RoleId.VOLUNTEER,
+      isActive: true,
+    },
+    ...overrides,
   };
 }
 
-function makeCtx(overrides?: {
-  session?: SessionData | null;
-  user?: UserRecord | null;
-  org?: OrgContext | null;
-}): Context {
-  return {
-    req: {} as Context["req"],
-    res: {} as Context["res"],
-    org: overrides?.org !== undefined ? overrides.org : stubOrg,
-    session: overrides?.session !== undefined ? overrides.session : stubSession,
-    user:
-      overrides?.user !== undefined
-        ? overrides.user
-        : makeUser(RoleId.VOLUNTEER),
-  };
-}
-
-/**
- * Invokes the requireRole middleware with a synthetic context and a no-op
- * next() that returns a resolved value. Returns the resolved value on success
- * or throws on rejection.
- */
-async function invokeMiddleware(
-  permission: Permission,
-  ctx: Context,
-): Promise<unknown> {
-  const mw = requireRole(permission);
-
-  // Access the internal _middlewares array to get the raw function.
-  // This is the same approach tRPC uses internally to chain middleware.
-  const fn = (mw as unknown as { _middlewares: unknown[] })
-    ._middlewares[0] as (opts: {
-    ctx: Context;
-    next: (opts: { ctx: Context }) => Promise<{ ctx: Context }>;
-    path: string;
-    type: string;
-    input: unknown;
-    getRawInput: () => Promise<unknown>;
-    meta: unknown;
-    signal: AbortSignal | undefined;
-  }) => Promise<unknown>;
-
-  return fn({
-    ctx,
-    next: (opts: { ctx: Context }) =>
-      Promise.resolve({ ok: true, ctx: opts.ctx, data: "passed" }),
-    path: "test.path",
-    type: "query",
-    input: undefined,
-    getRawInput: () => Promise.resolve(undefined),
-    meta: undefined,
-    signal: undefined,
+function makeCtxWithRole(roleId: string): Context {
+  return makeCtx({
+    user: {
+      id: "user-id",
+      identifier: "testuser",
+      displayName: "Test User",
+      roleId,
+      isActive: true,
+    },
   });
 }
 
+// Build a mini-router with one procedure per permission level.
+// requireRole is chained after authed2faProcedure (the real usage pattern).
+const testRouter = router({
+  viewTickets: authed2faProcedure
+    .use(requireRole(Permission.VIEW_TICKETS))
+    .query(() => "tickets-visible"),
+  manageUsers: authed2faProcedure
+    .use(requireRole(Permission.MANAGE_USERS))
+    .query(() => "users-managed"),
+  manageRoles: authed2faProcedure
+    .use(requireRole(Permission.MANAGE_ROLES))
+    .query(() => "roles-managed"),
+});
+
+const factory = createCallerFactory(testRouter);
+
 describe("requireRole", () => {
   describe("when user has the required permission", () => {
-    it("calls next() for volunteer checking VIEW_TICKETS", async () => {
-      const ctx = makeCtx({ user: makeUser(RoleId.VOLUNTEER) });
-      const result = await invokeMiddleware(Permission.VIEW_TICKETS, ctx);
-      expect(result).toMatchObject({ ok: true });
+    it("allows volunteer to VIEW_TICKETS", async () => {
+      const caller = factory(makeCtxWithRole(RoleId.VOLUNTEER));
+      const result = await caller.viewTickets();
+      expect(result).toBe("tickets-visible");
     });
 
-    it("calls next() for manager checking MANAGE_USERS", async () => {
-      const ctx = makeCtx({ user: makeUser(RoleId.MANAGER) });
-      const result = await invokeMiddleware(Permission.MANAGE_USERS, ctx);
-      expect(result).toMatchObject({ ok: true });
+    it("allows manager to MANAGE_USERS", async () => {
+      const caller = factory(makeCtxWithRole(RoleId.MANAGER));
+      const result = await caller.manageUsers();
+      expect(result).toBe("users-managed");
     });
 
-    it("calls next() for admin checking MANAGE_ROLES", async () => {
-      const ctx = makeCtx({ user: makeUser(RoleId.ADMIN) });
-      const result = await invokeMiddleware(Permission.MANAGE_ROLES, ctx);
-      expect(result).toMatchObject({ ok: true });
+    it("allows admin to MANAGE_ROLES", async () => {
+      const caller = factory(makeCtxWithRole(RoleId.ADMIN));
+      const result = await caller.manageRoles();
+      expect(result).toBe("roles-managed");
     });
 
-    it("allows all three roles to pass VIEW_TICKETS check", async () => {
+    it("allows all three roles to VIEW_TICKETS (inherited permission)", async () => {
       for (const roleId of [RoleId.VOLUNTEER, RoleId.MANAGER, RoleId.ADMIN]) {
-        const ctx = makeCtx({ user: makeUser(roleId) });
-        const result = await invokeMiddleware(Permission.VIEW_TICKETS, ctx);
-        expect(result).toMatchObject({ ok: true });
+        const caller = factory(makeCtxWithRole(roleId));
+        const result = await caller.viewTickets();
+        expect(result).toBe("tickets-visible");
       }
     });
   });
 
   describe("when user lacks the required permission", () => {
-    it("throws FORBIDDEN for volunteer checking MANAGE_ROLES", async () => {
-      const ctx = makeCtx({ user: makeUser(RoleId.VOLUNTEER) });
-      await expect(
-        invokeMiddleware(Permission.MANAGE_ROLES, ctx),
-      ).rejects.toMatchObject({
-        code: "FORBIDDEN",
-        message: "Insufficient permissions",
-      });
+    it("rejects volunteer from MANAGE_ROLES with FORBIDDEN", async () => {
+      const caller = factory(makeCtxWithRole(RoleId.VOLUNTEER));
+      await expectTrpcError(
+        caller.manageRoles(),
+        "FORBIDDEN",
+        "Insufficient permissions",
+      );
     });
 
-    it("throws FORBIDDEN for manager checking MANAGE_ROLES", async () => {
-      const ctx = makeCtx({ user: makeUser(RoleId.MANAGER) });
-      await expect(
-        invokeMiddleware(Permission.MANAGE_ROLES, ctx),
-      ).rejects.toMatchObject({
-        code: "FORBIDDEN",
-        message: "Insufficient permissions",
-      });
+    it("rejects manager from MANAGE_ROLES with FORBIDDEN", async () => {
+      const caller = factory(makeCtxWithRole(RoleId.MANAGER));
+      await expectTrpcError(
+        caller.manageRoles(),
+        "FORBIDDEN",
+        "Insufficient permissions",
+      );
     });
 
-    it("throws FORBIDDEN for volunteer checking MANAGE_USERS", async () => {
-      const ctx = makeCtx({ user: makeUser(RoleId.VOLUNTEER) });
-      await expect(
-        invokeMiddleware(Permission.MANAGE_USERS, ctx),
-      ).rejects.toMatchObject({
-        code: "FORBIDDEN",
-      });
+    it("rejects volunteer from MANAGE_USERS with FORBIDDEN", async () => {
+      const caller = factory(makeCtxWithRole(RoleId.VOLUNTEER));
+      await expectTrpcError(
+        caller.manageUsers(),
+        "FORBIDDEN",
+        "Insufficient permissions",
+      );
     });
 
     it("error message does not reveal the required permission name", async () => {
-      const ctx = makeCtx({ user: makeUser(RoleId.VOLUNTEER) });
-      let err: TRPCError | undefined;
+      const caller = factory(makeCtxWithRole(RoleId.VOLUNTEER));
       try {
-        await invokeMiddleware(Permission.MANAGE_ROLES, ctx);
-      } catch (caught: unknown) {
-        err = caught as TRPCError;
+        await caller.manageRoles();
+        expect.fail("should have thrown");
+      } catch (err: unknown) {
+        const message = (err as Error).message;
+        expect(message).not.toContain("MANAGE_ROLES");
+        expect(message).not.toContain("manage_roles");
       }
-      expect(err?.message).not.toContain("MANAGE_ROLES");
-      expect(err?.message).not.toContain("manage_roles");
     });
 
     it("error message does not reveal the user's role ID", async () => {
-      const ctx = makeCtx({ user: makeUser(RoleId.VOLUNTEER) });
-      let err: TRPCError | undefined;
+      const caller = factory(makeCtxWithRole(RoleId.VOLUNTEER));
       try {
-        await invokeMiddleware(Permission.MANAGE_ROLES, ctx);
-      } catch (caught: unknown) {
-        err = caught as TRPCError;
+        await caller.manageRoles();
+        expect.fail("should have thrown");
+      } catch (err: unknown) {
+        const message = (err as Error).message;
+        expect(message).not.toContain(RoleId.VOLUNTEER);
       }
-      expect(err?.message).not.toContain(RoleId.VOLUNTEER);
     });
   });
 
-  describe("redundant auth guards", () => {
-    it("throws UNAUTHORIZED when session is null", async () => {
-      const ctx = makeCtx({ session: null });
-      await expect(
-        invokeMiddleware(Permission.VIEW_TICKETS, ctx),
-      ).rejects.toMatchObject({ code: "UNAUTHORIZED" });
+  describe("redundant auth guards (defense in depth)", () => {
+    it("rejects when session is null with UNAUTHORIZED", async () => {
+      const caller = factory(makeCtx({ session: null }));
+      await expectTrpcError(caller.viewTickets(), "UNAUTHORIZED");
     });
 
-    it("throws UNAUTHORIZED when user is null", async () => {
-      const ctx = makeCtx({ user: null });
-      await expect(
-        invokeMiddleware(Permission.VIEW_TICKETS, ctx),
-      ).rejects.toMatchObject({ code: "UNAUTHORIZED" });
+    it("rejects when user is null with UNAUTHORIZED", async () => {
+      const caller = factory(makeCtx({ user: null }));
+      await expectTrpcError(caller.viewTickets(), "UNAUTHORIZED");
     });
 
-    it("throws UNAUTHORIZED when org is null", async () => {
-      const ctx = makeCtx({ org: null });
-      await expect(
-        invokeMiddleware(Permission.VIEW_TICKETS, ctx),
-      ).rejects.toMatchObject({ code: "UNAUTHORIZED" });
+    it("rejects when org is null with NOT_FOUND", async () => {
+      const caller = factory(makeCtx({ org: null }));
+      await expectTrpcError(caller.viewTickets(), "NOT_FOUND");
     });
   });
 });

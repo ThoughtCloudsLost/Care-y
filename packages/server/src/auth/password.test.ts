@@ -22,6 +22,9 @@ describe("createScryptHasher", () => {
     expect(h1).not.toBe(h2);
   });
 
+  // Format test guards backward compatibility with hashes already persisted
+  // in the DB. Changing the serialization format (e.g., to PHC "$scrypt$..."
+  // style) would silently break verification of all existing passwords.
   it("hash output follows scrypt:<salt-hex>:<hash-hex> format", async () => {
     const hash = await hasher.hash("test");
     const parts = hash.split(":");
