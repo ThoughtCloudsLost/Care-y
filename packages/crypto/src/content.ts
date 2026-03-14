@@ -19,15 +19,8 @@
 
 import { requireSodium } from "./sodium.js";
 import { DecryptionError, InvalidKeyError } from "./errors.js";
+import { concatBytes } from "./bytes.js";
 import type { SymmetricKey, Ciphertext } from "./types.js";
-
-/** Concatenate nonce and sealed ciphertext into a single blob. */
-function prependNonce(nonce: Uint8Array, sealed: Uint8Array): Ciphertext {
-  const result = new Uint8Array(nonce.length + sealed.length);
-  result.set(nonce, 0);
-  result.set(sealed, nonce.length);
-  return result as Ciphertext;
-}
 
 /**
  * Generate a random 32-byte ticket key (tk).
@@ -65,7 +58,7 @@ export function encryptContent(
   const nonce = sodium.randombytes_buf(sodium.crypto_secretbox_NONCEBYTES);
   const sealed = sodium.crypto_secretbox_easy(plaintext, nonce, key);
 
-  return prependNonce(nonce, sealed);
+  return concatBytes(nonce, sealed) as Ciphertext;
 }
 
 /**

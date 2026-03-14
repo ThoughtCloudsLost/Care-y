@@ -24,6 +24,7 @@
 import { requireSodium } from "./sodium.js";
 import { encryptContent, decryptContent } from "./content.js";
 import { InvalidKeyError } from "./errors.js";
+import { concatBytes } from "./bytes.js";
 import {
   BRANDING_LABEL,
   type SymmetricKey,
@@ -53,11 +54,10 @@ export function deriveClientBrandingKey(
   }
 
   const label = new TextEncoder().encode(BRANDING_LABEL);
-  const input = new Uint8Array(label.length + orgPublicKey.length);
-  input.set(label, 0);
-  input.set(orgPublicKey, label.length);
-
-  return sodium.crypto_generichash(32, input) as SymmetricKey;
+  return sodium.crypto_generichash(
+    32,
+    concatBytes(label, orgPublicKey),
+  ) as SymmetricKey;
 }
 
 /**

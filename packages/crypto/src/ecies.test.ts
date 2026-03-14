@@ -163,6 +163,13 @@ describe("ECIES per-volunteer wrapping", () => {
 
       expect(() => eciesEncrypt(plaintext, longKey)).toThrow(InvalidKeyError);
     });
+
+    it("throws InvalidKeyError for zero-length recipient public key", () => {
+      const plaintext = new TextEncoder().encode("test");
+      const emptyKey = new Uint8Array(0) as RistrettoPoint;
+
+      expect(() => eciesEncrypt(plaintext, emptyKey)).toThrow(InvalidKeyError);
+    });
   });
 
   describe("ephemeral uniqueness", () => {

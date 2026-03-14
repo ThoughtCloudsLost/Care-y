@@ -121,6 +121,36 @@ describe("HKDF-SHA512", () => {
       const result = hkdf(ikm, info, 255 * 64);
       expect(result.length).toBe(255 * 64);
     });
+
+    it("accepts minimum valid length (1 byte)", () => {
+      const ikm = new Uint8Array(32);
+      ikm.fill(0xbb);
+      const info = new Uint8Array(0);
+      const result = hkdf(ikm, info, 1);
+      expect(result.length).toBe(1);
+    });
+
+    it("1-byte output is prefix of 32-byte output (truncation correctness)", () => {
+      const ikm = new Uint8Array(32);
+      ikm.fill(0xcc);
+      const info = new TextEncoder().encode("truncation-test");
+      const one = hkdf(ikm, info, 1);
+      const full = hkdf(ikm, info, 32);
+      expect(one[0]).toBe(full[0]);
+    });
+
+    it("output lengths crossing hash boundary are correct", () => {
+      const ikm = new Uint8Array(32);
+      ikm.fill(0xdd);
+      const info = new Uint8Array(0);
+      // 64 = exactly one hash block, 65 = forces a second expand round
+      const exact = hkdf(ikm, info, 64);
+      const oneOver = hkdf(ikm, info, 65);
+      expect(exact.length).toBe(64);
+      expect(oneOver.length).toBe(65);
+      // First 64 bytes must be identical (same expand round)
+      expect(oneOver.subarray(0, 64)).toEqual(exact);
+    });
   });
 
   describe("determinism and domain separation", () => {

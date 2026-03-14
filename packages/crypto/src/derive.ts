@@ -24,6 +24,7 @@
 import { requireSodium } from "./sodium.js";
 import { hkdfDerive32 } from "./hkdf.js";
 import { InvalidKeyError, InvalidInputError } from "./errors.js";
+import { concatBytes } from "./bytes.js";
 import {
   type Scalar,
   type RistrettoPoint,
@@ -33,6 +34,28 @@ import {
   ARGON2_MIN_PARAMS,
   HKDF_LABELS,
 } from "./types.js";
+
+/**
+ * Enforce minimum Argon2id parameters to prevent server-side downgrades.
+ * A compromised server could send weaker params to make brute-force cheaper.
+ * Each field is clamped to at least the RFC 9106 Section 4 SECOND RECOMMENDED value.
+ */
+function enforceArgon2Floor(serverParams?: Argon2Params): Argon2Params {
+  return {
+    memoryKiB: Math.max(
+      serverParams?.memoryKiB ?? ARGON2_MIN_PARAMS.memoryKiB,
+      ARGON2_MIN_PARAMS.memoryKiB,
+    ),
+    iterations: Math.max(
+      serverParams?.iterations ?? ARGON2_MIN_PARAMS.iterations,
+      ARGON2_MIN_PARAMS.iterations,
+    ),
+    parallelism: Math.max(
+      serverParams?.parallelism ?? ARGON2_MIN_PARAMS.parallelism,
+      ARGON2_MIN_PARAMS.parallelism,
+    ),
+  };
+}
 
 /**
  * Argon2id key derivation (password stretching).
@@ -60,21 +83,7 @@ export function deriveAccountKey(
     );
   }
 
-  // Enforce minimums: use max(server, minimum) for each param
-  const params: Argon2Params = {
-    memoryKiB: Math.max(
-      serverParams?.memoryKiB ?? ARGON2_MIN_PARAMS.memoryKiB,
-      ARGON2_MIN_PARAMS.memoryKiB,
-    ),
-    iterations: Math.max(
-      serverParams?.iterations ?? ARGON2_MIN_PARAMS.iterations,
-      ARGON2_MIN_PARAMS.iterations,
-    ),
-    parallelism: Math.max(
-      serverParams?.parallelism ?? ARGON2_MIN_PARAMS.parallelism,
-      ARGON2_MIN_PARAMS.parallelism,
-    ),
-  };
+  const params = enforceArgon2Floor(serverParams);
 
   return sodium.crypto_pwhash(
     32,
@@ -103,14 +112,7 @@ export function deriveMasterKey(
     throw new InvalidKeyError("OPRF output must be 32 bytes");
   }
 
-  let ikm: Uint8Array;
-  if (pqShared) {
-    ikm = new Uint8Array(oprfOutput.length + pqShared.length);
-    ikm.set(oprfOutput, 0);
-    ikm.set(pqShared, oprfOutput.length);
-  } else {
-    ikm = oprfOutput;
-  }
+  const ikm = pqShared ? concatBytes(oprfOutput, pqShared) : oprfOutput;
 
   const result = hkdfDerive32(ikm, HKDF_LABELS.MASTER_KEY);
 
