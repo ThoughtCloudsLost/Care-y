@@ -232,5 +232,90 @@ describe("barrel export", () => {
       const orgUnwrapKey = deriveOrgUnwrapKey(masterKey);
       expect(orgUnwrapKey).not.toEqual(volPrivate);
     }, 30_000);
+
+    it("threshold OPRF (2-of-2) produces same master key as single-server", () => {
+      // Fixed input for determinism
+      const password = new TextEncoder().encode("threshold-e2e-test");
+      const salt = generateSalt();
+      const stretched = deriveAccountKey(password, salt);
+
+      // Full OPRF key
+      const fullKey = sodium.crypto_core_ristretto255_scalar_random() as Scalar;
+
+      // Split into 2-of-2 Shamir shares: f(x) = k + a*x
+      const a = sodium.crypto_core_ristretto255_scalar_random() as Scalar;
+      const shareA = sodium.crypto_core_ristretto255_scalar_add(
+        fullKey,
+        a,
+      ) as Scalar;
+      const twoA = sodium.crypto_core_ristretto255_scalar_add(a, a);
+      const shareB = sodium.crypto_core_ristretto255_scalar_add(
+        fullKey,
+        twoA,
+      ) as Scalar;
+
+      // Client blinds once
+      const { blindedElement, blindState } = oprfBlind(stretched);
+
+      // Path A: single-server evaluation
+      const fullEval = sodium.crypto_scalarmult_ristretto255(
+        fullKey,
+        blindedElement,
+      ) as RistrettoPoint;
+      const outputFull = oprfFinalize(blindState, fullEval, stretched);
+      const masterFull = deriveMasterKey(outputFull);
+
+      // Path B: threshold evaluation with Lagrange reconstruction
+      const partialA = sodium.crypto_scalarmult_ristretto255(
+        shareA,
+        blindedElement,
+      ) as RistrettoPoint;
+      const partialB = sodium.crypto_scalarmult_ristretto255(
+        shareB,
+        blindedElement,
+      ) as RistrettoPoint;
+      const combined = lagrangeInterpolate(partialA, partialB);
+      const outputThreshold = oprfFinalize(blindState, combined, stretched);
+      const masterThreshold = deriveMasterKey(outputThreshold);
+
+      // Both paths must produce identical master keys
+      expect(masterThreshold).toEqual(masterFull);
+
+      // Derive volunteer keys from threshold path and verify ECIES roundtrip
+      const volPrivate = deriveVolunteerPrivateKey(masterThreshold);
+      const volPublic = deriveVolunteerPublicKey(volPrivate);
+      const tk = generateContentKey();
+      const wrapped = eciesEncrypt(tk, volPublic);
+      const unwrapped = eciesDecrypt(
+        wrapped.ephemeralPoint,
+        wrapped.nonce,
+        wrapped.ciphertext,
+        volPrivate,
+      ) as SymmetricKey;
+      expect(unwrapped).toEqual(tk);
+    }, 30_000);
+
+    it("same password + same server key = deterministic master key", () => {
+      const password = new TextEncoder().encode("determinism-test");
+      const salt = generateSalt();
+      const stretched = deriveAccountKey(password, salt);
+      const serverKey =
+        sodium.crypto_core_ristretto255_scalar_random() as Scalar;
+
+      // Run the full chain twice with the same inputs
+      const masterKeys: Uint8Array[] = [];
+      for (let i = 0; i < 2; i++) {
+        const { blindedElement, blindState } = oprfBlind(stretched);
+        const evaluated = sodium.crypto_scalarmult_ristretto255(
+          serverKey,
+          blindedElement,
+        ) as RistrettoPoint;
+        const oprfOutput = oprfFinalize(blindState, evaluated, stretched);
+        masterKeys.push(deriveMasterKey(oprfOutput));
+      }
+
+      // Different blinding scalars, but same OPRF output after unblinding
+      expect(masterKeys[0]).toEqual(masterKeys[1]);
+    }, 30_000);
   });
 });

@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeAll } from "vitest";
 import fc from "fast-check";
+import { FC_MEDIUM } from "./fc-config.js";
 import { wrapKey, unwrapKey } from "./keywrap.js";
 import {
   getSodium,
@@ -121,7 +122,7 @@ describe("key wrapping", () => {
             expect(unwrapped).toEqual(keyMaterial);
           },
         ),
-        { numRuns: 20 },
+        { numRuns: FC_MEDIUM },
       );
     });
   });

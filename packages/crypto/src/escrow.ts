@@ -16,8 +16,13 @@
  * Serialization format: salt (16) || nonce (24) || ciphertext (variable)
  *
  * References:
- *   RFC 9106 Section 4 (Argon2id recommended parameters)
- *   SEC-041 (XSalsa20-Poly1305 for symmetric encryption)
+ *   SEC-008  RFC 9106 Section 3.1 (Argon2id salt requirements)
+ *   SEC-009  RFC 9106 Section 4 (Argon2id parameter choices, escrow-heavy params)
+ *   SEC-041  OWASP Key Management (symmetric encryption for key backup)
+ *   SEC-051  libsodium Argon2id (crypto_pwhash API)
+ *   SEC-052  libsodium crypto_secretbox (XSalsa20-Poly1305 for escrow encryption)
+ *   SEC-054  libsodium memory management (memzero for derived escrow key)
+ *   SEC-164  Argon2 reference specification (256 MB / 4i escrow cost justification)
  */
 
 import { requireSodium } from "./sodium.js";
@@ -67,16 +72,18 @@ export function encryptWithPassphrase(
   const salt = sodium.randombytes_buf(sodium.crypto_pwhash_SALTBYTES);
   const key = deriveEscrowKey(passphrase, salt);
 
-  const nonce = sodium.randombytes_buf(sodium.crypto_secretbox_NONCEBYTES);
-  const ciphertext = sodium.crypto_secretbox_easy(data, nonce, key);
+  try {
+    const nonce = sodium.randombytes_buf(sodium.crypto_secretbox_NONCEBYTES);
+    const ciphertext = sodium.crypto_secretbox_easy(data, nonce, key);
 
-  sodium.memzero(key);
-
-  return {
-    salt: salt as Salt,
-    nonce: nonce as Nonce,
-    ciphertext,
-  };
+    return {
+      salt: salt as Salt,
+      nonce: nonce as Nonce,
+      ciphertext,
+    };
+  } finally {
+    sodium.memzero(key);
+  }
 }
 
 /**
@@ -107,28 +114,53 @@ export function decryptWithPassphrase(
 }
 
 /**
+ * Escrow serialization version byte.
+ * v1 = Argon2id(256MB/4i/4p) + XSalsa20-Poly1305.
+ * If params or cipher change, bump the version and branch in deserialize.
+ */
+const ESCROW_VERSION = 0x01;
+
+/**
  * Serialize an EscrowBlob to a single Uint8Array for file storage.
- * Format: salt (16) || nonce (24) || ciphertext (variable)
+ * Format: version (1) || salt (16) || nonce (24) || ciphertext (variable)
  *
  * @param blob - EscrowBlob to serialize
- * @returns Single contiguous byte array
+ * @returns Single contiguous byte array with version prefix
  */
 export function serializeEscrowBlob(blob: EscrowBlob): Uint8Array {
-  return concatBytes(blob.salt, blob.nonce, blob.ciphertext);
+  return concatBytes(
+    new Uint8Array([ESCROW_VERSION]),
+    blob.salt,
+    blob.nonce,
+    blob.ciphertext,
+  );
 }
 
 /**
  * Deserialize a Uint8Array back to an EscrowBlob.
  *
- * @param data - Serialized escrow blob (salt || nonce || ciphertext)
+ * @param data - Serialized escrow blob (version || salt || nonce || ciphertext)
  * @returns Parsed EscrowBlob
- * @throws InvalidInputError if data is too short
+ * @throws InvalidInputError if data is too short or version is unrecognized
  */
 export function deserializeEscrowBlob(data: Uint8Array): EscrowBlob {
   const sodium = requireSodium();
+
+  if (data.length < 1) {
+    throw new InvalidInputError("Escrow blob is empty");
+  }
+
+  const version = data[0];
+  if (version !== ESCROW_VERSION) {
+    throw new InvalidInputError(
+      `Unknown escrow version: ${String(version)} (expected ${String(ESCROW_VERSION)})`,
+    );
+  }
+
   const saltLen = sodium.crypto_pwhash_SALTBYTES;
   const nonceLen = sodium.crypto_secretbox_NONCEBYTES;
-  const minLen = saltLen + nonceLen + sodium.crypto_secretbox_MACBYTES;
+  // +1 for the version byte
+  const minLen = 1 + saltLen + nonceLen + sodium.crypto_secretbox_MACBYTES;
 
   if (data.length < minLen) {
     throw new InvalidInputError(
@@ -137,8 +169,8 @@ export function deserializeEscrowBlob(data: Uint8Array): EscrowBlob {
   }
 
   return {
-    salt: data.subarray(0, saltLen) as Salt,
-    nonce: data.subarray(saltLen, saltLen + nonceLen) as Nonce,
-    ciphertext: data.subarray(saltLen + nonceLen),
+    salt: data.subarray(1, 1 + saltLen) as Salt,
+    nonce: data.subarray(1 + saltLen, 1 + saltLen + nonceLen) as Nonce,
+    ciphertext: data.subarray(1 + saltLen + nonceLen),
   };
 }

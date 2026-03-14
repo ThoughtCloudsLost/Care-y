@@ -13,8 +13,8 @@
  * Format: nonce (24 bytes) || ciphertext (plaintext + 16-byte MAC)
  *
  * References:
- *   SEC-041 (XSalsa20-Poly1305 for content encryption)
- *   libsodium crypto_secretbox documentation
+ *   SEC-041  OWASP Key Management (nonce || ciphertext storage format)
+ *   SEC-052  libsodium crypto_secretbox (XSalsa20-Poly1305 authenticated encryption)
  */
 
 import { requireSodium } from "./sodium.js";

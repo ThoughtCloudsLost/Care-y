@@ -41,3 +41,15 @@ export function scalarFromInt(value: number): Uint8Array {
   scalar[0] = value;
   return scalar;
 }
+
+/**
+ * Encode a domain separation label (ASCII string) to bytes.
+ *
+ * Centralizes the TextEncoder instantiation used throughout the key
+ * derivation tree and branding module. Keeps RFC-level code (rfc.ts)
+ * separate since those strings match spec naming conventions directly.
+ */
+const encoder = new TextEncoder();
+export function encodeLabel(label: string): Uint8Array {
+  return encoder.encode(label);
+}

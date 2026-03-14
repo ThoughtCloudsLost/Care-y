@@ -1,13 +1,18 @@
 import { describe, it, expect, beforeAll } from "vitest";
 import fc from "fast-check";
+import { FC_MEDIUM } from "./fc-config.js";
 import { eciesEncrypt, eciesDecrypt } from "./ecies.js";
 import {
   getSodium,
   _resetSodiumForTesting,
   type SodiumBackend,
 } from "./sodium.js";
-import { DecryptionError, InvalidKeyError } from "./errors.js";
-import type { Scalar, RistrettoPoint } from "./types.js";
+import {
+  DecryptionError,
+  InvalidKeyError,
+  InvalidInputError,
+} from "./errors.js";
+import type { Scalar, RistrettoPoint, Nonce } from "./types.js";
 
 /**
  * Test helper: generate a ristretto255 keypair (private scalar + public point).
@@ -170,6 +175,31 @@ describe("ECIES per-volunteer wrapping", () => {
 
       expect(() => eciesEncrypt(plaintext, emptyKey)).toThrow(InvalidKeyError);
     });
+
+    it("throws InvalidKeyError for wrong-length ephemeral point on decrypt", () => {
+      const { priv, pub } = generateKeypair(sodium);
+      const encrypted = eciesEncrypt(new Uint8Array(32), pub);
+      const shortPoint = new Uint8Array(16) as RistrettoPoint;
+
+      expect(() =>
+        eciesDecrypt(shortPoint, encrypted.nonce, encrypted.ciphertext, priv),
+      ).toThrow(InvalidKeyError);
+    });
+
+    it("throws InvalidInputError for wrong-length nonce on decrypt", () => {
+      const { priv, pub } = generateKeypair(sodium);
+      const encrypted = eciesEncrypt(new Uint8Array(32), pub);
+      const shortNonce = new Uint8Array(12) as Nonce;
+
+      expect(() =>
+        eciesDecrypt(
+          encrypted.ephemeralPoint,
+          shortNonce,
+          encrypted.ciphertext,
+          priv,
+        ),
+      ).toThrow(InvalidInputError);
+    });
   });
 
   describe("ephemeral uniqueness", () => {
@@ -236,7 +266,7 @@ describe("ECIES per-volunteer wrapping", () => {
             expect(decrypted).toEqual(plaintext);
           },
         ),
-        { numRuns: 20 },
+        { numRuns: FC_MEDIUM },
       );
     });
 
@@ -251,7 +281,7 @@ describe("ECIES per-volunteer wrapping", () => {
             expect(a.ephemeralPoint).not.toEqual(b.ephemeralPoint);
           },
         ),
-        { numRuns: 20 },
+        { numRuns: FC_MEDIUM },
       );
     });
   });

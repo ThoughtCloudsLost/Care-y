@@ -3,6 +3,7 @@ import fc from "fast-check";
 import { encode, decode } from "./serialize.js";
 import { getSodium, _resetSodiumForTesting } from "./sodium.js";
 import { InvalidInputError } from "./errors.js";
+import { FC_LIGHT } from "./fc-config.js";
 
 describe("serialize (base64url no-padding)", () => {
   beforeAll(async () => {
@@ -86,7 +87,7 @@ describe("serialize (base64url no-padding)", () => {
             expect(roundtripped).toEqual(data);
           },
         ),
-        { numRuns: 200 },
+        { numRuns: FC_LIGHT },
       );
     });
 
@@ -96,7 +97,7 @@ describe("serialize (base64url no-padding)", () => {
           const encoded = encode(data);
           expect(encoded).toMatch(/^[A-Za-z0-9_-]*$/);
         }),
-        { numRuns: 200 },
+        { numRuns: FC_LIGHT },
       );
     });
   });

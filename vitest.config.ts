@@ -19,6 +19,7 @@ export default defineConfig({
         // Test infrastructure, not production code.
         "packages/server/src/test-utils.ts",
         "packages/server/src/test-global-setup.ts",
+        "packages/crypto/src/fc-config.ts",
         // Side-effect singleton (Pool creation, type parser). Tested indirectly via integration tests.
         "packages/server/src/db/db.ts",
         // Migration down() functions are rollback-only, never called in production flow.

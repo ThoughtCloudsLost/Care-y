@@ -2,6 +2,7 @@
 // Isomorphic encryption library (browser + Node) using libsodium.
 
 // --- Initialization ---
+// Test-only helpers (_resetSodiumForTesting, etc.) are in "./testing.js"
 export { getSodium, requireSodium, type SodiumBackend } from "./sodium.js";
 
 // --- Types ---
@@ -48,7 +49,6 @@ export {
   generateRefreshScalar,
   computeRefreshDelta,
   applyRefresh,
-  _resetLagrangeCacheForTesting,
 } from "./oprf.js";
 
 // --- Key Derivation ---
@@ -91,3 +91,10 @@ export {
   serializeEscrowBlob,
   deserializeEscrowBlob,
 } from "./escrow.js";
+
+// --- RFC 9497 / 9380 internals (testing + server-side OPRF) ---
+export {
+  expandMessageXMD,
+  HASH_TO_GROUP_DST,
+  buildFinalizeInput,
+} from "./rfc.js";

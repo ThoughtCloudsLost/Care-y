@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeAll } from "vitest";
 import fc from "fast-check";
+import { FC_MEDIUM } from "./fc-config.js";
 import {
   deriveClientBrandingKey,
   encryptClientBranding,
@@ -121,7 +122,7 @@ describe("branding encryption", () => {
             expect(decrypted).toEqual(payload);
           },
         ),
-        { numRuns: 20 },
+        { numRuns: FC_MEDIUM },
       );
     });
   });

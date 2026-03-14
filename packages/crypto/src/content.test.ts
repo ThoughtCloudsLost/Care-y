@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeAll } from "vitest";
 import fc from "fast-check";
+import { FC_MEDIUM } from "./fc-config.js";
 import {
   generateContentKey,
   encryptContent,
@@ -199,7 +200,7 @@ describe("content encryption", () => {
             expect(decrypted).toEqual(plaintext);
           },
         ),
-        { numRuns: 20 },
+        { numRuns: FC_MEDIUM },
       );
     });
   });

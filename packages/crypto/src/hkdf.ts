@@ -13,12 +13,15 @@
  *          T(i) = HMAC-SHA512(PRK, T(i-1) || info || i)
  *
  * References:
- *   RFC 5869 Section 2 (HKDF specification)
- *   https://datatracker.ietf.org/doc/html/rfc5869#section-2
+ *   SEC-004  RFC 5869 (HKDF specification)
+ *   SEC-017  NIST SP 800-108 (KDF label/context binding requirements)
+ *   SEC-163  Krawczyk, "Cryptographic Extraction and Key Derivation" (CRYPTO 2010)
+ *   SEC-054  libsodium memory management (memzero for PRK)
  */
 
 import { requireSodium, type SodiumBackend } from "./sodium.js";
 import { InvalidInputError } from "./errors.js";
+import { encodeLabel } from "./bytes.js";
 
 const HASH_LEN = 64; // SHA-512 output length
 const MAX_OUTPUT = 255 * HASH_LEN;
@@ -104,10 +107,11 @@ export function hkdf(
 
   const sodium = requireSodium();
   const prk = hkdfExtract(sodium, ikm, salt);
-  const okm = hkdfExpand(sodium, prk, info, length);
-
-  sodium.memzero(prk);
-  return okm;
+  try {
+    return hkdfExpand(sodium, prk, info, length);
+  } finally {
+    sodium.memzero(prk);
+  }
 }
 
 /**
@@ -119,6 +123,5 @@ export function hkdf(
  * @returns 32-byte derived key
  */
 export function hkdfDerive32(ikm: Uint8Array, label: string): Uint8Array {
-  const info = new TextEncoder().encode(label);
-  return hkdf(ikm, info, 32);
+  return hkdf(ikm, encodeLabel(label), 32);
 }

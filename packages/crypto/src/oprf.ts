@@ -6,9 +6,16 @@
  * BlindEvaluate is in packages/server (not isomorphic, uses sodium-native).
  *
  * References:
- *   RFC 9497 Section 3 (OPRF Protocol)
- *   https://datatracker.ietf.org/doc/html/rfc9497#section-3
- *   liboprf C reference implementation (SEC-140)
+ *   SEC-011  RFC 9496 (ristretto255 group definition)
+ *   SEC-012  RFC 9497 (OPRF protocol, Blind/Finalize/HashToGroup)
+ *   SEC-013  RFC 9497 Section 7.3 (OPRF domain separation)
+ *   SEC-053  libsodium ristretto255 API (scalarmult, scalar_invert, from_hash)
+ *   SEC-140  liboprf C reference implementation (correctness baseline)
+ *   SEC-155  Jarecki et al., TOPPSS (ACNS 2017, threshold OPRF foundation)
+ *   SEC-172  Shamir secret sharing (Lagrange interpolation for 2-of-2)
+ *   SEC-157  Herzberg et al. (CRYPTO 1995, proactive secret sharing)
+ *   SEC-201  Herzberg et al. (CRYPTO 1995, sharing-of-zero polynomial)
+ *   SEC-202  Baron et al. (2015, communication-optimal proactive refresh)
  */
 
 /* eslint-disable @typescript-eslint/no-unsafe-type-assertion --
@@ -18,7 +25,12 @@
 
 import { requireSodium } from "./sodium.js";
 import { InvalidInputError } from "./errors.js";
-import { concatBytes, scalarFromInt } from "./bytes.js";
+import { scalarFromInt } from "./bytes.js";
+import {
+  expandMessageXMD,
+  HASH_TO_GROUP_DST,
+  buildFinalizeInput,
+} from "./rfc.js";
 import type {
   Scalar,
   RistrettoPoint,
@@ -27,9 +39,24 @@ import type {
 } from "./types.js";
 
 /**
- * Blind the input for OPRF evaluation.
+ * HashToGroup per RFC 9497 Section 4.1 (ristretto255-SHA512).
  *
- * 1. HashToGroup: expand input to 64 bytes via BLAKE2b, then map to ristretto255
+ * 1. expand_message_xmd(SHA-512, input, DST, 64) per RFC 9380
+ * 2. ristretto255_from_hash(expanded) maps 64 uniform bytes to a group element
+ *
+ * The DST is "HashToGroup-" || contextString where contextString encodes
+ * the OPRF mode (0x00) and ciphersuite identifier ("ristretto255-SHA512").
+ */
+function hashToGroup(input: Uint8Array): RistrettoPoint {
+  const sodium = requireSodium();
+  const expanded = expandMessageXMD(sodium, input, HASH_TO_GROUP_DST, 64);
+  return sodium.crypto_core_ristretto255_from_hash(expanded) as RistrettoPoint;
+}
+
+/**
+ * Blind the input for OPRF evaluation (RFC 9497 Section 3.3.1).
+ *
+ * 1. HashToGroup: expand_message_xmd(SHA-512) + ristretto255_from_hash
  * 2. Generate random blinding scalar r
  * 3. Blinded element B = r * P
  *
@@ -43,17 +70,8 @@ export function oprfBlind(input: Uint8Array): BlindResult {
     throw new InvalidInputError("OPRF input must not be empty");
   }
 
-  // HashToGroup: expand input to 64 bytes for ristretto255_from_hash
-  const expanded = sodium.crypto_generichash(
-    sodium.crypto_core_ristretto255_HASHBYTES, // 64
-    input,
-  );
-  const point = sodium.crypto_core_ristretto255_from_hash(expanded);
-
-  // Random blinding scalar
+  const point = hashToGroup(input);
   const blindScalar = sodium.crypto_core_ristretto255_scalar_random();
-
-  // Blinded element = blindScalar * point
   const blindedElement = sodium.crypto_scalarmult_ristretto255(
     blindScalar,
     point,
@@ -66,15 +84,19 @@ export function oprfBlind(input: Uint8Array): BlindResult {
 }
 
 /**
- * Finalize the OPRF output after receiving the server's evaluation.
+ * Finalize the OPRF output after receiving the server's evaluation
+ * (RFC 9497 Section 3.3.1).
  *
- * 1. Unblind: output_point = r^{-1} * evaluated
- * 2. Hash to fixed-length: oprfOutput = H(input || unblinded)
+ * 1. Unblind: N = r^{-1} * evaluated
+ * 2. Serialize: unblindedElement = SerializeElement(N)
+ * 3. Hash: output = SHA-512(I2OSP(len(input),2) || input ||
+ *                           I2OSP(len(unblindedElement),2) || unblindedElement ||
+ *                           "Finalize")
  *
  * @param blindState - The blinding scalar from oprfBlind
  * @param evaluatedElement - The server's response (key * blindedElement)
  * @param input - The original input (same bytes passed to oprfBlind)
- * @returns 32-byte OPRF output (deterministic for same input + server key)
+ * @returns 64-byte OPRF output (SHA-512, deterministic for same input + server key)
  */
 export function oprfFinalize(
   blindState: Scalar,
@@ -83,23 +105,24 @@ export function oprfFinalize(
 ): Uint8Array {
   const sodium = requireSodium();
 
-  // Unblind: r^{-1} * evaluated
+  // Unblind: N = r^{-1} * evaluated
   const rInverse = sodium.crypto_core_ristretto255_scalar_invert(blindState);
   const unblinded = sodium.crypto_scalarmult_ristretto255(
     rInverse,
     evaluatedElement,
   );
 
-  // Hash to output: H(input || unblinded) per RFC 9497 Section 4.1
-  const hashInput = concatBytes(input, unblinded);
-  const oprfOutput = sodium.crypto_generichash(32, hashInput);
-
-  // Zero intermediates (derived from key material)
-  sodium.memzero(rInverse);
-  sodium.memzero(unblinded);
-  sodium.memzero(hashInput);
-
-  return oprfOutput;
+  try {
+    // Hash per RFC 9497: SHA-512(I2OSP(len(input),2) || input ||
+    //   I2OSP(len(unblindedElement),2) || unblindedElement || "Finalize")
+    const hashInput = buildFinalizeInput(input, unblinded);
+    const oprfOutput = sodium.crypto_hash_sha512(hashInput);
+    sodium.memzero(hashInput);
+    return oprfOutput;
+  } finally {
+    sodium.memzero(rInverse);
+    sodium.memzero(unblinded);
+  }
 }
 
 /**
@@ -123,7 +146,7 @@ function getLagrangeCoefficients(): {
   coeffB: Uint8Array;
 } {
   if (lagrangeCoeffA && lagrangeCoeffB) {
-    return { coeffA: lagrangeCoeffA, coeffB: lagrangeCoeffB };
+    return { coeffA: lagrangeCoeffA.slice(), coeffB: lagrangeCoeffB.slice() };
   }
   const sodium = requireSodium();
   lagrangeCoeffA = scalarFromInt(2);
@@ -131,7 +154,7 @@ function getLagrangeCoefficients(): {
     new Uint8Array(32), // zero
     scalarFromInt(1),
   );
-  return { coeffA: lagrangeCoeffA, coeffB: lagrangeCoeffB };
+  return { coeffA: lagrangeCoeffA.slice(), coeffB: lagrangeCoeffB.slice() };
 }
 
 /**
@@ -165,13 +188,13 @@ export function lagrangeInterpolate(
 
 // --- Proactive Share Refresh (tested here, deployed later) ---
 //
-// Polynomial-aware refresh per SEC-201 (Herzberg et al. CRYPTO 1995).
+// Polynomial-aware refresh per SEC-157/SEC-201 (Herzberg et al. CRYPTO 1995).
 // Each refresh generates a random "sharing of zero": a degree-(t-1)
 // polynomial g(x) with g(0)=0. Adding g(x_i) to each share re-randomizes
 // without changing the reconstructed secret at x=0. For our 2-of-2
 // (t=2, degree-1): g(x) = b*x, so delta_A = b*1, delta_B = b*2.
 // See also SEC-202 (Baron et al. 2015) for the formal "0-hole polynomial"
-// construction.
+// construction, and SEC-158 (Falk et al. TCC 2023) for the async variant.
 
 /**
  * Generate a random scalar for proactive share refresh.
