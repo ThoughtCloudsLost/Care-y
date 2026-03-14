@@ -3,6 +3,7 @@ import fc from "fast-check";
 import { hkdf, hkdfDerive32 } from "./hkdf.js";
 import { getSodium, _resetSodiumForTesting } from "./sodium.js";
 import { InvalidInputError } from "./errors.js";
+import { FC_LIGHT } from "./fc-config.js";
 
 /**
  * Helper: convert hex string to Uint8Array.
@@ -233,7 +234,7 @@ describe("HKDF-SHA512", () => {
             expect(result.length).toBe(length);
           },
         ),
-        { numRuns: 100 },
+        { numRuns: FC_LIGHT },
       );
     });
 
@@ -248,7 +249,7 @@ describe("HKDF-SHA512", () => {
             expect(a).toEqual(b);
           },
         ),
-        { numRuns: 100 },
+        { numRuns: FC_LIGHT },
       );
     });
   });

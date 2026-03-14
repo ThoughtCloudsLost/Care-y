@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeAll } from "vitest";
 import fc from "fast-check";
+import { FC_HEAVY } from "./fc-config.js";
 import {
   encryptWithPassphrase,
   decryptWithPassphrase,
@@ -119,8 +120,10 @@ describe("escrow encryption", () => {
     }, 60_000);
 
     it("truncated blob error has correct code", () => {
+      const truncated = new Uint8Array(10);
+      truncated[0] = 0x01; // valid version, but too short
       try {
-        deserializeEscrowBlob(new Uint8Array(10));
+        deserializeEscrowBlob(truncated);
         expect.fail("should have thrown");
       } catch (e) {
         expect(e).toBeInstanceOf(InvalidInputError);
@@ -143,7 +146,7 @@ describe("escrow encryption", () => {
       expect(recovered).toEqual(data);
     }, 30_000);
 
-    it("serialized format is salt || nonce || ciphertext", () => {
+    it("serialized format is version || salt || nonce || ciphertext", () => {
       const data = sodium.randombytes_buf(32);
       const passphrase = new TextEncoder().encode("format-test");
 
@@ -151,16 +154,19 @@ describe("escrow encryption", () => {
       const serialized = serializeEscrowBlob(blob);
 
       const expectedLen =
-        blob.salt.length + blob.nonce.length + blob.ciphertext.length;
+        1 + blob.salt.length + blob.nonce.length + blob.ciphertext.length;
       expect(serialized.length).toBe(expectedLen);
 
       // Verify byte layout
-      const saltPart = serialized.subarray(0, blob.salt.length);
+      expect(serialized[0]).toBe(0x01); // version byte
+      const saltPart = serialized.subarray(1, 1 + blob.salt.length);
       const noncePart = serialized.subarray(
-        blob.salt.length,
-        blob.salt.length + blob.nonce.length,
+        1 + blob.salt.length,
+        1 + blob.salt.length + blob.nonce.length,
       );
-      const ctPart = serialized.subarray(blob.salt.length + blob.nonce.length);
+      const ctPart = serialized.subarray(
+        1 + blob.salt.length + blob.nonce.length,
+      );
 
       expect(saltPart).toEqual(blob.salt);
       expect(noncePart).toEqual(blob.nonce);
@@ -168,8 +174,38 @@ describe("escrow encryption", () => {
     }, 30_000);
 
     it("throws InvalidInputError for truncated serialized blob", () => {
+      // Needs version byte + enough data. 10 bytes with valid version is too short.
       const truncated = new Uint8Array(10);
+      truncated[0] = 0x01; // valid version
       expect(() => deserializeEscrowBlob(truncated)).toThrow(InvalidInputError);
+    });
+
+    it("throws InvalidInputError for unknown version", () => {
+      const badVersion = new Uint8Array(100);
+      badVersion[0] = 0xff;
+      expect(() => deserializeEscrowBlob(badVersion)).toThrow(
+        InvalidInputError,
+      );
+      expect(() => deserializeEscrowBlob(badVersion)).toThrow(
+        /Unknown escrow version/,
+      );
+    });
+
+    it("throws InvalidInputError for empty blob", () => {
+      expect(() => deserializeEscrowBlob(new Uint8Array(0))).toThrow(
+        InvalidInputError,
+      );
+    });
+
+    it("rejects version 0x00 (no valid escrow format uses version 0)", () => {
+      const zeroVersion = new Uint8Array(100);
+      zeroVersion[0] = 0x00;
+      expect(() => deserializeEscrowBlob(zeroVersion)).toThrow(
+        InvalidInputError,
+      );
+      expect(() => deserializeEscrowBlob(zeroVersion)).toThrow(
+        /Unknown escrow version: 0/,
+      );
     });
   });
 
@@ -185,7 +221,24 @@ describe("escrow encryption", () => {
             expect(recovered).toEqual(data);
           },
         ),
-        { numRuns: 3 }, // Heavy Argon2id, keep run count low
+        { numRuns: FC_HEAVY },
+      );
+    }, 120_000);
+
+    it("encrypt -> serialize -> deserialize -> decrypt roundtrip", () => {
+      fc.assert(
+        fc.property(
+          fc.uint8Array({ minLength: 1, maxLength: 64 }),
+          fc.uint8Array({ minLength: 8, maxLength: 32 }),
+          (data, passphrase) => {
+            const blob = encryptWithPassphrase(data, passphrase);
+            const serialized = serializeEscrowBlob(blob);
+            const deserialized = deserializeEscrowBlob(serialized);
+            const recovered = decryptWithPassphrase(deserialized, passphrase);
+            expect(recovered).toEqual(data);
+          },
+        ),
+        { numRuns: FC_HEAVY },
       );
     }, 120_000);
   });

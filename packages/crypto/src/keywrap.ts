@@ -6,7 +6,8 @@
  * the org private key to authorized volunteers.
  *
  * References:
- *   SEC-040 (ECIES construction)
+ *   SEC-040  OWASP Cryptographic Storage (ECIES construction guidance)
+ *   SEC-011  RFC 9496 (ristretto255 group for public/private key types)
  *   docs/design-ref/crypto-architecture-v2.md (key distribution)
  */
 

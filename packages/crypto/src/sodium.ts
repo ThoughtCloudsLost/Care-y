@@ -9,6 +9,14 @@
  * functions, which are required for OPRF and ECIES. The server package uses
  * sodium-native directly for its own server-only needs (field encryption,
  * blind indexes) but the isomorphic crypto library uses sumo exclusively.
+ *
+ * References:
+ *   SEC-142  libsodium.js WASM bindings (sumo build for ristretto255)
+ *   SEC-143  libsodium Emscripten symbols (confirms sumo includes ristretto255)
+ *   SEC-052  libsodium crypto_secretbox (XSalsa20-Poly1305 interface)
+ *   SEC-053  libsodium ristretto255 API (point arithmetic, scalar ops)
+ *   SEC-051  libsodium Argon2id (crypto_pwhash interface)
+ *   SEC-054  libsodium memory management (memzero interface)
  */
 
 import { SodiumNotReadyError } from "./errors.js";
@@ -56,6 +64,7 @@ export interface SodiumBackend {
   crypto_core_ristretto255_scalar_mul(x: Uint8Array, y: Uint8Array): Uint8Array;
   crypto_core_ristretto255_scalar_add(x: Uint8Array, y: Uint8Array): Uint8Array;
   crypto_core_ristretto255_scalar_sub(x: Uint8Array, y: Uint8Array): Uint8Array;
+  crypto_core_ristretto255_scalar_reduce(nonReduced: Uint8Array): Uint8Array;
   crypto_core_ristretto255_from_hash(hash: Uint8Array): Uint8Array;
   crypto_scalarmult_ristretto255(
     scalar: Uint8Array,
@@ -79,6 +88,9 @@ export interface SodiumBackend {
   readonly crypto_pwhash_ALG_ARGON2ID13: number;
   readonly crypto_pwhash_SALTBYTES: number;
 
+  // --- SHA-512 (for RFC 9380 expand_message_xmd) ---
+  crypto_hash_sha512(message: Uint8Array): Uint8Array;
+
   // --- Memory zeroing ---
   memzero(buf: Uint8Array): void;
 
@@ -99,11 +111,18 @@ export async function getSodium(): Promise<SodiumBackend> {
 
   if (pendingInit) return pendingInit;
 
-  pendingInit = loadSumoBackend().then((backend) => {
-    cachedBackend = backend;
-    pendingInit = null;
-    return backend;
-  });
+  pendingInit = loadSumoBackend()
+    .then((backend) => {
+      cachedBackend = backend;
+      pendingInit = null;
+      return backend;
+    })
+    /* v8 ignore start -- WASM load failure recovery, not testable without mocking dynamic import */
+    .catch((err: unknown) => {
+      pendingInit = null;
+      throw err;
+    });
+  /* v8 ignore stop */
 
   return pendingInit;
 }

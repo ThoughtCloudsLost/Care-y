@@ -25,13 +25,21 @@
  * defense-in-depth; the ephemeral scalar is the primary uniqueness guarantee.
  *
  * References:
- *   SEC-040 (ECIES construction)
- *   RFC 5869 (HKDF for key derivation)
+ *   SEC-040  OWASP Cryptographic Storage (ECIES construction guidance)
+ *   SEC-004  RFC 5869 (HKDF for ephemeral shared secret to wrap key)
+ *   SEC-011  RFC 9496 (ristretto255 group for ECDH)
+ *   SEC-052  libsodium crypto_secretbox (XSalsa20-Poly1305 for wrapping)
+ *   SEC-053  libsodium ristretto255 API (scalarmult, scalar_random)
+ *   SEC-054  libsodium memory management (memzero for shared secret, wrap key)
  */
 
 import { requireSodium } from "./sodium.js";
 import { hkdfDerive32 } from "./hkdf.js";
-import { DecryptionError, InvalidKeyError } from "./errors.js";
+import {
+  DecryptionError,
+  InvalidKeyError,
+  InvalidInputError,
+} from "./errors.js";
 import {
   type RistrettoPoint,
   type Scalar,
@@ -71,22 +79,23 @@ export function eciesEncrypt(
   // 4. Domain-separated key derivation
   const wrapKey = hkdfDerive32(shared, HKDF_LABELS.ECIES_WRAP);
 
-  // 5. Random nonce (defense-in-depth)
-  const nonce = sodium.randombytes_buf(sodium.crypto_secretbox_NONCEBYTES);
+  try {
+    // 5. Random nonce (defense-in-depth)
+    const nonce = sodium.randombytes_buf(sodium.crypto_secretbox_NONCEBYTES);
 
-  // 6. Encrypt
-  const ciphertext = sodium.crypto_secretbox_easy(plaintext, nonce, wrapKey);
+    // 6. Encrypt
+    const ciphertext = sodium.crypto_secretbox_easy(plaintext, nonce, wrapKey);
 
-  // 7. Zero intermediates
-  sodium.memzero(ephemeral);
-  sodium.memzero(shared);
-  sodium.memzero(wrapKey);
-
-  return {
-    ephemeralPoint: ephemeralPoint as RistrettoPoint,
-    nonce: nonce as Nonce,
-    ciphertext,
-  };
+    return {
+      ephemeralPoint: ephemeralPoint as RistrettoPoint,
+      nonce: nonce as Nonce,
+      ciphertext,
+    };
+  } finally {
+    sodium.memzero(ephemeral);
+    sodium.memzero(shared);
+    sodium.memzero(wrapKey);
+  }
 }
 
 /**
@@ -97,6 +106,8 @@ export function eciesEncrypt(
  * @param ciphertext - The encrypted data (secretbox output)
  * @param recipientPrivate - Recipient's ristretto255 private scalar
  * @returns Decrypted plaintext
+ * @throws InvalidKeyError if ephemeralPoint is wrong length
+ * @throws InvalidInputError if nonce is wrong length
  * @throws DecryptionError if the key is wrong or ciphertext is tampered
  */
 export function eciesDecrypt(
@@ -106,6 +117,14 @@ export function eciesDecrypt(
   recipientPrivate: Scalar,
 ): Uint8Array {
   const sodium = requireSodium();
+
+  if (ephemeralPoint.length !== sodium.crypto_core_ristretto255_BYTES) {
+    throw new InvalidKeyError("Ephemeral point must be 32 bytes");
+  }
+
+  if (nonce.length !== sodium.crypto_secretbox_NONCEBYTES) {
+    throw new InvalidInputError("Nonce must be 24 bytes");
+  }
 
   // 1. ECDH
   const shared = sodium.crypto_scalarmult_ristretto255(

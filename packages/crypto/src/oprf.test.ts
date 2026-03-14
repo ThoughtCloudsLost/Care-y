@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeAll } from "vitest";
 import fc from "fast-check";
+import { FC_MEDIUM } from "./fc-config.js";
 import {
   oprfBlind,
   oprfFinalize,
@@ -9,6 +10,7 @@ import {
   applyRefresh,
   _resetLagrangeCacheForTesting,
 } from "./oprf.js";
+import { expandMessageXMD, HASH_TO_GROUP_DST } from "./rfc.js";
 import {
   getSodium,
   _resetSodiumForTesting,
@@ -16,6 +18,20 @@ import {
 } from "./sodium.js";
 import { InvalidInputError } from "./errors.js";
 import type { Scalar, RistrettoPoint } from "./types.js";
+
+function fromHex(hex: string): Uint8Array {
+  const bytes = new Uint8Array(hex.length / 2);
+  for (let i = 0; i < bytes.length; i++) {
+    bytes[i] = parseInt(hex.slice(i * 2, i * 2 + 2), 16);
+  }
+  return bytes;
+}
+
+function toHex(buf: Uint8Array): string {
+  return Array.from(buf)
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
+}
 
 /**
  * Test helper: simulates server-side BlindEvaluate.
@@ -105,7 +121,7 @@ describe("OPRF protocol", () => {
       const output2 = oprfFinalize(s2, evaluated2, input);
 
       expect(output1).toEqual(output2);
-      expect(output1.length).toBe(32);
+      expect(output1.length).toBe(64);
     });
 
     it("produces different output for different keys", () => {
@@ -281,10 +297,8 @@ describe("OPRF protocol", () => {
       );
 
       // Direct computation: key * P (without blinding)
-      const expanded = sodium.crypto_generichash(
-        sodium.crypto_core_ristretto255_HASHBYTES,
-        input,
-      );
+      // Uses the same RFC 9380 HashToGroup as oprfBlind
+      const expanded = expandMessageXMD(sodium, input, HASH_TO_GROUP_DST, 64);
       const point = sodium.crypto_core_ristretto255_from_hash(expanded);
       const direct = sodium.crypto_scalarmult_ristretto255(key, point);
 
@@ -386,7 +400,7 @@ describe("OPRF protocol", () => {
   });
 
   describe("property-based", () => {
-    it("Blind -> Evaluate -> Finalize always produces 32 bytes", () => {
+    it("Blind -> Evaluate -> Finalize always produces 64 bytes", () => {
       fc.assert(
         fc.property(
           fc.uint8Array({ minLength: 1, maxLength: 128 }),
@@ -396,10 +410,10 @@ describe("OPRF protocol", () => {
             const { blindedElement, blindState } = oprfBlind(input);
             const evaluated = blindEvaluate(sodium, key, blindedElement);
             const output = oprfFinalize(blindState, evaluated, input);
-            expect(output.length).toBe(32);
+            expect(output.length).toBe(64);
           },
         ),
-        { numRuns: 50 },
+        { numRuns: FC_MEDIUM },
       );
     });
 
@@ -418,7 +432,7 @@ describe("OPRF protocol", () => {
 
           expect(combined).toEqual(fullEval);
         }),
-        { numRuns: 20 },
+        { numRuns: FC_MEDIUM },
       );
     });
 
@@ -445,8 +459,107 @@ describe("OPRF protocol", () => {
 
           expect(combined).toEqual(fullEval);
         }),
-        { numRuns: 20 },
+        { numRuns: FC_MEDIUM },
       );
+    });
+  });
+
+  /**
+   * RFC 9497 Appendix A.1.1 known-answer test vectors.
+   *
+   * These verify byte-exact compliance with the ristretto255-SHA512 OPRF
+   * ciphersuite. The test injects a deterministic blind (from the RFC)
+   * and verifies BlindedElement, EvaluationElement, and Output match.
+   *
+   * Key derivation (DeriveKeyPair) is server-side and tested separately.
+   * Here we verify HashToGroup + Blind + Evaluate + Finalize.
+   */
+  describe("RFC 9497 known-answer vectors", () => {
+    // Server key (skSm) from RFC 9497 Appendix A.1.1
+    const skSm = fromHex(
+      "5ebcea5ee37023ccb9fc2d2019f9d7737be85591ae8652ffa9ef0f4d37063b0e",
+    );
+
+    it("vector 1: Input = 0x00", () => {
+      const input = fromHex("00");
+      const blind = fromHex(
+        "64d37aed22a27f5191de1c1d69fadb899d8862b58eb4220029e036ec4c1f6706",
+      );
+      const expectedBlinded = fromHex(
+        "609a0ae68c15a3cf6903766461307e5c8bb2f95e7e6550e1ffa2dc99e412803c",
+      );
+      const expectedEval = fromHex(
+        "7ec6578ae5120958eb2db1745758ff379e77cb64fe77b0b2d8cc917ea0869c7e",
+      );
+      const expectedOutput = fromHex(
+        "527759c3d9366f277d8c6020418d96bb393ba2afb20ff90df23fb7708264e2f3" +
+          "ab9135e3bd69955851de4b1f9fe8a0973396719b7912ba9ee8aa7d0b5e24bcf6",
+      );
+
+      // HashToGroup: expand_message_xmd(input, DST, 64) -> from_hash
+      const expanded = expandMessageXMD(sodium, input, HASH_TO_GROUP_DST, 64);
+      const point = sodium.crypto_core_ristretto255_from_hash(expanded);
+
+      // Blind: blindedElement = blind * point
+      const blindedElement = sodium.crypto_scalarmult_ristretto255(
+        blind,
+        point,
+      );
+      expect(toHex(blindedElement)).toBe(toHex(expectedBlinded));
+
+      // Server evaluate: evaluated = skSm * blindedElement
+      const evaluated = sodium.crypto_scalarmult_ristretto255(
+        skSm,
+        blindedElement,
+      );
+      expect(toHex(evaluated)).toBe(toHex(expectedEval));
+
+      // Finalize with the RFC blind
+      const output = oprfFinalize(
+        blind as Scalar,
+        evaluated as RistrettoPoint,
+        input,
+      );
+      expect(toHex(output)).toBe(toHex(expectedOutput));
+    });
+
+    it("vector 2: Input = 0x5a*17", () => {
+      const input = fromHex("5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a");
+      const blind = fromHex(
+        "64d37aed22a27f5191de1c1d69fadb899d8862b58eb4220029e036ec4c1f6706",
+      );
+      const expectedBlinded = fromHex(
+        "da27ef466870f5f15296299850aa088629945a17d1f5b7f5ff043f76b3c06418",
+      );
+      const expectedEval = fromHex(
+        "b4cbf5a4f1eeda5a63ce7b77c7d23f461db3fcab0dd28e4e17cecb5c90d02c25",
+      );
+      const expectedOutput = fromHex(
+        "f4a74c9c592497375e796aa837e907b1a045d34306a749db9f34221f7e750cb4" +
+          "f2a6413a6bf6fa5e19ba6348eb673934a722a7ede2e7621306d18951e7cf2c73",
+      );
+
+      const expanded = expandMessageXMD(sodium, input, HASH_TO_GROUP_DST, 64);
+      const point = sodium.crypto_core_ristretto255_from_hash(expanded);
+
+      const blindedElement = sodium.crypto_scalarmult_ristretto255(
+        blind,
+        point,
+      );
+      expect(toHex(blindedElement)).toBe(toHex(expectedBlinded));
+
+      const evaluated = sodium.crypto_scalarmult_ristretto255(
+        skSm,
+        blindedElement,
+      );
+      expect(toHex(evaluated)).toBe(toHex(expectedEval));
+
+      const output = oprfFinalize(
+        blind as Scalar,
+        evaluated as RistrettoPoint,
+        input,
+      );
+      expect(toHex(output)).toBe(toHex(expectedOutput));
     });
   });
 });

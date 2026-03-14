@@ -91,6 +91,16 @@ describe("sodium abstraction layer", () => {
         expect(scalar.length).toBe(sodium.crypto_core_ristretto255_SCALARBYTES);
       });
 
+      it("scalar_reduce reduces 64 bytes to a 32-byte scalar", () => {
+        const input = new Uint8Array(64);
+        input.fill(0xff);
+        const reduced = sodium.crypto_core_ristretto255_scalar_reduce(input);
+        expect(reduced).toBeInstanceOf(Uint8Array);
+        expect(reduced.length).toBe(
+          sodium.crypto_core_ristretto255_SCALARBYTES,
+        );
+      });
+
       it("base point multiplication produces a valid 32-byte point", () => {
         const scalar = sodium.crypto_core_ristretto255_scalar_random();
         const point = sodium.crypto_scalarmult_ristretto255_base(scalar);
@@ -267,6 +277,34 @@ describe("sodium abstraction layer", () => {
         const a = sodium.crypto_generichash(32, message);
         const b = sodium.crypto_generichash(32, message);
         expect(a).toEqual(b);
+      });
+    });
+
+    describe("SHA-512", () => {
+      it("produces 64-byte output", () => {
+        const message = new TextEncoder().encode("test");
+        const hash = sodium.crypto_hash_sha512(message);
+        expect(hash.length).toBe(64);
+      });
+
+      it("is deterministic", () => {
+        const message = new TextEncoder().encode("deterministic");
+        const a = sodium.crypto_hash_sha512(message);
+        const b = sodium.crypto_hash_sha512(message);
+        expect(a).toEqual(b);
+      });
+
+      it("matches NIST test vector for 'abc'", () => {
+        const message = new TextEncoder().encode("abc");
+        const hash = sodium.crypto_hash_sha512(message);
+        // NIST SHA-512 test vector for "abc"
+        const expected =
+          "ddaf35a193617abacc417349ae20413112e6fa4e89a97ea20a9eeee64b55d39a" +
+          "2192992a274fc1a836ba3c23a3feebbd454d4423643ce80e2a9ac94fa54ca49f";
+        const actual = Array.from(hash)
+          .map((b) => b.toString(16).padStart(2, "0"))
+          .join("");
+        expect(actual).toBe(expected);
       });
     });
 

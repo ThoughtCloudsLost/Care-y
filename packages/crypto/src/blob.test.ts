@@ -1,7 +1,12 @@
 import { describe, it, expect, beforeAll } from "vitest";
 import fc from "fast-check";
+import { FC_MEDIUM } from "./fc-config.js";
 import { encryptBlob, decryptBlob } from "./blob.js";
-import { generateContentKey, decryptContent } from "./content.js";
+import {
+  generateContentKey,
+  encryptContent,
+  decryptContent,
+} from "./content.js";
 import {
   getSodium,
   _resetSodiumForTesting,
@@ -50,6 +55,16 @@ describe("blob encryption", () => {
 
       expect(decrypted).toEqual(data);
     });
+
+    it("content encrypted data is decryptable via decryptBlob", () => {
+      const key = generateContentKey();
+      const data = new TextEncoder().encode("reverse-interop-test");
+
+      const encrypted = encryptContent(data, key);
+      const decrypted = decryptBlob(encrypted, key);
+
+      expect(decrypted).toEqual(data);
+    });
   });
 
   describe("decryption failures", () => {
@@ -82,7 +97,7 @@ describe("blob encryption", () => {
             expect(decrypted).toEqual(data);
           },
         ),
-        { numRuns: 20 },
+        { numRuns: FC_MEDIUM },
       );
     });
   });

@@ -16,15 +16,21 @@
  * for ML-KEM-768 hybrid key agreement (H-016).
  *
  * References:
- *   RFC 9106 Section 4 (Argon2id recommended parameters)
- *   RFC 5869 (HKDF)
+ *   SEC-004  RFC 5869 (HKDF for domain-separated key derivation)
+ *   SEC-008  RFC 9106 Section 3.1 (Argon2id salt requirements)
+ *   SEC-009  RFC 9106 Section 4 (Argon2id SECOND RECOMMENDED parameters)
+ *   SEC-011  RFC 9496 (ristretto255 group for volunteer keypair)
+ *   SEC-053  libsodium ristretto255 API (scalar_reduce, scalarmult_base)
+ *   SEC-054  libsodium memory management (memzero for expanded key material)
+ *   SEC-155  Jarecki et al., TOPPSS (ACNS 2017, threshold OPRF key derivation)
+ *   SEC-164  Argon2 reference specification (brute-force cost analysis)
  *   docs/design-ref/crypto-architecture-v2.md
  */
 
 import { requireSodium } from "./sodium.js";
-import { hkdfDerive32 } from "./hkdf.js";
+import { hkdf, hkdfDerive32 } from "./hkdf.js";
 import { InvalidKeyError, InvalidInputError } from "./errors.js";
-import { concatBytes } from "./bytes.js";
+import { concatBytes, encodeLabel } from "./bytes.js";
 import {
   type Scalar,
   type RistrettoPoint,
@@ -99,7 +105,7 @@ export function deriveAccountKey(
  * Derive masterKey from OPRF output.
  * masterKey = HKDF-SHA512(oprfOutput [|| pqShared], "care-y-master-v2")
  *
- * @param oprfOutput - 32-byte OPRF finalize output
+ * @param oprfOutput - 64-byte OPRF finalize output (SHA-512 per RFC 9497)
  * @param pqShared   - Optional ML-KEM shared secret for hybrid (future, H-016)
  * @returns 32-byte master key
  * @throws InvalidKeyError if oprfOutput is wrong length
@@ -108,10 +114,12 @@ export function deriveMasterKey(
   oprfOutput: Uint8Array,
   pqShared?: Uint8Array,
 ): SymmetricKey {
-  if (oprfOutput.length !== 32) {
-    throw new InvalidKeyError("OPRF output must be 32 bytes");
+  if (oprfOutput.length !== 64) {
+    throw new InvalidKeyError("OPRF output must be 64 bytes");
   }
 
+  // When pqShared is absent, ikm aliases oprfOutput (caller's buffer).
+  // Only zero ikm when it's a new concatenated buffer we own.
   const ikm = pqShared ? concatBytes(oprfOutput, pqShared) : oprfOutput;
 
   const result = hkdfDerive32(ikm, HKDF_LABELS.MASTER_KEY);
@@ -125,14 +133,26 @@ export function deriveMasterKey(
 }
 
 /**
+ * Derive a uniformly distributed ristretto255 scalar from key material.
+ *
+ * Expands to 64 bytes via HKDF then reduces modulo the group order.
+ * The 64-byte expansion (double the scalar size) prevents modular
+ * reduction bias, matching the HashToScalar construction in
+ * RFC 9497 Section 4.1.
+ */
+function deriveUniformScalar(ikm: Uint8Array, label: string): Scalar {
+  const sodium = requireSodium();
+  const expanded = hkdf(ikm, encodeLabel(label), 64);
+  const scalar = sodium.crypto_core_ristretto255_scalar_reduce(expanded);
+  sodium.memzero(expanded);
+  return scalar as Scalar;
+}
+
+/**
  * Derive volunteer private key (ristretto255 scalar) from masterKey.
- * volPrivate = HKDF-SHA512(masterKey, "care-y-ecies-private-v1")
  */
 export function deriveVolunteerPrivateKey(masterKey: SymmetricKey): Scalar {
-  return hkdfDerive32(
-    masterKey,
-    HKDF_LABELS.ECIES_PRIVATE,
-  ) as unknown as Scalar;
+  return deriveUniformScalar(masterKey, HKDF_LABELS.ECIES_PRIVATE);
 }
 
 /**
@@ -151,10 +171,7 @@ export function deriveVolunteerPublicKey(volPrivate: Scalar): RistrettoPoint {
  * orgUnwrapKey = HKDF-SHA512(masterKey, "care-y-org-key-unwrap-v1")
  */
 export function deriveOrgUnwrapKey(masterKey: SymmetricKey): SymmetricKey {
-  return hkdfDerive32(
-    masterKey,
-    HKDF_LABELS.ORG_UNWRAP,
-  ) as unknown as SymmetricKey;
+  return hkdfDerive32(masterKey, HKDF_LABELS.ORG_UNWRAP) as SymmetricKey;
 }
 
 /**

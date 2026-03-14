@@ -18,13 +18,15 @@
  *   Client-side: encrypted with BLAKE2b(label || orgPublicKey) (this module)
  *
  * References:
+ *   SEC-052  libsodium crypto_secretbox (via content.ts for encrypt/decrypt)
+ *   SEC-011  RFC 9496 (ristretto255 public key as branding key input)
  *   B1 decision (crypto-architecture-v2.md, org branding two-tier)
  */
 
 import { requireSodium } from "./sodium.js";
 import { encryptContent, decryptContent } from "./content.js";
 import { InvalidKeyError } from "./errors.js";
-import { concatBytes } from "./bytes.js";
+import { concatBytes, encodeLabel } from "./bytes.js";
 import {
   BRANDING_LABEL,
   type SymmetricKey,
@@ -53,10 +55,9 @@ export function deriveClientBrandingKey(
     throw new InvalidKeyError("Org public key must be 32 bytes");
   }
 
-  const label = new TextEncoder().encode(BRANDING_LABEL);
   return sodium.crypto_generichash(
-    32,
-    concatBytes(label, orgPublicKey),
+    sodium.crypto_secretbox_KEYBYTES,
+    concatBytes(encodeLabel(BRANDING_LABEL), orgPublicKey),
   ) as SymmetricKey;
 }
 
@@ -74,9 +75,11 @@ export function encryptClientBranding(
   orgPublicKey: RistrettoPoint,
 ): Ciphertext {
   const key = deriveClientBrandingKey(orgPublicKey);
-  const result = encryptContent(payload, key);
-  requireSodium().memzero(key);
-  return result;
+  try {
+    return encryptContent(payload, key);
+  } finally {
+    requireSodium().memzero(key);
+  }
 }
 
 /**
