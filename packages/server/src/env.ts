@@ -32,6 +32,10 @@ const envSchema = z.object({
   // applies for production (Caddy reverse proxy) and direct API testing.
   CORS_ORIGIN: z.string().default("http://localhost:5173"),
 
+  // OPRF IPC sockets
+  OPRF_SOCKET_A: z.string().default("/run/oprf/oprf-a.sock"),
+  OPRF_SOCKET_B: z.string().default("/run/oprf/oprf-b.sock"),
+
   // SMTP (optional, defaults to Mailpit in dev)
   SMTP_HOST: z.string().optional(),
   SMTP_PORT: z.coerce.number().int().positive().optional(),

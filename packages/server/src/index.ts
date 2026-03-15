@@ -37,6 +37,10 @@ import { deriveFakeSaltKey } from "./auth/salt-defense.js";
 import { createContextFactory } from "./trpc/context.js";
 import { createAppRouter } from "./routes/router.js";
 import { createEmailSender } from "./email/email-sender.js";
+import { createIpcEvaluator } from "./crypto/oprf-ipc.js";
+import { createPowVerifier } from "./crypto/pow.js";
+import { createOprfAuditLogger } from "./crypto/oprf-audit.js";
+import { createOprfEvaluateService } from "./crypto/oprf-evaluate-service.js";
 
 // --- DB startup probe ---
 
@@ -145,6 +149,36 @@ const emailSender = createEmailSender(
   env.SMTP_FROM,
 );
 
+// --- OPRF infrastructure ---
+
+const oprfEvaluator = createIpcEvaluator({
+  socketPathA: env.OPRF_SOCKET_A,
+  socketPathB: env.OPRF_SOCKET_B,
+});
+
+const oprfUserLimiter = createInMemoryRateLimiter({
+  windowMs: 15 * 60 * 1000,
+  maxRequests: 10,
+});
+
+const oprfIpLimiter = createInMemoryRateLimiter({
+  windowMs: 15 * 60 * 1000,
+  maxRequests: 50,
+});
+
+const powVerifier = createPowVerifier();
+
+const opsKeyBuf = Buffer.from(env.OPS_SECRETS_KEY, "hex");
+const oprfAuditLogger = createOprfAuditLogger(db, opsKeyBuf);
+
+const oprfService = createOprfEvaluateService({
+  evaluator: oprfEvaluator,
+  userRateLimiter: oprfUserLimiter,
+  ipRateLimiter: oprfIpLimiter,
+  powVerifier,
+  auditLogger: oprfAuditLogger,
+});
+
 const appRouter = createAppRouter({
   authDeps: {
     hasher,
@@ -160,6 +194,7 @@ const appRouter = createAppRouter({
     emailSender,
     encryptor,
   },
+  oprfDeps: { oprfService },
   orgService,
 });
 

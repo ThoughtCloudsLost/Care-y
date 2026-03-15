@@ -468,3 +468,24 @@ export function extractEmailCode(text: string): string {
   }
   return match[1] as string;
 }
+
+// ---------------------------------------------------------------------------
+// Mock OPRF dependencies (for tests that build createAppRouter but don't
+// exercise the OPRF route)
+// ---------------------------------------------------------------------------
+
+import type { OprfRouterDeps } from "./routes/oprf.js";
+
+/**
+ * Creates stub OPRF deps that satisfy the type but throw on actual use.
+ * Only suitable for tests that don't call the oprf.evaluate endpoint.
+ */
+export function createMockOprfDeps(): OprfRouterDeps {
+  return {
+    oprfService: {
+      async evaluate() {
+        throw new TestSetupError("Mock OPRF service called unexpectedly");
+      },
+    },
+  };
+}
