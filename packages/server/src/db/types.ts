@@ -76,6 +76,7 @@ export interface OrgConfigTable {
   encrypted_client_text: Buffer | null;
   client_encrypted_branding: Buffer | null;
   pii_retention_days: number | null;
+  org_public_key: Buffer | null; // Curve25519 (32 bytes), null until first admin onboarding
 }
 
 // --- User keys (full interface, replaces UserKeysStubTable) ---
@@ -88,6 +89,14 @@ export interface UserKeysTable {
   key_version: ColumnType<number, number | undefined, number>;
   rotated_at: Date | null;
   rotation_lock: ColumnType<boolean, boolean | undefined, boolean>;
+}
+
+// --- Wrapped org keys (per-volunteer encrypted copies of org secret key) ---
+export interface WrappedOrgKeysTable {
+  user_id: string;
+  wrapped_key: Buffer; // encrypted blob, only volunteers can unwrap
+  nonce: Buffer; // 24 bytes
+  key_version: ColumnType<number, number | undefined, number>;
 }
 
 // --- Ticket key wraps (interface only, CREATE TABLE with tickets migration) ---
@@ -160,6 +169,7 @@ export interface TenantDatabase {
   email_codes: EmailCodesTable;
   backup_codes: BackupCodesTable;
   two_factor_methods: TwoFactorMethodsTable;
+  wrapped_org_keys: WrappedOrgKeysTable;
   ticket_key_wraps: TicketKeyWrapsTable; // Interface only, CREATE TABLE with tickets migration
   // Tickets (tickets, followups, audit_log)
   // Shifts (shifts, shift_occurrences)
