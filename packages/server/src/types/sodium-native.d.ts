@@ -35,4 +35,24 @@ declare module "sodium-native" {
     nonce: Buffer,
     key: Buffer,
   ): boolean;
+
+  // --- Memory hardening (OPRF process) ---
+
+  /**
+   * Allocates `size` bytes of guard-paged, canary-protected memory.
+   * The returned buffer is page-aligned with guard pages before and after.
+   */
+  export function sodium_malloc(size: number): Buffer;
+
+  /** Locks `buf` into RAM, preventing it from being swapped to disk. */
+  export function sodium_mlock(buf: Buffer): void;
+
+  /** Makes `buf` read-only at the OS level (MMU protection). */
+  export function sodium_mprotect_readonly(buf: Buffer): void;
+
+  /** Makes `buf` read-write at the OS level. */
+  export function sodium_mprotect_readwrite(buf: Buffer): void;
+
+  /** Securely zeros `buf` (not optimized away by the compiler). */
+  export function sodium_memzero(buf: Buffer): void;
 }
