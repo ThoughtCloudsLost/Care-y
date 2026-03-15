@@ -7,7 +7,7 @@
  * No database or Docker containers needed.
  */
 
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi, afterEach } from "vitest";
 import { createAppRouter } from "./router.js";
 import { createCallerFactory } from "../trpc/trpc.js";
 import type { Context } from "../trpc/context.js";
@@ -20,6 +20,7 @@ import { createInMemoryRateLimiter } from "../ratelimit/rate-limiter.js";
 import { createPowVerifier } from "../crypto/pow.js";
 import {
   createOprfEvaluateService,
+  createFailureTracker,
   getDelayMs,
   type OprfEvaluateServiceDeps,
   type OprfEvaluateRequest,
@@ -440,5 +441,99 @@ describe("OPRF tRPC route", () => {
       }),
       "FORBIDDEN",
     );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 4. createFailureTracker (unit tests for cleanup interval + dispose)
+// ---------------------------------------------------------------------------
+
+describe("createFailureTracker", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("check returns 0 for unknown user", () => {
+    const tracker = createFailureTracker();
+    expect(tracker.check("unknown")).toBe(0);
+    tracker.dispose();
+  });
+
+  it("increment returns current failure count", () => {
+    const tracker = createFailureTracker();
+    expect(tracker.increment("user-a")).toBe(1);
+    expect(tracker.increment("user-a")).toBe(2);
+    expect(tracker.increment("user-a")).toBe(3);
+    tracker.dispose();
+  });
+
+  it("reset clears failures for a user", () => {
+    const tracker = createFailureTracker();
+    tracker.increment("user-a");
+    tracker.increment("user-a");
+    tracker.reset("user-a");
+    expect(tracker.check("user-a")).toBe(0);
+    tracker.dispose();
+  });
+
+  it("expires failures outside the window", () => {
+    let time = 1000;
+    const tracker = createFailureTracker(5000, () => time);
+
+    tracker.increment("user-a");
+    tracker.increment("user-a");
+    expect(tracker.check("user-a")).toBe(2);
+
+    // Advance past the window
+    time = 7000;
+    expect(tracker.check("user-a")).toBe(0);
+    tracker.dispose();
+  });
+
+  it("cleanup interval removes fully expired entries", () => {
+    vi.useFakeTimers();
+    let time = 1000;
+    const tracker = createFailureTracker(5000, () => time);
+
+    tracker.increment("user-a");
+    tracker.increment("user-b");
+
+    // Advance past window so all entries are expired
+    time = 7000;
+
+    // Fire the 60s cleanup interval
+    vi.advanceTimersByTime(60_000);
+
+    // After cleanup, check still returns 0 (entries were pruned)
+    expect(tracker.check("user-a")).toBe(0);
+    expect(tracker.check("user-b")).toBe(0);
+    tracker.dispose();
+  });
+
+  it("cleanup interval retains entries with recent timestamps", () => {
+    vi.useFakeTimers();
+    let time = 1000;
+    const tracker = createFailureTracker(5000, () => time);
+
+    tracker.increment("user-a");
+    time = 3000;
+    tracker.increment("user-a");
+
+    // Only the first entry is expired (time=1000), second is still in window (time=3000)
+    time = 6500;
+    vi.advanceTimersByTime(60_000);
+
+    // One failure remains (the one at time=3000, within 5s window of 6500)
+    expect(tracker.check("user-a")).toBe(1);
+    tracker.dispose();
+  });
+
+  it("dispose stops the cleanup interval", () => {
+    vi.useFakeTimers();
+    const tracker = createFailureTracker();
+    tracker.dispose();
+
+    // Advancing timers should not throw (interval was cleared)
+    expect(() => vi.advanceTimersByTime(120_000)).not.toThrow();
   });
 });

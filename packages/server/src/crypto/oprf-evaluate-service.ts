@@ -73,12 +73,24 @@ export function createFailureTracker(
 // Escalating delay
 // ---------------------------------------------------------------------------
 
-/** Escalating delay in milliseconds based on failure count */
+/**
+ * Escalating delay tiers: as failure count rises, the delay before
+ * OPRF evaluation grows. Prevents rapid brute-force without fully
+ * blocking legitimate retries.
+ */
+const DELAY_TIERS: readonly {
+  readonly minFailures: number;
+  readonly delayMs: number;
+}[] = [
+  { minFailures: 10, delayMs: 10_000 },
+  { minFailures: 7, delayMs: 5_000 },
+  { minFailures: 4, delayMs: 2_000 },
+];
+
+/** Escalating delay in milliseconds based on failure count. */
 export function getDelayMs(failureCount: number): number {
-  if (failureCount >= 10) return 10_000;
-  if (failureCount >= 7) return 5_000;
-  if (failureCount >= 4) return 2_000;
-  return 0;
+  const tier = DELAY_TIERS.find((t) => failureCount >= t.minFailures);
+  return tier?.delayMs ?? 0;
 }
 
 async function delay(ms: number): Promise<void> {
@@ -115,91 +127,125 @@ export interface OprfEvaluateService {
   evaluate(request: OprfEvaluateRequest): Promise<OprfEvaluateResult>;
 }
 
+const POW_FAILURE_THRESHOLD = 3;
+
 export function createOprfEvaluateService(
   deps: OprfEvaluateServiceDeps,
 ): OprfEvaluateService {
   const failureTracker = createFailureTracker();
 
+  /** If authenticated, the session owner must match the requested userId. */
+  async function assertSessionBinding(
+    userId: string,
+    ip: string,
+    sessionUserId: string | null,
+  ): Promise<void> {
+    if (sessionUserId !== null && sessionUserId !== userId) {
+      await deps.auditLogger.logFailure(userId, ip, "session_mismatch");
+      throw new ForbiddenError("Session userId mismatch");
+    }
+  }
+
+  /** Per-userId sliding window rate limit (10 requests / 15 min). */
+  async function enforceUserRateLimit(
+    userId: string,
+    ip: string,
+  ): Promise<void> {
+    const result = deps.userRateLimiter.check(userId);
+    if (!result.allowed) {
+      await deps.auditLogger.logFailure(userId, ip, "rate_limited");
+      throw new RateLimitError(
+        "OPRF rate limit exceeded",
+        Math.ceil(result.retryAfterMs / 1000),
+      );
+    }
+  }
+
+  /** Per-IP supplementary rate limit, independent of per-userId. */
+  async function enforceIpRateLimit(userId: string, ip: string): Promise<void> {
+    const result = deps.ipRateLimiter.check(ip);
+    if (!result.allowed) {
+      await deps.auditLogger.logFailure(userId, ip, "rate_limited");
+      throw new RateLimitError(
+        "Rate limit exceeded",
+        Math.ceil(result.retryAfterMs / 1000),
+      );
+    }
+  }
+
+  /**
+   * After 3+ failures, require proof-of-work before allowing evaluation.
+   * If no PoW is provided, issue a challenge. If PoW is invalid, track failure.
+   */
+  async function enforcePowGate(
+    userId: string,
+    ip: string,
+    failureCount: number,
+    powChallenge: string | undefined,
+    powSolution: string | undefined,
+  ): Promise<void> {
+    if (failureCount < POW_FAILURE_THRESHOLD) return;
+
+    const noPowProvided =
+      powChallenge === undefined || powSolution === undefined;
+    if (noPowProvided) {
+      const challenge = deps.powVerifier.createChallenge(userId, failureCount);
+      await deps.auditLogger.logFailure(userId, ip, "pow_required");
+      throw new PowRequiredError(challenge.challenge, challenge.difficulty);
+    }
+
+    const powIsValid = deps.powVerifier.verify(
+      userId,
+      powChallenge,
+      powSolution,
+    );
+    if (!powIsValid) {
+      failureTracker.increment(userId);
+      await deps.auditLogger.logFailure(userId, ip, "pow_invalid");
+      throw new ValidationError("Invalid proof-of-work solution");
+    }
+  }
+
+  /** Perform threshold OPRF evaluation and track success/failure. */
+  async function evaluateBlindedElement(
+    userId: string,
+    ip: string,
+    blindedElement: string,
+  ): Promise<OprfEvaluateResult> {
+    const blindedBuf = Buffer.from(blindedElement, "base64");
+    try {
+      const evaluated = await deps.evaluator.evaluate(blindedBuf);
+
+      // Only OPRF success proves identity (PoW is a gate, not proof).
+      failureTracker.reset(userId);
+
+      return { evaluated: Buffer.from(evaluated).toString("base64") };
+    } catch (err: unknown) {
+      failureTracker.increment(userId);
+      await deps.auditLogger.logFailure(userId, ip, "oprf_failed");
+      throw err;
+    }
+  }
+
   return {
     async evaluate(req: OprfEvaluateRequest): Promise<OprfEvaluateResult> {
-      const {
-        userId,
-        blindedElement,
-        ip,
-        sessionUserId,
-        powChallenge,
-        powSolution,
-      } = req;
+      const { userId, ip, sessionUserId, blindedElement } = req;
 
-      // 1. Session binding: if authenticated, assert session.userId matches request userId.
-      if (sessionUserId !== null && sessionUserId !== userId) {
-        await deps.auditLogger.logFailure(userId, ip, "session_mismatch");
-        throw new ForbiddenError("Session userId mismatch");
-      }
+      await assertSessionBinding(userId, ip, sessionUserId);
+      await enforceUserRateLimit(userId, ip);
+      await enforceIpRateLimit(userId, ip);
 
-      // 2. Per-userId rate limit (10/15min)
-      const userResult = deps.userRateLimiter.check(userId);
-      if (!userResult.allowed) {
-        await deps.auditLogger.logFailure(userId, ip, "rate_limited");
-        throw new RateLimitError(
-          "OPRF rate limit exceeded",
-          Math.ceil(userResult.retryAfterMs / 1000),
-        );
-      }
-
-      // 3. Per-IP rate limit (supplementary, independent of per-userId)
-      const ipResult = deps.ipRateLimiter.check(ip);
-      if (!ipResult.allowed) {
-        await deps.auditLogger.logFailure(userId, ip, "rate_limited");
-        throw new RateLimitError(
-          "Rate limit exceeded",
-          Math.ceil(ipResult.retryAfterMs / 1000),
-        );
-      }
-
-      // 4. Proof-of-work gate (after 3 failures in 5min window)
       const failureCount = failureTracker.check(userId);
-      if (failureCount >= 3) {
-        if (powChallenge === undefined || powSolution === undefined) {
-          const challenge = deps.powVerifier.createChallenge(
-            userId,
-            failureCount,
-          );
-          await deps.auditLogger.logFailure(userId, ip, "pow_required");
-          throw new PowRequiredError(challenge.challenge, challenge.difficulty);
-        }
+      await enforcePowGate(
+        userId,
+        ip,
+        failureCount,
+        req.powChallenge,
+        req.powSolution,
+      );
+      await delay(getDelayMs(failureCount));
 
-        const valid = deps.powVerifier.verify(
-          userId,
-          powChallenge,
-          powSolution,
-        );
-        if (!valid) {
-          failureTracker.increment(userId);
-          await deps.auditLogger.logFailure(userId, ip, "pow_invalid");
-          throw new ValidationError("Invalid proof-of-work solution");
-        }
-      }
-
-      // 5. Escalating delay (failures 4-6: 2s, 7-9: 5s, 10+: 10s)
-      const delayMs = getDelayMs(failureCount);
-      await delay(delayMs);
-
-      // 6. OPRF evaluation via threshold IPC
-      const blindedBuf = Buffer.from(blindedElement, "base64");
-      try {
-        const evaluated = await deps.evaluator.evaluate(blindedBuf);
-
-        // Success: reset failure counter. Only OPRF success proves identity,
-        // not PoW success (PoW is a gate, not proof of identity).
-        failureTracker.reset(userId);
-
-        return { evaluated: Buffer.from(evaluated).toString("base64") };
-      } catch (err: unknown) {
-        failureTracker.increment(userId);
-        await deps.auditLogger.logFailure(userId, ip, "oprf_failed");
-        throw err;
-      }
+      return evaluateBlindedElement(userId, ip, blindedElement);
     },
   };
 }

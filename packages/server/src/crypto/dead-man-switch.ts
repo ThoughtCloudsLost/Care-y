@@ -63,12 +63,15 @@ export function createDeadManSwitch(
       state = "active";
     },
 
+    // State transitions: active -> warning -> lockdown (irreversible).
+    // heartbeat() resets active/warning to active. Lockdown is permanent.
     miss(): void {
       if (state === "lockdown") return;
 
       missedCount++;
 
-      if (missedCount >= config.missThreshold) {
+      const thresholdReached = missedCount >= config.missThreshold;
+      if (thresholdReached) {
         state = "lockdown";
         if (!lockdownFired) {
           lockdownFired = true;
