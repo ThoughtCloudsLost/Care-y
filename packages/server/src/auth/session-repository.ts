@@ -21,7 +21,6 @@ export interface SessionData {
   readonly ipAddress: string;
   readonly userAgent: string;
   readonly expiresAt: Date;
-  readonly createdAt: Date;
   readonly twofaVerified: boolean;
   readonly webauthnChallenge: string | null;
 }
@@ -56,7 +55,6 @@ function toSessionData(
     ipAddress: encryptor.decrypt(row.encrypted_ip_address),
     userAgent: encryptor.decrypt(row.encrypted_user_agent),
     expiresAt: row.expires_at,
-    createdAt: row.created_at,
     twofaVerified: row.twofa_verified,
     webauthnChallenge: row.webauthn_challenge,
   };

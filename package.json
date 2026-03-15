@@ -16,7 +16,7 @@
     "test": "vitest run",
     "test:server:db": "docker compose -f docker-compose.yml -f docker-compose.test.yml exec app pnpm vitest run --project server",
     "test:watch": "vitest",
-    "test:coverage": "vitest run --coverage",
+    "test:coverage": "docker compose -f docker-compose.yml -f docker-compose.test.yml exec app pnpm vitest run --coverage",
     "clean": "tsc --build --clean",
     "migrate": "tsx --env-file=.env packages/server/src/db/migrate.ts --platform",
     "migrate:down": "tsx --env-file=.env packages/server/src/db/migrate.ts down --platform",

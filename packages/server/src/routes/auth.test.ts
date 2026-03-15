@@ -170,7 +170,6 @@ describe.skipIf(!HAS_DB)("auth + org routers (DB integration)", () => {
       displayName: string;
       roleId: string;
       isActive: boolean;
-      createdAt: Date;
     },
     sessionToken: string,
   ) {
@@ -186,7 +185,6 @@ describe.skipIf(!HAS_DB)("auth + org routers (DB integration)", () => {
         ipAddress: "127.0.0.1",
         userAgent: "test-agent",
         expiresAt: new Date(Date.now() + 60 * 60 * 1000),
-        createdAt: new Date(),
         twofaVerified: false,
         webauthnChallenge: null,
       },

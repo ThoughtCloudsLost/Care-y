@@ -35,15 +35,12 @@ services:
         - action: sync
           path: ./packages/server/src
           target: /app/packages/server/src
-          initial_sync: true
         - action: sync
           path: ./packages/shared/src
           target: /app/packages/shared/src
-          initial_sync: true
         - action: sync
           path: ./packages/crypto/src
           target: /app/packages/crypto/src
-          initial_sync: true
         # Config changes: sync + restart the process
         - action: sync+restart
           path: ./tsconfig.base.json
