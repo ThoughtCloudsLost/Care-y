@@ -36,6 +36,41 @@ declare module "sodium-native" {
     key: Buffer,
   ): boolean;
 
+  // --- Sealed box (crypto_box_seal, Curve25519) ---
+  export const crypto_box_PUBLICKEYBYTES: 32;
+  export const crypto_box_SEALBYTES: 48;
+
+  /**
+   * Generates a Curve25519 keypair. Both buffers must be pre-allocated.
+   * `pk` must be crypto_box_PUBLICKEYBYTES bytes.
+   * `sk` must be 32 bytes.
+   */
+  export function crypto_box_keypair(pk: Buffer, sk: Buffer): void;
+
+  /**
+   * Encrypts `message` into `ciphertext` using an ephemeral key and
+   * the recipient's `publicKey`. The sender is anonymous.
+   * `ciphertext` must be `message.length + crypto_box_SEALBYTES` bytes.
+   */
+  export function crypto_box_seal(
+    ciphertext: Buffer,
+    message: Buffer,
+    publicKey: Buffer,
+  ): void;
+
+  /**
+   * Opens a sealed box. Type declared for test-only roundtrip verification.
+   * The server never calls this in production (no unseal on SealedBoxEncryptor).
+   * `plaintext` must be `ciphertext.length - crypto_box_SEALBYTES` bytes.
+   */
+  // care-y-ignore-next-line server-no-decrypt -- type declaration for test-only roundtrip verification, not called in production
+  export function crypto_box_seal_open(
+    plaintext: Buffer,
+    ciphertext: Buffer,
+    publicKey: Buffer,
+    secretKey: Buffer,
+  ): boolean;
+
   // --- Memory hardening (OPRF process) ---
 
   /**
