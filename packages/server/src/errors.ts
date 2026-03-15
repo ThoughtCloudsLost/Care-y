@@ -109,6 +109,26 @@ export class PowRequiredError extends AppError {
   }
 }
 
+/** Volunteer key rotation failed (lock contention, re-wrap failure) */
+export class KeyRotationError extends AppError {
+  readonly code = "KEY_ROTATION_ERROR" as const;
+  readonly httpStatus = 409; // conflict: rotation already in progress
+
+  constructor(message: string) {
+    super(message, false);
+  }
+}
+
+/** Offboarding failed (FK constraint, missing user_keys row) */
+export class OffboardingError extends AppError {
+  readonly code = "OFFBOARDING_ERROR" as const;
+  readonly httpStatus = 500;
+
+  constructor(message: string) {
+    super(message, false);
+  }
+}
+
 export function isAppError(err: unknown): err is AppError {
   return err instanceof AppError;
 }
