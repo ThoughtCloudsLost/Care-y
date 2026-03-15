@@ -19,8 +19,29 @@ export interface OrgsTable {
   is_active: ColumnType<boolean, boolean | undefined, boolean>;
 }
 
+// --- OPRF infrastructure ---
+
+export interface OprfConfigTable {
+  id: number;
+  server_a_url: string;
+  server_b_url: string;
+  refresh_epoch: number;
+  last_refresh_at: Date | null;
+  created_at: Date;
+}
+
+export interface OprfAuditLogTable {
+  id: Generated<string>;
+  user_id: string;
+  hashed_ip: string;
+  reason: string;
+  timestamp: Generated<Date>;
+}
+
 export interface PlatformDatabase {
   orgs: OrgsTable;
+  oprf_config: OprfConfigTable;
+  oprf_audit_log: OprfAuditLogTable;
   // Telephony (telephony_config)
   // Production (deletion_requests)
 }
