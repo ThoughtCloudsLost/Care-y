@@ -21,6 +21,7 @@ import {
   mockRes,
   expectTrpcError,
   createMockEmailSender,
+  createMockOprfDeps,
   createTestUser,
   createTestSession,
   enrollTotp,
@@ -130,6 +131,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
           emailSender: mockEmail,
           encryptor: testFieldEncryptor,
         },
+        oprfDeps: createMockOprfDeps(),
         orgService,
       });
     }

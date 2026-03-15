@@ -12,6 +12,7 @@ import {
   createTwoFactorRouter,
   type TwoFactorRouterDeps,
 } from "./two-factor.js";
+import { createOprfRouter, type OprfRouterDeps } from "./oprf.js";
 import type { AuthRouterDeps } from "./auth.js";
 import type { OrgService } from "../org/service.js";
 
@@ -22,6 +23,7 @@ function healthCheck(): { status: "ok" } {
 export interface RouterDeps {
   readonly authDeps: AuthRouterDeps;
   readonly twoFactorDeps: TwoFactorRouterDeps;
+  readonly oprfDeps: OprfRouterDeps;
   readonly orgService: OrgService;
 }
 
@@ -29,11 +31,13 @@ export function createAppRouter(deps: RouterDeps) {
   const authRouter = createAuthRouter(deps.authDeps);
   const orgRouter = createOrgRouter(deps.orgService);
   const twoFactorRouter = createTwoFactorRouter(deps.twoFactorDeps);
+  const oprfRouter = createOprfRouter(deps.oprfDeps);
 
   return router({
     health: publicProcedure.query(healthCheck),
     auth: authRouter,
     org: orgRouter,
     twoFactor: twoFactorRouter,
+    oprf: oprfRouter,
   });
 }
