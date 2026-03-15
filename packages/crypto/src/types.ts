@@ -80,3 +80,32 @@ export const HKDF_LABELS = {
 
 /** BLAKE2b domain separation label for branding key derivation */
 export const BRANDING_LABEL = "care-y-branding-v1";
+
+// --- Branded type constructors ---
+// Validate byte length and return the branded type. Use these at trust
+// boundaries (IPC, deserialization) instead of raw `as` casts.
+
+const RISTRETTO_POINT_BYTES = 32;
+const SCALAR_BYTES = 32;
+
+/** Validates a 32-byte buffer and returns it as a branded RistrettoPoint. */
+export function toRistrettoPoint(buf: Uint8Array): RistrettoPoint {
+  if (buf.length !== RISTRETTO_POINT_BYTES) {
+    throw new RangeError(
+      `RistrettoPoint must be ${String(RISTRETTO_POINT_BYTES)} bytes, got ${String(buf.length)}`,
+    );
+  }
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- length-checked branded newtype constructor
+  return buf as RistrettoPoint;
+}
+
+/** Validates a 32-byte buffer and returns it as a branded Scalar. */
+export function toScalar(buf: Uint8Array): Scalar {
+  if (buf.length !== SCALAR_BYTES) {
+    throw new RangeError(
+      `Scalar must be ${String(SCALAR_BYTES)} bytes, got ${String(buf.length)}`,
+    );
+  }
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- length-checked branded newtype constructor
+  return buf as Scalar;
+}
