@@ -4,13 +4,15 @@ import { timingSafeEqual, randomBytes } from "node:crypto";
 import { getSodium } from "@care-y/crypto";
 import { blindEvaluate } from "./oprf-server.js";
 import { CryptoError } from "../errors.js";
+import {
+  frameMessage,
+  frameError,
+  createMessageReader,
+} from "./ipc-protocol.js";
 
 const SCALAR_BYTES = 32;
 const CANARY_BYTES = 8;
 const POINT_BYTES = 32;
-
-/** IPC message format: 4-byte length prefix + payload */
-const LENGTH_PREFIX_BYTES = 4;
 
 export interface ProcessConfig {
   readonly socketPath: string;
@@ -85,47 +87,41 @@ export function zeroAndExit(secure: SecureShare, reason: string): never {
   process.exit(1);
 }
 
+/**
+ * Evaluates a single blinded element against the share.
+ * Returns the framed response (success or error).
+ */
+function evaluatePayload(payload: Buffer, secure: SecureShare): Buffer {
+  if (!verifyCanary(secure)) {
+    zeroAndExit(secure, "Canary corruption detected");
+  }
+
+  const isInvalidSize = payload.length !== POINT_BYTES;
+  if (isInvalidSize) return frameError();
+
+  try {
+    const share = getShare(secure);
+    const result = blindEvaluate(share, payload);
+    return frameMessage(new Uint8Array(result));
+  } catch {
+    return frameError();
+  }
+}
+
 export function handleConnection(socket: Socket, secure: SecureShare): void {
-  let pendingData = Buffer.alloc(0);
+  const reader = createMessageReader();
 
   socket.on("data", (chunk: Buffer) => {
-    pendingData = Buffer.concat([pendingData, chunk]);
+    reader.push(chunk);
 
-    while (pendingData.length >= LENGTH_PREFIX_BYTES) {
-      const msgLen = pendingData.readUInt32BE(0);
-      if (pendingData.length < LENGTH_PREFIX_BYTES + msgLen) break;
-
-      const payload = pendingData.subarray(
-        LENGTH_PREFIX_BYTES,
-        LENGTH_PREFIX_BYTES + msgLen,
-      );
-      pendingData = pendingData.subarray(LENGTH_PREFIX_BYTES + msgLen);
-
-      // Verify canary before every evaluation
-      if (!verifyCanary(secure)) {
-        zeroAndExit(secure, "Canary corruption detected");
+    let message = reader.read();
+    while (message !== null) {
+      if (message.payload === null) {
+        socket.write(frameError());
+      } else {
+        socket.write(evaluatePayload(message.payload, secure));
       }
-
-      if (payload.length !== POINT_BYTES) {
-        const errBuf = Buffer.alloc(LENGTH_PREFIX_BYTES);
-        errBuf.writeUInt32BE(0, 0);
-        socket.write(errBuf);
-        continue;
-      }
-
-      try {
-        const share = getShare(secure);
-        const result = blindEvaluate(share, payload);
-
-        const response = Buffer.alloc(LENGTH_PREFIX_BYTES + POINT_BYTES);
-        response.writeUInt32BE(POINT_BYTES, 0);
-        Buffer.from(result).copy(response, LENGTH_PREFIX_BYTES);
-        socket.write(response);
-      } catch {
-        const errBuf = Buffer.alloc(LENGTH_PREFIX_BYTES);
-        errBuf.writeUInt32BE(0, 0);
-        socket.write(errBuf);
-      }
+      message = reader.read();
     }
   });
 }

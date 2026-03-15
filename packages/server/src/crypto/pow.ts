@@ -19,11 +19,22 @@ interface StoredChallenge {
   used: boolean;
 }
 
-/** Difficulty scaling based on failure count within the PoW window */
+/**
+ * Difficulty tiers: more failures require harder proof-of-work.
+ * Values are leading zero bits in the SHA-256 hash.
+ */
+const DIFFICULTY_TIERS: readonly {
+  readonly minFailures: number;
+  readonly bits: number;
+}[] = [
+  { minFailures: 8, bits: 22 },
+  { minFailures: 5, bits: 20 },
+];
+
+/** Difficulty scaling based on failure count within the PoW window. */
 export function getDifficulty(failureCount: number): number {
-  if (failureCount >= 8) return 22;
-  if (failureCount >= 5) return 20;
-  return 16;
+  const tier = DIFFICULTY_TIERS.find((t) => failureCount >= t.minFailures);
+  return tier?.bits ?? DEFAULT_POW_CONFIG.baseDifficulty;
 }
 
 export interface PowVerifier {

@@ -116,6 +116,57 @@ function createHttpServer(
   });
 }
 
+// --- Rate limiters ---
+
+interface RateLimiters {
+  readonly loginLimiter: ReturnType<typeof createInMemoryRateLimiter>;
+  readonly saltLimiter: ReturnType<typeof createInMemoryRateLimiter>;
+}
+
+function createAuthRateLimiters(): RateLimiters {
+  return {
+    loginLimiter: createInMemoryRateLimiter({
+      windowMs: 60_000,
+      maxRequests: 5,
+    }),
+    saltLimiter: createInMemoryRateLimiter({
+      windowMs: 60_000,
+      maxRequests: 20,
+    }),
+  };
+}
+
+// --- OPRF infrastructure ---
+
+import type { OprfEvaluateService } from "./crypto/oprf-evaluate-service.js";
+
+function createOprfInfrastructure(env: EnvVars): OprfEvaluateService {
+  const evaluator = createIpcEvaluator({
+    socketPathA: env.OPRF_SOCKET_A,
+    socketPathB: env.OPRF_SOCKET_B,
+  });
+
+  const userRateLimiter = createInMemoryRateLimiter({
+    windowMs: 15 * 60 * 1000,
+    maxRequests: 10,
+  });
+  const ipRateLimiter = createInMemoryRateLimiter({
+    windowMs: 15 * 60 * 1000,
+    maxRequests: 50,
+  });
+
+  const opsKeyBuf = Buffer.from(env.OPS_SECRETS_KEY, "hex");
+  const auditLogger = createOprfAuditLogger(db, opsKeyBuf);
+
+  return createOprfEvaluateService({
+    evaluator,
+    userRateLimiter,
+    ipRateLimiter,
+    powVerifier: createPowVerifier(),
+    auditLogger,
+  });
+}
+
 // --- Bootstrap ---
 
 await probeDatabase();
@@ -127,56 +178,19 @@ const { encryptor, indexer, fakeSaltKey } = await deriveCryptoServices(
 
 const orgService = createOrgService(db, tenantDb);
 const hasher = createScryptHasher();
-const loginLimiter = createInMemoryRateLimiter({
-  windowMs: 60_000,
-  maxRequests: 5,
-});
-const saltLimiter = createInMemoryRateLimiter({
-  windowMs: 60_000,
-  maxRequests: 20,
-});
+const { loginLimiter, saltLimiter } = createAuthRateLimiters();
+const emailSender = createEmailSender(
+  env.SMTP_HOST,
+  env.SMTP_PORT,
+  env.SMTP_FROM,
+);
+const oprfService = createOprfInfrastructure(env);
 
 const createContext = createContextFactory({
   orgService,
   hasher,
   encryptor,
   indexer,
-});
-
-const emailSender = createEmailSender(
-  env.SMTP_HOST,
-  env.SMTP_PORT,
-  env.SMTP_FROM,
-);
-
-// --- OPRF infrastructure ---
-
-const oprfEvaluator = createIpcEvaluator({
-  socketPathA: env.OPRF_SOCKET_A,
-  socketPathB: env.OPRF_SOCKET_B,
-});
-
-const oprfUserLimiter = createInMemoryRateLimiter({
-  windowMs: 15 * 60 * 1000,
-  maxRequests: 10,
-});
-
-const oprfIpLimiter = createInMemoryRateLimiter({
-  windowMs: 15 * 60 * 1000,
-  maxRequests: 50,
-});
-
-const powVerifier = createPowVerifier();
-
-const opsKeyBuf = Buffer.from(env.OPS_SECRETS_KEY, "hex");
-const oprfAuditLogger = createOprfAuditLogger(db, opsKeyBuf);
-
-const oprfService = createOprfEvaluateService({
-  evaluator: oprfEvaluator,
-  userRateLimiter: oprfUserLimiter,
-  ipRateLimiter: oprfIpLimiter,
-  powVerifier,
-  auditLogger: oprfAuditLogger,
 });
 
 const appRouter = createAppRouter({
@@ -190,10 +204,7 @@ const appRouter = createAppRouter({
     isSecureCookie: env.NODE_ENV === "production",
     emailSender,
   },
-  twoFactorDeps: {
-    emailSender,
-    encryptor,
-  },
+  twoFactorDeps: { emailSender, encryptor },
   oprfDeps: { oprfService },
   orgService,
 });

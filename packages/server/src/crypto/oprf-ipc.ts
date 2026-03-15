@@ -1,8 +1,8 @@
 import { createConnection, type Socket } from "node:net";
 import { lagrangeInterpolate, toRistrettoPoint } from "@care-y/crypto";
 import { OprfError } from "../errors.js";
+import { frameMessage, createMessageReader } from "./ipc-protocol.js";
 
-const LENGTH_PREFIX_BYTES = 4;
 const POINT_BYTES = 32;
 const IPC_TIMEOUT_MS = 5_000;
 
@@ -24,44 +24,39 @@ interface IpcConfig {
   readonly socketPathB: string;
 }
 
+/**
+ * Sends a payload to an OPRF subprocess and waits for a single response.
+ * Opens a fresh connection per call (negligible overhead at CARE-Y scale).
+ */
 async function sendToProcess(
   socketPath: string,
   payload: Buffer,
 ): Promise<Buffer> {
   return new Promise((resolve, reject) => {
     const socket: Socket = createConnection(socketPath);
+    const reader = createMessageReader();
+
     const timeoutId = setTimeout(() => {
       socket.destroy();
       reject(new OprfError(`OPRF process timeout (${socketPath})`));
     }, IPC_TIMEOUT_MS);
 
-    const msg = Buffer.alloc(LENGTH_PREFIX_BYTES + payload.length);
-    msg.writeUInt32BE(payload.length, 0);
-    payload.copy(msg, LENGTH_PREFIX_BYTES);
-    socket.write(msg);
+    socket.write(frameMessage(payload));
 
-    let received = Buffer.alloc(0);
     socket.on("data", (chunk: Buffer) => {
-      received = Buffer.concat([received, chunk]);
+      reader.push(chunk);
+      const message = reader.read();
+      if (!message) return;
 
-      if (received.length >= LENGTH_PREFIX_BYTES) {
-        const respLen = received.readUInt32BE(0);
-        if (respLen === 0) {
-          clearTimeout(timeoutId);
-          socket.destroy();
-          reject(new OprfError(`OPRF process returned error (${socketPath})`));
-          return;
-        }
-        if (received.length >= LENGTH_PREFIX_BYTES + respLen) {
-          clearTimeout(timeoutId);
-          const result = received.subarray(
-            LENGTH_PREFIX_BYTES,
-            LENGTH_PREFIX_BYTES + respLen,
-          );
-          socket.destroy();
-          resolve(Buffer.from(result));
-        }
+      clearTimeout(timeoutId);
+      socket.destroy();
+
+      if (message.payload === null) {
+        reject(new OprfError(`OPRF process returned error (${socketPath})`));
+        return;
       }
+
+      resolve(message.payload);
     });
 
     socket.on("error", (err: Error) => {
