@@ -156,7 +156,6 @@ describe.skipIf(!process.env.DATABASE_URL)(
         displayName: string;
         roleId: string;
         isActive: boolean;
-        createdAt: Date;
       },
       sessionToken: string,
       emailSender?: MockEmailSender,
@@ -174,7 +173,6 @@ describe.skipIf(!process.env.DATABASE_URL)(
           ipAddress: "127.0.0.1",
           userAgent: "test-agent",
           expiresAt: new Date(Date.now() + 60 * 60 * 1000),
-          createdAt: new Date(),
           twofaVerified: false,
           webauthnChallenge: null,
         },
@@ -191,7 +189,6 @@ describe.skipIf(!process.env.DATABASE_URL)(
         displayName: string;
         roleId: string;
         isActive: boolean;
-        createdAt: Date;
       },
       sessionToken: string,
     ) {
@@ -208,7 +205,6 @@ describe.skipIf(!process.env.DATABASE_URL)(
           ipAddress: "127.0.0.1",
           userAgent: "test-agent",
           expiresAt: new Date(Date.now() + 60 * 60 * 1000),
-          createdAt: new Date(),
           twofaVerified: true,
           webauthnChallenge: null,
         },
@@ -353,7 +349,6 @@ describe.skipIf(!process.env.DATABASE_URL)(
           displayName: "Email Send User",
           roleId: user.role_id,
           isActive: user.is_active,
-          createdAt: user.created_at,
         };
 
         const { caller } = createAuthedCaller(
@@ -386,7 +381,6 @@ describe.skipIf(!process.env.DATABASE_URL)(
           displayName: "Email Verify User",
           roleId: user.role_id,
           isActive: user.is_active,
-          createdAt: user.created_at,
         };
 
         // Send the email to get the code
@@ -540,7 +534,6 @@ describe.skipIf(!process.env.DATABASE_URL)(
           displayName: "Verify Email User",
           roleId: user.role_id,
           isActive: user.is_active,
-          createdAt: user.created_at,
         };
 
         // Enroll email 2FA first (need the method registered)
@@ -620,7 +613,6 @@ describe.skipIf(!process.env.DATABASE_URL)(
           displayName: "Methods Remove User",
           roleId: user.role_id,
           isActive: user.is_active,
-          createdAt: user.created_at,
         };
 
         // Enroll TOTP + EMAIL (two methods, so one can be removed)

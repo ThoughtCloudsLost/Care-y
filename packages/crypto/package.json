@@ -8,6 +8,7 @@
     ".": "./src/index.ts"
   },
   "dependencies": {
-    "@care-y/shared": "workspace:*"
+    "@care-y/shared": "workspace:*",
+    "libsodium-wrappers-sumo": "0.8.2"
   }
 }

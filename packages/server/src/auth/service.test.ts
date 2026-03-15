@@ -62,7 +62,6 @@ describe.skipIf(!process.env.DATABASE_URL)("AuthService", () => {
       expect(user.displayName).toBe("Alice Smith");
       expect(user.roleId).toBe("volunteer");
       expect(user.isActive).toBe(true);
-      expect(user.createdAt).toBeInstanceOf(Date);
       // password_hash must not leak through the domain object.
       expect(user).not.toHaveProperty("passwordHash");
       expect(user).not.toHaveProperty("password_hash");

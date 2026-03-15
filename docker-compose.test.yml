@@ -1,14 +1,15 @@
 # Test compose override. Targets the "test" Dockerfile stage and bind-mounts
 # test infrastructure that .dockerignore (correctly) excludes from production.
 #
-# Usage:
+# Start with watch mode so lockfile changes trigger automatic image rebuilds:
 #   docker compose -f docker-compose.yml -f docker-compose.test.yml watch
-#     (then, in another terminal)
-#   docker compose -f docker-compose.yml -f docker-compose.test.yml exec app pnpm vitest run --project server
 #
-# Or one-shot (no file watching):
-#   docker compose -f docker-compose.yml -f docker-compose.test.yml up -d
-#   docker compose -f docker-compose.yml -f docker-compose.test.yml exec app pnpm vitest run --project server
+# Then run tests from a second terminal:
+#   pnpm test:server:db          (server tests with DB)
+#   pnpm test:coverage           (all Docker-compatible projects with coverage)
+#
+# Client tests run on the host (SvelteKit deps are not in the Docker image):
+#   pnpm vitest run --project client
 
 services:
   app:
@@ -27,3 +28,5 @@ services:
       - ./packages/server/src:/app/packages/server/src:ro
       - ./packages/shared/src:/app/packages/shared/src:ro
       - ./packages/crypto/src:/app/packages/crypto/src:ro
+      # Client tests run on the host (SvelteKit deps not in Docker image).
+      # Use `pnpm vitest run --project client` locally for client coverage.

@@ -26,9 +26,8 @@ describe.skipIf(!process.env.DATABASE_URL)("createDbSessionRepository", () => {
     await testDb.cleanup();
   });
 
-  it("create returns a SessionData with generated id and createdAt", async () => {
+  it("create returns a SessionData with generated id", async () => {
     const user = await createTestUser(testDb.db);
-    const now = new Date();
 
     const session = await repo.create({
       token: "tok-create-test",
@@ -43,7 +42,6 @@ describe.skipIf(!process.env.DATABASE_URL)("createDbSessionRepository", () => {
     expect(session.userId).toBe(user.id);
     expect(session.ipAddress).toBe("192.168.1.1");
     expect(session.userAgent).toBe("Mozilla/5.0");
-    expect(session.createdAt.getTime()).toBeGreaterThanOrEqual(now.getTime());
   });
 
   it("findByToken retrieves the created session", async () => {

@@ -59,7 +59,6 @@ describe.skipIf(!process.env.DATABASE_URL)("OrgService", () => {
     expect(org.slug).toBe("test-org-create");
     expect(org.schemaName).toBe(`org_${org.id}`);
     expect(org.isActive).toBe(true);
-    expect(org.createdAt).toBeInstanceOf(Date);
   });
 
   it("createOrg creates a real PostgreSQL schema", async () => {
