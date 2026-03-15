@@ -24,6 +24,8 @@ export {
   ARGON2_ESCROW_PARAMS,
   HKDF_LABELS,
   BRANDING_LABEL,
+  toRistrettoPoint,
+  toScalar,
 } from "./types.js";
 
 // --- Errors ---

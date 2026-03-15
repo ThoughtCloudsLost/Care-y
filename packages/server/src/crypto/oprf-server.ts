@@ -1,4 +1,8 @@
-import { requireSodium } from "@care-y/crypto";
+import {
+  requireSodium,
+  toRistrettoPoint,
+  type RistrettoPoint,
+} from "@care-y/crypto";
 import { CryptoError } from "../errors.js";
 
 const RISTRETTO_POINT_BYTES = 32;
@@ -15,13 +19,13 @@ const SCALAR_BYTES = 32;
  *
  * @param share - OPRF key share (ristretto255 scalar, 32 bytes)
  * @param blindedElement - Client's blinded element (ristretto255 point, 32 bytes)
- * @returns Evaluated element (ristretto255 point, 32 bytes)
+ * @returns Evaluated element (branded RistrettoPoint, 32 bytes)
  * @throws CryptoError if inputs have wrong length or scalarmult fails
  */
 export function blindEvaluate(
   share: Uint8Array,
   blindedElement: Uint8Array,
-): Uint8Array {
+): RistrettoPoint {
   if (share.length !== SCALAR_BYTES) {
     throw new CryptoError(
       `OPRF share must be ${String(SCALAR_BYTES)} bytes, got ${String(share.length)}`,
@@ -35,7 +39,9 @@ export function blindEvaluate(
 
   const sodium = requireSodium();
   try {
-    return sodium.crypto_scalarmult_ristretto255(share, blindedElement);
+    return toRistrettoPoint(
+      sodium.crypto_scalarmult_ristretto255(share, blindedElement),
+    );
   } catch (err) {
     throw new CryptoError(
       `OPRF BlindEvaluate failed: ${err instanceof Error ? err.message : String(err)}`,
