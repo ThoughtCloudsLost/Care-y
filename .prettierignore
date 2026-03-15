@@ -11,3 +11,6 @@ pnpm-lock.yaml
 *.txt
 CODEOWNERS
 Dockerfile
+Dockerfile.*
+.env*
+.prettierignore
