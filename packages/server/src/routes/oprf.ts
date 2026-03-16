@@ -18,8 +18,7 @@ export interface OprfRouterDeps {
   readonly oprfService: OprfEvaluateService;
 }
 
-// care-y-ignore-next-line missing-return-type -- tRPC router return type is a complex internal generic not exported for annotation; createAuthRouter and createTwoFactorRouter in this directory use the same pattern
-// eslint-disable-next-line @typescript-eslint/explicit-module-boundary-types -- same reason as above
+// care-y-ignore-next-line missing-return-type -- tRPC router() returns a deeply generic type that cannot be written explicitly
 export function createOprfRouter(deps: OprfRouterDeps) {
   return router({
     evaluate: publicProcedure.input(oprfEvaluateInputSchema).mutation(
