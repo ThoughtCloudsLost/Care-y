@@ -59,7 +59,7 @@ export interface AuthRouterDeps extends AuthServiceDeps {
 export interface UserResponse {
   readonly id: string;
   readonly identifier: string;
-  readonly displayName: string;
+  readonly encryptedDisplayName: string; // base64 ciphertext, client decrypts
   readonly roleId: string;
 }
 
@@ -68,7 +68,7 @@ function toUserResponse(user: UserRecord): UserResponse {
   return {
     id: user.id,
     identifier: user.identifier,
-    displayName: user.displayName,
+    encryptedDisplayName: user.encryptedDisplayName,
     roleId: user.roleId,
   };
 }

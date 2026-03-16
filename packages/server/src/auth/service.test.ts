@@ -66,7 +66,8 @@ describe.skipIf(!process.env.DATABASE_URL)("AuthService", () => {
 
       expect(user.id).toBeDefined();
       expect(user.identifier).toBe("alice");
-      expect(user.displayName).toBe("Alice Smith");
+      expect(user.encryptedDisplayName).toBeDefined();
+      expect(user.encryptedDisplayName.length).toBeGreaterThan(0);
       expect(user.roleId).toBe("volunteer");
       expect(user.isActive).toBe(true);
       // password_hash must not leak through the domain object.
@@ -584,7 +585,7 @@ describe.skipIf(!process.env.DATABASE_URL)("AuthService", () => {
       expect(found).not.toBeNull();
       expect(found?.id).toBe(registered.id);
       expect(found?.identifier).toBe("find-user-test");
-      expect(found?.displayName).toBe("Find Me");
+      expect(found?.encryptedDisplayName).toBeDefined();
     });
 
     it("returns null for nonexistent user", async () => {

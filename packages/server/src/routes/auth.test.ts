@@ -180,7 +180,7 @@ describe.skipIf(!HAS_DB)("auth + org routers (DB integration)", () => {
     user: {
       id: string;
       identifier: string;
-      displayName: string;
+      encryptedDisplayName: string;
       roleId: string;
       isActive: boolean;
     },
@@ -274,7 +274,7 @@ describe.skipIf(!HAS_DB)("auth + org routers (DB integration)", () => {
     });
 
     expect(result.user.identifier).toBe("invited-user");
-    expect(result.user.displayName).toBe("Invited User");
+    expect(result.user.encryptedDisplayName).toBeDefined();
     expect(result.user.roleId).toBe(RoleId.VOLUNTEER);
   });
 
@@ -297,7 +297,7 @@ describe.skipIf(!HAS_DB)("auth + org routers (DB integration)", () => {
     });
 
     expect(result.user.identifier).toBe("loginuser");
-    expect(result.user.displayName).toBe("Login User");
+    expect(result.user.encryptedDisplayName).toBeDefined();
     expect(result.requiresTwoFactor).toBe(false);
     expect(result.enrolledMethods).toEqual([]);
 
@@ -376,7 +376,7 @@ describe.skipIf(!HAS_DB)("auth + org routers (DB integration)", () => {
     const result = await caller.auth.me();
 
     expect(result.user.identifier).toBe("meuser");
-    expect(result.user.displayName).toBe("Me User");
+    expect(result.user.encryptedDisplayName).toBeDefined();
     expect(result.user.roleId).toBe(RoleId.VOLUNTEER);
   });
 
@@ -495,7 +495,7 @@ describe.skipIf(!HAS_DB)("auth + org routers (DB integration)", () => {
     });
 
     expect(result.user.identifier).toBe("email-user");
-    expect(result.user.displayName).toBe("Email User");
+    expect(result.user.encryptedDisplayName).toBeDefined();
   });
 
   // --- Rate limiting ---

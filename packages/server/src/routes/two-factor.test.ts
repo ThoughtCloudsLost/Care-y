@@ -160,7 +160,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
       user: {
         id: string;
         identifier: string;
-        displayName: string;
+        encryptedDisplayName: string;
         roleId: string;
         isActive: boolean;
       },
@@ -193,7 +193,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
       user: {
         id: string;
         identifier: string;
-        displayName: string;
+        encryptedDisplayName: string;
         roleId: string;
         isActive: boolean;
       },
@@ -364,7 +364,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         const userRecord = {
           id: user.id,
           identifier: "email-send-user",
-          displayName: "Email Send User",
+          encryptedDisplayName: "Email Send User",
           roleId: user.role_id,
           isActive: user.is_active,
         };
@@ -396,7 +396,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         const userRecord = {
           id: user.id,
           identifier: "email-verify-user",
-          displayName: "Email Verify User",
+          encryptedDisplayName: "Email Verify User",
           roleId: user.role_id,
           isActive: user.is_active,
         };
@@ -553,7 +553,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         const userRecord = {
           id: user.id,
           identifier: "verify-email-user",
-          displayName: "Verify Email User",
+          encryptedDisplayName: "Verify Email User",
           roleId: user.role_id,
           isActive: user.is_active,
         };
@@ -634,7 +634,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         const userRecord = {
           id: user.id,
           identifier: "methods-remove-user",
-          displayName: "Methods Remove User",
+          encryptedDisplayName: "Methods Remove User",
           roleId: user.role_id,
           isActive: user.is_active,
         };
