@@ -22,9 +22,10 @@ import {
   authed2faProcedure,
   withErrorWrapping,
 } from "../trpc/trpc.js";
+import { TRPCError } from "@trpc/server";
 import type { FieldEncryptor } from "../crypto/field-encryptor.js";
 import type { EmailSender } from "../email/email-sender.js";
-import type { OrgContext } from "../trpc/context.js";
+import type { Context, OrgContext } from "../trpc/context.js";
 import type { SessionData } from "../auth/session-repository.js";
 import type { UserRecord } from "../auth/service.js";
 import {
@@ -110,23 +111,29 @@ function deriveOrigin(org: OrgContext): string {
 
 // --- Router factory ---
 
+/**
+ * Narrows the tRPC context after requireOrg + requireSession have run.
+ * tRPC re-widens ctx to the base Context type when chaining middleware,
+ * so runtime guards re-narrow for TypeScript (same pattern as trpc.ts).
+ */
+function narrowAuthContext(ctx: Context): {
+  org: OrgContext;
+  session: SessionData;
+  user: UserRecord;
+} {
+  if (!ctx.org || !ctx.session || !ctx.user) {
+    throw new TRPCError({ code: "UNAUTHORIZED", message: "Not authenticated" });
+  }
+  return { org: ctx.org, session: ctx.session, user: ctx.user };
+}
+
 export function createTwoFactorRouter(deps: TwoFactorRouterDeps) {
   /**
    * Middleware: creates tenant-scoped 2FA services and injects them into ctx.
    * Chained after auth middleware, so ctx.org is guaranteed non-null.
    */
   const injectServices = middleware(async ({ ctx, next }) => {
-    // Runtime guards: requireOrg + requireSession already ran in the
-    // upstream chain, but tRPC re-widens ctx to the base Context type
-    // when chaining middleware. Re-assert non-null to satisfy TypeScript
-    // and narrow the types for downstream handlers.
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- requireOrg narrowed ctx.org; tRPC re-widens it
-    const org = ctx.org as OrgContext;
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- requireSession narrowed ctx.session; tRPC re-widens it
-    const session = ctx.session as SessionData;
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- requireSession narrowed ctx.user; tRPC re-widens it
-    const user = ctx.user as UserRecord;
-
+    const { org, session, user } = narrowAuthContext(ctx);
     const { twoFactor, emailCodes } = createScopedTwoFactorServices(org, deps);
     return next({ ctx: { ...ctx, org, session, user, twoFactor, emailCodes } });
   });

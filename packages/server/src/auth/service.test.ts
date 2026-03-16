@@ -195,9 +195,12 @@ describe.skipIf(!process.env.DATABASE_URL)("AuthService", () => {
       ).rejects.toThrow(ConflictError);
     });
 
+    // Implementation-coupled: mocks Kysely's insertInto chain to simulate
+    // a non-constraint DB error (connection reset, disk full, etc.). This is
+    // hard to trigger through the public API without infrastructure failure.
+    // Accepted tradeoff: ensures the error propagation path works rather than
+    // silently swallowing unexpected DB errors.
     it("re-throws non-unique-violation DB errors from insert", async () => {
-      // When insertInto throws an error that isn't a PG unique violation
-      // (e.g., connection reset), insertUserRow re-throws it (line 215).
       const insertSpy = vi.spyOn(testDb.db, "insertInto").mockReturnValue({
         values: () => ({
           returningAll: () => ({
@@ -518,7 +521,8 @@ describe.skipIf(!process.env.DATABASE_URL)("AuthService", () => {
       expect(result).toBeNull();
     });
 
-    it("logs IP mismatch but session stays valid", async () => {
+    it("session stays valid when IP changes (no hard lockout on roaming)", async () => {
+      // Suppress expected console.warn from IP mismatch detection.
       const warnSpy = vi
         .spyOn(console, "warn")
         .mockImplementation(() => undefined);
@@ -537,7 +541,8 @@ describe.skipIf(!process.env.DATABASE_URL)("AuthService", () => {
         userAgent: "TestAgent/1.0",
       });
 
-      // Validate from a different IP.
+      // Validate from a different IP. The observable behavior is that
+      // the session remains valid (no lockout on mobile network roaming).
       const result = await service.validateSession(
         session.token,
         "192.168.0.99",
@@ -545,9 +550,7 @@ describe.skipIf(!process.env.DATABASE_URL)("AuthService", () => {
       );
 
       expect(result).not.toBeNull();
-      expect(warnSpy).toHaveBeenCalledWith(
-        expect.stringContaining("IP or user-agent changed"),
-      );
+      expect(result?.user.identifier).toBe("ip-mismatch-user");
 
       warnSpy.mockRestore();
     });

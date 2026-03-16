@@ -201,9 +201,9 @@ export function createTwoFactorService(
 
     return creds.map((c) => {
       const isPlatform = c.device_type === "platform";
-      const label = isPlatform
-        ? `Screen lock ${String(c.ordinal)}${c.backed_up ? " (synced)" : ""}`
-        : `Security key ${String(c.ordinal)}`;
+      const deviceLabel = isPlatform ? "Screen lock" : "Security key";
+      const syncSuffix = isPlatform && c.backed_up ? " (synced)" : "";
+      const label = `${deviceLabel} ${String(c.ordinal)}${syncSuffix}`;
       return { type: TwoFactorMethod.WEBAUTHN, label, index: c.ordinal };
     });
   }
@@ -227,15 +227,13 @@ export function createTwoFactorService(
     sessionToken: string,
   ): Promise<string> {
     const session = await sessions.findByToken(sessionToken);
-    if (
-      session?.webauthnChallenge === undefined ||
-      session.webauthnChallenge === null
-    ) {
+    const challenge = session?.webauthnChallenge;
+    if (challenge == null) {
       throw new ValidationError(
         "No WebAuthn challenge found for this session.",
       );
     }
-    return session.webauthnChallenge;
+    return challenge;
   }
 
   /**
@@ -366,20 +364,22 @@ export function createTwoFactorService(
         countRemainingBackupCodes(userId),
       ]);
 
-      const enrolledMethods: EnrolledMethodInfo[] = [];
-      for (const m of methods) {
-        if (m.method_type === TwoFactorMethod.WEBAUTHN) {
-          enrolledMethods.push(...webauthnCreds);
-        } else if (m.method_type === TwoFactorMethod.TOTP) {
-          enrolledMethods.push(
-            simpleMethodInfo(TwoFactorMethod.TOTP, "Authenticator app"),
-          );
-        } else if (m.method_type === TwoFactorMethod.EMAIL) {
-          enrolledMethods.push(
-            simpleMethodInfo(TwoFactorMethod.EMAIL, "Email code"),
-          );
-        }
-      }
+      /** Maps method type to its display info. WebAuthn expands to per-credential entries. */
+      const methodDisplayInfo = new Map<string, EnrolledMethodInfo[]>([
+        [TwoFactorMethod.WEBAUTHN, webauthnCreds],
+        [
+          TwoFactorMethod.TOTP,
+          [simpleMethodInfo(TwoFactorMethod.TOTP, "Authenticator app")],
+        ],
+        [
+          TwoFactorMethod.EMAIL,
+          [simpleMethodInfo(TwoFactorMethod.EMAIL, "Email code")],
+        ],
+      ]);
+
+      const enrolledMethods = methods.flatMap(
+        (m) => methodDisplayInfo.get(m.method_type) ?? [],
+      );
 
       return {
         enrolled: methods.length > 0,

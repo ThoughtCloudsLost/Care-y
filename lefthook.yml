@@ -9,6 +9,12 @@ pre-commit:
         - run: "! command -v gitleaks &>/dev/null"
     banned-patterns:
       run: if [ -f .githooks/pre-commit ]; then bash .githooks/pre-commit; fi
+    typecheck:
+      run: npx tsc --build
+    lint:
+      run: npx eslint packages/
+    format:
+      run: npx prettier --check --ignore-path .prettierignore --ignore-path .prettierignore.local {staged_files}
 
 commit-msg:
   commands:

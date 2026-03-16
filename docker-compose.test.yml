@@ -28,5 +28,15 @@ services:
       - ./packages/server/src:/app/packages/server/src:ro
       - ./packages/shared/src:/app/packages/shared/src:ro
       - ./packages/crypto/src:/app/packages/crypto/src:ro
+      # OPRF socket volume so integration tests can reach OPRF processes
+      - oprf_sockets:/run/oprf
       # Client tests run on the host (SvelteKit deps not in Docker image).
       # Use `pnpm vitest run --project client` locally for client coverage.
+
+volumes:
+  oprf_sockets:
+    driver: local
+    driver_opts:
+      type: tmpfs
+      device: tmpfs
+      o: size=1m,uid=2001,gid=2001

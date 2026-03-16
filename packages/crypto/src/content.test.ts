@@ -72,6 +72,9 @@ describe("content encryption", () => {
     });
   });
 
+  // Wire format tests guard backward compatibility with ciphertext already
+  // stored in the DB. The nonce||ciphertext layout is a contract: changing
+  // it would make all persisted encrypted content undecryptable.
   describe("ciphertext format", () => {
     it("output is nonce + MAC + plaintext length", () => {
       const key = generateContentKey();

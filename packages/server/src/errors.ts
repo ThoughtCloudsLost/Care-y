@@ -85,6 +85,30 @@ export class CryptoError extends AppError {
   }
 }
 
+/** OPRF evaluation failed (process down, canary corruption, IPC timeout) */
+export class OprfError extends AppError {
+  readonly code = "OPRF_ERROR" as const;
+  readonly httpStatus = 503;
+
+  constructor(message: string) {
+    super(message, false); // non-operational: indicates infrastructure failure
+  }
+}
+
+/** Client must solve proof-of-work before retrying OPRF evaluation */
+export class PowRequiredError extends AppError {
+  readonly code = "POW_REQUIRED" as const;
+  readonly httpStatus = 429;
+  readonly challenge: string;
+  readonly difficulty: number;
+
+  constructor(challenge: string, difficulty: number) {
+    super("Proof-of-work required");
+    this.challenge = challenge;
+    this.difficulty = difficulty;
+  }
+}
+
 export function isAppError(err: unknown): err is AppError {
   return err instanceof AppError;
 }

@@ -65,3 +65,13 @@ export {
   type WebauthnAssertionResponse,
   type RemoveMethodInput,
 } from "./schemas/two-factor.js";
+
+// --- OPRF schemas ---
+export {
+  oprfEvaluateInputSchema,
+  oprfEvaluateOutputSchema,
+  powChallengeSchema,
+  type OprfEvaluateInput,
+  type OprfEvaluateOutput,
+  type PowChallenge,
+} from "./schemas/oprf.js";
