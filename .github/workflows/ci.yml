@@ -70,6 +70,11 @@ jobs:
           # Strip leading whitespace from heredoc (YAML block scalar indentation)
           sed -i 's/^[[:space:]]*//' .env
 
+      - name: Generate OPRF test shares
+        run: |
+          pnpm --filter @care-y/server exec tsx src/scripts/generate-oprf-shares.ts \
+            | grep '^OPRF_SHARE_' >> .env
+
       - name: Start test containers
         run: docker compose -f docker-compose.yml -f docker-compose.test.yml up -d --build --wait
 

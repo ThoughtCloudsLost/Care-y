@@ -12,7 +12,7 @@ services:
     build:
       context: .
       target: production
-    user: "1001:1001"
+    user: "1001"
     read_only: true
     security_opt:
       - no-new-privileges:true
@@ -88,7 +88,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.oprf
-    user: "2001:2001"
+    user: "2001"
     read_only: true
     security_opt:
       - no-new-privileges:true
@@ -107,7 +107,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.oprf
-    user: "2001:2001"
+    user: "2001"
     read_only: true
     security_opt:
       - no-new-privileges:true
@@ -129,7 +129,7 @@ volumes:
     driver_opts:
       type: tmpfs
       device: tmpfs
-      o: size=1m,uid=2001,gid=2001
+      o: size=1m,uid=2001,gid=3001,mode=0770
 
 networks:
   internal:

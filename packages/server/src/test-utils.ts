@@ -14,6 +14,7 @@
 import * as crypto from "node:crypto";
 import * as path from "node:path";
 import * as fs from "node:fs/promises";
+import { existsSync } from "node:fs";
 import { IncomingMessage, ServerResponse } from "node:http";
 import { Socket } from "node:net";
 import pg from "pg";
@@ -39,6 +40,11 @@ import {
   type FieldEncryptor,
   type BlindIndexer,
 } from "./crypto/field-encryptor.js";
+import {
+  deriveSessionHmacKey,
+  createSessionTokenizer,
+  type SessionTokenizer,
+} from "./crypto/session-tokenizer.js";
 
 // Override int8 parser (same as db.ts). Must be set before creating the Pool.
 pg.types.setTypeParser(pg.types.builtins.INT8, (val: string) =>
@@ -73,6 +79,12 @@ export const testBlindIndexer: BlindIndexer = createBlindIndexer(
 
 /** Passthrough encryptor for tests that don't need to verify encryption. */
 export const noopEncryptor: FieldEncryptor = createNoopFieldEncryptor();
+
+/** Real session tokenizer backed by a deterministic test key. Use for tests
+ *  that verify HMAC token computation. */
+export const testSessionTokenizer: SessionTokenizer = createSessionTokenizer(
+  deriveSessionHmacKey(TEST_OPS_KEY),
+);
 
 /** Stable org ID for test factories. Used as the org-scoping salt in blind
  *  index hashes so that test hashes are deterministic across runs. */
@@ -236,6 +248,10 @@ export async function createTestUser(
  * Inserts a session row. Requires user_id (no default, since sessions must
  * belong to a user). All other columns have sensible defaults.
  * Returns the full row from RETURNING *.
+ *
+ * Default IP ("127.0.0.1") and UA ("test-agent") are encrypted via the
+ * provided encryptor and tokenized via the test session tokenizer. Override
+ * ip_token/ua_token in overrides if using non-default IP/UA values.
  */
 export async function createTestSession(
   db: Kysely<TenantDatabase>,
@@ -250,6 +266,8 @@ export async function createTestSession(
       token: uid,
       encrypted_ip_address: enc.encrypt("127.0.0.1"),
       encrypted_user_agent: enc.encrypt("test-agent"),
+      ip_token: testSessionTokenizer.tokenize("127.0.0.1"),
+      ua_token: testSessionTokenizer.tokenize("test-agent"),
       expires_at: new Date(Date.now() + 60 * 60 * 1000), // 1 hour from now
       ...overrides,
     })
@@ -468,6 +486,17 @@ export function extractEmailCode(text: string): string {
   }
   return match[1] as string;
 }
+
+// ---------------------------------------------------------------------------
+// Docker OPRF container detection
+// ---------------------------------------------------------------------------
+
+/** True when the Docker OPRF sidecar sockets are present (inside test container). */
+export const DOCKER_OPRF_AVAILABLE =
+  existsSync("/run/oprf/oprf-a.sock") && existsSync("/run/oprf/oprf-b.sock");
+
+export const DOCKER_SOCKET_A = "/run/oprf/oprf-a.sock";
+export const DOCKER_SOCKET_B = "/run/oprf/oprf-b.sock";
 
 // ---------------------------------------------------------------------------
 // Mock OPRF dependencies (for tests that build createAppRouter but don't

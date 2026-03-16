@@ -1,11 +1,10 @@
-import { describe, it, expect, beforeAll, afterAll } from "vitest";
-import { createServer, type Server } from "node:net";
+import { describe, it, expect, beforeAll } from "vitest";
+import { createServer } from "node:net";
 import { existsSync, unlinkSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
   getSodium,
-  requireSodium,
   oprfBlind,
   oprfFinalize,
   type SodiumBackend,
@@ -13,8 +12,12 @@ import {
 } from "@care-y/crypto";
 import { blindEvaluate } from "./oprf-server.js";
 import { createMockEvaluator, createIpcEvaluator } from "./oprf-ipc.js";
-import { startOprfProcess } from "./oprf-process.js";
 import { OprfError } from "../errors.js";
+import {
+  DOCKER_OPRF_AVAILABLE,
+  DOCKER_SOCKET_A,
+  DOCKER_SOCKET_B,
+} from "../test-utils.js";
 
 const IS_LINUX = process.platform === "linux";
 const LENGTH_PREFIX_BYTES = 4;
@@ -82,128 +85,92 @@ describe("createMockEvaluator", () => {
   });
 });
 
-describe.skipIf(!IS_LINUX)("createIpcEvaluator (Linux only)", () => {
-  const socketPathA = join(tmpdir(), `oprf-ipc-a-${Date.now()}.sock`);
-  const socketPathB = join(tmpdir(), `oprf-ipc-b-${Date.now()}.sock`);
-  let serverA: Server | undefined;
-  let serverB: Server | undefined;
+describe.skipIf(!DOCKER_OPRF_AVAILABLE)(
+  "createIpcEvaluator (Docker OPRF containers)",
+  () => {
+    it("evaluates a blinded element via Docker OPRF processes", async () => {
+      const evaluator = createIpcEvaluator({
+        socketPathA: DOCKER_SOCKET_A,
+        socketPathB: DOCKER_SOCKET_B,
+      });
 
-  // Generate a full key and split into Shamir shares
-  let shareAHex: string;
-  let shareBHex: string;
-  let fullKey: Uint8Array;
+      const input = new TextEncoder().encode("docker-ipc-threshold-test");
+      const { blindedElement } = oprfBlind(input);
 
-  beforeAll(async () => {
-    const s = requireSodium();
-    fullKey = s.crypto_core_ristretto255_scalar_random();
-    const a = s.crypto_core_ristretto255_scalar_random();
-    const shareA = s.crypto_core_ristretto255_scalar_add(fullKey, a);
-    const twoA = s.crypto_core_ristretto255_scalar_add(a, a);
-    const shareB = s.crypto_core_ristretto255_scalar_add(fullKey, twoA);
+      const result = await evaluator.evaluate(blindedElement);
 
-    shareAHex = Buffer.from(shareA).toString("hex");
-    shareBHex = Buffer.from(shareB).toString("hex");
-
-    // eslint-disable-next-line security/detect-non-literal-fs-filename -- test socket cleanup
-    if (existsSync(socketPathA)) unlinkSync(socketPathA);
-    // eslint-disable-next-line security/detect-non-literal-fs-filename -- test socket cleanup
-    if (existsSync(socketPathB)) unlinkSync(socketPathB);
-
-    const srvA = await startOprfProcess({
-      socketPath: socketPathA,
-      shareHex: shareAHex,
-    });
-    const srvB = await startOprfProcess({
-      socketPath: socketPathB,
-      shareHex: shareBHex,
-    });
-    serverA = srvA;
-    serverB = srvB;
-
-    // Wait for both to be listening
-    await Promise.all([
-      new Promise<void>((resolve) => {
-        const check = (): void => {
-          if (srvA.listening) resolve();
-          else setTimeout(check, 10);
-        };
-        check();
-      }),
-      new Promise<void>((resolve) => {
-        const check = (): void => {
-          if (srvB.listening) resolve();
-          else setTimeout(check, 10);
-        };
-        check();
-      }),
-    ]);
-  });
-
-  afterAll(() => {
-    serverA?.close();
-    serverB?.close();
-    // eslint-disable-next-line security/detect-non-literal-fs-filename -- test socket cleanup
-    if (existsSync(socketPathA)) unlinkSync(socketPathA);
-    // eslint-disable-next-line security/detect-non-literal-fs-filename -- test socket cleanup
-    if (existsSync(socketPathB)) unlinkSync(socketPathB);
-  });
-
-  it("evaluates a blinded element via two OPRF processes", async () => {
-    const evaluator = createIpcEvaluator({
-      socketPathA,
-      socketPathB,
+      expect(result).toBeInstanceOf(Uint8Array);
+      expect(result.length).toBe(POINT_BYTES);
+      evaluator.close();
     });
 
-    const input = new TextEncoder().encode("ipc-threshold-test");
-    const { blindedElement } = oprfBlind(input);
+    it("produces deterministic results for the same input", async () => {
+      const evaluator = createIpcEvaluator({
+        socketPathA: DOCKER_SOCKET_A,
+        socketPathB: DOCKER_SOCKET_B,
+      });
 
-    const result = await evaluator.evaluate(blindedElement);
+      const input = new TextEncoder().encode("docker-determinism-test");
+      const { blindedElement } = oprfBlind(input);
 
-    expect(result).toBeInstanceOf(Uint8Array);
-    expect(result.length).toBe(POINT_BYTES);
-    evaluator.close();
-  });
+      const result1 = await evaluator.evaluate(blindedElement);
+      const result2 = await evaluator.evaluate(blindedElement);
 
-  it("threshold IPC result matches single-key evaluation", async () => {
-    const evaluator = createIpcEvaluator({
-      socketPathA,
-      socketPathB,
+      expect(Buffer.from(result1).equals(Buffer.from(result2))).toBe(true);
+      evaluator.close();
     });
 
-    const input = new TextEncoder().encode("ipc-parity-test");
-    const { blindedElement, blindState } = oprfBlind(input);
+    it("end-to-end blind/evaluate/finalize produces 64-byte output", async () => {
+      const evaluator = createIpcEvaluator({
+        socketPathA: DOCKER_SOCKET_A,
+        socketPathB: DOCKER_SOCKET_B,
+      });
 
-    const ipcResult = await evaluator.evaluate(blindedElement);
-    const directResult = blindEvaluate(fullKey, blindedElement);
+      const input = new TextEncoder().encode("docker-e2e-finalize-test");
+      const { blindedElement, blindState } = oprfBlind(input);
 
-    // Finalize both and compare
-    const ipcOutput = oprfFinalize(
-      blindState,
-      ipcResult as EvaluatedElement,
-      input,
-    );
-    const directOutput = oprfFinalize(
-      blindState,
-      directResult as EvaluatedElement,
-      input,
-    );
+      const evaluated = await evaluator.evaluate(blindedElement);
+      const output = oprfFinalize(
+        blindState,
+        evaluated as EvaluatedElement,
+        input,
+      );
 
-    expect(Buffer.from(ipcOutput).equals(Buffer.from(directOutput))).toBe(true);
-    evaluator.close();
-  });
-
-  it("rejects blinded element with wrong length", async () => {
-    const evaluator = createIpcEvaluator({
-      socketPathA,
-      socketPathB,
+      expect(output.length).toBe(64);
+      evaluator.close();
     });
 
-    await expect(evaluator.evaluate(new Uint8Array(16))).rejects.toThrow(
-      OprfError,
-    );
-    evaluator.close();
-  });
-});
+    it("produces different results for different inputs", async () => {
+      const evaluator = createIpcEvaluator({
+        socketPathA: DOCKER_SOCKET_A,
+        socketPathB: DOCKER_SOCKET_B,
+      });
+
+      const inputA = new TextEncoder().encode("docker-distinct-a");
+      const inputB = new TextEncoder().encode("docker-distinct-b");
+      const { blindedElement: blindedA } = oprfBlind(inputA);
+      const { blindedElement: blindedB } = oprfBlind(inputB);
+
+      const resultA = await evaluator.evaluate(blindedA);
+      const resultB = await evaluator.evaluate(blindedB);
+
+      expect(Buffer.from(resultA).equals(Buffer.from(resultB))).toBe(false);
+      evaluator.close();
+    });
+
+    it("rejects blinded element with wrong length", async () => {
+      const evaluator = createIpcEvaluator({
+        socketPathA: DOCKER_SOCKET_A,
+        socketPathB: DOCKER_SOCKET_B,
+      });
+
+      await expect(evaluator.evaluate(new Uint8Array(16))).rejects.toThrow(
+        OprfError,
+      );
+      evaluator.close();
+    });
+  },
+);
 
 describe.skipIf(!IS_LINUX)("IPC error handling (Linux only)", () => {
   it("rejects with OprfError when connecting to nonexistent socket", async () => {

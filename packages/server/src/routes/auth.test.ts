@@ -14,6 +14,7 @@ import {
   createTestDb,
   testFieldEncryptor,
   testBlindIndexer,
+  testSessionTokenizer,
   TEST_ORG_ID,
   mockReq,
   mockRes,
@@ -46,13 +47,19 @@ function makeAuthService(
   tenantDb: Kysely<TenantDatabase>,
   orgId: string = TEST_ORG_ID,
 ): ReturnType<typeof createAuthService> {
-  const sessions = createDbSessionRepository(tenantDb, testFieldEncryptor);
+  const sessions = createDbSessionRepository(
+    tenantDb,
+    testFieldEncryptor,
+    testSessionTokenizer,
+    null,
+  );
   return createAuthService(
     tenantDb,
     createScryptHasher(),
     sessions,
     testFieldEncryptor,
     testBlindIndexer,
+    testSessionTokenizer,
     orgId,
   );
 }
@@ -124,12 +131,16 @@ describe.skipIf(!HAS_DB)("auth + org routers (DB integration)", () => {
         fakeSaltKey: testFakeSaltKey,
         encryptor: testFieldEncryptor,
         indexer: testBlindIndexer,
+        tokenizer: testSessionTokenizer,
+        sealedBox: null,
         isSecureCookie: false,
         emailSender: createMockEmailSender(),
       },
       twoFactorDeps: {
         emailSender: createMockEmailSender(),
         encryptor: testFieldEncryptor,
+        tokenizer: testSessionTokenizer,
+        sealedBox: null,
       },
       oprfDeps: createMockOprfDeps(),
       orgService,
@@ -169,7 +180,7 @@ describe.skipIf(!HAS_DB)("auth + org routers (DB integration)", () => {
     user: {
       id: string;
       identifier: string;
-      displayName: string;
+      encryptedDisplayName: string;
       roleId: string;
       isActive: boolean;
     },
@@ -184,8 +195,8 @@ describe.skipIf(!HAS_DB)("auth + org routers (DB integration)", () => {
         id: "test-session-id",
         token: sessionToken,
         userId: user.id,
-        ipAddress: "127.0.0.1",
-        userAgent: "test-agent",
+        ipToken: "test-ip-token",
+        uaToken: "test-ua-token",
         expiresAt: new Date(Date.now() + 60 * 60 * 1000),
         twofaVerified: false,
         webauthnChallenge: null,
@@ -263,7 +274,7 @@ describe.skipIf(!HAS_DB)("auth + org routers (DB integration)", () => {
     });
 
     expect(result.user.identifier).toBe("invited-user");
-    expect(result.user.displayName).toBe("Invited User");
+    expect(result.user.encryptedDisplayName).toBeDefined();
     expect(result.user.roleId).toBe(RoleId.VOLUNTEER);
   });
 
@@ -286,7 +297,7 @@ describe.skipIf(!HAS_DB)("auth + org routers (DB integration)", () => {
     });
 
     expect(result.user.identifier).toBe("loginuser");
-    expect(result.user.displayName).toBe("Login User");
+    expect(result.user.encryptedDisplayName).toBeDefined();
     expect(result.requiresTwoFactor).toBe(false);
     expect(result.enrolledMethods).toEqual([]);
 
@@ -365,7 +376,7 @@ describe.skipIf(!HAS_DB)("auth + org routers (DB integration)", () => {
     const result = await caller.auth.me();
 
     expect(result.user.identifier).toBe("meuser");
-    expect(result.user.displayName).toBe("Me User");
+    expect(result.user.encryptedDisplayName).toBeDefined();
     expect(result.user.roleId).toBe(RoleId.VOLUNTEER);
   });
 
@@ -484,7 +495,7 @@ describe.skipIf(!HAS_DB)("auth + org routers (DB integration)", () => {
     });
 
     expect(result.user.identifier).toBe("email-user");
-    expect(result.user.displayName).toBe("Email User");
+    expect(result.user.encryptedDisplayName).toBeDefined();
   });
 
   // --- Rate limiting ---

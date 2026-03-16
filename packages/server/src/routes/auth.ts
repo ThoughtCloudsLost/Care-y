@@ -59,7 +59,7 @@ export interface AuthRouterDeps extends AuthServiceDeps {
 export interface UserResponse {
   readonly id: string;
   readonly identifier: string;
-  readonly displayName: string;
+  readonly encryptedDisplayName: string; // base64 ciphertext, client decrypts
   readonly roleId: string;
 }
 
@@ -68,7 +68,7 @@ function toUserResponse(user: UserRecord): UserResponse {
   return {
     id: user.id,
     identifier: user.identifier,
-    displayName: user.displayName,
+    encryptedDisplayName: user.encryptedDisplayName,
     roleId: user.roleId,
   };
 }
@@ -136,6 +136,7 @@ async function handleGetSalt(
   return { salt: result.salt.toString("base64") };
 }
 
+// care-y-ignore-next-line missing-return-type -- tRPC router() returns a deeply generic type that cannot be written explicitly
 export function createAuthRouter(deps: AuthRouterDeps) {
   const { loginLimiter, saltLimiter, fakeSaltKey, isSecureCookie } = deps;
 
@@ -173,6 +174,8 @@ export function createAuthRouter(deps: AuthRouterDeps) {
         const { twoFactor } = createScopedTwoFactorServices(ctx.org, {
           emailSender: deps.emailSender,
           encryptor: deps.encryptor,
+          tokenizer: deps.tokenizer,
+          sealedBox: deps.sealedBox,
         });
         const enrolledMethods = await twoFactor.getEnrolledMethodTypes(user.id);
 

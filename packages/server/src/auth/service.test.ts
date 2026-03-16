@@ -4,6 +4,7 @@ import {
   noopEncryptor,
   testFieldEncryptor,
   testBlindIndexer,
+  testSessionTokenizer,
   TEST_ORG_ID,
   type TestDb,
 } from "../test-utils.js";
@@ -29,13 +30,19 @@ describe.skipIf(!process.env.DATABASE_URL)("AuthService", () => {
   beforeAll(async () => {
     testDb = await createTestDb();
     hasher = createScryptHasher();
-    sessions = createDbSessionRepository(testDb.db, noopEncryptor);
+    sessions = createDbSessionRepository(
+      testDb.db,
+      noopEncryptor,
+      testSessionTokenizer,
+      null,
+    );
     service = createAuthService(
       testDb.db,
       hasher,
       sessions,
       noopEncryptor,
       testBlindIndexer,
+      testSessionTokenizer,
       TEST_ORG_ID,
     );
   });
@@ -59,7 +66,8 @@ describe.skipIf(!process.env.DATABASE_URL)("AuthService", () => {
 
       expect(user.id).toBeDefined();
       expect(user.identifier).toBe("alice");
-      expect(user.displayName).toBe("Alice Smith");
+      expect(user.encryptedDisplayName).toBeDefined();
+      expect(user.encryptedDisplayName.length).toBeGreaterThan(0);
       expect(user.roleId).toBe("volunteer");
       expect(user.isActive).toBe(true);
       // password_hash must not leak through the domain object.
@@ -72,6 +80,8 @@ describe.skipIf(!process.env.DATABASE_URL)("AuthService", () => {
       const encSessions = createDbSessionRepository(
         testDb.db,
         testFieldEncryptor,
+        testSessionTokenizer,
+        null,
       );
       const encService = createAuthService(
         testDb.db,
@@ -79,6 +89,7 @@ describe.skipIf(!process.env.DATABASE_URL)("AuthService", () => {
         encSessions,
         testFieldEncryptor,
         testBlindIndexer,
+        testSessionTokenizer,
         TEST_ORG_ID,
       );
 
@@ -574,7 +585,7 @@ describe.skipIf(!process.env.DATABASE_URL)("AuthService", () => {
       expect(found).not.toBeNull();
       expect(found?.id).toBe(registered.id);
       expect(found?.identifier).toBe("find-user-test");
-      expect(found?.displayName).toBe("Find Me");
+      expect(found?.encryptedDisplayName).toBeDefined();
     });
 
     it("returns null for nonexistent user", async () => {

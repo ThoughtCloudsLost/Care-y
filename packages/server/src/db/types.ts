@@ -63,6 +63,8 @@ export interface SessionsTable {
   user_id: string;
   encrypted_ip_address: Buffer;
   encrypted_user_agent: Buffer;
+  ip_token: string;
+  ua_token: string;
   expires_at: Date;
   twofa_verified: ColumnType<boolean, boolean | undefined, boolean>;
   webauthn_challenge: string | null;
@@ -76,14 +78,39 @@ export interface OrgConfigTable {
   encrypted_client_text: Buffer | null;
   client_encrypted_branding: Buffer | null;
   pii_retention_days: number | null;
+  org_public_key: Buffer | null; // Curve25519 (32 bytes), null until first admin onboarding
 }
 
-// --- Salt Defense (user_keys stub) ---
-// The crypto layer extends this table with vol_public, pq_public, key_version,
-// rotated_at via ALTER TABLE migration. Do NOT add those columns here.
-export interface UserKeysStubTable {
+// --- User keys (full interface, replaces UserKeysStubTable) ---
+// Stub created with user_id + salt, then extended via ALTER TABLE migration.
+export interface UserKeysTable {
   user_id: string;
   salt: Buffer;
+  vol_public: Buffer | null; // ristretto255 point (32 bytes), null until first login
+  pq_public: Buffer | null; // ML-KEM-768 (1184 bytes), null until PQ phase
+  key_version: ColumnType<number, number | undefined, number>;
+  rotated_at: Date | null;
+  rotation_lock: ColumnType<boolean, boolean | undefined, boolean>;
+}
+
+// --- Wrapped org keys (per-volunteer encrypted copies of org secret key) ---
+export interface WrappedOrgKeysTable {
+  user_id: string;
+  wrapped_key: Buffer; // encrypted blob, only volunteers can unwrap
+  nonce: Buffer; // 24 bytes
+  key_version: ColumnType<number, number | undefined, number>;
+}
+
+// --- Ticket key wraps (interface only, CREATE TABLE with tickets migration) ---
+// Each volunteer gets one wrap per ticket per key_generation.
+export interface TicketKeyWrapsTable {
+  ticket_id: string;
+  volunteer_id: string;
+  key_generation: string; // UUID, groups wraps by crypto-shred/reopen cycle (ADR-018)
+  ephemeral_point: Buffer; // ristretto255, 32 bytes
+  nonce: Buffer; // 24 bytes
+  wrapped_key: Buffer; // ECIES-wrapped ticket key
+  algorithm: string; // "ecies-ristretto255-v1"
 }
 
 // --- WebAuthn credentials ---
@@ -138,13 +165,14 @@ export interface TenantDatabase {
   users: UsersTable;
   sessions: SessionsTable;
   org_config: OrgConfigTable;
-  user_keys: UserKeysStubTable;
+  user_keys: UserKeysTable;
   webauthn_credentials: WebauthnCredentialsTable;
   totp_secrets: TotpSecretsTable;
   email_codes: EmailCodesTable;
   backup_codes: BackupCodesTable;
   two_factor_methods: TwoFactorMethodsTable;
-  // Cryptography (ticket_key_wraps)
+  wrapped_org_keys: WrappedOrgKeysTable;
+  ticket_key_wraps: TicketKeyWrapsTable; // Interface only, CREATE TABLE with tickets migration
   // Tickets (tickets, followups, audit_log)
   // Shifts (shifts, shift_occurrences)
   // Client portal (portal_channels)

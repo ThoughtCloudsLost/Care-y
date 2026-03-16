@@ -17,6 +17,7 @@ import {
   createTestSession,
   noopEncryptor,
   testFieldEncryptor,
+  testSessionTokenizer,
   createMockEmailSender,
   registerMethodDirectly,
   insertWebauthnCredential,
@@ -51,7 +52,12 @@ describe.skipIf(!process.env.DATABASE_URL)("TwoFactorService", () => {
   beforeAll(async () => {
     testDb = await createTestDb();
     db = testDb.db;
-    sessions = createDbSessionRepository(db, noopEncryptor);
+    sessions = createDbSessionRepository(
+      db,
+      noopEncryptor,
+      testSessionTokenizer,
+      null,
+    );
     const emailCodes = createEmailCodeService(db, createMockEmailSender());
     twoFactor = createTwoFactorService(
       db,
@@ -1001,6 +1007,8 @@ describe.skipIf(!process.env.DATABASE_URL)("TwoFactorService", () => {
       const encryptedSessions = createDbSessionRepository(
         db,
         testFieldEncryptor,
+        testSessionTokenizer,
+        null,
       );
       const emailCodes = createEmailCodeService(db, createMockEmailSender());
       const encryptedService = createTwoFactorService(

@@ -36,8 +36,8 @@ function makeCtx(overrides?: Partial<Context>): Context {
       id: "session-id",
       token: "token",
       userId: "user-id",
-      ipAddress: "127.0.0.1",
-      userAgent: "test-agent",
+      ipToken: "test-ip-token",
+      uaToken: "test-ua-token",
       expiresAt: new Date(Date.now() + 60_000),
       twofaVerified: true,
       webauthnChallenge: null,
@@ -45,7 +45,7 @@ function makeCtx(overrides?: Partial<Context>): Context {
     user: {
       id: "user-id",
       identifier: "testuser",
-      displayName: "Test User",
+      encryptedDisplayName: "Test User",
       roleId: RoleId.VOLUNTEER,
       isActive: true,
     },
@@ -58,7 +58,7 @@ function makeCtxWithRole(roleId: string): Context {
     user: {
       id: "user-id",
       identifier: "testuser",
-      displayName: "Test User",
+      encryptedDisplayName: "Test User",
       roleId,
       isActive: true,
     },

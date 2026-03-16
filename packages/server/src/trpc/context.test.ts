@@ -17,6 +17,7 @@ import {
   createTestDb,
   testFieldEncryptor,
   testBlindIndexer,
+  testSessionTokenizer,
   mockReq,
   mockRes,
   type TestDb,
@@ -59,6 +60,8 @@ describe.skipIf(!HAS_DB)("context factory (DB integration)", () => {
       hasher,
       encryptor: testFieldEncryptor,
       indexer: testBlindIndexer,
+      tokenizer: testSessionTokenizer,
+      sealedBox: null,
     };
   }
 
@@ -239,6 +242,8 @@ describe.skipIf(!HAS_DB)("context factory (DB integration)", () => {
       const sessions = createDbSessionRepository(
         orgTenantDb,
         testFieldEncryptor,
+        testSessionTokenizer,
+        null,
       );
       const authService = createAuthService(
         orgTenantDb,
@@ -246,6 +251,7 @@ describe.skipIf(!HAS_DB)("context factory (DB integration)", () => {
         sessions,
         testFieldEncryptor,
         testBlindIndexer,
+        testSessionTokenizer,
         orgId,
       );
 
@@ -332,6 +338,8 @@ describe.skipIf(!HAS_DB)("context factory (DB integration)", () => {
         hasher,
         encryptor: testFieldEncryptor,
         indexer: testBlindIndexer,
+        tokenizer: testSessionTokenizer,
+        sealedBox: null,
       });
 
       const suffix = randomUUID().slice(0, 8);
@@ -343,7 +351,7 @@ describe.skipIf(!HAS_DB)("context factory (DB integration)", () => {
       });
 
       expect(user.identifier).toBe(`scoped-svc-${suffix}`);
-      expect(user.displayName).toBe("Scoped User");
+      expect(user.encryptedDisplayName).toBeDefined();
     });
   });
 });
