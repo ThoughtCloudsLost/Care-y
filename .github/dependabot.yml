@@ -1,61 +1,9 @@
 version: 2
 
 updates:
-  # All npm dependencies (pnpm workspace uses a single root lockfile)
+  # All npm dependencies (pnpm workspace uses a single root lockfile).
+  # Two groups: at most 2 PRs per week instead of one per package.
   - package-ecosystem: "npm"
-    directory: "/"
-    schedule:
-      interval: "weekly"
-      day: "monday"
-    open-pull-requests-limit: 10
-    reviewers:
-      - ThoughtCloudsLost
-    groups:
-      svelte:
-        patterns:
-          - "svelte"
-          - "@sveltejs/*"
-          - "svelte-*"
-          - "bits-ui"
-          - "konsta"
-        update-types:
-          - "minor"
-          - "patch"
-      trpc:
-        patterns:
-          - "@trpc/*"
-        update-types:
-          - "minor"
-          - "patch"
-      lint-and-format:
-        patterns:
-          - "eslint*"
-          - "typescript-eslint"
-          - "prettier*"
-          - "@typescript-eslint/*"
-        update-types:
-          - "minor"
-          - "patch"
-      testing:
-        patterns:
-          - "vitest"
-          - "@vitest/*"
-          - "playwright"
-          - "@playwright/*"
-          - "fast-check"
-        update-types:
-          - "minor"
-          - "patch"
-      crypto:
-        patterns:
-          - "libsodium*"
-          - "sodium-native"
-        update-types:
-          - "minor"
-          - "patch"
-
-  # GitHub Actions
-  - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
       interval: "weekly"
@@ -64,9 +12,21 @@ updates:
     reviewers:
       - ThoughtCloudsLost
     groups:
+      production-deps:
+        dependency-type: "production"
+      dev-deps:
+        dependency-type: "development"
+
+  # GitHub Actions (single group for all actions)
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 3
+    reviewers:
+      - ThoughtCloudsLost
+    groups:
       github-actions:
         patterns:
           - "*"
-        update-types:
-          - "minor"
-          - "patch"
