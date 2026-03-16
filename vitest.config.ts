@@ -5,7 +5,9 @@ import { coverageConfigDefaults } from "vitest/config";
 // Client project requires SvelteKit deps (@sveltejs/vite-plugin-svelte) which
 // are only available on the host, not inside the Docker test container. Include
 // the client project only when its dependencies are installed.
-const clientAvailable = existsSync("node_modules/@sveltejs/vite-plugin-svelte");
+const clientAvailable = existsSync(
+  "packages/client/node_modules/@sveltejs/vite-plugin-svelte",
+);
 
 export default defineConfig({
   test: {
