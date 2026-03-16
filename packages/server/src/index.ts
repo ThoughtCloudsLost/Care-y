@@ -37,6 +37,10 @@ import { deriveFakeSaltKey } from "./auth/salt-defense.js";
 import { createContextFactory } from "./trpc/context.js";
 import { createAppRouter } from "./routes/router.js";
 import { createEmailSender } from "./email/email-sender.js";
+import { createIpcEvaluator } from "./crypto/oprf-ipc.js";
+import { createPowVerifier } from "./crypto/pow.js";
+import { createOprfAuditLogger } from "./crypto/oprf-audit.js";
+import { createOprfEvaluateService } from "./crypto/oprf-evaluate-service.js";
 
 // --- DB startup probe ---
 
@@ -112,6 +116,57 @@ function createHttpServer(
   });
 }
 
+// --- Rate limiters ---
+
+interface RateLimiters {
+  readonly loginLimiter: ReturnType<typeof createInMemoryRateLimiter>;
+  readonly saltLimiter: ReturnType<typeof createInMemoryRateLimiter>;
+}
+
+function createAuthRateLimiters(): RateLimiters {
+  return {
+    loginLimiter: createInMemoryRateLimiter({
+      windowMs: 60_000,
+      maxRequests: 5,
+    }),
+    saltLimiter: createInMemoryRateLimiter({
+      windowMs: 60_000,
+      maxRequests: 20,
+    }),
+  };
+}
+
+// --- OPRF infrastructure ---
+
+import type { OprfEvaluateService } from "./crypto/oprf-evaluate-service.js";
+
+function createOprfInfrastructure(env: EnvVars): OprfEvaluateService {
+  const evaluator = createIpcEvaluator({
+    socketPathA: env.OPRF_SOCKET_A,
+    socketPathB: env.OPRF_SOCKET_B,
+  });
+
+  const userRateLimiter = createInMemoryRateLimiter({
+    windowMs: 15 * 60 * 1000,
+    maxRequests: 10,
+  });
+  const ipRateLimiter = createInMemoryRateLimiter({
+    windowMs: 15 * 60 * 1000,
+    maxRequests: 50,
+  });
+
+  const opsKeyBuf = Buffer.from(env.OPS_SECRETS_KEY, "hex");
+  const auditLogger = createOprfAuditLogger(db, opsKeyBuf);
+
+  return createOprfEvaluateService({
+    evaluator,
+    userRateLimiter,
+    ipRateLimiter,
+    powVerifier: createPowVerifier(),
+    auditLogger,
+  });
+}
+
 // --- Bootstrap ---
 
 await probeDatabase();
@@ -123,14 +178,13 @@ const { encryptor, indexer, fakeSaltKey } = await deriveCryptoServices(
 
 const orgService = createOrgService(db, tenantDb);
 const hasher = createScryptHasher();
-const loginLimiter = createInMemoryRateLimiter({
-  windowMs: 60_000,
-  maxRequests: 5,
-});
-const saltLimiter = createInMemoryRateLimiter({
-  windowMs: 60_000,
-  maxRequests: 20,
-});
+const { loginLimiter, saltLimiter } = createAuthRateLimiters();
+const emailSender = createEmailSender(
+  env.SMTP_HOST,
+  env.SMTP_PORT,
+  env.SMTP_FROM,
+);
+const oprfService = createOprfInfrastructure(env);
 
 const createContext = createContextFactory({
   orgService,
@@ -138,12 +192,6 @@ const createContext = createContextFactory({
   encryptor,
   indexer,
 });
-
-const emailSender = createEmailSender(
-  env.SMTP_HOST,
-  env.SMTP_PORT,
-  env.SMTP_FROM,
-);
 
 const appRouter = createAppRouter({
   authDeps: {
@@ -156,10 +204,8 @@ const appRouter = createAppRouter({
     isSecureCookie: env.NODE_ENV === "production",
     emailSender,
   },
-  twoFactorDeps: {
-    emailSender,
-    encryptor,
-  },
+  twoFactorDeps: { emailSender, encryptor },
+  oprfDeps: { oprfService },
   orgService,
 });
 

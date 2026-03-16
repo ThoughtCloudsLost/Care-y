@@ -224,6 +224,10 @@ describe("ECIES per-volunteer wrapping", () => {
     });
   });
 
+  // Output shape tests guard the wire format that gets persisted or
+  // transmitted. The sizes (32-byte point, 24-byte nonce, plaintext+MAC
+  // ciphertext) are cryptographic contracts: changing them breaks
+  // interoperability with existing wrapped keys stored in the DB.
   describe("output shape", () => {
     it("ephemeralPoint is 32 bytes", () => {
       const { pub } = generateKeypair(sodium);

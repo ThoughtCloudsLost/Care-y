@@ -21,6 +21,7 @@ import {
   mockRes,
   expectTrpcError,
   createMockEmailSender,
+  createMockOprfDeps,
   type TestDb,
 } from "../test-utils.js";
 import { createScryptHasher } from "../auth/password.js";
@@ -133,6 +134,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
           emailSender: createMockEmailSender(),
           encryptor: testFieldEncryptor,
         },
+        oprfDeps: createMockOprfDeps(),
         orgService,
       });
     }

@@ -82,6 +82,8 @@ describe("createFieldEncryptor", () => {
     expect(a.equals(b)).toBe(false);
   });
 
+  // Wire format: nonce(24) || ciphertext(MAC + plaintext). Guards backward
+  // compatibility with encrypted DB columns. Changing layout = data loss.
   it("ciphertext is nonce(24) + mac+ct(16+N) bytes", () => {
     const ct = encryptor.encrypt("test");
     const messageLen = Buffer.byteLength("test", "utf-8");
@@ -115,6 +117,10 @@ describe("createFieldEncryptor", () => {
     expect(() => encryptor.decrypt(Buffer.alloc(0))).toThrow(CryptoError);
   });
 
+  // Sodium spy: tests that unexpected native crypto errors are wrapped as
+  // CryptoError rather than leaking implementation details. Coupled to the
+  // sodium function name, but sodium-native's API is stable and the error
+  // wrapping behavior is a security contract (no raw stack traces to clients).
   it("wraps unexpected sodium errors as CryptoError", () => {
     const ct = encryptor.encrypt("test");
     const spy = vi

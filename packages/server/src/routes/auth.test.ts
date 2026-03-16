@@ -19,6 +19,7 @@ import {
   mockRes,
   expectTrpcError,
   createMockEmailSender,
+  createMockOprfDeps,
   type TestDb,
 } from "../test-utils.js";
 import { RoleId } from "@care-y/shared";
@@ -130,6 +131,7 @@ describe.skipIf(!HAS_DB)("auth + org routers (DB integration)", () => {
         emailSender: createMockEmailSender(),
         encryptor: testFieldEncryptor,
       },
+      oprfDeps: createMockOprfDeps(),
       orgService,
     });
   }

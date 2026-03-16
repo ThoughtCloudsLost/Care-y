@@ -23,12 +23,20 @@ services:
     ports:
       - "3000:3000"
     networks: [internal]
+    volumes:
+      - oprf_sockets:/run/oprf
     depends_on:
       db:
         condition: service_healthy
+      oprf-a:
+        condition: service_started
+      oprf-b:
+        condition: service_started
     env_file: .env
     environment:
       - NODE_ENV=development
+      - OPRF_SOCKET_A=/run/oprf/oprf-a.sock
+      - OPRF_SOCKET_B=/run/oprf/oprf-b.sock
     develop:
       watch:
         # Source code: sync into container, tsx --watch restarts automatically
@@ -76,8 +84,52 @@ services:
     networks: [internal]
     restart: unless-stopped
 
+  oprf-a:
+    build:
+      context: .
+      dockerfile: Dockerfile.oprf
+    user: "2001:2001"
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 128m
+    cpus: "0.25"
+    tmpfs:
+      - /tmp
+    environment:
+      - OPRF_SOCKET_PATH=/run/oprf/oprf-a.sock
+      - OPRF_SHARE_HEX=${OPRF_SHARE_A_HEX}
+    volumes:
+      - oprf_sockets:/run/oprf
+    networks: [internal]
+
+  oprf-b:
+    build:
+      context: .
+      dockerfile: Dockerfile.oprf
+    user: "2001:2001"
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 128m
+    cpus: "0.25"
+    tmpfs:
+      - /tmp
+    environment:
+      - OPRF_SOCKET_PATH=/run/oprf/oprf-b.sock
+      - OPRF_SHARE_HEX=${OPRF_SHARE_B_HEX}
+    volumes:
+      - oprf_sockets:/run/oprf
+    networks: [internal]
+
 volumes:
   postgres_data:
+  oprf_sockets:
+    driver: local
+    driver_opts:
+      type: tmpfs
+      device: tmpfs
+      o: size=1m,uid=2001,gid=2001
 
 networks:
   internal:

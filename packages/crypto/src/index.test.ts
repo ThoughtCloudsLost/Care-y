@@ -83,6 +83,10 @@ describe("barrel export", () => {
     sodium = await getSodium();
   });
 
+  // These existence checks guard the public API surface of @care-y/crypto.
+  // Justified: consumers import these symbols by name. Accidental removal
+  // of a re-export during refactoring silently breaks downstream packages
+  // at runtime (TypeScript catches it at build, but only if someone builds).
   describe("exported functions are defined", () => {
     it("initialization functions", () => {
       expect(typeof getSodium).toBe("function");
@@ -160,6 +164,10 @@ describe("barrel export", () => {
     });
   });
 
+  // These constant-value checks guard cryptographic parameter contracts.
+  // Justified: Argon2 params and HKDF labels are baked into persisted
+  // key material. Changing them silently would make all existing derived
+  // keys unrecoverable. These tests catch accidental edits.
   describe("exported constants have correct values", () => {
     it("ARGON2_MIN_PARAMS", () => {
       expect(ARGON2_MIN_PARAMS.memoryKiB).toBe(65536);
