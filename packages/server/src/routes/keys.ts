@@ -11,6 +11,7 @@ import {
   uploadVolPublicSchema,
   passwordChangeKeysSchema,
 } from "@care-y/shared";
+import { encode } from "@care-y/crypto";
 import { router, authedProcedure } from "../trpc/trpc.js";
 import { createKeyRotationService } from "../crypto/key-rotation.js";
 
@@ -66,6 +67,23 @@ export function createKeysRouter() {
     rotationStatus: authedProcedure.query(async ({ ctx }) => {
       const keyRotation = createKeyRotationService(ctx.org.tenantDb);
       return keyRotation.getRotationStatus(ctx.session.userId);
+    }),
+
+    /** Return the calling volunteer's ECIES-wrapped copy of the org secret key. */
+    getWrappedOrgKey: authedProcedure.query(async ({ ctx }) => {
+      const wrap = await ctx.org.tenantDb
+        .selectFrom("wrapped_org_keys")
+        .selectAll()
+        .where("user_id", "=", ctx.session.userId)
+        .executeTakeFirst();
+
+      if (!wrap) return null; // org keypair not generated yet, or user not wrapped
+
+      return {
+        ephemeralPoint: encode(wrap.ephemeral_point),
+        wrappedKey: encode(wrap.wrapped_key),
+        nonce: encode(wrap.nonce),
+      };
     }),
   });
 }

@@ -47,6 +47,11 @@ export const getSaltInputSchema = z.object({
   identifier: identifierSchema,
 });
 
+export const getSaltOutputSchema = z.object({
+  salt: z.string(),
+  userId: z.uuid(),
+});
+
 export const assignRoleInputSchema = z.object({
   userId: z.uuid(),
   roleId: z.enum(ROLE_ID_VALUES_TUPLE),

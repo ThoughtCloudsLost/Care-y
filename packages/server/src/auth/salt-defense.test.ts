@@ -11,6 +11,7 @@ import type { TenantDatabase } from "../db/types.js";
 import {
   deriveFakeSaltKey,
   computeFakeSalt,
+  computeFakeUuid,
   createSaltDefense,
 } from "./salt-defense.js";
 import { CryptoError } from "../errors.js";
@@ -117,6 +118,54 @@ describe("computeFakeSalt", () => {
 });
 
 // ---------------------------------------------------------------------------
+// computeFakeUuid
+// ---------------------------------------------------------------------------
+
+describe("computeFakeUuid", () => {
+  const fakeSaltKey = Buffer.alloc(32, 0xab);
+  const orgUuid = "org-uuid-1";
+
+  it("returns a valid UUID v4 format string", () => {
+    const uuid = computeFakeUuid(fakeSaltKey, orgUuid, "alice");
+    expect(uuid).toMatch(
+      /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/,
+    );
+  });
+
+  it("is deterministic (same inputs produce same UUID)", () => {
+    const a = computeFakeUuid(fakeSaltKey, orgUuid, "alice");
+    const b = computeFakeUuid(fakeSaltKey, orgUuid, "alice");
+    expect(a).toBe(b);
+  });
+
+  it("produces different UUIDs for different identifiers", () => {
+    const a = computeFakeUuid(fakeSaltKey, orgUuid, "alice");
+    const b = computeFakeUuid(fakeSaltKey, orgUuid, "bob");
+    expect(a).not.toBe(b);
+  });
+
+  it("produces different UUIDs for different org UUIDs", () => {
+    const a = computeFakeUuid(fakeSaltKey, "org-a", "alice");
+    const b = computeFakeUuid(fakeSaltKey, "org-b", "alice");
+    expect(a).not.toBe(b);
+  });
+
+  it("normalizes identifier to lowercase", () => {
+    const a = computeFakeUuid(fakeSaltKey, orgUuid, "Alice");
+    const b = computeFakeUuid(fakeSaltKey, orgUuid, "alice");
+    expect(a).toBe(b);
+  });
+
+  it("produces different UUIDs for different keys", () => {
+    const keyA = Buffer.alloc(32, 0xaa);
+    const keyB = Buffer.alloc(32, 0xbb);
+    const a = computeFakeUuid(keyA, orgUuid, "alice");
+    const b = computeFakeUuid(keyB, orgUuid, "alice");
+    expect(a).not.toBe(b);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // createSaltDefense (DB integration)
 // ---------------------------------------------------------------------------
 
@@ -166,6 +215,17 @@ describe.skipIf(!process.env.DATABASE_URL)("createSaltDefense", () => {
     expect(result.salt.length).toBe(16);
   });
 
+  it("returns a deterministic fake userId for a nonexistent identifier", async () => {
+    const sd = makeSaltDefense();
+    const a = await sd.getSalt("ghost");
+    const b = await sd.getSalt("ghost");
+    expect(a.userId).toBe(b.userId);
+    // Must be valid UUID v4 format
+    expect(a.userId).toMatch(
+      /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/,
+    );
+  });
+
   it("returns the same fake salt for repeated queries (deterministic)", async () => {
     const sd = makeSaltDefense();
     const a = await sd.getSalt("ghost");
@@ -180,7 +240,7 @@ describe.skipIf(!process.env.DATABASE_URL)("createSaltDefense", () => {
     expect(a.salt.equals(b.salt)).toBe(false);
   });
 
-  it("returns the real salt for a user with a user_keys row", async () => {
+  it("returns the real salt and real userId for a user with a user_keys row", async () => {
     const user = await createTestUser(tenantDb, {
       encryptor: noopEncryptor,
       indexer: testBlindIndexer,
@@ -194,6 +254,7 @@ describe.skipIf(!process.env.DATABASE_URL)("createSaltDefense", () => {
     const sd = makeSaltDefense();
     const result = await sd.getSalt(testIdentifier);
     expect(result.salt.equals(realSalt)).toBe(true);
+    expect(result.userId).toBe(user.id);
   });
 
   it("returns a fake salt for a deactivated user", async () => {

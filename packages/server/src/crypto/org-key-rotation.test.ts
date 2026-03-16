@@ -57,6 +57,7 @@ describe.skipIf(!process.env.DATABASE_URL)("OrgKeyRotationService", () => {
           .insertInto("wrapped_org_keys")
           .values({
             user_id: user.id,
+            ephemeral_point: crypto.randomBytes(32),
             wrapped_key: crypto.randomBytes(64),
             nonce: crypto.randomBytes(24),
           })
@@ -82,11 +83,13 @@ describe.skipIf(!process.env.DATABASE_URL)("OrgKeyRotationService", () => {
 
       const wrapA = {
         userId: userA.id,
+        ephemeralPoint: crypto.randomBytes(32),
         wrappedKey: crypto.randomBytes(64),
         nonce: crypto.randomBytes(24),
       };
       const wrapB = {
         userId: userB.id,
+        ephemeralPoint: crypto.randomBytes(32),
         wrappedKey: crypto.randomBytes(64),
         nonce: crypto.randomBytes(24),
       };
@@ -128,6 +131,7 @@ describe.skipIf(!process.env.DATABASE_URL)("OrgKeyRotationService", () => {
         .insertInto("wrapped_org_keys")
         .values({
           user_id: user.id,
+          ephemeral_point: crypto.randomBytes(32),
           wrapped_key: crypto.randomBytes(64),
           nonce: crypto.randomBytes(24),
         })
@@ -135,6 +139,7 @@ describe.skipIf(!process.env.DATABASE_URL)("OrgKeyRotationService", () => {
 
       const newWrap = {
         userId: user.id,
+        ephemeralPoint: crypto.randomBytes(32),
         wrappedKey: crypto.randomBytes(64),
         nonce: crypto.randomBytes(24),
       };

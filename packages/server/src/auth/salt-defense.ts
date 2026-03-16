@@ -78,6 +78,44 @@ export function computeFakeSalt(
   return hmac.digest().subarray(0, SALT_LENGTH);
 }
 
+/**
+ * Derives a deterministic fake UUID v4 for a non-existent user.
+ * HMAC-SHA256(fakeSaltKey, "fake-uuid:" + orgUuid + ":" + identifier), take first
+ * 16 bytes, format as UUID v4 (version + variant bits set per RFC 9562 section 4.4).
+ * Deterministic per (orgUuid, identifier) pair.
+ */
+export function computeFakeUuid(
+  fakeSaltKey: Buffer,
+  orgUuid: string,
+  identifier: string,
+): string {
+  const hmac = createHmac("sha256", fakeSaltKey);
+  hmac.update("fake-uuid:");
+  hmac.update(orgUuid);
+  hmac.update(":");
+  hmac.update(identifier.toLowerCase());
+  const bytes = hmac.digest().subarray(0, 16);
+
+  // Set version 4 (bits 4-7 of byte 6)
+  const byte6 = bytes[6];
+  const byte8 = bytes[8];
+  if (byte6 === undefined || byte8 === undefined) {
+    throw new CryptoError("HMAC digest too short for UUID generation");
+  }
+  bytes[6] = (byte6 & 0x0f) | 0x40;
+  // Set variant 1 (bits 6-7 of byte 8)
+  bytes[8] = (byte8 & 0x3f) | 0x80;
+
+  const hex = bytes.toString("hex");
+  return [
+    hex.substring(0, 8),
+    hex.substring(8, 12),
+    hex.substring(12, 16),
+    hex.substring(16, 20),
+    hex.substring(20, 32),
+  ].join("-");
+}
+
 // --- SaltDefense interface and factory ---
 
 export interface SaltDefenseConfig {
@@ -88,6 +126,8 @@ export interface SaltDefenseConfig {
 export interface SaltLookupResult {
   /** The salt to return to the client (real or fake). Always 16 bytes. */
   readonly salt: Buffer;
+  /** The user's UUID (real for existing users, deterministic fake for non-existent). */
+  readonly userId: string;
 }
 
 export interface SaltDefense {
@@ -132,21 +172,27 @@ export function createSaltDefense(
         Promise.resolve(
           computeFakeSalt(config.fakeSaltKey, config.orgUuid, normalized),
         ),
-        // 2. Query DB for real salt (joins user_keys via users.identifier_hash)
+        // 2. Query DB for real salt + userId (joins user_keys via users.identifier_hash)
         db
           .selectFrom("user_keys")
           .innerJoin("users", "users.id", "user_keys.user_id")
-          .select("user_keys.salt")
+          .select(["user_keys.salt", "users.id as userId"])
           .where("users.identifier_hash", "=", identifierHash)
           .where("users.is_active", "=", true)
           .executeTakeFirst(),
       ]);
 
-      // Select result: real salt if user exists, fake salt otherwise.
+      // Select result: real salt + userId if user exists, fake values otherwise.
       // No timing difference: both values are already computed.
       const salt = dbResult?.salt ?? fakeSalt;
+      const userId =
+        dbResult?.userId ??
+        computeFakeUuid(config.fakeSaltKey, config.orgUuid, normalized);
 
-      return { salt: Buffer.isBuffer(salt) ? salt : Buffer.from(salt) };
+      return {
+        salt: Buffer.isBuffer(salt) ? salt : Buffer.from(salt),
+        userId,
+      };
     },
   };
 }

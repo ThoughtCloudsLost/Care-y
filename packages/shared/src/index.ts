@@ -23,6 +23,7 @@ export {
   loginInputSchema,
   registerInputSchema,
   getSaltInputSchema,
+  getSaltOutputSchema,
   assignRoleInputSchema,
   setPiiRetentionInputSchema,
 } from "./schemas/auth.js";

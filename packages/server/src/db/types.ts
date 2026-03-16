@@ -96,7 +96,8 @@ export interface UserKeysTable {
 // --- Wrapped org keys (per-volunteer encrypted copies of org secret key) ---
 export interface WrappedOrgKeysTable {
   user_id: string;
-  wrapped_key: Buffer; // encrypted blob, only volunteers can unwrap
+  ephemeral_point: Buffer; // ristretto255, 32 bytes (ECIES ephemeral public point)
+  wrapped_key: Buffer; // ECIES-wrapped org private key
   nonce: Buffer; // 24 bytes
   key_version: ColumnType<number, number | undefined, number>;
 }
