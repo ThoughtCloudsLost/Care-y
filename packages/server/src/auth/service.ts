@@ -25,8 +25,8 @@ import { RoleId } from "@care-y/shared";
 
 export interface UserRecord {
   readonly id: string;
-  readonly identifier: string;
-  readonly displayName: string;
+  readonly identifier: string; // still decrypted server-side (Tier 2, needed for login response)
+  readonly encryptedDisplayName: string; // base64 ciphertext, client decrypts with org key
   readonly roleId: string;
   readonly isActive: boolean;
 }
@@ -77,7 +77,7 @@ function toUserRecord(
   return {
     id: row.id,
     identifier: encryptor.decrypt(row.encrypted_identifier),
-    displayName: encryptor.decrypt(row.encrypted_display_name),
+    encryptedDisplayName: row.encrypted_display_name.toString("base64"),
     roleId: row.role_id,
     isActive: row.is_active,
   };

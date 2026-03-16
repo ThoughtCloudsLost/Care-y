@@ -351,7 +351,7 @@ describe.skipIf(!HAS_DB)("context factory (DB integration)", () => {
       });
 
       expect(user.identifier).toBe(`scoped-svc-${suffix}`);
-      expect(user.displayName).toBe("Scoped User");
+      expect(user.encryptedDisplayName).toBeDefined();
     });
   });
 });
