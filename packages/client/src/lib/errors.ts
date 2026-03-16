@@ -20,3 +20,11 @@ export class WebauthnError extends ClientError {
     this.name = "WebauthnError";
   }
 }
+
+/** Crypto Worker test infrastructure failures (handler not registered, no response). */
+export class CryptoWorkerTestError extends ClientError {
+  constructor(message: string) {
+    super(message);
+    this.name = "CryptoWorkerTestError";
+  }
+}
