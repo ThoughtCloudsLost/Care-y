@@ -15,10 +15,39 @@ import {
   type ProcessConfig,
 } from "./oprf-process.js";
 import { CryptoError } from "../errors.js";
+import { DOCKER_OPRF_AVAILABLE, DOCKER_SOCKET_A } from "../test-utils.js";
 
 const IS_LINUX = process.platform === "linux";
 const LENGTH_PREFIX_BYTES = 4;
 const POINT_BYTES = 32;
+
+function sendIpc(targetSocket: string, payload: Buffer): Promise<Buffer> {
+  return new Promise((resolve, reject) => {
+    const socket = createConnection(targetSocket);
+    const msg = Buffer.alloc(LENGTH_PREFIX_BYTES + payload.length);
+    msg.writeUInt32BE(payload.length, 0);
+    payload.copy(msg, LENGTH_PREFIX_BYTES);
+    socket.write(msg);
+
+    let received = Buffer.alloc(0);
+    socket.on("data", (chunk: Buffer) => {
+      received = Buffer.concat([received, chunk]);
+      if (received.length >= LENGTH_PREFIX_BYTES) {
+        const respLen = received.readUInt32BE(0);
+        if (received.length >= LENGTH_PREFIX_BYTES + respLen) {
+          socket.destroy();
+          resolve(received);
+        }
+      }
+    });
+
+    socket.on("error", reject);
+    setTimeout(() => {
+      socket.destroy();
+      reject(new Error("IPC timeout"));
+    }, 5_000);
+  });
+}
 
 beforeAll(async () => {
   await getSodium();
@@ -163,41 +192,13 @@ describe.skipIf(!IS_LINUX)("IPC protocol (Linux only)", () => {
     cleanup?.();
   });
 
-  function sendIpc(payload: Buffer): Promise<Buffer> {
-    return new Promise((resolve, reject) => {
-      const socket = createConnection(socketPath);
-      const msg = Buffer.alloc(LENGTH_PREFIX_BYTES + payload.length);
-      msg.writeUInt32BE(payload.length, 0);
-      payload.copy(msg, LENGTH_PREFIX_BYTES);
-      socket.write(msg);
-
-      let received = Buffer.alloc(0);
-      socket.on("data", (chunk: Buffer) => {
-        received = Buffer.concat([received, chunk]);
-        if (received.length >= LENGTH_PREFIX_BYTES) {
-          const respLen = received.readUInt32BE(0);
-          if (received.length >= LENGTH_PREFIX_BYTES + respLen) {
-            socket.destroy();
-            resolve(received);
-          }
-        }
-      });
-
-      socket.on("error", reject);
-      setTimeout(() => {
-        socket.destroy();
-        reject(new Error("IPC timeout"));
-      }, 5_000);
-    });
-  }
-
   it("returns 32-byte evaluated point for valid 32-byte input", async () => {
     const { requireSodium } = await import("@care-y/crypto");
     const s = requireSodium();
     const scalar = s.crypto_core_ristretto255_scalar_random();
     const point = s.crypto_scalarmult_ristretto255_base(scalar);
 
-    const response = await sendIpc(Buffer.from(point));
+    const response = await sendIpc(socketPath, Buffer.from(point));
     const respLen = response.readUInt32BE(0);
 
     expect(respLen).toBe(POINT_BYTES);
@@ -206,7 +207,7 @@ describe.skipIf(!IS_LINUX)("IPC protocol (Linux only)", () => {
 
   it("returns zero-length error for wrong-size payload", async () => {
     const badPayload = Buffer.alloc(16);
-    const response = await sendIpc(badPayload);
+    const response = await sendIpc(socketPath, badPayload);
     const respLen = response.readUInt32BE(0);
 
     expect(respLen).toBe(0);
@@ -220,11 +221,53 @@ describe.skipIf(!IS_LINUX)("IPC protocol (Linux only)", () => {
     const point = s.crypto_scalarmult_ristretto255_base(scalar);
     const payload = Buffer.from(point);
 
-    const resp1 = await sendIpc(payload);
-    const resp2 = await sendIpc(payload);
+    const resp1 = await sendIpc(socketPath, payload);
+    const resp2 = await sendIpc(socketPath, payload);
 
     const result1 = resp1.subarray(LENGTH_PREFIX_BYTES);
     const result2 = resp2.subarray(LENGTH_PREFIX_BYTES);
     expect(result1.equals(result2)).toBe(true);
   });
 });
+
+describe.skipIf(!DOCKER_OPRF_AVAILABLE)(
+  "IPC protocol (Docker OPRF containers)",
+  () => {
+    it("returns 32-byte evaluated point for valid 32-byte input", async () => {
+      const { requireSodium } = await import("@care-y/crypto");
+      const s = requireSodium();
+      const scalar = s.crypto_core_ristretto255_scalar_random();
+      const point = s.crypto_scalarmult_ristretto255_base(scalar);
+
+      const response = await sendIpc(DOCKER_SOCKET_A, Buffer.from(point));
+      const respLen = response.readUInt32BE(0);
+
+      expect(respLen).toBe(POINT_BYTES);
+      expect(response.length).toBe(LENGTH_PREFIX_BYTES + POINT_BYTES);
+    });
+
+    it("returns zero-length error for wrong-size payload", async () => {
+      const badPayload = Buffer.alloc(16);
+      const response = await sendIpc(DOCKER_SOCKET_A, badPayload);
+      const respLen = response.readUInt32BE(0);
+
+      expect(respLen).toBe(0);
+      expect(response.length).toBe(LENGTH_PREFIX_BYTES);
+    });
+
+    it("returns consistent results for the same input", async () => {
+      const { requireSodium } = await import("@care-y/crypto");
+      const s = requireSodium();
+      const scalar = s.crypto_core_ristretto255_scalar_random();
+      const point = s.crypto_scalarmult_ristretto255_base(scalar);
+      const payload = Buffer.from(point);
+
+      const resp1 = await sendIpc(DOCKER_SOCKET_A, payload);
+      const resp2 = await sendIpc(DOCKER_SOCKET_A, payload);
+
+      const result1 = resp1.subarray(LENGTH_PREFIX_BYTES);
+      const result2 = resp2.subarray(LENGTH_PREFIX_BYTES);
+      expect(result1.equals(result2)).toBe(true);
+    });
+  },
+);
