@@ -31,6 +31,10 @@ import {
   createFieldEncryptor,
   createBlindIndexer,
 } from "../crypto/field-encryptor.js";
+import {
+  deriveSessionHmacKey,
+  createSessionTokenizer,
+} from "../crypto/session-tokenizer.js";
 
 const DEV_ORG_SLUG = "dev-org";
 const ADMIN_IDENTIFIER = "admin@dev.local";
@@ -78,13 +82,20 @@ async function seed(): Promise<void> {
 
   // --- Create admin user ---
   const tenantDatabase = tenantDb(schemaName);
-  const sessions = createDbSessionRepository(tenantDatabase, encryptor);
+  const tokenizer = createSessionTokenizer(deriveSessionHmacKey(opsKey));
+  const sessions = createDbSessionRepository(
+    tenantDatabase,
+    encryptor,
+    tokenizer,
+    null, // no sealed box yet (org keypair not generated during seed)
+  );
   const authService = createAuthService(
     tenantDatabase,
     hasher,
     sessions,
     encryptor,
     indexer,
+    tokenizer,
     orgId,
   );
 

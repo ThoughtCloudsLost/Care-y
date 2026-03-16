@@ -17,6 +17,7 @@ import {
   createTestDb,
   testFieldEncryptor,
   testBlindIndexer,
+  testSessionTokenizer,
   mockReq,
   mockRes,
   expectTrpcError,
@@ -127,12 +128,16 @@ describe.skipIf(!process.env.DATABASE_URL)(
           fakeSaltKey,
           encryptor: testFieldEncryptor,
           indexer: testBlindIndexer,
+          tokenizer: testSessionTokenizer,
+          sealedBox: null,
           isSecureCookie: false,
           emailSender: createMockEmailSender(),
         },
         twoFactorDeps: {
           emailSender: createMockEmailSender(),
           encryptor: testFieldEncryptor,
+          tokenizer: testSessionTokenizer,
+          sealedBox: null,
         },
         oprfDeps: createMockOprfDeps(),
         orgService,
@@ -181,13 +186,19 @@ describe.skipIf(!process.env.DATABASE_URL)(
       identifier: string,
       roleId: string,
     ): Promise<UserRecord> {
-      const sessions = createDbSessionRepository(tenantDb, testFieldEncryptor);
+      const sessions = createDbSessionRepository(
+        tenantDb,
+        testFieldEncryptor,
+        testSessionTokenizer,
+        null,
+      );
       const authService = createAuthService(
         tenantDb,
         hasher,
         sessions,
         testFieldEncryptor,
         testBlindIndexer,
+        testSessionTokenizer,
         orgContext.orgId,
       );
       return authService.register({
@@ -204,8 +215,8 @@ describe.skipIf(!process.env.DATABASE_URL)(
         id: randomUUID(),
         token: randomUUID(),
         userId,
-        ipAddress: "127.0.0.1",
-        userAgent: "test-agent",
+        ipToken: "test-ip-token",
+        uaToken: "test-ua-token",
         expiresAt: new Date(Date.now() + 3_600_000),
         twofaVerified,
         webauthnChallenge: null,
@@ -320,6 +331,8 @@ describe.skipIf(!process.env.DATABASE_URL)(
         const sessions = createDbSessionRepository(
           tenantDb,
           testFieldEncryptor,
+          testSessionTokenizer,
+          null,
         );
         const authService = createAuthService(
           tenantDb,
@@ -327,6 +340,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
           sessions,
           testFieldEncryptor,
           testBlindIndexer,
+          testSessionTokenizer,
           orgContext.orgId,
         );
 

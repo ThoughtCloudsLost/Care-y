@@ -34,6 +34,11 @@ import {
   type BlindIndexer,
 } from "./crypto/field-encryptor.js";
 import { deriveFakeSaltKey } from "./auth/salt-defense.js";
+import {
+  deriveSessionHmacKey,
+  createSessionTokenizer,
+  type SessionTokenizer,
+} from "./crypto/session-tokenizer.js";
 import { createContextFactory } from "./trpc/context.js";
 import { createAppRouter } from "./routes/router.js";
 import { createEmailSender } from "./email/email-sender.js";
@@ -63,10 +68,11 @@ interface CryptoServices {
   readonly encryptor: FieldEncryptor;
   readonly indexer: BlindIndexer;
   readonly fakeSaltKey: Buffer;
+  readonly tokenizer: SessionTokenizer;
 }
 
-/** Derives all field-encryption, blind-index, and fake-salt keys from OPS_SECRETS_KEY.
- *  Called once at startup. The hex key is consumed here and never stored. */
+/** Derives all field-encryption, blind-index, fake-salt, and session-token
+ *  keys from OPS_SECRETS_KEY. Called once at startup. */
 async function deriveCryptoServices(
   opsSecretsKeyHex: string,
 ): Promise<CryptoServices> {
@@ -75,7 +81,8 @@ async function deriveCryptoServices(
   const encryptor = createFieldEncryptor(derived.fieldEncryptKey);
   const indexer = createBlindIndexer(derived.blindIndexKey);
   const fakeSaltKey = await deriveFakeSaltKey(opsSecretsKeyHex);
-  return { encryptor, indexer, fakeSaltKey };
+  const tokenizer = createSessionTokenizer(deriveSessionHmacKey(opsKey));
+  return { encryptor, indexer, fakeSaltKey, tokenizer };
 }
 
 // --- CORS ---
@@ -172,9 +179,8 @@ function createOprfInfrastructure(env: EnvVars): OprfEvaluateService {
 await probeDatabase();
 
 const env: EnvVars = getEnv();
-const { encryptor, indexer, fakeSaltKey } = await deriveCryptoServices(
-  env.OPS_SECRETS_KEY,
-);
+const { encryptor, indexer, fakeSaltKey, tokenizer } =
+  await deriveCryptoServices(env.OPS_SECRETS_KEY);
 
 const orgService = createOrgService(db, tenantDb);
 const hasher = createScryptHasher();
@@ -191,6 +197,8 @@ const createContext = createContextFactory({
   hasher,
   encryptor,
   indexer,
+  tokenizer,
+  sealedBox: null, // org keypair not generated yet
 });
 
 const appRouter = createAppRouter({
@@ -201,10 +209,12 @@ const appRouter = createAppRouter({
     fakeSaltKey,
     encryptor,
     indexer,
+    tokenizer,
+    sealedBox: null,
     isSecureCookie: env.NODE_ENV === "production",
     emailSender,
   },
-  twoFactorDeps: { emailSender, encryptor },
+  twoFactorDeps: { emailSender, encryptor, tokenizer, sealedBox: null },
   oprfDeps: { oprfService },
   orgService,
 });

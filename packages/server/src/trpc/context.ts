@@ -23,6 +23,8 @@ import type {
   FieldEncryptor,
   BlindIndexer,
 } from "../crypto/field-encryptor.js";
+import type { SessionTokenizer } from "../crypto/session-tokenizer.js";
+import type { SealedBoxEncryptor } from "../crypto/sealed-box.js";
 import type { PasswordHasher } from "../auth/password.js";
 import { createDbSessionRepository } from "../auth/session-repository.js";
 import { createAuthService } from "../auth/service.js";
@@ -53,6 +55,8 @@ export interface ContextDeps {
   readonly hasher: PasswordHasher;
   readonly encryptor: FieldEncryptor;
   readonly indexer: BlindIndexer;
+  readonly tokenizer: SessionTokenizer;
+  readonly sealedBox: SealedBoxEncryptor | null;
 }
 
 /**
@@ -98,6 +102,8 @@ export interface AuthServiceDeps {
   readonly hasher: PasswordHasher;
   readonly encryptor: FieldEncryptor;
   readonly indexer: BlindIndexer;
+  readonly tokenizer: SessionTokenizer;
+  readonly sealedBox: SealedBoxEncryptor | null;
 }
 
 /**
@@ -109,13 +115,19 @@ export function createScopedAuthService(
   orgCtx: OrgContext,
   deps: AuthServiceDeps,
 ): AuthService {
-  const sessions = createDbSessionRepository(orgCtx.tenantDb, deps.encryptor);
+  const sessions = createDbSessionRepository(
+    orgCtx.tenantDb,
+    deps.encryptor,
+    deps.tokenizer,
+    deps.sealedBox,
+  );
   return createAuthService(
     orgCtx.tenantDb,
     deps.hasher,
     sessions,
     deps.encryptor,
     deps.indexer,
+    deps.tokenizer,
     orgCtx.orgId,
   );
 }
