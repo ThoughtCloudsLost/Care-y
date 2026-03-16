@@ -112,6 +112,8 @@ export default tseslint.config(
           allowedNames: [
             "createAppRouter",
             "createAuthRouter",
+            "createKeysRouter",
+            "createOprfRouter",
             "createOrgRouter",
             "createTwoFactorRouter",
           ],

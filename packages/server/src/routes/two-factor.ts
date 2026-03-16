@@ -136,6 +136,7 @@ function narrowAuthContext(ctx: Context): {
   return { org: ctx.org, session: ctx.session, user: ctx.user };
 }
 
+// care-y-ignore-next-line missing-return-type -- tRPC router() returns a deeply generic type that cannot be written explicitly
 export function createTwoFactorRouter(deps: TwoFactorRouterDeps) {
   /**
    * Middleware: creates tenant-scoped 2FA services and injects them into ctx.

@@ -136,6 +136,7 @@ async function handleGetSalt(
   return { salt: result.salt.toString("base64") };
 }
 
+// care-y-ignore-next-line missing-return-type -- tRPC router() returns a deeply generic type that cannot be written explicitly
 export function createAuthRouter(deps: AuthRouterDeps) {
   const { loginLimiter, saltLimiter, fakeSaltKey, isSecureCookie } = deps;
 
