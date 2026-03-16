@@ -24,6 +24,8 @@ import {
 } from "../trpc/trpc.js";
 import { TRPCError } from "@trpc/server";
 import type { FieldEncryptor } from "../crypto/field-encryptor.js";
+import type { SessionTokenizer } from "../crypto/session-tokenizer.js";
+import type { SealedBoxEncryptor } from "../crypto/sealed-box.js";
 import type { EmailSender } from "../email/email-sender.js";
 import type { Context, OrgContext } from "../trpc/context.js";
 import type { SessionData } from "../auth/session-repository.js";
@@ -67,6 +69,8 @@ const TOTP_ISSUER = "CARE-Y";
 export interface TwoFactorRouterDeps {
   readonly emailSender: EmailSender;
   readonly encryptor: FieldEncryptor;
+  readonly tokenizer: SessionTokenizer;
+  readonly sealedBox: SealedBoxEncryptor | null;
 }
 
 interface ScopedServices {
@@ -82,7 +86,12 @@ export function createScopedTwoFactorServices(
   org: OrgContext,
   deps: TwoFactorRouterDeps,
 ): ScopedServices {
-  const sessions = createDbSessionRepository(org.tenantDb, deps.encryptor);
+  const sessions = createDbSessionRepository(
+    org.tenantDb,
+    deps.encryptor,
+    deps.tokenizer,
+    deps.sealedBox,
+  );
   const emailCodes = createEmailCodeService(org.tenantDb, deps.emailSender);
   const twoFactor = createTwoFactorService(
     org.tenantDb,
@@ -127,6 +136,7 @@ function narrowAuthContext(ctx: Context): {
   return { org: ctx.org, session: ctx.session, user: ctx.user };
 }
 
+// care-y-ignore-next-line missing-return-type -- tRPC router() returns a deeply generic type that cannot be written explicitly
 export function createTwoFactorRouter(deps: TwoFactorRouterDeps) {
   /**
    * Middleware: creates tenant-scoped 2FA services and injects them into ctx.

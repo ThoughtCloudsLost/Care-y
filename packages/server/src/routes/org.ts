@@ -10,6 +10,7 @@ import { createOrgInputSchema } from "@care-y/shared";
 import { router, publicProcedure, throwAsTrpc } from "../trpc/trpc.js";
 import type { OrgService } from "../org/service.js";
 
+// care-y-ignore-next-line missing-return-type -- tRPC router() returns a deeply generic type that cannot be written explicitly
 export function createOrgRouter(orgService: OrgService) {
   return router({
     create: publicProcedure

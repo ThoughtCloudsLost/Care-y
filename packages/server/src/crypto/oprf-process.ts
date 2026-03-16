@@ -1,5 +1,6 @@
 import sodium from "sodium-native";
 import { createServer, type Socket, type Server } from "node:net";
+import { chmodSync } from "node:fs";
 import { timingSafeEqual, randomBytes } from "node:crypto";
 import { getSodium } from "@care-y/crypto";
 import { blindEvaluate } from "./oprf-server.js";
@@ -158,6 +159,11 @@ export async function startOprfProcess(config: ProcessConfig): Promise<Server> {
   });
 
   server.listen(config.socketPath, () => {
+    // Node creates sockets with umask-derived permissions (typically 0755).
+    // Unix socket connect requires write permission. Restrict to owner+group
+    // so only the shared oprf-ipc group (GID 3001) can connect.
+    // eslint-disable-next-line security/detect-non-literal-fs-filename -- operator-controlled socket path from env
+    chmodSync(config.socketPath, 0o770);
     console.log(`OPRF process listening on ${config.socketPath}`);
     dropCredentials(config);
   });

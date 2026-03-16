@@ -27,15 +27,19 @@ RUN corepack enable pnpm \
 # does not expose ristretto255 functions).
 COPY packages/server/src/crypto/oprf-server.ts ./packages/server/src/crypto/
 COPY packages/server/src/crypto/oprf-process.ts ./packages/server/src/crypto/
+COPY packages/server/src/crypto/ipc-protocol.ts ./packages/server/src/crypto/
 COPY packages/server/src/errors.ts ./packages/server/src/
 COPY packages/crypto ./packages/crypto
 COPY packages/shared ./packages/shared
 COPY packages/server/tsconfig.json ./packages/server/
 COPY tsconfig.json tsconfig.base.json ./
 
-# Non-root user for credential drop target
-RUN groupadd --system oprfgroup \
-    && useradd --system --gid oprfgroup --uid 2001 oprf-user
+# Non-root user for credential drop target.
+# Primary group is oprf-ipc (GID 3001), the shared group for OPRF socket access.
+# Sockets created by this process inherit GID 3001, so the app container's user
+# (UID 1001, also in oprf-ipc) can connect via group-write permission (0770).
+RUN groupadd --system --gid 3001 oprf-ipc \
+    && useradd --system --gid oprf-ipc --uid 2001 oprf-user
 
 USER 2001
 CMD ["pnpm", "--filter", "@care-y/server", "exec", \

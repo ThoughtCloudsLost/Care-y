@@ -66,6 +66,16 @@ export {
   type RemoveMethodInput,
 } from "./schemas/two-factor.js";
 
+// --- Key management schemas ---
+export {
+  uploadVolPublicSchema,
+  passwordChangeKeysSchema,
+  uploadOrgPublicKeySchema,
+  type UploadVolPublicInput,
+  type PasswordChangeKeysInput,
+  type UploadOrgPublicKeyInput,
+} from "./schemas/keys.js";
+
 // --- OPRF schemas ---
 export {
   oprfEvaluateInputSchema,

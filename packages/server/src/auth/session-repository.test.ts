@@ -6,6 +6,7 @@ import {
   createTestSession,
   noopEncryptor,
   testFieldEncryptor,
+  testSessionTokenizer,
   type TestDb,
 } from "../test-utils.js";
 import type { SessionRepository } from "./session-repository.js";
@@ -19,7 +20,12 @@ describe.skipIf(!process.env.DATABASE_URL)("createDbSessionRepository", () => {
 
   beforeAll(async () => {
     testDb = await createTestDb();
-    repo = createDbSessionRepository(testDb.db, noopEncryptor);
+    repo = createDbSessionRepository(
+      testDb.db,
+      noopEncryptor,
+      testSessionTokenizer,
+      null,
+    );
   });
 
   afterAll(async () => {
@@ -40,8 +46,8 @@ describe.skipIf(!process.env.DATABASE_URL)("createDbSessionRepository", () => {
     expect(session.id).toBeDefined();
     expect(session.token).toBe("tok-create-test");
     expect(session.userId).toBe(user.id);
-    expect(session.ipAddress).toBe("192.168.1.1");
-    expect(session.userAgent).toBe("Mozilla/5.0");
+    expect(session.ipToken).toBe(testSessionTokenizer.tokenize("192.168.1.1"));
+    expect(session.uaToken).toBe(testSessionTokenizer.tokenize("Mozilla/5.0"));
   });
 
   it("findByToken retrieves the created session", async () => {
@@ -188,7 +194,12 @@ describe.skipIf(!process.env.DATABASE_URL)("createDbSessionRepository", () => {
 
   it("stores encrypted bytea, not plaintext", async () => {
     // Use the real encryptor to verify DB contents are not plaintext.
-    const encRepo = createDbSessionRepository(testDb.db, testFieldEncryptor);
+    const encRepo = createDbSessionRepository(
+      testDb.db,
+      testFieldEncryptor,
+      testSessionTokenizer,
+      null,
+    );
     const user = await createTestUser(testDb.db);
 
     await encRepo.create({
@@ -212,12 +223,16 @@ describe.skipIf(!process.env.DATABASE_URL)("createDbSessionRepository", () => {
     expect(ipBytes).not.toBe("10.20.30.40");
     expect(uaBytes).not.toBe("SecretAgent/1.0");
 
-    // But reading through the repo should decrypt correctly.
+    // But reading through the repo should return correct HMAC tokens.
     const session = await encRepo.findByToken("tok-enc-verify");
     expect(session).not.toBeNull();
     if (session) {
-      expect(session.ipAddress).toBe("10.20.30.40");
-      expect(session.userAgent).toBe("SecretAgent/1.0");
+      expect(session.ipToken).toBe(
+        testSessionTokenizer.tokenize("10.20.30.40"),
+      );
+      expect(session.uaToken).toBe(
+        testSessionTokenizer.tokenize("SecretAgent/1.0"),
+      );
     }
   });
 

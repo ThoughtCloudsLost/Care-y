@@ -13,6 +13,7 @@ import {
   type TwoFactorRouterDeps,
 } from "./two-factor.js";
 import { createOprfRouter, type OprfRouterDeps } from "./oprf.js";
+import { createKeysRouter } from "./keys.js";
 import type { AuthRouterDeps } from "./auth.js";
 import type { OrgService } from "../org/service.js";
 
@@ -27,11 +28,13 @@ export interface RouterDeps {
   readonly orgService: OrgService;
 }
 
+// care-y-ignore-next-line missing-return-type -- tRPC router() returns a deeply generic type that cannot be written explicitly
 export function createAppRouter(deps: RouterDeps) {
   const authRouter = createAuthRouter(deps.authDeps);
   const orgRouter = createOrgRouter(deps.orgService);
   const twoFactorRouter = createTwoFactorRouter(deps.twoFactorDeps);
   const oprfRouter = createOprfRouter(deps.oprfDeps);
+  const keysRouter = createKeysRouter();
 
   return router({
     health: publicProcedure.query(healthCheck),
@@ -39,5 +42,6 @@ export function createAppRouter(deps: RouterDeps) {
     org: orgRouter,
     twoFactor: twoFactorRouter,
     oprf: oprfRouter,
+    keys: keysRouter,
   });
 }
