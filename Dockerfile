@@ -40,7 +40,11 @@ COPY tsconfig.json tsconfig.base.json ./
 
 # Non-root user (matches container hardening - user 1001)
 # Corepack cache is world-readable so user 1001 can resolve pnpm without downloading.
-RUN groupadd --system appgroup && useradd --system --gid appgroup --uid 1001 appuser \
+# GID 3001 (oprf-ipc) is the shared group for OPRF socket access. The OPRF sidecar
+# containers create sockets with 0770 permissions; appuser needs group membership to connect.
+RUN groupadd --system appgroup \
+    && groupadd --system --gid 3001 oprf-ipc \
+    && useradd --system --gid appgroup --uid 1001 --groups oprf-ipc appuser \
     && chmod -R a+rX /app/.corepack
 
 # ── test ─────────────────────────────────────────────────────────────

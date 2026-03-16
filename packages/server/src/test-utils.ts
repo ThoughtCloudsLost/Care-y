@@ -14,6 +14,7 @@
 import * as crypto from "node:crypto";
 import * as path from "node:path";
 import * as fs from "node:fs/promises";
+import { existsSync } from "node:fs";
 import { IncomingMessage, ServerResponse } from "node:http";
 import { Socket } from "node:net";
 import pg from "pg";
@@ -485,6 +486,17 @@ export function extractEmailCode(text: string): string {
   }
   return match[1] as string;
 }
+
+// ---------------------------------------------------------------------------
+// Docker OPRF container detection
+// ---------------------------------------------------------------------------
+
+/** True when the Docker OPRF sidecar sockets are present (inside test container). */
+export const DOCKER_OPRF_AVAILABLE =
+  existsSync("/run/oprf/oprf-a.sock") && existsSync("/run/oprf/oprf-b.sock");
+
+export const DOCKER_SOCKET_A = "/run/oprf/oprf-a.sock";
+export const DOCKER_SOCKET_B = "/run/oprf/oprf-b.sock";
 
 // ---------------------------------------------------------------------------
 // Mock OPRF dependencies (for tests that build createAppRouter but don't

@@ -4,14 +4,20 @@
  * Service-level tests cover business logic (rate limiting, PoW, delay, audit).
  * Route-level tests verify tRPC wiring (delegation, error mapping, session binding extraction).
  *
- * No database or Docker containers needed.
+ * Docker integration tests (section 5) exercise the full pipeline through real OPRF containers.
  */
 
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { createAppRouter } from "./router.js";
 import { createCallerFactory } from "../trpc/trpc.js";
 import type { Context } from "../trpc/context.js";
-import type { OprfEvaluator } from "../crypto/oprf-ipc.js";
+import {
+  getSodium,
+  oprfBlind,
+  oprfFinalize,
+  type EvaluatedElement,
+} from "@care-y/crypto";
+import { createIpcEvaluator, type OprfEvaluator } from "../crypto/oprf-ipc.js";
 import type {
   OprfAuditLogger,
   OprfFailureReason,
@@ -33,6 +39,7 @@ import {
   testFieldEncryptor,
   testBlindIndexer,
   testSessionTokenizer,
+  DOCKER_OPRF_AVAILABLE,
 } from "../test-utils.js";
 import { createScryptHasher } from "../auth/password.js";
 import {
@@ -542,3 +549,87 @@ describe("createFailureTracker", () => {
     expect(() => vi.advanceTimersByTime(120_000)).not.toThrow();
   });
 });
+
+// ---------------------------------------------------------------------------
+// 5. End-to-end Docker integration (real OPRF containers)
+// ---------------------------------------------------------------------------
+
+describe.skipIf(!DOCKER_OPRF_AVAILABLE)(
+  "OPRF tRPC route (Docker integration)",
+  () => {
+    function buildDockerCaller(ctxOverrides?: Partial<Context>) {
+      const evaluator = createIpcEvaluator({
+        socketPathA: "/run/oprf/oprf-a.sock",
+        socketPathB: "/run/oprf/oprf-b.sock",
+      });
+
+      const service = createOprfEvaluateService(makeServiceDeps({ evaluator }));
+      const appRouter = createAppRouter({
+        authDeps: {
+          hasher: createScryptHasher(),
+          loginLimiter: createInMemoryRateLimiter({
+            windowMs: 60_000,
+            maxRequests: 100,
+          }),
+          saltLimiter: createInMemoryRateLimiter({
+            windowMs: 60_000,
+            maxRequests: 100,
+          }),
+          fakeSaltKey: Buffer.alloc(32, 0),
+          encryptor: testFieldEncryptor,
+          indexer: testBlindIndexer,
+          isSecureCookie: false,
+          emailSender: createMockEmailSender(),
+          tokenizer: testSessionTokenizer,
+          sealedBox: null,
+        },
+        twoFactorDeps: {
+          emailSender: createMockEmailSender(),
+          encryptor: testFieldEncryptor,
+          tokenizer: testSessionTokenizer,
+          sealedBox: null,
+        },
+        oprfDeps: { oprfService: service },
+        orgService: {
+          findBySlug: async () => null,
+          createOrg: async () => {
+            throw new OprfError("not implemented in test");
+          },
+        } as unknown as Parameters<typeof createAppRouter>[0]["orgService"],
+      });
+      const factory = createCallerFactory(appRouter);
+      const ctx: Context = {
+        req: mockReq({ headers: { "x-forwarded-for": TEST_IP } }),
+        res: mockRes(),
+        org: null,
+        session: null,
+        user: null,
+        ...ctxOverrides,
+      };
+      return { caller: factory(ctx), evaluator };
+    }
+
+    it("full pipeline: blind, evaluate via Docker, finalize produces 64-byte output", async () => {
+      await getSodium();
+
+      const input = new TextEncoder().encode("docker-e2e-trpc-test");
+      const { blindedElement, blindState } = oprfBlind(input);
+
+      const { caller, evaluator } = buildDockerCaller();
+      const result = await caller.oprf.evaluate({
+        userId: TEST_USER_ID,
+        blindedElement: Buffer.from(blindedElement).toString("base64"),
+      });
+
+      const evaluatedBytes = Buffer.from(result.evaluated, "base64");
+      const output = oprfFinalize(
+        blindState,
+        new Uint8Array(evaluatedBytes) as unknown as EvaluatedElement,
+        input,
+      );
+
+      expect(output.length).toBe(64);
+      evaluator.close();
+    });
+  },
+);
