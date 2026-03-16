@@ -32,6 +32,7 @@ import {
   createMockEmailSender,
   testFieldEncryptor,
   testBlindIndexer,
+  testSessionTokenizer,
 } from "../test-utils.js";
 import { createScryptHasher } from "../auth/password.js";
 import {
@@ -378,10 +379,14 @@ describe("OPRF tRPC route", () => {
         indexer: testBlindIndexer,
         isSecureCookie: false,
         emailSender: createMockEmailSender(),
+        tokenizer: testSessionTokenizer,
+        sealedBox: null,
       },
       twoFactorDeps: {
         emailSender: createMockEmailSender(),
         encryptor: testFieldEncryptor,
+        tokenizer: testSessionTokenizer,
+        sealedBox: null,
       },
       oprfDeps: { oprfService: service },
       orgService: {
@@ -419,8 +424,8 @@ describe("OPRF tRPC route", () => {
         id: "test-session",
         token: "test-token",
         userId: "d4e5f6a7-b8c9-4d0e-af2a-3b4c5d6e7f80",
-        ipAddress: TEST_IP,
-        userAgent: "test-agent",
+        ipToken: "test-ip-token",
+        uaToken: "test-ua-token",
         expiresAt: new Date(Date.now() + 3_600_000),
         twofaVerified: false,
         webauthnChallenge: null,

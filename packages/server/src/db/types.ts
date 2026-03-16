@@ -63,6 +63,8 @@ export interface SessionsTable {
   user_id: string;
   encrypted_ip_address: Buffer;
   encrypted_user_agent: Buffer;
+  ip_token: string;
+  ua_token: string;
   expires_at: Date;
   twofa_verified: ColumnType<boolean, boolean | undefined, boolean>;
   webauthn_challenge: string | null;

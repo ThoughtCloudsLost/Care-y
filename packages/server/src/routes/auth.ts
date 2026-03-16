@@ -173,6 +173,8 @@ export function createAuthRouter(deps: AuthRouterDeps) {
         const { twoFactor } = createScopedTwoFactorServices(ctx.org, {
           emailSender: deps.emailSender,
           encryptor: deps.encryptor,
+          tokenizer: deps.tokenizer,
+          sealedBox: deps.sealedBox,
         });
         const enrolledMethods = await twoFactor.getEnrolledMethodTypes(user.id);
 

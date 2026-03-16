@@ -17,6 +17,7 @@ import {
   createTestDb,
   testFieldEncryptor,
   testBlindIndexer,
+  testSessionTokenizer,
   mockReq,
   mockRes,
   expectTrpcError,
@@ -124,12 +125,16 @@ describe.skipIf(!process.env.DATABASE_URL)(
           fakeSaltKey,
           encryptor: testFieldEncryptor,
           indexer: testBlindIndexer,
+          tokenizer: testSessionTokenizer,
+          sealedBox: null,
           isSecureCookie: false,
           emailSender: mockEmail,
         },
         twoFactorDeps: {
           emailSender: mockEmail,
           encryptor: testFieldEncryptor,
+          tokenizer: testSessionTokenizer,
+          sealedBox: null,
         },
         oprfDeps: createMockOprfDeps(),
         orgService,
@@ -172,8 +177,8 @@ describe.skipIf(!process.env.DATABASE_URL)(
           id: "test-session-id",
           token: sessionToken,
           userId: user.id,
-          ipAddress: "127.0.0.1",
-          userAgent: "test-agent",
+          ipToken: "test-ip-token",
+          uaToken: "test-ua-token",
           expiresAt: new Date(Date.now() + 60 * 60 * 1000),
           twofaVerified: false,
           webauthnChallenge: null,
@@ -204,8 +209,8 @@ describe.skipIf(!process.env.DATABASE_URL)(
           id: "test-session-id",
           token: sessionToken,
           userId: user.id,
-          ipAddress: "127.0.0.1",
-          userAgent: "test-agent",
+          ipToken: "test-ip-token",
+          uaToken: "test-ua-token",
           expiresAt: new Date(Date.now() + 60 * 60 * 1000),
           twofaVerified: true,
           webauthnChallenge: null,
@@ -217,13 +222,19 @@ describe.skipIf(!process.env.DATABASE_URL)(
 
     /** Creates a registered user via the auth service and returns the user record. */
     async function registerUser(suffix: string) {
-      const sessions = createDbSessionRepository(tenantDb, testFieldEncryptor);
+      const sessions = createDbSessionRepository(
+        tenantDb,
+        testFieldEncryptor,
+        testSessionTokenizer,
+        null,
+      );
       const authService = createAuthService(
         tenantDb,
         hasher,
         sessions,
         testFieldEncryptor,
         testBlindIndexer,
+        testSessionTokenizer,
         orgContext.orgId,
       );
       return authService.register({
@@ -236,7 +247,12 @@ describe.skipIf(!process.env.DATABASE_URL)(
 
     /** Creates a TwoFactorService scoped to the test tenant DB. */
     function makeTwoFactorService(emailSender?: MockEmailSender) {
-      const sessions = createDbSessionRepository(tenantDb, testFieldEncryptor);
+      const sessions = createDbSessionRepository(
+        tenantDb,
+        testFieldEncryptor,
+        testSessionTokenizer,
+        null,
+      );
       const emailCodes = createEmailCodeService(
         tenantDb,
         emailSender ?? createMockEmailSender(),
@@ -483,6 +499,8 @@ describe.skipIf(!process.env.DATABASE_URL)(
         const sessions = createDbSessionRepository(
           tenantDb,
           testFieldEncryptor,
+          testSessionTokenizer,
+          null,
         );
         const updated = await sessions.findByToken(session.token);
         expect(updated?.twofaVerified).toBe(true);
@@ -512,6 +530,8 @@ describe.skipIf(!process.env.DATABASE_URL)(
         const sessions = createDbSessionRepository(
           tenantDb,
           testFieldEncryptor,
+          testSessionTokenizer,
+          null,
         );
         const updated = await sessions.findByToken(session.token);
         expect(updated?.twofaVerified).toBe(true);
@@ -573,6 +593,8 @@ describe.skipIf(!process.env.DATABASE_URL)(
         const sessions = createDbSessionRepository(
           tenantDb,
           testFieldEncryptor,
+          testSessionTokenizer,
+          null,
         );
         const updated = await sessions.findByToken(session.token);
         expect(updated?.twofaVerified).toBe(true);

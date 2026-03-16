@@ -4,6 +4,7 @@ import {
   noopEncryptor,
   testFieldEncryptor,
   testBlindIndexer,
+  testSessionTokenizer,
   TEST_ORG_ID,
   type TestDb,
 } from "../test-utils.js";
@@ -29,13 +30,19 @@ describe.skipIf(!process.env.DATABASE_URL)("AuthService", () => {
   beforeAll(async () => {
     testDb = await createTestDb();
     hasher = createScryptHasher();
-    sessions = createDbSessionRepository(testDb.db, noopEncryptor);
+    sessions = createDbSessionRepository(
+      testDb.db,
+      noopEncryptor,
+      testSessionTokenizer,
+      null,
+    );
     service = createAuthService(
       testDb.db,
       hasher,
       sessions,
       noopEncryptor,
       testBlindIndexer,
+      testSessionTokenizer,
       TEST_ORG_ID,
     );
   });
@@ -72,6 +79,8 @@ describe.skipIf(!process.env.DATABASE_URL)("AuthService", () => {
       const encSessions = createDbSessionRepository(
         testDb.db,
         testFieldEncryptor,
+        testSessionTokenizer,
+        null,
       );
       const encService = createAuthService(
         testDb.db,
@@ -79,6 +88,7 @@ describe.skipIf(!process.env.DATABASE_URL)("AuthService", () => {
         encSessions,
         testFieldEncryptor,
         testBlindIndexer,
+        testSessionTokenizer,
         TEST_ORG_ID,
       );
 

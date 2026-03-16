@@ -19,6 +19,7 @@ import type {
   FieldEncryptor,
   BlindIndexer,
 } from "../crypto/field-encryptor.js";
+import type { SessionTokenizer } from "../crypto/session-tokenizer.js";
 import { AuthError, ConflictError, NotFoundError } from "../errors.js";
 import { RoleId } from "@care-y/shared";
 
@@ -99,6 +100,7 @@ export function createAuthService(
   sessions: SessionRepository,
   encryptor: FieldEncryptor,
   indexer: BlindIndexer,
+  tokenizer: SessionTokenizer,
   orgId: string,
 ): AuthService {
   // Lazy-initialized dummy hash for timing side-channel prevention.
@@ -150,22 +152,28 @@ export function createAuthService(
   }
 
   /**
-   * Detects IP changes on a session. If the IP differs from the creation IP,
-   * clears the 2FA verification flag so the user must re-verify identity.
-   * The session is NOT killed; the user keeps their work.
+   * Detects IP/UA drift via HMAC token comparison. If the IP token differs
+   * from the stored token, clears the 2FA verification flag so the user
+   * must re-verify identity. The session is NOT killed; the user keeps their work.
    */
   async function handleIpChange(
     session: SessionData,
     ipAddress: string,
     userAgent: string,
   ): Promise<SessionData> {
-    if (session.ipAddress !== ipAddress || session.userAgent !== userAgent) {
+    const currentIpToken = tokenizer.tokenize(ipAddress);
+    const currentUaToken = tokenizer.tokenize(userAgent);
+
+    if (
+      session.ipToken !== currentIpToken ||
+      session.uaToken !== currentUaToken
+    ) {
       console.warn(
         `Session ${session.id}: IP or user-agent changed since creation`,
       );
     }
 
-    if (session.ipAddress !== ipAddress && session.twofaVerified) {
+    if (session.ipToken !== currentIpToken && session.twofaVerified) {
       await sessions.clearTwoFactorVerified(session.token);
       return { ...session, twofaVerified: false };
     }
