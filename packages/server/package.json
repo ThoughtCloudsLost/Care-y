@@ -11,7 +11,7 @@
     "@care-y/crypto": "workspace:*",
     "@care-y/shared": "workspace:*",
     "@trpc/server": "11.10.0",
-    "kysely": "0.28.11",
+    "kysely": "0.28.12",
     "nodemailer": "8.0.2",
     "pg": "8.19.0",
     "sodium-native": "^5.1.0",
