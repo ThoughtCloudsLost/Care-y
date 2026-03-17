@@ -14,7 +14,8 @@
 
 import { type Kysely, sql } from "kysely";
 import type { TenantDatabase } from "../db/types.js";
-import { KeyRotationError } from "../errors.js";
+import { KeyRotationError, ConflictError } from "../errors.js";
+import { isPgUniqueViolation } from "../db/pg-errors.js";
 
 export interface ReWrappedKey {
   readonly ticketId: string;
@@ -32,7 +33,18 @@ export interface KeyRotationInput {
 }
 
 export interface KeyRotationService {
-  /** Stores volPublic during account creation or first OPRF login. */
+  /**
+   * First-time crypto key setup: inserts user_keys row with salt + volPublic.
+   * Throws ConflictError if a row already exists (prevents salt replacement).
+   * Per crypto-architecture-v2.md Section 7 steps 9-10.
+   */
+  initCryptoKeys(
+    userId: string,
+    salt: Buffer,
+    volPublic: Buffer,
+  ): Promise<void>;
+
+  /** Updates volPublic on an existing user_keys row (password change flow). */
   storeVolPublic(userId: string, volPublic: Buffer): Promise<void>;
 
   /** Returns whether a rotation lock is active for this user. */
@@ -56,6 +68,30 @@ export function createKeyRotationService(
   db: Kysely<TenantDatabase>,
 ): KeyRotationService {
   return {
+    async initCryptoKeys(
+      userId: string,
+      salt: Buffer,
+      volPublic: Buffer,
+    ): Promise<void> {
+      try {
+        await db
+          .insertInto("user_keys")
+          .values({
+            user_id: userId,
+            salt,
+            vol_public: volPublic,
+          })
+          .execute();
+      } catch (err: unknown) {
+        if (isPgUniqueViolation(err)) {
+          throw new ConflictError(
+            "Crypto keys already initialized for this account",
+          );
+        }
+        throw err;
+      }
+    },
+
     async storeVolPublic(userId: string, volPublic: Buffer): Promise<void> {
       await db
         .updateTable("user_keys")

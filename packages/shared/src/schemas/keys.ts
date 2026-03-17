@@ -16,7 +16,13 @@ function base64Bytes(expectedLength: number, label: string): z.ZodType<string> {
     });
 }
 
-/** volPublic upload during account creation or password change */
+/** Initial crypto key setup: salt + volPublic (account creation, first-time only). */
+export const initCryptoKeysSchema = z.object({
+  salt: base64Bytes(16, "Argon2id salt"),
+  volPublic: base64Bytes(32, "volPublic (ristretto255 point)"),
+});
+
+/** volPublic update (password change re-derives volPublic without changing salt separately). */
 export const uploadVolPublicSchema = z.object({
   volPublic: base64Bytes(32, "volPublic (ristretto255 point)"),
 });
@@ -46,6 +52,7 @@ export const uploadOrgPublicKeySchema = z.object({
     .regex(/^[A-Za-z0-9+/=]+$/, "Must be base64-encoded"),
 });
 
+export type InitCryptoKeysInput = z.infer<typeof initCryptoKeysSchema>;
 export type UploadVolPublicInput = z.infer<typeof uploadVolPublicSchema>;
 export type PasswordChangeKeysInput = z.infer<typeof passwordChangeKeysSchema>;
 export type UploadOrgPublicKeyInput = z.infer<typeof uploadOrgPublicKeySchema>;
