@@ -54,8 +54,8 @@ function createMockBridge(): MockBridge {
     argon2id: vi.fn().mockResolvedValue(undefined),
     oprfBlind: vi
       .fn()
-      .mockResolvedValue({ blindedElement: "blineded-element-b64" }),
-    deriveKeys: vi.fn().mockResolvedValue({ volPublic: "vol-public-b64" }),
+      .mockResolvedValue({ blindedElement: "test-blinded-element-b64" }),
+    deriveKeys: vi.fn().mockResolvedValue({ volPublic: "test-vol-public-b64" }),
     unwrapOrgKey: vi.fn().mockResolvedValue(new ArrayBuffer(32)),
   };
 }
@@ -75,7 +75,7 @@ function createCallbackSpies(): {
       onOprfDone: vi.fn(() => callOrder.push("oprfDone")),
       onDeriveStart: vi.fn(() => callOrder.push("deriveStart")),
       onDone: vi.fn(() => callOrder.push("done")),
-      onPowRequired: vi.fn().mockResolvedValue("pow-solution"),
+      onPowRequired: vi.fn().mockResolvedValue("test-pow-solution"),
     },
     callOrder,
   };
@@ -105,9 +105,9 @@ describe("loginCrypto", () => {
       evaluated: btoa("evaluated-bytes-here!"),
     });
     mockGetWrappedOrgKey.mockResolvedValue({
-      wrappedKey: "wrapped-key-b64",
-      ephemeralPoint: "ephemeral-point-b64",
-      nonce: "nonce-b64",
+      wrappedKey: "test-wrapped-key-b64",
+      ephemeralPoint: "test-ephemeral-point-b64",
+      nonce: "test-nonce-b64",
     });
 
     // Dynamic import to pick up mocks
@@ -126,7 +126,7 @@ describe("loginCrypto", () => {
         callbacks,
       );
 
-      expect(result.volPublic).toBe("vol-public-b64");
+      expect(result.volPublic).toBe("test-vol-public-b64");
       expect(result.orgPrivateKey).toBeInstanceOf(ArrayBuffer);
       expect(result.orgPrivateKey?.byteLength).toBe(32);
     });
@@ -175,7 +175,7 @@ describe("loginCrypto", () => {
 
       expect(mockOprfEvaluate).toHaveBeenCalledWith({
         userId: "550e8400-e29b-41d4-a716-446655440000",
-        blindedElement: "blineded-element-b64",
+        blindedElement: "test-blinded-element-b64",
       });
     });
 
@@ -206,9 +206,9 @@ describe("loginCrypto", () => {
 
       expect(mockGetWrappedOrgKey).toHaveBeenCalledTimes(1);
       expect(mockBridge.unwrapOrgKey).toHaveBeenCalledWith(
-        "wrapped-key-b64",
-        "ephemeral-point-b64",
-        "nonce-b64",
+        "test-wrapped-key-b64",
+        "test-ephemeral-point-b64",
+        "test-nonce-b64",
       );
     });
   });
@@ -262,12 +262,12 @@ describe("loginCrypto", () => {
       expect(mockOprfEvaluate).toHaveBeenCalledTimes(2);
       expect(mockOprfEvaluate).toHaveBeenLastCalledWith({
         userId: "550e8400-e29b-41d4-a716-446655440000",
-        blindedElement: "blineded-element-b64",
+        blindedElement: "test-blinded-element-b64",
         powChallenge: "challenge-hex",
-        powSolution: "pow-solution",
+        powSolution: "test-pow-solution",
       });
 
-      expect(result.volPublic).toBe("vol-public-b64");
+      expect(result.volPublic).toBe("test-vol-public-b64");
     });
   });
 
