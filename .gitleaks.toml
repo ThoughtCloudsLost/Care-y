@@ -17,6 +17,8 @@ id = "generic-api-key"
   regexes = [
     # WebAuthn fields: base64url-encoded binary blobs, not secrets
     '''(clientDataJSON|authenticatorData|publicKey|rawId|signature)\s*:\s*["'][A-Za-z0-9+/\-_=]{20,}["']''',
+    # Crypto test fixtures: mock wrapped keys, ephemeral points, nonces
+    '''(wrappedKey|ephemeralPoint|nonce|wrappedOrgKey|volPublic|orgPrivateKey|encryptedPrivateKey)\s*[:=]\s*["'][A-Za-z0-9+/\-_=]+["']''',
   ]
   paths = [
     '''.*\.test\.ts$''',
