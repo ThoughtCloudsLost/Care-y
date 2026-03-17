@@ -19,6 +19,7 @@ import {
   ValidationError,
   ConflictError,
   RateLimitError,
+  PowRequiredError,
 } from "../errors.js";
 
 const t = initTRPC.context<Context>().create({
@@ -39,6 +40,10 @@ const t = initTRPC.context<Context>().create({
           // Non-operational errors (bugs) get a generic message.
           // Operational errors (bad input, auth failures) pass through.
           ...(cause.isOperational ? {} : { message: "Internal server error" }),
+          // PoW challenge data forwarded so the client can solve and retry.
+          ...(cause instanceof PowRequiredError
+            ? { challenge: cause.challenge, difficulty: cause.difficulty }
+            : {}),
         },
       };
     }

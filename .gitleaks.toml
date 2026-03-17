@@ -4,21 +4,27 @@
 [extend]
 useDefault = true
 
-[[rules]]
-id = "generic-api-key"
-# Inherit the default generic-api-key rule and add path-scoped allowlists.
+# Top-level allowlist for test fixture false positives.
 # WebAuthn test fixtures (clientDataJSON, authenticatorData, publicKey) are
 # base64url-encoded binary blobs with high entropy that trip the generic rule.
-# They are not secrets they are ephemeral test data with no privileged access.
-[rules.allowlist]
-  # AND: a finding must match BOTH the regex AND the path to be suppressed.
-  # OR (the default) would suppress any matching regex in production files too.
+# They are not secrets, they are ephemeral test data with no privileged access.
+#
+# Crypto test fixtures use a "test-" prefix convention so stopwords can
+# identify them as mock values (stopwords match against the secret value).
+[allowlist]
+  # AND: a finding must match BOTH a stopword AND a path to be suppressed.
+  # OR (the default) would suppress any matching stopword in production files too.
   condition = "AND"
-  regexes = [
-    # WebAuthn fields: base64url-encoded binary blobs, not secrets
-    '''(clientDataJSON|authenticatorData|publicKey|rawId|signature)\s*:\s*["'][A-Za-z0-9+/\-_=]{20,}["']''',
+  # Stopwords match substrings in the extracted secret value.
+  # Convention: all mock secrets in test files use one of these prefixes.
+  stopwords = [
+    "test-",
+    "mock-",
+    "fake-",
+    "dummy-",
+    "example-",
   ]
   paths = [
-    '''.*\.test\.ts$''',
-    '''.*\.spec\.ts$''',
+    '''\.test\.ts$''',
+    '''\.spec\.ts$''',
   ]

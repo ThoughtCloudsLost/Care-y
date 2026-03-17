@@ -91,6 +91,19 @@ export interface SodiumBackend {
   // --- SHA-512 (for RFC 9380 expand_message_xmd) ---
   crypto_hash_sha512(message: Uint8Array): Uint8Array;
 
+  // --- Curve25519 sealed box (for org key tier) ---
+  // Used by client-side OrgKeyManager to unseal data encrypted with crypto_box_seal.
+  // The org keypair is Curve25519, separate from the ristretto255 keys used for ECIES.
+  crypto_box_seal_open(
+    ciphertext: Uint8Array,
+    publicKey: Uint8Array,
+    secretKey: Uint8Array,
+  ): Uint8Array;
+  crypto_scalarmult_base(secretKey: Uint8Array): Uint8Array;
+  readonly crypto_box_SEALBYTES: number; // 48
+  readonly crypto_box_PUBLICKEYBYTES: number; // 32
+  readonly crypto_box_SECRETKEYBYTES: number; // 32
+
   // --- Memory zeroing ---
   memzero(buf: Uint8Array): void;
 

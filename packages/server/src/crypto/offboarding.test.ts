@@ -37,6 +37,7 @@ describe.skipIf(!process.env.DATABASE_URL)("OffboardingService", () => {
         .insertInto("wrapped_org_keys")
         .values({
           user_id: userId,
+          ephemeral_point: crypto.randomBytes(32),
           wrapped_key: crypto.randomBytes(64),
           nonce: crypto.randomBytes(24),
         })
