@@ -23,6 +23,7 @@ export {
   loginInputSchema,
   registerInputSchema,
   getSaltInputSchema,
+  getSaltOutputSchema,
   assignRoleInputSchema,
   setPiiRetentionInputSchema,
 } from "./schemas/auth.js";
@@ -68,9 +69,11 @@ export {
 
 // --- Key management schemas ---
 export {
+  initCryptoKeysSchema,
   uploadVolPublicSchema,
   passwordChangeKeysSchema,
   uploadOrgPublicKeySchema,
+  type InitCryptoKeysInput,
   type UploadVolPublicInput,
   type PasswordChangeKeysInput,
   type UploadOrgPublicKeyInput,

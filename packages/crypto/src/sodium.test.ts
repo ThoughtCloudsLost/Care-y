@@ -343,6 +343,63 @@ describe("sodium abstraction layer", () => {
       });
     });
 
+    describe("sealed box (Curve25519)", () => {
+      it("seal then open roundtrips", () => {
+        // Generate a Curve25519 keypair via scalarmult_base
+        const sk = sodium.randombytes_buf(sodium.crypto_box_SECRETKEYBYTES);
+        const pk = sodium.crypto_scalarmult_base(sk);
+        expect(pk).toBeInstanceOf(Uint8Array);
+        expect(pk.length).toBe(sodium.crypto_box_PUBLICKEYBYTES);
+      });
+
+      it("crypto_scalarmult_base produces different keys for different secrets", () => {
+        const sk1 = sodium.randombytes_buf(sodium.crypto_box_SECRETKEYBYTES);
+        const sk2 = sodium.randombytes_buf(sodium.crypto_box_SECRETKEYBYTES);
+        const pk1 = sodium.crypto_scalarmult_base(sk1);
+        const pk2 = sodium.crypto_scalarmult_base(sk2);
+        expect(pk1).not.toEqual(pk2);
+      });
+
+      it("seal_open decrypts a sealed box message", async () => {
+        // Use the full sumo lib to seal a message, then open via SodiumBackend
+        const mod = await import("libsodium-wrappers-sumo");
+        const lib = mod.default;
+        await lib.ready;
+
+        const sk = sodium.randombytes_buf(sodium.crypto_box_SECRETKEYBYTES);
+        const pk = sodium.crypto_scalarmult_base(sk);
+        const message = new TextEncoder().encode("hello sealed box");
+
+        // Seal with the underlying lib (not in SodiumBackend interface)
+        const ciphertext = lib.crypto_box_seal(message, pk);
+        expect(ciphertext.length).toBe(
+          message.length + sodium.crypto_box_SEALBYTES,
+        );
+
+        // Open via SodiumBackend
+        const decrypted = sodium.crypto_box_seal_open(ciphertext, pk, sk);
+        expect(decrypted).toEqual(message);
+      });
+
+      it("seal_open throws on wrong key", async () => {
+        const mod = await import("libsodium-wrappers-sumo");
+        const lib = mod.default;
+        await lib.ready;
+
+        const sk = sodium.randombytes_buf(sodium.crypto_box_SECRETKEYBYTES);
+        const pk = sodium.crypto_scalarmult_base(sk);
+        const wrongSk = sodium.randombytes_buf(
+          sodium.crypto_box_SECRETKEYBYTES,
+        );
+        const message = new TextEncoder().encode("wrong key test");
+        const ciphertext = lib.crypto_box_seal(message, pk);
+
+        expect(() =>
+          sodium.crypto_box_seal_open(ciphertext, pk, wrongSk),
+        ).toThrow();
+      });
+    });
+
     describe("constants", () => {
       it("secretbox constants match libsodium spec", () => {
         expect(sodium.crypto_secretbox_NONCEBYTES).toBe(24);
@@ -364,6 +421,12 @@ describe("sodium abstraction layer", () => {
       it("Argon2id constants match libsodium spec", () => {
         expect(sodium.crypto_pwhash_ALG_ARGON2ID13).toBe(2);
         expect(sodium.crypto_pwhash_SALTBYTES).toBe(16);
+      });
+
+      it("sealed box constants match libsodium spec", () => {
+        expect(sodium.crypto_box_SEALBYTES).toBe(48);
+        expect(sodium.crypto_box_PUBLICKEYBYTES).toBe(32);
+        expect(sodium.crypto_box_SECRETKEYBYTES).toBe(32);
       });
     });
   });

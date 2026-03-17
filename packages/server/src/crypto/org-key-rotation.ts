@@ -19,6 +19,7 @@ export interface OrgKeyRotationInput {
   readonly newOrgPublicKey: Buffer;
   readonly wrappedKeys: readonly {
     readonly userId: string;
+    readonly ephemeralPoint: Buffer;
     readonly wrappedKey: Buffer;
     readonly nonce: Buffer;
   }[];
@@ -55,6 +56,7 @@ export function createOrgKeyRotationService(
             .insertInto("wrapped_org_keys")
             .values({
               user_id: wrap.userId,
+              ephemeral_point: wrap.ephemeralPoint,
               wrapped_key: wrap.wrappedKey,
               nonce: wrap.nonce,
             })

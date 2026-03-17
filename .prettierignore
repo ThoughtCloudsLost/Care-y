@@ -14,3 +14,5 @@ Dockerfile
 Dockerfile.*
 .env*
 .prettierignore
+*.toml
+.gitleaksignore

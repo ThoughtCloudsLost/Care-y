@@ -61,7 +61,8 @@ describe.skipIf(!process.env.DATABASE_URL)(
         .insertInto("wrapped_org_keys")
         .values({
           user_id: user.id,
-          wrapped_key: Buffer.alloc(56, 0xcc), // crypto_secretbox output
+          ephemeral_point: Buffer.alloc(32, 0xaa), // ristretto255 ephemeral
+          wrapped_key: Buffer.alloc(56, 0xcc), // ECIES-wrapped org key
           nonce: Buffer.alloc(24, 0xdd),
         })
         .returningAll()
@@ -78,6 +79,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         .insertInto("wrapped_org_keys")
         .values({
           user_id: user.id,
+          ephemeral_point: Buffer.alloc(32, 0xaa),
           wrapped_key: Buffer.alloc(56, 0xee),
           nonce: Buffer.alloc(24, 0xff),
         })
@@ -101,6 +103,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         .insertInto("wrapped_org_keys")
         .values({
           user_id: user.id,
+          ephemeral_point: Buffer.alloc(32, 0xaa),
           wrapped_key: Buffer.alloc(56, 0x11),
           nonce: Buffer.alloc(24, 0x22),
         })
@@ -111,6 +114,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
           .insertInto("wrapped_org_keys")
           .values({
             user_id: user.id,
+            ephemeral_point: Buffer.alloc(32, 0xbb),
             wrapped_key: Buffer.alloc(56, 0x33),
             nonce: Buffer.alloc(24, 0x44),
           })

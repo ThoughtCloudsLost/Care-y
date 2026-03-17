@@ -43,6 +43,7 @@ import {
   type AuthServiceDeps,
 } from "../trpc/context.js";
 import { createSaltDefense } from "../auth/salt-defense.js";
+import { encode } from "@care-y/crypto";
 import type { OrgContext } from "../trpc/context.js";
 import type { EmailSender } from "../email/email-sender.js";
 import { createScopedTwoFactorServices } from "./two-factor.js";
@@ -112,7 +113,8 @@ function setSessionCookie(
 
 /**
  * Enforces rate limiting, then delegates salt lookup to the SaltDefense
- * module. Returns the salt as a base64-encoded string for JSON transport.
+ * module. Returns the salt as url-safe base64 (no padding) and the userId
+ * (real or deterministic fake) for the OPRF endpoint.
  */
 async function handleGetSalt(
   org: OrgContext,
@@ -121,7 +123,7 @@ async function handleGetSalt(
   saltLimiter: RateLimiter,
   req: IncomingMessage,
   identifier: string,
-): Promise<{ salt: string }> {
+): Promise<{ salt: string; userId: string }> {
   enforceRateLimit(
     saltLimiter,
     `salt:${extractClientIp(req)}`,
@@ -133,7 +135,7 @@ async function handleGetSalt(
     deps.indexer,
   );
   const result = await saltDefense.getSalt(identifier);
-  return { salt: result.salt.toString("base64") };
+  return { salt: encode(result.salt), userId: result.userId };
 }
 
 // care-y-ignore-next-line missing-return-type -- tRPC router() returns a deeply generic type that cannot be written explicitly
