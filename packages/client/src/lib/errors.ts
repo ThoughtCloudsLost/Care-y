@@ -28,3 +28,11 @@ export class CryptoWorkerTestError extends ClientError {
     this.name = "CryptoWorkerTestError";
   }
 }
+
+/** Thrown when a crypto operation is attempted before the Worker is initialized and keyed. */
+export class WorkerNotReadyError extends ClientError {
+  constructor() {
+    super("Crypto worker is not ready. Please wait for initialization.");
+    this.name = "WorkerNotReadyError";
+  }
+}
