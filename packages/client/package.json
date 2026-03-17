@@ -29,6 +29,7 @@
     "@tailwindcss/vite": "4.2.1",
     "@trpc/server": "11.10.0",
     "@vite-pwa/sveltekit": "1.1.0",
+    "libsodium-wrappers-sumo": "0.8.2",
     "svelte": "^5.53.12",
     "svelte-check": "^4.4.5",
     "tailwindcss": "4.2.1",
