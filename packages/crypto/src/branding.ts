@@ -25,7 +25,7 @@
 
 import { requireSodium } from "./sodium.js";
 import { encryptContent, decryptContent } from "./content.js";
-import { InvalidKeyError } from "./errors.js";
+import { assertKeyLength } from "./validation.js";
 import { concatBytes, encodeLabel } from "./bytes.js";
 import {
   BRANDING_LABEL,
@@ -50,10 +50,11 @@ export function deriveClientBrandingKey(
   orgPublicKey: RistrettoPoint,
 ): SymmetricKey {
   const sodium = requireSodium();
-
-  if (orgPublicKey.length !== sodium.crypto_core_ristretto255_BYTES) {
-    throw new InvalidKeyError("Org public key must be 32 bytes");
-  }
+  assertKeyLength(
+    orgPublicKey,
+    sodium.crypto_core_ristretto255_BYTES,
+    "Org public key",
+  );
 
   return sodium.crypto_generichash(
     sodium.crypto_secretbox_KEYBYTES,

@@ -87,6 +87,9 @@ export const BRANDING_LABEL = "care-y-branding-v1";
 
 const RISTRETTO_POINT_BYTES = 32;
 const SCALAR_BYTES = 32;
+const SYMMETRIC_KEY_BYTES = 32;
+const SALT_BYTES = 16;
+const NONCE_BYTES = 24;
 
 /** Validates a 32-byte buffer and returns it as a branded RistrettoPoint. */
 export function toRistrettoPoint(buf: Uint8Array): RistrettoPoint {
@@ -108,4 +111,37 @@ export function toScalar(buf: Uint8Array): Scalar {
   }
   // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- length-checked branded newtype constructor
   return buf as Scalar;
+}
+
+/** Validates a 32-byte buffer and returns it as a branded SymmetricKey. */
+export function toSymmetricKey(buf: Uint8Array): SymmetricKey {
+  if (buf.length !== SYMMETRIC_KEY_BYTES) {
+    throw new RangeError(
+      `SymmetricKey must be ${String(SYMMETRIC_KEY_BYTES)} bytes, got ${String(buf.length)}`,
+    );
+  }
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- length-checked branded newtype constructor
+  return buf as SymmetricKey;
+}
+
+/** Validates a 16-byte buffer and returns it as a branded Salt. */
+export function toSalt(buf: Uint8Array): Salt {
+  if (buf.length !== SALT_BYTES) {
+    throw new RangeError(
+      `Salt must be ${String(SALT_BYTES)} bytes, got ${String(buf.length)}`,
+    );
+  }
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- length-checked branded newtype constructor
+  return buf as Salt;
+}
+
+/** Validates a 24-byte buffer and returns it as a branded Nonce. */
+export function toNonce(buf: Uint8Array): Nonce {
+  if (buf.length !== NONCE_BYTES) {
+    throw new RangeError(
+      `Nonce must be ${String(NONCE_BYTES)} bytes, got ${String(buf.length)}`,
+    );
+  }
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- length-checked branded newtype constructor
+  return buf as Nonce;
 }

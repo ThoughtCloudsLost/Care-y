@@ -125,6 +125,35 @@ function asPublicKeyCredential(
 
 let ongoingOp: AbortController | null = null;
 
+/**
+ * Cancel any in-progress WebAuthn operation and return a fresh signal.
+ * Ensures only one credentials.create/get runs at a time.
+ */
+function resetAbortController(reason: string): AbortSignal {
+  if (ongoingOp !== null) ongoingOp.abort(reason);
+  ongoingOp = new AbortController();
+  return ongoingOp.signal;
+}
+
+/**
+ * Build a PublicKeyCredentialDescriptor array from serialized credential info.
+ * Used by both register (excludeCredentials) and authenticate (allowCredentials).
+ */
+function buildCredentialDescriptors(
+  credentials: readonly {
+    readonly id: string;
+    readonly transports?: string[];
+  }[],
+): PublicKeyCredentialDescriptor[] {
+  return credentials.map((c) => ({
+    id: parseBase64url(c.id),
+    type: "public-key" as const,
+    ...(c.transports
+      ? { transports: toAuthenticatorTransports(c.transports) }
+      : {}),
+  }));
+}
+
 /** Returns whether WebAuthn is available in this browser. */
 export function isWebauthnAvailable(): boolean {
   // typeof check is for SSR (SvelteKit server-side rendering)
@@ -179,24 +208,19 @@ export async function register(
     attestation: "none",
     ...(options.excludeCredentials
       ? {
-          excludeCredentials: options.excludeCredentials.map((c) => ({
-            id: parseBase64url(c.id),
-            type: "public-key" as const,
-            ...(c.transports
-              ? { transports: toAuthenticatorTransports(c.transports) }
-              : {}),
-          })),
+          excludeCredentials: buildCredentialDescriptors(
+            options.excludeCredentials,
+          ),
         }
       : {}),
   };
 
-  if (ongoingOp !== null) ongoingOp.abort("New registration started");
-  ongoingOp = new AbortController();
+  const signal = resetAbortController("New registration started");
 
   const raw = asPublicKeyCredential(
     await navigator.credentials.create({
       publicKey: creationOptions,
-      signal: ongoingOp.signal,
+      signal,
     }),
   );
 
@@ -243,26 +267,21 @@ export async function authenticate(
     rpId: options.rpId,
     ...(options.allowCredentials
       ? {
-          allowCredentials: options.allowCredentials.map((c) => ({
-            id: parseBase64url(c.id),
-            type: "public-key" as const,
-            ...(c.transports
-              ? { transports: toAuthenticatorTransports(c.transports) }
-              : {}),
-          })),
+          allowCredentials: buildCredentialDescriptors(
+            options.allowCredentials,
+          ),
         }
       : {}),
     userVerification: options.userVerification ?? "required",
     timeout: options.timeout ?? 60000,
   };
 
-  if (ongoingOp !== null) ongoingOp.abort("New authentication started");
-  ongoingOp = new AbortController();
+  const signal = resetAbortController("New authentication started");
 
   const raw = asPublicKeyCredential(
     await navigator.credentials.get({
       publicKey: getOptions,
-      signal: ongoingOp.signal,
+      signal,
     }),
   );
 

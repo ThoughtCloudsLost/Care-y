@@ -218,14 +218,8 @@ function handleDeriveKeys(req: DeriveKeysRequest): void {
     }
   } finally {
     sodium.memzero(evalBuf);
-    if (stretched) {
-      sodium.memzero(stretched);
-      stretched = null;
-    }
-    if (blindState) {
-      sodium.memzero(blindState);
-      blindState = null;
-    }
+    stretched = zeroAndClear(sodium, stretched);
+    blindState = zeroAndClear(sodium, blindState);
   }
 }
 
@@ -239,13 +233,13 @@ function handleDecryptContent(req: DecryptContentRequest): void {
 
   if (!tk) {
     // Cache miss: unwrap tk via ECIES
-    const ephPt = decode(req.ephemeralPoint);
+    const ephemeralPoint = decode(req.ephemeralPoint);
     const nonce = decode(req.nonce);
     const wrappedKey = decode(req.wrappedKey);
 
     try {
       tk = eciesDecrypt(
-        ephPt as RistrettoPoint,
+        ephemeralPoint as RistrettoPoint,
         nonce as Nonce,
         wrappedKey,
         assertPresent(volPrivate, "volPrivate"),
@@ -334,27 +328,24 @@ function handleEvictTk(req: EvictTkRequest): void {
   self.postMessage(msg);
 }
 
+/** Zero a key buffer and null the reference. */
+function zeroAndClear(
+  sodium: ReturnType<typeof requireSodium>,
+  buf: Uint8Array | null,
+): null {
+  if (buf) sodium.memzero(buf);
+  return null;
+}
+
 function handleZeroAll(id: number): void {
   const sodium = requireSodium();
 
   tkCache.zeroAll();
 
-  if (volPrivate) {
-    sodium.memzero(volPrivate);
-    volPrivate = null;
-  }
-  if (masterKey) {
-    sodium.memzero(masterKey);
-    masterKey = null;
-  }
-  if (stretched) {
-    sodium.memzero(stretched);
-    stretched = null;
-  }
-  if (blindState) {
-    sodium.memzero(blindState);
-    blindState = null;
-  }
+  volPrivate = zeroAndClear(sodium, volPrivate);
+  masterKey = zeroAndClear(sodium, masterKey);
+  stretched = zeroAndClear(sodium, stretched);
+  blindState = zeroAndClear(sodium, blindState);
 
   // volPublic is public (stored on server), no memzero needed
   volPublic = null;
@@ -379,14 +370,14 @@ function handleGetVolPublic(id: number): void {
 function handleUnwrapOrgKey(req: UnwrapOrgKeyRequest): void {
   if (!requireKeyed(req.id, "unwrapOrgKey")) return;
 
-  const ephPt = decode(req.ephemeralPoint);
+  const ephemeralPoint = decode(req.ephemeralPoint);
   const nonce = decode(req.nonce);
   const wrappedKey = decode(req.wrappedOrgKey);
 
   try {
     // care-y-ignore-next-line no-org-private-key-server -- client-side Worker, not server
     const unwrappedOrgSecret = eciesDecrypt(
-      ephPt as RistrettoPoint,
+      ephemeralPoint as RistrettoPoint,
       nonce as Nonce,
       wrappedKey,
       assertPresent(volPrivate, "volPrivate"),

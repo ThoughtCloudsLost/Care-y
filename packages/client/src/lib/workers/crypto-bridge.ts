@@ -21,8 +21,10 @@
 import { CryptoWorkerError } from "./crypto-bridge-errors.js";
 import type {
   WorkerRequest,
+  WorkerRequestType,
   WorkerResponse,
   WorkerSuccessResponse,
+  ResponseForRequest,
 } from "./crypto-protocol.js";
 
 export type BridgeState = "LOADING" | "READY" | "KEYED" | "DESTROYED";
@@ -39,6 +41,21 @@ type RequestBody = WorkerRequest extends infer R
     ? Omit<R, "id">
     : never
   : never;
+
+/**
+ * Narrow a WorkerSuccessResponse to the expected type, throwing if the
+ * Worker returned a mismatched response discriminant.
+ */
+function expectResponse<T extends WorkerRequestType>(
+  resp: WorkerSuccessResponse,
+  expectedType: T,
+): ResponseForRequest<T> {
+  if (resp.type !== expectedType) {
+    throw new CryptoWorkerError("Unexpected response type", "WORKER_ERROR");
+  }
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- narrowed by discriminant check above
+  return resp as ResponseForRequest<T>;
+}
 
 export class CryptoBridge {
   private worker: Worker;
@@ -91,10 +108,10 @@ export class CryptoBridge {
    * Returns the blinded element (base64, public) to send to the OPRF server.
    */
   async oprfBlind(): Promise<{ blindedElement: string }> {
-    const resp = await this.sendRequest({ type: "oprfBlind" });
-    if (resp.type !== "oprfBlind") {
-      throw new CryptoWorkerError("Unexpected response type", "WORKER_ERROR");
-    }
+    const resp = expectResponse(
+      await this.sendRequest({ type: "oprfBlind" }),
+      "oprfBlind",
+    );
     return { blindedElement: resp.blindedElement };
   }
 
@@ -103,12 +120,10 @@ export class CryptoBridge {
    * evaluated is Transferable: neutered on the main thread after this call.
    */
   async deriveKeys(evaluated: ArrayBuffer): Promise<{ volPublic: string }> {
-    const resp = await this.sendRequest({ type: "deriveKeys", evaluated }, [
-      evaluated,
-    ]);
-    if (resp.type !== "deriveKeys") {
-      throw new CryptoWorkerError("Unexpected response type", "WORKER_ERROR");
-    }
+    const resp = expectResponse(
+      await this.sendRequest({ type: "deriveKeys", evaluated }, [evaluated]),
+      "deriveKeys",
+    );
     this.state = "KEYED";
     return { volPublic: resp.volPublic };
   }
@@ -121,17 +136,17 @@ export class CryptoBridge {
     wrappedKey: string,
     ciphertext: string,
   ): Promise<string> {
-    const resp = await this.sendRequest({
-      type: "decryptContent",
-      ticketId,
-      ephemeralPoint,
-      nonce,
-      wrappedKey,
-      ciphertext,
-    });
-    if (resp.type !== "decryptContent") {
-      throw new CryptoWorkerError("Unexpected response type", "WORKER_ERROR");
-    }
+    const resp = expectResponse(
+      await this.sendRequest({
+        type: "decryptContent",
+        ticketId,
+        ephemeralPoint,
+        nonce,
+        wrappedKey,
+        ciphertext,
+      }),
+      "decryptContent",
+    );
     return resp.plaintext;
   }
 
@@ -140,14 +155,14 @@ export class CryptoBridge {
    * Returns base64 ciphertext. The tk must have been cached by a prior decrypt.
    */
   async encrypt(ticketId: string, plaintext: string): Promise<string> {
-    const resp = await this.sendRequest({
-      type: "encryptContent",
-      ticketId,
-      plaintext,
-    });
-    if (resp.type !== "encryptContent") {
-      throw new CryptoWorkerError("Unexpected response type", "WORKER_ERROR");
-    }
+    const resp = expectResponse(
+      await this.sendRequest({
+        type: "encryptContent",
+        ticketId,
+        plaintext,
+      }),
+      "encryptContent",
+    );
     return resp.ciphertext;
   }
 
@@ -164,10 +179,10 @@ export class CryptoBridge {
 
   /** Get the volunteer's public key (base64). Only valid when KEYED. */
   async getVolPublic(): Promise<string> {
-    const resp = await this.sendRequest({ type: "getVolPublic" });
-    if (resp.type !== "getVolPublic") {
-      throw new CryptoWorkerError("Unexpected response type", "WORKER_ERROR");
-    }
+    const resp = expectResponse(
+      await this.sendRequest({ type: "getVolPublic" }),
+      "getVolPublic",
+    );
     return resp.volPublic;
   }
 
@@ -180,15 +195,15 @@ export class CryptoBridge {
     ephemeralPoint: string,
     nonce: string,
   ): Promise<ArrayBuffer> {
-    const resp = await this.sendRequest({
-      type: "unwrapOrgKey",
-      wrappedOrgKey,
-      ephemeralPoint,
-      nonce,
-    });
-    if (resp.type !== "unwrapOrgKey") {
-      throw new CryptoWorkerError("Unexpected response type", "WORKER_ERROR");
-    }
+    const resp = expectResponse(
+      await this.sendRequest({
+        type: "unwrapOrgKey",
+        wrappedOrgKey,
+        ephemeralPoint,
+        nonce,
+      }),
+      "unwrapOrgKey",
+    );
     // care-y-ignore-next-line no-org-private-key-server -- protocol field, client-side bridge
     return resp.orgPrivateKey;
   }
@@ -201,14 +216,14 @@ export class CryptoBridge {
     ticketId: string,
     recipientVolPublic: string,
   ): Promise<{ ephemeralPoint: string; nonce: string; wrappedKey: string }> {
-    const resp = await this.sendRequest({
-      type: "rewrapTk",
-      ticketId,
-      recipientVolPublic,
-    });
-    if (resp.type !== "rewrapTk") {
-      throw new CryptoWorkerError("Unexpected response type", "WORKER_ERROR");
-    }
+    const resp = expectResponse(
+      await this.sendRequest({
+        type: "rewrapTk",
+        ticketId,
+        recipientVolPublic,
+      }),
+      "rewrapTk",
+    );
     return {
       ephemeralPoint: resp.ephemeralPoint,
       nonce: resp.nonce,
