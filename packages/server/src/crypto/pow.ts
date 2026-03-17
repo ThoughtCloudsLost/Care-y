@@ -1,4 +1,6 @@
 import { createHash, randomBytes } from "node:crypto";
+import { createCleanupInterval } from "../utils/intervals.js";
+import { findTier, type Tier } from "../utils/tiers.js";
 
 export interface PowConfig {
   /** Number of leading zero bits required (difficulty) */
@@ -23,18 +25,18 @@ interface StoredChallenge {
  * Difficulty tiers: more failures require harder proof-of-work.
  * Values are leading zero bits in the SHA-256 hash.
  */
-const DIFFICULTY_TIERS: readonly {
-  readonly minFailures: number;
-  readonly bits: number;
-}[] = [
-  { minFailures: 8, bits: 22 },
-  { minFailures: 5, bits: 20 },
+const DIFFICULTY_TIERS: readonly Tier<number>[] = [
+  { minFailures: 8, value: 22 },
+  { minFailures: 5, value: 20 },
 ];
 
 /** Difficulty scaling based on failure count within the PoW window. */
 export function getDifficulty(failureCount: number): number {
-  const tier = DIFFICULTY_TIERS.find((t) => failureCount >= t.minFailures);
-  return tier?.bits ?? DEFAULT_POW_CONFIG.baseDifficulty;
+  return findTier(
+    DIFFICULTY_TIERS,
+    failureCount,
+    DEFAULT_POW_CONFIG.baseDifficulty,
+  );
 }
 
 export interface PowVerifier {
@@ -59,15 +61,14 @@ export function createPowVerifier(
 ): PowVerifier {
   const challenges = new Map<string, StoredChallenge>();
 
-  const cleanup = setInterval(() => {
+  const dispose = createCleanupInterval(60_000, () => {
     const current = now();
     for (const [key, stored] of challenges) {
       if (stored.expiresAt <= current) {
         challenges.delete(key);
       }
     }
-  }, 60_000);
-  cleanup.unref();
+  });
 
   return {
     createChallenge(userId: string, failureCount: number) {
@@ -113,9 +114,7 @@ export function createPowVerifier(
       return true;
     },
 
-    dispose(): void {
-      clearInterval(cleanup);
-    },
+    dispose,
   };
 }
 

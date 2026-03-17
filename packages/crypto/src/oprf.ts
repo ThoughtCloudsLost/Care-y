@@ -38,6 +38,14 @@ import type {
   EvaluatedElement,
 } from "./types.js";
 
+/** RFC 9497 Section 4.1: expand_message_xmd output size for ristretto255_from_hash. */
+const HASH_TO_GROUP_EXPAND_BYTES = 64;
+
+/** Shamir evaluation point for server A (first threshold server). */
+const EVAL_POINT_A = 1;
+/** Shamir evaluation point for server B (second threshold server). */
+const EVAL_POINT_B = 2;
+
 /**
  * HashToGroup per RFC 9497 Section 4.1 (ristretto255-SHA512).
  *
@@ -49,7 +57,12 @@ import type {
  */
 function hashToGroup(input: Uint8Array): RistrettoPoint {
   const sodium = requireSodium();
-  const expanded = expandMessageXMD(sodium, input, HASH_TO_GROUP_DST, 64);
+  const expanded = expandMessageXMD(
+    sodium,
+    input,
+    HASH_TO_GROUP_DST,
+    HASH_TO_GROUP_EXPAND_BYTES,
+  );
   return sodium.crypto_core_ristretto255_from_hash(expanded) as RistrettoPoint;
 }
 
@@ -149,10 +162,10 @@ function getLagrangeCoefficients(): {
     return { coeffA: lagrangeCoeffA.slice(), coeffB: lagrangeCoeffB.slice() };
   }
   const sodium = requireSodium();
-  lagrangeCoeffA = scalarFromInt(2);
+  lagrangeCoeffA = scalarFromInt(EVAL_POINT_B); // L_A(0) = (0-2)/(1-2) = 2
   lagrangeCoeffB = sodium.crypto_core_ristretto255_scalar_sub(
     new Uint8Array(32), // zero
-    scalarFromInt(1),
+    scalarFromInt(EVAL_POINT_A), // L_B(0) = (0-1)/(2-1) = -1
   );
   return { coeffA: lagrangeCoeffA.slice(), coeffB: lagrangeCoeffB.slice() };
 }

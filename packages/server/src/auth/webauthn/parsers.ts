@@ -23,6 +23,17 @@ import type {
 
 const utf8Decoder = new TextDecoder("utf-8");
 
+/** DataView.getUint32 littleEndian=false means big-endian (WebAuthn spec). */
+const BIG_ENDIAN = false;
+
+/** Authenticator data flag bits (W3C WebAuthn Level 2, Section 6.1). */
+const FLAG_USER_PRESENT = 0x01;
+const FLAG_USER_VERIFIED = 0x04;
+const FLAG_BACKUP_ELIGIBILITY = 0x08;
+const FLAG_BACKUP_STATE = 0x10;
+const FLAG_ATTESTED_DATA = 0x40;
+const FLAG_EXTENSIONS_INCLUDED = 0x80;
+
 function isCollectedClientData(value: unknown): value is CollectedClientData {
   if (typeof value !== "object" || value === null) return false;
   return (
@@ -59,14 +70,14 @@ export function parseAuthenticator(
   return {
     rpIdHash: utils.toBase64url(buffer.slice(0, 32)),
     flags: {
-      userPresent: !!(flags & 1),
-      userVerified: !!(flags & 4),
-      backupEligibility: !!(flags & 8),
-      backupState: !!(flags & 16),
-      attestedData: !!(flags & 64),
-      extensionsIncluded: !!(flags & 128),
+      userPresent: !!(flags & FLAG_USER_PRESENT),
+      userVerified: !!(flags & FLAG_USER_VERIFIED),
+      backupEligibility: !!(flags & FLAG_BACKUP_ELIGIBILITY),
+      backupState: !!(flags & FLAG_BACKUP_STATE),
+      attestedData: !!(flags & FLAG_ATTESTED_DATA),
+      extensionsIncluded: !!(flags & FLAG_EXTENSIONS_INCLUDED),
     },
-    signCount: new DataView(buffer.slice(33, 37)).getUint32(0, false), // Big-endian
+    signCount: new DataView(buffer.slice(33, 37)).getUint32(0, BIG_ENDIAN),
     aaguid: extractAaguid(buffer),
   };
 }

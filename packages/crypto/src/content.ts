@@ -18,8 +18,9 @@
  */
 
 import { requireSodium } from "./sodium.js";
-import { DecryptionError, InvalidKeyError } from "./errors.js";
+import { DecryptionError } from "./errors.js";
 import { concatBytes } from "./bytes.js";
+import { assertKeyLength } from "./validation.js";
 import type { SymmetricKey, Ciphertext } from "./types.js";
 
 /**
@@ -48,12 +49,7 @@ export function encryptContent(
   key: SymmetricKey,
 ): Ciphertext {
   const sodium = requireSodium();
-
-  if (key.length !== sodium.crypto_secretbox_KEYBYTES) {
-    throw new InvalidKeyError(
-      `Content key must be ${String(sodium.crypto_secretbox_KEYBYTES)} bytes`,
-    );
-  }
+  assertKeyLength(key, sodium.crypto_secretbox_KEYBYTES, "Content key");
 
   const nonce = sodium.randombytes_buf(sodium.crypto_secretbox_NONCEBYTES);
   const sealed = sodium.crypto_secretbox_easy(plaintext, nonce, key);
@@ -75,12 +71,7 @@ export function decryptContent(
   key: SymmetricKey,
 ): Uint8Array {
   const sodium = requireSodium();
-
-  if (key.length !== sodium.crypto_secretbox_KEYBYTES) {
-    throw new InvalidKeyError(
-      `Content key must be ${String(sodium.crypto_secretbox_KEYBYTES)} bytes`,
-    );
-  }
+  assertKeyLength(key, sodium.crypto_secretbox_KEYBYTES, "Content key");
 
   const nonceLen = sodium.crypto_secretbox_NONCEBYTES;
   if (blob.length < nonceLen + sodium.crypto_secretbox_MACBYTES) {

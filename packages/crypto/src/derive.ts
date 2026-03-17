@@ -29,7 +29,8 @@
 
 import { requireSodium } from "./sodium.js";
 import { hkdf, hkdfDerive32 } from "./hkdf.js";
-import { InvalidKeyError, InvalidInputError } from "./errors.js";
+import { InvalidKeyError } from "./errors.js";
+import { assertInputLength } from "./validation.js";
 import { concatBytes, encodeLabel } from "./bytes.js";
 import {
   type Scalar,
@@ -83,11 +84,7 @@ export function deriveAccountKey(
 ): Uint8Array {
   const sodium = requireSodium();
 
-  if (salt.length !== sodium.crypto_pwhash_SALTBYTES) {
-    throw new InvalidInputError(
-      `Salt must be ${String(sodium.crypto_pwhash_SALTBYTES)} bytes`,
-    );
-  }
+  assertInputLength(salt, sodium.crypto_pwhash_SALTBYTES, "Salt");
 
   const params = enforceArgon2Floor(serverParams);
 

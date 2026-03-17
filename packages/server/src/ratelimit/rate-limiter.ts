@@ -9,6 +9,8 @@
  * for multi-process deployments.
  */
 
+import { createCleanupInterval } from "../utils/intervals.js";
+
 const CLEANUP_INTERVAL_MS = 60_000;
 
 export interface RateLimitConfig {
@@ -60,12 +62,11 @@ export function createInMemoryRateLimiter(
     return timestamps;
   }
 
-  const cleanup = setInterval(() => {
+  createCleanupInterval(CLEANUP_INTERVAL_MS, () => {
     for (const key of windows.keys()) {
       pruneKey(key);
     }
-  }, CLEANUP_INTERVAL_MS);
-  cleanup.unref();
+  });
 
   return {
     check(key: string): RateLimitResult {

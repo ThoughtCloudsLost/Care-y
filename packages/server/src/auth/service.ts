@@ -13,6 +13,7 @@ import { randomBytes } from "node:crypto";
 import type { Kysely, Selectable } from "kysely";
 import type { TenantDatabase, UsersTable } from "../db/types.js";
 import { isPgUniqueViolation } from "../db/pg-errors.js";
+import { toCount } from "../db/query-utils.js";
 import type { PasswordHasher } from "./password.js";
 import type { SessionRepository, SessionData } from "./session-repository.js";
 import type {
@@ -265,8 +266,7 @@ export function createAuthService(
       .where("role_id", "=", RoleId.ADMIN)
       .where("is_active", "=", true)
       .executeTakeFirstOrThrow();
-    // pg driver returns COUNT as string (bigint). Coerce explicitly.
-    return Number(result.count);
+    return toCount(result);
   }
 
   async function updateUserRole(

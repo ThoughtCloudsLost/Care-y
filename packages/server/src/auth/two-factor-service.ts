@@ -42,6 +42,7 @@ import type {
 import { TwoFactorMethod } from "@care-y/shared";
 import type { TwoFactorMethodType } from "@care-y/shared";
 import { ValidationError } from "../errors.js";
+import { toCount } from "../db/query-utils.js";
 
 // --- Types ---
 
@@ -216,7 +217,7 @@ export function createTwoFactorService(
       .where("user_id", "=", userId)
       .where("is_used", "=", false)
       .executeTakeFirstOrThrow();
-    return Number(count);
+    return toCount({ count });
   }
 
   /**
@@ -319,7 +320,7 @@ export function createTwoFactorService(
       .where("user_id", "=", userId)
       .executeTakeFirstOrThrow();
 
-    if (Number(credCount.count) <= 1) {
+    if (toCount(credCount) <= 1) {
       ensureNotLastMethod(activeMethods, TwoFactorMethod.WEBAUTHN);
       await deactivateMethod(userId, TwoFactorMethod.WEBAUTHN);
     }

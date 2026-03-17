@@ -35,11 +35,8 @@
 
 import { requireSodium } from "./sodium.js";
 import { hkdfDerive32 } from "./hkdf.js";
-import {
-  DecryptionError,
-  InvalidKeyError,
-  InvalidInputError,
-} from "./errors.js";
+import { DecryptionError } from "./errors.js";
+import { assertKeyLength, assertInputLength } from "./validation.js";
 import {
   type RistrettoPoint,
   type Scalar,
@@ -61,10 +58,11 @@ export function eciesEncrypt(
   recipientPublic: RistrettoPoint,
 ): EciesOutput {
   const sodium = requireSodium();
-
-  if (recipientPublic.length !== sodium.crypto_core_ristretto255_BYTES) {
-    throw new InvalidKeyError("Recipient public key must be 32 bytes");
-  }
+  assertKeyLength(
+    recipientPublic,
+    sodium.crypto_core_ristretto255_BYTES,
+    "Recipient public key",
+  );
 
   // 1-2. Ephemeral keypair
   const ephemeral = sodium.crypto_core_ristretto255_scalar_random();
@@ -117,14 +115,12 @@ export function eciesDecrypt(
   recipientPrivate: Scalar,
 ): Uint8Array {
   const sodium = requireSodium();
-
-  if (ephemeralPoint.length !== sodium.crypto_core_ristretto255_BYTES) {
-    throw new InvalidKeyError("Ephemeral point must be 32 bytes");
-  }
-
-  if (nonce.length !== sodium.crypto_secretbox_NONCEBYTES) {
-    throw new InvalidInputError("Nonce must be 24 bytes");
-  }
+  assertKeyLength(
+    ephemeralPoint,
+    sodium.crypto_core_ristretto255_BYTES,
+    "Ephemeral point",
+  );
+  assertInputLength(nonce, sodium.crypto_secretbox_NONCEBYTES, "Nonce");
 
   // 1. ECDH
   const shared = sodium.crypto_scalarmult_ristretto255(

@@ -61,6 +61,11 @@ vi.mock("@care-y/crypto", () => ({
     const tag = buf[0]?.toString(16) ?? "00";
     return `b64-${tag}`;
   }),
+  zeroAll: vi.fn((...buffers: Array<Uint8Array | null>) => {
+    for (const buf of buffers) {
+      if (buf !== null) mockMemzero(buf);
+    }
+  }),
 }));
 
 // ── Helpers ──────────────────────────────────────────────────────────

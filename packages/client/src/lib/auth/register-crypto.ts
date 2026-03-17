@@ -28,10 +28,13 @@ import {
   deriveVolunteerPublicKey,
   encode,
   getSodium,
+  zeroAll,
+  toRistrettoPoint,
 } from "@care-y/crypto";
 import type { BlindResult, Salt, Scalar, SymmetricKey } from "@care-y/crypto";
-import { toRistrettoPoint } from "@care-y/crypto";
 import { trpc } from "$lib/trpc/index.js";
+import { decodeStandardBase64 } from "$lib/base64.js";
+import type { CryptoPhaseCallbacks } from "./login-crypto.js";
 
 export interface RegisterCryptoResult {
   /** URL-safe base64 encoded salt (16 bytes). */
@@ -40,27 +43,8 @@ export interface RegisterCryptoResult {
   volPublic: string;
 }
 
-export interface RegisterCryptoCallbacks {
-  onArgon2idStart: () => void;
-  onArgon2idDone: () => void;
-  onOprfStart: () => void;
-  onOprfDone: () => void;
-  onDeriveStart: () => void;
+export interface RegisterCryptoCallbacks extends CryptoPhaseCallbacks {
   onUploadStart: () => void;
-  onDone: () => void;
-}
-
-/**
- * Decode a standard base64 string to Uint8Array.
- *
- * The OPRF evaluate endpoint returns standard base64 (with +, /, =).
- * The @care-y/crypto decode() expects url-safe no-padding base64.
- * The evaluated value is a public ristretto255 point (not key material),
- * so the temporary JS string from atob is acceptable here.
- */
-function decodeStandardBase64(encoded: string): Uint8Array {
-  const binary = atob(encoded);
-  return Uint8Array.from(binary, (c) => c.charCodeAt(0));
 }
 
 /**
@@ -76,7 +60,7 @@ export async function registerCrypto(
   password: string,
   callbacks: RegisterCryptoCallbacks,
 ): Promise<RegisterCryptoResult> {
-  const sodium = await getSodium();
+  await getSodium();
 
   // Declare intermediates upfront so the finally block can zero whatever
   // was allocated before an error, regardless of where it occurred.
@@ -140,12 +124,8 @@ export async function registerCrypto(
     callbacks.onDone();
     return result;
   } finally {
-    // 9. Zero ALL intermediate key material regardless of outcome.
-    //    Only zero what was actually allocated (null check).
-    //    salt and volPublic are public (stored on server), no zeroing needed.
-    if (stretched) sodium.memzero(stretched);
-    if (oprfOutput) sodium.memzero(oprfOutput);
-    if (masterKey) sodium.memzero(masterKey);
-    if (volPrivate) sodium.memzero(volPrivate);
+    // Zero ALL intermediate key material regardless of outcome.
+    // salt and volPublic are public (stored on server), no zeroing needed.
+    zeroAll(stretched, oprfOutput, masterKey, volPrivate);
   }
 }

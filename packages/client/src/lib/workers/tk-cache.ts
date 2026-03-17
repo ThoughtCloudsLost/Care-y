@@ -51,20 +51,21 @@ export class TkCache {
       this.cache.delete(ticketId);
     }
 
-    // Evict the LRU entry if at capacity.
     if (this.cache.size >= this.config.maxEntries) {
-      // Map.keys().next() returns the oldest entry (first inserted).
-      const oldestKey = this.cache.keys().next();
-      if (oldestKey.done !== true) {
-        const evicted = this.cache.get(oldestKey.value);
-        this.cache.delete(oldestKey.value);
-        if (evicted) {
-          this.config.memzero(evicted);
-        }
-      }
+      this.evictLru();
     }
 
     this.cache.set(ticketId, tk);
+  }
+
+  /** Evict the least-recently-used (oldest) entry and zero its buffer. */
+  private evictLru(): void {
+    const firstEntry = this.cache.keys().next();
+    if (firstEntry.done === true) return;
+    const firstKey = firstEntry.value;
+    const evicted = this.cache.get(firstKey);
+    this.cache.delete(firstKey);
+    if (evicted !== undefined) this.config.memzero(evicted);
   }
 
   /**

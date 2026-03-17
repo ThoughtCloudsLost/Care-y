@@ -1,6 +1,7 @@
 import { createHmac, hkdfSync } from "node:crypto";
 import type { Kysely } from "kysely";
 import type { PlatformDatabase } from "../db/types.js";
+import { createCleanupInterval } from "../utils/intervals.js";
 
 const AUDIT_KEY_INFO = "care-y-oprf-audit-v1";
 const RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
@@ -50,19 +51,19 @@ export function createOprfAuditLogger(
   opsSecretsKey: Buffer,
   now: () => number = Date.now,
 ): OprfAuditLogger {
-  let cachedDate = "";
-  let cachedKey: Buffer = Buffer.alloc(0);
+  let dailyCacheDate = "";
+  let dailyCacheKey: Buffer = Buffer.alloc(0);
 
   function getDailyKey(): Buffer {
     const today = new Date(now()).toISOString().slice(0, 10);
-    if (today !== cachedDate) {
-      cachedKey = deriveDailyKey(opsSecretsKey, today);
-      cachedDate = today;
+    if (today !== dailyCacheDate) {
+      dailyCacheKey = deriveDailyKey(opsSecretsKey, today);
+      dailyCacheDate = today;
     }
-    return cachedKey;
+    return dailyCacheKey;
   }
 
-  const cleanup = setInterval(() => {
+  const dispose = createCleanupInterval(CLEANUP_INTERVAL_MS, () => {
     const cutoff = new Date(now() - RETENTION_MS);
     db.deleteFrom("oprf_audit_log")
       .where("timestamp", "<", cutoff)
@@ -73,8 +74,7 @@ export function createOprfAuditLogger(
           err instanceof Error ? err.message : String(err),
         );
       });
-  }, CLEANUP_INTERVAL_MS);
-  cleanup.unref();
+  });
 
   return {
     async logFailure(
@@ -94,8 +94,6 @@ export function createOprfAuditLogger(
         .execute();
     },
 
-    dispose(): void {
-      clearInterval(cleanup);
-    },
+    dispose,
   };
 }

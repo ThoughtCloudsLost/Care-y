@@ -15,6 +15,7 @@ import type { Kysely, Selectable } from "kysely";
 import type { TenantDatabase, EmailCodesTable } from "../db/types.js";
 import type { EmailSender } from "../email/email-sender.js";
 import { RateLimitError, ValidationError } from "../errors.js";
+import { toCount } from "../db/query-utils.js";
 import { createScryptHasher } from "./scrypt-hash.js";
 
 const CODE_DIGITS = 6;
@@ -90,7 +91,7 @@ export function createEmailCodeService(
       .where("expires_at", ">", hourlyThreshold)
       .executeTakeFirstOrThrow();
 
-    if (Number(count) >= HOURLY_LIMIT) {
+    if (toCount({ count }) >= HOURLY_LIMIT) {
       throw new RateLimitError(
         "Too many codes requested. Please try again later.",
         3600,

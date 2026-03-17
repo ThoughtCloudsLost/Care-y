@@ -26,6 +26,9 @@ export {
   BRANDING_LABEL,
   toRistrettoPoint,
   toScalar,
+  toSymmetricKey,
+  toSalt,
+  toNonce,
 } from "./types.js";
 
 // --- Errors ---
@@ -36,6 +39,12 @@ export {
   InvalidInputError,
   SodiumNotReadyError,
 } from "./errors.js";
+
+// --- Validation ---
+export { assertKeyLength, assertInputLength } from "./validation.js";
+
+// --- Memory management ---
+export { zeroAll } from "./mem.js";
 
 // --- Serialization ---
 export { encode, decode } from "./serialize.js";

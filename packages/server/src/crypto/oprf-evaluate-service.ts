@@ -12,6 +12,8 @@ import {
   PowRequiredError,
   ValidationError,
 } from "../errors.js";
+import { createCleanupInterval } from "../utils/intervals.js";
+import { findTier, type Tier } from "../utils/tiers.js";
 import type { OprfEvaluator } from "./oprf-ipc.js";
 import type { RateLimiter } from "../ratelimit/rate-limiter.js";
 import type { PowVerifier } from "./pow.js";
@@ -34,7 +36,7 @@ export function createFailureTracker(
 ): FailureTracker {
   const failures = new Map<string, number[]>();
 
-  const cleanup = setInterval(() => {
+  const dispose = createCleanupInterval(60_000, () => {
     const cutoff = now() - windowMs;
     for (const [key, timestamps] of failures) {
       const filtered = timestamps.filter((t) => t > cutoff);
@@ -44,8 +46,7 @@ export function createFailureTracker(
         failures.set(key, filtered);
       }
     }
-  }, 60_000);
-  cleanup.unref();
+  });
 
   return {
     check(userId: string): number {
@@ -63,9 +64,7 @@ export function createFailureTracker(
     reset(userId: string): void {
       failures.delete(userId);
     },
-    dispose(): void {
-      clearInterval(cleanup);
-    },
+    dispose,
   };
 }
 
@@ -78,19 +77,15 @@ export function createFailureTracker(
  * OPRF evaluation grows. Prevents rapid brute-force without fully
  * blocking legitimate retries.
  */
-const DELAY_TIERS: readonly {
-  readonly minFailures: number;
-  readonly delayMs: number;
-}[] = [
-  { minFailures: 10, delayMs: 10_000 },
-  { minFailures: 7, delayMs: 5_000 },
-  { minFailures: 4, delayMs: 2_000 },
+const DELAY_TIERS: readonly Tier<number>[] = [
+  { minFailures: 10, value: 10_000 },
+  { minFailures: 7, value: 5_000 },
+  { minFailures: 4, value: 2_000 },
 ];
 
 /** Escalating delay in milliseconds based on failure count. */
 export function getDelayMs(failureCount: number): number {
-  const tier = DELAY_TIERS.find((t) => failureCount >= t.minFailures);
-  return tier?.delayMs ?? 0;
+  return findTier(DELAY_TIERS, failureCount, 0);
 }
 
 async function delay(ms: number): Promise<void> {

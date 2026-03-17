@@ -1,15 +1,19 @@
 import { z } from "zod";
-import { TwoFactorMethod, AVAILABLE_METHODS } from "../two-factor-types.js";
+import {
+  TwoFactorMethod,
+  AVAILABLE_METHODS,
+  type TwoFactorMethodType,
+} from "../two-factor-types.js";
 
 // --- Shared validation ---
 
-const twoFactorMethodSchema = z.enum([
-  TwoFactorMethod.WEBAUTHN,
-  TwoFactorMethod.TOTP,
-  TwoFactorMethod.EMAIL,
-  TwoFactorMethod.SMS,
-  TwoFactorMethod.PUSH,
-]);
+/** Generated from TwoFactorMethod to prevent drift when new methods are added. */
+// eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- z.enum() requires non-empty tuple; Object.values always has 5+ entries
+const allMethods = Object.values(TwoFactorMethod) as [
+  TwoFactorMethodType,
+  ...TwoFactorMethodType[],
+];
+const twoFactorMethodSchema = z.enum(allMethods);
 
 const availableMethodSchema = z
   .string()

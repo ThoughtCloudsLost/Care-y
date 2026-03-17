@@ -17,12 +17,9 @@
  *   "localhost:5173"           -> null
  */
 export function extractSubdomain(host: string): string | null {
-  const hostname = host.split(":")[0] ?? "";
-  if (hostname === "") return null;
+  const hostname = host.split(":")[0];
+  if (hostname === undefined || hostname === "") return null;
 
   const parts = hostname.split(".");
-  if (parts.length < 3) return null;
-
-  const subdomain = parts[0] ?? "";
-  return subdomain.length > 0 ? subdomain : null;
+  return parts.length >= 3 ? (parts[0] ?? null) : null;
 }
