@@ -26,6 +26,8 @@ import { TRPCError } from "@trpc/server";
 import type { FieldEncryptor } from "../crypto/field-encryptor.js";
 import type { SessionTokenizer } from "../crypto/session-tokenizer.js";
 import type { EmailSender } from "../email/email-sender.js";
+import type { SessionRepository } from "../auth/session-repository.js";
+import { createTenantSessions } from "../trpc/context.js";
 import type { Context, OrgContext } from "../trpc/context.js";
 import type { SessionData } from "../auth/session-repository.js";
 import type { UserRecord } from "../auth/service.js";
@@ -37,7 +39,6 @@ import {
   createEmailCodeService,
   type EmailCodeService,
 } from "../auth/email-code.js";
-import { createDbSessionRepository } from "../auth/session-repository.js";
 import {
   totpVerifySchema,
   emailCodeVerifySchema,
@@ -78,17 +79,14 @@ interface ScopedServices {
 
 /**
  * Builds tenant-scoped 2FA services from the resolved org context.
- * Called once per request by the injection middleware.
+ * Accepts a shared SessionRepository to avoid redundant construction
+ * when both auth and 2FA services are needed in the same request.
  */
 export function createScopedTwoFactorServices(
   org: OrgContext,
+  sessions: SessionRepository,
   deps: TwoFactorRouterDeps,
 ): ScopedServices {
-  const sessions = createDbSessionRepository(
-    org.tenantDb,
-    deps.tokenizer,
-    org.sealedBox,
-  );
   const emailCodes = createEmailCodeService(org.tenantDb, deps.emailSender);
   const twoFactor = createTwoFactorService(
     org.tenantDb,
@@ -141,7 +139,12 @@ export function createTwoFactorRouter(deps: TwoFactorRouterDeps) {
    */
   const injectServices = middleware(async ({ ctx, next }) => {
     const { org, session, user } = narrowAuthContext(ctx);
-    const { twoFactor, emailCodes } = createScopedTwoFactorServices(org, deps);
+    const sessions = createTenantSessions(org, deps.tokenizer);
+    const { twoFactor, emailCodes } = createScopedTwoFactorServices(
+      org,
+      sessions,
+      deps,
+    );
     return next({ ctx: { ...ctx, org, session, user, twoFactor, emailCodes } });
   });
 

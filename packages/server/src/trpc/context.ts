@@ -17,7 +17,10 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import type { CreateHTTPContextOptions } from "@trpc/server/adapters/standalone";
 import type { Kysely } from "kysely";
 import type { TenantDatabase } from "../db/types.js";
-import type { SessionData } from "../auth/session-repository.js";
+import type {
+  SessionData,
+  SessionRepository,
+} from "../auth/session-repository.js";
 import type { UserRecord, AuthService } from "../auth/service.js";
 import type { OrgService } from "../org/service.js";
 import type {
@@ -135,19 +138,31 @@ export interface AuthServiceDeps {
 }
 
 /**
+ * Creates a SessionRepository scoped to the given org.
+ * Call once per request and pass to both auth and 2FA service factories
+ * to avoid redundant construction.
+ */
+export function createTenantSessions(
+  orgCtx: OrgContext,
+  tokenizer: SessionTokenizer,
+): SessionRepository {
+  return createDbSessionRepository(
+    orgCtx.tenantDb,
+    tokenizer,
+    orgCtx.sealedBox,
+  );
+}
+
+/**
  * Creates an AuthService scoped to the given org's tenant DB.
  * Used by both the context factory (session validation) and route handlers
  * (login, register, logout) to avoid repeating the constructor call.
  */
 export function createScopedAuthService(
   orgCtx: OrgContext,
+  sessions: SessionRepository,
   deps: AuthServiceDeps,
 ): AuthService {
-  const sessions = createDbSessionRepository(
-    orgCtx.tenantDb,
-    deps.tokenizer,
-    orgCtx.sealedBox,
-  );
   return createAuthService(
     orgCtx.tenantDb,
     deps.hasher,
@@ -167,7 +182,8 @@ async function validateSessionFromRequest(
   const cookieToken = parseCookies(req.headers.cookie).get(SESSION_COOKIE_NAME);
   if (cookieToken === undefined) return null;
 
-  const authService = createScopedAuthService(orgCtx, deps);
+  const sessions = createTenantSessions(orgCtx, deps.tokenizer);
+  const authService = createScopedAuthService(orgCtx, sessions, deps);
   const ip = extractClientIp(req);
   const ua = req.headers["user-agent"] ?? "unknown";
 

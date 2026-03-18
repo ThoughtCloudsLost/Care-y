@@ -40,6 +40,7 @@ import {
 import { extractClientIp } from "../http/request-utils.js";
 import {
   createScopedAuthService,
+  createTenantSessions,
   type AuthServiceDeps,
 } from "../trpc/context.js";
 import { createSaltDefense } from "../auth/salt-defense.js";
@@ -161,7 +162,8 @@ export function createAuthRouter(deps: AuthRouterDeps) {
         const ip = extractClientIp(ctx.req);
         enforceRateLimit(loginLimiter, ip, "Too many login attempts");
 
-        const authService = createScopedAuthService(ctx.org, deps);
+        const sessions = createTenantSessions(ctx.org, deps.tokenizer);
+        const authService = createScopedAuthService(ctx.org, sessions, deps);
 
         const { user, session } = await authService.login({
           identifier: input.identifier,
@@ -172,8 +174,9 @@ export function createAuthRouter(deps: AuthRouterDeps) {
 
         setSessionCookie(ctx.res, session.token, isSecureCookie);
 
-        // Query enrolled 2FA methods via service to inform client redirect.
-        const { twoFactor } = createScopedTwoFactorServices(ctx.org, {
+        // Query enrolled 2FA methods. Reuses the same sessions instance
+        // created above to avoid redundant construction.
+        const { twoFactor } = createScopedTwoFactorServices(ctx.org, sessions, {
           emailSender: deps.emailSender,
           encryptor: deps.encryptor,
           tokenizer: deps.tokenizer,
@@ -208,7 +211,8 @@ export function createAuthRouter(deps: AuthRouterDeps) {
             );
           }
 
-          const authService = createScopedAuthService(ctx.org, deps);
+          const sessions = createTenantSessions(ctx.org, deps.tokenizer);
+          const authService = createScopedAuthService(ctx.org, sessions, deps);
           const user = await authService.register({
             identifier: input.identifier,
             password: input.password,
@@ -224,7 +228,8 @@ export function createAuthRouter(deps: AuthRouterDeps) {
       ),
 
     logout: authedProcedure.mutation(async ({ ctx }) => {
-      const authService = createScopedAuthService(ctx.org, deps);
+      const sessions = createTenantSessions(ctx.org, deps.tokenizer);
+      const authService = createScopedAuthService(ctx.org, sessions, deps);
       await authService.logout(ctx.session.token);
       ctx.res.setHeader("Set-Cookie", buildClearSessionCookie());
 
@@ -242,7 +247,8 @@ export function createAuthRouter(deps: AuthRouterDeps) {
           throw new ForbiddenError("Cannot change your own role");
         }
 
-        const authService = createScopedAuthService(ctx.org, deps);
+        const sessions = createTenantSessions(ctx.org, deps.tokenizer);
+        const authService = createScopedAuthService(ctx.org, sessions, deps);
         const targetUser = await authService.findUserById(input.userId);
         if (!targetUser) {
           throw new NotFoundError("User not found");
@@ -269,7 +275,8 @@ export function createAuthRouter(deps: AuthRouterDeps) {
 
     setPiiRetention: adminProcedure.input(setPiiRetentionInputSchema).mutation(
       withErrorWrapping(async ({ ctx, input }) => {
-        const authService = createScopedAuthService(ctx.org, deps);
+        const sessions = createTenantSessions(ctx.org, deps.tokenizer);
+        const authService = createScopedAuthService(ctx.org, sessions, deps);
         await authService.setPiiRetentionDays(input.days);
         return { success: true as const };
       }),
