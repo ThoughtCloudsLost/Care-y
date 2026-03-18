@@ -7,6 +7,7 @@ import {
   SodiumNotReadyError,
 } from "./errors.js";
 
+// code is part of the @care-y/crypto public API; server tRPC error mapping depends on specific string values
 describe("CryptoError", () => {
   it("stores code and message", () => {
     const err = new CryptoError("TEST_CODE", "test message");
@@ -96,23 +97,5 @@ describe("SodiumNotReadyError", () => {
     const err = new SodiumNotReadyError();
     expect(err).toBeInstanceOf(CryptoError);
     expect(err).toBeInstanceOf(Error);
-  });
-});
-
-describe("branded types structural compatibility", () => {
-  it("branded Uint8Array passes where Uint8Array is expected", () => {
-    // Compile-time check: branded types are structurally Uint8Array.
-    // At runtime, verify the cast produces a real Uint8Array.
-    const buf = new Uint8Array(32);
-    // The plan specifies phantom branding via `as Scalar`.
-    // This test confirms the resulting value is still a Uint8Array instance.
-    expect(buf).toBeInstanceOf(Uint8Array);
-    expect(buf.byteLength).toBe(32);
-
-    // Verify Uint8Array methods remain accessible after branding.
-    // (TypeScript intersection types preserve all methods from both sides.)
-    const slice = buf.slice(0, 16);
-    expect(slice).toBeInstanceOf(Uint8Array);
-    expect(slice.byteLength).toBe(16);
   });
 });

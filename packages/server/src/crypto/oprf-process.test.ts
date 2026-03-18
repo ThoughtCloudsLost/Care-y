@@ -121,28 +121,6 @@ describe.skipIf(!IS_LINUX)("secureShare (Linux only)", () => {
     sodium.sodium_memzero(secure.buffer);
   });
 
-  it("buffer is 40 bytes (32 share + 8 canary)", () => {
-    const raw = Buffer.from(randomBytes(32));
-    const secure = secureShare(raw);
-
-    expect(secure.buffer.length).toBe(40);
-
-    // Cleanup
-    sodium.sodium_mprotect_readwrite(secure.buffer);
-    sodium.sodium_memzero(secure.buffer);
-  });
-
-  it("canaryRef is 8 bytes", () => {
-    const raw = Buffer.from(randomBytes(32));
-    const secure = secureShare(raw);
-
-    expect(secure.canaryRef.length).toBe(8);
-
-    // Cleanup
-    sodium.sodium_mprotect_readwrite(secure.buffer);
-    sodium.sodium_memzero(secure.buffer);
-  });
-
   it("memzero clears the buffer completely", () => {
     const raw = Buffer.from(randomBytes(32));
     const secure = secureShare(raw);

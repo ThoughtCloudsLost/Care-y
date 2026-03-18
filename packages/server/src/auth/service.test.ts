@@ -212,6 +212,7 @@ describe.skipIf(!process.env.DATABASE_URL)("AuthService", () => {
     // Accepted tradeoff: ensures the error propagation path works rather than
     // silently swallowing unexpected DB errors.
     it("re-throws non-unique-violation DB errors from insert", async () => {
+      // Mocks insertInto().values().returningAll().executeTakeFirstOrThrow(). If this chain changes, update the mock.
       const insertSpy = vi.spyOn(testDb.db, "insertInto").mockReturnValue({
         values: () => ({
           returningAll: () => ({
@@ -371,6 +372,7 @@ describe.skipIf(!process.env.DATABASE_URL)("AuthService", () => {
       expect(found).toBeNull();
     });
 
+    // Wire contract: token is stored in the DB sessions table and sent as a cookie value; format change requires session migration
     it("generates 64-char hex token", async () => {
       const result = await service.login({
         identifier: LOGIN_ID,

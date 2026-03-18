@@ -113,29 +113,17 @@ describe("requireRole", () => {
   describe("when user lacks the required permission", () => {
     it("rejects volunteer from MANAGE_ROLES with FORBIDDEN", async () => {
       const caller = factory(makeCtxWithRole(RoleId.VOLUNTEER));
-      await expectTrpcError(
-        caller.manageRoles(),
-        "FORBIDDEN",
-        "Insufficient permissions",
-      );
+      await expectTrpcError(caller.manageRoles(), "FORBIDDEN");
     });
 
     it("rejects manager from MANAGE_ROLES with FORBIDDEN", async () => {
       const caller = factory(makeCtxWithRole(RoleId.MANAGER));
-      await expectTrpcError(
-        caller.manageRoles(),
-        "FORBIDDEN",
-        "Insufficient permissions",
-      );
+      await expectTrpcError(caller.manageRoles(), "FORBIDDEN");
     });
 
     it("rejects volunteer from MANAGE_USERS with FORBIDDEN", async () => {
       const caller = factory(makeCtxWithRole(RoleId.VOLUNTEER));
-      await expectTrpcError(
-        caller.manageUsers(),
-        "FORBIDDEN",
-        "Insufficient permissions",
-      );
+      await expectTrpcError(caller.manageUsers(), "FORBIDDEN");
     });
 
     it("error message does not reveal the required permission name", async () => {

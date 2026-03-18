@@ -82,6 +82,9 @@ describe("Backup codes", () => {
   // --- hashBackupCode ---
 
   describe("hashBackupCode", () => {
+    // Format guards backward compatibility with hashes already persisted
+    // in the DB. Changing the serialization format would silently break
+    // verification of all existing backup codes.
     it("produces scrypt:<salt>:<hash> format", async () => {
       const hash = await hashBackupCode("a1b2c3d4");
       const parts = hash.split(":");

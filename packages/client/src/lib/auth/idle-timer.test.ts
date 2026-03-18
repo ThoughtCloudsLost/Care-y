@@ -88,18 +88,6 @@ function advanceTime(
 
 describe("IdleTimer", () => {
   describe("start", () => {
-    it("registers event listeners on document", () => {
-      const { timer } = createTimer();
-      timer.start();
-
-      expect(addedListeners.has("mousemove")).toBe(true);
-      expect(addedListeners.has("mousedown")).toBe(true);
-      expect(addedListeners.has("touchstart")).toBe(true);
-      expect(addedListeners.has("keydown")).toBe(true);
-
-      timer.stop();
-    });
-
     it("is idempotent (second call does not double-register)", () => {
       const { timer } = createTimer();
       timer.start();
@@ -210,6 +198,32 @@ describe("IdleTimer", () => {
     });
   });
 
+  describe("DOM event wiring", () => {
+    it("resets the timer when a registered DOM event fires", () => {
+      const { timer, onTimeout, clock } = createTimer({ timeoutMs: 60_000 });
+      timer.start();
+
+      // Advance to 55s (just under timeout)
+      advanceTime(clock, 55_000);
+      expect(onTimeout).not.toHaveBeenCalled();
+
+      // Fire a synthetic mousemove through the mock document's listener map.
+      // This exercises the full path: DOM event → boundReset → lastActivity update.
+      const handlers = addedListeners.get("mousemove");
+      expect(handlers).toBeDefined();
+      expect(handlers!.size).toBe(1);
+      for (const handler of handlers!) {
+        handler(new Event("mousemove"));
+      }
+
+      // 30s after reset: should NOT have timed out (reset pushed deadline forward)
+      advanceTime(clock, 30_000);
+      expect(onTimeout).not.toHaveBeenCalled();
+
+      timer.stop();
+    });
+  });
+
   describe("stop", () => {
     it("prevents further callbacks", () => {
       const { timer, onTimeout, onWarning, clock } = createTimer({
@@ -222,17 +236,6 @@ describe("IdleTimer", () => {
       advanceTime(clock, 120_000);
       expect(onWarning).not.toHaveBeenCalled();
       expect(onTimeout).not.toHaveBeenCalled();
-    });
-
-    it("removes event listeners from document", () => {
-      const { timer } = createTimer();
-      timer.start();
-      timer.stop();
-
-      expect(removedListeners.has("mousemove")).toBe(true);
-      expect(removedListeners.has("mousedown")).toBe(true);
-      expect(removedListeners.has("touchstart")).toBe(true);
-      expect(removedListeners.has("keydown")).toBe(true);
     });
 
     it("is idempotent (no error when called twice)", () => {

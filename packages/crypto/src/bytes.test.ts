@@ -81,6 +81,7 @@ describe("concatBytes", () => {
 });
 
 describe("scalarFromInt", () => {
+  // ristretto255 scalars are little-endian per RFC 9496: byte 0 holds the least significant byte.
   it("places value at byte 0 (little-endian)", () => {
     const scalar = scalarFromInt(42);
     expect(scalar[0]).toBe(42);

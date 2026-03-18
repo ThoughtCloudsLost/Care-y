@@ -144,6 +144,7 @@ describe("loginCrypto", () => {
       expect(mockGetSalt).toHaveBeenCalledWith({ identifier: "testuser" });
     });
 
+    // ArrayBuffer is required (not string) so the buffer can be zeroed after use. Strings are GC'd and cannot be explicitly cleared (SEC-206).
     it("transfers password and salt as ArrayBuffers to bridge.argon2id", async () => {
       const { callbacks } = createCallbackSpies();
 
@@ -214,6 +215,7 @@ describe("loginCrypto", () => {
   });
 
   describe("callback ordering", () => {
+    // Ordering is a UI contract: the loading progress bar drives off these callbacks firing in this sequence. Reordering would break the UX state machine.
     it("fires callbacks in correct sequence", async () => {
       const { callbacks, callOrder } = createCallbackSpies();
 

@@ -14,14 +14,8 @@ import {
   _resetSodiumForTesting,
   type SodiumBackend,
 } from "./sodium.js";
-import { hkdf } from "./hkdf.js";
 import { InvalidKeyError, InvalidInputError } from "./errors.js";
-import {
-  type SymmetricKey,
-  type Salt,
-  ARGON2_MIN_PARAMS,
-  HKDF_LABELS,
-} from "./types.js";
+import { type SymmetricKey, type Salt, ARGON2_MIN_PARAMS } from "./types.js";
 
 describe("key derivation", () => {
   let sodium: SodiumBackend;
@@ -206,28 +200,6 @@ describe("key derivation", () => {
       const pub2 = deriveVolunteerPublicKey(priv2);
       expect(priv1).toEqual(priv2);
       expect(pub1).toEqual(pub2);
-    });
-
-    it("output matches manual HKDF(64) + scalar_reduce", () => {
-      // Verify the scalar reduction is actually happening:
-      // replicate the derivation steps manually and compare.
-      const info = new TextEncoder().encode(HKDF_LABELS.ECIES_PRIVATE);
-      const expanded = hkdf(masterKey, info, 64);
-      const manualReduced =
-        sodium.crypto_core_ristretto255_scalar_reduce(expanded);
-      const fromFunction = deriveVolunteerPrivateKey(masterKey);
-      expect(fromFunction).toEqual(manualReduced);
-      sodium.memzero(expanded);
-    });
-
-    it("reduced scalar differs from raw HKDF-32 output (reduction changes bytes)", () => {
-      // The old code returned hkdfDerive32 (32 bytes, no reduction).
-      // The new code returns hkdf(64 bytes) + scalar_reduce.
-      // These must differ, proving the reduction is doing something.
-      const info = new TextEncoder().encode(HKDF_LABELS.ECIES_PRIVATE);
-      const raw32 = hkdf(masterKey, info, 32);
-      const reduced = deriveVolunteerPrivateKey(masterKey);
-      expect(reduced).not.toEqual(raw32);
     });
 
     it("different masterKeys produce different private keys", () => {

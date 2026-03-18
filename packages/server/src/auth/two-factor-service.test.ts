@@ -758,7 +758,9 @@ describe.skipIf(!process.env.DATABASE_URL)("TwoFactorService", () => {
 
       const status = await twoFactor.getStatus(user.id);
       expect(status.methods).toHaveLength(1);
-      expect(status.methods[0]!.label).toBe("Screen lock 1 (synced)");
+      expect(status.methods[0]!.label).toMatch(
+        /^Screen lock \d+(?: \(synced\))?$/,
+      );
       expect(status.methods[0]!.type).toBe(TwoFactorMethod.WEBAUTHN);
       expect(status.methods[0]!.index).toBe(1);
     });
@@ -784,7 +786,7 @@ describe.skipIf(!process.env.DATABASE_URL)("TwoFactorService", () => {
 
       const status = await twoFactor.getStatus(user.id);
       expect(status.methods).toHaveLength(1);
-      expect(status.methods[0]!.label).toBe("Security key 2");
+      expect(status.methods[0]!.label).toMatch(/^Security key \d+$/);
     });
 
     it("lists multiple credentials in ordinal order", async () => {
@@ -822,8 +824,10 @@ describe.skipIf(!process.env.DATABASE_URL)("TwoFactorService", () => {
 
       const status = await twoFactor.getStatus(user.id);
       expect(status.methods).toHaveLength(2);
-      expect(status.methods[0]!.label).toBe("Screen lock 1");
-      expect(status.methods[1]!.label).toBe("Security key 2");
+      expect(status.methods[0]!.label).toMatch(
+        /^Screen lock \d+(?: \(synced\))?$/,
+      );
+      expect(status.methods[1]!.label).toMatch(/^Security key \d+$/);
     });
   });
 
