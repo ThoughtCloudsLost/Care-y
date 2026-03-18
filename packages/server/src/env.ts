@@ -40,6 +40,10 @@ const envSchema = z.object({
   SMTP_HOST: z.string().optional(),
   SMTP_PORT: z.coerce.number().int().positive().optional(),
   SMTP_FROM: z.string().default("noreply@care-y.app"),
+
+  // Blob storage (encrypted file store for attachments, recordings, etc.)
+  BLOB_STORE_TYPE: z.enum(["local"]).default("local"),
+  BLOB_STORE_PATH: z.string().default("./data"),
 });
 
 export type EnvVars = z.infer<typeof envSchema>;

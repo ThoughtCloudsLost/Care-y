@@ -16,3 +16,4 @@ Dockerfile.*
 .prettierignore
 *.toml
 .gitleaksignore
+.gitignore
