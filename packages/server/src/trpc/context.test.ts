@@ -32,6 +32,7 @@ import { SESSION_COOKIE_NAME } from "../auth/service.js";
 import {
   createContextFactory,
   createScopedAuthService,
+  createTenantSessions,
   type ContextDeps,
 } from "./context.js";
 import { _resetEnvCache } from "../env.js";
@@ -377,7 +378,8 @@ describe.skipIf(!HAS_DB)("context factory (DB integration)", () => {
         sealedBox: testSealedBox,
       };
 
-      const authService = createScopedAuthService(orgCtx, {
+      const sessions = createTenantSessions(orgCtx, testSessionTokenizer);
+      const authService = createScopedAuthService(orgCtx, sessions, {
         hasher,
         encryptor: testFieldEncryptor,
         indexer: testBlindIndexer,
