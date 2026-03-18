@@ -22,13 +22,10 @@ const CURVE25519_PK_BYTES = 32; // sodium.crypto_box_PUBLICKEYBYTES
 /**
  * Creates a SealedBoxEncryptor bound to a specific org public key.
  * The public key is loaded once (from org_config) and reused for all seal() calls.
- * Returns null if orgPublicKey is null (org keypair not yet generated).
  */
 export function createSealedBoxEncryptor(
-  orgPublicKey: Buffer | null,
-): SealedBoxEncryptor | null {
-  if (orgPublicKey === null) return null;
-
+  orgPublicKey: Buffer,
+): SealedBoxEncryptor {
   if (orgPublicKey.length !== CURVE25519_PK_BYTES) {
     throw new CryptoError(
       `orgPublicKey must be ${String(CURVE25519_PK_BYTES)} bytes, got ${String(orgPublicKey.length)}`,

@@ -12,7 +12,6 @@
 
 import type { Kysely, Selectable } from "kysely";
 import type { SessionsTable, TenantDatabase } from "../db/types.js";
-import type { FieldEncryptor } from "../crypto/field-encryptor.js";
 import type { SessionTokenizer } from "../crypto/session-tokenizer.js";
 import type { SealedBoxEncryptor } from "../crypto/sealed-box.js";
 
@@ -63,29 +62,21 @@ function toSessionData(row: Selectable<SessionsTable>): SessionData {
  * Creates a SessionRepository backed by Kysely against the tenant schema.
  *
  * Dependencies:
- * - encryptor: encrypts IP/UA for forensic storage (secretbox, Tier 2)
  * - tokenizer: computes HMAC tokens for drift detection
- * - sealedBox: if non-null, seals IP/UA with org public key (Tier 1) instead
- *   of secretbox. Falls back to encryptor when null (before org keypair exists).
+ * - sealedBox: seals IP/UA with org public key (Tier 1, server-blind)
  */
 export function createDbSessionRepository(
   db: Kysely<TenantDatabase>,
-  encryptor: FieldEncryptor,
   tokenizer: SessionTokenizer,
-  sealedBox: SealedBoxEncryptor | null,
+  sealedBox: SealedBoxEncryptor,
 ): SessionRepository {
   return {
     async create(input: CreateSessionInput): Promise<SessionData> {
       const ipToken = tokenizer.tokenize(input.ipAddress);
       const uaToken = tokenizer.tokenize(input.userAgent);
 
-      // Use sealed box if org keypair exists, otherwise fall back to field encryptor
-      const encryptedIp = sealedBox
-        ? sealedBox.seal(input.ipAddress)
-        : encryptor.encrypt(input.ipAddress);
-      const encryptedUa = sealedBox
-        ? sealedBox.seal(input.userAgent)
-        : encryptor.encrypt(input.userAgent);
+      const encryptedIp = sealedBox.seal(input.ipAddress);
+      const encryptedUa = sealedBox.seal(input.userAgent);
 
       const row = await db
         .insertInto("sessions")

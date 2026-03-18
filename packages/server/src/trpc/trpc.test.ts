@@ -32,7 +32,12 @@ import {
   InternalError,
 } from "../errors.js";
 import type { Context, OrgContext } from "./context.js";
-import { mockReq, mockRes, expectTrpcError } from "../test-utils.js";
+import {
+  mockReq,
+  mockRes,
+  expectTrpcError,
+  testSealedBox,
+} from "../test-utils.js";
 
 // --- Helpers ---
 
@@ -42,6 +47,7 @@ const fakeOrg: OrgContext = {
   orgSchema: "org_test",
   // Minimal stub; middleware doesn't use tenantDb directly
   tenantDb: {} as OrgContext["tenantDb"],
+  sealedBox: testSealedBox,
 };
 
 function baseCtx(overrides?: Partial<Context>): Context {

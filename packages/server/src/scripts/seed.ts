@@ -4,6 +4,9 @@
  * Idempotent: skips creation if the org or user already exists (catches
  * ConflictError from unique constraint violations rather than pre-checking).
  *
+ * Generates a Curve25519 keypair for the dev org so that org resolution
+ * succeeds (the context factory requires org_public_key to be non-null).
+ *
  * Usage: pnpm seed (runs via tsx --env-file=.env)
  */
 
@@ -20,12 +23,14 @@ try {
   throw err;
 }
 
+import sodium from "sodium-native";
 import { db, tenantDb } from "../db/db.js";
 import { getEnv } from "../env.js";
 import { createOrgService } from "../org/service.js";
 import { createScryptHasher } from "../auth/password.js";
 import { createAuthService } from "../auth/service.js";
 import { createDbSessionRepository } from "../auth/session-repository.js";
+import { createSealedBoxEncryptor } from "../crypto/sealed-box.js";
 import {
   deriveKeys,
   createFieldEncryptor,
@@ -35,12 +40,52 @@ import {
   deriveSessionHmacKey,
   createSessionTokenizer,
 } from "../crypto/session-tokenizer.js";
+import type { Kysely } from "kysely";
+import type { TenantDatabase } from "../db/types.js";
 
 const DEV_ORG_SLUG = "dev-org";
 const ADMIN_IDENTIFIER = "admin@dev.local";
 const ADMIN_PASSWORD = "devpassword123!";
 const ADMIN_DISPLAY_NAME = "Dev Admin";
 const ADMIN_ROLE_ID = "admin";
+
+/**
+ * Generates a Curve25519 keypair and stores the public key in org_config.
+ * Idempotent: skips if org_public_key is already set.
+ * Returns the public key buffer.
+ */
+async function ensureOrgKeypair(
+  tenantDatabase: Kysely<TenantDatabase>,
+): Promise<Buffer> {
+  const existing = await tenantDatabase
+    .selectFrom("org_config")
+    .select("org_public_key")
+    .executeTakeFirst();
+
+  if (existing?.org_public_key) {
+    console.log("Org keypair already exists, skipping generation.");
+    return existing.org_public_key;
+  }
+
+  const pk = Buffer.alloc(sodium.crypto_box_PUBLICKEYBYTES);
+  const sk = Buffer.alloc(sodium.crypto_box_SECRETKEYBYTES);
+  try {
+    sodium.crypto_box_keypair(pk, sk);
+
+    await tenantDatabase
+      .updateTable("org_config")
+      .set({ org_public_key: pk })
+      .execute();
+
+    console.log("Generated dev org Curve25519 keypair.");
+    return pk;
+  } finally {
+    // Zero the secret key. The dev SK is not stored anywhere;
+    // it's only needed for the seed script's own admin session creation.
+    // In production, the org SK is wrapped per-volunteer via ECIES.
+    sk.fill(0);
+  }
+}
 
 async function seed(): Promise<void> {
   const env = getEnv();
@@ -80,14 +125,17 @@ async function seed(): Promise<void> {
     }
   }
 
-  // --- Create admin user ---
+  // --- Generate org keypair ---
   const tenantDatabase = tenantDb(schemaName);
+  const orgPublicKey = await ensureOrgKeypair(tenantDatabase);
+
+  // --- Create admin user ---
   const tokenizer = createSessionTokenizer(deriveSessionHmacKey(opsKey));
+  const sealedBox = createSealedBoxEncryptor(orgPublicKey);
   const sessions = createDbSessionRepository(
     tenantDatabase,
-    encryptor,
     tokenizer,
-    null, // no sealed box yet (org keypair not generated during seed)
+    sealedBox,
   );
   const authService = createAuthService(
     tenantDatabase,

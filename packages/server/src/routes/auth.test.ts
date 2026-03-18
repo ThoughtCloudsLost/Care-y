@@ -15,6 +15,8 @@ import {
   testFieldEncryptor,
   testBlindIndexer,
   testSessionTokenizer,
+  testSealedBox,
+  seedOrgPublicKey,
   TEST_ORG_ID,
   mockReq,
   mockRes,
@@ -49,9 +51,8 @@ function makeAuthService(
 ): ReturnType<typeof createAuthService> {
   const sessions = createDbSessionRepository(
     tenantDb,
-    testFieldEncryptor,
     testSessionTokenizer,
-    null,
+    testSealedBox,
   );
   return createAuthService(
     tenantDb,
@@ -81,6 +82,15 @@ describe.skipIf(!HAS_DB)("auth + org routers (DB integration)", () => {
     testDb = await createTestDb();
     tenantDb = testDb.db;
 
+    // Seed org_config row + public key (createTestDb runs migrations but
+    // doesn't insert application data).
+    await tenantDb
+      .insertInto("org_config")
+      .values({ pii_retention_days: null })
+      .onConflict((oc) => oc.doNothing())
+      .execute();
+    await seedOrgPublicKey(tenantDb);
+
     const orgService = createOrgService(
       testDb.platformDb,
       makeTenantDbFactory(testDb.platformDb),
@@ -95,6 +105,7 @@ describe.skipIf(!HAS_DB)("auth + org routers (DB integration)", () => {
       orgSlug: org.slug,
       orgSchema: testDb.schemaName,
       tenantDb,
+      sealedBox: testSealedBox,
     };
   });
 
@@ -132,7 +143,6 @@ describe.skipIf(!HAS_DB)("auth + org routers (DB integration)", () => {
         encryptor: testFieldEncryptor,
         indexer: testBlindIndexer,
         tokenizer: testSessionTokenizer,
-        sealedBox: null,
         isSecureCookie: false,
         emailSender: createMockEmailSender(),
       },
@@ -140,7 +150,6 @@ describe.skipIf(!HAS_DB)("auth + org routers (DB integration)", () => {
         emailSender: createMockEmailSender(),
         encryptor: testFieldEncryptor,
         tokenizer: testSessionTokenizer,
-        sealedBox: null,
       },
       oprfDeps: createMockOprfDeps(),
       orgService,

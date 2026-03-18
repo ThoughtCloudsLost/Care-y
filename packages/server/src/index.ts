@@ -198,7 +198,6 @@ const createContext = createContextFactory({
   encryptor,
   indexer,
   tokenizer,
-  sealedBox: null, // org keypair not generated yet
 });
 
 const appRouter = createAppRouter({
@@ -210,11 +209,10 @@ const appRouter = createAppRouter({
     encryptor,
     indexer,
     tokenizer,
-    sealedBox: null,
     isSecureCookie: env.NODE_ENV === "production",
     emailSender,
   },
-  twoFactorDeps: { emailSender, encryptor, tokenizer, sealedBox: null },
+  twoFactorDeps: { emailSender, encryptor, tokenizer },
   oprfDeps: { oprfService },
   orgService,
 });

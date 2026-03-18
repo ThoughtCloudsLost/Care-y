@@ -4,9 +4,8 @@ import {
   createTestDb,
   createTestUser,
   createTestSession,
-  noopEncryptor,
-  testFieldEncryptor,
   testSessionTokenizer,
+  testSealedBox,
   type TestDb,
 } from "../test-utils.js";
 import type { SessionRepository } from "./session-repository.js";
@@ -22,9 +21,8 @@ describe.skipIf(!process.env.DATABASE_URL)("createDbSessionRepository", () => {
     testDb = await createTestDb();
     repo = createDbSessionRepository(
       testDb.db,
-      noopEncryptor,
       testSessionTokenizer,
-      null,
+      testSealedBox,
     );
   });
 
@@ -196,9 +194,8 @@ describe.skipIf(!process.env.DATABASE_URL)("createDbSessionRepository", () => {
     // Use the real encryptor to verify DB contents are not plaintext.
     const encRepo = createDbSessionRepository(
       testDb.db,
-      testFieldEncryptor,
       testSessionTokenizer,
-      null,
+      testSealedBox,
     );
     const user = await createTestUser(testDb.db);
 
