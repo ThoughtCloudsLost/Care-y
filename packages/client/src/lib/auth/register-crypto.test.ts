@@ -149,6 +149,7 @@ describe("registerCrypto", () => {
   });
 
   describe("callback ordering", () => {
+    // Ordering is a UI contract: the loading progress bar drives off these callbacks firing in this sequence. Reordering would break the UX state machine.
     it("fires callbacks in correct sequence", async () => {
       const { callbacks, callOrder } = createCallbackSpies();
 
@@ -167,6 +168,7 @@ describe("registerCrypto", () => {
   });
 
   describe("intermediate zeroing", () => {
+    // SEC-206/SEC-207: all intermediate key buffers must be zeroed in the finally block. Call-count and specific-buffer assertions guard against accidentally dropping a zero() call during refactors.
     it("zeros all 4 intermediate buffers on success", async () => {
       const { callbacks } = createCallbackSpies();
 

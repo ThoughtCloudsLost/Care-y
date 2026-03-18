@@ -93,6 +93,7 @@ describe("escrow encryption", () => {
       );
     });
 
+    // code is part of the @care-y/crypto public API; server tRPC error mapping depends on specific string values
     it("empty passphrase error has correct code", () => {
       const data = sodium.randombytes_buf(32);
       try {

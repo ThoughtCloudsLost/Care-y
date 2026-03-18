@@ -245,6 +245,7 @@ describe("WebAuthn verify", () => {
       expect(result.userVerified).toBe(true);
     });
 
+    // ValidationError is isOperational=true: message passes through the tRPC formatter to the client. These strings are wire-format contracts.
     it("rejects when challenge does not match", async () => {
       const { registration, checks } = await buildValidRegistration();
       const badChecks = { ...checks, challenge: "wrong-challenge" };
@@ -407,6 +408,7 @@ describe("WebAuthn verify", () => {
       expect(result.authenticatorAttachment).toBe("platform");
     });
 
+    // ValidationError is isOperational=true: message passes through the tRPC formatter to the client. These strings are wire-format contracts.
     it("rejects when credential ID does not match", async () => {
       const { authentication, credential, checks } =
         await buildValidAuthentication();

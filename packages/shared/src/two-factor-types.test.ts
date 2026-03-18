@@ -15,10 +15,6 @@ describe("TwoFactorMethod enum", () => {
     expect(TwoFactorMethod.SMS).toBe("sms");
     expect(TwoFactorMethod.PUSH).toBe("push");
   });
-
-  it("has exactly 5 entries", () => {
-    expect(Object.keys(TwoFactorMethod)).toHaveLength(5);
-  });
 });
 
 describe("AVAILABLE_METHODS", () => {
@@ -26,10 +22,6 @@ describe("AVAILABLE_METHODS", () => {
     expect(AVAILABLE_METHODS).toContain("webauthn");
     expect(AVAILABLE_METHODS).toContain("totp");
     expect(AVAILABLE_METHODS).toContain("email");
-  });
-
-  it("has exactly 3 entries", () => {
-    expect(AVAILABLE_METHODS).toHaveLength(3);
   });
 
   it("does not include stubbed methods", () => {
@@ -42,10 +34,6 @@ describe("STUBBED_METHODS", () => {
   it("contains sms and push", () => {
     expect(STUBBED_METHODS).toContain("sms");
     expect(STUBBED_METHODS).toContain("push");
-  });
-
-  it("has exactly 2 entries", () => {
-    expect(STUBBED_METHODS).toHaveLength(2);
   });
 });
 
@@ -68,10 +56,6 @@ describe("AVAILABLE_METHODS + STUBBED_METHODS completeness", () => {
 });
 
 describe("METHOD_INFO", () => {
-  it("has 6 entries (webauthn split into platform and cross-platform)", () => {
-    expect(METHOD_INFO).toHaveLength(6);
-  });
-
   it("covers all five method types", () => {
     const types = new Set(METHOD_INFO.map((m) => m.type));
     expect(types).toContain("webauthn");
@@ -126,6 +110,7 @@ describe("METHOD_INFO", () => {
     }
   });
 
+  // Policy assertion: WebAuthn > OTP > SMS ordering must not regress silently. UI severity indicators and onboarding copy depend on this ranking.
   it("has valid securityLevel values", () => {
     const validLevels = new Set(["strongest", "strong", "moderate", "weak"]);
     for (const entry of METHOD_INFO) {

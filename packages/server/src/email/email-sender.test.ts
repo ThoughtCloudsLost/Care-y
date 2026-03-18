@@ -62,6 +62,7 @@ describe("createSmtpEmailSender", () => {
     mockSendMail.mockReset();
   });
 
+  // sendMail envelope construction is the wire contract. No other verification point exists without a live SMTP server. This is intentionally structural.
   it("calls transport.sendMail with correct envelope", async () => {
     mockSendMail.mockResolvedValueOnce({});
     const sender = createTestSmtpSender();

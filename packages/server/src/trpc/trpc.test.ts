@@ -109,6 +109,7 @@ describe("throwAsTrpc", () => {
       const trpcErr = err as TRPCError;
       expect(trpcErr.code).toBe("UNAUTHORIZED");
       expect(trpcErr.message).toBe("bad creds");
+      // cause is preserved for server-side logging pipelines. It is not visible to tRPC clients.
       expect(trpcErr.cause).toBe(authErr);
     }
   });

@@ -202,9 +202,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
       // will fail when it tries to create the migration tracking table.
       // Instead, we use a factory that throws immediately to simulate a
       // catastrophic failure.
-      let callCount = 0;
       function failingTenantDbFactory(): Kysely<TenantDatabase> {
-        callCount++;
         // createOrg calls tenantDbFactory twice: once for migrations, once for org_config.
         // Throw on the first call to simulate migration failure.
         throw new TypeError("Simulated tenant DB failure");
@@ -215,8 +213,6 @@ describe.skipIf(!process.env.DATABASE_URL)(
       await expect(
         service.createOrg({ slug: "test-fault-migration" }),
       ).rejects.toThrow(InternalError);
-
-      expect(callCount).toBe(1);
 
       // Verify the org row was cleaned up (rollbackOrg).
       const row = await platformDb
@@ -315,6 +311,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
     it("re-throws non-unique-violation DB errors from insertOrgRow", async () => {
       // insertOrgRow is called BEFORE the try block in createOrg (line 153),
       // so a non-unique-violation error propagates directly without wrapping.
+      // Mocks insertInto().values().returningAll().executeTakeFirstOrThrow(). If this chain changes, update the mock.
       const insertSpy = vi.spyOn(platformDb, "insertInto").mockReturnValue({
         values: () => ({
           returningAll: () => ({

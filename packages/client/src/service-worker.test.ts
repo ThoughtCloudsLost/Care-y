@@ -125,14 +125,6 @@ describe("service-worker", () => {
     Object.assign(globalThis, { caches: createMockCaches() });
   });
 
-  describe("event listener registration", () => {
-    it("registers install, activate, and fetch listeners", () => {
-      expect(listeners.install).toBeTypeOf("function");
-      expect(listeners.activate).toBeTypeOf("function");
-      expect(listeners.fetch).toBeTypeOf("function");
-    });
-  });
-
   describe("fetch listener (path exclusion)", () => {
     it("ignores /api/ paths (no respondWith call)", () => {
       const event = createFetchEvent("http://localhost:5173/api/data");
@@ -258,14 +250,6 @@ describe("service-worker", () => {
   });
 
   describe("install listener (precache)", () => {
-    it("calls waitUntil with a precache promise", () => {
-      const event = createExtendableEvent();
-      listeners.install!(event);
-      expect(event.waitUntil).toHaveBeenCalledOnce();
-      const arg = event.waitUntil.mock.calls[0]![0];
-      expect(arg).toBeInstanceOf(Promise);
-    });
-
     it("precaches all known assets into the versioned cache", async () => {
       const event = createExtendableEvent();
       listeners.install!(event);

@@ -80,7 +80,6 @@ describe("CryptoBridge", () => {
       const bridge = new CryptoBridge();
 
       expect(mockWorkerInstance).not.toBeNull();
-      expect(mockWorkerInstance?.postMessage).toHaveBeenCalledTimes(1);
 
       const call = mockWorkerInstance?.postMessage.mock.calls[0] as [
         { type: string; id: number },

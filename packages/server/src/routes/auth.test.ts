@@ -301,6 +301,7 @@ describe.skipIf(!HAS_DB)("auth + org routers (DB integration)", () => {
     expect(result.requiresTwoFactor).toBe(false);
     expect(result.enrolledMethods).toEqual([]);
 
+    // Wire contract: cookie name is read by the client and must not change without a coordinated client update. HttpOnly + SameSite=Strict are security requirements (SEC-042).
     const cookies = res.getCapturedCookies();
     expect(cookies.length).toBeGreaterThan(0);
     expect(cookies[0]).toContain("care_y_session=");
@@ -439,14 +440,15 @@ describe.skipIf(!HAS_DB)("auth + org routers (DB integration)", () => {
 
     // Second registration with same identifier fails through throwAsTrpc
     const { caller: caller2 } = createAuthedCaller(admin, "dup-admin-token");
-    await expect(
+    await expectTrpcError(
       caller2.auth.register({
         identifier: "dup-target",
         password: "dup-target-password-long-enough",
         displayName: "Second",
         roleId: RoleId.VOLUNTEER,
       }),
-    ).rejects.toThrow("already exists");
+      "CONFLICT",
+    );
   });
 
   // --- Branch coverage: user-agent fallback ---

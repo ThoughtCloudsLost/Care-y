@@ -746,7 +746,8 @@ describe.skipIf(!process.env.DATABASE_URL)(
             fakeRegistrationInput("test-cred-dev"),
           );
 
-          // verifyRegistration(registration, expected) -- check second arg
+          // deriveOrigin is unexported, so the spy on verifyRegistration is the only test point.
+          // The origin value is security-critical for WebAuthn RP binding: wrong origin allows cross-origin credential use.
           expect(spy).toHaveBeenCalledWith(
             expect.anything(),
             expect.objectContaining({
@@ -788,6 +789,8 @@ describe.skipIf(!process.env.DATABASE_URL)(
             fakeRegistrationInput("test-cred-prod"),
           );
 
+          // deriveOrigin is unexported, so the spy on verifyRegistration is the only test point.
+          // The origin value is security-critical for WebAuthn RP binding: wrong origin allows cross-origin credential use.
           expect(spy).toHaveBeenCalledWith(
             expect.anything(),
             expect.objectContaining({

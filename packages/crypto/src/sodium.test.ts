@@ -400,6 +400,7 @@ describe("sodium abstraction layer", () => {
       });
     });
 
+    // Guards against libsodium upgrades silently changing constant values that are embedded as byte offsets in stored ciphertext and wire formats
     describe("constants", () => {
       it("secretbox constants match libsodium spec", () => {
         expect(sodium.crypto_secretbox_NONCEBYTES).toBe(24);

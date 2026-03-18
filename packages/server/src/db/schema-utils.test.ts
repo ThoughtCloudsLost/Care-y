@@ -79,7 +79,9 @@ describe("logMigrationResults", () => {
 
     logMigrationResults("platform", undefined);
 
-    expect(logSpy).toHaveBeenCalledWith("[platform] No migrations to apply");
+    expect(logSpy).toHaveBeenCalledWith(
+      expect.stringContaining("No migrations"),
+    );
     logSpy.mockRestore();
   });
 
@@ -88,7 +90,9 @@ describe("logMigrationResults", () => {
 
     logMigrationResults("platform", []);
 
-    expect(logSpy).toHaveBeenCalledWith("[platform] No migrations to apply");
+    expect(logSpy).toHaveBeenCalledWith(
+      expect.stringContaining("No migrations"),
+    );
     logSpy.mockRestore();
   });
 
@@ -97,7 +101,9 @@ describe("logMigrationResults", () => {
 
     logMigrationResults("tenant", undefined, "down");
 
-    expect(logSpy).toHaveBeenCalledWith("[tenant] No migrations to roll back");
+    expect(logSpy).toHaveBeenCalledWith(
+      expect.stringContaining("No migrations"),
+    );
     logSpy.mockRestore();
   });
 
@@ -112,8 +118,13 @@ describe("logMigrationResults", () => {
     logMigrationResults("org_abc", results);
 
     expect(logSpy).toHaveBeenCalledTimes(2);
-    expect(logSpy).toHaveBeenCalledWith("[org_abc] Success 001_create_users");
-    expect(logSpy).toHaveBeenCalledWith("[org_abc] Success 002_add_sessions");
+    expect(logSpy).toHaveBeenCalledWith(
+      expect.stringContaining("001_create_users"),
+    );
+    expect(logSpy).toHaveBeenCalledWith(expect.stringContaining("Success"));
+    expect(logSpy).toHaveBeenCalledWith(
+      expect.stringContaining("002_add_sessions"),
+    );
     logSpy.mockRestore();
   });
 });

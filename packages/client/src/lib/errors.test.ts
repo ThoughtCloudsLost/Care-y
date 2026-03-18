@@ -20,6 +20,7 @@ const cases = [
     create: () => new ClientError("base error"),
     expectedName: "ClientError",
     expectedMessage: "base error",
+    assertMessage: true,
     isClientError: true,
   },
   {
@@ -27,6 +28,7 @@ const cases = [
     create: () => new WebauthnError("credential rejected"),
     expectedName: "WebauthnError",
     expectedMessage: "credential rejected",
+    assertMessage: true,
     isClientError: true,
   },
   {
@@ -34,21 +36,23 @@ const cases = [
     create: () => new CryptoWorkerTestError("handler missing"),
     expectedName: "CryptoWorkerTestError",
     expectedMessage: "handler missing",
+    assertMessage: true,
     isClientError: true,
   },
   {
     name: "WorkerNotReadyError",
     create: () => new WorkerNotReadyError(),
     expectedName: "WorkerNotReadyError",
-    expectedMessage:
-      "Crypto worker is not ready. Please wait for initialization.",
+    expectedMessage: "",
+    assertMessage: false, // dev-console only, not rendered in UI
     isClientError: true,
   },
   {
     name: "OrgKeyNotLoadedError",
     create: () => new OrgKeyNotLoadedError(),
     expectedName: "OrgKeyNotLoadedError",
-    expectedMessage: "Org encryption key not loaded. Please log in again.",
+    expectedMessage: "",
+    assertMessage: false, // dev-console only, not rendered in UI
     isClientError: false, // extends Error directly, not ClientError
   },
 ] as const;
@@ -59,6 +63,7 @@ describe("Client error hierarchy", () => {
     create,
     expectedName,
     expectedMessage,
+    assertMessage,
     isClientError,
   } of cases) {
     describe(name, () => {
@@ -67,10 +72,12 @@ describe("Client error hierarchy", () => {
         expect(err.name).toBe(expectedName);
       });
 
-      it("has correct message", () => {
-        const err = create();
-        expect(err.message).toBe(expectedMessage);
-      });
+      if (assertMessage) {
+        it("has correct message", () => {
+          const err = create();
+          expect(err.message).toBe(expectedMessage);
+        });
+      }
 
       it("is an instance of Error", () => {
         const err = create();

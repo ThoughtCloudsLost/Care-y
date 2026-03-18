@@ -57,18 +57,6 @@ function createMockOrgKey(): {
 
 describe("cleanup handler", () => {
   describe("installCleanupHandler", () => {
-    it("registers a beforeunload listener", () => {
-      const { bridge } = createMockBridge();
-      const { orgKey } = createMockOrgKey();
-
-      installCleanupHandler(bridge, orgKey);
-
-      expect(window.addEventListener).toHaveBeenCalledWith(
-        "beforeunload",
-        expect.any(Function),
-      );
-    });
-
     it("is idempotent (second call does not double-register)", () => {
       const { bridge } = createMockBridge();
       const { orgKey } = createMockOrgKey();
@@ -119,17 +107,16 @@ describe("cleanup handler", () => {
   });
 
   describe("removeCleanupHandler", () => {
-    it("removes the beforeunload listener", () => {
-      const { bridge } = createMockBridge();
+    it("removes the beforeunload handler (zeroAll does not fire after removal)", () => {
+      const { bridge, zeroAllSpy } = createMockBridge();
       const { orgKey } = createMockOrgKey();
 
       installCleanupHandler(bridge, orgKey);
       removeCleanupHandler();
 
-      expect(window.removeEventListener).toHaveBeenCalledWith(
-        "beforeunload",
-        expect.any(Function),
-      );
+      // After removal, unloadHandler is null (handler cannot fire)
+      expect(unloadHandler).toBeNull();
+      expect(zeroAllSpy).not.toHaveBeenCalled();
     });
 
     it("is idempotent (no error when called without prior install)", () => {

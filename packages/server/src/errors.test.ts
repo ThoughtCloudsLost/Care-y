@@ -16,6 +16,7 @@ import {
   isAppError,
 } from "./errors.js";
 
+// code strings are wire format: the tRPC error formatter in trpc.ts maps them to client responses. httpStatus values are read by the HTTP error handler. Both are public contracts.
 describe("AppError hierarchy", () => {
   it("AppError is abstract and cannot be instantiated directly", () => {
     // TypeScript prevents `new AppError(...)` at compile time.
