@@ -38,10 +38,30 @@ export interface OprfAuditLogTable {
   timestamp: Generated<Date>;
 }
 
+// --- Job queue infrastructure ---
+
+export interface PendingJobsTable {
+  id: Generated<string>;
+  queue: string;
+  payload: Record<string, unknown>;
+  status: ColumnType<string, string | undefined, string>;
+  retry_count: ColumnType<number, number | undefined, number>;
+  max_retries: ColumnType<number, number | undefined, number>;
+  backoff: ColumnType<string, string | undefined, string>;
+  base_delay_ms: ColumnType<number, number | undefined, number>;
+  next_attempt: ColumnType<Date, Date | undefined, Date>;
+  created_at: ColumnType<Date, Date | undefined, Date>;
+  started_at: Date | null;
+  completed_at: Date | null;
+  failed_at: Date | null;
+  error: string | null;
+}
+
 export interface PlatformDatabase {
   orgs: OrgsTable;
   oprf_config: OprfConfigTable;
   oprf_audit_log: OprfAuditLogTable;
+  pending_jobs: PendingJobsTable;
   // Telephony (telephony_config)
   // Production (deletion_requests)
 }

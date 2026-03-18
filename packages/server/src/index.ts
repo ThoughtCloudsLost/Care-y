@@ -46,6 +46,7 @@ import { createIpcEvaluator } from "./crypto/oprf-ipc.js";
 import { createPowVerifier } from "./crypto/pow.js";
 import { createOprfAuditLogger } from "./crypto/oprf-audit.js";
 import { createOprfEvaluateService } from "./crypto/oprf-evaluate-service.js";
+import { createJobQueue } from "./jobs/index.js";
 
 // --- DB startup probe ---
 
@@ -228,7 +229,30 @@ const trpcHandler = createHTTPHandler({
   },
 });
 
+// --- Job queue ---
+
+const jobQueue = createJobQueue(db);
+// Handlers are registered by consumer modules (e.g. log-deletion)
+// via jobQueue.process() before jobQueue.start().
+jobQueue.start();
+console.log("Job queue started");
+
+// --- HTTP server ---
+
 const server = createHttpServer(trpcHandler, cors.preflight);
 const port = Number(process.env.PORT ?? 3000);
 server.listen(port);
 console.log(`Server ready on port ${String(port)}`);
+
+// --- Graceful shutdown ---
+
+async function shutdown(signal: string): Promise<void> {
+  console.log(`${signal} received, shutting down`);
+  server.close();
+  await jobQueue.stop();
+  await db.destroy();
+  process.exit(0);
+}
+
+process.on("SIGTERM", () => void shutdown("SIGTERM"));
+process.on("SIGINT", () => void shutdown("SIGINT"));
