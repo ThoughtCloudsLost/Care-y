@@ -136,7 +136,7 @@ export async function seedOrgPublicKey(
 // ---------------------------------------------------------------------------
 
 /** Thrown when test database setup or teardown fails. */
-class TestSetupError extends Error {
+export class TestSetupError extends Error {
   constructor(message: string) {
     super(message);
     this.name = "TestSetupError";
