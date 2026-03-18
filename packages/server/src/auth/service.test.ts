@@ -5,6 +5,7 @@ import {
   testFieldEncryptor,
   testBlindIndexer,
   testSessionTokenizer,
+  testSealedBox,
   TEST_ORG_ID,
   type TestDb,
 } from "../test-utils.js";
@@ -32,9 +33,8 @@ describe.skipIf(!process.env.DATABASE_URL)("AuthService", () => {
     hasher = createScryptHasher();
     sessions = createDbSessionRepository(
       testDb.db,
-      noopEncryptor,
       testSessionTokenizer,
-      null,
+      testSealedBox,
     );
     service = createAuthService(
       testDb.db,
@@ -79,9 +79,8 @@ describe.skipIf(!process.env.DATABASE_URL)("AuthService", () => {
       // Reconstruct the service with the real encryptor for this test.
       const encSessions = createDbSessionRepository(
         testDb.db,
-        testFieldEncryptor,
         testSessionTokenizer,
-        null,
+        testSealedBox,
       );
       const encService = createAuthService(
         testDb.db,

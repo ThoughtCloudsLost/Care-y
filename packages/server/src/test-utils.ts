@@ -91,6 +91,47 @@ export const testSessionTokenizer: SessionTokenizer = createSessionTokenizer(
 export const TEST_ORG_ID = "00000000-0000-0000-0000-000000000001";
 
 // ---------------------------------------------------------------------------
+// Sealed box test helpers
+// ---------------------------------------------------------------------------
+
+import sodium from "sodium-native";
+import {
+  createSealedBoxEncryptor,
+  type SealedBoxEncryptor,
+} from "./crypto/sealed-box.js";
+
+/** Deterministic test Curve25519 keypair. Safe to commit (test-only).
+ *  Same seed always produces the same keypair across runs. */
+const testKeypair = (() => {
+  const pk = Buffer.alloc(sodium.crypto_box_PUBLICKEYBYTES);
+  const sk = Buffer.alloc(sodium.crypto_box_SECRETKEYBYTES);
+  sodium.crypto_box_seed_keypair(pk, sk, TEST_OPS_KEY);
+  return { publicKey: pk, secretKey: sk };
+})();
+
+/** The test org's Curve25519 public key (32 bytes). */
+export const TEST_ORG_PUBLIC_KEY: Buffer = testKeypair.publicKey;
+
+/** SealedBoxEncryptor backed by the test org keypair. Use for any test that
+ *  creates sessions or users (session-repository, auth service, routes). */
+export const testSealedBox: SealedBoxEncryptor =
+  createSealedBoxEncryptor(TEST_ORG_PUBLIC_KEY);
+
+/**
+ * Seeds org_config.org_public_key in a test schema.
+ * Call in beforeAll after createTestDb() so that org resolution and
+ * session creation work correctly.
+ */
+export async function seedOrgPublicKey(
+  tDb: Kysely<TenantDatabase>,
+): Promise<void> {
+  await tDb
+    .updateTable("org_config")
+    .set({ org_public_key: TEST_ORG_PUBLIC_KEY })
+    .execute();
+}
+
+// ---------------------------------------------------------------------------
 // Test DB setup
 // ---------------------------------------------------------------------------
 

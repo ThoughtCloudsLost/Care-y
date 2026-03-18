@@ -18,6 +18,8 @@ import {
   testFieldEncryptor,
   testBlindIndexer,
   testSessionTokenizer,
+  testSealedBox,
+  TEST_ORG_PUBLIC_KEY,
   mockReq,
   mockRes,
   type TestDb,
@@ -61,7 +63,6 @@ describe.skipIf(!HAS_DB)("context factory (DB integration)", () => {
       encryptor: testFieldEncryptor,
       indexer: testBlindIndexer,
       tokenizer: testSessionTokenizer,
-      sealedBox: null,
     };
   }
 
@@ -80,6 +81,14 @@ describe.skipIf(!HAS_DB)("context factory (DB integration)", () => {
     orgSchemaName = org.schemaName;
     createdOrgIds.push(org.id);
     createdSchemas.push(org.schemaName);
+
+    // Seed org_public_key into the real org schema so resolveOrg succeeds.
+    // createOrg inserts a default org_config row; we update it with the test key.
+    const orgTenantDb = makeTenantDbFactory(testDb.platformDb)(orgSchemaName);
+    await orgTenantDb
+      .updateTable("org_config")
+      .set({ org_public_key: TEST_ORG_PUBLIC_KEY })
+      .execute();
 
     // Set NODE_ENV so extractOrgSlug uses the dev header path.
     process.env.NODE_ENV = "development";
@@ -230,6 +239,40 @@ describe.skipIf(!HAS_DB)("context factory (DB integration)", () => {
 
       expect(ctx.org).toBeNull();
     });
+
+    it("returns null org when org is active but has no keypair", async () => {
+      // Create an active org but do NOT seed org_public_key.
+      // resolveOrg should return null because the keypair check fails.
+      const slug = `no-key-${randomUUID().slice(0, 8)}`;
+      const org = await orgService.createOrg({ slug });
+      createdOrgIds.push(org.id);
+      createdSchemas.push(org.schemaName);
+
+      // Verify the org is active (default) and org_public_key is null.
+      const orgRow = await testDb.platformDb
+        .selectFrom("orgs")
+        .selectAll()
+        .where("id", "=", org.id)
+        .executeTakeFirstOrThrow();
+      expect(orgRow.is_active).toBe(true);
+
+      const orgTenantDb = makeTenantDbFactory(testDb.platformDb)(
+        org.schemaName,
+      );
+      const configRow = await orgTenantDb
+        .selectFrom("org_config")
+        .select("org_public_key")
+        .executeTakeFirstOrThrow();
+      expect(configRow.org_public_key).toBeNull();
+
+      // Context should resolve org as null despite it being active.
+      const factory = createContextFactory(makeDeps());
+      const req = mockReq({ headers: { "x-org-slug": slug } });
+      const res = mockRes();
+      const ctx = await factory({ req, res, info: undefined as never });
+
+      expect(ctx.org).toBeNull();
+    });
   });
 
   // --- Session validation within context factory ---
@@ -241,9 +284,8 @@ describe.skipIf(!HAS_DB)("context factory (DB integration)", () => {
       const orgTenantDb = makeTenantDbFactory(testDb.platformDb)(orgSchemaName);
       const sessions = createDbSessionRepository(
         orgTenantDb,
-        testFieldEncryptor,
         testSessionTokenizer,
-        null,
+        testSealedBox,
       );
       const authService = createAuthService(
         orgTenantDb,
@@ -332,6 +374,7 @@ describe.skipIf(!HAS_DB)("context factory (DB integration)", () => {
         orgSlug,
         orgSchema: orgSchemaName,
         tenantDb,
+        sealedBox: testSealedBox,
       };
 
       const authService = createScopedAuthService(orgCtx, {
@@ -339,7 +382,6 @@ describe.skipIf(!HAS_DB)("context factory (DB integration)", () => {
         encryptor: testFieldEncryptor,
         indexer: testBlindIndexer,
         tokenizer: testSessionTokenizer,
-        sealedBox: null,
       });
 
       const suffix = randomUUID().slice(0, 8);

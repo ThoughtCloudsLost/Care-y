@@ -6,6 +6,7 @@
  * 1. Org resolution (eager): resolve org from Host header subdomain (prod)
  *    or X-Org-Slug header (dev only). If no slug or org not found, ctx.org = null.
  *    Never throws; publicProcedure endpoints must work without an org.
+ *    Also loads the org's sealed box encryptor from org_config.org_public_key.
  *
  * 2. Session lookup (eager, null-safe): if org is resolved AND a session cookie
  *    exists, look up the session and attach user. If org is null, skip entirely.
@@ -26,6 +27,7 @@ import type {
 import type { SessionTokenizer } from "../crypto/session-tokenizer.js";
 import type { SealedBoxEncryptor } from "../crypto/sealed-box.js";
 import type { PasswordHasher } from "../auth/password.js";
+import { createSealedBoxEncryptor } from "../crypto/sealed-box.js";
 import { createDbSessionRepository } from "../auth/session-repository.js";
 import { createAuthService } from "../auth/service.js";
 import { parseCookies } from "../auth/cookies.js";
@@ -40,6 +42,7 @@ export interface OrgContext {
   readonly orgSlug: string;
   readonly orgSchema: string;
   readonly tenantDb: Kysely<TenantDatabase>;
+  readonly sealedBox: SealedBoxEncryptor;
 }
 
 export interface Context {
@@ -56,7 +59,6 @@ export interface ContextDeps {
   readonly encryptor: FieldEncryptor;
   readonly indexer: BlindIndexer;
   readonly tokenizer: SessionTokenizer;
-  readonly sealedBox: SealedBoxEncryptor | null;
 }
 
 /**
@@ -79,6 +81,23 @@ function extractOrgSlug(req: IncomingMessage): string | null {
   return extractSubdomain(host);
 }
 
+/**
+ * Loads org_public_key from org_config and creates a SealedBoxEncryptor.
+ * Returns null if the key is not yet set (org in pre-onboarding state).
+ */
+async function loadSealedBox(
+  tDb: Kysely<TenantDatabase>,
+): Promise<SealedBoxEncryptor | null> {
+  const row = await tDb
+    .selectFrom("org_config")
+    .select("org_public_key")
+    .executeTakeFirst();
+
+  if (!row?.org_public_key) return null;
+
+  return createSealedBoxEncryptor(row.org_public_key);
+}
+
 async function resolveOrg(
   req: IncomingMessage,
   orgService: OrgService,
@@ -89,11 +108,21 @@ async function resolveOrg(
   const org = await orgService.findBySlug(slug);
   if (org?.isActive !== true) return null;
 
+  const tDb = tenantDb(org.schemaName);
+  const sealedBox = await loadSealedBox(tDb);
+
+  // Org exists but keypair not generated yet (pre-onboarding).
+  // Requests to org-scoped endpoints will fail with org not found.
+  // This prevents session creation (which requires sealed box) before
+  // the onboarding wizard generates the keypair.
+  if (sealedBox === null) return null;
+
   return {
     orgId: org.id,
     orgSlug: org.slug,
     orgSchema: org.schemaName,
-    tenantDb: tenantDb(org.schemaName),
+    tenantDb: tDb,
+    sealedBox,
   };
 }
 
@@ -103,13 +132,12 @@ export interface AuthServiceDeps {
   readonly encryptor: FieldEncryptor;
   readonly indexer: BlindIndexer;
   readonly tokenizer: SessionTokenizer;
-  readonly sealedBox: SealedBoxEncryptor | null;
 }
 
 /**
  * Creates an AuthService scoped to the given org's tenant DB.
  * Used by both the context factory (session validation) and route handlers
- * (login, register, logout) to avoid repeating the 5-arg constructor call.
+ * (login, register, logout) to avoid repeating the constructor call.
  */
 export function createScopedAuthService(
   orgCtx: OrgContext,
@@ -117,9 +145,8 @@ export function createScopedAuthService(
 ): AuthService {
   const sessions = createDbSessionRepository(
     orgCtx.tenantDb,
-    deps.encryptor,
     deps.tokenizer,
-    deps.sealedBox,
+    orgCtx.sealedBox,
   );
   return createAuthService(
     orgCtx.tenantDb,

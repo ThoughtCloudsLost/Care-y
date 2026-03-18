@@ -18,6 +18,8 @@ import {
   testFieldEncryptor,
   testBlindIndexer,
   testSessionTokenizer,
+  testSealedBox,
+  seedOrgPublicKey,
   mockReq,
   mockRes,
   expectTrpcError,
@@ -78,13 +80,6 @@ describe.skipIf(!process.env.DATABASE_URL)(
       createdOrgIds.push(org.id);
       createdSchemas.push(org.schemaName);
 
-      orgContext = {
-        orgId: org.id,
-        orgSlug: org.slug,
-        orgSchema: testDb.schemaName,
-        tenantDb,
-      };
-
       // createTestDb() only runs migrations; it does not seed an org_config row.
       // Seed one so that setPiiRetentionDays (which does UPDATE, not upsert) can succeed.
       await tenantDb
@@ -98,6 +93,15 @@ describe.skipIf(!process.env.DATABASE_URL)(
           pii_retention_days: null,
         })
         .execute();
+      await seedOrgPublicKey(tenantDb);
+
+      orgContext = {
+        orgId: org.id,
+        orgSlug: org.slug,
+        orgSchema: testDb.schemaName,
+        tenantDb,
+        sealedBox: testSealedBox,
+      };
     });
 
     afterAll(async () => {
@@ -129,7 +133,6 @@ describe.skipIf(!process.env.DATABASE_URL)(
           encryptor: testFieldEncryptor,
           indexer: testBlindIndexer,
           tokenizer: testSessionTokenizer,
-          sealedBox: null,
           isSecureCookie: false,
           emailSender: createMockEmailSender(),
         },
@@ -137,7 +140,6 @@ describe.skipIf(!process.env.DATABASE_URL)(
           emailSender: createMockEmailSender(),
           encryptor: testFieldEncryptor,
           tokenizer: testSessionTokenizer,
-          sealedBox: null,
         },
         oprfDeps: createMockOprfDeps(),
         orgService,
@@ -188,9 +190,8 @@ describe.skipIf(!process.env.DATABASE_URL)(
     ): Promise<UserRecord> {
       const sessions = createDbSessionRepository(
         tenantDb,
-        testFieldEncryptor,
         testSessionTokenizer,
-        null,
+        testSealedBox,
       );
       const authService = createAuthService(
         tenantDb,
@@ -330,9 +331,8 @@ describe.skipIf(!process.env.DATABASE_URL)(
         const uid = randomUUID().slice(0, 8);
         const sessions = createDbSessionRepository(
           tenantDb,
-          testFieldEncryptor,
           testSessionTokenizer,
-          null,
+          testSealedBox,
         );
         const authService = createAuthService(
           tenantDb,

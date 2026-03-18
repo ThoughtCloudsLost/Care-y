@@ -38,14 +38,29 @@ declare module "sodium-native" {
 
   // --- Sealed box (crypto_box_seal, Curve25519) ---
   export const crypto_box_PUBLICKEYBYTES: 32;
+  export const crypto_box_SECRETKEYBYTES: 32;
+  export const crypto_box_SEEDBYTES: 32;
   export const crypto_box_SEALBYTES: 48;
 
   /**
    * Generates a Curve25519 keypair. Both buffers must be pre-allocated.
    * `pk` must be crypto_box_PUBLICKEYBYTES bytes.
-   * `sk` must be 32 bytes.
+   * `sk` must be crypto_box_SECRETKEYBYTES bytes.
    */
   export function crypto_box_keypair(pk: Buffer, sk: Buffer): void;
+
+  /**
+   * Generates a deterministic Curve25519 keypair from a 32-byte seed.
+   * Same seed always produces the same keypair.
+   * `pk` must be crypto_box_PUBLICKEYBYTES bytes.
+   * `sk` must be crypto_box_SECRETKEYBYTES bytes.
+   * `seed` must be crypto_box_SEEDBYTES bytes.
+   */
+  export function crypto_box_seed_keypair(
+    pk: Buffer,
+    sk: Buffer,
+    seed: Buffer,
+  ): void;
 
   /**
    * Encrypts `message` into `ciphertext` using an ephemeral key and

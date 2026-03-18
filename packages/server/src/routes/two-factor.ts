@@ -25,7 +25,6 @@ import {
 import { TRPCError } from "@trpc/server";
 import type { FieldEncryptor } from "../crypto/field-encryptor.js";
 import type { SessionTokenizer } from "../crypto/session-tokenizer.js";
-import type { SealedBoxEncryptor } from "../crypto/sealed-box.js";
 import type { EmailSender } from "../email/email-sender.js";
 import type { Context, OrgContext } from "../trpc/context.js";
 import type { SessionData } from "../auth/session-repository.js";
@@ -70,7 +69,6 @@ export interface TwoFactorRouterDeps {
   readonly emailSender: EmailSender;
   readonly encryptor: FieldEncryptor;
   readonly tokenizer: SessionTokenizer;
-  readonly sealedBox: SealedBoxEncryptor | null;
 }
 
 interface ScopedServices {
@@ -88,9 +86,8 @@ export function createScopedTwoFactorServices(
 ): ScopedServices {
   const sessions = createDbSessionRepository(
     org.tenantDb,
-    deps.encryptor,
     deps.tokenizer,
-    deps.sealedBox,
+    org.sealedBox,
   );
   const emailCodes = createEmailCodeService(org.tenantDb, deps.emailSender);
   const twoFactor = createTwoFactorService(

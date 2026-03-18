@@ -16,7 +16,12 @@ import {
   requireRole,
 } from "../trpc/trpc.js";
 import type { Context, OrgContext } from "../trpc/context.js";
-import { mockReq, mockRes, expectTrpcError } from "../test-utils.js";
+import {
+  mockReq,
+  mockRes,
+  expectTrpcError,
+  testSealedBox,
+} from "../test-utils.js";
 
 // --- Stubs ---
 
@@ -25,6 +30,7 @@ const stubOrg: OrgContext = {
   orgSlug: "test",
   orgSchema: "test_schema",
   tenantDb: {} as OrgContext["tenantDb"],
+  sealedBox: testSealedBox,
 };
 
 function makeCtx(overrides?: Partial<Context>): Context {

@@ -18,6 +18,8 @@ import {
   testFieldEncryptor,
   testBlindIndexer,
   testSessionTokenizer,
+  testSealedBox,
+  seedOrgPublicKey,
   mockReq,
   mockRes,
   expectTrpcError,
@@ -86,11 +88,20 @@ describe.skipIf(!process.env.DATABASE_URL)(
       createdOrgIds.push(org.id);
       createdSchemas.push(org.schemaName);
 
+      // Seed org_config + public key for session creation
+      await tenantDb
+        .insertInto("org_config")
+        .values({ pii_retention_days: null })
+        .onConflict((oc) => oc.doNothing())
+        .execute();
+      await seedOrgPublicKey(tenantDb);
+
       orgContext = {
         orgId: org.id,
         orgSlug: org.slug,
         orgSchema: testDb.schemaName,
         tenantDb,
+        sealedBox: testSealedBox,
       };
     });
 
@@ -126,7 +137,6 @@ describe.skipIf(!process.env.DATABASE_URL)(
           encryptor: testFieldEncryptor,
           indexer: testBlindIndexer,
           tokenizer: testSessionTokenizer,
-          sealedBox: null,
           isSecureCookie: false,
           emailSender: mockEmail,
         },
@@ -134,7 +144,6 @@ describe.skipIf(!process.env.DATABASE_URL)(
           emailSender: mockEmail,
           encryptor: testFieldEncryptor,
           tokenizer: testSessionTokenizer,
-          sealedBox: null,
         },
         oprfDeps: createMockOprfDeps(),
         orgService,
@@ -224,9 +233,8 @@ describe.skipIf(!process.env.DATABASE_URL)(
     async function registerUser(suffix: string) {
       const sessions = createDbSessionRepository(
         tenantDb,
-        testFieldEncryptor,
         testSessionTokenizer,
-        null,
+        testSealedBox,
       );
       const authService = createAuthService(
         tenantDb,
@@ -249,9 +257,8 @@ describe.skipIf(!process.env.DATABASE_URL)(
     function makeTwoFactorService(emailSender?: MockEmailSender) {
       const sessions = createDbSessionRepository(
         tenantDb,
-        testFieldEncryptor,
         testSessionTokenizer,
-        null,
+        testSealedBox,
       );
       const emailCodes = createEmailCodeService(
         tenantDb,
@@ -498,9 +505,8 @@ describe.skipIf(!process.env.DATABASE_URL)(
         // Check session is marked verified in DB
         const sessions = createDbSessionRepository(
           tenantDb,
-          testFieldEncryptor,
           testSessionTokenizer,
-          null,
+          testSealedBox,
         );
         const updated = await sessions.findByToken(session.token);
         expect(updated?.twofaVerified).toBe(true);
@@ -529,9 +535,8 @@ describe.skipIf(!process.env.DATABASE_URL)(
 
         const sessions = createDbSessionRepository(
           tenantDb,
-          testFieldEncryptor,
           testSessionTokenizer,
-          null,
+          testSealedBox,
         );
         const updated = await sessions.findByToken(session.token);
         expect(updated?.twofaVerified).toBe(true);
@@ -592,9 +597,8 @@ describe.skipIf(!process.env.DATABASE_URL)(
 
         const sessions = createDbSessionRepository(
           tenantDb,
-          testFieldEncryptor,
           testSessionTokenizer,
-          null,
+          testSealedBox,
         );
         const updated = await sessions.findByToken(session.token);
         expect(updated?.twofaVerified).toBe(true);

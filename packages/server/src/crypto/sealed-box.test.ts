@@ -27,10 +27,6 @@ function unsealForTest(
 }
 
 describe("createSealedBoxEncryptor", () => {
-  it("returns null when orgPublicKey is null", () => {
-    expect(createSealedBoxEncryptor(null)).toBeNull();
-  });
-
   it("throws CryptoError for wrong key length (31 bytes)", () => {
     expect(() => createSealedBoxEncryptor(Buffer.alloc(31))).toThrow(
       CryptoError,
@@ -52,7 +48,6 @@ describe("createSealedBoxEncryptor", () => {
   it("returns a SealedBoxEncryptor for valid 32-byte key", () => {
     const { pk } = generateCurve25519Keypair();
     const encryptor = createSealedBoxEncryptor(pk);
-    expect(encryptor).not.toBeNull();
     expect(encryptor).toHaveProperty("seal");
   });
 });
@@ -60,7 +55,7 @@ describe("createSealedBoxEncryptor", () => {
 describe("SealedBoxEncryptor.seal", () => {
   it("produces ciphertext of correct length", () => {
     const { pk } = generateCurve25519Keypair();
-    const encryptor = createSealedBoxEncryptor(pk)!;
+    const encryptor = createSealedBoxEncryptor(pk);
 
     const plaintext = "hello";
     const ciphertext = encryptor.seal(plaintext);
@@ -72,7 +67,7 @@ describe("SealedBoxEncryptor.seal", () => {
 
   it("ciphertext differs from plaintext", () => {
     const { pk } = generateCurve25519Keypair();
-    const encryptor = createSealedBoxEncryptor(pk)!;
+    const encryptor = createSealedBoxEncryptor(pk);
 
     const ciphertext = encryptor.seal("hello");
     expect(ciphertext.toString("utf-8")).not.toBe("hello");
@@ -80,7 +75,7 @@ describe("SealedBoxEncryptor.seal", () => {
 
   it("produces different ciphertext for same plaintext (random ephemeral key)", () => {
     const { pk } = generateCurve25519Keypair();
-    const encryptor = createSealedBoxEncryptor(pk)!;
+    const encryptor = createSealedBoxEncryptor(pk);
 
     const ct1 = encryptor.seal("test");
     const ct2 = encryptor.seal("test");
@@ -91,7 +86,7 @@ describe("SealedBoxEncryptor.seal", () => {
   // The server never calls seal_open in production (no unseal on SealedBoxEncryptor).
   it("roundtrips via test-only unseal", () => {
     const { pk, sk } = generateCurve25519Keypair();
-    const encryptor = createSealedBoxEncryptor(pk)!;
+    const encryptor = createSealedBoxEncryptor(pk);
 
     const original = "sensitive display name";
     const ciphertext = encryptor.seal(original);
@@ -104,7 +99,7 @@ describe("SealedBoxEncryptor.seal", () => {
   it("fails to open with wrong key (test-only unseal)", () => {
     const { pk } = generateCurve25519Keypair();
     const { sk: wrongSk } = generateCurve25519Keypair();
-    const encryptor = createSealedBoxEncryptor(pk)!;
+    const encryptor = createSealedBoxEncryptor(pk);
 
     const ciphertext = encryptor.seal("secret");
     const { opened } = unsealForTest(ciphertext, pk, wrongSk);
@@ -113,14 +108,14 @@ describe("SealedBoxEncryptor.seal", () => {
 
   it("zeroes the plaintext buffer after sealing", () => {
     const { pk } = generateCurve25519Keypair();
-    const encryptor = createSealedBoxEncryptor(pk)!;
+    const encryptor = createSealedBoxEncryptor(pk);
 
     const ct1 = encryptor.seal("zeroing test");
     const ct2 = encryptor.seal("zeroing test");
 
     // Verify ciphertext is valid (zeroing didn't corrupt state)
     const { pk: pk2, sk: sk2 } = generateCurve25519Keypair();
-    const enc2 = createSealedBoxEncryptor(pk2)!;
+    const enc2 = createSealedBoxEncryptor(pk2);
     const ct = enc2.seal("verify zeroing");
     const { opened, plaintext } = unsealForTest(ct, pk2, sk2);
     expect(opened).toBe(true);
@@ -132,7 +127,7 @@ describe("SealedBoxEncryptor.seal", () => {
 
   it("handles empty string", () => {
     const { pk, sk } = generateCurve25519Keypair();
-    const encryptor = createSealedBoxEncryptor(pk)!;
+    const encryptor = createSealedBoxEncryptor(pk);
 
     const ciphertext = encryptor.seal("");
     expect(ciphertext.length).toBe(sodium.crypto_box_SEALBYTES);
@@ -144,7 +139,7 @@ describe("SealedBoxEncryptor.seal", () => {
 
   it("handles unicode content", () => {
     const { pk, sk } = generateCurve25519Keypair();
-    const encryptor = createSealedBoxEncryptor(pk)!;
+    const encryptor = createSealedBoxEncryptor(pk);
 
     const original = "Héllo wörld 日本語";
     const ciphertext = encryptor.seal(original);
