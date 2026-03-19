@@ -48,6 +48,7 @@ import { encode } from "@care-y/crypto";
 import type { OrgContext } from "../trpc/context.js";
 import type { EmailSender } from "../email/email-sender.js";
 import { createScopedTwoFactorServices } from "./two-factor.js";
+import type { ProviderFactory } from "../telephony/factory.js";
 
 export interface AuthRouterDeps extends AuthServiceDeps {
   readonly loginLimiter: RateLimiter;
@@ -55,6 +56,7 @@ export interface AuthRouterDeps extends AuthServiceDeps {
   readonly fakeSaltKey: Buffer;
   readonly isSecureCookie: boolean;
   readonly emailSender: EmailSender;
+  readonly providerFactory: ProviderFactory;
 }
 
 /** Safe response shape: no password_hash, no internal fields. */
@@ -176,11 +178,17 @@ export function createAuthRouter(deps: AuthRouterDeps) {
 
         // Query enrolled 2FA methods. Reuses the same sessions instance
         // created above to avoid redundant construction.
-        const { twoFactor } = createScopedTwoFactorServices(ctx.org, sessions, {
-          emailSender: deps.emailSender,
-          encryptor: deps.encryptor,
-          tokenizer: deps.tokenizer,
-        });
+        const { twoFactor } = await createScopedTwoFactorServices(
+          ctx.org,
+          sessions,
+          {
+            emailSender: deps.emailSender,
+            encryptor: deps.encryptor,
+            indexer: deps.indexer,
+            tokenizer: deps.tokenizer,
+            providerFactory: deps.providerFactory,
+          },
+        );
         const enrolledMethods = await twoFactor.getEnrolledMethodTypes(user.id);
 
         return {

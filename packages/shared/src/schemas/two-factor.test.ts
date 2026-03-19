@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import {
   totpVerifySchema,
   emailCodeVerifySchema,
+  smsEnrollSchema,
+  smsCodeVerifySchema,
   backupCodeVerifySchema,
   webauthnRegistrationResponseSchema,
   webauthnAssertionResponseSchema,
@@ -85,6 +87,75 @@ describe("emailCodeVerifySchema", () => {
 
   it("rejects missing code", () => {
     expect(emailCodeVerifySchema.safeParse({}).success).toBe(false);
+  });
+});
+
+// --- SMS enroll ---
+
+describe("smsEnrollSchema", () => {
+  it("accepts a valid phone number", () => {
+    const result = smsEnrollSchema.safeParse({ phone: "+15551234567" });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.phone).toBe("+15551234567");
+    }
+  });
+
+  it("accepts a national format phone number", () => {
+    expect(smsEnrollSchema.safeParse({ phone: "2125551234" }).success).toBe(
+      true,
+    );
+  });
+
+  it("rejects empty phone", () => {
+    expect(smsEnrollSchema.safeParse({ phone: "" }).success).toBe(false);
+  });
+
+  it("rejects phone longer than 20 characters", () => {
+    expect(smsEnrollSchema.safeParse({ phone: "1".repeat(21) }).success).toBe(
+      false,
+    );
+  });
+
+  it("rejects missing phone field", () => {
+    expect(smsEnrollSchema.safeParse({}).success).toBe(false);
+  });
+
+  it("rejects non-string input", () => {
+    expect(smsEnrollSchema.safeParse({ phone: 15551234567 }).success).toBe(
+      false,
+    );
+  });
+});
+
+// --- SMS code verify ---
+
+describe("smsCodeVerifySchema", () => {
+  it("accepts a valid 6-digit code", () => {
+    const result = smsCodeVerifySchema.safeParse({ code: "345678" });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.code).toBe("345678");
+    }
+  });
+
+  it("rejects non-numeric code", () => {
+    expect(smsCodeVerifySchema.safeParse({ code: "abc123" }).success).toBe(
+      false,
+    );
+  });
+
+  it("rejects wrong length", () => {
+    expect(smsCodeVerifySchema.safeParse({ code: "12345" }).success).toBe(
+      false,
+    );
+    expect(smsCodeVerifySchema.safeParse({ code: "1234567" }).success).toBe(
+      false,
+    );
+  });
+
+  it("rejects missing code", () => {
+    expect(smsCodeVerifySchema.safeParse({}).success).toBe(false);
   });
 });
 
@@ -407,8 +478,8 @@ describe("removeMethodSchema", () => {
     }
   });
 
-  it("rejects stubbed methods (sms)", () => {
-    expect(removeMethodSchema.safeParse({ method: "sms" }).success).toBe(false);
+  it("accepts sms method (now available)", () => {
+    expect(removeMethodSchema.safeParse({ method: "sms" }).success).toBe(true);
   });
 
   it("rejects stubbed methods (push)", () => {

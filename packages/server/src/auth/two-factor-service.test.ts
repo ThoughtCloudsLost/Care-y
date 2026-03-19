@@ -17,9 +17,12 @@ import {
   createTestSession,
   noopEncryptor,
   testFieldEncryptor,
+  testBlindIndexer,
   testSessionTokenizer,
   testSealedBox,
+  TEST_ORG_ID,
   createMockEmailSender,
+  createMockTelephonyProvider,
   registerMethodDirectly,
   insertWebauthnCredential,
   enrollTotp,
@@ -33,6 +36,7 @@ import {
   createTwoFactorService,
   type TwoFactorService,
 } from "./two-factor-service.js";
+import { createSmsCodeService } from "./sms-code.js";
 import { generateTotpCode, base32Decode } from "./totp.js";
 import { TwoFactorMethod } from "@care-y/shared";
 import { ValidationError } from "../errors.js";
@@ -1185,6 +1189,190 @@ describe.skipIf(!process.env.DATABASE_URL)("TwoFactorService", () => {
         .execute();
       expect(rows).toHaveLength(1);
       expect(rows[0]!.is_active).toBe(true);
+    });
+  });
+
+  // --- SMS enrollment (pending -> active) ---
+
+  describe("SMS enrollment", () => {
+    /**
+     * Creates a TwoFactorService with SMS deps wired in.
+     * Seeds org_config if not already present (enrollSmsPhone reads
+     * default_country_code from it).
+     */
+    async function makeServiceWithSms(): Promise<{
+      service: TwoFactorService;
+      provider: ReturnType<typeof createMockTelephonyProvider>;
+    }> {
+      // Seed org_config row (enrollSmsPhone queries default_country_code)
+      await db
+        .insertInto("org_config")
+        .values({ pii_retention_days: null })
+        .onConflict((oc) => oc.doNothing())
+        .execute();
+
+      const provider = createMockTelephonyProvider();
+      const smsCodes = createSmsCodeService(db, provider);
+      const emailCodes = createEmailCodeService(db, createMockEmailSender());
+      const service = createTwoFactorService(
+        db,
+        sessions,
+        emailCodes,
+        noopEncryptor,
+        "CARE-Y Test",
+        { smsCodes, indexer: testBlindIndexer, orgId: TEST_ORG_ID },
+      );
+      return { service, provider };
+    }
+
+    it("enrollSmsPhone stores phone in pending state (not active)", async () => {
+      const user = await createTestUser(db);
+      const { service } = await makeServiceWithSms();
+
+      await service.enrollSmsPhone(user.id, "2125551234", TEST_ORG_ID);
+
+      // Method should NOT appear in enrolled methods (is_active = false)
+      const methods = await service.getEnrolledMethodTypes(user.id);
+      expect(methods).not.toContain(TwoFactorMethod.SMS);
+
+      // But the row exists with is_active = false and phone stored
+      const row = await db
+        .selectFrom("two_factor_methods")
+        .selectAll()
+        .where("user_id", "=", user.id)
+        .where("method_type", "=", TwoFactorMethod.SMS)
+        .executeTakeFirst();
+      expect(row).toBeDefined();
+      expect(row!.is_active).toBe(false);
+      expect(row!.encrypted_sms_phone).not.toBeNull();
+      expect(row!.sms_phone_hash).not.toBeNull();
+    });
+
+    it("verifySmsEnrollment activates method after correct code", async () => {
+      const user = await createTestUser(db);
+      const { service, provider } = await makeServiceWithSms();
+
+      const phone = await service.enrollSmsPhone(
+        user.id,
+        "2125551234",
+        TEST_ORG_ID,
+      );
+
+      // Send verification code via the SmsCodeService
+      const smsCodes = createSmsCodeService(db, provider);
+      await smsCodes.sendCode(user.id, phone);
+
+      // Extract code from the captured SMS
+      const codeMatch = /(\d{6})/.exec(provider.smsCalls[0]!.body);
+      expect(codeMatch).not.toBeNull();
+      const code = codeMatch![1] as string;
+
+      const result = await service.verifySmsEnrollment(user.id, code);
+      expect(result).toBe(true);
+
+      // Now SMS should appear in enrolled methods
+      const methods = await service.getEnrolledMethodTypes(user.id);
+      expect(methods).toContain(TwoFactorMethod.SMS);
+    });
+
+    it("verifySmsEnrollment returns false for wrong code without activating", async () => {
+      const user = await createTestUser(db);
+      const { service, provider } = await makeServiceWithSms();
+
+      await service.enrollSmsPhone(user.id, "2125551234", TEST_ORG_ID);
+
+      const smsCodes = createSmsCodeService(db, provider);
+      await smsCodes.sendCode(user.id, "+12125551234");
+
+      const result = await service.verifySmsEnrollment(user.id, "000000");
+      expect(result).toBe(false);
+
+      // SMS should still not be active
+      const methods = await service.getEnrolledMethodTypes(user.id);
+      expect(methods).not.toContain(TwoFactorMethod.SMS);
+    });
+
+    it("enrollSmsPhone normalizes phone to E.164", async () => {
+      const user = await createTestUser(db);
+      const { service } = await makeServiceWithSms();
+
+      const phone = await service.enrollSmsPhone(
+        user.id,
+        "2125551234",
+        TEST_ORG_ID,
+      );
+
+      // Default country code is +1 (from migration default)
+      expect(phone).toBe("+12125551234");
+    });
+
+    it("enrollSmsPhone throws when SMS deps are not available", async () => {
+      const user = await createTestUser(db);
+      // Service without smsDeps (the default twoFactor instance)
+      await expect(
+        twoFactor.enrollSmsPhone(user.id, "2125551234", TEST_ORG_ID),
+      ).rejects.toThrow(ValidationError);
+    });
+
+    it("getStatus includes SMS with correct label after activation", async () => {
+      const user = await createTestUser(db);
+      const { service, provider } = await makeServiceWithSms();
+
+      const phone = await service.enrollSmsPhone(
+        user.id,
+        "2125551234",
+        TEST_ORG_ID,
+      );
+      const smsCodes = createSmsCodeService(db, provider);
+      await smsCodes.sendCode(user.id, phone);
+      const codeMatch = /(\d{6})/.exec(provider.smsCalls[0]!.body);
+      await service.verifySmsEnrollment(user.id, codeMatch![1] as string);
+
+      const status = await service.getStatus(user.id);
+      expect(status.enrolled).toBe(true);
+      const smsMethod = status.methods.find(
+        (m) => m.type === TwoFactorMethod.SMS,
+      );
+      expect(smsMethod).toBeDefined();
+      expect(smsMethod!.label).toBe("Text message code");
+    });
+
+    it("removeMethod cleans up SMS codes and phone data", async () => {
+      const user = await createTestUser(db);
+      const { service, provider } = await makeServiceWithSms();
+
+      // Enroll and activate SMS
+      const phone = await service.enrollSmsPhone(
+        user.id,
+        "2125551234",
+        TEST_ORG_ID,
+      );
+      const smsCodes = createSmsCodeService(db, provider);
+      await smsCodes.sendCode(user.id, phone);
+      const codeMatch = /(\d{6})/.exec(provider.smsCalls[0]!.body);
+      await service.verifySmsEnrollment(user.id, codeMatch![1] as string);
+
+      // Also enroll TOTP so SMS isn't the last method
+      await enrollTotp(service, user.id);
+
+      // Remove SMS
+      await service.removeMethod(user.id, TwoFactorMethod.SMS);
+
+      // SMS should be gone from enrolled methods
+      const methods = await service.getEnrolledMethodTypes(user.id);
+      expect(methods).not.toContain(TwoFactorMethod.SMS);
+
+      // Phone data should be cleared
+      const row = await db
+        .selectFrom("two_factor_methods")
+        .selectAll()
+        .where("user_id", "=", user.id)
+        .where("method_type", "=", TwoFactorMethod.SMS)
+        .executeTakeFirst();
+      if (row) {
+        expect(row.encrypted_sms_phone).toBeNull();
+        expect(row.sms_phone_hash).toBeNull();
+      }
     });
   });
 });

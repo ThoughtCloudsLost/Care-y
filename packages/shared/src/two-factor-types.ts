@@ -15,11 +15,11 @@ export const AVAILABLE_METHODS: readonly TwoFactorMethodType[] = [
   TwoFactorMethod.WEBAUTHN,
   TwoFactorMethod.TOTP,
   TwoFactorMethod.EMAIL,
+  TwoFactorMethod.SMS,
 ] as const;
 
 /** Methods defined but not yet available (infrastructure dependencies pending). */
 export const STUBBED_METHODS: readonly TwoFactorMethodType[] = [
-  TwoFactorMethod.SMS,
   TwoFactorMethod.PUSH,
 ] as const;
 
@@ -108,7 +108,7 @@ const METHOD_SMS: TwoFactorMethodInfo = {
     "through a technique called SIM-swapping. Use only if no other " +
     "option is available for you.",
   securityLevel: "weak",
-  available: false,
+  available: true,
 };
 
 const METHOD_PUSH: TwoFactorMethodInfo = {

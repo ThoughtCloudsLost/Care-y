@@ -186,12 +186,24 @@ export interface BackupCodesTable {
   is_used: ColumnType<boolean, boolean | undefined, boolean>;
 }
 
+// --- SMS verification codes ---
+export interface SmsCodesTable {
+  id: Generated<string>;
+  user_id: string;
+  code_hash: string;
+  expires_at: Date;
+  attempts: ColumnType<number, number | undefined, number>;
+  consumed: ColumnType<boolean, boolean | undefined, boolean>;
+}
+
 // --- 2FA method registry ---
 export interface TwoFactorMethodsTable {
   id: Generated<string>;
   user_id: string;
   method_type: string;
   is_active: ColumnType<boolean, boolean | undefined, boolean>;
+  encrypted_sms_phone: Buffer | null; // Only populated when method_type = 'sms'
+  sms_phone_hash: string | null; // BlindIndexer hash, only when method_type = 'sms'
 }
 
 export interface TenantDatabase {
@@ -202,6 +214,7 @@ export interface TenantDatabase {
   webauthn_credentials: WebauthnCredentialsTable;
   totp_secrets: TotpSecretsTable;
   email_codes: EmailCodesTable;
+  sms_codes: SmsCodesTable;
   backup_codes: BackupCodesTable;
   two_factor_methods: TwoFactorMethodsTable;
   wrapped_org_keys: WrappedOrgKeysTable;
