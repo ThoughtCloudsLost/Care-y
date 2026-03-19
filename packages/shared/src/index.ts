@@ -53,6 +53,8 @@ export {
 export {
   totpVerifySchema,
   emailCodeVerifySchema,
+  smsEnrollSchema,
+  smsCodeVerifySchema,
   backupCodeVerifySchema,
   webauthnRegistrationResponseSchema,
   webauthnAssertionResponseSchema,
@@ -61,6 +63,8 @@ export {
   twoFactorStatusResponseSchema,
   type TotpVerifyInput,
   type EmailCodeVerifyInput,
+  type SmsEnrollInput,
+  type SmsCodeVerifyInput,
   type BackupCodeVerifyInput,
   type WebauthnRegistrationResponse,
   type WebauthnAssertionResponse,

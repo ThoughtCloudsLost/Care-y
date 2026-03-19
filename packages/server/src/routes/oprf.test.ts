@@ -388,11 +388,14 @@ describe("OPRF tRPC route", () => {
         isSecureCookie: false,
         emailSender: createMockEmailSender(),
         tokenizer: testSessionTokenizer,
+        providerFactory: createMockProviderFactory(),
       },
       twoFactorDeps: {
         emailSender: createMockEmailSender(),
         encryptor: testFieldEncryptor,
+        indexer: testBlindIndexer,
         tokenizer: testSessionTokenizer,
+        providerFactory: createMockProviderFactory(),
       },
       oprfDeps: { oprfService: service },
       orgService: {
@@ -581,11 +584,14 @@ describe.skipIf(!DOCKER_OPRF_AVAILABLE)(
           isSecureCookie: false,
           emailSender: createMockEmailSender(),
           tokenizer: testSessionTokenizer,
+          providerFactory: createMockProviderFactory(),
         },
         twoFactorDeps: {
           emailSender: createMockEmailSender(),
           encryptor: testFieldEncryptor,
+          indexer: testBlindIndexer,
           tokenizer: testSessionTokenizer,
+          providerFactory: createMockProviderFactory(),
         },
         oprfDeps: { oprfService: service },
         orgService: {
