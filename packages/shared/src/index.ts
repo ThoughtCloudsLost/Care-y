@@ -106,4 +106,6 @@ export {
   type SaveTelephonyConfigInput,
   type UpdateCountryCodeInput,
   type MaskedTelephonyConfigOutput,
+  createManagedTelephonyInputSchema,
+  type CreateManagedTelephonyInput,
 } from "./schemas/telephony.js";

@@ -14,6 +14,10 @@ import {
 } from "./two-factor.js";
 import { createOprfRouter, type OprfRouterDeps } from "./oprf.js";
 import { createKeysRouter } from "./keys.js";
+import {
+  createTelephonyAdminRouter,
+  type TelephonyAdminRouterDeps,
+} from "./telephony-admin.js";
 import type { AuthRouterDeps } from "./auth.js";
 import type { OrgService } from "../org/service.js";
 import type { ProviderFactory } from "../telephony/factory.js";
@@ -28,6 +32,7 @@ export interface RouterDeps {
   readonly oprfDeps: OprfRouterDeps;
   readonly orgService: OrgService;
   readonly providerFactory: ProviderFactory;
+  readonly telephonyAdminDeps?: TelephonyAdminRouterDeps;
 }
 
 // care-y-ignore-next-line missing-return-type -- tRPC router() returns a deeply generic type that cannot be written explicitly
@@ -45,5 +50,10 @@ export function createAppRouter(deps: RouterDeps) {
     twoFactor: twoFactorRouter,
     oprf: oprfRouter,
     keys: keysRouter,
+    ...(deps.telephonyAdminDeps
+      ? {
+          telephonyAdmin: createTelephonyAdminRouter(deps.telephonyAdminDeps),
+        }
+      : {}),
   });
 }

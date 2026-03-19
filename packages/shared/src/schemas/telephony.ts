@@ -49,3 +49,12 @@ export const maskedTelephonyConfigSchema = z.object({
 export type MaskedTelephonyConfigOutput = z.infer<
   typeof maskedTelephonyConfigSchema
 >;
+
+/** Input for creating a managed-mode telephony setup. */
+export const createManagedTelephonyInputSchema = z.object({
+  orgName: z.string().min(1, "Organization name is required"),
+});
+
+export type CreateManagedTelephonyInput = z.infer<
+  typeof createManagedTelephonyInputSchema
+>;

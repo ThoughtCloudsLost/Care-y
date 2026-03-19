@@ -44,6 +44,16 @@ const envSchema = z.object({
   // Blob storage (encrypted file store for attachments, recordings, etc.)
   BLOB_STORE_TYPE: z.enum(["local"]).default("local"),
   BLOB_STORE_PATH: z.string().default("./data"),
+
+  // Public URL that Twilio uses to reach this server's webhook endpoints.
+  // Production: the Caddy reverse proxy URL (e.g., "https://api.care-y.app").
+  // Dev: ngrok or localhost URL for webhook testing.
+  WEBHOOK_BASE_URL: z.string().default("http://localhost:3000"),
+
+  // Managed-mode Twilio master credentials (optional).
+  // Only needed when the platform operator manages Twilio accounts for orgs.
+  TWILIO_MASTER_SID: z.string().optional(),
+  TWILIO_MASTER_AUTH_TOKEN: z.string().optional(),
 });
 
 export type EnvVars = z.infer<typeof envSchema>;
