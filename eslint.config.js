@@ -115,6 +115,7 @@ export default tseslint.config(
             "createKeysRouter",
             "createOprfRouter",
             "createOrgRouter",
+            "createTelephonyAdminRouter",
             "createTwoFactorRouter",
           ],
         },
@@ -175,8 +176,15 @@ export default tseslint.config(
       // Unnecessary type assertions in mock wiring (e.g., `as unknown as Cache`).
       "@typescript-eslint/no-unnecessary-type-assertion": "off",
       // Test mocks use `any` in mock return types from vi.fn().
+      // vi.spyOn() and vi.fn() return MockInstance whose methods propagate
+      // `any` through assignment, member access, and call expressions.
       "@typescript-eslint/no-unsafe-assignment": "off",
+      "@typescript-eslint/no-unsafe-call": "off",
       "@typescript-eslint/no-unsafe-member-access": "off",
+      // expect(mock.method).toHaveBeenCalled() separates a method from its
+      // object, which unbound-method flags. Safe for vi.fn() mocks that
+      // never use `this`.
+      "@typescript-eslint/unbound-method": "off",
       // Array<T> in test helper type annotations is fine.
       "@typescript-eslint/array-type": "off",
       // Template literals with numbers in test labels are harmless.

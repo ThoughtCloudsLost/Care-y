@@ -49,6 +49,14 @@ import { createOprfEvaluateService } from "./crypto/oprf-evaluate-service.js";
 import { createJobQueue } from "./jobs/index.js";
 import { deriveSecretsKey, createSecretsEncryptor } from "./config/secrets.js";
 import { createProviderFactory } from "./telephony/factory.js";
+import {
+  createTwilioProvider,
+  twilioProviderStatic,
+} from "./telephony/twilio.js";
+import { createWebhookHandler } from "./routes/webhooks.js";
+import { createDedupStore } from "./telephony/dedup-store.js";
+import { registerLogDeletionHandler } from "./jobs/log-deletion.js";
+import { createTelephonyConfigService } from "./telephony/config-service.js";
 
 // --- DB startup probe ---
 
@@ -111,10 +119,12 @@ function buildCorsHeaders(origin: string): CorsHeaders {
 
 // --- HTTP server ---
 
-/** Creates an http.Server that handles OPTIONS preflight before delegating to tRPC. */
+/** Creates an http.Server that routes /webhooks/* to the webhook handler
+ *  and everything else to tRPC (after OPTIONS preflight). */
 function createHttpServer(
   trpcHandler: RequestListener,
   preflightHeaders: Record<string, string>,
+  onWebhook?: (req: IncomingMessage, res: ServerResponse) => Promise<void>,
 ): ReturnType<typeof createServer> {
   return createServer((req: IncomingMessage, res: ServerResponse) => {
     if (req.method === "OPTIONS") {
@@ -122,6 +132,12 @@ function createHttpServer(
       res.end();
       return;
     }
+
+    if (onWebhook !== undefined && req.url?.startsWith("/webhooks/") === true) {
+      void onWebhook(req, res);
+      return;
+    }
+
     trpcHandler(req, res);
   });
 }
@@ -193,7 +209,7 @@ const secretsEncryptor = createSecretsEncryptor(secretsKey);
 const providerFactory = createProviderFactory({
   db,
   secretsEncryptor,
-  providerConstructors: new Map(), // Twilio registration added with provider implementation
+  providerConstructors: new Map([["twilio", createTwilioProvider]]),
 });
 
 const orgService = createOrgService(db, tenantDb);
@@ -214,6 +230,14 @@ const createContext = createContextFactory({
   tokenizer,
 });
 
+const providerStatics = new Map([["twilio", twilioProviderStatic]]);
+const telephonyConfigService = createTelephonyConfigService({
+  db,
+  secretsEncryptor,
+  providerFactory,
+  providerStatics,
+});
+
 const appRouter = createAppRouter({
   authDeps: {
     hasher,
@@ -230,6 +254,10 @@ const appRouter = createAppRouter({
   oprfDeps: { oprfService },
   orgService,
   providerFactory,
+  telephonyAdminDeps: {
+    configService: telephonyConfigService,
+    webhookBaseUrl: env.WEBHOOK_BASE_URL,
+  },
 });
 
 export type AppRouter = typeof appRouter;
@@ -246,14 +274,34 @@ const trpcHandler = createHTTPHandler({
 // --- Job queue ---
 
 const jobQueue = createJobQueue(db);
-// Handlers are registered by consumer modules (e.g. log-deletion)
-// via jobQueue.process() before jobQueue.start().
+registerLogDeletionHandler(jobQueue, providerFactory);
 jobQueue.start();
 console.log("Job queue started");
 
+// --- Webhook handler ---
+
+const webhookDedupStore = createDedupStore();
+const webhookRateLimiter = createInMemoryRateLimiter({
+  windowMs: 60_000,
+  maxRequests: 200,
+});
+const webhookHandler = createWebhookHandler(
+  {
+    configService: telephonyConfigService,
+    providerFactory,
+    rateLimiter: webhookRateLimiter,
+    dedupStore: webhookDedupStore,
+  },
+  {
+    // No dispatch handlers yet. Webhooks validate and return 200.
+    // Add onInboundSms/onInboundVoice/onStatusCallback here.
+  },
+  env.WEBHOOK_BASE_URL,
+);
+
 // --- HTTP server ---
 
-const server = createHttpServer(trpcHandler, cors.preflight);
+const server = createHttpServer(trpcHandler, cors.preflight, webhookHandler);
 const port = Number(process.env.PORT ?? 3000);
 server.listen(port);
 console.log(`Server ready on port ${String(port)}`);
@@ -263,6 +311,7 @@ console.log(`Server ready on port ${String(port)}`);
 async function shutdown(signal: string): Promise<void> {
   console.log(`${signal} received, shutting down`);
   server.close();
+  webhookDedupStore.stop();
   await jobQueue.stop();
   await db.destroy();
   process.exit(0);
