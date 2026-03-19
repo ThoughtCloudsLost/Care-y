@@ -88,3 +88,22 @@ export {
   type OprfEvaluateOutput,
   type PowChallenge,
 } from "./schemas/oprf.js";
+
+// --- Telephony: country codes ---
+export {
+  E164_COUNTRY_CODES,
+  isValidCountryCode,
+} from "./telephony/country-codes.js";
+
+// --- Telephony schemas ---
+export {
+  telephonyProviderSchema,
+  saveTelephonyConfigInputSchema,
+  updateCountryCodeInputSchema,
+  maskedTelephonyConfigSchema,
+  maskedPhoneNumberSchema,
+  type TelephonyProviderType,
+  type SaveTelephonyConfigInput,
+  type UpdateCountryCodeInput,
+  type MaskedTelephonyConfigOutput,
+} from "./schemas/telephony.js";

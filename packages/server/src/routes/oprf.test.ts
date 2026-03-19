@@ -36,6 +36,7 @@ import {
   mockRes,
   expectTrpcError,
   createMockEmailSender,
+  createMockProviderFactory,
   testFieldEncryptor,
   testBlindIndexer,
   testSessionTokenizer,
@@ -400,6 +401,7 @@ describe("OPRF tRPC route", () => {
           throw new OprfError("not implemented in test");
         },
       } as unknown as Parameters<typeof createAppRouter>[0]["orgService"],
+      providerFactory: createMockProviderFactory(),
     });
     const factory = createCallerFactory(appRouter);
     const ctx: Context = {
@@ -592,6 +594,7 @@ describe.skipIf(!DOCKER_OPRF_AVAILABLE)(
             throw new OprfError("not implemented in test");
           },
         } as unknown as Parameters<typeof createAppRouter>[0]["orgService"],
+        providerFactory: createMockProviderFactory(),
       });
       const factory = createCallerFactory(appRouter);
       const ctx: Context = {

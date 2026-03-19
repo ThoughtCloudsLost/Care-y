@@ -545,6 +545,25 @@ export const DOCKER_SOCKET_B = "/run/oprf/oprf-b.sock";
 // ---------------------------------------------------------------------------
 
 import type { OprfRouterDeps } from "./routes/oprf.js";
+import type { ProviderFactory } from "./telephony/factory.js";
+
+/**
+ * Creates a stub ProviderFactory that throws on actual use.
+ * Only suitable for tests that don't exercise telephony endpoints.
+ */
+export function createMockProviderFactory(): ProviderFactory {
+  return {
+    async getProvider() {
+      throw new TestSetupError("Mock provider factory called unexpectedly");
+    },
+    invalidate() {
+      // no-op: cache invalidation not needed in tests
+    },
+    invalidateAll() {
+      // no-op: cache invalidation not needed in tests
+    },
+  };
+}
 
 /**
  * Creates stub OPRF deps that satisfy the type but throw on actual use.

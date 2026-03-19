@@ -16,6 +16,7 @@ import { createOprfRouter, type OprfRouterDeps } from "./oprf.js";
 import { createKeysRouter } from "./keys.js";
 import type { AuthRouterDeps } from "./auth.js";
 import type { OrgService } from "../org/service.js";
+import type { ProviderFactory } from "../telephony/factory.js";
 
 function healthCheck(): { status: "ok" } {
   return { status: "ok" };
@@ -26,6 +27,7 @@ export interface RouterDeps {
   readonly twoFactorDeps: TwoFactorRouterDeps;
   readonly oprfDeps: OprfRouterDeps;
   readonly orgService: OrgService;
+  readonly providerFactory: ProviderFactory;
 }
 
 // care-y-ignore-next-line missing-return-type -- tRPC router() returns a deeply generic type that cannot be written explicitly

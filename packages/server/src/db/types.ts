@@ -57,12 +57,23 @@ export interface PendingJobsTable {
   error: string | null;
 }
 
+// --- Telephony config ---
+
+export interface TelephonyConfigTable {
+  org_id: string;
+  provider: string;
+  config: Buffer; // encrypted JSON blob (nonce || ciphertext)
+  key_version: ColumnType<number, number | undefined, number>;
+  created_at: ColumnType<Date, Date | undefined, Date>;
+  updated_at: ColumnType<Date, Date | undefined, Date>;
+}
+
 export interface PlatformDatabase {
   orgs: OrgsTable;
   oprf_config: OprfConfigTable;
   oprf_audit_log: OprfAuditLogTable;
   pending_jobs: PendingJobsTable;
-  // Telephony (telephony_config)
+  telephony_config: TelephonyConfigTable;
   // Production (deletion_requests)
 }
 
@@ -99,6 +110,7 @@ export interface OrgConfigTable {
   client_encrypted_branding: Buffer | null;
   pii_retention_days: number | null;
   org_public_key: Buffer | null; // Curve25519 (32 bytes), null until first admin onboarding
+  default_country_code: ColumnType<string, string | undefined, string>;
 }
 
 // --- User keys (full interface, replaces UserKeysStubTable) ---

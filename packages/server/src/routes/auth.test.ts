@@ -23,6 +23,7 @@ import {
   expectTrpcError,
   createMockEmailSender,
   createMockOprfDeps,
+  createMockProviderFactory,
   type TestDb,
 } from "../test-utils.js";
 import { RoleId } from "@care-y/shared";
@@ -153,6 +154,7 @@ describe.skipIf(!HAS_DB)("auth + org routers (DB integration)", () => {
       },
       oprfDeps: createMockOprfDeps(),
       orgService,
+      providerFactory: createMockProviderFactory(),
     });
   }
 
