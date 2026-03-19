@@ -25,6 +25,7 @@ import {
   expectTrpcError,
   createMockEmailSender,
   createMockOprfDeps,
+  createMockProviderFactory,
   createTestUser,
   createTestSession,
   enrollTotp,
@@ -147,6 +148,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         },
         oprfDeps: createMockOprfDeps(),
         orgService,
+        providerFactory: createMockProviderFactory(),
       });
     }
 

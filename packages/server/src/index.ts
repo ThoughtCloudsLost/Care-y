@@ -47,6 +47,8 @@ import { createPowVerifier } from "./crypto/pow.js";
 import { createOprfAuditLogger } from "./crypto/oprf-audit.js";
 import { createOprfEvaluateService } from "./crypto/oprf-evaluate-service.js";
 import { createJobQueue } from "./jobs/index.js";
+import { deriveSecretsKey, createSecretsEncryptor } from "./config/secrets.js";
+import { createProviderFactory } from "./telephony/factory.js";
 
 // --- DB startup probe ---
 
@@ -183,6 +185,17 @@ const env: EnvVars = getEnv();
 const { encryptor, indexer, fakeSaltKey, tokenizer } =
   await deriveCryptoServices(env.OPS_SECRETS_KEY);
 
+// --- Telephony provider factory ---
+
+const secretsKey = deriveSecretsKey(Buffer.from(env.OPS_SECRETS_KEY, "hex"));
+const secretsEncryptor = createSecretsEncryptor(secretsKey);
+
+const providerFactory = createProviderFactory({
+  db,
+  secretsEncryptor,
+  providerConstructors: new Map(), // Twilio registration added with provider implementation
+});
+
 const orgService = createOrgService(db, tenantDb);
 const hasher = createScryptHasher();
 const { loginLimiter, saltLimiter } = createAuthRateLimiters();
@@ -216,6 +229,7 @@ const appRouter = createAppRouter({
   twoFactorDeps: { emailSender, encryptor, tokenizer },
   oprfDeps: { oprfService },
   orgService,
+  providerFactory,
 });
 
 export type AppRouter = typeof appRouter;
