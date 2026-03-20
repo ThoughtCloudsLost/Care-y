@@ -29,6 +29,14 @@ export class CryptoWorkerTestError extends ClientError {
   }
 }
 
+/** Telephony service errors (device not registered, SDK failures). */
+export class TelephonyError extends ClientError {
+  constructor(message: string) {
+    super(message);
+    this.name = "TelephonyError";
+  }
+}
+
 /** Thrown when a crypto operation is attempted before the Worker is initialized and keyed. */
 export class WorkerNotReadyError extends ClientError {
   constructor() {

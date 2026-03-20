@@ -54,6 +54,12 @@ import {
   twilioProviderStatic,
 } from "./telephony/twilio.js";
 import { createWebhookHandler } from "./routes/webhooks.js";
+import { createRelayHandler, type PendingCall } from "./routes/relay.js";
+import { extractOrgSlug } from "./org/slug-resolver.js";
+import { NotFoundError } from "./errors.js";
+import { createPhoneResolver } from "./telephony/phone-resolver.js";
+import { createConsultantRepository } from "./telephony/models/consultant-repo.js";
+import { createDbSessionRepository } from "./auth/session-repository.js";
 import { createDedupStore } from "./telephony/dedup-store.js";
 import { registerLogDeletionHandler } from "./jobs/log-deletion.js";
 import { createTelephonyConfigService } from "./telephony/config-service.js";
@@ -133,12 +139,13 @@ function buildCorsHeaders(origin: string): CorsHeaders {
 
 // --- HTTP server ---
 
-/** Creates an http.Server that routes /webhooks/* to the webhook handler
- *  and everything else to tRPC (after OPTIONS preflight). */
+/** Creates an http.Server that routes /webhooks/* to the webhook handler,
+ *  /relay/* to the relay handler, and everything else to tRPC. */
 function createHttpServer(
   trpcHandler: RequestListener,
   preflightHeaders: Record<string, string>,
   onWebhook?: (req: IncomingMessage, res: ServerResponse) => Promise<void>,
+  onRelay?: (req: IncomingMessage, res: ServerResponse) => Promise<void>,
 ): ReturnType<typeof createServer> {
   return createServer((req: IncomingMessage, res: ServerResponse) => {
     if (req.method === "OPTIONS") {
@@ -147,8 +154,15 @@ function createHttpServer(
       return;
     }
 
-    if (onWebhook !== undefined && req.url?.startsWith("/webhooks/") === true) {
+    const url = req.url ?? "";
+
+    if (onWebhook !== undefined && url.startsWith("/webhooks/")) {
       void onWebhook(req, res);
+      return;
+    }
+
+    if (onRelay !== undefined && url.startsWith("/relay/")) {
+      void onRelay(req, res);
       return;
     }
 
@@ -220,10 +234,18 @@ const { encryptor, indexer, fakeSaltKey, tokenizer } =
 const secretsKey = deriveSecretsKey(Buffer.from(env.OPS_SECRETS_KEY, "hex"));
 const secretsEncryptor = createSecretsEncryptor(secretsKey);
 
+const providerConstructors = new Map([["twilio", createTwilioProvider]]);
+
+// Register mock provider (dev/test only)
+if (env.NODE_ENV !== "production") {
+  const { createMockProvider } = await import("./telephony/mock-provider.js");
+  providerConstructors.set("mock", () => createMockProvider());
+}
+
 const providerFactory = createProviderFactory({
   db,
   secretsEncryptor,
-  providerConstructors: new Map([["twilio", createTwilioProvider]]),
+  providerConstructors,
 });
 
 // --- BlobStore ---
@@ -443,9 +465,107 @@ const webhookHandler = createWebhookHandler(
   env.WEBHOOK_BASE_URL,
 );
 
+// --- Phone purpose resolver ---
+
+const phoneResolver = createPhoneResolver({
+  async getOrgConfig(orgSchema: string) {
+    const tDb = tenantDb(orgSchema);
+    const row = await tDb
+      .selectFrom("org_config")
+      .select(["phone_outbound_sid", "phone_system_sid"])
+      .executeTakeFirst();
+    return {
+      phone_outbound_sid: row?.phone_outbound_sid ?? null,
+      phone_system_sid: row?.phone_system_sid ?? null,
+    };
+  },
+  async getProvisionedPhones(orgSchema: string) {
+    return telephonyConfigService.lookupProvisionedPhones(orgSchema);
+  },
+});
+
+// --- Relay infrastructure ---
+
+const pendingCalls = new Map<string, PendingCall>();
+
+// Pending call cleanup (2-minute TTL). Zeroes phone buffers on eviction.
+const pendingCallCleanupInterval = setInterval(() => {
+  const cutoff = Date.now() - 2 * 60 * 1000;
+  for (const [sid, pending] of pendingCalls) {
+    if (pending.createdAt < cutoff) {
+      pending.clientPhoneBuf.fill(0);
+      pending.callerIdBuf.fill(0);
+      pendingCalls.delete(sid);
+    }
+  }
+}, 60_000);
+
+// Org resolver for relay endpoints: uses the shared extractOrgSlug utility
+// (same logic as tRPC context), then derives the schema name from the slug.
+// The schema name is org_<slug> by convention (see MT1 in 00-overview.md).
+function relayOrgResolver(req: IncomingMessage): string | null {
+  const slug = extractOrgSlug(req);
+  if (slug === null) return null;
+  return `org_${slug}`;
+}
+
+// Session repo factory for relay auth. Loads the real org_public_key
+// for the SealedBoxEncryptor (same pattern as resolveOrgForWebhook).
+// The relay handler only calls findByToken (reads), but the session
+// repo interface requires a SealedBoxEncryptor for consistency.
+async function createRelaySessionRepo(
+  orgSchema: string,
+): Promise<ReturnType<typeof createDbSessionRepository>> {
+  const tDb = tenantDb(orgSchema);
+  const row = await tDb
+    .selectFrom("org_config")
+    .select("org_public_key")
+    .executeTakeFirst();
+
+  // Org must have its public key set (post-onboarding).
+  // Pre-onboarding orgs can't have active sessions anyway.
+  const sealedBox = row?.org_public_key
+    ? createSealedBoxEncryptor(row.org_public_key)
+    : createSealedBoxEncryptor(Buffer.alloc(32));
+
+  return createDbSessionRepository(tDb, tokenizer, sealedBox);
+}
+
+const relayHandler = createRelayHandler({
+  getProvider: async (orgId: string) => providerFactory.getProvider(orgId),
+  getTenantDb: tenantDb,
+  createConsultantRepo: (tDb: Kysely<TenantDatabase>) =>
+    createConsultantRepository(tDb),
+  resolveCallerIdByPurpose: phoneResolver,
+  pendingCalls,
+  webhookBaseUrl: env.WEBHOOK_BASE_URL,
+  async getAuthToken(orgId: string) {
+    const lookup = await telephonyConfigService.lookupWebhookConfig(orgId);
+    return lookup?.authToken ?? null;
+  },
+  async getAccountSid(orgId: string) {
+    const lookup = await telephonyConfigService.lookupWebhookConfig(orgId);
+    if (!lookup) {
+      throw new NotFoundError(`No telephony config for org ${orgId}`);
+    }
+    return lookup.accountSid;
+  },
+  apiKeySid: env.TWILIO_API_KEY_SID ?? "",
+  apiKeySecret: env.TWILIO_API_KEY_SECRET ?? "",
+  twimlAppSid: env.TWILIO_TWIML_APP_SID ?? "",
+  orgResolver: relayOrgResolver,
+  createSessionRepo: async (orgSchema: string) =>
+    createRelaySessionRepo(orgSchema),
+});
+
 // --- HTTP server ---
 
-const server = createHttpServer(trpcHandler, cors.preflight, webhookHandler);
+const server = createHttpServer(
+  trpcHandler,
+  cors.preflight,
+  webhookHandler,
+  relayHandler,
+);
 const port = Number(process.env.PORT ?? 3000);
 server.listen(port);
 console.log(`Server ready on port ${String(port)}`);
@@ -456,6 +576,13 @@ async function shutdown(signal: string): Promise<void> {
   console.log(`${signal} received, shutting down`);
   server.close();
   webhookDedupStore.stop();
+  clearInterval(pendingCallCleanupInterval);
+  // Zero any remaining pending call buffers
+  for (const [, pending] of pendingCalls) {
+    pending.clientPhoneBuf.fill(0);
+    pending.callerIdBuf.fill(0);
+  }
+  pendingCalls.clear();
   await jobQueue.stop();
   await db.destroy();
   process.exit(0);

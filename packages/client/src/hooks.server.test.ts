@@ -105,7 +105,7 @@ describe("handle (security headers)", () => {
       resolve: createMockResolve() as never,
     });
     expect(response.headers.get("Permissions-Policy")).toBe(
-      "camera=(), microphone=(), geolocation=(), payment=()",
+      "camera=(), microphone=(self), geolocation=(), payment=()",
     );
   });
 

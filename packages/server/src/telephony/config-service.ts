@@ -61,6 +61,15 @@ export interface TelephonyConfigService {
    * Returns null if no config exists for the org.
    */
   lookupWebhookConfig(orgId: string): Promise<WebhookConfigLookup | null>;
+
+  /**
+   * Look up provisioned phone numbers with their provider SIDs.
+   * Used by the phone purpose resolver to match org_config.phone_outbound_sid
+   * against actual provisioned numbers. Returns empty array if not configured.
+   */
+  lookupProvisionedPhones(
+    orgId: string,
+  ): Promise<readonly { number: string; sid: string }[]>;
 }
 
 export function createTelephonyConfigService(
@@ -247,6 +256,43 @@ export function createTelephonyConfigService(
         accountSid: webhookFields.data.accountSid,
         authToken: webhookFields.data.authToken,
       };
+    },
+
+    async lookupProvisionedPhones(
+      orgId: string,
+    ): Promise<readonly { number: string; sid: string }[]> {
+      const row = await db
+        .selectFrom("telephony_config")
+        .select(["provider", "config"])
+        .where("org_id", "=", orgId)
+        .executeTakeFirst();
+
+      if (!row) return [];
+
+      const rawConfig = decryptConfig(row.config);
+
+      // Extract phone numbers with SIDs from the decrypted config.
+      // Each provider's Zod schema defines phoneNumbers with different
+      // ID field names (sid for Twilio, id for SignalWire). Normalize
+      // to a common { number, sid } shape.
+      const phoneArraySchema = z
+        .object({
+          phoneNumbers: z.array(
+            z.object({
+              number: z.string(),
+              sid: z.string().optional(),
+              id: z.string().optional(),
+            }),
+          ),
+        })
+        .safeParse(rawConfig);
+
+      if (!phoneArraySchema.success) return [];
+
+      return phoneArraySchema.data.phoneNumbers.map((pn) => ({
+        number: pn.number,
+        sid: pn.sid ?? pn.id ?? pn.number,
+      }));
     },
   };
 }

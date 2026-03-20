@@ -54,6 +54,13 @@ const envSchema = z.object({
   // Only needed when the platform operator manages Twilio accounts for orgs.
   TWILIO_MASTER_SID: z.string().optional(),
   TWILIO_MASTER_AUTH_TOKEN: z.string().optional(),
+
+  // Twilio API Key for WebRTC Access Tokens.
+  // These are NOT per-org. They're platform-level API keys that sign JWTs.
+  // Create via Twilio Console > API Keys.
+  TWILIO_API_KEY_SID: z.string().optional(),
+  TWILIO_API_KEY_SECRET: z.string().optional(),
+  TWILIO_TWIML_APP_SID: z.string().optional(),
 });
 
 export type EnvVars = z.infer<typeof envSchema>;

@@ -145,3 +145,24 @@ export {
   type UpdateConsultantInput,
   type VerifyConsultantInput,
 } from "./schemas/telephony-content.js";
+
+// --- Relay schemas ---
+export {
+  relaySmsInputSchema,
+  relaySmsOutputSchema,
+  relayCallInputSchema,
+  relayCallOutputSchema,
+  relayWebrtcTokenOutputSchema,
+  type RelaySmsInput,
+  type RelaySmsOutput,
+  type RelayCallInput,
+  type RelayCallOutput,
+  type RelayWebrtcTokenOutput,
+} from "./schemas/relay.js";
+
+// --- Browser call service interface ---
+export type {
+  BrowserCallState,
+  BrowserCallEvents,
+  BrowserCallService,
+} from "./telephony/browser-call.js";

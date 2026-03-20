@@ -111,6 +111,8 @@ export interface OrgConfigTable {
   pii_retention_days: number | null;
   org_public_key: Buffer | null; // Curve25519 (32 bytes), null until first admin onboarding
   default_country_code: ColumnType<string, string | undefined, string>;
+  phone_outbound_sid: string | null;
+  phone_system_sid: string | null;
 }
 
 // --- User keys (full interface, replaces UserKeysStubTable) ---

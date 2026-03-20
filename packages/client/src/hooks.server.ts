@@ -34,10 +34,11 @@ const securityHeaders: Handle = async ({ event, resolve }) => {
   response.headers.set("Referrer-Policy", "strict-origin-when-cross-origin");
 
   // Permissions Policy: deny all sensitive capabilities by default.
-  // camera/microphone will be enabled when WebRTC support lands.
+  // microphone=(self) allows WebRTC browser calling from same origin only.
+  // camera remains disabled: CARE-Y is voice-only.
   response.headers.set(
     "Permissions-Policy",
-    "camera=(), microphone=(), geolocation=(), payment=()",
+    "camera=(), microphone=(self), geolocation=(), payment=()",
   );
 
   // COOP + COEP: enables SharedArrayBuffer if libsodium WASM ever requires it
