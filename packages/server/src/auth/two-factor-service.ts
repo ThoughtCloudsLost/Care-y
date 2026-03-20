@@ -175,6 +175,16 @@ export function createTwoFactorService(
   issuer: string,
   smsDeps?: SmsDeps,
 ): TwoFactorService {
+  /** Asserts that SMS deps are available. Throws if the org has no telephony config. */
+  function requireSmsDeps(): SmsDeps {
+    if (!smsDeps) {
+      throw new ValidationError(
+        "SMS 2FA is not available for this organization.",
+      );
+    }
+    return smsDeps;
+  }
+
   // --- Internal helpers ---
 
   async function getActiveMethods(
@@ -214,14 +224,10 @@ export function createTwoFactorService(
     phone: string,
     orgId: string,
   ): Promise<void> {
-    if (!smsDeps) {
-      throw new ValidationError(
-        "SMS 2FA is not available for this organization.",
-      );
-    }
+    const sms = requireSmsDeps();
 
     const encryptedPhone = encryptor.encrypt(phone);
-    const phoneHash = smsDeps.indexer.hash(phone, orgId);
+    const phoneHash = sms.indexer.hash(phone, orgId);
 
     await db
       .insertInto("two_factor_methods")
@@ -723,11 +729,7 @@ export function createTwoFactorService(
       rawPhone: string,
       orgId: string,
     ): Promise<string> {
-      if (!smsDeps) {
-        throw new ValidationError(
-          "SMS 2FA is not available for this organization.",
-        );
-      }
+      requireSmsDeps();
       // Resolve org's default country code for phone normalization
       const orgConfig = await db
         .selectFrom("org_config")
@@ -745,12 +747,8 @@ export function createTwoFactorService(
     },
 
     async verifySmsEnrollment(userId: string, code: string): Promise<boolean> {
-      if (!smsDeps) {
-        throw new ValidationError(
-          "SMS 2FA is not available for this organization.",
-        );
-      }
-      const valid = await smsDeps.smsCodes.verifyCode(userId, code);
+      const sms = requireSmsDeps();
+      const valid = await sms.smsCodes.verifyCode(userId, code);
       if (valid) {
         // Phone ownership confirmed. Activate the method.
         await db
@@ -767,12 +765,8 @@ export function createTwoFactorService(
     // --- SMS verification (login) ---
 
     async verifySms(userId: string, code: string): Promise<boolean> {
-      if (!smsDeps) {
-        throw new ValidationError(
-          "SMS 2FA is not available for this organization.",
-        );
-      }
-      return smsDeps.smsCodes.verifyCode(userId, code);
+      const sms = requireSmsDeps();
+      return sms.smsCodes.verifyCode(userId, code);
     },
 
     // --- Method queries ---

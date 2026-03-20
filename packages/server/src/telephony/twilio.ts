@@ -1,14 +1,15 @@
-import type {
-  TelephonyProvider,
-  TelephonyProviderStatic,
-  SendSmsResult,
-  OutboundCallParams,
-  WebRtcCallParams,
-  WebhookValidationRequest,
-  IncomingCallData,
-  IncomingSmsData,
-  VoiceInstruction,
-  MaskedTelephonyConfig,
+import {
+  extractMediaFromWebhookBody,
+  type TelephonyProvider,
+  type TelephonyProviderStatic,
+  type SendSmsResult,
+  type OutboundCallParams,
+  type WebRtcCallParams,
+  type WebhookValidationRequest,
+  type IncomingCallData,
+  type IncomingSmsData,
+  type VoiceInstruction,
+  type MaskedTelephonyConfig,
 } from "./provider.js";
 import { twilioConfigSchema, type TwilioConfig } from "./schemas.js";
 import { twilioHmacValidator } from "./webhook-crypto.js";
@@ -141,15 +142,10 @@ export function createTwilioProvider(config: unknown): TelephonyProvider {
 
       const smsBody = body.Body ?? "";
       const numMedia = parseInt(body.NumMedia ?? "0", 10) || 0;
-
-      const mediaUrls: string[] = [];
-      const mediaContentTypes: string[] = [];
-      for (let i = 0; i < numMedia; i++) {
-        const url = body[`MediaUrl${String(i)}`];
-        const contentType = body[`MediaContentType${String(i)}`];
-        if (url !== undefined) mediaUrls.push(url);
-        if (contentType !== undefined) mediaContentTypes.push(contentType);
-      }
+      const { mediaUrls, mediaContentTypes } = extractMediaFromWebhookBody(
+        body,
+        numMedia,
+      );
 
       return {
         messageId,

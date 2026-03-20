@@ -17,6 +17,27 @@ import { NotFoundError, TelephonyConfigError } from "../errors.js";
 import { providerConfigSchemas } from "./schemas.js";
 import { z } from "zod";
 
+/** Type guard for objects with a phoneNumbers array. */
+function hasPhoneNumbers(
+  config: unknown,
+): config is { phoneNumbers: readonly unknown[] } {
+  return (
+    typeof config === "object" &&
+    config !== null &&
+    "phoneNumbers" in config &&
+    Array.isArray(config.phoneNumbers)
+  );
+}
+
+/**
+ * Extracts the phone number count from a validated provider config.
+ * Safe on already-validated configs (providerStatic.validateConfig ran first).
+ * Returns 0 if the shape doesn't include a phoneNumbers array.
+ */
+function countPhoneNumbers(config: unknown): number {
+  return hasPhoneNumbers(config) ? config.phoneNumbers.length : 0;
+}
+
 export interface TelephonyConfigServiceDeps {
   readonly db: Kysely<PlatformDatabase>;
   readonly secretsEncryptor: SecretsEncryptor;
@@ -199,17 +220,10 @@ export function createTelephonyConfigService(
 
       providerFactory.invalidate(orgId);
 
-      // Extract phone number count from the validated config.
-      // providerStatic.validateConfig() already ran, so the shape is known.
-      // Use a minimal Zod schema to safely extract the count without unsafe casts.
-      const phoneNumbersShape = z
-        .object({ phoneNumbers: z.array(z.unknown()) })
-        .safeParse(updatedConfig);
-      const phoneNumberCount = phoneNumbersShape.success
-        ? phoneNumbersShape.data.phoneNumbers.length
-        : 0;
-
-      return { success: true as const, phoneNumberCount };
+      return {
+        success: true as const,
+        phoneNumberCount: countPhoneNumbers(updatedConfig),
+      };
     },
 
     async lookupWebhookConfig(
