@@ -28,6 +28,7 @@ import {
   type RelaySession,
   type OrgResolver,
 } from "./relay-utils.js";
+import { readFormBody } from "./webhooks.js";
 
 // ---------------------------------------------------------------------------
 // Dependencies
@@ -327,6 +328,62 @@ async function handleCallRelay(
 // ---------------------------------------------------------------------------
 
 /**
+ * Extracts the orgSchema segment from /relay/call-confirm/<orgSchema>.
+ * Returns null if the path does not match.
+ */
+function parseCallConfirmPath(url: string): string | null {
+  const prefix = "/relay/call-confirm/";
+  if (!url.startsWith(prefix)) return null;
+  const orgSchema = url.slice(prefix.length);
+  return orgSchema.length > 0 ? orgSchema : null;
+}
+
+type CallConfirmValidation =
+  | { status: "valid" }
+  | { status: "hangup" } // Infrastructure failure (missing auth token or provider)
+  | { status: "forbidden" }; // Auth failure (missing or invalid signature)
+
+/**
+ * Validates a Twilio HMAC signature for a call-confirm callback.
+ * Fetches the auth token and provider for the pending call's org,
+ * then delegates to the provider's validateWebhook method.
+ *
+ * Returns a discriminated result so the caller can distinguish between
+ * infrastructure failures (hangup) and auth failures (403).
+ */
+async function validateCallConfirmSignature(
+  req: IncomingMessage,
+  body: Record<string, string>,
+  pending: PendingCall,
+  callSid: string,
+  deps: RelayHandlerDeps,
+): Promise<CallConfirmValidation> {
+  const authToken = await deps.getAuthToken(pending.orgId);
+  if (authToken === null) {
+    cleanupPendingCall(deps, callSid);
+    return { status: "hangup" };
+  }
+
+  const signature = req.headers["x-twilio-signature"];
+  if (typeof signature !== "string") return { status: "forbidden" };
+
+  const provider = await deps.getProvider(pending.orgId);
+  if (!provider) {
+    cleanupPendingCall(deps, callSid);
+    return { status: "hangup" };
+  }
+
+  const fullUrl = deps.webhookBaseUrl + (req.url ?? "");
+  const isValid = provider.validateWebhook({
+    url: fullUrl,
+    body,
+    signature,
+    authToken,
+  });
+  return isValid ? { status: "valid" } : { status: "forbidden" };
+}
+
+/**
  * Twilio DTMF callback after consultant presses a digit on leg 1.
  * Validates Twilio HMAC signature, then bridges to client (leg 2).
  *
@@ -352,23 +409,18 @@ async function handleCallConfirm(
     return;
   }
 
-  // Extract orgSchema from URL path: /relay/call-confirm/<orgSchema>
-  const url = req.url ?? "";
-  const orgSchema = url.replace("/relay/call-confirm/", "");
-  if (!orgSchema || orgSchema === url) {
+  const orgSchema = parseCallConfirmPath(req.url ?? "");
+  if (orgSchema === null) {
     res.writeHead(400);
     res.end();
     return;
   }
 
-  // Read form-encoded body
-  const rawBodyBuf = await readRawBody(req, MAX_RELAY_BODY);
-  const rawStr = rawBodyBuf.toString("utf-8");
-  const params = new URLSearchParams(rawStr);
-  const body: Record<string, string> = {};
-  for (const [key, value] of params) {
-    // eslint-disable-next-line security/detect-object-injection -- key from URLSearchParams iterator, not user-controlled property name
-    body[key] = value;
+  const body = await readFormBody(req, MAX_RELAY_BODY);
+  if (body === null) {
+    res.writeHead(400);
+    res.end();
+    return;
   }
 
   const callSid = body.CallSid;
@@ -380,42 +432,22 @@ async function handleCallConfirm(
 
   const pending = deps.pendingCalls.get(callSid);
   if (!pending) {
-    // Unknown call or expired. Return TwiML that hangs up.
     respondTwiml(res, "<Response><Hangup/></Response>");
     return;
   }
 
-  // Validate Twilio HMAC signature using the org's auth token
-  const authToken = await deps.getAuthToken(pending.orgId);
-  if (authToken === null) {
-    respondTwiml(res, "<Response><Hangup/></Response>");
-    cleanupPendingCall(deps, callSid);
-    return;
-  }
-
-  const signature = req.headers["x-twilio-signature"];
-  if (typeof signature !== "string") {
-    res.writeHead(403);
-    res.end();
-    return;
-  }
-
-  const provider = await deps.getProvider(pending.orgId);
-  if (!provider) {
-    respondTwiml(res, "<Response><Hangup/></Response>");
-    cleanupPendingCall(deps, callSid);
-    return;
-  }
-
-  const fullUrl = deps.webhookBaseUrl + url;
-  const isValid = provider.validateWebhook({
-    url: fullUrl,
+  const validation = await validateCallConfirmSignature(
+    req,
     body,
-    signature,
-    authToken,
-  });
-
-  if (!isValid) {
+    pending,
+    callSid,
+    deps,
+  );
+  if (validation.status === "hangup") {
+    respondTwiml(res, "<Response><Hangup/></Response>");
+    return;
+  }
+  if (validation.status === "forbidden") {
     res.writeHead(403);
     res.end();
     return;

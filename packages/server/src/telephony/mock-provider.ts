@@ -1,14 +1,15 @@
 import { randomUUID } from "node:crypto";
-import type {
-  TelephonyProvider,
-  SendSmsResult,
-  OutboundCallParams,
-  WebRtcCallParams,
-  WebhookValidationRequest,
-  IncomingCallData,
-  IncomingSmsData,
-  VoiceInstruction,
-  MaskedTelephonyConfig,
+import {
+  extractMediaFromWebhookBody,
+  type TelephonyProvider,
+  type SendSmsResult,
+  type OutboundCallParams,
+  type WebRtcCallParams,
+  type WebhookValidationRequest,
+  type IncomingCallData,
+  type IncomingSmsData,
+  type VoiceInstruction,
+  type MaskedTelephonyConfig,
 } from "./provider.js";
 
 /** A single recorded method call on the mock provider. */
@@ -87,15 +88,10 @@ export function createMockProvider(): MockTelephonyProvider {
     parseIncomingSms(body: Record<string, string>): IncomingSmsData {
       record(callLog, "parseIncomingSms", [body]);
       const numMedia = parseInt(body.NumMedia ?? "0", 10) || 0;
-
-      const mediaUrls: string[] = [];
-      const mediaContentTypes: string[] = [];
-      for (let i = 0; i < numMedia; i++) {
-        const url = body[`MediaUrl${String(i)}`];
-        const contentType = body[`MediaContentType${String(i)}`];
-        if (url !== undefined) mediaUrls.push(url);
-        if (contentType !== undefined) mediaContentTypes.push(contentType);
-      }
+      const { mediaUrls, mediaContentTypes } = extractMediaFromWebhookBody(
+        body,
+        numMedia,
+      );
 
       return {
         messageId: body.MessageSid ?? `mock-msg-${randomUUID()}`,

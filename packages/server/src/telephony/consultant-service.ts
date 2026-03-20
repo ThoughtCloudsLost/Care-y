@@ -8,7 +8,11 @@
 
 import type { Kysely } from "kysely";
 import type { TenantDatabase } from "../db/types.js";
-import { createConsultantRepository } from "./models/consultant-repo.js";
+import {
+  createConsultantRepository,
+  type ConsultantRecord,
+  type ConsultantRepository,
+} from "./models/consultant-repo.js";
 import { randomInt, createHash } from "node:crypto";
 import { NotFoundError, AuthError } from "../errors.js";
 
@@ -35,6 +39,18 @@ export interface ConsultantService {
   verify(userId: string, code: string): Promise<void>;
   updatePreference(userId: string, preferredCallMethod: string): Promise<void>;
   deleteByUserId(userId: string): Promise<void>;
+}
+
+/** Looks up a consultant by userId, throwing NotFoundError if missing. */
+async function requireConsultantByUserId(
+  repo: ConsultantRepository,
+  userId: string,
+): Promise<ConsultantRecord> {
+  const record = await repo.findByUserId(userId);
+  if (!record) {
+    throw new NotFoundError("No consultant registration found");
+  }
+  return record;
 }
 
 export function createConsultantService(
@@ -79,11 +95,7 @@ export function createConsultantService(
     },
 
     async verify(userId: string, code: string): Promise<void> {
-      const record = await repo.findByUserId(userId);
-      if (!record) {
-        throw new NotFoundError("No consultant registration found");
-      }
-
+      const record = await requireConsultantByUserId(repo, userId);
       const codeHash = hashCode(code);
       const verified = await repo.verifyAndActivate(
         record.id,
@@ -100,20 +112,12 @@ export function createConsultantService(
       userId: string,
       preferredCallMethod: string,
     ): Promise<void> {
-      const record = await repo.findByUserId(userId);
-      if (!record) {
-        throw new NotFoundError("No consultant registration found");
-      }
-
+      const record = await requireConsultantByUserId(repo, userId);
       await repo.updatePreferredCallMethod(record.id, preferredCallMethod);
     },
 
     async deleteByUserId(userId: string): Promise<void> {
-      const record = await repo.findByUserId(userId);
-      if (!record) {
-        throw new NotFoundError("No consultant registration found");
-      }
-
+      const record = await requireConsultantByUserId(repo, userId);
       await repo.delete(record.id);
     },
   };

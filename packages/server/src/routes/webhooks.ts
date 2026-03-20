@@ -12,7 +12,10 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import type { ProviderFactory } from "../telephony/factory.js";
 import type { RateLimiter } from "../ratelimit/rate-limiter.js";
 import type { DedupStore } from "../telephony/dedup-store.js";
-import type { TelephonyConfigService } from "../telephony/config-service.js";
+import type {
+  TelephonyConfigService,
+  WebhookConfigLookup,
+} from "../telephony/config-service.js";
 
 const MAX_BODY_SIZE = 1_048_576; // 1 MB
 const REPLAY_WINDOW_MS = 5 * 60 * 1000; // 5 minutes
@@ -184,6 +187,49 @@ function extractSid(body: Record<string, string>): string | null {
 }
 
 /**
+ * Validates the webhook signature and AccountSid in one pass.
+ *
+ * Checks: signature header present, provider instantiation succeeds,
+ * HMAC signature valid, body AccountSid matches config. Returns null
+ * on success, or an HTTP status code on failure.
+ */
+async function validateWebhookSignature(
+  req: IncomingMessage,
+  body: Record<string, string>,
+  parsed: ParsedPath,
+  configLookup: WebhookConfigLookup,
+  deps: WebhookHandlerDeps,
+  webhookBaseUrl: string,
+): Promise<number | null> {
+  const signatureHeader = req.headers["x-twilio-signature"];
+  if (typeof signatureHeader !== "string" || signatureHeader === "") {
+    return 403;
+  }
+
+  let provider;
+  try {
+    provider = await deps.providerFactory.getProvider(parsed.orgId);
+  } catch {
+    return 500;
+  }
+
+  const fullUrl = reconstructPublicUrl(req, webhookBaseUrl);
+  const signatureValid = provider.validateWebhook({
+    url: fullUrl,
+    body,
+    signature: signatureHeader,
+    authToken: configLookup.authToken,
+  });
+
+  if (!signatureValid) return 403;
+
+  // Secondary AccountSid check: body AccountSid must match config
+  if (body.AccountSid !== configLookup.accountSid) return 403;
+
+  return null;
+}
+
+/**
  * Creates the webhook HTTP handler.
  *
  * Returns a function that can be mounted as a raw Node.js HTTP handler
@@ -225,13 +271,12 @@ export function createWebhookHandler(
     // Replay protection: reject timestamps outside the acceptable window.
     // Null timestamp means manual URL entry (skip replay check).
     if (parsed.timestamp !== null) {
-      const now = Math.floor(Date.now() / 1000);
-      const age = now - parsed.timestamp;
-      if (age > REPLAY_WINDOW_MS / 1000) {
-        sendResponse(res, 403, "Forbidden");
-        return;
-      }
-      if (parsed.timestamp > now + FUTURE_SKEW_MS / 1000) {
+      const nowSeconds = Math.floor(Date.now() / 1000);
+      const ageSeconds = nowSeconds - parsed.timestamp;
+      const isTooOld = ageSeconds > REPLAY_WINDOW_MS / 1000;
+      const isFromFuture =
+        parsed.timestamp > nowSeconds + FUTURE_SKEW_MS / 1000;
+      if (isTooOld || isFromFuture) {
         sendResponse(res, 403, "Forbidden");
         return;
       }
@@ -265,41 +310,21 @@ export function createWebhookHandler(
       return;
     }
 
-    const configAccountSid = configLookup.accountSid;
-    const authToken = configLookup.authToken;
-
-    // Validate webhook signature via the provider
-    const signatureHeader = req.headers["x-twilio-signature"];
-    if (typeof signatureHeader !== "string" || signatureHeader === "") {
-      sendResponse(res, 403, "Forbidden");
-      return;
-    }
-
-    let provider;
-    try {
-      provider = await deps.providerFactory.getProvider(parsed.orgId);
-    } catch {
-      sendResponse(res, 500, "Internal Server Error");
-      return;
-    }
-
-    const fullUrl = reconstructPublicUrl(req, webhookBaseUrl);
-    const signatureValid = provider.validateWebhook({
-      url: fullUrl,
+    // Validate signature + AccountSid
+    const sigFailure = await validateWebhookSignature(
+      req,
       body,
-      signature: signatureHeader,
-      authToken,
-    });
-
-    if (!signatureValid) {
-      sendResponse(res, 403, "Forbidden");
-      return;
-    }
-
-    // Secondary AccountSid check: body AccountSid must match config
-    const bodyAccountSid = body.AccountSid;
-    if (bodyAccountSid !== configAccountSid) {
-      sendResponse(res, 403, "Forbidden");
+      parsed,
+      configLookup,
+      deps,
+      webhookBaseUrl,
+    );
+    if (sigFailure !== null) {
+      sendResponse(
+        res,
+        sigFailure,
+        sigFailure === 500 ? "Internal Server Error" : "Forbidden",
+      );
       return;
     }
 

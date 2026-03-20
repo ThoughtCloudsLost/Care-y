@@ -150,6 +150,26 @@ export interface TelephonyProvider {
 }
 
 /**
+ * Extracts media URLs and content types from a Twilio-format webhook body.
+ * Twilio encodes MMS attachments as MediaUrl0..N and MediaContentType0..N.
+ * Both the real Twilio provider and the mock use this format.
+ */
+export function extractMediaFromWebhookBody(
+  body: Record<string, string>,
+  numMedia: number,
+): { mediaUrls: string[]; mediaContentTypes: string[] } {
+  const mediaUrls: string[] = [];
+  const mediaContentTypes: string[] = [];
+  for (let i = 0; i < numMedia; i++) {
+    const url = body[`MediaUrl${String(i)}`];
+    const contentType = body[`MediaContentType${String(i)}`];
+    if (url !== undefined) mediaUrls.push(url);
+    if (contentType !== undefined) mediaContentTypes.push(contentType);
+  }
+  return { mediaUrls, mediaContentTypes };
+}
+
+/**
  * Static factory methods for a provider implementation.
  * Config types are `unknown` because each provider defines its own Zod shape.
  * Callers MUST parse/validate return values before storing.

@@ -38,13 +38,20 @@ export interface RecordingResult {
  * failing the entire recording ingest. The caller still gets a valid
  * RecordingResult so the voicemail can be linked to a ticket.
  */
-export async function handleRecordingComplete(
-  body: Record<string, string>,
-  deps: RecordingHandlerDeps,
-): Promise<RecordingResult> {
-  const { provider, sealedBox, blobStore, jobQueue, orgSchema, orgId } = deps;
+interface ParsedRecordingCallback {
+  readonly recordingSid: string;
+  readonly callSid: string;
+  readonly durationSeconds: number;
+}
 
-  // eslint-disable-next-line @typescript-eslint/dot-notation
+/**
+ * Extracts and validates required fields from a recording-complete webhook body.
+ * Throws TelephonyError if RecordingSid or CallSid is missing.
+ */
+function parseRecordingCallback(
+  body: Record<string, string>,
+): ParsedRecordingCallback {
+  // eslint-disable-next-line @typescript-eslint/dot-notation -- Twilio keys are PascalCase strings, not identifiers
   const recordingSid = body["RecordingSid"];
   // eslint-disable-next-line @typescript-eslint/dot-notation
   const callSid = body["CallSid"];
@@ -59,6 +66,16 @@ export async function handleRecordingComplete(
   }
 
   const durationSeconds = rawDuration !== undefined ? Number(rawDuration) : 0;
+  return { recordingSid, callSid, durationSeconds };
+}
+
+export async function handleRecordingComplete(
+  body: Record<string, string>,
+  deps: RecordingHandlerDeps,
+): Promise<RecordingResult> {
+  const { provider, sealedBox, blobStore, jobQueue, orgSchema, orgId } = deps;
+  const { recordingSid, callSid, durationSeconds } =
+    parseRecordingCallback(body);
 
   // Fetch raw audio from the provider, encrypt, and zero the plaintext
   const rawAudio = await provider.getRecording(recordingSid);

@@ -74,9 +74,9 @@ export async function handleInboundCall(
   // eslint-disable-next-line @typescript-eslint/dot-notation
   const digits = body["Digits"];
   const phoneHash = indexer.hash(callData.from, orgId);
-  const voiceBaseUrl = `${webhookBaseUrl}/webhooks/twilio/${orgId}/voice`;
-  const recordingCallbackUrl = voiceBaseUrl;
-  const statusCallbackUrl = voiceBaseUrl;
+
+  // Single voice webhook URL handles DTMF, recording, and status callbacks
+  const voiceWebhookUrl = `${webhookBaseUrl}/webhooks/twilio/${orgId}/voice`;
 
   // Path 1: DTMF response from language selection
   if (digits !== undefined) {
@@ -99,10 +99,7 @@ export async function handleInboundCall(
       "new_client",
     );
 
-    return buildVoicemailIvr(
-      greeting ?? FALLBACK_GREETING,
-      recordingCallbackUrl,
-    );
+    return buildVoicemailIvr(greeting ?? FALLBACK_GREETING, voiceWebhookUrl);
   }
 
   // Path 2: Returning caller (phone hash already exists)
@@ -124,12 +121,12 @@ export async function handleInboundCall(
       return buildReturningCallerIvr(
         greeting,
         reselectionGreeting,
-        recordingCallbackUrl,
-        statusCallbackUrl,
+        voiceWebhookUrl,
+        voiceWebhookUrl,
       );
     }
   }
 
   // Path 3: New caller or no greeting configured for returning caller
-  return buildLanguageSelectionIvr(null, statusCallbackUrl);
+  return buildLanguageSelectionIvr(null, voiceWebhookUrl);
 }
