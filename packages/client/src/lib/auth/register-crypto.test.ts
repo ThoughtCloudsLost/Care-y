@@ -16,6 +16,9 @@ import type {
 
 // ── Mocks ────────────────────────────────────────────────────────────
 
+// vi.mock required: $lib/trpc/index.js resolves to a SvelteKit $lib alias
+// that creates a live tRPC HTTP client on import. Without a running server
+// the import fails. vi.spyOn requires a successful import first.
 const mockOprfEvaluate = vi.fn();
 const mockInitCryptoKeys = vi.fn();
 
@@ -30,7 +33,12 @@ vi.mock("$lib/trpc/index.js", () => ({
   },
 }));
 
-// Mock @care-y/crypto with trackable functions
+// vi.mock required: @care-y/crypto barrel import triggers libsodium WASM
+// initialization via the getSodium() lazy singleton. In the Node test
+// environment this loads the JS fallback (~500ms) or fails. This test
+// mocks 10+ crypto primitives to verify call sequence and zeroing.
+// All functions are synchronous and called inline by registerCrypto,
+// so vi.spyOn after import wouldn't intercept the already-bound references.
 const mockMemzero = vi.fn();
 const mockSalt = new Uint8Array([
   1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16,

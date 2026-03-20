@@ -7,9 +7,11 @@ import {
 } from "./email-sender.js";
 import { EmailDeliveryError } from "../errors.js";
 
-// vi.mock is required here: createTransport is called inside createSmtpEmailSender's
-// closure, so vi.spyOn can't intercept it without restructuring production code.
-// Same justification as SvelteKit virtual modules in test-setup.ts.
+// vi.mock required: nodemailer is a CommonJS package. When imported as ESM,
+// the module namespace is non-configurable (Object.defineProperty fails),
+// so vi.spyOn cannot intercept createTransport. Additionally, createTransport
+// is called at factory construction time (top of createSmtpEmailSender),
+// before any spy could be attached to the returned transport.
 const mockSendMail = vi.fn();
 vi.mock("nodemailer", () => ({
   createTransport: vi.fn(() => ({ sendMail: mockSendMail })),
