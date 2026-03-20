@@ -206,6 +206,62 @@ export interface TwoFactorMethodsTable {
   sms_phone_hash: string | null; // BlindIndexer hash, only when method_type = 'sms'
 }
 
+// Telephony data models
+
+export interface PhonesTable {
+  id: Generated<string>;
+  phone_hash: string;
+  encrypted_number: Buffer;
+  locale: string;
+  location_city: string | null;
+  location_region: string | null;
+  is_active: ColumnType<boolean, boolean | undefined, boolean>;
+  created_at: Generated<Date>;
+  updated_at: Generated<Date>;
+}
+
+export interface ClientsTable {
+  id: Generated<string>;
+  alias: string;
+  phone_id: string;
+  created_at: Generated<Date>;
+  updated_at: Generated<Date>;
+}
+
+export interface PhoneGreetingsTable {
+  id: Generated<string>;
+  phone_id: string;
+  greeting_type: string;
+  locale: string;
+  text: string;
+  is_audio: ColumnType<boolean, boolean | undefined, boolean>;
+  audio_blob_key: string | null;
+  created_at: Generated<Date>;
+  updated_at: Generated<Date>;
+}
+
+export interface SmsResponsesTable {
+  id: Generated<string>;
+  response_type: string;
+  locale: string;
+  text: string;
+  created_at: Generated<Date>;
+  updated_at: Generated<Date>;
+}
+
+export interface ConsultantsTable {
+  id: Generated<string>;
+  user_id: string;
+  encrypted_phone: Buffer;
+  phone_hash: string;
+  is_verified: ColumnType<boolean, boolean | undefined, boolean>;
+  verification_code_hash: string | null;
+  verification_expires_at: Date | null;
+  preferred_call_method: string;
+  created_at: Generated<Date>;
+  updated_at: Generated<Date>;
+}
+
 export interface TenantDatabase {
   users: UsersTable;
   sessions: SessionsTable;
@@ -219,6 +275,12 @@ export interface TenantDatabase {
   two_factor_methods: TwoFactorMethodsTable;
   wrapped_org_keys: WrappedOrgKeysTable;
   ticket_key_wraps: TicketKeyWrapsTable; // Interface only, CREATE TABLE with tickets migration
+  // Telephony data models
+  phones: PhonesTable;
+  clients: ClientsTable;
+  phone_greetings: PhoneGreetingsTable;
+  sms_responses: SmsResponsesTable;
+  consultants: ConsultantsTable;
   // Tickets (tickets, followups, audit_log)
   // Shifts (shifts, shift_occurrences)
   // Client portal (portal_channels)

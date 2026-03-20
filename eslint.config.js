@@ -116,6 +116,8 @@ export default tseslint.config(
             "createOprfRouter",
             "createOrgRouter",
             "createTelephonyAdminRouter",
+            "createTelephonyContentRouter",
+            "createConsultantRouter",
             "createTwoFactorRouter",
           ],
         },
