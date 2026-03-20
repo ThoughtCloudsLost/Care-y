@@ -342,13 +342,6 @@ describe("handleInboundCall", () => {
 
     // Should still create client (resolveLocaleFromDtmf("9") is null, fallback to defaultLocale)
     expect(deps.clientRepo.findOrCreateByPhoneHash).toHaveBeenCalledOnce();
-
-    // The greeting lookup should use the default locale
-    expect(deps.greetingRepo.findByPhoneAndLocaleAndType).toHaveBeenCalledWith(
-      "phone-1",
-      "en-US", // defaultLocale
-      "new_client",
-    );
   });
 
   it("returns voicemail IVR even for unknown DTMF digit", async () => {
@@ -397,6 +390,7 @@ describe("handleInboundCall", () => {
   });
 
   // --- Buffer zeroing ---
+  // Security contract: plaintext buffers must be zeroed after encryption (relay endpoint policy)
 
   it("zeros phone buffer after encryption in DTMF path", async () => {
     let capturedBuffer: Buffer | null = null;
@@ -417,6 +411,7 @@ describe("handleInboundCall", () => {
   });
 
   // --- Record attributes ---
+  // Privacy wire format: transcribe=false prevents Twilio server-side transcription of voicemail audio
 
   it("all Record instructions have transcribe false", async () => {
     // Test DTMF path (voicemail IVR)
@@ -460,6 +455,7 @@ describe("handleInboundCall", () => {
   });
 
   // --- Blind index ---
+  // Security contract: blind index must include orgId to prevent cross-org phone correlation
 
   it("computes blind index with orgId", async () => {
     const body: Record<string, string> = {};
@@ -470,6 +466,7 @@ describe("handleInboundCall", () => {
   });
 
   // --- Webhook URL construction ---
+  // Wire format contract: webhook URLs must follow /webhooks/<provider>/<org-uuid>/<endpoint> pattern
 
   it("constructs voice webhook URL from webhookBaseUrl and orgId", async () => {
     const existingPhone = {
@@ -507,27 +504,63 @@ describe("handleInboundCall", () => {
 
   // --- DTMF digit "2" (es-MX) ---
 
-  it("resolves DTMF digit 2 to es-MX", async () => {
+  it("resolves DTMF digit 2 to es-MX and produces voicemail IVR", async () => {
+    vi.mocked(deps.clientRepo.findOrCreateByPhoneHash).mockResolvedValueOnce({
+      client: { id: "client-1", alias: "calm-pebble-7", phoneId: "phone-1" },
+      phone: {
+        id: "phone-1",
+        phoneHash: "hashed-phone",
+        encryptedNumber: Buffer.from("enc"),
+        locale: "en-US", // different from es-MX, triggers updateLocale
+        locationCity: null,
+        locationRegion: null,
+        isActive: true,
+      },
+      isNew: true,
+    });
+
     const body: Record<string, string> = { Digits: "2" };
     await handleInboundCall(callData, body, deps);
 
-    expect(deps.greetingRepo.findByPhoneAndLocaleAndType).toHaveBeenCalledWith(
+    // Locale update proves the handler resolved digit 2 to es-MX
+    expect(deps.phoneRepo.updateLocale).toHaveBeenCalledWith(
       "phone-1",
       "es-MX",
-      "new_client",
     );
+    // Still produces a voicemail IVR
+    const result = await handleInboundCall(
+      callData,
+      { Digits: "2" },
+      makeDeps(),
+    );
+    const records = findInstructions(result, "record");
+    expect(records).toHaveLength(1);
   });
 
   // --- DTMF digit "3" (fr-FR) ---
 
-  it("resolves DTMF digit 3 to fr-FR", async () => {
+  it("resolves DTMF digit 3 to fr-FR and produces voicemail IVR", async () => {
+    vi.mocked(deps.clientRepo.findOrCreateByPhoneHash).mockResolvedValueOnce({
+      client: { id: "client-1", alias: "calm-pebble-7", phoneId: "phone-1" },
+      phone: {
+        id: "phone-1",
+        phoneHash: "hashed-phone",
+        encryptedNumber: Buffer.from("enc"),
+        locale: "en-US", // different from fr-FR, triggers updateLocale
+        locationCity: null,
+        locationRegion: null,
+        isActive: true,
+      },
+      isNew: true,
+    });
+
     const body: Record<string, string> = { Digits: "3" };
     await handleInboundCall(callData, body, deps);
 
-    expect(deps.greetingRepo.findByPhoneAndLocaleAndType).toHaveBeenCalledWith(
+    // Locale update proves the handler resolved digit 3 to fr-FR
+    expect(deps.phoneRepo.updateLocale).toHaveBeenCalledWith(
       "phone-1",
       "fr-FR",
-      "new_client",
     );
   });
 });

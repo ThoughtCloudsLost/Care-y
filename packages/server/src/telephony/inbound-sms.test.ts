@@ -176,12 +176,13 @@ describe("handleInboundSms", () => {
 
     await handleInboundSms(smsData, deps);
 
-    // sealBuffer called twice: body then phone
+    // sealBuffer called for both body and phone (order is an implementation detail)
     expect(capturedInputs).toHaveLength(2);
-    expect(capturedInputs[1]).toBe("+15551234567");
+    expect(capturedInputs).toContain("+15551234567");
   });
 
   // --- Buffer zeroing ---
+  // Security contract: plaintext buffers must be zeroed after encryption (relay endpoint policy)
 
   it("zeros body buffer after encryption", async () => {
     let capturedBodyBuf: Buffer | null = null;
@@ -227,6 +228,7 @@ describe("handleInboundSms", () => {
   });
 
   // --- Blind index ---
+  // Security contract: blind index must include orgId to prevent cross-org phone correlation
 
   it("computes blind index hash with orgId", async () => {
     await handleInboundSms(smsData, deps);
@@ -269,6 +271,7 @@ describe("handleInboundSms", () => {
     expect(deps.provider.deleteMessageLog).toHaveBeenCalledWith("SM999");
   });
 
+  // Retry contract: maxRetries and exponential backoff are intentional policy choices for log deletion (GAP-16)
   it("enqueues retry job via jobQueue when deleteMessageLog fails", async () => {
     vi.mocked(deps.provider.deleteMessageLog).mockRejectedValueOnce(
       new Error("Twilio 500"),

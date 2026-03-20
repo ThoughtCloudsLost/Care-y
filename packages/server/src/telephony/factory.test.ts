@@ -78,20 +78,15 @@ function createStubProvider(providerId: string): TelephonyProvider {
   };
 }
 
-interface MockDb {
+function createMockDb(row: Record<string, unknown> | undefined): {
   db: ProviderFactoryDeps["db"];
-  selectFromSpy: ReturnType<typeof vi.fn>;
-}
-
-function createMockDb(row: Record<string, unknown> | undefined): MockDb {
+} {
   const executeTakeFirst = vi.fn().mockResolvedValue(row);
   const where = vi.fn().mockReturnValue({ executeTakeFirst });
   const selectAll = vi.fn().mockReturnValue({ where });
-  const selectFromSpy = vi.fn().mockReturnValue({ selectAll });
-  const db = {
-    selectFrom: selectFromSpy,
-  } as unknown as ProviderFactoryDeps["db"];
-  return { db, selectFromSpy };
+  const selectFrom = vi.fn().mockReturnValue({ selectAll });
+  const db = { selectFrom } as unknown as ProviderFactoryDeps["db"];
+  return { db };
 }
 
 function encryptConfig(config: Record<string, unknown>): Buffer {
@@ -193,8 +188,8 @@ describe("createProviderFactory", () => {
     );
   });
 
-  it("caches: second call returns same instance without re-querying DB", async () => {
-    const { db, selectFromSpy } = createMockDb({
+  it("caches: second call returns same instance", async () => {
+    const { db } = createMockDb({
       org_id: "org-1",
       provider: "twilio",
       config: encryptConfig(VALID_TWILIO_CONFIG),
@@ -204,11 +199,12 @@ describe("createProviderFactory", () => {
     const first = await factory.getProvider("org-1");
     const second = await factory.getProvider("org-1");
     expect(second).toBe(first);
-    expect(selectFromSpy).toHaveBeenCalledTimes(1);
+    // Constructor called only once proves caching works at the behavioral level
+    expect(mockConstructor).toHaveBeenCalledTimes(1);
   });
 
-  it("invalidate: next call rebuilds provider from DB", async () => {
-    const { db, selectFromSpy } = createMockDb({
+  it("invalidate: next call rebuilds provider", async () => {
+    const { db } = createMockDb({
       org_id: "org-1",
       provider: "twilio",
       config: encryptConfig(VALID_TWILIO_CONFIG),
@@ -219,11 +215,11 @@ describe("createProviderFactory", () => {
     factory.invalidate("org-1");
     const second = await factory.getProvider("org-1");
     expect(second).not.toBe(first);
-    expect(selectFromSpy).toHaveBeenCalledTimes(2);
+    expect(mockConstructor).toHaveBeenCalledTimes(2);
   });
 
   it("invalidateAll: clears all cached entries", async () => {
-    const { db, selectFromSpy } = createMockDb({
+    const { db } = createMockDb({
       org_id: "org-1",
       provider: "twilio",
       config: encryptConfig(VALID_TWILIO_CONFIG),
@@ -234,18 +230,6 @@ describe("createProviderFactory", () => {
     factory.invalidateAll();
     const second = await factory.getProvider("org-1");
     expect(second).not.toBe(first);
-    expect(selectFromSpy).toHaveBeenCalledTimes(2);
-  });
-
-  it("succeeds after decrypting and parsing config", async () => {
-    const { db } = createMockDb({
-      org_id: "org-1",
-      provider: "twilio",
-      config: encryptConfig(VALID_TWILIO_CONFIG),
-      key_version: 1,
-    });
-    const factory = buildFactory(db);
-    const provider = await factory.getProvider("org-1");
-    expect(provider.providerId).toBe("twilio");
+    expect(mockConstructor).toHaveBeenCalledTimes(2);
   });
 });

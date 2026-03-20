@@ -1,3 +1,6 @@
+// Crypto contract: must match Twilio's webhook signature algorithm (HMAC-SHA1 over sorted params).
+// See https://www.twilio.com/docs/usage/webhooks/webhooks-security
+
 import { createHmac } from "node:crypto";
 import { describe, it, expect } from "vitest";
 import {

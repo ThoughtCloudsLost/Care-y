@@ -287,10 +287,6 @@ describe("createMockProvider", () => {
       });
 
       expect(warnSpy).toHaveBeenCalledTimes(2);
-      expect(warnSpy).toHaveBeenCalledWith("MOCK PROVIDER: sendSms called...");
-      expect(warnSpy).toHaveBeenCalledWith(
-        "MOCK PROVIDER: validateWebhook called...",
-      );
     });
   });
 

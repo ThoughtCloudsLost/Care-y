@@ -1,3 +1,6 @@
+// Wire format contract: exact TwiML XML is parsed by Twilio's voice processing servers.
+// Changing element names, attributes, or structure will break production call flows.
+
 import { describe, it, expect } from "vitest";
 import type { VoiceInstruction } from "./provider.js";
 import { ValidationError } from "../errors.js";
