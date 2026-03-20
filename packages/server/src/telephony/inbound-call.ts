@@ -4,7 +4,7 @@
  * returns VoiceInstruction[] for the provider to render as TwiML.
  *
  * Phone numbers are hashed (blind index) for lookup and sealed-box encrypted
- * for storage. Plaintext phone Buffers are zeroed in finally blocks.
+ * for storage. Plaintext is zeroed immediately after encryption (via crypto-helpers).
  */
 
 import type { IncomingCallData, VoiceInstruction } from "./provider.js";
@@ -22,6 +22,7 @@ import {
   buildVoicemailIvr,
   resolveLocaleFromDtmf,
 } from "./ivr.js";
+import { sealString } from "./crypto-helpers.js";
 
 export interface InboundCallDeps {
   readonly sealedBox: SealedBoxEncryptor;
@@ -81,35 +82,27 @@ export async function handleInboundCall(
   if (digits !== undefined) {
     const locale = resolveLocaleFromDtmf(digits) ?? defaultLocale;
 
-    let phoneBuf: Buffer | null = null;
-    try {
-      phoneBuf = Buffer.from(callData.from, "utf-8");
-      const encryptedNumber = sealedBox.sealBuffer(phoneBuf);
-      const { phone } = await clientRepo.findOrCreateByPhoneHash(
-        phoneHash,
-        encryptedNumber,
-      );
+    const encryptedNumber = sealString(sealedBox, callData.from);
+    const { phone } = await clientRepo.findOrCreateByPhoneHash(
+      phoneHash,
+      encryptedNumber,
+    );
 
-      // Update locale if the caller picked something different
-      if (phone.locale !== locale) {
-        await phoneRepo.updateLocale(phone.id, locale);
-      }
-
-      const greeting = await greetingRepo.findByPhoneAndLocaleAndType(
-        phone.id,
-        locale,
-        "new_client",
-      );
-
-      return buildVoicemailIvr(
-        greeting ?? FALLBACK_GREETING,
-        recordingCallbackUrl,
-      );
-    } finally {
-      if (phoneBuf !== null) {
-        phoneBuf.fill(0);
-      }
+    // Update locale if the caller picked something different
+    if (phone.locale !== locale) {
+      await phoneRepo.updateLocale(phone.id, locale);
     }
+
+    const greeting = await greetingRepo.findByPhoneAndLocaleAndType(
+      phone.id,
+      locale,
+      "new_client",
+    );
+
+    return buildVoicemailIvr(
+      greeting ?? FALLBACK_GREETING,
+      recordingCallbackUrl,
+    );
   }
 
   // Path 2: Returning caller (phone hash already exists)

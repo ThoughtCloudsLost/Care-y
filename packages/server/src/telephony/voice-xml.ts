@@ -40,6 +40,13 @@ function buildAttributeString(
   return parts.length > 0 ? " " + parts.join(" ") : "";
 }
 
+/** Extract and XML-escape the text body from a VoiceInstruction's attributes. */
+function extractTextBody(attributes: VoiceInstruction["attributes"]): string {
+  const text = attributes?.text;
+  if (text === undefined) return "";
+  return escapeXml(String(text));
+}
+
 export function renderInstruction(instruction: VoiceInstruction): string {
   const verb = VERB_MAP[instruction.type];
   if (verb === undefined) {
@@ -56,13 +63,7 @@ export function renderInstruction(instruction: VoiceInstruction): string {
     return `<${verb}${attrs}/>`;
   }
 
-  const textBody =
-    instruction.attributes && typeof instruction.attributes.text === "string"
-      ? escapeXml(instruction.attributes.text)
-      : typeof instruction.attributes?.text === "number" ||
-          typeof instruction.attributes?.text === "boolean"
-        ? escapeXml(String(instruction.attributes.text))
-        : "";
+  const textBody = extractTextBody(instruction.attributes);
 
   const childrenXml = instruction.children
     ? instruction.children.map(renderInstruction).join("")
