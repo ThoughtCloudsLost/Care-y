@@ -14,6 +14,7 @@ import type { SealedBoxEncryptor } from "../crypto/sealed-box.js";
 import type { BlobStore } from "../storage/store.js";
 import { validateAttachment } from "./attachment-validator.js";
 import { AttachmentValidationError } from "../errors.js";
+import { sealBufferAndZero } from "./crypto-helpers.js";
 
 export interface AttachmentResult {
   readonly blobKey: string;
@@ -86,35 +87,12 @@ export async function processAttachments(
     // 2. Convert to Buffer
     const rawData = Buffer.from(await response.arrayBuffer());
 
-    // 3. Validate
+    // 3. Validate (before encryption, rawData is still plaintext)
+    let validation;
     try {
-      const validation = validateAttachment(rawData, declaredType);
-
-      // 4. Encrypt (try/finally to zero rawData regardless of encryption outcome)
-      let encryptedData: Buffer;
-      try {
-        encryptedData = sealedBox.sealBuffer(rawData);
-      } finally {
-        rawData.fill(0);
-      }
-
-      // 5. Store
-      const blobKey = await blobStore.put(
-        orgSchema,
-        "attachment",
-        encryptedData,
-      );
-
-      // 6. Record accepted
-      accepted.push({
-        blobKey,
-        contentType: validation.contentType,
-        sizeBytes: validation.sizeBytes,
-      });
+      validation = validateAttachment(rawData, declaredType);
     } catch (err: unknown) {
-      // Zero rawData on any validation error path
       rawData.fill(0);
-
       if (err instanceof AttachmentValidationError) {
         rejected.push({
           mediaUrl: url,
@@ -123,10 +101,21 @@ export async function processAttachments(
         });
         continue;
       }
-
-      // Non-AttachmentValidationError: rethrow
       throw err;
     }
+
+    // 4. Encrypt and zero plaintext
+    const encryptedData = sealBufferAndZero(sealedBox, rawData);
+
+    // 5. Store
+    const blobKey = await blobStore.put(orgSchema, "attachment", encryptedData);
+
+    // 6. Record accepted
+    accepted.push({
+      blobKey,
+      contentType: validation.contentType,
+      sizeBytes: validation.sizeBytes,
+    });
   }
 
   return { accepted, rejected };

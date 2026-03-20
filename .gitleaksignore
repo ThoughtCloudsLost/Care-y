@@ -1,1 +1,5 @@
 faae94b65b864a7caba1a33d044ab2118716d3d5:packages/client/src/lib/auth/login-crypto.test.ts:generic-api-key:108
+# WebAuthn test fixtures: base64url authenticatorData blobs with high entropy
+c66afa58bd6046b4de7268a1035b7c4aaa7e938b:packages/server/src/routes/two-factor.test.ts:generic-api-key:680
+4712aafdacfb3ef0e807e014038dfb65c5411986:packages/shared/src/schemas/two-factor.test.ts:generic-api-key:285
+c66afa58bd6046b4de7268a1035b7c4aaa7e938b:packages/shared/src/schemas/two-factor.test.ts:generic-api-key:173

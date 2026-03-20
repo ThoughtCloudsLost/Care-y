@@ -3,6 +3,12 @@
  *
  * Wraps greeting and SMS response repositories. Routes delegate here
  * instead of creating repositories directly.
+ *
+ * Currently pass-through. Kept as a deliberate architectural seam:
+ * routes import this service (not repos directly) to satisfy the
+ * route-no-db-import validator rule. If future work adds business
+ * logic (authorization, audit logging, blob resolution for audio
+ * greetings), it belongs here.
  */
 
 import type { Kysely } from "kysely";

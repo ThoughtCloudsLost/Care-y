@@ -109,32 +109,21 @@ export function createTelephonyConfigService(
 
       const sealed = encryptConfig(configObj);
 
-      const existing = await db
-        .selectFrom("telephony_config")
-        .select("org_id")
-        .where("org_id", "=", input.orgId)
-        .executeTakeFirst();
-
-      if (existing) {
-        await db
-          .updateTable("telephony_config")
-          .set({
+      await db
+        .insertInto("telephony_config")
+        .values({
+          org_id: input.orgId,
+          provider: input.provider,
+          config: sealed,
+        })
+        .onConflict((oc) =>
+          oc.column("org_id").doUpdateSet({
             provider: input.provider,
             config: sealed,
             updated_at: new Date(),
-          })
-          .where("org_id", "=", input.orgId)
-          .execute();
-      } else {
-        await db
-          .insertInto("telephony_config")
-          .values({
-            org_id: input.orgId,
-            provider: input.provider,
-            config: sealed,
-          })
-          .execute();
-      }
+          }),
+        )
+        .execute();
 
       providerFactory.invalidate(input.orgId);
 

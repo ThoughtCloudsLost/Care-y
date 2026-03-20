@@ -4,7 +4,7 @@
  * (server-blind), finds or creates the client via blind index lookup,
  * sends an auto-reply, and triggers Twilio log deletion (GAP-16 M2).
  *
- * All plaintext is held in Buffers and zeroed in finally blocks.
+ * All plaintext is zeroed immediately after encryption (via crypto-helpers).
  * No PII is logged at any point.
  */
 
@@ -18,6 +18,7 @@ import type { SmsResponseRepository } from "./models/sms-response-repo.js";
 import { selectAutoReply } from "./sms-auto-reply.js";
 import { enqueueLogDeletion } from "../jobs/log-deletion.js";
 import { TelephonyError } from "../errors.js";
+import { sealString } from "./crypto-helpers.js";
 
 export interface InboundSmsResult {
   readonly clientId: string;
@@ -61,13 +62,7 @@ export async function handleInboundSms(
   } = deps;
 
   // 1. Encrypt SMS body (sealed box, server-blind)
-  let encryptedBody: Buffer;
-  const bodyBuffer = Buffer.from(smsData.body, "utf-8");
-  try {
-    encryptedBody = sealedBox.sealBuffer(bodyBuffer);
-  } finally {
-    bodyBuffer.fill(0);
-  }
+  const encryptedBody = sealString(sealedBox, smsData.body);
 
   // 2. Store encrypted body blob
   const bodyBlobKey = await blobStore.put(
@@ -77,15 +72,8 @@ export async function handleInboundSms(
   );
 
   // 3. Encrypt caller phone and compute blind index
-  let encryptedPhone: Buffer;
-  let phoneHash: string;
-  const phoneBuffer = Buffer.from(smsData.from, "utf-8");
-  try {
-    encryptedPhone = sealedBox.sealBuffer(phoneBuffer);
-    phoneHash = indexer.hash(smsData.from, orgId);
-  } finally {
-    phoneBuffer.fill(0);
-  }
+  const encryptedPhone = sealString(sealedBox, smsData.from);
+  const phoneHash = indexer.hash(smsData.from, orgId);
 
   // 4. Find or create client by phone hash
   const { client, phone, isNew } = await clientRepo.findOrCreateByPhoneHash(

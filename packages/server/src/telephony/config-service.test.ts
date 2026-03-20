@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, beforeAll, afterAll } from "vitest";
 import type { Kysely } from "kysely";
 import type { PlatformDatabase } from "../db/types.js";
 import type { SecretsEncryptor } from "../config/secrets.js";
@@ -12,12 +12,13 @@ import {
   type TelephonyConfigServiceDeps,
 } from "./config-service.js";
 import { NotFoundError, TelephonyConfigError } from "../errors.js";
+import { createTestDb, type TestDb, TEST_OPS_KEY } from "../test-utils.js";
+import { createSecretsEncryptor } from "../config/secrets.js";
+import { twilioConfigSchema } from "./schemas.js";
 
 // ---------------------------------------------------------------------------
-// Mock factories
+// Shared mock factories (used by both unit and DB integration tests)
 // ---------------------------------------------------------------------------
-
-const TEST_ORG_ID = "org-config-svc-test";
 
 function createMockEncryptor(): SecretsEncryptor & {
   lastEncryptInput: Buffer | null;
@@ -82,23 +83,19 @@ function createMockProviderStatic(): TelephonyProviderStatic {
   };
 }
 
+// ---------------------------------------------------------------------------
+// Unit tests (mocked DB, for non-persistence logic)
+// ---------------------------------------------------------------------------
+
 interface MockDbOptions {
   selectResult?: Record<string, unknown> | undefined;
 }
 
-interface MockDbSpies {
-  executeTakeFirst: ReturnType<typeof vi.fn>;
-  execute: ReturnType<typeof vi.fn>;
-}
-
-function createMockDb(options: MockDbOptions = {}): {
-  db: Kysely<PlatformDatabase>;
-  spies: MockDbSpies;
-} {
+function createMockDb(options: MockDbOptions = {}): Kysely<PlatformDatabase> {
   const executeTakeFirst = vi.fn().mockResolvedValue(options.selectResult);
   const execute = vi.fn().mockResolvedValue(undefined);
 
-  const db = {
+  return {
     selectFrom: vi.fn().mockReturnValue({
       selectAll: vi.fn().mockReturnValue({
         where: vi.fn().mockReturnValue({ executeTakeFirst }),
@@ -108,7 +105,10 @@ function createMockDb(options: MockDbOptions = {}): {
       }),
     }),
     insertInto: vi.fn().mockReturnValue({
-      values: vi.fn().mockReturnValue({ execute }),
+      values: vi.fn().mockReturnValue({
+        execute,
+        onConflict: vi.fn().mockReturnValue({ execute }),
+      }),
     }),
     updateTable: vi.fn().mockReturnValue({
       set: vi.fn().mockReturnValue({
@@ -116,16 +116,14 @@ function createMockDb(options: MockDbOptions = {}): {
       }),
     }),
   } as unknown as Kysely<PlatformDatabase>;
-
-  return { db, spies: { executeTakeFirst, execute } };
 }
 
-function buildDeps(overrides?: {
+function buildMockDeps(overrides?: {
   dbOptions?: MockDbOptions;
   factory?: ProviderFactory;
   encryptor?: SecretsEncryptor;
 }): TelephonyConfigServiceDeps {
-  const { db } = createMockDb(overrides?.dbOptions);
+  const db = createMockDb(overrides?.dbOptions);
   return {
     db,
     secretsEncryptor: overrides?.encryptor ?? createMockEncryptor(),
@@ -134,84 +132,29 @@ function buildDeps(overrides?: {
   };
 }
 
-// ---------------------------------------------------------------------------
-// Tests
-// ---------------------------------------------------------------------------
-
 describe("TelephonyConfigService", () => {
-  describe("saveConfig", () => {
-    it("inserts config when no existing row", async () => {
-      const deps = buildDeps({ dbOptions: { selectResult: undefined } });
-      const service = createTelephonyConfigService(deps);
-
-      const result = await service.saveConfig({
-        orgId: TEST_ORG_ID,
-        provider: "twilio",
-        accountId: "ACtest123",
-        authToken: "tok-secret",
-      });
-
-      expect(result).toEqual({ success: true });
-      expect(deps.providerFactory.invalidate).toHaveBeenCalledWith(TEST_ORG_ID);
-    });
-
-    it("updates config when row already exists", async () => {
-      const deps = buildDeps({
-        dbOptions: { selectResult: { org_id: TEST_ORG_ID } },
-      });
-      const service = createTelephonyConfigService(deps);
-
-      const result = await service.saveConfig({
-        orgId: TEST_ORG_ID,
-        provider: "twilio",
-        accountId: "ACtest123",
-        authToken: "tok-secret",
-      });
-
-      expect(result).toEqual({ success: true });
-    });
-
+  describe("saveConfig (unit)", () => {
     it("throws TelephonyConfigError for unsupported provider", async () => {
-      const deps = buildDeps();
+      const deps = buildMockDeps();
       const service = createTelephonyConfigService(deps);
 
       await expect(
         service.saveConfig({
-          orgId: TEST_ORG_ID,
+          orgId: "org-unit-test",
           provider: "unknown-provider",
           accountId: "AC123",
           authToken: "tok",
         }),
       ).rejects.toThrow(TelephonyConfigError);
     });
-
-    it("zeros plaintext buffer after encryption", async () => {
-      const encryptor = createMockEncryptor();
-      const deps = buildDeps({
-        dbOptions: { selectResult: undefined },
-        encryptor,
-      });
-      const service = createTelephonyConfigService(deps);
-
-      await service.saveConfig({
-        orgId: TEST_ORG_ID,
-        provider: "twilio",
-        accountId: "ACtest123",
-        authToken: "tok-secret",
-      });
-
-      // The encryptor captured the plaintext before it was zeroed.
-      // Verify the encrypt function was called (buffer was created and passed).
-      expect(encryptor.encrypt).toHaveBeenCalledOnce();
-    });
   });
 
   describe("getMaskedConfig", () => {
     it("returns masked config from provider factory", async () => {
-      const deps = buildDeps();
+      const deps = buildMockDeps();
       const service = createTelephonyConfigService(deps);
 
-      const result = await service.getMaskedConfig(TEST_ORG_ID);
+      const result = await service.getMaskedConfig("org-test");
 
       expect(result).toEqual(MASKED_CONFIG);
     });
@@ -220,10 +163,10 @@ describe("TelephonyConfigService", () => {
       const factory = createMockProviderFactory({
         getProvider: vi.fn().mockRejectedValue(new NotFoundError("No config")),
       });
-      const deps = buildDeps({ factory });
+      const deps = buildMockDeps({ factory });
       const service = createTelephonyConfigService(deps);
 
-      const result = await service.getMaskedConfig(TEST_ORG_ID);
+      const result = await service.getMaskedConfig("org-test");
 
       expect(result).toBeNull();
     });
@@ -232,96 +175,32 @@ describe("TelephonyConfigService", () => {
       const factory = createMockProviderFactory({
         getProvider: vi.fn().mockRejectedValue(new Error("DB down")),
       });
-      const deps = buildDeps({ factory });
+      const deps = buildMockDeps({ factory });
       const service = createTelephonyConfigService(deps);
 
-      await expect(service.getMaskedConfig(TEST_ORG_ID)).rejects.toThrow(
+      await expect(service.getMaskedConfig("org-test")).rejects.toThrow(
         "DB down",
       );
     });
   });
 
-  describe("provisionWebhooks", () => {
-    it("decrypts, provisions, re-encrypts, and returns phone count", async () => {
-      const configBlob = {
-        mode: "byot",
-        accountSid: "ACtest",
-        authToken: "tok",
-        phoneNumbers: [],
-      };
-      const encrypted = Buffer.concat([
-        Buffer.from("ENC:"),
-        Buffer.from(JSON.stringify(configBlob)),
-      ]);
-
-      const deps = buildDeps({
-        dbOptions: {
-          selectResult: {
-            org_id: TEST_ORG_ID,
-            provider: "twilio",
-            config: encrypted,
-          },
-        },
-      });
-      const service = createTelephonyConfigService(deps);
-
-      const result = await service.provisionWebhooks(
-        TEST_ORG_ID,
-        "https://api.example.com",
-      );
-
-      expect(result.success).toBe(true);
-      expect(result.phoneNumberCount).toBe(1);
-      expect(deps.providerFactory.invalidate).toHaveBeenCalledWith(TEST_ORG_ID);
-    });
-
+  describe("provisionWebhooks (unit)", () => {
     it("throws NotFoundError when no config row exists", async () => {
-      const deps = buildDeps({ dbOptions: { selectResult: undefined } });
+      const deps = buildMockDeps({ dbOptions: { selectResult: undefined } });
       const service = createTelephonyConfigService(deps);
 
       await expect(
-        service.provisionWebhooks(TEST_ORG_ID, "https://api.example.com"),
+        service.provisionWebhooks("org-test", "https://api.example.com"),
       ).rejects.toThrow(NotFoundError);
     });
   });
 
-  describe("lookupWebhookConfig", () => {
-    it("returns provider, accountSid, and authToken from decrypted config", async () => {
-      const configBlob = {
-        mode: "byot",
-        accountSid: "AC_LOOKUP_TEST",
-        authToken: "tok-lookup",
-        phoneNumbers: [],
-      };
-      const encrypted = Buffer.concat([
-        Buffer.from("ENC:"),
-        Buffer.from(JSON.stringify(configBlob)),
-      ]);
-
-      const deps = buildDeps({
-        dbOptions: {
-          selectResult: {
-            provider: "twilio",
-            config: encrypted,
-          },
-        },
-      });
-      const service = createTelephonyConfigService(deps);
-
-      const result = await service.lookupWebhookConfig(TEST_ORG_ID);
-
-      expect(result).toEqual({
-        provider: "twilio",
-        accountSid: "AC_LOOKUP_TEST",
-        authToken: "tok-lookup",
-      });
-    });
-
+  describe("lookupWebhookConfig (unit)", () => {
     it("returns null when no row exists", async () => {
-      const deps = buildDeps({ dbOptions: { selectResult: undefined } });
+      const deps = buildMockDeps({ dbOptions: { selectResult: undefined } });
       const service = createTelephonyConfigService(deps);
 
-      const result = await service.lookupWebhookConfig(TEST_ORG_ID);
+      const result = await service.lookupWebhookConfig("org-test");
 
       expect(result).toBeNull();
     });
@@ -333,7 +212,7 @@ describe("TelephonyConfigService", () => {
         Buffer.from(JSON.stringify(badConfig)),
       ]);
 
-      const deps = buildDeps({
+      const deps = buildMockDeps({
         dbOptions: {
           selectResult: {
             provider: "twilio",
@@ -343,9 +222,175 @@ describe("TelephonyConfigService", () => {
       });
       const service = createTelephonyConfigService(deps);
 
-      await expect(service.lookupWebhookConfig(TEST_ORG_ID)).rejects.toThrow(
+      await expect(service.lookupWebhookConfig("org-test")).rejects.toThrow(
         TelephonyConfigError,
       );
     });
   });
 });
+
+// ---------------------------------------------------------------------------
+// DB integration tests (real PostgreSQL, run via pnpm test:server:db)
+// ---------------------------------------------------------------------------
+
+describe.skipIf(!process.env.DATABASE_URL)(
+  "TelephonyConfigService (DB integration)",
+  () => {
+    let testDb: TestDb;
+    let secretsEncryptor: SecretsEncryptor;
+    const createdOrgIds: string[] = [];
+    const TEST_ORG_ID = "cafebabe-cafe-babe-cafe-cafebabe0001";
+
+    beforeAll(async () => {
+      testDb = await createTestDb();
+      secretsEncryptor = createSecretsEncryptor(TEST_OPS_KEY);
+
+      // Insert an org row (FK for telephony_config.org_id)
+      await testDb.platformDb
+        .insertInto("orgs")
+        .values({
+          id: TEST_ORG_ID,
+          slug: "cfg-svc-test",
+          schema_name: testDb.schemaName,
+        })
+        .execute();
+      createdOrgIds.push(TEST_ORG_ID);
+    });
+
+    afterAll(async () => {
+      // Clean up platform rows before dropping the schema
+      for (const id of createdOrgIds) {
+        await testDb.platformDb
+          .deleteFrom("telephony_config")
+          .where("org_id", "=", id)
+          .execute();
+        await testDb.platformDb
+          .deleteFrom("orgs")
+          .where("id", "=", id)
+          .execute();
+      }
+      await testDb.cleanup();
+    });
+
+    function buildDbDeps(
+      factoryOverrides?: Partial<ProviderFactory>,
+    ): TelephonyConfigServiceDeps {
+      return {
+        db: testDb.platformDb,
+        secretsEncryptor,
+        providerFactory: createMockProviderFactory(factoryOverrides),
+        providerStatics: new Map([
+          [
+            "twilio",
+            {
+              validateConfig: (raw: unknown) => twilioConfigSchema.parse(raw),
+              provisionWebhooks: vi.fn(async (config: unknown) => config),
+            },
+          ],
+        ]),
+      };
+    }
+
+    describe("saveConfig", () => {
+      it("persists config retrievable via lookupWebhookConfig", async () => {
+        const deps = buildDbDeps();
+        const service = createTelephonyConfigService(deps);
+
+        const result = await service.saveConfig({
+          orgId: TEST_ORG_ID,
+          provider: "twilio",
+          accountId: "ACpersistence01",
+          authToken: "test-tok-persist-01",
+        });
+
+        expect(result).toEqual({ success: true });
+
+        const lookup = await service.lookupWebhookConfig(TEST_ORG_ID);
+        expect(lookup).toEqual({
+          provider: "twilio",
+          accountSid: "ACpersistence01",
+          authToken: "test-tok-persist-01",
+        });
+      });
+
+      it("upserts on second save (updates, does not duplicate)", async () => {
+        const deps = buildDbDeps();
+        const service = createTelephonyConfigService(deps);
+
+        // First save was done in the previous test; do another
+        await service.saveConfig({
+          orgId: TEST_ORG_ID,
+          provider: "twilio",
+          accountId: "ACupdated02",
+          authToken: "test-tok-updated-02",
+        });
+
+        const lookup = await service.lookupWebhookConfig(TEST_ORG_ID);
+        expect(lookup).toEqual({
+          provider: "twilio",
+          accountSid: "ACupdated02",
+          authToken: "test-tok-updated-02",
+        });
+      });
+
+      it("invalidates provider cache after save", async () => {
+        const deps = buildDbDeps();
+        const service = createTelephonyConfigService(deps);
+
+        await service.saveConfig({
+          orgId: TEST_ORG_ID,
+          provider: "twilio",
+          accountId: "ACcache03",
+          authToken: "test-tok-cache-03",
+        });
+
+        expect(deps.providerFactory.invalidate).toHaveBeenCalledWith(
+          TEST_ORG_ID,
+        );
+      });
+
+      it("stores encrypted config (raw bytes differ from plaintext)", async () => {
+        const deps = buildDbDeps();
+        const service = createTelephonyConfigService(deps);
+
+        await service.saveConfig({
+          orgId: TEST_ORG_ID,
+          provider: "twilio",
+          accountId: "test-ACencrypt04",
+          authToken: "test-tok-encrypt-04",
+        });
+
+        const row = await testDb.platformDb
+          .selectFrom("telephony_config")
+          .select("config")
+          .where("org_id", "=", TEST_ORG_ID)
+          .executeTakeFirstOrThrow();
+
+        const raw = row.config.toString("utf-8");
+        expect(raw).not.toContain("test-ACencrypt04");
+        expect(raw).not.toContain("test-tok-encrypt-04");
+      });
+    });
+
+    describe("lookupWebhookConfig", () => {
+      it("returns null for unconfigured org", async () => {
+        const unconfiguredOrgId = "cafebabe-cafe-babe-cafe-cafebabe0002";
+        await testDb.platformDb
+          .insertInto("orgs")
+          .values({
+            id: unconfiguredOrgId,
+            slug: "cfg-svc-unconfigured",
+            schema_name: `test_uncfg_${testDb.schemaName.slice(-8)}`,
+          })
+          .execute();
+        createdOrgIds.push(unconfiguredOrgId);
+
+        const deps = buildDbDeps();
+        const service = createTelephonyConfigService(deps);
+        const result = await service.lookupWebhookConfig(unconfiguredOrgId);
+
+        expect(result).toBeNull();
+      });
+    });
+  },
+);

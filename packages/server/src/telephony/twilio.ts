@@ -167,36 +167,7 @@ export function createTwilioProvider(config: unknown): TelephonyProvider {
     },
 
     async getRecording(recordingId: string): Promise<Buffer> {
-      const url = `${accountBaseUrl(accountSid)}/Recordings/${recordingId}.wav`;
-      const encoded = Buffer.from(`${accountSid}:${authToken}`).toString(
-        "base64",
-      );
-
-      let response: Response;
-      try {
-        response = await fetch(url, {
-          method: "GET",
-          headers: { Authorization: `Basic ${encoded}` },
-          signal: AbortSignal.timeout(30_000),
-        });
-      } catch (err: unknown) {
-        const message =
-          err instanceof Error ? err.message : "Unknown network error";
-        throw new TelephonyError(
-          `Failed to fetch recording ${recordingId}: ${message}`,
-          502,
-        );
-      }
-
-      if (!response.ok) {
-        throw new TelephonyError(
-          `Failed to fetch recording ${recordingId}: HTTP ${String(response.status)}`,
-          response.status >= 500 ? 502 : response.status,
-        );
-      }
-
-      const arrayBuffer = await response.arrayBuffer();
-      return Buffer.from(arrayBuffer);
+      return http.getBuffer(`/Recordings/${recordingId}.wav`);
     },
 
     async deleteRecording(recordingId: string): Promise<void> {
@@ -280,6 +251,16 @@ export const twilioProviderStatic: TelephonyProviderStatic = {
   },
 };
 
+function masterHttpClient(
+  masterSid: string,
+  masterAuthToken: string,
+): ReturnType<typeof createProviderHttpClient> {
+  return createProviderHttpClient({
+    baseUrl: TWILIO_API_BASE,
+    auth: { username: masterSid, password: masterAuthToken },
+  });
+}
+
 /**
  * Create a Twilio subaccount under the master account (managed mode).
  * Returns the new subaccount's SID and auth token.
@@ -289,11 +270,7 @@ export async function createTwilioSubaccount(
   masterAuthToken: string,
   friendlyName: string,
 ): Promise<{ accountSid: string; authToken: string }> {
-  const http = createProviderHttpClient({
-    baseUrl: TWILIO_API_BASE,
-    auth: { username: masterSid, password: masterAuthToken },
-  });
-
+  const http = masterHttpClient(masterSid, masterAuthToken);
   const result = await http.post<{ sid: string; auth_token: string }>(
     "/.json",
     { FriendlyName: friendlyName },
@@ -313,11 +290,7 @@ export async function suspendTwilioSubaccount(
   masterAuthToken: string,
   subaccountSid: string,
 ): Promise<void> {
-  const http = createProviderHttpClient({
-    baseUrl: TWILIO_API_BASE,
-    auth: { username: masterSid, password: masterAuthToken },
-  });
-
+  const http = masterHttpClient(masterSid, masterAuthToken);
   await http.post(`/${subaccountSid}.json`, { Status: "suspended" });
 }
 
@@ -329,10 +302,6 @@ export async function closeTwilioSubaccount(
   masterAuthToken: string,
   subaccountSid: string,
 ): Promise<void> {
-  const http = createProviderHttpClient({
-    baseUrl: TWILIO_API_BASE,
-    auth: { username: masterSid, password: masterAuthToken },
-  });
-
+  const http = masterHttpClient(masterSid, masterAuthToken);
   await http.post(`/${subaccountSid}.json`, { Status: "closed" });
 }

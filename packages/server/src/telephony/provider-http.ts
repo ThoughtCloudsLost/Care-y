@@ -18,6 +18,8 @@ export interface ProviderHttpClient {
     body: Record<string, string>,
   ): Promise<ProviderResponse<T>>;
   delete(path: string): Promise<{ status: number }>;
+  /** Fetch a binary resource as a Buffer (e.g., audio recordings). */
+  getBuffer(path: string): Promise<Buffer>;
 }
 
 const DEFAULT_TIMEOUT_MS = 15_000;
@@ -128,6 +130,26 @@ export function createProviderHttpClient(
     async delete(path: string): Promise<{ status: number }> {
       const result = await request<undefined>("DELETE", path);
       return { status: result.status };
+    },
+
+    async getBuffer(path: string): Promise<Buffer> {
+      const url = `${baseUrl}${path}`;
+      let response: Response;
+      try {
+        response = await fetch(url, {
+          method: "GET",
+          headers: { Authorization: authHeader },
+          signal: AbortSignal.timeout(30_000),
+        });
+      } catch (err: unknown) {
+        throw wrapFetchError(err);
+      }
+
+      if (!response.ok) {
+        throw classifyError(response.status, url);
+      }
+
+      return Buffer.from(await response.arrayBuffer());
     },
   };
 }

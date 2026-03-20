@@ -13,6 +13,8 @@ import type { SealedBoxEncryptor } from "../crypto/sealed-box.js";
 import type { BlobStore } from "../storage/store.js";
 import type { JobQueue } from "../jobs/queue.js";
 import { TelephonyError } from "../errors.js";
+import { sealBufferAndZero } from "./crypto-helpers.js";
+import { deleteOrEnqueue } from "./log-deletion-helpers.js";
 
 export interface RecordingHandlerDeps {
   readonly provider: TelephonyProvider;
@@ -58,42 +60,18 @@ export async function handleRecordingComplete(
 
   const durationSeconds = rawDuration !== undefined ? Number(rawDuration) : 0;
 
-  // Fetch raw audio from the provider
-  let rawAudio: Buffer | null = null;
-  let encryptedAudio: Buffer;
-  try {
-    rawAudio = await provider.getRecording(recordingSid);
-    encryptedAudio = sealedBox.sealBuffer(rawAudio);
-  } finally {
-    if (rawAudio !== null) {
-      rawAudio.fill(0);
-    }
-  }
+  // Fetch raw audio from the provider, encrypt, and zero the plaintext
+  const rawAudio = await provider.getRecording(recordingSid);
+  const encryptedAudio = sealBufferAndZero(sealedBox, rawAudio);
 
   // Store encrypted audio in BlobStore
   const blobKey = await blobStore.put(orgSchema, "recording", encryptedAudio);
 
   // M3: Delete the recording from the provider. Enqueue retry on failure.
-  try {
-    await provider.deleteRecording(recordingSid);
-  } catch {
-    await jobQueue.enqueue("log-deletion", {
-      orgId,
-      resourceType: "recording",
-      resourceId: recordingSid,
-    });
-  }
+  await deleteOrEnqueue(provider, jobQueue, orgId, "recording", recordingSid);
 
   // M1: Delete the call log from the provider. Enqueue retry on failure.
-  try {
-    await provider.deleteCallLog(callSid);
-  } catch {
-    await jobQueue.enqueue("log-deletion", {
-      orgId,
-      resourceType: "call",
-      resourceId: callSid,
-    });
-  }
+  await deleteOrEnqueue(provider, jobQueue, orgId, "call", callSid);
 
   return { blobKey, durationSeconds };
 }

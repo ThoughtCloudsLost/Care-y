@@ -1,6 +1,14 @@
 import type { VoiceInstruction } from "./provider.js";
 import type { GreetingRecord } from "./models/greeting-repo.js";
 
+/** Convert a greeting record to a Say or Play instruction. */
+function greetingToInstruction(greeting: GreetingRecord): VoiceInstruction {
+  if (greeting.isAudio && greeting.audioBlobKey !== null) {
+    return { type: "play", attributes: { text: greeting.audioBlobKey } };
+  }
+  return { type: "say", attributes: { text: greeting.text } };
+}
+
 export const LOCALE_DTMF_MAP: Readonly<Record<string, string>> = {
   "1": "en-US",
   "2": "es-MX",
@@ -74,17 +82,7 @@ export function buildReturningCallerIvr(
   }
 
   // Main greeting
-  if (greeting.isAudio && greeting.audioBlobKey !== null) {
-    instructions.push({
-      type: "play",
-      attributes: { text: greeting.audioBlobKey },
-    });
-  } else {
-    instructions.push({
-      type: "say",
-      attributes: { text: greeting.text },
-    });
-  }
+  instructions.push(greetingToInstruction(greeting));
 
   // Record voicemail
   instructions.push({
@@ -118,13 +116,8 @@ export function buildVoicemailIvr(
   greeting: GreetingRecord,
   recordingCallbackUrl: string,
 ): readonly VoiceInstruction[] {
-  const greetingInstruction: VoiceInstruction =
-    greeting.isAudio && greeting.audioBlobKey !== null
-      ? { type: "play", attributes: { text: greeting.audioBlobKey } }
-      : { type: "say", attributes: { text: greeting.text } };
-
   return [
-    greetingInstruction,
+    greetingToInstruction(greeting),
     {
       type: "record",
       attributes: {
