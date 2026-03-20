@@ -1,3 +1,6 @@
+// Wire format contract: tests verify HTTP request shapes (auth headers, content-type, body encoding)
+// required by the Twilio REST API. Changing these breaks API authentication and request parsing.
+
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import {
   createProviderHttpClient,

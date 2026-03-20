@@ -154,6 +154,7 @@ describe("buildReturningCallerIvr", () => {
     expect(last.type).toBe("record");
   });
 
+  // Privacy wire format: transcribe=false prevents Twilio server-side transcription of voicemail audio
   it("sets transcribe=false and playBeep=true on the Record instruction", () => {
     const instructions = buildReturningCallerIvr(
       textGreeting,
@@ -217,6 +218,7 @@ describe("buildVoicemailIvr", () => {
     expect(instructions[1]!.type).toBe("record");
   });
 
+  // Privacy wire format: transcribe=false prevents Twilio server-side transcription of voicemail audio
   it("sets transcribe=false and playBeep=true on the Record", () => {
     const greeting = makeGreeting();
     const instructions = buildVoicemailIvr(greeting, "/record-callback");

@@ -124,6 +124,7 @@ describe("handleRecordingComplete", () => {
     expect(capturedContent).toBe("raw-audio");
   });
 
+  // Security contract: plaintext buffers must be zeroed after encryption (relay endpoint policy)
   it("zeros raw audio buffer after encryption", async () => {
     let capturedAudioBuf: Buffer | null = null;
     vi.mocked(deps.sealedBox.sealBuffer).mockImplementation((b: Buffer) => {

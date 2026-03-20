@@ -72,6 +72,7 @@ describe.skipIf(!process.env.DATABASE_URL)("ConsultantService", () => {
     expect(typeof result.id).toBe("string");
   });
 
+  // Persistence contract: verification codes must be stored as hashes, not plaintext
   it("register stores verification code hash in the database", async () => {
     const user = await createTestUser(testDb.db, {
       encryptor: testFieldEncryptor,

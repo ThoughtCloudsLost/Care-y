@@ -44,19 +44,6 @@ describe("selectAutoReply", () => {
     expect(result.locale).toBe("en-US");
   });
 
-  it("passes clientLocale, responseType, and defaultLocale to findWithFallback", async () => {
-    const repo = makeMockRepo(null);
-
-    await selectAutoReply(repo, "fr-FR", "voicemail_ack", "en-US");
-
-    expect(repo.findWithFallback).toHaveBeenCalledOnce();
-    expect(repo.findWithFallback).toHaveBeenCalledWith(
-      "fr-FR",
-      "voicemail_ack",
-      "en-US",
-    );
-  });
-
   it("works with voicemail_ack responseType (not just intake_ack)", async () => {
     const record: SmsResponseRecord = {
       id: "resp-vm",

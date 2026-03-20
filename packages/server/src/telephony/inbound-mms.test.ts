@@ -121,6 +121,7 @@ describe("processAttachments", () => {
   });
 
   // --- Buffer zeroing ---
+  // Security contract: plaintext buffers must be zeroed after encryption (relay endpoint policy)
 
   it("zeros raw attachment buffer after encryption", async () => {
     let capturedBuf: Buffer | null = null;

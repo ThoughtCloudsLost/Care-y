@@ -1,3 +1,6 @@
+// Wire format + crypto contract: tests verify Twilio webhook URL patterns, required form fields,
+// and HMAC-SHA1 signature computation that must match Twilio's algorithm exactly.
+
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { createHmac } from "node:crypto";
 import { sendMockSmsWebhook, sendMockCallWebhook } from "./mock-webhook.js";

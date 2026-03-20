@@ -1,3 +1,6 @@
+// Wire format contract: tests verify exact HTTP requests (URLs, methods, body params, headers)
+// sent to the Twilio REST API. Changing these breaks production telephony operations.
+
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import type { TwilioConfig } from "./schemas.js";
 import type { VoiceInstruction } from "./provider.js";

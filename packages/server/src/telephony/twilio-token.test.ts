@@ -1,3 +1,6 @@
+// Wire format contract: Twilio Client SDK requires this exact JWT structure (twilio-fpa;v=1).
+// Changing header fields, claim names, or grant shapes will break WebRTC call setup.
+
 import { createHmac } from "node:crypto";
 import { describe, it, expect } from "vitest";
 import { generateTwilioAccessToken } from "./twilio-token.js";
