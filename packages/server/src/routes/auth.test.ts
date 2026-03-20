@@ -6,7 +6,7 @@
  * Requires DATABASE_URL (runs inside Docker container).
  */
 
-import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
 import { randomUUID } from "node:crypto";
 import { sql, type Kysely } from "kysely";
 import type { PlatformDatabase, TenantDatabase } from "../db/types.js";
@@ -147,6 +147,7 @@ describe.skipIf(!HAS_DB)("auth + org routers (DB integration)", () => {
         isSecureCookie: false,
         emailSender: createMockEmailSender(),
         providerFactory: createMockProviderFactory(),
+        resolveCallerId: vi.fn().mockResolvedValue("+15551234567"),
       },
       twoFactorDeps: {
         emailSender: createMockEmailSender(),
@@ -154,6 +155,7 @@ describe.skipIf(!HAS_DB)("auth + org routers (DB integration)", () => {
         indexer: testBlindIndexer,
         tokenizer: testSessionTokenizer,
         providerFactory: createMockProviderFactory(),
+        resolveCallerId: vi.fn().mockResolvedValue("+15551234567"),
       },
       oprfDeps: createMockOprfDeps(),
       orgService,

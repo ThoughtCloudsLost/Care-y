@@ -8,7 +8,7 @@
  * Requires DATABASE_URL (runs inside Docker via pnpm test:server:db).
  */
 
-import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
 import { randomUUID } from "node:crypto";
 import { sql, type Kysely } from "kysely";
 import { RoleId } from "@care-y/shared";
@@ -137,6 +137,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
           isSecureCookie: false,
           emailSender: createMockEmailSender(),
           providerFactory: createMockProviderFactory(),
+          resolveCallerId: vi.fn().mockResolvedValue("+15551234567"),
         },
         twoFactorDeps: {
           emailSender: createMockEmailSender(),
@@ -144,6 +145,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
           indexer: testBlindIndexer,
           tokenizer: testSessionTokenizer,
           providerFactory: createMockProviderFactory(),
+          resolveCallerId: vi.fn().mockResolvedValue("+15551234567"),
         },
         oprfDeps: createMockOprfDeps(),
         orgService,

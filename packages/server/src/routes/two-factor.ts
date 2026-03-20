@@ -41,7 +41,11 @@ import {
   createEmailCodeService,
   type EmailCodeService,
 } from "../auth/email-code.js";
-import { createSmsCodeService, type SmsCodeService } from "../auth/sms-code.js";
+import {
+  createSmsCodeService,
+  type SmsCodeService,
+  type CallerIdResolver,
+} from "../auth/sms-code.js";
 import { NotFoundError, TelephonyConfigError } from "../errors.js";
 import {
   totpVerifySchema,
@@ -78,6 +82,7 @@ export interface TwoFactorRouterDeps {
   readonly indexer: BlindIndexer;
   readonly tokenizer: SessionTokenizer;
   readonly providerFactory: ProviderFactory;
+  readonly resolveCallerId: CallerIdResolver;
 }
 
 interface ScopedServices {
@@ -105,7 +110,12 @@ export async function createScopedTwoFactorServices(
   let smsCodes: SmsCodeService | null = null;
   try {
     const provider = await deps.providerFactory.getProvider(org.orgId);
-    smsCodes = createSmsCodeService(org.tenantDb, provider);
+    smsCodes = createSmsCodeService(
+      org.tenantDb,
+      provider,
+      deps.resolveCallerId,
+      org.orgSchema,
+    );
   } catch (err: unknown) {
     // NotFoundError: telephony not configured for this org. SMS 2FA unavailable.
     // TelephonyConfigError: config exists but is invalid. Also treat as unavailable

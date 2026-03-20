@@ -141,6 +141,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
           isSecureCookie: false,
           emailSender: mockEmail,
           providerFactory: createMockProviderFactory(),
+          resolveCallerId: vi.fn().mockResolvedValue("+15551234567"),
         },
         twoFactorDeps: {
           emailSender: mockEmail,
@@ -148,6 +149,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
           indexer: testBlindIndexer,
           tokenizer: testSessionTokenizer,
           providerFactory: createMockProviderFactory(),
+          resolveCallerId: vi.fn().mockResolvedValue("+15551234567"),
         },
         oprfDeps: createMockOprfDeps(),
         orgService,

@@ -272,6 +272,25 @@ const telephonyConfigService = createTelephonyConfigService({
   providerStatics,
 });
 
+// --- Phone purpose resolver ---
+
+const phoneResolver = createPhoneResolver({
+  async getOrgConfig(orgSchema: string) {
+    const tDb = tenantDb(orgSchema);
+    const row = await tDb
+      .selectFrom("org_config")
+      .select(["phone_outbound_sid", "phone_system_sid"])
+      .executeTakeFirst();
+    return {
+      phone_outbound_sid: row?.phone_outbound_sid ?? null,
+      phone_system_sid: row?.phone_system_sid ?? null,
+    };
+  },
+  async getProvisionedPhones(orgSchema: string) {
+    return telephonyConfigService.lookupProvisionedPhones(orgSchema);
+  },
+});
+
 const appRouter = createAppRouter({
   authDeps: {
     hasher,
@@ -284,6 +303,7 @@ const appRouter = createAppRouter({
     isSecureCookie: env.NODE_ENV === "production",
     emailSender,
     providerFactory,
+    resolveCallerId: phoneResolver,
   },
   twoFactorDeps: {
     emailSender,
@@ -291,6 +311,7 @@ const appRouter = createAppRouter({
     indexer,
     tokenizer,
     providerFactory,
+    resolveCallerId: phoneResolver,
   },
   oprfDeps: { oprfService },
   orgService,
@@ -348,25 +369,6 @@ const webhookHandler = createWebhookHandler(
   webhookDispatch,
   env.WEBHOOK_BASE_URL,
 );
-
-// --- Phone purpose resolver ---
-
-const phoneResolver = createPhoneResolver({
-  async getOrgConfig(orgSchema: string) {
-    const tDb = tenantDb(orgSchema);
-    const row = await tDb
-      .selectFrom("org_config")
-      .select(["phone_outbound_sid", "phone_system_sid"])
-      .executeTakeFirst();
-    return {
-      phone_outbound_sid: row?.phone_outbound_sid ?? null,
-      phone_system_sid: row?.phone_system_sid ?? null,
-    };
-  },
-  async getProvisionedPhones(orgSchema: string) {
-    return telephonyConfigService.lookupProvisionedPhones(orgSchema);
-  },
-});
 
 // --- Relay infrastructure ---
 

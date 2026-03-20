@@ -389,6 +389,7 @@ describe("OPRF tRPC route", () => {
         emailSender: createMockEmailSender(),
         tokenizer: testSessionTokenizer,
         providerFactory: createMockProviderFactory(),
+        resolveCallerId: vi.fn().mockResolvedValue("+15551234567"),
       },
       twoFactorDeps: {
         emailSender: createMockEmailSender(),
@@ -396,6 +397,7 @@ describe("OPRF tRPC route", () => {
         indexer: testBlindIndexer,
         tokenizer: testSessionTokenizer,
         providerFactory: createMockProviderFactory(),
+        resolveCallerId: vi.fn().mockResolvedValue("+15551234567"),
       },
       oprfDeps: { oprfService: service },
       orgService: {
@@ -585,6 +587,7 @@ describe.skipIf(!DOCKER_OPRF_AVAILABLE)(
           emailSender: createMockEmailSender(),
           tokenizer: testSessionTokenizer,
           providerFactory: createMockProviderFactory(),
+          resolveCallerId: vi.fn().mockResolvedValue("+15551234567"),
         },
         twoFactorDeps: {
           emailSender: createMockEmailSender(),
@@ -592,6 +595,7 @@ describe.skipIf(!DOCKER_OPRF_AVAILABLE)(
           indexer: testBlindIndexer,
           tokenizer: testSessionTokenizer,
           providerFactory: createMockProviderFactory(),
+          resolveCallerId: vi.fn().mockResolvedValue("+15551234567"),
         },
         oprfDeps: { oprfService: service },
         orgService: {
