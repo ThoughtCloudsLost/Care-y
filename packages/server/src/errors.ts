@@ -160,6 +160,21 @@ export class SecretCryptoError extends AppError {
   }
 }
 
+/** MMS attachment failed validation (size, type, or magic bytes). */
+export class AttachmentValidationError extends AppError {
+  readonly code = "ATTACHMENT_VALIDATION_ERROR" as const;
+  readonly httpStatus = 422;
+  readonly reason: "size" | "content_type" | "magic_bytes";
+
+  constructor(
+    message: string,
+    reason: "size" | "content_type" | "magic_bytes",
+  ) {
+    super(message);
+    this.reason = reason;
+  }
+}
+
 export function isAppError(err: unknown): err is AppError {
   return err instanceof AppError;
 }

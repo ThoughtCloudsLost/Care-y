@@ -57,6 +57,20 @@ import { createWebhookHandler } from "./routes/webhooks.js";
 import { createDedupStore } from "./telephony/dedup-store.js";
 import { registerLogDeletionHandler } from "./jobs/log-deletion.js";
 import { createTelephonyConfigService } from "./telephony/config-service.js";
+import { createBlobStore, type BlobStore } from "./storage/index.js";
+import { createSealedBoxEncryptor } from "./crypto/sealed-box.js";
+import type { SealedBoxEncryptor } from "./crypto/sealed-box.js";
+import type { Kysely } from "kysely";
+import type { TenantDatabase } from "./db/types.js";
+import { createPhoneRepository } from "./telephony/models/phone-repo.js";
+import { createClientRepository } from "./telephony/models/client-repo.js";
+import { createSmsResponseRepository } from "./telephony/models/sms-response-repo.js";
+import { createGreetingRepository } from "./telephony/models/greeting-repo.js";
+import { handleInboundSms } from "./telephony/inbound-sms.js";
+import { handleInboundCall } from "./telephony/inbound-call.js";
+import { handleRecordingComplete } from "./telephony/recording-handler.js";
+import { processAttachments } from "./telephony/inbound-mms.js";
+import type { WebhookDispatch } from "./routes/webhooks.js";
 
 // --- DB startup probe ---
 
@@ -212,6 +226,13 @@ const providerFactory = createProviderFactory({
   providerConstructors: new Map([["twilio", createTwilioProvider]]),
 });
 
+// --- BlobStore ---
+
+const blobStore: BlobStore = createBlobStore(
+  env.BLOB_STORE_TYPE,
+  env.BLOB_STORE_PATH,
+);
+
 const orgService = createOrgService(db, tenantDb);
 const hasher = createScryptHasher();
 const { loginLimiter, saltLimiter } = createAuthRateLimiters();
@@ -285,6 +306,125 @@ registerLogDeletionHandler(jobQueue, providerFactory);
 jobQueue.start();
 console.log("Job queue started");
 
+// --- Org context resolver for webhook dispatch ---
+
+interface WebhookOrgContext {
+  readonly orgId: string;
+  readonly orgSchema: string;
+  readonly tDb: Kysely<TenantDatabase>;
+  readonly sealedBox: SealedBoxEncryptor;
+}
+
+async function resolveOrgForWebhook(
+  orgId: string,
+): Promise<WebhookOrgContext | null> {
+  const org = await orgService.findById(orgId);
+  if (org?.isActive !== true) return null;
+
+  const tDb = tenantDb(org.schemaName);
+  const row = await tDb
+    .selectFrom("org_config")
+    .select("org_public_key")
+    .executeTakeFirst();
+
+  if (!row?.org_public_key) return null;
+
+  const sealedBox = createSealedBoxEncryptor(row.org_public_key);
+  return { orgId: org.id, orgSchema: org.schemaName, tDb, sealedBox };
+}
+
+// --- Webhook dispatch callbacks ---
+
+const webhookDispatch: WebhookDispatch = {
+  async onInboundSms(
+    orgId: string,
+    body: Record<string, string>,
+  ): Promise<string | null> {
+    const org = await resolveOrgForWebhook(orgId);
+    if (!org) return null;
+
+    const provider = await providerFactory.getProvider(orgId);
+    const phoneRepo = createPhoneRepository(org.tDb);
+    const clientRepo = createClientRepository(org.tDb, phoneRepo);
+    const smsResponseRepo = createSmsResponseRepository(org.tDb);
+
+    const smsData = provider.parseIncomingSms(body);
+
+    const result = await handleInboundSms(smsData, {
+      provider,
+      sealedBox: org.sealedBox,
+      indexer,
+      blobStore,
+      jobQueue,
+      clientRepo,
+      smsResponseRepo,
+      orgId,
+      orgSchema: org.orgSchema,
+      defaultLocale: "en-US",
+    });
+
+    // Process MMS attachments if present
+    if (smsData.numMedia > 0) {
+      await processAttachments(smsData.mediaUrls, smsData.mediaContentTypes, {
+        sealedBox: org.sealedBox,
+        blobStore,
+        orgSchema: org.orgSchema,
+      });
+      // Blob keys available in result for ticket follow-up wiring
+    }
+
+    void result; // Consumed by ticket creation when wired
+    return null; // No TwiML response (auto-reply sent via API)
+  },
+
+  async onInboundVoice(
+    orgId: string,
+    body: Record<string, string>,
+  ): Promise<string | null> {
+    const org = await resolveOrgForWebhook(orgId);
+    if (!org) return null;
+
+    const provider = await providerFactory.getProvider(orgId);
+
+    // Check if this is a recording-complete callback
+    // eslint-disable-next-line @typescript-eslint/dot-notation
+    const recordingSid = body["RecordingSid"];
+    if (recordingSid !== undefined && recordingSid !== "") {
+      await handleRecordingComplete(body, {
+        provider,
+        sealedBox: org.sealedBox,
+        blobStore,
+        jobQueue,
+        orgSchema: org.orgSchema,
+        orgId,
+      });
+      return null;
+    }
+
+    const phoneRepo = createPhoneRepository(org.tDb);
+    const clientRepo = createClientRepository(org.tDb, phoneRepo);
+    const greetingRepo = createGreetingRepository(org.tDb);
+
+    const callData = provider.parseIncomingCall(body);
+
+    const instructions = await handleInboundCall(callData, body, {
+      sealedBox: org.sealedBox,
+      indexer,
+      phoneRepo,
+      clientRepo,
+      greetingRepo,
+      orgId,
+      webhookBaseUrl: env.WEBHOOK_BASE_URL,
+      defaultLocale: "en-US",
+    });
+
+    return provider.generateVoiceResponse(instructions);
+  },
+
+  // onStatusCallback: not wired yet. Ticket system will use status
+  // callbacks for state updates.
+};
+
 // --- Webhook handler ---
 
 const webhookDedupStore = createDedupStore();
@@ -299,10 +439,7 @@ const webhookHandler = createWebhookHandler(
     rateLimiter: webhookRateLimiter,
     dedupStore: webhookDedupStore,
   },
-  {
-    // No dispatch handlers yet. Webhooks validate and return 200.
-    // Add onInboundSms/onInboundVoice/onStatusCallback here.
-  },
+  webhookDispatch,
   env.WEBHOOK_BASE_URL,
 );
 
