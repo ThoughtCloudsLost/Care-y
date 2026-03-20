@@ -7,7 +7,11 @@
  */
 
 import { router, adminProcedure, withErrorWrapping } from "../trpc/trpc.js";
-import { createTelephonyContentService } from "../telephony/telephony-content-service.js";
+import {
+  createTelephonyContentService,
+  type TelephonyContentService,
+} from "../telephony/telephony-content-service.js";
+import type { OrgContext } from "../trpc/context.js";
 import {
   createGreetingInputSchema,
   updateGreetingInputSchema,
@@ -19,26 +23,40 @@ import {
   listSmsResponsesInputSchema,
 } from "@care-y/shared";
 
+export interface TelephonyContentRouterDeps {
+  readonly createService: (
+    tenantDb: OrgContext["tenantDb"],
+  ) => TelephonyContentService;
+}
+
+const defaultDeps: TelephonyContentRouterDeps = {
+  createService: createTelephonyContentService,
+};
+
 // care-y-ignore-next-line missing-return-type -- tRPC router() returns a deeply generic type that cannot be written explicitly
-export function createTelephonyContentRouter() {
+export function createTelephonyContentRouter(
+  deps: TelephonyContentRouterDeps = defaultDeps,
+) {
+  const { createService } = deps;
+
   return router({
     listGreetings: adminProcedure.input(listGreetingsInputSchema).query(
       withErrorWrapping(async ({ ctx, input }) => {
-        const svc = createTelephonyContentService(ctx.org.tenantDb);
+        const svc = createService(ctx.org.tenantDb);
         return svc.listGreetings(input.phoneId);
       }),
     ),
 
     createGreeting: adminProcedure.input(createGreetingInputSchema).mutation(
       withErrorWrapping(async ({ ctx, input }) => {
-        const svc = createTelephonyContentService(ctx.org.tenantDb);
+        const svc = createService(ctx.org.tenantDb);
         return svc.createGreeting(input);
       }),
     ),
 
     updateGreeting: adminProcedure.input(updateGreetingInputSchema).mutation(
       withErrorWrapping(async ({ ctx, input }) => {
-        const svc = createTelephonyContentService(ctx.org.tenantDb);
+        const svc = createService(ctx.org.tenantDb);
         return svc.updateGreeting(input.id, {
           text: input.text,
           isAudio: input.isAudio,
@@ -48,7 +66,7 @@ export function createTelephonyContentRouter() {
 
     deleteGreeting: adminProcedure.input(deleteGreetingInputSchema).mutation(
       withErrorWrapping(async ({ ctx, input }) => {
-        const svc = createTelephonyContentService(ctx.org.tenantDb);
+        const svc = createService(ctx.org.tenantDb);
         await svc.deleteGreeting(input.id);
         return { success: true as const };
       }),
@@ -56,7 +74,7 @@ export function createTelephonyContentRouter() {
 
     listSmsResponses: adminProcedure.input(listSmsResponsesInputSchema).query(
       withErrorWrapping(async ({ ctx, input }) => {
-        const svc = createTelephonyContentService(ctx.org.tenantDb);
+        const svc = createService(ctx.org.tenantDb);
         return svc.listSmsResponses(input.locale);
       }),
     ),
@@ -65,7 +83,7 @@ export function createTelephonyContentRouter() {
       .input(createSmsResponseInputSchema)
       .mutation(
         withErrorWrapping(async ({ ctx, input }) => {
-          const svc = createTelephonyContentService(ctx.org.tenantDb);
+          const svc = createService(ctx.org.tenantDb);
           return svc.createSmsResponse(input);
         }),
       ),
@@ -74,7 +92,7 @@ export function createTelephonyContentRouter() {
       .input(updateSmsResponseInputSchema)
       .mutation(
         withErrorWrapping(async ({ ctx, input }) => {
-          const svc = createTelephonyContentService(ctx.org.tenantDb);
+          const svc = createService(ctx.org.tenantDb);
           return svc.updateSmsResponse(input.id, { text: input.text });
         }),
       ),
@@ -83,7 +101,7 @@ export function createTelephonyContentRouter() {
       .input(deleteSmsResponseInputSchema)
       .mutation(
         withErrorWrapping(async ({ ctx, input }) => {
-          const svc = createTelephonyContentService(ctx.org.tenantDb);
+          const svc = createService(ctx.org.tenantDb);
           await svc.deleteSmsResponse(input.id);
           return { success: true as const };
         }),

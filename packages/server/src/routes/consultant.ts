@@ -10,26 +10,44 @@
  */
 
 import { router, authed2faProcedure, withErrorWrapping } from "../trpc/trpc.js";
-import { createConsultantService } from "../telephony/consultant-service.js";
+import {
+  createConsultantService,
+  type ConsultantService,
+} from "../telephony/consultant-service.js";
+import type { OrgContext } from "../trpc/context.js";
 import {
   registerConsultantInputSchema,
   updateConsultantInputSchema,
   verifyConsultantInputSchema,
 } from "@care-y/shared";
 
+export interface ConsultantRouterDeps {
+  readonly createService: (
+    tenantDb: OrgContext["tenantDb"],
+  ) => ConsultantService;
+}
+
+const defaultDeps: ConsultantRouterDeps = {
+  createService: createConsultantService,
+};
+
 // care-y-ignore-next-line missing-return-type -- tRPC router() returns a deeply generic type that cannot be written explicitly
-export function createConsultantRouter() {
+export function createConsultantRouter(
+  deps: ConsultantRouterDeps = defaultDeps,
+) {
+  const { createService } = deps;
+
   return router({
     get: authed2faProcedure.query(
       withErrorWrapping(async ({ ctx }) => {
-        const svc = createConsultantService(ctx.org.tenantDb);
+        const svc = createService(ctx.org.tenantDb);
         return svc.getByUserId(ctx.user.id);
       }),
     ),
 
     register: authed2faProcedure.input(registerConsultantInputSchema).mutation(
       withErrorWrapping(async ({ ctx, input }) => {
-        const svc = createConsultantService(ctx.org.tenantDb);
+        const svc = createService(ctx.org.tenantDb);
         const encryptedPhone = Buffer.from(input.encryptedPhone, "base64");
         return svc.register(
           ctx.user.id,
@@ -42,7 +60,7 @@ export function createConsultantRouter() {
 
     verify: authed2faProcedure.input(verifyConsultantInputSchema).mutation(
       withErrorWrapping(async ({ ctx, input }) => {
-        const svc = createConsultantService(ctx.org.tenantDb);
+        const svc = createService(ctx.org.tenantDb);
         await svc.verify(ctx.user.id, input.code);
         return { success: true as const };
       }),
@@ -52,7 +70,7 @@ export function createConsultantRouter() {
       .input(updateConsultantInputSchema)
       .mutation(
         withErrorWrapping(async ({ ctx, input }) => {
-          const svc = createConsultantService(ctx.org.tenantDb);
+          const svc = createService(ctx.org.tenantDb);
           if (input.preferredCallMethod !== undefined) {
             await svc.updatePreference(ctx.user.id, input.preferredCallMethod);
           }
@@ -62,7 +80,7 @@ export function createConsultantRouter() {
 
     delete: authed2faProcedure.mutation(
       withErrorWrapping(async ({ ctx }) => {
-        const svc = createConsultantService(ctx.org.tenantDb);
+        const svc = createService(ctx.org.tenantDb);
         await svc.deleteByUserId(ctx.user.id);
         return { success: true as const };
       }),
