@@ -39,6 +39,7 @@ function createMockConfigService(
       .fn()
       .mockResolvedValue({ success: true as const, phoneNumberCount: 2 }),
     lookupWebhookConfig: vi.fn().mockResolvedValue(null),
+    lookupProvisionedPhones: vi.fn().mockResolvedValue([]),
     ...overrides,
   };
 }

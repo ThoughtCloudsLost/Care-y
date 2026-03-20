@@ -36,9 +36,8 @@ import { createAuthService } from "../auth/service.js";
 import { parseCookies } from "../auth/cookies.js";
 import { SESSION_COOKIE_NAME } from "../auth/service.js";
 import { extractClientIp } from "../http/request-utils.js";
-import { extractSubdomain } from "@care-y/shared";
 import { tenantDb } from "../db/db.js";
-import { getEnv } from "../env.js";
+import { extractOrgSlug } from "../org/slug-resolver.js";
 
 export interface OrgContext {
   readonly orgId: string;
@@ -62,26 +61,6 @@ export interface ContextDeps {
   readonly encryptor: FieldEncryptor;
   readonly indexer: BlindIndexer;
   readonly tokenizer: SessionTokenizer;
-}
-
-/**
- * Extracts org slug from the request.
- * Dev: reads X-Org-Slug header. Prod: extracts subdomain from Host header.
- */
-function extractOrgSlug(req: IncomingMessage): string | null {
-  const env = getEnv();
-
-  if (env.NODE_ENV === "development") {
-    const header = req.headers["x-org-slug"];
-    if (typeof header === "string" && header.length > 0) {
-      return header;
-    }
-  }
-
-  const host = req.headers.host;
-  if (host === undefined || host === "") return null;
-
-  return extractSubdomain(host);
 }
 
 /**

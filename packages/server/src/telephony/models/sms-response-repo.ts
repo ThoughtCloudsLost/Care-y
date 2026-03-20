@@ -11,7 +11,6 @@
  */
 
 import type { Kysely, Selectable } from "kysely";
-import { sql } from "kysely";
 import type { TenantDatabase, SmsResponsesTable } from "../../db/types.js";
 import { NotFoundError } from "../../errors.js";
 
@@ -82,7 +81,9 @@ export function createSmsResponseRepository(
         .selectAll()
         .where("response_type", "=", responseType)
         .where("locale", "in", [locale, defaultLocale])
-        .orderBy(sql<number>`case when "locale" = ${locale} then 0 else 1 end`)
+        .orderBy((eb) =>
+          eb.case().when("locale", "=", locale).then(0).else(1).end(),
+        )
         .limit(1)
         .executeTakeFirst();
 
