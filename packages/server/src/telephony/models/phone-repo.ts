@@ -32,6 +32,7 @@ export interface PhoneRepository {
   findByHash(phoneHash: string): Promise<PhoneRecord | null>;
   create(input: CreatePhoneInput): Promise<PhoneRecord>;
   updateLocale(id: string, locale: string): Promise<void>;
+  deactivate(id: string): Promise<void>;
 }
 
 function mapPhoneRow(row: Selectable<PhonesTable>): PhoneRecord {
@@ -82,6 +83,14 @@ export function createPhoneRepository(
       await db
         .updateTable("phones")
         .set({ locale, updated_at: new Date() })
+        .where("id", "=", id)
+        .execute();
+    },
+
+    async deactivate(id: string): Promise<void> {
+      await db
+        .updateTable("phones")
+        .set({ is_active: false, updated_at: new Date() })
         .where("id", "=", id)
         .execute();
     },
