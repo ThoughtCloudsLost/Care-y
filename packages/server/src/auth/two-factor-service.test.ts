@@ -36,7 +36,7 @@ import {
   createTwoFactorService,
   type TwoFactorService,
 } from "./two-factor-service.js";
-import { createSmsCodeService } from "./sms-code.js";
+import { createSmsCodeService, type CallerIdResolver } from "./sms-code.js";
 import { generateTotpCode, base32Decode } from "./totp.js";
 import { TwoFactorMethod } from "@care-y/shared";
 import { ValidationError } from "../errors.js";
@@ -1195,6 +1195,12 @@ describe.skipIf(!process.env.DATABASE_URL)("TwoFactorService", () => {
   // --- SMS enrollment (pending -> active) ---
 
   describe("SMS enrollment", () => {
+    const TEST_ORG_SCHEMA = "org_test";
+
+    const smsResolver: CallerIdResolver = vi
+      .fn<CallerIdResolver>()
+      .mockResolvedValue("+15551234567");
+
     /**
      * Creates a TwoFactorService with SMS deps wired in.
      * Seeds org_config if not already present (enrollSmsPhone reads
@@ -1212,7 +1218,12 @@ describe.skipIf(!process.env.DATABASE_URL)("TwoFactorService", () => {
         .execute();
 
       const provider = createMockTelephonyProvider();
-      const smsCodes = createSmsCodeService(db, provider);
+      const smsCodes = createSmsCodeService(
+        db,
+        provider,
+        smsResolver,
+        TEST_ORG_SCHEMA,
+      );
       const emailCodes = createEmailCodeService(db, createMockEmailSender());
       const service = createTwoFactorService(
         db,
@@ -1259,7 +1270,12 @@ describe.skipIf(!process.env.DATABASE_URL)("TwoFactorService", () => {
       );
 
       // Send verification code via the SmsCodeService
-      const smsCodes = createSmsCodeService(db, provider);
+      const smsCodes = createSmsCodeService(
+        db,
+        provider,
+        smsResolver,
+        TEST_ORG_SCHEMA,
+      );
       await smsCodes.sendCode(user.id, phone);
 
       // Extract code from the captured SMS
@@ -1281,7 +1297,12 @@ describe.skipIf(!process.env.DATABASE_URL)("TwoFactorService", () => {
 
       await service.enrollSmsPhone(user.id, "2125551234", TEST_ORG_ID);
 
-      const smsCodes = createSmsCodeService(db, provider);
+      const smsCodes = createSmsCodeService(
+        db,
+        provider,
+        smsResolver,
+        TEST_ORG_SCHEMA,
+      );
       await smsCodes.sendCode(user.id, "+12125551234");
 
       const result = await service.verifySmsEnrollment(user.id, "000000");
@@ -1323,7 +1344,12 @@ describe.skipIf(!process.env.DATABASE_URL)("TwoFactorService", () => {
         "2125551234",
         TEST_ORG_ID,
       );
-      const smsCodes = createSmsCodeService(db, provider);
+      const smsCodes = createSmsCodeService(
+        db,
+        provider,
+        smsResolver,
+        TEST_ORG_SCHEMA,
+      );
       await smsCodes.sendCode(user.id, phone);
       const codeMatch = /(\d{6})/.exec(provider.smsCalls[0]!.body);
       await service.verifySmsEnrollment(user.id, codeMatch![1] as string);
@@ -1347,7 +1373,12 @@ describe.skipIf(!process.env.DATABASE_URL)("TwoFactorService", () => {
         "2125551234",
         TEST_ORG_ID,
       );
-      const smsCodes = createSmsCodeService(db, provider);
+      const smsCodes = createSmsCodeService(
+        db,
+        provider,
+        smsResolver,
+        TEST_ORG_SCHEMA,
+      );
       await smsCodes.sendCode(user.id, phone);
       const codeMatch = /(\d{6})/.exec(provider.smsCalls[0]!.body);
       await service.verifySmsEnrollment(user.id, codeMatch![1] as string);

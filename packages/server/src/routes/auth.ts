@@ -49,6 +49,7 @@ import type { OrgContext } from "../trpc/context.js";
 import type { EmailSender } from "../email/email-sender.js";
 import { createScopedTwoFactorServices } from "./two-factor.js";
 import type { ProviderFactory } from "../telephony/factory.js";
+import type { CallerIdResolver } from "../auth/sms-code.js";
 
 export interface AuthRouterDeps extends AuthServiceDeps {
   readonly loginLimiter: RateLimiter;
@@ -57,6 +58,7 @@ export interface AuthRouterDeps extends AuthServiceDeps {
   readonly isSecureCookie: boolean;
   readonly emailSender: EmailSender;
   readonly providerFactory: ProviderFactory;
+  readonly resolveCallerId: CallerIdResolver;
 }
 
 /** Safe response shape: no password_hash, no internal fields. */
@@ -187,6 +189,7 @@ export function createAuthRouter(deps: AuthRouterDeps) {
             indexer: deps.indexer,
             tokenizer: deps.tokenizer,
             providerFactory: deps.providerFactory,
+            resolveCallerId: deps.resolveCallerId,
           },
         );
         const enrolledMethods = await twoFactor.getEnrolledMethodTypes(user.id);

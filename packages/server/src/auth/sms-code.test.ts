@@ -4,7 +4,7 @@
  * Covers: code generation and storage, successful verification (deletes row),
  * wrong code rejection, attempt tracking, max attempts deletion, expired code
  * rejection, rate limiting (90s cooldown and hourly cap of 3), caller ID
- * resolution from provider config.
+ * resolution via phone purpose resolver.
  *
  * DB integration: requires Docker test containers (DATABASE_URL).
  */
@@ -18,8 +18,11 @@ import {
   createMockTelephonyProvider,
   type TestDb,
 } from "../test-utils.js";
-import { createSmsCodeService, type SmsCodeService } from "./sms-code.js";
-import type { MaskedTelephonyConfig } from "../telephony/provider.js";
+import {
+  createSmsCodeService,
+  type SmsCodeService,
+  type CallerIdResolver,
+} from "./sms-code.js";
 import { RateLimitError, ValidationError } from "../errors.js";
 
 describe.skipIf(!process.env.DATABASE_URL)("SmsCodeService", () => {
@@ -35,14 +38,30 @@ describe.skipIf(!process.env.DATABASE_URL)("SmsCodeService", () => {
     await testDb.cleanup();
   });
 
+  const TEST_ORG_SCHEMA = "org_test";
+
+  function mockResolver(
+    number: string | null = "+15551234567",
+  ): CallerIdResolver {
+    return vi.fn<CallerIdResolver>().mockResolvedValue(number);
+  }
+
   function makeService(): {
     service: SmsCodeService;
     provider: ReturnType<typeof createMockTelephonyProvider>;
+    resolveCallerId: CallerIdResolver;
   } {
     const provider = createMockTelephonyProvider();
+    const resolveCallerId = mockResolver();
     return {
-      service: createSmsCodeService(db, provider),
+      service: createSmsCodeService(
+        db,
+        provider,
+        resolveCallerId,
+        TEST_ORG_SCHEMA,
+      ),
       provider,
+      resolveCallerId,
     };
   }
 
@@ -144,21 +163,17 @@ describe.skipIf(!process.env.DATABASE_URL)("SmsCodeService", () => {
       );
     });
 
-    it("throws ValidationError when provider has no phone numbers", async () => {
+    it("throws ValidationError when resolver returns null (no phones)", async () => {
       const user = await createTestUser(db);
       const provider = createMockTelephonyProvider();
+      const resolveCallerId = mockResolver(null);
 
-      // Override maskConfig to return empty phone numbers
-      const emptyConfig: MaskedTelephonyConfig = {
-        provider: "twilio",
-        mode: "byot",
-        maskedAccountId: "AC****1234",
-        maskedAuthToken: "••••••••",
-        phoneNumbers: [],
-      };
-      vi.spyOn(provider, "maskConfig").mockReturnValue(emptyConfig);
-
-      const service = createSmsCodeService(db, provider);
+      const service = createSmsCodeService(
+        db,
+        provider,
+        resolveCallerId,
+        TEST_ORG_SCHEMA,
+      );
 
       await expect(service.sendCode(user.id, "+15559876543")).rejects.toThrow(
         ValidationError,

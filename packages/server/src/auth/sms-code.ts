@@ -15,9 +15,15 @@ import { randomInt } from "node:crypto";
 import type { Kysely, Selectable } from "kysely";
 import type { TenantDatabase, SmsCodesTable } from "../db/types.js";
 import type { TelephonyProvider } from "../telephony/provider.js";
+import type { PhonePurpose } from "../telephony/phone-resolver.js";
 import { RateLimitError, ValidationError } from "../errors.js";
 import { toCount } from "../db/query-utils.js";
 import { createScryptHasher } from "./scrypt-hash.js";
+
+export type CallerIdResolver = (
+  orgSchema: string,
+  purpose: PhonePurpose,
+) => Promise<string | null>;
 
 const CODE_DIGITS = 6;
 const CODE_MAX = 10 ** CODE_DIGITS; // 1,000,000
@@ -35,7 +41,7 @@ export interface SmsCodeService {
    * Generates a new code, hashes it, stores it, and sends it via SMS.
    * Deletes any existing active codes for the user first.
    * Enforces rate limiting (1/90s, 3/hour).
-   * The caller ID (from number) is resolved from the provider's config.
+   * The caller ID (from number) is resolved via the phone purpose resolver.
    */
   sendCode(userId: string, phone: string): Promise<void>;
 
@@ -54,6 +60,8 @@ function generateCode(): string {
 export function createSmsCodeService(
   db: Kysely<TenantDatabase>,
   provider: TelephonyProvider,
+  resolveCallerId: CallerIdResolver,
+  orgSchema: string,
 ): SmsCodeService {
   /** Throws RateLimitError if the most recent code was sent less than 90s ago. */
   async function enforceCooldown(userId: string, now: Date): Promise<void> {
@@ -158,18 +166,6 @@ export function createSmsCodeService(
     return row;
   }
 
-  /** Resolves the first phone number from the provider's config as the caller ID. */
-  function resolveCallerId(): string {
-    const config = provider.maskConfig();
-    const first = config.phoneNumbers[0];
-    if (!first) {
-      throw new ValidationError(
-        "No phone numbers configured for this organization.",
-      );
-    }
-    return first.number;
-  }
-
   return {
     async sendCode(userId: string, phone: string): Promise<void> {
       const now = new Date();
@@ -177,8 +173,14 @@ export function createSmsCodeService(
       await enforceCooldown(userId, now);
       await enforceHourlyLimit(userId, now);
 
+      const callerId = await resolveCallerId(orgSchema, "system");
+      if (callerId === null) {
+        throw new ValidationError(
+          "No phone numbers configured for this organization.",
+        );
+      }
+
       const code = await replaceActiveCode(userId, now);
-      const callerId = resolveCallerId();
 
       await provider.sendSms(
         phone,
