@@ -14,7 +14,9 @@ import type {
 
 // ── Mocks ────────────────────────────────────────────────────────────
 
-// Mock tRPC client
+// vi.mock required: $lib/trpc/index.js resolves to a SvelteKit $lib alias
+// that creates a live tRPC HTTP client on import. Without a running server
+// the import fails. vi.spyOn requires a successful import first.
 const mockGetSalt = vi.fn();
 const mockOprfEvaluate = vi.fn();
 const mockGetWrappedOrgKey = vi.fn();
@@ -33,7 +35,10 @@ vi.mock("$lib/trpc/index.js", () => ({
   },
 }));
 
-// Mock @care-y/crypto decode (url-safe base64 -> Uint8Array)
+// vi.mock required: @care-y/crypto barrel import triggers libsodium WASM
+// initialization via the getSodium() lazy singleton. In the Node test
+// environment this loads the JS fallback (~500ms) or fails. This test
+// only needs the `decode` utility, but the barrel re-exports everything.
 vi.mock("@care-y/crypto", () => ({
   decode: (s: string): Uint8Array => {
     return new TextEncoder().encode(s);

@@ -793,4 +793,88 @@ describe("createWebhookHandler", () => {
       expect(res.statusCode).toBe(413);
     });
   });
+
+  // -----------------------------------------------------------------------
+  // Group B2: Webhook error responses never contain form body content
+  // -----------------------------------------------------------------------
+
+  describe("error responses never contain form body content (B2)", () => {
+    const SENSITIVE_FROM = "+15559876543";
+    const SENSITIVE_TO = "+15551234567";
+    const SENSITIVE_BODY = "test message";
+
+    it("invalid signature response does not contain form fields", async () => {
+      const { handler } = createTestHarness({ validateSignature: false });
+      const { url, body } = buildSignedRequest({});
+      const req = createMockReq({
+        url,
+        body,
+        headers: { "x-twilio-signature": "invalid-signature" },
+      });
+      const res = createMockRes();
+
+      await handler(req, res);
+
+      expect(res.statusCode).toBe(403);
+      expect(res.body).not.toContain(SENSITIVE_FROM);
+      expect(res.body).not.toContain(SENSITIVE_TO);
+      expect(res.body).not.toContain(SENSITIVE_BODY);
+    });
+
+    it("AccountSid mismatch response does not contain form fields", async () => {
+      const { handler } = createTestHarness();
+      const { url, body, signature } = buildSignedRequest({
+        extraBody: { AccountSid: "AC_WRONG_SID" },
+      });
+      const req = createMockReq({
+        url,
+        body,
+        headers: { "x-twilio-signature": signature },
+      });
+      const res = createMockRes();
+
+      await handler(req, res);
+
+      expect(res.statusCode).toBe(403);
+      expect(res.body).not.toContain(SENSITIVE_FROM);
+      expect(res.body).not.toContain(SENSITIVE_TO);
+      expect(res.body).not.toContain(SENSITIVE_BODY);
+    });
+
+    it("rate-limited response does not contain form fields", async () => {
+      const { handler } = createTestHarness({ rateLimitAllowed: false });
+      const { url, body, signature } = buildSignedRequest({});
+      const req = createMockReq({
+        url,
+        body,
+        headers: { "x-twilio-signature": signature },
+      });
+      const res = createMockRes();
+
+      await handler(req, res);
+
+      expect(res.statusCode).toBe(429);
+      expect(res.body).not.toContain(SENSITIVE_FROM);
+      expect(res.body).not.toContain(SENSITIVE_TO);
+      expect(res.body).not.toContain(SENSITIVE_BODY);
+    });
+
+    it("dedup rejection response does not contain form fields", async () => {
+      const { handler } = createTestHarness({ isDuplicate: true });
+      const { url, body, signature } = buildSignedRequest({});
+      const req = createMockReq({
+        url,
+        body,
+        headers: { "x-twilio-signature": signature },
+      });
+      const res = createMockRes();
+
+      await handler(req, res);
+
+      // Dedup returns 200 (not an error), but verify anyway
+      expect(res.statusCode).toBe(200);
+      expect(res.body).not.toContain(SENSITIVE_FROM);
+      expect(res.body).not.toContain(SENSITIVE_BODY);
+    });
+  });
 });
