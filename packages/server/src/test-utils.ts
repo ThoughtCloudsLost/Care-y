@@ -545,6 +545,126 @@ export const DOCKER_SOCKET_B = "/run/oprf/oprf-b.sock";
 // ---------------------------------------------------------------------------
 
 import type { OprfRouterDeps } from "./routes/oprf.js";
+import type { ProviderFactory } from "./telephony/factory.js";
+import type {
+  TelephonyProvider,
+  MaskedTelephonyConfig,
+} from "./telephony/provider.js";
+import { NotFoundError } from "./errors.js";
+
+/**
+ * Creates a stub ProviderFactory that signals "telephony not configured."
+ * getProvider throws NotFoundError (the same error the real factory throws
+ * for unconfigured orgs), so callers like createScopedTwoFactorServices
+ * handle it gracefully and set SMS to unavailable.
+ */
+export function createMockProviderFactory(): ProviderFactory {
+  return {
+    async getProvider() {
+      throw new NotFoundError("Telephony not configured (mock)");
+    },
+    invalidate() {
+      // no-op: cache invalidation not needed in tests
+    },
+    invalidateAll() {
+      // no-op: cache invalidation not needed in tests
+    },
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Mock telephony provider
+// ---------------------------------------------------------------------------
+
+export interface MockTelephonyProvider extends TelephonyProvider {
+  /** Captured sendSms() calls for assertion. */
+  readonly smsCalls: ReadonlyArray<{
+    to: string;
+    body: string;
+    callerId: string;
+  }>;
+}
+
+/**
+ * Creates a mock TelephonyProvider that records sendSms calls.
+ * maskConfig returns a single phone number (+15551234567) by default.
+ * All other methods throw TestSetupError to catch unexpected usage.
+ */
+export function createMockTelephonyProvider(): MockTelephonyProvider {
+  const smsCalls: { to: string; body: string; callerId: string }[] = [];
+
+  const maskedConfig: MaskedTelephonyConfig = {
+    provider: "twilio",
+    mode: "byot",
+    maskedAccountId: "AC****1234",
+    maskedAuthToken: "\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022",
+    phoneNumbers: [{ number: "+15551234567" }],
+  };
+
+  return {
+    get smsCalls() {
+      return smsCalls;
+    },
+    providerId: "twilio",
+    async sendSms(to, body, callerId) {
+      smsCalls.push({ to, body, callerId });
+      return { messageId: `SM${String(Date.now())}` };
+    },
+    maskConfig() {
+      return maskedConfig;
+    },
+    async initiateOutboundCall() {
+      throw new TestSetupError(
+        "Mock provider: initiateOutboundCall called unexpectedly",
+      );
+    },
+    async initiateWebRtcCall() {
+      throw new TestSetupError(
+        "Mock provider: initiateWebRtcCall called unexpectedly",
+      );
+    },
+    validateWebhook() {
+      throw new TestSetupError(
+        "Mock provider: validateWebhook called unexpectedly",
+      );
+    },
+    parseIncomingCall() {
+      throw new TestSetupError(
+        "Mock provider: parseIncomingCall called unexpectedly",
+      );
+    },
+    parseIncomingSms() {
+      throw new TestSetupError(
+        "Mock provider: parseIncomingSms called unexpectedly",
+      );
+    },
+    generateVoiceResponse() {
+      throw new TestSetupError(
+        "Mock provider: generateVoiceResponse called unexpectedly",
+      );
+    },
+    async getRecording() {
+      throw new TestSetupError(
+        "Mock provider: getRecording called unexpectedly",
+      );
+    },
+    async deleteRecording() {
+      throw new TestSetupError(
+        "Mock provider: deleteRecording called unexpectedly",
+      );
+    },
+    async deleteCallLog() {
+      throw new TestSetupError(
+        "Mock provider: deleteCallLog called unexpectedly",
+      );
+    },
+    async deleteMessageLog() {
+      throw new TestSetupError(
+        "Mock provider: deleteMessageLog called unexpectedly",
+      );
+    },
+  };
+}
 
 /**
  * Creates stub OPRF deps that satisfy the type but throw on actual use.

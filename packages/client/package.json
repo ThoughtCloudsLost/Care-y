@@ -16,6 +16,7 @@
     "@care-y/crypto": "workspace:*",
     "@care-y/server": "workspace:*",
     "@care-y/shared": "workspace:*",
+    "@twilio/voice-sdk": "2.18.1",
     "@tanstack/svelte-query": "6.1.0",
     "@trpc/client": "11.10.0",
     "bits-ui": "2.16.3",

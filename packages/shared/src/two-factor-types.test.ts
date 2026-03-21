@@ -18,22 +18,25 @@ describe("TwoFactorMethod enum", () => {
 });
 
 describe("AVAILABLE_METHODS", () => {
-  it("contains webauthn, totp, and email", () => {
+  it("contains webauthn, totp, email, and sms", () => {
     expect(AVAILABLE_METHODS).toContain("webauthn");
     expect(AVAILABLE_METHODS).toContain("totp");
     expect(AVAILABLE_METHODS).toContain("email");
+    expect(AVAILABLE_METHODS).toContain("sms");
   });
 
   it("does not include stubbed methods", () => {
-    expect(AVAILABLE_METHODS).not.toContain("sms");
     expect(AVAILABLE_METHODS).not.toContain("push");
   });
 });
 
 describe("STUBBED_METHODS", () => {
-  it("contains sms and push", () => {
-    expect(STUBBED_METHODS).toContain("sms");
+  it("contains push", () => {
     expect(STUBBED_METHODS).toContain("push");
+  });
+
+  it("does not contain sms (now available)", () => {
+    expect(STUBBED_METHODS).not.toContain("sms");
   });
 });
 

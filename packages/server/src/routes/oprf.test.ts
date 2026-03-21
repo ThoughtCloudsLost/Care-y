@@ -36,6 +36,7 @@ import {
   mockRes,
   expectTrpcError,
   createMockEmailSender,
+  createMockProviderFactory,
   testFieldEncryptor,
   testBlindIndexer,
   testSessionTokenizer,
@@ -387,11 +388,16 @@ describe("OPRF tRPC route", () => {
         isSecureCookie: false,
         emailSender: createMockEmailSender(),
         tokenizer: testSessionTokenizer,
+        providerFactory: createMockProviderFactory(),
+        resolveCallerId: vi.fn().mockResolvedValue("+15551234567"),
       },
       twoFactorDeps: {
         emailSender: createMockEmailSender(),
         encryptor: testFieldEncryptor,
+        indexer: testBlindIndexer,
         tokenizer: testSessionTokenizer,
+        providerFactory: createMockProviderFactory(),
+        resolveCallerId: vi.fn().mockResolvedValue("+15551234567"),
       },
       oprfDeps: { oprfService: service },
       orgService: {
@@ -400,6 +406,7 @@ describe("OPRF tRPC route", () => {
           throw new OprfError("not implemented in test");
         },
       } as unknown as Parameters<typeof createAppRouter>[0]["orgService"],
+      providerFactory: createMockProviderFactory(),
     });
     const factory = createCallerFactory(appRouter);
     const ctx: Context = {
@@ -579,11 +586,16 @@ describe.skipIf(!DOCKER_OPRF_AVAILABLE)(
           isSecureCookie: false,
           emailSender: createMockEmailSender(),
           tokenizer: testSessionTokenizer,
+          providerFactory: createMockProviderFactory(),
+          resolveCallerId: vi.fn().mockResolvedValue("+15551234567"),
         },
         twoFactorDeps: {
           emailSender: createMockEmailSender(),
           encryptor: testFieldEncryptor,
+          indexer: testBlindIndexer,
           tokenizer: testSessionTokenizer,
+          providerFactory: createMockProviderFactory(),
+          resolveCallerId: vi.fn().mockResolvedValue("+15551234567"),
         },
         oprfDeps: { oprfService: service },
         orgService: {
@@ -592,6 +604,7 @@ describe.skipIf(!DOCKER_OPRF_AVAILABLE)(
             throw new OprfError("not implemented in test");
           },
         } as unknown as Parameters<typeof createAppRouter>[0]["orgService"],
+        providerFactory: createMockProviderFactory(),
       });
       const factory = createCallerFactory(appRouter);
       const ctx: Context = {

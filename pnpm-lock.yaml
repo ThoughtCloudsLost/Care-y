@@ -79,6 +79,9 @@ importers:
       '@trpc/client':
         specifier: 11.10.0
         version: 11.10.0(@trpc/server@11.10.0(typescript@5.9.3))(typescript@5.9.3)
+      '@twilio/voice-sdk':
+        specifier: 2.18.1
+        version: 2.18.1
       bits-ui:
         specifier: 2.16.3
         version: 2.16.3(@internationalized/date@3.11.0)(@sveltejs/kit@2.55.0(@sveltejs/vite-plugin-svelte@6.2.4(svelte@5.53.12)(vite@7.3.1(@types/node@25.5.0)(jiti@2.6.1)(lightningcss@1.31.1)(terser@5.46.1)(tsx@4.21.0)))(svelte@5.53.12)(typescript@5.9.3)(vite@7.3.1(@types/node@25.5.0)(jiti@2.6.1)(lightningcss@1.31.1)(terser@5.46.1)(tsx@4.21.0)))(svelte@5.53.12)
@@ -1387,6 +1390,13 @@ packages:
     peerDependencies:
       typescript: '>=5.7.2'
 
+  '@twilio/voice-errors@1.7.0':
+    resolution: {integrity: sha512-9TvniWpzU0iy6SYFAcDP+HG+/mNz2yAHSs7+m0DZk86lE+LoTB6J/ZONTPuxXrXWi4tso/DulSHuA0w7nIQtGg==}
+
+  '@twilio/voice-sdk@2.18.1':
+    resolution: {integrity: sha512-4IvFgQOWrnluJrtJ79s1B4CiLbXLG7DKAXJW/uzgEsG9zQP30avs4d98LmtpOFr9ozd1kdKtjhKoqD+RbsY+MA==}
+    engines: {node: '>= 12'}
+
   '@types/chai@5.2.3':
     resolution: {integrity: sha512-Mw558oeA9fFbv65/y4mHtXDs9bPnFMZAL/jxdPFUpOHHIXX91mcgEHbS5Lahr+pwZFR8A7GQleRWeI6cGFC2UA==}
 
@@ -1404,6 +1414,9 @@ packages:
 
   '@types/estree@1.0.8':
     resolution: {integrity: sha512-dWHzHa2WqEXI/O1E9OjrocMTKJl2mSrEolh1Iomrv6U+JuNwaHXsXx9bLu5gG7BUWFIN0skIQJQ/L1rIex4X6w==}
+
+  '@types/events@3.0.3':
+    resolution: {integrity: sha512-trOc4AAUThEz9hapPtSd7wf5tiQKvTtu5b371UxXdTuqzIh0ArcRspRP0i0Viu+LXstIQ1z96t1nsPxT9ol01g==}
 
   '@types/json-schema@7.0.15':
     resolution: {integrity: sha512-5+fP8P8MFNC+AyZCDxrB2pkZFPGzqQWUzpSeuuVLvm8VMcorNYavBqoFcxK8bQz4Qsbn4oUEEem4wDLfcysGHA==}
@@ -2031,6 +2044,10 @@ packages:
   events-universal@1.0.1:
     resolution: {integrity: sha512-LUd5euvbMLpwOF8m6ivPCbhQeSiYVNb8Vs0fQ8QjXo0JTkEHpz8pxdQf0gStltaPpw0Cca8b39KxvK9cfKRiAw==}
 
+  events@3.3.0:
+    resolution: {integrity: sha512-mQw+2fkQbALzQ7V0MY0IqdnXNOeTtP4r0lN9z7AAawCXgqea7bDii20AYrIBrFd/Hx0M2Ocz6S111CaFkUcb0Q==}
+    engines: {node: '>=0.8.x'}
+
   expect-type@1.3.0:
     resolution: {integrity: sha512-knvyeauYhqjOYvQ66MznSMs83wmHrCycNEN6Ao+2AeYEfxUIkuiVxdEa1qlGEPK+We3n0THiDciYSsCcgW/DoA==}
     engines: {node: '>=12.0.0'}
@@ -2647,6 +2664,10 @@ packages:
 
   lodash@4.17.23:
     resolution: {integrity: sha512-LgVTMpQtIopCi79SJeDiP0TfWi5CNEc/L/aRdTh3yIvmZXTnheWpKjSZhnvMl8iXbC1tFg9gdHHDMLoV7CnG+w==}
+
+  loglevel@1.9.2:
+    resolution: {integrity: sha512-HgMmCqIJSAKqo68l0rS2AanEWfkxaZ5wNiEFb5ggm08lDs9Xl2KxBlX3PTcaD2chBM1gXAYf491/M2Rv8Jwayg==}
+    engines: {node: '>= 0.6.0'}
 
   lru-cache@11.2.7:
     resolution: {integrity: sha512-aY/R+aEsRelme17KGQa/1ZSIpLpNYYrhcrepKTZgE+W3WM16YMCaPwOHLHsmopZHELU0Ojin1lPVxKR0MihncA==}
@@ -4843,6 +4864,16 @@ snapshots:
     dependencies:
       typescript: 5.9.3
 
+  '@twilio/voice-errors@1.7.0': {}
+
+  '@twilio/voice-sdk@2.18.1':
+    dependencies:
+      '@twilio/voice-errors': 1.7.0
+      '@types/events': 3.0.3
+      events: 3.3.0
+      loglevel: 1.9.2
+      tslib: 2.8.1
+
   '@types/chai@5.2.3':
     dependencies:
       '@types/deep-eql': 4.0.2
@@ -4857,6 +4888,8 @@ snapshots:
   '@types/estree@0.0.39': {}
 
   '@types/estree@1.0.8': {}
+
+  '@types/events@3.0.3': {}
 
   '@types/json-schema@7.0.15': {}
 
@@ -5629,6 +5662,8 @@ snapshots:
     transitivePeerDependencies:
       - bare-abort-controller
 
+  events@3.3.0: {}
+
   expect-type@1.3.0: {}
 
   fast-check@4.6.0:
@@ -6164,6 +6199,8 @@ snapshots:
   lodash.upperfirst@4.3.1: {}
 
   lodash@4.17.23: {}
+
+  loglevel@1.9.2: {}
 
   lru-cache@11.2.7: {}
 

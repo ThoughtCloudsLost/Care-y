@@ -24,9 +24,11 @@ import {
 } from "../trpc/trpc.js";
 import { TRPCError } from "@trpc/server";
 import type { FieldEncryptor } from "../crypto/field-encryptor.js";
+import type { BlindIndexer } from "../crypto/field-encryptor.js";
 import type { SessionTokenizer } from "../crypto/session-tokenizer.js";
 import type { EmailSender } from "../email/email-sender.js";
 import type { SessionRepository } from "../auth/session-repository.js";
+import type { ProviderFactory } from "../telephony/factory.js";
 import { createTenantSessions } from "../trpc/context.js";
 import type { Context, OrgContext } from "../trpc/context.js";
 import type { SessionData } from "../auth/session-repository.js";
@@ -40,8 +42,16 @@ import {
   type EmailCodeService,
 } from "../auth/email-code.js";
 import {
+  createSmsCodeService,
+  type SmsCodeService,
+  type CallerIdResolver,
+} from "../auth/sms-code.js";
+import { NotFoundError, TelephonyConfigError } from "../errors.js";
+import {
   totpVerifySchema,
   emailCodeVerifySchema,
+  smsEnrollSchema,
+  smsCodeVerifySchema,
   backupCodeVerifySchema,
   webauthnRegistrationResponseSchema,
   webauthnAssertionResponseSchema,
@@ -69,33 +79,69 @@ const TOTP_ISSUER = "CARE-Y";
 export interface TwoFactorRouterDeps {
   readonly emailSender: EmailSender;
   readonly encryptor: FieldEncryptor;
+  readonly indexer: BlindIndexer;
   readonly tokenizer: SessionTokenizer;
+  readonly providerFactory: ProviderFactory;
+  readonly resolveCallerId: CallerIdResolver;
 }
 
 interface ScopedServices {
   readonly twoFactor: TwoFactorService;
   readonly emailCodes: EmailCodeService;
+  readonly smsCodes: SmsCodeService | null;
 }
 
 /**
  * Builds tenant-scoped 2FA services from the resolved org context.
  * Accepts a shared SessionRepository to avoid redundant construction
  * when both auth and 2FA services are needed in the same request.
+ *
+ * SMS service is created only when the org has telephony configured.
+ * The provider factory throws NotFoundError for unconfigured orgs,
+ * so we catch that and set smsCodes to null.
  */
-export function createScopedTwoFactorServices(
+export async function createScopedTwoFactorServices(
   org: OrgContext,
   sessions: SessionRepository,
   deps: TwoFactorRouterDeps,
-): ScopedServices {
+): Promise<ScopedServices> {
   const emailCodes = createEmailCodeService(org.tenantDb, deps.emailSender);
+
+  let smsCodes: SmsCodeService | null = null;
+  try {
+    const provider = await deps.providerFactory.getProvider(org.orgId);
+    smsCodes = createSmsCodeService(
+      org.tenantDb,
+      provider,
+      deps.resolveCallerId,
+      org.orgSchema,
+    );
+  } catch (err: unknown) {
+    // NotFoundError: telephony not configured for this org. SMS 2FA unavailable.
+    // TelephonyConfigError: config exists but is invalid. Also treat as unavailable
+    // rather than crashing the entire 2FA flow (other methods still work).
+    // Re-throw unexpected errors (DB connection failures, etc.).
+    if (
+      !(err instanceof NotFoundError) &&
+      !(err instanceof TelephonyConfigError)
+    ) {
+      throw err;
+    }
+  }
+
+  const smsDeps = smsCodes
+    ? { smsCodes, indexer: deps.indexer, orgId: org.orgId }
+    : undefined;
+
   const twoFactor = createTwoFactorService(
     org.tenantDb,
     sessions,
     emailCodes,
     deps.encryptor,
     TOTP_ISSUER,
+    smsDeps,
   );
-  return { twoFactor, emailCodes };
+  return { twoFactor, emailCodes, smsCodes };
 }
 
 /**
@@ -140,12 +186,11 @@ export function createTwoFactorRouter(deps: TwoFactorRouterDeps) {
   const injectServices = middleware(async ({ ctx, next }) => {
     const { org, session, user } = narrowAuthContext(ctx);
     const sessions = createTenantSessions(org, deps.tokenizer);
-    const { twoFactor, emailCodes } = createScopedTwoFactorServices(
-      org,
-      sessions,
-      deps,
-    );
-    return next({ ctx: { ...ctx, org, session, user, twoFactor, emailCodes } });
+    const { twoFactor, emailCodes, smsCodes } =
+      await createScopedTwoFactorServices(org, sessions, deps);
+    return next({
+      ctx: { ...ctx, org, session, user, twoFactor, emailCodes, smsCodes },
+    });
   });
 
   // Procedure types with service injection.
@@ -222,6 +267,38 @@ export function createTwoFactorRouter(deps: TwoFactorRouterDeps) {
       })),
     ),
 
+    /** SMS: register phone number and send a verification code. */
+    smsSend: twoFactorProcedure.input(smsEnrollSchema).mutation(
+      withErrorWrapping(async ({ ctx, input }) => {
+        if (!ctx.smsCodes) {
+          throw new TRPCError({
+            code: "PRECONDITION_FAILED",
+            message: "SMS is not available. Telephony is not configured.",
+          });
+        }
+        // enrollSmsPhone normalizes to E.164 internally, returns the result
+        const phone = await ctx.twoFactor.enrollSmsPhone(
+          ctx.user.id,
+          input.phone,
+          ctx.org.orgId,
+        );
+
+        // Send the verification code (caller ID resolved from provider config)
+        await ctx.smsCodes.sendCode(ctx.user.id, phone);
+        return { sent: true as const };
+      }),
+    ),
+
+    /** SMS: verify the 6-digit code to confirm SMS 2FA enrollment. */
+    smsVerify: twoFactorProcedure.input(smsCodeVerifySchema).mutation(
+      withErrorWrapping(async ({ ctx, input }) => ({
+        success: await ctx.twoFactor.verifySmsEnrollment(
+          ctx.user.id,
+          input.code,
+        ),
+      })),
+    ),
+
     /** Backup codes: generate 8 codes. Can be called to regenerate (replaces old set). */
     backupCodes: twoFactorProcedure.mutation(
       withErrorWrapping(async ({ ctx }) =>
@@ -287,6 +364,32 @@ export function createTwoFactorRouter(deps: TwoFactorRouterDeps) {
     emailComplete: twoFactorProcedure.input(emailCodeVerifySchema).mutation(
       withErrorWrapping(async ({ ctx, input }) => {
         const valid = await ctx.emailCodes.verifyCode(ctx.user.id, input.code);
+        if (valid) {
+          await ctx.twoFactor.markSessionVerified(ctx.session.token);
+        }
+        return { success: valid };
+      }),
+    ),
+
+    /** SMS: send a verification code to the enrolled phone for login 2FA. */
+    smsSend: twoFactorProcedure.mutation(
+      withErrorWrapping(async ({ ctx }) => {
+        if (!ctx.smsCodes) {
+          throw new TRPCError({
+            code: "PRECONDITION_FAILED",
+            message: "SMS is not available. Telephony is not configured.",
+          });
+        }
+        const phone = await ctx.twoFactor.resolveUserSmsPhone(ctx.user.id);
+        await ctx.smsCodes.sendCode(ctx.user.id, phone);
+        return { sent: true as const };
+      }),
+    ),
+
+    /** SMS: verify the 6-digit code during login 2FA. */
+    smsComplete: twoFactorProcedure.input(smsCodeVerifySchema).mutation(
+      withErrorWrapping(async ({ ctx, input }) => {
+        const valid = await ctx.twoFactor.verifySms(ctx.user.id, input.code);
         if (valid) {
           await ctx.twoFactor.markSessionVerified(ctx.session.token);
         }

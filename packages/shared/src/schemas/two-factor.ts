@@ -41,6 +41,19 @@ export const totpVerifySchema = z.object({ code: sixDigitCodeSchema });
 /** Verify a 6-digit email code. */
 export const emailCodeVerifySchema = z.object({ code: sixDigitCodeSchema });
 
+// --- SMS codes ---
+
+/** Enroll SMS 2FA: provide the phone number to receive codes. */
+export const smsEnrollSchema = z.object({
+  phone: z
+    .string()
+    .min(1, "Phone number is required")
+    .max(20, "Phone number too long"),
+});
+
+/** Verify a 6-digit SMS code. */
+export const smsCodeVerifySchema = z.object({ code: sixDigitCodeSchema });
+
 // --- Backup codes ---
 
 /** Verify a backup code. Alphanumeric, whitespace and hyphens stripped for usability. */
@@ -130,6 +143,8 @@ export const twoFactorStatusResponseSchema = z.object({
 
 export type TotpVerifyInput = z.infer<typeof totpVerifySchema>;
 export type EmailCodeVerifyInput = z.infer<typeof emailCodeVerifySchema>;
+export type SmsEnrollInput = z.infer<typeof smsEnrollSchema>;
+export type SmsCodeVerifyInput = z.infer<typeof smsCodeVerifySchema>;
 export type BackupCodeVerifyInput = z.infer<typeof backupCodeVerifySchema>;
 export type WebauthnRegistrationResponse = z.infer<
   typeof webauthnRegistrationResponseSchema
