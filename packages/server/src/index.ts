@@ -68,6 +68,17 @@ import { createSealedBoxEncryptor } from "./crypto/sealed-box.js";
 import type { Kysely } from "kysely";
 import type { TenantDatabase } from "./db/types.js";
 import { createWebhookDispatch } from "./telephony/webhook-dispatch.js";
+import { createTicketAccessChecker } from "./tickets/access.js";
+import { createTicketService } from "./tickets/ticket-service.js";
+import { createFollowUpService } from "./tickets/followup-service.js";
+import { createMergeService } from "./tickets/merge-service.js";
+import { createPresetService } from "./tickets/preset-service.js";
+import { createDependencyService } from "./tickets/dependency-service.js";
+import {
+  createMediaService,
+  registerMediaCleanupHandler,
+} from "./tickets/media-service.js";
+import { createQueueService } from "./tickets/queue-service.js";
 
 // --- DB startup probe ---
 
@@ -320,6 +331,17 @@ const appRouter = createAppRouter({
     configService: telephonyConfigService,
     webhookBaseUrl: env.WEBHOOK_BASE_URL,
   },
+  ticketDeps: {
+    blobStore,
+    createTicketAccess: createTicketAccessChecker,
+    createTicketSvc: createTicketService,
+    createFollowUpSvc: createFollowUpService,
+    createMergeSvc: createMergeService,
+    createPresetSvc: createPresetService,
+    createDependencySvc: createDependencyService,
+    createMediaSvc: createMediaService,
+    createQueueSvc: createQueueService,
+  },
 });
 
 export type AppRouter = typeof appRouter;
@@ -337,6 +359,14 @@ const trpcHandler = createHTTPHandler({
 
 const jobQueue = createJobQueue(db);
 registerLogDeletionHandler(jobQueue, providerFactory);
+registerMediaCleanupHandler(jobQueue, tenantDb, blobStore, async () => {
+  const orgs = await db
+    .selectFrom("orgs")
+    .select("schema_name")
+    .where("is_active", "=", true)
+    .execute();
+  return orgs.map((o) => o.schema_name);
+});
 jobQueue.start();
 console.log("Job queue started");
 

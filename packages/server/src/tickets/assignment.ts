@@ -1,0 +1,201 @@
+/**
+ * Ticket assignment service.
+ *
+ * - Round-robin: assign to shift volunteer with fewest open tickets
+ * - Take: volunteer self-assigns an unassigned ticket
+ * - Release: volunteer self-unassigns, ticket returns to unassigned
+ *
+ * All operations are plaintext metadata. No decryption.
+ * Optimistic concurrency via WHERE assigned_to IS NULL guards TOCTOU races.
+ */
+
+import type { Kysely } from "kysely";
+import type { TenantDatabase } from "../db/types.js";
+import type { ShiftProvider } from "./shift-provider.js";
+import type { TicketAccessChecker } from "./access.js";
+import { NotFoundError, TicketError } from "../errors.js";
+
+export interface AssignmentService {
+  /**
+   * Round-robin assignment: find the volunteer on shift with the fewest
+   * open tickets and assign. Falls back to next-future-shift if no one
+   * is currently on shift. Returns the assigned user ID (null if no
+   * candidates available or lost a race).
+   */
+  assignRoundRobin(ticketId: string): Promise<{ assignedTo: string | null }>;
+
+  /** Self-assign: volunteer takes an unassigned ticket. */
+  take(userId: string, ticketId: string): Promise<void>;
+
+  /** Self-unassign: volunteer releases their assigned ticket. */
+  release(userId: string, ticketId: string): Promise<void>;
+}
+
+export function createAssignmentService(
+  db: Kysely<TenantDatabase>,
+  access: TicketAccessChecker,
+  shiftProvider: ShiftProvider,
+): AssignmentService {
+  async function countOpenTickets(
+    userIds: string[],
+  ): Promise<Map<string, number>> {
+    if (userIds.length === 0) return new Map();
+
+    const rows = await db
+      .selectFrom("tickets")
+      .select(["assigned_to"])
+      .select((eb) => eb.fn.countAll<string>().as("count"))
+      .where("assigned_to", "in", userIds)
+      .where("status", "=", "open")
+      .groupBy("assigned_to")
+      .execute();
+
+    // Initialize all candidates to 0 (volunteers with no open tickets
+    // won't appear in the GROUP BY result).
+    const counts = new Map<string, number>();
+    for (const uid of userIds) counts.set(uid, 0);
+    for (const row of rows) {
+      if (row.assigned_to !== null) {
+        counts.set(row.assigned_to, Number(row.count));
+      }
+    }
+    return counts;
+  }
+
+  function pickFewest(counts: Map<string, number>): string | null {
+    let best: string | null = null;
+    let bestCount = Infinity;
+    for (const [uid, count] of counts) {
+      if (count < bestCount) {
+        bestCount = count;
+        best = uid;
+      }
+    }
+    return best;
+  }
+
+  async function createSystemFollowUp(
+    ticketId: string,
+    type: string,
+  ): Promise<void> {
+    await db
+      .insertInto("followups")
+      .values({
+        ticket_id: ticketId,
+        source: "system",
+        type,
+        encrypted_content: Buffer.from("system"),
+        encrypted_read_state: Buffer.from("unread"),
+      })
+      .execute();
+  }
+
+  return {
+    async assignRoundRobin(ticketId) {
+      const ticket = await db
+        .selectFrom("tickets")
+        .select(["id", "queue_id", "status"])
+        .where("id", "=", ticketId)
+        .executeTakeFirst();
+
+      if (!ticket) throw new NotFoundError("Ticket not found");
+      if (ticket.status !== "open") {
+        throw new TicketError("Cannot assign a closed ticket");
+      }
+
+      // Try current shift first
+      let candidates = await shiftProvider.getCurrentShiftVolunteers(
+        ticket.queue_id,
+      );
+
+      if (candidates.length === 0) {
+        // No-coverage: fall back to next future shift
+        candidates = await shiftProvider.getNextShiftVolunteers(
+          ticket.queue_id,
+        );
+      }
+
+      if (candidates.length === 0) {
+        return { assignedTo: null };
+      }
+
+      const counts = await countOpenTickets(candidates);
+      const chosen = pickFewest(counts);
+
+      if (chosen === null) {
+        return { assignedTo: null };
+      }
+
+      // Optimistic concurrency: only assign if still unassigned.
+      // If another request raced us, numUpdatedRows === 0n.
+      const result = await db
+        .updateTable("tickets")
+        .set({ assigned_to: chosen })
+        .where("id", "=", ticketId)
+        .where("assigned_to", "is", null)
+        .executeTakeFirst();
+
+      if (result.numUpdatedRows === BigInt(0)) {
+        return { assignedTo: null };
+      }
+
+      await createSystemFollowUp(ticketId, "assignment_change");
+      return { assignedTo: chosen };
+    },
+
+    async take(userId, ticketId) {
+      await access.assertAccess(userId, ticketId);
+
+      const ticket = await db
+        .selectFrom("tickets")
+        .select(["id", "assigned_to", "status"])
+        .where("id", "=", ticketId)
+        .executeTakeFirst();
+
+      if (!ticket) throw new NotFoundError("Ticket not found");
+      if (ticket.status !== "open") {
+        throw new TicketError("Cannot take a closed ticket");
+      }
+      if (ticket.assigned_to !== null) {
+        throw new TicketError("Ticket is already assigned");
+      }
+
+      // Optimistic concurrency: WHERE assigned_to IS NULL guards the TOCTOU race.
+      const result = await db
+        .updateTable("tickets")
+        .set({ assigned_to: userId })
+        .where("id", "=", ticketId)
+        .where("assigned_to", "is", null)
+        .executeTakeFirst();
+
+      if (result.numUpdatedRows === BigInt(0)) {
+        throw new TicketError("Ticket is already assigned");
+      }
+
+      await createSystemFollowUp(ticketId, "assignment_change");
+    },
+
+    async release(userId, ticketId) {
+      await access.assertAccess(userId, ticketId);
+
+      const ticket = await db
+        .selectFrom("tickets")
+        .select(["id", "assigned_to"])
+        .where("id", "=", ticketId)
+        .executeTakeFirst();
+
+      if (!ticket) throw new NotFoundError("Ticket not found");
+      if (ticket.assigned_to !== userId) {
+        throw new TicketError("You are not assigned to this ticket");
+      }
+
+      await db
+        .updateTable("tickets")
+        .set({ assigned_to: null })
+        .where("id", "=", ticketId)
+        .execute();
+
+      await createSystemFollowUp(ticketId, "assignment_change");
+    },
+  };
+}

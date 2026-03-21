@@ -118,6 +118,7 @@ export default tseslint.config(
             "createTelephonyAdminRouter",
             "createTelephonyContentRouter",
             "createConsultantRouter",
+            "createTicketRouter",
             "createTwoFactorRouter",
           ],
         },
