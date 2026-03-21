@@ -160,6 +160,46 @@ export {
   type RelayWebrtcTokenOutput,
 } from "./schemas/relay.js";
 
+// --- Ticket schemas ---
+export {
+  ticketStatusSchema,
+  ticketPrioritySchema,
+  followUpSourceSchema,
+  followUpTypeSchema,
+  createTicketInputSchema,
+  createFollowUpInputSchema,
+  markReadInputSchema,
+  updateTicketInputSchema,
+  createQueueInputSchema,
+  updateQueueInputSchema,
+  createPresetReplyInputSchema,
+  updatePresetReplyInputSchema,
+  addDependencyInputSchema,
+  mergeClientsInputSchema,
+  undoMergeInputSchema,
+  uploadAttachmentInputSchema,
+  ticketListInputSchema,
+  followUpListInputSchema,
+  type TicketStatus,
+  type TicketPriority,
+  type FollowUpSource,
+  type FollowUpType,
+  type CreateTicketInput,
+  type CreateFollowUpInput,
+  type MarkReadInput,
+  type UpdateTicketInput,
+  type CreateQueueInput,
+  type UpdateQueueInput,
+  type CreatePresetReplyInput,
+  type UpdatePresetReplyInput,
+  type AddDependencyInput,
+  type MergeClientsInput,
+  type UndoMergeInput,
+  type UploadAttachmentInput,
+  type TicketListInput,
+  type FollowUpListInput,
+} from "./schemas/tickets.js";
+
 // --- Browser call service interface ---
 export type {
   BrowserCallState,
