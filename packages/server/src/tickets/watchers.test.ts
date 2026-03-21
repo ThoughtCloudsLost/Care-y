@@ -12,6 +12,7 @@ import {
   type TicketAccessChecker,
 } from "./access.js";
 import { createWatchersService, type WatchersService } from "./watchers.js";
+import { ForbiddenError } from "../errors.js";
 
 describe.skipIf(!process.env.DATABASE_URL)("WatchersService (DB)", () => {
   let testDb: TestDb;
@@ -19,7 +20,7 @@ describe.skipIf(!process.env.DATABASE_URL)("WatchersService (DB)", () => {
   let svc: WatchersService;
   let userA: string;
   let userB: string;
-  let _outsider: string;
+  let outsider: string;
   let ticketId: string;
   let queueId: string;
 
@@ -34,7 +35,7 @@ describe.skipIf(!process.env.DATABASE_URL)("WatchersService (DB)", () => {
     const uOutsider = await createTestUser(testDb.db);
     userA = uA.id;
     userB = uB.id;
-    _outsider = uOutsider.id;
+    outsider = uOutsider.id;
 
     const queue = await createTestQueue(testDb.db);
     queueId = queue.id;
@@ -91,16 +92,11 @@ describe.skipIf(!process.env.DATABASE_URL)("WatchersService (DB)", () => {
     expect(await svc.isWatching(userB, ticketId)).toBe(false);
   });
 
-  // TODO: Re-enable when queue-based access control is implemented in the
-  // TicketAccessChecker. Currently all authenticated volunteers can access all
-  // tickets (access.ts checks ticket existence only). This test should be
-  // restored once assertAccess enforces queue membership or assignment scope.
-  //
-  // it("subscribe throws ForbiddenError if user has no ticket access", async () => {
-  //   await expect(svc.subscribe(outsider, ticketId)).rejects.toBeInstanceOf(
-  //     ForbiddenError,
-  //   );
-  // });
+  it("subscribe throws ForbiddenError if user has no ticket access", async () => {
+    await expect(svc.subscribe(outsider, ticketId)).rejects.toBeInstanceOf(
+      ForbiddenError,
+    );
+  });
 
   it("getTicketWatchers returns empty array for unwatched ticket", async () => {
     // Create a new ticket with no watchers

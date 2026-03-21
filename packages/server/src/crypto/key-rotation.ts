@@ -182,12 +182,19 @@ export function createKeyRotationService(
             /* eslint-enable @typescript-eslint/no-unsafe-type-assertion */
             await sql`RELEASE SAVEPOINT rewrap`.execute(tx);
           } catch (err: unknown) {
-            // ticket_key_wraps table doesn't exist yet: roll back to the
-            // savepoint so the outer transaction (user_keys update) survives.
-            if (
-              err instanceof Error &&
-              err.message.includes("does not exist")
-            ) {
+            // Roll back to the savepoint so the outer transaction (user_keys
+            // update) survives. Expected failure modes:
+            // - "does not exist": ticket_key_wraps table not yet migrated
+            // - FK violation (code 23503): stale ticket reference in re-wrap
+            const pgCode =
+              err instanceof Error
+                ? (err as Error & { code?: string }).code
+                : undefined;
+            const isTableMissing =
+              err instanceof Error && err.message.includes("does not exist");
+            const isFkViolation = pgCode === "23503";
+
+            if (isTableMissing || isFkViolation) {
               await sql`ROLLBACK TO SAVEPOINT rewrap`.execute(tx);
             } else {
               throw err;

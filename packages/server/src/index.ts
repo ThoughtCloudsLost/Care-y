@@ -79,6 +79,13 @@ import {
   registerMediaCleanupHandler,
 } from "./tickets/media-service.js";
 import { createQueueService } from "./tickets/queue-service.js";
+import { createAssignmentService } from "./tickets/assignment.js";
+import { createWatchersService } from "./tickets/watchers.js";
+import { createQueuePermissionsService } from "./tickets/queue-permissions.js";
+import {
+  registerEscalationHandler,
+  escalateTenantTickets,
+} from "./tickets/escalation.js";
 
 // --- DB startup probe ---
 
@@ -341,6 +348,9 @@ const appRouter = createAppRouter({
     createDependencySvc: createDependencyService,
     createMediaSvc: createMediaService,
     createQueueSvc: createQueueService,
+    createAssignmentSvc: createAssignmentService,
+    createWatchersSvc: createWatchersService,
+    createQueuePermissionsSvc: createQueuePermissionsService,
   },
 });
 
@@ -366,6 +376,17 @@ registerMediaCleanupHandler(jobQueue, tenantDb, blobStore, async () => {
     .where("is_active", "=", true)
     .execute();
   return orgs.map((o) => o.schema_name);
+});
+registerEscalationHandler(jobQueue, async () => {
+  const orgs = await db
+    .selectFrom("orgs")
+    .select("schema_name")
+    .where("is_active", "=", true)
+    .execute();
+  for (const org of orgs) {
+    const tDb = tenantDb(org.schema_name);
+    await escalateTenantTickets(tDb);
+  }
 });
 jobQueue.start();
 console.log("Job queue started");

@@ -151,3 +151,37 @@ export const followUpListInputSchema = z.object({
   cursor: z.uuid().optional(),
 });
 export type FollowUpListInput = z.infer<typeof followUpListInputSchema>;
+
+// --- Workflow schemas ---
+
+export const assignTicketInputSchema = z.object({
+  ticketId: z.uuid(),
+});
+export type AssignTicketInput = z.infer<typeof assignTicketInputSchema>;
+
+export const takeTicketInputSchema = z.object({
+  ticketId: z.uuid(),
+});
+export type TakeTicketInput = z.infer<typeof takeTicketInputSchema>;
+
+export const releaseTicketInputSchema = z.object({
+  ticketId: z.uuid(),
+});
+export type ReleaseTicketInput = z.infer<typeof releaseTicketInputSchema>;
+
+export const watchTicketInputSchema = z.object({
+  ticketId: z.uuid(),
+});
+export type WatchTicketInput = z.infer<typeof watchTicketInputSchema>;
+
+export const queueWatcherInputSchema = z.object({
+  queueId: z.uuid(),
+  userId: z.uuid(),
+});
+export type QueueWatcherInput = z.infer<typeof queueWatcherInputSchema>;
+
+export const queueAssignmentInputSchema = z.object({
+  queueId: z.uuid(),
+  userId: z.uuid(),
+});
+export type QueueAssignmentInput = z.infer<typeof queueAssignmentInputSchema>;

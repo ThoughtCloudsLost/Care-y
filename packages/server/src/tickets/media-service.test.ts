@@ -17,7 +17,7 @@ import {
   createTicketAccessChecker,
   type TicketAccessChecker,
 } from "./access.js";
-import { NotFoundError } from "../errors.js";
+import { ForbiddenError, NotFoundError } from "../errors.js";
 import type { BlobStore } from "../storage/store.js";
 import type { JobQueue } from "../jobs/queue.js";
 
@@ -46,6 +46,7 @@ describe.skipIf(!process.env.DATABASE_URL)("MediaService (DB)", () => {
   let access: TicketAccessChecker;
   let blobStore: ReturnType<typeof createMockBlobStore>;
   let userId: string;
+  let outsiderId: string;
   let queueId: string;
 
   beforeAll(async () => {
@@ -55,12 +56,22 @@ describe.skipIf(!process.env.DATABASE_URL)("MediaService (DB)", () => {
     const user = await createTestUser(testDb.db);
     userId = user.id;
 
+    const outsider = await createTestUser(testDb.db);
+    outsiderId = outsider.id;
+
     access = createTicketAccessChecker(testDb.db);
     blobStore = createMockBlobStore();
     svc = createMediaService(testDb.db, blobStore, access);
 
     const q = await createTestQueue(testDb.db);
     queueId = q.id;
+
+    // Add user to queue so TicketAccessChecker grants access via queue membership.
+    // outsiderId is deliberately NOT added to any queue.
+    await testDb.db
+      .insertInto("queue_assignments")
+      .values({ queue_id: queueId, user_id: userId })
+      .execute();
   });
 
   afterAll(async () => {
@@ -118,6 +129,32 @@ describe.skipIf(!process.env.DATABASE_URL)("MediaService (DB)", () => {
   // The recordings table has a FK constraint on ticket_id, making orphaned
   // recordings (recording exists, ticket doesn't) physically impossible.
   // Testing this scenario would test PostgreSQL's FK enforcement, not our code.
+
+  it("getRecording throws ForbiddenError for user outside ticket scope", async () => {
+    const ticketId = await insertTicket();
+    const rec = await svc.createRecording({
+      ticketId,
+      blobKey: "blob-denied-rec",
+      sizeBytes: 256,
+    });
+
+    await expect(svc.getRecording(outsiderId, rec.id)).rejects.toBeInstanceOf(
+      ForbiddenError,
+    );
+  });
+
+  it("getAttachment throws ForbiddenError for user outside ticket scope", async () => {
+    const ticketId = await insertTicket();
+    const att = await svc.createAttachment({
+      ticketId,
+      blobKey: "blob-denied-att",
+      sizeBytes: 256,
+    });
+
+    await expect(svc.getAttachment(outsiderId, att.id)).rejects.toBeInstanceOf(
+      ForbiddenError,
+    );
+  });
 
   it("softDeleteRecording sets deleted_at to a non-null timestamp", async () => {
     const ticketId = await insertTicket();
