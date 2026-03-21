@@ -2,9 +2,9 @@
  * Two-factor authentication orchestration service.
  *
  * Coordinates enrollment, verification, and method management across all 2FA
- * method types (WebAuthn, TOTP, email, backup codes). Individual method logic
- * lives in dedicated modules; this service handles DB persistence, method
- * registry, and cross-method coordination.
+ * method types (WebAuthn, TOTP, email, SMS, backup codes). Individual method
+ * logic lives in dedicated modules; this service handles DB persistence,
+ * method registry, and cross-method coordination.
  *
  * All queries run against a tenant-scoped Kysely instance.
  */
@@ -12,8 +12,11 @@
 import type { Kysely } from "kysely";
 import type { TenantDatabase } from "../db/types.js";
 import type { FieldEncryptor } from "../crypto/field-encryptor.js";
+import type { BlindIndexer } from "../crypto/field-encryptor.js";
 import type { SessionRepository } from "./session-repository.js";
 import type { EmailCodeService } from "./email-code.js";
+import type { SmsCodeService } from "./sms-code.js";
+import { normalizePhoneNumber } from "../telephony/phone-utils.js";
 import {
   generateTotpSecret,
   getTotpUri,
@@ -126,11 +129,26 @@ export interface TwoFactorService {
   // Email enrollment
   verifyEmailEnrollment(userId: string, code: string): Promise<boolean>;
 
+  // SMS enrollment (rawPhone is user input, normalized to E.164 internally).
+  // Returns the normalized E.164 phone for the caller to send the verification code.
+  enrollSmsPhone(
+    userId: string,
+    rawPhone: string,
+    orgId: string,
+  ): Promise<string>;
+  verifySmsEnrollment(userId: string, code: string): Promise<boolean>;
+
+  // SMS verification (login)
+  verifySms(userId: string, code: string): Promise<boolean>;
+
   // Method queries
   getEnrolledMethodTypes(userId: string): Promise<string[]>;
 
   // User email resolution (decrypts notification email for 2FA code delivery)
   resolveUserEmail(userId: string): Promise<string>;
+
+  // User SMS phone resolution (decrypts stored SMS phone for code delivery)
+  resolveUserSmsPhone(userId: string): Promise<string>;
 
   // Method management
   removeMethod(
@@ -143,13 +161,30 @@ export interface TwoFactorService {
   markSessionVerified(sessionToken: string): Promise<void>;
 }
 
+export interface SmsDeps {
+  readonly smsCodes: SmsCodeService;
+  readonly indexer: BlindIndexer;
+  readonly orgId: string;
+}
+
 export function createTwoFactorService(
   db: Kysely<TenantDatabase>,
   sessions: SessionRepository,
   emailCodes: EmailCodeService,
   encryptor: FieldEncryptor,
   issuer: string,
+  smsDeps?: SmsDeps,
 ): TwoFactorService {
+  /** Asserts that SMS deps are available. Throws if the org has no telephony config. */
+  function requireSmsDeps(): SmsDeps {
+    if (!smsDeps) {
+      throw new ValidationError(
+        "SMS 2FA is not available for this organization.",
+      );
+    }
+    return smsDeps;
+  }
+
   // --- Internal helpers ---
 
   async function getActiveMethods(
@@ -174,6 +209,41 @@ export function createTwoFactorService(
       .values({ user_id: userId, method_type: method, is_active: true })
       .onConflict((oc) =>
         oc.columns(["user_id", "method_type"]).doUpdateSet({ is_active: true }),
+      )
+      .execute();
+  }
+
+  /**
+   * Stores the SMS phone number in a pending state (is_active: false).
+   * The method becomes active only after verifySmsEnrollment confirms
+   * the user controls the phone by verifying a code sent to it.
+   * Uses upsert to handle re-enrollment (user changes their SMS phone).
+   */
+  async function storePendingSmsPhone(
+    userId: string,
+    phone: string,
+    orgId: string,
+  ): Promise<void> {
+    const sms = requireSmsDeps();
+
+    const encryptedPhone = encryptor.encrypt(phone);
+    const phoneHash = sms.indexer.hash(phone, orgId);
+
+    await db
+      .insertInto("two_factor_methods")
+      .values({
+        user_id: userId,
+        method_type: TwoFactorMethod.SMS,
+        is_active: false,
+        encrypted_sms_phone: encryptedPhone,
+        sms_phone_hash: phoneHash,
+      })
+      .onConflict((oc) =>
+        oc.columns(["user_id", "method_type"]).doUpdateSet({
+          is_active: false,
+          encrypted_sms_phone: encryptedPhone,
+          sms_phone_hash: phoneHash,
+        }),
       )
       .execute();
   }
@@ -351,6 +421,15 @@ export function createTwoFactorService(
         .deleteFrom("webauthn_credentials")
         .where("user_id", "=", userId)
         .execute();
+    } else if (method === TwoFactorMethod.SMS) {
+      // Delete pending SMS codes and clear stored phone data
+      await db.deleteFrom("sms_codes").where("user_id", "=", userId).execute();
+      await db
+        .updateTable("two_factor_methods")
+        .set({ encrypted_sms_phone: null, sms_phone_hash: null })
+        .where("user_id", "=", userId)
+        .where("method_type", "=", TwoFactorMethod.SMS)
+        .execute();
     }
   }
 
@@ -375,6 +454,10 @@ export function createTwoFactorService(
         [
           TwoFactorMethod.EMAIL,
           [simpleMethodInfo(TwoFactorMethod.EMAIL, "Email code")],
+        ],
+        [
+          TwoFactorMethod.SMS,
+          [simpleMethodInfo(TwoFactorMethod.SMS, "Text message code")],
         ],
       ]);
 
@@ -639,6 +722,53 @@ export function createTwoFactorService(
       return valid;
     },
 
+    // --- SMS enrollment ---
+
+    async enrollSmsPhone(
+      userId: string,
+      rawPhone: string,
+      orgId: string,
+    ): Promise<string> {
+      requireSmsDeps();
+      // Resolve org's default country code for phone normalization
+      const orgConfig = await db
+        .selectFrom("org_config")
+        .select("default_country_code")
+        .executeTakeFirstOrThrow();
+      const phone = normalizePhoneNumber(
+        rawPhone,
+        orgConfig.default_country_code,
+      );
+
+      // Store phone in pending state (is_active: false).
+      // Activated only after code verification in verifySmsEnrollment.
+      await storePendingSmsPhone(userId, phone, orgId);
+      return phone;
+    },
+
+    async verifySmsEnrollment(userId: string, code: string): Promise<boolean> {
+      const sms = requireSmsDeps();
+      const valid = await sms.smsCodes.verifyCode(userId, code);
+      if (valid) {
+        // Phone ownership confirmed. Activate the method.
+        await db
+          .updateTable("two_factor_methods")
+          .set({ is_active: true })
+          .where("user_id", "=", userId)
+          .where("method_type", "=", TwoFactorMethod.SMS)
+          .execute();
+        return true;
+      }
+      return false;
+    },
+
+    // --- SMS verification (login) ---
+
+    async verifySms(userId: string, code: string): Promise<boolean> {
+      const sms = requireSmsDeps();
+      return sms.smsCodes.verifyCode(userId, code);
+    },
+
     // --- Method queries ---
 
     async getEnrolledMethodTypes(userId: string): Promise<string[]> {
@@ -661,6 +791,25 @@ export function createTwoFactorService(
 
       // care-y-ignore-next-line server-no-decrypt -- notification email is operational server-side PII (Tier 2, not E2EE)
       return encryptor.decrypt(row.encrypted_notification_addr);
+    },
+
+    async resolveUserSmsPhone(userId: string): Promise<string> {
+      const row = await db
+        .selectFrom("two_factor_methods")
+        .select("encrypted_sms_phone")
+        .where("user_id", "=", userId)
+        .where("method_type", "=", TwoFactorMethod.SMS)
+        .where("is_active", "=", true)
+        .executeTakeFirst();
+
+      if (!row?.encrypted_sms_phone) {
+        throw new ValidationError(
+          "No SMS phone number enrolled. Set up SMS 2FA first.",
+        );
+      }
+
+      // care-y-ignore-next-line server-no-decrypt -- SMS phone is operational server-side PII (Tier 2, not E2EE)
+      return encryptor.decrypt(row.encrypted_sms_phone);
     },
 
     // --- Method management ---

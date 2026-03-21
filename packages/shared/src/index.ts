@@ -53,6 +53,8 @@ export {
 export {
   totpVerifySchema,
   emailCodeVerifySchema,
+  smsEnrollSchema,
+  smsCodeVerifySchema,
   backupCodeVerifySchema,
   webauthnRegistrationResponseSchema,
   webauthnAssertionResponseSchema,
@@ -61,6 +63,8 @@ export {
   twoFactorStatusResponseSchema,
   type TotpVerifyInput,
   type EmailCodeVerifyInput,
+  type SmsEnrollInput,
+  type SmsCodeVerifyInput,
   type BackupCodeVerifyInput,
   type WebauthnRegistrationResponse,
   type WebauthnAssertionResponse,
@@ -88,3 +92,77 @@ export {
   type OprfEvaluateOutput,
   type PowChallenge,
 } from "./schemas/oprf.js";
+
+// --- Telephony: country codes ---
+export {
+  E164_COUNTRY_CODES,
+  isValidCountryCode,
+} from "./telephony/country-codes.js";
+
+// --- Telephony schemas ---
+export {
+  telephonyProviderSchema,
+  saveTelephonyConfigInputSchema,
+  updateCountryCodeInputSchema,
+  maskedTelephonyConfigSchema,
+  maskedPhoneNumberSchema,
+  type TelephonyProviderType,
+  type SaveTelephonyConfigInput,
+  type UpdateCountryCodeInput,
+  type MaskedTelephonyConfigOutput,
+  createManagedTelephonyInputSchema,
+  type CreateManagedTelephonyInput,
+} from "./schemas/telephony.js";
+
+// --- Telephony content schemas ---
+export {
+  greetingTypeSchema,
+  createGreetingInputSchema,
+  updateGreetingInputSchema,
+  deleteGreetingInputSchema,
+  listGreetingsInputSchema,
+  smsResponseTypeSchema,
+  createSmsResponseInputSchema,
+  updateSmsResponseInputSchema,
+  deleteSmsResponseInputSchema,
+  listSmsResponsesInputSchema,
+  preferredCallMethodSchema,
+  registerConsultantInputSchema,
+  updateConsultantInputSchema,
+  verifyConsultantInputSchema,
+  type GreetingType,
+  type CreateGreetingInput,
+  type UpdateGreetingInput,
+  type DeleteGreetingInput,
+  type ListGreetingsInput,
+  type SmsResponseType,
+  type CreateSmsResponseInput,
+  type UpdateSmsResponseInput,
+  type DeleteSmsResponseInput,
+  type ListSmsResponsesInput,
+  type PreferredCallMethod,
+  type RegisterConsultantInput,
+  type UpdateConsultantInput,
+  type VerifyConsultantInput,
+} from "./schemas/telephony-content.js";
+
+// --- Relay schemas ---
+export {
+  relaySmsInputSchema,
+  relaySmsOutputSchema,
+  relayCallInputSchema,
+  relayCallOutputSchema,
+  relayWebrtcTokenOutputSchema,
+  type RelaySmsInput,
+  type RelaySmsOutput,
+  type RelayCallInput,
+  type RelayCallOutput,
+  type RelayWebrtcTokenOutput,
+} from "./schemas/relay.js";
+
+// --- Browser call service interface ---
+export type {
+  BrowserCallState,
+  BrowserCallEvents,
+  BrowserCallService,
+} from "./telephony/browser-call.js";

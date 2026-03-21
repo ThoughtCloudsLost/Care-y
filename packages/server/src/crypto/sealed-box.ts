@@ -13,8 +13,10 @@ import sodium from "sodium-native";
 import { CryptoError } from "../errors.js";
 
 export interface SealedBoxEncryptor {
-  /** Encrypt plaintext so only the org key holder can read it. */
+  /** Encrypt plaintext string so only the org key holder can read it. */
   seal(plaintext: string): Buffer;
+  /** Encrypt a raw Buffer. Caller must zero the input after use. */
+  sealBuffer(data: Buffer): Buffer;
 }
 
 const CURVE25519_PK_BYTES = 32; // sodium.crypto_box_PUBLICKEYBYTES
@@ -44,6 +46,14 @@ export function createSealedBoxEncryptor(
       } finally {
         message.fill(0);
       }
+    },
+
+    sealBuffer(data: Buffer): Buffer {
+      const ciphertext = Buffer.alloc(
+        data.length + sodium.crypto_box_SEALBYTES,
+      );
+      sodium.crypto_box_seal(ciphertext, data, orgPublicKey);
+      return ciphertext;
     },
   };
 }

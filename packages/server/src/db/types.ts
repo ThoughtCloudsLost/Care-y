@@ -57,12 +57,23 @@ export interface PendingJobsTable {
   error: string | null;
 }
 
+// --- Telephony config ---
+
+export interface TelephonyConfigTable {
+  org_id: string;
+  provider: string;
+  config: Buffer; // encrypted JSON blob (nonce || ciphertext)
+  key_version: ColumnType<number, number | undefined, number>;
+  created_at: ColumnType<Date, Date | undefined, Date>;
+  updated_at: ColumnType<Date, Date | undefined, Date>;
+}
+
 export interface PlatformDatabase {
   orgs: OrgsTable;
   oprf_config: OprfConfigTable;
   oprf_audit_log: OprfAuditLogTable;
   pending_jobs: PendingJobsTable;
-  // Telephony (telephony_config)
+  telephony_config: TelephonyConfigTable;
   // Production (deletion_requests)
 }
 
@@ -99,6 +110,9 @@ export interface OrgConfigTable {
   client_encrypted_branding: Buffer | null;
   pii_retention_days: number | null;
   org_public_key: Buffer | null; // Curve25519 (32 bytes), null until first admin onboarding
+  default_country_code: ColumnType<string, string | undefined, string>;
+  phone_outbound_sid: string | null;
+  phone_system_sid: string | null;
 }
 
 // --- User keys (full interface, replaces UserKeysStubTable) ---
@@ -174,12 +188,80 @@ export interface BackupCodesTable {
   is_used: ColumnType<boolean, boolean | undefined, boolean>;
 }
 
+// --- SMS verification codes ---
+export interface SmsCodesTable {
+  id: Generated<string>;
+  user_id: string;
+  code_hash: string;
+  expires_at: Date;
+  attempts: ColumnType<number, number | undefined, number>;
+  consumed: ColumnType<boolean, boolean | undefined, boolean>;
+}
+
 // --- 2FA method registry ---
 export interface TwoFactorMethodsTable {
   id: Generated<string>;
   user_id: string;
   method_type: string;
   is_active: ColumnType<boolean, boolean | undefined, boolean>;
+  encrypted_sms_phone: Buffer | null; // Only populated when method_type = 'sms'
+  sms_phone_hash: string | null; // BlindIndexer hash, only when method_type = 'sms'
+}
+
+// Telephony data models
+
+export interface PhonesTable {
+  id: Generated<string>;
+  phone_hash: string;
+  encrypted_number: Buffer;
+  locale: string;
+  location_city: string | null;
+  location_region: string | null;
+  is_active: ColumnType<boolean, boolean | undefined, boolean>;
+  created_at: Generated<Date>;
+  updated_at: Generated<Date>;
+}
+
+export interface ClientsTable {
+  id: Generated<string>;
+  alias: string;
+  phone_id: string;
+  created_at: Generated<Date>;
+  updated_at: Generated<Date>;
+}
+
+export interface PhoneGreetingsTable {
+  id: Generated<string>;
+  phone_id: string;
+  greeting_type: string;
+  locale: string;
+  text: string;
+  is_audio: ColumnType<boolean, boolean | undefined, boolean>;
+  audio_blob_key: string | null;
+  created_at: Generated<Date>;
+  updated_at: Generated<Date>;
+}
+
+export interface SmsResponsesTable {
+  id: Generated<string>;
+  response_type: string;
+  locale: string;
+  text: string;
+  created_at: Generated<Date>;
+  updated_at: Generated<Date>;
+}
+
+export interface ConsultantsTable {
+  id: Generated<string>;
+  user_id: string;
+  encrypted_phone: Buffer;
+  phone_hash: string;
+  is_verified: ColumnType<boolean, boolean | undefined, boolean>;
+  verification_code_hash: string | null;
+  verification_expires_at: Date | null;
+  preferred_call_method: string;
+  created_at: Generated<Date>;
+  updated_at: Generated<Date>;
 }
 
 export interface TenantDatabase {
@@ -190,10 +272,17 @@ export interface TenantDatabase {
   webauthn_credentials: WebauthnCredentialsTable;
   totp_secrets: TotpSecretsTable;
   email_codes: EmailCodesTable;
+  sms_codes: SmsCodesTable;
   backup_codes: BackupCodesTable;
   two_factor_methods: TwoFactorMethodsTable;
   wrapped_org_keys: WrappedOrgKeysTable;
   ticket_key_wraps: TicketKeyWrapsTable; // Interface only, CREATE TABLE with tickets migration
+  // Telephony data models
+  phones: PhonesTable;
+  clients: ClientsTable;
+  phone_greetings: PhoneGreetingsTable;
+  sms_responses: SmsResponsesTable;
+  consultants: ConsultantsTable;
   // Tickets (tickets, followups, audit_log)
   // Shifts (shifts, shift_occurrences)
   // Client portal (portal_channels)

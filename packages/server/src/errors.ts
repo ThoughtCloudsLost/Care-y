@@ -129,6 +129,52 @@ export class OffboardingError extends AppError {
   }
 }
 
+/** Telephony provider operation failed (send SMS, initiate call, etc.) */
+export class TelephonyError extends AppError {
+  readonly code = "TELEPHONY_ERROR" as const;
+  readonly httpStatus: number;
+
+  constructor(message: string, httpStatus = 502) {
+    super(message);
+    this.httpStatus = httpStatus;
+  }
+}
+
+/** Telephony provider configuration is invalid or missing */
+export class TelephonyConfigError extends AppError {
+  readonly code = "TELEPHONY_CONFIG_ERROR" as const;
+  readonly httpStatus = 500;
+
+  constructor(message: string) {
+    super(message, false); // non-operational: config should be valid
+  }
+}
+
+/** Secret encryption/decryption failed (key mismatch, tampered ciphertext) */
+export class SecretCryptoError extends AppError {
+  readonly code = "SECRET_CRYPTO_ERROR" as const;
+  readonly httpStatus = 500;
+
+  constructor(message: string) {
+    super(message, false); // non-operational: indicates infrastructure failure
+  }
+}
+
+/** MMS attachment failed validation (size, type, or magic bytes). */
+export class AttachmentValidationError extends AppError {
+  readonly code = "ATTACHMENT_VALIDATION_ERROR" as const;
+  readonly httpStatus = 422;
+  readonly reason: "size" | "content_type" | "magic_bytes";
+
+  constructor(
+    message: string,
+    reason: "size" | "content_type" | "magic_bytes",
+  ) {
+    super(message);
+    this.reason = reason;
+  }
+}
+
 export function isAppError(err: unknown): err is AppError {
   return err instanceof AppError;
 }
