@@ -10,6 +10,7 @@
 import type { Kysely } from "kysely";
 import type { TenantDatabase } from "../db/types.js";
 import { MergeError, NotFoundError } from "../errors.js";
+import { createDependencyService } from "./dependency-service.js";
 
 export interface MergeEventRecord {
   readonly id: string;
@@ -114,6 +115,15 @@ export function createMergeService(db: Kysely<TenantDatabase>): MergeService {
           .executeTakeFirst();
 
         if (secondaryTicket) {
+          // Enforce dependency constraint: cannot close ticket with unresolved deps
+          const depService = createDependencyService(trx);
+          const resolved = await depService.allResolved(secondaryTicket.id);
+          if (!resolved) {
+            throw new MergeError(
+              "Cannot merge: secondary client's ticket has unresolved dependencies",
+            );
+          }
+
           await trx
             .updateTable("tickets")
             .set({ status: "closed" })

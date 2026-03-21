@@ -433,6 +433,15 @@ export async function createTestTicketFixture(
   if (options?.createUser) {
     const user = await createTestUser(db);
     userId = user.id;
+
+    // Add user to queue so TicketAccessChecker grants access via queue
+    // membership. Reflects production: volunteers in a queue are members.
+    // care-y-ignore-next-line no-plaintext-db-write -- queue_assignments contains only opaque UUIDs (queue_id, user_id), no PII
+    await db
+      .insertInto("queue_assignments")
+      .values({ queue_id: queueId, user_id: userId })
+      .onConflict((oc) => oc.columns(["queue_id", "user_id"]).doNothing())
+      .execute();
   }
 
   return {
@@ -490,6 +499,14 @@ export async function createTestClientFixture(
   }
 
   const user = await createTestUser(db);
+
+  // Add user to queue so TicketAccessChecker grants access via queue membership.
+  // care-y-ignore-next-line no-plaintext-db-write -- queue_assignments contains only opaque UUIDs (queue_id, user_id), no PII
+  await db
+    .insertInto("queue_assignments")
+    .values({ queue_id: queueId, user_id: user.id })
+    .onConflict((oc) => oc.columns(["queue_id", "user_id"]).doNothing())
+    .execute();
 
   return {
     phoneId: phone.id,

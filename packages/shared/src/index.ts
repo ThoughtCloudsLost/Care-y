@@ -180,6 +180,12 @@ export {
   uploadAttachmentInputSchema,
   ticketListInputSchema,
   followUpListInputSchema,
+  assignTicketInputSchema,
+  takeTicketInputSchema,
+  releaseTicketInputSchema,
+  watchTicketInputSchema,
+  queueWatcherInputSchema,
+  queueAssignmentInputSchema,
   type TicketStatus,
   type TicketPriority,
   type FollowUpSource,
@@ -198,6 +204,12 @@ export {
   type UploadAttachmentInput,
   type TicketListInput,
   type FollowUpListInput,
+  type AssignTicketInput,
+  type TakeTicketInput,
+  type ReleaseTicketInput,
+  type WatchTicketInput,
+  type QueueWatcherInput,
+  type QueueAssignmentInput,
 } from "./schemas/tickets.js";
 
 // --- Browser call service interface ---

@@ -250,13 +250,14 @@ describe.skipIf(!process.env.DATABASE_URL)("KeyRotationService", () => {
       ).resolves.toBeUndefined();
     });
 
-    it("handles reWrappedKeys when ticket_key_wraps table does not exist", async () => {
+    it("handles reWrappedKeys with stale ticket references gracefully", async () => {
       const user = await createTestUser(testDb.db);
       await seedUserKeys(user.id, { vol_public: crypto.randomBytes(32) });
       await service.acquireLock(user.id);
 
-      // Attempt to insert re-wrapped keys. The table doesn't exist yet,
-      // so the guard should catch the "does not exist" error and treat it as no-op.
+      // Attempt to insert re-wrapped keys referencing a non-existent ticket.
+      // The FK violation is caught by the savepoint guard, and user_keys
+      // are still updated in the outer transaction.
       await expect(
         service.applyRotation({
           userId: user.id,
@@ -274,7 +275,7 @@ describe.skipIf(!process.env.DATABASE_URL)("KeyRotationService", () => {
         }),
       ).resolves.toBeUndefined();
 
-      // Verify user_keys were still updated despite the table-not-found
+      // Verify user_keys were still updated despite the FK violation
       const row = await testDb.db
         .selectFrom("user_keys")
         .select(["key_version", "rotation_lock"])

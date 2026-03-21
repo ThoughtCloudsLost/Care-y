@@ -400,6 +400,7 @@ export interface TenantDatabase {
   ticket_dependencies: TicketDependenciesTable;
   preset_replies: PresetRepliesTable;
   client_merge_events: ClientMergeEventsTable;
+  // Workflow join tables
   queue_assignments: QueueAssignmentsTable;
   ticket_watchers: TicketWatchersTable;
   queue_watchers: QueueWatchersTable;

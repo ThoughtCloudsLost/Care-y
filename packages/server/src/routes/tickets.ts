@@ -30,6 +30,11 @@ import type { PresetService } from "../tickets/preset-service.js";
 import type { DependencyService } from "../tickets/dependency-service.js";
 import type { MediaService } from "../tickets/media-service.js";
 import type { QueueService } from "../tickets/queue-service.js";
+import type { AssignmentService } from "../tickets/assignment.js";
+import type { WatchersService } from "../tickets/watchers.js";
+import type { QueuePermissionsService } from "../tickets/queue-permissions.js";
+import type { ShiftProvider } from "../tickets/shift-provider.js";
+import { createStubShiftProvider } from "../tickets/shift-provider.js";
 import {
   createTicketInputSchema,
   updateTicketInputSchema,
@@ -44,6 +49,12 @@ import {
   undoMergeInputSchema,
   createQueueInputSchema,
   updateQueueInputSchema,
+  assignTicketInputSchema,
+  takeTicketInputSchema,
+  releaseTicketInputSchema,
+  watchTicketInputSchema,
+  queueWatcherInputSchema,
+  queueAssignmentInputSchema,
 } from "@care-y/shared";
 
 export interface TicketRouterDeps {
@@ -70,8 +81,22 @@ export interface TicketRouterDeps {
     access: TicketAccessChecker,
   ) => MediaService;
   readonly createQueueSvc: (tDb: OrgContext["tenantDb"]) => QueueService;
+  // Workflow deps
+  readonly createAssignmentSvc: (
+    tDb: OrgContext["tenantDb"],
+    access: TicketAccessChecker,
+    shiftProvider: ShiftProvider,
+  ) => AssignmentService;
+  readonly createWatchersSvc: (
+    tDb: OrgContext["tenantDb"],
+    access: TicketAccessChecker,
+  ) => WatchersService;
+  readonly createQueuePermissionsSvc: (
+    tDb: OrgContext["tenantDb"],
+  ) => QueuePermissionsService;
 }
 
+// care-y-ignore-next-line missing-return-type -- tRPC router() returns a deeply generic type that cannot be written explicitly
 export function createTicketRouter(deps: TicketRouterDeps) {
   return router({
     // --- Ticket CRUD ---
@@ -384,5 +409,101 @@ export function createTicketRouter(deps: TicketRouterDeps) {
         });
       }),
     ),
+
+    // --- Assignment ---
+    assign: volunteerProcedure.input(assignTicketInputSchema).mutation(
+      withErrorWrapping(async ({ ctx, input }) => {
+        const access = deps.createTicketAccess(ctx.org.tenantDb);
+        const qp = deps.createQueuePermissionsSvc(ctx.org.tenantDb);
+        const shift = createStubShiftProvider(async (qId) =>
+          qp.getQueueMembers(qId),
+        );
+        const svc = deps.createAssignmentSvc(ctx.org.tenantDb, access, shift);
+        return svc.assignRoundRobin(input.ticketId);
+      }),
+    ),
+
+    take: volunteerProcedure.input(takeTicketInputSchema).mutation(
+      withErrorWrapping(async ({ ctx, input }) => {
+        const access = deps.createTicketAccess(ctx.org.tenantDb);
+        const qp = deps.createQueuePermissionsSvc(ctx.org.tenantDb);
+        const shift = createStubShiftProvider(async (qId) =>
+          qp.getQueueMembers(qId),
+        );
+        const svc = deps.createAssignmentSvc(ctx.org.tenantDb, access, shift);
+        return svc.take(ctx.user.id, input.ticketId);
+      }),
+    ),
+
+    release: volunteerProcedure.input(releaseTicketInputSchema).mutation(
+      withErrorWrapping(async ({ ctx, input }) => {
+        const access = deps.createTicketAccess(ctx.org.tenantDb);
+        const qp = deps.createQueuePermissionsSvc(ctx.org.tenantDb);
+        const shift = createStubShiftProvider(async (qId) =>
+          qp.getQueueMembers(qId),
+        );
+        const svc = deps.createAssignmentSvc(ctx.org.tenantDb, access, shift);
+        return svc.release(ctx.user.id, input.ticketId);
+      }),
+    ),
+
+    // --- CC/Watchers ---
+    watchTicket: volunteerProcedure.input(watchTicketInputSchema).mutation(
+      withErrorWrapping(async ({ ctx, input }) => {
+        const access = deps.createTicketAccess(ctx.org.tenantDb);
+        const svc = deps.createWatchersSvc(ctx.org.tenantDb, access);
+        await svc.subscribe(ctx.user.id, input.ticketId);
+      }),
+    ),
+
+    unwatchTicket: volunteerProcedure.input(watchTicketInputSchema).mutation(
+      withErrorWrapping(async ({ ctx, input }) => {
+        const access = deps.createTicketAccess(ctx.org.tenantDb);
+        const svc = deps.createWatchersSvc(ctx.org.tenantDb, access);
+        await svc.unsubscribe(ctx.user.id, input.ticketId);
+      }),
+    ),
+
+    addQueueWatcher: adminProcedure.input(queueWatcherInputSchema).mutation(
+      withErrorWrapping(async ({ ctx, input }) => {
+        const access = deps.createTicketAccess(ctx.org.tenantDb);
+        const svc = deps.createWatchersSvc(ctx.org.tenantDb, access);
+        await svc.addQueueWatcher(input.queueId, input.userId);
+      }),
+    ),
+
+    removeQueueWatcher: adminProcedure.input(queueWatcherInputSchema).mutation(
+      withErrorWrapping(async ({ ctx, input }) => {
+        const access = deps.createTicketAccess(ctx.org.tenantDb);
+        const svc = deps.createWatchersSvc(ctx.org.tenantDb, access);
+        await svc.removeQueueWatcher(input.queueId, input.userId);
+      }),
+    ),
+
+    // --- Queue Assignments ---
+    addQueueMember: adminProcedure.input(queueAssignmentInputSchema).mutation(
+      withErrorWrapping(async ({ ctx, input }) => {
+        const svc = deps.createQueuePermissionsSvc(ctx.org.tenantDb);
+        await svc.addMember(input.queueId, input.userId);
+      }),
+    ),
+
+    removeQueueMember: adminProcedure
+      .input(queueAssignmentInputSchema)
+      .mutation(
+        withErrorWrapping(async ({ ctx, input }) => {
+          const svc = deps.createQueuePermissionsSvc(ctx.org.tenantDb);
+          await svc.removeMember(input.queueId, input.userId);
+        }),
+      ),
+
+    listQueueMembers: volunteerProcedure
+      .input(z.object({ queueId: z.uuid() }))
+      .query(
+        withErrorWrapping(async ({ ctx, input }) => {
+          const svc = deps.createQueuePermissionsSvc(ctx.org.tenantDb);
+          return svc.getQueueMembers(input.queueId);
+        }),
+      ),
   });
 }

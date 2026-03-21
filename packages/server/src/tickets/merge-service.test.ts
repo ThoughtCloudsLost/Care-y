@@ -7,6 +7,7 @@ import {
   type TestDb,
 } from "../test-utils.js";
 import { createMergeService, type MergeService } from "./merge-service.js";
+import { createDependencyService } from "./dependency-service.js";
 import { MergeError, NotFoundError } from "../errors.js";
 import * as crypto from "node:crypto";
 
@@ -120,6 +121,32 @@ describe.skipIf(!process.env.DATABASE_URL)("MergeService (DB)", () => {
         encryptedSnapshot: Buffer.from("snap2"),
       }),
     ).rejects.toBeInstanceOf(MergeError);
+  });
+
+  it("merge rejects if secondary's ticket has unresolved dependencies", async () => {
+    const a = await createClientWithTicket();
+    const b = await createClientWithTicket();
+    const blocker = await createClientWithTicket();
+
+    // Add an unresolved dependency: b's ticket depends on blocker's (still open)
+    const depService = createDependencyService(testDb.db);
+    await depService.add(b.ticketId, blocker.ticketId);
+
+    await expect(
+      svc.merge({
+        primaryClientId: a.clientId,
+        secondaryClientId: b.clientId,
+        encryptedSnapshot: Buffer.from("snap"),
+      }),
+    ).rejects.toBeInstanceOf(MergeError);
+
+    // Verify secondary was NOT merged (transaction rolled back)
+    const secondary = await testDb.db
+      .selectFrom("clients")
+      .select("merged_into")
+      .where("id", "=", b.clientId)
+      .executeTakeFirstOrThrow();
+    expect(secondary.merged_into).toBeNull();
   });
 
   it("merge rejects if either client does not exist", async () => {
