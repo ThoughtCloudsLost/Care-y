@@ -17,10 +17,10 @@
     "@care-y/server": "workspace:*",
     "@care-y/shared": "workspace:*",
     "@twilio/voice-sdk": "2.18.1",
-    "@tanstack/svelte-query": "6.1.0",
+    "@tanstack/svelte-query": "6.1.8",
     "@trpc/client": "11.10.0",
     "bits-ui": "2.16.3",
-    "konsta": "5.0.7",
+    "konsta": "5.0.8",
     "svelte-gestures": "5.2.2"
   },
   "devDependencies": {
