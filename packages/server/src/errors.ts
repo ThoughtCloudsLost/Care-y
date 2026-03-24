@@ -187,6 +187,24 @@ export class MergeError extends AppError {
   readonly httpStatus = 422;
 }
 
+/** Notification delivery failed (SSE, email, SMS, push) */
+export class NotificationError extends AppError {
+  readonly code = "NOTIFICATION_ERROR" as const;
+  readonly httpStatus = 500;
+}
+
+/** Search query failed (invalid filter, query error) */
+export class SearchError extends AppError {
+  readonly code = "SEARCH_ERROR" as const;
+  readonly httpStatus = 400;
+}
+
+/** Audit log operation failed */
+export class AuditError extends AppError {
+  readonly code = "AUDIT_ERROR" as const;
+  readonly httpStatus = 500;
+}
+
 export function isAppError(err: unknown): err is AppError {
   return err instanceof AppError;
 }
