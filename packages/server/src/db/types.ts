@@ -357,6 +357,37 @@ export interface ClientMergeEventsTable {
   is_undone: ColumnType<boolean, boolean | undefined, boolean>;
 }
 
+// --- Knowledge Base ---
+
+export interface KBCategoriesTable {
+  id: Generated<string>;
+  name: string;
+  encrypted_description: Buffer | null;
+  created_at: Generated<Date>;
+  updated_at: Generated<Date>;
+}
+
+export interface KBItemsTable {
+  id: Generated<string>;
+  category_id: string;
+  encrypted_title: Buffer;
+  encrypted_body: Buffer;
+  created_by: string;
+  vote_up_count: ColumnType<number, number | undefined, number>;
+  vote_down_count: ColumnType<number, number | undefined, number>;
+  rating: ColumnType<number, number | undefined, number>;
+  created_at: Generated<Date>;
+  updated_at: Generated<Date>;
+}
+
+export interface KBVotesTable {
+  id: Generated<string>;
+  kb_item_id: string;
+  voter_pseudonym: string;
+  direction: string;
+  created_at: Generated<Date>;
+}
+
 export interface QueueAssignmentsTable {
   queue_id: string;
   user_id: string;
@@ -400,6 +431,10 @@ export interface TenantDatabase {
   ticket_dependencies: TicketDependenciesTable;
   preset_replies: PresetRepliesTable;
   client_merge_events: ClientMergeEventsTable;
+  // Knowledge Base
+  kb_categories: KBCategoriesTable;
+  kb_items: KBItemsTable;
+  kb_votes: KBVotesTable;
   // Workflow join tables
   queue_assignments: QueueAssignmentsTable;
   ticket_watchers: TicketWatchersTable;
