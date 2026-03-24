@@ -74,6 +74,7 @@ export interface TicketRouterDeps {
   readonly createTicketSvc: (
     tDb: OrgContext["tenantDb"],
     access: TicketAccessChecker,
+    getAccessibleQueueIds: (userId: string) => Promise<readonly string[]>,
   ) => TicketService;
   readonly createFollowUpSvc: (
     tDb: OrgContext["tenantDb"],
@@ -83,6 +84,7 @@ export interface TicketRouterDeps {
   readonly createPresetSvc: (tDb: OrgContext["tenantDb"]) => PresetService;
   readonly createDependencySvc: (
     tDb: OrgContext["tenantDb"],
+    access?: TicketAccessChecker,
   ) => DependencyService;
   readonly createMediaSvc: (
     tDb: OrgContext["tenantDb"],
@@ -145,6 +147,20 @@ function buildAuditRoutes(
 
 // care-y-ignore-next-line missing-return-type -- tRPC router() returns a deeply generic type that cannot be written explicitly
 export function createTicketRouter(deps: TicketRouterDeps) {
+  // Per-request ticket service factory. Wires access checker + queue scoping
+  // so every handler gets a correctly-scoped service without repeating the setup.
+  function ticketSvc(tDb: OrgContext["tenantDb"]): {
+    access: TicketAccessChecker;
+    svc: TicketService;
+  } {
+    const access = deps.createTicketAccess(tDb);
+    const qps = deps.createQueuePermissionsSvc(tDb);
+    const svc = deps.createTicketSvc(tDb, access, async (userId) =>
+      qps.getUserQueues(userId),
+    );
+    return { access, svc };
+  }
+
   // Audit helper: best-effort, never blocks. No-op when audit service not injected.
   function audit(tDb: OrgContext["tenantDb"], entry: AuditEntry): void {
     if (!deps.createAuditSvc) return;
@@ -205,8 +221,7 @@ export function createTicketRouter(deps: TicketRouterDeps) {
     // --- Ticket CRUD ---
     create: volunteerProcedure.input(createTicketInputSchema).mutation(
       withErrorWrapping(async ({ ctx, input }) => {
-        const access = deps.createTicketAccess(ctx.org.tenantDb);
-        const svc = deps.createTicketSvc(ctx.org.tenantDb, access);
+        const { svc } = ticketSvc(ctx.org.tenantDb);
         const ticket = await svc.create(ctx.user.id, {
           clientId: input.clientId,
           queueId: input.queueId,
@@ -233,24 +248,21 @@ export function createTicketRouter(deps: TicketRouterDeps) {
 
     get: volunteerProcedure.input(z.object({ ticketId: z.uuid() })).query(
       withErrorWrapping(async ({ ctx, input }) => {
-        const access = deps.createTicketAccess(ctx.org.tenantDb);
-        const svc = deps.createTicketSvc(ctx.org.tenantDb, access);
+        const { svc } = ticketSvc(ctx.org.tenantDb);
         return svc.findById(input.ticketId, ctx.user.id);
       }),
     ),
 
     list: volunteerProcedure.input(ticketListInputSchema).query(
       withErrorWrapping(async ({ ctx, input }) => {
-        const access = deps.createTicketAccess(ctx.org.tenantDb);
-        const svc = deps.createTicketSvc(ctx.org.tenantDb, access);
-        return svc.list(input);
+        const { svc } = ticketSvc(ctx.org.tenantDb);
+        return svc.list(ctx.user.id, input);
       }),
     ),
 
     update: volunteerProcedure.input(updateTicketInputSchema).mutation(
       withErrorWrapping(async ({ ctx, input }) => {
-        const access = deps.createTicketAccess(ctx.org.tenantDb);
-        const svc = deps.createTicketSvc(ctx.org.tenantDb, access);
+        const { svc } = ticketSvc(ctx.org.tenantDb);
         // care-y-ignore-next-line route-delegates-to-service -- delegates to svc.update; field extraction from Zod-validated input is wire-format mapping, not business logic
         return svc.update(ctx.user.id, {
           ticketId: input.ticketId,
@@ -264,8 +276,7 @@ export function createTicketRouter(deps: TicketRouterDeps) {
 
     close: volunteerProcedure.input(z.object({ ticketId: z.uuid() })).mutation(
       withErrorWrapping(async ({ ctx, input }) => {
-        const access = deps.createTicketAccess(ctx.org.tenantDb);
-        const svc = deps.createTicketSvc(ctx.org.tenantDb, access);
+        const { svc } = ticketSvc(ctx.org.tenantDb);
         const ticket = await svc.close(ctx.user.id, input.ticketId);
         audit(ctx.org.tenantDb, {
           eventType: "ticket_closed",
@@ -289,8 +300,7 @@ export function createTicketRouter(deps: TicketRouterDeps) {
       )
       .mutation(
         withErrorWrapping(async ({ ctx, input }) => {
-          const access = deps.createTicketAccess(ctx.org.tenantDb);
-          const svc = deps.createTicketSvc(ctx.org.tenantDb, access);
+          const { svc } = ticketSvc(ctx.org.tenantDb);
           const ticket = await svc.reopen(
             ctx.user.id,
             input.ticketId,
@@ -331,8 +341,8 @@ export function createTicketRouter(deps: TicketRouterDeps) {
             ticketId: input.ticketId,
           });
           // Look up ticket for notification context
-          const ticketSvc = deps.createTicketSvc(ctx.org.tenantDb, access);
-          const ticket = await ticketSvc.findById(input.ticketId, ctx.user.id);
+          const { svc: tSvc } = ticketSvc(ctx.org.tenantDb);
+          const ticket = await tSvc.findById(input.ticketId, ctx.user.id);
           const queueName = await deps
             .createQueueSvc(ctx.org.tenantDb)
             .getQueueName(ticket.queueId);
@@ -421,8 +431,9 @@ export function createTicketRouter(deps: TicketRouterDeps) {
     // --- Dependencies ---
     addDependency: volunteerProcedure.input(addDependencyInputSchema).mutation(
       withErrorWrapping(async ({ ctx, input }) => {
-        const svc = deps.createDependencySvc(ctx.org.tenantDb);
-        return svc.add(input.ticketId, input.dependsOnTicketId);
+        const { access } = ticketSvc(ctx.org.tenantDb);
+        const svc = deps.createDependencySvc(ctx.org.tenantDb, access);
+        return svc.add(ctx.user.id, input.ticketId, input.dependsOnTicketId);
       }),
     ),
 
@@ -430,8 +441,13 @@ export function createTicketRouter(deps: TicketRouterDeps) {
       .input(addDependencyInputSchema)
       .mutation(
         withErrorWrapping(async ({ ctx, input }) => {
-          const svc = deps.createDependencySvc(ctx.org.tenantDb);
-          await svc.remove(input.ticketId, input.dependsOnTicketId);
+          const { access } = ticketSvc(ctx.org.tenantDb);
+          const svc = deps.createDependencySvc(ctx.org.tenantDb, access);
+          await svc.remove(
+            ctx.user.id,
+            input.ticketId,
+            input.dependsOnTicketId,
+          );
         }),
       ),
 
@@ -596,8 +612,8 @@ export function createTicketRouter(deps: TicketRouterDeps) {
             ticketId: input.ticketId,
             metadata: { assignedTo: result.assignedTo },
           });
-          const ticketSvc = deps.createTicketSvc(ctx.org.tenantDb, access);
-          const ticket = await ticketSvc.findById(input.ticketId, ctx.user.id);
+          const { svc: tSvc } = ticketSvc(ctx.org.tenantDb);
+          const ticket = await tSvc.findById(input.ticketId, ctx.user.id);
           const queueName = await deps
             .createQueueSvc(ctx.org.tenantDb)
             .getQueueName(ticket.queueId);
@@ -622,8 +638,8 @@ export function createTicketRouter(deps: TicketRouterDeps) {
           ticketId: input.ticketId,
           metadata: { assignedTo: ctx.user.id },
         });
-        const ticketSvc = deps.createTicketSvc(ctx.org.tenantDb, access);
-        const ticket = await ticketSvc.findById(input.ticketId, ctx.user.id);
+        const { svc: tSvc } = ticketSvc(ctx.org.tenantDb);
+        const ticket = await tSvc.findById(input.ticketId, ctx.user.id);
         const queueName = await deps
           .createQueueSvc(ctx.org.tenantDb)
           .getQueueName(ticket.queueId);

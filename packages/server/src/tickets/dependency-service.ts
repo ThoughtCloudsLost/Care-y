@@ -9,6 +9,7 @@
 
 import type { Kysely } from "kysely";
 import type { TenantDatabase } from "../db/types.js";
+import type { TicketAccessChecker } from "./access.js";
 import { TicketError, NotFoundError, ValidationError } from "../errors.js";
 
 export interface DependencyRecord {
@@ -18,8 +19,16 @@ export interface DependencyRecord {
 }
 
 export interface DependencyService {
-  add(ticketId: string, dependsOnTicketId: string): Promise<DependencyRecord>;
-  remove(ticketId: string, dependsOnTicketId: string): Promise<void>;
+  add(
+    userId: string,
+    ticketId: string,
+    dependsOnTicketId: string,
+  ): Promise<DependencyRecord>;
+  remove(
+    userId: string,
+    ticketId: string,
+    dependsOnTicketId: string,
+  ): Promise<void>;
   listForTicket(ticketId: string): Promise<DependencyRecord[]>;
   allResolved(ticketId: string): Promise<boolean>;
 }
@@ -38,9 +47,16 @@ function toRecord(row: {
 
 export function createDependencyService(
   db: Kysely<TenantDatabase>,
+  access?: TicketAccessChecker,
 ): DependencyService {
   return {
-    async add(ticketId, dependsOnTicketId): Promise<DependencyRecord> {
+    async add(userId, ticketId, dependsOnTicketId): Promise<DependencyRecord> {
+      // Verify the caller has access to both tickets
+      if (access) {
+        await access.assertAccess(userId, ticketId);
+        await access.assertAccess(userId, dependsOnTicketId);
+      }
+
       // Reject self-dependency
       if (ticketId === dependsOnTicketId) {
         throw new ValidationError("A ticket cannot depend on itself");
@@ -87,7 +103,12 @@ export function createDependencyService(
       return toRecord(row);
     },
 
-    async remove(ticketId, dependsOnTicketId): Promise<void> {
+    async remove(userId, ticketId, dependsOnTicketId): Promise<void> {
+      // Verify the caller has access to the source ticket
+      if (access) {
+        await access.assertAccess(userId, ticketId);
+      }
+
       // Idempotent: no error if dependency doesn't exist
       await db
         .deleteFrom("ticket_dependencies")

@@ -6,8 +6,10 @@ import {
   derToJws,
   base64UrlToBuffer,
 } from "./push-crypto.js";
+import { CryptoError } from "../errors.js";
 
 describe("generateVapidKeyPair", () => {
+  // VAPID spec (RFC 8292) + SEC 1 v2 s2.3.3: uncompressed P-256 point = 0x04 || X (32 bytes) || Y (32 bytes) = 65 bytes.
   it("produces a 65-byte uncompressed P-256 public key (base64url)", () => {
     const { publicKey } = generateVapidKeyPair();
     const decoded = base64UrlToBuffer(publicKey);
@@ -154,6 +156,8 @@ describe("signVapidJwt", () => {
 });
 
 describe("derToJws", () => {
+  // JWS compact serialization for ES256 (RFC 7518 s3.4): signature = R (32 bytes) || S (32 bytes) = 64 bytes.
+  // Push services reject non-conforming signature lengths.
   it("produces exactly 64 bytes", () => {
     const keypair = generateVapidKeyPair();
     const result = signVapidJwt({
@@ -170,13 +174,17 @@ describe("derToJws", () => {
     expect(signature.length).toBe(64);
   });
 
-  it("throws on invalid DER (wrong SEQUENCE tag)", () => {
+  it("throws CryptoError on invalid DER (wrong SEQUENCE tag)", () => {
+    expect(() => derToJws(Buffer.from([0x31, 0x00]))).toThrow(CryptoError);
     expect(() => derToJws(Buffer.from([0x31, 0x00]))).toThrow(
       "missing SEQUENCE tag",
     );
   });
 
-  it("throws on invalid DER (wrong INTEGER tag for R)", () => {
+  it("throws CryptoError on invalid DER (wrong INTEGER tag for R)", () => {
+    expect(() => derToJws(Buffer.from([0x30, 0x02, 0x03, 0x01]))).toThrow(
+      CryptoError,
+    );
     expect(() => derToJws(Buffer.from([0x30, 0x02, 0x03, 0x01]))).toThrow(
       "missing INTEGER tag for R",
     );

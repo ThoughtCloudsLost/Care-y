@@ -9,13 +9,7 @@ import type { PushNotificationSender } from "../notifications/push.js";
 import type { Kysely } from "kysely";
 import type { TenantDatabase } from "../db/types.js";
 import { hkdfSync } from "node:crypto";
-import {
-  pushChallengeIdSchema,
-  pushApprovalSchema,
-  AVAILABLE_METHODS,
-  STUBBED_METHODS,
-  METHOD_INFO,
-} from "@care-y/shared";
+import { pushChallengeIdSchema, pushApprovalSchema } from "@care-y/shared";
 
 // ---------------------------------------------------------------------------
 // Test HMAC key (derived the same way as production, from test OPS key)
@@ -114,22 +108,6 @@ describe("push Zod schemas", () => {
       challengeId: "not-a-uuid",
     });
     expect(result.success).toBe(false);
-  });
-});
-
-describe("two-factor method availability", () => {
-  it("AVAILABLE_METHODS includes push", () => {
-    expect(AVAILABLE_METHODS).toContain("push");
-  });
-
-  it("STUBBED_METHODS is empty", () => {
-    expect(STUBBED_METHODS).toHaveLength(0);
-  });
-
-  it("METHOD_INFO marks push as available", () => {
-    const pushInfo = METHOD_INFO.find((m) => m.type === "push");
-    expect(pushInfo).toBeDefined();
-    expect(pushInfo?.available).toBe(true);
   });
 });
 

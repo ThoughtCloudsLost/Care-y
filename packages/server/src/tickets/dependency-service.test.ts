@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import {
   createTestDb,
+  createTestUser,
   seedOrgPublicKey,
   createTestQueue,
   createTestTicketFixture,
@@ -10,8 +11,17 @@ import {
   createDependencyService,
   type DependencyService,
 } from "./dependency-service.js";
-import { TicketError, NotFoundError, ValidationError } from "../errors.js";
+import { createTicketAccessChecker } from "./access.js";
+import {
+  TicketError,
+  NotFoundError,
+  ValidationError,
+  ForbiddenError,
+} from "../errors.js";
 import * as crypto from "node:crypto";
+
+// Dummy user ID for tests that don't exercise access control
+const SYSTEM_USER = crypto.randomUUID();
 
 describe.skipIf(!process.env.DATABASE_URL)("DependencyService (DB)", () => {
   let testDb: TestDb;
@@ -21,6 +31,7 @@ describe.skipIf(!process.env.DATABASE_URL)("DependencyService (DB)", () => {
   beforeAll(async () => {
     testDb = await createTestDb();
     await seedOrgPublicKey(testDb.db);
+    // No access checker: tests dependency logic in isolation
     svc = createDependencyService(testDb.db);
 
     const q = await createTestQueue(testDb.db);
@@ -39,7 +50,7 @@ describe.skipIf(!process.env.DATABASE_URL)("DependencyService (DB)", () => {
   it("add creates a dependency link", async () => {
     const t1 = await createTicket();
     const t2 = await createTicket();
-    const dep = await svc.add(t1, t2);
+    const dep = await svc.add(SYSTEM_USER, t1, t2);
     expect(dep.ticketId).toBe(t1);
     expect(dep.dependsOnTicketId).toBe(t2);
     expect(dep.createdAt).toBeInstanceOf(Date);
@@ -47,27 +58,31 @@ describe.skipIf(!process.env.DATABASE_URL)("DependencyService (DB)", () => {
 
   it("add rejects self-dependency", async () => {
     const t1 = await createTicket();
-    await expect(svc.add(t1, t1)).rejects.toBeInstanceOf(ValidationError);
+    await expect(svc.add(SYSTEM_USER, t1, t1)).rejects.toBeInstanceOf(
+      ValidationError,
+    );
   });
 
   it("add rejects direct circular dependency", async () => {
     const t1 = await createTicket();
     const t2 = await createTicket();
-    await svc.add(t1, t2);
-    await expect(svc.add(t2, t1)).rejects.toBeInstanceOf(TicketError);
+    await svc.add(SYSTEM_USER, t1, t2);
+    await expect(svc.add(SYSTEM_USER, t2, t1)).rejects.toBeInstanceOf(
+      TicketError,
+    );
   });
 
   it("add throws NotFoundError for non-existent ticket", async () => {
     const t1 = await createTicket();
-    await expect(svc.add(t1, crypto.randomUUID())).rejects.toBeInstanceOf(
-      NotFoundError,
-    );
+    await expect(
+      svc.add(SYSTEM_USER, t1, crypto.randomUUID()),
+    ).rejects.toBeInstanceOf(NotFoundError);
   });
 
   it("allResolved returns true when all deps are closed", async () => {
     const t1 = await createTicket();
     const t2 = await createTicket();
-    await svc.add(t1, t2);
+    await svc.add(SYSTEM_USER, t1, t2);
 
     // Close t2
     await testDb.db
@@ -82,7 +97,7 @@ describe.skipIf(!process.env.DATABASE_URL)("DependencyService (DB)", () => {
   it("allResolved returns false when any dep is open", async () => {
     const t1 = await createTicket();
     const t2 = await createTicket();
-    await svc.add(t1, t2);
+    await svc.add(SYSTEM_USER, t1, t2);
     expect(await svc.allResolved(t1)).toBe(false);
   });
 
@@ -95,14 +110,14 @@ describe.skipIf(!process.env.DATABASE_URL)("DependencyService (DB)", () => {
     const t1 = await createTicket();
     const t2 = await createTicket();
     // Remove something that doesn't exist - should not throw
-    await expect(svc.remove(t1, t2)).resolves.toBeUndefined();
+    await expect(svc.remove(SYSTEM_USER, t1, t2)).resolves.toBeUndefined();
   });
 
   it("remove deletes existing dependency", async () => {
     const t1 = await createTicket();
     const t2 = await createTicket();
-    await svc.add(t1, t2);
-    await svc.remove(t1, t2);
+    await svc.add(SYSTEM_USER, t1, t2);
+    await svc.remove(SYSTEM_USER, t1, t2);
     const deps = await svc.listForTicket(t1);
     expect(deps).toHaveLength(0);
   });
@@ -111,8 +126,8 @@ describe.skipIf(!process.env.DATABASE_URL)("DependencyService (DB)", () => {
     const t1 = await createTicket();
     const t2 = await createTicket();
     const t3 = await createTicket();
-    await svc.add(t1, t2);
-    await svc.add(t1, t3);
+    await svc.add(SYSTEM_USER, t1, t2);
+    await svc.add(SYSTEM_USER, t1, t3);
     const deps = await svc.listForTicket(t1);
     expect(deps).toHaveLength(2);
     const ids = deps.map((d) => d.dependsOnTicketId);
@@ -120,3 +135,48 @@ describe.skipIf(!process.env.DATABASE_URL)("DependencyService (DB)", () => {
     expect(ids).toContain(t3);
   });
 });
+
+describe.skipIf(!process.env.DATABASE_URL)(
+  "DependencyService access checks (DB)",
+  () => {
+    let testDb: TestDb;
+    let svc: DependencyService;
+
+    beforeAll(async () => {
+      testDb = await createTestDb();
+      await seedOrgPublicKey(testDb.db);
+      const access = createTicketAccessChecker(testDb.db);
+      svc = createDependencyService(testDb.db, access);
+    });
+
+    afterAll(async () => {
+      await testDb.cleanup();
+    });
+
+    it("add rejects when user has no access to source ticket", async () => {
+      const fix = await createTestTicketFixture(testDb.db, {
+        createUser: true,
+      });
+      const other = await createTestTicketFixture(testDb.db);
+      // outsider has no queue membership for fix.queueId
+      const outsider = await createTestUser(testDb.db);
+
+      await expect(
+        svc.add(outsider.id, fix.ticketId, other.ticketId),
+      ).rejects.toBeInstanceOf(ForbiddenError);
+    });
+
+    it("add succeeds when user has queue access to both tickets", async () => {
+      const fix = await createTestTicketFixture(testDb.db, {
+        createUser: true,
+      });
+      // Create second ticket in the same queue (user already has access)
+      const fix2 = await createTestTicketFixture(testDb.db, {
+        queueId: fix.queueId,
+      });
+
+      const dep = await svc.add(fix.userId!, fix.ticketId, fix2.ticketId);
+      expect(dep.ticketId).toBe(fix.ticketId);
+    });
+  },
+);

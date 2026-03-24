@@ -49,12 +49,15 @@ export interface UpdateTicketInput {
 export interface TicketService {
   create(userId: string, input: CreateTicketInput): Promise<TicketRecord>;
   findById(ticketId: string, userId: string): Promise<TicketRecord>;
-  list(opts: {
-    queueId?: string;
-    status?: string;
-    limit: number;
-    cursor?: string;
-  }): Promise<TicketRecord[]>;
+  list(
+    userId: string,
+    opts: {
+      queueId?: string;
+      status?: string;
+      limit: number;
+      cursor?: string;
+    },
+  ): Promise<TicketRecord[]>;
   update(userId: string, input: UpdateTicketInput): Promise<TicketRecord>;
   close(userId: string, ticketId: string): Promise<TicketRecord>;
   reopen(
@@ -95,6 +98,7 @@ function toRecord(row: {
 export function createTicketService(
   db: Kysely<TenantDatabase>,
   access: TicketAccessChecker,
+  getAccessibleQueueIds: (userId: string) => Promise<readonly string[]>,
 ): TicketService {
   const depService = createDependencyService(db);
 
@@ -197,8 +201,17 @@ export function createTicketService(
       return toRecord(row);
     },
 
-    async list(opts) {
-      let query = db.selectFrom("tickets").selectAll();
+    async list(userId, opts) {
+      // Scope to queues the user has access to (queue membership check).
+      // Without this, any authenticated volunteer could enumerate all
+      // ticket metadata across queues they are not assigned to.
+      const accessibleQueues = await getAccessibleQueueIds(userId);
+      if (accessibleQueues.length === 0) return [];
+
+      let query = db
+        .selectFrom("tickets")
+        .selectAll()
+        .where("queue_id", "in", [...accessibleQueues]);
 
       if (opts.queueId !== undefined) {
         query = query.where("queue_id", "=", opts.queueId);

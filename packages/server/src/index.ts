@@ -92,6 +92,7 @@ import { loadOrCreateVapidKeys } from "./notifications/vapid.js";
 import { createSseService } from "./notifications/sse.js";
 import { createNotificationEmailSender } from "./notifications/email.js";
 import { createPushNotificationSender } from "./notifications/push.js";
+import { createPushSubscriptionService } from "./notifications/push-subscriptions.js";
 import {
   createNotificationJobHandler,
   createNotificationService,
@@ -412,7 +413,7 @@ const appRouter = createAppRouter({
     notificationService,
   },
   notificationDeps: {
-    pushSender,
+    createPushSubSvc: (tDb) => createPushSubscriptionService(tDb, pushSender),
     vapidPublicKey: vapidKeys.publicKey,
   },
 });

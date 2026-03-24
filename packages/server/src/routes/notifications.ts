@@ -6,14 +6,17 @@
  */
 
 import { router, volunteerProcedure, withErrorWrapping } from "../trpc/trpc.js";
-import type { PushNotificationSender } from "../notifications/push.js";
+import type { PushSubscriptionService } from "../notifications/push-subscriptions.js";
+import type { OrgContext } from "../trpc/context.js";
 import {
   pushSubscriptionInputSchema,
   unsubscribePushInputSchema,
 } from "@care-y/shared";
 
 export interface NotificationRouterDeps {
-  readonly pushSender: PushNotificationSender;
+  readonly createPushSubSvc: (
+    tDb: OrgContext["tenantDb"],
+  ) => PushSubscriptionService;
   readonly vapidPublicKey: string;
 }
 
@@ -31,22 +34,13 @@ export function createNotificationRouter(deps: NotificationRouterDeps) {
       .input(pushSubscriptionInputSchema)
       .mutation(
         withErrorWrapping(async ({ ctx, input }) => {
-          await ctx.org.tenantDb
-            .insertInto("push_subscriptions")
-            .values({
-              user_id: ctx.user.id,
-              endpoint: input.endpoint,
-              key_p256dh: input.keys.p256dh,
-              key_auth: input.keys.auth,
-            })
-            .onConflict((oc) =>
-              oc.column("endpoint").doUpdateSet({
-                user_id: ctx.user.id,
-                key_p256dh: input.keys.p256dh,
-                key_auth: input.keys.auth,
-              }),
-            )
-            .execute();
+          const svc = deps.createPushSubSvc(ctx.org.tenantDb);
+          await svc.subscribe(
+            ctx.user.id,
+            input.endpoint,
+            input.keys.p256dh,
+            input.keys.auth,
+          );
           return { subscribed: true };
         }),
       ),
@@ -56,10 +50,8 @@ export function createNotificationRouter(deps: NotificationRouterDeps) {
       .input(unsubscribePushInputSchema)
       .mutation(
         withErrorWrapping(async ({ ctx, input }) => {
-          await deps.pushSender.removeSubscription(
-            ctx.org.tenantDb,
-            input.endpoint,
-          );
+          const svc = deps.createPushSubSvc(ctx.org.tenantDb);
+          await svc.unsubscribe(input.endpoint);
           return { unsubscribed: true };
         }),
       ),
@@ -67,12 +59,9 @@ export function createNotificationRouter(deps: NotificationRouterDeps) {
     /** List current user's push subscriptions (endpoints only, for settings UI). */
     listPushSubscriptions: volunteerProcedure.query(
       withErrorWrapping(async ({ ctx }) => {
-        const subs = await ctx.org.tenantDb
-          .selectFrom("push_subscriptions")
-          .select(["endpoint", "created_at"])
-          .where("user_id", "=", ctx.user.id)
-          .execute();
-        return { subscriptions: subs };
+        const svc = deps.createPushSubSvc(ctx.org.tenantDb);
+        const subscriptions = await svc.listForUser(ctx.user.id);
+        return { subscriptions };
       }),
     ),
   });
