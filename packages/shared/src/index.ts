@@ -61,6 +61,8 @@ export {
   removeMethodSchema,
   enrolledMethodResponseSchema,
   twoFactorStatusResponseSchema,
+  pushChallengeIdSchema,
+  pushApprovalSchema,
   type TotpVerifyInput,
   type EmailCodeVerifyInput,
   type SmsEnrollInput,
@@ -69,6 +71,8 @@ export {
   type WebauthnRegistrationResponse,
   type WebauthnAssertionResponse,
   type RemoveMethodInput,
+  type PushChallengeIdInput,
+  type PushApprovalInput,
 } from "./schemas/two-factor.js";
 
 // --- Key management schemas ---

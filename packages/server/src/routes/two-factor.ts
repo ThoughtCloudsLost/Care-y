@@ -46,6 +46,11 @@ import {
   type SmsCodeService,
   type CallerIdResolver,
 } from "../auth/sms-code.js";
+import {
+  createPushChallengeService,
+  type PushChallengeService,
+} from "../auth/push-challenge.js";
+import type { PushNotificationSender } from "../notifications/push.js";
 import { NotFoundError, TelephonyConfigError } from "../errors.js";
 import {
   totpVerifySchema,
@@ -56,6 +61,8 @@ import {
   webauthnRegistrationResponseSchema,
   webauthnAssertionResponseSchema,
   removeMethodSchema,
+  pushChallengeIdSchema,
+  pushApprovalSchema,
 } from "@care-y/shared";
 
 // --- Constants ---
@@ -83,12 +90,15 @@ export interface TwoFactorRouterDeps {
   readonly tokenizer: SessionTokenizer;
   readonly providerFactory: ProviderFactory;
   readonly resolveCallerId: CallerIdResolver;
+  readonly pushSender: PushNotificationSender | null;
+  readonly pushHmacKey: Buffer | null;
 }
 
 interface ScopedServices {
   readonly twoFactor: TwoFactorService;
   readonly emailCodes: EmailCodeService;
   readonly smsCodes: SmsCodeService | null;
+  readonly pushChallenges: PushChallengeService | null;
 }
 
 /**
@@ -133,6 +143,17 @@ export async function createScopedTwoFactorServices(
     ? { smsCodes, indexer: deps.indexer, orgId: org.orgId }
     : undefined;
 
+  let pushChallenges: PushChallengeService | null = null;
+  if (deps.pushSender && deps.pushHmacKey) {
+    pushChallenges = createPushChallengeService(
+      org.tenantDb,
+      deps.pushSender,
+      deps.pushHmacKey,
+    );
+  }
+
+  const pushServiceDeps = pushChallenges ? { pushChallenges } : undefined;
+
   const twoFactor = createTwoFactorService(
     org.tenantDb,
     sessions,
@@ -140,8 +161,9 @@ export async function createScopedTwoFactorServices(
     deps.encryptor,
     TOTP_ISSUER,
     smsDeps,
+    pushServiceDeps,
   );
-  return { twoFactor, emailCodes, smsCodes };
+  return { twoFactor, emailCodes, smsCodes, pushChallenges };
 }
 
 /**
@@ -299,6 +321,13 @@ export function createTwoFactorRouter(deps: TwoFactorRouterDeps) {
       })),
     ),
 
+    /** Push: send test push to verify device subscriptions work. Registers push method on success. */
+    pushVerify: twoFactorProcedure.mutation(
+      withErrorWrapping(async ({ ctx }) => ({
+        success: await ctx.twoFactor.enrollPushDevice(ctx.user.id),
+      })),
+    ),
+
     /** Backup codes: generate 8 codes. Can be called to regenerate (replaces old set). */
     backupCodes: twoFactorProcedure.mutation(
       withErrorWrapping(async ({ ctx }) =>
@@ -408,6 +437,55 @@ export function createTwoFactorRouter(deps: TwoFactorRouterDeps) {
           await ctx.twoFactor.markSessionVerified(ctx.session.token);
         }
         return { success: valid };
+      }),
+    ),
+
+    /** Push: send a challenge push to all subscribed devices. */
+    pushSend: twoFactorProcedure.mutation(
+      withErrorWrapping(async ({ ctx }) => {
+        const result = await ctx.twoFactor.sendPushChallenge(
+          ctx.user.id,
+          ctx.session.token,
+        );
+        return { challengeId: result.challengeId, sent: result.sent };
+      }),
+    ),
+
+    /** Push: poll challenge status (called by the login page). */
+    pushPoll: twoFactorProcedure.input(pushChallengeIdSchema).query(
+      withErrorWrapping(async ({ ctx, input }) => {
+        const result = await ctx.twoFactor.pollPushChallenge(
+          input.challengeId,
+          ctx.session.token,
+        );
+        if (result.status === "approved") {
+          await ctx.twoFactor.markSessionVerified(ctx.session.token);
+        }
+        return { status: result.status };
+      }),
+    ),
+
+    /** Push: approve a challenge (called from the device that received the push).
+     *  Uses twoFactor2faProcedure: the approving device must have a fully verified session. */
+    pushApprove: twoFactor2faProcedure.input(pushApprovalSchema).mutation(
+      withErrorWrapping(async ({ ctx, input }) => {
+        const approved = await ctx.twoFactor.approvePushChallenge(
+          input.challengeId,
+          ctx.user.id,
+        );
+        return { success: approved };
+      }),
+    ),
+
+    /** Push: deny a challenge (called from the device that received the push).
+     *  Uses twoFactor2faProcedure: the denying device must have a fully verified session. */
+    pushDeny: twoFactor2faProcedure.input(pushApprovalSchema).mutation(
+      withErrorWrapping(async ({ ctx, input }) => {
+        const denied = await ctx.twoFactor.denyPushChallenge(
+          input.challengeId,
+          ctx.user.id,
+        );
+        return { success: denied };
       }),
     ),
   });

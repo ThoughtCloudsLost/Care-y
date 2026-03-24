@@ -146,6 +146,8 @@ describe.skipIf(!process.env.DATABASE_URL)(
           tokenizer: testSessionTokenizer,
           providerFactory: createMockProviderFactory(),
           resolveCallerId: vi.fn().mockResolvedValue("+15551234567"),
+          pushSender: null,
+          pushHmacKey: null,
         },
         oprfDeps: createMockOprfDeps(),
         orgService,

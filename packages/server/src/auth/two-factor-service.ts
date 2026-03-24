@@ -16,6 +16,10 @@ import type { BlindIndexer } from "../crypto/field-encryptor.js";
 import type { SessionRepository } from "./session-repository.js";
 import type { EmailCodeService } from "./email-code.js";
 import type { SmsCodeService } from "./sms-code.js";
+import type {
+  PushChallengeService,
+  ChallengeStatus,
+} from "./push-challenge.js";
 import { normalizePhoneNumber } from "../telephony/phone-utils.js";
 import {
   generateTotpSecret,
@@ -150,6 +154,23 @@ export interface TwoFactorService {
   // User SMS phone resolution (decrypts stored SMS phone for code delivery)
   resolveUserSmsPhone(userId: string): Promise<string>;
 
+  // Push enrollment
+  enrollPushDevice(userId: string): Promise<boolean>;
+
+  // Push verification (login)
+  sendPushChallenge(
+    userId: string,
+    sessionToken: string,
+  ): Promise<{ challengeId: string; sent: boolean }>;
+  pollPushChallenge(
+    challengeId: string,
+    sessionToken: string,
+  ): Promise<{ status: ChallengeStatus }>;
+
+  // Push approval/denial (called from the approving device)
+  approvePushChallenge(challengeId: string, userId: string): Promise<boolean>;
+  denyPushChallenge(challengeId: string, userId: string): Promise<boolean>;
+
   // Method management
   removeMethod(
     userId: string,
@@ -167,6 +188,10 @@ export interface SmsDeps {
   readonly orgId: string;
 }
 
+export interface PushDeps {
+  readonly pushChallenges: PushChallengeService;
+}
+
 export function createTwoFactorService(
   db: Kysely<TenantDatabase>,
   sessions: SessionRepository,
@@ -174,6 +199,7 @@ export function createTwoFactorService(
   encryptor: FieldEncryptor,
   issuer: string,
   smsDeps?: SmsDeps,
+  pushDeps?: PushDeps,
 ): TwoFactorService {
   /** Asserts that SMS deps are available. Throws if the org has no telephony config. */
   function requireSmsDeps(): SmsDeps {
@@ -183,6 +209,15 @@ export function createTwoFactorService(
       );
     }
     return smsDeps;
+  }
+
+  function requirePushDeps(): PushDeps {
+    if (!pushDeps) {
+      throw new ValidationError(
+        "Push 2FA is not available. Web Push is not configured.",
+      );
+    }
+    return pushDeps;
   }
 
   // --- Internal helpers ---
@@ -430,6 +465,8 @@ export function createTwoFactorService(
         .where("user_id", "=", userId)
         .where("method_type", "=", TwoFactorMethod.SMS)
         .execute();
+    } else if (method === TwoFactorMethod.PUSH) {
+      await pushDeps?.pushChallenges.deleteUserChallenges(userId);
     }
   }
 
@@ -458,6 +495,10 @@ export function createTwoFactorService(
         [
           TwoFactorMethod.SMS,
           [simpleMethodInfo(TwoFactorMethod.SMS, "Text message code")],
+        ],
+        [
+          TwoFactorMethod.PUSH,
+          [simpleMethodInfo(TwoFactorMethod.PUSH, "Push notification")],
         ],
       ]);
 
@@ -834,6 +875,59 @@ export function createTwoFactorService(
       } else {
         await removeEntireMethod(userId, method, activeMethods);
       }
+    },
+
+    // --- Push enrollment ---
+
+    async enrollPushDevice(userId: string): Promise<boolean> {
+      const push = requirePushDeps();
+
+      // Verify the user has at least one working push subscription
+      // by sending a test push. If all subscriptions are expired,
+      // enrollment fails.
+      const hasWorking = await push.pushChallenges.sendTestPush(userId);
+      if (!hasWorking) {
+        throw new ValidationError(
+          "No working push subscriptions found. Subscribe a device first.",
+        );
+      }
+
+      await registerMethod(userId, TwoFactorMethod.PUSH);
+      return true;
+    },
+
+    // --- Push verification (login) ---
+
+    async sendPushChallenge(
+      userId: string,
+      sessionToken: string,
+    ): Promise<{ challengeId: string; sent: boolean }> {
+      const push = requirePushDeps();
+      return push.pushChallenges.sendChallenge(userId, sessionToken);
+    },
+
+    async pollPushChallenge(
+      challengeId: string,
+      sessionToken: string,
+    ): Promise<{ status: ChallengeStatus }> {
+      const push = requirePushDeps();
+      return push.pushChallenges.pollChallenge(challengeId, sessionToken);
+    },
+
+    async approvePushChallenge(
+      challengeId: string,
+      userId: string,
+    ): Promise<boolean> {
+      const push = requirePushDeps();
+      return push.pushChallenges.approveChallenge(challengeId, userId);
+    },
+
+    async denyPushChallenge(
+      challengeId: string,
+      userId: string,
+    ): Promise<boolean> {
+      const push = requirePushDeps();
+      return push.pushChallenges.denyChallenge(challengeId, userId);
     },
 
     async markSessionVerified(sessionToken: string): Promise<void> {
