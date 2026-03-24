@@ -55,6 +55,7 @@ import {
 } from "./telephony/twilio.js";
 import { createWebhookHandler } from "./routes/webhooks.js";
 import { createRelayHandler, type PendingCall } from "./routes/relay.js";
+import { authenticateRelay } from "./routes/relay-utils.js";
 import { extractOrgSlug } from "./org/slug-resolver.js";
 import { NotFoundError } from "./errors.js";
 import { createPhoneResolver } from "./telephony/phone-resolver.js";
@@ -90,7 +91,10 @@ import { loadOrCreateVapidKeys } from "./notifications/vapid.js";
 import { createSseService } from "./notifications/sse.js";
 import { createNotificationEmailSender } from "./notifications/email.js";
 import { createPushNotificationSender } from "./notifications/push.js";
-import { createNotificationJobHandler } from "./notifications/service.js";
+import {
+  createNotificationJobHandler,
+  createNotificationService,
+} from "./notifications/service.js";
 import { createSearchService } from "./tickets/search.js";
 import { createAuditService } from "./tickets/audit.js";
 
@@ -281,11 +285,14 @@ const blobStore: BlobStore = createBlobStore(
 const orgService = createOrgService(db, tenantDb);
 const hasher = createScryptHasher();
 const { loginLimiter, saltLimiter } = createAuthRateLimiters();
-const emailSender = createEmailSender(
-  env.SMTP_HOST,
-  env.SMTP_PORT,
-  env.SMTP_FROM,
-);
+const emailSender = createEmailSender({
+  host: env.SMTP_HOST,
+  port: env.SMTP_PORT,
+  from: env.SMTP_FROM,
+  secure: env.SMTP_SECURE,
+  user: env.SMTP_USER,
+  password: env.SMTP_PASSWORD,
+});
 const oprfService = createOprfInfrastructure(env);
 
 // --- Notification infrastructure ---
@@ -294,6 +301,16 @@ const vapidKeys = await loadOrCreateVapidKeys(db, secretsEncryptor);
 const sseService = createSseService();
 const notificationEmailSender = createNotificationEmailSender(emailSender);
 const pushSender = createPushNotificationSender(vapidKeys, "admin@care-y.app");
+
+// Job queue created early so NotificationService can use it during routing.
+const jobQueue = createJobQueue(db);
+
+const notificationService = createNotificationService({
+  sse: sseService,
+  emailSender: notificationEmailSender,
+  pushSender,
+  jobQueue,
+});
 
 const createContext = createContextFactory({
   orgService,
@@ -378,6 +395,7 @@ const appRouter = createAppRouter({
         return qps.getUserQueues(userId);
       }),
     createAuditSvc: createAuditService,
+    notificationService,
   },
   notificationDeps: {
     pushSender,
@@ -396,9 +414,8 @@ const trpcHandler = createHTTPHandler({
   },
 });
 
-// --- Job queue ---
+// --- Job queue handlers ---
 
-const jobQueue = createJobQueue(db);
 registerLogDeletionHandler(jobQueue, providerFactory);
 registerMediaCleanupHandler(jobQueue, tenantDb, blobStore, async () => {
   const orgs = await db
@@ -409,9 +426,11 @@ registerMediaCleanupHandler(jobQueue, tenantDb, blobStore, async () => {
   return orgs.map((o) => o.schema_name);
 });
 // Notification email job handler
-const notificationJobHandler = createNotificationJobHandler(
-  notificationEmailSender,
-);
+const notificationJobHandler = createNotificationJobHandler({
+  emailSender: notificationEmailSender,
+  encryptor,
+  getTenantDb: tenantDb,
+});
 jobQueue.process("notification-email", notificationJobHandler);
 
 registerEscalationHandler(jobQueue, async () => {
@@ -535,12 +554,41 @@ const relayHandler = createRelayHandler({
 // --- HTTP server ---
 
 // SSE handler (raw HTTP, not tRPC). Session auth follows the relay pattern.
-// Full implementation: validate session cookie, extract orgId + userId,
-// then call sseService.connect(). Stubbed until the frontend SSE client lands.
 function handleSse(req: IncomingMessage, res: ServerResponse): void {
-  // TODO: authenticate via session cookie (same pattern as relay handler)
-  res.writeHead(501, { "Content-Type": "text/plain" });
-  res.end("SSE not yet available");
+  void (async () => {
+    const result = await authenticateRelay(
+      req,
+      relayOrgResolver,
+      createRelaySessionRepo,
+    );
+
+    if (!result.ok) {
+      res.writeHead(result.status, { "Content-Type": "text/plain" });
+      res.end("Unauthorized");
+      return;
+    }
+
+    // Set CORS headers for SSE (same origin policy applies)
+    res.setHeader("Access-Control-Allow-Origin", env.CORS_ORIGIN);
+    res.setHeader("Access-Control-Allow-Credentials", "true");
+
+    // Parse Last-Event-ID for reconnection replay
+    const lastEventIdHeader = req.headers["last-event-id"];
+    const lastEventId =
+      typeof lastEventIdHeader === "string"
+        ? Number(lastEventIdHeader)
+        : undefined;
+
+    const cleanup = sseService.connect(
+      res,
+      result.session.userId,
+      result.session.orgSchema,
+      Number.isFinite(lastEventId) ? lastEventId : undefined,
+    );
+
+    req.on("close", cleanup);
+    res.on("close", cleanup);
+  })();
 }
 
 const server = createHttpServer(

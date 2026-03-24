@@ -25,6 +25,8 @@ export interface QueueService {
     queueId: string,
     input: { name?: string; escalateDays?: number },
   ): Promise<QueueRecord>;
+  /** Returns the queue name for a given ID, or "unknown" if not found. */
+  getQueueName(queueId: string): Promise<string>;
 }
 
 function toRecord(row: {
@@ -99,6 +101,15 @@ export function createQueueService(db: Kysely<TenantDatabase>): QueueService {
 
       if (!row) throw new NotFoundError("Queue not found");
       return toRecord(row);
+    },
+
+    async getQueueName(queueId) {
+      const row = await db
+        .selectFrom("queues")
+        .select("name")
+        .where("id", "=", queueId)
+        .executeTakeFirst();
+      return row?.name ?? "unknown";
     },
   };
 }

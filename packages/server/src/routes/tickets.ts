@@ -35,6 +35,10 @@ import type { WatchersService } from "../tickets/watchers.js";
 import type { QueuePermissionsService } from "../tickets/queue-permissions.js";
 import type { SearchService } from "../tickets/search.js";
 import type { AuditService } from "../tickets/audit.js";
+import type { NotificationService } from "../notifications/service.js";
+import type { AuditEntry } from "../tickets/audit.js";
+import type { NotificationEventType } from "@care-y/shared";
+import { buildRecipientList } from "../tickets/notification-recipients.js";
 import type { ShiftProvider } from "../tickets/shift-provider.js";
 import { createStubShiftProvider } from "../tickets/shift-provider.js";
 import {
@@ -102,6 +106,8 @@ export interface TicketRouterDeps {
   // Search + audit (optional, injected by 5d wiring)
   readonly createSearchSvc?: (tDb: OrgContext["tenantDb"]) => SearchService;
   readonly createAuditSvc?: (tDb: OrgContext["tenantDb"]) => AuditService;
+  // Notification dispatch (optional, injected by 5d wiring)
+  readonly notificationService?: NotificationService;
 }
 
 function buildSearchRoutes(
@@ -139,13 +145,69 @@ function buildAuditRoutes(
 
 // care-y-ignore-next-line missing-return-type -- tRPC router() returns a deeply generic type that cannot be written explicitly
 export function createTicketRouter(deps: TicketRouterDeps) {
+  // Audit helper: best-effort, never blocks. No-op when audit service not injected.
+  function audit(tDb: OrgContext["tenantDb"], entry: AuditEntry): void {
+    if (!deps.createAuditSvc) return;
+    const svc = deps.createAuditSvc(tDb);
+    void svc.log(entry);
+  }
+
+  // Notification dispatch helper: best-effort, never blocks.
+  // Builds recipient list and dispatches across all channels.
+  function notify(
+    ctx: { org: OrgContext; user: { id: string } },
+    eventType: NotificationEventType,
+    ticket: { id: string; queueId: string; assignedTo: string | null },
+    queueName: string,
+    mentionedPseudonyms: string[] = [],
+  ): void {
+    if (!deps.notificationService) return;
+    const ns = deps.notificationService;
+    const tDb = ctx.org.tenantDb;
+    const access = deps.createTicketAccess(tDb);
+    const watchers = deps.createWatchersSvc(tDb, access);
+
+    void (async () => {
+      try {
+        const recipients = await buildRecipientList(
+          {
+            getTicketWatchers: async (ticketId) =>
+              watchers.getTicketWatchers(ticketId),
+            getQueueWatchers: async (queueId) =>
+              watchers.getQueueWatchers(queueId),
+            resolveValidMentions: async (ids) => Promise.resolve(ids),
+          },
+          ticket,
+          mentionedPseudonyms,
+          ctx.user.id,
+        );
+        await ns.dispatch(
+          tDb,
+          ctx.org.orgId,
+          ctx.org.orgSlug,
+          eventType,
+          ticket.id,
+          queueName,
+          recipients,
+        );
+      } catch (err: unknown) {
+        // Notification failures are non-critical. Never block the response.
+        // Log the error type without any PII (no ticket content, no names).
+        console.error(
+          "Notification dispatch failed:",
+          err instanceof Error ? err.message : String(err),
+        );
+      }
+    })();
+  }
+
   return router({
     // --- Ticket CRUD ---
     create: volunteerProcedure.input(createTicketInputSchema).mutation(
       withErrorWrapping(async ({ ctx, input }) => {
         const access = deps.createTicketAccess(ctx.org.tenantDb);
         const svc = deps.createTicketSvc(ctx.org.tenantDb, access);
-        return svc.create(ctx.user.id, {
+        const ticket = await svc.create(ctx.user.id, {
           clientId: input.clientId,
           queueId: input.queueId,
           encryptedTitle: Buffer.from(input.encryptedTitle, "base64"),
@@ -156,6 +218,16 @@ export function createTicketRouter(deps: TicketRouterDeps) {
           priority: input.priority,
           keyGeneration: input.keyGeneration,
         });
+        audit(ctx.org.tenantDb, {
+          eventType: "ticket_created",
+          actorId: ctx.user.id,
+          ticketId: ticket.id,
+        });
+        const queueName = await deps
+          .createQueueSvc(ctx.org.tenantDb)
+          .getQueueName(ticket.queueId);
+        notify(ctx, "ticket_created", ticket, queueName);
+        return ticket;
       }),
     ),
 
@@ -194,7 +266,17 @@ export function createTicketRouter(deps: TicketRouterDeps) {
       withErrorWrapping(async ({ ctx, input }) => {
         const access = deps.createTicketAccess(ctx.org.tenantDb);
         const svc = deps.createTicketSvc(ctx.org.tenantDb, access);
-        return svc.close(ctx.user.id, input.ticketId);
+        const ticket = await svc.close(ctx.user.id, input.ticketId);
+        audit(ctx.org.tenantDb, {
+          eventType: "ticket_closed",
+          actorId: ctx.user.id,
+          ticketId: input.ticketId,
+        });
+        const queueName = await deps
+          .createQueueSvc(ctx.org.tenantDb)
+          .getQueueName(ticket.queueId);
+        notify(ctx, "ticket_closed", ticket, queueName);
+        return ticket;
       }),
     ),
 
@@ -209,11 +291,21 @@ export function createTicketRouter(deps: TicketRouterDeps) {
         withErrorWrapping(async ({ ctx, input }) => {
           const access = deps.createTicketAccess(ctx.org.tenantDb);
           const svc = deps.createTicketSvc(ctx.org.tenantDb, access);
-          return svc.reopen(
+          const ticket = await svc.reopen(
             ctx.user.id,
             input.ticketId,
             input.newKeyGeneration,
           );
+          audit(ctx.org.tenantDb, {
+            eventType: "ticket_reopened",
+            actorId: ctx.user.id,
+            ticketId: input.ticketId,
+          });
+          const queueName = await deps
+            .createQueueSvc(ctx.org.tenantDb)
+            .getQueueName(ticket.queueId);
+          notify(ctx, "ticket_reopened", ticket, queueName);
+          return ticket;
         }),
       ),
 
@@ -224,7 +316,7 @@ export function createTicketRouter(deps: TicketRouterDeps) {
         withErrorWrapping(async ({ ctx, input }) => {
           const access = deps.createTicketAccess(ctx.org.tenantDb);
           const svc = deps.createFollowUpSvc(ctx.org.tenantDb, access);
-          return svc.create(ctx.user.id, {
+          const followUp = await svc.create(ctx.user.id, {
             ticketId: input.ticketId,
             encryptedContent: Buffer.from(input.encryptedContent, "base64"),
             encryptedReadState: Buffer.from(input.encryptedReadState, "base64"),
@@ -233,6 +325,21 @@ export function createTicketRouter(deps: TicketRouterDeps) {
             isPrivate: input.isPrivate,
             mentionedPseudonyms: input.mentionedPseudonyms,
           });
+          audit(ctx.org.tenantDb, {
+            eventType: "followup_added",
+            actorId: ctx.user.id,
+            ticketId: input.ticketId,
+          });
+          // Look up ticket for notification context
+          const ticketSvc = deps.createTicketSvc(ctx.org.tenantDb, access);
+          const ticket = await ticketSvc.findById(input.ticketId, ctx.user.id);
+          const queueName = await deps
+            .createQueueSvc(ctx.org.tenantDb)
+            .getQueueName(ticket.queueId);
+          const eventType =
+            input.mentionedPseudonyms.length > 0 ? "mention" : "followup_added";
+          notify(ctx, eventType, ticket, queueName, input.mentionedPseudonyms);
+          return followUp;
         }),
       ),
 
@@ -341,11 +448,20 @@ export function createTicketRouter(deps: TicketRouterDeps) {
     mergeClients: managerProcedure.input(mergeClientsInputSchema).mutation(
       withErrorWrapping(async ({ ctx, input }) => {
         const svc = deps.createMergeSvc(ctx.org.tenantDb);
-        return svc.merge({
+        const result = await svc.merge({
           primaryClientId: input.primaryClientId,
           secondaryClientId: input.secondaryClientId,
           encryptedSnapshot: Buffer.from(input.encryptedSnapshot, "base64"),
         });
+        audit(ctx.org.tenantDb, {
+          eventType: "ticket_merged",
+          actorId: ctx.user.id,
+          metadata: {
+            primaryClientId: input.primaryClientId,
+            secondaryClientId: input.secondaryClientId,
+          },
+        });
+        return result;
       }),
     ),
 
@@ -429,7 +545,13 @@ export function createTicketRouter(deps: TicketRouterDeps) {
     createQueue: adminProcedure.input(createQueueInputSchema).mutation(
       withErrorWrapping(async ({ ctx, input }) => {
         const svc = deps.createQueueSvc(ctx.org.tenantDb);
-        return svc.create(input);
+        const queue = await svc.create(input);
+        audit(ctx.org.tenantDb, {
+          eventType: "queue_created",
+          actorId: ctx.user.id,
+          metadata: { queueId: queue.id },
+        });
+        return queue;
       }),
     ),
 
@@ -444,10 +566,16 @@ export function createTicketRouter(deps: TicketRouterDeps) {
       withErrorWrapping(async ({ ctx, input }) => {
         const svc = deps.createQueueSvc(ctx.org.tenantDb);
         // care-y-ignore-next-line route-delegates-to-service -- delegates to svc.update; field extraction from validated input, not business logic
-        return svc.update(input.queueId, {
+        const queue = await svc.update(input.queueId, {
           name: input.name,
           escalateDays: input.escalateDays,
         });
+        audit(ctx.org.tenantDb, {
+          eventType: "queue_updated",
+          actorId: ctx.user.id,
+          metadata: { queueId: input.queueId },
+        });
+        return queue;
       }),
     ),
 
@@ -460,7 +588,22 @@ export function createTicketRouter(deps: TicketRouterDeps) {
           qp.getQueueMembers(qId),
         );
         const svc = deps.createAssignmentSvc(ctx.org.tenantDb, access, shift);
-        return svc.assignRoundRobin(input.ticketId);
+        const result = await svc.assignRoundRobin(input.ticketId);
+        if (result.assignedTo !== null) {
+          audit(ctx.org.tenantDb, {
+            eventType: "ticket_assigned",
+            actorId: ctx.user.id,
+            ticketId: input.ticketId,
+            metadata: { assignedTo: result.assignedTo },
+          });
+          const ticketSvc = deps.createTicketSvc(ctx.org.tenantDb, access);
+          const ticket = await ticketSvc.findById(input.ticketId, ctx.user.id);
+          const queueName = await deps
+            .createQueueSvc(ctx.org.tenantDb)
+            .getQueueName(ticket.queueId);
+          notify(ctx, "ticket_assigned", ticket, queueName);
+        }
+        return result;
       }),
     ),
 
@@ -472,7 +615,19 @@ export function createTicketRouter(deps: TicketRouterDeps) {
           qp.getQueueMembers(qId),
         );
         const svc = deps.createAssignmentSvc(ctx.org.tenantDb, access, shift);
-        return svc.take(ctx.user.id, input.ticketId);
+        await svc.take(ctx.user.id, input.ticketId);
+        audit(ctx.org.tenantDb, {
+          eventType: "ticket_assigned",
+          actorId: ctx.user.id,
+          ticketId: input.ticketId,
+          metadata: { assignedTo: ctx.user.id },
+        });
+        const ticketSvc = deps.createTicketSvc(ctx.org.tenantDb, access);
+        const ticket = await ticketSvc.findById(input.ticketId, ctx.user.id);
+        const queueName = await deps
+          .createQueueSvc(ctx.org.tenantDb)
+          .getQueueName(ticket.queueId);
+        notify(ctx, "ticket_assigned", ticket, queueName);
       }),
     ),
 
@@ -484,7 +639,13 @@ export function createTicketRouter(deps: TicketRouterDeps) {
           qp.getQueueMembers(qId),
         );
         const svc = deps.createAssignmentSvc(ctx.org.tenantDb, access, shift);
-        return svc.release(ctx.user.id, input.ticketId);
+        await svc.release(ctx.user.id, input.ticketId);
+        audit(ctx.org.tenantDb, {
+          eventType: "ticket_assigned",
+          actorId: ctx.user.id,
+          ticketId: input.ticketId,
+          metadata: { assignedTo: null },
+        });
       }),
     ),
 

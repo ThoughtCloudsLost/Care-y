@@ -6,9 +6,11 @@
 import type { Kysely } from "kysely";
 import type { TenantDatabase } from "../db/types.js";
 import type { SseService } from "./sse.js";
-import type { NotificationEmailSender } from "./email.js";
+import type { NotificationEmailSender, OrgEmailBranding } from "./email.js";
+import { loadOrgEmailBranding } from "./email.js";
 import type { PushNotificationSender } from "./push.js";
 import type { JobQueue } from "../jobs/queue.js";
+import type { FieldEncryptor } from "../crypto/field-encryptor.js";
 import type { NotificationEventType, SseEvent } from "@care-y/shared";
 import { notificationEventTypeSchema } from "@care-y/shared";
 import { z } from "zod";
@@ -80,15 +82,19 @@ export function createNotificationService(
   };
 }
 
+export interface NotificationJobHandlerDeps {
+  readonly emailSender: NotificationEmailSender;
+  readonly encryptor: FieldEncryptor;
+  readonly getTenantDb: (orgSchema: string) => Kysely<TenantDatabase>;
+}
+
 /**
  * Job handler for notification-email queue.
- * Processes email delivery with retry. SMS is best-effort.
- *
- * Full implementation requires decrypting notification addresses from
- * the user table (field encryptor). Stubbed until that wiring is available.
+ * Decrypts user notification addresses and sends branded email per recipient.
+ * Failures for individual recipients are logged but do not fail the job.
  */
 export function createNotificationJobHandler(
-  emailSender: NotificationEmailSender,
+  deps: NotificationJobHandlerDeps,
 ): (payload: Record<string, unknown>) => Promise<void> {
   const jobPayloadSchema = z.object({
     orgId: z.uuid(),
@@ -100,21 +106,44 @@ export function createNotificationJobHandler(
 
   return async (payload) => {
     const parsed = jobPayloadSchema.parse(payload);
-    const { orgSlug, eventType, queueName } = parsed;
+    const { orgId, orgSlug, recipientUserIds, eventType, queueName } = parsed;
     const loginUrl = buildLoginUrl(orgSlug);
 
-    // Build the notification message (validates all event types are handled)
     const strings = getStrings("en");
     const body = getNotificationBody(strings, eventType, queueName, loginUrl);
     const subject = `${strings.emailSubjectPrefix}: ${getSubjectLine(eventType)}`;
 
-    // Stubbed: when field encryptor is wired, iterate recipientUserIds,
-    // decrypt each user's notification_addr, and call emailSender.sendTicketNotification().
-    // Using await here to satisfy require-await until the real send is wired.
-    await Promise.resolve();
-    void emailSender;
-    void body;
-    void subject;
+    const tDb = deps.getTenantDb(orgId);
+    const branding: OrgEmailBranding = await loadOrgEmailBranding(tDb);
+
+    // Fetch notification addresses for all recipients in one query
+    const users = await tDb
+      .selectFrom("users")
+      .select(["id", "encrypted_notification_addr"])
+      .where("id", "in", recipientUserIds)
+      .execute();
+
+    for (const user of users) {
+      if (!user.encrypted_notification_addr) continue;
+
+      try {
+        // care-y-ignore-next-line server-no-decrypt -- notification email is operational server-side PII (Tier 2, not E2EE)
+        const email = deps.encryptor.decrypt(user.encrypted_notification_addr);
+        await deps.emailSender.sendTicketNotification({
+          to: email,
+          subject,
+          body,
+          branding,
+        });
+      } catch {
+        // Per-recipient failures are non-critical. The job succeeds even if
+        // some emails fail (transient SMTP errors are retried by the queue).
+        // Logging the user ID (pseudonym) is safe; the email address is not logged.
+        console.error(
+          `Notification email failed for user ${user.id}, event ${eventType}`,
+        );
+      }
+    }
   };
 }
 
