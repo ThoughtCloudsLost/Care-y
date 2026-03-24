@@ -139,6 +139,18 @@ export const twoFactorStatusResponseSchema = z.object({
   backupCodesRemaining: z.number().int().min(0),
 });
 
+// --- Push notification 2FA ---
+
+/** Poll a push challenge by ID. */
+export const pushChallengeIdSchema = z.object({
+  challengeId: z.uuid(),
+});
+
+/** Approve or deny a push challenge. */
+export const pushApprovalSchema = z.object({
+  challengeId: z.uuid(),
+});
+
 // --- Inferred types ---
 
 export type TotpVerifyInput = z.infer<typeof totpVerifySchema>;
@@ -153,3 +165,5 @@ export type WebauthnAssertionResponse = z.infer<
   typeof webauthnAssertionResponseSchema
 >;
 export type RemoveMethodInput = z.infer<typeof removeMethodSchema>;
+export type PushChallengeIdInput = z.infer<typeof pushChallengeIdSchema>;
+export type PushApprovalInput = z.infer<typeof pushApprovalSchema>;

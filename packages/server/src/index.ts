@@ -19,6 +19,7 @@ import type {
   ServerResponse,
 } from "node:http";
 import { createServer } from "node:http";
+import { hkdfSync } from "node:crypto";
 import { createHTTPHandler } from "@trpc/server/adapters/standalone";
 import { db, tenantDb } from "./db/db.js";
 import { sql } from "kysely";
@@ -120,6 +121,16 @@ interface CryptoServices {
   readonly indexer: BlindIndexer;
   readonly fakeSaltKey: Buffer;
   readonly tokenizer: SessionTokenizer;
+  readonly pushChallengeHmacKey: Buffer;
+}
+
+const PUSH_CHALLENGE_HMAC_INFO = "care-y-push-challenge-v1";
+
+/** Derives the push challenge HMAC key from OPS_SECRETS_KEY via HKDF. */
+function derivePushChallengeHmacKey(opsKey: Buffer): Buffer {
+  return Buffer.from(
+    hkdfSync("sha256", opsKey, Buffer.alloc(0), PUSH_CHALLENGE_HMAC_INFO, 32),
+  );
 }
 
 /** Derives all field-encryption, blind-index, fake-salt, and session-token
@@ -133,7 +144,8 @@ async function deriveCryptoServices(
   const indexer = createBlindIndexer(derived.blindIndexKey);
   const fakeSaltKey = await deriveFakeSaltKey(opsSecretsKeyHex);
   const tokenizer = createSessionTokenizer(deriveSessionHmacKey(opsKey));
-  return { encryptor, indexer, fakeSaltKey, tokenizer };
+  const pushChallengeHmacKey = derivePushChallengeHmacKey(opsKey);
+  return { encryptor, indexer, fakeSaltKey, tokenizer, pushChallengeHmacKey };
 }
 
 // --- CORS ---
@@ -253,7 +265,7 @@ function createOprfInfrastructure(env: EnvVars): OprfEvaluateService {
 await probeDatabase();
 
 const env: EnvVars = getEnv();
-const { encryptor, indexer, fakeSaltKey, tokenizer } =
+const { encryptor, indexer, fakeSaltKey, tokenizer, pushChallengeHmacKey } =
   await deriveCryptoServices(env.OPS_SECRETS_KEY);
 
 // --- Telephony provider factory ---
@@ -368,6 +380,8 @@ const appRouter = createAppRouter({
     tokenizer,
     providerFactory,
     resolveCallerId: phoneResolver,
+    pushSender,
+    pushHmacKey: pushChallengeHmacKey,
   },
   oprfDeps: { oprfService },
   orgService,

@@ -398,6 +398,8 @@ describe("OPRF tRPC route", () => {
         tokenizer: testSessionTokenizer,
         providerFactory: createMockProviderFactory(),
         resolveCallerId: vi.fn().mockResolvedValue("+15551234567"),
+        pushSender: null,
+        pushHmacKey: null,
       },
       oprfDeps: { oprfService: service },
       orgService: {
@@ -596,6 +598,8 @@ describe.skipIf(!DOCKER_OPRF_AVAILABLE)(
           tokenizer: testSessionTokenizer,
           providerFactory: createMockProviderFactory(),
           resolveCallerId: vi.fn().mockResolvedValue("+15551234567"),
+          pushSender: null,
+          pushHmacKey: null,
         },
         oprfDeps: { oprfService: service },
         orgService: {

@@ -16,12 +16,11 @@ export const AVAILABLE_METHODS: readonly TwoFactorMethodType[] = [
   TwoFactorMethod.TOTP,
   TwoFactorMethod.EMAIL,
   TwoFactorMethod.SMS,
+  TwoFactorMethod.PUSH,
 ] as const;
 
 /** Methods defined but not yet available (infrastructure dependencies pending). */
-export const STUBBED_METHODS: readonly TwoFactorMethodType[] = [
-  TwoFactorMethod.PUSH,
-] as const;
+export const STUBBED_METHODS: readonly TwoFactorMethodType[] = [] as const;
 
 // --- WebAuthn credential types ---
 
@@ -121,7 +120,7 @@ const METHOD_PUSH: TwoFactorMethodInfo = {
     "button. Requires the app to be installed and an internet " +
     "connection on your phone.",
   securityLevel: "moderate",
-  available: false,
+  available: true,
 };
 
 export const METHOD_INFO: readonly TwoFactorMethodInfo[] = [

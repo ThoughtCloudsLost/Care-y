@@ -418,6 +418,16 @@ export interface PushSubscriptionsTable {
   created_at: Generated<Date>;
 }
 
+// --- Push 2FA challenges ---
+
+export interface PushChallengesTable {
+  id: Generated<string>;
+  user_id: string;
+  session_token_hash: string; // HMAC-SHA256 of the session token
+  status: string; // 'pending' | 'approved' | 'denied' | 'expired'
+  expires_at: Date;
+}
+
 // --- Audit log ---
 
 export interface AuditLogTable {
@@ -477,6 +487,7 @@ export interface TenantDatabase {
   queue_watchers: QueueWatchersTable;
   // Notifications
   push_subscriptions: PushSubscriptionsTable;
+  push_challenges: PushChallengesTable;
   audit_log: AuditLogTable;
   // Shifts (shifts, shift_occurrences)
   // Client portal (portal_channels)
