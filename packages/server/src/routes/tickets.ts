@@ -33,6 +33,8 @@ import type { QueueService } from "../tickets/queue-service.js";
 import type { AssignmentService } from "../tickets/assignment.js";
 import type { WatchersService } from "../tickets/watchers.js";
 import type { QueuePermissionsService } from "../tickets/queue-permissions.js";
+import type { SearchService } from "../tickets/search.js";
+import type { AuditService } from "../tickets/audit.js";
 import type { ShiftProvider } from "../tickets/shift-provider.js";
 import { createStubShiftProvider } from "../tickets/shift-provider.js";
 import {
@@ -55,6 +57,9 @@ import {
   watchTicketInputSchema,
   queueWatcherInputSchema,
   queueAssignmentInputSchema,
+  metadataSearchInputSchema,
+  contentSearchInputSchema,
+  auditLogQueryInputSchema,
 } from "@care-y/shared";
 
 export interface TicketRouterDeps {
@@ -94,6 +99,42 @@ export interface TicketRouterDeps {
   readonly createQueuePermissionsSvc: (
     tDb: OrgContext["tenantDb"],
   ) => QueuePermissionsService;
+  // Search + audit (optional, injected by 5d wiring)
+  readonly createSearchSvc?: (tDb: OrgContext["tenantDb"]) => SearchService;
+  readonly createAuditSvc?: (tDb: OrgContext["tenantDb"]) => AuditService;
+}
+
+function buildSearchRoutes(
+  factory: (tDb: OrgContext["tenantDb"]) => SearchService,
+) {
+  return {
+    metadataSearch: volunteerProcedure.input(metadataSearchInputSchema).query(
+      withErrorWrapping(async ({ ctx, input }) => {
+        const search = factory(ctx.org.tenantDb);
+        return search.metadataSearch(input, ctx.user.id);
+      }),
+    ),
+
+    contentSearch: volunteerProcedure.input(contentSearchInputSchema).query(
+      withErrorWrapping(async ({ ctx, input }) => {
+        const search = factory(ctx.org.tenantDb);
+        return search.contentSearch(input, ctx.user.id);
+      }),
+    ),
+  };
+}
+
+function buildAuditRoutes(
+  factory: (tDb: OrgContext["tenantDb"]) => AuditService,
+) {
+  return {
+    auditLog: managerProcedure.input(auditLogQueryInputSchema).query(
+      withErrorWrapping(async ({ ctx, input }) => {
+        const audit = factory(ctx.org.tenantDb);
+        return audit.query(input);
+      }),
+    ),
+  };
 }
 
 // care-y-ignore-next-line missing-return-type -- tRPC router() returns a deeply generic type that cannot be written explicitly
@@ -505,5 +546,11 @@ export function createTicketRouter(deps: TicketRouterDeps) {
           return svc.getQueueMembers(input.queueId);
         }),
       ),
+
+    // --- Metadata search (injected by 5d wiring) ---
+    ...(deps.createSearchSvc ? buildSearchRoutes(deps.createSearchSvc) : {}),
+
+    // --- Audit log query (manager+ only, injected by 5d wiring) ---
+    ...(deps.createAuditSvc ? buildAuditRoutes(deps.createAuditSvc) : {}),
   });
 }
