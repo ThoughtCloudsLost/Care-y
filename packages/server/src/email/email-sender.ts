@@ -7,6 +7,7 @@ export interface EmailMessage {
   readonly subject: string;
   readonly text: string;
   readonly html?: string;
+  readonly from?: string; // Per-message override. When absent, uses factory default.
 }
 
 export interface EmailSender {
@@ -42,7 +43,7 @@ export function createSmtpEmailSender(
     async send(message: EmailMessage): Promise<void> {
       try {
         await transport.sendMail({
-          from,
+          from: message.from ?? from,
           to: message.to,
           subject: message.subject,
           text: message.text,

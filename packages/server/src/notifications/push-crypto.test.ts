@@ -1,0 +1,184 @@
+import { describe, expect, it } from "vitest";
+import { createVerify } from "node:crypto";
+import {
+  generateVapidKeyPair,
+  signVapidJwt,
+  derToJws,
+  base64UrlToBuffer,
+} from "./push-crypto.js";
+
+describe("generateVapidKeyPair", () => {
+  it("produces a 65-byte uncompressed P-256 public key (base64url)", () => {
+    const { publicKey } = generateVapidKeyPair();
+    const decoded = base64UrlToBuffer(publicKey);
+    expect(decoded.length).toBe(65);
+    // Uncompressed point starts with 0x04
+    expect(decoded[0]).toBe(0x04);
+  });
+
+  it("produces a PEM-encoded EC private key", () => {
+    const { privateKeyPem } = generateVapidKeyPair();
+    expect(privateKeyPem).toContain("-----BEGIN EC PRIVATE KEY-----");
+    expect(privateKeyPem).toContain("-----END EC PRIVATE KEY-----");
+  });
+
+  it("generates different keys on each call", () => {
+    const pair1 = generateVapidKeyPair();
+    const pair2 = generateVapidKeyPair();
+    expect(pair1.publicKey).not.toBe(pair2.publicKey);
+  });
+});
+
+describe("signVapidJwt", () => {
+  const keypair = generateVapidKeyPair();
+
+  it("produces valid JWT structure (3 base64url segments)", () => {
+    const result = signVapidJwt({
+      audience: "https://fcm.googleapis.com",
+      subject: "mailto:admin@care-y.app",
+      publicKey: keypair.publicKey,
+      privateKeyPem: keypair.privateKeyPem,
+    });
+
+    // Extract JWT from authorization header
+    const jwtMatch = /^vapid t=([^,]+),/.exec(result.authorization);
+    expect(jwtMatch).not.toBeNull();
+    const jwt = jwtMatch?.[1] ?? "";
+    const parts = jwt.split(".");
+    expect(parts).toHaveLength(3);
+  });
+
+  it("sets correct header algorithm", () => {
+    const result = signVapidJwt({
+      audience: "https://fcm.googleapis.com",
+      subject: "mailto:admin@care-y.app",
+      publicKey: keypair.publicKey,
+      privateKeyPem: keypair.privateKeyPem,
+    });
+
+    const jwtMatch = /^vapid t=([^,]+),/.exec(result.authorization);
+    const jwt = jwtMatch?.[1] ?? "";
+    const headerB64 = jwt.split(".")[0] ?? "";
+    const header = JSON.parse(
+      Buffer.from(headerB64, "base64url").toString(),
+    ) as Record<string, string>;
+    expect(header.alg).toBe("ES256");
+    expect(header.typ).toBe("JWT");
+  });
+
+  it("sets correct payload fields", () => {
+    const result = signVapidJwt({
+      audience: "https://fcm.googleapis.com",
+      subject: "mailto:admin@care-y.app",
+      publicKey: keypair.publicKey,
+      privateKeyPem: keypair.privateKeyPem,
+      expSeconds: 3600,
+    });
+
+    const jwtMatch = /^vapid t=([^,]+),/.exec(result.authorization);
+    const jwt = jwtMatch?.[1] ?? "";
+    const payloadB64 = jwt.split(".")[1] ?? "";
+    const payload = JSON.parse(
+      Buffer.from(payloadB64, "base64url").toString(),
+    ) as Record<string, unknown>;
+    expect(payload.aud).toBe("https://fcm.googleapis.com");
+    expect(payload.sub).toBe("mailto:admin@care-y.app");
+    expect(typeof payload.exp).toBe("number");
+  });
+
+  it("produces a signature verifiable with the public key", () => {
+    const result = signVapidJwt({
+      audience: "https://fcm.googleapis.com",
+      subject: "mailto:admin@care-y.app",
+      publicKey: keypair.publicKey,
+      privateKeyPem: keypair.privateKeyPem,
+    });
+
+    const jwtMatch = /^vapid t=([^,]+),/.exec(result.authorization);
+    const jwt = jwtMatch?.[1] ?? "";
+    const [headerB64, payloadB64, signatureB64] = jwt.split(".");
+
+    // The signature in JWS is R||S (64 bytes). We need to convert back to DER for verification.
+    // Instead, we verify the JWT using node:crypto which handles JWS format.
+    const signingInput = `${headerB64 ?? ""}.${payloadB64 ?? ""}`;
+    const signature = base64UrlToBuffer(signatureB64 ?? "");
+
+    // Convert JWS R||S back to DER for createVerify
+    const r = signature.subarray(0, 32);
+    const s = signature.subarray(32, 64);
+
+    function toDerInteger(val: Buffer): Buffer {
+      // Add leading 0x00 if high bit is set (positive integer encoding)
+      if (val[0] !== undefined && val[0] >= 0x80) {
+        return Buffer.concat([Buffer.from([0x02, val.length + 1, 0x00]), val]);
+      }
+      return Buffer.concat([Buffer.from([0x02, val.length]), val]);
+    }
+
+    const rDer = toDerInteger(r);
+    const sDer = toDerInteger(s);
+    const derSig = Buffer.concat([
+      Buffer.from([0x30, rDer.length + sDer.length]),
+      rDer,
+      sDer,
+    ]);
+
+    // Reconstruct the SPKI public key from the uncompressed point
+    const uncompressedPoint = base64UrlToBuffer(keypair.publicKey);
+    // SPKI header for P-256 uncompressed point
+    const spkiPrefix = Buffer.from(
+      "3059301306072a8648ce3d020106082a8648ce3d030107034200",
+      "hex",
+    );
+    const spkiDer = Buffer.concat([spkiPrefix, uncompressedPoint]);
+
+    const verifier = createVerify("SHA256");
+    verifier.update(signingInput);
+    const isValid = verifier.verify(
+      { key: spkiDer, format: "der", type: "spki" },
+      derSig,
+    );
+    expect(isValid).toBe(true);
+  });
+
+  it("includes public key in Crypto-Key header", () => {
+    const result = signVapidJwt({
+      audience: "https://fcm.googleapis.com",
+      subject: "mailto:admin@care-y.app",
+      publicKey: keypair.publicKey,
+      privateKeyPem: keypair.privateKeyPem,
+    });
+
+    expect(result.cryptoKey).toBe(`p256ecdsa=${keypair.publicKey}`);
+  });
+});
+
+describe("derToJws", () => {
+  it("produces exactly 64 bytes", () => {
+    const keypair = generateVapidKeyPair();
+    const result = signVapidJwt({
+      audience: "https://example.com",
+      subject: "mailto:test@test.com",
+      publicKey: keypair.publicKey,
+      privateKeyPem: keypair.privateKeyPem,
+    });
+
+    const jwtMatch = /^vapid t=([^,]+),/.exec(result.authorization);
+    const jwt = jwtMatch?.[1] ?? "";
+    const signatureB64 = jwt.split(".")[2] ?? "";
+    const signature = base64UrlToBuffer(signatureB64);
+    expect(signature.length).toBe(64);
+  });
+
+  it("throws on invalid DER (wrong SEQUENCE tag)", () => {
+    expect(() => derToJws(Buffer.from([0x31, 0x00]))).toThrow(
+      "missing SEQUENCE tag",
+    );
+  });
+
+  it("throws on invalid DER (wrong INTEGER tag for R)", () => {
+    expect(() => derToJws(Buffer.from([0x30, 0x02, 0x03, 0x01]))).toThrow(
+      "missing INTEGER tag for R",
+    );
+  });
+});
