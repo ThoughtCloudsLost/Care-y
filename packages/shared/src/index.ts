@@ -212,6 +212,26 @@ export {
   type QueueAssignmentInput,
 } from "./schemas/tickets.js";
 
+// --- Knowledge Base schemas ---
+export {
+  createKbCategoryInputSchema,
+  updateKbCategoryInputSchema,
+  createKbItemInputSchema,
+  updateKbItemInputSchema,
+  kbItemListInputSchema,
+  voteDirectionSchema,
+  castVoteInputSchema,
+  removeVoteInputSchema,
+  type CreateKbCategoryInput,
+  type UpdateKbCategoryInput,
+  type CreateKbItemInput,
+  type UpdateKbItemInput,
+  type KbItemListInput,
+  type VoteDirection,
+  type CastVoteInput,
+  type RemoveVoteInput,
+} from "./schemas/kb.js";
+
 // --- Browser call service interface ---
 export type {
   BrowserCallState,

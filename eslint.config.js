@@ -120,6 +120,7 @@ export default tseslint.config(
             "createConsultantRouter",
             "createTicketRouter",
             "createTwoFactorRouter",
+            "createKbRouter",
           ],
         },
       ],
