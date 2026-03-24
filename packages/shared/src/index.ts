@@ -232,6 +232,26 @@ export {
   type RemoveVoteInput,
 } from "./schemas/kb.js";
 
+// --- Notification, search, audit schemas ---
+export {
+  notificationEventTypeSchema,
+  sseEventSchema,
+  pushSubscriptionInputSchema,
+  unsubscribePushInputSchema,
+  metadataSearchInputSchema,
+  contentSearchInputSchema,
+  auditEventTypeSchema,
+  auditLogQueryInputSchema,
+  type NotificationEventType,
+  type SseEvent,
+  type PushSubscriptionInput,
+  type UnsubscribePushInput,
+  type MetadataSearchInput,
+  type ContentSearchInput,
+  type AuditEventType,
+  type AuditLogQueryInput,
+} from "./schemas/notifications.js";
+
 // --- Browser call service interface ---
 export type {
   BrowserCallState,
