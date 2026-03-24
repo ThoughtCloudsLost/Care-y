@@ -86,6 +86,13 @@ import {
   registerEscalationHandler,
   escalateTenantTickets,
 } from "./tickets/escalation.js";
+import { loadOrCreateVapidKeys } from "./notifications/vapid.js";
+import { createSseService } from "./notifications/sse.js";
+import { createNotificationEmailSender } from "./notifications/email.js";
+import { createPushNotificationSender } from "./notifications/push.js";
+import { createNotificationJobHandler } from "./notifications/service.js";
+import { createSearchService } from "./tickets/search.js";
+import { createAuditService } from "./tickets/audit.js";
 
 // --- DB startup probe ---
 
@@ -149,12 +156,14 @@ function buildCorsHeaders(origin: string): CorsHeaders {
 // --- HTTP server ---
 
 /** Creates an http.Server that routes /webhooks/* to the webhook handler,
- *  /relay/* to the relay handler, and everything else to tRPC. */
+ *  /relay/* to the relay handler, /notifications/stream to the SSE handler,
+ *  and everything else to tRPC. */
 function createHttpServer(
   trpcHandler: RequestListener,
   preflightHeaders: Record<string, string>,
   onWebhook?: (req: IncomingMessage, res: ServerResponse) => Promise<void>,
   onRelay?: (req: IncomingMessage, res: ServerResponse) => Promise<void>,
+  onSse?: (req: IncomingMessage, res: ServerResponse) => void,
 ): ReturnType<typeof createServer> {
   return createServer((req: IncomingMessage, res: ServerResponse) => {
     if (req.method === "OPTIONS") {
@@ -172,6 +181,11 @@ function createHttpServer(
 
     if (onRelay !== undefined && url.startsWith("/relay/")) {
       void onRelay(req, res);
+      return;
+    }
+
+    if (onSse !== undefined && url.startsWith("/notifications/stream")) {
+      onSse(req, res);
       return;
     }
 
@@ -274,6 +288,13 @@ const emailSender = createEmailSender(
 );
 const oprfService = createOprfInfrastructure(env);
 
+// --- Notification infrastructure ---
+
+const vapidKeys = await loadOrCreateVapidKeys(db, secretsEncryptor);
+const sseService = createSseService();
+const notificationEmailSender = createNotificationEmailSender(emailSender);
+const pushSender = createPushNotificationSender(vapidKeys, "admin@care-y.app");
+
 const createContext = createContextFactory({
   orgService,
   hasher,
@@ -351,6 +372,16 @@ const appRouter = createAppRouter({
     createAssignmentSvc: createAssignmentService,
     createWatchersSvc: createWatchersService,
     createQueuePermissionsSvc: createQueuePermissionsService,
+    createSearchSvc: (tDb) =>
+      createSearchService(tDb, async (userId) => {
+        const qps = createQueuePermissionsService(tDb);
+        return qps.getUserQueues(userId);
+      }),
+    createAuditSvc: createAuditService,
+  },
+  notificationDeps: {
+    pushSender,
+    vapidPublicKey: vapidKeys.publicKey,
   },
 });
 
@@ -377,6 +408,12 @@ registerMediaCleanupHandler(jobQueue, tenantDb, blobStore, async () => {
     .execute();
   return orgs.map((o) => o.schema_name);
 });
+// Notification email job handler
+const notificationJobHandler = createNotificationJobHandler(
+  notificationEmailSender,
+);
+jobQueue.process("notification-email", notificationJobHandler);
+
 registerEscalationHandler(jobQueue, async () => {
   const orgs = await db
     .selectFrom("orgs")
@@ -497,11 +534,21 @@ const relayHandler = createRelayHandler({
 
 // --- HTTP server ---
 
+// SSE handler (raw HTTP, not tRPC). Session auth follows the relay pattern.
+// Full implementation: validate session cookie, extract orgId + userId,
+// then call sseService.connect(). Stubbed until the frontend SSE client lands.
+function handleSse(req: IncomingMessage, res: ServerResponse): void {
+  // TODO: authenticate via session cookie (same pattern as relay handler)
+  res.writeHead(501, { "Content-Type": "text/plain" });
+  res.end("SSE not yet available");
+}
+
 const server = createHttpServer(
   trpcHandler,
   cors.preflight,
   webhookHandler,
   relayHandler,
+  handleSse,
 );
 const port = Number(process.env.PORT ?? 3000);
 server.listen(port);
@@ -512,6 +559,7 @@ console.log(`Server ready on port ${String(port)}`);
 async function shutdown(signal: string): Promise<void> {
   console.log(`${signal} received, shutting down`);
   server.close();
+  sseService.closeAll();
   webhookDedupStore.stop();
   clearInterval(pendingCallCleanupInterval);
   // Zero any remaining pending call buffers
