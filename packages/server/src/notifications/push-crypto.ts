@@ -7,6 +7,7 @@
 // content from being subpoenaed from those services.
 
 import { createSign, generateKeyPairSync } from "node:crypto";
+import { CryptoError } from "../errors.js";
 
 /** Generates a VAPID P-256 key pair. Returns base64url public key and PEM private key. */
 export function generateVapidKeyPair(): {
@@ -84,12 +85,12 @@ export function derToJws(derSig: Buffer): Buffer {
   // DER structure: 0x30 <length> 0x02 <r-length> <r-bytes> 0x02 <s-length> <s-bytes>
   let offset = 2; // skip 0x30 and total length
   if (derSig.readUInt8(0) !== 0x30) {
-    throw new Error("Invalid DER signature: missing SEQUENCE tag");
+    throw new CryptoError("Invalid DER signature: missing SEQUENCE tag");
   }
 
   // Parse R
   if (derSig.readUInt8(offset) !== 0x02) {
-    throw new Error("Invalid DER signature: missing INTEGER tag for R");
+    throw new CryptoError("Invalid DER signature: missing INTEGER tag for R");
   }
   offset += 1;
   const rLen = derSig.readUInt8(offset);
@@ -99,7 +100,7 @@ export function derToJws(derSig: Buffer): Buffer {
 
   // Parse S
   if (derSig.readUInt8(offset) !== 0x02) {
-    throw new Error("Invalid DER signature: missing INTEGER tag for S");
+    throw new CryptoError("Invalid DER signature: missing INTEGER tag for S");
   }
   offset += 1;
   const sLen = derSig.readUInt8(offset);

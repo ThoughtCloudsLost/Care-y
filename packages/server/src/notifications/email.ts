@@ -48,7 +48,12 @@ export function createNotificationEmailSender(
       body,
       branding,
     }): Promise<void> {
-      const fromHeader = `"${branding.fromName}" <${branding.fromAddress}>`;
+      // Strip characters that could enable header injection. Admin-controlled
+      // values from org_config, but defense-in-depth says we don't rely on
+      // nodemailer's sanitization alone.
+      const safeName = branding.fromName.replace(/[\r\n\0]/g, "");
+      const safeAddr = branding.fromAddress.replace(/[\r\n\0]/g, "");
+      const fromHeader = `"${safeName}" <${safeAddr}>`;
       await transport.send({
         to,
         subject,

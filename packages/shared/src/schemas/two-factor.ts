@@ -1,7 +1,6 @@
 import { z } from "zod";
 import {
   TwoFactorMethod,
-  AVAILABLE_METHODS,
   type TwoFactorMethodType,
 } from "../two-factor-types.js";
 
@@ -14,14 +13,6 @@ const allMethods = Object.values(TwoFactorMethod) as [
   ...TwoFactorMethodType[],
 ];
 const twoFactorMethodSchema = z.enum(allMethods);
-
-const availableMethodSchema = z
-  .string()
-  .refine(
-    (v): v is (typeof AVAILABLE_METHODS)[number] =>
-      (AVAILABLE_METHODS as readonly string[]).includes(v),
-    { message: "Method not available for enrollment" },
-  );
 
 // --- Shared 6-digit code validation ---
 
@@ -120,7 +111,7 @@ export const webauthnAssertionResponseSchema = z.object({
 
 /** Remove an enrolled 2FA method. */
 export const removeMethodSchema = z.object({
-  method: availableMethodSchema,
+  method: twoFactorMethodSchema,
   credentialId: z.string().optional(),
 });
 

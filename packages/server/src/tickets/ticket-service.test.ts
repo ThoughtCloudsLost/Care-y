@@ -13,6 +13,7 @@ import {
   createTicketAccessChecker,
   type TicketAccessChecker,
 } from "./access.js";
+import { createQueuePermissionsService } from "./queue-permissions.js";
 import { createDependencyService } from "./dependency-service.js";
 import {
   NotFoundError,
@@ -31,7 +32,10 @@ describe.skipIf(!process.env.DATABASE_URL)("TicketService (DB)", () => {
     testDb = await createTestDb();
     await seedOrgPublicKey(testDb.db);
     access = createTicketAccessChecker(testDb.db);
-    svc = createTicketService(testDb.db, access);
+    const qps = createQueuePermissionsService(testDb.db);
+    svc = createTicketService(testDb.db, access, (userId) =>
+      qps.getUserQueues(userId),
+    );
   });
 
   afterAll(async () => {
@@ -205,10 +209,17 @@ describe.skipIf(!process.env.DATABASE_URL)("TicketService (DB)", () => {
   });
 
   it("list returns tickets with keyset pagination", async () => {
-    // Create 3 tickets in the same queue
+    // Create a user and 3 tickets in the same queue
     const queue = await createTestQueue(testDb.db, {
       name: "Paginate-Q-" + crypto.randomUUID().slice(0, 8),
     });
+    const user = await createTestUser(testDb.db);
+    // Give the user queue access so list() returns results
+    await testDb.db
+      .insertInto("queue_assignments")
+      .values({ queue_id: queue.id, user_id: user.id })
+      .onConflict((oc) => oc.columns(["queue_id", "user_id"]).doNothing())
+      .execute();
 
     const ticketIds: string[] = [];
     for (let i = 0; i < 3; i++) {
@@ -219,11 +230,11 @@ describe.skipIf(!process.env.DATABASE_URL)("TicketService (DB)", () => {
     }
 
     // First page: limit 2
-    const page1 = await svc.list({ queueId: queue.id, limit: 2 });
+    const page1 = await svc.list(user.id, { queueId: queue.id, limit: 2 });
     expect(page1).toHaveLength(2);
 
     // Second page: cursor from last item of page1
-    const page2 = await svc.list({
+    const page2 = await svc.list(user.id, {
       queueId: queue.id,
       limit: 2,
       cursor: page1[1]!.id,
@@ -237,10 +248,10 @@ describe.skipIf(!process.env.DATABASE_URL)("TicketService (DB)", () => {
   });
 
   it("list filters by queue and status", async () => {
-    const { queueId, ticketId } = await createTicketFixture();
+    const { userId, queueId, ticketId } = await createTicketFixture();
 
     // Open tickets in this queue
-    const openInQueue = await svc.list({
+    const openInQueue = await svc.list(userId, {
       queueId,
       status: "open",
       limit: 100,
@@ -248,12 +259,24 @@ describe.skipIf(!process.env.DATABASE_URL)("TicketService (DB)", () => {
     expect(openInQueue.some((t) => t.id === ticketId)).toBe(true);
 
     // Closed tickets in this queue (should not contain our ticket)
-    const closedInQueue = await svc.list({
+    const closedInQueue = await svc.list(userId, {
       queueId,
       status: "closed",
       limit: 100,
     });
     expect(closedInQueue.some((t) => t.id === ticketId)).toBe(false);
+  });
+
+  it("list returns empty for user with no queue access", async () => {
+    const { queueId } = await createTicketFixture();
+    // Create a user who is NOT assigned to any queue
+    const outsider = await createTestUser(testDb.db);
+
+    const result = await svc.list(outsider.id, {
+      queueId,
+      limit: 100,
+    });
+    expect(result).toHaveLength(0);
   });
 
   it("close sets status to closed and creates system follow-up", async () => {
@@ -279,7 +302,7 @@ describe.skipIf(!process.env.DATABASE_URL)("TicketService (DB)", () => {
 
     // Add an unresolved dependency (fixture2's ticket is still open)
     const depService = createDependencyService(testDb.db);
-    await depService.add(fixture1.ticketId, fixture2.ticketId);
+    await depService.add(fixture1.userId, fixture1.ticketId, fixture2.ticketId);
 
     await expect(
       svc.close(fixture1.userId, fixture1.ticketId),

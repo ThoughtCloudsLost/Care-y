@@ -2,6 +2,11 @@
 // English + Spanish at launch, stubbed for expansion.
 // Uses simple string interpolation with named parameters.
 // No ICU MessageFormat (overkill for fixed-format metadata-only messages).
+//
+// NOTE: Queue names appear verbatim in email notification bodies. Admins
+// should avoid naming queues after specific people or cases. If a queue
+// is named "Jane's intake", that string reaches the volunteer's inbox in
+// plaintext. Admin guidance documentation should cover this.
 
 type SupportedLocale = "en" | "es";
 

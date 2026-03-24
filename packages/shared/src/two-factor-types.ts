@@ -1,4 +1,4 @@
-/** Supported 2FA method types. SMS and push are defined but stubbed until their infrastructure lands. */
+/** Supported 2FA method types. */
 export const TwoFactorMethod = {
   WEBAUTHN: "webauthn",
   TOTP: "totp",
@@ -9,18 +9,6 @@ export const TwoFactorMethod = {
 
 export type TwoFactorMethodType =
   (typeof TwoFactorMethod)[keyof typeof TwoFactorMethod];
-
-/** Methods fully implemented and available for enrollment. */
-export const AVAILABLE_METHODS: readonly TwoFactorMethodType[] = [
-  TwoFactorMethod.WEBAUTHN,
-  TwoFactorMethod.TOTP,
-  TwoFactorMethod.EMAIL,
-  TwoFactorMethod.SMS,
-  TwoFactorMethod.PUSH,
-] as const;
-
-/** Methods defined but not yet available (infrastructure dependencies pending). */
-export const STUBBED_METHODS: readonly TwoFactorMethodType[] = [] as const;
 
 // --- WebAuthn credential types ---
 
@@ -43,7 +31,6 @@ export interface TwoFactorMethodInfo {
   readonly label: string;
   readonly description: string;
   readonly securityLevel: "strongest" | "strong" | "moderate" | "weak";
-  readonly available: boolean;
 }
 
 const METHOD_WEBAUTHN_PLATFORM: TwoFactorMethodInfo = {
@@ -58,7 +45,6 @@ const METHOD_WEBAUTHN_PLATFORM: TwoFactorMethodInfo = {
     "screen from far away. They would need to be holding your phone " +
     "or sitting at your computer.",
   securityLevel: "strongest",
-  available: true,
 };
 
 const METHOD_WEBAUTHN_CROSSPLATFORM: TwoFactorMethodInfo = {
@@ -73,7 +59,6 @@ const METHOD_WEBAUTHN_CROSSPLATFORM: TwoFactorMethodInfo = {
     "have this physical thing. It stays with you, like a house key " +
     "on your keyring.",
   securityLevel: "strongest",
-  available: true,
 };
 
 const METHOD_TOTP: TwoFactorMethodInfo = {
@@ -84,7 +69,6 @@ const METHOD_TOTP: TwoFactorMethodInfo = {
     "30 seconds. Common apps include Google Authenticator and Authy. " +
     "Works even without an internet connection.",
   securityLevel: "strong",
-  available: true,
 };
 
 const METHOD_EMAIL: TwoFactorMethodInfo = {
@@ -95,7 +79,6 @@ const METHOD_EMAIL: TwoFactorMethodInfo = {
     "Convenient, but only as secure as your email account. Anyone " +
     "who can read your email can receive these codes.",
   securityLevel: "moderate",
-  available: true,
 };
 
 const METHOD_SMS: TwoFactorMethodInfo = {
@@ -107,7 +90,6 @@ const METHOD_SMS: TwoFactorMethodInfo = {
     "through a technique called SIM-swapping. Use only if no other " +
     "option is available for you.",
   securityLevel: "weak",
-  available: true,
 };
 
 const METHOD_PUSH: TwoFactorMethodInfo = {
@@ -120,7 +102,6 @@ const METHOD_PUSH: TwoFactorMethodInfo = {
     "button. Requires the app to be installed and an internet " +
     "connection on your phone.",
   securityLevel: "moderate",
-  available: true,
 };
 
 export const METHOD_INFO: readonly TwoFactorMethodInfo[] = [

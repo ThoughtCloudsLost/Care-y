@@ -40,8 +40,6 @@ export {
 // --- Two-factor authentication ---
 export {
   TwoFactorMethod,
-  AVAILABLE_METHODS,
-  STUBBED_METHODS,
   METHOD_INFO,
   type TwoFactorMethodType,
   type WebauthnCategory,

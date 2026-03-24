@@ -48,6 +48,9 @@ export function createSseService(): SseService {
     timestamp: number;
   }[] = [];
   const BUFFER_TTL_MS = 5 * 60 * 1000;
+  // Phone + computer + one spare (tablet, work machine). Exceeding the
+  // limit evicts the oldest connection rather than rejecting the new one.
+  const MAX_CONNECTIONS_PER_USER = 3;
 
   function pruneBuffer(): void {
     const cutoff = Date.now() - BUFFER_TTL_MS;
@@ -86,6 +89,16 @@ export function createSseService(): SseService {
 
       const key = `${orgId}:${userId}`;
       const existing = connections.get(key) ?? [];
+
+      // Evict oldest connections when the per-user limit is reached.
+      // Prevents a single authenticated user from exhausting server memory.
+      while (existing.length >= MAX_CONNECTIONS_PER_USER) {
+        const oldest = existing.shift();
+        if (oldest && !oldest.res.destroyed) {
+          oldest.res.end();
+        }
+      }
+
       existing.push(conn);
       connections.set(key, existing);
 

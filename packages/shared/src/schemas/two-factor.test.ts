@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { TwoFactorMethod } from "../two-factor-types.js";
 import {
   totpVerifySchema,
   emailCodeVerifySchema,
@@ -478,14 +479,13 @@ describe("removeMethodSchema", () => {
     }
   });
 
-  it("accepts sms method (now available)", () => {
-    expect(removeMethodSchema.safeParse({ method: "sms" }).success).toBe(true);
-  });
-
-  it("rejects stubbed methods (push)", () => {
-    expect(removeMethodSchema.safeParse({ method: "push" }).success).toBe(
-      false,
-    );
+  it("accepts every TwoFactorMethod value", () => {
+    for (const method of Object.values(TwoFactorMethod)) {
+      expect(
+        removeMethodSchema.safeParse({ method }).success,
+        `expected ${method} to be accepted`,
+      ).toBe(true);
+    }
   });
 
   it("rejects unknown method", () => {

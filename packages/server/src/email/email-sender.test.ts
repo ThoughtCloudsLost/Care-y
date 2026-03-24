@@ -37,7 +37,21 @@ const testMessage: EmailMessage = {
 };
 
 describe("createConsoleEmailSender", () => {
-  it("logs subject and text length but redacts recipient", async () => {
+  it("never logs the recipient address (PII redaction contract)", async () => {
+    const consoleSpy = vi.spyOn(console, "log").mockReturnValue(undefined);
+    const sender = createConsoleEmailSender();
+
+    await sender.send(testMessage);
+
+    const loggedLine = consoleSpy.mock.calls[0]?.[0] as string;
+    expect(loggedLine).not.toContain("user@example.com");
+
+    consoleSpy.mockRestore();
+  });
+
+  // Ops observability contract: structured log line is parsed by log aggregators.
+  // Changing the format requires a coordinated update to log parsing rules.
+  it("emits structured log with subject and text length", async () => {
     const consoleSpy = vi.spyOn(console, "log").mockReturnValue(undefined);
     const sender = createConsoleEmailSender();
 
@@ -46,7 +60,6 @@ describe("createConsoleEmailSender", () => {
     expect(consoleSpy).toHaveBeenCalledOnce();
     const loggedLine = consoleSpy.mock.calls[0]?.[0] as string;
     expect(loggedLine).toContain("<redacted>");
-    expect(loggedLine).not.toContain("user@example.com");
     expect(loggedLine).toContain("Your verification code");
     expect(loggedLine).toContain(`length=${String(testMessage.text.length)}`);
 
@@ -96,9 +109,8 @@ describe("createSmtpEmailSender", () => {
 
     await sender.send(textOnly);
 
-    expect(mockSendMail).toHaveBeenCalledWith(
-      expect.objectContaining({ html: undefined }),
-    );
+    const envelope = mockSendMail.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(envelope.html).toBeFalsy();
   });
 
   describe("error classification", () => {
