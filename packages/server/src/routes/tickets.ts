@@ -161,11 +161,57 @@ export function createTicketRouter(deps: TicketRouterDeps) {
     return { access, svc };
   }
 
+  /** Creates a tenant-scoped assignment service with shift provider wiring. */
+  function assignmentSvc(tDb: OrgContext["tenantDb"]): AssignmentService {
+    const access = deps.createTicketAccess(tDb);
+    const qp = deps.createQueuePermissionsSvc(tDb);
+    const shift = createStubShiftProvider(async (qId) =>
+      qp.getQueueMembers(qId),
+    );
+    return deps.createAssignmentSvc(tDb, access, shift);
+  }
+
+  /** Creates a tenant-scoped media service backed by the shared blob store. */
+  function mediaSvc(tDb: OrgContext["tenantDb"]): MediaService {
+    const access = deps.createTicketAccess(tDb);
+    return deps.createMediaSvc(tDb, deps.blobStore, access);
+  }
+
   // Audit helper: best-effort, never blocks. No-op when audit service not injected.
   function audit(tDb: OrgContext["tenantDb"], entry: AuditEntry): void {
     if (!deps.createAuditSvc) return;
     const svc = deps.createAuditSvc(tDb);
     void svc.log(entry);
+  }
+
+  /**
+   * Resolves the queue name for a ticket. Used by audit+notify flows.
+   */
+  async function resolveQueueName(
+    tDb: OrgContext["tenantDb"],
+    queueId: string,
+  ): Promise<string> {
+    return deps.createQueueSvc(tDb).getQueueName(queueId);
+  }
+
+  /**
+   * Combined audit + notification for ticket lifecycle events.
+   * Logs the audit entry, resolves queue name, dispatches notification.
+   * All steps are best-effort (never blocks the response).
+   */
+  function auditAndNotify(
+    ctx: { org: OrgContext; user: { id: string } },
+    eventType: NotificationEventType,
+    ticket: { id: string; queueId: string; assignedTo: string | null },
+    auditEntry: AuditEntry,
+    mentionedPseudonyms: string[] = [],
+  ): void {
+    audit(ctx.org.tenantDb, auditEntry);
+    void resolveQueueName(ctx.org.tenantDb, ticket.queueId).then(
+      (queueName) => {
+        notify(ctx, eventType, ticket, queueName, mentionedPseudonyms);
+      },
+    );
   }
 
   // Notification dispatch helper: best-effort, never blocks.
@@ -233,15 +279,11 @@ export function createTicketRouter(deps: TicketRouterDeps) {
           priority: input.priority,
           keyGeneration: input.keyGeneration,
         });
-        audit(ctx.org.tenantDb, {
+        auditAndNotify(ctx, "ticket_created", ticket, {
           eventType: "ticket_created",
           actorId: ctx.user.id,
           ticketId: ticket.id,
         });
-        const queueName = await deps
-          .createQueueSvc(ctx.org.tenantDb)
-          .getQueueName(ticket.queueId);
-        notify(ctx, "ticket_created", ticket, queueName);
         return ticket;
       }),
     ),
@@ -278,15 +320,11 @@ export function createTicketRouter(deps: TicketRouterDeps) {
       withErrorWrapping(async ({ ctx, input }) => {
         const { svc } = ticketSvc(ctx.org.tenantDb);
         const ticket = await svc.close(ctx.user.id, input.ticketId);
-        audit(ctx.org.tenantDb, {
+        auditAndNotify(ctx, "ticket_closed", ticket, {
           eventType: "ticket_closed",
           actorId: ctx.user.id,
           ticketId: input.ticketId,
         });
-        const queueName = await deps
-          .createQueueSvc(ctx.org.tenantDb)
-          .getQueueName(ticket.queueId);
-        notify(ctx, "ticket_closed", ticket, queueName);
         return ticket;
       }),
     ),
@@ -306,15 +344,11 @@ export function createTicketRouter(deps: TicketRouterDeps) {
             input.ticketId,
             input.newKeyGeneration,
           );
-          audit(ctx.org.tenantDb, {
+          auditAndNotify(ctx, "ticket_reopened", ticket, {
             eventType: "ticket_reopened",
             actorId: ctx.user.id,
             ticketId: input.ticketId,
           });
-          const queueName = await deps
-            .createQueueSvc(ctx.org.tenantDb)
-            .getQueueName(ticket.queueId);
-          notify(ctx, "ticket_reopened", ticket, queueName);
           return ticket;
         }),
       ),
@@ -335,20 +369,22 @@ export function createTicketRouter(deps: TicketRouterDeps) {
             isPrivate: input.isPrivate,
             mentionedPseudonyms: input.mentionedPseudonyms,
           });
-          audit(ctx.org.tenantDb, {
-            eventType: "followup_added",
-            actorId: ctx.user.id,
-            ticketId: input.ticketId,
-          });
           // Look up ticket for notification context
           const { svc: tSvc } = ticketSvc(ctx.org.tenantDb);
           const ticket = await tSvc.findById(input.ticketId, ctx.user.id);
-          const queueName = await deps
-            .createQueueSvc(ctx.org.tenantDb)
-            .getQueueName(ticket.queueId);
-          const eventType =
-            input.mentionedPseudonyms.length > 0 ? "mention" : "followup_added";
-          notify(ctx, eventType, ticket, queueName, input.mentionedPseudonyms);
+          const hasMentions = input.mentionedPseudonyms.length > 0;
+          const eventType = hasMentions ? "mention" : "followup_added";
+          auditAndNotify(
+            ctx,
+            eventType,
+            ticket,
+            {
+              eventType: "followup_added",
+              actorId: ctx.user.id,
+              ticketId: input.ticketId,
+            },
+            input.mentionedPseudonyms,
+          );
           return followUp;
         }),
       ),
@@ -505,12 +541,7 @@ export function createTicketRouter(deps: TicketRouterDeps) {
       .input(z.object({ recordingId: z.uuid() }))
       .query(
         withErrorWrapping(async ({ ctx, input }) => {
-          const access = deps.createTicketAccess(ctx.org.tenantDb);
-          const svc = deps.createMediaSvc(
-            ctx.org.tenantDb,
-            deps.blobStore,
-            access,
-          );
+          const svc = mediaSvc(ctx.org.tenantDb);
           return svc.getRecording(ctx.user.id, input.recordingId);
         }),
       ),
@@ -519,12 +550,7 @@ export function createTicketRouter(deps: TicketRouterDeps) {
       .input(z.object({ attachmentId: z.uuid() }))
       .query(
         withErrorWrapping(async ({ ctx, input }) => {
-          const access = deps.createTicketAccess(ctx.org.tenantDb);
-          const svc = deps.createMediaSvc(
-            ctx.org.tenantDb,
-            deps.blobStore,
-            access,
-          );
+          const svc = mediaSvc(ctx.org.tenantDb);
           return svc.getAttachment(ctx.user.id, input.attachmentId);
         }),
       ),
@@ -533,12 +559,7 @@ export function createTicketRouter(deps: TicketRouterDeps) {
       .input(z.object({ ticketId: z.uuid() }))
       .query(
         withErrorWrapping(async ({ ctx, input }) => {
-          const access = deps.createTicketAccess(ctx.org.tenantDb);
-          const svc = deps.createMediaSvc(
-            ctx.org.tenantDb,
-            deps.blobStore,
-            access,
-          );
+          const svc = mediaSvc(ctx.org.tenantDb);
           return svc.listRecordings(ctx.user.id, input.ticketId);
         }),
       ),
@@ -547,12 +568,7 @@ export function createTicketRouter(deps: TicketRouterDeps) {
       .input(z.object({ ticketId: z.uuid() }))
       .query(
         withErrorWrapping(async ({ ctx, input }) => {
-          const access = deps.createTicketAccess(ctx.org.tenantDb);
-          const svc = deps.createMediaSvc(
-            ctx.org.tenantDb,
-            deps.blobStore,
-            access,
-          );
+          const svc = mediaSvc(ctx.org.tenantDb);
           return svc.listAttachments(ctx.user.id, input.ticketId);
         }),
       ),
@@ -598,26 +614,17 @@ export function createTicketRouter(deps: TicketRouterDeps) {
     // --- Assignment ---
     assign: volunteerProcedure.input(assignTicketInputSchema).mutation(
       withErrorWrapping(async ({ ctx, input }) => {
-        const access = deps.createTicketAccess(ctx.org.tenantDb);
-        const qp = deps.createQueuePermissionsSvc(ctx.org.tenantDb);
-        const shift = createStubShiftProvider(async (qId) =>
-          qp.getQueueMembers(qId),
-        );
-        const svc = deps.createAssignmentSvc(ctx.org.tenantDb, access, shift);
+        const svc = assignmentSvc(ctx.org.tenantDb);
         const result = await svc.assignRoundRobin(input.ticketId);
         if (result.assignedTo !== null) {
-          audit(ctx.org.tenantDb, {
+          const { svc: tSvc } = ticketSvc(ctx.org.tenantDb);
+          const ticket = await tSvc.findById(input.ticketId, ctx.user.id);
+          auditAndNotify(ctx, "ticket_assigned", ticket, {
             eventType: "ticket_assigned",
             actorId: ctx.user.id,
             ticketId: input.ticketId,
             metadata: { assignedTo: result.assignedTo },
           });
-          const { svc: tSvc } = ticketSvc(ctx.org.tenantDb);
-          const ticket = await tSvc.findById(input.ticketId, ctx.user.id);
-          const queueName = await deps
-            .createQueueSvc(ctx.org.tenantDb)
-            .getQueueName(ticket.queueId);
-          notify(ctx, "ticket_assigned", ticket, queueName);
         }
         return result;
       }),
@@ -625,36 +632,22 @@ export function createTicketRouter(deps: TicketRouterDeps) {
 
     take: volunteerProcedure.input(takeTicketInputSchema).mutation(
       withErrorWrapping(async ({ ctx, input }) => {
-        const access = deps.createTicketAccess(ctx.org.tenantDb);
-        const qp = deps.createQueuePermissionsSvc(ctx.org.tenantDb);
-        const shift = createStubShiftProvider(async (qId) =>
-          qp.getQueueMembers(qId),
-        );
-        const svc = deps.createAssignmentSvc(ctx.org.tenantDb, access, shift);
+        const svc = assignmentSvc(ctx.org.tenantDb);
         await svc.take(ctx.user.id, input.ticketId);
-        audit(ctx.org.tenantDb, {
+        const { svc: tSvc } = ticketSvc(ctx.org.tenantDb);
+        const ticket = await tSvc.findById(input.ticketId, ctx.user.id);
+        auditAndNotify(ctx, "ticket_assigned", ticket, {
           eventType: "ticket_assigned",
           actorId: ctx.user.id,
           ticketId: input.ticketId,
           metadata: { assignedTo: ctx.user.id },
         });
-        const { svc: tSvc } = ticketSvc(ctx.org.tenantDb);
-        const ticket = await tSvc.findById(input.ticketId, ctx.user.id);
-        const queueName = await deps
-          .createQueueSvc(ctx.org.tenantDb)
-          .getQueueName(ticket.queueId);
-        notify(ctx, "ticket_assigned", ticket, queueName);
       }),
     ),
 
     release: volunteerProcedure.input(releaseTicketInputSchema).mutation(
       withErrorWrapping(async ({ ctx, input }) => {
-        const access = deps.createTicketAccess(ctx.org.tenantDb);
-        const qp = deps.createQueuePermissionsSvc(ctx.org.tenantDb);
-        const shift = createStubShiftProvider(async (qId) =>
-          qp.getQueueMembers(qId),
-        );
-        const svc = deps.createAssignmentSvc(ctx.org.tenantDb, access, shift);
+        const svc = assignmentSvc(ctx.org.tenantDb);
         await svc.release(ctx.user.id, input.ticketId);
         audit(ctx.org.tenantDb, {
           eventType: "ticket_assigned",

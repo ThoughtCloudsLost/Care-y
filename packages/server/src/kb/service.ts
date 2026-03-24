@@ -394,9 +394,40 @@ export function createKBItemService(db: Kysely<TenantDatabase>): KBItemService {
 }
 
 export function createKBVoteService(db: Kysely<TenantDatabase>): KBVoteService {
+  /** Recalculates and persists vote counts + Wilson score for an item. */
+  async function updateVoteCounts(
+    itemId: string,
+    currentUp: number,
+    currentDown: number,
+    upDelta: number,
+    downDelta: number,
+  ): Promise<void> {
+    const newUp = currentUp + upDelta;
+    const newDown = currentDown + downDelta;
+    await db
+      .updateTable("kb_items")
+      .set({
+        vote_up_count: newUp,
+        vote_down_count: newDown,
+        rating: wilsonScore(newUp, newDown),
+      })
+      .where("id", "=", itemId)
+      .execute();
+  }
+
+  /** Computes the up/down deltas when changing from one direction to another. */
+  function voteDelta(
+    direction: string,
+    previous: string | null,
+  ): { upDelta: number; downDelta: number } {
+    const upDelta = (direction === "up" ? 1 : 0) - (previous === "up" ? 1 : 0);
+    const downDelta =
+      (direction === "down" ? 1 : 0) - (previous === "down" ? 1 : 0);
+    return { upDelta, downDelta };
+  }
+
   return {
     async castVote(voterPseudonym, input) {
-      // Verify article exists
       const item = await db
         .selectFrom("kb_items")
         .select(["id", "vote_up_count", "vote_down_count"])
@@ -404,7 +435,6 @@ export function createKBVoteService(db: Kysely<TenantDatabase>): KBVoteService {
         .executeTakeFirst();
       if (!item) throw new NotFoundError("Article not found");
 
-      // Check for existing vote
       const existing = await db
         .selectFrom("kb_votes")
         .selectAll()
@@ -413,39 +443,26 @@ export function createKBVoteService(db: Kysely<TenantDatabase>): KBVoteService {
         .executeTakeFirst();
 
       if (existing) {
-        if (existing.direction === input.direction) {
-          // Same direction: no-op
-          return;
-        }
-        // Change direction: update vote row + adjust counts
+        if (existing.direction === input.direction) return;
+
         await db
           .updateTable("kb_votes")
           .set({ direction: input.direction })
           .where("id", "=", existing.id)
           .execute();
 
-        // Adjust counts: remove old direction, add new direction
-        const upDelta =
-          (input.direction === "up" ? 1 : 0) -
-          (existing.direction === "up" ? 1 : 0);
-        const downDelta =
-          (input.direction === "down" ? 1 : 0) -
-          (existing.direction === "down" ? 1 : 0);
-
-        const newUp = item.vote_up_count + upDelta;
-        const newDown = item.vote_down_count + downDelta;
-
-        await db
-          .updateTable("kb_items")
-          .set({
-            vote_up_count: newUp,
-            vote_down_count: newDown,
-            rating: wilsonScore(newUp, newDown),
-          })
-          .where("id", "=", input.itemId)
-          .execute();
+        const { upDelta, downDelta } = voteDelta(
+          input.direction,
+          existing.direction,
+        );
+        await updateVoteCounts(
+          input.itemId,
+          item.vote_up_count,
+          item.vote_down_count,
+          upDelta,
+          downDelta,
+        );
       } else {
-        // New vote
         await db
           .insertInto("kb_votes")
           .values({
@@ -455,19 +472,14 @@ export function createKBVoteService(db: Kysely<TenantDatabase>): KBVoteService {
           })
           .execute();
 
-        const newUp = item.vote_up_count + (input.direction === "up" ? 1 : 0);
-        const newDown =
-          item.vote_down_count + (input.direction === "down" ? 1 : 0);
-
-        await db
-          .updateTable("kb_items")
-          .set({
-            vote_up_count: newUp,
-            vote_down_count: newDown,
-            rating: wilsonScore(newUp, newDown),
-          })
-          .where("id", "=", input.itemId)
-          .execute();
+        const { upDelta, downDelta } = voteDelta(input.direction, null);
+        await updateVoteCounts(
+          input.itemId,
+          item.vote_up_count,
+          item.vote_down_count,
+          upDelta,
+          downDelta,
+        );
       }
     },
 
@@ -479,11 +491,10 @@ export function createKBVoteService(db: Kysely<TenantDatabase>): KBVoteService {
         .where("voter_pseudonym", "=", voterPseudonym)
         .executeTakeFirst();
 
-      if (!existing) return; // No vote to remove, idempotent
+      if (!existing) return;
 
       await db.deleteFrom("kb_votes").where("id", "=", existing.id).execute();
 
-      // Fetch current item to adjust counts
       const item = await db
         .selectFrom("kb_items")
         .select(["id", "vote_up_count", "vote_down_count"])
@@ -491,20 +502,14 @@ export function createKBVoteService(db: Kysely<TenantDatabase>): KBVoteService {
         .executeTakeFirst();
 
       if (item) {
-        const newUp =
-          item.vote_up_count - (existing.direction === "up" ? 1 : 0);
-        const newDown =
-          item.vote_down_count - (existing.direction === "down" ? 1 : 0);
-
-        await db
-          .updateTable("kb_items")
-          .set({
-            vote_up_count: newUp,
-            vote_down_count: newDown,
-            rating: wilsonScore(newUp, newDown),
-          })
-          .where("id", "=", item.id)
-          .execute();
+        const { upDelta, downDelta } = voteDelta("none", existing.direction);
+        await updateVoteCounts(
+          itemId,
+          item.vote_up_count,
+          item.vote_down_count,
+          upDelta,
+          downDelta,
+        );
       }
     },
 

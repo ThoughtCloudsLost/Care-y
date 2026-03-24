@@ -431,16 +431,24 @@ const trpcHandler = createHTTPHandler({
 
 // --- Job queue handlers ---
 
-registerLogDeletionHandler(jobQueue, providerFactory);
-registerMediaCleanupHandler(jobQueue, tenantDb, blobStore, async () => {
+/** Lists schema names for all active orgs. Used by cross-tenant job handlers. */
+async function listActiveOrgSchemas(): Promise<string[]> {
   const orgs = await db
     .selectFrom("orgs")
     .select("schema_name")
     .where("is_active", "=", true)
     .execute();
   return orgs.map((o) => o.schema_name);
-});
-// Notification email job handler
+}
+
+registerLogDeletionHandler(jobQueue, providerFactory);
+registerMediaCleanupHandler(
+  jobQueue,
+  tenantDb,
+  blobStore,
+  listActiveOrgSchemas,
+);
+
 const notificationJobHandler = createNotificationJobHandler({
   emailSender: notificationEmailSender,
   encryptor,
@@ -449,14 +457,9 @@ const notificationJobHandler = createNotificationJobHandler({
 jobQueue.process("notification-email", notificationJobHandler);
 
 registerEscalationHandler(jobQueue, async () => {
-  const orgs = await db
-    .selectFrom("orgs")
-    .select("schema_name")
-    .where("is_active", "=", true)
-    .execute();
-  for (const org of orgs) {
-    const tDb = tenantDb(org.schema_name);
-    await escalateTenantTickets(tDb);
+  const schemas = await listActiveOrgSchemas();
+  for (const schema of schemas) {
+    await escalateTenantTickets(tenantDb(schema));
   }
 });
 jobQueue.start();
@@ -496,16 +499,33 @@ const webhookHandler = createWebhookHandler(
 
 const pendingCalls = new Map<string, PendingCall>();
 
-// Pending call cleanup (2-minute TTL). Zeroes phone buffers on eviction.
-const pendingCallCleanupInterval = setInterval(() => {
+/** Zeros sensitive buffers in a pending call entry. */
+function zeroPendingCallBuffers(pending: PendingCall): void {
+  pending.clientPhoneBuf.fill(0);
+  pending.callerIdBuf.fill(0);
+}
+
+/** Evicts pending calls older than TTL, zeroing sensitive buffers. */
+function evictExpiredPendingCalls(calls: Map<string, PendingCall>): void {
   const cutoff = Date.now() - 2 * 60 * 1000;
-  for (const [sid, pending] of pendingCalls) {
+  for (const [sid, pending] of calls) {
     if (pending.createdAt < cutoff) {
-      pending.clientPhoneBuf.fill(0);
-      pending.callerIdBuf.fill(0);
-      pendingCalls.delete(sid);
+      zeroPendingCallBuffers(pending);
+      calls.delete(sid);
     }
   }
+}
+
+/** Zeros and clears all pending calls. Used during graceful shutdown. */
+function zeroAllPendingCalls(calls: Map<string, PendingCall>): void {
+  for (const [, pending] of calls) {
+    zeroPendingCallBuffers(pending);
+  }
+  calls.clear();
+}
+
+const pendingCallCleanupInterval = setInterval(() => {
+  evictExpiredPendingCalls(pendingCalls);
 }, 60_000);
 
 // Org resolver for relay endpoints: uses the shared extractOrgSlug utility
@@ -539,6 +559,17 @@ async function createRelaySessionRepo(
   return createDbSessionRepository(tDb, tokenizer, sealedBox);
 }
 
+/** Looks up webhook config for an org. Shared by relay auth token + account SID resolution. */
+async function requireWebhookConfig(
+  orgId: string,
+): Promise<{ accountSid: string; authToken: string }> {
+  const lookup = await telephonyConfigService.lookupWebhookConfig(orgId);
+  if (!lookup) {
+    throw new NotFoundError(`No telephony config for org ${orgId}`);
+  }
+  return lookup;
+}
+
 const relayHandler = createRelayHandler({
   getProvider: async (orgId: string) => providerFactory.getProvider(orgId),
   getTenantDb: tenantDb,
@@ -552,11 +583,7 @@ const relayHandler = createRelayHandler({
     return lookup?.authToken ?? null;
   },
   async getAccountSid(orgId: string) {
-    const lookup = await telephonyConfigService.lookupWebhookConfig(orgId);
-    if (!lookup) {
-      throw new NotFoundError(`No telephony config for org ${orgId}`);
-    }
-    return lookup.accountSid;
+    return (await requireWebhookConfig(orgId)).accountSid;
   },
   apiKeySid: env.TWILIO_API_KEY_SID ?? "",
   apiKeySecret: env.TWILIO_API_KEY_SECRET ?? "",
@@ -625,12 +652,7 @@ async function shutdown(signal: string): Promise<void> {
   sseService.closeAll();
   webhookDedupStore.stop();
   clearInterval(pendingCallCleanupInterval);
-  // Zero any remaining pending call buffers
-  for (const [, pending] of pendingCalls) {
-    pending.clientPhoneBuf.fill(0);
-    pending.callerIdBuf.fill(0);
-  }
-  pendingCalls.clear();
+  zeroAllPendingCalls(pendingCalls);
   await jobQueue.stop();
   await db.destroy();
   process.exit(0);

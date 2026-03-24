@@ -263,6 +263,39 @@ export function createMediaService(
   };
 }
 
+/** Soft-deletes rows in a media table where created_at is older than the cutoff. */
+async function softDeleteExpiredMedia(
+  tDb: Kysely<TenantDatabase>,
+  table: "recordings" | "attachments",
+  cutoff: Date,
+): Promise<void> {
+  await tDb
+    .updateTable(table)
+    .set({ deleted_at: new Date() })
+    .where("created_at", "<", cutoff)
+    .where("deleted_at", "is", null)
+    .execute();
+}
+
+/** Hard-deletes soft-deleted rows past the purge threshold. Deletes blob first for safety. */
+async function purgeDeletedMedia(
+  tDb: Kysely<TenantDatabase>,
+  table: "recordings" | "attachments",
+  cutoff: Date,
+  blobStore: BlobStore,
+): Promise<void> {
+  const expired = await tDb
+    .selectFrom(table)
+    .select(["id", "blob_key"])
+    .where("deleted_at", "<", cutoff)
+    .execute();
+
+  for (const row of expired) {
+    await blobStore.delete(row.blob_key);
+    await tDb.deleteFrom(table).where("id", "=", row.id).execute();
+  }
+}
+
 export function registerMediaCleanupHandler(
   jobQueue: JobQueue,
   getTenantDb: (orgSchema: string) => Kysely<TenantDatabase>,
@@ -289,43 +322,10 @@ export function registerMediaCleanupHandler(
         Date.now() - config.media_purge_days * 24 * 60 * 60 * 1000,
       );
 
-      // Soft-delete media past retention threshold
-      await tDb
-        .updateTable("recordings")
-        .set({ deleted_at: new Date() })
-        .where("created_at", "<", retentionCutoff)
-        .where("deleted_at", "is", null)
-        .execute();
-
-      await tDb
-        .updateTable("attachments")
-        .set({ deleted_at: new Date() })
-        .where("created_at", "<", retentionCutoff)
-        .where("deleted_at", "is", null)
-        .execute();
-
-      // Hard-delete soft-deleted media past purge threshold (one at a time for fault tolerance)
-      const expiredRecordings = await tDb
-        .selectFrom("recordings")
-        .select(["id", "blob_key"])
-        .where("deleted_at", "<", purgeCutoff)
-        .execute();
-
-      for (const rec of expiredRecordings) {
-        await blobStore.delete(rec.blob_key);
-        await tDb.deleteFrom("recordings").where("id", "=", rec.id).execute();
-      }
-
-      const expiredAttachments = await tDb
-        .selectFrom("attachments")
-        .select(["id", "blob_key"])
-        .where("deleted_at", "<", purgeCutoff)
-        .execute();
-
-      for (const att of expiredAttachments) {
-        await blobStore.delete(att.blob_key);
-        await tDb.deleteFrom("attachments").where("id", "=", att.id).execute();
-      }
+      await softDeleteExpiredMedia(tDb, "recordings", retentionCutoff);
+      await softDeleteExpiredMedia(tDb, "attachments", retentionCutoff);
+      await purgeDeletedMedia(tDb, "recordings", purgeCutoff, blobStore);
+      await purgeDeletedMedia(tDb, "attachments", purgeCutoff, blobStore);
     }
   });
 }
