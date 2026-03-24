@@ -74,6 +74,7 @@ export interface PlatformDatabase {
   oprf_audit_log: OprfAuditLogTable;
   pending_jobs: PendingJobsTable;
   telephony_config: TelephonyConfigTable;
+  vapid_config: VapidConfigTable;
   // Production (deletion_requests)
 }
 
@@ -116,6 +117,9 @@ export interface OrgConfigTable {
   recommend_close_days: number | null;
   media_retention_days: ColumnType<number, number | undefined, number>;
   media_purge_days: ColumnType<number, number | undefined, number>;
+  // Email branding (notification sender identity per org)
+  email_from_name: ColumnType<string, string | undefined, string>;
+  email_from_address: ColumnType<string, string | undefined, string>;
 }
 
 // --- User keys (full interface, replaces UserKeysStubTable) ---
@@ -403,6 +407,38 @@ export interface QueueWatchersTable {
   user_id: string;
 }
 
+// --- Push notifications ---
+
+export interface PushSubscriptionsTable {
+  id: Generated<string>;
+  user_id: string;
+  endpoint: string;
+  key_p256dh: string;
+  key_auth: string;
+  created_at: Generated<Date>;
+}
+
+// --- Audit log ---
+
+export interface AuditLogTable {
+  id: Generated<string>;
+  event_type: string;
+  actor_id: string;
+  ticket_id: string | null;
+  metadata: Record<string, unknown>;
+  created_at: Generated<Date>;
+}
+
+// --- VAPID (platform-wide Web Push identity) ---
+
+export interface VapidConfigTable {
+  id: number;
+  public_key: string; // base64url-encoded P-256 uncompressed public key
+  encrypted_private_key: Buffer; // nonce(24) || ciphertext (SecretsEncryptor format)
+  key_version: ColumnType<number, number | undefined, number>;
+  created_at: Generated<Date>;
+}
+
 export interface TenantDatabase {
   users: UsersTable;
   sessions: SessionsTable;
@@ -439,6 +475,9 @@ export interface TenantDatabase {
   queue_assignments: QueueAssignmentsTable;
   ticket_watchers: TicketWatchersTable;
   queue_watchers: QueueWatchersTable;
+  // Notifications
+  push_subscriptions: PushSubscriptionsTable;
+  audit_log: AuditLogTable;
   // Shifts (shifts, shift_occurrences)
   // Client portal (portal_channels)
 }
