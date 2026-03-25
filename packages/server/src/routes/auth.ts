@@ -190,6 +190,8 @@ export function createAuthRouter(deps: AuthRouterDeps) {
             tokenizer: deps.tokenizer,
             providerFactory: deps.providerFactory,
             resolveCallerId: deps.resolveCallerId,
+            pushSender: null,
+            pushHmacKey: null,
           },
         );
         const enrolledMethods = await twoFactor.getEnrolledMethodTypes(user.id);

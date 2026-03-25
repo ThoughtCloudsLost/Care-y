@@ -40,8 +40,6 @@ export {
 // --- Two-factor authentication ---
 export {
   TwoFactorMethod,
-  AVAILABLE_METHODS,
-  STUBBED_METHODS,
   METHOD_INFO,
   type TwoFactorMethodType,
   type WebauthnCategory,
@@ -61,6 +59,8 @@ export {
   removeMethodSchema,
   enrolledMethodResponseSchema,
   twoFactorStatusResponseSchema,
+  pushChallengeIdSchema,
+  pushApprovalSchema,
   type TotpVerifyInput,
   type EmailCodeVerifyInput,
   type SmsEnrollInput,
@@ -69,6 +69,8 @@ export {
   type WebauthnRegistrationResponse,
   type WebauthnAssertionResponse,
   type RemoveMethodInput,
+  type PushChallengeIdInput,
+  type PushApprovalInput,
 } from "./schemas/two-factor.js";
 
 // --- Key management schemas ---
@@ -159,6 +161,98 @@ export {
   type RelayCallOutput,
   type RelayWebrtcTokenOutput,
 } from "./schemas/relay.js";
+
+// --- Ticket schemas ---
+export {
+  ticketStatusSchema,
+  ticketPrioritySchema,
+  followUpSourceSchema,
+  followUpTypeSchema,
+  createTicketInputSchema,
+  createFollowUpInputSchema,
+  markReadInputSchema,
+  updateTicketInputSchema,
+  createQueueInputSchema,
+  updateQueueInputSchema,
+  createPresetReplyInputSchema,
+  updatePresetReplyInputSchema,
+  addDependencyInputSchema,
+  mergeClientsInputSchema,
+  undoMergeInputSchema,
+  uploadAttachmentInputSchema,
+  ticketListInputSchema,
+  followUpListInputSchema,
+  assignTicketInputSchema,
+  takeTicketInputSchema,
+  releaseTicketInputSchema,
+  watchTicketInputSchema,
+  queueWatcherInputSchema,
+  queueAssignmentInputSchema,
+  type TicketStatus,
+  type TicketPriority,
+  type FollowUpSource,
+  type FollowUpType,
+  type CreateTicketInput,
+  type CreateFollowUpInput,
+  type MarkReadInput,
+  type UpdateTicketInput,
+  type CreateQueueInput,
+  type UpdateQueueInput,
+  type CreatePresetReplyInput,
+  type UpdatePresetReplyInput,
+  type AddDependencyInput,
+  type MergeClientsInput,
+  type UndoMergeInput,
+  type UploadAttachmentInput,
+  type TicketListInput,
+  type FollowUpListInput,
+  type AssignTicketInput,
+  type TakeTicketInput,
+  type ReleaseTicketInput,
+  type WatchTicketInput,
+  type QueueWatcherInput,
+  type QueueAssignmentInput,
+} from "./schemas/tickets.js";
+
+// --- Knowledge Base schemas ---
+export {
+  createKbCategoryInputSchema,
+  updateKbCategoryInputSchema,
+  createKbItemInputSchema,
+  updateKbItemInputSchema,
+  kbItemListInputSchema,
+  voteDirectionSchema,
+  castVoteInputSchema,
+  removeVoteInputSchema,
+  type CreateKbCategoryInput,
+  type UpdateKbCategoryInput,
+  type CreateKbItemInput,
+  type UpdateKbItemInput,
+  type KbItemListInput,
+  type VoteDirection,
+  type CastVoteInput,
+  type RemoveVoteInput,
+} from "./schemas/kb.js";
+
+// --- Notification, search, audit schemas ---
+export {
+  notificationEventTypeSchema,
+  sseEventSchema,
+  pushSubscriptionInputSchema,
+  unsubscribePushInputSchema,
+  metadataSearchInputSchema,
+  contentSearchInputSchema,
+  auditEventTypeSchema,
+  auditLogQueryInputSchema,
+  type NotificationEventType,
+  type SseEvent,
+  type PushSubscriptionInput,
+  type UnsubscribePushInput,
+  type MetadataSearchInput,
+  type ContentSearchInput,
+  type AuditEventType,
+  type AuditLogQueryInput,
+} from "./schemas/notifications.js";
 
 // --- Browser call service interface ---
 export type {

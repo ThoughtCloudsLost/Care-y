@@ -74,6 +74,7 @@ export interface PlatformDatabase {
   oprf_audit_log: OprfAuditLogTable;
   pending_jobs: PendingJobsTable;
   telephony_config: TelephonyConfigTable;
+  vapid_config: VapidConfigTable;
   // Production (deletion_requests)
 }
 
@@ -113,6 +114,12 @@ export interface OrgConfigTable {
   default_country_code: ColumnType<string, string | undefined, string>;
   phone_outbound_sid: string | null;
   phone_system_sid: string | null;
+  recommend_close_days: number | null;
+  media_retention_days: ColumnType<number, number | undefined, number>;
+  media_purge_days: ColumnType<number, number | undefined, number>;
+  // Email branding (notification sender identity per org)
+  email_from_name: ColumnType<string, string | undefined, string>;
+  email_from_address: ColumnType<string, string | undefined, string>;
 }
 
 // --- User keys (full interface, replaces UserKeysStubTable) ---
@@ -136,9 +143,10 @@ export interface WrappedOrgKeysTable {
   key_version: ColumnType<number, number | undefined, number>;
 }
 
-// --- Ticket key wraps (interface only, CREATE TABLE with tickets migration) ---
+// --- Ticket key wraps (CREATE TABLE in migration 025) ---
 // Each volunteer gets one wrap per ticket per key_generation.
 export interface TicketKeyWrapsTable {
+  id: Generated<string>;
   ticket_id: string;
   volunteer_id: string;
   key_generation: string; // UUID, groups wraps by crypto-shred/reopen cycle (ADR-018)
@@ -226,6 +234,7 @@ export interface ClientsTable {
   id: Generated<string>;
   alias: string;
   phone_id: string;
+  merged_into: string | null;
   created_at: Generated<Date>;
   updated_at: Generated<Date>;
 }
@@ -264,6 +273,182 @@ export interface ConsultantsTable {
   updated_at: Generated<Date>;
 }
 
+// --- Ticket Data Models ---
+
+export interface QueuesTable {
+  id: Generated<string>;
+  name: string;
+  escalate_days: ColumnType<number, number | undefined, number>;
+  is_active: ColumnType<boolean, boolean | undefined, boolean>;
+  created_at: Generated<Date>;
+}
+
+export interface TicketsTable {
+  id: Generated<string>;
+  client_id: string;
+  queue_id: string;
+  status: ColumnType<string, string | undefined, string>;
+  priority: ColumnType<string, string | undefined, string>;
+  on_hold: ColumnType<boolean, boolean | undefined, boolean>;
+  assigned_to: string | null;
+  encrypted_title: Buffer;
+  encrypted_description: Buffer;
+  key_generation: string;
+  created_at: Generated<Date>;
+}
+
+export interface FollowupsTable {
+  id: Generated<string>;
+  ticket_id: string;
+  source: string;
+  type: string;
+  is_private: ColumnType<boolean, boolean | undefined, boolean>;
+  mentioned_pseudonyms: ColumnType<
+    string[],
+    string | string[] | undefined,
+    string | string[]
+  >;
+  encrypted_content: Buffer;
+  encrypted_read_state: Buffer;
+  created_at: Generated<Date>;
+}
+
+export interface RecordingsTable {
+  id: Generated<string>;
+  ticket_id: string;
+  followup_id: string | null;
+  blob_key: string;
+  size_bytes: number;
+  duration_seconds: number | null;
+  created_at: Generated<Date>;
+  deleted_at: Date | null;
+}
+
+export interface AttachmentsTable {
+  id: Generated<string>;
+  ticket_id: string;
+  followup_id: string | null;
+  blob_key: string;
+  size_bytes: number;
+  encrypted_filename: Buffer | null;
+  content_type: string | null;
+  created_at: Generated<Date>;
+  deleted_at: Date | null;
+}
+
+export interface TicketDependenciesTable {
+  ticket_id: string;
+  depends_on_ticket_id: string;
+  created_at: Generated<Date>;
+}
+
+export interface PresetRepliesTable {
+  id: Generated<string>;
+  encrypted_title: Buffer;
+  encrypted_body: Buffer;
+  queue_id: string | null;
+  created_by: string;
+  created_at: Generated<Date>;
+}
+
+export interface ClientMergeEventsTable {
+  id: Generated<string>;
+  primary_client_id: string;
+  secondary_client_id: string;
+  merged_at: Generated<Date>;
+  snapshot: Buffer;
+  undo_locked: ColumnType<boolean, boolean | undefined, boolean>;
+  is_undone: ColumnType<boolean, boolean | undefined, boolean>;
+}
+
+// --- Knowledge Base ---
+
+export interface KBCategoriesTable {
+  id: Generated<string>;
+  name: string;
+  encrypted_description: Buffer | null;
+  created_at: Generated<Date>;
+  updated_at: Generated<Date>;
+}
+
+export interface KBItemsTable {
+  id: Generated<string>;
+  category_id: string;
+  encrypted_title: Buffer;
+  encrypted_body: Buffer;
+  created_by: string;
+  vote_up_count: ColumnType<number, number | undefined, number>;
+  vote_down_count: ColumnType<number, number | undefined, number>;
+  rating: ColumnType<number, number | undefined, number>;
+  created_at: Generated<Date>;
+  updated_at: Generated<Date>;
+}
+
+export interface KBVotesTable {
+  id: Generated<string>;
+  kb_item_id: string;
+  voter_pseudonym: string;
+  direction: string;
+  created_at: Generated<Date>;
+}
+
+export interface QueueAssignmentsTable {
+  queue_id: string;
+  user_id: string;
+}
+
+export interface TicketWatchersTable {
+  ticket_id: string;
+  user_id: string;
+}
+
+export interface QueueWatchersTable {
+  queue_id: string;
+  user_id: string;
+}
+
+// --- Push notifications ---
+
+export interface PushSubscriptionsTable {
+  id: Generated<string>;
+  user_id: string;
+  endpoint: string;
+  key_p256dh: string;
+  key_auth: string;
+  created_at: Generated<Date>;
+}
+
+// --- Push 2FA challenges ---
+
+export interface PushChallengesTable {
+  id: Generated<string>;
+  user_id: string;
+  session_token_hash: string; // HMAC-SHA256 of the session token
+  status: string; // 'pending' | 'approved' | 'denied' | 'expired'
+  expires_at: Date;
+}
+
+// --- Audit log ---
+
+export interface AuditLogTable {
+  id: Generated<string>;
+  event_type: string;
+  actor_id: string;
+  ticket_id: string | null;
+  metadata: Record<string, unknown>;
+  created_at: Generated<Date>;
+}
+
+// --- VAPID (platform-wide Web Push identity) ---
+
+export interface VapidConfigTable {
+  id: number;
+  public_key: string; // base64url-encoded P-256 uncompressed public key
+  encrypted_private_key: Buffer; // nonce(24) || ciphertext (SecretsEncryptor format)
+  key_version: ColumnType<number, number | undefined, number>;
+  created_at: Generated<Date>;
+}
+
 export interface TenantDatabase {
   users: UsersTable;
   sessions: SessionsTable;
@@ -276,14 +461,34 @@ export interface TenantDatabase {
   backup_codes: BackupCodesTable;
   two_factor_methods: TwoFactorMethodsTable;
   wrapped_org_keys: WrappedOrgKeysTable;
-  ticket_key_wraps: TicketKeyWrapsTable; // Interface only, CREATE TABLE with tickets migration
+  ticket_key_wraps: TicketKeyWrapsTable;
   // Telephony data models
   phones: PhonesTable;
   clients: ClientsTable;
   phone_greetings: PhoneGreetingsTable;
   sms_responses: SmsResponsesTable;
   consultants: ConsultantsTable;
-  // Tickets (tickets, followups, audit_log)
+  // Ticket data models
+  queues: QueuesTable;
+  tickets: TicketsTable;
+  followups: FollowupsTable;
+  recordings: RecordingsTable;
+  attachments: AttachmentsTable;
+  ticket_dependencies: TicketDependenciesTable;
+  preset_replies: PresetRepliesTable;
+  client_merge_events: ClientMergeEventsTable;
+  // Knowledge Base
+  kb_categories: KBCategoriesTable;
+  kb_items: KBItemsTable;
+  kb_votes: KBVotesTable;
+  // Workflow join tables
+  queue_assignments: QueueAssignmentsTable;
+  ticket_watchers: TicketWatchersTable;
+  queue_watchers: QueueWatchersTable;
+  // Notifications
+  push_subscriptions: PushSubscriptionsTable;
+  push_challenges: PushChallengesTable;
+  audit_log: AuditLogTable;
   // Shifts (shifts, shift_occurrences)
   // Client portal (portal_channels)
 }

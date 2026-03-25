@@ -118,17 +118,30 @@ export const testSealedBox: SealedBoxEncryptor =
   createSealedBoxEncryptor(TEST_ORG_PUBLIC_KEY);
 
 /**
- * Seeds org_config.org_public_key in a test schema.
+ * Seeds the org_config singleton row in a test schema.
+ * Inserts the row if it doesn't exist, then sets org_public_key.
  * Call in beforeAll after createTestDb() so that org resolution and
  * session creation work correctly.
  */
 export async function seedOrgPublicKey(
   tDb: Kysely<TenantDatabase>,
 ): Promise<void> {
-  await tDb
-    .updateTable("org_config")
-    .set({ org_public_key: TEST_ORG_PUBLIC_KEY })
-    .execute();
+  const existing = await tDb
+    .selectFrom("org_config")
+    .select("id")
+    .executeTakeFirst();
+
+  if (!existing) {
+    await tDb
+      .insertInto("org_config")
+      .values({ org_public_key: TEST_ORG_PUBLIC_KEY })
+      .execute();
+  } else {
+    await tDb
+      .updateTable("org_config")
+      .set({ org_public_key: TEST_ORG_PUBLIC_KEY })
+      .execute();
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -314,6 +327,193 @@ export async function createTestSession(
     })
     .returningAll()
     .executeTakeFirstOrThrow();
+}
+
+// ---------------------------------------------------------------------------
+// Ticket test fixtures
+// ---------------------------------------------------------------------------
+
+/**
+ * Inserts a queue row with a random name. Queue names are plaintext
+ * by design (05-tickets.md: "queue names aren't sensitive").
+ */
+export async function createTestQueue(
+  db: Kysely<TenantDatabase>,
+  overrides?: { name?: string; escalateDays?: number },
+): Promise<{ id: string; name: string }> {
+  const uid = crypto.randomUUID().slice(0, 8);
+  const row = await db
+    .insertInto("queues")
+    .values({
+      // care-y-ignore-next-line ast-pii-in-db-write -- queue names are plaintext by design (05-tickets.md section 5.1)
+      name: overrides?.name ?? `Q-${uid}`,
+      ...(overrides?.escalateDays !== undefined
+        ? { escalate_days: overrides.escalateDays }
+        : {}),
+    })
+    .returning(["id", "name"])
+    .executeTakeFirstOrThrow();
+  return row;
+}
+
+export interface TestTicketFixture {
+  readonly phoneId: string;
+  readonly clientId: string;
+  readonly queueId: string;
+  readonly ticketId: string;
+  readonly userId: string | null;
+}
+
+export interface CreateTestTicketFixtureOptions {
+  /** If provided, reuse this queue instead of creating a new one. */
+  queueId?: string;
+  /** If true, creates a user via createTestUser and returns its ID. Default false. */
+  createUser?: boolean;
+}
+
+/**
+ * Inserts the full phone -> client -> (queue) -> ticket chain needed
+ * by most ticket-system integration tests. Centralizes the dummy-data
+ * inserts so individual test files don't each reinvent the chain.
+ *
+ * Encrypted fields use opaque Buffers (not real ciphertext). This is
+ * correct for DB integration tests that verify service logic, not
+ * crypto correctness.
+ */
+export async function createTestTicketFixture(
+  db: Kysely<TenantDatabase>,
+  options?: CreateTestTicketFixtureOptions,
+): Promise<TestTicketFixture> {
+  const uid = crypto.randomUUID().slice(0, 8);
+
+  // Construct encrypted values before the DB calls. phone_hash is a
+  // one-way blind index, encrypted_number goes through the encryptor,
+  // and phone_id is a UUID FK (none are plaintext PII).
+  const phoneRow = {
+    phone_hash: `ph-${uid}`,
+    encrypted_number: noopEncryptor.encrypt(`+1555000${uid}`),
+    locale: "en-US",
+  };
+
+  // care-y-ignore-next-line no-plaintext-db-write -- phone_hash is a blind index, encrypted_number passes through noopEncryptor.encrypt() above
+  const phone = await db
+    .insertInto("phones")
+    .values(phoneRow)
+    .returning("id")
+    .executeTakeFirstOrThrow();
+
+  // care-y-ignore-next-line no-plaintext-db-write -- phone_id is a UUID FK (not PII); alias is a random test identifier
+  const client = await db
+    .insertInto("clients")
+    .values({ alias: `cl-${uid}`, phone_id: phone.id })
+    .returning("id")
+    .executeTakeFirstOrThrow();
+
+  let queueId: string;
+  if (options?.queueId) {
+    queueId = options.queueId;
+  } else {
+    const q = await createTestQueue(db);
+    queueId = q.id;
+  }
+
+  const ticket = await db
+    .insertInto("tickets")
+    .values({
+      client_id: client.id,
+      queue_id: queueId,
+      encrypted_title: noopEncryptor.encrypt("test-title"),
+      encrypted_description: noopEncryptor.encrypt("test-desc"),
+      key_generation: crypto.randomUUID(),
+    })
+    .returning("id")
+    .executeTakeFirstOrThrow();
+
+  let userId: string | null = null;
+  if (options?.createUser) {
+    const user = await createTestUser(db);
+    userId = user.id;
+
+    // Add user to queue so TicketAccessChecker grants access via queue
+    // membership. Reflects production: volunteers in a queue are members.
+    // care-y-ignore-next-line no-plaintext-db-write -- queue_assignments contains only opaque UUIDs (queue_id, user_id), no PII
+    await db
+      .insertInto("queue_assignments")
+      .values({ queue_id: queueId, user_id: userId })
+      .onConflict((oc) => oc.columns(["queue_id", "user_id"]).doNothing())
+      .execute();
+  }
+
+  return {
+    phoneId: phone.id,
+    clientId: client.id,
+    queueId,
+    ticketId: ticket.id,
+    userId,
+  };
+}
+
+export interface TestClientFixture {
+  readonly phoneId: string;
+  readonly clientId: string;
+  readonly queueId: string;
+  readonly userId: string;
+}
+
+/**
+ * Inserts phone -> client -> queue -> user (no ticket). For tests that
+ * need a client entity without an associated ticket.
+ */
+export async function createTestClientFixture(
+  db: Kysely<TenantDatabase>,
+  options?: { queueId?: string },
+): Promise<TestClientFixture> {
+  const uid = crypto.randomUUID().slice(0, 8);
+
+  const phoneRow = {
+    phone_hash: `ph-${uid}`,
+    encrypted_number: noopEncryptor.encrypt(`+1555000${uid}`),
+    locale: "en-US",
+  };
+
+  // care-y-ignore-next-line no-plaintext-db-write -- phone_hash is a blind index, encrypted_number passes through noopEncryptor.encrypt() above
+  const phone = await db
+    .insertInto("phones")
+    .values(phoneRow)
+    .returning("id")
+    .executeTakeFirstOrThrow();
+
+  // care-y-ignore-next-line no-plaintext-db-write -- phone_id is a UUID FK (not PII); alias is a random test identifier
+  const client = await db
+    .insertInto("clients")
+    .values({ alias: `cl-${uid}`, phone_id: phone.id })
+    .returning("id")
+    .executeTakeFirstOrThrow();
+
+  let queueId: string;
+  if (options?.queueId) {
+    queueId = options.queueId;
+  } else {
+    const q = await createTestQueue(db);
+    queueId = q.id;
+  }
+
+  const user = await createTestUser(db);
+
+  // Add user to queue so TicketAccessChecker grants access via queue membership.
+  // care-y-ignore-next-line no-plaintext-db-write -- queue_assignments contains only opaque UUIDs (queue_id, user_id), no PII
+  await db
+    .insertInto("queue_assignments")
+    .values({ queue_id: queueId, user_id: user.id })
+    .onConflict((oc) => oc.columns(["queue_id", "user_id"]).doNothing())
+    .execute();
+
+  return {
+    phoneId: phone.id,
+    clientId: client.id,
+    queueId,
+    userId: user.id,
+  };
 }
 
 // ---------------------------------------------------------------------------
