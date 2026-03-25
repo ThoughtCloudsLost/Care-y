@@ -1,2 +1,220 @@
 @import "tailwindcss";
 @import "konsta/svelte/theme.css";
+
+/* --- Font faces (self-hosted, COEP require-corp blocks Google Fonts CDN) --- */
+
+/* Syne: display / headlines. Variable font covering 700-800 weight range. */
+@font-face {
+  font-family: "Syne";
+  src: url("/fonts/Syne-latin-ext.woff2") format("woff2");
+  font-weight: 700 800;
+  font-style: normal;
+  font-display: swap;
+  unicode-range:
+    U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304,
+    U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB,
+    U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+@font-face {
+  font-family: "Syne";
+  src: url("/fonts/Syne-latin.woff2") format("woff2");
+  font-weight: 700 800;
+  font-style: normal;
+  font-display: swap;
+  unicode-range:
+    U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC,
+    U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212,
+    U+2215, U+FEFF, U+FFFD;
+}
+
+/* Space Grotesk: UI chrome / body. Variable font covering 400-500 weight range. */
+@font-face {
+  font-family: "Space Grotesk";
+  src: url("/fonts/SpaceGrotesk-latin-ext.woff2") format("woff2");
+  font-weight: 400 500;
+  font-style: normal;
+  font-display: swap;
+  unicode-range:
+    U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304,
+    U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB,
+    U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+@font-face {
+  font-family: "Space Grotesk";
+  src: url("/fonts/SpaceGrotesk-latin.woff2") format("woff2");
+  font-weight: 400 500;
+  font-style: normal;
+  font-display: swap;
+  unicode-range:
+    U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC,
+    U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212,
+    U+2215, U+FEFF, U+FFFD;
+}
+
+/* --- Design tokens (Risograph palette) --- */
+:root {
+  /* Core palette */
+  --ink: #0a0a0a;
+  --paper: #f2ede4;
+  --brand-primary: #ff5c35;
+  --surface-1: #ffffff;
+  --surface-2: #f7f3ee;
+  --muted: #8a8580;
+
+  /* Derived from --brand-primary (computed in branding module for org override) */
+  --brand-primary-40: rgba(255, 92, 53, 0.4);
+  --brand-primary-20: rgba(255, 92, 53, 0.2);
+
+  /* Typography */
+  --font-display: "Syne", system-ui, sans-serif;
+  --font-ui: "Space Grotesk", system-ui, sans-serif;
+
+  /* Responsive breakpoints */
+  --bp-tablet: 768px;
+  --bp-desktop: 1024px;
+
+  /* App height (synced by keyboard-viewport.ts for iOS Safari) */
+  --app-height: 100dvh;
+
+  color-scheme: light dark;
+}
+
+/* Dark mode (default) */
+.dark {
+  --ink: #f2ede4;
+  --paper: #0c0c0c;
+  --brand-primary: #ff5c35;
+  --surface-1: #141414;
+  --surface-2: #1c1c1c;
+  --muted: #6a6560;
+  --brand-primary-40: rgba(255, 92, 53, 0.4);
+  --brand-primary-20: rgba(255, 92, 53, 0.2);
+}
+
+/* Light mode */
+.light {
+  --ink: #0a0a0a;
+  --paper: #f2ede4;
+  --surface-1: #ffffff;
+  --surface-2: #f7f3ee;
+  --muted: #8a8580;
+}
+
+/* Base typography */
+body {
+  font-family: var(--font-ui);
+  background-color: var(--paper);
+  color: var(--ink);
+}
+
+/* Responsive breakpoint utilities (Tailwind v4 custom screens) */
+@theme {
+  --breakpoint-tablet: 768px;
+  --breakpoint-desktop: 1024px;
+}
+
+/* Accessibility: reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* Accessibility: high contrast disables decorative textures */
+@media (prefers-contrast: more) {
+  .grain::before,
+  .halftone::after {
+    display: none !important;
+  }
+
+  .riso-heading {
+    filter: none !important;
+  }
+
+  .riso-heading-compact {
+    text-shadow: none !important;
+  }
+}
+
+/* --- Riso effect classes (used by texture components) --- */
+
+.riso-heading {
+  font-family: var(--font-display);
+  font-weight: 800;
+  filter: url(#riso-ink);
+}
+
+.riso-heading-compact {
+  font-family: var(--font-display);
+  font-weight: 700;
+  text-shadow: 1.5px 1.5px 0 var(--brand-primary-40);
+}
+
+/* Grain texture overlay (applied via ::before on .grain containers) */
+.grain {
+  position: relative;
+  isolation: isolate;
+}
+
+.grain::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  opacity: 0.03;
+  background-image: url("/styles/grain.svg");
+  background-repeat: repeat;
+  background-size: 182px;
+  pointer-events: none;
+  z-index: 1;
+}
+
+/* Halftone dot pattern overlay (applied via ::after on .halftone containers) */
+.halftone {
+  position: relative;
+  isolation: isolate;
+}
+
+.halftone::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image: radial-gradient(
+    circle,
+    currentColor var(--dot-size, 1px),
+    transparent 0
+  );
+  background-size: var(--dot-spacing, 8px) var(--dot-spacing, 8px);
+  opacity: 0.04;
+  pointer-events: none;
+  z-index: 1;
+}
+
+/* Skeleton bar animation (used by RisoSkeleton) */
+@media (prefers-reduced-motion: no-preference) {
+  @keyframes skeleton-extend {
+    from {
+      transform: scaleX(0);
+    }
+    to {
+      transform: scaleX(1);
+    }
+  }
+}
+
+.skeleton-bar {
+  height: 12px;
+  background: var(--muted);
+  border-radius: 2px;
+  transform-origin: left;
+  opacity: 0.3;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .skeleton-bar {
+    animation: skeleton-extend 0.8s linear infinite alternate;
+  }
+}
