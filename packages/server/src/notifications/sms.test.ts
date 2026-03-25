@@ -4,7 +4,7 @@ import type {
   TelephonyProvider,
   SendSmsResult,
 } from "../telephony/provider.js";
-import { NotificationError } from "../errors.js";
+import { NotificationError, TelephonyError } from "../errors.js";
 
 function mockProvider(
   behavior: "success" | "fail" = "success",
@@ -20,7 +20,7 @@ function mockProvider(
     ): Promise<SendSmsResult> {
       calls.push({ to, body, callerId });
       if (behavior === "fail") {
-        throw new Error("Carrier rejected");
+        throw new TelephonyError("Carrier rejected");
       }
       return { messageId: "SM_test_123" };
     },
@@ -92,7 +92,7 @@ describe("createNotificationSmsSender", () => {
     ).rejects.toThrow(NotificationError);
   });
 
-  it("includes original error message in NotificationError", async () => {
+  it("uses generic message without leaking provider error details", async () => {
     const provider = mockProvider("fail");
     const sender = createNotificationSmsSender(async () => provider, "org-123");
 
@@ -102,6 +102,6 @@ describe("createNotificationSmsSender", () => {
         fromPhoneNumber: "+15559876543",
         body: "ping",
       }),
-    ).rejects.toThrow("Carrier rejected");
+    ).rejects.toThrow("SMS ping delivery failed");
   });
 });

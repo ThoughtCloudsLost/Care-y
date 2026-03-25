@@ -23,9 +23,11 @@ export function createNotificationSmsSender(
       try {
         await provider.sendSms(toPhoneNumber, body, fromPhoneNumber);
       } catch (err: unknown) {
-        throw new NotificationError(
-          `SMS ping delivery failed: ${err instanceof Error ? err.message : String(err)}`,
+        console.error(
+          "SMS ping delivery failed:",
+          err instanceof Error ? err.message : String(err),
         );
+        throw new NotificationError("SMS ping delivery failed");
       }
     },
   };
