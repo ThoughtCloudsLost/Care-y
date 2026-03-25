@@ -22,7 +22,11 @@ const TEST_SMTP_PORT = 1025;
 const TEST_FROM = "noreply@test.com";
 
 function createTestSmtpSender(): ReturnType<typeof createSmtpEmailSender> {
-  return createSmtpEmailSender(TEST_SMTP_HOST, TEST_SMTP_PORT, TEST_FROM);
+  return createSmtpEmailSender({
+    host: TEST_SMTP_HOST,
+    port: TEST_SMTP_PORT,
+    from: TEST_FROM,
+  });
 }
 
 const testMessage: EmailMessage = {
@@ -33,7 +37,21 @@ const testMessage: EmailMessage = {
 };
 
 describe("createConsoleEmailSender", () => {
-  it("logs subject and text length but redacts recipient", async () => {
+  it("never logs the recipient address (PII redaction contract)", async () => {
+    const consoleSpy = vi.spyOn(console, "log").mockReturnValue(undefined);
+    const sender = createConsoleEmailSender();
+
+    await sender.send(testMessage);
+
+    const loggedLine = consoleSpy.mock.calls[0]?.[0] as string;
+    expect(loggedLine).not.toContain("user@example.com");
+
+    consoleSpy.mockRestore();
+  });
+
+  // Ops observability contract: structured log line is parsed by log aggregators.
+  // Changing the format requires a coordinated update to log parsing rules.
+  it("emits structured log with subject and text length", async () => {
     const consoleSpy = vi.spyOn(console, "log").mockReturnValue(undefined);
     const sender = createConsoleEmailSender();
 
@@ -42,7 +60,6 @@ describe("createConsoleEmailSender", () => {
     expect(consoleSpy).toHaveBeenCalledOnce();
     const loggedLine = consoleSpy.mock.calls[0]?.[0] as string;
     expect(loggedLine).toContain("<redacted>");
-    expect(loggedLine).not.toContain("user@example.com");
     expect(loggedLine).toContain("Your verification code");
     expect(loggedLine).toContain(`length=${String(testMessage.text.length)}`);
 
@@ -92,19 +109,18 @@ describe("createSmtpEmailSender", () => {
 
     await sender.send(textOnly);
 
-    expect(mockSendMail).toHaveBeenCalledWith(
-      expect.objectContaining({ html: undefined }),
-    );
+    const envelope = mockSendMail.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(envelope.html).toBeFalsy();
   });
 
   describe("error classification", () => {
     it("throws EmailDeliveryError with 400 for 550 recipient rejection", async () => {
       mockSendMail.mockRejectedValueOnce(new Error("550 User not found"));
-      const sender = createSmtpEmailSender(
-        "localhost",
-        1025,
-        "noreply@test.com",
-      );
+      const sender = createSmtpEmailSender({
+        host: "localhost",
+        port: 1025,
+        from: "noreply@test.com",
+      });
 
       try {
         await sender.send(testMessage);
@@ -121,11 +137,11 @@ describe("createSmtpEmailSender", () => {
       mockSendMail.mockRejectedValueOnce(
         new Error("553 Mailbox name not allowed"),
       );
-      const sender = createSmtpEmailSender(
-        "localhost",
-        1025,
-        "noreply@test.com",
-      );
+      const sender = createSmtpEmailSender({
+        host: "localhost",
+        port: 1025,
+        from: "noreply@test.com",
+      });
 
       try {
         await sender.send(testMessage);
@@ -140,11 +156,11 @@ describe("createSmtpEmailSender", () => {
       mockSendMail.mockRejectedValueOnce(
         new Error("551 User not local; please try <forward-path>"),
       );
-      const sender = createSmtpEmailSender(
-        "localhost",
-        1025,
-        "noreply@test.com",
-      );
+      const sender = createSmtpEmailSender({
+        host: "localhost",
+        port: 1025,
+        from: "noreply@test.com",
+      });
 
       try {
         await sender.send(testMessage);
@@ -157,11 +173,11 @@ describe("createSmtpEmailSender", () => {
 
     it("throws EmailDeliveryError with 503 for connection refused", async () => {
       mockSendMail.mockRejectedValueOnce(new Error("connect ECONNREFUSED"));
-      const sender = createSmtpEmailSender(
-        "localhost",
-        1025,
-        "noreply@test.com",
-      );
+      const sender = createSmtpEmailSender({
+        host: "localhost",
+        port: 1025,
+        from: "noreply@test.com",
+      });
 
       try {
         await sender.send(testMessage);
@@ -176,11 +192,11 @@ describe("createSmtpEmailSender", () => {
 
     it("throws EmailDeliveryError with 503 for timeout", async () => {
       mockSendMail.mockRejectedValueOnce(new Error("Connection timeout"));
-      const sender = createSmtpEmailSender(
-        "localhost",
-        1025,
-        "noreply@test.com",
-      );
+      const sender = createSmtpEmailSender({
+        host: "localhost",
+        port: 1025,
+        from: "noreply@test.com",
+      });
 
       try {
         await sender.send(testMessage);
@@ -195,11 +211,11 @@ describe("createSmtpEmailSender", () => {
       mockSendMail.mockRejectedValueOnce(
         new Error("421 Service not available, closing transmission channel"),
       );
-      const sender = createSmtpEmailSender(
-        "localhost",
-        1025,
-        "noreply@test.com",
-      );
+      const sender = createSmtpEmailSender({
+        host: "localhost",
+        port: 1025,
+        from: "noreply@test.com",
+      });
 
       try {
         await sender.send(testMessage);
@@ -212,11 +228,11 @@ describe("createSmtpEmailSender", () => {
 
     it("handles non-Error throw from transport", async () => {
       mockSendMail.mockRejectedValueOnce("raw string error");
-      const sender = createSmtpEmailSender(
-        "localhost",
-        1025,
-        "noreply@test.com",
-      );
+      const sender = createSmtpEmailSender({
+        host: "localhost",
+        port: 1025,
+        from: "noreply@test.com",
+      });
 
       try {
         await sender.send(testMessage);
@@ -235,7 +251,11 @@ describe("createEmailSender", () => {
     mockSendMail.mockReset();
     mockSendMail.mockResolvedValueOnce({});
 
-    const sender = createEmailSender("smtp.test.com", 587, TEST_FROM);
+    const sender = createEmailSender({
+      host: "smtp.test.com",
+      port: 587,
+      from: TEST_FROM,
+    });
     await sender.send(testMessage);
 
     expect(mockSendMail).toHaveBeenCalledOnce();
@@ -243,7 +263,7 @@ describe("createEmailSender", () => {
 
   it("returns console sender when host is undefined", async () => {
     const consoleSpy = vi.spyOn(console, "log").mockReturnValue(undefined);
-    const sender = createEmailSender(undefined, undefined, TEST_FROM);
+    const sender = createEmailSender({ from: TEST_FROM });
 
     await sender.send(testMessage);
     expect(consoleSpy).toHaveBeenCalled();
@@ -253,7 +273,10 @@ describe("createEmailSender", () => {
 
   it("returns console sender when port is undefined", async () => {
     const consoleSpy = vi.spyOn(console, "log").mockReturnValue(undefined);
-    const sender = createEmailSender("smtp.test.com", undefined, TEST_FROM);
+    const sender = createEmailSender({
+      host: "smtp.test.com",
+      from: TEST_FROM,
+    });
 
     await sender.send(testMessage);
     expect(consoleSpy).toHaveBeenCalled();

@@ -7,6 +7,7 @@ export interface EmailMessage {
   readonly subject: string;
   readonly text: string;
   readonly html?: string;
+  readonly from?: string; // Per-message override. When absent, uses factory default.
 }
 
 export interface EmailSender {
@@ -24,25 +25,34 @@ function isRecipientRejection(errorMessage: string): boolean {
   return RECIPIENT_REJECTION_CODES.some((code) => errorMessage.includes(code));
 }
 
+export interface SmtpOptions {
+  readonly host: string;
+  readonly port: number;
+  readonly from: string;
+  readonly secure?: boolean;
+  readonly user?: string;
+  readonly password?: string;
+}
+
 /** SMTP-based sender. Works with Mailpit in dev and real SMTP in production. */
-export function createSmtpEmailSender(
-  host: string,
-  port: number,
-  from: string,
-): EmailSender {
+export function createSmtpEmailSender(opts: SmtpOptions): EmailSender {
   const transport: Transporter<SMTPTransport.SentMessageInfo> = createTransport(
     {
-      host,
-      port,
-      secure: false,
+      host: opts.host,
+      port: opts.port,
+      secure: opts.secure ?? false,
+      ...(opts.user !== undefined && opts.password !== undefined
+        ? { auth: { user: opts.user, pass: opts.password } }
+        : {}),
     },
   );
+  const from = opts.from;
 
   return {
     async send(message: EmailMessage): Promise<void> {
       try {
         await transport.sendMail({
-          from,
+          from: message.from ?? from,
           to: message.to,
           subject: message.subject,
           text: message.text,
@@ -81,13 +91,23 @@ export function createConsoleEmailSender(): EmailSender {
 }
 
 /** Creates the appropriate sender based on environment config. */
-export function createEmailSender(
-  smtpHost: string | undefined,
-  smtpPort: number | undefined,
-  from: string,
-): EmailSender {
-  if (smtpHost !== undefined && smtpHost !== "" && smtpPort !== undefined) {
-    return createSmtpEmailSender(smtpHost, smtpPort, from);
+export function createEmailSender(opts: {
+  host?: string;
+  port?: number;
+  from: string;
+  secure?: boolean;
+  user?: string;
+  password?: string;
+}): EmailSender {
+  if (opts.host !== undefined && opts.host !== "" && opts.port !== undefined) {
+    return createSmtpEmailSender({
+      host: opts.host,
+      port: opts.port,
+      from: opts.from,
+      secure: opts.secure,
+      user: opts.user,
+      password: opts.password,
+    });
   }
   return createConsoleEmailSender();
 }

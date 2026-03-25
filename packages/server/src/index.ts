@@ -19,6 +19,7 @@ import type {
   ServerResponse,
 } from "node:http";
 import { createServer } from "node:http";
+import { hkdfSync } from "node:crypto";
 import { createHTTPHandler } from "@trpc/server/adapters/standalone";
 import { db, tenantDb } from "./db/db.js";
 import { sql } from "kysely";
@@ -55,6 +56,7 @@ import {
 } from "./telephony/twilio.js";
 import { createWebhookHandler } from "./routes/webhooks.js";
 import { createRelayHandler, type PendingCall } from "./routes/relay.js";
+import { authenticateRelay } from "./routes/relay-utils.js";
 import { extractOrgSlug } from "./org/slug-resolver.js";
 import { NotFoundError } from "./errors.js";
 import { createPhoneResolver } from "./telephony/phone-resolver.js";
@@ -68,6 +70,35 @@ import { createSealedBoxEncryptor } from "./crypto/sealed-box.js";
 import type { Kysely } from "kysely";
 import type { TenantDatabase } from "./db/types.js";
 import { createWebhookDispatch } from "./telephony/webhook-dispatch.js";
+import { createTicketAccessChecker } from "./tickets/access.js";
+import { createTicketService } from "./tickets/ticket-service.js";
+import { createFollowUpService } from "./tickets/followup-service.js";
+import { createMergeService } from "./tickets/merge-service.js";
+import { createPresetService } from "./tickets/preset-service.js";
+import { createDependencyService } from "./tickets/dependency-service.js";
+import {
+  createMediaService,
+  registerMediaCleanupHandler,
+} from "./tickets/media-service.js";
+import { createQueueService } from "./tickets/queue-service.js";
+import { createAssignmentService } from "./tickets/assignment.js";
+import { createWatchersService } from "./tickets/watchers.js";
+import { createQueuePermissionsService } from "./tickets/queue-permissions.js";
+import {
+  registerEscalationHandler,
+  escalateTenantTickets,
+} from "./tickets/escalation.js";
+import { loadOrCreateVapidKeys } from "./notifications/vapid.js";
+import { createSseService } from "./notifications/sse.js";
+import { createNotificationEmailSender } from "./notifications/email.js";
+import { createPushNotificationSender } from "./notifications/push.js";
+import { createPushSubscriptionService } from "./notifications/push-subscriptions.js";
+import {
+  createNotificationJobHandler,
+  createNotificationService,
+} from "./notifications/service.js";
+import { createSearchService } from "./tickets/search.js";
+import { createAuditService } from "./tickets/audit.js";
 
 // --- DB startup probe ---
 
@@ -91,6 +122,16 @@ interface CryptoServices {
   readonly indexer: BlindIndexer;
   readonly fakeSaltKey: Buffer;
   readonly tokenizer: SessionTokenizer;
+  readonly pushChallengeHmacKey: Buffer;
+}
+
+const PUSH_CHALLENGE_HMAC_INFO = "care-y-push-challenge-v1";
+
+/** Derives the push challenge HMAC key from OPS_SECRETS_KEY via HKDF. */
+function derivePushChallengeHmacKey(opsKey: Buffer): Buffer {
+  return Buffer.from(
+    hkdfSync("sha256", opsKey, Buffer.alloc(0), PUSH_CHALLENGE_HMAC_INFO, 32),
+  );
 }
 
 /** Derives all field-encryption, blind-index, fake-salt, and session-token
@@ -104,7 +145,8 @@ async function deriveCryptoServices(
   const indexer = createBlindIndexer(derived.blindIndexKey);
   const fakeSaltKey = await deriveFakeSaltKey(opsSecretsKeyHex);
   const tokenizer = createSessionTokenizer(deriveSessionHmacKey(opsKey));
-  return { encryptor, indexer, fakeSaltKey, tokenizer };
+  const pushChallengeHmacKey = derivePushChallengeHmacKey(opsKey);
+  return { encryptor, indexer, fakeSaltKey, tokenizer, pushChallengeHmacKey };
 }
 
 // --- CORS ---
@@ -131,12 +173,14 @@ function buildCorsHeaders(origin: string): CorsHeaders {
 // --- HTTP server ---
 
 /** Creates an http.Server that routes /webhooks/* to the webhook handler,
- *  /relay/* to the relay handler, and everything else to tRPC. */
+ *  /relay/* to the relay handler, /notifications/stream to the SSE handler,
+ *  and everything else to tRPC. */
 function createHttpServer(
   trpcHandler: RequestListener,
   preflightHeaders: Record<string, string>,
   onWebhook?: (req: IncomingMessage, res: ServerResponse) => Promise<void>,
   onRelay?: (req: IncomingMessage, res: ServerResponse) => Promise<void>,
+  onSse?: (req: IncomingMessage, res: ServerResponse) => void,
 ): ReturnType<typeof createServer> {
   return createServer((req: IncomingMessage, res: ServerResponse) => {
     if (req.method === "OPTIONS") {
@@ -154,6 +198,11 @@ function createHttpServer(
 
     if (onRelay !== undefined && url.startsWith("/relay/")) {
       void onRelay(req, res);
+      return;
+    }
+
+    if (onSse !== undefined && url.startsWith("/notifications/stream")) {
+      onSse(req, res);
       return;
     }
 
@@ -217,7 +266,7 @@ function createOprfInfrastructure(env: EnvVars): OprfEvaluateService {
 await probeDatabase();
 
 const env: EnvVars = getEnv();
-const { encryptor, indexer, fakeSaltKey, tokenizer } =
+const { encryptor, indexer, fakeSaltKey, tokenizer, pushChallengeHmacKey } =
   await deriveCryptoServices(env.OPS_SECRETS_KEY);
 
 // --- Telephony provider factory ---
@@ -249,12 +298,32 @@ const blobStore: BlobStore = createBlobStore(
 const orgService = createOrgService(db, tenantDb);
 const hasher = createScryptHasher();
 const { loginLimiter, saltLimiter } = createAuthRateLimiters();
-const emailSender = createEmailSender(
-  env.SMTP_HOST,
-  env.SMTP_PORT,
-  env.SMTP_FROM,
-);
+const emailSender = createEmailSender({
+  host: env.SMTP_HOST,
+  port: env.SMTP_PORT,
+  from: env.SMTP_FROM,
+  secure: env.SMTP_SECURE,
+  user: env.SMTP_USER,
+  password: env.SMTP_PASSWORD,
+});
 const oprfService = createOprfInfrastructure(env);
+
+// --- Notification infrastructure ---
+
+const vapidKeys = await loadOrCreateVapidKeys(db, secretsEncryptor);
+const sseService = createSseService();
+const notificationEmailSender = createNotificationEmailSender(emailSender);
+const pushSender = createPushNotificationSender(vapidKeys, "admin@care-y.app");
+
+// Job queue created early so NotificationService can use it during routing.
+const jobQueue = createJobQueue(db);
+
+const notificationService = createNotificationService({
+  sse: sseService,
+  emailSender: notificationEmailSender,
+  pushSender,
+  jobQueue,
+});
 
 const createContext = createContextFactory({
   orgService,
@@ -312,6 +381,8 @@ const appRouter = createAppRouter({
     tokenizer,
     providerFactory,
     resolveCallerId: phoneResolver,
+    pushSender,
+    pushHmacKey: pushChallengeHmacKey,
   },
   oprfDeps: { oprfService },
   orgService,
@@ -319,6 +390,31 @@ const appRouter = createAppRouter({
   telephonyAdminDeps: {
     configService: telephonyConfigService,
     webhookBaseUrl: env.WEBHOOK_BASE_URL,
+  },
+  ticketDeps: {
+    blobStore,
+    createTicketAccess: createTicketAccessChecker,
+    createTicketSvc: createTicketService,
+    createFollowUpSvc: createFollowUpService,
+    createMergeSvc: createMergeService,
+    createPresetSvc: createPresetService,
+    createDependencySvc: createDependencyService,
+    createMediaSvc: createMediaService,
+    createQueueSvc: createQueueService,
+    createAssignmentSvc: createAssignmentService,
+    createWatchersSvc: createWatchersService,
+    createQueuePermissionsSvc: createQueuePermissionsService,
+    createSearchSvc: (tDb) =>
+      createSearchService(tDb, async (userId) => {
+        const qps = createQueuePermissionsService(tDb);
+        return qps.getUserQueues(userId);
+      }),
+    createAuditSvc: createAuditService,
+    notificationService,
+  },
+  notificationDeps: {
+    createPushSubSvc: (tDb) => createPushSubscriptionService(tDb, pushSender),
+    vapidPublicKey: vapidKeys.publicKey,
   },
 });
 
@@ -333,10 +429,39 @@ const trpcHandler = createHTTPHandler({
   },
 });
 
-// --- Job queue ---
+// --- Job queue handlers ---
 
-const jobQueue = createJobQueue(db);
+/** Lists schema names for all active orgs. Used by cross-tenant job handlers. */
+async function listActiveOrgSchemas(): Promise<string[]> {
+  const orgs = await db
+    .selectFrom("orgs")
+    .select("schema_name")
+    .where("is_active", "=", true)
+    .execute();
+  return orgs.map((o) => o.schema_name);
+}
+
 registerLogDeletionHandler(jobQueue, providerFactory);
+registerMediaCleanupHandler(
+  jobQueue,
+  tenantDb,
+  blobStore,
+  listActiveOrgSchemas,
+);
+
+const notificationJobHandler = createNotificationJobHandler({
+  emailSender: notificationEmailSender,
+  encryptor,
+  getTenantDb: tenantDb,
+});
+jobQueue.process("notification-email", notificationJobHandler);
+
+registerEscalationHandler(jobQueue, async () => {
+  const schemas = await listActiveOrgSchemas();
+  for (const schema of schemas) {
+    await escalateTenantTickets(tenantDb(schema));
+  }
+});
 jobQueue.start();
 console.log("Job queue started");
 
@@ -374,16 +499,33 @@ const webhookHandler = createWebhookHandler(
 
 const pendingCalls = new Map<string, PendingCall>();
 
-// Pending call cleanup (2-minute TTL). Zeroes phone buffers on eviction.
-const pendingCallCleanupInterval = setInterval(() => {
+/** Zeros sensitive buffers in a pending call entry. */
+function zeroPendingCallBuffers(pending: PendingCall): void {
+  pending.clientPhoneBuf.fill(0);
+  pending.callerIdBuf.fill(0);
+}
+
+/** Evicts pending calls older than TTL, zeroing sensitive buffers. */
+function evictExpiredPendingCalls(calls: Map<string, PendingCall>): void {
   const cutoff = Date.now() - 2 * 60 * 1000;
-  for (const [sid, pending] of pendingCalls) {
+  for (const [sid, pending] of calls) {
     if (pending.createdAt < cutoff) {
-      pending.clientPhoneBuf.fill(0);
-      pending.callerIdBuf.fill(0);
-      pendingCalls.delete(sid);
+      zeroPendingCallBuffers(pending);
+      calls.delete(sid);
     }
   }
+}
+
+/** Zeros and clears all pending calls. Used during graceful shutdown. */
+function zeroAllPendingCalls(calls: Map<string, PendingCall>): void {
+  for (const [, pending] of calls) {
+    zeroPendingCallBuffers(pending);
+  }
+  calls.clear();
+}
+
+const pendingCallCleanupInterval = setInterval(() => {
+  evictExpiredPendingCalls(pendingCalls);
 }, 60_000);
 
 // Org resolver for relay endpoints: uses the shared extractOrgSlug utility
@@ -417,6 +559,17 @@ async function createRelaySessionRepo(
   return createDbSessionRepository(tDb, tokenizer, sealedBox);
 }
 
+/** Looks up webhook config for an org. Shared by relay auth token + account SID resolution. */
+async function requireWebhookConfig(
+  orgId: string,
+): Promise<{ accountSid: string; authToken: string }> {
+  const lookup = await telephonyConfigService.lookupWebhookConfig(orgId);
+  if (!lookup) {
+    throw new NotFoundError(`No telephony config for org ${orgId}`);
+  }
+  return lookup;
+}
+
 const relayHandler = createRelayHandler({
   getProvider: async (orgId: string) => providerFactory.getProvider(orgId),
   getTenantDb: tenantDb,
@@ -430,11 +583,7 @@ const relayHandler = createRelayHandler({
     return lookup?.authToken ?? null;
   },
   async getAccountSid(orgId: string) {
-    const lookup = await telephonyConfigService.lookupWebhookConfig(orgId);
-    if (!lookup) {
-      throw new NotFoundError(`No telephony config for org ${orgId}`);
-    }
-    return lookup.accountSid;
+    return (await requireWebhookConfig(orgId)).accountSid;
   },
   apiKeySid: env.TWILIO_API_KEY_SID ?? "",
   apiKeySecret: env.TWILIO_API_KEY_SECRET ?? "",
@@ -446,11 +595,50 @@ const relayHandler = createRelayHandler({
 
 // --- HTTP server ---
 
+// SSE handler (raw HTTP, not tRPC). Session auth follows the relay pattern.
+function handleSse(req: IncomingMessage, res: ServerResponse): void {
+  void (async () => {
+    const result = await authenticateRelay(
+      req,
+      relayOrgResolver,
+      createRelaySessionRepo,
+    );
+
+    if (!result.ok) {
+      res.writeHead(result.status, { "Content-Type": "text/plain" });
+      res.end("Unauthorized");
+      return;
+    }
+
+    // Set CORS headers for SSE (same origin policy applies)
+    res.setHeader("Access-Control-Allow-Origin", env.CORS_ORIGIN);
+    res.setHeader("Access-Control-Allow-Credentials", "true");
+
+    // Parse Last-Event-ID for reconnection replay
+    const lastEventIdHeader = req.headers["last-event-id"];
+    const lastEventId =
+      typeof lastEventIdHeader === "string"
+        ? Number(lastEventIdHeader)
+        : undefined;
+
+    const cleanup = sseService.connect(
+      res,
+      result.session.userId,
+      result.session.orgSchema,
+      Number.isFinite(lastEventId) ? lastEventId : undefined,
+    );
+
+    req.on("close", cleanup);
+    res.on("close", cleanup);
+  })();
+}
+
 const server = createHttpServer(
   trpcHandler,
   cors.preflight,
   webhookHandler,
   relayHandler,
+  handleSse,
 );
 const port = Number(process.env.PORT ?? 3000);
 server.listen(port);
@@ -461,14 +649,10 @@ console.log(`Server ready on port ${String(port)}`);
 async function shutdown(signal: string): Promise<void> {
   console.log(`${signal} received, shutting down`);
   server.close();
+  sseService.closeAll();
   webhookDedupStore.stop();
   clearInterval(pendingCallCleanupInterval);
-  // Zero any remaining pending call buffers
-  for (const [, pending] of pendingCalls) {
-    pending.clientPhoneBuf.fill(0);
-    pending.callerIdBuf.fill(0);
-  }
-  pendingCalls.clear();
+  zeroAllPendingCalls(pendingCalls);
   await jobQueue.stop();
   await db.destroy();
   process.exit(0);

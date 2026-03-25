@@ -156,6 +156,8 @@ describe.skipIf(!HAS_DB)("auth + org routers (DB integration)", () => {
         tokenizer: testSessionTokenizer,
         providerFactory: createMockProviderFactory(),
         resolveCallerId: vi.fn().mockResolvedValue("+15551234567"),
+        pushSender: null,
+        pushHmacKey: null,
       },
       oprfDeps: createMockOprfDeps(),
       orgService,

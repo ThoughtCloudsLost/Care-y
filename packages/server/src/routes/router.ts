@@ -20,6 +20,12 @@ import {
 } from "./telephony-admin.js";
 import { createTelephonyContentRouter } from "./telephony-content.js";
 import { createConsultantRouter } from "./consultant.js";
+import { createTicketRouter, type TicketRouterDeps } from "./tickets.js";
+import { createKbRouter, type KBRouterDeps } from "./kb.js";
+import {
+  createNotificationRouter,
+  type NotificationRouterDeps,
+} from "./notifications.js";
 import type { AuthRouterDeps } from "./auth.js";
 import type { OrgService } from "../org/service.js";
 import type { ProviderFactory } from "../telephony/factory.js";
@@ -37,6 +43,9 @@ export interface RouterDeps {
   readonly telephonyAdminDeps?: TelephonyAdminRouterDeps;
   readonly includeTelephonyContent?: boolean;
   readonly includeConsultant?: boolean;
+  readonly ticketDeps?: TicketRouterDeps;
+  readonly kbDeps?: KBRouterDeps;
+  readonly notificationDeps?: NotificationRouterDeps;
 }
 
 // care-y-ignore-next-line missing-return-type -- tRPC router() returns a deeply generic type that cannot be written explicitly
@@ -64,6 +73,13 @@ export function createAppRouter(deps: RouterDeps) {
       : {}),
     ...(deps.includeConsultant !== false
       ? { consultant: createConsultantRouter() }
+      : {}),
+    ...(deps.ticketDeps
+      ? { tickets: createTicketRouter(deps.ticketDeps) }
+      : {}),
+    ...(deps.kbDeps ? { kb: createKbRouter(deps.kbDeps) } : {}),
+    ...(deps.notificationDeps
+      ? { notifications: createNotificationRouter(deps.notificationDeps) }
       : {}),
   });
 }

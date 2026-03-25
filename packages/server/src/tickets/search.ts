@@ -1,0 +1,207 @@
+// Search service: metadata filtering (server-side SQL) and content search
+// (returns paginated encrypted blobs for client-side decrypt + text matching).
+// Encryption precludes server-side content search. At CARE-Y scale
+// (200-2,000 tickets), client-side decrypt + search is fast.
+
+import type { Kysely } from "kysely";
+import type { TenantDatabase } from "../db/types.js";
+import type { MetadataSearchInput, ContentSearchInput } from "@care-y/shared";
+import { toCount } from "../db/query-utils.js";
+
+export interface MetadataSearchResult {
+  readonly tickets: readonly {
+    readonly id: string;
+    readonly clientAlias: string;
+    readonly status: string;
+    readonly priority: string;
+    readonly queueId: string;
+    readonly assignedTo: string | null;
+    readonly onHold: boolean;
+    readonly createdAt: Date;
+  }[];
+  readonly total: number;
+  readonly page: number;
+  readonly pageSize: number;
+}
+
+export interface ContentSearchResult {
+  readonly tickets: readonly {
+    readonly id: string;
+    readonly encryptedTitle: string; // base64-encoded ciphertext
+    readonly encryptedDescription: string; // base64-encoded ciphertext
+    readonly status: string;
+    readonly queueId: string;
+    readonly createdAt: Date;
+  }[];
+  readonly total: number;
+  readonly page: number;
+  readonly pageSize: number;
+}
+
+export interface SearchService {
+  metadataSearch(
+    input: MetadataSearchInput,
+    userId: string,
+  ): Promise<MetadataSearchResult>;
+
+  contentSearch(
+    input: ContentSearchInput,
+    userId: string,
+  ): Promise<ContentSearchResult>;
+}
+
+export function createSearchService(
+  db: Kysely<TenantDatabase>,
+  getAccessibleQueueIds: (userId: string) => Promise<readonly string[]>,
+): SearchService {
+  return {
+    async metadataSearch(input, userId) {
+      const accessibleQueues = await getAccessibleQueueIds(userId);
+      if (accessibleQueues.length === 0) {
+        return {
+          tickets: [],
+          total: 0,
+          page: input.page,
+          pageSize: input.pageSize,
+        };
+      }
+
+      let query = db
+        .selectFrom("tickets")
+        .innerJoin("clients", "clients.id", "tickets.client_id")
+        .where("tickets.queue_id", "in", [...accessibleQueues])
+        .select([
+          "tickets.id",
+          "clients.alias as clientAlias",
+          "tickets.status",
+          "tickets.priority",
+          "tickets.queue_id as queueId",
+          "tickets.assigned_to as assignedTo",
+          "tickets.on_hold as onHold",
+          "tickets.created_at as createdAt",
+        ]);
+
+      if (input.status !== undefined) {
+        query = query.where("tickets.status", "=", input.status);
+      }
+      if (input.queueId !== undefined) {
+        query = query.where("tickets.queue_id", "=", input.queueId);
+      }
+      if (input.assignedTo !== undefined) {
+        query = query.where("tickets.assigned_to", "=", input.assignedTo);
+      }
+      if (input.clientAlias !== undefined) {
+        // Escape SQL LIKE wildcards in user input
+        const escaped = input.clientAlias.replace(/[%_\\]/g, "\\$&");
+        query = query.where("clients.alias", "ilike", `%${escaped}%`);
+      }
+      if (input.dateFrom !== undefined) {
+        query = query.where(
+          "tickets.created_at",
+          ">=",
+          new Date(input.dateFrom),
+        );
+      }
+      if (input.dateTo !== undefined) {
+        query = query.where("tickets.created_at", "<=", new Date(input.dateTo));
+      }
+
+      // Count total before pagination
+      const countResult = await db
+        .selectFrom("tickets")
+        .innerJoin("clients", "clients.id", "tickets.client_id")
+        .where("tickets.queue_id", "in", [...accessibleQueues])
+        .$call((qb) => {
+          let q = qb;
+          if (input.status !== undefined)
+            q = q.where("tickets.status", "=", input.status);
+          if (input.queueId !== undefined)
+            q = q.where("tickets.queue_id", "=", input.queueId);
+          if (input.assignedTo !== undefined)
+            q = q.where("tickets.assigned_to", "=", input.assignedTo);
+          if (input.clientAlias !== undefined) {
+            const escaped = input.clientAlias.replace(/[%_\\]/g, "\\$&");
+            q = q.where("clients.alias", "ilike", `%${escaped}%`);
+          }
+          if (input.dateFrom !== undefined)
+            q = q.where("tickets.created_at", ">=", new Date(input.dateFrom));
+          if (input.dateTo !== undefined)
+            q = q.where("tickets.created_at", "<=", new Date(input.dateTo));
+          return q;
+        })
+        .select(db.fn.countAll().as("count"))
+        .executeTakeFirstOrThrow();
+
+      const tickets = await query
+        .orderBy("tickets.created_at", "desc")
+        .limit(input.pageSize)
+        .offset((input.page - 1) * input.pageSize)
+        .execute();
+
+      return {
+        tickets,
+        total: toCount(countResult),
+        page: input.page,
+        pageSize: input.pageSize,
+      };
+    },
+
+    async contentSearch(input, userId) {
+      const accessibleQueues = await getAccessibleQueueIds(userId);
+      if (accessibleQueues.length === 0) {
+        return {
+          tickets: [],
+          total: 0,
+          page: input.page,
+          pageSize: input.pageSize,
+        };
+      }
+
+      let baseQuery = db
+        .selectFrom("tickets")
+        .where("queue_id", "in", [...accessibleQueues]);
+
+      if (input.status !== undefined) {
+        baseQuery = baseQuery.where("status", "=", input.status);
+      }
+      if (input.queueId !== undefined) {
+        baseQuery = baseQuery.where("queue_id", "=", input.queueId);
+      }
+
+      const countResult = await baseQuery
+        .select(db.fn.countAll().as("count"))
+        .executeTakeFirstOrThrow();
+
+      const rows = await baseQuery
+        .select([
+          "id",
+          "encrypted_title as encryptedTitle",
+          "encrypted_description as encryptedDescription",
+          "status",
+          "queue_id as queueId",
+          "created_at as createdAt",
+        ])
+        .orderBy("created_at", "desc")
+        .limit(input.pageSize)
+        .offset((input.page - 1) * input.pageSize)
+        .execute();
+
+      // Convert Buffer to base64 for JSON transport over tRPC.
+      // Kysely types these as Buffer (bytea columns from TicketsTable).
+      const tickets = rows.map((row) => ({
+        ...row,
+        encryptedTitle: Buffer.from(row.encryptedTitle).toString("base64"),
+        encryptedDescription: Buffer.from(row.encryptedDescription).toString(
+          "base64",
+        ),
+      }));
+
+      return {
+        tickets,
+        total: toCount(countResult),
+        page: input.page,
+        pageSize: input.pageSize,
+      };
+    },
+  };
+}

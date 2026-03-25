@@ -175,6 +175,36 @@ export class AttachmentValidationError extends AppError {
   }
 }
 
+/** Ticket operation failed (close with unresolved deps, invalid state transition) */
+export class TicketError extends AppError {
+  readonly code = "TICKET_ERROR" as const;
+  readonly httpStatus = 422;
+}
+
+/** Client merge operation failed (self-merge, already merged, undo locked) */
+export class MergeError extends AppError {
+  readonly code = "MERGE_ERROR" as const;
+  readonly httpStatus = 422;
+}
+
+/** Notification delivery failed (SSE, email, SMS, push) */
+export class NotificationError extends AppError {
+  readonly code = "NOTIFICATION_ERROR" as const;
+  readonly httpStatus = 500;
+}
+
+/** Search query failed (invalid filter, query error) */
+export class SearchError extends AppError {
+  readonly code = "SEARCH_ERROR" as const;
+  readonly httpStatus = 400;
+}
+
+/** Audit log operation failed */
+export class AuditError extends AppError {
+  readonly code = "AUDIT_ERROR" as const;
+  readonly httpStatus = 500;
+}
+
 export function isAppError(err: unknown): err is AppError {
   return err instanceof AppError;
 }
