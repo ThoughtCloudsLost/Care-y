@@ -4,6 +4,7 @@
   import { QueryClient, QueryClientProvider } from "@tanstack/svelte-query";
   import favicon from "$lib/assets/favicon.svg";
   import { themeStore } from "$lib/stores/theme.svelte";
+  import RisoInkFilter from "$lib/components/RisoInkFilter.svelte";
 
   let { children } = $props();
 
@@ -21,6 +22,8 @@
 <svelte:head>
   <link rel="icon" href={favicon} />
 </svelte:head>
+
+<RisoInkFilter />
 
 <QueryClientProvider client={queryClient}>
   <App theme={themeStore.current}>
