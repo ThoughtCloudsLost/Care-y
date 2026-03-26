@@ -1,11 +1,16 @@
 <!--
-  Bottom tab bar: 3 tabs grouped left (Home, Tickets, Calendar), More isolated right.
-  Uses Konsta Toolbar with tabbar={true} for custom flex layout (Tabbar forces equal spacing).
-  Follows WAI-ARIA APG tabs pattern: arrow keys, Home/End, role="tablist", aria-selected.
+  Bottom tab bar using Konsta's Tabbar for native chrome (background, safe areas,
+  correct height per theme). Buttons use manual Konsta tabbar-link classes for
+  native styling while keeping WAI-ARIA APG tabs pattern (role="tab",
+  aria-selected, roving tabindex, arrow key navigation).
+
+  Konsta's Link component hardcodes role="link" after the prop spread (Link.svelte
+  line 128), making it impossible to pass role="tab". Custom buttons are necessary.
 -->
 <script lang="ts">
-  import { Toolbar } from "konsta/svelte";
+  import { Tabbar } from "konsta/svelte";
   import { TAB_IDS, type AppTabbarProps, type TabId } from "./types";
+  import { themeStore } from "$lib/stores/theme.svelte";
 
   let { active, ontabchange }: AppTabbarProps = $props();
 
@@ -15,17 +20,14 @@
     readonly icon: string;
   }
 
-  const mainTabs: readonly TabDef[] = [
+  const allTabs: readonly TabDef[] = [
     { id: "home", label: "Home", icon: "house" },
     { id: "tickets", label: "Tickets", icon: "list" },
     { id: "calendar", label: "Calendar", icon: "calendar" },
+    { id: "more", label: "More", icon: "menu" },
   ] as const;
 
-  const moreTab: TabDef = {
-    id: "more",
-    label: "More",
-    icon: "menu",
-  } as const;
+  const activeIndex = $derived(TAB_IDS.indexOf(active));
 
   function handleKeydown(event: KeyboardEvent): void {
     const currentIndex = TAB_IDS.indexOf(active);
@@ -53,7 +55,6 @@
     if (nextId == null) return;
     ontabchange(nextId);
 
-    // Focus the newly active tab button
     const target = event.target;
     if (!(target instanceof HTMLElement)) return;
     const tablist = target.closest('[role="tablist"]');
@@ -64,86 +65,49 @@
   }
 </script>
 
-<nav aria-label="Main navigation">
-  <Toolbar tabbar tabbarLabels>
-    <div
-      class="flex flex-1 justify-start"
-      role="tablist"
-      onkeydown={handleKeydown}
-    >
-      {#each mainTabs as tab (tab.id)}
-        <button
-          role="tab"
-          aria-selected={active === tab.id}
-          tabindex={active === tab.id ? 0 : -1}
-          onclick={() => {
-            ontabchange(tab.id);
-          }}
-          class="tabbar-tab"
-          class:tabbar-tab-active={active === tab.id}
-        >
-          <span class="tabbar-icon" aria-hidden="true">{tab.icon}</span>
-          <span class="tabbar-label">{tab.label}</span>
-        </button>
-      {/each}
+<!-- bgClass adds iOS glass treatment to the Toolbar's background div.
+     Konsta's Toolbar template omits the bgBlur div that Navbar renders,
+     so we apply glass colors + shadow + blur directly on the bg div. -->
+<Tabbar
+  labels
+  bgClass={themeStore.current === "ios"
+    ? "!bg-ios-light-glass !shadow-ios-light-glass backdrop-blur-lg dark:!bg-ios-dark-glass dark:!shadow-ios-dark-glass hairline-t"
+    : ""}
+>
+  <div
+    class="flex w-full h-full relative"
+    role="tablist"
+    tabindex="-1"
+    aria-label="Main navigation"
+    onkeydown={handleKeydown}
+  >
+    {#each allTabs as tab (tab.id)}
+      {@const isActive = active === tab.id}
       <button
         role="tab"
-        aria-selected={active === moreTab.id}
-        tabindex={active === moreTab.id ? 0 : -1}
-        onclick={() => {
-          ontabchange(moreTab.id);
-        }}
-        class="tabbar-tab tabbar-tab-more"
-        class:tabbar-tab-active={active === moreTab.id}
+        aria-selected={isActive}
+        tabindex={isActive ? 0 : -1}
+        onclick={() => ontabchange(tab.id)}
+        class="k-link w-full h-full duration-300 transition-colors relative
+               flex flex-col items-center justify-center gap-0.5
+               cursor-pointer select-none border-none bg-transparent
+               {isActive ? 'k-tabbar-link-active text-primary' : ''}
+               focus-visible:outline-2 focus-visible:outline-primary
+               focus-visible:outline-offset-[-2px] focus-visible:rounded"
       >
-        <span class="tabbar-icon" aria-hidden="true">{moreTab.icon}</span>
-        <span class="tabbar-label">{moreTab.label}</span>
+        <span class="text-xl leading-none" aria-hidden="true">{tab.icon}</span>
+        <span class="text-2xs leading-none font-medium">{tab.label}</span>
       </button>
-    </div>
-  </Toolbar>
-</nav>
+    {/each}
 
-<style>
-  .tabbar-tab {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 2px;
-    padding: 4px 12px;
-    min-width: 44px;
-    min-height: 44px;
-    color: var(--muted);
-    background: none;
-    border: none;
-    cursor: pointer;
-    -webkit-tap-highlight-color: transparent;
-    transition: color 0.15s linear;
-  }
-
-  .tabbar-tab:focus-visible {
-    outline: 2px solid var(--brand-primary);
-    outline-offset: -2px;
-    border-radius: 4px;
-  }
-
-  .tabbar-tab-active {
-    color: var(--brand-primary);
-  }
-
-  .tabbar-tab-more {
-    margin-left: auto;
-  }
-
-  .tabbar-icon {
-    font-size: 20px;
-    line-height: 1;
-  }
-
-  .tabbar-label {
-    font-family: var(--font-ui);
-    font-size: 10px;
-    line-height: 1;
-    font-weight: 500;
-  }
-</style>
+    <!-- Material highlight bar (custom implementation since Konsta's built-in
+         one can't find tabs inside our wrapper div) -->
+    {#if themeStore.current === "material"}
+      <span
+        class="absolute top-0 left-0 h-0.5 bg-primary transition-transform duration-300"
+        style:width="{100 / allTabs.length}%"
+        style:transform="translateX({activeIndex * 100}%)"
+      ></span>
+    {/if}
+  </div>
+</Tabbar>

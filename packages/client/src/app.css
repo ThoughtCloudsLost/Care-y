@@ -69,12 +69,35 @@
   --font-display: "Syne", system-ui, sans-serif;
   --font-ui: "Space Grotesk", system-ui, sans-serif;
 
+  /* Override Konsta font stacks (hedge: declare as CSS props too, not just
+     @theme tokens, in case Konsta references var(--font-ios) directly) */
+  --font-ios: "Space Grotesk", system-ui, sans-serif;
+  --font-material: "Space Grotesk", system-ui, sans-serif;
+
   /* Responsive breakpoints */
   --bp-tablet: 768px;
   --bp-desktop: 1024px;
 
   /* App height (synced by keyboard-viewport.ts for iOS Safari) */
   --app-height: 100dvh;
+
+  /* Override Konsta iOS surface colors to use CARE-Y warm palette.
+     Material surfaces are generated from --color-brand-primary by Konsta's
+     Tailwind plugin, so they pick up the warm tone automatically. */
+  --color-ios-light-surface: #f2ede4;
+  --color-ios-light-surface-1: #ffffff;
+  --color-ios-light-surface-1-shade: #edeae3;
+  --color-ios-light-surface-1-tint: #ffffff;
+  --color-ios-light-surface-2: #f7f3ee;
+  --color-ios-light-surface-3: #ffffff;
+  --color-ios-light-surface-variant: #ebe7e0;
+  --color-ios-dark-surface: #0c0c0c;
+  --color-ios-dark-surface-1: #141414;
+  --color-ios-dark-surface-1-shade: #060606;
+  --color-ios-dark-surface-1-tint: #3a3a3a;
+  --color-ios-dark-surface-2: #1c1c1c;
+  --color-ios-dark-surface-3: #141414;
+  --color-ios-dark-surface-variant: #232323;
 
   color-scheme: light dark;
 }
@@ -103,6 +126,15 @@
   --muted: #8a8580;
 }
 
+/* Lock document scroll so only inner containers scroll.
+   Prevents iOS Safari rubber-band bounce on the shell.
+   The App component's height constraint handles viewport sizing. */
+html,
+body {
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+
 /* Base typography */
 body {
   font-family: var(--font-ui);
@@ -115,11 +147,11 @@ body {
   --breakpoint-tablet: 768px;
   --breakpoint-desktop: 1024px;
   --color-brand-primary: #f05030;
-}
 
-/* Override Konsta Page background to use CARE-Y design tokens */
-:global(.k-page) {
-  background-color: var(--paper);
+  /* Override Konsta's default font stacks (SF Pro / Roboto) with Space Grotesk.
+     Konsta applies these via .k-ios / .k-material classes on the App root. */
+  --font-ios: "Space Grotesk", system-ui, sans-serif;
+  --font-material: "Space Grotesk", system-ui, sans-serif;
 }
 
 /* Accessibility: reduced motion */

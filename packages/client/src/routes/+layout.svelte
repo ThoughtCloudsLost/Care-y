@@ -6,8 +6,7 @@
   import favicon from "$lib/assets/favicon.svg";
   import { themeStore } from "$lib/stores/theme.svelte";
   import RisoInkFilter from "$lib/components/RisoInkFilter.svelte";
-  import AppTabbar from "$lib/shell/AppTabbar.svelte";
-  import AppNavbar from "$lib/shell/AppNavbar.svelte";
+  import AppShell from "$lib/shell/AppShell.svelte";
   import type { TabId } from "$lib/shell/types";
 
   let { children } = $props();
@@ -76,36 +75,19 @@
     dark={themeStore.resolvedScheme === "dark"}
     class="app-shell"
   >
-    <AppNavbar title="CARE-Y">
-      {#snippet right()}
-        <!-- Placeholder icons: wired in view phases -->
-        <button class="navbar-icon" aria-label="Exposure status" type="button">
-          <span aria-hidden="true">&#9632;</span>
-        </button>
-        <button class="navbar-icon" aria-label="Search" type="button">
-          <span aria-hidden="true">&#8981;</span>
-        </button>
-        <button class="navbar-icon" aria-label="New ticket" type="button">
-          <span aria-hidden="true">+</span>
-        </button>
-      {/snippet}
-    </AppNavbar>
-    <main id="main-content" class="app-main">
+    <AppShell {activeTab} ontabchange={handleTabChange}>
       {@render children()}
-    </main>
-    <AppTabbar active={activeTab} ontabchange={handleTabChange} />
+    </AppShell>
   </App>
 </QueryClientProvider>
 
 <style>
+  /* Constrain App to viewport for iOS Safari. Konsta manages layout
+     internally: Page is absolute + overflow-auto, Navbar is sticky top,
+     Tabbar is fixed bottom. */
   :global(.app-shell) {
-    display: flex;
-    flex-direction: column;
-  }
-
-  .app-main {
-    flex: 1;
-    min-height: 0;
+    height: 100dvh;
+    min-height: auto;
     overflow: hidden;
   }
 
@@ -119,26 +101,5 @@
     clip: rect(0, 0, 0, 0);
     white-space: nowrap;
     border-width: 0;
-  }
-
-  .navbar-icon {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    min-width: 44px;
-    min-height: 44px;
-    padding: 0 4px;
-    background: none;
-    border: none;
-    color: var(--ink);
-    font-size: 18px;
-    cursor: pointer;
-    -webkit-tap-highlight-color: transparent;
-  }
-
-  .navbar-icon:focus-visible {
-    outline: 2px solid var(--brand-primary);
-    outline-offset: -2px;
-    border-radius: 4px;
   }
 </style>
