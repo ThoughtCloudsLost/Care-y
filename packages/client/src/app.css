@@ -197,6 +197,17 @@ body {
   z-index: 1;
 }
 
+/* View transitions (180ms linear, constant velocity per Riso aesthetic) */
+@view-transition {
+  navigation: auto;
+}
+
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation-duration: 180ms;
+  animation-timing-function: linear;
+}
+
 /* Skeleton bar animation (used by RisoSkeleton) */
 @media (prefers-reduced-motion: no-preference) {
   @keyframes skeleton-extend {
