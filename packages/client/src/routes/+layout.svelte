@@ -26,7 +26,7 @@
 <RisoInkFilter />
 
 <QueryClientProvider client={queryClient}>
-  <App theme={themeStore.current}>
+  <App theme={themeStore.current} dark={themeStore.resolvedScheme === "dark"}>
     {@render children()}
   </App>
 </QueryClientProvider>
