@@ -56,14 +56,14 @@
   /* Core palette */
   --ink: #0a0a0a;
   --paper: #f2ede4;
-  --brand-primary: #ff5c35;
+  --brand-primary: #f05030;
   --surface-1: #ffffff;
   --surface-2: #f7f3ee;
   --muted: #8a8580;
 
   /* Derived from --brand-primary (computed in branding module for org override) */
-  --brand-primary-40: rgba(255, 92, 53, 0.4);
-  --brand-primary-20: rgba(255, 92, 53, 0.2);
+  --brand-primary-40: rgba(240, 80, 48, 0.4);
+  --brand-primary-20: rgba(240, 80, 48, 0.2);
 
   /* Typography */
   --font-display: "Syne", system-ui, sans-serif;
@@ -83,12 +83,15 @@
 .dark {
   --ink: #f2ede4;
   --paper: #0c0c0c;
-  --brand-primary: #ff5c35;
+  --brand-primary: #f05030;
   --surface-1: #141414;
   --surface-2: #1c1c1c;
   --muted: #6a6560;
-  --brand-primary-40: rgba(255, 92, 53, 0.4);
-  --brand-primary-20: rgba(255, 92, 53, 0.2);
+  --brand-primary-40: rgba(240, 80, 48, 0.4);
+  --brand-primary-20: rgba(240, 80, 48, 0.2);
+  /* Override Konsta's hardcoded #000 background */
+  background-color: var(--paper);
+  color: var(--ink);
 }
 
 /* Light mode */
@@ -111,6 +114,7 @@ body {
 @theme {
   --breakpoint-tablet: 768px;
   --breakpoint-desktop: 1024px;
+  --color-brand-primary: #f05030;
 }
 
 /* Accessibility: reduced motion */
