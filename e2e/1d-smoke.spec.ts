@@ -9,19 +9,16 @@ test.describe("1d-smoke", () => {
     await expect(appRoot).toBeVisible();
 
     // Main content landmark exists
-    const main = page.locator("main#main-content");
+    const main = page.locator('[role="main"]');
     await expect(main).toBeAttached();
 
     // Bottom tab bar renders with correct tabs
-    const tablist = page.getByRole("tablist");
-    await expect(tablist).toBeAttached();
+    const tabbar = page.locator(".k-toolbar");
+    await expect(tabbar).toBeAttached();
 
-    const tabs = page.getByRole("tab");
-    await expect(tabs).toHaveCount(4);
-    await expect(page.getByRole("tab", { name: "Home" })).toBeAttached();
-    await expect(page.getByRole("tab", { name: "Tickets" })).toBeAttached();
-    await expect(page.getByRole("tab", { name: "Calendar" })).toBeAttached();
-    await expect(page.getByRole("tab", { name: "More" })).toBeAttached();
+    for (const name of ["Home", "Tickets", "Calendar", "More"]) {
+      await expect(tabbar.getByRole("link", { name })).toBeAttached();
+    }
   });
 
   test("default theme is iOS and dark mode", async ({ page }) => {
