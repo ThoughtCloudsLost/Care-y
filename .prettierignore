@@ -18,3 +18,4 @@ Dockerfile.*
 .gitleaksignore
 .gitignore
 *.woff2
+*.patch

@@ -9,21 +9,20 @@ test.describe("shell architecture", () => {
   // ── Semantic landmarks ──────────────────────────────────────────────
 
   test("has main landmark", async ({ page }) => {
-    const main = page.locator("main#main-content");
+    const main = page.locator('[role="main"]');
     await expect(main).toBeAttached();
   });
 
-  test("has two nav landmarks with distinct aria-labels", async ({ page }) => {
-    const navs = page.locator("nav");
-    await expect(navs).toHaveCount(2);
+  test("has banner landmark on navbar", async ({ page }) => {
+    const banner = page.locator('[role="banner"]');
+    await expect(banner).toBeAttached();
+    await expect(banner).toContainText("CARE-Y");
+  });
 
-    const labels = await navs.evaluateAll((els) =>
-      els.map((el) => el.getAttribute("aria-label")),
-    );
-    expect(labels).toContain("Main navigation");
-    expect(labels).toContain("Page navigation");
-    // Labels must be distinct
-    expect(new Set(labels).size).toBe(2);
+  test("has tablist landmark on tabbar", async ({ page }) => {
+    const tablist = page.locator('[role="tablist"]');
+    await expect(tablist).toBeAttached();
+    await expect(tablist).toHaveAttribute("aria-label", "Main navigation");
   });
 
   test("has toast container with role=status", async ({ page }) => {
@@ -55,96 +54,39 @@ test.describe("shell architecture", () => {
 
   // ── Tab bar ─────────────────────────────────────────────────────────
 
-  test("tab bar has role=tablist with 4 tabs", async ({ page }) => {
+  test("tab bar has 4 tabs with correct roles", async ({ page }) => {
     const tablist = page.getByRole("tablist");
     await expect(tablist).toBeAttached();
 
-    const tabs = tablist.getByRole("tab");
-    await expect(tabs).toHaveCount(4);
+    for (const name of ["Home", "Tickets", "Calendar", "More"]) {
+      const tab = tablist.getByRole("tab", { name });
+      await expect(tab).toBeAttached();
+    }
   });
 
   test("Home tab is selected by default", async ({ page }) => {
     const homeTab = page.getByRole("tab", { name: "Home" });
     await expect(homeTab).toHaveAttribute("aria-selected", "true");
-    await expect(homeTab).toHaveAttribute("tabindex", "0");
-
-    // Other tabs are not selected and have tabindex -1
-    for (const name of ["Tickets", "Calendar", "More"]) {
-      const tab = page.getByRole("tab", { name });
-      await expect(tab).toHaveAttribute("aria-selected", "false");
-      await expect(tab).toHaveAttribute("tabindex", "-1");
-    }
-  });
-
-  test("arrow keys move tab selection", async ({ page }) => {
-    const homeTab = page.getByRole("tab", { name: "Home" });
-    // Click to ensure focus lands on the tab
-    await homeTab.click();
-    await expect(homeTab).toBeFocused();
-
-    // ArrowRight moves to Tickets
-    await page.keyboard.press("ArrowRight");
-    const ticketsTab = page.getByRole("tab", { name: "Tickets" });
-    await expect(ticketsTab).toHaveAttribute("aria-selected", "true");
-    await expect(ticketsTab).toBeFocused();
-
-    // ArrowRight moves to Calendar
-    await page.keyboard.press("ArrowRight");
-    const calendarTab = page.getByRole("tab", { name: "Calendar" });
-    await expect(calendarTab).toHaveAttribute("aria-selected", "true");
-    await expect(calendarTab).toBeFocused();
-
-    // ArrowRight moves to More
-    await page.keyboard.press("ArrowRight");
-    const moreTab = page.getByRole("tab", { name: "More" });
-    await expect(moreTab).toHaveAttribute("aria-selected", "true");
-    await expect(moreTab).toBeFocused();
-
-    // ArrowRight wraps to Home
-    await page.keyboard.press("ArrowRight");
-    await expect(homeTab).toHaveAttribute("aria-selected", "true");
-    await expect(homeTab).toBeFocused();
-  });
-
-  test("Home and End keys jump to first/last tab", async ({ page }) => {
-    const homeTab = page.getByRole("tab", { name: "Home" });
-    await homeTab.click();
-    await expect(homeTab).toBeFocused();
-
-    await page.keyboard.press("End");
-    const moreTab = page.getByRole("tab", { name: "More" });
-    await expect(moreTab).toHaveAttribute("aria-selected", "true");
-    await expect(moreTab).toBeFocused();
-
-    await page.keyboard.press("Home");
-    await expect(homeTab).toHaveAttribute("aria-selected", "true");
-    await expect(homeTab).toBeFocused();
+    await expect(homeTab).toHaveClass(/k-tabbar-link-active/);
   });
 
   // ── Navbar ──────────────────────────────────────────────────────────
 
-  test("navbar renders with placeholder icons", async ({ page }) => {
-    const nav = page.locator('nav[aria-label="Page navigation"]');
-    await expect(nav).toBeAttached();
-
-    // Right slot has 3 placeholder buttons
-    await expect(
-      nav.getByRole("button", { name: "Exposure status" }),
-    ).toBeAttached();
-    await expect(nav.getByRole("button", { name: "Search" })).toBeAttached();
-    await expect(
-      nav.getByRole("button", { name: "New ticket" }),
-    ).toBeAttached();
-  });
-
-  // ── Tab grouping layout ─────────────────────────────────────────────
-
-  test("More tab has margin-left auto for right alignment", async ({
+  test("navbar renders with title and placeholder action buttons", async ({
     page,
   }) => {
-    const moreTab = page.getByRole("tab", { name: "More" });
-    // Verify the CSS class that applies margin-left: auto is present
-    await expect(moreTab).toHaveClass(/tabbar-tab-more/);
+    const navbar = page.locator(".k-navbar");
+    await expect(navbar).toBeAttached();
+    await expect(navbar).toContainText("CARE-Y");
+
+    // Right slot has 3 placeholder buttons (role="button" via patched Link)
+    await expect(
+      navbar.getByRole("button", { name: "Exposure status" }),
+    ).toBeAttached();
+    await expect(navbar.getByRole("button", { name: "Search" })).toBeAttached();
+    await expect(
+      navbar.getByRole("button", { name: "New ticket" }),
+    ).toBeAttached();
   });
 
   // ── Accessibility ───────────────────────────────────────────────────

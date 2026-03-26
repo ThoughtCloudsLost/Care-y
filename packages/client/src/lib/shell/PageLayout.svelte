@@ -1,7 +1,10 @@
 <!--
-  Page wrapper with contained scroll pattern (no position: fixed).
-  Avoids iOS Safari keyboard issues where fixed bottom bars hide behind the keyboard.
-  Uses flex column layout: scrollable content area + optional sticky bottom bar.
+  Page wrapper using Konsta's Page as the scroll container.
+  Page is `absolute overflow-auto` by default. Within the flex shell layout,
+  the main element is the positioning context, so Page fills the content area
+  between the navbar and tabbar.
+  lockScroll disables Page scrolling and uses an internal flex layout
+  for chat views with a fixed input bar at the bottom.
 -->
 <script lang="ts">
   import { Page } from "konsta/svelte";
@@ -15,40 +18,20 @@
   }: PageLayoutProps = $props();
 </script>
 
-<Page>
-  <div
-    class="page-content"
-    class:lock-scroll={lockScroll}
-    style:touch-action={touchAction}
-    role="region"
-  >
+<Page class={lockScroll ? "!overflow-hidden flex flex-col" : ""}>
+  {#if lockScroll}
+    <div
+      class="flex-1 min-h-0 overflow-y-auto overscroll-contain"
+      style:touch-action={touchAction}
+    >
+      {@render children()}
+    </div>
+  {:else}
     {@render children()}
-  </div>
+  {/if}
   {#if bottomBar}
-    <div class="page-bottom-bar">
+    <div class="shrink-0" style:padding-bottom="env(safe-area-inset-bottom)">
       {@render bottomBar()}
     </div>
   {/if}
 </Page>
-
-<style>
-  .page-content {
-    flex: 1;
-    overflow-y: auto;
-    -webkit-overflow-scrolling: touch;
-    overscroll-behavior: contain;
-  }
-
-  .lock-scroll {
-    overflow: hidden;
-  }
-
-  .page-bottom-bar {
-    flex-shrink: 0;
-    padding-bottom: env(safe-area-inset-bottom);
-  }
-
-  :global(.keyboard-open) .page-bottom-bar {
-    padding-bottom: 0;
-  }
-</style>
