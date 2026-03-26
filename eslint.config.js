@@ -59,6 +59,10 @@ export default tseslint.config(
       // Event handler parameters (e.g., SubmitEvent) aren't fully resolved
       // by the Svelte parser in <script> blocks, triggering false positives.
       "@typescript-eslint/no-unsafe-member-access": "off",
+      // $state() and $props() rune return types are resolved by the Svelte
+      // compiler, not the TS type checker. The checker sees them as void,
+      // triggering false positives on assignments like `let x = $state(null)`.
+      "@typescript-eslint/no-confusing-void-expression": "off",
     },
   },
 
