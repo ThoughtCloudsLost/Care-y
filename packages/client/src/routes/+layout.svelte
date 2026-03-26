@@ -47,6 +47,7 @@
 </script>
 
 <svelte:head>
+  <title>CARE-Y</title>
   <link rel="icon" href={favicon} />
 </svelte:head>
 
