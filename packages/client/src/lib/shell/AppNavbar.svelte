@@ -16,24 +16,26 @@
   }: ShellNavbarProps = $props();
 </script>
 
-<Navbar {title}>
-  {#snippet left()}
-    {#if backLink}
-      <Link navbar onclick={onback}>
-        <span aria-hidden="true" class="back-arrow">&lsaquo;</span>
-        <span class="sr-only">Back</span>
-      </Link>
-    {/if}
-    {#if leftSlot}
-      {@render leftSlot()}
-    {/if}
-  {/snippet}
-  {#snippet right()}
-    {#if rightSlot}
-      {@render rightSlot()}
-    {/if}
-  {/snippet}
-</Navbar>
+<nav aria-label="Page navigation">
+  <Navbar {title}>
+    {#snippet left()}
+      {#if backLink}
+        <Link navbar onclick={onback}>
+          <span aria-hidden="true" class="back-arrow">&lsaquo;</span>
+          <span class="sr-only">Back</span>
+        </Link>
+      {/if}
+      {#if leftSlot}
+        {@render leftSlot()}
+      {/if}
+    {/snippet}
+    {#snippet right()}
+      {#if rightSlot}
+        {@render rightSlot()}
+      {/if}
+    {/snippet}
+  </Navbar>
+</nav>
 
 <style>
   .back-arrow {
