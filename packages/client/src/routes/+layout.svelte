@@ -71,7 +71,20 @@
 
 <QueryClientProvider client={queryClient}>
   <App theme={themeStore.current} dark={themeStore.resolvedScheme === "dark"}>
-    <AppNavbar title="CARE-Y" />
+    <AppNavbar title="CARE-Y">
+      {#snippet right()}
+        <!-- Placeholder icons: wired in view phases -->
+        <button class="navbar-icon" aria-label="Exposure status" type="button">
+          <span aria-hidden="true">&#9632;</span>
+        </button>
+        <button class="navbar-icon" aria-label="Search" type="button">
+          <span aria-hidden="true">&#8981;</span>
+        </button>
+        <button class="navbar-icon" aria-label="New ticket" type="button">
+          <span aria-hidden="true">+</span>
+        </button>
+      {/snippet}
+    </AppNavbar>
     <main id="main-content">
       {@render children()}
     </main>
@@ -90,5 +103,26 @@
     clip: rect(0, 0, 0, 0);
     white-space: nowrap;
     border-width: 0;
+  }
+
+  .navbar-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 44px;
+    min-height: 44px;
+    padding: 0 4px;
+    background: none;
+    border: none;
+    color: var(--ink);
+    font-size: 18px;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .navbar-icon:focus-visible {
+    outline: 2px solid var(--brand-primary);
+    outline-offset: -2px;
+    border-radius: 4px;
   }
 </style>
