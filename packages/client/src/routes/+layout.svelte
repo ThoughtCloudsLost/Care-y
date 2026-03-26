@@ -71,7 +71,11 @@
 <div role="status" id="toast-container"></div>
 
 <QueryClientProvider client={queryClient}>
-  <App theme={themeStore.current} dark={themeStore.resolvedScheme === "dark"}>
+  <App
+    theme={themeStore.current}
+    dark={themeStore.resolvedScheme === "dark"}
+    class="app-shell"
+  >
     <AppNavbar title="CARE-Y">
       {#snippet right()}
         <!-- Placeholder icons: wired in view phases -->
@@ -86,7 +90,7 @@
         </button>
       {/snippet}
     </AppNavbar>
-    <main id="main-content">
+    <main id="main-content" class="app-main">
       {@render children()}
     </main>
     <AppTabbar active={activeTab} ontabchange={handleTabChange} />
@@ -94,6 +98,17 @@
 </QueryClientProvider>
 
 <style>
+  :global(.app-shell) {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .app-main {
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
+  }
+
   .sr-only {
     position: absolute;
     width: 1px;
