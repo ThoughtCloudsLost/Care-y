@@ -1,12 +1,16 @@
 import { sveltekit } from "@sveltejs/kit/vite";
 import tailwindcss from "@tailwindcss/vite";
+import basicSsl from "@vitejs/plugin-basic-ssl";
 import { SvelteKitPWA } from "@vite-pwa/sveltekit";
 import { defineConfig } from "vite";
+
+const isMobile = process.env.VITE_MOBILE === "true";
 
 export default defineConfig({
   plugins: [
     tailwindcss(),
     sveltekit(),
+    ...(isMobile ? [basicSsl()] : []),
     SvelteKitPWA({
       strategies: "injectManifest",
       srcDir: "src",

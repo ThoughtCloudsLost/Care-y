@@ -10,15 +10,16 @@
     "preview": "vite preview",
     "prepare": "svelte-kit sync || echo ''",
     "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
-    "check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch"
+    "check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
+    "dev:mobile": "node scripts/dev-network.js"
   },
   "dependencies": {
     "@care-y/crypto": "workspace:*",
     "@care-y/server": "workspace:*",
     "@care-y/shared": "workspace:*",
-    "@twilio/voice-sdk": "2.18.1",
     "@tanstack/svelte-query": "6.1.8",
     "@trpc/client": "11.10.0",
+    "@twilio/voice-sdk": "2.18.1",
     "bits-ui": "2.16.3",
     "konsta": "5.0.8",
     "svelte-gestures": "5.2.2"
@@ -32,6 +33,7 @@
     "@testing-library/svelte": "5.3.1",
     "@trpc/server": "11.10.0",
     "@vite-pwa/sveltekit": "1.1.0",
+    "@vitejs/plugin-basic-ssl": "2.3.0",
     "jsdom": "29.0.1",
     "libsodium-wrappers-sumo": "0.8.2",
     "svelte": "^5.55.0",
