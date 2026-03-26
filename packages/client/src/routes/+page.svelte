@@ -1,52 +1,12 @@
 <script lang="ts">
-  import {
-    Page,
-    Navbar,
-    Block,
-    Tabbar,
-    TabbarLink,
-    Button,
-  } from "konsta/svelte";
-  import { themeStore } from "$lib/stores/theme.svelte";
-
-  let activeTab = $state("inbox");
+  import PageLayout from "$lib/shell/PageLayout.svelte";
+  import RisoHeading from "$lib/components/RisoHeading.svelte";
+  import { Block } from "konsta/svelte";
 </script>
 
-<Page>
-  <Navbar title="CARE-Y" />
-
-  <Block strong inset class="space-y-4">
-    <p>
-      Theme: <strong>{themeStore.current}</strong>
-    </p>
-    <Button
-      onclick={() => {
-        themeStore.toggle();
-      }}
-    >
-      Switch to {themeStore.current === "ios" ? "Material" : "iOS"}
-    </Button>
-  </Block>
-
+<PageLayout>
   <Block strong inset>
-    <p>Active tab: <strong>{activeTab}</strong></p>
+    <RisoHeading level={1}>CARE-Y</RisoHeading>
+    <p>Shell loaded. Views coming soon.</p>
   </Block>
-
-  <Tabbar labels class="left-0 bottom-0 fixed">
-    <TabbarLink
-      active={activeTab === "inbox"}
-      onclick={() => (activeTab = "inbox")}
-      label="Inbox"
-    />
-    <TabbarLink
-      active={activeTab === "tickets"}
-      onclick={() => (activeTab = "tickets")}
-      label="Tickets"
-    />
-    <TabbarLink
-      active={activeTab === "schedule"}
-      onclick={() => (activeTab = "schedule")}
-      label="Schedule"
-    />
-  </Tabbar>
-</Page>
+</PageLayout>
