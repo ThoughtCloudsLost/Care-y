@@ -117,6 +117,11 @@ body {
   --color-brand-primary: #f05030;
 }
 
+/* Override Konsta Page background to use CARE-Y design tokens */
+:global(.k-page) {
+  background-color: var(--paper);
+}
+
 /* Accessibility: reduced motion */
 @media (prefers-reduced-motion: reduce) {
   *,
