@@ -154,6 +154,14 @@ body {
   --font-material: "Space Grotesk", system-ui, sans-serif;
 }
 
+/* Prevent iOS Safari auto-zoom on input focus (triggers below 16px).
+   Applies to all form controls so the native-app feel is preserved. */
+input,
+textarea,
+select {
+  font-size: 16px;
+}
+
 /* Accessibility: reduced motion */
 @media (prefers-reduced-motion: reduce) {
   *,
