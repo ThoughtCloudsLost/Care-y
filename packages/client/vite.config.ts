@@ -1,3 +1,4 @@
+import fs from "node:fs";
 import { sveltekit } from "@sveltejs/kit/vite";
 import tailwindcss from "@tailwindcss/vite";
 import basicSsl from "@vitejs/plugin-basic-ssl";
@@ -6,11 +7,31 @@ import { defineConfig } from "vite";
 
 const isMobile = process.env.VITE_MOBILE === "true";
 
+// Prefer mkcert certs (trusted by simulators and browsers).
+// Fall back to basicSsl (self-signed, triggers cert warnings).
+function httpsConfig():
+  | { https?: { cert: Buffer; key: Buffer } }
+  | { plugins: ReturnType<typeof basicSsl>[] } {
+  const certPath = ".certs/localhost.pem";
+  const keyPath = ".certs/localhost-key.pem";
+  if (fs.existsSync(certPath) && fs.existsSync(keyPath)) {
+    return {
+      https: {
+        cert: fs.readFileSync(certPath),
+        key: fs.readFileSync(keyPath),
+      },
+    };
+  }
+  return { plugins: [basicSsl()] };
+}
+
+const mkcert = isMobile ? httpsConfig() : {};
+
 export default defineConfig({
   plugins: [
     tailwindcss(),
     sveltekit(),
-    ...(isMobile ? [basicSsl()] : []),
+    ...("plugins" in mkcert ? mkcert.plugins : []),
     SvelteKitPWA({
       strategies: "injectManifest",
       srcDir: "src",
@@ -37,6 +58,7 @@ export default defineConfig({
     }),
   ],
   server: {
+    ...("https" in mkcert ? { https: mkcert.https } : {}),
     proxy: {
       "/trpc": {
         target: "http://localhost:3000",
