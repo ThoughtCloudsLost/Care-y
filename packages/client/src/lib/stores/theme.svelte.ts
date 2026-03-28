@@ -10,11 +10,21 @@
 
 export type ColorScheme = "dark" | "light" | "system";
 export type KonstaTheme = "ios" | "material";
+export type VisualTheme = "riso" | "default";
 
 const UI_THEME_KEY = "care-y-theme";
 const COLOR_SCHEME_KEY = "care-y-color-scheme";
-const DEFAULT_UI_THEME: KonstaTheme = "material";
+const VISUAL_THEME_KEY = "care-y-visual-theme";
+function detectUiTheme(): KonstaTheme {
+  if (typeof navigator === "undefined") return "ios";
+  const ua = navigator.userAgent;
+  if (/android/i.test(ua)) return "material";
+  return "ios";
+}
+
+const DEFAULT_UI_THEME: KonstaTheme = detectUiTheme();
 const DEFAULT_COLOR_SCHEME: ColorScheme = "dark";
+const DEFAULT_VISUAL_THEME: VisualTheme = "default";
 
 function resolveScheme(
   pref: ColorScheme,
@@ -33,14 +43,25 @@ function applyScheme(resolved: "dark" | "light"): void {
   document.documentElement.classList.toggle("light", resolved === "light");
 }
 
+function applyVisualTheme(theme: VisualTheme): void {
+  if (typeof document === "undefined") return;
+  document.documentElement.classList.toggle("theme-riso", theme === "riso");
+  document.documentElement.classList.toggle(
+    "theme-default",
+    theme === "default",
+  );
+}
+
 export interface ThemeStore {
   readonly uiTheme: KonstaTheme;
   readonly resolvedScheme: "dark" | "light";
   readonly colorSchemePreference: ColorScheme;
+  readonly visualTheme: VisualTheme;
   readonly current: KonstaTheme;
 
   setUiTheme(theme: KonstaTheme): void;
   setColorScheme(scheme: ColorScheme): void;
+  setVisualTheme(theme: VisualTheme): void;
   toggleColorScheme(): void;
   toggle(): void;
 }
@@ -50,6 +71,7 @@ function createThemeStore(): ThemeStore {
     uiTheme: DEFAULT_UI_THEME,
     colorPref: DEFAULT_COLOR_SCHEME,
     resolved: "dark" as "dark" | "light",
+    visual: DEFAULT_VISUAL_THEME,
   });
 
   const darkQuery =
@@ -75,8 +97,18 @@ function createThemeStore(): ThemeStore {
       state.colorPref = storedScheme;
     }
 
+    // Visual theme only hydrates from localStorage in dev mode.
+    // In production, visual theme is controlled by org config (not yet wired).
+    if (import.meta.env.DEV) {
+      const storedVisual = localStorage.getItem(VISUAL_THEME_KEY);
+      if (storedVisual === "riso" || storedVisual === "default") {
+        state.visual = storedVisual;
+      }
+    }
+
     state.resolved = resolveScheme(state.colorPref, darkQuery);
     applyScheme(state.resolved);
+    applyVisualTheme(state.visual);
   }
 
   function persistAndApply(scheme: ColorScheme): void {
@@ -107,6 +139,9 @@ function createThemeStore(): ThemeStore {
     get colorSchemePreference(): ColorScheme {
       return state.colorPref;
     },
+    get visualTheme(): VisualTheme {
+      return state.visual;
+    },
     get current(): KonstaTheme {
       return state.uiTheme;
     },
@@ -115,6 +150,13 @@ function createThemeStore(): ThemeStore {
       state.uiTheme = theme;
       if (typeof window !== "undefined") {
         localStorage.setItem(UI_THEME_KEY, theme);
+      }
+    },
+    setVisualTheme(theme: VisualTheme): void {
+      state.visual = theme;
+      applyVisualTheme(theme);
+      if (typeof window !== "undefined" && import.meta.env.DEV) {
+        localStorage.setItem(VISUAL_THEME_KEY, theme);
       }
     },
     setColorScheme(scheme: ColorScheme): void {

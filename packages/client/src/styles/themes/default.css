@@ -1,0 +1,54 @@
+/* Default theme: stock Konsta UI look with system fonts, no riso effects.
+   No Konsta surface overrides (lets Konsta's built-in @theme defaults pass through). */
+
+.theme-default {
+  --theme-font-display: system-ui, sans-serif;
+  --theme-font-ui: system-ui, sans-serif;
+
+  --ink: #1a1a1a;
+  --paper: #ffffff;
+  --surface-1: #f5f5f5;
+  --surface-2: #eeeeee;
+  --muted: #888888;
+}
+
+.theme-default.dark {
+  --ink: #e5e5e5;
+  --paper: #000000;
+  --surface-1: #1c1c1d;
+  --surface-2: #2c2c2c;
+  --muted: #777777;
+  background-color: var(--paper);
+  color: var(--ink);
+}
+
+.theme-default.light {
+  --ink: #1a1a1a;
+  --paper: #ffffff;
+  --surface-1: #f5f5f5;
+  --surface-2: #eeeeee;
+  --muted: #888888;
+}
+
+/* Divider: standard 1px separator instead of riso 4px thick rule */
+.theme-default .riso-divider {
+  height: 1px;
+  background: var(--muted);
+}
+
+/* Skeleton animation: standard opacity pulse */
+@media (prefers-reduced-motion: no-preference) {
+  @keyframes skeleton-pulse {
+    0%,
+    100% {
+      opacity: 0.3;
+    }
+    50% {
+      opacity: 0.6;
+    }
+  }
+
+  .theme-default .skeleton-bar {
+    animation: skeleton-pulse 1.5s ease-in-out infinite;
+  }
+}

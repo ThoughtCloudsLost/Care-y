@@ -1,0 +1,211 @@
+/* Riso zine theme: warm risograph printing aesthetic */
+@import "../fonts.css";
+
+/* --- Riso palette tokens (light defaults) --- */
+.theme-riso {
+  --theme-font-display: "Syne", system-ui, sans-serif;
+  --theme-font-ui: "Space Grotesk", system-ui, sans-serif;
+
+  --ink: #0a0a0a;
+  --paper: #f2ede4;
+  --surface-1: #f7f3ee;
+  --surface-2: #f2ede4;
+  --muted: #8a8580;
+  --brand-primary-40: rgba(240, 80, 48, 0.4);
+  --brand-primary-20: rgba(240, 80, 48, 0.2);
+
+  /* Konsta iOS surface overrides: warm-tinted via color-mix with brand-primary */
+  --color-ios-light-surface: #f2ede4;
+  --color-ios-light-surface-1: color-mix(
+    in srgb,
+    #f7f3ee 90%,
+    var(--brand-primary) 10%
+  );
+  --color-ios-light-surface-1-shade: color-mix(
+    in srgb,
+    #edeae3 90%,
+    var(--brand-primary) 10%
+  );
+  --color-ios-light-surface-1-tint: color-mix(
+    in srgb,
+    #faf8f4 92%,
+    var(--brand-primary) 8%
+  );
+  --color-ios-light-surface-2: color-mix(
+    in srgb,
+    #f2ede4 92%,
+    var(--brand-primary) 8%
+  );
+  --color-ios-light-surface-3: color-mix(
+    in srgb,
+    #f7f3ee 90%,
+    var(--brand-primary) 10%
+  );
+  --color-ios-light-surface-variant: color-mix(
+    in srgb,
+    #ebe7e0 92%,
+    var(--brand-primary) 8%
+  );
+  --color-ios-dark-surface: #161618;
+  --color-ios-dark-surface-1: #201e20;
+  --color-ios-dark-surface-1-shade: #111113;
+  --color-ios-dark-surface-1-tint: #353335;
+  --color-ios-dark-surface-2: #282628;
+  --color-ios-dark-surface-3: #201e20;
+  --color-ios-dark-surface-variant: #2e2c2e;
+
+  /* Konsta Material surface overrides: same color-mix approach as iOS */
+  --color-md-light-surface-1: color-mix(
+    in srgb,
+    #f7f3ee 90%,
+    var(--brand-primary) 10%
+  );
+  --color-md-light-surface-2: color-mix(
+    in srgb,
+    #f2ede4 92%,
+    var(--brand-primary) 8%
+  );
+  --color-md-light-surface-3: color-mix(
+    in srgb,
+    #f7f3ee 90%,
+    var(--brand-primary) 10%
+  );
+  --color-md-light-surface-variant: color-mix(
+    in srgb,
+    #ebe7e0 92%,
+    var(--brand-primary) 8%
+  );
+  --color-md-dark-surface: #161618;
+  --color-md-dark-surface-1: #201e20;
+  --color-md-dark-surface-2: #282628;
+  --color-md-dark-surface-3: #201e20;
+  --color-md-dark-surface-variant: #2e2c2e;
+}
+
+/* --- Dark mode: dark paper stock --- */
+.theme-riso.dark {
+  --ink: #f2ede4;
+  --paper: #161618;
+  --surface-1: #201e20;
+  --surface-2: #282628;
+  --muted: #7a7570;
+  --brand-primary-40: rgba(240, 80, 48, 0.4);
+  --brand-primary-20: rgba(240, 80, 48, 0.2);
+  background-color: var(--paper);
+  color: var(--ink);
+}
+
+/* --- Light mode --- */
+.theme-riso.light {
+  --ink: #0a0a0a;
+  --paper: #f2ede4;
+  --surface-1: #f7f3ee;
+  --surface-2: #f2ede4;
+  --muted: #8a8580;
+}
+
+/* Tighter block corners for zine feel */
+.theme-riso.dark .k-block {
+  border-radius: 0.5rem;
+}
+
+/* --- Riso effect classes --- */
+
+.theme-riso .riso-heading {
+  font-family: var(--theme-font-display);
+  font-weight: 800;
+  filter: url(#riso-ink);
+}
+
+.theme-riso .riso-heading-compact {
+  font-family: var(--theme-font-display);
+  font-weight: 700;
+  text-shadow: 1.5px 1.5px 0 var(--brand-primary-40);
+}
+
+/* Riso ink overlay: opt-in for branding/hero elements.
+   Apply .riso-block to a Konsta Block to get the riso drum
+   print effect in --brand-primary. */
+.theme-riso.dark .riso-block {
+  position: relative;
+}
+
+.theme-riso.dark .riso-block::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: var(--brand-primary);
+  mask-image: url("/styles/riso-ink.png");
+  mask-repeat: repeat;
+  mask-size: 600px;
+  -webkit-mask-image: url("/styles/riso-ink.png");
+  -webkit-mask-repeat: repeat;
+  -webkit-mask-size: 600px;
+  opacity: 0.35;
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* Grain texture overlay */
+.theme-riso .grain {
+  position: relative;
+  isolation: isolate;
+}
+
+.theme-riso .grain::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  opacity: 0.03;
+  background-image: url("/styles/grain.svg");
+  background-repeat: repeat;
+  background-size: 182px;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.theme-riso.dark .grain::before {
+  opacity: 0.12;
+}
+
+/* Halftone dot pattern overlay */
+.theme-riso .halftone {
+  position: relative;
+  isolation: isolate;
+}
+
+.theme-riso .halftone::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image: radial-gradient(
+    circle,
+    currentColor var(--dot-size, 1px),
+    transparent 0
+  );
+  background-size: var(--dot-spacing, 8px) var(--dot-spacing, 8px);
+  opacity: 0.04;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.theme-riso.dark .halftone::after {
+  opacity: 0.08;
+}
+
+/* Skeleton animation: extend-from-left sweep */
+@media (prefers-reduced-motion: no-preference) {
+  @keyframes skeleton-extend {
+    from {
+      transform: scaleX(0);
+    }
+    to {
+      transform: scaleX(1);
+    }
+  }
+
+  .theme-riso .skeleton-bar {
+    animation: skeleton-extend 0.8s linear infinite alternate;
+  }
+}

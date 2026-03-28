@@ -121,7 +121,7 @@ describe("themeStore", () => {
     expect(localStorage.getItem("care-y-theme")).toBe("material");
   });
 
-  it("toggle switches UI theme (legacy API)", async () => {
+  it("toggle switches UI theme", async () => {
     setupMocks();
     const { themeStore } = await import("./theme.svelte.ts");
     expect(themeStore.current).toBe("ios");
@@ -136,5 +136,36 @@ describe("themeStore", () => {
     themeStore.setColorScheme("light");
     expect(document.documentElement.classList.contains("light")).toBe(true);
     expect(document.documentElement.classList.contains("dark")).toBe(false);
+  });
+
+  it("defaults to 'default' visual theme", async () => {
+    setupMocks();
+    const { themeStore } = await import("./theme.svelte.ts");
+    expect(themeStore.visualTheme).toBe("default");
+  });
+
+  it("applies visual theme class to document element on init", async () => {
+    setupMocks();
+    await import("./theme.svelte.ts");
+    expect(document.documentElement.classList.contains("theme-default")).toBe(
+      true,
+    );
+    expect(document.documentElement.classList.contains("theme-riso")).toBe(
+      false,
+    );
+  });
+
+  it("setVisualTheme switches theme and applies class", async () => {
+    setupMocks();
+    const { themeStore } = await import("./theme.svelte.ts");
+    expect(themeStore.visualTheme).toBe("default");
+    themeStore.setVisualTheme("riso");
+    expect(themeStore.visualTheme).toBe("riso");
+    expect(document.documentElement.classList.contains("theme-riso")).toBe(
+      true,
+    );
+    expect(document.documentElement.classList.contains("theme-default")).toBe(
+      false,
+    );
   });
 });

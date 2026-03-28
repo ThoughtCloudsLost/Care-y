@@ -7,7 +7,10 @@
   import { themeStore } from "$lib/stores/theme.svelte";
   import RisoInkFilter from "$lib/components/RisoInkFilter.svelte";
   import AppShell from "$lib/shell/AppShell.svelte";
+  import DevThemePanel from "$lib/components/DevThemePanel.svelte";
   import type { TabId } from "$lib/shell/types";
+
+  const isDev = import.meta.env.DEV;
 
   let { children } = $props();
 
@@ -19,7 +22,7 @@
     },
   });
 
-  // View transitions (180ms linear, constant velocity per Riso aesthetic).
+  // View transitions (180ms linear).
   // startViewTransition is not yet in all TS DOM lib types.
   function hasViewTransitions(doc: Document): doc is Document & {
     startViewTransition: (cb: () => Promise<void>) => void;
@@ -50,7 +53,9 @@
   <link rel="icon" href={favicon} />
 </svelte:head>
 
-<RisoInkFilter />
+{#if themeStore.visualTheme === "riso"}
+  <RisoInkFilter />
+{/if}
 
 <!-- ARIA live regions: downstream components publish announcements here -->
 <div
@@ -78,6 +83,9 @@
     <AppShell {activeTab} ontabchange={handleTabChange}>
       {@render children()}
     </AppShell>
+    {#if isDev}
+      <DevThemePanel />
+    {/if}
   </App>
 </QueryClientProvider>
 

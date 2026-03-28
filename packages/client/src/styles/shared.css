@@ -1,0 +1,100 @@
+/* Theme-agnostic rules shared across all visual themes */
+
+/* Tailwind v4 build-time tokens. Only breakpoints and brand color belong here.
+   Font overrides are handled by the bridge vars below, not @theme. */
+@theme {
+  --breakpoint-tablet: 768px;
+  --breakpoint-desktop: 1024px;
+  --color-brand-primary: #f05030;
+}
+
+/* Font bridge: Konsta's .k-ios/.k-material classes resolve font-family through
+   var(--font-ios) and var(--font-material). These @theme tokens compile to :root
+   unconditionally, so we can't scope them by class. Instead, point them at
+   theme-controlled custom properties that each theme defines. This :root block
+   appears after Konsta's @theme in cascade order, so it wins. */
+:root {
+  --font-ios: var(--theme-font-ui);
+  --font-material: var(--theme-font-ui);
+}
+
+/* App-level defaults (invariant across themes, overridden per-org) */
+:root {
+  --brand-primary: #f05030;
+  --brand-primary-40: rgba(240, 80, 48, 0.4);
+  --brand-primary-20: rgba(240, 80, 48, 0.2);
+  --app-height: 100dvh;
+  color-scheme: light dark;
+}
+
+/* Lock document scroll so only inner containers scroll.
+   Prevents iOS Safari rubber-band bounce on the shell.
+   The App component's height constraint handles viewport sizing. */
+html,
+body {
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+
+/* Base typography */
+body {
+  font-family: var(--theme-font-ui);
+  background-color: var(--paper);
+  color: var(--ink);
+}
+
+/* Prevent iOS Safari auto-zoom on input focus (triggers below 16px).
+   Applies to all form controls so the native-app feel is preserved. */
+input,
+textarea,
+select {
+  font-size: 16px;
+}
+
+/* Accessibility: reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* Accessibility: high contrast disables decorative textures.
+   These selectors are no-ops when the default theme is active. */
+@media (prefers-contrast: more) {
+  .grain::before,
+  .halftone::after {
+    display: none !important;
+  }
+
+  .riso-heading {
+    filter: none !important;
+  }
+
+  .riso-heading-compact {
+    text-shadow: none !important;
+  }
+}
+
+/* View transitions */
+@view-transition {
+  navigation: auto;
+}
+
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation-duration: 180ms;
+  animation-timing-function: linear;
+}
+
+/* Skeleton bar: structural base. Animation is theme-specific. */
+.skeleton-bar {
+  height: 12px;
+  background: var(--muted);
+  border-radius: 2px;
+  transform-origin: left;
+  opacity: 0.3;
+}
