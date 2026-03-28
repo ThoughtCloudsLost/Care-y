@@ -89,6 +89,10 @@
           label={tab.label}
           role="tab"
           aria-selected={activeTab === tab.id}
+          colors={{
+            textActiveIos: "text-[var(--brand-text)]",
+            textActiveMaterial: "text-[var(--brand-text)]",
+          }}
         />
       {/each}
     </ToolbarPane>

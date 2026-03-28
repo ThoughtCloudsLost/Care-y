@@ -1,16 +1,16 @@
 /**
- * Runtime derivation of Konsta UI's --k-color-* palette from a brand hex.
+ * Runtime derivation of Konsta UI's --k-color-* palette from a brand hex,
+ * plus dual-token contrast enforcement.
  *
- * Mirrors what konsta/plugin-colors.js does at Tailwind build time, but runs
- * in the browser so org brand colors can be applied dynamically.
+ * Two functional tokens derived from the brand color:
+ * - --k-color-primary (fill token): used by bg-primary (buttons, badges,
+ *   toggles). Darkened if too light for white text on top.
+ * - --brand-text: used for brand-colored text on surfaces (tabbar active,
+ *   links, list buttons, outline buttons). Lightened in dark mode or
+ *   darkened in light mode to meet WCAG AA 4.5:1.
  *
- * After writing the palette, a contrast enforcement pass checks all
- * foreground-on-background token pairs and adjusts foreground lightness
- * to meet WCAG AA (4.5:1). This runs for every theme, color scheme,
- * and brand color combination automatically.
- *
- * iOS colors: pure HSL math (adapted from konsta v5.0.8 color-utils/ios-colors.js, MIT).
- * Material colors: uses @material/material-color-utilities via dynamic import.
+ * iOS colors: pure HSL math (adapted from konsta v5.0.8, MIT).
+ * Material colors: @material/material-color-utilities via dynamic import.
  */
 
 // --- Color conversion utilities ---
@@ -108,9 +108,8 @@ function contrastRatio(
 }
 
 /**
- * Adjust a foreground color's lightness until it meets the target contrast
- * ratio against a background. Preserves hue and saturation. Returns the
- * original hex if it already passes.
+ * Adjust a color's lightness until it meets the target contrast ratio
+ * against a background. Preserves hue and saturation.
  */
 function ensureContrast(
   fgHex: string,
@@ -136,39 +135,44 @@ function ensureContrast(
   return bgLum < 0.5 ? "#ffffff" : "#000000";
 }
 
+// --- Dual-token derivation ---
+
+// Worst-case surfaces for contrast checks.
+// Lightest dark surface and darkest light surface from riso theme.
+const WORST_DARK: [number, number, number] = [44, 42, 44]; // #2c2a2c
+const WORST_LIGHT: [number, number, number] = [229, 225, 218]; // #e5e1da
+const WHITE_RGB: [number, number, number] = [255, 255, 255];
+
 /**
- * Resolve a CSS custom property from :root's computed style to an RGB tuple.
- * Returns null if the property is unset or unparseable.
+ * Derive --brand-text: the brand color adjusted for text-on-surface.
+ * Lightened in dark mode, darkened in light mode, to meet WCAG AA 4.5:1
+ * against the worst-case surface.
  */
-function resolveVarToRgb(
-  computed: CSSStyleDeclaration,
-  prop: string,
-): [number, number, number] | null {
-  const raw = computed.getPropertyValue(prop).trim();
-  if (!raw) return null;
+function deriveBrandText(brandHex: string, isDark: boolean): string {
+  const worstSurface = isDark ? WORST_DARK : WORST_LIGHT;
+  return ensureContrast(brandHex, worstSurface, 4.5);
+}
 
-  // Konsta vars are in "rgb(R G B)" format (space-separated, no commas)
-  const rgbMatch = /rgb\(\s*(\d+)\s+(\d+)\s+(\d+)\s*\)/.exec(raw);
-  if (rgbMatch && rgbMatch.length >= 4) {
-    return [
-      parseInt(rgbMatch[1] ?? "0", 10),
-      parseInt(rgbMatch[2] ?? "0", 10),
-      parseInt(rgbMatch[3] ?? "0", 10),
-    ];
+/**
+ * Derive --brand-fill: the brand color adjusted for white-text-on-fill.
+ * Darkened if the brand is too light for white text, to meet WCAG AA 4.5:1.
+ * Returns the original hex if it already passes.
+ */
+function deriveBrandFill(brandHex: string): string {
+  const brandRgb = hexToRgbArray(brandHex);
+  if (!brandRgb) return brandHex;
+  if (contrastRatio(WHITE_RGB, brandRgb) >= 4.5) return brandHex;
+
+  // Darken the brand color until white passes
+  const hsl = rgbToHsl(...brandRgb);
+  for (let i = 1; i <= 40; i++) {
+    const newL = Math.max(0, hsl[2] - 0.02 * i);
+    const candidate = hslToRgb(hsl[0], hsl[1], newL);
+    if (contrastRatio(WHITE_RGB, candidate) >= 4.5) {
+      return rgbToHex(...candidate);
+    }
   }
-
-  // Comma-separated rgb(R, G, B)
-  const rgbComma = /rgb\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*\)/.exec(raw);
-  if (rgbComma && rgbComma.length >= 4) {
-    return [
-      parseInt(rgbComma[1] ?? "0", 10),
-      parseInt(rgbComma[2] ?? "0", 10),
-      parseInt(rgbComma[3] ?? "0", 10),
-    ];
-  }
-
-  // Hex fallback
-  return hexToRgbArray(raw);
+  return "#000000";
 }
 
 // --- iOS color derivation (pure HSL math) ---
@@ -252,226 +256,67 @@ async function deriveMdColors(
   return colors;
 }
 
-// --- Contrast enforcement ---
-
-/**
- * Foreground/background pairs to check. Each entry maps a --k-color-* foreground
- * token to the CSS property of the surface it sits on. The surface property may
- * be a --k-color-* var or a --color-* var (Konsta theme surface).
- *
- * "white-on" entries check white (#ffffff) against a brand-derived background
- * to catch light brand colors where white text becomes unreadable.
- */
-interface ContrastPair {
-  /** CSS property name for the foreground color (e.g., "--k-color-ios-primary") */
-  fg: string;
-  /** CSS property name for the background surface */
-  bg: string;
-  /** WCAG AA minimum ratio (4.5 for normal text, 3.0 for large text) */
-  ratio: number;
-}
-
-/** Build iOS foreground/background pairs for the current color scheme.
- *  Checks both --k-color-primary (used by text-primary class, TabbarLink)
- *  and --k-color-ios-primary (used by iOS-specific component styles).
- *  Uses worst-case surface so a single check covers all surface variants. */
-function getIosBrandOnSurfacePairs(isDark: boolean): ContrastPair[] {
-  const scheme = isDark ? "dark" : "light";
-  return [
-    {
-      fg: "--k-color-primary",
-      bg: `--color-ios-${scheme}-surface`,
-      ratio: 4.5,
-    },
-    {
-      fg: "--k-color-ios-primary",
-      bg: `--color-ios-${scheme}-surface`,
-      ratio: 4.5,
-    },
-  ];
-}
-
-/** Pairs where white text sits on the brand primary background.
- *  Only check --k-color-primary (used for button fills, badges, toggles).
- *  Do NOT check --k-color-ios-primary here because that token is primarily
- *  used as foreground text (tabbar, links) and gets lightened by the
- *  brand-on-surface check. Lightening + darkening the same token conflicts. */
-const WHITE_ON_BRAND: ContrastPair[] = [
-  // Button fill, Badge, Toggle checked, Checkbox/Radio checked, FAB
-  { fg: "white", bg: "--k-color-primary", ratio: 4.5 },
-];
-
-/** Material pairs that should be safe from SchemeTonalSpot but worth verifying */
-const MD_PAIRS: ContrastPair[] = [
-  {
-    fg: "--k-color-md-light-primary",
-    bg: "--k-color-md-light-surface",
-    ratio: 4.5,
-  },
-  {
-    fg: "--k-color-md-dark-primary",
-    bg: "--k-color-md-dark-surface",
-    ratio: 4.5,
-  },
-  {
-    fg: "--k-color-md-light-on-primary",
-    bg: "--k-color-md-light-primary",
-    ratio: 4.5,
-  },
-  {
-    fg: "--k-color-md-dark-on-primary",
-    bg: "--k-color-md-dark-primary",
-    ratio: 4.5,
-  },
-  {
-    fg: "--k-color-md-light-on-secondary-container",
-    bg: "--k-color-md-light-secondary-container",
-    ratio: 4.5,
-  },
-  {
-    fg: "--k-color-md-dark-on-secondary-container",
-    bg: "--k-color-md-dark-secondary-container",
-    ratio: 4.5,
-  },
-];
-
-const WHITE_RGB: [number, number, number] = [255, 255, 255];
-
-/**
- * Post-write contrast enforcement. Reads computed values from the DOM,
- * checks each foreground/background pair, and overwrites foreground
- * tokens that fail WCAG AA.
- */
-function enforceContrast(el: HTMLElement): void {
-  const computed = getComputedStyle(el);
-  const isDark = el.classList.contains("dark");
-  const scheme = isDark ? "dark" : "light";
-
-  const allPairs = [
-    ...getIosBrandOnSurfacePairs(isDark),
-    ...WHITE_ON_BRAND,
-    // Material pairs filtered to current scheme
-    ...MD_PAIRS.filter((p) => p.fg.includes(scheme) || p.bg.includes(scheme)),
-  ];
-
-  // Worst-case surfaces for contrast checks. Use the LIGHTEST dark surface
-  // and DARKEST light surface, so if the check passes here it passes everywhere.
-  // getComputedStyle often returns Konsta's @theme defaults (e.g., pure black)
-  // instead of the theme's overrides, so we always use these known values.
-  const WORST_DARK: [number, number, number] = [44, 42, 44]; // #2c2a2c (surface-variant, lightest dark)
-  const WORST_LIGHT: [number, number, number] = [229, 225, 218]; // #e5e1da (surface-variant, darkest light)
-
-  for (const pair of allPairs) {
-    // Always use worst-case surfaces instead of trusting getComputedStyle
-    let bgRgb: [number, number, number];
-    if (pair.bg.includes("dark")) bgRgb = WORST_DARK;
-    else if (pair.bg.includes("light")) bgRgb = WORST_LIGHT;
-    else {
-      // For non-scheme-specific tokens (e.g., --k-color-primary), try resolving
-      const resolved = resolveVarToRgb(computed, pair.bg);
-      if (!resolved) continue;
-      bgRgb = resolved;
-    }
-
-    const fgLabel = pair.fg.replace(/^--k-color-/, "");
-    const bgLabel = pair.bg.replace(/^--(color-|k-color-)/, "");
-
-    if (pair.fg === "white") {
-      const ratio = contrastRatio(WHITE_RGB, bgRgb);
-      const pass = ratio >= pair.ratio;
-      (pass ? console.log : console.warn)(
-        `[contrast] white on ${bgLabel} = ${ratio.toFixed(2)} ${pass ? "PASS" : "FAIL"}`,
-      );
-      if (
-        !pass &&
-        (pair.bg === "--k-color-primary" || pair.bg === "--k-color-ios-primary")
-      ) {
-        const bgHsl = rgbToHsl(...bgRgb);
-        for (let i = 1; i <= 40; i++) {
-          const newL = Math.max(0, bgHsl[2] - 0.02 * i);
-          const candidate = hslToRgb(bgHsl[0], bgHsl[1], newL);
-          if (contrastRatio(WHITE_RGB, candidate) >= pair.ratio) {
-            el.style.setProperty(
-              pair.bg,
-              `rgb(${String(candidate[0])} ${String(candidate[1])} ${String(candidate[2])})`,
-            );
-            console.warn(
-              `[contrast] -> darkened ${bgLabel} to [${String(candidate)}]`,
-            );
-            break;
-          }
-        }
-      }
-      continue;
-    }
-
-    const fgRgb = resolveVarToRgb(computed, pair.fg);
-    if (!fgRgb) {
-      console.warn(
-        `[contrast] ${fgLabel} on ${bgLabel}: fg unresolvable, skipped`,
-      );
-      continue;
-    }
-
-    const ratio = contrastRatio(fgRgb, bgRgb);
-    const pass = ratio >= pair.ratio;
-    (pass ? console.log : console.warn)(
-      `[contrast] ${fgLabel} on ${bgLabel} = ${ratio.toFixed(2)} ${pass ? "PASS" : "FAIL"}`,
-    );
-
-    if (!pass) {
-      const fgHex = rgbToHex(...fgRgb);
-      const adjusted = ensureContrast(fgHex, bgRgb, pair.ratio);
-      el.style.setProperty(pair.fg, `rgb(${hexToRgbString(adjusted)})`);
-      console.warn(`[contrast] -> adjusted ${fgLabel} to ${adjusted}`);
-    }
-  }
-}
-
 // --- Public API ---
 
 /**
  * Derives the full Konsta color palette from a brand hex, writes all
- * --k-color-* CSS vars to :root, then enforces WCAG AA contrast on
- * all foreground/background token pairs.
+ * --k-color-* CSS vars to :root, and sets the dual contrast tokens:
  *
+ * - --k-color-primary: the fill-safe brand color (darkened if needed
+ *   for white text readability on button fills, badges, toggles)
+ * - --brand-text: the surface-safe brand color (lightened/darkened
+ *   for text readability on page/card surfaces)
+ *
+ * Components use --brand-text via Konsta's colors prop or CSS overrides.
  * Browser-only (no-op during SSR).
  */
 export async function applyKonstaPalette(brandHex: string): Promise<void> {
   if (typeof document === "undefined") return;
 
   const el = document.documentElement;
+  const isDark = el.classList.contains("dark");
 
-  // Step 1: Write the raw palette
-  el.style.setProperty("--k-color-primary", `rgb(${hexToRgbString(brandHex)})`);
+  // Derive the two functional tokens
+  const brandText = deriveBrandText(brandHex, isDark);
+  const brandFill = deriveBrandFill(brandHex);
 
-  const ios = deriveIosColors(brandHex);
+  console.log(
+    `[palette] brand=${brandHex} text=${brandText} fill=${brandFill} dark=${String(isDark)}`,
+  );
+
+  // Set --brand-text for component overrides (tabbar, links, etc.)
+  el.style.setProperty("--brand-text", brandText);
+
+  // Set --k-color-primary to the fill-safe value
+  el.style.setProperty(
+    "--k-color-primary",
+    `rgb(${hexToRgbString(brandFill)})`,
+  );
+
+  // iOS derived colors use the fill value (shade/tint for button press states)
+  const ios = deriveIosColors(brandFill);
   for (const [token, hex] of Object.entries(ios)) {
     el.style.setProperty(`--k-color-${token}`, `rgb(${hexToRgbString(hex)})`);
   }
 
+  // Material palette from the raw brand hex (SchemeTonalSpot handles contrast)
   const md = await deriveMdColors(brandHex);
   for (const [token, hex] of Object.entries(md)) {
     el.style.setProperty(`--k-color-${token}`, `rgb(${hexToRgbString(hex)})`);
   }
-
-  // Step 2: Enforce contrast against actual computed surfaces.
-  // The surfaces may come from riso.css (color-mix with brand), default.css,
-  // or Konsta's built-in @theme defaults. Reading computed values handles
-  // all cases without hardcoding surface colors.
-  enforceContrast(el);
 }
 
 /**
- * Removes all runtime --k-color-* overrides from :root, reverting to
- * the build-time palette.
+ * Removes all runtime --k-color-* and --brand-text overrides from :root,
+ * reverting to the build-time palette.
  */
 export function resetKonstaPalette(): void {
   if (typeof document === "undefined") return;
 
   const el = document.documentElement;
-  const propsToRemove: string[] = [];
+  el.style.removeProperty("--brand-text");
 
+  const propsToRemove: string[] = [];
   for (let i = 0; i < el.style.length; i++) {
     const prop = el.style.item(i);
     if (prop.startsWith("--k-color-")) {
