@@ -32,11 +32,17 @@
 
   interface AppShellProps {
     activeTab: TabId;
+    orgName?: string;
     ontabchange: (tabId: TabId) => void;
     children: Snippet;
   }
 
-  let { activeTab, ontabchange, children }: AppShellProps = $props();
+  let {
+    activeTab,
+    orgName = "CARE-Y",
+    ontabchange,
+    children,
+  }: AppShellProps = $props();
 
   interface TabDef {
     readonly id: TabId;
@@ -52,7 +58,9 @@
 </script>
 
 <Page>
-  <Navbar title="CARE-Y" role="banner">
+  <Navbar role="banner">
+    {#snippet title()}<span class="riso-heading-compact">{orgName}</span
+      >{/snippet}
     {#snippet right()}
       <!-- Placeholder icons: wired in view phases -->
       <Link navbar iconOnly role="button" aria-label="Exposure status">

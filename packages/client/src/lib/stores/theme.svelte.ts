@@ -13,7 +13,7 @@ export type KonstaTheme = "ios" | "material";
 
 const UI_THEME_KEY = "care-y-theme";
 const COLOR_SCHEME_KEY = "care-y-color-scheme";
-const DEFAULT_UI_THEME: KonstaTheme = "ios";
+const DEFAULT_UI_THEME: KonstaTheme = "material";
 const DEFAULT_COLOR_SCHEME: ColorScheme = "dark";
 
 function resolveScheme(
