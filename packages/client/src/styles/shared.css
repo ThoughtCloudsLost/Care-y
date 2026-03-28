@@ -23,9 +23,29 @@
   --brand-primary: #f05030;
   --brand-primary-40: color-mix(in srgb, var(--brand-primary) 40%, transparent);
   --brand-primary-20: color-mix(in srgb, var(--brand-primary) 20%, transparent);
-  /* --brand-text: contrast-safe brand color for text on surfaces.
-     Set at runtime by konsta-palette.ts. Falls back to --brand-primary. */
+  /* Dual contrast tokens: set at runtime by konsta-palette.ts.
+     --brand-text: surface-safe for text accents.
+     --brand-fill: white-safe for fill backgrounds.
+     Fall back to --brand-primary when not set. */
   --brand-text: var(--brand-primary);
+  --brand-fill: var(--brand-primary);
+  --brand-primary-text: var(--brand-primary);
+  --brand-primary-fill: var(--brand-primary);
+
+  /* Secondary brand color (optional, set per-org) */
+  --brand-secondary: var(--brand-primary);
+  --brand-secondary-text: var(--brand-secondary);
+  --brand-secondary-fill: var(--brand-secondary);
+  --brand-secondary-40: color-mix(
+    in srgb,
+    var(--brand-secondary) 40%,
+    transparent
+  );
+  --brand-secondary-20: color-mix(
+    in srgb,
+    var(--brand-secondary) 20%,
+    transparent
+  );
   --app-height: 100dvh;
   color-scheme: light dark;
 }
