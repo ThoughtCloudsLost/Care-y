@@ -5,14 +5,19 @@
     applyKonstaPalette,
     resetKonstaPalette,
   } from "$lib/branding/konsta-palette";
+  import type { BrandColors } from "$lib/branding/konsta-palette";
 
-  const BRAND_COLOR_KEY = "care-y-dev-brand-color";
-  const DEFAULT_BRAND = "#f05030";
+  const PRIMARY_KEY = "care-y-dev-brand-color";
+  const SECONDARY_KEY = "care-y-dev-brand-secondary";
+  const DEFAULT_PRIMARY = "#f05030";
+  const DEFAULT_SECONDARY = "#2563eb";
   const MAX_LOG_LINES = 150;
 
   let opened = $state(false);
   let consoleOpen = $state(false);
-  let brandColor = $state(DEFAULT_BRAND);
+  let primaryColor = $state(DEFAULT_PRIMARY);
+  let secondaryColor = $state(DEFAULT_SECONDARY);
+  let secondaryEnabled = $state(false);
 
   interface LogLine {
     text: string;
@@ -53,32 +58,56 @@
     };
   }
 
-  // Hydrate persisted brand color (browser only)
+  // Hydrate persisted brand colors (browser only)
   if (typeof window !== "undefined") {
-    brandColor = localStorage.getItem(BRAND_COLOR_KEY) ?? DEFAULT_BRAND;
-    if (brandColor !== DEFAULT_BRAND) {
-      applyBrandColor(brandColor);
+    primaryColor = localStorage.getItem(PRIMARY_KEY) ?? DEFAULT_PRIMARY;
+    const storedSecondary = localStorage.getItem(SECONDARY_KEY);
+    if (storedSecondary !== null && storedSecondary !== "") {
+      secondaryColor = storedSecondary;
+      secondaryEnabled = true;
     }
+    applyBrandColors();
   }
 
-  function applyBrandColor(hex: string): void {
-    document.documentElement.style.setProperty("--brand-primary", hex);
-    localStorage.setItem(BRAND_COLOR_KEY, hex);
-    void applyKonstaPalette(hex);
+  function buildBrandColors(): BrandColors {
+    return {
+      primary: primaryColor,
+      secondary: secondaryEnabled ? secondaryColor : undefined,
+    };
   }
 
-  function resetBrandColor(): void {
-    brandColor = DEFAULT_BRAND;
-    localStorage.removeItem(BRAND_COLOR_KEY);
+  function applyBrandColors(): void {
+    document.documentElement.style.setProperty("--brand-primary", primaryColor);
+    localStorage.setItem(PRIMARY_KEY, primaryColor);
+    if (secondaryEnabled) {
+      localStorage.setItem(SECONDARY_KEY, secondaryColor);
+    } else {
+      localStorage.removeItem(SECONDARY_KEY);
+    }
+    void applyKonstaPalette(buildBrandColors());
+  }
+
+  function resetBrandColors(): void {
+    primaryColor = DEFAULT_PRIMARY;
+    secondaryColor = DEFAULT_SECONDARY;
+    secondaryEnabled = false;
+    localStorage.removeItem(PRIMARY_KEY);
+    localStorage.removeItem(SECONDARY_KEY);
     document.documentElement.style.removeProperty("--brand-primary");
     resetKonstaPalette();
-    void applyKonstaPalette(DEFAULT_BRAND);
+    void applyKonstaPalette({ primary: DEFAULT_PRIMARY });
   }
 
-  function handleColorInput(e: Event): void {
+  function handlePrimaryInput(e: Event): void {
     if (!(e.target instanceof HTMLInputElement)) return;
-    brandColor = e.target.value;
-    applyBrandColor(brandColor);
+    primaryColor = e.target.value;
+    applyBrandColors();
+  }
+
+  function handleSecondaryInput(e: Event): void {
+    if (!(e.target instanceof HTMLInputElement)) return;
+    secondaryColor = e.target.value;
+    applyBrandColors();
   }
 
   function cycleVisual(): void {
@@ -121,7 +150,7 @@
         class="dev-btn"
         onclick={() => {
           themeStore.toggleColorScheme();
-          queueMicrotask(() => void applyKonstaPalette(brandColor));
+          queueMicrotask(() => void applyKonstaPalette(buildBrandColors()));
         }}
       >
         {themeStore.resolvedScheme === "dark" ? "Dark" : "Light"}
@@ -135,15 +164,37 @@
       <div class="dev-color-cell">
         <input
           type="color"
-          value={brandColor}
-          oninput={handleColorInput}
+          value={primaryColor}
+          oninput={handlePrimaryInput}
           class="dev-color"
         />
-        <span class="dev-hex">{brandColor}</span>
+        <span class="dev-hex">{primaryColor}</span>
       </div>
     </div>
+    <div class="dev-row" style="margin-bottom: 0.5rem">
+      <button
+        class="dev-reset"
+        onclick={() => {
+          secondaryEnabled = !secondaryEnabled;
+          applyBrandColors();
+        }}
+      >
+        {secondaryEnabled ? "- Secondary" : "+ Secondary"}
+      </button>
+      {#if secondaryEnabled}
+        <div class="dev-color-cell" style="flex: 1">
+          <input
+            type="color"
+            value={secondaryColor}
+            oninput={handleSecondaryInput}
+            class="dev-color"
+          />
+          <span class="dev-hex">{secondaryColor}</span>
+        </div>
+      {/if}
+    </div>
     <div class="dev-row">
-      <button class="dev-reset" onclick={resetBrandColor}>Reset color</button>
+      <button class="dev-reset" onclick={resetBrandColors}>Reset colors</button>
       <button class="dev-reset" onclick={() => (consoleOpen = !consoleOpen)}>
         {consoleOpen ? "Hide" : "Show"} console ({logs.length})
       </button>

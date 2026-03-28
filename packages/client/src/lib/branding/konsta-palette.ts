@@ -258,63 +258,129 @@ async function deriveMdColors(
 
 // --- Public API ---
 
+export interface BrandColors {
+  primary: string;
+  secondary?: string;
+}
+
 /**
- * Derives the full Konsta color palette from a brand hex, writes all
- * --k-color-* CSS vars to :root, and sets the dual contrast tokens:
+ * Derive contrast-safe token pairs for a single brand color.
+ * Returns the text-safe and fill-safe hex values.
+ */
+function deriveDualTokens(
+  hex: string,
+  isDark: boolean,
+): { text: string; fill: string } {
+  return {
+    text: deriveBrandText(hex, isDark),
+    fill: deriveBrandFill(hex),
+  };
+}
+
+/**
+ * Derives the full Konsta color palette from brand colors, writes all
+ * --k-color-* CSS vars to :root, and sets dual contrast tokens for
+ * each brand color.
  *
- * - --k-color-primary: the fill-safe brand color (darkened if needed
- *   for white text readability on button fills, badges, toggles)
- * - --brand-text: the surface-safe brand color (lightened/darkened
- *   for text readability on page/card surfaces)
+ * For each color (primary, secondary), two functional tokens are created:
+ * - --brand-{name}-text: surface-safe for text accents (WCAG AA 4.5:1)
+ * - --brand-{name}-fill: white-safe for fill backgrounds (WCAG AA 4.5:1)
  *
- * Components use --brand-text via Konsta's colors prop or CSS overrides.
+ * Shorthand aliases:
+ * - --brand-text = --brand-primary-text
+ * - --brand-fill = --brand-primary-fill
+ *
+ * Konsta's --k-color-primary is set to the primary fill value.
  * Browser-only (no-op during SSR).
  */
-export async function applyKonstaPalette(brandHex: string): Promise<void> {
+export async function applyKonstaPalette(
+  colors: BrandColors | string,
+): Promise<void> {
   if (typeof document === "undefined") return;
+
+  const brand: BrandColors =
+    typeof colors === "string" ? { primary: colors } : colors;
 
   const el = document.documentElement;
   const isDark = el.classList.contains("dark");
 
-  // Derive the two functional tokens
-  const brandText = deriveBrandText(brandHex, isDark);
-  const brandFill = deriveBrandFill(brandHex);
+  // Primary tokens
+  const primary = deriveDualTokens(brand.primary, isDark);
+  el.style.setProperty("--brand-primary-text", primary.text);
+  el.style.setProperty("--brand-primary-fill", primary.fill);
+  el.style.setProperty("--brand-text", primary.text);
+  el.style.setProperty("--brand-fill", primary.fill);
 
   console.log(
-    `[palette] brand=${brandHex} text=${brandText} fill=${brandFill} dark=${String(isDark)}`,
+    `[palette] primary=${brand.primary} text=${primary.text} fill=${primary.fill} dark=${String(isDark)}`,
   );
 
-  // Set --brand-text for component overrides (tabbar, links, etc.)
-  el.style.setProperty("--brand-text", brandText);
+  // Secondary tokens (if provided)
+  if (brand.secondary !== undefined && brand.secondary !== "") {
+    const secondary = deriveDualTokens(brand.secondary, isDark);
+    el.style.setProperty("--brand-secondary", brand.secondary);
+    el.style.setProperty("--brand-secondary-text", secondary.text);
+    el.style.setProperty("--brand-secondary-fill", secondary.fill);
+    el.style.setProperty(
+      "--brand-secondary-40",
+      `color-mix(in srgb, ${brand.secondary} 40%, transparent)`,
+    );
+    el.style.setProperty(
+      "--brand-secondary-20",
+      `color-mix(in srgb, ${brand.secondary} 20%, transparent)`,
+    );
+    console.log(
+      `[palette] secondary=${brand.secondary} text=${secondary.text} fill=${secondary.fill}`,
+    );
+  } else {
+    el.style.removeProperty("--brand-secondary");
+    el.style.removeProperty("--brand-secondary-text");
+    el.style.removeProperty("--brand-secondary-fill");
+    el.style.removeProperty("--brand-secondary-40");
+    el.style.removeProperty("--brand-secondary-20");
+  }
 
-  // Set --k-color-primary to the fill-safe value
+  // Konsta primary = fill-safe value
   el.style.setProperty(
     "--k-color-primary",
-    `rgb(${hexToRgbString(brandFill)})`,
+    `rgb(${hexToRgbString(primary.fill)})`,
   );
 
-  // iOS derived colors use the fill value (shade/tint for button press states)
-  const ios = deriveIosColors(brandFill);
+  // iOS derived colors (shade/tint for button press states)
+  const ios = deriveIosColors(primary.fill);
   for (const [token, hex] of Object.entries(ios)) {
     el.style.setProperty(`--k-color-${token}`, `rgb(${hexToRgbString(hex)})`);
   }
 
-  // Material palette from the raw brand hex (SchemeTonalSpot handles contrast)
-  const md = await deriveMdColors(brandHex);
+  // Material palette (SchemeTonalSpot handles its own contrast)
+  const md = await deriveMdColors(brand.primary);
   for (const [token, hex] of Object.entries(md)) {
     el.style.setProperty(`--k-color-${token}`, `rgb(${hexToRgbString(hex)})`);
   }
 }
 
 /**
- * Removes all runtime --k-color-* and --brand-text overrides from :root,
+ * Removes all runtime brand and --k-color-* overrides from :root,
  * reverting to the build-time palette.
  */
 export function resetKonstaPalette(): void {
   if (typeof document === "undefined") return;
 
   const el = document.documentElement;
-  el.style.removeProperty("--brand-text");
+  const brandProps = [
+    "--brand-text",
+    "--brand-fill",
+    "--brand-primary-text",
+    "--brand-primary-fill",
+    "--brand-secondary",
+    "--brand-secondary-text",
+    "--brand-secondary-fill",
+    "--brand-secondary-40",
+    "--brand-secondary-20",
+  ];
+  for (const prop of brandProps) {
+    el.style.removeProperty(prop);
+  }
 
   const propsToRemove: string[] = [];
   for (let i = 0; i < el.style.length; i++) {
