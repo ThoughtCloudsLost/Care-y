@@ -7,90 +7,97 @@
   --theme-font-ui: "Space Grotesk", system-ui, sans-serif;
 
   --ink: #0a0a0a;
-  --paper: #f2ede4;
-  --surface-1: #f7f3ee;
-  --surface-2: #f2ede4;
+  --paper: color-mix(in oklch, #f0ece5 85%, var(--brand-primary) 15%);
+  --surface-1: color-mix(in oklch, #f5f2ed 82%, var(--brand-primary) 18%);
+  --surface-2: color-mix(in oklch, #f0ece5 85%, var(--brand-primary) 15%);
   --muted: #8a8580;
-  --brand-primary-40: rgba(240, 80, 48, 0.4);
-  --brand-primary-20: rgba(240, 80, 48, 0.2);
 
-  /* Konsta iOS surface overrides: warm-tinted via color-mix with brand-primary */
-  --color-ios-light-surface: #f2ede4;
+  /* Konsta iOS surface overrides: brand-tinted via color-mix in oklch
+     (perceptually uniform, so tinting looks natural across brand colors).
+     Neutral light bases with 15-20% brand influence. */
+  --color-ios-light-surface: color-mix(
+    in oklch,
+    #f0ece5 85%,
+    var(--brand-primary) 15%
+  );
   --color-ios-light-surface-1: color-mix(
-    in srgb,
-    #f7f3ee 90%,
-    var(--brand-primary) 10%
+    in oklch,
+    #f5f2ed 82%,
+    var(--brand-primary) 18%
   );
   --color-ios-light-surface-1-shade: color-mix(
-    in srgb,
-    #edeae3 90%,
-    var(--brand-primary) 10%
+    in oklch,
+    #e8e4dd 82%,
+    var(--brand-primary) 18%
   );
   --color-ios-light-surface-1-tint: color-mix(
-    in srgb,
-    #faf8f4 92%,
-    var(--brand-primary) 8%
+    in oklch,
+    #faf8f5 88%,
+    var(--brand-primary) 12%
   );
   --color-ios-light-surface-2: color-mix(
-    in srgb,
-    #f2ede4 92%,
-    var(--brand-primary) 8%
+    in oklch,
+    #f0ece5 85%,
+    var(--brand-primary) 15%
   );
   --color-ios-light-surface-3: color-mix(
-    in srgb,
-    #f7f3ee 90%,
-    var(--brand-primary) 10%
+    in oklch,
+    #f5f2ed 82%,
+    var(--brand-primary) 18%
   );
   --color-ios-light-surface-variant: color-mix(
-    in srgb,
-    #ebe7e0 92%,
-    var(--brand-primary) 8%
+    in oklch,
+    #e5e1da 85%,
+    var(--brand-primary) 15%
   );
-  --color-ios-dark-surface: #161618;
-  --color-ios-dark-surface-1: #201e20;
-  --color-ios-dark-surface-1-shade: #111113;
-  --color-ios-dark-surface-1-tint: #353335;
-  --color-ios-dark-surface-2: #282628;
-  --color-ios-dark-surface-3: #201e20;
-  --color-ios-dark-surface-variant: #2e2c2e;
 
-  /* Konsta Material surface overrides: same color-mix approach as iOS */
+  /* iOS dark surfaces: solid dark paper, no brand tinting */
+  --color-ios-dark-surface: #141416;
+  --color-ios-dark-surface-1: #1e1c1e;
+  --color-ios-dark-surface-1-shade: #101012;
+  --color-ios-dark-surface-1-tint: #333133;
+  --color-ios-dark-surface-2: #262426;
+  --color-ios-dark-surface-3: #1e1c1e;
+  --color-ios-dark-surface-variant: #2c2a2c;
+
+  /* Konsta Material surface overrides */
+  /* Light: brand-tinted */
   --color-md-light-surface-1: color-mix(
-    in srgb,
-    #f7f3ee 90%,
-    var(--brand-primary) 10%
+    in oklch,
+    #f5f2ed 82%,
+    var(--brand-primary) 18%
   );
   --color-md-light-surface-2: color-mix(
-    in srgb,
-    #f2ede4 92%,
-    var(--brand-primary) 8%
+    in oklch,
+    #f0ece5 85%,
+    var(--brand-primary) 15%
   );
   --color-md-light-surface-3: color-mix(
-    in srgb,
-    #f7f3ee 90%,
-    var(--brand-primary) 10%
+    in oklch,
+    #f5f2ed 82%,
+    var(--brand-primary) 18%
   );
   --color-md-light-surface-variant: color-mix(
-    in srgb,
-    #ebe7e0 92%,
-    var(--brand-primary) 8%
+    in oklch,
+    #e5e1da 85%,
+    var(--brand-primary) 15%
   );
-  --color-md-dark-surface: #161618;
-  --color-md-dark-surface-1: #201e20;
-  --color-md-dark-surface-2: #282628;
-  --color-md-dark-surface-3: #201e20;
-  --color-md-dark-surface-variant: #2e2c2e;
+  /* Dark: solid dark paper, no brand tinting */
+  --color-md-dark-surface: #141416;
+  --color-md-dark-surface-1: #1e1c1e;
+  --color-md-dark-surface-2: #262426;
+  --color-md-dark-surface-3: #1e1c1e;
+  --color-md-dark-surface-variant: #2c2a2c;
 }
 
-/* --- Dark mode: dark paper stock --- */
+/* --- Dark mode: black paper stock, no brand tinting on backgrounds.
+   The dark riso look is dark paper with brand color on accents/ink overlay only. --- */
 .theme-riso.dark {
   --ink: #f2ede4;
-  --paper: #161618;
-  --surface-1: #201e20;
-  --surface-2: #282628;
+  --paper: #141416;
+  --surface-1: #1e1c1e;
+  --surface-2: #262426;
   --muted: #7a7570;
-  --brand-primary-40: rgba(240, 80, 48, 0.4);
-  --brand-primary-20: rgba(240, 80, 48, 0.2);
   background-color: var(--paper);
   color: var(--ink);
 }
@@ -98,9 +105,9 @@
 /* --- Light mode --- */
 .theme-riso.light {
   --ink: #0a0a0a;
-  --paper: #f2ede4;
-  --surface-1: #f7f3ee;
-  --surface-2: #f2ede4;
+  --paper: color-mix(in oklch, #f0ece5 85%, var(--brand-primary) 15%);
+  --surface-1: color-mix(in oklch, #f5f2ed 82%, var(--brand-primary) 18%);
+  --surface-2: color-mix(in oklch, #f0ece5 85%, var(--brand-primary) 15%);
   --muted: #8a8580;
 }
 
@@ -125,12 +132,12 @@
 
 /* Riso ink overlay: opt-in for branding/hero elements.
    Apply .riso-block to a Konsta Block to get the riso drum
-   print effect in --brand-primary. */
-.theme-riso.dark .riso-block {
+   print effect in --brand-primary. Works in both light and dark. */
+.theme-riso .riso-block {
   position: relative;
 }
 
-.theme-riso.dark .riso-block::after {
+.theme-riso .riso-block::after {
   content: "";
   position: absolute;
   inset: 0;
@@ -142,9 +149,17 @@
   -webkit-mask-image: url("/styles/riso-ink.png");
   -webkit-mask-repeat: repeat;
   -webkit-mask-size: 600px;
-  opacity: 0.35;
   pointer-events: none;
   z-index: 0;
+}
+
+/* Stronger overlay on dark paper, subtler on light */
+.theme-riso.dark .riso-block::after {
+  opacity: 0.35;
+}
+
+.theme-riso.light .riso-block::after {
+  opacity: 0.2;
 }
 
 /* Grain texture overlay */

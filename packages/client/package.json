@@ -17,6 +17,7 @@
     "@care-y/crypto": "workspace:*",
     "@care-y/server": "workspace:*",
     "@care-y/shared": "workspace:*",
+    "@material/material-color-utilities": "0.4.0",
     "@tanstack/svelte-query": "6.1.8",
     "@trpc/client": "11.10.0",
     "@twilio/voice-sdk": "2.18.1",

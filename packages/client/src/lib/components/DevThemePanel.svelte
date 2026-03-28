@@ -1,30 +1,78 @@
 <script lang="ts">
   import { themeStore } from "$lib/stores/theme.svelte";
   import type { VisualTheme, KonstaTheme } from "$lib/stores/theme.svelte";
+  import {
+    applyKonstaPalette,
+    resetKonstaPalette,
+  } from "$lib/branding/konsta-palette";
+
+  const BRAND_COLOR_KEY = "care-y-dev-brand-color";
+  const DEFAULT_BRAND = "#f05030";
+  const MAX_LOG_LINES = 150;
 
   let opened = $state(false);
-  let brandColor = $state("#f05030");
+  let consoleOpen = $state(false);
+  let brandColor = $state(DEFAULT_BRAND);
+
+  interface LogLine {
+    text: string;
+    level: "log" | "warn" | "error";
+  }
+
+  let logs: LogLine[] = $state([]);
+
+  // Intercept console.log/warn/error in the browser
+  if (typeof window !== "undefined") {
+    const orig = {
+      log: console.log.bind(console),
+      warn: console.warn.bind(console),
+      error: console.error.bind(console),
+    };
+
+    function capture(level: LogLine["level"], args: unknown[]): void {
+      const text = args
+        .map((a) => (typeof a === "string" ? a : JSON.stringify(a)))
+        .join(" ");
+      logs.push({ text, level });
+      if (logs.length > MAX_LOG_LINES) {
+        logs.splice(0, logs.length - MAX_LOG_LINES);
+      }
+    }
+
+    console.log = (...args: unknown[]) => {
+      orig.log(...args);
+      capture("log", args);
+    };
+    console.warn = (...args: unknown[]) => {
+      orig.warn(...args);
+      capture("warn", args);
+    };
+    console.error = (...args: unknown[]) => {
+      orig.error(...args);
+      capture("error", args);
+    };
+  }
+
+  // Hydrate persisted brand color (browser only)
+  if (typeof window !== "undefined") {
+    brandColor = localStorage.getItem(BRAND_COLOR_KEY) ?? DEFAULT_BRAND;
+    if (brandColor !== DEFAULT_BRAND) {
+      applyBrandColor(brandColor);
+    }
+  }
 
   function applyBrandColor(hex: string): void {
-    document.body.style.setProperty("--brand-primary", hex);
-    const r = parseInt(hex.slice(1, 3), 16);
-    const g = parseInt(hex.slice(3, 5), 16);
-    const b = parseInt(hex.slice(5, 7), 16);
-    document.body.style.setProperty(
-      "--brand-primary-40",
-      `rgba(${String(r)}, ${String(g)}, ${String(b)}, 0.4)`,
-    );
-    document.body.style.setProperty(
-      "--brand-primary-20",
-      `rgba(${String(r)}, ${String(g)}, ${String(b)}, 0.2)`,
-    );
+    document.documentElement.style.setProperty("--brand-primary", hex);
+    localStorage.setItem(BRAND_COLOR_KEY, hex);
+    void applyKonstaPalette(hex);
   }
 
   function resetBrandColor(): void {
-    brandColor = "#f05030";
-    document.body.style.removeProperty("--brand-primary");
-    document.body.style.removeProperty("--brand-primary-40");
-    document.body.style.removeProperty("--brand-primary-20");
+    brandColor = DEFAULT_BRAND;
+    localStorage.removeItem(BRAND_COLOR_KEY);
+    document.documentElement.style.removeProperty("--brand-primary");
+    resetKonstaPalette();
+    void applyKonstaPalette(DEFAULT_BRAND);
   }
 
   function handleColorInput(e: Event): void {
@@ -43,9 +91,13 @@
     const themes: KonstaTheme[] = ["ios", "material"];
     const idx = themes.indexOf(themeStore.uiTheme);
     themeStore.setUiTheme(themes[(idx + 1) % themes.length]);
-    // Konsta doesn't fully reinitialize on runtime theme switch (iOS tabbar
-    // glass drag breaks). Reload so the new theme is picked up from localStorage.
     window.location.reload();
+  }
+
+  function logColor(level: LogLine["level"]): string {
+    if (level === "error") return "#ff4444";
+    if (level === "warn") return "#ffaa00";
+    return "#88ff88";
   }
 </script>
 
@@ -65,7 +117,13 @@
   <div class="dev-panel" role="dialog" aria-label="Dev theme panel">
     <div class="dev-title">Dev Theme Panel</div>
     <div class="dev-grid">
-      <button class="dev-btn" onclick={() => themeStore.toggleColorScheme()}>
+      <button
+        class="dev-btn"
+        onclick={() => {
+          themeStore.toggleColorScheme();
+          queueMicrotask(() => void applyKonstaPalette(brandColor));
+        }}
+      >
         {themeStore.resolvedScheme === "dark" ? "Dark" : "Light"}
       </button>
       <button class="dev-btn" onclick={cycleUi}>
@@ -84,7 +142,23 @@
         <span class="dev-hex">{brandColor}</span>
       </div>
     </div>
-    <button class="dev-reset" onclick={resetBrandColor}>Reset color</button>
+    <div class="dev-row">
+      <button class="dev-reset" onclick={resetBrandColor}>Reset color</button>
+      <button class="dev-reset" onclick={() => (consoleOpen = !consoleOpen)}>
+        {consoleOpen ? "Hide" : "Show"} console ({logs.length})
+      </button>
+      <button class="dev-reset" onclick={() => (logs.length = 0)}>
+        Clear
+      </button>
+    </div>
+
+    {#if consoleOpen}
+      <div class="dev-console">
+        {#each logs as line (line)}
+          <div style:color={logColor(line.level)}>{line.text}</div>
+        {/each}
+      </div>
+    {/if}
   </div>
 {/if}
 
@@ -133,6 +207,8 @@
     padding: 1rem;
     padding-bottom: calc(1rem + env(safe-area-inset-bottom));
     border-radius: 1rem 1rem 0 0;
+    max-height: 80vh;
+    overflow-y: auto;
   }
 
   .dev-title {
@@ -192,8 +268,14 @@
     color: var(--muted, #888);
   }
 
+  .dev-row {
+    display: flex;
+    gap: 0.5rem;
+    margin-bottom: 0.5rem;
+  }
+
   .dev-reset {
-    width: 100%;
+    flex: 1;
     padding: 0.4rem;
     border-radius: 0.5rem;
     border: 1px solid var(--muted, #888);
@@ -201,5 +283,15 @@
     color: var(--muted, #888);
     font-size: 0.75rem;
     cursor: pointer;
+  }
+
+  .dev-console {
+    background: #0a0a0a;
+    border-radius: 0.5rem;
+    padding: 0.5rem;
+    max-height: 30vh;
+    overflow-y: auto;
+    font: 9px/1.4 monospace;
+    word-break: break-all;
   }
 </style>
