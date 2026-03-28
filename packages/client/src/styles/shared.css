@@ -23,6 +23,9 @@
   --brand-primary: #f05030;
   --brand-primary-40: color-mix(in srgb, var(--brand-primary) 40%, transparent);
   --brand-primary-20: color-mix(in srgb, var(--brand-primary) 20%, transparent);
+  /* --brand-text: contrast-safe brand color for text on surfaces.
+     Set at runtime by konsta-palette.ts. Falls back to --brand-primary. */
+  --brand-text: var(--brand-primary);
   --app-height: 100dvh;
   color-scheme: light dark;
 }
@@ -88,6 +91,16 @@ select {
 ::view-transition-new(root) {
   animation-duration: 180ms;
   animation-timing-function: linear;
+}
+
+/* Brand text overrides: Konsta uses text-primary (--color-primary) for both
+   foreground text AND background fills via the same token. We split them:
+   --k-color-primary is the fill-safe value (bg-primary stays correct).
+   --brand-text is the surface-safe value for text contexts.
+   These overrides target Konsta's link and list-button text usage without
+   affecting bg-primary fills (buttons, badges, toggles) or navbar icons. */
+.k-list-button .k-list-button-text {
+  color: var(--brand-text);
 }
 
 /* Skeleton bar: structural base. Animation is theme-specific. */
