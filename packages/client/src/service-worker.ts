@@ -70,7 +70,11 @@ sw.addEventListener("activate", (event: ExtendableEvent) => {
  * /sse/), they must be added here to prevent accidental caching of live data.
  */
 function isExcludedPath(url: URL): boolean {
-  return url.pathname.startsWith("/api/") || url.pathname.startsWith("/trpc/");
+  return (
+    url.pathname.startsWith("/api/") ||
+    url.pathname.startsWith("/trpc/") ||
+    url.pathname.startsWith("/sse/")
+  );
 }
 
 /**

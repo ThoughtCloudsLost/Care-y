@@ -1,0 +1,12 @@
+/* iOS active-state touch feedback.
+   Apply .touch-feedback to tappable non-link elements (cards, list items).
+   Konsta's own components handle their own :active states. */
+
+.touch-feedback {
+  -webkit-tap-highlight-color: transparent;
+  transition: opacity 60ms linear;
+}
+
+.touch-feedback:active {
+  opacity: 0.6;
+}
