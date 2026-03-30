@@ -3,12 +3,17 @@
   import { App } from "konsta/svelte";
   import { QueryClient, QueryClientProvider } from "@tanstack/svelte-query";
   import { onNavigate } from "$app/navigation";
+  import { onMount } from "svelte";
+  import { browser } from "$app/environment";
   import favicon from "$lib/assets/favicon.svg";
   import { themeStore } from "$lib/stores/theme.svelte";
+  import { initKeyboardViewport } from "$lib/utils/keyboard-viewport";
+  import { announceToLiveRegion } from "$lib/utils/announce";
+  import { createSSEListener } from "$lib/sse/index.svelte";
   import RisoInkFilter from "$lib/components/RisoInkFilter.svelte";
   import AppShell from "$lib/shell/AppShell.svelte";
   import DevThemePanel from "$lib/components/DevThemePanel.svelte";
-  import type { TabId } from "$lib/shell/types";
+  import { TAB_IDS, type TabId } from "$lib/shell/types";
 
   const isDev = import.meta.env.DEV;
 
@@ -40,12 +45,38 @@
     });
   });
 
-  let activeTab: TabId = $state("home");
+  let activeTab: TabId = $state(TAB_IDS[0]);
 
   function handleTabChange(tabId: TabId): void {
     activeTab = tabId;
     // Tab-to-route mapping wired when route structure exists
   }
+
+  const sseListener = createSSEListener({
+    url: "/sse/events",
+    queryClient,
+    onConnectionChange: (isConnected) => {
+      if (!isConnected) {
+        announceToLiveRegion(
+          "assertive",
+          "Real-time connection lost. Reconnecting...",
+        );
+      }
+    },
+  });
+
+  onMount(() => {
+    if (!browser) return;
+    const cleanupKeyboard = initKeyboardViewport();
+
+    // SSE connects unconditionally for now; auth guard added when login flow exists (6i)
+    sseListener.connect();
+
+    return () => {
+      cleanupKeyboard();
+      sseListener.disconnect();
+    };
+  });
 </script>
 
 <svelte:head>
