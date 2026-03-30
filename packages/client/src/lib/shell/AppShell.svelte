@@ -47,13 +47,14 @@
   interface TabDef {
     readonly id: TabId;
     readonly label: string;
+    readonly icon: string;
   }
 
   const allTabs: readonly TabDef[] = [
-    { id: "home", label: "Home" },
-    { id: "tickets", label: "Tickets" },
-    { id: "calendar", label: "Calendar" },
-    { id: "more", label: "More" },
+    { id: "home", label: "Home", icon: "\u2302" },
+    { id: "tickets", label: "Tickets", icon: "\u2709" },
+    { id: "calendar", label: "Calendar", icon: "\u2630" },
+    { id: "more", label: "More", icon: "\u22EF" },
   ] as const;
 </script>
 
@@ -93,7 +94,11 @@
             textActiveIos: "text-[var(--brand-text)]",
             textActiveMaterial: "text-[var(--brand-text)]",
           }}
-        />
+        >
+          {#snippet icon()}<span aria-hidden="true" class="text-lg"
+              >{tab.icon}</span
+            >{/snippet}
+        </TabbarLink>
       {/each}
     </ToolbarPane>
   </Tabbar>
