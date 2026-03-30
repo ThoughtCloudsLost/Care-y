@@ -134,169 +134,15 @@
   background: transparent !important;
 }
 
-/* ==========================================================
-   iOS GLASS OVERRIDE: Replace Konsta's native iOS frosted glass
-   with Frutiger Aero translucent plastic. The .k-glass element
-   wraps navbar/toolbar on iOS and applies its own bg + shadow.
-   ========================================================== */
+/* No .k-glass overrides. Konsta's built-in iOS frosted glass is used as-is
+   so navbar/tabbar look native across all themes. */
 
-.theme-frutiger .k-glass {
-  background: var(--glass-bg-strong) !important;
-  box-shadow: var(--shadow), var(--inner-highlight) !important;
-  backdrop-filter: blur(var(--glass-blur)) !important;
-  -webkit-backdrop-filter: blur(var(--glass-blur)) !important;
-}
+/* No glass color overrides. Konsta's built-in .k-glass handles the native frosted look. */
 
-/* Gloss stripe on the glass pane */
-.theme-frutiger .k-glass::after {
-  content: "";
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 50%;
-  background: linear-gradient(
-    180deg,
-    var(--gloss-top) 0%,
-    var(--gloss-mid) 80%,
-    var(--gloss-bottom) 100%
-  );
-  pointer-events: none;
-  z-index: 1;
-}
+/* Navbar and toolbar: no overrides. Konsta's native glass handles these. */
 
-/* Override the Konsta glass color tokens so nothing leaks through */
-.theme-frutiger {
-  --color-ios-light-glass: rgba(130, 215, 245, 0.55);
-  --color-ios-dark-glass: rgba(10, 35, 70, 0.75);
-}
-
-/* ==========================================================
-   NAVBAR: Translucent glossy bar with organic radius
-   ========================================================== */
-
-.theme-frutiger .k-navbar {
-  backdrop-filter: blur(var(--glass-blur));
-  -webkit-backdrop-filter: blur(var(--glass-blur));
-  border: none;
-  box-shadow: none;
-}
-
-.theme-frutiger.light .k-navbar {
-  background: transparent !important;
-}
-
-.theme-frutiger.dark .k-navbar {
-  background: transparent !important;
-}
-
-/* Gloss: wet shine across top half */
-.theme-frutiger .k-navbar::after {
-  content: "";
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 50%;
-  background: linear-gradient(
-    180deg,
-    var(--gloss-top) 0%,
-    var(--gloss-mid) 80%,
-    var(--gloss-bottom) 100%
-  );
-  pointer-events: none;
-  z-index: 0;
-}
-
-/* ==========================================================
-   TOOLBAR / TABBAR: Translucent glossy bar
-   ========================================================== */
-
-.theme-frutiger .k-toolbar {
-  backdrop-filter: blur(var(--glass-blur));
-  -webkit-backdrop-filter: blur(var(--glass-blur));
-  border: none;
-  box-shadow: none;
-}
-
-.theme-frutiger.light .k-toolbar {
-  background: transparent !important;
-}
-
-.theme-frutiger.dark .k-toolbar {
-  background: transparent !important;
-}
-
-/* ==========================================================
-   BLOCKS: Translucent cards with organic asymmetric radius
-   ========================================================== */
-
-.theme-frutiger .k-block {
-  border-radius: var(--bubble-radius-organic);
-  backdrop-filter: blur(var(--glass-blur));
-  -webkit-backdrop-filter: blur(var(--glass-blur));
-  background: var(--glass-bg);
-  border: 1px solid var(--border-dark);
-  border-top-color: var(--border-light);
-  border-left-color: var(--border-light);
-  box-shadow: var(--shadow), var(--inner-highlight), var(--inner-shadow);
-  position: relative;
-  overflow: hidden;
-}
-
-/* Wet gloss: hard-edge shine at ~50% */
-.theme-frutiger .k-block::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  background: linear-gradient(
-    180deg,
-    var(--gloss-top) 0%,
-    var(--gloss-mid) 48%,
-    var(--gloss-bottom) 50%
-  );
-  pointer-events: none;
-  z-index: 0;
-}
-
-/* Varied organic shapes: nth-child cycling so adjacent cards
-   don't share the same silhouette. Targets blocks & cards. */
-.theme-frutiger .k-block:nth-child(4n + 1),
-.theme-frutiger .k-card:nth-child(4n + 1) {
-  border-radius: 1.75rem 2rem 1.5rem 1.75rem;
-}
-
-.theme-frutiger .k-block:nth-child(4n + 2),
-.theme-frutiger .k-card:nth-child(4n + 2) {
-  border-radius: 1.5rem 1.75rem 2rem 1.5rem;
-}
-
-.theme-frutiger .k-block:nth-child(4n + 3),
-.theme-frutiger .k-card:nth-child(4n + 3) {
-  border-radius: 2rem 1.5rem 1.75rem 2rem;
-}
-
-.theme-frutiger .k-block:nth-child(4n + 4),
-.theme-frutiger .k-card:nth-child(4n + 4) {
-  border-radius: 1.5rem 2rem 1.75rem 1.5rem;
-}
-
-/* ==========================================================
-   LISTS: Translucent glass container, organic shape
-   ========================================================== */
-
-.theme-frutiger .k-list {
-  border-radius: var(--bubble-radius-organic);
-  backdrop-filter: blur(var(--glass-blur));
-  -webkit-backdrop-filter: blur(var(--glass-blur));
-  background: var(--glass-bg);
-  border: 1px solid var(--border-dark);
-  border-top-color: var(--border-light);
-  border-left-color: var(--border-light);
-  box-shadow: var(--shadow), var(--inner-highlight), var(--inner-shadow);
-  overflow: hidden;
-}
+/* Blocks, cards, lists: use Konsta's native look.
+   Frutiger glass treatment is available via .card-elevated for opt-in elements. */
 
 /* List dividers */
 .theme-frutiger.light .k-list .hairline-b::after {
@@ -460,37 +306,31 @@
     0 1px 0 var(--border-light);
 }
 
-/* ==========================================================
-   CARDS: Translucent glossy plastic, organic shape
-   ========================================================== */
-
-.theme-frutiger .k-card {
-  border-radius: var(--bubble-radius-organic);
-  backdrop-filter: blur(var(--glass-blur));
-  -webkit-backdrop-filter: blur(var(--glass-blur));
-  background: var(--glass-bg);
-  border: 1px solid var(--border-dark);
-  border-top-color: var(--border-light);
-  border-left-color: var(--border-light);
-  box-shadow:
-    var(--shadow-elevated), var(--inner-highlight), var(--inner-shadow);
-  overflow: hidden;
-  position: relative;
+/* Elevated cards: Konsta's iOS glass surface tokens */
+.theme-frutiger .card-elevated {
+  background: var(--color-ios-light-glass);
+  box-shadow: var(--shadow-ios-light-glass);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
 }
 
-.theme-frutiger .k-card::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  background: linear-gradient(
-    180deg,
-    var(--gloss-top) 0%,
-    var(--gloss-mid) 48%,
-    var(--gloss-bottom) 50%
-  );
-  pointer-events: none;
-  z-index: 0;
+.theme-frutiger.dark .card-elevated {
+  background: var(--color-ios-dark-glass);
+  box-shadow: var(--shadow-ios-dark-glass);
+}
+
+/* Glass mode: force dark glass on frutiger cards in light mode */
+html.glass-dark.light .theme-frutiger .card-elevated {
+  background: var(--color-ios-dark-glass) !important;
+  box-shadow: var(--shadow-ios-dark-glass) !important;
+  color: #f5f5f7;
+}
+
+/* Glass mode: force light glass on frutiger cards in dark mode */
+html.glass-light.dark .theme-frutiger .card-elevated {
+  background: var(--color-ios-light-glass) !important;
+  box-shadow: var(--shadow-ios-light-glass) !important;
+  color: #1a1a1a;
 }
 
 /* ==========================================================
@@ -554,7 +394,7 @@
    DIVIDER
    ========================================================== */
 
-.theme-frutiger .riso-divider {
+.theme-frutiger .divider-brand {
   height: 1px;
   background: var(--border-dark);
 }
@@ -564,21 +404,35 @@
    ========================================================== */
 
 /* Glossy heading */
-.theme-frutiger .frutiger-heading {
+.theme-frutiger .heading-display {
   font-family: var(--theme-font-display);
   font-weight: 700;
 }
 
-.theme-frutiger.light .frutiger-heading {
+.theme-frutiger.light .heading-display {
   text-shadow:
     0 1px 0 rgba(255, 255, 255, 0.8),
     0 2px 10px var(--brand-primary-20);
 }
 
-.theme-frutiger.dark .frutiger-heading {
+.theme-frutiger.dark .heading-display {
   text-shadow:
     0 1px 2px rgba(0, 0, 0, 0.6),
     0 2px 14px var(--brand-primary-20);
+}
+
+/* Compact heading: navbar/small contexts */
+.theme-frutiger .heading-compact {
+  font-family: var(--theme-font-display);
+  font-weight: 700;
+}
+
+.theme-frutiger.light .heading-compact {
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.6);
+}
+
+.theme-frutiger.dark .heading-compact {
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
 }
 
 /* Bubble: full glossy translucent pill */
@@ -739,20 +593,16 @@
     -webkit-backdrop-filter: none !important;
   }
 
-  .theme-frutiger .k-block::before,
-  .theme-frutiger .k-card::before,
   .theme-frutiger .k-dialog::before,
   .theme-frutiger .frutiger-glass::before,
   .theme-frutiger .frutiger-tile::before,
   .theme-frutiger .frutiger-bubble::before,
-  .theme-frutiger .k-navbar::after,
-  .theme-frutiger .k-glass::after,
   .theme-frutiger .k-button::after,
   .theme-frutiger .k-fab::after {
     display: none;
   }
 
-  .theme-frutiger .frutiger-heading,
+  .theme-frutiger .heading-display,
   .theme-frutiger .k-block-title {
     text-shadow: none;
   }

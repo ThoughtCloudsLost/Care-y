@@ -1,7 +1,7 @@
-<hr class="riso-divider" aria-hidden="true" />
+<hr class="divider-brand" aria-hidden="true" />
 
 <style>
-  .riso-divider {
+  .divider-brand {
     border: none;
     height: 4px;
     background: var(--brand-primary);

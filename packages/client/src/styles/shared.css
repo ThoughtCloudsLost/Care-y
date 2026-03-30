@@ -32,20 +32,12 @@
   --brand-primary-text: var(--brand-primary);
   --brand-primary-fill: var(--brand-primary);
 
-  /* Secondary brand color (optional, set per-org) */
-  --brand-secondary: var(--brand-primary);
-  --brand-secondary-text: var(--brand-secondary);
-  --brand-secondary-fill: var(--brand-secondary);
-  --brand-secondary-40: color-mix(
-    in srgb,
-    var(--brand-secondary) 40%,
-    transparent
-  );
-  --brand-secondary-20: color-mix(
-    in srgb,
-    var(--brand-secondary) 20%,
-    transparent
-  );
+  /* Accent brand color (optional, set per-org) */
+  --brand-accent: var(--brand-primary);
+  --brand-accent-text: var(--brand-accent);
+  --brand-accent-fill: var(--brand-accent);
+  --brand-accent-40: color-mix(in srgb, var(--brand-accent) 40%, transparent);
+  --brand-accent-20: color-mix(in srgb, var(--brand-accent) 20%, transparent);
   --app-height: 100dvh;
   color-scheme: light dark;
 }
@@ -93,11 +85,11 @@ select {
     display: none !important;
   }
 
-  .riso-heading {
+  .heading-display {
     filter: none !important;
   }
 
-  .riso-heading-compact {
+  .heading-compact {
     text-shadow: none !important;
   }
 }
@@ -109,8 +101,8 @@ select {
 
 ::view-transition-old(root),
 ::view-transition-new(root) {
-  animation-duration: 180ms;
-  animation-timing-function: linear;
+  animation-duration: var(--anim-transition-duration);
+  animation-timing-function: var(--anim-transition-easing);
 }
 
 /* Brand text overrides: Konsta uses text-primary (--color-primary) for both
@@ -123,7 +115,65 @@ select {
   color: var(--brand-text);
 }
 
-/* Skeleton bar: structural base. Animation is theme-specific. */
+/* Accent color overrides for Konsta components.
+   Uses --brand-accent-fill so any org accent color propagates automatically.
+   Components: filled filter chips, segmented-strong highlight. */
+
+/* Filled Chip inside a filter bar: any .k-chip without the outline border
+   class gets accent styling. The Chip's outline prop controls the toggle,
+   so no custom active class is needed. Scope to .filter-bar so card-level
+   chips are unaffected. */
+.filter-bar .k-chip:not(.border) {
+  background-color: var(--brand-accent-fill) !important;
+  color: #fff !important;
+}
+
+/* Segmented strong: the sliding highlight behind the active button. */
+.k-segmented > span {
+  background-color: var(--brand-accent-fill) !important;
+}
+
+.k-segmented .k-segmented-strong-button-active {
+  color: #fff !important;
+}
+
+/* Glass mode override: force dark or light glass on navbar/tabbar surfaces
+   independent of color scheme. Targets Konsta's Glass component (uses
+   backdrop-blur-lg) using Konsta's own tokens. Each theme controls its
+   own card glass treatment separately. */
+
+/* Dark glass forced on light mode */
+html.glass-dark.light .backdrop-blur-lg {
+  background-color: var(--color-ios-dark-glass) !important;
+  box-shadow: var(--shadow-ios-dark-glass) !important;
+  color: #f5f5f7;
+}
+
+/* Light glass forced on dark mode */
+html.glass-light.dark .backdrop-blur-lg {
+  background-color: var(--color-ios-light-glass) !important;
+  box-shadow: var(--shadow-ios-light-glass) !important;
+  color: #1a1a1a;
+}
+
+/* Semantic heading classes: base styles (themes override with their own fonts/effects) */
+.heading-display {
+  font-weight: 800;
+}
+
+.heading-compact {
+  font-weight: 700;
+}
+
+/* Elevated card: base surface. Each theme overrides with its visual treatment. */
+.card-elevated {
+  background: var(--surface-1);
+  border-radius: 0.75rem;
+  border: 1px solid rgba(128, 128, 128, 0.12);
+}
+
+/* Skeleton bar: structural base. Animation set in animations.css via
+   --anim-skeleton-* tokens; themes override tokens or the animation directly. */
 .skeleton-bar {
   height: 12px;
   background: var(--muted);

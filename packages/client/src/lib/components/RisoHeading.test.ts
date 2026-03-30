@@ -20,8 +20,8 @@ describe("RisoHeading", () => {
       props: { level: 2, children: snippetOf("Display") },
     });
     const heading = screen.getByRole("heading", { level: 2 });
-    expect(heading.classList.contains("riso-heading")).toBe(true);
-    expect(heading.classList.contains("riso-heading-compact")).toBe(false);
+    expect(heading.classList.contains("heading-display")).toBe(true);
+    expect(heading.classList.contains("heading-compact")).toBe(false);
   });
 
   it("applies compact class for level 3+ by default", () => {
@@ -29,8 +29,8 @@ describe("RisoHeading", () => {
       props: { level: 4, children: snippetOf("Compact") },
     });
     const heading = screen.getByRole("heading", { level: 4 });
-    expect(heading.classList.contains("riso-heading-compact")).toBe(true);
-    expect(heading.classList.contains("riso-heading")).toBe(false);
+    expect(heading.classList.contains("heading-compact")).toBe(true);
+    expect(heading.classList.contains("heading-display")).toBe(false);
   });
 
   it("respects explicit ink=true override on small headings", () => {
@@ -38,7 +38,7 @@ describe("RisoHeading", () => {
       props: { level: 5, ink: true, children: snippetOf("Forced ink") },
     });
     const heading = screen.getByRole("heading", { level: 5 });
-    expect(heading.classList.contains("riso-heading")).toBe(true);
+    expect(heading.classList.contains("heading-display")).toBe(true);
   });
 
   it("respects explicit ink=false override on large headings", () => {
@@ -46,7 +46,7 @@ describe("RisoHeading", () => {
       props: { level: 1, ink: false, children: snippetOf("Forced compact") },
     });
     const heading = screen.getByRole("heading", { level: 1 });
-    expect(heading.classList.contains("riso-heading-compact")).toBe(true);
+    expect(heading.classList.contains("heading-compact")).toBe(true);
   });
 });
 

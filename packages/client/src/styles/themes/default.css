@@ -31,7 +31,7 @@
 }
 
 /* Divider: standard 1px separator instead of riso 4px thick rule */
-.theme-default .riso-divider {
+.theme-default .divider-brand {
   height: 1px;
   background: var(--muted);
 }
