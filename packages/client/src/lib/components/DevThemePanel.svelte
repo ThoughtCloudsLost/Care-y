@@ -6,6 +6,7 @@
     GlassMode,
   } from "$lib/stores/theme.svelte";
   import { onMount } from "svelte";
+  import { Settings } from "@lucide/svelte";
   import {
     applyKonstaPalette,
     resetKonstaPalette,
@@ -192,7 +193,7 @@
   onclick={() => (opened = !opened)}
   aria-label="Dev theme settings"
 >
-  <span aria-hidden="true">&#9881;</span>
+  <Settings size={20} aria-hidden="true" />
 </button>
 
 <!-- Panel -->

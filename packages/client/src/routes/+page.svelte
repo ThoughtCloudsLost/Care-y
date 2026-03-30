@@ -6,6 +6,7 @@
     SegmentedButton,
     BlockTitle,
   } from "konsta/svelte";
+  import { List, LayoutGrid } from "@lucide/svelte";
 
   type TicketStatus = "new" | "active" | "hold" | "closed";
 
@@ -225,13 +226,15 @@
         active={viewMode === "list"}
         aria-pressed={viewMode === "list"}
         aria-label="List view"
-        onclick={() => (viewMode = "list")}>&#9776;</SegmentedButton
+        onclick={() => (viewMode = "list")}
+        ><List size={16} aria-hidden="true" /></SegmentedButton
       >
       <SegmentedButton
         active={viewMode === "grid"}
         aria-pressed={viewMode === "grid"}
         aria-label="Grid view"
-        onclick={() => (viewMode = "grid")}>&#9638;</SegmentedButton
+        onclick={() => (viewMode = "grid")}
+        ><LayoutGrid size={16} aria-hidden="true" /></SegmentedButton
       >
     </Segmented>
   </div>

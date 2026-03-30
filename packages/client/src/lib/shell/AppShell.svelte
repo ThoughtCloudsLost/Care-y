@@ -27,6 +27,14 @@
     TabbarLink,
     ToolbarPane,
   } from "konsta/svelte";
+  import {
+    House,
+    Ticket,
+    CalendarDays,
+    Ellipsis,
+    Search,
+  } from "@lucide/svelte";
+  import type { Component } from "svelte";
   import type { TabId, AppShellProps } from "./types";
 
   let {
@@ -39,14 +47,14 @@
   interface TabDef {
     readonly id: TabId;
     readonly label: string;
-    readonly icon: string;
+    readonly icon: Component;
   }
 
   const allTabs: readonly TabDef[] = [
-    { id: "home", label: "Home", icon: "\u2302" },
-    { id: "tickets", label: "Tickets", icon: "\u2709" },
-    { id: "calendar", label: "Calendar", icon: "\u2630" },
-    { id: "more", label: "More", icon: "\u22EF" },
+    { id: "home", label: "Home", icon: House },
+    { id: "tickets", label: "Tickets", icon: Ticket },
+    { id: "calendar", label: "Calendar", icon: CalendarDays },
+    { id: "more", label: "More", icon: Ellipsis },
   ] as const;
 </script>
 
@@ -54,9 +62,8 @@
   <Navbar role="banner">
     {#snippet title()}<span class="heading-compact">{orgName}</span>{/snippet}
     {#snippet right()}
-      <!-- Placeholder icons: wired in view phases -->
       <Link iconOnly role="button" aria-label="Search">
-        <span aria-hidden="true" class="text-lg">&#8981;</span>
+        <Search size={22} aria-hidden="true" />
       </Link>
       <Link iconOnly role="button" aria-label="Account">
         <span class="navbar-avatar" aria-hidden="true">JN</span>
@@ -83,9 +90,11 @@
             textActiveMaterial: "text-[var(--brand-text)]",
           }}
         >
-          {#snippet icon()}<span aria-hidden="true" class="text-lg"
-              >{tab.icon}</span
-            >{/snippet}
+          {#snippet icon()}<svelte:component
+              this={tab.icon}
+              size={24}
+              aria-hidden="true"
+            />{/snippet}
         </TabbarLink>
       {/each}
     </ToolbarPane>

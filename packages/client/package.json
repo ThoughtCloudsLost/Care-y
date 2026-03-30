@@ -17,6 +17,7 @@
     "@care-y/crypto": "workspace:*",
     "@care-y/server": "workspace:*",
     "@care-y/shared": "workspace:*",
+    "@lucide/svelte": "1.7.0",
     "@material/material-color-utilities": "0.4.0",
     "@tanstack/svelte-query": "6.1.8",
     "@trpc/client": "11.10.0",
