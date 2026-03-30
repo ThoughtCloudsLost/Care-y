@@ -118,26 +118,26 @@
 
 /* --- Riso effect classes --- */
 
-.theme-riso .riso-heading {
+.theme-riso .heading-display {
   font-family: var(--theme-font-display);
   font-weight: 800;
   filter: url(#riso-ink);
 }
 
-.theme-riso .riso-heading-compact {
+.theme-riso .heading-compact {
   font-family: var(--theme-font-display);
   font-weight: 700;
   text-shadow: 1.5px 1.5px 0 var(--brand-primary-40);
 }
 
 /* Riso ink overlay: opt-in for branding/hero elements.
-   Apply .riso-block to a Konsta Block to get the riso drum
+   Apply .card-elevated to a Konsta Block to get the riso drum
    print effect in --brand-primary. Works in both light and dark. */
-.theme-riso .riso-block {
+.theme-riso .card-elevated {
   position: relative;
 }
 
-.theme-riso .riso-block::after {
+.theme-riso .card-elevated::after {
   content: "";
   position: absolute;
   inset: 0;
@@ -154,11 +154,11 @@
 }
 
 /* Stronger overlay on dark paper, subtler on light */
-.theme-riso.dark .riso-block::after {
+.theme-riso.dark .card-elevated::after {
   opacity: 0.35;
 }
 
-.theme-riso.light .riso-block::after {
+.theme-riso.light .card-elevated::after {
   opacity: 0.2;
 }
 

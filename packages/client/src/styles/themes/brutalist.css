@@ -72,67 +72,7 @@
   color: var(--ink);
 }
 
-/* ==========================================================
-   NAVBAR: Flat concrete slab, sharp edges, no blur
-   ========================================================== */
-
-.theme-brutalist .k-navbar {
-  border-bottom: 2px solid var(--ink);
-  box-shadow: none;
-  backdrop-filter: none;
-  -webkit-backdrop-filter: none;
-}
-
-.theme-brutalist.light .k-navbar {
-  background: var(--paper) !important;
-}
-
-.theme-brutalist.dark .k-navbar {
-  background: var(--paper) !important;
-}
-
-/* Kill any gloss pseudo-elements */
-.theme-brutalist .k-navbar::after {
-  display: none;
-}
-
-/* Override Konsta glass on iOS */
-.theme-brutalist .k-glass {
-  background: var(--paper) !important;
-  box-shadow: none !important;
-  backdrop-filter: none !important;
-  -webkit-backdrop-filter: none !important;
-}
-
-.theme-brutalist {
-  --color-ios-light-glass: var(--paper);
-  --color-ios-dark-glass: var(--paper);
-}
-
-/* ==========================================================
-   TOOLBAR / TABBAR: Flat slab. Border goes on the pane (the
-   glass pill in iOS), not on .k-toolbar (the layout wrapper).
-   ========================================================== */
-
-.theme-brutalist .k-toolbar {
-  border: none;
-  box-shadow: none;
-  backdrop-filter: none;
-  -webkit-backdrop-filter: none;
-}
-
-.theme-brutalist .k-toolbar-pane {
-  border-radius: 0;
-  border-top: 2px solid var(--ink);
-}
-
-.theme-brutalist.light .k-toolbar {
-  background: var(--paper) !important;
-}
-
-.theme-brutalist.dark .k-toolbar {
-  background: var(--paper) !important;
-}
+/* Navbar, toolbar, glass: no overrides. Konsta's native frosted glass handles these. */
 
 /* --- TABBAR ACTIVE INDICATOR: Kill the Material 3 rounded pill
    behind the active tab icon. It doesn't fit brutalist. --- */
@@ -155,6 +95,14 @@
 
 .theme-brutalist .k-block::before {
   display: none;
+}
+
+/* Elevated cards: sharp concrete panels */
+.theme-brutalist .card-elevated {
+  border-radius: 0;
+  background: var(--surface-1);
+  border: 2px solid var(--ink);
+  box-shadow: none;
 }
 
 /* ==========================================================
@@ -340,7 +288,7 @@
    DIVIDER: Thick black rule (like redaction bar edge)
    ========================================================== */
 
-.theme-brutalist .riso-divider {
+.theme-brutalist .divider-brand {
   height: 3px;
   background: var(--ink);
 }
@@ -350,11 +298,19 @@
    ========================================================== */
 
 /* Section heading: uppercase, underlined, Jost geometric sans */
-.theme-brutalist .brutalist-heading {
+.theme-brutalist .heading-display {
   font-family: var(--theme-font-display);
   font-weight: 800;
   text-transform: uppercase;
   letter-spacing: 0.06em;
+}
+
+/* Compact heading: navbar/small contexts */
+.theme-brutalist .heading-compact {
+  font-family: var(--theme-font-display);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
 }
 
 /* Document text: monospaced case-file feel */
@@ -459,7 +415,7 @@
     box-shadow: none;
   }
 
-  .theme-brutalist .brutalist-heading,
+  .theme-brutalist .heading-display,
   .theme-brutalist .k-block-title {
     text-shadow: none;
   }

@@ -10,11 +10,18 @@
 
 export type ColorScheme = "dark" | "light" | "system";
 export type KonstaTheme = "ios" | "material";
-export type VisualTheme = "riso" | "default" | "frutiger" | "brutalist";
+export type GlassMode = "auto" | "light" | "dark";
+export type VisualTheme =
+  | "riso"
+  | "default"
+  | "frutiger"
+  | "brutalist"
+  | "cupertino";
 
 const UI_THEME_KEY = "care-y-theme";
 const COLOR_SCHEME_KEY = "care-y-color-scheme";
 const VISUAL_THEME_KEY = "care-y-visual-theme";
+const GLASS_MODE_KEY = "care-y-glass-mode";
 function detectUiTheme(): KonstaTheme {
   if (typeof navigator === "undefined") return "ios";
   const ua = navigator.userAgent;
@@ -43,6 +50,16 @@ function applyScheme(resolved: "dark" | "light"): void {
   document.documentElement.classList.toggle("light", resolved === "light");
 }
 
+function applyGlassMode(mode: GlassMode, resolved: "dark" | "light"): void {
+  if (typeof document === "undefined") return;
+  const effective = mode === "auto" ? resolved : mode;
+  document.documentElement.classList.toggle(
+    "glass-light",
+    effective === "light",
+  );
+  document.documentElement.classList.toggle("glass-dark", effective === "dark");
+}
+
 function applyVisualTheme(theme: VisualTheme): void {
   if (typeof document === "undefined") return;
   document.documentElement.classList.toggle("theme-riso", theme === "riso");
@@ -58,6 +75,10 @@ function applyVisualTheme(theme: VisualTheme): void {
     "theme-brutalist",
     theme === "brutalist",
   );
+  document.documentElement.classList.toggle(
+    "theme-cupertino",
+    theme === "cupertino",
+  );
 }
 
 export interface ThemeStore {
@@ -65,11 +86,13 @@ export interface ThemeStore {
   readonly resolvedScheme: "dark" | "light";
   readonly colorSchemePreference: ColorScheme;
   readonly visualTheme: VisualTheme;
+  readonly glassMode: GlassMode;
   readonly current: KonstaTheme;
 
   setUiTheme(theme: KonstaTheme): void;
   setColorScheme(scheme: ColorScheme): void;
   setVisualTheme(theme: VisualTheme): void;
+  setGlassMode(mode: GlassMode): void;
   toggleColorScheme(): void;
   toggle(): void;
 }
@@ -80,6 +103,7 @@ function createThemeStore(): ThemeStore {
     colorPref: DEFAULT_COLOR_SCHEME,
     resolved: "dark" as "dark" | "light",
     visual: DEFAULT_VISUAL_THEME,
+    glass: "auto" as GlassMode,
   });
 
   const darkQuery =
@@ -113,21 +137,33 @@ function createThemeStore(): ThemeStore {
         storedVisual === "riso" ||
         storedVisual === "default" ||
         storedVisual === "frutiger" ||
-        storedVisual === "brutalist"
+        storedVisual === "brutalist" ||
+        storedVisual === "cupertino"
       ) {
         state.visual = storedVisual;
+      }
+
+      const storedGlass = localStorage.getItem(GLASS_MODE_KEY);
+      if (
+        storedGlass === "auto" ||
+        storedGlass === "light" ||
+        storedGlass === "dark"
+      ) {
+        state.glass = storedGlass;
       }
     }
 
     state.resolved = resolveScheme(state.colorPref, darkQuery);
     applyScheme(state.resolved);
     applyVisualTheme(state.visual);
+    applyGlassMode(state.glass, state.resolved);
   }
 
   function persistAndApply(scheme: ColorScheme): void {
     state.colorPref = scheme;
     state.resolved = resolveScheme(scheme, darkQuery);
     applyScheme(state.resolved);
+    applyGlassMode(state.glass, state.resolved);
     if (typeof window !== "undefined") {
       localStorage.setItem(COLOR_SCHEME_KEY, scheme);
     }
@@ -155,6 +191,9 @@ function createThemeStore(): ThemeStore {
     get visualTheme(): VisualTheme {
       return state.visual;
     },
+    get glassMode(): GlassMode {
+      return state.glass;
+    },
     get current(): KonstaTheme {
       return state.uiTheme;
     },
@@ -170,6 +209,13 @@ function createThemeStore(): ThemeStore {
       applyVisualTheme(theme);
       if (typeof window !== "undefined" && import.meta.env.DEV) {
         localStorage.setItem(VISUAL_THEME_KEY, theme);
+      }
+    },
+    setGlassMode(mode: GlassMode): void {
+      state.glass = mode;
+      applyGlassMode(mode, state.resolved);
+      if (typeof window !== "undefined" && import.meta.env.DEV) {
+        localStorage.setItem(GLASS_MODE_KEY, mode);
       }
     },
     setColorScheme(scheme: ColorScheme): void {

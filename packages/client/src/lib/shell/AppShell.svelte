@@ -60,18 +60,14 @@
 
 <Page>
   <Navbar role="banner">
-    {#snippet title()}<span class="riso-heading-compact">{orgName}</span
-      >{/snippet}
+    {#snippet title()}<span class="heading-compact">{orgName}</span>{/snippet}
     {#snippet right()}
       <!-- Placeholder icons: wired in view phases -->
-      <Link navbar iconOnly role="button" aria-label="Exposure status">
-        <span aria-hidden="true">&#9632;</span>
+      <Link iconOnly role="button" aria-label="Search">
+        <span aria-hidden="true" class="text-lg">&#8981;</span>
       </Link>
-      <Link navbar iconOnly role="button" aria-label="Search">
-        <span aria-hidden="true">&#8981;</span>
-      </Link>
-      <Link navbar iconOnly role="button" aria-label="New ticket">
-        <span aria-hidden="true">+</span>
+      <Link iconOnly role="button" aria-label="Account">
+        <span class="navbar-avatar" aria-hidden="true">JN</span>
       </Link>
     {/snippet}
   </Navbar>
@@ -105,7 +101,27 @@
 
   <!-- Page content: routes render here, scrolls behind navbar/tabbar.
        Padding-bottom clears the fixed tabbar overlay zone. -->
-  <div id="main-content" role="main" class="pb-20">
+  <div id="main-content" role="main" class="main-content">
     {@render children()}
   </div>
 </Page>
+
+<style>
+  .main-content {
+    padding-bottom: calc(5rem + env(safe-area-inset-bottom, 0px));
+  }
+
+  .navbar-avatar {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.75rem;
+    height: 1.75rem;
+    border-radius: 50%;
+    background: var(--brand-fill, var(--brand-primary));
+    color: #ffffff;
+    font-size: 0.625rem;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+  }
+</style>

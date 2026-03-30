@@ -15,8 +15,8 @@
 
 <svelte:element
   this={`h${String(level)}`}
-  class:riso-heading={useInk}
-  class:riso-heading-compact={!useInk}
+  class:heading-display={useInk}
+  class:heading-compact={!useInk}
 >
   {@render children()}
 </svelte:element>
