@@ -111,7 +111,7 @@
   }
 
   function cycleVisual(): void {
-    const themes: VisualTheme[] = ["default", "riso"];
+    const themes: VisualTheme[] = ["default", "riso", "frutiger", "brutalist"];
     const idx = themes.indexOf(themeStore.visualTheme);
     themeStore.setVisualTheme(themes[(idx + 1) % themes.length]);
   }

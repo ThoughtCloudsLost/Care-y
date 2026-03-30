@@ -168,4 +168,73 @@ describe("themeStore", () => {
       false,
     );
   });
+
+  it("setVisualTheme applies frutiger class and removes others", async () => {
+    setupMocks();
+    const { themeStore } = await import("./theme.svelte.ts");
+    themeStore.setVisualTheme("frutiger");
+    expect(themeStore.visualTheme).toBe("frutiger");
+    expect(document.documentElement.classList.contains("theme-frutiger")).toBe(
+      true,
+    );
+    expect(document.documentElement.classList.contains("theme-default")).toBe(
+      false,
+    );
+    expect(document.documentElement.classList.contains("theme-riso")).toBe(
+      false,
+    );
+  });
+
+  it("hydrates frutiger visual theme from localStorage", async () => {
+    setupMocks();
+    // Manually set visual theme in storage before import
+    localStorage.setItem("care-y-visual-theme", "frutiger");
+    // Need to re-import to pick up the stored value
+    vi.resetModules();
+    // Re-setup mocks with the stored value intact
+    vi.stubGlobal("localStorage", {
+      getItem: (key: string) => {
+        if (key === "care-y-visual-theme") return "frutiger";
+        return null;
+      },
+      setItem: vi.fn(),
+      removeItem: vi.fn(),
+    });
+    const { themeStore } = await import("./theme.svelte.ts");
+    expect(themeStore.visualTheme).toBe("frutiger");
+  });
+
+  it("setVisualTheme applies brutalist class and removes others", async () => {
+    setupMocks();
+    const { themeStore } = await import("./theme.svelte.ts");
+    themeStore.setVisualTheme("brutalist");
+    expect(themeStore.visualTheme).toBe("brutalist");
+    expect(document.documentElement.classList.contains("theme-brutalist")).toBe(
+      true,
+    );
+    expect(document.documentElement.classList.contains("theme-default")).toBe(
+      false,
+    );
+    expect(document.documentElement.classList.contains("theme-riso")).toBe(
+      false,
+    );
+    expect(document.documentElement.classList.contains("theme-frutiger")).toBe(
+      false,
+    );
+  });
+
+  it("hydrates brutalist visual theme from localStorage", async () => {
+    setupMocks();
+    vi.resetModules();
+    vi.stubGlobal("localStorage", {
+      getItem: (key: string) => {
+        if (key === "care-y-visual-theme") return "brutalist";
+        return null;
+      },
+      setItem: vi.fn(),
+      removeItem: vi.fn(),
+    });
+    const { themeStore } = await import("./theme.svelte.ts");
+    expect(themeStore.visualTheme).toBe("brutalist");
+  });
 });
