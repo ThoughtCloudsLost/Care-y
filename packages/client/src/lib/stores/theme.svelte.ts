@@ -10,7 +10,7 @@
 
 export type ColorScheme = "dark" | "light" | "system";
 export type KonstaTheme = "ios" | "material";
-export type VisualTheme = "riso" | "default";
+export type VisualTheme = "riso" | "default" | "frutiger" | "brutalist";
 
 const UI_THEME_KEY = "care-y-theme";
 const COLOR_SCHEME_KEY = "care-y-color-scheme";
@@ -49,6 +49,14 @@ function applyVisualTheme(theme: VisualTheme): void {
   document.documentElement.classList.toggle(
     "theme-default",
     theme === "default",
+  );
+  document.documentElement.classList.toggle(
+    "theme-frutiger",
+    theme === "frutiger",
+  );
+  document.documentElement.classList.toggle(
+    "theme-brutalist",
+    theme === "brutalist",
   );
 }
 
@@ -101,7 +109,12 @@ function createThemeStore(): ThemeStore {
     // In production, visual theme is controlled by org config (not yet wired).
     if (import.meta.env.DEV) {
       const storedVisual = localStorage.getItem(VISUAL_THEME_KEY);
-      if (storedVisual === "riso" || storedVisual === "default") {
+      if (
+        storedVisual === "riso" ||
+        storedVisual === "default" ||
+        storedVisual === "frutiger" ||
+        storedVisual === "brutalist"
+      ) {
         state.visual = storedVisual;
       }
     }
