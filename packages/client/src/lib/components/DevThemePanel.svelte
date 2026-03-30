@@ -5,6 +5,7 @@
     KonstaTheme,
     GlassMode,
   } from "$lib/stores/theme.svelte";
+  import { onMount } from "svelte";
   import {
     applyKonstaPalette,
     resetKonstaPalette,
@@ -49,8 +50,7 @@
 
   let logs: LogLine[] = $state([]);
 
-  // Intercept console.log/warn/error in the browser
-  if (typeof window !== "undefined") {
+  onMount(() => {
     const orig = {
       log: console.log.bind(console),
       warn: console.warn.bind(console),
@@ -79,7 +79,13 @@
       orig.error(...args);
       capture("error", args);
     };
-  }
+
+    return () => {
+      console.log = orig.log;
+      console.warn = orig.warn;
+      console.error = orig.error;
+    };
+  });
 
   function applyPalette(palette: Palette): void {
     activePalette = palette.name;
@@ -191,8 +197,19 @@
 
 <!-- Panel -->
 {#if opened}
-  <!-- svelte-ignore a11y_no_static_element_interactions -->
-  <div class="dev-backdrop" onclick={() => (opened = false)}></div>
+  <div
+    class="dev-backdrop"
+    role="button"
+    tabindex="-1"
+    aria-label="Close dev panel"
+    onclick={() => (opened = false)}
+    onkeydown={(e) => {
+      if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        opened = false;
+      }
+    }}
+  ></div>
   <div class="dev-panel" role="dialog" aria-label="Dev theme panel">
     <div class="dev-title">Dev Theme Panel</div>
     <div class="dev-grid">

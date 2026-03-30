@@ -27,15 +27,7 @@
     TabbarLink,
     ToolbarPane,
   } from "konsta/svelte";
-  import type { TabId } from "./types";
-  import type { Snippet } from "svelte";
-
-  interface AppShellProps {
-    activeTab: TabId;
-    orgName?: string;
-    ontabchange: (tabId: TabId) => void;
-    children: Snippet;
-  }
+  import type { TabId, AppShellProps } from "./types";
 
   let {
     activeTab,

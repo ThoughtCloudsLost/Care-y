@@ -130,6 +130,38 @@
   let activeFilter: FilterId = $state("all");
   let viewMode: "list" | "grid" = $state("list");
 
+  function handleFilterKeydown(event: KeyboardEvent): void {
+    const ids = filters.map((f) => f.id);
+    const idx = ids.indexOf(activeFilter);
+    if (idx === -1) return;
+
+    let next: number | null = null;
+    if (event.key === "ArrowRight" || event.key === "ArrowDown") {
+      next = (idx + 1) % ids.length;
+    } else if (event.key === "ArrowLeft" || event.key === "ArrowUp") {
+      next = (idx - 1 + ids.length) % ids.length;
+    } else if (event.key === "Home") {
+      next = 0;
+    } else if (event.key === "End") {
+      next = ids.length - 1;
+    }
+
+    if (next != null) {
+      event.preventDefault();
+      const nextId = ids.at(next);
+      if (nextId != null) {
+        activeFilter = nextId;
+        const container = event.currentTarget;
+        if (container instanceof HTMLElement) {
+          const tabs = Array.from(
+            container.querySelectorAll<HTMLElement>('[role="tab"]'),
+          );
+          tabs.at(next)?.focus();
+        }
+      }
+    }
+  }
+
   const filteredTickets = $derived(
     activeFilter === "all"
       ? MOCK_TICKETS
@@ -167,12 +199,19 @@
   </div>
 
   <div class="queue-controls">
-    <div class="filter-bar" role="tablist" aria-label="Filter tickets">
+    <!-- svelte-ignore a11y_interactive_supports_focus -->
+    <div
+      class="filter-bar"
+      role="tablist"
+      aria-label="Filter tickets"
+      onkeydown={handleFilterKeydown}
+    >
       {#each filters as filter (filter.id)}
         <Chip
           outline={activeFilter !== filter.id}
           class="filter-chip"
           role="tab"
+          tabindex={activeFilter === filter.id ? 0 : -1}
           aria-selected={activeFilter === filter.id}
           onclick={() => (activeFilter = filter.id)}
         >
@@ -245,7 +284,7 @@
 
 <style>
   .queue-page {
-    padding: 1rem;
+    padding: 0.8rem;
     display: flex;
     flex-direction: column;
     gap: 1rem;
