@@ -31,7 +31,7 @@
     "@trpc/server": "11.10.0",
     "@vite-pwa/sveltekit": "1.1.0",
     "libsodium-wrappers-sumo": "0.8.2",
-    "svelte": "^5.55.0",
+    "svelte": "^5.55.1",
     "svelte-check": "^4.4.5",
     "tailwindcss": "4.2.2",
     "typescript": "^5.9.3",
