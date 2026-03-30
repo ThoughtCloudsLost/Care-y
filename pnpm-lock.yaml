@@ -78,6 +78,9 @@ importers:
       '@care-y/shared':
         specifier: workspace:*
         version: link:../shared
+      '@lucide/svelte':
+        specifier: 1.7.0
+        version: 1.7.0(svelte@5.55.0)
       '@material/material-color-utilities':
         specifier: 0.4.0
         version: 0.4.0
@@ -1096,6 +1099,11 @@ packages:
 
   '@jridgewell/trace-mapping@0.3.31':
     resolution: {integrity: sha512-zzNR+SdQSDJzc8joaeP8QQoCQr8NuYx2dIIytl1QeBEZHJ9uW6hebsrYgbz8hJwUQao3TWCMtmfV8Nu1twOLAw==}
+
+  '@lucide/svelte@1.7.0':
+    resolution: {integrity: sha512-YytBKOUBGox7yWcykZnYxOkn5WpR5G1qYXLYXV/j1B79SOTTEKzB+s5yF5Rq9l9OkweDStNH2b4yTqfvhEhV8g==}
+    peerDependencies:
+      svelte: ^5
 
   '@material/material-color-utilities@0.4.0':
     resolution: {integrity: sha512-dlq6VExJReb8dhjj3a/yTigr3ncNwoFmL5Iy2ENtbDX03EmNeOEdZ+vsaGrj7RTuO+mB7L58II4LCsl4NpM8uw==}
@@ -4846,6 +4854,10 @@ snapshots:
     dependencies:
       '@jridgewell/resolve-uri': 3.1.2
       '@jridgewell/sourcemap-codec': 1.5.5
+
+  '@lucide/svelte@1.7.0(svelte@5.55.0)':
+    dependencies:
+      svelte: 5.55.0
 
   '@material/material-color-utilities@0.4.0': {}
 
