@@ -1,0 +1,764 @@
+/* Frutiger Aero theme: translucent glossy plastic, circa 2006-2012.
+   Vista Aero glass, Wii channels, early iPhone, PlayStation XMB.
+   Translucent cyan-tinted surfaces with backdrop blur, wet gloss
+   highlights, organic asymmetric rounded shapes, 3D embossed controls.
+   References: Vista calculator gadget, r/FrutigerAero reddit redesign,
+   Wii Menu channel grid. */
+
+/* --- Frutiger palette tokens (light defaults) --- */
+.theme-frutiger {
+  --theme-font-display: "Trebuchet MS", "Segoe UI", system-ui, sans-serif;
+  --theme-font-ui: "Segoe UI", system-ui, sans-serif;
+
+  --ink: #0c2840;
+  --paper: #a0d8f0;
+  --surface-1: rgba(120, 210, 240, 0.4);
+  --surface-2: rgba(100, 200, 235, 0.3);
+  --muted: #4890b8;
+
+  /* Translucent glass + gloss tokens */
+  --glass-blur: 20px;
+  --glass-bg: rgba(130, 215, 245, 0.4);
+  --glass-bg-strong: rgba(150, 225, 250, 0.55);
+  --gloss-top: rgba(255, 255, 255, 0.85);
+  --gloss-mid: rgba(255, 255, 255, 0.2);
+  --gloss-bottom: rgba(255, 255, 255, 0);
+  --border-light: rgba(255, 255, 255, 0.85);
+  --border-dark: rgba(0, 100, 150, 0.15);
+  --shadow: 0 3px 10px rgba(0, 60, 110, 0.18), 0 1px 3px rgba(0, 60, 110, 0.1);
+  --shadow-elevated:
+    0 8px 28px rgba(0, 60, 110, 0.22), 0 3px 8px rgba(0, 60, 110, 0.12);
+  --inner-highlight: inset 0 1px 0 rgba(255, 255, 255, 0.7);
+  --inner-shadow: inset 0 -1px 0 rgba(0, 80, 120, 0.08);
+  --bubble-radius: 1.5rem;
+  --bubble-radius-organic: 1.75rem 2rem 1.5rem 1.75rem;
+  --pill-radius: 999px;
+
+  /* Konsta iOS surface overrides: tinted translucent cyan */
+  --color-ios-light-surface: #a0d8f0;
+  --color-ios-light-surface-1: rgba(120, 210, 240, 0.4);
+  --color-ios-light-surface-1-shade: rgba(100, 195, 230, 0.5);
+  --color-ios-light-surface-1-tint: rgba(160, 230, 250, 0.45);
+  --color-ios-light-surface-2: rgba(100, 200, 235, 0.3);
+  --color-ios-light-surface-3: rgba(120, 210, 240, 0.4);
+  --color-ios-light-surface-variant: rgba(90, 195, 230, 0.35);
+
+  /* iOS dark surfaces */
+  --color-ios-dark-surface: #061220;
+  --color-ios-dark-surface-1: rgba(10, 30, 58, 0.88);
+  --color-ios-dark-surface-1-shade: rgba(6, 22, 44, 0.92);
+  --color-ios-dark-surface-1-tint: rgba(18, 42, 72, 0.82);
+  --color-ios-dark-surface-2: rgba(14, 35, 65, 0.78);
+  --color-ios-dark-surface-3: rgba(10, 30, 58, 0.88);
+  --color-ios-dark-surface-variant: rgba(16, 38, 68, 0.72);
+
+  /* Konsta Material surface overrides */
+  --color-md-light-surface-1: rgba(120, 210, 240, 0.4);
+  --color-md-light-surface-2: rgba(100, 200, 235, 0.3);
+  --color-md-light-surface-3: rgba(120, 210, 240, 0.4);
+  --color-md-light-surface-variant: rgba(90, 195, 230, 0.35);
+  --color-md-dark-surface: #061220;
+  --color-md-dark-surface-1: rgba(10, 30, 58, 0.88);
+  --color-md-dark-surface-2: rgba(14, 35, 65, 0.78);
+  --color-md-dark-surface-3: rgba(10, 30, 58, 0.88);
+  --color-md-dark-surface-variant: rgba(16, 38, 68, 0.72);
+}
+
+/* --- Light mode --- */
+.theme-frutiger.light {
+  --ink: #0c2840;
+  --paper: #a0d8f0;
+  --surface-1: rgba(120, 210, 240, 0.4);
+  --surface-2: rgba(100, 200, 235, 0.3);
+  --muted: #4890b8;
+}
+
+/* --- Dark mode: deep ocean, still glossy --- */
+.theme-frutiger.dark {
+  --ink: #c0daf0;
+  --paper: #061220;
+  --surface-1: rgba(10, 30, 58, 0.88);
+  --surface-2: rgba(14, 35, 65, 0.78);
+  --muted: #4870a0;
+  --glass-bg: rgba(10, 35, 70, 0.65);
+  --glass-bg-strong: rgba(14, 42, 78, 0.75);
+  --gloss-top: rgba(80, 160, 230, 0.22);
+  --gloss-mid: rgba(80, 160, 230, 0.05);
+  --gloss-bottom: rgba(80, 160, 230, 0);
+  --border-light: rgba(60, 140, 210, 0.3);
+  --border-dark: rgba(0, 0, 0, 0.4);
+  --shadow: 0 3px 10px rgba(0, 0, 0, 0.35), 0 1px 3px rgba(0, 0, 0, 0.2);
+  --shadow-elevated:
+    0 8px 28px rgba(0, 0, 0, 0.45), 0 3px 8px rgba(0, 0, 0, 0.25);
+  --inner-highlight: inset 0 1px 0 rgba(60, 140, 210, 0.2);
+  --inner-shadow: inset 0 -1px 0 rgba(0, 0, 0, 0.2);
+  background-color: var(--paper);
+  color: var(--ink);
+}
+
+/* ==========================================================
+   BACKGROUND: Luminous caustic aurora gradient (angled for movement)
+   ========================================================== */
+
+.theme-frutiger.light {
+  background: linear-gradient(
+    145deg,
+    #48b0d8 0%,
+    #70c8e8 12%,
+    #90d8f0 28%,
+    #b0e4f6 45%,
+    #a8e0e8 58%,
+    #98e0d0 72%,
+    #b0e8c8 85%,
+    #c8f0d0 100%
+  );
+  background-attachment: fixed;
+}
+
+.theme-frutiger.dark {
+  background: linear-gradient(
+    145deg,
+    #020a14 0%,
+    #061220 18%,
+    #0a1a30 40%,
+    #0c2038 60%,
+    #081830 80%,
+    #061220 100%
+  );
+  background-attachment: fixed;
+}
+
+/* Let sky gradient show through body and Konsta page. */
+.theme-frutiger body,
+.theme-frutiger .k-page {
+  background: transparent !important;
+}
+
+/* ==========================================================
+   iOS GLASS OVERRIDE: Replace Konsta's native iOS frosted glass
+   with Frutiger Aero translucent plastic. The .k-glass element
+   wraps navbar/toolbar on iOS and applies its own bg + shadow.
+   ========================================================== */
+
+.theme-frutiger .k-glass {
+  background: var(--glass-bg-strong) !important;
+  box-shadow: var(--shadow), var(--inner-highlight) !important;
+  backdrop-filter: blur(var(--glass-blur)) !important;
+  -webkit-backdrop-filter: blur(var(--glass-blur)) !important;
+}
+
+/* Gloss stripe on the glass pane */
+.theme-frutiger .k-glass::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 50%;
+  background: linear-gradient(
+    180deg,
+    var(--gloss-top) 0%,
+    var(--gloss-mid) 80%,
+    var(--gloss-bottom) 100%
+  );
+  pointer-events: none;
+  z-index: 1;
+}
+
+/* Override the Konsta glass color tokens so nothing leaks through */
+.theme-frutiger {
+  --color-ios-light-glass: rgba(130, 215, 245, 0.55);
+  --color-ios-dark-glass: rgba(10, 35, 70, 0.75);
+}
+
+/* ==========================================================
+   NAVBAR: Translucent glossy bar with organic radius
+   ========================================================== */
+
+.theme-frutiger .k-navbar {
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  border: none;
+  box-shadow: none;
+}
+
+.theme-frutiger.light .k-navbar {
+  background: transparent !important;
+}
+
+.theme-frutiger.dark .k-navbar {
+  background: transparent !important;
+}
+
+/* Gloss: wet shine across top half */
+.theme-frutiger .k-navbar::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 50%;
+  background: linear-gradient(
+    180deg,
+    var(--gloss-top) 0%,
+    var(--gloss-mid) 80%,
+    var(--gloss-bottom) 100%
+  );
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* ==========================================================
+   TOOLBAR / TABBAR: Translucent glossy bar
+   ========================================================== */
+
+.theme-frutiger .k-toolbar {
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  border: none;
+  box-shadow: none;
+}
+
+.theme-frutiger.light .k-toolbar {
+  background: transparent !important;
+}
+
+.theme-frutiger.dark .k-toolbar {
+  background: transparent !important;
+}
+
+/* ==========================================================
+   BLOCKS: Translucent cards with organic asymmetric radius
+   ========================================================== */
+
+.theme-frutiger .k-block {
+  border-radius: var(--bubble-radius-organic);
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  background: var(--glass-bg);
+  border: 1px solid var(--border-dark);
+  border-top-color: var(--border-light);
+  border-left-color: var(--border-light);
+  box-shadow: var(--shadow), var(--inner-highlight), var(--inner-shadow);
+  position: relative;
+  overflow: hidden;
+}
+
+/* Wet gloss: hard-edge shine at ~50% */
+.theme-frutiger .k-block::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(
+    180deg,
+    var(--gloss-top) 0%,
+    var(--gloss-mid) 48%,
+    var(--gloss-bottom) 50%
+  );
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* Varied organic shapes: nth-child cycling so adjacent cards
+   don't share the same silhouette. Targets blocks & cards. */
+.theme-frutiger .k-block:nth-child(4n + 1),
+.theme-frutiger .k-card:nth-child(4n + 1) {
+  border-radius: 1.75rem 2rem 1.5rem 1.75rem;
+}
+
+.theme-frutiger .k-block:nth-child(4n + 2),
+.theme-frutiger .k-card:nth-child(4n + 2) {
+  border-radius: 1.5rem 1.75rem 2rem 1.5rem;
+}
+
+.theme-frutiger .k-block:nth-child(4n + 3),
+.theme-frutiger .k-card:nth-child(4n + 3) {
+  border-radius: 2rem 1.5rem 1.75rem 2rem;
+}
+
+.theme-frutiger .k-block:nth-child(4n + 4),
+.theme-frutiger .k-card:nth-child(4n + 4) {
+  border-radius: 1.5rem 2rem 1.75rem 1.5rem;
+}
+
+/* ==========================================================
+   LISTS: Translucent glass container, organic shape
+   ========================================================== */
+
+.theme-frutiger .k-list {
+  border-radius: var(--bubble-radius-organic);
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  background: var(--glass-bg);
+  border: 1px solid var(--border-dark);
+  border-top-color: var(--border-light);
+  border-left-color: var(--border-light);
+  box-shadow: var(--shadow), var(--inner-highlight), var(--inner-shadow);
+  overflow: hidden;
+}
+
+/* List dividers */
+.theme-frutiger.light .k-list .hairline-b::after {
+  background: rgba(0, 100, 150, 0.08) !important;
+}
+
+.theme-frutiger.dark .k-list .hairline-b::after {
+  background: rgba(0, 0, 0, 0.3) !important;
+}
+
+/* ==========================================================
+   BUTTONS: Glossy 3D pills with specular highlight
+   ========================================================== */
+
+.theme-frutiger .k-button {
+  border-radius: var(--pill-radius) !important;
+  border: 1px solid var(--border-dark) !important;
+  border-top-color: var(--border-light) !important;
+  box-shadow: var(--shadow), var(--inner-highlight);
+  position: relative;
+  overflow: hidden;
+}
+
+/* Specular radial highlight on top half (3D orb look) */
+.theme-frutiger .k-button::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 10%;
+  right: 10%;
+  height: 55%;
+  background: radial-gradient(
+    ellipse 80% 100% at 50% 0%,
+    rgba(255, 255, 255, 0.65) 0%,
+    rgba(255, 255, 255, 0.15) 55%,
+    rgba(255, 255, 255, 0) 100%
+  );
+  pointer-events: none;
+  border-radius: inherit;
+}
+
+.theme-frutiger .k-button:active {
+  box-shadow: inset 0 2px 6px rgba(0, 60, 110, 0.25);
+}
+
+.theme-frutiger .k-button:active::after {
+  opacity: 0.4;
+}
+
+/* Outline/clear buttons get glass backdrop */
+.theme-frutiger .k-button[class*="outline"],
+.theme-frutiger .k-button[class*="clear"] {
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+/* ==========================================================
+   CHIPS & BADGES: Pill with embossed edges
+   ========================================================== */
+
+.theme-frutiger .k-chip {
+  border-radius: var(--pill-radius);
+  border: 1px solid var(--border-dark);
+  border-top-color: var(--border-light);
+  box-shadow:
+    0 2px 4px rgba(0, 60, 110, 0.12),
+    var(--inner-highlight);
+}
+
+.theme-frutiger .k-badge {
+  box-shadow: 0 2px 4px rgba(0, 60, 110, 0.15);
+}
+
+/* ==========================================================
+   SEGMENTED CONTROLS: Glossy pill group
+   ========================================================== */
+
+.theme-frutiger .k-segmented {
+  border-radius: var(--pill-radius);
+  border: 1px solid var(--border-dark);
+  border-top-color: var(--border-light);
+  box-shadow: var(--inner-shadow);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  background: var(--glass-bg);
+}
+
+/* ==========================================================
+   DIALOGS: Translucent glossy overlays, organic shape
+   ========================================================== */
+
+.theme-frutiger .k-dialog {
+  border-radius: var(--bubble-radius-organic);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border: 1px solid var(--border-dark);
+  border-top-color: var(--border-light);
+  border-left-color: var(--border-light);
+  box-shadow: var(--shadow-elevated);
+  overflow: hidden;
+  position: relative;
+}
+
+.theme-frutiger.light .k-dialog {
+  background: rgba(140, 220, 248, 0.65);
+}
+
+.theme-frutiger.dark .k-dialog {
+  background: rgba(8, 24, 48, 0.85);
+}
+
+/* Gloss on dialog */
+.theme-frutiger .k-dialog::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(
+    180deg,
+    var(--gloss-top) 0%,
+    var(--gloss-mid) 40%,
+    var(--gloss-bottom) 42%
+  );
+  pointer-events: none;
+  z-index: 0;
+}
+
+.theme-frutiger .k-popup {
+  border-radius: 2rem 2rem 0 0;
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border-top: 1px solid var(--border-light);
+  box-shadow: var(--shadow-elevated);
+}
+
+.theme-frutiger .k-sheet {
+  border-radius: 2rem 2rem 0 0;
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border-top: 1px solid var(--border-light);
+}
+
+.theme-frutiger .k-actions-group {
+  border-radius: var(--bubble-radius-organic);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid var(--border-dark);
+  border-top-color: var(--border-light);
+  overflow: hidden;
+  background: var(--glass-bg);
+}
+
+/* ==========================================================
+   TOGGLE: Embossed glossy track
+   ========================================================== */
+
+.theme-frutiger .k-toggle {
+  border-radius: var(--pill-radius);
+  box-shadow:
+    inset 0 2px 5px rgba(0, 60, 110, 0.2),
+    0 1px 0 var(--border-light);
+}
+
+/* ==========================================================
+   CARDS: Translucent glossy plastic, organic shape
+   ========================================================== */
+
+.theme-frutiger .k-card {
+  border-radius: var(--bubble-radius-organic);
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  background: var(--glass-bg);
+  border: 1px solid var(--border-dark);
+  border-top-color: var(--border-light);
+  border-left-color: var(--border-light);
+  box-shadow:
+    var(--shadow-elevated), var(--inner-highlight), var(--inner-shadow);
+  overflow: hidden;
+  position: relative;
+}
+
+.theme-frutiger .k-card::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(
+    180deg,
+    var(--gloss-top) 0%,
+    var(--gloss-mid) 48%,
+    var(--gloss-bottom) 50%
+  );
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* ==========================================================
+   SEARCHBAR: Glossy pill input
+   ========================================================== */
+
+.theme-frutiger .k-searchbar input {
+  border-radius: var(--pill-radius) !important;
+  border: 1px solid var(--border-dark) !important;
+  border-top-color: var(--border-light) !important;
+  box-shadow:
+    inset 0 2px 5px rgba(0, 60, 110, 0.12),
+    0 1px 0 var(--border-light);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+/* ==========================================================
+   FAB: Glossy floating orb
+   ========================================================== */
+
+.theme-frutiger .k-fab {
+  box-shadow: var(--shadow-elevated);
+  position: relative;
+  overflow: hidden;
+}
+
+.theme-frutiger .k-fab::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 10%;
+  right: 10%;
+  height: 50%;
+  background: radial-gradient(
+    ellipse 80% 100% at 50% 0%,
+    rgba(255, 255, 255, 0.55) 0%,
+    rgba(255, 255, 255, 0) 100%
+  );
+  pointer-events: none;
+  border-radius: inherit;
+}
+
+/* ==========================================================
+   BLOCK TITLES
+   ========================================================== */
+
+.theme-frutiger .k-block-title {
+  font-family: var(--theme-font-display);
+}
+
+.theme-frutiger.light .k-block-title {
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.6);
+}
+
+.theme-frutiger.dark .k-block-title {
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
+}
+
+/* ==========================================================
+   DIVIDER
+   ========================================================== */
+
+.theme-frutiger .riso-divider {
+  height: 1px;
+  background: var(--border-dark);
+}
+
+/* ==========================================================
+   FRUTIGER EFFECT CLASSES (opt-in)
+   ========================================================== */
+
+/* Glossy heading */
+.theme-frutiger .frutiger-heading {
+  font-family: var(--theme-font-display);
+  font-weight: 700;
+}
+
+.theme-frutiger.light .frutiger-heading {
+  text-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.8),
+    0 2px 10px var(--brand-primary-20);
+}
+
+.theme-frutiger.dark .frutiger-heading {
+  text-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.6),
+    0 2px 14px var(--brand-primary-20);
+}
+
+/* Bubble: full glossy translucent pill */
+.theme-frutiger .frutiger-bubble {
+  border-radius: var(--pill-radius);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  background: var(--glass-bg);
+  border: 1px solid var(--border-dark);
+  border-top-color: var(--border-light);
+  border-left-color: var(--border-light);
+  box-shadow: var(--shadow), var(--inner-highlight), var(--inner-shadow);
+  position: relative;
+  overflow: hidden;
+}
+
+.theme-frutiger .frutiger-bubble::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(
+    180deg,
+    var(--gloss-top) 0%,
+    var(--gloss-mid) 48%,
+    var(--gloss-bottom) 50%
+  );
+  pointer-events: none;
+}
+
+/* Glass panel: translucent glossy card, organic shape */
+.theme-frutiger .frutiger-glass {
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  background: var(--glass-bg);
+  border: 1px solid var(--border-dark);
+  border-top-color: var(--border-light);
+  border-left-color: var(--border-light);
+  border-radius: var(--bubble-radius-organic);
+  box-shadow: var(--shadow), var(--inner-highlight), var(--inner-shadow);
+  position: relative;
+  overflow: hidden;
+}
+
+.theme-frutiger .frutiger-glass::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(
+    180deg,
+    var(--gloss-top) 0%,
+    var(--gloss-mid) 48%,
+    var(--gloss-bottom) 50%
+  );
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* Wii channel tile: interactive glossy card, organic shape */
+.theme-frutiger .frutiger-tile {
+  border-radius: var(--bubble-radius-organic);
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  background: var(--glass-bg);
+  border: 1px solid var(--border-dark);
+  border-top-color: var(--border-light);
+  border-left-color: var(--border-light);
+  box-shadow:
+    var(--shadow-elevated), var(--inner-highlight), var(--inner-shadow);
+  position: relative;
+  overflow: hidden;
+  transition:
+    transform 150ms ease,
+    box-shadow 150ms ease;
+}
+
+.theme-frutiger .frutiger-tile:active {
+  transform: scale(0.97);
+  box-shadow:
+    var(--shadow),
+    inset 0 2px 5px rgba(0, 60, 110, 0.15);
+}
+
+.theme-frutiger .frutiger-tile::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(
+    180deg,
+    var(--gloss-top) 0%,
+    var(--gloss-mid) 48%,
+    var(--gloss-bottom) 50%
+  );
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* ==========================================================
+   SKELETON: Shimmer sweep
+   ========================================================== */
+
+@media (prefers-reduced-motion: no-preference) {
+  @keyframes skeleton-shimmer {
+    0% {
+      background-position: -200% 0;
+    }
+    100% {
+      background-position: 200% 0;
+    }
+  }
+
+  .theme-frutiger .skeleton-bar {
+    background: linear-gradient(
+      90deg,
+      var(--muted) 25%,
+      rgba(255, 255, 255, 0.6) 50%,
+      var(--muted) 75%
+    );
+    background-size: 200% 100%;
+    animation: skeleton-shimmer 1.8s ease-in-out infinite;
+    opacity: 0.3;
+    border-radius: var(--pill-radius);
+  }
+}
+
+/* ==========================================================
+   ACCESSIBILITY: high contrast strips all decorative effects
+   ========================================================== */
+
+@media (prefers-contrast: more) {
+  .theme-frutiger .k-block,
+  .theme-frutiger .k-list,
+  .theme-frutiger .k-card,
+  .theme-frutiger .k-dialog,
+  .theme-frutiger .k-popup,
+  .theme-frutiger .k-sheet,
+  .theme-frutiger .k-actions-group,
+  .theme-frutiger .k-navbar,
+  .theme-frutiger .k-toolbar,
+  .theme-frutiger .k-segmented,
+  .theme-frutiger .frutiger-glass,
+  .theme-frutiger .frutiger-tile,
+  .theme-frutiger .frutiger-bubble {
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+    background: Canvas;
+    border: 2px solid currentColor;
+    box-shadow: none;
+    border-radius: 1rem;
+  }
+
+  .theme-frutiger .k-glass {
+    background: Canvas !important;
+    box-shadow: none !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+  }
+
+  .theme-frutiger .k-block::before,
+  .theme-frutiger .k-card::before,
+  .theme-frutiger .k-dialog::before,
+  .theme-frutiger .frutiger-glass::before,
+  .theme-frutiger .frutiger-tile::before,
+  .theme-frutiger .frutiger-bubble::before,
+  .theme-frutiger .k-navbar::after,
+  .theme-frutiger .k-glass::after,
+  .theme-frutiger .k-button::after,
+  .theme-frutiger .k-fab::after {
+    display: none;
+  }
+
+  .theme-frutiger .frutiger-heading,
+  .theme-frutiger .k-block-title {
+    text-shadow: none;
+  }
+
+  .theme-frutiger body,
+  .theme-frutiger .k-page {
+    background: Canvas !important;
+  }
+}
