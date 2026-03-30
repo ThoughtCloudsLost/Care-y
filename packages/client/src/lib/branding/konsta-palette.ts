@@ -135,6 +135,20 @@ function ensureContrast(
   return bgLum < 0.5 ? "#ffffff" : "#000000";
 }
 
+/**
+ * Pick black or white text for use on top of a given background color,
+ * based on which achieves higher WCAG contrast. If neither meets AA 4.5:1,
+ * the higher-contrast option is still returned (best effort).
+ */
+function deriveOnColor(bgHex: string): string {
+  const bgRgb = hexToRgbArray(bgHex);
+  if (!bgRgb) return "#000000";
+  const BLACK_RGB: [number, number, number] = [0, 0, 0];
+  const whiteContrast = contrastRatio(WHITE_RGB, bgRgb);
+  const blackContrast = contrastRatio(BLACK_RGB, bgRgb);
+  return whiteContrast >= blackContrast ? "#ffffff" : "#000000";
+}
+
 // --- Dual-token derivation ---
 
 // Worst-case surfaces for contrast checks.
@@ -260,7 +274,7 @@ async function deriveMdColors(
 
 export interface BrandColors {
   primary: string;
-  secondary?: string;
+  accent?: string;
 }
 
 /**
@@ -282,7 +296,7 @@ function deriveDualTokens(
  * --k-color-* CSS vars to :root, and sets dual contrast tokens for
  * each brand color.
  *
- * For each color (primary, secondary), two functional tokens are created:
+ * For each color (primary, accent), two functional tokens are created:
  * - --brand-{name}-text: surface-safe for text accents (WCAG AA 4.5:1)
  * - --brand-{name}-fill: white-safe for fill backgrounds (WCAG AA 4.5:1)
  *
@@ -315,29 +329,32 @@ export async function applyKonstaPalette(
     `[palette] primary=${brand.primary} text=${primary.text} fill=${primary.fill} dark=${String(isDark)}`,
   );
 
-  // Secondary tokens (if provided)
-  if (brand.secondary !== undefined && brand.secondary !== "") {
-    const secondary = deriveDualTokens(brand.secondary, isDark);
-    el.style.setProperty("--brand-secondary", brand.secondary);
-    el.style.setProperty("--brand-secondary-text", secondary.text);
-    el.style.setProperty("--brand-secondary-fill", secondary.fill);
+  // Accent tokens (if provided)
+  if (brand.accent !== undefined && brand.accent !== "") {
+    const accent = deriveDualTokens(brand.accent, isDark);
+    const accentOn = deriveOnColor(brand.accent);
+    el.style.setProperty("--brand-accent", brand.accent);
+    el.style.setProperty("--brand-accent-on", accentOn);
+    el.style.setProperty("--brand-accent-text", accent.text);
+    el.style.setProperty("--brand-accent-fill", accent.fill);
     el.style.setProperty(
-      "--brand-secondary-40",
-      `color-mix(in srgb, ${brand.secondary} 40%, transparent)`,
+      "--brand-accent-40",
+      `color-mix(in srgb, ${brand.accent} 40%, transparent)`,
     );
     el.style.setProperty(
-      "--brand-secondary-20",
-      `color-mix(in srgb, ${brand.secondary} 20%, transparent)`,
+      "--brand-accent-20",
+      `color-mix(in srgb, ${brand.accent} 20%, transparent)`,
     );
     console.log(
-      `[palette] secondary=${brand.secondary} text=${secondary.text} fill=${secondary.fill}`,
+      `[palette] accent=${brand.accent} on=${accentOn} text=${accent.text} fill=${accent.fill}`,
     );
   } else {
-    el.style.removeProperty("--brand-secondary");
-    el.style.removeProperty("--brand-secondary-text");
-    el.style.removeProperty("--brand-secondary-fill");
-    el.style.removeProperty("--brand-secondary-40");
-    el.style.removeProperty("--brand-secondary-20");
+    el.style.removeProperty("--brand-accent");
+    el.style.removeProperty("--brand-accent-on");
+    el.style.removeProperty("--brand-accent-text");
+    el.style.removeProperty("--brand-accent-fill");
+    el.style.removeProperty("--brand-accent-40");
+    el.style.removeProperty("--brand-accent-20");
   }
 
   // Konsta primary = fill-safe value
@@ -372,11 +389,12 @@ export function resetKonstaPalette(): void {
     "--brand-fill",
     "--brand-primary-text",
     "--brand-primary-fill",
-    "--brand-secondary",
-    "--brand-secondary-text",
-    "--brand-secondary-fill",
-    "--brand-secondary-40",
-    "--brand-secondary-20",
+    "--brand-accent",
+    "--brand-accent-on",
+    "--brand-accent-text",
+    "--brand-accent-fill",
+    "--brand-accent-40",
+    "--brand-accent-20",
   ];
   for (const prop of brandProps) {
     el.style.removeProperty(prop);
