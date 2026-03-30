@@ -34,6 +34,7 @@
 
   /* Accent brand color (optional, set per-org) */
   --brand-accent: var(--brand-primary);
+  --brand-accent-on: #fff;
   --brand-accent-text: var(--brand-accent);
   --brand-accent-fill: var(--brand-accent);
   --brand-accent-40: color-mix(in srgb, var(--brand-accent) 40%, transparent);
@@ -122,19 +123,21 @@ select {
 /* Filled Chip inside a filter bar: any .k-chip without the outline border
    class gets accent styling. The Chip's outline prop controls the toggle,
    so no custom active class is needed. Scope to .filter-bar so card-level
-   chips are unaffected. */
+   chips are unaffected.
+   Uses --brand-accent (raw hex) so the org's chosen color displays
+   faithfully. Text adapts via --brand-accent-on (black or white). */
 .filter-bar .k-chip:not(.border) {
-  background-color: var(--brand-accent-fill) !important;
-  color: #fff !important;
+  background-color: var(--brand-accent) !important;
+  color: var(--brand-accent-on) !important;
 }
 
 /* Segmented strong: the sliding highlight behind the active button. */
 .k-segmented > span {
-  background-color: var(--brand-accent-fill) !important;
+  background-color: var(--brand-accent) !important;
 }
 
 .k-segmented .k-segmented-strong-button-active {
-  color: #fff !important;
+  color: var(--brand-accent-on) !important;
 }
 
 /* Glass mode override: force dark or light glass on navbar/tabbar surfaces
