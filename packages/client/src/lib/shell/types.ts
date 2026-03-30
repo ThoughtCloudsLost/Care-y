@@ -17,11 +17,15 @@ export type TabId = (typeof TAB_IDS)[number];
 
 // ── Shell wrapper props ──────────────────────────────────────────────
 
-export interface AppTabbarProps {
+export interface AppShellProps {
   /** Currently active tab ID. */
-  active: TabId;
+  activeTab: TabId;
+  /** Org name shown in the navbar. */
+  orgName?: string;
   /** Callback when a tab is tapped or arrow-keyed to. */
   ontabchange: (tabId: TabId) => void;
+  /** Page content rendered inside the shell. */
+  children: Snippet;
 }
 
 export interface ShellNavbarProps {

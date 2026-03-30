@@ -2,7 +2,7 @@ import { describe, it, expect, expectTypeOf } from "vitest";
 import {
   TAB_IDS,
   type TabId,
-  type AppTabbarProps,
+  type AppShellProps,
   type ShellNavbarProps,
   type PageLayoutProps,
   type ShellSheetProps,
@@ -26,9 +26,10 @@ describe("shell types", () => {
     >();
   });
 
-  it("AppTabbarProps has active and ontabchange", () => {
-    expectTypeOf<AppTabbarProps>().toHaveProperty("active");
-    expectTypeOf<AppTabbarProps>().toHaveProperty("ontabchange");
+  it("AppShellProps has activeTab, ontabchange, and children", () => {
+    expectTypeOf<AppShellProps>().toHaveProperty("activeTab");
+    expectTypeOf<AppShellProps>().toHaveProperty("ontabchange");
+    expectTypeOf<AppShellProps>().toHaveProperty("children");
   });
 
   it("ShellNavbarProps has optional title and backLink", () => {

@@ -1,9 +1,9 @@
 <!--
   Popup wrapper with focus trap and focus restore.
-  Includes an optional title shown via Konsta Navbar inside the popup.
+  Contains its own Page + Navbar for independent scroll context and navigation.
 -->
 <script lang="ts">
-  import { Popup, Navbar, Link } from "konsta/svelte";
+  import { Popup, Page, Navbar, Link } from "konsta/svelte";
   import type { ShellPopupProps } from "./types";
   import { activateFocusTrap } from "./focus-trap";
 
@@ -20,9 +20,12 @@
 
     const active = document.activeElement;
     triggerEl = active instanceof HTMLElement ? active : null;
-    cleanupTrap = activateFocusTrap({
-      container: el,
-      onEscape: handleDismiss,
+
+    requestAnimationFrame(() => {
+      cleanupTrap = activateFocusTrap({
+        container: el,
+        onEscape: handleDismiss,
+      });
     });
 
     return () => {
@@ -44,13 +47,15 @@
 
 <Popup {opened} onBackdropClick={handleDismiss}>
   <div bind:this={dialogEl} role="dialog" aria-modal="true" aria-label={title}>
-    {#if title}
-      <Navbar {title}>
-        {#snippet right()}
-          <Link navbar onclick={handleDismiss}>Close</Link>
-        {/snippet}
-      </Navbar>
-    {/if}
-    {@render children()}
+    <Page>
+      {#if title}
+        <Navbar {title}>
+          {#snippet right()}
+            <Link navbar role="button" onclick={handleDismiss}>Close</Link>
+          {/snippet}
+        </Navbar>
+      {/if}
+      {@render children()}
+    </Page>
   </div>
 </Popup>

@@ -21,9 +21,12 @@
 
     const active = document.activeElement;
     triggerEl = active instanceof HTMLElement ? active : null;
-    cleanupTrap = activateFocusTrap({
-      container: el,
-      onEscape: handleDismiss,
+
+    requestAnimationFrame(() => {
+      cleanupTrap = activateFocusTrap({
+        container: el,
+        onEscape: handleDismiss,
+      });
     });
 
     return () => {

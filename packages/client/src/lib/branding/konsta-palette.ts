@@ -325,9 +325,11 @@ export async function applyKonstaPalette(
   el.style.setProperty("--brand-text", primary.text);
   el.style.setProperty("--brand-fill", primary.fill);
 
-  console.log(
-    `[palette] primary=${brand.primary} text=${primary.text} fill=${primary.fill} dark=${String(isDark)}`,
-  );
+  if (import.meta.env.DEV) {
+    console.log(
+      `[palette] primary=${brand.primary} text=${primary.text} fill=${primary.fill} dark=${String(isDark)}`,
+    );
+  }
 
   // Accent tokens (if provided)
   if (brand.accent !== undefined && brand.accent !== "") {
@@ -345,9 +347,11 @@ export async function applyKonstaPalette(
       "--brand-accent-20",
       `color-mix(in srgb, ${brand.accent} 20%, transparent)`,
     );
-    console.log(
-      `[palette] accent=${brand.accent} on=${accentOn} text=${accent.text} fill=${accent.fill}`,
-    );
+    if (import.meta.env.DEV) {
+      console.log(
+        `[palette] accent=${brand.accent} on=${accentOn} text=${accent.text} fill=${accent.fill}`,
+      );
+    }
   } else {
     el.style.removeProperty("--brand-accent");
     el.style.removeProperty("--brand-accent-on");

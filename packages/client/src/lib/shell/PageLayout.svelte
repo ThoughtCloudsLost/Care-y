@@ -1,13 +1,9 @@
 <!--
-  Page wrapper using Konsta's Page as the scroll container.
-  Page is `absolute overflow-auto` by default. Within the flex shell layout,
-  the main element is the positioning context, so Page fills the content area
-  between the navbar and tabbar.
-  lockScroll disables Page scrolling and uses an internal flex layout
-  for chat views with a fixed input bar at the bottom.
+  Route-level content wrapper for scroll and layout control.
+  Does NOT render a Konsta Page (that lives in AppShell).
+  lockScroll disables scrolling for chat views with a fixed input bar at the bottom.
 -->
 <script lang="ts">
-  import { Page } from "konsta/svelte";
   import type { PageLayoutProps } from "./types";
 
   let {
@@ -18,20 +14,43 @@
   }: PageLayoutProps = $props();
 </script>
 
-<Page class={lockScroll ? "!overflow-hidden flex flex-col" : ""}>
+<div class="page-layout" class:lock-scroll={lockScroll}>
   {#if lockScroll}
-    <div
-      class="flex-1 min-h-0 overflow-y-auto overscroll-contain"
-      style:touch-action={touchAction}
-    >
+    <div class="scroll-region" style:touch-action={touchAction}>
       {@render children()}
     </div>
   {:else}
     {@render children()}
   {/if}
   {#if bottomBar}
-    <div class="shrink-0" style:padding-bottom="env(safe-area-inset-bottom)">
+    <div class="bottom-bar">
       {@render bottomBar()}
     </div>
   {/if}
-</Page>
+</div>
+
+<style>
+  .page-layout {
+    display: contents;
+  }
+
+  .page-layout.lock-scroll {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  .scroll-region {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+
+  .bottom-bar {
+    flex-shrink: 0;
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+</style>
