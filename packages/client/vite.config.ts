@@ -1,4 +1,5 @@
 import fs from "node:fs";
+import { paraglideVitePlugin } from "@inlang/paraglide-js";
 import { sveltekit } from "@sveltejs/kit/vite";
 import tailwindcss from "@tailwindcss/vite";
 import basicSsl from "@vitejs/plugin-basic-ssl";
@@ -29,6 +30,11 @@ const mkcert = isMobile ? httpsConfig() : {};
 
 export default defineConfig({
   plugins: [
+    paraglideVitePlugin({
+      project: "./project.inlang",
+      outdir: "./src/lib/paraglide",
+      strategy: ["cookie", "baseLocale"],
+    }),
     tailwindcss(),
     sveltekit(),
     ...("plugins" in mkcert ? mkcert.plugins : []),

@@ -1,6 +1,7 @@
 import tseslint from "typescript-eslint";
 import eslintPluginSvelte from "eslint-plugin-svelte";
 import eslintPluginSecurity from "eslint-plugin-security";
+import noHardcodedStrings from "./eslint-rules/no-hardcoded-strings.js";
 
 export default tseslint.config(
   // Global ignores - must be first config object
@@ -12,6 +13,7 @@ export default tseslint.config(
       "**/coverage/**",
       "**/build/**",
       "**/scripts/**",
+      "**/paraglide/**",
     ],
   },
 
@@ -45,6 +47,12 @@ export default tseslint.config(
   ...eslintPluginSvelte.configs["flat/recommended"],
   {
     files: ["**/*.svelte", "*.svelte"],
+    plugins: {
+      "care-y": {
+        meta: { name: "eslint-plugin-care-y", version: "1.0.0" },
+        rules: { "no-hardcoded-strings": noHardcodedStrings },
+      },
+    },
     languageOptions: {
       parserOptions: {
         parser: tseslint.parser,
@@ -64,6 +72,15 @@ export default tseslint.config(
       // compiler, not the TS type checker. The checker sees them as void,
       // triggering false positives on assignments like `let x = $state(null)`.
       "@typescript-eslint/no-confusing-void-expression": "off",
+      // All user-facing strings in Svelte templates must use Paraglide
+      // message functions for i18n. Catches hardcoded aria-labels,
+      // title, placeholder, alt, and visible text content.
+      "care-y/no-hardcoded-strings": [
+        "error",
+        {
+          ignoreText: ["CARE-Y", "JN"],
+        },
+      ],
     },
   },
 

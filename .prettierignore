@@ -20,3 +20,4 @@ Dockerfile.*
 *.woff2
 *.patch
 *.png
+**/paraglide/**

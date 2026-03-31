@@ -1,4 +1,5 @@
 <script lang="ts">
+  /* eslint-disable care-y/no-hardcoded-strings -- Dev-only tooling, not user-facing */
   import { themeStore } from "$lib/stores/theme.svelte";
   import type {
     VisualTheme,
