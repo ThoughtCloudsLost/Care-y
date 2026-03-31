@@ -1,0 +1,211 @@
+/* Theme-agnostic rules shared across all visual themes */
+
+/* Tailwind v4 build-time tokens. Only breakpoints and brand color belong here.
+   Font overrides are handled by the bridge vars below, not @theme. */
+@theme {
+  --breakpoint-tablet: 768px;
+  --breakpoint-desktop: 1024px;
+  --color-brand-primary: #f05030;
+}
+
+/* Font bridge: Konsta's .k-ios/.k-material classes resolve font-family through
+   var(--font-ios) and var(--font-material). These @theme tokens compile to :root
+   unconditionally, so we can't scope them by class. Instead, point them at
+   theme-controlled custom properties that each theme defines. This :root block
+   appears after Konsta's @theme in cascade order, so it wins. */
+:root {
+  --font-ios: var(--theme-font-ui);
+  --font-material: var(--theme-font-ui);
+}
+
+/* App-level defaults (invariant across themes, overridden per-org) */
+:root {
+  --brand-primary: #f05030;
+  --brand-primary-40: color-mix(in srgb, var(--brand-primary) 40%, transparent);
+  --brand-primary-20: color-mix(in srgb, var(--brand-primary) 20%, transparent);
+  /* Dual contrast tokens: set at runtime by konsta-palette.ts.
+     --brand-text: surface-safe for text accents.
+     --brand-fill: white-safe for fill backgrounds.
+     Fall back to --brand-primary when not set. */
+  --brand-text: var(--brand-primary);
+  --brand-fill: var(--brand-primary);
+  --brand-primary-text: var(--brand-primary);
+  --brand-primary-fill: var(--brand-primary);
+
+  /* Accent brand color (optional, set per-org) */
+  --brand-accent: var(--brand-primary);
+  --brand-accent-on: #fff;
+  --brand-accent-text: var(--brand-accent);
+  --brand-accent-fill: var(--brand-accent);
+  --brand-accent-40: color-mix(in srgb, var(--brand-accent) 40%, transparent);
+  --brand-accent-20: color-mix(in srgb, var(--brand-accent) 20%, transparent);
+  --app-height: 100dvh;
+}
+
+/* Color scheme set dynamically by the blocking script in app.html
+   and the theme store. Class-scoped so it matches the resolved scheme,
+   not the OS preference. */
+html.dark {
+  color-scheme: dark;
+}
+
+html.light {
+  color-scheme: light;
+}
+
+/* Lock document scroll so only inner containers scroll.
+   Prevents iOS Safari rubber-band bounce on the shell.
+   The App component's height constraint handles viewport sizing. */
+html,
+body {
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+
+/* Base typography and surface color.
+   Konsta's base.css sets `.dark { background-color: #000; color: #fff }`
+   at specificity 0,1,0. A bare `html` selector (0,0,1) loses.
+   We use `html.dark` / `html.light` (0,1,1) to override at higher
+   specificity AND later cascade position. */
+html.dark,
+html.light {
+  background-color: var(--paper);
+  color: var(--ink);
+}
+
+body {
+  font-family: var(--theme-font-ui);
+}
+
+/* FOUC guard: body starts hidden (class set in app.html), removed by
+   +layout.svelte onMount after hydration. visibility:hidden still
+   participates in layout, so no content shift on reveal. */
+body.fouc-guard {
+  visibility: hidden;
+}
+
+/* Prevent iOS Safari auto-zoom on input focus (triggers below 16px).
+   Applies to all form controls so the native-app feel is preserved. */
+input,
+textarea,
+select {
+  font-size: 16px;
+}
+
+/* Accessibility: reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* Accessibility: high contrast disables decorative textures.
+   These selectors are no-ops when the default theme is active. */
+@media (prefers-contrast: more) {
+  .grain::before,
+  .halftone::after {
+    display: none !important;
+  }
+
+  .heading-display {
+    filter: none !important;
+  }
+
+  .heading-compact {
+    text-shadow: none !important;
+  }
+}
+
+/* View transitions */
+@view-transition {
+  navigation: auto;
+}
+
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation-duration: var(--anim-transition-duration);
+  animation-timing-function: var(--anim-transition-easing);
+}
+
+/* Brand text overrides: Konsta uses text-primary (--color-primary) for both
+   foreground text AND background fills via the same token. We split them:
+   --k-color-primary is the fill-safe value (bg-primary stays correct).
+   --brand-text is the surface-safe value for text contexts.
+   These overrides target Konsta's link and list-button text usage without
+   affecting bg-primary fills (buttons, badges, toggles) or navbar icons. */
+.k-list-button .k-list-button-text {
+  color: var(--brand-text);
+}
+
+/* Accent color overrides for Konsta components.
+   Uses --brand-accent-fill so any org accent color propagates automatically.
+   Components: filled filter chips, segmented-strong highlight. */
+
+/* Filled Chip inside a filter bar: any .k-chip without the outline border
+   class gets accent styling. The Chip's outline prop controls the toggle,
+   so no custom active class is needed. Scope to .filter-bar so card-level
+   chips are unaffected.
+   Uses --brand-accent (raw hex) so the org's chosen color displays
+   faithfully. Text adapts via --brand-accent-on (black or white). */
+.filter-bar .k-chip:not(.border) {
+  background-color: var(--brand-accent) !important;
+  color: var(--brand-accent-on) !important;
+}
+
+/* Segmented strong: the sliding highlight behind the active button. */
+.k-segmented > span {
+  background-color: var(--brand-accent) !important;
+}
+
+.k-segmented .k-segmented-strong-button-active {
+  color: var(--brand-accent-on) !important;
+}
+
+/* Glass mode override: force dark or light glass on navbar/tabbar surfaces
+   independent of color scheme. Targets Konsta's Glass component (uses
+   backdrop-blur-lg) using Konsta's own tokens. Each theme controls its
+   own card glass treatment separately. */
+
+/* Dark glass forced on light mode */
+html.glass-dark.light .backdrop-blur-lg {
+  background-color: var(--color-ios-dark-glass) !important;
+  box-shadow: var(--shadow-ios-dark-glass) !important;
+  color: #f5f5f7;
+}
+
+/* Light glass forced on dark mode */
+html.glass-light.dark .backdrop-blur-lg {
+  background-color: var(--color-ios-light-glass) !important;
+  box-shadow: var(--shadow-ios-light-glass) !important;
+  color: #1a1a1a;
+}
+
+/* Semantic heading classes: base styles (themes override with their own fonts/effects) */
+.heading-display {
+  font-weight: 800;
+}
+
+.heading-compact {
+  font-weight: 700;
+}
+
+/* Elevated card: base surface. Each theme overrides with its visual treatment. */
+.card-elevated {
+  background: var(--surface-1);
+  border-radius: 0.75rem;
+  border: 1px solid rgba(128, 128, 128, 0.12);
+}
+
+/* Skeleton bar: structural base. Animation set in animations.css via
+   --anim-skeleton-* tokens; themes override tokens or the animation directly. */
+.skeleton-bar {
+  height: 12px;
+  background: var(--muted);
+  border-radius: 2px;
+  transform-origin: left;
+  opacity: 0.3;
+}

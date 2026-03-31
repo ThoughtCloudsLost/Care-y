@@ -12,6 +12,7 @@ WORKDIR /app
 # Minimal install: only sodium-native runtime dep. All workspace package.json
 # files are needed for pnpm resolution, but --filter limits actual installation.
 COPY package.json pnpm-workspace.yaml pnpm-lock.yaml ./
+COPY patches/ ./patches/
 COPY packages/server/package.json ./packages/server/
 COPY packages/shared/package.json ./packages/shared/
 COPY packages/client/package.json ./packages/client/

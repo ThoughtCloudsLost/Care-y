@@ -1,0 +1,56 @@
+diff --git a/svelte/components/Link.svelte b/svelte/components/Link.svelte
+index 5b219dc6403e587a20f5b2ce79fcc1cbc152db3f..dc6dd5504cce9cc0243910915a4c1433785483ae 100644
+--- a/svelte/components/Link.svelte
++++ b/svelte/components/Link.svelte
+@@ -123,10 +123,10 @@
+   this={component}
+   bind:this={el}
+   class={classes}
+-  {...restProps}
+-  {...linkProps}
+   role="link"
+   tabindex="0"
++  {...restProps}
++  {...linkProps}
+   onclick={onClick || onclick}
+ >
+   {@render children?.()}
+diff --git a/svelte/components/Searchbar.svelte b/svelte/components/Searchbar.svelte
+index 317608318ac2f0234bfb46b5b5c7a2954917505c..82d95924ee83cc1e8a06c26a74d0382b0b6ef56a 100644
+--- a/svelte/components/Searchbar.svelte
++++ b/svelte/components/Searchbar.svelte
+@@ -46,7 +46,7 @@
+     ...restProps
+   } = $props();
+ 
+-  let theme = $state(useTheme({ ios, material }));
++  let theme = $derived(useTheme({ ios, material }));
+   let disableTimeout = null;
+ 
+   let el = $state(null);
+diff --git a/svelte/components/Stepper.svelte b/svelte/components/Stepper.svelte
+index 019e8f3c47c0a8b8ed78c98964e32e3ba8c8ca43..095479b639a380b05896f3df65dad9323b1fe3be 100644
+--- a/svelte/components/Stepper.svelte
++++ b/svelte/components/Stepper.svelte
+@@ -62,7 +62,7 @@
+   let el = $state(null);
+   export { el };
+ 
+-  let theme = $state(useTheme({ ios, material }));
++  let theme = $derived(useTheme({ ios, material }));
+ 
+   const isRounded = $derived(
+     typeof rounded === 'undefined'
+diff --git a/svelte/components/Toggle.svelte b/svelte/components/Toggle.svelte
+index 6fb59773a4d9ca8e3d98441cb4b47ca1807dad64..4b925ca71182f137abdf524373bff4c59a55b4de 100644
+--- a/svelte/components/Toggle.svelte
++++ b/svelte/components/Toggle.svelte
+@@ -70,7 +70,7 @@
+     <span class={c.thumbSide[state]}></span>
+     <span class={c.thumbBg[state]}></span>
+     <span class={c.thumbShadow[state]}></span>
+-    <span ref={rippleTargetElRef} class={c.thumbWrap[state]}>
++    <span bind:this={rippleTargetElRef} class={c.thumbWrap[state]}>
+       <span class={c.thumb[state]}></span>
+     </span>{:else}
+     <span bind:this={rippleTargetElRef} class={c.thumbWrap[state]}>

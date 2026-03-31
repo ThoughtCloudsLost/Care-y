@@ -22,6 +22,7 @@ WORKDIR /app
 # All package.json files are included for pnpm workspace resolution.
 # Client source is NOT copied - it runs separately via SvelteKit dev server.
 COPY package.json pnpm-workspace.yaml pnpm-lock.yaml ./
+COPY patches/ ./patches/
 COPY packages/server/package.json ./packages/server/
 COPY packages/client/package.json ./packages/client/
 COPY packages/shared/package.json ./packages/shared/
