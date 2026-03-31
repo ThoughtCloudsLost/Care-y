@@ -20,10 +20,10 @@
     "@care-y/shared": "workspace:*",
     "@lucide/svelte": "1.7.0",
     "@material/material-color-utilities": "0.4.0",
-    "@tanstack/svelte-query": "6.1.8",
+    "@tanstack/svelte-query": "6.1.11",
     "@trpc/client": "11.10.0",
     "@twilio/voice-sdk": "2.18.1",
-    "bits-ui": "2.16.3",
+    "bits-ui": "2.16.5",
     "konsta": "5.0.8",
     "svelte-gestures": "5.2.2"
   },
