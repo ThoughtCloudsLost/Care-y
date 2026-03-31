@@ -7,6 +7,7 @@
     BlockTitle,
   } from "konsta/svelte";
   import { List, LayoutGrid } from "@lucide/svelte";
+  import * as m from "$lib/paraglide/messages.js";
 
   type TicketStatus = "new" | "active" | "hold" | "closed";
 
@@ -100,30 +101,34 @@
 
   interface FilterDef {
     id: FilterId;
-    label: string;
+    label: () => string;
     count: number;
   }
 
   const filters: FilterDef[] = [
-    { id: "all", label: "All", count: MOCK_TICKETS.length },
+    {
+      id: "all",
+      label: () => m.tickets_filter_all(),
+      count: MOCK_TICKETS.length,
+    },
     {
       id: "new",
-      label: "New",
+      label: () => m.tickets_filter_new(),
       count: MOCK_TICKETS.filter((t) => t.status === "new").length,
     },
     {
       id: "active",
-      label: "Active",
+      label: () => m.tickets_filter_active(),
       count: MOCK_TICKETS.filter((t) => t.status === "active").length,
     },
     {
       id: "hold",
-      label: "On Hold",
+      label: () => m.tickets_filter_hold(),
       count: MOCK_TICKETS.filter((t) => t.status === "hold").length,
     },
     {
       id: "closed",
-      label: "Closed",
+      label: () => m.tickets_filter_closed(),
       count: MOCK_TICKETS.filter((t) => t.status === "closed").length,
     },
   ];
@@ -169,12 +174,18 @@
       : MOCK_TICKETS.filter((t) => t.status === activeFilter),
   );
 
-  const statusLabel: Record<TicketStatus, string> = {
-    new: "New",
-    active: "Active",
-    hold: "On Hold",
-    closed: "Closed",
-  };
+  function statusLabel(status: TicketStatus): string {
+    switch (status) {
+      case "new":
+        return m.tickets_filter_new();
+      case "active":
+        return m.tickets_filter_active();
+      case "hold":
+        return m.tickets_filter_hold();
+      case "closed":
+        return m.tickets_filter_closed();
+    }
+  }
 
   function priorityColor(priority: MockTicket["priority"]): string {
     if (priority === "urgent") return "var(--brand-text)";
@@ -185,16 +196,19 @@
 
 <div class="queue-page">
   <div class="queue-header">
-    <BlockTitle large class="!m-0 !pl-0">Tickets</BlockTitle>
+    <BlockTitle large class="!m-0 !pl-0">{m.tickets_title()}</BlockTitle>
     <div class="stats-row">
       <span
-        >&#9679; {MOCK_TICKETS.filter((t) => t.status === "new").length} new</span
+        >&#9679; {MOCK_TICKETS.filter((t) => t.status === "new").length}
+        {m.tickets_status_new()}</span
       >
       <span
-        >&#8594; {MOCK_TICKETS.filter((t) => t.status === "active").length} active</span
+        >&#8594; {MOCK_TICKETS.filter((t) => t.status === "active").length}
+        {m.tickets_status_active()}</span
       >
       <span
-        >&#9673; {MOCK_TICKETS.filter((t) => t.status === "hold").length} on hold</span
+        >&#9673; {MOCK_TICKETS.filter((t) => t.status === "hold").length}
+        {m.tickets_status_on_hold()}</span
       >
     </div>
   </div>
@@ -204,7 +218,7 @@
     <div
       class="filter-bar"
       role="tablist"
-      aria-label="Filter tickets"
+      aria-label={m.tickets_filter()}
       onkeydown={handleFilterKeydown}
     >
       {#each filters as filter (filter.id)}
@@ -216,7 +230,7 @@
           aria-selected={activeFilter === filter.id}
           onclick={() => (activeFilter = filter.id)}
         >
-          {filter.label}
+          {filter.label()}
           {filter.count}
         </Chip>
       {/each}
@@ -225,14 +239,14 @@
       <SegmentedButton
         active={viewMode === "list"}
         aria-pressed={viewMode === "list"}
-        aria-label="List view"
+        aria-label={m.tickets_view_list()}
         onclick={() => (viewMode = "list")}
         ><List size={16} aria-hidden="true" /></SegmentedButton
       >
       <SegmentedButton
         active={viewMode === "grid"}
         aria-pressed={viewMode === "grid"}
-        aria-label="Grid view"
+        aria-label={m.tickets_view_grid()}
         onclick={() => (viewMode = "grid")}
         ><LayoutGrid size={16} aria-hidden="true" /></SegmentedButton
       >
@@ -246,14 +260,14 @@
         contentWrap={false}
         component="button"
         type="button"
-        aria-label="Open ticket {ticket.alias}"
+        aria-label={m.tickets_open({ alias: ticket.alias })}
         class="card-elevated touch-feedback !m-0 !mx-0"
       >
         <div class="card-inner">
           <div class="card-header-row">
             <span class="status-badge">
               <span class="status-dot" data-status={ticket.status}></span>
-              {statusLabel[ticket.status]}
+              {statusLabel(ticket.status)}
             </span>
             <span class="card-header-right">
               {#if ticket.assignee}<span class="card-meta"
@@ -280,7 +294,7 @@
 
   {#if filteredTickets.length === 0}
     <div class="empty-state">
-      <p>No tickets match this filter.</p>
+      <p>{m.tickets_empty_filter()}</p>
     </div>
   {/if}
 </div>

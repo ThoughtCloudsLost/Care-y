@@ -23,6 +23,7 @@
     Page,
     Navbar,
     Link,
+    Searchbar,
     Tabbar,
     TabbarLink,
     ToolbarPane,
@@ -35,7 +36,9 @@
     Search,
     TicketPlus,
   } from "@lucide/svelte";
+  import { tick } from "svelte";
   import type { Component } from "svelte";
+  import * as m from "$lib/paraglide/messages.js";
   import type { TabId, AppShellProps } from "./types";
 
   let {
@@ -45,43 +48,82 @@
     children,
   }: AppShellProps = $props();
 
+  let searchOpen = $state(false);
+  let searchQuery = $state("");
+  let searchContainerEl: HTMLDivElement | undefined = $state();
+
+  async function openSearch(): Promise<void> {
+    searchOpen = true;
+    await tick();
+    searchContainerEl
+      ?.querySelector<HTMLInputElement>("input[type='text']")
+      ?.focus();
+  }
+
+  function closeSearch(): void {
+    searchOpen = false;
+    searchQuery = "";
+  }
+
   interface TabDef {
     readonly id: TabId;
-    readonly label: string;
+    readonly label: () => string;
     readonly icon: Component;
   }
 
   const allTabs: readonly TabDef[] = [
-    { id: "home", label: "Home", icon: House },
-    { id: "tickets", label: "Tickets", icon: Ticket },
-    { id: "calendar", label: "Calendar", icon: CalendarDays },
-    { id: "more", label: "More", icon: Ellipsis },
-  ] as const;
+    { id: "home", label: () => m.nav_home(), icon: House },
+    { id: "tickets", label: () => m.nav_tickets(), icon: Ticket },
+    { id: "calendar", label: () => m.nav_calendar(), icon: CalendarDays },
+    { id: "more", label: () => m.nav_more(), icon: Ellipsis },
+  ];
 </script>
 
 <Page>
   <Navbar role="banner">
     {#snippet left()}
-      <Link iconOnly role="button" aria-label="Account">
+      <Link iconOnly role="button" aria-label={m.nav_account()}>
         <span class="navbar-avatar" aria-hidden="true">JN</span>
       </Link>
     {/snippet}
-    {#snippet title()}<span class="heading-compact">{orgName}</span>{/snippet}
+    {#snippet title()}<span
+        class="heading-compact"
+        class:heading-hidden={searchOpen}>{orgName}</span
+      >{/snippet}
     {#snippet right()}
-      <Link iconOnly role="button" aria-label="Search">
-        <Search size={22} aria-hidden="true" />
-      </Link>
-      <Link iconOnly role="button" aria-label="New Ticket">
-        <TicketPlus size={22} aria-hidden="true" />
-      </Link>
+      {#if !searchOpen}
+        <Link
+          iconOnly
+          role="button"
+          aria-label={m.nav_search()}
+          onclick={openSearch}
+        >
+          <Search size={22} aria-hidden="true" />
+        </Link>
+        <Link iconOnly role="button" aria-label={m.nav_new_ticket()}>
+          <TicketPlus size={22} aria-hidden="true" />
+        </Link>
+      {/if}
     {/snippet}
+    <div
+      bind:this={searchContainerEl}
+      class="search-overlay"
+      class:search-overlay-open={searchOpen}
+    >
+      <Searchbar
+        bind:value={searchQuery}
+        disableButton
+        onDisable={closeSearch}
+        onClear={() => (searchQuery = "")}
+      />
+    </div>
   </Navbar>
 
   <Tabbar
     labels
     class="left-0 bottom-0 fixed"
     role="tablist"
-    aria-label="Main navigation"
+    aria-label={m.nav_main()}
   >
     <ToolbarPane>
       {#each allTabs as tab (tab.id)}
@@ -89,6 +131,7 @@
           active={activeTab === tab.id}
           onclick={() => ontabchange(tab.id)}
           role="tab"
+          aria-label={tab.label()}
           aria-selected={activeTab === tab.id}
           colors={{
             textActiveIos: "text-[var(--brand-text)]",
@@ -129,5 +172,32 @@
     font-size: 0.625rem;
     font-weight: 600;
     letter-spacing: 0.02em;
+  }
+
+  .heading-hidden {
+    opacity: 0;
+    transition: opacity 150ms ease;
+  }
+
+  .search-overlay {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    padding-inline: 8px;
+    z-index: 50;
+    opacity: 0;
+    pointer-events: none;
+    transform: scaleX(0.85);
+    transform-origin: right center;
+    transition:
+      opacity 200ms ease,
+      transform 350ms cubic-bezier(0.2, 1, 0.4, 1);
+  }
+
+  .search-overlay-open {
+    opacity: 1;
+    pointer-events: auto;
+    transform: scaleX(1);
   }
 </style>

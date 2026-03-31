@@ -30,10 +30,10 @@ describe("METHOD_INFO", () => {
     }
   });
 
-  it("every entry has a non-empty label and description", () => {
+  it("every entry has a non-empty labelKey and descriptionKey", () => {
     for (const entry of METHOD_INFO) {
-      expect(entry.label.length).toBeGreaterThan(0);
-      expect(entry.description.length).toBeGreaterThan(0);
+      expect(entry.labelKey.length).toBeGreaterThan(0);
+      expect(entry.descriptionKey.length).toBeGreaterThan(0);
     }
   });
 

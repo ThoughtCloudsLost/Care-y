@@ -4,6 +4,7 @@
 -->
 <script lang="ts">
   import { Popup, Page, Navbar, Link } from "konsta/svelte";
+  import * as m from "$lib/paraglide/messages.js";
   import type { ShellPopupProps } from "./types";
   import { activateFocusTrap } from "./focus-trap";
 
@@ -51,7 +52,9 @@
       {#if title}
         <Navbar {title}>
           {#snippet right()}
-            <Link navbar role="button" onclick={handleDismiss}>Close</Link>
+            <Link navbar role="button" onclick={handleDismiss}
+              >{m.shell_close()}</Link
+            >
           {/snippet}
         </Navbar>
       {/if}
