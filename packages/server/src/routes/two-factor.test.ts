@@ -292,7 +292,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         await expectTrpcError(
           caller.twoFactor.status(),
           "UNAUTHORIZED",
-          "Not authenticated",
+          "NOT_AUTHENTICATED",
         );
       });
 
@@ -301,7 +301,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         await expectTrpcError(
           caller.twoFactor.enroll.totpSetup(),
           "UNAUTHORIZED",
-          "Not authenticated",
+          "NOT_AUTHENTICATED",
         );
       });
 
@@ -311,7 +311,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         await expectTrpcError(
           caller.twoFactor.methods.list(),
           "UNAUTHORIZED",
-          "Two-factor verification required",
+          "TWOFA_REQUIRED",
         );
       });
     });
