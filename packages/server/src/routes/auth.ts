@@ -19,6 +19,7 @@ import {
   setPiiRetentionInputSchema,
   RoleId,
   Permission,
+  ErrorCode,
 } from "@care-y/shared";
 import { TRPCError } from "@trpc/server";
 import {
@@ -88,15 +89,15 @@ function toUserResponse(user: UserRecord): UserResponse {
 function enforceRateLimit(
   limiter: RateLimiter,
   key: string,
-  userMessage: string,
+  errorCode: string,
 ): void {
   const result = limiter.check(key);
   if (!result.allowed) {
     throw new TRPCError({
       code: "TOO_MANY_REQUESTS",
-      message: `${userMessage}. Try again later.`,
+      message: errorCode,
       cause: new RateLimitError(
-        userMessage,
+        errorCode,
         Math.ceil(result.retryAfterMs / 1000),
       ),
     });
@@ -132,7 +133,7 @@ async function handleGetSalt(
   enforceRateLimit(
     saltLimiter,
     `salt:${extractClientIp(req)}`,
-    "Too many requests",
+    ErrorCode.REQUEST_RATE_LIMITED,
   );
   const saltDefense = createSaltDefense(
     org.tenantDb,
@@ -164,7 +165,7 @@ export function createAuthRouter(deps: AuthRouterDeps) {
     login: orgProcedure.input(loginInputSchema).mutation(
       withErrorWrapping(async ({ ctx, input }) => {
         const ip = extractClientIp(ctx.req);
-        enforceRateLimit(loginLimiter, ip, "Too many login attempts");
+        enforceRateLimit(loginLimiter, ip, ErrorCode.LOGIN_RATE_LIMITED);
 
         const sessions = createTenantSessions(ctx.org, deps.tokenizer);
         const authService = createScopedAuthService(ctx.org, sessions, deps);
@@ -219,9 +220,7 @@ export function createAuthRouter(deps: AuthRouterDeps) {
             effectiveRoleId !== getDefaultRoleId() &&
             !hasPermission(ctx.user.roleId, Permission.MANAGE_ROLES)
           ) {
-            throw new ForbiddenError(
-              "Only admins can register users with non-default roles",
-            );
+            throw new ForbiddenError(ErrorCode.ONLY_ADMINS_CAN_ASSIGN_ROLES);
           }
 
           const sessions = createTenantSessions(ctx.org, deps.tokenizer);
@@ -257,14 +256,14 @@ export function createAuthRouter(deps: AuthRouterDeps) {
       withErrorWrapping(async ({ ctx, input }) => {
         // Self-assignment protection: admins cannot change their own role.
         if (input.userId === ctx.user.id) {
-          throw new ForbiddenError("Cannot change your own role");
+          throw new ForbiddenError(ErrorCode.CANNOT_CHANGE_OWN_ROLE);
         }
 
         const sessions = createTenantSessions(ctx.org, deps.tokenizer);
         const authService = createScopedAuthService(ctx.org, sessions, deps);
         const targetUser = await authService.findUserById(input.userId);
         if (!targetUser) {
-          throw new NotFoundError("User not found");
+          throw new NotFoundError(ErrorCode.USER_NOT_FOUND);
         }
 
         // Last-admin protection: if demoting an admin, ensure at least one other remains.
@@ -274,7 +273,7 @@ export function createAuthRouter(deps: AuthRouterDeps) {
         ) {
           const adminCount = await authService.countActiveAdmins();
           if (adminCount <= 1) {
-            throw new ForbiddenError("Cannot demote the last admin");
+            throw new ForbiddenError(ErrorCode.CANNOT_DEMOTE_LAST_ADMIN);
           }
         }
 

@@ -43,6 +43,37 @@ describe("QueryError", () => {
     ).toBeTruthy();
   });
 
+  it("maps NOT_AUTHENTICATED to translated message", () => {
+    render(QueryError, { props: { error: new Error("NOT_AUTHENTICATED") } });
+    expect(screen.getByText("You are not signed in.")).toBeTruthy();
+  });
+
+  it("maps INVALID_CREDENTIALS to translated message", () => {
+    render(QueryError, { props: { error: new Error("INVALID_CREDENTIALS") } });
+    expect(screen.getByText("Invalid username or password.")).toBeTruthy();
+  });
+
+  it("maps TICKET_NOT_FOUND to translated message", () => {
+    render(QueryError, { props: { error: new Error("TICKET_NOT_FOUND") } });
+    expect(screen.getByText("Ticket not found.")).toBeTruthy();
+  });
+
+  it("maps KB_CATEGORY_NOT_FOUND to translated message", () => {
+    render(QueryError, {
+      props: { error: new Error("KB_CATEGORY_NOT_FOUND") },
+    });
+    expect(screen.getByText("Category not found.")).toBeTruthy();
+  });
+
+  it("maps TELEPHONY_NOT_CONFIGURED to translated message", () => {
+    render(QueryError, {
+      props: { error: new Error("TELEPHONY_NOT_CONFIGURED") },
+    });
+    expect(
+      screen.getByText("Telephony is not configured for this organization."),
+    ).toBeTruthy();
+  });
+
   it("renders generic message for non-Error values", () => {
     render(QueryError, { props: { error: "some string" } });
     expect(

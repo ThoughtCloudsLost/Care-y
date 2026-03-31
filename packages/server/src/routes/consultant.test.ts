@@ -159,7 +159,7 @@ describe("createConsultantRouter", () => {
 
     it("throws on wrong code", async () => {
       vi.mocked(mockService.verify).mockRejectedValue(
-        new AuthError("Invalid or expired verification code"),
+        new AuthError("INVALID_VERIFICATION_CODE"),
       );
 
       await expect(caller.verify({ code: "000000" })).rejects.toThrow(
@@ -203,7 +203,7 @@ describe("createConsultantRouter", () => {
 
     it("throws when no consultant exists", async () => {
       vi.mocked(mockService.deleteByUserId).mockRejectedValue(
-        new NotFoundError("No consultant registration found"),
+        new NotFoundError("NO_CONSULTANT_REGISTRATION"),
       );
 
       await expect(caller.delete()).rejects.toThrow(TRPCError);

@@ -327,7 +327,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
             roleId: RoleId.VOLUNTEER,
           }),
           "FORBIDDEN",
-          "Cannot change your own role",
+          "CANNOT_CHANGE_OWN_ROLE",
         );
       });
 
