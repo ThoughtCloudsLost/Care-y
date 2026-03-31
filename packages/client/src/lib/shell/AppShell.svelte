@@ -33,6 +33,7 @@
     CalendarDays,
     Ellipsis,
     Search,
+    TicketPlus,
   } from "@lucide/svelte";
   import type { Component } from "svelte";
   import type { TabId, AppShellProps } from "./types";
@@ -60,13 +61,18 @@
 
 <Page>
   <Navbar role="banner">
+    {#snippet left()}
+      <Link iconOnly role="button" aria-label="Account">
+        <span class="navbar-avatar" aria-hidden="true">JN</span>
+      </Link>
+    {/snippet}
     {#snippet title()}<span class="heading-compact">{orgName}</span>{/snippet}
     {#snippet right()}
       <Link iconOnly role="button" aria-label="Search">
         <Search size={22} aria-hidden="true" />
       </Link>
-      <Link iconOnly role="button" aria-label="Account">
-        <span class="navbar-avatar" aria-hidden="true">JN</span>
+      <Link iconOnly role="button" aria-label="New Ticket">
+        <TicketPlus size={22} aria-hidden="true" />
       </Link>
     {/snippet}
   </Navbar>
@@ -82,7 +88,6 @@
         <TabbarLink
           active={activeTab === tab.id}
           onclick={() => ontabchange(tab.id)}
-          label={tab.label}
           role="tab"
           aria-selected={activeTab === tab.id}
           colors={{
