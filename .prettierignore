@@ -21,3 +21,4 @@ Dockerfile.*
 *.patch
 *.png
 **/paraglide/**
+**/project.inlang/**
