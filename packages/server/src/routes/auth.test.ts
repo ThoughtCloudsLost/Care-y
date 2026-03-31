@@ -270,7 +270,7 @@ describe.skipIf(!HAS_DB)("auth + org routers (DB integration)", () => {
         roleId: RoleId.VOLUNTEER,
       }),
       "UNAUTHORIZED",
-      "Not authenticated",
+      "NOT_AUTHENTICATED",
     );
   });
 
@@ -404,7 +404,7 @@ describe.skipIf(!HAS_DB)("auth + org routers (DB integration)", () => {
     await expectTrpcError(
       caller.auth.me(),
       "UNAUTHORIZED",
-      "Not authenticated",
+      "NOT_AUTHENTICATED",
     );
   });
 
@@ -542,7 +542,7 @@ describe.skipIf(!HAS_DB)("auth + org routers (DB integration)", () => {
     await expectTrpcError(
       tryLogin(),
       "TOO_MANY_REQUESTS",
-      "Too many login attempts",
+      "LOGIN_RATE_LIMITED",
     );
   });
 });

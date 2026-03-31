@@ -1,0 +1,316 @@
+/* Cupertino theme: clean card-based information UI inspired by the Apple HIG design language.
+   Light mode: white/near-white surfaces, subtle borders, generous whitespace.
+   Dark mode: true black background, warm frosted translucent cards.
+   Uses system fonts throughout (SF Pro on iOS, system-ui elsewhere). */
+
+/* --- Cupertino palette tokens (light defaults) --- */
+.theme-cupertino {
+  --theme-font-display: system-ui, -apple-system, sans-serif;
+  --theme-font-ui: system-ui, -apple-system, sans-serif;
+
+  --ink: #1a1a1a;
+  --muted: #8e8e93;
+
+  /* Semantic aliases (resolve through Konsta vars below) */
+  --paper: var(--color-ios-light-surface);
+  --surface-1: var(--color-ios-light-surface-1);
+  --surface-2: var(--color-ios-light-surface-2);
+
+  /* Card tokens */
+  --card-bg: #ffffff;
+  --card-border: rgba(0, 0, 0, 0.06);
+  --card-shadow: 0 1px 3px rgba(0, 0, 0, 0.04), 0 1px 2px rgba(0, 0, 0, 0.02);
+  --card-shadow-elevated:
+    0 4px 12px rgba(0, 0, 0, 0.06), 0 1px 4px rgba(0, 0, 0, 0.04);
+  --card-radius: 1rem;
+
+  /* Filter pill tokens */
+  --pill-bg: rgba(0, 0, 0, 0.04);
+  --pill-bg-active: var(--ink);
+  --pill-text: var(--muted);
+  --pill-text-active: #ffffff;
+  --pill-radius: 999px;
+
+  /* Chip/tag tokens */
+  --chip-bg: rgba(0, 0, 0, 0.04);
+  --chip-text: var(--muted);
+
+  /* Divider */
+  --divider: rgba(0, 0, 0, 0.06);
+
+  /* Konsta iOS surface overrides: clean flat white/gray */
+  --color-ios-light-surface: #f2f2f7;
+  --color-ios-light-surface-1: #ffffff;
+  --color-ios-light-surface-1-shade: #e8e8ed;
+  --color-ios-light-surface-1-tint: #ffffff;
+  --color-ios-light-surface-2: #f5f5f5;
+  --color-ios-light-surface-3: #ffffff;
+  --color-ios-light-surface-variant: #e5e5ea;
+
+  /* iOS dark surfaces: true black with warm-tinted elevated cards */
+  --color-ios-dark-surface: #000000;
+  --color-ios-dark-surface-1: #1c1c1e;
+  --color-ios-dark-surface-1-shade: #0a0a0a;
+  --color-ios-dark-surface-1-tint: #2c2c2e;
+  --color-ios-dark-surface-2: #1c1c1e;
+  --color-ios-dark-surface-3: #2c2c2e;
+  --color-ios-dark-surface-variant: #2c2c2e;
+
+  /* Konsta Material surface overrides */
+  --color-md-light-surface-1: #ffffff;
+  --color-md-light-surface-2: #f5f5f5;
+  --color-md-light-surface-3: #ffffff;
+  --color-md-light-surface-variant: #e5e5ea;
+  --color-md-dark-surface: #000000;
+  --color-md-dark-surface-1: #1c1c1e;
+  --color-md-dark-surface-2: #1c1c1e;
+  --color-md-dark-surface-3: #2c2c2e;
+  --color-md-dark-surface-variant: #2c2c2e;
+}
+
+/* --- Dark mode: true black, warm translucent cards --- */
+.theme-cupertino.dark {
+  --ink: #f5f5f7;
+  --muted: #98989d;
+  --paper: var(--color-ios-dark-surface);
+  --surface-1: var(--color-ios-dark-surface-1);
+  --surface-2: var(--color-ios-dark-surface-2);
+
+  --card-bg: rgba(44, 44, 46, 0.72);
+  --card-border: rgba(255, 255, 255, 0.06);
+  --card-shadow: 0 1px 3px rgba(0, 0, 0, 0.2), 0 1px 2px rgba(0, 0, 0, 0.12);
+  --card-shadow-elevated:
+    0 4px 12px rgba(0, 0, 0, 0.3), 0 1px 4px rgba(0, 0, 0, 0.2);
+  --pill-bg: rgba(255, 255, 255, 0.08);
+  --pill-bg-active: #ffffff;
+  --pill-text: var(--muted);
+  --pill-text-active: #000000;
+  --chip-bg: rgba(255, 255, 255, 0.08);
+  --chip-text: var(--muted);
+  --divider: rgba(255, 255, 255, 0.06);
+}
+
+/* ==========================================================
+   BLOCKS / CARDS: Clean rounded cards with subtle elevation
+   ========================================================== */
+
+.theme-cupertino .k-block {
+  border-radius: var(--card-radius);
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  box-shadow: var(--card-shadow);
+}
+
+.theme-cupertino .k-card {
+  border-radius: var(--card-radius);
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  box-shadow: var(--card-shadow);
+}
+
+/* Dark mode cards get subtle backdrop blur for frosted glass effect */
+.theme-cupertino.dark .k-block,
+.theme-cupertino.dark .k-card {
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+}
+
+/* Elevated cards: clean rounded with subtle elevation */
+.theme-cupertino .card-elevated {
+  border-radius: var(--card-radius);
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  box-shadow: var(--card-shadow);
+}
+
+.theme-cupertino.dark .card-elevated {
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+}
+
+/* ==========================================================
+   LISTS: Clean grouped list with card-like container
+   ========================================================== */
+
+.theme-cupertino .k-list {
+  border-radius: var(--card-radius);
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  box-shadow: var(--card-shadow);
+  overflow: hidden;
+}
+
+.theme-cupertino.dark .k-list {
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+}
+
+/* List dividers */
+.theme-cupertino .k-list .hairline-b::after {
+  background: var(--divider) !important;
+}
+
+/* ==========================================================
+   NAVBAR / TOOLBAR: Use Konsta's built-in .k-glass for frosted
+   blur. Only set glass color tokens and add subtle borders.
+   ========================================================== */
+
+/* Navbar and toolbar: no glass color overrides, no custom borders.
+   Konsta's built-in .k-glass handles the native frosted look. */
+
+/* ==========================================================
+   BUTTONS: Clean rounded buttons
+   ========================================================== */
+
+.theme-cupertino .k-button {
+  border-radius: 0.75rem;
+}
+
+/* ==========================================================
+   CHIPS & BADGES: Subtle rounded chips
+   ========================================================== */
+
+.theme-cupertino .k-chip {
+  border-radius: var(--pill-radius);
+  background: var(--chip-bg);
+  color: var(--chip-text);
+  border: none;
+}
+
+.theme-cupertino .k-badge {
+  border-radius: var(--pill-radius);
+}
+
+/* ==========================================================
+   SEGMENTED CONTROLS: Pill group
+   ========================================================== */
+
+.theme-cupertino .k-segmented {
+  border-radius: var(--pill-radius);
+  background: var(--pill-bg);
+}
+
+/* ==========================================================
+   DIALOGS & MODALS: Clean rounded overlays
+   ========================================================== */
+
+.theme-cupertino .k-dialog {
+  border-radius: 1.25rem;
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  box-shadow: var(--card-shadow-elevated);
+}
+
+.theme-cupertino.dark .k-dialog {
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+}
+
+.theme-cupertino .k-popup {
+  border-radius: 1.25rem 1.25rem 0 0;
+}
+
+.theme-cupertino .k-sheet {
+  border-radius: 1.25rem 1.25rem 0 0;
+  border-top: 1px solid var(--card-border);
+}
+
+.theme-cupertino .k-actions-group {
+  border-radius: var(--card-radius);
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  overflow: hidden;
+}
+
+.theme-cupertino.dark .k-actions-group {
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+}
+
+/* ==========================================================
+   SEARCHBAR: Clean rounded input
+   ========================================================== */
+
+.theme-cupertino .k-searchbar input {
+  border-radius: 0.75rem !important;
+  background: var(--pill-bg) !important;
+  border: 1px solid var(--card-border) !important;
+}
+
+/* ==========================================================
+   FAB: Clean elevated circle
+   ========================================================== */
+
+.theme-cupertino .k-fab {
+  box-shadow: var(--card-shadow-elevated);
+}
+
+/* ==========================================================
+   BLOCK TITLES
+   ========================================================== */
+
+.theme-cupertino .k-block-title {
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+/* ==========================================================
+   DIVIDER
+   ========================================================== */
+
+.theme-cupertino .divider-brand {
+  height: 1px;
+  background: var(--divider);
+}
+
+/* Queue UI utility classes removed: now using Konsta components
+   (Card, Chip, Segmented, SegmentedButton, BlockTitle). */
+
+/* ==========================================================
+   SKELETON: Gentle pulse
+   ========================================================== */
+
+@media (prefers-reduced-motion: no-preference) {
+  @keyframes cupertino-skeleton-pulse {
+    0%,
+    100% {
+      opacity: 0.25;
+    }
+    50% {
+      opacity: 0.5;
+    }
+  }
+
+  .theme-cupertino .skeleton-bar {
+    animation: cupertino-skeleton-pulse 1.8s ease-in-out infinite;
+    border-radius: 0.375rem;
+  }
+}
+
+/* ==========================================================
+   ACCESSIBILITY: high contrast
+   ========================================================== */
+
+@media (prefers-contrast: more) {
+  .theme-cupertino .k-block,
+  .theme-cupertino .k-card,
+  .theme-cupertino .k-list,
+  .theme-cupertino .k-dialog,
+  .theme-cupertino .k-popup,
+  .theme-cupertino .k-sheet,
+  .theme-cupertino .k-actions-group {
+    border: 2px solid currentColor;
+    box-shadow: none;
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+    background: Canvas;
+  }
+
+  .theme-cupertino .k-navbar,
+  .theme-cupertino .k-toolbar {
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+    background: Canvas;
+    border-color: currentColor;
+  }
+}

@@ -15,6 +15,7 @@ import {
 } from "./models/consultant-repo.js";
 import { randomInt, createHash } from "node:crypto";
 import { NotFoundError, AuthError } from "../errors.js";
+import { ErrorCode } from "@care-y/shared";
 
 const VERIFICATION_EXPIRY_MS = 15 * 60 * 1000; // 15 minutes
 
@@ -48,7 +49,7 @@ async function requireConsultantByUserId(
 ): Promise<ConsultantRecord> {
   const record = await repo.findByUserId(userId);
   if (!record) {
-    throw new NotFoundError("No consultant registration found");
+    throw new NotFoundError(ErrorCode.NO_CONSULTANT_REGISTRATION);
   }
   return record;
 }
@@ -104,7 +105,7 @@ export function createConsultantService(
       );
 
       if (!verified) {
-        throw new AuthError("Invalid or expired verification code");
+        throw new AuthError(ErrorCode.INVALID_VERIFICATION_CODE);
       }
     },
 

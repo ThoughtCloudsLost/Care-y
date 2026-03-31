@@ -119,7 +119,7 @@ describe.skipIf(!process.env.DATABASE_URL)("TicketAccessChecker (DB)", () => {
       const msg = (err as ForbiddenError).message;
       expect(msg).not.toContain(outsiderUser);
       expect(msg).not.toContain(ticketId);
-      expect(msg).toBe("Access denied to this ticket");
+      expect(msg).toBe("INSUFFICIENT_PERMISSIONS");
     }
   });
 

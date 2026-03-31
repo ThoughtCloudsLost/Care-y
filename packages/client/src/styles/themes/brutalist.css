@@ -1,0 +1,435 @@
+/* Brutalist theme: institutional document aesthetic, circa 1960s-1970s.
+   Raw concrete palette, monospaced case files, redaction bars,
+   utilitarian grid, Swiss-influenced sans-serif headings.
+   References: Control (Remedy, 2019), declassified CIA/FBI documents,
+   International Typographic Style, Louis Kahn concrete interiors.
+
+   Font mapping from Control's actual typefaces:
+   - ITC Avant Garde Gothic -> Jost (geometric sans, display/titles)
+   - Basic Commercial / Akzidenz-Grotesk -> Overpass (UI body, based on FHWA highway signage)
+   - Monospaced case files -> IBM Plex Mono (document/data text) */
+@import "../fonts.css";
+
+/* --- Brutalist palette tokens (light defaults) --- */
+.theme-brutalist {
+  --theme-font-display: "Jost", system-ui, sans-serif;
+  --theme-font-ui: "Overpass", system-ui, sans-serif;
+  --theme-font-mono: "IBM Plex Mono", "Courier New", monospace;
+
+  --ink: #1a1a1a;
+  --muted: #7a7672;
+
+  /* Konsta iOS surface overrides: flat concrete, no transparency */
+  --color-ios-light-surface: #d8d4ce;
+  --color-ios-light-surface-1: #ccc8c0;
+  --color-ios-light-surface-1-shade: #c0bbb3;
+  --color-ios-light-surface-1-tint: #e0ddd8;
+  --color-ios-light-surface-2: #d8d4ce;
+  --color-ios-light-surface-3: #ccc8c0;
+  --color-ios-light-surface-variant: #c0bbb3;
+
+  /* iOS dark surfaces: bunker concrete */
+  --color-ios-dark-surface: #141414;
+  --color-ios-dark-surface-1: #1e1e1e;
+  --color-ios-dark-surface-1-shade: #0e0e0e;
+  --color-ios-dark-surface-1-tint: #2a2a2a;
+  --color-ios-dark-surface-2: #242424;
+  --color-ios-dark-surface-3: #1e1e1e;
+  --color-ios-dark-surface-variant: #2a2a2a;
+
+  /* Konsta Material surface overrides */
+  --color-md-light-surface-1: #ccc8c0;
+  --color-md-light-surface-2: #d8d4ce;
+  --color-md-light-surface-3: #ccc8c0;
+  --color-md-light-surface-variant: #c0bbb3;
+  --color-md-dark-surface: #141414;
+  --color-md-dark-surface-1: #1e1e1e;
+  --color-md-dark-surface-2: #242424;
+  --color-md-dark-surface-3: #1e1e1e;
+  --color-md-dark-surface-variant: #2a2a2a;
+
+  /* Semantic aliases (resolve through Konsta vars) */
+  --paper: var(--color-ios-light-surface);
+  --surface-1: var(--color-ios-light-surface-1);
+  --surface-2: var(--color-ios-light-surface-2);
+}
+
+/* --- Dark mode: bunker interior, fluorescent-lit concrete --- */
+.theme-brutalist.dark {
+  --ink: #c8c4be;
+  --muted: #6a6a6a;
+  --paper: var(--color-ios-dark-surface);
+  --surface-1: var(--color-ios-dark-surface-1);
+  --surface-2: var(--color-ios-dark-surface-2);
+}
+
+/* Navbar, toolbar, glass: no overrides. Konsta's native frosted glass handles these. */
+
+/* --- TABBAR ACTIVE INDICATOR: Kill the Material 3 rounded pill
+   behind the active tab icon. It doesn't fit brutalist. --- */
+.theme-brutalist .k-tabbar-link-icon > .rounded-full {
+  display: none;
+}
+
+/* ==========================================================
+   Shared resets (flat concrete, no glass, no shadow)
+   ========================================================== */
+
+.theme-brutalist
+  :is(
+    .k-block,
+    .k-list,
+    .k-card,
+    .k-segmented,
+    .k-dialog,
+    .k-popup,
+    .k-sheet,
+    .k-actions-group,
+    .k-searchbar input
+  ) {
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+.theme-brutalist
+  :is(
+    .k-block,
+    .k-list,
+    .k-card,
+    .k-chip,
+    .k-badge,
+    .k-segmented,
+    .k-popup,
+    .k-toggle,
+    .k-searchbar input
+  ) {
+  box-shadow: none;
+}
+
+.theme-brutalist
+  :is(
+    .k-block,
+    .k-list,
+    .k-card,
+    .k-chip,
+    .k-badge,
+    .k-segmented,
+    .k-dialog,
+    .k-popup,
+    .k-sheet,
+    .k-actions-group,
+    .k-toggle,
+    .k-searchbar input,
+    .k-fab,
+    .card-elevated
+  ) {
+  border-radius: 0;
+}
+
+/* ==========================================================
+   BLOCKS: Sharp-cornered concrete panels
+   ========================================================== */
+
+.theme-brutalist .k-block {
+  background: var(--surface-1);
+  border: 1px solid var(--muted);
+}
+
+.theme-brutalist .k-block::before {
+  display: none;
+}
+
+/* Elevated cards: sharp concrete panels */
+.theme-brutalist .card-elevated {
+  background: var(--surface-1);
+  border: 2px solid var(--ink);
+  box-shadow: none;
+}
+
+/* ==========================================================
+   LISTS: Flat containers, hard dividers
+   ========================================================== */
+
+.theme-brutalist .k-list {
+  background: var(--surface-1);
+  border: 1px solid var(--muted);
+}
+
+/* Hard 1px dividers */
+.theme-brutalist .k-list .hairline-b::after {
+  background: var(--muted) !important;
+}
+
+/* ==========================================================
+   Buttons (rectangular, no radius, no effects)
+   ========================================================== */
+
+.theme-brutalist .k-button {
+  border-radius: 0 !important;
+  border: 1px solid var(--ink) !important;
+  box-shadow: none;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-weight: 500;
+}
+
+.theme-brutalist .k-button::after {
+  display: none;
+}
+
+.theme-brutalist .k-button:active {
+  box-shadow: none;
+  opacity: 0.7;
+}
+
+/* ==========================================================
+   CARDS: Flat document panels, sharp corners
+   ========================================================== */
+
+.theme-brutalist .k-card {
+  background: var(--surface-1);
+  border: 1px solid var(--muted);
+}
+
+.theme-brutalist .k-card::before {
+  display: none;
+}
+
+/* ==========================================================
+   CHIPS & BADGES: Rectangular, utilitarian
+   ========================================================== */
+
+.theme-brutalist .k-chip {
+  border: 1px solid var(--ink);
+}
+
+/* ==========================================================
+   SEGMENTED CONTROLS: Hard-edged tabs
+   ========================================================== */
+
+.theme-brutalist .k-segmented {
+  border: 1px solid var(--ink);
+  background: var(--surface-1);
+}
+
+/* ==========================================================
+   DIALOGS: Document overlays, no radius
+   ========================================================== */
+
+.theme-brutalist .k-dialog {
+  border: 2px solid var(--ink);
+  box-shadow: 4px 4px 0 var(--ink);
+}
+
+.theme-brutalist.light .k-dialog {
+  background: var(--paper);
+}
+
+.theme-brutalist.dark .k-dialog {
+  background: var(--surface-1);
+}
+
+.theme-brutalist .k-dialog::before {
+  display: none;
+}
+
+.theme-brutalist .k-popup {
+  border-top: 2px solid var(--ink);
+}
+
+.theme-brutalist .k-sheet {
+  border-top: 2px solid var(--ink);
+}
+
+.theme-brutalist .k-actions-group {
+  border: 1px solid var(--ink);
+  background: var(--surface-1);
+}
+
+/* ==========================================================
+   TOGGLE: Squared track
+   ========================================================== */
+
+.theme-brutalist .k-toggle {
+  border-radius: 2px;
+}
+
+/* ==========================================================
+   SEARCHBAR: Rectangular input, no frills
+   ========================================================== */
+
+.theme-brutalist .k-searchbar input {
+  border-radius: 0 !important;
+  border: 1px solid var(--ink) !important;
+}
+
+/* ==========================================================
+   FAB: Square, no orb effects
+   ========================================================== */
+
+.theme-brutalist .k-fab {
+  border-radius: 0;
+  box-shadow: 2px 2px 0 var(--ink);
+}
+
+.theme-brutalist .k-fab::after {
+  display: none;
+}
+
+/* ==========================================================
+   BLOCK TITLES: Uppercase underlined section headers
+   ========================================================== */
+
+.theme-brutalist .k-block-title {
+  font-family: var(--theme-font-display);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+
+/* ==========================================================
+   DIVIDER: Thick black rule (like redaction bar edge)
+   ========================================================== */
+
+.theme-brutalist .divider-brand {
+  height: 3px;
+  background: var(--ink);
+}
+
+/* ==========================================================
+   BRUTALIST EFFECT CLASSES (opt-in)
+   ========================================================== */
+
+/* Section heading: uppercase, underlined, Jost geometric sans */
+.theme-brutalist .heading-display {
+  font-family: var(--theme-font-display);
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+/* Compact heading: navbar/small contexts */
+.theme-brutalist .heading-compact {
+  font-family: var(--theme-font-display);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+/* Document text: monospaced case-file feel */
+.theme-brutalist .brutalist-document {
+  font-family: var(--theme-font-mono);
+  font-size: 0.9375rem;
+  line-height: 1.6;
+  letter-spacing: 0.01em;
+}
+
+/* Redaction bar: black censorship stripe */
+.theme-brutalist .brutalist-redacted {
+  background: var(--ink);
+  color: transparent;
+  user-select: none;
+  display: inline;
+  padding: 0.05em 0.25em;
+}
+
+/* Classified stamp: rotated overlay text */
+.theme-brutalist .brutalist-stamp {
+  font-family: var(--theme-font-display);
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.15em;
+  color: var(--brand-fill, var(--brand-primary));
+  opacity: 0.35;
+  border: 3px solid currentColor;
+  padding: 0.25em 0.75em;
+  display: inline-block;
+  transform: rotate(-8deg);
+}
+
+/* Case file container: bordered document with header rule */
+.theme-brutalist .brutalist-case-file {
+  background: var(--surface-1);
+  border: 1px solid var(--muted);
+  padding: 1.5rem;
+  position: relative;
+}
+
+.theme-brutalist .brutalist-case-file::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 4px;
+  background: var(--ink);
+}
+
+/* Wayfinding sign: Interstate-style directional label */
+.theme-brutalist .brutalist-sign {
+  font-family: var(--theme-font-ui);
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+
+/* ==========================================================
+   SKELETON: Typewriter line-by-line reveal
+   ========================================================== */
+
+@media (prefers-reduced-motion: no-preference) {
+  @keyframes skeleton-type {
+    0% {
+      width: 0;
+    }
+    100% {
+      width: 100%;
+    }
+  }
+
+  .theme-brutalist .skeleton-bar {
+    animation: skeleton-type 0.6s steps(20) infinite alternate;
+    overflow: hidden;
+    border-radius: 0;
+  }
+}
+
+/* ==========================================================
+   ACCESSIBILITY: high contrast strips all decorative effects
+   ========================================================== */
+
+@media (prefers-contrast: more) {
+  .theme-brutalist .k-block,
+  .theme-brutalist .k-list,
+  .theme-brutalist .k-card,
+  .theme-brutalist .k-dialog,
+  .theme-brutalist .k-popup,
+  .theme-brutalist .k-sheet,
+  .theme-brutalist .k-actions-group,
+  .theme-brutalist .k-navbar,
+  .theme-brutalist .k-toolbar,
+  .theme-brutalist .k-segmented {
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+    background: Canvas;
+    border: 2px solid currentColor;
+    box-shadow: none;
+  }
+
+  .theme-brutalist .heading-display,
+  .theme-brutalist .k-block-title {
+    text-shadow: none;
+  }
+
+  .theme-brutalist .brutalist-stamp {
+    opacity: 1;
+  }
+
+  .theme-brutalist .brutalist-redacted {
+    background: CanvasText;
+  }
+}

@@ -11,6 +11,7 @@ import type { Kysely } from "kysely";
 import type { TenantDatabase } from "../db/types.js";
 import { MergeError, NotFoundError } from "../errors.js";
 import { createDependencyService } from "./dependency-service.js";
+import { ErrorCode } from "@care-y/shared";
 
 export interface MergeEventRecord {
   readonly id: string;
@@ -63,7 +64,7 @@ export function createMergeService(db: Kysely<TenantDatabase>): MergeService {
   return {
     async merge(input) {
       if (input.primaryClientId === input.secondaryClientId) {
-        throw new MergeError("Cannot merge a client into itself");
+        throw new MergeError(ErrorCode.CANNOT_MERGE_INTO_SELF);
       }
 
       return db.transaction().execute(async (trx) => {
@@ -81,11 +82,13 @@ export function createMergeService(db: Kysely<TenantDatabase>): MergeService {
             .executeTakeFirst(),
         ]);
 
-        if (!primary) throw new NotFoundError("Primary client not found");
-        if (!secondary) throw new NotFoundError("Secondary client not found");
+        if (!primary)
+          throw new NotFoundError(ErrorCode.PRIMARY_CLIENT_NOT_FOUND);
+        if (!secondary)
+          throw new NotFoundError(ErrorCode.SECONDARY_CLIENT_NOT_FOUND);
 
         if (secondary.merged_into !== null) {
-          throw new MergeError("Secondary client is already merged");
+          throw new MergeError(ErrorCode.SECONDARY_ALREADY_MERGED);
         }
 
         // 1. Create merge event
@@ -119,9 +122,7 @@ export function createMergeService(db: Kysely<TenantDatabase>): MergeService {
           const depService = createDependencyService(trx);
           const resolved = await depService.allResolved(secondaryTicket.id);
           if (!resolved) {
-            throw new MergeError(
-              "Cannot merge: secondary client's ticket has unresolved dependencies",
-            );
+            throw new MergeError(ErrorCode.MERGE_UNRESOLVED_DEPS);
           }
 
           await trx
@@ -154,9 +155,11 @@ export function createMergeService(db: Kysely<TenantDatabase>): MergeService {
           .where("id", "=", input.mergeEventId)
           .executeTakeFirst();
 
-        if (!event) throw new NotFoundError("Merge event not found");
-        if (event.is_undone) throw new MergeError("Merge already undone");
-        if (event.undo_locked) throw new MergeError("Merge undo is locked");
+        if (!event) throw new NotFoundError(ErrorCode.MERGE_EVENT_NOT_FOUND);
+        if (event.is_undone)
+          throw new MergeError(ErrorCode.MERGE_ALREADY_UNDONE);
+        if (event.undo_locked)
+          throw new MergeError(ErrorCode.MERGE_UNDO_LOCKED);
 
         // 1. Clear merged_into on secondary
         await trx
@@ -188,7 +191,7 @@ export function createMergeService(db: Kysely<TenantDatabase>): MergeService {
         .executeTakeFirst();
 
       if (result.numUpdatedRows === 0n) {
-        throw new NotFoundError("Merge event not found");
+        throw new NotFoundError(ErrorCode.MERGE_EVENT_NOT_FOUND);
       }
     },
 
