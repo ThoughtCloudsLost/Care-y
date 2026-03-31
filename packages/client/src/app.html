@@ -22,10 +22,21 @@
               ? "dark"
               : "light";
           }
+          if (scheme !== "dark" && scheme !== "light") scheme = "dark";
           d.classList.add(scheme);
+          var validVisual = {
+            default: 1,
+            riso: 1,
+            frutiger: 1,
+            brutalist: 1,
+            cupertino: 1,
+          };
           var visual = s.getItem("care-y-visual-theme") || "default";
+          if (!validVisual[visual]) visual = "default";
           d.classList.add("theme-" + visual);
           var glass = s.getItem("care-y-glass-mode") || "auto";
+          if (glass !== "auto" && glass !== "light" && glass !== "dark")
+            glass = "auto";
           var ge = glass === "auto" ? scheme : glass;
           d.classList.add("glass-" + ge);
         } catch (e) {

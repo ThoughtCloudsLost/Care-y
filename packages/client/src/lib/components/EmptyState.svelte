@@ -3,11 +3,13 @@
   import * as m from "$lib/paraglide/messages.js";
 
   let { message }: { message?: string } = $props();
+
+  const label = $derived(message ?? m.empty_no_data());
 </script>
 
-<div class="empty-state" aria-label={message ?? m.empty_no_data()}>
+<div class="empty-state" aria-label={label}>
   <Skeleton lines={4} />
-  <p class="empty-label">{message ?? m.empty_no_data()}</p>
+  <p class="empty-label">{label}</p>
 </div>
 
 <style>

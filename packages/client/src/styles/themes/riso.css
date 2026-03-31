@@ -200,17 +200,8 @@
   opacity: 0.08;
 }
 
-/* Skeleton animation: extend-from-left sweep */
+/* Skeleton animation: uses skeleton-extend keyframe from animations.css */
 @media (prefers-reduced-motion: no-preference) {
-  @keyframes skeleton-extend {
-    from {
-      transform: scaleX(0);
-    }
-    to {
-      transform: scaleX(1);
-    }
-  }
-
   .theme-riso .skeleton-bar {
     animation: skeleton-extend 0.8s linear infinite alternate;
   }

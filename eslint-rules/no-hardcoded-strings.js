@@ -165,6 +165,7 @@ const rule = {
           if (BOOLEAN_ARIA_VALUES.has(text)) continue;
 
           if (isNonTranslatableText(text)) continue;
+          if (ignoreText.has(text)) continue;
 
           context.report({
             node: part,
