@@ -6,28 +6,48 @@
   --theme-font-ui: system-ui, sans-serif;
 
   --ink: #1a1a1a;
-  --paper: #ffffff;
-  --surface-1: #f5f5f5;
-  --surface-2: #eeeeee;
   --muted: #888888;
+
+  /* Konsta iOS surface overrides */
+  --color-ios-light-surface: #ffffff;
+  --color-ios-light-surface-1: #f5f5f5;
+  --color-ios-light-surface-1-shade: #e8e8e8;
+  --color-ios-light-surface-1-tint: #ffffff;
+  --color-ios-light-surface-2: #eeeeee;
+  --color-ios-light-surface-3: #f5f5f5;
+  --color-ios-light-surface-variant: #eeeeee;
+
+  --color-ios-dark-surface: #000000;
+  --color-ios-dark-surface-1: #1c1c1d;
+  --color-ios-dark-surface-1-shade: #0a0a0a;
+  --color-ios-dark-surface-1-tint: #2c2c2c;
+  --color-ios-dark-surface-2: #2c2c2c;
+  --color-ios-dark-surface-3: #1c1c1d;
+  --color-ios-dark-surface-variant: #2c2c2c;
+
+  /* Konsta Material surface overrides */
+  --color-md-light-surface-1: #f5f5f5;
+  --color-md-light-surface-2: #eeeeee;
+  --color-md-light-surface-3: #f5f5f5;
+  --color-md-light-surface-variant: #eeeeee;
+  --color-md-dark-surface: #000000;
+  --color-md-dark-surface-1: #1c1c1d;
+  --color-md-dark-surface-2: #2c2c2c;
+  --color-md-dark-surface-3: #1c1c1d;
+  --color-md-dark-surface-variant: #2c2c2c;
+
+  /* Semantic aliases (resolve through Konsta vars) */
+  --paper: var(--color-ios-light-surface);
+  --surface-1: var(--color-ios-light-surface-1);
+  --surface-2: var(--color-ios-light-surface-2);
 }
 
 .theme-default.dark {
   --ink: #e5e5e5;
-  --paper: #000000;
-  --surface-1: #1c1c1d;
-  --surface-2: #2c2c2c;
   --muted: #777777;
-  background-color: var(--paper);
-  color: var(--ink);
-}
-
-.theme-default.light {
-  --ink: #1a1a1a;
-  --paper: #ffffff;
-  --surface-1: #f5f5f5;
-  --surface-2: #eeeeee;
-  --muted: #888888;
+  --paper: var(--color-ios-dark-surface);
+  --surface-1: var(--color-ios-dark-surface-1);
+  --surface-2: var(--color-ios-dark-surface-2);
 }
 
 /* Divider: standard 1px separator instead of riso 4px thick rule */

@@ -40,7 +40,17 @@
   --brand-accent-40: color-mix(in srgb, var(--brand-accent) 40%, transparent);
   --brand-accent-20: color-mix(in srgb, var(--brand-accent) 20%, transparent);
   --app-height: 100dvh;
-  color-scheme: light dark;
+}
+
+/* Color scheme set dynamically by the blocking script in app.html
+   and the theme store. Class-scoped so it matches the resolved scheme,
+   not the OS preference. */
+html.dark {
+  color-scheme: dark;
+}
+
+html.light {
+  color-scheme: light;
 }
 
 /* Lock document scroll so only inner containers scroll.
@@ -52,11 +62,26 @@ body {
   overscroll-behavior: none;
 }
 
-/* Base typography */
-body {
-  font-family: var(--theme-font-ui);
+/* Base typography and surface color.
+   Konsta's base.css sets `.dark { background-color: #000; color: #fff }`
+   at specificity 0,1,0. A bare `html` selector (0,0,1) loses.
+   We use `html.dark` / `html.light` (0,1,1) to override at higher
+   specificity AND later cascade position. */
+html.dark,
+html.light {
   background-color: var(--paper);
   color: var(--ink);
+}
+
+body {
+  font-family: var(--theme-font-ui);
+}
+
+/* FOUC guard: body starts hidden (class set in app.html), removed by
+   +layout.svelte onMount after hydration. visibility:hidden still
+   participates in layout, so no content shift on reveal. */
+body.fouc-guard {
+  visibility: hidden;
 }
 
 /* Prevent iOS Safari auto-zoom on input focus (triggers below 16px).
