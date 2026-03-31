@@ -10,15 +10,15 @@ pre-commit:
     banned-patterns:
       run: if [ -f .githooks/pre-commit ]; then bash .githooks/pre-commit; fi
     typecheck:
-      run: pnpm run typecheck
+      run: npx tsc --build
     lint:
-      run: pnpm exec eslint packages/
+      run: npx eslint packages/
     format:
-      run: pnpm exec prettier --check --ignore-path .prettierignore --ignore-path .prettierignore.local {staged_files}
+      run: npx prettier --check --ignore-path .prettierignore --ignore-path .prettierignore.local {staged_files}
 
 commit-msg:
   commands:
     commitlint:
-      run: pnpm exec commitlint --edit {1}
+      run: npx --no -- commitlint --edit {1}
     banned-patterns:
       run: if [ -f .githooks/commit-msg ]; then bash .githooks/commit-msg {1}; fi

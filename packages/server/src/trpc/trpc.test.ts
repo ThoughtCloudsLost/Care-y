@@ -242,7 +242,7 @@ describe("requireAuth middleware (authedProcedure)", () => {
     await expectTrpcError(
       caller.needsAuth(),
       "UNAUTHORIZED",
-      "NOT_AUTHENTICATED",
+      "Not authenticated",
     );
   });
 
@@ -266,7 +266,7 @@ describe("requireAuth middleware (authedProcedure)", () => {
     await expectTrpcError(
       caller.needsAuth(),
       "UNAUTHORIZED",
-      "NOT_AUTHENTICATED",
+      "Not authenticated",
     );
   });
 
@@ -321,7 +321,7 @@ describe("require2fa middleware (authed2faProcedure)", () => {
     await expectTrpcError(
       caller.needs2fa(),
       "UNAUTHORIZED",
-      "NOT_AUTHENTICATED",
+      "Not authenticated",
     );
   });
 
@@ -348,7 +348,11 @@ describe("require2fa middleware (authed2faProcedure)", () => {
         },
       }),
     );
-    await expectTrpcError(caller.needs2fa(), "UNAUTHORIZED", "TWOFA_REQUIRED");
+    await expectTrpcError(
+      caller.needs2fa(),
+      "UNAUTHORIZED",
+      "Two-factor verification required",
+    );
   });
 
   it("allows requests when twofaVerified is true", async () => {

@@ -9,7 +9,7 @@
 
 import { initTRPC, TRPCError } from "@trpc/server";
 import type { Context } from "./context.js";
-import { Permission, ErrorCode } from "@care-y/shared";
+import { Permission } from "@care-y/shared";
 import { hasPermission } from "../auth/roles.js";
 import {
   isAppError,
@@ -110,7 +110,7 @@ const requireSession = middleware(async ({ ctx, next }) => {
   if (!ctx.session || !ctx.user) {
     throw new TRPCError({
       code: "UNAUTHORIZED",
-      message: ErrorCode.NOT_AUTHENTICATED,
+      message: "Not authenticated",
     });
   }
 
@@ -141,14 +141,14 @@ const require2fa = middleware(async ({ ctx, next }) => {
   if (!ctx.session || !ctx.user || !ctx.org) {
     throw new TRPCError({
       code: "UNAUTHORIZED",
-      message: ErrorCode.NOT_AUTHENTICATED,
+      message: "Not authenticated",
     });
   }
 
   if (!ctx.session.twofaVerified) {
     throw new TRPCError({
       code: "UNAUTHORIZED",
-      message: ErrorCode.TWOFA_REQUIRED,
+      message: "Two-factor verification required",
     });
   }
 
@@ -174,14 +174,14 @@ export function requireRole(permission: Permission) {
     if (!ctx.session || !ctx.user || !ctx.org) {
       throw new TRPCError({
         code: "UNAUTHORIZED",
-        message: ErrorCode.NOT_AUTHENTICATED,
+        message: "Not authenticated",
       });
     }
 
     if (!hasPermission(ctx.user.roleId, permission)) {
       throw new TRPCError({
         code: "FORBIDDEN",
-        message: ErrorCode.INSUFFICIENT_PERMISSIONS,
+        message: "Insufficient permissions",
       });
     }
 

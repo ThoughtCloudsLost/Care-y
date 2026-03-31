@@ -22,7 +22,7 @@ import type {
 } from "../crypto/field-encryptor.js";
 import type { SessionTokenizer } from "../crypto/session-tokenizer.js";
 import { AuthError, ConflictError, NotFoundError } from "../errors.js";
-import { ErrorCode, RoleId } from "@care-y/shared";
+import { RoleId } from "@care-y/shared";
 
 export interface UserRecord {
   readonly id: string;
@@ -189,12 +189,12 @@ export function createAuthService(
   ): Promise<Selectable<UsersTable>> {
     if (!row) {
       await hasher.verify(password, await getTimingPadHash());
-      throw new AuthError(ErrorCode.INVALID_CREDENTIALS);
+      throw new AuthError("Invalid credentials");
     }
 
     const valid = await hasher.verify(password, row.password_hash);
     if (!valid) {
-      throw new AuthError(ErrorCode.INVALID_CREDENTIALS);
+      throw new AuthError("Invalid credentials");
     }
 
     return row;
@@ -251,7 +251,9 @@ export function createAuthService(
         .executeTakeFirstOrThrow();
     } catch (err: unknown) {
       if (isPgUniqueViolation(err)) {
-        throw new ConflictError(ErrorCode.ACCOUNT_ALREADY_EXISTS);
+        throw new ConflictError(
+          "An account with this identifier already exists",
+        );
       }
       throw err;
     }
@@ -280,7 +282,7 @@ export function createAuthService(
       .executeTakeFirst();
 
     if (!row) {
-      throw new NotFoundError(ErrorCode.USER_NOT_FOUND);
+      throw new NotFoundError("User not found");
     }
 
     return toUserRecord(row, encryptor);

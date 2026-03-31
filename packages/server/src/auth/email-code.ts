@@ -12,13 +12,6 @@
 
 import { randomInt } from "node:crypto";
 import type { Kysely, Selectable } from "kysely";
-import { ErrorCode } from "@care-y/shared";
-import {
-  email_verification_subject,
-  email_verification_body,
-  email_verification_html,
-} from "@care-y/shared/paraglide/messages.js";
-import type { Locale } from "@care-y/shared/paraglide/runtime.js";
 import type { TenantDatabase, EmailCodesTable } from "../db/types.js";
 import type { EmailSender } from "../email/email-sender.js";
 import { RateLimitError, ValidationError } from "../errors.js";
@@ -41,10 +34,8 @@ export interface EmailCodeService {
    * Generates a new code, hashes it, stores it, and sends it via email.
    * Deletes any existing active codes for the user first.
    * Enforces rate limiting (1/60s, 5/hour).
-   *
-   * @param locale - The user's locale for the email template (e.g., "en", "es").
    */
-  sendCode(userId: string, email: string, locale?: Locale): Promise<void>;
+  sendCode(userId: string, email: string): Promise<void>;
 
   /**
    * Verifies a code. Increments attempt counter on failure.
@@ -80,7 +71,10 @@ export function createEmailCodeService(
     const elapsed = now.getTime() - createdAt;
     if (elapsed < COOLDOWN_MS) {
       const retryAfter = Math.ceil((COOLDOWN_MS - elapsed) / 1000);
-      throw new RateLimitError(ErrorCode.RATE_LIMIT_COOLDOWN, retryAfter);
+      throw new RateLimitError(
+        "Please wait before requesting another code.",
+        retryAfter,
+      );
     }
   }
 
@@ -98,7 +92,10 @@ export function createEmailCodeService(
       .executeTakeFirstOrThrow();
 
     if (toCount({ count }) >= HOURLY_LIMIT) {
-      throw new RateLimitError(ErrorCode.RATE_LIMIT_HOURLY, 3600);
+      throw new RateLimitError(
+        "Too many codes requested. Please try again later.",
+        3600,
+      );
     }
   }
 
@@ -144,23 +141,23 @@ export function createEmailCodeService(
       .executeTakeFirst();
 
     if (!row) {
-      throw new ValidationError(ErrorCode.NO_ACTIVE_CODE);
+      throw new ValidationError(
+        "No active verification code. Please request a new one.",
+      );
     }
 
     if (row.attempts >= MAX_ATTEMPTS) {
       await deleteCodeById(row.id);
-      throw new ValidationError(ErrorCode.TOO_MANY_ATTEMPTS);
+      throw new ValidationError(
+        "Too many attempts. Please request a new code.",
+      );
     }
 
     return row;
   }
 
   return {
-    async sendCode(
-      userId: string,
-      email: string,
-      locale: Locale = "en",
-    ): Promise<void> {
+    async sendCode(userId: string, email: string): Promise<void> {
       const now = new Date();
 
       await enforceCooldown(userId, now);
@@ -168,12 +165,11 @@ export function createEmailCodeService(
 
       const code = await replaceActiveCode(userId, now);
 
-      const loc = { locale };
       await emailSender.send({
         to: email,
-        subject: email_verification_subject({}, loc),
-        text: email_verification_body({ code }, loc),
-        html: email_verification_html({ code }, loc),
+        subject: "Your verification code",
+        text: `Your verification code is: ${code}\n\nThis code expires in 5 minutes. If you did not request this code, you can safely ignore this email.`,
+        html: `<p>Your verification code is: <strong>${code}</strong></p><p>This code expires in 5 minutes. If you did not request this code, you can safely ignore this email.</p>`,
       });
     },
 
@@ -190,7 +186,9 @@ export function createEmailCodeService(
       const newAttempts = row.attempts + 1;
       if (newAttempts >= MAX_ATTEMPTS) {
         await deleteCodeById(row.id);
-        throw new ValidationError(ErrorCode.TOO_MANY_ATTEMPTS);
+        throw new ValidationError(
+          "Too many attempts. Please request a new code.",
+        );
       }
 
       await db

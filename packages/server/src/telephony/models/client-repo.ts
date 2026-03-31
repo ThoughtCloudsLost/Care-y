@@ -15,7 +15,6 @@ import type { ClientsTable, TenantDatabase } from "../../db/types.js";
 import type { PhoneRecord, PhoneRepository } from "./phone-repo.js";
 import { generateAlias } from "./alias-generator.js";
 import { ConflictError } from "../../errors.js";
-import { ErrorCode } from "@care-y/shared";
 
 const MAX_ALIAS_RETRIES = 5;
 
@@ -133,7 +132,9 @@ export function createClientRepository(
         }
       }
 
-      throw new ConflictError(ErrorCode.ALIAS_GENERATION_FAILED);
+      throw new ConflictError(
+        `Failed to generate unique client alias after ${String(MAX_ALIAS_RETRIES)} attempts`,
+      );
     },
 
     async findById(id: string): Promise<ClientRecord | null> {

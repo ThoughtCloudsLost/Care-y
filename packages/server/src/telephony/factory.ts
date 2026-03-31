@@ -4,7 +4,6 @@ import type { SecretsEncryptor } from "../config/secrets.js";
 import type { TelephonyProvider } from "./provider.js";
 import { providerConfigSchemas } from "./schemas.js";
 import { TelephonyConfigError, NotFoundError } from "../errors.js";
-import { ErrorCode } from "@care-y/shared";
 
 /**
  * A function that constructs a TelephonyProvider from a validated config object.
@@ -40,7 +39,7 @@ export function createProviderFactory(
       .executeTakeFirst();
 
     if (!row) {
-      throw new NotFoundError(ErrorCode.TELEPHONY_NOT_CONFIGURED);
+      throw new NotFoundError("Telephony not configured for this organization");
     }
 
     // Decrypt the config blob

@@ -18,7 +18,6 @@
 import type { Kysely } from "kysely";
 import type { TenantDatabase } from "../db/types.js";
 import { ForbiddenError } from "../errors.js";
-import { ErrorCode } from "@care-y/shared";
 
 export interface TicketAccessChecker {
   assertAccess(userId: string, ticketId: string): Promise<void>;
@@ -65,7 +64,7 @@ export function createTicketAccessChecker(
   async function assertAccess(userId: string, ticketId: string): Promise<void> {
     const allowed = await canAccess(userId, ticketId);
     if (!allowed) {
-      throw new ForbiddenError(ErrorCode.INSUFFICIENT_PERMISSIONS);
+      throw new ForbiddenError("Access denied to this ticket");
     }
   }
 

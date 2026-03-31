@@ -11,7 +11,6 @@ import type { Kysely } from "kysely";
 import type { TenantDatabase } from "../db/types.js";
 import type { TicketAccessChecker } from "./access.js";
 import { TicketError, NotFoundError, ValidationError } from "../errors.js";
-import { ErrorCode } from "@care-y/shared";
 
 export interface DependencyRecord {
   readonly ticketId: string;
@@ -60,7 +59,7 @@ export function createDependencyService(
 
       // Reject self-dependency
       if (ticketId === dependsOnTicketId) {
-        throw new ValidationError(ErrorCode.SELF_DEPENDENCY);
+        throw new ValidationError("A ticket cannot depend on itself");
       }
 
       // Verify both tickets exist
@@ -77,8 +76,8 @@ export function createDependencyService(
           .executeTakeFirst(),
       ]);
 
-      if (!ticket) throw new NotFoundError(ErrorCode.TICKET_NOT_FOUND);
-      if (!dep) throw new NotFoundError(ErrorCode.DEPENDENCY_TICKET_NOT_FOUND);
+      if (!ticket) throw new NotFoundError("Ticket not found");
+      if (!dep) throw new NotFoundError("Dependency ticket not found");
 
       // Check for direct circular dependency (A->B and B->A)
       const reverse = await db
@@ -89,7 +88,7 @@ export function createDependencyService(
         .executeTakeFirst();
 
       if (reverse) {
-        throw new TicketError(ErrorCode.CIRCULAR_DEPENDENCY);
+        throw new TicketError("Circular dependency detected");
       }
 
       const row = await db

@@ -13,7 +13,6 @@ import type { BlobStore } from "../storage/store.js";
 import type { TicketAccessChecker } from "./access.js";
 import type { JobQueue } from "../jobs/queue.js";
 import { NotFoundError } from "../errors.js";
-import { ErrorCode } from "@care-y/shared";
 
 export interface RecordingRecord {
   readonly id: string;
@@ -168,7 +167,7 @@ export function createMediaService(
         .executeTakeFirst();
 
       if (!row) {
-        throw new NotFoundError(ErrorCode.RECORDING_NOT_FOUND);
+        throw new NotFoundError("Recording not found");
       }
 
       await access.assertAccess(userId, row.ticket_id);
@@ -183,7 +182,7 @@ export function createMediaService(
         .executeTakeFirst();
 
       if (!row) {
-        throw new NotFoundError(ErrorCode.ATTACHMENT_NOT_FOUND);
+        throw new NotFoundError("Attachment not found");
       }
 
       await access.assertAccess(userId, row.ticket_id);

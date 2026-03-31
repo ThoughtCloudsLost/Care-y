@@ -9,12 +9,7 @@ declare global {
       orgSlug: string | null;
     }
     // interface PageData {}
-    interface PageState {
-      modalOpen?: boolean;
-      ticketId?: string;
-      sheetOpen?: boolean;
-      [key: string]: unknown;
-    }
+    // interface PageState {}
     // interface Platform {}
   }
 }

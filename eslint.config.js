@@ -1,7 +1,6 @@
 import tseslint from "typescript-eslint";
 import eslintPluginSvelte from "eslint-plugin-svelte";
 import eslintPluginSecurity from "eslint-plugin-security";
-import noHardcodedStrings from "./eslint-rules/no-hardcoded-strings.js";
 
 export default tseslint.config(
   // Global ignores - must be first config object
@@ -12,8 +11,6 @@ export default tseslint.config(
       "**/dist/**",
       "**/coverage/**",
       "**/build/**",
-      "**/scripts/**",
-      "**/paraglide/**",
     ],
   },
 
@@ -47,12 +44,6 @@ export default tseslint.config(
   ...eslintPluginSvelte.configs["flat/recommended"],
   {
     files: ["**/*.svelte", "*.svelte"],
-    plugins: {
-      "care-y": {
-        meta: { name: "eslint-plugin-care-y", version: "1.0.0" },
-        rules: { "no-hardcoded-strings": noHardcodedStrings },
-      },
-    },
     languageOptions: {
       parserOptions: {
         parser: tseslint.parser,
@@ -68,19 +59,6 @@ export default tseslint.config(
       // Event handler parameters (e.g., SubmitEvent) aren't fully resolved
       // by the Svelte parser in <script> blocks, triggering false positives.
       "@typescript-eslint/no-unsafe-member-access": "off",
-      // $state() and $props() rune return types are resolved by the Svelte
-      // compiler, not the TS type checker. The checker sees them as void,
-      // triggering false positives on assignments like `let x = $state(null)`.
-      "@typescript-eslint/no-confusing-void-expression": "off",
-      // All user-facing strings in Svelte templates must use Paraglide
-      // message functions for i18n. Catches hardcoded aria-labels,
-      // title, placeholder, alt, and visible text content.
-      "care-y/no-hardcoded-strings": [
-        "error",
-        {
-          ignoreText: ["CARE-Y", "JN"],
-        },
-      ],
     },
   },
 
@@ -95,11 +73,6 @@ export default tseslint.config(
         tsconfigRootDir: import.meta.dirname,
         extraFileExtensions: [".svelte"],
       },
-    },
-    rules: {
-      // $state() and $props() rune return types are resolved by the Svelte
-      // compiler, not the TS type checker. Same issue as .svelte files.
-      "@typescript-eslint/no-confusing-void-expression": "off",
     },
   },
 
@@ -239,10 +212,6 @@ export default tseslint.config(
       "**/vitest.config.ts",
       "**/svelte.config.js",
       "**/vite.config.ts",
-      // Custom ESLint rules are plain JS, not in any tsconfig.
-      // disableTypeChecked handles type-aware rules; explicit-module-boundary-types
-      // is disabled separately below since it isn't type-aware.
-      "eslint-rules/**/*.js",
       // Service worker and its test are compiled by SvelteKit separately
       // with their own tsconfig (no DOM types, $service-worker module).
       // projectService can't resolve them from the root tsconfigRootDir.
@@ -250,15 +219,5 @@ export default tseslint.config(
       "**/service-worker.test.ts",
     ],
     ...tseslint.configs.disableTypeChecked,
-  },
-
-  // Custom ESLint rules are plain JS without TS annotations.
-  // explicit-module-boundary-types isn't type-aware so disableTypeChecked
-  // doesn't cover it.
-  {
-    files: ["eslint-rules/**/*.js"],
-    rules: {
-      "@typescript-eslint/explicit-module-boundary-types": "off",
-    },
   },
 );

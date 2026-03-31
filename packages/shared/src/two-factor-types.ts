@@ -28,52 +28,79 @@ export type WebauthnCategory = "platform" | "cross-platform";
 export interface TwoFactorMethodInfo {
   readonly type: TwoFactorMethodType;
   readonly webauthnAttachment?: WebauthnCategory;
-  readonly labelKey: string;
-  readonly descriptionKey: string;
+  readonly label: string;
+  readonly description: string;
   readonly securityLevel: "strongest" | "strong" | "moderate" | "weak";
 }
 
 const METHOD_WEBAUTHN_PLATFORM: TwoFactorMethodInfo = {
   type: TwoFactorMethod.WEBAUTHN,
   webauthnAttachment: "platform",
-  labelKey: "twofa_webauthn_platform_label",
-  descriptionKey: "twofa_webauthn_platform_desc",
+  label: "Screen lock verification",
+  description:
+    "This uses your screen lock method. The same biometrics " +
+    "(fingerprint, face scan) or PIN you already use to unlock your " +
+    "phone or computer to verify it's really you. It works because " +
+    "even if someone learns your password, they can't unlock your " +
+    "screen from far away. They would need to be holding your phone " +
+    "or sitting at your computer.",
   securityLevel: "strongest",
 };
 
 const METHOD_WEBAUTHN_CROSSPLATFORM: TwoFactorMethodInfo = {
   type: TwoFactorMethod.WEBAUTHN,
   webauthnAttachment: "cross-platform",
-  labelKey: "twofa_webauthn_crossplatform_label",
-  descriptionKey: "twofa_webauthn_crossplatform_desc",
+  label: "Physical plug-in or tap verification",
+  description:
+    "This uses a small physical gadget (often a USB stick, a key fob, " +
+    "or a tap card) to verify it's really you. When you log in, you " +
+    "plug it into your computer or hold it against your phone. It " +
+    "works because even if someone learns your password, they don't " +
+    "have this physical thing. It stays with you, like a house key " +
+    "on your keyring.",
   securityLevel: "strongest",
 };
 
 const METHOD_TOTP: TwoFactorMethodInfo = {
   type: TwoFactorMethod.TOTP,
-  labelKey: "twofa_totp_label",
-  descriptionKey: "twofa_totp_desc",
+  label: "Authenticator app",
+  description:
+    "A separate app on your phone generates a new 6-digit code every " +
+    "30 seconds. Common apps include Google Authenticator and Authy. " +
+    "Works even without an internet connection.",
   securityLevel: "strong",
 };
 
 const METHOD_EMAIL: TwoFactorMethodInfo = {
   type: TwoFactorMethod.EMAIL,
-  labelKey: "twofa_email_label",
-  descriptionKey: "twofa_email_desc",
+  label: "Email code",
+  description:
+    "We send a 6-digit code to your email each time you log in. " +
+    "Convenient, but only as secure as your email account. Anyone " +
+    "who can read your email can receive these codes.",
   securityLevel: "moderate",
 };
 
 const METHOD_SMS: TwoFactorMethodInfo = {
   type: TwoFactorMethod.SMS,
-  labelKey: "twofa_sms_label",
-  descriptionKey: "twofa_sms_desc",
+  label: "Text message code",
+  description:
+    "We send a 6-digit code to your phone number via text message. " +
+    "This is the weakest option because phone numbers can be stolen " +
+    "through a technique called SIM-swapping. Use only if no other " +
+    "option is available for you.",
   securityLevel: "weak",
 };
 
 const METHOD_PUSH: TwoFactorMethodInfo = {
   type: TwoFactorMethod.PUSH,
-  labelKey: "twofa_push_label",
-  descriptionKey: "twofa_push_desc",
+  label: "Push notification",
+  description:
+    "A notification pops up on your phone asking you to approve the " +
+    'login. You just tap "Yes, that\'s me" to get in. It works ' +
+    "because someone would need access to your phone to tap that " +
+    "button. Requires the app to be installed and an internet " +
+    "connection on your phone.",
   securityLevel: "moderate",
 };
 
@@ -92,7 +119,7 @@ export const METHOD_INFO: readonly TwoFactorMethodInfo[] = [
 export interface EnrolledMethod {
   readonly type: TwoFactorMethodType;
   readonly webauthnAttachment?: WebauthnCategory;
-  readonly labelKey: string;
+  readonly label: string;
   readonly index: number;
 }
 

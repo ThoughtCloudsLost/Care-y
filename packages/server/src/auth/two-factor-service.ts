@@ -46,7 +46,7 @@ import type {
   RegistrationChecks,
   AuthenticationChecks,
 } from "./webauthn/index.js";
-import { TwoFactorMethod, ErrorCode } from "@care-y/shared";
+import { TwoFactorMethod } from "@care-y/shared";
 import type { TwoFactorMethodType } from "@care-y/shared";
 import { ValidationError } from "../errors.js";
 import { toCount } from "../db/query-utils.js";
@@ -204,14 +204,18 @@ export function createTwoFactorService(
   /** Asserts that SMS deps are available. Throws if the org has no telephony config. */
   function requireSmsDeps(): SmsDeps {
     if (!smsDeps) {
-      throw new ValidationError(ErrorCode.SMS_2FA_NOT_AVAILABLE);
+      throw new ValidationError(
+        "SMS 2FA is not available for this organization.",
+      );
     }
     return smsDeps;
   }
 
   function requirePushDeps(): PushDeps {
     if (!pushDeps) {
-      throw new ValidationError(ErrorCode.PUSH_2FA_NOT_AVAILABLE);
+      throw new ValidationError(
+        "Push 2FA is not available. Web Push is not configured.",
+      );
     }
     return pushDeps;
   }
@@ -331,7 +335,9 @@ export function createTwoFactorService(
     const session = await sessions.findByToken(sessionToken);
     const challenge = session?.webauthnChallenge;
     if (challenge == null) {
-      throw new ValidationError(ErrorCode.WEBAUTHN_CHALLENGE_NOT_FOUND);
+      throw new ValidationError(
+        "No WebAuthn challenge found for this session.",
+      );
     }
     return challenge;
   }
@@ -355,7 +361,9 @@ export function createTwoFactorService(
 
     if (!row) {
       throw new ValidationError(
-        verified ? ErrorCode.TOTP_NOT_ENROLLED : ErrorCode.NO_PENDING_TOTP,
+        verified
+          ? "TOTP is not enrolled."
+          : "No pending TOTP enrollment found.",
       );
     }
 
@@ -386,7 +394,9 @@ export function createTwoFactorService(
       (m) => m.method_type !== methodToRemove,
     );
     if (remaining.length === 0) {
-      throw new ValidationError(ErrorCode.CANNOT_REMOVE_LAST_2FA);
+      throw new ValidationError(
+        "Cannot remove the last 2FA method. At least one must remain active.",
+      );
     }
   }
 
@@ -588,7 +598,7 @@ export function createTwoFactorService(
         .execute();
 
       if (rows.length === 0) {
-        throw new ValidationError(ErrorCode.NO_BACKUP_CODES);
+        throw new ValidationError("No backup codes available.");
       }
 
       // Sequential by design: scrypt is CPU-bound (saturates the thread pool
@@ -706,7 +716,7 @@ export function createTwoFactorService(
         .executeTakeFirst();
 
       if (!credRow) {
-        throw new ValidationError(ErrorCode.UNKNOWN_CREDENTIAL);
+        throw new ValidationError("Unknown credential.");
       }
 
       const credential: CredentialInfo = {
@@ -815,7 +825,9 @@ export function createTwoFactorService(
         .executeTakeFirst();
 
       if (!row?.encrypted_notification_addr) {
-        throw new ValidationError(ErrorCode.NO_NOTIFICATION_EMAIL);
+        throw new ValidationError(
+          "No notification email configured. Set an email address in your profile first.",
+        );
       }
 
       // care-y-ignore-next-line server-no-decrypt -- notification email is operational server-side PII (Tier 2, not E2EE)
@@ -832,7 +844,9 @@ export function createTwoFactorService(
         .executeTakeFirst();
 
       if (!row?.encrypted_sms_phone) {
-        throw new ValidationError(ErrorCode.NO_SMS_PHONE_ENROLLED);
+        throw new ValidationError(
+          "No SMS phone number enrolled. Set up SMS 2FA first.",
+        );
       }
 
       // care-y-ignore-next-line server-no-decrypt -- SMS phone is operational server-side PII (Tier 2, not E2EE)
@@ -873,7 +887,9 @@ export function createTwoFactorService(
       // enrollment fails.
       const hasWorking = await push.pushChallenges.sendTestPush(userId);
       if (!hasWorking) {
-        throw new ValidationError(ErrorCode.NO_PUSH_SUBSCRIPTIONS);
+        throw new ValidationError(
+          "No working push subscriptions found. Subscribe a device first.",
+        );
       }
 
       await registerMethod(userId, TwoFactorMethod.PUSH);

@@ -9,7 +9,7 @@
   },
   "packageManager": "pnpm@10.6.2",
   "scripts": {
-    "typecheck": "pnpm --filter @care-y/shared run build:paraglide && pnpm --filter @care-y/client run build:paraglide && tsc --build && pnpm --filter @care-y/client exec svelte-check --tsconfig ./tsconfig.json",
+    "typecheck": "tsc --build && pnpm --filter @care-y/client exec svelte-check --tsconfig ./tsconfig.json",
     "lint": "eslint packages/",
     "format": "prettier --check --ignore-path .prettierignore --ignore-path .prettierignore.local .",
     "format:fix": "prettier --write --ignore-path .prettierignore --ignore-path .prettierignore.local .",
@@ -38,17 +38,14 @@
       "@types/node": "25.5.0",
       "devalue": ">=5.6.4",
       "serialize-javascript": ">=7.0.3"
-    },
-    "patchedDependencies": {
-      "konsta@5.0.8": "patches/konsta@5.0.8.patch"
     }
   },
   "devDependencies": {
     "@axe-core/playwright": "4.11.1",
+    "@types/node": "25.5.0",
     "@commitlint/cli": "20.5.0",
     "@commitlint/config-conventional": "20.5.0",
     "@playwright/test": "1.58.2",
-    "@types/node": "25.5.0",
     "@vitest/coverage-v8": "4.1.1",
     "eslint": "10.1.0",
     "eslint-plugin-security": "4.0.0",

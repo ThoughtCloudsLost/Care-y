@@ -1,56 +1,11 @@
 <!doctype html>
-<html lang="%paraglide.lang%" dir="%paraglide.dir%">
+<html lang="en">
   <head>
     <meta charset="utf-8" />
-    <meta
-      name="viewport"
-      content="width=device-width, initial-scale=1, maximum-scale=5, viewport-fit=cover, interactive-widget=resizes-content"
-    />
-    <meta name="color-scheme" content="dark light" />
-    <script>
-      // Blocking theme init: reads class preferences from localStorage
-      // and applies them to <html> before first paint. CSS theme files
-      // provide all color values; this script only sets classes.
-      // Keys must stay in sync with theme.svelte.ts.
-      (function () {
-        var d = document.documentElement;
-        try {
-          var s = localStorage;
-          var scheme = s.getItem("care-y-color-scheme") || "dark";
-          if (scheme === "system") {
-            scheme = window.matchMedia("(prefers-color-scheme: dark)").matches
-              ? "dark"
-              : "light";
-          }
-          if (scheme !== "dark" && scheme !== "light") scheme = "dark";
-          d.classList.add(scheme);
-          var validVisual = {
-            default: 1,
-            riso: 1,
-            frutiger: 1,
-            brutalist: 1,
-            cupertino: 1,
-          };
-          var visual = s.getItem("care-y-visual-theme") || "default";
-          if (!validVisual[visual]) visual = "default";
-          d.classList.add("theme-" + visual);
-          var glass = s.getItem("care-y-glass-mode") || "auto";
-          if (glass !== "auto" && glass !== "light" && glass !== "dark")
-            glass = "auto";
-          var ge = glass === "auto" ? scheme : glass;
-          d.classList.add("glass-" + ge);
-        } catch (e) {
-          d.classList.add("dark", "theme-default", "glass-dark");
-        }
-        var cs = d.classList.contains("dark") ? "dark" : "light";
-        d.style.colorScheme = cs;
-        var m = document.querySelector('meta[name="color-scheme"]');
-        if (m) m.setAttribute("content", cs);
-      })();
-    </script>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
     %sveltekit.head%
   </head>
-  <body data-sveltekit-preload-data="hover" class="fouc-guard">
+  <body data-sveltekit-preload-data="hover">
     <div style="display: contents">%sveltekit.body%</div>
   </body>
 </html>

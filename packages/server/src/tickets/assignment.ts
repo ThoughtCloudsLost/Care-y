@@ -14,7 +14,6 @@ import type { TenantDatabase } from "../db/types.js";
 import type { ShiftProvider } from "./shift-provider.js";
 import type { TicketAccessChecker } from "./access.js";
 import { NotFoundError, TicketError } from "../errors.js";
-import { ErrorCode } from "@care-y/shared";
 
 export interface AssignmentService {
   /**
@@ -99,9 +98,9 @@ export function createAssignmentService(
         .where("id", "=", ticketId)
         .executeTakeFirst();
 
-      if (!ticket) throw new NotFoundError(ErrorCode.TICKET_NOT_FOUND);
+      if (!ticket) throw new NotFoundError("Ticket not found");
       if (ticket.status !== "open") {
-        throw new TicketError(ErrorCode.CANNOT_ASSIGN_CLOSED_TICKET);
+        throw new TicketError("Cannot assign a closed ticket");
       }
 
       // Try current shift first
@@ -153,12 +152,12 @@ export function createAssignmentService(
         .where("id", "=", ticketId)
         .executeTakeFirst();
 
-      if (!ticket) throw new NotFoundError(ErrorCode.TICKET_NOT_FOUND);
+      if (!ticket) throw new NotFoundError("Ticket not found");
       if (ticket.status !== "open") {
-        throw new TicketError(ErrorCode.CANNOT_TAKE_CLOSED_TICKET);
+        throw new TicketError("Cannot take a closed ticket");
       }
       if (ticket.assigned_to !== null) {
-        throw new TicketError(ErrorCode.TICKET_ALREADY_ASSIGNED);
+        throw new TicketError("Ticket is already assigned");
       }
 
       // Optimistic concurrency: WHERE assigned_to IS NULL guards the TOCTOU race.
@@ -170,7 +169,7 @@ export function createAssignmentService(
         .executeTakeFirst();
 
       if (result.numUpdatedRows === BigInt(0)) {
-        throw new TicketError(ErrorCode.TICKET_ALREADY_ASSIGNED);
+        throw new TicketError("Ticket is already assigned");
       }
 
       await createSystemFollowUp(ticketId, "assignment_change");
@@ -185,9 +184,9 @@ export function createAssignmentService(
         .where("id", "=", ticketId)
         .executeTakeFirst();
 
-      if (!ticket) throw new NotFoundError(ErrorCode.TICKET_NOT_FOUND);
+      if (!ticket) throw new NotFoundError("Ticket not found");
       if (ticket.assigned_to !== userId) {
-        throw new TicketError(ErrorCode.NOT_ASSIGNED_TO_TICKET);
+        throw new TicketError("You are not assigned to this ticket");
       }
 
       await db

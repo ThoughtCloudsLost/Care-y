@@ -309,7 +309,7 @@ describe.skipIf(!process.env.DATABASE_URL)("AuthService", () => {
       });
 
       await expect(err).rejects.toThrow(AuthError);
-      await expect(err).rejects.toThrow("INVALID_CREDENTIALS");
+      await expect(err).rejects.toThrow("Invalid credentials");
     });
 
     it("fails with inactive user: same AuthError", async () => {

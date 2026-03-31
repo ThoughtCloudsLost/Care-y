@@ -9,7 +9,6 @@
 import type { Kysely } from "kysely";
 import type { TenantDatabase } from "../db/types.js";
 import { NotFoundError } from "../errors.js";
-import { ErrorCode } from "@care-y/shared";
 
 export interface PresetReplyRecord {
   readonly id: string;
@@ -105,8 +104,7 @@ export function createPresetService(db: Kysely<TenantDatabase>): PresetService {
           .selectAll()
           .where("id", "=", presetId)
           .executeTakeFirst();
-        if (!existing)
-          throw new NotFoundError(ErrorCode.PRESET_REPLY_NOT_FOUND);
+        if (!existing) throw new NotFoundError("Preset reply not found");
         return toRecord(existing);
       }
 
@@ -117,7 +115,7 @@ export function createPresetService(db: Kysely<TenantDatabase>): PresetService {
         .returningAll()
         .executeTakeFirst();
 
-      if (!row) throw new NotFoundError(ErrorCode.PRESET_REPLY_NOT_FOUND);
+      if (!row) throw new NotFoundError("Preset reply not found");
       return toRecord(row);
     },
 
@@ -128,7 +126,7 @@ export function createPresetService(db: Kysely<TenantDatabase>): PresetService {
         .executeTakeFirst();
 
       if (result.numDeletedRows === 0n) {
-        throw new NotFoundError(ErrorCode.PRESET_REPLY_NOT_FOUND);
+        throw new NotFoundError("Preset reply not found");
       }
     },
   };

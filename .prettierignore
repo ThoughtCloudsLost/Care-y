@@ -17,8 +17,3 @@ Dockerfile.*
 *.toml
 .gitleaksignore
 .gitignore
-*.woff2
-*.patch
-*.png
-**/paraglide/**
-**/project.inlang/**

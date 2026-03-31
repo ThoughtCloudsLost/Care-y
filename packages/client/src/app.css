@@ -1,10 +1,2 @@
 @import "tailwindcss";
 @import "konsta/svelte/theme.css";
-@import "./styles/shared.css";
-@import "./styles/touch.css";
-@import "./styles/animations.css";
-@import "./styles/themes/riso.css";
-@import "./styles/themes/default.css";
-@import "./styles/themes/frutiger.css";
-@import "./styles/themes/brutalist.css";
-@import "./styles/themes/cupertino.css";

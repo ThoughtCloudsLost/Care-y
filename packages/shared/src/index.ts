@@ -260,5 +260,3 @@ export type {
   BrowserCallEvents,
   BrowserCallService,
 } from "./telephony/browser-call.js";
-
-export { ErrorCode, type ErrorCodeType } from "./error-codes.js";

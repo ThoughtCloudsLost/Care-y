@@ -17,7 +17,6 @@ import type { TenantDatabase, SmsCodesTable } from "../db/types.js";
 import type { TelephonyProvider } from "../telephony/provider.js";
 import type { PhonePurpose } from "../telephony/phone-resolver.js";
 import { RateLimitError, ValidationError } from "../errors.js";
-import { ErrorCode } from "@care-y/shared";
 import { toCount } from "../db/query-utils.js";
 import { createScryptHasher } from "./scrypt-hash.js";
 
@@ -82,7 +81,10 @@ export function createSmsCodeService(
     const elapsed = now.getTime() - createdAt;
     if (elapsed < COOLDOWN_MS) {
       const retryAfter = Math.ceil((COOLDOWN_MS - elapsed) / 1000);
-      throw new RateLimitError(ErrorCode.RATE_LIMIT_COOLDOWN, retryAfter);
+      throw new RateLimitError(
+        "Please wait before requesting another code.",
+        retryAfter,
+      );
     }
   }
 
@@ -100,7 +102,10 @@ export function createSmsCodeService(
       .executeTakeFirstOrThrow();
 
     if (toCount({ count }) >= HOURLY_LIMIT) {
-      throw new RateLimitError(ErrorCode.RATE_LIMIT_HOURLY, 3600);
+      throw new RateLimitError(
+        "Too many codes requested. Please try again later.",
+        3600,
+      );
     }
   }
 
@@ -146,12 +151,16 @@ export function createSmsCodeService(
       .executeTakeFirst();
 
     if (!row) {
-      throw new ValidationError(ErrorCode.NO_ACTIVE_CODE);
+      throw new ValidationError(
+        "No active verification code. Please request a new one.",
+      );
     }
 
     if (row.attempts >= MAX_ATTEMPTS) {
       await deleteCodeById(row.id);
-      throw new ValidationError(ErrorCode.TOO_MANY_ATTEMPTS);
+      throw new ValidationError(
+        "Too many attempts. Please request a new code.",
+      );
     }
 
     return row;
@@ -166,7 +175,9 @@ export function createSmsCodeService(
 
       const callerId = await resolveCallerId(orgSchema, "system");
       if (callerId === null) {
-        throw new ValidationError(ErrorCode.NO_PHONE_NUMBERS_CONFIGURED);
+        throw new ValidationError(
+          "No phone numbers configured for this organization.",
+        );
       }
 
       const code = await replaceActiveCode(userId, now);
@@ -191,7 +202,9 @@ export function createSmsCodeService(
       const newAttempts = row.attempts + 1;
       if (newAttempts >= MAX_ATTEMPTS) {
         await deleteCodeById(row.id);
-        throw new ValidationError(ErrorCode.TOO_MANY_ATTEMPTS);
+        throw new ValidationError(
+          "Too many attempts. Please request a new code.",
+        );
       }
 
       await db

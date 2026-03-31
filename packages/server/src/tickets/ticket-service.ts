@@ -14,7 +14,6 @@ import type { TenantDatabase } from "../db/types.js";
 import type { TicketAccessChecker } from "./access.js";
 import { NotFoundError, TicketError, MergeError } from "../errors.js";
 import { createDependencyService } from "./dependency-service.js";
-import { ErrorCode } from "@care-y/shared";
 
 export interface TicketRecord {
   readonly id: string;
@@ -128,7 +127,7 @@ export function createTicketService(
         .where("id", "=", input.queueId)
         .where("is_active", "=", true)
         .executeTakeFirst();
-      if (!queue) throw new NotFoundError(ErrorCode.QUEUE_NOT_FOUND);
+      if (!queue) throw new NotFoundError("Queue not found");
 
       // Validate client exists and is not merged
       const client = await db
@@ -136,9 +135,9 @@ export function createTicketService(
         .select(["id", "merged_into"])
         .where("id", "=", input.clientId)
         .executeTakeFirst();
-      if (!client) throw new NotFoundError(ErrorCode.CLIENT_NOT_FOUND);
+      if (!client) throw new NotFoundError("Client not found");
       if (client.merged_into !== null) {
-        throw new MergeError(ErrorCode.CLIENT_MERGED);
+        throw new MergeError("Client has been merged into another client");
       }
 
       // One-ticket-per-client: check for existing ticket
@@ -198,7 +197,7 @@ export function createTicketService(
         .where("id", "=", ticketId)
         .executeTakeFirst();
 
-      if (!row) throw new NotFoundError(ErrorCode.TICKET_NOT_FOUND);
+      if (!row) throw new NotFoundError("Ticket not found");
       return toRecord(row);
     },
 
@@ -266,7 +265,7 @@ export function createTicketService(
           .selectAll()
           .where("id", "=", input.ticketId)
           .executeTakeFirst();
-        if (!existing) throw new NotFoundError(ErrorCode.TICKET_NOT_FOUND);
+        if (!existing) throw new NotFoundError("Ticket not found");
         return toRecord(existing);
       }
 
@@ -277,7 +276,7 @@ export function createTicketService(
         .returningAll()
         .executeTakeFirst();
 
-      if (!row) throw new NotFoundError(ErrorCode.TICKET_NOT_FOUND);
+      if (!row) throw new NotFoundError("Ticket not found");
 
       // Create system follow-ups for state changes
       if (input.onHold !== undefined) {
@@ -299,7 +298,9 @@ export function createTicketService(
       // Check unresolved dependencies
       const resolved = await depService.allResolved(ticketId);
       if (!resolved) {
-        throw new TicketError(ErrorCode.TICKET_UNRESOLVED_DEPS);
+        throw new TicketError(
+          "Cannot close ticket with unresolved dependencies",
+        );
       }
 
       const row = await db
@@ -310,7 +311,7 @@ export function createTicketService(
         .returningAll()
         .executeTakeFirst();
 
-      if (!row) throw new NotFoundError(ErrorCode.TICKET_NOT_FOUND_OR_CLOSED);
+      if (!row) throw new NotFoundError("Ticket not found or already closed");
 
       await createSystemFollowUp(ticketId, "status_change");
       return toRecord(row);
@@ -330,7 +331,7 @@ export function createTicketService(
         .returningAll()
         .executeTakeFirst();
 
-      if (!row) throw new NotFoundError(ErrorCode.TICKET_NOT_FOUND_OR_OPEN);
+      if (!row) throw new NotFoundError("Ticket not found or already open");
 
       await createSystemFollowUp(ticketId, "status_change");
       return toRecord(row);

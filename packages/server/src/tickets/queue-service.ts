@@ -9,7 +9,6 @@
 import type { Kysely } from "kysely";
 import type { TenantDatabase } from "../db/types.js";
 import { NotFoundError } from "../errors.js";
-import { ErrorCode } from "@care-y/shared";
 
 export interface QueueRecord {
   readonly id: string;
@@ -89,7 +88,7 @@ export function createQueueService(db: Kysely<TenantDatabase>): QueueService {
           .where("id", "=", queueId)
           .executeTakeFirst();
 
-        if (!existing) throw new NotFoundError(ErrorCode.QUEUE_NOT_FOUND);
+        if (!existing) throw new NotFoundError("Queue not found");
         return toRecord(existing);
       }
 
@@ -100,7 +99,7 @@ export function createQueueService(db: Kysely<TenantDatabase>): QueueService {
         .returningAll()
         .executeTakeFirst();
 
-      if (!row) throw new NotFoundError(ErrorCode.QUEUE_NOT_FOUND);
+      if (!row) throw new NotFoundError("Queue not found");
       return toRecord(row);
     },
 

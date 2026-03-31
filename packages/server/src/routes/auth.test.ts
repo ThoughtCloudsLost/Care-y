@@ -542,7 +542,7 @@ describe.skipIf(!HAS_DB)("auth + org routers (DB integration)", () => {
     await expectTrpcError(
       tryLogin(),
       "TOO_MANY_REQUESTS",
-      "LOGIN_RATE_LIMITED",
+      "Too many login attempts",
     );
   });
 });

@@ -2,7 +2,6 @@
   import { goto } from "$app/navigation";
   import { resolve } from "$app/paths";
   import { Page, Navbar, Block, List, ListInput, Button } from "konsta/svelte";
-  import * as m from "$lib/paraglide/messages.js";
   import { trpc } from "$lib/trpc";
 
   let identifier = $state("");
@@ -19,7 +18,7 @@
       await trpc.auth.login.mutate({ identifier, password });
       await goto(resolve("/"));
     } catch {
-      error = m.auth_invalid_credentials();
+      error = "Invalid username or password";
     } finally {
       loading = false;
     }
@@ -27,11 +26,11 @@
 </script>
 
 <Page>
-  <Navbar title={m.auth_sign_in()} />
+  <Navbar title="Sign in" />
 
   <Block class="mt-8 text-center">
     <h1 class="text-2xl font-bold">CARE-Y</h1>
-    <p class="mt-1 text-sm opacity-60">{m.auth_sign_in_continue()}</p>
+    <p class="mt-1 text-sm opacity-60">Sign in to continue</p>
   </Block>
 
   {#if error}
@@ -43,18 +42,18 @@
   <form onsubmit={handleSubmit}>
     <List strong inset>
       <ListInput
-        label={m.auth_username()}
+        label="Username"
         type="text"
-        placeholder={m.auth_username_placeholder()}
+        placeholder="your.username"
         bind:value={identifier}
         autocomplete="username"
         autocapitalize="none"
         required
       />
       <ListInput
-        label={m.auth_password()}
+        label="Password"
         type="password"
-        placeholder={m.auth_password_placeholder()}
+        placeholder="Enter your password"
         bind:value={password}
         autocomplete="current-password"
         required
@@ -67,7 +66,7 @@
         type="submit"
         disabled={loading || !identifier || !password}
       >
-        {loading ? m.auth_signing_in() : m.auth_sign_in()}
+        {loading ? "Signing in..." : "Sign in"}
       </Button>
     </Block>
   </form>

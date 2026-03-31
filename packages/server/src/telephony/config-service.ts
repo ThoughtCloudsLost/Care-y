@@ -16,7 +16,6 @@ import type {
 import { NotFoundError, TelephonyConfigError } from "../errors.js";
 import { providerConfigSchemas } from "./schemas.js";
 import { z } from "zod";
-import { ErrorCode } from "@care-y/shared";
 
 /** Type guard for objects with a phoneNumbers array. */
 function hasPhoneNumbers(
@@ -186,7 +185,9 @@ export function createTelephonyConfigService(
         .executeTakeFirst();
 
       if (!row) {
-        throw new NotFoundError(ErrorCode.TELEPHONY_NOT_CONFIGURED);
+        throw new NotFoundError(
+          "Telephony not configured for this organization",
+        );
       }
 
       const providerStatic = providerStatics.get(row.provider);

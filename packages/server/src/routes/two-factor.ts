@@ -52,7 +52,6 @@ import {
 } from "../auth/push-challenge.js";
 import type { PushNotificationSender } from "../notifications/push.js";
 import { NotFoundError, TelephonyConfigError } from "../errors.js";
-import { ErrorCode } from "@care-y/shared";
 import {
   totpVerifySchema,
   emailCodeVerifySchema,
@@ -195,10 +194,7 @@ function narrowAuthContext(ctx: Context): {
   user: UserRecord;
 } {
   if (!ctx.org || !ctx.session || !ctx.user) {
-    throw new TRPCError({
-      code: "UNAUTHORIZED",
-      message: ErrorCode.NOT_AUTHENTICATED,
-    });
+    throw new TRPCError({ code: "UNAUTHORIZED", message: "Not authenticated" });
   }
   return { org: ctx.org, session: ctx.session, user: ctx.user };
 }
@@ -299,7 +295,7 @@ export function createTwoFactorRouter(deps: TwoFactorRouterDeps) {
         if (!ctx.smsCodes) {
           throw new TRPCError({
             code: "PRECONDITION_FAILED",
-            message: ErrorCode.SMS_NOT_CONFIGURED,
+            message: "SMS is not available. Telephony is not configured.",
           });
         }
         // enrollSmsPhone normalizes to E.164 internally, returns the result
@@ -410,7 +406,7 @@ export function createTwoFactorRouter(deps: TwoFactorRouterDeps) {
         if (!ctx.smsCodes) {
           throw new TRPCError({
             code: "PRECONDITION_FAILED",
-            message: ErrorCode.SMS_NOT_CONFIGURED,
+            message: "SMS is not available. Telephony is not configured.",
           });
         }
         const phone = await ctx.twoFactor.resolveUserSmsPhone(ctx.user.id);
