@@ -13,6 +13,7 @@
 import type { Kysely, Selectable } from "kysely";
 import type { TenantDatabase, SmsResponsesTable } from "../../db/types.js";
 import { NotFoundError } from "../../errors.js";
+import { ErrorCode } from "@care-y/shared";
 
 export interface SmsResponseRecord {
   readonly id: string;
@@ -135,7 +136,7 @@ export function createSmsResponseRepository(
         .executeTakeFirst();
 
       if (!row) {
-        throw new NotFoundError(`SMS response not found: ${id}`);
+        throw new NotFoundError(ErrorCode.SMS_RESPONSE_NOT_FOUND);
       }
 
       return toSmsResponseRecord(row);
@@ -148,7 +149,7 @@ export function createSmsResponseRepository(
         .executeTakeFirst();
 
       if (Number(result.numDeletedRows) === 0) {
-        throw new NotFoundError(`SMS response not found: ${id}`);
+        throw new NotFoundError(ErrorCode.SMS_RESPONSE_NOT_FOUND);
       }
     },
   };

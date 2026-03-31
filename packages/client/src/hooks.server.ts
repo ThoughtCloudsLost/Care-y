@@ -1,6 +1,8 @@
 import { dev } from "$app/environment";
 import { sequence } from "@sveltejs/kit/hooks";
 import type { Handle, HandleServerError } from "@sveltejs/kit";
+import { paraglideMiddleware } from "$lib/paraglide/server.js";
+import { getTextDirection } from "$lib/paraglide/runtime.js";
 import {
   extractSubdomain,
   readDevSlugHeader,
@@ -63,7 +65,28 @@ const orgResolution: Handle = async ({ event, resolve }) => {
   return resolve(event);
 };
 
-export const handle: Handle = sequence(securityHeaders, orgResolution);
+/**
+ * Paraglide i18n handle.
+ *
+ * Determines locale from cookie (or falls back to baseLocale).
+ * Sets lang and dir attributes on the html element via transformPageChunk.
+ * Uses AsyncLocalStorage for per-request locale isolation during SSR.
+ */
+const i18n: Handle = async ({ event, resolve }) =>
+  paraglideMiddleware(
+    event.request,
+    async ({ request: localizedRequest, locale }) => {
+      event.request = localizedRequest;
+      return resolve(event, {
+        transformPageChunk: ({ html }) =>
+          html
+            .replace("%paraglide.lang%", locale)
+            .replace("%paraglide.dir%", getTextDirection(locale)),
+      });
+    },
+  );
+
+export const handle: Handle = sequence(securityHeaders, orgResolution, i18n);
 
 /**
  * Global error handler.

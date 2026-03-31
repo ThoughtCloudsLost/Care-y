@@ -1,12 +1,43 @@
+import fs from "node:fs";
+import { paraglideVitePlugin } from "@inlang/paraglide-js";
 import { sveltekit } from "@sveltejs/kit/vite";
 import tailwindcss from "@tailwindcss/vite";
+import basicSsl from "@vitejs/plugin-basic-ssl";
 import { SvelteKitPWA } from "@vite-pwa/sveltekit";
 import { defineConfig } from "vite";
 
+const isMobile = process.env.VITE_MOBILE === "true";
+
+// Prefer mkcert certs (trusted by simulators and browsers).
+// Fall back to basicSsl (self-signed, triggers cert warnings).
+function httpsConfig():
+  | { https?: { cert: Buffer; key: Buffer } }
+  | { plugins: ReturnType<typeof basicSsl>[] } {
+  const certPath = ".certs/localhost.pem";
+  const keyPath = ".certs/localhost-key.pem";
+  if (fs.existsSync(certPath) && fs.existsSync(keyPath)) {
+    return {
+      https: {
+        cert: fs.readFileSync(certPath),
+        key: fs.readFileSync(keyPath),
+      },
+    };
+  }
+  return { plugins: [basicSsl()] };
+}
+
+const mkcert = isMobile ? httpsConfig() : {};
+
 export default defineConfig({
   plugins: [
+    paraglideVitePlugin({
+      project: "./project.inlang",
+      outdir: "./src/lib/paraglide",
+      strategy: ["cookie", "baseLocale"],
+    }),
     tailwindcss(),
     sveltekit(),
+    ...("plugins" in mkcert ? mkcert.plugins : []),
     SvelteKitPWA({
       strategies: "injectManifest",
       srcDir: "src",
@@ -23,7 +54,7 @@ export default defineConfig({
         name: "CARE-Y",
         short_name: "CARE-Y",
         display: "standalone",
-        background_color: "#ffffff",
+        background_color: "#0C0C0C",
         theme_color: "#000000",
         icons: [
           { src: "/icon-192.png", sizes: "192x192", type: "image/png" },
@@ -33,6 +64,7 @@ export default defineConfig({
     }),
   ],
   server: {
+    ...("https" in mkcert ? { https: mkcert.https } : {}),
     proxy: {
       "/trpc": {
         target: "http://localhost:3000",
