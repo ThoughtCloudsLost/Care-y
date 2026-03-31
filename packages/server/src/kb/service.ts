@@ -16,6 +16,7 @@
 import type { Kysely } from "kysely";
 import type { TenantDatabase } from "../db/types.js";
 import { NotFoundError } from "../errors.js";
+import { ErrorCode } from "@care-y/shared";
 
 // --- Category records ---
 
@@ -224,7 +225,7 @@ export function createKBCategoryService(
           .selectAll()
           .where("id", "=", categoryId)
           .executeTakeFirst();
-        if (!existing) throw new NotFoundError("Category not found");
+        if (!existing) throw new NotFoundError(ErrorCode.KB_CATEGORY_NOT_FOUND);
         return toCategoryRecord(existing);
       }
 
@@ -236,7 +237,7 @@ export function createKBCategoryService(
         .where("id", "=", categoryId)
         .returningAll()
         .executeTakeFirst();
-      if (!row) throw new NotFoundError("Category not found");
+      if (!row) throw new NotFoundError(ErrorCode.KB_CATEGORY_NOT_FOUND);
       return toCategoryRecord(row);
     },
 
@@ -248,7 +249,7 @@ export function createKBCategoryService(
         .where("id", "=", categoryId)
         .executeTakeFirst();
       if (result.numDeletedRows === 0n) {
-        throw new NotFoundError("Category not found");
+        throw new NotFoundError(ErrorCode.KB_CATEGORY_NOT_FOUND);
       }
     },
   };
@@ -263,7 +264,7 @@ export function createKBItemService(db: Kysely<TenantDatabase>): KBItemService {
         .select("id")
         .where("id", "=", input.categoryId)
         .executeTakeFirst();
-      if (!category) throw new NotFoundError("Category not found");
+      if (!category) throw new NotFoundError(ErrorCode.KB_CATEGORY_NOT_FOUND);
 
       const row = await db
         .insertInto("kb_items")
@@ -284,7 +285,7 @@ export function createKBItemService(db: Kysely<TenantDatabase>): KBItemService {
         .selectAll()
         .where("id", "=", itemId)
         .executeTakeFirst();
-      if (!row) throw new NotFoundError("Article not found");
+      if (!row) throw new NotFoundError(ErrorCode.KB_ARTICLE_NOT_FOUND);
       return toItemRecord(row);
     },
 
@@ -350,7 +351,7 @@ export function createKBItemService(db: Kysely<TenantDatabase>): KBItemService {
           .select("id")
           .where("id", "=", input.categoryId)
           .executeTakeFirst();
-        if (!category) throw new NotFoundError("Category not found");
+        if (!category) throw new NotFoundError(ErrorCode.KB_CATEGORY_NOT_FOUND);
         updates.category_id = input.categoryId;
       }
       if (input.encryptedTitle !== undefined)
@@ -364,7 +365,7 @@ export function createKBItemService(db: Kysely<TenantDatabase>): KBItemService {
           .selectAll()
           .where("id", "=", itemId)
           .executeTakeFirst();
-        if (!existing) throw new NotFoundError("Article not found");
+        if (!existing) throw new NotFoundError(ErrorCode.KB_ARTICLE_NOT_FOUND);
         return toItemRecord(existing);
       }
 
@@ -376,7 +377,7 @@ export function createKBItemService(db: Kysely<TenantDatabase>): KBItemService {
         .where("id", "=", itemId)
         .returningAll()
         .executeTakeFirst();
-      if (!row) throw new NotFoundError("Article not found");
+      if (!row) throw new NotFoundError(ErrorCode.KB_ARTICLE_NOT_FOUND);
       return toItemRecord(row);
     },
 
@@ -387,7 +388,7 @@ export function createKBItemService(db: Kysely<TenantDatabase>): KBItemService {
         .where("id", "=", itemId)
         .executeTakeFirst();
       if (result.numDeletedRows === 0n) {
-        throw new NotFoundError("Article not found");
+        throw new NotFoundError(ErrorCode.KB_ARTICLE_NOT_FOUND);
       }
     },
   };
@@ -433,7 +434,7 @@ export function createKBVoteService(db: Kysely<TenantDatabase>): KBVoteService {
         .select(["id", "vote_up_count", "vote_down_count"])
         .where("id", "=", input.itemId)
         .executeTakeFirst();
-      if (!item) throw new NotFoundError("Article not found");
+      if (!item) throw new NotFoundError(ErrorCode.KB_ARTICLE_NOT_FOUND);
 
       const existing = await db
         .selectFrom("kb_votes")

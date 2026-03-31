@@ -12,6 +12,7 @@
 import type { Kysely, Selectable } from "kysely";
 import type { TenantDatabase, PhoneGreetingsTable } from "../../db/types.js";
 import { NotFoundError } from "../../errors.js";
+import { ErrorCode } from "@care-y/shared";
 
 export interface GreetingRecord {
   readonly id: string;
@@ -132,7 +133,7 @@ export function createGreetingRepository(
         .executeTakeFirst();
 
       if (!row) {
-        throw new NotFoundError(`Greeting not found: ${id}`);
+        throw new NotFoundError(ErrorCode.GREETING_NOT_FOUND);
       }
 
       return toGreetingRecord(row);
@@ -145,7 +146,7 @@ export function createGreetingRepository(
         .executeTakeFirst();
 
       if (Number(result.numDeletedRows) === 0) {
-        throw new NotFoundError(`Greeting not found: ${id}`);
+        throw new NotFoundError(ErrorCode.GREETING_NOT_FOUND);
       }
     },
   };

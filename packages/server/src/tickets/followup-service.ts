@@ -11,6 +11,7 @@ import type { Kysely } from "kysely";
 import type { TenantDatabase } from "../db/types.js";
 import type { TicketAccessChecker } from "./access.js";
 import { NotFoundError } from "../errors.js";
+import { ErrorCode } from "@care-y/shared";
 
 export interface FollowUpRecord {
   readonly id: string;
@@ -87,9 +88,9 @@ export function createFollowUpService(
         .where("id", "=", input.ticketId)
         .executeTakeFirst();
 
-      if (!ticket) throw new NotFoundError("Ticket not found");
+      if (!ticket) throw new NotFoundError(ErrorCode.TICKET_NOT_FOUND);
       if (ticket.status !== "open") {
-        throw new NotFoundError("Cannot add follow-up to a closed ticket");
+        throw new NotFoundError(ErrorCode.CANNOT_FOLLOWUP_CLOSED_TICKET);
       }
 
       const row = await db
@@ -156,7 +157,7 @@ export function createFollowUpService(
         .where("id", "=", followUpId)
         .executeTakeFirst();
 
-      if (!followUp) throw new NotFoundError("Follow-up not found");
+      if (!followUp) throw new NotFoundError(ErrorCode.FOLLOWUP_NOT_FOUND);
 
       await access.assertAccess(userId, followUp.ticket_id);
 
