@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { describe, it, expect, afterEach } from "vitest";
 import { render, screen, cleanup } from "@testing-library/svelte";
+import type { Snippet } from "svelte";
 import QueryLoader from "./QueryLoader.svelte";
 
 afterEach(cleanup);
@@ -73,8 +74,8 @@ describe("QueryLoader", () => {
   });
 });
 
-function snippetOf(text: string): unknown {
-  return (node: HTMLElement) => {
+function snippetOf(text: string): Snippet<[unknown]> {
+  return ((node: HTMLElement) => {
     node.textContent = text;
-  };
+  }) as unknown as Snippet<[unknown]>;
 }

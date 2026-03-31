@@ -259,7 +259,6 @@
         raised
         contentWrap={false}
         component="button"
-        type="button"
         aria-label={m.tickets_open({ alias: ticket.alias })}
         class="card-elevated touch-feedback !m-0 !mx-0"
       >

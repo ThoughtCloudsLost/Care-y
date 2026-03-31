@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { describe, it, expect, afterEach } from "vitest";
 import { render, screen, cleanup } from "@testing-library/svelte";
+import type { Snippet } from "svelte";
 import ErrorBoundary from "./ErrorBoundary.svelte";
 
 afterEach(cleanup);
@@ -25,14 +26,14 @@ describe("ErrorBoundary", () => {
   });
 });
 
-function snippetOf(text: string): unknown {
-  return (node: HTMLElement) => {
+function snippetOf(text: string): Snippet {
+  return ((node: HTMLElement) => {
     node.textContent = text;
-  };
+  }) as unknown as Snippet;
 }
 
-function throwingSnippet(message: string): unknown {
-  return (_node: HTMLElement) => {
+function throwingSnippet(message: string): Snippet {
+  return ((_node: HTMLElement) => {
     throw new Error(message);
-  };
+  }) as unknown as Snippet;
 }
