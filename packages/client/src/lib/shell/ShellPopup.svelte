@@ -30,7 +30,7 @@
       {#if title}
         <Navbar {title}>
           {#snippet right()}
-            <Link navbar role="button" onclick={trap.handleDismiss}
+            <Link role="button" onclick={trap.handleDismiss}
               >{m.shell_close()}</Link
             >
           {/snippet}

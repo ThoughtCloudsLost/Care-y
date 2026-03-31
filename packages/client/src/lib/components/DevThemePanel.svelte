@@ -164,8 +164,8 @@
   const handlePrimaryInput = handleColorInput((v) => (primaryColor = v));
   const handleAccentInput = handleColorInput((v) => (accentColor = v));
 
-  function cycleEnum<T>(values: readonly T[], current: T): T {
-    return values[(values.indexOf(current) + 1) % values.length] ?? values[0];
+  function cycleEnum<T extends string>(values: readonly T[], current: T): T {
+    return values[(values.indexOf(current) + 1) % values.length] ?? current;
   }
 
   function cycleVisual(): void {

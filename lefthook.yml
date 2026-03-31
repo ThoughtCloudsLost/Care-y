@@ -10,7 +10,7 @@ pre-commit:
     banned-patterns:
       run: if [ -f .githooks/pre-commit ]; then bash .githooks/pre-commit; fi
     typecheck:
-      run: pnpm exec tsc --build
+      run: pnpm run typecheck
     lint:
       run: pnpm exec eslint packages/
     format:

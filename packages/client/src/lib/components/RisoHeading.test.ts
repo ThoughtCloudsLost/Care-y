@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { describe, it, expect, afterEach } from "vitest";
 import { render, screen, cleanup } from "@testing-library/svelte";
+import type { Snippet } from "svelte";
 import RisoHeading from "./RisoHeading.svelte";
 
 afterEach(cleanup);
@@ -54,8 +55,8 @@ describe("RisoHeading", () => {
  * Creates a minimal Svelte snippet for testing.
  * Svelte 5 snippets are functions that receive an anchor node.
  */
-function snippetOf(text: string): unknown {
-  return (node: HTMLElement) => {
+function snippetOf(text: string): Snippet {
+  return ((node: HTMLElement) => {
     node.textContent = text;
-  };
+  }) as unknown as Snippet;
 }

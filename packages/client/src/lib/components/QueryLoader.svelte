@@ -6,19 +6,17 @@
   import Skeleton from "./Skeleton.svelte";
   import QueryError from "./QueryError.svelte";
 
-  interface QueryShape {
-    isLoading: boolean;
-    isError: boolean;
-    error: Error | null;
-    data: T | undefined;
-  }
-
   let {
     query,
     skeletonLines = 3,
     children,
   }: {
-    query: QueryShape;
+    query: {
+      isLoading: boolean;
+      isError: boolean;
+      error: Error | null;
+      data: T | undefined;
+    };
     skeletonLines?: number;
     children: Snippet<[T]>;
   } = $props();
