@@ -62,25 +62,18 @@ function applyGlassMode(mode: GlassMode, resolved: "dark" | "light"): void {
   document.documentElement.classList.toggle("glass-dark", effective === "dark");
 }
 
+let activeVisualClass = "";
+
 function applyVisualTheme(theme: VisualTheme): void {
   if (typeof document === "undefined") return;
-  document.documentElement.classList.toggle("theme-riso", theme === "riso");
-  document.documentElement.classList.toggle(
-    "theme-default",
-    theme === "default",
-  );
-  document.documentElement.classList.toggle(
-    "theme-frutiger",
-    theme === "frutiger",
-  );
-  document.documentElement.classList.toggle(
-    "theme-brutalist",
-    theme === "brutalist",
-  );
-  document.documentElement.classList.toggle(
-    "theme-cupertino",
-    theme === "cupertino",
-  );
+  const newClass = `theme-${theme}`;
+  const cl = document.documentElement.classList;
+  if (activeVisualClass !== "" && activeVisualClass !== newClass) {
+    cl.replace(activeVisualClass, newClass);
+  } else {
+    cl.add(newClass);
+  }
+  activeVisualClass = newClass;
 }
 
 export interface ThemeStore {

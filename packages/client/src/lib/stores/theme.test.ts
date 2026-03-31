@@ -55,6 +55,16 @@ function setupMocks(options?: {
         if (force) classes.add(name);
         else classes.delete(name);
       },
+      add: (name: string) => classes.add(name),
+      remove: (name: string) => classes.delete(name),
+      replace: (oldName: string, newName: string) => {
+        if (classes.has(oldName)) {
+          classes.delete(oldName);
+          classes.add(newName);
+          return true;
+        }
+        return false;
+      },
       contains: (name: string) => classes.has(name),
     },
     configurable: true,

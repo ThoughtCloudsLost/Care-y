@@ -1,18 +1,23 @@
 <script lang="ts">
   import { Block } from "konsta/svelte";
   import * as m from "$lib/paraglide/messages.js";
+  import { ErrorCode, type ErrorCodeType } from "@care-y/shared";
 
   let { error, onretry }: { error: unknown; onretry?: () => void } = $props();
 
-  const errorCodeMap: Record<string, () => string> = {
-    RATE_LIMIT_COOLDOWN: () => m.error_rate_limit_cooldown(),
-    RATE_LIMIT_HOURLY: () => m.error_rate_limit_hourly(),
-    NO_ACTIVE_CODE: () => m.error_no_active_code(),
-    TOO_MANY_ATTEMPTS: () => m.error_too_many_attempts(),
+  const errorCodeMap: Partial<Record<ErrorCodeType, () => string>> = {
+    [ErrorCode.RATE_LIMIT_COOLDOWN]: () => m.error_rate_limit_cooldown(),
+    [ErrorCode.RATE_LIMIT_HOURLY]: () => m.error_rate_limit_hourly(),
+    [ErrorCode.NO_ACTIVE_CODE]: () => m.error_no_active_code(),
+    [ErrorCode.TOO_MANY_ATTEMPTS]: () => m.error_too_many_attempts(),
   };
 
+  function isErrorCode(value: string): value is ErrorCodeType {
+    return value in errorCodeMap;
+  }
+
   function getErrorMessage(err: unknown): string {
-    if (err instanceof Error && err.message in errorCodeMap) {
+    if (err instanceof Error && isErrorCode(err.message)) {
       const messageFn = errorCodeMap[err.message];
       if (messageFn) return messageFn();
     }

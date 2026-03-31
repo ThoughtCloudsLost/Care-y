@@ -29,7 +29,7 @@ export function handleEvent(event: SSEEvent, queryClient: QueryClient): void {
     case "ticket:updated":
     case "ticket:created":
       void queryClient.invalidateQueries({ queryKey: ["tickets"] });
-      if (event.ticketId !== undefined && event.ticketId !== "") {
+      if (event.ticketId !== undefined) {
         void queryClient.invalidateQueries({
           queryKey: ["ticket", event.ticketId],
         });
@@ -46,11 +46,14 @@ export function handleEvent(event: SSEEvent, queryClient: QueryClient): void {
 
 function isSSEEvent(value: unknown): value is SSEEvent {
   if (typeof value !== "object" || value === null) return false;
-  if (!("type" in value)) return false;
-  const obj = value as Record<string, unknown>;
-  if (typeof obj.type !== "string") return false;
-  if ("ticketId" in obj && typeof obj.ticketId !== "string") return false;
-  if ("entityType" in obj && typeof obj.entityType !== "string") return false;
+  if (!("type" in value) || typeof value.type !== "string") return false;
+  if (
+    "ticketId" in value &&
+    (typeof value.ticketId !== "string" || value.ticketId === "")
+  )
+    return false;
+  if ("entityType" in value && typeof value.entityType !== "string")
+    return false;
   return true;
 }
 
@@ -107,7 +110,11 @@ export function createSSEListener(options: SSEListenerOptions): {
     }
     eventSource?.close();
     eventSource = null;
+    const wasConnected = connected;
     connected = false;
+    if (wasConnected) {
+      options.onConnectionChange?.(false);
+    }
   }
 
   function scheduleReconnect(): void {

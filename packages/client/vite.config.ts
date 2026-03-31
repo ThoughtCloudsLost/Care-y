@@ -54,7 +54,7 @@ export default defineConfig({
         name: "CARE-Y",
         short_name: "CARE-Y",
         display: "standalone",
-        background_color: "#ffffff",
+        background_color: "#0C0C0C",
         theme_color: "#000000",
         icons: [
           { src: "/icon-192.png", sizes: "192x192", type: "image/png" },

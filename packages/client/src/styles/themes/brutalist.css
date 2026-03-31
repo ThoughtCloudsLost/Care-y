@@ -72,16 +72,67 @@
 }
 
 /* ==========================================================
+   Shared resets (flat concrete, no glass, no shadow)
+   ========================================================== */
+
+.theme-brutalist
+  :is(
+    .k-block,
+    .k-list,
+    .k-card,
+    .k-segmented,
+    .k-dialog,
+    .k-popup,
+    .k-sheet,
+    .k-actions-group,
+    .k-searchbar input
+  ) {
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+.theme-brutalist
+  :is(
+    .k-block,
+    .k-list,
+    .k-card,
+    .k-chip,
+    .k-badge,
+    .k-segmented,
+    .k-popup,
+    .k-toggle,
+    .k-searchbar input
+  ) {
+  box-shadow: none;
+}
+
+.theme-brutalist
+  :is(
+    .k-block,
+    .k-list,
+    .k-card,
+    .k-chip,
+    .k-badge,
+    .k-segmented,
+    .k-dialog,
+    .k-popup,
+    .k-sheet,
+    .k-actions-group,
+    .k-toggle,
+    .k-searchbar input,
+    .k-fab,
+    .card-elevated
+  ) {
+  border-radius: 0;
+}
+
+/* ==========================================================
    BLOCKS: Sharp-cornered concrete panels
    ========================================================== */
 
 .theme-brutalist .k-block {
-  border-radius: 0;
-  backdrop-filter: none;
-  -webkit-backdrop-filter: none;
   background: var(--surface-1);
   border: 1px solid var(--muted);
-  box-shadow: none;
 }
 
 .theme-brutalist .k-block::before {
@@ -90,7 +141,6 @@
 
 /* Elevated cards: sharp concrete panels */
 .theme-brutalist .card-elevated {
-  border-radius: 0;
   background: var(--surface-1);
   border: 2px solid var(--ink);
   box-shadow: none;
@@ -101,12 +151,8 @@
    ========================================================== */
 
 .theme-brutalist .k-list {
-  border-radius: 0;
-  backdrop-filter: none;
-  -webkit-backdrop-filter: none;
   background: var(--surface-1);
   border: 1px solid var(--muted);
-  box-shadow: none;
 }
 
 /* Hard 1px dividers */
@@ -115,7 +161,7 @@
 }
 
 /* ==========================================================
-   BUTTONS: Rectangular, no radius, no effects
+   Buttons (rectangular, no radius, no effects)
    ========================================================== */
 
 .theme-brutalist .k-button {
@@ -141,12 +187,8 @@
    ========================================================== */
 
 .theme-brutalist .k-card {
-  border-radius: 0;
-  backdrop-filter: none;
-  -webkit-backdrop-filter: none;
   background: var(--surface-1);
   border: 1px solid var(--muted);
-  box-shadow: none;
 }
 
 .theme-brutalist .k-card::before {
@@ -158,14 +200,7 @@
    ========================================================== */
 
 .theme-brutalist .k-chip {
-  border-radius: 0;
   border: 1px solid var(--ink);
-  box-shadow: none;
-}
-
-.theme-brutalist .k-badge {
-  border-radius: 0;
-  box-shadow: none;
 }
 
 /* ==========================================================
@@ -173,11 +208,7 @@
    ========================================================== */
 
 .theme-brutalist .k-segmented {
-  border-radius: 0;
   border: 1px solid var(--ink);
-  box-shadow: none;
-  backdrop-filter: none;
-  -webkit-backdrop-filter: none;
   background: var(--surface-1);
 }
 
@@ -186,9 +217,6 @@
    ========================================================== */
 
 .theme-brutalist .k-dialog {
-  border-radius: 0;
-  backdrop-filter: none;
-  -webkit-backdrop-filter: none;
   border: 2px solid var(--ink);
   box-shadow: 4px 4px 0 var(--ink);
 }
@@ -206,24 +234,14 @@
 }
 
 .theme-brutalist .k-popup {
-  border-radius: 0;
-  backdrop-filter: none;
-  -webkit-backdrop-filter: none;
   border-top: 2px solid var(--ink);
-  box-shadow: none;
 }
 
 .theme-brutalist .k-sheet {
-  border-radius: 0;
-  backdrop-filter: none;
-  -webkit-backdrop-filter: none;
   border-top: 2px solid var(--ink);
 }
 
 .theme-brutalist .k-actions-group {
-  border-radius: 0;
-  backdrop-filter: none;
-  -webkit-backdrop-filter: none;
   border: 1px solid var(--ink);
   background: var(--surface-1);
 }
@@ -234,7 +252,6 @@
 
 .theme-brutalist .k-toggle {
   border-radius: 2px;
-  box-shadow: none;
 }
 
 /* ==========================================================
@@ -244,9 +261,6 @@
 .theme-brutalist .k-searchbar input {
   border-radius: 0 !important;
   border: 1px solid var(--ink) !important;
-  box-shadow: none;
-  backdrop-filter: none;
-  -webkit-backdrop-filter: none;
 }
 
 /* ==========================================================

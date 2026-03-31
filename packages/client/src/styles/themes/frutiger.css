@@ -440,7 +440,8 @@ html.glass-light.dark .theme-frutiger .card-elevated {
   overflow: hidden;
 }
 
-.theme-frutiger .frutiger-bubble::before {
+/* Shared gloss pseudo-element for bubble, glass, and tile */
+.theme-frutiger :is(.frutiger-bubble, .frutiger-glass, .frutiger-tile)::before {
   content: "";
   position: absolute;
   inset: 0;
@@ -452,6 +453,7 @@ html.glass-light.dark .theme-frutiger .card-elevated {
     var(--gloss-bottom) 50%
   );
   pointer-events: none;
+  z-index: 0;
 }
 
 /* Glass panel: translucent glossy card, organic shape */
@@ -466,21 +468,6 @@ html.glass-light.dark .theme-frutiger .card-elevated {
   box-shadow: var(--shadow), var(--inner-highlight), var(--inner-shadow);
   position: relative;
   overflow: hidden;
-}
-
-.theme-frutiger .frutiger-glass::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  background: linear-gradient(
-    180deg,
-    var(--gloss-top) 0%,
-    var(--gloss-mid) 48%,
-    var(--gloss-bottom) 50%
-  );
-  pointer-events: none;
-  z-index: 0;
 }
 
 /* Wii channel tile: interactive glossy card, organic shape */
@@ -506,21 +493,6 @@ html.glass-light.dark .theme-frutiger .card-elevated {
   box-shadow:
     var(--shadow),
     inset 0 2px 5px rgba(0, 60, 110, 0.15);
-}
-
-.theme-frutiger .frutiger-tile::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  background: linear-gradient(
-    180deg,
-    var(--gloss-top) 0%,
-    var(--gloss-mid) 48%,
-    var(--gloss-bottom) 50%
-  );
-  pointer-events: none;
-  z-index: 0;
 }
 
 /* ==========================================================

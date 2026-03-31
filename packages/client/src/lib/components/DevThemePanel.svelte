@@ -28,7 +28,7 @@
   }
 
   const PALETTES: Palette[] = [
-    { name: "Default", primary: "#f05030", accent: "#2563eb" },
+    { name: "Default", primary: DEFAULT_PRIMARY, accent: DEFAULT_ACCENT },
     { name: "Lavender + Cherry", primary: "#9967CA", accent: "#F9A8BB" },
     { name: "Linen + Blossom", primary: "#F5F1E6", accent: "#F9A8BB" },
     { name: "Grape + Pastel", primary: "#473144", accent: "#FFCAD4" },
@@ -46,13 +46,39 @@
   let activePalette = $state("");
 
   interface LogLine {
+    id: number;
     text: string;
     level: "log" | "warn" | "error";
   }
 
+  let logId = 0;
   let logs: LogLine[] = $state([]);
 
+  function safeStringify(value: unknown): string {
+    try {
+      return JSON.stringify(value);
+    } catch {
+      return String(value);
+    }
+  }
+
   onMount(() => {
+    // Hydrate persisted brand colors
+    const storedPalette = localStorage.getItem(PALETTE_KEY);
+    if (storedPalette !== null && storedPalette !== "") {
+      const match = PALETTES.find((p) => p.name === storedPalette);
+      if (match) {
+        activePalette = match.name;
+        primaryColor = match.primary;
+        accentColor = match.accent;
+      }
+    } else {
+      primaryColor = localStorage.getItem(PRIMARY_KEY) ?? DEFAULT_PRIMARY;
+      accentColor = localStorage.getItem(ACCENT_KEY) ?? DEFAULT_ACCENT;
+    }
+    applyBrandColors();
+
+    // Console capture
     const orig = {
       log: console.log.bind(console),
       warn: console.warn.bind(console),
@@ -61,9 +87,9 @@
 
     function capture(level: LogLine["level"], args: unknown[]): void {
       const text = args
-        .map((a) => (typeof a === "string" ? a : JSON.stringify(a)))
+        .map((a) => (typeof a === "string" ? a : safeStringify(a)))
         .join(" ");
-      logs.push({ text, level });
+      logs.push({ id: logId++, text, level });
       if (logs.length > MAX_LOG_LINES) {
         logs.splice(0, logs.length - MAX_LOG_LINES);
       }
@@ -97,23 +123,6 @@
     applyBrandColors();
   }
 
-  // Hydrate persisted brand colors (browser only)
-  if (typeof window !== "undefined") {
-    const storedPalette = localStorage.getItem(PALETTE_KEY);
-    if (storedPalette !== null && storedPalette !== "") {
-      const match = PALETTES.find((p) => p.name === storedPalette);
-      if (match) {
-        activePalette = match.name;
-        primaryColor = match.primary;
-        accentColor = match.accent;
-      }
-    } else {
-      primaryColor = localStorage.getItem(PRIMARY_KEY) ?? DEFAULT_PRIMARY;
-      accentColor = localStorage.getItem(ACCENT_KEY) ?? DEFAULT_ACCENT;
-    }
-    applyBrandColors();
-  }
-
   function buildBrandColors(): BrandColors {
     return {
       primary: primaryColor,
@@ -140,20 +149,23 @@
     void applyKonstaPalette({ primary: DEFAULT_PRIMARY });
   }
 
-  function handlePrimaryInput(e: Event): void {
-    if (!(e.target instanceof HTMLInputElement)) return;
-    primaryColor = e.target.value;
-    activePalette = "";
-    localStorage.removeItem(PALETTE_KEY);
-    applyBrandColors();
+  function handleColorInput(
+    setter: (value: string) => void,
+  ): (e: Event) => void {
+    return (e: Event) => {
+      if (!(e.target instanceof HTMLInputElement)) return;
+      setter(e.target.value);
+      activePalette = "";
+      localStorage.removeItem(PALETTE_KEY);
+      applyBrandColors();
+    };
   }
 
-  function handleAccentInput(e: Event): void {
-    if (!(e.target instanceof HTMLInputElement)) return;
-    accentColor = e.target.value;
-    activePalette = "";
-    localStorage.removeItem(PALETTE_KEY);
-    applyBrandColors();
+  const handlePrimaryInput = handleColorInput((v) => (primaryColor = v));
+  const handleAccentInput = handleColorInput((v) => (accentColor = v));
+
+  function cycleEnum<T>(values: readonly T[], current: T): T {
+    return values[(values.indexOf(current) + 1) % values.length] ?? values[0];
   }
 
   function cycleVisual(): void {
@@ -164,20 +176,19 @@
       "brutalist",
       "cupertino",
     ];
-    const idx = themes.indexOf(themeStore.visualTheme);
-    themeStore.setVisualTheme(themes[(idx + 1) % themes.length]);
+    themeStore.setVisualTheme(cycleEnum(themes, themeStore.visualTheme));
   }
 
   function cycleGlass(): void {
-    const modes: GlassMode[] = ["auto", "light", "dark"];
-    const idx = modes.indexOf(themeStore.glassMode);
-    themeStore.setGlassMode(modes[(idx + 1) % modes.length]);
+    themeStore.setGlassMode(
+      cycleEnum<GlassMode>(["auto", "light", "dark"], themeStore.glassMode),
+    );
   }
 
   function cycleUi(): void {
-    const themes: KonstaTheme[] = ["ios", "material"];
-    const idx = themes.indexOf(themeStore.uiTheme);
-    themeStore.setUiTheme(themes[(idx + 1) % themes.length]);
+    themeStore.setUiTheme(
+      cycleEnum<KonstaTheme>(["ios", "material"], themeStore.uiTheme),
+    );
     window.location.reload();
   }
 
@@ -282,7 +293,7 @@
 
     {#if consoleOpen}
       <div class="dev-console">
-        {#each logs as line (line)}
+        {#each logs as line (line.id)}
           <div style:color={logColor(line.level)}>{line.text}</div>
         {/each}
       </div>

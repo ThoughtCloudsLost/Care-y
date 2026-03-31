@@ -120,7 +120,6 @@
   </Navbar>
 
   <Tabbar
-    labels
     class="left-0 bottom-0 fixed"
     role="tablist"
     aria-label={m.nav_main()}
@@ -138,8 +137,7 @@
             textActiveMaterial: "text-[var(--brand-text)]",
           }}
         >
-          {#snippet icon()}<svelte:component
-              this={tab.icon}
+          {#snippet icon()}{@const Icon = tab.icon}<Icon
               size={24}
               aria-hidden="true"
             />{/snippet}
@@ -150,9 +148,9 @@
 
   <!-- Page content: routes render here, scrolls behind navbar/tabbar.
        Padding-bottom clears the fixed tabbar overlay zone. -->
-  <div id="main-content" role="main" class="main-content">
+  <main id="main-content" class="main-content">
     {@render children()}
-  </div>
+  </main>
 </Page>
 
 <style>

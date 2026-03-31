@@ -6,53 +6,31 @@
   import { Popup, Page, Navbar, Link } from "konsta/svelte";
   import * as m from "$lib/paraglide/messages.js";
   import type { ShellPopupProps } from "./types";
-  import { activateFocusTrap } from "./focus-trap";
+  import { useFocusTrap } from "./use-focus-trap.svelte";
 
   let { opened, ondismiss, title, children }: ShellPopupProps = $props();
 
-  let dialogEl: HTMLDivElement | undefined = $state(undefined);
-  let triggerEl: HTMLElement | null = null;
-  let cleanupTrap: (() => void) | null = null;
-
-  $effect(() => {
-    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- bind:this sets dialogEl after mount
-    if (!opened || dialogEl == null) return;
-    const el = dialogEl;
-
-    const active = document.activeElement;
-    triggerEl = active instanceof HTMLElement ? active : null;
-
-    requestAnimationFrame(() => {
-      cleanupTrap = activateFocusTrap({
-        container: el,
-        onEscape: handleDismiss,
-      });
-    });
-
-    return () => {
-      if (cleanupTrap != null) {
-        cleanupTrap();
-        cleanupTrap = null;
-      }
-    };
+  const trap = useFocusTrap({
+    get opened() {
+      return opened;
+    },
+    ondismiss,
   });
-
-  function handleDismiss(): void {
-    ondismiss();
-    requestAnimationFrame(() => {
-      triggerEl?.focus();
-      triggerEl = null;
-    });
-  }
 </script>
 
-<Popup {opened} onBackdropClick={handleDismiss}>
-  <div bind:this={dialogEl} role="dialog" aria-modal="true" aria-label={title}>
+<Popup {opened} onBackdropClick={trap.handleDismiss}>
+  <div
+    bind:this={trap.dialogEl}
+    role="dialog"
+    aria-modal="true"
+    aria-label={title}
+    tabindex="-1"
+  >
     <Page>
       {#if title}
         <Navbar {title}>
           {#snippet right()}
-            <Link navbar role="button" onclick={handleDismiss}
+            <Link navbar role="button" onclick={trap.handleDismiss}
               >{m.shell_close()}</Link
             >
           {/snippet}

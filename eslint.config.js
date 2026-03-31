@@ -96,6 +96,11 @@ export default tseslint.config(
         extraFileExtensions: [".svelte"],
       },
     },
+    rules: {
+      // $state() and $props() rune return types are resolved by the Svelte
+      // compiler, not the TS type checker. Same issue as .svelte files.
+      "@typescript-eslint/no-confusing-void-expression": "off",
+    },
   },
 
   // Module boundary enforcement - block deep imports into @care-y/* packages
@@ -234,6 +239,10 @@ export default tseslint.config(
       "**/vitest.config.ts",
       "**/svelte.config.js",
       "**/vite.config.ts",
+      // Custom ESLint rules are plain JS, not in any tsconfig.
+      // disableTypeChecked handles type-aware rules; explicit-module-boundary-types
+      // is disabled separately below since it isn't type-aware.
+      "eslint-rules/**/*.js",
       // Service worker and its test are compiled by SvelteKit separately
       // with their own tsconfig (no DOM types, $service-worker module).
       // projectService can't resolve them from the root tsconfigRootDir.
@@ -241,5 +250,15 @@ export default tseslint.config(
       "**/service-worker.test.ts",
     ],
     ...tseslint.configs.disableTypeChecked,
+  },
+
+  // Custom ESLint rules are plain JS without TS annotations.
+  // explicit-module-boundary-types isn't type-aware so disableTypeChecked
+  // doesn't cover it.
+  {
+    files: ["eslint-rules/**/*.js"],
+    rules: {
+      "@typescript-eslint/explicit-module-boundary-types": "off",
+    },
   },
 );
