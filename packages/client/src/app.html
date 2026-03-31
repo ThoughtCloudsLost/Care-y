@@ -6,138 +6,40 @@
       name="viewport"
       content="width=device-width, initial-scale=1, maximum-scale=5, viewport-fit=cover, interactive-widget=resizes-content"
     />
+    <meta name="color-scheme" content="dark light" />
     <script>
-      // Blocking theme init: reads localStorage and applies classes, CSS vars,
-      // and critical surface colors before first paint.
-      // Keys must stay in sync with theme.svelte.ts and DevThemePanel.svelte.
+      // Blocking theme init: reads class preferences from localStorage
+      // and applies them to <html> before first paint. CSS theme files
+      // provide all color values; this script only sets classes.
+      // Keys must stay in sync with theme.svelte.ts.
       (function () {
         var d = document.documentElement;
-        var s = localStorage;
-
-        // Color scheme (dark/light/system)
-        var schemePref = s.getItem("care-y-color-scheme") || "dark";
-        var resolved = schemePref;
-        if (schemePref === "system") {
-          resolved = window.matchMedia("(prefers-color-scheme: dark)").matches
-            ? "dark"
-            : "light";
+        try {
+          var s = localStorage;
+          var scheme = s.getItem("care-y-color-scheme") || "dark";
+          if (scheme === "system") {
+            scheme = window.matchMedia("(prefers-color-scheme: dark)").matches
+              ? "dark"
+              : "light";
+          }
+          d.classList.add(scheme);
+          var visual = s.getItem("care-y-visual-theme") || "default";
+          d.classList.add("theme-" + visual);
+          var glass = s.getItem("care-y-glass-mode") || "auto";
+          var ge = glass === "auto" ? scheme : glass;
+          d.classList.add("glass-" + ge);
+        } catch (e) {
+          d.classList.add("dark", "theme-default", "glass-dark");
         }
-        d.classList.add(resolved);
-
-        // Visual theme (default/riso/frutiger/brutalist/cupertino)
-        var visual = s.getItem("care-y-visual-theme") || "default";
-        d.classList.add("theme-" + visual);
-
-        // Glass mode (auto/light/dark)
-        var glass = s.getItem("care-y-glass-mode") || "auto";
-        var glassEffective = glass === "auto" ? resolved : glass;
-        d.classList.add("glass-" + glassEffective);
-
-        // Brand primary color (dev panel)
-        var primary = s.getItem("care-y-dev-brand-color");
-        if (primary) {
-          d.style.setProperty("--brand-primary", primary);
-        }
-
-        // Critical surface colors: set --ink, --paper, --surface-1,
-        // --surface-2, --muted inline so the first paint matches the
-        // saved theme even before the full stylesheet loads.
-        var themes = {
-          default: {
-            dark: {
-              ink: "#e5e5e5",
-              paper: "#000000",
-              s1: "#1c1c1d",
-              s2: "#2c2c2c",
-              m: "#777777",
-            },
-            light: {
-              ink: "#1a1a1a",
-              paper: "#ffffff",
-              s1: "#f5f5f5",
-              s2: "#eeeeee",
-              m: "#888888",
-            },
-          },
-          riso: {
-            dark: {
-              ink: "#f2ede4",
-              paper: "#141416",
-              s1: "#1e1c1e",
-              s2: "#262426",
-              m: "#7a7570",
-            },
-            light: {
-              ink: "#0a0a0a",
-              paper: "#f0ece5",
-              s1: "#f5f2ed",
-              s2: "#f0ece5",
-              m: "#8a8580",
-            },
-          },
-          brutalist: {
-            dark: {
-              ink: "#c8c4be",
-              paper: "#141414",
-              s1: "#1e1e1e",
-              s2: "#242424",
-              m: "#6a6a6a",
-            },
-            light: {
-              ink: "#1a1a1a",
-              paper: "#d8d4ce",
-              s1: "#ccc8c0",
-              s2: "#c0bbb3",
-              m: "#7a7672",
-            },
-          },
-          frutiger: {
-            dark: {
-              ink: "#c0daf0",
-              paper: "#061220",
-              s1: "#0a1e3a",
-              s2: "#0e2341",
-              m: "#4870a0",
-            },
-            light: {
-              ink: "#0c2840",
-              paper: "#a0d8f0",
-              s1: "#78d2f0",
-              s2: "#64c8eb",
-              m: "#4890b8",
-            },
-          },
-          cupertino: {
-            dark: {
-              ink: "#f5f5f7",
-              paper: "#000000",
-              s1: "#1c1c1e",
-              s2: "#2c2c2e",
-              m: "#98989d",
-            },
-            light: {
-              ink: "#1a1a1a",
-              paper: "#f2f2f7",
-              s1: "#ffffff",
-              s2: "#f5f5f5",
-              m: "#8e8e93",
-            },
-          },
-        };
-        var t = themes[visual] || themes["default"];
-        var c = t[resolved] || t["dark"];
-        d.style.setProperty("--ink", c.ink);
-        d.style.setProperty("--paper", c.paper);
-        d.style.setProperty("--surface-1", c.s1);
-        d.style.setProperty("--surface-2", c.s2);
-        d.style.setProperty("--muted", c.m);
-        d.style.backgroundColor = c.paper;
-        d.style.color = c.ink;
+        var cs = d.classList.contains("dark") ? "dark" : "light";
+        d.style.colorScheme = cs;
+        var m = document.querySelector('meta[name="color-scheme"]');
+        if (m) m.setAttribute("content", cs);
       })();
     </script>
     %sveltekit.head%
   </head>
-  <body data-sveltekit-preload-data="hover">
+  <body data-sveltekit-preload-data="hover" class="fouc-guard">
     <div style="display: contents">%sveltekit.body%</div>
   </body>
 </html>

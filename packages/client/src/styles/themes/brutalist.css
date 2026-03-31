@@ -17,9 +17,6 @@
   --theme-font-mono: "IBM Plex Mono", "Courier New", monospace;
 
   --ink: #1a1a1a;
-  --paper: #d8d4ce;
-  --surface-1: #ccc8c0;
-  --surface-2: #c0bbb3;
   --muted: #7a7672;
 
   /* Konsta iOS surface overrides: flat concrete, no transparency */
@@ -50,26 +47,20 @@
   --color-md-dark-surface-2: #242424;
   --color-md-dark-surface-3: #1e1e1e;
   --color-md-dark-surface-variant: #2a2a2a;
-}
 
-/* --- Light mode: warm concrete, aged government paper --- */
-.theme-brutalist.light {
-  --ink: #1a1a1a;
-  --paper: #d8d4ce;
-  --surface-1: #ccc8c0;
-  --surface-2: #c0bbb3;
-  --muted: #7a7672;
+  /* Semantic aliases (resolve through Konsta vars) */
+  --paper: var(--color-ios-light-surface);
+  --surface-1: var(--color-ios-light-surface-1);
+  --surface-2: var(--color-ios-light-surface-2);
 }
 
 /* --- Dark mode: bunker interior, fluorescent-lit concrete --- */
 .theme-brutalist.dark {
   --ink: #c8c4be;
-  --paper: #141414;
-  --surface-1: #1e1e1e;
-  --surface-2: #242424;
   --muted: #6a6a6a;
-  background-color: var(--paper);
-  color: var(--ink);
+  --paper: var(--color-ios-dark-surface);
+  --surface-1: var(--color-ios-dark-surface-1);
+  --surface-2: var(--color-ios-dark-surface-2);
 }
 
 /* Navbar, toolbar, glass: no overrides. Konsta's native frosted glass handles these. */

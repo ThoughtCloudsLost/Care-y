@@ -67,6 +67,10 @@
 
   onMount(() => {
     if (!browser) return;
+
+    // Reveal page now that CSS is loaded and hydration is complete.
+    document.body.classList.remove("fouc-guard");
+
     const cleanupKeyboard = initKeyboardViewport();
 
     // SSE connects unconditionally for now; auth guard added when login flow exists (6i)

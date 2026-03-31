@@ -9,10 +9,12 @@
   --theme-font-ui: system-ui, -apple-system, sans-serif;
 
   --ink: #1a1a1a;
-  --paper: #f2f2f7;
-  --surface-1: #ffffff;
-  --surface-2: #f5f5f5;
   --muted: #8e8e93;
+
+  /* Semantic aliases (resolve through Konsta vars below) */
+  --paper: var(--color-ios-light-surface);
+  --surface-1: var(--color-ios-light-surface-1);
+  --surface-2: var(--color-ios-light-surface-2);
 
   /* Card tokens */
   --card-bg: #ffffff;
@@ -66,33 +68,13 @@
   --color-md-dark-surface-variant: #2c2c2e;
 }
 
-/* --- Light mode --- */
-.theme-cupertino.light {
-  --ink: #1a1a1a;
-  --paper: #f2f2f7;
-  --surface-1: #ffffff;
-  --surface-2: #f5f5f5;
-  --muted: #8e8e93;
-
-  --card-bg: #ffffff;
-  --card-border: rgba(0, 0, 0, 0.06);
-  --card-shadow: 0 1px 3px rgba(0, 0, 0, 0.04), 0 1px 2px rgba(0, 0, 0, 0.02);
-  --pill-bg: rgba(0, 0, 0, 0.04);
-  --pill-bg-active: var(--ink);
-  --pill-text: var(--muted);
-  --pill-text-active: #ffffff;
-  --chip-bg: rgba(0, 0, 0, 0.04);
-  --chip-text: var(--muted);
-  --divider: rgba(0, 0, 0, 0.06);
-}
-
 /* --- Dark mode: true black, warm translucent cards --- */
 .theme-cupertino.dark {
   --ink: #f5f5f7;
-  --paper: #000000;
-  --surface-1: #1c1c1e;
-  --surface-2: #2c2c2e;
   --muted: #98989d;
+  --paper: var(--color-ios-dark-surface);
+  --surface-1: var(--color-ios-dark-surface-1);
+  --surface-2: var(--color-ios-dark-surface-2);
 
   --card-bg: rgba(44, 44, 46, 0.72);
   --card-border: rgba(255, 255, 255, 0.06);
@@ -106,9 +88,6 @@
   --chip-bg: rgba(255, 255, 255, 0.08);
   --chip-text: var(--muted);
   --divider: rgba(255, 255, 255, 0.06);
-
-  background-color: var(--paper);
-  color: var(--ink);
 }
 
 /* ==========================================================

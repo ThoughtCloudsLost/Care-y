@@ -22,6 +22,7 @@ const UI_THEME_KEY = "care-y-theme";
 const COLOR_SCHEME_KEY = "care-y-color-scheme";
 const VISUAL_THEME_KEY = "care-y-visual-theme";
 const GLASS_MODE_KEY = "care-y-glass-mode";
+
 function detectUiTheme(): KonstaTheme {
   if (typeof navigator === "undefined") return "ios";
   const ua = navigator.userAgent;
@@ -48,6 +49,7 @@ function applyScheme(resolved: "dark" | "light"): void {
   if (typeof document === "undefined") return;
   document.documentElement.classList.toggle("dark", resolved === "dark");
   document.documentElement.classList.toggle("light", resolved === "light");
+  document.documentElement.style.colorScheme = resolved;
 }
 
 function applyGlassMode(mode: GlassMode, resolved: "dark" | "light"): void {

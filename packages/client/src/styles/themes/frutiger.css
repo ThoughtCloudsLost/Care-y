@@ -11,9 +11,6 @@
   --theme-font-ui: "Segoe UI", system-ui, sans-serif;
 
   --ink: #0c2840;
-  --paper: #a0d8f0;
-  --surface-1: rgba(120, 210, 240, 0.4);
-  --surface-2: rgba(100, 200, 235, 0.3);
   --muted: #4890b8;
 
   /* Translucent glass + gloss tokens */
@@ -62,24 +59,20 @@
   --color-md-dark-surface-2: rgba(14, 35, 65, 0.78);
   --color-md-dark-surface-3: rgba(10, 30, 58, 0.88);
   --color-md-dark-surface-variant: rgba(16, 38, 68, 0.72);
-}
 
-/* --- Light mode --- */
-.theme-frutiger.light {
-  --ink: #0c2840;
-  --paper: #a0d8f0;
-  --surface-1: rgba(120, 210, 240, 0.4);
-  --surface-2: rgba(100, 200, 235, 0.3);
-  --muted: #4890b8;
+  /* Semantic aliases (resolve through Konsta vars) */
+  --paper: var(--color-ios-light-surface);
+  --surface-1: var(--color-ios-light-surface-1);
+  --surface-2: var(--color-ios-light-surface-2);
 }
 
 /* --- Dark mode: deep ocean, still glossy --- */
 .theme-frutiger.dark {
   --ink: #c0daf0;
-  --paper: #061220;
-  --surface-1: rgba(10, 30, 58, 0.88);
-  --surface-2: rgba(14, 35, 65, 0.78);
   --muted: #4870a0;
+  --paper: var(--color-ios-dark-surface);
+  --surface-1: var(--color-ios-dark-surface-1);
+  --surface-2: var(--color-ios-dark-surface-2);
   --glass-bg: rgba(10, 35, 70, 0.65);
   --glass-bg-strong: rgba(14, 42, 78, 0.75);
   --gloss-top: rgba(80, 160, 230, 0.22);
@@ -92,8 +85,6 @@
     0 8px 28px rgba(0, 0, 0, 0.45), 0 3px 8px rgba(0, 0, 0, 0.25);
   --inner-highlight: inset 0 1px 0 rgba(60, 140, 210, 0.2);
   --inner-shadow: inset 0 -1px 0 rgba(0, 0, 0, 0.2);
-  background-color: var(--paper);
-  color: var(--ink);
 }
 
 /* ==========================================================
