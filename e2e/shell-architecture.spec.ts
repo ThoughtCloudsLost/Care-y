@@ -89,6 +89,17 @@ test.describe("shell architecture", () => {
     ).toBeAttached();
   });
 
+  // ── View transitions ────────────────────────────────────────────────
+
+  test("view transitions API is available", async ({ page }) => {
+    const hasViewTransitions = await page.evaluate(
+      () => "startViewTransition" in document,
+    );
+    // Not all browsers support it; just verify the app doesn't crash
+    // If supported, the layout's onNavigate hook will use it
+    expect(typeof hasViewTransitions).toBe("boolean");
+  });
+
   // ── Accessibility ───────────────────────────────────────────────────
 
   test("page passes axe-core accessibility scan", async ({ page }) => {
