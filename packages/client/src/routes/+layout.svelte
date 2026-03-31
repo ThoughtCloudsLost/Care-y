@@ -10,6 +10,7 @@
   import { initKeyboardViewport } from "$lib/utils/keyboard-viewport";
   import { announceToLiveRegion } from "$lib/utils/announce";
   import { createSSEListener } from "$lib/sse/index.svelte";
+  import { getCachedBranding, applyBranding } from "$lib/branding/index.js";
   import RisoInkFilter from "$lib/components/RisoInkFilter.svelte";
   import AppShell from "$lib/shell/AppShell.svelte";
   import DevThemePanel from "$lib/components/DevThemePanel.svelte";
@@ -72,6 +73,12 @@
     document.body.classList.remove("fouc-guard");
 
     const cleanupKeyboard = initKeyboardViewport();
+
+    // Apply cached org branding if available (pre-login display).
+    // Full branding load (fetch + decrypt) happens after login (6i).
+    void getCachedBranding().then((cached) => {
+      if (cached) void applyBranding(cached);
+    });
 
     // SSE connects unconditionally for now; auth guard added when login flow exists (6i)
     sseListener.connect();

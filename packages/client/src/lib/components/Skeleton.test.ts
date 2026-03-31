@@ -1,32 +1,32 @@
 // @vitest-environment jsdom
 import { describe, it, expect, afterEach } from "vitest";
 import { render, screen, cleanup } from "@testing-library/svelte";
-import RisoSkeleton from "./RisoSkeleton.svelte";
+import Skeleton from "./Skeleton.svelte";
 
 afterEach(cleanup);
 
-describe("RisoSkeleton", () => {
+describe("Skeleton", () => {
   it("renders with role=status and aria-busy for screen readers", () => {
-    render(RisoSkeleton);
+    render(Skeleton);
     const status = screen.getByRole("status");
     expect(status.getAttribute("aria-busy")).toBe("true");
     expect(status.getAttribute("aria-label")).toBe("Loading");
   });
 
   it("renders the default 3 skeleton bars", () => {
-    render(RisoSkeleton);
+    render(Skeleton);
     const bars = screen.getByRole("status").querySelectorAll(".skeleton-bar");
     expect(bars.length).toBe(3);
   });
 
   it("renders custom number of lines", () => {
-    render(RisoSkeleton, { props: { lines: 5 } });
+    render(Skeleton, { props: { lines: 5 } });
     const bars = screen.getByRole("status").querySelectorAll(".skeleton-bar");
     expect(bars.length).toBe(5);
   });
 
   it("staggers animation delays across bars", () => {
-    render(RisoSkeleton, { props: { lines: 3 } });
+    render(Skeleton, { props: { lines: 3 } });
     const bars = screen
       .getByRole("status")
       .querySelectorAll<HTMLElement>(".skeleton-bar");
