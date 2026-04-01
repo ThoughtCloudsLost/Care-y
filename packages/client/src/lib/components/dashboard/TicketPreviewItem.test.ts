@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
-import { render, cleanup } from "@testing-library/svelte";
+import { render, cleanup, fireEvent } from "@testing-library/svelte";
 import TicketPreviewItem from "./TicketPreviewItem.svelte";
 
 afterEach(cleanup);
@@ -17,6 +17,8 @@ describe("TicketPreviewItem", () => {
     vi.useRealTimers();
   });
 
+  const ontap = vi.fn();
+
   const defaults = {
     ticketId: "t-001",
     title: "Test ticket title",
@@ -25,6 +27,7 @@ describe("TicketPreviewItem", () => {
     onHold: false,
     assignedTo: null,
     createdAt: new Date("2026-03-31T11:30:00Z"),
+    ontap,
   };
 
   it("renders decrypted title when provided", () => {
@@ -92,6 +95,16 @@ describe("TicketPreviewItem", () => {
     });
     expect(container.textContent).toContain("Closed");
   });
+
+  it("fires ontap with ticketId when clicked", async () => {
+    const tapHandler = vi.fn();
+    const { container } = render(TicketPreviewItem, {
+      props: { ...defaults, ontap: tapHandler },
+    });
+    const listItem = container.querySelector(".k-list-item");
+    if (listItem) await fireEvent.click(listItem);
+    expect(tapHandler).toHaveBeenCalledWith("t-001");
+  });
 });
 
 describe("formatRelativeTime (via rendered output)", () => {
@@ -114,6 +127,7 @@ describe("formatRelativeTime (via rendered output)", () => {
     priority: "normal",
     onHold: false,
     assignedTo: null,
+    ontap: vi.fn(),
   };
 
   const cases: Array<{ label: string; createdAt: Date; expected: string }> = [

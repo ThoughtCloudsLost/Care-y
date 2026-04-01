@@ -17,6 +17,8 @@
     assignedTo: string | null;
     /** Creation timestamp */
     createdAt: Date;
+    /** Callback when item is tapped. Route file handles navigation. */
+    ontap: (ticketId: string) => void;
   }
 
   let {
@@ -27,6 +29,7 @@
     onHold,
     assignedTo,
     createdAt,
+    ontap,
   }: TicketPreviewItemProps = $props();
 
   const displayTitle = $derived(title ?? m.dashboard_encrypted_ticket());
@@ -44,7 +47,12 @@
   }
 </script>
 
-<ListItem link href="/tickets/{ticketId}" title={displayTitle} after={timeAgo}>
+<ListItem
+  link
+  title={displayTitle}
+  after={timeAgo}
+  onclick={() => ontap(ticketId)}
+>
   {#snippet media()}
     <span
       class="status-dot"
