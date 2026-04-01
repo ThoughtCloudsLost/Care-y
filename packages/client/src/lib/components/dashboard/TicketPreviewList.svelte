@@ -3,22 +3,13 @@
   import TicketPreviewItem from "./TicketPreviewItem.svelte";
   import EmptyState from "$lib/components/EmptyState.svelte";
   import * as m from "$lib/paraglide/messages.js";
-
-  interface TicketPreviewItemProps {
-    ticketId: string;
-    title?: string;
-    status: string;
-    priority: string;
-    onHold: boolean;
-    assignedTo: string | null;
-    createdAt: Date;
-  }
+  import type { TicketPreviewItemProps } from "./types.js";
 
   interface TicketPreviewListProps {
     /** Section heading (i18n label) */
     heading: string;
-    /** Tickets to display */
-    tickets: TicketPreviewItemProps[];
+    /** Tickets to display (ontap provided separately via ontickettap) */
+    tickets: Omit<TicketPreviewItemProps, "ontap">[];
     /** Maximum items to show before "see all" button */
     maxVisible?: number;
     /** Callback when "see all" is tapped. Route file handles navigation. */
