@@ -11,7 +11,7 @@ overrides:
 
 patchedDependencies:
   konsta@5.0.8:
-    hash: 7735676d1b63a8261aeba8e5cc0493d30bf98b360be1c3a4dbced01d5e98fea5
+    hash: 65ef5a2416178d8cebb20d4f46b426ff45856c9ef23f2775d7302872c8f31ad1
     path: patches/konsta@5.0.8.patch
 
 importers:
@@ -98,7 +98,7 @@ importers:
         version: 2.16.5(@internationalized/date@3.11.0)(@sveltejs/kit@2.55.0(@sveltejs/vite-plugin-svelte@6.2.4(svelte@5.55.1)(vite@7.3.1(@types/node@25.5.0)(jiti@2.6.1)(lightningcss@1.32.0)(terser@5.46.1)(tsx@4.21.0)))(svelte@5.55.1)(typescript@5.9.3)(vite@7.3.1(@types/node@25.5.0)(jiti@2.6.1)(lightningcss@1.32.0)(terser@5.46.1)(tsx@4.21.0)))(svelte@5.55.1)
       konsta:
         specifier: 5.0.8
-        version: 5.0.8(patch_hash=7735676d1b63a8261aeba8e5cc0493d30bf98b360be1c3a4dbced01d5e98fea5)
+        version: 5.0.8(patch_hash=65ef5a2416178d8cebb20d4f46b426ff45856c9ef23f2775d7302872c8f31ad1)
       svelte-gestures:
         specifier: 5.2.2
         version: 5.2.2
@@ -6635,7 +6635,7 @@ snapshots:
 
   kolorist@1.8.0: {}
 
-  konsta@5.0.8(patch_hash=7735676d1b63a8261aeba8e5cc0493d30bf98b360be1c3a4dbced01d5e98fea5):
+  konsta@5.0.8(patch_hash=65ef5a2416178d8cebb20d4f46b426ff45856c9ef23f2775d7302872c8f31ad1):
     dependencies:
       tailwind-merge: 3.5.0
 

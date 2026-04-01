@@ -1,18 +1,11 @@
 <!--
-  App shell following Konsta's intended composition:
-  Everything inside a single <Page>. Navbar is sticky top, Tabbar is fixed
-  bottom, content scrolls behind both (iOS frosted glass effect).
+  App shell: persistent navigation chrome across all routes.
 
-  This matches the Konsta docs Tabbar example exactly:
-  <Page>
-    <Navbar />
-    <Tabbar class="left-0 bottom-0 fixed">
-      <ToolbarPane>
-        <TabbarLink />
-      </ToolbarPane>
-    </Tabbar>
-    ...content...
-  </Page>
+  Single Konsta Page wraps everything. Navbar is sticky top. Bottom bar
+  uses a Toolbar with two ToolbarPane children (Safari-style split glass
+  pills): tabs pane inherits tabbar context, More pane overrides with
+  tabbar={false} (patched in konsta@5.0.8.patch) to disable highlight
+  and w-full.
 
   ARIA roles on TabbarLink (role="tab", aria-selected) are possible because
   we patch Konsta's Link.svelte to move the hardcoded role="link" BEFORE
@@ -24,7 +17,7 @@
     Navbar,
     Link,
     Searchbar,
-    Tabbar,
+    Toolbar,
     TabbarLink,
     ToolbarPane,
   } from "konsta/svelte";
@@ -75,7 +68,6 @@
     { id: "home", label: () => m.nav_home(), icon: House },
     { id: "tickets", label: () => m.nav_tickets(), icon: Ticket },
     { id: "calendar", label: () => m.nav_calendar(), icon: CalendarDays },
-    { id: "more", label: () => m.nav_more(), icon: Ellipsis },
   ];
 </script>
 
@@ -119,11 +111,7 @@
     </div>
   </Navbar>
 
-  <Tabbar
-    class="left-0 bottom-0 fixed"
-    role="tablist"
-    aria-label={m.nav_main()}
-  >
+  <Toolbar tabbar tabbarIcons class="left-0 bottom-0 fixed">
     <ToolbarPane>
       {#each allTabs as tab (tab.id)}
         <TabbarLink
@@ -144,10 +132,13 @@
         </TabbarLink>
       {/each}
     </ToolbarPane>
-  </Tabbar>
+    <ToolbarPane tabbar={false}>
+      <Link iconOnly aria-label={m.nav_more()}>
+        <Ellipsis size={24} aria-hidden="true" />
+      </Link>
+    </ToolbarPane>
+  </Toolbar>
 
-  <!-- Page content: routes render here, scrolls behind navbar/tabbar.
-       Padding-bottom clears the fixed tabbar overlay zone. -->
   <main id="main-content" class="main-content">
     {@render children()}
   </main>

@@ -14,6 +14,8 @@
   "app_sse_disconnected": "Real-time connection lost. Reconnecting...",
   "app_retry": "Try again",
 
+  "error_page_not_found": "This page does not exist.",
+  "error_go_home": "Go home",
   "error_generic": "Something went wrong. Please try again.",
   "error_decryption_failed": "This content could not be decrypted.",
   "error_network": "Could not reach the server. Check your connection.",
