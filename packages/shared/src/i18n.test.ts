@@ -39,6 +39,10 @@ describe("messages/en.json", () => {
       "twofa_",
       "exposure_",
       "empty_",
+      "shell_",
+      "auth_",
+      "tickets_",
+      "dashboard_",
     ];
     for (const prefix of prefixes) {
       const keys = Object.keys(en).filter((k) => k.startsWith(prefix));
