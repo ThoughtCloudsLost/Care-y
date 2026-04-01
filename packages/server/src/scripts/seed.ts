@@ -23,6 +23,7 @@ try {
   throw err;
 }
 
+import { RoleId } from "@care-y/shared";
 import sodium from "sodium-native";
 import { db, tenantDb } from "../db/db.js";
 import { getEnv } from "../env.js";
@@ -44,10 +45,10 @@ import type { Kysely } from "kysely";
 import type { TenantDatabase } from "../db/types.js";
 
 const DEV_ORG_SLUG = "dev-org";
-const ADMIN_IDENTIFIER = "admin@dev.local";
-const ADMIN_PASSWORD = "devpassword123!";
+const ADMIN_IDENTIFIER = "admin.dev";
+const ADMIN_PASSWORD = "dev-password-1234!";
 const ADMIN_DISPLAY_NAME = "Dev Admin";
-const ADMIN_ROLE_ID = "admin";
+const ADMIN_ROLE_ID = RoleId.ADMIN;
 
 /**
  * Generates a Curve25519 keypair and stores the public key in org_config.
