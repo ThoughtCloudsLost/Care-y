@@ -30,6 +30,16 @@ export interface TicketRecord {
   readonly createdAt: Date;
 }
 
+export interface TicketKeyWrap {
+  readonly ephemeralPoint: string; // base64
+  readonly nonce: string; // base64
+  readonly wrappedKey: string; // base64
+}
+
+export interface TicketWithKeyWrap extends TicketRecord {
+  readonly keyWrap: TicketKeyWrap | null;
+}
+
 export interface CreateTicketInput {
   readonly clientId: string;
   readonly queueId: string;
@@ -49,7 +59,7 @@ export interface UpdateTicketInput {
 
 export interface TicketService {
   create(userId: string, input: CreateTicketInput): Promise<TicketRecord>;
-  findById(ticketId: string, userId: string): Promise<TicketRecord>;
+  findById(ticketId: string, userId: string): Promise<TicketWithKeyWrap>;
   list(
     userId: string,
     opts: {
@@ -58,7 +68,7 @@ export interface TicketService {
       limit: number;
       cursor?: string;
     },
-  ): Promise<TicketRecord[]>;
+  ): Promise<TicketWithKeyWrap[]>;
   update(userId: string, input: UpdateTicketInput): Promise<TicketRecord>;
   close(userId: string, ticketId: string): Promise<TicketRecord>;
   reopen(
@@ -94,6 +104,38 @@ function toRecord(row: {
     keyGeneration: row.key_generation,
     createdAt: row.created_at,
   };
+}
+
+function toRecordWithKeyWrap(row: {
+  id: string;
+  client_id: string;
+  queue_id: string;
+  status: string;
+  priority: string;
+  on_hold: boolean;
+  assigned_to: string | null;
+  encrypted_title: Buffer;
+  encrypted_description: Buffer;
+  key_generation: string;
+  created_at: Date;
+  ephemeral_point: Buffer | null;
+  nonce: Buffer | null;
+  wrapped_key: Buffer | null;
+}): TicketWithKeyWrap {
+  const ep = row.ephemeral_point;
+  const n = row.nonce;
+  const wk = row.wrapped_key;
+  // All three columns are NOT NULL in ticket_key_wraps. If the LEFT JOIN
+  // matched a row, all three are present. Check all to satisfy the linter.
+  const keyWrap: TicketKeyWrap | null =
+    ep && n && wk
+      ? {
+          ephemeralPoint: ep.toString("base64"),
+          nonce: n.toString("base64"),
+          wrappedKey: wk.toString("base64"),
+        }
+      : null;
+  return { ...toRecord(row), keyWrap };
 }
 
 export function createTicketService(
@@ -193,13 +235,20 @@ export function createTicketService(
       await access.assertAccess(userId, ticketId);
 
       const row = await db
-        .selectFrom("tickets")
-        .selectAll()
-        .where("id", "=", ticketId)
+        .selectFrom("tickets as t")
+        .leftJoin("ticket_key_wraps as tkw", (join) =>
+          join
+            .onRef("tkw.ticket_id", "=", "t.id")
+            .on("tkw.volunteer_id", "=", userId)
+            .onRef("tkw.key_generation", "=", "t.key_generation"),
+        )
+        .selectAll("t")
+        .select(["tkw.ephemeral_point", "tkw.nonce", "tkw.wrapped_key"])
+        .where("t.id", "=", ticketId)
         .executeTakeFirst();
 
       if (!row) throw new NotFoundError(ErrorCode.TICKET_NOT_FOUND);
-      return toRecord(row);
+      return toRecordWithKeyWrap(row);
     },
 
     async list(userId, opts) {
@@ -210,15 +259,22 @@ export function createTicketService(
       if (accessibleQueues.length === 0) return [];
 
       let query = db
-        .selectFrom("tickets")
-        .selectAll()
-        .where("queue_id", "in", [...accessibleQueues]);
+        .selectFrom("tickets as t")
+        .leftJoin("ticket_key_wraps as tkw", (join) =>
+          join
+            .onRef("tkw.ticket_id", "=", "t.id")
+            .on("tkw.volunteer_id", "=", userId)
+            .onRef("tkw.key_generation", "=", "t.key_generation"),
+        )
+        .selectAll("t")
+        .select(["tkw.ephemeral_point", "tkw.nonce", "tkw.wrapped_key"])
+        .where("t.queue_id", "in", [...accessibleQueues]);
 
       if (opts.queueId !== undefined) {
-        query = query.where("queue_id", "=", opts.queueId);
+        query = query.where("t.queue_id", "=", opts.queueId);
       }
       if (opts.status !== undefined) {
-        query = query.where("status", "=", opts.status);
+        query = query.where("t.status", "=", opts.status);
       }
       if (opts.cursor !== undefined) {
         // Keyset pagination: skip past the cursor row.
@@ -233,22 +289,22 @@ export function createTicketService(
 
         query = query.where((eb) =>
           eb.or([
-            eb("created_at", ">", cursorCreatedAt),
+            eb("t.created_at", ">", cursorCreatedAt),
             eb.and([
-              eb("created_at", "=", cursorCreatedAt),
-              eb("id", ">", cursorId),
+              eb("t.created_at", "=", cursorCreatedAt),
+              eb("t.id", ">", cursorId),
             ]),
           ]),
         );
       }
 
       const rows = await query
-        .orderBy("created_at", "asc")
-        .orderBy("id", "asc")
+        .orderBy("t.created_at", "asc")
+        .orderBy("t.id", "asc")
         .limit(opts.limit)
         .execute();
 
-      return rows.map(toRecord);
+      return rows.map(toRecordWithKeyWrap);
     },
 
     async update(userId, input) {
