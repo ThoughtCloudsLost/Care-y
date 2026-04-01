@@ -112,7 +112,7 @@
   </Navbar>
 
   <Toolbar tabbar tabbarIcons class="left-0 bottom-0 fixed">
-    <ToolbarPane>
+    <ToolbarPane role="tablist" aria-label={m.nav_main()}>
       {#each allTabs as tab (tab.id)}
         <TabbarLink
           active={activeTab === tab.id}
