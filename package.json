@@ -27,6 +27,8 @@
     "migrate:create-schema": "tsx --env-file=.env packages/server/src/db/schema-create.ts",
     "seed": "tsx --env-file=.env packages/server/src/scripts/seed.ts",
     "dev:server": "tsx --env-file=.env packages/server/src/index.ts",
+    "dev": "node scripts/dev-setup.mjs && pnpm --filter @care-y/client dev",
+    "dev:mobile": "node scripts/dev-setup.mjs && pnpm --filter @care-y/client dev:mobile",
     "dev:setup": "node scripts/dev-setup.mjs",
     "postinstall": "lefthook install"
   },
