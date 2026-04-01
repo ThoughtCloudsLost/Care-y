@@ -13,8 +13,26 @@
     const bridge = new CryptoBridge();
     setContext("cryptoBridge", bridge);
   }
+
+  // Dev-only auto-login. The dynamic import is behind import.meta.env.DEV,
+  // which Vite replaces with `false` in production builds. The entire import
+  // and the auto-login module are stripped by dead-code elimination.
+  let devLoginDone = $state(!import.meta.env.DEV);
+
+  if (import.meta.env.DEV && browser) {
+    void (async () => {
+      try {
+        const { devAutoLogin } = await import("$lib/dev/auto-login.js");
+        await devAutoLogin();
+      } catch (err: unknown) {
+        console.error("[dev] auto-login failed:", err);
+      }
+      devLoginDone = true;
+    })();
+  }
 </script>
 
-<!-- Auth guard placeholder: 6i will add session check + redirect here.
-     For now, all (app) routes render unconditionally. -->
-{@render children()}
+<!-- Auth guard placeholder: 6i will add session check + redirect here. -->
+{#if devLoginDone}
+  {@render children()}
+{/if}
