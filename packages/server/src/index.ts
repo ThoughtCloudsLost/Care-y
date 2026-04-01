@@ -26,7 +26,10 @@ import { sql } from "kysely";
 import { getEnv, type EnvVars } from "./env.js";
 import { createOrgService } from "./org/service.js";
 import { createScryptHasher } from "./auth/password.js";
-import { createInMemoryRateLimiter } from "./ratelimit/rate-limiter.js";
+import {
+  createInMemoryRateLimiter,
+  type RateLimiter,
+} from "./ratelimit/rate-limiter.js";
 import {
   deriveKeys,
   createFieldEncryptor,
@@ -231,6 +234,11 @@ function createAuthRateLimiters(): RateLimiters {
 }
 
 // --- OPRF infrastructure ---
+// The main server uses @care-y/crypto functions (lagrangeInterpolate,
+// toRistrettoPoint) to combine partial OPRF evaluations from the sidecars.
+// These functions require the sodium backend to be initialized.
+import { getSodium } from "@care-y/crypto";
+await getSodium();
 
 import type { OprfEvaluateService } from "./crypto/oprf-evaluate-service.js";
 
@@ -240,14 +248,26 @@ function createOprfInfrastructure(env: EnvVars): OprfEvaluateService {
     socketPathB: env.OPRF_SOCKET_B,
   });
 
-  const userRateLimiter = createInMemoryRateLimiter({
-    windowMs: 15 * 60 * 1000,
-    maxRequests: 10,
-  });
-  const ipRateLimiter = createInMemoryRateLimiter({
-    windowMs: 15 * 60 * 1000,
-    maxRequests: 50,
-  });
+  const noopLimiter: RateLimiter = {
+    check: () => ({ allowed: true, remaining: Infinity, retryAfterMs: 0 }),
+    // eslint-disable-next-line @typescript-eslint/no-empty-function -- intentional no-op for dev
+    reset: () => {},
+  };
+
+  const userRateLimiter =
+    process.env.NODE_ENV === "development"
+      ? noopLimiter
+      : createInMemoryRateLimiter({
+          windowMs: 15 * 60 * 1000,
+          maxRequests: 10,
+        });
+  const ipRateLimiter =
+    process.env.NODE_ENV === "development"
+      ? noopLimiter
+      : createInMemoryRateLimiter({
+          windowMs: 15 * 60 * 1000,
+          maxRequests: 50,
+        });
 
   const opsKeyBuf = Buffer.from(env.OPS_SECRETS_KEY, "hex");
   const auditLogger = createOprfAuditLogger(db, opsKeyBuf);

@@ -122,6 +122,7 @@
 </script>
 
 <div class="dashboard">
+  <h1 class="sr-only">{m.nav_home()}</h1>
   <Notification
     role="alert"
     opened={exposureNotificationVisible}
@@ -181,8 +182,8 @@
   .stat-grid {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
-    gap: 0.5rem;
-    padding: 0 0.8rem;
-    margin-bottom: 0.5rem;
+    gap: 0rem;
+    padding: 0 0rem;
+    margin-bottom: 0rem;
   }
 </style>

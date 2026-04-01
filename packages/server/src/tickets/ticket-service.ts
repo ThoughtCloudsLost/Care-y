@@ -15,6 +15,7 @@ import type { TicketAccessChecker } from "./access.js";
 import { NotFoundError, TicketError, MergeError } from "../errors.js";
 import { createDependencyService } from "./dependency-service.js";
 import { ErrorCode } from "@care-y/shared";
+import { encode } from "@care-y/crypto";
 
 export interface TicketRecord {
   readonly id: string;
@@ -31,9 +32,9 @@ export interface TicketRecord {
 }
 
 export interface TicketKeyWrap {
-  readonly ephemeralPoint: string; // base64
-  readonly nonce: string; // base64
-  readonly wrappedKey: string; // base64
+  readonly ephemeralPoint: string; // base64url (no padding)
+  readonly nonce: string; // base64url (no padding)
+  readonly wrappedKey: string; // base64url (no padding)
 }
 
 export interface TicketWithKeyWrap extends TicketRecord {
@@ -130,9 +131,9 @@ function toRecordWithKeyWrap(row: {
   const keyWrap: TicketKeyWrap | null =
     ep && n && wk
       ? {
-          ephemeralPoint: ep.toString("base64"),
-          nonce: n.toString("base64"),
-          wrappedKey: wk.toString("base64"),
+          ephemeralPoint: encode(new Uint8Array(ep)),
+          nonce: encode(new Uint8Array(n)),
+          wrappedKey: encode(new Uint8Array(wk)),
         }
       : null;
   return { ...toRecord(row), keyWrap };

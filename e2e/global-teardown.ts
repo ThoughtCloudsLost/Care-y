@@ -1,18 +1,9 @@
 /**
  * Playwright global teardown.
  *
- * Kills the tRPC API server started by global-setup.
+ * No-op. Docker services stay running (started by `pnpm dev:setup`).
  */
 
 export default async function globalTeardown(): Promise<void> {
-  const pid = process.env.E2E_API_PID;
-  if (!pid) return;
-
-  console.log(`[e2e] Stopping tRPC server (PID ${pid})...`);
-
-  try {
-    process.kill(Number(pid), "SIGTERM");
-  } catch {
-    // Process already exited
-  }
+  // Docker services are managed externally. Nothing to clean up.
 }

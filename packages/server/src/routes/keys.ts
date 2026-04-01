@@ -13,7 +13,7 @@ import {
   passwordChangeKeysSchema,
 } from "@care-y/shared";
 import { encode } from "@care-y/crypto";
-import { router, authedProcedure } from "../trpc/trpc.js";
+import { router, authedProcedure, withErrorWrapping } from "../trpc/trpc.js";
 import { createKeyRotationService } from "../crypto/key-rotation.js";
 
 // care-y-ignore-next-line missing-return-type -- tRPC router() returns a deeply generic type that cannot be written explicitly
@@ -25,15 +25,15 @@ export function createKeysRouter() {
      * already exists (prevents salt replacement after initial setup).
      * Per crypto-architecture-v2.md Section 7 steps 9-10.
      */
-    initCryptoKeys: authedProcedure
-      .input(initCryptoKeysSchema)
-      .mutation(async ({ ctx, input }) => {
+    initCryptoKeys: authedProcedure.input(initCryptoKeysSchema).mutation(
+      withErrorWrapping(async ({ ctx, input }) => {
         const keyRotation = createKeyRotationService(ctx.org.tenantDb);
         const salt = Buffer.from(input.salt, "base64");
         const volPublic = Buffer.from(input.volPublic, "base64");
         await keyRotation.initCryptoKeys(ctx.session.userId, salt, volPublic);
         return { success: true as const };
       }),
+    ),
 
     /** Update volPublic on existing user_keys row (e.g. after password change). */
     uploadVolPublic: authedProcedure

@@ -42,6 +42,12 @@ import { buildRecipientList } from "../tickets/notification-recipients.js";
 import type { ShiftProvider } from "../tickets/shift-provider.js";
 import { createStubShiftProvider } from "../tickets/shift-provider.js";
 import {
+  generateContentKey,
+  encryptContent,
+  eciesEncrypt,
+  toRistrettoPoint,
+} from "@care-y/crypto";
+import {
   createTicketInputSchema,
   updateTicketInputSchema,
   ticketListInputSchema,
@@ -722,5 +728,156 @@ export function createTicketRouter(deps: TicketRouterDeps) {
 
     // --- Audit log query (manager+ only, injected by 5d wiring) ---
     ...(deps.createAuditSvc ? buildAuditRoutes(deps.createAuditSvc) : {}),
+
+    // --- Dev-only: seed test tickets with real ECIES key wraps ---
+    ...(process.env.NODE_ENV === "development"
+      ? {
+          devSeedTickets: volunteerProcedure.mutation(
+            withErrorWrapping(async ({ ctx }) => {
+              const tDb = ctx.org.tenantDb;
+
+              // 1. Look up vol_public for the current user
+              const userKeys = await tDb
+                .selectFrom("user_keys")
+                .select("vol_public")
+                .where("user_id", "=", ctx.user.id)
+                .executeTakeFirst();
+
+              if (!userKeys?.vol_public) {
+                throw new Error(
+                  "user_keys.vol_public not found. Run registerCrypto first.",
+                );
+              }
+
+              const volPublic = toRistrettoPoint(
+                new Uint8Array(userKeys.vol_public),
+              );
+
+              // 2. Fetch queue + clients (created by seed script)
+              const queue = await tDb
+                .selectFrom("queues")
+                .select("id")
+                .where("name", "=", "Intake")
+                .executeTakeFirstOrThrow();
+
+              const clients = await tDb
+                .selectFrom("clients")
+                .select(["id", "alias"])
+                .where("alias", "in", ["Sparrow", "Wren", "Finch", "Robin"])
+                .execute();
+
+              const clientMap = new Map(clients.map((c) => [c.alias, c.id]));
+
+              // 3. Ticket definitions
+              const ticketDefs = [
+                {
+                  clientAlias: "Sparrow",
+                  title: "Help with housing",
+                  description: "Client needs housing referral",
+                  assignedTo: ctx.user.id,
+                  onHold: false,
+                  withKeyWrap: true,
+                },
+                {
+                  clientAlias: "Wren",
+                  title: "Emergency referral needed",
+                  description: "Urgent case requiring immediate attention",
+                  assignedTo: null,
+                  onHold: false,
+                  withKeyWrap: true,
+                },
+                {
+                  clientAlias: "Finch",
+                  title: "Waiting for callback",
+                  description: "Client requested callback",
+                  assignedTo: ctx.user.id,
+                  onHold: true,
+                  withKeyWrap: true,
+                },
+                {
+                  clientAlias: "Robin",
+                  title: "Encrypted intake note",
+                  description: "Intake note from phone call",
+                  assignedTo: ctx.user.id,
+                  onHold: false,
+                  withKeyWrap: false, // Tests fallback
+                },
+              ];
+
+              const createdIds: string[] = [];
+              const encoder = new TextEncoder();
+
+              for (const def of ticketDefs) {
+                const clientId = clientMap.get(def.clientAlias);
+                if (clientId === undefined) {
+                  throw new Error(
+                    `Client "${def.clientAlias}" not found. Run seed first.`,
+                  );
+                }
+
+                // Idempotency: skip if ticket already exists for this client
+                const existing = await tDb
+                  .selectFrom("tickets")
+                  .select("id")
+                  .where("client_id", "=", clientId)
+                  .executeTakeFirst();
+
+                if (existing) {
+                  createdIds.push(existing.id);
+                  continue;
+                }
+
+                // Generate ticket key and encrypt content
+                const tk = generateContentKey();
+                const encryptedTitle = encryptContent(
+                  encoder.encode(def.title),
+                  tk,
+                );
+                const encryptedDescription = encryptContent(
+                  encoder.encode(def.description),
+                  tk,
+                );
+
+                const keyGeneration = crypto.randomUUID();
+
+                const ticket = await tDb
+                  .insertInto("tickets")
+                  .values({
+                    client_id: clientId,
+                    queue_id: queue.id,
+                    encrypted_title: Buffer.from(encryptedTitle),
+                    encrypted_description: Buffer.from(encryptedDescription),
+                    key_generation: keyGeneration,
+                    assigned_to: def.assignedTo,
+                    on_hold: def.onHold,
+                  })
+                  .returning("id")
+                  .executeTakeFirstOrThrow();
+
+                // Create ECIES key wrap (except ticket 4)
+                if (def.withKeyWrap) {
+                  const wrap = eciesEncrypt(tk, volPublic);
+                  await tDb
+                    .insertInto("ticket_key_wraps")
+                    .values({
+                      ticket_id: ticket.id,
+                      volunteer_id: ctx.user.id,
+                      key_generation: keyGeneration,
+                      ephemeral_point: Buffer.from(wrap.ephemeralPoint),
+                      nonce: Buffer.from(wrap.nonce),
+                      wrapped_key: Buffer.from(wrap.ciphertext),
+                      algorithm: "ecies-ristretto255-v1",
+                    })
+                    .execute();
+                }
+
+                createdIds.push(ticket.id);
+              }
+
+              return { ticketIds: createdIds };
+            }),
+          ),
+        }
+      : {}),
   });
 }
