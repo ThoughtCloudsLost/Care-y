@@ -293,5 +293,20 @@ export function createAuthRouter(deps: AuthRouterDeps) {
         return { success: true as const };
       }),
     ),
+
+    // Dev-only: mark the current session as 2FA-verified without completing
+    // a real 2FA challenge. Route does not exist in production builds.
+    ...(process.env.NODE_ENV === "development"
+      ? {
+          devBypass2fa: authedProcedure.mutation(
+            withErrorWrapping(async ({ ctx }) => {
+              // authedProcedure guarantees session and org are non-null.
+              const sessions = createTenantSessions(ctx.org, deps.tokenizer);
+              await sessions.markTwoFactorVerified(ctx.session.token);
+              return { success: true as const };
+            }),
+          ),
+        }
+      : {}),
   });
 }

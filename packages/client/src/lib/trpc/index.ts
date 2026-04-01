@@ -21,6 +21,9 @@ export const trpc: TRPCClient<AppRouter> = createTRPCClient<AppRouter>({
       // Vite proxy in dev (/trpc -> localhost:3000), Caddy route in prod.
       // Same-origin requests: no CORS, cookies work naturally.
       url: "/trpc",
+      // Dev: send X-Org-Slug header for org resolution (no subdomain in dev).
+      // import.meta.env.DEV is compile-time; Vite strips the header in prod builds.
+      headers: import.meta.env.DEV ? { "x-org-slug": "dev-org" } : undefined,
       // tRPC's RequestInitEsque has signal?: AbortSignal | undefined, incompatible
       // with native fetch's RequestInit under exactOptionalPropertyTypes (trpc/trpc#1904)
       async fetch(url, options) {
