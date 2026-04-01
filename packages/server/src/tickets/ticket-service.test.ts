@@ -342,4 +342,137 @@ describe.skipIf(!process.env.DATABASE_URL)("TicketService (DB)", () => {
       .execute();
     expect(followups.length).toBeGreaterThanOrEqual(1);
   });
+
+  // --- Key wrap read path ---
+
+  async function insertKeyWrap(
+    ticketId: string,
+    volunteerId: string,
+    keyGeneration: string,
+  ): Promise<{ ephemeralPoint: Buffer; nonce: Buffer; wrappedKey: Buffer }> {
+    const ephemeralPoint = crypto.randomBytes(32);
+    const nonce = crypto.randomBytes(24);
+    const wrappedKey = crypto.randomBytes(48);
+
+    // care-y-ignore-next-line no-plaintext-db-write -- test key wrap data, not real cryptographic material
+    await testDb.db
+      .insertInto("ticket_key_wraps")
+      .values({
+        ticket_id: ticketId,
+        volunteer_id: volunteerId,
+        key_generation: keyGeneration,
+        ephemeral_point: ephemeralPoint,
+        nonce,
+        wrapped_key: wrappedKey,
+        algorithm: "ecies-ristretto255-v1",
+      })
+      .execute();
+
+    return { ephemeralPoint, nonce, wrappedKey };
+  }
+
+  it("list returns keyWrap: null for tickets without a wrap row", async () => {
+    const { userId, ticketId } = await createTicketFixture();
+
+    const results = await svc.list(userId, { limit: 100 });
+    const ticket = results.find((t) => t.id === ticketId);
+
+    expect(ticket).toBeDefined();
+    expect(ticket!.keyWrap).toBeNull();
+  });
+
+  it("list returns populated keyWrap with correct base64 values", async () => {
+    const { userId, ticketId } = await createTicketFixture();
+
+    // Look up the ticket's key_generation for the wrap
+    const ticketRow = await testDb.db
+      .selectFrom("tickets")
+      .select("key_generation")
+      .where("id", "=", ticketId)
+      .executeTakeFirstOrThrow();
+
+    const buffers = await insertKeyWrap(
+      ticketId,
+      userId!,
+      ticketRow.key_generation,
+    );
+
+    const results = await svc.list(userId!, { limit: 100 });
+    const ticket = results.find((t) => t.id === ticketId);
+
+    expect(ticket).toBeDefined();
+    expect(ticket!.keyWrap).not.toBeNull();
+    expect(ticket!.keyWrap!.ephemeralPoint).toBe(
+      buffers.ephemeralPoint.toString("base64"),
+    );
+    expect(ticket!.keyWrap!.nonce).toBe(buffers.nonce.toString("base64"));
+    expect(ticket!.keyWrap!.wrappedKey).toBe(
+      buffers.wrappedKey.toString("base64"),
+    );
+  });
+
+  it("list does NOT return key wraps belonging to other volunteers", async () => {
+    const { userId, ticketId } = await createTicketFixture();
+
+    // Look up key_generation
+    const ticketRow = await testDb.db
+      .selectFrom("tickets")
+      .select("key_generation")
+      .where("id", "=", ticketId)
+      .executeTakeFirstOrThrow();
+
+    // Insert wrap for a different volunteer
+    const otherUser = await createTestUser(testDb.db);
+    await insertKeyWrap(ticketId, otherUser.id, ticketRow.key_generation);
+
+    // The requesting user should see keyWrap: null (wrap belongs to otherUser)
+    const results = await svc.list(userId!, { limit: 100 });
+    const ticket = results.find((t) => t.id === ticketId);
+
+    expect(ticket).toBeDefined();
+    expect(ticket!.keyWrap).toBeNull();
+  });
+
+  it("findById returns key wrap scoped to the requesting user", async () => {
+    const { userId, ticketId } = await createTicketFixture();
+
+    // Look up key_generation
+    const ticketRow = await testDb.db
+      .selectFrom("tickets")
+      .select("key_generation")
+      .where("id", "=", ticketId)
+      .executeTakeFirstOrThrow();
+
+    const buffers = await insertKeyWrap(
+      ticketId,
+      userId!,
+      ticketRow.key_generation,
+    );
+
+    const ticket = await svc.findById(ticketId, userId!);
+
+    expect(ticket.keyWrap).not.toBeNull();
+    expect(ticket.keyWrap!.ephemeralPoint).toBe(
+      buffers.ephemeralPoint.toString("base64"),
+    );
+    expect(ticket.keyWrap!.nonce).toBe(buffers.nonce.toString("base64"));
+    expect(ticket.keyWrap!.wrappedKey).toBe(
+      buffers.wrappedKey.toString("base64"),
+    );
+
+    // Another user requesting the same ticket should get null keyWrap
+    const otherUser = await createTestUser(testDb.db);
+    // Give otherUser queue access so findById's access check passes
+    await testDb.db
+      .insertInto("queue_assignments")
+      .values({
+        queue_id: ticket.queueId,
+        user_id: otherUser.id,
+      })
+      .onConflict((oc) => oc.columns(["queue_id", "user_id"]).doNothing())
+      .execute();
+
+    const otherResult = await svc.findById(ticketId, otherUser.id);
+    expect(otherResult.keyWrap).toBeNull();
+  });
 });
