@@ -137,5 +137,23 @@
   "tickets_filter_closed": "Closed",
 
   "empty_no_data": "Nothing here yet.",
-  "empty_no_results": "No results found."
+  "empty_no_results": "No results found.",
+
+  "dashboard_stat_my_open": "My Open",
+  "dashboard_stat_unassigned": "Unassigned",
+  "dashboard_stat_on_hold": "On Hold",
+  "dashboard_section_my_tickets": "My Tickets",
+  "dashboard_section_unassigned": "Needs Attention",
+  "dashboard_see_all": "See all ({count})",
+  "dashboard_empty_section": "Nothing here right now",
+  "dashboard_encrypted_ticket": "Encrypted ticket",
+  "dashboard_status_open": "Open",
+  "dashboard_status_closed": "Closed",
+  "dashboard_status_on_hold": "On Hold",
+  "dashboard_time_just_now": "Just now",
+  "dashboard_time_minutes_ago": "{count}m ago",
+  "dashboard_time_hours_ago": "{count}h ago",
+  "dashboard_time_days_ago": "{count}d ago",
+  "dashboard_exposure_title": "Security Summary",
+  "dashboard_exposure_subtitle": "Checking your protection status..."
 }
