@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
-import { render, screen, cleanup } from "@testing-library/svelte";
+import { render, screen, cleanup, fireEvent } from "@testing-library/svelte";
 import TicketPreviewList from "./TicketPreviewList.svelte";
 
 beforeEach(() => {
@@ -12,6 +12,8 @@ afterEach(() => {
   cleanup();
   vi.useRealTimers();
 });
+
+const ontickettap = vi.fn();
 
 function makeTicket(id: string, overrides?: Record<string, unknown>) {
   return {
@@ -29,14 +31,18 @@ function makeTicket(id: string, overrides?: Record<string, unknown>) {
 describe("TicketPreviewList", () => {
   it("shows EmptyState when tickets array is empty", () => {
     render(TicketPreviewList, {
-      props: { heading: "My Tickets", tickets: [] },
+      props: { heading: "My Tickets", tickets: [], ontickettap },
     });
     expect(screen.getByText("Nothing here right now")).toBeTruthy();
   });
 
   it("renders heading", () => {
     render(TicketPreviewList, {
-      props: { heading: "My Tickets", tickets: [makeTicket("1")] },
+      props: {
+        heading: "My Tickets",
+        tickets: [makeTicket("1")],
+        ontickettap,
+      },
     });
     expect(screen.getByText("My Tickets")).toBeTruthy();
   });
@@ -44,9 +50,8 @@ describe("TicketPreviewList", () => {
   it("renders correct number of ticket items", () => {
     const tickets = [makeTicket("1"), makeTicket("2"), makeTicket("3")];
     const { container } = render(TicketPreviewList, {
-      props: { heading: "Test", tickets },
+      props: { heading: "Test", tickets, ontickettap },
     });
-    // Each TicketPreviewItem renders a ListItem which becomes an <a> or <li>
     const items = container.querySelectorAll(".status-dot");
     expect(items.length).toBe(3);
   });
@@ -56,13 +61,14 @@ describe("TicketPreviewList", () => {
       makeTicket(String(i + 1)),
     );
     const { container } = render(TicketPreviewList, {
-      props: { heading: "Test", tickets, maxVisible: 3 },
+      props: { heading: "Test", tickets, maxVisible: 3, ontickettap },
     });
     const items = container.querySelectorAll(".status-dot");
     expect(items.length).toBe(3);
   });
 
-  it("shows 'see all' link when items exceed maxVisible and filterParam is set", () => {
+  it("shows 'see all' button when items exceed maxVisible and onseeall is set", () => {
+    const onseeall = vi.fn();
     const tickets = Array.from({ length: 8 }, (_, i) =>
       makeTicket(String(i + 1)),
     );
@@ -71,33 +77,53 @@ describe("TicketPreviewList", () => {
         heading: "Test",
         tickets,
         maxVisible: 3,
-        filterParam: "my-open",
+        onseeall,
+        ontickettap,
       },
     });
-    const link = screen.getByText("See all (8)");
-    expect(link).toBeTruthy();
-    expect(link.getAttribute("href")).toBe("/tickets?filter=my-open");
+    const button = screen.getByText("See all (8)");
+    expect(button).toBeTruthy();
+    expect(button.tagName).toBe("BUTTON");
   });
 
-  it("does not show 'see all' link when items fit within maxVisible", () => {
+  it("fires onseeall callback when 'see all' button is clicked", async () => {
+    const onseeall = vi.fn();
+    const tickets = Array.from({ length: 8 }, (_, i) =>
+      makeTicket(String(i + 1)),
+    );
+    render(TicketPreviewList, {
+      props: {
+        heading: "Test",
+        tickets,
+        maxVisible: 3,
+        onseeall,
+        ontickettap,
+      },
+    });
+    await fireEvent.click(screen.getByText("See all (8)"));
+    expect(onseeall).toHaveBeenCalledOnce();
+  });
+
+  it("does not show 'see all' button when items fit within maxVisible", () => {
     const tickets = [makeTicket("1"), makeTicket("2")];
     render(TicketPreviewList, {
       props: {
         heading: "Test",
         tickets,
         maxVisible: 5,
-        filterParam: "my-open",
+        onseeall: vi.fn(),
+        ontickettap,
       },
     });
     expect(screen.queryByText(/See all/)).toBeNull();
   });
 
-  it("does not show 'see all' link when filterParam is omitted", () => {
+  it("does not show 'see all' button when onseeall is omitted", () => {
     const tickets = Array.from({ length: 8 }, (_, i) =>
       makeTicket(String(i + 1)),
     );
     render(TicketPreviewList, {
-      props: { heading: "Test", tickets, maxVisible: 3 },
+      props: { heading: "Test", tickets, maxVisible: 3, ontickettap },
     });
     expect(screen.queryByText(/See all/)).toBeNull();
   });

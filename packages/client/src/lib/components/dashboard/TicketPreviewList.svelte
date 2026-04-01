@@ -19,26 +19,24 @@
     heading: string;
     /** Tickets to display */
     tickets: TicketPreviewItemProps[];
-    /** Maximum items to show before "see all" link */
+    /** Maximum items to show before "see all" button */
     maxVisible?: number;
-    /** Filter param for "see all" navigation */
-    filterParam?: string;
+    /** Callback when "see all" is tapped. Route file handles navigation. */
+    onseeall?: () => void;
+    /** Callback when a ticket item is tapped. Route file handles navigation. */
+    ontickettap: (ticketId: string) => void;
   }
 
   let {
     heading,
     tickets,
     maxVisible = 5,
-    filterParam,
+    onseeall,
+    ontickettap,
   }: TicketPreviewListProps = $props();
 
   const visibleTickets = $derived(tickets.slice(0, maxVisible));
   const hasMore = $derived(tickets.length > maxVisible);
-  const seeAllHref = $derived(
-    filterParam !== undefined
-      ? `/tickets?filter=${encodeURIComponent(filterParam)}`
-      : undefined,
-  );
 </script>
 
 <BlockTitle>{heading}</BlockTitle>
@@ -47,28 +45,28 @@
 {:else}
   <List strongIos outlineIos>
     {#each visibleTickets as ticket (ticket.ticketId)}
-      <TicketPreviewItem {...ticket} />
+      <TicketPreviewItem {...ticket} ontap={ontickettap} />
     {/each}
   </List>
-  {#if hasMore && seeAllHref}
-    <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- Static route with query param, not a dynamic SvelteKit route -->
-    <a href={seeAllHref} class="see-all-link">
+  {#if hasMore && onseeall !== undefined}
+    <button type="button" class="see-all-link" onclick={onseeall}>
       {m.dashboard_see_all({ count: tickets.length })}
-    </a>
+    </button>
   {/if}
 {/if}
 
 <style>
   .see-all-link {
     display: block;
+    width: 100%;
+    background: none;
+    border: none;
+    cursor: pointer;
     text-align: center;
     padding: 0.5rem;
     font-size: 0.8125rem;
     color: var(--brand-text);
-    text-decoration: none;
-  }
-
-  .see-all-link:hover {
-    text-decoration: underline;
+    font-family: inherit;
+    -webkit-tap-highlight-color: transparent;
   }
 </style>
