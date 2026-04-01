@@ -46,8 +46,8 @@
   }
 
   .stat-dot {
-    width: 0.5rem;
-    height: 0.5rem;
+    width: 0.25rem;
+    height: 0.25rem;
     border-radius: 50%;
     flex-shrink: 0;
   }

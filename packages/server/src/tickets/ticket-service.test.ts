@@ -22,6 +22,7 @@ import {
   MergeError,
 } from "../errors.js";
 import * as crypto from "node:crypto";
+import { encode, getSodium } from "@care-y/crypto";
 
 describe.skipIf(!process.env.DATABASE_URL)("TicketService (DB)", () => {
   let testDb: TestDb;
@@ -29,6 +30,7 @@ describe.skipIf(!process.env.DATABASE_URL)("TicketService (DB)", () => {
   let svc: TicketService;
 
   beforeAll(async () => {
+    await getSodium();
     testDb = await createTestDb();
     await seedOrgPublicKey(testDb.db);
     access = createTicketAccessChecker(testDb.db);
@@ -402,13 +404,19 @@ describe.skipIf(!process.env.DATABASE_URL)("TicketService (DB)", () => {
 
     expect(ticket).toBeDefined();
     expect(ticket!.keyWrap).not.toBeNull();
+    // Key wraps must use URL-safe base64 (no padding) to match @care-y/crypto's
+    // decode(). Standard base64 (+/=) breaks the crypto Worker's decryption.
     expect(ticket!.keyWrap!.ephemeralPoint).toBe(
-      buffers.ephemeralPoint.toString("base64"),
+      encode(new Uint8Array(buffers.ephemeralPoint)),
     );
-    expect(ticket!.keyWrap!.nonce).toBe(buffers.nonce.toString("base64"));
+    expect(ticket!.keyWrap!.nonce).toBe(encode(new Uint8Array(buffers.nonce)));
     expect(ticket!.keyWrap!.wrappedKey).toBe(
-      buffers.wrappedKey.toString("base64"),
+      encode(new Uint8Array(buffers.wrappedKey)),
     );
+    // Regression guard: must never contain standard base64 characters
+    expect(ticket!.keyWrap!.ephemeralPoint).not.toMatch(/[+/=]/);
+    expect(ticket!.keyWrap!.nonce).not.toMatch(/[+/=]/);
+    expect(ticket!.keyWrap!.wrappedKey).not.toMatch(/[+/=]/);
   });
 
   it("list does NOT return key wraps belonging to other volunteers", async () => {
@@ -453,12 +461,13 @@ describe.skipIf(!process.env.DATABASE_URL)("TicketService (DB)", () => {
 
     expect(ticket.keyWrap).not.toBeNull();
     expect(ticket.keyWrap!.ephemeralPoint).toBe(
-      buffers.ephemeralPoint.toString("base64"),
+      encode(new Uint8Array(buffers.ephemeralPoint)),
     );
-    expect(ticket.keyWrap!.nonce).toBe(buffers.nonce.toString("base64"));
+    expect(ticket.keyWrap!.nonce).toBe(encode(new Uint8Array(buffers.nonce)));
     expect(ticket.keyWrap!.wrappedKey).toBe(
-      buffers.wrappedKey.toString("base64"),
+      encode(new Uint8Array(buffers.wrappedKey)),
     );
+    expect(ticket.keyWrap!.ephemeralPoint).not.toMatch(/[+/=]/);
 
     // Another user requesting the same ticket should get null keyWrap
     const otherUser = await createTestUser(testDb.db);

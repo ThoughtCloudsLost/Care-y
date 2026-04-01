@@ -97,47 +97,50 @@
         </Link>
       {/if}
     {/snippet}
-    <div
-      bind:this={searchContainerEl}
-      class="search-overlay"
-      class:search-overlay-open={searchOpen}
-    >
-      <Searchbar
-        bind:value={searchQuery}
-        disableButton
-        onDisable={closeSearch}
-        onClear={() => (searchQuery = "")}
-      />
-    </div>
+    {#if searchOpen}
+      <div
+        bind:this={searchContainerEl}
+        class="search-overlay search-overlay-open"
+      >
+        <Searchbar
+          bind:value={searchQuery}
+          disableButton
+          onDisable={closeSearch}
+          onClear={() => (searchQuery = "")}
+        />
+      </div>
+    {/if}
   </Navbar>
 
-  <Toolbar tabbar tabbarIcons class="left-0 bottom-0 fixed">
-    <ToolbarPane role="tablist" aria-label={m.nav_main()}>
-      {#each allTabs as tab (tab.id)}
-        <TabbarLink
-          active={activeTab === tab.id}
-          onclick={() => ontabchange(tab.id)}
-          role="tab"
-          aria-label={tab.label()}
-          aria-selected={activeTab === tab.id}
-          colors={{
-            textActiveIos: "text-[var(--brand-text)]",
-            textActiveMaterial: "text-[var(--brand-text)]",
-          }}
-        >
-          {#snippet icon()}{@const Icon = tab.icon}<Icon
-              size={24}
-              aria-hidden="true"
-            />{/snippet}
-        </TabbarLink>
-      {/each}
-    </ToolbarPane>
-    <ToolbarPane tabbar={false}>
-      <Link iconOnly aria-label={m.nav_more()}>
-        <Ellipsis size={24} aria-hidden="true" />
-      </Link>
-    </ToolbarPane>
-  </Toolbar>
+  <nav aria-label={m.nav_main()}>
+    <Toolbar tabbar tabbarIcons class="native-tabbar left-0 bottom-0 fixed">
+      <ToolbarPane role="tablist" aria-label={m.nav_main()}>
+        {#each allTabs as tab (tab.id)}
+          <TabbarLink
+            active={activeTab === tab.id}
+            onclick={() => ontabchange(tab.id)}
+            role="tab"
+            aria-label={tab.label()}
+            aria-selected={activeTab === tab.id}
+            colors={{
+              textActiveIos: "text-[var(--brand-text)]",
+              textActiveMaterial: "text-[var(--brand-text)]",
+            }}
+          >
+            {#snippet icon()}{@const Icon = tab.icon}<Icon
+                size={24}
+                aria-hidden="true"
+              />{/snippet}
+          </TabbarLink>
+        {/each}
+      </ToolbarPane>
+      <ToolbarPane tabbar={false}>
+        <Link iconOnly aria-label={m.nav_more()}>
+          <Ellipsis size={24} aria-hidden="true" />
+        </Link>
+      </ToolbarPane>
+    </Toolbar>
+  </nav>
 
   <main id="main-content" class="main-content">
     {@render children()}
@@ -145,8 +148,20 @@
 </Page>
 
 <style>
+  /* Override Konsta's pb-safe-4 (safe-area + 16px) to match native iOS tab bar
+     positioning. Native tab bars use only the safe-area inset, no extra padding. */
+  :global(.native-tabbar.k-toolbar) {
+    padding-bottom: var(--k-safe-area-bottom) !important;
+  }
+
+  /* The bg layer uses calc(safe-area + 16px + 48px + 16px) = safe-area + 80px.
+     Native height is safe-area + 48px (icons-only tabbar). */
+  :global(.native-tabbar.k-toolbar > div:first-child) {
+    height: calc(var(--k-safe-area-bottom) + 48px) !important;
+  }
+
   .main-content {
-    padding-bottom: calc(5rem + env(safe-area-inset-bottom, 0px));
+    padding-bottom: calc(3rem + env(safe-area-inset-bottom, 0px));
   }
 
   .navbar-avatar {

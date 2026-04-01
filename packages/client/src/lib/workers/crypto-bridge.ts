@@ -81,6 +81,24 @@ export class CryptoBridge {
     worker.onmessage = (e: MessageEvent<WorkerResponse>) => {
       this.handleResponse(e.data);
     };
+    worker.onerror = (e: ErrorEvent) => {
+      console.error(
+        "[CryptoBridge] Worker error:",
+        e.message,
+        e.filename,
+        e.lineno,
+      );
+      // Reject all pending requests so callers don't hang forever
+      for (const [, entry] of this.pending) {
+        entry.reject(
+          new CryptoWorkerError(
+            `Worker failed to load: ${e.message}`,
+            "WORKER_ERROR",
+          ),
+        );
+      }
+      this.pending.clear();
+    };
     this.readyPromise = this.sendRequest({ type: "init" }).then(() => {
       this.state = "READY";
     });

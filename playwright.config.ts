@@ -10,23 +10,27 @@ export default defineConfig({
   globalSetup: "./e2e/global-setup.ts",
   globalTeardown: "./e2e/global-teardown.ts",
   use: {
-    baseURL: "http://localhost:5173",
+    baseURL: "http://localhost:5174",
     trace: "on-first-retry",
   },
   projects: [
+    {
+      name: "chromium",
+      use: { ...devices["Desktop Chrome"] },
+    },
     {
       name: "firefox",
       use: { ...devices["Desktop Firefox"] },
     },
     {
-      name: "firefox-mobile",
-      use: { ...devices["iPhone 13"], defaultBrowserType: "firefox" },
+      name: "webkit-mobile",
+      use: { ...devices["iPhone 13"] },
     },
   ],
   webServer: {
-    command: "pnpm --filter @care-y/client dev",
-    url: "http://localhost:5173",
-    reuseExistingServer: !process.env.CI,
-    timeout: 60_000,
+    command: "pnpm --filter @care-y/client exec vite dev --port 5174",
+    url: "http://localhost:5174",
+    reuseExistingServer: false,
+    timeout: 120_000,
   },
 });

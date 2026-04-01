@@ -72,5 +72,9 @@ console.log(`
     Dev org:  dev-org
     Admin:    admin.dev / dev-password-1234!
 
-    Start client: pnpm --filter @care-y/client dev
+    Seeded: org, admin user, phone, Intake queue, 4 clients (Sparrow/Wren/Finch/Robin)
+    Crypto + tickets are created by auto-login on first browser page load.
+
+    Start client:  pnpm --filter @care-y/client dev
+    Run E2E tests: npx playwright test
 `);

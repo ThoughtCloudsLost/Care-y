@@ -148,6 +148,7 @@ async function seed(): Promise<void> {
     orgId,
   );
 
+  let adminUserId: string;
   try {
     const user = await authService.register({
       identifier: ADMIN_IDENTIFIER,
@@ -155,13 +156,119 @@ async function seed(): Promise<void> {
       displayName: ADMIN_DISPLAY_NAME,
       roleId: ADMIN_ROLE_ID,
     });
+    adminUserId = user.id;
     console.log(`Created admin user "${ADMIN_IDENTIFIER}" (${user.id})`);
   } catch (err) {
     if (err instanceof ConflictError) {
-      console.log(`User "${ADMIN_IDENTIFIER}" already exists, skipping.`);
+      const identifierHash = indexer.hash(ADMIN_IDENTIFIER, orgId);
+      const existing = await tenantDatabase
+        .selectFrom("users")
+        .select("id")
+        .where("identifier_hash", "=", identifierHash)
+        .where("is_active", "=", true)
+        .executeTakeFirst();
+      if (!existing) {
+        console.error(
+          "User conflict but identifier not found. Database may be inconsistent.",
+        );
+        process.exit(1);
+      }
+      adminUserId = existing.id;
+      console.log(
+        `User "${ADMIN_IDENTIFIER}" already exists (${adminUserId}), skipping.`,
+      );
     } else {
       console.error("Failed to create admin user:", extractErrorMessage(err));
       process.exit(1);
+    }
+  }
+
+  // --- Seed structural data (phone, queue, queue assignment, clients) ---
+  // No crypto here. Tickets and key wraps are created later by the browser
+  // (registerCrypto + loginCrypto) and server (devSeedTickets).
+
+  // Phone record (encrypted via OPS_SECRETS_KEY field encryption)
+  let phoneId: string;
+  const existingPhone = await tenantDatabase
+    .selectFrom("phones")
+    .select("id")
+    .where("phone_hash", "=", indexer.hash("+15550001234", orgId))
+    .executeTakeFirst();
+
+  if (existingPhone) {
+    phoneId = existingPhone.id;
+    console.log("Phone record already exists, skipping.");
+  } else {
+    const inserted = await tenantDatabase
+      .insertInto("phones")
+      .values({
+        phone_hash: indexer.hash("+15550001234", orgId),
+        encrypted_number: encryptor.encrypt("+15550001234"),
+        locale: "en",
+      })
+      .returning("id")
+      .executeTakeFirstOrThrow();
+    phoneId = inserted.id;
+    console.log(`Created phone record (${phoneId})`);
+  }
+
+  // Queue: "Intake"
+  let queueId: string;
+  const existingQueue = await tenantDatabase
+    .selectFrom("queues")
+    .select("id")
+    .where("name", "=", "Intake")
+    .executeTakeFirst();
+
+  if (existingQueue) {
+    queueId = existingQueue.id;
+    console.log("Queue 'Intake' already exists, skipping.");
+  } else {
+    const inserted = await tenantDatabase
+      .insertInto("queues")
+      .values({ name: "Intake" })
+      .returning("id")
+      .executeTakeFirstOrThrow();
+    queueId = inserted.id;
+    console.log(`Created queue "Intake" (${queueId})`);
+  }
+
+  // Queue assignment: admin -> Intake
+  const existingAssignment = await tenantDatabase
+    .selectFrom("queue_assignments")
+    .select("queue_id")
+    .where("queue_id", "=", queueId)
+    .where("user_id", "=", adminUserId)
+    .executeTakeFirst();
+
+  if (existingAssignment) {
+    console.log("Queue assignment already exists, skipping.");
+  } else {
+    await tenantDatabase
+      .insertInto("queue_assignments")
+      .values({ queue_id: queueId, user_id: adminUserId })
+      .execute();
+    console.log("Assigned admin to Intake queue.");
+  }
+
+  // Clients: Sparrow, Wren, Finch, Robin
+  const clientAliases = ["Sparrow", "Wren", "Finch", "Robin"];
+  for (const alias of clientAliases) {
+    const existingClient = await tenantDatabase
+      .selectFrom("clients")
+      .select("id")
+      .where("alias", "=", alias)
+      .executeTakeFirst();
+
+    if (existingClient) {
+      console.log(`Client "${alias}" already exists, skipping.`);
+    } else {
+      const inserted = await tenantDatabase
+        .insertInto("clients")
+        .values({ alias, phone_id: phoneId })
+        .returning("id")
+        .executeTakeFirstOrThrow();
+      console.log(`Created client "${alias}" (${inserted.id})`);
     }
   }
 
