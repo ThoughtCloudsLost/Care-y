@@ -146,6 +146,12 @@
     overflow: hidden;
   }
 
+  /* Remove iOS rubber-band bounce on the scroll container.
+     overscroll-behavior on html/body does not cover inner scroll containers. */
+  :global(.k-page) {
+    overscroll-behavior-y: none;
+  }
+
   /* Dark mode: paper texture on the page canvas.
      TODO: Replace with scanned dark paper stock texture.
      Cards sit above (Konsta Block has z-10). */
