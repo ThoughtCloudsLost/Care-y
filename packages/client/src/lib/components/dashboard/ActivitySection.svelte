@@ -84,10 +84,16 @@
             role="button"
             tabindex="0"
             onclick={() => item.ticketId !== null && ontap?.(item.ticketId)}
-            onkeydown={(e) =>
-              e.key === "Enter" &&
-              item.ticketId !== null &&
-              ontap?.(item.ticketId)}
+            aria-disabled={item.ticketId === null}
+            onkeydown={(e) => {
+              if (
+                (e.key === "Enter" || e.key === " ") &&
+                item.ticketId !== null
+              ) {
+                if (e.key === " ") e.preventDefault();
+                ontap?.(item.ticketId);
+              }
+            }}
           >
             <span class="activity-icon-gutter" aria-hidden="true">
               <EventIcon size={13} />

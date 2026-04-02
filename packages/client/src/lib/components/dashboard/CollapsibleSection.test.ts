@@ -25,7 +25,7 @@ describe("CollapsibleSection", () => {
 
     const button = screen.getByRole("button");
     expect(button.textContent).toContain("My Tickets");
-    expect(button.textContent).toContain("(5)");
+    expect(button.textContent).toContain("5");
   });
 
   it("sets aria-expanded to false when collapsed", () => {

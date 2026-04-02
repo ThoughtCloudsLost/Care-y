@@ -1,14 +1,17 @@
 <script lang="ts">
   import { browser } from "$app/environment";
+  import { createQuery } from "@tanstack/svelte-query";
   import { CryptoBridge } from "$lib/workers/crypto-bridge.js";
   import { OrgKeyManager } from "$lib/crypto/org-key.js";
   import { OrgDecryptCache } from "$lib/crypto/org-decrypt-cache.js";
   import { TicketDecryptCache } from "$lib/crypto/ticket-decrypt-cache.js";
+  import { trpc } from "$lib/trpc/index.js";
   import {
     setCryptoBridge,
     setOrgKeyManager,
     setOrgDecryptCache,
     setTicketDecryptCache,
+    setCurrentUserId,
   } from "$lib/crypto/context.js";
 
   let { children } = $props();
@@ -35,6 +38,15 @@
     setOrgDecryptCache(new OrgDecryptCache(orgKeyManager));
     setTicketDecryptCache(new TicketDecryptCache(bridge));
   }
+
+  // Current user identity, shared to all authenticated pages via context.
+  const meQuery = createQuery(() => ({
+    queryKey: ["auth", "me"],
+    queryFn: async () => trpc.auth.me.query(),
+    staleTime: Infinity,
+  }));
+  const currentUserId = $derived(meQuery.data?.user.id);
+  setCurrentUserId(() => currentUserId);
 
   // Dev-only auto-login with full production crypto pipeline.
   // Runs registerCrypto + loginCrypto + devSeedTickets so the Worker

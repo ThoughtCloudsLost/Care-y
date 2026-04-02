@@ -89,7 +89,14 @@
   }
 </script>
 
-<ListItem link chevron={false} onclick={() => ontap(ticketId)}>
+<ListItem
+  link
+  chevron={false}
+  tabindex={0}
+  role="button"
+  class="touch-feedback"
+  onclick={() => ontap(ticketId)}
+>
   {#snippet inner()}
     {@const PriorityIcon = priorityDef.icon}
     <div class="item-layout">

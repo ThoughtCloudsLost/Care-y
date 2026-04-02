@@ -1,12 +1,21 @@
 <script lang="ts">
   import { BlockTitle } from "konsta/svelte";
   import { slide } from "svelte/transition";
+  import { browser } from "$app/environment";
   import type { Snippet, Component } from "svelte";
 
-  const reducedMotion =
-    typeof window !== "undefined" &&
-    typeof window.matchMedia === "function" &&
-    window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  let reducedMotion = $state(false);
+
+  $effect(() => {
+    if (!browser) return;
+    const mql = window.matchMedia("(prefers-reduced-motion: reduce)");
+    reducedMotion = mql.matches;
+    const handler = (e: MediaQueryListEvent) => {
+      reducedMotion = e.matches;
+    };
+    mql.addEventListener("change", handler);
+    return () => mql.removeEventListener("change", handler);
+  });
 
   interface CollapsibleSectionProps {
     /** Section heading text */

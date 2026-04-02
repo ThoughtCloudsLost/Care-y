@@ -1,12 +1,12 @@
 /**
- * Typed Svelte 5 context pairs for crypto singletons.
+ * Typed Svelte 5 context pairs for crypto singletons and auth state.
  *
  * Each pair is created via createContext<T>() (Svelte 5.40+), which
  * returns a [getter, setter] tuple. The getter throws if context was
  * not set by a parent component, failing fast if a page renders
  * outside the (app) layout.
  *
- * All four contexts are set in (app)/+layout.svelte and available to
+ * All contexts are set in (app)/+layout.svelte and available to
  * every authenticated route via the getter functions.
  */
 
@@ -26,3 +26,6 @@ export const [getOrgDecryptCache, setOrgDecryptCache] =
 
 export const [getTicketDecryptCache, setTicketDecryptCache] =
   createContext<TicketDecryptCache>();
+
+export const [getCurrentUserId, setCurrentUserId] =
+  createContext<() => string | undefined>();

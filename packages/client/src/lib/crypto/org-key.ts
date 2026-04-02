@@ -34,6 +34,7 @@ export class OrgKeyNotLoadedError extends Error {
 // It is never sent to the server. The server holds only the ECIES-wrapped blob (wrapped_org_keys table).
 export class OrgKeyManager {
   private orgSecret: Uint8Array | null = null;
+  private orgPublicKey: Uint8Array | null = null;
 
   /**
    * Load the org secret key from a buffer.
@@ -44,12 +45,16 @@ export class OrgKeyManager {
    * the unwrapped org key back to the main thread.
    */
   load(orgKeyBuffer: ArrayBufferLike): void {
+    const sodium = requireSodium();
     if (this.orgSecret) {
       // Zero the previous key before replacing (e.g., re-login without logout)
-      const sodium = requireSodium();
       sodium.memzero(this.orgSecret);
     }
+    if (this.orgPublicKey) {
+      sodium.memzero(this.orgPublicKey);
+    }
     this.orgSecret = new Uint8Array(orgKeyBuffer);
+    this.orgPublicKey = sodium.crypto_scalarmult_base(this.orgSecret);
   }
 
   /**
@@ -60,25 +65,30 @@ export class OrgKeyManager {
    * (Curve25519 base point multiplication). The derived pk is zeroed after use.
    */
   decrypt(ciphertext: Uint8Array): Uint8Array {
-    if (!this.orgSecret) {
+    if (!this.orgSecret || !this.orgPublicKey) {
       throw new OrgKeyNotLoadedError();
     }
 
     const sodium = requireSodium();
-    const pk = sodium.crypto_scalarmult_base(this.orgSecret);
-    try {
-      return sodium.crypto_box_seal_open(ciphertext, pk, this.orgSecret);
-    } finally {
-      sodium.memzero(pk);
-    }
+    return sodium.crypto_box_seal_open(
+      ciphertext,
+      this.orgPublicKey,
+      this.orgSecret,
+    );
   }
 
   /** Zero the org secret key. Idempotent (safe to call multiple times). */
   zero(): void {
-    if (this.orgSecret) {
+    if (this.orgSecret || this.orgPublicKey) {
       const sodium = requireSodium();
-      sodium.memzero(this.orgSecret);
-      this.orgSecret = null;
+      if (this.orgPublicKey) {
+        sodium.memzero(this.orgPublicKey);
+        this.orgPublicKey = null;
+      }
+      if (this.orgSecret) {
+        sodium.memzero(this.orgSecret);
+        this.orgSecret = null;
+      }
     }
   }
 

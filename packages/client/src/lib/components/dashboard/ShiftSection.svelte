@@ -104,7 +104,7 @@
 
     {#if shift && shift.volunteers.length > 0}
       <div class="shift-volunteers">
-        {#each shift.volunteers as vol (vol.initials)}
+        {#each shift.volunteers as vol, i (`${vol.initials}${String(i)}`)}
           <span class="vol-chip" class:vol-chip-you={vol.isCurrentUser}>
             {vol.initials}
           </span>

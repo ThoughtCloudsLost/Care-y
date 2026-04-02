@@ -86,6 +86,7 @@ vi.mock("$lib/crypto/context.js", () => ({
     clear: vi.fn(),
     size: 0,
   }),
+  getCurrentUserId: () => () => "user-001",
 }));
 
 // --- Helpers ---
@@ -119,22 +120,7 @@ function makeTicket(overrides: Record<string, unknown> = {}) {
   };
 }
 
-const meQuerySuccess = {
-  isLoading: false,
-  isError: false,
-  error: null,
-  data: {
-    user: {
-      id: USER_ID,
-      identifier: "vol1",
-      encryptedDisplayName: "",
-      roleId: "volunteer",
-    },
-  },
-};
-
 function buildQueryStates(
-  meQuery: Record<string, unknown>,
   ticketsQuery: Record<string, unknown>,
   overrides?: {
     activity?: Record<string, unknown>;
@@ -144,7 +130,6 @@ function buildQueryStates(
   },
 ): Array<Record<string, unknown>> {
   return [
-    meQuery,
     ticketsQuery,
     overrides?.activity ?? emptyDataQuery,
     overrides?.queues ?? emptyDataQuery,
@@ -181,7 +166,7 @@ describe("Dashboard page", () => {
       makeTicket({ assignedTo: USER_ID }),
       makeTicket({ assignedTo: null }),
     ];
-    queryStates = buildQueryStates(meQuerySuccess, {
+    queryStates = buildQueryStates({
       isLoading: false,
       isError: false,
       error: null,
@@ -193,7 +178,7 @@ describe("Dashboard page", () => {
   });
 
   it("renders skeleton during loading", () => {
-    queryStates = buildQueryStates(meQuerySuccess, {
+    queryStates = buildQueryStates({
       isLoading: true,
       isError: false,
       error: null,
@@ -205,7 +190,7 @@ describe("Dashboard page", () => {
   });
 
   it("renders error message on query failure", () => {
-    queryStates = buildQueryStates(meQuerySuccess, {
+    queryStates = buildQueryStates({
       isLoading: false,
       isError: true,
       error: new Error("UNKNOWN"),
@@ -219,7 +204,7 @@ describe("Dashboard page", () => {
   });
 
   it("renders all section headers when data is present", () => {
-    queryStates = buildQueryStates(meQuerySuccess, {
+    queryStates = buildQueryStates({
       isLoading: false,
       isError: false,
       error: null,

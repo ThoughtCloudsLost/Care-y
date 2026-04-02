@@ -73,8 +73,13 @@ export class TicketDecryptCache {
       .then((plaintext) => {
         this.cache.set(ticketId, plaintext);
       })
-      .catch(() => {
-        // Decryption failure: title stays undefined (shows placeholder).
+      .catch((err: unknown) => {
+        if (import.meta.env.DEV) {
+          console.warn(
+            `[TicketDecryptCache] decrypt failed for ${ticketId}:`,
+            err,
+          );
+        }
       })
       .finally(() => {
         this.pending.delete(ticketId);
