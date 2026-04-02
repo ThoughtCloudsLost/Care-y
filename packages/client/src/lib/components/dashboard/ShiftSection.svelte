@@ -1,6 +1,6 @@
 <script lang="ts">
   import { SvelteDate } from "svelte/reactivity";
-  import { Clock, Users } from "@lucide/svelte";
+  import { CalendarDays } from "@lucide/svelte";
   import * as m from "$lib/paraglide/messages.js";
   import CollapsibleSection from "./CollapsibleSection.svelte";
 
@@ -92,29 +92,23 @@
 
 <CollapsibleSection
   heading={m.dashboard_shift_heading()}
-  count={shift?.volunteersOnShift ?? 0}
+  icon={CalendarDays}
+  iconColor="var(--brand-accent)"
   {expanded}
   {ontoggle}
 >
   <div class="shift-content">
     <div class="shift-time">
-      <Clock size={14} aria-hidden="true" class="shift-icon" />
       <span>{timeDisplay}</span>
     </div>
 
     {#if shift && shift.volunteers.length > 0}
       <div class="shift-volunteers">
-        <Users size={14} aria-hidden="true" class="shift-icon" />
-        <span class="volunteer-list">
-          {#each shift.volunteers as vol, i (vol.initials)}
-            {#if i > 0}<span class="vol-sep"> · </span>{/if}
-            <span class="vol-name" class:vol-you={vol.isCurrentUser}>
-              {vol.initials}{#if vol.isCurrentUser}
-                <span class="you-label"> {m.dashboard_shift_you()}</span>
-              {/if}
-            </span>
-          {/each}
-        </span>
+        {#each shift.volunteers as vol (vol.initials)}
+          <span class="vol-chip" class:vol-chip-you={vol.isCurrentUser}>
+            {vol.initials}
+          </span>
+        {/each}
       </div>
     {/if}
   </div>
@@ -124,41 +118,37 @@
   .shift-content {
     display: flex;
     flex-direction: column;
-    gap: 0.375rem;
-    padding: 0 1rem 0.5rem;
+    gap: 0.5rem;
+    padding: 0 0.75rem 0.625rem;
     font-size: 0.8125rem;
   }
 
-  .shift-time,
+  .shift-time {
+    color: var(--muted);
+    font-size: 0.8125rem;
+  }
+
   .shift-volunteers {
     display: flex;
+    flex-wrap: wrap;
+    gap: 0.375rem;
+  }
+
+  .vol-chip {
+    display: inline-flex;
     align-items: center;
-    gap: 0.5rem;
-    color: var(--ink);
-  }
-
-  .shift-content :global(.shift-icon) {
-    flex-shrink: 0;
-    color: var(--muted);
-  }
-
-  .volunteer-list {
-    color: var(--muted);
+    gap: 0.25rem;
+    padding: 0.1875rem 0.5rem;
+    border-radius: 999px;
+    background: var(--surface-1);
     font-size: 0.75rem;
-  }
-
-  .vol-sep {
-    opacity: 0.4;
-  }
-
-  .vol-you {
-    color: var(--ink);
     font-weight: 500;
+    color: var(--muted);
+    white-space: nowrap;
   }
 
-  .you-label {
-    font-weight: 400;
-    opacity: 0.6;
-    font-size: 0.6875rem;
+  .vol-chip-you {
+    color: var(--ink);
+    background: color-mix(in srgb, var(--brand-accent) 15%, var(--surface-1));
   }
 </style>

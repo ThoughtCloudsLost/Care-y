@@ -111,7 +111,9 @@
   }
 
   function onTouchMove(e: TouchEvent): void {
-    const dy = e.touches[0].clientY - startY;
+    const touch = e.touches[0];
+    if (!touch) return;
+    const dy = touch.clientY - startY;
 
     if (dy <= 0) {
       // Scrolling up or lateral -- bail out of PTR tracking
@@ -170,7 +172,9 @@
     const scrollEl = document.querySelector<HTMLElement>(".k-page");
     if (!scrollEl || scrollEl.scrollTop > 0) return;
 
-    startY = e.touches[0].clientY;
+    const touch = e.touches[0];
+    if (!touch) return;
+    startY = touch.clientY;
 
     // Dynamically attach blocking listeners to window only now
     const moveOpts: AddEventListenerOptions = { passive: false };
@@ -222,7 +226,7 @@
   const indicatorTop = $derived(
     ptrPhase === "idle"
       ? "-40px"
-      : `calc(env(safe-area-inset-top, 0px) + ${NAVBAR_H + Math.round(ptrPullY * 0.2) + 8}px)`,
+      : `calc(env(safe-area-inset-top, 0px) + ${String(NAVBAR_H + Math.round(ptrPullY * 0.2) + 8)}px)`,
   );
 </script>
 

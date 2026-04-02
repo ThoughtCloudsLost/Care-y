@@ -168,7 +168,6 @@
   "dashboard_shift_ended": "Shift ended ({start} - {end})",
   "dashboard_shift_not_started": "Starts in {time} ({start} - {end})",
   "dashboard_shift_volunteers": "{count} on shift",
-  "dashboard_shift_you": "(you)",
   "dashboard_shift_no_shift": "No active shift",
 
   "dashboard_queues_heading": "Queues",

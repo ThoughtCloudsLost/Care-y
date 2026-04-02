@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Card } from "konsta/svelte";
+  import { Layers } from "@lucide/svelte";
   import * as m from "$lib/paraglide/messages.js";
   import CollapsibleSection from "./CollapsibleSection.svelte";
 
@@ -21,7 +21,8 @@
 
 <CollapsibleSection
   heading={m.dashboard_queues_heading()}
-  count={queues.length}
+  icon={Layers}
+  iconColor="var(--brand-accent)"
   {expanded}
   {ontoggle}
 >
@@ -31,22 +32,19 @@
       style:grid-template-columns="repeat({Math.min(queues.length, 3)}, 1fr)"
     >
       {#each queues as queue (queue.id)}
-        <Card
-          raised
-          component="button"
+        <button
+          type="button"
+          class="queue-tile"
           aria-label="{queue.name}, {m.dashboard_queues_open_count({
             count: queue.openCount,
           })}"
           onclick={() => ontap(queue.id, queue.name)}
-          class="queue-card card-elevated touch-feedback"
         >
-          <div class="queue-inner">
-            <span class="queue-name">{queue.name}</span>
-            <span class="queue-count"
-              >{m.dashboard_queues_open_count({ count: queue.openCount })}</span
-            >
-          </div>
-        </Card>
+          <span class="queue-name">{queue.name}</span>
+          <span class="queue-count"
+            >{m.dashboard_queues_open_count({ count: queue.openCount })}</span
+          >
+        </button>
       {/each}
     </div>
   {:else}
@@ -57,25 +55,28 @@
 <style>
   .queue-grid {
     display: grid;
-    gap: 0;
-    padding: 0;
+    gap: 0.5rem;
+    padding: 0.25rem 0.75rem 0.5rem;
   }
 
-  .queue-grid :global(.k-card) {
-    margin-left: 0.25rem;
-    margin-right: 0.25rem;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-  }
-
-  .queue-inner {
+  .queue-tile {
     display: flex;
     flex-direction: column;
     align-items: center;
+    justify-content: center;
     gap: 0.125rem;
-    padding: 0.625rem 0.25rem;
+    padding: 0.875rem 0.25rem;
     text-align: center;
+    background: var(--surface-1);
+    border-radius: var(--card-radius, 0.75rem);
+    border: none;
+    cursor: pointer;
+    font-family: inherit;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .queue-tile:active {
+    opacity: 0.7;
   }
 
   .queue-name {
@@ -94,7 +95,7 @@
   }
 
   .no-queues {
-    padding: 0 1rem 0.5rem;
+    padding: 0 0.75rem 0.5rem;
     font-size: 0.8125rem;
     color: var(--muted);
   }
