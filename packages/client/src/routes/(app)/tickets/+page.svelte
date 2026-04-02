@@ -196,7 +196,7 @@
 
 <div class="queue-page">
   <div class="queue-header">
-    <BlockTitle large class="!m-0 !pl-0">{m.tickets_title()}</BlockTitle>
+    <BlockTitle large class="m-0! pl-0!">{m.tickets_title()}</BlockTitle>
     <div class="stats-row">
       <span
         >&#9679; {MOCK_TICKETS.filter((t) => t.status === "new").length}
@@ -260,7 +260,7 @@
         contentWrap={false}
         component="button"
         aria-label={m.tickets_open({ alias: ticket.alias })}
-        class="card-elevated touch-feedback !m-0 !mx-0"
+        class="card-elevated touch-feedback m-0! mx-0!"
       >
         <div class="card-inner">
           <div class="card-header-row">
@@ -280,11 +280,11 @@
           <div class="card-footer-row">
             <Chip
               outline
-              class="card-chip !m-0"
+              class="card-chip m-0!"
               style="color: {priorityColor(ticket.priority)}"
               >{ticket.priority}</Chip
             >
-            <Chip outline class="card-chip !m-0">{ticket.category}</Chip>
+            <Chip outline class="card-chip m-0!">{ticket.category}</Chip>
           </div>
         </div>
       </Card>
