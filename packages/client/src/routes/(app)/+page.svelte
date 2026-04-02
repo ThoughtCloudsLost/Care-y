@@ -8,6 +8,7 @@
   import { trpc } from "$lib/trpc/index.js";
   import type { CryptoBridge } from "$lib/workers/crypto-bridge.js";
   import type { TicketPreviewItemProps } from "$lib/components/dashboard/types.js";
+  import { Ticket, TicketMinus } from "@lucide/svelte";
   import TicketPreviewList from "$lib/components/dashboard/TicketPreviewList.svelte";
   import CollapsibleSection from "$lib/components/dashboard/CollapsibleSection.svelte";
   import ShiftSection from "$lib/components/dashboard/ShiftSection.svelte";
@@ -15,6 +16,8 @@
   import ActivitySection from "$lib/components/dashboard/ActivitySection.svelte";
   import KBSection from "$lib/components/dashboard/KBSection.svelte";
   import QueryLoader from "$lib/components/QueryLoader.svelte";
+  import TicketAlert from "$lib/components/icons/TicketAlert.svelte";
+  import TicketPause from "$lib/components/icons/TicketPause.svelte";
   import { serializedBufferToBase64 } from "$lib/utils/buffer-encoding.js";
   import * as m from "$lib/paraglide/messages.js";
 
@@ -244,6 +247,8 @@
           <CollapsibleSection
             heading={m.dashboard_section_needs_attention()}
             count={needsAttention.length}
+            icon={TicketAlert}
+            iconColor="var(--brand-accent)"
             expanded={needsAttentionExpanded}
             ontoggle={() => (needsAttentionExpanded = !needsAttentionExpanded)}
           >
@@ -286,6 +291,8 @@
         <CollapsibleSection
           heading={m.dashboard_section_my_tickets()}
           count={myOpen.length}
+          icon={Ticket}
+          iconColor="var(--brand-accent)"
           expanded={myTicketsExpanded}
           ontoggle={() => (myTicketsExpanded = !myTicketsExpanded)}
         >
@@ -302,6 +309,8 @@
         <CollapsibleSection
           heading={m.dashboard_section_unassigned()}
           count={unassigned.length}
+          icon={TicketMinus}
+          iconColor="var(--brand-accent)"
           expanded={unassignedExpanded}
           ontoggle={() => (unassignedExpanded = !unassignedExpanded)}
         >
@@ -319,6 +328,8 @@
           <CollapsibleSection
             heading={m.dashboard_section_on_hold()}
             count={onHold.length}
+            icon={TicketPause}
+            iconColor="var(--brand-accent)"
             expanded={onHoldExpanded}
             ontoggle={() => (onHoldExpanded = !onHoldExpanded)}
           >

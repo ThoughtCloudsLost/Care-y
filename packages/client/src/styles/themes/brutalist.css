@@ -52,6 +52,9 @@
   --paper: var(--color-ios-light-surface);
   --surface-1: var(--color-ios-light-surface-1);
   --surface-2: var(--color-ios-light-surface-2);
+
+  /* Card tokens: flat/sharp brutalist surfaces */
+  --card-radius: 0;
 }
 
 /* --- Dark mode: bunker interior, fluorescent-lit concrete --- */

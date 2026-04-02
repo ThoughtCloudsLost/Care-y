@@ -41,18 +41,18 @@
 
 <CollapsibleSection
   heading={m.dashboard_activity_heading()}
-  count={activity.length}
+  icon={Activity}
+  iconColor="var(--brand-accent)"
   {expanded}
   {ontoggle}
 >
   {#if activity.length > 0}
     <div class="activity-content">
       <div class="activity-summary">
-        <Activity size={14} aria-hidden="true" class="activity-icon" />
         <span>{m.dashboard_activity_summary({ count: activity.length })}</span>
       </div>
 
-      <div class="activity-list">
+      <div class="activity-surface">
         {#each activity.slice(0, 5) as item (item.id)}
           <div class="activity-row">
             <span class="activity-event">{eventLabel(item.eventType)}</span>
@@ -82,7 +82,7 @@
     display: flex;
     flex-direction: column;
     gap: 0.375rem;
-    padding: 0 1rem 0.5rem;
+    padding: 0 0.75rem 0.25rem;
   }
 
   .activity-summary {
@@ -93,15 +93,13 @@
     color: var(--muted);
   }
 
-  .activity-content :global(.activity-icon) {
-    flex-shrink: 0;
-    color: var(--muted);
-  }
-
-  .activity-list {
+  .activity-surface {
     display: flex;
     flex-direction: column;
-    gap: 0.25rem;
+    gap: 0;
+    background: var(--surface-1);
+    border-radius: var(--card-radius, 0.75rem);
+    overflow: hidden;
   }
 
   .activity-row {
@@ -110,6 +108,12 @@
     gap: 0.25rem;
     font-size: 0.75rem;
     color: var(--muted);
+    padding: 0.5rem 0.75rem;
+    border-bottom: 1px solid color-mix(in srgb, var(--ink) 6%, transparent);
+  }
+
+  .activity-row:last-child {
+    border-bottom: none;
   }
 
   .activity-event {

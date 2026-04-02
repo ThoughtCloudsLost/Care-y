@@ -148,7 +148,6 @@ export * from "./dashboard_shift_ends_in.js";
 export * from "./dashboard_shift_ended.js";
 export * from "./dashboard_shift_not_started.js";
 export * from "./dashboard_shift_volunteers.js";
-export * from "./dashboard_shift_you.js";
 export * from "./dashboard_shift_no_shift.js";
 export * from "./dashboard_queues_heading.js";
 export * from "./dashboard_queues_open_count.js";

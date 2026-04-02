@@ -21,18 +21,18 @@
 
 <CollapsibleSection
   heading={m.dashboard_kb_heading()}
-  count={kbItems.length}
+  icon={BookOpen}
+  iconColor="var(--brand-accent)"
   {expanded}
   {ontoggle}
 >
   {#if kbItems.length > 0}
     <div class="kb-content">
       <div class="kb-summary">
-        <BookOpen size={14} aria-hidden="true" class="kb-icon" />
         <span>{m.dashboard_kb_summary({ count: kbItems.length })}</span>
       </div>
 
-      <div class="kb-list">
+      <div class="kb-surface">
         {#each kbItems as item (item.id)}
           <div class="kb-row">
             <span class="kb-title">
@@ -52,7 +52,7 @@
     display: flex;
     flex-direction: column;
     gap: 0.375rem;
-    padding: 0 1rem 0.5rem;
+    padding: 0 0.75rem 0.25rem;
   }
 
   .kb-summary {
@@ -63,22 +63,25 @@
     color: var(--muted);
   }
 
-  .kb-content :global(.kb-icon) {
-    flex-shrink: 0;
-    color: var(--muted);
-  }
-
-  .kb-list {
+  .kb-surface {
     display: flex;
     flex-direction: column;
-    gap: 0.25rem;
+    gap: 0;
+    background: var(--surface-1);
+    border-radius: var(--card-radius, 0.75rem);
+    overflow: hidden;
   }
 
   .kb-row {
     font-size: 0.8125rem;
     color: var(--ink);
     opacity: 0.8;
-    padding: 0.125rem 0;
+    padding: 0.5rem 0.75rem;
+    border-bottom: 1px solid color-mix(in srgb, var(--ink) 6%, transparent);
+  }
+
+  .kb-row:last-child {
+    border-bottom: none;
   }
 
   .no-kb {

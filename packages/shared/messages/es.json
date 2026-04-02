@@ -168,7 +168,6 @@
   "dashboard_shift_ended": "Turno terminado ({start} - {end})",
   "dashboard_shift_not_started": "Comienza en {time} ({start} - {end})",
   "dashboard_shift_volunteers": "{count} en turno",
-  "dashboard_shift_you": "(tu)",
   "dashboard_shift_no_shift": "Sin turno activo",
 
   "dashboard_queues_heading": "Colas",
