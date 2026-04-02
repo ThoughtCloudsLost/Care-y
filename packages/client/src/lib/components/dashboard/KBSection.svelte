@@ -1,5 +1,6 @@
 <script lang="ts">
-  import { BookOpen } from "@lucide/svelte";
+  import { BookOpen, FileText, ThumbsUp } from "@lucide/svelte";
+  import { formatRelativeTime } from "$lib/utils/format-time.js";
   import * as m from "$lib/paraglide/messages.js";
   import CollapsibleSection from "./CollapsibleSection.svelte";
 
@@ -7,6 +8,7 @@
     id: string;
     encryptedTitle: unknown;
     updatedAt: Date | string;
+    rating: number;
     decryptedTitle?: string;
   }
 
@@ -14,9 +16,10 @@
     kbItems: KBItem[];
     expanded: boolean;
     ontoggle: () => void;
+    ontap?: (itemId: string) => void;
   }
 
-  let { kbItems, expanded, ontoggle }: KBSectionProps = $props();
+  let { kbItems, expanded, ontoggle, ontap }: KBSectionProps = $props();
 </script>
 
 <CollapsibleSection
@@ -34,9 +37,32 @@
 
       <div class="kb-surface">
         {#each kbItems as item (item.id)}
-          <div class="kb-row">
+          <div
+            class="kb-row touch-feedback"
+            role="button"
+            tabindex="0"
+            onclick={() => ontap?.(item.id)}
+            onkeydown={(e) => e.key === "Enter" && ontap?.(item.id)}
+          >
+            <span class="kb-icon-gutter" aria-hidden="true">
+              <FileText size={13} />
+            </span>
             <span class="kb-title">
               {item.decryptedTitle ?? m.dashboard_kb_encrypted_title()}
+            </span>
+            <span
+              class="kb-rating"
+              aria-label={m.dashboard_kb_rating({ count: item.rating })}
+            >
+              <ThumbsUp size={10} aria-hidden="true" />
+              {item.rating}
+            </span>
+            <span class="kb-time">
+              {formatRelativeTime(
+                item.updatedAt instanceof Date
+                  ? item.updatedAt
+                  : new Date(item.updatedAt),
+              )}
             </span>
           </div>
         {/each}
@@ -73,15 +99,56 @@
   }
 
   .kb-row {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
     font-size: 0.8125rem;
     color: var(--ink);
-    opacity: 0.8;
     padding: 0.5rem 0.75rem;
     border-bottom: 1px solid color-mix(in srgb, var(--ink) 6%, transparent);
+    cursor: pointer;
   }
 
   .kb-row:last-child {
     border-bottom: none;
+  }
+
+  .kb-icon-gutter {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    width: 1rem;
+    color: var(--muted);
+    opacity: 0.55;
+  }
+
+  .kb-title {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    opacity: 0.8;
+  }
+
+  .kb-rating {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.1875rem;
+    flex-shrink: 0;
+    font-size: 0.625rem;
+    font-weight: 600;
+    color: var(--brand-accent);
+    opacity: 0.85;
+    white-space: nowrap;
+  }
+
+  .kb-time {
+    flex-shrink: 0;
+    margin-left: auto;
+    font-size: 0.6875rem;
+    color: var(--muted);
+    opacity: 0.7;
   }
 
   .no-kb {
