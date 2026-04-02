@@ -77,6 +77,37 @@ describe("TkCache", () => {
       expect(cache.get("t-1")).toEqual(fakeTk(0x02));
     });
 
+    it("zeros the old key material when overwriting an existing entry", () => {
+      const oldTk = fakeTk(0xaa);
+      cache.set("t-replace", oldTk);
+      cache.set("t-replace", fakeTk(0xbb));
+      expect(oldTk.every((b) => b === 0)).toBe(true);
+      expect(memzero).toHaveBeenCalledWith(oldTk);
+    });
+
+    it("replace at capacity does not spuriously evict another entry", () => {
+      const { cache: small, memzero: mz } = createTestCache(3);
+      const tk1 = fakeTk(0x01);
+      const tk2 = fakeTk(0x02);
+      const tk3 = fakeTk(0x03);
+      small.set("a", tk1);
+      small.set("b", tk2);
+      small.set("c", tk3);
+      mz.mockClear();
+
+      // Replace "b" at full capacity. Only the old "b" buffer should
+      // be zeroed. "a" and "c" must remain untouched.
+      const newTk2 = fakeTk(0x22);
+      small.set("b", newTk2);
+
+      expect(small.size).toBe(3);
+      expect(mz).toHaveBeenCalledTimes(1);
+      expect(mz).toHaveBeenCalledWith(tk2);
+      expect(small.get("a")).toBe(tk1);
+      expect(small.get("c")).toBe(tk3);
+      expect(small.get("b")).toBe(newTk2);
+    });
+
     it("evicts least-recently-used entry when cache is full (51st set with maxEntries=50)", () => {
       // Fill cache to capacity
       const tks: Uint8Array[] = [];
@@ -97,6 +128,17 @@ describe("TkCache", () => {
       expect(memzero).toHaveBeenCalledWith(tks[0]);
       // the new entry is present
       expect(cache.get("ticket-50")).toBeDefined();
+    });
+
+    it("LRU eviction zeros the buffer bytes, not just calls memzero", () => {
+      const { cache: small } = createTestCache(2);
+      const tk1 = fakeTk(0xdd);
+      small.set("a", tk1);
+      small.set("b", fakeTk(0xee));
+
+      // Evict "a" by inserting a third entry
+      small.set("c", fakeTk(0xff));
+      expect(tk1.every((b) => b === 0)).toBe(true);
     });
 
     it("does not call memzero when cache is not full", () => {
@@ -162,7 +204,7 @@ describe("TkCache", () => {
   });
 
   describe("property-based", () => {
-    it("never exceeds maxEntries after arbitrary set/get/evict operations", () => {
+    it("never exceeds maxEntries and zeros every evicted buffer", () => {
       const maxEntries = 10;
 
       fc.assert(
@@ -187,11 +229,20 @@ describe("TkCache", () => {
           (ops) => {
             const { cache: propCache } = createTestCache(maxEntries);
 
+            // Track every buffer passed to set() so we can verify
+            // zeroing after the run.
+            const allBuffers = new Map<string, Uint8Array[]>();
+
             for (const action of ops) {
               switch (action.op) {
-                case "set":
-                  propCache.set(action.key, fakeTk());
+                case "set": {
+                  const tk = fakeTk(0x42);
+                  const existing = allBuffers.get(action.key) ?? [];
+                  existing.push(tk);
+                  allBuffers.set(action.key, existing);
+                  propCache.set(action.key, tk);
                   break;
+                }
                 case "get":
                   propCache.get(action.key);
                   break;
@@ -201,10 +252,23 @@ describe("TkCache", () => {
               }
             }
 
-            return propCache.size <= maxEntries;
+            // Size invariant
+            if (propCache.size > maxEntries) return false;
+
+            // Zeroing invariant: every buffer that is NOT currently
+            // retrievable from the cache must have been zeroed.
+            for (const [key, buffers] of allBuffers) {
+              const current = propCache.get(key);
+              for (const buf of buffers) {
+                if (buf === current) continue; // still live in cache
+                if (!buf.every((b) => b === 0)) return false;
+              }
+            }
+
+            return true;
           },
         ),
-        { numRuns: 200 },
+        { numRuns: 500 },
       );
     });
   });
