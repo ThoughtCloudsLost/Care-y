@@ -1,12 +1,9 @@
 <script lang="ts">
-  import { getContext } from "svelte";
-  import { SvelteMap } from "svelte/reactivity";
   import { createQuery } from "@tanstack/svelte-query";
   import { Notification, Toast } from "konsta/svelte";
   import { goto } from "$app/navigation";
   import { resolve } from "$app/paths";
   import { trpc } from "$lib/trpc/index.js";
-  import type { CryptoBridge } from "$lib/workers/crypto-bridge.js";
   import type { TicketPreviewItemProps } from "$lib/components/dashboard/types.js";
   import { Ticket, TicketMinus } from "@lucide/svelte";
   import TicketPreviewList from "$lib/components/dashboard/TicketPreviewList.svelte";
@@ -18,11 +15,21 @@
   import QueryLoader from "$lib/components/QueryLoader.svelte";
   import TicketAlert from "$lib/components/icons/TicketAlert.svelte";
   import TicketPause from "$lib/components/icons/TicketPause.svelte";
-  import { serializedBufferToBase64 } from "$lib/utils/buffer-encoding.js";
+  import {
+    getOrgDecryptCache,
+    getTicketDecryptCache,
+  } from "$lib/crypto/context.js";
+  import {
+    filterNeedsAttention,
+    filterMyOpen,
+    filterUnassigned,
+    filterOnHold,
+  } from "$lib/components/dashboard/filters.js";
   import * as m from "$lib/paraglide/messages.js";
 
-  // CryptoBridge provided by (app) layout via setContext.
-  const bridge = getContext<CryptoBridge>("cryptoBridge");
+  // Crypto singletons from (app) layout context.
+  const orgCache = getOrgDecryptCache();
+  const ticketCache = getTicketDecryptCache();
 
   // Current user identity from auth.me.
   const meQuery = createQuery(() => ({
@@ -70,41 +77,14 @@
     },
   }));
 
-  // --- "Needs Attention" filter ---
-  // Urgent/high priority tickets that are unassigned, OR assigned to
-  // the current user with unread follow-ups. This surfaces items that
-  // need someone to act right now.
+  // --- Dashboard section filters (logic in filters.ts) ---
+  const allTickets = $derived(ticketsQuery.data ?? []);
   const needsAttention = $derived(
-    (ticketsQuery.data ?? []).filter((t) => {
-      if (t.status !== "open" || t.onHold) return false;
-      const isHighPriority = t.priority === "urgent" || t.priority === "high";
-      // Unassigned urgent/high tickets need someone to claim them.
-      if (isHighPriority && t.assignedTo === null) return true;
-      // Your tickets with follow-ups need a response.
-      if (
-        t.assignedTo === currentUserId &&
-        t.followUpCount > 0 &&
-        isHighPriority
-      )
-        return true;
-      return false;
-    }),
+    filterNeedsAttention(allTickets, currentUserId),
   );
-
-  // Remaining dashboard sections.
-  const myOpen = $derived(
-    (ticketsQuery.data ?? []).filter(
-      (t) => t.assignedTo === currentUserId && t.status === "open" && !t.onHold,
-    ),
-  );
-
-  const unassigned = $derived(
-    (ticketsQuery.data ?? []).filter(
-      (t) => t.assignedTo === null && t.status === "open",
-    ),
-  );
-
-  const onHold = $derived((ticketsQuery.data ?? []).filter((t) => t.onHold));
+  const myOpen = $derived(filterMyOpen(allTickets, currentUserId));
+  const unassigned = $derived(filterUnassigned(allTickets));
+  const onHold = $derived(filterOnHold(allTickets));
 
   // --- Collapsible section state (all expanded by default) ---
   let shiftExpanded = $state(true);
@@ -116,58 +96,28 @@
   let unassignedExpanded = $state(false);
   let onHoldExpanded = $state(false);
 
-  // Decrypted titles keyed by ticket ID. SvelteMap is reactive without $state.
-  const decryptedTitles = new SvelteMap<string, string>();
+  // Ticket title decryption is handled by ticketCache (TicketDecryptCache).
+  // It uses a SvelteMap internally, so reads are reactive. Decryption is
+  // triggered lazily in toPreviewProps when each ticket is first rendered.
 
-  // Decrypted assignee names keyed by user ID (org-key tier, main thread).
-  // TODO: wire org-key decryption for assignee display names
-  const decryptedAssignees = new SvelteMap<string, string>();
-
-  // Decrypt ticket titles as data arrives.
-  $effect(() => {
-    const tickets = ticketsQuery.data;
-    if (!tickets) return;
-
-    for (const t of tickets) {
-      if (decryptedTitles.has(t.id)) continue;
-      if (!t.keyWrap) continue;
-
-      const ciphertext = serializedBufferToBase64(t.encryptedTitle);
-
-      void bridge
-        .decrypt(
-          t.id,
-          t.keyWrap.ephemeralPoint,
-          t.keyWrap.nonce,
-          t.keyWrap.wrappedKey,
-          ciphertext,
-        )
-        .then((plaintext) => {
-          decryptedTitles.set(t.id, plaintext);
-        })
-        .catch(() => {
-          // Decryption failure: title stays as undefined (shows placeholder).
-        });
-    }
-  });
+  // Assignee display name decryption is handled by orgCache (OrgDecryptCache).
+  // Display names are sealed-box encrypted with the org public key.
 
   function toPreviewProps(t: Ticket): Omit<TicketPreviewItemProps, "ontap"> {
-    // Assignee: show "You" for current user, decrypted name for others,
-    // null for unassigned. Display name is org-key encrypted; decryption
-    // will be wired when the org-key decrypt pipeline is available on
-    // main thread. For now, show "You" or null (falls back to i18n
-    // "Unassigned" in the component).
+    // Assignee: show "You" for current user, org-key-decrypt name for
+    // others, null for unassigned (falls back to i18n "Unassigned").
     let assignedName: string | null = null;
     if (t.assignedTo === currentUserId) {
       assignedName = m.dashboard_assigned_you();
     } else if (t.assignedTo !== null) {
-      // TODO: decrypt t.assignedDisplayName with org key
-      assignedName = decryptedAssignees.get(t.assignedTo) ?? null;
+      assignedName =
+        orgCache.decrypt(`assignee:${t.assignedTo}`, t.assignedDisplayName) ??
+        null;
     }
 
     return {
       ticketId: t.id,
-      title: decryptedTitles.get(t.id),
+      title: ticketCache.decryptTitle(t.id, t.keyWrap, t.encryptedTitle),
       status: t.status,
       priority: t.priority,
       onHold: t.onHold,
@@ -214,6 +164,14 @@
   function dismissHelpToast(): void {
     helpToastOpen = false;
     clearTimeout(helpToastTimer);
+  }
+
+  function handleActivityTap(ticketId: string): void {
+    void goto(resolve(`/tickets/${ticketId}`));
+  }
+
+  function handleKBTap(itemId: string): void {
+    void goto(resolve(`/kb/${itemId}`));
   }
 
   // Login summary notification slot (6k provides content).
@@ -277,15 +235,19 @@
           activity={activityQuery.data ?? []}
           expanded={activityExpanded}
           ontoggle={() => (activityExpanded = !activityExpanded)}
+          ontap={handleActivityTap}
         />
 
         <KBSection
           kbItems={(kbQuery.data ?? []).map((item) => ({
             ...item,
-            decryptedTitle: undefined,
+            decryptedTitle:
+              orgCache.decrypt(`kb:${item.id}`, item.encryptedTitle) ??
+              undefined,
           }))}
           expanded={kbExpanded}
           ontoggle={() => (kbExpanded = !kbExpanded)}
+          ontap={handleKBTap}
         />
 
         <CollapsibleSection
