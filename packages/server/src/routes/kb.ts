@@ -148,6 +148,16 @@ export function createKbRouter(deps: KBRouterDeps) {
       }),
     ),
 
+    // --- Dashboard: recently updated ---
+    recentItems: volunteerProcedure
+      .input(z.object({ limit: z.number().int().min(1).max(5).default(2) }))
+      .query(
+        withErrorWrapping(async ({ ctx, input }) => {
+          const svc = deps.createItemSvc(ctx.org.tenantDb);
+          return svc.listRecentlyUpdated(input.limit);
+        }),
+      ),
+
     // --- Voting ---
     castVote: volunteerProcedure.input(castVoteInputSchema).mutation(
       withErrorWrapping(async ({ ctx, input }) => {

@@ -4,7 +4,7 @@
  *
  * Tests the dashboard's rendering behavior with mocked tRPC queries
  * and CryptoBridge. Verifies stat count derivation, loading/error states,
- * and notification slot presence.
+ * collapsible sections, and QuickInfoBar presence.
  *
  * vi.mock() is required for:
  *   - $app/navigation: SvelteKit virtual module, no on-disk source
@@ -32,19 +32,29 @@ vi.mock("$app/paths", () => ({
 }));
 
 // Controlled query states. Tests set these before rendering.
-// Order matches createQuery call order in the page: [meQuery, ticketsQuery].
+// Order matches createQuery call order in the page:
+// [meQuery, ticketsQuery, activityQuery, queuesQuery, shiftQuery, kbQuery]
 let queryStates: Array<Record<string, unknown>> = [];
 let queryCallIndex = 0;
+
+const defaultQueryState = {
+  isLoading: false,
+  isError: false,
+  error: null,
+  data: undefined,
+};
+
+const emptyDataQuery = {
+  isLoading: false,
+  isError: false,
+  error: null,
+  data: [],
+};
 
 vi.mock("@tanstack/svelte-query", () => ({
   createQuery: (optsFn: () => Record<string, unknown>) => {
     optsFn(); // Validate the options factory does not throw.
-    const state = queryStates[queryCallIndex] ?? {
-      isLoading: true,
-      isError: false,
-      error: null,
-      data: undefined,
-    };
+    const state = queryStates[queryCallIndex] ?? defaultQueryState;
     queryCallIndex++;
     return state;
   },
@@ -53,7 +63,15 @@ vi.mock("@tanstack/svelte-query", () => ({
 vi.mock("$lib/trpc/index.js", () => ({
   trpc: {
     auth: { me: { query: vi.fn() } },
-    tickets: { list: { query: vi.fn() } },
+    tickets: {
+      list: { query: vi.fn() },
+      recentActivity: { query: vi.fn() },
+      myQueues: { query: vi.fn() },
+      dashboardInfo: { query: vi.fn() },
+    },
+    kb: {
+      recentItems: { query: vi.fn() },
+    },
   },
 }));
 
@@ -154,6 +172,36 @@ const ticketsQueryError = {
   data: undefined,
 };
 
+/** Build query states array for all 6 queries. Defaults to empty data for info queries. */
+function buildQueryStates(
+  meQuery: Record<string, unknown>,
+  ticketsQuery: Record<string, unknown>,
+  overrides?: {
+    activity?: Record<string, unknown>;
+    queues?: Record<string, unknown>;
+    shift?: Record<string, unknown>;
+    kb?: Record<string, unknown>;
+  },
+): Array<Record<string, unknown>> {
+  return [
+    meQuery,
+    ticketsQuery,
+    overrides?.activity ?? emptyDataQuery,
+    overrides?.queues ?? emptyDataQuery,
+    overrides?.shift ?? { ...defaultQueryState, data: { shift: null } },
+    overrides?.kb ?? emptyDataQuery,
+  ];
+}
+
+// jsdom lacks Web Animations API (used by Svelte's slide transition).
+if (typeof Element.prototype.animate !== "function") {
+  Element.prototype.animate = vi.fn().mockReturnValue({
+    finished: Promise.resolve(),
+    cancel: vi.fn(),
+    onfinish: null,
+  }) as unknown as Element["animate"];
+}
+
 // --- Setup / teardown ---
 
 beforeEach(() => {
@@ -175,7 +223,7 @@ const PageModule = await import("../../../routes/(app)/+page.svelte");
 describe("Dashboard page", () => {
   describe("loading state", () => {
     it("renders skeleton when tickets query is loading", async () => {
-      queryStates = [meQuerySuccess, ticketsQueryLoading];
+      queryStates = buildQueryStates(meQuerySuccess, ticketsQueryLoading);
       const { container } = render(PageModule.default);
       expect(container.querySelector("[role='status']")).toBeTruthy();
     });
@@ -183,7 +231,7 @@ describe("Dashboard page", () => {
 
   describe("error state", () => {
     it("renders error message when tickets query fails", async () => {
-      queryStates = [meQuerySuccess, ticketsQueryError];
+      queryStates = buildQueryStates(meQuerySuccess, ticketsQueryError);
       render(PageModule.default);
       expect(
         screen.getByText("Something went wrong. Please try again."),
@@ -220,7 +268,10 @@ describe("Dashboard page", () => {
         }),
       ];
 
-      queryStates = [meQuerySuccess, ticketsQuerySuccess(tickets)];
+      queryStates = buildQueryStates(
+        meQuerySuccess,
+        ticketsQuerySuccess(tickets),
+      );
       render(PageModule.default);
 
       // StatCard renders aria-label="{count} {label}".
@@ -236,7 +287,7 @@ describe("Dashboard page", () => {
     });
 
     it("shows zero counts when no tickets match filters", async () => {
-      queryStates = [meQuerySuccess, ticketsQuerySuccess([])];
+      queryStates = buildQueryStates(meQuerySuccess, ticketsQuerySuccess([]));
       render(PageModule.default);
 
       const statCards = screen.getAllByLabelText(/\d+\s/);
@@ -248,10 +299,67 @@ describe("Dashboard page", () => {
     });
   });
 
+  describe("collapsible sections", () => {
+    it("renders Urgent section expanded when urgent tickets exist", async () => {
+      const tickets = [
+        makeTicket({
+          id: "t-urgent",
+          priority: "urgent",
+          status: "open",
+          onHold: false,
+        }),
+        makeTicket({
+          id: "t-normal",
+          assignedTo: USER_ID,
+          status: "open",
+          onHold: false,
+        }),
+      ];
+
+      queryStates = buildQueryStates(
+        meQuerySuccess,
+        ticketsQuerySuccess(tickets),
+      );
+      render(PageModule.default);
+
+      // Urgent section header should be present with count
+      const urgentButton = screen.getByRole("button", {
+        name: /Urgent.*\(1\)/,
+      });
+      expect(urgentButton.getAttribute("aria-expanded")).toBe("true");
+    });
+
+    it("renders My Tickets expanded when no urgent tickets", async () => {
+      const tickets = [
+        makeTicket({
+          id: "t-mine",
+          assignedTo: USER_ID,
+          status: "open",
+          onHold: false,
+          priority: "normal",
+        }),
+      ];
+
+      queryStates = buildQueryStates(
+        meQuerySuccess,
+        ticketsQuerySuccess(tickets),
+      );
+      render(PageModule.default);
+
+      const myTicketsButton = screen.getByRole("button", {
+        name: /My Tickets.*\(1\)/,
+      });
+      expect(myTicketsButton.getAttribute("aria-expanded")).toBe("true");
+    });
+  });
+
   describe("decryption", () => {
     it("calls bridge.decrypt for tickets with key wraps", async () => {
       const ticket = makeTicket({ id: "t-decrypt" });
-      queryStates = [meQuerySuccess, ticketsQuerySuccess([ticket])];
+      queryStates = buildQueryStates(
+        meQuerySuccess,
+        ticketsQuerySuccess([ticket]),
+      );
       render(PageModule.default);
 
       // $effect fires asynchronously after mount.
@@ -268,7 +376,10 @@ describe("Dashboard page", () => {
 
     it("does not call bridge.decrypt for tickets without key wraps", async () => {
       const ticket = makeTicket({ id: "t-no-wrap", keyWrap: null });
-      queryStates = [meQuerySuccess, ticketsQuerySuccess([ticket])];
+      queryStates = buildQueryStates(
+        meQuerySuccess,
+        ticketsQuerySuccess([ticket]),
+      );
       render(PageModule.default);
 
       // Wait briefly for any effects to settle.
@@ -279,7 +390,7 @@ describe("Dashboard page", () => {
 
   describe("notification slot", () => {
     it("renders dashboard wrapper with notification slot", async () => {
-      queryStates = [meQuerySuccess, ticketsQuerySuccess([])];
+      queryStates = buildQueryStates(meQuerySuccess, ticketsQuerySuccess([]));
       const { container } = render(PageModule.default);
 
       // The .dashboard div is always present (holds the notification slot).

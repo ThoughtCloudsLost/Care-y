@@ -9,7 +9,7 @@
  * - No activity timestamps on the ticket row (ADR-018 section 7)
  */
 
-import { sql, type Kysely } from "kysely";
+import { type Kysely } from "kysely";
 import type { TenantDatabase } from "../db/types.js";
 import type { TicketAccessChecker } from "./access.js";
 import { NotFoundError, TicketError, MergeError } from "../errors.js";
@@ -37,6 +37,8 @@ export interface TicketListRecord extends TicketRecord {
   readonly queueName: string;
   readonly lastActivityAt: Date | null;
   readonly followUpCount: number;
+  /** Org-key encrypted display name of the assigned volunteer, or null if unassigned. */
+  readonly assignedDisplayName: Buffer | null;
 }
 
 export interface TicketKeyWrap {
@@ -106,6 +108,7 @@ interface EnrichedTicketRow extends BaseTicketRow {
   queue_name: string;
   last_activity_at: Date | null;
   followup_count: string | number | bigint | null;
+  assigned_display_name: Buffer | null;
 }
 
 function toRecord(row: BaseTicketRow): TicketRecord {
@@ -131,6 +134,7 @@ function toListRecord(row: EnrichedTicketRow): TicketListRecord {
     queueName: row.queue_name,
     lastActivityAt: row.last_activity_at,
     followUpCount: Number(row.followup_count),
+    assignedDisplayName: row.assigned_display_name,
   };
 }
 
@@ -263,20 +267,24 @@ export function createTicketService(
         )
         .innerJoin("clients as c", "c.id", "t.client_id")
         .innerJoin("queues as q", "q.id", "t.queue_id")
+        .leftJoin("users as u", "u.id", "t.assigned_to")
         .selectAll("t")
         .select(["tkw.ephemeral_point", "tkw.nonce", "tkw.wrapped_key"])
         .select("c.alias as client_alias")
         .select("q.name as queue_name")
-        .select(
-          sql<Date | null>`(SELECT MAX(f.created_at) FROM followups f WHERE f.ticket_id = t.id)`.as(
-            "last_activity_at",
-          ),
-        )
-        .select(
-          sql<string>`(SELECT COUNT(*) FROM followups f WHERE f.ticket_id = t.id)`.as(
-            "followup_count",
-          ),
-        )
+        .select("u.encrypted_display_name as assigned_display_name")
+        .select((eb) => [
+          eb
+            .selectFrom("followups as f")
+            .select((sb) => sb.fn.max("f.created_at").as("max_at"))
+            .whereRef("f.ticket_id", "=", "t.id")
+            .as("last_activity_at"),
+          eb
+            .selectFrom("followups as f")
+            .select((sb) => sb.fn.countAll().as("cnt"))
+            .whereRef("f.ticket_id", "=", "t.id")
+            .as("followup_count"),
+        ])
         .where("t.id", "=", ticketId)
         .executeTakeFirst();
 
@@ -301,20 +309,24 @@ export function createTicketService(
         )
         .innerJoin("clients as c", "c.id", "t.client_id")
         .innerJoin("queues as q", "q.id", "t.queue_id")
+        .leftJoin("users as u", "u.id", "t.assigned_to")
         .selectAll("t")
         .select(["tkw.ephemeral_point", "tkw.nonce", "tkw.wrapped_key"])
         .select("c.alias as client_alias")
         .select("q.name as queue_name")
-        .select(
-          sql<Date | null>`(SELECT MAX(f.created_at) FROM followups f WHERE f.ticket_id = t.id)`.as(
-            "last_activity_at",
-          ),
-        )
-        .select(
-          sql<string>`(SELECT COUNT(*) FROM followups f WHERE f.ticket_id = t.id)`.as(
-            "followup_count",
-          ),
-        )
+        .select("u.encrypted_display_name as assigned_display_name")
+        .select((eb) => [
+          eb
+            .selectFrom("followups as f")
+            .select((sb) => sb.fn.max("f.created_at").as("max_at"))
+            .whereRef("f.ticket_id", "=", "t.id")
+            .as("last_activity_at"),
+          eb
+            .selectFrom("followups as f")
+            .select((sb) => sb.fn.countAll().as("cnt"))
+            .whereRef("f.ticket_id", "=", "t.id")
+            .as("followup_count"),
+        ])
         .where("t.queue_id", "in", [...accessibleQueues]);
 
       if (opts.queueId !== undefined) {

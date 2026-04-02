@@ -22,6 +22,10 @@ export interface TicketPreviewItemProps {
   lastActivityAt: Date | null;
   /** Number of follow-ups on this ticket */
   followUpCount: number;
+  /** Decrypted display name of assigned volunteer, or null/undefined */
+  assignedName?: string | null;
   /** Callback when item is tapped. Route file handles navigation. */
   ontap: (ticketId: string) => void;
+  /** Callback when encrypted help icon is tapped. Page owns the toast. */
+  onhelp?: () => void;
 }

@@ -164,5 +164,26 @@
   "dashboard_time_hours_ago": "hace {count}h",
   "dashboard_time_days_ago": "hace {count}d",
   "dashboard_exposure_title": "Resumen de seguridad",
-  "dashboard_exposure_subtitle": "Verificando tu estado de proteccion..."
+  "dashboard_exposure_subtitle": "Verificando tu estado de proteccion...",
+
+  "dashboard_info_shift": "Turno: {start} - {end}",
+  "dashboard_info_shift_label": "{label}",
+  "dashboard_info_volunteers_on_shift": "{count} en turno",
+  "dashboard_info_queues": "Colas",
+  "dashboard_info_no_queues": "Sin colas asignadas",
+  "dashboard_info_activity": "Reciente",
+  "dashboard_info_no_activity": "Sin actividad reciente",
+  "dashboard_info_kb": "Novedades KB",
+  "dashboard_info_no_kb": "Sin articulos recientes",
+  "dashboard_info_kb_encrypted_title": "Articulo actualizado",
+
+  "dashboard_activity_ticket_created": "Ticket nuevo",
+  "dashboard_activity_ticket_closed": "Cerrado",
+  "dashboard_activity_ticket_reopened": "Reabierto",
+  "dashboard_activity_followup_added": "Mensaje nuevo",
+  "dashboard_activity_mention": "Mencion",
+  "dashboard_activity_unknown": "Actividad",
+
+  "dashboard_assigned_you": "Tu",
+  "dashboard_assigned_unassigned": "Sin asignar"
 }

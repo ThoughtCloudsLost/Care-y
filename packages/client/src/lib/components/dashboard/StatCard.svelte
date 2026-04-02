@@ -40,8 +40,8 @@
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 0.25rem;
-    padding: 0.625rem 0.5rem;
+    gap: 0.125rem;
+    padding: 0.5rem 0.25rem;
     text-align: center;
   }
 
@@ -63,5 +63,9 @@
     font-size: 0.6875rem;
     color: var(--muted);
     line-height: 1.2;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 100%;
   }
 </style>
