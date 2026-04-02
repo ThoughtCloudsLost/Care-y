@@ -90,8 +90,8 @@
     .k-actions-group,
     .k-searchbar input
   ) {
-  backdrop-filter: none;
   -webkit-backdrop-filter: none;
+  backdrop-filter: none;
 }
 
 .theme-brutalist
@@ -333,6 +333,7 @@
 .theme-brutalist .brutalist-redacted {
   background: var(--ink);
   color: transparent;
+  -webkit-user-select: none;
   user-select: none;
   display: inline;
   padding: 0.05em 0.25em;
@@ -416,8 +417,8 @@
   .theme-brutalist .k-navbar,
   .theme-brutalist .k-toolbar,
   .theme-brutalist .k-segmented {
-    backdrop-filter: none;
     -webkit-backdrop-filter: none;
+    backdrop-filter: none;
     background: Canvas;
     border: 2px solid currentColor;
     box-shadow: none;
