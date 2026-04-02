@@ -65,13 +65,14 @@
         <Clock size={14} aria-hidden="true" class="info-icon" />
         <div class="info-content">
           <span class="info-primary">
-            {m.dashboard_info_shift({
+            {m.dashboard_shift_ends_in({
+              time: "",
               start: shift.current.start,
               end: shift.current.end,
             })}
           </span>
           <span class="info-secondary">
-            {m.dashboard_info_volunteers_on_shift({
+            {m.dashboard_shift_volunteers({
               count: shift.volunteersOnShift,
             })}
           </span>
@@ -94,7 +95,7 @@
             {/each}
           </span>
         {:else}
-          <span class="info-secondary">{m.dashboard_info_no_queues()}</span>
+          <span class="info-secondary">{m.dashboard_queues_no_queues()}</span>
         {/if}
       </div>
     </div>
@@ -130,7 +131,7 @@
         <div class="info-content">
           {#each kbItems as item (item.id)}
             <span class="info-primary">
-              {item.decryptedTitle ?? m.dashboard_info_kb_encrypted_title()}
+              {item.decryptedTitle ?? m.dashboard_kb_encrypted_title()}
             </span>
           {/each}
         </div>

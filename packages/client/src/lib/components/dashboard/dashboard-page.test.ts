@@ -3,8 +3,8 @@
  * Dashboard page tests.
  *
  * Tests the dashboard's rendering behavior with mocked tRPC queries
- * and CryptoBridge. Verifies stat count derivation, loading/error states,
- * collapsible sections, and QuickInfoBar presence.
+ * and CryptoBridge. Verifies the new section-based layout: Shift,
+ * Needs Attention, Queues, Activity, KB, and ticket list sections.
  *
  * vi.mock() is required for:
  *   - $app/navigation: SvelteKit virtual module, no on-disk source
@@ -107,7 +107,6 @@ vi.mock("svelte", async () => {
 // --- Test data factories ---
 
 const USER_ID = "user-001";
-const OTHER_USER_ID = "user-002";
 
 function makeTicket(overrides: Record<string, unknown> = {}) {
   return {
@@ -239,72 +238,13 @@ describe("Dashboard page", () => {
     });
   });
 
-  describe("stat counts", () => {
-    it("derives correct counts from ticket data", async () => {
-      const tickets = [
-        makeTicket({
-          id: "t1",
-          assignedTo: USER_ID,
-          status: "open",
-          onHold: false,
-        }),
-        makeTicket({
-          id: "t2",
-          assignedTo: USER_ID,
-          status: "open",
-          onHold: true,
-        }),
-        makeTicket({
-          id: "t3",
-          assignedTo: null,
-          status: "open",
-          onHold: false,
-        }),
-        makeTicket({
-          id: "t4",
-          assignedTo: OTHER_USER_ID,
-          status: "open",
-          onHold: false,
-        }),
-      ];
-
-      queryStates = buildQueryStates(
-        meQuerySuccess,
-        ticketsQuerySuccess(tickets),
-      );
-      render(PageModule.default);
-
-      // StatCard renders aria-label="{count} {label}".
-      // My Open: t1 only (assigned to USER_ID, open, not on hold)
-      // Unassigned: t3 only (assignedTo null, open)
-      // On Hold: t2 only (onHold true)
-      const statCards = screen.getAllByLabelText(/\d+\s/);
-      const labels = statCards.map((el) => el.getAttribute("aria-label"));
-
-      expect(labels).toContain("1 My Open");
-      expect(labels).toContain("1 Unassigned");
-      expect(labels).toContain("1 On Hold");
-    });
-
-    it("shows zero counts when no tickets match filters", async () => {
-      queryStates = buildQueryStates(meQuerySuccess, ticketsQuerySuccess([]));
-      render(PageModule.default);
-
-      const statCards = screen.getAllByLabelText(/\d+\s/);
-      const labels = statCards.map((el) => el.getAttribute("aria-label"));
-
-      expect(labels).toContain("0 My Open");
-      expect(labels).toContain("0 Unassigned");
-      expect(labels).toContain("0 On Hold");
-    });
-  });
-
-  describe("collapsible sections", () => {
-    it("renders Urgent section expanded when urgent tickets exist", async () => {
+  describe("needs attention section", () => {
+    it("renders Needs Attention section for urgent unassigned tickets", async () => {
       const tickets = [
         makeTicket({
           id: "t-urgent",
           priority: "urgent",
+          assignedTo: null,
           status: "open",
           onHold: false,
         }),
@@ -322,14 +262,104 @@ describe("Dashboard page", () => {
       );
       render(PageModule.default);
 
-      // Urgent section header should be present with count
-      const urgentButton = screen.getByRole("button", {
-        name: /Urgent.*\(1\)/,
+      const needsAttentionButton = screen.getByRole("button", {
+        name: /Needs Attention.*\(1\)/,
       });
-      expect(urgentButton.getAttribute("aria-expanded")).toBe("true");
+      expect(needsAttentionButton.getAttribute("aria-expanded")).toBe("true");
     });
 
-    it("renders My Tickets expanded when no urgent tickets", async () => {
+    it("includes high-priority unassigned tickets in needs attention", async () => {
+      const tickets = [
+        makeTicket({
+          id: "t-high",
+          priority: "high",
+          assignedTo: null,
+          status: "open",
+          onHold: false,
+        }),
+      ];
+
+      queryStates = buildQueryStates(
+        meQuerySuccess,
+        ticketsQuerySuccess(tickets),
+      );
+      render(PageModule.default);
+
+      expect(
+        screen.getByRole("button", { name: /Needs Attention.*\(1\)/ }),
+      ).toBeTruthy();
+    });
+
+    it("includes own tickets with follow-ups in needs attention", async () => {
+      const tickets = [
+        makeTicket({
+          id: "t-followup",
+          priority: "high",
+          assignedTo: USER_ID,
+          status: "open",
+          onHold: false,
+          followUpCount: 2,
+        }),
+      ];
+
+      queryStates = buildQueryStates(
+        meQuerySuccess,
+        ticketsQuerySuccess(tickets),
+      );
+      render(PageModule.default);
+
+      expect(
+        screen.getByRole("button", { name: /Needs Attention.*\(1\)/ }),
+      ).toBeTruthy();
+    });
+
+    it("does not show needs attention section when no qualifying tickets", async () => {
+      const tickets = [
+        makeTicket({
+          id: "t-normal",
+          priority: "normal",
+          assignedTo: USER_ID,
+          status: "open",
+          onHold: false,
+        }),
+      ];
+
+      queryStates = buildQueryStates(
+        meQuerySuccess,
+        ticketsQuerySuccess(tickets),
+      );
+      render(PageModule.default);
+
+      expect(
+        screen.queryByRole("button", { name: /Needs Attention/ }),
+      ).toBeNull();
+    });
+
+    it("excludes on-hold tickets from needs attention", async () => {
+      const tickets = [
+        makeTicket({
+          id: "t-urgent-hold",
+          priority: "urgent",
+          assignedTo: null,
+          status: "open",
+          onHold: true,
+        }),
+      ];
+
+      queryStates = buildQueryStates(
+        meQuerySuccess,
+        ticketsQuerySuccess(tickets),
+      );
+      render(PageModule.default);
+
+      expect(
+        screen.queryByRole("button", { name: /Needs Attention/ }),
+      ).toBeNull();
+    });
+  });
+
+  describe("collapsible sections", () => {
+    it("renders My Tickets section with correct count", async () => {
       const tickets = [
         makeTicket({
           id: "t-mine",
