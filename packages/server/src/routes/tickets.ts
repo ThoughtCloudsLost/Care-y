@@ -753,54 +753,304 @@ export function createTicketRouter(deps: TicketRouterDeps) {
                 new Uint8Array(userKeys.vol_public),
               );
 
-              // 2. Fetch queue + clients (created by seed script)
-              const queue = await tDb
+              // 2. Fetch queues + clients (created by seed script)
+              const queues = await tDb
                 .selectFrom("queues")
-                .select("id")
-                .where("name", "=", "Intake")
-                .executeTakeFirstOrThrow();
+                .select(["id", "name"])
+                .where("name", "in", ["Intake", "Crisis", "Housing"])
+                .execute();
+              const queueMap = new Map(queues.map((q) => [q.name, q.id]));
 
               const clients = await tDb
                 .selectFrom("clients")
                 .select(["id", "alias"])
-                .where("alias", "in", ["Sparrow", "Wren", "Finch", "Robin"])
                 .execute();
-
               const clientMap = new Map(clients.map((c) => [c.alias, c.id]));
 
-              // 3. Ticket definitions
-              const ticketDefs = [
+              // Helper: minutes ago as a Date
+              function minutesAgo(m: number): Date {
+                return new Date(Date.now() - m * 60_000);
+              }
+
+              // 3. Ticket definitions with varied data
+              interface TicketDef {
+                clientAlias: string;
+                title: string;
+                description: string;
+                queue: string;
+                priority: string;
+                assignedTo: string | null;
+                onHold: boolean;
+                withKeyWrap: boolean;
+                createdAgo: number; // minutes ago
+                followUps: {
+                  content: string;
+                  source: string;
+                  agoMinutes: number;
+                }[];
+              }
+
+              const me = ctx.user.id;
+              const ticketDefs: TicketDef[] = [
+                // --- MY TICKETS (assigned to me) ---
                 {
                   clientAlias: "Sparrow",
                   title: "Help with housing",
-                  description: "Client needs housing referral",
-                  assignedTo: ctx.user.id,
+                  description: "Client needs housing referral and support",
+                  queue: "Housing",
+                  priority: "normal",
+                  assignedTo: me,
                   onHold: false,
                   withKeyWrap: true,
+                  createdAgo: 4320, // 3 days
+                  followUps: [
+                    {
+                      content: "I need help finding a place to stay",
+                      source: "client",
+                      agoMinutes: 4300,
+                    },
+                    {
+                      content: "I can look into shelters in your area",
+                      source: "volunteer",
+                      agoMinutes: 4200,
+                    },
+                    {
+                      content: "Thank you, any help is appreciated",
+                      source: "client",
+                      agoMinutes: 1440,
+                    },
+                  ],
                 },
                 {
                   clientAlias: "Wren",
+                  title: "Follow-up on legal aid referral",
+                  description: "Client was referred to legal aid last week",
+                  queue: "Intake",
+                  priority: "normal",
+                  assignedTo: me,
+                  onHold: false,
+                  withKeyWrap: true,
+                  createdAgo: 10080, // 7 days
+                  followUps: [
+                    {
+                      content: "Referred to legal aid org",
+                      source: "volunteer",
+                      agoMinutes: 10000,
+                    },
+                    {
+                      content: "They said they would call me back",
+                      source: "client",
+                      agoMinutes: 8640,
+                    },
+                    {
+                      content: "Still waiting, called again",
+                      source: "volunteer",
+                      agoMinutes: 5760,
+                    },
+                    {
+                      content: "They finally reached out, thank you",
+                      source: "client",
+                      agoMinutes: 2880,
+                    },
+                    {
+                      content: "Checking in, did the meeting happen?",
+                      source: "volunteer",
+                      agoMinutes: 1440,
+                    },
+                  ],
+                },
+                {
+                  clientAlias: "Jay",
+                  title: "Safety planning session",
+                  description: "Client requested safety planning support",
+                  queue: "Crisis",
+                  priority: "high",
+                  assignedTo: me,
+                  onHold: false,
+                  withKeyWrap: true,
+                  createdAgo: 180, // 3 hours
+                  followUps: [
+                    {
+                      content: "I need to talk about my situation",
+                      source: "client",
+                      agoMinutes: 170,
+                    },
+                    {
+                      content: "I am here for you. Can you tell me more?",
+                      source: "volunteer",
+                      agoMinutes: 160,
+                    },
+                  ],
+                },
+                {
+                  clientAlias: "Dove",
+                  title: "Benefits application help",
+                  description: "Assistance with benefits paperwork",
+                  queue: "Intake",
+                  priority: "low",
+                  assignedTo: me,
+                  onHold: false,
+                  withKeyWrap: true,
+                  createdAgo: 20160, // 14 days
+                  followUps: [
+                    {
+                      content: "Need help filling out forms",
+                      source: "client",
+                      agoMinutes: 20100,
+                    },
+                  ],
+                },
+                {
+                  clientAlias: "Crane",
+                  title: "Encrypted intake note",
+                  description: "Intake note from phone call, key wrap pending",
+                  queue: "Intake",
+                  priority: "normal",
+                  assignedTo: me,
+                  onHold: false,
+                  withKeyWrap: false, // Tests decryption fallback
+                  createdAgo: 60,
+                  followUps: [],
+                },
+
+                // --- ON HOLD ---
+                {
+                  clientAlias: "Finch",
+                  title: "Waiting for callback from shelter",
+                  description:
+                    "Client requested callback when shelter has a bed",
+                  queue: "Housing",
+                  priority: "normal",
+                  assignedTo: me,
+                  onHold: true,
+                  withKeyWrap: true,
+                  createdAgo: 7200, // 5 days
+                  followUps: [
+                    {
+                      content: "Shelter said they will call when a bed opens",
+                      source: "volunteer",
+                      agoMinutes: 5760,
+                    },
+                    {
+                      content: "Still no word from them",
+                      source: "client",
+                      agoMinutes: 2880,
+                    },
+                  ],
+                },
+                {
+                  clientAlias: "Heron",
+                  title: "Pending court date documentation",
+                  description: "Need documents before next court appearance",
+                  queue: "Intake",
+                  priority: "high",
+                  assignedTo: me,
+                  onHold: true,
+                  withKeyWrap: true,
+                  createdAgo: 14400, // 10 days
+                  followUps: [
+                    {
+                      content: "Court date is in two weeks, need letter",
+                      source: "client",
+                      agoMinutes: 14300,
+                    },
+                    {
+                      content: "Working on getting the documentation together",
+                      source: "volunteer",
+                      agoMinutes: 10080,
+                    },
+                  ],
+                },
+
+                // --- UNASSIGNED ---
+                {
+                  clientAlias: "Robin",
                   title: "Emergency referral needed",
-                  description: "Urgent case requiring immediate attention",
+                  description: "Urgent case flagged by intake volunteer",
+                  queue: "Crisis",
+                  priority: "urgent",
                   assignedTo: null,
                   onHold: false,
                   withKeyWrap: true,
+                  createdAgo: 45, // 45 minutes ago
+                  followUps: [
+                    {
+                      content: "Please help, I am in danger",
+                      source: "client",
+                      agoMinutes: 40,
+                    },
+                  ],
                 },
                 {
-                  clientAlias: "Finch",
-                  title: "Waiting for callback",
-                  description: "Client requested callback",
-                  assignedTo: ctx.user.id,
-                  onHold: true,
-                  withKeyWrap: true,
-                },
-                {
-                  clientAlias: "Robin",
-                  title: "Encrypted intake note",
-                  description: "Intake note from phone call",
-                  assignedTo: ctx.user.id,
+                  clientAlias: "Lark",
+                  title: "New intake call",
+                  description: "Voicemail received, needs triage",
+                  queue: "Intake",
+                  priority: "normal",
+                  assignedTo: null,
                   onHold: false,
-                  withKeyWrap: false, // Tests fallback
+                  withKeyWrap: true,
+                  createdAgo: 120, // 2 hours
+                  followUps: [],
+                },
+                {
+                  clientAlias: "Raven",
+                  title: "Relocation assistance request",
+                  description: "Client needs help with relocation planning",
+                  queue: "Housing",
+                  priority: "high",
+                  assignedTo: null,
+                  onHold: false,
+                  withKeyWrap: true,
+                  createdAgo: 360, // 6 hours
+                  followUps: [
+                    {
+                      content: "I need to move but I do not know where to go",
+                      source: "client",
+                      agoMinutes: 350,
+                    },
+                  ],
+                },
+                {
+                  clientAlias: "Swift",
+                  title: "Transportation to appointment",
+                  description: "Client needs ride to medical appointment",
+                  queue: "Intake",
+                  priority: "normal",
+                  assignedTo: null,
+                  onHold: false,
+                  withKeyWrap: true,
+                  createdAgo: 2880, // 2 days
+                  followUps: [
+                    {
+                      content: "I have a doctor appointment next week",
+                      source: "client",
+                      agoMinutes: 2800,
+                    },
+                    {
+                      content: "Can someone help me get there?",
+                      source: "client",
+                      agoMinutes: 1440,
+                    },
+                  ],
+                },
+                {
+                  clientAlias: "Hawk",
+                  title: "Food bank referral",
+                  description: "Client asking about food assistance",
+                  queue: "Intake",
+                  priority: "low",
+                  assignedTo: null,
+                  onHold: false,
+                  withKeyWrap: true,
+                  createdAgo: 480, // 8 hours
+                  followUps: [
+                    {
+                      content: "Where can I get groceries?",
+                      source: "client",
+                      agoMinutes: 470,
+                    },
+                  ],
                 },
               ];
 
@@ -812,6 +1062,13 @@ export function createTicketRouter(deps: TicketRouterDeps) {
                 if (clientId === undefined) {
                   throw new Error(
                     `Client "${def.clientAlias}" not found. Run seed first.`,
+                  );
+                }
+
+                const qId = queueMap.get(def.queue);
+                if (qId === undefined) {
+                  throw new Error(
+                    `Queue "${def.queue}" not found. Run seed first.`,
                   );
                 }
 
@@ -839,22 +1096,25 @@ export function createTicketRouter(deps: TicketRouterDeps) {
                 );
 
                 const keyGeneration = crypto.randomUUID();
+                const createdAt = minutesAgo(def.createdAgo);
 
                 const ticket = await tDb
                   .insertInto("tickets")
                   .values({
                     client_id: clientId,
-                    queue_id: queue.id,
+                    queue_id: qId,
                     encrypted_title: Buffer.from(encryptedTitle),
                     encrypted_description: Buffer.from(encryptedDescription),
                     key_generation: keyGeneration,
                     assigned_to: def.assignedTo,
                     on_hold: def.onHold,
+                    priority: def.priority,
+                    created_at: createdAt,
                   })
                   .returning("id")
                   .executeTakeFirstOrThrow();
 
-                // Create ECIES key wrap (except ticket 4)
+                // Create ECIES key wrap
                 if (def.withKeyWrap) {
                   const wrap = eciesEncrypt(tk, volPublic);
                   await tDb
@@ -867,6 +1127,25 @@ export function createTicketRouter(deps: TicketRouterDeps) {
                       nonce: Buffer.from(wrap.nonce),
                       wrapped_key: Buffer.from(wrap.ciphertext),
                       algorithm: "ecies-ristretto255-v1",
+                    })
+                    .execute();
+                }
+
+                // Create follow-up messages (encrypted with same ticket key)
+                for (const fu of def.followUps) {
+                  const encryptedContent = encryptContent(
+                    encoder.encode(fu.content),
+                    tk,
+                  );
+                  await tDb
+                    .insertInto("followups")
+                    .values({
+                      ticket_id: ticket.id,
+                      source: fu.source,
+                      type: "message",
+                      encrypted_content: Buffer.from(encryptedContent),
+                      encrypted_read_state: Buffer.from("unread"),
+                      created_at: minutesAgo(fu.agoMinutes),
                     })
                     .execute();
                 }

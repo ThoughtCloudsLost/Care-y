@@ -212,47 +212,65 @@ async function seed(): Promise<void> {
     console.log(`Created phone record (${phoneId})`);
   }
 
-  // Queue: "Intake"
-  let queueId: string;
-  const existingQueue = await tenantDatabase
-    .selectFrom("queues")
-    .select("id")
-    .where("name", "=", "Intake")
-    .executeTakeFirst();
+  const queueNames = ["Intake", "Crisis", "Housing"];
+  const queueIds = new Map<string, string>();
 
-  if (existingQueue) {
-    queueId = existingQueue.id;
-    console.log("Queue 'Intake' already exists, skipping.");
-  } else {
-    const inserted = await tenantDatabase
-      .insertInto("queues")
-      .values({ name: "Intake" })
-      .returning("id")
-      .executeTakeFirstOrThrow();
-    queueId = inserted.id;
-    console.log(`Created queue "Intake" (${queueId})`);
+  for (const name of queueNames) {
+    const existing = await tenantDatabase
+      .selectFrom("queues")
+      .select("id")
+      .where("name", "=", name)
+      .executeTakeFirst();
+
+    if (existing) {
+      queueIds.set(name, existing.id);
+      console.log(`Queue "${name}" already exists, skipping.`);
+    } else {
+      const inserted = await tenantDatabase
+        .insertInto("queues")
+        .values({ name })
+        .returning("id")
+        .executeTakeFirstOrThrow();
+      queueIds.set(name, inserted.id);
+      console.log(`Created queue "${name}" (${inserted.id})`);
+    }
   }
 
-  // Queue assignment: admin -> Intake
-  const existingAssignment = await tenantDatabase
-    .selectFrom("queue_assignments")
-    .select("queue_id")
-    .where("queue_id", "=", queueId)
-    .where("user_id", "=", adminUserId)
-    .executeTakeFirst();
+  // Queue assignments: admin -> all queues
+  for (const [name, qId] of queueIds) {
+    const existing = await tenantDatabase
+      .selectFrom("queue_assignments")
+      .select("queue_id")
+      .where("queue_id", "=", qId)
+      .where("user_id", "=", adminUserId)
+      .executeTakeFirst();
 
-  if (existingAssignment) {
-    console.log("Queue assignment already exists, skipping.");
-  } else {
-    await tenantDatabase
-      .insertInto("queue_assignments")
-      .values({ queue_id: queueId, user_id: adminUserId })
-      .execute();
-    console.log("Assigned admin to Intake queue.");
+    if (existing) {
+      console.log(`Admin already assigned to "${name}", skipping.`);
+    } else {
+      await tenantDatabase
+        .insertInto("queue_assignments")
+        .values({ queue_id: qId, user_id: adminUserId })
+        .execute();
+      console.log(`Assigned admin to "${name}" queue.`);
+    }
   }
 
-  // Clients: Sparrow, Wren, Finch, Robin
-  const clientAliases = ["Sparrow", "Wren", "Finch", "Robin"];
+  // Clients: bird-name aliases
+  const clientAliases = [
+    "Sparrow",
+    "Wren",
+    "Finch",
+    "Robin",
+    "Jay",
+    "Lark",
+    "Dove",
+    "Heron",
+    "Raven",
+    "Crane",
+    "Swift",
+    "Hawk",
+  ];
   for (const alias of clientAliases) {
     const existingClient = await tenantDatabase
       .selectFrom("clients")
