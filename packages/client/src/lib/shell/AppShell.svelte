@@ -148,20 +148,24 @@
 </Page>
 
 <style>
-  /* Override Konsta's pb-safe-4 (safe-area + 16px) to match native iOS tab bar
-     positioning. Native tab bars use only the safe-area inset, no extra padding. */
-  :global(.native-tabbar.k-toolbar) {
+  /* iOS only: override Konsta's pb-safe-4 (safe-area + 16px) to match native
+     iOS tab bar positioning. Native uses only the safe-area inset. */
+  :global(.k-ios .native-tabbar.k-toolbar) {
     padding-bottom: var(--k-safe-area-bottom) !important;
   }
 
-  /* The bg layer uses calc(safe-area + 16px + 48px + 16px) = safe-area + 80px.
+  /* iOS only: the bg layer uses calc(safe-area + 16px + 48px + 16px) = safe-area + 80px.
      Native height is safe-area + 48px (icons-only tabbar). */
-  :global(.native-tabbar.k-toolbar > div:first-child) {
+  :global(.k-ios .native-tabbar.k-toolbar > div:first-child) {
     height: calc(var(--k-safe-area-bottom) + 48px) !important;
   }
 
-  .main-content {
+  :global(.k-ios) .main-content {
     padding-bottom: calc(3rem + env(safe-area-inset-bottom, 0px));
+  }
+
+  :global(.k-material) .main-content {
+    padding-bottom: calc(5rem + env(safe-area-inset-bottom, 0px));
   }
 
   .navbar-avatar {

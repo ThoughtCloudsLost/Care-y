@@ -2,7 +2,7 @@
   import { getContext } from "svelte";
   import { SvelteMap } from "svelte/reactivity";
   import { createQuery } from "@tanstack/svelte-query";
-  import { Notification } from "konsta/svelte";
+  import { BlockTitle, List, Notification } from "konsta/svelte";
   import { goto } from "$app/navigation";
   import { resolve } from "$app/paths";
   import { trpc } from "$lib/trpc/index.js";
@@ -10,6 +10,7 @@
   import type { TicketPreviewItemProps } from "$lib/components/dashboard/types.js";
   import StatCard from "$lib/components/dashboard/StatCard.svelte";
   import TicketPreviewList from "$lib/components/dashboard/TicketPreviewList.svelte";
+  import TicketPreviewItem from "$lib/components/dashboard/TicketPreviewItem.svelte";
   import QueryLoader from "$lib/components/QueryLoader.svelte";
   import { serializedBufferToBase64 } from "$lib/utils/buffer-encoding.js";
   import * as m from "$lib/paraglide/messages.js";
@@ -38,7 +39,7 @@
 
   type Ticket = NonNullable<typeof ticketsQuery.data>[number];
 
-  // Dashboard stat counts derived from the ticket list.
+  // Dashboard sections derived from the ticket list.
   const myOpen = $derived(
     (ticketsQuery.data ?? []).filter(
       (t) => t.assignedTo === currentUserId && t.status === "open" && !t.onHold,
@@ -52,6 +53,19 @@
   );
 
   const onHold = $derived((ticketsQuery.data ?? []).filter((t) => t.onHold));
+
+  // Urgent: high or urgent priority from both assigned (mine) and unassigned
+  const urgent = $derived(
+    (ticketsQuery.data ?? []).filter(
+      (t) =>
+        (t.priority === "urgent" || t.priority === "high") &&
+        t.status === "open" &&
+        !t.onHold,
+    ),
+  );
+
+  // On Hold section collapsed state
+  let onHoldExpanded = $state(false);
 
   // Decrypted titles keyed by ticket ID. SvelteMap is reactive without $state.
   const decryptedTitles = new SvelteMap<string, string>();
@@ -93,6 +107,11 @@
       onHold: t.onHold,
       assignedTo: t.assignedTo,
       createdAt: new Date(t.createdAt),
+      clientAlias: t.clientAlias,
+      queueName: t.queueName,
+      lastActivityAt:
+        t.lastActivityAt !== null ? new Date(t.lastActivityAt) : null,
+      followUpCount: t.followUpCount,
     };
   }
 
@@ -157,6 +176,14 @@
         />
       </div>
 
+      {#if urgent.length > 0}
+        <TicketPreviewList
+          heading={m.dashboard_section_urgent()}
+          tickets={urgent.map(toPreviewProps)}
+          ontickettap={handleTicketTap}
+        />
+      {/if}
+
       <TicketPreviewList
         heading={m.dashboard_section_my_tickets()}
         tickets={myOpen.map(toPreviewProps)}
@@ -170,20 +197,68 @@
         ontickettap={handleTicketTap}
         onseeall={handleSeeAllUnassigned}
       />
+
+      {#if onHold.length > 0}
+        <button
+          type="button"
+          class="on-hold-toggle"
+          onclick={() => (onHoldExpanded = !onHoldExpanded)}
+          aria-expanded={onHoldExpanded}
+        >
+          <BlockTitle>
+            {m.dashboard_section_on_hold()} ({onHold.length})
+            <span class="toggle-chevron" class:expanded={onHoldExpanded}>
+              &#x276F;
+            </span>
+          </BlockTitle>
+        </button>
+        {#if onHoldExpanded}
+          <List strongIos outlineIos>
+            {#each onHold.map(toPreviewProps) as ticket (ticket.ticketId)}
+              <TicketPreviewItem {...ticket} ontap={handleTicketTap} />
+            {/each}
+          </List>
+        {/if}
+      {/if}
     {/snippet}
   </QueryLoader>
 </div>
 
 <style>
   .dashboard {
-    padding: 0.5rem 0;
+    padding: 0.25rem 0;
   }
 
   .stat-grid {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
-    gap: 0rem;
-    padding: 0 0rem;
-    margin-bottom: 0rem;
+    gap: 0;
+    padding: 0;
+    margin-bottom: 0;
+  }
+
+  .on-hold-toggle {
+    display: block;
+    width: 100%;
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 0;
+    text-align: left;
+    font-family: inherit;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .toggle-chevron {
+    display: inline-block;
+    font-size: 0.75rem;
+    transition: transform 200ms ease;
+    transform: rotate(90deg);
+    opacity: 0.5;
+    margin-left: 0.25rem;
+  }
+
+  .toggle-chevron.expanded {
+    transform: rotate(-90deg);
   }
 </style>

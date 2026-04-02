@@ -27,6 +27,10 @@ describe("TicketPreviewItem", () => {
     onHold: false,
     assignedTo: null,
     createdAt: new Date("2026-03-31T11:30:00Z"),
+    clientAlias: "Sparrow",
+    queueName: "Intake",
+    lastActivityAt: new Date("2026-03-31T11:45:00Z"),
+    followUpCount: 3,
     ontap,
   };
 
@@ -42,58 +46,56 @@ describe("TicketPreviewItem", () => {
     expect(container.textContent).toContain("Encrypted ticket");
   });
 
-  it("renders status dot with correct data-status attribute", () => {
+  it("renders priority indicator with correct data-priority attribute", () => {
     const { container } = render(TicketPreviewItem, { props: defaults });
-    const dot = container.querySelector(".status-dot");
-    expect(dot?.getAttribute("data-status")).toBe("open");
+    const indicator = container.querySelector(".priority-indicator");
+    expect(indicator?.getAttribute("data-priority")).toBe("normal");
   });
 
-  it("renders status dot as 'hold' when onHold is true", () => {
+  it("renders priority indicator as hold when onHold is true", () => {
     const { container } = render(TicketPreviewItem, {
       props: { ...defaults, onHold: true },
     });
-    const dot = container.querySelector(".status-dot");
-    expect(dot?.getAttribute("data-status")).toBe("hold");
+    const indicator = container.querySelector(".priority-indicator");
+    expect(indicator?.getAttribute("data-hold")).toBe("true");
   });
 
-  it("renders data-priority attribute on status dot", () => {
+  it("renders urgent priority attribute", () => {
     const { container } = render(TicketPreviewItem, {
       props: { ...defaults, priority: "urgent" },
     });
-    const dot = container.querySelector(".status-dot");
-    expect(dot?.getAttribute("data-priority")).toBe("urgent");
+    const indicator = container.querySelector(".priority-indicator");
+    expect(indicator?.getAttribute("data-priority")).toBe("urgent");
   });
 
-  it("shows assignee when provided", () => {
-    const { container } = render(TicketPreviewItem, {
-      props: { ...defaults, assignedTo: "JN" },
-    });
-    expect(container.textContent).toContain("JN");
-  });
-
-  it("does not render assignee span when assignedTo is null", () => {
+  it("shows client alias in subtitle", () => {
     const { container } = render(TicketPreviewItem, { props: defaults });
-    const assignee = container.querySelector(".preview-assignee");
-    expect(assignee).toBeNull();
+    expect(container.textContent).toContain("Sparrow");
   });
 
-  it("shows 'On Hold' status text when onHold is true", () => {
-    const { container } = render(TicketPreviewItem, {
-      props: { ...defaults, onHold: true },
-    });
-    expect(container.textContent).toContain("On Hold");
-  });
-
-  it("shows 'Open' status text for open tickets", () => {
+  it("shows queue name in subtitle", () => {
     const { container } = render(TicketPreviewItem, { props: defaults });
-    expect(container.textContent).toContain("Open");
+    expect(container.textContent).toContain("Intake");
   });
 
-  it("shows 'Closed' status text for closed tickets", () => {
+  it("shows follow-up count when > 0", () => {
+    const { container } = render(TicketPreviewItem, { props: defaults });
+    expect(container.textContent).toContain("3 msgs");
+  });
+
+  it("hides follow-up count when 0", () => {
     const { container } = render(TicketPreviewItem, {
-      props: { ...defaults, status: "closed" },
+      props: { ...defaults, followUpCount: 0 },
     });
-    expect(container.textContent).toContain("Closed");
+    expect(container.textContent).not.toContain("msgs");
+  });
+
+  it("shows singular 'msg' for count of 1", () => {
+    const { container } = render(TicketPreviewItem, {
+      props: { ...defaults, followUpCount: 1 },
+    });
+    expect(container.textContent).toContain("1 msg");
+    expect(container.textContent).not.toContain("1 msgs");
   });
 
   it("fires ontap with ticketId when clicked", async () => {
@@ -127,36 +129,47 @@ describe("formatRelativeTime (via rendered output)", () => {
     priority: "normal",
     onHold: false,
     assignedTo: null,
+    clientAlias: "Wren",
+    queueName: "Crisis",
+    followUpCount: 0,
     ontap: vi.fn(),
   };
 
-  const cases: Array<{ label: string; createdAt: Date; expected: string }> = [
+  const cases: Array<{
+    label: string;
+    lastActivityAt: Date;
+    expected: string;
+  }> = [
     {
       label: "just now (30 seconds ago)",
-      createdAt: new Date("2026-03-31T11:59:30Z"),
+      lastActivityAt: new Date("2026-03-31T11:59:30Z"),
       expected: "Just now",
     },
     {
       label: "minutes ago",
-      createdAt: new Date("2026-03-31T11:55:00Z"),
+      lastActivityAt: new Date("2026-03-31T11:55:00Z"),
       expected: "5m ago",
     },
     {
       label: "hours ago",
-      createdAt: new Date("2026-03-31T09:00:00Z"),
+      lastActivityAt: new Date("2026-03-31T09:00:00Z"),
       expected: "3h ago",
     },
     {
       label: "days ago",
-      createdAt: new Date("2026-03-29T12:00:00Z"),
+      lastActivityAt: new Date("2026-03-29T12:00:00Z"),
       expected: "2d ago",
     },
   ];
 
-  for (const { label, createdAt, expected } of cases) {
+  for (const { label, lastActivityAt, expected } of cases) {
     it(`renders "${expected}" for ${label}`, () => {
       const { container } = render(TicketPreviewItem, {
-        props: { ...base, createdAt },
+        props: {
+          ...base,
+          createdAt: new Date("2026-03-28T12:00:00Z"),
+          lastActivityAt,
+        },
       });
       expect(container.textContent).toContain(expected);
     });

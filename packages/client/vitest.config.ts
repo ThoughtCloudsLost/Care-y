@@ -17,6 +17,8 @@ export default defineConfig({
         "./src/test-mocks/app-navigation.ts",
         import.meta.url,
       ).pathname,
+      "$app/paths": new URL("./src/test-mocks/app-paths.ts", import.meta.url)
+        .pathname,
     },
     // Use browser entry points so Svelte's client-side code resolves
     // correctly in the Node test runner (per Svelte testing docs).

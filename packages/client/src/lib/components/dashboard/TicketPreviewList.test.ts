@@ -24,6 +24,10 @@ function makeTicket(id: string, overrides?: Record<string, unknown>) {
     onHold: false,
     assignedTo: null,
     createdAt: new Date("2026-03-31T11:30:00Z"),
+    clientAlias: "Sparrow",
+    queueName: "Intake",
+    lastActivityAt: new Date("2026-03-31T11:45:00Z"),
+    followUpCount: 1,
     ...overrides,
   };
 }
@@ -52,7 +56,7 @@ describe("TicketPreviewList", () => {
     const { container } = render(TicketPreviewList, {
       props: { heading: "Test", tickets, ontickettap },
     });
-    const items = container.querySelectorAll(".status-dot");
+    const items = container.querySelectorAll(".priority-indicator");
     expect(items.length).toBe(3);
   });
 
@@ -63,7 +67,7 @@ describe("TicketPreviewList", () => {
     const { container } = render(TicketPreviewList, {
       props: { heading: "Test", tickets, maxVisible: 3, ontickettap },
     });
-    const items = container.querySelectorAll(".status-dot");
+    const items = container.querySelectorAll(".priority-indicator");
     expect(items.length).toBe(3);
   });
 
