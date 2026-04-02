@@ -291,6 +291,27 @@ describe.skipIf(!process.env.DATABASE_URL)("KBItemService (DB)", () => {
     // RESTRICT FK prevents category deletion
     await expect(catSvc.delete(cat.id)).rejects.toThrow();
   });
+
+  it("listRecentlyUpdated returns encryptedTitle as Buffer, not plaintext string", async () => {
+    const cat = await catSvc.create({ name: "Encrypt Check" });
+    const ciphertext = Buffer.from([0xde, 0xad, 0xbe, 0xef, 0x01, 0x02]);
+    await svc.create("user-1", {
+      categoryId: cat.id,
+      encryptedTitle: ciphertext,
+      encryptedBody: Buffer.from("body-cipher"),
+    });
+
+    const recent = await svc.listRecentlyUpdated(1);
+    expect(recent.length).toBeGreaterThanOrEqual(1);
+    const item = recent[0]!;
+
+    // encryptedTitle must be a Buffer (ciphertext), not a decoded string.
+    expect(Buffer.isBuffer(item.encryptedTitle)).toBe(true);
+    expect(Buffer.isBuffer(item.encryptedBody)).toBe(true);
+
+    // The raw bytes must match what was stored (no transformation).
+    expect(item.encryptedTitle.equals(ciphertext)).toBe(true);
+  });
 });
 
 describe.skipIf(!process.env.DATABASE_URL)("KBVoteService (DB)", () => {

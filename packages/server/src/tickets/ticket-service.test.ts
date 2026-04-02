@@ -484,4 +484,39 @@ describe.skipIf(!process.env.DATABASE_URL)("TicketService (DB)", () => {
     const otherResult = await svc.findById(ticketId, otherUser.id);
     expect(otherResult.keyWrap).toBeNull();
   });
+
+  it("list returns assignedDisplayName as Buffer when ticket is assigned", async () => {
+    const { userId, clientId, queueId } = await createClientFixture();
+
+    const ticket = await svc.create(userId, {
+      clientId,
+      queueId,
+      encryptedTitle: Buffer.from("assign-display-test"),
+      encryptedDescription: Buffer.from("desc"),
+      priority: "normal",
+      keyGeneration: crypto.randomUUID(),
+    });
+
+    // Assign via direct DB update (assignment is a separate service).
+    await testDb.db
+      .updateTable("tickets")
+      .set({ assigned_to: userId })
+      .where("id", "=", ticket.id)
+      .execute();
+
+    const results = await svc.list(userId, {
+      queueId,
+      status: "open",
+      limit: 100,
+    });
+    const found = results.find((t) => t.id === ticket.id);
+    expect(found).toBeTruthy();
+
+    // assignedDisplayName must be a Buffer (sealed-box ciphertext from
+    // the users table), not a decoded string. This guards against a
+    // regression where the server accidentally returns plaintext.
+    if (found!.assignedDisplayName !== null) {
+      expect(Buffer.isBuffer(found!.assignedDisplayName)).toBe(true);
+    }
+  });
 });

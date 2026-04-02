@@ -1,18 +1,39 @@
 <script lang="ts">
-  import { setContext } from "svelte";
   import { browser } from "$app/environment";
   import { CryptoBridge } from "$lib/workers/crypto-bridge.js";
+  import { OrgKeyManager } from "$lib/crypto/org-key.js";
+  import { OrgDecryptCache } from "$lib/crypto/org-decrypt-cache.js";
+  import { TicketDecryptCache } from "$lib/crypto/ticket-decrypt-cache.js";
+  import {
+    setCryptoBridge,
+    setOrgKeyManager,
+    setOrgDecryptCache,
+    setTicketDecryptCache,
+  } from "$lib/crypto/context.js";
 
   let { children } = $props();
 
-  // Initialize the CryptoBridge singleton for all authenticated routes.
-  // The bridge spawns the Web Worker and captures postMessage at construction
-  // time (SEC-210). All (app) child routes access this via getContext('cryptoBridge').
+  // Initialize crypto singletons for all authenticated routes.
   // Guarded by `browser` because Web Workers do not exist during SSR.
   let bridge: CryptoBridge | undefined;
+  let orgKeyManager: OrgKeyManager | undefined;
+
   if (browser) {
+    // CryptoBridge spawns the Web Worker and captures postMessage at
+    // construction time (SEC-210).
     bridge = new CryptoBridge();
-    setContext("cryptoBridge", bridge);
+    setCryptoBridge(bridge);
+
+    // OrgKeyManager holds the org secret key on the main thread for
+    // non-PII tier decryption (KB titles, display names, branding).
+    // Loaded during login; zeroed on logout.
+    orgKeyManager = new OrgKeyManager();
+    setOrgKeyManager(orgKeyManager);
+
+    // Decrypt caches: org-key tier (sync, main thread) and ticket
+    // tier (async, Worker ECIES). Both use SvelteMap for reactivity.
+    setOrgDecryptCache(new OrgDecryptCache(orgKeyManager));
+    setTicketDecryptCache(new TicketDecryptCache(bridge));
   }
 
   // Dev-only auto-login with full production crypto pipeline.
@@ -24,12 +45,13 @@
   let devLoginDone = $state(!import.meta.env.DEV);
   let devLoginError = $state<string | null>(null);
 
-  if (import.meta.env.DEV && browser && bridge) {
+  if (import.meta.env.DEV && browser && bridge && orgKeyManager) {
     const b = bridge;
+    const okm = orgKeyManager;
     void (async () => {
       try {
         const { devAutoLogin } = await import("$lib/dev/auto-login.js");
-        await devAutoLogin(b);
+        await devAutoLogin(b, okm);
       } catch (err: unknown) {
         console.error("[dev] auto-login failed:", err);
         // Surface rate limit errors visibly so they're not silently swallowed.

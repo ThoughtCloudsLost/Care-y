@@ -15,6 +15,7 @@ import { loginCrypto } from "$lib/auth/login-crypto.js";
 import type { RegisterCryptoCallbacks } from "$lib/auth/register-crypto.js";
 import type { LoginCryptoCallbacks } from "$lib/auth/login-crypto.js";
 import type { CryptoBridge } from "$lib/workers/crypto-bridge.js";
+import type { OrgKeyManager } from "$lib/crypto/org-key.js";
 
 const DEV_IDENTIFIER = "admin.dev";
 const DEV_PASSWORD = "dev-password-1234!";
@@ -113,7 +114,10 @@ function isConflictError(err: unknown): boolean {
   return false;
 }
 
-export async function devAutoLogin(bridge: CryptoBridge): Promise<void> {
+export async function devAutoLogin(
+  bridge: CryptoBridge,
+  orgKeyManager: OrgKeyManager,
+): Promise<void> {
   // 1. Auth login (creates session)
   try {
     await getBypass2fa().mutate();
@@ -142,10 +146,25 @@ export async function devAutoLogin(bridge: CryptoBridge): Promise<void> {
 
   // 4. Login crypto (Worker-based key derivation -> KEYED state)
   await bridge.waitReady();
-  await loginCrypto(DEV_IDENTIFIER, DEV_PASSWORD, bridge, noopLoginCallbacks);
+  const { orgPrivateKey } = await loginCrypto(
+    DEV_IDENTIFIER,
+    DEV_PASSWORD,
+    bridge,
+    noopLoginCallbacks,
+  );
   console.log("[dev] loginCrypto: Worker is KEYED");
 
-  // 5. Seed test tickets (server creates tickets with real ECIES key wraps)
+  // 5. Load org key for non-PII tier decryption (KB titles, display names, branding)
+  if (orgPrivateKey) {
+    orgKeyManager.load(orgPrivateKey);
+    console.log("[dev] orgKeyManager: org key loaded");
+  } else {
+    console.warn(
+      "[dev] orgKeyManager: no org key available (org not onboarded?)",
+    );
+  }
+
+  // 6. Seed test tickets (server creates tickets with real ECIES key wraps)
   await getDevSeedTickets().mutate();
   console.log("[dev] devSeedTickets: tickets seeded");
 }
