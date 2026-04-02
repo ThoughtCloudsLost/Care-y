@@ -59,9 +59,10 @@ export class OrgDecryptCache {
       const plaintext = new TextDecoder().decode(plainBytes);
       this.cache.set(id, plaintext);
       return plaintext;
-    } catch {
-      // Decryption failure (wrong key, corrupted data, etc.).
-      // Return null; caller shows placeholder.
+    } catch (err: unknown) {
+      if (import.meta.env.DEV) {
+        console.warn(`[OrgDecryptCache] decrypt failed for ${id}:`, err);
+      }
       return null;
     }
   }

@@ -213,7 +213,7 @@
   <div
     class="dev-backdrop"
     role="button"
-    tabindex="-1"
+    tabindex="0"
     aria-label="Close dev panel"
     onclick={() => (opened = false)}
     onkeydown={(e) => {

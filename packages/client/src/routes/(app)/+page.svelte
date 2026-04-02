@@ -5,7 +5,7 @@
   import { resolve } from "$app/paths";
   import { trpc } from "$lib/trpc/index.js";
   import type { TicketPreviewItemProps } from "$lib/components/dashboard/types.js";
-  import { Ticket, TicketMinus } from "@lucide/svelte";
+  import { Ticket as TicketIcon, TicketMinus } from "@lucide/svelte";
   import TicketPreviewList from "$lib/components/dashboard/TicketPreviewList.svelte";
   import CollapsibleSection from "$lib/components/dashboard/CollapsibleSection.svelte";
   import ShiftSection from "$lib/components/dashboard/ShiftSection.svelte";
@@ -18,6 +18,7 @@
   import {
     getOrgDecryptCache,
     getTicketDecryptCache,
+    getCurrentUserId,
   } from "$lib/crypto/context.js";
   import {
     filterNeedsAttention,
@@ -27,18 +28,11 @@
   } from "$lib/components/dashboard/filters.js";
   import * as m from "$lib/paraglide/messages.js";
 
-  // Crypto singletons from (app) layout context.
+  // Singletons from (app) layout context.
   const orgCache = getOrgDecryptCache();
   const ticketCache = getTicketDecryptCache();
-
-  // Current user identity from auth.me.
-  const meQuery = createQuery(() => ({
-    queryKey: ["auth", "me"],
-    queryFn: async () => trpc.auth.me.query(),
-    staleTime: Infinity,
-  }));
-
-  const currentUserId = $derived(meQuery.data?.user.id);
+  const currentUserIdGetter = getCurrentUserId();
+  const currentUserId = $derived(currentUserIdGetter());
 
   // All open tickets for the current user's accessible queues.
   if (!trpc.tickets) throw new Error("tickets router unavailable");
@@ -151,19 +145,21 @@
 
   // Encrypted ticket help toast (page-level, shared across all list items).
   let helpToastOpen = $state(false);
-  let helpToastTimer: ReturnType<typeof setTimeout> | undefined;
+
+  $effect(() => {
+    if (!helpToastOpen) return;
+    const timer = setTimeout(() => {
+      helpToastOpen = false;
+    }, 5000);
+    return () => clearTimeout(timer);
+  });
 
   function showEncryptedHelp(): void {
     helpToastOpen = true;
-    clearTimeout(helpToastTimer);
-    helpToastTimer = setTimeout(() => {
-      helpToastOpen = false;
-    }, 5000);
   }
 
   function dismissHelpToast(): void {
     helpToastOpen = false;
-    clearTimeout(helpToastTimer);
   }
 
   function handleActivityTap(ticketId: string): void {
@@ -253,7 +249,7 @@
         <CollapsibleSection
           heading={m.dashboard_section_my_tickets()}
           count={myOpen.length}
-          icon={Ticket}
+          icon={TicketIcon}
           iconColor="var(--brand-accent)"
           expanded={myTicketsExpanded}
           ontoggle={() => (myTicketsExpanded = !myTicketsExpanded)}
@@ -315,7 +311,12 @@
   >
 {/snippet}
 
-<Toast opened={helpToastOpen} position="center" button={helpDismissButton}>
+<Toast
+  opened={helpToastOpen}
+  position="center"
+  button={helpDismissButton}
+  role="status"
+>
   <div class="encrypted-help-toast">
     {m.dashboard_encrypted_help()}
   </div>

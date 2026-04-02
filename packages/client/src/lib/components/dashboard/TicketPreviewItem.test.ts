@@ -46,26 +46,26 @@ describe("TicketPreviewItem", () => {
     expect(container.textContent).toContain("Encrypted ticket");
   });
 
-  it("renders priority indicator with correct data-priority attribute", () => {
+  it("renders normal priority label", () => {
     const { container } = render(TicketPreviewItem, { props: defaults });
     const indicator = container.querySelector(".priority-indicator");
-    expect(indicator?.getAttribute("data-priority")).toBe("normal");
+    expect(indicator?.textContent).toContain("Normal");
   });
 
-  it("renders priority indicator as hold when onHold is true", () => {
+  it("renders priority label even when onHold is true", () => {
     const { container } = render(TicketPreviewItem, {
       props: { ...defaults, onHold: true },
     });
     const indicator = container.querySelector(".priority-indicator");
-    expect(indicator?.getAttribute("data-hold")).toBe("true");
+    expect(indicator?.textContent).toContain("Normal");
   });
 
-  it("renders urgent priority attribute", () => {
+  it("renders urgent priority label", () => {
     const { container } = render(TicketPreviewItem, {
       props: { ...defaults, priority: "urgent" },
     });
     const indicator = container.querySelector(".priority-indicator");
-    expect(indicator?.getAttribute("data-priority")).toBe("urgent");
+    expect(indicator?.textContent).toContain("Urgent");
   });
 
   it("shows client alias in subtitle", () => {

@@ -107,6 +107,9 @@ function contrastRatio(
   return (lighter + 0.05) / (darker + 0.05);
 }
 
+const MAX_LIGHTNESS_STEPS = 40;
+const LIGHTNESS_STEP = 0.02;
+
 /**
  * Adjust a color's lightness until it meets the target contrast ratio
  * against a background. Preserves hue and saturation.
@@ -124,8 +127,11 @@ function ensureContrast(
   const bgLum = relativeLuminance(...bgRgb);
   const direction = bgLum < 0.5 ? 1 : -1;
 
-  for (let i = 1; i <= 40; i++) {
-    const newL = Math.max(0, Math.min(1, hsl[2] + direction * 0.02 * i));
+  for (let i = 1; i <= MAX_LIGHTNESS_STEPS; i++) {
+    const newL = Math.max(
+      0,
+      Math.min(1, hsl[2] + direction * LIGHTNESS_STEP * i),
+    );
     const candidate = hslToRgb(hsl[0], hsl[1], newL);
     if (contrastRatio(candidate, bgRgb) >= minRatio) {
       return rgbToHex(...candidate);
@@ -179,8 +185,8 @@ function deriveBrandFill(brandHex: string): string {
 
   // Darken the brand color until white passes
   const hsl = rgbToHsl(...brandRgb);
-  for (let i = 1; i <= 40; i++) {
-    const newL = Math.max(0, hsl[2] - 0.02 * i);
+  for (let i = 1; i <= MAX_LIGHTNESS_STEPS; i++) {
+    const newL = Math.max(0, hsl[2] - LIGHTNESS_STEP * i);
     const candidate = hslToRgb(hsl[0], hsl[1], newL);
     if (contrastRatio(WHITE_RGB, candidate) >= 4.5) {
       return rgbToHex(...candidate);
@@ -307,18 +313,11 @@ function deriveDualTokens(
  * Konsta's --k-color-primary is set to the primary fill value.
  * Browser-only (no-op during SSR).
  */
-export async function applyKonstaPalette(
-  colors: BrandColors | string,
-): Promise<void> {
-  if (typeof document === "undefined") return;
-
-  const brand: BrandColors =
-    typeof colors === "string" ? { primary: colors } : colors;
-
-  const el = document.documentElement;
-  const isDark = el.classList.contains("dark");
-
-  // Primary tokens
+function applyPrimaryTokens(
+  el: HTMLElement,
+  brand: BrandColors,
+  isDark: boolean,
+): { text: string; fill: string } {
   const primary = deriveDualTokens(brand.primary, isDark);
   el.style.setProperty("--brand-primary-text", primary.text);
   el.style.setProperty("--brand-primary-fill", primary.fill);
@@ -331,7 +330,14 @@ export async function applyKonstaPalette(
     );
   }
 
-  // Accent tokens (if provided)
+  return primary;
+}
+
+function applyAccentTokens(
+  el: HTMLElement,
+  brand: BrandColors,
+  isDark: boolean,
+): void {
   if (brand.accent !== undefined && brand.accent !== "") {
     const accent = deriveDualTokens(brand.accent, isDark);
     const accentOn = deriveOnColor(brand.accent);
@@ -360,24 +366,45 @@ export async function applyKonstaPalette(
     el.style.removeProperty("--brand-accent-40");
     el.style.removeProperty("--brand-accent-20");
   }
+}
 
-  // Konsta primary = fill-safe value
+function applyKonstaColors(el: HTMLElement, primaryFill: string): void {
   el.style.setProperty(
     "--k-color-primary",
-    `rgb(${hexToRgbString(primary.fill)})`,
+    `rgb(${hexToRgbString(primaryFill)})`,
   );
 
-  // iOS derived colors (shade/tint for button press states)
-  const ios = deriveIosColors(primary.fill);
+  const ios = deriveIosColors(primaryFill);
   for (const [token, hex] of Object.entries(ios)) {
     el.style.setProperty(`--k-color-${token}`, `rgb(${hexToRgbString(hex)})`);
   }
+}
 
-  // Material palette (SchemeTonalSpot handles its own contrast)
-  const md = await deriveMdColors(brand.primary);
+async function applyMaterialColors(
+  el: HTMLElement,
+  primaryHex: string,
+): Promise<void> {
+  const md = await deriveMdColors(primaryHex);
   for (const [token, hex] of Object.entries(md)) {
     el.style.setProperty(`--k-color-${token}`, `rgb(${hexToRgbString(hex)})`);
   }
+}
+
+export async function applyKonstaPalette(
+  colors: BrandColors | string,
+): Promise<void> {
+  if (typeof document === "undefined") return;
+
+  const brand: BrandColors =
+    typeof colors === "string" ? { primary: colors } : colors;
+
+  const el = document.documentElement;
+  const isDark = el.classList.contains("dark");
+
+  const primary = applyPrimaryTokens(el, brand, isDark);
+  applyAccentTokens(el, brand, isDark);
+  applyKonstaColors(el, primary.fill);
+  await applyMaterialColors(el, brand.primary);
 }
 
 /**

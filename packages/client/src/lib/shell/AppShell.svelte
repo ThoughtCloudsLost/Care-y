@@ -342,8 +342,14 @@
   {/if}
 
   <nav aria-label={m.nav_main()}>
-    <Toolbar tabbar tabbarIcons class="native-tabbar left-0 bottom-0 fixed">
-      <ToolbarPane role="tablist" aria-label={m.nav_main()}>
+    <Toolbar
+      tabbar
+      tabbarIcons
+      class="native-tabbar left-0 bottom-0 fixed"
+      role="tablist"
+      aria-label={m.nav_main()}
+    >
+      <ToolbarPane>
         {#each allTabs as tab (tab.id)}
           <TabbarLink
             active={activeTab === tab.id}

@@ -12,6 +12,10 @@
 
 import { WebauthnError } from "./errors.js";
 
+// COSE algorithm identifiers (RFC 8152)
+const COSE_ES256 = -7;
+const COSE_RS256 = -257;
+
 // --- Base64url utilities (browser-compatible, no Buffer) ---
 
 function parseBuffer(buffer: ArrayBuffer): string {
@@ -174,14 +178,10 @@ export async function isPlatformAuthenticatorAvailable(): Promise<boolean> {
  * Wraps navigator.credentials.create() and converts the response to
  * JSON-serializable base64url format for sending to the server.
  */
-export async function register(
+function buildCreationOptions(
   options: RegisterOptions,
-): Promise<WebauthnRegistrationResponse> {
-  if (!options.challenge) throw new WebauthnError("challenge required");
-  if (!isBase64url(options.challenge))
-    throw new WebauthnError("challenge must be base64url-encoded");
-
-  const creationOptions: PublicKeyCredentialCreationOptions = {
+): PublicKeyCredentialCreationOptions {
+  return {
     challenge: parseBase64url(options.challenge),
     rp: {
       id: options.rpId,
@@ -193,8 +193,8 @@ export async function register(
       displayName: options.userName,
     },
     pubKeyCredParams: [
-      { alg: -7, type: "public-key" }, // ES256
-      { alg: -257, type: "public-key" }, // RS256
+      { alg: COSE_ES256, type: "public-key" },
+      { alg: COSE_RS256, type: "public-key" },
     ],
     timeout: options.timeout ?? 60000,
     authenticatorSelection: {
@@ -214,18 +214,11 @@ export async function register(
         }
       : {}),
   };
+}
 
-  const signal = resetAbortController("New registration started");
-
-  const raw = asPublicKeyCredential(
-    await navigator.credentials.create({
-      publicKey: creationOptions,
-      signal,
-    }),
-  );
-
-  ongoingOp = null;
-
+function serializeAttestationResponse(
+  raw: PublicKeyCredential,
+): WebauthnRegistrationResponse {
   if (!(raw.response instanceof AuthenticatorAttestationResponse)) {
     throw new WebauthnError("Expected attestation response");
   }
@@ -248,6 +241,28 @@ export async function register(
       transports: response.getTransports(),
     },
   };
+}
+
+export async function register(
+  options: RegisterOptions,
+): Promise<WebauthnRegistrationResponse> {
+  if (!options.challenge) throw new WebauthnError("challenge required");
+  if (!isBase64url(options.challenge))
+    throw new WebauthnError("challenge must be base64url-encoded");
+
+  const creationOptions = buildCreationOptions(options);
+  const signal = resetAbortController("New registration started");
+
+  const raw = asPublicKeyCredential(
+    await navigator.credentials.create({
+      publicKey: creationOptions,
+      signal,
+    }),
+  );
+
+  ongoingOp = null;
+
+  return serializeAttestationResponse(raw);
 }
 
 /**

@@ -40,15 +40,18 @@
     ["calendar", "/calendar"],
   ]);
 
-  const ROUTE_TO_TAB = new Map<string, TabId>([
-    ["/", "home"],
+  const TAB_PREFIXES: [string, TabId][] = [
     ["/tickets", "tickets"],
     ["/calendar", "calendar"],
-  ]);
+  ];
 
-  const activeTab: TabId = $derived(
-    ROUTE_TO_TAB.get(page.url.pathname) ?? "home",
-  );
+  const activeTab: TabId = $derived.by(() => {
+    const path = page.url.pathname;
+    for (const [prefix, tab] of TAB_PREFIXES) {
+      if (path === prefix || path.startsWith(prefix + "/")) return tab;
+    }
+    return "home";
+  });
 
   function handleTabChange(tabId: TabId): void {
     const route = TAB_ROUTES.get(tabId);

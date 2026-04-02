@@ -101,14 +101,22 @@ function createThemeStore(): ThemeStore {
     glass: "auto" as GlassMode,
   });
 
-  const darkQuery =
-    typeof window !== "undefined"
-      ? window.matchMedia("(prefers-color-scheme: dark)")
-      : null;
+  let darkQuery: MediaQueryList | null = null;
 
-  state.resolved = resolveScheme(DEFAULT_COLOR_SCHEME, darkQuery);
+  function ensureDarkQuery(): MediaQueryList | null {
+    if (darkQuery === null && typeof window !== "undefined") {
+      darkQuery = window.matchMedia("(prefers-color-scheme: dark)");
+      darkQuery.addEventListener("change", () => {
+        if (state.colorPref === "system") {
+          persistAndApply("system");
+        }
+      });
+    }
+    return darkQuery;
+  }
 
-  // Hydrate from localStorage (browser only)
+  state.resolved = resolveScheme(DEFAULT_COLOR_SCHEME, ensureDarkQuery());
+
   if (typeof window !== "undefined") {
     const storedUi = localStorage.getItem(UI_THEME_KEY);
     if (storedUi === "ios" || storedUi === "material") {
@@ -148,7 +156,7 @@ function createThemeStore(): ThemeStore {
       }
     }
 
-    state.resolved = resolveScheme(state.colorPref, darkQuery);
+    state.resolved = resolveScheme(state.colorPref, ensureDarkQuery());
     applyScheme(state.resolved);
     applyVisualTheme(state.visual);
     applyGlassMode(state.glass, state.resolved);
@@ -156,21 +164,12 @@ function createThemeStore(): ThemeStore {
 
   function persistAndApply(scheme: ColorScheme): void {
     state.colorPref = scheme;
-    state.resolved = resolveScheme(scheme, darkQuery);
+    state.resolved = resolveScheme(scheme, ensureDarkQuery());
     applyScheme(state.resolved);
     applyGlassMode(state.glass, state.resolved);
     if (typeof window !== "undefined") {
       localStorage.setItem(COLOR_SCHEME_KEY, scheme);
     }
-  }
-
-  // Track OS theme changes when preference is 'system'
-  if (darkQuery) {
-    darkQuery.addEventListener("change", () => {
-      if (state.colorPref === "system") {
-        persistAndApply("system");
-      }
-    });
   }
 
   return {

@@ -42,7 +42,12 @@
             role="button"
             tabindex="0"
             onclick={() => ontap?.(item.id)}
-            onkeydown={(e) => e.key === "Enter" && ontap?.(item.id)}
+            onkeydown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                if (e.key === " ") e.preventDefault();
+                ontap?.(item.id);
+              }
+            }}
           >
             <span class="kb-icon-gutter" aria-hidden="true">
               <FileText size={13} />

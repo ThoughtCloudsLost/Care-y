@@ -229,6 +229,12 @@
           tabindex={activeFilter === filter.id ? 0 : -1}
           aria-selected={activeFilter === filter.id}
           onclick={() => (activeFilter = filter.id)}
+          onkeydown={(e: KeyboardEvent) => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              activeFilter = filter.id;
+            }
+          }}
         >
           {filter.label()}
           {filter.count}
