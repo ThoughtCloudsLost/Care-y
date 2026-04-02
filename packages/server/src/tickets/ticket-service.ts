@@ -9,7 +9,7 @@
  * - No activity timestamps on the ticket row (ADR-018 section 7)
  */
 
-import type { Kysely } from "kysely";
+import { sql, type Kysely } from "kysely";
 import type { TenantDatabase } from "../db/types.js";
 import type { TicketAccessChecker } from "./access.js";
 import { NotFoundError, TicketError, MergeError } from "../errors.js";
@@ -31,13 +31,21 @@ export interface TicketRecord {
   readonly createdAt: Date;
 }
 
+/** Enriched ticket with joined metadata for list/detail views. */
+export interface TicketListRecord extends TicketRecord {
+  readonly clientAlias: string;
+  readonly queueName: string;
+  readonly lastActivityAt: Date | null;
+  readonly followUpCount: number;
+}
+
 export interface TicketKeyWrap {
   readonly ephemeralPoint: string; // base64url (no padding)
   readonly nonce: string; // base64url (no padding)
   readonly wrappedKey: string; // base64url (no padding)
 }
 
-export interface TicketWithKeyWrap extends TicketRecord {
+export interface TicketWithKeyWrap extends TicketListRecord {
   readonly keyWrap: TicketKeyWrap | null;
 }
 
@@ -79,7 +87,7 @@ export interface TicketService {
   ): Promise<TicketRecord>;
 }
 
-function toRecord(row: {
+interface BaseTicketRow {
   id: string;
   client_id: string;
   queue_id: string;
@@ -91,7 +99,16 @@ function toRecord(row: {
   encrypted_description: Buffer;
   key_generation: string;
   created_at: Date;
-}): TicketRecord {
+}
+
+interface EnrichedTicketRow extends BaseTicketRow {
+  client_alias: string;
+  queue_name: string;
+  last_activity_at: Date | null;
+  followup_count: string | number | bigint | null;
+}
+
+function toRecord(row: BaseTicketRow): TicketRecord {
   return {
     id: row.id,
     clientId: row.client_id,
@@ -107,22 +124,23 @@ function toRecord(row: {
   };
 }
 
-function toRecordWithKeyWrap(row: {
-  id: string;
-  client_id: string;
-  queue_id: string;
-  status: string;
-  priority: string;
-  on_hold: boolean;
-  assigned_to: string | null;
-  encrypted_title: Buffer;
-  encrypted_description: Buffer;
-  key_generation: string;
-  created_at: Date;
-  ephemeral_point: Buffer | null;
-  nonce: Buffer | null;
-  wrapped_key: Buffer | null;
-}): TicketWithKeyWrap {
+function toListRecord(row: EnrichedTicketRow): TicketListRecord {
+  return {
+    ...toRecord(row),
+    clientAlias: row.client_alias,
+    queueName: row.queue_name,
+    lastActivityAt: row.last_activity_at,
+    followUpCount: Number(row.followup_count),
+  };
+}
+
+function toRecordWithKeyWrap(
+  row: EnrichedTicketRow & {
+    ephemeral_point: Buffer | null;
+    nonce: Buffer | null;
+    wrapped_key: Buffer | null;
+  },
+): TicketWithKeyWrap {
   const ep = row.ephemeral_point;
   const n = row.nonce;
   const wk = row.wrapped_key;
@@ -136,7 +154,7 @@ function toRecordWithKeyWrap(row: {
           wrappedKey: encode(new Uint8Array(wk)),
         }
       : null;
-  return { ...toRecord(row), keyWrap };
+  return { ...toListRecord(row), keyWrap };
 }
 
 export function createTicketService(
@@ -243,8 +261,22 @@ export function createTicketService(
             .on("tkw.volunteer_id", "=", userId)
             .onRef("tkw.key_generation", "=", "t.key_generation"),
         )
+        .innerJoin("clients as c", "c.id", "t.client_id")
+        .innerJoin("queues as q", "q.id", "t.queue_id")
         .selectAll("t")
         .select(["tkw.ephemeral_point", "tkw.nonce", "tkw.wrapped_key"])
+        .select("c.alias as client_alias")
+        .select("q.name as queue_name")
+        .select(
+          sql<Date | null>`(SELECT MAX(f.created_at) FROM followups f WHERE f.ticket_id = t.id)`.as(
+            "last_activity_at",
+          ),
+        )
+        .select(
+          sql<string>`(SELECT COUNT(*) FROM followups f WHERE f.ticket_id = t.id)`.as(
+            "followup_count",
+          ),
+        )
         .where("t.id", "=", ticketId)
         .executeTakeFirst();
 
@@ -267,8 +299,22 @@ export function createTicketService(
             .on("tkw.volunteer_id", "=", userId)
             .onRef("tkw.key_generation", "=", "t.key_generation"),
         )
+        .innerJoin("clients as c", "c.id", "t.client_id")
+        .innerJoin("queues as q", "q.id", "t.queue_id")
         .selectAll("t")
         .select(["tkw.ephemeral_point", "tkw.nonce", "tkw.wrapped_key"])
+        .select("c.alias as client_alias")
+        .select("q.name as queue_name")
+        .select(
+          sql<Date | null>`(SELECT MAX(f.created_at) FROM followups f WHERE f.ticket_id = t.id)`.as(
+            "last_activity_at",
+          ),
+        )
+        .select(
+          sql<string>`(SELECT COUNT(*) FROM followups f WHERE f.ticket_id = t.id)`.as(
+            "followup_count",
+          ),
+        )
         .where("t.queue_id", "in", [...accessibleQueues]);
 
       if (opts.queueId !== undefined) {
