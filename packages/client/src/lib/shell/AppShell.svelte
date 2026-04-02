@@ -10,6 +10,13 @@
   ARIA roles on TabbarLink (role="tab", aria-selected) are possible because
   we patch Konsta's Link.svelte to move the hardcoded role="link" BEFORE
   restProps, so our overrides take precedence. See patches/konsta@5.0.8.patch.
+
+  Pull-to-refresh: two-phase touch listener pattern.
+  - Passive touchstart on .k-page records startY; bails if scrollTop > 0.
+  - { passive: false } touchmove added to window only when a downward drag from
+    scrollTop === 0 is confirmed. Removed on touchend / touchcancel / upward delta.
+  - This avoids attaching a blocking listener to the root scroll container globally.
+  - Any child route can suppress PTR via setContext(PTR_CONTEXT_KEY, false).
 -->
 <script lang="ts">
   import {
@@ -29,10 +36,13 @@
     Search,
     TicketPlus,
   } from "@lucide/svelte";
-  import { tick } from "svelte";
+  import { tick, onMount, getContext } from "svelte";
   import type { Component } from "svelte";
   import * as m from "$lib/paraglide/messages.js";
   import type { TabId, AppShellProps } from "./types";
+  import { PTR_CONTEXT_KEY } from "./ptr-context";
+  import { themeStore } from "$lib/stores/theme.svelte";
+  import { useQueryClient } from "@tanstack/svelte-query";
 
   let {
     activeTab,
@@ -69,6 +79,151 @@
     { id: "tickets", label: () => m.nav_tickets(), icon: Ticket },
     { id: "calendar", label: () => m.nav_calendar(), icon: CalendarDays },
   ];
+
+  // ── Pull-to-refresh ──────────────────────────────────────────────────
+
+  const queryClient = useQueryClient();
+
+  // Route opt-out: child calls setContext(PTR_CONTEXT_KEY, false)
+  const ptrEnabled: boolean = getContext(PTR_CONTEXT_KEY) !== false;
+
+  const PTR_THRESHOLD = 72; // px of overscroll to trigger refresh
+  const PTR_MAX_PULL = 120; // px cap for visual travel
+  const PTR_RESISTANCE = 0.4; // dampen pull distance
+
+  type PtrPhase = "idle" | "pulling" | "releasing" | "refreshing";
+
+  let ptrPhase = $state<PtrPhase>("idle");
+  let ptrPullY = $state(0); // 0..PTR_MAX_PULL, drives indicator position
+  let ptrProgress = $state(0); // 0..1, drives iOS arc fill
+
+  let startY = 0;
+
+  // Cleanup refs for window listeners added dynamically
+  let removeMoveListener: (() => void) | null = null;
+  let removeEndListener: (() => void) | null = null;
+
+  function cleanupWindowListeners(): void {
+    removeMoveListener?.();
+    removeEndListener?.();
+    removeMoveListener = null;
+    removeEndListener = null;
+  }
+
+  function onTouchMove(e: TouchEvent): void {
+    const dy = e.touches[0].clientY - startY;
+
+    if (dy <= 0) {
+      // Scrolling up or lateral -- bail out of PTR tracking
+      cleanupWindowListeners();
+      ptrPhase = "idle";
+      ptrPullY = 0;
+      ptrProgress = 0;
+      return;
+    }
+
+    e.preventDefault();
+
+    const clamped = Math.min(dy * PTR_RESISTANCE, PTR_MAX_PULL);
+    ptrPullY = clamped;
+    ptrProgress = Math.min(clamped / PTR_THRESHOLD, 1);
+    ptrPhase = "pulling";
+  }
+
+  function onTouchEnd(): void {
+    cleanupWindowListeners();
+
+    if (ptrPhase !== "pulling") return;
+
+    if (ptrPullY >= PTR_THRESHOLD * PTR_RESISTANCE) {
+      void triggerRefresh();
+    } else {
+      // Didn't pull far enough -- snap back
+      ptrPhase = "idle";
+      ptrPullY = 0;
+      ptrProgress = 0;
+    }
+  }
+
+  async function triggerRefresh(): Promise<void> {
+    ptrPhase = "refreshing";
+    ptrPullY = PTR_THRESHOLD * PTR_RESISTANCE; // hold at threshold during spin
+
+    await queryClient.invalidateQueries();
+
+    // Brief hold so the spinner is visible even on fast responses
+    await new Promise<void>((resolve) => setTimeout(resolve, 400));
+
+    ptrPhase = "releasing";
+    ptrPullY = 0;
+    ptrProgress = 0;
+
+    // Let the CSS transition finish before going fully idle
+    await new Promise<void>((resolve) => setTimeout(resolve, 300));
+    ptrPhase = "idle";
+  }
+
+  function onPageTouchStart(e: TouchEvent): void {
+    if (!ptrEnabled) return;
+    if (ptrPhase === "refreshing" || ptrPhase === "releasing") return;
+
+    const scrollEl = document.querySelector<HTMLElement>(".k-page");
+    if (!scrollEl || scrollEl.scrollTop > 0) return;
+
+    startY = e.touches[0].clientY;
+
+    // Dynamically attach blocking listeners to window only now
+    const moveOpts: AddEventListenerOptions = { passive: false };
+
+    window.addEventListener("touchmove", onTouchMove, moveOpts);
+    window.addEventListener("touchend", onTouchEnd);
+    window.addEventListener("touchcancel", onTouchEnd);
+
+    removeMoveListener = () =>
+      window.removeEventListener("touchmove", onTouchMove, moveOpts);
+    removeEndListener = () => {
+      window.removeEventListener("touchend", onTouchEnd);
+      window.removeEventListener("touchcancel", onTouchEnd);
+    };
+  }
+
+  onMount(() => {
+    if (!ptrEnabled) return;
+
+    // .k-page is rendered synchronously by Konsta before onMount fires,
+    // so no tick() needed. Attach passive touchstart here; the blocking
+    // touchmove is added dynamically per-gesture in onPageTouchStart.
+    const scrollEl = document.querySelector<HTMLElement>(".k-page");
+    scrollEl?.addEventListener("touchstart", onPageTouchStart, {
+      passive: true,
+    });
+
+    return () => {
+      scrollEl?.removeEventListener("touchstart", onPageTouchStart);
+      cleanupWindowListeners();
+    };
+  });
+
+  // ── iOS arc indicator helpers ────────────────────────────────────────
+
+  const ARC_R = 11; // SVG circle radius
+  const ARC_CIRCUM = 2 * Math.PI * ARC_R; // ~69.1
+
+  // progress 0..1 -> stroke-dashoffset (full gap -> no gap)
+  function arcOffset(progress: number): number {
+    return ARC_CIRCUM * (1 - progress);
+  }
+
+  // Indicator sits just below the navbar (44px Konsta navbar + safe-area-inset-top).
+  // Travels down slightly as the user pulls for a natural feel.
+  // The idle branch is unreachable in the template ({#if ptrPhase !== "idle"}),
+  // but keeping it as a string avoids a mixed number|string type.
+  const NAVBAR_H = 44;
+  const indicatorTop = $derived(
+    ptrPhase === "idle"
+      ? "-40px"
+      : `calc(env(safe-area-inset-top, 0px) + ${NAVBAR_H + Math.round(ptrPullY * 0.2) + 8}px)`,
+  );
 </script>
 
 <Page>
@@ -111,6 +266,76 @@
       </div>
     {/if}
   </Navbar>
+
+  <!-- Pull-to-refresh indicator -->
+  {#if ptrPhase !== "idle"}
+    <div
+      class="ptr-indicator"
+      class:ptr-indicator-ios={themeStore.uiTheme === "ios"}
+      class:ptr-indicator-material={themeStore.uiTheme === "material"}
+      class:ptr-refreshing={ptrPhase === "refreshing"}
+      class:ptr-releasing={ptrPhase === "releasing"}
+      style:top={indicatorTop}
+      aria-hidden="true"
+    >
+      {#if themeStore.uiTheme === "ios"}
+        <!-- Circular arc that fills on pull, spins on release/refresh -->
+        <svg
+          class="ptr-arc"
+          width="28"
+          height="28"
+          viewBox="0 0 28 28"
+          fill="none"
+          xmlns="http://www.w3.org/2000/svg"
+        >
+          <circle
+            class="ptr-arc-track"
+            cx="14"
+            cy="14"
+            r={ARC_R}
+            stroke-width="2.5"
+          />
+          <circle
+            class="ptr-arc-fill"
+            cx="14"
+            cy="14"
+            r={ARC_R}
+            stroke-width="2.5"
+            stroke-linecap="round"
+            stroke-dasharray={ARC_CIRCUM}
+            stroke-dashoffset={ptrPhase === "pulling"
+              ? arcOffset(ptrProgress)
+              : 0}
+            transform="rotate(-90 14 14)"
+          />
+        </svg>
+      {:else}
+        <!-- Material: simple card with a spinner -->
+        <div class="ptr-material-card">
+          <svg
+            class="ptr-spinner"
+            width="24"
+            height="24"
+            viewBox="0 0 24 24"
+            fill="none"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <circle
+              cx="12"
+              cy="12"
+              r="9"
+              stroke-width="2.5"
+              stroke-linecap="round"
+              stroke-dasharray="56.5"
+              stroke-dashoffset={ptrPhase === "pulling"
+                ? 56.5 * (1 - ptrProgress)
+                : 0}
+            />
+          </svg>
+        </div>
+      {/if}
+    </div>
+  {/if}
 
   <nav aria-label={m.nav_main()}>
     <Toolbar tabbar tabbarIcons class="native-tabbar left-0 bottom-0 fixed">
@@ -207,5 +432,81 @@
     opacity: 1;
     pointer-events: auto;
     transform: scaleX(1);
+  }
+
+  /* ── Pull-to-refresh indicator ──────────────────────────────────── */
+
+  .ptr-indicator {
+    position: fixed;
+    left: 50%;
+    translate: -50% 0;
+    z-index: 100;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    pointer-events: none;
+  }
+
+  /* Animate the snap-back only, not the pull-down tracking */
+  .ptr-indicator.ptr-releasing {
+    transition: top 300ms cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  /* iOS: bare arc, no card background */
+  .ptr-indicator-ios .ptr-arc {
+    display: block;
+    filter: drop-shadow(0 1px 3px rgba(0, 0, 0, 0.25));
+  }
+
+  .ptr-arc-track {
+    stroke: color-mix(in srgb, var(--brand-primary, #888) 25%, transparent);
+  }
+
+  .ptr-arc-fill {
+    stroke: var(--brand-primary, currentColor);
+    transition: stroke-dashoffset 50ms linear;
+  }
+
+  /* Spin the arc when refreshing or releasing */
+  .ptr-refreshing .ptr-arc,
+  .ptr-releasing .ptr-arc {
+    animation: ptr-spin 0.8s linear infinite;
+  }
+
+  /* Material: card shadow pill */
+  .ptr-material-card {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: var(--k-surface-1, #fff);
+    box-shadow:
+      0 2px 6px rgba(0, 0, 0, 0.18),
+      0 0 0 1px rgba(0, 0, 0, 0.04);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  :global(html.dark) .ptr-material-card {
+    background: var(--k-surface-2, #1e1e1e);
+  }
+
+  .ptr-spinner {
+    stroke: var(--brand-primary, currentColor);
+    transition: stroke-dashoffset 50ms linear;
+  }
+
+  .ptr-refreshing .ptr-spinner,
+  .ptr-releasing .ptr-spinner {
+    animation: ptr-spin 0.8s linear infinite;
+  }
+
+  @keyframes ptr-spin {
+    from {
+      transform: rotate(0deg);
+    }
+    to {
+      transform: rotate(360deg);
+    }
   }
 </style>
