@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Needs Attention" |
+* | "Unassigned" |
 *
 * @param {Dashboard_Section_UnassignedInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

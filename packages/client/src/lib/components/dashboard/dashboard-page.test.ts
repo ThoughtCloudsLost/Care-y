@@ -25,6 +25,12 @@ vi.mock("$app/navigation", () => ({
   onNavigate: vi.fn(),
 }));
 
+vi.mock("$app/paths", () => ({
+  resolve: (path: string) => path,
+  base: "",
+  assets: "",
+}));
+
 // Controlled query states. Tests set these before rendering.
 // Order matches createQuery call order in the page: [meQuery, ticketsQuery].
 let queryStates: Array<Record<string, unknown>> = [];
@@ -98,6 +104,10 @@ function makeTicket(overrides: Record<string, unknown> = {}) {
     encryptedDescription: { type: "Buffer", data: [] },
     keyGeneration: "gen-001",
     createdAt: new Date().toISOString(),
+    clientAlias: "Sparrow",
+    queueName: "Intake",
+    lastActivityAt: null as string | null,
+    followUpCount: 0,
     keyWrap: {
       ephemeralPoint: "AAAA",
       nonce: "BBBB",
@@ -158,13 +168,15 @@ afterEach(cleanup);
 
 // --- Tests ---
 
+// Warm up the dynamic import so the first test doesn't pay the full
+// module resolution cost (Toast, CircleHelp, etc. are heavy in jsdom).
+const PageModule = await import("../../../routes/(app)/+page.svelte");
+
 describe("Dashboard page", () => {
   describe("loading state", () => {
     it("renders skeleton when tickets query is loading", async () => {
       queryStates = [meQuerySuccess, ticketsQueryLoading];
-      const { container } = render(
-        (await import("../../../routes/(app)/+page.svelte")).default,
-      );
+      const { container } = render(PageModule.default);
       expect(container.querySelector("[role='status']")).toBeTruthy();
     });
   });
@@ -172,7 +184,7 @@ describe("Dashboard page", () => {
   describe("error state", () => {
     it("renders error message when tickets query fails", async () => {
       queryStates = [meQuerySuccess, ticketsQueryError];
-      render((await import("../../../routes/(app)/+page.svelte")).default);
+      render(PageModule.default);
       expect(
         screen.getByText("Something went wrong. Please try again."),
       ).toBeTruthy();
@@ -209,7 +221,7 @@ describe("Dashboard page", () => {
       ];
 
       queryStates = [meQuerySuccess, ticketsQuerySuccess(tickets)];
-      render((await import("../../../routes/(app)/+page.svelte")).default);
+      render(PageModule.default);
 
       // StatCard renders aria-label="{count} {label}".
       // My Open: t1 only (assigned to USER_ID, open, not on hold)
@@ -225,7 +237,7 @@ describe("Dashboard page", () => {
 
     it("shows zero counts when no tickets match filters", async () => {
       queryStates = [meQuerySuccess, ticketsQuerySuccess([])];
-      render((await import("../../../routes/(app)/+page.svelte")).default);
+      render(PageModule.default);
 
       const statCards = screen.getAllByLabelText(/\d+\s/);
       const labels = statCards.map((el) => el.getAttribute("aria-label"));
@@ -240,7 +252,7 @@ describe("Dashboard page", () => {
     it("calls bridge.decrypt for tickets with key wraps", async () => {
       const ticket = makeTicket({ id: "t-decrypt" });
       queryStates = [meQuerySuccess, ticketsQuerySuccess([ticket])];
-      render((await import("../../../routes/(app)/+page.svelte")).default);
+      render(PageModule.default);
 
       // $effect fires asynchronously after mount.
       await vi.waitFor(() => {
@@ -257,7 +269,7 @@ describe("Dashboard page", () => {
     it("does not call bridge.decrypt for tickets without key wraps", async () => {
       const ticket = makeTicket({ id: "t-no-wrap", keyWrap: null });
       queryStates = [meQuerySuccess, ticketsQuerySuccess([ticket])];
-      render((await import("../../../routes/(app)/+page.svelte")).default);
+      render(PageModule.default);
 
       // Wait briefly for any effects to settle.
       await new Promise((r) => setTimeout(r, 50));
@@ -268,9 +280,7 @@ describe("Dashboard page", () => {
   describe("notification slot", () => {
     it("renders dashboard wrapper with notification slot", async () => {
       queryStates = [meQuerySuccess, ticketsQuerySuccess([])];
-      const { container } = render(
-        (await import("../../../routes/(app)/+page.svelte")).default,
-      );
+      const { container } = render(PageModule.default);
 
       // The .dashboard div is always present (holds the notification slot).
       const dashboard = container.querySelector(".dashboard");

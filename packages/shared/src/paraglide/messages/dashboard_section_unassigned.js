@@ -6,17 +6,17 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Dashboard_Section_UnassignedInputs */
 
 const en_dashboard_section_unassigned = /** @type {(inputs: Dashboard_Section_UnassignedInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Needs Attention`)
+	return /** @type {LocalizedString} */ (`Unassigned`)
 };
 
 const es_dashboard_section_unassigned = /** @type {(inputs: Dashboard_Section_UnassignedInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Necesita atencion`)
+	return /** @type {LocalizedString} */ (`Sin asignar`)
 };
 
 /**
 * | output |
 * | --- |
-* | "Needs Attention" |
+* | "Unassigned" |
 *
 * @param {Dashboard_Section_UnassignedInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

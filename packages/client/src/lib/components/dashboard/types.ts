@@ -14,6 +14,14 @@ export interface TicketPreviewItemProps {
   assignedTo: string | null;
   /** Creation timestamp */
   createdAt: Date;
+  /** Client alias (e.g., "Sparrow") */
+  clientAlias: string;
+  /** Queue name (e.g., "Crisis") */
+  queueName: string;
+  /** Timestamp of most recent follow-up, or null if none */
+  lastActivityAt: Date | null;
+  /** Number of follow-ups on this ticket */
+  followUpCount: number;
   /** Callback when item is tapped. Route file handles navigation. */
   ontap: (ticketId: string) => void;
 }
