@@ -164,5 +164,26 @@
   "dashboard_time_hours_ago": "{count}h ago",
   "dashboard_time_days_ago": "{count}d ago",
   "dashboard_exposure_title": "Security Summary",
-  "dashboard_exposure_subtitle": "Checking your protection status..."
+  "dashboard_exposure_subtitle": "Checking your protection status...",
+
+  "dashboard_info_shift": "Shift: {start} - {end}",
+  "dashboard_info_shift_label": "{label}",
+  "dashboard_info_volunteers_on_shift": "{count} on shift",
+  "dashboard_info_queues": "Queues",
+  "dashboard_info_no_queues": "No queues assigned",
+  "dashboard_info_activity": "Recent",
+  "dashboard_info_no_activity": "No recent activity",
+  "dashboard_info_kb": "KB Updates",
+  "dashboard_info_no_kb": "No recent articles",
+  "dashboard_info_kb_encrypted_title": "Updated article",
+
+  "dashboard_activity_ticket_created": "New ticket",
+  "dashboard_activity_ticket_closed": "Closed",
+  "dashboard_activity_ticket_reopened": "Reopened",
+  "dashboard_activity_followup_added": "New message",
+  "dashboard_activity_mention": "Mention",
+  "dashboard_activity_unknown": "Activity",
+
+  "dashboard_assigned_you": "You",
+  "dashboard_assigned_unassigned": "Unassigned"
 }

@@ -723,6 +723,78 @@ export function createTicketRouter(deps: TicketRouterDeps) {
         }),
       ),
 
+    // --- Dashboard: activity feed (scoped to user's queues) ---
+    recentActivity: volunteerProcedure
+      .input(
+        z
+          .object({ limit: z.number().int().min(1).max(10).default(5) })
+          .default({ limit: 5 }),
+      )
+      .query(
+        withErrorWrapping(async ({ ctx, input }) => {
+          const tDb = ctx.org.tenantDb;
+          const qps = deps.createQueuePermissionsSvc(tDb);
+          const queueIds = await qps.getUserQueues(ctx.user.id);
+
+          if (queueIds.length === 0) return [];
+
+          const rows = await tDb
+            .selectFrom("audit_log as al")
+            .innerJoin("tickets as t", "t.id", "al.ticket_id")
+            .innerJoin("clients as c", "c.id", "t.client_id")
+            .innerJoin("queues as q", "q.id", "t.queue_id")
+            .select([
+              "al.id",
+              "al.event_type as eventType",
+              "al.ticket_id as ticketId",
+              "c.alias as clientAlias",
+              "q.name as queueName",
+              "al.created_at as createdAt",
+            ])
+            .where("t.queue_id", "in", queueIds)
+            .where("al.ticket_id", "is not", null)
+            .orderBy("al.created_at", "desc")
+            .limit(input.limit)
+            .execute();
+
+          return rows;
+        }),
+      ),
+
+    // --- Dashboard: queue membership ---
+    myQueues: volunteerProcedure.query(
+      withErrorWrapping(async ({ ctx }) => {
+        const tDb = ctx.org.tenantDb;
+        const qps = deps.createQueuePermissionsSvc(tDb);
+        const queueIds = await qps.getUserQueues(ctx.user.id);
+
+        if (queueIds.length === 0) return [];
+
+        const rows = await tDb
+          .selectFrom("queues")
+          .select(["id", "name"])
+          .where("id", "in", queueIds)
+          .where("is_active", "=", true)
+          .orderBy("name", "asc")
+          .execute();
+
+        return rows;
+      }),
+    ),
+
+    // --- Dashboard: shift info (mock, scheduling backend stub) ---
+    dashboardInfo: volunteerProcedure.query(
+      withErrorWrapping(() => {
+        // Hardcoded mock data until the scheduling backend is built.
+        return {
+          shift: {
+            current: { start: "09:00", end: "13:00", label: "Morning" },
+            volunteersOnShift: 3,
+          },
+        };
+      }),
+    ),
+
     // --- Metadata search (injected by 5d wiring) ---
     ...(deps.createSearchSvc ? buildSearchRoutes(deps.createSearchSvc) : {}),
 

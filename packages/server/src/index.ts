@@ -102,6 +102,11 @@ import {
 } from "./notifications/service.js";
 import { createSearchService } from "./tickets/search.js";
 import { createAuditService } from "./tickets/audit.js";
+import {
+  createKBCategoryService,
+  createKBItemService,
+  createKBVoteService,
+} from "./kb/service.js";
 
 // --- DB startup probe ---
 
@@ -431,6 +436,11 @@ const appRouter = createAppRouter({
       }),
     createAuditSvc: createAuditService,
     notificationService,
+  },
+  kbDeps: {
+    createCategorySvc: createKBCategoryService,
+    createItemSvc: createKBItemService,
+    createVoteSvc: createKBVoteService,
   },
   notificationDeps: {
     createPushSubSvc: (tDb) => createPushSubscriptionService(tDb, pushSender),

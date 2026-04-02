@@ -107,6 +107,9 @@ export interface KBItemService {
   ): Promise<KBItemRecord>;
 
   delete(itemId: string): Promise<void>;
+
+  /** Return the N most recently updated items, ordered by updated_at desc. */
+  listRecentlyUpdated(limit: number): Promise<KBItemRecord[]>;
 }
 
 export interface KBVoteService {
@@ -390,6 +393,16 @@ export function createKBItemService(db: Kysely<TenantDatabase>): KBItemService {
       if (result.numDeletedRows === 0n) {
         throw new NotFoundError(ErrorCode.KB_ARTICLE_NOT_FOUND);
       }
+    },
+
+    async listRecentlyUpdated(limit) {
+      const rows = await db
+        .selectFrom("kb_items")
+        .selectAll()
+        .orderBy("updated_at", "desc")
+        .limit(limit)
+        .execute();
+      return rows.map(toItemRecord);
     },
   };
 }

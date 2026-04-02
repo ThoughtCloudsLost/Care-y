@@ -290,6 +290,130 @@ async function seed(): Promise<void> {
     }
   }
 
+  // --- Seed KB categories and articles ---
+  const kbCategories = [
+    {
+      name: "Procedures",
+      articles: ["Intake call checklist", "Escalation protocol"],
+    },
+    {
+      name: "Resources",
+      articles: ["Housing referral contacts", "Legal aid directory"],
+    },
+    { name: "Safety", articles: ["Safety planning template"] },
+  ];
+
+  for (const cat of kbCategories) {
+    const existingCat = await tenantDatabase
+      .selectFrom("kb_categories")
+      .select("id")
+      .where("name", "=", cat.name)
+      .executeTakeFirst();
+
+    let categoryId: string;
+    if (existingCat) {
+      categoryId = existingCat.id;
+      console.log(`KB category "${cat.name}" already exists, skipping.`);
+    } else {
+      const inserted = await tenantDatabase
+        .insertInto("kb_categories")
+        .values({ name: cat.name })
+        .returning("id")
+        .executeTakeFirstOrThrow();
+      categoryId = inserted.id;
+      console.log(`Created KB category "${cat.name}" (${categoryId})`);
+    }
+
+    for (const title of cat.articles) {
+      const encTitle = sealedBox.seal(title);
+      const encBody = sealedBox.seal(`Body content for: ${title}`);
+
+      // Check by category + created_by (same admin, same category = likely same seed)
+      const existingItem = await tenantDatabase
+        .selectFrom("kb_items")
+        .select("id")
+        .where("category_id", "=", categoryId)
+        .where("created_by", "=", adminUserId)
+        .limit(cat.articles.length)
+        .execute();
+
+      if (existingItem.length >= cat.articles.length) {
+        console.log(`KB articles for "${cat.name}" already seeded, skipping.`);
+        break;
+      }
+
+      await tenantDatabase
+        .insertInto("kb_items")
+        .values({
+          category_id: categoryId,
+          encrypted_title: encTitle,
+          encrypted_body: encBody,
+          created_by: adminUserId,
+        })
+        .execute();
+      console.log(`Created KB article "${title}" in "${cat.name}"`);
+    }
+  }
+
+  // --- Seed audit log entries (sample activity for dashboard feed) ---
+  const clientIds = await tenantDatabase
+    .selectFrom("clients")
+    .select("id")
+    .limit(3)
+    .execute();
+
+  const ticketRows = await tenantDatabase
+    .selectFrom("tickets")
+    .select("id")
+    .limit(5)
+    .execute();
+
+  if (ticketRows.length > 0) {
+    const existingAudit = await tenantDatabase
+      .selectFrom("audit_log")
+      .select("id")
+      .limit(1)
+      .executeTakeFirst();
+
+    if (!existingAudit) {
+      const events: Array<{
+        event_type: string;
+        actor_id: string;
+        ticket_id: string;
+        metadata: Record<string, unknown>;
+      }> = [];
+
+      for (const ticket of ticketRows) {
+        events.push({
+          event_type: "ticket_created",
+          actor_id: adminUserId,
+          ticket_id: ticket.id,
+          metadata: {},
+        });
+      }
+
+      if (ticketRows.length >= 2 && ticketRows[1]) {
+        events.push({
+          event_type: "followup_added",
+          actor_id: adminUserId,
+          ticket_id: ticketRows[1].id,
+          metadata: {},
+        });
+      }
+
+      for (const entry of events) {
+        await tenantDatabase.insertInto("audit_log").values(entry).execute();
+      }
+      console.log(`Seeded ${String(events.length)} audit log entries.`);
+    } else {
+      console.log("Audit log already has entries, skipping.");
+    }
+  } else {
+    console.log(
+      "No tickets found for audit seeding (run devSeedTickets first).",
+    );
+  }
+
   console.log("Seed complete.");
 }
 
