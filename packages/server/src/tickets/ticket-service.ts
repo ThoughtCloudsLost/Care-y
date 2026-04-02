@@ -267,7 +267,11 @@ export function createTicketService(
         )
         .innerJoin("clients as c", "c.id", "t.client_id")
         .innerJoin("queues as q", "q.id", "t.queue_id")
-        .leftJoin("users as u", "u.id", "t.assigned_to")
+        .leftJoin("users as u", (join) =>
+          join.on((eb) =>
+            eb(eb.cast("t.assigned_to", "uuid"), "=", eb.ref("u.id")),
+          ),
+        )
         .selectAll("t")
         .select(["tkw.ephemeral_point", "tkw.nonce", "tkw.wrapped_key"])
         .select("c.alias as client_alias")
@@ -309,7 +313,11 @@ export function createTicketService(
         )
         .innerJoin("clients as c", "c.id", "t.client_id")
         .innerJoin("queues as q", "q.id", "t.queue_id")
-        .leftJoin("users as u", "u.id", "t.assigned_to")
+        .leftJoin("users as u", (join) =>
+          join.on((eb) =>
+            eb(eb.cast("t.assigned_to", "uuid"), "=", eb.ref("u.id")),
+          ),
+        )
         .selectAll("t")
         .select(["tkw.ephemeral_point", "tkw.nonce", "tkw.wrapped_key"])
         .select("c.alias as client_alias")

@@ -761,7 +761,7 @@ export function createTicketRouter(deps: TicketRouterDeps) {
         }),
       ),
 
-    // --- Dashboard: queue membership ---
+    // --- Dashboard: queue membership with open ticket counts ---
     myQueues: volunteerProcedure.query(
       withErrorWrapping(async ({ ctx }) => {
         const tDb = ctx.org.tenantDb;
@@ -771,25 +771,36 @@ export function createTicketRouter(deps: TicketRouterDeps) {
         if (queueIds.length === 0) return [];
 
         const rows = await tDb
-          .selectFrom("queues")
-          .select(["id", "name"])
-          .where("id", "in", queueIds)
-          .where("is_active", "=", true)
-          .orderBy("name", "asc")
+          .selectFrom("queues as q")
+          .leftJoin("tickets as t", (join) =>
+            join.onRef("t.queue_id", "=", "q.id").on("t.status", "=", "open"),
+          )
+          .select(["q.id", "q.name"])
+          .select((eb) => eb.fn.count<string>("t.id").as("openCount"))
+          .where("q.id", "in", queueIds)
+          .where("q.is_active", "=", true)
+          .groupBy(["q.id", "q.name"])
+          .orderBy("q.name", "asc")
           .execute();
 
         return rows;
       }),
     ),
 
-    // --- Dashboard: shift info (mock, scheduling backend stub) ---
+    // --- Dashboard: shift info (STUB:SHIFT-SCHEDULING) ---
     dashboardInfo: volunteerProcedure.query(
       withErrorWrapping(() => {
-        // Hardcoded mock data until the scheduling backend is built.
+        // TODO(shift-scheduling): Replace with real DB queries when
+        // the shift scheduling feature lands.
         return {
           shift: {
             current: { start: "09:00", end: "13:00", label: "Morning" },
             volunteersOnShift: 3,
+            volunteers: [
+              { initials: "JN", isCurrentUser: true },
+              { initials: "AK", isCurrentUser: false },
+              { initials: "ML", isCurrentUser: false },
+            ],
           },
         };
       }),
