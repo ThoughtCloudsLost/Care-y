@@ -12,6 +12,33 @@
 
 import { vi } from "vitest";
 
+// jsdom does not implement matchMedia. Stub it so components that
+// read media queries (e.g., prefers-reduced-motion) don't crash.
+if (
+  typeof globalThis.window !== "undefined" &&
+  typeof window.matchMedia !== "function"
+) {
+  window.matchMedia = (query: string) =>
+    ({
+      matches: false,
+      media: query,
+      onchange: null,
+      addListener(_cb: unknown) {
+        /* deprecated stub */
+      },
+      removeListener(_cb: unknown) {
+        /* deprecated stub */
+      },
+      addEventListener(_type: string, _cb: unknown) {
+        /* stub */
+      },
+      removeEventListener(_type: string, _cb: unknown) {
+        /* stub */
+      },
+      dispatchEvent: () => false,
+    }) as MediaQueryList;
+}
+
 // ---------------------------------------------------------------------------
 // $app/environment
 // ---------------------------------------------------------------------------
@@ -19,11 +46,17 @@ import { vi } from "vitest";
 // mockDev.mockReturnValue(true) in beforeEach or per-test.
 
 export const mockDev = vi.fn((): boolean => false);
+export const mockBrowser = vi.fn((): boolean => true);
 
 vi.mock("$app/environment", () => ({
   get dev(): boolean {
     return mockDev();
   },
+  get browser(): boolean {
+    return mockBrowser();
+  },
+  building: false,
+  version: "test",
 }));
 
 // ---------------------------------------------------------------------------

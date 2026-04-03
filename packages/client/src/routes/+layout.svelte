@@ -2,7 +2,9 @@
   import "../app.css";
   import { App } from "konsta/svelte";
   import { QueryClient, QueryClientProvider } from "@tanstack/svelte-query";
-  import { onNavigate } from "$app/navigation";
+  import { goto } from "$app/navigation";
+  import { resolve } from "$app/paths";
+  import { page } from "$app/state";
   import { onMount } from "svelte";
   import { browser } from "$app/environment";
   import favicon from "$lib/assets/favicon.svg";
@@ -13,10 +15,18 @@
   import { getCachedBranding, applyBranding } from "$lib/branding/index.js";
   import RisoInkFilter from "$lib/components/RisoInkFilter.svelte";
   import AppShell from "$lib/shell/AppShell.svelte";
-  import DevThemePanel from "$lib/components/DevThemePanel.svelte";
-  import { TAB_IDS, type TabId } from "$lib/shell/types";
+  import type { Component } from "svelte";
+  import type { TabId } from "$lib/shell/types";
 
-  const isDev = import.meta.env.DEV;
+  // DevThemePanel is dynamically imported so it is fully excluded from prod
+  // bundles. Never convert this to a static import. A static import alone
+  // ships the module even when the render branch is dead-code-eliminated.
+  let DevPanel = $state<Component | null>(null);
+  if (import.meta.env.DEV) {
+    void import("$lib/components/DevThemePanel.svelte").then(
+      (m) => (DevPanel = m.default),
+    );
+  }
 
   let { children } = $props();
 
@@ -28,29 +38,35 @@
     },
   });
 
-  // View transitions (180ms linear).
-  // startViewTransition is not yet in all TS DOM lib types.
-  function hasViewTransitions(doc: Document): doc is Document & {
-    startViewTransition: (cb: () => Promise<void>) => void;
-  } {
-    return "startViewTransition" in doc;
-  }
+  // Derive active tab from the current URL path.
+  // "more" is a menu trigger (not a route), so it has no entry here.
+  type TabRoute = "/" | "/tickets" | "/calendar";
 
-  onNavigate(async (navigation) => {
-    if (!hasViewTransitions(document)) return;
-    await new Promise<void>((resolve) => {
-      document.startViewTransition(async () => {
-        resolve();
-        await navigation.complete;
-      });
-    });
+  const TAB_ROUTES = new Map<TabId, TabRoute>([
+    ["home", "/"],
+    ["tickets", "/tickets"],
+    ["calendar", "/calendar"],
+  ]);
+
+  const TAB_PREFIXES: [string, TabId][] = [
+    ["/tickets", "tickets"],
+    ["/calendar", "calendar"],
+  ];
+
+  const activeTab: TabId = $derived.by(() => {
+    const path = page.url.pathname;
+    for (const [prefix, tab] of TAB_PREFIXES) {
+      if (path === prefix || path.startsWith(prefix + "/")) return tab;
+    }
+    return "home";
   });
 
-  let activeTab: TabId = $state(TAB_IDS[0]);
-
   function handleTabChange(tabId: TabId): void {
-    activeTab = tabId;
-    // Tab-to-route mapping wired when route structure exists
+    const route = TAB_ROUTES.get(tabId);
+    if (route !== undefined && page.url.pathname !== route) {
+      void goto(resolve(route));
+    }
+    // Tabs without a route entry (e.g. "more") are menu triggers, not navigation.
   }
 
   const sseListener = createSSEListener({
@@ -125,8 +141,8 @@
     <AppShell {activeTab} ontabchange={handleTabChange}>
       {@render children()}
     </AppShell>
-    {#if isDev}
-      <DevThemePanel />
+    {#if DevPanel}
+      <DevPanel />
     {/if}
   </App>
 </QueryClientProvider>
@@ -139,6 +155,12 @@
     height: 100dvh;
     min-height: auto;
     overflow: hidden;
+  }
+
+  /* Remove iOS rubber-band bounce on the scroll container.
+     overscroll-behavior on html/body does not cover inner scroll containers. */
+  :global(.k-page) {
+    overscroll-behavior-y: none;
   }
 
   /* Dark mode: paper texture on the page canvas.

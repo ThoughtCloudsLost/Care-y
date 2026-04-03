@@ -79,10 +79,12 @@ export {
   uploadVolPublicSchema,
   passwordChangeKeysSchema,
   uploadOrgPublicKeySchema,
+  rotateOrgKeySchema,
   type InitCryptoKeysInput,
   type UploadVolPublicInput,
   type PasswordChangeKeysInput,
   type UploadOrgPublicKeyInput,
+  type RotateOrgKeyInput,
 } from "./schemas/keys.js";
 
 // --- OPRF schemas ---

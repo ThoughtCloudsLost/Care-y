@@ -119,7 +119,10 @@ async function fetchAndUnwrapOrgKey(
       orgKeyData.ephemeralPoint,
       orgKeyData.nonce,
     );
-  } catch {
+  } catch (err: unknown) {
+    if (import.meta.env.DEV) {
+      console.warn("[fetchAndUnwrapOrgKey] failed:", err);
+    }
     // Org key may not exist yet (pre-onboarding). Non-fatal.
     return null;
   }

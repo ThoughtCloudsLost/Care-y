@@ -44,7 +44,7 @@
 
 .theme-default.dark {
   --ink: #e5e5e5;
-  --muted: #777777;
+  --muted: #888888;
   --paper: var(--color-ios-dark-surface);
   --surface-1: var(--color-ios-dark-surface-1);
   --surface-2: var(--color-ios-dark-surface-2);

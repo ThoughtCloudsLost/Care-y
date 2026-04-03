@@ -8,6 +8,8 @@ import {
 const BRANDING_CACHE_KEY = "care-y-branding";
 const DEFAULT_PRIMARY = "#f05030";
 
+let previousLogoBlobUrl: string | null = null;
+
 /** Fetch encrypted branding from server, decrypt with org key, cache in SW. */
 export async function loadBranding(
   fetchDecrypted: () => Promise<BrandingData>,
@@ -27,9 +29,7 @@ export async function loadBranding(
       isValidHexColor(data.accentColor)
         ? data.accentColor
         : null,
-    logoBlobUrl: data.logoBlob
-      ? URL.createObjectURL(new Blob([data.logoBlob]))
-      : null,
+    logoBlobUrl: data.logoBlob ? createLogoBlobUrl(data.logoBlob) : null,
   };
 
   await cacheBranding(cached);
@@ -91,6 +91,14 @@ function isCachedBranding(data: unknown): data is CachedBranding {
     "primaryColor" in data &&
     typeof data.primaryColor === "string"
   );
+}
+
+function createLogoBlobUrl(logoBlob: BlobPart): string {
+  if (previousLogoBlobUrl !== null) {
+    URL.revokeObjectURL(previousLogoBlobUrl);
+  }
+  previousLogoBlobUrl = URL.createObjectURL(new Blob([logoBlob]));
+  return previousLogoBlobUrl;
 }
 
 /** Strip HTML tags from org name. DOM-free for SW compatibility. */

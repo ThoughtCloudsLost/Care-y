@@ -4,7 +4,37 @@ import { sveltekit } from "@sveltejs/kit/vite";
 import tailwindcss from "@tailwindcss/vite";
 import basicSsl from "@vitejs/plugin-basic-ssl";
 import { SvelteKitPWA } from "@vite-pwa/sveltekit";
-import { defineConfig } from "vite";
+import { defineConfig, type Plugin } from "vite";
+
+/**
+ * Vite plugin: enable cross-origin isolation on all dev server responses.
+ *
+ * hooks.server.ts sets COOP same-origin + COEP require-corp on SvelteKit
+ * page responses (enables SharedArrayBuffer for libsodium WASM). Under COEP
+ * require-corp, every subresource must carry a Cross-Origin-Resource-Policy
+ * header, and module Workers must carry their own COEP header
+ * (coep-frame-resource-needs-coep-header).
+ *
+ * Vite's dev server doesn't add these headers by default, and server.headers
+ * only covers Vite's static file handler. This plugin uses configureServer
+ * to inject middleware before all other handlers, covering /@fs/ paths,
+ * pre-bundled deps, HMR preambles, and Worker scripts.
+ *
+ * Standard pattern from vite-plugin-cross-origin-isolation and Vite #3909.
+ */
+function crossOriginIsolationPlugin(): Plugin {
+  return {
+    name: "care-y-cross-origin-isolation",
+    configureServer(server) {
+      server.middlewares.use((_req, res, next) => {
+        res.setHeader("Cross-Origin-Opener-Policy", "same-origin");
+        res.setHeader("Cross-Origin-Embedder-Policy", "require-corp");
+        res.setHeader("Cross-Origin-Resource-Policy", "same-origin");
+        next();
+      });
+    },
+  };
+}
 
 const isMobile = process.env.VITE_MOBILE === "true";
 
@@ -30,6 +60,7 @@ const mkcert = isMobile ? httpsConfig() : {};
 
 export default defineConfig({
   plugins: [
+    crossOriginIsolationPlugin(),
     paraglideVitePlugin({
       project: "./project.inlang",
       outdir: "./src/lib/paraglide",
@@ -71,6 +102,14 @@ export default defineConfig({
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/trpc/, ""),
       },
+    },
+    fs: {
+      // Module Workers resolve imports through Vite's dev server (not the
+      // SSR bundler), so workspace packages the Worker depends on must be
+      // in the allow list. Without this, the crypto Worker's import of
+      // @care-y/crypto resolves to /@fs/.../packages/crypto/... and Vite
+      // returns 403 because it falls outside the default allow boundary.
+      allow: ["../crypto"],
     },
   },
   ssr: {

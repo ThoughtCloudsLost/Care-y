@@ -14,7 +14,9 @@
     get opened() {
       return opened;
     },
-    ondismiss,
+    get ondismiss() {
+      return ondismiss;
+    },
   });
 </script>
 

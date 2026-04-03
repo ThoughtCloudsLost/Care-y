@@ -92,13 +92,21 @@ export interface SodiumBackend {
   crypto_hash_sha512(message: Uint8Array): Uint8Array;
 
   // --- Curve25519 sealed box (for org key tier) ---
-  // Used by client-side OrgKeyManager to unseal data encrypted with crypto_box_seal.
   // The org keypair is Curve25519, separate from the ristretto255 keys used for ECIES.
+  // crypto_box_seal: client-side sealing of KB articles, branding, org config.
+  // crypto_box_seal_open: client-side unsealing via OrgKeyManager.
+  // crypto_box_keypair: org keypair generation during admin onboarding.
+  crypto_box_seal(message: Uint8Array, publicKey: Uint8Array): Uint8Array;
   crypto_box_seal_open(
     ciphertext: Uint8Array,
     publicKey: Uint8Array,
     secretKey: Uint8Array,
   ): Uint8Array;
+  crypto_box_keypair(): {
+    publicKey: Uint8Array;
+    privateKey: Uint8Array;
+    keyType: string;
+  };
   crypto_scalarmult_base(secretKey: Uint8Array): Uint8Array;
   readonly crypto_box_SEALBYTES: number; // 48
   readonly crypto_box_PUBLICKEYBYTES: number; // 32

@@ -21,11 +21,22 @@ export interface CleanupOrgKey {
   zero(): void;
 }
 
+/** Narrow interface: only the method cleanup needs from decrypt caches. */
+export interface CleanupCache {
+  clear(): void;
+}
+
 let installed = false;
 let bridgeRef: CleanupBridge | null = null;
 let orgKeyRef: CleanupOrgKey | null = null;
+let cacheRefs: CleanupCache[] = [];
 
 function handleBeforeUnload(): void {
+  // Clear decrypt caches first (plaintext strings in SvelteMap).
+  for (const cache of cacheRefs) {
+    cache.clear();
+  }
+
   // Fire-and-forget: do not await, do not block unload
   if (bridgeRef) {
     bridgeRef.zeroAll().catch(() => {
@@ -38,16 +49,18 @@ function handleBeforeUnload(): void {
 }
 
 /**
- * Install the beforeunload handler for key zeroing.
+ * Install the beforeunload handler for key zeroing and cache clearing.
  * Call once during app initialization (root layout).
  * Idempotent: safe to call multiple times.
  */
 export function installCleanupHandler(
   bridge: CleanupBridge,
   orgKey: CleanupOrgKey,
+  caches?: CleanupCache[],
 ): void {
   bridgeRef = bridge;
   orgKeyRef = orgKey;
+  cacheRefs = caches ?? [];
 
   if (!installed) {
     window.addEventListener("beforeunload", handleBeforeUnload);

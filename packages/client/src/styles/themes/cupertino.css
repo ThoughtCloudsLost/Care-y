@@ -111,8 +111,8 @@
 /* Dark mode cards get subtle backdrop blur for frosted glass effect */
 .theme-cupertino.dark .k-block,
 .theme-cupertino.dark .k-card {
-  backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
+  backdrop-filter: blur(20px);
 }
 
 /* Elevated cards: clean rounded with subtle elevation */
@@ -124,8 +124,8 @@
 }
 
 .theme-cupertino.dark .card-elevated {
-  backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
+  backdrop-filter: blur(20px);
 }
 
 /* ==========================================================
@@ -141,8 +141,8 @@
 }
 
 .theme-cupertino.dark .k-list {
-  backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
+  backdrop-filter: blur(20px);
 }
 
 /* List dividers */
@@ -202,8 +202,8 @@
 }
 
 .theme-cupertino.dark .k-dialog {
-  backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
+  backdrop-filter: blur(20px);
 }
 
 .theme-cupertino .k-popup {
@@ -223,8 +223,8 @@
 }
 
 .theme-cupertino.dark .k-actions-group {
-  backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
+  backdrop-filter: blur(20px);
 }
 
 /* ==========================================================
@@ -301,15 +301,15 @@
   .theme-cupertino .k-actions-group {
     border: 2px solid currentColor;
     box-shadow: none;
-    backdrop-filter: none;
     -webkit-backdrop-filter: none;
+    backdrop-filter: none;
     background: Canvas;
   }
 
   .theme-cupertino .k-navbar,
   .theme-cupertino .k-toolbar {
-    backdrop-filter: none;
     -webkit-backdrop-filter: none;
+    backdrop-filter: none;
     background: Canvas;
     border-color: currentColor;
   }

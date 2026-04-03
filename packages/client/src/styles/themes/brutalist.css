@@ -52,6 +52,9 @@
   --paper: var(--color-ios-light-surface);
   --surface-1: var(--color-ios-light-surface-1);
   --surface-2: var(--color-ios-light-surface-2);
+
+  /* Card tokens: flat/sharp brutalist surfaces */
+  --card-radius: 0;
 }
 
 /* --- Dark mode: bunker interior, fluorescent-lit concrete --- */
@@ -87,8 +90,8 @@
     .k-actions-group,
     .k-searchbar input
   ) {
-  backdrop-filter: none;
   -webkit-backdrop-filter: none;
+  backdrop-filter: none;
 }
 
 .theme-brutalist
@@ -330,6 +333,7 @@
 .theme-brutalist .brutalist-redacted {
   background: var(--ink);
   color: transparent;
+  -webkit-user-select: none;
   user-select: none;
   display: inline;
   padding: 0.05em 0.25em;
@@ -413,8 +417,8 @@
   .theme-brutalist .k-navbar,
   .theme-brutalist .k-toolbar,
   .theme-brutalist .k-segmented {
-    backdrop-filter: none;
     -webkit-backdrop-filter: none;
+    backdrop-filter: none;
     background: Canvas;
     border: 2px solid currentColor;
     box-shadow: none;

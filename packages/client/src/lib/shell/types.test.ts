@@ -17,13 +17,11 @@ import {
 describe("shell types", () => {
   it("exports TAB_IDS as a readonly tuple", () => {
     expectTypeOf(TAB_IDS).toExtend<readonly string[]>();
-    expect(TAB_IDS).toEqual(["home", "tickets", "calendar", "more"]);
+    expect(TAB_IDS).toEqual(["home", "tickets", "calendar"]);
   });
 
   it("TabId is a union of the tab ID strings", () => {
-    expectTypeOf<TabId>().toEqualTypeOf<
-      "home" | "tickets" | "calendar" | "more"
-    >();
+    expectTypeOf<TabId>().toEqualTypeOf<"home" | "tickets" | "calendar">();
   });
 
   it("AppShellProps has activeTab, ontabchange, and children", () => {
