@@ -847,8 +847,12 @@ export function createTicketRouter(deps: TicketRouterDeps) {
               const clients = await tDb
                 .selectFrom("clients")
                 .select(["id", "alias"])
+                .orderBy("created_at", "asc")
                 .execute();
-              const clientMap = new Map(clients.map((c) => [c.alias, c.id]));
+
+              if (clients.length === 0) {
+                throw new Error("No clients found. Run seed first.");
+              }
 
               // Helper: minutes ago as a Date
               function minutesAgo(m: number): Date {
@@ -856,8 +860,8 @@ export function createTicketRouter(deps: TicketRouterDeps) {
               }
 
               // 3. Ticket definitions with varied data
+              // Clients are assigned round-robin from whatever clients exist.
               interface TicketDef {
-                clientAlias: string;
                 title: string;
                 description: string;
                 queue: string;
@@ -877,7 +881,6 @@ export function createTicketRouter(deps: TicketRouterDeps) {
               const ticketDefs: TicketDef[] = [
                 // --- MY TICKETS (assigned to me) ---
                 {
-                  clientAlias: "Sparrow",
                   title: "Help with housing",
                   description: "Client needs housing referral and support",
                   queue: "Housing",
@@ -905,7 +908,6 @@ export function createTicketRouter(deps: TicketRouterDeps) {
                   ],
                 },
                 {
-                  clientAlias: "Wren",
                   title: "Follow-up on legal aid referral",
                   description: "Client was referred to legal aid last week",
                   queue: "Intake",
@@ -943,7 +945,6 @@ export function createTicketRouter(deps: TicketRouterDeps) {
                   ],
                 },
                 {
-                  clientAlias: "Jay",
                   title: "Safety planning session",
                   description: "Client requested safety planning support",
                   queue: "Crisis",
@@ -966,7 +967,6 @@ export function createTicketRouter(deps: TicketRouterDeps) {
                   ],
                 },
                 {
-                  clientAlias: "Dove",
                   title: "Benefits application help",
                   description: "Assistance with benefits paperwork",
                   queue: "Intake",
@@ -984,7 +984,6 @@ export function createTicketRouter(deps: TicketRouterDeps) {
                   ],
                 },
                 {
-                  clientAlias: "Crane",
                   title: "Encrypted intake note",
                   description: "Intake note from phone call, key wrap pending",
                   queue: "Intake",
@@ -998,7 +997,6 @@ export function createTicketRouter(deps: TicketRouterDeps) {
 
                 // --- ON HOLD ---
                 {
-                  clientAlias: "Finch",
                   title: "Waiting for callback from shelter",
                   description:
                     "Client requested callback when shelter has a bed",
@@ -1022,7 +1020,6 @@ export function createTicketRouter(deps: TicketRouterDeps) {
                   ],
                 },
                 {
-                  clientAlias: "Heron",
                   title: "Pending court date documentation",
                   description: "Need documents before next court appearance",
                   queue: "Intake",
@@ -1047,7 +1044,6 @@ export function createTicketRouter(deps: TicketRouterDeps) {
 
                 // --- UNASSIGNED ---
                 {
-                  clientAlias: "Robin",
                   title: "Emergency referral needed",
                   description: "Urgent case flagged by intake volunteer",
                   queue: "Crisis",
@@ -1065,7 +1061,6 @@ export function createTicketRouter(deps: TicketRouterDeps) {
                   ],
                 },
                 {
-                  clientAlias: "Lark",
                   title: "New intake call",
                   description: "Voicemail received, needs triage",
                   queue: "Intake",
@@ -1077,7 +1072,6 @@ export function createTicketRouter(deps: TicketRouterDeps) {
                   followUps: [],
                 },
                 {
-                  clientAlias: "Raven",
                   title: "Relocation assistance request",
                   description: "Client needs help with relocation planning",
                   queue: "Housing",
@@ -1095,7 +1089,6 @@ export function createTicketRouter(deps: TicketRouterDeps) {
                   ],
                 },
                 {
-                  clientAlias: "Swift",
                   title: "Transportation to appointment",
                   description: "Client needs ride to medical appointment",
                   queue: "Intake",
@@ -1118,7 +1111,6 @@ export function createTicketRouter(deps: TicketRouterDeps) {
                   ],
                 },
                 {
-                  clientAlias: "Hawk",
                   title: "Food bank referral",
                   description: "Client asking about food assistance",
                   queue: "Intake",
@@ -1140,13 +1132,12 @@ export function createTicketRouter(deps: TicketRouterDeps) {
               const createdIds: string[] = [];
               const encoder = new TextEncoder();
 
-              for (const def of ticketDefs) {
-                const clientId = clientMap.get(def.clientAlias);
-                if (clientId === undefined) {
-                  throw new Error(
-                    `Client "${def.clientAlias}" not found. Run seed first.`,
-                  );
-                }
+              for (let i = 0; i < ticketDefs.length; i++) {
+                const def = ticketDefs.at(i);
+                if (!def) continue;
+                const client = clients.at(i % clients.length);
+                if (!client) continue;
+                const clientId = client.id;
 
                 const qId = queueMap.get(def.queue);
                 if (qId === undefined) {

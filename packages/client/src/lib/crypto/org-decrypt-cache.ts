@@ -15,6 +15,7 @@
  */
 
 import { SvelteMap } from "svelte/reactivity";
+import { untrack } from "svelte";
 import type { OrgKeyManager } from "./org-key.js";
 
 /** Serialized Node.js Buffer as it arrives over tRPC JSON (no superjson). */
@@ -57,7 +58,10 @@ export class OrgDecryptCache {
 
       const plainBytes = this.manager.decrypt(ciphertext);
       const plaintext = new TextDecoder().decode(plainBytes);
-      this.cache.set(id, plaintext);
+      // untrack: cache population is a side effect, not a reactive signal.
+      // Without this, calling decrypt() from a template expression or
+      // $derived triggers Svelte 5's state_unsafe_mutation error.
+      untrack(() => this.cache.set(id, plaintext));
       return plaintext;
     } catch (err: unknown) {
       if (import.meta.env.DEV) {

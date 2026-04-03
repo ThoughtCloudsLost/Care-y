@@ -3,8 +3,12 @@
  *
  * Runs registerCrypto (Argon2id -> OPRF -> deriveKeys -> initCryptoKeys)
  * and loginCrypto (Worker-based key derivation -> KEYED state), then
- * seeds test tickets via devSeedTickets. Identical to production
- * registration + login, the only shortcut is devBypass2fa for 2FA.
+ * rotates the throwaway org keypair (from seed) with a real client-generated
+ * Curve25519 keypair, seals KB articles client-side, and seeds test tickets.
+ *
+ * The org key rotation matches the production flow: the browser generates
+ * the keypair, ECIES-wraps the secret for authorized volunteers, and uploads
+ * via the rotateOrgKey endpoint. The server never holds the org secret key.
  *
  * This file is dynamically imported only when import.meta.env.DEV is true,
  * so Vite's dead-code elimination strips it from production builds entirely.
@@ -12,6 +16,15 @@
 import { trpc } from "$lib/trpc/index.js";
 import { registerCrypto } from "$lib/auth/register-crypto.js";
 import { loginCrypto } from "$lib/auth/login-crypto.js";
+import {
+  generateOrgKeypair,
+  sealForOrgKey,
+  wrapKey,
+  encode,
+  decode,
+  getSodium,
+  toRistrettoPoint,
+} from "@care-y/crypto";
 import type { RegisterCryptoCallbacks } from "$lib/auth/register-crypto.js";
 import type { LoginCryptoCallbacks } from "$lib/auth/login-crypto.js";
 import type { CryptoBridge } from "$lib/workers/crypto-bridge.js";
@@ -114,6 +127,141 @@ function isConflictError(err: unknown): boolean {
   return false;
 }
 
+/** KB article definitions for dev seeding. */
+const KB_ARTICLES: readonly {
+  category: string;
+  title: string;
+  body: string;
+}[] = [
+  {
+    category: "Procedures",
+    title: "Intake call checklist",
+    body: "Body content for: Intake call checklist",
+  },
+  {
+    category: "Procedures",
+    title: "Escalation protocol",
+    body: "Body content for: Escalation protocol",
+  },
+  {
+    category: "Resources",
+    title: "Housing referral contacts",
+    body: "Body content for: Housing referral contacts",
+  },
+  {
+    category: "Resources",
+    title: "Legal aid directory",
+    body: "Body content for: Legal aid directory",
+  },
+  {
+    category: "Safety",
+    title: "Safety planning template",
+    body: "Body content for: Safety planning template",
+  },
+];
+
+/**
+ * Rotate the throwaway seed keypair with a real client-generated one.
+ * Returns the org public key and loads the secret into OrgKeyManager.
+ */
+async function bootstrapOrgKeypair(
+  bridge: CryptoBridge,
+  orgKeyManager: OrgKeyManager,
+  userId: string,
+): Promise<Uint8Array> {
+  await getSodium();
+
+  // Generate real Curve25519 org keypair in the browser
+  const { publicKey, secretKey } = generateOrgKeypair();
+
+  try {
+    // Get the admin's volPublic for ECIES wrapping
+    const volPublicB64 = await bridge.getVolPublic();
+    const volPublicBytes = decode(volPublicB64);
+    const volPublicPoint = toRistrettoPoint(volPublicBytes);
+
+    // ECIES-wrap org secret for the admin
+    const wrap = wrapKey(secretKey, volPublicPoint);
+
+    // Rotate: replace the throwaway seed keypair with the real one
+    await trpc.keys.rotateOrgKey.mutate({
+      newOrgPublicKey: encode(publicKey),
+      wrappedKeys: [
+        {
+          userId,
+          ephemeralPoint: encode(wrap.ephemeralPoint),
+          nonce: encode(wrap.nonce),
+          wrappedKey: encode(wrap.ciphertext),
+        },
+      ],
+    });
+
+    // Load org secret into OrgKeyManager (main thread, non-PII tier)
+    const skCopy = new ArrayBuffer(secretKey.byteLength);
+    new Uint8Array(skCopy).set(secretKey);
+    orgKeyManager.load(skCopy);
+
+    console.log("[dev] org keypair: rotated seed keypair with real one");
+    return publicKey;
+  } finally {
+    // Zero the org secret key material
+    const sodium = await getSodium();
+    sodium.memzero(secretKey);
+  }
+}
+
+/**
+ * Seal and upload KB articles using the real org public key.
+ * Skips if articles already exist for the admin user.
+ */
+async function seedKBArticles(orgPublicKey: Uint8Array): Promise<void> {
+  // kb router is conditionally spread on the server, so TypeScript
+  // doesn't guarantee its existence. This file only runs in dev mode.
+  const kb = trpc.kb;
+  if (!kb) throw new Error("kb router unavailable (not in dev mode?)");
+
+  // Fetch category list from server
+  const categories = await kb.listCategories.query();
+  const categoryMap = new Map(categories.map((c) => [c.name, c.id]));
+
+  // Check if articles already exist (idempotent re-run)
+  const existingItems = await kb.listItems.query({ limit: 1 });
+  if (existingItems.items.length > 0) {
+    console.log("[dev] KB articles already seeded, skipping.");
+    return;
+  }
+
+  const encoder = new TextEncoder();
+
+  for (const article of KB_ARTICLES) {
+    const categoryId = categoryMap.get(article.category);
+    if (categoryId === undefined) {
+      console.warn(
+        `[dev] KB category "${article.category}" not found, skipping article "${article.title}"`,
+      );
+      continue;
+    }
+
+    // Seal title and body client-side with the org public key
+    const encryptedTitle = sealForOrgKey(
+      encoder.encode(article.title),
+      orgPublicKey,
+    );
+    const encryptedBody = sealForOrgKey(
+      encoder.encode(article.body),
+      orgPublicKey,
+    );
+
+    await kb.createItem.mutate({
+      categoryId,
+      encryptedTitle: encode(encryptedTitle),
+      encryptedBody: encode(encryptedBody),
+    });
+
+    console.log(`[dev] Created KB article "${article.title}"`);
+  }
+}
+
 export async function devAutoLogin(
   bridge: CryptoBridge,
   orgKeyManager: OrgKeyManager,
@@ -154,17 +302,34 @@ export async function devAutoLogin(
   );
   console.log("[dev] loginCrypto: Worker is KEYED");
 
-  // 5. Load org key for non-PII tier decryption (KB titles, display names, branding)
+  // 5. Org key bootstrap
+  // On first run: orgPrivateKey is null (seed created a throwaway keypair,
+  // no wrapped_org_keys row exists). Generate real keypair and rotate.
+  // On re-run: orgPrivateKey is non-null (rotation already happened,
+  // wrapped_org_keys row exists). Load directly.
+  let orgPublicKey: Uint8Array | null = null;
+
   if (orgPrivateKey) {
     orgKeyManager.load(orgPrivateKey);
-    console.log("[dev] orgKeyManager: org key loaded");
+    console.log("[dev] orgKeyManager: org key loaded (existing)");
   } else {
-    console.warn(
-      "[dev] orgKeyManager: no org key available (org not onboarded?)",
-    );
+    orgPublicKey = await bootstrapOrgKeypair(bridge, orgKeyManager, user.id);
   }
 
-  // 6. Seed test tickets (server creates tickets with real ECIES key wraps)
+  // 6. Seed KB articles client-side (first run only)
+  // Need the org public key. On first run we have it from bootstrapOrgKeypair.
+  // On re-run, derive it from the secret key in OrgKeyManager.
+  if (!orgPublicKey) {
+    // Re-run path: derive public key from secret key. OrgKeyManager holds
+    // the secret. We can derive pk = scalarmult_base(sk), but OrgKeyManager
+    // doesn't expose the raw key. KB articles should already exist on re-run
+    // so we just skip seeding. The listItems check in seedKBArticles handles this.
+    console.log("[dev] KB seeding: skipping (re-run, articles should exist)");
+  } else {
+    await seedKBArticles(orgPublicKey);
+  }
+
+  // 7. Seed test tickets (server creates tickets with real ECIES key wraps)
   await getDevSeedTickets().mutate();
   console.log("[dev] devSeedTickets: tickets seeded");
 }

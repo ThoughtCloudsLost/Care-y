@@ -1,11 +1,19 @@
 /**
- * Dev seed script. Creates a dev org and admin user for local development.
+ * Dev seed script. Creates a dev org, admin user, and structural data for
+ * local development.
  *
  * Idempotent: skips creation if the org or user already exists (catches
  * ConflictError from unique constraint violations rather than pre-checking).
  *
- * Generates a Curve25519 keypair for the dev org so that org resolution
- * succeeds (the context factory requires org_public_key to be non-null).
+ * Generates a throwaway Curve25519 keypair for the dev org so that org
+ * resolution succeeds (the context factory requires org_public_key to be
+ * non-null for the sealedBox auth gate). devAutoLogin replaces this with
+ * a real client-generated keypair via key rotation. The throwaway secret
+ * key is zeroed immediately and never stored.
+ *
+ * KB articles are NOT seeded here. They are sealed client-side by
+ * devAutoLogin after the real org keypair is established (matching the
+ * production flow where the browser seals content with crypto_box_seal).
  *
  * Usage: pnpm seed (runs via tsx --env-file=.env)
  */
@@ -41,6 +49,7 @@ import {
   deriveSessionHmacKey,
   createSessionTokenizer,
 } from "../crypto/session-tokenizer.js";
+import { generateAlias } from "../telephony/models/alias-generator.js";
 import type { Kysely } from "kysely";
 import type { TenantDatabase } from "../db/types.js";
 
@@ -49,11 +58,14 @@ const ADMIN_IDENTIFIER = "admin.dev";
 const ADMIN_PASSWORD = "dev-password-1234!";
 const ADMIN_DISPLAY_NAME = "Dev Admin";
 const ADMIN_ROLE_ID = RoleId.ADMIN;
+const NUM_SEED_CLIENTS = 12;
 
 /**
- * Generates a Curve25519 keypair and stores the public key in org_config.
+ * Generates a throwaway Curve25519 keypair and stores the public key in
+ * org_config. The secret key is zeroed immediately. devAutoLogin replaces
+ * this with a real client-generated keypair via org key rotation.
+ *
  * Idempotent: skips if org_public_key is already set.
- * Returns the public key buffer.
  */
 async function ensureOrgKeypair(
   tenantDatabase: Kysely<TenantDatabase>,
@@ -78,12 +90,9 @@ async function ensureOrgKeypair(
       .set({ org_public_key: pk })
       .execute();
 
-    console.log("Generated dev org Curve25519 keypair.");
+    console.log("Generated throwaway org Curve25519 keypair (for auth gate).");
     return pk;
   } finally {
-    // Zero the secret key. The dev SK is not stored anywhere;
-    // it's only needed for the seed script's own admin session creation.
-    // In production, the org SK is wrapped per-volunteer via ECIES.
     sk.fill(0);
   }
 }
@@ -126,7 +135,7 @@ async function seed(): Promise<void> {
     }
   }
 
-  // --- Generate org keypair ---
+  // --- Generate throwaway org keypair (unblocks auth gate) ---
   const tenantDatabase = tenantDb(schemaName);
   const orgPublicKey = await ensureOrgKeypair(tenantDatabase);
 
@@ -256,112 +265,74 @@ async function seed(): Promise<void> {
     }
   }
 
-  // Clients: bird-name aliases
-  const clientAliases = [
-    "Sparrow",
-    "Wren",
-    "Finch",
-    "Robin",
-    "Jay",
-    "Lark",
-    "Dove",
-    "Heron",
-    "Raven",
-    "Crane",
-    "Swift",
-    "Hawk",
-  ];
-  for (const alias of clientAliases) {
-    const existingClient = await tenantDatabase
-      .selectFrom("clients")
-      .select("id")
-      .where("alias", "=", alias)
-      .executeTakeFirst();
+  // Clients: generated aliases via alias-generator
+  const existingClientCount = await tenantDatabase
+    .selectFrom("clients")
+    .select(tenantDatabase.fn.countAll<string>().as("count"))
+    .executeTakeFirstOrThrow();
 
-    if (existingClient) {
-      console.log(`Client "${alias}" already exists, skipping.`);
-    } else {
-      const inserted = await tenantDatabase
-        .insertInto("clients")
-        .values({ alias, phone_id: phoneId })
-        .returning("id")
-        .executeTakeFirstOrThrow();
-      console.log(`Created client "${alias}" (${inserted.id})`);
+  const currentCount = Number(existingClientCount.count);
+  if (currentCount >= NUM_SEED_CLIENTS) {
+    console.log(
+      `${String(currentCount)} clients already exist, skipping client seeding.`,
+    );
+  } else {
+    const toCreate = NUM_SEED_CLIENTS - currentCount;
+    for (let i = 0; i < toCreate; i++) {
+      // generateAlias uses crypto.randomInt, so collisions are possible.
+      // Retry on unique constraint violation (same pattern as client-repo.ts).
+      let created = false;
+      for (let attempt = 0; attempt < 5 && !created; attempt++) {
+        const alias = generateAlias();
+        try {
+          const inserted = await tenantDatabase
+            .insertInto("clients")
+            .values({ alias, phone_id: phoneId })
+            .returning("id")
+            .executeTakeFirstOrThrow();
+          console.log(`Created client "${alias}" (${inserted.id})`);
+          created = true;
+        } catch (err: unknown) {
+          if (
+            err instanceof Error &&
+            err.message.includes("unique") // PG unique violation on alias
+          ) {
+            continue; // retry with a new alias
+          }
+          throw err;
+        }
+      }
+      if (!created) {
+        console.warn("Failed to generate unique alias after 5 attempts");
+      }
     }
   }
 
-  // --- Seed KB categories and articles ---
-  const kbCategories = [
-    {
-      name: "Procedures",
-      articles: ["Intake call checklist", "Escalation protocol"],
-    },
-    {
-      name: "Resources",
-      articles: ["Housing referral contacts", "Legal aid directory"],
-    },
-    { name: "Safety", articles: ["Safety planning template"] },
-  ];
+  // --- Seed KB categories (structural data, plaintext names) ---
+  // KB articles are seeded client-side by devAutoLogin after the real org
+  // keypair is established via rotation (articles require sealed-box encryption).
+  const kbCategoryNames = ["Procedures", "Resources", "Safety"];
 
-  for (const cat of kbCategories) {
+  for (const name of kbCategoryNames) {
     const existingCat = await tenantDatabase
       .selectFrom("kb_categories")
       .select("id")
-      .where("name", "=", cat.name)
+      .where("name", "=", name)
       .executeTakeFirst();
 
-    let categoryId: string;
     if (existingCat) {
-      categoryId = existingCat.id;
-      console.log(`KB category "${cat.name}" already exists, skipping.`);
+      console.log(`KB category "${name}" already exists, skipping.`);
     } else {
       const inserted = await tenantDatabase
         .insertInto("kb_categories")
-        .values({ name: cat.name })
+        .values({ name })
         .returning("id")
         .executeTakeFirstOrThrow();
-      categoryId = inserted.id;
-      console.log(`Created KB category "${cat.name}" (${categoryId})`);
-    }
-
-    for (const title of cat.articles) {
-      const encTitle = sealedBox.seal(title);
-      const encBody = sealedBox.seal(`Body content for: ${title}`);
-
-      // Check by category + created_by (same admin, same category = likely same seed)
-      const existingItem = await tenantDatabase
-        .selectFrom("kb_items")
-        .select("id")
-        .where("category_id", "=", categoryId)
-        .where("created_by", "=", adminUserId)
-        .limit(cat.articles.length)
-        .execute();
-
-      if (existingItem.length >= cat.articles.length) {
-        console.log(`KB articles for "${cat.name}" already seeded, skipping.`);
-        break;
-      }
-
-      await tenantDatabase
-        .insertInto("kb_items")
-        .values({
-          category_id: categoryId,
-          encrypted_title: encTitle,
-          encrypted_body: encBody,
-          created_by: adminUserId,
-        })
-        .execute();
-      console.log(`Created KB article "${title}" in "${cat.name}"`);
+      console.log(`Created KB category "${name}" (${inserted.id})`);
     }
   }
 
   // --- Seed audit log entries (sample activity for dashboard feed) ---
-  const clientIds = await tenantDatabase
-    .selectFrom("clients")
-    .select("id")
-    .limit(3)
-    .execute();
-
   const ticketRows = await tenantDatabase
     .selectFrom("tickets")
     .select("id")

@@ -88,6 +88,9 @@ export { encryptBlob, decryptBlob } from "./blob.js";
 // --- Org Key Wrapping ---
 export { wrapKey, unwrapKey } from "./keywrap.js";
 
+// --- Org Keypair + Sealed Box ---
+export { generateOrgKeypair, sealForOrgKey } from "./org-keypair.js";
+
 // --- Branding ---
 export {
   deriveClientBrandingKey,
