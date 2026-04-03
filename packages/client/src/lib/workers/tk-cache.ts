@@ -45,9 +45,12 @@ export class TkCache {
    * is evicted and its buffer is zeroed via `memzero`.
    */
   set(ticketId: string, tk: Uint8Array): void {
-    // If this ticketId already exists, remove first so the re-insert
-    // updates its position (and we don't double-count toward maxEntries).
-    if (this.cache.has(ticketId)) {
+    // If this ticketId already exists, zero the old key material before
+    // removing. Without this, the old Uint8Array sits in the V8 heap
+    // until GC, violating the "zero all evicted key material" invariant.
+    const existing = this.cache.get(ticketId);
+    if (existing !== undefined) {
+      this.config.memzero(existing);
       this.cache.delete(ticketId);
     }
 

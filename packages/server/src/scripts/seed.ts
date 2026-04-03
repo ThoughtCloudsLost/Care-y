@@ -1,11 +1,19 @@
 /**
- * Dev seed script. Creates a dev org and admin user for local development.
+ * Dev seed script. Creates a dev org, admin user, and structural data for
+ * local development.
  *
  * Idempotent: skips creation if the org or user already exists (catches
  * ConflictError from unique constraint violations rather than pre-checking).
  *
- * Generates a Curve25519 keypair for the dev org so that org resolution
- * succeeds (the context factory requires org_public_key to be non-null).
+ * Generates a throwaway Curve25519 keypair for the dev org so that org
+ * resolution succeeds (the context factory requires org_public_key to be
+ * non-null for the sealedBox auth gate). devAutoLogin replaces this with
+ * a real client-generated keypair via key rotation. The throwaway secret
+ * key is zeroed immediately and never stored.
+ *
+ * KB articles are NOT seeded here. They are sealed client-side by
+ * devAutoLogin after the real org keypair is established (matching the
+ * production flow where the browser seals content with crypto_box_seal).
  *
  * Usage: pnpm seed (runs via tsx --env-file=.env)
  */
@@ -23,6 +31,7 @@ try {
   throw err;
 }
 
+import { RoleId } from "@care-y/shared";
 import sodium from "sodium-native";
 import { db, tenantDb } from "../db/db.js";
 import { getEnv } from "../env.js";
@@ -40,19 +49,23 @@ import {
   deriveSessionHmacKey,
   createSessionTokenizer,
 } from "../crypto/session-tokenizer.js";
+import { generateAlias } from "../telephony/models/alias-generator.js";
 import type { Kysely } from "kysely";
 import type { TenantDatabase } from "../db/types.js";
 
 const DEV_ORG_SLUG = "dev-org";
-const ADMIN_IDENTIFIER = "admin@dev.local";
-const ADMIN_PASSWORD = "devpassword123!";
+const ADMIN_IDENTIFIER = "admin.dev";
+const ADMIN_PASSWORD = "dev-password-1234!";
 const ADMIN_DISPLAY_NAME = "Dev Admin";
-const ADMIN_ROLE_ID = "admin";
+const ADMIN_ROLE_ID = RoleId.ADMIN;
+const NUM_SEED_CLIENTS = 12;
 
 /**
- * Generates a Curve25519 keypair and stores the public key in org_config.
+ * Generates a throwaway Curve25519 keypair and stores the public key in
+ * org_config. The secret key is zeroed immediately. devAutoLogin replaces
+ * this with a real client-generated keypair via org key rotation.
+ *
  * Idempotent: skips if org_public_key is already set.
- * Returns the public key buffer.
  */
 async function ensureOrgKeypair(
   tenantDatabase: Kysely<TenantDatabase>,
@@ -77,12 +90,9 @@ async function ensureOrgKeypair(
       .set({ org_public_key: pk })
       .execute();
 
-    console.log("Generated dev org Curve25519 keypair.");
+    console.log("Generated throwaway org Curve25519 keypair (for auth gate).");
     return pk;
   } finally {
-    // Zero the secret key. The dev SK is not stored anywhere;
-    // it's only needed for the seed script's own admin session creation.
-    // In production, the org SK is wrapped per-volunteer via ECIES.
     sk.fill(0);
   }
 }
@@ -125,7 +135,7 @@ async function seed(): Promise<void> {
     }
   }
 
-  // --- Generate org keypair ---
+  // --- Generate throwaway org keypair (unblocks auth gate) ---
   const tenantDatabase = tenantDb(schemaName);
   const orgPublicKey = await ensureOrgKeypair(tenantDatabase);
 
@@ -147,6 +157,7 @@ async function seed(): Promise<void> {
     orgId,
   );
 
+  let adminUserId: string;
   try {
     const user = await authService.register({
       identifier: ADMIN_IDENTIFIER,
@@ -154,14 +165,224 @@ async function seed(): Promise<void> {
       displayName: ADMIN_DISPLAY_NAME,
       roleId: ADMIN_ROLE_ID,
     });
+    adminUserId = user.id;
     console.log(`Created admin user "${ADMIN_IDENTIFIER}" (${user.id})`);
   } catch (err) {
     if (err instanceof ConflictError) {
-      console.log(`User "${ADMIN_IDENTIFIER}" already exists, skipping.`);
+      const identifierHash = indexer.hash(ADMIN_IDENTIFIER, orgId);
+      const existing = await tenantDatabase
+        .selectFrom("users")
+        .select("id")
+        .where("identifier_hash", "=", identifierHash)
+        .where("is_active", "=", true)
+        .executeTakeFirst();
+      if (!existing) {
+        console.error(
+          "User conflict but identifier not found. Database may be inconsistent.",
+        );
+        process.exit(1);
+      }
+      adminUserId = existing.id;
+      console.log(
+        `User "${ADMIN_IDENTIFIER}" already exists (${adminUserId}), skipping.`,
+      );
     } else {
       console.error("Failed to create admin user:", extractErrorMessage(err));
       process.exit(1);
     }
+  }
+
+  // --- Seed structural data (phone, queue, queue assignment, clients) ---
+  // No crypto here. Tickets and key wraps are created later by the browser
+  // (registerCrypto + loginCrypto) and server (devSeedTickets).
+
+  // Phone record (encrypted via OPS_SECRETS_KEY field encryption)
+  let phoneId: string;
+  const existingPhone = await tenantDatabase
+    .selectFrom("phones")
+    .select("id")
+    .where("phone_hash", "=", indexer.hash("+15550001234", orgId))
+    .executeTakeFirst();
+
+  if (existingPhone) {
+    phoneId = existingPhone.id;
+    console.log("Phone record already exists, skipping.");
+  } else {
+    const inserted = await tenantDatabase
+      .insertInto("phones")
+      .values({
+        phone_hash: indexer.hash("+15550001234", orgId),
+        encrypted_number: encryptor.encrypt("+15550001234"),
+        locale: "en",
+      })
+      .returning("id")
+      .executeTakeFirstOrThrow();
+    phoneId = inserted.id;
+    console.log(`Created phone record (${phoneId})`);
+  }
+
+  const queueNames = ["Intake", "Crisis", "Housing"];
+  const queueIds = new Map<string, string>();
+
+  for (const name of queueNames) {
+    const existing = await tenantDatabase
+      .selectFrom("queues")
+      .select("id")
+      .where("name", "=", name)
+      .executeTakeFirst();
+
+    if (existing) {
+      queueIds.set(name, existing.id);
+      console.log(`Queue "${name}" already exists, skipping.`);
+    } else {
+      const inserted = await tenantDatabase
+        .insertInto("queues")
+        .values({ name })
+        .returning("id")
+        .executeTakeFirstOrThrow();
+      queueIds.set(name, inserted.id);
+      console.log(`Created queue "${name}" (${inserted.id})`);
+    }
+  }
+
+  // Queue assignments: admin -> all queues
+  for (const [name, qId] of queueIds) {
+    const existing = await tenantDatabase
+      .selectFrom("queue_assignments")
+      .select("queue_id")
+      .where("queue_id", "=", qId)
+      .where("user_id", "=", adminUserId)
+      .executeTakeFirst();
+
+    if (existing) {
+      console.log(`Admin already assigned to "${name}", skipping.`);
+    } else {
+      await tenantDatabase
+        .insertInto("queue_assignments")
+        .values({ queue_id: qId, user_id: adminUserId })
+        .execute();
+      console.log(`Assigned admin to "${name}" queue.`);
+    }
+  }
+
+  // Clients: generated aliases via alias-generator
+  const existingClientCount = await tenantDatabase
+    .selectFrom("clients")
+    .select(tenantDatabase.fn.countAll<string>().as("count"))
+    .executeTakeFirstOrThrow();
+
+  const currentCount = Number(existingClientCount.count);
+  if (currentCount >= NUM_SEED_CLIENTS) {
+    console.log(
+      `${String(currentCount)} clients already exist, skipping client seeding.`,
+    );
+  } else {
+    const toCreate = NUM_SEED_CLIENTS - currentCount;
+    for (let i = 0; i < toCreate; i++) {
+      // generateAlias uses crypto.randomInt, so collisions are possible.
+      // Retry on unique constraint violation (same pattern as client-repo.ts).
+      let created = false;
+      for (let attempt = 0; attempt < 5 && !created; attempt++) {
+        const alias = generateAlias();
+        try {
+          const inserted = await tenantDatabase
+            .insertInto("clients")
+            .values({ alias, phone_id: phoneId })
+            .returning("id")
+            .executeTakeFirstOrThrow();
+          console.log(`Created client "${alias}" (${inserted.id})`);
+          created = true;
+        } catch (err: unknown) {
+          if (
+            err instanceof Error &&
+            err.message.includes("unique") // PG unique violation on alias
+          ) {
+            continue; // retry with a new alias
+          }
+          throw err;
+        }
+      }
+      if (!created) {
+        console.warn("Failed to generate unique alias after 5 attempts");
+      }
+    }
+  }
+
+  // --- Seed KB categories (structural data, plaintext names) ---
+  // KB articles are seeded client-side by devAutoLogin after the real org
+  // keypair is established via rotation (articles require sealed-box encryption).
+  const kbCategoryNames = ["Procedures", "Resources", "Safety"];
+
+  for (const name of kbCategoryNames) {
+    const existingCat = await tenantDatabase
+      .selectFrom("kb_categories")
+      .select("id")
+      .where("name", "=", name)
+      .executeTakeFirst();
+
+    if (existingCat) {
+      console.log(`KB category "${name}" already exists, skipping.`);
+    } else {
+      const inserted = await tenantDatabase
+        .insertInto("kb_categories")
+        .values({ name })
+        .returning("id")
+        .executeTakeFirstOrThrow();
+      console.log(`Created KB category "${name}" (${inserted.id})`);
+    }
+  }
+
+  // --- Seed audit log entries (sample activity for dashboard feed) ---
+  const ticketRows = await tenantDatabase
+    .selectFrom("tickets")
+    .select("id")
+    .limit(5)
+    .execute();
+
+  if (ticketRows.length > 0) {
+    const existingAudit = await tenantDatabase
+      .selectFrom("audit_log")
+      .select("id")
+      .limit(1)
+      .executeTakeFirst();
+
+    if (!existingAudit) {
+      const events: Array<{
+        event_type: string;
+        actor_id: string;
+        ticket_id: string;
+        metadata: Record<string, unknown>;
+      }> = [];
+
+      for (const ticket of ticketRows) {
+        events.push({
+          event_type: "ticket_created",
+          actor_id: adminUserId,
+          ticket_id: ticket.id,
+          metadata: {},
+        });
+      }
+
+      if (ticketRows.length >= 2 && ticketRows[1]) {
+        events.push({
+          event_type: "followup_added",
+          actor_id: adminUserId,
+          ticket_id: ticketRows[1].id,
+          metadata: {},
+        });
+      }
+
+      for (const entry of events) {
+        await tenantDatabase.insertInto("audit_log").values(entry).execute();
+      }
+      console.log(`Seeded ${String(events.length)} audit log entries.`);
+    } else {
+      console.log("Audit log already has entries, skipping.");
+    }
+  } else {
+    console.log(
+      "No tickets found for audit seeding (run devSeedTickets first).",
+    );
   }
 
   console.log("Seed complete.");

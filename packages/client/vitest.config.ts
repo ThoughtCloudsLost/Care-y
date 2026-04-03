@@ -4,12 +4,25 @@ import { svelte } from "@sveltejs/vite-plugin-svelte";
 export default defineConfig({
   plugins: [svelte({ hot: false })],
   resolve: {
-    // $lib is the only alias that maps to a real directory.
-    // $app/* and $service-worker are SvelteKit virtual modules with no
-    // on-disk source. Tests that import code using them must vi.mock()
-    // those modules per-file. See testing-reference.md section 14.
+    // $lib maps to a real directory. $app/* are SvelteKit virtual modules
+    // with no on-disk source. .ts test files can vi.mock() them, but
+    // .svelte component tests need Vite-level resolution for $app/*
+    // imports inside the component's <script> block (Vite transforms
+    // .svelte files before vitest's mock system processes them).
+    // Stubs in src/test-mocks/ provide resolution targets; individual
+    // tests override behavior via vi.mock() as before.
     alias: {
       $lib: new URL("./src/lib", import.meta.url).pathname,
+      "$app/navigation": new URL(
+        "./src/test-mocks/app-navigation.ts",
+        import.meta.url,
+      ).pathname,
+      "$app/paths": new URL("./src/test-mocks/app-paths.ts", import.meta.url)
+        .pathname,
+      "$app/environment": new URL(
+        "./src/test-mocks/app-environment.ts",
+        import.meta.url,
+      ).pathname,
     },
     // Use browser entry points so Svelte's client-side code resolves
     // correctly in the Node test runner (per Svelte testing docs).

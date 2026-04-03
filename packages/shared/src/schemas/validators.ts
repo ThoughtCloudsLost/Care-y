@@ -7,7 +7,10 @@
 
 import { z } from "zod";
 
-const BASE64_REGEX = /^[A-Za-z0-9+/=]+$/;
+// Accepts both standard base64 (+/=) and URL-safe base64 (-_, no padding).
+// @care-y/crypto's encode() uses URL-safe (URLSAFE_NO_PADDING), so all
+// crypto payloads from the client use -_ instead of +/.
+const BASE64_REGEX = /^[A-Za-z0-9+/=_-]+$/;
 
 /** Compute decoded byte length from a base64 string without Buffer (isomorphic). */
 export function base64ByteLength(s: string): number {

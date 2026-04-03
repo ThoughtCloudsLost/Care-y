@@ -54,3 +54,50 @@ index 6fb59773a4d9ca8e3d98441cb4b47ca1807dad64..4b925ca71182f137abdf524373bff4c5
        <span class={c.thumb[state]}></span>
      </span>{:else}
      <span bind:this={rippleTargetElRef} class={c.thumbWrap[state]}>
+diff --git a/svelte/components/ToolbarPane.svelte b/svelte/components/ToolbarPane.svelte
+index cb4657f834c2499dcff4ddebddfdf620cc3ea614..2b27a3805bcefbe06768d28a3f9ce358bc25b463 100644
+--- a/svelte/components/ToolbarPane.svelte
++++ b/svelte/components/ToolbarPane.svelte
+@@ -13,6 +13,7 @@
+     class: className,
+     ios = undefined,
+     material = undefined,
++    tabbar: tabbarProp = undefined,
+     colors: colorsProp,
+     children,
+     ...restProps
+@@ -45,7 +46,7 @@
+       },
+     }));
+ 
+-  const { tabbar, activeTabbarEl } = $derived(
++  const { tabbar: ctxTabbar, activeTabbarEl } = $derived(
+     ToolbarContext()?.value || {
+       toolbar: false,
+       tabbar: false,
+@@ -54,6 +55,7 @@
+       activeTabbarEl: undefined,
+     }
+   );
++  const tabbar = $derived(tabbarProp !== undefined ? tabbarProp : ctxTabbar);
+   const hasHighlight = $derived(theme === 'ios' && tabbar);
+ 
+   const dark = useDarkClasses();
+diff --git a/svelte/types/ToolbarPane.d.ts b/svelte/types/ToolbarPane.d.ts
+index 584f9ac73f7107816319c1784e36390e23e00697..0c792b17fcbac9f4eabdb3f1a23d0199f974d9c0 100644
+--- a/svelte/types/ToolbarPane.d.ts
++++ b/svelte/types/ToolbarPane.d.ts
+@@ -9,6 +9,13 @@ export interface Props {
+    * @default 'div'
+    */
+   component?: string | typeof SvelteComponent;
++  /**
++   * Override the parent Toolbar's tabbar context for this pane.
++   * Set to false to disable the iOS highlight and w-full class.
++   *
++   * @default undefined (inherits from parent Toolbar context)
++   */
++  tabbar?: boolean;
+   /**
+    * Object with Tailwind CSS colors classes
+    * */

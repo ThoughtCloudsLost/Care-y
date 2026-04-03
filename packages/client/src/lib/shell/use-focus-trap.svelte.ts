@@ -40,7 +40,7 @@ export function useFocusTrap(options: UseFocusTrapOptions): UseFocusTrapReturn {
     const active = document.activeElement;
     triggerEl = active instanceof HTMLElement ? active : null;
 
-    requestAnimationFrame(() => {
+    const rafId = requestAnimationFrame(() => {
       cleanupTrap = activateFocusTrap({
         container: el,
         onEscape: handleDismiss,
@@ -48,6 +48,7 @@ export function useFocusTrap(options: UseFocusTrapOptions): UseFocusTrapReturn {
     });
 
     return () => {
+      cancelAnimationFrame(rafId);
       if (cleanupTrap != null) {
         cleanupTrap();
         cleanupTrap = null;

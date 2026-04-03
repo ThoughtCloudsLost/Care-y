@@ -218,7 +218,9 @@ describe("passwordChangeKeysSchema", () => {
 describe("uploadOrgPublicKeySchema", () => {
   const validInput = {
     orgPublicKey: base64OfBytes(32),
-    wrappedOrgSecretBlob: base64OfBytes(72),
+    ephemeralPoint: base64OfBytes(32),
+    nonce: base64OfBytes(24),
+    wrappedKey: base64OfBytes(56),
   };
 
   it("accepts valid org public key upload", () => {
@@ -242,24 +244,62 @@ describe("uploadOrgPublicKeySchema", () => {
     expect(result.success).toBe(false);
   });
 
-  it("rejects non-base64 wrappedOrgSecretBlob", () => {
+  it("rejects ephemeralPoint with wrong byte length", () => {
     const result = uploadOrgPublicKeySchema.safeParse({
       ...validInput,
-      wrappedOrgSecretBlob: "not!valid@base64#chars",
+      ephemeralPoint: base64OfBytes(31),
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects nonce with wrong byte length", () => {
+    const result = uploadOrgPublicKeySchema.safeParse({
+      ...validInput,
+      nonce: base64OfBytes(16),
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects non-base64 wrappedKey", () => {
+    const result = uploadOrgPublicKeySchema.safeParse({
+      ...validInput,
+      wrappedKey: "not!valid@base64#chars",
     });
     expect(result.success).toBe(false);
   });
 
   it("rejects missing orgPublicKey", () => {
     const result = uploadOrgPublicKeySchema.safeParse({
-      wrappedOrgSecretBlob: validInput.wrappedOrgSecretBlob,
+      ephemeralPoint: validInput.ephemeralPoint,
+      nonce: validInput.nonce,
+      wrappedKey: validInput.wrappedKey,
     });
     expect(result.success).toBe(false);
   });
 
-  it("rejects missing wrappedOrgSecretBlob", () => {
+  it("rejects missing ephemeralPoint", () => {
     const result = uploadOrgPublicKeySchema.safeParse({
       orgPublicKey: validInput.orgPublicKey,
+      nonce: validInput.nonce,
+      wrappedKey: validInput.wrappedKey,
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects missing nonce", () => {
+    const result = uploadOrgPublicKeySchema.safeParse({
+      orgPublicKey: validInput.orgPublicKey,
+      ephemeralPoint: validInput.ephemeralPoint,
+      wrappedKey: validInput.wrappedKey,
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects missing wrappedKey", () => {
+    const result = uploadOrgPublicKeySchema.safeParse({
+      orgPublicKey: validInput.orgPublicKey,
+      ephemeralPoint: validInput.ephemeralPoint,
+      nonce: validInput.nonce,
     });
     expect(result.success).toBe(false);
   });

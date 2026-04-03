@@ -65,6 +65,9 @@ import type {
 } from "./crypto-protocol.js";
 import { TkCache } from "./tk-cache.js";
 
+const textDecoder = new TextDecoder();
+const textEncoder = new TextEncoder();
+
 // ── Key material (Worker-only, never returned via postMessage) ──────
 
 let stretched: Uint8Array | null = null;
@@ -223,42 +226,41 @@ function handleDeriveKeys(req: DeriveKeysRequest): void {
   }
 }
 
+function resolveTk(req: DecryptContentRequest): Uint8Array | null {
+  const cached = tkCache.get(req.ticketId);
+  if (cached) return cached;
+
+  const ephemeralPoint = decode(req.ephemeralPoint);
+  const nonce = decode(req.nonce);
+  const wrappedKey = decode(req.wrappedKey);
+
+  try {
+    const tk = eciesDecrypt(
+      ephemeralPoint as RistrettoPoint,
+      nonce as Nonce,
+      wrappedKey,
+      assertPresent(volPrivate, "volPrivate"),
+    );
+    tkCache.set(req.ticketId, tk);
+    return tk;
+  } catch (err: unknown) {
+    postError(
+      req.id,
+      "decryptContent",
+      err instanceof Error ? err.message : String(err),
+      "DECRYPT_FAILED",
+    );
+    return null;
+  }
+}
+
 function handleDecryptContent(req: DecryptContentRequest): void {
   if (!requireKeyed(req.id, "decryptContent")) return;
 
   const sodium = requireSodium();
+  const tk = resolveTk(req);
+  if (!tk) return;
 
-  // Check tk cache first
-  let tk = tkCache.get(req.ticketId);
-
-  if (!tk) {
-    // Cache miss: unwrap tk via ECIES
-    const ephemeralPoint = decode(req.ephemeralPoint);
-    const nonce = decode(req.nonce);
-    const wrappedKey = decode(req.wrappedKey);
-
-    try {
-      tk = eciesDecrypt(
-        ephemeralPoint as RistrettoPoint,
-        nonce as Nonce,
-        wrappedKey,
-        assertPresent(volPrivate, "volPrivate"),
-      );
-    } catch (err: unknown) {
-      postError(
-        req.id,
-        "decryptContent",
-        err instanceof Error ? err.message : String(err),
-        "DECRYPT_FAILED",
-      );
-      return;
-    }
-
-    // Cache the unwrapped tk
-    tkCache.set(req.ticketId, tk);
-  }
-
-  // Decrypt content with tk
   const ciphertextBuf = decode(req.ciphertext);
 
   try {
@@ -271,7 +273,7 @@ function handleDecryptContent(req: DecryptContentRequest): void {
       id: req.id,
       ok: true,
       type: "decryptContent",
-      plaintext: new TextDecoder().decode(plaintext),
+      plaintext: textDecoder.decode(plaintext),
     };
     self.postMessage(msg);
 
@@ -300,7 +302,7 @@ function handleEncryptContent(req: EncryptContentRequest): void {
     return;
   }
 
-  const plaintextBuf = new TextEncoder().encode(req.plaintext);
+  const plaintextBuf = textEncoder.encode(req.plaintext);
 
   try {
     const ciphertext = encryptContent(plaintextBuf, tk as SymmetricKey);

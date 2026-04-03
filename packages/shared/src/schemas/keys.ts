@@ -28,13 +28,30 @@ export const passwordChangeKeysSchema = z.object({
   reWrappedKeys: z.array(reWrappedKeySchema),
 });
 
-/** Org public key upload (first admin onboarding) */
+/** Org public key upload (first admin onboarding). ECIES wrap fields match wrapped_org_keys DB columns. */
 export const uploadOrgPublicKeySchema = z.object({
   orgPublicKey: base64Bytes(32, "orgPublicKey (Curve25519)"),
-  wrappedOrgSecretBlob: base64String("wrappedOrgSecretBlob"),
+  ephemeralPoint: base64Bytes(32, "ephemeralPoint (ristretto255)"),
+  nonce: base64Bytes(24, "nonce"),
+  wrappedKey: base64String("wrappedKey"),
+});
+
+/** Per-volunteer wrapped org secret key entry (used in org key rotation). */
+const wrappedOrgKeyEntrySchema = z.object({
+  userId: z.uuid(),
+  ephemeralPoint: base64Bytes(32, "ephemeralPoint (ristretto255)"),
+  nonce: base64Bytes(24, "nonce"),
+  wrappedKey: base64String("wrappedKey"),
+});
+
+/** Org key rotation: new public key + re-wrapped secrets for all active volunteers. */
+export const rotateOrgKeySchema = z.object({
+  newOrgPublicKey: base64Bytes(32, "newOrgPublicKey (Curve25519)"),
+  wrappedKeys: z.array(wrappedOrgKeyEntrySchema).min(1),
 });
 
 export type InitCryptoKeysInput = z.infer<typeof initCryptoKeysSchema>;
 export type UploadVolPublicInput = z.infer<typeof uploadVolPublicSchema>;
 export type PasswordChangeKeysInput = z.infer<typeof passwordChangeKeysSchema>;
 export type UploadOrgPublicKeyInput = z.infer<typeof uploadOrgPublicKeySchema>;
+export type RotateOrgKeyInput = z.infer<typeof rotateOrgKeySchema>;

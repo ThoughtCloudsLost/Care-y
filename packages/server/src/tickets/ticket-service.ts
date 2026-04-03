@@ -9,12 +9,13 @@
  * - No activity timestamps on the ticket row (ADR-018 section 7)
  */
 
-import type { Kysely } from "kysely";
+import { type Kysely } from "kysely";
 import type { TenantDatabase } from "../db/types.js";
 import type { TicketAccessChecker } from "./access.js";
 import { NotFoundError, TicketError, MergeError } from "../errors.js";
 import { createDependencyService } from "./dependency-service.js";
 import { ErrorCode } from "@care-y/shared";
+import { encode } from "@care-y/crypto";
 
 export interface TicketRecord {
   readonly id: string;
@@ -28,6 +29,26 @@ export interface TicketRecord {
   readonly encryptedDescription: Buffer;
   readonly keyGeneration: string;
   readonly createdAt: Date;
+}
+
+/** Enriched ticket with joined metadata for list/detail views. */
+export interface TicketListRecord extends TicketRecord {
+  readonly clientAlias: string;
+  readonly queueName: string;
+  readonly lastActivityAt: Date | null;
+  readonly followUpCount: number;
+  /** Org-key encrypted display name of the assigned volunteer, or null if unassigned. */
+  readonly assignedDisplayName: Buffer | null;
+}
+
+export interface TicketKeyWrap {
+  readonly ephemeralPoint: string; // base64url (no padding)
+  readonly nonce: string; // base64url (no padding)
+  readonly wrappedKey: string; // base64url (no padding)
+}
+
+export interface TicketWithKeyWrap extends TicketListRecord {
+  readonly keyWrap: TicketKeyWrap | null;
 }
 
 export interface CreateTicketInput {
@@ -49,7 +70,7 @@ export interface UpdateTicketInput {
 
 export interface TicketService {
   create(userId: string, input: CreateTicketInput): Promise<TicketRecord>;
-  findById(ticketId: string, userId: string): Promise<TicketRecord>;
+  findById(ticketId: string, userId: string): Promise<TicketWithKeyWrap>;
   list(
     userId: string,
     opts: {
@@ -58,7 +79,7 @@ export interface TicketService {
       limit: number;
       cursor?: string;
     },
-  ): Promise<TicketRecord[]>;
+  ): Promise<TicketWithKeyWrap[]>;
   update(userId: string, input: UpdateTicketInput): Promise<TicketRecord>;
   close(userId: string, ticketId: string): Promise<TicketRecord>;
   reopen(
@@ -68,7 +89,7 @@ export interface TicketService {
   ): Promise<TicketRecord>;
 }
 
-function toRecord(row: {
+interface BaseTicketRow {
   id: string;
   client_id: string;
   queue_id: string;
@@ -80,7 +101,17 @@ function toRecord(row: {
   encrypted_description: Buffer;
   key_generation: string;
   created_at: Date;
-}): TicketRecord {
+}
+
+interface EnrichedTicketRow extends BaseTicketRow {
+  client_alias: string;
+  queue_name: string;
+  last_activity_at: Date | null;
+  followup_count: string | number | bigint | null;
+  assigned_display_name: Buffer | null;
+}
+
+function toRecord(row: BaseTicketRow): TicketRecord {
   return {
     id: row.id,
     clientId: row.client_id,
@@ -94,6 +125,40 @@ function toRecord(row: {
     keyGeneration: row.key_generation,
     createdAt: row.created_at,
   };
+}
+
+function toListRecord(row: EnrichedTicketRow): TicketListRecord {
+  return {
+    ...toRecord(row),
+    clientAlias: row.client_alias,
+    queueName: row.queue_name,
+    lastActivityAt: row.last_activity_at,
+    followUpCount: Number(row.followup_count),
+    assignedDisplayName: row.assigned_display_name,
+  };
+}
+
+function toRecordWithKeyWrap(
+  row: EnrichedTicketRow & {
+    ephemeral_point: Buffer | null;
+    nonce: Buffer | null;
+    wrapped_key: Buffer | null;
+  },
+): TicketWithKeyWrap {
+  const ep = row.ephemeral_point;
+  const n = row.nonce;
+  const wk = row.wrapped_key;
+  // All three columns are NOT NULL in ticket_key_wraps. If the LEFT JOIN
+  // matched a row, all three are present. Check all to satisfy the linter.
+  const keyWrap: TicketKeyWrap | null =
+    ep && n && wk
+      ? {
+          ephemeralPoint: encode(new Uint8Array(ep)),
+          nonce: encode(new Uint8Array(n)),
+          wrappedKey: encode(new Uint8Array(wk)),
+        }
+      : null;
+  return { ...toListRecord(row), keyWrap };
 }
 
 export function createTicketService(
@@ -193,13 +258,42 @@ export function createTicketService(
       await access.assertAccess(userId, ticketId);
 
       const row = await db
-        .selectFrom("tickets")
-        .selectAll()
-        .where("id", "=", ticketId)
+        .selectFrom("tickets as t")
+        .leftJoin("ticket_key_wraps as tkw", (join) =>
+          join
+            .onRef("tkw.ticket_id", "=", "t.id")
+            .on("tkw.volunteer_id", "=", userId)
+            .onRef("tkw.key_generation", "=", "t.key_generation"),
+        )
+        .innerJoin("clients as c", "c.id", "t.client_id")
+        .innerJoin("queues as q", "q.id", "t.queue_id")
+        .leftJoin("users as u", (join) =>
+          join.on((eb) =>
+            eb(eb.cast("t.assigned_to", "uuid"), "=", eb.ref("u.id")),
+          ),
+        )
+        .selectAll("t")
+        .select(["tkw.ephemeral_point", "tkw.nonce", "tkw.wrapped_key"])
+        .select("c.alias as client_alias")
+        .select("q.name as queue_name")
+        .select("u.encrypted_display_name as assigned_display_name")
+        .select((eb) => [
+          eb
+            .selectFrom("followups as f")
+            .select((sb) => sb.fn.max("f.created_at").as("max_at"))
+            .whereRef("f.ticket_id", "=", "t.id")
+            .as("last_activity_at"),
+          eb
+            .selectFrom("followups as f")
+            .select((sb) => sb.fn.countAll().as("cnt"))
+            .whereRef("f.ticket_id", "=", "t.id")
+            .as("followup_count"),
+        ])
+        .where("t.id", "=", ticketId)
         .executeTakeFirst();
 
       if (!row) throw new NotFoundError(ErrorCode.TICKET_NOT_FOUND);
-      return toRecord(row);
+      return toRecordWithKeyWrap(row);
     },
 
     async list(userId, opts) {
@@ -210,15 +304,44 @@ export function createTicketService(
       if (accessibleQueues.length === 0) return [];
 
       let query = db
-        .selectFrom("tickets")
-        .selectAll()
-        .where("queue_id", "in", [...accessibleQueues]);
+        .selectFrom("tickets as t")
+        .leftJoin("ticket_key_wraps as tkw", (join) =>
+          join
+            .onRef("tkw.ticket_id", "=", "t.id")
+            .on("tkw.volunteer_id", "=", userId)
+            .onRef("tkw.key_generation", "=", "t.key_generation"),
+        )
+        .innerJoin("clients as c", "c.id", "t.client_id")
+        .innerJoin("queues as q", "q.id", "t.queue_id")
+        .leftJoin("users as u", (join) =>
+          join.on((eb) =>
+            eb(eb.cast("t.assigned_to", "uuid"), "=", eb.ref("u.id")),
+          ),
+        )
+        .selectAll("t")
+        .select(["tkw.ephemeral_point", "tkw.nonce", "tkw.wrapped_key"])
+        .select("c.alias as client_alias")
+        .select("q.name as queue_name")
+        .select("u.encrypted_display_name as assigned_display_name")
+        .select((eb) => [
+          eb
+            .selectFrom("followups as f")
+            .select((sb) => sb.fn.max("f.created_at").as("max_at"))
+            .whereRef("f.ticket_id", "=", "t.id")
+            .as("last_activity_at"),
+          eb
+            .selectFrom("followups as f")
+            .select((sb) => sb.fn.countAll().as("cnt"))
+            .whereRef("f.ticket_id", "=", "t.id")
+            .as("followup_count"),
+        ])
+        .where("t.queue_id", "in", [...accessibleQueues]);
 
       if (opts.queueId !== undefined) {
-        query = query.where("queue_id", "=", opts.queueId);
+        query = query.where("t.queue_id", "=", opts.queueId);
       }
       if (opts.status !== undefined) {
-        query = query.where("status", "=", opts.status);
+        query = query.where("t.status", "=", opts.status);
       }
       if (opts.cursor !== undefined) {
         // Keyset pagination: skip past the cursor row.
@@ -233,22 +356,22 @@ export function createTicketService(
 
         query = query.where((eb) =>
           eb.or([
-            eb("created_at", ">", cursorCreatedAt),
+            eb("t.created_at", ">", cursorCreatedAt),
             eb.and([
-              eb("created_at", "=", cursorCreatedAt),
-              eb("id", ">", cursorId),
+              eb("t.created_at", "=", cursorCreatedAt),
+              eb("t.id", ">", cursorId),
             ]),
           ]),
         );
       }
 
       const rows = await query
-        .orderBy("created_at", "asc")
-        .orderBy("id", "asc")
+        .orderBy("t.created_at", "asc")
+        .orderBy("t.id", "asc")
         .limit(opts.limit)
         .execute();
 
-      return rows.map(toRecord);
+      return rows.map(toRecordWithKeyWrap);
     },
 
     async update(userId, input) {

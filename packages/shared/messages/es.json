@@ -14,6 +14,8 @@
   "app_sse_disconnected": "Se perdió la conexión en tiempo real. Reconectando...",
   "app_retry": "Intentar de nuevo",
 
+  "error_page_not_found": "Esta página no existe.",
+  "error_go_home": "Ir al inicio",
   "error_generic": "Algo salió mal. Por favor, inténtalo de nuevo.",
   "error_decryption_failed": "No se pudo descifrar este contenido.",
   "error_network": "No se pudo conectar con el servidor. Verifica tu conexión.",
@@ -137,5 +139,58 @@
   "tickets_filter_closed": "Cerrados",
 
   "empty_no_data": "Nada aquí todavía.",
-  "empty_no_results": "No se encontraron resultados."
+  "empty_no_results": "No se encontraron resultados.",
+
+  "dashboard_section_needs_attention": "Necesita atencion",
+  "dashboard_section_my_tickets": "Mis tickets",
+  "dashboard_section_unassigned": "Sin asignar",
+  "dashboard_section_on_hold": "En espera",
+  "dashboard_see_all": "Ver todos ({count})",
+  "dashboard_empty_section": "Nada aqui ahora mismo",
+  "dashboard_encrypted_ticket": "Ticket cifrado",
+  "dashboard_encrypted_help": "Tienes acceso a la cola pero no la clave de descifrado para este ticket. Pide a un admin que vuelva a envolver las claves.",
+  "dashboard_encrypted_help_label": "Por que esta cifrado?",
+  "dashboard_msg_count": "{count} msg",
+  "dashboard_msgs_count": "{count} msgs",
+  "dashboard_dismiss": "OK",
+  "dashboard_status_open": "Abierto",
+  "dashboard_status_closed": "Cerrado",
+  "dashboard_status_on_hold": "En espera",
+  "dashboard_time_just_now": "Ahora",
+  "dashboard_time_minutes_ago": "hace {count}m",
+  "dashboard_time_hours_ago": "hace {count}h",
+  "dashboard_time_days_ago": "hace {count}d",
+  "dashboard_exposure_title": "Resumen de seguridad",
+  "dashboard_exposure_subtitle": "Verificando tu estado de proteccion...",
+
+  "dashboard_shift_heading": "Turno",
+  "dashboard_shift_ends_in": "Termina en {time} ({start} - {end})",
+  "dashboard_shift_ended": "Turno terminado ({start} - {end})",
+  "dashboard_shift_not_started": "Comienza en {time} ({start} - {end})",
+  "dashboard_shift_volunteers": "{count} en turno",
+  "dashboard_shift_no_shift": "Sin turno activo",
+
+  "dashboard_queues_heading": "Colas",
+  "dashboard_queues_open_count": "{count} abiertos",
+  "dashboard_queues_no_queues": "Sin colas asignadas",
+
+  "dashboard_activity_heading": "Actividad",
+  "dashboard_activity_summary": "{count} eventos en la ultima hora",
+  "dashboard_activity_no_activity": "Sin actividad reciente",
+  "dashboard_activity_ticket_created": "Ticket nuevo",
+  "dashboard_activity_ticket_closed": "Cerrado",
+  "dashboard_activity_ticket_reopened": "Reabierto",
+  "dashboard_activity_followup_added": "Mensaje nuevo",
+  "dashboard_activity_mention": "Mencion",
+  "dashboard_activity_unknown": "Actividad",
+  "dashboard_activity_in_queue": "en {queue}",
+
+  "dashboard_kb_heading": "Base de conocimiento",
+  "dashboard_kb_summary": "{count} actualizados recientemente",
+  "dashboard_kb_no_articles": "Sin articulos recientes",
+  "dashboard_kb_encrypted_title": "Articulo actualizado",
+  "dashboard_kb_rating": "{count} votos",
+
+  "dashboard_assigned_you": "Tu",
+  "dashboard_assigned_unassigned": "Sin asignar"
 }

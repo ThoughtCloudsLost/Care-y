@@ -134,12 +134,12 @@
   inset: 0;
   border-radius: inherit;
   background: var(--brand-primary);
-  mask-image: url("/styles/riso-ink.png");
-  mask-repeat: repeat;
-  mask-size: 600px;
   -webkit-mask-image: url("/styles/riso-ink.png");
   -webkit-mask-repeat: repeat;
   -webkit-mask-size: 600px;
+  mask-image: url("/styles/riso-ink.png");
+  mask-repeat: repeat;
+  mask-size: 600px;
   pointer-events: none;
   z-index: 0;
 }

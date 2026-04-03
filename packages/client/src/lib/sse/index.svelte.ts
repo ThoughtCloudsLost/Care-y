@@ -8,6 +8,7 @@
  * Reconnects with exponential backoff (capped at 30s) on connection loss.
  */
 
+import { browser } from "$app/environment";
 import type { QueryClient } from "@tanstack/svelte-query";
 
 export interface SSEEvent {
@@ -72,6 +73,20 @@ export function createSSEListener(options: SSEListenerOptions): {
   disconnect(): void;
   readonly connected: boolean;
 } {
+  if (!browser) {
+    return {
+      connect() {
+        /* no-op during SSR */
+      },
+      disconnect() {
+        /* no-op during SSR */
+      },
+      get connected() {
+        return false;
+      },
+    };
+  }
+
   let eventSource: EventSource | null = null;
   let connected = $state(false);
   let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
