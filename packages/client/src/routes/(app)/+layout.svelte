@@ -49,8 +49,8 @@
   setCurrentUserId(() => currentUserId);
 
   // Dev-only auto-login with full production crypto pipeline.
-  // Runs registerCrypto + loginCrypto + devSeedTickets so the Worker
-  // reaches KEYED state and test tickets exist with real ECIES key wraps.
+  // Runs registerCrypto + loginCrypto, rotates the throwaway org keypair,
+  // seals KB articles client-side, and seeds test tickets.
   // The dynamic import is behind import.meta.env.DEV, which Vite replaces
   // with `false` in production builds. The entire import and the auto-login
   // module are stripped by dead-code elimination.
