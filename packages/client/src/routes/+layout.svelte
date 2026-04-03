@@ -15,10 +15,18 @@
   import { getCachedBranding, applyBranding } from "$lib/branding/index.js";
   import RisoInkFilter from "$lib/components/RisoInkFilter.svelte";
   import AppShell from "$lib/shell/AppShell.svelte";
-  import DevThemePanel from "$lib/components/DevThemePanel.svelte";
+  import type { Component } from "svelte";
   import type { TabId } from "$lib/shell/types";
 
-  const isDev = import.meta.env.DEV;
+  // DevThemePanel is dynamically imported so it is fully excluded from prod
+  // bundles. Never convert this to a static import. A static import alone
+  // ships the module even when the render branch is dead-code-eliminated.
+  let DevPanel = $state<Component | null>(null);
+  if (import.meta.env.DEV) {
+    void import("$lib/components/DevThemePanel.svelte").then(
+      (m) => (DevPanel = m.default),
+    );
+  }
 
   let { children } = $props();
 
@@ -133,8 +141,8 @@
     <AppShell {activeTab} ontabchange={handleTabChange}>
       {@render children()}
     </AppShell>
-    {#if isDev}
-      <DevThemePanel />
+    {#if DevPanel}
+      <DevPanel />
     {/if}
   </App>
 </QueryClientProvider>
