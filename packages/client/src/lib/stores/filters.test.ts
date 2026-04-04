@@ -142,9 +142,20 @@ describe("filterStore", () => {
   });
 
   describe("serverParams", () => {
-    it("returns only limit when no filters", async () => {
+    it("includes sort defaults and limit when no filters active", async () => {
       const store = await getStore();
-      expect(store.serverParams).toEqual({ limit: 50 });
+      expect(store.serverParams).toEqual({
+        sortBy: "date",
+        sortDirection: "desc",
+        limit: 50,
+      });
+    });
+
+    it("reflects sort changes in serverParams", async () => {
+      const store = await getStore();
+      store.setSort("last_activity", "asc");
+      expect(store.serverParams.sortBy).toBe("last_activity");
+      expect(store.serverParams.sortDirection).toBe("asc");
     });
 
     it("maps real statuses to statuses array", async () => {

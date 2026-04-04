@@ -79,12 +79,17 @@ export interface UpdateTicketInput {
   readonly onHold?: boolean;
 }
 
+export type TicketSortField = "date" | "priority" | "last_activity";
+export type TicketSortDirection = "asc" | "desc";
+
 export interface TicketListOpts {
   readonly statuses?: string[];
   readonly queueIds?: string[];
   readonly priorities?: string[];
   readonly onHold?: boolean;
   readonly assignedTo?: string;
+  readonly sortBy?: TicketSortField;
+  readonly sortDirection?: TicketSortDirection;
   readonly limit: number;
   readonly cursor?: string;
 }
@@ -314,6 +319,9 @@ export function createTicketService(
     },
 
     async list(userId, opts) {
+      const sortBy: TicketSortField = opts.sortBy ?? "date";
+      const sortDirection: TicketSortDirection = opts.sortDirection ?? "desc";
+
       // Scope to queues the user has access to (queue membership check).
       // Without this, any authenticated volunteer could enumerate all
       // ticket metadata across queues they are not assigned to.
@@ -369,33 +377,189 @@ export function createTicketService(
       if (opts.assignedTo !== undefined) {
         query = query.where("t.assigned_to", "=", opts.assignedTo);
       }
+      // --- Dynamic sort + keyset cursor ---
+      //
+      // Keyset pagination: the cursor WHERE must match the ORDER BY columns.
+      // Each sort mode produces a different composite keyset comparison.
+      // Timestamp comparisons use subqueries to preserve PostgreSQL's
+      // microsecond precision (JS Date truncates to milliseconds).
+
+      const gt = sortDirection === "asc" ? (">" as const) : ("<" as const);
+
       if (opts.cursor !== undefined) {
-        // Keyset pagination: skip past the cursor row.
-        // Uses subquery to keep timestamp comparison in PostgreSQL,
-        // avoiding JS Date millisecond precision loss (PostgreSQL
-        // stores timestamptz with microsecond precision).
         const cursorId = opts.cursor;
+
+        // Subquery: cursor row's created_at (reused across all sort modes)
         const cursorCreatedAt = db
           .selectFrom("tickets")
           .select("created_at")
           .where("id", "=", cursorId);
 
-        query = query.where((eb) =>
-          eb.or([
-            eb("t.created_at", ">", cursorCreatedAt),
-            eb.and([
-              eb("t.created_at", "=", cursorCreatedAt),
-              eb("t.id", ">", cursorId),
+        if (sortBy === "priority") {
+          // Subquery: cursor row's priority sort key
+          const cursorPriorityKey = db
+            .selectFrom("tickets")
+            .select((sub) =>
+              sub
+                .case("priority")
+                .when("urgent")
+                .then(0)
+                .when("high")
+                .then(1)
+                .when("normal")
+                .then(2)
+                .when("low")
+                .then(3)
+                .else(4)
+                .end()
+                .as("sort_key"),
+            )
+            .where("id", "=", cursorId);
+
+          // Three-column keyset: (priority_sort_key, created_at, id)
+          query = query.where((eb) => {
+            const rowKey = eb
+              .case("t.priority")
+              .when("urgent")
+              .then(0)
+              .when("high")
+              .then(1)
+              .when("normal")
+              .then(2)
+              .when("low")
+              .then(3)
+              .else(4)
+              .end();
+
+            return eb.or([
+              eb(rowKey, gt, cursorPriorityKey),
+              eb.and([
+                eb(rowKey, "=", cursorPriorityKey),
+                eb("t.created_at", gt, cursorCreatedAt),
+              ]),
+              eb.and([
+                eb(rowKey, "=", cursorPriorityKey),
+                eb("t.created_at", "=", cursorCreatedAt),
+                eb("t.id", gt, cursorId),
+              ]),
+            ]);
+          });
+        } else if (sortBy === "last_activity") {
+          // Subquery expressions for the cursor row and the current row
+          const cursorLastActivity = db
+            .selectFrom("followups")
+            .select((sb) => sb.fn.max("followups.created_at").as("max_at"))
+            .where("followups.ticket_id", "=", cursorId);
+
+          // NULLS LAST keyset: NULL activity rows sort after all non-NULL rows.
+          // Three regions in sort order:
+          //   1. Non-NULL activity values (sorted by gt direction)
+          //   2. NULL activity values (sorted by created_at tiebreaker)
+          //
+          // If cursor has non-NULL activity: rows "after" are either
+          //   (a) non-NULL with activity gt cursor, or
+          //   (b) non-NULL with equal activity + later tiebreaker, or
+          //   (c) NULL activity (always after non-NULL with NULLS LAST)
+          // If cursor has NULL activity: rows "after" are other NULLs
+          //   with later tiebreaker (created_at, then id)
+          query = query.where((eb) => {
+            const rowActivity = eb
+              .selectFrom("followups as f2")
+              .select((sb) => sb.fn.max("f2.created_at").as("max_at"))
+              .whereRef("f2.ticket_id", "=", "t.id");
+
+            // Cursor has non-NULL activity
+            const cursorNonNull = eb.and([
+              eb(cursorLastActivity, "is not", null),
+              eb.or([
+                // (a) Row has non-NULL activity that sorts after cursor
+                eb(rowActivity, gt, cursorLastActivity),
+                // (b) Same activity, later tiebreaker
+                eb.and([
+                  eb(rowActivity, "=", cursorLastActivity),
+                  eb("t.created_at", gt, cursorCreatedAt),
+                ]),
+                eb.and([
+                  eb(rowActivity, "=", cursorLastActivity),
+                  eb("t.created_at", "=", cursorCreatedAt),
+                  eb("t.id", gt, cursorId),
+                ]),
+                // (c) Row has NULL activity (NULLS LAST: after all non-NULL)
+                eb(rowActivity, "is", null),
+              ]),
+            ]);
+
+            // Cursor has NULL activity (we're in the NULL tail)
+            const cursorNull = eb.and([
+              eb(cursorLastActivity, "is", null),
+              eb(rowActivity, "is", null),
+              eb.or([
+                eb("t.created_at", gt, cursorCreatedAt),
+                eb.and([
+                  eb("t.created_at", "=", cursorCreatedAt),
+                  eb("t.id", gt, cursorId),
+                ]),
+              ]),
+            ]);
+
+            return eb.or([cursorNonNull, cursorNull]);
+          });
+        } else {
+          // "date": two-column keyset (created_at, id)
+          query = query.where((eb) =>
+            eb.or([
+              eb("t.created_at", gt, cursorCreatedAt),
+              eb.and([
+                eb("t.created_at", "=", cursorCreatedAt),
+                eb("t.id", gt, cursorId),
+              ]),
             ]),
-          ]),
-        );
+          );
+        }
       }
 
-      const rows = await query
-        .orderBy("t.created_at", "asc")
-        .orderBy("t.id", "asc")
-        .limit(opts.limit)
-        .execute();
+      // ORDER BY: must match the keyset cursor columns above
+      if (sortBy === "priority") {
+        query = query
+          .orderBy(
+            (eb) =>
+              eb
+                .case("t.priority")
+                .when("urgent")
+                .then(0)
+                .when("high")
+                .then(1)
+                .when("normal")
+                .then(2)
+                .when("low")
+                .then(3)
+                .else(4)
+                .end(),
+            sortDirection,
+          )
+          .orderBy("t.created_at", sortDirection)
+          .orderBy("t.id", "asc");
+      } else if (sortBy === "last_activity") {
+        // Tickets with no follow-ups (NULL last_activity_at) sort to the end
+        // regardless of direction. A volunteer sorting by "most recent activity"
+        // wants active tickets first; sorting "least recent" wants stale tickets
+        // first. Either way, tickets with zero activity belong at the bottom.
+        query = query
+          .orderBy("last_activity_at", (ob) =>
+            sortDirection === "desc"
+              ? ob.desc().nullsLast()
+              : ob.asc().nullsLast(),
+          )
+          .orderBy("t.created_at", sortDirection)
+          .orderBy("t.id", "asc");
+      } else {
+        // "date" (default)
+        query = query
+          .orderBy("t.created_at", sortDirection)
+          .orderBy("t.id", "asc");
+      }
+
+      const rows = await query.limit(opts.limit).execute();
 
       return rows.map(toRecordWithKeyWrap);
     },

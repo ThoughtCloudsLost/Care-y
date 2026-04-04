@@ -135,7 +135,17 @@ export const uploadAttachmentInputSchema = z.object({
 });
 export type UploadAttachmentInput = z.infer<typeof uploadAttachmentInputSchema>;
 
-// --- Pagination ---
+// --- Sort + Pagination ---
+
+export const ticketSortFieldSchema = z.enum([
+  "date",
+  "priority",
+  "last_activity",
+]);
+export type TicketSortField = z.infer<typeof ticketSortFieldSchema>;
+
+export const sortDirectionSchema = z.enum(["asc", "desc"]);
+export type SortDirection = z.infer<typeof sortDirectionSchema>;
 
 export const ticketListInputSchema = z.object({
   statuses: z.array(ticketStatusSchema).optional(),
@@ -143,6 +153,8 @@ export const ticketListInputSchema = z.object({
   priorities: z.array(ticketPrioritySchema).optional(),
   onHold: z.boolean().optional(),
   assignedTo: z.uuid().optional(),
+  sortBy: ticketSortFieldSchema.default("date"),
+  sortDirection: sortDirectionSchema.default("desc"),
   limit: z.number().int().min(1).max(100).default(50),
   cursor: z.uuid().optional(),
 });

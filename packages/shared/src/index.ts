@@ -168,6 +168,8 @@ export {
 export {
   ticketStatusSchema,
   ticketPrioritySchema,
+  ticketSortFieldSchema,
+  sortDirectionSchema,
   followUpSourceSchema,
   followUpTypeSchema,
   createTicketInputSchema,
@@ -193,6 +195,8 @@ export {
   queueAssignmentInputSchema,
   type TicketStatus,
   type TicketPriority,
+  type TicketSortField,
+  type SortDirection,
   type FollowUpSource,
   type FollowUpType,
   type CreateTicketInput,

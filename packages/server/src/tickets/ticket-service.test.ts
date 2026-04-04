@@ -729,4 +729,298 @@ describe.skipIf(!process.env.DATABASE_URL)("TicketService (DB)", () => {
       expect(Buffer.isBuffer(found!.assignedDisplayName)).toBe(true);
     }
   });
+
+  // --- Server-side sort ---
+
+  it("sortBy priority places urgent before low (not alphabetical)", async () => {
+    const { userId, queueId } = await createClientFixture();
+
+    // Create tickets with different priorities via separate clients
+    // (one-ticket-per-client model)
+    const priorities = ["low", "urgent", "normal", "high"] as const;
+    const ticketIds: string[] = [];
+
+    for (const p of priorities) {
+      const c = await createTestClientFixture(testDb.db, { queueId });
+      const t = await svc.create(c.userId, {
+        clientId: c.clientId,
+        queueId,
+        encryptedTitle: Buffer.from(`title-${p}`),
+        encryptedDescription: Buffer.from("desc"),
+        priority: p,
+        keyGeneration: crypto.randomUUID(),
+      });
+      ticketIds.push(t.id);
+    }
+
+    const descResults = await svc.list(userId, {
+      queueIds: [queueId],
+      sortBy: "priority",
+      sortDirection: "asc",
+      limit: 100,
+    });
+
+    // Extract priorities of our test tickets in the order they were returned
+    const ourTickets = descResults.filter((t) => ticketIds.includes(t.id));
+    const returnedPriorities = ourTickets.map((t) => t.priority);
+
+    // Urgent should come first (sort key 0), then high (1), normal (2), low (3)
+    const urgentIdx = returnedPriorities.indexOf("urgent");
+    const highIdx = returnedPriorities.indexOf("high");
+    const normalIdx = returnedPriorities.indexOf("normal");
+    const lowIdx = returnedPriorities.indexOf("low");
+
+    expect(urgentIdx).toBeLessThan(highIdx);
+    expect(highIdx).toBeLessThan(normalIdx);
+    expect(normalIdx).toBeLessThan(lowIdx);
+  });
+
+  it("sortBy priority desc places low before urgent", async () => {
+    const { userId, queueId } = await createClientFixture();
+
+    const priorities = ["urgent", "low"] as const;
+    const ticketIds: string[] = [];
+
+    for (const p of priorities) {
+      const c = await createTestClientFixture(testDb.db, { queueId });
+      const t = await svc.create(c.userId, {
+        clientId: c.clientId,
+        queueId,
+        encryptedTitle: Buffer.from(`title-${p}`),
+        encryptedDescription: Buffer.from("desc"),
+        priority: p,
+        keyGeneration: crypto.randomUUID(),
+      });
+      ticketIds.push(t.id);
+    }
+
+    const results = await svc.list(userId, {
+      queueIds: [queueId],
+      sortBy: "priority",
+      sortDirection: "desc",
+      limit: 100,
+    });
+
+    const ourTickets = results.filter((t) => ticketIds.includes(t.id));
+    const returnedPriorities = ourTickets.map((t) => t.priority);
+
+    expect(returnedPriorities.indexOf("low")).toBeLessThan(
+      returnedPriorities.indexOf("urgent"),
+    );
+  });
+
+  it("sortBy last_activity places recently-active tickets first (desc)", async () => {
+    const { userId, queueId } = await createClientFixture();
+
+    // Ticket A: created first, no follow-ups (last_activity = null)
+    const clientA = await createTestClientFixture(testDb.db, { queueId });
+    const ticketA = await svc.create(clientA.userId, {
+      clientId: clientA.clientId,
+      queueId,
+      encryptedTitle: Buffer.from("old-no-activity"),
+      encryptedDescription: Buffer.from("desc"),
+      priority: "normal",
+      keyGeneration: crypto.randomUUID(),
+    });
+
+    // Ticket B: created second, has a follow-up (last_activity = now)
+    const clientB = await createTestClientFixture(testDb.db, { queueId });
+    const ticketB = await svc.create(clientB.userId, {
+      clientId: clientB.clientId,
+      queueId,
+      encryptedTitle: Buffer.from("recent-activity"),
+      encryptedDescription: Buffer.from("desc"),
+      priority: "normal",
+      keyGeneration: crypto.randomUUID(),
+    });
+
+    // Add a follow-up to ticket B so it has recent activity
+    await testDb.db
+      .insertInto("followups")
+      .values({
+        ticket_id: ticketB.id,
+        source: "volunteer",
+        type: "message",
+        encrypted_content: Buffer.from("test follow-up"),
+        encrypted_read_state: Buffer.from("{}"),
+      })
+      .execute();
+
+    const results = await svc.list(userId, {
+      queueIds: [queueId],
+      sortBy: "last_activity",
+      sortDirection: "desc",
+      limit: 100,
+    });
+
+    const ourTickets = results.filter(
+      (t) => t.id === ticketA.id || t.id === ticketB.id,
+    );
+
+    // Ticket B (has activity) should appear before ticket A (no activity)
+    const idxB = ourTickets.findIndex((t) => t.id === ticketB.id);
+    const idxA = ourTickets.findIndex((t) => t.id === ticketA.id);
+    expect(idxB).toBeLessThan(idxA);
+  });
+
+  it("sortBy priority pagination covers all tickets without duplicates", async () => {
+    const { userId, queueId } = await createClientFixture();
+
+    // Create 5 tickets with mixed priorities
+    const priorities = ["low", "urgent", "high", "normal", "urgent"] as const;
+    const ticketIds: string[] = [];
+
+    for (const p of priorities) {
+      const c = await createTestClientFixture(testDb.db, { queueId });
+      const t = await svc.create(c.userId, {
+        clientId: c.clientId,
+        queueId,
+        encryptedTitle: Buffer.from(`title-${p}-${ticketIds.length}`),
+        encryptedDescription: Buffer.from("desc"),
+        priority: p,
+        keyGeneration: crypto.randomUUID(),
+      });
+      ticketIds.push(t.id);
+    }
+
+    // Page through with limit 2
+    const page1 = await svc.list(userId, {
+      queueIds: [queueId],
+      sortBy: "priority",
+      sortDirection: "asc",
+      limit: 2,
+    });
+    expect(page1.length).toBe(2);
+
+    const page2 = await svc.list(userId, {
+      queueIds: [queueId],
+      sortBy: "priority",
+      sortDirection: "asc",
+      limit: 2,
+      cursor: page1[1]!.id,
+    });
+    expect(page2.length).toBe(2);
+
+    const page3 = await svc.list(userId, {
+      queueIds: [queueId],
+      sortBy: "priority",
+      sortDirection: "asc",
+      limit: 2,
+      cursor: page2[1]!.id,
+    });
+
+    // Collect all returned ticket IDs across pages
+    const allReturned = [
+      ...page1.map((t) => t.id),
+      ...page2.map((t) => t.id),
+      ...page3.map((t) => t.id),
+    ];
+
+    // All 5 tickets appear exactly once (no duplicates, no skips)
+    const ourReturned = allReturned.filter((id) => ticketIds.includes(id));
+    expect(new Set(ourReturned).size).toBe(5);
+    expect(ourReturned).toHaveLength(5);
+  });
+
+  it("sortBy last_activity pagination covers tickets with and without activity", async () => {
+    const { userId, queueId } = await createClientFixture();
+
+    // 5 tickets: indices 0,2,4 have follow-ups (activity), 1,3 do not (NULL).
+    // With NULLS LAST desc, active tickets come first, then NULLs.
+    // Pagination must cross the non-NULL → NULL boundary without skips.
+    const ticketIds: string[] = [];
+    for (let i = 0; i < 5; i++) {
+      const c = await createTestClientFixture(testDb.db, { queueId });
+      const t = await svc.create(c.userId, {
+        clientId: c.clientId,
+        queueId,
+        encryptedTitle: Buffer.from(`activity-page-${i}`),
+        encryptedDescription: Buffer.from("desc"),
+        priority: "normal",
+        keyGeneration: crypto.randomUUID(),
+      });
+      ticketIds.push(t.id);
+
+      if (i % 2 === 0) {
+        await testDb.db
+          .insertInto("followups")
+          .values({
+            ticket_id: t.id,
+            source: "volunteer",
+            type: "message",
+            encrypted_content: Buffer.from(`msg-${i}`),
+            encrypted_read_state: Buffer.from("{}"),
+          })
+          .execute();
+      }
+    }
+
+    // Page through with limit 2
+    const page1 = await svc.list(userId, {
+      queueIds: [queueId],
+      sortBy: "last_activity",
+      sortDirection: "desc",
+      limit: 2,
+    });
+    expect(page1.length).toBe(2);
+
+    const page2 = await svc.list(userId, {
+      queueIds: [queueId],
+      sortBy: "last_activity",
+      sortDirection: "desc",
+      limit: 2,
+      cursor: page1[1]!.id,
+    });
+    expect(page2.length).toBe(2);
+
+    const page3 = await svc.list(userId, {
+      queueIds: [queueId],
+      sortBy: "last_activity",
+      sortDirection: "desc",
+      limit: 2,
+      cursor: page2[1]!.id,
+    });
+
+    const allReturned = [
+      ...page1.map((t) => t.id),
+      ...page2.map((t) => t.id),
+      ...page3.map((t) => t.id),
+    ];
+
+    // All 5 tickets appear exactly once across pages
+    const ourReturned = allReturned.filter((id) => ticketIds.includes(id));
+    expect(new Set(ourReturned).size).toBe(5);
+    expect(ourReturned).toHaveLength(5);
+  });
+
+  it("default sort (no sortBy) returns tickets in created_at desc order", async () => {
+    const { userId, queueId } = await createClientFixture();
+
+    const ticketIds: string[] = [];
+    for (let i = 0; i < 3; i++) {
+      const c = await createTestClientFixture(testDb.db, { queueId });
+      const t = await svc.create(c.userId, {
+        clientId: c.clientId,
+        queueId,
+        encryptedTitle: Buffer.from(`title-${i}`),
+        encryptedDescription: Buffer.from("desc"),
+        priority: "normal",
+        keyGeneration: crypto.randomUUID(),
+      });
+      ticketIds.push(t.id);
+    }
+
+    const results = await svc.list(userId, {
+      queueIds: [queueId],
+      limit: 100,
+    });
+
+    const ourTickets = results.filter((t) => ticketIds.includes(t.id));
+    const returnedIds = ourTickets.map((t) => t.id);
+
+    // Default is desc, so the last created ticket should appear first
+    expect(returnedIds[0]).toBe(ticketIds[2]);
+    expect(returnedIds[1]).toBe(ticketIds[1]);
+    expect(returnedIds[2]).toBe(ticketIds[0]);
+  });
 });

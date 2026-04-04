@@ -18,7 +18,7 @@ import type { TicketStatus, TicketPriority } from "@care-y/shared";
 /** UI status values: server statuses + the "hold" pseudo-status. */
 export type FilterStatus = TicketStatus | "hold";
 
-export type SortField = "date" | "priority" | "status";
+export type SortField = "date" | "priority" | "last_activity";
 export type SortDirection = "asc" | "desc";
 
 export interface SortConfig {
@@ -47,6 +47,8 @@ function createFilterStore(): {
     queueIds?: string[];
     priorities?: TicketPriority[];
     assignedTo?: string;
+    sortBy: SortField;
+    sortDirection: SortDirection;
     limit: number;
   };
   clearAll(): void;
@@ -63,7 +65,7 @@ function createFilterStore(): {
   let dateFrom = $state<Date | null>(null);
   let dateTo = $state<Date | null>(null);
 
-  // Sort (client-side reorder of already-fetched tickets)
+  // Sort (server-side ORDER BY; also used as TanStack Query cache key)
   let sort = $state<SortConfig>({ field: "date", direction: "desc" });
 
   // Count of active *dimensions* (for the badge, e.g. "2 filters applied")
@@ -90,6 +92,8 @@ function createFilterStore(): {
       priorities:
         priorities.size > 0 ? ([...priorities] as TicketPriority[]) : undefined,
       assignedTo: assigneeId ?? undefined,
+      sortBy: sort.field,
+      sortDirection: sort.direction,
       limit: 50,
     };
   });
