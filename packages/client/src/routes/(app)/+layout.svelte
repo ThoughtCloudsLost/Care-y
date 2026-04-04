@@ -5,12 +5,15 @@
   import { OrgKeyManager } from "$lib/crypto/org-key.js";
   import { OrgDecryptCache } from "$lib/crypto/org-decrypt-cache.js";
   import { TicketDecryptCache } from "$lib/crypto/ticket-decrypt-cache.js";
+  import { FollowUpDecryptCache } from "$lib/crypto/follow-up-decrypt-cache.js";
+  import { cacheRegistry } from "$lib/crypto/cache-registry.js";
   import { trpc } from "$lib/trpc/index.js";
   import {
     setCryptoBridge,
     setOrgKeyManager,
     setOrgDecryptCache,
     setTicketDecryptCache,
+    setFollowUpDecryptCache,
     setCurrentUserId,
   } from "$lib/crypto/context.js";
 
@@ -37,6 +40,26 @@
     // tier (async, Worker ECIES). Both use SvelteMap for reactivity.
     setOrgDecryptCache(new OrgDecryptCache(orgKeyManager));
     setTicketDecryptCache(new TicketDecryptCache(bridge));
+
+    const followUpCache = new FollowUpDecryptCache(bridge);
+    setFollowUpDecryptCache(followUpCache);
+
+    // Dev-mode: verify all expected caches are registered.
+    // New caches added by future phases must be appended to this list.
+    if (import.meta.env.DEV) {
+      const expected = [
+        "TicketDecryptCache",
+        "FollowUpDecryptCache",
+        "OrgDecryptCache",
+      ];
+      const registered = cacheRegistry.registered;
+      const missing = expected.filter((n) => !registered.includes(n));
+      if (missing.length > 0) {
+        console.error(
+          `[CacheRegistry] missing registrations: ${missing.join(", ")}`,
+        );
+      }
+    }
   }
 
   // Current user identity, shared to all authenticated pages via context.

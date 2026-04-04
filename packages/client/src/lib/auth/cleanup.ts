@@ -11,6 +11,8 @@
  * handleZeroAll and the bridge's zeroAll are idempotent.
  */
 
+import { cacheRegistry } from "$lib/crypto/cache-registry.js";
+
 /** Narrow interface: only the method cleanup needs from CryptoBridge. */
 export interface CleanupBridge {
   zeroAll(): Promise<void>;
@@ -32,7 +34,10 @@ let orgKeyRef: CleanupOrgKey | null = null;
 let cacheRefs: CleanupCache[] = [];
 
 function handleBeforeUnload(): void {
-  // Clear decrypt caches first (plaintext strings in SvelteMap).
+  // Clear all registry-tracked caches.
+  cacheRegistry.clearAll();
+
+  // Also clear caches not yet migrated to the registry.
   for (const cache of cacheRefs) {
     cache.clear();
   }
@@ -65,6 +70,17 @@ export function installCleanupHandler(
   if (!installed) {
     window.addEventListener("beforeunload", handleBeforeUnload);
     installed = true;
+  }
+}
+
+/**
+ * Clear all decrypted data from memory.
+ * Call on logout, session expiry, or idle timeout (not just beforeunload).
+ */
+export function clearAllDecryptedData(): void {
+  cacheRegistry.clearAll();
+  for (const cache of cacheRefs) {
+    cache.clear();
   }
 }
 

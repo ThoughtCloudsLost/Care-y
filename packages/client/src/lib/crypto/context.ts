@@ -15,6 +15,8 @@ import type { CryptoBridge } from "$lib/workers/crypto-bridge.js";
 import type { OrgKeyManager } from "./org-key.js";
 import type { OrgDecryptCache } from "./org-decrypt-cache.js";
 import type { TicketDecryptCache } from "./ticket-decrypt-cache.js";
+import type { FollowUpDecryptCache } from "./follow-up-decrypt-cache.js";
+import type { PreviewLoader } from "$lib/tickets/preview-loader.svelte.js";
 
 export const [getCryptoBridge, setCryptoBridge] = createContext<CryptoBridge>();
 
@@ -29,3 +31,9 @@ export const [getTicketDecryptCache, setTicketDecryptCache] =
 
 export const [getCurrentUserId, setCurrentUserId] =
   createContext<() => string | undefined>();
+
+export const [getFollowUpDecryptCache, setFollowUpDecryptCache] =
+  createContext<FollowUpDecryptCache>();
+
+export const [getPreviewLoader, setPreviewLoader] =
+  createContext<PreviewLoader>();
