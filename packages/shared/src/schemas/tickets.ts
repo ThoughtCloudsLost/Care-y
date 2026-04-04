@@ -138,12 +138,21 @@ export type UploadAttachmentInput = z.infer<typeof uploadAttachmentInputSchema>;
 // --- Pagination ---
 
 export const ticketListInputSchema = z.object({
-  queueId: z.uuid().optional(),
-  status: ticketStatusSchema.optional(),
+  statuses: z.array(ticketStatusSchema).optional(),
+  queueIds: z.array(z.uuid()).optional(),
+  priorities: z.array(ticketPrioritySchema).optional(),
+  onHold: z.boolean().optional(),
+  assignedTo: z.uuid().optional(),
   limit: z.number().int().min(1).max(100).default(50),
   cursor: z.uuid().optional(),
 });
 export type TicketListInput = z.infer<typeof ticketListInputSchema>;
+
+export const recentFollowUpsInputSchema = z.object({
+  ticketIds: z.array(z.uuid()).min(1).max(50),
+  perTicket: z.number().int().min(1).max(5).default(3),
+});
+export type RecentFollowUpsInput = z.infer<typeof recentFollowUpsInputSchema>;
 
 export const followUpListInputSchema = z.object({
   ticketId: z.uuid(),

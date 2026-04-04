@@ -39,9 +39,9 @@
   const ticketRouter = trpc.tickets;
 
   const ticketsQuery = createQuery(() => ({
-    queryKey: ["tickets", "list", { status: "open" }],
+    queryKey: ["tickets", "list", { statuses: ["open"] }],
     queryFn: async () =>
-      ticketRouter.list.query({ status: "open", limit: 100 }),
+      ticketRouter.list.query({ statuses: ["open"], limit: 100 }),
   }));
 
   type Ticket = NonNullable<typeof ticketsQuery.data>[number];

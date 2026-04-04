@@ -11,6 +11,7 @@
 
 import { type Kysely } from "kysely";
 import type { TenantDatabase } from "../db/types.js";
+import type { RecentFollowUpsInput } from "@care-y/shared";
 import type { TicketAccessChecker } from "./access.js";
 import { NotFoundError, TicketError, MergeError } from "../errors.js";
 import { createDependencyService } from "./dependency-service.js";
@@ -51,6 +52,16 @@ export interface TicketWithKeyWrap extends TicketListRecord {
   readonly keyWrap: TicketKeyWrap | null;
 }
 
+export interface FollowUpPreview {
+  readonly id: string;
+  readonly ticketId: string;
+  readonly source: string;
+  readonly type: string;
+  readonly encryptedContent: Buffer;
+  readonly createdAt: Date;
+  readonly keyWrap: TicketKeyWrap | null;
+}
+
 export interface CreateTicketInput {
   readonly clientId: string;
   readonly queueId: string;
@@ -68,18 +79,20 @@ export interface UpdateTicketInput {
   readonly onHold?: boolean;
 }
 
+export interface TicketListOpts {
+  readonly statuses?: string[];
+  readonly queueIds?: string[];
+  readonly priorities?: string[];
+  readonly onHold?: boolean;
+  readonly assignedTo?: string;
+  readonly limit: number;
+  readonly cursor?: string;
+}
+
 export interface TicketService {
   create(userId: string, input: CreateTicketInput): Promise<TicketRecord>;
   findById(ticketId: string, userId: string): Promise<TicketWithKeyWrap>;
-  list(
-    userId: string,
-    opts: {
-      queueId?: string;
-      status?: string;
-      limit: number;
-      cursor?: string;
-    },
-  ): Promise<TicketWithKeyWrap[]>;
+  list(userId: string, opts: TicketListOpts): Promise<TicketWithKeyWrap[]>;
   update(userId: string, input: UpdateTicketInput): Promise<TicketRecord>;
   close(userId: string, ticketId: string): Promise<TicketRecord>;
   reopen(
@@ -87,6 +100,10 @@ export interface TicketService {
     ticketId: string,
     newKeyGeneration: string,
   ): Promise<TicketRecord>;
+  recentFollowUps(
+    userId: string,
+    input: RecentFollowUpsInput,
+  ): Promise<Record<string, FollowUpPreview[]>>;
 }
 
 interface BaseTicketRow {
@@ -337,11 +354,20 @@ export function createTicketService(
         ])
         .where("t.queue_id", "in", [...accessibleQueues]);
 
-      if (opts.queueId !== undefined) {
-        query = query.where("t.queue_id", "=", opts.queueId);
+      if (opts.queueIds !== undefined && opts.queueIds.length > 0) {
+        query = query.where("t.queue_id", "in", opts.queueIds);
       }
-      if (opts.status !== undefined) {
-        query = query.where("t.status", "=", opts.status);
+      if (opts.statuses !== undefined && opts.statuses.length > 0) {
+        query = query.where("t.status", "in", opts.statuses);
+      }
+      if (opts.priorities !== undefined && opts.priorities.length > 0) {
+        query = query.where("t.priority", "in", opts.priorities);
+      }
+      if (opts.onHold !== undefined) {
+        query = query.where("t.on_hold", "=", opts.onHold);
+      }
+      if (opts.assignedTo !== undefined) {
+        query = query.where("t.assigned_to", "=", opts.assignedTo);
       }
       if (opts.cursor !== undefined) {
         // Keyset pagination: skip past the cursor row.
@@ -457,6 +483,98 @@ export function createTicketService(
 
       await createSystemFollowUp(ticketId, "status_change");
       return toRecord(row);
+    },
+
+    async recentFollowUps(
+      userId: string,
+      input: RecentFollowUpsInput,
+    ): Promise<Record<string, FollowUpPreview[]>> {
+      const accessibleQueues = await getAccessibleQueueIds(userId);
+      if (accessibleQueues.length === 0) return {};
+
+      // Derived table: rank follow-ups per ticket by recency.
+      // Uses eb.fn.agg("row_number") with .over() for typesafe window function
+      // (column names checked by Kysely). LATERAL JOIN is not supported by
+      // Kysely, so ROW_NUMBER + outer filter achieves the same top-N-per-group.
+      const ranked = db
+        .selectFrom("followups as f")
+        .select((eb) => [
+          eb.ref("f.id").as("id"),
+          eb.ref("f.ticket_id").as("ticket_id"),
+          eb.ref("f.source").as("source"),
+          eb.ref("f.type").as("type"),
+          eb.ref("f.encrypted_content").as("encrypted_content"),
+          eb.ref("f.created_at").as("created_at"),
+          eb.fn
+            .agg<number>("row_number")
+            .over((ob) =>
+              ob.partitionBy("f.ticket_id").orderBy("f.created_at", "desc"),
+            )
+            .as("rn"),
+        ])
+        .where("f.ticket_id", "in", input.ticketIds)
+        .as("ranked_f");
+
+      const rows = await db
+        .selectFrom("tickets as t")
+        .innerJoin(ranked, (join) =>
+          join
+            .onRef("ranked_f.ticket_id", "=", "t.id")
+            .on("ranked_f.rn", "<=", input.perTicket),
+        )
+        .leftJoin("ticket_key_wraps as tkw", (join) =>
+          join
+            .onRef("tkw.ticket_id", "=", "t.id")
+            .on("tkw.volunteer_id", "=", userId)
+            .onRef("tkw.key_generation", "=", "t.key_generation"),
+        )
+        .select([
+          "ranked_f.id",
+          "ranked_f.ticket_id",
+          "ranked_f.source",
+          "ranked_f.type",
+          "ranked_f.encrypted_content",
+          "ranked_f.created_at",
+          "tkw.ephemeral_point",
+          "tkw.nonce",
+          "tkw.wrapped_key",
+        ])
+        .where("t.id", "in", input.ticketIds)
+        .where("t.queue_id", "in", [...accessibleQueues])
+        .orderBy("ranked_f.ticket_id")
+        .orderBy("ranked_f.created_at", "desc")
+        .execute();
+
+      const result: Record<string, FollowUpPreview[]> = {};
+      for (const row of rows) {
+        const ep = row.ephemeral_point;
+        const n = row.nonce;
+        const wk = row.wrapped_key;
+        const keyWrap: TicketKeyWrap | null =
+          ep && n && wk
+            ? {
+                ephemeralPoint: encode(new Uint8Array(ep)),
+                nonce: encode(new Uint8Array(n)),
+                wrappedKey: encode(new Uint8Array(wk)),
+              }
+            : null;
+        const preview: FollowUpPreview = {
+          id: row.id,
+          ticketId: row.ticket_id,
+          source: row.source,
+          type: row.type,
+          encryptedContent: row.encrypted_content,
+          createdAt: row.created_at,
+          keyWrap,
+        };
+        const list = result[row.ticket_id];
+        if (list) {
+          list.push(preview);
+        } else {
+          result[row.ticket_id] = [preview];
+        }
+      }
+      return result;
     },
   };
 }

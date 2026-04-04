@@ -232,12 +232,12 @@ describe.skipIf(!process.env.DATABASE_URL)("TicketService (DB)", () => {
     }
 
     // First page: limit 2
-    const page1 = await svc.list(user.id, { queueId: queue.id, limit: 2 });
+    const page1 = await svc.list(user.id, { queueIds: [queue.id], limit: 2 });
     expect(page1).toHaveLength(2);
 
     // Second page: cursor from last item of page1
     const page2 = await svc.list(user.id, {
-      queueId: queue.id,
+      queueIds: [queue.id],
       limit: 2,
       cursor: page1[1]!.id,
     });
@@ -249,21 +249,21 @@ describe.skipIf(!process.env.DATABASE_URL)("TicketService (DB)", () => {
     expect(new Set(allIds)).toEqual(new Set(ticketIds));
   });
 
-  it("list filters by queue and status", async () => {
+  it("list filters by queueIds and statuses arrays", async () => {
     const { userId, queueId, ticketId } = await createTicketFixture();
 
-    // Open tickets in this queue
+    // Open tickets in this queue (array-based)
     const openInQueue = await svc.list(userId, {
-      queueId,
-      status: "open",
+      queueIds: [queueId],
+      statuses: ["open"],
       limit: 100,
     });
     expect(openInQueue.some((t) => t.id === ticketId)).toBe(true);
 
-    // Closed tickets in this queue (should not contain our ticket)
+    // Closed tickets in this queue (should not contain our open ticket)
     const closedInQueue = await svc.list(userId, {
-      queueId,
-      status: "closed",
+      queueIds: [queueId],
+      statuses: ["closed"],
       limit: 100,
     });
     expect(closedInQueue.some((t) => t.id === ticketId)).toBe(false);
@@ -275,7 +275,7 @@ describe.skipIf(!process.env.DATABASE_URL)("TicketService (DB)", () => {
     const outsider = await createTestUser(testDb.db);
 
     const result = await svc.list(outsider.id, {
-      queueId,
+      queueIds: [queueId],
       limit: 100,
     });
     expect(result).toHaveLength(0);
@@ -485,6 +485,216 @@ describe.skipIf(!process.env.DATABASE_URL)("TicketService (DB)", () => {
     expect(otherResult.keyWrap).toBeNull();
   });
 
+  it("list filters by priorities array", async () => {
+    const { userId, clientId, queueId } = await createClientFixture();
+
+    const normalTicket = await svc.create(userId, {
+      clientId,
+      queueId,
+      encryptedTitle: Buffer.from("normal-priority"),
+      encryptedDescription: Buffer.from("desc"),
+      priority: "normal",
+      keyGeneration: crypto.randomUUID(),
+    });
+
+    // Create a high-priority ticket for a different client in the same queue
+    const otherClient = await createTestClientFixture(testDb.db, { queueId });
+    const highTicket = await svc.create(userId, {
+      clientId: otherClient.clientId,
+      queueId,
+      encryptedTitle: Buffer.from("high-priority"),
+      encryptedDescription: Buffer.from("desc"),
+      priority: "high",
+      keyGeneration: crypto.randomUUID(),
+    });
+
+    // Filter to high only
+    const highOnly = await svc.list(userId, {
+      priorities: ["high"],
+      limit: 100,
+    });
+    expect(highOnly.some((t) => t.id === highTicket.id)).toBe(true);
+    expect(highOnly.some((t) => t.id === normalTicket.id)).toBe(false);
+
+    // Filter to both
+    const both = await svc.list(userId, {
+      priorities: ["normal", "high"],
+      limit: 100,
+    });
+    expect(both.some((t) => t.id === normalTicket.id)).toBe(true);
+    expect(both.some((t) => t.id === highTicket.id)).toBe(true);
+  });
+
+  it("list with empty arrays returns all (no filter applied)", async () => {
+    const { userId, ticketId } = await createTicketFixture();
+
+    const result = await svc.list(userId, {
+      statuses: [],
+      queueIds: [],
+      priorities: [],
+      limit: 100,
+    });
+    // The fixture ticket should be present (no filters active)
+    expect(result.some((t) => t.id === ticketId)).toBe(true);
+  });
+
+  it("list filters by assignedTo", async () => {
+    const { userId, ticketId } = await createTicketFixture();
+
+    // Assign ticket to this user
+    await testDb.db
+      .updateTable("tickets")
+      .set({ assigned_to: userId })
+      .where("id", "=", ticketId)
+      .execute();
+
+    const assigned = await svc.list(userId, {
+      assignedTo: userId,
+      limit: 100,
+    });
+    expect(assigned.some((t) => t.id === ticketId)).toBe(true);
+
+    // Filter by a different assignee
+    const otherUser = await createTestUser(testDb.db);
+    const notAssigned = await svc.list(userId, {
+      assignedTo: otherUser.id,
+      limit: 100,
+    });
+    expect(notAssigned.some((t) => t.id === ticketId)).toBe(false);
+  });
+
+  it("list filters by onHold", async () => {
+    const { userId, ticketId } = await createTicketFixture();
+
+    // Put ticket on hold
+    await svc.update(userId, { ticketId, onHold: true });
+
+    const onHoldResults = await svc.list(userId, {
+      onHold: true,
+      limit: 100,
+    });
+    expect(onHoldResults.some((t) => t.id === ticketId)).toBe(true);
+
+    const notOnHold = await svc.list(userId, {
+      onHold: false,
+      limit: 100,
+    });
+    expect(notOnHold.some((t) => t.id === ticketId)).toBe(false);
+  });
+
+  // --- recentFollowUps ---
+
+  it("recentFollowUps returns follow-ups grouped by ticket", async () => {
+    const { userId, ticketId } = await createTicketFixture();
+
+    // Insert 4 follow-ups for this ticket
+    for (let i = 0; i < 4; i++) {
+      await testDb.db
+        .insertInto("followups")
+        .values({
+          ticket_id: ticketId,
+          source: "volunteer",
+          type: "message",
+          encrypted_content: Buffer.from(`message-${i}`),
+          encrypted_read_state: Buffer.from("unread"),
+        })
+        .execute();
+    }
+
+    const result = await svc.recentFollowUps(userId, {
+      ticketIds: [ticketId],
+      perTicket: 3,
+    });
+
+    expect(result[ticketId]).toBeDefined();
+    expect(result[ticketId]).toHaveLength(3);
+    // Should be ordered by created_at DESC (most recent first)
+    for (let i = 0; i < result[ticketId]!.length - 1; i++) {
+      expect(result[ticketId]![i]!.createdAt.getTime()).toBeGreaterThanOrEqual(
+        result[ticketId]![i + 1]!.createdAt.getTime(),
+      );
+    }
+  });
+
+  it("recentFollowUps respects perTicket limit", async () => {
+    const { userId, ticketId } = await createTicketFixture();
+
+    for (let i = 0; i < 5; i++) {
+      await testDb.db
+        .insertInto("followups")
+        .values({
+          ticket_id: ticketId,
+          source: "volunteer",
+          type: "message",
+          encrypted_content: Buffer.from(`msg-${i}`),
+          encrypted_read_state: Buffer.from("unread"),
+        })
+        .execute();
+    }
+
+    const result = await svc.recentFollowUps(userId, {
+      ticketIds: [ticketId],
+      perTicket: 2,
+    });
+    expect(result[ticketId]).toHaveLength(2);
+  });
+
+  it("recentFollowUps returns empty for tickets outside user queues", async () => {
+    const { ticketId } = await createTicketFixture();
+    const outsider = await createTestUser(testDb.db);
+
+    const result = await svc.recentFollowUps(outsider.id, {
+      ticketIds: [ticketId],
+      perTicket: 3,
+    });
+    expect(result).toEqual({});
+  });
+
+  it("recentFollowUps includes key wraps for requesting user", async () => {
+    const { userId, ticketId } = await createTicketFixture();
+
+    // Insert a follow-up
+    await testDb.db
+      .insertInto("followups")
+      .values({
+        ticket_id: ticketId,
+        source: "volunteer",
+        type: "message",
+        encrypted_content: Buffer.from("wrap-test"),
+        encrypted_read_state: Buffer.from("unread"),
+      })
+      .execute();
+
+    // Insert a key wrap for this user
+    const ticketRow = await testDb.db
+      .selectFrom("tickets")
+      .select("key_generation")
+      .where("id", "=", ticketId)
+      .executeTakeFirstOrThrow();
+
+    const buffers = await insertKeyWrap(
+      ticketId,
+      userId,
+      ticketRow.key_generation,
+    );
+
+    const result = await svc.recentFollowUps(userId, {
+      ticketIds: [ticketId],
+      perTicket: 3,
+    });
+
+    const followUps = result[ticketId];
+    expect(followUps).toBeDefined();
+    expect(followUps!.length).toBeGreaterThanOrEqual(1);
+    // At least one should have a key wrap (the one with our wrap row)
+    const withWrap = followUps!.find((f) => f.keyWrap !== null);
+    expect(withWrap).toBeDefined();
+    expect(withWrap!.keyWrap!.ephemeralPoint).toBe(
+      encode(new Uint8Array(buffers.ephemeralPoint)),
+    );
+    expect(withWrap!.keyWrap!.ephemeralPoint).not.toMatch(/[+/=]/);
+  });
+
   it("list returns assignedDisplayName as Buffer when ticket is assigned", async () => {
     const { userId, clientId, queueId } = await createClientFixture();
 
@@ -505,8 +715,8 @@ describe.skipIf(!process.env.DATABASE_URL)("TicketService (DB)", () => {
       .execute();
 
     const results = await svc.list(userId, {
-      queueId,
-      status: "open",
+      queueIds: [queueId],
+      statuses: ["open"],
       limit: 100,
     });
     const found = results.find((t) => t.id === ticket.id);
