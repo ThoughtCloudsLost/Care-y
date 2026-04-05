@@ -44,3 +44,11 @@ export class WorkerNotReadyError extends ClientError {
     this.name = "WorkerNotReadyError";
   }
 }
+
+/** Thrown when a required tRPC router is not available on the client. */
+export class RouterNotAvailableError extends ClientError {
+  constructor(router: string) {
+    super(`${router} router unavailable`);
+    this.name = "RouterNotAvailableError";
+  }
+}

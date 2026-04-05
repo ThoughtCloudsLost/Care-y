@@ -4,6 +4,7 @@
   import { goto } from "$app/navigation";
   import { resolve } from "$app/paths";
   import { trpc } from "$lib/trpc/index.js";
+  import { RouterNotAvailableError } from "$lib/errors.js";
   import type { TicketPreviewItemProps } from "$lib/components/dashboard/types.js";
   import { Ticket as TicketIcon, TicketMinus } from "@lucide/svelte";
   import TicketPreviewList from "$lib/components/dashboard/TicketPreviewList.svelte";
@@ -35,7 +36,7 @@
   const currentUserId = $derived(currentUserIdGetter());
 
   // All open tickets for the current user's accessible queues.
-  if (!trpc.tickets) throw new Error("tickets router unavailable");
+  if (!trpc.tickets) throw new RouterNotAvailableError("tickets");
   const ticketRouter = trpc.tickets;
 
   const ticketsQuery = createQuery(() => ({

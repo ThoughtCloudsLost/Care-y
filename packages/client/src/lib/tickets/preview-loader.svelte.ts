@@ -27,7 +27,7 @@ interface SerializedBuffer {
 
 export interface RawFollowUpPreview {
   readonly id: string;
-  readonly source: "client" | "volunteer" | "system";
+  readonly source: string;
   readonly type: string;
   readonly encryptedContent: SerializedBuffer | string;
   readonly keyWrap: TicketKeyWrap | null;
