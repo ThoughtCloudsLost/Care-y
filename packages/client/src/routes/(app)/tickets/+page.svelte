@@ -2,7 +2,6 @@
   import { createInfiniteQuery } from "@tanstack/svelte-query";
   import { goto } from "$app/navigation";
   import { resolve } from "$app/paths";
-  import { onMount } from "svelte";
   import { Segmented, SegmentedButton } from "konsta/svelte";
   import { List, LayoutGrid } from "@lucide/svelte";
   import * as m from "$lib/paraglide/messages.js";
@@ -13,6 +12,7 @@
     getCurrentUserId,
     setPreviewLoader,
   } from "$lib/crypto/context.js";
+  import { getScrollContainer } from "$lib/shell/context.js";
   import { createPreviewLoader } from "$lib/tickets/preview-loader.svelte.js";
   import { deriveDisplayStatus } from "$lib/tickets/display-status.js";
   import { sortTickets } from "$lib/tickets/sort-tickets.js";
@@ -36,13 +36,10 @@
   if (!trpc.tickets) throw new RouterNotAvailableError("tickets");
   const ticketRouter = trpc.tickets;
 
-  // Scroll container ref: Konsta Page (.k-page) is the scroll ancestor.
-  // Queried from DOM on mount because it lives in AppShell, not this route.
-  let scrollEl: HTMLElement | undefined = $state();
-
-  onMount(() => {
-    scrollEl = document.querySelector<HTMLElement>(".k-page") ?? undefined;
-  });
+  // Scroll container from AppShell context.
+  // Returns undefined until mount, then the resolved element.
+  const getScroll = getScrollContainer();
+  const scrollEl = $derived(getScroll());
 
   // Preview loader: batch-fetches encrypted follow-up data for card previews.
   // Created per-route and set in context so TicketCard children can call observe().

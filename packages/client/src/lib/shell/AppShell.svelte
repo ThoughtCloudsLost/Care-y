@@ -43,6 +43,14 @@
   import { PTR_CONTEXT_KEY } from "./ptr-context";
   import { themeStore } from "$lib/stores/theme.svelte";
   import { useQueryClient } from "@tanstack/svelte-query";
+  import { setScrollContainer } from "./context";
+
+  const SCROLL_CONTAINER_ID = "app-scroll-container";
+
+  // Scroll container ref, resolved on mount. $state so the context
+  // getter is reactive when read inside $derived or $effect.
+  let scrollContainerEl = $state<HTMLElement | undefined>();
+  setScrollContainer(() => scrollContainerEl);
 
   let {
     activeTab,
@@ -169,7 +177,7 @@
     if (!ptrEnabled) return;
     if (ptrPhase === "refreshing" || ptrPhase === "releasing") return;
 
-    const scrollEl = document.querySelector<HTMLElement>(".k-page");
+    const scrollEl = document.getElementById(SCROLL_CONTAINER_ID);
     if (!scrollEl || scrollEl.scrollTop > 0) return;
 
     const touch = e.touches[0];
@@ -192,18 +200,22 @@
   }
 
   onMount(() => {
+    // Resolve the scroll container and store it so the context getter
+    // returns the element for any route that reads it after mount.
+    const el = document.getElementById(SCROLL_CONTAINER_ID);
+    if (el) scrollContainerEl = el;
+
     if (!ptrEnabled) return;
 
-    // .k-page is rendered synchronously by Konsta before onMount fires,
+    // Page is rendered synchronously by Konsta before onMount fires,
     // so no tick() needed. Attach passive touchstart here; the blocking
     // touchmove is added dynamically per-gesture in onPageTouchStart.
-    const scrollEl = document.querySelector<HTMLElement>(".k-page");
-    scrollEl?.addEventListener("touchstart", onPageTouchStart, {
+    el?.addEventListener("touchstart", onPageTouchStart, {
       passive: true,
     });
 
     return () => {
-      scrollEl?.removeEventListener("touchstart", onPageTouchStart);
+      el?.removeEventListener("touchstart", onPageTouchStart);
       cleanupWindowListeners();
     };
   });
@@ -230,7 +242,7 @@
   );
 </script>
 
-<Page>
+<Page id={SCROLL_CONTAINER_ID}>
   <Navbar role="banner">
     {#snippet left()}
       <Link iconOnly role="button" aria-label={m.nav_account()}>

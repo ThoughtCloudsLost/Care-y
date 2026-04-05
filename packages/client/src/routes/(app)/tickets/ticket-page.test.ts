@@ -99,6 +99,10 @@ vi.mock("$lib/crypto/context.js", () => ({
   }),
 }));
 
+vi.mock("$lib/shell/context.js", () => ({
+  getScrollContainer: () => () => undefined,
+}));
+
 let currentViewMode = "list";
 
 vi.mock("$lib/stores/view-mode.svelte.js", () => ({
