@@ -57,6 +57,7 @@ vi.mock("$lib/trpc/index.js", () => ({
     tickets: {
       list: { query: vi.fn() },
       recentFollowUps: { query: vi.fn() },
+      myQueues: { query: vi.fn() },
     },
   },
 }));
@@ -126,7 +127,17 @@ vi.mock("$lib/stores/filters.svelte.js", () => ({
     sort: { field: "date", direction: "desc" },
     needsDisplayStatusPostFilter: false,
     statuses: new Set(),
+    queueIds: new Set(),
+    priorities: new Set(),
+    assigneeId: null,
+    dateFrom: null,
+    dateTo: null,
     activeCount: 0,
+    toggleStatus: vi.fn(),
+    toggleQueue: vi.fn(),
+    togglePriority: vi.fn(),
+    setAssignee: vi.fn(),
+    setDateRange: vi.fn(),
     clearAll: vi.fn(),
   },
 }));

@@ -80,3 +80,53 @@ export interface ShellActionSheetProps {
   /** Action sheet content (typically ActionsGroup + ActionsButton). */
   children: Snippet;
 }
+
+export interface ShellPopoverProps {
+  /** Whether the popover is open. */
+  opened: boolean;
+  /** Callback when the popover is dismissed (backdrop click or Escape). */
+  ondismiss: () => void;
+  /** Anchor element the popover positions itself relative to. */
+  target?: HTMLElement;
+  /** Whether to show the pointing arrow toward the target. */
+  angle?: boolean;
+  /** Popover content. */
+  children: Snippet;
+}
+
+export interface ShellDialogProps {
+  /** Whether the dialog is open. */
+  opened: boolean;
+  /** Callback when the dialog is dismissed. */
+  ondismiss: () => void;
+  /** Dialog title. */
+  title?: string;
+  /** Dialog content (text or rich content). */
+  content: Snippet;
+  /** Dialog buttons. */
+  buttons: Snippet;
+}
+
+export interface ShellToastProps {
+  /** Whether the toast is visible. */
+  opened: boolean;
+  /** Position on wider screens. */
+  position?: "left" | "center" | "right";
+  /** Toast content. */
+  children: Snippet;
+}
+
+export interface ShellNotificationProps {
+  /** Whether the notification is visible. */
+  opened: boolean;
+  /** Callback when the notification is closed. */
+  onclose: () => void;
+  /** Notification title. */
+  title: string;
+  /** Subtitle (e.g., sender name). */
+  subtitle?: string;
+  /** Body text. */
+  text?: string;
+  /** Right-aligned text (e.g., timestamp). */
+  titleRightText?: string;
+}

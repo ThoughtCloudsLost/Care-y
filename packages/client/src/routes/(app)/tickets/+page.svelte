@@ -25,6 +25,7 @@
 
   import { RouterNotAvailableError } from "$lib/errors.js";
   import TicketCard from "$lib/components/tickets/TicketCard.svelte";
+  import FilterPillBar from "$lib/components/tickets/FilterPillBar.svelte";
   import VirtualList from "$lib/components/tickets/VirtualList.svelte";
   import Skeleton from "$lib/components/Skeleton.svelte";
   import QueryError from "$lib/components/QueryError.svelte";
@@ -156,8 +157,7 @@
 <div class="ticket-page pb-20">
   <h1 class="sr-only">{m.tickets_title()}</h1>
   <div class="ticket-controls">
-    <!-- FilterPillBar placeholder: wired when filter UI lands. -->
-    <div class="filter-placeholder" aria-label={m.tickets_filter()}></div>
+    <FilterPillBar />
     <Segmented strong class="view-toggle">
       <SegmentedButton
         active={viewModeStore.mode === "list"}
@@ -215,11 +215,6 @@
     display: flex;
     align-items: center;
     gap: 0.75rem;
-  }
-
-  .filter-placeholder {
-    flex: 1;
-    min-width: 0;
   }
 
   :global(.view-toggle) {
