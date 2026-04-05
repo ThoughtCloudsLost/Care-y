@@ -1,0 +1,29 @@
+/* eslint-disable */
+import { getLocale, experimentalStaticLocale } from '../runtime.js';
+
+/** @typedef {import('../runtime.js').LocalizedString} LocalizedString */
+
+/** @typedef {{}} Tickets_Status_ClosedInputs */
+
+const en_tickets_status_closed = /** @type {(inputs: Tickets_Status_ClosedInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`closed`)
+};
+
+const es_tickets_status_closed = /** @type {(inputs: Tickets_Status_ClosedInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`cerrado`)
+};
+
+/**
+* | output |
+* | --- |
+* | "closed" |
+*
+* @param {Tickets_Status_ClosedInputs} inputs
+* @param {{ locale?: "en" | "es" }} options
+* @returns {LocalizedString}
+*/
+export const tickets_status_closed = /** @type {((inputs?: Tickets_Status_ClosedInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Tickets_Status_ClosedInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
+	if (locale === "en") return en_tickets_status_closed(inputs)
+	return es_tickets_status_closed(inputs)
+});

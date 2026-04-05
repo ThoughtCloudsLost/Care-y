@@ -4,19 +4,25 @@
  * Multi-select dimensions (status, queue, priority) use SvelteSet for
  * granular reactivity on .add()/.delete() without immutable reassignment.
  *
- * "hold" is a UI pseudo-status. Volunteers see "Open", "Closed", "On Hold"
- * as peers, but the server models on_hold as a separate boolean column.
- * The serverParams derived value handles this split transparently.
+ * Volunteers see four statuses: New, Active, On Hold, Closed. The server
+ * only stores "open"/"closed" + onHold boolean. "New" vs "Active" is
+ * derived from followUpCount (see display-status.ts). The serverParams
+ * derivation maps display statuses back to server query params:
+ *   - "new" or "active" -> statuses: ["open"]
+ *   - "closed" -> statuses: ["closed"]
+ *   - "hold" -> onHold: true
+ * When only "new" xor "active" is selected, the route must post-filter
+ * client-side by followUpCount (the server can't distinguish them).
  *
  * 6c.2 adds a "stages" dimension for kanban filtering. The store structure
  * supports appending new SvelteSet dimensions without restructuring.
  */
 
 import { SvelteSet } from "svelte/reactivity";
-import type { TicketStatus, TicketPriority } from "@care-y/shared";
+import type { TicketPriority } from "@care-y/shared";
+import type { DisplayStatus } from "$lib/tickets/display-status.js";
 
-/** UI status values: server statuses + the "hold" pseudo-status. */
-export type FilterStatus = TicketStatus | "hold";
+export type FilterStatus = DisplayStatus;
 
 export type SortField = "date" | "priority" | "last_activity";
 export type SortDirection = "asc" | "desc";
@@ -42,7 +48,7 @@ function createFilterStore(): {
   setSort(field: SortField, direction: SortDirection): void;
   readonly activeCount: number;
   readonly serverParams: {
-    statuses?: TicketStatus[];
+    statuses?: ("open" | "closed")[];
     onHold?: true;
     queueIds?: string[];
     priorities?: TicketPriority[];
@@ -51,6 +57,7 @@ function createFilterStore(): {
     sortDirection: SortDirection;
     limit: number;
   };
+  readonly needsDisplayStatusPostFilter: boolean;
   clearAll(): void;
 } {
   // Multi-select dimensions: empty set = "show all" (no filter applied)
@@ -77,16 +84,23 @@ function createFilterStore(): {
       (dateFrom !== null || dateTo !== null ? 1 : 0),
   );
 
-  // Convert UI filter state to server query params.
-  // "hold" is a pseudo-status that maps to onHold=true on the server.
-  // Real statuses ("open", "closed") go in the statuses array.
+  // Convert display statuses to server query params.
+  // "new" and "active" both map to server status "open".
+  // "closed" maps to "closed". "hold" maps to onHold: true.
+  // When only "new" xor "active" is selected (not both), the route
+  // must post-filter client-side by followUpCount.
   const serverParams = $derived.by(() => {
-    const realStatuses = [...statuses].filter(
-      (s): s is TicketStatus => s !== "hold",
-    );
+    const hasNew = statuses.has("new");
+    const hasActive = statuses.has("active");
+    const hasClosed = statuses.has("closed");
     const hasHold = statuses.has("hold");
+
+    const serverStatuses: ("open" | "closed")[] = [];
+    if (hasNew || hasActive) serverStatuses.push("open");
+    if (hasClosed) serverStatuses.push("closed");
+
     return {
-      statuses: realStatuses.length > 0 ? realStatuses : undefined,
+      statuses: serverStatuses.length > 0 ? serverStatuses : undefined,
       onHold: hasHold ? (true as const) : undefined,
       queueIds: queueIds.size > 0 ? [...queueIds] : undefined,
       priorities:
@@ -97,6 +111,12 @@ function createFilterStore(): {
       limit: 50,
     };
   });
+
+  // Whether the route needs to post-filter "new" vs "active" client-side.
+  // True when exactly one of "new"/"active" is selected (not both, not neither).
+  const needsDisplayStatusPostFilter = $derived(
+    statuses.has("new") !== statuses.has("active"),
+  );
 
   return {
     get statuses(): SvelteSet<FilterStatus> {
@@ -153,6 +173,10 @@ function createFilterStore(): {
     },
     get serverParams() {
       return serverParams;
+    },
+
+    get needsDisplayStatusPostFilter(): boolean {
+      return needsDisplayStatusPostFilter;
     },
 
     clearAll(): void {

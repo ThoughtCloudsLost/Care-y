@@ -22,25 +22,25 @@ describe("filterStore", () => {
 
     it("toggleStatus adds a status", async () => {
       const store = await getStore();
-      store.toggleStatus("open");
-      expect(store.statuses.has("open")).toBe(true);
+      store.toggleStatus("new");
+      expect(store.statuses.has("new")).toBe(true);
       expect(store.statuses.size).toBe(1);
     });
 
     it("toggleStatus removes a status on second call", async () => {
       const store = await getStore();
-      store.toggleStatus("open");
-      store.toggleStatus("open");
-      expect(store.statuses.has("open")).toBe(false);
+      store.toggleStatus("active");
+      store.toggleStatus("active");
+      expect(store.statuses.has("active")).toBe(false);
       expect(store.statuses.size).toBe(0);
     });
 
     it("supports multiple selected statuses", async () => {
       const store = await getStore();
-      store.toggleStatus("open");
+      store.toggleStatus("new");
       store.toggleStatus("hold");
       expect(store.statuses.size).toBe(2);
-      expect(store.statuses.has("open")).toBe(true);
+      expect(store.statuses.has("new")).toBe(true);
       expect(store.statuses.has("hold")).toBe(true);
     });
   });
@@ -119,14 +119,14 @@ describe("filterStore", () => {
     it("counts active *dimensions*, not individual selections", async () => {
       const store = await getStore();
       // Two statuses = one dimension active
-      store.toggleStatus("open");
+      store.toggleStatus("new");
       store.toggleStatus("closed");
       expect(store.activeCount).toBe(1);
     });
 
     it("counts each dimension independently", async () => {
       const store = await getStore();
-      store.toggleStatus("open");
+      store.toggleStatus("active");
       store.toggleQueue("q1");
       store.togglePriority("urgent");
       store.setAssignee("user-1");
@@ -158,26 +158,56 @@ describe("filterStore", () => {
       expect(store.serverParams.sortDirection).toBe("asc");
     });
 
-    it("maps real statuses to statuses array", async () => {
+    it("maps 'new' display status to server status 'open'", async () => {
       const store = await getStore();
-      store.toggleStatus("open");
+      store.toggleStatus("new");
       expect(store.serverParams.statuses).toEqual(["open"]);
       expect(store.serverParams.onHold).toBeUndefined();
     });
 
-    it("maps hold pseudo-status to onHold: true, not in statuses array", async () => {
+    it("maps 'active' display status to server status 'open'", async () => {
+      const store = await getStore();
+      store.toggleStatus("active");
+      expect(store.serverParams.statuses).toEqual(["open"]);
+      expect(store.serverParams.onHold).toBeUndefined();
+    });
+
+    it("maps both 'new' and 'active' to single 'open' without duplicates", async () => {
+      const store = await getStore();
+      store.toggleStatus("new");
+      store.toggleStatus("active");
+      expect(store.serverParams.statuses).toEqual(["open"]);
+    });
+
+    it("maps hold to onHold: true, not in statuses array", async () => {
       const store = await getStore();
       store.toggleStatus("hold");
       expect(store.serverParams.onHold).toBe(true);
       expect(store.serverParams.statuses).toBeUndefined();
     });
 
-    it("splits hold from real statuses correctly", async () => {
+    it("splits hold from display statuses correctly", async () => {
       const store = await getStore();
-      store.toggleStatus("open");
+      store.toggleStatus("active");
       store.toggleStatus("hold");
       expect(store.serverParams.statuses).toEqual(["open"]);
       expect(store.serverParams.onHold).toBe(true);
+    });
+
+    it("maps 'closed' to server status 'closed'", async () => {
+      const store = await getStore();
+      store.toggleStatus("closed");
+      expect(store.serverParams.statuses).toEqual(["closed"]);
+    });
+
+    it("combines open and closed server statuses", async () => {
+      const store = await getStore();
+      store.toggleStatus("new");
+      store.toggleStatus("closed");
+      expect(store.serverParams.statuses).toEqual(
+        expect.arrayContaining(["open", "closed"]),
+      );
+      expect(store.serverParams.statuses).toHaveLength(2);
     });
 
     it("maps priorities to array", async () => {
@@ -216,10 +246,42 @@ describe("filterStore", () => {
     });
   });
 
+  describe("needsDisplayStatusPostFilter", () => {
+    it("is false when no statuses selected", async () => {
+      const store = await getStore();
+      expect(store.needsDisplayStatusPostFilter).toBe(false);
+    });
+
+    it("is true when only 'new' is selected", async () => {
+      const store = await getStore();
+      store.toggleStatus("new");
+      expect(store.needsDisplayStatusPostFilter).toBe(true);
+    });
+
+    it("is true when only 'active' is selected", async () => {
+      const store = await getStore();
+      store.toggleStatus("active");
+      expect(store.needsDisplayStatusPostFilter).toBe(true);
+    });
+
+    it("is false when both 'new' and 'active' are selected", async () => {
+      const store = await getStore();
+      store.toggleStatus("new");
+      store.toggleStatus("active");
+      expect(store.needsDisplayStatusPostFilter).toBe(false);
+    });
+
+    it("is false when neither 'new' nor 'active' is selected (only hold)", async () => {
+      const store = await getStore();
+      store.toggleStatus("hold");
+      expect(store.needsDisplayStatusPostFilter).toBe(false);
+    });
+  });
+
   describe("clearAll", () => {
     it("resets all filter state", async () => {
       const store = await getStore();
-      store.toggleStatus("open");
+      store.toggleStatus("active");
       store.toggleQueue("q1");
       store.togglePriority("urgent");
       store.setAssignee("user-1");
