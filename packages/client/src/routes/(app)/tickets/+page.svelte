@@ -22,28 +22,12 @@
     TicketCardProps,
     TicketQuickAction,
   } from "$lib/components/tickets/ticket-types.js";
-  import type { TicketStatus, TicketPriority } from "@care-y/shared";
 
   import { RouterNotAvailableError } from "$lib/errors.js";
   import TicketCard from "$lib/components/tickets/TicketCard.svelte";
   import VirtualList from "$lib/components/tickets/VirtualList.svelte";
   import Skeleton from "$lib/components/Skeleton.svelte";
   import QueryError from "$lib/components/QueryError.svelte";
-
-  // Type guards: server returns string-typed fields; Zod validates on the
-  // server side, so these always pass at runtime. Using guards instead of
-  // `as` casts satisfies no-unsafe-type-assertion.
-  const VALID_STATUSES = new Set<string>(["open", "closed"]);
-  function asTicketStatus(s: string): TicketStatus {
-    if (VALID_STATUSES.has(s)) return s as TicketStatus; // eslint-disable-line @typescript-eslint/no-unsafe-type-assertion -- guarded by Set check
-    return "open";
-  }
-
-  const VALID_PRIORITIES = new Set<string>(["low", "normal", "high", "urgent"]);
-  function asTicketPriority(p: string): TicketPriority {
-    if (VALID_PRIORITIES.has(p)) return p as TicketPriority; // eslint-disable-line @typescript-eslint/no-unsafe-type-assertion -- guarded by Set check
-    return "normal";
-  }
 
   const ticketCache = getTicketDecryptCache();
   const orgCache = getOrgDecryptCache();
@@ -135,12 +119,8 @@
     return {
       ticketId: t.id,
       queueName: t.queueName,
-      displayStatus: deriveDisplayStatus(
-        asTicketStatus(t.status),
-        t.onHold,
-        t.followUpCount,
-      ),
-      priority: asTicketPriority(t.priority),
+      displayStatus: deriveDisplayStatus(t.status, t.onHold, t.followUpCount),
+      priority: t.priority,
       title: ticketCache.decryptTitle(t.id, t.keyWrap, t.encryptedTitle),
       clientAlias: t.clientAlias,
       assignedName,

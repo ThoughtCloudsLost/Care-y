@@ -11,6 +11,7 @@
 //   Buffer                 - encrypted bytea column
 
 import type { ColumnType, Generated } from "kysely";
+import type { TicketStatus, TicketPriority } from "@care-y/shared";
 
 export interface OrgsTable {
   id: Generated<string>;
@@ -287,8 +288,12 @@ export interface TicketsTable {
   id: Generated<string>;
   client_id: string;
   queue_id: string;
-  status: ColumnType<string, string | undefined, string>;
-  priority: ColumnType<string, string | undefined, string>;
+  status: ColumnType<TicketStatus, TicketStatus | undefined, TicketStatus>;
+  priority: ColumnType<
+    TicketPriority,
+    TicketPriority | undefined,
+    TicketPriority
+  >;
   on_hold: ColumnType<boolean, boolean | undefined, boolean>;
   assigned_to: string | null;
   encrypted_title: Buffer;

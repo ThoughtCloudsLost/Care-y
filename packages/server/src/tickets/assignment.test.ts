@@ -61,7 +61,7 @@ describe.skipIf(!process.env.DATABASE_URL)("AssignmentService (DB)", () => {
 
   async function insertTicket(opts?: {
     assignedTo?: string;
-    status?: string;
+    status?: "open" | "closed";
   }): Promise<string> {
     const fix = await createTestTicketFixture(testDb.db, { queueId });
     if (opts?.assignedTo !== undefined || opts?.status !== undefined) {

@@ -11,7 +11,11 @@
 
 import { type Kysely } from "kysely";
 import type { TenantDatabase } from "../db/types.js";
-import type { RecentFollowUpsInput } from "@care-y/shared";
+import type {
+  RecentFollowUpsInput,
+  TicketStatus,
+  TicketPriority,
+} from "@care-y/shared";
 import type { TicketAccessChecker } from "./access.js";
 import { NotFoundError, TicketError, MergeError } from "../errors.js";
 import { createDependencyService } from "./dependency-service.js";
@@ -22,8 +26,8 @@ export interface TicketRecord {
   readonly id: string;
   readonly clientId: string;
   readonly queueId: string;
-  readonly status: string;
-  readonly priority: string;
+  readonly status: TicketStatus;
+  readonly priority: TicketPriority;
   readonly onHold: boolean;
   readonly assignedTo: string | null;
   readonly encryptedTitle: Buffer;
@@ -67,14 +71,14 @@ export interface CreateTicketInput {
   readonly queueId: string;
   readonly encryptedTitle: Buffer;
   readonly encryptedDescription: Buffer;
-  readonly priority: string;
+  readonly priority: TicketPriority;
   readonly keyGeneration: string;
 }
 
 export interface UpdateTicketInput {
   readonly ticketId: string;
-  readonly status?: string;
-  readonly priority?: string;
+  readonly status?: TicketStatus;
+  readonly priority?: TicketPriority;
   readonly queueId?: string;
   readonly onHold?: boolean;
 }
@@ -83,9 +87,9 @@ export type TicketSortField = "date" | "priority" | "last_activity";
 export type TicketSortDirection = "asc" | "desc";
 
 export interface TicketListOpts {
-  readonly statuses?: string[];
+  readonly statuses?: TicketStatus[];
   readonly queueIds?: string[];
-  readonly priorities?: string[];
+  readonly priorities?: TicketPriority[];
   readonly onHold?: boolean;
   readonly assignedTo?: string;
   readonly sortBy?: TicketSortField;
@@ -115,8 +119,8 @@ interface BaseTicketRow {
   id: string;
   client_id: string;
   queue_id: string;
-  status: string;
-  priority: string;
+  status: TicketStatus;
+  priority: TicketPriority;
   on_hold: boolean;
   assigned_to: string | null;
   encrypted_title: Buffer;

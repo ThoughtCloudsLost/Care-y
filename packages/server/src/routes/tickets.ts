@@ -37,7 +37,7 @@ import type { SearchService } from "../tickets/search.js";
 import type { AuditService } from "../tickets/audit.js";
 import type { NotificationService } from "../notifications/service.js";
 import type { AuditEntry } from "../tickets/audit.js";
-import type { NotificationEventType } from "@care-y/shared";
+import type { NotificationEventType, TicketPriority } from "@care-y/shared";
 import { buildRecipientList } from "../tickets/notification-recipients.js";
 import type { ShiftProvider } from "../tickets/shift-provider.js";
 import { createStubShiftProvider } from "../tickets/shift-provider.js";
@@ -873,7 +873,7 @@ export function createTicketRouter(deps: TicketRouterDeps) {
                 title: string;
                 description: string;
                 queue: string;
-                priority: string;
+                priority: TicketPriority;
                 assignedTo: string | null;
                 onHold: boolean;
                 withKeyWrap: boolean;
