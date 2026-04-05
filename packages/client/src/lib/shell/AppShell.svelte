@@ -105,7 +105,9 @@
   let ptrPullY = $state(0); // 0..PTR_MAX_PULL, drives indicator position
   let ptrProgress = $state(0); // 0..1, drives iOS arc fill
 
+  let startX = 0;
   let startY = 0;
+  let ptrLocked = false; // true once we confirm this is a vertical pull, not lateral scroll
 
   // Cleanup refs for window listeners added dynamically
   let removeMoveListener: (() => void) | null = null;
@@ -119,18 +121,45 @@
   }
 
   function onTouchMove(e: TouchEvent): void {
-    const touch = e.touches[0];
-    if (!touch) return;
-    const dy = touch.clientY - startY;
-
-    if (dy <= 0) {
-      // Scrolling up or lateral -- bail out of PTR tracking
+    // Ignore pinch-to-zoom (multi-touch)
+    if (e.touches.length > 1) {
       cleanupWindowListeners();
       ptrPhase = "idle";
       ptrPullY = 0;
       ptrProgress = 0;
       return;
     }
+
+    const touch = e.touches[0];
+    if (!touch) return;
+    const dy = touch.clientY - startY;
+    const dx = touch.clientX - startX;
+
+    if (dy <= 0) {
+      // Scrolling up -- bail out of PTR tracking
+      cleanupWindowListeners();
+      ptrPhase = "idle";
+      ptrPullY = 0;
+      ptrProgress = 0;
+      return;
+    }
+
+    // If horizontal movement exceeds vertical, this is a lateral scroll
+    // (e.g., swiping through the filter pill bar). Bail out.
+    if (!ptrLocked && Math.abs(dx) > dy) {
+      cleanupWindowListeners();
+      ptrPhase = "idle";
+      ptrPullY = 0;
+      ptrProgress = 0;
+      return;
+    }
+
+    // Once vertical pull exceeds a small threshold, lock into PTR mode
+    if (!ptrLocked && dy > 8) {
+      ptrLocked = true;
+    }
+
+    if (!ptrLocked) return;
 
     e.preventDefault();
 
@@ -180,9 +209,28 @@
     const scrollEl = document.getElementById(SCROLL_CONTAINER_ID);
     if (!scrollEl || scrollEl.scrollTop > 0) return;
 
+    // Ignore multi-touch (pinch-to-zoom)
+    if (e.touches.length > 1) return;
+
+    // Suppress PTR when the touch starts inside a fixed-position overlay
+    // (Popover, Sheet, Popup, Dialog, etc.). Overlays use position:fixed
+    // and sit above the scroll container visually even though they may be
+    // DOM descendants of it. Walk up from the touch target; if any ancestor
+    // (before the scroll container) is position:fixed, this is an overlay.
+    const target = e.target;
+    if (target instanceof HTMLElement) {
+      let el: HTMLElement | null = target;
+      while (el && el !== scrollEl) {
+        if (getComputedStyle(el).position === "fixed") return;
+        el = el.parentElement;
+      }
+    }
+
     const touch = e.touches[0];
     if (!touch) return;
+    startX = touch.clientX;
     startY = touch.clientY;
+    ptrLocked = false;
 
     // Dynamically attach blocking listeners to window only now
     const moveOpts: AddEventListenerOptions = { passive: false };
