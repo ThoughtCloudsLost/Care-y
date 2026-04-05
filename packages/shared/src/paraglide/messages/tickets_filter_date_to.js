@@ -9,8 +9,9 @@ const en_tickets_filter_date_to = /** @type {(inputs: Tickets_Filter_Date_ToInpu
 	return /** @type {LocalizedString} */ (`To`)
 };
 
-/** @type {(inputs: Tickets_Filter_Date_ToInputs) => LocalizedString} */
-const es_tickets_filter_date_to = en_tickets_filter_date_to;
+const es_tickets_filter_date_to = /** @type {(inputs: Tickets_Filter_Date_ToInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`Hasta`)
+};
 
 /**
 * | output |

@@ -162,6 +162,22 @@
   "tickets_action_release": "Release",
   "tickets_status_closed": "closed",
 
+  "saved_filter_modal_title": "Save Filter",
+  "saved_filter_name_label": "Filter name",
+  "saved_filter_name_placeholder": "e.g. Urgent Housing",
+  "saved_filter_color_label": "Color",
+  "saved_filter_icon_label": "Icon",
+  "saved_filter_preview_label": "Filters",
+  "saved_filter_save": "Save",
+  "saved_filter_delete": "Delete",
+  "saved_filter_share": "Share",
+  "saved_filter_unshare": "Unshare",
+  "saved_filter_shared_label": "Shared",
+  "saved_filter_apply": "Apply saved filter",
+  "saved_filter_empty": "No saved filters",
+  "saved_filter_decrypting": "...",
+  "saved_filter_saved": "Filter saved",
+
   "empty_no_data": "Nothing here yet.",
   "empty_no_results": "No results found.",
 

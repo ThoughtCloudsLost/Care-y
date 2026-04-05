@@ -9,8 +9,9 @@ const en_tickets_filter_status = /** @type {(inputs: Tickets_Filter_StatusInputs
 	return /** @type {LocalizedString} */ (`Status`)
 };
 
-/** @type {(inputs: Tickets_Filter_StatusInputs) => LocalizedString} */
-const es_tickets_filter_status = en_tickets_filter_status;
+const es_tickets_filter_status = /** @type {(inputs: Tickets_Filter_StatusInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`Estado`)
+};
 
 /**
 * | output |

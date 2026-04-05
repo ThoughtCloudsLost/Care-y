@@ -26,6 +26,8 @@
   import { RouterNotAvailableError } from "$lib/errors.js";
   import TicketCard from "$lib/components/tickets/TicketCard.svelte";
   import FilterPillBar from "$lib/components/tickets/FilterPillBar.svelte";
+  import SavedFilterList from "$lib/components/tickets/SavedFilterList.svelte";
+  import CreateSavedFilter from "$lib/components/tickets/CreateSavedFilter.svelte";
   import VirtualList from "$lib/components/tickets/VirtualList.svelte";
   import Skeleton from "$lib/components/Skeleton.svelte";
   import QueryError from "$lib/components/QueryError.svelte";
@@ -152,12 +154,20 @@
   }
 
   const gridColumns = $derived(viewModeStore.mode === "grid" ? 2 : 1);
+
+  // Saved filter modal state.
+  let savedFilterModalOpen = $state(false);
 </script>
 
 <div class="ticket-page pb-20">
   <h1 class="sr-only">{m.tickets_title()}</h1>
+  <SavedFilterList />
   <div class="ticket-controls">
-    <FilterPillBar />
+    <FilterPillBar
+      oncreateshortcut={() => {
+        savedFilterModalOpen = true;
+      }}
+    />
     <Segmented strong class="view-toggle">
       <SegmentedButton
         active={viewModeStore.mode === "list"}
@@ -202,6 +212,13 @@
     {/if}
   {/if}
 </div>
+
+<CreateSavedFilter
+  opened={savedFilterModalOpen}
+  ondismiss={() => {
+    savedFilterModalOpen = false;
+  }}
+/>
 
 <style>
   .ticket-page {

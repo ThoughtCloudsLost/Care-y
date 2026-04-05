@@ -9,8 +9,9 @@ const en_tickets_filter_date_range = /** @type {(inputs: Tickets_Filter_Date_Ran
 	return /** @type {LocalizedString} */ (`Date`)
 };
 
-/** @type {(inputs: Tickets_Filter_Date_RangeInputs) => LocalizedString} */
-const es_tickets_filter_date_range = en_tickets_filter_date_range;
+const es_tickets_filter_date_range = /** @type {(inputs: Tickets_Filter_Date_RangeInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`Fecha`)
+};
 
 /**
 * | output |

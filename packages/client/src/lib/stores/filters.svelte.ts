@@ -21,6 +21,7 @@
 import { SvelteSet } from "svelte/reactivity";
 import type { TicketPriority } from "@care-y/shared";
 import type { DisplayStatus } from "$lib/tickets/display-status.js";
+import type { SavedFilterState } from "./saved-filters.svelte.js";
 
 export type FilterStatus = DisplayStatus;
 
@@ -58,6 +59,8 @@ function createFilterStore(): {
     limit: number;
   };
   readonly needsDisplayStatusPostFilter: boolean;
+  captureState(): SavedFilterState;
+  applyState(state: SavedFilterState): void;
   clearAll(): void;
 } {
   // Multi-select dimensions: empty set = "show all" (no filter applied)
@@ -177,6 +180,32 @@ function createFilterStore(): {
 
     get needsDisplayStatusPostFilter(): boolean {
       return needsDisplayStatusPostFilter;
+    },
+
+    captureState(): SavedFilterState {
+      return {
+        statuses: [...statuses],
+        queueIds: [...queueIds],
+        priorities: [...priorities],
+        assigneeId,
+        dateFrom: dateFrom?.toISOString() ?? null,
+        dateTo: dateTo?.toISOString() ?? null,
+        sortField: sort.field,
+        sortDirection: sort.direction,
+      };
+    },
+
+    applyState(state: SavedFilterState): void {
+      statuses.clear();
+      for (const s of state.statuses) statuses.add(s);
+      queueIds.clear();
+      for (const q of state.queueIds) queueIds.add(q);
+      priorities.clear();
+      for (const p of state.priorities) priorities.add(p);
+      assigneeId = state.assigneeId;
+      dateFrom = state.dateFrom !== null ? new Date(state.dateFrom) : null;
+      dateTo = state.dateTo !== null ? new Date(state.dateTo) : null;
+      sort = { field: state.sortField, direction: state.sortDirection };
     },
 
     clearAll(): void {

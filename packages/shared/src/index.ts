@@ -220,6 +220,14 @@ export {
   type WatchTicketInput,
   type QueueWatcherInput,
   type QueueAssignmentInput,
+  displayStatusSchema,
+  savedFilterStateSchema,
+  savedFilterColorSchema,
+  savedFilterRecordSchema,
+  type DisplayFilterStatus,
+  type SavedFilterState,
+  type SavedFilterColor,
+  type SavedFilterRecord,
 } from "./schemas/tickets.js";
 
 // --- Knowledge Base schemas ---

@@ -88,6 +88,13 @@ vi.mock("$lib/crypto/context.js", () => ({
     clear: vi.fn(),
     size: 0,
   }),
+  getOrgKeyManager: () => ({
+    encrypt: vi.fn().mockReturnValue(new Uint8Array([1, 2, 3])),
+    decrypt: vi.fn().mockReturnValue(new Uint8Array([1, 2, 3])),
+    isLoaded: true,
+    load: vi.fn(),
+    zero: vi.fn(),
+  }),
   getCurrentUserId: () => () => "user-001",
   setPreviewLoader: vi.fn(),
   getPreviewLoader: () => mockPreviewLoader,

@@ -17,6 +17,8 @@
     setCurrentUserId,
   } from "$lib/crypto/context.js";
 
+  import ToastRenderer from "$lib/shell/ToastRenderer.svelte";
+
   let { children } = $props();
 
   // Initialize crypto singletons for all authenticated routes.
@@ -117,3 +119,4 @@
 {#if devLoginDone}
   {@render children()}
 {/if}
+<ToastRenderer />

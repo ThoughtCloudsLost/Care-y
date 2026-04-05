@@ -206,3 +206,45 @@ export const queueAssignmentInputSchema = z.object({
   userId: z.uuid(),
 });
 export type QueueAssignmentInput = z.infer<typeof queueAssignmentInputSchema>;
+
+// --- Saved filters ---
+
+/** Display-level filter statuses (client derives "new"/"active" from server's "open"). */
+export const displayStatusSchema = z.enum(["new", "active", "hold", "closed"]);
+export type DisplayFilterStatus = z.infer<typeof displayStatusSchema>;
+
+/** Serialized filter state stored inside a SavedFilterRecord's `state` JSON blob. */
+export const savedFilterStateSchema = z.object({
+  statuses: z.array(displayStatusSchema),
+  queueIds: z.array(z.string()),
+  priorities: z.array(ticketPrioritySchema),
+  assigneeId: z.string().nullable(),
+  dateFrom: z.string().nullable(),
+  dateTo: z.string().nullable(),
+  sortField: ticketSortFieldSchema,
+  sortDirection: sortDirectionSchema,
+});
+export type SavedFilterState = z.infer<typeof savedFilterStateSchema>;
+
+export const savedFilterColorSchema = z.enum([
+  "grey",
+  "blue",
+  "green",
+  "orange",
+  "red",
+  "pink",
+  "purple",
+]);
+export type SavedFilterColor = z.infer<typeof savedFilterColorSchema>;
+
+export const savedFilterRecordSchema = z.object({
+  id: z.uuid(),
+  encryptedName: z.string().min(1),
+  color: savedFilterColorSchema,
+  icon: z.string().min(1).max(50),
+  state: z.string().min(1),
+  shared: z.boolean(),
+  ownerId: z.string(),
+  createdAt: z.iso.datetime(),
+});
+export type SavedFilterRecord = z.infer<typeof savedFilterRecordSchema>;

@@ -9,8 +9,9 @@ const en_tickets_filter_assignee = /** @type {(inputs: Tickets_Filter_AssigneeIn
 	return /** @type {LocalizedString} */ (`Assignee`)
 };
 
-/** @type {(inputs: Tickets_Filter_AssigneeInputs) => LocalizedString} */
-const es_tickets_filter_assignee = en_tickets_filter_assignee;
+const es_tickets_filter_assignee = /** @type {(inputs: Tickets_Filter_AssigneeInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`Asignado`)
+};
 
 /**
 * | output |

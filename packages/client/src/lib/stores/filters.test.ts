@@ -305,4 +305,91 @@ describe("filterStore", () => {
       expect(store.sort).toEqual({ field: "priority", direction: "asc" });
     });
   });
+
+  describe("captureState", () => {
+    it("captures all active filter dimensions", async () => {
+      const store = await getStore();
+      store.toggleStatus("new");
+      store.toggleStatus("active");
+      store.togglePriority("urgent");
+      store.setAssignee("user-42");
+      store.setDateRange(new Date("2026-01-01"), new Date("2026-03-01"));
+      store.setSort("priority", "asc");
+
+      const state = store.captureState();
+
+      expect(state.statuses).toEqual(expect.arrayContaining(["new", "active"]));
+      expect(state.priorities).toEqual(["urgent"]);
+      expect(state.assigneeId).toBe("user-42");
+      expect(state.dateFrom).toBe(new Date("2026-01-01").toISOString());
+      expect(state.dateTo).toBe(new Date("2026-03-01").toISOString());
+      expect(state.sortField).toBe("priority");
+      expect(state.sortDirection).toBe("asc");
+    });
+
+    it("captures empty state when no filters active", async () => {
+      const store = await getStore();
+      const state = store.captureState();
+
+      expect(state.statuses).toEqual([]);
+      expect(state.queueIds).toEqual([]);
+      expect(state.priorities).toEqual([]);
+      expect(state.assigneeId).toBeNull();
+      expect(state.dateFrom).toBeNull();
+      expect(state.dateTo).toBeNull();
+    });
+  });
+
+  describe("applyState", () => {
+    it("restores all filter dimensions from a captured state", async () => {
+      const store = await getStore();
+
+      store.applyState({
+        statuses: ["hold", "closed"],
+        queueIds: ["q-1", "q-2"],
+        priorities: ["high"],
+        assigneeId: "user-99",
+        dateFrom: new Date("2026-02-01").toISOString(),
+        dateTo: new Date("2026-04-01").toISOString(),
+        sortField: "last_activity",
+        sortDirection: "asc",
+      });
+
+      expect([...store.statuses]).toEqual(
+        expect.arrayContaining(["hold", "closed"]),
+      );
+      expect([...store.queueIds]).toEqual(
+        expect.arrayContaining(["q-1", "q-2"]),
+      );
+      expect([...store.priorities]).toEqual(["high"]);
+      expect(store.assigneeId).toBe("user-99");
+      expect(store.dateFrom).toEqual(new Date("2026-02-01"));
+      expect(store.dateTo).toEqual(new Date("2026-04-01"));
+      expect(store.sort).toEqual({
+        field: "last_activity",
+        direction: "asc",
+      });
+    });
+
+    it("clears previous filter state before applying", async () => {
+      const store = await getStore();
+      store.toggleStatus("new");
+      store.toggleQueue("q-old");
+
+      store.applyState({
+        statuses: ["closed"],
+        queueIds: [],
+        priorities: [],
+        assigneeId: null,
+        dateFrom: null,
+        dateTo: null,
+        sortField: "date",
+        sortDirection: "desc",
+      });
+
+      expect(store.statuses.has("new")).toBe(false);
+      expect(store.queueIds.size).toBe(0);
+      expect([...store.statuses]).toEqual(["closed"]);
+    });
+  });
 });

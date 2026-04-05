@@ -9,8 +9,9 @@ const en_tickets_filter_priority = /** @type {(inputs: Tickets_Filter_PriorityIn
 	return /** @type {LocalizedString} */ (`Priority`)
 };
 
-/** @type {(inputs: Tickets_Filter_PriorityInputs) => LocalizedString} */
-const es_tickets_filter_priority = en_tickets_filter_priority;
+const es_tickets_filter_priority = /** @type {(inputs: Tickets_Filter_PriorityInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`Prioridad`)
+};
 
 /**
 * | output |

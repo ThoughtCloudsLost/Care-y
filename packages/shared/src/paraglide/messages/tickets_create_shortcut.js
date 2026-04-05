@@ -9,8 +9,9 @@ const en_tickets_create_shortcut = /** @type {(inputs: Tickets_Create_ShortcutIn
 	return /** @type {LocalizedString} */ (`Save filter shortcut`)
 };
 
-/** @type {(inputs: Tickets_Create_ShortcutInputs) => LocalizedString} */
-const es_tickets_create_shortcut = en_tickets_create_shortcut;
+const es_tickets_create_shortcut = /** @type {(inputs: Tickets_Create_ShortcutInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`Guardar filtro`)
+};
 
 /**
 * | output |

@@ -9,8 +9,9 @@ const en_tickets_filter_count = /** @type {(inputs: Tickets_Filter_CountInputs) 
 	return /** @type {LocalizedString} */ (`${i?.label} (${i?.count})`)
 };
 
-/** @type {(inputs: Tickets_Filter_CountInputs) => LocalizedString} */
-const es_tickets_filter_count = en_tickets_filter_count;
+const es_tickets_filter_count = /** @type {(inputs: Tickets_Filter_CountInputs) => LocalizedString} */ (i) => {
+	return /** @type {LocalizedString} */ (`${i?.label} (${i?.count})`)
+};
 
 /**
 * | output |

@@ -9,8 +9,9 @@ const en_tickets_filter_queue = /** @type {(inputs: Tickets_Filter_QueueInputs) 
 	return /** @type {LocalizedString} */ (`Queue`)
 };
 
-/** @type {(inputs: Tickets_Filter_QueueInputs) => LocalizedString} */
-const es_tickets_filter_queue = en_tickets_filter_queue;
+const es_tickets_filter_queue = /** @type {(inputs: Tickets_Filter_QueueInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`Cola`)
+};
 
 /**
 * | output |

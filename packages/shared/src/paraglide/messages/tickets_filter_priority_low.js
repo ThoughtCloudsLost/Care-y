@@ -9,8 +9,9 @@ const en_tickets_filter_priority_low = /** @type {(inputs: Tickets_Filter_Priori
 	return /** @type {LocalizedString} */ (`Low`)
 };
 
-/** @type {(inputs: Tickets_Filter_Priority_LowInputs) => LocalizedString} */
-const es_tickets_filter_priority_low = en_tickets_filter_priority_low;
+const es_tickets_filter_priority_low = /** @type {(inputs: Tickets_Filter_Priority_LowInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`Baja`)
+};
 
 /**
 * | output |

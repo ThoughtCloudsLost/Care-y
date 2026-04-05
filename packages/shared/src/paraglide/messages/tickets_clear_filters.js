@@ -9,8 +9,9 @@ const en_tickets_clear_filters = /** @type {(inputs: Tickets_Clear_FiltersInputs
 	return /** @type {LocalizedString} */ (`Clear all`)
 };
 
-/** @type {(inputs: Tickets_Clear_FiltersInputs) => LocalizedString} */
-const es_tickets_clear_filters = en_tickets_clear_filters;
+const es_tickets_clear_filters = /** @type {(inputs: Tickets_Clear_FiltersInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`Borrar todos`)
+};
 
 /**
 * | output |

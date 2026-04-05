@@ -9,8 +9,9 @@ const en_tickets_filter_priority_urgent = /** @type {(inputs: Tickets_Filter_Pri
 	return /** @type {LocalizedString} */ (`Urgent`)
 };
 
-/** @type {(inputs: Tickets_Filter_Priority_UrgentInputs) => LocalizedString} */
-const es_tickets_filter_priority_urgent = en_tickets_filter_priority_urgent;
+const es_tickets_filter_priority_urgent = /** @type {(inputs: Tickets_Filter_Priority_UrgentInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`Urgente`)
+};
 
 /**
 * | output |
