@@ -58,7 +58,7 @@ const ADMIN_IDENTIFIER = "admin.dev";
 const ADMIN_PASSWORD = "dev-password-1234!";
 const ADMIN_DISPLAY_NAME = "Dev Admin";
 const ADMIN_ROLE_ID = RoleId.ADMIN;
-const NUM_SEED_CLIENTS = 12;
+const NUM_SEED_CLIENTS = 120;
 
 /**
  * Generates a throwaway Curve25519 keypair and stores the public key in

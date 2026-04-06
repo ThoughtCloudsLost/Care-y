@@ -26,6 +26,8 @@
   {estimateHeight}
   {overscan}
   {columns}
+  _forceVirtualize={true}
+  getKey={(item: string) => item}
   {onloadmore}
 >
   {#snippet children({ item, index })}
