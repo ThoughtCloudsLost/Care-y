@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { ListItem } from "konsta/svelte";
+  import { ListItem, Chip } from "konsta/svelte";
   import { ChevronRight, CircleQuestionMark, Dot } from "@lucide/svelte";
   import * as m from "$lib/paraglide/messages.js";
   import { formatRelativeTime } from "$lib/utils/format-time.js";
@@ -67,7 +67,7 @@
 
         <div class="row-bottom">
           <span class="bottom-left">
-            <span class="queue-name">{queueName}</span>
+            <Chip outline class="queue-badge">{queueName}</Chip>
             <Dot size={10} aria-hidden="true" class="meta-dot" />
             <span class="assignee"
               >{assignedName ?? m.dashboard_assigned_unassigned()}</span
@@ -190,8 +190,12 @@
     flex-shrink: 0;
   }
 
-  .queue-name {
-    white-space: nowrap;
+  :global(.queue-badge) {
+    height: 1.125rem !important;
+    font-size: var(--text-xs) !important;
+    padding-left: var(--space-md) !important;
+    padding-right: var(--space-md) !important;
+    flex-shrink: 0;
   }
 
   .assignee {
