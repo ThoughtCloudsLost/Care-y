@@ -15,6 +15,17 @@ import { cacheRegistry } from "./cache-registry.js";
 import type { SvelteMap } from "svelte/reactivity";
 import type { CryptoBridge } from "$lib/workers/crypto-bridge.js";
 
+/**
+ * Sentinel value stored in the cache when decryption permanently fails.
+ * The null byte prefix prevents collision with any real plaintext.
+ */
+export const DECRYPT_ERROR_SENTINEL = "\0DECRYPT_FAILED";
+
+/** Returns true if the cached value is a decrypt failure sentinel. */
+export function isDecryptError(value: string | undefined): boolean {
+  return value === DECRYPT_ERROR_SENTINEL;
+}
+
 export class AsyncDecryptCache {
   private readonly cache: SvelteMap<string, string>;
   private readonly pending = new Set<string>();
@@ -51,6 +62,7 @@ export class AsyncDecryptCache {
         this.cache.set(cacheKey, plaintext);
       })
       .catch((err: unknown) => {
+        this.cache.set(cacheKey, DECRYPT_ERROR_SENTINEL);
         if (import.meta.env.DEV) {
           console.warn(`[${this.label}] decrypt failed for ${cacheKey}:`, err);
         }

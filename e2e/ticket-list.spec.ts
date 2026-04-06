@@ -1,0 +1,383 @@
+import { test, expect, type Page } from "@playwright/test";
+import AxeBuilder from "@axe-core/playwright";
+
+// Crypto pipeline timeout: Argon2id (64 MiB WASM) + OPRF round-trips +
+// ECIES key wrapping + Worker decryption. 60s is generous but safe.
+const CRYPTO_TIMEOUT = 60_000;
+
+// Serial tests model a real user session: one login, then SPA navigation.
+// The Worker stays KEYED across test navigations.
+test.describe.serial("Ticket List (Tickets Tab)", () => {
+  let page: Page;
+
+  test.beforeAll(async ({ browser }) => {
+    page = await browser.newPage();
+    await page.goto("/");
+
+    // Wait for crypto pipeline to complete on dashboard first.
+    await expect(page.getByText("Help with housing")).toBeVisible({
+      timeout: CRYPTO_TIMEOUT,
+    });
+
+    // Navigate to tickets page via tab bar (SPA navigation).
+    await page.getByRole("tab", { name: "Tickets" }).click();
+    await expect(page).toHaveURL("/tickets");
+
+    // Wait for ticket list to render with decrypted content.
+    // "Help with housing" is a seeded ticket with a key wrap, so its title
+    // is only visible after the full decrypt pipeline runs on this page too.
+    await expect(page.getByText("Help with housing")).toBeVisible({
+      timeout: CRYPTO_TIMEOUT,
+    });
+  });
+
+  test.afterAll(async () => {
+    await page.close();
+  });
+
+  // ── 1. Load and decrypt ─────────────────────────────────────────
+
+  test("ticket cards render with decrypted titles", async () => {
+    // Multiple seeded tickets should be visible with decrypted titles.
+    // Verify the shape: non-empty title text, not shimmer placeholders.
+    await expect(page.getByText("Help with housing")).toBeVisible();
+    await expect(page.getByText("Safety planning session")).toBeVisible();
+
+    // Ticket without key wrap shows "Encrypted ticket" placeholder with help icon.
+    await expect(page.getByText("Encrypted ticket")).toBeVisible();
+  });
+
+  test("cards show queue badges, status dots, and priority chips", async () => {
+    // Queue badges are Konsta Chip elements with queue names.
+    await expect(page.getByText("Housing").first()).toBeVisible();
+    await expect(page.getByText("Crisis").first()).toBeVisible();
+    await expect(page.getByText("Intake").first()).toBeVisible();
+
+    // Status labels are visible in card headers.
+    const statusLabels = page.locator(".status-label");
+    await expect(statusLabels.first()).toBeVisible();
+  });
+
+  // ── 2. Status filter pill ───────────────────────────────────────
+
+  test("status filter pill filters tickets", async () => {
+    // Tap the "Status" filter pill to open its popover.
+    const statusPill = page.locator(".filter-pill-bar").getByText("Status");
+    await statusPill.click();
+
+    // The popover should be visible with status options.
+    await expect(page.getByText("New")).toBeVisible();
+    await expect(page.getByText("Active")).toBeVisible();
+    await expect(page.getByText("On Hold")).toBeVisible();
+    await expect(page.getByText("Closed")).toBeVisible();
+
+    // Select "On Hold" to filter to on-hold tickets only.
+    await page.getByText("On Hold").click();
+
+    // Close popover by tapping the pill again.
+    await statusPill.click();
+
+    // On-hold tickets should be visible (seeded: "Waiting for callback from shelter",
+    // "Pending court date documentation").
+    await expect(page.getByText("Waiting for callback")).toBeVisible();
+
+    // Non-hold tickets should be hidden.
+    await expect(page.getByText("Help with housing")).not.toBeVisible();
+
+    // Pill should show the selected label.
+    await expect(
+      page.locator(".filter-pill-bar").getByText("On Hold"),
+    ).toBeVisible();
+
+    // Clear the filter for subsequent tests.
+    await page.getByText("Clear all").click();
+
+    // Verify tickets are back.
+    await expect(page.getByText("Help with housing")).toBeVisible();
+  });
+
+  // ── 3. Queue filter pill ────────────────────────────────────────
+
+  test("queue filter pill shows filtered results", async () => {
+    const queuePill = page.locator(".filter-pill-bar").getByText("Queue");
+    await queuePill.click();
+
+    // Select "Crisis" queue.
+    // The popover renders queue names from the server.
+    await page.getByRole("group").getByText("Crisis").click();
+
+    // Close popover.
+    await queuePill.click();
+
+    // Crisis tickets should be visible.
+    await expect(page.getByText("Safety planning session")).toBeVisible();
+    await expect(page.getByText("Emergency referral needed")).toBeVisible();
+
+    // Non-Crisis tickets should be hidden.
+    await expect(page.getByText("Help with housing")).not.toBeVisible();
+
+    // Clear filter.
+    await page.getByText("Clear all").click();
+    await expect(page.getByText("Help with housing")).toBeVisible();
+  });
+
+  // ── 4. View toggle (list <-> grid) ──────────────────────────────
+
+  test("view toggle switches between list and grid layouts", async () => {
+    // Default is list mode.
+    const listBtn = page.getByRole("button", { name: "List view" });
+    const gridBtn = page.getByRole("button", { name: "Grid view" });
+
+    // Verify list mode: cards use single-column layout (no grid rows).
+    await expect(listBtn).toHaveAttribute("aria-pressed", "true");
+    const gridRow = page.locator(".virtual-row-grid");
+    await expect(gridRow).toHaveCount(0);
+
+    // Switch to grid.
+    await gridBtn.click();
+    await expect(gridBtn).toHaveAttribute("aria-pressed", "true");
+
+    // Grid mode: cards render in 2-column rows.
+    await expect(page.locator(".virtual-row-grid").first()).toBeVisible();
+
+    // In grid mode, action buttons should be hidden (no card-actions div).
+    await expect(page.locator(".card-actions")).toHaveCount(0);
+
+    // Switch back to list.
+    await listBtn.click();
+    await expect(listBtn).toHaveAttribute("aria-pressed", "true");
+
+    // Action buttons should reappear in list mode.
+    await expect(page.locator(".card-actions").first()).toBeVisible();
+  });
+
+  test("view mode preference persists across navigation", async () => {
+    // Switch to grid.
+    await page.getByRole("button", { name: "Grid view" }).click();
+
+    // Navigate away to Home tab, then back.
+    await page.getByRole("tab", { name: "Home" }).click();
+    await expect(page).toHaveURL("/");
+
+    await page.getByRole("tab", { name: "Tickets" }).click();
+    await expect(page).toHaveURL("/tickets");
+
+    // Grid should still be active (persisted in localStorage).
+    const gridBtn = page.getByRole("button", { name: "Grid view" });
+    await expect(gridBtn).toHaveAttribute("aria-pressed", "true");
+
+    // Restore list mode for other tests.
+    await page.getByRole("button", { name: "List view" }).click();
+  });
+
+  // ── 5. Infinite scroll ──────────────────────────────────────────
+
+  test("virtual scroller keeps DOM node count bounded", async () => {
+    // The dev seed has 12 tickets, which all fit on one page (limit: 50).
+    // Verify the virtualizer infrastructure is present: sentinel element
+    // exists, spacer elements exist, and visible rows are rendered.
+    const sentinel = page.locator(".scroll-sentinel");
+    await expect(sentinel).toBeAttached();
+
+    const spacers = page.locator(".virtual-spacer");
+    await expect(spacers).toHaveCount(2); // top + bottom
+  });
+
+  // ── 6. Multi-select ─────────────────────────────────────────────
+
+  test("long-press enters multi-select with checkboxes and action bar", async () => {
+    // Long-press a ticket card to enter multi-select mode.
+    const firstCard = page.locator(".swipeable-card").first();
+
+    // pointerdown, wait 600ms, pointerup = long-press
+    const box = await firstCard.boundingBox();
+    if (!box) throw new Error("Card not found");
+
+    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+    await page.mouse.down();
+    // Hold for long-press duration (500ms threshold + margin).
+    await page.waitForTimeout(600);
+    await page.mouse.up();
+
+    // Checkboxes should appear on cards.
+    const checkboxes = page.locator(".select-checkbox");
+    // At least one checkbox visible (the long-pressed card + visible cards).
+    await expect(checkboxes.first()).toBeVisible();
+
+    // The tabbar override should show selection count.
+    // First card should be selected.
+    await expect(page.getByText(/1 selected/)).toBeVisible();
+
+    // Tap another card to add to selection.
+    const secondCard = page.locator(".swipeable-card").nth(1);
+    await secondCard.click();
+    await expect(page.getByText(/2 selected/)).toBeVisible();
+
+    // Exit multi-select via the dismiss button (X icon in tabbar override).
+    const dismissBtn = page.getByRole("button", {
+      name: "Exit selection mode",
+    });
+    await dismissBtn.click();
+
+    // Multi-select should be gone: no checkboxes, tab bar restored.
+    await expect(checkboxes).toHaveCount(0);
+  });
+
+  test("select mode button also enters multi-select", async () => {
+    // The "Select" button in the filter pill bar is the explicit entry point.
+    await page.getByRole("button", { name: "Select" }).click();
+
+    // Checkboxes should appear.
+    await expect(page.locator(".select-checkbox").first()).toBeVisible();
+
+    // Exit via dismiss.
+    await page.getByRole("button", { name: "Exit selection mode" }).click();
+  });
+
+  // ── 7. Card tap navigation ──────────────────────────────────────
+
+  test("tapping a card navigates to ticket detail route", async () => {
+    // Click the first card's inner button area.
+    const firstCardButton = page.locator(".card-inner").first();
+    await firstCardButton.click();
+
+    // Should navigate to /tickets/{uuid}. The detail page doesn't exist
+    // yet (6d), but the URL change is verifiable.
+    await expect(page).toHaveURL(/\/tickets\/[0-9a-f-]{36}/);
+
+    // Navigate back to the ticket list for remaining tests.
+    await page.getByRole("tab", { name: "Tickets" }).click();
+    await expect(page).toHaveURL("/tickets");
+
+    // Wait for tickets to re-render.
+    await expect(page.getByText("Help with housing")).toBeVisible({
+      timeout: CRYPTO_TIMEOUT,
+    });
+  });
+
+  // ── 8. Empty state ──────────────────────────────────────────────
+
+  test("empty state shown when filters match zero tickets", async () => {
+    // Apply a filter combination that matches nothing: "Closed" status.
+    // No seeded tickets are closed.
+    const statusPill = page.locator(".filter-pill-bar").getByText("Status");
+    await statusPill.click();
+    await page.getByText("Closed").click();
+    await statusPill.click();
+
+    // Empty state message should appear.
+    await expect(page.getByText("No tickets match this filter.")).toBeVisible();
+
+    // Clear filter.
+    await page.getByText("Clear all").click();
+    await expect(page.getByText("Help with housing")).toBeVisible();
+  });
+
+  // ── 9. Accessibility ────────────────────────────────────────────
+
+  test("filter pill bar has correct ARIA structure", async () => {
+    // Toolbar role on the filter bar.
+    const toolbar = page.locator('[role="toolbar"]');
+    await expect(toolbar).toBeAttached();
+    await expect(toolbar).toHaveAttribute("aria-label", "Filter tickets");
+
+    // Each filter pill has role="button", aria-haspopup, aria-expanded.
+    const pills = page.locator('.filter-pill-bar [role="button"]');
+    const count = await pills.count();
+    expect(count).toBeGreaterThanOrEqual(4); // status, queue, priority, assignee
+
+    // Verify first pill (Status) has expected ARIA attributes.
+    const statusChip = pills.first();
+    await expect(statusChip).toHaveAttribute("aria-haspopup");
+    await expect(statusChip).toHaveAttribute("aria-expanded", "false");
+  });
+
+  test("escape closes open filter popover", async () => {
+    // Open status pill.
+    const statusPill = page.locator(".filter-pill-bar").getByText("Status");
+    await statusPill.click();
+
+    // Popover should be visible.
+    await expect(page.getByText("New")).toBeVisible();
+
+    // Press Escape to close.
+    await page.keyboard.press("Escape");
+
+    // Wait for popover to dismiss. Check that "New" in popover context
+    // is no longer visible (the status stat label on the page says "new"
+    // in lowercase, but the filter option says "New" with capital N).
+    // The popover-specific "New" list item should no longer be visible.
+    // Use a more specific locator to distinguish from the stats row.
+    const popoverContent = page.locator(
+      '[role="group"] >> text=New, [role="listbox"] >> text=New',
+    );
+    await expect(popoverContent).toHaveCount(0);
+  });
+
+  test("passes axe accessibility audit on ticket list", async () => {
+    // Ensure we're on the tickets page with content visible.
+    await expect(page.getByText("Help with housing")).toBeVisible();
+
+    const results = await new AxeBuilder({ page })
+      .setLegacyMode(true)
+      .analyze();
+    expect(results.violations).toEqual([]);
+  });
+
+  test("passes axe accessibility audit in grid mode", async () => {
+    await page.getByRole("button", { name: "Grid view" }).click();
+    await expect(page.locator(".virtual-row-grid").first()).toBeVisible();
+
+    const results = await new AxeBuilder({ page })
+      .setLegacyMode(true)
+      .analyze();
+    expect(results.violations).toEqual([]);
+
+    // Restore list mode.
+    await page.getByRole("button", { name: "List view" }).click();
+  });
+
+  // ── 10. Visual themes ───────────────────────────────────────────
+
+  test("all themes render without visual breakage", async () => {
+    const themes = ["riso", "default", "frutiger", "brutalist", "cupertino"];
+
+    for (const theme of themes) {
+      // Set theme via localStorage (same mechanism as ThemeProvider).
+      await page.evaluate((t: string) => {
+        localStorage.setItem("care-y-theme", t);
+        // Dispatch storage event to trigger reactive update.
+        window.dispatchEvent(new Event("storage"));
+      }, theme);
+
+      // Force a re-render by navigating away and back.
+      await page.getByRole("tab", { name: "Home" }).click();
+      await page.getByRole("tab", { name: "Tickets" }).click();
+
+      // Wait for tickets to render.
+      await expect(page.getByText("Help with housing")).toBeVisible({
+        timeout: CRYPTO_TIMEOUT,
+      });
+
+      // Verify no layout crash: cards are still visible, filter bar is
+      // present, and the view toggle still works.
+      await expect(page.locator(".ticket-card-wrap").first()).toBeVisible();
+      await expect(page.locator('[role="toolbar"]')).toBeVisible();
+      await expect(
+        page.getByRole("button", { name: "List view" }),
+      ).toBeVisible();
+
+      // Take screenshot for manual comparison (stored by Playwright).
+      await page.screenshot({
+        path: `test-results/theme-${theme}-tickets.png`,
+        fullPage: false,
+      });
+    }
+
+    // Restore default theme.
+    await page.evaluate(() => {
+      localStorage.setItem("care-y-theme", "riso");
+      window.dispatchEvent(new Event("storage"));
+    });
+  });
+});

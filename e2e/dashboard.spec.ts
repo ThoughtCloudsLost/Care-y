@@ -63,8 +63,8 @@ test.describe.serial("Dashboard (Home Tab)", () => {
   });
 
   test("ticket without key wrap shows encrypted placeholder", async () => {
-    // Ticket 4 (Robin) has no key wrap. The title falls back to the i18n
-    // placeholder "Encrypted ticket" because decryption is skipped.
+    // Ticket with withKeyWrap: false has no key wrap. The title falls
+    // back to the i18n placeholder "Encrypted ticket" with a help icon.
     await expect(page.getByText("Encrypted ticket")).toBeVisible();
   });
 

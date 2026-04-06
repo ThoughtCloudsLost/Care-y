@@ -1,6 +1,7 @@
 <script lang="ts">
   import * as m from "$lib/paraglide/messages.js";
   import { getFollowUpDecryptCache } from "$lib/crypto/context.js";
+  import { isDecryptError } from "$lib/crypto/async-decrypt-cache.js";
   import type { RawFollowUpPreview } from "$lib/tickets/preview-loader.svelte.js";
 
   interface Props {
@@ -25,7 +26,9 @@
         fu.encryptedContent,
       )}
       <div class="preview-line" data-source={fu.source}>
-        {#if content === undefined}
+        {#if isDecryptError(content)}
+          <span class="preview-error">{m.error_decryption_failed()}</span>
+        {:else if content === undefined}
           <span class="shimmer shimmer-line" aria-hidden="true"></span>
         {:else}
           <span class="preview-text">{content}</span>
@@ -76,6 +79,13 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+
+  .preview-error {
+    display: block;
+    color: var(--muted);
+    font-style: italic;
+    opacity: 0.6;
   }
 
   .shimmer {

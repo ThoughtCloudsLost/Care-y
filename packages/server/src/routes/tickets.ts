@@ -316,6 +316,13 @@ export function createTicketRouter(deps: TicketRouterDeps) {
       }),
     ),
 
+    counts: volunteerProcedure.query(
+      withErrorWrapping(async ({ ctx }) => {
+        const { svc } = ticketSvc(ctx.org.tenantDb);
+        return svc.counts(ctx.user.id);
+      }),
+    ),
+
     update: volunteerProcedure.input(updateTicketInputSchema).mutation(
       withErrorWrapping(async ({ ctx, input }) => {
         const { svc } = ticketSvc(ctx.org.tenantDb);
@@ -1155,6 +1162,126 @@ export function createTicketRouter(deps: TicketRouterDeps) {
                   ],
                 },
               ];
+
+              // Generate additional tickets programmatically to test
+              // virtual scrolling with large lists. Uses a simple
+              // deterministic seed so re-runs produce the same data.
+              const GENERATED_COUNT = 106; // 14 handcrafted + 106 = 120 total
+              const queuesArr = ["Intake", "Crisis", "Housing"] as const;
+              const priorities: TicketPriority[] = [
+                "low",
+                "normal",
+                "normal",
+                "high",
+                "urgent",
+              ];
+              const titlePrefixes = [
+                "Referral request",
+                "Follow-up needed",
+                "New intake call",
+                "Callback requested",
+                "Documentation help",
+                "Transportation need",
+                "Safety concern",
+                "Benefits question",
+                "Housing inquiry",
+                "Medical appointment",
+                "Legal consultation",
+                "Emergency contact",
+                "Resource request",
+                "Check-in call",
+                "Outreach follow-up",
+              ];
+              const clientMessages = [
+                "I need some help please",
+                "Can someone call me back?",
+                "I have a question about my case",
+                "When is my next appointment?",
+                "I wanted to follow up on our last conversation",
+                "Is there anyone available to talk?",
+                "I have new information to share",
+                "Things have changed since we last spoke",
+              ];
+              const volMessages = [
+                "I will look into this for you",
+                "Checking with the team now",
+                "Left a voicemail, will try again tomorrow",
+                "Referred to partner organization",
+                "Scheduled follow-up for next week",
+                "Updated case notes with new info",
+              ];
+
+              // Simple deterministic hash for reproducible "random" values.
+              function seedHash(i: number, salt: number): number {
+                let h = (i * 2654435761 + salt * 40503) >>> 0;
+                h = ((h ^ (h >>> 16)) * 2246822507) >>> 0;
+                h = ((h ^ (h >>> 13)) * 3266489909) >>> 0;
+                return (h ^ (h >>> 16)) >>> 0;
+              }
+
+              for (let g = 0; g < GENERATED_COUNT; g++) {
+                const h0 = seedHash(g, 0);
+                const h1 = seedHash(g, 1);
+                const h2 = seedHash(g, 2);
+                const h3 = seedHash(g, 3);
+                const h4 = seedHash(g, 4);
+
+                const queue = queuesArr[h0 % queuesArr.length];
+                const priority = priorities[h1 % priorities.length];
+                const prefix = titlePrefixes[h2 % titlePrefixes.length];
+                if (
+                  queue === undefined ||
+                  priority === undefined ||
+                  prefix === undefined
+                )
+                  continue;
+                const suffix = String(g + 1).padStart(3, "0");
+
+                // 40% assigned to me, 60% unassigned
+                const assigned = h3 % 5 < 2 ? me : null;
+                // 15% on hold (only if assigned)
+                const hold = assigned !== null && h4 % 7 === 0;
+
+                // Created 30 min to 30 days ago
+                const ageMinutes = 30 + (h0 % 43200);
+
+                // 0-4 follow-ups
+                const fuCount = h1 % 5;
+                const followUps: {
+                  content: string;
+                  source: string;
+                  agoMinutes: number;
+                }[] = [];
+                for (let f = 0; f < fuCount; f++) {
+                  const fh = seedHash(g, 10 + f);
+                  const isClient = fh % 2 === 0;
+                  const msgs = isClient ? clientMessages : volMessages;
+                  const msg = msgs[fh % msgs.length] ?? "Message";
+                  // Space follow-ups evenly within the ticket's age
+                  const fuAge = Math.max(
+                    1,
+                    ageMinutes -
+                      Math.floor((ageMinutes * (f + 1)) / (fuCount + 1)),
+                  );
+                  followUps.push({
+                    content: msg,
+                    source: isClient ? "client" : "volunteer",
+                    agoMinutes: fuAge,
+                  });
+                }
+
+                ticketDefs.push({
+                  title: `${prefix} #${suffix}`,
+                  description: `Generated test ticket ${suffix}`,
+                  queue,
+                  priority,
+                  assignedTo: assigned,
+                  onHold: hold,
+                  withKeyWrap: true,
+                  createdAgo: ageMinutes,
+                  followUps,
+                });
+              }
 
               const createdIds: string[] = [];
               const encoder = new TextEncoder();

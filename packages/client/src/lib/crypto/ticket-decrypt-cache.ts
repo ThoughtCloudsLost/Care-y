@@ -16,6 +16,7 @@
 import { SvelteMap } from "svelte/reactivity";
 import type { CryptoBridge } from "$lib/workers/crypto-bridge.js";
 import { serializedBufferToBase64 } from "$lib/utils/buffer-encoding.js";
+import { DECRYPT_ERROR_SENTINEL } from "./async-decrypt-cache.js";
 
 /** Serialized Node.js Buffer as it arrives over tRPC JSON (no superjson). */
 interface SerializedBuffer {
@@ -55,7 +56,16 @@ export class TicketDecryptCache {
     const cached = this.cache.get(ticketId);
     if (cached !== undefined) return cached;
 
-    if (keyWrap === null) return undefined;
+    if (keyWrap === null) {
+      // Defer cache write: this method is called during render (template
+      // expressions), and SvelteMap.set() is a state mutation. Synchronous
+      // mutation during render triggers state_unsafe_mutation. The microtask
+      // runs after the current render pass completes.
+      queueMicrotask(() => {
+        this.cache.set(ticketId, DECRYPT_ERROR_SENTINEL);
+      });
+      return DECRYPT_ERROR_SENTINEL;
+    }
     if (this.pending.has(ticketId)) return undefined;
 
     this.pending.add(ticketId);
@@ -74,6 +84,7 @@ export class TicketDecryptCache {
         this.cache.set(ticketId, plaintext);
       })
       .catch((err: unknown) => {
+        this.cache.set(ticketId, DECRYPT_ERROR_SENTINEL);
         if (import.meta.env.DEV) {
           console.warn(
             `[TicketDecryptCache] decrypt failed for ${ticketId}:`,

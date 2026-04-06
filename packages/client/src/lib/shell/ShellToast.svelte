@@ -6,9 +6,14 @@
   import { Toast } from "konsta/svelte";
   import type { ShellToastProps } from "./types";
 
-  let { opened, position = "center", children }: ShellToastProps = $props();
+  let {
+    opened,
+    position = "center",
+    button,
+    children,
+  }: ShellToastProps = $props();
 </script>
 
-<Toast {opened} {position}>
+<Toast {opened} {position} {button}>
   {@render children()}
 </Toast>

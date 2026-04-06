@@ -12,7 +12,9 @@
   import * as m from "$lib/paraglide/messages.js";
   import { formatRelativeTime } from "$lib/utils/format-time.js";
   import { getPreviewLoader } from "$lib/crypto/context.js";
+  import { isDecryptError } from "$lib/crypto/async-decrypt-cache.js";
   import PriorityBadge from "$lib/components/PriorityBadge.svelte";
+  import EncryptedTitle from "$lib/components/EncryptedTitle.svelte";
   import TicketPreview from "./TicketPreview.svelte";
   import type { TicketCardProps } from "./ticket-types.js";
 
@@ -35,10 +37,10 @@
     ontap,
     onselect,
     onaction,
+    onencryptedhelp,
   }: TicketCardProps = $props();
 
   const previewLoader = getPreviewLoader();
-  const isEncrypted = $derived(title === undefined);
   const isList = $derived(viewMode === "list");
 
   const statusLabel = $derived.by(() => {
@@ -136,7 +138,9 @@
       <div class="content-group">
         <span class="client-alias">{clientAlias}</span>
         <div class="row-title">
-          {#if isEncrypted}
+          {#if isDecryptError(title)}
+            <EncryptedTitle onhelp={onencryptedhelp} />
+          {:else if title === undefined}
             <div
               class="shimmer shimmer-title"
               role="status"

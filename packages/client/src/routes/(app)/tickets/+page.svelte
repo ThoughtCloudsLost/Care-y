@@ -1,10 +1,23 @@
 <script lang="ts">
-  import { createInfiniteQuery } from "@tanstack/svelte-query";
+  import { createInfiniteQuery, createQuery } from "@tanstack/svelte-query";
   import { SvelteSet } from "svelte/reactivity";
   import { goto } from "$app/navigation";
   import { resolve } from "$app/paths";
-  import { BlockTitle, Segmented, SegmentedButton } from "konsta/svelte";
-  import { List, LayoutGrid } from "@lucide/svelte";
+  import {
+    BlockTitle,
+    Button,
+    Segmented,
+    SegmentedButton,
+    List as KList,
+    ListItem,
+  } from "konsta/svelte";
+  import {
+    List,
+    LayoutGrid,
+    ArrowUpDown,
+    ArrowUp,
+    ArrowDown,
+  } from "@lucide/svelte";
   import * as m from "$lib/paraglide/messages.js";
   import { trpc } from "$lib/trpc/index.js";
   import {
@@ -20,7 +33,6 @@
   import { UserPlus, Pause, X } from "@lucide/svelte";
   import { createPreviewLoader } from "$lib/tickets/preview-loader.svelte.js";
   import { deriveDisplayStatus } from "$lib/tickets/display-status.js";
-  import { sortTickets } from "$lib/tickets/sort-tickets.js";
   import { filterStore } from "$lib/stores/filters.svelte.js";
   import { viewModeStore } from "$lib/stores/view-mode.svelte.js";
   import { toastStore } from "$lib/stores/toast.svelte.js";
@@ -30,6 +42,8 @@
   } from "$lib/components/tickets/ticket-types.js";
 
   import { RouterNotAvailableError } from "$lib/errors.js";
+  import ShellPopover from "$lib/shell/ShellPopover.svelte";
+  import type { SortField } from "$lib/stores/filters.svelte.js";
   import TicketCard from "$lib/components/tickets/TicketCard.svelte";
   import SwipeableCard from "$lib/components/tickets/SwipeableCard.svelte";
   import FilterPillBar from "$lib/components/tickets/FilterPillBar.svelte";
@@ -101,10 +115,8 @@
     });
   });
 
-  // Client-side sort (server returns keyset order).
-  const sortedTickets = $derived(
-    sortTickets(displayFiltered, filterStore.sort),
-  );
+  // Server handles sort via ORDER BY. displayFiltered is the final list
+  // (post-filter for display status, but sort order preserved from server).
 
   // Eager-load previews for the first page when tickets arrive.
   // eagerLoad() skips IDs already in the loaded Set, so repeated calls
@@ -147,7 +159,12 @@
       ontap: handleTicketTap,
       onselect: toggleSelection,
       onaction: handleAction,
+      onencryptedhelp: showEncryptedHelp,
     };
+  }
+
+  function showEncryptedHelp(): void {
+    toastStore.show(m.dashboard_encrypted_help(), 5000);
   }
 
   function handleTicketTap(ticketId: string): void {
@@ -263,21 +280,51 @@
 
   const gridColumns = $derived(viewModeStore.mode === "grid" ? 2 : 1);
 
-  // Stats counts derived from all loaded tickets (unfiltered).
-  const newCount = $derived(
-    allTickets.filter(
-      (t) => t.status === "open" && !t.onHold && t.followUpCount === 0,
-    ).length,
-  );
-  const activeCount = $derived(
-    allTickets.filter(
-      (t) => t.status === "open" && !t.onHold && t.followUpCount > 0,
-    ).length,
-  );
-  const holdCount = $derived(allTickets.filter((t) => t.onHold).length);
+  // Accurate ticket counts from dedicated server endpoint (not limited by pagination).
+  const countsQuery = createQuery(() => ({
+    queryKey: ["tickets", "counts"],
+    queryFn: async () => ticketRouter.counts.query(),
+  }));
+
+  const newCount = $derived(countsQuery.data?.new ?? 0);
+  const activeCount = $derived(countsQuery.data?.active ?? 0);
+  const holdCount = $derived(countsQuery.data?.onHold ?? 0);
 
   // Saved filter modal state.
   let savedFilterModalOpen = $state(false);
+
+  // Sort dropdown state.
+  let sortOpen = $state(false);
+  let sortAnchorEl = $state<HTMLElement | undefined>(undefined);
+
+  interface SortOption {
+    readonly field: SortField;
+    readonly label: string;
+  }
+
+  const sortOptions: SortOption[] = [
+    { field: "date", label: m.tickets_sort_newest() },
+    { field: "priority", label: m.tickets_sort_priority() },
+    { field: "last_activity", label: m.tickets_sort_activity() },
+    { field: "queue", label: m.tickets_sort_queue() },
+  ];
+
+  function toggleSort(): void {
+    sortOpen = !sortOpen;
+  }
+
+  function handleSortTap(field: SortField): void {
+    if (filterStore.sort.field === field) {
+      // Toggle direction on re-tap.
+      filterStore.setSort(
+        field,
+        filterStore.sort.direction === "asc" ? "desc" : "asc",
+      );
+    } else {
+      // New field: default to desc (newest/highest first).
+      filterStore.setSort(field, "desc");
+    }
+  }
 </script>
 
 <div class="ticket-page pb-20">
@@ -301,28 +348,46 @@
           {m.tickets_status_on_hold()}
         </span>
       </div>
-      <Segmented strong class="view-toggle">
-        <SegmentedButton
-          active={viewModeStore.mode === "list"}
-          aria-pressed={viewModeStore.mode === "list"}
-          aria-label={m.tickets_view_list()}
-          onclick={() => viewModeStore.set("list")}
-          ><List size={16} aria-hidden="true" /></SegmentedButton
-        >
-        <SegmentedButton
-          active={viewModeStore.mode === "grid"}
-          aria-pressed={viewModeStore.mode === "grid"}
-          aria-label={m.tickets_view_grid()}
-          onclick={() => viewModeStore.set("grid")}
-          ><LayoutGrid size={16} aria-hidden="true" /></SegmentedButton
-        >
-      </Segmented>
+      <div class="view-controls">
+        <Segmented strong class="view-toggle">
+          <SegmentedButton
+            active={viewModeStore.mode === "list"}
+            aria-pressed={viewModeStore.mode === "list"}
+            aria-label={m.tickets_view_list()}
+            onclick={() => viewModeStore.set("list")}
+            ><List size={16} aria-hidden="true" /></SegmentedButton
+          >
+          <SegmentedButton
+            active={viewModeStore.mode === "grid"}
+            aria-pressed={viewModeStore.mode === "grid"}
+            aria-label={m.tickets_view_grid()}
+            onclick={() => viewModeStore.set("grid")}
+            ><LayoutGrid size={16} aria-hidden="true" /></SegmentedButton
+          >
+        </Segmented>
+        <span bind:this={sortAnchorEl} class="sort-anchor">
+          <Button
+            tonal
+            rounded
+            small
+            inline
+            class="sort-btn"
+            aria-label={m.tickets_sort()}
+            aria-haspopup="listbox"
+            aria-expanded={sortOpen}
+            onclick={toggleSort}
+          >
+            <ArrowUpDown size={16} aria-hidden="true" />
+          </Button>
+        </span>
+      </div>
     </div>
   </div>
 
   <SavedFilterList />
   <div class="ticket-controls">
     <FilterPillBar
+      {currentUserId}
       oncreateshortcut={() => {
         savedFilterModalOpen = true;
       }}
@@ -337,10 +402,11 @@
   {:else}
     <div class="ticket-list">
       <VirtualList
-        items={sortedTickets}
+        items={displayFiltered}
         scrollContainer={scrollEl}
         estimateHeight={viewModeStore.mode === "grid" ? 200 : 140}
         columns={gridColumns}
+        getKey={(t: TicketRecord) => t.id}
         onloadmore={loadNextPage}
       >
         {#snippet children({ item }: { item: TicketRecord; index: number })}
@@ -356,7 +422,7 @@
       </VirtualList>
     </div>
 
-    {#if sortedTickets.length === 0}
+    {#if displayFiltered.length === 0}
       <div class="empty-state" role="status">
         <p>{m.tickets_empty_filter()}</p>
       </div>
@@ -370,6 +436,37 @@
     savedFilterModalOpen = false;
   }}
 />
+
+<ShellPopover
+  opened={sortOpen}
+  target={sortAnchorEl}
+  placement="bottom"
+  ondismiss={() => {
+    sortOpen = false;
+  }}
+>
+  <KList nested role="listbox" aria-label={m.tickets_sort()}>
+    {#each sortOptions as opt (opt.field)}
+      {@const isSelected = filterStore.sort.field === opt.field}
+      <ListItem
+        title={opt.label}
+        role="option"
+        aria-selected={isSelected}
+        onclick={() => handleSortTap(opt.field)}
+      >
+        {#snippet after()}
+          {#if isSelected}
+            {#if filterStore.sort.direction === "asc"}
+              <ArrowUp size={14} class="sort-dir-icon" />
+            {:else}
+              <ArrowDown size={14} class="sort-dir-icon" />
+            {/if}
+          {/if}
+        {/snippet}
+      </ListItem>
+    {/each}
+  </KList>
+</ShellPopover>
 
 <style>
   .ticket-page {
@@ -428,6 +525,29 @@
 
   .status-dot[data-status="hold"] {
     background: #ff9500;
+  }
+
+  .view-controls {
+    display: flex;
+    align-items: center;
+    gap: 0.375rem;
+    flex-shrink: 0;
+  }
+
+  .sort-anchor {
+    display: inline-flex;
+    flex-shrink: 0;
+  }
+
+  :global(.sort-btn) {
+    width: 1.75rem !important;
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+  }
+
+  :global(.sort-dir-icon) {
+    color: var(--brand-text);
+    flex-shrink: 0;
   }
 
   .ticket-controls {

@@ -25,7 +25,7 @@ import type { SavedFilterState } from "./saved-filters.svelte.js";
 
 export type FilterStatus = DisplayStatus;
 
-export type SortField = "date" | "priority" | "last_activity";
+export type SortField = "date" | "priority" | "last_activity" | "queue";
 export type SortDirection = "asc" | "desc";
 
 export interface SortConfig {
@@ -40,8 +40,9 @@ function createFilterStore(): {
   toggleQueue(v: string): void;
   readonly priorities: SvelteSet<TicketPriority>;
   togglePriority(v: TicketPriority): void;
-  readonly assigneeId: string | null;
-  setAssignee(v: string | null): void;
+  /** undefined = no filter, null = unassigned, string = specific user */
+  readonly assigneeId: string | null | undefined;
+  setAssignee(v: string | null | undefined): void;
   readonly dateFrom: Date | null;
   readonly dateTo: Date | null;
   setDateRange(from: Date | null, to: Date | null): void;
@@ -53,7 +54,9 @@ function createFilterStore(): {
     onHold?: true;
     queueIds?: string[];
     priorities?: TicketPriority[];
-    assignedTo?: string;
+    assignedTo?: string | null;
+    createdAfter?: string;
+    createdBefore?: string;
     sortBy: SortField;
     sortDirection: SortDirection;
     limit: number;
@@ -69,7 +72,7 @@ function createFilterStore(): {
   const priorities = new SvelteSet<TicketPriority>();
 
   // Single-select dimensions
-  let assigneeId = $state<string | null>(null);
+  let assigneeId = $state<string | null | undefined>(undefined);
 
   // Date range
   let dateFrom = $state<Date | null>(null);
@@ -83,7 +86,7 @@ function createFilterStore(): {
     (statuses.size > 0 ? 1 : 0) +
       (queueIds.size > 0 ? 1 : 0) +
       (priorities.size > 0 ? 1 : 0) +
-      (assigneeId !== null ? 1 : 0) +
+      (assigneeId !== undefined ? 1 : 0) +
       (dateFrom !== null || dateTo !== null ? 1 : 0),
   );
 
@@ -108,7 +111,9 @@ function createFilterStore(): {
       queueIds: queueIds.size > 0 ? [...queueIds] : undefined,
       priorities:
         priorities.size > 0 ? ([...priorities] as TicketPriority[]) : undefined,
-      assignedTo: assigneeId ?? undefined,
+      assignedTo: assigneeId,
+      createdAfter: dateFrom?.toISOString(),
+      createdBefore: dateTo?.toISOString(),
       sortBy: sort.field,
       sortDirection: sort.direction,
       limit: 50,
@@ -146,10 +151,10 @@ function createFilterStore(): {
       else priorities.add(v);
     },
 
-    get assigneeId(): string | null {
+    get assigneeId(): string | null | undefined {
       return assigneeId;
     },
-    setAssignee(v: string | null): void {
+    setAssignee(v: string | null | undefined): void {
       assigneeId = v;
     },
 
@@ -212,7 +217,7 @@ function createFilterStore(): {
       statuses.clear();
       queueIds.clear();
       priorities.clear();
-      assigneeId = null;
+      assigneeId = undefined;
       dateFrom = null;
       dateTo = null;
     },

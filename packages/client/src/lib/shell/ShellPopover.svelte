@@ -12,6 +12,7 @@
     ondismiss,
     target,
     angle = false,
+    placement,
     children,
   }: ShellPopoverProps = $props();
 
@@ -25,7 +26,13 @@
   });
 </script>
 
-<Popover {opened} {target} {angle} onBackdropClick={trap.handleDismiss}>
+<Popover
+  {opened}
+  {target}
+  {angle}
+  {placement}
+  onBackdropClick={trap.handleDismiss}
+>
   <div bind:this={trap.dialogEl} role="dialog" aria-modal="true" tabindex="-1">
     {@render children()}
   </div>

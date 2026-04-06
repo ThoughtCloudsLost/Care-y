@@ -141,6 +141,7 @@ export const ticketSortFieldSchema = z.enum([
   "date",
   "priority",
   "last_activity",
+  "queue",
 ]);
 export type TicketSortField = z.infer<typeof ticketSortFieldSchema>;
 
@@ -152,7 +153,9 @@ export const ticketListInputSchema = z.object({
   queueIds: z.array(z.uuid()).optional(),
   priorities: z.array(ticketPrioritySchema).optional(),
   onHold: z.boolean().optional(),
-  assignedTo: z.uuid().optional(),
+  assignedTo: z.uuid().nullable().optional(),
+  createdAfter: z.iso.datetime().optional(),
+  createdBefore: z.iso.datetime().optional(),
   sortBy: ticketSortFieldSchema.default("date"),
   sortDirection: sortDirectionSchema.default("desc"),
   limit: z.number().int().min(1).max(100).default(50),
@@ -218,7 +221,7 @@ export const savedFilterStateSchema = z.object({
   statuses: z.array(displayStatusSchema),
   queueIds: z.array(z.string()),
   priorities: z.array(ticketPrioritySchema),
-  assigneeId: z.string().nullable(),
+  assigneeId: z.string().nullable().optional(),
   dateFrom: z.string().nullable(),
   dateTo: z.string().nullable(),
   sortField: ticketSortFieldSchema,

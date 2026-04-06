@@ -11,7 +11,11 @@
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import type { CryptoBridge } from "$lib/workers/crypto-bridge.js";
-import { AsyncDecryptCache } from "./async-decrypt-cache.js";
+import {
+  AsyncDecryptCache,
+  DECRYPT_ERROR_SENTINEL,
+  isDecryptError,
+} from "./async-decrypt-cache.js";
 import { cacheRegistry } from "./cache-registry.js";
 
 class TestDecryptCache extends AsyncDecryptCache {
@@ -105,15 +109,23 @@ describe("AsyncDecryptCache", () => {
       expect(mockDecrypt).toHaveBeenCalledOnce();
     });
 
-    it("handles decrypt failure (returns undefined, clears pending)", async () => {
+    it("stores error sentinel on decrypt failure", async () => {
       mockDecrypt.mockRejectedValueOnce(new Error("decrypt failed"));
 
       const result = cache.testDecrypt(CACHE_KEY, EP, NONCE, WK, CT);
       expect(result).toBeUndefined();
 
       await vi.waitFor(() => {
-        expect(cache.has(CACHE_KEY)).toBe(false);
+        expect(cache.has(CACHE_KEY)).toBe(true);
       });
+
+      expect(cache.get(CACHE_KEY)).toBe(DECRYPT_ERROR_SENTINEL);
+      expect(isDecryptError(cache.get(CACHE_KEY))).toBe(true);
+    });
+
+    it("isDecryptError returns false for valid plaintext", () => {
+      expect(isDecryptError("hello world")).toBe(false);
+      expect(isDecryptError(undefined)).toBe(false);
     });
   });
 

@@ -90,6 +90,8 @@ export interface ShellPopoverProps {
   target?: HTMLElement;
   /** Whether to show the pointing arrow toward the target. */
   angle?: boolean;
+  /** Force vertical placement. Skips auto-detection. */
+  placement?: "top" | "bottom";
   /** Popover content. */
   children: Snippet;
 }
@@ -112,6 +114,8 @@ export interface ShellToastProps {
   opened: boolean;
   /** Position on wider screens. */
   position?: "left" | "center" | "right";
+  /** Optional dismiss button snippet. */
+  button?: Snippet;
   /** Toast content. */
   children: Snippet;
 }

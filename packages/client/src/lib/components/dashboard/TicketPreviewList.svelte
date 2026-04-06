@@ -16,6 +16,8 @@
     hideHeading?: boolean;
     /** Callback when "see all" is tapped. Route file handles navigation. */
     onseeall?: () => void;
+    /** Total count from server (overrides tickets.length in "see all" label). */
+    totalCount?: number;
     /** Callback when a ticket item is tapped. Route file handles navigation. */
     ontickettap: (ticketId: string) => void;
     /** Callback when encrypted help icon is tapped. Page owns the toast. */
@@ -28,12 +30,14 @@
     maxVisible = 5,
     hideHeading = false,
     onseeall,
+    totalCount,
     ontickettap,
     onencryptedhelp,
   }: TicketPreviewListProps = $props();
 
+  const displayCount = $derived(totalCount ?? tickets.length);
   const visibleTickets = $derived(tickets.slice(0, maxVisible));
-  const hasMore = $derived(tickets.length > maxVisible);
+  const hasMore = $derived(displayCount > maxVisible);
 </script>
 
 {#if !hideHeading}
@@ -53,7 +57,7 @@
   </List>
   {#if hasMore && onseeall !== undefined}
     <button type="button" class="see-all-link" onclick={onseeall}>
-      {m.dashboard_see_all({ count: tickets.length })}
+      {m.dashboard_see_all({ count: displayCount })}
     </button>
   {/if}
 {/if}

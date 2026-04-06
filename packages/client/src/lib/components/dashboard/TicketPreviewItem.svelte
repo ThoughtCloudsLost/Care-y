@@ -1,9 +1,11 @@
 <script lang="ts">
   import { ListItem, Chip } from "konsta/svelte";
-  import { ChevronRight, CircleQuestionMark, Dot } from "@lucide/svelte";
+  import { ChevronRight, Dot } from "@lucide/svelte";
   import * as m from "$lib/paraglide/messages.js";
   import { formatRelativeTime } from "$lib/utils/format-time.js";
+  import { isDecryptError } from "$lib/crypto/async-decrypt-cache.js";
   import PriorityBadge from "$lib/components/PriorityBadge.svelte";
+  import EncryptedTitle from "$lib/components/EncryptedTitle.svelte";
   import type { TicketPreviewItemProps } from "./types.js";
 
   let {
@@ -19,19 +21,12 @@
     onhelp,
   }: TicketPreviewItemProps = $props();
 
-  const isEncrypted = $derived(title === undefined);
-  const displayTitle = $derived(title ?? m.dashboard_encrypted_ticket());
+  const isEncrypted = $derived(title === undefined || isDecryptError(title));
 
   const activityDate = $derived(lastActivityAt ?? undefined);
   const timeAgo = $derived(
     activityDate ? formatRelativeTime(activityDate) : "",
   );
-
-  function handleHelp(e: MouseEvent): void {
-    e.stopPropagation();
-    e.preventDefault();
-    onhelp?.();
-  }
 </script>
 
 <ListItem
@@ -51,17 +46,10 @@
         </div>
 
         <div class="row-title">
-          <span class="title-text" class:encrypted={isEncrypted}
-            >{displayTitle}</span
-          >
-          {#if isEncrypted && onhelp}
-            <button
-              type="button"
-              class="help-icon"
-              onclick={handleHelp}
-              aria-label={m.dashboard_encrypted_help_label()}
-              ><CircleQuestionMark size={14} aria-hidden="true" /></button
-            >
+          {#if isEncrypted}
+            <EncryptedTitle {onhelp} />
+          {:else}
+            <span class="title-text">{title}</span>
           {/if}
         </div>
 
@@ -145,27 +133,6 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-  }
-
-  .title-text.encrypted {
-    opacity: 0.45;
-    font-style: italic;
-  }
-
-  .help-icon {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    min-width: 2.75rem;
-    min-height: 2.75rem;
-    margin: -0.875rem -0.75rem -0.875rem 0;
-    padding: 0;
-    border: none;
-    background: none;
-    color: var(--muted);
-    cursor: pointer;
-    flex-shrink: 0;
-    -webkit-tap-highlight-color: transparent;
   }
 
   .row-bottom {

@@ -33,4 +33,5 @@ export interface TicketCardProps {
   readonly ontap: (ticketId: string) => void;
   readonly onselect?: (ticketId: string) => void;
   readonly onaction?: (ticketId: string, action: TicketQuickAction) => void;
+  readonly onencryptedhelp?: () => void;
 }

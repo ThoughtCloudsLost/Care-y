@@ -76,6 +76,16 @@ describe("TicketCard", () => {
     expect(shimmer?.getAttribute("aria-label")).toBe("Decrypting...");
   });
 
+  it("shows encrypted placeholder when title decryption fails (sentinel value)", () => {
+    const { container } = render(TicketCard, {
+      props: { ...defaults, title: "\0DECRYPT_FAILED" },
+    });
+    expect(container.textContent).toContain("Encrypted ticket");
+    // Should NOT show shimmer
+    const shimmer = container.querySelector(".shimmer-title");
+    expect(shimmer).toBeNull();
+  });
+
   it("shows preview window in list mode even when follow-ups are empty", () => {
     const { container } = render(TicketCard, {
       props: { ...defaults, previewFollowUps: [] },

@@ -1,9 +1,10 @@
 <script lang="ts">
   import { createQuery } from "@tanstack/svelte-query";
-  import { Notification, Toast } from "konsta/svelte";
+  import { Notification } from "konsta/svelte";
   import { goto } from "$app/navigation";
   import { resolve } from "$app/paths";
   import { trpc } from "$lib/trpc/index.js";
+  import { toastStore } from "$lib/stores/toast.svelte.js";
   import { RouterNotAvailableError } from "$lib/errors.js";
   import type { TicketPreviewItemProps } from "$lib/components/dashboard/types.js";
   import { Ticket as TicketIcon, TicketMinus } from "@lucide/svelte";
@@ -70,6 +71,11 @@
       if (!trpc.kb) return [];
       return trpc.kb.recentItems.query({ limit: 2 });
     },
+  }));
+
+  const countsQuery = createQuery(() => ({
+    queryKey: ["tickets", "counts"],
+    queryFn: async () => ticketRouter.counts.query(),
   }));
 
   // --- Dashboard section filters (logic in filters.ts) ---
@@ -144,23 +150,8 @@
     void goto(resolve("/tickets?filter=unassigned"));
   }
 
-  // Encrypted ticket help toast (page-level, shared across all list items).
-  let helpToastOpen = $state(false);
-
-  $effect(() => {
-    if (!helpToastOpen) return;
-    const timer = setTimeout(() => {
-      helpToastOpen = false;
-    }, 5000);
-    return () => clearTimeout(timer);
-  });
-
   function showEncryptedHelp(): void {
-    helpToastOpen = true;
-  }
-
-  function dismissHelpToast(): void {
-    helpToastOpen = false;
+    toastStore.show(m.dashboard_encrypted_help(), 5000);
   }
 
   function handleActivityTap(ticketId: string): void {
@@ -267,7 +258,7 @@
 
         <CollapsibleSection
           heading={m.dashboard_section_unassigned()}
-          count={unassigned.length}
+          count={countsQuery.data?.unassigned ?? unassigned.length}
           icon={TicketMinus}
           iconColor="var(--brand-accent)"
           expanded={unassignedExpanded}
@@ -277,16 +268,17 @@
             heading={m.dashboard_section_unassigned()}
             hideHeading
             tickets={unassigned.map(toPreviewProps)}
+            totalCount={countsQuery.data?.unassigned}
             ontickettap={handleTicketTap}
             onseeall={handleSeeAllUnassigned}
             onencryptedhelp={showEncryptedHelp}
           />
         </CollapsibleSection>
 
-        {#if onHold.length > 0}
+        {#if (countsQuery.data?.onHold ?? onHold.length) > 0}
           <CollapsibleSection
             heading={m.dashboard_section_on_hold()}
-            count={onHold.length}
+            count={countsQuery.data?.onHold ?? onHold.length}
             icon={TicketPause}
             iconColor="var(--brand-accent)"
             expanded={onHoldExpanded}
@@ -296,6 +288,7 @@
               heading={m.dashboard_section_on_hold()}
               hideHeading
               tickets={onHold.map(toPreviewProps)}
+              totalCount={countsQuery.data?.onHold}
               ontickettap={handleTicketTap}
               onencryptedhelp={showEncryptedHelp}
             />
@@ -306,44 +299,8 @@
   </QueryLoader>
 </div>
 
-{#snippet helpDismissButton()}
-  <button type="button" class="toast-dismiss" onclick={dismissHelpToast}
-    >{m.dashboard_dismiss()}</button
-  >
-{/snippet}
-
-<Toast
-  opened={helpToastOpen}
-  position="center"
-  button={helpDismissButton}
-  role="status"
->
-  <div class="encrypted-help-toast">
-    {m.dashboard_encrypted_help()}
-  </div>
-</Toast>
-
 <style>
   .dashboard {
     padding: 0.25rem 0 1rem;
-  }
-
-  .encrypted-help-toast {
-    font-size: 0.8125rem;
-    line-height: 1.4;
-    text-align: center;
-    padding: 0.25rem 0;
-  }
-
-  .toast-dismiss {
-    background: none;
-    border: none;
-    color: var(--brand-text);
-    font-weight: 600;
-    font-size: 0.8125rem;
-    font-family: inherit;
-    cursor: pointer;
-    padding: 0.25rem 0.5rem;
-    -webkit-tap-highlight-color: transparent;
   }
 </style>

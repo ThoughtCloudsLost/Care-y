@@ -83,7 +83,7 @@ export interface UpdateTicketInput {
   readonly onHold?: boolean;
 }
 
-export type TicketSortField = "date" | "priority" | "last_activity";
+export type TicketSortField = "date" | "priority" | "last_activity" | "queue";
 export type TicketSortDirection = "asc" | "desc";
 
 export interface TicketListOpts {
@@ -91,7 +91,9 @@ export interface TicketListOpts {
   readonly queueIds?: string[];
   readonly priorities?: TicketPriority[];
   readonly onHold?: boolean;
-  readonly assignedTo?: string;
+  readonly assignedTo?: string | null;
+  readonly createdAfter?: string;
+  readonly createdBefore?: string;
   readonly sortBy?: TicketSortField;
   readonly sortDirection?: TicketSortDirection;
   readonly limit: number;
@@ -113,6 +115,22 @@ export interface TicketService {
     userId: string,
     input: RecentFollowUpsInput,
   ): Promise<Record<string, FollowUpPreview[]>>;
+  counts(userId: string): Promise<TicketCounts>;
+}
+
+export interface TicketCounts {
+  readonly new: number;
+  readonly active: number;
+  readonly closed: number;
+  readonly onHold: number;
+  readonly unassigned: number;
+  readonly mine: number;
+  readonly byPriority: {
+    readonly low: number;
+    readonly normal: number;
+    readonly high: number;
+    readonly urgent: number;
+  };
 }
 
 interface BaseTicketRow {
@@ -378,8 +396,16 @@ export function createTicketService(
       if (opts.onHold !== undefined) {
         query = query.where("t.on_hold", "=", opts.onHold);
       }
-      if (opts.assignedTo !== undefined) {
+      if (opts.assignedTo === null) {
+        query = query.where("t.assigned_to", "is", null);
+      } else if (opts.assignedTo !== undefined) {
         query = query.where("t.assigned_to", "=", opts.assignedTo);
+      }
+      if (opts.createdAfter !== undefined) {
+        query = query.where("t.created_at", ">=", new Date(opts.createdAfter));
+      }
+      if (opts.createdBefore !== undefined) {
+        query = query.where("t.created_at", "<=", new Date(opts.createdBefore));
       }
       // --- Dynamic sort + keyset cursor ---
       //
@@ -508,6 +534,29 @@ export function createTicketService(
 
             return eb.or([cursorNonNull, cursorNull]);
           });
+        } else if (sortBy === "queue") {
+          // Subquery: cursor row's queue name via JOIN
+          const cursorQueueName = db
+            .selectFrom("tickets")
+            .innerJoin("queues", "queues.id", "tickets.queue_id")
+            .select("queues.name")
+            .where("tickets.id", "=", cursorId);
+
+          // Three-column keyset: (queue_name, created_at, id)
+          query = query.where((eb) =>
+            eb.or([
+              eb("q.name", gt, cursorQueueName),
+              eb.and([
+                eb("q.name", "=", cursorQueueName),
+                eb("t.created_at", gt, cursorCreatedAt),
+              ]),
+              eb.and([
+                eb("q.name", "=", cursorQueueName),
+                eb("t.created_at", "=", cursorCreatedAt),
+                eb("t.id", gt, cursorId),
+              ]),
+            ]),
+          );
         } else {
           // "date": two-column keyset (created_at, id)
           query = query.where((eb) =>
@@ -556,6 +605,11 @@ export function createTicketService(
           )
           .orderBy("t.created_at", sortDirection)
           .orderBy("t.id", "asc");
+      } else if (sortBy === "queue") {
+        query = query
+          .orderBy("q.name", sortDirection)
+          .orderBy("t.created_at", sortDirection)
+          .orderBy("t.id", "asc");
       } else {
         // "date" (default)
         query = query
@@ -566,6 +620,209 @@ export function createTicketService(
       const rows = await query.limit(opts.limit).execute();
 
       return rows.map(toRecordWithKeyWrap);
+    },
+
+    async counts(userId) {
+      const queueIds = await getAccessibleQueueIds(userId);
+      if (queueIds.length === 0) {
+        return {
+          new: 0,
+          active: 0,
+          closed: 0,
+          onHold: 0,
+          unassigned: 0,
+          mine: 0,
+          byPriority: { low: 0, normal: 0, high: 0, urgent: 0 },
+        };
+      }
+
+      // Left join follow-up counts so we can distinguish new (0 follow-ups)
+      // from active (1+ follow-ups) within open tickets.
+      const rows = await db
+        .selectFrom("tickets as t")
+        .leftJoin(
+          (eb) =>
+            eb
+              .selectFrom("followups")
+              .select([
+                "followups.ticket_id",
+                (sb) => sb.fn.countAll().as("fu_count"),
+              ])
+              .groupBy("followups.ticket_id")
+              .as("fc"),
+          (join) => join.onRef("fc.ticket_id", "=", "t.id"),
+        )
+        .where("t.queue_id", "in", [...queueIds])
+        .select([
+          (eb) =>
+            eb.fn
+              .sum(
+                eb
+                  .case()
+                  .when(
+                    eb.and([
+                      eb("t.status", "=", "open"),
+                      eb("t.on_hold", "=", false),
+                      eb(eb.fn.coalesce("fc.fu_count", eb.lit(0)), "=", 0),
+                    ]),
+                  )
+                  .then(1)
+                  .else(0)
+                  .end(),
+              )
+              .as("new_count"),
+          (eb) =>
+            eb.fn
+              .sum(
+                eb
+                  .case()
+                  .when(
+                    eb.and([
+                      eb("t.status", "=", "open"),
+                      eb("t.on_hold", "=", false),
+                      eb(eb.fn.coalesce("fc.fu_count", eb.lit(0)), ">", 0),
+                    ]),
+                  )
+                  .then(1)
+                  .else(0)
+                  .end(),
+              )
+              .as("active_count"),
+          (eb) =>
+            eb.fn
+              .sum(
+                eb
+                  .case()
+                  .when(eb("t.status", "=", "closed"))
+                  .then(1)
+                  .else(0)
+                  .end(),
+              )
+              .as("closed_count"),
+          (eb) =>
+            eb.fn
+              .sum(
+                eb
+                  .case()
+                  .when(eb("t.on_hold", "=", true))
+                  .then(1)
+                  .else(0)
+                  .end(),
+              )
+              .as("on_hold_count"),
+          (eb) =>
+            eb.fn
+              .sum(
+                eb
+                  .case()
+                  .when(
+                    eb.and([
+                      eb("t.assigned_to", "is", null),
+                      eb("t.status", "=", "open"),
+                    ]),
+                  )
+                  .then(1)
+                  .else(0)
+                  .end(),
+              )
+              .as("unassigned_count"),
+          (eb) =>
+            eb.fn
+              .sum(
+                eb
+                  .case()
+                  .when(
+                    eb.and([
+                      eb("t.priority", "=", "low"),
+                      eb("t.status", "=", "open"),
+                    ]),
+                  )
+                  .then(1)
+                  .else(0)
+                  .end(),
+              )
+              .as("p_low"),
+          (eb) =>
+            eb.fn
+              .sum(
+                eb
+                  .case()
+                  .when(
+                    eb.and([
+                      eb("t.priority", "=", "normal"),
+                      eb("t.status", "=", "open"),
+                    ]),
+                  )
+                  .then(1)
+                  .else(0)
+                  .end(),
+              )
+              .as("p_normal"),
+          (eb) =>
+            eb.fn
+              .sum(
+                eb
+                  .case()
+                  .when(
+                    eb.and([
+                      eb("t.priority", "=", "high"),
+                      eb("t.status", "=", "open"),
+                    ]),
+                  )
+                  .then(1)
+                  .else(0)
+                  .end(),
+              )
+              .as("p_high"),
+          (eb) =>
+            eb.fn
+              .sum(
+                eb
+                  .case()
+                  .when(
+                    eb.and([
+                      eb("t.priority", "=", "urgent"),
+                      eb("t.status", "=", "open"),
+                    ]),
+                  )
+                  .then(1)
+                  .else(0)
+                  .end(),
+              )
+              .as("p_urgent"),
+          (eb) =>
+            eb.fn
+              .sum(
+                eb
+                  .case()
+                  .when(
+                    eb.and([
+                      eb("t.assigned_to", "=", userId),
+                      eb("t.status", "=", "open"),
+                    ]),
+                  )
+                  .then(1)
+                  .else(0)
+                  .end(),
+              )
+              .as("mine_count"),
+        ])
+        .executeTakeFirstOrThrow();
+
+      return {
+        new: Number(rows.new_count),
+        active: Number(rows.active_count),
+        closed: Number(rows.closed_count),
+        onHold: Number(rows.on_hold_count),
+        unassigned: Number(rows.unassigned_count),
+        mine: Number(rows.mine_count),
+        byPriority: {
+          low: Number(rows.p_low),
+          normal: Number(rows.p_normal),
+          high: Number(rows.p_high),
+          urgent: Number(rows.p_urgent),
+        },
+      };
     },
 
     async update(userId, input) {

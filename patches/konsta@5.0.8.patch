@@ -1,3 +1,39 @@
+diff --git a/shared/calc-popover-position.js b/shared/calc-popover-position.js
+index 3163bcf68efefdbe6d177e52d668bff06bcd81c8..3ee50168c8ccf5319ddc9f71f92ed1a76590acbe 100644
+--- a/shared/calc-popover-position.js
++++ b/shared/calc-popover-position.js
+@@ -7,7 +7,8 @@ export const calcPopoverPosition = ({
+   targetY,
+   targetWidth = 0,
+   targetHeight = 0,
+-  theme
++  theme,
++  placement
+ }) => {
+   if (targetEl.current) {
+     targetEl = targetEl.current;
+@@ -66,11 +67,18 @@ export const calcPopoverPosition = ({
+ 
+   // Top Position
+   let position = 'top';
+-  if (popoverHeight + angleSize < targetOffsetTop - safeAreaTop) {
+-    // On top
++  if (placement === 'bottom') {
++    // Forced bottom placement
++    position = 'bottom';
++    top = targetOffsetTop + targetHeight + angleSize;
++  } else if (placement === 'top') {
++    // Forced top placement
++    top = targetOffsetTop - popoverHeight - angleSize;
++  } else if (popoverHeight + angleSize < targetOffsetTop - safeAreaTop) {
++    // On top (auto)
+     top = targetOffsetTop - popoverHeight - angleSize;
+   } else if (popoverHeight + angleSize < appHeight - targetOffsetTop - targetHeight) {
+-    // On bottom
++    // On bottom (auto)
+     position = 'bottom';
+     top = targetOffsetTop + targetHeight + angleSize;
+   } else {
 diff --git a/svelte/components/Link.svelte b/svelte/components/Link.svelte
 index 5b219dc6403e587a20f5b2ce79fcc1cbc152db3f..dc6dd5504cce9cc0243910915a4c1433785483ae 100644
 --- a/svelte/components/Link.svelte
@@ -15,6 +51,26 @@ index 5b219dc6403e587a20f5b2ce79fcc1cbc152db3f..dc6dd5504cce9cc0243910915a4c1433
    onclick={onClick || onclick}
  >
    {@render children?.()}
+diff --git a/svelte/components/Popover.svelte b/svelte/components/Popover.svelte
+index 25ebd4b7069a8af1028228eb8451ba0678bd49b2..ef71ff2eb90df7fa282da5579757f363d7b54ba9 100644
+--- a/svelte/components/Popover.svelte
++++ b/svelte/components/Popover.svelte
+@@ -28,6 +28,7 @@
+     targetY = undefined,
+     targetWidth = undefined,
+     targetHeight = undefined,
++    placement = undefined,
+ 
+     children,
+     ...restProps
+@@ -76,6 +77,7 @@
+       targetWidth,
+       targetHeight,
+       theme,
++      placement,
+     });
+   };
+ 
 diff --git a/svelte/components/Searchbar.svelte b/svelte/components/Searchbar.svelte
 index 317608318ac2f0234bfb46b5b5c7a2954917505c..82d95924ee83cc1e8a06c26a74d0382b0b6ef56a 100644
 --- a/svelte/components/Searchbar.svelte
@@ -83,6 +139,23 @@ index cb4657f834c2499dcff4ddebddfdf620cc3ea614..2b27a3805bcefbe06768d28a3f9ce358
    const hasHighlight = $derived(theme === 'ios' && tabbar);
  
    const dark = useDarkClasses();
+diff --git a/svelte/types/Popover.d.ts b/svelte/types/Popover.d.ts
+index 126bebc04eff64fb1745417e0ea6d9e8167e8e5b..bd07ea417df130ea17e795d5e8c646f2bed4c5cb 100644
+--- a/svelte/types/Popover.d.ts
++++ b/svelte/types/Popover.d.ts
+@@ -74,6 +74,12 @@ export interface Props {
+    * Virtual target element height (in px). Required without using real target element (`target` prop)
+    */
+   targetHeight?: number;
++  /**
++   * Force popover vertical placement. Skips auto-detection.
++   *
++   * @default undefined (auto)
++   */
++  placement?: 'top' | 'bottom';
+ }
+ 
+ 
 diff --git a/svelte/types/ToolbarPane.d.ts b/svelte/types/ToolbarPane.d.ts
 index 584f9ac73f7107816319c1784e36390e23e00697..0c792b17fcbac9f4eabdb3f1a23d0199f974d9c0 100644
 --- a/svelte/types/ToolbarPane.d.ts

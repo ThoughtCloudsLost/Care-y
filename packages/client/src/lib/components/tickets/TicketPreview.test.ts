@@ -107,6 +107,20 @@ describe("TicketPreview", () => {
     expect(line).not.toBeNull();
   });
 
+  it("renders error text when decryption fails (sentinel value)", () => {
+    // The sentinel value is "\0DECRYPT_FAILED" from async-decrypt-cache.
+    mockDecryptContent.mockReturnValue("\0DECRYPT_FAILED");
+    const fu = makeFollowUp();
+    const { container } = render(TicketPreview, {
+      props: { followUps: [fu] },
+    });
+    expect(container.textContent).toContain(
+      "This content could not be decrypted.",
+    );
+    // Should NOT show shimmer
+    expect(container.querySelectorAll(".shimmer-line").length).toBe(0);
+  });
+
   it("does not use {@html} for decrypted content (XSS safety)", () => {
     mockDecryptContent.mockReturnValue("<script>alert('xss')</script>");
     const fu = makeFollowUp();

@@ -1,6 +1,6 @@
 <script lang="ts">
   import { createQuery } from "@tanstack/svelte-query";
-  import { Badge, List, ListItem, Checkbox } from "konsta/svelte";
+  import { Badge, List, ListItem, ListInput, Checkbox } from "konsta/svelte";
   import { Bookmark, Check, SquareCheckBig } from "@lucide/svelte";
   import ShellPopover from "$lib/shell/ShellPopover.svelte";
   import * as m from "$lib/paraglide/messages.js";
@@ -12,14 +12,15 @@
   import FilterPill from "./FilterPill.svelte";
   import type { FilterOption } from "./FilterPill.svelte";
 
-  type PillId = "status" | "queue" | "priority" | "assignee";
+  type PillId = "status" | "queue" | "priority" | "assignee" | "date";
 
   interface Props {
+    currentUserId?: string;
     oncreateshortcut?: () => void;
     onenterselect?: () => void;
   }
 
-  let { oncreateshortcut, onenterselect }: Props = $props();
+  let { currentUserId, oncreateshortcut, onenterselect }: Props = $props();
 
   if (!trpc.tickets) throw new RouterNotAvailableError("tickets");
   const ticketRouter = trpc.tickets;
@@ -28,26 +29,59 @@
     queryFn: async () => ticketRouter.myQueues.query(),
   }));
 
+  const countsQuery = createQuery(() => ({
+    queryKey: ["tickets", "counts"],
+    queryFn: async () => ticketRouter.counts.query(),
+  }));
+
   // --- Pill option configs ---
 
-  const statusOptions: FilterOption[] = [
-    { value: "new", label: m.tickets_filter_new() },
-    { value: "active", label: m.tickets_filter_active() },
-    { value: "hold", label: m.tickets_filter_hold() },
-    { value: "closed", label: m.tickets_filter_closed() },
-  ];
+  const c = $derived(countsQuery.data);
 
-  const priorityOptions: FilterOption[] = [
-    { value: "low", label: m.tickets_filter_priority_low() },
-    { value: "normal", label: m.tickets_filter_priority_normal() },
-    { value: "high", label: m.tickets_filter_priority_high() },
-    { value: "urgent", label: m.tickets_filter_priority_urgent() },
-  ];
+  const statusOptions = $derived([
+    {
+      value: "new",
+      label: `${m.tickets_filter_new()} (${String(c?.new ?? 0)})`,
+    },
+    {
+      value: "active",
+      label: `${m.tickets_filter_active()} (${String(c?.active ?? 0)})`,
+    },
+    {
+      value: "hold",
+      label: `${m.tickets_filter_hold()} (${String(c?.onHold ?? 0)})`,
+    },
+    {
+      value: "closed",
+      label: `${m.tickets_filter_closed()} (${String(c?.closed ?? 0)})`,
+    },
+  ]);
+
+  const bp = $derived(c?.byPriority);
+
+  const priorityOptions = $derived([
+    {
+      value: "low",
+      label: `${m.tickets_filter_priority_low()} (${String(bp?.low ?? 0)})`,
+    },
+    {
+      value: "normal",
+      label: `${m.tickets_filter_priority_normal()} (${String(bp?.normal ?? 0)})`,
+    },
+    {
+      value: "high",
+      label: `${m.tickets_filter_priority_high()} (${String(bp?.high ?? 0)})`,
+    },
+    {
+      value: "urgent",
+      label: `${m.tickets_filter_priority_urgent()} (${String(bp?.urgent ?? 0)})`,
+    },
+  ]);
 
   const queueOptions = $derived(
     (queuesQuery.data ?? []).map((q) => ({
       value: q.id,
-      label: q.name,
+      label: `${q.name} (${q.openCount})`,
     })),
   );
 
@@ -80,14 +114,32 @@
         return queueOptions;
       case "priority":
         return priorityOptions;
-      case "assignee":
+      case "assignee": {
+        const opts: FilterOption[] = [];
+        if (currentUserId !== undefined) {
+          opts.push({
+            value: currentUserId,
+            label: `${m.tickets_filter_me()} (${String(c?.mine ?? 0)})`,
+          });
+        }
+        opts.push({
+          value: "__unassigned__",
+          label: `${m.tickets_unassigned()} (${String(c?.unassigned ?? 0)})`,
+        });
+        return opts;
+      }
+      case "date":
       case null:
         return [];
     }
   });
 
-  const activeMode = $derived<"multi" | "single">(
-    activePill === "assignee" ? "single" : "multi",
+  const activeMode = $derived<"multi" | "single" | "date">(
+    activePill === "date"
+      ? "date"
+      : activePill === "assignee"
+        ? "single"
+        : "multi",
   );
 
   const activeSelected = $derived.by(
@@ -100,7 +152,9 @@
         case "priority":
           return filterStore.priorities;
         case "assignee":
-          return filterStore.assigneeId;
+          if (filterStore.assigneeId === null) return "__unassigned__";
+          return filterStore.assigneeId ?? null;
+        case "date":
         case null:
           return new Set<string>();
       }
@@ -117,6 +171,8 @@
         return m.tickets_filter_priority();
       case "assignee":
         return m.tickets_filter_assignee();
+      case "date":
+        return m.tickets_filter_date_range();
       case null:
         return "";
     }
@@ -149,12 +205,13 @@
         break;
       }
       case "assignee":
+      case "date":
       case null:
         break;
     }
   }
 
-  function handleSingleSelect(value: string | null): void {
+  function handleSingleSelect(value: string | null | undefined): void {
     if (activePill === "assignee") {
       filterStore.setAssignee(value);
     }
@@ -170,7 +227,8 @@
         });
       }
     } else {
-      handleSingleSelect(null);
+      // Clear filter: undefined = no filter applied
+      handleSingleSelect(undefined);
     }
   }
 
@@ -181,7 +239,11 @@
     return () => handleMultiToggle(String(value));
   }
   function onSingleItemClick(value: unknown): () => void {
-    return () => handleSingleSelect(String(value));
+    return () => {
+      const v = String(value);
+      // Map the internal unassigned key back to null for the store
+      handleSingleSelect(v === "__unassigned__" ? null : v);
+    };
   }
 
   // --- Date range display ---
@@ -206,6 +268,41 @@
     filterStore.dateFrom !== null || filterStore.dateTo !== null,
   );
 
+  // Date input values as YYYY-MM-DD strings for native <input type="date">.
+  const fromStr = $derived(
+    filterStore.dateFrom !== null
+      ? filterStore.dateFrom.toISOString().slice(0, 10)
+      : "",
+  );
+  const toStr = $derived(
+    filterStore.dateTo !== null
+      ? filterStore.dateTo.toISOString().slice(0, 10)
+      : "",
+  );
+
+  function handleFromInput(e: Event): void {
+    const target = e.target;
+    if (!(target instanceof HTMLInputElement)) return;
+    filterStore.setDateRange(
+      target.value !== "" ? new Date(target.value) : null,
+      filterStore.dateTo,
+    );
+  }
+
+  function handleToInput(e: Event): void {
+    const target = e.target;
+    if (!(target instanceof HTMLInputElement)) return;
+    filterStore.setDateRange(
+      filterStore.dateFrom,
+      target.value !== "" ? new Date(target.value) : null,
+    );
+  }
+
+  function handleDateClear(): void {
+    filterStore.setDateRange(null, null);
+    closePopover();
+  }
+
   // Named open handlers to avoid unsafe-argument lint errors from template bindings.
   function openStatus(el: HTMLElement): void {
     openPill("status", el);
@@ -218,6 +315,9 @@
   }
   function openAssignee(el: HTMLElement): void {
     openPill("assignee", el);
+  }
+  function openDate(el: HTMLElement): void {
+    openPill("date", el);
   }
 </script>
 
@@ -249,19 +349,22 @@
     />
     <FilterPill
       label={m.tickets_filter_assignee()}
-      options={[]}
+      options={[{ value: "__unassigned__", label: m.tickets_unassigned() }]}
       mode="single"
-      selected={filterStore.assigneeId}
+      selected={filterStore.assigneeId === null
+        ? "__unassigned__"
+        : (filterStore.assigneeId ?? null)}
       isOpen={activePill === "assignee"}
       onopen={openAssignee}
     />
-    <button
-      class="date-pill"
-      class:date-pill--active={dateRangeActive}
-      aria-label={m.tickets_filter_date_range()}
-    >
-      {dateRangeActive ? dateRangeLabel : m.tickets_filter_date_range()}
-    </button>
+    <FilterPill
+      label={m.tickets_filter_date_range()}
+      options={[]}
+      mode="single"
+      selected={dateRangeActive ? dateRangeLabel : null}
+      isOpen={activePill === "date"}
+      onopen={openDate}
+    />
   </div>
 
   <div class="pill-actions">
@@ -293,9 +396,36 @@
 <ShellPopover
   opened={activePill !== null}
   target={popoverTarget}
+  placement="bottom"
   ondismiss={closePopover}
 >
-  {#if activeMode === "multi"}
+  {#if activeMode === "date"}
+    <List nested aria-label={activeLabel}>
+      <ListInput
+        label={m.tickets_filter_date_from()}
+        type="date"
+        value={fromStr}
+        max={toStr || undefined}
+        inputClass="text-base"
+        onchange={handleFromInput}
+      />
+      <ListInput
+        label={m.tickets_filter_date_to()}
+        type="date"
+        value={toStr}
+        min={fromStr || undefined}
+        inputClass="text-base"
+        onchange={handleToInput}
+      />
+      {#if dateRangeActive}
+        <ListItem
+          title={m.tickets_filter_date_clear()}
+          class="filter-pill-all"
+          onclick={handleDateClear}
+        />
+      {/if}
+    </List>
+  {:else if activeMode === "multi"}
     <List nested role="group" aria-label={activeLabel}>
       {#each activeOptions as opt (opt.value)}
         {@const sel = activeSelected}
@@ -420,30 +550,6 @@
 
   .clear-filters-btn:hover {
     background-color: var(--surface-1, rgba(0, 0, 0, 0.06));
-  }
-
-  .date-pill {
-    display: flex;
-    align-items: center;
-    gap: 2px;
-    padding: 4px 10px;
-    border: 1px solid var(--surface-1, rgba(0, 0, 0, 0.15));
-    border-radius: 999px;
-    background: transparent;
-    color: var(--ink);
-    font-size: 0.8125rem;
-    cursor: pointer;
-    white-space: nowrap;
-    flex-shrink: 0;
-    transition:
-      background-color 150ms ease,
-      border-color 150ms ease;
-  }
-
-  .date-pill--active {
-    background-color: var(--ink);
-    color: var(--paper);
-    border-color: var(--ink);
   }
 
   .select-mode-btn {
