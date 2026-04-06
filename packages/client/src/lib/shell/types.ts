@@ -8,7 +8,7 @@
  * This file is append-only. All downstream view modules depend on it.
  */
 
-import type { Snippet } from "svelte";
+import type { Component, Snippet } from "svelte";
 
 // ── Tab identifiers ──────────────────────────────────────────────────
 
@@ -129,4 +129,33 @@ export interface ShellNotificationProps {
   text?: string;
   /** Right-aligned text (e.g., timestamp). */
   titleRightText?: string;
+}
+
+// ── Tabbar override ─────────────────────────────────────────────────
+// Any route can temporarily replace the tab bar with custom actions.
+// The shell renders Link items (not TabbarLink, which drives the
+// Material highlight bar). Content components build this descriptor;
+// the shell handles rendering. For native migration, only the shell
+// renderer changes.
+
+export interface TabbarOverrideAction {
+  readonly id: string;
+  readonly label: string;
+  readonly icon: Component;
+  readonly onclick: () => void;
+}
+
+export interface TabbarOverride {
+  /** Actions rendered as Link items in the main ToolbarPane. */
+  readonly actions: readonly TabbarOverrideAction[];
+  /** Text label shown in the toolbar (e.g., "3 selected"). */
+  readonly label: string;
+  /** Accessible label for the toolbar element. */
+  readonly ariaLabel: string;
+  /** Dismiss action (icon-only Link in its own ToolbarPane, like the "..." button). */
+  readonly dismiss: {
+    readonly icon: Component;
+    readonly ariaLabel: string;
+    readonly onclick: () => void;
+  };
 }

@@ -43,7 +43,11 @@
   import { PTR_CONTEXT_KEY } from "./ptr-context";
   import { themeStore } from "$lib/stores/theme.svelte";
   import { useQueryClient } from "@tanstack/svelte-query";
-  import { setScrollContainer } from "./context";
+  import {
+    setScrollContainer,
+    setTabbarOverrideCtx,
+    type TabbarOverrideContainer,
+  } from "./context";
 
   const SCROLL_CONTAINER_ID = "app-scroll-container";
 
@@ -51,6 +55,14 @@
   // getter is reactive when read inside $derived or $effect.
   let scrollContainerEl = $state<HTMLElement | undefined>();
   setScrollContainer(() => scrollContainerEl);
+
+  // Tabbar override: child routes can replace the tab bar with custom
+  // actions by mutating this container. $state makes it reactive.
+  const tabbarOverrideContainer: TabbarOverrideContainer = $state({
+    current: undefined,
+  });
+  setTabbarOverrideCtx(tabbarOverrideContainer);
+  const tabbarOverride = $derived(tabbarOverrideContainer.current);
 
   let {
     activeTab,
@@ -401,41 +413,77 @@
     </div>
   {/if}
 
-  <nav aria-label={m.nav_main()}>
-    <Toolbar
-      tabbar
-      tabbarIcons
-      class="native-tabbar left-0 bottom-0 fixed"
-      role="tablist"
-      aria-label={m.nav_main()}
-    >
-      <ToolbarPane>
-        {#each allTabs as tab (tab.id)}
-          <TabbarLink
-            active={activeTab === tab.id}
-            onclick={() => ontabchange(tab.id)}
-            role="tab"
-            aria-label={tab.label()}
-            aria-selected={activeTab === tab.id}
-            colors={{
-              textActiveIos: "text-[var(--brand-text)]",
-              textActiveMaterial: "text-[var(--brand-text)]",
-            }}
+  {#if tabbarOverride}
+    {@const DismissIcon = tabbarOverride.dismiss.icon}
+    <div role="toolbar" aria-label={tabbarOverride.ariaLabel}>
+      <Toolbar tabbar tabbarIcons class="native-tabbar left-0 bottom-0 fixed">
+        {#if themeStore.uiTheme === "ios"}
+          <div
+            class="backdrop-blur-[2px] fixed left-0 bottom-0 w-full h-[calc(env(safe-area-inset-bottom,0px)+48px+32px)] mask-t-to-100% mask-t-from-70% pointer-events-none bg-gradient-to-t from-ios-light-surface to-transparent dark:from-ios-dark-surface/50"
+          ></div>
+        {/if}
+        <ToolbarPane tabbar={false}>
+          {#each tabbarOverride.actions as action (action.id)}
+            {@const ActionIcon = action.icon}
+            <Link iconOnly onclick={action.onclick} aria-label={action.label}>
+              <ActionIcon size={24} aria-hidden="true" />
+            </Link>
+          {/each}
+        </ToolbarPane>
+        <ToolbarPane tabbar={false}>
+          <Link
+            iconOnly
+            aria-label={tabbarOverride.dismiss.ariaLabel}
+            onclick={tabbarOverride.dismiss.onclick}
           >
-            {#snippet icon()}{@const Icon = tab.icon}<Icon
-                size={24}
-                aria-hidden="true"
-              />{/snippet}
-          </TabbarLink>
-        {/each}
-      </ToolbarPane>
-      <ToolbarPane tabbar={false}>
-        <Link iconOnly aria-label={m.nav_more()}>
-          <Ellipsis size={24} aria-hidden="true" />
-        </Link>
-      </ToolbarPane>
-    </Toolbar>
-  </nav>
+            <DismissIcon size={24} aria-hidden="true" />
+          </Link>
+        </ToolbarPane>
+      </Toolbar>
+      <span
+        class="fixed bottom-0 left-0 right-0 flex items-center justify-center pointer-events-none font-semibold text-sm h-12 z-50"
+        role="status"
+      >
+        {tabbarOverride.label}
+      </span>
+    </div>
+  {:else}
+    <nav aria-label={m.nav_main()}>
+      <Toolbar
+        tabbar
+        tabbarIcons
+        class="native-tabbar left-0 bottom-0 fixed"
+        role="tablist"
+        aria-label={m.nav_main()}
+      >
+        <ToolbarPane>
+          {#each allTabs as tab (tab.id)}
+            <TabbarLink
+              active={activeTab === tab.id}
+              onclick={() => ontabchange(tab.id)}
+              role="tab"
+              aria-label={tab.label()}
+              aria-selected={activeTab === tab.id}
+              colors={{
+                textActiveIos: "text-[var(--brand-text)]",
+                textActiveMaterial: "text-[var(--brand-text)]",
+              }}
+            >
+              {#snippet icon()}{@const Icon = tab.icon}<Icon
+                  size={24}
+                  aria-hidden="true"
+                />{/snippet}
+            </TabbarLink>
+          {/each}
+        </ToolbarPane>
+        <ToolbarPane tabbar={false}>
+          <Link iconOnly aria-label={m.nav_more()}>
+            <Ellipsis size={24} aria-hidden="true" />
+          </Link>
+        </ToolbarPane>
+      </Toolbar>
+    </nav>
+  {/if}
 
   <main id="main-content" class="main-content">
     {@render children()}

@@ -31,6 +31,7 @@ vi.mock("$lib/paraglide/messages.js", () => ({
   tickets_filter_all: () => "All",
   tickets_clear_filters: () => "Clear all",
   tickets_create_shortcut: () => "Save filter shortcut",
+  tickets_select_mode: () => "Select",
 }));
 
 // --- Mock TanStack Query ---

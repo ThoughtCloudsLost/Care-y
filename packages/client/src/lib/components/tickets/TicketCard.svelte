@@ -105,10 +105,6 @@
 
       <!-- Top bar: dot (left) + priority (right). In list mode, alias is here too. -->
       <div class="row-top">
-        <span class="status-indicator">
-          <span class="status-dot" data-status={displayStatus}></span>
-          <span class="status-label">{statusLabel}</span>
-        </span>
         {#if multiSelectActive}
           <div
             class="checkbox-wrap"
@@ -119,9 +115,20 @@
             <Checkbox
               checked={selected}
               onchange={() => onselect?.(ticketId)}
+              class="select-checkbox"
+              colors={{
+                bgCheckedIos: "bg-[var(--brand-accent)]",
+                borderCheckedIos: "border-[var(--brand-accent)]",
+                bgCheckedMaterial: "bg-[var(--brand-accent)]",
+                borderCheckedMaterial: "border-[var(--brand-accent)]",
+              }}
             />
           </div>
         {/if}
+        <span class="status-indicator">
+          <span class="status-dot" data-status={displayStatus}></span>
+          <span class="status-label">{statusLabel}</span>
+        </span>
         <PriorityBadge {priority} />
       </div>
 
@@ -308,12 +315,15 @@
     overflow: hidden;
   }
 
-  /* ── Row: dot + status (left), priority (right) ── */
+  /* ── Row: [checkbox? + status] (left), priority (right) ── */
   .row-top {
     display: flex;
     align-items: center;
-    justify-content: space-between;
     gap: var(--space-md);
+  }
+
+  .row-top :global(:last-child) {
+    margin-left: auto;
   }
 
   .client-alias {
@@ -329,6 +339,11 @@
 
   .checkbox-wrap {
     flex-shrink: 0;
+  }
+
+  :global(.select-checkbox) {
+    transform: scale(0.8);
+    transform-origin: center;
   }
 
   /* ── Row: title ── */

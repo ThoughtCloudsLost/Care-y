@@ -1,5 +1,6 @@
 <script lang="ts">
   import { createInfiniteQuery } from "@tanstack/svelte-query";
+  import { SvelteSet } from "svelte/reactivity";
   import { goto } from "$app/navigation";
   import { resolve } from "$app/paths";
   import { BlockTitle, Segmented, SegmentedButton } from "konsta/svelte";
@@ -12,12 +13,17 @@
     getCurrentUserId,
     setPreviewLoader,
   } from "$lib/crypto/context.js";
-  import { getScrollContainer } from "$lib/shell/context.js";
+  import {
+    getScrollContainer,
+    getTabbarOverrideCtx,
+  } from "$lib/shell/context.js";
+  import { UserPlus, Pause, X } from "@lucide/svelte";
   import { createPreviewLoader } from "$lib/tickets/preview-loader.svelte.js";
   import { deriveDisplayStatus } from "$lib/tickets/display-status.js";
   import { sortTickets } from "$lib/tickets/sort-tickets.js";
   import { filterStore } from "$lib/stores/filters.svelte.js";
   import { viewModeStore } from "$lib/stores/view-mode.svelte.js";
+  import { toastStore } from "$lib/stores/toast.svelte.js";
   import type {
     TicketCardProps,
     TicketQuickAction,
@@ -25,6 +31,7 @@
 
   import { RouterNotAvailableError } from "$lib/errors.js";
   import TicketCard from "$lib/components/tickets/TicketCard.svelte";
+  import SwipeableCard from "$lib/components/tickets/SwipeableCard.svelte";
   import FilterPillBar from "$lib/components/tickets/FilterPillBar.svelte";
   import SavedFilterList from "$lib/components/tickets/SavedFilterList.svelte";
   import CreateSavedFilter from "$lib/components/tickets/CreateSavedFilter.svelte";
@@ -43,6 +50,10 @@
   // Returns undefined until mount, then the resolved element.
   const getScroll = getScrollContainer();
   const scrollEl = $derived(getScroll());
+
+  // Tabbar override container: set actions to replace the tab bar
+  // with multi-select controls, clear to restore normal tabs.
+  const tabbarOverride = getTabbarOverrideCtx();
 
   // Preview loader: batch-fetches encrypted follow-up data for card previews.
   // Created per-route and set in context so TicketCard children can call observe().
@@ -131,7 +142,10 @@
       followUpCount: t.followUpCount,
       unreadCount: 0,
       previewFollowUps: previewLoader.get(t.id),
+      selected: selectedIds.has(t.id),
+      multiSelectActive,
       ontap: handleTicketTap,
+      onselect: toggleSelection,
       onaction: handleAction,
     };
   }
@@ -142,10 +156,103 @@
 
   function handleAction(ticketId: string, action: TicketQuickAction): void {
     // Quick actions call existing tRPC mutations.
-    // Full implementation wired when SwipeableCard lands.
     if (import.meta.env.DEV) {
       console.log(`[TicketList] action: ${action} on ${ticketId}`);
     }
+  }
+
+  // Multi-select state.
+  let multiSelectActive = $state(false);
+  let selectedIds = new SvelteSet<string>();
+
+  function toggleMultiSelect(): void {
+    if (multiSelectActive) {
+      exitMultiSelect();
+    } else {
+      multiSelectActive = true;
+    }
+  }
+
+  function toggleSelection(ticketId: string): void {
+    if (selectedIds.has(ticketId)) {
+      selectedIds.delete(ticketId);
+    } else {
+      selectedIds.add(ticketId);
+    }
+  }
+
+  function exitMultiSelect(): void {
+    multiSelectActive = false;
+    selectedIds.clear();
+  }
+
+  // Sync multi-select state to the tabbar override. When active, the
+  // tab bar is replaced with Assign/Hold actions + dismiss button.
+  // When inactive, the normal tab bar is restored.
+  $effect(() => {
+    if (multiSelectActive) {
+      tabbarOverride.current = {
+        label: m.tickets_selected({ count: selectedIds.size }),
+        ariaLabel: m.tickets_selected({ count: selectedIds.size }),
+        actions: [
+          {
+            id: "assign",
+            label: m.tickets_action_assign(),
+            icon: UserPlus,
+            onclick: handleBulkAssign,
+          },
+          {
+            id: "hold",
+            label: m.tickets_action_hold(),
+            icon: Pause,
+            onclick: handleBulkHold,
+          },
+        ],
+        dismiss: {
+          icon: X,
+          ariaLabel: m.tickets_exit_multiselect(),
+          onclick: exitMultiSelect,
+        },
+      };
+    } else {
+      tabbarOverride.current = undefined;
+    }
+  });
+
+  // Clean up override on route unmount (navigating away from tickets).
+  $effect(() => {
+    return () => {
+      tabbarOverride.current = undefined;
+    };
+  });
+
+  function handleBulkAssign(): void {
+    const count = selectedIds.size;
+    if (count === 0) return;
+    if (import.meta.env.DEV) {
+      console.log(`[TicketList] bulk assign: ${[...selectedIds].join(", ")}`);
+    }
+    // Bulk assign will call existing tRPC mutations per selected ticket.
+    toastStore.show(m.tickets_action_assign() + ` (${String(count)})`);
+    selectedIds.clear();
+  }
+
+  function handleBulkHold(): void {
+    const count = selectedIds.size;
+    if (count === 0) return;
+    if (import.meta.env.DEV) {
+      console.log(`[TicketList] bulk hold: ${[...selectedIds].join(", ")}`);
+    }
+    // Bulk hold will call existing tRPC mutations per selected ticket.
+    toastStore.show(m.tickets_action_hold() + ` (${String(count)})`);
+    selectedIds.clear();
+  }
+
+  function handleLongPress(ticketId: string): void {
+    if (!multiSelectActive) {
+      multiSelectActive = true;
+    }
+    toggleSelection(ticketId);
   }
 
   function loadNextPage(): void {
@@ -219,6 +326,7 @@
       oncreateshortcut={() => {
         savedFilterModalOpen = true;
       }}
+      onenterselect={toggleMultiSelect}
     />
   </div>
 
@@ -236,7 +344,14 @@
         onloadmore={loadNextPage}
       >
         {#snippet children({ item }: { item: TicketRecord; index: number })}
-          <TicketCard {...toCardProps(item)} />
+          <SwipeableCard
+            ticketId={item.id}
+            disabled={multiSelectActive}
+            onaction={handleAction}
+            onlongpress={handleLongPress}
+          >
+            <TicketCard {...toCardProps(item)} />
+          </SwipeableCard>
         {/snippet}
       </VirtualList>
     </div>

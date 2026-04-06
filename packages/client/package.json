@@ -24,8 +24,7 @@
     "@trpc/client": "11.10.0",
     "@twilio/voice-sdk": "2.18.1",
     "bits-ui": "2.16.5",
-    "konsta": "5.0.8",
-    "svelte-gestures": "5.2.2"
+    "konsta": "5.0.8"
   },
   "devDependencies": {
     "@inlang/paraglide-js": "2.15.1",

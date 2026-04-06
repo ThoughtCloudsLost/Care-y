@@ -99,9 +99,6 @@ importers:
       konsta:
         specifier: 5.0.8
         version: 5.0.8(patch_hash=65ef5a2416178d8cebb20d4f46b426ff45856c9ef23f2775d7302872c8f31ad1)
-      svelte-gestures:
-        specifier: 5.2.2
-        version: 5.2.2
     devDependencies:
       '@inlang/paraglide-js':
         specifier: 2.15.1
@@ -3496,9 +3493,6 @@ packages:
     peerDependenciesMeta:
       svelte:
         optional: true
-
-  svelte-gestures@5.2.2:
-    resolution: {integrity: sha512-Y+chXPaSx8OsPoFppUwPk8PJzgrZ7xoDJKXeiEc7JBqyKKzXer9hlf8F9O34eFuAWB4/WQEvccACvyBplESL7A==}
 
   svelte-toolbelt@0.10.6:
     resolution: {integrity: sha512-YWuX+RE+CnWYx09yseAe4ZVMM7e7GRFZM6OYWpBKOb++s+SQ8RBIMMe+Bs/CznBMc0QPLjr+vDBxTAkozXsFXQ==}
@@ -7397,8 +7391,6 @@ snapshots:
       semver: 7.7.4
     optionalDependencies:
       svelte: 5.55.1
-
-  svelte-gestures@5.2.2: {}
 
   svelte-toolbelt@0.10.6(@sveltejs/kit@2.55.0(@sveltejs/vite-plugin-svelte@6.2.4(svelte@5.55.1)(vite@7.3.1(@types/node@25.5.0)(jiti@2.6.1)(lightningcss@1.32.0)(terser@5.46.1)(tsx@4.21.0)))(svelte@5.55.1)(typescript@5.9.3)(vite@7.3.1(@types/node@25.5.0)(jiti@2.6.1)(lightningcss@1.32.0)(terser@5.46.1)(tsx@4.21.0)))(svelte@5.55.1):
     dependencies:

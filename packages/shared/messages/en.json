@@ -160,6 +160,10 @@
   "tickets_action_unhold": "Unhold",
   "tickets_action_take": "Take",
   "tickets_action_release": "Release",
+  "tickets_action_assign": "Assign",
+  "tickets_selected": "{count} selected",
+  "tickets_exit_multiselect": "Exit selection mode",
+  "tickets_select_mode": "Select",
   "tickets_status_closed": "closed",
 
   "saved_filter_modal_title": "Save Filter",

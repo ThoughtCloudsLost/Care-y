@@ -109,6 +109,7 @@ vi.mock("$lib/crypto/context.js", () => ({
 
 vi.mock("$lib/shell/context.js", () => ({
   getScrollContainer: () => () => undefined,
+  getTabbarOverrideCtx: () => ({ current: undefined }),
 }));
 
 let currentViewMode = "list";

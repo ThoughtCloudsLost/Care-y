@@ -1,7 +1,7 @@
 <script lang="ts">
   import { createQuery } from "@tanstack/svelte-query";
   import { Badge, List, ListItem, Checkbox } from "konsta/svelte";
-  import { Bookmark, Check } from "@lucide/svelte";
+  import { Bookmark, Check, SquareCheckBig } from "@lucide/svelte";
   import ShellPopover from "$lib/shell/ShellPopover.svelte";
   import * as m from "$lib/paraglide/messages.js";
   import { trpc } from "$lib/trpc/index.js";
@@ -16,9 +16,10 @@
 
   interface Props {
     oncreateshortcut?: () => void;
+    onenterselect?: () => void;
   }
 
-  let { oncreateshortcut }: Props = $props();
+  let { oncreateshortcut, onenterselect }: Props = $props();
 
   if (!trpc.tickets) throw new RouterNotAvailableError("tickets");
   const ticketRouter = trpc.tickets;
@@ -264,6 +265,14 @@
   </div>
 
   <div class="pill-actions">
+    <button
+      class="select-mode-btn"
+      aria-label={m.tickets_select_mode()}
+      onclick={() => onenterselect?.()}
+    >
+      <SquareCheckBig size={16} aria-hidden="true" />
+      <span class="select-label">{m.tickets_select_mode()}</span>
+    </button>
     {#if activeFilterCount > 0}
       <Badge class="filter-badge">{activeFilterCount}</Badge>
       <button
@@ -435,6 +444,32 @@
     background-color: var(--ink);
     color: var(--paper);
     border-color: var(--ink);
+  }
+
+  .select-mode-btn {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 4px 8px;
+    border: 1px solid var(--surface-1, rgba(0, 0, 0, 0.15));
+    border-radius: 999px;
+    background: transparent;
+    color: var(--ink);
+    font-size: 0.75rem;
+    font-weight: 500;
+    cursor: pointer;
+    white-space: nowrap;
+    flex-shrink: 0;
+    -webkit-tap-highlight-color: transparent;
+    transition: background-color 150ms ease;
+  }
+
+  .select-mode-btn:hover {
+    background-color: var(--surface-1, rgba(0, 0, 0, 0.06));
+  }
+
+  .select-label {
+    line-height: 1;
   }
 
   :global(.filter-pill-all) {
