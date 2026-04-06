@@ -1069,6 +1069,25 @@ export function createTicketRouter(deps: TicketRouterDeps) {
                   ],
                 },
                 {
+                  title:
+                    "Emergency referral needed for client who is in immediate danger and requires relocation assistance as well as legal representation for upcoming court hearing",
+                  description: "Multi-service coordination case",
+                  queue: "Crisis",
+                  priority: "high",
+                  assignedTo: null,
+                  onHold: false,
+                  withKeyWrap: true,
+                  createdAgo: 90,
+                  followUps: [
+                    {
+                      content:
+                        "I need help with everything, I do not know where to start",
+                      source: "client",
+                      agoMinutes: 85,
+                    },
+                  ],
+                },
+                {
                   title: "New intake call",
                   description: "Voicemail received, needs triage",
                   queue: "Intake",

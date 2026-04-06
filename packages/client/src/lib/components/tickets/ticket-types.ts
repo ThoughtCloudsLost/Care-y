@@ -10,7 +10,10 @@ export type TicketQuickAction =
   | "assign"
   | "release";
 
+export type ViewMode = "list" | "grid";
+
 export interface TicketCardProps {
+  readonly viewMode: ViewMode;
   readonly ticketId: string;
   readonly queueName: string;
   readonly displayStatus: DisplayStatus;

@@ -508,14 +508,15 @@ describe("VirtualList component", () => {
       },
     });
 
-    const list = container.querySelector(".virtual-list");
-    expect(list).not.toBeNull();
-    expect(list?.getAttribute("style")).toContain("0px");
+    // Spacer divs exist but with 0 height.
+    const spacers = container.querySelectorAll(".virtual-spacer");
+    expect(spacers.length).toBe(2);
+    expect(spacers[0]?.getAttribute("style")).toContain("0px");
     expect(container.querySelectorAll(".virtual-row").length).toBe(0);
     expect(container.querySelectorAll(".test-item").length).toBe(0);
   });
 
-  it("sets totalHeight on the container to match all items", () => {
+  it("sets spacer heights to represent off-screen items", () => {
     const { container } = render(VirtualListHarness, {
       props: {
         items: makeItems(50),
@@ -526,8 +527,8 @@ describe("VirtualList component", () => {
       },
     });
 
-    const list = container.querySelector(".virtual-list");
-    // 50 items * 80px estimate = 4000px.
-    expect(list?.getAttribute("style")).toContain("4000px");
+    // Total height = 50 * 80 = 4000px, split between spacers and visible rows.
+    const spacers = container.querySelectorAll(".virtual-spacer");
+    expect(spacers.length).toBe(2);
   });
 });

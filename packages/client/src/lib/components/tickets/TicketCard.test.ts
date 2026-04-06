@@ -36,6 +36,7 @@ describe("TicketCard", () => {
   const onselect = vi.fn();
 
   const defaults = {
+    viewMode: "list" as const,
     ticketId: "t-001",
     queueName: "Intake",
     displayStatus: "active" as const,
@@ -75,9 +76,18 @@ describe("TicketCard", () => {
     expect(shimmer?.getAttribute("aria-label")).toBe("Decrypting...");
   });
 
-  it("renders preview empty state when follow-ups array is empty", () => {
+  it("shows preview window in list mode even when follow-ups are empty", () => {
     const { container } = render(TicketCard, {
       props: { ...defaults, previewFollowUps: [] },
+    });
+    const preview = container.querySelector(".preview-window");
+    expect(preview).not.toBeNull();
+    expect(container.textContent).toContain("No messages yet");
+  });
+
+  it("shows preview empty state in grid mode when follow-ups array is empty", () => {
+    const { container } = render(TicketCard, {
+      props: { ...defaults, viewMode: "grid" as const, previewFollowUps: [] },
     });
     expect(container.textContent).toContain("No messages yet");
   });
@@ -138,35 +148,38 @@ describe("TicketCard", () => {
 
   // --- Priority chip ---
 
-  it("shows priority chip for urgent tickets", () => {
+  it("shows priority badge for urgent tickets", () => {
     const { container } = render(TicketCard, {
       props: { ...defaults, priority: "urgent" as const },
     });
-    const chip = container.querySelector("[data-priority='urgent']");
-    expect(chip).not.toBeNull();
-    expect(chip!.textContent!.trim()).toBe("urgent");
+    const badge = container.querySelector(".priority-urgent");
+    expect(badge).not.toBeNull();
+    expect(badge!.textContent).toContain("Urgent");
   });
 
-  it("shows priority chip for high tickets", () => {
+  it("shows priority badge for high tickets", () => {
     const { container } = render(TicketCard, {
       props: { ...defaults, priority: "high" as const },
     });
-    const chip = container.querySelector("[data-priority='high']");
-    expect(chip).not.toBeNull();
+    const badge = container.querySelector(".priority-high");
+    expect(badge).not.toBeNull();
+    expect(badge!.textContent).toContain("High");
   });
 
-  it("hides priority chip for normal tickets", () => {
+  it("shows priority badge for normal tickets", () => {
     const { container } = render(TicketCard, { props: defaults });
-    const chip = container.querySelector("[data-priority]");
-    expect(chip).toBeNull();
+    const badge = container.querySelector(".priority-normal");
+    expect(badge).not.toBeNull();
+    expect(badge!.textContent).toContain("Normal");
   });
 
-  it("hides priority chip for low tickets", () => {
+  it("shows priority badge for low tickets", () => {
     const { container } = render(TicketCard, {
       props: { ...defaults, priority: "low" as const },
     });
-    const chip = container.querySelector("[data-priority]");
-    expect(chip).toBeNull();
+    const badge = container.querySelector(".priority-low");
+    expect(badge).not.toBeNull();
+    expect(badge!.textContent).toContain("Low");
   });
 
   // --- Metadata ---
@@ -243,34 +256,39 @@ describe("TicketCard", () => {
 
   // --- Action buttons ---
 
-  it("renders action buttons in default (list) mode", () => {
+  it("renders action icon buttons in list mode", () => {
     const { container } = render(TicketCard, { props: defaults });
-    expect(container.textContent).toContain("Reply");
-    expect(container.textContent).toContain("Call");
-    expect(container.textContent).toContain("Hold");
-    expect(container.textContent).toContain("Take");
+    const actions = container.querySelectorAll(".action-icon");
+    expect(actions.length).toBe(4);
   });
 
-  it("shows 'Unhold' button when displayStatus is hold", () => {
+  it("hides action icons in grid mode", () => {
+    const { container } = render(TicketCard, {
+      props: { ...defaults, viewMode: "grid" as const },
+    });
+    const actions = container.querySelectorAll(".action-icon");
+    expect(actions.length).toBe(0);
+  });
+
+  it("renders hold/unhold icon with correct aria-label", () => {
     const { container } = render(TicketCard, {
       props: { ...defaults, displayStatus: "hold" as const },
     });
-    expect(container.textContent).toContain("Unhold");
+    const unhold = container.querySelector('[aria-label="Unhold"]');
+    expect(unhold).not.toBeNull();
   });
 
-  it("shows 'Release' button when assignedName is set", () => {
+  it("renders take/release icon with correct aria-label", () => {
     const { container } = render(TicketCard, {
       props: { ...defaults, assignedName: "Jordan" },
     });
-    expect(container.textContent).toContain("Release");
+    const release = container.querySelector('[aria-label="Release"]');
+    expect(release).not.toBeNull();
   });
 
-  it("fires onaction with correct action on button click", async () => {
+  it("fires onaction with correct action on icon click", async () => {
     const { container } = render(TicketCard, { props: defaults });
-    const buttons = container.querySelectorAll("button");
-    const replyBtn = Array.from(buttons).find(
-      (b) => b.textContent.trim() === "Reply",
-    );
+    const replyBtn = container.querySelector('[aria-label="Reply"]');
     expect(replyBtn).not.toBeNull();
     if (replyBtn) await fireEvent.click(replyBtn);
     expect(onaction).toHaveBeenCalledWith("t-001", "reply");
@@ -285,10 +303,10 @@ describe("TicketCard", () => {
 
   // --- Keyboard accessibility ---
 
-  it("card-inner is a native button (supports Enter/Space natively)", () => {
+  it("card-inner has role=button and tabindex for keyboard access", () => {
     const { container } = render(TicketCard, { props: defaults });
     const inner = container.querySelector(".card-inner");
-    expect(inner?.tagName).toBe("BUTTON");
-    expect(inner?.getAttribute("type")).toBe("button");
+    expect(inner?.getAttribute("role")).toBe("button");
+    expect(inner?.getAttribute("tabindex")).toBe("0");
   });
 });

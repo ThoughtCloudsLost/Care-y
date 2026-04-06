@@ -7,7 +7,7 @@ export interface TicketPreviewItemProps {
   /** Ticket status */
   status: string;
   /** Ticket priority */
-  priority: string;
+  priority: "low" | "normal" | "high" | "urgent";
   /** Whether ticket is on hold */
   onHold: boolean;
   /** Assignee user ID or null */

@@ -118,20 +118,20 @@
   .shift-content {
     display: flex;
     flex-direction: column;
-    gap: 0.5rem;
-    padding: 0 0.75rem 0.625rem;
-    font-size: 0.8125rem;
+    gap: var(--space-lg);
+    padding: 0 var(--page-pad-x) var(--card-pad-y);
+    font-size: var(--text-base);
   }
 
   .shift-time {
     color: var(--muted);
-    font-size: 0.8125rem;
+    font-size: var(--text-base);
   }
 
   .shift-volunteers {
     display: flex;
     flex-wrap: wrap;
-    gap: 0.375rem;
+    gap: var(--space-md);
   }
 
   .vol-chip {
@@ -141,7 +141,7 @@
     padding: 0.1875rem 0.5rem;
     border-radius: 999px;
     background: var(--surface-1);
-    font-size: 0.75rem;
+    font-size: var(--text-sm);
     font-weight: 500;
     color: var(--muted);
     white-space: nowrap;

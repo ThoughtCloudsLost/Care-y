@@ -28,7 +28,6 @@
   const rowCount = $derived(Math.ceil(items.length / columns));
 
   // Prefix-sum array rebuilt when heights or rowCount changes.
-  // O(n) rebuild, but only on height changes (not on scroll).
   const prefixSums = $derived(
     buildPrefixSums(heights, rowCount, estimateHeight),
   );
@@ -46,6 +45,27 @@
 
   // eslint-disable-next-line security/detect-object-injection -- rowCount is derived from items.length, always a valid index into prefixSums
   const totalHeight = $derived(prefixSums[rowCount] ?? 0);
+
+  // Spacer heights: space above and below the visible items to maintain
+  // correct scroll position while items are in normal document flow.
+  const topSpacer = $derived(visibleRange.startOffset);
+  const visibleRowIndices = $derived.by(() => {
+    const indices: number[] = [];
+    for (const vi of visibleRange.items) {
+      const row = Math.floor(vi.index / columns);
+      if (indices.length === 0 || indices[indices.length - 1] !== row) {
+        indices.push(row);
+      }
+    }
+    return indices;
+  });
+  const bottomSpacer = $derived.by(() => {
+    if (visibleRowIndices.length === 0) return 0;
+    const lastVisibleRow = visibleRowIndices[visibleRowIndices.length - 1];
+    if (lastVisibleRow === undefined) return 0;
+    const bottomOfLastVisible = prefixSums[lastVisibleRow + 1] ?? totalHeight;
+    return Math.max(0, totalHeight - bottomOfLastVisible);
+  });
 
   // --- Scroll listener with rAF coalescing ---
   $effect(() => {
@@ -126,8 +146,7 @@
     };
   });
 
-  // Svelte action for row elements. Returns destroy() for proper cleanup
-  // when the virtualizer removes a row from the DOM.
+  // Svelte action for row elements.
   function bindRow(node: HTMLDivElement, row: number): { destroy: () => void } {
     node.dataset.virtualRow = String(row);
     rowElements.set(row, node);
@@ -141,7 +160,7 @@
     };
   }
 
-  // --- Sentinel for infinite scroll (separate effect per anti-pattern rule) ---
+  // --- Sentinel for infinite scroll ---
   let sentinelEl: HTMLDivElement | undefined = $state();
 
   $effect(() => {
@@ -160,15 +179,12 @@
   // Group visible items by row for rendering.
   const visibleRows = $derived.by(() => {
     // eslint-disable-next-line svelte/prefer-svelte-reactivity -- fresh Map per derivation, never mutated after return, SvelteMap proxy overhead unnecessary
-    const rows = new Map<
-      number,
-      { offset: number; items: { item: T; index: number }[] }
-    >();
+    const rows = new Map<number, { items: { item: T; index: number }[] }>();
     for (const vi of visibleRange.items) {
       const row = Math.floor(vi.index / columns);
       let entry = rows.get(row);
       if (!entry) {
-        entry = { offset: vi.offset, items: [] };
+        entry = { items: [] };
         rows.set(row, entry);
       }
       entry.items.push({ item: vi.item, index: vi.index });
@@ -177,48 +193,47 @@
   });
 </script>
 
+<!-- Top spacer: represents all rows above the visible range -->
 <div
-  class="virtual-list"
-  style:height="{totalHeight}px"
-  style:position="relative"
->
-  {#each [...visibleRows] as [row, rowData] (row)}
-    {@const isSingleCol = columns === 1}
-    <div
-      class="virtual-row"
-      class:virtual-row-grid={!isSingleCol}
-      style:position="absolute"
-      style:transform="translateY({rowData.offset}px)"
-      style:width="100%"
-      style:--virtual-columns={columns}
-      use:bindRow={row}
-    >
-      {#each rowData.items as vi (vi.index)}
-        {@render children({ item: vi.item, index: vi.index })}
-      {/each}
-    </div>
-  {/each}
-</div>
+  class="virtual-spacer"
+  style:height="{topSpacer}px"
+  aria-hidden="true"
+></div>
 
-<!-- Infinite scroll sentinel (separate from scroll listener per anti-pattern) -->
+<!-- Visible rows: rendered in normal document flow, CSS controls layout -->
+{#each [...visibleRows] as [row, rowData] (row)}
+  {@const isSingleCol = columns === 1}
+  <div
+    class="virtual-row"
+    class:virtual-row-grid={!isSingleCol}
+    style:--virtual-columns={columns}
+    use:bindRow={row}
+  >
+    {#each rowData.items as vi (vi.index)}
+      {@render children({ item: vi.item, index: vi.index })}
+    {/each}
+  </div>
+{/each}
+
+<!-- Bottom spacer: represents all rows below the visible range -->
+<div
+  class="virtual-spacer"
+  style:height="{bottomSpacer}px"
+  aria-hidden="true"
+></div>
+
+<!-- Infinite scroll sentinel -->
 <div bind:this={sentinelEl} class="scroll-sentinel" aria-hidden="true"></div>
 
 <style>
-  .virtual-list {
-    position: relative;
-    width: 100%;
-  }
-
-  .virtual-row {
-    position: absolute;
-    width: 100%;
-    will-change: transform;
+  .virtual-spacer {
+    flex-shrink: 0;
   }
 
   .virtual-row-grid {
     display: grid;
     grid-template-columns: repeat(var(--virtual-columns, 1), 1fr);
-    gap: 0.5rem;
+    gap: var(--space-md);
   }
 
   .scroll-sentinel {

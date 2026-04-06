@@ -86,7 +86,7 @@
 
 <style>
   .collapsible-section {
-    padding-top: 1.25rem;
+    padding-top: var(--space-2xl);
   }
 
   .section-toggle {
@@ -110,7 +110,7 @@
     /* Override Konsta's secondary label color, use full ink for interactive headers */
     color: var(--ink);
     /* Pull left edge in to match page margin (Konsta default is pl-safe-4 = 1rem + safe area) */
-    padding-left: 0.75rem;
+    padding-left: var(--page-pad-x);
   }
 
   .section-content :global(.k-list) {
@@ -121,7 +121,7 @@
   .heading-inner {
     display: flex;
     align-items: center;
-    gap: 0.375rem;
+    gap: var(--space-md);
     width: 100%;
   }
 

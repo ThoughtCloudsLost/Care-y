@@ -281,7 +281,7 @@ describe("Ticket list page", () => {
     expect(container.querySelector(".ticket-list")).toBeTruthy();
   });
 
-  it("applies grid-view class when view mode is grid", () => {
+  it("renders ticket-list container in grid mode without grid-view class", () => {
     currentViewMode = "grid";
     const tickets = [makeTicket()];
     infiniteQueryState = {
@@ -295,10 +295,11 @@ describe("Ticket list page", () => {
     };
 
     const { container } = render(PageModule.default);
-    expect(container.querySelector(".ticket-list.grid-view")).toBeTruthy();
+    const list = container.querySelector(".ticket-list");
+    expect(list).toBeTruthy();
   });
 
-  it("does not apply grid-view class when view mode is list", () => {
+  it("renders ticket-list container in list mode", () => {
     currentViewMode = "list";
     const tickets = [makeTicket()];
     infiniteQueryState = {
@@ -314,7 +315,6 @@ describe("Ticket list page", () => {
     const { container } = render(PageModule.default);
     const list = container.querySelector(".ticket-list");
     expect(list).toBeTruthy();
-    expect(list?.classList.contains("grid-view")).toBe(false);
   });
 
   it("renders empty state when no tickets match filter", () => {

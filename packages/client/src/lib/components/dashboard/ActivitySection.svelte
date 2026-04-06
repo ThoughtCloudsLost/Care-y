@@ -123,15 +123,15 @@
   .activity-content {
     display: flex;
     flex-direction: column;
-    gap: 0.375rem;
-    padding: 0 0.75rem 0.25rem;
+    gap: var(--space-md);
+    padding: 0 var(--page-pad-x) 0.25rem;
   }
 
   .activity-summary {
     display: flex;
     align-items: center;
-    gap: 0.5rem;
-    font-size: 0.75rem;
+    gap: var(--space-lg);
+    font-size: var(--text-sm);
     color: var(--muted);
   }
 
@@ -140,7 +140,7 @@
     flex-direction: column;
     gap: 0;
     background: var(--surface-1);
-    border-radius: var(--card-radius, 0.75rem);
+    border-radius: var(--card-radius);
     overflow: hidden;
   }
 
@@ -148,10 +148,10 @@
     display: flex;
     align-items: center;
     gap: 0.25rem;
-    font-size: 0.75rem;
+    font-size: var(--text-sm);
     color: var(--muted);
-    padding: 0.5rem 0.75rem;
-    border-bottom: 1px solid color-mix(in srgb, var(--ink) 6%, transparent);
+    padding: var(--space-lg) var(--page-pad-x);
+    border-bottom: 1px solid var(--divider);
     cursor: pointer;
   }
 
@@ -181,7 +181,7 @@
     padding: 0.0625rem 0.3125rem;
     border-radius: 0.25rem;
     background: color-mix(in srgb, var(--ink) 10%, transparent);
-    font-size: 0.6875rem;
+    font-size: var(--text-xs);
     font-weight: 500;
     color: var(--ink);
     opacity: 0.75;
@@ -195,19 +195,19 @@
     white-space: nowrap;
     min-width: 0;
     color: var(--muted);
-    font-size: 0.6875rem;
+    font-size: var(--text-xs);
   }
 
   .activity-time {
     flex-shrink: 0;
     margin-left: auto;
-    font-size: 0.6875rem;
+    font-size: var(--text-xs);
     opacity: 0.7;
   }
 
   .no-activity {
     padding: 0 1rem 0.5rem;
-    font-size: 0.8125rem;
+    font-size: var(--text-base);
     color: var(--muted);
   }
 </style>

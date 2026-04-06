@@ -20,7 +20,7 @@ function makeTicket(id: string, overrides?: Record<string, unknown>) {
     ticketId: id,
     title: `Ticket ${id}`,
     status: "open",
-    priority: "normal",
+    priority: "normal" as const,
     onHold: false,
     assignedTo: null,
     createdAt: new Date("2026-03-31T11:30:00Z"),

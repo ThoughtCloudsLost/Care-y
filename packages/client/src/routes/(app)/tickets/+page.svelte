@@ -2,7 +2,7 @@
   import { createInfiniteQuery } from "@tanstack/svelte-query";
   import { goto } from "$app/navigation";
   import { resolve } from "$app/paths";
-  import { Segmented, SegmentedButton } from "konsta/svelte";
+  import { BlockTitle, Segmented, SegmentedButton } from "konsta/svelte";
   import { List, LayoutGrid } from "@lucide/svelte";
   import * as m from "$lib/paraglide/messages.js";
   import { trpc } from "$lib/trpc/index.js";
@@ -117,6 +117,7 @@
     }
 
     return {
+      viewMode: viewModeStore.mode,
       ticketId: t.id,
       queueName: t.queueName,
       displayStatus: deriveDisplayStatus(t.status, t.onHold, t.followUpCount),
@@ -155,12 +156,63 @@
 
   const gridColumns = $derived(viewModeStore.mode === "grid" ? 2 : 1);
 
+  // Stats counts derived from all loaded tickets (unfiltered).
+  const newCount = $derived(
+    allTickets.filter(
+      (t) => t.status === "open" && !t.onHold && t.followUpCount === 0,
+    ).length,
+  );
+  const activeCount = $derived(
+    allTickets.filter(
+      (t) => t.status === "open" && !t.onHold && t.followUpCount > 0,
+    ).length,
+  );
+  const holdCount = $derived(allTickets.filter((t) => t.onHold).length);
+
   // Saved filter modal state.
   let savedFilterModalOpen = $state(false);
 </script>
 
 <div class="ticket-page pb-20">
-  <h1 class="sr-only">{m.tickets_title()}</h1>
+  <div class="page-header">
+    <BlockTitle large class="page-title">{m.tickets_title()}</BlockTitle>
+    <div class="stats-row">
+      <div class="stats-counts">
+        <span class="stat-item">
+          <span class="status-dot" data-status="new"></span>
+          {newCount}
+          {m.tickets_status_new()}
+        </span>
+        <span class="stat-item">
+          <span class="status-dot" data-status="active"></span>
+          {activeCount}
+          {m.tickets_status_active()}
+        </span>
+        <span class="stat-item">
+          <span class="status-dot" data-status="hold"></span>
+          {holdCount}
+          {m.tickets_status_on_hold()}
+        </span>
+      </div>
+      <Segmented strong class="view-toggle">
+        <SegmentedButton
+          active={viewModeStore.mode === "list"}
+          aria-pressed={viewModeStore.mode === "list"}
+          aria-label={m.tickets_view_list()}
+          onclick={() => viewModeStore.set("list")}
+          ><List size={16} aria-hidden="true" /></SegmentedButton
+        >
+        <SegmentedButton
+          active={viewModeStore.mode === "grid"}
+          aria-pressed={viewModeStore.mode === "grid"}
+          aria-label={m.tickets_view_grid()}
+          onclick={() => viewModeStore.set("grid")}
+          ><LayoutGrid size={16} aria-hidden="true" /></SegmentedButton
+        >
+      </Segmented>
+    </div>
+  </div>
+
   <SavedFilterList />
   <div class="ticket-controls">
     <FilterPillBar
@@ -168,22 +220,6 @@
         savedFilterModalOpen = true;
       }}
     />
-    <Segmented strong class="view-toggle">
-      <SegmentedButton
-        active={viewModeStore.mode === "list"}
-        aria-pressed={viewModeStore.mode === "list"}
-        aria-label={m.tickets_view_list()}
-        onclick={() => viewModeStore.set("list")}
-        ><List size={16} aria-hidden="true" /></SegmentedButton
-      >
-      <SegmentedButton
-        active={viewModeStore.mode === "grid"}
-        aria-pressed={viewModeStore.mode === "grid"}
-        aria-label={m.tickets_view_grid()}
-        onclick={() => viewModeStore.set("grid")}
-        ><LayoutGrid size={16} aria-hidden="true" /></SegmentedButton
-      >
-    </Segmented>
   </div>
 
   {#if ticketsQuery.isLoading}
@@ -191,11 +227,11 @@
   {:else if ticketsQuery.isError}
     <QueryError error={ticketsQuery.error} />
   {:else}
-    <div class="ticket-list" class:grid-view={viewModeStore.mode === "grid"}>
+    <div class="ticket-list">
       <VirtualList
         items={sortedTickets}
         scrollContainer={scrollEl}
-        estimateHeight={viewModeStore.mode === "grid" ? 240 : 180}
+        estimateHeight={viewModeStore.mode === "grid" ? 200 : 140}
         columns={gridColumns}
         onloadmore={loadNextPage}
       >
@@ -222,16 +258,67 @@
 
 <style>
   .ticket-page {
-    padding: 0.5rem 0.5rem 0;
+    padding: 0.25rem var(--page-pad-x) 0;
     display: flex;
     flex-direction: column;
-    gap: 0.75rem;
+    gap: var(--space-lg);
+  }
+
+  .page-header {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-md);
+  }
+
+  :global(.page-title) {
+    margin: 0 !important;
+    padding-left: 0 !important;
+  }
+
+  .stats-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-lg);
+  }
+
+  .stats-counts {
+    display: flex;
+    align-items: center;
+    gap: var(--space-xl);
+    font-size: var(--text-sm);
+    color: var(--muted);
+  }
+
+  .stat-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+  }
+
+  .status-dot {
+    width: 0.375rem;
+    height: 0.375rem;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+
+  .status-dot[data-status="new"] {
+    background: #34c759;
+  }
+
+  .status-dot[data-status="active"] {
+    background: var(--brand-text);
+  }
+
+  .status-dot[data-status="hold"] {
+    background: #ff9500;
   }
 
   .ticket-controls {
     display: flex;
     align-items: center;
-    gap: 0.75rem;
+    gap: var(--space-xl);
   }
 
   :global(.view-toggle) {
@@ -248,26 +335,14 @@
   .ticket-list {
     display: flex;
     flex-direction: column;
-    gap: 0.5rem;
-  }
-
-  .ticket-list.grid-view {
-    display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    gap: 0.5rem;
-  }
-
-  /* Narrow viewport: single column grid fallback */
-  @media (max-width: 359px) {
-    .ticket-list.grid-view {
-      grid-template-columns: 1fr;
-    }
+    gap: var(--space-md);
+    min-width: 0;
   }
 
   .empty-state {
     text-align: center;
     padding: 3rem 1rem;
     color: var(--muted);
-    font-size: 0.875rem;
+    font-size: var(--text-base);
   }
 </style>

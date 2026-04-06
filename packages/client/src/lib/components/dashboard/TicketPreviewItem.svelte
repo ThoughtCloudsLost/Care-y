@@ -1,17 +1,9 @@
 <script lang="ts">
   import { ListItem } from "konsta/svelte";
-  import {
-    ChevronsUp,
-    ChevronUp,
-    ChevronRight,
-    Minus,
-    ChevronDown,
-    CircleQuestionMark,
-    Dot,
-  } from "@lucide/svelte";
-  import type { Component } from "svelte";
+  import { ChevronRight, CircleQuestionMark, Dot } from "@lucide/svelte";
   import * as m from "$lib/paraglide/messages.js";
   import { formatRelativeTime } from "$lib/utils/format-time.js";
+  import PriorityBadge from "$lib/components/PriorityBadge.svelte";
   import type { TicketPreviewItemProps } from "./types.js";
 
   let {
@@ -35,53 +27,6 @@
     activityDate ? formatRelativeTime(activityDate) : "",
   );
 
-  interface PriorityDef {
-    icon: Component;
-    label: string;
-    colorClass: string;
-    badge: boolean;
-  }
-
-  const normalDef: PriorityDef = {
-    icon: Minus,
-    label: "Normal",
-    colorClass: "priority-normal",
-    badge: false,
-  };
-
-  const priorityMap = new Map<string, PriorityDef>([
-    [
-      "urgent",
-      {
-        icon: ChevronsUp,
-        label: "Urgent",
-        colorClass: "priority-urgent",
-        badge: true,
-      },
-    ],
-    [
-      "high",
-      {
-        icon: ChevronUp,
-        label: "High",
-        colorClass: "priority-high",
-        badge: true,
-      },
-    ],
-    ["normal", normalDef],
-    [
-      "low",
-      {
-        icon: ChevronDown,
-        label: "Low",
-        colorClass: "priority-low",
-        badge: false,
-      },
-    ],
-  ]);
-
-  const priorityDef = $derived(priorityMap.get(priority) ?? normalDef);
-
   function handleHelp(e: MouseEvent): void {
     e.stopPropagation();
     e.preventDefault();
@@ -98,18 +43,11 @@
   onclick={() => ontap(ticketId)}
 >
   {#snippet inner()}
-    {@const PriorityIcon = priorityDef.icon}
     <div class="item-layout">
       <div class="ticket-item">
         <div class="row-top">
           <span class="client-alias">{clientAlias}</span>
-          <span
-            class="priority-indicator {priorityDef.colorClass}"
-            class:priority-badge={priorityDef.badge}
-          >
-            <PriorityIcon size={12} aria-hidden="true" />
-            <span>{priorityDef.label}</span>
-          </span>
+          <PriorityBadge {priority} />
         </div>
 
         <div class="row-title">
@@ -159,14 +97,14 @@
   .item-layout {
     display: flex;
     align-items: center;
-    gap: 0.5rem;
+    gap: var(--space-lg);
     width: 100%;
   }
 
   .ticket-item {
     display: flex;
     flex-direction: column;
-    gap: 0.1875rem;
+    gap: var(--space-sm);
     min-width: 0;
     flex: 1;
     width: 100%;
@@ -176,56 +114,17 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 0.5rem;
+    gap: var(--space-lg);
   }
 
   .client-alias {
     font-weight: 600;
-    font-size: 0.9375rem;
+    font-size: var(--text-md);
     color: var(--ink);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
     min-width: 0;
-  }
-
-  .priority-indicator {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.1875rem;
-    font-size: 0.6875rem;
-    font-weight: 500;
-    white-space: nowrap;
-  }
-
-  .priority-badge {
-    font-weight: 600;
-    padding: 0.0625rem 0.3125rem;
-    border-radius: 0.25rem;
-  }
-
-  .priority-urgent {
-    color: #ff3b30;
-  }
-  .priority-urgent.priority-badge {
-    background: rgba(255, 59, 48, 0.12);
-  }
-
-  .priority-high {
-    color: #ff9500;
-  }
-  .priority-high.priority-badge {
-    background: rgba(255, 149, 0, 0.12);
-  }
-
-  .priority-normal {
-    color: var(--muted);
-    opacity: 0.7;
-  }
-
-  .priority-low {
-    color: var(--muted);
-    opacity: 0.5;
   }
 
   :global(.item-chevron) {
@@ -240,7 +139,7 @@
   }
 
   .title-text {
-    font-size: 0.8125rem;
+    font-size: var(--text-base);
     color: var(--ink);
     opacity: 0.75;
     overflow: hidden;
@@ -273,15 +172,15 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 0.5rem;
-    font-size: 0.75rem;
+    gap: var(--space-lg);
+    font-size: var(--text-sm);
     color: var(--muted);
   }
 
   .bottom-left {
     display: flex;
     align-items: center;
-    gap: 0.125rem;
+    gap: var(--space-xs);
     min-width: 0;
     overflow: hidden;
   }
@@ -304,7 +203,7 @@
   .bottom-meta {
     display: flex;
     align-items: center;
-    gap: 0.125rem;
+    gap: var(--space-xs);
     flex-shrink: 0;
   }
 

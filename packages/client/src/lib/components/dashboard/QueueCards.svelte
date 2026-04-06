@@ -55,8 +55,8 @@
 <style>
   .queue-grid {
     display: grid;
-    gap: 0.5rem;
-    padding: 0.25rem 0.75rem 0.5rem;
+    gap: var(--space-lg);
+    padding: 0.25rem var(--page-pad-x) var(--space-lg);
   }
 
   .queue-tile {
@@ -64,11 +64,11 @@
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    gap: 0.125rem;
+    gap: var(--space-xs);
     padding: 0.875rem 0.25rem;
     text-align: center;
     background: var(--surface-1);
-    border-radius: var(--card-radius, 0.75rem);
+    border-radius: var(--card-radius);
     border: none;
     cursor: pointer;
     font-family: inherit;
@@ -80,7 +80,7 @@
   }
 
   .queue-name {
-    font-size: 0.8125rem;
+    font-size: var(--text-base);
     font-weight: 600;
     color: var(--ink);
     white-space: nowrap;
@@ -90,13 +90,13 @@
   }
 
   .queue-count {
-    font-size: 0.6875rem;
+    font-size: var(--text-xs);
     color: var(--muted);
   }
 
   .no-queues {
-    padding: 0 0.75rem 0.5rem;
-    font-size: 0.8125rem;
+    padding: 0 var(--page-pad-x) var(--space-lg);
+    font-size: var(--text-base);
     color: var(--muted);
   }
 </style>

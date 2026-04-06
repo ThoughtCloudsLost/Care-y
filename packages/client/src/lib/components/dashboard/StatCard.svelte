@@ -40,7 +40,7 @@
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 0.125rem;
+    gap: var(--space-xs);
     padding: 0.5rem 0.25rem;
     text-align: center;
   }
@@ -60,7 +60,7 @@
   }
 
   .stat-label {
-    font-size: 0.6875rem;
+    font-size: var(--text-xs);
     color: var(--muted);
     line-height: 1.2;
     white-space: nowrap;
