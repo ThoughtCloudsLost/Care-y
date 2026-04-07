@@ -212,6 +212,12 @@ export const queueWatcherInputSchema = z.object({
 });
 export type QueueWatcherInput = z.infer<typeof queueWatcherInputSchema>;
 
+// --- Volunteer list (for @mention autocomplete) ---
+// Return type is inferred by tRPC from the resolver. The server returns
+// { id: string, encryptedDisplayName: Buffer } which tRPC serializes as
+// { type: "Buffer", data: number[] } over the wire. OrgDecryptCache
+// handles that shape via its SerializedBuffer type.
+
 export const queueAssignmentInputSchema = z.object({
   queueId: z.uuid(),
   userId: z.uuid(),

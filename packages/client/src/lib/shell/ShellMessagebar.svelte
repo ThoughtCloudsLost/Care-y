@@ -27,6 +27,7 @@
     onsend,
     onattach,
     onpreset,
+    oninput,
     sendDisabled = false,
   }: ShellMessagebarProps = $props();
 
@@ -55,6 +56,7 @@
   <Messagebar
     bind:value
     {placeholder}
+    {oninput}
     colors={mode === "note" ? NOTE_COLORS : undefined}
     class="shell-messagebar"
   >

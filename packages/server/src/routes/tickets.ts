@@ -43,6 +43,7 @@ import { NotFoundError } from "../errors.js";
 import { buildRecipientList } from "../tickets/notification-recipients.js";
 import type { ShiftProvider } from "../tickets/shift-provider.js";
 import { createStubShiftProvider } from "../tickets/shift-provider.js";
+import { createUserService } from "../users/user-service.js";
 import {
   generateContentKey,
   encryptContent,
@@ -776,6 +777,14 @@ export function createTicketRouter(deps: TicketRouterDeps) {
           return svc.getQueueMembers(input.queueId);
         }),
       ),
+
+    // --- Volunteers (for @mention autocomplete) ---
+    listVolunteers: volunteerProcedure.query(
+      withErrorWrapping(async ({ ctx }) => {
+        const svc = createUserService(ctx.org.tenantDb);
+        return svc.listActiveVolunteers();
+      }),
+    ),
 
     // --- Dashboard: activity feed (scoped to user's queues) ---
     recentActivity: volunteerProcedure

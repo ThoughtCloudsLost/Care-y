@@ -66,9 +66,9 @@ describe("filterStore", () => {
   });
 
   describe("assignee (single-select)", () => {
-    it("defaults to null", async () => {
+    it("defaults to undefined (no filter)", async () => {
       const store = await getStore();
-      expect(store.assigneeId).toBe(null);
+      expect(store.assigneeId).toBeUndefined();
     });
 
     it("setAssignee sets and clears", async () => {
@@ -292,7 +292,7 @@ describe("filterStore", () => {
       expect(store.statuses.size).toBe(0);
       expect(store.queueIds.size).toBe(0);
       expect(store.priorities.size).toBe(0);
-      expect(store.assigneeId).toBe(null);
+      expect(store.assigneeId).toBeUndefined();
       expect(store.dateFrom).toBe(null);
       expect(store.dateTo).toBe(null);
       expect(store.activeCount).toBe(0);
@@ -334,7 +334,7 @@ describe("filterStore", () => {
       expect(state.statuses).toEqual([]);
       expect(state.queueIds).toEqual([]);
       expect(state.priorities).toEqual([]);
-      expect(state.assigneeId).toBeNull();
+      expect(state.assigneeId).toBeUndefined();
       expect(state.dateFrom).toBeNull();
       expect(state.dateTo).toBeNull();
     });

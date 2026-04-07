@@ -282,20 +282,24 @@ describe("uploadAttachmentInputSchema", () => {
 
 describe("createQueueInputSchema", () => {
   it("accepts valid input with default escalateDays", () => {
-    const result = createQueueInputSchema.safeParse({ name: "General" });
+    const result = createQueueInputSchema.safeParse({
+      encryptedName: "AQIDBA==",
+    });
     expect(result.success).toBe(true);
     if (result.success) {
       expect(result.data.escalateDays).toBe(0);
     }
   });
 
-  it("rejects empty name", () => {
-    expect(createQueueInputSchema.safeParse({ name: "" }).success).toBe(false);
+  it("rejects empty encryptedName", () => {
+    expect(
+      createQueueInputSchema.safeParse({ encryptedName: "" }).success,
+    ).toBe(false);
   });
 
-  it("rejects name over 100 chars", () => {
+  it("rejects non-base64 encryptedName", () => {
     expect(
-      createQueueInputSchema.safeParse({ name: "a".repeat(101) }).success,
+      createQueueInputSchema.safeParse({ encryptedName: "not!base64" }).success,
     ).toBe(false);
   });
 

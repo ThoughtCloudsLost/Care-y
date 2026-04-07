@@ -32,6 +32,9 @@ vi.mock("$lib/paraglide/messages.js", () => ({
   tickets_clear_filters: () => "Clear all",
   tickets_create_shortcut: () => "Save filter shortcut",
   tickets_select_mode: () => "Select",
+  tickets_unassigned: () => "Unassigned",
+  tickets_filter_me: () => "Me",
+  tickets_filter_date_clear: () => "Clear dates",
 }));
 
 // --- Mock TanStack Query ---
@@ -55,6 +58,15 @@ vi.mock("$lib/trpc/index.js", () => ({
   },
 }));
 
+// --- Mock crypto context ---
+vi.mock("$lib/crypto/context.js", () => ({
+  getOrgDecryptCache: () => ({
+    decrypt: vi.fn(() => null),
+    has: vi.fn().mockReturnValue(false),
+    get: vi.fn().mockReturnValue(undefined),
+  }),
+}));
+
 // --- Mock errors ---
 vi.mock("$lib/errors.js", () => ({
   RouterNotAvailableError: class extends Error {},
@@ -64,7 +76,7 @@ vi.mock("$lib/errors.js", () => ({
 let mockStatuses: SvelteSet<string>;
 let mockQueueIds: SvelteSet<string>;
 let mockPriorities: SvelteSet<string>;
-let mockAssigneeId: string | null;
+let mockAssigneeId: string | null | undefined;
 let mockDateFrom: Date | null;
 let mockDateTo: Date | null;
 let mockActiveCount: number;
@@ -73,7 +85,7 @@ function resetFilterMock(): void {
   mockStatuses = new SvelteSet<string>();
   mockQueueIds = new SvelteSet<string>();
   mockPriorities = new SvelteSet<string>();
-  mockAssigneeId = null;
+  mockAssigneeId = undefined;
   mockDateFrom = null;
   mockDateTo = null;
   mockActiveCount = 0;

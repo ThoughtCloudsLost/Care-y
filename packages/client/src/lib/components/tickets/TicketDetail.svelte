@@ -33,16 +33,21 @@
   import VoicemailPlayer from "$lib/components/tickets/VoicemailPlayer.svelte";
   import MmsImage from "$lib/components/tickets/MmsImage.svelte";
   import AttachmentChip from "$lib/components/tickets/AttachmentChip.svelte";
+  import MentionAutocomplete from "$lib/components/tickets/MentionAutocomplete.svelte";
 
   interface TicketDetailProps {
     ticketId: string;
     /** Compose draft text (two-way bindable). */
     draftText?: string;
+    /** Current cursor position in the compose textarea. */
+    cursorPosition?: number;
     onback: () => void;
     oncall: () => void;
     onactions: () => void;
     onclientinfo: () => void;
     onpresetselect: (body: string) => void;
+    /** Called when a volunteer is selected from @mention autocomplete. */
+    onmentionselect?: (userId: string, displayName: string) => void;
     /** Called when an MMS image is tapped. Route file opens lightbox. */
     onlightbox?: (imageUrl: string) => void;
   }
@@ -50,11 +55,13 @@
   let {
     ticketId,
     draftText = $bindable(""),
+    cursorPosition = 0,
     onback,
     oncall,
     onactions,
     onclientinfo,
     onpresetselect,
+    onmentionselect,
     onlightbox,
   }: TicketDetailProps = $props();
 
@@ -324,6 +331,15 @@
       </Messages>
     {/if}
   </div>
+
+  <div class="mention-anchor">
+    <MentionAutocomplete
+      {draftText}
+      {cursorPosition}
+      onselect={(userId: string, displayName: string) =>
+        onmentionselect?.(userId, displayName)}
+    />
+  </div>
 {/if}
 
 <style>
@@ -341,6 +357,14 @@
     flex-direction: column;
     /* Leave space for the fixed ShellMessagebar at the bottom */
     padding-bottom: 4.5rem;
+  }
+
+  .mention-anchor {
+    position: fixed;
+    bottom: 3.5rem;
+    left: 0;
+    right: 0;
+    z-index: 25;
   }
 
   .empty-chat {

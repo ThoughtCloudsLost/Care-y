@@ -150,6 +150,8 @@ export interface ShellMessagebarProps {
   onattach: () => void;
   /** Called when the preset reply button is tapped. */
   onpreset: () => void;
+  /** Forwarded from the textarea's native input event. Used by @mention autocomplete to read cursor position. */
+  oninput?: (e: Event) => void;
   /** Whether the send button is visually disabled. */
   sendDisabled?: boolean;
 }

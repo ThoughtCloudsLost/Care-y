@@ -27,6 +27,7 @@
   import ShellActionSheet from "$lib/shell/ShellActionSheet.svelte";
   import ShellSheet from "$lib/shell/ShellSheet.svelte";
   import ShellPopup from "$lib/shell/ShellPopup.svelte";
+  import PresetReplyContent from "$lib/components/tickets/PresetReplyContent.svelte";
   import { createQuery } from "@tanstack/svelte-query";
   import { trpc } from "$lib/trpc/index.js";
   import { RouterNotAvailableError } from "$lib/errors.js";
@@ -41,6 +42,14 @@
   // Draft compose state (shared with ShellMessagebar + TicketDetail).
   let draftText = $state("");
   let composeMode = $state<ComposeMode>("reply");
+  let cursorPosition = $state(0);
+
+  function handleInput(e: Event): void {
+    const target = e.target;
+    if (target instanceof HTMLTextAreaElement) {
+      cursorPosition = target.selectionStart;
+    }
+  }
 
   // Ticket data for navbar display.
   const ticketQuery = createQuery(() => ({
@@ -101,6 +110,17 @@
     if (import.meta.env.DEV) {
       console.log("[TicketDetail] attach");
     }
+  }
+
+  function handleMentionSelect(_userId: string, displayName: string): void {
+    // Replace the @partial at cursor with @DisplayName followed by a space.
+    const before = draftText.slice(0, cursorPosition);
+    const after = draftText.slice(cursorPosition);
+    const atIndex = before.lastIndexOf("@");
+    if (atIndex === -1) return;
+    const replacement = `@${displayName} `;
+    draftText = before.slice(0, atIndex) + replacement + after;
+    cursorPosition = atIndex + replacement.length;
   }
 
   // --- Overlay helpers ---
@@ -181,6 +201,7 @@
   <TicketDetail
     {ticketId}
     bind:draftText
+    {cursorPosition}
     onback={goBack}
     oncall={openCallSheet}
     onactions={openActionsSheet}
@@ -188,6 +209,7 @@
     onpresetselect={(body: string) => {
       draftText = body;
     }}
+    onmentionselect={handleMentionSelect}
     onlightbox={openLightbox}
   />
 </div>
@@ -199,6 +221,7 @@
   onsend={handleSend}
   onattach={handleAttach}
   onpreset={openPresetSheet}
+  oninput={handleInput}
   sendDisabled={!draftText.trim()}
 />
 
@@ -218,10 +241,12 @@
 </ShellActionSheet>
 
 <ShellSheet opened={presetSheetOpen} ondismiss={closePresetSheet}>
-  <!-- PresetReplyContent replaces this stub -->
-  <div class="stub-overlay">
-    <p>{m.ticket_preset_replies()}</p>
-  </div>
+  <PresetReplyContent
+    onselect={(body: string) => {
+      draftText = body;
+      closePresetSheet();
+    }}
+  />
 </ShellSheet>
 
 <ShellSheet opened={clientInfoOpen} ondismiss={closeClientInfo}>
