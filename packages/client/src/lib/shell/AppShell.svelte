@@ -46,7 +46,11 @@
   import {
     setScrollContainer,
     setTabbarOverrideCtx,
+    setTabbarHiddenCtx,
+    setNavbarOverrideCtx,
     type TabbarOverrideContainer,
+    type TabbarHiddenContainer,
+    type NavbarOverrideContainer,
   } from "./context";
 
   const SCROLL_CONTAINER_ID = "app-scroll-container";
@@ -63,6 +67,24 @@
   });
   setTabbarOverrideCtx(tabbarOverrideContainer);
   const tabbarOverride = $derived(tabbarOverrideContainer.current);
+
+  // Tabbar hidden: child routes can hide the tab bar entirely (e.g.,
+  // ticket detail with its own compose bar). $state makes it reactive.
+  const tabbarHiddenContainer: TabbarHiddenContainer = $state({
+    current: false,
+  });
+  setTabbarHiddenCtx(tabbarHiddenContainer);
+  const tabbarHidden = $derived(tabbarHiddenContainer.current);
+
+  // Navbar override: child routes can replace the default Navbar slot
+  // content (avatar + org name + search/new) with custom left/title/right
+  // snippets. The real Konsta Navbar stays in AppShell for Glass blur +
+  // safe-area + theme adaptation.
+  const navbarOverrideContainer: NavbarOverrideContainer = $state({
+    current: undefined,
+  });
+  setNavbarOverrideCtx(navbarOverrideContainer);
+  const navbarOverride = $derived(navbarOverrideContainer.current);
 
   let {
     activeTab,
@@ -305,16 +327,31 @@
 <Page id={SCROLL_CONTAINER_ID}>
   <Navbar role="banner">
     {#snippet left()}
-      <Link iconOnly role="button" aria-label={m.nav_account()}>
-        <span class="navbar-avatar" aria-hidden="true">JN</span>
-      </Link>
+      {#if navbarOverride?.left}
+        {@render navbarOverride.left()}
+      {:else}
+        <Link iconOnly role="button" aria-label={m.nav_account()}>
+          <span class="navbar-avatar" aria-hidden="true">JN</span>
+        </Link>
+      {/if}
     {/snippet}
-    {#snippet title()}<span
-        class="heading-compact"
-        class:heading-hidden={searchOpen}>{orgName}</span
-      >{/snippet}
+    {#snippet title()}
+      {#if navbarOverride?.title}
+        {#if typeof navbarOverride.title === "string"}
+          <span class="heading-compact">{navbarOverride.title}</span>
+        {:else}
+          {@render navbarOverride.title()}
+        {/if}
+      {:else}
+        <span class="heading-compact" class:heading-hidden={searchOpen}
+          >{orgName}</span
+        >
+      {/if}
+    {/snippet}
     {#snippet right()}
-      {#if !searchOpen}
+      {#if navbarOverride?.right}
+        {@render navbarOverride.right()}
+      {:else if !searchOpen}
         <Link
           iconOnly
           role="button"
@@ -328,7 +365,7 @@
         </Link>
       {/if}
     {/snippet}
-    {#if searchOpen}
+    {#if searchOpen && !navbarOverride}
       <div
         bind:this={searchContainerEl}
         class="search-overlay search-overlay-open"
@@ -413,7 +450,9 @@
     </div>
   {/if}
 
-  {#if tabbarOverride}
+  {#if tabbarHidden}
+    <!-- Tabbar hidden: route provides its own bottom bar (e.g., ShellMessagebar) -->
+  {:else if tabbarOverride}
     {@const DismissIcon = tabbarOverride.dismiss.icon}
     <div role="toolbar" aria-label={tabbarOverride.ariaLabel}>
       <Toolbar tabbar tabbarIcons class="native-tabbar left-0 bottom-0 fixed">
@@ -485,7 +524,11 @@
     </nav>
   {/if}
 
-  <main id="main-content" class="main-content">
+  <main
+    id="main-content"
+    class="main-content"
+    class:tabbar-hidden={tabbarHidden}
+  >
     {@render children()}
   </main>
 </Page>
@@ -509,6 +552,10 @@
 
   :global(.k-material) .main-content {
     padding-bottom: calc(5rem + env(safe-area-inset-bottom, 0px));
+  }
+
+  .main-content.tabbar-hidden {
+    padding-bottom: 0 !important;
   }
 
   .navbar-avatar {

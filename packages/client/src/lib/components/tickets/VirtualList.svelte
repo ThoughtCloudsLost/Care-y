@@ -49,7 +49,9 @@
   let virtualized = $state(false);
 
   // Allow tests to start in virtualized mode immediately.
-  if (_forceVirtualize) virtualized = true;
+  $effect(() => {
+    if (_forceVirtualize) virtualized = true;
+  });
   let prevItemCount = $state(0);
   let loadMoreFired = false;
 

@@ -135,6 +135,39 @@ export interface ShellNotificationProps {
   titleRightText?: string;
 }
 
+// ── Compose mode ────────────────────────────────────────────────────
+
+export type ComposeMode = "reply" | "note";
+
+export interface ShellMessagebarProps {
+  /** Compose text (two-way bindable). Defaults to empty string. */
+  value?: string;
+  /** Current compose mode (two-way bindable). Defaults to "reply". */
+  mode?: ComposeMode;
+  /** Called when the send/save button is tapped. */
+  onsend: () => void;
+  /** Called when the attach button is tapped. */
+  onattach: () => void;
+  /** Called when the preset reply button is tapped. */
+  onpreset: () => void;
+  /** Whether the send button is visually disabled. */
+  sendDisabled?: boolean;
+}
+
+// ── Navbar override ─────────────────────────────────────────────────
+// Any route can temporarily override AppShell's Navbar left/title/right
+// by setting a NavbarOverride via context. AppShell reads the override
+// reactively and renders the provided snippets.
+
+export interface NavbarOverride {
+  /** Snippet rendered in the left slot (back button). */
+  readonly left?: Snippet;
+  /** Title string or snippet. */
+  readonly title?: string | Snippet;
+  /** Snippet rendered in the right slot (action icons). */
+  readonly right?: Snippet;
+}
+
 // ── Tabbar override ─────────────────────────────────────────────────
 // Any route can temporarily replace the tab bar with custom actions.
 // The shell renders Link items (not TabbarLink, which drives the
