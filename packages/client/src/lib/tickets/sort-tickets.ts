@@ -14,7 +14,7 @@ interface SortableTicket {
   readonly priority: string;
   readonly createdAt: string;
   readonly lastActivityAt: string | null;
-  readonly queueName: string;
+  readonly queueSortOrder: number;
 }
 
 const PRIORITY_ORDER = new Map<string, number>([
@@ -56,7 +56,7 @@ export function sortTickets<T extends SortableTicket>(
         break;
       }
       case "queue":
-        cmp = a.queueName.localeCompare(b.queueName);
+        cmp = a.queueSortOrder - b.queueSortOrder;
         break;
       case "date":
       default:

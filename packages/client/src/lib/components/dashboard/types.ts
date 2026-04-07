@@ -16,8 +16,8 @@ export interface TicketPreviewItemProps {
   createdAt: Date;
   /** Client alias (e.g., "Sparrow") */
   clientAlias: string;
-  /** Queue name (e.g., "Crisis") */
-  queueName: string;
+  /** Queue name, decrypted client-side via OrgDecryptCache (ADR-030) */
+  queueName: string | null;
   /** Timestamp of most recent follow-up, or null if none */
   lastActivityAt: Date | null;
   /** Number of follow-ups on this ticket */

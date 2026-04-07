@@ -39,7 +39,8 @@ export interface TicketRecord {
 /** Enriched ticket with joined metadata for list/detail views. */
 export interface TicketListRecord extends TicketRecord {
   readonly clientAlias: string;
-  readonly queueName: string;
+  readonly encryptedQueueName: Buffer;
+  readonly queueSortOrder: number;
   readonly lastActivityAt: Date | null;
   readonly followUpCount: number;
   /** Org-key encrypted display name of the assigned volunteer, or null if unassigned. */
@@ -149,7 +150,8 @@ interface BaseTicketRow {
 
 interface EnrichedTicketRow extends BaseTicketRow {
   client_alias: string;
-  queue_name: string;
+  encrypted_queue_name: Buffer;
+  queue_sort_order: number;
   last_activity_at: Date | null;
   followup_count: string | number | bigint | null;
   assigned_display_name: Buffer | null;
@@ -175,7 +177,8 @@ function toListRecord(row: EnrichedTicketRow): TicketListRecord {
   return {
     ...toRecord(row),
     clientAlias: row.client_alias,
-    queueName: row.queue_name,
+    encryptedQueueName: row.encrypted_queue_name,
+    queueSortOrder: row.queue_sort_order,
     lastActivityAt: row.last_activity_at,
     followUpCount: Number(row.followup_count),
     assignedDisplayName: row.assigned_display_name,
@@ -319,7 +322,8 @@ export function createTicketService(
         .selectAll("t")
         .select(["tkw.ephemeral_point", "tkw.nonce", "tkw.wrapped_key"])
         .select("c.alias as client_alias")
-        .select("q.name as queue_name")
+        .select("q.encrypted_name as encrypted_queue_name")
+        .select("q.sort_order as queue_sort_order")
         .select("u.encrypted_display_name as assigned_display_name")
         .select((eb) => [
           eb
@@ -368,7 +372,8 @@ export function createTicketService(
         .selectAll("t")
         .select(["tkw.ephemeral_point", "tkw.nonce", "tkw.wrapped_key"])
         .select("c.alias as client_alias")
-        .select("q.name as queue_name")
+        .select("q.encrypted_name as encrypted_queue_name")
+        .select("q.sort_order as queue_sort_order")
         .select("u.encrypted_display_name as assigned_display_name")
         .select((eb) => [
           eb
@@ -535,23 +540,23 @@ export function createTicketService(
             return eb.or([cursorNonNull, cursorNull]);
           });
         } else if (sortBy === "queue") {
-          // Subquery: cursor row's queue name via JOIN
-          const cursorQueueName = db
+          // Subquery: cursor row's queue sort_order via JOIN
+          const cursorSortOrder = db
             .selectFrom("tickets")
             .innerJoin("queues", "queues.id", "tickets.queue_id")
-            .select("queues.name")
+            .select("queues.sort_order")
             .where("tickets.id", "=", cursorId);
 
-          // Three-column keyset: (queue_name, created_at, id)
+          // Three-column keyset: (sort_order, created_at, id)
           query = query.where((eb) =>
             eb.or([
-              eb("q.name", gt, cursorQueueName),
+              eb("q.sort_order", gt, cursorSortOrder),
               eb.and([
-                eb("q.name", "=", cursorQueueName),
+                eb("q.sort_order", "=", cursorSortOrder),
                 eb("t.created_at", gt, cursorCreatedAt),
               ]),
               eb.and([
-                eb("q.name", "=", cursorQueueName),
+                eb("q.sort_order", "=", cursorSortOrder),
                 eb("t.created_at", "=", cursorCreatedAt),
                 eb("t.id", gt, cursorId),
               ]),
@@ -607,7 +612,7 @@ export function createTicketService(
           .orderBy("t.id", "asc");
       } else if (sortBy === "queue") {
         query = query
-          .orderBy("q.name", sortDirection)
+          .orderBy("q.sort_order", sortDirection)
           .orderBy("t.created_at", sortDirection)
           .orderBy("t.id", "asc");
       } else {

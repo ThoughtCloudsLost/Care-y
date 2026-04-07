@@ -5,13 +5,12 @@
  * Each takes a tenant-scoped Kysely instance (already bound to the org
  * schema via tenantDb/withSchema).
  *
- * KB content is encrypted with the org key (non-PII tier). The server
- * stores only ciphertext in bytea columns and plaintext metadata
- * (category names, vote counts, timestamps). Decryption happens
- * client-side after the browser unwraps the org key at login.
+ * KB content (category names, article titles, bodies) is encrypted with the org
+ * key (non-PII tier). The server stores only ciphertext in bytea
+ * columns and plaintext metadata (sort order, vote counts, timestamps).
+ * Decryption happens client-side after the browser unwraps the org key
+ * at login.
  */
-
-// care-y-ignore db-write-no-crypto-import -- KB encrypted fields (encrypted_title, encrypted_body, encrypted_description) arrive pre-encrypted from the browser via org key encryption. Server writes opaque ciphertext Buffers. No server-side crypto needed.
 
 import type { Kysely } from "kysely";
 import type { TenantDatabase } from "../db/types.js";
@@ -22,7 +21,8 @@ import { ErrorCode } from "@care-y/shared";
 
 export interface KBCategoryRecord {
   readonly id: string;
-  readonly name: string;
+  readonly encryptedName: Buffer;
+  readonly sortOrder: number;
   readonly encryptedDescription: Buffer | null;
   readonly createdAt: Date;
   readonly updatedAt: Date;
@@ -62,7 +62,7 @@ export interface KBVoteRecord {
 
 export interface KBCategoryService {
   create(input: {
-    name: string;
+    encryptedName: Buffer;
     encryptedDescription?: Buffer;
   }): Promise<KBCategoryRecord>;
 
@@ -71,12 +71,14 @@ export interface KBCategoryService {
   update(
     categoryId: string,
     input: {
-      name?: string;
+      encryptedName?: Buffer;
       encryptedDescription?: Buffer;
     },
   ): Promise<KBCategoryRecord>;
 
   delete(categoryId: string): Promise<void>;
+
+  reorder(items: { categoryId: string; sortOrder: number }[]): Promise<void>;
 }
 
 export interface KBItemService {
@@ -133,14 +135,16 @@ export interface KBVoteService {
 
 function toCategoryRecord(row: {
   id: string;
-  name: string;
+  encrypted_name: Buffer;
+  sort_order: number;
   encrypted_description: Buffer | null;
   created_at: Date;
   updated_at: Date;
 }): KBCategoryRecord {
   return {
     id: row.id,
-    name: row.name,
+    encryptedName: row.encrypted_name,
+    sortOrder: row.sort_order,
     encryptedDescription: row.encrypted_description,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -195,11 +199,20 @@ export function createKBCategoryService(
 ): KBCategoryService {
   return {
     async create(input) {
+      const { max } = await db
+        .selectFrom("kb_categories")
+        .select((eb) =>
+          eb.fn.coalesce(eb.fn.max("sort_order"), eb.lit(0)).as("max"),
+        )
+        .executeTakeFirstOrThrow();
+
+      const nextSortOrder = max + 1;
+
       const row = await db
         .insertInto("kb_categories")
         .values({
-          // care-y-ignore-next-line ast-pii-in-db-write -- category names are plaintext by design (05c-knowledge-base.md Design Decisions: "Category labels are organizational taxonomy, not sensitive content")
-          name: input.name,
+          encrypted_name: input.encryptedName,
+          sort_order: nextSortOrder,
           encrypted_description: input.encryptedDescription ?? null,
         })
         .returningAll()
@@ -211,14 +224,15 @@ export function createKBCategoryService(
       const rows = await db
         .selectFrom("kb_categories")
         .selectAll()
-        .orderBy("name", "asc")
+        .orderBy("sort_order", "asc")
         .execute();
       return rows.map(toCategoryRecord);
     },
 
     async update(categoryId, input) {
       const updates: Record<string, unknown> = {};
-      if (input.name !== undefined) updates.name = input.name;
+      if (input.encryptedName !== undefined)
+        updates.encrypted_name = input.encryptedName;
       if (input.encryptedDescription !== undefined)
         updates.encrypted_description = input.encryptedDescription;
 
@@ -254,6 +268,32 @@ export function createKBCategoryService(
       if (result.numDeletedRows === 0n) {
         throw new NotFoundError(ErrorCode.KB_CATEGORY_NOT_FOUND);
       }
+    },
+
+    async reorder(items) {
+      await db.transaction().execute(async (trx) => {
+        // Set all affected rows to negative sort_order to avoid unique
+        // constraint conflicts during the reorder swap.
+        for (const item of items) {
+          await trx
+            .updateTable("kb_categories")
+            .set({ sort_order: -item.sortOrder })
+            .where("id", "=", item.categoryId)
+            .execute();
+        }
+
+        // Apply the final positive sort_order values.
+        for (const item of items) {
+          await trx
+            .updateTable("kb_categories")
+            .set({
+              sort_order: item.sortOrder,
+              updated_at: new Date(),
+            })
+            .where("id", "=", item.categoryId)
+            .execute();
+        }
+      });
     },
   };
 }

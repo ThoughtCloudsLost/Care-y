@@ -142,7 +142,7 @@
     return {
       viewMode: viewModeStore.mode,
       ticketId: t.id,
-      queueName: t.queueName,
+      queueName: orgCache.decrypt(`queue:${t.queueId}`, t.encryptedQueueName),
       displayStatus: deriveDisplayStatus(t.status, t.onHold, t.followUpCount),
       priority: t.priority,
       title: ticketCache.decryptTitle(t.id, t.keyWrap, t.encryptedTitle),

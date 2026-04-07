@@ -5,7 +5,7 @@
 
   interface QueueInfo {
     id: string;
-    name: string;
+    name: string | null;
     openCount: number;
   }
 
@@ -13,7 +13,7 @@
     queues: QueueInfo[];
     expanded: boolean;
     ontoggle: () => void;
-    ontap: (queueId: string, queueName: string) => void;
+    ontap: (queueId: string) => void;
   }
 
   let { queues, expanded, ontoggle, ontap }: QueueCardsProps = $props();
@@ -35,12 +35,12 @@
         <button
           type="button"
           class="queue-tile"
-          aria-label="{queue.name}, {m.dashboard_queues_open_count({
+          aria-label="{queue.name ?? '...'}, {m.dashboard_queues_open_count({
             count: queue.openCount,
           })}"
-          onclick={() => ontap(queue.id, queue.name)}
+          onclick={() => ontap(queue.id)}
         >
-          <span class="queue-name">{queue.name}</span>
+          <span class="queue-name">{queue.name ?? "..."}</span>
           <span class="queue-count"
             >{m.dashboard_queues_open_count({ count: queue.openCount })}</span
           >

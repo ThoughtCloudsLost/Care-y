@@ -213,7 +213,7 @@ describe.skipIf(!process.env.DATABASE_URL)("TicketService (DB)", () => {
   it("list returns tickets with keyset pagination", async () => {
     // Create a user and 3 tickets in the same queue
     const queue = await createTestQueue(testDb.db, {
-      name: "Paginate-Q-" + crypto.randomUUID().slice(0, 8),
+      label: "Paginate-Q-" + crypto.randomUUID().slice(0, 8),
     });
     const user = await createTestUser(testDb.db);
     // Give the user queue access so list() returns results

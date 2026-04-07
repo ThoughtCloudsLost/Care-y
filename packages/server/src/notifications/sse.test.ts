@@ -30,7 +30,7 @@ function mockResponse(): {
 const TEST_EVENT: SseEvent = {
   type: "ticket_assigned",
   ticketId: "550e8400-e29b-41d4-a716-446655440000",
-  queueName: "Intake",
+  queueId: "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
   timestamp: "2026-03-24T12:00:00.000Z",
 };
 

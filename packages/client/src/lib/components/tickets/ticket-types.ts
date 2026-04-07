@@ -15,7 +15,7 @@ export type ViewMode = "list" | "grid";
 export interface TicketCardProps {
   readonly viewMode: ViewMode;
   readonly ticketId: string;
-  readonly queueName: string;
+  readonly queueName: string | null;
   readonly displayStatus: DisplayStatus;
   readonly priority: "low" | "normal" | "high" | "urgent";
   /** undefined = still decrypting */

@@ -24,8 +24,9 @@ import {
   FileMigrationProvider,
   Migrator,
   sql,
+  type Insertable,
+  type Selectable,
 } from "kysely";
-import type { Insertable, Selectable } from "kysely";
 import type {
   PlatformDatabase,
   TenantDatabase,
@@ -334,26 +335,40 @@ export async function createTestSession(
 // ---------------------------------------------------------------------------
 
 /**
- * Inserts a queue row with a random name. Queue names are plaintext
- * by design (05-tickets.md: "queue names aren't sensitive").
+ * Inserts a queue row with encrypted name and sort_order.
+ * Uses Buffer.from(label) as a test placeholder (not real org-key encryption).
  */
 export async function createTestQueue(
   db: Kysely<TenantDatabase>,
-  overrides?: { name?: string; escalateDays?: number },
-): Promise<{ id: string; name: string }> {
+  overrides?: { label?: string; escalateDays?: number; sortOrder?: number },
+): Promise<{ id: string; sortOrder: number }> {
   const uid = crypto.randomUUID().slice(0, 8);
+  const label = overrides?.label ?? `Q-${uid}`;
+
+  // Auto-assign sort_order if not provided
+  const sortOrder =
+    overrides?.sortOrder ??
+    (
+      await db
+        .selectFrom("queues")
+        .select((eb) =>
+          eb.fn.coalesce(eb.fn.max("sort_order"), eb.lit(0)).as("max"),
+        )
+        .executeTakeFirstOrThrow()
+    ).max + 1;
+
   const row = await db
     .insertInto("queues")
     .values({
-      // care-y-ignore-next-line ast-pii-in-db-write -- queue names are plaintext by design (05-tickets.md section 5.1)
-      name: overrides?.name ?? `Q-${uid}`,
+      encrypted_name: Buffer.from(label),
+      sort_order: sortOrder,
       ...(overrides?.escalateDays !== undefined
         ? { escalate_days: overrides.escalateDays }
         : {}),
     })
-    .returning(["id", "name"])
+    .returning(["id", "sort_order"])
     .executeTakeFirstOrThrow();
-  return row;
+  return { id: row.id, sortOrder: row.sort_order };
 }
 
 export interface TestTicketFixture {

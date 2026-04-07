@@ -278,7 +278,8 @@ export interface ConsultantsTable {
 
 export interface QueuesTable {
   id: Generated<string>;
-  name: string;
+  encrypted_name: Buffer;
+  sort_order: number;
   escalate_days: ColumnType<number, number | undefined, number>;
   is_active: ColumnType<boolean, boolean | undefined, boolean>;
   created_at: Generated<Date>;
@@ -370,7 +371,8 @@ export interface ClientMergeEventsTable {
 
 export interface KBCategoriesTable {
   id: Generated<string>;
-  name: string;
+  encrypted_name: Buffer;
+  sort_order: number;
   encrypted_description: Buffer | null;
   created_at: Generated<Date>;
   updated_at: Generated<Date>;

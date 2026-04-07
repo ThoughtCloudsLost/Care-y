@@ -62,6 +62,7 @@ import {
   undoMergeInputSchema,
   createQueueInputSchema,
   updateQueueInputSchema,
+  reorderQueuesInputSchema,
   assignTicketInputSchema,
   takeTicketInputSchema,
   releaseTicketInputSchema,
@@ -192,18 +193,9 @@ export function createTicketRouter(deps: TicketRouterDeps) {
   }
 
   /**
-   * Resolves the queue name for a ticket. Used by audit+notify flows.
-   */
-  async function resolveQueueName(
-    tDb: OrgContext["tenantDb"],
-    queueId: string,
-  ): Promise<string> {
-    return deps.createQueueSvc(tDb).getQueueName(queueId);
-  }
-
-  /**
    * Combined audit + notification for ticket lifecycle events.
-   * Logs the audit entry, resolves queue name, dispatches notification.
+   * Logs the audit entry, dispatches notification with queueId (not name,
+   * since queue names are encrypted per ADR-030).
    * All steps are best-effort (never blocks the response).
    */
   function auditAndNotify(
@@ -214,20 +206,16 @@ export function createTicketRouter(deps: TicketRouterDeps) {
     mentionedPseudonyms: string[] = [],
   ): void {
     audit(ctx.org.tenantDb, auditEntry);
-    void resolveQueueName(ctx.org.tenantDb, ticket.queueId).then(
-      (queueName) => {
-        notify(ctx, eventType, ticket, queueName, mentionedPseudonyms);
-      },
-    );
+    notify(ctx, eventType, ticket, mentionedPseudonyms);
   }
 
   // Notification dispatch helper: best-effort, never blocks.
   // Builds recipient list and dispatches across all channels.
+  // Passes queueId (not queue name) since names are encrypted (ADR-030).
   function notify(
     ctx: { org: OrgContext; user: { id: string } },
     eventType: NotificationEventType,
     ticket: { id: string; queueId: string; assignedTo: string | null },
-    queueName: string,
     mentionedPseudonyms: string[] = [],
   ): void {
     if (!deps.notificationService) return;
@@ -256,7 +244,7 @@ export function createTicketRouter(deps: TicketRouterDeps) {
           ctx.org.orgSlug,
           eventType,
           ticket.id,
-          queueName,
+          ticket.queueId,
           recipients,
         );
       } catch (err: unknown) {
@@ -598,7 +586,10 @@ export function createTicketRouter(deps: TicketRouterDeps) {
     createQueue: adminProcedure.input(createQueueInputSchema).mutation(
       withErrorWrapping(async ({ ctx, input }) => {
         const svc = deps.createQueueSvc(ctx.org.tenantDb);
-        const queue = await svc.create(input);
+        const queue = await svc.create({
+          encryptedName: Buffer.from(input.encryptedName, "base64"),
+          escalateDays: input.escalateDays,
+        });
         audit(ctx.org.tenantDb, {
           eventType: "queue_created",
           actorId: ctx.user.id,
@@ -618,9 +609,11 @@ export function createTicketRouter(deps: TicketRouterDeps) {
     updateQueue: adminProcedure.input(updateQueueInputSchema).mutation(
       withErrorWrapping(async ({ ctx, input }) => {
         const svc = deps.createQueueSvc(ctx.org.tenantDb);
-        // care-y-ignore-next-line route-delegates-to-service -- delegates to svc.update; field extraction from validated input, not business logic
         const queue = await svc.update(input.queueId, {
-          name: input.name,
+          encryptedName:
+            input.encryptedName !== undefined
+              ? Buffer.from(input.encryptedName, "base64")
+              : undefined,
           escalateDays: input.escalateDays,
         });
         audit(ctx.org.tenantDb, {
@@ -629,6 +622,18 @@ export function createTicketRouter(deps: TicketRouterDeps) {
           metadata: { queueId: input.queueId },
         });
         return queue;
+      }),
+    ),
+
+    reorderQueues: adminProcedure.input(reorderQueuesInputSchema).mutation(
+      withErrorWrapping(async ({ ctx, input }) => {
+        const svc = deps.createQueueSvc(ctx.org.tenantDb);
+        await svc.reorder(
+          input.map((item) => ({
+            queueId: item.queueId,
+            sortOrder: item.sortOrder,
+          })),
+        );
       }),
     ),
 
@@ -763,7 +768,8 @@ export function createTicketRouter(deps: TicketRouterDeps) {
               "al.event_type as eventType",
               "al.ticket_id as ticketId",
               "c.alias as clientAlias",
-              "q.name as queueName",
+              "q.id as queueId",
+              "q.encrypted_name as encryptedQueueName",
               "al.created_at as createdAt",
             ])
             .where("t.queue_id", "in", queueIds)
@@ -790,12 +796,12 @@ export function createTicketRouter(deps: TicketRouterDeps) {
           .leftJoin("tickets as t", (join) =>
             join.onRef("t.queue_id", "=", "q.id").on("t.status", "=", "open"),
           )
-          .select(["q.id", "q.name"])
+          .select(["q.id", "q.encrypted_name", "q.sort_order"])
           .select((eb) => eb.fn.count<string>("t.id").as("openCount"))
           .where("q.id", "in", queueIds)
           .where("q.is_active", "=", true)
-          .groupBy(["q.id", "q.name"])
-          .orderBy("q.name", "asc")
+          .groupBy(["q.id", "q.encrypted_name", "q.sort_order"])
+          .orderBy("q.sort_order", "asc")
           .execute();
 
         return rows;
@@ -852,12 +858,21 @@ export function createTicketRouter(deps: TicketRouterDeps) {
               );
 
               // 2. Fetch queues + clients (created by seed script)
+              // Queue names are encrypted (ADR-030), so we fetch all active
+              // queues by sort_order and assign them to the seed labels by
+              // position: sort_order 1 = "Intake", 2 = "Crisis", 3 = "Housing".
               const queues = await tDb
                 .selectFrom("queues")
-                .select(["id", "name"])
-                .where("name", "in", ["Intake", "Crisis", "Housing"])
+                .select(["id", "sort_order"])
+                .where("is_active", "=", true)
+                .orderBy("sort_order", "asc")
                 .execute();
-              const queueMap = new Map(queues.map((q) => [q.name, q.id]));
+              const seedLabels = ["Intake", "Crisis", "Housing"];
+              const queueMap = new Map<string, string>();
+              for (const [idx, q] of queues.entries()) {
+                const label = seedLabels.at(idx);
+                if (label !== undefined) queueMap.set(label, q.id);
+              }
 
               const clients = await tDb
                 .selectFrom("clients")

@@ -9,8 +9,11 @@
   import type { FilterStatus } from "$lib/stores/filters.svelte.js";
   import { ticketPrioritySchema } from "@care-y/shared";
   import { RouterNotAvailableError } from "$lib/errors.js";
+  import { getOrgDecryptCache } from "$lib/crypto/context.js";
   import FilterPill from "./FilterPill.svelte";
   import type { FilterOption } from "./FilterPill.svelte";
+
+  const orgDecrypt = getOrgDecryptCache();
 
   type PillId = "status" | "queue" | "priority" | "assignee" | "date";
 
@@ -81,7 +84,7 @@
   const queueOptions = $derived(
     (queuesQuery.data ?? []).map((q) => ({
       value: q.id,
-      label: `${q.name} (${q.openCount})`,
+      label: `${orgDecrypt.decrypt(`queue:${q.id}`, q.encrypted_name) ?? "..."} (${q.openCount})`,
     })),
   );
 

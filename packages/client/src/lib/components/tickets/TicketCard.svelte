@@ -155,7 +155,7 @@
       <!-- Meta: queue · assignee (left group), time · msgs (right group) -->
       <div class="row-meta">
         <span class="meta-left">
-          <Chip outline class="queue-badge">{queueName}</Chip>
+          <Chip outline class="queue-badge">{queueName ?? "..."}</Chip>
           <Dot size={10} aria-hidden="true" class="meta-dot" />
           <span class="assignee">
             {assignedName ?? m.tickets_unassigned()}

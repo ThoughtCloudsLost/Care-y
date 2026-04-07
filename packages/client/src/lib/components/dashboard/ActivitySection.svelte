@@ -16,7 +16,7 @@
     eventType: string;
     ticketId: string | null;
     clientAlias: string;
-    queueName: string;
+    queueName: string | null;
     createdAt: Date | string;
   }
 
@@ -101,7 +101,9 @@
             <span class="activity-event">{eventLabel(item.eventType)}</span>
             <span class="activity-alias">{item.clientAlias}</span>
             <span class="activity-queue"
-              >{m.dashboard_activity_in_queue({ queue: item.queueName })}</span
+              >{m.dashboard_activity_in_queue({
+                queue: item.queueName ?? "...",
+              })}</span
             >
             <span class="activity-time">
               {formatRelativeTime(

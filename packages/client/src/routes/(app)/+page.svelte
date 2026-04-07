@@ -125,7 +125,7 @@
       assignedTo: t.assignedTo,
       createdAt: new Date(t.createdAt),
       clientAlias: t.clientAlias,
-      queueName: t.queueName,
+      queueName: orgCache.decrypt(`queue:${t.queueId}`, t.encryptedQueueName),
       lastActivityAt:
         t.lastActivityAt !== null ? new Date(t.lastActivityAt) : null,
       followUpCount: t.followUpCount,
@@ -138,8 +138,8 @@
     void goto(resolve(`/tickets/${ticketId}`));
   }
 
-  function handleQueueTap(queueId: string, queueName: string): void {
-    void goto(resolve(`/tickets?queue=${encodeURIComponent(queueName)}`));
+  function handleQueueTap(queueId: string): void {
+    void goto(resolve(`/tickets?queue=${encodeURIComponent(queueId)}`));
   }
 
   function handleSeeAllMyOpen(): void {
@@ -211,7 +211,7 @@
         <QueueCards
           queues={(queuesQuery.data ?? []).map((q) => ({
             id: q.id,
-            name: q.name,
+            name: orgCache.decrypt(`queue:${q.id}`, q.encrypted_name),
             openCount: Number(q.openCount),
           }))}
           expanded={queuesExpanded}
@@ -220,7 +220,13 @@
         />
 
         <ActivitySection
-          activity={activityQuery.data ?? []}
+          activity={(activityQuery.data ?? []).map((a) => ({
+            ...a,
+            queueName: orgCache.decrypt(
+              `queue:${a.queueId}`,
+              a.encryptedQueueName,
+            ),
+          }))}
           expanded={activityExpanded}
           ontoggle={() => (activityExpanded = !activityExpanded)}
           ontap={handleActivityTap}

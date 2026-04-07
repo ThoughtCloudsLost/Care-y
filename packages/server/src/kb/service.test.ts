@@ -12,6 +12,11 @@ import {
 } from "./service.js";
 import { NotFoundError } from "../errors.js";
 
+/** Helper: wrap a label string as a Buffer (test-only, not real org-key encryption). */
+function encName(label: string): Buffer {
+  return Buffer.from(label);
+}
+
 // --- Wilson score unit tests (no DB needed) ---
 
 describe("wilsonScore", () => {
@@ -60,64 +65,67 @@ describe.skipIf(!process.env.DATABASE_URL)("KBCategoryService (DB)", () => {
     await testDb.cleanup();
   });
 
-  it("creates a category with name only", async () => {
-    const cat = await svc.create({ name: "Protocols" });
+  it("creates a category with encrypted name only", async () => {
+    const cat = await svc.create({ encryptedName: encName("Protocols") });
     expect(cat.id).toBeTruthy();
-    expect(cat.name).toBe("Protocols");
+    expect(cat.encryptedName.toString()).toBe("Protocols");
     expect(cat.encryptedDescription).toBeNull();
+    expect(cat.sortOrder).toBeGreaterThan(0);
     expect(cat.createdAt).toBeInstanceOf(Date);
   });
 
   it("creates a category with encrypted description", async () => {
     const desc = Buffer.from("encrypted-desc");
     const cat = await svc.create({
-      name: "Resources",
+      encryptedName: encName("Resources"),
       encryptedDescription: desc,
     });
     expect(Buffer.isBuffer(cat.encryptedDescription)).toBe(true);
   });
 
-  it("lists categories sorted by name", async () => {
-    // Previous tests already created "Protocols" and "Resources"
+  it("lists categories sorted by sort_order", async () => {
     const list = await svc.list();
     expect(list.length).toBeGreaterThanOrEqual(2);
-    // Names should be alphabetically sorted
     for (let i = 1; i < list.length; i++) {
-      expect(list[i]!.name >= list[i - 1]!.name).toBe(true);
+      expect(list[i]!.sortOrder).toBeGreaterThanOrEqual(list[i - 1]!.sortOrder);
     }
   });
 
-  it("updates category name", async () => {
-    const cat = await svc.create({ name: "Old Name" });
-    const updated = await svc.update(cat.id, { name: "New Name" });
-    expect(updated.name).toBe("New Name");
+  it("updates category encrypted name", async () => {
+    const cat = await svc.create({ encryptedName: encName("Old Name") });
+    const updated = await svc.update(cat.id, {
+      encryptedName: encName("New Name"),
+    });
+    expect(updated.encryptedName.toString()).toBe("New Name");
     expect(updated.updatedAt.getTime()).toBeGreaterThanOrEqual(
       cat.updatedAt.getTime(),
     );
   });
 
   it("updates category encrypted description", async () => {
-    const cat = await svc.create({ name: "Desc Test" });
+    const cat = await svc.create({ encryptedName: encName("Desc Test") });
     const desc = Buffer.from("new-encrypted-desc");
     const updated = await svc.update(cat.id, { encryptedDescription: desc });
     expect(Buffer.isBuffer(updated.encryptedDescription)).toBe(true);
   });
 
   it("no-op update returns existing category", async () => {
-    const cat = await svc.create({ name: "No-op" });
+    const cat = await svc.create({ encryptedName: encName("No-op") });
     const same = await svc.update(cat.id, {});
     expect(same.id).toBe(cat.id);
-    expect(same.name).toBe("No-op");
+    expect(same.encryptedName.toString()).toBe("No-op");
   });
 
   it("update throws NotFoundError for non-existent category", async () => {
     await expect(
-      svc.update("00000000-0000-0000-0000-000000000099", { name: "X" }),
+      svc.update("00000000-0000-0000-0000-000000000099", {
+        encryptedName: encName("X"),
+      }),
     ).rejects.toThrow(NotFoundError);
   });
 
   it("deletes an empty category", async () => {
-    const cat = await svc.create({ name: "Deletable" });
+    const cat = await svc.create({ encryptedName: encName("Deletable") });
     await svc.delete(cat.id);
     const list = await svc.list();
     expect(list.find((c) => c.id === cat.id)).toBeUndefined();
@@ -127,6 +135,22 @@ describe.skipIf(!process.env.DATABASE_URL)("KBCategoryService (DB)", () => {
     await expect(
       svc.delete("00000000-0000-0000-0000-000000000099"),
     ).rejects.toThrow(NotFoundError);
+  });
+
+  it("reorder swaps sort_order values", async () => {
+    const c1 = await svc.create({ encryptedName: encName("ReorderA") });
+    const c2 = await svc.create({ encryptedName: encName("ReorderB") });
+
+    await svc.reorder([
+      { categoryId: c1.id, sortOrder: c2.sortOrder },
+      { categoryId: c2.id, sortOrder: c1.sortOrder },
+    ]);
+
+    const list = await svc.list();
+    const r1 = list.find((c) => c.id === c1.id);
+    const r2 = list.find((c) => c.id === c2.id);
+    expect(r1?.sortOrder).toBe(c2.sortOrder);
+    expect(r2?.sortOrder).toBe(c1.sortOrder);
   });
 });
 
@@ -141,7 +165,9 @@ describe.skipIf(!process.env.DATABASE_URL)("KBItemService (DB)", () => {
     catSvc = createKBCategoryService(testDb.db);
     svc = createKBItemService(testDb.db);
 
-    const cat = await catSvc.create({ name: "Test Category" });
+    const cat = await catSvc.create({
+      encryptedName: encName("Test Category"),
+    });
     categoryId = cat.id;
   });
 
@@ -220,7 +246,9 @@ describe.skipIf(!process.env.DATABASE_URL)("KBItemService (DB)", () => {
   });
 
   it("lists filtered by categoryId", async () => {
-    const cat2 = await catSvc.create({ name: "Other Category" });
+    const cat2 = await catSvc.create({
+      encryptedName: encName("Other Category"),
+    });
     await svc.create("user-1", {
       categoryId: cat2.id,
       encryptedTitle: Buffer.from("other-cat"),
@@ -247,7 +275,9 @@ describe.skipIf(!process.env.DATABASE_URL)("KBItemService (DB)", () => {
   });
 
   it("update moves article to different category", async () => {
-    const cat2 = await catSvc.create({ name: "Move Target" });
+    const cat2 = await catSvc.create({
+      encryptedName: encName("Move Target"),
+    });
     const item = await svc.create("user-1", {
       categoryId,
       encryptedTitle: Buffer.from("movable"),
@@ -282,7 +312,9 @@ describe.skipIf(!process.env.DATABASE_URL)("KBItemService (DB)", () => {
   });
 
   it("category delete fails when articles exist (RESTRICT FK)", async () => {
-    const cat = await catSvc.create({ name: "Has Articles" });
+    const cat = await catSvc.create({
+      encryptedName: encName("Has Articles"),
+    });
     await svc.create("user-1", {
       categoryId: cat.id,
       encryptedTitle: Buffer.from("blocker"),
@@ -293,7 +325,9 @@ describe.skipIf(!process.env.DATABASE_URL)("KBItemService (DB)", () => {
   });
 
   it("listRecentlyUpdated returns encryptedTitle as Buffer, not plaintext string", async () => {
-    const cat = await catSvc.create({ name: "Encrypt Check" });
+    const cat = await catSvc.create({
+      encryptedName: encName("Encrypt Check"),
+    });
     const ciphertext = Buffer.from([0xde, 0xad, 0xbe, 0xef, 0x01, 0x02]);
     await svc.create("user-1", {
       categoryId: cat.id,
@@ -327,7 +361,9 @@ describe.skipIf(!process.env.DATABASE_URL)("KBVoteService (DB)", () => {
     itemSvc = createKBItemService(testDb.db);
     svc = createKBVoteService(testDb.db);
 
-    const cat = await catSvc.create({ name: "Vote Category" });
+    const cat = await catSvc.create({
+      encryptedName: encName("Vote Category"),
+    });
     const item = await itemSvc.create("user-1", {
       categoryId: cat.id,
       encryptedTitle: Buffer.from("vote-article"),
@@ -411,7 +447,9 @@ describe.skipIf(!process.env.DATABASE_URL)("KBVoteService (DB)", () => {
 
   it("deleting article cascades votes", async () => {
     // Create a fresh article with a vote
-    const cat = await catSvc.create({ name: "Cascade Test" });
+    const cat = await catSvc.create({
+      encryptedName: encName("Cascade Test"),
+    });
     const fresh = await itemSvc.create("u", {
       categoryId: cat.id,
       encryptedTitle: Buffer.from("t"),

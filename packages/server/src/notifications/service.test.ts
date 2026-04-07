@@ -83,7 +83,7 @@ describe("NotificationService.dispatch", () => {
       "myorg",
       "ticket_assigned",
       "ticket-uuid",
-      "Intake",
+      "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
       TEST_RECIPIENTS,
     );
 
@@ -96,7 +96,7 @@ describe("NotificationService.dispatch", () => {
     const event = broadcastArgs[2] as Record<string, unknown>;
     expect(event.type).toBe("ticket_assigned");
     expect(event.ticketId).toBe("ticket-uuid");
-    expect(event.queueName).toBe("Intake");
+    expect(event.queueId).toBe("a1b2c3d4-e5f6-7890-abcd-ef1234567890");
   });
 
   it("enqueues email job via JobQueue", async () => {
@@ -114,7 +114,7 @@ describe("NotificationService.dispatch", () => {
       "myorg",
       "ticket_created",
       "ticket-uuid",
-      "Intake",
+      "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
       TEST_RECIPIENTS,
     );
 
@@ -143,7 +143,7 @@ describe("NotificationService.dispatch", () => {
       "myorg",
       "ticket_assigned",
       "ticket-uuid",
-      "Intake",
+      "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
       TEST_RECIPIENTS,
     );
 
@@ -167,7 +167,7 @@ describe("NotificationService.dispatch", () => {
       "myorg",
       "ticket_assigned",
       "ticket-uuid",
-      "Intake",
+      "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
       EMPTY_RECIPIENTS,
     );
 

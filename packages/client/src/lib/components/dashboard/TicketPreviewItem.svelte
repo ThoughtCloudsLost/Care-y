@@ -55,7 +55,7 @@
 
         <div class="row-bottom">
           <span class="bottom-left">
-            <Chip outline class="queue-badge">{queueName}</Chip>
+            <Chip outline class="queue-badge">{queueName ?? "..."}</Chip>
             <Dot size={10} aria-hidden="true" class="meta-dot" />
             <span class="assignee"
               >{assignedName ?? m.dashboard_assigned_unassigned()}</span

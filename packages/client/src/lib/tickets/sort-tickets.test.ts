@@ -6,21 +6,21 @@ function makeTicket(
   priority: string,
   createdAt: string,
   lastActivityAt: string | null = null,
-  queueName = "Intake",
+  queueSortOrder = 1,
 ) {
-  return { id, priority, createdAt, lastActivityAt, queueName };
+  return { id, priority, createdAt, lastActivityAt, queueSortOrder };
 }
 
 describe("sortTickets", () => {
-  const t1 = makeTicket("a", "normal", "2026-01-01T00:00:00Z", null, "Intake");
-  const t2 = makeTicket("b", "urgent", "2026-01-02T00:00:00Z", null, "Crisis");
-  const t3 = makeTicket("c", "low", "2026-01-03T00:00:00Z", null, "Housing");
+  const t1 = makeTicket("a", "normal", "2026-01-01T00:00:00Z", null, 3);
+  const t2 = makeTicket("b", "urgent", "2026-01-02T00:00:00Z", null, 1);
+  const t3 = makeTicket("c", "low", "2026-01-03T00:00:00Z", null, 2);
   const t4 = makeTicket(
     "d",
     "high",
     "2026-01-04T00:00:00Z",
     "2026-01-10T00:00:00Z",
-    "Crisis",
+    1,
   );
 
   it("sorts by date descending (most recent first)", () => {
@@ -79,12 +79,12 @@ describe("sortTickets", () => {
     expect(result).toEqual([]);
   });
 
-  it("sorts by queue name alphabetically", () => {
+  it("sorts by queue sort order (numeric)", () => {
     const result = sortTickets([t1, t2, t3, t4], {
       field: "queue",
       direction: "asc",
     });
-    // asc alphabetical: Crisis(b), Crisis(d), Housing(c), Intake(a)
+    // asc by sortOrder: 1(b), 1(d), 2(c), 3(a). Tiebreaker by id: b < d
     expect(result.map((t) => t.id)).toEqual(["b", "d", "c", "a"]);
   });
 

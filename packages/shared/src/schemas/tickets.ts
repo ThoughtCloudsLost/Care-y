@@ -73,17 +73,25 @@ export const updateTicketInputSchema = z.object({
 export type UpdateTicketInput = z.infer<typeof updateTicketInputSchema>;
 
 export const createQueueInputSchema = z.object({
-  name: z.string().min(1).max(100).trim(),
+  encryptedName: base64String("encryptedName"),
   escalateDays: z.number().int().min(0).max(365).default(0),
 });
 export type CreateQueueInput = z.infer<typeof createQueueInputSchema>;
 
 export const updateQueueInputSchema = z.object({
   queueId: z.uuid(),
-  name: z.string().min(1).max(100).trim().optional(),
+  encryptedName: base64String("encryptedName").optional(),
   escalateDays: z.number().int().min(0).max(365).optional(),
 });
 export type UpdateQueueInput = z.infer<typeof updateQueueInputSchema>;
+
+export const reorderQueuesInputSchema = z.array(
+  z.object({
+    queueId: z.uuid(),
+    sortOrder: z.number().int().min(0),
+  }),
+);
+export type ReorderQueuesInput = z.infer<typeof reorderQueuesInputSchema>;
 
 export const createPresetReplyInputSchema = z.object({
   encryptedTitle: base64String("encryptedTitle"),
