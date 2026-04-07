@@ -46,7 +46,8 @@ COPY tsconfig.json tsconfig.base.json ./
 RUN groupadd --system appgroup \
     && groupadd --system --gid 3001 oprf-ipc \
     && useradd --system --gid appgroup --uid 1001 --groups oprf-ipc appuser \
-    && chmod -R a+rX /app/.corepack
+    && chmod -R a+rX /app/.corepack \
+    && mkdir -p /app/data && chown 1001:1001 /app/data
 
 # ── test ─────────────────────────────────────────────────────────────
 # Test files (*.test.ts) and vitest.config.ts are bind-mounted into the

@@ -38,6 +38,8 @@ import type { AuditService } from "../tickets/audit.js";
 import type { NotificationService } from "../notifications/service.js";
 import type { AuditEntry } from "../tickets/audit.js";
 import type { NotificationEventType, TicketPriority } from "@care-y/shared";
+import { ErrorCode } from "@care-y/shared";
+import { NotFoundError } from "../errors.js";
 import { buildRecipientList } from "../tickets/notification-recipients.js";
 import type { ShiftProvider } from "../tickets/shift-provider.js";
 import { createStubShiftProvider } from "../tickets/shift-provider.js";
@@ -46,6 +48,7 @@ import {
   encryptContent,
   eciesEncrypt,
   toRistrettoPoint,
+  encode as cryptoEncode,
 } from "@care-y/crypto";
 import {
   createTicketInputSchema,
@@ -564,6 +567,37 @@ export function createTicketRouter(deps: TicketRouterDeps) {
         }),
       ),
 
+    downloadRecordingBlob: volunteerProcedure
+      .input(z.object({ recordingId: z.uuid() }))
+      .query(
+        withErrorWrapping(async ({ ctx, input }) => {
+          const svc = mediaSvc(ctx.org.tenantDb);
+          const record = await svc.getRecording(ctx.user.id, input.recordingId);
+          const blob = await deps.blobStore.get(record.blobKey);
+          if (!blob) {
+            throw new NotFoundError(ErrorCode.RECORDING_NOT_FOUND);
+          }
+          return { data: cryptoEncode(new Uint8Array(blob)) };
+        }),
+      ),
+
+    downloadAttachmentBlob: volunteerProcedure
+      .input(z.object({ attachmentId: z.uuid() }))
+      .query(
+        withErrorWrapping(async ({ ctx, input }) => {
+          const svc = mediaSvc(ctx.org.tenantDb);
+          const record = await svc.getAttachment(
+            ctx.user.id,
+            input.attachmentId,
+          );
+          const blob = await deps.blobStore.get(record.blobKey);
+          if (!blob) {
+            throw new NotFoundError(ErrorCode.ATTACHMENT_NOT_FOUND);
+          }
+          return { data: cryptoEncode(new Uint8Array(blob)) };
+        }),
+      ),
+
     listRecordings: volunteerProcedure
       .input(z.object({ ticketId: z.uuid() }))
       .query(
@@ -891,6 +925,25 @@ export function createTicketRouter(deps: TicketRouterDeps) {
 
               // 3. Ticket definitions with varied data
               // Clients are assigned round-robin from whatever clients exist.
+              interface FollowUpDef {
+                content: string;
+                source: string;
+                type?: string; // default: "message"
+                isPrivate?: boolean; // default: false
+                agoMinutes: number;
+                media?: MediaDef[];
+              }
+
+              interface MediaDef {
+                kind: "recording" | "image" | "file";
+                /** For recordings: duration in seconds. */
+                durationSeconds?: number;
+                /** For attachments: plaintext filename (encrypted at insert time). */
+                filename?: string;
+                /** For attachments: MIME content type. */
+                contentType?: string;
+              }
+
               interface TicketDef {
                 title: string;
                 description: string;
@@ -900,11 +953,73 @@ export function createTicketRouter(deps: TicketRouterDeps) {
                 onHold: boolean;
                 withKeyWrap: boolean;
                 createdAgo: number; // minutes ago
-                followUps: {
-                  content: string;
-                  source: string;
-                  agoMinutes: number;
-                }[];
+                followUps: FollowUpDef[];
+              }
+
+              // --- Synthetic media generators ---
+              // Minimal valid files for testing. Production uses real
+              // Twilio recordings / user uploads, but the encryption
+              // pipeline is identical.
+
+              /** Minimal valid WAV header + sine wave (~1 second, 8kHz mono). */
+              function generateWav(durationSec: number): Buffer {
+                const sampleRate = 8000;
+                const numSamples = sampleRate * durationSec;
+                const dataSize = numSamples * 2; // 16-bit PCM
+                const header = Buffer.alloc(44);
+                // RIFF header
+                header.write("RIFF", 0);
+                header.writeUInt32LE(36 + dataSize, 4);
+                header.write("WAVE", 8);
+                // fmt chunk
+                header.write("fmt ", 12);
+                header.writeUInt32LE(16, 16); // chunk size
+                header.writeUInt16LE(1, 20); // PCM
+                header.writeUInt16LE(1, 22); // mono
+                header.writeUInt32LE(sampleRate, 24);
+                header.writeUInt32LE(sampleRate * 2, 28); // byte rate
+                header.writeUInt16LE(2, 32); // block align
+                header.writeUInt16LE(16, 34); // bits per sample
+                // data chunk
+                header.write("data", 36);
+                header.writeUInt32LE(dataSize, 40);
+                const data = Buffer.alloc(dataSize);
+                for (let i = 0; i < numSamples; i++) {
+                  const sample = Math.sin((2 * Math.PI * 440 * i) / sampleRate);
+                  data.writeInt16LE(Math.round(sample * 16000), i * 2);
+                }
+                return Buffer.concat([header, data]);
+              }
+
+              /** Valid 64x64 cyan PNG (178 bytes). Visible on both light and dark. */
+              function generatePng(): Buffer {
+                // Generated programmatically: 64x64 RGB, solid #00CCBB.
+                // CRC32 checksums computed correctly for all chunks.
+                const hex =
+                  "89504e470d0a1a0a0000000d49484452000000400000" +
+                  "00400802000000250be6890000007949444154789ced" +
+                  "cf410900300cc0c0fab7340b1355117b1c8340045c66" +
+                  "eef93b2f68400b1ad08206b4a0012d68400b1ad08206" +
+                  "b4a0012d68400b1ad08206b4a0012d68400b1ad08206" +
+                  "b4a0012d68400b1ad08206b4a0012d68400b1ad08206" +
+                  "b4a0012d68400b1ad08206b4a0012d68400b1ad08206" +
+                  "b4e0ad050ceb71698b8b2a940000000049454e44ae42" +
+                  "6082";
+                return Buffer.from(hex, "hex");
+              }
+
+              /** Small text file for attachment testing. */
+              function generateTextFile(): Buffer {
+                return Buffer.from(
+                  "CARE-Y Safety Plan Template\n\n" +
+                    "1. Warning signs that a crisis may be developing\n" +
+                    "2. Internal coping strategies\n" +
+                    "3. People and social settings that provide distraction\n" +
+                    "4. People I can ask for help\n" +
+                    "5. Professionals or agencies I can contact during a crisis\n" +
+                    "6. Making the environment safe\n",
+                  "utf-8",
+                );
               }
 
               const me = ctx.user.id;
@@ -921,6 +1036,12 @@ export function createTicketRouter(deps: TicketRouterDeps) {
                   createdAgo: 4320, // 3 days
                   followUps: [
                     {
+                      content: "Assigned to Dev Admin",
+                      source: "system",
+                      type: "assignment_change",
+                      agoMinutes: 4310,
+                    },
+                    {
                       content: "I need help finding a place to stay",
                       source: "client",
                       agoMinutes: 4300,
@@ -931,9 +1052,35 @@ export function createTicketRouter(deps: TicketRouterDeps) {
                       agoMinutes: 4200,
                     },
                     {
+                      content:
+                        "Client sounds stressed but stable. Shelter list sent via SMS.",
+                      source: "volunteer",
+                      type: "internal_note",
+                      isPrivate: true,
+                      agoMinutes: 4190,
+                    },
+                    {
                       content: "Thank you, any help is appreciated",
                       source: "client",
                       agoMinutes: 1440,
+                    },
+                    {
+                      content: "Priority changed to high",
+                      source: "system",
+                      type: "priority_change",
+                      agoMinutes: 1430,
+                    },
+                    {
+                      content: "Status changed to closed",
+                      source: "system",
+                      type: "status_change",
+                      agoMinutes: 720,
+                    },
+                    {
+                      content: "Status changed to open",
+                      source: "system",
+                      type: "status_change",
+                      agoMinutes: 360,
                     },
                   ],
                 },
@@ -958,9 +1105,32 @@ export function createTicketRouter(deps: TicketRouterDeps) {
                       agoMinutes: 8640,
                     },
                     {
+                      content: "",
+                      source: "client",
+                      agoMinutes: 7200,
+                      media: [
+                        {
+                          kind: "recording",
+                          durationSeconds: 12,
+                        },
+                      ],
+                    },
+                    {
                       content: "Still waiting, called again",
                       source: "volunteer",
                       agoMinutes: 5760,
+                    },
+                    {
+                      content: "",
+                      source: "client",
+                      agoMinutes: 4320,
+                      media: [
+                        {
+                          kind: "image",
+                          filename: "photo.png",
+                          contentType: "image/png",
+                        },
+                      ],
                     },
                     {
                       content: "They finally reached out, thank you",
@@ -985,14 +1155,39 @@ export function createTicketRouter(deps: TicketRouterDeps) {
                   createdAgo: 180, // 3 hours
                   followUps: [
                     {
+                      content: "Assigned to Dev Admin",
+                      source: "system",
+                      type: "assignment_change",
+                      agoMinutes: 175,
+                    },
+                    {
                       content: "I need to talk about my situation",
                       source: "client",
                       agoMinutes: 170,
                     },
                     {
+                      content: "",
+                      source: "client",
+                      agoMinutes: 165,
+                      media: [
+                        {
+                          kind: "recording",
+                          durationSeconds: 47,
+                        },
+                      ],
+                    },
+                    {
                       content: "I am here for you. Can you tell me more?",
                       source: "volunteer",
                       agoMinutes: 160,
+                    },
+                    {
+                      content:
+                        "High-risk situation. Follow up within 24h per protocol.",
+                      source: "volunteer",
+                      type: "internal_note",
+                      isPrivate: true,
+                      agoMinutes: 155,
                     },
                   ],
                 },
@@ -1038,14 +1233,34 @@ export function createTicketRouter(deps: TicketRouterDeps) {
                   createdAgo: 7200, // 5 days
                   followUps: [
                     {
+                      content: "Assigned to Dev Admin",
+                      source: "system",
+                      type: "assignment_change",
+                      agoMinutes: 7100,
+                    },
+                    {
                       content: "Shelter said they will call when a bed opens",
                       source: "volunteer",
                       agoMinutes: 5760,
                     },
                     {
+                      content: "Put on hold",
+                      source: "system",
+                      type: "hold_change",
+                      agoMinutes: 5750,
+                    },
+                    {
                       content: "Still no word from them",
                       source: "client",
                       agoMinutes: 2880,
+                    },
+                    {
+                      content:
+                        "Called shelter again, they have a long waitlist. Documented in case file.",
+                      source: "volunteer",
+                      type: "internal_note",
+                      isPrivate: true,
+                      agoMinutes: 2000,
                     },
                   ],
                 },
@@ -1060,6 +1275,12 @@ export function createTicketRouter(deps: TicketRouterDeps) {
                   createdAgo: 14400, // 10 days
                   followUps: [
                     {
+                      content: "Assigned to Dev Admin",
+                      source: "system",
+                      type: "assignment_change",
+                      agoMinutes: 14350,
+                    },
+                    {
                       content: "Court date is in two weeks, need letter",
                       source: "client",
                       agoMinutes: 14300,
@@ -1068,6 +1289,32 @@ export function createTicketRouter(deps: TicketRouterDeps) {
                       content: "Working on getting the documentation together",
                       source: "volunteer",
                       agoMinutes: 10080,
+                    },
+                    {
+                      content: "Attached the safety plan template for review",
+                      source: "volunteer",
+                      agoMinutes: 10070,
+                      media: [
+                        {
+                          kind: "file",
+                          filename: "safety-plan-template.txt",
+                          contentType: "text/plain",
+                        },
+                      ],
+                    },
+                    {
+                      content: "Put on hold",
+                      source: "system",
+                      type: "hold_change",
+                      agoMinutes: 8640,
+                    },
+                    {
+                      content:
+                        "Waiting on court clerk response. Will check back Monday.",
+                      source: "volunteer",
+                      type: "internal_note",
+                      isPrivate: true,
+                      agoMinutes: 8630,
                     },
                   ],
                 },
@@ -1262,11 +1509,7 @@ export function createTicketRouter(deps: TicketRouterDeps) {
 
                 // 0-4 follow-ups
                 const fuCount = h1 % 5;
-                const followUps: {
-                  content: string;
-                  source: string;
-                  agoMinutes: number;
-                }[] = [];
+                const followUps: FollowUpDef[] = [];
                 for (let f = 0; f < fuCount; f++) {
                   const fh = seedHash(g, 10 + f);
                   const isClient = fh % 2 === 0;
@@ -1374,23 +1617,86 @@ export function createTicketRouter(deps: TicketRouterDeps) {
                     .execute();
                 }
 
-                // Create follow-up messages (encrypted with same ticket key)
+                // Create follow-ups (encrypted with same ticket key)
                 for (const fu of def.followUps) {
                   const encryptedContent = encryptContent(
                     encoder.encode(fu.content),
                     tk,
                   );
-                  await tDb
+                  const followUp = await tDb
                     .insertInto("followups")
                     .values({
                       ticket_id: ticket.id,
                       source: fu.source,
-                      type: "message",
+                      type: fu.type ?? "message",
+                      is_private: fu.isPrivate ?? false,
                       encrypted_content: Buffer.from(encryptedContent),
                       encrypted_read_state: Buffer.from("unread"),
                       created_at: minutesAgo(fu.agoMinutes),
                     })
-                    .execute();
+                    .returning("id")
+                    .executeTakeFirstOrThrow();
+
+                  // Create media records (encrypted blobs stored in BlobStore)
+                  if (fu.media && def.withKeyWrap) {
+                    for (const media of fu.media) {
+                      if (media.kind === "recording") {
+                        const raw = generateWav(media.durationSeconds ?? 5);
+                        const encrypted = encryptContent(raw, tk);
+                        const blobKey = await deps.blobStore.put(
+                          ctx.org.orgSchema,
+                          "recording",
+                          Buffer.from(encrypted),
+                        );
+                        await tDb
+                          .insertInto("recordings")
+                          .values({
+                            ticket_id: ticket.id,
+                            followup_id: followUp.id,
+                            blob_key: blobKey,
+                            size_bytes: encrypted.byteLength,
+                            duration_seconds: media.durationSeconds ?? null,
+                            created_at: minutesAgo(fu.agoMinutes),
+                          })
+                          .execute();
+                      } else {
+                        // image or file attachment
+                        const raw =
+                          media.kind === "image"
+                            ? generatePng()
+                            : generateTextFile();
+                        const encrypted = encryptContent(raw, tk);
+                        const category =
+                          media.kind === "image" ? "attachment" : "attachment";
+                        const blobKey = await deps.blobStore.put(
+                          ctx.org.orgSchema,
+                          category,
+                          Buffer.from(encrypted),
+                        );
+                        const encFilename =
+                          media.filename !== undefined
+                            ? Buffer.from(
+                                encryptContent(
+                                  encoder.encode(media.filename),
+                                  tk,
+                                ),
+                              )
+                            : null;
+                        await tDb
+                          .insertInto("attachments")
+                          .values({
+                            ticket_id: ticket.id,
+                            followup_id: followUp.id,
+                            blob_key: blobKey,
+                            size_bytes: encrypted.byteLength,
+                            encrypted_filename: encFilename,
+                            content_type: media.contentType ?? null,
+                            created_at: minutesAgo(fu.agoMinutes),
+                          })
+                          .execute();
+                      }
+                    }
+                  }
                 }
 
                 createdIds.push(ticket.id);
