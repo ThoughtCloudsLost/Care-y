@@ -5,11 +5,13 @@
  * This module adds chat-specific helpers.
  */
 
+import * as m from "$lib/paraglide/messages.js";
+
 /**
  * Returns a date separator label for the chat timeline.
- * Uses the browser locale for month names. Shows "Today" and "Yesterday"
- * for the two most recent days, then full "Month Day" or "Month Day, Year"
- * if the year differs from the current year.
+ * Uses Paraglide i18n for "Today" and "Yesterday", browser locale for
+ * month names. Shows "Month Day" or "Month Day, Year" if the year
+ * differs from the current year.
  */
 export function formatDateSeparator(dateStr: string): string {
   const date = new Date(dateStr);
@@ -22,8 +24,8 @@ export function formatDateSeparator(dateStr: string): string {
     (today.getTime() - target.getTime()) / (1000 * 60 * 60 * 24),
   );
 
-  if (diffDays === 0) return "Today";
-  if (diffDays === 1) return "Yesterday";
+  if (diffDays === 0) return m.ticket_date_today();
+  if (diffDays === 1) return m.ticket_date_yesterday();
 
   const sameYear = date.getFullYear() === now.getFullYear();
   const options: Intl.DateTimeFormatOptions = sameYear

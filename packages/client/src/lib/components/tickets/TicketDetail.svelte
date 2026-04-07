@@ -12,7 +12,7 @@
 -->
 <script lang="ts">
   import { createQuery } from "@tanstack/svelte-query";
-  import { Messages } from "konsta/svelte";
+  import { Messages, Message } from "konsta/svelte";
   import * as m from "$lib/paraglide/messages.js";
   import { trpc } from "$lib/trpc/index.js";
   import {
@@ -21,9 +21,14 @@
     getOrgDecryptCache,
     getCurrentUserId,
   } from "$lib/crypto/context.js";
+  import { isDecryptError } from "$lib/crypto/async-decrypt-cache.js";
   import { RouterNotAvailableError } from "$lib/errors.js";
+  import { formatRelativeTime } from "$lib/utils/format-time.js";
+  import { formatDateSeparator, needsDateSeparator } from "$lib/utils/time.js";
   import Skeleton from "$lib/components/Skeleton.svelte";
   import QueryError from "$lib/components/QueryError.svelte";
+  import SystemEvent from "$lib/components/tickets/SystemEvent.svelte";
+  import PrivateNote from "$lib/components/tickets/PrivateNote.svelte";
 
   interface TicketDetailProps {
     ticketId: string;
@@ -39,25 +44,17 @@
   let {
     ticketId,
     draftText = $bindable(""),
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars -- bubbles and notes trigger these
     onback,
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars -- bubbles and notes trigger these
     oncall,
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars -- bubbles and notes trigger these
     onactions,
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars -- bubbles and notes trigger these
     onclientinfo,
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars -- preset reply selection fills compose
     onpresetselect,
   }: TicketDetailProps = $props();
 
   const ticketCache = getTicketDecryptCache();
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- decrypts follow-up content in chat
   const followUpCache = getFollowUpDecryptCache();
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- decrypts volunteer display names
   const orgCache = getOrgDecryptCache();
   const currentUserIdGetter = getCurrentUserId();
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- authorship checks on internal notes
   const currentUserId = $derived(currentUserIdGetter());
 
   // --- Data Loading ---
@@ -91,6 +88,59 @@
       );
     }
   });
+
+  // --- Follow-up rendering helpers ---
+
+  type FollowUp = (typeof followUps)[number];
+
+  function followUpKind(fu: FollowUp): "message" | "system" | "note" {
+    if (fu.source === "system") return "system";
+    if (fu.type === "internal_note") return "note";
+    return "message";
+  }
+
+  function messageType(fu: FollowUp): "sent" | "received" {
+    return fu.source === "client" ? "received" : "sent";
+  }
+
+  function bubbleAriaLabel(fu: FollowUp, content: string | undefined): string {
+    const time = formatRelativeTime(new Date(fu.createdAt));
+    const preview = isDecryptError(content)
+      ? m.error_decryption_failed()
+      : (content?.slice(0, 80) ?? "");
+    const base =
+      fu.source === "client"
+        ? m.ticket_message_received_from({ name: clientAlias, time })
+        : m.ticket_message_sent_by({ name: "Volunteer", time });
+    return preview ? `${base}: ${preview}` : base;
+  }
+
+  // --- Long-press handler ---
+
+  let longPressTimer: ReturnType<typeof setTimeout> | null = null;
+
+  function startLongPress(fu: FollowUp): (e: PointerEvent) => void {
+    return () => {
+      longPressTimer = setTimeout(() => {
+        openContextMenu(fu);
+        longPressTimer = null;
+      }, 500);
+    };
+  }
+
+  function cancelLongPress(): void {
+    if (longPressTimer) {
+      clearTimeout(longPressTimer);
+      longPressTimer = null;
+    }
+  }
+
+  function openContextMenu(fu: FollowUp): void {
+    // Stub: wired when Action Sheets are added.
+    if (import.meta.env.DEV) {
+      console.log("[TicketDetail] long-press context menu:", fu.id);
+    }
+  }
 
   // --- Scroll container ---
 
@@ -134,8 +184,70 @@
       </div>
     {:else}
       <Messages>
-        <!-- Follow-up bubbles, system events, and notes render here. -->
-        <!-- Pagination sentinel and unread divider added separately. -->
+        {#each followUps as fu, i (fu.id)}
+          {@const kind = followUpKind(fu)}
+          {@const content = followUpCache.decryptContent(
+            fu.id,
+            ticket.keyWrap,
+            fu.encryptedContent,
+          )}
+          {@const prevTimestamp =
+            i > 0 ? followUps[i - 1]?.createdAt : undefined}
+
+          {#if needsDateSeparator(fu.createdAt, prevTimestamp)}
+            <div class="date-separator" role="separator">
+              <span class="date-separator-label"
+                >{formatDateSeparator(fu.createdAt)}</span
+              >
+            </div>
+          {/if}
+
+          {#if kind === "system"}
+            <SystemEvent {content} timestamp={fu.createdAt} />
+          {:else if kind === "note"}
+            <PrivateNote
+              {content}
+              authorName={undefined}
+              timestamp={fu.createdAt}
+              isOwn={false}
+              onpointerdown={startLongPress(fu)}
+              onpointerup={cancelLongPress}
+              onpointercancel={cancelLongPress}
+            />
+          {:else}
+            <Message
+              type={messageType(fu)}
+              name={fu.source === "client" ? clientAlias : undefined}
+              aria-label={bubbleAriaLabel(fu, content)}
+            >
+              {#snippet text()}
+                <!-- svelte-ignore a11y_no_static_element_interactions -->
+                <span
+                  class="bubble-text"
+                  onpointerdown={startLongPress(fu)}
+                  onpointerup={cancelLongPress}
+                  onpointercancel={cancelLongPress}
+                >
+                  {#if isDecryptError(content)}
+                    <span class="decrypt-error"
+                      >{m.error_decryption_failed()}</span
+                    >
+                  {:else if content === undefined}
+                    <span class="shimmer shimmer-bubble" aria-busy="true"
+                    ></span>
+                  {:else}
+                    {content}
+                  {/if}
+                </span>
+              {/snippet}
+              {#snippet footer()}
+                <time class="bubble-time" datetime={fu.createdAt}>
+                  {formatRelativeTime(new Date(fu.createdAt))}
+                </time>
+              {/snippet}
+            </Message>
+          {/if}
+        {/each}
       </Messages>
     {/if}
   </div>
@@ -166,5 +278,82 @@
     color: var(--muted);
     font-size: var(--text-base);
     padding: 2rem;
+  }
+
+  /* --- Date separators --- */
+
+  .date-separator {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.75rem 1rem 0.25rem;
+  }
+
+  .date-separator::before,
+  .date-separator::after {
+    content: "";
+    flex: 1;
+    height: 1px;
+    background: var(--muted);
+    opacity: 0.3;
+  }
+
+  .date-separator-label {
+    font-size: 0.6875rem;
+    font-weight: 600;
+    color: var(--muted);
+    white-space: nowrap;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+  }
+
+  /* --- Bubble content --- */
+
+  .bubble-text {
+    user-select: text;
+    -webkit-user-select: text;
+    word-break: break-word;
+    touch-action: pan-y;
+  }
+
+  .bubble-time {
+    font-size: 0.625rem;
+    color: var(--muted);
+  }
+
+  .decrypt-error {
+    color: var(--muted);
+    font-style: italic;
+  }
+
+  .shimmer-bubble {
+    display: inline-block;
+    width: 8rem;
+    height: 0.875rem;
+    border-radius: 0.25rem;
+    background: linear-gradient(
+      90deg,
+      var(--surface-2) 25%,
+      var(--surface-1) 50%,
+      var(--surface-2) 75%
+    );
+    background-size: 200% 100%;
+    animation: shimmer 1.5s infinite linear;
+  }
+
+  @keyframes shimmer {
+    from {
+      background-position: 200% 0;
+    }
+    to {
+      background-position: -200% 0;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .shimmer-bubble {
+      animation: none;
+      background: var(--surface-2);
+    }
   }
 </style>

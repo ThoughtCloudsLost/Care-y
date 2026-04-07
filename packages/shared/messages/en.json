@@ -287,5 +287,14 @@
   "ticket_delete_note": "Delete Note",
   "ticket_downloading_attachment": "Downloading {filename}...",
   "ticket_download_attachment": "Download {filename}",
-  "ticket_mention_volunteers": "Mention a volunteer"
+  "ticket_mention_volunteers": "Mention a volunteer",
+  "ticket_system_status_change": "Status changed to {status}",
+  "ticket_system_assignment_change": "Assigned to {name}",
+  "ticket_system_hold_change": "{action}",
+  "ticket_system_priority_change": "Priority changed to {priority}",
+  "ticket_system_merge_note": "Tickets merged",
+  "ticket_system_event": "System event",
+  "ticket_copy_message": "Copy",
+  "ticket_date_today": "Today",
+  "ticket_date_yesterday": "Yesterday"
 }

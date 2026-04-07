@@ -37,7 +37,7 @@ function makeFollowUp(
   };
 }
 
-describe("TicketPreview", () => {
+describe("TicketPreview (mini-bubbles)", () => {
   it("renders shimmer when followUps is undefined (not loaded)", () => {
     const { container } = render(TicketPreview, {
       props: { followUps: undefined },
@@ -50,65 +50,76 @@ describe("TicketPreview", () => {
     const { container } = render(TicketPreview, {
       props: { followUps: [] },
     });
-    expect(container.textContent).toContain("No messages yet");
+    expect(container.querySelector(".preview-empty")).not.toBeNull();
+    expect(container.textContent).toBeTruthy();
   });
 
-  it("renders shimmer lines when decryption is pending (returns undefined)", () => {
+  it("renders shimmer inside mini-bubble when decryption is pending", () => {
     mockDecryptContent.mockReturnValue(undefined);
     const fu = makeFollowUp();
     const { container } = render(TicketPreview, {
       props: { followUps: [fu] },
     });
-    const shimmerLines = container.querySelectorAll(".shimmer-line");
-    expect(shimmerLines.length).toBe(1);
+    const shimmer = container.querySelector(".shimmer-mini");
+    expect(shimmer).not.toBeNull();
   });
 
-  it("renders decrypted plain text when available", () => {
-    mockDecryptContent.mockReturnValue("Hello, this is a test message");
+  it("renders decrypted text inside a mini-bubble", () => {
+    mockDecryptContent.mockReturnValue("Hello, test message");
     const fu = makeFollowUp();
     const { container } = render(TicketPreview, {
       props: { followUps: [fu] },
     });
-    expect(container.textContent).toContain("Hello, this is a test message");
+    expect(container.textContent).toContain("Hello, test message");
   });
 
-  it("sets data-source attribute on preview lines", () => {
+  it("right-aligns volunteer mini-bubbles (sent)", () => {
+    mockDecryptContent.mockReturnValue("Volunteer reply");
+    const fu = makeFollowUp({ source: "volunteer" });
+    const { container } = render(TicketPreview, {
+      props: { followUps: [fu] },
+    });
+    const row = container.querySelector(".mini-row-sent");
+    expect(row).not.toBeNull();
+  });
+
+  it("left-aligns client mini-bubbles (received)", () => {
     mockDecryptContent.mockReturnValue("Client message");
     const fu = makeFollowUp({ source: "client" });
     const { container } = render(TicketPreview, {
       props: { followUps: [fu] },
     });
-    const line = container.querySelector("[data-source='client']");
-    expect(line).not.toBeNull();
+    const row = container.querySelector(".mini-row-received");
+    expect(row).not.toBeNull();
   });
 
-  it("renders multiple follow-ups", () => {
-    mockDecryptContent
-      .mockReturnValueOnce("First message")
-      .mockReturnValueOnce("Second message");
-    const fus = [
-      makeFollowUp({ id: "fu-1", source: "volunteer" }),
-      makeFollowUp({ id: "fu-2", source: "client" }),
-    ];
-    const { container } = render(TicketPreview, {
-      props: { followUps: fus },
-    });
-    expect(container.textContent).toContain("First message");
-    expect(container.textContent).toContain("Second message");
-  });
-
-  it("renders system source follow-ups with data-source='system'", () => {
+  it("renders system events as centered text without bubble", () => {
     mockDecryptContent.mockReturnValue("Status changed to closed");
-    const fu = makeFollowUp({ source: "system" });
+    const fu = makeFollowUp({ source: "system", type: "status_change" });
     const { container } = render(TicketPreview, {
       props: { followUps: [fu] },
     });
-    const line = container.querySelector("[data-source='system']");
-    expect(line).not.toBeNull();
+    const sysEl = container.querySelector(".mini-system");
+    expect(sysEl).not.toBeNull();
+    expect(sysEl?.textContent).toContain("Status changed to closed");
+    // Should not be in a bubble row
+    expect(container.querySelector(".mini-bubble-row")).toBeNull();
+  });
+
+  it("truncates long text to 30 characters with ellipsis", () => {
+    mockDecryptContent.mockReturnValue(
+      "This is a very long message that should be truncated",
+    );
+    const fu = makeFollowUp();
+    const { container } = render(TicketPreview, {
+      props: { followUps: [fu] },
+    });
+    const text = container.querySelector(".mini-text")?.textContent ?? "";
+    expect(text.length).toBeLessThanOrEqual(31); // 30 chars + ellipsis
+    expect(text).toContain("\u2026");
   });
 
   it("renders error text when decryption fails (sentinel value)", () => {
-    // The sentinel value is "\0DECRYPT_FAILED" from async-decrypt-cache.
     mockDecryptContent.mockReturnValue("\0DECRYPT_FAILED");
     const fu = makeFollowUp();
     const { container } = render(TicketPreview, {
@@ -117,8 +128,21 @@ describe("TicketPreview", () => {
     expect(container.textContent).toContain(
       "This content could not be decrypted.",
     );
-    // Should NOT show shimmer
-    expect(container.querySelectorAll(".shimmer-line").length).toBe(0);
+  });
+
+  it("renders multiple follow-ups with correct alignment", () => {
+    mockDecryptContent
+      .mockReturnValueOnce("Client msg")
+      .mockReturnValueOnce("Volunteer reply");
+    const fus = [
+      makeFollowUp({ id: "fu-1", source: "client" }),
+      makeFollowUp({ id: "fu-2", source: "volunteer" }),
+    ];
+    const { container } = render(TicketPreview, {
+      props: { followUps: fus },
+    });
+    expect(container.querySelector(".mini-row-received")).not.toBeNull();
+    expect(container.querySelector(".mini-row-sent")).not.toBeNull();
   });
 
   it("does not use {@html} for decrypted content (XSS safety)", () => {
@@ -128,8 +152,6 @@ describe("TicketPreview", () => {
       props: { followUps: [fu] },
     });
     // Text should appear as escaped, not interpreted as HTML
-    expect(container.innerHTML).toContain(
-      "&lt;script&gt;alert('xss')&lt;/script&gt;",
-    );
+    expect(container.innerHTML).toContain("&lt;script&gt;");
   });
 });

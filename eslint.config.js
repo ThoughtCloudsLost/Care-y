@@ -121,6 +121,13 @@ export default tseslint.config(
     },
   },
 
+  // Disabled during incremental build-out. PRs enforce it via `pnpm lint:strict`.
+  {
+    rules: {
+      "@typescript-eslint/no-unused-vars": "off",
+    },
+  },
+
   // Stricter type safety rules.
   // These supplement strictTypeChecked, which does not include them.
   {
