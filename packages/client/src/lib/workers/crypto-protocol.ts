@@ -102,6 +102,20 @@ export interface UnwrapOrgKeyRequest {
   readonly nonce: string;
 }
 
+export interface DecryptBlobRequest {
+  readonly type: "decryptBlob";
+  readonly id: number;
+  readonly ticketId: string;
+  /** ECIES ephemeral point, base64. */
+  readonly ephemeralPoint: string;
+  /** ECIES nonce, base64. */
+  readonly nonce: string;
+  /** ECIES-wrapped ticket key, base64. */
+  readonly wrappedKey: string;
+  /** Encrypted binary blob (nonce || ciphertext), base64. */
+  readonly ciphertext: string;
+}
+
 export interface RewrapTkRequest {
   readonly type: "rewrapTk";
   readonly id: number;
@@ -117,6 +131,7 @@ export type WorkerRequest =
   | DeriveKeysRequest
   | DecryptContentRequest
   | EncryptContentRequest
+  | DecryptBlobRequest
   | EvictTkRequest
   | ZeroAllRequest
   | GetVolPublicRequest
@@ -188,6 +203,12 @@ export interface UnwrapOrgKeyResponse extends SuccessBase {
   readonly orgPrivateKey: ArrayBuffer;
 }
 
+export interface DecryptBlobResponse extends SuccessBase {
+  readonly type: "decryptBlob";
+  /** Decrypted binary data. Transferable: neutered in Worker after send. */
+  readonly data: ArrayBuffer;
+}
+
 export interface RewrapTkResponse extends SuccessBase {
   readonly type: "rewrapTk";
   /** ECIES ephemeral point for new wrapping, base64. */
@@ -213,6 +234,7 @@ export type WorkerSuccessResponse =
   | DeriveKeysResponse
   | DecryptContentResponse
   | EncryptContentResponse
+  | DecryptBlobResponse
   | GetVolPublicResponse
   | UnwrapOrgKeyResponse
   | RewrapTkResponse

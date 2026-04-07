@@ -296,5 +296,16 @@
   "ticket_system_event": "System event",
   "ticket_copy_message": "Copy",
   "ticket_date_today": "Today",
-  "ticket_date_yesterday": "Yesterday"
+  "ticket_date_yesterday": "Yesterday",
+  "ticket_voicemail_play": "Play voicemail",
+  "ticket_voicemail_pause": "Pause voicemail",
+  "ticket_voicemail_loading": "Loading voicemail...",
+  "ticket_voicemail_error": "Could not load voicemail.",
+  "ticket_voicemail_duration": "{duration} seconds",
+  "ticket_voicemail_progress": "{current} of {total}",
+  "ticket_mms_image": "MMS image",
+  "ticket_mms_loading": "Loading image...",
+  "ticket_mms_open_lightbox": "View full-size image",
+  "ticket_mms_lightbox_label": "Full-size image",
+  "ticket_attachment_file": "File: {filename} ({size})"
 }

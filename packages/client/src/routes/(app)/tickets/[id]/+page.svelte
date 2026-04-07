@@ -26,6 +26,7 @@
   import ShellMessagebar from "$lib/shell/ShellMessagebar.svelte";
   import ShellActionSheet from "$lib/shell/ShellActionSheet.svelte";
   import ShellSheet from "$lib/shell/ShellSheet.svelte";
+  import ShellPopup from "$lib/shell/ShellPopup.svelte";
   import { createQuery } from "@tanstack/svelte-query";
   import { trpc } from "$lib/trpc/index.js";
   import { RouterNotAvailableError } from "$lib/errors.js";
@@ -74,6 +75,8 @@
   let callSheetOpen = $state(false);
   let presetSheetOpen = $state(false);
   let clientInfoOpen = $state(false);
+  let lightboxOpen = $state(false);
+  let lightboxUrl = $state<string | null>(null);
 
   // --- Navigation ---
 
@@ -130,6 +133,15 @@
     clientInfoOpen = false;
   }
 
+  function openLightbox(imageUrl: string): void {
+    lightboxUrl = imageUrl;
+    lightboxOpen = true;
+  }
+  function closeLightbox(): void {
+    lightboxOpen = false;
+    lightboxUrl = null;
+  }
+
   // --- SvelteKit Snapshot (draft preservation) ---
   // Snapshot interface defined here, wired when draft persistence is added.
 </script>
@@ -176,6 +188,7 @@
     onpresetselect={(body: string) => {
       draftText = body;
     }}
+    onlightbox={openLightbox}
   />
 </div>
 
@@ -218,6 +231,18 @@
   </div>
 </ShellSheet>
 
+<ShellPopup opened={lightboxOpen} ondismiss={closeLightbox}>
+  {#if lightboxUrl}
+    <div class="lightbox-content">
+      <img
+        src={lightboxUrl}
+        alt={m.ticket_mms_lightbox_label()}
+        class="lightbox-img"
+      />
+    </div>
+  {/if}
+</ShellPopup>
+
 <style>
   .ticket-detail-page {
     display: flex;
@@ -245,5 +270,20 @@
     text-align: center;
     color: var(--muted);
     font-size: var(--text-sm);
+  }
+
+  .lightbox-content {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1rem;
+    min-height: 200px;
+  }
+
+  .lightbox-img {
+    max-width: 100%;
+    max-height: 80vh;
+    object-fit: contain;
+    border-radius: 0.5rem;
   }
 </style>

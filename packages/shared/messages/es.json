@@ -296,5 +296,16 @@
   "ticket_system_event": "Evento del sistema",
   "ticket_copy_message": "Copiar",
   "ticket_date_today": "Hoy",
-  "ticket_date_yesterday": "Ayer"
+  "ticket_date_yesterday": "Ayer",
+  "ticket_voicemail_play": "Reproducir mensaje de voz",
+  "ticket_voicemail_pause": "Pausar mensaje de voz",
+  "ticket_voicemail_loading": "Cargando mensaje de voz...",
+  "ticket_voicemail_error": "No se pudo cargar el mensaje de voz.",
+  "ticket_voicemail_duration": "{duration} segundos",
+  "ticket_voicemail_progress": "{current} de {total}",
+  "ticket_mms_image": "Imagen MMS",
+  "ticket_mms_loading": "Cargando imagen...",
+  "ticket_mms_open_lightbox": "Ver imagen en tamaño completo",
+  "ticket_mms_lightbox_label": "Imagen en tamaño completo",
+  "ticket_attachment_file": "Archivo: {filename} ({size})"
 }

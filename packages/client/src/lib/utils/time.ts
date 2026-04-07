@@ -1,5 +1,5 @@
 /**
- * Time utilities for the ticket detail chat view.
+ * Time and formatting utilities for the ticket detail chat view.
  *
  * formatRelativeTime lives in format-time.ts (dashboard).
  * This module adds chat-specific helpers.
@@ -33,6 +33,28 @@ export function formatDateSeparator(dateStr: string): string {
     : { month: "long", day: "numeric", year: "numeric" };
 
   return date.toLocaleDateString(undefined, options);
+}
+
+/**
+ * Formats a duration in seconds as M:SS (e.g., 0:47, 2:15).
+ */
+export function formatDuration(seconds: number): string {
+  const mins = Math.floor(seconds / 60);
+  const secs = Math.floor(seconds % 60);
+  return `${String(mins)}:${secs.toString().padStart(2, "0")}`;
+}
+
+/**
+ * Formats a byte count as a human-readable file size.
+ * Uses binary units (KB, MB, GB).
+ */
+export function formatFileSize(bytes: number): string {
+  if (bytes < 1024) return `${String(bytes)}B`;
+  if (bytes < 1024 * 1024) return `${String(Math.round(bytes / 1024))}KB`;
+  if (bytes < 1024 * 1024 * 1024) {
+    return `${(bytes / (1024 * 1024)).toFixed(1)}MB`;
+  }
+  return `${(bytes / (1024 * 1024 * 1024)).toFixed(1)}GB`;
 }
 
 /**
