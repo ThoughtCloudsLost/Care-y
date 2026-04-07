@@ -28,8 +28,16 @@
   import ShellSheet from "$lib/shell/ShellSheet.svelte";
   import ShellPopup from "$lib/shell/ShellPopup.svelte";
   import PresetReplyContent from "$lib/components/tickets/PresetReplyContent.svelte";
+  import TicketActionsContent, {
+    type TicketAction,
+  } from "$lib/components/tickets/TicketActionsContent.svelte";
+  import CallOptionsContent, {
+    type CallAction,
+  } from "$lib/components/tickets/CallOptionsContent.svelte";
+  import ClientInfoContent from "$lib/components/tickets/ClientInfoContent.svelte";
   import { createQuery } from "@tanstack/svelte-query";
   import { trpc } from "$lib/trpc/index.js";
+  import { getCurrentUserId } from "$lib/crypto/context.js";
   import { RouterNotAvailableError } from "$lib/errors.js";
 
   if (!trpc.tickets) throw new RouterNotAvailableError("tickets");
@@ -59,6 +67,32 @@
 
   const ticket = $derived(ticketQuery.data);
   const clientAlias = $derived(ticket?.clientAlias ?? "...");
+
+  // --- Action sheet data ---
+
+  const currentUserIdGetter = getCurrentUserId();
+  const currentUserId = $derived(currentUserIdGetter());
+
+  const ticketStatus = $derived(ticket?.status ?? "open");
+  const isOnHold = $derived(ticket?.onHold ?? false);
+  const isAssignedToMe = $derived(
+    currentUserId !== undefined && ticket?.assignedTo === currentUserId,
+  );
+
+  const watchingQuery = createQuery(() => ({
+    queryKey: ["isWatching", ticketId],
+    queryFn: async () => ticketRouter.isWatching.query({ ticketId }),
+    enabled: ticketId !== "",
+  }));
+  const isWatching = $derived(watchingQuery.data ?? false);
+
+  // Consultant phone registration (for call options).
+  const consultantQuery = createQuery(() => ({
+    queryKey: ["consultant"],
+    queryFn: async () => trpc.consultant?.get.query() ?? null,
+    staleTime: 5 * 60 * 1000,
+  }));
+  const hasVerifiedPhone = $derived(consultantQuery.data?.isVerified ?? false);
 
   // --- Shell overrides ---
 
@@ -121,6 +155,67 @@
     const replacement = `@${displayName} `;
     draftText = before.slice(0, atIndex) + replacement + after;
     cursorPosition = atIndex + replacement.length;
+  }
+
+  // --- Action dispatchers ---
+
+  function handleTicketAction(action: TicketAction): void {
+    closeActionsSheet();
+    switch (action) {
+      case "take":
+        void ticketRouter.take.mutate({ ticketId });
+        break;
+      case "release":
+        void ticketRouter.release.mutate({ ticketId });
+        break;
+      case "assign":
+        // Stub: assignment UI (picker) wired by a later phase.
+        if (import.meta.env.DEV) console.log("[TicketDetail] assign");
+        break;
+      case "hold":
+        void ticketRouter.update.mutate({ ticketId, onHold: true });
+        break;
+      case "unhold":
+        void ticketRouter.update.mutate({ ticketId, onHold: false });
+        break;
+      case "close":
+        void ticketRouter.close.mutate({ ticketId });
+        break;
+      case "reopen":
+        // Reopen requires a new key generation UUID (ticket re-keying).
+        void ticketRouter.reopen.mutate({
+          ticketId,
+          newKeyGeneration: crypto.randomUUID(),
+        });
+        break;
+      case "watch":
+        void ticketRouter.watchTicket.mutate({ ticketId });
+        break;
+      case "unwatch":
+        void ticketRouter.unwatchTicket.mutate({ ticketId });
+        break;
+      case "client-info":
+        openClientInfo();
+        break;
+      case "cancel":
+        break;
+    }
+  }
+
+  function handleCallAction(action: CallAction): void {
+    closeCallSheet();
+    switch (action) {
+      case "browser-call":
+        // Stub: BrowserCallService.startCall() wired by telephony integration.
+        if (import.meta.env.DEV) console.log("[TicketDetail] browser-call");
+        break;
+      case "phone-call":
+        // Stub: consultant phone callback wired by telephony integration.
+        if (import.meta.env.DEV) console.log("[TicketDetail] phone-call");
+        break;
+      case "cancel":
+        break;
+    }
   }
 
   // --- Overlay helpers ---
@@ -227,17 +322,17 @@
 
 <!-- Overlays (route file owns all shell wrappers) -->
 <ShellActionSheet opened={actionsSheetOpen} ondismiss={closeActionsSheet}>
-  <!-- TicketActionsContent replaces this stub -->
-  <div class="stub-overlay">
-    <p>{m.ticket_more_actions()}</p>
-  </div>
+  <TicketActionsContent
+    {ticketStatus}
+    {isOnHold}
+    {isAssignedToMe}
+    {isWatching}
+    onaction={handleTicketAction}
+  />
 </ShellActionSheet>
 
 <ShellActionSheet opened={callSheetOpen} ondismiss={closeCallSheet}>
-  <!-- CallOptionsContent replaces this stub -->
-  <div class="stub-overlay">
-    <p>{m.ticket_call()}</p>
-  </div>
+  <CallOptionsContent {hasVerifiedPhone} onaction={handleCallAction} />
 </ShellActionSheet>
 
 <ShellSheet opened={presetSheetOpen} ondismiss={closePresetSheet}>
@@ -250,10 +345,12 @@
 </ShellSheet>
 
 <ShellSheet opened={clientInfoOpen} ondismiss={closeClientInfo}>
-  <!-- ClientInfoContent replaces this stub -->
-  <div class="stub-overlay">
-    <p>{m.ticket_action_client_info()}</p>
-  </div>
+  <ClientInfoContent
+    {clientAlias}
+    clientTier={undefined}
+    contactMethod={undefined}
+    recentTickets={[]}
+  />
 </ShellSheet>
 
 <ShellPopup opened={lightboxOpen} ondismiss={closeLightbox}>
@@ -288,13 +385,6 @@
 
   .client-alias-btn:hover {
     opacity: 0.7;
-  }
-
-  .stub-overlay {
-    padding: 1.5rem;
-    text-align: center;
-    color: var(--muted);
-    font-size: var(--text-sm);
   }
 
   .lightbox-content {

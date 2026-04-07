@@ -736,6 +736,15 @@ export function createTicketRouter(deps: TicketRouterDeps) {
       }),
     ),
 
+    isWatching: volunteerProcedure.input(watchTicketInputSchema).query(
+      withErrorWrapping(async ({ ctx, input }) => {
+        const access = deps.createTicketAccess(ctx.org.tenantDb);
+        await access.assertAccess(ctx.user.id, input.ticketId);
+        const svc = deps.createWatchersSvc(ctx.org.tenantDb, access);
+        return svc.isWatching(ctx.user.id, input.ticketId);
+      }),
+    ),
+
     addQueueWatcher: adminProcedure.input(queueWatcherInputSchema).mutation(
       withErrorWrapping(async ({ ctx, input }) => {
         const access = deps.createTicketAccess(ctx.org.tenantDb);
