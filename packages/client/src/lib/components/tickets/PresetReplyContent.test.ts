@@ -102,12 +102,12 @@ describe("PresetReplyContent", () => {
     expect(container.textContent).toContain("I wanted to check in");
   });
 
-  it("renders List with multiple ListItem elements", () => {
+  it("renders all preset entries", () => {
     const { container } = render(PresetReplyContent, {
       props: { onselect: vi.fn() },
     });
-    // Konsta List renders <ul>, ListItem renders <li>
-    const items = container.querySelectorAll("li");
-    expect(items.length).toBe(2);
+    // Both presets from mock data should render with their titles.
+    expect(container.textContent).toContain("Greeting");
+    expect(container.textContent).toContain("Follow-up");
   });
 });

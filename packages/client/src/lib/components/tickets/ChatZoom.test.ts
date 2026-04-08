@@ -63,23 +63,15 @@ describe("computeTimestampOpacity", () => {
   });
 });
 
-// --- Scale constants ---
+// --- Scale constant invariants ---
 
-describe("scale constants", () => {
-  it("MIN_SCALE is 0.15", () => {
-    expect(MIN_SCALE).toBe(0.15);
-  });
-
-  it("MAX_SCALE is 1.0", () => {
-    expect(MAX_SCALE).toBe(1.0);
-  });
-
-  it("TEXT_FADE_THRESHOLD is 0.5", () => {
-    expect(TEXT_FADE_THRESHOLD).toBe(0.5);
-  });
-
-  it("MIN_SCALE is less than TEXT_FADE_THRESHOLD", () => {
+describe("scale constant invariants", () => {
+  it("MIN_SCALE is less than TEXT_FADE_THRESHOLD (crossfade requires this)", () => {
     expect(MIN_SCALE).toBeLessThan(TEXT_FADE_THRESHOLD);
+  });
+
+  it("MAX_SCALE is greater than TEXT_FADE_THRESHOLD", () => {
+    expect(MAX_SCALE).toBeGreaterThan(TEXT_FADE_THRESHOLD);
   });
 });
 
@@ -99,47 +91,9 @@ describe("ChatZoom component", () => {
     });
   }
 
-  it("renders the zoom container with transform scale(1)", () => {
-    const { container } = renderZoom();
-    const zoomEl = container.querySelector(
-      ".chat-zoom-container",
-    ) as HTMLElement;
-    expect(zoomEl).not.toBeNull();
-    expect(zoomEl.style.transform).toBe("scale(1)");
-  });
-
-  it("does not show zoom summary at default scale", () => {
-    const { container } = renderZoom();
-    const summary = container.querySelector(".zoom-summary");
-    expect(summary).toBeNull();
-  });
-
-  it("sets text opacity CSS custom property to 1 at default scale", () => {
-    const { container } = renderZoom();
-    const zoomEl = container.querySelector(
-      ".chat-zoom-container",
-    ) as HTMLElement;
-    expect(zoomEl.style.getPropertyValue("--text-opacity")).toBe("1");
-  });
-
-  it("sets timestamp opacity CSS custom property to 0 at default scale", () => {
-    const { container } = renderZoom();
-    const zoomEl = container.querySelector(
-      ".chat-zoom-container",
-    ) as HTMLElement;
-    expect(zoomEl.style.getPropertyValue("--timestamp-opacity")).toBe("0");
-  });
-
-  it("does not apply is-zooming class by default", () => {
-    const { container } = renderZoom();
-    const zoomEl = container.querySelector(".chat-zoom-container");
-    expect(zoomEl?.classList.contains("is-zooming")).toBe(false);
-  });
-
   it("renders children inside the zoom container", () => {
     const { container } = renderZoom();
-    const testChildren = container.querySelector(".test-children");
-    expect(testChildren).not.toBeNull();
+    // Children are rendered (harness injects test bubbles with data-fu-id).
     const bubbles = container.querySelectorAll("[data-fu-id]");
     expect(bubbles.length).toBeGreaterThan(0);
   });

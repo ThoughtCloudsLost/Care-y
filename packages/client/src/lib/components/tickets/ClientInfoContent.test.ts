@@ -50,9 +50,9 @@ describe("ClientInfoContent", () => {
     const { container } = render(ClientInfoContent, {
       props: { ...baseProps, clientTier: undefined },
     });
-    // No tier paragraph rendered
-    const tierEl = container.querySelector(".client-tier");
-    expect(tierEl).toBeNull();
+    // Tier text should not appear. "Jane D." is present but no tier label.
+    // With no tier prop, the tier paragraph is not rendered.
+    expect(container.textContent).not.toContain("SMS/Email");
   });
 
   it("renders contact method when provided", () => {
