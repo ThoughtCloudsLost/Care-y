@@ -2,12 +2,21 @@
 <script lang="ts">
   /* eslint-disable care-y/no-hardcoded-strings */
   import ChatZoom from "./ChatZoom.svelte";
+  import type { TimelineItem, ClusterRecord } from "./chat-zoom-types.js";
+  import type { FollowUpDecryptCache } from "$lib/crypto/follow-up-decrypt-cache.js";
+  import type { TicketKeyWrap } from "$lib/crypto/ticket-decrypt-cache.js";
 
   interface Props {
     scrollContainerEl?: HTMLDivElement;
     totalMessages?: number;
     earliestDate?: string;
     latestDate?: string;
+    items?: TimelineItem[];
+    decryptedContent?: Map<string, string | undefined>;
+    expandedClusters?: Map<string, ClusterRecord[]>;
+    onexpandcluster?: (ids: string[]) => void;
+    followUpCache?: FollowUpDecryptCache;
+    keyWrap?: TicketKeyWrap | null;
   }
 
   let {
@@ -15,6 +24,12 @@
     totalMessages = 0,
     earliestDate,
     latestDate,
+    items = [],
+    decryptedContent = new Map(),
+    expandedClusters = new Map(),
+    onexpandcluster,
+    followUpCache,
+    keyWrap = null,
   }: Props = $props();
 
   // Create a default scroll container if none provided.
@@ -28,6 +43,12 @@
     {totalMessages}
     {earliestDate}
     {latestDate}
+    {items}
+    {decryptedContent}
+    {expandedClusters}
+    {onexpandcluster}
+    {followUpCache}
+    {keyWrap}
   >
     <div class="test-children">
       <div data-fu-id="fu-1" id="fu-fu-1" class="bubble-text">Message 1</div>

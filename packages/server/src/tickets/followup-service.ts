@@ -36,12 +36,42 @@ export interface CreateFollowUpInput {
   readonly mentionedPseudonyms: string[];
 }
 
+/** Lightweight follow-up for timeline rendering. Plain messages omit encryptedContent. */
+export interface FollowUpSummaryRecord {
+  readonly id: string;
+  readonly ticketId: string;
+  readonly source: string;
+  readonly type: string;
+  /** Present for system events and internal notes, null for plain messages. */
+  readonly encryptedContent: Buffer | null;
+  readonly createdAt: Date;
+  readonly hasRecording: boolean;
+  readonly recordingDurationSeconds: number | null;
+  readonly hasImage: boolean;
+  readonly hasFile: boolean;
+}
+
 export interface FollowUpService {
   create(userId: string, input: CreateFollowUpInput): Promise<FollowUpRecord>;
   listByTicket(
     userId: string,
     ticketId: string,
     opts: { limit: number; cursor?: string; direction?: "newer" | "older" },
+  ): Promise<FollowUpRecord[]>;
+  /**
+   * All follow-ups for timeline rendering. Plain messages carry no
+   * encryptedContent. System events and notes include it for client-side
+   * decryption. Joins recordings/attachments for media flags.
+   */
+  listSummary(
+    userId: string,
+    ticketId: string,
+  ): Promise<FollowUpSummaryRecord[]>;
+  /** Fetch specific follow-ups by ID (for expanding timeline clusters). */
+  listByIds(
+    userId: string,
+    ticketId: string,
+    followUpIds: string[],
   ): Promise<FollowUpRecord[]>;
   markRead(
     userId: string,
@@ -175,6 +205,120 @@ export function createFollowUpService(
 
       const records = rows.map(toRecord);
       return isOlder ? records.reverse() : records;
+    },
+
+    async listSummary(userId, ticketId) {
+      await access.assertAccess(userId, ticketId);
+
+      // Fetch all non-deleted follow-ups in chronological order.
+      const rows = await db
+        .selectFrom("followups")
+        .select([
+          "followups.id",
+          "followups.ticket_id",
+          "followups.source",
+          "followups.type",
+          "followups.encrypted_content",
+          "followups.created_at",
+        ])
+        .where("followups.ticket_id", "=", ticketId)
+        .where("followups.deleted_at", "is", null)
+        .orderBy("followups.created_at", "asc")
+        .orderBy("followups.id", "asc")
+        .execute();
+
+      // Batch-fetch recordings and attachments for this ticket.
+      const [recRows, attRows] = await Promise.all([
+        db
+          .selectFrom("recordings")
+          .select(["followup_id", "duration_seconds"])
+          .where("ticket_id", "=", ticketId)
+          .where("deleted_at", "is", null)
+          .execute(),
+        db
+          .selectFrom("attachments")
+          .select(["followup_id", "content_type"])
+          .where("ticket_id", "=", ticketId)
+          .where("deleted_at", "is", null)
+          .execute(),
+      ]);
+
+      // Build lookup maps.
+      const recByFu = new Map<
+        string,
+        { count: number; maxDuration: number | null }
+      >();
+      for (const r of recRows) {
+        if (r.followup_id === null) continue;
+        const existing = recByFu.get(r.followup_id) ?? {
+          count: 0,
+          maxDuration: null,
+        };
+        existing.count++;
+        if (r.duration_seconds !== null) {
+          existing.maxDuration =
+            existing.maxDuration !== null
+              ? Math.max(existing.maxDuration, r.duration_seconds)
+              : r.duration_seconds;
+        }
+        recByFu.set(r.followup_id, existing);
+      }
+
+      const attByFu = new Map<
+        string,
+        { hasImage: boolean; hasFile: boolean }
+      >();
+      for (const a of attRows) {
+        if (a.followup_id === null) continue;
+        const existing = attByFu.get(a.followup_id) ?? {
+          hasImage: false,
+          hasFile: false,
+        };
+        if (a.content_type?.startsWith("image/") === true) {
+          existing.hasImage = true;
+        } else {
+          existing.hasFile = true;
+        }
+        attByFu.set(a.followup_id, existing);
+      }
+
+      return rows.map((row): FollowUpSummaryRecord => {
+        const isPlainMessage =
+          row.source !== "system" && row.type !== "internal_note";
+        const rec = recByFu.get(row.id);
+        const att = attByFu.get(row.id);
+
+        return {
+          id: row.id,
+          ticketId: row.ticket_id,
+          source: row.source,
+          type: row.type,
+          encryptedContent: isPlainMessage ? null : row.encrypted_content,
+          createdAt: row.created_at,
+          hasRecording: (rec?.count ?? 0) > 0,
+          recordingDurationSeconds: rec?.maxDuration ?? null,
+          hasImage: att?.hasImage ?? false,
+          hasFile: att?.hasFile ?? false,
+        };
+      });
+    },
+
+    async listByIds(userId, ticketId, followUpIds) {
+      await access.assertAccess(userId, ticketId);
+
+      if (followUpIds.length === 0) return [];
+
+      const rows = await db
+        .selectFrom("followups")
+        .selectAll()
+        .where("ticket_id", "=", ticketId)
+        .where("id", "in", followUpIds)
+        .where("deleted_at", "is", null)
+        .orderBy("created_at", "asc")
+        .orderBy("id", "asc")
+        .execute();
+
+      return rows.map(toRecord);
     },
 
     async markRead(userId, followUpId, encryptedReadState) {

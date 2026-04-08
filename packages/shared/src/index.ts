@@ -188,6 +188,8 @@ export {
   ticketListInputSchema,
   recentFollowUpsInputSchema,
   followUpListInputSchema,
+  followUpSummaryInputSchema,
+  followUpsByIdsInputSchema,
   assignTicketInputSchema,
   takeTicketInputSchema,
   releaseTicketInputSchema,

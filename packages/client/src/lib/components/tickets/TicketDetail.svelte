@@ -37,6 +37,10 @@
   import AttachmentChip from "$lib/components/tickets/AttachmentChip.svelte";
   import VirtualList from "$lib/components/tickets/VirtualList.svelte";
   import ChatZoom from "$lib/components/tickets/ChatZoom.svelte";
+  import type {
+    TimelineItem,
+    ClusterRecord,
+  } from "$lib/components/tickets/chat-zoom-types.js";
   import MentionAutocomplete from "$lib/components/tickets/MentionAutocomplete.svelte";
 
   import {
@@ -221,6 +225,85 @@
     return map;
   });
 
+  // --- Timeline summary query (fetched lazily when zoomed) ---
+
+  const summaryQuery = createQuery(() => ({
+    queryKey: ["ticket", ticketId, "followUpSummary"],
+    queryFn: async () => ticketRouter.listFollowUpSummary.query({ ticketId }),
+    enabled: chatZoomed,
+  }));
+
+  // Build timeline items from the summary endpoint response.
+  const timelineItems = $derived.by((): TimelineItem[] =>
+    (summaryQuery.data ?? []).map((fu) => ({
+      id: fu.id,
+      source: fu.source,
+      type: fu.type,
+      createdAt: fu.createdAt,
+      encryptedContent: fu.encryptedContent,
+      hasRecording: fu.hasRecording,
+      recordingDurationSeconds: fu.recordingDurationSeconds,
+      hasImage: fu.hasImage,
+      hasFile: fu.hasFile,
+    })),
+  );
+
+  // Decrypt system event and note content for timeline display.
+  const timelineDecryptedContent = $derived.by(
+    (): SvelteMap<string, string | undefined> => {
+      const map = new SvelteMap<string, string | undefined>();
+      if (!ticket) return map;
+      for (const item of summaryQuery.data ?? []) {
+        if (item.encryptedContent === null) continue;
+        const content = followUpCache.decryptContent(
+          item.id,
+          ticket.keyWrap,
+          item.encryptedContent,
+        );
+        map.set(item.id, isDecryptError(content) ? undefined : content);
+      }
+      return map;
+    },
+  );
+
+  // --- Expandable timeline clusters ---
+
+  const expandedClusters = new SvelteMap<string, ClusterRecord[]>();
+
+  async function handleExpandCluster(followUpIds: string[]): Promise<void> {
+    const key = followUpIds.join(",");
+    if (expandedClusters.has(key) || !ticket) return;
+
+    // Expand immediately with placeholder shimmer rows.
+    const placeholders: ClusterRecord[] = followUpIds.map((id) => {
+      const summary = (summaryQuery.data ?? []).find((s) => s.id === id);
+      return {
+        id,
+        source: summary?.source ?? "volunteer",
+        encryptedContent: null,
+        createdAt: summary?.createdAt ?? "",
+      };
+    });
+    expandedClusters.set(key, placeholders);
+
+    // Fetch full follow-ups by IDs.
+    const fullRecords = await queryClient.fetchQuery({
+      queryKey: ["ticket", ticketId, "followUpsByIds", key],
+      queryFn: async () =>
+        ticketRouter.listFollowUpsByIds.query({ ticketId, followUpIds }),
+    });
+
+    // Replace placeholders with real records. Decryption happens reactively
+    // in ChatZoom's template via followUpCache.decryptContent.
+    const records: ClusterRecord[] = fullRecords.map((fu) => ({
+      id: fu.id,
+      source: fu.source,
+      encryptedContent: fu.encryptedContent,
+      createdAt: fu.createdAt,
+    }));
+    expandedClusters.set(key, records);
+  }
+
   // Decrypt ticket title (warm the cache for display elsewhere).
   $effect(() => {
     if (ticket) {
@@ -364,6 +447,7 @@
   let hasScrolledInitially = false;
 
   $effect(() => {
+    if (chatZoomed) return;
     if (followUps.length > 0 && scrollContainerEl && !hasScrolledInitially) {
       hasScrolledInitially = true;
       const el = scrollContainerEl;
@@ -385,6 +469,7 @@
   const followUpCount = $derived(followUps.length);
 
   $effect(() => {
+    if (chatZoomed) return;
     // Reading followUpCount registers the dependency.
     if (followUpCount === 0) return;
 
@@ -433,6 +518,12 @@
         totalMessages={followUps.length}
         {earliestDate}
         {latestDate}
+        items={timelineItems}
+        decryptedContent={timelineDecryptedContent}
+        {expandedClusters}
+        onexpandcluster={handleExpandCluster}
+        {followUpCache}
+        keyWrap={ticket.keyWrap}
         bind:zoomed={chatZoomed}
       >
         <Messages>
@@ -486,6 +577,7 @@
               <div
                 id="fu-{fu.id}"
                 data-fu-id={fu.id}
+                class="fu-wrapper"
                 tabindex={kind === "system" ? undefined : 0}
                 role={kind === "system" ? undefined : "article"}
                 aria-label={kind === "system"
@@ -611,6 +703,20 @@
     flex-direction: column;
     /* Leave space for the fixed ShellMessagebar at the bottom */
     padding-bottom: 4.5rem;
+  }
+
+  /* display:contents lets the Message flex alignment (self-end for sent)
+     work through the wrapper without breaking the Messages flex column. */
+  .fu-wrapper {
+    display: contents;
+  }
+
+  /* VirtualList wraps each item in a .virtual-row div which breaks
+     the Messages flex-col context. Make each row a flex-col so
+     Message's self-end (sent alignment) works within each row. */
+  :global(.virtual-row:not(.virtual-row-grid)) {
+    display: flex;
+    flex-direction: column;
   }
 
   .mention-anchor {

@@ -324,6 +324,15 @@
 
   "ticket_zoom_out": "Zoom out",
   "ticket_zoom_in": "Zoom in",
+  "ticket_action_timeline": "View timeline",
+  "ticket_action_messages": "View messages",
+  "ticket_timeline_messages_count": "{count} messages",
+  "ticket_timeline_incoming": "{count} incoming",
+  "ticket_timeline_outgoing": "{count} outgoing",
+  "ticket_timeline_nav_label": "Conversation timeline",
+  "ticket_timeline_expand_cluster": "Expand {summary}",
+  "ticket_timeline_jump_to": "Jump to: {label}, {time}",
+  "ticket_timeline_decrypting": "Decrypting message",
   "ticket_zoom_summary": "{count} messages over {days} days, most recent {recency}",
   "ticket_zoom_toggle": "Toggle zoom"
 }

@@ -22,6 +22,7 @@ let ticketQueryState: Record<string, unknown> = {};
 let followUpsQueryState: Record<string, unknown> = {};
 let recordingsQueryState: Record<string, unknown> = {};
 let attachmentsQueryState: Record<string, unknown> = {};
+let summaryQueryState: Record<string, unknown> = {};
 
 // createQuery is called multiple times (ticket, followUps, recordings,
 // attachments). We identify which query is being created by the queryKey.
@@ -33,6 +34,7 @@ vi.mock("@tanstack/svelte-query", () => ({
 
     // Match by the third key segment to identify the query.
     if (key[2] === "followUps") return followUpsQueryState;
+    if (key[2] === "followUpSummary") return summaryQueryState;
     if (key[2] === "recordings") return recordingsQueryState;
     if (key[2] === "attachments") return attachmentsQueryState;
 
@@ -52,6 +54,8 @@ vi.mock("$lib/trpc/index.js", () => ({
     tickets: {
       get: { query: vi.fn() },
       listFollowUps: { query: vi.fn() },
+      listFollowUpSummary: { query: vi.fn() },
+      listFollowUpsByIds: { query: vi.fn() },
       listRecordings: { query: vi.fn() },
       listAttachments: { query: vi.fn() },
       listVolunteers: { query: vi.fn() },
@@ -169,6 +173,13 @@ beforeEach(() => {
   };
 
   attachmentsQueryState = {
+    isLoading: false,
+    isError: false,
+    error: null,
+    data: [],
+  };
+
+  summaryQueryState = {
     isLoading: false,
     isError: false,
     error: null,

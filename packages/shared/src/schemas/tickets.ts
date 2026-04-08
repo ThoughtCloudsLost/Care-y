@@ -187,6 +187,19 @@ export const followUpListInputSchema = z.object({
 });
 export type FollowUpListInput = z.infer<typeof followUpListInputSchema>;
 
+/** Input for the timeline summary endpoint (no pagination, all follow-ups). */
+export const followUpSummaryInputSchema = z.object({
+  ticketId: z.uuid(),
+});
+export type FollowUpSummaryInput = z.infer<typeof followUpSummaryInputSchema>;
+
+/** Fetch specific follow-ups by ID (for expanding timeline clusters). */
+export const followUpsByIdsInputSchema = z.object({
+  ticketId: z.uuid(),
+  followUpIds: z.array(z.uuid()).min(1).max(200),
+});
+export type FollowUpsByIdsInput = z.infer<typeof followUpsByIdsInputSchema>;
+
 // --- Workflow schemas ---
 
 export const assignTicketInputSchema = z.object({

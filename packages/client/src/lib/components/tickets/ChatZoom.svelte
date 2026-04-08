@@ -1,37 +1,70 @@
 <!--
-  Pinch-to-zoom timeline view for the ticket detail chat.
+  Timeline table-of-contents view for the ticket detail chat.
 
-  Wraps the Messages container and applies continuous CSS transform: scale()
-  via raw pointer events. At zoomed-out scales, bubble text fades and
-  timestamps become prominent. Tap a mini-bubble to zoom back and scroll
-  to that message.
+  Two rendering modes controlled by the `zoomed` bindable:
+  - Normal (zoomed=false): renders children (full chat bubbles) as-is.
+  - Timeline (zoomed=true): renders a compact TOC using Konsta List/ListGroup/
+    ListItem with date headers, landmark rows, and expandable message clusters.
 
-  Uses raw pointer events (not svelte-gestures) for full control over zoom
-  center and scroll position management. See Design Decision in 06d plan.
+  Toggled via "View timeline" / "View messages" in the ticket actions menu.
 -->
 <script lang="ts">
-  import type { Snippet } from "svelte";
-  import { SvelteMap } from "svelte/reactivity";
+  import type { Snippet, Component } from "svelte";
+  import { tick } from "svelte";
+  import { SvelteSet } from "svelte/reactivity";
+  import { List, ListGroup, ListItem, Messages, Message } from "konsta/svelte";
+  import {
+    MessagesSquare,
+    MessageSquare,
+    Lock,
+    Play,
+    Image as ImageIcon,
+    Paperclip,
+    Dot,
+    ChevronDown,
+  } from "@lucide/svelte";
   import * as m from "$lib/paraglide/messages.js";
   import { formatRelativeTime } from "$lib/utils/format-time.js";
-  import {
-    MIN_SCALE,
-    MAX_SCALE,
-    TEXT_FADE_THRESHOLD,
-    computeTextOpacity,
-    computeTimestampOpacity,
-  } from "./chat-zoom-utils.js";
+  import { needsDateSeparator, formatDateSeparator } from "$lib/utils/time.js";
+  import type { FollowUpDecryptCache } from "$lib/crypto/follow-up-decrypt-cache.js";
+  import type { TicketKeyWrap } from "$lib/crypto/ticket-decrypt-cache.js";
+  import { isDecryptError } from "$lib/crypto/async-decrypt-cache.js";
+  import type { TimelineItem, ClusterRecord } from "./chat-zoom-types.js";
+
+  interface ClusterEntry {
+    kind: "cluster";
+    ids: string[];
+    incoming: number;
+    outgoing: number;
+    firstCreatedAt: string;
+  }
+
+  interface LandmarkEntry {
+    kind: "landmark";
+    item: TimelineItem;
+    icon: Component;
+    label: string;
+    time: string;
+  }
+
+  type TocEntry = ClusterEntry | LandmarkEntry;
+
+  interface TocGroup {
+    dateLabel: string;
+    entries: TocEntry[];
+  }
 
   interface ChatZoomProps {
-    /** The scrollable container element that holds the zoom content. */
     scrollContainerEl: HTMLDivElement | undefined;
-    /** Total number of follow-ups in the conversation. */
     totalMessages: number;
-    /** ISO date string of the earliest message in the conversation. */
     earliestDate: string | undefined;
-    /** ISO date string of the most recent message. */
     latestDate: string | undefined;
-    /** Two-way bindable: true when zoomed out (scale < 0.8). */
+    items?: TimelineItem[];
+    decryptedContent?: Map<string, string | undefined>;
+    expandedClusters?: Map<string, ClusterRecord[]>;
+    onexpandcluster?: (followUpIds: string[]) => void;
+    followUpCache?: FollowUpDecryptCache;
+    keyWrap?: TicketKeyWrap | null;
     zoomed?: boolean;
     children: Snippet;
   }
@@ -41,38 +74,22 @@
     totalMessages,
     earliestDate,
     latestDate,
+    items = [],
+    decryptedContent = new Map(),
+    expandedClusters = new Map(),
+    onexpandcluster,
+    followUpCache,
+    keyWrap = null,
     zoomed = $bindable(false),
     children,
   }: ChatZoomProps = $props();
 
-  let scale = $state(1.0);
-  let isZooming = $state(false);
-  let initialPinchDistance: number | null = null;
-  let initialScale = 1.0;
-  const pointers = new SvelteMap<number, PointerEvent>();
+  // Track which clusters are visually open (separate from data loading).
+  const openClusters = new SvelteSet<string>();
 
-  const textOpacity = $derived(computeTextOpacity(scale));
-  const timestampOpacity = $derived(computeTimestampOpacity(scale));
+  // Track which date groups are collapsed. Empty = all expanded (default).
+  const collapsedGroups = new SvelteSet<number>();
 
-  const isZoomedOut = $derived(scale < 0.8);
-
-  // Sync internal scale -> external zoomed prop.
-  $effect(() => {
-    zoomed = isZoomedOut;
-  });
-
-  // React to external zoomed changes (e.g. action sheet toggle).
-  let prevZoomed = false;
-  $effect(() => {
-    if (zoomed && !prevZoomed) {
-      scale = MIN_SCALE;
-    } else if (!zoomed && prevZoomed) {
-      scale = MAX_SCALE;
-    }
-    prevZoomed = zoomed;
-  });
-
-  // Accessible summary text: "N messages over M days, most recent X ago"
   const summaryText = $derived.by((): string => {
     if (
       totalMessages === 0 ||
@@ -95,184 +112,487 @@
     });
   });
 
-  function getPair(): [PointerEvent, PointerEvent] | undefined {
-    const pts = [...pointers.values()];
-    const p1 = pts[0];
-    const p2 = pts[1];
-    if (p1 === undefined || p2 === undefined) return undefined;
-    return [p1, p2];
+  function isLandmark(item: TimelineItem): boolean {
+    if (item.source === "system") return true;
+    if (item.type === "internal_note") return true;
+    if (item.hasRecording || item.hasImage || item.hasFile) return true;
+    return false;
   }
 
-  function pinchDistance(pair: [PointerEvent, PointerEvent]): number {
-    return Math.hypot(
-      pair[0].clientX - pair[1].clientX,
-      pair[0].clientY - pair[1].clientY,
-    );
+  function landmarkIcon(item: TimelineItem): Component {
+    if (item.source === "system") return Dot;
+    if (item.type === "internal_note") return Lock;
+    if (item.hasRecording) return Play;
+    if (item.hasImage) return ImageIcon;
+    if (item.hasFile) return Paperclip;
+    return MessageSquare;
   }
 
-  function onPointerDown(e: PointerEvent): void {
-    pointers.set(e.pointerId, e);
-    if (pointers.size === 2) {
-      isZooming = true;
-      const pair = getPair();
-      if (!pair) return;
-      initialPinchDistance = pinchDistance(pair);
-      initialScale = scale;
+  function landmarkLabel(item: TimelineItem): string {
+    if (item.source === "system") {
+      const decrypted = decryptedContent.get(item.id);
+      if (decrypted !== undefined && decrypted !== "") return decrypted;
+      if (item.type === "assignment_change") return "Assigned";
+      if (item.type === "status_change") return "Status changed";
+      if (item.type === "hold_change") return "Hold changed";
+      if (item.type === "priority_change") return "Priority changed";
+      return "Event";
     }
-  }
 
-  function onPointerMove(e: PointerEvent): void {
-    pointers.set(e.pointerId, e);
-    if (!isZooming || pointers.size < 2 || initialPinchDistance === null)
-      return;
-
-    const pair = getPair();
-    if (!pair) return;
-    const currentDistance = pinchDistance(pair);
-
-    scale = Math.max(
-      MIN_SCALE,
-      Math.min(
-        MAX_SCALE,
-        initialScale * (currentDistance / initialPinchDistance),
-      ),
-    );
-  }
-
-  // Track whether a pinch just ended so we can suppress the click that
-  // browsers sometimes fire after a multi-pointer gesture.
-  let suppressNextClick = false;
-
-  function onPointerUp(e: PointerEvent): void {
-    pointers.delete(e.pointerId);
-    if (pointers.size < 2) {
-      if (isZooming) {
-        suppressNextClick = true;
+    if (item.type === "internal_note") {
+      const decrypted = decryptedContent.get(item.id);
+      if (decrypted !== undefined && decrypted !== "") {
+        return decrypted.length > 40
+          ? decrypted.slice(0, 40) + "\u2026"
+          : decrypted;
       }
-      isZooming = false;
-      initialPinchDistance = null;
+      return "Note";
     }
+
+    if (item.hasRecording) {
+      const dur = item.recordingDurationSeconds;
+      if (dur !== null) {
+        const mins = Math.floor(dur / 60);
+        const secs = String(dur % 60).padStart(2, "0");
+        return `Voicemail (${String(mins)}:${secs})`;
+      }
+      return "Voicemail";
+    }
+    if (item.hasImage) return "Photo";
+    if (item.hasFile) return "File";
+
+    return "";
   }
 
-  /**
-   * Zoom-back core: zoom to 1.0 and scroll to the target follow-up.
-   * Sets scale first, waits one frame for the container to resize, then
-   * scrolls. This avoids cross-browser scrollIntoView issues on scaled
-   * content (W3C CSSWG #9458).
-   */
-  function zoomBackTo(target: HTMLElement): void {
-    const fuId = target.closest("[data-fu-id]")?.getAttribute("data-fu-id");
-    if (fuId === null || fuId === undefined) return;
+  function formatTime(iso: string): string {
+    const d = new Date(iso);
+    return d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+  }
 
-    scale = MAX_SCALE;
+  function clusterKey(ids: string[]): string {
+    return ids.join(",");
+  }
 
+  function clusterLabel(incoming: number, outgoing: number): string {
+    const parts: string[] = [];
+    if (incoming > 0) {
+      parts.push(m.ticket_timeline_incoming({ count: String(incoming) }));
+    }
+    if (outgoing > 0) {
+      parts.push(m.ticket_timeline_outgoing({ count: String(outgoing) }));
+    }
+    return parts.join(", ");
+  }
+
+  const tocGroups = $derived.by((): TocGroup[] => {
+    const groups: TocGroup[] = [];
+    let currentGroup: TocGroup | null = null;
+    let clusterIds: string[] = [];
+    let clusterIncoming = 0;
+    let clusterOutgoing = 0;
+
+    function flushCluster(): void {
+      if (clusterIds.length > 0 && currentGroup) {
+        currentGroup.entries.push({
+          kind: "cluster",
+          ids: [...clusterIds],
+          incoming: clusterIncoming,
+          outgoing: clusterOutgoing,
+          firstCreatedAt:
+            items.find((it) => it.id === clusterIds[0])?.createdAt ?? "",
+        });
+        clusterIds = [];
+        clusterIncoming = 0;
+        clusterOutgoing = 0;
+      }
+    }
+
+    function ensureGroup(dateLabel: string): void {
+      flushCluster();
+      currentGroup = { dateLabel, entries: [] };
+      groups.push(currentGroup);
+    }
+
+    for (const [i, item] of items.entries()) {
+      const prevTimestamp = i > 0 ? items[i - 1]?.createdAt : undefined;
+
+      if (needsDateSeparator(item.createdAt, prevTimestamp)) {
+        ensureGroup(formatDateSeparator(item.createdAt));
+      }
+
+      if (!currentGroup) {
+        currentGroup = {
+          dateLabel: formatDateSeparator(item.createdAt),
+          entries: [],
+        };
+        groups.push(currentGroup);
+      }
+
+      if (isLandmark(item)) {
+        flushCluster();
+        currentGroup.entries.push({
+          kind: "landmark",
+          item,
+          icon: landmarkIcon(item),
+          label: landmarkLabel(item),
+          time: formatTime(item.createdAt),
+        });
+      } else {
+        clusterIds.push(item.id);
+        if (item.source === "client") {
+          clusterIncoming++;
+        } else {
+          clusterOutgoing++;
+        }
+      }
+    }
+    flushCluster();
+
+    return groups;
+  });
+
+  function zoomBackTo(fuId: string): void {
+    zoomed = false;
     requestAnimationFrame(() => {
       const el = document.getElementById(`fu-${fuId}`);
       el?.scrollIntoView({ behavior: "smooth", block: "center" });
     });
   }
 
-  /** Tap a mini-bubble when zoomed out to zoom back. */
-  function onTapMini(e: MouseEvent): void {
-    if (suppressNextClick) {
-      suppressNextClick = false;
+  function handleClusterClick(entry: ClusterEntry): void {
+    const key = clusterKey(entry.ids);
+    if (openClusters.has(key)) {
+      openClusters.delete(key);
       return;
     }
-    if (!isZoomedOut) return;
-
-    const target = e.target;
-    if (!(target instanceof HTMLElement)) return;
-    zoomBackTo(target);
+    openClusters.add(key);
+    if (!expandedClusters.has(key)) {
+      onexpandcluster?.(entry.ids);
+    }
   }
 
-  /** Keyboard equivalent: Enter/Space on a focused follow-up zooms back. */
-  function onKeydownMini(e: KeyboardEvent): void {
-    if (!isZoomedOut) return;
-    if (e.key !== "Enter" && e.key !== " ") return;
-
-    const target = e.target;
-    if (!(target instanceof HTMLElement)) return;
-    if (!target.closest("[data-fu-id]")) return;
-
-    e.preventDefault();
-    zoomBackTo(target);
+  function decrypt(rec: ClusterRecord): string | undefined {
+    if (!followUpCache || !keyWrap || rec.encryptedContent === null) {
+      return undefined;
+    }
+    const result = followUpCache.decryptContent(
+      rec.id,
+      keyWrap,
+      rec.encryptedContent,
+    );
+    return isDecryptError(result) ? undefined : result;
   }
+
+  // Scroll to bottom when timeline first appears.
+  // tick() flushes Svelte DOM updates, then two rAFs ensure the browser
+  // has laid out and painted the Konsta List content before we measure
+  // scrollHeight. A single rAF can fire before layout is complete.
+  $effect(() => {
+    if (zoomed && scrollContainerEl) {
+      const el = scrollContainerEl;
+      void tick().then(() => {
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => {
+            el.scrollTop = el.scrollHeight;
+          });
+        });
+      });
+    }
+  });
 </script>
 
-<div class="chat-zoom-wrapper">
-  <!-- Zoom summary (visible when zoomed out, announced to screen readers) -->
-  {#if isZoomedOut && summaryText}
-    <div class="zoom-summary" aria-live="polite" role="status">
-      {summaryText}
-    </div>
-  {/if}
+{#if zoomed}
+  <nav class="timeline-view" aria-label={m.ticket_timeline_nav_label()}>
+    {#if summaryText}
+      <div class="timeline-summary" aria-live="polite" role="status">
+        {summaryText}
+      </div>
+    {/if}
 
-  <!--
-    Pointer events on this container track pinch gestures for zoom.
-    Click/keydown handle zoom-back on mini-bubbles (keyboard alternative
-    to tap). The action sheet "Zoom" option provides the primary accessible
-    alternative. Suppressing a11y warning: this is a gesture-tracking
-    surface, not a semantic interactive element.
-  -->
-  <!-- svelte-ignore a11y_no_static_element_interactions -->
-  <div
-    class="chat-zoom-container"
-    class:is-zooming={isZooming}
-    style:transform="scale({scale})"
-    style:transform-origin="top center"
-    style:--text-opacity={textOpacity}
-    style:--timestamp-opacity={timestampOpacity}
-    onpointerdown={onPointerDown}
-    onpointermove={onPointerMove}
-    onpointerup={onPointerUp}
-    onpointercancel={onPointerUp}
-    onclick={isZoomedOut ? onTapMini : undefined}
-    onkeydown={isZoomedOut ? onKeydownMini : undefined}
-  >
-    {@render children()}
-  </div>
-</div>
+    <List strongIos outlineIos>
+      {#each tocGroups as group, gi (gi)}
+        {@const groupCollapsed = collapsedGroups.has(gi)}
+        <ListGroup>
+          <ListItem
+            link
+            chevron={false}
+            title={group.dateLabel}
+            class="toc-group-title"
+            onclick={() => {
+              if (collapsedGroups.has(gi)) {
+                collapsedGroups.delete(gi);
+              } else {
+                collapsedGroups.add(gi);
+              }
+            }}
+            linkProps={{
+              role: "button",
+              "aria-expanded": !groupCollapsed,
+            }}
+          >
+            {#snippet after()}
+              <ChevronDown
+                size={14}
+                class="toc-chevron {groupCollapsed ? '' : 'toc-chevron-open'}"
+                aria-hidden="true"
+              />
+            {/snippet}
+          </ListItem>
+
+          {#if !groupCollapsed}
+            {#each group.entries as entry, ei (ei)}
+              {#if entry.kind === "cluster"}
+                {@const key = clusterKey(entry.ids)}
+                {@const isOpen = openClusters.has(key)}
+                {@const expanded = expandedClusters.get(key)}
+                {@const summary = clusterLabel(entry.incoming, entry.outgoing)}
+                {@const clusterTime = formatTime(entry.firstCreatedAt)}
+
+                <ListItem
+                  link
+                  chevron={false}
+                  title={summary}
+                  onclick={() => handleClusterClick(entry)}
+                  linkProps={{
+                    role: "button",
+                    "aria-expanded": isOpen,
+                    "aria-label": m.ticket_timeline_expand_cluster({ summary }),
+                  }}
+                >
+                  {#snippet media()}
+                    <MessagesSquare
+                      size={20}
+                      class="toc-icon"
+                      aria-hidden="true"
+                    />
+                  {/snippet}
+                  {#snippet after()}
+                    <span class="toc-after">
+                      <span class="toc-time">{clusterTime}</span>
+                      <ChevronDown
+                        size={14}
+                        class="toc-chevron {isOpen ? 'toc-chevron-open' : ''}"
+                        aria-hidden="true"
+                      />
+                    </span>
+                  {/snippet}
+
+                  {#if isOpen}
+                    <div class="cluster-bubbles">
+                      <Messages>
+                        {#if expanded !== undefined}
+                          {#each expanded as rec (rec.id)}
+                            {@const plaintext = decrypt(rec)}
+                            {@const preview =
+                              plaintext !== undefined
+                                ? plaintext.length > 60
+                                  ? plaintext.slice(0, 60) + "\u2026"
+                                  : plaintext
+                                : undefined}
+                            <Message
+                              type={rec.source === "client"
+                                ? "received"
+                                : "sent"}
+                              role="button"
+                              tabindex={0}
+                              aria-label={m.ticket_timeline_jump_to({
+                                label:
+                                  preview ?? m.ticket_timeline_decrypting(),
+                                time: formatTime(rec.createdAt),
+                              })}
+                              onclick={() => zoomBackTo(rec.id)}
+                              onkeydown={(e) => {
+                                if (e.key === "Enter" || e.key === " ") {
+                                  e.preventDefault();
+                                  zoomBackTo(rec.id);
+                                }
+                              }}
+                              class="cluster-bubble-tap"
+                            >
+                              {#snippet text()}
+                                {#if preview === undefined}
+                                  <span
+                                    class="shimmer shimmer-bubble"
+                                    role="status"
+                                    aria-label={m.ticket_timeline_decrypting()}
+                                  ></span>
+                                {:else}
+                                  {preview}
+                                {/if}
+                              {/snippet}
+                              {#snippet footer()}
+                                <time
+                                  class="bubble-time"
+                                  datetime={rec.createdAt}
+                                >
+                                  {formatTime(rec.createdAt)}
+                                </time>
+                              {/snippet}
+                            </Message>
+                          {/each}
+                        {/if}
+                      </Messages>
+                    </div>
+                  {/if}
+                </ListItem>
+              {:else if entry.kind === "landmark"}
+                {@const EntryIcon = entry.icon}
+                <ListItem
+                  link
+                  chevron={false}
+                  title={entry.label}
+                  onclick={() => zoomBackTo(entry.item.id)}
+                  class={entry.item.source === "system" ? "toc-row-system" : ""}
+                  linkProps={{
+                    "aria-label": m.ticket_timeline_jump_to({
+                      label: entry.label,
+                      time: entry.time,
+                    }),
+                  }}
+                >
+                  {#snippet media()}
+                    <EntryIcon size={20} class="toc-icon" aria-hidden="true" />
+                  {/snippet}
+                  {#snippet after()}
+                    <span class="toc-after">
+                      <span class="toc-time">{entry.time}</span>
+                      <span class="toc-chevron-spacer"></span>
+                    </span>
+                  {/snippet}
+                </ListItem>
+              {/if}
+            {/each}
+          {/if}
+        </ListGroup>
+      {/each}
+    </List>
+  </nav>
+{:else}
+  {@render children()}
+{/if}
 
 <style>
-  .chat-zoom-wrapper {
-    position: relative;
-    flex: 1;
-    min-height: 0;
+  .timeline-view {
+    padding-bottom: 5rem;
+  }
+
+  .timeline-summary {
+    text-align: center;
+    font-size: 0.75rem;
+    color: var(--muted, #666);
+    padding: 0.25rem 1rem 0.5rem;
+  }
+
+  /* Icon styling for Lucide icons in ListItem media slots */
+  :global(.toc-icon) {
+    opacity: 0.5;
+    color: var(--muted, #666);
+  }
+
+  :global(.toc-icon-sm) {
+    opacity: 0.4;
+    color: var(--muted, #666);
+  }
+
+  /* Timestamp in the after slot: secondary color */
+  .toc-time {
+    font-size: 0.75rem;
+    color: var(--muted, #666);
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* After slot layout for cluster rows (time + chevron) */
+  .toc-after {
     display: flex;
-    flex-direction: column;
+    align-items: center;
+    gap: 0.25rem;
   }
 
-  .chat-zoom-container {
-    transition: transform 0.2s linear;
-    will-change: transform;
+  /* Group title styled to match Konsta groupTitle but tappable */
+  :global(.toc-group-title) {
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--muted, #666);
   }
 
-  /* Only suppress browser pinch-zoom during active two-pointer gesture.
-     Single-pointer scroll must still work. */
-  .chat-zoom-container.is-zooming {
-    touch-action: none;
+  /* Chevron rotation for expand/collapse */
+  :global(.toc-chevron) {
+    transition: transform 0.2s ease;
+    color: var(--muted, #666);
   }
 
-  /* Text opacity crossfade controlled by CSS custom properties set from JS */
-  .chat-zoom-container :global(.bubble-text) {
-    opacity: var(--text-opacity);
+  :global(.toc-chevron-open) {
+    transform: rotate(180deg);
   }
 
-  .chat-zoom-container :global(.bubble-time) {
-    opacity: var(--timestamp-opacity);
+  /* Invisible spacer matching chevron width so timestamps align across rows */
+  .toc-chevron-spacer {
+    display: inline-block;
+    width: 14px;
+    flex-shrink: 0;
   }
 
   @media (prefers-reduced-motion: reduce) {
-    .chat-zoom-container {
+    :global(.toc-chevron) {
       transition: none;
     }
   }
 
-  .zoom-summary {
-    text-align: center;
-    font-size: 0.75rem;
+  /* System event rows: muted text */
+  :global(.toc-row-system) {
+    opacity: 0.7;
+  }
+
+  /* Expanded cluster: message bubbles */
+  .cluster-bubbles {
+    padding: 0.25rem 0;
+  }
+
+  :global(.cluster-bubble-tap) {
+    cursor: pointer;
+  }
+
+  :global(.cluster-bubble-tap:focus-visible) {
+    outline: 2px solid var(--brand-primary, #7c3aed);
+    outline-offset: -2px;
+    border-radius: 0.5rem;
+  }
+
+  .bubble-time {
+    font-size: 0.625rem;
     color: var(--muted, #666);
-    padding: 0.375rem 1rem 0.25rem;
-    background: var(--surface-1, #fff);
+  }
+
+  .shimmer-bubble {
+    display: inline-block;
+    width: 8rem;
+    height: 0.875rem;
+    border-radius: 0.25rem;
+    background: linear-gradient(
+      90deg,
+      var(--surface-2, #333) 25%,
+      var(--surface-1, #444) 50%,
+      var(--surface-2, #333) 75%
+    );
+    background-size: 200% 100%;
+    animation: shimmer 1.5s infinite linear;
+  }
+
+  @keyframes shimmer {
+    from {
+      background-position: 200% 0;
+    }
+    to {
+      background-position: -200% 0;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .shimmer-bubble {
+      animation: none;
+      background: var(--surface-2, #333);
+    }
   }
 </style>

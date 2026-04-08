@@ -72,7 +72,7 @@
     >{m.ticket_action_client_info()}</ActionsButton
   >
   <ActionsButton onclick={() => onaction("zoom")}>
-    {isZoomedOut ? m.ticket_zoom_in() : m.ticket_zoom_out()}
+    {isZoomedOut ? m.ticket_action_messages() : m.ticket_action_timeline()}
   </ActionsButton>
   <!-- 6m extends here with pin action -->
 </ActionsGroup>

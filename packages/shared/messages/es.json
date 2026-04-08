@@ -324,6 +324,15 @@
 
   "ticket_zoom_out": "Alejar",
   "ticket_zoom_in": "Acercar",
+  "ticket_action_timeline": "Ver cronologia",
+  "ticket_action_messages": "Ver mensajes",
+  "ticket_timeline_messages_count": "{count} mensajes",
+  "ticket_timeline_incoming": "{count} entrantes",
+  "ticket_timeline_outgoing": "{count} salientes",
+  "ticket_timeline_nav_label": "Cronologia de la conversacion",
+  "ticket_timeline_expand_cluster": "Expandir {summary}",
+  "ticket_timeline_jump_to": "Ir a: {label}, {time}",
+  "ticket_timeline_decrypting": "Descifrando mensaje",
   "ticket_zoom_summary": "{count} mensajes en {days} dias, mas reciente {recency}",
   "ticket_zoom_toggle": "Alternar zoom"
 }

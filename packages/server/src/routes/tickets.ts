@@ -78,6 +78,8 @@ import {
   auditLogQueryInputSchema,
   updateInternalNoteInputSchema,
   deleteInternalNoteInputSchema,
+  followUpSummaryInputSchema,
+  followUpsByIdsInputSchema,
   RoleId,
 } from "@care-y/shared";
 
@@ -416,6 +418,26 @@ export function createTicketRouter(deps: TicketRouterDeps) {
         });
       }),
     ),
+
+    listFollowUpSummary: volunteerProcedure
+      .input(followUpSummaryInputSchema)
+      .query(
+        withErrorWrapping(async ({ ctx, input }) => {
+          const access = deps.createTicketAccess(ctx.org.tenantDb);
+          const svc = deps.createFollowUpSvc(ctx.org.tenantDb, access);
+          return svc.listSummary(ctx.user.id, input.ticketId);
+        }),
+      ),
+
+    listFollowUpsByIds: volunteerProcedure
+      .input(followUpsByIdsInputSchema)
+      .query(
+        withErrorWrapping(async ({ ctx, input }) => {
+          const access = deps.createTicketAccess(ctx.org.tenantDb);
+          const svc = deps.createFollowUpSvc(ctx.org.tenantDb, access);
+          return svc.listByIds(ctx.user.id, input.ticketId, input.followUpIds);
+        }),
+      ),
 
     markRead: volunteerProcedure.input(markReadInputSchema).mutation(
       withErrorWrapping(async ({ ctx, input }) => {
