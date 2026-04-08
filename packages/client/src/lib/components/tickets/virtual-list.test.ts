@@ -529,4 +529,53 @@ describe("VirtualList component", () => {
     expect(vc).not.toBeNull();
     expect(vc?.getAttribute("style")).toContain("4000px");
   });
+
+  it("top sentinel triggers onloadprevious when intersecting", () => {
+    const onloadprevious = vi.fn();
+    const items = makeItems(10);
+
+    render(VirtualListHarness, {
+      props: {
+        items,
+        scrollContainer,
+        estimateHeight: 50,
+        overscan: 0,
+        columns: 1,
+        onloadprevious,
+      },
+    });
+
+    // The top sentinel observer is a separate IntersectionObserver instance
+    // that observes the .scroll-sentinel--top element.
+    const topSentinelObserver = MockIntersectionObserver.instances.find(
+      (obs) =>
+        obs.elements.length > 0 &&
+        (obs.elements[0] as HTMLElement).classList.contains(
+          "scroll-sentinel--top",
+        ),
+    );
+    expect(topSentinelObserver).toBeDefined();
+
+    topSentinelObserver?.trigger(true);
+    expect(onloadprevious).toHaveBeenCalledOnce();
+
+    // Non-intersecting should not fire again.
+    topSentinelObserver?.trigger(false);
+    expect(onloadprevious).toHaveBeenCalledOnce();
+  });
+
+  it("does not render top sentinel when onloadprevious is not provided", () => {
+    const { container } = render(VirtualListHarness, {
+      props: {
+        items: makeItems(5),
+        scrollContainer,
+        estimateHeight: 50,
+        overscan: 0,
+        columns: 1,
+      },
+    });
+
+    const topSentinel = container.querySelector(".scroll-sentinel--top");
+    expect(topSentinel).toBeNull();
+  });
 });

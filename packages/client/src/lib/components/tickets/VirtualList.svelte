@@ -11,6 +11,7 @@
     _forceVirtualize = false,
     getKey,
     onloadmore,
+    onloadprevious,
     children,
   }: {
     items: T[];
@@ -22,6 +23,8 @@
     _forceVirtualize?: boolean;
     getKey: (item: T) => string;
     onloadmore?: () => void;
+    /** Fire when user scrolls to the top (load older items). */
+    onloadprevious?: () => void;
     children: Snippet<[{ item: T; index: number }]>;
   } = $props();
 
@@ -245,8 +248,9 @@
     };
   }
 
-  // --- Sentinel for infinite scroll (both modes) ---
+  // --- Sentinels for infinite scroll (both modes) ---
   let sentinelEl: HTMLDivElement | undefined = $state();
+  let topSentinelEl: HTMLDivElement | undefined = $state();
 
   $effect(() => {
     if (!sentinelEl || !onloadmore) return;
@@ -258,6 +262,20 @@
       { rootMargin: "200px" },
     );
     io.observe(sentinelEl);
+    return () => io.disconnect();
+  });
+
+  // Top sentinel: fires onloadprevious when user scrolls to the top.
+  $effect(() => {
+    if (!topSentinelEl || !onloadprevious) return;
+    const cb = onloadprevious;
+    const io = new IntersectionObserver(
+      ([entry]) => {
+        if (entry?.isIntersecting === true) cb();
+      },
+      { rootMargin: "200px" },
+    );
+    io.observe(topSentinelEl);
     return () => io.disconnect();
   });
 
@@ -294,6 +312,15 @@
 
 <!-- Invisible wrapper for gap measurement -->
 <div bind:this={wrapperEl} class="virtual-wrapper">
+  <!-- Top sentinel: fires onloadprevious when scrolled into view -->
+  {#if onloadprevious}
+    <div
+      bind:this={topSentinelEl}
+      class="scroll-sentinel scroll-sentinel--top"
+      aria-hidden="true"
+    ></div>
+  {/if}
+
   {#if virtualized}
     <!-- ══ VIRTUALIZED MODE ══
          Absolutely positioned rows inside a fixed-height container.

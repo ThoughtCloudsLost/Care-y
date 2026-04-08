@@ -177,10 +177,13 @@ export const recentFollowUpsInputSchema = z.object({
 });
 export type RecentFollowUpsInput = z.infer<typeof recentFollowUpsInputSchema>;
 
+export const followUpListDirectionSchema = z.enum(["newer", "older"]);
+
 export const followUpListInputSchema = z.object({
   ticketId: z.uuid(),
   limit: z.number().int().min(1).max(100).default(50),
   cursor: z.uuid().optional(),
+  direction: followUpListDirectionSchema.default("newer"),
 });
 export type FollowUpListInput = z.infer<typeof followUpListInputSchema>;
 

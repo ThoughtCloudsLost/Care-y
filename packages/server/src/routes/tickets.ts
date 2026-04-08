@@ -412,6 +412,7 @@ export function createTicketRouter(deps: TicketRouterDeps) {
         return svc.listByTicket(ctx.user.id, input.ticketId, {
           limit: input.limit,
           cursor: input.cursor,
+          direction: input.direction,
         });
       }),
     ),

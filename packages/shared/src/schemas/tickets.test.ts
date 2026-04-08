@@ -235,14 +235,35 @@ describe("followUpListInputSchema", () => {
     expect(followUpListInputSchema.safeParse({}).success).toBe(false);
   });
 
-  it("defaults limit to 50", () => {
+  it("defaults limit to 50 and direction to newer", () => {
     const result = followUpListInputSchema.safeParse({
       ticketId: VALID_UUID,
     });
     expect(result.success).toBe(true);
     if (result.success) {
       expect(result.data.limit).toBe(50);
+      expect(result.data.direction).toBe("newer");
     }
+  });
+
+  it("accepts direction older", () => {
+    const result = followUpListInputSchema.safeParse({
+      ticketId: VALID_UUID,
+      direction: "older",
+    });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.direction).toBe("older");
+    }
+  });
+
+  it("rejects invalid direction", () => {
+    expect(
+      followUpListInputSchema.safeParse({
+        ticketId: VALID_UUID,
+        direction: "sideways",
+      }).success,
+    ).toBe(false);
   });
 });
 

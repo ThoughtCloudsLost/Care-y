@@ -8,6 +8,7 @@
     overscan?: number;
     columns?: number;
     onloadmore?: () => void;
+    onloadprevious?: () => void;
   }
 
   let {
@@ -17,6 +18,7 @@
     overscan = 3,
     columns = 1,
     onloadmore,
+    onloadprevious,
   }: Props = $props();
 </script>
 
@@ -29,6 +31,7 @@
   _forceVirtualize={true}
   getKey={(item: string) => item}
   {onloadmore}
+  {onloadprevious}
 >
   {#snippet children({ item, index })}
     <div class="test-item" data-index={index}>{item}</div>

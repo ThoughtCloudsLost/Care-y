@@ -293,7 +293,7 @@
     closeDeleteConfirm();
     if (targetId === null) return;
 
-    const followUpsKey = ["ticket", ticketId, "followUps"];
+    const followUpsKey = ["ticket", ticketId, "followUps", "initial"];
 
     // Snapshot for rollback.
     const previousData = queryClient.getQueryData<FollowUpList>(followUpsKey);
@@ -307,8 +307,11 @@
       await ticketRouter.deleteInternalNote.mutate({
         followUpId: targetId,
       });
-      // Refetch to get authoritative server state.
-      void queryClient.invalidateQueries({ queryKey: followUpsKey });
+      // Refetch to get authoritative server state. Prefix match invalidates
+      // both the initial key and any paginated page keys.
+      void queryClient.invalidateQueries({
+        queryKey: ["ticket", ticketId, "followUps"],
+      });
     } catch {
       // Rollback: restore the cached list.
       queryClient.setQueryData<FollowUpList>(followUpsKey, previousData);

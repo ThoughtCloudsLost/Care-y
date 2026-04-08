@@ -11,7 +11,7 @@
               OrgDecryptCache (org-key tier, main thread) for display names.
 -->
 <script lang="ts">
-  import { createQuery } from "@tanstack/svelte-query";
+  import { createQuery, useQueryClient } from "@tanstack/svelte-query";
   import { Messages, Message } from "konsta/svelte";
   import * as m from "$lib/paraglide/messages.js";
   import { trpc } from "$lib/trpc/index.js";
@@ -24,7 +24,7 @@
   } from "$lib/crypto/context.js";
   import { RoleId } from "@care-y/shared";
   import { isDecryptError } from "$lib/crypto/async-decrypt-cache.js";
-  import { SvelteMap } from "svelte/reactivity";
+  import { SvelteMap, SvelteSet } from "svelte/reactivity";
   import { RouterNotAvailableError } from "$lib/errors.js";
   import { formatRelativeTime } from "$lib/utils/format-time.js";
   import { formatDateSeparator, needsDateSeparator } from "$lib/utils/time.js";
@@ -35,6 +35,7 @@
   import VoicemailPlayer from "$lib/components/tickets/VoicemailPlayer.svelte";
   import MmsImage from "$lib/components/tickets/MmsImage.svelte";
   import AttachmentChip from "$lib/components/tickets/AttachmentChip.svelte";
+  import VirtualList from "$lib/components/tickets/VirtualList.svelte";
   import MentionAutocomplete from "$lib/components/tickets/MentionAutocomplete.svelte";
 
   import {
@@ -104,16 +105,24 @@
 
   if (!trpc.tickets) throw new RouterNotAvailableError("tickets");
   const ticketRouter = trpc.tickets;
+  const queryClient = useQueryClient();
+
+  const PAGE_SIZE = 50;
 
   const ticketQuery = createQuery(() => ({
     queryKey: ["ticket", ticketId],
     queryFn: async () => ticketRouter.get.query({ ticketId }),
   }));
 
-  const followUpsQuery = createQuery(() => ({
-    queryKey: ["ticket", ticketId, "followUps"],
+  // Initial query: most recent PAGE_SIZE follow-ups (direction='older', no cursor).
+  const initialFollowUpsQuery = createQuery(() => ({
+    queryKey: ["ticket", ticketId, "followUps", "initial"],
     queryFn: async () =>
-      ticketRouter.listFollowUps.query({ ticketId, limit: 50 }),
+      ticketRouter.listFollowUps.query({
+        ticketId,
+        limit: PAGE_SIZE,
+        direction: "older",
+      }),
   }));
 
   const recordingsQuery = createQuery(() => ({
@@ -128,10 +137,77 @@
 
   // Ticket data shortcuts.
   const ticket = $derived(ticketQuery.data);
-  const followUps = $derived(followUpsQuery.data ?? []);
   const clientAlias = $derived(ticket?.clientAlias ?? "...");
   const recordings = $derived(recordingsQuery.data ?? []);
   const attachments = $derived(attachmentsQuery.data ?? []);
+
+  // --- Pagination state ---
+
+  type FollowUpRecord = Awaited<
+    ReturnType<typeof ticketRouter.listFollowUps.query>
+  >[number];
+
+  // Older pages prepended as they load. Each page is already in
+  // chronological order (server reverses DESC results).
+  let olderPages = $state<FollowUpRecord[][]>([]);
+  let hasMoreOlder = $state(true);
+  let loadingOlder = $state(false);
+
+  // Seed olderPages from the initial query once it resolves.
+  $effect(() => {
+    const data = initialFollowUpsQuery.data;
+    if (!data) return;
+    // Only seed once (when olderPages is empty and initial data arrives).
+    if (olderPages.length === 0 && data.length > 0) {
+      olderPages = [data];
+      if (data.length < PAGE_SIZE) hasMoreOlder = false;
+    }
+  });
+
+  // Flatten all pages into a single chronological array (oldest first).
+  const followUps = $derived(olderPages.flat());
+
+  async function loadOlderPage(): Promise<void> {
+    if (loadingOlder || !hasMoreOlder || followUps.length === 0) return;
+    loadingOlder = true;
+
+    const oldestId = followUps[0]?.id;
+    if (oldestId === undefined) {
+      loadingOlder = false;
+      return;
+    }
+
+    try {
+      const older = await queryClient.fetchQuery({
+        queryKey: ["ticket", ticketId, "followUps", "page", oldestId],
+        queryFn: async () =>
+          ticketRouter.listFollowUps.query({
+            ticketId,
+            limit: PAGE_SIZE,
+            cursor: oldestId,
+            direction: "older",
+          }),
+      });
+
+      if (older.length < PAGE_SIZE) hasMoreOlder = false;
+      if (older.length > 0) {
+        // Preserve scroll position: measure before prepend, restore after.
+        const el = scrollContainerEl;
+        const prevScrollHeight = el?.scrollHeight ?? 0;
+        const prevScrollTop = el?.scrollTop ?? 0;
+
+        olderPages = [older, ...olderPages];
+
+        requestAnimationFrame(() => {
+          if (!el) return;
+          const newScrollHeight = el.scrollHeight;
+          el.scrollTop = prevScrollTop + (newScrollHeight - prevScrollHeight);
+        });
+      }
+    } finally {
+      loadingOlder = false;
+    }
+  }
 
   // Build followUpId -> media lookup maps for rendering media inside bubbles.
   const recordingsByFollowUp = $derived.by(() => {
@@ -231,6 +307,35 @@
     oncontextmenu?.({ followUpId: fu.id, actions, plaintext });
   }
 
+  // --- Unread divider ---
+
+  // The oblivious read pattern (5a) means we track read state client-side.
+  // A follow-up is "read" if the client has previously marked it via
+  // the encrypted read state. Track locally via a Set populated from
+  // the initial query's read markers.
+  let readFollowUpIds: SvelteSet<string> = new SvelteSet<string>();
+
+  // Seed read state from initial data. Follow-ups with a non-null
+  // encrypted_read_state that differs from the initial dummy are "read."
+  // Since we can't distinguish dummy from real without decryption, we
+  // treat all follow-ups from before the initial load as read, and only
+  // the ones arriving after initial load as potentially unread.
+  // For now, use a simpler heuristic: mark all follow-ups loaded in the
+  // initial page as read (the user has seen them before or is seeing them now).
+  $effect(() => {
+    const data = initialFollowUpsQuery.data;
+    if (!data) return;
+    const ids = new SvelteSet<string>();
+    for (const fu of data) {
+      ids.add(fu.id);
+    }
+    readFollowUpIds = ids;
+  });
+
+  const firstUnreadId = $derived(
+    followUps.find((fu) => !readFollowUpIds.has(fu.id))?.id ?? null,
+  );
+
   // --- Scroll container ---
 
   let scrollContainerEl: HTMLDivElement | undefined = $state();
@@ -243,8 +348,16 @@
     if (followUps.length > 0 && scrollContainerEl && !hasScrolledInitially) {
       hasScrolledInitially = true;
       const el = scrollContainerEl;
+
       requestAnimationFrame(() => {
-        el.scrollTop = el.scrollHeight;
+        if (firstUnreadId !== null) {
+          // Scroll to the unread divider so the user sees where they left off.
+          const divider = document.getElementById(`unread-divider`);
+          divider?.scrollIntoView({ behavior: "auto", block: "start" });
+        } else {
+          // All read: scroll to bottom.
+          el.scrollTop = el.scrollHeight;
+        }
       });
     }
   });
@@ -265,113 +378,152 @@
     role="log"
     aria-label={m.ticket_conversation_with({ alias: clientAlias })}
   >
-    {#if followUpsQuery.isLoading}
+    {#if initialFollowUpsQuery.isLoading}
       <Skeleton lines={6} />
     {:else if followUps.length === 0}
       <div class="empty-chat" role="status">
         <p>{m.empty_no_data()}</p>
       </div>
     {:else}
+      {#if loadingOlder}
+        <div class="loading-older" role="status" aria-live="polite">
+          <span>{m.ticket_loading_older()}</span>
+        </div>
+      {/if}
+
       <Messages>
-        {#each followUps as fu, i (fu.id)}
-          {@const kind = followUpKind(fu)}
-          {@const content = followUpCache.decryptContent(
-            fu.id,
-            ticket.keyWrap,
-            fu.encryptedContent,
-          )}
-          {@const prevTimestamp =
-            i > 0 ? followUps[i - 1]?.createdAt : undefined}
+        <VirtualList
+          items={followUps}
+          scrollContainer={scrollContainerEl}
+          estimateHeight={80}
+          columns={1}
+          getKey={(fu: FollowUpRecord) => fu.id}
+          onloadprevious={hasMoreOlder ? loadOlderPage : undefined}
+        >
+          {#snippet children({
+            item,
+            index: i,
+          }: {
+            item: FollowUpRecord;
+            index: number;
+          })}
+            {@const fu = item}
+            {@const kind = followUpKind(fu)}
+            {@const content = followUpCache.decryptContent(
+              fu.id,
+              ticket.keyWrap,
+              fu.encryptedContent,
+            )}
+            {@const prevTimestamp =
+              i > 0 ? followUps[i - 1]?.createdAt : undefined}
 
-          {#if needsDateSeparator(fu.createdAt, prevTimestamp)}
-            <div class="date-separator" role="separator">
-              <span class="date-separator-label"
-                >{formatDateSeparator(fu.createdAt)}</span
+            {#if needsDateSeparator(fu.createdAt, prevTimestamp)}
+              <div class="date-separator" role="separator">
+                <span class="date-separator-label"
+                  >{formatDateSeparator(fu.createdAt)}</span
+                >
+              </div>
+            {/if}
+
+            {#if fu.id === firstUnreadId}
+              <div
+                id="unread-divider"
+                class="unread-divider"
+                role="separator"
+                aria-label={m.ticket_new_messages()}
               >
-            </div>
-          {/if}
+                <span class="unread-divider-label"
+                  >{m.ticket_new_messages()}</span
+                >
+              </div>
+            {/if}
 
-          {#if kind === "system"}
-            <SystemEvent {content} timestamp={fu.createdAt} />
-          {:else if kind === "note"}
-            <PrivateNote
-              {content}
-              authorName={undefined}
-              timestamp={fu.createdAt}
-              isOwn={fu.createdBy === currentUserId}
-              editing={editingFollowUpId === fu.id}
-              saving={editingFollowUpId === fu.id && savingNote}
-              onedit={(newText: string) => onnoteedit?.(fu.id, newText)}
-              {oncanceledit}
-              onpointerdown={startLongPress(fu)}
-              onpointerup={cancelLongPress}
-              onpointercancel={cancelLongPress}
-            />
-          {:else}
-            {@const fuRecordings = recordingsByFollowUp.get(fu.id) ?? []}
-            {@const fuAttachments = attachmentsByFollowUp.get(fu.id) ?? []}
-            <Message
-              type={messageType(fu)}
-              name={fu.source === "client" ? clientAlias : undefined}
-              aria-label={bubbleAriaLabel(fu, content)}
-            >
-              {#snippet text()}
-                <!-- svelte-ignore a11y_no_static_element_interactions -->
-                <span
-                  class="bubble-text"
+            <div id="fu-{fu.id}" data-fu-id={fu.id}>
+              {#if kind === "system"}
+                <SystemEvent {content} timestamp={fu.createdAt} />
+              {:else if kind === "note"}
+                <PrivateNote
+                  {content}
+                  authorName={undefined}
+                  timestamp={fu.createdAt}
+                  isOwn={fu.createdBy === currentUserId}
+                  editing={editingFollowUpId === fu.id}
+                  saving={editingFollowUpId === fu.id && savingNote}
+                  onedit={(newText: string) => onnoteedit?.(fu.id, newText)}
+                  {oncanceledit}
                   onpointerdown={startLongPress(fu)}
                   onpointerup={cancelLongPress}
                   onpointercancel={cancelLongPress}
+                />
+              {:else}
+                {@const fuRecordings = recordingsByFollowUp.get(fu.id) ?? []}
+                {@const fuAttachments = attachmentsByFollowUp.get(fu.id) ?? []}
+                <Message
+                  type={messageType(fu)}
+                  name={fu.source === "client" ? clientAlias : undefined}
+                  aria-label={bubbleAriaLabel(fu, content)}
                 >
-                  {#if isDecryptError(content)}
-                    <span class="decrypt-error"
-                      >{m.error_decryption_failed()}</span
+                  {#snippet text()}
+                    <!-- svelte-ignore a11y_no_static_element_interactions -->
+                    <span
+                      class="bubble-text"
+                      onpointerdown={startLongPress(fu)}
+                      onpointerup={cancelLongPress}
+                      onpointercancel={cancelLongPress}
                     >
-                  {:else if content === undefined}
-                    <span class="shimmer shimmer-bubble" aria-busy="true"
-                    ></span>
-                  {:else if content}
-                    {content}
-                  {/if}
-                </span>
+                      {#if isDecryptError(content)}
+                        <span class="decrypt-error"
+                          >{m.error_decryption_failed()}</span
+                        >
+                      {:else if content === undefined}
+                        <span class="shimmer shimmer-bubble" aria-busy="true"
+                        ></span>
+                      {:else if content}
+                        {content}
+                      {/if}
+                    </span>
 
-                {#each fuRecordings as rec (rec.id)}
-                  <VoicemailPlayer
-                    recordingId={rec.id}
-                    {ticketId}
-                    keyWrap={ticket.keyWrap}
-                    durationSeconds={rec.durationSeconds}
-                  />
-                {/each}
+                    {#each fuRecordings as rec (rec.id)}
+                      <VoicemailPlayer
+                        recordingId={rec.id}
+                        {ticketId}
+                        keyWrap={ticket.keyWrap}
+                        durationSeconds={rec.durationSeconds}
+                      />
+                    {/each}
 
-                {#each fuAttachments as att (att.id)}
-                  {#if att.contentType?.startsWith("image/")}
-                    <MmsImage
-                      attachmentId={att.id}
-                      {ticketId}
-                      keyWrap={ticket.keyWrap}
-                      alt={m.ticket_mms_image()}
-                      onopen={(url: string) => onlightbox?.(url)}
-                    />
-                  {:else}
-                    <AttachmentChip
-                      attachmentId={att.id}
-                      {ticketId}
-                      keyWrap={ticket.keyWrap}
-                      filename={att.encryptedFilename !== null ? "..." : "file"}
-                      sizeBytes={att.sizeBytes}
-                    />
-                  {/if}
-                {/each}
-              {/snippet}
-              {#snippet footer()}
-                <time class="bubble-time" datetime={fu.createdAt}>
-                  {formatRelativeTime(new Date(fu.createdAt))}
-                </time>
-              {/snippet}
-            </Message>
-          {/if}
-        {/each}
+                    {#each fuAttachments as att (att.id)}
+                      {#if att.contentType?.startsWith("image/")}
+                        <MmsImage
+                          attachmentId={att.id}
+                          {ticketId}
+                          keyWrap={ticket.keyWrap}
+                          alt={m.ticket_mms_image()}
+                          onopen={(url: string) => onlightbox?.(url)}
+                        />
+                      {:else}
+                        <AttachmentChip
+                          attachmentId={att.id}
+                          {ticketId}
+                          keyWrap={ticket.keyWrap}
+                          filename={att.encryptedFilename !== null
+                            ? "..."
+                            : "file"}
+                          sizeBytes={att.sizeBytes}
+                        />
+                      {/if}
+                    {/each}
+                  {/snippet}
+                  {#snippet footer()}
+                    <time class="bubble-time" datetime={fu.createdAt}>
+                      {formatRelativeTime(new Date(fu.createdAt))}
+                    </time>
+                  {/snippet}
+                </Message>
+              {/if}
+            </div>
+          {/snippet}
+        </VirtualList>
       </Messages>
     {/if}
   </div>
@@ -443,6 +595,43 @@
     font-size: 0.6875rem;
     font-weight: 600;
     color: var(--muted);
+    white-space: nowrap;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+  }
+
+  /* --- Loading older messages --- */
+
+  .loading-older {
+    display: flex;
+    justify-content: center;
+    padding: 0.75rem 1rem;
+    color: var(--muted);
+    font-size: 0.75rem;
+  }
+
+  /* --- Unread divider --- */
+
+  .unread-divider {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.5rem 1rem;
+  }
+
+  .unread-divider::before,
+  .unread-divider::after {
+    content: "";
+    flex: 1;
+    height: 1px;
+    background: var(--brand-primary, #e53e3e);
+    opacity: 0.6;
+  }
+
+  .unread-divider-label {
+    font-size: 0.6875rem;
+    font-weight: 600;
+    color: var(--brand-primary, #e53e3e);
     white-space: nowrap;
     text-transform: uppercase;
     letter-spacing: 0.03em;

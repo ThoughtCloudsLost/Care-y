@@ -317,5 +317,6 @@
   "ticket_mms_loading": "Loading image...",
   "ticket_mms_open_lightbox": "View full-size image",
   "ticket_mms_lightbox_label": "Full-size image",
-  "ticket_attachment_file": "File: {filename} ({size})"
+  "ticket_attachment_file": "File: {filename} ({size})",
+  "ticket_loading_older": "Loading older messages..."
 }

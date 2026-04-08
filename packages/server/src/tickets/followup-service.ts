@@ -41,7 +41,7 @@ export interface FollowUpService {
   listByTicket(
     userId: string,
     ticketId: string,
-    opts: { limit: number; cursor?: string },
+    opts: { limit: number; cursor?: string; direction?: "newer" | "older" },
   ): Promise<FollowUpRecord[]>;
   markRead(
     userId: string,
@@ -130,6 +130,8 @@ export function createFollowUpService(
     async listByTicket(userId, ticketId, opts) {
       await access.assertAccess(userId, ticketId);
 
+      const isOlder = opts.direction === "older";
+
       let query = db
         .selectFrom("followups")
         .selectAll()
@@ -147,24 +149,32 @@ export function createFollowUpService(
           .select("created_at")
           .where("id", "=", cursorId);
 
+        // "newer" pages forward (after cursor), "older" pages backward (before cursor).
+        const timeOp = isOlder ? "<" : ">";
+        const tieOp = isOlder ? "<" : ">";
+
         query = query.where((eb) =>
           eb.or([
-            eb("created_at", ">", cursorCreatedAt),
+            eb("created_at", timeOp, cursorCreatedAt),
             eb.and([
               eb("created_at", "=", cursorCreatedAt),
-              eb("id", ">", cursorId),
+              eb("id", tieOp, cursorId),
             ]),
           ]),
         );
       }
 
+      // "older" queries DESC to get the N rows closest to the cursor,
+      // then reverses to chronological order before returning.
+      const sortDir = isOlder ? "desc" : "asc";
       const rows = await query
-        .orderBy("created_at", "asc")
-        .orderBy("id", "asc")
+        .orderBy("created_at", sortDir)
+        .orderBy("id", sortDir)
         .limit(opts.limit)
         .execute();
 
-      return rows.map(toRecord);
+      const records = rows.map(toRecord);
+      return isOlder ? records.reverse() : records;
     },
 
     async markRead(userId, followUpId, encryptedReadState) {
