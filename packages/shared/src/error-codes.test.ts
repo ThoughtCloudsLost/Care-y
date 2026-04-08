@@ -51,6 +51,9 @@ describe("ErrorCode", () => {
       "CIRCULAR_DEPENDENCY",
       "DEPENDENCY_TICKET_NOT_FOUND",
       "FOLLOWUP_NOT_FOUND",
+      "FOLLOWUP_NOT_EDITABLE",
+      "FOLLOWUP_NOT_DELETABLE",
+      "FOLLOWUP_NOT_OWNED",
       "CANNOT_FOLLOWUP_CLOSED_TICKET",
 
       // Clients / merge

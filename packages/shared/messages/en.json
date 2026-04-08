@@ -63,6 +63,9 @@
   "error_circular_dependency": "Circular dependency detected.",
   "error_dependency_ticket_not_found": "Dependency ticket not found.",
   "error_followup_not_found": "Follow-up not found.",
+  "error_followup_not_editable": "This follow-up cannot be edited.",
+  "error_followup_not_deletable": "This follow-up cannot be deleted.",
+  "error_followup_not_owned": "You can only modify your own notes.",
   "error_cannot_followup_closed_ticket": "Cannot add a follow-up to a closed ticket.",
 
   "error_client_not_found": "Client not found.",
@@ -248,7 +251,9 @@
 
   "common_back": "Back",
   "common_cancel": "Cancel",
+  "common_save": "Save",
   "common_copy": "Copy",
+  "common_copy_failed": "Could not copy to clipboard.",
   "common_loading": "Loading",
 
   "ticket_compose_reply_placeholder": "Type a reply...",
@@ -285,6 +290,11 @@
   "ticket_recent_history": "Recent Tickets",
   "ticket_edit_note": "Edit Note",
   "ticket_delete_note": "Delete Note",
+  "ticket_delete_note_confirm_title": "Delete Note",
+  "ticket_delete_note_confirm_body": "This note will be removed from the conversation. This cannot be undone.",
+  "common_delete": "Delete",
+  "ticket_context_menu_title": "Message Actions",
+  "ticket_copied_to_clipboard": "Copied to clipboard",
   "ticket_downloading_attachment": "Downloading {filename}...",
   "ticket_download_attachment": "Download {filename}",
   "ticket_mention_volunteers": "Mention a volunteer",

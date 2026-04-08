@@ -15,6 +15,7 @@
     setTicketDecryptCache,
     setFollowUpDecryptCache,
     setCurrentUserId,
+    setCurrentUserRoleId,
   } from "$lib/crypto/context.js";
 
   import ToastRenderer from "$lib/shell/ToastRenderer.svelte";
@@ -72,6 +73,8 @@
   }));
   const currentUserId = $derived(meQuery.data?.user.id);
   setCurrentUserId(() => currentUserId);
+  const currentUserRoleId = $derived(meQuery.data?.user.roleId);
+  setCurrentUserRoleId(() => currentUserRoleId);
 
   // Dev-only auto-login with full production crypto pipeline.
   // Runs registerCrypto + loginCrypto, rotates the throwaway org keypair,

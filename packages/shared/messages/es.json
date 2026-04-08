@@ -63,6 +63,9 @@
   "error_circular_dependency": "Se detectó una dependencia circular.",
   "error_dependency_ticket_not_found": "Ticket de dependencia no encontrado.",
   "error_followup_not_found": "Seguimiento no encontrado.",
+  "error_followup_not_editable": "Este seguimiento no se puede editar.",
+  "error_followup_not_deletable": "Este seguimiento no se puede eliminar.",
+  "error_followup_not_owned": "Solo puedes modificar tus propias notas.",
   "error_cannot_followup_closed_ticket": "No se puede agregar un seguimiento a un ticket cerrado.",
 
   "error_client_not_found": "Cliente no encontrado.",
@@ -248,7 +251,9 @@
 
   "common_back": "Atras",
   "common_cancel": "Cancelar",
+  "common_save": "Guardar",
   "common_copy": "Copiar",
+  "common_copy_failed": "No se pudo copiar al portapapeles.",
   "common_loading": "Cargando",
 
   "ticket_compose_reply_placeholder": "Escribe una respuesta...",
@@ -285,6 +290,11 @@
   "ticket_recent_history": "Tickets recientes",
   "ticket_edit_note": "Editar nota",
   "ticket_delete_note": "Eliminar nota",
+  "ticket_delete_note_confirm_title": "Eliminar nota",
+  "ticket_delete_note_confirm_body": "Esta nota se eliminara de la conversacion. No se puede deshacer.",
+  "common_delete": "Eliminar",
+  "ticket_context_menu_title": "Acciones del mensaje",
+  "ticket_copied_to_clipboard": "Copiado al portapapeles",
   "ticket_downloading_attachment": "Descargando {filename}...",
   "ticket_download_attachment": "Descargar {filename}",
   "ticket_mention_volunteers": "Mencionar un voluntario",

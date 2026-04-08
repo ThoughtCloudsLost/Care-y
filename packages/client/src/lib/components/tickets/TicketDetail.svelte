@@ -20,7 +20,9 @@
     getTicketDecryptCache,
     getOrgDecryptCache,
     getCurrentUserId,
+    getCurrentUserRoleId,
   } from "$lib/crypto/context.js";
+  import { RoleId } from "@care-y/shared";
   import { isDecryptError } from "$lib/crypto/async-decrypt-cache.js";
   import { SvelteMap } from "svelte/reactivity";
   import { RouterNotAvailableError } from "$lib/errors.js";
@@ -34,6 +36,15 @@
   import MmsImage from "$lib/components/tickets/MmsImage.svelte";
   import AttachmentChip from "$lib/components/tickets/AttachmentChip.svelte";
   import MentionAutocomplete from "$lib/components/tickets/MentionAutocomplete.svelte";
+
+  import {
+    getContextMenuActions,
+    type ContextActionId,
+    type ContextAction,
+    type ContextMenuEvent,
+  } from "./context-menu-actions.js";
+
+  export type { ContextActionId, ContextAction, ContextMenuEvent };
 
   interface TicketDetailProps {
     ticketId: string;
@@ -50,6 +61,16 @@
     onmentionselect?: (userId: string, displayName: string) => void;
     /** Called when an MMS image is tapped. Route file opens lightbox. */
     onlightbox?: (imageUrl: string) => void;
+    /** Called when a long-press context menu should open. */
+    oncontextmenu?: (event: ContextMenuEvent) => void;
+    /** Called when a note edit is saved (plaintext). Route encrypts + submits. */
+    onnoteedit?: (followUpId: string, newPlaintext: string) => void;
+    /** The follow-up ID currently in edit mode (set by route after context menu). */
+    editingFollowUpId?: string | null;
+    /** Whether a note edit mutation is in flight. */
+    savingNote?: boolean;
+    /** Called when editing is cancelled (route clears editingFollowUpId). */
+    oncanceledit?: () => void;
   }
 
   let {
@@ -63,6 +84,11 @@
     onpresetselect,
     onmentionselect,
     onlightbox,
+    oncontextmenu,
+    onnoteedit,
+    editingFollowUpId = null,
+    savingNote = false,
+    oncanceledit,
   }: TicketDetailProps = $props();
 
   const ticketCache = getTicketDecryptCache();
@@ -70,6 +96,9 @@
   const orgCache = getOrgDecryptCache();
   const currentUserIdGetter = getCurrentUserId();
   const currentUserId = $derived(currentUserIdGetter());
+  const currentUserRoleIdGetter = getCurrentUserRoleId();
+  const currentUserRoleId = $derived(currentUserRoleIdGetter());
+  const isAdmin = $derived(currentUserRoleId === RoleId.ADMIN);
 
   // --- Data Loading ---
 
@@ -185,10 +214,21 @@
   }
 
   function openContextMenu(fu: FollowUp): void {
-    // Stub: wired when Action Sheets are added.
-    if (import.meta.env.DEV) {
-      console.log("[TicketDetail] long-press context menu:", fu.id);
-    }
+    const actions = getContextMenuActions(fu, currentUserId, isAdmin, {
+      copy: m.common_copy(),
+      editNote: m.ticket_edit_note(),
+      deleteNote: m.ticket_delete_note(),
+    });
+    if (actions.length === 0 || !ticket) return;
+
+    const content = followUpCache.decryptContent(
+      fu.id,
+      ticket.keyWrap,
+      fu.encryptedContent,
+    );
+    const plaintext = isDecryptError(content) ? undefined : content;
+
+    oncontextmenu?.({ followUpId: fu.id, actions, plaintext });
   }
 
   // --- Scroll container ---
@@ -258,7 +298,11 @@
               {content}
               authorName={undefined}
               timestamp={fu.createdAt}
-              isOwn={false}
+              isOwn={fu.createdBy === currentUserId}
+              editing={editingFollowUpId === fu.id}
+              saving={editingFollowUpId === fu.id && savingNote}
+              onedit={(newText: string) => onnoteedit?.(fu.id, newText)}
+              {oncanceledit}
               onpointerdown={startLongPress(fu)}
               onpointerup={cancelLongPress}
               onpointercancel={cancelLongPress}

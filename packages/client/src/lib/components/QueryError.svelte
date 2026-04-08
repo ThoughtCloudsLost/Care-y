@@ -64,6 +64,9 @@
     [ErrorCode.DEPENDENCY_TICKET_NOT_FOUND]: () =>
       m.error_dependency_ticket_not_found(),
     [ErrorCode.FOLLOWUP_NOT_FOUND]: () => m.error_followup_not_found(),
+    [ErrorCode.FOLLOWUP_NOT_EDITABLE]: () => m.error_followup_not_editable(),
+    [ErrorCode.FOLLOWUP_NOT_DELETABLE]: () => m.error_followup_not_deletable(),
+    [ErrorCode.FOLLOWUP_NOT_OWNED]: () => m.error_followup_not_owned(),
     [ErrorCode.CANNOT_FOLLOWUP_CLOSED_TICKET]: () =>
       m.error_cannot_followup_closed_ticket(),
 

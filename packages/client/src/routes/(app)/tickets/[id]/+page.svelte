@@ -23,10 +23,16 @@
   } from "$lib/shell/context.js";
   import type { ComposeMode } from "$lib/shell/types.js";
   import TicketDetail from "$lib/components/tickets/TicketDetail.svelte";
+  import type {
+    ContextActionId,
+    ContextMenuEvent,
+  } from "$lib/components/tickets/context-menu-actions.js";
   import ShellMessagebar from "$lib/shell/ShellMessagebar.svelte";
   import ShellActionSheet from "$lib/shell/ShellActionSheet.svelte";
   import ShellSheet from "$lib/shell/ShellSheet.svelte";
   import ShellPopup from "$lib/shell/ShellPopup.svelte";
+  import ShellDialog from "$lib/shell/ShellDialog.svelte";
+  import { DialogButton, ActionsGroup, ActionsButton } from "konsta/svelte";
   import PresetReplyContent from "$lib/components/tickets/PresetReplyContent.svelte";
   import TicketActionsContent, {
     type TicketAction,
@@ -35,13 +41,20 @@
     type CallAction,
   } from "$lib/components/tickets/CallOptionsContent.svelte";
   import ClientInfoContent from "$lib/components/tickets/ClientInfoContent.svelte";
-  import { createQuery } from "@tanstack/svelte-query";
+  import { createQuery, useQueryClient } from "@tanstack/svelte-query";
   import { trpc } from "$lib/trpc/index.js";
-  import { getCurrentUserId } from "$lib/crypto/context.js";
+  import { getCurrentUserId, getCryptoBridge } from "$lib/crypto/context.js";
   import { RouterNotAvailableError } from "$lib/errors.js";
+  import { toastStore } from "$lib/stores/toast.svelte.js";
 
   if (!trpc.tickets) throw new RouterNotAvailableError("tickets");
   const ticketRouter = trpc.tickets;
+  const cryptoBridge = getCryptoBridge();
+  const queryClient = useQueryClient();
+
+  type FollowUpList = Awaited<
+    ReturnType<typeof ticketRouter.listFollowUps.query>
+  >;
 
   const ticketId = $derived(page.params.id ?? "");
   const tabbarHidden = getTabbarHiddenCtx();
@@ -120,6 +133,12 @@
   let clientInfoOpen = $state(false);
   let lightboxOpen = $state(false);
   let lightboxUrl = $state<string | null>(null);
+  let contextMenuOpen = $state(false);
+  let contextMenuData = $state<ContextMenuEvent | null>(null);
+  let deleteConfirmOpen = $state(false);
+  let deleteTargetId = $state<string | null>(null);
+  let editingFollowUpId = $state<string | null>(null);
+  let savingNote = $state(false);
 
   // --- Navigation ---
 
@@ -218,6 +237,121 @@
     }
   }
 
+  // --- Context menu handlers ---
+
+  function openContextMenu(event: ContextMenuEvent): void {
+    contextMenuData = event;
+    contextMenuOpen = true;
+  }
+
+  function closeContextMenu(): void {
+    contextMenuOpen = false;
+    contextMenuData = null;
+  }
+
+  function handleContextAction(actionId: ContextActionId): void {
+    const data = contextMenuData;
+    closeContextMenu();
+    if (data === null) return;
+
+    switch (actionId) {
+      case "copy": {
+        void handleCopy(data.plaintext);
+        break;
+      }
+      case "edit": {
+        editingFollowUpId = data.followUpId;
+        break;
+      }
+      case "delete": {
+        deleteTargetId = data.followUpId;
+        deleteConfirmOpen = true;
+        break;
+      }
+    }
+  }
+
+  async function handleCopy(plaintext: string | undefined): Promise<void> {
+    if (plaintext === undefined || plaintext === "") return;
+    try {
+      await navigator.clipboard.writeText(plaintext);
+      toastStore.show(m.ticket_copied_to_clipboard());
+    } catch {
+      toastStore.show(m.common_copy_failed());
+    }
+  }
+
+  // --- Delete handlers (optimistic) ---
+
+  function closeDeleteConfirm(): void {
+    deleteConfirmOpen = false;
+    deleteTargetId = null;
+  }
+
+  async function confirmDelete(): Promise<void> {
+    const targetId = deleteTargetId;
+    closeDeleteConfirm();
+    if (targetId === null) return;
+
+    const followUpsKey = ["ticket", ticketId, "followUps"];
+
+    // Snapshot for rollback.
+    const previousData = queryClient.getQueryData<FollowUpList>(followUpsKey);
+
+    // Optimistically remove the note from the cache.
+    queryClient.setQueryData<FollowUpList>(followUpsKey, (old) =>
+      old?.filter((fu) => fu.id !== targetId),
+    );
+
+    try {
+      await ticketRouter.deleteInternalNote.mutate({
+        followUpId: targetId,
+      });
+      // Refetch to get authoritative server state.
+      void queryClient.invalidateQueries({ queryKey: followUpsKey });
+    } catch {
+      // Rollback: restore the cached list.
+      queryClient.setQueryData<FollowUpList>(followUpsKey, previousData);
+      toastStore.show(m.error_followup_not_deletable());
+    }
+  }
+
+  // --- Note edit handlers ---
+
+  async function handleNoteEdit(
+    followUpId: string,
+    newPlaintext: string,
+  ): Promise<void> {
+    // Stay in edit mode. Show saving indicator.
+    savingNote = true;
+
+    try {
+      const encryptedContent = await cryptoBridge.encrypt(
+        ticketId,
+        newPlaintext,
+      );
+      await ticketRouter.updateInternalNote.mutate({
+        followUpId,
+        encryptedContent,
+      });
+      // Success: exit edit mode and refresh.
+      editingFollowUpId = null;
+      savingNote = false;
+      void queryClient.invalidateQueries({
+        queryKey: ["ticket", ticketId, "followUps"],
+      });
+    } catch {
+      // Stay in edit mode with the user's text intact.
+      savingNote = false;
+      toastStore.show(m.error_followup_not_editable());
+    }
+  }
+
+  function cancelNoteEdit(): void {
+    editingFollowUpId = null;
+    savingNote = false;
+  }
+
   // --- Overlay helpers ---
 
   function openActionsSheet(): void {
@@ -306,6 +440,11 @@
     }}
     onmentionselect={handleMentionSelect}
     onlightbox={openLightbox}
+    oncontextmenu={openContextMenu}
+    {editingFollowUpId}
+    {savingNote}
+    onnoteedit={(fid: string, text: string) => void handleNoteEdit(fid, text)}
+    oncanceledit={cancelNoteEdit}
   />
 </div>
 
@@ -364,6 +503,49 @@
     </div>
   {/if}
 </ShellPopup>
+
+<!-- Context menu (long-press on message bubble) -->
+<ShellActionSheet opened={contextMenuOpen} ondismiss={closeContextMenu}>
+  {#if contextMenuData !== null}
+    <ActionsGroup>
+      {#each contextMenuData.actions as action (action.id)}
+        <ActionsButton
+          onclick={() => handleContextAction(action.id)}
+          bold={action.destructive === true}
+          colors={action.destructive === true
+            ? { textIos: "text-red-500", textMaterial: "text-red-500" }
+            : undefined}
+        >
+          {action.label}
+        </ActionsButton>
+      {/each}
+    </ActionsGroup>
+    <ActionsGroup>
+      <ActionsButton onclick={closeContextMenu} bold>
+        {m.common_cancel()}
+      </ActionsButton>
+    </ActionsGroup>
+  {/if}
+</ShellActionSheet>
+
+<!-- Delete note confirmation dialog -->
+<ShellDialog
+  opened={deleteConfirmOpen}
+  ondismiss={closeDeleteConfirm}
+  title={m.ticket_delete_note_confirm_title()}
+>
+  {#snippet content()}
+    <p>{m.ticket_delete_note_confirm_body()}</p>
+  {/snippet}
+  {#snippet buttons()}
+    <DialogButton onclick={closeDeleteConfirm}>
+      {m.common_cancel()}
+    </DialogButton>
+    <DialogButton onclick={confirmDelete} class="text-red-500 font-semibold">
+      {m.common_delete()}
+    </DialogButton>
+  {/snippet}
+</ShellDialog>
 
 <style>
   .ticket-detail-page {

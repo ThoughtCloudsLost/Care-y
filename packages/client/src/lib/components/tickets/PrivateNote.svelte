@@ -6,7 +6,12 @@
   Visually distinct from message bubbles so volunteers never mistake a
   private note for a client-visible message.
 
-  Long-press on own notes opens edit/delete menu (handled by parent).
+  Edit lifecycle: parent controls `editing` boolean. When editing transitions
+  from false to true, this component snapshots `content` into an internal
+  `editText` draft. The draft persists across re-renders and content changes
+  while editing is true. Parent calls `onedit(text)` on Save, which triggers
+  encryption + mutation. `saving` disables the textarea and buttons while
+  the mutation is in flight. Parent sets `editing = false` only on success.
 -->
 <script lang="ts">
   import { isDecryptError } from "$lib/crypto/async-decrypt-cache.js";
@@ -18,6 +23,14 @@
     authorName: string | undefined;
     timestamp: string;
     isOwn: boolean;
+    /** When true, note body becomes a textarea for editing. */
+    editing?: boolean;
+    /** When true, Save/Cancel are disabled and a saving indicator shows. */
+    saving?: boolean;
+    /** Called with the new plaintext when the user taps Save. */
+    onedit?: (newContent: string) => void;
+    /** Called when the user cancels editing. */
+    oncanceledit?: () => void;
     onpointerdown?: (e: PointerEvent) => void;
     onpointerup?: (e: PointerEvent) => void;
     onpointercancel?: (e: PointerEvent) => void;
@@ -28,37 +41,100 @@
     authorName,
     timestamp,
     isOwn,
+    editing = false,
+    saving = false,
+    onedit,
+    oncanceledit,
     onpointerdown,
     onpointerup,
     onpointercancel,
   }: Props = $props();
 
+  let editText = $state("");
+  let prevEditing = false;
+
+  // Seed editText only on the false -> true transition of `editing`.
+  // While editing stays true (including error-recovery re-renders),
+  // the user's draft is preserved. Content changes from the decrypt
+  // cache are ignored while editing.
+  $effect(() => {
+    if (editing && !prevEditing) {
+      if (content !== undefined && !isDecryptError(content)) {
+        editText = content;
+      }
+    }
+    prevEditing = editing;
+  });
+
+  function handleSave(): void {
+    const trimmed = editText.trim();
+    if (!trimmed || trimmed === content) {
+      oncanceledit?.();
+      return;
+    }
+    onedit?.(trimmed);
+  }
+
+  function handleCancel(): void {
+    oncanceledit?.();
+  }
+
   const timeLabel = $derived(formatRelativeTime(new Date(timestamp)));
   const displayAuthor = $derived(authorName ?? m.common_loading());
+  const canSave = $derived(editText.trim().length > 0 && !saving);
 </script>
 
 <div
   class="private-note"
   class:private-note-own={isOwn}
+  class:private-note-editing={editing}
   role="article"
   aria-label={m.ticket_private_note_by({ author: displayAuthor })}
-  {onpointerdown}
-  {onpointerup}
-  {onpointercancel}
+  onpointerdown={editing ? undefined : onpointerdown}
+  onpointerup={editing ? undefined : onpointerup}
+  onpointercancel={editing ? undefined : onpointercancel}
 >
   <div class="note-header">
     <span class="note-author">{displayAuthor}</span>
     <span class="note-badge">{m.ticket_private_note_label()}</span>
   </div>
-  <div class="note-body">
-    {#if isDecryptError(content)}
-      <span class="decrypt-error">{m.error_decryption_failed()}</span>
-    {:else if content === undefined}
-      <span class="shimmer shimmer-note" aria-busy="true"></span>
-    {:else}
-      {content}
-    {/if}
-  </div>
+  {#if editing}
+    <div class="note-edit-area">
+      <textarea
+        class="note-edit-textarea"
+        bind:value={editText}
+        aria-label={m.ticket_edit_note()}
+        rows={3}
+        disabled={saving}
+      ></textarea>
+      <div class="note-edit-actions">
+        <button
+          class="note-edit-cancel"
+          onclick={handleCancel}
+          disabled={saving}
+        >
+          {m.common_cancel()}
+        </button>
+        <button class="note-edit-save" onclick={handleSave} disabled={!canSave}>
+          {#if saving}
+            {m.common_loading()}
+          {:else}
+            {m.common_save()}
+          {/if}
+        </button>
+      </div>
+    </div>
+  {:else}
+    <div class="note-body">
+      {#if isDecryptError(content)}
+        <span class="decrypt-error">{m.error_decryption_failed()}</span>
+      {:else if content === undefined}
+        <span class="shimmer shimmer-note" aria-busy="true"></span>
+      {:else}
+        {content}
+      {/if}
+    </div>
+  {/if}
   <time class="note-time" datetime={timestamp}>{timeLabel}</time>
 </div>
 
@@ -72,6 +148,10 @@
     user-select: text;
     -webkit-user-select: text;
     touch-action: pan-y;
+  }
+
+  .private-note-editing {
+    border-left-color: var(--brand-accent, var(--brand-primary));
   }
 
   .note-header {
@@ -102,6 +182,71 @@
     line-height: 1.5;
     color: var(--ink);
     word-break: break-word;
+  }
+
+  .note-edit-area {
+    display: flex;
+    flex-direction: column;
+    gap: 0.375rem;
+  }
+
+  .note-edit-textarea {
+    width: 100%;
+    min-height: 3rem;
+    padding: 0.5rem;
+    font-size: 0.875rem;
+    line-height: 1.5;
+    font-family: inherit;
+    color: var(--ink);
+    background: var(--surface-1);
+    border: 1px solid var(--muted);
+    border-radius: 0.375rem;
+    resize: vertical;
+  }
+
+  .note-edit-textarea:focus {
+    outline: 2px solid var(--brand-primary);
+    outline-offset: -1px;
+  }
+
+  .note-edit-textarea:disabled {
+    opacity: 0.6;
+  }
+
+  .note-edit-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.5rem;
+  }
+
+  .note-edit-cancel,
+  .note-edit-save {
+    padding: 0.25rem 0.75rem;
+    font-size: 0.75rem;
+    font-weight: 600;
+    border-radius: 0.375rem;
+    border: none;
+    cursor: pointer;
+  }
+
+  .note-edit-cancel {
+    color: var(--muted);
+    background: transparent;
+  }
+
+  .note-edit-cancel:disabled {
+    opacity: 0.4;
+    cursor: default;
+  }
+
+  .note-edit-save {
+    color: white;
+    background: var(--brand-primary);
+  }
+
+  .note-edit-save:disabled {
+    opacity: 0.4;
+    cursor: default;
   }
 
   .note-time {

@@ -10,7 +10,7 @@
 import type { Kysely } from "kysely";
 import type { TenantDatabase } from "../db/types.js";
 import type { TicketAccessChecker } from "./access.js";
-import { NotFoundError } from "../errors.js";
+import { ForbiddenError, NotFoundError } from "../errors.js";
 import { ErrorCode } from "@care-y/shared";
 
 export interface FollowUpRecord {
@@ -22,6 +22,7 @@ export interface FollowUpRecord {
   readonly mentionedPseudonyms: string[];
   readonly encryptedContent: Buffer;
   readonly encryptedReadState: Buffer;
+  readonly createdBy: string | null;
   readonly createdAt: Date;
 }
 
@@ -47,6 +48,18 @@ export interface FollowUpService {
     followUpId: string,
     encryptedReadState: Buffer,
   ): Promise<void>;
+  /** Update encrypted content of an internal note. Only the author can edit. */
+  updateInternalNote(
+    userId: string,
+    followUpId: string,
+    encryptedContent: Buffer,
+  ): Promise<FollowUpRecord>;
+  /** Soft-delete an internal note. Author or admin can delete. */
+  softDeleteInternalNote(
+    userId: string,
+    followUpId: string,
+    isAdmin: boolean,
+  ): Promise<void>;
 }
 
 function toRecord(row: {
@@ -58,6 +71,8 @@ function toRecord(row: {
   mentioned_pseudonyms: string[];
   encrypted_content: Buffer;
   encrypted_read_state: Buffer;
+  created_by: string | null;
+  deleted_at: Date | null;
   created_at: Date;
 }): FollowUpRecord {
   return {
@@ -69,6 +84,7 @@ function toRecord(row: {
     mentionedPseudonyms: row.mentioned_pseudonyms,
     encryptedContent: row.encrypted_content,
     encryptedReadState: row.encrypted_read_state,
+    createdBy: row.created_by,
     createdAt: row.created_at,
   };
 }
@@ -103,6 +119,7 @@ export function createFollowUpService(
           mentioned_pseudonyms: JSON.stringify(input.mentionedPseudonyms),
           encrypted_content: input.encryptedContent,
           encrypted_read_state: input.encryptedReadState,
+          created_by: userId,
         })
         .returningAll()
         .executeTakeFirstOrThrow();
@@ -116,7 +133,8 @@ export function createFollowUpService(
       let query = db
         .selectFrom("followups")
         .selectAll()
-        .where("ticket_id", "=", ticketId);
+        .where("ticket_id", "=", ticketId)
+        .where("deleted_at", "is", null);
 
       if (opts.cursor !== undefined) {
         // Keyset pagination: skip past the cursor row.
@@ -165,6 +183,71 @@ export function createFollowUpService(
       await db
         .updateTable("followups")
         .set({ encrypted_read_state: encryptedReadState })
+        .where("id", "=", followUpId)
+        .execute();
+    },
+
+    async updateInternalNote(userId, followUpId, encryptedContent) {
+      const existing = await db
+        .selectFrom("followups")
+        .selectAll()
+        .where("id", "=", followUpId)
+        .executeTakeFirst();
+
+      if (!existing) throw new NotFoundError(ErrorCode.FOLLOWUP_NOT_FOUND);
+
+      await access.assertAccess(userId, existing.ticket_id);
+
+      if (existing.type !== "internal_note") {
+        throw new ForbiddenError(ErrorCode.FOLLOWUP_NOT_EDITABLE);
+      }
+      if (existing.source !== "volunteer") {
+        throw new ForbiddenError(ErrorCode.FOLLOWUP_NOT_EDITABLE);
+      }
+      if (existing.deleted_at !== null) {
+        throw new NotFoundError(ErrorCode.FOLLOWUP_NOT_FOUND);
+      }
+
+      // Author check: WHERE created_by = userId ensures only the author
+      // can edit. If the row doesn't match, the update returns nothing.
+      const row = await db
+        .updateTable("followups")
+        .set({ encrypted_content: encryptedContent })
+        .where("id", "=", followUpId)
+        .where("created_by", "=", userId)
+        .returningAll()
+        .executeTakeFirst();
+
+      if (!row) throw new ForbiddenError(ErrorCode.FOLLOWUP_NOT_OWNED);
+      return toRecord(row);
+    },
+
+    async softDeleteInternalNote(userId, followUpId, isAdmin) {
+      const existing = await db
+        .selectFrom("followups")
+        .selectAll()
+        .where("id", "=", followUpId)
+        .executeTakeFirst();
+
+      if (!existing) throw new NotFoundError(ErrorCode.FOLLOWUP_NOT_FOUND);
+
+      await access.assertAccess(userId, existing.ticket_id);
+
+      if (existing.type !== "internal_note") {
+        throw new ForbiddenError(ErrorCode.FOLLOWUP_NOT_DELETABLE);
+      }
+      if (existing.deleted_at !== null) {
+        throw new NotFoundError(ErrorCode.FOLLOWUP_NOT_FOUND);
+      }
+
+      // Author or admin can delete
+      if (!isAdmin && existing.created_by !== userId) {
+        throw new ForbiddenError(ErrorCode.FOLLOWUP_NOT_OWNED);
+      }
+
+      await db
+        .updateTable("followups")
+        .set({ deleted_at: new Date() })
         .where("id", "=", followUpId)
         .execute();
     },

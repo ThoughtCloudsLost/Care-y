@@ -202,4 +202,247 @@ describe.skipIf(!process.env.DATABASE_URL)("FollowUpService (DB)", () => {
       svc.markRead(user.id, crypto.randomUUID(), Buffer.from("read")),
     ).rejects.toBeInstanceOf(NotFoundError);
   });
+
+  // --- updateInternalNote ---
+
+  it("updateInternalNote succeeds for author of internal note", async () => {
+    const { userId, ticketId } = await createTicketFixture();
+
+    const fu = await svc.create(userId, {
+      ticketId,
+      encryptedContent: Buffer.from("original-note"),
+      encryptedReadState: Buffer.from("unread"),
+      source: "volunteer",
+      type: "internal_note",
+      isPrivate: true,
+      mentionedPseudonyms: [],
+    });
+
+    const updated = await svc.updateInternalNote(
+      userId,
+      fu.id,
+      Buffer.from("edited-note"),
+    );
+
+    expect(updated.id).toBe(fu.id);
+    expect(updated.encryptedContent.toString()).toBe("edited-note");
+  });
+
+  it("updateInternalNote rejects non-author", async () => {
+    const { userId, ticketId } = await createTicketFixture();
+    const otherUser = await createTestUser(testDb.db);
+
+    const fu = await svc.create(userId, {
+      ticketId,
+      encryptedContent: Buffer.from("note"),
+      encryptedReadState: Buffer.from("unread"),
+      source: "volunteer",
+      type: "internal_note",
+      isPrivate: true,
+      mentionedPseudonyms: [],
+    });
+
+    await expect(
+      svc.updateInternalNote(otherUser.id, fu.id, Buffer.from("edited")),
+    ).rejects.toBeInstanceOf(ForbiddenError);
+  });
+
+  it("updateInternalNote rejects non-internal-note types", async () => {
+    const { userId, ticketId } = await createTicketFixture();
+
+    const fu = await svc.create(userId, {
+      ticketId,
+      encryptedContent: Buffer.from("message"),
+      encryptedReadState: Buffer.from("unread"),
+      source: "volunteer",
+      type: "message",
+      isPrivate: false,
+      mentionedPseudonyms: [],
+    });
+
+    await expect(
+      svc.updateInternalNote(userId, fu.id, Buffer.from("edited")),
+    ).rejects.toBeInstanceOf(ForbiddenError);
+  });
+
+  it("updateInternalNote rejects system-sourced internal notes", async () => {
+    const { userId, ticketId } = await createTicketFixture();
+
+    const fu = await svc.create(userId, {
+      ticketId,
+      encryptedContent: Buffer.from("system-note"),
+      encryptedReadState: Buffer.from("unread"),
+      source: "system",
+      type: "internal_note",
+      isPrivate: true,
+      mentionedPseudonyms: [],
+    });
+
+    await expect(
+      svc.updateInternalNote(userId, fu.id, Buffer.from("edited")),
+    ).rejects.toBeInstanceOf(ForbiddenError);
+  });
+
+  // --- softDeleteInternalNote ---
+
+  it("softDeleteInternalNote succeeds for author", async () => {
+    const { userId, ticketId } = await createTicketFixture();
+
+    const fu = await svc.create(userId, {
+      ticketId,
+      encryptedContent: Buffer.from("note-to-delete"),
+      encryptedReadState: Buffer.from("unread"),
+      source: "volunteer",
+      type: "internal_note",
+      isPrivate: true,
+      mentionedPseudonyms: [],
+    });
+
+    await svc.softDeleteInternalNote(userId, fu.id, false);
+
+    // Verify deleted_at is set
+    const row = await testDb.db
+      .selectFrom("followups")
+      .selectAll()
+      .where("id", "=", fu.id)
+      .executeTakeFirstOrThrow();
+
+    expect(row.deleted_at).toBeInstanceOf(Date);
+  });
+
+  it("softDeleteInternalNote succeeds for admin on other author's note", async () => {
+    const { userId, ticketId } = await createTicketFixture();
+    const adminUser = await createTestUser(testDb.db);
+
+    const fu = await svc.create(userId, {
+      ticketId,
+      encryptedContent: Buffer.from("note"),
+      encryptedReadState: Buffer.from("unread"),
+      source: "volunteer",
+      type: "internal_note",
+      isPrivate: true,
+      mentionedPseudonyms: [],
+    });
+
+    // Admin can delete another user's note
+    await svc.softDeleteInternalNote(adminUser.id, fu.id, true);
+
+    const row = await testDb.db
+      .selectFrom("followups")
+      .selectAll()
+      .where("id", "=", fu.id)
+      .executeTakeFirstOrThrow();
+
+    expect(row.deleted_at).toBeInstanceOf(Date);
+  });
+
+  it("softDeleteInternalNote rejects non-author non-admin", async () => {
+    const { userId, ticketId } = await createTicketFixture();
+    const otherUser = await createTestUser(testDb.db);
+
+    const fu = await svc.create(userId, {
+      ticketId,
+      encryptedContent: Buffer.from("note"),
+      encryptedReadState: Buffer.from("unread"),
+      source: "volunteer",
+      type: "internal_note",
+      isPrivate: true,
+      mentionedPseudonyms: [],
+    });
+
+    await expect(
+      svc.softDeleteInternalNote(otherUser.id, fu.id, false),
+    ).rejects.toBeInstanceOf(ForbiddenError);
+  });
+
+  it("softDeleteInternalNote rejects non-internal-note types", async () => {
+    const { userId, ticketId } = await createTicketFixture();
+
+    const fu = await svc.create(userId, {
+      ticketId,
+      encryptedContent: Buffer.from("msg"),
+      encryptedReadState: Buffer.from("unread"),
+      source: "volunteer",
+      type: "message",
+      isPrivate: false,
+      mentionedPseudonyms: [],
+    });
+
+    await expect(
+      svc.softDeleteInternalNote(userId, fu.id, false),
+    ).rejects.toBeInstanceOf(ForbiddenError);
+  });
+
+  // --- listByTicket excludes soft-deleted ---
+
+  it("listByTicket excludes soft-deleted follow-ups", async () => {
+    const { userId, ticketId } = await createTicketFixture();
+
+    const fu1 = await svc.create(userId, {
+      ticketId,
+      encryptedContent: Buffer.from("note-1"),
+      encryptedReadState: Buffer.from("unread"),
+      source: "volunteer",
+      type: "internal_note",
+      isPrivate: true,
+      mentionedPseudonyms: [],
+    });
+
+    await svc.create(userId, {
+      ticketId,
+      encryptedContent: Buffer.from("note-2"),
+      encryptedReadState: Buffer.from("unread"),
+      source: "volunteer",
+      type: "internal_note",
+      isPrivate: true,
+      mentionedPseudonyms: [],
+    });
+
+    // Soft-delete the first note
+    await svc.softDeleteInternalNote(userId, fu1.id, false);
+
+    const list = await svc.listByTicket(userId, ticketId, { limit: 100 });
+    const ids = list.map((f) => f.id);
+    expect(ids).not.toContain(fu1.id);
+  });
+
+  // --- Access checks on edit/delete ---
+
+  it("updateInternalNote rejects user without ticket access", async () => {
+    const { userId, ticketId } = await createTicketFixture();
+    const outsider = await createTestUser(testDb.db);
+
+    const fu = await svc.create(userId, {
+      ticketId,
+      encryptedContent: Buffer.from("note"),
+      encryptedReadState: Buffer.from("unread"),
+      source: "volunteer",
+      type: "internal_note",
+      isPrivate: true,
+      mentionedPseudonyms: [],
+    });
+
+    await expect(
+      svc.updateInternalNote(outsider.id, fu.id, Buffer.from("edited")),
+    ).rejects.toBeInstanceOf(ForbiddenError);
+  });
+
+  it("softDeleteInternalNote rejects user without ticket access", async () => {
+    const { userId, ticketId } = await createTicketFixture();
+    const outsider = await createTestUser(testDb.db);
+
+    const fu = await svc.create(userId, {
+      ticketId,
+      encryptedContent: Buffer.from("note"),
+      encryptedReadState: Buffer.from("unread"),
+      source: "volunteer",
+      type: "internal_note",
+      isPrivate: true,
+      mentionedPseudonyms: [],
+    });
+
+    await expect(
+      svc.softDeleteInternalNote(outsider.id, fu.id, false),
+    ).rejects.toBeInstanceOf(ForbiddenError);
+  });
 });

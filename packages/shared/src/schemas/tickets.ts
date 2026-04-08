@@ -212,6 +212,23 @@ export const queueWatcherInputSchema = z.object({
 });
 export type QueueWatcherInput = z.infer<typeof queueWatcherInputSchema>;
 
+// --- Internal note edit/delete ---
+
+export const updateInternalNoteInputSchema = z.object({
+  followUpId: z.uuid(),
+  encryptedContent: base64String("encryptedContent"),
+});
+export type UpdateInternalNoteInput = z.infer<
+  typeof updateInternalNoteInputSchema
+>;
+
+export const deleteInternalNoteInputSchema = z.object({
+  followUpId: z.uuid(),
+});
+export type DeleteInternalNoteInput = z.infer<
+  typeof deleteInternalNoteInputSchema
+>;
+
 // --- Volunteer list (for @mention autocomplete) ---
 // Return type is inferred by tRPC from the resolver. The server returns
 // { id: string, encryptedDisplayName: Buffer } which tRPC serializes as

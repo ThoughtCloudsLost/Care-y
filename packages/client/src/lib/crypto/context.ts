@@ -32,6 +32,9 @@ export const [getTicketDecryptCache, setTicketDecryptCache] =
 export const [getCurrentUserId, setCurrentUserId] =
   createContext<() => string | undefined>();
 
+export const [getCurrentUserRoleId, setCurrentUserRoleId] =
+  createContext<() => string | undefined>();
+
 export const [getFollowUpDecryptCache, setFollowUpDecryptCache] =
   createContext<FollowUpDecryptCache>();
 

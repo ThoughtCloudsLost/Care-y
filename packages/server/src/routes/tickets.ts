@@ -76,6 +76,9 @@ import {
   metadataSearchInputSchema,
   contentSearchInputSchema,
   auditLogQueryInputSchema,
+  updateInternalNoteInputSchema,
+  deleteInternalNoteInputSchema,
+  RoleId,
 } from "@care-y/shared";
 
 export interface TicketRouterDeps {
@@ -424,6 +427,36 @@ export function createTicketRouter(deps: TicketRouterDeps) {
         );
       }),
     ),
+
+    // --- Internal note edit/delete ---
+    updateInternalNote: volunteerProcedure
+      .input(updateInternalNoteInputSchema)
+      .mutation(
+        withErrorWrapping(async ({ ctx, input }) => {
+          const access = deps.createTicketAccess(ctx.org.tenantDb);
+          const svc = deps.createFollowUpSvc(ctx.org.tenantDb, access);
+          return svc.updateInternalNote(
+            ctx.user.id,
+            input.followUpId,
+            Buffer.from(input.encryptedContent, "base64"),
+          );
+        }),
+      ),
+
+    deleteInternalNote: volunteerProcedure
+      .input(deleteInternalNoteInputSchema)
+      .mutation(
+        withErrorWrapping(async ({ ctx, input }) => {
+          const access = deps.createTicketAccess(ctx.org.tenantDb);
+          const svc = deps.createFollowUpSvc(ctx.org.tenantDb, access);
+          const isAdmin = ctx.user.roleId === RoleId.ADMIN;
+          await svc.softDeleteInternalNote(
+            ctx.user.id,
+            input.followUpId,
+            isAdmin,
+          );
+        }),
+      ),
 
     // --- Presets ---
     createPreset: managerProcedure.input(createPresetReplyInputSchema).mutation(

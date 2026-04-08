@@ -316,6 +316,8 @@ export interface FollowupsTable {
   >;
   encrypted_content: Buffer;
   encrypted_read_state: Buffer;
+  created_by: string | null;
+  deleted_at: Date | null;
   created_at: Generated<Date>;
 }
 
