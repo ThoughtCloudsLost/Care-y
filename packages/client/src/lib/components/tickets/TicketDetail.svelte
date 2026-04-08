@@ -11,6 +11,7 @@
               OrgDecryptCache (org-key tier, main thread) for display names.
 -->
 <script lang="ts">
+  import { tick } from "svelte";
   import { createQuery, useQueryClient } from "@tanstack/svelte-query";
   import { Messages, Message } from "konsta/svelte";
   import * as m from "$lib/paraglide/messages.js";
@@ -18,7 +19,6 @@
   import {
     getFollowUpDecryptCache,
     getTicketDecryptCache,
-    getOrgDecryptCache,
     getCurrentUserId,
     getCurrentUserRoleId,
   } from "$lib/crypto/context.js";
@@ -41,12 +41,8 @@
 
   import {
     getContextMenuActions,
-    type ContextActionId,
-    type ContextAction,
     type ContextMenuEvent,
   } from "./context-menu-actions.js";
-
-  export type { ContextActionId, ContextAction, ContextMenuEvent };
 
   interface TicketDetailProps {
     ticketId: string;
@@ -54,11 +50,6 @@
     draftText?: string;
     /** Current cursor position in the compose textarea. */
     cursorPosition?: number;
-    onback: () => void;
-    oncall: () => void;
-    onactions: () => void;
-    onclientinfo: () => void;
-    onpresetselect: (body: string) => void;
     /** Called when a volunteer is selected from @mention autocomplete. */
     onmentionselect?: (userId: string, displayName: string) => void;
     /** Called when an MMS image is tapped. Route file opens lightbox. */
@@ -81,11 +72,6 @@
     ticketId,
     draftText = $bindable(""),
     cursorPosition = 0,
-    onback,
-    oncall,
-    onactions,
-    onclientinfo,
-    onpresetselect,
     onmentionselect,
     onlightbox,
     oncontextmenu,
@@ -98,7 +84,6 @@
 
   const ticketCache = getTicketDecryptCache();
   const followUpCache = getFollowUpDecryptCache();
-  const orgCache = getOrgDecryptCache();
   const currentUserIdGetter = getCurrentUserId();
   const currentUserId = $derived(currentUserIdGetter());
   const currentUserRoleIdGetter = getCurrentUserRoleId();
@@ -355,6 +340,15 @@
 
   let scrollContainerEl: HTMLDivElement | undefined = $state();
 
+  // Track whether user is near bottom (within 100px) for auto-scroll decisions.
+  let isNearBottom = $state(true);
+
+  function onScroll(): void {
+    if (!scrollContainerEl) return;
+    const { scrollTop, scrollHeight, clientHeight } = scrollContainerEl;
+    isNearBottom = scrollHeight - scrollTop - clientHeight < 100;
+  }
+
   // Track whether initial scroll has happened. Only auto-scroll once
   // on first data load, not on every reactive update.
   let hasScrolledInitially = false;
@@ -376,6 +370,23 @@
       });
     }
   });
+
+  // Auto-scroll when new follow-ups arrive via SSE and user was near bottom.
+  const followUpCount = $derived(followUps.length);
+
+  $effect(() => {
+    // Reading followUpCount registers the dependency.
+    if (followUpCount === 0) return;
+
+    if (isNearBottom && hasScrolledInitially) {
+      void tick().then(() => {
+        scrollContainerEl?.scrollTo({
+          top: scrollContainerEl.scrollHeight,
+          behavior: "smooth",
+        });
+      });
+    }
+  });
 </script>
 
 {#if ticketQuery.isLoading}
@@ -390,6 +401,7 @@
   <div
     class="chat-container"
     bind:this={scrollContainerEl}
+    onscroll={onScroll}
     role="log"
     aria-label={m.ticket_conversation_with({ alias: clientAlias })}
   >

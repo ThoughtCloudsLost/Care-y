@@ -36,6 +36,13 @@ export function handleEvent(event: SSEEvent, queryClient: QueryClient): void {
         });
       }
       break;
+    case "followup:created":
+      if (event.ticketId !== undefined) {
+        void queryClient.invalidateQueries({
+          queryKey: ["ticket", event.ticketId, "followUps"],
+        });
+      }
+      break;
     case "kb:updated":
       void queryClient.invalidateQueries({ queryKey: ["kb"] });
       break;

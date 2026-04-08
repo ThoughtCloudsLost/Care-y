@@ -67,6 +67,20 @@ describe("handleEvent", () => {
     });
   });
 
+  it("invalidates follow-ups for specific ticket on followup:created", () => {
+    handleEvent({ type: "followup:created", ticketId: "t-789" }, qc);
+
+    expect(qc.invalidateQueries).toHaveBeenCalledWith({
+      queryKey: ["ticket", "t-789", "followUps"],
+    });
+  });
+
+  it("does not invalidate when followup:created has no ticketId", () => {
+    handleEvent({ type: "followup:created" }, qc);
+
+    expect(qc.invalidateQueries).not.toHaveBeenCalled();
+  });
+
   it("does nothing for unknown event types", () => {
     handleEvent({ type: "unknown:event" }, qc);
 

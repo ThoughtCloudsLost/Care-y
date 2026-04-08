@@ -11,6 +11,7 @@
   - Provides SvelteKit snapshot for draft preservation
 -->
 <script lang="ts">
+  import type { Snapshot } from "./$types.js";
   import { page } from "$app/state";
   import { goto } from "$app/navigation";
   import { resolve } from "$app/paths";
@@ -399,7 +400,22 @@
   }
 
   // --- SvelteKit Snapshot (draft preservation) ---
-  // Snapshot interface defined here, wired when draft persistence is added.
+
+  interface TicketDetailSnapshot {
+    draftText: string;
+    composeMode: ComposeMode;
+  }
+
+  export const snapshot: Snapshot<TicketDetailSnapshot> = {
+    capture: () => ({
+      draftText,
+      composeMode,
+    }),
+    restore: (value) => {
+      draftText = value.draftText;
+      composeMode = value.composeMode;
+    },
+  };
 </script>
 
 {#snippet navLeft()}
@@ -438,13 +454,6 @@
     {ticketId}
     bind:draftText
     {cursorPosition}
-    onback={goBack}
-    oncall={openCallSheet}
-    onactions={openActionsSheet}
-    onclientinfo={openClientInfo}
-    onpresetselect={(body: string) => {
-      draftText = body;
-    }}
     onmentionselect={handleMentionSelect}
     onlightbox={openLightbox}
     oncontextmenu={openContextMenu}
