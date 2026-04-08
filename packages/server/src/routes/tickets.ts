@@ -1559,25 +1559,201 @@ export function createTicketRouter(deps: TicketRouterDeps) {
                 // Created 30 min to 30 days ago
                 const ageMinutes = 30 + (h0 % 43200);
 
-                // 0-4 follow-ups
-                const fuCount = h1 % 5;
+                // 0-4 follow-ups (first generated ticket gets 180 for pagination/feature testing)
+                const fuCount = g === 0 ? 180 : h1 % 5;
                 const followUps: FollowUpDef[] = [];
-                for (let f = 0; f < fuCount; f++) {
-                  const fh = seedHash(g, 10 + f);
-                  const isClient = fh % 2 === 0;
-                  const msgs = isClient ? clientMessages : volMessages;
-                  const msg = msgs[fh % msgs.length] ?? "Message";
-                  // Space follow-ups evenly within the ticket's age
-                  const fuAge = Math.max(
-                    1,
-                    ageMinutes -
-                      Math.floor((ageMinutes * (f + 1)) / (fuCount + 1)),
-                  );
-                  followUps.push({
-                    content: msg,
-                    source: isClient ? "client" : "volunteer",
-                    agoMinutes: fuAge,
-                  });
+
+                if (g === 0) {
+                  // 180 follow-ups matching production data shapes.
+                  // Client media (MMS/voicemail): no filename (Twilio
+                  // doesn't provide one). Volunteer attachments: filename
+                  // (picked from device). Voicemail content: empty or
+                  // transcription. System events: exact server strings.
+                  const totalAge = ageMinutes;
+                  for (let f = 0; f < 180; f++) {
+                    const fuAge = Math.max(
+                      1,
+                      totalAge - Math.floor((totalAge * (f + 1)) / 181),
+                    );
+                    const fh = seedHash(0, 10 + f);
+                    const isClient = fh % 2 === 0;
+                    const msgs = isClient ? clientMessages : volMessages;
+
+                    if (f === 3) {
+                      followUps.push({
+                        content: "Assigned to Alice",
+                        source: "system",
+                        type: "assignment_change",
+                        agoMinutes: fuAge,
+                      });
+                    } else if (f === 10) {
+                      followUps.push({
+                        content: "Priority changed to high",
+                        source: "system",
+                        type: "priority_change",
+                        agoMinutes: fuAge,
+                      });
+                    } else if (f === 20) {
+                      followUps.push({
+                        content: "Put on hold",
+                        source: "system",
+                        type: "hold_change",
+                        agoMinutes: fuAge,
+                      });
+                    } else if (f === 30) {
+                      followUps.push({
+                        content: "Status changed to closed",
+                        source: "system",
+                        type: "status_change",
+                        agoMinutes: fuAge,
+                      });
+                    } else if (f === 31) {
+                      followUps.push({
+                        content: "Status changed to open",
+                        source: "system",
+                        type: "status_change",
+                        agoMinutes: fuAge,
+                      });
+                    } else if (f === 40) {
+                      followUps.push({
+                        content: "Assigned to Bob",
+                        source: "system",
+                        type: "assignment_change",
+                        agoMinutes: fuAge,
+                      });
+                    } else if (f === 5 || f === 55 || f === 120) {
+                      const noteText =
+                        f === 5
+                          ? "Client seems anxious, approach carefully"
+                          : f === 55
+                            ? "Coordinating with housing team on this"
+                            : "Supervisor reviewed, approved next steps";
+                      followUps.push({
+                        content: noteText,
+                        source: "volunteer",
+                        type: "internal_note",
+                        isPrivate: true,
+                        agoMinutes: fuAge,
+                      });
+                    } else if (f === 8) {
+                      // Client voicemail (inbound call, no transcription)
+                      followUps.push({
+                        content: "",
+                        source: "client",
+                        agoMinutes: fuAge,
+                        media: [{ kind: "recording", durationSeconds: 12 }],
+                      });
+                    } else if (f === 25) {
+                      // Volunteer voicemail (outbound call)
+                      followUps.push({
+                        content: "",
+                        source: "volunteer",
+                        agoMinutes: fuAge,
+                        media: [{ kind: "recording", durationSeconds: 30 }],
+                      });
+                    } else if (f === 65) {
+                      // Client voicemail with transcription
+                      followUps.push({
+                        content:
+                          "Hi, I wanted to talk about the appointment next week, I am not sure I can make it because my ride fell through and I need to figure out another way to get there",
+                        source: "client",
+                        agoMinutes: fuAge,
+                        media: [{ kind: "recording", durationSeconds: 90 }],
+                      });
+                    } else if (f === 12) {
+                      // Client MMS image only (no text, no filename from Twilio)
+                      followUps.push({
+                        content: "",
+                        source: "client",
+                        agoMinutes: fuAge,
+                        media: [{ kind: "image", contentType: "image/jpeg" }],
+                      });
+                    } else if (f === 35) {
+                      // Client MMS image with text body
+                      followUps.push({
+                        content:
+                          "Here is a photo of the document you asked for",
+                        source: "client",
+                        agoMinutes: fuAge,
+                        media: [{ kind: "image", contentType: "image/jpeg" }],
+                      });
+                    } else if (f === 50) {
+                      // Volunteer sends image (from device, has filename)
+                      followUps.push({
+                        content: "Attached the resource guide",
+                        source: "volunteer",
+                        agoMinutes: fuAge,
+                        media: [
+                          {
+                            kind: "image",
+                            filename: "resource-guide.jpg",
+                            contentType: "image/jpeg",
+                          },
+                        ],
+                      });
+                    } else if (f === 15) {
+                      // Client file via MMS (no filename from Twilio)
+                      followUps.push({
+                        content: "",
+                        source: "client",
+                        agoMinutes: fuAge,
+                        media: [
+                          { kind: "file", contentType: "application/pdf" },
+                        ],
+                      });
+                    } else if (f === 45) {
+                      // Volunteer file (from device, has filename)
+                      followUps.push({
+                        content: "Here are the referral instructions",
+                        source: "volunteer",
+                        agoMinutes: fuAge,
+                        media: [
+                          {
+                            kind: "file",
+                            filename: "referral-instructions.docx",
+                            contentType:
+                              "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                          },
+                        ],
+                      });
+                    } else if (f === 100) {
+                      // Client MMS with multiple media (no filenames)
+                      followUps.push({
+                        content: "",
+                        source: "client",
+                        agoMinutes: fuAge,
+                        media: [
+                          { kind: "image", contentType: "image/png" },
+                          { kind: "file", contentType: "application/pdf" },
+                        ],
+                      });
+                    } else {
+                      const msg = msgs[fh % msgs.length] ?? "Message";
+                      followUps.push({
+                        content: msg,
+                        source: isClient ? "client" : "volunteer",
+                        agoMinutes: fuAge,
+                      });
+                    }
+                  }
+                } else {
+                  for (let f = 0; f < fuCount; f++) {
+                    const fh = seedHash(g, 10 + f);
+                    const isClient = fh % 2 === 0;
+                    const msgs = isClient ? clientMessages : volMessages;
+                    const msg = msgs[fh % msgs.length] ?? "Message";
+                    // Space follow-ups evenly within the ticket's age
+                    const fuAge = Math.max(
+                      1,
+                      ageMinutes -
+                        Math.floor((ageMinutes * (f + 1)) / (fuCount + 1)),
+                    );
+                    followUps.push({
+                      content: msg,
+                      source: isClient ? "client" : "volunteer",
+                      agoMinutes: fuAge,
+                    });
+                  }
                 }
 
                 ticketDefs.push({

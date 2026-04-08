@@ -139,6 +139,7 @@
   let deleteTargetId = $state<string | null>(null);
   let editingFollowUpId = $state<string | null>(null);
   let savingNote = $state(false);
+  let chatZoomed = $state(false);
 
   // --- Navigation ---
 
@@ -215,6 +216,9 @@
         break;
       case "client-info":
         openClientInfo();
+        break;
+      case "zoom":
+        chatZoomed = !chatZoomed;
         break;
       case "cancel":
         break;
@@ -448,6 +452,7 @@
     {savingNote}
     onnoteedit={(fid: string, text: string) => void handleNoteEdit(fid, text)}
     oncanceledit={cancelNoteEdit}
+    bind:chatZoomed
   />
 </div>
 
@@ -469,6 +474,7 @@
     {isOnHold}
     {isAssignedToMe}
     {isWatching}
+    isZoomedOut={chatZoomed}
     onaction={handleTicketAction}
   />
 </ShellActionSheet>

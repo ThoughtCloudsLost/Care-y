@@ -22,6 +22,8 @@ vi.mock("$lib/paraglide/messages.js", () => ({
   ticket_action_watch: () => "Watch",
   ticket_action_unwatch: () => "Unwatch",
   ticket_action_client_info: () => "Client Info",
+  ticket_zoom_out: () => "Zoom out",
+  ticket_zoom_in: () => "Zoom in",
   common_cancel: () => "Cancel",
 }));
 
@@ -34,6 +36,7 @@ const baseProps = {
   isOnHold: false,
   isAssignedToMe: false,
   isWatching: false,
+  isZoomedOut: false,
   onaction: vi.fn(),
 };
 
@@ -158,5 +161,33 @@ describe("TicketActionsContent", () => {
     expect(cancelBtn).toBeDefined();
     await fireEvent.click(cancelBtn!);
     expect(onaction).toHaveBeenCalledWith("cancel");
+  });
+
+  it("shows 'Zoom out' when not zoomed", () => {
+    const { container } = render(TicketActionsContent, {
+      props: { ...baseProps, isZoomedOut: false },
+    });
+    expect(container.textContent).toContain("Zoom out");
+  });
+
+  it("shows 'Zoom in' when zoomed out", () => {
+    const { container } = render(TicketActionsContent, {
+      props: { ...baseProps, isZoomedOut: true },
+    });
+    expect(container.textContent).toContain("Zoom in");
+  });
+
+  it("calls onaction with 'zoom' when zoom is clicked", async () => {
+    const onaction = vi.fn();
+    const { container } = render(TicketActionsContent, {
+      props: { ...baseProps, onaction },
+    });
+    const buttons = container.querySelectorAll("button");
+    const zoomBtn = Array.from(buttons).find(
+      (b) => b.textContent!.trim() === "Zoom out",
+    );
+    expect(zoomBtn).toBeDefined();
+    await fireEvent.click(zoomBtn!);
+    expect(onaction).toHaveBeenCalledWith("zoom");
   });
 });

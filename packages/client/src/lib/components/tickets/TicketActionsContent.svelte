@@ -20,6 +20,7 @@
     | "watch"
     | "unwatch"
     | "client-info"
+    | "zoom"
     | "cancel";
 
   interface TicketActionsContentProps {
@@ -27,6 +28,7 @@
     isOnHold: boolean;
     isAssignedToMe: boolean;
     isWatching: boolean;
+    isZoomedOut: boolean;
     onaction: (action: TicketAction) => void;
   }
 
@@ -35,6 +37,7 @@
     isOnHold,
     isAssignedToMe,
     isWatching,
+    isZoomedOut,
     onaction,
   }: TicketActionsContentProps = $props();
 </script>
@@ -68,6 +71,9 @@
   <ActionsButton onclick={() => onaction("client-info")}
     >{m.ticket_action_client_info()}</ActionsButton
   >
+  <ActionsButton onclick={() => onaction("zoom")}>
+    {isZoomedOut ? m.ticket_zoom_in() : m.ticket_zoom_out()}
+  </ActionsButton>
   <!-- 6m extends here with pin action -->
 </ActionsGroup>
 <ActionsGroup>

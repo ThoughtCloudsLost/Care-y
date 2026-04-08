@@ -292,4 +292,8 @@ export * from "./ticket_mms_open_lightbox.js";
 export * from "./ticket_mms_lightbox_label.js";
 export * from "./ticket_attachment_file.js";
 export * from "./ticket_loading_older.js";
+export * from "./ticket_zoom_out.js";
+export * from "./ticket_zoom_in.js";
+export * from "./ticket_zoom_summary.js";
+export * from "./ticket_zoom_toggle.js";
 export type LocalizedString = import("../runtime.js").LocalizedString;

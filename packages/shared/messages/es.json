@@ -318,5 +318,10 @@
   "ticket_mms_open_lightbox": "Ver imagen en tamaño completo",
   "ticket_mms_lightbox_label": "Imagen en tamaño completo",
   "ticket_attachment_file": "Archivo: {filename} ({size})",
-  "ticket_loading_older": "Cargando mensajes anteriores..."
+  "ticket_loading_older": "Cargando mensajes anteriores...",
+
+  "ticket_zoom_out": "Alejar",
+  "ticket_zoom_in": "Acercar",
+  "ticket_zoom_summary": "{count} mensajes en {days} dias, mas reciente {recency}",
+  "ticket_zoom_toggle": "Alternar zoom"
 }

@@ -36,6 +36,7 @@
   import MmsImage from "$lib/components/tickets/MmsImage.svelte";
   import AttachmentChip from "$lib/components/tickets/AttachmentChip.svelte";
   import VirtualList from "$lib/components/tickets/VirtualList.svelte";
+  import ChatZoom from "$lib/components/tickets/ChatZoom.svelte";
   import MentionAutocomplete from "$lib/components/tickets/MentionAutocomplete.svelte";
 
   import {
@@ -72,6 +73,8 @@
     savingNote?: boolean;
     /** Called when editing is cancelled (route clears editingFollowUpId). */
     oncanceledit?: () => void;
+    /** Two-way bindable: whether the chat is zoomed out. */
+    chatZoomed?: boolean;
   }
 
   let {
@@ -90,6 +93,7 @@
     editingFollowUpId = null,
     savingNote = false,
     oncanceledit,
+    chatZoomed = $bindable(false),
   }: TicketDetailProps = $props();
 
   const ticketCache = getTicketDecryptCache();
@@ -336,6 +340,17 @@
     followUps.find((fu) => !readFollowUpIds.has(fu.id))?.id ?? null,
   );
 
+  // --- ChatZoom data ---
+
+  const earliestDate = $derived(
+    followUps.length > 0 ? followUps[0]?.createdAt : undefined,
+  );
+  const latestDate = $derived(
+    followUps.length > 0
+      ? followUps[followUps.length - 1]?.createdAt
+      : undefined,
+  );
+
   // --- Scroll container ---
 
   let scrollContainerEl: HTMLDivElement | undefined = $state();
@@ -391,140 +406,149 @@
         </div>
       {/if}
 
-      <Messages>
-        <VirtualList
-          items={followUps}
-          scrollContainer={scrollContainerEl}
-          estimateHeight={80}
-          columns={1}
-          getKey={(fu: FollowUpRecord) => fu.id}
-          onloadprevious={hasMoreOlder ? loadOlderPage : undefined}
-        >
-          {#snippet children({
-            item,
-            index: i,
-          }: {
-            item: FollowUpRecord;
-            index: number;
-          })}
-            {@const fu = item}
-            {@const kind = followUpKind(fu)}
-            {@const content = followUpCache.decryptContent(
-              fu.id,
-              ticket.keyWrap,
-              fu.encryptedContent,
-            )}
-            {@const prevTimestamp =
-              i > 0 ? followUps[i - 1]?.createdAt : undefined}
+      <ChatZoom
+        {scrollContainerEl}
+        totalMessages={followUps.length}
+        {earliestDate}
+        {latestDate}
+        bind:zoomed={chatZoomed}
+      >
+        <Messages>
+          <VirtualList
+            items={followUps}
+            scrollContainer={scrollContainerEl}
+            estimateHeight={80}
+            columns={1}
+            getKey={(fu: FollowUpRecord) => fu.id}
+            onloadprevious={hasMoreOlder ? loadOlderPage : undefined}
+          >
+            {#snippet children({
+              item,
+              index: i,
+            }: {
+              item: FollowUpRecord;
+              index: number;
+            })}
+              {@const fu = item}
+              {@const kind = followUpKind(fu)}
+              {@const content = followUpCache.decryptContent(
+                fu.id,
+                ticket.keyWrap,
+                fu.encryptedContent,
+              )}
+              {@const prevTimestamp =
+                i > 0 ? followUps[i - 1]?.createdAt : undefined}
 
-            {#if needsDateSeparator(fu.createdAt, prevTimestamp)}
-              <div class="date-separator" role="separator">
-                <span class="date-separator-label"
-                  >{formatDateSeparator(fu.createdAt)}</span
-                >
-              </div>
-            {/if}
-
-            {#if fu.id === firstUnreadId}
-              <div
-                id="unread-divider"
-                class="unread-divider"
-                role="separator"
-                aria-label={m.ticket_new_messages()}
-              >
-                <span class="unread-divider-label"
-                  >{m.ticket_new_messages()}</span
-                >
-              </div>
-            {/if}
-
-            <div id="fu-{fu.id}" data-fu-id={fu.id}>
-              {#if kind === "system"}
-                <SystemEvent {content} timestamp={fu.createdAt} />
-              {:else if kind === "note"}
-                <PrivateNote
-                  {content}
-                  authorName={undefined}
-                  timestamp={fu.createdAt}
-                  isOwn={fu.createdBy === currentUserId}
-                  editing={editingFollowUpId === fu.id}
-                  saving={editingFollowUpId === fu.id && savingNote}
-                  onedit={(newText: string) => onnoteedit?.(fu.id, newText)}
-                  {oncanceledit}
-                  onpointerdown={startLongPress(fu)}
-                  onpointerup={cancelLongPress}
-                  onpointercancel={cancelLongPress}
-                />
-              {:else}
-                {@const fuRecordings = recordingsByFollowUp.get(fu.id) ?? []}
-                {@const fuAttachments = attachmentsByFollowUp.get(fu.id) ?? []}
-                <Message
-                  type={messageType(fu)}
-                  name={fu.source === "client" ? clientAlias : undefined}
-                  aria-label={bubbleAriaLabel(fu, content)}
-                >
-                  {#snippet text()}
-                    <!-- svelte-ignore a11y_no_static_element_interactions -->
-                    <span
-                      class="bubble-text"
-                      onpointerdown={startLongPress(fu)}
-                      onpointerup={cancelLongPress}
-                      onpointercancel={cancelLongPress}
-                    >
-                      {#if isDecryptError(content)}
-                        <span class="decrypt-error"
-                          >{m.error_decryption_failed()}</span
-                        >
-                      {:else if content === undefined}
-                        <span class="shimmer shimmer-bubble" aria-busy="true"
-                        ></span>
-                      {:else if content}
-                        {content}
-                      {/if}
-                    </span>
-
-                    {#each fuRecordings as rec (rec.id)}
-                      <VoicemailPlayer
-                        recordingId={rec.id}
-                        {ticketId}
-                        keyWrap={ticket.keyWrap}
-                        durationSeconds={rec.durationSeconds}
-                      />
-                    {/each}
-
-                    {#each fuAttachments as att (att.id)}
-                      {#if att.contentType?.startsWith("image/")}
-                        <MmsImage
-                          attachmentId={att.id}
-                          {ticketId}
-                          keyWrap={ticket.keyWrap}
-                          alt={m.ticket_mms_image()}
-                          onopen={(url: string) => onlightbox?.(url)}
-                        />
-                      {:else}
-                        <AttachmentChip
-                          attachmentId={att.id}
-                          {ticketId}
-                          keyWrap={ticket.keyWrap}
-                          filename={att.encryptedFilename !== null
-                            ? "..."
-                            : "file"}
-                          sizeBytes={att.sizeBytes}
-                        />
-                      {/if}
-                    {/each}
-                  {/snippet}
-                  {#snippet footer()}
-                    <time class="bubble-time" datetime={fu.createdAt}>
-                      {formatRelativeTime(new Date(fu.createdAt))}
-                    </time>
-                  {/snippet}
-                </Message>
+              {#if needsDateSeparator(fu.createdAt, prevTimestamp)}
+                <div class="date-separator" role="separator">
+                  <span class="date-separator-label"
+                    >{formatDateSeparator(fu.createdAt)}</span
+                  >
+                </div>
               {/if}
-            </div>
-          {/snippet}
-        </VirtualList>
-      </Messages>
+
+              {#if fu.id === firstUnreadId}
+                <div
+                  id="unread-divider"
+                  class="unread-divider"
+                  role="separator"
+                  aria-label={m.ticket_new_messages()}
+                >
+                  <span class="unread-divider-label"
+                    >{m.ticket_new_messages()}</span
+                  >
+                </div>
+              {/if}
+
+              <div id="fu-{fu.id}" data-fu-id={fu.id}>
+                {#if kind === "system"}
+                  <SystemEvent {content} timestamp={fu.createdAt} />
+                {:else if kind === "note"}
+                  <PrivateNote
+                    {content}
+                    authorName={undefined}
+                    timestamp={fu.createdAt}
+                    isOwn={fu.createdBy === currentUserId}
+                    editing={editingFollowUpId === fu.id}
+                    saving={editingFollowUpId === fu.id && savingNote}
+                    onedit={(newText: string) => onnoteedit?.(fu.id, newText)}
+                    {oncanceledit}
+                    onpointerdown={startLongPress(fu)}
+                    onpointerup={cancelLongPress}
+                    onpointercancel={cancelLongPress}
+                  />
+                {:else}
+                  {@const fuRecordings = recordingsByFollowUp.get(fu.id) ?? []}
+                  {@const fuAttachments =
+                    attachmentsByFollowUp.get(fu.id) ?? []}
+                  <Message
+                    type={messageType(fu)}
+                    name={fu.source === "client" ? clientAlias : undefined}
+                    aria-label={bubbleAriaLabel(fu, content)}
+                  >
+                    {#snippet text()}
+                      <!-- svelte-ignore a11y_no_static_element_interactions -->
+                      <span
+                        class="bubble-text"
+                        onpointerdown={startLongPress(fu)}
+                        onpointerup={cancelLongPress}
+                        onpointercancel={cancelLongPress}
+                      >
+                        {#if isDecryptError(content)}
+                          <span class="decrypt-error"
+                            >{m.error_decryption_failed()}</span
+                          >
+                        {:else if content === undefined}
+                          <span class="shimmer shimmer-bubble" aria-busy="true"
+                          ></span>
+                        {:else if content}
+                          {content}
+                        {/if}
+                      </span>
+
+                      {#each fuRecordings as rec (rec.id)}
+                        <VoicemailPlayer
+                          recordingId={rec.id}
+                          {ticketId}
+                          keyWrap={ticket.keyWrap}
+                          durationSeconds={rec.durationSeconds}
+                        />
+                      {/each}
+
+                      {#each fuAttachments as att (att.id)}
+                        {#if att.contentType?.startsWith("image/")}
+                          <MmsImage
+                            attachmentId={att.id}
+                            {ticketId}
+                            keyWrap={ticket.keyWrap}
+                            alt={m.ticket_mms_image()}
+                            onopen={(url: string) => onlightbox?.(url)}
+                          />
+                        {:else}
+                          <AttachmentChip
+                            attachmentId={att.id}
+                            {ticketId}
+                            keyWrap={ticket.keyWrap}
+                            filename={att.encryptedFilename !== null
+                              ? "..."
+                              : "file"}
+                            sizeBytes={att.sizeBytes}
+                          />
+                        {/if}
+                      {/each}
+                    {/snippet}
+                    {#snippet footer()}
+                      <time class="bubble-time" datetime={fu.createdAt}>
+                        {formatRelativeTime(new Date(fu.createdAt))}
+                      </time>
+                    {/snippet}
+                  </Message>
+                {/if}
+              </div>
+            {/snippet}
+          </VirtualList>
+        </Messages>
+      </ChatZoom>
     {/if}
   </div>
 
