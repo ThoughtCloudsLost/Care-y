@@ -34,6 +34,17 @@ index 3163bcf68efefdbe6d177e52d668bff06bcd81c8..3ee50168c8ccf5319ddc9f71f92ed1a7
      position = 'bottom';
      top = targetOffsetTop + targetHeight + angleSize;
    } else {
+diff --git a/svelte/components/Dialog.svelte b/svelte/components/Dialog.svelte
+--- a/svelte/components/Dialog.svelte
++++ b/svelte/components/Dialog.svelte
+@@ -3,6 +3,7 @@
+   import { DialogColors } from '../../shared/colors/DialogColors.js';
+   import { useDarkClasses } from '../shared/use-dark-classes.js';
+   import { useThemeClasses } from '../shared/use-theme-classes.js';
++  import { printText } from '../shared/print-text.js';
+   import Glass from './Glass.svelte';
+
+   let {
 diff --git a/svelte/components/Link.svelte b/svelte/components/Link.svelte
 index 5b219dc6403e587a20f5b2ce79fcc1cbc152db3f..dc6dd5504cce9cc0243910915a4c1433785483ae 100644
 --- a/svelte/components/Link.svelte
