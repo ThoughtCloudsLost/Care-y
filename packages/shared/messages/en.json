@@ -313,6 +313,8 @@
   "ticket_voicemail_error": "Could not load voicemail.",
   "ticket_voicemail_duration": "{duration} seconds",
   "ticket_voicemail_progress": "{current} of {total}",
+  "ticket_voicemail_group": "Voicemail, {duration}",
+  "ticket_client_info_button": "View info for {alias}",
   "ticket_mms_image": "MMS image",
   "ticket_mms_loading": "Loading image...",
   "ticket_mms_open_lightbox": "View full-size image",

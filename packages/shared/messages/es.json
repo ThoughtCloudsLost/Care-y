@@ -313,6 +313,8 @@
   "ticket_voicemail_error": "No se pudo cargar el mensaje de voz.",
   "ticket_voicemail_duration": "{duration} segundos",
   "ticket_voicemail_progress": "{current} de {total}",
+  "ticket_voicemail_group": "Mensaje de voz, {duration}",
+  "ticket_client_info_button": "Ver info de {alias}",
   "ticket_mms_image": "Imagen MMS",
   "ticket_mms_loading": "Cargando imagen...",
   "ticket_mms_open_lightbox": "Ver imagen en tamaño completo",

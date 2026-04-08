@@ -212,7 +212,9 @@
   <div
     class="voicemail-player"
     role="group"
-    aria-label={m.ticket_voicemail_play()}
+    aria-label={m.ticket_voicemail_group({
+      duration: formatDuration(duration),
+    })}
   >
     <button
       class="voicemail-play-btn"
@@ -235,7 +237,14 @@
       class="waveform"
       viewBox="0 0 {peaks.length} 40"
       preserveAspectRatio="none"
-      aria-hidden="true"
+      role="progressbar"
+      aria-valuenow={Math.round(currentTime)}
+      aria-valuemin={0}
+      aria-valuemax={Math.round(duration)}
+      aria-label={m.ticket_voicemail_progress({
+        current: formatDuration(currentTime),
+        total: formatDuration(duration),
+      })}
     >
       {#each peaks as peak, i (i)}
         <rect

@@ -278,6 +278,16 @@
     }
   }
 
+  /** Keyboard equivalent for long-press context menu (Shift+F10). */
+  function handleBubbleKeydown(fu: FollowUp): (e: KeyboardEvent) => void {
+    return (e: KeyboardEvent) => {
+      if (e.key === "F10" && e.shiftKey) {
+        e.preventDefault();
+        openContextMenu(fu);
+      }
+    };
+  }
+
   function openContextMenu(fu: FollowUp): void {
     const actions = getContextMenuActions(fu, currentUserId, isAdmin, {
       copy: m.common_copy(),
@@ -472,7 +482,19 @@
                 </div>
               {/if}
 
-              <div id="fu-{fu.id}" data-fu-id={fu.id}>
+              <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
+              <div
+                id="fu-{fu.id}"
+                data-fu-id={fu.id}
+                tabindex={kind === "system" ? undefined : 0}
+                role={kind === "system" ? undefined : "article"}
+                aria-label={kind === "system"
+                  ? undefined
+                  : bubbleAriaLabel(fu, content)}
+                onkeydown={kind === "system"
+                  ? undefined
+                  : handleBubbleKeydown(fu)}
+              >
                 {#if kind === "system"}
                   <SystemEvent {content} timestamp={fu.createdAt} />
                 {:else if kind === "note"}

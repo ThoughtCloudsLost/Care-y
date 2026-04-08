@@ -286,6 +286,8 @@ export * from "./ticket_voicemail_loading.js";
 export * from "./ticket_voicemail_error.js";
 export * from "./ticket_voicemail_duration.js";
 export * from "./ticket_voicemail_progress.js";
+export * from "./ticket_voicemail_group.js";
+export * from "./ticket_client_info_button.js";
 export * from "./ticket_mms_image.js";
 export * from "./ticket_mms_loading.js";
 export * from "./ticket_mms_open_lightbox.js";

@@ -425,7 +425,11 @@
 {/snippet}
 
 {#snippet navTitle()}
-  <button class="client-alias-btn" onclick={openClientInfo}>
+  <button
+    class="client-alias-btn"
+    onclick={openClientInfo}
+    aria-label={m.ticket_client_info_button({ alias: clientAlias })}
+  >
     {clientAlias}
   </button>
 {/snippet}
