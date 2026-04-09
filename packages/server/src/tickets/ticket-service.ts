@@ -65,6 +65,9 @@ export interface FollowUpPreview {
   readonly encryptedContent: Buffer;
   readonly createdAt: Date;
   readonly keyWrap: TicketKeyWrap | null;
+  readonly hasRecording: boolean;
+  readonly hasImage: boolean;
+  readonly hasFile: boolean;
 }
 
 export interface CreateTicketInput {
@@ -940,6 +943,40 @@ export function createTicketService(
               ob.partitionBy("f.ticket_id").orderBy("f.created_at", "desc"),
             )
             .as("rn"),
+          eb
+            .exists(
+              eb
+                .selectFrom("recordings as r")
+                .whereRef("r.followup_id", "=", "f.id")
+                .where("r.deleted_at", "is", null)
+                .select(eb.lit(1).as("one")),
+            )
+            .as("has_recording"),
+          eb
+            .exists(
+              eb
+                .selectFrom("attachments as a")
+                .whereRef("a.followup_id", "=", "f.id")
+                .where("a.deleted_at", "is", null)
+                .where("a.content_type", "like", "image/%")
+                .select(eb.lit(1).as("one")),
+            )
+            .as("has_image"),
+          eb
+            .exists(
+              eb
+                .selectFrom("attachments as a2")
+                .whereRef("a2.followup_id", "=", "f.id")
+                .where("a2.deleted_at", "is", null)
+                .where((w) =>
+                  w.or([
+                    w("a2.content_type", "is", null),
+                    w("a2.content_type", "not like", "image/%"),
+                  ]),
+                )
+                .select(eb.lit(1).as("one")),
+            )
+            .as("has_file"),
         ])
         .where("f.ticket_id", "in", input.ticketIds)
         .as("ranked_f");
@@ -964,6 +1001,9 @@ export function createTicketService(
           "ranked_f.type",
           "ranked_f.encrypted_content",
           "ranked_f.created_at",
+          "ranked_f.has_recording",
+          "ranked_f.has_image",
+          "ranked_f.has_file",
           "tkw.ephemeral_point",
           "tkw.nonce",
           "tkw.wrapped_key",
@@ -995,6 +1035,9 @@ export function createTicketService(
           encryptedContent: row.encrypted_content,
           createdAt: row.created_at,
           keyWrap,
+          hasRecording: Boolean(row.has_recording),
+          hasImage: Boolean(row.has_image),
+          hasFile: Boolean(row.has_file),
         };
         const list = result[row.ticket_id];
         if (list) {

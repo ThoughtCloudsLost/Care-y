@@ -32,6 +32,9 @@ export interface RawFollowUpPreview {
   readonly encryptedContent: SerializedBuffer | string;
   readonly keyWrap: TicketKeyWrap | null;
   readonly createdAt: string;
+  readonly hasRecording: boolean;
+  readonly hasImage: boolean;
+  readonly hasFile: boolean;
 }
 
 interface PreviewLoaderOptions {

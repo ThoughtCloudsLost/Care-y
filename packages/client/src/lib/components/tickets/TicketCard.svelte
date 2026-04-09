@@ -103,7 +103,7 @@
       }}
     >
       <div class="preview-window">
-        <TicketPreview followUps={previewFollowUps} />
+        <TicketPreview followUps={previewFollowUps} multiline={isList} />
       </div>
 
       <!-- Top bar: dot (left) + priority (right). In list mode, alias is here too. -->

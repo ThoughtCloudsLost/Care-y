@@ -33,6 +33,9 @@ function makeFollowUp(
       wrappedKey: "CCCC",
     },
     createdAt: "2026-04-05T12:00:00Z",
+    hasRecording: false,
+    hasImage: false,
+    hasFile: false,
     ...overrides,
   };
 }

@@ -2,12 +2,15 @@
   Ticket list preview window: miniature chat bubbles matching the
   detail view's visual language.
 
-  Shows at most 3 follow-ups (from the recentFollowUps endpoint).
+  Shows at most 3 follow-ups (from the recentFollowUps endpoint),
+  reversed into chronological order (oldest on top).
   Left-aligned mini-bubbles for client messages, right-aligned for
-  volunteer messages, centered muted text for system events.
+  volunteer messages, centered muted text for system events,
+  and left-border-accented italic text for internal notes.
   Text truncated to single-line with ellipsis.
 -->
 <script lang="ts">
+  import { Mic, Image as ImageIcon, Paperclip } from "@lucide/svelte";
   import * as m from "$lib/paraglide/messages.js";
   import { getFollowUpDecryptCache } from "$lib/crypto/context.js";
   import { isDecryptError } from "$lib/crypto/async-decrypt-cache.js";
@@ -15,31 +18,47 @@
 
   interface Props {
     followUps: RawFollowUpPreview[] | undefined;
+    /** Allow 2-line wrapping per bubble (list mode). */
+    multiline?: boolean;
   }
 
-  let { followUps }: Props = $props();
+  let { followUps, multiline = false }: Props = $props();
   const followUpCache = getFollowUpDecryptCache();
 
   function truncate(text: string, maxLen: number): string {
     if (text.length <= maxLen) return text;
     return text.slice(0, maxLen) + "\u2026";
   }
+
+  /** Classify follow-up the same way TicketDetail does. */
+  function followUpKind(fu: RawFollowUpPreview): "message" | "system" | "note" {
+    if (fu.source === "system") return "system";
+    if (fu.type === "internal_note") return "note";
+    return "message";
+  }
+
+  // Server returns newest-first; reverse so oldest is at the top
+  // (matching natural chat order: oldest on top, newest on bottom).
+  const ordered = $derived(
+    followUps !== undefined ? [...followUps].reverse() : undefined,
+  );
 </script>
 
-<div class="mini-chat">
-  {#if followUps === undefined}
+<div class="mini-chat" class:multiline>
+  {#if ordered === undefined}
     <div class="shimmer shimmer-preview" aria-hidden="true"></div>
     <div class="shimmer shimmer-preview short" aria-hidden="true"></div>
-  {:else if followUps.length === 0}
+  {:else if ordered.length === 0}
     <p class="preview-empty">{m.tickets_preview_empty()}</p>
   {:else}
-    {#each followUps as fu (fu.id)}
+    {#each ordered as fu (fu.id)}
+      {@const kind = followUpKind(fu)}
       {@const content = followUpCache.decryptContent(
         fu.id,
         fu.keyWrap,
         fu.encryptedContent,
       )}
-      {#if fu.source === "system"}
+      {#if kind === "system"}
         <div class="mini-system">
           {#if isDecryptError(content)}
             {m.error_decryption_failed()}
@@ -47,6 +66,16 @@
             <span class="shimmer shimmer-mini" aria-hidden="true"></span>
           {:else}
             {truncate(content, 30)}
+          {/if}
+        </div>
+      {:else if kind === "note"}
+        <div class="mini-note">
+          {#if isDecryptError(content)}
+            {m.error_decryption_failed()}
+          {:else if content === undefined}
+            <span class="shimmer shimmer-mini" aria-hidden="true"></span>
+          {:else}
+            <span class="mini-text">{content}</span>
           {/if}
         </div>
       {:else}
@@ -60,12 +89,19 @@
             class:mini-bubble-received={fu.source === "client"}
             class:mini-bubble-sent={fu.source !== "client"}
           >
+            {#if fu.hasRecording || fu.hasImage || fu.hasFile}
+              <span class="mini-media" aria-hidden="true">
+                {#if fu.hasRecording}<Mic size={10} />{/if}
+                {#if fu.hasImage}<ImageIcon size={10} />{/if}
+                {#if fu.hasFile}<Paperclip size={10} />{/if}
+              </span>
+            {/if}
             {#if isDecryptError(content)}
               <span class="mini-error">{m.error_decryption_failed()}</span>
             {:else if content === undefined}
               <span class="shimmer shimmer-mini" aria-hidden="true"></span>
-            {:else}
-              <span class="mini-text">{truncate(content, 30)}</span>
+            {:else if content}
+              <span class="mini-text">{content}</span>
             {/if}
           </div>
         </div>
@@ -111,26 +147,39 @@
     border-radius: 0.375rem;
     font-size: 0.625rem;
     line-height: 1.4;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
   }
 
   .mini-bubble-received {
-    background: color-mix(in srgb, var(--brand-text) 15%, var(--surface-1));
-    color: var(--ink);
-  }
-
-  .mini-bubble-sent {
     background: var(--surface-2);
     color: var(--ink);
   }
 
+  .mini-bubble-sent {
+    background: color-mix(in srgb, var(--brand-text) 15%, var(--surface-1));
+    color: var(--ink);
+  }
+
   .mini-text {
-    display: block;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 1;
+    line-clamp: 1;
     overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+  }
+
+  /* In multiline mode (list view), allow 2 lines per bubble. */
+  .multiline .mini-text {
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+  }
+
+  .mini-media {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    color: var(--muted);
+    vertical-align: middle;
+    flex-shrink: 0;
   }
 
   .mini-error {
@@ -151,6 +200,18 @@
     text-overflow: ellipsis;
     white-space: nowrap;
     padding: 0 0.25rem;
+  }
+
+  /* --- Internal notes (full-width, left-border accent) --- */
+
+  .mini-note {
+    font-size: 0.625rem;
+    line-height: 1.4;
+    color: var(--muted);
+    font-style: italic;
+    padding: 0.125rem 0.375rem;
+    border-left: 2px solid var(--brand-accent, var(--brand-text));
+    overflow: hidden;
   }
 
   /* --- Shimmer --- */
