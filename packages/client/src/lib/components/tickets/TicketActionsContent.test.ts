@@ -38,7 +38,7 @@ const baseProps = {
   isOnHold: false,
   isAssignedToMe: false,
   isWatching: false,
-  isZoomedOut: false,
+  timelineActive: false,
   onaction: vi.fn(),
 };
 
@@ -165,31 +165,31 @@ describe("TicketActionsContent", () => {
     expect(onaction).toHaveBeenCalledWith("cancel");
   });
 
-  it("shows 'View timeline' when not zoomed", () => {
+  it("shows 'View timeline' when timeline is inactive", () => {
     const { container } = render(TicketActionsContent, {
-      props: { ...baseProps, isZoomedOut: false },
+      props: { ...baseProps, timelineActive: false },
     });
     expect(container.textContent).toContain("View timeline");
   });
 
-  it("shows 'View messages' when zoomed out", () => {
+  it("shows 'View messages' when timeline is active", () => {
     const { container } = render(TicketActionsContent, {
-      props: { ...baseProps, isZoomedOut: true },
+      props: { ...baseProps, timelineActive: true },
     });
     expect(container.textContent).toContain("View messages");
   });
 
-  it("calls onaction with 'zoom' when timeline toggle is clicked", async () => {
+  it("calls onaction with 'timeline' when timeline toggle is clicked", async () => {
     const onaction = vi.fn();
     const { container } = render(TicketActionsContent, {
       props: { ...baseProps, onaction },
     });
     const buttons = container.querySelectorAll("button");
-    const zoomBtn = Array.from(buttons).find(
+    const timelineBtn = Array.from(buttons).find(
       (b) => b.textContent!.trim() === "View timeline",
     );
-    expect(zoomBtn).toBeDefined();
-    await fireEvent.click(zoomBtn!);
-    expect(onaction).toHaveBeenCalledWith("zoom");
+    expect(timelineBtn).toBeDefined();
+    await fireEvent.click(timelineBtn!);
+    expect(onaction).toHaveBeenCalledWith("timeline");
   });
 });

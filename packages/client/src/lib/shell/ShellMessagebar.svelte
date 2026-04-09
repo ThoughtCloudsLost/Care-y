@@ -18,6 +18,7 @@
 <script lang="ts">
   import { Messagebar, Link } from "konsta/svelte";
   import { Send, Lock, Paperclip, BookDashed } from "@lucide/svelte";
+  import { onMount } from "svelte";
   import type { ShellMessagebarProps } from "./types.js";
   import * as m from "$lib/paraglide/messages.js";
 
@@ -50,9 +51,35 @@
   function toggleMode(): void {
     mode = mode === "reply" ? "note" : "reply";
   }
+
+  // Publish the messagebar's rendered height as a CSS variable so
+  // siblings (e.g., chat-container) can use it for padding-bottom
+  // instead of a hardcoded magic number.
+  let anchorEl = $state<HTMLDivElement | undefined>();
+
+  onMount(() => {
+    const el = anchorEl;
+    if (!el) return;
+
+    const observer = new ResizeObserver(([entry]) => {
+      if (!entry) return;
+      const box = entry.borderBoxSize[0];
+      const h = box !== undefined ? box.blockSize : el.offsetHeight;
+      document.documentElement.style.setProperty(
+        "--messagebar-height",
+        `${String(Math.ceil(h))}px`,
+      );
+    });
+    observer.observe(el);
+
+    return () => {
+      observer.disconnect();
+      document.documentElement.style.removeProperty("--messagebar-height");
+    };
+  });
 </script>
 
-<div class="shell-messagebar-anchor">
+<div bind:this={anchorEl} class="shell-messagebar-anchor">
   <Messagebar
     bind:value
     {placeholder}

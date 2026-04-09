@@ -68,8 +68,8 @@
     savingNote?: boolean;
     /** Called when editing is cancelled (route clears editingFollowUpId). */
     oncanceledit?: () => void;
-    /** Two-way bindable: whether the chat is zoomed out. */
-    chatZoomed?: boolean;
+    /** Two-way bindable: whether the timeline TOC view is active. */
+    timelineActive?: boolean;
     /** Decrypted read cursor: messages with createdAt <= this are read. null = all unread. */
     readUpTo?: Date | null;
     /** Called when the latest visible follow-up timestamp changes (for read cursor updates). */
@@ -87,7 +87,7 @@
     editingFollowUpId = null,
     savingNote = false,
     oncanceledit,
-    chatZoomed = $bindable(false),
+    timelineActive = $bindable(false),
     readUpTo = null,
     onreadprogress,
   }: TicketDetailProps = $props();
@@ -236,7 +236,7 @@
   const summaryQuery = createQuery(() => ({
     queryKey: ["ticket", ticketId, "followUpSummary"],
     queryFn: async () => ticketRouter.listFollowUpSummary.query({ ticketId }),
-    enabled: chatZoomed,
+    enabled: timelineActive,
   }));
 
   // Build timeline items from the summary endpoint response.
@@ -537,7 +537,7 @@
   let hasScrolledInitially = false;
 
   $effect(() => {
-    if (chatZoomed) return;
+    if (timelineActive) return;
     // Wait for unread loading to complete before scrolling.
     if (loadingUnread) return;
     if (followUps.length > 0 && scrollContainerEl && !hasScrolledInitially) {
@@ -561,7 +561,7 @@
   const followUpCount = $derived(followUps.length);
 
   $effect(() => {
-    if (chatZoomed) return;
+    if (timelineActive) return;
     // Reading followUpCount registers the dependency.
     if (followUpCount === 0) return;
 
@@ -616,7 +616,7 @@
         onexpandcluster={handleExpandCluster}
         {followUpCache}
         keyWrap={ticket.keyWrap}
-        bind:zoomed={chatZoomed}
+        bind:timelineActive
       >
         <Messages>
           <VirtualList
@@ -793,8 +793,9 @@
     overscroll-behavior: contain;
     display: flex;
     flex-direction: column;
-    /* Leave space for the fixed ShellMessagebar at the bottom */
-    padding-bottom: 4.5rem;
+    /* Leave space for the fixed ShellMessagebar at the bottom.
+       --messagebar-height is measured by ShellMessagebar's ResizeObserver. */
+    padding-bottom: var(--messagebar-height, 4.5rem);
   }
 
   /* display:contents lets the Message flex alignment (self-end for sent)

@@ -13,8 +13,6 @@
 <script lang="ts">
   import type { Snapshot } from "./$types.js";
   import { page } from "$app/state";
-  import { goto } from "$app/navigation";
-  import { resolve } from "$app/paths";
   import { Link } from "konsta/svelte";
   import { ChevronLeft, Phone, EllipsisVertical } from "@lucide/svelte";
   import * as m from "$lib/paraglide/messages.js";
@@ -22,6 +20,7 @@
     getTabbarHiddenCtx,
     getNavbarOverrideCtx,
   } from "$lib/shell/context.js";
+  import { shellBack } from "$lib/shell/navigation.js";
   import type { ComposeMode } from "$lib/shell/types.js";
   import TicketDetail from "$lib/components/tickets/TicketDetail.svelte";
   import type {
@@ -228,12 +227,12 @@
   let deleteTargetId = $state<string | null>(null);
   let editingFollowUpId = $state<string | null>(null);
   let savingNote = $state(false);
-  let chatZoomed = $state(false);
+  let timelineActive = $state(false);
 
   // --- Navigation ---
 
   function goBack(): void {
-    void goto(resolve("/tickets"));
+    shellBack("/tickets");
   }
 
   // --- Compose handlers ---
@@ -306,8 +305,8 @@
       case "client-info":
         openClientInfo();
         break;
-      case "zoom":
-        chatZoomed = !chatZoomed;
+      case "timeline":
+        timelineActive = !timelineActive;
         break;
       case "cancel":
         break;
@@ -558,7 +557,7 @@
     {savingNote}
     onnoteedit={(fid: string, text: string) => void handleNoteEdit(fid, text)}
     oncanceledit={cancelNoteEdit}
-    bind:chatZoomed
+    bind:timelineActive
     readUpTo={readUpTo ?? null}
     onreadprogress={handleReadProgress}
   />
@@ -582,7 +581,7 @@
     {isOnHold}
     {isAssignedToMe}
     {isWatching}
-    isZoomedOut={chatZoomed}
+    {timelineActive}
     onaction={handleTicketAction}
   />
 </ShellActionSheet>

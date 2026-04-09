@@ -41,6 +41,13 @@ vi.mock("$lib/paraglide/messages.js", () => ({
   ticket_timeline_jump_to: ({ label, time }: { label: string; time: string }) =>
     `Jump to: ${label}, ${time}`,
   ticket_timeline_decrypting: () => "Decrypting message",
+  dashboard_time_just_now: () => "just now",
+  dashboard_time_minutes_ago: ({ count }: { count: number }) =>
+    `${String(count)}m ago`,
+  dashboard_time_hours_ago: ({ count }: { count: number }) =>
+    `${String(count)}h ago`,
+  dashboard_time_days_ago: ({ count }: { count: number }) =>
+    `${String(count)}d ago`,
 }));
 
 afterEach(() => {
@@ -132,7 +139,7 @@ describe("ChatZoom component (normal mode)", () => {
     expect(bubbles.length).toBeGreaterThan(0);
   });
 
-  it("does not render timeline list when not zoomed", () => {
+  it("hides timeline view when timeline is inactive", () => {
     const { container } = render(ChatZoomHarness, {
       props: {
         totalMessages: 6,
@@ -141,6 +148,8 @@ describe("ChatZoom component (normal mode)", () => {
         items: makeItems(),
       },
     });
-    expect(container.querySelector(".timeline-view")).toBeNull();
+    const timeline = container.querySelector(".timeline-view");
+    expect(timeline).not.toBeNull();
+    expect(timeline!.classList.contains("view-hidden")).toBe(true);
   });
 });

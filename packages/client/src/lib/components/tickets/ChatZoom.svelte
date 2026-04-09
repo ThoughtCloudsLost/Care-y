@@ -1,9 +1,9 @@
 <!--
   Timeline table-of-contents view for the ticket detail chat.
 
-  Two rendering modes controlled by the `zoomed` bindable:
-  - Normal (zoomed=false): renders children (full chat bubbles) as-is.
-  - Timeline (zoomed=true): renders a compact TOC using Konsta List/ListGroup/
+  Two rendering modes controlled by the `timelineActive` bindable:
+  - Normal (timelineActive=false): renders children (full chat bubbles).
+  - Timeline (timelineActive=true): renders a compact TOC using Konsta List/ListGroup/
     ListItem with date headers, landmark rows, and expandable message clusters.
 
   Toggled via "View timeline" / "View messages" in the ticket actions menu.
@@ -65,7 +65,7 @@
     onexpandcluster?: (followUpIds: string[]) => void;
     followUpCache?: FollowUpDecryptCache;
     keyWrap?: TicketKeyWrap | null;
-    zoomed?: boolean;
+    timelineActive?: boolean;
     children: Snippet;
   }
 
@@ -80,7 +80,7 @@
     onexpandcluster,
     followUpCache,
     keyWrap = null,
-    zoomed = $bindable(false),
+    timelineActive = $bindable(false),
     children,
   }: ChatZoomProps = $props();
 
@@ -252,7 +252,7 @@
   });
 
   function zoomBackTo(fuId: string): void {
-    zoomed = false;
+    timelineActive = false;
     requestAnimationFrame(() => {
       const el = document.getElementById(`fu-${fuId}`);
       el?.scrollIntoView({ behavior: "smooth", block: "center" });
@@ -288,7 +288,7 @@
   // has laid out and painted the Konsta List content before we measure
   // scrollHeight. A single rAF can fire before layout is complete.
   $effect(() => {
-    if (zoomed && scrollContainerEl) {
+    if (timelineActive && scrollContainerEl) {
       const el = scrollContainerEl;
       void tick().then(() => {
         requestAnimationFrame(() => {
@@ -301,177 +301,188 @@
   });
 </script>
 
-{#if zoomed}
-  <nav class="timeline-view" aria-label={m.ticket_timeline_nav_label()}>
-    {#if summaryText}
-      <div class="timeline-summary" aria-live="polite" role="status">
-        {summaryText}
-      </div>
-    {/if}
+<div class="view-pane" class:view-hidden={timelineActive}>
+  {@render children()}
+</div>
 
-    <List strongIos outlineIos>
-      {#each tocGroups as group, gi (gi)}
-        {@const groupCollapsed = collapsedGroups.has(gi)}
-        <ListGroup>
-          <ListItem
-            link
-            chevron={false}
-            title={group.dateLabel}
-            class="toc-group-title"
-            onclick={() => {
-              if (collapsedGroups.has(gi)) {
-                collapsedGroups.delete(gi);
-              } else {
-                collapsedGroups.add(gi);
-              }
-            }}
-            linkProps={{
-              role: "button",
-              "aria-expanded": !groupCollapsed,
-            }}
-          >
-            {#snippet after()}
-              <ChevronDown
-                size={14}
-                class="toc-chevron {groupCollapsed ? '' : 'toc-chevron-open'}"
-                aria-hidden="true"
-              />
-            {/snippet}
-          </ListItem>
+<nav
+  class="timeline-view"
+  class:view-hidden={!timelineActive}
+  aria-label={m.ticket_timeline_nav_label()}
+>
+  {#if summaryText}
+    <div class="timeline-summary" aria-live="polite" role="status">
+      {summaryText}
+    </div>
+  {/if}
 
-          {#if !groupCollapsed}
-            {#each group.entries as entry, ei (ei)}
-              {#if entry.kind === "cluster"}
-                {@const key = clusterKey(entry.ids)}
-                {@const isOpen = openClusters.has(key)}
-                {@const expanded = expandedClusters.get(key)}
-                {@const summary = clusterLabel(entry.incoming, entry.outgoing)}
-                {@const clusterTime = formatTime(entry.firstCreatedAt)}
+  <List strongIos outlineIos>
+    {#each tocGroups as group, gi (gi)}
+      {@const groupCollapsed = collapsedGroups.has(gi)}
+      <ListGroup>
+        <ListItem
+          link
+          chevron={false}
+          title={group.dateLabel}
+          class="toc-group-title"
+          onclick={() => {
+            if (collapsedGroups.has(gi)) {
+              collapsedGroups.delete(gi);
+            } else {
+              collapsedGroups.add(gi);
+            }
+          }}
+          linkProps={{
+            role: "button",
+            "aria-expanded": !groupCollapsed,
+          }}
+        >
+          {#snippet after()}
+            <ChevronDown
+              size={14}
+              class="toc-chevron {groupCollapsed ? '' : 'toc-chevron-open'}"
+              aria-hidden="true"
+            />
+          {/snippet}
+        </ListItem>
 
-                <ListItem
-                  link
-                  chevron={false}
-                  title={summary}
-                  onclick={() => handleClusterClick(entry)}
-                  linkProps={{
-                    role: "button",
-                    "aria-expanded": isOpen,
-                    "aria-label": m.ticket_timeline_expand_cluster({ summary }),
-                  }}
-                >
-                  {#snippet media()}
-                    <MessagesSquare
-                      size={20}
-                      class="toc-icon"
+        {#if !groupCollapsed}
+          {#each group.entries as entry, ei (ei)}
+            {#if entry.kind === "cluster"}
+              {@const key = clusterKey(entry.ids)}
+              {@const isOpen = openClusters.has(key)}
+              {@const expanded = expandedClusters.get(key)}
+              {@const summary = clusterLabel(entry.incoming, entry.outgoing)}
+              {@const clusterTime = formatTime(entry.firstCreatedAt)}
+
+              <ListItem
+                link
+                chevron={false}
+                title={summary}
+                onclick={() => handleClusterClick(entry)}
+                linkProps={{
+                  role: "button",
+                  "aria-expanded": isOpen,
+                  "aria-label": m.ticket_timeline_expand_cluster({ summary }),
+                }}
+              >
+                {#snippet media()}
+                  <MessagesSquare
+                    size={20}
+                    class="toc-icon"
+                    aria-hidden="true"
+                  />
+                {/snippet}
+                {#snippet after()}
+                  <span class="toc-after">
+                    <span class="toc-time">{clusterTime}</span>
+                    <ChevronDown
+                      size={14}
+                      class="toc-chevron {isOpen ? 'toc-chevron-open' : ''}"
                       aria-hidden="true"
                     />
-                  {/snippet}
-                  {#snippet after()}
-                    <span class="toc-after">
-                      <span class="toc-time">{clusterTime}</span>
-                      <ChevronDown
-                        size={14}
-                        class="toc-chevron {isOpen ? 'toc-chevron-open' : ''}"
-                        aria-hidden="true"
-                      />
-                    </span>
-                  {/snippet}
+                  </span>
+                {/snippet}
 
-                  {#if isOpen}
-                    <div class="cluster-bubbles">
-                      <Messages>
-                        {#if expanded !== undefined}
-                          {#each expanded as rec (rec.id)}
-                            {@const plaintext = decrypt(rec)}
-                            {@const preview =
-                              plaintext !== undefined
-                                ? plaintext.length > 60
-                                  ? plaintext.slice(0, 60) + "\u2026"
-                                  : plaintext
-                                : undefined}
-                            <Message
-                              type={rec.source === "client"
-                                ? "received"
-                                : "sent"}
-                              role="button"
-                              tabindex={0}
-                              aria-label={m.ticket_timeline_jump_to({
-                                label:
-                                  preview ?? m.ticket_timeline_decrypting(),
-                                time: formatTime(rec.createdAt),
-                              })}
-                              onclick={() => zoomBackTo(rec.id)}
-                              onkeydown={(e) => {
-                                if (e.key === "Enter" || e.key === " ") {
-                                  e.preventDefault();
-                                  zoomBackTo(rec.id);
-                                }
-                              }}
-                              class="cluster-bubble-tap"
-                            >
-                              {#snippet text()}
-                                {#if preview === undefined}
-                                  <span
-                                    class="shimmer shimmer-bubble"
-                                    role="status"
-                                    aria-label={m.ticket_timeline_decrypting()}
-                                  ></span>
-                                {:else}
-                                  {preview}
-                                {/if}
-                              {/snippet}
-                              {#snippet footer()}
-                                <time
-                                  class="bubble-time"
-                                  datetime={rec.createdAt}
-                                >
-                                  {formatTime(rec.createdAt)}
-                                </time>
-                              {/snippet}
-                            </Message>
-                          {/each}
-                        {/if}
-                      </Messages>
-                    </div>
-                  {/if}
-                </ListItem>
-              {:else if entry.kind === "landmark"}
-                {@const EntryIcon = entry.icon}
-                <ListItem
-                  link
-                  chevron={false}
-                  title={entry.label}
-                  onclick={() => zoomBackTo(entry.item.id)}
-                  class={entry.item.source === "system" ? "toc-row-system" : ""}
-                  linkProps={{
-                    "aria-label": m.ticket_timeline_jump_to({
-                      label: entry.label,
-                      time: entry.time,
-                    }),
-                  }}
-                >
-                  {#snippet media()}
-                    <EntryIcon size={20} class="toc-icon" aria-hidden="true" />
-                  {/snippet}
-                  {#snippet after()}
-                    <span class="toc-after">
-                      <span class="toc-time">{entry.time}</span>
-                      <span class="toc-chevron-spacer"></span>
-                    </span>
-                  {/snippet}
-                </ListItem>
-              {/if}
-            {/each}
-          {/if}
-        </ListGroup>
-      {/each}
-    </List>
-  </nav>
-{:else}
-  {@render children()}
-{/if}
+                {#if isOpen}
+                  <div class="cluster-bubbles">
+                    <Messages>
+                      {#if expanded !== undefined}
+                        {#each expanded as rec (rec.id)}
+                          {@const plaintext = decrypt(rec)}
+                          {@const preview =
+                            plaintext !== undefined
+                              ? plaintext.length > 60
+                                ? plaintext.slice(0, 60) + "\u2026"
+                                : plaintext
+                              : undefined}
+                          <Message
+                            type={rec.source === "client" ? "received" : "sent"}
+                            role="button"
+                            tabindex={0}
+                            aria-label={m.ticket_timeline_jump_to({
+                              label: preview ?? m.ticket_timeline_decrypting(),
+                              time: formatTime(rec.createdAt),
+                            })}
+                            onclick={() => zoomBackTo(rec.id)}
+                            onkeydown={(e) => {
+                              if (e.key === "Enter" || e.key === " ") {
+                                e.preventDefault();
+                                zoomBackTo(rec.id);
+                              }
+                            }}
+                            class="cluster-bubble-tap"
+                          >
+                            {#snippet text()}
+                              {#if preview === undefined}
+                                <span
+                                  class="shimmer shimmer-bubble"
+                                  role="status"
+                                  aria-label={m.ticket_timeline_decrypting()}
+                                ></span>
+                              {:else}
+                                {preview}
+                              {/if}
+                            {/snippet}
+                            {#snippet footer()}
+                              <time
+                                class="bubble-time"
+                                datetime={rec.createdAt}
+                              >
+                                {formatTime(rec.createdAt)}
+                              </time>
+                            {/snippet}
+                          </Message>
+                        {/each}
+                      {/if}
+                    </Messages>
+                  </div>
+                {/if}
+              </ListItem>
+            {:else if entry.kind === "landmark"}
+              {@const EntryIcon = entry.icon}
+              <ListItem
+                link
+                chevron={false}
+                title={entry.label}
+                onclick={() => zoomBackTo(entry.item.id)}
+                class={entry.item.source === "system" ? "toc-row-system" : ""}
+                linkProps={{
+                  "aria-label": m.ticket_timeline_jump_to({
+                    label: entry.label,
+                    time: entry.time,
+                  }),
+                }}
+              >
+                {#snippet media()}
+                  <EntryIcon size={20} class="toc-icon" aria-hidden="true" />
+                {/snippet}
+                {#snippet after()}
+                  <span class="toc-after">
+                    <span class="toc-time">{entry.time}</span>
+                    <span class="toc-chevron-spacer"></span>
+                  </span>
+                {/snippet}
+              </ListItem>
+            {/if}
+          {/each}
+        {/if}
+      </ListGroup>
+    {/each}
+  </List>
+</nav>
 
 <style>
+  /* display:contents preserves the parent flex-column layout for
+     Messages/VirtualList. When hidden, display:none overrides it. */
+  .view-pane {
+    display: contents;
+  }
+
+  .view-hidden {
+    display: none !important;
+  }
+
   .timeline-view {
     padding-bottom: 5rem;
   }

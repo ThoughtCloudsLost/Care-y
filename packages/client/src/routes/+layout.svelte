@@ -148,19 +148,22 @@
 </QueryClientProvider>
 
 <style>
-  /* Constrain App to viewport for iOS Safari. Konsta manages layout
-     internally: Page is absolute + overflow-auto, Navbar is sticky top,
-     Tabbar is fixed bottom. */
+  /* Constrain App to viewport for iOS Safari. Page is a non-scrolling
+     flex frame. Navbar sits at the top, Tabbar is fixed bottom.
+     Scrolling lives on <main> inside AppShell. */
   :global(.app-shell) {
     height: 100dvh;
     min-height: auto;
     overflow: hidden;
   }
 
-  /* Remove iOS rubber-band bounce on the scroll container.
-     overscroll-behavior on html/body does not cover inner scroll containers. */
+  /* Page is a non-scrolling flex frame. Scrolling moves to <main> inside
+     AppShell so each route gets independent scroll isolation. Navbar sits
+     at the top as a flex child; Toolbar is position:fixed, unaffected. */
   :global(.k-page) {
-    overscroll-behavior-y: none;
+    overflow: hidden !important;
+    display: flex !important;
+    flex-direction: column !important;
   }
 
   /* Dark mode: paper texture on the page canvas.

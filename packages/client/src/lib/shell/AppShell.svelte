@@ -1,8 +1,13 @@
 <!--
   App shell: persistent navigation chrome across all routes.
 
-  Single Konsta Page wraps everything. Navbar is sticky top. Bottom bar
-  uses a Toolbar with two ToolbarPane children (Safari-style split glass
+  Konsta Page is a non-scrolling flex frame (overflow: hidden).
+  <main> is the scroll container for route content. Routes with
+  their own scroll containers (e.g., ticket detail's chat-container)
+  capture overflow internally so <main> stays at scrollTop 0.
+
+  Navbar sits at the top of the Page flex column. Bottom bar uses a
+  Toolbar with two ToolbarPane children (Safari-style split glass
   pills): tabs pane inherits tabbar context, More pane overrides with
   tabbar={false} (patched in konsta@5.0.8.patch) to disable highlight
   and w-full.
@@ -12,7 +17,8 @@
   restProps, so our overrides take precedence. See patches/konsta@5.0.8.patch.
 
   Pull-to-refresh: two-phase touch listener pattern.
-  - Passive touchstart on .k-page records startY; bails if scrollTop > 0.
+  - Passive touchstart on <main> records startY; bails if the nearest
+    scrollable ancestor has scrollTop > 0.
   - { passive: false } touchmove added to window only when a downward drag from
     scrollTop === 0 is confirmed. Removed on touchend / touchcancel / upward delta.
   - This avoids attaching a blocking listener to the root scroll container globally.
@@ -37,7 +43,9 @@
     TicketPlus,
   } from "@lucide/svelte";
   import { tick, onMount, getContext } from "svelte";
+  import { SvelteMap } from "svelte/reactivity";
   import type { Component } from "svelte";
+  import { beforeNavigate, afterNavigate } from "$app/navigation";
   import * as m from "$lib/paraglide/messages.js";
   import type { TabId, AppShellProps } from "./types";
   import { PTR_CONTEXT_KEY } from "./ptr-context";
@@ -52,13 +60,46 @@
     type TabbarHiddenContainer,
     type NavbarOverrideContainer,
   } from "./context";
+  import { markNavigated } from "./navigation.js";
 
-  const SCROLL_CONTAINER_ID = "app-scroll-container";
+  // Main content element, resolved via bind:this. This is the scroll
+  // container for all routes (Page has overflow:hidden, main scrolls).
+  let mainEl = $state<HTMLElement | undefined>();
 
-  // Scroll container ref, resolved on mount. $state so the context
-  // getter is reactive when read inside $derived or $effect.
-  let scrollContainerEl = $state<HTMLElement | undefined>();
+  // Scroll container ref exposed via context. Derived from mainEl
+  // so routes that read the getter always get the current <main>.
+  const scrollContainerEl = $derived(mainEl);
   setScrollContainer(() => scrollContainerEl);
+
+  // ── Per-route scroll position save/restore ───────────────────────────
+  // The Konsta <Page> is a single scroll container shared by all routes.
+  // Without intervention, navigating away and back leaks scroll positions
+  // between routes. We key by pathname (not route.id) so that e.g.
+  // /tickets/abc and /tickets/def each keep their own position.
+  const scrollPositions = new SvelteMap<string, number>();
+  const MAX_SCROLL_ENTRIES = 50;
+
+  beforeNavigate(({ from }) => {
+    const el = scrollContainerEl;
+    if (!el || !from?.url) return;
+    scrollPositions.set(from.url.pathname, el.scrollTop);
+    // Cap the map so it doesn't grow unbounded during long sessions.
+    if (scrollPositions.size > MAX_SCROLL_ENTRIES) {
+      const oldest = scrollPositions.keys().next().value;
+      if (oldest !== undefined) scrollPositions.delete(oldest);
+    }
+  });
+
+  afterNavigate(({ to }) => {
+    markNavigated();
+    const el = scrollContainerEl;
+    if (!el || !to?.url) return;
+    const saved = scrollPositions.get(to.url.pathname);
+    // Restore if we have a saved position, otherwise reset to top.
+    requestAnimationFrame(() => {
+      el.scrollTop = saved ?? 0;
+    });
+  });
 
   // Tabbar override: child routes can replace the tab bar with custom
   // actions by mutating this container. $state makes it reactive.
@@ -236,12 +277,30 @@
     ptrPhase = "idle";
   }
 
+  /**
+   * Find the nearest scrollable ancestor of a given element, stopping
+   * at the main content boundary. Returns the element with overflow-y
+   * set to auto/scroll that has scrollable content, or mainEl itself.
+   */
+  function findScrollAncestor(target: HTMLElement): HTMLElement | undefined {
+    let el: HTMLElement | null = target;
+    while (el && el !== mainEl) {
+      const { overflowY } = getComputedStyle(el);
+      if (
+        (overflowY === "auto" || overflowY === "scroll") &&
+        el.scrollHeight > el.clientHeight
+      ) {
+        return el;
+      }
+      el = el.parentElement;
+    }
+    return mainEl;
+  }
+
   function onPageTouchStart(e: TouchEvent): void {
     if (!ptrEnabled) return;
     if (ptrPhase === "refreshing" || ptrPhase === "releasing") return;
-
-    const scrollEl = document.getElementById(SCROLL_CONTAINER_ID);
-    if (!scrollEl || scrollEl.scrollTop > 0) return;
+    if (!mainEl) return;
 
     // Ignore multi-touch (pinch-to-zoom)
     if (e.touches.length > 1) return;
@@ -254,10 +313,17 @@
     const target = e.target;
     if (target instanceof HTMLElement) {
       let el: HTMLElement | null = target;
-      while (el && el !== scrollEl) {
+      while (el && el !== mainEl) {
         if (getComputedStyle(el).position === "fixed") return;
         el = el.parentElement;
       }
+    }
+
+    // Find the nearest scrollable ancestor. If it's not at the top,
+    // the user is scrolling within that container, not pulling to refresh.
+    if (target instanceof HTMLElement) {
+      const scrollParent = findScrollAncestor(target);
+      if (scrollParent && scrollParent.scrollTop > 0) return;
     }
 
     const touch = e.touches[0];
@@ -282,22 +348,20 @@
   }
 
   onMount(() => {
-    // Resolve the scroll container and store it so the context getter
-    // returns the element for any route that reads it after mount.
-    const el = document.getElementById(SCROLL_CONTAINER_ID);
-    if (el) scrollContainerEl = el;
-
     if (!ptrEnabled) return;
 
-    // Page is rendered synchronously by Konsta before onMount fires,
-    // so no tick() needed. Attach passive touchstart here; the blocking
-    // touchmove is added dynamically per-gesture in onPageTouchStart.
-    el?.addEventListener("touchstart", onPageTouchStart, {
+    const el = mainEl;
+    if (!el) return;
+
+    // Attach passive touchstart to <main> (the scroll container).
+    // The blocking touchmove is added dynamically per-gesture in
+    // onPageTouchStart.
+    el.addEventListener("touchstart", onPageTouchStart, {
       passive: true,
     });
 
     return () => {
-      el?.removeEventListener("touchstart", onPageTouchStart);
+      el.removeEventListener("touchstart", onPageTouchStart);
       cleanupWindowListeners();
     };
   });
@@ -324,7 +388,7 @@
   );
 </script>
 
-<Page id={SCROLL_CONTAINER_ID}>
+<Page>
   <Navbar role="banner">
     {#snippet left()}
       {#if navbarOverride?.left}
@@ -525,6 +589,7 @@
   {/if}
 
   <main
+    bind:this={mainEl}
     id="main-content"
     class="main-content"
     class:tabbar-hidden={tabbarHidden}
@@ -544,6 +609,19 @@
      Native height is safe-area + 48px (icons-only tabbar). */
   :global(.k-ios .native-tabbar.k-toolbar > div:first-child) {
     height: calc(var(--k-safe-area-bottom) + 48px) !important;
+  }
+
+  /* Main is the scroll container (Page has overflow:hidden). Each route's
+     content scrolls within this element. Routes with their own scroll
+     containers (e.g., ticket detail chat-container) capture overflow
+     internally so main stays at scrollTop 0 for them. */
+  .main-content {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior-y: contain;
+    display: flex;
+    flex-direction: column;
   }
 
   :global(.k-ios) .main-content {
