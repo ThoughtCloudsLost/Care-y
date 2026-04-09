@@ -14,6 +14,7 @@
   the mutation is in flight. Parent sets `editing = false` only on success.
 -->
 <script lang="ts">
+  import { Button, List, ListInput } from "konsta/svelte";
   import { isDecryptError } from "$lib/crypto/async-decrypt-cache.js";
   import { formatRelativeTime } from "$lib/utils/format-time.js";
   import * as m from "$lib/paraglide/messages.js";
@@ -100,28 +101,39 @@
   </div>
   {#if editing}
     <div class="note-edit-area">
-      <textarea
-        class="note-edit-textarea"
-        bind:value={editText}
-        aria-label={m.ticket_edit_note()}
-        rows={3}
-        disabled={saving}
-      ></textarea>
+      <List strong inset nested class="note-edit-list">
+        <ListInput
+          type="textarea"
+          bind:value={editText}
+          aria-label={m.ticket_edit_note()}
+          inputClass="resize-y min-h-[3rem]"
+          disabled={saving}
+        />
+      </List>
       <div class="note-edit-actions">
-        <button
-          class="note-edit-cancel"
+        <Button
+          clear
+          small
+          inline
           onclick={handleCancel}
           disabled={saving}
+          class="note-edit-cancel"
         >
           {m.common_cancel()}
-        </button>
-        <button class="note-edit-save" onclick={handleSave} disabled={!canSave}>
+        </Button>
+        <Button
+          small
+          inline
+          onclick={handleSave}
+          disabled={!canSave}
+          class="note-edit-save"
+        >
           {#if saving}
             {m.common_loading()}
           {:else}
             {m.common_save()}
           {/if}
-        </button>
+        </Button>
       </div>
     </div>
   {:else}
@@ -190,63 +202,14 @@
     gap: 0.375rem;
   }
 
-  .note-edit-textarea {
-    width: 100%;
-    min-height: 3rem;
-    padding: 0.5rem;
-    font-size: 0.875rem;
-    line-height: 1.5;
-    font-family: inherit;
-    color: var(--ink);
-    background: var(--surface-1);
-    border: 1px solid var(--muted);
-    border-radius: 0.375rem;
-    resize: vertical;
-  }
-
-  .note-edit-textarea:focus {
-    outline: 2px solid var(--brand-primary);
-    outline-offset: -1px;
-  }
-
-  .note-edit-textarea:disabled {
-    opacity: 0.6;
-  }
-
   .note-edit-actions {
     display: flex;
     justify-content: flex-end;
     gap: 0.5rem;
   }
 
-  .note-edit-cancel,
-  .note-edit-save {
-    padding: 0.25rem 0.75rem;
-    font-size: 0.75rem;
-    font-weight: 600;
-    border-radius: 0.375rem;
-    border: none;
-    cursor: pointer;
-  }
-
-  .note-edit-cancel {
-    color: var(--muted);
-    background: transparent;
-  }
-
-  .note-edit-cancel:disabled {
-    opacity: 0.4;
-    cursor: default;
-  }
-
-  .note-edit-save {
-    color: white;
-    background: var(--brand-primary);
-  }
-
-  .note-edit-save:disabled {
-    opacity: 0.4;
-    cursor: default;
+  :global(.note-edit-list) {
+    margin: 0 !important;
   }
 
   .note-time {

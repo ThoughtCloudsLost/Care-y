@@ -9,7 +9,7 @@
   available in the data model. The component handles missing data gracefully.
 -->
 <script lang="ts">
-  import { List, ListItem, Block } from "konsta/svelte";
+  import { List, ListItem, Block, BlockTitle } from "konsta/svelte";
   import * as m from "$lib/paraglide/messages.js";
 
   interface ClientInfoContentProps {
@@ -31,12 +31,12 @@
   }: ClientInfoContentProps = $props();
 </script>
 
-<Block>
-  <h3 class="client-alias-heading">{clientAlias}</h3>
-  {#if clientTier}
+<BlockTitle large>{clientAlias}</BlockTitle>
+{#if clientTier}
+  <Block>
     <p class="client-tier">{clientTier}</p>
-  {/if}
-</Block>
+  </Block>
+{/if}
 <List>
   {#if contactMethod}
     <ListItem title={m.ticket_contact_method()} after={contactMethod} />
@@ -50,12 +50,6 @@
 </List>
 
 <style>
-  .client-alias-heading {
-    font-size: var(--text-lg);
-    font-weight: 600;
-    margin: 0;
-  }
-
   .client-tier {
     color: var(--muted);
     font-size: var(--text-sm);

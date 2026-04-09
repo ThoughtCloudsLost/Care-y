@@ -6,7 +6,7 @@
   Titles and bodies are org-key encrypted, decrypted via OrgDecryptCache.
 -->
 <script lang="ts">
-  import { List, ListItem, Block } from "konsta/svelte";
+  import { List, ListItem, Block, BlockTitle } from "konsta/svelte";
   import { createQuery } from "@tanstack/svelte-query";
   import * as m from "$lib/paraglide/messages.js";
   import { trpc } from "$lib/trpc/index.js";
@@ -36,9 +36,7 @@
   const isEmpty = $derived(!presetsQuery.isLoading && presets.length === 0);
 </script>
 
-<Block>
-  <h3 class="preset-heading">{m.ticket_preset_replies()}</h3>
-</Block>
+<BlockTitle medium>{m.ticket_preset_replies()}</BlockTitle>
 
 {#if presetsQuery.isLoading}
   <Block>
@@ -73,12 +71,6 @@
 {/if}
 
 <style>
-  .preset-heading {
-    font-size: var(--text-base);
-    font-weight: 600;
-    margin: 0;
-  }
-
   .preset-muted {
     color: var(--muted);
     font-size: var(--text-sm);

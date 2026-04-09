@@ -513,13 +513,18 @@
 {/snippet}
 
 {#snippet navTitle()}
-  <button
-    class="client-alias-btn"
+  <Link
+    role="button"
     onclick={openClientInfo}
     aria-label={m.ticket_client_info_button({ alias: clientAlias })}
+    class="client-alias-btn"
+    colors={{
+      navbarTextIos: "text-current",
+      navbarTextMaterial: "text-current",
+    }}
   >
     {clientAlias}
-  </button>
+  </Link>
 {/snippet}
 
 {#snippet navRight()}
@@ -665,20 +670,6 @@
     flex-direction: column;
     flex: 1;
     min-height: 0;
-  }
-
-  .client-alias-btn {
-    background: none;
-    border: none;
-    cursor: pointer;
-    font: inherit;
-    color: inherit;
-    padding: 0.25rem 0.5rem;
-    border-radius: 0.25rem;
-  }
-
-  .client-alias-btn:hover {
-    opacity: 0.7;
   }
 
   .lightbox-content {

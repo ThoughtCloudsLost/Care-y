@@ -220,8 +220,8 @@ describe("TicketCard", () => {
 
   it("hides unread badge when unreadCount is 0", () => {
     const { container } = render(TicketCard, { props: defaults });
-    const badges = container.querySelectorAll(".k-badge");
-    expect(badges.length).toBe(0);
+    const unreadBadge = container.querySelector(".unread-badge");
+    expect(unreadBadge).toBeNull();
   });
 
   // --- Relative time ---

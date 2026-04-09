@@ -46,16 +46,16 @@ describe("AttachmentChip", () => {
 
   it("has correct aria-label for download action", () => {
     const { container } = render(AttachmentChip, { props: baseProps });
-    const btn = container.querySelector("button");
+    const btn = container.querySelector("[role='button']");
     expect(btn?.getAttribute("aria-label")).toBe("Download consent-form.pdf");
   });
 
-  it("disables button when keyWrap is null", () => {
+  it("marks chip as aria-disabled when keyWrap is null", () => {
     const { container } = render(AttachmentChip, {
       props: { ...baseProps, keyWrap: null },
     });
-    const btn = container.querySelector("button");
-    expect(btn?.hasAttribute("disabled")).toBe(true);
+    const btn = container.querySelector("[role='button']");
+    expect(btn?.getAttribute("aria-disabled")).toBe("true");
   });
 
   it("formats file sizes correctly", () => {

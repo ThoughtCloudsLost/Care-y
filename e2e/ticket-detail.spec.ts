@@ -199,7 +199,7 @@ test.describe.serial("Ticket Detail (Chat View)", () => {
     await page.getByText("Edit").click();
 
     // The note should switch to edit mode with a textarea.
-    const textarea = page.locator(".note-edit-textarea");
+    const textarea = page.locator(".note-edit-list textarea");
     await expect(textarea).toBeVisible();
 
     // Save and Cancel buttons should be present.

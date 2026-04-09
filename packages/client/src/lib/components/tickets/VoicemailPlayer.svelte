@@ -18,6 +18,7 @@
   nullifies its reference on teardown.
 -->
 <script lang="ts">
+  import { Button } from "konsta/svelte";
   import { Play, Pause } from "@lucide/svelte";
   import * as m from "$lib/paraglide/messages.js";
   import { formatDuration } from "$lib/utils/time.js";
@@ -216,20 +217,22 @@
       duration: formatDuration(duration),
     })}
   >
-    <button
-      class="voicemail-play-btn"
+    <Button
+      inline
+      rounded
       onclick={togglePlay}
       disabled={audioBuffer === null}
       aria-label={isPlaying
         ? m.ticket_voicemail_pause()
         : m.ticket_voicemail_play()}
+      class="voicemail-play-btn w-8 h-8 p-0 flex items-center justify-center"
     >
       {#if isPlaying}
         <Pause size={16} aria-hidden="true" />
       {:else}
         <Play size={16} aria-hidden="true" />
       {/if}
-    </button>
+    </Button>
 
     <span class="voicemail-time">{formatDuration(currentTime)}</span>
 
@@ -273,28 +276,8 @@
     min-width: 12rem;
   }
 
-  .voicemail-play-btn {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 2rem;
-    height: 2rem;
-    border-radius: 50%;
-    border: none;
-    background: var(--brand-primary);
-    color: var(--surface-1);
-    cursor: pointer;
+  :global(.voicemail-play-btn) {
     flex-shrink: 0;
-    transition: opacity 0.15s;
-  }
-
-  .voicemail-play-btn:disabled {
-    opacity: 0.3;
-    pointer-events: none;
-  }
-
-  .voicemail-play-btn:active {
-    opacity: 0.7;
   }
 
   .waveform {
@@ -359,10 +342,6 @@
     .shimmer-voicemail {
       animation: none;
       background: var(--surface-2);
-    }
-
-    .voicemail-play-btn {
-      transition: none;
     }
   }
 </style>

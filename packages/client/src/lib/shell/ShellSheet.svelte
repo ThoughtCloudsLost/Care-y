@@ -21,7 +21,19 @@
 </script>
 
 <Sheet {opened} onBackdropClick={trap.handleDismiss}>
-  <div bind:this={trap.dialogEl} role="dialog" aria-modal="true" tabindex="-1">
+  <div
+    bind:this={trap.dialogEl}
+    role="dialog"
+    aria-modal="true"
+    tabindex="-1"
+    class="shell-sheet-content"
+  >
     {@render children()}
   </div>
 </Sheet>
+
+<style>
+  .shell-sheet-content {
+    min-height: 30vh;
+  }
+</style>

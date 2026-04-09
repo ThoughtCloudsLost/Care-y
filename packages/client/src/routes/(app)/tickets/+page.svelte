@@ -44,6 +44,7 @@
   import { RouterNotAvailableError } from "$lib/errors.js";
   import ShellPopover from "$lib/shell/ShellPopover.svelte";
   import type { SortField } from "$lib/stores/filters.svelte.js";
+  import StatusDot from "$lib/components/StatusDot.svelte";
   import TicketCard from "$lib/components/tickets/TicketCard.svelte";
   import SwipeableCard from "$lib/components/tickets/SwipeableCard.svelte";
   import FilterPillBar from "$lib/components/tickets/FilterPillBar.svelte";
@@ -333,17 +334,17 @@
     <div class="stats-row">
       <div class="stats-counts">
         <span class="stat-item">
-          <span class="status-dot" data-status="new"></span>
+          <StatusDot status="new" />
           {newCount}
           {m.tickets_status_new()}
         </span>
         <span class="stat-item">
-          <span class="status-dot" data-status="active"></span>
+          <StatusDot status="active" />
           {activeCount}
           {m.tickets_status_active()}
         </span>
         <span class="stat-item">
-          <span class="status-dot" data-status="hold"></span>
+          <StatusDot status="hold" />
           {holdCount}
           {m.tickets_status_on_hold()}
         </span>
@@ -506,25 +507,6 @@
     display: inline-flex;
     align-items: center;
     gap: 0.25rem;
-  }
-
-  .status-dot {
-    width: 0.375rem;
-    height: 0.375rem;
-    border-radius: 50%;
-    flex-shrink: 0;
-  }
-
-  .status-dot[data-status="new"] {
-    background: #34c759;
-  }
-
-  .status-dot[data-status="active"] {
-    background: var(--brand-text);
-  }
-
-  .status-dot[data-status="hold"] {
-    background: #ff9500;
   }
 
   .view-controls {

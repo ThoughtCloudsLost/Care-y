@@ -1,6 +1,14 @@
 <script lang="ts">
   import { createQuery } from "@tanstack/svelte-query";
-  import { Badge, List, ListItem, ListInput, Checkbox } from "konsta/svelte";
+  import {
+    Badge,
+    Button,
+    Link,
+    List,
+    ListItem,
+    ListInput,
+    Checkbox,
+  } from "konsta/svelte";
   import { Bookmark, Check, SquareCheckBig } from "@lucide/svelte";
   import ShellPopover from "$lib/shell/ShellPopover.svelte";
   import * as m from "$lib/paraglide/messages.js";
@@ -371,26 +379,31 @@
   </div>
 
   <div class="pill-actions">
-    <button
-      class="select-mode-btn"
-      aria-label={m.tickets_select_mode()}
+    <Button
+      outline
+      rounded
+      small
+      inline
       onclick={() => onenterselect?.()}
+      class="select-mode-btn"
     >
       <SquareCheckBig size={16} aria-hidden="true" />
       <span class="select-label">{m.tickets_select_mode()}</span>
-    </button>
+    </Button>
     {#if activeFilterCount > 0}
       <Badge class="filter-badge">{activeFilterCount}</Badge>
-      <button
-        class="create-shortcut-btn"
+      <Link
+        iconOnly
+        role="button"
         aria-label={m.tickets_create_shortcut()}
         onclick={() => oncreateshortcut?.()}
+        class="p-1"
       >
         <Bookmark size={18} />
-      </button>
-      <button class="clear-filters-btn" onclick={() => filterStore.clearAll()}>
+      </Link>
+      <Button clear small inline onclick={() => filterStore.clearAll()}>
         {m.tickets_clear_filters()}
-      </button>
+      </Button>
     {/if}
   </div>
 </div>
@@ -521,60 +534,8 @@
     line-height: 1.125rem;
   }
 
-  .create-shortcut-btn {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 4px;
-    border: none;
-    background: none;
-    color: var(--ink);
-    cursor: pointer;
-    border-radius: 4px;
-    transition: background-color 150ms ease;
-  }
-
-  .create-shortcut-btn:hover {
-    background-color: var(--surface-1, rgba(0, 0, 0, 0.06));
-  }
-
-  .clear-filters-btn {
-    border: none;
-    background: none;
-    color: var(--brand-text, var(--ink));
-    cursor: pointer;
-    font-size: 0.75rem;
-    font-weight: 500;
-    white-space: nowrap;
-    padding: 4px 8px;
-    border-radius: 4px;
-    transition: background-color 150ms ease;
-  }
-
-  .clear-filters-btn:hover {
-    background-color: var(--surface-1, rgba(0, 0, 0, 0.06));
-  }
-
-  .select-mode-btn {
-    display: flex;
-    align-items: center;
-    gap: 0.25rem;
-    padding: 4px 8px;
-    border: 1px solid var(--surface-1, rgba(0, 0, 0, 0.15));
-    border-radius: 999px;
-    background: transparent;
-    color: var(--ink);
-    font-size: 0.75rem;
-    font-weight: 500;
-    cursor: pointer;
-    white-space: nowrap;
+  :global(.select-mode-btn) {
     flex-shrink: 0;
-    -webkit-tap-highlight-color: transparent;
-    transition: background-color 150ms ease;
-  }
-
-  .select-mode-btn:hover {
-    background-color: var(--surface-1, rgba(0, 0, 0, 0.06));
   }
 
   .select-label {

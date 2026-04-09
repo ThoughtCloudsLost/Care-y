@@ -70,45 +70,34 @@
   }
 </script>
 
-<button
-  class="attachment-chip-btn"
-  class:attachment-downloading={downloading}
+<Chip
+  outline
+  class="attachment-chip mt-1 {downloading
+    ? 'opacity-50 pointer-events-none'
+    : ''}"
+  role="button"
+  tabindex={downloading || keyWrap === null ? -1 : 0}
   onclick={() => void download()}
-  disabled={downloading || keyWrap === null}
+  onkeydown={(e: KeyboardEvent) => {
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      void download();
+    }
+  }}
   aria-label={downloading
     ? m.ticket_downloading_attachment({ filename })
     : m.ticket_download_attachment({ filename })}
   aria-busy={downloading}
-  type="button"
+  aria-disabled={downloading || keyWrap === null}
 >
-  <Chip outline class="attachment-chip">
-    {#snippet media()}
-      <Paperclip size={14} aria-hidden="true" class="attachment-icon" />
-    {/snippet}
-    <span class="attachment-name">{filename}</span>
-    <span class="attachment-size">{formatFileSize(sizeBytes)}</span>
-  </Chip>
-</button>
+  {#snippet media()}
+    <Paperclip size={14} aria-hidden="true" class="attachment-icon" />
+  {/snippet}
+  <span class="attachment-name">{filename}</span>
+  <span class="attachment-size">{formatFileSize(sizeBytes)}</span>
+</Chip>
 
 <style>
-  .attachment-chip-btn {
-    display: inline-block;
-    background: none;
-    border: none;
-    padding: 0;
-    cursor: pointer;
-    margin-top: 0.25rem;
-  }
-
-  .attachment-chip-btn:active {
-    opacity: 0.7;
-  }
-
-  .attachment-downloading {
-    opacity: 0.5;
-    pointer-events: none;
-  }
-
   .attachment-name {
     font-size: 0.8125rem;
     max-width: 12rem;

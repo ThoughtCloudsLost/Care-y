@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Card, Chip, Badge, Checkbox } from "konsta/svelte";
+  import { Card, Chip, Badge, Checkbox, Link } from "konsta/svelte";
   import {
     Dot,
     MessageSquare,
@@ -14,6 +14,7 @@
   import { getPreviewLoader } from "$lib/crypto/context.js";
   import { isDecryptError } from "$lib/crypto/async-decrypt-cache.js";
   import PriorityBadge from "$lib/components/PriorityBadge.svelte";
+  import StatusDot from "$lib/components/StatusDot.svelte";
   import EncryptedTitle from "$lib/components/EncryptedTitle.svelte";
   import TicketPreview from "./TicketPreview.svelte";
   import type { TicketCardProps } from "./ticket-types.js";
@@ -128,7 +129,7 @@
           </div>
         {/if}
         <span class="status-indicator">
-          <span class="status-dot" data-status={displayStatus}></span>
+          <StatusDot status={displayStatus} />
           <span class="status-label">{statusLabel}</span>
         </span>
         <PriorityBadge {priority} />
@@ -175,31 +176,33 @@
 
       {#if isList}
         <div class="card-actions">
-          <button
-            type="button"
-            class="action-icon"
+          <Link
+            iconOnly
+            role="button"
             aria-label={m.tickets_action_reply()}
             onclick={(e: MouseEvent) => {
               e.stopPropagation();
               onaction?.(ticketId, "reply");
             }}
+            class="action-icon p-1 -m-1"
           >
             <MessageSquare size={18} />
-          </button>
-          <button
-            type="button"
-            class="action-icon"
+          </Link>
+          <Link
+            iconOnly
+            role="button"
             aria-label={m.tickets_action_call()}
             onclick={(e: MouseEvent) => {
               e.stopPropagation();
               onaction?.(ticketId, "call");
             }}
+            class="action-icon p-1 -m-1"
           >
             <Phone size={18} />
-          </button>
-          <button
-            type="button"
-            class="action-icon"
+          </Link>
+          <Link
+            iconOnly
+            role="button"
             aria-label={displayStatus === "hold"
               ? m.tickets_action_unhold()
               : m.tickets_action_hold()}
@@ -210,16 +213,17 @@
                 displayStatus === "hold" ? "unhold" : "hold",
               );
             }}
+            class="action-icon p-1 -m-1"
           >
             {#if displayStatus === "hold"}
               <Play size={18} />
             {:else}
               <Pause size={18} />
             {/if}
-          </button>
-          <button
-            type="button"
-            class="action-icon"
+          </Link>
+          <Link
+            iconOnly
+            role="button"
             aria-label={assignedName !== null
               ? m.tickets_action_release()
               : m.tickets_action_take()}
@@ -227,13 +231,14 @@
               e.stopPropagation();
               onaction?.(ticketId, assignedName !== null ? "release" : "take");
             }}
+            class="action-icon p-1 -m-1"
           >
             {#if assignedName !== null}
               <UserMinus size={18} />
             {:else}
               <UserPlus size={18} />
             {/if}
-          </button>
+          </Link>
         </div>
       {/if}
     </div>
@@ -277,27 +282,6 @@
     outline: 2px solid var(--brand-text);
     outline-offset: -2px;
     border-radius: var(--card-radius);
-  }
-
-  /* ── Status dot (inline in row-top) ── */
-  .status-dot {
-    width: 0.5rem;
-    height: 0.5rem;
-    border-radius: 50%;
-    flex-shrink: 0;
-  }
-
-  .status-dot[data-status="new"] {
-    background: #34c759;
-  }
-  .status-dot[data-status="active"] {
-    background: var(--brand-text);
-  }
-  .status-dot[data-status="hold"] {
-    background: #ff9500;
-  }
-  .status-dot[data-status="closed"] {
-    background: var(--muted);
   }
 
   .status-indicator {
@@ -425,22 +409,8 @@
     margin-top: var(--space-xs);
   }
 
-  .action-icon {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 0.25rem;
-    border: none;
-    background: none;
+  :global(.action-icon) {
     color: var(--muted);
-    cursor: pointer;
-    border-radius: 0.25rem;
-    -webkit-tap-highlight-color: transparent;
-    transition: color 150ms ease;
-  }
-
-  .action-icon:active {
-    color: var(--brand-text);
   }
 
   /* ── Shimmer ── */
