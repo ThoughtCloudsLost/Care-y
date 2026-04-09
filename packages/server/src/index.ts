@@ -76,6 +76,7 @@ import { createWebhookDispatch } from "./telephony/webhook-dispatch.js";
 import { createTicketAccessChecker } from "./tickets/access.js";
 import { createTicketService } from "./tickets/ticket-service.js";
 import { createFollowUpService } from "./tickets/followup-service.js";
+import { createReadCursorService } from "./tickets/read-cursor-service.js";
 import { createMergeService } from "./tickets/merge-service.js";
 import { createPresetService } from "./tickets/preset-service.js";
 import { createDependencyService } from "./tickets/dependency-service.js";
@@ -421,6 +422,7 @@ const appRouter = createAppRouter({
     createTicketAccess: createTicketAccessChecker,
     createTicketSvc: createTicketService,
     createFollowUpSvc: createFollowUpService,
+    createReadCursorSvc: createReadCursorService,
     createMergeSvc: createMergeService,
     createPresetSvc: createPresetService,
     createDependencySvc: createDependencyService,

@@ -14,7 +14,6 @@ import {
   createPresetReplyInputSchema,
   updatePresetReplyInputSchema,
   addDependencyInputSchema,
-  markReadInputSchema,
   undoMergeInputSchema,
   updateTicketInputSchema,
   followUpListInputSchema,
@@ -152,7 +151,6 @@ describe("createFollowUpInputSchema", () => {
   const validInput = {
     ticketId: VALID_UUID,
     encryptedContent: VALID_BASE64,
-    encryptedReadState: VALID_BASE64,
     source: "volunteer" as const,
     type: "message" as const,
   };
@@ -177,16 +175,6 @@ describe("createFollowUpInputSchema", () => {
       expect(result.data.isPrivate).toBe(true);
       expect(result.data.mentionedPseudonyms).toEqual(["user-abc"]);
     }
-  });
-});
-
-describe("markReadInputSchema", () => {
-  it("accepts valid input", () => {
-    const result = markReadInputSchema.safeParse({
-      followUpId: VALID_UUID,
-      encryptedReadState: VALID_BASE64,
-    });
-    expect(result.success).toBe(true);
   });
 });
 

@@ -70,6 +70,26 @@ vi.mock("@tanstack/svelte-query", () => ({
       };
     }
 
+    // read cursor query
+    if (key[2] === "readCursor") {
+      return {
+        isLoading: false,
+        isError: false,
+        error: null,
+        data: null,
+      };
+    }
+
+    // followUpSummary query (ChatZoom)
+    if (key[2] === "followUpSummary") {
+      return {
+        isLoading: false,
+        isError: false,
+        error: null,
+        data: [],
+      };
+    }
+
     // ticket query
     return ticketQueryState;
   },
@@ -99,6 +119,9 @@ vi.mock("$lib/trpc/index.js", () => ({
       isWatching: { query: vi.fn().mockResolvedValue(false) },
       deleteInternalNote: { mutate: vi.fn() },
       updateInternalNote: { mutate: vi.fn() },
+      getReadCursor: { query: vi.fn().mockResolvedValue(null) },
+      updateReadCursor: { mutate: vi.fn() },
+      listFollowUpSummary: { query: vi.fn().mockResolvedValue([]) },
     },
     consultant: {
       get: { query: vi.fn().mockResolvedValue(null) },

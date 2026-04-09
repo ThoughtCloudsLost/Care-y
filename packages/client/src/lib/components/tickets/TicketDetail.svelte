@@ -24,7 +24,7 @@
   } from "$lib/crypto/context.js";
   import { RoleId } from "@care-y/shared";
   import { isDecryptError } from "$lib/crypto/async-decrypt-cache.js";
-  import { SvelteMap, SvelteSet } from "svelte/reactivity";
+  import { SvelteMap } from "svelte/reactivity";
   import { RouterNotAvailableError } from "$lib/errors.js";
   import { formatRelativeTime } from "$lib/utils/format-time.js";
   import { formatDateSeparator, needsDateSeparator } from "$lib/utils/time.js";
@@ -70,6 +70,10 @@
     oncanceledit?: () => void;
     /** Two-way bindable: whether the chat is zoomed out. */
     chatZoomed?: boolean;
+    /** Decrypted read cursor: messages with createdAt <= this are read. null = all unread. */
+    readUpTo?: Date | null;
+    /** Called when the latest visible follow-up timestamp changes (for read cursor updates). */
+    onreadprogress?: (latestVisibleTimestamp: string) => void;
   }
 
   let {
@@ -84,6 +88,8 @@
     savingNote = false,
     oncanceledit,
     chatZoomed = $bindable(false),
+    readUpTo = null,
+    onreadprogress,
   }: TicketDetailProps = $props();
 
   const ticketCache = getTicketDecryptCache();
@@ -391,32 +397,81 @@
 
   // --- Unread divider ---
 
-  // The oblivious read pattern (5a) means we track read state client-side.
-  // A follow-up is "read" if the client has previously marked it via
-  // the encrypted read state. Track locally via a Set populated from
-  // the initial query's read markers.
-  let readFollowUpIds: SvelteSet<string> = new SvelteSet<string>();
+  // Read state is tracked via an encrypted read cursor (one timestamp
+  // per volunteer per ticket). Messages with createdAt <= readUpTo are
+  // read; messages after are unread. readUpTo is passed as a prop from
+  // the route file, which handles decryption and cursor updates.
 
-  // Seed read state from initial data. Follow-ups with a non-null
-  // encrypted_read_state that differs from the initial dummy are "read."
-  // Since we can't distinguish dummy from real without decryption, we
-  // treat all follow-ups from before the initial load as read, and only
-  // the ones arriving after initial load as potentially unread.
-  // For now, use a simpler heuristic: mark all follow-ups loaded in the
-  // initial page as read (the user has seen them before or is seeing them now).
-  $effect(() => {
-    const data = initialFollowUpsQuery.data;
-    if (!data) return;
-    const ids = new SvelteSet<string>();
-    for (const fu of data) {
-      ids.add(fu.id);
+  const firstUnreadId = $derived.by(() => {
+    if (readUpTo === null) {
+      // No read cursor (first visit or decryption failed): all unread.
+      // First follow-up is the unread boundary.
+      return followUps.length > 0 ? (followUps[0]?.id ?? null) : null;
     }
-    readFollowUpIds = ids;
+    const cutoff = readUpTo.getTime();
+    const firstUnread = followUps.find(
+      (fu) => new Date(fu.createdAt).getTime() > cutoff,
+    );
+    return firstUnread?.id ?? null;
   });
 
-  const firstUnreadId = $derived(
-    followUps.find((fu) => !readFollowUpIds.has(fu.id))?.id ?? null,
-  );
+  // --- Load all unread messages ---
+
+  // After the initial page loads, check if there are unread messages
+  // beyond the loaded range. If so, keep fetching older pages until
+  // the read boundary is within the loaded range.
+  let loadingUnread = $state(false);
+
+  $effect(() => {
+    if (!initialFollowUpsQuery.data || loadingUnread) return;
+    if (readUpTo === null) return; // All unread: initial page is sufficient
+    if (!hasMoreOlder) return; // Already loaded everything
+
+    // Check: is the oldest loaded follow-up still newer than readUpTo?
+    // If so, there are unread messages beyond the loaded range.
+    const oldest = followUps[0];
+    if (!oldest) return;
+    const oldestTime = new Date(oldest.createdAt).getTime();
+    const cutoff = readUpTo.getTime();
+
+    if (oldestTime > cutoff) {
+      // The read boundary is beyond what we've loaded. Fetch more.
+      void loadUntilReadBoundary(cutoff);
+    }
+  });
+
+  async function loadUntilReadBoundary(cutoffMs: number): Promise<void> {
+    loadingUnread = true;
+    try {
+      while (hasMoreOlder) {
+        const oldestId = followUps[0]?.id;
+        if (oldestId === undefined) break;
+
+        const older = await queryClient.fetchQuery({
+          queryKey: ["ticket", ticketId, "followUps", "page", oldestId],
+          queryFn: async () =>
+            ticketRouter.listFollowUps.query({
+              ticketId,
+              limit: PAGE_SIZE,
+              cursor: oldestId,
+              direction: "older",
+            }),
+        });
+
+        if (older.length < PAGE_SIZE) hasMoreOlder = false;
+        if (older.length > 0) {
+          olderPages = [older, ...olderPages];
+        }
+
+        // Check if we've loaded past the read boundary
+        const newOldest = followUps[0];
+        if (!newOldest) break;
+        if (new Date(newOldest.createdAt).getTime() <= cutoffMs) break;
+      }
+    } finally {
+      loadingUnread = false;
+    }
+  }
 
   // --- ChatZoom data ---
 
@@ -436,10 +491,45 @@
   // Track whether user is near bottom (within 100px) for auto-scroll decisions.
   let isNearBottom = $state(true);
 
+  // Debounce timer for reporting read progress to the route.
+  let readProgressTimer: ReturnType<typeof setTimeout> | null = null;
+
   function onScroll(): void {
     if (!scrollContainerEl) return;
     const { scrollTop, scrollHeight, clientHeight } = scrollContainerEl;
     isNearBottom = scrollHeight - scrollTop - clientHeight < 100;
+
+    // Report the latest visible follow-up timestamp (debounced).
+    if (onreadprogress && followUps.length > 0) {
+      if (readProgressTimer) clearTimeout(readProgressTimer);
+      readProgressTimer = setTimeout(() => {
+        reportReadProgress();
+      }, 2000);
+    }
+  }
+
+  function reportReadProgress(): void {
+    if (!scrollContainerEl || !onreadprogress) return;
+    // Find the last follow-up whose element is within the viewport.
+    const containerRect = scrollContainerEl.getBoundingClientRect();
+    let latestVisible: string | null = null;
+
+    for (let i = followUps.length - 1; i >= 0; i--) {
+      const fu = followUps.at(i);
+      if (!fu) continue;
+      const el = document.getElementById(`fu-${fu.id}`);
+      if (!el) continue;
+      const elRect = el.getBoundingClientRect();
+      // Element is visible if its top is above the container bottom.
+      if (elRect.top < containerRect.bottom) {
+        latestVisible = fu.createdAt;
+        break;
+      }
+    }
+
+    if (latestVisible !== null) {
+      onreadprogress(latestVisible);
+    }
   }
 
   // Track whether initial scroll has happened. Only auto-scroll once
@@ -448,6 +538,8 @@
 
   $effect(() => {
     if (chatZoomed) return;
+    // Wait for unread loading to complete before scrolling.
+    if (loadingUnread) return;
     if (followUps.length > 0 && scrollContainerEl && !hasScrolledInitially) {
       hasScrolledInitially = true;
       const el = scrollContainerEl;

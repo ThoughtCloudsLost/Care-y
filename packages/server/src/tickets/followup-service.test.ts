@@ -44,13 +44,12 @@ describe.skipIf(!process.env.DATABASE_URL)("FollowUpService (DB)", () => {
     };
   }
 
-  it("create inserts follow-up with encrypted_content and encrypted_read_state", async () => {
+  it("create inserts follow-up with encrypted_content", async () => {
     const { userId, ticketId } = await createTicketFixture();
 
     const fu = await svc.create(userId, {
       ticketId,
       encryptedContent: Buffer.from("content-blob"),
-      encryptedReadState: Buffer.from("read-state-blob"),
       source: "volunteer",
       type: "note",
       isPrivate: false,
@@ -64,7 +63,6 @@ describe.skipIf(!process.env.DATABASE_URL)("FollowUpService (DB)", () => {
     expect(fu.isPrivate).toBe(false);
     expect(fu.mentionedPseudonyms).toEqual(["alice"]);
     expect(Buffer.isBuffer(fu.encryptedContent)).toBe(true);
-    expect(Buffer.isBuffer(fu.encryptedReadState)).toBe(true);
     expect(fu.createdAt).toBeInstanceOf(Date);
   });
 
@@ -75,7 +73,6 @@ describe.skipIf(!process.env.DATABASE_URL)("FollowUpService (DB)", () => {
       svc.create(user.id, {
         ticketId: crypto.randomUUID(),
         encryptedContent: Buffer.from("c"),
-        encryptedReadState: Buffer.from("r"),
         source: "volunteer",
         type: "note",
         isPrivate: false,
@@ -98,7 +95,6 @@ describe.skipIf(!process.env.DATABASE_URL)("FollowUpService (DB)", () => {
       svc.create(userId, {
         ticketId,
         encryptedContent: Buffer.from("c"),
-        encryptedReadState: Buffer.from("r"),
         source: "volunteer",
         type: "note",
         isPrivate: false,
@@ -116,7 +112,6 @@ describe.skipIf(!process.env.DATABASE_URL)("FollowUpService (DB)", () => {
       const fu = await svc.create(userId, {
         ticketId,
         encryptedContent: Buffer.from(`content-${String(i)}`),
-        encryptedReadState: Buffer.from("unread"),
         source: "volunteer",
         type: "note",
         isPrivate: false,
@@ -142,67 +137,6 @@ describe.skipIf(!process.env.DATABASE_URL)("FollowUpService (DB)", () => {
     expect(new Set(allIds)).toEqual(new Set(ids));
   });
 
-  it("markRead updates encrypted_read_state column", async () => {
-    const { userId, ticketId } = await createTicketFixture();
-
-    const fu = await svc.create(userId, {
-      ticketId,
-      encryptedContent: Buffer.from("content"),
-      encryptedReadState: Buffer.from("unread"),
-      source: "volunteer",
-      type: "note",
-      isPrivate: false,
-      mentionedPseudonyms: [],
-    });
-
-    const newReadState = Buffer.from("read-by-user");
-    await svc.markRead(userId, fu.id, newReadState);
-
-    // Verify by reading it back
-    const list = await svc.listByTicket(userId, ticketId, { limit: 100 });
-    const updated = list.find((f) => f.id === fu.id);
-    expect(updated).toBeDefined();
-    expect(updated!.encryptedReadState.toString()).toBe("read-by-user");
-  });
-
-  it("markRead does not create a new row", async () => {
-    const { userId, ticketId } = await createTicketFixture();
-
-    const fu = await svc.create(userId, {
-      ticketId,
-      encryptedContent: Buffer.from("content"),
-      encryptedReadState: Buffer.from("unread"),
-      source: "volunteer",
-      type: "note",
-      isPrivate: false,
-      mentionedPseudonyms: [],
-    });
-
-    const countBefore = await testDb.db
-      .selectFrom("followups")
-      .select(({ fn }) => fn.countAll<number>().as("count"))
-      .where("ticket_id", "=", ticketId)
-      .executeTakeFirstOrThrow();
-
-    await svc.markRead(userId, fu.id, Buffer.from("read"));
-
-    const countAfter = await testDb.db
-      .selectFrom("followups")
-      .select(({ fn }) => fn.countAll<number>().as("count"))
-      .where("ticket_id", "=", ticketId)
-      .executeTakeFirstOrThrow();
-
-    expect(countAfter.count).toBe(countBefore.count);
-  });
-
-  it("markRead throws NotFoundError for non-existent follow-up", async () => {
-    const user = await createTestUser(testDb.db);
-
-    await expect(
-      svc.markRead(user.id, crypto.randomUUID(), Buffer.from("read")),
-    ).rejects.toBeInstanceOf(NotFoundError);
-  });
-
   // --- updateInternalNote ---
 
   it("updateInternalNote succeeds for author of internal note", async () => {
@@ -211,7 +145,6 @@ describe.skipIf(!process.env.DATABASE_URL)("FollowUpService (DB)", () => {
     const fu = await svc.create(userId, {
       ticketId,
       encryptedContent: Buffer.from("original-note"),
-      encryptedReadState: Buffer.from("unread"),
       source: "volunteer",
       type: "internal_note",
       isPrivate: true,
@@ -235,7 +168,6 @@ describe.skipIf(!process.env.DATABASE_URL)("FollowUpService (DB)", () => {
     const fu = await svc.create(userId, {
       ticketId,
       encryptedContent: Buffer.from("note"),
-      encryptedReadState: Buffer.from("unread"),
       source: "volunteer",
       type: "internal_note",
       isPrivate: true,
@@ -253,7 +185,6 @@ describe.skipIf(!process.env.DATABASE_URL)("FollowUpService (DB)", () => {
     const fu = await svc.create(userId, {
       ticketId,
       encryptedContent: Buffer.from("message"),
-      encryptedReadState: Buffer.from("unread"),
       source: "volunteer",
       type: "message",
       isPrivate: false,
@@ -271,7 +202,6 @@ describe.skipIf(!process.env.DATABASE_URL)("FollowUpService (DB)", () => {
     const fu = await svc.create(userId, {
       ticketId,
       encryptedContent: Buffer.from("system-note"),
-      encryptedReadState: Buffer.from("unread"),
       source: "system",
       type: "internal_note",
       isPrivate: true,
@@ -291,7 +221,6 @@ describe.skipIf(!process.env.DATABASE_URL)("FollowUpService (DB)", () => {
     const fu = await svc.create(userId, {
       ticketId,
       encryptedContent: Buffer.from("note-to-delete"),
-      encryptedReadState: Buffer.from("unread"),
       source: "volunteer",
       type: "internal_note",
       isPrivate: true,
@@ -317,7 +246,6 @@ describe.skipIf(!process.env.DATABASE_URL)("FollowUpService (DB)", () => {
     const fu = await svc.create(userId, {
       ticketId,
       encryptedContent: Buffer.from("note"),
-      encryptedReadState: Buffer.from("unread"),
       source: "volunteer",
       type: "internal_note",
       isPrivate: true,
@@ -343,7 +271,6 @@ describe.skipIf(!process.env.DATABASE_URL)("FollowUpService (DB)", () => {
     const fu = await svc.create(userId, {
       ticketId,
       encryptedContent: Buffer.from("note"),
-      encryptedReadState: Buffer.from("unread"),
       source: "volunteer",
       type: "internal_note",
       isPrivate: true,
@@ -361,7 +288,6 @@ describe.skipIf(!process.env.DATABASE_URL)("FollowUpService (DB)", () => {
     const fu = await svc.create(userId, {
       ticketId,
       encryptedContent: Buffer.from("msg"),
-      encryptedReadState: Buffer.from("unread"),
       source: "volunteer",
       type: "message",
       isPrivate: false,
@@ -381,7 +307,6 @@ describe.skipIf(!process.env.DATABASE_URL)("FollowUpService (DB)", () => {
     const fu1 = await svc.create(userId, {
       ticketId,
       encryptedContent: Buffer.from("note-1"),
-      encryptedReadState: Buffer.from("unread"),
       source: "volunteer",
       type: "internal_note",
       isPrivate: true,
@@ -391,7 +316,6 @@ describe.skipIf(!process.env.DATABASE_URL)("FollowUpService (DB)", () => {
     await svc.create(userId, {
       ticketId,
       encryptedContent: Buffer.from("note-2"),
-      encryptedReadState: Buffer.from("unread"),
       source: "volunteer",
       type: "internal_note",
       isPrivate: true,
@@ -415,7 +339,6 @@ describe.skipIf(!process.env.DATABASE_URL)("FollowUpService (DB)", () => {
     const fu = await svc.create(userId, {
       ticketId,
       encryptedContent: Buffer.from("note"),
-      encryptedReadState: Buffer.from("unread"),
       source: "volunteer",
       type: "internal_note",
       isPrivate: true,
@@ -434,7 +357,6 @@ describe.skipIf(!process.env.DATABASE_URL)("FollowUpService (DB)", () => {
     const fu = await svc.create(userId, {
       ticketId,
       encryptedContent: Buffer.from("note"),
-      encryptedReadState: Buffer.from("unread"),
       source: "volunteer",
       type: "internal_note",
       isPrivate: true,

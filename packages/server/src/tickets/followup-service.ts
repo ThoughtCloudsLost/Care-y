@@ -1,10 +1,9 @@
 /**
- * Follow-up CRUD service with oblivious read pattern.
+ * Follow-up CRUD service.
  *
- * Follow-ups are comments/events on a ticket. Each follow-up carries
- * an encrypted_read_state blob that starts as a dummy value and is
- * updated in-place when a volunteer reads it (no new row created).
- * This prevents a snapshot attacker from inferring read timing.
+ * Follow-ups are comments/events on a ticket. Read state is tracked
+ * separately via ticket_read_cursors (one encrypted timestamp per
+ * volunteer per ticket). See ReadCursorService.
  */
 
 import type { Kysely } from "kysely";
@@ -21,7 +20,6 @@ export interface FollowUpRecord {
   readonly isPrivate: boolean;
   readonly mentionedPseudonyms: string[];
   readonly encryptedContent: Buffer;
-  readonly encryptedReadState: Buffer;
   readonly createdBy: string | null;
   readonly createdAt: Date;
 }
@@ -29,7 +27,6 @@ export interface FollowUpRecord {
 export interface CreateFollowUpInput {
   readonly ticketId: string;
   readonly encryptedContent: Buffer;
-  readonly encryptedReadState: Buffer;
   readonly source: string;
   readonly type: string;
   readonly isPrivate: boolean;
@@ -73,11 +70,6 @@ export interface FollowUpService {
     ticketId: string,
     followUpIds: string[],
   ): Promise<FollowUpRecord[]>;
-  markRead(
-    userId: string,
-    followUpId: string,
-    encryptedReadState: Buffer,
-  ): Promise<void>;
   /** Update encrypted content of an internal note. Only the author can edit. */
   updateInternalNote(
     userId: string,
@@ -100,7 +92,6 @@ function toRecord(row: {
   is_private: boolean;
   mentioned_pseudonyms: string[];
   encrypted_content: Buffer;
-  encrypted_read_state: Buffer;
   created_by: string | null;
   deleted_at: Date | null;
   created_at: Date;
@@ -113,7 +104,6 @@ function toRecord(row: {
     isPrivate: row.is_private,
     mentionedPseudonyms: row.mentioned_pseudonyms,
     encryptedContent: row.encrypted_content,
-    encryptedReadState: row.encrypted_read_state,
     createdBy: row.created_by,
     createdAt: row.created_at,
   };
@@ -148,7 +138,6 @@ export function createFollowUpService(
           is_private: input.isPrivate,
           mentioned_pseudonyms: JSON.stringify(input.mentionedPseudonyms),
           encrypted_content: input.encryptedContent,
-          encrypted_read_state: input.encryptedReadState,
           created_by: userId,
         })
         .returningAll()
@@ -319,26 +308,6 @@ export function createFollowUpService(
         .execute();
 
       return rows.map(toRecord);
-    },
-
-    async markRead(userId, followUpId, encryptedReadState) {
-      // Find the follow-up to get its ticket_id for access check
-      const followUp = await db
-        .selectFrom("followups")
-        .select(["id", "ticket_id"])
-        .where("id", "=", followUpId)
-        .executeTakeFirst();
-
-      if (!followUp) throw new NotFoundError(ErrorCode.FOLLOWUP_NOT_FOUND);
-
-      await access.assertAccess(userId, followUp.ticket_id);
-
-      // Update in place (oblivious write: no new row created)
-      await db
-        .updateTable("followups")
-        .set({ encrypted_read_state: encryptedReadState })
-        .where("id", "=", followUpId)
-        .execute();
     },
 
     async updateInternalNote(userId, followUpId, encryptedContent) {

@@ -35,6 +35,7 @@ import type { WatchersService } from "../tickets/watchers.js";
 import type { QueuePermissionsService } from "../tickets/queue-permissions.js";
 import type { SearchService } from "../tickets/search.js";
 import type { AuditService } from "../tickets/audit.js";
+import type { ReadCursorService } from "../tickets/read-cursor-service.js";
 import type { NotificationService } from "../notifications/service.js";
 import type { AuditEntry } from "../tickets/audit.js";
 import type { NotificationEventType, TicketPriority } from "@care-y/shared";
@@ -58,7 +59,7 @@ import {
   recentFollowUpsInputSchema,
   createFollowUpInputSchema,
   followUpListInputSchema,
-  markReadInputSchema,
+  updateReadCursorInputSchema,
   createPresetReplyInputSchema,
   updatePresetReplyInputSchema,
   addDependencyInputSchema,
@@ -122,6 +123,10 @@ export interface TicketRouterDeps {
   readonly createQueuePermissionsSvc: (
     tDb: OrgContext["tenantDb"],
   ) => QueuePermissionsService;
+  readonly createReadCursorSvc: (
+    tDb: OrgContext["tenantDb"],
+    access: TicketAccessChecker,
+  ) => ReadCursorService;
   // Search + audit (optional, injected by 5d wiring)
   readonly createSearchSvc?: (tDb: OrgContext["tenantDb"]) => SearchService;
   readonly createAuditSvc?: (tDb: OrgContext["tenantDb"]) => AuditService;
@@ -336,8 +341,14 @@ export function createTicketRouter(deps: TicketRouterDeps) {
 
     close: volunteerProcedure.input(z.object({ ticketId: z.uuid() })).mutation(
       withErrorWrapping(async ({ ctx, input }) => {
-        const { svc } = ticketSvc(ctx.org.tenantDb);
+        const { svc, access } = ticketSvc(ctx.org.tenantDb);
         const ticket = await svc.close(ctx.user.id, input.ticketId);
+        // Delete read cursors for closed ticket (no post-closure read state)
+        const readCursorSvc = deps.createReadCursorSvc(
+          ctx.org.tenantDb,
+          access,
+        );
+        await readCursorSvc.deleteForTicket(input.ticketId);
         auditAndNotify(ctx, "ticket_closed", ticket, {
           eventType: "ticket_closed",
           actorId: ctx.user.id,
@@ -381,7 +392,6 @@ export function createTicketRouter(deps: TicketRouterDeps) {
           const followUp = await svc.create(ctx.user.id, {
             ticketId: input.ticketId,
             encryptedContent: Buffer.from(input.encryptedContent, "base64"),
-            encryptedReadState: Buffer.from(input.encryptedReadState, "base64"),
             source: input.source,
             type: input.type,
             isPrivate: input.isPrivate,
@@ -439,17 +449,31 @@ export function createTicketRouter(deps: TicketRouterDeps) {
         }),
       ),
 
-    markRead: volunteerProcedure.input(markReadInputSchema).mutation(
-      withErrorWrapping(async ({ ctx, input }) => {
-        const access = deps.createTicketAccess(ctx.org.tenantDb);
-        const svc = deps.createFollowUpSvc(ctx.org.tenantDb, access);
-        await svc.markRead(
-          ctx.user.id,
-          input.followUpId,
-          Buffer.from(input.encryptedReadState, "base64"),
-        );
-      }),
-    ),
+    // --- Read cursors ---
+
+    getReadCursor: volunteerProcedure
+      .input(z.object({ ticketId: z.uuid() }))
+      .query(
+        withErrorWrapping(async ({ ctx, input }) => {
+          const access = deps.createTicketAccess(ctx.org.tenantDb);
+          const svc = deps.createReadCursorSvc(ctx.org.tenantDb, access);
+          return svc.getOrCreate(ctx.user.id, input.ticketId);
+        }),
+      ),
+
+    updateReadCursor: volunteerProcedure
+      .input(updateReadCursorInputSchema)
+      .mutation(
+        withErrorWrapping(async ({ ctx, input }) => {
+          const access = deps.createTicketAccess(ctx.org.tenantDb);
+          const svc = deps.createReadCursorSvc(ctx.org.tenantDb, access);
+          await svc.update(
+            ctx.user.id,
+            input.ticketId,
+            Buffer.from(input.encryptedReadCursor, "base64"),
+          );
+        }),
+      ),
 
     // --- Internal note edit/delete ---
     updateInternalNote: volunteerProcedure
@@ -1881,7 +1905,6 @@ export function createTicketRouter(deps: TicketRouterDeps) {
                       type: fu.type ?? "message",
                       is_private: fu.isPrivate ?? false,
                       encrypted_content: Buffer.from(encryptedContent),
-                      encrypted_read_state: Buffer.from("unread"),
                       created_at: minutesAgo(fu.agoMinutes),
                     })
                     .returning("id")

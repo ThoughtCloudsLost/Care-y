@@ -315,7 +315,6 @@ export interface FollowupsTable {
     string | string[]
   >;
   encrypted_content: Buffer;
-  encrypted_read_state: Buffer;
   created_by: string | null;
   deleted_at: Date | null;
   created_at: Generated<Date>;
@@ -437,6 +436,14 @@ export interface PushChallengesTable {
   expires_at: Date;
 }
 
+// --- Read cursors ---
+
+export interface TicketReadCursorsTable {
+  ticket_id: string;
+  user_id: string;
+  encrypted_read_cursor: Buffer;
+}
+
 // --- Audit log ---
 
 export interface AuditLogTable {
@@ -494,6 +501,8 @@ export interface TenantDatabase {
   queue_assignments: QueueAssignmentsTable;
   ticket_watchers: TicketWatchersTable;
   queue_watchers: QueueWatchersTable;
+  // Read state
+  ticket_read_cursors: TicketReadCursorsTable;
   // Notifications
   push_subscriptions: PushSubscriptionsTable;
   push_challenges: PushChallengesTable;

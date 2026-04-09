@@ -596,7 +596,6 @@ describe.skipIf(!process.env.DATABASE_URL)("TicketService (DB)", () => {
           source: "volunteer",
           type: "message",
           encrypted_content: Buffer.from(`message-${i}`),
-          encrypted_read_state: Buffer.from("unread"),
         })
         .execute();
     }
@@ -627,7 +626,6 @@ describe.skipIf(!process.env.DATABASE_URL)("TicketService (DB)", () => {
           source: "volunteer",
           type: "message",
           encrypted_content: Buffer.from(`msg-${i}`),
-          encrypted_read_state: Buffer.from("unread"),
         })
         .execute();
     }
@@ -661,7 +659,6 @@ describe.skipIf(!process.env.DATABASE_URL)("TicketService (DB)", () => {
         source: "volunteer",
         type: "message",
         encrypted_content: Buffer.from("wrap-test"),
-        encrypted_read_state: Buffer.from("unread"),
       })
       .execute();
 
@@ -842,7 +839,6 @@ describe.skipIf(!process.env.DATABASE_URL)("TicketService (DB)", () => {
         source: "volunteer",
         type: "message",
         encrypted_content: Buffer.from("test follow-up"),
-        encrypted_read_state: Buffer.from("{}"),
       })
       .execute();
 
@@ -949,7 +945,6 @@ describe.skipIf(!process.env.DATABASE_URL)("TicketService (DB)", () => {
             source: "volunteer",
             type: "message",
             encrypted_content: Buffer.from(`msg-${i}`),
-            encrypted_read_state: Buffer.from("{}"),
           })
           .execute();
       }

@@ -49,7 +49,6 @@ export type CreateTicketInput = z.infer<typeof createTicketInputSchema>;
 export const createFollowUpInputSchema = z.object({
   ticketId: z.uuid(),
   encryptedContent: base64String("encryptedContent"),
-  encryptedReadState: base64String("encryptedReadState"),
   source: followUpSourceSchema,
   type: followUpTypeSchema,
   isPrivate: z.boolean().default(false),
@@ -57,11 +56,11 @@ export const createFollowUpInputSchema = z.object({
 });
 export type CreateFollowUpInput = z.infer<typeof createFollowUpInputSchema>;
 
-export const markReadInputSchema = z.object({
-  followUpId: z.uuid(),
-  encryptedReadState: base64String("encryptedReadState"),
+export const updateReadCursorInputSchema = z.object({
+  ticketId: z.uuid(),
+  encryptedReadCursor: base64String("encryptedReadCursor"),
 });
-export type MarkReadInput = z.infer<typeof markReadInputSchema>;
+export type UpdateReadCursorInput = z.infer<typeof updateReadCursorInputSchema>;
 
 export const updateTicketInputSchema = z.object({
   ticketId: z.uuid(),

@@ -86,7 +86,6 @@ export function createAssignmentService(
         source: "system",
         type,
         encrypted_content: Buffer.from("system"),
-        encrypted_read_state: Buffer.from("unread"),
       })
       .execute();
   }

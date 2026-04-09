@@ -47,6 +47,7 @@
   import { getCurrentUserId, getCryptoBridge } from "$lib/crypto/context.js";
   import { RouterNotAvailableError } from "$lib/errors.js";
   import { toastStore } from "$lib/stores/toast.svelte.js";
+  import { serializedBufferToBase64 } from "$lib/utils/buffer-encoding.js";
 
   if (!trpc.tickets) throw new RouterNotAvailableError("tickets");
   const ticketRouter = trpc.tickets;
@@ -81,6 +82,93 @@
 
   const ticket = $derived(ticketQuery.data);
   const clientAlias = $derived(ticket?.clientAlias ?? "...");
+
+  // --- Read cursor ---
+
+  const readCursorQuery = createQuery(() => ({
+    queryKey: ["ticket", ticketId, "readCursor"],
+    queryFn: async () => ticketRouter.getReadCursor.query({ ticketId }),
+    enabled: ticketId !== "",
+  }));
+
+  // Decrypt the read cursor to get the readUpTo timestamp.
+  // undefined = still loading, null = unread (dummy or decrypt failed).
+  let readUpTo = $state<Date | null | undefined>(undefined);
+
+  $effect(() => {
+    const cursor = readCursorQuery.data;
+    const t = ticket;
+    if (!cursor || !t?.keyWrap) return;
+
+    const ciphertext = serializedBufferToBase64(cursor.encryptedReadCursor);
+    const kw = t.keyWrap;
+
+    cryptoBridge
+      .decrypt(ticketId, kw.ephemeralPoint, kw.nonce, kw.wrappedKey, ciphertext)
+      .then((plaintext) => {
+        try {
+          const parsed: unknown = JSON.parse(plaintext);
+          if (
+            parsed !== null &&
+            typeof parsed === "object" &&
+            "readUpTo" in parsed
+          ) {
+            const ts = (parsed as Record<string, unknown>).readUpTo;
+            if (typeof ts === "string") {
+              readUpTo = new Date(ts);
+              return;
+            }
+          }
+        } catch {
+          // JSON parse failed: treat as unread
+        }
+        readUpTo = null;
+      })
+      .catch(() => {
+        // AEAD failure (random dummy bytes): all messages are unread.
+        readUpTo = null;
+      });
+  });
+
+  // Debounced read cursor update. Called by TicketDetail when the user
+  // scrolls and new follow-ups become visible.
+  let pendingReadTimestamp: string | null = null;
+  let cursorUpdateTimer: ReturnType<typeof setTimeout> | null = null;
+
+  function handleReadProgress(latestVisibleTimestamp: string): void {
+    // Only advance the cursor forward, never backward.
+    if (
+      pendingReadTimestamp !== null &&
+      latestVisibleTimestamp <= pendingReadTimestamp
+    ) {
+      return;
+    }
+    pendingReadTimestamp = latestVisibleTimestamp;
+
+    if (cursorUpdateTimer) clearTimeout(cursorUpdateTimer);
+    cursorUpdateTimer = setTimeout(() => {
+      void flushReadCursor();
+    }, 3000);
+  }
+
+  async function flushReadCursor(): Promise<void> {
+    const ts = pendingReadTimestamp;
+    if (ts === null) return;
+    pendingReadTimestamp = null;
+
+    try {
+      const payload = JSON.stringify({ readUpTo: ts });
+      const encrypted = await cryptoBridge.encrypt(ticketId, payload);
+      await ticketRouter.updateReadCursor.mutate({
+        ticketId,
+        encryptedReadCursor: encrypted,
+      });
+      // Update local state so the divider adjusts.
+      readUpTo = new Date(ts);
+    } catch {
+      // Failed to update cursor. Not critical; will retry on next scroll.
+    }
+  }
 
   // --- Action sheet data ---
 
@@ -466,6 +554,8 @@
     onnoteedit={(fid: string, text: string) => void handleNoteEdit(fid, text)}
     oncanceledit={cancelNoteEdit}
     bind:chatZoomed
+    readUpTo={readUpTo ?? null}
+    onreadprogress={handleReadProgress}
   />
 </div>
 
