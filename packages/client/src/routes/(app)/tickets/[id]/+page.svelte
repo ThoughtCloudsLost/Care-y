@@ -558,7 +558,7 @@
     onnoteedit={(fid: string, text: string) => void handleNoteEdit(fid, text)}
     oncanceledit={cancelNoteEdit}
     bind:timelineActive
-    readUpTo={readUpTo ?? null}
+    {readUpTo}
     onreadprogress={handleReadProgress}
   />
 </div>

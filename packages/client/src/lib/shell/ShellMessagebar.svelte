@@ -18,7 +18,6 @@
 <script lang="ts">
   import { Messagebar, Link } from "konsta/svelte";
   import { Send, Lock, Paperclip, BookDashed } from "@lucide/svelte";
-  import { onMount } from "svelte";
   import type { ShellMessagebarProps } from "./types.js";
   import * as m from "$lib/paraglide/messages.js";
 
@@ -57,18 +56,28 @@
   // instead of a hardcoded magic number.
   let anchorEl = $state<HTMLDivElement | undefined>();
 
-  onMount(() => {
+  // Publish the messagebar height as a CSS variable. Uses $effect so it
+  // re-runs if anchorEl changes (e.g., HMR remount). ResizeObserver
+  // tracks dynamic height changes (keyboard open, textarea grow).
+  $effect(() => {
     const el = anchorEl;
     if (!el) return;
 
-    const observer = new ResizeObserver(([entry]) => {
-      if (!entry) return;
-      const box = entry.borderBoxSize[0];
-      const h = box !== undefined ? box.blockSize : el.offsetHeight;
+    function setHeight(h: number): void {
+      if (h <= 0) return;
       document.documentElement.style.setProperty(
         "--messagebar-height",
         `${String(Math.ceil(h))}px`,
       );
+    }
+
+    // Synchronous initial measurement.
+    setHeight(el.offsetHeight);
+
+    const observer = new ResizeObserver(([entry]) => {
+      if (!entry) return;
+      const box = entry.borderBoxSize[0];
+      setHeight(box !== undefined ? box.blockSize : el.offsetHeight);
     });
     observer.observe(el);
 

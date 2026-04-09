@@ -70,8 +70,8 @@
     oncanceledit?: () => void;
     /** Two-way bindable: whether the timeline TOC view is active. */
     timelineActive?: boolean;
-    /** Decrypted read cursor: messages with createdAt <= this are read. null = all unread. */
-    readUpTo?: Date | null;
+    /** Decrypted read cursor: undefined = still loading, null = all unread, Date = read up to. */
+    readUpTo?: Date | null | undefined;
     /** Called when the latest visible follow-up timestamp changes (for read cursor updates). */
     onreadprogress?: (latestVisibleTimestamp: string) => void;
   }
@@ -88,7 +88,7 @@
     savingNote = false,
     oncanceledit,
     timelineActive = $bindable(false),
-    readUpTo = null,
+    readUpTo,
     onreadprogress,
   }: TicketDetailProps = $props();
 
@@ -403,9 +403,8 @@
   // the route file, which handles decryption and cursor updates.
 
   const firstUnreadId = $derived.by(() => {
-    if (readUpTo === null) {
-      // No read cursor (first visit or decryption failed): no prior
-      // read history, so no meaningful unread boundary. Scroll to bottom.
+    if (readUpTo === undefined || readUpTo === null) {
+      // Still loading or no read cursor: no meaningful unread boundary.
       return null;
     }
     const cutoff = readUpTo.getTime();
@@ -422,22 +421,51 @@
   // the read boundary is within the loaded range.
   let loadingUnread = $state(false);
 
+  // Unified load-then-scroll sequence. A single $effect owns both
+  // "fetch older pages until the read boundary" and "scroll to the
+  // correct position." Running these in one async chain eliminates
+  // the race between two effects that read each other's state.
+  let scrollReady = $state(false);
+
   $effect(() => {
-    if (!initialFollowUpsQuery.data || loadingUnread) return;
-    if (readUpTo === null) return; // All unread: initial page is sufficient
-    if (!hasMoreOlder) return; // Already loaded everything
+    if (timelineActive) return;
+    if (readUpTo === undefined) return;
+    if (!initialFollowUpsQuery.data) return;
+    if (followUps.length === 0 || !scrollContainerEl) return;
+    if (scrollReady) return;
 
-    // Check: is the oldest loaded follow-up still newer than readUpTo?
-    // If so, there are unread messages beyond the loaded range.
-    const oldest = followUps[0];
-    if (!oldest) return;
-    const oldestTime = new Date(oldest.createdAt).getTime();
-    const cutoff = readUpTo.getTime();
+    // Mark intent immediately so this effect doesn't re-trigger.
+    scrollReady = true;
 
-    if (oldestTime > cutoff) {
-      // The read boundary is beyond what we've loaded. Fetch more.
-      void loadUntilReadBoundary(cutoff);
-    }
+    void (async () => {
+      // Load all pages until the read boundary (if needed).
+      if (readUpTo !== null && hasMoreOlder) {
+        const oldest = followUps[0];
+        if (oldest) {
+          const cutoffMs = readUpTo.getTime();
+          const oldestTime = new Date(oldest.createdAt).getTime();
+          if (oldestTime > cutoffMs) {
+            await loadUntilReadBoundary(cutoffMs);
+          }
+        }
+      }
+
+      // Wait for DOM to settle, then scroll.
+      await tick();
+      const scrollEl = scrollContainerEl;
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          if (hasScrolledInitially) return;
+          hasScrolledInitially = true;
+          if (firstUnreadId !== null) {
+            const divider = document.getElementById("unread-divider");
+            divider?.scrollIntoView({ behavior: "auto", block: "start" });
+          } else {
+            scrollEl.scrollTop = scrollEl.scrollHeight;
+          }
+        });
+      });
+    })();
   });
 
   async function loadUntilReadBoundary(cutoffMs: number): Promise<void> {
@@ -535,27 +563,6 @@
   // Track whether initial scroll has happened. Only auto-scroll once
   // on first data load, not on every reactive update.
   let hasScrolledInitially = false;
-
-  $effect(() => {
-    if (timelineActive) return;
-    // Wait for unread loading to complete before scrolling.
-    if (loadingUnread) return;
-    if (followUps.length > 0 && scrollContainerEl && !hasScrolledInitially) {
-      hasScrolledInitially = true;
-      const el = scrollContainerEl;
-
-      requestAnimationFrame(() => {
-        if (firstUnreadId !== null) {
-          // Scroll to the unread divider so the user sees where they left off.
-          const divider = document.getElementById(`unread-divider`);
-          divider?.scrollIntoView({ behavior: "auto", block: "start" });
-        } else {
-          // All read: scroll to bottom.
-          el.scrollTop = el.scrollHeight;
-        }
-      });
-    }
-  });
 
   // Auto-scroll when new follow-ups arrive via SSE and user was near bottom.
   const followUpCount = $derived(followUps.length);
@@ -793,9 +800,16 @@
     overscroll-behavior: contain;
     display: flex;
     flex-direction: column;
-    /* Leave space for the fixed ShellMessagebar at the bottom.
-       --messagebar-height is measured by ShellMessagebar's ResizeObserver. */
-    padding-bottom: var(--messagebar-height, 4.5rem);
+  }
+
+  /* Override Konsta Messages' built-in mb-12/mb-16 with the measured
+     messagebar height so the last message clears the fixed compose bar.
+     Uses the ResizeObserver-measured value from ShellMessagebar. */
+  :global(.k-messages) {
+    margin-bottom: var(
+      --messagebar-height,
+      calc(3.5rem + env(safe-area-inset-bottom, 0px))
+    ) !important;
   }
 
   /* display:contents lets the Message flex alignment (self-end for sent)

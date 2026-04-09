@@ -632,8 +632,12 @@
     padding-bottom: calc(5rem + env(safe-area-inset-bottom, 0px));
   }
 
+  /* When tabbar is hidden the route manages its own scroll container
+     (e.g., ticket detail chat-container). Make main a non-scrolling
+     flex frame so the inner container gets the correct height. */
   .main-content.tabbar-hidden {
     padding-bottom: 0 !important;
+    overflow: hidden;
   }
 
   .navbar-avatar {
