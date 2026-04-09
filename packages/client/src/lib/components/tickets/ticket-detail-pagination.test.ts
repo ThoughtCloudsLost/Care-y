@@ -29,8 +29,43 @@ function flattenPages<T>(pages: T[][]): T[] {
 }
 
 /**
- * Find the first unread follow-up ID.
- * Returns null if all follow-ups have been read.
+ * Find the first unread follow-up ID using a read cursor timestamp.
+ * Messages with createdAt <= readUpTo are read. null readUpTo = all unread.
+ */
+function findFirstUnreadByTimestamp(
+  followUps: MinimalFollowUp[],
+  readUpTo: Date | null,
+): string | null {
+  if (readUpTo === null) {
+    // No prior read history (first visit): no unread boundary.
+    return null;
+  }
+  const cutoff = readUpTo.getTime();
+  const firstUnread = followUps.find(
+    (fu) => new Date(fu.createdAt).getTime() > cutoff,
+  );
+  return firstUnread?.id ?? null;
+}
+
+/**
+ * Determine if the read boundary is beyond the loaded range.
+ * Returns true if we need to fetch more older pages.
+ */
+function needsMorePages(
+  followUps: MinimalFollowUp[],
+  readUpTo: Date | null,
+  hasMoreOlder: boolean,
+): boolean {
+  if (readUpTo === null) return false;
+  if (!hasMoreOlder) return false;
+  const oldest = followUps[0];
+  if (!oldest) return false;
+  return new Date(oldest.createdAt).getTime() > readUpTo.getTime();
+}
+
+/**
+ * Legacy: find the first unread follow-up ID using a Set of read IDs.
+ * Kept for backwards-compatibility test coverage.
  */
 function findFirstUnreadId(
   followUps: MinimalFollowUp[],
@@ -105,6 +140,97 @@ describe("firstUnreadId", () => {
     // fu-1 read, fu-2 unread, fu-3 read: first unread is fu-2
     const readIds = new Set(["fu-1", "fu-3"]);
     expect(findFirstUnreadId(followUps, readIds)).toBe("fu-2");
+  });
+});
+
+describe("findFirstUnreadByTimestamp", () => {
+  const followUps: MinimalFollowUp[] = [
+    { id: "fu-1", createdAt: "2026-04-01T10:00:00Z" },
+    { id: "fu-2", createdAt: "2026-04-01T10:01:00Z" },
+    { id: "fu-3", createdAt: "2026-04-01T10:02:00Z" },
+    { id: "fu-4", createdAt: "2026-04-01T10:03:00Z" },
+  ];
+
+  it("returns the first follow-up after the readUpTo timestamp", () => {
+    const readUpTo = new Date("2026-04-01T10:01:00Z");
+    expect(findFirstUnreadByTimestamp(followUps, readUpTo)).toBe("fu-3");
+  });
+
+  it("returns null when all follow-ups are before readUpTo", () => {
+    const readUpTo = new Date("2026-04-01T11:00:00Z");
+    expect(findFirstUnreadByTimestamp(followUps, readUpTo)).toBeNull();
+  });
+
+  it("returns null when readUpTo is null (first visit, no prior history)", () => {
+    expect(findFirstUnreadByTimestamp(followUps, null)).toBeNull();
+  });
+
+  it("returns null for empty follow-ups with null readUpTo", () => {
+    expect(findFirstUnreadByTimestamp([], null)).toBeNull();
+  });
+
+  it("returns null for empty follow-ups with a readUpTo", () => {
+    expect(
+      findFirstUnreadByTimestamp([], new Date("2026-04-01T10:00:00Z")),
+    ).toBeNull();
+  });
+
+  it("treats the exact readUpTo timestamp as read", () => {
+    // readUpTo = fu-2's timestamp, so fu-2 is read, fu-3 is first unread
+    const readUpTo = new Date("2026-04-01T10:01:00Z");
+    expect(findFirstUnreadByTimestamp(followUps, readUpTo)).toBe("fu-3");
+  });
+
+  it("returns first follow-up when readUpTo is before all messages", () => {
+    const readUpTo = new Date("2026-03-01T00:00:00Z");
+    expect(findFirstUnreadByTimestamp(followUps, readUpTo)).toBe("fu-1");
+  });
+
+  it("handles sub-second precision differences", () => {
+    const fus: MinimalFollowUp[] = [
+      { id: "a", createdAt: "2026-04-01T10:00:00.100Z" },
+      { id: "b", createdAt: "2026-04-01T10:00:00.200Z" },
+      { id: "c", createdAt: "2026-04-01T10:00:00.300Z" },
+    ];
+    const readUpTo = new Date("2026-04-01T10:00:00.200Z");
+    expect(findFirstUnreadByTimestamp(fus, readUpTo)).toBe("c");
+  });
+});
+
+describe("needsMorePages", () => {
+  const followUps: MinimalFollowUp[] = [
+    { id: "fu-50", createdAt: "2026-04-01T10:50:00Z" },
+    { id: "fu-51", createdAt: "2026-04-01T10:51:00Z" },
+    { id: "fu-99", createdAt: "2026-04-01T11:39:00Z" },
+  ];
+
+  it("returns true when oldest loaded is newer than readUpTo", () => {
+    const readUpTo = new Date("2026-04-01T10:30:00Z");
+    expect(needsMorePages(followUps, readUpTo, true)).toBe(true);
+  });
+
+  it("returns false when oldest loaded is older than readUpTo", () => {
+    const readUpTo = new Date("2026-04-01T10:55:00Z");
+    expect(needsMorePages(followUps, readUpTo, true)).toBe(false);
+  });
+
+  it("returns false when readUpTo is null (all unread, no boundary to find)", () => {
+    expect(needsMorePages(followUps, null, true)).toBe(false);
+  });
+
+  it("returns false when hasMoreOlder is false", () => {
+    const readUpTo = new Date("2026-04-01T10:30:00Z");
+    expect(needsMorePages(followUps, readUpTo, false)).toBe(false);
+  });
+
+  it("returns false for empty follow-ups", () => {
+    const readUpTo = new Date("2026-04-01T10:30:00Z");
+    expect(needsMorePages([], readUpTo, true)).toBe(false);
+  });
+
+  it("returns false when oldest loaded equals readUpTo exactly", () => {
+    const readUpTo = new Date("2026-04-01T10:50:00Z");
+    expect(needsMorePages(followUps, readUpTo, true)).toBe(false);
   });
 });
 

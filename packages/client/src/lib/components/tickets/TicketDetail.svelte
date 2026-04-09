@@ -404,9 +404,9 @@
 
   const firstUnreadId = $derived.by(() => {
     if (readUpTo === null) {
-      // No read cursor (first visit or decryption failed): all unread.
-      // First follow-up is the unread boundary.
-      return followUps.length > 0 ? (followUps[0]?.id ?? null) : null;
+      // No read cursor (first visit or decryption failed): no prior
+      // read history, so no meaningful unread boundary. Scroll to bottom.
+      return null;
     }
     const cutoff = readUpTo.getTime();
     const firstUnread = followUps.find(
