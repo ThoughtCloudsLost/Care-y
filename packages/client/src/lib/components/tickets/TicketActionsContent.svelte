@@ -20,7 +20,6 @@
     | "watch"
     | "unwatch"
     | "client-info"
-    | "timeline"
     | "cancel";
 
   interface TicketActionsContentProps {
@@ -28,7 +27,6 @@
     isOnHold: boolean;
     isAssignedToMe: boolean;
     isWatching: boolean;
-    timelineActive: boolean;
     onaction: (action: TicketAction) => void;
   }
 
@@ -37,7 +35,6 @@
     isOnHold,
     isAssignedToMe,
     isWatching,
-    timelineActive,
     onaction,
   }: TicketActionsContentProps = $props();
 </script>
@@ -71,9 +68,6 @@
   <ActionsButton onclick={() => onaction("client-info")}
     >{m.ticket_action_client_info()}</ActionsButton
   >
-  <ActionsButton onclick={() => onaction("timeline")}>
-    {timelineActive ? m.ticket_action_messages() : m.ticket_action_timeline()}
-  </ActionsButton>
   <!-- 6m extends here with pin action -->
 </ActionsGroup>
 <ActionsGroup>

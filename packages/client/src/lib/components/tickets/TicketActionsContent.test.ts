@@ -38,7 +38,6 @@ const baseProps = {
   isOnHold: false,
   isAssignedToMe: false,
   isWatching: false,
-  timelineActive: false,
   onaction: vi.fn(),
 };
 
@@ -163,33 +162,5 @@ describe("TicketActionsContent", () => {
     expect(cancelBtn).toBeDefined();
     await fireEvent.click(cancelBtn!);
     expect(onaction).toHaveBeenCalledWith("cancel");
-  });
-
-  it("shows 'View timeline' when timeline is inactive", () => {
-    const { container } = render(TicketActionsContent, {
-      props: { ...baseProps, timelineActive: false },
-    });
-    expect(container.textContent).toContain("View timeline");
-  });
-
-  it("shows 'View messages' when timeline is active", () => {
-    const { container } = render(TicketActionsContent, {
-      props: { ...baseProps, timelineActive: true },
-    });
-    expect(container.textContent).toContain("View messages");
-  });
-
-  it("calls onaction with 'timeline' when timeline toggle is clicked", async () => {
-    const onaction = vi.fn();
-    const { container } = render(TicketActionsContent, {
-      props: { ...baseProps, onaction },
-    });
-    const buttons = container.querySelectorAll("button");
-    const timelineBtn = Array.from(buttons).find(
-      (b) => b.textContent!.trim() === "View timeline",
-    );
-    expect(timelineBtn).toBeDefined();
-    await fireEvent.click(timelineBtn!);
-    expect(onaction).toHaveBeenCalledWith("timeline");
   });
 });

@@ -146,10 +146,8 @@ export interface ShellMessagebarProps {
   mode?: ComposeMode;
   /** Called when the send/save button is tapped. */
   onsend: () => void;
-  /** Called when the attach button is tapped. */
-  onattach: () => void;
-  /** Called when the preset reply button is tapped. */
-  onpreset: () => void;
+  /** Called when the + compose actions button is tapped (opens attach/preset sheet). */
+  onplus: () => void;
   /** Forwarded from the textarea's native input event. Used by @mention autocomplete to read cursor position. */
   oninput?: (e: Event) => void;
   /** Whether the send button is visually disabled. */

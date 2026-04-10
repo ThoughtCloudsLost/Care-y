@@ -257,7 +257,7 @@
   "common_loading": "Cargando",
 
   "ticket_compose_reply_placeholder": "Escribe una respuesta...",
-  "ticket_compose_note_placeholder": "Escribe una nota...",
+  "ticket_compose_note_placeholder": "Nota interna del equipo...",
   "ticket_send": "Enviar mensaje",
   "ticket_save_note": "Guardar nota",
   "ticket_mode_reply": "RESPUESTA",
@@ -266,6 +266,7 @@
   "ticket_switch_to_note": "Cambiar a modo nota",
   "ticket_attach_file": "Adjuntar archivo",
   "ticket_preset_replies": "Respuestas predefinidas",
+  "ticket_compose_actions": "Acciones de composicion",
   "ticket_call": "Llamar al cliente",
   "ticket_more_actions": "Mas acciones",
   "ticket_new_messages": "Mensajes nuevos",

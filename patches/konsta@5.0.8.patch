@@ -167,6 +167,73 @@ index 126bebc04eff64fb1745417e0ea6d9e8167e8e5b..bd07ea417df130ea17e795d5e8c646f2
  }
  
  
+diff --git a/svelte/components/Messagebar.svelte b/svelte/components/Messagebar.svelte
+--- a/svelte/components/Messagebar.svelte
++++ b/svelte/components/Messagebar.svelte
+@@ -5,6 +5,7 @@
+   import { useDarkClasses } from '../shared/use-dark-classes.js';
+   import Toolbar from './Toolbar.svelte';
+   import Glass from './Glass.svelte';
++  import ToolbarPane from './ToolbarPane.svelte';
+
+   let {
+     class: className,
+@@ -92,9 +93,9 @@
+ >
+   <Toolbar {colors} {outline} innerClass={c.toolbarInner}>
+     {#if left}
+-      <div class={c.left}>
++      <ToolbarPane tabbar={false} class={c.left}>
+         {@render left?.()}
+-      </div>
++      </ToolbarPane>
+     {/if}
+     <Glass class={c.messagebarArea}>
+       <textarea
+@@ -113,9 +114,9 @@
+       ></textarea>
+     </Glass>
+     {#if right}
+-      <div class={c.right}>
++      <ToolbarPane tabbar={false} class={c.right}>
+         {@render right?.()}
+-      </div>
++      </ToolbarPane>
+     {/if}
+   </Toolbar>
+ </svelte:element>
+diff --git a/shared/colors/MessagebarColors.js b/shared/colors/MessagebarColors.js
+--- a/shared/colors/MessagebarColors.js
++++ b/shared/colors/MessagebarColors.js
+@@ -8,8 +8,8 @@ export const MessagebarColors = (colorsProp = {}, dark) => {
+     inputBgMd: cls('bg-md-light-surface-2', dark('dark:bg-md-dark-surface-variant')),
+     placeholderIos: cls(dark('dark:placeholder-whit/40')),
+     placeholderMd: cls('placeholder-md-light-on-surface-variant', dark('dark:placeholder-md-dark-on-surface-variant')),
+-    bgIos: undefined,
+-    bgMaterial: cls('bg-md-light-surface', dark('dark:bg-md-dark-surface')),
++    bgIos: cls('bg-gradient-to-t from-ios-light-surface to-transparent', dark('dark:from-ios-dark-surface/50')),
++    bgMaterial: cls('bg-md-light-surface-2', dark('dark:bg-md-dark-surface-2')),
+     ...filterColors(colorsProp)
+   };
+ };
+diff --git a/shared/classes/MessagebarClasses.js b/shared/classes/MessagebarClasses.js
+--- a/shared/classes/MessagebarClasses.js
++++ b/shared/classes/MessagebarClasses.js
+@@ -19,12 +19,12 @@ export const MessagebarClasses = (props, colors, {
+       ios: 'w-full items-center gap-3'
+     },
+     left: {
+-      common: cls('', leftClassName || leftClass),
++      common: cls('flex items-center', leftClassName || leftClass),
+       ios: cls('', colors.toolbarIconIos),
+       material: cls('mt-1 -ms-2', colors.toolbarIconMd)
+     },
+     right: {
+-      common: cls('', rightClassName || rightClass),
++      common: cls('flex items-center', rightClassName || rightClass),
+       ios: cls('', colors.toolbarIconIos),
+       material: cls('mt-1 -me-2')
+     },
 diff --git a/svelte/types/ToolbarPane.d.ts b/svelte/types/ToolbarPane.d.ts
 index 584f9ac73f7107816319c1784e36390e23e00697..0c792b17fcbac9f4eabdb3f1a23d0199f974d9c0 100644
 --- a/svelte/types/ToolbarPane.d.ts

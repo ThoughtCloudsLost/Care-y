@@ -6,17 +6,17 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Ticket_Compose_Note_PlaceholderInputs */
 
 const en_ticket_compose_note_placeholder = /** @type {(inputs: Ticket_Compose_Note_PlaceholderInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Type a note...`)
+	return /** @type {LocalizedString} */ (`Internal team note...`)
 };
 
 const es_ticket_compose_note_placeholder = /** @type {(inputs: Ticket_Compose_Note_PlaceholderInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Escribe una nota...`)
+	return /** @type {LocalizedString} */ (`Nota interna del equipo...`)
 };
 
 /**
 * | output |
 * | --- |
-* | "Type a note..." |
+* | "Internal team note..." |
 *
 * @param {Ticket_Compose_Note_PlaceholderInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

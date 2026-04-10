@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Type a note..." |
+* | "Internal team note..." |
 *
 * @param {Ticket_Compose_Note_PlaceholderInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

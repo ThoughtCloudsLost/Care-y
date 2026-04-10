@@ -14,7 +14,13 @@
   import type { Snapshot } from "./$types.js";
   import { page } from "$app/state";
   import { Link } from "konsta/svelte";
-  import { ChevronLeft, Phone, EllipsisVertical } from "@lucide/svelte";
+  import {
+    ChevronLeft,
+    Phone,
+    CalendarClock,
+    MessageSquareText,
+    EllipsisVertical,
+  } from "@lucide/svelte";
   import * as m from "$lib/paraglide/messages.js";
   import {
     getTabbarHiddenCtx,
@@ -217,6 +223,7 @@
 
   let actionsSheetOpen = $state(false);
   let callSheetOpen = $state(false);
+  let composeActionsOpen = $state(false);
   let presetSheetOpen = $state(false);
   let clientInfoOpen = $state(false);
   let lightboxOpen = $state(false);
@@ -247,11 +254,24 @@
     }
   }
 
+  function openComposeActions(): void {
+    composeActionsOpen = true;
+  }
+  function closeComposeActions(): void {
+    composeActionsOpen = false;
+  }
+
   function handleAttach(): void {
+    closeComposeActions();
     // Stub: file attachment wired separately.
     if (import.meta.env.DEV) {
       console.log("[TicketDetail] attach");
     }
+  }
+
+  function handlePresetFromCompose(): void {
+    closeComposeActions();
+    openPresetSheet();
   }
 
   function handleMentionSelect(_userId: string, displayName: string): void {
@@ -304,9 +324,6 @@
         break;
       case "client-info":
         openClientInfo();
-        break;
-      case "timeline":
-        timelineActive = !timelineActive;
         break;
       case "cancel":
         break;
@@ -509,6 +526,21 @@
   <Link iconOnly onclick={goBack} role="button" aria-label={m.common_back()}>
     <ChevronLeft size={22} aria-hidden="true" />
   </Link>
+  <Link
+    iconOnly
+    onclick={() => (timelineActive = !timelineActive)}
+    role="switch"
+    aria-checked={timelineActive ? "true" : "false"}
+    aria-label={timelineActive
+      ? m.ticket_action_messages()
+      : m.ticket_action_timeline()}
+  >
+    {#if timelineActive}
+      <MessageSquareText size={22} aria-hidden="true" />
+    {:else}
+      <CalendarClock size={22} aria-hidden="true" />
+    {/if}
+  </Link>
 {/snippet}
 
 {#snippet navTitle()}
@@ -568,8 +600,7 @@
   bind:value={draftText}
   bind:mode={composeMode}
   onsend={handleSend}
-  onattach={handleAttach}
-  onpreset={openPresetSheet}
+  onplus={openComposeActions}
   oninput={handleInput}
   sendDisabled={!draftText.trim()}
 />
@@ -581,13 +612,28 @@
     {isOnHold}
     {isAssignedToMe}
     {isWatching}
-    {timelineActive}
     onaction={handleTicketAction}
   />
 </ShellActionSheet>
 
 <ShellActionSheet opened={callSheetOpen} ondismiss={closeCallSheet}>
   <CallOptionsContent {hasVerifiedPhone} onaction={handleCallAction} />
+</ShellActionSheet>
+
+<ShellActionSheet opened={composeActionsOpen} ondismiss={closeComposeActions}>
+  <ActionsGroup>
+    <ActionsButton onclick={handleAttach}>
+      {m.ticket_attach_file()}
+    </ActionsButton>
+    <ActionsButton onclick={handlePresetFromCompose}>
+      {m.ticket_preset_replies()}
+    </ActionsButton>
+  </ActionsGroup>
+  <ActionsGroup>
+    <ActionsButton onclick={closeComposeActions} bold>
+      {m.common_cancel()}
+    </ActionsButton>
+  </ActionsGroup>
 </ShellActionSheet>
 
 <ShellSheet opened={presetSheetOpen} ondismiss={closePresetSheet}>
