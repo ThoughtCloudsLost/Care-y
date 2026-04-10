@@ -99,7 +99,20 @@
     cursor: pointer;
     user-select: none;
     flex-shrink: 0;
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    background-color: rgb(128 128 128 / 0.15);
     transition: background-color 150ms ease;
+  }
+
+  @media (prefers-contrast: more) {
+    :global(.filter-pill) {
+      backdrop-filter: none;
+      -webkit-backdrop-filter: none;
+      background-color: Canvas;
+      color: CanvasText;
+      border: 1px solid CanvasText;
+    }
   }
 
   :global(.filter-pill--active) {

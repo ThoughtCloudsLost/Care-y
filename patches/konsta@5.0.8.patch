@@ -34,7 +34,61 @@ index 3163bcf68efefdbe6d177e52d668bff06bcd81c8..3ee50168c8ccf5319ddc9f71f92ed1a7
      position = 'bottom';
      top = targetOffsetTop + targetHeight + angleSize;
    } else {
+diff --git a/shared/classes/MessagebarClasses.js b/shared/classes/MessagebarClasses.js
+index 0143714c3d284cda7aac1204d33262948cd074aa..ad35cdf2b80fb85fec710b410c532fe38b67de27 100644
+--- a/shared/classes/MessagebarClasses.js
++++ b/shared/classes/MessagebarClasses.js
+@@ -19,12 +19,12 @@ export const MessagebarClasses = (props, colors, {
+       ios: 'w-full items-center gap-3'
+     },
+     left: {
+-      common: cls('', leftClassName || leftClass),
++      common: cls('flex items-center', leftClassName || leftClass),
+       ios: cls('', colors.toolbarIconIos),
+       material: cls('mt-1 -ms-2', colors.toolbarIconMd)
+     },
+     right: {
+-      common: cls('', rightClassName || rightClass),
++      common: cls('flex items-center', rightClassName || rightClass),
+       ios: cls('', colors.toolbarIconIos),
+       material: cls('mt-1 -me-2')
+     },
+diff --git a/shared/classes/NavbarClasses.js b/shared/classes/NavbarClasses.js
+index 6fbf74ceeb19fcdc938f7b5ea570942d0cc42970..5d3f2d03fc5f900e62aba8ec921029d101fff7a2 100644
+--- a/shared/classes/NavbarClasses.js
++++ b/shared/classes/NavbarClasses.js
+@@ -39,11 +39,11 @@ export const NavbarClasses = (props, colors, baseClassName) => {
+       material: cls('pt-safe', fontSizeMaterial, colors.textMaterial)
+     },
+     bgBlur: {
+-      ios: cls('backdrop-blur-[2px] absolute left-0 top-0 w-full  mask-b-to-100% pointer-events-none mask-b-from-50%', subnavbar ? 'h-[calc(max(16px,var(--k-safe-area-top))_+_44px_+70px_+_16px)]' : 'h-[calc(max(16px,var(--k-safe-area-top))_+_44px_+_16px)]')
++      ios: cls('backdrop-blur-[2px] absolute left-0 top-0 w-full  mask-b-to-100% pointer-events-none mask-b-from-50%', subnavbar ? 'h-[calc(max(16px,var(--k-safe-area-top))_+_44px_+70px_+_16px)]' : 'h-[var(--k-navbar-chrome-h,calc(max(16px,var(--k-safe-area-top))_+_44px_+_16px))]')
+     },
+     bg: {
+       common: cls('absolute w-full left-0 top-0', bgClassName || bgClass),
+-      ios: cls(colors.bgIos, 'pointer-events-none', subnavbar ? 'h-[calc(max(16px,var(--k-safe-area-top))_+_44px_+70px_+_16px)]' : 'h-[calc(max(16px,var(--k-safe-area-top))_+_44px_+_16px)]'),
++      ios: cls(colors.bgIos, 'pointer-events-none', subnavbar ? 'h-[calc(max(16px,var(--k-safe-area-top))_+_44px_+70px_+_16px)]' : 'h-[var(--k-navbar-chrome-h,calc(max(16px,var(--k-safe-area-top))_+_44px_+_16px))]'),
+       material: cls('h-full', colors.bgMaterial, outline && 'hairline-b')
+     },
+     subnavbar: {
+diff --git a/shared/colors/MessagebarColors.js b/shared/colors/MessagebarColors.js
+index 1bb74e299d2dc5cac99299e4b90252207b60a483..1d761000429c47ffa753cbbf1d3729aab4ade158 100644
+--- a/shared/colors/MessagebarColors.js
++++ b/shared/colors/MessagebarColors.js
+@@ -8,8 +8,8 @@ export const MessagebarColors = (colorsProp = {}, dark) => {
+     inputBgMd: cls('bg-md-light-surface-2', dark('dark:bg-md-dark-surface-variant')),
+     placeholderIos: cls(dark('dark:placeholder-whit/40')),
+     placeholderMd: cls('placeholder-md-light-on-surface-variant', dark('dark:placeholder-md-dark-on-surface-variant')),
+-    bgIos: undefined,
+-    bgMaterial: cls('bg-md-light-surface', dark('dark:bg-md-dark-surface')),
++    bgIos: cls('bg-gradient-to-t from-ios-light-surface to-transparent', dark('dark:from-ios-dark-surface/50')),
++    bgMaterial: cls('bg-md-light-surface-2', dark('dark:bg-md-dark-surface-2')),
+     ...filterColors(colorsProp)
+   };
+ };
+\ No newline at end of file
 diff --git a/svelte/components/Dialog.svelte b/svelte/components/Dialog.svelte
+index f83845881302040a240af0d836464932551573e6..711eaddc598a715800f44f46cd4752262a70084f 100644
 --- a/svelte/components/Dialog.svelte
 +++ b/svelte/components/Dialog.svelte
 @@ -3,6 +3,7 @@
@@ -43,7 +97,7 @@ diff --git a/svelte/components/Dialog.svelte b/svelte/components/Dialog.svelte
    import { useThemeClasses } from '../shared/use-theme-classes.js';
 +  import { printText } from '../shared/print-text.js';
    import Glass from './Glass.svelte';
-
+ 
    let {
 diff --git a/svelte/components/Link.svelte b/svelte/components/Link.svelte
 index 5b219dc6403e587a20f5b2ce79fcc1cbc152db3f..dc6dd5504cce9cc0243910915a4c1433785483ae 100644
@@ -62,6 +116,42 @@ index 5b219dc6403e587a20f5b2ce79fcc1cbc152db3f..dc6dd5504cce9cc0243910915a4c1433
    onclick={onClick || onclick}
  >
    {@render children?.()}
+diff --git a/svelte/components/Messagebar.svelte b/svelte/components/Messagebar.svelte
+index c2fbdb2c614369629d1cdff35bbccee3d38ee173..20a4ae45e250d4142cd2087feb592ba39d1cd9bb 100644
+--- a/svelte/components/Messagebar.svelte
++++ b/svelte/components/Messagebar.svelte
+@@ -5,6 +5,7 @@
+   import { useDarkClasses } from '../shared/use-dark-classes.js';
+   import Toolbar from './Toolbar.svelte';
+   import Glass from './Glass.svelte';
++  import ToolbarPane from './ToolbarPane.svelte';
+ 
+   let {
+     class: className,
+@@ -92,9 +93,9 @@
+ >
+   <Toolbar {colors} {outline} innerClass={c.toolbarInner}>
+     {#if left}
+-      <div class={c.left}>
++      <ToolbarPane tabbar={false} class={c.left}>
+         {@render left?.()}
+-      </div>
++      </ToolbarPane>
+     {/if}
+     <Glass class={c.messagebarArea}>
+       <textarea
+@@ -113,9 +114,9 @@
+       ></textarea>
+     </Glass>
+     {#if right}
+-      <div class={c.right}>
++      <ToolbarPane tabbar={false} class={c.right}>
+         {@render right?.()}
+-      </div>
++      </ToolbarPane>
+     {/if}
+   </Toolbar>
+ </svelte:element>
 diff --git a/svelte/components/Popover.svelte b/svelte/components/Popover.svelte
 index 25ebd4b7069a8af1028228eb8451ba0678bd49b2..ef71ff2eb90df7fa282da5579757f363d7b54ba9 100644
 --- a/svelte/components/Popover.svelte
@@ -167,73 +257,6 @@ index 126bebc04eff64fb1745417e0ea6d9e8167e8e5b..bd07ea417df130ea17e795d5e8c646f2
  }
  
  
-diff --git a/svelte/components/Messagebar.svelte b/svelte/components/Messagebar.svelte
---- a/svelte/components/Messagebar.svelte
-+++ b/svelte/components/Messagebar.svelte
-@@ -5,6 +5,7 @@
-   import { useDarkClasses } from '../shared/use-dark-classes.js';
-   import Toolbar from './Toolbar.svelte';
-   import Glass from './Glass.svelte';
-+  import ToolbarPane from './ToolbarPane.svelte';
-
-   let {
-     class: className,
-@@ -92,9 +93,9 @@
- >
-   <Toolbar {colors} {outline} innerClass={c.toolbarInner}>
-     {#if left}
--      <div class={c.left}>
-+      <ToolbarPane tabbar={false} class={c.left}>
-         {@render left?.()}
--      </div>
-+      </ToolbarPane>
-     {/if}
-     <Glass class={c.messagebarArea}>
-       <textarea
-@@ -113,9 +114,9 @@
-       ></textarea>
-     </Glass>
-     {#if right}
--      <div class={c.right}>
-+      <ToolbarPane tabbar={false} class={c.right}>
-         {@render right?.()}
--      </div>
-+      </ToolbarPane>
-     {/if}
-   </Toolbar>
- </svelte:element>
-diff --git a/shared/colors/MessagebarColors.js b/shared/colors/MessagebarColors.js
---- a/shared/colors/MessagebarColors.js
-+++ b/shared/colors/MessagebarColors.js
-@@ -8,8 +8,8 @@ export const MessagebarColors = (colorsProp = {}, dark) => {
-     inputBgMd: cls('bg-md-light-surface-2', dark('dark:bg-md-dark-surface-variant')),
-     placeholderIos: cls(dark('dark:placeholder-whit/40')),
-     placeholderMd: cls('placeholder-md-light-on-surface-variant', dark('dark:placeholder-md-dark-on-surface-variant')),
--    bgIos: undefined,
--    bgMaterial: cls('bg-md-light-surface', dark('dark:bg-md-dark-surface')),
-+    bgIos: cls('bg-gradient-to-t from-ios-light-surface to-transparent', dark('dark:from-ios-dark-surface/50')),
-+    bgMaterial: cls('bg-md-light-surface-2', dark('dark:bg-md-dark-surface-2')),
-     ...filterColors(colorsProp)
-   };
- };
-diff --git a/shared/classes/MessagebarClasses.js b/shared/classes/MessagebarClasses.js
---- a/shared/classes/MessagebarClasses.js
-+++ b/shared/classes/MessagebarClasses.js
-@@ -19,12 +19,12 @@ export const MessagebarClasses = (props, colors, {
-       ios: 'w-full items-center gap-3'
-     },
-     left: {
--      common: cls('', leftClassName || leftClass),
-+      common: cls('flex items-center', leftClassName || leftClass),
-       ios: cls('', colors.toolbarIconIos),
-       material: cls('mt-1 -ms-2', colors.toolbarIconMd)
-     },
-     right: {
--      common: cls('', rightClassName || rightClass),
-+      common: cls('flex items-center', rightClassName || rightClass),
-       ios: cls('', colors.toolbarIconIos),
-       material: cls('mt-1 -me-2')
-     },
 diff --git a/svelte/types/ToolbarPane.d.ts b/svelte/types/ToolbarPane.d.ts
 index 584f9ac73f7107816319c1784e36390e23e00697..0c792b17fcbac9f4eabdb3f1a23d0199f974d9c0 100644
 --- a/svelte/types/ToolbarPane.d.ts

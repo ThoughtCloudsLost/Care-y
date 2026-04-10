@@ -127,11 +127,12 @@
   setNavbarOverrideCtx(navbarOverrideContainer);
   const navbarOverride = $derived(navbarOverrideContainer.current);
 
-  // Subnavbar height measurement for collapse animation.
-  // ResizeObserver tracks the inner content height and sets a CSS
-  // variable that the negative margin-top transition uses.
+  // Subnavbar + Navbar height measurement.
+  // ResizeObserver tracks the inner content height so we can set
+  // padding-top on <main> and position the subnavbar correctly.
   let subnavbarInnerEl = $state<HTMLElement | undefined>();
   let subnavbarHeight = $state(0);
+  let navbarHeight = $state(0);
 
   $effect(() => {
     const el = subnavbarInnerEl;
@@ -144,6 +145,56 @@
     });
     ro.observe(el, { box: "border-box" });
     return () => ro.disconnect();
+  });
+
+  // Measure the Navbar's rendered height via its .k-navbar class.
+  // mainEl's parentElement is the Page div that contains the Navbar.
+  let navbarDomEl = $state<HTMLElement | undefined>();
+
+  $effect(() => {
+    const page = mainEl?.parentElement;
+    if (page == null) return;
+    const navbar = page.querySelector<HTMLElement>(".k-navbar");
+    if (navbar == null) return;
+    navbarDomEl = navbar;
+    const ro = new ResizeObserver((entries) => {
+      const entry = entries[0];
+      if (entry != null) {
+        navbarHeight = entry.borderBoxSize[0]?.blockSize ?? navbar.offsetHeight;
+      }
+    });
+    ro.observe(navbar, { box: "border-box" });
+    return () => ro.disconnect();
+  });
+
+  // Extend the Navbar's blur/bg layers to cover the subnavbar region.
+  // The patched NavbarClasses reads --k-navbar-chrome-h for iOS layer heights.
+  // When no subnavbar is present or it's hidden, the variable is unset
+  // and the default (navbar-only) height applies.
+  $effect(() => {
+    const el = navbarDomEl;
+    if (el == null) return;
+    const hasSubnavbar = navbarOverride?.subnavbar != null;
+    const isHidden = navbarOverride?.subnavbarHidden?.() === true;
+    // The bgBlur layer is the first child of .k-navbar (iOS only).
+    // Its gradient mask fades blur too early over the extended area.
+    const firstChild = el.firstElementChild;
+    const bgBlur = firstChild instanceof HTMLElement ? firstChild : null;
+    if (hasSubnavbar && !isHidden && subnavbarHeight > 0 && navbarHeight > 0) {
+      const chromeH = navbarHeight + subnavbarHeight + 16;
+      el.style.setProperty("--k-navbar-chrome-h", `${String(chromeH)}px`);
+      if (bgBlur != null) {
+        const mask = "linear-gradient(to bottom, black 90%, transparent)";
+        bgBlur.style.setProperty("-webkit-mask-image", mask);
+        bgBlur.style.setProperty("mask-image", mask);
+      }
+    } else {
+      el.style.removeProperty("--k-navbar-chrome-h");
+      if (bgBlur != null) {
+        bgBlur.style.removeProperty("-webkit-mask-image");
+        bgBlur.style.removeProperty("mask-image");
+      }
+    }
   });
 
   let {
@@ -395,15 +446,13 @@
     return ARC_CIRCUM * (1 - progress);
   }
 
-  // Indicator sits just below the navbar (44px Konsta navbar + safe-area-inset-top).
+  // Indicator sits just below the navbar. navbarHeight already includes
+  // safe-area padding, so no need to add env(safe-area-inset-top) again.
   // Travels down slightly as the user pulls for a natural feel.
-  // The idle branch is unreachable in the template ({#if ptrPhase !== "idle"}),
-  // but keeping it as a string avoids a mixed number|string type.
-  const NAVBAR_H = 44;
   const indicatorTop = $derived(
     ptrPhase === "idle"
       ? "-40px"
-      : `calc(env(safe-area-inset-top, 0px) + ${String(NAVBAR_H + Math.round(ptrPullY * 0.2) + 8)}px)`,
+      : `${String(navbarHeight + Math.round(ptrPullY * 0.2) + 8)}px`,
   );
 </script>
 
@@ -469,6 +518,7 @@
       class:shell-subnavbar--hidden={navbarOverride.subnavbarHidden?.() ===
         true}
       style:--subnavbar-h="{subnavbarHeight}px"
+      style:--navbar-h="{navbarHeight}px"
     >
       <div class="shell-subnavbar-inner" bind:this={subnavbarInnerEl}>
         {@render navbarOverride.subnavbar()}
@@ -625,6 +675,9 @@
     id="main-content"
     class="main-content"
     class:tabbar-hidden={tabbarHidden}
+    class:has-subnavbar={navbarOverride?.subnavbar != null}
+    style:--subnavbar-h="{subnavbarHeight}px"
+    style:--navbar-h="{navbarHeight}px"
   >
     {@render children()}
   </main>
@@ -643,10 +696,34 @@
     height: calc(var(--k-safe-area-bottom) + 48px) !important;
   }
 
+  /* Navbar keeps Konsta's default sticky + z-20. */
+
+  @media (prefers-contrast: more) {
+    :global(.k-navbar) {
+      background: Canvas !important;
+      color: CanvasText !important;
+    }
+
+    /* Remove the blur and gradient layers inside the Navbar */
+    :global(.k-navbar) > :first-child,
+    :global(.k-navbar) > :nth-child(2) {
+      backdrop-filter: none !important;
+      -webkit-backdrop-filter: none !important;
+      background: none !important;
+      mask-image: none !important;
+      -webkit-mask-image: none !important;
+    }
+  }
+
   /* Main is the scroll container (Page has overflow:hidden). Each route's
      content scrolls within this element. Routes with their own scroll
      containers (e.g., ticket detail chat-container) capture overflow
-     internally so main stays at scrollTop 0 for them. */
+     internally so main stays at scrollTop 0 for them.
+
+     Negative margin-top pulls main up behind the Navbar so scrolling
+     content is painted in the same compositing area. This lets the
+     Navbar's backdrop-filter blur the content behind it. padding-top
+     compensates so visible content starts below the Navbar. */
   .main-content {
     flex: 1;
     min-height: 0;
@@ -654,6 +731,8 @@
     overscroll-behavior-y: contain;
     display: flex;
     flex-direction: column;
+    margin-top: calc(-1 * var(--navbar-h, 0px));
+    padding-top: var(--navbar-h, 0px);
   }
 
   :global(.k-ios) .main-content {
@@ -714,23 +793,65 @@
   }
 
   /* ── Subnavbar (collapsible region below Navbar) ────────────────── */
+  /* Absolutely positioned so it does NOT participate in flex layout.
+     <main> reserves space via padding-top instead. This prevents iOS
+     Safari scroll-position jumps caused by flex siblings resizing
+     mid-scroll (WebKit lacks scroll anchoring in stable Safari 26). */
 
   .shell-subnavbar {
-    flex-shrink: 0;
-    overflow: hidden;
-    background: var(--k-page-bg);
+    position: absolute;
+    top: var(--navbar-h);
+    left: 0;
+    right: 0;
+    z-index: 21; /* above Navbar's blur/bg layers (z-20) */
   }
 
+  /* Only clip overflow during collapse animation. When visible,
+     overflow must be visible so popovers inside the subnavbar
+     (e.g., filter pill dropdowns) can render outside the bounds. */
+  .shell-subnavbar--hidden {
+    overflow: hidden;
+  }
+
+  /* No background on the subnavbar itself. The Navbar's bg/blur layers
+     are extended via --k-navbar-chrome-h to cover this region, creating
+     one continuous glass surface regardless of theme. */
+
   .shell-subnavbar-inner {
+    will-change: transform, opacity;
     transition:
-      margin-top 300ms cubic-bezier(0.4, 0, 0.2, 1),
+      transform 300ms cubic-bezier(0.4, 0, 0.2, 1),
       opacity 200ms ease;
   }
 
+  /* Material: Navbar has no bgBlur layer, so the subnavbar provides
+     its own backdrop blur with a soft fade-out at the bottom. */
+  :global(.k-material) .shell-subnavbar-inner {
+    backdrop-filter: blur(2px);
+    -webkit-backdrop-filter: blur(2px);
+    -webkit-mask-image: linear-gradient(to bottom, black 90%, transparent);
+    mask-image: linear-gradient(to bottom, black 90%, transparent);
+  }
+
   .shell-subnavbar--hidden .shell-subnavbar-inner {
-    margin-top: calc(-1 * var(--subnavbar-h));
+    transform: translateY(calc(-1 * var(--subnavbar-h)));
     opacity: 0;
     pointer-events: none;
+  }
+
+  .main-content.has-subnavbar {
+    padding-top: calc(var(--navbar-h, 0px) + var(--subnavbar-h));
+  }
+
+  @media (prefers-contrast: more) {
+    .shell-subnavbar-inner {
+      backdrop-filter: none !important;
+      -webkit-backdrop-filter: none !important;
+      mask-image: none !important;
+      -webkit-mask-image: none !important;
+      background: Canvas !important;
+      color: CanvasText !important;
+    }
   }
 
   @media (prefers-reduced-motion: reduce) {

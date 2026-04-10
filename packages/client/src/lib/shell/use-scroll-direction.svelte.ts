@@ -43,6 +43,7 @@ export class ScrollDirectionTracker {
   private lastScrollTop = 0;
   private scrollHandler: (() => void) | null = null;
   private currentEl: HTMLElement | null = null;
+  private rafId: number | null = null;
 
   hidden = false;
 
@@ -84,7 +85,17 @@ export class ScrollDirectionTracker {
     this.detach();
     this.currentEl = el;
     this.lastScrollTop = el.scrollTop;
-    this.scrollHandler = () => this.handleScroll();
+    // Gate through rAF so iOS Safari's batched momentum scroll events
+    // are coalesced into a single direction check per frame. Without
+    // this, rapid scroll events cause the hidden state to flip multiple
+    // times in one frame, producing a janky animation.
+    this.scrollHandler = () => {
+      if (this.rafId != null) return;
+      this.rafId = requestAnimationFrame(() => {
+        this.rafId = null;
+        this.handleScroll();
+      });
+    };
     el.addEventListener("scroll", this.scrollHandler, { passive: true });
   }
 
@@ -92,6 +103,10 @@ export class ScrollDirectionTracker {
   detach(): void {
     if (this.currentEl != null && this.scrollHandler != null) {
       this.currentEl.removeEventListener("scroll", this.scrollHandler);
+    }
+    if (this.rafId != null) {
+      cancelAnimationFrame(this.rafId);
+      this.rafId = null;
     }
     this.scrollHandler = null;
     this.currentEl = null;
