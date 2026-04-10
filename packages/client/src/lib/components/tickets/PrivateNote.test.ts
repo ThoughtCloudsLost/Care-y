@@ -57,11 +57,12 @@ describe("PrivateNote", () => {
     );
   });
 
-  it("renders loading fallback when authorName is undefined", () => {
+  it("hides author name when authorName is undefined", () => {
     const { container } = render(PrivateNote, {
       props: { ...baseProps, authorName: undefined },
     });
-    expect(container.textContent).toContain("Loading");
+    const authorEl = container.querySelector(".note-author");
+    expect(authorEl).toBeNull();
   });
 
   it("renders a <time> element with datetime attribute", () => {

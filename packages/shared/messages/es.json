@@ -275,6 +275,7 @@
   "ticket_message_received_from": "Mensaje recibido de {name} a las {time}",
   "ticket_private_note_by": "Nota privada de {author}",
   "ticket_private_note_label": "Solo tu equipo puede ver esto",
+  "ticket_private_note_author_fallback": "Nota",
   "ticket_action_take": "Tomar",
   "ticket_action_release": "Liberar",
   "ticket_action_assign": "Asignar",

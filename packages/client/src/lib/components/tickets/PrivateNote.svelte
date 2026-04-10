@@ -1,10 +1,9 @@
 <!--
   Private/internal note in the chat timeline.
 
-  Full-width block with distinct background and brand-colored left border.
-  Shows author name, "only your team can see this" badge, and timestamp.
-  Visually distinct from message bubbles so volunteers never mistake a
-  private note for a client-visible message.
+  Uses a Konsta Card (outline) to stay visually consistent with the
+  component library. A Chip marks the note as team-only. The Card's
+  header snippet holds the author + chip, footer holds the timestamp.
 
   Edit lifecycle: parent controls `editing` boolean. When editing transitions
   from false to true, this component snapshots `content` into an internal
@@ -14,7 +13,8 @@
   the mutation is in flight. Parent sets `editing = false` only on success.
 -->
 <script lang="ts">
-  import { Button, List, ListInput } from "konsta/svelte";
+  import { Card, Chip, Button, List, ListInput } from "konsta/svelte";
+  import { StickyNote } from "@lucide/svelte";
   import { isDecryptError } from "$lib/crypto/async-decrypt-cache.js";
   import { formatRelativeTime } from "$lib/utils/format-time.js";
   import * as m from "$lib/paraglide/messages.js";
@@ -81,112 +81,143 @@
   }
 
   const timeLabel = $derived(formatRelativeTime(new Date(timestamp)));
-  const displayAuthor = $derived(authorName ?? m.common_loading());
+  const displayAuthor = $derived(
+    authorName ?? m.ticket_private_note_author_fallback(),
+  );
   const canSave = $derived(editText.trim().length > 0 && !saving);
 </script>
 
-<div
-  class="private-note"
-  class:private-note-own={isOwn}
-  class:private-note-editing={editing}
-  role="article"
-  aria-label={m.ticket_private_note_by({ author: displayAuthor })}
-  onpointerdown={editing ? undefined : onpointerdown}
-  onpointerup={editing ? undefined : onpointerup}
-  onpointercancel={editing ? undefined : onpointercancel}
->
-  <div class="note-header">
-    <span class="note-author">{displayAuthor}</span>
-    <span class="note-badge">{m.ticket_private_note_label()}</span>
-  </div>
-  {#if editing}
-    <div class="note-edit-area">
-      <List strong inset nested class="note-edit-list">
-        <ListInput
-          type="textarea"
-          bind:value={editText}
-          aria-label={m.ticket_edit_note()}
-          inputClass="resize-y min-h-[3rem]"
-          disabled={saving}
-        />
-      </List>
-      <div class="note-edit-actions">
-        <Button
-          clear
-          small
-          inline
-          onclick={handleCancel}
-          disabled={saving}
-          class="note-edit-cancel"
-        >
-          {m.common_cancel()}
-        </Button>
-        <Button
-          small
-          inline
-          onclick={handleSave}
-          disabled={!canSave}
-          class="note-edit-save"
-        >
-          {#if saving}
-            {m.common_loading()}
-          {:else}
-            {m.common_save()}
-          {/if}
-        </Button>
+<div class="private-note-wrapper">
+  <Card
+    outline
+    contentWrapPadding="pt-1 pb-3 px-3"
+    class="private-note-card"
+    role="article"
+    aria-label={m.ticket_private_note_by({ author: displayAuthor })}
+    onpointerdown={editing ? undefined : onpointerdown}
+    onpointerup={editing ? undefined : onpointerup}
+    onpointercancel={editing ? undefined : onpointercancel}
+  >
+    {#snippet header()}
+      <div class="note-header">
+        <div class="note-header-row">
+          <Chip outline class="note-chip">
+            <span class="note-chip-content">
+              <StickyNote size={11} class="note-icon" />
+              {m.ticket_private_note_label()}
+            </span>
+          </Chip>
+          <time class="note-time" datetime={timestamp}>{timeLabel}</time>
+        </div>
+        {#if authorName}
+          <span class="note-author">{authorName}</span>
+        {/if}
       </div>
-    </div>
-  {:else}
-    <div class="note-body">
-      {#if isDecryptError(content)}
-        <span class="decrypt-error">{m.error_decryption_failed()}</span>
-      {:else if content === undefined}
-        <span class="shimmer shimmer-note" aria-busy="true"></span>
-      {:else}
-        {content}
-      {/if}
-    </div>
-  {/if}
-  <time class="note-time" datetime={timestamp}>{timeLabel}</time>
+    {/snippet}
+    {#if editing}
+      <div class="note-edit-area">
+        <List strong inset nested class="note-edit-list">
+          <ListInput
+            type="textarea"
+            bind:value={editText}
+            aria-label={m.ticket_edit_note()}
+            inputClass="resize-y min-h-[3rem]"
+            disabled={saving}
+          />
+        </List>
+        <div class="note-edit-actions">
+          <Button
+            clear
+            small
+            inline
+            onclick={handleCancel}
+            disabled={saving}
+            class="note-edit-cancel"
+          >
+            {m.common_cancel()}
+          </Button>
+          <Button
+            small
+            inline
+            onclick={handleSave}
+            disabled={!canSave}
+            class="note-edit-save"
+          >
+            {#if saving}
+              {m.common_loading()}
+            {:else}
+              {m.common_save()}
+            {/if}
+          </Button>
+        </div>
+      </div>
+    {:else}
+      <div class="note-body">
+        {#if isDecryptError(content)}
+          <span class="decrypt-error">{m.error_decryption_failed()}</span>
+        {:else if content === undefined}
+          <span class="shimmer shimmer-note" aria-busy="true"></span>
+        {:else}
+          {content}
+        {/if}
+      </div>
+    {/if}
+  </Card>
 </div>
 
 <style>
-  .private-note {
-    margin: 0.375rem 0.75rem;
-    padding: 0.625rem 0.75rem;
-    background: var(--surface-2);
-    border-left: 3px solid var(--brand-primary);
-    border-radius: 0.5rem;
+  .private-note-wrapper {
+    margin: 0.25rem 0;
     user-select: text;
     -webkit-user-select: text;
     touch-action: pan-y;
   }
 
-  .private-note-editing {
-    border-left-color: var(--brand-accent, var(--brand-primary));
-  }
-
   .note-header {
     display: flex;
+    flex-direction: column;
+    gap: 0.1875rem;
+  }
+
+  .note-header-row {
+    display: flex;
     align-items: center;
-    gap: 0.5rem;
-    margin-bottom: 0.25rem;
+    gap: 0.375rem;
+  }
+
+  .note-chip-content {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+  }
+
+  :global(.note-icon) {
+    color: var(--brand-accent, var(--brand-primary));
+    flex-shrink: 0;
+  }
+
+  /* Scale down the Chip to fit inline in the header row. */
+  :global(.note-chip) {
+    font-size: 0.625rem !important;
+    height: auto !important;
+    padding-left: 0.375rem !important;
+    padding-right: 0.375rem !important;
+    padding-top: 0.0625rem !important;
+    padding-bottom: 0.0625rem !important;
+  }
+
+  .note-time {
+    margin-left: auto;
+    font-size: 0.625rem;
+    color: var(--muted);
+    white-space: nowrap;
   }
 
   .note-author {
     font-size: 0.75rem;
     font-weight: 600;
     color: var(--ink);
-  }
-
-  .note-badge {
-    font-size: 0.625rem;
-    font-weight: 500;
-    color: var(--brand-text);
-    background: color-mix(in srgb, var(--brand-primary) 12%, transparent);
-    padding: 0.0625rem 0.375rem;
-    border-radius: 0.25rem;
-    white-space: nowrap;
+    opacity: 0.85;
   }
 
   .note-body {
@@ -210,14 +241,6 @@
 
   :global(.note-edit-list) {
     margin: 0 !important;
-  }
-
-  .note-time {
-    display: block;
-    font-size: 0.625rem;
-    color: var(--muted);
-    text-align: right;
-    margin-top: 0.25rem;
   }
 
   .decrypt-error {
@@ -253,14 +276,6 @@
     .shimmer-note {
       animation: none;
       background: var(--surface-1);
-    }
-  }
-
-  @media (prefers-contrast: more) {
-    .private-note {
-      border-left-width: 4px;
-      background: var(--surface-1);
-      outline: 1px solid var(--muted);
     }
   }
 </style>

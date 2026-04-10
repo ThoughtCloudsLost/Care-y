@@ -10,7 +10,12 @@
   Text truncated to single-line with ellipsis.
 -->
 <script lang="ts">
-  import { Mic, Image as ImageIcon, Paperclip } from "@lucide/svelte";
+  import {
+    Mic,
+    Image as ImageIcon,
+    Paperclip,
+    StickyNote,
+  } from "@lucide/svelte";
   import * as m from "$lib/paraglide/messages.js";
   import { getFollowUpDecryptCache } from "$lib/crypto/context.js";
   import { isDecryptError } from "$lib/crypto/async-decrypt-cache.js";
@@ -70,6 +75,7 @@
         </div>
       {:else if kind === "note"}
         <div class="mini-note">
+          <StickyNote size={10} class="mini-note-icon" />
           {#if isDecryptError(content)}
             {m.error_decryption_failed()}
           {:else if content === undefined}
@@ -202,16 +208,25 @@
     padding: 0 0.25rem;
   }
 
-  /* --- Internal notes (full-width, left-border accent) --- */
+  /* --- Internal notes (outline card style) --- */
 
   .mini-note {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
     font-size: 0.625rem;
     line-height: 1.4;
     color: var(--muted);
     font-style: italic;
     padding: 0.125rem 0.375rem;
-    border-left: 2px solid var(--brand-accent, var(--brand-text));
+    border: 1px solid var(--divider);
+    border-radius: 0.25rem;
     overflow: hidden;
+  }
+
+  :global(.mini-note-icon) {
+    color: var(--brand-accent, var(--brand-primary));
+    flex-shrink: 0;
   }
 
   /* --- Shimmer --- */

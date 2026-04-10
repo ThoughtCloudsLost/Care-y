@@ -248,6 +248,7 @@ export * from "./ticket_message_sent_by.js";
 export * from "./ticket_message_received_from.js";
 export * from "./ticket_private_note_by.js";
 export * from "./ticket_private_note_label.js";
+export * from "./ticket_private_note_author_fallback.js";
 export * from "./ticket_action_take.js";
 export * from "./ticket_action_release.js";
 export * from "./ticket_action_assign.js";

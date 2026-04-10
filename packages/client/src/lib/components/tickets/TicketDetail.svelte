@@ -19,6 +19,7 @@
   import {
     getFollowUpDecryptCache,
     getTicketDecryptCache,
+    getOrgDecryptCache,
     getCurrentUserId,
     getCurrentUserRoleId,
   } from "$lib/crypto/context.js";
@@ -94,6 +95,7 @@
 
   const ticketCache = getTicketDecryptCache();
   const followUpCache = getFollowUpDecryptCache();
+  const orgCache = getOrgDecryptCache();
   const currentUserIdGetter = getCurrentUserId();
   const currentUserId = $derived(currentUserIdGetter());
   const currentUserRoleIdGetter = getCurrentUserRoleId();
@@ -134,11 +136,31 @@
     queryFn: async () => ticketRouter.listAttachments.query({ ticketId }),
   }));
 
+  // Volunteer list (cached, shared with MentionAutocomplete).
+  const volunteersQuery = createQuery(() => ({
+    queryKey: ["volunteers"],
+    queryFn: async () => ticketRouter.listVolunteers.query(),
+    staleTime: 5 * 60 * 1000,
+  }));
+
   // Ticket data shortcuts.
   const ticket = $derived(ticketQuery.data);
   const clientAlias = $derived(ticket?.clientAlias ?? "...");
   const recordings = $derived(recordingsQuery.data ?? []);
   const attachments = $derived(attachmentsQuery.data ?? []);
+
+  // Reactive userId -> decrypted display name lookup for note authors.
+  function resolveVolunteerName(userId: string | null): string | undefined {
+    if (userId === null) return undefined;
+    const volunteers = volunteersQuery.data;
+    if (!Array.isArray(volunteers)) return undefined;
+    const vol = volunteers.find((v) => v.id === userId);
+    if (!vol) return undefined;
+    return (
+      orgCache.decrypt(`volunteer:${vol.id}`, vol.encryptedDisplayName) ??
+      undefined
+    );
+  }
 
   // --- Pagination state ---
 
@@ -691,7 +713,7 @@
                 {:else if kind === "note"}
                   <PrivateNote
                     {content}
-                    authorName={undefined}
+                    authorName={resolveVolunteerName(fu.createdBy)}
                     timestamp={fu.createdAt}
                     isOwn={fu.createdBy === currentUserId}
                     editing={editingFollowUpId === fu.id}
