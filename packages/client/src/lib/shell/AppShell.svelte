@@ -497,7 +497,7 @@
         </Link>
       {/if}
     {/snippet}
-    {#if searchOpen && !navbarOverride}
+    {#if searchOpen && !navbarOverride?.right}
       <div
         bind:this={searchContainerEl}
         class="search-overlay search-overlay-open"

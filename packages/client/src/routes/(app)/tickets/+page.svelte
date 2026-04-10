@@ -17,6 +17,7 @@
     ArrowUpDown,
     ArrowUp,
     ArrowDown,
+    SquareCheckBig,
   } from "@lucide/svelte";
   import * as m from "$lib/paraglide/messages.js";
   import { trpc } from "$lib/trpc/index.js";
@@ -358,57 +359,68 @@
   <div class="ticket-header-content">
     <div class="page-header">
       <BlockTitle large class="page-title">{m.tickets_title()}</BlockTitle>
-      <div class="stats-row">
-        <div class="stats-counts">
-          <span class="stat-item">
-            <StatusDot status="new" />
-            {newCount}
-            {m.tickets_status_new()}
-          </span>
-          <span class="stat-item">
-            <StatusDot status="active" />
-            {activeCount}
-            {m.tickets_status_active()}
-          </span>
-          <span class="stat-item">
-            <StatusDot status="hold" />
-            {holdCount}
-            {m.tickets_status_on_hold()}
-          </span>
-        </div>
-        <div class="view-controls">
-          <Segmented strong class="view-toggle">
-            <SegmentedButton
-              active={viewModeStore.mode === "list"}
-              aria-pressed={viewModeStore.mode === "list"}
-              aria-label={m.tickets_view_list()}
-              onclick={() => viewModeStore.set("list")}
-              ><List size={16} aria-hidden="true" /></SegmentedButton
-            >
-            <SegmentedButton
-              active={viewModeStore.mode === "grid"}
-              aria-pressed={viewModeStore.mode === "grid"}
-              aria-label={m.tickets_view_grid()}
-              onclick={() => viewModeStore.set("grid")}
-              ><LayoutGrid size={16} aria-hidden="true" /></SegmentedButton
-            >
-          </Segmented>
-          <span bind:this={sortAnchorEl} class="sort-anchor">
-            <Button
-              tonal
-              rounded
-              small
-              inline
-              class="sort-btn"
-              aria-label={m.tickets_sort()}
-              aria-haspopup="listbox"
-              aria-expanded={sortOpen}
-              onclick={toggleSort}
-            >
-              <ArrowUpDown size={16} aria-hidden="true" />
-            </Button>
-          </span>
-        </div>
+      <Segmented strong class="view-toggle">
+        <SegmentedButton
+          active={viewModeStore.mode === "list"}
+          aria-pressed={viewModeStore.mode === "list"}
+          aria-label={m.tickets_view_list()}
+          onclick={() => viewModeStore.set("list")}
+          ><List size={16} aria-hidden="true" /></SegmentedButton
+        >
+        <SegmentedButton
+          active={viewModeStore.mode === "grid"}
+          aria-pressed={viewModeStore.mode === "grid"}
+          aria-label={m.tickets_view_grid()}
+          onclick={() => viewModeStore.set("grid")}
+          ><LayoutGrid size={16} aria-hidden="true" /></SegmentedButton
+        >
+      </Segmented>
+    </div>
+    <div class="stats-row">
+      <div class="stats-counts">
+        <span class="stat-item">
+          <StatusDot status="new" />
+          {newCount}
+          {m.tickets_status_new()}
+        </span>
+        <span class="stat-item">
+          <StatusDot status="active" />
+          {activeCount}
+          {m.tickets_status_active()}
+        </span>
+        <span class="stat-item">
+          <StatusDot status="hold" />
+          {holdCount}
+          {m.tickets_status_on_hold()}
+        </span>
+      </div>
+      <div class="view-controls">
+        <span bind:this={sortAnchorEl} class="sort-anchor">
+          <Button
+            tonal
+            rounded
+            small
+            inline
+            class="sort-btn"
+            aria-label={m.tickets_sort()}
+            aria-haspopup="listbox"
+            aria-expanded={sortOpen}
+            onclick={toggleSort}
+          >
+            <ArrowUpDown size={16} aria-hidden="true" />
+          </Button>
+        </span>
+        <Button
+          tonal
+          rounded
+          small
+          inline
+          class="select-btn"
+          aria-label={m.tickets_select_mode()}
+          onclick={toggleMultiSelect}
+        >
+          <SquareCheckBig size={16} aria-hidden="true" />
+        </Button>
       </div>
     </div>
     <SavedFilterList />
@@ -418,7 +430,6 @@
         oncreateshortcut={() => {
           savedFilterModalOpen = true;
         }}
-        onenterselect={toggleMultiSelect}
       />
     </div>
   </div>
@@ -515,7 +526,8 @@
 
   .page-header {
     display: flex;
-    flex-direction: column;
+    align-items: center;
+    justify-content: space-between;
     gap: var(--space-md);
   }
 
@@ -557,7 +569,8 @@
     flex-shrink: 0;
   }
 
-  :global(.sort-btn) {
+  :global(.sort-btn),
+  :global(.select-btn) {
     width: 1.75rem !important;
     padding-left: 0 !important;
     padding-right: 0 !important;

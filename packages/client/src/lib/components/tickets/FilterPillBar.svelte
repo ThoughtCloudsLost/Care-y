@@ -3,13 +3,14 @@
   import {
     Badge,
     Button,
+    Icon,
     Link,
     List,
     ListItem,
     ListInput,
     Checkbox,
   } from "konsta/svelte";
-  import { Bookmark, Check, SquareCheckBig } from "@lucide/svelte";
+  import { Bookmark, Check } from "@lucide/svelte";
   import ShellPopover from "$lib/shell/ShellPopover.svelte";
   import * as m from "$lib/paraglide/messages.js";
   import { trpc } from "$lib/trpc/index.js";
@@ -28,10 +29,9 @@
   interface Props {
     currentUserId?: string;
     oncreateshortcut?: () => void;
-    onenterselect?: () => void;
   }
 
-  let { currentUserId, oncreateshortcut, onenterselect }: Props = $props();
+  let { currentUserId, oncreateshortcut }: Props = $props();
 
   if (!trpc.tickets) throw new RouterNotAvailableError("tickets");
   const ticketRouter = trpc.tickets;
@@ -333,6 +333,18 @@
 </script>
 
 <div class="filter-pill-bar" role="toolbar" aria-label={m.tickets_filter()}>
+  {#if activeFilterCount > 0}
+    <Link
+      iconOnly
+      role="button"
+      class="bookmark-link"
+      aria-label={m.tickets_create_shortcut()}
+      onclick={() => oncreateshortcut?.()}
+    >
+      <Icon badge={String(activeFilterCount)}><Bookmark size={18} /></Icon>
+    </Link>
+  {/if}
+
   <div class="pill-scroll">
     <FilterPill
       label={m.tickets_filter_status()}
@@ -378,34 +390,11 @@
     />
   </div>
 
-  <div class="pill-actions">
-    <Button
-      outline
-      rounded
-      small
-      inline
-      onclick={() => onenterselect?.()}
-      class="select-mode-btn"
-    >
-      <SquareCheckBig size={16} aria-hidden="true" />
-      <span class="select-label">{m.tickets_select_mode()}</span>
+  {#if activeFilterCount > 0}
+    <Button clear small inline onclick={() => filterStore.clearAll()}>
+      {m.tickets_clear_filters()}
     </Button>
-    {#if activeFilterCount > 0}
-      <Badge class="filter-badge">{activeFilterCount}</Badge>
-      <Link
-        iconOnly
-        role="button"
-        aria-label={m.tickets_create_shortcut()}
-        onclick={() => oncreateshortcut?.()}
-        class="p-1"
-      >
-        <Bookmark size={18} />
-      </Link>
-      <Button clear small inline onclick={() => filterStore.clearAll()}>
-        {m.tickets_clear_filters()}
-      </Button>
-    {/if}
-  </div>
+  {/if}
 </div>
 
 <!-- Shared Popover: rendered OUTSIDE .pill-scroll to avoid overflow clipping. -->
@@ -520,26 +509,8 @@
     display: none;
   }
 
-  .pill-actions {
-    display: flex;
-    align-items: center;
-    gap: 0.375rem;
+  :global(.bookmark-link) {
     flex-shrink: 0;
-  }
-
-  :global(.filter-badge) {
-    font-size: 0.6875rem !important;
-    min-width: 1.125rem;
-    height: 1.125rem;
-    line-height: 1.125rem;
-  }
-
-  :global(.select-mode-btn) {
-    flex-shrink: 0;
-  }
-
-  .select-label {
-    line-height: 1;
   }
 
   :global(.filter-pill-all) {
