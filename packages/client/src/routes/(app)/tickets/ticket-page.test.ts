@@ -107,9 +107,12 @@ vi.mock("$lib/crypto/context.js", () => ({
   }),
 }));
 
+const mockNavbarCtx = { current: undefined as unknown };
+
 vi.mock("$lib/shell/context.js", () => ({
   getScrollContainer: () => () => undefined,
   getTabbarOverrideCtx: () => ({ current: undefined }),
+  getNavbarOverrideCtx: () => mockNavbarCtx,
 }));
 
 let currentViewMode = "list";
@@ -334,7 +337,7 @@ describe("Ticket list page", () => {
     expect(screen.getByText("No tickets match this filter.")).toBeTruthy();
   });
 
-  it("renders view mode toggle with list and grid buttons", () => {
+  it("sets subnavbar snippet on navbar override context", () => {
     infiniteQueryState = {
       isLoading: false,
       isError: false,
@@ -346,7 +349,12 @@ describe("Ticket list page", () => {
     };
 
     render(PageModule.default);
-    expect(screen.getByLabelText("List view")).toBeTruthy();
-    expect(screen.getByLabelText("Grid view")).toBeTruthy();
+    // The header content (title, stats, filters, view toggle) is now
+    // rendered via a subnavbar snippet in AppShell's navbar override.
+    expect(mockNavbarCtx.current).toBeTruthy();
+    expect(mockNavbarCtx.current).toHaveProperty("subnavbar");
+    expect(
+      typeof (mockNavbarCtx.current as Record<string, unknown>).subnavbarHidden,
+    ).toBe("function");
   });
 });

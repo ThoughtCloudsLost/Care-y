@@ -29,7 +29,9 @@
   import {
     getScrollContainer,
     getTabbarOverrideCtx,
+    getNavbarOverrideCtx,
   } from "$lib/shell/context.js";
+  import { useScrollDirection } from "$lib/shell/use-scroll-direction.svelte.js";
   import { UserPlus, Pause, X } from "@lucide/svelte";
   import { createPreviewLoader } from "$lib/tickets/preview-loader.svelte.js";
   import { deriveDisplayStatus } from "$lib/tickets/display-status.js";
@@ -66,9 +68,20 @@
   const getScroll = getScrollContainer();
   const scrollEl = $derived(getScroll());
 
+  // Scroll-direction tracker: hides header on scroll-down, reveals on scroll-up.
+  const scrollDir = useScrollDirection({
+    get scrollEl() {
+      return scrollEl;
+    },
+  });
+
   // Tabbar override container: set actions to replace the tab bar
   // with multi-select controls, clear to restore normal tabs.
   const tabbarOverride = getTabbarOverrideCtx();
+
+  // Navbar override container: renders the ticket header as a
+  // subnavbar region in AppShell (outside the scroll container).
+  const navbarCtx = getNavbarOverrideCtx();
 
   // Preview loader: batch-fetches encrypted follow-up data for card previews.
   // Created per-route and set in context so TicketCard children can call observe().
@@ -244,6 +257,19 @@
     };
   });
 
+  // Set the subnavbar override once on mount. The hidden getter is a
+  // closure over scrollDir.hidden, so AppShell reads the latest value
+  // reactively without the override object needing to change.
+  $effect(() => {
+    navbarCtx.current = {
+      subnavbar: ticketSubnavbar,
+      subnavbarHidden: () => scrollDir.hidden,
+    };
+    return () => {
+      navbarCtx.current = undefined;
+    };
+  });
+
   function handleBulkAssign(): void {
     const count = selectedIds.size;
     if (count === 0) return;
@@ -328,74 +354,77 @@
   }
 </script>
 
-<div class="ticket-page pb-20">
-  <div class="page-header">
-    <BlockTitle large class="page-title">{m.tickets_title()}</BlockTitle>
-    <div class="stats-row">
-      <div class="stats-counts">
-        <span class="stat-item">
-          <StatusDot status="new" />
-          {newCount}
-          {m.tickets_status_new()}
-        </span>
-        <span class="stat-item">
-          <StatusDot status="active" />
-          {activeCount}
-          {m.tickets_status_active()}
-        </span>
-        <span class="stat-item">
-          <StatusDot status="hold" />
-          {holdCount}
-          {m.tickets_status_on_hold()}
-        </span>
-      </div>
-      <div class="view-controls">
-        <Segmented strong class="view-toggle">
-          <SegmentedButton
-            active={viewModeStore.mode === "list"}
-            aria-pressed={viewModeStore.mode === "list"}
-            aria-label={m.tickets_view_list()}
-            onclick={() => viewModeStore.set("list")}
-            ><List size={16} aria-hidden="true" /></SegmentedButton
-          >
-          <SegmentedButton
-            active={viewModeStore.mode === "grid"}
-            aria-pressed={viewModeStore.mode === "grid"}
-            aria-label={m.tickets_view_grid()}
-            onclick={() => viewModeStore.set("grid")}
-            ><LayoutGrid size={16} aria-hidden="true" /></SegmentedButton
-          >
-        </Segmented>
-        <span bind:this={sortAnchorEl} class="sort-anchor">
-          <Button
-            tonal
-            rounded
-            small
-            inline
-            class="sort-btn"
-            aria-label={m.tickets_sort()}
-            aria-haspopup="listbox"
-            aria-expanded={sortOpen}
-            onclick={toggleSort}
-          >
-            <ArrowUpDown size={16} aria-hidden="true" />
-          </Button>
-        </span>
+{#snippet ticketSubnavbar()}
+  <div class="ticket-header-content">
+    <div class="page-header">
+      <BlockTitle large class="page-title">{m.tickets_title()}</BlockTitle>
+      <div class="stats-row">
+        <div class="stats-counts">
+          <span class="stat-item">
+            <StatusDot status="new" />
+            {newCount}
+            {m.tickets_status_new()}
+          </span>
+          <span class="stat-item">
+            <StatusDot status="active" />
+            {activeCount}
+            {m.tickets_status_active()}
+          </span>
+          <span class="stat-item">
+            <StatusDot status="hold" />
+            {holdCount}
+            {m.tickets_status_on_hold()}
+          </span>
+        </div>
+        <div class="view-controls">
+          <Segmented strong class="view-toggle">
+            <SegmentedButton
+              active={viewModeStore.mode === "list"}
+              aria-pressed={viewModeStore.mode === "list"}
+              aria-label={m.tickets_view_list()}
+              onclick={() => viewModeStore.set("list")}
+              ><List size={16} aria-hidden="true" /></SegmentedButton
+            >
+            <SegmentedButton
+              active={viewModeStore.mode === "grid"}
+              aria-pressed={viewModeStore.mode === "grid"}
+              aria-label={m.tickets_view_grid()}
+              onclick={() => viewModeStore.set("grid")}
+              ><LayoutGrid size={16} aria-hidden="true" /></SegmentedButton
+            >
+          </Segmented>
+          <span bind:this={sortAnchorEl} class="sort-anchor">
+            <Button
+              tonal
+              rounded
+              small
+              inline
+              class="sort-btn"
+              aria-label={m.tickets_sort()}
+              aria-haspopup="listbox"
+              aria-expanded={sortOpen}
+              onclick={toggleSort}
+            >
+              <ArrowUpDown size={16} aria-hidden="true" />
+            </Button>
+          </span>
+        </div>
       </div>
     </div>
+    <SavedFilterList />
+    <div class="ticket-controls">
+      <FilterPillBar
+        {currentUserId}
+        oncreateshortcut={() => {
+          savedFilterModalOpen = true;
+        }}
+        onenterselect={toggleMultiSelect}
+      />
+    </div>
   </div>
+{/snippet}
 
-  <SavedFilterList />
-  <div class="ticket-controls">
-    <FilterPillBar
-      {currentUserId}
-      oncreateshortcut={() => {
-        savedFilterModalOpen = true;
-      }}
-      onenterselect={toggleMultiSelect}
-    />
-  </div>
-
+<div class="ticket-page pb-20">
   {#if ticketsQuery.isLoading}
     <Skeleton lines={8} />
   {:else if ticketsQuery.isError}
@@ -470,6 +499,13 @@
 </ShellPopover>
 
 <style>
+  .ticket-header-content {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-lg);
+    padding: 0.25rem var(--page-pad-x) 0;
+  }
+
   .ticket-page {
     padding: 0.25rem var(--page-pad-x) 0;
     display: flex;

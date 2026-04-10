@@ -127,6 +127,25 @@
   setNavbarOverrideCtx(navbarOverrideContainer);
   const navbarOverride = $derived(navbarOverrideContainer.current);
 
+  // Subnavbar height measurement for collapse animation.
+  // ResizeObserver tracks the inner content height and sets a CSS
+  // variable that the negative margin-top transition uses.
+  let subnavbarInnerEl = $state<HTMLElement | undefined>();
+  let subnavbarHeight = $state(0);
+
+  $effect(() => {
+    const el = subnavbarInnerEl;
+    if (el == null) return;
+    const ro = new ResizeObserver((entries) => {
+      const entry = entries[0];
+      if (entry != null) {
+        subnavbarHeight = entry.borderBoxSize[0]?.blockSize ?? el.offsetHeight;
+      }
+    });
+    ro.observe(el, { box: "border-box" });
+    return () => ro.disconnect();
+  });
+
   let {
     activeTab,
     orgName = "CARE-Y",
@@ -444,6 +463,19 @@
     {/if}
   </Navbar>
 
+  {#if navbarOverride?.subnavbar}
+    <div
+      class="shell-subnavbar"
+      class:shell-subnavbar--hidden={navbarOverride.subnavbarHidden?.() ===
+        true}
+      style:--subnavbar-h="{subnavbarHeight}px"
+    >
+      <div class="shell-subnavbar-inner" bind:this={subnavbarInnerEl}>
+        {@render navbarOverride.subnavbar()}
+      </div>
+    </div>
+  {/if}
+
   <!-- Pull-to-refresh indicator -->
   {#if ptrPhase !== "idle"}
     <div
@@ -679,6 +711,32 @@
     opacity: 1;
     pointer-events: auto;
     transform: scaleX(1);
+  }
+
+  /* ── Subnavbar (collapsible region below Navbar) ────────────────── */
+
+  .shell-subnavbar {
+    flex-shrink: 0;
+    overflow: hidden;
+    background: var(--k-page-bg);
+  }
+
+  .shell-subnavbar-inner {
+    transition:
+      margin-top 300ms cubic-bezier(0.4, 0, 0.2, 1),
+      opacity 200ms ease;
+  }
+
+  .shell-subnavbar--hidden .shell-subnavbar-inner {
+    margin-top: calc(-1 * var(--subnavbar-h));
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .shell-subnavbar-inner {
+      transition: none;
+    }
   }
 
   /* ── Pull-to-refresh indicator ──────────────────────────────────── */

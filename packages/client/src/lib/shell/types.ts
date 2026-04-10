@@ -166,6 +166,10 @@ export interface NavbarOverride {
   readonly title?: string | Snippet;
   /** Snippet rendered in the right slot (action icons). */
   readonly right?: Snippet;
+  /** Snippet rendered below the Navbar as a collapsible subnavbar region. */
+  readonly subnavbar?: Snippet;
+  /** Reactive getter: returns true when the subnavbar should be hidden. */
+  readonly subnavbarHidden?: () => boolean;
 }
 
 // ── Tabbar override ─────────────────────────────────────────────────
