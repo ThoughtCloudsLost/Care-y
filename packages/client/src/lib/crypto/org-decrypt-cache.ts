@@ -14,8 +14,8 @@
  * The SvelteMap is natively reactive in Svelte 5 without $state wrapping.
  */
 
-import { SvelteMap } from "svelte/reactivity";
 import { untrack } from "svelte";
+import { cacheRegistry } from "./cache-registry.js";
 import type { OrgKeyManager } from "./org-key.js";
 
 /** Serialized Node.js Buffer as it arrives over tRPC JSON (no superjson). */
@@ -25,7 +25,9 @@ interface SerializedBuffer {
 }
 
 export class OrgDecryptCache {
-  private readonly cache = new SvelteMap<string, string>();
+  private readonly cache = cacheRegistry.createMap<string, string>(
+    "OrgDecryptCache",
+  );
   private readonly manager: OrgKeyManager;
 
   constructor(manager: OrgKeyManager) {

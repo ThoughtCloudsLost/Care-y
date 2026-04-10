@@ -13,6 +13,7 @@ import {
   DECRYPT_ERROR_SENTINEL,
   isDecryptError,
 } from "./async-decrypt-cache.js";
+import { cacheRegistry } from "./cache-registry.js";
 
 const TICKET_ID = "ticket-001";
 const KEY_WRAP = {
@@ -183,6 +184,12 @@ describe("TicketDecryptCache", () => {
   describe("size", () => {
     it("returns 0 for empty cache", () => {
       expect(cache.size).toBe(0);
+    });
+  });
+
+  describe("cache registry", () => {
+    it("registers with cacheRegistry on construction", () => {
+      expect(cacheRegistry.registered).toContain("TicketDecryptCache");
     });
   });
 });

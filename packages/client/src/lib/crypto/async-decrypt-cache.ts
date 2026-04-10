@@ -74,6 +74,15 @@ export class AsyncDecryptCache {
     return undefined;
   }
 
+  /**
+   * Store the error sentinel for a cache key. Used by subclasses when
+   * decryption is known to be impossible (e.g., missing key material)
+   * without going through the async bridge path.
+   */
+  protected setError(key: string): void {
+    this.cache.set(key, DECRYPT_ERROR_SENTINEL);
+  }
+
   has(key: string): boolean {
     return this.cache.has(key);
   }
