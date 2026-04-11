@@ -210,6 +210,7 @@ export type FollowUpsByIdsInput = z.infer<typeof followUpsByIdsInputSchema>;
 
 export const recordingListInputSchema = z.object({
   ticketId: z.uuid(),
+  followupId: z.uuid().optional(),
   limit: z.number().int().min(1).max(200).default(50),
   cursor: z.uuid().optional(),
   direction: followUpListDirectionSchema.default("newer"),
@@ -218,6 +219,7 @@ export type RecordingListInput = z.infer<typeof recordingListInputSchema>;
 
 export const attachmentListInputSchema = z.object({
   ticketId: z.uuid(),
+  followupId: z.uuid().optional(),
   limit: z.number().int().min(1).max(200).default(50),
   cursor: z.uuid().optional(),
   direction: followUpListDirectionSchema.default("newer"),

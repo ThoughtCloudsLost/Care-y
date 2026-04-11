@@ -696,6 +696,7 @@ export function createTicketRouter(deps: TicketRouterDeps) {
           limit: input.limit,
           cursor: input.cursor,
           direction: input.direction,
+          followupId: input.followupId,
         });
       }),
     ),
@@ -707,6 +708,7 @@ export function createTicketRouter(deps: TicketRouterDeps) {
           limit: input.limit,
           cursor: input.cursor,
           direction: input.direction,
+          followupId: input.followupId,
         });
       }),
     ),

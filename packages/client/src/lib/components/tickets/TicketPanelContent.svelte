@@ -38,10 +38,12 @@
   import StatusDot from "$lib/components/StatusDot.svelte";
   import MmsImage from "$lib/components/tickets/MmsImage.svelte";
   import VoicemailPlayer from "$lib/components/tickets/VoicemailPlayer.svelte";
+  import LoadMore from "$lib/components/ui/LoadMore.svelte";
   import { formatRelativeTime } from "$lib/utils/format-time.js";
   import { formatDuration, formatFileSize } from "$lib/utils/time.js";
   import type { DisplayStatus } from "$lib/tickets/display-status.js";
   import { createQuery } from "@tanstack/svelte-query";
+  import { createPaginatedQuery } from "$lib/query/paginated.svelte.js";
   import { trpc } from "$lib/trpc/index.js";
   import {
     getCurrentUserId,
@@ -136,6 +138,50 @@
     staleTime: 5 * 60 * 1000,
   }));
 
+  // --- Paginated wrappers ---
+
+  const NOTES_LIMIT = 100;
+  const RECORDINGS_LIMIT = 50;
+  const ATTACHMENTS_LIMIT = 50;
+
+  const notesPaginated = createPaginatedQuery({
+    query: notesQuery,
+    limit: NOTES_LIMIT,
+    fetchPage: async (cursor) =>
+      ticketRouter.listFollowUps.query({
+        ticketId,
+        types: ["internal_note"],
+        limit: NOTES_LIMIT,
+        direction: "older",
+        cursor,
+      }),
+    getCursor: (note) => note.id,
+  });
+
+  const recordingsPaginated = createPaginatedQuery({
+    query: recordingsQuery,
+    limit: RECORDINGS_LIMIT,
+    fetchPage: async (cursor) =>
+      ticketRouter.listRecordings.query({
+        ticketId,
+        limit: RECORDINGS_LIMIT,
+        cursor,
+      }),
+    getCursor: (rec) => rec.id,
+  });
+
+  const attachmentsPaginated = createPaginatedQuery({
+    query: attachmentsQuery,
+    limit: ATTACHMENTS_LIMIT,
+    fetchPage: async (cursor) =>
+      ticketRouter.listAttachments.query({
+        ticketId,
+        limit: ATTACHMENTS_LIMIT,
+        cursor,
+      }),
+    getCursor: (att) => att.id,
+  });
+
   // --- Derived ticket state ---
 
   const ticket = $derived(ticketQuery.data);
@@ -173,7 +219,7 @@
 
   // --- Notes (internal_note follow-ups) ---
 
-  const notes = $derived(notesQuery.data ?? []);
+  const notes = $derived(notesPaginated.items);
 
   function resolveVolunteerName(userId: string | null): string | undefined {
     if (userId === null) return undefined;
@@ -203,8 +249,8 @@
 
   // --- Media: split by type ---
 
-  const attachments = $derived(attachmentsQuery.data ?? []);
-  const recordings = $derived(recordingsQuery.data ?? []);
+  const attachments = $derived(attachmentsPaginated.items);
+  const recordings = $derived(recordingsPaginated.items);
 
   const imageAttachments = $derived(
     attachments.filter((a) => a.contentType?.startsWith("image/") === true),
@@ -399,6 +445,11 @@
         </ListItem>
       {/each}
     </List>
+    <LoadMore
+      hasMore={notesPaginated.hasMore}
+      loading={notesPaginated.loading}
+      onloadmore={() => void notesPaginated.loadMore()}
+    />
   {/if}
 
   <!-- Ticket actions -->
@@ -471,6 +522,11 @@
         </div>
       {/each}
     </Block>
+    <LoadMore
+      hasMore={recordingsPaginated.hasMore}
+      loading={recordingsPaginated.loading}
+      onloadmore={() => void recordingsPaginated.loadMore()}
+    />
   {/if}
 
   <!-- Images -->
@@ -539,6 +595,15 @@
         {/each}
       </div>
     </Block>
+  {/if}
+
+  <!-- Shared "Load more" for combined attachments (images + files) -->
+  {#if imageAttachments.length > 0 || fileAttachments.length > 0}
+    <LoadMore
+      hasMore={attachmentsPaginated.hasMore}
+      loading={attachmentsPaginated.loading}
+      onloadmore={() => void attachmentsPaginated.loadMore()}
+    />
   {/if}
 
   <!-- Empty state when no media at all -->

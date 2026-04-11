@@ -71,12 +71,22 @@ export interface MediaService {
   listRecordings(
     userId: string,
     ticketId: string,
-    opts: { limit: number; cursor?: string; direction?: "newer" | "older" },
+    opts: {
+      limit: number;
+      cursor?: string;
+      direction?: "newer" | "older";
+      followupId?: string;
+    },
   ): Promise<RecordingRecord[]>;
   listAttachments(
     userId: string,
     ticketId: string,
-    opts: { limit: number; cursor?: string; direction?: "newer" | "older" },
+    opts: {
+      limit: number;
+      cursor?: string;
+      direction?: "newer" | "older";
+      followupId?: string;
+    },
   ): Promise<AttachmentRecord[]>;
 }
 
@@ -250,6 +260,10 @@ export function createMediaService(
         .where("ticket_id", "=", ticketId)
         .where("deleted_at", "is", null);
 
+      if (opts.followupId !== undefined) {
+        query = query.where("followup_id", "=", opts.followupId);
+      }
+
       if (opts.cursor !== undefined) {
         const cursorId = opts.cursor;
         const cursorCreatedAt = db
@@ -292,6 +306,10 @@ export function createMediaService(
         .selectAll()
         .where("ticket_id", "=", ticketId)
         .where("deleted_at", "is", null);
+
+      if (opts.followupId !== undefined) {
+        query = query.where("followup_id", "=", opts.followupId);
+      }
 
       if (opts.cursor !== undefined) {
         const cursorId = opts.cursor;

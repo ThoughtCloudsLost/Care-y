@@ -22,6 +22,9 @@ export interface FollowUpRecord {
   readonly encryptedContent: Buffer;
   readonly createdBy: string | null;
   readonly createdAt: Date;
+  readonly hasRecording: boolean;
+  readonly hasImage: boolean;
+  readonly hasFile: boolean;
 }
 
 export interface CreateFollowUpInput {
@@ -108,6 +111,9 @@ function toRecord(row: {
   created_by: string | null;
   deleted_at: Date | null;
   created_at: Date;
+  has_recording?: boolean | number;
+  has_image?: boolean | number;
+  has_file?: boolean | number;
 }): FollowUpRecord {
   return {
     id: row.id,
@@ -119,6 +125,9 @@ function toRecord(row: {
     encryptedContent: row.encrypted_content,
     createdBy: row.created_by,
     createdAt: row.created_at,
+    hasRecording: Boolean(row.has_recording),
+    hasImage: Boolean(row.has_image),
+    hasFile: Boolean(row.has_file),
   };
 }
 
@@ -167,6 +176,42 @@ export function createFollowUpService(
       let query = db
         .selectFrom("followups")
         .selectAll()
+        .select((eb) => [
+          eb
+            .exists(
+              eb
+                .selectFrom("recordings as r")
+                .whereRef("r.followup_id", "=", "followups.id")
+                .where("r.deleted_at", "is", null)
+                .select(eb.lit(1).as("one")),
+            )
+            .as("has_recording"),
+          eb
+            .exists(
+              eb
+                .selectFrom("attachments as a")
+                .whereRef("a.followup_id", "=", "followups.id")
+                .where("a.deleted_at", "is", null)
+                .where("a.content_type", "like", "image/%")
+                .select(eb.lit(1).as("one")),
+            )
+            .as("has_image"),
+          eb
+            .exists(
+              eb
+                .selectFrom("attachments as a2")
+                .whereRef("a2.followup_id", "=", "followups.id")
+                .where("a2.deleted_at", "is", null)
+                .where((w) =>
+                  w.or([
+                    w("a2.content_type", "is", null),
+                    w("a2.content_type", "not like", "image/%"),
+                  ]),
+                )
+                .select(eb.lit(1).as("one")),
+            )
+            .as("has_file"),
+        ])
         .where("ticket_id", "=", ticketId)
         .where("deleted_at", "is", null);
 
@@ -355,6 +400,42 @@ export function createFollowUpService(
       let query = db
         .selectFrom("followups")
         .selectAll()
+        .select((eb) => [
+          eb
+            .exists(
+              eb
+                .selectFrom("recordings as r")
+                .whereRef("r.followup_id", "=", "followups.id")
+                .where("r.deleted_at", "is", null)
+                .select(eb.lit(1).as("one")),
+            )
+            .as("has_recording"),
+          eb
+            .exists(
+              eb
+                .selectFrom("attachments as a")
+                .whereRef("a.followup_id", "=", "followups.id")
+                .where("a.deleted_at", "is", null)
+                .where("a.content_type", "like", "image/%")
+                .select(eb.lit(1).as("one")),
+            )
+            .as("has_image"),
+          eb
+            .exists(
+              eb
+                .selectFrom("attachments as a2")
+                .whereRef("a2.followup_id", "=", "followups.id")
+                .where("a2.deleted_at", "is", null)
+                .where((w) =>
+                  w.or([
+                    w("a2.content_type", "is", null),
+                    w("a2.content_type", "not like", "image/%"),
+                  ]),
+                )
+                .select(eb.lit(1).as("one")),
+            )
+            .as("has_file"),
+        ])
         .where("ticket_id", "=", ticketId)
         .where("id", "in", followUpIds)
         .where("deleted_at", "is", null);

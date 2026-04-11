@@ -499,4 +499,137 @@ describe.skipIf(!process.env.DATABASE_URL)("FollowUpService (DB)", () => {
     expect(result).toHaveLength(1);
     expect(result[0]!.id).toBe(note.id);
   });
+
+  // --- Media flags (hasRecording, hasImage, hasFile) ---
+
+  it("listByTicket returns hasRecording true when follow-up has a recording", async () => {
+    const { userId, ticketId } = await createTicketFixture();
+
+    const fu = await svc.create(userId, {
+      ticketId,
+      encryptedContent: Buffer.from("msg-with-vm"),
+      source: "client",
+      type: "message",
+      isPrivate: false,
+      mentionedPseudonyms: [],
+    });
+
+    // Insert a recording for this follow-up
+    await testDb.db
+      .insertInto("recordings")
+      .values({
+        ticket_id: ticketId,
+        followup_id: fu.id,
+        blob_key: "blob-vm-test",
+        size_bytes: 1024,
+        duration_seconds: 30,
+      })
+      .execute();
+
+    const list = await svc.listByTicket(userId, ticketId, { limit: 50 });
+    const found = list.find((f) => f.id === fu.id);
+    expect(found).toBeDefined();
+    expect(found!.hasRecording).toBe(true);
+    expect(found!.hasImage).toBe(false);
+    expect(found!.hasFile).toBe(false);
+  });
+
+  it("listByTicket returns hasImage true when follow-up has image attachment", async () => {
+    const { userId, ticketId } = await createTicketFixture();
+
+    const fu = await svc.create(userId, {
+      ticketId,
+      encryptedContent: Buffer.from("msg-with-img"),
+      source: "client",
+      type: "message",
+      isPrivate: false,
+      mentionedPseudonyms: [],
+    });
+
+    await testDb.db
+      .insertInto("attachments")
+      .values({
+        ticket_id: ticketId,
+        followup_id: fu.id,
+        blob_key: "blob-img-test",
+        size_bytes: 2048,
+        content_type: "image/jpeg",
+      })
+      .execute();
+
+    const list = await svc.listByTicket(userId, ticketId, { limit: 50 });
+    const found = list.find((f) => f.id === fu.id);
+    expect(found).toBeDefined();
+    expect(found!.hasRecording).toBe(false);
+    expect(found!.hasImage).toBe(true);
+    expect(found!.hasFile).toBe(false);
+  });
+
+  it("listByTicket returns all flags false for text-only follow-ups", async () => {
+    const { userId, ticketId } = await createTicketFixture();
+
+    const fu = await svc.create(userId, {
+      ticketId,
+      encryptedContent: Buffer.from("text-only"),
+      source: "volunteer",
+      type: "message",
+      isPrivate: false,
+      mentionedPseudonyms: [],
+    });
+
+    const list = await svc.listByTicket(userId, ticketId, { limit: 50 });
+    const found = list.find((f) => f.id === fu.id);
+    expect(found).toBeDefined();
+    expect(found!.hasRecording).toBe(false);
+    expect(found!.hasImage).toBe(false);
+    expect(found!.hasFile).toBe(false);
+  });
+
+  it("listByIds also returns media flags", async () => {
+    const { userId, ticketId } = await createTicketFixture();
+
+    const fu = await svc.create(userId, {
+      ticketId,
+      encryptedContent: Buffer.from("msg-ids"),
+      source: "client",
+      type: "message",
+      isPrivate: false,
+      mentionedPseudonyms: [],
+    });
+
+    // Add a non-image attachment (file)
+    await testDb.db
+      .insertInto("attachments")
+      .values({
+        ticket_id: ticketId,
+        followup_id: fu.id,
+        blob_key: "blob-file-test",
+        size_bytes: 4096,
+        content_type: "application/pdf",
+      })
+      .execute();
+
+    const result = await svc.listByIds(userId, ticketId, [fu.id]);
+    expect(result).toHaveLength(1);
+    expect(result[0]!.hasRecording).toBe(false);
+    expect(result[0]!.hasImage).toBe(false);
+    expect(result[0]!.hasFile).toBe(true);
+  });
+
+  it("create returns all media flags as false", async () => {
+    const { userId, ticketId } = await createTicketFixture();
+
+    const fu = await svc.create(userId, {
+      ticketId,
+      encryptedContent: Buffer.from("new-msg"),
+      source: "volunteer",
+      type: "message",
+      isPrivate: false,
+      mentionedPseudonyms: [],
+    });
+
+    expect(fu.hasRecording).toBe(false);
+    expect(fu.hasImage).toBe(false);
+    expect(fu.hasFile).toBe(false);
+  });
 });

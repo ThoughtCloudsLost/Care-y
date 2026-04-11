@@ -400,6 +400,115 @@ describe.skipIf(!process.env.DATABASE_URL)("MediaService (DB)", () => {
     expect(asc.map((r) => r.id)).toEqual(desc.map((r) => r.id));
   });
 
+  // --- followupId filter ---
+
+  it("listRecordings with followupId returns only that follow-up's recordings", async () => {
+    const ticketId = await insertTicket();
+    const fuId1 = crypto.randomUUID();
+    const fuId2 = crypto.randomUUID();
+
+    // Create follow-ups so FK constraint is satisfied
+    await testDb.db
+      .insertInto("followups")
+      .values([
+        {
+          id: fuId1,
+          ticket_id: ticketId,
+          source: "client",
+          type: "message",
+          is_private: false,
+          mentioned_pseudonyms: "[]",
+          encrypted_content: Buffer.from("c1"),
+          created_by: null,
+        },
+        {
+          id: fuId2,
+          ticket_id: ticketId,
+          source: "client",
+          type: "message",
+          is_private: false,
+          mentioned_pseudonyms: "[]",
+          encrypted_content: Buffer.from("c2"),
+          created_by: null,
+        },
+      ])
+      .execute();
+
+    const rec1 = await svc.createRecording({
+      ticketId,
+      followupId: fuId1,
+      blobKey: "blob-fu-filter-1",
+      sizeBytes: 100,
+    });
+    await svc.createRecording({
+      ticketId,
+      followupId: fuId2,
+      blobKey: "blob-fu-filter-2",
+      sizeBytes: 100,
+    });
+
+    const result = await svc.listRecordings(userId, ticketId, {
+      limit: 50,
+      followupId: fuId1,
+    });
+    expect(result).toHaveLength(1);
+    expect(result[0]!.id).toBe(rec1.id);
+  });
+
+  it("listAttachments with followupId returns only that follow-up's attachments", async () => {
+    const ticketId = await insertTicket();
+    const fuId1 = crypto.randomUUID();
+    const fuId2 = crypto.randomUUID();
+
+    await testDb.db
+      .insertInto("followups")
+      .values([
+        {
+          id: fuId1,
+          ticket_id: ticketId,
+          source: "client",
+          type: "message",
+          is_private: false,
+          mentioned_pseudonyms: "[]",
+          encrypted_content: Buffer.from("c1"),
+          created_by: null,
+        },
+        {
+          id: fuId2,
+          ticket_id: ticketId,
+          source: "client",
+          type: "message",
+          is_private: false,
+          mentioned_pseudonyms: "[]",
+          encrypted_content: Buffer.from("c2"),
+          created_by: null,
+        },
+      ])
+      .execute();
+
+    const att1 = await svc.createAttachment({
+      ticketId,
+      followupId: fuId1,
+      blobKey: "blob-att-fu-1",
+      sizeBytes: 100,
+      contentType: "image/png",
+    });
+    await svc.createAttachment({
+      ticketId,
+      followupId: fuId2,
+      blobKey: "blob-att-fu-2",
+      sizeBytes: 200,
+      contentType: "application/pdf",
+    });
+
+    const result = await svc.listAttachments(userId, ticketId, {
+      limit: 50,
+      followupId: fuId1,
+    });
+    expect(result).toHaveLength(1);
+    expect(result[0]!.id).toBe(att1.id);
+  });
+
   it("listAttachments paginates with cursor", async () => {
     const ticketId = await insertTicket();
 

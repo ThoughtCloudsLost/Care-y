@@ -33,9 +33,7 @@
   import QueryError from "$lib/components/QueryError.svelte";
   import SystemEvent from "$lib/components/tickets/SystemEvent.svelte";
   import PrivateNote from "$lib/components/tickets/PrivateNote.svelte";
-  import VoicemailPlayer from "$lib/components/tickets/VoicemailPlayer.svelte";
-  import MmsImage from "$lib/components/tickets/MmsImage.svelte";
-  import AttachmentChip from "$lib/components/tickets/AttachmentChip.svelte";
+  import FollowUpMedia from "$lib/components/tickets/FollowUpMedia.svelte";
   import VirtualList from "$lib/components/tickets/VirtualList.svelte";
   import ChatZoom from "$lib/components/tickets/ChatZoom.svelte";
   import type {
@@ -126,18 +124,6 @@
       }),
   }));
 
-  const recordingsQuery = createQuery(() => ({
-    queryKey: ["ticket", ticketId, "recordings"],
-    queryFn: async () =>
-      ticketRouter.listRecordings.query({ ticketId, limit: 200 }),
-  }));
-
-  const attachmentsQuery = createQuery(() => ({
-    queryKey: ["ticket", ticketId, "attachments"],
-    queryFn: async () =>
-      ticketRouter.listAttachments.query({ ticketId, limit: 200 }),
-  }));
-
   // Volunteer list (cached, shared with MentionAutocomplete).
   const volunteersQuery = createQuery(() => ({
     queryKey: ["volunteers"],
@@ -148,8 +134,6 @@
   // Ticket data shortcuts.
   const ticket = $derived(ticketQuery.data);
   const clientAlias = $derived(ticket?.clientAlias ?? "...");
-  const recordings = $derived(recordingsQuery.data ?? []);
-  const attachments = $derived(attachmentsQuery.data ?? []);
 
   // Reactive userId -> decrypted display name lookup for note authors.
   function resolveVolunteerName(userId: string | null): string | undefined {
@@ -231,29 +215,6 @@
       loadingOlder = false;
     }
   }
-
-  // Build followUpId -> media lookup maps for rendering media inside bubbles.
-  const recordingsByFollowUp = $derived.by(() => {
-    const map = new SvelteMap<string, typeof recordings>();
-    for (const rec of recordings) {
-      if (rec.followupId === null) continue;
-      const list = map.get(rec.followupId) ?? [];
-      list.push(rec);
-      map.set(rec.followupId, list);
-    }
-    return map;
-  });
-
-  const attachmentsByFollowUp = $derived.by(() => {
-    const map = new SvelteMap<string, typeof attachments>();
-    for (const att of attachments) {
-      if (att.followupId === null) continue;
-      const list = map.get(att.followupId) ?? [];
-      list.push(att);
-      map.set(att.followupId, list);
-    }
-    return map;
-  });
 
   // --- Timeline summary query (fetched lazily when zoomed) ---
 
@@ -727,9 +688,6 @@
                     onpointercancel={cancelLongPress}
                   />
                 {:else}
-                  {@const fuRecordings = recordingsByFollowUp.get(fu.id) ?? []}
-                  {@const fuAttachments =
-                    attachmentsByFollowUp.get(fu.id) ?? []}
                   <Message
                     type={messageType(fu)}
                     name={fu.source === "client" ? clientAlias : undefined}
@@ -755,36 +713,17 @@
                         {/if}
                       </span>
 
-                      {#each fuRecordings as rec (rec.id)}
-                        <VoicemailPlayer
-                          recordingId={rec.id}
+                      {#if fu.hasRecording || fu.hasImage || fu.hasFile}
+                        <FollowUpMedia
+                          followupId={fu.id}
                           {ticketId}
                           keyWrap={ticket.keyWrap}
-                          durationSeconds={rec.durationSeconds}
+                          hasRecording={fu.hasRecording}
+                          hasImage={fu.hasImage}
+                          hasFile={fu.hasFile}
+                          onlightbox={(url: string) => onlightbox?.(url)}
                         />
-                      {/each}
-
-                      {#each fuAttachments as att (att.id)}
-                        {#if att.contentType?.startsWith("image/")}
-                          <MmsImage
-                            attachmentId={att.id}
-                            {ticketId}
-                            keyWrap={ticket.keyWrap}
-                            alt={m.ticket_mms_image()}
-                            onopen={(url: string) => onlightbox?.(url)}
-                          />
-                        {:else}
-                          <AttachmentChip
-                            attachmentId={att.id}
-                            {ticketId}
-                            keyWrap={ticket.keyWrap}
-                            filename={att.encryptedFilename !== null
-                              ? "..."
-                              : "file"}
-                            sizeBytes={att.sizeBytes}
-                          />
-                        {/if}
-                      {/each}
+                      {/if}
                     {/snippet}
                     {#snippet footer()}
                       <time class="bubble-time" datetime={fu.createdAt}>
