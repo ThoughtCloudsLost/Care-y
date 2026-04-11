@@ -81,6 +81,8 @@ import {
   deleteInternalNoteInputSchema,
   followUpSummaryInputSchema,
   followUpsByIdsInputSchema,
+  recordingListInputSchema,
+  attachmentListInputSchema,
   RoleId,
 } from "@care-y/shared";
 
@@ -425,6 +427,7 @@ export function createTicketRouter(deps: TicketRouterDeps) {
           limit: input.limit,
           cursor: input.cursor,
           direction: input.direction,
+          types: input.types,
         });
       }),
     ),
@@ -435,7 +438,12 @@ export function createTicketRouter(deps: TicketRouterDeps) {
         withErrorWrapping(async ({ ctx, input }) => {
           const access = deps.createTicketAccess(ctx.org.tenantDb);
           const svc = deps.createFollowUpSvc(ctx.org.tenantDb, access);
-          return svc.listSummary(ctx.user.id, input.ticketId);
+          return svc.listSummary(ctx.user.id, input.ticketId, {
+            limit: input.limit,
+            cursor: input.cursor,
+            direction: input.direction,
+            types: input.types,
+          });
         }),
       ),
 
@@ -445,7 +453,9 @@ export function createTicketRouter(deps: TicketRouterDeps) {
         withErrorWrapping(async ({ ctx, input }) => {
           const access = deps.createTicketAccess(ctx.org.tenantDb);
           const svc = deps.createFollowUpSvc(ctx.org.tenantDb, access);
-          return svc.listByIds(ctx.user.id, input.ticketId, input.followUpIds);
+          return svc.listByIds(ctx.user.id, input.ticketId, input.followUpIds, {
+            types: input.types,
+          });
         }),
       ),
 
@@ -679,23 +689,27 @@ export function createTicketRouter(deps: TicketRouterDeps) {
         }),
       ),
 
-    listRecordings: volunteerProcedure
-      .input(z.object({ ticketId: z.uuid() }))
-      .query(
-        withErrorWrapping(async ({ ctx, input }) => {
-          const svc = mediaSvc(ctx.org.tenantDb);
-          return svc.listRecordings(ctx.user.id, input.ticketId);
-        }),
-      ),
+    listRecordings: volunteerProcedure.input(recordingListInputSchema).query(
+      withErrorWrapping(async ({ ctx, input }) => {
+        const svc = mediaSvc(ctx.org.tenantDb);
+        return svc.listRecordings(ctx.user.id, input.ticketId, {
+          limit: input.limit,
+          cursor: input.cursor,
+          direction: input.direction,
+        });
+      }),
+    ),
 
-    listAttachments: volunteerProcedure
-      .input(z.object({ ticketId: z.uuid() }))
-      .query(
-        withErrorWrapping(async ({ ctx, input }) => {
-          const svc = mediaSvc(ctx.org.tenantDb);
-          return svc.listAttachments(ctx.user.id, input.ticketId);
-        }),
-      ),
+    listAttachments: volunteerProcedure.input(attachmentListInputSchema).query(
+      withErrorWrapping(async ({ ctx, input }) => {
+        const svc = mediaSvc(ctx.org.tenantDb);
+        return svc.listAttachments(ctx.user.id, input.ticketId, {
+          limit: input.limit,
+          cursor: input.cursor,
+          direction: input.direction,
+        });
+      }),
+    ),
 
     // --- Queues ---
     createQueue: adminProcedure.input(createQueueInputSchema).mutation(

@@ -367,4 +367,136 @@ describe.skipIf(!process.env.DATABASE_URL)("FollowUpService (DB)", () => {
       svc.softDeleteInternalNote(outsider.id, fu.id, false),
     ).rejects.toBeInstanceOf(ForbiddenError);
   });
+
+  // --- Types filter ---
+
+  it("listByTicket with types filter returns only matching types", async () => {
+    const { userId, ticketId } = await createTicketFixture();
+
+    await svc.create(userId, {
+      ticketId,
+      encryptedContent: Buffer.from("msg-1"),
+      source: "volunteer",
+      type: "message",
+      isPrivate: false,
+      mentionedPseudonyms: [],
+    });
+    const note = await svc.create(userId, {
+      ticketId,
+      encryptedContent: Buffer.from("note-1"),
+      source: "volunteer",
+      type: "internal_note",
+      isPrivate: true,
+      mentionedPseudonyms: [],
+    });
+    await svc.create(userId, {
+      ticketId,
+      encryptedContent: Buffer.from("status-1"),
+      source: "system",
+      type: "status_change",
+      isPrivate: false,
+      mentionedPseudonyms: [],
+    });
+
+    // Filter to notes only
+    const notes = await svc.listByTicket(userId, ticketId, {
+      limit: 50,
+      types: ["internal_note"],
+    });
+    expect(notes).toHaveLength(1);
+    expect(notes[0]!.id).toBe(note.id);
+
+    // Filter to multiple types
+    const mixed = await svc.listByTicket(userId, ticketId, {
+      limit: 50,
+      types: ["message", "status_change"],
+    });
+    expect(mixed).toHaveLength(2);
+    expect(mixed.every((f) => f.type !== "internal_note")).toBe(true);
+
+    // No filter returns all
+    const all = await svc.listByTicket(userId, ticketId, { limit: 50 });
+    expect(all).toHaveLength(3);
+  });
+
+  it("listSummary with limit caps results", async () => {
+    const { userId, ticketId } = await createTicketFixture();
+
+    for (let i = 0; i < 5; i++) {
+      await svc.create(userId, {
+        ticketId,
+        encryptedContent: Buffer.from(`msg-${String(i)}`),
+        source: "volunteer",
+        type: "message",
+        isPrivate: false,
+        mentionedPseudonyms: [],
+      });
+    }
+
+    const page = await svc.listSummary(userId, ticketId, {
+      limit: 3,
+    });
+    expect(page).toHaveLength(3);
+
+    const all = await svc.listSummary(userId, ticketId, {
+      limit: 100,
+    });
+    expect(all).toHaveLength(5);
+  });
+
+  it("listSummary with types filter returns only matching types", async () => {
+    const { userId, ticketId } = await createTicketFixture();
+
+    await svc.create(userId, {
+      ticketId,
+      encryptedContent: Buffer.from("msg"),
+      source: "volunteer",
+      type: "message",
+      isPrivate: false,
+      mentionedPseudonyms: [],
+    });
+    await svc.create(userId, {
+      ticketId,
+      encryptedContent: Buffer.from("note"),
+      source: "volunteer",
+      type: "internal_note",
+      isPrivate: true,
+      mentionedPseudonyms: [],
+    });
+
+    const notes = await svc.listSummary(userId, ticketId, {
+      limit: 100,
+      types: ["internal_note"],
+    });
+    expect(notes).toHaveLength(1);
+    expect(notes[0]!.type).toBe("internal_note");
+  });
+
+  it("listByIds with types filter only returns matching IDs", async () => {
+    const { userId, ticketId } = await createTicketFixture();
+
+    const msg = await svc.create(userId, {
+      ticketId,
+      encryptedContent: Buffer.from("msg"),
+      source: "volunteer",
+      type: "message",
+      isPrivate: false,
+      mentionedPseudonyms: [],
+    });
+    const note = await svc.create(userId, {
+      ticketId,
+      encryptedContent: Buffer.from("note"),
+      source: "volunteer",
+      type: "internal_note",
+      isPrivate: true,
+      mentionedPseudonyms: [],
+    });
+
+    // Request both IDs but filter to notes only
+    const result = await svc.listByIds(userId, ticketId, [msg.id, note.id], {
+      types: ["internal_note"],
+    });
+    expect(result).toHaveLength(1);
+    expect(result[0]!.id).toBe(note.id);
+  });
 });

@@ -229,7 +229,7 @@ describe.skipIf(!process.env.DATABASE_URL)("MediaService (DB)", () => {
 
     await svc.softDeleteRecording(deleted.id);
 
-    const list = await svc.listRecordings(userId, ticketId);
+    const list = await svc.listRecordings(userId, ticketId, { limit: 50 });
     const ids = list.map((r) => r.id);
     expect(ids).toContain(alive.id);
     expect(ids).not.toContain(deleted.id);
@@ -328,10 +328,105 @@ describe.skipIf(!process.env.DATABASE_URL)("MediaService (DB)", () => {
 
     await svc.softDeleteAttachment(deleted.id);
 
-    const list = await svc.listAttachments(userId, ticketId);
+    const list = await svc.listAttachments(userId, ticketId, { limit: 50 });
     const ids = list.map((a) => a.id);
     expect(ids).toContain(alive.id);
     expect(ids).not.toContain(deleted.id);
+  });
+
+  // --- Pagination ---
+
+  it("listRecordings paginates with cursor", async () => {
+    const ticketId = await insertTicket();
+
+    const ids: string[] = [];
+    for (let i = 0; i < 5; i++) {
+      const rec = await svc.createRecording({
+        ticketId,
+        blobKey: `blob-page-${String(i)}`,
+        sizeBytes: 100,
+      });
+      ids.push(rec.id);
+    }
+
+    // First page of 2
+    const page1 = await svc.listRecordings(userId, ticketId, { limit: 2 });
+    expect(page1).toHaveLength(2);
+
+    // Second page using cursor
+    const page2 = await svc.listRecordings(userId, ticketId, {
+      limit: 2,
+      cursor: page1[1]!.id,
+    });
+    expect(page2).toHaveLength(2);
+
+    // Third page (remainder)
+    const page3 = await svc.listRecordings(userId, ticketId, {
+      limit: 2,
+      cursor: page2[1]!.id,
+    });
+    expect(page3).toHaveLength(1);
+
+    // All 5 IDs covered with no duplicates
+    const allIds = [
+      ...page1.map((r) => r.id),
+      ...page2.map((r) => r.id),
+      ...page3.map((r) => r.id),
+    ];
+    expect(new Set(allIds).size).toBe(5);
+  });
+
+  it("listRecordings respects direction", async () => {
+    const ticketId = await insertTicket();
+
+    for (let i = 0; i < 3; i++) {
+      await svc.createRecording({
+        ticketId,
+        blobKey: `blob-dir-${String(i)}`,
+        sizeBytes: 100,
+      });
+    }
+
+    const asc = await svc.listRecordings(userId, ticketId, {
+      limit: 10,
+      direction: "newer",
+    });
+    const desc = await svc.listRecordings(userId, ticketId, {
+      limit: 10,
+      direction: "older",
+    });
+
+    // Both return same records, same chronological order
+    expect(asc.map((r) => r.id)).toEqual(desc.map((r) => r.id));
+  });
+
+  it("listAttachments paginates with cursor", async () => {
+    const ticketId = await insertTicket();
+
+    const ids: string[] = [];
+    for (let i = 0; i < 4; i++) {
+      const att = await svc.createAttachment({
+        ticketId,
+        blobKey: `blob-att-page-${String(i)}`,
+        sizeBytes: 100,
+      });
+      ids.push(att.id);
+    }
+
+    // First page of 2
+    const page1 = await svc.listAttachments(userId, ticketId, { limit: 2 });
+    expect(page1).toHaveLength(2);
+
+    // Second page
+    const page2 = await svc.listAttachments(userId, ticketId, {
+      limit: 2,
+      cursor: page1[1]!.id,
+    });
+    expect(page2).toHaveLength(2);
+
+    // All 4 IDs covered
+    const allIds = [...page1.map((a) => a.id), ...page2.map((a) => a.id)];
+    expect(new Set(allIds).size).toBe(4);
   });
 });
 

@@ -128,12 +128,14 @@
 
   const recordingsQuery = createQuery(() => ({
     queryKey: ["ticket", ticketId, "recordings"],
-    queryFn: async () => ticketRouter.listRecordings.query({ ticketId }),
+    queryFn: async () =>
+      ticketRouter.listRecordings.query({ ticketId, limit: 200 }),
   }));
 
   const attachmentsQuery = createQuery(() => ({
     queryKey: ["ticket", ticketId, "attachments"],
-    queryFn: async () => ticketRouter.listAttachments.query({ ticketId }),
+    queryFn: async () =>
+      ticketRouter.listAttachments.query({ ticketId, limit: 200 }),
   }));
 
   // Volunteer list (cached, shared with MentionAutocomplete).

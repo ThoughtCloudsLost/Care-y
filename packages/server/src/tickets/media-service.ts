@@ -68,10 +68,15 @@ export interface MediaService {
   hardDeleteRecording(recordingId: string): Promise<void>;
   hardDeleteAttachment(attachmentId: string): Promise<void>;
 
-  listRecordings(userId: string, ticketId: string): Promise<RecordingRecord[]>;
+  listRecordings(
+    userId: string,
+    ticketId: string,
+    opts: { limit: number; cursor?: string; direction?: "newer" | "older" },
+  ): Promise<RecordingRecord[]>;
   listAttachments(
     userId: string,
     ticketId: string,
+    opts: { limit: number; cursor?: string; direction?: "newer" | "older" },
   ): Promise<AttachmentRecord[]>;
 }
 
@@ -234,32 +239,90 @@ export function createMediaService(
       await db.deleteFrom("attachments").where("id", "=", row.id).execute();
     },
 
-    async listRecordings(userId, ticketId) {
+    async listRecordings(userId, ticketId, opts) {
       await access.assertAccess(userId, ticketId);
 
-      const rows = await db
+      const isOlder = opts.direction === "older";
+
+      let query = db
         .selectFrom("recordings")
         .selectAll()
         .where("ticket_id", "=", ticketId)
-        .where("deleted_at", "is", null)
-        .orderBy("created_at", "asc")
+        .where("deleted_at", "is", null);
+
+      if (opts.cursor !== undefined) {
+        const cursorId = opts.cursor;
+        const cursorCreatedAt = db
+          .selectFrom("recordings")
+          .select("created_at")
+          .where("id", "=", cursorId);
+
+        const timeOp = isOlder ? "<" : ">";
+        const tieOp = isOlder ? "<" : ">";
+
+        query = query.where((eb) =>
+          eb.or([
+            eb("created_at", timeOp, cursorCreatedAt),
+            eb.and([
+              eb("created_at", "=", cursorCreatedAt),
+              eb("id", tieOp, cursorId),
+            ]),
+          ]),
+        );
+      }
+
+      const sortDir = isOlder ? "desc" : "asc";
+      const rows = await query
+        .orderBy("created_at", sortDir)
+        .orderBy("id", sortDir)
+        .limit(opts.limit)
         .execute();
 
-      return rows.map(toRecordingRecord);
+      const records = rows.map(toRecordingRecord);
+      return isOlder ? records.reverse() : records;
     },
 
-    async listAttachments(userId, ticketId) {
+    async listAttachments(userId, ticketId, opts) {
       await access.assertAccess(userId, ticketId);
 
-      const rows = await db
+      const isOlder = opts.direction === "older";
+
+      let query = db
         .selectFrom("attachments")
         .selectAll()
         .where("ticket_id", "=", ticketId)
-        .where("deleted_at", "is", null)
-        .orderBy("created_at", "asc")
+        .where("deleted_at", "is", null);
+
+      if (opts.cursor !== undefined) {
+        const cursorId = opts.cursor;
+        const cursorCreatedAt = db
+          .selectFrom("attachments")
+          .select("created_at")
+          .where("id", "=", cursorId);
+
+        const timeOp = isOlder ? "<" : ">";
+        const tieOp = isOlder ? "<" : ">";
+
+        query = query.where((eb) =>
+          eb.or([
+            eb("created_at", timeOp, cursorCreatedAt),
+            eb.and([
+              eb("created_at", "=", cursorCreatedAt),
+              eb("id", tieOp, cursorId),
+            ]),
+          ]),
+        );
+      }
+
+      const sortDir = isOlder ? "desc" : "asc";
+      const rows = await query
+        .orderBy("created_at", sortDir)
+        .orderBy("id", sortDir)
+        .limit(opts.limit)
         .execute();
 
-      return rows.map(toAttachmentRecord);
+      const records = rows.map(toAttachmentRecord);
+      return isOlder ? records.reverse() : records;
     },
   };
 }

@@ -979,6 +979,11 @@ export function createTicketService(
             .as("has_file"),
         ])
         .where("f.ticket_id", "in", input.ticketIds)
+        .$if(input.types !== undefined && input.types.length > 0, (qb) => {
+          const types = input.types;
+          if (types === undefined) return qb;
+          return qb.where("f.type", "in", types);
+        })
         .as("ranked_f");
 
       const rows = await db

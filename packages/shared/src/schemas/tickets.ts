@@ -173,6 +173,7 @@ export type TicketListInput = z.infer<typeof ticketListInputSchema>;
 export const recentFollowUpsInputSchema = z.object({
   ticketIds: z.array(z.uuid()).min(1).max(50),
   perTicket: z.number().int().min(1).max(5).default(3),
+  types: z.array(followUpTypeSchema).optional(),
 });
 export type RecentFollowUpsInput = z.infer<typeof recentFollowUpsInputSchema>;
 
@@ -183,12 +184,17 @@ export const followUpListInputSchema = z.object({
   limit: z.number().int().min(1).max(100).default(50),
   cursor: z.uuid().optional(),
   direction: followUpListDirectionSchema.default("newer"),
+  types: z.array(followUpTypeSchema).optional(),
 });
 export type FollowUpListInput = z.infer<typeof followUpListInputSchema>;
 
-/** Input for the timeline summary endpoint (no pagination, all follow-ups). */
+/** Input for the timeline summary endpoint. */
 export const followUpSummaryInputSchema = z.object({
   ticketId: z.uuid(),
+  limit: z.number().int().min(1).max(2000).default(500),
+  cursor: z.uuid().optional(),
+  direction: followUpListDirectionSchema.default("newer"),
+  types: z.array(followUpTypeSchema).optional(),
 });
 export type FollowUpSummaryInput = z.infer<typeof followUpSummaryInputSchema>;
 
@@ -196,8 +202,27 @@ export type FollowUpSummaryInput = z.infer<typeof followUpSummaryInputSchema>;
 export const followUpsByIdsInputSchema = z.object({
   ticketId: z.uuid(),
   followUpIds: z.array(z.uuid()).min(1).max(200),
+  types: z.array(followUpTypeSchema).optional(),
 });
 export type FollowUpsByIdsInput = z.infer<typeof followUpsByIdsInputSchema>;
+
+// --- Media list schemas ---
+
+export const recordingListInputSchema = z.object({
+  ticketId: z.uuid(),
+  limit: z.number().int().min(1).max(200).default(50),
+  cursor: z.uuid().optional(),
+  direction: followUpListDirectionSchema.default("newer"),
+});
+export type RecordingListInput = z.infer<typeof recordingListInputSchema>;
+
+export const attachmentListInputSchema = z.object({
+  ticketId: z.uuid(),
+  limit: z.number().int().min(1).max(200).default(50),
+  cursor: z.uuid().optional(),
+  direction: followUpListDirectionSchema.default("newer"),
+});
+export type AttachmentListInput = z.infer<typeof attachmentListInputSchema>;
 
 // --- Workflow schemas ---
 

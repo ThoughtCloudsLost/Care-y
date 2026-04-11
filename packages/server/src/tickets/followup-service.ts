@@ -53,22 +53,35 @@ export interface FollowUpService {
   listByTicket(
     userId: string,
     ticketId: string,
-    opts: { limit: number; cursor?: string; direction?: "newer" | "older" },
+    opts: {
+      limit: number;
+      cursor?: string;
+      direction?: "newer" | "older";
+      types?: string[];
+    },
   ): Promise<FollowUpRecord[]>;
   /**
-   * All follow-ups for timeline rendering. Plain messages carry no
-   * encryptedContent. System events and notes include it for client-side
-   * decryption. Joins recordings/attachments for media flags.
+   * Follow-ups for timeline rendering with optional pagination and type
+   * filtering. Plain messages carry no encryptedContent. System events and
+   * notes include it for client-side decryption. Joins recordings/attachments
+   * for media flags.
    */
   listSummary(
     userId: string,
     ticketId: string,
+    opts: {
+      limit: number;
+      cursor?: string;
+      direction?: "newer" | "older";
+      types?: string[];
+    },
   ): Promise<FollowUpSummaryRecord[]>;
   /** Fetch specific follow-ups by ID (for expanding timeline clusters). */
   listByIds(
     userId: string,
     ticketId: string,
     followUpIds: string[],
+    opts?: { types?: string[] },
   ): Promise<FollowUpRecord[]>;
   /** Update encrypted content of an internal note. Only the author can edit. */
   updateInternalNote(
@@ -157,6 +170,10 @@ export function createFollowUpService(
         .where("ticket_id", "=", ticketId)
         .where("deleted_at", "is", null);
 
+      if (opts.types !== undefined && opts.types.length > 0) {
+        query = query.where("type", "in", opts.types);
+      }
+
       if (opts.cursor !== undefined) {
         // Keyset pagination: skip past the cursor row.
         // Uses subquery to keep timestamp comparison in PostgreSQL,
@@ -196,11 +213,12 @@ export function createFollowUpService(
       return isOlder ? records.reverse() : records;
     },
 
-    async listSummary(userId, ticketId) {
+    async listSummary(userId, ticketId, opts) {
       await access.assertAccess(userId, ticketId);
 
-      // Fetch all non-deleted follow-ups in chronological order.
-      const rows = await db
+      const isOlder = opts.direction === "older";
+
+      let query = db
         .selectFrom("followups")
         .select([
           "followups.id",
@@ -211,26 +229,63 @@ export function createFollowUpService(
           "followups.created_at",
         ])
         .where("followups.ticket_id", "=", ticketId)
-        .where("followups.deleted_at", "is", null)
-        .orderBy("followups.created_at", "asc")
-        .orderBy("followups.id", "asc")
+        .where("followups.deleted_at", "is", null);
+
+      if (opts.types !== undefined && opts.types.length > 0) {
+        query = query.where("followups.type", "in", opts.types);
+      }
+
+      if (opts.cursor !== undefined) {
+        const cursorId = opts.cursor;
+        const cursorCreatedAt = db
+          .selectFrom("followups")
+          .select("created_at")
+          .where("id", "=", cursorId);
+
+        const timeOp = isOlder ? "<" : ">";
+        const tieOp = isOlder ? "<" : ">";
+
+        query = query.where((eb) =>
+          eb.or([
+            eb("followups.created_at", timeOp, cursorCreatedAt),
+            eb.and([
+              eb("followups.created_at", "=", cursorCreatedAt),
+              eb("followups.id", tieOp, cursorId),
+            ]),
+          ]),
+        );
+      }
+
+      const sortDir = isOlder ? "desc" : "asc";
+      const rows = await query
+        .orderBy("followups.created_at", sortDir)
+        .orderBy("followups.id", sortDir)
+        .limit(opts.limit)
         .execute();
 
-      // Batch-fetch recordings and attachments for this ticket.
-      const [recRows, attRows] = await Promise.all([
-        db
-          .selectFrom("recordings")
-          .select(["followup_id", "duration_seconds"])
-          .where("ticket_id", "=", ticketId)
-          .where("deleted_at", "is", null)
-          .execute(),
-        db
-          .selectFrom("attachments")
-          .select(["followup_id", "content_type"])
-          .where("ticket_id", "=", ticketId)
-          .where("deleted_at", "is", null)
-          .execute(),
-      ]);
+      const orderedRows = isOlder ? rows.reverse() : rows;
+
+      // Batch-fetch recordings and attachments scoped to this page's
+      // follow-up IDs (not the full ticket).
+      const fuIds = orderedRows.map((r) => r.id);
+
+      const [recRows, attRows] =
+        fuIds.length > 0
+          ? await Promise.all([
+              db
+                .selectFrom("recordings")
+                .select(["followup_id", "duration_seconds"])
+                .where("followup_id", "in", fuIds)
+                .where("deleted_at", "is", null)
+                .execute(),
+              db
+                .selectFrom("attachments")
+                .select(["followup_id", "content_type"])
+                .where("followup_id", "in", fuIds)
+                .where("deleted_at", "is", null)
+                .execute(),
+            ])
+          : [[], []];
 
       // Build lookup maps.
       const recByFu = new Map<
@@ -271,7 +326,7 @@ export function createFollowUpService(
         attByFu.set(a.followup_id, existing);
       }
 
-      return rows.map((row): FollowUpSummaryRecord => {
+      return orderedRows.map((row): FollowUpSummaryRecord => {
         const isPlainMessage =
           row.source !== "system" && row.type !== "internal_note";
         const rec = recByFu.get(row.id);
@@ -292,17 +347,23 @@ export function createFollowUpService(
       });
     },
 
-    async listByIds(userId, ticketId, followUpIds) {
+    async listByIds(userId, ticketId, followUpIds, opts) {
       await access.assertAccess(userId, ticketId);
 
       if (followUpIds.length === 0) return [];
 
-      const rows = await db
+      let query = db
         .selectFrom("followups")
         .selectAll()
         .where("ticket_id", "=", ticketId)
         .where("id", "in", followUpIds)
-        .where("deleted_at", "is", null)
+        .where("deleted_at", "is", null);
+
+      if (opts?.types !== undefined && opts.types.length > 0) {
+        query = query.where("type", "in", opts.types);
+      }
+
+      const rows = await query
         .orderBy("created_at", "asc")
         .orderBy("id", "asc")
         .execute();
