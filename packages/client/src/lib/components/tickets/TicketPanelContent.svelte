@@ -32,8 +32,8 @@
     FileHeadphone,
     FilePlay,
     File,
+    type LucideIcon,
   } from "@lucide/svelte";
-  import type { Component } from "svelte";
   import * as m from "$lib/paraglide/messages.js";
   import StatusDot from "$lib/components/StatusDot.svelte";
   import MmsImage from "$lib/components/tickets/MmsImage.svelte";
@@ -259,8 +259,7 @@
   // --- File type helpers ---
 
   /** Map MIME content type to a Lucide icon component. */
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  function fileIcon(ct: string | null): Component<any> {
+  function fileIcon(ct: string | null): LucideIcon {
     if (ct === null || ct === "") return File;
     if (ct.startsWith("text/")) return FileText;
     if (ct === "application/pdf") return FileText;
