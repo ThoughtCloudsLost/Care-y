@@ -47,6 +47,10 @@
   import { trpc } from "$lib/trpc/index.js";
   import { createVolunteersQuery } from "$lib/tickets/queries.js";
   import {
+    buildVolunteerMap,
+    resolveVolunteerName as resolveVolName,
+  } from "$lib/tickets/resolve-volunteer.js";
+  import {
     getCurrentUserId,
     getCryptoBridge,
     getFollowUpDecryptCache,
@@ -220,16 +224,9 @@
 
   const notes = $derived(notesPaginated.items);
 
+  const volunteerMap = $derived(buildVolunteerMap(volunteersQuery.data));
   function resolveVolunteerName(userId: string | null): string | undefined {
-    if (userId === null) return undefined;
-    const volunteers = volunteersQuery.data;
-    if (!Array.isArray(volunteers)) return undefined;
-    const vol = volunteers.find((v) => v.id === userId);
-    if (!vol) return undefined;
-    return (
-      orgCache.decrypt(`volunteer:${vol.id}`, vol.encryptedDisplayName) ??
-      undefined
-    );
+    return resolveVolName(userId, volunteerMap, orgCache);
   }
 
   function decryptNoteContent(
