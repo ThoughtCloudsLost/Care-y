@@ -2,6 +2,20 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { render, cleanup } from "@testing-library/svelte";
 import TicketPreview from "./TicketPreview.svelte";
+
+// IntersectionObserver stub for DecryptPlaceholder
+vi.stubGlobal(
+  "IntersectionObserver",
+  vi.fn(function (this: {
+    observe: () => void;
+    disconnect: () => void;
+    unobserve: () => void;
+  }) {
+    this.observe = vi.fn();
+    this.disconnect = vi.fn();
+    this.unobserve = vi.fn();
+  }),
+);
 import type { RawFollowUpPreview } from "$lib/tickets/preview-loader.svelte.js";
 
 // --- Mocks ---
@@ -41,12 +55,12 @@ function makeFollowUp(
 }
 
 describe("TicketPreview (mini-bubbles)", () => {
-  it("renders shimmer when followUps is undefined (not loaded)", () => {
+  it("renders DecryptPlaceholder when followUps is undefined (not loaded)", () => {
     const { container } = render(TicketPreview, {
       props: { followUps: undefined },
     });
-    const shimmers = container.querySelectorAll(".shimmer-preview");
-    expect(shimmers.length).toBeGreaterThan(0);
+    const placeholders = container.querySelectorAll(".dp");
+    expect(placeholders.length).toBeGreaterThan(0);
   });
 
   it("renders empty state when followUps is empty array", () => {
@@ -57,14 +71,14 @@ describe("TicketPreview (mini-bubbles)", () => {
     expect(container.textContent).toBeTruthy();
   });
 
-  it("renders shimmer inside mini-bubble when decryption is pending", () => {
+  it("renders DecryptPlaceholder inside mini-bubble when decryption is pending", () => {
     mockDecryptContent.mockReturnValue(undefined);
     const fu = makeFollowUp();
     const { container } = render(TicketPreview, {
       props: { followUps: [fu] },
     });
-    const shimmer = container.querySelector(".shimmer-mini");
-    expect(shimmer).not.toBeNull();
+    const dp = container.querySelector(".dp[aria-busy='true']");
+    expect(dp).not.toBeNull();
   });
 
   it("renders decrypted text inside a mini-bubble", () => {
@@ -109,7 +123,7 @@ describe("TicketPreview (mini-bubbles)", () => {
     expect(container.querySelector(".mini-bubble-row")).toBeNull();
   });
 
-  it("truncates long text to 30 characters with ellipsis", () => {
+  it("renders long text with CSS truncation (line-clamp)", () => {
     mockDecryptContent.mockReturnValue(
       "This is a very long message that should be truncated",
     );
@@ -117,9 +131,9 @@ describe("TicketPreview (mini-bubbles)", () => {
     const { container } = render(TicketPreview, {
       props: { followUps: [fu] },
     });
-    const text = container.querySelector(".mini-text")?.textContent ?? "";
-    expect(text.length).toBeLessThanOrEqual(31); // 30 chars + ellipsis
-    expect(text).toContain("\u2026");
+    const textEl = container.querySelector(".mini-text");
+    expect(textEl).not.toBeNull();
+    expect(textEl?.textContent).toContain("This is a very long message");
   });
 
   it("renders error text when decryption fails (sentinel value)", () => {

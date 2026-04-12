@@ -3,6 +3,7 @@
   import { slide } from "svelte/transition";
   import { browser } from "$app/environment";
   import type { Snippet, Component } from "svelte";
+  import DecryptPlaceholder from "$lib/components/DecryptPlaceholder.svelte";
 
   let reducedMotion = $state(false);
 
@@ -22,6 +23,8 @@
     heading: string;
     /** Item count (omit to hide the badge entirely) */
     count?: number;
+    /** Whether the section data is still loading */
+    loading?: boolean;
     /** Icon component to show left of the heading */
     icon?: Component;
     /** Icon color: any CSS color value or variable reference */
@@ -37,6 +40,7 @@
   let {
     heading,
     count,
+    loading = false,
     icon: Icon,
     iconColor = "currentColor",
     expanded,
@@ -63,7 +67,11 @@
           />
         {/if}
         <span class="heading-text">{heading}</span>
-        {#if count !== undefined}
+        {#if loading && count === undefined}
+          <span class="count-badge" aria-hidden="true">
+            <DecryptPlaceholder length={3} />
+          </span>
+        {:else if count !== undefined}
           <span class="count-badge" aria-hidden="true">{count}</span>
         {/if}
         <span class="toggle-chevron" class:expanded aria-hidden="true">

@@ -29,6 +29,7 @@
   import type { FollowUpDecryptCache } from "$lib/crypto/follow-up-decrypt-cache.js";
   import type { TicketKeyWrap } from "$lib/crypto/ticket-decrypt-cache.js";
   import { isDecryptError } from "$lib/crypto/async-decrypt-cache.js";
+  import DecryptPlaceholder from "$lib/components/DecryptPlaceholder.svelte";
   import type { TimelineItem, ClusterRecord } from "./chat-zoom-types.js";
 
   interface ClusterEntry {
@@ -414,15 +415,13 @@
                             class="cluster-bubble-tap"
                           >
                             {#snippet text()}
-                              {#if preview === undefined}
-                                <span
-                                  class="shimmer shimmer-bubble"
-                                  role="status"
-                                  aria-label={m.ticket_timeline_decrypting()}
-                                ></span>
-                              {:else}
-                                {preview}
-                              {/if}
+                              <DecryptPlaceholder
+                                content={preview}
+                                ciphertext={rec.encryptedContent}
+                                length={30}
+                                block
+                                charsPerLine={35}
+                              />
                             {/snippet}
                             {#snippet footer()}
                               <time
@@ -574,36 +573,5 @@
   .bubble-time {
     font-size: 0.625rem;
     color: var(--muted, #666);
-  }
-
-  .shimmer-bubble {
-    display: inline-block;
-    width: 8rem;
-    height: 0.875rem;
-    border-radius: 0.25rem;
-    background: linear-gradient(
-      90deg,
-      var(--surface-2, #333) 25%,
-      var(--surface-1, #444) 50%,
-      var(--surface-2, #333) 75%
-    );
-    background-size: 200% 100%;
-    animation: shimmer 1.5s infinite linear;
-  }
-
-  @keyframes shimmer {
-    from {
-      background-position: 200% 0;
-    }
-    to {
-      background-position: -200% 0;
-    }
-  }
-
-  @media (prefers-reduced-motion: reduce) {
-    .shimmer-bubble {
-      animation: none;
-      background: var(--surface-2, #333);
-    }
   }
 </style>

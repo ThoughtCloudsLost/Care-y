@@ -1,36 +1,71 @@
 <script lang="ts">
   import type { Snippet } from "svelte";
   import * as m from "$lib/paraglide/messages.js";
+  import { isDecryptError } from "$lib/crypto/async-decrypt-cache.js";
 
   interface Props {
-    /** Whether content is still loading/decrypting */
-    loading?: boolean;
+    /** Decrypted value: undefined/null = loading, error sentinel = error, string = ready */
+    content?: string | null;
+    /** Encrypted data for automatic length estimation (ciphertext bytes - 40 = plaintext chars).
+     *  Accepts unknown to avoid forcing callers to import SerializedBuffer. Runtime type-checked. */
+    ciphertext?: unknown;
     /**
      * Display mode:
      *  - "text": scrambled alphanumeric characters (inline text fields)
      *  - "media": grid of block characters (images, files, non-text)
      * Only use this component for client-decrypted content.
-     * Server-returned plaintext should use <Skeleton> instead.
+     * Server-returned plaintext should use <InlineSkeleton> instead.
      */
     mode?: "text" | "media";
-    /** Approximate character count for placeholder width (text mode) */
+    /** Fallback character count when ciphertext unavailable (loading skeletons) */
     length?: number;
     /** Render as block-level element (for notes, messages, or media) */
     block?: boolean;
+    /** Characters per line for block mode height estimation. Default: 40 */
+    charsPerLine?: number;
+    /** Maximum lines for block mode height. Caps the scramble height estimate. */
+    maxLines?: number;
     /** Additional CSS classes */
     class?: string;
-    /** Revealed content */
+    /** Custom rendering for decrypted content. If omitted, renders content as text. */
     children?: Snippet;
   }
 
   let {
-    loading = true,
+    content,
+    ciphertext,
     mode = "text",
     length = 20,
     block = false,
+    charsPerLine = 40,
+    maxLines,
     class: className = "",
     children,
   }: Props = $props();
+
+  const loading = $derived(content === undefined || content === null);
+  const isError = $derived(!loading && isDecryptError(content));
+  /** True when this is a pure shape guess with no real data behind it. */
+  const isDummy = $derived(loading && ciphertext == null);
+  const effectiveLength = $derived(estimateLength(ciphertext, length));
+  const estimatedLines = $derived.by(() => {
+    const lines = Math.max(1, Math.ceil(effectiveLength / charsPerLine));
+    return maxLines !== undefined ? Math.min(lines, maxLines) : lines;
+  });
+
+  function estimateLength(ct: unknown, fallback: number): number {
+    if (ct == null) return fallback;
+    if (ct instanceof Uint8Array) return Math.max(1, ct.length - 40);
+    if (typeof ct === "string")
+      return Math.max(1, Math.ceil((ct.length * 3) / 4) - 40);
+    if (typeof ct === "object" && "data" in ct) {
+      const obj: Record<string, unknown> = ct as Record<string, unknown>;
+      if (Array.isArray(obj.data)) {
+        return Math.max(1, obj.data.length - 40);
+      }
+    }
+    return fallback;
+  }
 
   const isMedia = $derived(mode === "media");
   // Text mode: 4 variants, Media mode: 2 variants
@@ -76,7 +111,11 @@
   <span
     class="scramble"
     class:scramble-media={isMedia}
-    style:width={isMedia ? undefined : `${String(length)}ch`}
+    class:scramble-block={block && !isMedia}
+    style:width={isMedia || block ? undefined : `${String(effectiveLength)}ch`}
+    style:max-height={block && !isMedia
+      ? `${String(estimatedLines)}lh`
+      : undefined}
     style:--delay={delay}
     aria-hidden="true"
   ></span>
@@ -84,8 +123,14 @@
     <span class="dp-sr-only">{m.decrypt_placeholder_loading()}</span>
   {/if}
   <span class="content">
-    {#if children}
-      {@render children()}
+    {#if isError}
+      <span class="decrypt-error">{m.error_decryption_failed()}</span>
+    {:else if !loading}
+      {#if children}
+        {@render children()}
+      {:else}
+        {content}
+      {/if}
     {/if}
   </span>
 </span>
@@ -96,11 +141,14 @@
     display: inline-grid;
     align-items: center;
     overflow: hidden;
+    max-width: 100%;
+    min-width: 0;
   }
 
   .dp.block {
     display: grid;
     width: 100%;
+    min-width: 0;
   }
 
   .scramble,
@@ -110,23 +158,44 @@
 
   /* ── Scramble placeholder ── */
   .scramble {
-    font-family: ui-monospace, "SF Mono", "Cascadia Mono", monospace;
-    font-size: inherit;
+    font: inherit;
     color: var(--muted, #888);
     filter: blur(2.5px);
     opacity: 1;
     overflow: hidden;
     white-space: nowrap;
+    max-width: 100%;
     user-select: none;
     transition:
       filter 0.4s ease-out,
-      opacity 0.3s ease-out 0.1s;
+      opacity 0.3s ease-out 0.1s,
+      max-height 0.5s ease-in-out 0.1s,
+      width 0.5s ease-in-out 0.1s;
+  }
+
+  /* Block text mode: ::before content wraps within the container.
+     max-height clips to the approximate number of lines. */
+  .scramble-block {
+    white-space: normal;
+    word-break: break-all;
+    width: 100%;
+  }
+
+  .scramble-block::before {
+    display: block;
+    white-space: normal;
+    word-break: break-all;
   }
 
   .dp:not(.loading) .scramble {
     filter: blur(0);
     opacity: 0;
     pointer-events: none;
+    /* Smoothly collapse to 0 so the content determines container size
+       without an instant layout jump. !important overrides inline styles. */
+    max-height: 0 !important;
+    width: 0 !important;
+    overflow: hidden;
   }
 
   .paused .scramble::before {
@@ -135,113 +204,113 @@
 
   /* ── Keyframe variant 1 ── */
   .v1 .scramble::before {
-    content: "kX9mBqR2pLzF";
+    content: "kXm Bq pLzF";
     animation: scramble-1 1.8s steps(1) infinite;
     animation-delay: var(--delay, 0s);
   }
 
   @keyframes scramble-1 {
     0% {
-      content: "kX9mBqR2pLzF4jNwC7sAhT6vDx1eYgUoI8tKdMfWb5n3cJrQyS0lEaHuPiVwZGkX9mBqR2pLzF4jNwC7sAhT6vDx1eYgUoI8tKdMfWb5n3cJrQyS0lEaHuPiVwZG";
+      content: "kXm BqR pLzF jNwC sAhT vDx eYgU oItK dMfW n3cJ rQyS lEaH uPiVw kXm BqR pLzF jNwC sAhT vDx eYgU oItK dMfW n3cJ rQyS lEaH uPiVw";
     }
     16% {
-      content: "Zf4jNwC7sAR2pLzFhT6vDx1eYUoI8tkX9mBqKdMfWb5n3cJrQyS0lEaHuPiVwZf4jNwC7sAR2pLzFhT6vDx1eYUoI8tkX9mBqKdMfWb5n3cJrQyS0lEaHuPiVw";
+      content: "Zfj NwC sAR pLzFh TvDx eYUo tkXm BqKd MfWb ncJr QySl EaHu PiVw Zfj NwC sAR pLzFh TvDx eYUo tkXm BqKd MfWb ncJr QySl EaHu PiVw";
     }
     33% {
-      content: "hT6vDx1eYgkX9mBqR2pLzF4jNwC7sAUoI8tKdMfWb5n3cJrQyS0lEaHuPiVwZGhT6vDx1eYgkX9mBqR2pLzF4jNwC7sAUoI8tKdMfWb5n3cJrQyS0lEaHuPi";
+      content: "hTv Dx eYgk XmBq RpLz FjNw CsAU oItK dMfW ncJr QySl EaHu PiVw hTv Dx eYgk XmBq RpLz FjNw CsAU oItK dMfW ncJr QySl EaHu PiVw";
     }
     50% {
-      content: "UoI8tKdMfWhT6vDx1eYgkX9mBqR2pLzF4jNwC7sAb5n3cJrQyS0lEaHuPiVwZGUoI8tKdMfWhT6vDx1eYgkX9mBqR2pLzF4jNwC7sAb5n3cJrQyS0lEaHuPiVw";
+      content: "UoI tKdM fWhT vDxe Ygk XmBq RpLz FjNw CsAb ncJr QySl EaHu PiVw UoI tKdM fWhT vDxe Ygk XmBq RpLz FjNw CsAb ncJr QySl EaHu PiVw";
     }
     66% {
-      content: "b5n3cJrQySUoI8tKdMfWhT6vDx1eYgkX9mBqR2pLzF4jNwC7sA0lEaHuPiVwZGb5n3cJrQySUoI8tKdMfWhT6vDx1eYgkX9mBqR2pLzF4jNwC7sA0lEaHuPiVw";
+      content: "bncJ rQyS UoIt KdMf WhTv Dxe YgkX mBqR pLzF jNwC sAlE aHuP iVwZ bncJ rQyS UoIt KdMf WhTv Dxe YgkX mBqR pLzF jNwC sAlE aHuP iVwZ";
     }
     83% {
-      content: "0lEaHuPiVwb5n3cJrQySUoI8tKdMfWhT6vDx1eYgkX9mBqR2pLzF4jNwC7sAZG0lEaHuPiVwb5n3cJrQySUoI8tKdMfWhT6vDx1eYgkX9mBqR2pLzF4jNwC7sA";
+      content: "lEaH uPiV wbncJ rQyS UoIt KdMf WhTv Dxe YgkX mBqR pLzF jNwC sAZG lEaH uPiV wbncJ rQyS UoIt KdMf WhTv Dxe YgkX mBqR pLzF jNwC";
     }
   }
 
   /* ── Keyframe variant 2 ── */
   .v2 .scramble::before {
-    content: "Rn7wYq4dLx2G";
+    content: "Rnw Yqd Lx2G";
     animation: scramble-2 1.8s steps(1) infinite;
     animation-delay: var(--delay, 0s);
   }
 
   @keyframes scramble-2 {
     0% {
-      content: "Rn7wYq4dLx2GfJ9sPk6hMt0eBaUoWv8iZc5rNl3mXgDyKbFjQ1uAHpECITVSORn7wYq4dLx2GfJ9sPk6hMt0eBaUoWv8iZc5rNl3mXgDyKbFjQ1uAHpECITVSO";
+      content: "Rnw Yqd Lx2G fJsP kMte BaUo Wvi Zcr NlmX gDyK bFjQ uAHp ECIT Rnw Yqd Lx2G fJsP kMte BaUo Wvi Zcr NlmX gDyK bFjQ uAHp ECIT";
     }
     16% {
-      content: "fJ9sPk6hMt0eRn7wYq4dLx2GBaUoWv8iZc5rNl3mXgDyKbFjQ1uAHpECITVSOfJ9sPk6hMt0eRn7wYq4dLx2GBaUoWv8iZc5rNl3mXgDyKbFjQ1uAHpECITVSO";
+      content: "fJsP kMte Rnw Yqd Lx2G BaUo Wvi ZcrN lmXg DyKb FjQu AHpE CITV fJsP kMte Rnw Yqd Lx2G BaUo Wvi ZcrN lmXg DyKb FjQu AHpE CITV";
     }
     33% {
-      content: "BaUoWv8iZc5rRn7wYq4dLx2GfJ9sPk6hMt0eNl3mXgDyKbFjQ1uAHpECITVSOBaUoWv8iZc5rRn7wYq4dLx2GfJ9sPk6hMt0eNl3mXgDyKbFjQ1uAHpECITVSO";
+      content: "BaUo Wvi Zcr Rnw Yqd Lx2G fJsP kMte NlmX gDyK bFjQ uAHp ECIT BaUo Wvi Zcr Rnw Yqd Lx2G fJsP kMte NlmX gDyK bFjQ uAHp ECIT";
     }
     50% {
-      content: "Nl3mXgDyKbFjBaUoWv8iZc5rRn7wYq4dLx2GfJ9sPk6hMt0eQ1uAHpECITVSONl3mXgDyKbFjBaUoWv8iZc5rRn7wYq4dLx2GfJ9sPk6hMt0eQ1uAHpECITVSO";
+      content: "NlmX gDyK bFjQ BaUo Wvi Zcr Rnw Yqd Lx2G fJsP kMte uAHp ECIT NlmX gDyK bFjQ BaUo Wvi Zcr Rnw Yqd Lx2G fJsP kMte uAHp ECIT";
     }
     66% {
-      content: "Q1uAHpECITVSNl3mXgDyKbFjBaUoWv8iZc5rRn7wYq4dLx2GfJ9sPk6hMt0eOQ1uAHpECITVSNl3mXgDyKbFjBaUoWv8iZc5rRn7wYq4dLx2GfJ9sPk6hMt0e";
+      content: "QuAH pECI TVS NlmX gDyK bFjQ BaUo Wvi Zcr Rnw Yqd Lx2G fJsP kMte QuAH pECI TVS NlmX gDyK bFjQ BaUo Wvi Zcr Rnw Yqd Lx2G fJsP";
     }
     83% {
-      content: "OQ1uAHpECITVSNl3mXgDyKbFjBaUoWv8iZc5rRn7wYq4dLx2GfJ9sPk6hMt0eSOQ1uAHpECITVSNl3mXgDyKbFjBaUoWv8iZc5rRn7wYq4dLx2GfJ9sPk6hMt";
+      content: "OQu AHpE CITV SNlm XgDy KbFj QBaU oWvi ZcrR nwYq dLx2 GfJs PkMt OQu AHpE CITV SNlm XgDy KbFj QBaU oWvi ZcrR nwYq dLx2 GfJs PkMt";
     }
   }
 
   /* ── Keyframe variant 3 ── */
   .v3 .scramble::before {
-    content: "Wp3gTc8nFs5V";
+    content: "Wpg TcnF s5Vj";
     animation: scramble-3 1.8s steps(1) infinite;
     animation-delay: var(--delay, 0s);
   }
 
   @keyframes scramble-3 {
     0% {
-      content: "Wp3gTc8nFs5VjL1yHr6bKd9mQx4wAe0uZi7oPv2sSaNkGfXtBJMCDEIRUYWOWp3gTc8nFs5VjL1yHr6bKd9mQx4wAe0uZi7oPv2sSaNkGfXtBJMCDEIRUYWO";
+      content: "Wpg Tcn Fs5V jLyH rbKd mQxw Aeu Zio Pvs NkGf XtBJ MCDE IRUY Wpg Tcn Fs5V jLyH rbKd mQxw Aeu Zio Pvs NkGf XtBJ MCDE IRUY";
     }
     16% {
-      content: "jL1yHr6bKd9mWp3gTc8nFs5VQx4wAe0uZi7oPv2sSaNkGfXtBJMCDEIRUYWOjL1yHr6bKd9mWp3gTc8nFs5VQx4wAe0uZi7oPv2sSaNkGfXtBJMCDEIRUYWO";
+      content: "jLyH rbKd Wpg Tcn Fs5V Qxw Aeu Zio PvsN kGfX tBJM CDEI RUYW jLyH rbKd Wpg Tcn Fs5V Qxw Aeu Zio PvsN kGfX tBJM CDEI RUYW";
     }
     33% {
-      content: "Qx4wAe0uZi7oWp3gTc8nFs5VjL1yHr6bKd9mPv2sSaNkGfXtBJMCDEIRUYWOQx4wAe0uZi7oWp3gTc8nFs5VjL1yHr6bKd9mPv2sSaNkGfXtBJMCDEIRUYWO";
+      content: "Qxw Aeu Zio Wpg Tcn Fs5V jLyH rbKd Pvs NkGf XtBJ MCDE IRUY Qxw Aeu Zio Wpg Tcn Fs5V jLyH rbKd Pvs NkGf XtBJ MCDE IRUY";
     }
     50% {
-      content: "Pv2sSaNkGfXtQx4wAe0uZi7oWp3gTc8nFs5VjL1yHr6bKd9mBJMCDEIRUYWOPv2sSaNkGfXtQx4wAe0uZi7oWp3gTc8nFs5VjL1yHr6bKd9mBJMCDEIRUYWO";
+      content: "Pvs NkGf XtBJ Qxw Aeu Zio Wpg Tcn Fs5V jLyH rbKd MCDE IRUY Pvs NkGf XtBJ Qxw Aeu Zio Wpg Tcn Fs5V jLyH rbKd MCDE IRUY";
     }
     66% {
-      content: "BJMCDEIRUYWOPv2sSaNkGfXtQx4wAe0uZi7oWp3gTc8nFs5VjL1yHr6bKd9mBJMCDEIRUYWOPv2sSaNkGfXtQx4wAe0uZi7oWp3gTc8nFs5VjL1yHr6bKd9m";
+      content: "BJMC DEIR UYWO Pvs NkGf XtBJ Qxw Aeu Zio Wpg Tcn Fs5V jLyH rbKd BJMC DEIR UYWO Pvs NkGf XtBJ Qxw Aeu Zio Wpg Tcn Fs5V jLyH";
     }
     83% {
-      content: "6bKd9mBJMCDEIRUYWOPv2sSaNkGfXtQx4wAe0uZi7oWp3gTc8nFs5VjL1yHr6bKd9mBJMCDEIRUYWOPv2sSaNkGfXtQx4wAe0uZi7oWp3gTc8nFs5VjL1yHr";
+      content: "bKd BJMC DEIR UYWO Pvs NkGf XtBJ Qxw Aeu Zio Wpg Tcn Fs5V jLyH rbKd BJMC DEIR UYWO Pvs NkGf XtBJ Qxw Aeu Zio Wpg Tcn Fs5V jLyH";
     }
   }
 
   /* ── Keyframe variant 4 ── */
   .v4 .scramble::before {
-    content: "Yd2nKf7vRm4X";
+    content: "Ydn Kfv Rm4X";
     animation: scramble-4 1.8s steps(1) infinite;
     animation-delay: var(--delay, 0s);
   }
 
   @keyframes scramble-4 {
     0% {
-      content: "Yd2nKf7vRm4XsP9wBh6gTj1lQc0eAu8iZo5rNx3tWkSaGbFyLMJDCHEVIUOYd2nKf7vRm4XsP9wBh6gTj1lQc0eAu8iZo5rNx3tWkSaGbFyLMJDCHEVIUO";
+      content: "Ydn Kfv Rm4X sPw Bhg Tjl Qce Aui Zor Nxt WkSa GbFy LMJD CHEV Ydn Kfv Rm4X sPw Bhg Tjl Qce Aui Zor Nxt WkSa GbFy LMJD CHEV";
     }
     16% {
-      content: "sP9wBh6gTj1lYd2nKf7vRm4XQc0eAu8iZo5rNx3tWkSaGbFyLMJDCHEVIUOsP9wBh6gTj1lYd2nKf7vRm4XQc0eAu8iZo5rNx3tWkSaGbFyLMJDCHEVIUO";
+      content: "sPw Bhg Tjl Ydn Kfv Rm4X Qce Aui Zor NxtW kSaG bFyL MJDC HEVI sPw Bhg Tjl Ydn Kfv Rm4X Qce Aui Zor NxtW kSaG bFyL MJDC HEVI";
     }
     33% {
-      content: "Qc0eAu8iZo5rYd2nKf7vRm4XsP9wBh6gTj1lNx3tWkSaGbFyLMJDCHEVIUOQc0eAu8iZo5rYd2nKf7vRm4XsP9wBh6gTj1lNx3tWkSaGbFyLMJDCHEVIUO";
+      content: "Qce Aui Zor Ydn Kfv Rm4X sPw Bhg Tjl NxtW kSaG bFyL MJDC HEVI Qce Aui Zor Ydn Kfv Rm4X sPw Bhg Tjl NxtW kSaG bFyL MJDC HEVI";
     }
     50% {
-      content: "Nx3tWkSaGbFyQc0eAu8iZo5rYd2nKf7vRm4XsP9wBh6gTj1lLMJDCHEVIUONx3tWkSaGbFyQc0eAu8iZo5rYd2nKf7vRm4XsP9wBh6gTj1lLMJDCHEVIUO";
+      content: "Nxt WkSa GbFy Qce Aui Zor Ydn Kfv Rm4X sPw Bhg Tjl LMJD CHEV Nxt WkSa GbFy Qce Aui Zor Ydn Kfv Rm4X sPw Bhg Tjl LMJD CHEV";
     }
     66% {
-      content: "LMJDCHEVIUONx3tWkSaGbFyQc0eAu8iZo5rYd2nKf7vRm4XsP9wBh6gTj1lLMJDCHEVIUONx3tWkSaGbFyQc0eAu8iZo5rYd2nKf7vRm4XsP9wBh6gTj1l";
+      content: "LMJD CHEV IUO Nxt WkSa GbFy Qce Aui Zor Ydn Kfv Rm4X sPw Bhg Tjl LMJD CHEV IUO Nxt WkSa GbFy Qce Aui Zor Ydn Kfv Rm4X sPw";
     }
     83% {
-      content: "Tj1lLMJDCHEVIUONx3tWkSaGbFyQc0eAu8iZo5rYd2nKf7vRm4XsP9wBh6gTj1lLMJDCHEVIUONx3tWkSaGbFyQc0eAu8iZo5rYd2nKf7vRm4XsP9wBh6g";
+      content: "Tjl LMJD CHEV IUO Nxt WkSa GbFy Qce Aui Zor Ydn Kfv Rm4X sPw Bhg Tjl LMJD CHEV IUO Nxt WkSa GbFy Qce Aui Zor Ydn Kfv Rm4X sPw";
     }
   }
 
@@ -334,6 +403,12 @@
     .scramble::before {
       animation: none !important;
     }
+  }
+
+  /* ── Decrypt error ── */
+  .decrypt-error {
+    color: var(--muted);
+    font-style: italic;
   }
 
   /* ── Screen reader only ── */

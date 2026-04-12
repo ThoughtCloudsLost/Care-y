@@ -10,6 +10,8 @@
   import { formatRelativeTime } from "$lib/utils/format-time.js";
   import * as m from "$lib/paraglide/messages.js";
   import CollapsibleSection from "./CollapsibleSection.svelte";
+  import InlineSkeleton from "$lib/components/InlineSkeleton.svelte";
+  import DecryptPlaceholder from "$lib/components/DecryptPlaceholder.svelte";
 
   interface ActivityItem {
     id: string;
@@ -22,12 +24,19 @@
 
   interface ActivitySectionProps {
     activity: ActivityItem[];
+    loading?: boolean;
     expanded: boolean;
     ontoggle: () => void;
     ontap?: (ticketId: string) => void;
   }
 
-  let { activity, expanded, ontoggle, ontap }: ActivitySectionProps = $props();
+  let {
+    activity,
+    loading = false,
+    expanded,
+    ontoggle,
+    ontap,
+  }: ActivitySectionProps = $props();
 
   function eventLabel(eventType: string): string {
     switch (eventType) {
@@ -67,10 +76,28 @@
   heading={m.dashboard_activity_heading()}
   icon={Activity}
   iconColor="var(--brand-accent)"
+  {loading}
   {expanded}
   {ontoggle}
 >
-  {#if activity.length > 0}
+  {#if loading}
+    <div class="activity-content skeleton-pulse">
+      <div class="activity-surface">
+        {#each [1, 2, 3] as n (n)}
+          <div class="activity-row">
+            <span class="activity-icon-gutter" aria-hidden="true">
+              <Activity size={13} />
+            </span>
+            <span class="activity-event"><InlineSkeleton width="8ch" /></span>
+            <span class="activity-alias"><InlineSkeleton width="4ch" /></span>
+            <span class="activity-queue"><DecryptPlaceholder length={6} /></span
+            >
+            <span class="activity-time"><InlineSkeleton width="3ch" /></span>
+          </div>
+        {/each}
+      </div>
+    </div>
+  {:else if activity.length > 0}
     <div class="activity-content">
       <div class="activity-summary">
         <span>{m.dashboard_activity_summary({ count: activity.length })}</span>
@@ -211,5 +238,26 @@
     padding: 0 1rem 0.5rem;
     font-size: var(--text-base);
     color: var(--muted);
+  }
+
+  .skeleton-pulse {
+    animation: skeleton-pulse 2.5s ease-in-out infinite;
+  }
+
+  @keyframes skeleton-pulse {
+    0%,
+    100% {
+      opacity: 1;
+    }
+    50% {
+      opacity: 0.65;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .skeleton-pulse {
+      animation: none;
+      opacity: 0.7;
+    }
   }
 </style>

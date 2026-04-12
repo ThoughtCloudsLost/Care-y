@@ -18,9 +18,11 @@
   import { isDecryptError } from "$lib/crypto/async-decrypt-cache.js";
   import { formatRelativeTime } from "$lib/utils/format-time.js";
   import * as m from "$lib/paraglide/messages.js";
+  import DecryptPlaceholder from "$lib/components/DecryptPlaceholder.svelte";
 
   interface Props {
     content: string | undefined;
+    encryptedContent?: unknown;
     authorName: string | undefined;
     timestamp: string;
     isOwn: boolean;
@@ -39,6 +41,7 @@
 
   let {
     content,
+    encryptedContent,
     authorName,
     timestamp,
     isOwn,
@@ -153,13 +156,12 @@
       </div>
     {:else}
       <div class="note-body">
-        {#if isDecryptError(content)}
-          <span class="decrypt-error">{m.error_decryption_failed()}</span>
-        {:else if content === undefined}
-          <span class="shimmer shimmer-note" aria-busy="true"></span>
-        {:else}
+        <DecryptPlaceholder
           {content}
-        {/if}
+          ciphertext={encryptedContent}
+          length={40}
+          block
+        />
       </div>
     {/if}
   </Card>
@@ -241,41 +243,5 @@
 
   :global(.note-edit-list) {
     margin: 0 !important;
-  }
-
-  .decrypt-error {
-    color: var(--muted);
-    font-style: italic;
-  }
-
-  .shimmer-note {
-    display: block;
-    width: 70%;
-    height: 0.875rem;
-    border-radius: 0.25rem;
-    background: linear-gradient(
-      90deg,
-      var(--surface-1) 25%,
-      var(--surface-2) 50%,
-      var(--surface-1) 75%
-    );
-    background-size: 200% 100%;
-    animation: shimmer 1.5s infinite linear;
-  }
-
-  @keyframes shimmer {
-    from {
-      background-position: 200% 0;
-    }
-    to {
-      background-position: -200% 0;
-    }
-  }
-
-  @media (prefers-reduced-motion: reduce) {
-    .shimmer-note {
-      animation: none;
-      background: var(--surface-1);
-    }
   }
 </style>

@@ -13,6 +13,8 @@
   import { formatRelativeTime } from "$lib/utils/format-time.js";
   import { getPreviewLoader } from "$lib/crypto/context.js";
   import { isDecryptError } from "$lib/crypto/async-decrypt-cache.js";
+  import DecryptPlaceholder from "$lib/components/DecryptPlaceholder.svelte";
+  import InlineSkeleton from "$lib/components/InlineSkeleton.svelte";
   import PriorityBadge from "$lib/components/PriorityBadge.svelte";
   import StatusDot from "$lib/components/StatusDot.svelte";
   import EncryptedTitle from "$lib/components/EncryptedTitle.svelte";
@@ -26,6 +28,7 @@
     displayStatus,
     priority,
     title,
+    encryptedTitle,
     clientAlias,
     assignedName,
     createdAt,
@@ -39,6 +42,7 @@
     onselect,
     onaction,
     onencryptedhelp,
+    loading = false,
   }: TicketCardProps = $props();
 
   const previewLoader = getPreviewLoader();
@@ -68,8 +72,9 @@
   });
 
   // Trigger lazy preview load when this card mounts (enters virtualizer viewport).
+  // Skip for loading skeleton cards: they have no ticketId to observe.
   $effect(() => {
-    if (previewFollowUps === undefined) {
+    if (previewFollowUps === undefined && !loading) {
       previewLoader.observe(ticketId);
     }
   });
@@ -83,167 +88,224 @@
   }
 </script>
 
-<div class="ticket-card-wrap">
-  <Card raised contentWrap={false} class="ticket-card">
-    <!-- Using div+role instead of <button> to avoid nested-button HTML violation
-         when action icon buttons are rendered inside. -->
-    <div
-      class="card-inner"
-      class:card-inner--list={isList}
-      class:card-inner--grid={!isList}
-      role="button"
-      tabindex="0"
-      aria-label={m.tickets_open({ alias: clientAlias })}
-      onclick={handleCardClick}
-      onkeydown={(e) => {
-        if (e.key === "Enter" || e.key === " ") {
-          e.preventDefault();
-          handleCardClick();
-        }
-      }}
-    >
-      <div class="preview-window">
-        <TicketPreview followUps={previewFollowUps} multiline={isList} />
-      </div>
+{#if loading}
+  <div class="ticket-card-wrap skeleton-pulse">
+    <Card raised contentWrap={false} class="ticket-card">
+      <div
+        class="card-inner"
+        class:card-inner--list={isList}
+        class:card-inner--grid={!isList}
+        aria-hidden="true"
+      >
+        <div class="preview-window">
+          <TicketPreview followUps={undefined} multiline={isList} />
+        </div>
 
-      <!-- Top bar: dot (left) + priority (right). In list mode, alias is here too. -->
-      <div class="row-top">
-        {#if multiSelectActive}
-          <div
-            class="checkbox-wrap"
-            role="presentation"
-            onclick={(e) => e.stopPropagation()}
-            onkeydown={(e) => e.stopPropagation()}
-          >
-            <Checkbox
-              checked={selected}
-              onchange={() => onselect?.(ticketId)}
-              class="select-checkbox"
-              colors={{
-                bgCheckedIos: "bg-[var(--brand-accent)]",
-                borderCheckedIos: "border-[var(--brand-accent)]",
-                bgCheckedMaterial: "bg-[var(--brand-accent)]",
-                borderCheckedMaterial: "border-[var(--brand-accent)]",
-              }}
-            />
+        <div class="row-top">
+          <span class="status-indicator">
+            <span class="skeleton-dot"></span>
+            <InlineSkeleton width="5ch" />
+          </span>
+          <InlineSkeleton width="5ch" />
+        </div>
+
+        <div class="content-group">
+          <span class="client-alias"><InlineSkeleton width="8ch" /></span>
+          <div class="row-title">
+            <DecryptPlaceholder length={25} />
+          </div>
+        </div>
+
+        <div class="row-meta">
+          <span class="meta-left">
+            <DecryptPlaceholder length={8} />
+            <InlineSkeleton width="6ch" />
+          </span>
+          <span class="meta-right">
+            <InlineSkeleton width="3ch" />
+          </span>
+        </div>
+
+        {#if isList}
+          <div class="card-actions">
+            {#each [1, 2, 3, 4] as _ (_)}
+              <span class="skeleton-icon"></span>
+            {/each}
           </div>
         {/if}
-        <span class="status-indicator">
-          <StatusDot status={displayStatus} />
-          <span class="status-label">{statusLabel}</span>
-        </span>
-        <PriorityBadge {priority} />
       </div>
+    </Card>
+  </div>
+{:else}
+  <div class="ticket-card-wrap">
+    <Card raised contentWrap={false} class="ticket-card">
+      <!-- Using div+role instead of <button> to avoid nested-button HTML violation
+           when action icon buttons are rendered inside. -->
+      <div
+        class="card-inner"
+        class:card-inner--list={isList}
+        class:card-inner--grid={!isList}
+        role="button"
+        tabindex="0"
+        aria-label={m.tickets_open({ alias: clientAlias })}
+        onclick={handleCardClick}
+        onkeydown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            handleCardClick();
+          }
+        }}
+      >
+        <div class="preview-window">
+          <TicketPreview
+            followUps={previewFollowUps}
+            multiline={isList}
+            {followUpCount}
+          />
+        </div>
 
-      <!-- Alias + title: grouped together below the preview window in both modes -->
-      <div class="content-group">
-        <span class="client-alias">{clientAlias}</span>
-        <div class="row-title">
-          {#if isDecryptError(title)}
-            <EncryptedTitle onhelp={onencryptedhelp} />
-          {:else if title === undefined}
+        <!-- Top bar: dot (left) + priority (right). In list mode, alias is here too. -->
+        <div class="row-top">
+          {#if multiSelectActive}
             <div
-              class="shimmer shimmer-title"
-              role="status"
-              aria-label={m.tickets_decrypting()}
-            ></div>
-          {:else}
-            <span class="title-text">{title}</span>
+              class="checkbox-wrap"
+              role="presentation"
+              onclick={(e) => e.stopPropagation()}
+              onkeydown={(e) => e.stopPropagation()}
+            >
+              <Checkbox
+                checked={selected}
+                onchange={() => onselect?.(ticketId)}
+                class="select-checkbox"
+                colors={{
+                  bgCheckedIos: "bg-[var(--brand-accent)]",
+                  borderCheckedIos: "border-[var(--brand-accent)]",
+                  bgCheckedMaterial: "bg-[var(--brand-accent)]",
+                  borderCheckedMaterial: "border-[var(--brand-accent)]",
+                }}
+              />
+            </div>
           {/if}
-        </div>
-      </div>
-
-      <!-- Meta: queue · assignee (left group), time · msgs (right group) -->
-      <div class="row-meta">
-        <span class="meta-left">
-          <Chip outline class="queue-badge">{queueName ?? "..."}</Chip>
-          <Dot size={10} aria-hidden="true" class="meta-dot" />
-          <span class="assignee">
-            {assignedName ?? m.tickets_unassigned()}
+          <span class="status-indicator">
+            <StatusDot status={displayStatus} />
+            <span class="status-label">{statusLabel}</span>
           </span>
-        </span>
-        <span class="meta-right">
-          <span class="timestamp">{relativeTime}</span>
-          {#if msgLabel}
-            <Dot size={10} aria-hidden="true" class="meta-dot" />
-            <span class="msg-count">{msgLabel}</span>
-          {/if}
-          {#if unreadCount > 0}
-            <Badge class="unread-badge">{unreadCount}</Badge>
-          {/if}
-        </span>
-      </div>
-
-      {#if isList}
-        <div class="card-actions">
-          <Link
-            iconOnly
-            role="button"
-            aria-label={m.tickets_action_reply()}
-            onclick={(e: MouseEvent) => {
-              e.stopPropagation();
-              onaction?.(ticketId, "reply");
-            }}
-            class="action-icon p-1 -m-1"
-          >
-            <MessageSquare size={18} />
-          </Link>
-          <Link
-            iconOnly
-            role="button"
-            aria-label={m.tickets_action_call()}
-            onclick={(e: MouseEvent) => {
-              e.stopPropagation();
-              onaction?.(ticketId, "call");
-            }}
-            class="action-icon p-1 -m-1"
-          >
-            <Phone size={18} />
-          </Link>
-          <Link
-            iconOnly
-            role="button"
-            aria-label={displayStatus === "hold"
-              ? m.tickets_action_unhold()
-              : m.tickets_action_hold()}
-            onclick={(e: MouseEvent) => {
-              e.stopPropagation();
-              onaction?.(
-                ticketId,
-                displayStatus === "hold" ? "unhold" : "hold",
-              );
-            }}
-            class="action-icon p-1 -m-1"
-          >
-            {#if displayStatus === "hold"}
-              <Play size={18} />
-            {:else}
-              <Pause size={18} />
-            {/if}
-          </Link>
-          <Link
-            iconOnly
-            role="button"
-            aria-label={assignedName !== null
-              ? m.tickets_action_release()
-              : m.tickets_action_take()}
-            onclick={(e: MouseEvent) => {
-              e.stopPropagation();
-              onaction?.(ticketId, assignedName !== null ? "release" : "take");
-            }}
-            class="action-icon p-1 -m-1"
-          >
-            {#if assignedName !== null}
-              <UserMinus size={18} />
-            {:else}
-              <UserPlus size={18} />
-            {/if}
-          </Link>
+          <PriorityBadge {priority} />
         </div>
-      {/if}
-    </div>
-  </Card>
-</div>
+
+        <!-- Alias + title: grouped together below the preview window in both modes -->
+        <div class="content-group">
+          <span class="client-alias">{clientAlias}</span>
+          <div class="row-title">
+            {#if isDecryptError(title)}
+              <EncryptedTitle onhelp={onencryptedhelp} />
+            {:else}
+              <DecryptPlaceholder
+                content={title}
+                ciphertext={encryptedTitle}
+                length={25}
+              >
+                <span class="title-text">{title}</span>
+              </DecryptPlaceholder>
+            {/if}
+          </div>
+        </div>
+
+        <!-- Meta: queue · assignee (left group), time · msgs (right group) -->
+        <div class="row-meta">
+          <span class="meta-left">
+            <Chip outline class="queue-badge">{queueName ?? "..."}</Chip>
+            <Dot size={10} aria-hidden="true" class="meta-dot" />
+            <span class="assignee">
+              {assignedName ?? m.tickets_unassigned()}
+            </span>
+          </span>
+          <span class="meta-right">
+            <span class="timestamp">{relativeTime}</span>
+            {#if msgLabel}
+              <Dot size={10} aria-hidden="true" class="meta-dot" />
+              <span class="msg-count">{msgLabel}</span>
+            {/if}
+            {#if unreadCount > 0}
+              <Badge class="unread-badge">{unreadCount}</Badge>
+            {/if}
+          </span>
+        </div>
+
+        {#if isList}
+          <div class="card-actions">
+            <Link
+              iconOnly
+              role="button"
+              aria-label={m.tickets_action_reply()}
+              onclick={(e: MouseEvent) => {
+                e.stopPropagation();
+                onaction?.(ticketId, "reply");
+              }}
+              class="action-icon p-1 -m-1"
+            >
+              <MessageSquare size={18} />
+            </Link>
+            <Link
+              iconOnly
+              role="button"
+              aria-label={m.tickets_action_call()}
+              onclick={(e: MouseEvent) => {
+                e.stopPropagation();
+                onaction?.(ticketId, "call");
+              }}
+              class="action-icon p-1 -m-1"
+            >
+              <Phone size={18} />
+            </Link>
+            <Link
+              iconOnly
+              role="button"
+              aria-label={displayStatus === "hold"
+                ? m.tickets_action_unhold()
+                : m.tickets_action_hold()}
+              onclick={(e: MouseEvent) => {
+                e.stopPropagation();
+                onaction?.(
+                  ticketId,
+                  displayStatus === "hold" ? "unhold" : "hold",
+                );
+              }}
+              class="action-icon p-1 -m-1"
+            >
+              {#if displayStatus === "hold"}
+                <Play size={18} />
+              {:else}
+                <Pause size={18} />
+              {/if}
+            </Link>
+            <Link
+              iconOnly
+              role="button"
+              aria-label={assignedName !== null
+                ? m.tickets_action_release()
+                : m.tickets_action_take()}
+              onclick={(e: MouseEvent) => {
+                e.stopPropagation();
+                onaction?.(
+                  ticketId,
+                  assignedName !== null ? "release" : "take",
+                );
+              }}
+              class="action-icon p-1 -m-1"
+            >
+              {#if assignedName !== null}
+                <UserMinus size={18} />
+              {:else}
+                <UserPlus size={18} />
+              {/if}
+            </Link>
+          </div>
+        {/if}
+      </div>
+    </Card>
+  </div>
+{/if}
 
 <style>
   /* ── Card wrapper ── */
@@ -413,40 +475,6 @@
     color: var(--muted);
   }
 
-  /* ── Shimmer ── */
-  .shimmer {
-    border-radius: 0.25rem;
-    background: linear-gradient(
-      90deg,
-      var(--surface-2) 25%,
-      var(--surface-1) 50%,
-      var(--surface-2) 75%
-    );
-    background-size: 200% 100%;
-    animation: shimmer 1.5s infinite linear;
-  }
-
-  .shimmer-title {
-    height: 1.125rem;
-    width: 60%;
-  }
-
-  @keyframes shimmer {
-    from {
-      background-position: 200% 0;
-    }
-    to {
-      background-position: -200% 0;
-    }
-  }
-
-  @media (prefers-reduced-motion: reduce) {
-    .shimmer {
-      animation: none;
-      background: var(--surface-2);
-    }
-  }
-
   /* ══════════════════════════════════════════
      LIST MODE
      Top row full width. Title + preview side-by-side.
@@ -539,5 +567,48 @@
 
   .card-inner--grid .meta-right {
     margin-left: auto;
+  }
+
+  /* ── Loading skeleton shapes ── */
+
+  .skeleton-dot {
+    display: inline-block;
+    width: 0.5rem;
+    height: 0.5rem;
+    border-radius: 50%;
+    vertical-align: middle;
+  }
+
+  .skeleton-dot,
+  .skeleton-icon {
+    background: color-mix(in srgb, var(--ink) 12%, transparent);
+  }
+
+  .skeleton-icon {
+    display: block;
+    width: 18px;
+    height: 18px;
+    border-radius: 0.25rem;
+  }
+
+  .skeleton-pulse {
+    animation: skeleton-pulse 2s ease-in-out infinite;
+  }
+
+  @keyframes skeleton-pulse {
+    0%,
+    100% {
+      opacity: 1;
+    }
+    50% {
+      opacity: 0.65;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .skeleton-pulse {
+      animation: none;
+      opacity: 0.6;
+    }
   }
 </style>

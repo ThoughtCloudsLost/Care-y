@@ -20,6 +20,7 @@
     getFollowUpDecryptCache,
     getTicketDecryptCache,
     getOrgDecryptCache,
+    getPreviewLoader,
     getCurrentUserId,
     getCurrentUserRoleId,
   } from "$lib/crypto/context.js";
@@ -29,8 +30,9 @@
   import { RouterNotAvailableError } from "$lib/errors.js";
   import { formatRelativeTime } from "$lib/utils/format-time.js";
   import { formatDateSeparator, needsDateSeparator } from "$lib/utils/time.js";
-  import Skeleton from "$lib/components/Skeleton.svelte";
+  import InlineSkeleton from "$lib/components/InlineSkeleton.svelte";
   import QueryError from "$lib/components/QueryError.svelte";
+  import DecryptPlaceholder from "$lib/components/DecryptPlaceholder.svelte";
   import SystemEvent from "$lib/components/tickets/SystemEvent.svelte";
   import PrivateNote from "$lib/components/tickets/PrivateNote.svelte";
   import FollowUpMedia from "$lib/components/tickets/FollowUpMedia.svelte";
@@ -49,6 +51,8 @@
 
   interface TicketDetailProps {
     ticketId: string;
+    /** Known follow-up count from the ticket list cache (available immediately). */
+    knownFollowUpCount?: number;
     /** Compose draft text (two-way bindable). */
     draftText?: string;
     /** Current cursor position in the compose textarea. */
@@ -77,6 +81,7 @@
 
   let {
     ticketId,
+    knownFollowUpCount,
     draftText = $bindable(""),
     cursorPosition = 0,
     onmentionselect,
@@ -94,6 +99,7 @@
   const ticketCache = getTicketDecryptCache();
   const followUpCache = getFollowUpDecryptCache();
   const orgCache = getOrgDecryptCache();
+  const previewLoader = getPreviewLoader();
   const currentUserIdGetter = getCurrentUserId();
   const currentUserId = $derived(currentUserIdGetter());
   const currentUserRoleIdGetter = getCurrentUserRoleId();
@@ -265,7 +271,7 @@
     const key = followUpIds.join(",");
     if (expandedClusters.has(key) || !ticket) return;
 
-    // Expand immediately with placeholder shimmer rows.
+    // Expand immediately with placeholder rows.
     const placeholders: ClusterRecord[] = followUpIds.map((id) => {
       const summary = (summaryQuery.data ?? []).find((s) => s.id === id);
       return {
@@ -310,7 +316,10 @@
 
   type FollowUp = (typeof followUps)[number];
 
-  function followUpKind(fu: FollowUp): "message" | "system" | "note" {
+  function followUpKind(fu: {
+    source: string;
+    type: string;
+  }): "message" | "system" | "note" {
     if (fu.source === "system") return "system";
     if (fu.type === "internal_note") return "note";
     return "message";
@@ -507,6 +516,15 @@
   // Debounce timer for reporting read progress to the route.
   let readProgressTimer: ReturnType<typeof setTimeout> | null = null;
 
+  /** Svelte action: scroll element to bottom after DOM paint. */
+  function scrollToBottom(node: HTMLElement): void {
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        node.scrollTop = node.scrollHeight;
+      });
+    });
+  }
+
   function onScroll(): void {
     if (!scrollContainerEl) return;
     const { scrollTop, scrollHeight, clientHeight } = scrollContainerEl;
@@ -566,11 +584,135 @@
       });
     }
   });
+
+  // --- Loading placeholder shape ---
+  // Use cached preview data (from the ticket list) to match the real
+  // conversation shape. Falls back to a generic pattern if no preview exists.
+
+  interface PlaceholderBubble {
+    kind: "message" | "system";
+    type: "sent" | "received";
+    length: number;
+  }
+
+  // Cycling pattern for placeholder bubbles.
+  const placeholderPattern: PlaceholderBubble[] = [
+    { kind: "message", type: "received", length: 45 },
+    { kind: "message", type: "sent", length: 18 },
+    { kind: "message", type: "received", length: 60 },
+    { kind: "system", type: "received", length: 15 },
+    { kind: "message", type: "sent", length: 30 },
+    { kind: "message", type: "received", length: 20 },
+  ];
+
+  // Preview data from the ticket list (server returns newest-first, reverse for chat order).
+  const previewData = $derived(previewLoader.get(ticketId));
+  const orderedPreviews = $derived(
+    previewData !== undefined && previewData.length > 0
+      ? [...previewData].reverse()
+      : [],
+  );
+
+  // Total message slots: prop (instant from list cache) > ticket query > fallback.
+  // Previews replace the bottom N slots (not added on top).
+  const totalSlots = $derived(
+    Math.min(knownFollowUpCount ?? ticket?.followUpCount ?? 6, PAGE_SIZE),
+  );
+  const fillerCount = $derived(
+    Math.max(0, totalSlots - orderedPreviews.length),
+  );
+
+  const placeholderBubbles = $derived.by((): PlaceholderBubble[] => {
+    const result: PlaceholderBubble[] = [];
+    for (let i = 0; i < fillerCount; i++) {
+      const bubble = placeholderPattern[i % placeholderPattern.length];
+      if (bubble) result.push(bubble);
+    }
+    return result;
+  });
 </script>
 
 {#if ticketQuery.isLoading}
-  <div class="detail-loading">
-    <Skeleton lines={12} />
+  <div
+    class="chat-container"
+    role="log"
+    aria-label={m.shell_loading()}
+    use:scrollToBottom
+  >
+    <Messages>
+      {#each placeholderBubbles as bubble, i (i)}
+        {#if bubble.kind === "system"}
+          <div class="fu-wrapper filler-pulse">
+            <div class="system-event-placeholder">
+              <DecryptPlaceholder length={bubble.length} />
+            </div>
+          </div>
+        {:else}
+          <div class="fu-wrapper filler-pulse">
+            <Message type={bubble.type}>
+              {#snippet text()}
+                <span class="bubble-text">
+                  <DecryptPlaceholder length={bubble.length} block />
+                </span>
+              {/snippet}
+              {#snippet footer()}
+                <span class="bubble-time">
+                  <InlineSkeleton width="4ch" />
+                </span>
+              {/snippet}
+            </Message>
+          </div>
+        {/if}
+      {/each}
+
+      <!-- Preview messages that arrived before the ticket query resolved -->
+      {#each orderedPreviews as fu (fu.id)}
+        {@const content = followUpCache.decryptContent(
+          fu.id,
+          fu.keyWrap,
+          fu.encryptedContent,
+        )}
+        {@const kind = followUpKind(fu)}
+        <div class="fu-wrapper">
+          {#if kind === "system"}
+            <SystemEvent
+              {content}
+              encryptedContent={fu.encryptedContent}
+              timestamp={fu.createdAt}
+            />
+          {:else if kind === "note"}
+            <PrivateNote
+              {content}
+              encryptedContent={fu.encryptedContent}
+              authorName={undefined}
+              timestamp={fu.createdAt}
+              isOwn={false}
+            />
+          {:else}
+            <Message
+              type={fu.source === "client" ? "received" : "sent"}
+              name={fu.source === "client" ? clientAlias : undefined}
+            >
+              {#snippet text()}
+                <span class="bubble-text">
+                  <DecryptPlaceholder
+                    {content}
+                    ciphertext={fu.encryptedContent}
+                    length={30}
+                    block
+                  />
+                </span>
+              {/snippet}
+              {#snippet footer()}
+                <span class="bubble-time">
+                  {formatRelativeTime(new Date(fu.createdAt))}
+                </span>
+              {/snippet}
+            </Message>
+          {/if}
+        </div>
+      {/each}
+    </Messages>
   </div>
 {:else if ticketQuery.isError}
   <div class="detail-error">
@@ -580,12 +722,87 @@
   <div
     class="chat-container"
     bind:this={scrollContainerEl}
+    use:scrollToBottom
     onscroll={onScroll}
     role="log"
     aria-label={m.ticket_conversation_with({ alias: clientAlias })}
   >
     {#if initialFollowUpsQuery.isLoading}
-      <Skeleton lines={6} />
+      <Messages>
+        <!-- Filler placeholders to fill the viewport above preview data -->
+        {#each placeholderBubbles as bubble, i (i)}
+          {#if bubble.kind === "system"}
+            <div class="fu-wrapper filler-pulse">
+              <div class="system-event-placeholder">
+                <DecryptPlaceholder length={bubble.length} />
+              </div>
+            </div>
+          {:else}
+            <div class="fu-wrapper filler-pulse">
+              <Message type={bubble.type}>
+                {#snippet text()}
+                  <span class="bubble-text">
+                    <DecryptPlaceholder length={bubble.length} block />
+                  </span>
+                {/snippet}
+                {#snippet footer()}
+                  <span class="bubble-time">
+                    <InlineSkeleton width="4ch" />
+                  </span>
+                {/snippet}
+              </Message>
+            </div>
+          {/if}
+        {/each}
+
+        <!-- Real preview messages from the ticket list (already decrypting) -->
+        {#each orderedPreviews as fu (fu.id)}
+          {@const content = followUpCache.decryptContent(
+            fu.id,
+            fu.keyWrap,
+            fu.encryptedContent,
+          )}
+          {@const kind = followUpKind(fu)}
+          <div class="fu-wrapper">
+            {#if kind === "system"}
+              <SystemEvent
+                {content}
+                encryptedContent={fu.encryptedContent}
+                timestamp={fu.createdAt}
+              />
+            {:else if kind === "note"}
+              <PrivateNote
+                {content}
+                encryptedContent={fu.encryptedContent}
+                authorName={undefined}
+                timestamp={fu.createdAt}
+                isOwn={false}
+              />
+            {:else}
+              <Message
+                type={fu.source === "client" ? "received" : "sent"}
+                name={fu.source === "client" ? clientAlias : undefined}
+              >
+                {#snippet text()}
+                  <span class="bubble-text">
+                    <DecryptPlaceholder
+                      {content}
+                      ciphertext={fu.encryptedContent}
+                      length={30}
+                      block
+                    />
+                  </span>
+                {/snippet}
+                {#snippet footer()}
+                  <span class="bubble-time">
+                    {formatRelativeTime(new Date(fu.createdAt))}
+                  </span>
+                {/snippet}
+              </Message>
+            {/if}
+          </div>
+        {/each}
+      </Messages>
     {:else if followUps.length === 0}
       <div class="empty-chat" role="status">
         <p>{m.empty_no_data()}</p>
@@ -701,16 +918,12 @@
                         onpointerup={cancelLongPress}
                         onpointercancel={cancelLongPress}
                       >
-                        {#if isDecryptError(content)}
-                          <span class="decrypt-error"
-                            >{m.error_decryption_failed()}</span
-                          >
-                        {:else if content === undefined}
-                          <span class="shimmer shimmer-bubble" aria-busy="true"
-                          ></span>
-                        {:else if content}
+                        <DecryptPlaceholder
                           {content}
-                        {/if}
+                          ciphertext={fu.encryptedContent}
+                          length={30}
+                          block
+                        />
                       </span>
 
                       {#if fu.hasRecording || fu.hasImage || fu.hasFile}
@@ -751,7 +964,6 @@
 {/if}
 
 <style>
-  .detail-loading,
   .detail-error {
     padding: 1rem var(--page-pad-x);
   }
@@ -874,6 +1086,7 @@
   /* --- Bubble content --- */
 
   .bubble-text {
+    display: block;
     user-select: text;
     -webkit-user-select: text;
     word-break: break-word;
@@ -885,39 +1098,34 @@
     color: var(--muted);
   }
 
-  .decrypt-error {
-    color: var(--muted);
-    font-style: italic;
+  .system-event-placeholder {
+    display: flex;
+    justify-content: center;
+    padding: 0.5rem 1rem;
   }
 
-  .shimmer-bubble {
-    display: inline-block;
-    width: 8rem;
-    height: 0.875rem;
-    border-radius: 0.25rem;
-    background: linear-gradient(
-      90deg,
-      var(--surface-2) 25%,
-      var(--surface-1) 50%,
-      var(--surface-2) 75%
-    );
-    background-size: 200% 100%;
-    animation: shimmer 1.5s infinite linear;
+  /* Filler bubbles (shape guesses) pulse to distinguish from real decrypt-pending content.
+     .fu-wrapper is display:contents, so target the Konsta Message root via :global. */
+  .filler-pulse > :global(.k-message),
+  .filler-pulse > .system-event-placeholder {
+    animation: filler-pulse 2.5s ease-in-out infinite;
   }
 
-  @keyframes shimmer {
-    from {
-      background-position: 200% 0;
+  @keyframes filler-pulse {
+    0%,
+    100% {
+      opacity: 1;
     }
-    to {
-      background-position: -200% 0;
+    50% {
+      opacity: 0.65;
     }
   }
 
   @media (prefers-reduced-motion: reduce) {
-    .shimmer-bubble {
+    .filler-pulse > :global(.k-message),
+    .filler-pulse > .system-event-placeholder {
       animation: none;
-      background: var(--surface-2);
+      opacity: 0.7;
     }
   }
 </style>

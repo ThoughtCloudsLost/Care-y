@@ -12,6 +12,8 @@
   import { trpc } from "$lib/trpc/index.js";
   import { getOrgDecryptCache } from "$lib/crypto/context.js";
   import { RouterNotAvailableError } from "$lib/errors.js";
+  import Skeleton from "$lib/components/Skeleton.svelte";
+  import DecryptPlaceholder from "$lib/components/DecryptPlaceholder.svelte";
 
   interface PresetReplyContentProps {
     onselect: (body: string) => void;
@@ -40,7 +42,7 @@
 
 {#if presetsQuery.isLoading}
   <Block>
-    <p class="preset-muted">{m.common_loading()}</p>
+    <Skeleton lines={3} />
   </Block>
 {:else if isEmpty}
   <Block>
@@ -49,23 +51,38 @@
 {:else}
   <List>
     {#each presets as preset (preset.id)}
-      {@const title = orgCache.decrypt(
+      {@const presetTitle = orgCache.decrypt(
         `preset:${preset.id}:title`,
         preset.encryptedTitle,
       )}
-      {@const body = orgCache.decrypt(
+      {@const presetBody = orgCache.decrypt(
         `preset:${preset.id}:body`,
         preset.encryptedBody,
       )}
       <ListItem
-        title={title ?? "..."}
-        subtitle={body !== null
-          ? body.slice(0, 80) + (body.length > 80 ? "..." : "")
-          : "..."}
         onclick={() => {
-          if (body !== null) onselect(body);
+          if (presetBody !== null) onselect(presetBody);
         }}
-      />
+      >
+        {#snippet title()}
+          <DecryptPlaceholder
+            content={presetTitle}
+            ciphertext={preset.encryptedTitle}
+            length={20}
+          />
+        {/snippet}
+        {#snippet subtitle()}
+          <DecryptPlaceholder
+            content={presetBody}
+            ciphertext={preset.encryptedBody}
+            length={40}
+          >
+            {presetBody?.slice(0, 80)}{(presetBody?.length ?? 0) > 80
+              ? "..."
+              : ""}
+          </DecryptPlaceholder>
+        {/snippet}
+      </ListItem>
     {/each}
   </List>
 {/if}

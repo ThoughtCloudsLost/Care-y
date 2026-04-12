@@ -18,16 +18,18 @@
   } from "@lucide/svelte";
   import * as m from "$lib/paraglide/messages.js";
   import { getFollowUpDecryptCache } from "$lib/crypto/context.js";
-  import { isDecryptError } from "$lib/crypto/async-decrypt-cache.js";
+  import DecryptPlaceholder from "$lib/components/DecryptPlaceholder.svelte";
   import type { RawFollowUpPreview } from "$lib/tickets/preview-loader.svelte.js";
 
   interface Props {
     followUps: RawFollowUpPreview[] | undefined;
     /** Allow 2-line wrapping per bubble (list mode). */
     multiline?: boolean;
+    /** Known follow-up count. Limits placeholder bubbles when preview hasn't loaded. */
+    followUpCount?: number;
   }
 
-  let { followUps, multiline = false }: Props = $props();
+  let { followUps, multiline = false, followUpCount }: Props = $props();
   const followUpCache = getFollowUpDecryptCache();
 
   function truncate(text: string, maxLen: number): string {
@@ -51,8 +53,29 @@
 
 <div class="mini-chat" class:multiline>
   {#if ordered === undefined}
-    <div class="shimmer shimmer-preview" aria-hidden="true"></div>
-    <div class="shimmer shimmer-preview short" aria-hidden="true"></div>
+    {@const placeholderCount = Math.min(followUpCount ?? 3, 3)}
+    {#each { length: placeholderCount } as _, i (i)}
+      {@const isReceived = i % 2 === 0}
+      {@const lengths = [24, 14, 18]}
+      <div
+        class="mini-bubble-row"
+        class:mini-row-received={isReceived}
+        class:mini-row-sent={!isReceived}
+      >
+        <div
+          class="mini-bubble"
+          class:mini-bubble-received={isReceived}
+          class:mini-bubble-sent={!isReceived}
+        >
+          <DecryptPlaceholder
+            length={lengths[i % 3] ?? 20}
+            block={multiline}
+            charsPerLine={20}
+            maxLines={multiline ? 2 : 1}
+          />
+        </div>
+      </div>
+    {/each}
   {:else if ordered.length === 0}
     <p class="preview-empty">{m.tickets_preview_empty()}</p>
   {:else}
@@ -65,24 +88,30 @@
       )}
       {#if kind === "system"}
         <div class="mini-system">
-          {#if isDecryptError(content)}
-            {m.error_decryption_failed()}
-          {:else if content === undefined}
-            <span class="shimmer shimmer-mini" aria-hidden="true"></span>
-          {:else}
-            {truncate(content, 30)}
-          {/if}
+          <DecryptPlaceholder
+            {content}
+            ciphertext={fu.encryptedContent}
+            length={20}
+            block={multiline}
+            charsPerLine={20}
+            maxLines={multiline ? 2 : 1}
+          >
+            {truncate(content ?? "", 30)}
+          </DecryptPlaceholder>
         </div>
       {:else if kind === "note"}
         <div class="mini-note">
           <StickyNote size={10} class="mini-note-icon" />
-          {#if isDecryptError(content)}
-            {m.error_decryption_failed()}
-          {:else if content === undefined}
-            <span class="shimmer shimmer-mini" aria-hidden="true"></span>
-          {:else}
+          <DecryptPlaceholder
+            {content}
+            ciphertext={fu.encryptedContent}
+            length={20}
+            block={multiline}
+            charsPerLine={20}
+            maxLines={multiline ? 2 : 1}
+          >
             <span class="mini-text">{content}</span>
-          {/if}
+          </DecryptPlaceholder>
         </div>
       {:else}
         <div
@@ -102,13 +131,15 @@
                 {#if fu.hasFile}<Paperclip size={10} />{/if}
               </span>
             {/if}
-            {#if isDecryptError(content)}
-              <span class="mini-error">{m.error_decryption_failed()}</span>
-            {:else if content === undefined}
-              <span class="shimmer shimmer-mini" aria-hidden="true"></span>
-            {:else if content}
-              <span class="mini-text">{content}</span>
-            {/if}
+            <DecryptPlaceholder
+              {content}
+              ciphertext={fu.encryptedContent}
+              length={20}
+              block={multiline}
+              charsPerLine={20}
+            >
+              {#if content}<span class="mini-text">{content}</span>{/if}
+            </DecryptPlaceholder>
           </div>
         </div>
       {/if}
@@ -188,13 +219,6 @@
     flex-shrink: 0;
   }
 
-  .mini-error {
-    display: block;
-    color: var(--muted);
-    font-style: italic;
-    font-size: 0.625rem;
-  }
-
   /* --- System events (centered, no bubble) --- */
 
   .mini-system {
@@ -227,51 +251,5 @@
   :global(.mini-note-icon) {
     color: var(--brand-accent, var(--brand-primary));
     flex-shrink: 0;
-  }
-
-  /* --- Shimmer --- */
-
-  .shimmer {
-    border-radius: 0.25rem;
-    background: linear-gradient(
-      90deg,
-      var(--surface-2) 25%,
-      var(--surface-1) 50%,
-      var(--surface-2) 75%
-    );
-    background-size: 200% 100%;
-    animation: shimmer 1.5s infinite linear;
-  }
-
-  .shimmer-preview {
-    height: 0.75rem;
-    width: 90%;
-  }
-
-  .shimmer-preview.short {
-    width: 60%;
-  }
-
-  .shimmer-mini {
-    display: inline-block;
-    height: 0.625rem;
-    width: 4rem;
-    border-radius: 0.25rem;
-  }
-
-  @keyframes shimmer {
-    from {
-      background-position: 200% 0;
-    }
-    to {
-      background-position: -200% 0;
-    }
-  }
-
-  @media (prefers-reduced-motion: reduce) {
-    .shimmer {
-      animation: none;
-      background: var(--surface-2);
-    }
   }
 </style>

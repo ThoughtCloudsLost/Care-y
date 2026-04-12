@@ -22,7 +22,7 @@ import type { CryptoBridge } from "$lib/workers/crypto-bridge.js";
 export const DECRYPT_ERROR_SENTINEL = "\0DECRYPT_FAILED";
 
 /** Returns true if the cached value is a decrypt failure sentinel. */
-export function isDecryptError(value: string | undefined): boolean {
+export function isDecryptError(value: string | null | undefined): boolean {
   return value === DECRYPT_ERROR_SENTINEL;
 }
 
@@ -56,8 +56,20 @@ export class AsyncDecryptCache {
 
     this.pending.add(cacheKey);
 
-    void this.bridge
-      .decrypt(cacheKey, ephemeralPoint, nonce, wrappedKey, ciphertext)
+    // DEBUG: random 5-15s delay for DecryptPlaceholder inspection. Remove after testing.
+    const delay = new Promise<void>((resolve) => {
+      setTimeout(resolve, 5_000 + Math.random() * 10_000);
+    });
+    void delay
+      .then(async () =>
+        this.bridge.decrypt(
+          cacheKey,
+          ephemeralPoint,
+          nonce,
+          wrappedKey,
+          ciphertext,
+        ),
+      )
       .then((plaintext) => {
         this.cache.set(cacheKey, plaintext);
       })

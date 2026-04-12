@@ -3,6 +3,8 @@
   import { formatRelativeTime } from "$lib/utils/format-time.js";
   import * as m from "$lib/paraglide/messages.js";
   import CollapsibleSection from "./CollapsibleSection.svelte";
+  import DecryptPlaceholder from "$lib/components/DecryptPlaceholder.svelte";
+  import InlineSkeleton from "$lib/components/InlineSkeleton.svelte";
 
   interface KBItem {
     id: string;
@@ -14,22 +16,51 @@
 
   interface KBSectionProps {
     kbItems: KBItem[];
+    loading?: boolean;
     expanded: boolean;
     ontoggle: () => void;
     ontap?: (itemId: string) => void;
   }
 
-  let { kbItems, expanded, ontoggle, ontap }: KBSectionProps = $props();
+  let {
+    kbItems,
+    loading = false,
+    expanded,
+    ontoggle,
+    ontap,
+  }: KBSectionProps = $props();
 </script>
 
 <CollapsibleSection
   heading={m.dashboard_kb_heading()}
   icon={BookOpen}
   iconColor="var(--brand-accent)"
+  {loading}
   {expanded}
   {ontoggle}
 >
-  {#if kbItems.length > 0}
+  {#if loading}
+    <div class="kb-content skeleton-pulse">
+      <div class="kb-surface">
+        {#each [1, 2] as n (n)}
+          <div class="kb-row">
+            <span class="kb-icon-gutter" aria-hidden="true">
+              <FileText size={13} />
+            </span>
+            <span class="kb-title">
+              <DecryptPlaceholder length={20} />
+            </span>
+            <span class="kb-rating">
+              <InlineSkeleton width="2ch" />
+            </span>
+            <span class="kb-time">
+              <InlineSkeleton width="3ch" />
+            </span>
+          </div>
+        {/each}
+      </div>
+    </div>
+  {:else if kbItems.length > 0}
     <div class="kb-content">
       <div class="kb-summary">
         <span>{m.dashboard_kb_summary({ count: kbItems.length })}</span>
@@ -160,5 +191,24 @@
     padding: 0 1rem 0.5rem;
     font-size: var(--text-base);
     color: var(--muted);
+  }
+
+  .skeleton-pulse {
+    animation: skeleton-pulse 2.5s ease-in-out infinite;
+  }
+  @keyframes skeleton-pulse {
+    0%,
+    100% {
+      opacity: 1;
+    }
+    50% {
+      opacity: 0.65;
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .skeleton-pulse {
+      animation: none;
+      opacity: 0.7;
+    }
   }
 </style>

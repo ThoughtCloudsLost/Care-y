@@ -9,6 +9,20 @@
 import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
 import { render, screen, cleanup } from "@testing-library/svelte";
 
+// IntersectionObserver is not available in jsdom (needed by DecryptPlaceholder)
+vi.stubGlobal(
+  "IntersectionObserver",
+  vi.fn(function (this: {
+    observe: ReturnType<typeof vi.fn>;
+    disconnect: ReturnType<typeof vi.fn>;
+    unobserve: ReturnType<typeof vi.fn>;
+  }) {
+    this.observe = vi.fn();
+    this.disconnect = vi.fn();
+    this.unobserve = vi.fn();
+  }),
+);
+
 // --- Mock i18n ---
 vi.mock("$lib/paraglide/messages.js", () => ({
   saved_filter_apply: () => "Apply saved filter",
@@ -18,6 +32,8 @@ vi.mock("$lib/paraglide/messages.js", () => ({
   saved_filter_unshare: () => "Unshare",
   saved_filter_delete: () => "Delete",
   shell_close: () => "Close",
+  error_decryption_failed: () => "Decryption failed",
+  decrypt_placeholder_loading: () => "Decrypting",
 }));
 
 // --- Mock crypto context ---

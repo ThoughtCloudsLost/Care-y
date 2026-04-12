@@ -20,6 +20,8 @@ export interface TicketCardProps {
   readonly priority: "low" | "normal" | "high" | "urgent";
   /** undefined = still decrypting */
   readonly title: string | undefined;
+  /** Ciphertext for auto-sizing the title placeholder */
+  readonly encryptedTitle?: unknown;
   readonly clientAlias: string;
   readonly assignedName: string | null;
   readonly createdAt: Date;
@@ -34,4 +36,5 @@ export interface TicketCardProps {
   readonly onselect?: (ticketId: string) => void;
   readonly onaction?: (ticketId: string, action: TicketQuickAction) => void;
   readonly onencryptedhelp?: () => void;
+  readonly loading?: boolean;
 }

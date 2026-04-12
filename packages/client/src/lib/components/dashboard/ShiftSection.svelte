@@ -3,6 +3,7 @@
   import { CalendarDays } from "@lucide/svelte";
   import * as m from "$lib/paraglide/messages.js";
   import CollapsibleSection from "./CollapsibleSection.svelte";
+  import InlineSkeleton from "$lib/components/InlineSkeleton.svelte";
 
   interface Volunteer {
     initials: string;
@@ -17,11 +18,17 @@
 
   interface ShiftSectionProps {
     shift: ShiftInfo | null;
+    loading?: boolean;
     expanded: boolean;
     ontoggle: () => void;
   }
 
-  let { shift, expanded, ontoggle }: ShiftSectionProps = $props();
+  let {
+    shift,
+    loading = false,
+    expanded,
+    ontoggle,
+  }: ShiftSectionProps = $props();
 
   // Reactive countdown that ticks every minute.
   const now = new SvelteDate();
@@ -96,22 +103,38 @@
   iconColor="var(--brand-accent)"
   {expanded}
   {ontoggle}
+  {loading}
 >
-  <div class="shift-content">
-    <div class="shift-time">
-      <span>{timeDisplay}</span>
-    </div>
-
-    {#if shift && shift.volunteers.length > 0}
+  {#if loading}
+    <div class="shift-content skeleton-pulse">
+      <div class="shift-time">
+        <InlineSkeleton width="18ch" />
+      </div>
       <div class="shift-volunteers">
-        {#each shift.volunteers as vol, i (`${vol.initials}${String(i)}`)}
-          <span class="vol-chip" class:vol-chip-you={vol.isCurrentUser}>
-            {vol.initials}
+        {#each [1, 2, 3] as n (n)}
+          <span class="vol-chip">
+            <InlineSkeleton width="2ch" />
           </span>
         {/each}
       </div>
-    {/if}
-  </div>
+    </div>
+  {:else}
+    <div class="shift-content">
+      <div class="shift-time">
+        <span>{timeDisplay}</span>
+      </div>
+
+      {#if shift && shift.volunteers.length > 0}
+        <div class="shift-volunteers">
+          {#each shift.volunteers as vol, i (`${vol.initials}${String(i)}`)}
+            <span class="vol-chip" class:vol-chip-you={vol.isCurrentUser}>
+              {vol.initials}
+            </span>
+          {/each}
+        </div>
+      {/if}
+    </div>
+  {/if}
 </CollapsibleSection>
 
 <style>
@@ -150,5 +173,24 @@
   .vol-chip-you {
     color: var(--ink);
     background: color-mix(in srgb, var(--brand-accent) 15%, var(--surface-1));
+  }
+
+  .skeleton-pulse {
+    animation: skeleton-pulse 2.5s ease-in-out infinite;
+  }
+  @keyframes skeleton-pulse {
+    0%,
+    100% {
+      opacity: 1;
+    }
+    50% {
+      opacity: 0.65;
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .skeleton-pulse {
+      animation: none;
+      opacity: 0.7;
+    }
   }
 </style>

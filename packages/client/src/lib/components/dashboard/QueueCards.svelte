@@ -2,6 +2,8 @@
   import { Layers } from "@lucide/svelte";
   import * as m from "$lib/paraglide/messages.js";
   import CollapsibleSection from "./CollapsibleSection.svelte";
+  import DecryptPlaceholder from "$lib/components/DecryptPlaceholder.svelte";
+  import InlineSkeleton from "$lib/components/InlineSkeleton.svelte";
 
   interface QueueInfo {
     id: string;
@@ -11,22 +13,42 @@
 
   interface QueueCardsProps {
     queues: QueueInfo[];
+    loading?: boolean;
     expanded: boolean;
     ontoggle: () => void;
     ontap: (queueId: string) => void;
   }
 
-  let { queues, expanded, ontoggle, ontap }: QueueCardsProps = $props();
+  let {
+    queues,
+    loading = false,
+    expanded,
+    ontoggle,
+    ontap,
+  }: QueueCardsProps = $props();
 </script>
 
 <CollapsibleSection
   heading={m.dashboard_queues_heading()}
   icon={Layers}
   iconColor="var(--brand-accent)"
+  {loading}
   {expanded}
   {ontoggle}
 >
-  {#if queues.length > 0}
+  {#if loading}
+    <div
+      class="queue-grid skeleton-pulse"
+      style:grid-template-columns="repeat(3, 1fr)"
+    >
+      {#each [1, 2, 3] as n (n)}
+        <div class="queue-tile queue-tile-placeholder">
+          <DecryptPlaceholder length={8} />
+          <span class="queue-count"><InlineSkeleton width="5ch" /></span>
+        </div>
+      {/each}
+    </div>
+  {:else if queues.length > 0}
     <div
       class="queue-grid"
       style:grid-template-columns="repeat({Math.min(queues.length, 3)}, 1fr)"
@@ -94,9 +116,33 @@
     color: var(--muted);
   }
 
+  .queue-tile-placeholder {
+    cursor: default;
+    pointer-events: none;
+  }
+
   .no-queues {
     padding: 0 var(--page-pad-x) var(--space-lg);
     font-size: var(--text-base);
     color: var(--muted);
+  }
+
+  .skeleton-pulse {
+    animation: skeleton-pulse 2.5s ease-in-out infinite;
+  }
+  @keyframes skeleton-pulse {
+    0%,
+    100% {
+      opacity: 1;
+    }
+    50% {
+      opacity: 0.65;
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .skeleton-pulse {
+      animation: none;
+      opacity: 0.7;
+    }
   }
 </style>

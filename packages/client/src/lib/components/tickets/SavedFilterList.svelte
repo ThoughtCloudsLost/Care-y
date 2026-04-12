@@ -3,6 +3,7 @@
   import { Share2 } from "@lucide/svelte";
   import * as m from "$lib/paraglide/messages.js";
   import { getOrgDecryptCache } from "$lib/crypto/context.js";
+  import DecryptPlaceholder from "$lib/components/DecryptPlaceholder.svelte";
   import { savedFilterStore } from "$lib/stores/saved-filters.svelte.js";
   import { filterStore } from "$lib/stores/filters.svelte.js";
   import {
@@ -121,11 +122,11 @@
             <IconComponent size={14} />
           </span>
           <span class="chip-label">
-            {#if name !== null}
-              {name}
-            {:else}
-              <span class="chip-shimmer">{m.saved_filter_decrypting()}</span>
-            {/if}
+            <DecryptPlaceholder
+              content={name}
+              ciphertext={record.encryptedName}
+              length={10}
+            />
           </span>
           {#if record.shared}
             <Share2
@@ -228,11 +229,6 @@
     max-width: 120px;
     overflow: hidden;
     text-overflow: ellipsis;
-  }
-
-  .chip-shimmer {
-    color: var(--muted);
-    font-style: italic;
   }
 
   :global(.chip-shared-icon) {

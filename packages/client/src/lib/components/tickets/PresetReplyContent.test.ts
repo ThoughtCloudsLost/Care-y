@@ -11,6 +11,20 @@ import { describe, it, expect, vi, afterEach } from "vitest";
 import { render, cleanup } from "@testing-library/svelte";
 import PresetReplyContent from "./PresetReplyContent.svelte";
 
+// IntersectionObserver stub for DecryptPlaceholder
+vi.stubGlobal(
+  "IntersectionObserver",
+  vi.fn(function (this: {
+    observe: () => void;
+    disconnect: () => void;
+    unobserve: () => void;
+  }) {
+    this.observe = vi.fn();
+    this.disconnect = vi.fn();
+    this.unobserve = vi.fn();
+  }),
+);
+
 // --- Mock i18n ---
 vi.mock("$lib/paraglide/messages.js", () => ({
   ticket_preset_replies: () => "Preset replies",

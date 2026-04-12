@@ -7,29 +7,23 @@
 -->
 <script lang="ts">
   import { Chip } from "konsta/svelte";
-  import { isDecryptError } from "$lib/crypto/async-decrypt-cache.js";
   import { formatRelativeTime } from "$lib/utils/format-time.js";
-  import * as m from "$lib/paraglide/messages.js";
+  import DecryptPlaceholder from "$lib/components/DecryptPlaceholder.svelte";
 
   interface Props {
     content: string | undefined;
+    encryptedContent?: unknown;
     timestamp: string;
   }
 
-  let { content, timestamp }: Props = $props();
+  let { content, encryptedContent, timestamp }: Props = $props();
 
   const timeLabel = $derived(formatRelativeTime(new Date(timestamp)));
 </script>
 
 <div class="system-event" role="status">
   <Chip outline class="system-chip">
-    {#if content === undefined}
-      <span class="shimmer shimmer-chip" aria-busy="true"></span>
-    {:else if isDecryptError(content)}
-      {m.error_decryption_failed()}
-    {:else}
-      {content}
-    {/if}
+    <DecryptPlaceholder {content} ciphertext={encryptedContent} length={15} />
   </Chip>
   <time class="system-time" datetime={timestamp}>{timeLabel}</time>
 </div>
@@ -47,36 +41,5 @@
     font-size: 0.625rem;
     color: var(--muted);
     line-height: 1;
-  }
-
-  .shimmer-chip {
-    display: inline-block;
-    width: 6rem;
-    height: 0.75rem;
-    border-radius: 0.25rem;
-    background: linear-gradient(
-      90deg,
-      var(--surface-2) 25%,
-      var(--surface-1) 50%,
-      var(--surface-2) 75%
-    );
-    background-size: 200% 100%;
-    animation: shimmer 1.5s infinite linear;
-  }
-
-  @keyframes shimmer {
-    from {
-      background-position: 200% 0;
-    }
-    to {
-      background-position: -200% 0;
-    }
-  }
-
-  @media (prefers-reduced-motion: reduce) {
-    .shimmer-chip {
-      animation: none;
-      background: var(--surface-2);
-    }
   }
 </style>

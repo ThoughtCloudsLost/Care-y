@@ -3,14 +3,34 @@
  * CollapsibleSection component tests.
  *
  * Verifies heading with count, aria-expanded, toggle callback,
- * and conditional content rendering.
+ * conditional content rendering, and DecryptPlaceholder count badge.
  */
 
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { render, screen, cleanup, fireEvent } from "@testing-library/svelte";
 import CollapsibleSection from "./CollapsibleSection.svelte";
 
-afterEach(cleanup);
+// IntersectionObserver stub for DecryptPlaceholder
+const mockObserve = vi.fn();
+const mockDisconnect = vi.fn();
+
+const MockIntersectionObserver = vi.fn(function (this: {
+  observe: typeof mockObserve;
+  disconnect: typeof mockDisconnect;
+  unobserve: ReturnType<typeof vi.fn>;
+}) {
+  this.observe = mockObserve;
+  this.disconnect = mockDisconnect;
+  this.unobserve = vi.fn();
+});
+
+vi.stubGlobal("IntersectionObserver", MockIntersectionObserver);
+
+afterEach(() => {
+  cleanup();
+  mockObserve.mockClear();
+  mockDisconnect.mockClear();
+});
 
 describe("CollapsibleSection", () => {
   it("renders heading with count", () => {
@@ -96,5 +116,66 @@ describe("CollapsibleSection", () => {
     });
 
     expect(container.querySelector(".section-content")).toBeTruthy();
+  });
+
+  it("shows DecryptPlaceholder in badge area when loading and count is undefined", () => {
+    const { container } = render(CollapsibleSection, {
+      props: {
+        heading: "My Tickets",
+        loading: true,
+        expanded: false,
+        ontoggle: vi.fn(),
+      },
+    });
+
+    const badge = container.querySelector(".count-badge");
+    expect(badge).toBeTruthy();
+    // DecryptPlaceholder renders with class "dp" and role="status"
+    const dp = badge?.querySelector(".dp");
+    expect(dp).toBeTruthy();
+  });
+
+  it("shows count badge when count is provided and loading is false", () => {
+    render(CollapsibleSection, {
+      props: {
+        heading: "My Tickets",
+        count: 5,
+        loading: false,
+        expanded: false,
+        ontoggle: vi.fn(),
+      },
+    });
+
+    const button = screen.getByRole("button");
+    expect(button.textContent).toContain("5");
+  });
+
+  it("shows count badge (not placeholder) when count is provided even if loading", () => {
+    render(CollapsibleSection, {
+      props: {
+        heading: "My Tickets",
+        count: 3,
+        loading: true,
+        expanded: false,
+        ontoggle: vi.fn(),
+      },
+    });
+
+    const button = screen.getByRole("button");
+    expect(button.textContent).toContain("3");
+  });
+
+  it("renders heading and icon regardless of loading state", () => {
+    render(CollapsibleSection, {
+      props: {
+        heading: "Urgent",
+        loading: true,
+        expanded: false,
+        ontoggle: vi.fn(),
+      },
+    });
+
+    const button = screen.getByRole("button");
+    expect(button.textContent).toContain("Urgent");
   });
 });

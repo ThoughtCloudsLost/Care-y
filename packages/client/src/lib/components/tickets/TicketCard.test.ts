@@ -3,6 +3,20 @@ import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
 import { render, cleanup, fireEvent } from "@testing-library/svelte";
 import TicketCard from "./TicketCard.svelte";
 
+// IntersectionObserver stub for DecryptPlaceholder
+vi.stubGlobal(
+  "IntersectionObserver",
+  vi.fn(function (this: {
+    observe: () => void;
+    disconnect: () => void;
+    unobserve: () => void;
+  }) {
+    this.observe = vi.fn();
+    this.disconnect = vi.fn();
+    this.unobserve = vi.fn();
+  }),
+);
+
 // --- Mocks ---
 
 vi.mock("$lib/crypto/context.js", () => ({
@@ -67,13 +81,12 @@ describe("TicketCard", () => {
     expect(container.textContent).toContain("Test ticket title");
   });
 
-  it("shows shimmer placeholder when title is undefined (encrypting state)", () => {
+  it("shows DecryptPlaceholder when title is undefined (encrypting state)", () => {
     const { container } = render(TicketCard, {
       props: { ...defaults, title: undefined },
     });
-    const shimmer = container.querySelector(".shimmer-title");
-    expect(shimmer).not.toBeNull();
-    expect(shimmer?.getAttribute("aria-label")).toBe("Decrypting...");
+    const dp = container.querySelector(".dp[aria-busy='true']");
+    expect(dp).not.toBeNull();
   });
 
   it("shows encrypted placeholder when title decryption fails (sentinel value)", () => {
@@ -81,9 +94,9 @@ describe("TicketCard", () => {
       props: { ...defaults, title: "\0DECRYPT_FAILED" },
     });
     expect(container.textContent).toContain("Encrypted ticket");
-    // Should NOT show shimmer
-    const shimmer = container.querySelector(".shimmer-title");
-    expect(shimmer).toBeNull();
+    // Should NOT show DecryptPlaceholder
+    const dp = container.querySelector(".row-title .dp");
+    expect(dp).toBeNull();
   });
 
   it("shows preview window in list mode even when follow-ups are empty", () => {
@@ -102,12 +115,12 @@ describe("TicketCard", () => {
     expect(container.textContent).toContain("No messages yet");
   });
 
-  it("renders preview shimmer when follow-ups are undefined (not loaded)", () => {
+  it("renders DecryptPlaceholder when follow-ups are undefined (not loaded)", () => {
     const { container } = render(TicketCard, {
       props: { ...defaults, previewFollowUps: undefined },
     });
-    const shimmers = container.querySelectorAll(".shimmer-preview");
-    expect(shimmers.length).toBeGreaterThan(0);
+    const placeholders = container.querySelectorAll(".dp");
+    expect(placeholders.length).toBeGreaterThan(0);
   });
 
   // --- Queue badge ---
