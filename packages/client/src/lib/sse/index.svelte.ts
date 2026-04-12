@@ -41,6 +41,12 @@ export function handleEvent(event: SSEEvent, queryClient: QueryClient): void {
         void queryClient.invalidateQueries({
           queryKey: ["ticket", event.ticketId, "followUps"],
         });
+        void queryClient.invalidateQueries({
+          queryKey: ["ticket", event.ticketId, "recordings"],
+        });
+        void queryClient.invalidateQueries({
+          queryKey: ["ticket", event.ticketId, "attachments"],
+        });
       }
       break;
     case "kb:updated":
