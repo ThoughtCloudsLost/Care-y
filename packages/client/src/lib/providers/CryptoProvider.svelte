@@ -24,6 +24,8 @@
   import { FollowUpDecryptCache } from "$lib/crypto/follow-up-decrypt-cache.js";
   import { cacheRegistry } from "$lib/crypto/cache-registry.js";
   import { trpc } from "$lib/trpc/index.js";
+  import { createPreviewLoader } from "$lib/tickets/preview-loader.svelte.js";
+  import { RouterNotAvailableError } from "$lib/errors.js";
   import {
     setCryptoBridge,
     setOrgKeyManager,
@@ -32,7 +34,8 @@
     setFollowUpDecryptCache,
     setCurrentUserId,
     setCurrentUserRoleId,
-  } from "$lib/crypto/context.js";
+    setPreviewLoader,
+  } from "$lib/crypto/context-init.js";
 
   import type { Snippet } from "svelte";
 
@@ -51,11 +54,22 @@
     const followUpCache = new FollowUpDecryptCache(bridge);
     setFollowUpDecryptCache(followUpCache);
 
+    if (!trpc.tickets) throw new RouterNotAvailableError("tickets");
+    const ticketRouter = trpc.tickets;
+    setPreviewLoader(
+      createPreviewLoader({
+        queryFn: async (ids) =>
+          ticketRouter.recentFollowUps.query({ ticketIds: ids, perTicket: 3 }),
+      }),
+    );
+
     if (import.meta.env.DEV) {
       const expected = [
         "TicketDecryptCache",
         "FollowUpDecryptCache",
         "OrgDecryptCache",
+        "PreviewLoader:raw",
+        "PreviewLoader:state",
       ];
       const registered = cacheRegistry.registered;
       const missing = expected.filter((n) => !registered.includes(n));

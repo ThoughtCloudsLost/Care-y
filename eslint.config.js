@@ -104,7 +104,40 @@ export default tseslint.config(
   },
 
   // Module boundary enforcement - block deep imports into @care-y/* packages
+  // and restrict context-init.ts to CryptoProvider only.
   {
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          patterns: [
+            {
+              group: ["@care-y/*/src/*", "@care-y/*/src/**"],
+              message:
+                "Import from the package barrel export (e.g., @care-y/shared) - not deep paths.",
+            },
+            {
+              group: [
+                "$lib/crypto/context-init",
+                "$lib/crypto/context-init.js",
+                "$lib/crypto/context-init.ts",
+                "**/crypto/context-init",
+                "**/crypto/context-init.js",
+                "**/crypto/context-init.ts",
+              ],
+              message:
+                "Context setters are restricted to CryptoProvider. Import getters from $lib/crypto/context.js instead.",
+            },
+          ],
+        },
+      ],
+    },
+  },
+
+  // CryptoProvider is the sole consumer of context-init.ts (setter imports).
+  // Exempt it from the no-restricted-imports rule that blocks context-init.
+  {
+    files: ["**/providers/CryptoProvider.svelte"],
     rules: {
       "no-restricted-imports": [
         "error",

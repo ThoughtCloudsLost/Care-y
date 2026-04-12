@@ -1,6 +1,7 @@
 <script lang="ts">
   import { browser } from "$app/environment";
   import { getCryptoBridge, getOrgKeyManager } from "$lib/crypto/context.js";
+  import { setDebugDelay } from "$lib/trpc/index.js";
   import ToastRenderer from "$lib/shell/ToastRenderer.svelte";
 
   let { children } = $props();
@@ -19,6 +20,7 @@
     const orgKeyManager = getOrgKeyManager();
     void (async () => {
       try {
+        setDebugDelay(false);
         const { devAutoLogin } = await import("$lib/dev/auto-login.js");
         await devAutoLogin(bridge, orgKeyManager);
       } catch (err: unknown) {
@@ -35,6 +37,7 @@
           devLoginError = `Auto-login failed: ${err instanceof Error ? err.message : String(err)}`;
         }
       }
+      setDebugDelay(true);
       devLoginDone = true;
     })();
   }
