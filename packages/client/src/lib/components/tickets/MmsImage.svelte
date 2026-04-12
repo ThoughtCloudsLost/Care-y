@@ -14,6 +14,7 @@
 <script lang="ts">
   import * as m from "$lib/paraglide/messages.js";
   import { trpc } from "$lib/trpc/index.js";
+  import DecryptPlaceholder from "$lib/components/DecryptPlaceholder.svelte";
   import { getCryptoBridge } from "$lib/crypto/context.js";
   import { RouterNotAvailableError } from "$lib/errors.js";
   import type { TicketKeyWrap } from "$lib/crypto/ticket-decrypt-cache.js";
@@ -105,8 +106,8 @@
     <img src={thumbnailUrl} {alt} class="mms-img" draggable="false" />
   </button>
 {:else}
-  <div class="mms-placeholder shimmer" aria-busy="true" role="status">
-    <span class="sr-only">{m.ticket_mms_loading()}</span>
+  <div class="mms-placeholder">
+    <DecryptPlaceholder mode="media" block />
   </div>
 {/if}
 
@@ -162,42 +163,7 @@
     font-style: italic;
   }
 
-  .shimmer {
-    background: linear-gradient(
-      90deg,
-      var(--surface-2) 25%,
-      var(--surface-1) 50%,
-      var(--surface-2) 75%
-    );
-    background-size: 200% 100%;
-    animation: shimmer 1.5s infinite linear;
-  }
-
-  .sr-only {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    overflow: hidden;
-    clip: rect(0, 0, 0, 0);
-    white-space: nowrap;
-    border: 0;
-  }
-
-  @keyframes shimmer {
-    from {
-      background-position: 200% 0;
-    }
-    to {
-      background-position: -200% 0;
-    }
-  }
-
   @media (prefers-reduced-motion: reduce) {
-    .shimmer {
-      animation: none;
-      background: var(--surface-2);
-    }
-
     .mms-thumbnail {
       transition: none;
     }

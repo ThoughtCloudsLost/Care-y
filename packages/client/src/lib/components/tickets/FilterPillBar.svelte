@@ -19,6 +19,7 @@
   import { ticketPrioritySchema } from "@care-y/shared";
   import { RouterNotAvailableError } from "$lib/errors.js";
   import { getOrgDecryptCache } from "$lib/crypto/context.js";
+  import Skeleton from "$lib/components/Skeleton.svelte";
   import FilterPill from "./FilterPill.svelte";
   import type { FilterOption } from "./FilterPill.svelte";
 
@@ -432,6 +433,13 @@
     </List>
   {:else if activeMode === "multi"}
     <List nested role="group" aria-label={activeLabel}>
+      {#if activePill === "queue" && queuesQuery.isLoading}
+        <ListItem>
+          {#snippet title()}
+            <Skeleton lines={2} />
+          {/snippet}
+        </ListItem>
+      {/if}
       {#each activeOptions as opt (opt.value)}
         {@const sel = activeSelected}
         {@const checked = sel instanceof Set && sel.has(opt.value)}

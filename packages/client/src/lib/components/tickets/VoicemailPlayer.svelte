@@ -21,6 +21,7 @@
   import { Button } from "konsta/svelte";
   import { Play, Pause } from "@lucide/svelte";
   import * as m from "$lib/paraglide/messages.js";
+  import DecryptPlaceholder from "$lib/components/DecryptPlaceholder.svelte";
   import { formatDuration } from "$lib/utils/time.js";
   import { trpc } from "$lib/trpc/index.js";
   import { getCryptoBridge } from "$lib/crypto/context.js";
@@ -206,7 +207,7 @@
     aria-busy="true"
     role="status"
   >
-    <div class="shimmer shimmer-voicemail"></div>
+    <DecryptPlaceholder mode="media" block />
     <span class="voicemail-loading-text">{m.ticket_voicemail_loading()}</span>
   </div>
 {:else}
@@ -313,35 +314,5 @@
   .voicemail-loading-text {
     font-size: 0.75rem;
     color: var(--muted);
-  }
-
-  .shimmer-voicemail {
-    width: 6rem;
-    height: 1.5rem;
-    border-radius: 0.25rem;
-    background: linear-gradient(
-      90deg,
-      var(--surface-2) 25%,
-      var(--surface-1) 50%,
-      var(--surface-2) 75%
-    );
-    background-size: 200% 100%;
-    animation: shimmer 1.5s infinite linear;
-  }
-
-  @keyframes shimmer {
-    from {
-      background-position: 200% 0;
-    }
-    to {
-      background-position: -200% 0;
-    }
-  }
-
-  @media (prefers-reduced-motion: reduce) {
-    .shimmer-voicemail {
-      animation: none;
-      background: var(--surface-2);
-    }
   }
 </style>

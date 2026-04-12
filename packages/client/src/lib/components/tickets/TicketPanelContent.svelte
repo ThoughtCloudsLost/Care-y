@@ -55,6 +55,8 @@
   import { SvelteSet } from "svelte/reactivity";
   import { isDecryptError } from "$lib/crypto/async-decrypt-cache.js";
   import { RouterNotAvailableError } from "$lib/errors.js";
+  import DecryptPlaceholder from "$lib/components/DecryptPlaceholder.svelte";
+  import InlineSkeleton from "$lib/components/InlineSkeleton.svelte";
 
   export type TicketAction =
     | "call"
@@ -390,7 +392,13 @@
 
 <div class="panel-content">
   <!-- Ticket title / description -->
-  {#if decryptedTitle}
+  {#if ticketQuery.isLoading}
+    <Block class="!my-0 !mt-2">
+      <p class="ticket-title">
+        <DecryptPlaceholder length={20} />
+      </p>
+    </Block>
+  {:else if decryptedTitle}
     <Block class="!my-0 !mt-2">
       <p class="ticket-title">{decryptedTitle}</p>
     </Block>
@@ -408,22 +416,46 @@
   <List strong inset class="!my-3">
     <ListItem title={m.ticket_panel_status()}>
       {#snippet after()}
-        <span class="status-after">
-          <StatusDot status={displayStatus} />
-          <span class="status-label">{statusLabel}</span>
-        </span>
+        {#if ticketQuery.isLoading}
+          <InlineSkeleton width="6ch" />
+        {:else}
+          <span class="status-after">
+            <StatusDot status={displayStatus} />
+            <span class="status-label">{statusLabel}</span>
+          </span>
+        {/if}
       {/snippet}
     </ListItem>
-    {#if ticket?.createdAt}
-      <ListItem
-        title={m.ticket_panel_opened()}
-        after={formatRelativeTime(new Date(ticket.createdAt))}
-      />
-    {/if}
+    <ListItem title={m.ticket_panel_opened()}>
+      {#snippet after()}
+        {#if ticketQuery.isLoading}
+          <InlineSkeleton width="4ch" />
+        {:else if ticket?.createdAt}
+          {formatRelativeTime(new Date(ticket.createdAt))}
+        {/if}
+      {/snippet}
+    </ListItem>
   </List>
 
   <!-- Internal notes (only shown when notes exist) -->
-  {#if notes.length > 0}
+  {#if notesQuery.isLoading}
+    <BlockTitle class="!mt-6 !-mb-2">{m.ticket_panel_notes()}</BlockTitle>
+    <List strong inset class="!my-3">
+      {#each [1, 2] as n (n)}
+        <ListItem>
+          {#snippet title()}
+            <InlineSkeleton width="8ch" />
+          {/snippet}
+          {#snippet subtitle()}
+            <DecryptPlaceholder length={40} />
+          {/snippet}
+          {#snippet media()}
+            <StickyNote size={18} aria-hidden="true" class="list-icon" />
+          {/snippet}
+        </ListItem>
+      {/each}
+    </List>
+  {:else if notes.length > 0}
     <BlockTitle class="!mt-6 !-mb-2">{m.ticket_panel_notes()}</BlockTitle>
     <List strong inset class="!my-3">
       {#each notes as note (note.id)}
@@ -434,11 +466,17 @@
         <ListItem
           link
           title={authorName}
-          subtitle={content ?? "..."}
           after={formatRelativeTime(new Date(note.createdAt))}
           onclick={() => onnotetap?.(note.id)}
           class="note-item"
         >
+          {#snippet subtitle()}
+            <DecryptPlaceholder
+              {content}
+              ciphertext={note.encryptedContent}
+              length={40}
+            />
+          {/snippet}
           {#snippet media()}
             <StickyNote size={18} aria-hidden="true" class="list-icon" />
           {/snippet}
@@ -530,7 +568,18 @@
   {/if}
 
   <!-- Images -->
-  {#if imageAttachments.length > 0}
+  {#if attachmentsQuery.isLoading}
+    <BlockTitle class="!mt-6 !-mb-2">{m.ticket_panel_media()}</BlockTitle>
+    <Block strong inset class="!my-3">
+      <div class="image-grid">
+        {#each [1, 2] as n (n)}
+          <div class="image-cell">
+            <div class="media-placeholder"></div>
+          </div>
+        {/each}
+      </div>
+    </Block>
+  {:else if imageAttachments.length > 0}
     <BlockTitle class="!mt-6 !-mb-2">{m.ticket_panel_media()}</BlockTitle>
     <Block strong inset class="!my-3">
       <div class="image-grid">
@@ -607,7 +656,7 @@
   {/if}
 
   <!-- Empty state when no media at all -->
-  {#if imageAttachments.length === 0 && recordings.length === 0 && fileAttachments.length === 0}
+  {#if !attachmentsQuery.isLoading && !recordingsQuery.isLoading && imageAttachments.length === 0 && recordings.length === 0 && fileAttachments.length === 0}
     <BlockTitle class="!mt-6 !-mb-2">{m.ticket_panel_media()}</BlockTitle>
     <Block strong inset class="!my-3">
       <p class="empty-text">{m.ticket_panel_no_media()}</p>
@@ -700,6 +749,13 @@
     flex-direction: column;
     gap: 0.125rem;
     align-items: center;
+  }
+
+  .media-placeholder {
+    width: 100%;
+    aspect-ratio: 1;
+    border-radius: 0.375rem;
+    background: var(--surface-2);
   }
 
   /* Constrain MmsImage thumbnails within grid cells */

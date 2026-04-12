@@ -8,7 +8,7 @@
   Security: blob URL revoked immediately after download link click.
 -->
 <script lang="ts">
-  import { Chip } from "konsta/svelte";
+  import { Chip, Preloader } from "konsta/svelte";
   import { Paperclip } from "@lucide/svelte";
   import * as m from "$lib/paraglide/messages.js";
   import { formatFileSize } from "$lib/utils/time.js";
@@ -91,7 +91,11 @@
   aria-disabled={downloading || keyWrap === null}
 >
   {#snippet media()}
-    <Paperclip size={14} aria-hidden="true" class="attachment-icon" />
+    {#if downloading}
+      <Preloader class="attachment-preloader" />
+    {:else}
+      <Paperclip size={14} aria-hidden="true" class="attachment-icon" />
+    {/if}
   {/snippet}
   <span class="attachment-name">{filename}</span>
   <span class="attachment-size">{formatFileSize(sizeBytes)}</span>
@@ -111,5 +115,10 @@
     color: var(--muted);
     margin-left: 0.25rem;
     white-space: nowrap;
+  }
+
+  :global(.attachment-preloader) {
+    width: 14px !important;
+    height: 14px !important;
   }
 </style>

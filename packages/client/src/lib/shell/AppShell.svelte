@@ -481,9 +481,7 @@
       {/if}
     {/snippet}
     {#snippet right()}
-      {#if navbarOverride?.right}
-        {@render navbarOverride.right()}
-      {:else if !searchOpen}
+      {#if !searchOpen}
         <Link
           iconOnly
           role="button"
@@ -492,12 +490,16 @@
         >
           <Search size={22} aria-hidden="true" />
         </Link>
+      {/if}
+      {#if navbarOverride?.right && !searchOpen}
+        {@render navbarOverride.right()}
+      {:else if !searchOpen}
         <Link iconOnly role="button" aria-label={m.nav_new_ticket()}>
           <TicketPlus size={22} aria-hidden="true" />
         </Link>
       {/if}
     {/snippet}
-    {#if searchOpen && !navbarOverride?.right}
+    {#if searchOpen}
       <div
         bind:this={searchContainerEl}
         class="search-overlay search-overlay-open"

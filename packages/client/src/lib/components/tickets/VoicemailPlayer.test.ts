@@ -3,6 +3,20 @@ import { describe, it, expect, vi, afterEach } from "vitest";
 import { render, cleanup } from "@testing-library/svelte";
 import VoicemailPlayer from "./VoicemailPlayer.svelte";
 
+// IntersectionObserver stub for DecryptPlaceholder
+vi.stubGlobal(
+  "IntersectionObserver",
+  vi.fn(function (this: {
+    observe: () => void;
+    disconnect: () => void;
+    unobserve: () => void;
+  }) {
+    this.observe = vi.fn();
+    this.disconnect = vi.fn();
+    this.unobserve = vi.fn();
+  }),
+);
+
 // Mock crypto context (components now self-fetch via bridge)
 vi.mock("$lib/crypto/context.js", () => ({
   getCryptoBridge: () => ({
