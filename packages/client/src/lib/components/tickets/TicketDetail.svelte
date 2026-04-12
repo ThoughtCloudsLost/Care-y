@@ -401,36 +401,32 @@
   // After the initial page loads, check if there are unread messages
   // beyond the loaded range. If so, keep fetching older pages until
   // the read boundary is within the loaded range.
-  // Unified load-then-scroll sequence. A single $effect owns both
-  // "fetch older pages until the read boundary" and "scroll to the
-  // correct position." Running these in one async chain eliminates
-  // the race between two effects that read each other's state.
-  let scrollReady = $state(false);
+  // Scroll initialization state machine. Fires once per mount:
+  //   waiting -> loading (fetch unread pages) -> scrolling -> done
+  type ScrollInitPhase = "waiting" | "loading" | "scrolling" | "done";
+  let scrollInitPhase = $state<ScrollInitPhase>("waiting");
 
   $effect(() => {
+    if (scrollInitPhase !== "waiting") return;
     if (timelineActive) return;
     if (readUpTo === undefined) return;
     if (!initialFollowUpsQuery.data) return;
     if (followUps.length === 0 || !scroll.scrollContainerEl) return;
-    if (scrollReady) return;
 
-    // Mark intent immediately so this effect doesn't re-trigger.
-    scrollReady = true;
+    scrollInitPhase = "loading";
 
     void (async () => {
-      // Load all pages until the read boundary (if needed).
       if (readUpTo !== null && hasMoreOlder) {
         const oldest = followUps[0];
         if (oldest) {
           const cutoffMs = readUpTo.getTime();
-          const oldestTime = new Date(oldest.createdAt).getTime();
-          if (oldestTime > cutoffMs) {
+          if (Date.parse(oldest.createdAt) > cutoffMs) {
             await paginator.loadUntilReadBoundary(cutoffMs);
           }
         }
       }
 
-      // Wait for DOM to settle, then scroll.
+      scrollInitPhase = "scrolling";
       await tick();
       const scrollEl = scroll.scrollContainerEl;
       requestAnimationFrame(() => {
@@ -442,6 +438,7 @@
           } else if (scrollEl) {
             scrollEl.scrollTop = scrollEl.scrollHeight;
           }
+          scrollInitPhase = "done";
         });
       });
     })();
