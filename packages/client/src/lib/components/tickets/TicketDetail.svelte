@@ -241,26 +241,35 @@
 
   // Decrypt system event and note content for timeline display.
   // Patches incrementally: skips items already resolved, only processes new ones.
+  //
+  // Uses a plain Set (not SvelteSet) to track resolved IDs so that writes
+  // to timelineDecryptedContent don't re-trigger this effect. The only
+  // re-run triggers are followUpCache's internal SvelteMap updates (when a
+  // Worker completes decryption) and summaryQuery.data changes.
   const timelineDecryptedContent = new SvelteMap<string, string | undefined>();
+  // eslint-disable-next-line svelte/prefer-svelte-reactivity -- intentionally non-reactive to avoid feedback loop in the $effect below
+  const resolvedIds = new Set<string>();
 
   // Clear when switching tickets.
   $effect(() => {
     // Read ticketId to track it as a dependency.
     void ticketId;
     timelineDecryptedContent.clear();
+    resolvedIds.clear();
   });
 
   $effect(() => {
     if (!ticket) return;
     for (const item of summaryQuery.data ?? []) {
       if (item.encryptedContent === null) continue;
-      if (timelineDecryptedContent.has(item.id)) continue;
+      if (resolvedIds.has(item.id)) continue;
       const content = followUpCache.decryptContent(
         item.id,
         ticket.keyWrap,
         item.encryptedContent,
       );
       if (content !== undefined) {
+        resolvedIds.add(item.id);
         timelineDecryptedContent.set(
           item.id,
           isDecryptError(content) ? undefined : content,
