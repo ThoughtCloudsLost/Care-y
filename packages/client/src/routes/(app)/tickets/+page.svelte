@@ -1,7 +1,7 @@
 <script lang="ts">
   import { createInfiniteQuery } from "@tanstack/svelte-query";
   import { createCountsQuery } from "$lib/tickets/queries.js";
-  import { SvelteSet } from "svelte/reactivity";
+  import { SvelteMap, SvelteSet } from "svelte/reactivity";
   import { goto } from "$app/navigation";
   import { resolve } from "$app/paths";
   import {
@@ -171,6 +171,16 @@
       onencryptedhelp: showEncryptedHelp,
     };
   }
+
+  // Pre-compute card props for the visible ticket list. Recomputes when
+  // displayFiltered, selection state, or decrypted content changes.
+  const cardPropsMap = $derived.by(() => {
+    const map = new SvelteMap<string, TicketCardProps>();
+    for (const t of displayFiltered) {
+      map.set(t.id, toCardProps(t));
+    }
+    return map;
+  });
 
   function showEncryptedHelp(): void {
     toastStore.show(m.dashboard_encrypted_help(), 5000);
@@ -470,7 +480,10 @@
             onaction={handleAction}
             onlongpress={handleLongPress}
           >
-            <TicketCard {...toCardProps(item)} />
+            {@const props = cardPropsMap.get(item.id)}
+            {#if props}
+              <TicketCard {...props} />
+            {/if}
           </SwipeableCard>
         {/snippet}
       </VirtualList>
