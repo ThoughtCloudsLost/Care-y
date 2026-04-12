@@ -138,7 +138,16 @@
   });
 
   // Map server record to TicketCard props (triggers lazy decryption).
-  function toCardProps(t: TicketRecord): TicketCardProps {
+  // Data-derived card props: only recompute when ticket data, decryption
+  // caches, or preview content changes. Excludes volatile per-interaction
+  // state (selected, multiSelectActive, viewMode) to avoid rebuilding the
+  // entire Map on every selection toggle.
+  type DataCardProps = Omit<
+    TicketCardProps,
+    "viewMode" | "selected" | "multiSelectActive"
+  >;
+
+  function toDataCardProps(t: TicketRecord): DataCardProps {
     let assignedName: string | null = null;
     if (t.assignedTo === currentUserId) {
       assignedName = m.dashboard_assigned_you();
@@ -149,7 +158,6 @@
     }
 
     return {
-      viewMode: viewModeStore.mode,
       ticketId: t.id,
       queueName: orgCache.decrypt(`queue:${t.queueId}`, t.encryptedQueueName),
       displayStatus: deriveDisplayStatus(t.status, t.onHold, t.followUpCount),
@@ -163,8 +171,6 @@
       followUpCount: t.followUpCount,
       unreadCount: 0,
       previewFollowUps: previewLoader.get(t.id),
-      selected: selectedIds.has(t.id),
-      multiSelectActive,
       ontap: handleTicketTap,
       onselect: toggleSelection,
       onaction: handleAction,
@@ -172,12 +178,13 @@
     };
   }
 
-  // Pre-compute card props for the visible ticket list. Recomputes when
-  // displayFiltered, selection state, or decrypted content changes.
+  // Pre-compute data-derived card props for the visible ticket list.
+  // Volatile props (viewMode, selected, multiSelectActive) are added at
+  // render time so selection toggles don't rebuild the entire Map.
   const cardPropsMap = $derived.by(() => {
-    const map = new SvelteMap<string, TicketCardProps>();
+    const map = new SvelteMap<string, DataCardProps>();
     for (const t of displayFiltered) {
-      map.set(t.id, toCardProps(t));
+      map.set(t.id, toDataCardProps(t));
     }
     return map;
   });
@@ -480,9 +487,14 @@
             onaction={handleAction}
             onlongpress={handleLongPress}
           >
-            {@const props = cardPropsMap.get(item.id)}
-            {#if props}
-              <TicketCard {...props} />
+            {@const dataProps = cardPropsMap.get(item.id)}
+            {#if dataProps}
+              <TicketCard
+                {...dataProps}
+                viewMode={viewModeStore.mode}
+                selected={selectedIds.has(item.id)}
+                {multiSelectActive}
+              />
             {/if}
           </SwipeableCard>
         {/snippet}
