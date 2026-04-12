@@ -27,7 +27,11 @@
 >
   <div class="stat-inner">
     {#if accentColor}
-      <span class="stat-dot" style:background={accentColor} aria-hidden="true"
+      <span
+        class="stat-dot"
+        style:background={accentColor}
+        aria-hidden="true"
+        data-accent-dot
       ></span>
     {/if}
     <span class="stat-count">{count}</span>

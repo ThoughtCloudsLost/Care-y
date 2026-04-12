@@ -85,7 +85,7 @@ describe("TicketCard", () => {
     const { container } = render(TicketCard, {
       props: { ...defaults, title: undefined },
     });
-    const dp = container.querySelector(".dp[aria-busy='true']");
+    const dp = container.querySelector("[aria-busy='true']");
     expect(dp).not.toBeNull();
   });
 
@@ -94,8 +94,8 @@ describe("TicketCard", () => {
       props: { ...defaults, title: "\0DECRYPT_FAILED" },
     });
     expect(container.textContent).toContain("Encrypted ticket");
-    // Should NOT show DecryptPlaceholder
-    const dp = container.querySelector(".row-title .dp");
+    // Should NOT show DecryptPlaceholder (no loading indicator in the title area)
+    const dp = container.querySelector("[aria-busy='true']");
     expect(dp).toBeNull();
   });
 
@@ -103,7 +103,7 @@ describe("TicketCard", () => {
     const { container } = render(TicketCard, {
       props: { ...defaults, previewFollowUps: [] },
     });
-    const preview = container.querySelector(".preview-window");
+    const preview = container.querySelector("[data-preview]");
     expect(preview).not.toBeNull();
     expect(container.textContent).toContain("No messages yet");
   });
@@ -119,7 +119,7 @@ describe("TicketCard", () => {
     const { container } = render(TicketCard, {
       props: { ...defaults, previewFollowUps: undefined },
     });
-    const placeholders = container.querySelectorAll(".dp");
+    const placeholders = container.querySelectorAll("[aria-busy='true']");
     expect(placeholders.length).toBeGreaterThan(0);
   });
 
@@ -175,7 +175,7 @@ describe("TicketCard", () => {
     const { container } = render(TicketCard, {
       props: { ...defaults, priority: "urgent" as const },
     });
-    const badge = container.querySelector(".priority-urgent");
+    const badge = container.querySelector("[data-priority='urgent']");
     expect(badge).not.toBeNull();
     expect(badge!.textContent).toContain("Urgent");
   });
@@ -184,14 +184,14 @@ describe("TicketCard", () => {
     const { container } = render(TicketCard, {
       props: { ...defaults, priority: "high" as const },
     });
-    const badge = container.querySelector(".priority-high");
+    const badge = container.querySelector("[data-priority='high']");
     expect(badge).not.toBeNull();
     expect(badge!.textContent).toContain("High");
   });
 
   it("shows priority badge for normal tickets", () => {
     const { container } = render(TicketCard, { props: defaults });
-    const badge = container.querySelector(".priority-normal");
+    const badge = container.querySelector("[data-priority='normal']");
     expect(badge).not.toBeNull();
     expect(badge!.textContent).toContain("Normal");
   });
@@ -200,7 +200,7 @@ describe("TicketCard", () => {
     const { container } = render(TicketCard, {
       props: { ...defaults, priority: "low" as const },
     });
-    const badge = container.querySelector(".priority-low");
+    const badge = container.querySelector("[data-priority='low']");
     expect(badge).not.toBeNull();
     expect(badge!.textContent).toContain("Low");
   });
@@ -233,7 +233,7 @@ describe("TicketCard", () => {
 
   it("hides unread badge when unreadCount is 0", () => {
     const { container } = render(TicketCard, { props: defaults });
-    const unreadBadge = container.querySelector(".unread-badge");
+    const unreadBadge = container.querySelector("[data-unread]");
     expect(unreadBadge).toBeNull();
   });
 
@@ -271,7 +271,7 @@ describe("TicketCard", () => {
     const { container } = render(TicketCard, {
       props: { ...defaults, multiSelectActive: true },
     });
-    const inner = container.querySelector(".card-inner");
+    const inner = container.querySelector("[role='button']");
     if (inner) await fireEvent.click(inner);
     expect(onselect).toHaveBeenCalledWith("t-001");
     expect(ontap).not.toHaveBeenCalled();
@@ -281,7 +281,9 @@ describe("TicketCard", () => {
 
   it("renders action icon buttons in list mode", () => {
     const { container } = render(TicketCard, { props: defaults });
-    const actions = container.querySelectorAll(".action-icon");
+    const actions = container.querySelectorAll(
+      '[aria-label="Reply"], [aria-label="Call"], [aria-label="Hold"], [aria-label="Take"]',
+    );
     expect(actions.length).toBe(4);
   });
 
@@ -289,7 +291,9 @@ describe("TicketCard", () => {
     const { container } = render(TicketCard, {
       props: { ...defaults, viewMode: "grid" as const },
     });
-    const actions = container.querySelectorAll(".action-icon");
+    const actions = container.querySelectorAll(
+      '[aria-label="Reply"], [aria-label="Call"], [aria-label="Hold"], [aria-label="Take"]',
+    );
     expect(actions.length).toBe(0);
   });
 
@@ -319,7 +323,7 @@ describe("TicketCard", () => {
 
   it("fires ontap with ticketId on card click", async () => {
     const { container } = render(TicketCard, { props: defaults });
-    const inner = container.querySelector(".card-inner");
+    const inner = container.querySelector("[role='button']");
     if (inner) await fireEvent.click(inner);
     expect(ontap).toHaveBeenCalledWith("t-001");
   });
@@ -328,8 +332,8 @@ describe("TicketCard", () => {
 
   it("card-inner has role=button and tabindex for keyboard access", () => {
     const { container } = render(TicketCard, { props: defaults });
-    const inner = container.querySelector(".card-inner");
-    expect(inner?.getAttribute("role")).toBe("button");
+    const inner = container.querySelector("[role='button']");
+    expect(inner).not.toBeNull();
     expect(inner?.getAttribute("tabindex")).toBe("0");
   });
 });

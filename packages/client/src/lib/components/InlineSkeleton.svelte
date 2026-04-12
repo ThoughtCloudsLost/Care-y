@@ -23,6 +23,7 @@
 {#if loading}
   <span
     class="isk skeleton-bar skeleton-pulse {className ?? ''}"
+    data-skeleton
     style:width
     role="presentation"
   ></span>

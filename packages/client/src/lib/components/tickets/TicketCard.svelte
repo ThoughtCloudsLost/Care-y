@@ -152,7 +152,7 @@
         onclick={handleCardClick}
         onkeydown={onKeyActivate(handleCardClick)}
       >
-        <div class="preview-window">
+        <div class="preview-window" data-preview>
           <TicketPreview
             followUps={previewFollowUps}
             multiline={isList}
@@ -223,7 +223,7 @@
               <span class="msg-count">{msgLabel}</span>
             {/if}
             {#if unreadCount > 0}
-              <Badge class="unread-badge">{unreadCount}</Badge>
+              <Badge class="unread-badge" data-unread>{unreadCount}</Badge>
             {/if}
           </span>
         </div>

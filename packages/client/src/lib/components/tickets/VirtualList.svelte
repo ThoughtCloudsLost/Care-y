@@ -318,6 +318,7 @@
       bind:this={topSentinelEl}
       class="scroll-sentinel scroll-sentinel--top"
       aria-hidden="true"
+      data-sentinel="top"
     ></div>
   {/if}
 
@@ -325,12 +326,18 @@
     <!-- ══ VIRTUALIZED MODE ══
          Absolutely positioned rows inside a fixed-height container.
          Heights come from real measurements collected during flat mode. -->
-    <div class="virtual-container" style:height="{totalHeight}px">
+    <div
+      class="virtual-container"
+      data-virtual="container"
+      style:height="{totalHeight}px"
+    >
       {#each visibleRows as rowData (rowData.key)}
         {@const isSingleCol = columns === 1}
         <div
           class="virtual-row virtual-row--abs"
           class:virtual-row-grid={!isSingleCol}
+          data-virtual="row"
+          data-grid={!isSingleCol || undefined}
           style:--virtual-columns={columns}
           style:top="{rowData.top}px"
           use:bindRow={rowData.row}
@@ -349,6 +356,8 @@
       <div
         class="virtual-row"
         class:virtual-row-grid={!isSingleCol}
+        data-virtual="row"
+        data-grid={!isSingleCol || undefined}
         style:--virtual-columns={columns}
         use:bindRow={rowData.row}
       >
@@ -360,7 +369,12 @@
   {/if}
 
   <!-- Infinite scroll sentinel (both modes) -->
-  <div bind:this={sentinelEl} class="scroll-sentinel" aria-hidden="true"></div>
+  <div
+    bind:this={sentinelEl}
+    class="scroll-sentinel"
+    aria-hidden="true"
+    data-sentinel="bottom"
+  ></div>
 </div>
 
 <style>

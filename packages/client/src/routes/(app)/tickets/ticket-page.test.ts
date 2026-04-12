@@ -282,7 +282,7 @@ describe("Ticket list page", () => {
     };
 
     const { container } = render(PageModule.default);
-    expect(container.querySelector(".ticket-list")).toBeTruthy();
+    expect(container.querySelector("[data-ticket-list]")).toBeTruthy();
   });
 
   it("renders ticket-list container in grid mode without grid-view class", () => {
@@ -299,7 +299,7 @@ describe("Ticket list page", () => {
     };
 
     const { container } = render(PageModule.default);
-    const list = container.querySelector(".ticket-list");
+    const list = container.querySelector("[data-ticket-list]");
     expect(list).toBeTruthy();
   });
 
@@ -317,7 +317,7 @@ describe("Ticket list page", () => {
     };
 
     const { container } = render(PageModule.default);
-    const list = container.querySelector(".ticket-list");
+    const list = container.querySelector("[data-ticket-list]");
     expect(list).toBeTruthy();
   });
 
@@ -336,6 +336,7 @@ describe("Ticket list page", () => {
     expect(screen.getByText("No tickets match this filter.")).toBeTruthy();
   });
 
+  // Navbar override context shape is the shell integration contract between page and AppShell.
   it("sets subnavbar snippet on navbar override context", () => {
     infiniteQueryState = {
       isLoading: false,

@@ -247,6 +247,7 @@ describe("Ticket detail route page", () => {
     expect(log).not.toBeNull();
   });
 
+  // Navbar override context shape is the shell integration contract between page and AppShell.
   it("sets navbar override context on mount", () => {
     render(PageModule.default);
     // The route injects navbar snippets (left, title, right) via context.

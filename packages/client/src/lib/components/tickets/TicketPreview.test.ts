@@ -59,7 +59,7 @@ describe("TicketPreview (mini-bubbles)", () => {
     const { container } = render(TicketPreview, {
       props: { followUps: undefined },
     });
-    const placeholders = container.querySelectorAll(".dp");
+    const placeholders = container.querySelectorAll("[aria-busy='true']");
     expect(placeholders.length).toBeGreaterThan(0);
   });
 
@@ -67,7 +67,7 @@ describe("TicketPreview (mini-bubbles)", () => {
     const { container } = render(TicketPreview, {
       props: { followUps: [] },
     });
-    expect(container.querySelector(".preview-empty")).not.toBeNull();
+    expect(container.querySelector("[role='status']")).not.toBeNull();
     expect(container.textContent).toBeTruthy();
   });
 
@@ -77,7 +77,7 @@ describe("TicketPreview (mini-bubbles)", () => {
     const { container } = render(TicketPreview, {
       props: { followUps: [fu] },
     });
-    const dp = container.querySelector(".dp[aria-busy='true']");
+    const dp = container.querySelector("[aria-busy='true']");
     expect(dp).not.toBeNull();
   });
 
@@ -96,7 +96,7 @@ describe("TicketPreview (mini-bubbles)", () => {
     const { container } = render(TicketPreview, {
       props: { followUps: [fu] },
     });
-    const row = container.querySelector(".mini-row-sent");
+    const row = container.querySelector("[data-direction='sent']");
     expect(row).not.toBeNull();
   });
 
@@ -106,7 +106,7 @@ describe("TicketPreview (mini-bubbles)", () => {
     const { container } = render(TicketPreview, {
       props: { followUps: [fu] },
     });
-    const row = container.querySelector(".mini-row-received");
+    const row = container.querySelector("[data-direction='received']");
     expect(row).not.toBeNull();
   });
 
@@ -116,14 +116,14 @@ describe("TicketPreview (mini-bubbles)", () => {
     const { container } = render(TicketPreview, {
       props: { followUps: [fu] },
     });
-    const sysEl = container.querySelector(".mini-system");
+    const sysEl = container.querySelector("[data-type='system']");
     expect(sysEl).not.toBeNull();
     expect(sysEl?.textContent).toContain("Status changed to closed");
-    // Should not be in a bubble row
-    expect(container.querySelector(".mini-bubble-row")).toBeNull();
+    // Should not be in a directional bubble row
+    expect(container.querySelector("[data-direction]")).toBeNull();
   });
 
-  it("renders long text with CSS truncation (line-clamp)", () => {
+  it("renders long decrypted text content", () => {
     mockDecryptContent.mockReturnValue(
       "This is a very long message that should be truncated",
     );
@@ -131,9 +131,7 @@ describe("TicketPreview (mini-bubbles)", () => {
     const { container } = render(TicketPreview, {
       props: { followUps: [fu] },
     });
-    const textEl = container.querySelector(".mini-text");
-    expect(textEl).not.toBeNull();
-    expect(textEl?.textContent).toContain("This is a very long message");
+    expect(container.textContent).toContain("This is a very long message");
   });
 
   it("renders error text when decryption fails (sentinel value)", () => {
@@ -158,8 +156,10 @@ describe("TicketPreview (mini-bubbles)", () => {
     const { container } = render(TicketPreview, {
       props: { followUps: fus },
     });
-    expect(container.querySelector(".mini-row-received")).not.toBeNull();
-    expect(container.querySelector(".mini-row-sent")).not.toBeNull();
+    expect(
+      container.querySelector("[data-direction='received']"),
+    ).not.toBeNull();
+    expect(container.querySelector("[data-direction='sent']")).not.toBeNull();
   });
 
   it("does not use {@html} for decrypted content (XSS safety)", () => {

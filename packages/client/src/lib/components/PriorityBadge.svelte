@@ -60,6 +60,7 @@
 <span
   class="priority-indicator {def.colorClass}"
   class:priority-badge={def.badge}
+  data-priority={priority}
 >
   <PriorityIcon size={12} aria-hidden="true" />
   <span>{def.label}</span>

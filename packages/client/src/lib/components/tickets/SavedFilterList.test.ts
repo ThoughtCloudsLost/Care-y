@@ -176,12 +176,11 @@ describe("SavedFilterList", () => {
     );
   });
 
-  it("does not render when no saved filters exist", () => {
-    // Override count to 0 temporarily via a fresh module mock isn't easy,
-    // but we can verify the list renders for the non-empty case above.
-    // The {#if count > 0} guard is structural, tested implicitly.
+  // TODO: Properly test the empty state by mocking savedFilterStore with count=0.
+  // The module-level vi.mock makes it hard to swap per-test. The {#if count > 0}
+  // guard in the component prevents rendering when no filters exist.
+  it("renders the list when saved filters are present", () => {
     render(SavedFilterList);
-    // Should render (count > 0 in our mock).
     const list = screen.queryByRole("list");
     expect(list).not.toBeNull();
   });

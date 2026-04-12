@@ -54,6 +54,10 @@ describe("FollowUpMedia", () => {
     expect(container.querySelector("button")).toBeNull();
   });
 
+  // queryKey values ("recordings", "attachments") must match the keys used in
+  // the detail view's recording/attachment queries so TanStack Query shares
+  // cache entries across FollowUpMedia and the ticket detail panel.
+
   it("creates recording query only when hasRecording is true", () => {
     render(FollowUpMedia, {
       props: { ...baseProps, hasRecording: true },

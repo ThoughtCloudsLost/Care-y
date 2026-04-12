@@ -148,8 +148,8 @@ describe("ChatZoom component (normal mode)", () => {
         items: makeItems(),
       },
     });
-    const timeline = container.querySelector(".timeline-view");
+    const timeline = container.querySelector("[data-view='timeline']");
     expect(timeline).not.toBeNull();
-    expect(timeline!.classList.contains("view-hidden")).toBe(true);
+    expect(timeline!.getAttribute("aria-hidden")).toBe("true");
   });
 });

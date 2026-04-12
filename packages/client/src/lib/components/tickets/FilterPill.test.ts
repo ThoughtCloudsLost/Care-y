@@ -109,7 +109,7 @@ describe("FilterPill", () => {
           onopen,
         },
       });
-      const chip = container.querySelector(".filter-pill");
+      const chip = container.querySelector("[role='button']");
       expect(chip).not.toBeNull();
       await fireEvent.click(chip!);
       expect(onopen).toHaveBeenCalledOnce();
@@ -128,7 +128,7 @@ describe("FilterPill", () => {
           onopen,
         },
       });
-      const chip = container.querySelector(".filter-pill");
+      const chip = container.querySelector("[role='button']");
       await fireEvent.keyDown(chip!, { key: "Enter" });
       expect(onopen).toHaveBeenCalledOnce();
     });
@@ -145,7 +145,7 @@ describe("FilterPill", () => {
           onopen: vi.fn(),
         },
       });
-      const chip = container.querySelector(".filter-pill");
+      const chip = container.querySelector("[role='button']");
       expect(chip?.getAttribute("aria-haspopup")).toBe("true");
     });
 
@@ -159,7 +159,7 @@ describe("FilterPill", () => {
           onopen: vi.fn(),
         },
       });
-      const chip = container.querySelector(".filter-pill");
+      const chip = container.querySelector("[role='button']");
       expect(chip?.getAttribute("aria-haspopup")).toBe("listbox");
     });
 
@@ -174,7 +174,7 @@ describe("FilterPill", () => {
           onopen: vi.fn(),
         },
       });
-      const chip = container.querySelector(".filter-pill");
+      const chip = container.querySelector("[role='button']");
       expect(chip?.getAttribute("aria-expanded")).toBe("true");
     });
   });

@@ -61,6 +61,7 @@
         class="mini-bubble-row"
         class:mini-row-received={isReceived}
         class:mini-row-sent={!isReceived}
+        data-direction={isReceived ? "received" : "sent"}
       >
         <div
           class="mini-bubble"
@@ -77,7 +78,7 @@
       </div>
     {/each}
   {:else if ordered.length === 0}
-    <p class="preview-empty">{m.tickets_preview_empty()}</p>
+    <p class="preview-empty" role="status">{m.tickets_preview_empty()}</p>
   {:else}
     {#each ordered as fu (fu.id)}
       {@const kind = followUpKind(fu)}
@@ -87,7 +88,7 @@
         fu.encryptedContent,
       )}
       {#if kind === "system"}
-        <div class="mini-system">
+        <div class="mini-system" data-type="system">
           <DecryptPlaceholder
             {content}
             ciphertext={fu.encryptedContent}
@@ -118,6 +119,7 @@
           class="mini-bubble-row"
           class:mini-row-received={fu.source === "client"}
           class:mini-row-sent={fu.source !== "client"}
+          data-direction={fu.source === "client" ? "received" : "sent"}
         >
           <div
             class="mini-bubble"

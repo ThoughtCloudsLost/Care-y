@@ -68,11 +68,13 @@
         {/if}
         <span class="heading-text">{heading}</span>
         {#if loading && count === undefined}
-          <span class="count-badge" aria-hidden="true">
+          <span class="count-badge" data-count aria-hidden="true">
             <DecryptPlaceholder length={3} />
           </span>
         {:else if count !== undefined}
-          <span class="count-badge" aria-hidden="true">{count}</span>
+          <span class="count-badge" data-count={count} aria-hidden="true"
+            >{count}</span
+          >
         {/if}
         <span class="toggle-chevron" class:expanded aria-hidden="true">
           &#x276F;
@@ -83,6 +85,7 @@
   {#if expanded}
     <div
       class="section-content"
+      role="region"
       transition:slide={{ duration: reducedMotion ? 0 : 200 }}
     >
       {#if children}

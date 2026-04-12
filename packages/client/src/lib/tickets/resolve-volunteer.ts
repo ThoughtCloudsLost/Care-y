@@ -20,10 +20,10 @@ export interface VolunteerRecord {
  * Call from $derived so it recomputes only when the volunteer list changes.
  */
 export function buildVolunteerMap(
-  volunteers: readonly VolunteerRecord[] | undefined,
+  volunteers: readonly VolunteerRecord[] | undefined | null,
 ): Map<string, VolunteerRecord> {
   const map = new Map<string, VolunteerRecord>();
-  if (volunteers === undefined) return map;
+  if (volunteers == null) return map;
   for (const v of volunteers) map.set(v.id, v);
   return map;
 }

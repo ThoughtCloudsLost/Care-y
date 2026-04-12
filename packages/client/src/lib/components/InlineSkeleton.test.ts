@@ -27,10 +27,10 @@ describe("InlineSkeleton", () => {
     expect(span?.style.width).toBe("12ch");
   });
 
-  it("includes skeleton-bar class for theme animation inheritance", () => {
+  it("includes data-skeleton attribute for test targeting", () => {
     const { container } = render(InlineSkeleton);
     const span = container.querySelector("span.isk");
-    expect(span?.classList.contains("skeleton-bar")).toBe(true);
+    expect(span?.hasAttribute("data-skeleton")).toBe(true);
   });
 
   it("applies custom class", () => {

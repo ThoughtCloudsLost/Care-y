@@ -40,26 +40,21 @@ describe("DecryptPlaceholder", () => {
   it("renders scramble element with aria-hidden", () => {
     render(DecryptPlaceholder, { props: {} });
     const status = screen.getByRole("status");
-    const scramble = status.querySelector(".scramble");
+    const scramble = status.querySelector("[aria-hidden='true']");
     expect(scramble).not.toBeNull();
-    expect(scramble?.getAttribute("aria-hidden")).toBe("true");
   });
 
   it("assigns a variant class (v1-v4)", () => {
     render(DecryptPlaceholder, { props: {} });
     const status = screen.getByRole("status");
-    const hasVariant =
-      status.classList.contains("v1") ||
-      status.classList.contains("v2") ||
-      status.classList.contains("v3") ||
-      status.classList.contains("v4");
-    expect(hasVariant).toBe(true);
+    const variant = status.getAttribute("data-variant");
+    expect(variant).toMatch(/^v[1-4]$/);
   });
 
   it("sets scramble width based on length prop", () => {
     render(DecryptPlaceholder, { props: { length: 14 } });
     const status = screen.getByRole("status");
-    const scramble = status.querySelector<HTMLElement>(".scramble");
+    const scramble = status.querySelector<HTMLElement>("[aria-hidden='true']");
     expect(scramble?.style.width).toBe("14ch");
   });
 
@@ -68,7 +63,7 @@ describe("DecryptPlaceholder", () => {
     const ciphertext = new Uint8Array(60);
     render(DecryptPlaceholder, { props: { ciphertext } });
     const status = screen.getByRole("status");
-    const scramble = status.querySelector<HTMLElement>(".scramble");
+    const scramble = status.querySelector<HTMLElement>("[aria-hidden='true']");
     expect(scramble?.style.width).toBe("20ch");
   });
 
@@ -114,9 +109,8 @@ describe("DecryptPlaceholder", () => {
     it("assigns a media variant class (m1-m2)", () => {
       render(DecryptPlaceholder, { props: { mode: "media" } });
       const status = screen.getByRole("status");
-      const hasMediaVariant =
-        status.classList.contains("m1") || status.classList.contains("m2");
-      expect(hasMediaVariant).toBe(true);
+      const mediaVariant = status.getAttribute("data-media-variant");
+      expect(mediaVariant).toMatch(/^m[12]$/);
     });
 
     it("applies media and block classes in media mode", () => {
@@ -129,7 +123,9 @@ describe("DecryptPlaceholder", () => {
     it("does not set width on scramble in media mode", () => {
       render(DecryptPlaceholder, { props: { mode: "media" } });
       const status = screen.getByRole("status");
-      const scramble = status.querySelector<HTMLElement>(".scramble");
+      const scramble = status.querySelector<HTMLElement>(
+        "[aria-hidden='true']",
+      );
       expect(scramble?.style.width).toBe("");
     });
   });

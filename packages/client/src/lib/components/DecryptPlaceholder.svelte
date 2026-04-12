@@ -105,6 +105,8 @@
   class:v4={!isMedia && variant === 4}
   class:m1={isMedia && variant === 1}
   class:m2={isMedia && variant === 2}
+  data-variant={!isMedia ? `v${String(variant)}` : undefined}
+  data-media-variant={isMedia ? `m${String(variant)}` : undefined}
   role={loading ? "status" : undefined}
   aria-busy={loading ? "true" : undefined}
 >

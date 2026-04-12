@@ -156,9 +156,11 @@ describe("FilterPillBar", () => {
   it("shows badge counter matching active filter count", () => {
     mockActiveCount = 2;
     const { container } = render(FilterPillBar);
-    const badge = container.querySelector(".filter-badge");
-    expect(badge).not.toBeNull();
-    expect(badge!.textContent!.trim()).toBe("2");
+    const bookmarkLink = container.querySelector(
+      "[aria-label='Save filter shortcut']",
+    );
+    expect(bookmarkLink).not.toBeNull();
+    expect(bookmarkLink!.textContent).toContain("2");
   });
 
   it("shows clear all button when filters are active", () => {

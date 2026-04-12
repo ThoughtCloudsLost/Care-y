@@ -513,7 +513,7 @@
   {:else if ticketsQuery.isError}
     <QueryError error={ticketsQuery.error} />
   {:else}
-    <div class="ticket-list">
+    <div class="ticket-list" data-ticket-list>
       <VirtualList
         items={displayFiltered}
         scrollContainer={scrollEl}

@@ -17,6 +17,7 @@
   {#each Array(lines) as _, i (i)}
     <div
       class="skeleton-bar"
+      data-skeleton
       style:width="{widths[i % widths.length]}%"
       style:animation-delay="{i * 80}ms"
     ></div>

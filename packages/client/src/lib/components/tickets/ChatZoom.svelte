@@ -303,13 +303,20 @@
   });
 </script>
 
-<div class="view-pane" class:view-hidden={timelineActive}>
+<div
+  class="view-pane"
+  class:view-hidden={timelineActive}
+  data-view="messages"
+  aria-hidden={timelineActive}
+>
   {@render children()}
 </div>
 
 <nav
   class="timeline-view"
   class:view-hidden={!timelineActive}
+  data-view="timeline"
+  aria-hidden={!timelineActive}
   aria-label={m.ticket_timeline_nav_label()}
 >
   {#if summaryText}

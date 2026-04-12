@@ -56,7 +56,7 @@ describe("TicketPreviewList", () => {
     const { container } = render(TicketPreviewList, {
       props: { heading: "Test", tickets, ontickettap },
     });
-    const items = container.querySelectorAll(".priority-indicator");
+    const items = container.querySelectorAll("[data-priority]");
     expect(items.length).toBe(3);
   });
 
@@ -67,7 +67,7 @@ describe("TicketPreviewList", () => {
     const { container } = render(TicketPreviewList, {
       props: { heading: "Test", tickets, maxVisible: 3, ontickettap },
     });
-    const items = container.querySelectorAll(".priority-indicator");
+    const items = container.querySelectorAll("[data-priority]");
     expect(items.length).toBe(3);
   });
 

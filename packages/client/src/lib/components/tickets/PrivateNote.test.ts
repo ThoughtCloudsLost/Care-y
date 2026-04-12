@@ -75,7 +75,7 @@ describe("PrivateNote", () => {
     const { container } = render(PrivateNote, {
       props: { ...baseProps, authorName: undefined },
     });
-    const authorEl = container.querySelector(".note-author");
+    const authorEl = container.querySelector("[data-author]");
     expect(authorEl).toBeNull();
   });
 

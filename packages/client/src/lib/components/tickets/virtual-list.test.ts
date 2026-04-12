@@ -398,7 +398,9 @@ describe("VirtualList component", () => {
       },
     });
 
-    const initialRowCount = container.querySelectorAll(".virtual-row").length;
+    const initialRowCount = container.querySelectorAll(
+      "[data-virtual='row']",
+    ).length;
     expect(initialRowCount).toBeGreaterThan(0);
     expect(initialRowCount).toBeLessThan(20);
 
@@ -407,8 +409,9 @@ describe("VirtualList component", () => {
     scrollContainer.dispatchEvent(new Event("scroll"));
     await tick();
 
-    const afterScrollRowCount =
-      container.querySelectorAll(".virtual-row").length;
+    const afterScrollRowCount = container.querySelectorAll(
+      "[data-virtual='row']",
+    ).length;
     // Row count should be similar (not growing with scroll).
     expect(afterScrollRowCount).toBeLessThanOrEqual(initialRowCount + 2);
     expect(afterScrollRowCount).toBeGreaterThan(0);
@@ -432,7 +435,7 @@ describe("VirtualList component", () => {
     const sentinelObserver = MockIntersectionObserver.instances.find(
       (obs) =>
         obs.elements.length > 0 &&
-        (obs.elements[0] as HTMLElement).classList.contains("scroll-sentinel"),
+        (obs.elements[0] as HTMLElement).dataset.sentinel === "bottom",
     );
     expect(sentinelObserver).toBeDefined();
 
@@ -460,7 +463,7 @@ describe("VirtualList component", () => {
     const sentinelObserver = MockIntersectionObserver.instances.find(
       (obs) =>
         obs.elements.length > 0 &&
-        (obs.elements[0] as HTMLElement).classList.contains("scroll-sentinel"),
+        (obs.elements[0] as HTMLElement).dataset.sentinel === "bottom",
     );
 
     sentinelObserver?.trigger(false);
@@ -478,12 +481,10 @@ describe("VirtualList component", () => {
       },
     });
 
-    expect(
-      container.querySelectorAll(".virtual-row-grid").length,
-    ).toBeGreaterThan(0);
+    expect(container.querySelectorAll("[data-grid]").length).toBeGreaterThan(0);
   });
 
-  it("does not apply grid class in single-column mode", () => {
+  it("does not apply grid layout in single-column mode", () => {
     const { container } = render(VirtualListHarness, {
       props: {
         items: makeItems(6),
@@ -494,7 +495,7 @@ describe("VirtualList component", () => {
       },
     });
 
-    expect(container.querySelectorAll(".virtual-row-grid").length).toBe(0);
+    expect(container.querySelectorAll("[data-grid]").length).toBe(0);
   });
 
   it("renders empty list without crashing", () => {
@@ -509,7 +510,7 @@ describe("VirtualList component", () => {
     });
 
     // Empty list renders nothing.
-    expect(container.querySelectorAll(".virtual-row").length).toBe(0);
+    expect(container.querySelectorAll("[data-virtual='row']").length).toBe(0);
     expect(container.querySelectorAll(".test-item").length).toBe(0);
   });
 
@@ -525,7 +526,7 @@ describe("VirtualList component", () => {
     });
 
     // Total height = 50 * 80 = 4000px, held by the virtual-container.
-    const vc = container.querySelector(".virtual-container");
+    const vc = container.querySelector("[data-virtual='container']");
     expect(vc).not.toBeNull();
     expect(vc?.getAttribute("style")).toContain("4000px");
   });
@@ -550,9 +551,7 @@ describe("VirtualList component", () => {
     const topSentinelObserver = MockIntersectionObserver.instances.find(
       (obs) =>
         obs.elements.length > 0 &&
-        (obs.elements[0] as HTMLElement).classList.contains(
-          "scroll-sentinel--top",
-        ),
+        (obs.elements[0] as HTMLElement).dataset.sentinel === "top",
     );
     expect(topSentinelObserver).toBeDefined();
 
@@ -575,7 +574,7 @@ describe("VirtualList component", () => {
       },
     });
 
-    const topSentinel = container.querySelector(".scroll-sentinel--top");
+    const topSentinel = container.querySelector("[data-sentinel='top']");
     expect(topSentinel).toBeNull();
   });
 });

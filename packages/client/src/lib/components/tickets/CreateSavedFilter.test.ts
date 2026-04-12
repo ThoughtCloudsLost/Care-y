@@ -2,8 +2,8 @@
 /**
  * CreateSavedFilter component tests.
  *
- * Verifies the modal renders color picker (7 options), icon picker (15 icons),
- * name input, filter preview summary, and save button behavior.
+ * Verifies the modal renders color picker, icon picker, name input,
+ * filter preview summary, and save button behavior.
  */
 
 import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
@@ -94,6 +94,10 @@ vi.mock("$lib/shell/ShellPopup.svelte", async () => ({
 
 // Must import AFTER all vi.mock() calls.
 import CreateSavedFilter from "./CreateSavedFilter.svelte";
+import {
+  SAVED_FILTER_COLORS,
+  SAVED_FILTER_ICONS,
+} from "./saved-filter-constants.js";
 
 describe("CreateSavedFilter", () => {
   beforeEach(() => {
@@ -102,20 +106,20 @@ describe("CreateSavedFilter", () => {
 
   afterEach(cleanup);
 
-  it("renders 7 color swatches", () => {
+  it("renders a radio for each color in SAVED_FILTER_COLORS", () => {
     render(CreateSavedFilter, { props: { opened: true, ondismiss: vi.fn() } });
     const swatches = screen.getAllByRole("radio", {
       name: /grey|blue|green|orange|red|pink|purple/,
     });
-    expect(swatches).toHaveLength(7);
+    expect(swatches).toHaveLength(SAVED_FILTER_COLORS.length);
   });
 
-  it("renders 15 icon options", () => {
+  it("renders a radio for each icon in SAVED_FILTER_ICONS", () => {
     render(CreateSavedFilter, { props: { opened: true, ondismiss: vi.fn() } });
     const icons = screen.getAllByRole("radio", {
       name: /^(phone|message-square|clock|triangle-alert|user|users|folder|tag|star|pin|heart|shield|house|briefcase|circle-question-mark)$/,
     });
-    expect(icons).toHaveLength(15);
+    expect(icons).toHaveLength(SAVED_FILTER_ICONS.length);
   });
 
   it("renders filter preview summary", () => {

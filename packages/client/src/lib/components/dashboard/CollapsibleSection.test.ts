@@ -102,7 +102,7 @@ describe("CollapsibleSection", () => {
       },
     });
 
-    expect(container.querySelector(".section-content")).toBeNull();
+    expect(container.querySelector('[role="region"]')).toBeNull();
   });
 
   it("renders children when expanded", () => {
@@ -115,7 +115,7 @@ describe("CollapsibleSection", () => {
       },
     });
 
-    expect(container.querySelector(".section-content")).toBeTruthy();
+    expect(container.querySelector('[role="region"]')).toBeTruthy();
   });
 
   it("shows DecryptPlaceholder in badge area when loading and count is undefined", () => {
@@ -128,10 +128,10 @@ describe("CollapsibleSection", () => {
       },
     });
 
-    const badge = container.querySelector(".count-badge");
+    const badge = container.querySelector("[data-count]");
     expect(badge).toBeTruthy();
-    // DecryptPlaceholder renders with class "dp" and role="status"
-    const dp = badge?.querySelector(".dp");
+    // DecryptPlaceholder renders with aria-busy="true" and role="status" while loading
+    const dp = badge?.querySelector('[aria-busy="true"]');
     expect(dp).toBeTruthy();
   });
 

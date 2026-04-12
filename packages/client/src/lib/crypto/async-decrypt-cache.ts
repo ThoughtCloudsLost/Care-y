@@ -14,6 +14,7 @@
 import { cacheRegistry } from "./cache-registry.js";
 import type { SvelteMap } from "svelte/reactivity";
 import type { CryptoBridge } from "$lib/workers/crypto-bridge.js";
+import { isDevDelayEnabled } from "$lib/trpc/index.js";
 
 /**
  * Sentinel value stored in the cache when decryption permanently fails.
@@ -61,25 +62,20 @@ export class AsyncDecryptCache {
 
     this.pending.add(cacheKey);
 
-    const decryptPromise = import.meta.env.DEV
-      ? new Promise<void>((resolve) => {
-          setTimeout(resolve, 5_000 + Math.random() * 10_000);
-        }).then(async () =>
-          this.bridge.decrypt(
-            cacheKey,
-            ephemeralPoint,
-            nonce,
-            wrappedKey,
-            ciphertext,
-          ),
-        )
-      : this.bridge.decrypt(
-          cacheKey,
-          ephemeralPoint,
-          nonce,
-          wrappedKey,
-          ciphertext,
-        );
+    const bridgeCall = this.bridge.decrypt(
+      cacheKey,
+      ephemeralPoint,
+      nonce,
+      wrappedKey,
+      ciphertext,
+    );
+
+    const decryptPromise =
+      import.meta.env.DEV && isDevDelayEnabled()
+        ? new Promise<void>((resolve) => {
+            setTimeout(resolve, 5_000 + Math.random() * 10_000);
+          }).then(async () => bridgeCall)
+        : bridgeCall;
 
     void decryptPromise
       .then((plaintext) => {

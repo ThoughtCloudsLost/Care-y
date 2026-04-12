@@ -113,7 +113,7 @@
           <time class="note-time" datetime={timestamp}>{timeLabel}</time>
         </div>
         {#if authorName}
-          <span class="note-author">{authorName}</span>
+          <span class="note-author" data-author>{authorName}</span>
         {/if}
       </div>
     {/snippet}

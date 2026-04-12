@@ -65,6 +65,7 @@ describe("createPreviewLoader", () => {
     vi.useRealTimers();
   });
 
+  // Registry names are used by cacheRegistry.clearAll() on logout to wipe decrypted data.
   it("registers rawPreviews map and state with cacheRegistry", () => {
     const names = cacheRegistry.registered;
     expect(names).toContain("PreviewLoader:raw");

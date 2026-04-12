@@ -13,6 +13,7 @@
     applyKonstaPalette,
     resetKonstaPalette,
   } from "$lib/branding/konsta-palette";
+  import { setDevDelay } from "$lib/trpc/index.js";
   import type { BrandColors } from "$lib/branding/konsta-palette";
   import {
     logBuffer,
@@ -46,6 +47,7 @@
   ];
 
   let opened = $state(false);
+  let devDelay = $state(false);
   let activeLog = $state<"console" | "network" | null>(null);
   let primaryColor = $state(DEFAULT_PRIMARY);
   let accentColor = $state(DEFAULT_ACCENT);
@@ -134,6 +136,11 @@
 
   function cycleEnum<T extends string>(values: readonly T[], current: T): T {
     return values[(values.indexOf(current) + 1) % values.length] ?? current;
+  }
+
+  function toggleDevDelay(): void {
+    devDelay = !devDelay;
+    setDevDelay(devDelay);
   }
 
   function cycleVisual(): void {
@@ -227,6 +234,13 @@
       </button>
       <button class="dev-pill" onclick={cycleGlass}>
         glass: {themeStore.glassMode}
+      </button>
+      <button
+        class="dev-pill"
+        class:dev-pill-active={devDelay}
+        onclick={toggleDevDelay}
+      >
+        delay: {devDelay ? "ON" : "OFF"}
       </button>
     </div>
 
@@ -443,6 +457,11 @@
   }
   .dev-pill:active {
     opacity: 0.6;
+  }
+  .dev-pill.dev-pill-active {
+    background: var(--ink, #e5e5e5);
+    color: var(--surface-1, #1c1c1d);
+    border-color: transparent;
   }
 
   /* Color row */
