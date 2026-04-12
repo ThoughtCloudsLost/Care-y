@@ -60,6 +60,7 @@
   "error_cannot_take_closed_ticket": "No se puede tomar un ticket cerrado.",
   "error_ticket_already_assigned": "El ticket ya está asignado.",
   "error_not_assigned_to_ticket": "No estás asignado a este ticket.",
+  "error_invalid_target_user": "No se puede asignar a este usuario.",
   "error_self_dependency": "Un ticket no puede depender de sí mismo.",
   "error_circular_dependency": "Se detectó una dependencia circular.",
   "error_dependency_ticket_not_found": "Ticket de dependencia no encontrado.",

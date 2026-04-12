@@ -243,6 +243,12 @@ export const releaseTicketInputSchema = z.object({
 });
 export type ReleaseTicketInput = z.infer<typeof releaseTicketInputSchema>;
 
+export const assignToInputSchema = z.object({
+  ticketId: z.uuid(),
+  targetUserId: z.uuid().nullable(),
+});
+export type AssignToInput = z.infer<typeof assignToInputSchema>;
+
 export const watchTicketInputSchema = z.object({
   ticketId: z.uuid(),
 });

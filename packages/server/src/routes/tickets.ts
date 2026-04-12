@@ -71,6 +71,7 @@ import {
   assignTicketInputSchema,
   takeTicketInputSchema,
   releaseTicketInputSchema,
+  assignToInputSchema,
   watchTicketInputSchema,
   queueWatcherInputSchema,
   queueAssignmentInputSchema,
@@ -811,6 +812,21 @@ export function createTicketRouter(deps: TicketRouterDeps) {
           actorId: ctx.user.id,
           ticketId: input.ticketId,
           metadata: { assignedTo: null },
+        });
+      }),
+    ),
+
+    assignTo: volunteerProcedure.input(assignToInputSchema).mutation(
+      withErrorWrapping(async ({ ctx, input }) => {
+        const svc = assignmentSvc(ctx.org.tenantDb);
+        await svc.assignTo(ctx.user.id, input.ticketId, input.targetUserId);
+        const { svc: tSvc } = ticketSvc(ctx.org.tenantDb);
+        const ticket = await tSvc.findById(input.ticketId, ctx.user.id);
+        auditAndNotify(ctx, "ticket_assigned", ticket, {
+          eventType: "ticket_assigned",
+          actorId: ctx.user.id,
+          ticketId: input.ticketId,
+          metadata: { assignedTo: input.targetUserId },
         });
       }),
     ),

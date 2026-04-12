@@ -59,6 +59,7 @@
     [ErrorCode.TICKET_ALREADY_ASSIGNED]: () =>
       m.error_ticket_already_assigned(),
     [ErrorCode.NOT_ASSIGNED_TO_TICKET]: () => m.error_not_assigned_to_ticket(),
+    [ErrorCode.INVALID_TARGET_USER]: () => m.error_invalid_target_user(),
     [ErrorCode.SELF_DEPENDENCY]: () => m.error_self_dependency(),
     [ErrorCode.CIRCULAR_DEPENDENCY]: () => m.error_circular_dependency(),
     [ErrorCode.DEPENDENCY_TICKET_NOT_FOUND]: () =>

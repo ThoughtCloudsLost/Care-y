@@ -15,7 +15,7 @@ import {
 } from "./assignment.js";
 import { createStubShiftProvider } from "./shift-provider.js";
 import { createQueuePermissionsService } from "./queue-permissions.js";
-import { NotFoundError, TicketError } from "../errors.js";
+import { ForbiddenError, NotFoundError, TicketError } from "../errors.js";
 
 describe.skipIf(!process.env.DATABASE_URL)("AssignmentService (DB)", () => {
   let testDb: TestDb;
@@ -222,5 +222,107 @@ describe.skipIf(!process.env.DATABASE_URL)("AssignmentService (DB)", () => {
       .executeTakeFirstOrThrow();
     // Stays unassigned per design: no auto-reassignment on release
     expect(ticket.assigned_to).toBeNull();
+  });
+
+  // --- assignTo ---
+
+  it("assignTo sets assigned_to to target volunteer", async () => {
+    const ticketId = await insertTicket();
+    await svc.assignTo(volunteerA, ticketId, volunteerB);
+
+    const ticket = await testDb.db
+      .selectFrom("tickets")
+      .select("assigned_to")
+      .where("id", "=", ticketId)
+      .executeTakeFirstOrThrow();
+    expect(ticket.assigned_to).toBe(volunteerB);
+  });
+
+  it("assignTo with null clears assigned_to", async () => {
+    const ticketId = await insertTicket({ assignedTo: volunteerA });
+    await svc.assignTo(volunteerA, ticketId, null);
+
+    const ticket = await testDb.db
+      .selectFrom("tickets")
+      .select("assigned_to")
+      .where("id", "=", ticketId)
+      .executeTakeFirstOrThrow();
+    expect(ticket.assigned_to).toBeNull();
+  });
+
+  it("assignTo reassigns from one volunteer to another", async () => {
+    const ticketId = await insertTicket({ assignedTo: volunteerA });
+    await svc.assignTo(volunteerB, ticketId, volunteerC);
+
+    const ticket = await testDb.db
+      .selectFrom("tickets")
+      .select("assigned_to")
+      .where("id", "=", ticketId)
+      .executeTakeFirstOrThrow();
+    expect(ticket.assigned_to).toBe(volunteerC);
+  });
+
+  it("assignTo creates assignment_change system follow-up", async () => {
+    const ticketId = await insertTicket();
+    await svc.assignTo(volunteerA, ticketId, volunteerB);
+
+    const followups = await testDb.db
+      .selectFrom("followups")
+      .selectAll()
+      .where("ticket_id", "=", ticketId)
+      .where("source", "=", "system")
+      .where("type", "=", "assignment_change")
+      .execute();
+    expect(followups.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it("assignTo is no-op when target matches current assignee", async () => {
+    const ticketId = await insertTicket({ assignedTo: volunteerA });
+    await svc.assignTo(volunteerB, ticketId, volunteerA);
+
+    // Should not have created a new follow-up for a no-op
+    const followups = await testDb.db
+      .selectFrom("followups")
+      .selectAll()
+      .where("ticket_id", "=", ticketId)
+      .where("source", "=", "system")
+      .where("type", "=", "assignment_change")
+      .execute();
+    expect(followups).toHaveLength(0);
+  });
+
+  it("assignTo throws TicketError for closed ticket", async () => {
+    const ticketId = await insertTicket({ status: "closed" });
+    await expect(
+      svc.assignTo(volunteerA, ticketId, volunteerB),
+    ).rejects.toBeInstanceOf(TicketError);
+  });
+
+  it("assignTo throws NotFoundError for nonexistent ticket", async () => {
+    await expect(
+      svc.assignTo(volunteerA, crypto.randomUUID(), volunteerB),
+    ).rejects.toBeInstanceOf(NotFoundError);
+  });
+
+  it("assignTo throws ForbiddenError for inactive target user", async () => {
+    // Create an inactive user
+    const inactive = await createTestUser(testDb.db);
+    await testDb.db
+      .updateTable("users")
+      .set({ is_active: false })
+      .where("id", "=", inactive.id)
+      .execute();
+
+    const ticketId = await insertTicket();
+    await expect(
+      svc.assignTo(volunteerA, ticketId, inactive.id),
+    ).rejects.toBeInstanceOf(ForbiddenError);
+  });
+
+  it("assignTo throws ForbiddenError for nonexistent target user", async () => {
+    const ticketId = await insertTicket();
+    await expect(
+      svc.assignTo(volunteerA, ticketId, crypto.randomUUID()),
+    ).rejects.toBeInstanceOf(ForbiddenError);
   });
 });
