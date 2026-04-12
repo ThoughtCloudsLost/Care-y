@@ -18,6 +18,7 @@
   "error_go_home": "Go home",
   "error_generic": "Something went wrong. Please try again.",
   "error_decryption_failed": "This content could not be decrypted.",
+  "decrypt_placeholder_loading": "Decrypting",
   "error_network": "Could not reach the server. Check your connection.",
 
   "error_not_authenticated": "You are not signed in.",
@@ -336,5 +337,19 @@
   "ticket_timeline_jump_to": "Jump to: {label}, {time}",
   "ticket_timeline_decrypting": "Decrypting message",
   "ticket_zoom_summary": "{count} messages over {days} days, most recent {recency}",
-  "ticket_zoom_toggle": "Toggle zoom"
+  "ticket_zoom_toggle": "Toggle zoom",
+
+  "ticket_panel_call": "Call",
+  "ticket_panel_queue": "Queue",
+  "ticket_panel_status": "Status",
+  "ticket_panel_opened": "Opened",
+  "ticket_panel_media": "Images",
+  "ticket_panel_voicemails": "Voicemails",
+  "ticket_panel_voicemail_item": "Voicemail",
+  "ticket_panel_files": "Files",
+  "ticket_panel_load_more": "Load more",
+  "ticket_panel_no_media": "No attachments yet.",
+  "ticket_panel_notes": "Notes",
+  "ticket_panel_no_notes": "No internal notes yet.",
+  "ticket_panel_recent_coming_soon": "Recent ticket history will appear here."
 }

@@ -18,6 +18,7 @@
   "error_go_home": "Ir al inicio",
   "error_generic": "Algo salió mal. Por favor, inténtalo de nuevo.",
   "error_decryption_failed": "No se pudo descifrar este contenido.",
+  "decrypt_placeholder_loading": "Descifrando",
   "error_network": "No se pudo conectar con el servidor. Verifica tu conexión.",
 
   "error_not_authenticated": "No has iniciado sesión.",
@@ -336,5 +337,19 @@
   "ticket_timeline_jump_to": "Ir a: {label}, {time}",
   "ticket_timeline_decrypting": "Descifrando mensaje",
   "ticket_zoom_summary": "{count} mensajes en {days} dias, mas reciente {recency}",
-  "ticket_zoom_toggle": "Alternar zoom"
+  "ticket_zoom_toggle": "Alternar zoom",
+
+  "ticket_panel_call": "Llamar",
+  "ticket_panel_queue": "Cola",
+  "ticket_panel_status": "Estado",
+  "ticket_panel_opened": "Abierto",
+  "ticket_panel_media": "Imagenes",
+  "ticket_panel_voicemails": "Mensajes de voz",
+  "ticket_panel_voicemail_item": "Mensaje de voz",
+  "ticket_panel_files": "Archivos",
+  "ticket_panel_load_more": "Cargar mas",
+  "ticket_panel_no_media": "Sin adjuntos todavia.",
+  "ticket_panel_notes": "Notas",
+  "ticket_panel_no_notes": "Sin notas internas todavia.",
+  "ticket_panel_recent_coming_soon": "El historial de tickets recientes aparecera aqui."
 }
