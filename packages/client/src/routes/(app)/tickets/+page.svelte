@@ -25,7 +25,7 @@
     getTicketDecryptCache,
     getOrgDecryptCache,
     getCurrentUserId,
-    setPreviewLoader,
+    getPreviewLoader,
   } from "$lib/crypto/context.js";
   import {
     getScrollContainer,
@@ -34,7 +34,6 @@
   } from "$lib/shell/context.js";
   import { useScrollDirection } from "$lib/shell/use-scroll-direction.svelte.js";
   import { UserPlus, Pause, X } from "@lucide/svelte";
-  import { createPreviewLoader } from "$lib/tickets/preview-loader.svelte.js";
   import { deriveDisplayStatus } from "$lib/tickets/display-status.js";
   import { filterStore } from "$lib/stores/filters.svelte.js";
   import { viewModeStore } from "$lib/stores/view-mode.svelte.js";
@@ -54,7 +53,6 @@
   import SavedFilterList from "$lib/components/tickets/SavedFilterList.svelte";
   import CreateSavedFilter from "$lib/components/tickets/CreateSavedFilter.svelte";
   import VirtualList from "$lib/components/tickets/VirtualList.svelte";
-  import Skeleton from "$lib/components/Skeleton.svelte";
   import QueryError from "$lib/components/QueryError.svelte";
 
   const ticketCache = getTicketDecryptCache();
@@ -84,13 +82,8 @@
   // subnavbar region in AppShell (outside the scroll container).
   const navbarCtx = getNavbarOverrideCtx();
 
-  // Preview loader: batch-fetches encrypted follow-up data for card previews.
-  // Created per-route and set in context so TicketCard children can call observe().
-  const previewLoader = createPreviewLoader({
-    queryFn: async (ids) =>
-      ticketRouter.recentFollowUps.query({ ticketIds: ids, perTicket: 3 }),
-  });
-  setPreviewLoader(previewLoader);
+  // Preview loader: session-level cache created in CryptoProvider.
+  const previewLoader = getPreviewLoader();
 
   // Main ticket list with infinite scroll (keyset pagination).
   const ticketsQuery = createInfiniteQuery(() => ({
@@ -437,7 +430,29 @@
 
 <div class="ticket-page pb-20">
   {#if ticketsQuery.isLoading}
-    <Skeleton lines={8} />
+    <div class="ticket-list" class:ticket-grid={viewModeStore.mode === "grid"}>
+      {#each [1, 2, 3, 4] as n (n)}
+        <TicketCard
+          loading={true}
+          viewMode={viewModeStore.mode}
+          ticketId=""
+          queueName={null}
+          displayStatus="active"
+          priority="normal"
+          title={undefined}
+          clientAlias=""
+          assignedName={null}
+          createdAt={new Date()}
+          lastActivityAt={null}
+          followUpCount={0}
+          unreadCount={0}
+          previewFollowUps={undefined}
+          ontap={() => {
+            /* loading skeleton, no-op */
+          }}
+        />
+      {/each}
+    </div>
   {:else if ticketsQuery.isError}
     <QueryError error={ticketsQuery.error} />
   {:else}
@@ -603,6 +618,11 @@
     flex-direction: column;
     gap: var(--space-md);
     min-width: 0;
+  }
+
+  .ticket-list.ticket-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
   }
 
   .empty-state {

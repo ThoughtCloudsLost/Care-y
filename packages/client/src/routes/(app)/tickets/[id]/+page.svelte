@@ -16,7 +16,6 @@
   import { Link } from "konsta/svelte";
   import {
     ChevronLeft,
-    Phone,
     CalendarClock,
     MessageSquareText,
     EllipsisVertical,
@@ -40,16 +39,15 @@
   import ShellDialog from "$lib/shell/ShellDialog.svelte";
   import { DialogButton, ActionsGroup, ActionsButton } from "konsta/svelte";
   import PresetReplyContent from "$lib/components/tickets/PresetReplyContent.svelte";
-  import TicketActionsContent, {
+  import TicketPanelContent, {
     type TicketAction,
-  } from "$lib/components/tickets/TicketActionsContent.svelte";
+  } from "$lib/components/tickets/TicketPanelContent.svelte";
   import CallOptionsContent, {
     type CallAction,
   } from "$lib/components/tickets/CallOptionsContent.svelte";
-  import ClientInfoContent from "$lib/components/tickets/ClientInfoContent.svelte";
   import { createQuery, useQueryClient } from "@tanstack/svelte-query";
   import { trpc } from "$lib/trpc/index.js";
-  import { getCurrentUserId, getCryptoBridge } from "$lib/crypto/context.js";
+  import { getCryptoBridge } from "$lib/crypto/context.js";
   import { RouterNotAvailableError } from "$lib/errors.js";
   import { toastStore } from "$lib/stores/toast.svelte.js";
   import { serializedBufferToBase64 } from "$lib/utils/buffer-encoding.js";
@@ -87,6 +85,26 @@
 
   const ticket = $derived(ticketQuery.data);
   const clientAlias = $derived(ticket?.clientAlias ?? "...");
+
+  // Look up followUpCount from the ticket list cache (available instantly,
+  // no need to wait for the detail query).
+  const cachedFollowUpCount = $derived.by((): number | undefined => {
+    interface TicketRow {
+      id: string;
+      followUpCount: number;
+    }
+    const entries = queryClient.getQueriesData<{ pages: TicketRow[][] }>({
+      queryKey: ["tickets", "list"],
+    });
+    for (const [, data] of entries) {
+      if (!data?.pages) continue;
+      for (const ticketPage of data.pages) {
+        const match = ticketPage.find((t) => t.id === ticketId);
+        if (match) return match.followUpCount;
+      }
+    }
+    return undefined;
+  });
 
   // --- Read cursor ---
 
@@ -177,22 +195,6 @@
 
   // --- Action sheet data ---
 
-  const currentUserIdGetter = getCurrentUserId();
-  const currentUserId = $derived(currentUserIdGetter());
-
-  const ticketStatus = $derived(ticket?.status ?? "open");
-  const isOnHold = $derived(ticket?.onHold ?? false);
-  const isAssignedToMe = $derived(
-    currentUserId !== undefined && ticket?.assignedTo === currentUserId,
-  );
-
-  const watchingQuery = createQuery(() => ({
-    queryKey: ["isWatching", ticketId],
-    queryFn: async () => ticketRouter.isWatching.query({ ticketId }),
-    enabled: ticketId !== "",
-  }));
-  const isWatching = $derived(watchingQuery.data ?? false);
-
   // Consultant phone registration (for call options).
   const consultantQuery = createQuery(() => ({
     queryKey: ["consultant"],
@@ -221,11 +223,10 @@
 
   // --- Overlay state ---
 
-  let actionsSheetOpen = $state(false);
+  let panelOpen = $state(false);
   let callSheetOpen = $state(false);
   let composeActionsOpen = $state(false);
   let presetSheetOpen = $state(false);
-  let clientInfoOpen = $state(false);
   let lightboxOpen = $state(false);
   let lightboxUrl = $state<string | null>(null);
   let contextMenuOpen = $state(false);
@@ -287,9 +288,13 @@
 
   // --- Action dispatchers ---
 
-  function handleTicketAction(action: TicketAction): void {
-    closeActionsSheet();
+  function handlePanelAction(action: TicketAction): void {
     switch (action) {
+      case "call":
+        // Close the panel, then open the call options picker.
+        closePanel();
+        openCallSheet();
+        break;
       case "take":
         void ticketRouter.take.mutate({ ticketId });
         break;
@@ -321,9 +326,6 @@
         break;
       case "unwatch":
         void ticketRouter.unwatchTicket.mutate({ ticketId });
-        break;
-      case "client-info":
-        openClientInfo();
         break;
       case "cancel":
         break;
@@ -466,11 +468,27 @@
 
   // --- Overlay helpers ---
 
-  function openActionsSheet(): void {
-    actionsSheetOpen = true;
+  function openPanel(): void {
+    panelOpen = true;
   }
-  function closeActionsSheet(): void {
-    actionsSheetOpen = false;
+  function closePanel(): void {
+    panelOpen = false;
+  }
+
+  /** Close panel, then scroll the conversation to the tapped note. */
+  function handleNoteTap(noteId: string): void {
+    closePanel();
+    // Wait for panel dismiss animation, then scroll to the note.
+    requestAnimationFrame(() => {
+      const el = document.getElementById(`fu-${noteId}`);
+      el?.scrollIntoView({ behavior: "smooth", block: "center" });
+    });
+  }
+
+  /** Close panel, then open the lightbox with the tapped image. */
+  function handlePanelLightbox(imageUrl: string): void {
+    closePanel();
+    openLightbox(imageUrl);
   }
 
   function openCallSheet(): void {
@@ -485,13 +503,6 @@
   }
   function closePresetSheet(): void {
     presetSheetOpen = false;
-  }
-
-  function openClientInfo(): void {
-    clientInfoOpen = true;
-  }
-  function closeClientInfo(): void {
-    clientInfoOpen = false;
   }
 
   function openLightbox(imageUrl: string): void {
@@ -546,7 +557,7 @@
 {#snippet navTitle()}
   <Link
     role="button"
-    onclick={openClientInfo}
+    onclick={openPanel}
     aria-label={m.ticket_client_info_button({ alias: clientAlias })}
     class="client-alias-btn"
     colors={{
@@ -561,15 +572,7 @@
 {#snippet navRight()}
   <Link
     iconOnly
-    onclick={openCallSheet}
-    role="button"
-    aria-label={m.ticket_call()}
-  >
-    <Phone size={22} aria-hidden="true" />
-  </Link>
-  <Link
-    iconOnly
-    onclick={openActionsSheet}
+    onclick={openPanel}
     role="button"
     aria-label={m.ticket_more_actions()}
   >
@@ -580,6 +583,7 @@
 <div class="ticket-detail-page">
   <TicketDetail
     {ticketId}
+    knownFollowUpCount={cachedFollowUpCount}
     bind:draftText
     {cursorPosition}
     onmentionselect={handleMentionSelect}
@@ -606,15 +610,14 @@
 />
 
 <!-- Overlays (route file owns all shell wrappers) -->
-<ShellActionSheet opened={actionsSheetOpen} ondismiss={closeActionsSheet}>
-  <TicketActionsContent
-    {ticketStatus}
-    {isOnHold}
-    {isAssignedToMe}
-    {isWatching}
-    onaction={handleTicketAction}
+<ShellPopup opened={panelOpen} ondismiss={closePanel} title={clientAlias}>
+  <TicketPanelContent
+    {ticketId}
+    onaction={handlePanelAction}
+    onnotetap={handleNoteTap}
+    onlightbox={handlePanelLightbox}
   />
-</ShellActionSheet>
+</ShellPopup>
 
 <ShellActionSheet opened={callSheetOpen} ondismiss={closeCallSheet}>
   <CallOptionsContent {hasVerifiedPhone} onaction={handleCallAction} />
@@ -642,15 +645,6 @@
       draftText = body;
       closePresetSheet();
     }}
-  />
-</ShellSheet>
-
-<ShellSheet opened={clientInfoOpen} ondismiss={closeClientInfo}>
-  <ClientInfoContent
-    {clientAlias}
-    clientTier={undefined}
-    contactMethod={undefined}
-    recentTickets={[]}
   />
 </ShellSheet>
 

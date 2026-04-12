@@ -153,6 +153,11 @@ vi.mock("$lib/crypto/context.js", () => ({
   }),
   getCurrentUserId: () => () => "user-001",
   getCurrentUserRoleId: () => () => 2,
+  getPreviewLoader: () => ({
+    get: vi.fn().mockReturnValue(undefined),
+    observe: vi.fn(),
+    eagerLoad: vi.fn(),
+  }),
 }));
 
 vi.mock("$lib/errors.js", () => ({

@@ -14,7 +14,6 @@
   import QueueCards from "$lib/components/dashboard/QueueCards.svelte";
   import ActivitySection from "$lib/components/dashboard/ActivitySection.svelte";
   import KBSection from "$lib/components/dashboard/KBSection.svelte";
-  import QueryLoader from "$lib/components/QueryLoader.svelte";
   import TicketAlert from "$lib/components/icons/TicketAlert.svelte";
   import TicketPause from "$lib/components/icons/TicketPause.svelte";
   import {
@@ -182,127 +181,135 @@
 
   <ShiftSection
     shift={shiftQuery.data?.shift ?? null}
+    loading={shiftQuery.isLoading}
     expanded={shiftExpanded}
     ontoggle={() => (shiftExpanded = !shiftExpanded)}
   />
 
-  <QueryLoader query={ticketsQuery} skeletonLines={8}>
-    {#snippet children(tickets)}
-      <div class="ticket-sections" data-total={tickets.length}>
-        {#if needsAttention.length > 0}
-          <CollapsibleSection
-            heading={m.dashboard_section_needs_attention()}
-            count={needsAttention.length}
-            icon={TicketAlert}
-            iconColor="var(--brand-accent)"
-            expanded={needsAttentionExpanded}
-            ontoggle={() => (needsAttentionExpanded = !needsAttentionExpanded)}
-          >
-            <TicketPreviewList
-              heading={m.dashboard_section_needs_attention()}
-              hideHeading
-              tickets={needsAttention.map(toPreviewProps)}
-              ontickettap={handleTicketTap}
-              onencryptedhelp={showEncryptedHelp}
-            />
-          </CollapsibleSection>
-        {/if}
+  <ActivitySection
+    activity={(activityQuery.data ?? []).map((a) => ({
+      ...a,
+      queueName: orgCache.decrypt(`queue:${a.queueId}`, a.encryptedQueueName),
+    }))}
+    loading={activityQuery.isLoading}
+    expanded={activityExpanded}
+    ontoggle={() => (activityExpanded = !activityExpanded)}
+    ontap={handleActivityTap}
+  />
 
-        <QueueCards
-          queues={(queuesQuery.data ?? []).map((q) => ({
-            id: q.id,
-            name: orgCache.decrypt(`queue:${q.id}`, q.encrypted_name),
-            openCount: Number(q.openCount),
-          }))}
-          expanded={queuesExpanded}
-          ontoggle={() => (queuesExpanded = !queuesExpanded)}
-          ontap={handleQueueTap}
+  <KBSection
+    kbItems={(kbQuery.data ?? []).map((item) => ({
+      ...item,
+      decryptedTitle:
+        orgCache.decrypt(`kb:${item.id}`, item.encryptedTitle) ?? undefined,
+    }))}
+    loading={kbQuery.isLoading}
+    expanded={kbExpanded}
+    ontoggle={() => (kbExpanded = !kbExpanded)}
+    ontap={handleKBTap}
+  />
+
+  <QueueCards
+    queues={(queuesQuery.data ?? []).map((q) => ({
+      id: q.id,
+      name: orgCache.decrypt(`queue:${q.id}`, q.encrypted_name),
+      openCount: Number(q.openCount),
+    }))}
+    loading={queuesQuery.isLoading}
+    expanded={queuesExpanded}
+    ontoggle={() => (queuesExpanded = !queuesExpanded)}
+    ontap={handleQueueTap}
+  />
+
+  <div class="ticket-sections" data-total={allTickets.length}>
+    {#if ticketsQuery.isLoading || needsAttention.length > 0}
+      <CollapsibleSection
+        heading={m.dashboard_section_needs_attention()}
+        count={ticketsQuery.isLoading ? undefined : needsAttention.length}
+        loading={ticketsQuery.isLoading}
+        icon={TicketAlert}
+        iconColor="var(--brand-accent)"
+        expanded={needsAttentionExpanded}
+        ontoggle={() => (needsAttentionExpanded = !needsAttentionExpanded)}
+      >
+        <TicketPreviewList
+          heading={m.dashboard_section_needs_attention()}
+          hideHeading
+          loading={ticketsQuery.isLoading}
+          tickets={needsAttention.map(toPreviewProps)}
+          ontickettap={handleTicketTap}
+          onencryptedhelp={showEncryptedHelp}
         />
+      </CollapsibleSection>
+    {/if}
 
-        <ActivitySection
-          activity={(activityQuery.data ?? []).map((a) => ({
-            ...a,
-            queueName: orgCache.decrypt(
-              `queue:${a.queueId}`,
-              a.encryptedQueueName,
-            ),
-          }))}
-          expanded={activityExpanded}
-          ontoggle={() => (activityExpanded = !activityExpanded)}
-          ontap={handleActivityTap}
+    <CollapsibleSection
+      heading={m.dashboard_section_my_tickets()}
+      count={ticketsQuery.isLoading ? undefined : myOpen.length}
+      loading={ticketsQuery.isLoading}
+      icon={TicketIcon}
+      iconColor="var(--brand-accent)"
+      expanded={myTicketsExpanded}
+      ontoggle={() => (myTicketsExpanded = !myTicketsExpanded)}
+    >
+      <TicketPreviewList
+        heading={m.dashboard_section_my_tickets()}
+        hideHeading
+        loading={ticketsQuery.isLoading}
+        tickets={myOpen.map(toPreviewProps)}
+        ontickettap={handleTicketTap}
+        onseeall={handleSeeAllMyOpen}
+        onencryptedhelp={showEncryptedHelp}
+      />
+    </CollapsibleSection>
+
+    <CollapsibleSection
+      heading={m.dashboard_section_unassigned()}
+      count={ticketsQuery.isLoading
+        ? undefined
+        : (countsQuery.data?.unassigned ?? unassigned.length)}
+      loading={ticketsQuery.isLoading}
+      icon={TicketMinus}
+      iconColor="var(--brand-accent)"
+      expanded={unassignedExpanded}
+      ontoggle={() => (unassignedExpanded = !unassignedExpanded)}
+    >
+      <TicketPreviewList
+        heading={m.dashboard_section_unassigned()}
+        hideHeading
+        loading={ticketsQuery.isLoading}
+        tickets={unassigned.map(toPreviewProps)}
+        totalCount={countsQuery.data?.unassigned}
+        ontickettap={handleTicketTap}
+        onseeall={handleSeeAllUnassigned}
+        onencryptedhelp={showEncryptedHelp}
+      />
+    </CollapsibleSection>
+
+    {#if ticketsQuery.isLoading || (countsQuery.data?.onHold ?? onHold.length) > 0}
+      <CollapsibleSection
+        heading={m.dashboard_section_on_hold()}
+        count={ticketsQuery.isLoading
+          ? undefined
+          : (countsQuery.data?.onHold ?? onHold.length)}
+        loading={ticketsQuery.isLoading}
+        icon={TicketPause}
+        iconColor="var(--brand-accent)"
+        expanded={onHoldExpanded}
+        ontoggle={() => (onHoldExpanded = !onHoldExpanded)}
+      >
+        <TicketPreviewList
+          heading={m.dashboard_section_on_hold()}
+          hideHeading
+          loading={ticketsQuery.isLoading}
+          tickets={onHold.map(toPreviewProps)}
+          totalCount={countsQuery.data?.onHold}
+          ontickettap={handleTicketTap}
+          onencryptedhelp={showEncryptedHelp}
         />
-
-        <KBSection
-          kbItems={(kbQuery.data ?? []).map((item) => ({
-            ...item,
-            decryptedTitle:
-              orgCache.decrypt(`kb:${item.id}`, item.encryptedTitle) ??
-              undefined,
-          }))}
-          expanded={kbExpanded}
-          ontoggle={() => (kbExpanded = !kbExpanded)}
-          ontap={handleKBTap}
-        />
-
-        <CollapsibleSection
-          heading={m.dashboard_section_my_tickets()}
-          count={myOpen.length}
-          icon={TicketIcon}
-          iconColor="var(--brand-accent)"
-          expanded={myTicketsExpanded}
-          ontoggle={() => (myTicketsExpanded = !myTicketsExpanded)}
-        >
-          <TicketPreviewList
-            heading={m.dashboard_section_my_tickets()}
-            hideHeading
-            tickets={myOpen.map(toPreviewProps)}
-            ontickettap={handleTicketTap}
-            onseeall={handleSeeAllMyOpen}
-            onencryptedhelp={showEncryptedHelp}
-          />
-        </CollapsibleSection>
-
-        <CollapsibleSection
-          heading={m.dashboard_section_unassigned()}
-          count={countsQuery.data?.unassigned ?? unassigned.length}
-          icon={TicketMinus}
-          iconColor="var(--brand-accent)"
-          expanded={unassignedExpanded}
-          ontoggle={() => (unassignedExpanded = !unassignedExpanded)}
-        >
-          <TicketPreviewList
-            heading={m.dashboard_section_unassigned()}
-            hideHeading
-            tickets={unassigned.map(toPreviewProps)}
-            totalCount={countsQuery.data?.unassigned}
-            ontickettap={handleTicketTap}
-            onseeall={handleSeeAllUnassigned}
-            onencryptedhelp={showEncryptedHelp}
-          />
-        </CollapsibleSection>
-
-        {#if (countsQuery.data?.onHold ?? onHold.length) > 0}
-          <CollapsibleSection
-            heading={m.dashboard_section_on_hold()}
-            count={countsQuery.data?.onHold ?? onHold.length}
-            icon={TicketPause}
-            iconColor="var(--brand-accent)"
-            expanded={onHoldExpanded}
-            ontoggle={() => (onHoldExpanded = !onHoldExpanded)}
-          >
-            <TicketPreviewList
-              heading={m.dashboard_section_on_hold()}
-              hideHeading
-              tickets={onHold.map(toPreviewProps)}
-              totalCount={countsQuery.data?.onHold}
-              ontickettap={handleTicketTap}
-              onencryptedhelp={showEncryptedHelp}
-            />
-          </CollapsibleSection>
-        {/if}
-      </div>
-    {/snippet}
-  </QueryLoader>
+      </CollapsibleSection>
+    {/if}
+  </div>
 </div>
 
 <style>

@@ -96,7 +96,6 @@ vi.mock("$lib/crypto/context.js", () => ({
     zero: vi.fn(),
   }),
   getCurrentUserId: () => () => "user-001",
-  setPreviewLoader: vi.fn(),
   getPreviewLoader: () => mockPreviewLoader,
   getFollowUpDecryptCache: () => ({
     decrypt: vi.fn().mockReturnValue(undefined),
