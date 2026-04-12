@@ -22,18 +22,7 @@
     ListItem,
     Toggle,
   } from "konsta/svelte";
-  import {
-    Phone,
-    StickyNote,
-    Paperclip,
-    FileText,
-    FileArchive,
-    FileSpreadsheet,
-    FileHeadphone,
-    FilePlay,
-    File,
-    type LucideIcon,
-  } from "@lucide/svelte";
+  import { Phone, StickyNote } from "@lucide/svelte";
   import * as m from "$lib/paraglide/messages.js";
   import StatusDot from "$lib/components/StatusDot.svelte";
   import MmsImage from "$lib/components/tickets/MmsImage.svelte";
@@ -50,7 +39,11 @@
     buildVolunteerMap,
     resolveVolunteerName as resolveVolName,
   } from "$lib/tickets/resolve-volunteer.js";
-  import { downloadDecryptedAttachment } from "$lib/tickets/attachment-download.js";
+  import {
+    downloadDecryptedAttachment,
+    fileIcon,
+    fileTypeLabel,
+  } from "$lib/tickets/attachment-download.js";
   import {
     getCurrentUserId,
     getCryptoBridge,
@@ -257,79 +250,6 @@
   const fileAttachments = $derived(
     attachments.filter((a) => a.contentType?.startsWith("image/") !== true),
   );
-
-  // --- File type helpers ---
-
-  /** Map MIME content type to a Lucide icon component. */
-  function fileIcon(ct: string | null): LucideIcon {
-    if (ct === null || ct === "") return File;
-    if (ct.startsWith("text/")) return FileText;
-    if (ct === "application/pdf") return FileText;
-    if (ct === "application/msword") return FileText;
-    if (
-      ct ===
-      "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-    )
-      return FileText;
-    if (
-      ct === "application/zip" ||
-      ct === "application/gzip" ||
-      ct === "application/x-tar" ||
-      ct === "application/x-7z-compressed" ||
-      ct === "application/x-rar-compressed"
-    )
-      return FileArchive;
-    if (
-      ct === "application/vnd.ms-excel" ||
-      ct ===
-        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" ||
-      ct === "text/csv"
-    )
-      return FileSpreadsheet;
-    if (ct.startsWith("audio/")) return FileHeadphone;
-    if (ct.startsWith("video/")) return FilePlay;
-    return Paperclip;
-  }
-
-  /** Extract short label from MIME type (e.g. "application/pdf" -> "PDF"). */
-  const MIME_LABELS = new Map<string, string>([
-    ["application/pdf", "PDF"],
-    ["application/zip", "ZIP"],
-    ["application/gzip", "GZIP"],
-    ["application/x-tar", "TAR"],
-    ["application/x-7z-compressed", "7Z"],
-    ["application/x-rar-compressed", "RAR"],
-    ["application/vnd.ms-excel", "XLS"],
-    [
-      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-      "XLSX",
-    ],
-    ["application/msword", "DOC"],
-    [
-      "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-      "DOCX",
-    ],
-    ["application/vnd.ms-powerpoint", "PPT"],
-    [
-      "application/vnd.openxmlformats-officedocument.presentationml.presentation",
-      "PPTX",
-    ],
-    ["text/plain", "TXT"],
-    ["text/csv", "CSV"],
-    ["text/html", "HTML"],
-    ["application/json", "JSON"],
-    ["application/xml", "XML"],
-  ]);
-
-  function fileTypeLabel(ct: string | null): string {
-    if (ct === null || ct === "") return "";
-    const known = MIME_LABELS.get(ct);
-    if (known !== undefined) return known;
-    // Fallback: use the subtype after the slash
-    const sub = ct.split("/")[1];
-    if (sub === undefined || sub === "") return "";
-    return sub.replace(/^x-/, "").toUpperCase();
-  }
 
   /** Decrypt an attachment's encrypted filename. Returns the name or undefined while pending. */
   function decryptFilename(
