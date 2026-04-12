@@ -324,3 +324,18 @@ export const savedFilterRecordSchema = z.object({
   createdAt: z.iso.datetime(),
 });
 export type SavedFilterRecord = z.infer<typeof savedFilterRecordSchema>;
+
+export const ticketActionSchema = z.enum([
+  "call",
+  "take",
+  "release",
+  "assign",
+  "hold",
+  "unhold",
+  "close",
+  "reopen",
+  "watch",
+  "unwatch",
+  "cancel",
+]);
+export type TicketAction = z.infer<typeof ticketActionSchema>;

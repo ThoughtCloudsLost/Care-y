@@ -39,9 +39,8 @@
   import ShellDialog from "$lib/shell/ShellDialog.svelte";
   import { DialogButton, ActionsGroup, ActionsButton } from "konsta/svelte";
   import PresetReplyContent from "$lib/components/tickets/PresetReplyContent.svelte";
-  import TicketPanelContent, {
-    type TicketAction,
-  } from "$lib/components/tickets/TicketPanelContent.svelte";
+  import TicketPanelContent from "$lib/components/tickets/TicketPanelContent.svelte";
+  import type { TicketAction } from "$lib/tickets/types.js";
   import CallOptionsContent, {
     type CallAction,
   } from "$lib/components/tickets/CallOptionsContent.svelte";

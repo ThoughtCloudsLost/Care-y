@@ -240,6 +240,8 @@ export {
   type SavedFilterState,
   type SavedFilterColor,
   type SavedFilterRecord,
+  ticketActionSchema,
+  type TicketAction,
 } from "./schemas/tickets.js";
 
 // --- Knowledge Base schemas ---

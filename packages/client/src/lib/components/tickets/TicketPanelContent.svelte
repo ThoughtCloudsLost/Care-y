@@ -39,19 +39,7 @@
   import InlineSkeleton from "$lib/components/InlineSkeleton.svelte";
   import PanelNotesSection from "./PanelNotesSection.svelte";
   import PanelMediaSection from "./PanelMediaSection.svelte";
-
-  export type TicketAction =
-    | "call"
-    | "take"
-    | "release"
-    | "assign"
-    | "hold"
-    | "unhold"
-    | "close"
-    | "reopen"
-    | "watch"
-    | "unwatch"
-    | "cancel";
+  import type { TicketAction } from "$lib/tickets/types.js";
 
   interface TicketPanelContentProps {
     ticketId: string;
