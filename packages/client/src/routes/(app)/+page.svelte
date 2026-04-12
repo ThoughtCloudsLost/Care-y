@@ -80,6 +80,36 @@
   const unassigned = $derived(buckets.unassigned);
   const onHold = $derived(buckets.onHold);
 
+  // --- Pre-computed derived props (avoid inline .map() in template) ---
+
+  const activityProps = $derived(
+    (activityQuery.data ?? []).map((a) => ({
+      ...a,
+      queueName: orgCache.decrypt(`queue:${a.queueId}`, a.encryptedQueueName),
+    })),
+  );
+
+  const kbProps = $derived(
+    (kbQuery.data ?? []).map((item) => ({
+      ...item,
+      decryptedTitle:
+        orgCache.decrypt(`kb:${item.id}`, item.encryptedTitle) ?? undefined,
+    })),
+  );
+
+  const queueProps = $derived(
+    (queuesQuery.data ?? []).map((q) => ({
+      id: q.id,
+      name: orgCache.decrypt(`queue:${q.id}`, q.encrypted_name),
+      openCount: Number(q.openCount),
+    })),
+  );
+
+  const needsAttentionProps = $derived(needsAttention.map(toPreviewProps));
+  const myOpenProps = $derived(myOpen.map(toPreviewProps));
+  const unassignedProps = $derived(unassigned.map(toPreviewProps));
+  const onHoldProps = $derived(onHold.map(toPreviewProps));
+
   // --- Collapsible section state (all expanded by default) ---
   let shiftExpanded = $state(true);
   let needsAttentionExpanded = $state(true);
@@ -181,10 +211,7 @@
   />
 
   <ActivitySection
-    activity={(activityQuery.data ?? []).map((a) => ({
-      ...a,
-      queueName: orgCache.decrypt(`queue:${a.queueId}`, a.encryptedQueueName),
-    }))}
+    activity={activityProps}
     loading={activityQuery.isLoading}
     expanded={activityExpanded}
     ontoggle={() => (activityExpanded = !activityExpanded)}
@@ -192,11 +219,7 @@
   />
 
   <KBSection
-    kbItems={(kbQuery.data ?? []).map((item) => ({
-      ...item,
-      decryptedTitle:
-        orgCache.decrypt(`kb:${item.id}`, item.encryptedTitle) ?? undefined,
-    }))}
+    kbItems={kbProps}
     loading={kbQuery.isLoading}
     expanded={kbExpanded}
     ontoggle={() => (kbExpanded = !kbExpanded)}
@@ -204,11 +227,7 @@
   />
 
   <QueueCards
-    queues={(queuesQuery.data ?? []).map((q) => ({
-      id: q.id,
-      name: orgCache.decrypt(`queue:${q.id}`, q.encrypted_name),
-      openCount: Number(q.openCount),
-    }))}
+    queues={queueProps}
     loading={queuesQuery.isLoading}
     expanded={queuesExpanded}
     ontoggle={() => (queuesExpanded = !queuesExpanded)}
@@ -230,7 +249,7 @@
           heading={m.dashboard_section_needs_attention()}
           hideHeading
           loading={ticketsQuery.isLoading}
-          tickets={needsAttention.map(toPreviewProps)}
+          tickets={needsAttentionProps}
           ontickettap={handleTicketTap}
           onencryptedhelp={showEncryptedHelp}
         />
@@ -250,7 +269,7 @@
         heading={m.dashboard_section_my_tickets()}
         hideHeading
         loading={ticketsQuery.isLoading}
-        tickets={myOpen.map(toPreviewProps)}
+        tickets={myOpenProps}
         ontickettap={handleTicketTap}
         onseeall={handleSeeAllMyOpen}
         onencryptedhelp={showEncryptedHelp}
@@ -272,7 +291,7 @@
         heading={m.dashboard_section_unassigned()}
         hideHeading
         loading={ticketsQuery.isLoading}
-        tickets={unassigned.map(toPreviewProps)}
+        tickets={unassignedProps}
         totalCount={countsQuery.data?.unassigned}
         ontickettap={handleTicketTap}
         onseeall={handleSeeAllUnassigned}
@@ -296,7 +315,7 @@
           heading={m.dashboard_section_on_hold()}
           hideHeading
           loading={ticketsQuery.isLoading}
-          tickets={onHold.map(toPreviewProps)}
+          tickets={onHoldProps}
           totalCount={countsQuery.data?.onHold}
           ontickettap={handleTicketTap}
           onencryptedhelp={showEncryptedHelp}
