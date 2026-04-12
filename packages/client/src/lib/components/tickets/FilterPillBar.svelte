@@ -46,45 +46,45 @@
 
   // --- Pill option configs ---
 
-  const c = $derived(countsQuery.data);
+  const counts = $derived(countsQuery.data);
 
   const statusOptions = $derived([
     {
       value: "new",
-      label: `${m.tickets_filter_new()} (${String(c?.new ?? 0)})`,
+      label: `${m.tickets_filter_new()} (${String(counts?.new ?? 0)})`,
     },
     {
       value: "active",
-      label: `${m.tickets_filter_active()} (${String(c?.active ?? 0)})`,
+      label: `${m.tickets_filter_active()} (${String(counts?.active ?? 0)})`,
     },
     {
       value: "hold",
-      label: `${m.tickets_filter_hold()} (${String(c?.onHold ?? 0)})`,
+      label: `${m.tickets_filter_hold()} (${String(counts?.onHold ?? 0)})`,
     },
     {
       value: "closed",
-      label: `${m.tickets_filter_closed()} (${String(c?.closed ?? 0)})`,
+      label: `${m.tickets_filter_closed()} (${String(counts?.closed ?? 0)})`,
     },
   ]);
 
-  const bp = $derived(c?.byPriority);
+  const priorityCounts = $derived(counts?.byPriority);
 
   const priorityOptions = $derived([
     {
       value: "low",
-      label: `${m.tickets_filter_priority_low()} (${String(bp?.low ?? 0)})`,
+      label: `${m.tickets_filter_priority_low()} (${String(priorityCounts?.low ?? 0)})`,
     },
     {
       value: "normal",
-      label: `${m.tickets_filter_priority_normal()} (${String(bp?.normal ?? 0)})`,
+      label: `${m.tickets_filter_priority_normal()} (${String(priorityCounts?.normal ?? 0)})`,
     },
     {
       value: "high",
-      label: `${m.tickets_filter_priority_high()} (${String(bp?.high ?? 0)})`,
+      label: `${m.tickets_filter_priority_high()} (${String(priorityCounts?.high ?? 0)})`,
     },
     {
       value: "urgent",
-      label: `${m.tickets_filter_priority_urgent()} (${String(bp?.urgent ?? 0)})`,
+      label: `${m.tickets_filter_priority_urgent()} (${String(priorityCounts?.urgent ?? 0)})`,
     },
   ]);
 
@@ -129,12 +129,12 @@
         if (currentUserId !== undefined) {
           opts.push({
             value: currentUserId,
-            label: `${m.tickets_filter_me()} (${String(c?.mine ?? 0)})`,
+            label: `${m.tickets_filter_me()} (${String(counts?.mine ?? 0)})`,
           });
         }
         opts.push({
           value: "__unassigned__",
-          label: `${m.tickets_unassigned()} (${String(c?.unassigned ?? 0)})`,
+          label: `${m.tickets_unassigned()} (${String(counts?.unassigned ?? 0)})`,
         });
         return opts;
       }

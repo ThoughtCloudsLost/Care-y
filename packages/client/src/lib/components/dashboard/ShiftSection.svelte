@@ -63,7 +63,7 @@
     return "active";
   });
 
-  function formatDuration(ms: number): string {
+  function formatShiftCountdown(ms: number): string {
     const totalMin = Math.max(0, Math.floor(ms / 60_000));
     const h = Math.floor(totalMin / 60);
     const min = totalMin % 60;
@@ -80,7 +80,7 @@
     if (shiftState === "not_started") {
       const diff = shiftStart.getTime() - now.getTime();
       return m.dashboard_shift_not_started({
-        time: formatDuration(diff),
+        time: formatShiftCountdown(diff),
         start,
         end,
       });
@@ -90,7 +90,7 @@
     }
     const diff = shiftEnd.getTime() - now.getTime();
     return m.dashboard_shift_ends_in({
-      time: formatDuration(diff),
+      time: formatShiftCountdown(diff),
       start,
       end,
     });
