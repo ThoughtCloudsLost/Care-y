@@ -288,6 +288,13 @@
 
   // --- Action dispatchers ---
 
+  /** Fire a mutation and show a generic error toast on failure. */
+  function mutateWithToast<T>(promise: Promise<T>): void {
+    void promise.catch(() => {
+      toastStore.show(m.error_generic(), 3000);
+    });
+  }
+
   function handlePanelAction(action: TicketAction): void {
     switch (action) {
       case "call":
@@ -296,36 +303,39 @@
         openCallSheet();
         break;
       case "take":
-        void ticketRouter.take.mutate({ ticketId });
+        mutateWithToast(ticketRouter.take.mutate({ ticketId }));
         break;
       case "release":
-        void ticketRouter.release.mutate({ ticketId });
+        mutateWithToast(ticketRouter.release.mutate({ ticketId }));
         break;
       case "assign":
         // Stub: assignment UI (picker) wired by a later phase.
         if (import.meta.env.DEV) console.log("[TicketDetail] assign");
         break;
       case "hold":
-        void ticketRouter.update.mutate({ ticketId, onHold: true });
+        mutateWithToast(ticketRouter.update.mutate({ ticketId, onHold: true }));
         break;
       case "unhold":
-        void ticketRouter.update.mutate({ ticketId, onHold: false });
+        mutateWithToast(
+          ticketRouter.update.mutate({ ticketId, onHold: false }),
+        );
         break;
       case "close":
-        void ticketRouter.close.mutate({ ticketId });
+        mutateWithToast(ticketRouter.close.mutate({ ticketId }));
         break;
       case "reopen":
-        // Reopen requires a new key generation UUID (ticket re-keying).
-        void ticketRouter.reopen.mutate({
-          ticketId,
-          newKeyGeneration: crypto.randomUUID(),
-        });
+        mutateWithToast(
+          ticketRouter.reopen.mutate({
+            ticketId,
+            newKeyGeneration: crypto.randomUUID(),
+          }),
+        );
         break;
       case "watch":
-        void ticketRouter.watchTicket.mutate({ ticketId });
+        mutateWithToast(ticketRouter.watchTicket.mutate({ ticketId }));
         break;
       case "unwatch":
-        void ticketRouter.unwatchTicket.mutate({ ticketId });
+        mutateWithToast(ticketRouter.unwatchTicket.mutate({ ticketId }));
         break;
       case "cancel":
         break;
