@@ -23,6 +23,7 @@ let followUpsQueryState: Record<string, unknown> = {};
 let recordingsQueryState: Record<string, unknown> = {};
 let attachmentsQueryState: Record<string, unknown> = {};
 let summaryQueryState: Record<string, unknown> = {};
+let volunteersQueryState: Record<string, unknown> = {};
 
 // createQuery is called multiple times (ticket, followUps, recordings,
 // attachments). We identify which query is being created by the queryKey.
@@ -37,6 +38,7 @@ vi.mock("@tanstack/svelte-query", () => ({
     if (key[2] === "followUpSummary") return summaryQueryState;
     if (key[2] === "recordings") return recordingsQueryState;
     if (key[2] === "attachments") return attachmentsQueryState;
+    if (key[0] === "volunteers") return volunteersQueryState;
 
     // First call per render is the ticket query (key: ["ticket", id]).
     return ticketQueryState;
@@ -185,6 +187,13 @@ beforeEach(() => {
   };
 
   summaryQueryState = {
+    isLoading: false,
+    isError: false,
+    error: null,
+    data: [],
+  };
+
+  volunteersQueryState = {
     isLoading: false,
     isError: false,
     error: null,

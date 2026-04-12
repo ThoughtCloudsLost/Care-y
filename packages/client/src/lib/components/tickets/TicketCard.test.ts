@@ -282,7 +282,7 @@ describe("TicketCard", () => {
   it("renders action icon buttons in list mode", () => {
     const { container } = render(TicketCard, { props: defaults });
     const actions = container.querySelectorAll(
-      '[aria-label="Reply"], [aria-label="Call"], [aria-label="Hold"], [aria-label="Take"]',
+      '[aria-label="Reply"], [aria-label="Call"], [aria-label="Hold"], [aria-label="Assign"]',
     );
     expect(actions.length).toBe(4);
   });
@@ -292,7 +292,7 @@ describe("TicketCard", () => {
       props: { ...defaults, viewMode: "grid" as const },
     });
     const actions = container.querySelectorAll(
-      '[aria-label="Reply"], [aria-label="Call"], [aria-label="Hold"], [aria-label="Take"]',
+      '[aria-label="Reply"], [aria-label="Call"], [aria-label="Hold"], [aria-label="Assign"]',
     );
     expect(actions.length).toBe(0);
   });
@@ -305,12 +305,24 @@ describe("TicketCard", () => {
     expect(unhold).not.toBeNull();
   });
 
-  it("renders take/release icon with correct aria-label", () => {
-    const { container } = render(TicketCard, {
+  it("renders assign button regardless of assignment state", () => {
+    const { container: unassigned } = render(TicketCard, { props: defaults });
+    expect(unassigned.querySelector('[aria-label="Assign"]')).not.toBeNull();
+
+    cleanup();
+
+    const { container: assigned } = render(TicketCard, {
       props: { ...defaults, assignedName: "Jordan" },
     });
-    const release = container.querySelector('[aria-label="Release"]');
-    expect(release).not.toBeNull();
+    expect(assigned.querySelector('[aria-label="Assign"]')).not.toBeNull();
+  });
+
+  it("fires onaction with 'assign' when assign button clicked", async () => {
+    const { container } = render(TicketCard, { props: defaults });
+    const assignBtn = container.querySelector('[aria-label="Assign"]');
+    expect(assignBtn).not.toBeNull();
+    if (assignBtn) await fireEvent.click(assignBtn);
+    expect(onaction).toHaveBeenCalledWith("t-001", "assign");
   });
 
   it("fires onaction with correct action on icon click", async () => {

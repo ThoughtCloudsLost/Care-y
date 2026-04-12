@@ -1,14 +1,7 @@
 import type { RawFollowUpPreview } from "$lib/tickets/preview-loader.svelte.js";
 import type { DisplayStatus } from "$lib/tickets/display-status.js";
 
-export type TicketQuickAction =
-  | "reply"
-  | "call"
-  | "hold"
-  | "unhold"
-  | "take"
-  | "assign"
-  | "release";
+export type TicketQuickAction = "reply" | "call" | "hold" | "unhold" | "assign";
 
 export type ViewMode = "list" | "grid";
 

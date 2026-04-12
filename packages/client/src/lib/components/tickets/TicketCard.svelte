@@ -7,7 +7,6 @@
     Pause,
     Play,
     UserPlus,
-    UserMinus,
   } from "@lucide/svelte";
   import * as m from "$lib/paraglide/messages.js";
   import { formatRelativeTime } from "$lib/utils/format-time.js";
@@ -278,23 +277,14 @@
             <Link
               iconOnly
               role="button"
-              aria-label={assignedName !== null
-                ? m.tickets_action_release()
-                : m.tickets_action_take()}
+              aria-label={m.tickets_action_assign()}
               onclick={(e: MouseEvent) => {
                 e.stopPropagation();
-                onaction?.(
-                  ticketId,
-                  assignedName !== null ? "release" : "take",
-                );
+                onaction?.(ticketId, "assign");
               }}
               class="action-icon p-1 -m-1"
             >
-              {#if assignedName !== null}
-                <UserMinus size={18} />
-              {:else}
-                <UserPlus size={18} />
-              {/if}
+              <UserPlus size={18} />
             </Link>
           </div>
         {/if}
