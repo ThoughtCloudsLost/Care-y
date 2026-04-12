@@ -1,6 +1,7 @@
 <script lang="ts">
   import { Chip } from "konsta/svelte";
   import { ChevronDown } from "@lucide/svelte";
+  import { onKeyActivate } from "$lib/utils/a11y.js";
 
   export interface FilterOption {
     readonly value: string;
@@ -61,12 +62,9 @@
     if (anchorEl) onopen(anchorEl);
   }
 
-  function handleKeydown(e: KeyboardEvent): void {
-    if (e.key === "Enter" || e.key === " ") {
-      e.preventDefault();
-      if (anchorEl) onopen(anchorEl);
-    }
-  }
+  const handleKeydown = onKeyActivate(() => {
+    if (anchorEl) onopen(anchorEl);
+  });
 </script>
 
 <span bind:this={anchorEl} class="pill-anchor">

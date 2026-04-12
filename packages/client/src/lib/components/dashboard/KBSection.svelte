@@ -1,6 +1,7 @@
 <script lang="ts">
   import { BookOpen, FileText, ThumbsUp } from "@lucide/svelte";
   import { formatRelativeTime } from "$lib/utils/format-time.js";
+  import { onKeyActivate } from "$lib/utils/a11y.js";
   import * as m from "$lib/paraglide/messages.js";
   import CollapsibleSection from "./CollapsibleSection.svelte";
   import DecryptPlaceholder from "$lib/components/DecryptPlaceholder.svelte";
@@ -73,12 +74,7 @@
             role="button"
             tabindex="0"
             onclick={() => ontap?.(item.id)}
-            onkeydown={(e) => {
-              if (e.key === "Enter" || e.key === " ") {
-                if (e.key === " ") e.preventDefault();
-                ontap?.(item.id);
-              }
-            }}
+            onkeydown={onKeyActivate(() => ontap?.(item.id))}
           >
             <span class="kb-icon-gutter" aria-hidden="true">
               <FileText size={13} />

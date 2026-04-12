@@ -24,6 +24,7 @@
     ChevronDown,
   } from "@lucide/svelte";
   import * as m from "$lib/paraglide/messages.js";
+  import { onKeyActivate } from "$lib/utils/a11y.js";
   import { formatRelativeTime } from "$lib/utils/format-time.js";
   import { needsDateSeparator, formatDateSeparator } from "$lib/utils/time.js";
   import type { FollowUpDecryptCache } from "$lib/crypto/follow-up-decrypt-cache.js";
@@ -406,12 +407,7 @@
                               time: formatTime(rec.createdAt),
                             })}
                             onclick={() => zoomBackTo(rec.id)}
-                            onkeydown={(e) => {
-                              if (e.key === "Enter" || e.key === " ") {
-                                e.preventDefault();
-                                zoomBackTo(rec.id);
-                              }
-                            }}
+                            onkeydown={onKeyActivate(() => zoomBackTo(rec.id))}
                             class="cluster-bubble-tap"
                           >
                             {#snippet text()}

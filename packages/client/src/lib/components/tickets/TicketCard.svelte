@@ -11,6 +11,7 @@
   } from "@lucide/svelte";
   import * as m from "$lib/paraglide/messages.js";
   import { formatRelativeTime } from "$lib/utils/format-time.js";
+  import { onKeyActivate } from "$lib/utils/a11y.js";
   import { getPreviewLoader } from "$lib/crypto/context.js";
   import { isDecryptError } from "$lib/crypto/async-decrypt-cache.js";
   import DecryptPlaceholder from "$lib/components/DecryptPlaceholder.svelte";
@@ -149,12 +150,7 @@
         tabindex="0"
         aria-label={m.tickets_open({ alias: clientAlias })}
         onclick={handleCardClick}
-        onkeydown={(e) => {
-          if (e.key === "Enter" || e.key === " ") {
-            e.preventDefault();
-            handleCardClick();
-          }
-        }}
+        onkeydown={onKeyActivate(handleCardClick)}
       >
         <div class="preview-window">
           <TicketPreview

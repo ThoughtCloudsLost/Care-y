@@ -12,6 +12,7 @@
   import { Paperclip } from "@lucide/svelte";
   import * as m from "$lib/paraglide/messages.js";
   import { formatFileSize } from "$lib/utils/time.js";
+  import { onKeyActivate } from "$lib/utils/a11y.js";
   import { trpc } from "$lib/trpc/index.js";
   import { getCryptoBridge } from "$lib/crypto/context.js";
   import { RouterNotAvailableError } from "$lib/errors.js";
@@ -78,12 +79,7 @@
   role="button"
   tabindex={downloading || keyWrap === null ? -1 : 0}
   onclick={() => void download()}
-  onkeydown={(e: KeyboardEvent) => {
-    if (e.key === "Enter" || e.key === " ") {
-      e.preventDefault();
-      void download();
-    }
-  }}
+  onkeydown={onKeyActivate(() => void download())}
   aria-label={downloading
     ? m.ticket_downloading_attachment({ filename })
     : m.ticket_download_attachment({ filename })}

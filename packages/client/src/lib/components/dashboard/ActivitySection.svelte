@@ -8,6 +8,7 @@
   } from "@lucide/svelte";
   import type { Component } from "svelte";
   import { formatRelativeTime } from "$lib/utils/format-time.js";
+  import { onKeyActivate } from "$lib/utils/a11y.js";
   import * as m from "$lib/paraglide/messages.js";
   import CollapsibleSection from "./CollapsibleSection.svelte";
   import InlineSkeleton from "$lib/components/InlineSkeleton.svelte";
@@ -112,15 +113,9 @@
             tabindex="0"
             onclick={() => item.ticketId !== null && ontap?.(item.ticketId)}
             aria-disabled={item.ticketId === null}
-            onkeydown={(e) => {
-              if (
-                (e.key === "Enter" || e.key === " ") &&
-                item.ticketId !== null
-              ) {
-                if (e.key === " ") e.preventDefault();
-                ontap?.(item.ticketId);
-              }
-            }}
+            onkeydown={onKeyActivate(() => {
+              if (item.ticketId !== null) ontap?.(item.ticketId);
+            })}
           >
             <span class="activity-icon-gutter" aria-hidden="true">
               <EventIcon size={13} />

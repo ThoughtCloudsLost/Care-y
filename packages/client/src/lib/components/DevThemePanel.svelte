@@ -1,6 +1,7 @@
 <script lang="ts">
   /* eslint-disable care-y/no-hardcoded-strings -- Dev-only tooling, not user-facing */
   import { themeStore } from "$lib/stores/theme.svelte";
+  import { onKeyActivate } from "$lib/utils/a11y.js";
   import type {
     VisualTheme,
     KonstaTheme,
@@ -183,12 +184,7 @@
     tabindex="0"
     aria-label="Close dev panel"
     onclick={() => (opened = false)}
-    onkeydown={(e) => {
-      if (e.key === "Enter" || e.key === " ") {
-        e.preventDefault();
-        opened = false;
-      }
-    }}
+    onkeydown={onKeyActivate(() => (opened = false))}
   ></div>
   <div class="dev-panel" role="dialog" aria-label="Dev panel">
     <!-- Header -->
