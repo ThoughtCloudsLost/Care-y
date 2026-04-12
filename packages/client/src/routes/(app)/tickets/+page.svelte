@@ -1,7 +1,9 @@
 <script lang="ts">
   import { createInfiniteQuery } from "@tanstack/svelte-query";
   import { createCountsQuery } from "$lib/tickets/queries.js";
+  import { untrack } from "svelte";
   import { SvelteMap, SvelteSet } from "svelte/reactivity";
+  import { page } from "$app/state";
   import { goto } from "$app/navigation";
   import { resolve } from "$app/paths";
   import {
@@ -62,6 +64,46 @@
   const currentUserId = $derived(currentUserIdGetter());
   if (!trpc.tickets) throw new RouterNotAvailableError("tickets");
   const ticketRouter = trpc.tickets;
+
+  // --- URL filter application (dashboard → tickets navigation) ---
+  // When arriving with ?queue=X or ?filter=my-open|unassigned, apply
+  // to filterStore once, then strip the params so manual filter
+  // changes aren't clobbered if the effect re-runs.
+  let lastAppliedSearch = "";
+
+  $effect(() => {
+    const searchStr = page.url.search;
+
+    if (searchStr === "" || searchStr === lastAppliedSearch) return;
+
+    const params = page.url.searchParams;
+    const queueId = params.get("queue");
+    const filter = params.get("filter");
+
+    if (queueId === null && filter === null) return;
+
+    lastAppliedSearch = searchStr;
+
+    untrack(() => {
+      filterStore.clearAll();
+
+      if (queueId !== null) {
+        filterStore.toggleQueue(queueId);
+      } else if (filter === "my-open") {
+        filterStore.toggleStatus("new");
+        filterStore.toggleStatus("active");
+        if (currentUserId !== undefined) {
+          filterStore.setAssignee(currentUserId);
+        }
+      } else if (filter === "unassigned") {
+        filterStore.toggleStatus("new");
+        filterStore.toggleStatus("active");
+        filterStore.setAssignee(null);
+      }
+    });
+
+    void goto(resolve("/tickets"), { replaceState: true });
+  });
 
   // Scroll container from AppShell context.
   // Returns undefined until mount, then the resolved element.
