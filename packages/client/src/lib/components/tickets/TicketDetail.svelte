@@ -367,6 +367,14 @@
     }
   }
 
+  // Clear pending timers on unmount to avoid firing into a dead component.
+  $effect(() => {
+    return () => {
+      if (longPressTimer) clearTimeout(longPressTimer);
+      if (readProgressTimer) clearTimeout(readProgressTimer);
+    };
+  });
+
   /** Keyboard equivalent for long-press context menu (Shift+F10). */
   function handleBubbleKeydown(fu: FollowUp): (e: KeyboardEvent) => void {
     return (e: KeyboardEvent) => {
