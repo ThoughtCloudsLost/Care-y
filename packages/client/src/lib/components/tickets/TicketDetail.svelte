@@ -49,6 +49,7 @@
   } from "$lib/components/tickets/chat-zoom-types.js";
   import MentionAutocomplete from "$lib/components/tickets/MentionAutocomplete.svelte";
 
+  import { createScrollManager } from "$lib/tickets/scroll-manager.svelte.js";
   import {
     getContextMenuActions,
     type ContextMenuEvent,
@@ -199,7 +200,7 @@
       if (older.length < PAGE_SIZE) hasMoreOlder = false;
       if (older.length > 0) {
         // Preserve scroll position: measure before prepend, restore after.
-        const el = scrollContainerEl;
+        const el = scroll.scrollContainerEl;
         const prevScrollHeight = el?.scrollHeight ?? 0;
         const prevScrollTop = el?.scrollTop ?? 0;
 
@@ -380,7 +381,7 @@
   $effect(() => {
     return () => {
       if (longPressTimer) clearTimeout(longPressTimer);
-      if (readProgressTimer) clearTimeout(readProgressTimer);
+      scroll.cleanup();
     };
   });
 
@@ -448,7 +449,7 @@
     if (timelineActive) return;
     if (readUpTo === undefined) return;
     if (!initialFollowUpsQuery.data) return;
-    if (followUps.length === 0 || !scrollContainerEl) return;
+    if (followUps.length === 0 || !scroll.scrollContainerEl) return;
     if (scrollReady) return;
 
     // Mark intent immediately so this effect doesn't re-trigger.
@@ -469,15 +470,14 @@
 
       // Wait for DOM to settle, then scroll.
       await tick();
-      const scrollEl = scrollContainerEl;
+      const scrollEl = scroll.scrollContainerEl;
       requestAnimationFrame(() => {
         requestAnimationFrame(() => {
-          if (hasScrolledInitially) return;
-          hasScrolledInitially = true;
+          scroll.markScrolledInitially();
           if (firstUnreadId !== null) {
             const divider = document.getElementById("unread-divider");
             divider?.scrollIntoView({ behavior: "auto", block: "start" });
-          } else {
+          } else if (scrollEl) {
             scrollEl.scrollTop = scrollEl.scrollHeight;
           }
         });
@@ -531,81 +531,13 @@
 
   // --- Scroll container ---
 
-  let scrollContainerEl: HTMLDivElement | undefined = $state();
-
-  // Track whether user is near bottom (within 100px) for auto-scroll decisions.
-  let isNearBottom = $state(true);
-
-  // Debounce timer for reporting read progress to the route.
-  let readProgressTimer: ReturnType<typeof setTimeout> | null = null;
-
-  /** Svelte action: scroll element to bottom after DOM paint. */
-  function scrollToBottom(node: HTMLElement): void {
-    requestAnimationFrame(() => {
-      requestAnimationFrame(() => {
-        node.scrollTop = node.scrollHeight;
-      });
-    });
-  }
-
-  function onScroll(): void {
-    if (!scrollContainerEl) return;
-    const { scrollTop, scrollHeight, clientHeight } = scrollContainerEl;
-    isNearBottom = scrollHeight - scrollTop - clientHeight < 100;
-
-    // Report the latest visible follow-up timestamp (debounced).
-    if (onreadprogress && followUps.length > 0) {
-      if (readProgressTimer) clearTimeout(readProgressTimer);
-      readProgressTimer = setTimeout(() => {
-        reportReadProgress();
-      }, 2000);
-    }
-  }
-
-  function reportReadProgress(): void {
-    if (!scrollContainerEl || !onreadprogress) return;
-    // Find the last follow-up whose element is within the viewport.
-    const containerRect = scrollContainerEl.getBoundingClientRect();
-    let latestVisible: string | null = null;
-
-    for (let i = followUps.length - 1; i >= 0; i--) {
-      const fu = followUps.at(i);
-      if (!fu) continue;
-      const el = document.getElementById(`fu-${fu.id}`);
-      if (!el) continue;
-      const elRect = el.getBoundingClientRect();
-      // Element is visible if its top is above the container bottom.
-      if (elRect.top < containerRect.bottom) {
-        latestVisible = fu.createdAt;
-        break;
-      }
-    }
-
-    if (latestVisible !== null) {
-      onreadprogress(latestVisible);
-    }
-  }
-
-  // Track whether initial scroll has happened. Only auto-scroll once
-  // on first data load, not on every reactive update.
-  let hasScrolledInitially = false;
+  const scroll = createScrollManager();
 
   // Auto-scroll when new follow-ups arrive via SSE and user was near bottom.
   const followUpCount = $derived(followUps.length);
 
   $effect(() => {
-    if (timelineActive) return;
-    // Reading followUpCount registers the dependency.
-    if (followUpCount === 0) return;
-
-    if (isNearBottom && hasScrolledInitially) {
-      void tick().then(() => {
-        scrollContainerEl?.scrollTo({
-          top: scrollContainerEl.scrollHeight,
-          behavior: "smooth",
-        });
-      });
-    }
+    scroll.autoScrollOnNew(followUpCount, timelineActive);
   });
 
   // --- Loading placeholder shape ---
@@ -660,7 +592,7 @@
     class="chat-container"
     role="log"
     aria-label={m.shell_loading()}
-    use:scrollToBottom
+    use:scroll.scrollToBottom
   >
     <Messages>
       {#each placeholderBubbles as bubble, i (i)}
@@ -744,9 +676,9 @@
 {:else if ticket}
   <div
     class="chat-container"
-    bind:this={scrollContainerEl}
-    use:scrollToBottom
-    onscroll={onScroll}
+    bind:this={scroll.scrollContainerEl}
+    use:scroll.scrollToBottom
+    onscroll={() => scroll.onScroll(followUps, onreadprogress)}
     role="log"
     aria-label={m.ticket_conversation_with({ alias: clientAlias })}
   >
@@ -838,7 +770,7 @@
       {/if}
 
       <ChatZoom
-        {scrollContainerEl}
+        scrollContainerEl={scroll.scrollContainerEl}
         totalMessages={followUps.length}
         {earliestDate}
         {latestDate}
@@ -853,7 +785,7 @@
         <Messages>
           <VirtualList
             items={followUps}
-            scrollContainer={scrollContainerEl}
+            scrollContainer={scroll.scrollContainerEl}
             estimateHeight={80}
             columns={1}
             getKey={(fu: FollowUpRecord) => fu.id}
