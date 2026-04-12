@@ -50,6 +50,7 @@
   import MentionAutocomplete from "$lib/components/tickets/MentionAutocomplete.svelte";
 
   import { createScrollManager } from "$lib/tickets/scroll-manager.svelte.js";
+  import { createChatPaginator } from "$lib/tickets/chat-paginator.svelte.js";
   import {
     getContextMenuActions,
     type ContextMenuEvent,
@@ -149,73 +150,36 @@
     return resolveVolName(userId, volunteerMap, orgCache);
   }
 
-  // --- Pagination state ---
+  // --- Pagination ---
 
   type FollowUpRecord = Awaited<
     ReturnType<typeof ticketRouter.listFollowUps.query>
   >[number];
 
-  // Older pages prepended as they load. Each page is already in
-  // chronological order (server reverses DESC results).
-  let olderPages = $state<FollowUpRecord[][]>([]);
-  let hasMoreOlder = $state(true);
-  let loadingOlder = $state(false);
-
-  // Seed olderPages from the initial query once it resolves.
-  $effect(() => {
-    const data = initialFollowUpsQuery.data;
-    if (!data) return;
-    // Only seed once (when olderPages is empty and initial data arrives).
-    if (olderPages.length === 0 && data.length > 0) {
-      olderPages = [data];
-      if (data.length < PAGE_SIZE) hasMoreOlder = false;
-    }
+  const paginator = createChatPaginator({
+    pageSize: PAGE_SIZE,
+    queryClient,
+    getTicketId: () => ticketId,
+    fetchPage: async (cursor) =>
+      ticketRouter.listFollowUps.query({
+        ticketId,
+        limit: PAGE_SIZE,
+        cursor,
+        direction: "older",
+      }),
+    getScrollContainer: () => scroll.scrollContainerEl,
   });
 
-  // Flatten all pages into a single chronological array (oldest first).
-  const followUps = $derived(olderPages.flat());
+  // Seed paginator from the initial query once it resolves.
+  $effect(() => {
+    const data = initialFollowUpsQuery.data;
+    if (data) paginator.seed(data);
+  });
 
-  async function loadOlderPage(): Promise<void> {
-    if (loadingOlder || !hasMoreOlder || followUps.length === 0) return;
-    loadingOlder = true;
-
-    const oldestId = followUps[0]?.id;
-    if (oldestId === undefined) {
-      loadingOlder = false;
-      return;
-    }
-
-    try {
-      const older = await queryClient.fetchQuery({
-        queryKey: ["ticket", ticketId, "followUps", "page", oldestId],
-        queryFn: async () =>
-          ticketRouter.listFollowUps.query({
-            ticketId,
-            limit: PAGE_SIZE,
-            cursor: oldestId,
-            direction: "older",
-          }),
-      });
-
-      if (older.length < PAGE_SIZE) hasMoreOlder = false;
-      if (older.length > 0) {
-        // Preserve scroll position: measure before prepend, restore after.
-        const el = scroll.scrollContainerEl;
-        const prevScrollHeight = el?.scrollHeight ?? 0;
-        const prevScrollTop = el?.scrollTop ?? 0;
-
-        olderPages = [older, ...olderPages];
-
-        requestAnimationFrame(() => {
-          if (!el) return;
-          const newScrollHeight = el.scrollHeight;
-          el.scrollTop = prevScrollTop + (newScrollHeight - prevScrollHeight);
-        });
-      }
-    } finally {
-      loadingOlder = false;
-    }
-  }
+  // Local aliases for readability in template and downstream $derived.
+  const followUps = $derived(paginator.items);
+  const hasMoreOlder = $derived(paginator.hasMore);
+  const loadingOlder = $derived(paginator.loadingOlder);
 
   // --- Timeline summary query (fetched lazily when zoomed) ---
 
@@ -437,8 +401,6 @@
   // After the initial page loads, check if there are unread messages
   // beyond the loaded range. If so, keep fetching older pages until
   // the read boundary is within the loaded range.
-  let loadingUnread = $state(false);
-
   // Unified load-then-scroll sequence. A single $effect owns both
   // "fetch older pages until the read boundary" and "scroll to the
   // correct position." Running these in one async chain eliminates
@@ -463,7 +425,7 @@
           const cutoffMs = readUpTo.getTime();
           const oldestTime = new Date(oldest.createdAt).getTime();
           if (oldestTime > cutoffMs) {
-            await loadUntilReadBoundary(cutoffMs);
+            await paginator.loadUntilReadBoundary(cutoffMs);
           }
         }
       }
@@ -484,39 +446,6 @@
       });
     })();
   });
-
-  async function loadUntilReadBoundary(cutoffMs: number): Promise<void> {
-    loadingUnread = true;
-    try {
-      while (hasMoreOlder) {
-        const oldestId = followUps[0]?.id;
-        if (oldestId === undefined) break;
-
-        const older = await queryClient.fetchQuery({
-          queryKey: ["ticket", ticketId, "followUps", "page", oldestId],
-          queryFn: async () =>
-            ticketRouter.listFollowUps.query({
-              ticketId,
-              limit: PAGE_SIZE,
-              cursor: oldestId,
-              direction: "older",
-            }),
-        });
-
-        if (older.length < PAGE_SIZE) hasMoreOlder = false;
-        if (older.length > 0) {
-          olderPages = [older, ...olderPages];
-        }
-
-        // Check if we've loaded past the read boundary
-        const newOldest = followUps[0];
-        if (!newOldest) break;
-        if (new Date(newOldest.createdAt).getTime() <= cutoffMs) break;
-      }
-    } finally {
-      loadingUnread = false;
-    }
-  }
 
   // --- ChatZoom data ---
 
@@ -789,7 +718,9 @@
             estimateHeight={80}
             columns={1}
             getKey={(fu: FollowUpRecord) => fu.id}
-            onloadprevious={hasMoreOlder ? loadOlderPage : undefined}
+            onloadprevious={hasMoreOlder
+              ? async () => paginator.loadOlderPage()
+              : undefined}
           >
             {#snippet children({
               item,
