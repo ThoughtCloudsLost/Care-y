@@ -18,12 +18,7 @@ import { SvelteSet } from "svelte/reactivity";
 import type { SvelteMap } from "svelte/reactivity";
 import { cacheRegistry } from "$lib/crypto/cache-registry.js";
 import type { TicketKeyWrap } from "$lib/crypto/ticket-decrypt-cache.js";
-
-/** Serialized Node.js Buffer as it arrives over tRPC JSON (no superjson). */
-interface SerializedBuffer {
-  type: "Buffer";
-  data: number[];
-}
+import type { SerializedBuffer } from "$lib/utils/buffer-encoding.js";
 
 export interface RawFollowUpPreview {
   readonly id: string;

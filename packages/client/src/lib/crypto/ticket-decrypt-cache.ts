@@ -13,13 +13,10 @@ import {
   DECRYPT_ERROR_SENTINEL,
 } from "./async-decrypt-cache.js";
 import type { CryptoBridge } from "$lib/workers/crypto-bridge.js";
-import { serializedBufferToBase64 } from "$lib/utils/buffer-encoding.js";
-
-/** Serialized Node.js Buffer as it arrives over tRPC JSON (no superjson). */
-interface SerializedBuffer {
-  type: "Buffer";
-  data: number[];
-}
+import {
+  serializedBufferToBase64,
+  type SerializedBuffer,
+} from "$lib/utils/buffer-encoding.js";
 
 export interface TicketKeyWrap {
   readonly ephemeralPoint: string;

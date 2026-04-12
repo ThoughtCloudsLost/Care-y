@@ -10,13 +10,10 @@
 import { AsyncDecryptCache } from "./async-decrypt-cache.js";
 import type { CryptoBridge } from "$lib/workers/crypto-bridge.js";
 import type { TicketKeyWrap } from "./ticket-decrypt-cache.js";
-import { serializedBufferToBase64 } from "$lib/utils/buffer-encoding.js";
-
-/** Serialized Node.js Buffer as it arrives over tRPC JSON (no superjson). */
-interface SerializedBuffer {
-  type: "Buffer";
-  data: number[];
-}
+import {
+  serializedBufferToBase64,
+  type SerializedBuffer,
+} from "$lib/utils/buffer-encoding.js";
 
 export class FollowUpDecryptCache extends AsyncDecryptCache {
   constructor(bridge: CryptoBridge) {

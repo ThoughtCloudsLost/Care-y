@@ -17,12 +17,9 @@
 import { untrack } from "svelte";
 import { cacheRegistry } from "./cache-registry.js";
 import type { OrgKeyManager } from "./org-key.js";
+import type { SerializedBuffer } from "$lib/utils/buffer-encoding.js";
 
-/** Serialized Node.js Buffer as it arrives over tRPC JSON (no superjson). */
-interface SerializedBuffer {
-  type: "Buffer";
-  data: number[];
-}
+const textDecoder = new TextDecoder();
 
 export class OrgDecryptCache {
   private readonly cache = cacheRegistry.createMap<string, string>(
@@ -59,7 +56,7 @@ export class OrgDecryptCache {
         data instanceof Uint8Array ? data : new Uint8Array(data.data);
 
       const plainBytes = this.manager.decrypt(ciphertext);
-      const plaintext = new TextDecoder().decode(plainBytes);
+      const plaintext = textDecoder.decode(plainBytes);
       // untrack: cache population is a side effect, not a reactive signal.
       // Without this, calling decrypt() from a template expression or
       // $derived triggers Svelte 5's state_unsafe_mutation error.

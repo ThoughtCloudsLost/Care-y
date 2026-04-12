@@ -30,8 +30,14 @@ export function base64ToUint8Array(encoded: string): Uint8Array {
   return Uint8Array.from(binary, (c) => c.charCodeAt(0));
 }
 
+/** Serialized Node.js Buffer shape as it arrives over tRPC JSON (no superjson). */
+export interface SerializedBuffer {
+  type: "Buffer";
+  data: number[];
+}
+
 export function serializedBufferToBase64(
-  buf: { type: "Buffer"; data: number[] } | string,
+  buf: SerializedBuffer | string,
 ): string {
   if (typeof buf === "string") return buf;
   const bytes = new Uint8Array(buf.data);
