@@ -22,7 +22,7 @@
   - { passive: false } touchmove added to window only when a downward drag from
     scrollTop === 0 is confirmed. Removed on touchend / touchcancel / upward delta.
   - This avoids attaching a blocking listener to the root scroll container globally.
-  - Any child route can suppress PTR via setPTREnabled(false) during init.
+  - Any child route can suppress PTR via usePTR().setEnabled(false) during init.
 -->
 <script lang="ts">
   import {
@@ -48,7 +48,7 @@
   import { beforeNavigate, afterNavigate } from "$app/navigation";
   import * as m from "$lib/paraglide/messages.js";
   import type { TabId, AppShellProps } from "./types";
-  import { getPTREnabled } from "./ptr-context.js";
+  import { providePTR } from "./ptr-context.svelte.js";
   import { themeStore } from "$lib/stores/theme.svelte";
   import { useQueryClient } from "@tanstack/svelte-query";
   import {
@@ -237,7 +237,7 @@
 
   const queryClient = useQueryClient();
 
-  const ptrEnabled: boolean = getPTREnabled();
+  const ptr = providePTR(true);
 
   const PTR_THRESHOLD = 72; // px of overscroll to trigger refresh
   const PTR_MAX_PULL = 120; // px cap for visual travel
@@ -367,7 +367,7 @@
   }
 
   function onPageTouchStart(e: TouchEvent): void {
-    if (!ptrEnabled) return;
+    if (!ptr.enabled) return;
     if (ptrPhase === "refreshing" || ptrPhase === "releasing") return;
     if (!mainEl) return;
 
@@ -417,8 +417,8 @@
   }
 
   onMount(() => {
-    if (!ptrEnabled) return;
-
+    // Always attach listener; per-event check in onPageTouchStart handles
+    // the enabled flag reactively (a child route may disable PTR after mount).
     const el = mainEl;
     if (!el) return;
 
