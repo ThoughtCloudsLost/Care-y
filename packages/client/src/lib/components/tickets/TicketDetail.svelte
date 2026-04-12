@@ -240,22 +240,34 @@
   );
 
   // Decrypt system event and note content for timeline display.
-  const timelineDecryptedContent = $derived.by(
-    (): SvelteMap<string, string | undefined> => {
-      const map = new SvelteMap<string, string | undefined>();
-      if (!ticket) return map;
-      for (const item of summaryQuery.data ?? []) {
-        if (item.encryptedContent === null) continue;
-        const content = followUpCache.decryptContent(
+  // Patches incrementally: skips items already resolved, only processes new ones.
+  const timelineDecryptedContent = new SvelteMap<string, string | undefined>();
+
+  // Clear when switching tickets.
+  $effect(() => {
+    // Read ticketId to track it as a dependency.
+    void ticketId;
+    timelineDecryptedContent.clear();
+  });
+
+  $effect(() => {
+    if (!ticket) return;
+    for (const item of summaryQuery.data ?? []) {
+      if (item.encryptedContent === null) continue;
+      if (timelineDecryptedContent.has(item.id)) continue;
+      const content = followUpCache.decryptContent(
+        item.id,
+        ticket.keyWrap,
+        item.encryptedContent,
+      );
+      if (content !== undefined) {
+        timelineDecryptedContent.set(
           item.id,
-          ticket.keyWrap,
-          item.encryptedContent,
+          isDecryptError(content) ? undefined : content,
         );
-        map.set(item.id, isDecryptError(content) ? undefined : content);
       }
-      return map;
-    },
-  );
+    }
+  });
 
   // --- Expandable timeline clusters ---
 
