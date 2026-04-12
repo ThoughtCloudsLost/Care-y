@@ -11,9 +11,9 @@
 -->
 <script lang="ts">
   import { List, ListItem } from "konsta/svelte";
-  import { createQuery } from "@tanstack/svelte-query";
   import * as m from "$lib/paraglide/messages.js";
   import { trpc } from "$lib/trpc/index.js";
+  import { createVolunteersQuery } from "$lib/tickets/queries.js";
   import { getOrgDecryptCache } from "$lib/crypto/context.js";
   import { RouterNotAvailableError } from "$lib/errors.js";
 
@@ -32,11 +32,7 @@
   const orgCache = getOrgDecryptCache();
 
   // Volunteer list query (cached, fetched once per session).
-  const volunteersQuery = createQuery(() => ({
-    queryKey: ["volunteers"],
-    queryFn: async () => ticketRouter.listVolunteers.query(),
-    staleTime: 5 * 60 * 1000,
-  }));
+  const volunteersQuery = createVolunteersQuery(ticketRouter);
 
   // Extract @partial from cursor position.
   // Searches backward from cursor for the last `@` not preceded by a

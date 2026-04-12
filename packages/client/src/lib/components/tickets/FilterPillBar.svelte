@@ -1,5 +1,6 @@
 <script lang="ts">
   import { createQuery } from "@tanstack/svelte-query";
+  import { createCountsQuery } from "$lib/tickets/queries.js";
   import {
     Badge,
     Button,
@@ -41,10 +42,7 @@
     queryFn: async () => ticketRouter.myQueues.query(),
   }));
 
-  const countsQuery = createQuery(() => ({
-    queryKey: ["tickets", "counts"],
-    queryFn: async () => ticketRouter.counts.query(),
-  }));
+  const countsQuery = createCountsQuery(ticketRouter);
 
   // --- Pill option configs ---
 

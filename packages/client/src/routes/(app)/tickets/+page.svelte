@@ -1,5 +1,6 @@
 <script lang="ts">
-  import { createInfiniteQuery, createQuery } from "@tanstack/svelte-query";
+  import { createInfiniteQuery } from "@tanstack/svelte-query";
+  import { createCountsQuery } from "$lib/tickets/queries.js";
   import { SvelteSet } from "svelte/reactivity";
   import { goto } from "$app/navigation";
   import { resolve } from "$app/paths";
@@ -302,10 +303,7 @@
   const gridColumns = $derived(viewModeStore.mode === "grid" ? 2 : 1);
 
   // Accurate ticket counts from dedicated server endpoint (not limited by pagination).
-  const countsQuery = createQuery(() => ({
-    queryKey: ["tickets", "counts"],
-    queryFn: async () => ticketRouter.counts.query(),
-  }));
+  const countsQuery = createCountsQuery(ticketRouter);
 
   const newCount = $derived(countsQuery.data?.new ?? 0);
   const activeCount = $derived(countsQuery.data?.active ?? 0);

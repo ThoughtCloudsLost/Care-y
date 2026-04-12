@@ -45,6 +45,7 @@
   import { createQuery } from "@tanstack/svelte-query";
   import { createPaginatedQuery } from "$lib/query/paginated.svelte.js";
   import { trpc } from "$lib/trpc/index.js";
+  import { createVolunteersQuery } from "$lib/tickets/queries.js";
   import {
     getCurrentUserId,
     getCryptoBridge,
@@ -134,11 +135,7 @@
     enabled: ticketId !== "",
   }));
 
-  const volunteersQuery = createQuery(() => ({
-    queryKey: ["volunteers"],
-    queryFn: async () => ticketRouter.listVolunteers.query(),
-    staleTime: 5 * 60 * 1000,
-  }));
+  const volunteersQuery = createVolunteersQuery(ticketRouter);
 
   // --- Paginated wrappers ---
 
