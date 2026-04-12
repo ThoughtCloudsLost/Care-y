@@ -21,12 +21,7 @@
     getTicketDecryptCache,
     getCurrentUserId,
   } from "$lib/crypto/context.js";
-  import {
-    filterNeedsAttention,
-    filterMyOpen,
-    filterUnassigned,
-    filterOnHold,
-  } from "$lib/components/dashboard/filters.js";
+  import { bucketTickets } from "$lib/components/dashboard/filters.js";
   import * as m from "$lib/paraglide/messages.js";
 
   // Singletons from (app) layout context.
@@ -77,14 +72,13 @@
     queryFn: async () => ticketRouter.counts.query(),
   }));
 
-  // --- Dashboard section filters (logic in filters.ts) ---
+  // --- Dashboard section filters (single-pass bucketing in filters.ts) ---
   const allTickets = $derived(ticketsQuery.data ?? []);
-  const needsAttention = $derived(
-    filterNeedsAttention(allTickets, currentUserId),
-  );
-  const myOpen = $derived(filterMyOpen(allTickets, currentUserId));
-  const unassigned = $derived(filterUnassigned(allTickets));
-  const onHold = $derived(filterOnHold(allTickets));
+  const buckets = $derived(bucketTickets(allTickets, currentUserId));
+  const needsAttention = $derived(buckets.needsAttention);
+  const myOpen = $derived(buckets.myOpen);
+  const unassigned = $derived(buckets.unassigned);
+  const onHold = $derived(buckets.onHold);
 
   // --- Collapsible section state (all expanded by default) ---
   let shiftExpanded = $state(true);

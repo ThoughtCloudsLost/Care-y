@@ -52,3 +52,55 @@ export function filterUnassigned<T extends DashboardTicket>(tickets: T[]): T[] {
 export function filterOnHold<T extends DashboardTicket>(tickets: T[]): T[] {
   return tickets.filter((t) => t.onHold);
 }
+
+// --- Single-pass bucketing (optimized path for dashboard) ---
+
+export interface DashboardBuckets<T> {
+  needsAttention: T[];
+  myOpen: T[];
+  unassigned: T[];
+  onHold: T[];
+}
+
+/**
+ * Bucket all tickets in a single O(N) pass instead of 4 separate filter calls.
+ *
+ * On-hold tickets go into onHold only (not duplicated into other buckets).
+ * A ticket can appear in both needsAttention and myOpen/unassigned since
+ * "needs attention" is a severity overlay, not a mutually exclusive state.
+ */
+export function bucketTickets<T extends DashboardTicket>(
+  tickets: T[],
+  currentUserId: string | undefined,
+): DashboardBuckets<T> {
+  const result: DashboardBuckets<T> = {
+    needsAttention: [],
+    myOpen: [],
+    unassigned: [],
+    onHold: [],
+  };
+
+  for (const t of tickets) {
+    if (t.onHold) {
+      result.onHold.push(t);
+      continue;
+    }
+    if (t.status !== "open") continue;
+
+    if (t.assignedTo === null) result.unassigned.push(t);
+    if (t.assignedTo === currentUserId) result.myOpen.push(t);
+
+    const isHigh = t.priority === "urgent" || t.priority === "high";
+    if (isHigh && t.assignedTo === null) {
+      result.needsAttention.push(t);
+    } else if (
+      isHigh &&
+      t.assignedTo === currentUserId &&
+      t.followUpCount > 0
+    ) {
+      result.needsAttention.push(t);
+    }
+  }
+
+  return result;
+}
