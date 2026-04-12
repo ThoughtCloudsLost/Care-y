@@ -586,25 +586,4 @@
     height: 18px;
     border-radius: 0.25rem;
   }
-
-  .skeleton-pulse {
-    animation: skeleton-pulse 2s ease-in-out infinite;
-  }
-
-  @keyframes skeleton-pulse {
-    0%,
-    100% {
-      opacity: 1;
-    }
-    50% {
-      opacity: 0.65;
-    }
-  }
-
-  @media (prefers-reduced-motion: reduce) {
-    .skeleton-pulse {
-      animation: none;
-      opacity: 0.6;
-    }
-  }
 </style>

@@ -22,7 +22,7 @@
 
 {#if loading}
   <span
-    class="isk skeleton-bar {className ?? ''}"
+    class="isk skeleton-bar skeleton-pulse {className ?? ''}"
     style:width
     role="presentation"
   ></span>
@@ -36,23 +36,5 @@
     height: 0.8em;
     border-radius: 0.25rem;
     vertical-align: baseline;
-    animation: skeleton-pulse 2s ease-in-out infinite;
-  }
-
-  @keyframes skeleton-pulse {
-    0%,
-    100% {
-      opacity: 1;
-    }
-    50% {
-      opacity: 0.65;
-    }
-  }
-
-  @media (prefers-reduced-motion: reduce) {
-    .isk {
-      animation: none;
-      opacity: 0.6;
-    }
   }
 </style>

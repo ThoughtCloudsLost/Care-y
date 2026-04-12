@@ -127,23 +127,4 @@
     font-family: inherit;
     -webkit-tap-highlight-color: transparent;
   }
-
-  :global(.skeleton-pulse) {
-    animation: skeleton-pulse 2.5s ease-in-out infinite;
-  }
-  @keyframes skeleton-pulse {
-    0%,
-    100% {
-      opacity: 1;
-    }
-    50% {
-      opacity: 0.65;
-    }
-  }
-  @media (prefers-reduced-motion: reduce) {
-    :global(.skeleton-pulse) {
-      animation: none;
-      opacity: 0.7;
-    }
-  }
 </style>
