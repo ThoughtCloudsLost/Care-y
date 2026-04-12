@@ -15,6 +15,12 @@ import type { TRPCClient } from "@trpc/client";
 import { createTRPCClient, httpBatchLink } from "@trpc/client";
 import type { AppRouter } from "@care-y/server";
 
+// DEV-only: skip artificial delay during auto-login so it completes fast.
+let debugDelayEnabled = false;
+export function setDebugDelay(enabled: boolean): void {
+  debugDelayEnabled = enabled;
+}
+
 export const trpc: TRPCClient<AppRouter> = createTRPCClient<AppRouter>({
   links: [
     httpBatchLink({
@@ -27,7 +33,7 @@ export const trpc: TRPCClient<AppRouter> = createTRPCClient<AppRouter>({
       // tRPC's RequestInitEsque has signal?: AbortSignal | undefined, incompatible
       // with native fetch's RequestInit under exactOptionalPropertyTypes (trpc/trpc#1904)
       async fetch(url, options) {
-        if (import.meta.env.DEV) {
+        if (import.meta.env.DEV && debugDelayEnabled) {
           await new Promise((r) =>
             setTimeout(r, 5_000 + Math.random() * 10_000),
           );
