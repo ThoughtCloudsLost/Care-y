@@ -284,6 +284,7 @@
   "ticket_action_unhold": "Quitar espera",
   "ticket_action_close": "Cerrar",
   "ticket_action_reopen": "Reabrir",
+  "ticket_action_open": "Abierto",
   "ticket_action_watch": "Observar",
   "ticket_action_unwatch": "Dejar de observar",
   "ticket_action_client_info": "Info del cliente",

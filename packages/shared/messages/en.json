@@ -284,6 +284,7 @@
   "ticket_action_unhold": "Unhold",
   "ticket_action_close": "Close",
   "ticket_action_reopen": "Reopen",
+  "ticket_action_open": "Open",
   "ticket_action_watch": "Watch",
   "ticket_action_unwatch": "Unwatch",
   "ticket_action_client_info": "Client Info",

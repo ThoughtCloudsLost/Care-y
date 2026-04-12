@@ -204,7 +204,7 @@
       ? m.ticket_action_hold()
       : ticketStatus === "closed"
         ? m.ticket_action_close()
-        : m.ticket_action_reopen().replace("Reopen", "Open"),
+        : m.ticket_action_open(),
   );
 
   // Decrypt ticket title via shared cache.
