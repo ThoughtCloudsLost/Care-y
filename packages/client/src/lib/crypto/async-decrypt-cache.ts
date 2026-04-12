@@ -56,20 +56,27 @@ export class AsyncDecryptCache {
 
     this.pending.add(cacheKey);
 
-    // DEBUG: random 5-15s delay for DecryptPlaceholder inspection. Remove after testing.
-    const delay = new Promise<void>((resolve) => {
-      setTimeout(resolve, 5_000 + Math.random() * 10_000);
-    });
-    void delay
-      .then(async () =>
-        this.bridge.decrypt(
+    const decryptPromise = import.meta.env.DEV
+      ? new Promise<void>((resolve) => {
+          setTimeout(resolve, 5_000 + Math.random() * 10_000);
+        }).then(async () =>
+          this.bridge.decrypt(
+            cacheKey,
+            ephemeralPoint,
+            nonce,
+            wrappedKey,
+            ciphertext,
+          ),
+        )
+      : this.bridge.decrypt(
           cacheKey,
           ephemeralPoint,
           nonce,
           wrappedKey,
           ciphertext,
-        ),
-      )
+        );
+
+    void decryptPromise
       .then((plaintext) => {
         this.cache.set(cacheKey, plaintext);
       })
