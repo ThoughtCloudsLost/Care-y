@@ -1,9 +1,25 @@
+import { getContext, setContext } from "svelte";
+
 /**
- * Context key for pull-to-refresh opt-out.
+ * Typed context for pull-to-refresh opt-out.
  *
- * Any route that should suppress PTR calls:
- *   setContext(PTR_CONTEXT_KEY, false)
+ * AppShell reads `getPTREnabled()` (defaults to true if no parent set it).
+ * Any child route that should suppress PTR calls `setPTREnabled(false)` during init.
  *
- * AppShell reads this via getContext and skips gesture handling when false.
+ * Uses a typed wrapper around getContext/setContext because the opt-out flows
+ * bottom-up (child signals to parent's already-read default), not top-down.
+ * Svelte's createContext throws when no parent calls the setter, which makes
+ * it unsuitable here since the default case is "no one opts out."
  */
-export const PTR_CONTEXT_KEY: unique symbol = Symbol("pull-to-refresh-enabled");
+
+const PTR_KEY = Symbol("ptr-enabled");
+
+/** Read the PTR-enabled flag from ancestor context. Returns `true` if unset. */
+export function getPTREnabled(): boolean {
+  return getContext<boolean | undefined>(PTR_KEY) !== false;
+}
+
+/** Set the PTR-enabled flag for this component's children. */
+export function setPTREnabled(enabled: boolean): void {
+  setContext(PTR_KEY, enabled);
+}

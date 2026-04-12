@@ -22,7 +22,7 @@
   - { passive: false } touchmove added to window only when a downward drag from
     scrollTop === 0 is confirmed. Removed on touchend / touchcancel / upward delta.
   - This avoids attaching a blocking listener to the root scroll container globally.
-  - Any child route can suppress PTR via setContext(PTR_CONTEXT_KEY, false).
+  - Any child route can suppress PTR via setPTREnabled(false) during init.
 -->
 <script lang="ts">
   import {
@@ -42,13 +42,13 @@
     Search,
     TicketPlus,
   } from "@lucide/svelte";
-  import { tick, onMount, getContext } from "svelte";
+  import { tick, onMount } from "svelte";
   import { SvelteMap } from "svelte/reactivity";
   import type { Component } from "svelte";
   import { beforeNavigate, afterNavigate } from "$app/navigation";
   import * as m from "$lib/paraglide/messages.js";
   import type { TabId, AppShellProps } from "./types";
-  import { PTR_CONTEXT_KEY } from "./ptr-context";
+  import { getPTREnabled } from "./ptr-context.js";
   import { themeStore } from "$lib/stores/theme.svelte";
   import { useQueryClient } from "@tanstack/svelte-query";
   import {
@@ -237,8 +237,7 @@
 
   const queryClient = useQueryClient();
 
-  // Route opt-out: child calls setContext(PTR_CONTEXT_KEY, false)
-  const ptrEnabled: boolean = getContext(PTR_CONTEXT_KEY) !== false;
+  const ptrEnabled: boolean = getPTREnabled();
 
   const PTR_THRESHOLD = 72; // px of overscroll to trigger refresh
   const PTR_MAX_PULL = 120; // px cap for visual travel
