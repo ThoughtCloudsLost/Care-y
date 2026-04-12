@@ -34,6 +34,13 @@ export class OrgDecryptCache {
   /**
    * Decrypt a sealed-box ciphertext, returning cached plaintext on hit.
    *
+   * Safe to call from `$derived` and template expressions. First call
+   * decrypts synchronously and caches via `untrack()` to avoid
+   * `state_unsafe_mutation`. Subsequent calls return the cached value.
+   * The underlying SvelteMap triggers reactivity, so any `$derived`
+   * that received null (key not loaded) will re-evaluate once the org
+   * key loads and a new `.get()` call picks up the populated entry.
+   *
    * Returns the decrypted UTF-8 string, or null if the org key is not
    * loaded or decryption fails (e.g., wrong key, corrupted ciphertext).
    *

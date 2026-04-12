@@ -41,7 +41,12 @@ export class AsyncDecryptCache {
   /**
    * Returns cached plaintext if available, undefined if a decrypt is
    * already pending, or triggers an async Worker decrypt on first call.
-   * The SvelteMap update re-renders any component reading the value.
+   *
+   * Safe to call from `$derived` and template expressions. The
+   * fire-and-forget Worker decrypt is idempotent (guarded by `pending`
+   * Set). When the Worker responds, the SvelteMap `.set()` triggers
+   * reactivity, causing any `$derived` that previously received
+   * `undefined` to re-evaluate and pick up the cached plaintext.
    */
   protected decrypt(
     cacheKey: string,
