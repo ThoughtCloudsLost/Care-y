@@ -17,6 +17,7 @@
   import { getCryptoBridge } from "$lib/crypto/context.js";
   import { RouterNotAvailableError } from "$lib/errors.js";
   import type { TicketKeyWrap } from "$lib/crypto/ticket-decrypt-cache.js";
+  import { downloadDecryptedAttachment } from "$lib/tickets/attachment-download.js";
 
   interface Props {
     /** Attachment UUID from AttachmentRecord. */
@@ -45,26 +46,12 @@
     downloading = true;
 
     try {
-      const { data: encryptedBase64 } =
-        await ticketRouter.downloadAttachmentBlob.query({ attachmentId });
-
-      const decryptedBuf = await bridge.decryptBlob(
+      await downloadDecryptedAttachment(attachmentId, filename, {
+        ticketRouter,
+        bridge,
         ticketId,
-        keyWrap.ephemeralPoint,
-        keyWrap.nonce,
-        keyWrap.wrappedKey,
-        encryptedBase64,
-      );
-
-      const blob = new Blob([decryptedBuf]);
-      const url = URL.createObjectURL(blob);
-
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = filename;
-      a.click();
-
-      URL.revokeObjectURL(url);
+        keyWrap,
+      });
     } finally {
       downloading = false;
     }

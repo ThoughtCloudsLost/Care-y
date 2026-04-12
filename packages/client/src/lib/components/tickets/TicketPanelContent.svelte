@@ -50,6 +50,7 @@
     buildVolunteerMap,
     resolveVolunteerName as resolveVolName,
   } from "$lib/tickets/resolve-volunteer.js";
+  import { downloadDecryptedAttachment } from "$lib/tickets/attachment-download.js";
   import {
     getCurrentUserId,
     getCryptoBridge,
@@ -358,26 +359,12 @@
     downloadingFiles.add(attachmentId);
 
     try {
-      const { data: encryptedBase64 } =
-        await ticketRouter.downloadAttachmentBlob.query({ attachmentId });
-
-      const decryptedBuf = await bridge.decryptBlob(
+      await downloadDecryptedAttachment(attachmentId, filename, {
+        ticketRouter,
+        bridge,
         ticketId,
-        keyWrap.ephemeralPoint,
-        keyWrap.nonce,
-        keyWrap.wrappedKey,
-        encryptedBase64,
-      );
-
-      const blob = new Blob([decryptedBuf]);
-      const url = URL.createObjectURL(blob);
-
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = filename;
-      a.click();
-
-      URL.revokeObjectURL(url);
+        keyWrap,
+      });
     } finally {
       downloadingFiles.delete(attachmentId);
     }
