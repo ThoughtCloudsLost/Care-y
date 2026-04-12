@@ -108,6 +108,7 @@
     queryFn: async () => ticketRouter.get.query({ ticketId }),
   }));
 
+  // Defer until ticket loaded: notes need keyWrap for content decryption.
   const notesQuery = createQuery(() => ({
     queryKey: ["ticket", ticketId, "followUps", "notes"],
     queryFn: async () =>
@@ -117,21 +118,22 @@
         limit: 100,
         direction: "older",
       }),
-    enabled: ticketId !== "",
+    enabled: ticketId !== "" && keyWrap !== null,
   }));
 
+  // Defer media queries until ticket data has loaded (keyWrap needed for decryption).
   const attachmentsQuery = createQuery(() => ({
     queryKey: ["ticket", ticketId, "attachments"],
     queryFn: async () =>
       ticketRouter.listAttachments.query({ ticketId, limit: 50 }),
-    enabled: ticketId !== "",
+    enabled: ticketId !== "" && keyWrap !== null,
   }));
 
   const recordingsQuery = createQuery(() => ({
     queryKey: ["ticket", ticketId, "recordings"],
     queryFn: async () =>
       ticketRouter.listRecordings.query({ ticketId, limit: 50 }),
-    enabled: ticketId !== "",
+    enabled: ticketId !== "" && keyWrap !== null,
   }));
 
   const watchingQuery = createQuery(() => ({
