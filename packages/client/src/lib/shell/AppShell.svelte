@@ -43,7 +43,7 @@
     TicketPlus,
   } from "@lucide/svelte";
   import { tick, onMount } from "svelte";
-  import { SvelteMap } from "svelte/reactivity";
+  import { SvelteMap, SvelteSet } from "svelte/reactivity";
   import type { Component } from "svelte";
   import { beforeNavigate, afterNavigate } from "$app/navigation";
   import * as m from "$lib/paraglide/messages.js";
@@ -61,6 +61,29 @@
     type NavbarOverrideContainer,
   } from "./context";
   import { markNavigated } from "./navigation.js";
+  import ShellSheet from "./ShellSheet.svelte";
+  import SearchResults from "$lib/components/search/SearchResults.svelte";
+  import {
+    createTicketSearchProvider,
+    type RawCachedTicket,
+  } from "$lib/search/providers/tickets.js";
+  import {
+    kbStubProvider,
+    volunteersStubProvider,
+  } from "$lib/search/providers/stubs.js";
+  import {
+    registerSearchProvider,
+    resetFullSearch,
+  } from "$lib/search/registry.svelte.js";
+  import {
+    getTicketDecryptCache,
+    getOrgDecryptCache,
+    getCurrentUserId,
+    getPreviewLoader,
+  } from "$lib/crypto/context.js";
+  import { deriveDisplayStatus } from "$lib/tickets/display-status.js";
+  import type { TicketKeyWrap } from "$lib/crypto/ticket-decrypt-cache.js";
+  import type { SerializedBuffer } from "$lib/utils/buffer-encoding.js";
 
   // Main content element, resolved via bind:this. This is the scroll
   // container for all routes (Page has overflow:hidden, main scrolls).
@@ -219,7 +242,146 @@
   function closeSearch(): void {
     searchOpen = false;
     searchQuery = "";
+    resetFullSearch();
   }
+
+  // ── Search provider registration ────────────────────────────────────
+  //
+  // Context getters (crypto caches, currentUserId) are NOT available
+  // during SSR because CryptoProvider only initializes in the browser.
+  // All crypto context access happens inside $effect blocks, which
+  // only run client-side.
+
+  const promotedProviderId = $derived(
+    activeTab === "tickets" ? "tickets" : undefined,
+  );
+
+  // Memoized flat ticket list (raw records, no decryption).
+  // Updated by the cache subscription effect. Empty during SSR.
+  let flatTicketList = $state<readonly RawCachedTicket[]>([]);
+
+  // All crypto context access + cache subscription + provider registration
+  // in a single effect (browser-only, never runs during SSR).
+  $effect(() => {
+    const ticketCache = getTicketDecryptCache();
+    const orgCache = getOrgDecryptCache();
+    const currentUserIdGetter = getCurrentUserId();
+    const previewLoader = getPreviewLoader();
+
+    // Flatten + deduplicate the TanStack Query cache. No decryption here.
+    // Handles both regular queries (dashboard: T[]) and infinite queries
+    // (ticket list: { pages: T[][] }).
+    function hasPages(
+      val: RawCachedTicket[] | { pages: RawCachedTicket[][] },
+    ): val is { pages: RawCachedTicket[][] } {
+      return "pages" in val && Array.isArray(val.pages);
+    }
+
+    function rebuildFlatList(): readonly RawCachedTicket[] {
+      const entries = queryClient.getQueriesData<
+        RawCachedTicket[] | { pages: RawCachedTicket[][] }
+      >({ queryKey: ["tickets", "list"] });
+
+      const seen = new SvelteSet<string>();
+      const result: RawCachedTicket[] = [];
+      for (const [, data] of entries) {
+        if (data == null) continue;
+        const tickets: RawCachedTicket[] = hasPages(data)
+          ? data.pages.flat()
+          : data;
+        for (const t of tickets) {
+          if (seen.has(t.id)) continue;
+          seen.add(t.id);
+          result.push(t);
+        }
+      }
+      return result;
+    }
+
+    // Build initial list.
+    flatTicketList = rebuildFlatList();
+
+    // Rebuild when ticket queries update (new data fetched, pagination, etc.).
+    const unsubscribeCache = queryClient.getQueryCache().subscribe((event) => {
+      if (
+        event.type === "updated" &&
+        Array.isArray(event.query.queryKey) &&
+        event.query.queryKey[0] === "tickets" &&
+        event.query.queryKey[1] === "list"
+      ) {
+        flatTicketList = rebuildFlatList();
+      }
+    });
+
+    // Register the ticket search provider with decrypt trigger functions.
+    // The provider's search() calls these in a $derived context, so all
+    // reactive SvelteMap reads are tracked. Results update automatically
+    // as titles are decrypted, queue names are resolved, etc.
+    // Type-narrowing helpers for the unknown -> concrete boundary.
+    // The query cache stores server response data whose encrypted fields
+    // are typed as unknown in RawCachedTicket. These helpers satisfy
+    // strict-type-checked ESLint without losing safety.
+    function isKeyWrap(val: unknown): val is TicketKeyWrap {
+      return (
+        typeof val === "object" &&
+        val !== null &&
+        "ephemeralPoint" in val &&
+        "nonce" in val &&
+        "wrappedKey" in val
+      );
+    }
+
+    function isSerializedBuffer(val: unknown): val is SerializedBuffer {
+      return typeof val === "object" && val !== null && "type" in val;
+    }
+
+    function isOrgCiphertext(
+      val: unknown,
+    ): val is SerializedBuffer | Uint8Array {
+      return val instanceof Uint8Array || isSerializedBuffer(val);
+    }
+
+    const unregisterProvider = registerSearchProvider(
+      createTicketSearchProvider({
+        getAllCachedTickets: () => flatTicketList,
+        decryptTitle: (id, keyWrap, encryptedTitle) => {
+          const kw = isKeyWrap(keyWrap) ? keyWrap : null;
+          if (typeof encryptedTitle === "string") {
+            return ticketCache.decryptTitle(id, kw, encryptedTitle);
+          }
+          if (isSerializedBuffer(encryptedTitle)) {
+            return ticketCache.decryptTitle(id, kw, encryptedTitle);
+          }
+          return undefined;
+        },
+        decryptQueueName: (queueId, ciphertext) => {
+          if (!isOrgCiphertext(ciphertext)) return null;
+          return orgCache.decrypt(`queue:${queueId}`, ciphertext) ?? null;
+        },
+        resolveAssignedName: (assignedTo, ciphertext) => {
+          if (assignedTo === null) return null;
+          if (assignedTo === currentUserIdGetter()) {
+            return m.dashboard_assigned_you();
+          }
+          if (!isOrgCiphertext(ciphertext)) return null;
+          return orgCache.decrypt(`assignee:${assignedTo}`, ciphertext) ?? null;
+        },
+        getPreviewFollowUps: (ticketId) => previewLoader.get(ticketId),
+        deriveDisplayStatus,
+      }),
+    );
+
+    // Placeholder providers for sections not yet built (removed by 6f/6g).
+    const unregisterKb = registerSearchProvider(kbStubProvider);
+    const unregisterVol = registerSearchProvider(volunteersStubProvider);
+
+    return () => {
+      unsubscribeCache();
+      unregisterProvider();
+      unregisterKb();
+      unregisterVol();
+    };
+  });
 
   interface TabDef {
     readonly id: TabId;
@@ -682,6 +844,25 @@
   >
     {@render children()}
   </main>
+
+  <ShellSheet
+    opened={searchOpen}
+    ondismiss={closeSearch}
+    backdrop={false}
+    trapFocus={false}
+    role="search"
+    ariaLabel={m.search_hint()}
+    class="search-sheet"
+  >
+    <SearchResults
+      query={searchQuery}
+      {promotedProviderId}
+      ondismiss={closeSearch}
+      onselectrecent={(q: string) => {
+        searchQuery = q;
+      }}
+    />
+  </ShellSheet>
 </Page>
 
 <style>
@@ -935,5 +1116,10 @@
     to {
       transform: rotate(360deg);
     }
+  }
+
+  /* Search sheet: fill from bottom up to the Navbar */
+  :global(.search-sheet) {
+    height: calc(100dvh - var(--navbar-h, 64px));
   }
 </style>

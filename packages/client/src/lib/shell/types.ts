@@ -59,6 +59,17 @@ export interface ShellSheetProps {
   ondismiss: () => void;
   /** Sheet content. */
   children: Snippet;
+  /** Show backdrop overlay behind the sheet. Default: true. */
+  backdrop?: boolean;
+  /** Trap focus inside the sheet. Disable when an external input (e.g.,
+   *  Searchbar in the Navbar) should keep focus. Default: true. */
+  trapFocus?: boolean;
+  /** ARIA role for the content wrapper. Default: "dialog". */
+  role?: "dialog" | "search" | "region";
+  /** ARIA label (required when role is not "dialog" with a visible title). */
+  ariaLabel?: string;
+  /** Additional CSS class on the Konsta Sheet element. */
+  class?: string;
 }
 
 export interface ShellPopupProps {
