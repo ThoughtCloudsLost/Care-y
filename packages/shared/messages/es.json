@@ -353,5 +353,21 @@
   "ticket_panel_no_media": "Sin adjuntos todavia.",
   "ticket_panel_notes": "Notas",
   "ticket_panel_no_notes": "Sin notas internas todavia.",
-  "ticket_panel_recent_coming_soon": "El historial de tickets recientes aparecera aqui."
+  "ticket_panel_recent_coming_soon": "El historial de tickets recientes aparecera aqui.",
+
+  "ticket_toast_held": "Ticket puesto en espera",
+  "ticket_toast_unheld": "Ticket quitado de espera",
+  "ticket_toast_assigned": "Asignado a {name}",
+  "ticket_toast_unassigned": "Ticket sin asignar",
+  "ticket_toast_message_sent": "Mensaje enviado",
+  "ticket_toast_bulk_assigned": "{count} tickets asignados a {name}",
+  "ticket_toast_bulk_held": "{count} tickets puestos en espera",
+  "ticket_reply_sheet_title": "Responder a {alias}",
+  "ticket_reply_sheet_more": "y {count} mas",
+  "ticket_reply_sheet_placeholder": "Escribe un mensaje...",
+  "ticket_assign_sheet_title": "Asignar",
+  "ticket_assign_search": "Buscar voluntarios...",
+  "ticket_assign_you": "(tu)",
+  "ticket_note_saved": "Nota guardada",
+  "feature_coming_soon": "Funcion disponible pronto"
 }

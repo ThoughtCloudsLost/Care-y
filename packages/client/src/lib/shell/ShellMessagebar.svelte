@@ -30,6 +30,7 @@
     onplus,
     oninput,
     sendDisabled = false,
+    inline = false,
   }: ShellMessagebarProps = $props();
 
   const placeholder = $derived(
@@ -51,6 +52,7 @@
   let anchorEl = $state<HTMLDivElement | undefined>();
 
   $effect(() => {
+    if (inline) return;
     const el = anchorEl;
     if (!el) return;
 
@@ -82,6 +84,7 @@
   bind:this={anchorEl}
   class="shell-messagebar-anchor"
   class:note-mode={mode === "note"}
+  class:shell-messagebar-inline={inline}
 >
   <Messagebar bind:value {placeholder} {oninput} class="shell-messagebar">
     {#snippet left()}
@@ -125,6 +128,11 @@
     left: 0;
     right: 0;
     z-index: 20;
+  }
+
+  .shell-messagebar-anchor.shell-messagebar-inline {
+    position: relative;
+    z-index: auto;
   }
 
   /* Match the tabbar safe-area override: strip extra 16px Konsta adds. */

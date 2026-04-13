@@ -20,6 +20,7 @@
   import { getFollowUpDecryptCache } from "$lib/crypto/context.js";
   import DecryptPlaceholder from "$lib/components/DecryptPlaceholder.svelte";
   import type { RawFollowUpPreview } from "$lib/tickets/preview-loader.svelte.js";
+  import { followUpKind } from "$lib/tickets/follow-up-utils.js";
 
   interface Props {
     followUps: RawFollowUpPreview[] | undefined;
@@ -35,13 +36,6 @@
   function truncate(text: string, maxLen: number): string {
     if (text.length <= maxLen) return text;
     return text.slice(0, maxLen) + "\u2026";
-  }
-
-  /** Classify follow-up the same way TicketDetail does. */
-  function followUpKind(fu: RawFollowUpPreview): "message" | "system" | "note" {
-    if (fu.source === "system") return "system";
-    if (fu.type === "internal_note") return "note";
-    return "message";
   }
 
   // Server returns newest-first; reverse so oldest is at the top

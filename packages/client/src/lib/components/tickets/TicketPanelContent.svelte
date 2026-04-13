@@ -29,10 +29,7 @@
   import type { DisplayStatus } from "$lib/tickets/display-status.js";
   import { createQuery } from "@tanstack/svelte-query";
   import { trpc } from "$lib/trpc/index.js";
-  import {
-    getCurrentUserId,
-    getTicketDecryptCache,
-  } from "$lib/crypto/context.js";
+  import { getTicketDecryptCache } from "$lib/crypto/context.js";
   import { isDecryptError } from "$lib/crypto/async-decrypt-cache.js";
   import { RouterNotAvailableError } from "$lib/errors.js";
   import DecryptPlaceholder from "$lib/components/DecryptPlaceholder.svelte";
@@ -59,8 +56,6 @@
   const ticketRouter = trpc.tickets;
 
   const ticketCache = getTicketDecryptCache();
-  const currentUserIdGetter = getCurrentUserId();
-  const currentUserId = $derived(currentUserIdGetter());
 
   // --- TanStack queries (same keys as TicketDetail, deduplicated) ---
 
@@ -81,9 +76,6 @@
   const keyWrap = $derived(ticket?.keyWrap ?? null);
   const ticketStatus = $derived(ticket?.status ?? "open");
   const isOnHold = $derived(ticket?.onHold ?? false);
-  const isAssignedToMe = $derived(
-    currentUserId !== undefined && ticket?.assignedTo === currentUserId,
-  );
   const isWatching = $derived(watchingQuery.data ?? false);
 
   const displayStatus = $derived<DisplayStatus>(
@@ -162,14 +154,12 @@
 
   <!-- Ticket actions -->
   <List strong inset class="!my-3">
-    <ListItem title={m.ticket_action_take()}>
-      {#snippet after()}
-        <Toggle
-          checked={isAssignedToMe}
-          onChange={() => onaction(isAssignedToMe ? "release" : "take")}
-        />
-      {/snippet}
-    </ListItem>
+    <ListItem
+      link
+      chevron
+      title={m.ticket_action_assign()}
+      onclick={() => onaction("assign")}
+    />
     <ListItem title={m.ticket_action_hold()}>
       {#snippet after()}
         <Toggle

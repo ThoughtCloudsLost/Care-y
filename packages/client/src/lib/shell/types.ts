@@ -152,6 +152,10 @@ export interface ShellMessagebarProps {
   oninput?: (e: Event) => void;
   /** Whether the send button is visually disabled. */
   sendDisabled?: boolean;
+  /** When true, renders inline (position: relative) instead of fixed, and
+   *  skips the ResizeObserver that publishes --messagebar-height. Used inside
+   *  sheets where the messagebar sits within the sheet's flow, not viewport-pinned. */
+  inline?: boolean;
 }
 
 // ── Navbar override ─────────────────────────────────────────────────

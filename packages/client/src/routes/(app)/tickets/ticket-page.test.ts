@@ -37,6 +37,11 @@ vi.mock("$app/paths", () => ({
 let infiniteQueryState: Record<string, unknown> = {};
 
 vi.mock("@tanstack/svelte-query", () => ({
+  useQueryClient: () => ({
+    getQueryData: vi.fn(),
+    setQueryData: vi.fn(),
+    invalidateQueries: vi.fn(),
+  }),
   createInfiniteQuery: (optsFn: () => Record<string, unknown>) => {
     optsFn();
     return infiniteQueryState;
@@ -58,6 +63,12 @@ vi.mock("$lib/trpc/index.js", () => ({
       list: { query: vi.fn() },
       recentFollowUps: { query: vi.fn() },
       myQueues: { query: vi.fn() },
+      listVolunteers: { query: vi.fn().mockResolvedValue([]) },
+      assignTo: { mutate: vi.fn().mockResolvedValue({}) },
+      createFollowUp: { mutate: vi.fn().mockResolvedValue({}) },
+      counts: {
+        query: vi.fn().mockResolvedValue({ new: 0, active: 0, onHold: 0 }),
+      },
     },
   },
 }));
@@ -97,8 +108,13 @@ vi.mock("$lib/crypto/context.js", () => ({
   }),
   getCurrentUserId: () => () => "user-001",
   getPreviewLoader: () => mockPreviewLoader,
+  getCryptoBridge: () => ({
+    encrypt: vi.fn().mockResolvedValue("base64-ciphertext"),
+    decrypt: vi.fn().mockResolvedValue("plaintext"),
+  }),
   getFollowUpDecryptCache: () => ({
     decrypt: vi.fn().mockReturnValue(undefined),
+    decryptContent: vi.fn().mockReturnValue(undefined),
     has: vi.fn().mockReturnValue(false),
     get: vi.fn().mockReturnValue(undefined),
     clear: vi.fn(),

@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { createInfiniteQuery } from "@tanstack/svelte-query";
+  import { createInfiniteQuery, useQueryClient } from "@tanstack/svelte-query";
   import { createCountsQuery } from "$lib/tickets/queries.js";
   import { untrack } from "svelte";
   import { SvelteMap, SvelteSet } from "svelte/reactivity";
@@ -57,6 +57,15 @@
   import CreateSavedFilter from "$lib/components/tickets/CreateSavedFilter.svelte";
   import VirtualList from "$lib/components/tickets/VirtualList.svelte";
   import QueryError from "$lib/components/QueryError.svelte";
+  import AssignSheet from "$lib/components/tickets/AssignSheet.svelte";
+  import ReplySheet from "$lib/components/tickets/ReplySheet.svelte";
+  import ShellActionSheet from "$lib/shell/ShellActionSheet.svelte";
+  import CallOptionsContent, {
+    type CallAction,
+  } from "$lib/components/tickets/CallOptionsContent.svelte";
+  import { haptic } from "$lib/utils/haptic.js";
+  import type { SerializedBuffer } from "$lib/utils/buffer-encoding.js";
+  import type { RawFollowUpPreview } from "$lib/tickets/preview-loader.svelte.js";
 
   const ticketCache = getTicketDecryptCache();
   const orgCache = getOrgDecryptCache();
@@ -64,6 +73,48 @@
   const currentUserId = $derived(currentUserIdGetter());
   if (!trpc.tickets) throw new RouterNotAvailableError("tickets");
   const ticketRouter = trpc.tickets;
+  const queryClient = useQueryClient();
+
+  /** Resolve a volunteer's display name from the query cache, falling back to "You" for self. */
+  function resolveVolunteerName(userId: string): string {
+    if (userId === currentUserId) return m.dashboard_assigned_you();
+    interface VolunteerRecord {
+      id: string;
+      encryptedDisplayName: SerializedBuffer | Uint8Array | null;
+    }
+    const volunteers = queryClient.getQueryData<readonly VolunteerRecord[]>([
+      "volunteers",
+    ]);
+    const vol = volunteers?.find((v) => v.id === userId);
+    if (vol) {
+      const name = orgCache.decrypt(
+        `volunteer:${vol.id}`,
+        vol.encryptedDisplayName,
+      );
+      if (name !== null) return name;
+    }
+    return m.dashboard_assigned_you();
+  }
+
+  // Per-ticket pending guards to prevent double-tap races.
+  const pendingHoldIds = new SvelteSet<string>();
+
+  // AssignSheet overlay state.
+  let assignSheetOpen = $state(false);
+  let assignTargetTicketId = $state("");
+  let assignCurrentAssigneeId = $state<string | null>(null);
+
+  // ReplySheet overlay state.
+  let replySheetOpen = $state(false);
+  let replyTargetTicketId = $state("");
+  let replyClientAlias = $state("");
+  let replyPreviewFollowUps = $state<RawFollowUpPreview[] | undefined>(
+    undefined,
+  );
+  let replyFollowUpCount = $state(0);
+
+  // Call action sheet state.
+  let callSheetOpen = $state(false);
 
   // --- URL filter application (dashboard → tickets navigation) ---
   // When arriving with ?queue=X or ?filter=my-open|unassigned, apply
@@ -240,10 +291,133 @@
   }
 
   function handleAction(ticketId: string, action: TicketQuickAction): void {
-    // Quick actions call existing tRPC mutations.
-    if (import.meta.env.DEV) {
-      console.log(`[TicketList] action: ${action} on ${ticketId}`);
+    switch (action) {
+      case "hold":
+        void handleHold(ticketId, true);
+        break;
+      case "unhold":
+        void handleHold(ticketId, false);
+        break;
+      case "assign":
+        openAssignSheet(ticketId);
+        break;
+      case "reply":
+        openReplySheet(ticketId);
+        break;
+      case "call":
+        callSheetOpen = true;
+        break;
     }
+  }
+
+  async function handleHold(ticketId: string, onHold: boolean): Promise<void> {
+    if (pendingHoldIds.has(ticketId)) return;
+    pendingHoldIds.add(ticketId);
+
+    const listKey = ["tickets", "list", filterStore.serverParams];
+
+    // Snapshot for rollback.
+    const previous = queryClient.getQueryData<{
+      pages: TicketRecord[][];
+      pageParams: unknown[];
+    }>(listKey);
+
+    // Optimistic update: flip onHold in cache.
+    queryClient.setQueryData<typeof previous>(listKey, (old) => {
+      if (!old) return old;
+      return {
+        ...old,
+        pages: old.pages.map((pg) =>
+          pg.map((t) => (t.id === ticketId ? { ...t, onHold } : t)),
+        ),
+      };
+    });
+
+    try {
+      await ticketRouter.update.mutate({ ticketId, onHold });
+      haptic();
+      toastStore.show(onHold ? m.ticket_toast_held() : m.ticket_toast_unheld());
+      void queryClient.invalidateQueries({ queryKey: ["tickets", "list"] });
+    } catch {
+      // Rollback.
+      queryClient.setQueryData(listKey, previous);
+      toastStore.show(m.error_generic(), 3000);
+    } finally {
+      pendingHoldIds.delete(ticketId);
+    }
+  }
+
+  function openAssignSheet(ticketId: string): void {
+    // Look up current assignee from the list data.
+    const ticket = allTickets.find((t) => t.id === ticketId);
+    assignTargetTicketId = ticketId;
+    assignCurrentAssigneeId = ticket?.assignedTo ?? null;
+    assignSheetOpen = true;
+  }
+
+  async function handleAssign(
+    ticketId: string,
+    targetUserId: string | null,
+  ): Promise<void> {
+    const listKey = ["tickets", "list", filterStore.serverParams];
+
+    // Snapshot for rollback.
+    const previous = queryClient.getQueryData<{
+      pages: TicketRecord[][];
+      pageParams: unknown[];
+    }>(listKey);
+
+    // Optimistic update: set assignedTo in cache.
+    queryClient.setQueryData<typeof previous>(listKey, (old) => {
+      if (!old) return old;
+      return {
+        ...old,
+        pages: old.pages.map((pg) =>
+          pg.map((t) =>
+            t.id === ticketId ? { ...t, assignedTo: targetUserId } : t,
+          ),
+        ),
+      };
+    });
+
+    try {
+      await ticketRouter.assignTo.mutate({ ticketId, targetUserId });
+      haptic();
+      if (targetUserId === null) {
+        toastStore.show(m.ticket_toast_unassigned());
+      } else {
+        toastStore.show(
+          m.ticket_toast_assigned({ name: resolveVolunteerName(targetUserId) }),
+        );
+      }
+      void queryClient.invalidateQueries({ queryKey: ["tickets", "list"] });
+    } catch {
+      queryClient.setQueryData(listKey, previous);
+      toastStore.show(m.error_generic(), 3000);
+    }
+  }
+
+  function openReplySheet(ticketId: string): void {
+    const ticket = allTickets.find((t) => t.id === ticketId);
+    if (!ticket) return;
+    replyTargetTicketId = ticketId;
+    replyClientAlias = ticket.clientAlias;
+    replyPreviewFollowUps = previewLoader.get(ticketId);
+    replyFollowUpCount = ticket.followUpCount;
+    replySheetOpen = true;
+  }
+
+  function handleReplySent(ticketId: string): void {
+    replySheetOpen = false;
+    void queryClient.invalidateQueries({ queryKey: ["tickets", "list"] });
+    void previewLoader.eagerLoad([ticketId]);
+  }
+
+  function handleCallAction(action: CallAction): void {
+    callSheetOpen = false;
+    if (action === "cancel") return;
+    // Call actions are stubs (deferred to telephony session). No haptic.
+    toastStore.show(m.feature_coming_soon());
   }
 
   // Multi-select state.
@@ -290,7 +464,7 @@
             id: "hold",
             label: m.tickets_action_hold(),
             icon: Pause,
-            onclick: handleBulkHold,
+            onclick: () => void handleBulkHold(),
           },
         ],
         dismiss: {
@@ -324,26 +498,78 @@
     };
   });
 
+  // Bulk assign: open AssignSheet with no pre-selected assignee.
+  let bulkAssignSheetOpen = $state(false);
+
   function handleBulkAssign(): void {
-    const count = selectedIds.size;
-    if (count === 0) return;
-    if (import.meta.env.DEV) {
-      console.log(`[TicketList] bulk assign: ${[...selectedIds].join(", ")}`);
-    }
-    // Bulk assign will call existing tRPC mutations per selected ticket.
-    toastStore.show(m.tickets_action_assign() + ` (${String(count)})`);
-    selectedIds.clear();
+    if (selectedIds.size === 0) return;
+    assignCurrentAssigneeId = null;
+    assignTargetTicketId = ""; // Not used for bulk, but required by AssignSheet.
+    bulkAssignSheetOpen = true;
   }
 
-  function handleBulkHold(): void {
-    const count = selectedIds.size;
-    if (count === 0) return;
-    if (import.meta.env.DEV) {
-      console.log(`[TicketList] bulk hold: ${[...selectedIds].join(", ")}`);
+  async function handleBulkAssignTo(
+    _ticketId: string,
+    targetUserId: string | null,
+  ): Promise<void> {
+    bulkAssignSheetOpen = false;
+    if (targetUserId === null) return; // Unassign in bulk is a no-op.
+
+    const ids = [...selectedIds];
+    let succeeded = 0;
+
+    for (const tid of ids) {
+      try {
+        await ticketRouter.assignTo.mutate({ ticketId: tid, targetUserId });
+        succeeded++;
+      } catch {
+        const name = resolveVolunteerName(targetUserId);
+        toastStore.show(
+          m.ticket_toast_bulk_assigned({ count: String(succeeded), name }) +
+            ` (${String(ids.length - succeeded)} failed)`,
+          3000,
+        );
+        exitMultiSelect();
+        return;
+      }
     }
-    // Bulk hold will call existing tRPC mutations per selected ticket.
-    toastStore.show(m.tickets_action_hold() + ` (${String(count)})`);
-    selectedIds.clear();
+
+    haptic();
+    toastStore.show(
+      m.ticket_toast_bulk_assigned({
+        count: String(succeeded),
+        name: resolveVolunteerName(targetUserId),
+      }),
+    );
+    exitMultiSelect();
+    void queryClient.invalidateQueries({ queryKey: ["tickets", "list"] });
+  }
+
+  async function handleBulkHold(): Promise<void> {
+    const ids = [...selectedIds];
+    if (ids.length === 0) return;
+
+    let succeeded = 0;
+
+    for (const tid of ids) {
+      try {
+        await ticketRouter.update.mutate({ ticketId: tid, onHold: true });
+        succeeded++;
+      } catch {
+        toastStore.show(
+          m.ticket_toast_bulk_held({ count: String(succeeded) }) +
+            ` (${String(ids.length - succeeded)} failed)`,
+          3000,
+        );
+        exitMultiSelect();
+        return;
+      }
+    }
+
+    haptic();
+    toastStore.show(m.ticket_toast_bulk_held({ count: String(succeeded) }));
+    exitMultiSelect();
+    void queryClient.invalidateQueries({ queryKey: ["tickets", "list"] });
   }
 
   function handleLongPress(ticketId: string): void {
@@ -557,6 +783,48 @@
     savedFilterModalOpen = false;
   }}
 />
+
+<AssignSheet
+  opened={assignSheetOpen}
+  ticketId={assignTargetTicketId}
+  currentAssigneeId={assignCurrentAssigneeId}
+  ondismiss={() => {
+    assignSheetOpen = false;
+  }}
+  onassign={(tid: string, uid: string | null) => void handleAssign(tid, uid)}
+/>
+
+<AssignSheet
+  opened={bulkAssignSheetOpen}
+  ticketId=""
+  currentAssigneeId={null}
+  ondismiss={() => {
+    bulkAssignSheetOpen = false;
+  }}
+  onassign={(tid: string, uid: string | null) =>
+    void handleBulkAssignTo(tid, uid)}
+/>
+
+<ReplySheet
+  opened={replySheetOpen}
+  ticketId={replyTargetTicketId}
+  clientAlias={replyClientAlias}
+  previewFollowUps={replyPreviewFollowUps}
+  followUpCount={replyFollowUpCount}
+  ondismiss={() => {
+    replySheetOpen = false;
+  }}
+  onsent={handleReplySent}
+/>
+
+<ShellActionSheet
+  opened={callSheetOpen}
+  ondismiss={() => {
+    callSheetOpen = false;
+  }}
+>
+  <CallOptionsContent hasVerifiedPhone={false} onaction={handleCallAction} />
+</ShellActionSheet>
 
 <ShellPopover
   opened={sortOpen}

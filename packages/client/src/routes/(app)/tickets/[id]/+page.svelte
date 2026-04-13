@@ -40,6 +40,7 @@
   import { DialogButton, ActionsGroup, ActionsButton } from "konsta/svelte";
   import PresetReplyContent from "$lib/components/tickets/PresetReplyContent.svelte";
   import TicketPanelContent from "$lib/components/tickets/TicketPanelContent.svelte";
+  import AssignSheet from "$lib/components/tickets/AssignSheet.svelte";
   import type { TicketAction } from "$lib/tickets/types.js";
   import CallOptionsContent, {
     type CallAction,
@@ -49,6 +50,7 @@
   import { getCryptoBridge } from "$lib/crypto/context.js";
   import { RouterNotAvailableError } from "$lib/errors.js";
   import { toastStore } from "$lib/stores/toast.svelte.js";
+  import { haptic } from "$lib/utils/haptic.js";
   import { serializedBufferToBase64 } from "$lib/utils/buffer-encoding.js";
 
   if (!trpc.tickets) throw new RouterNotAvailableError("tickets");
@@ -223,6 +225,7 @@
   // --- Overlay state ---
 
   let panelOpen = $state(false);
+  let assignSheetOpen = $state(false);
   let callSheetOpen = $state(false);
   let composeActionsOpen = $state(false);
   let presetSheetOpen = $state(false);
@@ -308,8 +311,8 @@
         mutateWithToast(ticketRouter.release.mutate({ ticketId }));
         break;
       case "assign":
-        // Stub: assignment UI (picker) wired by a later phase.
-        if (import.meta.env.DEV) console.log("[TicketDetail] assign");
+        closePanel();
+        assignSheetOpen = true;
         break;
       case "hold":
         mutateWithToast(ticketRouter.update.mutate({ ticketId, onHold: true }));
@@ -627,6 +630,30 @@
     onlightbox={handlePanelLightbox}
   />
 </ShellPopup>
+
+<AssignSheet
+  opened={assignSheetOpen}
+  {ticketId}
+  currentAssigneeId={ticket?.assignedTo ?? null}
+  ondismiss={() => {
+    assignSheetOpen = false;
+  }}
+  onassign={(tid: string, targetUserId: string | null) => {
+    assignSheetOpen = false;
+    void ticketRouter.assignTo
+      .mutate({ ticketId: tid, targetUserId })
+      .then(() => {
+        haptic();
+        void queryClient.invalidateQueries({ queryKey: ["ticket", ticketId] });
+        void queryClient.invalidateQueries({
+          queryKey: ["tickets", "list"],
+        });
+      })
+      .catch(() => {
+        toastStore.show(m.error_generic(), 3000);
+      });
+  }}
+/>
 
 <ShellActionSheet opened={callSheetOpen} ondismiss={closeCallSheet}>
   <CallOptionsContent {hasVerifiedPhone} onaction={handleCallAction} />

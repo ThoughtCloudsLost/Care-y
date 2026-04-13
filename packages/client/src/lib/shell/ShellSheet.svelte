@@ -39,5 +39,6 @@
 <style>
   .shell-sheet-content {
     min-height: 30vh;
+    padding-bottom: calc(var(--k-safe-area-bottom) + 1.5rem);
   }
 </style>

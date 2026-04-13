@@ -90,6 +90,16 @@ vi.mock("@tanstack/svelte-query", () => ({
       };
     }
 
+    // volunteers query (AssignSheet)
+    if (key[0] === "volunteers") {
+      return {
+        isLoading: false,
+        isError: false,
+        error: null,
+        data: [],
+      };
+    }
+
     // ticket query
     return ticketQueryState;
   },
@@ -122,6 +132,7 @@ vi.mock("$lib/trpc/index.js", () => ({
       getReadCursor: { query: vi.fn().mockResolvedValue(null) },
       updateReadCursor: { mutate: vi.fn() },
       listFollowUpSummary: { query: vi.fn().mockResolvedValue([]) },
+      assignTo: { mutate: vi.fn().mockResolvedValue({}) },
     },
     consultant: {
       get: { query: vi.fn().mockResolvedValue(null) },

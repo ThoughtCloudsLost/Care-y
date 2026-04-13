@@ -48,6 +48,8 @@
     ClusterRecord,
   } from "$lib/components/tickets/chat-zoom-types.js";
   import MentionAutocomplete from "$lib/components/tickets/MentionAutocomplete.svelte";
+  import FollowUpBubble from "$lib/components/tickets/FollowUpBubble.svelte";
+  import { followUpKind } from "$lib/tickets/follow-up-utils.js";
 
   import { createScrollManager } from "$lib/tickets/scroll-manager.svelte.js";
   import { createChatPaginator } from "$lib/tickets/chat-paginator.svelte.js";
@@ -295,15 +297,6 @@
   // --- Follow-up rendering helpers ---
 
   type FollowUp = (typeof followUps)[number];
-
-  function followUpKind(fu: {
-    source: string;
-    type: string;
-  }): "message" | "system" | "note" {
-    if (fu.source === "system") return "system";
-    if (fu.type === "internal_note") return "note";
-    return "message";
-  }
 
   function messageType(fu: FollowUp): "sent" | "received" {
     return fu.source === "client" ? "received" : "sent";
@@ -553,44 +546,8 @@
           fu.keyWrap,
           fu.encryptedContent,
         )}
-        {@const kind = followUpKind(fu)}
         <div class="fu-wrapper">
-          {#if kind === "system"}
-            <SystemEvent
-              {content}
-              encryptedContent={fu.encryptedContent}
-              timestamp={fu.createdAt}
-            />
-          {:else if kind === "note"}
-            <PrivateNote
-              {content}
-              encryptedContent={fu.encryptedContent}
-              authorName={undefined}
-              timestamp={fu.createdAt}
-              isOwn={false}
-            />
-          {:else}
-            <Message
-              type={fu.source === "client" ? "received" : "sent"}
-              name={fu.source === "client" ? clientAlias : undefined}
-            >
-              {#snippet text()}
-                <span class="bubble-text">
-                  <DecryptPlaceholder
-                    {content}
-                    ciphertext={fu.encryptedContent}
-                    length={30}
-                    block
-                  />
-                </span>
-              {/snippet}
-              {#snippet footer()}
-                <span class="bubble-time">
-                  {formatRelativeTime(new Date(fu.createdAt))}
-                </span>
-              {/snippet}
-            </Message>
-          {/if}
+          <FollowUpBubble followUp={fu} {content} {clientAlias} />
         </div>
       {/each}
     </Messages>
@@ -643,44 +600,8 @@
             fu.keyWrap,
             fu.encryptedContent,
           )}
-          {@const kind = followUpKind(fu)}
           <div class="fu-wrapper">
-            {#if kind === "system"}
-              <SystemEvent
-                {content}
-                encryptedContent={fu.encryptedContent}
-                timestamp={fu.createdAt}
-              />
-            {:else if kind === "note"}
-              <PrivateNote
-                {content}
-                encryptedContent={fu.encryptedContent}
-                authorName={undefined}
-                timestamp={fu.createdAt}
-                isOwn={false}
-              />
-            {:else}
-              <Message
-                type={fu.source === "client" ? "received" : "sent"}
-                name={fu.source === "client" ? clientAlias : undefined}
-              >
-                {#snippet text()}
-                  <span class="bubble-text">
-                    <DecryptPlaceholder
-                      {content}
-                      ciphertext={fu.encryptedContent}
-                      length={30}
-                      block
-                    />
-                  </span>
-                {/snippet}
-                {#snippet footer()}
-                  <span class="bubble-time">
-                    {formatRelativeTime(new Date(fu.createdAt))}
-                  </span>
-                {/snippet}
-              </Message>
-            {/if}
+            <FollowUpBubble followUp={fu} {content} {clientAlias} />
           </div>
         {/each}
       </Messages>

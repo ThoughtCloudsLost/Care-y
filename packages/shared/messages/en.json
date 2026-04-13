@@ -353,5 +353,21 @@
   "ticket_panel_no_media": "No attachments yet.",
   "ticket_panel_notes": "Notes",
   "ticket_panel_no_notes": "No internal notes yet.",
-  "ticket_panel_recent_coming_soon": "Recent ticket history will appear here."
+  "ticket_panel_recent_coming_soon": "Recent ticket history will appear here.",
+
+  "ticket_toast_held": "Ticket placed on hold",
+  "ticket_toast_unheld": "Ticket removed from hold",
+  "ticket_toast_assigned": "Assigned to {name}",
+  "ticket_toast_unassigned": "Ticket unassigned",
+  "ticket_toast_message_sent": "Message sent",
+  "ticket_toast_bulk_assigned": "{count} tickets assigned to {name}",
+  "ticket_toast_bulk_held": "{count} tickets placed on hold",
+  "ticket_reply_sheet_title": "Reply to {alias}",
+  "ticket_reply_sheet_more": "and {count} more",
+  "ticket_reply_sheet_placeholder": "Type a message...",
+  "ticket_assign_sheet_title": "Assign",
+  "ticket_assign_search": "Search volunteers...",
+  "ticket_assign_you": "(you)",
+  "ticket_note_saved": "Note saved",
+  "feature_coming_soon": "Feature coming soon"
 }
