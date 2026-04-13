@@ -43,7 +43,7 @@ describe("voteDirectionSchema", () => {
 describe("createKbCategoryInputSchema", () => {
   it("accepts valid input with description", () => {
     const result = createKbCategoryInputSchema.safeParse({
-      name: "Protocols",
+      encryptedName: VALID_BASE64,
       encryptedDescription: VALID_BASE64,
     });
     expect(result.success).toBe(true);
@@ -51,15 +51,15 @@ describe("createKbCategoryInputSchema", () => {
 
   it("accepts valid input without description", () => {
     const result = createKbCategoryInputSchema.safeParse({
-      name: "Resources",
+      encryptedName: VALID_BASE64,
     });
     expect(result.success).toBe(true);
   });
 
-  it("rejects empty name", () => {
-    expect(createKbCategoryInputSchema.safeParse({ name: "" }).success).toBe(
-      false,
-    );
+  it("rejects empty encryptedName", () => {
+    expect(
+      createKbCategoryInputSchema.safeParse({ encryptedName: "" }).success,
+    ).toBe(false);
   });
 
   it("rejects name over 100 characters", () => {

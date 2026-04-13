@@ -56,19 +56,8 @@
   background: var(--muted);
 }
 
-/* Skeleton animation: standard opacity pulse */
-@media (prefers-reduced-motion: no-preference) {
-  @keyframes skeleton-pulse {
-    0%,
-    100% {
-      opacity: 0.3;
-    }
-    50% {
-      opacity: 0.6;
-    }
-  }
-
-  .theme-default .skeleton-bar {
-    animation: skeleton-pulse 1.5s ease-in-out infinite;
-  }
+/* Default theme overrides skeleton-bar to use the pulse animation
+   instead of the extending bar (defined globally in animations.css). */
+.theme-default .skeleton-bar {
+  animation: skeleton-pulse 2s ease-in-out infinite;
 }

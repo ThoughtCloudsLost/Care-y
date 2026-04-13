@@ -12,7 +12,7 @@ const config = {
         "style-src": ["self"],
         "style-src-elem": ["self"],
         "style-src-attr": ["unsafe-inline"],
-        "img-src": ["self", "data:"],
+        "img-src": ["self", "data:", "blob:"],
         "connect-src": ["self"],
         "font-src": ["self"],
         "worker-src": ["self"],

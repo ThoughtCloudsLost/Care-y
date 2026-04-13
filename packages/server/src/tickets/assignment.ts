@@ -13,7 +13,7 @@ import type { Kysely } from "kysely";
 import type { TenantDatabase } from "../db/types.js";
 import type { ShiftProvider } from "./shift-provider.js";
 import type { TicketAccessChecker } from "./access.js";
-import { NotFoundError, TicketError } from "../errors.js";
+import { ForbiddenError, NotFoundError, TicketError } from "../errors.js";
 import { ErrorCode } from "@care-y/shared";
 
 export interface AssignmentService {
@@ -30,6 +30,17 @@ export interface AssignmentService {
 
   /** Self-unassign: volunteer releases their assigned ticket. */
   release(userId: string, ticketId: string): Promise<void>;
+
+  /**
+   * Assign a ticket to a specific volunteer, or unassign if targetUserId is null.
+   * Validates that the actor has access and that the target user is an active
+   * volunteer in the same org. Replaces the separate take/release client flows.
+   */
+  assignTo(
+    actorId: string,
+    ticketId: string,
+    targetUserId: string | null,
+  ): Promise<void>;
 }
 
 export function createAssignmentService(
@@ -86,7 +97,6 @@ export function createAssignmentService(
         source: "system",
         type,
         encrypted_content: Buffer.from("system"),
-        encrypted_read_state: Buffer.from("unread"),
       })
       .execute();
   }
@@ -193,6 +203,45 @@ export function createAssignmentService(
       await db
         .updateTable("tickets")
         .set({ assigned_to: null })
+        .where("id", "=", ticketId)
+        .execute();
+
+      await createSystemFollowUp(ticketId, "assignment_change");
+    },
+
+    async assignTo(actorId, ticketId, targetUserId) {
+      await access.assertAccess(actorId, ticketId);
+
+      const ticket = await db
+        .selectFrom("tickets")
+        .select(["id", "status", "assigned_to"])
+        .where("id", "=", ticketId)
+        .executeTakeFirst();
+
+      if (!ticket) throw new NotFoundError(ErrorCode.TICKET_NOT_FOUND);
+      if (ticket.status !== "open") {
+        throw new TicketError(ErrorCode.CANNOT_ASSIGN_CLOSED_TICKET);
+      }
+
+      if (targetUserId !== null) {
+        // Verify target is an active user in this tenant schema
+        const targetUser = await db
+          .selectFrom("users")
+          .select(["id", "is_active"])
+          .where("id", "=", targetUserId)
+          .executeTakeFirst();
+
+        if (targetUser?.is_active !== true) {
+          throw new ForbiddenError(ErrorCode.INVALID_TARGET_USER);
+        }
+      }
+
+      // Skip DB write if assignment is already in the desired state
+      if (ticket.assigned_to === targetUserId) return;
+
+      await db
+        .updateTable("tickets")
+        .set({ assigned_to: targetUserId })
         .where("id", "=", ticketId)
         .execute();
 

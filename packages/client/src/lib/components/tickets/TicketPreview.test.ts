@@ -1,0 +1,174 @@
+// @vitest-environment jsdom
+import { describe, it, expect, vi, afterEach } from "vitest";
+import { render, cleanup } from "@testing-library/svelte";
+import TicketPreview from "./TicketPreview.svelte";
+
+// IntersectionObserver stub for DecryptPlaceholder
+vi.stubGlobal(
+  "IntersectionObserver",
+  vi.fn(function (this: {
+    observe: () => void;
+    disconnect: () => void;
+    unobserve: () => void;
+  }) {
+    this.observe = vi.fn();
+    this.disconnect = vi.fn();
+    this.unobserve = vi.fn();
+  }),
+);
+import type { RawFollowUpPreview } from "$lib/tickets/preview-loader.svelte.js";
+
+// --- Mocks ---
+
+const mockDecryptContent = vi.fn();
+
+vi.mock("$lib/crypto/context.js", () => ({
+  getFollowUpDecryptCache: () => ({
+    decryptContent: mockDecryptContent,
+  }),
+}));
+
+afterEach(() => {
+  cleanup();
+  mockDecryptContent.mockReset();
+});
+
+function makeFollowUp(
+  overrides: Partial<RawFollowUpPreview> = {},
+): RawFollowUpPreview {
+  return {
+    id: `fu-${Math.random().toString(36).slice(2, 8)}`,
+    source: "volunteer",
+    type: "message",
+    encryptedContent: { type: "Buffer", data: [72, 101, 108, 108, 111] },
+    keyWrap: {
+      ephemeralPoint: "AAAA",
+      nonce: "BBBB",
+      wrappedKey: "CCCC",
+    },
+    createdAt: "2026-04-05T12:00:00Z",
+    hasRecording: false,
+    hasImage: false,
+    hasFile: false,
+    ...overrides,
+  };
+}
+
+describe("TicketPreview (mini-bubbles)", () => {
+  it("renders DecryptPlaceholder when followUps is undefined (not loaded)", () => {
+    const { container } = render(TicketPreview, {
+      props: { followUps: undefined },
+    });
+    const placeholders = container.querySelectorAll("[aria-busy='true']");
+    expect(placeholders.length).toBeGreaterThan(0);
+  });
+
+  it("renders empty state when followUps is empty array", () => {
+    const { container } = render(TicketPreview, {
+      props: { followUps: [] },
+    });
+    expect(container.querySelector("[role='status']")).not.toBeNull();
+    expect(container.textContent).toBeTruthy();
+  });
+
+  it("renders DecryptPlaceholder inside mini-bubble when decryption is pending", () => {
+    mockDecryptContent.mockReturnValue(undefined);
+    const fu = makeFollowUp();
+    const { container } = render(TicketPreview, {
+      props: { followUps: [fu] },
+    });
+    const dp = container.querySelector("[aria-busy='true']");
+    expect(dp).not.toBeNull();
+  });
+
+  it("renders decrypted text inside a mini-bubble", () => {
+    mockDecryptContent.mockReturnValue("Hello, test message");
+    const fu = makeFollowUp();
+    const { container } = render(TicketPreview, {
+      props: { followUps: [fu] },
+    });
+    expect(container.textContent).toContain("Hello, test message");
+  });
+
+  it("right-aligns volunteer mini-bubbles (sent)", () => {
+    mockDecryptContent.mockReturnValue("Volunteer reply");
+    const fu = makeFollowUp({ source: "volunteer" });
+    const { container } = render(TicketPreview, {
+      props: { followUps: [fu] },
+    });
+    const row = container.querySelector("[data-direction='sent']");
+    expect(row).not.toBeNull();
+  });
+
+  it("left-aligns client mini-bubbles (received)", () => {
+    mockDecryptContent.mockReturnValue("Client message");
+    const fu = makeFollowUp({ source: "client" });
+    const { container } = render(TicketPreview, {
+      props: { followUps: [fu] },
+    });
+    const row = container.querySelector("[data-direction='received']");
+    expect(row).not.toBeNull();
+  });
+
+  it("renders system events as centered text without bubble", () => {
+    mockDecryptContent.mockReturnValue("Status changed to closed");
+    const fu = makeFollowUp({ source: "system", type: "status_change" });
+    const { container } = render(TicketPreview, {
+      props: { followUps: [fu] },
+    });
+    const sysEl = container.querySelector("[data-type='system']");
+    expect(sysEl).not.toBeNull();
+    expect(sysEl?.textContent).toContain("Status changed to closed");
+    // Should not be in a directional bubble row
+    expect(container.querySelector("[data-direction]")).toBeNull();
+  });
+
+  it("renders long decrypted text content", () => {
+    mockDecryptContent.mockReturnValue(
+      "This is a very long message that should be truncated",
+    );
+    const fu = makeFollowUp();
+    const { container } = render(TicketPreview, {
+      props: { followUps: [fu] },
+    });
+    expect(container.textContent).toContain("This is a very long message");
+  });
+
+  it("renders error text when decryption fails (sentinel value)", () => {
+    mockDecryptContent.mockReturnValue("\0DECRYPT_FAILED");
+    const fu = makeFollowUp();
+    const { container } = render(TicketPreview, {
+      props: { followUps: [fu] },
+    });
+    expect(container.textContent).toContain(
+      "This content could not be decrypted.",
+    );
+  });
+
+  it("renders multiple follow-ups with correct alignment", () => {
+    mockDecryptContent
+      .mockReturnValueOnce("Client msg")
+      .mockReturnValueOnce("Volunteer reply");
+    const fus = [
+      makeFollowUp({ id: "fu-1", source: "client" }),
+      makeFollowUp({ id: "fu-2", source: "volunteer" }),
+    ];
+    const { container } = render(TicketPreview, {
+      props: { followUps: fus },
+    });
+    expect(
+      container.querySelector("[data-direction='received']"),
+    ).not.toBeNull();
+    expect(container.querySelector("[data-direction='sent']")).not.toBeNull();
+  });
+
+  it("does not use {@html} for decrypted content (XSS safety)", () => {
+    mockDecryptContent.mockReturnValue("<script>alert('xss')</script>");
+    const fu = makeFollowUp();
+    const { container } = render(TicketPreview, {
+      props: { followUps: [fu] },
+    });
+    // Text should appear as escaped, not interpreted as HTML
+    expect(container.innerHTML).toContain("&lt;script&gt;");
+  });
+});

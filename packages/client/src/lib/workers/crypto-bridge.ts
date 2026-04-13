@@ -184,6 +184,32 @@ export class CryptoBridge {
     return resp.ciphertext;
   }
 
+  /**
+   * Decrypt a binary blob (voicemail recording, MMS image, file attachment).
+   * Returns the raw decrypted bytes as an ArrayBuffer (Transferable from Worker).
+   * Uses the same ECIES key-wrap as decryptContent, but returns binary instead of UTF-8.
+   */
+  async decryptBlob(
+    ticketId: string,
+    ephemeralPoint: string,
+    nonce: string,
+    wrappedKey: string,
+    ciphertext: string,
+  ): Promise<ArrayBuffer> {
+    const resp = expectResponse(
+      await this.sendRequest({
+        type: "decryptBlob",
+        ticketId,
+        ephemeralPoint,
+        nonce,
+        wrappedKey,
+        ciphertext,
+      }),
+      "decryptBlob",
+    );
+    return resp.data;
+  }
+
   /** Evict a specific tk from the Worker cache (TanStack Query GC signal). */
   async evictTk(ticketId: string): Promise<void> {
     await this.sendRequest({ type: "evictTk", ticketId });

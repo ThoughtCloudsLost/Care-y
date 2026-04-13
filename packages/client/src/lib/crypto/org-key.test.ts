@@ -142,6 +142,59 @@ describe("OrgKeyManager", () => {
     });
   });
 
+  describe("encrypt", () => {
+    it("seals plaintext with the org public key (encrypt-then-decrypt roundtrip)", () => {
+      manager.load(sk.buffer);
+
+      const plaintext = new TextEncoder().encode("My Urgent Housing Filter");
+      const ciphertext = manager.encrypt(plaintext);
+
+      // Ciphertext must differ from plaintext.
+      expect(ciphertext.length).toBeGreaterThan(plaintext.length);
+      expect(ciphertext).not.toEqual(plaintext);
+
+      // Decrypt to verify roundtrip.
+      const decrypted = manager.decrypt(ciphertext);
+      expect(decrypted).toEqual(plaintext);
+
+      manager.zero();
+    });
+
+    it("produces different ciphertext each time (sealed box is non-deterministic)", () => {
+      manager.load(sk.buffer);
+
+      const plaintext = new TextEncoder().encode("same input");
+      const ct1 = manager.encrypt(plaintext);
+      const ct2 = manager.encrypt(plaintext);
+
+      // Sealed box uses an ephemeral keypair internally, so two encryptions
+      // of the same plaintext produce different ciphertext.
+      expect(ct1).not.toEqual(ct2);
+
+      // Both must decrypt to the same plaintext.
+      expect(manager.decrypt(ct1)).toEqual(plaintext);
+      expect(manager.decrypt(ct2)).toEqual(plaintext);
+
+      manager.zero();
+    });
+
+    it("throws OrgKeyNotLoadedError when key is not loaded", () => {
+      const plaintext = new TextEncoder().encode("test");
+      expect(() => manager.encrypt(plaintext)).toThrow(OrgKeyNotLoadedError);
+    });
+
+    it("encrypts empty input", () => {
+      manager.load(sk.buffer);
+
+      const empty = new Uint8Array(0);
+      const ciphertext = manager.encrypt(empty);
+      const decrypted = manager.decrypt(ciphertext);
+      expect(decrypted).toEqual(empty);
+
+      manager.zero();
+    });
+  });
+
   describe("zero", () => {
     it("clears the key and sets isLoaded to false", () => {
       manager.load(sk.buffer);

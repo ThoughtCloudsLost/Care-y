@@ -13,14 +13,14 @@ import { base64String } from "./validators.js";
 // --- Category schemas ---
 
 export const createKbCategoryInputSchema = z.object({
-  name: z.string().min(1).max(100),
+  encryptedName: base64String("encryptedName"),
   encryptedDescription: base64String("encryptedDescription").optional(),
 });
 export type CreateKbCategoryInput = z.infer<typeof createKbCategoryInputSchema>;
 
 export const updateKbCategoryInputSchema = z.object({
   categoryId: z.uuid(),
-  name: z.string().min(1).max(100).optional(),
+  encryptedName: base64String("encryptedName").optional(),
   encryptedDescription: base64String("encryptedDescription").optional(),
 });
 export type UpdateKbCategoryInput = z.infer<typeof updateKbCategoryInputSchema>;

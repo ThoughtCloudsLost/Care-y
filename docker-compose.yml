@@ -25,6 +25,7 @@ services:
     networks: [internal]
     volumes:
       - oprf_sockets:/run/oprf
+      - blob_data:/app/data
     depends_on:
       db:
         condition: service_healthy
@@ -124,6 +125,7 @@ services:
 
 volumes:
   postgres_data:
+  blob_data:
   oprf_sockets:
     driver: local
     driver_opts:

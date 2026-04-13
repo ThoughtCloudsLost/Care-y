@@ -3,6 +3,7 @@
   import { CalendarDays } from "@lucide/svelte";
   import * as m from "$lib/paraglide/messages.js";
   import CollapsibleSection from "./CollapsibleSection.svelte";
+  import InlineSkeleton from "$lib/components/InlineSkeleton.svelte";
 
   interface Volunteer {
     initials: string;
@@ -17,11 +18,17 @@
 
   interface ShiftSectionProps {
     shift: ShiftInfo | null;
+    loading?: boolean;
     expanded: boolean;
     ontoggle: () => void;
   }
 
-  let { shift, expanded, ontoggle }: ShiftSectionProps = $props();
+  let {
+    shift,
+    loading = false,
+    expanded,
+    ontoggle,
+  }: ShiftSectionProps = $props();
 
   // Reactive countdown that ticks every minute.
   const now = new SvelteDate();
@@ -56,7 +63,7 @@
     return "active";
   });
 
-  function formatDuration(ms: number): string {
+  function formatShiftCountdown(ms: number): string {
     const totalMin = Math.max(0, Math.floor(ms / 60_000));
     const h = Math.floor(totalMin / 60);
     const min = totalMin % 60;
@@ -73,7 +80,7 @@
     if (shiftState === "not_started") {
       const diff = shiftStart.getTime() - now.getTime();
       return m.dashboard_shift_not_started({
-        time: formatDuration(diff),
+        time: formatShiftCountdown(diff),
         start,
         end,
       });
@@ -83,7 +90,7 @@
     }
     const diff = shiftEnd.getTime() - now.getTime();
     return m.dashboard_shift_ends_in({
-      time: formatDuration(diff),
+      time: formatShiftCountdown(diff),
       start,
       end,
     });
@@ -96,42 +103,58 @@
   iconColor="var(--brand-accent)"
   {expanded}
   {ontoggle}
+  {loading}
 >
-  <div class="shift-content">
-    <div class="shift-time">
-      <span>{timeDisplay}</span>
-    </div>
-
-    {#if shift && shift.volunteers.length > 0}
+  {#if loading}
+    <div class="shift-content skeleton-pulse">
+      <div class="shift-time">
+        <InlineSkeleton width="18ch" />
+      </div>
       <div class="shift-volunteers">
-        {#each shift.volunteers as vol, i (`${vol.initials}${String(i)}`)}
-          <span class="vol-chip" class:vol-chip-you={vol.isCurrentUser}>
-            {vol.initials}
+        {#each [1, 2, 3] as n (n)}
+          <span class="vol-chip">
+            <InlineSkeleton width="2ch" />
           </span>
         {/each}
       </div>
-    {/if}
-  </div>
+    </div>
+  {:else}
+    <div class="shift-content">
+      <div class="shift-time">
+        <span>{timeDisplay}</span>
+      </div>
+
+      {#if shift && shift.volunteers.length > 0}
+        <div class="shift-volunteers">
+          {#each shift.volunteers as vol, i (`${vol.initials}${String(i)}`)}
+            <span class="vol-chip" class:vol-chip-you={vol.isCurrentUser}>
+              {vol.initials}
+            </span>
+          {/each}
+        </div>
+      {/if}
+    </div>
+  {/if}
 </CollapsibleSection>
 
 <style>
   .shift-content {
     display: flex;
     flex-direction: column;
-    gap: 0.5rem;
-    padding: 0 0.75rem 0.625rem;
-    font-size: 0.8125rem;
+    gap: var(--space-lg);
+    padding: 0 var(--page-pad-x) var(--card-pad-y);
+    font-size: var(--text-base);
   }
 
   .shift-time {
     color: var(--muted);
-    font-size: 0.8125rem;
+    font-size: var(--text-base);
   }
 
   .shift-volunteers {
     display: flex;
     flex-wrap: wrap;
-    gap: 0.375rem;
+    gap: var(--space-md);
   }
 
   .vol-chip {
@@ -141,7 +164,7 @@
     padding: 0.1875rem 0.5rem;
     border-radius: 999px;
     background: var(--surface-1);
-    font-size: 0.75rem;
+    font-size: var(--text-sm);
     font-weight: 500;
     color: var(--muted);
     white-space: nowrap;

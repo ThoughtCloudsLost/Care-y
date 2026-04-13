@@ -14,7 +14,6 @@ import {
   createPresetReplyInputSchema,
   updatePresetReplyInputSchema,
   addDependencyInputSchema,
-  markReadInputSchema,
   undoMergeInputSchema,
   updateTicketInputSchema,
   followUpListInputSchema,
@@ -152,7 +151,6 @@ describe("createFollowUpInputSchema", () => {
   const validInput = {
     ticketId: VALID_UUID,
     encryptedContent: VALID_BASE64,
-    encryptedReadState: VALID_BASE64,
     source: "volunteer" as const,
     type: "message" as const,
   };
@@ -177,16 +175,6 @@ describe("createFollowUpInputSchema", () => {
       expect(result.data.isPrivate).toBe(true);
       expect(result.data.mentionedPseudonyms).toEqual(["user-abc"]);
     }
-  });
-});
-
-describe("markReadInputSchema", () => {
-  it("accepts valid input", () => {
-    const result = markReadInputSchema.safeParse({
-      followUpId: VALID_UUID,
-      encryptedReadState: VALID_BASE64,
-    });
-    expect(result.success).toBe(true);
   });
 });
 
@@ -235,14 +223,35 @@ describe("followUpListInputSchema", () => {
     expect(followUpListInputSchema.safeParse({}).success).toBe(false);
   });
 
-  it("defaults limit to 50", () => {
+  it("defaults limit to 50 and direction to newer", () => {
     const result = followUpListInputSchema.safeParse({
       ticketId: VALID_UUID,
     });
     expect(result.success).toBe(true);
     if (result.success) {
       expect(result.data.limit).toBe(50);
+      expect(result.data.direction).toBe("newer");
     }
+  });
+
+  it("accepts direction older", () => {
+    const result = followUpListInputSchema.safeParse({
+      ticketId: VALID_UUID,
+      direction: "older",
+    });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.direction).toBe("older");
+    }
+  });
+
+  it("rejects invalid direction", () => {
+    expect(
+      followUpListInputSchema.safeParse({
+        ticketId: VALID_UUID,
+        direction: "sideways",
+      }).success,
+    ).toBe(false);
   });
 });
 
@@ -282,20 +291,24 @@ describe("uploadAttachmentInputSchema", () => {
 
 describe("createQueueInputSchema", () => {
   it("accepts valid input with default escalateDays", () => {
-    const result = createQueueInputSchema.safeParse({ name: "General" });
+    const result = createQueueInputSchema.safeParse({
+      encryptedName: "AQIDBA==",
+    });
     expect(result.success).toBe(true);
     if (result.success) {
       expect(result.data.escalateDays).toBe(0);
     }
   });
 
-  it("rejects empty name", () => {
-    expect(createQueueInputSchema.safeParse({ name: "" }).success).toBe(false);
+  it("rejects empty encryptedName", () => {
+    expect(
+      createQueueInputSchema.safeParse({ encryptedName: "" }).success,
+    ).toBe(false);
   });
 
-  it("rejects name over 100 chars", () => {
+  it("rejects non-base64 encryptedName", () => {
     expect(
-      createQueueInputSchema.safeParse({ name: "a".repeat(101) }).success,
+      createQueueInputSchema.safeParse({ encryptedName: "not!base64" }).success,
     ).toBe(false);
   });
 

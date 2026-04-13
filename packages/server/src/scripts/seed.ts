@@ -58,7 +58,7 @@ const ADMIN_IDENTIFIER = "admin.dev";
 const ADMIN_PASSWORD = "dev-password-1234!";
 const ADMIN_DISPLAY_NAME = "Dev Admin";
 const ADMIN_ROLE_ID = RoleId.ADMIN;
-const NUM_SEED_CLIENTS = 12;
+const NUM_SEED_CLIENTS = 120;
 
 /**
  * Generates a throwaway Curve25519 keypair and stores the public key in
@@ -221,23 +221,38 @@ async function seed(): Promise<void> {
     console.log(`Created phone record (${phoneId})`);
   }
 
+  // Seal a plaintext string with the org public key (crypto_box_seal).
+  function sealName(plaintext: string): Buffer {
+    const pt = Buffer.from(plaintext, "utf8");
+    const ct = Buffer.alloc(pt.length + sodium.crypto_box_SEALBYTES);
+    sodium.crypto_box_seal(ct, pt, orgPublicKey);
+    return ct;
+  }
+
   const queueNames = ["Intake", "Crisis", "Housing"];
   const queueIds = new Map<string, string>();
 
-  for (const name of queueNames) {
+  for (let i = 0; i < queueNames.length; i++) {
+    const name = queueNames[i]!;
+    const sortOrder = i + 1;
+
+    // Idempotency: check by sort_order (deterministic for seed data).
+    // Sealed-box ciphertext is non-deterministic so we can't match by value.
     const existing = await tenantDatabase
       .selectFrom("queues")
       .select("id")
-      .where("name", "=", name)
+      .where("sort_order", "=", sortOrder)
       .executeTakeFirst();
 
     if (existing) {
       queueIds.set(name, existing.id);
-      console.log(`Queue "${name}" already exists, skipping.`);
+      console.log(
+        `Queue "${name}" already exists (sort_order=${String(sortOrder)}), skipping.`,
+      );
     } else {
       const inserted = await tenantDatabase
         .insertInto("queues")
-        .values({ name })
+        .values({ encrypted_name: sealName(name), sort_order: sortOrder })
         .returning("id")
         .executeTakeFirstOrThrow();
       queueIds.set(name, inserted.id);
@@ -308,24 +323,29 @@ async function seed(): Promise<void> {
     }
   }
 
-  // --- Seed KB categories (structural data, plaintext names) ---
+  // --- Seed KB categories (structural data, encrypted names) ---
   // KB articles are seeded client-side by devAutoLogin after the real org
   // keypair is established via rotation (articles require sealed-box encryption).
   const kbCategoryNames = ["Procedures", "Resources", "Safety"];
 
-  for (const name of kbCategoryNames) {
+  for (let i = 0; i < kbCategoryNames.length; i++) {
+    const name = kbCategoryNames[i]!;
+    const sortOrder = i + 1;
+
     const existingCat = await tenantDatabase
       .selectFrom("kb_categories")
       .select("id")
-      .where("name", "=", name)
+      .where("sort_order", "=", sortOrder)
       .executeTakeFirst();
 
     if (existingCat) {
-      console.log(`KB category "${name}" already exists, skipping.`);
+      console.log(
+        `KB category "${name}" already exists (sort_order=${String(sortOrder)}), skipping.`,
+      );
     } else {
       const inserted = await tenantDatabase
         .insertInto("kb_categories")
-        .values({ name })
+        .values({ encrypted_name: sealName(name), sort_order: sortOrder })
         .returning("id")
         .executeTakeFirstOrThrow();
       console.log(`Created KB category "${name}" (${inserted.id})`);

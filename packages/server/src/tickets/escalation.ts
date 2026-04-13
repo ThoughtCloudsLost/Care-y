@@ -15,6 +15,7 @@
 import type { Kysely } from "kysely";
 import type { TenantDatabase } from "../db/types.js";
 import type { JobQueue } from "../jobs/queue.js";
+import type { TicketPriority } from "@care-y/shared";
 
 export const ESCALATION_QUEUE = "ticket-escalation";
 export const ESCALATION_INTERVAL_MS = 60 * 60 * 1000; // 1 hour
@@ -24,7 +25,7 @@ export interface EscalationResult {
 }
 
 /** Priority escalation ladder. Keyed by current priority, value is next. */
-const NEXT_PRIORITY: Record<string, string> = {
+const NEXT_PRIORITY: Partial<Record<TicketPriority, TicketPriority>> = {
   low: "normal",
   normal: "high",
   high: "urgent",
@@ -84,7 +85,6 @@ export async function escalateTenantTickets(
         source: "system",
         type: "priority_change",
         encrypted_content: Buffer.from("system"),
-        encrypted_read_state: Buffer.from("unread"),
       })
       .execute();
 

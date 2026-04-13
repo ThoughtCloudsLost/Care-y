@@ -49,7 +49,6 @@ export type CreateTicketInput = z.infer<typeof createTicketInputSchema>;
 export const createFollowUpInputSchema = z.object({
   ticketId: z.uuid(),
   encryptedContent: base64String("encryptedContent"),
-  encryptedReadState: base64String("encryptedReadState"),
   source: followUpSourceSchema,
   type: followUpTypeSchema,
   isPrivate: z.boolean().default(false),
@@ -57,11 +56,11 @@ export const createFollowUpInputSchema = z.object({
 });
 export type CreateFollowUpInput = z.infer<typeof createFollowUpInputSchema>;
 
-export const markReadInputSchema = z.object({
-  followUpId: z.uuid(),
-  encryptedReadState: base64String("encryptedReadState"),
+export const updateReadCursorInputSchema = z.object({
+  ticketId: z.uuid(),
+  encryptedReadCursor: base64String("encryptedReadCursor"),
 });
-export type MarkReadInput = z.infer<typeof markReadInputSchema>;
+export type UpdateReadCursorInput = z.infer<typeof updateReadCursorInputSchema>;
 
 export const updateTicketInputSchema = z.object({
   ticketId: z.uuid(),
@@ -73,17 +72,25 @@ export const updateTicketInputSchema = z.object({
 export type UpdateTicketInput = z.infer<typeof updateTicketInputSchema>;
 
 export const createQueueInputSchema = z.object({
-  name: z.string().min(1).max(100).trim(),
+  encryptedName: base64String("encryptedName"),
   escalateDays: z.number().int().min(0).max(365).default(0),
 });
 export type CreateQueueInput = z.infer<typeof createQueueInputSchema>;
 
 export const updateQueueInputSchema = z.object({
   queueId: z.uuid(),
-  name: z.string().min(1).max(100).trim().optional(),
+  encryptedName: base64String("encryptedName").optional(),
   escalateDays: z.number().int().min(0).max(365).optional(),
 });
 export type UpdateQueueInput = z.infer<typeof updateQueueInputSchema>;
+
+export const reorderQueuesInputSchema = z.array(
+  z.object({
+    queueId: z.uuid(),
+    sortOrder: z.number().int().min(0),
+  }),
+);
+export type ReorderQueuesInput = z.infer<typeof reorderQueuesInputSchema>;
 
 export const createPresetReplyInputSchema = z.object({
   encryptedTitle: base64String("encryptedTitle"),
@@ -135,22 +142,89 @@ export const uploadAttachmentInputSchema = z.object({
 });
 export type UploadAttachmentInput = z.infer<typeof uploadAttachmentInputSchema>;
 
-// --- Pagination ---
+// --- Sort + Pagination ---
+
+export const ticketSortFieldSchema = z.enum([
+  "date",
+  "priority",
+  "last_activity",
+  "queue",
+]);
+export type TicketSortField = z.infer<typeof ticketSortFieldSchema>;
+
+export const sortDirectionSchema = z.enum(["asc", "desc"]);
+export type SortDirection = z.infer<typeof sortDirectionSchema>;
 
 export const ticketListInputSchema = z.object({
-  queueId: z.uuid().optional(),
-  status: ticketStatusSchema.optional(),
+  statuses: z.array(ticketStatusSchema).optional(),
+  queueIds: z.array(z.uuid()).optional(),
+  priorities: z.array(ticketPrioritySchema).optional(),
+  onHold: z.boolean().optional(),
+  assignedTo: z.uuid().nullable().optional(),
+  createdAfter: z.iso.datetime().optional(),
+  createdBefore: z.iso.datetime().optional(),
+  sortBy: ticketSortFieldSchema.default("date"),
+  sortDirection: sortDirectionSchema.default("desc"),
   limit: z.number().int().min(1).max(100).default(50),
   cursor: z.uuid().optional(),
 });
 export type TicketListInput = z.infer<typeof ticketListInputSchema>;
 
+export const recentFollowUpsInputSchema = z.object({
+  ticketIds: z.array(z.uuid()).min(1).max(50),
+  perTicket: z.number().int().min(1).max(5).default(3),
+  types: z.array(followUpTypeSchema).optional(),
+});
+export type RecentFollowUpsInput = z.infer<typeof recentFollowUpsInputSchema>;
+
+export const followUpListDirectionSchema = z.enum(["newer", "older"]);
+
 export const followUpListInputSchema = z.object({
   ticketId: z.uuid(),
   limit: z.number().int().min(1).max(100).default(50),
   cursor: z.uuid().optional(),
+  direction: followUpListDirectionSchema.default("newer"),
+  types: z.array(followUpTypeSchema).optional(),
 });
 export type FollowUpListInput = z.infer<typeof followUpListInputSchema>;
+
+/** Input for the timeline summary endpoint. */
+export const followUpSummaryInputSchema = z.object({
+  ticketId: z.uuid(),
+  limit: z.number().int().min(1).max(2000).default(500),
+  cursor: z.uuid().optional(),
+  direction: followUpListDirectionSchema.default("newer"),
+  types: z.array(followUpTypeSchema).optional(),
+});
+export type FollowUpSummaryInput = z.infer<typeof followUpSummaryInputSchema>;
+
+/** Fetch specific follow-ups by ID (for expanding timeline clusters). */
+export const followUpsByIdsInputSchema = z.object({
+  ticketId: z.uuid(),
+  followUpIds: z.array(z.uuid()).min(1).max(200),
+  types: z.array(followUpTypeSchema).optional(),
+});
+export type FollowUpsByIdsInput = z.infer<typeof followUpsByIdsInputSchema>;
+
+// --- Media list schemas ---
+
+export const recordingListInputSchema = z.object({
+  ticketId: z.uuid(),
+  followupId: z.uuid().optional(),
+  limit: z.number().int().min(1).max(200).default(50),
+  cursor: z.uuid().optional(),
+  direction: followUpListDirectionSchema.default("newer"),
+});
+export type RecordingListInput = z.infer<typeof recordingListInputSchema>;
+
+export const attachmentListInputSchema = z.object({
+  ticketId: z.uuid(),
+  followupId: z.uuid().optional(),
+  limit: z.number().int().min(1).max(200).default(50),
+  cursor: z.uuid().optional(),
+  direction: followUpListDirectionSchema.default("newer"),
+});
+export type AttachmentListInput = z.infer<typeof attachmentListInputSchema>;
 
 // --- Workflow schemas ---
 
@@ -169,6 +243,12 @@ export const releaseTicketInputSchema = z.object({
 });
 export type ReleaseTicketInput = z.infer<typeof releaseTicketInputSchema>;
 
+export const assignToInputSchema = z.object({
+  ticketId: z.uuid(),
+  targetUserId: z.uuid().nullable(),
+});
+export type AssignToInput = z.infer<typeof assignToInputSchema>;
+
 export const watchTicketInputSchema = z.object({
   ticketId: z.uuid(),
 });
@@ -180,8 +260,88 @@ export const queueWatcherInputSchema = z.object({
 });
 export type QueueWatcherInput = z.infer<typeof queueWatcherInputSchema>;
 
+// --- Internal note edit/delete ---
+
+export const updateInternalNoteInputSchema = z.object({
+  followUpId: z.uuid(),
+  encryptedContent: base64String("encryptedContent"),
+});
+export type UpdateInternalNoteInput = z.infer<
+  typeof updateInternalNoteInputSchema
+>;
+
+export const deleteInternalNoteInputSchema = z.object({
+  followUpId: z.uuid(),
+});
+export type DeleteInternalNoteInput = z.infer<
+  typeof deleteInternalNoteInputSchema
+>;
+
+// --- Volunteer list (for @mention autocomplete) ---
+// Return type is inferred by tRPC from the resolver. The server returns
+// { id: string, encryptedDisplayName: Buffer } which tRPC serializes as
+// { type: "Buffer", data: number[] } over the wire. OrgDecryptCache
+// handles that shape via its SerializedBuffer type.
+
 export const queueAssignmentInputSchema = z.object({
   queueId: z.uuid(),
   userId: z.uuid(),
 });
 export type QueueAssignmentInput = z.infer<typeof queueAssignmentInputSchema>;
+
+// --- Saved filters ---
+
+/** Display-level filter statuses (client derives "new"/"active" from server's "open"). */
+export const displayStatusSchema = z.enum(["new", "active", "hold", "closed"]);
+export type DisplayFilterStatus = z.infer<typeof displayStatusSchema>;
+
+/** Serialized filter state stored inside a SavedFilterRecord's `state` JSON blob. */
+export const savedFilterStateSchema = z.object({
+  statuses: z.array(displayStatusSchema),
+  queueIds: z.array(z.string()),
+  priorities: z.array(ticketPrioritySchema),
+  assigneeId: z.string().nullable().optional(),
+  dateFrom: z.string().nullable(),
+  dateTo: z.string().nullable(),
+  sortField: ticketSortFieldSchema,
+  sortDirection: sortDirectionSchema,
+});
+export type SavedFilterState = z.infer<typeof savedFilterStateSchema>;
+
+export const savedFilterColorSchema = z.enum([
+  "grey",
+  "blue",
+  "green",
+  "orange",
+  "red",
+  "pink",
+  "purple",
+]);
+export type SavedFilterColor = z.infer<typeof savedFilterColorSchema>;
+
+export const savedFilterRecordSchema = z.object({
+  id: z.uuid(),
+  encryptedName: z.string().min(1),
+  color: savedFilterColorSchema,
+  icon: z.string().min(1).max(50),
+  state: z.string().min(1),
+  shared: z.boolean(),
+  ownerId: z.string(),
+  createdAt: z.iso.datetime(),
+});
+export type SavedFilterRecord = z.infer<typeof savedFilterRecordSchema>;
+
+export const ticketActionSchema = z.enum([
+  "call",
+  "take",
+  "release",
+  "assign",
+  "hold",
+  "unhold",
+  "close",
+  "reopen",
+  "watch",
+  "unwatch",
+  "cancel",
+]);
+export type TicketAction = z.infer<typeof ticketActionSchema>;

@@ -69,7 +69,7 @@ describe("QueryLoader", () => {
         children: snippetOf("Content"),
       },
     });
-    const bars = container.querySelectorAll(".skeleton-bar");
+    const bars = container.querySelectorAll("[data-skeleton]");
     expect(bars.length).toBe(5);
   });
 });

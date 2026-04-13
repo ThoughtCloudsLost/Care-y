@@ -31,6 +31,7 @@ function createMockCategorySvc(): KBCategoryService {
     list: vi.fn(),
     update: vi.fn(),
     delete: vi.fn(),
+    reorder: vi.fn(),
   };
 }
 
@@ -119,7 +120,8 @@ const NOW = new Date();
 
 const MOCK_CATEGORY: KBCategoryRecord = {
   id: VALID_UUID,
-  name: "Protocols",
+  encryptedName: Buffer.from("Protocols"),
+  sortOrder: 1,
   encryptedDescription: null,
   createdAt: NOW,
   updatedAt: NOW,
@@ -186,12 +188,13 @@ describe("KB Category routes", () => {
     vi.mocked(mockCatSvc.create).mockResolvedValue(MOCK_CATEGORY);
     const caller = buildManagerCaller();
 
-    const result = await caller.createCategory({ name: "Protocols" });
-    expect(result.name).toBe("Protocols");
-    expect(mockCatSvc.create).toHaveBeenCalledWith({
-      name: "Protocols",
-      encryptedDescription: undefined,
+    const result = await caller.createCategory({
+      encryptedName: VALID_BASE64,
     });
+    expect(Buffer.isBuffer(result.encryptedName)).toBe(true);
+    const call = vi.mocked(mockCatSvc.create).mock.calls[0]![0];
+    expect(Buffer.isBuffer(call.encryptedName)).toBe(true);
+    expect(call.encryptedDescription).toBeUndefined();
   });
 
   it("manager can create category with encrypted description", async () => {
@@ -202,19 +205,20 @@ describe("KB Category routes", () => {
     const caller = buildManagerCaller();
 
     await caller.createCategory({
-      name: "Test",
+      encryptedName: VALID_BASE64,
       encryptedDescription: VALID_BASE64,
     });
 
     const call = vi.mocked(mockCatSvc.create).mock.calls[0]![0];
+    expect(Buffer.isBuffer(call.encryptedName)).toBe(true);
     expect(Buffer.isBuffer(call.encryptedDescription)).toBe(true);
   });
 
   it("volunteer cannot create a category", async () => {
     const caller = buildVolunteerCaller();
-    await expect(caller.createCategory({ name: "Nope" })).rejects.toThrow(
-      TRPCError,
-    );
+    await expect(
+      caller.createCategory({ encryptedName: VALID_BASE64 }),
+    ).rejects.toThrow(TRPCError);
   });
 
   it("volunteer can list categories", async () => {
@@ -223,27 +227,31 @@ describe("KB Category routes", () => {
 
     const result = await caller.listCategories();
     expect(result).toHaveLength(1);
-    expect(result[0]!.name).toBe("Protocols");
+    expect(Buffer.isBuffer(result[0]!.encryptedName)).toBe(true);
   });
 
   it("manager can update a category", async () => {
+    const updatedName = Buffer.from("Updated");
     vi.mocked(mockCatSvc.update).mockResolvedValue({
       ...MOCK_CATEGORY,
-      name: "Updated",
+      encryptedName: updatedName,
     });
     const caller = buildManagerCaller();
 
     const result = await caller.updateCategory({
       categoryId: VALID_UUID,
-      name: "Updated",
+      encryptedName: VALID_BASE64,
     });
-    expect(result.name).toBe("Updated");
+    expect(Buffer.isBuffer(result.encryptedName)).toBe(true);
   });
 
   it("volunteer cannot update a category", async () => {
     const caller = buildVolunteerCaller();
     await expect(
-      caller.updateCategory({ categoryId: VALID_UUID, name: "Nope" }),
+      caller.updateCategory({
+        categoryId: VALID_UUID,
+        encryptedName: VALID_BASE64,
+      }),
     ).rejects.toThrow(TRPCError);
   });
 

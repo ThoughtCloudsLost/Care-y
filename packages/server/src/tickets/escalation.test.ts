@@ -23,9 +23,9 @@ describe.skipIf(!process.env.DATABASE_URL)("escalateTenantTickets (DB)", () => {
   async function insertTicketWithAge(opts: {
     queueId: string;
     ageDays: number;
-    priority?: string;
+    priority?: "low" | "normal" | "high" | "urgent";
     onHold?: boolean;
-    status?: string;
+    status?: "open" | "closed";
   }): Promise<string> {
     const fix = await createTestTicketFixture(testDb.db, {
       queueId: opts.queueId,

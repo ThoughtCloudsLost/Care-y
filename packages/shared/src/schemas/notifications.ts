@@ -5,7 +5,7 @@
  * queries are validated against these schemas.
  *
  * No encrypted fields here. Notification payloads are metadata-only
- * (queue names, ticket IDs, timestamps). Content search returns
+ * (queue IDs, ticket IDs, timestamps). Content search returns
  * encrypted blobs from the tickets table, but the search input itself
  * is plaintext filter criteria.
  */
@@ -31,7 +31,7 @@ export type NotificationEventType = z.infer<typeof notificationEventTypeSchema>;
 export const sseEventSchema = z.object({
   type: notificationEventTypeSchema,
   ticketId: z.uuid(),
-  queueName: z.string(),
+  queueId: z.uuid(),
   timestamp: z.iso.datetime(),
 });
 export type SseEvent = z.infer<typeof sseEventSchema>;

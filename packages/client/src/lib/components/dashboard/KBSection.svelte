@@ -1,8 +1,11 @@
 <script lang="ts">
   import { BookOpen, FileText, ThumbsUp } from "@lucide/svelte";
   import { formatRelativeTime } from "$lib/utils/format-time.js";
+  import { onKeyActivate } from "$lib/utils/a11y.js";
   import * as m from "$lib/paraglide/messages.js";
   import CollapsibleSection from "./CollapsibleSection.svelte";
+  import DecryptPlaceholder from "$lib/components/DecryptPlaceholder.svelte";
+  import InlineSkeleton from "$lib/components/InlineSkeleton.svelte";
 
   interface KBItem {
     id: string;
@@ -14,22 +17,51 @@
 
   interface KBSectionProps {
     kbItems: KBItem[];
+    loading?: boolean;
     expanded: boolean;
     ontoggle: () => void;
     ontap?: (itemId: string) => void;
   }
 
-  let { kbItems, expanded, ontoggle, ontap }: KBSectionProps = $props();
+  let {
+    kbItems,
+    loading = false,
+    expanded,
+    ontoggle,
+    ontap,
+  }: KBSectionProps = $props();
 </script>
 
 <CollapsibleSection
   heading={m.dashboard_kb_heading()}
   icon={BookOpen}
   iconColor="var(--brand-accent)"
+  {loading}
   {expanded}
   {ontoggle}
 >
-  {#if kbItems.length > 0}
+  {#if loading}
+    <div class="kb-content skeleton-pulse">
+      <div class="kb-surface">
+        {#each [1, 2] as n (n)}
+          <div class="kb-row">
+            <span class="kb-icon-gutter" aria-hidden="true">
+              <FileText size={13} />
+            </span>
+            <span class="kb-title">
+              <DecryptPlaceholder length={20} />
+            </span>
+            <span class="kb-rating">
+              <InlineSkeleton width="2ch" />
+            </span>
+            <span class="kb-time">
+              <InlineSkeleton width="3ch" />
+            </span>
+          </div>
+        {/each}
+      </div>
+    </div>
+  {:else if kbItems.length > 0}
     <div class="kb-content">
       <div class="kb-summary">
         <span>{m.dashboard_kb_summary({ count: kbItems.length })}</span>
@@ -42,12 +74,7 @@
             role="button"
             tabindex="0"
             onclick={() => ontap?.(item.id)}
-            onkeydown={(e) => {
-              if (e.key === "Enter" || e.key === " ") {
-                if (e.key === " ") e.preventDefault();
-                ontap?.(item.id);
-              }
-            }}
+            onkeydown={onKeyActivate(() => ontap?.(item.id))}
           >
             <span class="kb-icon-gutter" aria-hidden="true">
               <FileText size={13} />
@@ -82,15 +109,15 @@
   .kb-content {
     display: flex;
     flex-direction: column;
-    gap: 0.375rem;
-    padding: 0 0.75rem 0.25rem;
+    gap: var(--space-md);
+    padding: 0 var(--page-pad-x) 0.25rem;
   }
 
   .kb-summary {
     display: flex;
     align-items: center;
-    gap: 0.5rem;
-    font-size: 0.75rem;
+    gap: var(--space-lg);
+    font-size: var(--text-sm);
     color: var(--muted);
   }
 
@@ -99,7 +126,7 @@
     flex-direction: column;
     gap: 0;
     background: var(--surface-1);
-    border-radius: var(--card-radius, 0.75rem);
+    border-radius: var(--card-radius);
     overflow: hidden;
   }
 
@@ -107,10 +134,10 @@
     display: flex;
     align-items: center;
     gap: 0.25rem;
-    font-size: 0.8125rem;
+    font-size: var(--text-base);
     color: var(--ink);
-    padding: 0.5rem 0.75rem;
-    border-bottom: 1px solid color-mix(in srgb, var(--ink) 6%, transparent);
+    padding: var(--space-lg) var(--page-pad-x);
+    border-bottom: 1px solid var(--divider);
     cursor: pointer;
   }
 
@@ -139,7 +166,7 @@
   .kb-rating {
     display: inline-flex;
     align-items: center;
-    gap: 0.1875rem;
+    gap: var(--space-sm);
     flex-shrink: 0;
     font-size: 0.625rem;
     font-weight: 600;
@@ -151,14 +178,14 @@
   .kb-time {
     flex-shrink: 0;
     margin-left: auto;
-    font-size: 0.6875rem;
+    font-size: var(--text-xs);
     color: var(--muted);
     opacity: 0.7;
   }
 
   .no-kb {
     padding: 0 1rem 0.5rem;
-    font-size: 0.8125rem;
+    font-size: var(--text-base);
     color: var(--muted);
   }
 </style>

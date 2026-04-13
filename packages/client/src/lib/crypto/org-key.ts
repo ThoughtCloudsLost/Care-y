@@ -58,6 +58,22 @@ export class OrgKeyManager {
   }
 
   /**
+   * Encrypt plaintext using the org public key (crypto_box_seal).
+   *
+   * Sealed-box encryption: anyone with the public key can encrypt,
+   * only the holder of the secret key can decrypt. Used for shortcut
+   * names and other org-tier content created client-side.
+   */
+  encrypt(plaintext: Uint8Array): Uint8Array {
+    if (!this.orgPublicKey) {
+      throw new OrgKeyNotLoadedError();
+    }
+
+    const sodium = requireSodium();
+    return sodium.crypto_box_seal(plaintext, this.orgPublicKey);
+  }
+
+  /**
    * Decrypt a sealed box ciphertext using the org keypair.
    *
    * crypto_box_seal_open requires both the public key and secret key.

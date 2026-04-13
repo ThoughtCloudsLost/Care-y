@@ -9,6 +9,11 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import type { CryptoBridge } from "$lib/workers/crypto-bridge.js";
 import { TicketDecryptCache } from "./ticket-decrypt-cache.js";
+import {
+  DECRYPT_ERROR_SENTINEL,
+  isDecryptError,
+} from "./async-decrypt-cache.js";
+import { cacheRegistry } from "./cache-registry.js";
 
 const TICKET_ID = "ticket-001";
 const KEY_WRAP = {
@@ -82,9 +87,10 @@ describe("TicketDecryptCache", () => {
       expect(mockDecrypt).toHaveBeenCalledOnce();
     });
 
-    it("returns undefined for null keyWrap without calling bridge", () => {
+    it("returns error sentinel for null keyWrap without calling bridge", () => {
       const result = cache.decryptTitle(TICKET_ID, null, ENCRYPTED_TITLE);
-      expect(result).toBeUndefined();
+      expect(result).toBe(DECRYPT_ERROR_SENTINEL);
+      expect(isDecryptError(result)).toBe(true);
       expect(mockDecrypt).not.toHaveBeenCalled();
     });
 
@@ -95,37 +101,19 @@ describe("TicketDecryptCache", () => {
       expect(mockDecrypt).toHaveBeenCalledOnce();
     });
 
-    it("handles decrypt failure gracefully (returns undefined)", async () => {
+    it("stores error sentinel on decrypt failure", async () => {
       mockDecrypt.mockRejectedValueOnce(new Error("ECIES decrypt failed"));
 
       const result = cache.decryptTitle(TICKET_ID, KEY_WRAP, ENCRYPTED_TITLE);
       expect(result).toBeUndefined();
 
-      // Wait for the rejection to settle.
+      // After failure, cache should contain the error sentinel.
       await vi.waitFor(() => {
-        // After failure, pending should be cleared so a retry is possible.
-        expect(cache.has(TICKET_ID)).toBe(false);
+        expect(cache.has(TICKET_ID)).toBe(true);
       });
-    });
 
-    it("retries after a previous failure", async () => {
-      mockDecrypt.mockRejectedValueOnce(new Error("transient"));
-      cache.decryptTitle(TICKET_ID, KEY_WRAP, ENCRYPTED_TITLE);
-
-      // Wait for failure to clear pending.
-      await vi.waitFor(() => {
-        expect(mockDecrypt).toHaveBeenCalledOnce();
-      });
-      // Small delay for the finally block
-      await new Promise((r) => setTimeout(r, 10));
-
-      mockDecrypt.mockResolvedValueOnce("Retry Success");
-      cache.decryptTitle(TICKET_ID, KEY_WRAP, ENCRYPTED_TITLE);
-      expect(mockDecrypt).toHaveBeenCalledTimes(2);
-
-      await vi.waitFor(() => {
-        expect(cache.get(TICKET_ID)).toBe("Retry Success");
-      });
+      expect(cache.get(TICKET_ID)).toBe(DECRYPT_ERROR_SENTINEL);
+      expect(isDecryptError(cache.get(TICKET_ID))).toBe(true);
     });
 
     it("handles string encryptedTitle (already base64)", () => {
@@ -196,6 +184,12 @@ describe("TicketDecryptCache", () => {
   describe("size", () => {
     it("returns 0 for empty cache", () => {
       expect(cache.size).toBe(0);
+    });
+  });
+
+  describe("cache registry", () => {
+    it("registers with cacheRegistry on construction", () => {
+      expect(cacheRegistry.registered).toContain("TicketDecryptCache");
     });
   });
 });

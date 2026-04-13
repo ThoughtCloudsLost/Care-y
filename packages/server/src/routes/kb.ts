@@ -50,7 +50,7 @@ export function createKbRouter(deps: KBRouterDeps) {
         withErrorWrapping(async ({ ctx, input }) => {
           const svc = deps.createCategorySvc(ctx.org.tenantDb);
           return svc.create({
-            name: input.name,
+            encryptedName: Buffer.from(input.encryptedName, "base64"),
             encryptedDescription:
               input.encryptedDescription !== undefined
                 ? Buffer.from(input.encryptedDescription, "base64")
@@ -73,7 +73,10 @@ export function createKbRouter(deps: KBRouterDeps) {
           const svc = deps.createCategorySvc(ctx.org.tenantDb);
           // care-y-ignore-next-line route-delegates-to-service -- delegates to svc.update; Buffer.from is wire-format (base64 to Buffer) conversion, not business logic
           return svc.update(input.categoryId, {
-            name: input.name,
+            encryptedName:
+              input.encryptedName !== undefined
+                ? Buffer.from(input.encryptedName, "base64")
+                : undefined,
             encryptedDescription:
               input.encryptedDescription !== undefined
                 ? Buffer.from(input.encryptedDescription, "base64")

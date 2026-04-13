@@ -9,7 +9,13 @@
  * Both idle timeout and beforeunload may fire in the same session
  * (user closes tab while idle timer is counting). The Worker's
  * handleZeroAll and the bridge's zeroAll are idempotent.
+ *
+ * All decrypt caches are cleared via cacheRegistry.clearAll(). Every
+ * cache holding decrypted content registers itself through the registry
+ * at construction time (BF-010 completed this migration).
  */
+
+import { cacheRegistry } from "$lib/crypto/cache-registry.js";
 
 /** Narrow interface: only the method cleanup needs from CryptoBridge. */
 export interface CleanupBridge {
@@ -21,21 +27,13 @@ export interface CleanupOrgKey {
   zero(): void;
 }
 
-/** Narrow interface: only the method cleanup needs from decrypt caches. */
-export interface CleanupCache {
-  clear(): void;
-}
-
 let installed = false;
 let bridgeRef: CleanupBridge | null = null;
 let orgKeyRef: CleanupOrgKey | null = null;
-let cacheRefs: CleanupCache[] = [];
 
 function handleBeforeUnload(): void {
-  // Clear decrypt caches first (plaintext strings in SvelteMap).
-  for (const cache of cacheRefs) {
-    cache.clear();
-  }
+  // Clear all registry-tracked caches.
+  cacheRegistry.clearAll();
 
   // Fire-and-forget: do not await, do not block unload
   if (bridgeRef) {
@@ -56,16 +54,22 @@ function handleBeforeUnload(): void {
 export function installCleanupHandler(
   bridge: CleanupBridge,
   orgKey: CleanupOrgKey,
-  caches?: CleanupCache[],
 ): void {
   bridgeRef = bridge;
   orgKeyRef = orgKey;
-  cacheRefs = caches ?? [];
 
   if (!installed) {
     window.addEventListener("beforeunload", handleBeforeUnload);
     installed = true;
   }
+}
+
+/**
+ * Clear all decrypted data from memory.
+ * Call on logout, session expiry, or idle timeout (not just beforeunload).
+ */
+export function clearAllDecryptedData(): void {
+  cacheRegistry.clearAll();
 }
 
 /**

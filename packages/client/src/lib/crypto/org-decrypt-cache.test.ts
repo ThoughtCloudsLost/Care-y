@@ -12,6 +12,7 @@ import { getSodium, requireSodium } from "@care-y/crypto";
 import sodium from "libsodium-wrappers-sumo";
 import { OrgKeyManager } from "./org-key.js";
 import { OrgDecryptCache } from "./org-decrypt-cache.js";
+import { cacheRegistry } from "./cache-registry.js";
 
 beforeAll(async () => {
   await getSodium();
@@ -172,6 +173,12 @@ describe("OrgDecryptCache", () => {
       );
       cache.decrypt("kb-052", ct);
       expect(cache.size).toBe(0);
+    });
+  });
+
+  describe("cache registry", () => {
+    it("registers with cacheRegistry on construction", () => {
+      expect(cacheRegistry.registered).toContain("OrgDecryptCache");
     });
   });
 });

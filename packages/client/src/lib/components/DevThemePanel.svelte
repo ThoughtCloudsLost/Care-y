@@ -1,6 +1,7 @@
 <script lang="ts">
   /* eslint-disable care-y/no-hardcoded-strings -- Dev-only tooling, not user-facing */
   import { themeStore } from "$lib/stores/theme.svelte";
+  import { onKeyActivate } from "$lib/utils/a11y.js";
   import type {
     VisualTheme,
     KonstaTheme,
@@ -12,6 +13,7 @@
     applyKonstaPalette,
     resetKonstaPalette,
   } from "$lib/branding/konsta-palette";
+  import { setDevDelay } from "$lib/trpc/index.js";
   import type { BrandColors } from "$lib/branding/konsta-palette";
   import {
     logBuffer,
@@ -45,6 +47,7 @@
   ];
 
   let opened = $state(false);
+  let devDelay = $state(false);
   let activeLog = $state<"console" | "network" | null>(null);
   let primaryColor = $state(DEFAULT_PRIMARY);
   let accentColor = $state(DEFAULT_ACCENT);
@@ -135,6 +138,11 @@
     return values[(values.indexOf(current) + 1) % values.length] ?? current;
   }
 
+  function toggleDevDelay(): void {
+    devDelay = !devDelay;
+    setDevDelay(devDelay);
+  }
+
   function cycleVisual(): void {
     const themes: VisualTheme[] = [
       "default",
@@ -183,12 +191,7 @@
     tabindex="0"
     aria-label="Close dev panel"
     onclick={() => (opened = false)}
-    onkeydown={(e) => {
-      if (e.key === "Enter" || e.key === " ") {
-        e.preventDefault();
-        opened = false;
-      }
-    }}
+    onkeydown={onKeyActivate(() => (opened = false))}
   ></div>
   <div class="dev-panel" role="dialog" aria-label="Dev panel">
     <!-- Header -->
@@ -231,6 +234,13 @@
       </button>
       <button class="dev-pill" onclick={cycleGlass}>
         glass: {themeStore.glassMode}
+      </button>
+      <button
+        class="dev-pill"
+        class:dev-pill-active={devDelay}
+        onclick={toggleDevDelay}
+      >
+        delay: {devDelay ? "ON" : "OFF"}
       </button>
     </div>
 
@@ -447,6 +457,11 @@
   }
   .dev-pill:active {
     opacity: 0.6;
+  }
+  .dev-pill.dev-pill-active {
+    background: var(--ink, #e5e5e5);
+    color: var(--surface-1, #1c1c1d);
+    border-color: transparent;
   }
 
   /* Color row */

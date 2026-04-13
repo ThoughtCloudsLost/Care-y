@@ -1,27 +1,22 @@
 /**
  * Reactive cache for ticket-tier (PII) ECIES decryption.
  *
- * Wraps CryptoBridge.decrypt() with a SvelteMap so each ticket's
- * encrypted title is decrypted at most once per session. The Worker
- * caches the per-ticket key (tk) internally, so subsequent decrypts
- * of the same ticket's other fields are fast.
- *
- * Decryption is async (postMessage round-trip to the crypto Worker).
- * The cache stores the resolved plaintext; in-flight decryptions are
- * tracked by a pending Set to avoid duplicate Worker calls.
- *
- * The SvelteMap is natively reactive in Svelte 5 without $state wrapping.
+ * Extends AsyncDecryptCache to inherit the SvelteMap + pending Set +
+ * CryptoBridge pattern and auto-register with CacheRegistry. The only
+ * domain-specific logic is decryptTitle(), which handles the null-keyWrap
+ * edge case and serialized-buffer-to-base64 conversion before delegating
+ * to the base class decrypt().
  */
 
-import { SvelteMap } from "svelte/reactivity";
+import {
+  AsyncDecryptCache,
+  DECRYPT_ERROR_SENTINEL,
+} from "./async-decrypt-cache.js";
 import type { CryptoBridge } from "$lib/workers/crypto-bridge.js";
-import { serializedBufferToBase64 } from "$lib/utils/buffer-encoding.js";
-
-/** Serialized Node.js Buffer as it arrives over tRPC JSON (no superjson). */
-interface SerializedBuffer {
-  type: "Buffer";
-  data: number[];
-}
+import {
+  serializedBufferToBase64,
+  type SerializedBuffer,
+} from "$lib/utils/buffer-encoding.js";
 
 export interface TicketKeyWrap {
   readonly ephemeralPoint: string;
@@ -29,13 +24,9 @@ export interface TicketKeyWrap {
   readonly wrappedKey: string;
 }
 
-export class TicketDecryptCache {
-  private readonly cache = new SvelteMap<string, string>();
-  private readonly pending = new Set<string>();
-  private readonly bridge: CryptoBridge;
-
+export class TicketDecryptCache extends AsyncDecryptCache {
   constructor(bridge: CryptoBridge) {
-    this.bridge = bridge;
+    super(bridge, "TicketDecryptCache");
   }
 
   /**
@@ -52,60 +43,28 @@ export class TicketDecryptCache {
     keyWrap: TicketKeyWrap | null,
     encryptedTitle: SerializedBuffer | string,
   ): string | undefined {
-    const cached = this.cache.get(ticketId);
-    if (cached !== undefined) return cached;
-
-    if (keyWrap === null) return undefined;
-    if (this.pending.has(ticketId)) return undefined;
-
-    this.pending.add(ticketId);
+    if (keyWrap === null) {
+      // No key wrap means the ticket cannot be decrypted (missing key
+      // material). Defer the cache write to avoid state_unsafe_mutation
+      // when called from a render expression.
+      if (!this.has(ticketId)) {
+        queueMicrotask(() => {
+          if (!this.has(ticketId)) {
+            this.setError(ticketId);
+          }
+        });
+      }
+      return DECRYPT_ERROR_SENTINEL;
+    }
 
     const ciphertext = serializedBufferToBase64(encryptedTitle);
 
-    void this.bridge
-      .decrypt(
-        ticketId,
-        keyWrap.ephemeralPoint,
-        keyWrap.nonce,
-        keyWrap.wrappedKey,
-        ciphertext,
-      )
-      .then((plaintext) => {
-        this.cache.set(ticketId, plaintext);
-      })
-      .catch((err: unknown) => {
-        if (import.meta.env.DEV) {
-          console.warn(
-            `[TicketDecryptCache] decrypt failed for ${ticketId}:`,
-            err,
-          );
-        }
-      })
-      .finally(() => {
-        this.pending.delete(ticketId);
-      });
-
-    return undefined;
-  }
-
-  /** Check whether a decrypted title exists in cache. */
-  has(ticketId: string): boolean {
-    return this.cache.has(ticketId);
-  }
-
-  /** Get a cached title without triggering decrypt. */
-  get(ticketId: string): string | undefined {
-    return this.cache.get(ticketId);
-  }
-
-  /** Clear all cached decryptions (e.g., on logout). */
-  clear(): void {
-    this.cache.clear();
-    this.pending.clear();
-  }
-
-  /** Number of cached entries (useful for tests). */
-  get size(): number {
-    return this.cache.size;
+    return this.decrypt(
+      ticketId,
+      keyWrap.ephemeralPoint,
+      keyWrap.nonce,
+      keyWrap.wrappedKey,
+      ciphertext,
+    );
   }
 }
