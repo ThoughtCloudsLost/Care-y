@@ -298,10 +298,12 @@ describe.skipIf(!process.env.DATABASE_URL)("AssignmentService (DB)", () => {
     ).rejects.toBeInstanceOf(TicketError);
   });
 
-  it("assignTo throws NotFoundError for nonexistent ticket", async () => {
+  it("assignTo throws ForbiddenError for nonexistent ticket", async () => {
+    // Access checker returns ForbiddenError for nonexistent tickets
+    // (no existence leak: "not found" is indistinguishable from "no access")
     await expect(
       svc.assignTo(volunteerA, crypto.randomUUID(), volunteerB),
-    ).rejects.toBeInstanceOf(NotFoundError);
+    ).rejects.toBeInstanceOf(ForbiddenError);
   });
 
   it("assignTo throws ForbiddenError for inactive target user", async () => {

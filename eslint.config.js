@@ -221,6 +221,7 @@ export default tseslint.config(
       "**/test-utils.ts",
       "**/test-setup.ts",
       "**/test-global-setup.ts",
+      "**/test-mocks/**",
       "e2e/global-setup.ts",
       "e2e/global-teardown.ts",
     ],

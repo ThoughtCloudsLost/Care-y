@@ -60,7 +60,6 @@ export function createQueueService(db: Kysely<TenantDatabase>): QueueService {
         .select((eb) =>
           eb.fn.coalesce(eb.fn.max("sort_order"), eb.lit(0)).as("max"),
         )
-        .where("is_active", "=", true)
         .executeTakeFirstOrThrow();
 
       const nextSortOrder = max + 1;

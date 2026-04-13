@@ -240,8 +240,15 @@ describe.skipIf(!process.env.DATABASE_URL)("FollowUpService (DB)", () => {
   });
 
   it("softDeleteInternalNote succeeds for admin on other author's note", async () => {
-    const { userId, ticketId } = await createTicketFixture();
+    const { userId, ticketId, queueId } = await createTicketFixture();
     const adminUser = await createTestUser(testDb.db);
+
+    // Grant queue-level ticket access so assertAccess passes
+    await testDb.db
+      .insertInto("queue_assignments")
+      .values({ queue_id: queueId, user_id: adminUser.id })
+      .onConflict((oc) => oc.columns(["queue_id", "user_id"]).doNothing())
+      .execute();
 
     const fu = await svc.create(userId, {
       ticketId,

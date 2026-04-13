@@ -47,6 +47,7 @@
     onBackdropClick={backdrop ? trap.handleDismiss : undefined}
     class={sheetClass}
   >
+    <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
     <div
       bind:this={trap.dialogEl}
       {role}

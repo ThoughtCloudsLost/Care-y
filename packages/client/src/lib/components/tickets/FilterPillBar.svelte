@@ -2,7 +2,6 @@
   import { createQuery } from "@tanstack/svelte-query";
   import { createCountsQuery } from "$lib/tickets/queries.js";
   import {
-    Badge,
     Button,
     Icon,
     Link,

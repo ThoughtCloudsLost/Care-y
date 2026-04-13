@@ -45,8 +45,6 @@
 
   const loading = $derived(content === undefined || content === null);
   const isError = $derived(!loading && isDecryptError(content));
-  /** True when this is a pure shape guess with no real data behind it. */
-  const isDummy = $derived(loading && ciphertext == null);
   const effectiveLength = $derived(estimateLength(ciphertext, length));
   const estimatedLines = $derived.by(() => {
     const lines = Math.max(1, Math.ceil(effectiveLength / charsPerLine));
@@ -68,9 +66,9 @@
   }
 
   const isMedia = $derived(mode === "media");
-  // Text mode: 4 variants, Media mode: 2 variants
-  const maxVariants = isMedia ? 2 : 4;
-  const variant = Math.floor(Math.random() * maxVariants) + 1;
+  // Stable random variant (1-4 text, 1-2 media). Clamped in the template
+  // via isMedia guards so out-of-range values are harmless.
+  const variant = Math.floor(Math.random() * 4) + 1;
   const delay = `${String(-(Math.random() * 1.8))}s`;
 
   let paused = $state(false);

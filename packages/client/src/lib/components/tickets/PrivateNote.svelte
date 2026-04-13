@@ -90,7 +90,7 @@
   const canSave = $derived(editText.trim().length > 0 && !saving);
 </script>
 
-<div class="private-note-wrapper">
+<div class="private-note-wrapper" class:own-note={isOwn}>
   <Card
     outline
     contentWrapPadding="pt-1 pb-3 px-3"

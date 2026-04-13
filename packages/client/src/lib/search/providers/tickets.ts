@@ -118,7 +118,7 @@ export function createTicketSearchProvider(
     label: () => m.search_section_tickets(),
     icon: Ticket,
     renderMode: "card-strip",
-    showAllHref: (_query: string) => "/tickets",
+    showAllHref: () => "/tickets",
     getResultHref: (id: string) => `/tickets/${id}`,
 
     search(query: string) {
