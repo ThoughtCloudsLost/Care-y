@@ -57,6 +57,7 @@ import type {
   Argon2idRequest,
   DeriveKeysRequest,
   DecryptContentRequest,
+  DecryptBlobRequest,
   EncryptContentRequest,
   EvictTkRequest,
   UnwrapOrgKeyRequest,
@@ -226,7 +227,16 @@ function handleDeriveKeys(req: DeriveKeysRequest): void {
   }
 }
 
-function resolveTk(req: DecryptContentRequest): Uint8Array | null {
+interface KeyWrapRequest {
+  readonly id: number;
+  readonly type: WorkerRequestType;
+  readonly ticketId: string;
+  readonly ephemeralPoint: string;
+  readonly nonce: string;
+  readonly wrappedKey: string;
+}
+
+function resolveTk(req: KeyWrapRequest): Uint8Array | null {
   const cached = tkCache.get(req.ticketId);
   if (cached) return cached;
 
@@ -246,7 +256,7 @@ function resolveTk(req: DecryptContentRequest): Uint8Array | null {
   } catch (err: unknown) {
     postError(
       req.id,
-      "decryptContent",
+      req.type,
       err instanceof Error ? err.message : String(err),
       "DECRYPT_FAILED",
     );
@@ -282,6 +292,42 @@ function handleDecryptContent(req: DecryptContentRequest): void {
     postError(
       req.id,
       "decryptContent",
+      err instanceof Error ? err.message : String(err),
+      "DECRYPT_FAILED",
+    );
+  }
+}
+
+function handleDecryptBlob(req: DecryptBlobRequest): void {
+  if (!requireKeyed(req.id, "decryptBlob")) return;
+
+  const sodium = requireSodium();
+  const tk = resolveTk(req);
+  if (!tk) return;
+
+  try {
+    const ciphertextBuf = decode(req.ciphertext);
+    const plainBytes = decryptContent(
+      ciphertextBuf as Ciphertext,
+      tk as SymmetricKey,
+    );
+
+    // Copy into a fresh ArrayBuffer for Transferable ownership.
+    const abuf = new ArrayBuffer(plainBytes.byteLength);
+    new Uint8Array(abuf).set(plainBytes);
+    sodium.memzero(plainBytes);
+
+    const msg: WorkerResponse = {
+      id: req.id,
+      ok: true,
+      type: "decryptBlob",
+      data: abuf,
+    };
+    self.postMessage(msg, { transfer: [abuf] });
+  } catch (err: unknown) {
+    postError(
+      req.id,
+      "decryptBlob",
       err instanceof Error ? err.message : String(err),
       "DECRYPT_FAILED",
     );
@@ -477,6 +523,9 @@ self.addEventListener("message", (event: MessageEvent<WorkerRequest>): void => {
         break;
       case "encryptContent":
         handleEncryptContent(req);
+        break;
+      case "decryptBlob":
+        handleDecryptBlob(req);
         break;
       case "evictTk":
         handleEvictTk(req);

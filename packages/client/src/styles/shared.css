@@ -40,6 +40,33 @@
   --brand-accent-40: color-mix(in srgb, var(--brand-accent) 40%, transparent);
   --brand-accent-20: color-mix(in srgb, var(--brand-accent) 20%, transparent);
   --app-height: 100dvh;
+
+  /* ── Layout spacing scale ── */
+  --space-xs: 0.125rem; /* 2px  - dot gaps, minimal separators */
+  --space-sm: 0.1875rem; /* 3px  - row gaps within cards */
+  --space-md: 0.375rem; /* 6px  - element gaps, pill gaps */
+  --space-lg: 0.5rem; /* 8px  - card list gaps, section content gaps */
+  --space-xl: 0.75rem; /* 12px - page/card horizontal padding */
+  --space-2xl: 1.25rem; /* 20px - section vertical spacing */
+
+  /* Card inner padding */
+  --card-pad-x: 0.75rem;
+  --card-pad-y: 0.625rem;
+
+  /* Page horizontal padding (content inset from screen edge) */
+  --page-pad-x: 0.75rem;
+
+  /* Card radius (themes override: brutalist=0, cupertino=1rem, frutiger=1.5rem) */
+  --card-radius: 0.75rem;
+
+  /* Divider color (6% ink) */
+  --divider: color-mix(in srgb, var(--ink) 6%, transparent);
+
+  /* ── Typography scale ── */
+  --text-xs: 0.6875rem; /* 11px - badges, chips, tiny labels */
+  --text-sm: 0.75rem; /* 12px - meta, captions, timestamps */
+  --text-base: 0.8125rem; /* 13px - body text, descriptions */
+  --text-md: 0.9375rem; /* 15px - card titles, client aliases */
 }
 
 /* Color scheme set dynamically by the blocking script in app.html
@@ -196,7 +223,7 @@ html.glass-light.dark .backdrop-blur-lg {
 /* Elevated card: base surface. Each theme overrides with its visual treatment. */
 .card-elevated {
   background: var(--surface-1);
-  border-radius: 0.75rem;
+  border-radius: var(--card-radius);
   border: 1px solid rgba(128, 128, 128, 0.12);
 }
 

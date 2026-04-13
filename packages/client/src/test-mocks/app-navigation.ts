@@ -7,8 +7,6 @@
  * provides the resolution target; individual tests override via vi.mock().
  */
 
-/* eslint-disable @typescript-eslint/no-unused-vars -- Stub signatures must match SvelteKit API */
-
 export function goto(_url: string, _opts?: Record<string, unknown>): void {
   // Stub: overridden by vi.mock() in test files.
 }

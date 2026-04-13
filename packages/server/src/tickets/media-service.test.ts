@@ -229,7 +229,7 @@ describe.skipIf(!process.env.DATABASE_URL)("MediaService (DB)", () => {
 
     await svc.softDeleteRecording(deleted.id);
 
-    const list = await svc.listRecordings(userId, ticketId);
+    const list = await svc.listRecordings(userId, ticketId, { limit: 50 });
     const ids = list.map((r) => r.id);
     expect(ids).toContain(alive.id);
     expect(ids).not.toContain(deleted.id);
@@ -328,10 +328,214 @@ describe.skipIf(!process.env.DATABASE_URL)("MediaService (DB)", () => {
 
     await svc.softDeleteAttachment(deleted.id);
 
-    const list = await svc.listAttachments(userId, ticketId);
+    const list = await svc.listAttachments(userId, ticketId, { limit: 50 });
     const ids = list.map((a) => a.id);
     expect(ids).toContain(alive.id);
     expect(ids).not.toContain(deleted.id);
+  });
+
+  // --- Pagination ---
+
+  it("listRecordings paginates with cursor", async () => {
+    const ticketId = await insertTicket();
+
+    const ids: string[] = [];
+    for (let i = 0; i < 5; i++) {
+      const rec = await svc.createRecording({
+        ticketId,
+        blobKey: `blob-page-${String(i)}`,
+        sizeBytes: 100,
+      });
+      ids.push(rec.id);
+    }
+
+    // First page of 2
+    const page1 = await svc.listRecordings(userId, ticketId, { limit: 2 });
+    expect(page1).toHaveLength(2);
+
+    // Second page using cursor
+    const page2 = await svc.listRecordings(userId, ticketId, {
+      limit: 2,
+      cursor: page1[1]!.id,
+    });
+    expect(page2).toHaveLength(2);
+
+    // Third page (remainder)
+    const page3 = await svc.listRecordings(userId, ticketId, {
+      limit: 2,
+      cursor: page2[1]!.id,
+    });
+    expect(page3).toHaveLength(1);
+
+    // All 5 IDs covered with no duplicates
+    const allIds = [
+      ...page1.map((r) => r.id),
+      ...page2.map((r) => r.id),
+      ...page3.map((r) => r.id),
+    ];
+    expect(new Set(allIds).size).toBe(5);
+  });
+
+  it("listRecordings respects direction", async () => {
+    const ticketId = await insertTicket();
+
+    for (let i = 0; i < 3; i++) {
+      await svc.createRecording({
+        ticketId,
+        blobKey: `blob-dir-${String(i)}`,
+        sizeBytes: 100,
+      });
+    }
+
+    const asc = await svc.listRecordings(userId, ticketId, {
+      limit: 10,
+      direction: "newer",
+    });
+    const desc = await svc.listRecordings(userId, ticketId, {
+      limit: 10,
+      direction: "older",
+    });
+
+    // Both return same records, same chronological order
+    expect(asc.map((r) => r.id)).toEqual(desc.map((r) => r.id));
+  });
+
+  // --- followupId filter ---
+
+  it("listRecordings with followupId returns only that follow-up's recordings", async () => {
+    const ticketId = await insertTicket();
+    const fuId1 = crypto.randomUUID();
+    const fuId2 = crypto.randomUUID();
+
+    // Create follow-ups so FK constraint is satisfied
+    await testDb.db
+      .insertInto("followups")
+      .values([
+        {
+          id: fuId1,
+          ticket_id: ticketId,
+          source: "client",
+          type: "message",
+          is_private: false,
+          mentioned_pseudonyms: "[]",
+          encrypted_content: Buffer.from("c1"),
+          created_by: null,
+        },
+        {
+          id: fuId2,
+          ticket_id: ticketId,
+          source: "client",
+          type: "message",
+          is_private: false,
+          mentioned_pseudonyms: "[]",
+          encrypted_content: Buffer.from("c2"),
+          created_by: null,
+        },
+      ])
+      .execute();
+
+    const rec1 = await svc.createRecording({
+      ticketId,
+      followupId: fuId1,
+      blobKey: "blob-fu-filter-1",
+      sizeBytes: 100,
+    });
+    await svc.createRecording({
+      ticketId,
+      followupId: fuId2,
+      blobKey: "blob-fu-filter-2",
+      sizeBytes: 100,
+    });
+
+    const result = await svc.listRecordings(userId, ticketId, {
+      limit: 50,
+      followupId: fuId1,
+    });
+    expect(result).toHaveLength(1);
+    expect(result[0]!.id).toBe(rec1.id);
+  });
+
+  it("listAttachments with followupId returns only that follow-up's attachments", async () => {
+    const ticketId = await insertTicket();
+    const fuId1 = crypto.randomUUID();
+    const fuId2 = crypto.randomUUID();
+
+    await testDb.db
+      .insertInto("followups")
+      .values([
+        {
+          id: fuId1,
+          ticket_id: ticketId,
+          source: "client",
+          type: "message",
+          is_private: false,
+          mentioned_pseudonyms: "[]",
+          encrypted_content: Buffer.from("c1"),
+          created_by: null,
+        },
+        {
+          id: fuId2,
+          ticket_id: ticketId,
+          source: "client",
+          type: "message",
+          is_private: false,
+          mentioned_pseudonyms: "[]",
+          encrypted_content: Buffer.from("c2"),
+          created_by: null,
+        },
+      ])
+      .execute();
+
+    const att1 = await svc.createAttachment({
+      ticketId,
+      followupId: fuId1,
+      blobKey: "blob-att-fu-1",
+      sizeBytes: 100,
+      contentType: "image/png",
+    });
+    await svc.createAttachment({
+      ticketId,
+      followupId: fuId2,
+      blobKey: "blob-att-fu-2",
+      sizeBytes: 200,
+      contentType: "application/pdf",
+    });
+
+    const result = await svc.listAttachments(userId, ticketId, {
+      limit: 50,
+      followupId: fuId1,
+    });
+    expect(result).toHaveLength(1);
+    expect(result[0]!.id).toBe(att1.id);
+  });
+
+  it("listAttachments paginates with cursor", async () => {
+    const ticketId = await insertTicket();
+
+    const ids: string[] = [];
+    for (let i = 0; i < 4; i++) {
+      const att = await svc.createAttachment({
+        ticketId,
+        blobKey: `blob-att-page-${String(i)}`,
+        sizeBytes: 100,
+      });
+      ids.push(att.id);
+    }
+
+    // First page of 2
+    const page1 = await svc.listAttachments(userId, ticketId, { limit: 2 });
+    expect(page1).toHaveLength(2);
+
+    // Second page
+    const page2 = await svc.listAttachments(userId, ticketId, {
+      limit: 2,
+      cursor: page1[1]!.id,
+    });
+    expect(page2).toHaveLength(2);
+
+    // All 4 IDs covered
+    const allIds = [...page1.map((a) => a.id), ...page2.map((a) => a.id)];
+    expect(new Set(allIds).size).toBe(4);
   });
 });
 

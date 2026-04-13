@@ -3,49 +3,47 @@
 // Uses simple string interpolation with named parameters.
 // No ICU MessageFormat (overkill for fixed-format metadata-only messages).
 //
-// NOTE: Queue names appear verbatim in email notification bodies. Admins
-// should avoid naming queues after specific people or cases. If a queue
-// is named "Jane's intake", that string reaches the volunteer's inbox in
-// plaintext. Admin guidance documentation should cover this.
+// Queue names are encrypted at rest (ADR-030, org-key tier). The server
+// cannot decrypt them, so outbound notifications use generic phrasing.
+// Volunteers see the full queue name after logging in to the app.
 
 type SupportedLocale = "en" | "es";
 
 export interface NotificationStrings {
-  readonly ticketAssigned: (queueName: string, loginUrl: string) => string;
-  readonly ticketCreated: (queueName: string, loginUrl: string) => string;
-  readonly ticketEscalated: (queueName: string, loginUrl: string) => string;
-  readonly followupAdded: (queueName: string, loginUrl: string) => string;
-  readonly mentionNotification: (queueName: string, loginUrl: string) => string;
+  readonly ticketAssigned: (loginUrl: string) => string;
+  readonly ticketCreated: (loginUrl: string) => string;
+  readonly ticketEscalated: (loginUrl: string) => string;
+  readonly followupAdded: (loginUrl: string) => string;
+  readonly mentionNotification: (loginUrl: string) => string;
   readonly smsPing: (loginUrl: string) => string;
   readonly emailSubjectPrefix: string;
 }
 
 const EN: NotificationStrings = {
-  ticketAssigned: (q, url) =>
-    `A ticket in queue "${q}" has been assigned to you. Log in to view it: ${url}`,
-  ticketCreated: (q, url) =>
-    `A new ticket has arrived in queue "${q}". Log in to view it: ${url}`,
-  ticketEscalated: (q, url) =>
-    `A ticket in queue "${q}" has been escalated. Log in to review it: ${url}`,
-  followupAdded: (q, url) =>
-    `A ticket you are following in queue "${q}" has a new update. Log in to view it: ${url}`,
-  mentionNotification: (q, url) =>
-    `You were mentioned in a note on a ticket in queue "${q}". Log in to view it: ${url}`,
+  ticketAssigned: (url) =>
+    `A ticket has been assigned to you. Log in to view it: ${url}`,
+  ticketCreated: (url) => `A new ticket has arrived. Log in to view it: ${url}`,
+  ticketEscalated: (url) =>
+    `A ticket has been escalated. Log in to review it: ${url}`,
+  followupAdded: (url) =>
+    `A ticket you are following has a new update. Log in to view it: ${url}`,
+  mentionNotification: (url) =>
+    `You were mentioned in a ticket note. Log in to view it: ${url}`,
   smsPing: (url) => `You have a new notification. Visit ${url}`,
   emailSubjectPrefix: "CARE-Y",
 };
 
 const ES: NotificationStrings = {
-  ticketAssigned: (q, url) =>
-    `Se le ha asignado un caso en la cola "${q}". Inicie sesion para verlo: ${url}`,
-  ticketCreated: (q, url) =>
-    `Ha llegado un nuevo caso a la cola "${q}". Inicie sesion para verlo: ${url}`,
-  ticketEscalated: (q, url) =>
-    `Un caso en la cola "${q}" ha sido escalado. Inicie sesion para revisarlo: ${url}`,
-  followupAdded: (q, url) =>
-    `Un caso que sigue en la cola "${q}" tiene una nueva actualizacion. Inicie sesion para verlo: ${url}`,
-  mentionNotification: (q, url) =>
-    `Se le ha mencionado en una nota de un caso en la cola "${q}". Inicie sesion para verlo: ${url}`,
+  ticketAssigned: (url) =>
+    `Se le ha asignado un caso. Inicie sesion para verlo: ${url}`,
+  ticketCreated: (url) =>
+    `Ha llegado un nuevo caso. Inicie sesion para verlo: ${url}`,
+  ticketEscalated: (url) =>
+    `Un caso ha sido escalado. Inicie sesion para revisarlo: ${url}`,
+  followupAdded: (url) =>
+    `Un caso que sigue tiene una nueva actualizacion. Inicie sesion para verlo: ${url}`,
+  mentionNotification: (url) =>
+    `Se le ha mencionado en una nota de un caso. Inicie sesion para verlo: ${url}`,
   smsPing: (url) => `Tiene una nueva notificacion. Visite ${url}`,
   emailSubjectPrefix: "CARE-Y",
 };

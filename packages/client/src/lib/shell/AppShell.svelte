@@ -1,8 +1,13 @@
 <!--
   App shell: persistent navigation chrome across all routes.
 
-  Single Konsta Page wraps everything. Navbar is sticky top. Bottom bar
-  uses a Toolbar with two ToolbarPane children (Safari-style split glass
+  Konsta Page is a non-scrolling flex frame (overflow: hidden).
+  <main> is the scroll container for route content. Routes with
+  their own scroll containers (e.g., ticket detail's chat-container)
+  capture overflow internally so <main> stays at scrollTop 0.
+
+  Navbar sits at the top of the Page flex column. Bottom bar uses a
+  Toolbar with two ToolbarPane children (Safari-style split glass
   pills): tabs pane inherits tabbar context, More pane overrides with
   tabbar={false} (patched in konsta@5.0.8.patch) to disable highlight
   and w-full.
@@ -12,11 +17,12 @@
   restProps, so our overrides take precedence. See patches/konsta@5.0.8.patch.
 
   Pull-to-refresh: two-phase touch listener pattern.
-  - Passive touchstart on .k-page records startY; bails if scrollTop > 0.
+  - Passive touchstart on <main> records startY; bails if the nearest
+    scrollable ancestor has scrollTop > 0.
   - { passive: false } touchmove added to window only when a downward drag from
     scrollTop === 0 is confirmed. Removed on touchend / touchcancel / upward delta.
   - This avoids attaching a blocking listener to the root scroll container globally.
-  - Any child route can suppress PTR via setContext(PTR_CONTEXT_KEY, false).
+  - Any child route can suppress PTR via usePTR().setEnabled(false) during init.
 -->
 <script lang="ts">
   import {
@@ -36,13 +42,183 @@
     Search,
     TicketPlus,
   } from "@lucide/svelte";
-  import { tick, onMount, getContext } from "svelte";
+  import { tick, onMount } from "svelte";
+  import { SvelteMap, SvelteSet } from "svelte/reactivity";
   import type { Component } from "svelte";
+  import { beforeNavigate, afterNavigate } from "$app/navigation";
   import * as m from "$lib/paraglide/messages.js";
   import type { TabId, AppShellProps } from "./types";
-  import { PTR_CONTEXT_KEY } from "./ptr-context";
+  import { providePTR } from "./ptr-context.svelte.js";
   import { themeStore } from "$lib/stores/theme.svelte";
   import { useQueryClient } from "@tanstack/svelte-query";
+  import {
+    setScrollContainer,
+    setTabbarOverrideCtx,
+    setTabbarHiddenCtx,
+    setNavbarOverrideCtx,
+    type TabbarOverrideContainer,
+    type TabbarHiddenContainer,
+    type NavbarOverrideContainer,
+  } from "./context";
+  import { markNavigated } from "./navigation.js";
+  import ShellSheet from "./ShellSheet.svelte";
+  import SearchResults from "$lib/components/search/SearchResults.svelte";
+  import {
+    createTicketSearchProvider,
+    type RawCachedTicket,
+  } from "$lib/search/providers/tickets.js";
+  import {
+    kbStubProvider,
+    volunteersStubProvider,
+  } from "$lib/search/providers/stubs.js";
+  import {
+    registerSearchProvider,
+    resetFullSearch,
+  } from "$lib/search/registry.svelte.js";
+  import {
+    getTicketDecryptCache,
+    getOrgDecryptCache,
+    getCurrentUserId,
+    getPreviewLoader,
+  } from "$lib/crypto/context.js";
+  import { deriveDisplayStatus } from "$lib/tickets/display-status.js";
+  import type { TicketKeyWrap } from "$lib/crypto/ticket-decrypt-cache.js";
+  import type { SerializedBuffer } from "$lib/utils/buffer-encoding.js";
+
+  // Main content element, resolved via bind:this. This is the scroll
+  // container for all routes (Page has overflow:hidden, main scrolls).
+  let mainEl = $state<HTMLElement | undefined>();
+
+  // Scroll container ref exposed via context. Derived from mainEl
+  // so routes that read the getter always get the current <main>.
+  const scrollContainerEl = $derived(mainEl);
+  setScrollContainer(() => scrollContainerEl);
+
+  // ── Per-route scroll position save/restore ───────────────────────────
+  // The Konsta <Page> is a single scroll container shared by all routes.
+  // Without intervention, navigating away and back leaks scroll positions
+  // between routes. We key by pathname (not route.id) so that e.g.
+  // /tickets/abc and /tickets/def each keep their own position.
+  const scrollPositions = new SvelteMap<string, number>();
+  const MAX_SCROLL_ENTRIES = 50;
+
+  beforeNavigate(({ from }) => {
+    const el = scrollContainerEl;
+    if (!el || !from?.url) return;
+    scrollPositions.set(from.url.pathname, el.scrollTop);
+    // Cap the map so it doesn't grow unbounded during long sessions.
+    if (scrollPositions.size > MAX_SCROLL_ENTRIES) {
+      const oldest = scrollPositions.keys().next().value;
+      if (oldest !== undefined) scrollPositions.delete(oldest);
+    }
+  });
+
+  afterNavigate(({ to }) => {
+    markNavigated();
+    const el = scrollContainerEl;
+    if (!el || !to?.url) return;
+    const saved = scrollPositions.get(to.url.pathname);
+    // Restore if we have a saved position, otherwise reset to top.
+    requestAnimationFrame(() => {
+      el.scrollTop = saved ?? 0;
+    });
+  });
+
+  // Tabbar override: child routes can replace the tab bar with custom
+  // actions by mutating this container. $state makes it reactive.
+  const tabbarOverrideContainer: TabbarOverrideContainer = $state({
+    current: undefined,
+  });
+  setTabbarOverrideCtx(tabbarOverrideContainer);
+  const tabbarOverride = $derived(tabbarOverrideContainer.current);
+
+  // Tabbar hidden: child routes can hide the tab bar entirely (e.g.,
+  // ticket detail with its own compose bar). $state makes it reactive.
+  const tabbarHiddenContainer: TabbarHiddenContainer = $state({
+    current: false,
+  });
+  setTabbarHiddenCtx(tabbarHiddenContainer);
+  const tabbarHidden = $derived(tabbarHiddenContainer.current);
+
+  // Navbar override: child routes can replace the default Navbar slot
+  // content (avatar + org name + search/new) with custom left/title/right
+  // snippets. The real Konsta Navbar stays in AppShell for Glass blur +
+  // safe-area + theme adaptation.
+  const navbarOverrideContainer: NavbarOverrideContainer = $state({
+    current: undefined,
+  });
+  setNavbarOverrideCtx(navbarOverrideContainer);
+  const navbarOverride = $derived(navbarOverrideContainer.current);
+
+  // Subnavbar + Navbar height measurement.
+  // ResizeObserver tracks the inner content height so we can set
+  // padding-top on <main> and position the subnavbar correctly.
+  let subnavbarInnerEl = $state<HTMLElement | undefined>();
+  let subnavbarHeight = $state(0);
+  let navbarHeight = $state(0);
+
+  $effect(() => {
+    const el = subnavbarInnerEl;
+    if (el == null) return;
+    const ro = new ResizeObserver((entries) => {
+      const entry = entries[0];
+      if (entry != null) {
+        subnavbarHeight = entry.borderBoxSize[0]?.blockSize ?? el.offsetHeight;
+      }
+    });
+    ro.observe(el, { box: "border-box" });
+    return () => ro.disconnect();
+  });
+
+  // Measure the Navbar's rendered height via its .k-navbar class.
+  // mainEl's parentElement is the Page div that contains the Navbar.
+  let navbarDomEl = $state<HTMLElement | undefined>();
+
+  $effect(() => {
+    const page = mainEl?.parentElement;
+    if (page == null) return;
+    const navbar = page.querySelector<HTMLElement>(".k-navbar");
+    if (navbar == null) return;
+    navbarDomEl = navbar;
+    const ro = new ResizeObserver((entries) => {
+      const entry = entries[0];
+      if (entry != null) {
+        navbarHeight = entry.borderBoxSize[0]?.blockSize ?? navbar.offsetHeight;
+      }
+    });
+    ro.observe(navbar, { box: "border-box" });
+    return () => ro.disconnect();
+  });
+
+  // Extend the Navbar's blur/bg layers to cover the subnavbar region.
+  // The patched NavbarClasses reads --k-navbar-chrome-h for iOS layer heights.
+  // When no subnavbar is present or it's hidden, the variable is unset
+  // and the default (navbar-only) height applies.
+  $effect(() => {
+    const el = navbarDomEl;
+    if (el == null) return;
+    const hasSubnavbar = navbarOverride?.subnavbar != null;
+    const isHidden = navbarOverride?.subnavbarHidden?.() === true;
+    // The bgBlur layer is the first child of .k-navbar (iOS only).
+    // Its gradient mask fades blur too early over the extended area.
+    const firstChild = el.firstElementChild;
+    const bgBlur = firstChild instanceof HTMLElement ? firstChild : null;
+    if (hasSubnavbar && !isHidden && subnavbarHeight > 0 && navbarHeight > 0) {
+      const chromeH = navbarHeight + subnavbarHeight + 16;
+      el.style.setProperty("--k-navbar-chrome-h", `${String(chromeH)}px`);
+      if (bgBlur != null) {
+        const mask = "linear-gradient(to bottom, black 90%, transparent)";
+        bgBlur.style.setProperty("-webkit-mask-image", mask);
+        bgBlur.style.setProperty("mask-image", mask);
+      }
+    } else {
+      el.style.removeProperty("--k-navbar-chrome-h");
+      if (bgBlur != null) {
+        bgBlur.style.removeProperty("-webkit-mask-image");
+        bgBlur.style.removeProperty("mask-image");
+      }
+    }
+  });
 
   let {
     activeTab,
@@ -66,7 +242,146 @@
   function closeSearch(): void {
     searchOpen = false;
     searchQuery = "";
+    resetFullSearch();
   }
+
+  // ── Search provider registration ────────────────────────────────────
+  //
+  // Context getters (crypto caches, currentUserId) are NOT available
+  // during SSR because CryptoProvider only initializes in the browser.
+  // All crypto context access happens inside $effect blocks, which
+  // only run client-side.
+
+  const promotedProviderId = $derived(
+    activeTab === "tickets" ? "tickets" : undefined,
+  );
+
+  // Memoized flat ticket list (raw records, no decryption).
+  // Updated by the cache subscription effect. Empty during SSR.
+  let flatTicketList = $state<readonly RawCachedTicket[]>([]);
+
+  // All crypto context access + cache subscription + provider registration
+  // in a single effect (browser-only, never runs during SSR).
+  $effect(() => {
+    const ticketCache = getTicketDecryptCache();
+    const orgCache = getOrgDecryptCache();
+    const currentUserIdGetter = getCurrentUserId();
+    const previewLoader = getPreviewLoader();
+
+    // Flatten + deduplicate the TanStack Query cache. No decryption here.
+    // Handles both regular queries (dashboard: T[]) and infinite queries
+    // (ticket list: { pages: T[][] }).
+    function hasPages(
+      val: RawCachedTicket[] | { pages: RawCachedTicket[][] },
+    ): val is { pages: RawCachedTicket[][] } {
+      return "pages" in val && Array.isArray(val.pages);
+    }
+
+    function rebuildFlatList(): readonly RawCachedTicket[] {
+      const entries = queryClient.getQueriesData<
+        RawCachedTicket[] | { pages: RawCachedTicket[][] }
+      >({ queryKey: ["tickets", "list"] });
+
+      const seen = new SvelteSet<string>();
+      const result: RawCachedTicket[] = [];
+      for (const [, data] of entries) {
+        if (data == null) continue;
+        const tickets: RawCachedTicket[] = hasPages(data)
+          ? data.pages.flat()
+          : data;
+        for (const t of tickets) {
+          if (seen.has(t.id)) continue;
+          seen.add(t.id);
+          result.push(t);
+        }
+      }
+      return result;
+    }
+
+    // Build initial list.
+    flatTicketList = rebuildFlatList();
+
+    // Rebuild when ticket queries update (new data fetched, pagination, etc.).
+    const unsubscribeCache = queryClient.getQueryCache().subscribe((event) => {
+      if (
+        event.type === "updated" &&
+        Array.isArray(event.query.queryKey) &&
+        event.query.queryKey[0] === "tickets" &&
+        event.query.queryKey[1] === "list"
+      ) {
+        flatTicketList = rebuildFlatList();
+      }
+    });
+
+    // Register the ticket search provider with decrypt trigger functions.
+    // The provider's search() calls these in a $derived context, so all
+    // reactive SvelteMap reads are tracked. Results update automatically
+    // as titles are decrypted, queue names are resolved, etc.
+    // Type-narrowing helpers for the unknown -> concrete boundary.
+    // The query cache stores server response data whose encrypted fields
+    // are typed as unknown in RawCachedTicket. These helpers satisfy
+    // strict-type-checked ESLint without losing safety.
+    function isKeyWrap(val: unknown): val is TicketKeyWrap {
+      return (
+        typeof val === "object" &&
+        val !== null &&
+        "ephemeralPoint" in val &&
+        "nonce" in val &&
+        "wrappedKey" in val
+      );
+    }
+
+    function isSerializedBuffer(val: unknown): val is SerializedBuffer {
+      return typeof val === "object" && val !== null && "type" in val;
+    }
+
+    function isOrgCiphertext(
+      val: unknown,
+    ): val is SerializedBuffer | Uint8Array {
+      return val instanceof Uint8Array || isSerializedBuffer(val);
+    }
+
+    const unregisterProvider = registerSearchProvider(
+      createTicketSearchProvider({
+        getAllCachedTickets: () => flatTicketList,
+        decryptTitle: (id, keyWrap, encryptedTitle) => {
+          const kw = isKeyWrap(keyWrap) ? keyWrap : null;
+          if (typeof encryptedTitle === "string") {
+            return ticketCache.decryptTitle(id, kw, encryptedTitle);
+          }
+          if (isSerializedBuffer(encryptedTitle)) {
+            return ticketCache.decryptTitle(id, kw, encryptedTitle);
+          }
+          return undefined;
+        },
+        decryptQueueName: (queueId, ciphertext) => {
+          if (!isOrgCiphertext(ciphertext)) return null;
+          return orgCache.decrypt(`queue:${queueId}`, ciphertext) ?? null;
+        },
+        resolveAssignedName: (assignedTo, ciphertext) => {
+          if (assignedTo === null) return null;
+          if (assignedTo === currentUserIdGetter()) {
+            return m.dashboard_assigned_you();
+          }
+          if (!isOrgCiphertext(ciphertext)) return null;
+          return orgCache.decrypt(`assignee:${assignedTo}`, ciphertext) ?? null;
+        },
+        getPreviewFollowUps: (ticketId) => previewLoader.get(ticketId),
+        deriveDisplayStatus,
+      }),
+    );
+
+    // Placeholder providers for sections not yet built (removed by 6f/6g).
+    const unregisterKb = registerSearchProvider(kbStubProvider);
+    const unregisterVol = registerSearchProvider(volunteersStubProvider);
+
+    return () => {
+      unsubscribeCache();
+      unregisterProvider();
+      unregisterKb();
+      unregisterVol();
+    };
+  });
 
   interface TabDef {
     readonly id: TabId;
@@ -84,8 +399,7 @@
 
   const queryClient = useQueryClient();
 
-  // Route opt-out: child calls setContext(PTR_CONTEXT_KEY, false)
-  const ptrEnabled: boolean = getContext(PTR_CONTEXT_KEY) !== false;
+  const ptr = providePTR(true);
 
   const PTR_THRESHOLD = 72; // px of overscroll to trigger refresh
   const PTR_MAX_PULL = 120; // px cap for visual travel
@@ -97,7 +411,9 @@
   let ptrPullY = $state(0); // 0..PTR_MAX_PULL, drives indicator position
   let ptrProgress = $state(0); // 0..1, drives iOS arc fill
 
+  let startX = 0;
   let startY = 0;
+  let ptrLocked = false; // true once we confirm this is a vertical pull, not lateral scroll
 
   // Cleanup refs for window listeners added dynamically
   let removeMoveListener: (() => void) | null = null;
@@ -111,18 +427,45 @@
   }
 
   function onTouchMove(e: TouchEvent): void {
-    const touch = e.touches[0];
-    if (!touch) return;
-    const dy = touch.clientY - startY;
-
-    if (dy <= 0) {
-      // Scrolling up or lateral -- bail out of PTR tracking
+    // Ignore pinch-to-zoom (multi-touch)
+    if (e.touches.length > 1) {
       cleanupWindowListeners();
       ptrPhase = "idle";
       ptrPullY = 0;
       ptrProgress = 0;
       return;
     }
+
+    const touch = e.touches[0];
+    if (!touch) return;
+    const dy = touch.clientY - startY;
+    const dx = touch.clientX - startX;
+
+    if (dy <= 0) {
+      // Scrolling up -- bail out of PTR tracking
+      cleanupWindowListeners();
+      ptrPhase = "idle";
+      ptrPullY = 0;
+      ptrProgress = 0;
+      return;
+    }
+
+    // If horizontal movement exceeds vertical, this is a lateral scroll
+    // (e.g., swiping through the filter pill bar). Bail out.
+    if (!ptrLocked && Math.abs(dx) > dy) {
+      cleanupWindowListeners();
+      ptrPhase = "idle";
+      ptrPullY = 0;
+      ptrProgress = 0;
+      return;
+    }
+
+    // Once vertical pull exceeds a small threshold, lock into PTR mode
+    if (!ptrLocked && dy > 8) {
+      ptrLocked = true;
+    }
+
+    if (!ptrLocked) return;
 
     e.preventDefault();
 
@@ -165,16 +508,60 @@
     ptrPhase = "idle";
   }
 
-  function onPageTouchStart(e: TouchEvent): void {
-    if (!ptrEnabled) return;
-    if (ptrPhase === "refreshing" || ptrPhase === "releasing") return;
+  /**
+   * Find the nearest scrollable ancestor of a given element, stopping
+   * at the main content boundary. Returns the element with overflow-y
+   * set to auto/scroll that has scrollable content, or mainEl itself.
+   */
+  function findScrollAncestor(target: HTMLElement): HTMLElement | undefined {
+    let el: HTMLElement | null = target;
+    while (el && el !== mainEl) {
+      const { overflowY } = getComputedStyle(el);
+      if (
+        (overflowY === "auto" || overflowY === "scroll") &&
+        el.scrollHeight > el.clientHeight
+      ) {
+        return el;
+      }
+      el = el.parentElement;
+    }
+    return mainEl;
+  }
 
-    const scrollEl = document.querySelector<HTMLElement>(".k-page");
-    if (!scrollEl || scrollEl.scrollTop > 0) return;
+  function onPageTouchStart(e: TouchEvent): void {
+    if (!ptr.enabled) return;
+    if (ptrPhase === "refreshing" || ptrPhase === "releasing") return;
+    if (!mainEl) return;
+
+    // Ignore multi-touch (pinch-to-zoom)
+    if (e.touches.length > 1) return;
+
+    // Suppress PTR when the touch starts inside a fixed-position overlay
+    // (Popover, Sheet, Popup, Dialog, etc.). Overlays use position:fixed
+    // and sit above the scroll container visually even though they may be
+    // DOM descendants of it. Walk up from the touch target; if any ancestor
+    // (before the scroll container) is position:fixed, this is an overlay.
+    const target = e.target;
+    if (target instanceof HTMLElement) {
+      let el: HTMLElement | null = target;
+      while (el && el !== mainEl) {
+        if (getComputedStyle(el).position === "fixed") return;
+        el = el.parentElement;
+      }
+    }
+
+    // Find the nearest scrollable ancestor. If it's not at the top,
+    // the user is scrolling within that container, not pulling to refresh.
+    if (target instanceof HTMLElement) {
+      const scrollParent = findScrollAncestor(target);
+      if (scrollParent && scrollParent.scrollTop > 0) return;
+    }
 
     const touch = e.touches[0];
     if (!touch) return;
+    startX = touch.clientX;
     startY = touch.clientY;
+    ptrLocked = false;
 
     // Dynamically attach blocking listeners to window only now
     const moveOpts: AddEventListenerOptions = { passive: false };
@@ -192,18 +579,20 @@
   }
 
   onMount(() => {
-    if (!ptrEnabled) return;
+    // Always attach listener; per-event check in onPageTouchStart handles
+    // the enabled flag reactively (a child route may disable PTR after mount).
+    const el = mainEl;
+    if (!el) return;
 
-    // .k-page is rendered synchronously by Konsta before onMount fires,
-    // so no tick() needed. Attach passive touchstart here; the blocking
-    // touchmove is added dynamically per-gesture in onPageTouchStart.
-    const scrollEl = document.querySelector<HTMLElement>(".k-page");
-    scrollEl?.addEventListener("touchstart", onPageTouchStart, {
+    // Attach passive touchstart to <main> (the scroll container).
+    // The blocking touchmove is added dynamically per-gesture in
+    // onPageTouchStart.
+    el.addEventListener("touchstart", onPageTouchStart, {
       passive: true,
     });
 
     return () => {
-      scrollEl?.removeEventListener("touchstart", onPageTouchStart);
+      el.removeEventListener("touchstart", onPageTouchStart);
       cleanupWindowListeners();
     };
   });
@@ -218,29 +607,40 @@
     return ARC_CIRCUM * (1 - progress);
   }
 
-  // Indicator sits just below the navbar (44px Konsta navbar + safe-area-inset-top).
+  // Indicator sits just below the navbar. navbarHeight already includes
+  // safe-area padding, so no need to add env(safe-area-inset-top) again.
   // Travels down slightly as the user pulls for a natural feel.
-  // The idle branch is unreachable in the template ({#if ptrPhase !== "idle"}),
-  // but keeping it as a string avoids a mixed number|string type.
-  const NAVBAR_H = 44;
   const indicatorTop = $derived(
     ptrPhase === "idle"
       ? "-40px"
-      : `calc(env(safe-area-inset-top, 0px) + ${String(NAVBAR_H + Math.round(ptrPullY * 0.2) + 8)}px)`,
+      : `${String(navbarHeight + Math.round(ptrPullY * 0.2) + 8)}px`,
   );
 </script>
 
 <Page>
   <Navbar role="banner">
     {#snippet left()}
-      <Link iconOnly role="button" aria-label={m.nav_account()}>
-        <span class="navbar-avatar" aria-hidden="true">JN</span>
-      </Link>
+      {#if navbarOverride?.left}
+        {@render navbarOverride.left()}
+      {:else}
+        <Link iconOnly role="button" aria-label={m.nav_account()}>
+          <span class="navbar-avatar" aria-hidden="true">JN</span>
+        </Link>
+      {/if}
     {/snippet}
-    {#snippet title()}<span
-        class="heading-compact"
-        class:heading-hidden={searchOpen}>{orgName}</span
-      >{/snippet}
+    {#snippet title()}
+      {#if navbarOverride?.title}
+        {#if typeof navbarOverride.title === "string"}
+          <span class="heading-compact">{navbarOverride.title}</span>
+        {:else}
+          {@render navbarOverride.title()}
+        {/if}
+      {:else}
+        <span class="heading-compact" class:heading-hidden={searchOpen}
+          >{orgName}</span
+        >
+      {/if}
+    {/snippet}
     {#snippet right()}
       {#if !searchOpen}
         <Link
@@ -251,6 +651,10 @@
         >
           <Search size={22} aria-hidden="true" />
         </Link>
+      {/if}
+      {#if navbarOverride?.right && !searchOpen}
+        {@render navbarOverride.right()}
+      {:else if !searchOpen}
         <Link iconOnly role="button" aria-label={m.nav_new_ticket()}>
           <TicketPlus size={22} aria-hidden="true" />
         </Link>
@@ -270,6 +674,20 @@
       </div>
     {/if}
   </Navbar>
+
+  {#if navbarOverride?.subnavbar}
+    <div
+      class="shell-subnavbar"
+      class:shell-subnavbar--hidden={navbarOverride.subnavbarHidden?.() ===
+        true}
+      style:--subnavbar-h="{subnavbarHeight}px"
+      style:--navbar-h="{navbarHeight}px"
+    >
+      <div class="shell-subnavbar-inner" bind:this={subnavbarInnerEl}>
+        {@render navbarOverride.subnavbar()}
+      </div>
+    </div>
+  {/if}
 
   <!-- Pull-to-refresh indicator -->
   {#if ptrPhase !== "idle"}
@@ -341,45 +759,110 @@
     </div>
   {/if}
 
-  <nav aria-label={m.nav_main()}>
-    <Toolbar
-      tabbar
-      tabbarIcons
-      class="native-tabbar left-0 bottom-0 fixed"
-      role="tablist"
-      aria-label={m.nav_main()}
-    >
-      <ToolbarPane>
-        {#each allTabs as tab (tab.id)}
-          <TabbarLink
-            active={activeTab === tab.id}
-            onclick={() => ontabchange(tab.id)}
-            role="tab"
-            aria-label={tab.label()}
-            aria-selected={activeTab === tab.id}
-            colors={{
-              textActiveIos: "text-[var(--brand-text)]",
-              textActiveMaterial: "text-[var(--brand-text)]",
-            }}
+  {#if tabbarHidden}
+    <!-- Tabbar hidden: route provides its own bottom bar (e.g., ShellMessagebar) -->
+  {:else if tabbarOverride}
+    {@const DismissIcon = tabbarOverride.dismiss.icon}
+    <div role="toolbar" aria-label={tabbarOverride.ariaLabel}>
+      <Toolbar tabbar tabbarIcons class="native-tabbar left-0 bottom-0 fixed">
+        {#if themeStore.uiTheme === "ios"}
+          <div
+            class="backdrop-blur-[2px] fixed left-0 bottom-0 w-full h-[calc(env(safe-area-inset-bottom,0px)+48px+32px)] mask-t-to-100% mask-t-from-70% pointer-events-none bg-gradient-to-t from-ios-light-surface to-transparent dark:from-ios-dark-surface/50"
+          ></div>
+        {/if}
+        <ToolbarPane tabbar={false}>
+          {#each tabbarOverride.actions as action (action.id)}
+            {@const ActionIcon = action.icon}
+            <Link iconOnly onclick={action.onclick} aria-label={action.label}>
+              <ActionIcon size={24} aria-hidden="true" />
+            </Link>
+          {/each}
+        </ToolbarPane>
+        <ToolbarPane tabbar={false}>
+          <Link
+            iconOnly
+            aria-label={tabbarOverride.dismiss.ariaLabel}
+            onclick={tabbarOverride.dismiss.onclick}
           >
-            {#snippet icon()}{@const Icon = tab.icon}<Icon
-                size={24}
-                aria-hidden="true"
-              />{/snippet}
-          </TabbarLink>
-        {/each}
-      </ToolbarPane>
-      <ToolbarPane tabbar={false}>
-        <Link iconOnly aria-label={m.nav_more()}>
-          <Ellipsis size={24} aria-hidden="true" />
-        </Link>
-      </ToolbarPane>
-    </Toolbar>
-  </nav>
+            <DismissIcon size={24} aria-hidden="true" />
+          </Link>
+        </ToolbarPane>
+      </Toolbar>
+      <span
+        class="fixed bottom-0 left-0 right-0 flex items-center justify-center pointer-events-none font-semibold text-sm h-12 z-50"
+        role="status"
+      >
+        {tabbarOverride.label}
+      </span>
+    </div>
+  {:else}
+    <nav aria-label={m.nav_main()}>
+      <Toolbar
+        tabbar
+        tabbarIcons
+        class="native-tabbar left-0 bottom-0 fixed"
+        role="tablist"
+        aria-label={m.nav_main()}
+      >
+        <ToolbarPane>
+          {#each allTabs as tab (tab.id)}
+            <TabbarLink
+              active={activeTab === tab.id}
+              onclick={() => ontabchange(tab.id)}
+              role="tab"
+              aria-label={tab.label()}
+              aria-selected={activeTab === tab.id}
+              colors={{
+                textActiveIos: "text-[var(--brand-text)]",
+                textActiveMaterial: "text-[var(--brand-text)]",
+              }}
+            >
+              {#snippet icon()}{@const Icon = tab.icon}<Icon
+                  size={24}
+                  aria-hidden="true"
+                />{/snippet}
+            </TabbarLink>
+          {/each}
+        </ToolbarPane>
+        <ToolbarPane tabbar={false}>
+          <Link iconOnly aria-label={m.nav_more()}>
+            <Ellipsis size={24} aria-hidden="true" />
+          </Link>
+        </ToolbarPane>
+      </Toolbar>
+    </nav>
+  {/if}
 
-  <main id="main-content" class="main-content">
+  <main
+    bind:this={mainEl}
+    id="main-content"
+    class="main-content"
+    class:tabbar-hidden={tabbarHidden}
+    class:has-subnavbar={navbarOverride?.subnavbar != null}
+    style:--subnavbar-h="{subnavbarHeight}px"
+    style:--navbar-h="{navbarHeight}px"
+  >
     {@render children()}
   </main>
+
+  <ShellSheet
+    opened={searchOpen}
+    ondismiss={closeSearch}
+    backdrop={false}
+    trapFocus={false}
+    role="search"
+    ariaLabel={m.search_hint()}
+    class="search-sheet"
+  >
+    <SearchResults
+      query={searchQuery}
+      {promotedProviderId}
+      ondismiss={closeSearch}
+      onselectrecent={(q: string) => {
+        searchQuery = q;
+      }}
+    />
+  </ShellSheet>
 </Page>
 
 <style>
@@ -395,12 +878,59 @@
     height: calc(var(--k-safe-area-bottom) + 48px) !important;
   }
 
+  /* Navbar keeps Konsta's default sticky + z-20. */
+
+  @media (prefers-contrast: more) {
+    :global(.k-navbar) {
+      background: Canvas !important;
+      color: CanvasText !important;
+    }
+
+    /* Remove the blur and gradient layers inside the Navbar */
+    :global(.k-navbar) > :first-child,
+    :global(.k-navbar) > :nth-child(2) {
+      backdrop-filter: none !important;
+      -webkit-backdrop-filter: none !important;
+      background: none !important;
+      mask-image: none !important;
+      -webkit-mask-image: none !important;
+    }
+  }
+
+  /* Main is the scroll container (Page has overflow:hidden). Each route's
+     content scrolls within this element. Routes with their own scroll
+     containers (e.g., ticket detail chat-container) capture overflow
+     internally so main stays at scrollTop 0 for them.
+
+     Negative margin-top pulls main up behind the Navbar so scrolling
+     content is painted in the same compositing area. This lets the
+     Navbar's backdrop-filter blur the content behind it. padding-top
+     compensates so visible content starts below the Navbar. */
+  .main-content {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior-y: contain;
+    display: flex;
+    flex-direction: column;
+    margin-top: calc(-1 * var(--navbar-h, 0px));
+    padding-top: var(--navbar-h, 0px);
+  }
+
   :global(.k-ios) .main-content {
     padding-bottom: calc(3rem + env(safe-area-inset-bottom, 0px));
   }
 
   :global(.k-material) .main-content {
     padding-bottom: calc(5rem + env(safe-area-inset-bottom, 0px));
+  }
+
+  /* When tabbar is hidden the route manages its own scroll container
+     (e.g., ticket detail chat-container). Make main a non-scrolling
+     flex frame so the inner container gets the correct height. */
+  .main-content.tabbar-hidden {
+    padding-bottom: 0 !important;
+    overflow: hidden;
   }
 
   .navbar-avatar {
@@ -442,6 +972,74 @@
     opacity: 1;
     pointer-events: auto;
     transform: scaleX(1);
+  }
+
+  /* ── Subnavbar (collapsible region below Navbar) ────────────────── */
+  /* Absolutely positioned so it does NOT participate in flex layout.
+     <main> reserves space via padding-top instead. This prevents iOS
+     Safari scroll-position jumps caused by flex siblings resizing
+     mid-scroll (WebKit lacks scroll anchoring in stable Safari 26). */
+
+  .shell-subnavbar {
+    position: absolute;
+    top: var(--navbar-h);
+    left: 0;
+    right: 0;
+    z-index: 21; /* above Navbar's blur/bg layers (z-20) */
+  }
+
+  /* Only clip overflow during collapse animation. When visible,
+     overflow must be visible so popovers inside the subnavbar
+     (e.g., filter pill dropdowns) can render outside the bounds. */
+  .shell-subnavbar--hidden {
+    overflow: hidden;
+  }
+
+  /* No background on the subnavbar itself. The Navbar's bg/blur layers
+     are extended via --k-navbar-chrome-h to cover this region, creating
+     one continuous glass surface regardless of theme. */
+
+  .shell-subnavbar-inner {
+    will-change: transform, opacity;
+    transition:
+      transform 300ms cubic-bezier(0.4, 0, 0.2, 1),
+      opacity 200ms ease;
+  }
+
+  /* Material: Navbar has no bgBlur layer, so the subnavbar provides
+     its own backdrop blur with a soft fade-out at the bottom. */
+  :global(.k-material) .shell-subnavbar-inner {
+    backdrop-filter: blur(2px);
+    -webkit-backdrop-filter: blur(2px);
+    -webkit-mask-image: linear-gradient(to bottom, black 90%, transparent);
+    mask-image: linear-gradient(to bottom, black 90%, transparent);
+  }
+
+  .shell-subnavbar--hidden .shell-subnavbar-inner {
+    transform: translateY(calc(-1 * var(--subnavbar-h)));
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  .main-content.has-subnavbar {
+    padding-top: calc(var(--navbar-h, 0px) + var(--subnavbar-h));
+  }
+
+  @media (prefers-contrast: more) {
+    .shell-subnavbar-inner {
+      backdrop-filter: none !important;
+      -webkit-backdrop-filter: none !important;
+      mask-image: none !important;
+      -webkit-mask-image: none !important;
+      background: Canvas !important;
+      color: CanvasText !important;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .shell-subnavbar-inner {
+      transition: none;
+    }
   }
 
   /* ── Pull-to-refresh indicator ──────────────────────────────────── */
@@ -518,5 +1116,10 @@
     to {
       transform: rotate(360deg);
     }
+  }
+
+  /* Search sheet: fill from bottom up to the Navbar */
+  :global(.search-sheet) {
+    height: calc(100dvh - var(--navbar-h, 64px));
   }
 </style>

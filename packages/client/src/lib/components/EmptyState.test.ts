@@ -24,7 +24,7 @@ describe("EmptyState", () => {
 
   it("renders skeleton bars with animation disabled", () => {
     const { container } = render(EmptyState);
-    const bars = container.querySelectorAll(".skeleton-bar");
+    const bars = container.querySelectorAll("[data-skeleton]");
     expect(bars.length).toBe(4);
   });
 });

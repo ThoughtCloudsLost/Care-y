@@ -3,6 +3,7 @@
   import { slide } from "svelte/transition";
   import { browser } from "$app/environment";
   import type { Snippet, Component } from "svelte";
+  import DecryptPlaceholder from "$lib/components/DecryptPlaceholder.svelte";
 
   let reducedMotion = $state(false);
 
@@ -22,6 +23,8 @@
     heading: string;
     /** Item count (omit to hide the badge entirely) */
     count?: number;
+    /** Whether the section data is still loading */
+    loading?: boolean;
     /** Icon component to show left of the heading */
     icon?: Component;
     /** Icon color: any CSS color value or variable reference */
@@ -37,6 +40,7 @@
   let {
     heading,
     count,
+    loading = false,
     icon: Icon,
     iconColor = "currentColor",
     expanded,
@@ -63,8 +67,14 @@
           />
         {/if}
         <span class="heading-text">{heading}</span>
-        {#if count !== undefined}
-          <span class="count-badge" aria-hidden="true">{count}</span>
+        {#if loading && count === undefined}
+          <span class="count-badge" data-count aria-hidden="true">
+            <DecryptPlaceholder length={3} />
+          </span>
+        {:else if count !== undefined}
+          <span class="count-badge" data-count={count} aria-hidden="true"
+            >{count}</span
+          >
         {/if}
         <span class="toggle-chevron" class:expanded aria-hidden="true">
           &#x276F;
@@ -75,6 +85,7 @@
   {#if expanded}
     <div
       class="section-content"
+      role="region"
       transition:slide={{ duration: reducedMotion ? 0 : 200 }}
     >
       {#if children}
@@ -86,7 +97,7 @@
 
 <style>
   .collapsible-section {
-    padding-top: 1.25rem;
+    padding-top: var(--space-2xl);
   }
 
   .section-toggle {
@@ -110,7 +121,7 @@
     /* Override Konsta's secondary label color, use full ink for interactive headers */
     color: var(--ink);
     /* Pull left edge in to match page margin (Konsta default is pl-safe-4 = 1rem + safe area) */
-    padding-left: 0.75rem;
+    padding-left: var(--page-pad-x);
   }
 
   .section-content :global(.k-list) {
@@ -121,7 +132,7 @@
   .heading-inner {
     display: flex;
     align-items: center;
-    gap: 0.375rem;
+    gap: var(--space-md);
     width: 100%;
   }
 

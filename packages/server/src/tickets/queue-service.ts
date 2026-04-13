@@ -1,9 +1,10 @@
 /**
  * Queue CRUD service.
  *
- * Queues are plaintext organizational containers. Queue names are not
- * sensitive (05-tickets.md section 5.1). Each queue has an escalate_days
- * threshold used by the auto-escalation job.
+ * Queue names are encrypted with the org key (org-key tier) before storage.
+ * The server never sees plaintext queue names. Each queue carries a sort_order
+ * for client-controlled ordering and an escalate_days threshold used by the
+ * auto-escalation job.
  */
 
 import type { Kysely } from "kysely";
@@ -13,33 +14,38 @@ import { ErrorCode } from "@care-y/shared";
 
 export interface QueueRecord {
   readonly id: string;
-  readonly name: string;
+  readonly encryptedName: Buffer;
+  readonly sortOrder: number;
   readonly escalateDays: number;
   readonly isActive: boolean;
   readonly createdAt: Date;
 }
 
 export interface QueueService {
-  create(input: { name: string; escalateDays?: number }): Promise<QueueRecord>;
+  create(input: {
+    encryptedName: Buffer;
+    escalateDays?: number;
+  }): Promise<QueueRecord>;
   listActive(): Promise<QueueRecord[]>;
   update(
     queueId: string,
-    input: { name?: string; escalateDays?: number },
+    input: { encryptedName?: Buffer; escalateDays?: number },
   ): Promise<QueueRecord>;
-  /** Returns the queue name for a given ID, or "unknown" if not found. */
-  getQueueName(queueId: string): Promise<string>;
+  reorder(items: { queueId: string; sortOrder: number }[]): Promise<void>;
 }
 
 function toRecord(row: {
   id: string;
-  name: string;
+  encrypted_name: Buffer;
+  sort_order: number;
   escalate_days: number;
   is_active: boolean;
   created_at: Date;
 }): QueueRecord {
   return {
     id: row.id,
-    name: row.name,
+    encryptedName: row.encrypted_name,
+    sortOrder: row.sort_order,
     escalateDays: row.escalate_days,
     isActive: row.is_active,
     createdAt: row.created_at,
@@ -49,11 +55,20 @@ function toRecord(row: {
 export function createQueueService(db: Kysely<TenantDatabase>): QueueService {
   return {
     async create(input) {
+      const { max } = await db
+        .selectFrom("queues")
+        .select((eb) =>
+          eb.fn.coalesce(eb.fn.max("sort_order"), eb.lit(0)).as("max"),
+        )
+        .executeTakeFirstOrThrow();
+
+      const nextSortOrder = max + 1;
+
       const row = await db
         .insertInto("queues")
         .values({
-          // care-y-ignore-next-line ast-pii-in-db-write -- queue names are plaintext by design (05-tickets.md section 5.1)
-          name: input.name,
+          encrypted_name: input.encryptedName,
+          sort_order: nextSortOrder,
           ...(input.escalateDays !== undefined
             ? { escalate_days: input.escalateDays }
             : {}),
@@ -69,7 +84,7 @@ export function createQueueService(db: Kysely<TenantDatabase>): QueueService {
         .selectFrom("queues")
         .selectAll()
         .where("is_active", "=", true)
-        .orderBy("created_at", "asc")
+        .orderBy("sort_order", "asc")
         .execute();
 
       return rows.map(toRecord);
@@ -77,7 +92,8 @@ export function createQueueService(db: Kysely<TenantDatabase>): QueueService {
 
     async update(queueId, input) {
       const updates: Record<string, unknown> = {};
-      if (input.name !== undefined) updates.name = input.name;
+      if (input.encryptedName !== undefined)
+        updates.encrypted_name = input.encryptedName;
       if (input.escalateDays !== undefined)
         updates.escalate_days = input.escalateDays;
 
@@ -104,13 +120,27 @@ export function createQueueService(db: Kysely<TenantDatabase>): QueueService {
       return toRecord(row);
     },
 
-    async getQueueName(queueId) {
-      const row = await db
-        .selectFrom("queues")
-        .select("name")
-        .where("id", "=", queueId)
-        .executeTakeFirst();
-      return row?.name ?? "unknown";
+    async reorder(items) {
+      await db.transaction().execute(async (trx) => {
+        // Set all targeted sort_orders to negative values first to avoid
+        // unique constraint conflicts during the swap.
+        for (const item of items) {
+          await trx
+            .updateTable("queues")
+            .set({ sort_order: -item.sortOrder })
+            .where("id", "=", item.queueId)
+            .execute();
+        }
+
+        // Now set the actual positive values.
+        for (const item of items) {
+          await trx
+            .updateTable("queues")
+            .set({ sort_order: item.sortOrder })
+            .where("id", "=", item.queueId)
+            .execute();
+        }
+      });
     },
   };
 }

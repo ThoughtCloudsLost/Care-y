@@ -15,13 +15,13 @@ describe("Skeleton", () => {
 
   it("renders the default 3 skeleton bars", () => {
     render(Skeleton);
-    const bars = screen.getByRole("status").querySelectorAll(".skeleton-bar");
+    const bars = screen.getByRole("status").querySelectorAll("[data-skeleton]");
     expect(bars.length).toBe(3);
   });
 
   it("renders custom number of lines", () => {
     render(Skeleton, { props: { lines: 5 } });
-    const bars = screen.getByRole("status").querySelectorAll(".skeleton-bar");
+    const bars = screen.getByRole("status").querySelectorAll("[data-skeleton]");
     expect(bars.length).toBe(5);
   });
 
@@ -29,7 +29,7 @@ describe("Skeleton", () => {
     render(Skeleton, { props: { lines: 3 } });
     const bars = screen
       .getByRole("status")
-      .querySelectorAll<HTMLElement>(".skeleton-bar");
+      .querySelectorAll<HTMLElement>("[data-skeleton]");
     expect(bars[0]?.style.animationDelay).toBe("0ms");
     expect(bars[1]?.style.animationDelay).toBe("80ms");
     expect(bars[2]?.style.animationDelay).toBe("160ms");

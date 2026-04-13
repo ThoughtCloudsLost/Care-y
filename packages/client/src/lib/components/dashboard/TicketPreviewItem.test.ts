@@ -23,7 +23,7 @@ describe("TicketPreviewItem", () => {
     ticketId: "t-001",
     title: "Test ticket title",
     status: "open",
-    priority: "normal",
+    priority: "normal" as const,
     onHold: false,
     assignedTo: null,
     createdAt: new Date("2026-03-31T11:30:00Z"),
@@ -48,7 +48,7 @@ describe("TicketPreviewItem", () => {
 
   it("renders normal priority label", () => {
     const { container } = render(TicketPreviewItem, { props: defaults });
-    const indicator = container.querySelector(".priority-indicator");
+    const indicator = container.querySelector("[data-priority]");
     expect(indicator?.textContent).toContain("Normal");
   });
 
@@ -56,7 +56,7 @@ describe("TicketPreviewItem", () => {
     const { container } = render(TicketPreviewItem, {
       props: { ...defaults, onHold: true },
     });
-    const indicator = container.querySelector(".priority-indicator");
+    const indicator = container.querySelector("[data-priority]");
     expect(indicator?.textContent).toContain("Normal");
   });
 
@@ -64,7 +64,7 @@ describe("TicketPreviewItem", () => {
     const { container } = render(TicketPreviewItem, {
       props: { ...defaults, priority: "urgent" },
     });
-    const indicator = container.querySelector(".priority-indicator");
+    const indicator = container.querySelector("[data-priority]");
     expect(indicator?.textContent).toContain("Urgent");
   });
 
@@ -103,7 +103,7 @@ describe("TicketPreviewItem", () => {
     const { container } = render(TicketPreviewItem, {
       props: { ...defaults, ontap: tapHandler },
     });
-    const listItem = container.querySelector(".k-list-item");
+    const listItem = container.querySelector('[role="button"]');
     if (listItem) await fireEvent.click(listItem);
     expect(tapHandler).toHaveBeenCalledWith("t-001");
   });
@@ -126,7 +126,7 @@ describe("formatRelativeTime (via rendered output)", () => {
     ticketId: "t-time",
     title: "Time test",
     status: "open",
-    priority: "normal",
+    priority: "normal" as const,
     onHold: false,
     assignedTo: null,
     clientAlias: "Wren",

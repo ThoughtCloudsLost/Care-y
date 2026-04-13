@@ -83,4 +83,30 @@ describe("TwilioBrowserCallService", () => {
     const service = createTwilioBrowserCallService();
     expect(service.toggleMute()).toBe(false);
   });
+
+  it("sendDtmf does not throw when no active call", () => {
+    const service = createTwilioBrowserCallService();
+    expect(() => {
+      service.sendDtmf("5");
+    }).not.toThrow();
+  });
+
+  it("disconnect transitions state and fires callback", () => {
+    const service = createTwilioBrowserCallService();
+    const onStateChange = vi.fn();
+    const onError = vi.fn();
+    // Register to capture events reference
+    void service.register("token", { onStateChange, onError });
+    service.disconnect();
+    expect(service.getState()).toBe("disconnected");
+    expect(onStateChange).toHaveBeenCalledWith("disconnected");
+  });
+
+  it("destroy resets to idle state", () => {
+    const service = createTwilioBrowserCallService();
+    const onStateChange = vi.fn();
+    void service.register("token", { onStateChange, onError: vi.fn() });
+    service.destroy();
+    expect(service.getState()).toBe("idle");
+  });
 });

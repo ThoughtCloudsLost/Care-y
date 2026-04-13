@@ -56,6 +56,17 @@
   }
 }
 
+/* Skeleton pulse: opacity fade for loading placeholders */
+@keyframes skeleton-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.65;
+  }
+}
+
 /* ── Default animation application ───────────────────────────────── */
 
 /* Skeleton bar default. Themes can override by redefining --anim-skeleton-*
@@ -66,13 +77,23 @@
     var(--anim-skeleton-easing) infinite alternate;
 }
 
+/* Skeleton pulse utility: apply to any element that needs the pulse */
+.skeleton-pulse {
+  animation: skeleton-pulse 2s ease-in-out infinite;
+}
+
 /* ── Reduced motion ──────────────────────────────────────────────── */
 
 /* The blanket rule in shared.css zeroes all animation-duration/transition-duration.
-   This explicit override ensures skeleton-bar gets animation:none rather than
+   These explicit overrides ensure skeleton elements get animation:none rather than
    a near-zero-duration flicker. */
 @media (prefers-reduced-motion: reduce) {
   .skeleton-bar {
     animation: none;
+  }
+
+  .skeleton-pulse {
+    animation: none;
+    opacity: 0.6;
   }
 }

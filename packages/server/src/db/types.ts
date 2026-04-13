@@ -11,6 +11,7 @@
 //   Buffer                 - encrypted bytea column
 
 import type { ColumnType, Generated } from "kysely";
+import type { TicketStatus, TicketPriority } from "@care-y/shared";
 
 export interface OrgsTable {
   id: Generated<string>;
@@ -277,7 +278,8 @@ export interface ConsultantsTable {
 
 export interface QueuesTable {
   id: Generated<string>;
-  name: string;
+  encrypted_name: Buffer;
+  sort_order: number;
   escalate_days: ColumnType<number, number | undefined, number>;
   is_active: ColumnType<boolean, boolean | undefined, boolean>;
   created_at: Generated<Date>;
@@ -287,8 +289,12 @@ export interface TicketsTable {
   id: Generated<string>;
   client_id: string;
   queue_id: string;
-  status: ColumnType<string, string | undefined, string>;
-  priority: ColumnType<string, string | undefined, string>;
+  status: ColumnType<TicketStatus, TicketStatus | undefined, TicketStatus>;
+  priority: ColumnType<
+    TicketPriority,
+    TicketPriority | undefined,
+    TicketPriority
+  >;
   on_hold: ColumnType<boolean, boolean | undefined, boolean>;
   assigned_to: string | null;
   encrypted_title: Buffer;
@@ -309,7 +315,8 @@ export interface FollowupsTable {
     string | string[]
   >;
   encrypted_content: Buffer;
-  encrypted_read_state: Buffer;
+  created_by: string | null;
+  deleted_at: Date | null;
   created_at: Generated<Date>;
 }
 
@@ -365,7 +372,8 @@ export interface ClientMergeEventsTable {
 
 export interface KBCategoriesTable {
   id: Generated<string>;
-  name: string;
+  encrypted_name: Buffer;
+  sort_order: number;
   encrypted_description: Buffer | null;
   created_at: Generated<Date>;
   updated_at: Generated<Date>;
@@ -428,6 +436,14 @@ export interface PushChallengesTable {
   expires_at: Date;
 }
 
+// --- Read cursors ---
+
+export interface TicketReadCursorsTable {
+  ticket_id: string;
+  user_id: string;
+  encrypted_read_cursor: Buffer;
+}
+
 // --- Audit log ---
 
 export interface AuditLogTable {
@@ -485,6 +501,8 @@ export interface TenantDatabase {
   queue_assignments: QueueAssignmentsTable;
   ticket_watchers: TicketWatchersTable;
   queue_watchers: QueueWatchersTable;
+  // Read state
+  ticket_read_cursors: TicketReadCursorsTable;
   // Notifications
   push_subscriptions: PushSubscriptionsTable;
   push_challenges: PushChallengesTable;

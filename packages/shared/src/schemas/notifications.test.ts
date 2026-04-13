@@ -50,7 +50,7 @@ describe("sseEventSchema", () => {
     const result = sseEventSchema.safeParse({
       type: "ticket_assigned",
       ticketId: VALID_UUID,
-      queueName: "Intake",
+      queueId: VALID_UUID_2,
       timestamp: VALID_ISO,
     });
     expect(result.success).toBe(true);
@@ -60,7 +60,7 @@ describe("sseEventSchema", () => {
     expect(
       sseEventSchema.safeParse({
         ticketId: VALID_UUID,
-        queueName: "Intake",
+        queueId: VALID_UUID_2,
         timestamp: VALID_ISO,
       }).success,
     ).toBe(false);

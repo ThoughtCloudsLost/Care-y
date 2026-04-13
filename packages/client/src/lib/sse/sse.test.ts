@@ -15,6 +15,8 @@ describe("handleEvent", () => {
     qc = createMockQueryClient();
   });
 
+  // queryKey must match the key used in createQuery() calls across ticket list components.
+  // Changing this key without updating those queries causes silent invalidation failures.
   it("invalidates tickets list on ticket:created", () => {
     handleEvent({ type: "ticket:created" }, qc);
 
@@ -23,6 +25,7 @@ describe("handleEvent", () => {
     });
   });
 
+  // Same ["tickets"] contract as above, for the update event path.
   it("invalidates tickets list on ticket:updated", () => {
     handleEvent({ type: "ticket:updated" }, qc);
 
@@ -31,6 +34,8 @@ describe("handleEvent", () => {
     });
   });
 
+  // ["ticket", id] must match the per-ticket detail query key used in TicketPanel/TicketDetail.
+  // Both the list key and the detail key are invalidated so the UI stays consistent.
   it("invalidates specific ticket when ticketId is provided", () => {
     handleEvent({ type: "ticket:updated", ticketId: "t-123" }, qc);
 
@@ -51,6 +56,7 @@ describe("handleEvent", () => {
     });
   });
 
+  // ["kb"] must match the knowledge base query key used in KB article components.
   it("invalidates kb on kb:updated", () => {
     handleEvent({ type: "kb:updated" }, qc);
 
@@ -59,6 +65,7 @@ describe("handleEvent", () => {
     });
   });
 
+  // ["notifications"] must match the notifications query key used in the notification bell/list.
   it("invalidates notifications on notification event", () => {
     handleEvent({ type: "notification" }, qc);
 
@@ -67,10 +74,39 @@ describe("handleEvent", () => {
     });
   });
 
+  // ["ticket", id, "followUps"] must match the follow-up sub-query key in ticket detail views.
+  it("invalidates follow-ups for specific ticket on followup:created", () => {
+    handleEvent({ type: "followup:created", ticketId: "t-789" }, qc);
+
+    expect(qc.invalidateQueries).toHaveBeenCalledWith({
+      queryKey: ["ticket", "t-789", "followUps"],
+    });
+  });
+
+  it("does not invalidate when followup:created has no ticketId", () => {
+    handleEvent({ type: "followup:created" }, qc);
+
+    expect(qc.invalidateQueries).not.toHaveBeenCalled();
+  });
+
   it("does nothing for unknown event types", () => {
     handleEvent({ type: "unknown:event" }, qc);
 
     expect(qc.invalidateQueries).not.toHaveBeenCalled();
+  });
+
+  it("invalidates recordings and attachments on followup:created", () => {
+    handleEvent({ type: "followup:created", ticketId: "t-100" }, qc);
+
+    expect(qc.invalidateQueries).toHaveBeenCalledWith({
+      queryKey: ["ticket", "t-100", "followUps"],
+    });
+    expect(qc.invalidateQueries).toHaveBeenCalledWith({
+      queryKey: ["ticket", "t-100", "recordings"],
+    });
+    expect(qc.invalidateQueries).toHaveBeenCalledWith({
+      queryKey: ["ticket", "t-100", "attachments"],
+    });
   });
 });
 
@@ -135,6 +171,7 @@ describe("createSSEListener", () => {
     });
     listener.connect();
 
+    // withCredentials: true is required for cross-origin cookie-based session auth.
     expect(constructorCalls).toEqual([
       { url: "/sse/events", opts: { withCredentials: true } },
     ]);
@@ -294,6 +331,43 @@ describe("createSSEListener", () => {
     expect(qc.invalidateQueries).not.toHaveBeenCalled();
   });
 
+  it("rejects events with empty ticketId string", async () => {
+    const { createSSEListener } = await importListener();
+    const qc = createMockQueryClient();
+
+    const listener = createSSEListener({
+      url: "/sse/events",
+      queryClient: qc,
+    });
+    listener.connect();
+    mockEventSource.onopen?.();
+
+    // Empty ticketId string should fail isSSEEvent validation
+    mockEventSource.onmessage?.({
+      data: JSON.stringify({ type: "ticket:updated", ticketId: "" }),
+    });
+
+    expect(qc.invalidateQueries).not.toHaveBeenCalled();
+  });
+
+  it("rejects non-object SSE payloads", async () => {
+    const { createSSEListener } = await importListener();
+    const qc = createMockQueryClient();
+
+    const listener = createSSEListener({
+      url: "/sse/events",
+      queryClient: qc,
+    });
+    listener.connect();
+    mockEventSource.onopen?.();
+
+    mockEventSource.onmessage?.({ data: JSON.stringify("just a string") });
+    mockEventSource.onmessage?.({ data: JSON.stringify(42) });
+    mockEventSource.onmessage?.({ data: JSON.stringify(null) });
+
+    expect(qc.invalidateQueries).not.toHaveBeenCalled();
+  });
+
   it("dispatches valid SSE messages to handleEvent", async () => {
     const { createSSEListener } = await importListener();
     const qc = createMockQueryClient();
@@ -308,6 +382,7 @@ describe("createSSEListener", () => {
     const event: SSEEvent = { type: "ticket:created", ticketId: "t-456" };
     mockEventSource.onmessage?.({ data: JSON.stringify(event) });
 
+    // queryKey shapes must match the ticket list and detail queries (see handleEvent tests above).
     expect(qc.invalidateQueries).toHaveBeenCalledWith({
       queryKey: ["tickets"],
     });

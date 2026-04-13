@@ -17,6 +17,7 @@
   this={`h${String(level)}`}
   class:heading-display={useInk}
   class:heading-compact={!useInk}
+  data-ink={useInk ? "" : undefined}
 >
   {@render children()}
 </svelte:element>

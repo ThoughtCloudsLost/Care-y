@@ -214,15 +214,32 @@ async function bootstrapOrgKeypair(
  * Seal and upload KB articles using the real org public key.
  * Skips if articles already exist for the admin user.
  */
-async function seedKBArticles(orgPublicKey: Uint8Array): Promise<void> {
+async function seedKBArticles(
+  orgPublicKey: Uint8Array,
+  orgKeyManager: OrgKeyManager,
+): Promise<void> {
   // kb router is conditionally spread on the server, so TypeScript
   // doesn't guarantee its existence. This file only runs in dev mode.
   const kb = trpc.kb;
   if (!kb) throw new Error("kb router unavailable (not in dev mode?)");
 
-  // Fetch category list from server
+  // Fetch category list from server. Category names are encrypted (ADR-030),
+  // so we decrypt them with the org key to map article definitions by name.
   const categories = await kb.listCategories.query();
-  const categoryMap = new Map(categories.map((c) => [c.name, c.id]));
+  const decoder = new TextDecoder();
+  const categoryMap = new Map<string, string>();
+  for (const c of categories) {
+    try {
+      const ciphertext =
+        c.encryptedName instanceof Uint8Array
+          ? c.encryptedName
+          : new Uint8Array((c.encryptedName as { data: number[] }).data);
+      const plainBytes = orgKeyManager.decrypt(ciphertext);
+      categoryMap.set(decoder.decode(plainBytes), c.id);
+    } catch {
+      // Can't decrypt (wrong key or corrupted), skip
+    }
+  }
 
   // Check if articles already exist (idempotent re-run)
   const existingItems = await kb.listItems.query({ limit: 1 });
@@ -260,6 +277,49 @@ async function seedKBArticles(orgPublicKey: Uint8Array): Promise<void> {
 
     console.log(`[dev] Created KB article "${article.title}"`);
   }
+}
+
+/**
+ * Re-encrypt seed queue and KB category names with the real org public key.
+ * The seed script encrypts with the throwaway keypair; after org key rotation
+ * the ciphertext is undecryptable. This re-seals with the real key.
+ *
+ * Dev-only. Matches known seed names by sort_order (deterministic).
+ */
+async function reEncryptSeedNames(orgPublicKey: Uint8Array): Promise<void> {
+  const tickets = trpc.tickets;
+  const kb = trpc.kb;
+  if (!tickets || !kb) return;
+
+  const encoder = new TextEncoder();
+
+  // Re-encrypt queue names by sort_order (seed assigns 1=Intake, 2=Crisis, 3=Housing)
+  const queueNamesBySortOrder = ["Intake", "Crisis", "Housing"];
+  const queues = await tickets.listQueues.query();
+  for (const q of queues) {
+    const expectedName = queueNamesBySortOrder.at(q.sortOrder - 1);
+    if (expectedName === undefined) continue;
+    const sealed = sealForOrgKey(encoder.encode(expectedName), orgPublicKey);
+    await tickets.updateQueue.mutate({
+      queueId: q.id,
+      encryptedName: encode(sealed),
+    });
+  }
+  console.log("[dev] re-encrypted queue names with real org key");
+
+  // Re-encrypt KB category names (seed assigns 1=Procedures, 2=Resources, 3=Safety)
+  const kbNamesBySortOrder = ["Procedures", "Resources", "Safety"];
+  const categories = await kb.listCategories.query();
+  for (const c of categories) {
+    const expectedName = kbNamesBySortOrder.at(c.sortOrder - 1);
+    if (expectedName === undefined) continue;
+    const sealed = sealForOrgKey(encoder.encode(expectedName), orgPublicKey);
+    await kb.updateCategory.mutate({
+      categoryId: c.id,
+      encryptedName: encode(sealed),
+    });
+  }
+  console.log("[dev] re-encrypted KB category names with real org key");
 }
 
 export async function devAutoLogin(
@@ -314,6 +374,9 @@ export async function devAutoLogin(
     console.log("[dev] orgKeyManager: org key loaded (existing)");
   } else {
     orgPublicKey = await bootstrapOrgKeypair(bridge, orgKeyManager, user.id);
+    // Re-encrypt seed data (queue names, KB category names) with the real org key.
+    // The seed encrypted them with the throwaway keypair which is now gone.
+    await reEncryptSeedNames(orgPublicKey);
   }
 
   // 6. Seed KB articles client-side (first run only)
@@ -326,7 +389,7 @@ export async function devAutoLogin(
     // so we just skip seeding. The listItems check in seedKBArticles handles this.
     console.log("[dev] KB seeding: skipping (re-run, articles should exist)");
   } else {
-    await seedKBArticles(orgPublicKey);
+    await seedKBArticles(orgPublicKey, orgKeyManager);
   }
 
   // 7. Seed test tickets (server creates tickets with real ECIES key wraps)

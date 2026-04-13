@@ -20,7 +20,7 @@ function makeTicket(id: string, overrides?: Record<string, unknown>) {
     ticketId: id,
     title: `Ticket ${id}`,
     status: "open",
-    priority: "normal",
+    priority: "normal" as const,
     onHold: false,
     assignedTo: null,
     createdAt: new Date("2026-03-31T11:30:00Z"),
@@ -56,7 +56,7 @@ describe("TicketPreviewList", () => {
     const { container } = render(TicketPreviewList, {
       props: { heading: "Test", tickets, ontickettap },
     });
-    const items = container.querySelectorAll(".priority-indicator");
+    const items = container.querySelectorAll("[data-priority]");
     expect(items.length).toBe(3);
   });
 
@@ -67,7 +67,7 @@ describe("TicketPreviewList", () => {
     const { container } = render(TicketPreviewList, {
       props: { heading: "Test", tickets, maxVisible: 3, ontickettap },
     });
-    const items = container.querySelectorAll(".priority-indicator");
+    const items = container.querySelectorAll("[data-priority]");
     expect(items.length).toBe(3);
   });
 

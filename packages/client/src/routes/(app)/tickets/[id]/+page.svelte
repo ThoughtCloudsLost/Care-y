@@ -1,0 +1,764 @@
+<!--
+  Ticket detail route: glue layer between TicketDetail content component
+  and AppShell navigation chrome.
+
+  Responsibilities:
+  - Hides AppShell tabbar while active (ShellMessagebar provides compose bar)
+  - Overrides AppShell Navbar with back/client-alias/call/more icons
+  - Renders ShellMessagebar compose bar (fixed bottom)
+  - Hosts all overlays via shell wrappers (ActionSheet, Sheet, Popup)
+  - Manages draft text state shared between compose bar and content
+  - Provides SvelteKit snapshot for draft preservation
+-->
+<script lang="ts">
+  import type { Snapshot } from "./$types.js";
+  import { page } from "$app/state";
+  import { Link } from "konsta/svelte";
+  import {
+    ChevronLeft,
+    CalendarClock,
+    MessageSquareText,
+    EllipsisVertical,
+  } from "@lucide/svelte";
+  import * as m from "$lib/paraglide/messages.js";
+  import {
+    getTabbarHiddenCtx,
+    getNavbarOverrideCtx,
+  } from "$lib/shell/context.js";
+  import { shellBack } from "$lib/shell/navigation.js";
+  import type { ComposeMode } from "$lib/shell/types.js";
+  import TicketDetail from "$lib/components/tickets/TicketDetail.svelte";
+  import type {
+    ContextActionId,
+    ContextMenuEvent,
+  } from "$lib/components/tickets/context-menu-actions.js";
+  import ShellMessagebar from "$lib/shell/ShellMessagebar.svelte";
+  import ShellActionSheet from "$lib/shell/ShellActionSheet.svelte";
+  import ShellSheet from "$lib/shell/ShellSheet.svelte";
+  import ShellPopup from "$lib/shell/ShellPopup.svelte";
+  import ShellDialog from "$lib/shell/ShellDialog.svelte";
+  import { DialogButton, ActionsGroup, ActionsButton } from "konsta/svelte";
+  import PresetReplyContent from "$lib/components/tickets/PresetReplyContent.svelte";
+  import TicketPanelContent from "$lib/components/tickets/TicketPanelContent.svelte";
+  import AssignSheet from "$lib/components/tickets/AssignSheet.svelte";
+  import type { TicketAction } from "$lib/tickets/types.js";
+  import CallOptionsContent, {
+    type CallAction,
+  } from "$lib/components/tickets/CallOptionsContent.svelte";
+  import { createQuery, useQueryClient } from "@tanstack/svelte-query";
+  import { trpc } from "$lib/trpc/index.js";
+  import { getCryptoBridge } from "$lib/crypto/context.js";
+  import { RouterNotAvailableError } from "$lib/errors.js";
+  import { toastStore } from "$lib/stores/toast.svelte.js";
+  import { haptic } from "$lib/utils/haptic.js";
+  import { serializedBufferToBase64 } from "$lib/utils/buffer-encoding.js";
+
+  if (!trpc.tickets) throw new RouterNotAvailableError("tickets");
+  const ticketRouter = trpc.tickets;
+  const cryptoBridge = getCryptoBridge();
+  const queryClient = useQueryClient();
+
+  type FollowUpList = Awaited<
+    ReturnType<typeof ticketRouter.listFollowUps.query>
+  >;
+
+  const ticketId = $derived(page.params.id ?? "");
+  const tabbarHidden = getTabbarHiddenCtx();
+  const navbarCtx = getNavbarOverrideCtx();
+
+  // Draft compose state (shared with ShellMessagebar + TicketDetail).
+  let draftText = $state("");
+  let composeMode = $state<ComposeMode>("reply");
+  let cursorPosition = $state(0);
+
+  function handleInput(e: Event): void {
+    const target = e.target;
+    if (target instanceof HTMLTextAreaElement) {
+      cursorPosition = target.selectionStart;
+    }
+  }
+
+  // Ticket data for navbar display.
+  const ticketQuery = createQuery(() => ({
+    queryKey: ["ticket", ticketId],
+    queryFn: async () => ticketRouter.get.query({ ticketId }),
+  }));
+
+  const ticket = $derived(ticketQuery.data);
+  const clientAlias = $derived(ticket?.clientAlias ?? "...");
+
+  // Look up followUpCount from the ticket list cache (available instantly,
+  // no need to wait for the detail query).
+  const cachedFollowUpCount = $derived.by((): number | undefined => {
+    interface TicketRow {
+      id: string;
+      followUpCount: number;
+    }
+    const entries = queryClient.getQueriesData<{ pages: TicketRow[][] }>({
+      queryKey: ["tickets", "list"],
+    });
+    for (const [, data] of entries) {
+      if (!data?.pages) continue;
+      for (const ticketPage of data.pages) {
+        const match = ticketPage.find((t) => t.id === ticketId);
+        if (match) return match.followUpCount;
+      }
+    }
+    return undefined;
+  });
+
+  // --- Read cursor ---
+
+  const readCursorQuery = createQuery(() => ({
+    queryKey: ["ticket", ticketId, "readCursor"],
+    queryFn: async () => ticketRouter.getReadCursor.query({ ticketId }),
+    enabled: ticketId !== "",
+  }));
+
+  // Decrypt the read cursor to get the readUpTo timestamp.
+  // undefined = still loading, null = unread (dummy or decrypt failed).
+  let readUpTo = $state<Date | null | undefined>(undefined);
+
+  $effect(() => {
+    const cursor = readCursorQuery.data;
+    const t = ticket;
+    if (!cursor || !t?.keyWrap) return;
+
+    const ciphertext = serializedBufferToBase64(cursor.encryptedReadCursor);
+    const kw = t.keyWrap;
+
+    cryptoBridge
+      .decrypt(ticketId, kw.ephemeralPoint, kw.nonce, kw.wrappedKey, ciphertext)
+      .then((plaintext) => {
+        try {
+          const parsed: unknown = JSON.parse(plaintext);
+          if (
+            parsed !== null &&
+            typeof parsed === "object" &&
+            "readUpTo" in parsed
+          ) {
+            const ts = (parsed as Record<string, unknown>).readUpTo;
+            if (typeof ts === "string") {
+              readUpTo = new Date(ts);
+              return;
+            }
+          }
+        } catch {
+          // JSON parse failed: treat as unread
+        }
+        readUpTo = null;
+      })
+      .catch(() => {
+        // AEAD failure (random dummy bytes): all messages are unread.
+        readUpTo = null;
+      });
+  });
+
+  // Debounced read cursor update. Called by TicketDetail when the user
+  // scrolls and new follow-ups become visible.
+  let pendingReadTimestamp: string | null = null;
+  let cursorUpdateTimer: ReturnType<typeof setTimeout> | null = null;
+
+  function handleReadProgress(latestVisibleTimestamp: string): void {
+    // Only advance the cursor forward, never backward.
+    if (
+      pendingReadTimestamp !== null &&
+      latestVisibleTimestamp <= pendingReadTimestamp
+    ) {
+      return;
+    }
+    pendingReadTimestamp = latestVisibleTimestamp;
+
+    if (cursorUpdateTimer) clearTimeout(cursorUpdateTimer);
+    cursorUpdateTimer = setTimeout(() => {
+      void flushReadCursor();
+    }, 3000);
+  }
+
+  async function flushReadCursor(): Promise<void> {
+    const ts = pendingReadTimestamp;
+    if (ts === null) return;
+    pendingReadTimestamp = null;
+
+    try {
+      const payload = JSON.stringify({ readUpTo: ts });
+      const encrypted = await cryptoBridge.encrypt(ticketId, payload);
+      await ticketRouter.updateReadCursor.mutate({
+        ticketId,
+        encryptedReadCursor: encrypted,
+      });
+      // Update local state so the divider adjusts.
+      readUpTo = new Date(ts);
+    } catch {
+      // Failed to update cursor. Not critical; will retry on next scroll.
+    }
+  }
+
+  // --- Action sheet data ---
+
+  // Consultant phone registration (for call options).
+  const consultantQuery = createQuery(() => ({
+    queryKey: ["consultant"],
+    queryFn: async () => trpc.consultant?.get.query() ?? null,
+    staleTime: 5 * 60 * 1000,
+  }));
+  const hasVerifiedPhone = $derived(consultantQuery.data?.isVerified ?? false);
+
+  // --- Shell overrides ---
+
+  // Hide the AppShell tabbar while this route is active.
+  $effect(() => {
+    tabbarHidden.current = true;
+    return () => {
+      tabbarHidden.current = false;
+    };
+  });
+
+  // Override AppShell Navbar with ticket-specific content.
+  $effect(() => {
+    navbarCtx.current = { left: navLeft, title: navTitle, right: navRight };
+    return () => {
+      navbarCtx.current = undefined;
+    };
+  });
+
+  // --- Overlay state ---
+
+  let panelOpen = $state(false);
+  let assignSheetOpen = $state(false);
+  let callSheetOpen = $state(false);
+  let composeActionsOpen = $state(false);
+  let presetSheetOpen = $state(false);
+  let lightboxOpen = $state(false);
+  let lightboxUrl = $state<string | null>(null);
+  let contextMenuOpen = $state(false);
+  let contextMenuData = $state<ContextMenuEvent | null>(null);
+  let deleteConfirmOpen = $state(false);
+  let deleteTargetId = $state<string | null>(null);
+  let editingFollowUpId = $state<string | null>(null);
+  let savingNote = $state(false);
+  let timelineActive = $state(false);
+
+  // --- Navigation ---
+
+  function goBack(): void {
+    shellBack("/tickets");
+  }
+
+  // --- Compose handlers ---
+
+  function handleSend(): void {
+    // Stub: encryption + submission wired separately.
+    if (import.meta.env.DEV) {
+      console.log(
+        `[TicketDetail] send ${composeMode}:`,
+        draftText.slice(0, 50),
+      );
+    }
+  }
+
+  function openComposeActions(): void {
+    composeActionsOpen = true;
+  }
+  function closeComposeActions(): void {
+    composeActionsOpen = false;
+  }
+
+  function handleAttach(): void {
+    closeComposeActions();
+    // Stub: file attachment wired separately.
+    if (import.meta.env.DEV) {
+      console.log("[TicketDetail] attach");
+    }
+  }
+
+  function handlePresetFromCompose(): void {
+    closeComposeActions();
+    openPresetSheet();
+  }
+
+  function handleMentionSelect(_userId: string, displayName: string): void {
+    // Replace the @partial at cursor with @DisplayName followed by a space.
+    const before = draftText.slice(0, cursorPosition);
+    const after = draftText.slice(cursorPosition);
+    const atIndex = before.lastIndexOf("@");
+    if (atIndex === -1) return;
+    const replacement = `@${displayName} `;
+    draftText = before.slice(0, atIndex) + replacement + after;
+    cursorPosition = atIndex + replacement.length;
+  }
+
+  // --- Action dispatchers ---
+
+  /** Fire a mutation and show a generic error toast on failure. */
+  function mutateWithToast<T>(promise: Promise<T>): void {
+    void promise.catch(() => {
+      toastStore.show(m.error_generic(), 3000);
+    });
+  }
+
+  function handlePanelAction(action: TicketAction): void {
+    switch (action) {
+      case "call":
+        // Close the panel, then open the call options picker.
+        closePanel();
+        openCallSheet();
+        break;
+      case "take":
+        mutateWithToast(ticketRouter.take.mutate({ ticketId }));
+        break;
+      case "release":
+        mutateWithToast(ticketRouter.release.mutate({ ticketId }));
+        break;
+      case "assign":
+        closePanel();
+        assignSheetOpen = true;
+        break;
+      case "hold":
+        mutateWithToast(ticketRouter.update.mutate({ ticketId, onHold: true }));
+        break;
+      case "unhold":
+        mutateWithToast(
+          ticketRouter.update.mutate({ ticketId, onHold: false }),
+        );
+        break;
+      case "close":
+        mutateWithToast(ticketRouter.close.mutate({ ticketId }));
+        break;
+      case "reopen":
+        mutateWithToast(
+          ticketRouter.reopen.mutate({
+            ticketId,
+            newKeyGeneration: crypto.randomUUID(),
+          }),
+        );
+        break;
+      case "watch":
+        mutateWithToast(ticketRouter.watchTicket.mutate({ ticketId }));
+        break;
+      case "unwatch":
+        mutateWithToast(ticketRouter.unwatchTicket.mutate({ ticketId }));
+        break;
+      case "cancel":
+        break;
+    }
+  }
+
+  function handleCallAction(action: CallAction): void {
+    closeCallSheet();
+    switch (action) {
+      case "browser-call":
+        // Stub: BrowserCallService.startCall() wired by telephony integration.
+        if (import.meta.env.DEV) console.log("[TicketDetail] browser-call");
+        break;
+      case "phone-call":
+        // Stub: consultant phone callback wired by telephony integration.
+        if (import.meta.env.DEV) console.log("[TicketDetail] phone-call");
+        break;
+      case "cancel":
+        break;
+    }
+  }
+
+  // --- Context menu handlers ---
+
+  function openContextMenu(event: ContextMenuEvent): void {
+    contextMenuData = event;
+    contextMenuOpen = true;
+  }
+
+  function closeContextMenu(): void {
+    contextMenuOpen = false;
+    contextMenuData = null;
+  }
+
+  function handleContextAction(actionId: ContextActionId): void {
+    const data = contextMenuData;
+    closeContextMenu();
+    if (data === null) return;
+
+    switch (actionId) {
+      case "copy": {
+        void handleCopy(data.plaintext);
+        break;
+      }
+      case "edit": {
+        editingFollowUpId = data.followUpId;
+        break;
+      }
+      case "delete": {
+        deleteTargetId = data.followUpId;
+        deleteConfirmOpen = true;
+        break;
+      }
+    }
+  }
+
+  async function handleCopy(plaintext: string | undefined): Promise<void> {
+    if (plaintext === undefined || plaintext === "") return;
+    try {
+      await navigator.clipboard.writeText(plaintext);
+      toastStore.show(m.ticket_copied_to_clipboard());
+    } catch {
+      toastStore.show(m.common_copy_failed());
+    }
+  }
+
+  // --- Delete handlers (optimistic) ---
+
+  function closeDeleteConfirm(): void {
+    deleteConfirmOpen = false;
+    deleteTargetId = null;
+  }
+
+  async function confirmDelete(): Promise<void> {
+    const targetId = deleteTargetId;
+    closeDeleteConfirm();
+    if (targetId === null) return;
+
+    const followUpsKey = ["ticket", ticketId, "followUps", "initial"];
+
+    // Snapshot for rollback.
+    const previousData = queryClient.getQueryData<FollowUpList>(followUpsKey);
+
+    // Optimistically remove the note from the cache.
+    queryClient.setQueryData<FollowUpList>(followUpsKey, (old) =>
+      old?.filter((fu) => fu.id !== targetId),
+    );
+
+    try {
+      await ticketRouter.deleteInternalNote.mutate({
+        followUpId: targetId,
+      });
+      // Refetch to get authoritative server state. Prefix match invalidates
+      // both the initial key and any paginated page keys.
+      void queryClient.invalidateQueries({
+        queryKey: ["ticket", ticketId, "followUps"],
+      });
+    } catch {
+      // Rollback: restore the cached list.
+      queryClient.setQueryData<FollowUpList>(followUpsKey, previousData);
+      toastStore.show(m.error_followup_not_deletable());
+    }
+  }
+
+  // --- Note edit handlers ---
+
+  async function handleNoteEdit(
+    followUpId: string,
+    newPlaintext: string,
+  ): Promise<void> {
+    // Stay in edit mode. Show saving indicator.
+    savingNote = true;
+
+    try {
+      const encryptedContent = await cryptoBridge.encrypt(
+        ticketId,
+        newPlaintext,
+      );
+      await ticketRouter.updateInternalNote.mutate({
+        followUpId,
+        encryptedContent,
+      });
+      // Success: exit edit mode and refresh.
+      editingFollowUpId = null;
+      savingNote = false;
+      void queryClient.invalidateQueries({
+        queryKey: ["ticket", ticketId, "followUps"],
+      });
+    } catch {
+      // Stay in edit mode with the user's text intact.
+      savingNote = false;
+      toastStore.show(m.error_followup_not_editable());
+    }
+  }
+
+  function cancelNoteEdit(): void {
+    editingFollowUpId = null;
+    savingNote = false;
+  }
+
+  // --- Overlay helpers ---
+
+  function openPanel(): void {
+    panelOpen = true;
+  }
+  function closePanel(): void {
+    panelOpen = false;
+  }
+
+  /** Close panel, then scroll the conversation to the tapped note. */
+  function handleNoteTap(noteId: string): void {
+    closePanel();
+    // Wait for panel dismiss animation, then scroll to the note.
+    requestAnimationFrame(() => {
+      const el = document.getElementById(`fu-${noteId}`);
+      el?.scrollIntoView({ behavior: "smooth", block: "center" });
+    });
+  }
+
+  /** Close panel, then open the lightbox with the tapped image. */
+  function handlePanelLightbox(imageUrl: string): void {
+    closePanel();
+    openLightbox(imageUrl);
+  }
+
+  function openCallSheet(): void {
+    callSheetOpen = true;
+  }
+  function closeCallSheet(): void {
+    callSheetOpen = false;
+  }
+
+  function openPresetSheet(): void {
+    presetSheetOpen = true;
+  }
+  function closePresetSheet(): void {
+    presetSheetOpen = false;
+  }
+
+  function openLightbox(imageUrl: string): void {
+    lightboxUrl = imageUrl;
+    lightboxOpen = true;
+  }
+  function closeLightbox(): void {
+    lightboxOpen = false;
+    lightboxUrl = null;
+  }
+
+  // --- SvelteKit Snapshot (draft preservation) ---
+
+  interface TicketDetailSnapshot {
+    draftText: string;
+    composeMode: ComposeMode;
+  }
+
+  export const snapshot: Snapshot<TicketDetailSnapshot> = {
+    capture: () => ({
+      draftText,
+      composeMode,
+    }),
+    restore: (value) => {
+      draftText = value.draftText;
+      composeMode = value.composeMode;
+    },
+  };
+</script>
+
+{#snippet navLeft()}
+  <Link iconOnly onclick={goBack} role="button" aria-label={m.common_back()}>
+    <ChevronLeft size={22} aria-hidden="true" />
+  </Link>
+  <Link
+    iconOnly
+    onclick={() => (timelineActive = !timelineActive)}
+    role="switch"
+    aria-checked={timelineActive ? "true" : "false"}
+    aria-label={timelineActive
+      ? m.ticket_action_messages()
+      : m.ticket_action_timeline()}
+  >
+    {#if timelineActive}
+      <MessageSquareText size={22} aria-hidden="true" />
+    {:else}
+      <CalendarClock size={22} aria-hidden="true" />
+    {/if}
+  </Link>
+{/snippet}
+
+{#snippet navTitle()}
+  <Link
+    role="button"
+    onclick={openPanel}
+    aria-label={m.ticket_client_info_button({ alias: clientAlias })}
+    class="client-alias-btn"
+    colors={{
+      navbarTextIos: "text-current",
+      navbarTextMaterial: "text-current",
+    }}
+  >
+    {clientAlias}
+  </Link>
+{/snippet}
+
+{#snippet navRight()}
+  <Link
+    iconOnly
+    onclick={openPanel}
+    role="button"
+    aria-label={m.ticket_more_actions()}
+  >
+    <EllipsisVertical size={22} aria-hidden="true" />
+  </Link>
+{/snippet}
+
+<div class="ticket-detail-page">
+  <TicketDetail
+    {ticketId}
+    knownFollowUpCount={cachedFollowUpCount}
+    bind:draftText
+    {cursorPosition}
+    onmentionselect={handleMentionSelect}
+    onlightbox={openLightbox}
+    oncontextmenu={openContextMenu}
+    {editingFollowUpId}
+    {savingNote}
+    onnoteedit={(fid: string, text: string) => void handleNoteEdit(fid, text)}
+    oncanceledit={cancelNoteEdit}
+    bind:timelineActive
+    {readUpTo}
+    onreadprogress={handleReadProgress}
+  />
+</div>
+
+<!-- Compose bar (shell wrapper, maps to native input accessory view) -->
+<ShellMessagebar
+  bind:value={draftText}
+  bind:mode={composeMode}
+  onsend={handleSend}
+  onplus={openComposeActions}
+  oninput={handleInput}
+  sendDisabled={!draftText.trim()}
+/>
+
+<!-- Overlays (route file owns all shell wrappers) -->
+<ShellPopup opened={panelOpen} ondismiss={closePanel} title={clientAlias}>
+  <TicketPanelContent
+    {ticketId}
+    onaction={handlePanelAction}
+    onnotetap={handleNoteTap}
+    onlightbox={handlePanelLightbox}
+  />
+</ShellPopup>
+
+<AssignSheet
+  opened={assignSheetOpen}
+  {ticketId}
+  currentAssigneeId={ticket?.assignedTo ?? null}
+  ondismiss={() => {
+    assignSheetOpen = false;
+  }}
+  onassign={(tid: string, targetUserId: string | null) => {
+    assignSheetOpen = false;
+    void ticketRouter.assignTo
+      .mutate({ ticketId: tid, targetUserId })
+      .then(() => {
+        haptic();
+        void queryClient.invalidateQueries({ queryKey: ["ticket", ticketId] });
+        void queryClient.invalidateQueries({
+          queryKey: ["tickets", "list"],
+        });
+      })
+      .catch(() => {
+        toastStore.show(m.error_generic(), 3000);
+      });
+  }}
+/>
+
+<ShellActionSheet opened={callSheetOpen} ondismiss={closeCallSheet}>
+  <CallOptionsContent {hasVerifiedPhone} onaction={handleCallAction} />
+</ShellActionSheet>
+
+<ShellActionSheet opened={composeActionsOpen} ondismiss={closeComposeActions}>
+  <ActionsGroup>
+    <ActionsButton onclick={handleAttach}>
+      {m.ticket_attach_file()}
+    </ActionsButton>
+    <ActionsButton onclick={handlePresetFromCompose}>
+      {m.ticket_preset_replies()}
+    </ActionsButton>
+  </ActionsGroup>
+  <ActionsGroup>
+    <ActionsButton onclick={closeComposeActions} bold>
+      {m.common_cancel()}
+    </ActionsButton>
+  </ActionsGroup>
+</ShellActionSheet>
+
+<ShellSheet opened={presetSheetOpen} ondismiss={closePresetSheet}>
+  <PresetReplyContent
+    onselect={(body: string) => {
+      draftText = body;
+      closePresetSheet();
+    }}
+  />
+</ShellSheet>
+
+<ShellPopup opened={lightboxOpen} ondismiss={closeLightbox}>
+  {#if lightboxUrl}
+    <div class="lightbox-content">
+      <img
+        src={lightboxUrl}
+        alt={m.ticket_mms_lightbox_label()}
+        class="lightbox-img"
+      />
+    </div>
+  {/if}
+</ShellPopup>
+
+<!-- Context menu (long-press on message bubble) -->
+<ShellActionSheet opened={contextMenuOpen} ondismiss={closeContextMenu}>
+  {#if contextMenuData !== null}
+    <ActionsGroup>
+      {#each contextMenuData.actions as action (action.id)}
+        <ActionsButton
+          onclick={() => handleContextAction(action.id)}
+          bold={action.destructive === true}
+          colors={action.destructive === true
+            ? { textIos: "text-red-500", textMaterial: "text-red-500" }
+            : undefined}
+        >
+          {action.label}
+        </ActionsButton>
+      {/each}
+    </ActionsGroup>
+    <ActionsGroup>
+      <ActionsButton onclick={closeContextMenu} bold>
+        {m.common_cancel()}
+      </ActionsButton>
+    </ActionsGroup>
+  {/if}
+</ShellActionSheet>
+
+<!-- Delete note confirmation dialog -->
+<ShellDialog
+  opened={deleteConfirmOpen}
+  ondismiss={closeDeleteConfirm}
+  title={m.ticket_delete_note_confirm_title()}
+>
+  {#snippet content()}
+    <p>{m.ticket_delete_note_confirm_body()}</p>
+  {/snippet}
+  {#snippet buttons()}
+    <DialogButton onclick={closeDeleteConfirm}>
+      {m.common_cancel()}
+    </DialogButton>
+    <DialogButton onclick={confirmDelete} class="text-red-500 font-semibold">
+      {m.common_delete()}
+    </DialogButton>
+  {/snippet}
+</ShellDialog>
+
+<style>
+  .ticket-detail-page {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-height: 0;
+  }
+
+  .lightbox-content {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1rem;
+    min-height: 200px;
+  }
+
+  .lightbox-img {
+    max-width: 100%;
+    max-height: 80vh;
+    object-fit: contain;
+    border-radius: 0.5rem;
+  }
+</style>

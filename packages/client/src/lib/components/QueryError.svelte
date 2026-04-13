@@ -59,11 +59,15 @@
     [ErrorCode.TICKET_ALREADY_ASSIGNED]: () =>
       m.error_ticket_already_assigned(),
     [ErrorCode.NOT_ASSIGNED_TO_TICKET]: () => m.error_not_assigned_to_ticket(),
+    [ErrorCode.INVALID_TARGET_USER]: () => m.error_invalid_target_user(),
     [ErrorCode.SELF_DEPENDENCY]: () => m.error_self_dependency(),
     [ErrorCode.CIRCULAR_DEPENDENCY]: () => m.error_circular_dependency(),
     [ErrorCode.DEPENDENCY_TICKET_NOT_FOUND]: () =>
       m.error_dependency_ticket_not_found(),
     [ErrorCode.FOLLOWUP_NOT_FOUND]: () => m.error_followup_not_found(),
+    [ErrorCode.FOLLOWUP_NOT_EDITABLE]: () => m.error_followup_not_editable(),
+    [ErrorCode.FOLLOWUP_NOT_DELETABLE]: () => m.error_followup_not_deletable(),
+    [ErrorCode.FOLLOWUP_NOT_OWNED]: () => m.error_followup_not_owned(),
     [ErrorCode.CANNOT_FOLLOWUP_CLOSED_TICKET]: () =>
       m.error_cannot_followup_closed_ticket(),
 

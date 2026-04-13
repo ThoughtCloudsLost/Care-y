@@ -17,6 +17,20 @@
 import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
 import { render, screen, cleanup } from "@testing-library/svelte";
 
+// IntersectionObserver stub for DecryptPlaceholder
+vi.stubGlobal(
+  "IntersectionObserver",
+  vi.fn(function (this: {
+    observe: () => void;
+    disconnect: () => void;
+    unobserve: () => void;
+  }) {
+    this.observe = vi.fn();
+    this.disconnect = vi.fn();
+    this.unobserve = vi.fn();
+  }),
+);
+
 // --- Mocks ---
 
 vi.mock("$app/navigation", () => ({
@@ -107,7 +121,8 @@ function makeTicket(overrides: Record<string, unknown> = {}) {
     keyGeneration: "gen-001",
     createdAt: new Date().toISOString(),
     clientAlias: "Sparrow",
-    queueName: "Intake",
+    encryptedQueueName: { type: "Buffer", data: [73, 110, 116, 97, 107, 101] },
+    queueSortOrder: 1,
     lastActivityAt: null as string | null,
     followUpCount: 0,
     assignedDisplayName: null as { type: "Buffer"; data: number[] } | null,
@@ -127,6 +142,7 @@ function buildQueryStates(
     queues?: Record<string, unknown>;
     shift?: Record<string, unknown>;
     kb?: Record<string, unknown>;
+    counts?: Record<string, unknown>;
   },
 ): Array<Record<string, unknown>> {
   return [
@@ -135,6 +151,7 @@ function buildQueryStates(
     overrides?.queues ?? emptyDataQuery,
     overrides?.shift ?? { ...defaultQueryState, data: { shift: null } },
     overrides?.kb ?? emptyDataQuery,
+    overrides?.counts ?? emptyDataQuery,
   ];
 }
 
@@ -189,7 +206,7 @@ describe("Dashboard page", () => {
     expect(container.querySelector("[role='status']")).toBeTruthy();
   });
 
-  it("renders error message on query failure", () => {
+  it("renders section headers even on query failure (progressive loading)", () => {
     queryStates = buildQueryStates({
       isLoading: false,
       isError: true,
@@ -197,10 +214,9 @@ describe("Dashboard page", () => {
       data: undefined,
     });
 
-    render(PageModule.default);
-    expect(
-      screen.getByText("Something went wrong. Please try again."),
-    ).toBeTruthy();
+    const { container } = render(PageModule.default);
+    // Sections render unconditionally with progressive loading
+    expect(container.querySelector(".dashboard")).toBeTruthy();
   });
 
   it("renders all section headers when data is present", () => {

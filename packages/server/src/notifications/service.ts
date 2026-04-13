@@ -2,6 +2,9 @@
 // Dispatches notification events across all channels:
 // SSE (real-time in-app), email (metadata-only), SMS ping (optional), Web Push.
 // Consumes NotificationRecipientList from notification-recipients.ts.
+//
+// Queue names are encrypted (ADR-030). SSE events carry queueId only.
+// The client resolves the human-readable name from its org-key decrypt cache.
 
 import type { Kysely } from "kysely";
 import type { TenantDatabase } from "../db/types.js";
@@ -31,7 +34,7 @@ export interface NotificationService {
     orgSlug: string,
     eventType: NotificationEventType,
     ticketId: string,
-    queueName: string,
+    queueId: string,
     recipients: NotificationRecipientList,
   ): Promise<void>;
 }
@@ -46,7 +49,7 @@ export function createNotificationService(
       orgSlug,
       eventType,
       ticketId,
-      queueName,
+      queueId,
       recipients,
     ) {
       const userIds = recipients.recipients.map((r) => r.userId);
@@ -58,7 +61,7 @@ export function createNotificationService(
       const sseEvent: SseEvent = {
         type: eventType,
         ticketId,
-        queueName,
+        queueId,
         timestamp,
       };
       deps.sse.broadcast(orgId, userIds, sseEvent);
@@ -75,8 +78,6 @@ export function createNotificationService(
         orgSlug,
         recipientUserIds: userIds,
         eventType,
-        ticketId,
-        queueName,
       });
     },
   };
@@ -101,16 +102,15 @@ export function createNotificationJobHandler(
     orgSlug: z.string().min(1),
     recipientUserIds: z.array(z.uuid()),
     eventType: notificationEventTypeSchema,
-    queueName: z.string(),
   });
 
   return async (payload) => {
     const parsed = jobPayloadSchema.parse(payload);
-    const { orgId, orgSlug, recipientUserIds, eventType, queueName } = parsed;
+    const { orgId, orgSlug, recipientUserIds, eventType } = parsed;
     const loginUrl = buildLoginUrl(orgSlug);
 
     const strings = getStrings("en");
-    const body = getNotificationBody(strings, eventType, queueName, loginUrl);
+    const body = getNotificationBody(strings, eventType, loginUrl);
     const subject = `${strings.emailSubjectPrefix}: ${getSubjectLine(eventType)}`;
 
     const tDb = deps.getTenantDb(orgId);
@@ -150,24 +150,23 @@ export function createNotificationJobHandler(
 function getNotificationBody(
   strings: ReturnType<typeof getStrings>,
   eventType: NotificationEventType,
-  queueName: string,
   loginUrl: string,
 ): string {
   switch (eventType) {
     case "ticket_assigned":
-      return strings.ticketAssigned(queueName, loginUrl);
+      return strings.ticketAssigned(loginUrl);
     case "ticket_created":
-      return strings.ticketCreated(queueName, loginUrl);
+      return strings.ticketCreated(loginUrl);
     case "ticket_escalated":
-      return strings.ticketEscalated(queueName, loginUrl);
+      return strings.ticketEscalated(loginUrl);
     case "followup_added":
-      return strings.followupAdded(queueName, loginUrl);
+      return strings.followupAdded(loginUrl);
     case "mention":
-      return strings.mentionNotification(queueName, loginUrl);
+      return strings.mentionNotification(loginUrl);
     case "ticket_closed":
     case "ticket_reopened":
     case "merge_completed":
-      return strings.followupAdded(queueName, loginUrl);
+      return strings.followupAdded(loginUrl);
   }
 }
 

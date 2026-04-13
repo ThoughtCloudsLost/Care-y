@@ -1,6 +1,5 @@
 <script lang="ts">
   import "../app.css";
-  import { App } from "konsta/svelte";
   import { QueryClient, QueryClientProvider } from "@tanstack/svelte-query";
   import { goto } from "$app/navigation";
   import { resolve } from "$app/paths";
@@ -8,25 +7,13 @@
   import { onMount } from "svelte";
   import { browser } from "$app/environment";
   import favicon from "$lib/assets/favicon.svg";
-  import { themeStore } from "$lib/stores/theme.svelte";
   import { initKeyboardViewport } from "$lib/utils/keyboard-viewport";
-  import { announceToLiveRegion } from "$lib/utils/announce";
-  import { createSSEListener } from "$lib/sse/index.svelte";
-  import { getCachedBranding, applyBranding } from "$lib/branding/index.js";
-  import RisoInkFilter from "$lib/components/RisoInkFilter.svelte";
+  import CryptoProvider from "$lib/providers/CryptoProvider.svelte";
+  import SSEProvider from "$lib/providers/SSEProvider.svelte";
+  import BrandingProvider from "$lib/providers/BrandingProvider.svelte";
+  import ThemeProvider from "$lib/providers/ThemeProvider.svelte";
   import AppShell from "$lib/shell/AppShell.svelte";
-  import type { Component } from "svelte";
   import type { TabId } from "$lib/shell/types";
-
-  // DevThemePanel is dynamically imported so it is fully excluded from prod
-  // bundles. Never convert this to a static import. A static import alone
-  // ships the module even when the render branch is dead-code-eliminated.
-  let DevPanel = $state<Component | null>(null);
-  if (import.meta.env.DEV) {
-    void import("$lib/components/DevThemePanel.svelte").then(
-      (m) => (DevPanel = m.default),
-    );
-  }
 
   let { children } = $props();
 
@@ -66,21 +53,7 @@
     if (route !== undefined && page.url.pathname !== route) {
       void goto(resolve(route));
     }
-    // Tabs without a route entry (e.g. "more") are menu triggers, not navigation.
   }
-
-  const sseListener = createSSEListener({
-    url: "/sse/events",
-    queryClient,
-    onConnectionChange: (isConnected) => {
-      if (!isConnected) {
-        announceToLiveRegion(
-          "assertive",
-          "Real-time connection lost. Reconnecting...",
-        );
-      }
-    },
-  });
 
   onMount(() => {
     if (!browser) return;
@@ -90,18 +63,8 @@
 
     const cleanupKeyboard = initKeyboardViewport();
 
-    // Apply cached org branding if available (pre-login display).
-    // Full branding load (fetch + decrypt) happens after login (6i).
-    void getCachedBranding().then((cached) => {
-      if (cached) void applyBranding(cached);
-    });
-
-    // SSE connects unconditionally for now; auth guard added when login flow exists (6i)
-    sseListener.connect();
-
     return () => {
       cleanupKeyboard();
-      sseListener.disconnect();
     };
   });
 </script>
@@ -110,10 +73,6 @@
   <title>CARE-Y</title>
   <link rel="icon" href={favicon} />
 </svelte:head>
-
-{#if themeStore.visualTheme === "riso"}
-  <RisoInkFilter />
-{/if}
 
 <!-- ARIA live regions: downstream components publish announcements here -->
 <div
@@ -133,34 +92,36 @@
 <div role="status" id="toast-container"></div>
 
 <QueryClientProvider client={queryClient}>
-  <App
-    theme={themeStore.current}
-    dark={themeStore.resolvedScheme === "dark"}
-    class="app-shell"
-  >
-    <AppShell {activeTab} ontabchange={handleTabChange}>
-      {@render children()}
-    </AppShell>
-    {#if DevPanel}
-      <DevPanel />
-    {/if}
-  </App>
+  <CryptoProvider>
+    <SSEProvider>
+      <BrandingProvider>
+        <ThemeProvider>
+          <AppShell {activeTab} ontabchange={handleTabChange}>
+            {@render children()}
+          </AppShell>
+        </ThemeProvider>
+      </BrandingProvider>
+    </SSEProvider>
+  </CryptoProvider>
 </QueryClientProvider>
 
 <style>
-  /* Constrain App to viewport for iOS Safari. Konsta manages layout
-     internally: Page is absolute + overflow-auto, Navbar is sticky top,
-     Tabbar is fixed bottom. */
+  /* Constrain App to viewport for iOS Safari. Page is a non-scrolling
+     flex frame. Navbar sits at the top, Tabbar is fixed bottom.
+     Scrolling lives on <main> inside AppShell. */
   :global(.app-shell) {
     height: 100dvh;
     min-height: auto;
     overflow: hidden;
   }
 
-  /* Remove iOS rubber-band bounce on the scroll container.
-     overscroll-behavior on html/body does not cover inner scroll containers. */
+  /* Page is a non-scrolling flex frame. Scrolling moves to <main> inside
+     AppShell so each route gets independent scroll isolation. Navbar sits
+     at the top as a flex child; Toolbar is position:fixed, unaffected. */
   :global(.k-page) {
-    overscroll-behavior-y: none;
+    overflow: hidden !important;
+    display: flex !important;
+    flex-direction: column !important;
   }
 
   /* Dark mode: paper texture on the page canvas.

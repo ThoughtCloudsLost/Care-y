@@ -36,7 +36,7 @@ describe("StatCard", () => {
     const { container } = render(StatCard, {
       props: { ...defaults, accentColor: "var(--brand-text)" },
     });
-    const dot = container.querySelector(".stat-dot");
+    const dot = container.querySelector("[data-accent-dot]");
     expect(dot).toBeTruthy();
   });
 
@@ -44,7 +44,7 @@ describe("StatCard", () => {
     const { container } = render(StatCard, {
       props: { ...defaults, accentColor: undefined },
     });
-    const dot = container.querySelector(".stat-dot");
+    const dot = container.querySelector("[data-accent-dot]");
     expect(dot).toBeNull();
   });
 

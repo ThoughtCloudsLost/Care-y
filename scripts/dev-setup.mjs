@@ -56,12 +56,20 @@ run(
   `${serverExec} tsx src/db/migrate.ts --platform`,
 );
 
-// 4. Seed dev data (idempotent)
-run("Seeding dev data", `${serverExec} tsx src/scripts/seed.ts`);
-
-// 5. Tenant migrations (seed creates the org schema, migrations populate tables)
+// 4. Tenant migrations (existing org schemas). Migrates tables before seed
+//    writes to them. No-ops on a fresh DB (no org schemas yet).
 run(
   "Running tenant migrations",
+  `${serverExec} tsx src/db/migrate.ts --all-schemas`,
+);
+
+// 5. Seed dev data (idempotent: creates org/schema if needed, then data)
+run("Seeding dev data", `${serverExec} tsx src/scripts/seed.ts`);
+
+// 6. Tenant migrations (new schemas). On fresh DB the seed just created an
+//    org schema that needs its table migrations applied.
+run(
+  "Running tenant migrations (new schemas)",
   `${serverExec} tsx src/db/migrate.ts --all-schemas`,
 );
 

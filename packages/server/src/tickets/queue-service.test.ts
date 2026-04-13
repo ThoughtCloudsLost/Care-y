@@ -4,6 +4,11 @@ import { createQueueService, type QueueService } from "./queue-service.js";
 import { NotFoundError } from "../errors.js";
 import * as crypto from "node:crypto";
 
+/** Helper: create a Buffer from a label string (test-only, not real org-key encryption). */
+function encName(label: string): Buffer {
+  return Buffer.from(label);
+}
+
 describe.skipIf(!process.env.DATABASE_URL)("QueueService (DB)", () => {
   let testDb: TestDb;
   let svc: QueueService;
@@ -19,21 +24,32 @@ describe.skipIf(!process.env.DATABASE_URL)("QueueService (DB)", () => {
   });
 
   it("create inserts a queue with defaults", async () => {
-    const q = await svc.create({ name: "General" });
-    expect(q.name).toBe("General");
+    const q = await svc.create({ encryptedName: encName("General") });
+    expect(Buffer.isBuffer(q.encryptedName)).toBe(true);
+    expect(q.encryptedName.toString()).toBe("General");
     expect(q.escalateDays).toBe(0);
     expect(q.isActive).toBe(true);
+    expect(q.sortOrder).toBeGreaterThan(0);
     expect(q.id).toBeTruthy();
     expect(q.createdAt).toBeInstanceOf(Date);
   });
 
   it("create with explicit escalateDays", async () => {
-    const q = await svc.create({ name: "Urgent", escalateDays: 3 });
+    const q = await svc.create({
+      encryptedName: encName("Urgent"),
+      escalateDays: 3,
+    });
     expect(q.escalateDays).toBe(3);
   });
 
+  it("create auto-increments sort_order", async () => {
+    const q1 = await svc.create({ encryptedName: encName("First") });
+    const q2 = await svc.create({ encryptedName: encName("Second") });
+    expect(q2.sortOrder).toBeGreaterThan(q1.sortOrder);
+  });
+
   it("listActive returns only active queues", async () => {
-    const q = await svc.create({ name: "Active Queue" });
+    const q = await svc.create({ encryptedName: encName("Active Queue") });
     // Deactivate it directly
     await testDb.db
       .updateTable("queues")
@@ -45,36 +61,58 @@ describe.skipIf(!process.env.DATABASE_URL)("QueueService (DB)", () => {
     expect(active.find((a) => a.id === q.id)).toBeUndefined();
   });
 
-  it("listActive returns queues ordered by created_at", async () => {
-    const q1 = await svc.create({ name: "First" });
-    const q2 = await svc.create({ name: "Second" });
+  it("listActive returns queues ordered by sort_order", async () => {
+    const q1 = await svc.create({ encryptedName: encName("Earlier") });
+    const q2 = await svc.create({ encryptedName: encName("Later") });
     const list = await svc.listActive();
     const ids = list.map((q) => q.id);
     expect(ids.indexOf(q1.id)).toBeLessThan(ids.indexOf(q2.id));
   });
 
-  it("update modifies name", async () => {
-    const q = await svc.create({ name: "Old Name" });
-    const updated = await svc.update(q.id, { name: "New Name" });
-    expect(updated.name).toBe("New Name");
+  it("update modifies encryptedName", async () => {
+    const q = await svc.create({ encryptedName: encName("Old Name") });
+    const updated = await svc.update(q.id, {
+      encryptedName: encName("New Name"),
+    });
+    expect(updated.encryptedName.toString()).toBe("New Name");
     expect(updated.id).toBe(q.id);
   });
 
   it("update modifies escalateDays", async () => {
-    const q = await svc.create({ name: "Escal", escalateDays: 5 });
+    const q = await svc.create({
+      encryptedName: encName("Escal"),
+      escalateDays: 5,
+    });
     const updated = await svc.update(q.id, { escalateDays: 10 });
     expect(updated.escalateDays).toBe(10);
   });
 
   it("update with no fields returns current state", async () => {
-    const q = await svc.create({ name: "NoChange" });
+    const q = await svc.create({ encryptedName: encName("NoChange") });
     const same = await svc.update(q.id, {});
-    expect(same.name).toBe("NoChange");
+    expect(same.encryptedName.toString()).toBe("NoChange");
   });
 
   it("update throws NotFoundError for non-existent queue", async () => {
     await expect(
-      svc.update(crypto.randomUUID(), { name: "x" }),
+      svc.update(crypto.randomUUID(), { encryptedName: encName("x") }),
     ).rejects.toBeInstanceOf(NotFoundError);
+  });
+
+  it("reorder swaps sort_order values", async () => {
+    const q1 = await svc.create({ encryptedName: encName("ReorderA") });
+    const q2 = await svc.create({ encryptedName: encName("ReorderB") });
+
+    // Swap their sort orders
+    await svc.reorder([
+      { queueId: q1.id, sortOrder: q2.sortOrder },
+      { queueId: q2.id, sortOrder: q1.sortOrder },
+    ]);
+
+    const list = await svc.listActive();
+    const reorderedQ1 = list.find((q) => q.id === q1.id);
+    const reorderedQ2 = list.find((q) => q.id === q2.id);
+    expect(reorderedQ1?.sortOrder).toBe(q2.sortOrder);
+    expect(reorderedQ2?.sortOrder).toBe(q1.sortOrder);
   });
 });

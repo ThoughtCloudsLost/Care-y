@@ -14,18 +14,17 @@
  * The SvelteMap is natively reactive in Svelte 5 without $state wrapping.
  */
 
-import { SvelteMap } from "svelte/reactivity";
 import { untrack } from "svelte";
+import { cacheRegistry } from "./cache-registry.js";
 import type { OrgKeyManager } from "./org-key.js";
+import type { SerializedBuffer } from "$lib/utils/buffer-encoding.js";
 
-/** Serialized Node.js Buffer as it arrives over tRPC JSON (no superjson). */
-interface SerializedBuffer {
-  type: "Buffer";
-  data: number[];
-}
+const textDecoder = new TextDecoder();
 
 export class OrgDecryptCache {
-  private readonly cache = new SvelteMap<string, string>();
+  private readonly cache = cacheRegistry.createMap<string, string>(
+    "OrgDecryptCache",
+  );
   private readonly manager: OrgKeyManager;
 
   constructor(manager: OrgKeyManager) {
@@ -34,6 +33,13 @@ export class OrgDecryptCache {
 
   /**
    * Decrypt a sealed-box ciphertext, returning cached plaintext on hit.
+   *
+   * Safe to call from `$derived` and template expressions. First call
+   * decrypts synchronously and caches via `untrack()` to avoid
+   * `state_unsafe_mutation`. Subsequent calls return the cached value.
+   * The underlying SvelteMap triggers reactivity, so any `$derived`
+   * that received null (key not loaded) will re-evaluate once the org
+   * key loads and a new `.get()` call picks up the populated entry.
    *
    * Returns the decrypted UTF-8 string, or null if the org key is not
    * loaded or decryption fails (e.g., wrong key, corrupted ciphertext).
@@ -57,7 +63,7 @@ export class OrgDecryptCache {
         data instanceof Uint8Array ? data : new Uint8Array(data.data);
 
       const plainBytes = this.manager.decrypt(ciphertext);
-      const plaintext = new TextDecoder().decode(plainBytes);
+      const plaintext = textDecoder.decode(plainBytes);
       // untrack: cache population is a side effect, not a reactive signal.
       // Without this, calling decrypt() from a template expression or
       // $derived triggers Svelte 5's state_unsafe_mutation error.
