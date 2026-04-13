@@ -66,9 +66,10 @@
   }
 
   const isMedia = $derived(mode === "media");
-  // Stable random variant (1-4 text, 1-2 media). Clamped in the template
-  // via isMedia guards so out-of-range values are harmless.
-  const variant = Math.floor(Math.random() * 4) + 1;
+  // Pre-roll both ranges; $derived picks the correct one reactively.
+  const textVariant = Math.floor(Math.random() * 4) + 1;
+  const mediaVariant = Math.floor(Math.random() * 2) + 1;
+  const variant = $derived(isMedia ? mediaVariant : textVariant);
   const delay = `${String(-(Math.random() * 1.8))}s`;
 
   let paused = $state(false);
