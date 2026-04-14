@@ -25,6 +25,7 @@
     "@trpc/client": "11.10.0",
     "@twilio/voice-sdk": "2.18.1",
     "bits-ui": "2.16.5",
+    "dompurify": "3.4.0",
     "konsta": "5.0.8"
   },
   "devDependencies": {

@@ -104,7 +104,9 @@
         aria-hidden="true"
       >
         <div class="row-category">
-          <InlineSkeleton width="6ch" />
+          <Chip outline class="category-badge"
+            ><DecryptPlaceholder length={8} /></Chip
+          >
         </div>
         <div class="row-title">
           <DecryptPlaceholder length={20} />
@@ -115,8 +117,11 @@
           </div>
         {/if}
         <div class="row-meta">
-          <InlineSkeleton width="6ch" />
-          <InlineSkeleton width="4ch" />
+          <span class="meta-left"><DecryptPlaceholder length={8} /></span>
+          <span class="meta-right">
+            <InlineSkeleton width="6ch" />
+            <InlineSkeleton width="3ch" />
+          </span>
         </div>
       </div>
     </Card>
@@ -136,28 +141,27 @@
         onpointerup={handlePointerUp}
         onpointercancel={handlePointerUp}
       >
-        {#if multiSelectActive}
-          <div
-            class="checkbox-wrap"
-            role="presentation"
-            onclick={(e) => e.stopPropagation()}
-            onkeydown={(e) => e.stopPropagation()}
-          >
-            <Checkbox
-              checked={selected}
-              onchange={() => onselect?.(articleId)}
-              class="select-checkbox"
-              colors={{
-                bgCheckedIos: "bg-[var(--brand-accent)]",
-                borderCheckedIos: "border-[var(--brand-accent)]",
-                bgCheckedMaterial: "bg-[var(--brand-accent)]",
-                borderCheckedMaterial: "border-[var(--brand-accent)]",
-              }}
-            />
-          </div>
-        {/if}
-
         <div class="row-category">
+          {#if multiSelectActive}
+            <div
+              class="checkbox-wrap"
+              role="presentation"
+              onclick={(e) => e.stopPropagation()}
+              onkeydown={(e) => e.stopPropagation()}
+            >
+              <Checkbox
+                checked={selected}
+                onchange={() => onselect?.(articleId)}
+                class="select-checkbox"
+                colors={{
+                  bgCheckedIos: "bg-[var(--brand-accent)]",
+                  borderCheckedIos: "border-[var(--brand-accent)]",
+                  bgCheckedMaterial: "bg-[var(--brand-accent)]",
+                  borderCheckedMaterial: "border-[var(--brand-accent)]",
+                }}
+              />
+            </div>
+          {/if}
           {#if categoryName !== null}
             <Chip outline class="category-badge">{categoryName}</Chip>
           {:else}
@@ -288,6 +292,7 @@
     color: var(--muted);
     display: -webkit-box;
     -webkit-line-clamp: 2;
+    line-clamp: 2;
     -webkit-box-orient: vertical;
     overflow: hidden;
     line-height: 1.4;
@@ -359,6 +364,7 @@
     white-space: normal;
     display: -webkit-box;
     -webkit-line-clamp: 2;
+    line-clamp: 2;
     -webkit-box-orient: vertical;
   }
 
