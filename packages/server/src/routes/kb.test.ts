@@ -43,6 +43,7 @@ function createMockItemSvc(): KBItemService {
     update: vi.fn(),
     delete: vi.fn(),
     listRecentlyUpdated: vi.fn(),
+    listAuthors: vi.fn(),
   };
 }
 

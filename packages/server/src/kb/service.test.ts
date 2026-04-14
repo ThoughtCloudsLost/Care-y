@@ -1,6 +1,6 @@
 // care-y-ignore db-write-no-crypto-import -- test writes synthetic Buffers as pre-encrypted ciphertext (org key tier). No server-side crypto needed.
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
-import { createTestDb, type TestDb } from "../test-utils.js";
+import { createTestDb, createTestUser, type TestDb } from "../test-utils.js";
 import {
   createKBCategoryService,
   createKBItemService,
@@ -655,6 +655,94 @@ describe.skipIf(!process.env.DATABASE_URL)("KBItemService (DB)", () => {
     expect(page.items[1]!.id).toBe(itemB.id);
   });
 });
+
+describe.skipIf(!process.env.DATABASE_URL)(
+  "KBItemService.listAuthors (DB)",
+  () => {
+    let testDb: TestDb;
+    let catSvc: KBCategoryService;
+    let svc: KBItemService;
+    let categoryId: string;
+
+    beforeAll(async () => {
+      testDb = await createTestDb();
+      catSvc = createKBCategoryService(testDb.db);
+      svc = createKBItemService(testDb.db);
+
+      const cat = await catSvc.create({
+        encryptedName: encName("Authors Category"),
+      });
+      categoryId = cat.id;
+    });
+
+    afterAll(async () => {
+      await testDb.cleanup();
+    });
+
+    it("returns authors who have written articles", async () => {
+      const user = await createTestUser(testDb.db);
+      await svc.create(user.id, {
+        categoryId,
+        encryptedTitle: Buffer.from("author-test"),
+        encryptedBody: Buffer.from("body"),
+      });
+
+      const authors = await svc.listAuthors();
+      const found = authors.find((a) => a.id === user.id);
+      expect(found).toBeDefined();
+      expect(Buffer.isBuffer(found!.encryptedDisplayName)).toBe(true);
+    });
+
+    it("returns each author only once even with multiple articles", async () => {
+      const user = await createTestUser(testDb.db);
+      await svc.create(user.id, {
+        categoryId,
+        encryptedTitle: Buffer.from("multi-1"),
+        encryptedBody: Buffer.from("body"),
+      });
+      await svc.create(user.id, {
+        categoryId,
+        encryptedTitle: Buffer.from("multi-2"),
+        encryptedBody: Buffer.from("body"),
+      });
+
+      const authors = await svc.listAuthors();
+      const matches = authors.filter((a) => a.id === user.id);
+      expect(matches).toHaveLength(1);
+    });
+
+    it("excludes users who have not written any articles", async () => {
+      const nonAuthor = await createTestUser(testDb.db);
+
+      const authors = await svc.listAuthors();
+      const found = authors.find((a) => a.id === nonAuthor.id);
+      expect(found).toBeUndefined();
+    });
+
+    it("includes authors from different categories", async () => {
+      const cat2 = await catSvc.create({
+        encryptedName: encName("Authors Cat 2"),
+      });
+      const userA = await createTestUser(testDb.db);
+      const userB = await createTestUser(testDb.db);
+
+      await svc.create(userA.id, {
+        categoryId,
+        encryptedTitle: Buffer.from("cat1-article"),
+        encryptedBody: Buffer.from("body"),
+      });
+      await svc.create(userB.id, {
+        categoryId: cat2.id,
+        encryptedTitle: Buffer.from("cat2-article"),
+        encryptedBody: Buffer.from("body"),
+      });
+
+      const authors = await svc.listAuthors();
+      expect(authors.find((a) => a.id === userA.id)).toBeDefined();
+      expect(authors.find((a) => a.id === userB.id)).toBeDefined();
+    });
+  },
+);
 
 describe.skipIf(!process.env.DATABASE_URL)("KBVoteService (DB)", () => {
   let testDb: TestDb;

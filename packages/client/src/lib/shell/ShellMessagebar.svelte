@@ -148,14 +148,14 @@
   .note-mode :global(.backdrop-blur-lg) {
     background-color: color-mix(
       in srgb,
-      var(--brand-primary) 25%,
+      var(--brand-accent) 25%,
       var(--color-ios-light-glass)
     ) !important;
   }
   :global(.dark) .note-mode :global(.backdrop-blur-lg) {
     background-color: color-mix(
       in srgb,
-      var(--brand-primary) 20%,
+      var(--brand-accent) 20%,
       var(--color-ios-dark-glass)
     ) !important;
   }
