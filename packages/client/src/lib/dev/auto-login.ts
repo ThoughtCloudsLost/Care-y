@@ -127,36 +127,665 @@ function isConflictError(err: unknown): boolean {
   return false;
 }
 
-/** KB article definitions for dev seeding. */
+// ── ProseMirror JSON helpers for seed content ───────────────────────
+// These build doc.toJSON()-compatible nodes. The real editor (06f.2)
+// will produce the same structure via ProseMirror's serialization.
+
+interface PmMark {
+  type: string;
+  attrs?: Record<string, unknown>;
+}
+interface PmNode {
+  type: string;
+  attrs?: Record<string, unknown>;
+  marks?: PmMark[];
+  content?: PmNode[];
+  text?: string;
+}
+
+function pmDoc(...content: PmNode[]): string {
+  return JSON.stringify({ type: "doc", content });
+}
+
+function p(...children: PmNode[]): PmNode {
+  return { type: "paragraph", content: children };
+}
+
+function t(text: string, ...marks: PmMark[]): PmNode {
+  const node: PmNode = { type: "text", text };
+  if (marks.length > 0) node.marks = marks;
+  return node;
+}
+
+function h(level: number, ...children: PmNode[]): PmNode {
+  return { type: "heading", attrs: { level }, content: children };
+}
+
+function ul(...items: PmNode[]): PmNode {
+  return { type: "bullet_list", content: items };
+}
+
+function ol(...items: PmNode[]): PmNode {
+  return { type: "ordered_list", content: items };
+}
+
+function li(...content: PmNode[]): PmNode {
+  return { type: "list_item", content };
+}
+
+function bq(...content: PmNode[]): PmNode {
+  return { type: "blockquote", content };
+}
+
+function codeBlock(text: string): PmNode {
+  return { type: "code_block", content: [{ type: "text", text }] };
+}
+
+function br(): PmNode {
+  return { type: "hard_break" };
+}
+
+function table(...rows: PmNode[]): PmNode {
+  return { type: "table", content: rows };
+}
+
+function tr(...cells: PmNode[]): PmNode {
+  return { type: "table_row", content: cells };
+}
+
+function th(...children: PmNode[]): PmNode {
+  return { type: "table_header", content: [p(...children)] };
+}
+
+function td(...children: PmNode[]): PmNode {
+  return { type: "table_cell", content: [p(...children)] };
+}
+
+function hr(): PmNode {
+  return { type: "horizontal_rule" };
+}
+
+const bold: PmMark = { type: "strong" };
+const italic: PmMark = { type: "em" };
+const strike: PmMark = { type: "strikethrough" };
+const code: PmMark = { type: "code" };
+function link(href: string): PmMark {
+  return { type: "link", attrs: { href } };
+}
+
+/** KB article definitions for dev seeding (ProseMirror JSON bodies). */
 const KB_ARTICLES: readonly {
   category: string;
   title: string;
   body: string;
+  excerpt: string;
 }[] = [
   {
     category: "Procedures",
     title: "Intake call checklist",
-    body: "Body content for: Intake call checklist",
+    excerpt:
+      "Step-by-step checklist for receiving and documenting intake calls from new callers.",
+    body: pmDoc(
+      h(2, t("Before the call")),
+      p(
+        t(
+          "Confirm your workstation is ready. Your headset should be connected, ",
+        ),
+        t("the ticketing system open", bold),
+        t(", and any reference materials within reach."),
+      ),
+      ul(
+        li(
+          p(t("Check that your session is active and crypto keys are loaded")),
+        ),
+        li(p(t("Open the new ticket form so you can type during the call"))),
+        li(p(t("Review any prior tickets if the caller ID is recognized"))),
+      ),
+      h(2, t("During the call")),
+      h(3, t("Opening the conversation")),
+      ol(
+        li(
+          p(
+            t("Greet the caller calmly. Use a neutral opening: "),
+            t('"Thank you for calling, how can I help you today?"', italic),
+          ),
+        ),
+        li(
+          p(
+            t(
+              "Ask for their preferred name or alias. Do not require legal names.",
+            ),
+          ),
+        ),
+        li(
+          p(
+            t(
+              "Document the reason for the call in the ticket body. Use their words where possible.",
+            ),
+          ),
+        ),
+      ),
+      h(3, t("Routing the call")),
+      ol(
+        li(
+          p(
+            t("If the caller describes an "),
+            t("immediate safety concern", bold),
+            t(", follow the "),
+            t("Escalation Protocol", link("#escalation-protocol")),
+            t(" instead of continuing standard intake."),
+          ),
+        ),
+        li(
+          p(
+            t("Set the ticket "),
+            t("Status", code),
+            t(" field to "),
+            t("In Progress", code),
+            t(" and assign the appropriate "),
+            t("Queue", code),
+            t("."),
+          ),
+        ),
+        li(
+          p(
+            t(
+              "Confirm the next step with the caller before ending: referral, callback, or case assignment.",
+            ),
+          ),
+        ),
+      ),
+      h(2, t("After the call")),
+      p(
+        t(
+          "Complete all required ticket fields before moving to the next call. ",
+        ),
+        t(
+          "Incomplete tickets create gaps in the case record that are difficult to fill later.",
+        ),
+      ),
+      ul(
+        li(p(t("Assign the ticket to the appropriate queue"))),
+        li(p(t("Add any follow-up tasks with due dates"))),
+        li(
+          p(
+            t(
+              "If the caller requested a callback, set the reminder for the agreed time",
+            ),
+          ),
+        ),
+      ),
+      bq(
+        p(
+          t("Remember: "),
+          t("you are often the first point of contact", bold),
+          t(
+            ". A calm, patient interaction makes a real difference, even if the call feels routine to you.",
+          ),
+        ),
+      ),
+    ),
   },
   {
     category: "Procedures",
     title: "Escalation protocol",
-    body: "Body content for: Escalation protocol",
+    excerpt:
+      "When and how to escalate a call involving immediate safety concerns or crisis situations.",
+    body: pmDoc(
+      p(
+        t("This protocol applies when a caller reports an "),
+        t("immediate threat to their safety", bold),
+        t(
+          " or the safety of someone in their household. Escalation is not punitive. It connects the caller with resources faster.",
+        ),
+      ),
+      h(2, t("Recognizing escalation triggers")),
+      p(
+        t(
+          "Not every distressed caller needs escalation. Look for these specific indicators:",
+        ),
+      ),
+      ul(
+        li(p(t("The caller states they are in physical danger right now"))),
+        li(p(t("The caller describes an active threat from a known person"))),
+        li(p(t("The caller mentions self-harm or suicidal ideation"))),
+        li(
+          p(t("A child or dependent is described as being in immediate risk")),
+        ),
+      ),
+      p(
+        t("If you are unsure whether a situation qualifies, "),
+        t("escalate anyway", bold),
+        t(". False escalations are far less costly than missed ones."),
+      ),
+      h(2, t("Escalation steps")),
+      ol(
+        li(
+          p(
+            t(
+              "Stay on the line with the caller. Do not ask them to call back.",
+            ),
+          ),
+        ),
+        li(
+          p(
+            t("Use the "),
+            t("crisis flag", bold),
+            t(
+              " on the ticket form. This moves the ticket to the Crisis queue and pages the on-call supervisor.",
+            ),
+          ),
+        ),
+        li(
+          p(
+            t(
+              "If the caller consents, collect their current location. This may be needed if emergency services are involved.",
+            ),
+          ),
+        ),
+        li(
+          p(
+            t(
+              "Transfer the call to the crisis volunteer when they join. Brief them on what you know so the caller does not have to repeat themselves.",
+            ),
+          ),
+        ),
+        li(
+          p(
+            t(
+              "Document the handoff in the ticket timeline, including who took over and at what time.",
+            ),
+          ),
+        ),
+      ),
+      h(2, t("Handoff documentation")),
+      p(
+        t(
+          "When transferring a crisis call, paste the following template into the ticket timeline:",
+        ),
+      ),
+      codeBlock(
+        "ESCALATION HANDOFF\n" +
+          "Time: [HH:MM]\n" +
+          "Transferred to: [volunteer name]\n" +
+          "Reason: [brief trigger description]\n" +
+          "Caller on line: [yes/no]\n" +
+          "Location disclosed: [yes/no]",
+      ),
+      p(
+        t("Previously, escalation calls were routed through an "),
+        t("automated phone tree", strike),
+        t(
+          ". That system was retired because callers in crisis could not navigate menu prompts reliably. All escalations now go directly to a live crisis volunteer.",
+        ),
+      ),
+      hr(),
+      h(2, t("After an escalation")),
+      p(
+        t(
+          "Escalation calls can be emotionally difficult. Take a few minutes before your next call if you need to. Debrief with your supervisor if the situation was particularly intense.",
+        ),
+      ),
+      p(
+        t(
+          "All escalation calls are reviewed within 48 hours as part of quality assurance. This is ",
+        ),
+        t("not", italic),
+        t(
+          " a performance review. The goal is to improve the protocol over time.",
+        ),
+      ),
+    ),
   },
   {
     category: "Resources",
     title: "Housing referral contacts",
-    body: "Body content for: Housing referral contacts",
+    excerpt:
+      "Regional housing assistance contacts and referral procedures for callers facing housing instability.",
+    body: pmDoc(
+      p(
+        t(
+          "This directory covers the primary housing assistance contacts for our service area. Verify availability before giving a caller any specific contact, as capacity changes frequently.",
+        ),
+      ),
+      h(2, t("Emergency shelter")),
+      p(
+        t("For callers who need "),
+        t("same-day shelter placement", bold),
+        t(
+          ", start with the regional shelter coordinating office. They maintain a real-time bed availability list that individual shelters do not publish.",
+        ),
+      ),
+      p(
+        t("Regional Shelter Coordinating Office", bold),
+        br(),
+        t("Hours: Monday through Friday, 8 AM to 6 PM"),
+        br(),
+        t("After-hours line available for emergencies"),
+        br(),
+        t("See the "),
+        t(
+          "HUD resource locator",
+          link("https://www.hud.gov/program_offices/comm_planning/coc"),
+        ),
+        t(" for the full national directory."),
+      ),
+      ul(
+        li(
+          p(
+            t(
+              "Ask the caller about any access needs (wheelchair, pets, children) before calling the coordinator",
+            ),
+          ),
+        ),
+        li(
+          p(
+            t(
+              "Some shelters have gender-specific or age-specific restrictions",
+            ),
+          ),
+        ),
+        li(
+          p(
+            t(
+              "Wait times vary. Let the caller know this may take more than one call to resolve.",
+            ),
+          ),
+        ),
+      ),
+      h(2, t("Transitional housing")),
+      p(
+        t(
+          "Transitional programs typically require an application and may have waiting lists measured in weeks. They are appropriate for callers who have temporary shelter but need longer-term stability.",
+        ),
+      ),
+      ol(
+        li(
+          p(
+            t(
+              "Confirm the caller has valid identification or can obtain it. Most programs require ID within 30 days of intake.",
+            ),
+          ),
+        ),
+        li(
+          p(
+            t(
+              "Gather their preferred contact method for follow-up. Some callers cannot safely receive phone calls at certain times.",
+            ),
+          ),
+        ),
+        li(
+          p(
+            t(
+              "Submit the referral through the housing queue. The housing coordinator will follow up within two business days.",
+            ),
+          ),
+        ),
+      ),
+      h(2, t("What not to promise")),
+      bq(
+        p(
+          t("Never guarantee placement timelines. "),
+          t("Say ", italic),
+          t('"I will connect you with the people who can help" ', italic),
+          t("rather than ", italic),
+          t('"We will find you a place."', italic),
+          t(" Promises that cannot be kept damage trust."),
+        ),
+      ),
+    ),
   },
   {
     category: "Resources",
     title: "Legal aid directory",
-    body: "Body content for: Legal aid directory",
+    excerpt:
+      "Legal assistance organizations for civil, family, and immigration matters relevant to our callers.",
+    body: pmDoc(
+      h(1, t("Legal Aid Directory")),
+      p(
+        t("Legal referrals require care. We are "),
+        t("not lawyers", bold),
+        t(
+          " and cannot give legal advice. Our role is to connect callers with organizations that can.",
+        ),
+      ),
+      h(2, t("When to offer a legal referral")),
+      p(
+        t(
+          "A legal referral is appropriate when the caller describes a situation that involves:",
+        ),
+      ),
+      ul(
+        li(
+          p(
+            t(
+              "A protection or restraining order (obtaining, modifying, or responding to one)",
+            ),
+          ),
+        ),
+        li(p(t("Custody or family court proceedings"))),
+        li(
+          p(t("Immigration status concerns that affect their safety options")),
+        ),
+        li(p(t("Eviction or landlord disputes connected to their situation"))),
+        li(p(t("Criminal proceedings where they are a witness or victim"))),
+      ),
+      h(2, t("Organization types")),
+      p(
+        t(
+          "Use this table to match the caller's issue to the right kind of organization:",
+        ),
+      ),
+      table(
+        tr(
+          th(t("Issue type")),
+          th(t("Organization category")),
+          th(t("Typical wait")),
+        ),
+        tr(
+          td(t("Protection orders")),
+          td(t("Domestic violence legal clinic")),
+          td(t("1 to 3 days")),
+        ),
+        tr(
+          td(t("Custody / family court")),
+          td(t("Family law legal aid")),
+          td(t("1 to 2 weeks")),
+        ),
+        tr(
+          td(t("Immigration")),
+          td(t("Immigration legal services")),
+          td(t("2 to 4 weeks")),
+        ),
+        tr(
+          td(t("Eviction / housing")),
+          td(t("Tenant rights organization")),
+          td(t("3 to 5 days")),
+        ),
+        tr(
+          td(t("Criminal (victim/witness)")),
+          td(t("Victim advocacy program")),
+          td(t("Same day to 1 week")),
+        ),
+      ),
+      p(
+        t(
+          "Wait times are estimates. Actual availability depends on the organization's current caseload.",
+        ),
+      ),
+      h(2, t("Referral process")),
+      ol(
+        li(
+          p(
+            t(
+              "Ask the caller what type of legal help they need. Use plain language: ",
+            ),
+            t(
+              '"Are you dealing with a court case, a landlord issue, or something with immigration?"',
+              italic,
+            ),
+          ),
+        ),
+        li(
+          p(
+            t(
+              "Check whether the caller has previously worked with an attorney. If so, reconnecting with that attorney may be faster than starting over.",
+            ),
+          ),
+        ),
+        li(
+          p(
+            t(
+              "Match the caller to the appropriate organization based on issue type and their location.",
+            ),
+          ),
+        ),
+        li(
+          p(
+            t(
+              "Provide the organization name and phone number. Offer to note it in a follow-up callback if the caller cannot write it down safely.",
+            ),
+          ),
+        ),
+      ),
+      h(2, t("Important boundaries")),
+      p(
+        t(
+          "Do not interpret legal documents for callers, speculate about case outcomes, or recommend specific legal strategies. If a caller asks for your opinion on a legal matter, redirect with something like:",
+        ),
+      ),
+      bq(
+        p(
+          t(
+            '"I am not able to give legal advice, but the folks at [organization] handle exactly this kind of situation. They can walk you through your options."',
+            italic,
+          ),
+        ),
+      ),
+    ),
   },
   {
     category: "Safety",
     title: "Safety planning template",
-    body: "Body content for: Safety planning template",
+    excerpt:
+      "Structured template for helping callers identify warning signs, coping strategies, and safe contacts.",
+    body: pmDoc(
+      p(
+        t("A safety plan is a "),
+        t("personalized, practical document", bold),
+        t(
+          " that helps someone recognize danger signs and take protective steps. It is not a contract or a commitment. It is a tool the caller creates for themselves, with your support.",
+        ),
+      ),
+      h(2, t("When to offer a safety plan")),
+      p(t("Safety planning is appropriate when a caller:")),
+      ul(
+        li(
+          p(t("Describes a pattern of escalating conflict in their household")),
+        ),
+        li(
+          p(
+            t(
+              "Is considering leaving a dangerous situation but has not yet done so",
+            ),
+          ),
+        ),
+        li(
+          p(
+            t(
+              "Has left a dangerous situation but is concerned about continued contact or retaliation",
+            ),
+          ),
+        ),
+        li(
+          p(
+            t(
+              "Expresses thoughts of self-harm (use this alongside a crisis referral, not instead of one)",
+            ),
+          ),
+        ),
+      ),
+      h(2, t("Plan sections")),
+      p(
+        t("Walk through each section with the caller. "),
+        t("Do not rush this.", bold),
+        t(
+          " Let them lead. Some callers will have clear answers for every section. Others will need time to think.",
+        ),
+      ),
+      ol(
+        li(
+          p(
+            t("Warning signs", bold),
+            t(
+              ": What situations, feelings, or behaviors tell you that things are becoming unsafe?",
+            ),
+          ),
+        ),
+        li(
+          p(
+            t("Coping strategies", bold),
+            t(
+              ": What can you do on your own to manage stress or fear in the moment? (e.g., breathing exercises, going for a walk, calling a friend)",
+            ),
+          ),
+        ),
+        li(
+          p(
+            t("People who can help", bold),
+            t(
+              ": Who are the people you trust that you can contact when you need support? List names and how to reach them.",
+            ),
+          ),
+        ),
+        li(
+          p(
+            t("Places to go", bold),
+            t(
+              ": If you need to leave quickly, where can you go? Think about more than one option.",
+            ),
+          ),
+        ),
+        li(
+          p(
+            t("Emergency contacts", bold),
+            t(
+              ": Numbers for local emergency services, crisis hotlines, and any case workers already involved.",
+            ),
+          ),
+        ),
+        li(
+          p(
+            t("Making the environment safer", bold),
+            t(
+              ": Are there steps you can take now to reduce risk? (e.g., keeping important documents in a bag you can grab, telling a neighbor your situation)",
+            ),
+          ),
+        ),
+      ),
+      hr(),
+      h(2, t("After completing the plan")),
+      h(3, t("Storage")),
+      p(
+        t(
+          "Ask the caller where they will keep the plan. It should be somewhere they can access quickly but that is not visible to the person who poses the risk. A phone note, a trusted friend, or a sealed envelope at work are common choices.",
+        ),
+      ),
+      h(3, t("Documentation")),
+      h(4, t("What to record")),
+      p(
+        t(
+          "Record in the ticket that a safety plan was discussed. Note the date it was created.",
+        ),
+      ),
+      h(4, t("What not to record")),
+      p(
+        t("Do not copy the plan contents into the ticket.", bold),
+        t(
+          " The plan belongs to the caller. It contains names, addresses, and strategies that could put them at greater risk if disclosed. The ticket should only confirm that a plan exists.",
+        ),
+      ),
+    ),
   },
 ];
 
@@ -259,7 +888,10 @@ async function seedKBArticles(
       continue;
     }
 
-    // Seal title and body client-side with the org public key
+    // Seal title, body, and excerpt client-side with the org public key.
+    // Matches the production publish flow from kb-editor-design.md:
+    // title encrypted independently, body as ProseMirror JSON, excerpt
+    // as plain text (~150 chars).
     const encryptedTitle = sealForOrgKey(
       encoder.encode(article.title),
       orgPublicKey,
@@ -268,11 +900,16 @@ async function seedKBArticles(
       encoder.encode(article.body),
       orgPublicKey,
     );
+    const encryptedExcerpt = sealForOrgKey(
+      encoder.encode(article.excerpt),
+      orgPublicKey,
+    );
 
     await kb.createItem.mutate({
       categoryId,
       encryptedTitle: encode(encryptedTitle),
       encryptedBody: encode(encryptedBody),
+      encryptedExcerpt: encode(encryptedExcerpt),
     });
 
     console.log(`[dev] Created KB article "${article.title}"`);
