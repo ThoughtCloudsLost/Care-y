@@ -227,13 +227,19 @@ describe.skipIf(!process.env.DATABASE_URL)("KBItemService (DB)", () => {
     }
 
     // Request first page of 2
-    const page1 = await svc.list({ limit: 2 });
+    const page1 = await svc.list({
+      limit: 2,
+      sortBy: "created_at",
+      sortDirection: "desc",
+    });
     expect(page1.items.length).toBe(2);
     expect(page1.nextCursor).not.toBeNull();
 
     // Request second page
     const page2 = await svc.list({
       limit: 2,
+      sortBy: "created_at",
+      sortDirection: "desc",
       cursor: page1.nextCursor!,
     });
     expect(page2.items.length).toBe(2);
@@ -255,7 +261,12 @@ describe.skipIf(!process.env.DATABASE_URL)("KBItemService (DB)", () => {
       encryptedBody: Buffer.from("other-body"),
     });
 
-    const filtered = await svc.list({ categoryId: cat2.id, limit: 50 });
+    const filtered = await svc.list({
+      categoryId: cat2.id,
+      limit: 50,
+      sortBy: "created_at",
+      sortDirection: "desc",
+    });
     expect(filtered.items.length).toBe(1);
     expect(filtered.items[0]!.categoryId).toBe(cat2.id);
   });
@@ -394,7 +405,11 @@ describe.skipIf(!process.env.DATABASE_URL)("KBItemService (DB)", () => {
       encryptedExcerpt: excerpt,
     });
 
-    const page = await svc.list({ limit: 50 });
+    const page = await svc.list({
+      limit: 50,
+      sortBy: "created_at",
+      sortDirection: "desc",
+    });
     const found = page.items.find(
       (i) => i.encryptedTitle.toString() === "list-test",
     );
@@ -435,6 +450,209 @@ describe.skipIf(!process.env.DATABASE_URL)("KBItemService (DB)", () => {
     const item = recent[0]!;
     expect(item.encryptedExcerpt).not.toBeNull();
     expect("encryptedBody" in item).toBe(false);
+  });
+
+  // --- Sort + filter tests ---
+
+  it("sorts by rating descending", async () => {
+    const cat = await catSvc.create({
+      encryptedName: encName("Rating Sort"),
+    });
+    const voteSvc = createKBVoteService(testDb.db);
+
+    const low = await svc.create("user-1", {
+      categoryId: cat.id,
+      encryptedTitle: Buffer.from("low-rated"),
+      encryptedBody: Buffer.from("body"),
+    });
+    const high = await svc.create("user-1", {
+      categoryId: cat.id,
+      encryptedTitle: Buffer.from("high-rated"),
+      encryptedBody: Buffer.from("body"),
+    });
+
+    // Give "high" 3 upvotes to push its rating above "low"
+    await voteSvc.castVote("v1", { itemId: high.id, direction: "up" });
+    await voteSvc.castVote("v2", { itemId: high.id, direction: "up" });
+    await voteSvc.castVote("v3", { itemId: high.id, direction: "up" });
+
+    const page = await svc.list({
+      categoryId: cat.id,
+      limit: 10,
+      sortBy: "rating",
+      sortDirection: "desc",
+    });
+    const ids = page.items.map((i) => i.id);
+    expect(ids.indexOf(high.id)).toBeLessThan(ids.indexOf(low.id));
+  });
+
+  it("sorts by updated_at ascending", async () => {
+    const cat = await catSvc.create({
+      encryptedName: encName("UpdatedAt Sort"),
+    });
+
+    const first = await svc.create("user-1", {
+      categoryId: cat.id,
+      encryptedTitle: Buffer.from("first"),
+      encryptedBody: Buffer.from("body"),
+    });
+    const second = await svc.create("user-1", {
+      categoryId: cat.id,
+      encryptedTitle: Buffer.from("second"),
+      encryptedBody: Buffer.from("body"),
+    });
+
+    // Touch "first" to make it newer by updated_at
+    await svc.update(first.id, {
+      encryptedTitle: Buffer.from("first-updated"),
+    });
+
+    const page = await svc.list({
+      categoryId: cat.id,
+      limit: 10,
+      sortBy: "updated_at",
+      sortDirection: "asc",
+    });
+    const ids = page.items.map((i) => i.id);
+    // "second" was not updated, so it should come before "first" in asc order
+    expect(ids.indexOf(second.id)).toBeLessThan(ids.indexOf(first.id));
+  });
+
+  it("filters by minRating", async () => {
+    const cat = await catSvc.create({
+      encryptedName: encName("MinRating Filter"),
+    });
+    const voteSvc = createKBVoteService(testDb.db);
+
+    const noVotes = await svc.create("user-1", {
+      categoryId: cat.id,
+      encryptedTitle: Buffer.from("no-votes"),
+      encryptedBody: Buffer.from("body"),
+    });
+    const upvoted = await svc.create("user-1", {
+      categoryId: cat.id,
+      encryptedTitle: Buffer.from("upvoted"),
+      encryptedBody: Buffer.from("body"),
+    });
+    await voteSvc.castVote("v1", { itemId: upvoted.id, direction: "up" });
+
+    const page = await svc.list({
+      categoryId: cat.id,
+      limit: 50,
+      sortBy: "created_at",
+      sortDirection: "desc",
+      minRating: 0.01,
+    });
+    const ids = page.items.map((i) => i.id);
+    expect(ids).toContain(upvoted.id);
+    expect(ids).not.toContain(noVotes.id);
+  });
+
+  it("filters by createdBy", async () => {
+    const cat = await catSvc.create({
+      encryptedName: encName("CreatedBy Filter"),
+    });
+
+    await svc.create("author-a", {
+      categoryId: cat.id,
+      encryptedTitle: Buffer.from("by-a"),
+      encryptedBody: Buffer.from("body"),
+    });
+    await svc.create("author-b", {
+      categoryId: cat.id,
+      encryptedTitle: Buffer.from("by-b"),
+      encryptedBody: Buffer.from("body"),
+    });
+
+    const page = await svc.list({
+      categoryId: cat.id,
+      limit: 50,
+      sortBy: "created_at",
+      sortDirection: "desc",
+      createdBy: "author-a",
+    });
+    expect(page.items.every((i) => i.createdBy === "author-a")).toBe(true);
+    expect(page.items.length).toBe(1);
+  });
+
+  it("filters by date range", async () => {
+    const cat = await catSvc.create({
+      encryptedName: encName("Date Range Filter"),
+    });
+
+    // All items created "now", so filtering with a future range should return none
+    await svc.create("user-1", {
+      categoryId: cat.id,
+      encryptedTitle: Buffer.from("in-range"),
+      encryptedBody: Buffer.from("body"),
+    });
+
+    const futureDate = new Date(Date.now() + 86_400_000).toISOString();
+    const farFuture = new Date(Date.now() + 172_800_000).toISOString();
+
+    const page = await svc.list({
+      categoryId: cat.id,
+      limit: 50,
+      sortBy: "created_at",
+      sortDirection: "desc",
+      createdAfter: futureDate,
+      createdBefore: farFuture,
+    });
+    expect(page.items.length).toBe(0);
+
+    // Filtering with a past range should include the item
+    const pastDate = new Date(Date.now() - 86_400_000).toISOString();
+    const nowIsh = new Date(Date.now() + 1_000).toISOString();
+
+    const page2 = await svc.list({
+      categoryId: cat.id,
+      limit: 50,
+      sortBy: "created_at",
+      sortDirection: "desc",
+      createdAfter: pastDate,
+      createdBefore: nowIsh,
+    });
+    expect(page2.items.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it("combines sort + filter correctly", async () => {
+    const cat = await catSvc.create({
+      encryptedName: encName("Combined Sort+Filter"),
+    });
+    const voteSvc = createKBVoteService(testDb.db);
+
+    const itemA = await svc.create("target-author", {
+      categoryId: cat.id,
+      encryptedTitle: Buffer.from("combo-a"),
+      encryptedBody: Buffer.from("body"),
+    });
+    const itemB = await svc.create("target-author", {
+      categoryId: cat.id,
+      encryptedTitle: Buffer.from("combo-b"),
+      encryptedBody: Buffer.from("body"),
+    });
+    // Different author, should be filtered out
+    await svc.create("other-author", {
+      categoryId: cat.id,
+      encryptedTitle: Buffer.from("combo-c"),
+      encryptedBody: Buffer.from("body"),
+    });
+
+    // Give itemA more votes
+    await voteSvc.castVote("v1", { itemId: itemA.id, direction: "up" });
+    await voteSvc.castVote("v2", { itemId: itemA.id, direction: "up" });
+
+    const page = await svc.list({
+      categoryId: cat.id,
+      limit: 50,
+      sortBy: "rating",
+      sortDirection: "desc",
+      createdBy: "target-author",
+    });
+
+    expect(page.items.length).toBe(2);
+    expect(page.items[0]!.id).toBe(itemA.id);
+    expect(page.items[1]!.id).toBe(itemB.id);
   });
 });
 

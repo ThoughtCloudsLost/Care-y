@@ -9,6 +9,7 @@
 
 import { z } from "zod";
 import { base64String } from "./validators.js";
+import { sortDirectionSchema } from "./tickets.js";
 
 // --- Category schemas ---
 
@@ -44,14 +45,41 @@ export const updateKbItemInputSchema = z.object({
 });
 export type UpdateKbItemInput = z.infer<typeof updateKbItemInputSchema>;
 
+// --- Sort + filter for article listing ---
+
+export const kbSortFieldSchema = z.enum(["created_at", "updated_at", "rating"]);
+export type KbSortField = z.infer<typeof kbSortFieldSchema>;
+
+// Re-export sortDirectionSchema for convenience (already defined in tickets.ts)
+export { sortDirectionSchema } from "./tickets.js";
+
 // --- Article listing (paginated) ---
 
 export const kbItemListInputSchema = z.object({
   categoryId: z.uuid().optional(),
+  sortBy: kbSortFieldSchema.default("created_at"),
+  sortDirection: sortDirectionSchema.default("desc"),
+  minRating: z.number().min(0).max(1).optional(),
+  createdBy: z.string().optional(),
+  createdAfter: z.iso.datetime().optional(),
+  createdBefore: z.iso.datetime().optional(),
   limit: z.number().int().min(1).max(100).default(50),
-  cursor: z.string().optional(), // opaque cursor: "created_at|id"
+  cursor: z.string().optional(), // opaque cursor: "sortValue|id"
 });
 export type KbItemListInput = z.infer<typeof kbItemListInputSchema>;
+
+// --- Saved filter state (serialized inside SavedFilterRecord.state) ---
+
+export const kbSavedFilterStateSchema = z.object({
+  categoryIds: z.array(z.string()),
+  minRating: z.number().nullable(),
+  createdBy: z.string().nullable(),
+  dateFrom: z.string().nullable(),
+  dateTo: z.string().nullable(),
+  sortField: kbSortFieldSchema,
+  sortDirection: sortDirectionSchema,
+});
+export type KbSavedFilterState = z.infer<typeof kbSavedFilterStateSchema>;
 
 // --- Voting schemas ---
 
