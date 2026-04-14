@@ -2,6 +2,8 @@
   "nav_home": "Home",
   "nav_tickets": "Tickets",
   "nav_calendar": "Calendar",
+  "tab_library": "Library",
+  "library_schedule_coming_soon": "Schedule is coming soon.",
   "nav_more": "More",
   "nav_main": "Main navigation",
   "nav_search": "Search",

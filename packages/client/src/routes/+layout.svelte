@@ -27,17 +27,17 @@
 
   // Derive active tab from the current URL path.
   // "more" is a menu trigger (not a route), so it has no entry here.
-  type TabRoute = "/" | "/tickets" | "/calendar";
+  type TabRoute = "/" | "/tickets" | "/library";
 
   const TAB_ROUTES = new Map<TabId, TabRoute>([
     ["home", "/"],
     ["tickets", "/tickets"],
-    ["calendar", "/calendar"],
+    ["library", "/library"],
   ]);
 
   const TAB_PREFIXES: [string, TabId][] = [
     ["/tickets", "tickets"],
-    ["/calendar", "calendar"],
+    ["/library", "library"],
   ];
 
   const activeTab: TabId = $derived.by(() => {
