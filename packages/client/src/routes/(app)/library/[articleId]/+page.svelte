@@ -371,7 +371,7 @@
   </h1>
 
   <!-- Metadata row -->
-  <div class="article-meta">
+  <div class="article-meta" role="group" aria-label={m.library_article_info()}>
     {#if authorName !== null}
       <span>{m.library_article_by({ author: authorName })}</span>
     {:else if createdBy === null}
