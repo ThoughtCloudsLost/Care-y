@@ -306,6 +306,36 @@ describe("KB Article routes", () => {
     const result = await caller.listItems({ limit: 10 });
     expect(result.items).toHaveLength(1);
     expect(result.nextCursor).toBeNull();
+
+    // Verify sort/filter defaults are passed through
+    const call = vi.mocked(mockItemSvc.list).mock.calls[0]![0];
+    expect(call.sortBy).toBe("created_at");
+    expect(call.sortDirection).toBe("desc");
+    expect(call.minRating).toBeUndefined();
+    expect(call.createdBy).toBeUndefined();
+  });
+
+  it("volunteer can list articles with sort and filter params", async () => {
+    vi.mocked(mockItemSvc.list).mockResolvedValue(MOCK_ITEM_PAGE);
+    const caller = buildVolunteerCaller();
+
+    await caller.listItems({
+      limit: 20,
+      sortBy: "rating",
+      sortDirection: "asc",
+      minRating: 0.5,
+      createdBy: "user-1",
+      createdAfter: "2026-01-01T00:00:00.000Z",
+      createdBefore: "2026-12-31T23:59:59.999Z",
+    });
+
+    const call = vi.mocked(mockItemSvc.list).mock.calls[0]![0];
+    expect(call.sortBy).toBe("rating");
+    expect(call.sortDirection).toBe("asc");
+    expect(call.minRating).toBe(0.5);
+    expect(call.createdBy).toBe("user-1");
+    expect(call.createdAfter).toBe("2026-01-01T00:00:00.000Z");
+    expect(call.createdBefore).toBe("2026-12-31T23:59:59.999Z");
   });
 
   it("volunteer can update an article", async () => {

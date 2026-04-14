@@ -102,6 +102,12 @@ export interface KBItemService {
 
   list(input: {
     categoryId?: string;
+    sortBy: "created_at" | "updated_at" | "rating";
+    sortDirection: "asc" | "desc";
+    minRating?: number;
+    createdBy?: string;
+    createdAfter?: string;
+    createdBefore?: string;
     limit: number;
     cursor?: string;
   }): Promise<KBItemPage>;
@@ -374,27 +380,52 @@ export function createKBItemService(db: Kysely<TenantDatabase>): KBItemService {
         "updated_at",
       ] as const;
 
+      const sortBy = input.sortBy;
+      const sortDir = input.sortDirection;
+
       let query = db.selectFrom("kb_items").select(summaryColumns);
 
+      // --- Filters ---
       if (input.categoryId !== undefined) {
         query = query.where("category_id", "=", input.categoryId);
       }
+      if (input.minRating !== undefined) {
+        query = query.where("rating", ">=", input.minRating);
+      }
+      if (input.createdBy !== undefined) {
+        query = query.where("created_by", "=", input.createdBy);
+      }
+      if (input.createdAfter !== undefined) {
+        query = query.where("created_at", ">=", new Date(input.createdAfter));
+      }
+      if (input.createdBefore !== undefined) {
+        query = query.where("created_at", "<=", new Date(input.createdBefore));
+      }
 
+      // --- Cursor keyset ---
+      // Cursor format: "sortValue|id" where sortValue is ISO date or numeric rating.
+      // The comparison operator flips based on sort direction.
       if (input.cursor !== undefined) {
-        // Cursor format: "ISO_DATE|UUID"
-        const parts = input.cursor.split("|");
-        const cursorDate = parts[0];
-        const cursorId = parts[1];
-        if (
-          parts.length === 2 &&
-          cursorDate !== undefined &&
-          cursorId !== undefined
-        ) {
+        const pipeIdx = input.cursor.indexOf("|");
+        if (pipeIdx > 0) {
+          const cursorSortRaw = input.cursor.slice(0, pipeIdx);
+          const cursorId = input.cursor.slice(pipeIdx + 1);
+
+          // For date columns, parse as Date. For rating, parse as number.
+          const cursorSortValue: Date | number =
+            sortBy === "rating"
+              ? Number(cursorSortRaw)
+              : new Date(cursorSortRaw);
+
+          // "desc" pages forward with <, "asc" pages forward with >
+          const op = sortDir === "desc" ? ("<" as const) : (">" as const);
+
           query = query.where((eb) =>
             eb.or([
-              eb("created_at", "<", new Date(cursorDate)),
+              eb(sortBy, op, cursorSortValue),
               eb.and([
-                eb("created_at", "=", new Date(cursorDate)),
+                eb(sortBy, "=", cursorSortValue),
+                // Secondary sort by id always descending for stable ordering
                 eb("id", "<", cursorId),
               ]),
             ]),
@@ -404,7 +435,7 @@ export function createKBItemService(db: Kysely<TenantDatabase>): KBItemService {
 
       // Fetch limit + 1 to determine if there's a next page
       const rows = await query
-        .orderBy("created_at", "desc")
+        .orderBy(sortBy, sortDir)
         .orderBy("id", "desc")
         .limit(input.limit + 1)
         .execute();
@@ -416,7 +447,13 @@ export function createKBItemService(db: Kysely<TenantDatabase>): KBItemService {
       if (hasMore && pageRows.length > 0) {
         const last = pageRows.at(-1);
         if (last !== undefined) {
-          nextCursor = `${last.created_at.toISOString()}|${last.id}`;
+          const sortValue =
+            sortBy === "rating"
+              ? String(last.rating)
+              : sortBy === "updated_at"
+                ? last.updated_at.toISOString()
+                : last.created_at.toISOString();
+          nextCursor = `${sortValue}|${last.id}`;
         }
       }
 

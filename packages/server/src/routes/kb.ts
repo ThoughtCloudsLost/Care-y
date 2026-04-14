@@ -123,6 +123,12 @@ export function createKbRouter(deps: KBRouterDeps) {
         const svc = deps.createItemSvc(ctx.org.tenantDb);
         return svc.list({
           categoryId: input.categoryId,
+          sortBy: input.sortBy,
+          sortDirection: input.sortDirection,
+          minRating: input.minRating,
+          createdBy: input.createdBy,
+          createdAfter: input.createdAfter,
+          createdBefore: input.createdBefore,
           limit: input.limit,
           cursor: input.cursor,
         });
