@@ -452,6 +452,7 @@
   const filterPillsConfig: FilterPillsConfig = $derived({
     pills: kbPills,
     activeCount: kbFilterStore.activeCount,
+    filterLabel: m.library_filter(),
     dateFrom: dateFromStr,
     dateTo: dateToStr,
     dateActive: dateRangeActive,
@@ -607,7 +608,11 @@
   {:else if articlesQuery.isError}
     <QueryError error={articlesQuery.error} />
   {:else if filteredArticles.length === 0}
-    <div class="empty-state" role="status">
+    <div
+      class="empty-state"
+      role="status"
+      aria-label={m.library_article_list_empty()}
+    >
       <p>
         {kbFilterStore.activeCount > 0
           ? m.library_empty_filter()

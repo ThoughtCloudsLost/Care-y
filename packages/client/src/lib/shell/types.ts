@@ -255,6 +255,7 @@ export interface SavedFiltersConfig {
 export interface FilterPillsConfig {
   readonly pills: PillDefinition[];
   readonly activeCount: number;
+  readonly filterLabel?: string;
   readonly dateFrom?: string;
   readonly dateTo?: string;
   readonly dateActive?: boolean;
