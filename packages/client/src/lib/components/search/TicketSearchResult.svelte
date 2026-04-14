@@ -15,7 +15,7 @@
     queueName={result.queueName}
     displayStatus={result.displayStatus}
     priority={result.priority}
-    title={result.title}
+    titleResult={result.titleResult}
     encryptedTitle={result.encryptedTitle}
     clientAlias={result.clientAlias}
     assignedName={result.assignedName}

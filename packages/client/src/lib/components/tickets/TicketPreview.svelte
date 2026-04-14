@@ -18,6 +18,10 @@
   } from "@lucide/svelte";
   import * as m from "$lib/paraglide/messages.js";
   import { getFollowUpDecryptCache } from "$lib/crypto/context.js";
+  import {
+    resolveAsyncDecrypt,
+    isDecryptReady,
+  } from "$lib/crypto/decrypt-result.js";
   import DecryptPlaceholder from "$lib/components/DecryptPlaceholder.svelte";
   import type { RawFollowUpPreview } from "$lib/tickets/preview-loader.svelte.js";
   import { followUpKind } from "$lib/tickets/follow-up-utils.js";
@@ -76,15 +80,17 @@
   {:else}
     {#each ordered as fu (fu.id)}
       {@const kind = followUpKind(fu)}
-      {@const content = followUpCache.decryptContent(
+      {@const raw = followUpCache.decryptContent(
         fu.id,
         fu.keyWrap,
         fu.encryptedContent,
       )}
+      {@const result = resolveAsyncDecrypt(raw, fu.keyWrap !== null)}
+      {@const content = isDecryptReady(result) ? result.value : undefined}
       {#if kind === "system"}
         <div class="mini-system" data-type="system">
           <DecryptPlaceholder
-            {content}
+            {result}
             ciphertext={fu.encryptedContent}
             length={20}
             block={multiline}
@@ -98,7 +104,7 @@
         <div class="mini-note">
           <StickyNote size={10} class="mini-note-icon" />
           <DecryptPlaceholder
-            {content}
+            {result}
             ciphertext={fu.encryptedContent}
             length={20}
             block={multiline}
@@ -128,7 +134,7 @@
               </span>
             {/if}
             <DecryptPlaceholder
-              {content}
+              {result}
               ciphertext={fu.encryptedContent}
               length={20}
               block={multiline}

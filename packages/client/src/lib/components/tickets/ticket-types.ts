@@ -1,5 +1,6 @@
 import type { RawFollowUpPreview } from "$lib/tickets/preview-loader.svelte.js";
 import type { DisplayStatus } from "$lib/tickets/display-status.js";
+import type { DecryptResult } from "$lib/crypto/decrypt-result.js";
 
 export type TicketQuickAction = "reply" | "call" | "hold" | "unhold" | "assign";
 
@@ -11,8 +12,7 @@ export interface TicketCardProps {
   readonly queueName: string | null;
   readonly displayStatus: DisplayStatus;
   readonly priority: "low" | "normal" | "high" | "urgent";
-  /** undefined = still decrypting */
-  readonly title: string | undefined;
+  readonly titleResult: DecryptResult;
   /** Ciphertext for auto-sizing the title placeholder */
   readonly encryptedTitle?: unknown;
   readonly clientAlias: string;

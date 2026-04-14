@@ -21,6 +21,7 @@
     getTicketDecryptCache,
     getCurrentUserId,
   } from "$lib/crypto/context.js";
+  import { resolveAsyncDecrypt } from "$lib/crypto/decrypt-result.js";
   import { bucketTickets } from "$lib/components/dashboard/filters.js";
   import * as m from "$lib/paraglide/messages.js";
 
@@ -141,7 +142,10 @@
 
     return {
       ticketId: t.id,
-      title: ticketCache.decryptTitle(t.id, t.keyWrap, t.encryptedTitle),
+      titleResult: resolveAsyncDecrypt(
+        ticketCache.decryptTitle(t.id, t.keyWrap, t.encryptedTitle),
+        t.keyWrap !== null,
+      ),
       status: t.status,
       priority: t.priority,
       onHold: t.onHold,

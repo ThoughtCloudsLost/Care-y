@@ -118,6 +118,9 @@ describe("createTicketSearchProvider", () => {
     expect(data.ticketId).toBe("t1");
     expect(data.clientAlias).toBe("Maria");
     expect(data.queueName).toBe("General");
-    expect(data.title).toBe("Housing assistance request");
+    expect(data.titleResult).toEqual({
+      status: "ready",
+      value: "Housing assistance request",
+    });
   });
 });

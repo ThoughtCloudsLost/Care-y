@@ -13,6 +13,7 @@
     getCryptoBridge,
     getFollowUpDecryptCache,
   } from "$lib/crypto/context.js";
+  import { resolveAsyncDecrypt } from "$lib/crypto/decrypt-result.js";
   import { RouterNotAvailableError } from "$lib/errors.js";
   import { toastStore } from "$lib/stores/toast.svelte.js";
   import { haptic } from "$lib/utils/haptic.js";
@@ -189,12 +190,15 @@
 
       {#if orderedPreviews}
         {#each orderedPreviews as fu (fu.id)}
-          {@const content = followUpCache.decryptContent(
-            fu.id,
-            fu.keyWrap,
-            fu.encryptedContent,
+          {@const fuResult = resolveAsyncDecrypt(
+            followUpCache.decryptContent(
+              fu.id,
+              fu.keyWrap,
+              fu.encryptedContent,
+            ),
+            fu.keyWrap !== null,
           )}
-          <FollowUpBubble followUp={fu} {content} {clientAlias} />
+          <FollowUpBubble followUp={fu} result={fuResult} {clientAlias} />
         {/each}
       {/if}
 
@@ -207,7 +211,7 @@
             encryptedContent: "",
             createdAt: optimisticMessage.createdAt,
           }}
-          content={optimisticMessage.text}
+          result={{ status: "ready", value: optimisticMessage.text }}
           {clientAlias}
         />
       {/if}

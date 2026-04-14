@@ -29,7 +29,12 @@
   import { needsDateSeparator, formatDateSeparator } from "$lib/utils/time.js";
   import type { FollowUpDecryptCache } from "$lib/crypto/follow-up-decrypt-cache.js";
   import type { TicketKeyWrap } from "$lib/crypto/ticket-decrypt-cache.js";
-  import { isDecryptError } from "$lib/crypto/async-decrypt-cache.js";
+  import {
+    type DecryptResult,
+    resolveAsyncDecrypt,
+    isDecryptReady,
+    LOADING,
+  } from "$lib/crypto/decrypt-result.js";
   import DecryptPlaceholder from "$lib/components/DecryptPlaceholder.svelte";
   import type { TimelineItem, ClusterRecord } from "./chat-zoom-types.js";
 
@@ -273,16 +278,14 @@
     }
   }
 
-  function decrypt(rec: ClusterRecord): string | undefined {
-    if (!followUpCache || !keyWrap || rec.encryptedContent === null) {
-      return undefined;
+  function decryptClusterRecord(rec: ClusterRecord): DecryptResult {
+    if (!followUpCache || rec.encryptedContent === null) {
+      return LOADING;
     }
-    const result = followUpCache.decryptContent(
-      rec.id,
-      keyWrap,
-      rec.encryptedContent,
+    return resolveAsyncDecrypt(
+      followUpCache.decryptContent(rec.id, keyWrap, rec.encryptedContent),
+      keyWrap !== null,
     );
-    return isDecryptError(result) ? undefined : result;
   }
 
   // Scroll to bottom when timeline first appears.
@@ -398,13 +401,12 @@
                     <Messages>
                       {#if expanded !== undefined}
                         {#each expanded as rec (rec.id)}
-                          {@const plaintext = decrypt(rec)}
-                          {@const preview =
-                            plaintext !== undefined
-                              ? plaintext.length > 60
-                                ? plaintext.slice(0, 60) + "\u2026"
-                                : plaintext
-                              : undefined}
+                          {@const recResult = decryptClusterRecord(rec)}
+                          {@const preview = isDecryptReady(recResult)
+                            ? recResult.value.length > 60
+                              ? recResult.value.slice(0, 60) + "\u2026"
+                              : recResult.value
+                            : undefined}
                           <Message
                             type={rec.source === "client" ? "received" : "sent"}
                             role="button"
@@ -419,7 +421,7 @@
                           >
                             {#snippet text()}
                               <DecryptPlaceholder
-                                content={preview}
+                                result={recResult}
                                 ciphertext={rec.encryptedContent}
                                 length={30}
                                 block

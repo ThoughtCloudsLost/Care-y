@@ -19,6 +19,7 @@
   "error_generic": "Algo salió mal. Por favor, inténtalo de nuevo.",
   "error_decryption_failed": "No se pudo descifrar este contenido.",
   "decrypt_placeholder_loading": "Descifrando",
+  "decrypt_placeholder_denied": "Sin acceso a este contenido",
   "error_network": "No se pudo conectar con el servidor. Verifica tu conexión.",
 
   "error_not_authenticated": "No has iniciado sesión.",

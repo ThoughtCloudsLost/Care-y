@@ -130,8 +130,9 @@ describe("CollapsibleSection", () => {
 
     const badge = container.querySelector("[data-count]");
     expect(badge).toBeTruthy();
-    // DecryptPlaceholder renders with aria-busy="true" and role="status" while loading
-    const dp = badge?.querySelector('[aria-busy="true"]');
+    // DecryptPlaceholder container (.dp) renders immediately; the scramble
+    // animation inside it is delayed by 150ms, so check the container only.
+    const dp = badge?.querySelector(".dp");
     expect(dp).toBeTruthy();
   });
 

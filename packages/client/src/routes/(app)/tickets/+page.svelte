@@ -66,6 +66,7 @@
   import { haptic } from "$lib/utils/haptic.js";
   import type { SerializedBuffer } from "$lib/utils/buffer-encoding.js";
   import type { RawFollowUpPreview } from "$lib/tickets/preview-loader.svelte.js";
+  import { resolveAsyncDecrypt } from "$lib/crypto/decrypt-result.js";
 
   const ticketCache = getTicketDecryptCache();
   const orgCache = getOrgDecryptCache();
@@ -255,7 +256,10 @@
       queueName: orgCache.decrypt(`queue:${t.queueId}`, t.encryptedQueueName),
       displayStatus: deriveDisplayStatus(t.status, t.onHold, t.followUpCount),
       priority: t.priority,
-      title: ticketCache.decryptTitle(t.id, t.keyWrap, t.encryptedTitle),
+      titleResult: resolveAsyncDecrypt(
+        ticketCache.decryptTitle(t.id, t.keyWrap, t.encryptedTitle),
+        t.keyWrap !== null,
+      ),
       clientAlias: t.clientAlias,
       assignedName,
       createdAt: new Date(t.createdAt),
@@ -722,7 +726,7 @@
           queueName={null}
           displayStatus="active"
           priority="normal"
-          title={undefined}
+          titleResult={{ status: "loading" }}
           clientAlias=""
           assignedName={null}
           createdAt={new Date()}

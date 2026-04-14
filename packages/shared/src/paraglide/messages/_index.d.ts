@@ -16,6 +16,7 @@ export * from "./error_go_home.js";
 export * from "./error_generic.js";
 export * from "./error_decryption_failed.js";
 export * from "./decrypt_placeholder_loading.js";
+export * from "./decrypt_placeholder_denied.js";
 export * from "./error_network.js";
 export * from "./error_not_authenticated.js";
 export * from "./error_twofa_required.js";

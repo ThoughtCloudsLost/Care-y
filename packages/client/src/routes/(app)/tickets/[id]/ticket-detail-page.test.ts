@@ -158,6 +158,9 @@ vi.mock("$lib/crypto/context.js", () => ({
   getOrgDecryptCache: () => ({
     decrypt: vi.fn().mockReturnValue(null),
   }),
+  getOrgKeyManager: () => ({
+    isLoaded: false,
+  }),
   getCryptoBridge: () => ({
     encrypt: vi.fn().mockResolvedValue("encrypted-base64"),
     decryptBlob: vi.fn().mockRejectedValue(new Error("mock")),

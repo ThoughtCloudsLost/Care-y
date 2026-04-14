@@ -3,14 +3,13 @@
   import { ChevronRight, Dot } from "@lucide/svelte";
   import * as m from "$lib/paraglide/messages.js";
   import { formatRelativeTime } from "$lib/utils/format-time.js";
-  import { isDecryptError } from "$lib/crypto/async-decrypt-cache.js";
   import PriorityBadge from "$lib/components/PriorityBadge.svelte";
   import EncryptedTitle from "$lib/components/EncryptedTitle.svelte";
   import type { TicketPreviewItemProps } from "./types.js";
 
   let {
     ticketId,
-    title,
+    titleResult,
     priority,
     clientAlias,
     queueName,
@@ -21,7 +20,11 @@
     onhelp,
   }: TicketPreviewItemProps = $props();
 
-  const isEncrypted = $derived(title === undefined || isDecryptError(title));
+  const isEncrypted = $derived(
+    titleResult.status === "denied" ||
+      titleResult.status === "error" ||
+      titleResult.status === "loading",
+  );
 
   const activityDate = $derived(lastActivityAt ?? undefined);
   const timeAgo = $derived(
@@ -49,7 +52,9 @@
           {#if isEncrypted}
             <EncryptedTitle {onhelp} />
           {:else}
-            <span class="title-text">{title}</span>
+            <span class="title-text"
+              >{titleResult.status === "ready" ? titleResult.value : ""}</span
+            >
           {/if}
         </div>
 
