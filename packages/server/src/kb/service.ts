@@ -30,11 +30,12 @@ export interface KBCategoryRecord {
 
 // --- Item records ---
 
-export interface KBItemRecord {
+/** Lightweight item record for list endpoints (no body). */
+export interface KBItemSummary {
   readonly id: string;
   readonly categoryId: string;
   readonly encryptedTitle: Buffer;
-  readonly encryptedBody: Buffer;
+  readonly encryptedExcerpt: Buffer | null;
   readonly createdBy: string;
   readonly voteUpCount: number;
   readonly voteDownCount: number;
@@ -43,8 +44,13 @@ export interface KBItemRecord {
   readonly updatedAt: Date;
 }
 
+/** Full item record for detail endpoints (includes body). */
+export interface KBItemRecord extends KBItemSummary {
+  readonly encryptedBody: Buffer;
+}
+
 export interface KBItemPage {
-  readonly items: KBItemRecord[];
+  readonly items: KBItemSummary[];
   readonly nextCursor: string | null;
 }
 
@@ -88,6 +94,7 @@ export interface KBItemService {
       categoryId: string;
       encryptedTitle: Buffer;
       encryptedBody: Buffer;
+      encryptedExcerpt?: Buffer;
     },
   ): Promise<KBItemRecord>;
 
@@ -105,13 +112,14 @@ export interface KBItemService {
       categoryId?: string;
       encryptedTitle?: Buffer;
       encryptedBody?: Buffer;
+      encryptedExcerpt?: Buffer;
     },
   ): Promise<KBItemRecord>;
 
   delete(itemId: string): Promise<void>;
 
   /** Return the N most recently updated items, ordered by updated_at desc. */
-  listRecentlyUpdated(limit: number): Promise<KBItemRecord[]>;
+  listRecentlyUpdated(limit: number): Promise<KBItemSummary[]>;
 }
 
 export interface KBVoteService {
@@ -151,11 +159,38 @@ function toCategoryRecord(row: {
   };
 }
 
+function toItemSummary(row: {
+  id: string;
+  category_id: string;
+  encrypted_title: Buffer;
+  encrypted_excerpt: Buffer | null;
+  created_by: string;
+  vote_up_count: number;
+  vote_down_count: number;
+  rating: number;
+  created_at: Date;
+  updated_at: Date;
+}): KBItemSummary {
+  return {
+    id: row.id,
+    categoryId: row.category_id,
+    encryptedTitle: row.encrypted_title,
+    encryptedExcerpt: row.encrypted_excerpt,
+    createdBy: row.created_by,
+    voteUpCount: row.vote_up_count,
+    voteDownCount: row.vote_down_count,
+    rating: row.rating,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
 function toItemRecord(row: {
   id: string;
   category_id: string;
   encrypted_title: Buffer;
   encrypted_body: Buffer;
+  encrypted_excerpt: Buffer | null;
   created_by: string;
   vote_up_count: number;
   vote_down_count: number;
@@ -164,16 +199,8 @@ function toItemRecord(row: {
   updated_at: Date;
 }): KBItemRecord {
   return {
-    id: row.id,
-    categoryId: row.category_id,
-    encryptedTitle: row.encrypted_title,
+    ...toItemSummary(row),
     encryptedBody: row.encrypted_body,
-    createdBy: row.created_by,
-    voteUpCount: row.vote_up_count,
-    voteDownCount: row.vote_down_count,
-    rating: row.rating,
-    createdAt: row.created_at,
-    updatedAt: row.updated_at,
   };
 }
 
@@ -315,6 +342,7 @@ export function createKBItemService(db: Kysely<TenantDatabase>): KBItemService {
           category_id: input.categoryId,
           encrypted_title: input.encryptedTitle,
           encrypted_body: input.encryptedBody,
+          encrypted_excerpt: input.encryptedExcerpt ?? null,
           created_by: createdBy,
         })
         .returningAll()
@@ -333,7 +361,20 @@ export function createKBItemService(db: Kysely<TenantDatabase>): KBItemService {
     },
 
     async list(input) {
-      let query = db.selectFrom("kb_items").selectAll();
+      const summaryColumns = [
+        "id",
+        "category_id",
+        "encrypted_title",
+        "encrypted_excerpt",
+        "created_by",
+        "vote_up_count",
+        "vote_down_count",
+        "rating",
+        "created_at",
+        "updated_at",
+      ] as const;
+
+      let query = db.selectFrom("kb_items").select(summaryColumns);
 
       if (input.categoryId !== undefined) {
         query = query.where("category_id", "=", input.categoryId);
@@ -380,7 +421,7 @@ export function createKBItemService(db: Kysely<TenantDatabase>): KBItemService {
       }
 
       return {
-        items: pageRows.map(toItemRecord),
+        items: pageRows.map(toItemSummary),
         nextCursor,
       };
     },
@@ -401,6 +442,8 @@ export function createKBItemService(db: Kysely<TenantDatabase>): KBItemService {
         updates.encrypted_title = input.encryptedTitle;
       if (input.encryptedBody !== undefined)
         updates.encrypted_body = input.encryptedBody;
+      if (input.encryptedExcerpt !== undefined)
+        updates.encrypted_excerpt = input.encryptedExcerpt;
 
       if (Object.keys(updates).length === 0) {
         const existing = await db
@@ -438,11 +481,22 @@ export function createKBItemService(db: Kysely<TenantDatabase>): KBItemService {
     async listRecentlyUpdated(limit) {
       const rows = await db
         .selectFrom("kb_items")
-        .selectAll()
+        .select([
+          "id",
+          "category_id",
+          "encrypted_title",
+          "encrypted_excerpt",
+          "created_by",
+          "vote_up_count",
+          "vote_down_count",
+          "rating",
+          "created_at",
+          "updated_at",
+        ])
         .orderBy("updated_at", "desc")
         .limit(limit)
         .execute();
-      return rows.map(toItemRecord);
+      return rows.map(toItemSummary);
     },
   };
 }
