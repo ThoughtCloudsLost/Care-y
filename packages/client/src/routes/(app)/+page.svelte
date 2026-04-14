@@ -1,13 +1,23 @@
 <script lang="ts">
   import { createQuery } from "@tanstack/svelte-query";
-  import { Notification } from "konsta/svelte";
+  import { Notification, Link, List, ListItem } from "konsta/svelte";
   import { goto } from "$app/navigation";
   import { resolve } from "$app/paths";
   import { trpc } from "$lib/trpc/index.js";
   import { toastStore } from "$lib/stores/toast.svelte.js";
   import { RouterNotAvailableError } from "$lib/errors.js";
   import type { TicketPreviewItemProps } from "$lib/components/dashboard/types.js";
-  import { Ticket as TicketIcon, TicketMinus } from "@lucide/svelte";
+  import {
+    Ticket as TicketIcon,
+    TicketMinus,
+    TicketPlus,
+    FilePlus,
+    LayersPlus,
+    FolderPlus,
+    CalendarPlus,
+    UserPlus,
+    Plus,
+  } from "@lucide/svelte";
   import TicketPreviewList from "$lib/components/dashboard/TicketPreviewList.svelte";
   import CollapsibleSection from "$lib/components/dashboard/CollapsibleSection.svelte";
   import ShiftSection from "$lib/components/dashboard/ShiftSection.svelte";
@@ -20,7 +30,11 @@
     getOrgDecryptCache,
     getTicketDecryptCache,
     getCurrentUserId,
+    getCurrentUserRoleId,
   } from "$lib/crypto/context.js";
+  import { RoleId } from "@care-y/shared";
+  import ShellPopover from "$lib/shell/ShellPopover.svelte";
+  import { getNavbarOverrideCtx } from "$lib/shell/context.js";
   import { resolveAsyncDecrypt } from "$lib/crypto/decrypt-result.js";
   import { bucketTickets } from "$lib/components/dashboard/filters.js";
   import * as m from "$lib/paraglide/messages.js";
@@ -30,6 +44,66 @@
   const ticketCache = getTicketDecryptCache();
   const currentUserIdGetter = getCurrentUserId();
   const currentUserId = $derived(currentUserIdGetter());
+  const currentUserRoleIdGetter = getCurrentUserRoleId();
+  const currentUserRoleId = $derived(currentUserRoleIdGetter());
+  const isAdmin = $derived(currentUserRoleId === RoleId.ADMIN);
+  const isManager = $derived(currentUserRoleId === RoleId.MANAGER || isAdmin);
+  const navbarCtx = getNavbarOverrideCtx();
+
+  // --- Create menu (navbar "+" popover) ---
+
+  interface CreateOption {
+    readonly id: string;
+    readonly label: string;
+    readonly icon: typeof TicketPlus;
+  }
+
+  const createOptions = $derived.by((): CreateOption[] => {
+    const options: CreateOption[] = [
+      { id: "ticket", label: m.create_new_ticket(), icon: TicketPlus },
+    ];
+    if (isManager) {
+      options.push(
+        { id: "article", label: m.create_new_article(), icon: FilePlus },
+        { id: "category", label: m.create_new_category(), icon: FolderPlus },
+        { id: "shift", label: m.create_new_shift(), icon: CalendarPlus },
+      );
+    }
+    if (isAdmin) {
+      options.push(
+        { id: "queue", label: m.create_new_queue(), icon: LayersPlus },
+        { id: "user", label: m.create_invite_user(), icon: UserPlus },
+      );
+    }
+    return options;
+  });
+
+  let createPopoverOpen = $state(false);
+  let createButtonEl = $state<HTMLElement | undefined>(undefined);
+
+  function handleCreateTap(e: MouseEvent): void {
+    const first = createOptions[0];
+    if (createOptions.length === 1 && first) {
+      handleCreateOption(first.id);
+      return;
+    }
+    const target = e.currentTarget;
+    createButtonEl = target instanceof HTMLElement ? target : undefined;
+    createPopoverOpen = true;
+  }
+
+  function handleCreateOption(_optionId: string): void {
+    createPopoverOpen = false;
+    toastStore.show(m.create_coming_soon(), 2500);
+  }
+
+  // Navbar right-action override: "+" button with create popover.
+  $effect(() => {
+    navbarCtx.current = { right: createButton };
+    return () => {
+      navbarCtx.current = undefined;
+    };
+  });
 
   // All open tickets for the current user's accessible queues.
   if (!trpc.tickets) throw new RouterNotAvailableError("tickets");
@@ -328,6 +402,38 @@
     {/if}
   </div>
 </div>
+
+{#snippet createButton()}
+  <Link
+    iconOnly
+    role="button"
+    aria-label={m.nav_create_new()}
+    onclick={handleCreateTap}
+  >
+    <Plus size={22} aria-hidden="true" />
+  </Link>
+{/snippet}
+
+<ShellPopover
+  opened={createPopoverOpen}
+  target={createButtonEl}
+  placement="bottom"
+  ondismiss={() => (createPopoverOpen = false)}
+>
+  <List nested>
+    {#each createOptions as option (option.id)}
+      {@const Icon = option.icon}
+      <ListItem
+        title={option.label}
+        onclick={() => handleCreateOption(option.id)}
+      >
+        {#snippet media()}
+          <Icon size={20} aria-hidden="true" />
+        {/snippet}
+      </ListItem>
+    {/each}
+  </List>
+</ShellPopover>
 
 <style>
   .dashboard {

@@ -34,14 +34,7 @@
     TabbarLink,
     ToolbarPane,
   } from "konsta/svelte";
-  import {
-    House,
-    Ticket,
-    BookOpen,
-    Ellipsis,
-    Search,
-    TicketPlus,
-  } from "@lucide/svelte";
+  import { House, Ticket, BookOpen, Ellipsis, Search } from "@lucide/svelte";
   import { tick, onMount } from "svelte";
   import { SvelteMap, SvelteSet } from "svelte/reactivity";
   import type { Component } from "svelte";
@@ -654,10 +647,6 @@
       {/if}
       {#if navbarOverride?.right && !searchOpen}
         {@render navbarOverride.right()}
-      {:else if !searchOpen}
-        <Link iconOnly role="button" aria-label={m.nav_new_ticket()}>
-          <TicketPlus size={22} aria-hidden="true" />
-        </Link>
       {/if}
     {/snippet}
     {#if searchOpen}
