@@ -1,5 +1,9 @@
 <script lang="ts">
-  import { createInfiniteQuery, useQueryClient } from "@tanstack/svelte-query";
+  import {
+    createInfiniteQuery,
+    createQuery,
+    useQueryClient,
+  } from "@tanstack/svelte-query";
   import { createCountsQuery } from "$lib/tickets/queries.js";
   import { untrack } from "svelte";
   import { SvelteMap, SvelteSet } from "svelte/reactivity";
@@ -48,13 +52,21 @@
 
   import { RouterNotAvailableError } from "$lib/errors.js";
   import ShellPopover from "$lib/shell/ShellPopover.svelte";
-  import type { SortField } from "$lib/stores/filters.svelte.js";
+  import type { SortField, FilterStatus } from "$lib/stores/filters.svelte.js";
+  import { savedFilterStore } from "$lib/stores/saved-filters.svelte.js";
+  import {
+    savedFilterStateSchema,
+    ticketPrioritySchema,
+    type SavedFilterRecord,
+    type SavedFilterColor,
+  } from "@care-y/shared";
   import StatusDot from "$lib/components/StatusDot.svelte";
   import TicketCard from "$lib/components/tickets/TicketCard.svelte";
   import SwipeableCard from "$lib/components/tickets/SwipeableCard.svelte";
-  import FilterPillBar from "$lib/components/tickets/FilterPillBar.svelte";
-  import SavedFilterList from "$lib/components/tickets/SavedFilterList.svelte";
-  import CreateSavedFilter from "$lib/components/tickets/CreateSavedFilter.svelte";
+  import FilterPillBar from "$lib/components/filters/FilterPillBar.svelte";
+  import type { PillDefinition } from "$lib/components/filters/filter-types.js";
+  import SavedFilterList from "$lib/components/filters/SavedFilterList.svelte";
+  import CreateSavedFilter from "$lib/components/filters/CreateSavedFilter.svelte";
   import VirtualList from "$lib/components/tickets/VirtualList.svelte";
   import QueryError from "$lib/components/QueryError.svelte";
   import AssignSheet from "$lib/components/tickets/AssignSheet.svelte";
@@ -598,6 +610,242 @@
   const activeCount = $derived(countsQuery.data?.active ?? 0);
   const holdCount = $derived(countsQuery.data?.onHold ?? 0);
 
+  // Queue list for the filter pill bar (was inside old FilterPillBar).
+  const queuesQuery = createQuery(() => ({
+    queryKey: ["tickets", "myQueues"],
+    queryFn: async () => ticketRouter.myQueues.query(),
+  }));
+
+  // --- Filter pill definitions (wiring ticket stores to generic FilterPillBar) ---
+
+  const counts = $derived(countsQuery.data);
+  const priorityCounts = $derived(counts?.byPriority);
+
+  const statusOptions = $derived([
+    {
+      value: "new",
+      label: `${m.tickets_filter_new()} (${String(counts?.new ?? 0)})`,
+    },
+    {
+      value: "active",
+      label: `${m.tickets_filter_active()} (${String(counts?.active ?? 0)})`,
+    },
+    {
+      value: "hold",
+      label: `${m.tickets_filter_hold()} (${String(counts?.onHold ?? 0)})`,
+    },
+    {
+      value: "closed",
+      label: `${m.tickets_filter_closed()} (${String(counts?.closed ?? 0)})`,
+    },
+  ]);
+
+  const priorityOptions = $derived([
+    {
+      value: "low",
+      label: `${m.tickets_filter_priority_low()} (${String(priorityCounts?.low ?? 0)})`,
+    },
+    {
+      value: "normal",
+      label: `${m.tickets_filter_priority_normal()} (${String(priorityCounts?.normal ?? 0)})`,
+    },
+    {
+      value: "high",
+      label: `${m.tickets_filter_priority_high()} (${String(priorityCounts?.high ?? 0)})`,
+    },
+    {
+      value: "urgent",
+      label: `${m.tickets_filter_priority_urgent()} (${String(priorityCounts?.urgent ?? 0)})`,
+    },
+  ]);
+
+  const queueOptions = $derived(
+    (queuesQuery.data ?? []).map(
+      (q: {
+        id: string;
+        encrypted_name: SerializedBuffer | Uint8Array | null;
+        openCount: string;
+      }) => ({
+        value: q.id,
+        label: `${orgCache.decrypt(`queue:${q.id}`, q.encrypted_name) ?? "..."} (${q.openCount})`,
+      }),
+    ),
+  );
+
+  const assigneeOptions = $derived.by(() => {
+    const opts: { value: string; label: string }[] = [];
+    if (currentUserId !== undefined) {
+      opts.push({
+        value: currentUserId,
+        label: `${m.tickets_filter_me()} (${String(counts?.mine ?? 0)})`,
+      });
+    }
+    opts.push({
+      value: "__unassigned__",
+      label: `${m.tickets_unassigned()} (${String(counts?.unassigned ?? 0)})`,
+    });
+    return opts;
+  });
+
+  const ticketPills: PillDefinition[] = $derived([
+    {
+      id: "status",
+      label: m.tickets_filter_status(),
+      mode: "multi",
+      options: statusOptions,
+      selected: filterStore.statuses,
+    },
+    {
+      id: "queue",
+      label: m.tickets_filter_queue(),
+      mode: "multi",
+      options: queueOptions,
+      selected: filterStore.queueIds,
+      loading: queuesQuery.isLoading,
+    },
+    {
+      id: "priority",
+      label: m.tickets_filter_priority(),
+      mode: "multi",
+      options: priorityOptions,
+      selected: filterStore.priorities,
+    },
+    {
+      id: "assignee",
+      label: m.tickets_filter_assignee(),
+      mode: "single",
+      options: assigneeOptions,
+      selected:
+        filterStore.assigneeId === null
+          ? "__unassigned__"
+          : (filterStore.assigneeId ?? null),
+    },
+    {
+      id: "date",
+      label: m.tickets_filter_date_range(),
+      mode: "date",
+      options: [],
+      selected: null,
+    },
+  ]);
+
+  const validStatuses: ReadonlySet<FilterStatus> = new Set<FilterStatus>([
+    "new",
+    "active",
+    "hold",
+    "closed",
+  ]);
+
+  function isFilterStatus(v: string): v is FilterStatus {
+    return (validStatuses as ReadonlySet<string>).has(v);
+  }
+
+  function handlePillToggle(pillId: string, value: string): void {
+    switch (pillId) {
+      case "status":
+        if (isFilterStatus(value)) filterStore.toggleStatus(value);
+        break;
+      case "queue":
+        filterStore.toggleQueue(value);
+        break;
+      case "priority": {
+        const parsed = ticketPrioritySchema.safeParse(value);
+        if (parsed.success) filterStore.togglePriority(parsed.data);
+        break;
+      }
+    }
+  }
+
+  function handlePillSelect(pillId: string, value: string | null): void {
+    if (pillId === "assignee") {
+      filterStore.setAssignee(value === "__unassigned__" ? null : value);
+    }
+  }
+
+  function handlePillDateChange(from: Date | null, to: Date | null): void {
+    filterStore.setDateRange(from, to);
+  }
+
+  const dateRangeActive = $derived(
+    filterStore.dateFrom !== null || filterStore.dateTo !== null,
+  );
+
+  const dateFromStr = $derived(
+    filterStore.dateFrom !== null
+      ? filterStore.dateFrom.toISOString().slice(0, 10)
+      : "",
+  );
+  const dateToStr = $derived(
+    filterStore.dateTo !== null
+      ? filterStore.dateTo.toISOString().slice(0, 10)
+      : "",
+  );
+
+  const dateRangeLabel = $derived.by(() => {
+    const from = filterStore.dateFrom;
+    const to = filterStore.dateTo;
+    if (from !== null && to !== null)
+      return `${from.toLocaleDateString()} - ${to.toLocaleDateString()}`;
+    if (from !== null)
+      return `${m.tickets_filter_date_from()} ${from.toLocaleDateString()}`;
+    if (to !== null)
+      return `${m.tickets_filter_date_to()} ${to.toLocaleDateString()}`;
+    return m.tickets_filter_date_range();
+  });
+
+  // --- Saved filter wiring ---
+
+  function handleSavedFilterApply(record: SavedFilterRecord): void {
+    const parsed: unknown = JSON.parse(record.state);
+    const result = savedFilterStateSchema.safeParse(parsed);
+    if (result.success) {
+      filterStore.applyState(result.data);
+    }
+  }
+
+  function handleSavedFilterDelete(id: string): void {
+    savedFilterStore.remove(id);
+  }
+
+  function handleSavedFilterToggleShare(id: string): void {
+    savedFilterStore.toggleShare(id);
+  }
+
+  const filterSummary = $derived.by(() => {
+    const parts: string[] = [];
+    if (filterStore.statuses.size > 0)
+      parts.push([...filterStore.statuses].join(", "));
+    if (filterStore.priorities.size > 0)
+      parts.push([...filterStore.priorities].join(", "));
+    if (filterStore.queueIds.size > 0) {
+      const count = filterStore.queueIds.size;
+      parts.push(`${String(count)} queue${count > 1 ? "s" : ""}`);
+    }
+    if (filterStore.assigneeId !== null) parts.push("assigned");
+    if (filterStore.dateFrom !== null || filterStore.dateTo !== null)
+      parts.push("date range");
+    return parts.length > 0 ? parts.join(", ") : "No filters";
+  });
+
+  function handleCreateSavedFilter(meta: {
+    encryptedName: string;
+    color: SavedFilterColor;
+    icon: string;
+  }): void {
+    const record: SavedFilterRecord = {
+      id: crypto.randomUUID(),
+      encryptedName: meta.encryptedName,
+      color: meta.color,
+      icon: meta.icon,
+      state: JSON.stringify(filterStore.captureState()),
+      shared: false,
+      ownerId: currentUserId ?? "",
+      createdAt: new Date().toISOString(),
+    };
+    savedFilterStore.add(record);
+    toastStore.show(m.saved_filter_saved());
+  }
+
   // Saved filter modal state.
   let savedFilterModalOpen = $state(false);
 
@@ -703,10 +951,25 @@
         </Button>
       </div>
     </div>
-    <SavedFilterList />
+    <SavedFilterList
+      filters={savedFilterStore.filters}
+      count={savedFilterStore.count}
+      onapply={handleSavedFilterApply}
+      ondelete={handleSavedFilterDelete}
+      ontoggleshare={handleSavedFilterToggleShare}
+    />
     <div class="ticket-controls">
       <FilterPillBar
-        {currentUserId}
+        pills={ticketPills}
+        activeCount={filterStore.activeCount}
+        dateFrom={dateFromStr}
+        dateTo={dateToStr}
+        dateActive={dateRangeActive}
+        dateLabel={dateRangeLabel}
+        ontoggle={handlePillToggle}
+        onselect={handlePillSelect}
+        ondatechange={handlePillDateChange}
+        onclearall={() => filterStore.clearAll()}
         oncreateshortcut={() => {
           savedFilterModalOpen = true;
         }}
@@ -783,9 +1046,11 @@
 
 <CreateSavedFilter
   opened={savedFilterModalOpen}
+  {filterSummary}
   ondismiss={() => {
     savedFilterModalOpen = false;
   }}
+  onsave={handleCreateSavedFilter}
 />
 
 <AssignSheet

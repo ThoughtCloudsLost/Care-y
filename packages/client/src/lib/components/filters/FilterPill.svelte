@@ -2,11 +2,7 @@
   import { Chip } from "konsta/svelte";
   import { ChevronDown } from "@lucide/svelte";
   import { onKeyActivate } from "$lib/utils/a11y.js";
-
-  export interface FilterOption {
-    readonly value: string;
-    readonly label: string;
-  }
+  import type { FilterOption } from "./filter-types.js";
 
   interface Props {
     /** Dimension label shown when nothing is selected */
