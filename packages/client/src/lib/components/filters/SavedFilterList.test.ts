@@ -1,9 +1,9 @@
 // @vitest-environment jsdom
 /**
- * SavedFilterList component tests.
+ * SavedFilterList generic component tests.
  *
- * Verifies rendering of saved filter chips with icon, color, and decrypted name.
- * Verifies tapping a chip applies the filter state to the store.
+ * The generic SavedFilterList accepts filters, count, and callbacks as props.
+ * Tests verify chip rendering, tap-to-apply, and long-press menu.
  */
 
 import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
@@ -47,71 +47,6 @@ vi.mock("$lib/crypto/context.js", () => ({
   }),
 }));
 
-// --- Mock filter store ---
-const { mockApplyState } = vi.hoisted(() => ({ mockApplyState: vi.fn() }));
-vi.mock("$lib/stores/filters.svelte.js", () => ({
-  filterStore: {
-    applyState: mockApplyState,
-  },
-}));
-
-// --- Mock saved filter store ---
-const { mockSavedFilters } = vi.hoisted(() => ({
-  mockSavedFilters: [
-    {
-      id: "sf-1",
-      encryptedName: "AQIDBA==",
-      color: "blue",
-      icon: "tag",
-      state: JSON.stringify({
-        statuses: ["new"],
-        queueIds: [],
-        priorities: ["urgent"],
-        assigneeId: null,
-        dateFrom: null,
-        dateTo: null,
-        sortField: "date",
-        sortDirection: "desc",
-      }),
-      shared: false,
-      ownerId: "user-1",
-      createdAt: new Date().toISOString(),
-    },
-    {
-      id: "sf-2",
-      encryptedName: "BQYHCA==",
-      color: "red",
-      icon: "phone",
-      state: JSON.stringify({
-        statuses: ["active"],
-        queueIds: ["q-1"],
-        priorities: [],
-        assigneeId: null,
-        dateFrom: null,
-        dateTo: null,
-        sortField: "date",
-        sortDirection: "desc",
-      }),
-      shared: true,
-      ownerId: "user-1",
-      createdAt: new Date().toISOString(),
-    },
-  ],
-}));
-
-vi.mock("$lib/stores/saved-filters.svelte.js", () => ({
-  savedFilterStore: {
-    get filters() {
-      return mockSavedFilters;
-    },
-    get count() {
-      return mockSavedFilters.length;
-    },
-    remove: vi.fn(),
-    toggleShare: vi.fn(),
-  },
-}));
-
 // --- Mock buffer encoding ---
 vi.mock("$lib/utils/buffer-encoding.js", () => ({
   base64ToUint8Array: vi.fn().mockReturnValue(new Uint8Array([1, 2, 3, 4])),
@@ -119,11 +54,35 @@ vi.mock("$lib/utils/buffer-encoding.js", () => ({
 
 // --- Mock shell action sheet: pass-through renders children ---
 vi.mock("$lib/shell/ShellActionSheet.svelte", async () => ({
-  default: (await import("./test-helpers/PassthroughShell.svelte")).default,
+  default: (await import("../tickets/test-helpers/PassthroughShell.svelte"))
+    .default,
 }));
 
-// Must import AFTER all vi.mock() calls.
 import SavedFilterList from "./SavedFilterList.svelte";
+import type { SavedFilterRecord } from "@care-y/shared";
+
+const mockFilters: SavedFilterRecord[] = [
+  {
+    id: "sf-1",
+    encryptedName: "AQIDBA==",
+    color: "blue",
+    icon: "tag",
+    state: JSON.stringify({ statuses: ["new"], priorities: ["urgent"] }),
+    shared: false,
+    ownerId: "user-1",
+    createdAt: new Date().toISOString(),
+  },
+  {
+    id: "sf-2",
+    encryptedName: "BQYHCA==",
+    color: "red",
+    icon: "phone",
+    state: JSON.stringify({ statuses: ["active"], queueIds: ["q-1"] }),
+    shared: true,
+    ownerId: "user-1",
+    createdAt: new Date().toISOString(),
+  },
+];
 
 describe("SavedFilterList", () => {
   beforeEach(() => {
@@ -133,7 +92,13 @@ describe("SavedFilterList", () => {
   afterEach(cleanup);
 
   it("renders saved filter chips", () => {
-    render(SavedFilterList);
+    render(SavedFilterList, {
+      filters: mockFilters,
+      count: 2,
+      onapply: vi.fn(),
+      ondelete: vi.fn(),
+      ontoggleshare: vi.fn(),
+    });
     const list = screen.getByRole("list", { name: "Apply saved filter" });
     expect(list).toBeTruthy();
 
@@ -142,22 +107,40 @@ describe("SavedFilterList", () => {
   });
 
   it("displays decrypted names on chips", () => {
-    render(SavedFilterList);
-    // Both chips should show the decrypted name from the mock
+    render(SavedFilterList, {
+      filters: mockFilters,
+      count: 2,
+      onapply: vi.fn(),
+      ondelete: vi.fn(),
+      ontoggleshare: vi.fn(),
+    });
     const chips = screen.getAllByText("My Housing Filter");
     expect(chips.length).toBeGreaterThanOrEqual(1);
   });
 
   it("renders chips with correct aria-labels", () => {
-    render(SavedFilterList);
+    render(SavedFilterList, {
+      filters: mockFilters,
+      count: 2,
+      onapply: vi.fn(),
+      ondelete: vi.fn(),
+      ontoggleshare: vi.fn(),
+    });
     const buttons = screen.getAllByRole("button", {
       name: "My Housing Filter",
     });
     expect(buttons).toHaveLength(2);
   });
 
-  it("applies filter state on chip tap (pointerup)", async () => {
-    render(SavedFilterList);
+  it("calls onapply on chip tap (pointerup)", () => {
+    const onapply = vi.fn();
+    render(SavedFilterList, {
+      filters: mockFilters,
+      count: 2,
+      onapply,
+      ondelete: vi.fn(),
+      ontoggleshare: vi.fn(),
+    });
     const buttons = screen.getAllByRole("button", {
       name: "My Housing Filter",
     });
@@ -167,21 +150,19 @@ describe("SavedFilterList", () => {
     firstChip.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true }));
     firstChip.dispatchEvent(new PointerEvent("pointerup", { bubbles: true }));
 
-    expect(mockApplyState).toHaveBeenCalledTimes(1);
-    expect(mockApplyState).toHaveBeenCalledWith(
-      expect.objectContaining({
-        statuses: ["new"],
-        priorities: ["urgent"],
-      }),
-    );
+    expect(onapply).toHaveBeenCalledTimes(1);
+    expect(onapply).toHaveBeenCalledWith(mockFilters[0]);
   });
 
-  // TODO: Properly test the empty state by mocking savedFilterStore with count=0.
-  // The module-level vi.mock makes it hard to swap per-test. The {#if count > 0}
-  // guard in the component prevents rendering when no filters exist.
-  it("renders the list when saved filters are present", () => {
-    render(SavedFilterList);
+  it("does not render when count is 0", () => {
+    render(SavedFilterList, {
+      filters: [],
+      count: 0,
+      onapply: vi.fn(),
+      ondelete: vi.fn(),
+      ontoggleshare: vi.fn(),
+    });
     const list = screen.queryByRole("list");
-    expect(list).not.toBeNull();
+    expect(list).toBeNull();
   });
 });

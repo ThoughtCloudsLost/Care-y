@@ -4,12 +4,6 @@
   import * as m from "$lib/paraglide/messages.js";
   import { getOrgDecryptCache } from "$lib/crypto/context.js";
   import DecryptPlaceholder from "$lib/components/DecryptPlaceholder.svelte";
-  import { savedFilterStore } from "$lib/stores/saved-filters.svelte.js";
-  import { filterStore } from "$lib/stores/filters.svelte.js";
-  import {
-    savedFilterStateSchema,
-    type SavedFilterRecord,
-  } from "@care-y/shared";
   import { base64ToUint8Array } from "$lib/utils/buffer-encoding.js";
   import ShellActionSheet from "$lib/shell/ShellActionSheet.svelte";
   import {
@@ -18,6 +12,17 @@
     DEFAULT_ICON,
     DEFAULT_COLOR_HEX,
   } from "./saved-filter-constants.js";
+  import type { SavedFilterRecord } from "@care-y/shared";
+
+  interface Props {
+    filters: SavedFilterRecord[];
+    count: number;
+    onapply: (record: SavedFilterRecord) => void;
+    ondelete: (id: string) => void;
+    ontoggleshare: (id: string) => void;
+  }
+
+  let { filters, count, onapply, ondelete, ontoggleshare }: Props = $props();
 
   const orgCache = getOrgDecryptCache();
 
@@ -34,14 +39,6 @@
     return orgCache.decrypt(`saved-filter:${record.id}`, ciphertextBytes);
   }
 
-  function applyFilter(record: SavedFilterRecord): void {
-    const parsed: unknown = JSON.parse(record.state);
-    const result = savedFilterStateSchema.safeParse(parsed);
-    if (result.success) {
-      filterStore.applyState(result.data);
-    }
-  }
-
   function onPointerDown(id: string): void {
     pressTriggered = false;
     pressTimer = setTimeout(() => {
@@ -56,7 +53,7 @@
       pressTimer = null;
     }
     if (!pressTriggered) {
-      applyFilter(record);
+      onapply(record);
     }
     pressTriggered = false;
   }
@@ -75,32 +72,32 @@
 
   function handleDelete(): void {
     if (actionSheetFilterId !== null) {
-      savedFilterStore.remove(actionSheetFilterId);
+      ondelete(actionSheetFilterId);
     }
     closeActionSheet();
   }
 
   function handleToggleShare(): void {
     if (actionSheetFilterId !== null) {
-      savedFilterStore.toggleShare(actionSheetFilterId);
+      ontoggleshare(actionSheetFilterId);
     }
     closeActionSheet();
   }
 
   const activeRecord = $derived(
     actionSheetFilterId !== null
-      ? savedFilterStore.filters.find((f) => f.id === actionSheetFilterId)
+      ? filters.find((f) => f.id === actionSheetFilterId)
       : undefined,
   );
 </script>
 
-{#if savedFilterStore.count > 0}
+{#if count > 0}
   <div
     class="saved-filter-list"
     role="list"
     aria-label={m.saved_filter_apply()}
   >
-    {#each savedFilterStore.filters as record (record.id)}
+    {#each filters as record (record.id)}
       {@const name = decryptName(record)}
       {@const IconComponent = ICON_BY_ID[record.icon] ?? DEFAULT_ICON}
       {@const color = COLOR_HEX_BY_ID[record.color] ?? DEFAULT_COLOR_HEX}

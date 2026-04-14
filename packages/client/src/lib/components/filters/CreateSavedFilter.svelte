@@ -2,52 +2,34 @@
   import { List, ListInput, Block } from "konsta/svelte";
   import ShellPopup from "$lib/shell/ShellPopup.svelte";
   import * as m from "$lib/paraglide/messages.js";
-  import { getOrgKeyManager, getCurrentUserId } from "$lib/crypto/context.js";
-  import { filterStore } from "$lib/stores/filters.svelte.js";
-  import { savedFilterStore } from "$lib/stores/saved-filters.svelte.js";
+  import { getOrgKeyManager } from "$lib/crypto/context.js";
   import {
     SAVED_FILTER_COLORS,
     SAVED_FILTER_ICONS,
   } from "./saved-filter-constants.js";
-  import type { SavedFilterColor, SavedFilterRecord } from "@care-y/shared";
+  import type { SavedFilterColor } from "@care-y/shared";
   import { uint8ArrayToBase64 } from "$lib/utils/buffer-encoding.js";
-  import { toastStore } from "$lib/stores/toast.svelte.js";
 
   interface Props {
     opened: boolean;
+    /** Human-readable summary of the current filter state (pre-computed by caller) */
+    filterSummary: string;
     ondismiss: () => void;
+    /** Called with encrypted name + visual metadata. Caller handles captureState + store.add. */
+    onsave: (meta: {
+      encryptedName: string;
+      color: SavedFilterColor;
+      icon: string;
+    }) => void;
   }
 
-  let { opened, ondismiss }: Props = $props();
+  let { opened, filterSummary, ondismiss, onsave }: Props = $props();
 
   const orgKeyManager = getOrgKeyManager();
-  const currentUserIdGetter = getCurrentUserId();
 
   let name = $state("");
   let selectedColor = $state<SavedFilterColor>("blue");
   let selectedIcon = $state("tag");
-
-  // Human-readable summary of the current filter state.
-  const filterSummary = $derived.by(() => {
-    const parts: string[] = [];
-    if (filterStore.statuses.size > 0) {
-      parts.push([...filterStore.statuses].join(", "));
-    }
-    if (filterStore.priorities.size > 0) {
-      parts.push([...filterStore.priorities].join(", "));
-    }
-    if (filterStore.queueIds.size > 0) {
-      const count = filterStore.queueIds.size;
-      parts.push(`${String(count)} queue${count > 1 ? "s" : ""}`);
-    }
-    if (filterStore.assigneeId !== null) {
-      parts.push("assigned");
-    }
-    if (filterStore.dateFrom !== null || filterStore.dateTo !== null) {
-      parts.push("date range");
-    }
-    return parts.length > 0 ? parts.join(", ") : "No filters";
-  });
 
   const canSave = $derived(name.trim().length > 0);
 
@@ -58,19 +40,11 @@
     const ciphertext = orgKeyManager.encrypt(plaintext);
     const encryptedName = uint8ArrayToBase64(ciphertext);
 
-    const record: SavedFilterRecord = {
-      id: crypto.randomUUID(),
+    onsave({
       encryptedName,
       color: selectedColor,
       icon: selectedIcon,
-      state: JSON.stringify(filterStore.captureState()),
-      shared: false,
-      ownerId: currentUserIdGetter() ?? "",
-      createdAt: new Date().toISOString(),
-    };
-
-    savedFilterStore.add(record);
-    toastStore.show(m.saved_filter_saved());
+    });
 
     // Reset form state.
     name = "";
