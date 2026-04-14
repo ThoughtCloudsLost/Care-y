@@ -341,10 +341,100 @@ describe.skipIf(!process.env.DATABASE_URL)("KBItemService (DB)", () => {
 
     // encryptedTitle must be a Buffer (ciphertext), not a decoded string.
     expect(Buffer.isBuffer(item.encryptedTitle)).toBe(true);
-    expect(Buffer.isBuffer(item.encryptedBody)).toBe(true);
 
     // The raw bytes must match what was stored (no transformation).
     expect(item.encryptedTitle.equals(ciphertext)).toBe(true);
+  });
+
+  // --- Excerpt tests ---
+
+  it("creates an article with encryptedExcerpt", async () => {
+    const excerpt = Buffer.from("excerpt-cipher");
+    const item = await svc.create("user-1", {
+      categoryId,
+      encryptedTitle: Buffer.from("with-excerpt"),
+      encryptedBody: Buffer.from("full-body"),
+      encryptedExcerpt: excerpt,
+    });
+    expect(item.encryptedExcerpt).not.toBeNull();
+    expect(Buffer.isBuffer(item.encryptedExcerpt)).toBe(true);
+    expect(item.encryptedExcerpt!.toString()).toBe("excerpt-cipher");
+  });
+
+  it("creates an article without encryptedExcerpt (null)", async () => {
+    const item = await svc.create("user-1", {
+      categoryId,
+      encryptedTitle: Buffer.from("no-excerpt"),
+      encryptedBody: Buffer.from("body"),
+    });
+    expect(item.encryptedExcerpt).toBeNull();
+  });
+
+  it("update sets encryptedExcerpt", async () => {
+    const item = await svc.create("user-1", {
+      categoryId,
+      encryptedTitle: Buffer.from("update-excerpt"),
+      encryptedBody: Buffer.from("body"),
+    });
+    expect(item.encryptedExcerpt).toBeNull();
+
+    const updated = await svc.update(item.id, {
+      encryptedExcerpt: Buffer.from("new-excerpt"),
+    });
+    expect(updated.encryptedExcerpt).not.toBeNull();
+    expect(updated.encryptedExcerpt!.toString()).toBe("new-excerpt");
+  });
+
+  it("list returns encryptedExcerpt but not encryptedBody", async () => {
+    const excerpt = Buffer.from("list-excerpt");
+    await svc.create("user-1", {
+      categoryId,
+      encryptedTitle: Buffer.from("list-test"),
+      encryptedBody: Buffer.from("list-body"),
+      encryptedExcerpt: excerpt,
+    });
+
+    const page = await svc.list({ limit: 50 });
+    const found = page.items.find(
+      (i) => i.encryptedTitle.toString() === "list-test",
+    );
+    expect(found).toBeDefined();
+    expect(found!.encryptedExcerpt).not.toBeNull();
+    expect(found!.encryptedExcerpt!.toString()).toBe("list-excerpt");
+    // Summary type has no encryptedBody property
+    expect("encryptedBody" in found!).toBe(false);
+  });
+
+  it("findById returns both encryptedBody and encryptedExcerpt", async () => {
+    const item = await svc.create("user-1", {
+      categoryId,
+      encryptedTitle: Buffer.from("detail-test"),
+      encryptedBody: Buffer.from("detail-body"),
+      encryptedExcerpt: Buffer.from("detail-excerpt"),
+    });
+
+    const found = await svc.findById(item.id);
+    expect(found.encryptedBody.toString()).toBe("detail-body");
+    expect(found.encryptedExcerpt).not.toBeNull();
+    expect(found.encryptedExcerpt!.toString()).toBe("detail-excerpt");
+  });
+
+  it("listRecentlyUpdated returns encryptedExcerpt but not encryptedBody", async () => {
+    const cat = await catSvc.create({
+      encryptedName: encName("Recent Excerpt"),
+    });
+    await svc.create("user-1", {
+      categoryId: cat.id,
+      encryptedTitle: Buffer.from("recent-test"),
+      encryptedBody: Buffer.from("recent-body"),
+      encryptedExcerpt: Buffer.from("recent-excerpt"),
+    });
+
+    const recent = await svc.listRecentlyUpdated(1);
+    expect(recent.length).toBeGreaterThanOrEqual(1);
+    const item = recent[0]!;
+    expect(item.encryptedExcerpt).not.toBeNull();
+    expect("encryptedBody" in item).toBe(false);
   });
 });
 

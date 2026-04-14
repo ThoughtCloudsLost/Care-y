@@ -132,6 +132,7 @@ const MOCK_ITEM: KBItemRecord = {
   categoryId: VALID_UUID,
   encryptedTitle: Buffer.from("title"),
   encryptedBody: Buffer.from("body"),
+  encryptedExcerpt: null,
   createdBy: USER_ID,
   voteUpCount: 0,
   voteDownCount: 0,

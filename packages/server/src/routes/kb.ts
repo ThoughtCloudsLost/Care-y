@@ -103,6 +103,10 @@ export function createKbRouter(deps: KBRouterDeps) {
           categoryId: input.categoryId,
           encryptedTitle: Buffer.from(input.encryptedTitle, "base64"),
           encryptedBody: Buffer.from(input.encryptedBody, "base64"),
+          encryptedExcerpt:
+            input.encryptedExcerpt !== undefined
+              ? Buffer.from(input.encryptedExcerpt, "base64")
+              : undefined,
         });
       }),
     ),
@@ -138,6 +142,10 @@ export function createKbRouter(deps: KBRouterDeps) {
           encryptedBody:
             input.encryptedBody !== undefined
               ? Buffer.from(input.encryptedBody, "base64")
+              : undefined,
+          encryptedExcerpt:
+            input.encryptedExcerpt !== undefined
+              ? Buffer.from(input.encryptedExcerpt, "base64")
               : undefined,
         });
       }),

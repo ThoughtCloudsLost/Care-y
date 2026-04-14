@@ -31,6 +31,7 @@ export const createKbItemInputSchema = z.object({
   categoryId: z.uuid(),
   encryptedTitle: base64String("encryptedTitle"),
   encryptedBody: base64String("encryptedBody"),
+  encryptedExcerpt: base64String("encryptedExcerpt").optional(),
 });
 export type CreateKbItemInput = z.infer<typeof createKbItemInputSchema>;
 
@@ -39,6 +40,7 @@ export const updateKbItemInputSchema = z.object({
   categoryId: z.uuid().optional(),
   encryptedTitle: base64String("encryptedTitle").optional(),
   encryptedBody: base64String("encryptedBody").optional(),
+  encryptedExcerpt: base64String("encryptedExcerpt").optional(),
 });
 export type UpdateKbItemInput = z.infer<typeof updateKbItemInputSchema>;
 

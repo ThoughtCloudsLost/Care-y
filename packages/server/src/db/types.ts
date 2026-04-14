@@ -384,6 +384,7 @@ export interface KBItemsTable {
   category_id: string;
   encrypted_title: Buffer;
   encrypted_body: Buffer;
+  encrypted_excerpt: Buffer | null;
   created_by: string;
   vote_up_count: ColumnType<number, number | undefined, number>;
   vote_down_count: ColumnType<number, number | undefined, number>;
