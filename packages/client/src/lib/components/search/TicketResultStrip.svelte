@@ -63,6 +63,7 @@
     gap: var(--space-md, 12px);
     overflow-x: auto;
     scroll-snap-type: x mandatory;
+    scroll-padding-inline-start: var(--page-pad-x, 0.75rem);
     -webkit-overflow-scrolling: touch;
     padding: var(--space-sm, 8px) var(--page-pad-x, 0.75rem);
     scrollbar-width: none;

@@ -25,6 +25,7 @@ export * from "./library_encrypted_title.js";
 export * from "./library_encrypted_body.js";
 export * from "./library_loading.js";
 export * from "./library_search_loading.js";
+export * from "./library_search_rating_label.js";
 export * from "./library_schedule_coming_soon.js";
 export * from "./library_empty_description.js";
 export * from "./library_sort.js";
