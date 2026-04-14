@@ -10,22 +10,13 @@
   import { page } from "$app/state";
   import { goto } from "$app/navigation";
   import { resolve } from "$app/paths";
-  import {
-    BlockTitle,
-    Button,
-    Segmented,
-    SegmentedButton,
-    List as KList,
-    ListItem,
-  } from "konsta/svelte";
-  import {
-    List,
-    LayoutGrid,
-    ArrowUpDown,
-    ArrowUp,
-    ArrowDown,
-    SquareCheckBig,
-  } from "@lucide/svelte";
+  import SubNavbarFilterLayout from "$lib/shell/SubNavbarFilterLayout.svelte";
+  import type {
+    ViewToggleConfig,
+    SortConfig,
+    SavedFiltersConfig,
+    FilterPillsConfig,
+  } from "$lib/shell/types.js";
   import * as m from "$lib/paraglide/messages.js";
   import { trpc } from "$lib/trpc/index.js";
   import {
@@ -51,7 +42,6 @@
   } from "$lib/components/tickets/ticket-types.js";
 
   import { RouterNotAvailableError } from "$lib/errors.js";
-  import ShellPopover from "$lib/shell/ShellPopover.svelte";
   import type { SortField, FilterStatus } from "$lib/stores/filters.svelte.js";
   import { savedFilterStore } from "$lib/stores/saved-filters.svelte.js";
   import {
@@ -63,9 +53,7 @@
   import StatusDot from "$lib/components/StatusDot.svelte";
   import TicketCard from "$lib/components/tickets/TicketCard.svelte";
   import SwipeableCard from "$lib/components/tickets/SwipeableCard.svelte";
-  import FilterPillBar from "$lib/components/filters/FilterPillBar.svelte";
   import type { PillDefinition } from "$lib/components/filters/filter-types.js";
-  import SavedFilterList from "$lib/components/filters/SavedFilterList.svelte";
   import CreateSavedFilter from "$lib/components/filters/CreateSavedFilter.svelte";
   import VirtualList from "$lib/components/tickets/VirtualList.svelte";
   import QueryError from "$lib/components/QueryError.svelte";
@@ -849,133 +837,96 @@
   // Saved filter modal state.
   let savedFilterModalOpen = $state(false);
 
-  // Sort dropdown state.
-  let sortOpen = $state(false);
-  let sortAnchorEl = $state<HTMLElement | undefined>(undefined);
+  // --- SubNavbar config objects ---
+  const viewConfig: ViewToggleConfig = $derived({
+    mode: viewModeStore.mode,
+    onchange: (mode: "list" | "grid") => viewModeStore.set(mode),
+    listLabel: m.tickets_view_list(),
+    gridLabel: m.tickets_view_grid(),
+  });
 
-  interface SortOption {
-    readonly field: SortField;
-    readonly label: string;
-  }
-
-  const sortOptions: SortOption[] = [
-    { field: "date", label: m.tickets_sort_newest() },
-    { field: "priority", label: m.tickets_sort_priority() },
-    { field: "last_activity", label: m.tickets_sort_activity() },
-    { field: "queue", label: m.tickets_sort_queue() },
+  const SORT_FIELDS: readonly SortField[] = [
+    "date",
+    "priority",
+    "last_activity",
+    "queue",
   ];
 
-  function toggleSort(): void {
-    sortOpen = !sortOpen;
+  function isSortField(value: string): value is SortField {
+    return (SORT_FIELDS as readonly string[]).includes(value);
   }
 
-  function handleSortTap(field: SortField): void {
-    if (filterStore.sort.field === field) {
-      // Toggle direction on re-tap.
-      filterStore.setSort(
-        field,
-        filterStore.sort.direction === "asc" ? "desc" : "asc",
-      );
-    } else {
-      // New field: default to desc (newest/highest first).
-      filterStore.setSort(field, "desc");
-    }
+  function handleSortChange(field: string, dir: "asc" | "desc"): void {
+    if (isSortField(field)) filterStore.setSort(field, dir);
   }
+
+  const sortConfig: SortConfig = $derived({
+    label: m.tickets_sort(),
+    options: [
+      { field: "date", label: m.tickets_sort_newest() },
+      { field: "priority", label: m.tickets_sort_priority() },
+      { field: "last_activity", label: m.tickets_sort_activity() },
+      { field: "queue", label: m.tickets_sort_queue() },
+    ],
+    currentField: filterStore.sort.field,
+    currentDirection: filterStore.sort.direction,
+    onchange: handleSortChange,
+  });
+
+  const savedFiltersConfig: SavedFiltersConfig = $derived({
+    filters: savedFilterStore.filters,
+    count: savedFilterStore.count,
+    onapply: handleSavedFilterApply,
+    ondelete: handleSavedFilterDelete,
+    ontoggleshare: handleSavedFilterToggleShare,
+  });
+
+  const filterPillsConfig: FilterPillsConfig = $derived({
+    pills: ticketPills,
+    activeCount: filterStore.activeCount,
+    dateFrom: dateFromStr,
+    dateTo: dateToStr,
+    dateActive: dateRangeActive,
+    dateLabel: dateRangeLabel,
+    ontoggle: handlePillToggle,
+    onselect: handlePillSelect,
+    ondatechange: handlePillDateChange,
+    onclearall: () => filterStore.clearAll(),
+    oncreateshortcut: () => {
+      savedFilterModalOpen = true;
+    },
+  });
 </script>
 
+{#snippet ticketStats()}
+  <span class="stat-item">
+    <StatusDot status="new" />
+    {newCount}
+    {m.tickets_status_new()}
+  </span>
+  <span class="stat-item">
+    <StatusDot status="active" />
+    {activeCount}
+    {m.tickets_status_active()}
+  </span>
+  <span class="stat-item">
+    <StatusDot status="hold" />
+    {holdCount}
+    {m.tickets_status_on_hold()}
+  </span>
+{/snippet}
+
 {#snippet ticketSubnavbar()}
-  <div class="ticket-header-content">
-    <div class="page-header">
-      <BlockTitle large class="page-title">{m.tickets_title()}</BlockTitle>
-      <Segmented strong class="view-toggle">
-        <SegmentedButton
-          active={viewModeStore.mode === "list"}
-          aria-pressed={viewModeStore.mode === "list"}
-          aria-label={m.tickets_view_list()}
-          onclick={() => viewModeStore.set("list")}
-          ><List size={16} aria-hidden="true" /></SegmentedButton
-        >
-        <SegmentedButton
-          active={viewModeStore.mode === "grid"}
-          aria-pressed={viewModeStore.mode === "grid"}
-          aria-label={m.tickets_view_grid()}
-          onclick={() => viewModeStore.set("grid")}
-          ><LayoutGrid size={16} aria-hidden="true" /></SegmentedButton
-        >
-      </Segmented>
-    </div>
-    <div class="stats-row">
-      <div class="stats-counts">
-        <span class="stat-item">
-          <StatusDot status="new" />
-          {newCount}
-          {m.tickets_status_new()}
-        </span>
-        <span class="stat-item">
-          <StatusDot status="active" />
-          {activeCount}
-          {m.tickets_status_active()}
-        </span>
-        <span class="stat-item">
-          <StatusDot status="hold" />
-          {holdCount}
-          {m.tickets_status_on_hold()}
-        </span>
-      </div>
-      <div class="view-controls">
-        <span bind:this={sortAnchorEl} class="sort-anchor">
-          <Button
-            tonal
-            rounded
-            small
-            inline
-            class="sort-btn"
-            aria-label={m.tickets_sort()}
-            aria-haspopup="listbox"
-            aria-expanded={sortOpen}
-            onclick={toggleSort}
-          >
-            <ArrowUpDown size={16} aria-hidden="true" />
-          </Button>
-        </span>
-        <Button
-          tonal
-          rounded
-          small
-          inline
-          class="select-btn"
-          aria-label={m.tickets_select_mode()}
-          onclick={toggleMultiSelect}
-        >
-          <SquareCheckBig size={16} aria-hidden="true" />
-        </Button>
-      </div>
-    </div>
-    <SavedFilterList
-      filters={savedFilterStore.filters}
-      count={savedFilterStore.count}
-      onapply={handleSavedFilterApply}
-      ondelete={handleSavedFilterDelete}
-      ontoggleshare={handleSavedFilterToggleShare}
-    />
-    <div class="ticket-controls">
-      <FilterPillBar
-        pills={ticketPills}
-        activeCount={filterStore.activeCount}
-        dateFrom={dateFromStr}
-        dateTo={dateToStr}
-        dateActive={dateRangeActive}
-        dateLabel={dateRangeLabel}
-        ontoggle={handlePillToggle}
-        onselect={handlePillSelect}
-        ondatechange={handlePillDateChange}
-        onclearall={() => filterStore.clearAll()}
-        oncreateshortcut={() => {
-          savedFilterModalOpen = true;
-        }}
-      />
-    </div>
-  </div>
+  <SubNavbarFilterLayout
+    title={m.tickets_title()}
+    view={viewConfig}
+    stats={ticketStats}
+    sort={sortConfig}
+    selectLabel={m.tickets_select_mode()}
+    onselect={toggleMultiSelect}
+    savedFilters={savedFiltersConfig}
+    filterPills={filterPillsConfig}
+  />
 {/snippet}
 
 <div class="ticket-page pb-20">
@@ -1095,45 +1046,7 @@
   <CallOptionsContent hasVerifiedPhone={false} onaction={handleCallAction} />
 </ShellActionSheet>
 
-<ShellPopover
-  opened={sortOpen}
-  target={sortAnchorEl}
-  placement="bottom"
-  ondismiss={() => {
-    sortOpen = false;
-  }}
->
-  <KList nested role="listbox" aria-label={m.tickets_sort()}>
-    {#each sortOptions as opt (opt.field)}
-      {@const isSelected = filterStore.sort.field === opt.field}
-      <ListItem
-        title={opt.label}
-        role="option"
-        aria-selected={isSelected}
-        onclick={() => handleSortTap(opt.field)}
-      >
-        {#snippet after()}
-          {#if isSelected}
-            {#if filterStore.sort.direction === "asc"}
-              <ArrowUp size={14} class="sort-dir-icon" />
-            {:else}
-              <ArrowDown size={14} class="sort-dir-icon" />
-            {/if}
-          {/if}
-        {/snippet}
-      </ListItem>
-    {/each}
-  </KList>
-</ShellPopover>
-
 <style>
-  .ticket-header-content {
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-lg);
-    padding: 0.25rem var(--page-pad-x) 0;
-  }
-
   .ticket-page {
     padding: 0.25rem var(--page-pad-x) 0;
     display: flex;
@@ -1141,78 +1054,10 @@
     gap: var(--space-lg);
   }
 
-  .page-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: var(--space-md);
-  }
-
-  :global(.page-title) {
-    margin: 0 !important;
-    padding-left: 0 !important;
-  }
-
-  .stats-row {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: var(--space-lg);
-  }
-
-  .stats-counts {
-    display: flex;
-    align-items: center;
-    gap: var(--space-xl);
-    font-size: var(--text-sm);
-    color: var(--muted);
-  }
-
   .stat-item {
     display: inline-flex;
     align-items: center;
     gap: 0.25rem;
-  }
-
-  .view-controls {
-    display: flex;
-    align-items: center;
-    gap: 0.375rem;
-    flex-shrink: 0;
-  }
-
-  .sort-anchor {
-    display: inline-flex;
-    flex-shrink: 0;
-  }
-
-  :global(.sort-btn),
-  :global(.select-btn) {
-    width: 1.75rem !important;
-    padding-left: 0 !important;
-    padding-right: 0 !important;
-  }
-
-  :global(.sort-dir-icon) {
-    color: var(--brand-text);
-    flex-shrink: 0;
-  }
-
-  .ticket-controls {
-    display: flex;
-    align-items: center;
-    gap: var(--space-xl);
-  }
-
-  :global(.view-toggle) {
-    flex-shrink: 0;
-    width: auto !important;
-    height: 1.75rem !important;
-  }
-
-  :global(.view-toggle .k-segmented-button) {
-    height: 1.75rem !important;
-    min-height: unset !important;
   }
 
   .ticket-list {

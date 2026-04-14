@@ -7,28 +7,15 @@
   import { SvelteMap, SvelteSet } from "svelte/reactivity";
   import { goto } from "$app/navigation";
   import { resolve } from "$app/paths";
-  import {
-    BlockTitle,
-    Button,
-    Segmented,
-    SegmentedButton,
-    List as KList,
-    ListItem,
-    Dialog,
-    DialogButton,
-  } from "konsta/svelte";
-  import {
-    List,
-    LayoutGrid,
-    ArrowUpDown,
-    ArrowUp,
-    ArrowDown,
-    SquareCheckBig,
-    FolderInput,
-    Trash2,
-    Download,
-    X,
-  } from "@lucide/svelte";
+  import { Dialog, DialogButton } from "konsta/svelte";
+  import { FolderInput, Trash2, Download, X } from "@lucide/svelte";
+  import SubNavbarFilterLayout from "$lib/shell/SubNavbarFilterLayout.svelte";
+  import type {
+    ViewToggleConfig,
+    SortConfig,
+    SavedFiltersConfig,
+    FilterPillsConfig,
+  } from "$lib/shell/types.js";
   import * as m from "$lib/paraglide/messages.js";
   import { trpc } from "$lib/trpc/index.js";
   import {
@@ -55,9 +42,6 @@
   } from "@care-y/shared";
   import { resolveOrgDecrypt } from "$lib/crypto/decrypt-result.js";
   import type { PillDefinition } from "$lib/components/filters/filter-types.js";
-  import ShellPopover from "$lib/shell/ShellPopover.svelte";
-  import FilterPillBar from "$lib/components/filters/FilterPillBar.svelte";
-  import SavedFilterList from "$lib/components/filters/SavedFilterList.svelte";
   import CreateSavedFilter from "$lib/components/filters/CreateSavedFilter.svelte";
   import ArticleCard from "$lib/components/library/ArticleCard.svelte";
   import MoveCategorySheet from "$lib/components/library/MoveCategorySheet.svelte";
@@ -317,35 +301,47 @@
     };
   });
 
-  // --- Sort ---
-  let sortOpen = $state(false);
-  let sortAnchorEl = $state<HTMLElement | undefined>(undefined);
+  // --- SubNavbar config objects ---
+  const viewConfig: ViewToggleConfig = $derived({
+    mode: kbViewModeStore.mode,
+    onchange: (mode: "list" | "grid") => kbViewModeStore.set(mode),
+    listLabel: m.library_view_list(),
+    gridLabel: m.library_view_grid(),
+  });
 
-  interface SortOption {
-    readonly field: KbSortField;
-    readonly label: string;
-  }
-
-  const sortOptions: SortOption[] = [
-    { field: "created_at", label: m.library_sort_date() },
-    { field: "updated_at", label: m.library_sort_updated() },
-    { field: "rating", label: m.library_sort_rating() },
+  const KB_SORT_FIELDS: readonly KbSortField[] = [
+    "created_at",
+    "updated_at",
+    "rating",
   ];
 
-  function toggleSort(): void {
-    sortOpen = !sortOpen;
+  function isKbSortField(value: string): value is KbSortField {
+    return (KB_SORT_FIELDS as readonly string[]).includes(value);
   }
 
-  function handleSortTap(field: KbSortField): void {
-    if (kbFilterStore.sort.field === field) {
-      kbFilterStore.setSort(
-        field,
-        kbFilterStore.sort.direction === "asc" ? "desc" : "asc",
-      );
-    } else {
-      kbFilterStore.setSort(field, "desc");
-    }
+  function handleSortChange(field: string, dir: "asc" | "desc"): void {
+    if (isKbSortField(field)) kbFilterStore.setSort(field, dir);
   }
+
+  const sortConfig: SortConfig = $derived({
+    label: m.library_sort(),
+    options: [
+      { field: "created_at", label: m.library_sort_date() },
+      { field: "updated_at", label: m.library_sort_updated() },
+      { field: "rating", label: m.library_sort_rating() },
+    ],
+    currentField: kbFilterStore.sort.field,
+    currentDirection: kbFilterStore.sort.direction,
+    onchange: handleSortChange,
+  });
+
+  const savedFiltersConfig: SavedFiltersConfig = $derived({
+    filters: kbSavedFilterStore.filters,
+    count: kbSavedFilterStore.count,
+    onapply: handleSavedFilterApply,
+    ondelete: handleSavedFilterDelete,
+    ontoggleshare: handleSavedFilterToggleShare,
+  });
 
   // --- Filter pill definitions ---
   const categoryOptions = $derived(
@@ -453,6 +449,22 @@
     return m.library_filter_date_range();
   });
 
+  const filterPillsConfig: FilterPillsConfig = $derived({
+    pills: kbPills,
+    activeCount: kbFilterStore.activeCount,
+    dateFrom: dateFromStr,
+    dateTo: dateToStr,
+    dateActive: dateRangeActive,
+    dateLabel: dateRangeLabel,
+    ontoggle: handlePillToggle,
+    onselect: handlePillSelect,
+    ondatechange: handlePillDateChange,
+    onclearall: () => kbFilterStore.clearAll(),
+    oncreateshortcut: () => {
+      savedFilterModalOpen = true;
+    },
+  });
+
   // --- Saved filter wiring ---
   function handleSavedFilterApply(record: SavedFilterRecord): void {
     const parsed: unknown = JSON.parse(record.state);
@@ -547,91 +559,25 @@
   }
 </script>
 
+{#snippet libraryStats()}
+  {#if !articlesQuery.isLoading}
+    <span class="stat-item">
+      {m.library_stats_count({ count: String(articleCount) })}
+    </span>
+  {/if}
+{/snippet}
+
 {#snippet librarySubnavbar()}
-  <div class="library-header-content">
-    <div class="page-header">
-      <BlockTitle large class="page-title">{m.library_title()}</BlockTitle>
-      <Segmented strong class="view-toggle">
-        <SegmentedButton
-          active={kbViewModeStore.mode === "list"}
-          aria-pressed={kbViewModeStore.mode === "list"}
-          aria-label={m.library_view_list()}
-          onclick={() => kbViewModeStore.set("list")}
-        >
-          <List size={16} aria-hidden="true" />
-        </SegmentedButton>
-        <SegmentedButton
-          active={kbViewModeStore.mode === "grid"}
-          aria-pressed={kbViewModeStore.mode === "grid"}
-          aria-label={m.library_view_grid()}
-          onclick={() => kbViewModeStore.set("grid")}
-        >
-          <LayoutGrid size={16} aria-hidden="true" />
-        </SegmentedButton>
-      </Segmented>
-    </div>
-    <div class="stats-row">
-      <div class="stats-counts">
-        {#if !articlesQuery.isLoading}
-          <span class="stat-item">
-            {m.library_stats_count({ count: String(articleCount) })}
-          </span>
-        {/if}
-      </div>
-      <div class="view-controls">
-        <span bind:this={sortAnchorEl} class="sort-anchor">
-          <Button
-            tonal
-            rounded
-            small
-            inline
-            class="sort-btn"
-            aria-label={m.library_sort()}
-            aria-haspopup="listbox"
-            aria-expanded={sortOpen}
-            onclick={toggleSort}
-          >
-            <ArrowUpDown size={16} aria-hidden="true" />
-          </Button>
-        </span>
-        <Button
-          tonal
-          rounded
-          small
-          inline
-          class="select-btn"
-          aria-label={m.library_select_mode()}
-          onclick={toggleMultiSelect}
-        >
-          <SquareCheckBig size={16} aria-hidden="true" />
-        </Button>
-      </div>
-    </div>
-    <SavedFilterList
-      filters={kbSavedFilterStore.filters}
-      count={kbSavedFilterStore.count}
-      onapply={handleSavedFilterApply}
-      ondelete={handleSavedFilterDelete}
-      ontoggleshare={handleSavedFilterToggleShare}
-    />
-    <div class="filter-controls">
-      <FilterPillBar
-        pills={kbPills}
-        activeCount={kbFilterStore.activeCount}
-        dateFrom={dateFromStr}
-        dateTo={dateToStr}
-        dateActive={dateRangeActive}
-        dateLabel={dateRangeLabel}
-        ontoggle={handlePillToggle}
-        onselect={handlePillSelect}
-        ondatechange={handlePillDateChange}
-        onclearall={() => kbFilterStore.clearAll()}
-        oncreateshortcut={() => {
-          savedFilterModalOpen = true;
-        }}
-      />
-    </div>
-  </div>
+  <SubNavbarFilterLayout
+    title={m.library_title()}
+    view={viewConfig}
+    stats={libraryStats}
+    sort={sortConfig}
+    selectLabel={m.library_select_mode()}
+    onselect={toggleMultiSelect}
+    savedFilters={savedFiltersConfig}
+    filterPills={filterPillsConfig}
+  />
 {/snippet}
 
 <div class="library-page pb-20">
@@ -752,45 +698,7 @@
   {/snippet}
 </Dialog>
 
-<ShellPopover
-  opened={sortOpen}
-  target={sortAnchorEl}
-  placement="bottom"
-  ondismiss={() => {
-    sortOpen = false;
-  }}
->
-  <KList nested role="listbox" aria-label={m.library_sort()}>
-    {#each sortOptions as opt (opt.field)}
-      {@const isSelected = kbFilterStore.sort.field === opt.field}
-      <ListItem
-        title={opt.label}
-        role="option"
-        aria-selected={isSelected}
-        onclick={() => handleSortTap(opt.field)}
-      >
-        {#snippet after()}
-          {#if isSelected}
-            {#if kbFilterStore.sort.direction === "asc"}
-              <ArrowUp size={14} class="sort-dir-icon" />
-            {:else}
-              <ArrowDown size={14} class="sort-dir-icon" />
-            {/if}
-          {/if}
-        {/snippet}
-      </ListItem>
-    {/each}
-  </KList>
-</ShellPopover>
-
 <style>
-  .library-header-content {
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-lg);
-    padding: 0.25rem var(--page-pad-x) 0;
-  }
-
   .library-page {
     padding: 0.25rem var(--page-pad-x) 0;
     display: flex;
@@ -798,59 +706,8 @@
     gap: var(--space-lg);
   }
 
-  .page-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: var(--space-md);
-  }
-
-  :global(.page-title) {
-    margin: 0 !important;
-    padding-left: 0 !important;
-  }
-
-  .stats-row {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: var(--space-lg);
-  }
-
-  .stats-counts {
-    display: flex;
-    align-items: center;
-    gap: var(--space-md);
-    font-size: var(--text-sm);
-    color: var(--muted);
-  }
-
   .stat-item {
     white-space: nowrap;
-  }
-
-  .view-controls {
-    display: flex;
-    align-items: center;
-    gap: 0.375rem;
-    flex-shrink: 0;
-  }
-
-  .sort-anchor {
-    display: inline-flex;
-    flex-shrink: 0;
-  }
-
-  :global(.sort-btn) {
-    width: 1.75rem !important;
-    padding-left: 0 !important;
-    padding-right: 0 !important;
-  }
-
-  :global(.select-btn) {
-    width: 1.75rem !important;
-    padding-left: 0 !important;
-    padding-right: 0 !important;
   }
 
   .article-list {

@@ -14,7 +14,7 @@ export interface UseScrollDirectionOptions {
   get scrollEl(): HTMLElement | undefined;
   /** Scroll position below which `hidden` is always false. Default: 60. */
   threshold?: number;
-  /** Minimum delta (px) to register a direction change. Default: 5. */
+  /** Minimum delta (px) to register a direction change. Default: 8. */
   deadZone?: number;
 }
 
@@ -49,7 +49,7 @@ export class ScrollDirectionTracker {
 
   constructor(options: ScrollDirectionTrackerOptions = {}) {
     this.threshold = options.threshold ?? 60;
-    this.deadZone = options.deadZone ?? 5;
+    this.deadZone = options.deadZone ?? 8;
     this.onChange = options.onChange;
   }
 
@@ -70,8 +70,19 @@ export class ScrollDirectionTracker {
 
     const delta = currentTop - this.lastScrollTop;
 
-    // Dead zone: ignore tiny deltas (iOS rubber-band bounce).
+    // Dead zone: ignore tiny deltas from sub-pixel jitter.
     if (Math.abs(delta) < this.deadZone) return;
+
+    // Rubber-band bounce guard: when the scroll position is at the
+    // bottom content boundary, iOS Safari's overscroll spring-back
+    // produces a small upward delta. Ignore upward movement that
+    // originates from the bottom edge so it isn't mistaken for an
+    // intentional scroll-up gesture.
+    const maxScroll = this.currentEl.scrollHeight - this.currentEl.clientHeight;
+    if (delta < 0 && this.lastScrollTop >= maxScroll - 3) {
+      this.lastScrollTop = currentTop;
+      return;
+    }
 
     const newHidden = delta > 0; // positive = scrolling down = hide
     const changed = this.hidden !== newHidden;
