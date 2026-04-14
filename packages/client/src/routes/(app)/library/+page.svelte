@@ -15,6 +15,7 @@
     SortConfig,
     SavedFiltersConfig,
     FilterPillsConfig,
+    TabbarOverrideAction,
   } from "$lib/shell/types.js";
   import * as m from "$lib/paraglide/messages.js";
   import { trpc } from "$lib/trpc/index.js";
@@ -22,6 +23,7 @@
     getOrgDecryptCache,
     getOrgKeyManager,
     getCurrentUserId,
+    getCurrentPermissions,
   } from "$lib/crypto/context.js";
   import {
     getScrollContainer,
@@ -36,6 +38,7 @@
   import { toastStore } from "$lib/stores/toast.svelte.js";
   import {
     kbSavedFilterStateSchema,
+    Permission,
     type KbSortField,
     type SavedFilterRecord,
     type SavedFilterColor,
@@ -43,16 +46,19 @@
   import { resolveOrgDecrypt } from "$lib/crypto/decrypt-result.js";
   import type { PillDefinition } from "$lib/components/filters/filter-types.js";
   import CreateSavedFilter from "$lib/components/filters/CreateSavedFilter.svelte";
+  import VirtualList from "$lib/components/tickets/VirtualList.svelte";
   import ArticleCard from "$lib/components/library/ArticleCard.svelte";
   import MoveCategorySheet from "$lib/components/library/MoveCategorySheet.svelte";
   import QueryError from "$lib/components/QueryError.svelte";
   import { haptic } from "$lib/utils/haptic.js";
-  import type { SerializedBuffer } from "$lib/utils/buffer-encoding.js";
 
   const orgCache = getOrgDecryptCache();
   const orgKeyManager = getOrgKeyManager();
   const currentUserIdGetter = getCurrentUserId();
   const currentUserId = $derived(currentUserIdGetter());
+  const permissionsGetter = getCurrentPermissions();
+  const permissions = $derived(permissionsGetter());
+  const canDelete = $derived(permissions.has(Permission.MANAGE_USERS));
   if (!trpc.kb) throw new RouterNotAvailableError("kb");
   const kbRouter = trpc.kb;
   const queryClient = useQueryClient();
@@ -85,20 +91,29 @@
     return map;
   });
 
-  // --- Volunteers query (for author name resolution) ---
-  interface VolunteerRecord {
-    id: string;
-    encryptedDisplayName: SerializedBuffer | Uint8Array | null;
-  }
+  // --- Authors query (distinct KB article authors with display names) ---
+  const authorsQuery = createQuery(() => ({
+    queryKey: ["kb", "authors"],
+    queryFn: async () => kbRouter.listAuthors.query(),
+    staleTime: 10 * 60 * 1000,
+  }));
 
-  function resolveVolunteerName(userId: string): string | null {
+  // Build author name lookup: userId -> decrypted display name.
+  const authorNameMap = $derived.by(() => {
+    const map = new SvelteMap<string, string>();
+    for (const a of authorsQuery.data ?? []) {
+      const name = orgCache.decrypt(
+        `volunteer:${a.id}`,
+        a.encryptedDisplayName,
+      );
+      if (name !== null) map.set(a.id, name);
+    }
+    return map;
+  });
+
+  function resolveAuthorName(userId: string): string | null {
     if (userId === currentUserId) return m.dashboard_assigned_you();
-    const volunteers = queryClient.getQueryData<readonly VolunteerRecord[]>([
-      "volunteers",
-    ]);
-    const vol = volunteers?.find((v) => v.id === userId);
-    if (!vol) return null;
-    return orgCache.decrypt(`volunteer:${vol.id}`, vol.encryptedDisplayName);
+    return authorNameMap.get(userId) ?? null;
   }
 
   // --- Article list with infinite scroll ---
@@ -250,29 +265,32 @@
   // Tabbar override for multi-select.
   $effect(() => {
     if (multiSelectActive) {
+      const actions: TabbarOverrideAction[] = [
+        {
+          id: "move",
+          label: m.library_action_move(),
+          icon: FolderInput,
+          onclick: handleBulkMove,
+        },
+      ];
+      if (canDelete) {
+        actions.push({
+          id: "delete",
+          label: m.library_action_delete(),
+          icon: Trash2,
+          onclick: handleBulkDelete,
+        });
+      }
+      actions.push({
+        id: "export",
+        label: m.library_action_export(),
+        icon: Download,
+        onclick: handleBulkExport,
+      });
       tabbarOverride.current = {
         label: m.library_selected({ count: selectedIds.size }),
         ariaLabel: m.library_selected({ count: selectedIds.size }),
-        actions: [
-          {
-            id: "move",
-            label: m.library_action_move(),
-            icon: FolderInput,
-            onclick: handleBulkMove,
-          },
-          {
-            id: "delete",
-            label: m.library_action_delete(),
-            icon: Trash2,
-            onclick: handleBulkDelete,
-          },
-          {
-            id: "export",
-            label: m.library_action_export(),
-            icon: Download,
-            onclick: handleBulkExport,
-          },
-        ],
+        actions,
         dismiss: {
           icon: X,
           ariaLabel: m.library_exit_multiselect(),
@@ -363,20 +381,12 @@
     return r >= 0.5 ? "high" : "positive";
   });
 
-  const authorOptions = $derived.by(() => {
-    // Build from unique createdBy values in the loaded article set.
-    const authors = new SvelteMap<string, string>();
-    for (const a of allArticles) {
-      if (!authors.has(a.createdBy)) {
-        const name = resolveVolunteerName(a.createdBy);
-        if (name !== null) authors.set(a.createdBy, name);
-      }
-    }
-    return [...authors.entries()].map(([id, name]) => ({
+  const authorOptions = $derived(
+    [...authorNameMap.entries()].map(([id, name]) => ({
       value: id,
       label: name,
-    }));
-  });
+    })),
+  );
 
   const kbPills: PillDefinition[] = $derived([
     {
@@ -539,22 +549,6 @@
     })),
   );
 
-  // Intersection observer action for infinite scroll trigger.
-  function loadTrigger(node: HTMLElement): { destroy(): void } {
-    const observer = new IntersectionObserver(
-      (entries) => {
-        if (entries[0]?.isIntersecting === true) loadNextPage();
-      },
-      { rootMargin: "200px" },
-    );
-    observer.observe(node);
-    return {
-      destroy(): void {
-        observer.disconnect();
-      },
-    };
-  }
-
   function skeletonNoop(): void {
     /* skeleton card, no interaction */
   }
@@ -620,46 +614,53 @@
       </p>
     </div>
   {:else}
-    <div
-      class="article-list"
-      class:article-grid={kbViewModeStore.mode === "grid"}
-    >
-      {#each filteredArticles as article (article.id)}
-        <ArticleCard
-          articleId={article.id}
-          viewMode={kbViewModeStore.mode}
-          titleResult={resolveOrgDecrypt(
-            orgCache.decrypt(`kb-item:${article.id}`, article.encryptedTitle),
-            isOrgKeyLoaded,
-          )}
-          excerptResult={resolveOrgDecrypt(
-            orgCache.decrypt(
-              `kb-excerpt:${article.id}`,
-              article.encryptedExcerpt,
-            ),
-            isOrgKeyLoaded,
-          )}
-          encryptedTitle={article.encryptedTitle}
-          encryptedExcerpt={article.encryptedExcerpt}
-          categoryName={categoryNameMap.get(article.categoryId) ?? null}
-          authorName={resolveVolunteerName(article.createdBy)}
-          rating={article.rating}
-          voteUpCount={article.voteUpCount}
-          voteTotalCount={article.voteUpCount + article.voteDownCount}
-          createdAt={new Date(article.createdAt)}
-          updatedAt={new Date(article.updatedAt)}
-          selected={selectedIds.has(article.id)}
-          {multiSelectActive}
-          ontap={handleArticleTap}
-          onselect={toggleSelection}
-          onlongpress={handleLongPress}
-        />
-      {/each}
+    <div class="article-list">
+      <VirtualList
+        items={filteredArticles}
+        scrollContainer={scrollEl}
+        estimateHeight={kbViewModeStore.mode === "grid" ? 200 : 140}
+        columns={kbViewModeStore.mode === "grid" ? 2 : 1}
+        getKey={(article: (typeof filteredArticles)[number]) => article.id}
+        onloadmore={articlesQuery.hasNextPage ? loadNextPage : undefined}
+      >
+        {#snippet children({
+          item: article,
+        }: {
+          item: (typeof filteredArticles)[number];
+          index: number;
+        })}
+          <ArticleCard
+            articleId={article.id}
+            viewMode={kbViewModeStore.mode}
+            titleResult={resolveOrgDecrypt(
+              orgCache.decrypt(`kb-item:${article.id}`, article.encryptedTitle),
+              isOrgKeyLoaded,
+            )}
+            excerptResult={resolveOrgDecrypt(
+              orgCache.decrypt(
+                `kb-excerpt:${article.id}`,
+                article.encryptedExcerpt,
+              ),
+              isOrgKeyLoaded,
+            )}
+            encryptedTitle={article.encryptedTitle}
+            encryptedExcerpt={article.encryptedExcerpt}
+            categoryName={categoryNameMap.get(article.categoryId) ?? null}
+            authorName={resolveAuthorName(article.createdBy)}
+            rating={article.rating}
+            voteUpCount={article.voteUpCount}
+            voteTotalCount={article.voteUpCount + article.voteDownCount}
+            createdAt={new Date(article.createdAt)}
+            updatedAt={new Date(article.updatedAt)}
+            selected={selectedIds.has(article.id)}
+            {multiSelectActive}
+            ontap={handleArticleTap}
+            onselect={toggleSelection}
+            onlongpress={handleLongPress}
+          />
+        {/snippet}
+      </VirtualList>
     </div>
-
-    {#if articlesQuery.hasNextPage}
-      <div class="load-trigger" use:loadTrigger></div>
-    {/if}
   {/if}
 </div>
 
@@ -723,7 +724,7 @@
 
   .article-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(10rem, 1fr));
+    grid-template-columns: repeat(2, 1fr);
     gap: var(--space-md);
   }
 
@@ -732,9 +733,5 @@
     padding: 3rem 1rem;
     color: var(--muted);
     font-size: var(--text-base);
-  }
-
-  .load-trigger {
-    height: 1px;
   }
 </style>

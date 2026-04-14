@@ -165,6 +165,14 @@ export function createKbRouter(deps: KBRouterDeps) {
       }),
     ),
 
+    // --- Authors (for client-side filter dropdown) ---
+    listAuthors: volunteerProcedure.query(
+      withErrorWrapping(async ({ ctx }) => {
+        const svc = deps.createItemSvc(ctx.org.tenantDb);
+        return svc.listAuthors();
+      }),
+    ),
+
     // --- Dashboard: recently updated ---
     recentItems: volunteerProcedure
       .input(z.object({ limit: z.number().int().min(1).max(5).default(2) }))

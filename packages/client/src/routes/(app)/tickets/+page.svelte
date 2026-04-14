@@ -962,6 +962,7 @@
         items={displayFiltered}
         scrollContainer={scrollEl}
         estimateHeight={viewModeStore.mode === "grid" ? 200 : 140}
+        virtualizeThreshold={200}
         columns={gridColumns}
         getKey={(t: TicketRecord) => t.id}
         onloadmore={loadNextPage}

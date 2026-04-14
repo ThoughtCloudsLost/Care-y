@@ -8,6 +8,7 @@
     estimateHeight = 200,
     overscan = 3,
     columns = 1,
+    virtualizeThreshold = 500,
     _forceVirtualize = false,
     getKey,
     onloadmore,
@@ -19,6 +20,12 @@
     estimateHeight?: number;
     overscan?: number;
     columns?: number;
+    /**
+     * Item count before switching from flat to virtualized rendering.
+     * Lower for complex items (cards with images), higher for simple items.
+     * Set to 0 to virtualize immediately (not recommended outside tests).
+     */
+    virtualizeThreshold?: number;
     /** Test-only: skip flat mode and start virtualized immediately. */
     _forceVirtualize?: boolean;
     getKey: (item: T) => string;
@@ -45,34 +52,16 @@
 
   // ── Virtualization lifecycle ──
   // Starts flat (normal document flow). ResizeObserver measures row heights
-  // silently in the background. After onloadmore fires and new items arrive,
-  // switches to absolute positioning using real measured heights. Unmeasured
-  // rows (from newly loaded pages) use the average of all measured heights.
-  // Once virtualized, stays virtualized (no flipping back).
+  // silently in the background. Switches to absolute positioning (virtualized
+  // mode) once item count reaches virtualizeThreshold AND enough rows have
+  // been measured for a reliable average height. Once virtualized, stays
+  // virtualized (no flipping back).
   let virtualized = $state(false);
 
   // Allow tests to start in virtualized mode immediately.
   $effect(() => {
     if (_forceVirtualize) virtualized = true;
   });
-  let prevItemCount = $state(0);
-  let loadMoreFired = false;
-
-  // Track item count changes. When onloadmore has fired and items grow,
-  // we have measurements from the first page and can switch to virtualized.
-  $effect(() => {
-    const count = items.length;
-    if (loadMoreFired && count > prevItemCount && prevItemCount > 0) {
-      virtualized = true;
-    }
-    prevItemCount = count;
-  });
-
-  // Wrap onloadmore to detect when it fires.
-  function handleLoadMore(): void {
-    loadMoreFired = true;
-    onloadmore?.();
-  }
 
   // ── Flat-mode rows ──
   // Group all items into rows for the grid layout, keyed by identity.
@@ -104,10 +93,25 @@
 
   // Per-row measured heights (including gap). Index = row index.
   let heights: number[] = $state([]);
+  let measuredCount = $state(0);
   let scrollTop = $state(0);
   let containerHeight = $state(0);
 
   const rowCount = $derived(Math.ceil(items.length / columns));
+
+  // Switch to virtualized when items exceed threshold and we have enough
+  // height measurements (at least 20 rows, or all rows if fewer) for
+  // reliable average-height positioning of unmeasured rows.
+  $effect(() => {
+    const MIN_MEASURED = 20;
+    if (
+      !virtualized &&
+      items.length >= virtualizeThreshold &&
+      measuredCount >= Math.min(rowCount, MIN_MEASURED)
+    ) {
+      virtualized = true;
+    }
+  });
 
   // Running average of measured heights, used as fallback for unmeasured
   // rows. Falls back to estimateHeight + gap when nothing is measured yet.
@@ -214,12 +218,16 @@
           const next = [...heights];
           const maxRow = Math.max(...pendingHeights.keys());
           while (next.length <= maxRow) next.push(0);
+          let newlyMeasured = 0;
           for (const [row, h] of pendingHeights) {
             // eslint-disable-next-line security/detect-object-injection -- row is a numeric key from the pendingHeights Map, originally validated on parse
+            if ((next[row] ?? 0) === 0) newlyMeasured++;
+            // eslint-disable-next-line security/detect-object-injection -- same row variable
             next[row] = h;
           }
           pendingHeights.clear();
           heights = next;
+          measuredCount += newlyMeasured;
         });
       }
     });
@@ -254,7 +262,7 @@
 
   $effect(() => {
     if (!sentinelEl || !onloadmore) return;
-    const cb = handleLoadMore;
+    const cb = onloadmore;
     const io = new IntersectionObserver(
       ([entry]) => {
         if (entry?.isIntersecting === true) cb();

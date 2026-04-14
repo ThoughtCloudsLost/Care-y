@@ -54,6 +54,14 @@ export interface KBItemPage {
   readonly nextCursor: string | null;
 }
 
+// --- Author records ---
+
+/** Distinct KB article author with encrypted display name for client resolution. */
+export interface KBAuthorRecord {
+  readonly id: string;
+  readonly encryptedDisplayName: Buffer;
+}
+
 // --- Vote records ---
 
 export interface KBVoteRecord {
@@ -126,6 +134,9 @@ export interface KBItemService {
 
   /** Return the N most recently updated items, ordered by updated_at desc. */
   listRecentlyUpdated(limit: number): Promise<KBItemSummary[]>;
+
+  /** Return distinct authors who have written KB articles. */
+  listAuthors(): Promise<KBAuthorRecord[]>;
 }
 
 export interface KBVoteService {
@@ -534,6 +545,23 @@ export function createKBItemService(db: Kysely<TenantDatabase>): KBItemService {
         .limit(limit)
         .execute();
       return rows.map(toItemSummary);
+    },
+
+    async listAuthors() {
+      const rows = await db
+        .selectFrom("kb_items")
+        .innerJoin("users", (join) =>
+          join.on((eb) =>
+            eb(eb.cast("kb_items.created_by", "uuid"), "=", eb.ref("users.id")),
+          ),
+        )
+        .select(["users.id", "users.encrypted_display_name"])
+        .groupBy(["users.id", "users.encrypted_display_name"])
+        .execute();
+      return rows.map((r) => ({
+        id: r.id,
+        encryptedDisplayName: r.encrypted_display_name,
+      }));
     },
   };
 }
