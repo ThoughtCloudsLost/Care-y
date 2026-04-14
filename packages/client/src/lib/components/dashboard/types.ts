@@ -1,9 +1,11 @@
+import type { DecryptResult } from "$lib/crypto/decrypt-result.js";
+
 /** Props for a single ticket preview item in the dashboard. */
 export interface TicketPreviewItemProps {
   /** Ticket ID for navigation */
   ticketId: string;
-  /** Decrypted title, or undefined if decryption is pending or key wrap is unavailable */
-  title?: string;
+  /** Decrypted ticket title */
+  titleResult: DecryptResult;
   /** Ticket status */
   status: string;
   /** Ticket priority */

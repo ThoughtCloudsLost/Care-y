@@ -25,12 +25,19 @@
     getFollowUpDecryptCache,
     getTicketDecryptCache,
     getOrgDecryptCache,
+    getOrgKeyManager,
     getPreviewLoader,
     getCurrentUserId,
     getCurrentUserRoleId,
   } from "$lib/crypto/context.js";
   import { RoleId } from "@care-y/shared";
   import { isDecryptError } from "$lib/crypto/async-decrypt-cache.js";
+  import {
+    type DecryptResult,
+    resolveAsyncDecrypt,
+    matchDecryptResult,
+  } from "$lib/crypto/decrypt-result.js";
+  import { createTicketDecryptScope } from "$lib/crypto/ticket-decrypt-scope.js";
   import { SvelteMap } from "svelte/reactivity";
   import { RouterNotAvailableError } from "$lib/errors.js";
   import { formatRelativeTime } from "$lib/utils/format-time.js";
@@ -108,6 +115,7 @@
   const ticketCache = getTicketDecryptCache();
   const followUpCache = getFollowUpDecryptCache();
   const orgCache = getOrgDecryptCache();
+  const orgKeyManager = getOrgKeyManager();
   const previewLoader = getPreviewLoader();
   const currentUserIdGetter = getCurrentUserId();
   const currentUserId = $derived(currentUserIdGetter());
@@ -151,6 +159,20 @@
   function resolveVolunteerName(userId: string | null): string | undefined {
     return resolveVolName(userId, volunteerMap, orgCache);
   }
+
+  // Pre-bound decrypt scope for the current ticket.
+  const decrypt = $derived(
+    ticket != null
+      ? createTicketDecryptScope({
+          ticketCache,
+          followUpCache,
+          orgCache,
+          orgKeyManager,
+          ticketId: ticket.id,
+          keyWrap: ticket.keyWrap,
+        })
+      : null,
+  );
 
   // --- Pagination ---
 
@@ -302,11 +324,14 @@
     return fu.source === "client" ? "received" : "sent";
   }
 
-  function bubbleAriaLabel(fu: FollowUp, content: string | undefined): string {
+  function bubbleAriaLabel(fu: FollowUp, fuResult: DecryptResult): string {
     const time = formatRelativeTime(new Date(fu.createdAt));
-    const preview = isDecryptError(content)
-      ? m.error_decryption_failed()
-      : (content?.slice(0, 80) ?? "");
+    const preview = matchDecryptResult(fuResult, {
+      loading: () => "",
+      ready: (v) => v.slice(0, 80),
+      denied: () => m.decrypt_placeholder_denied(),
+      error: () => m.error_decryption_failed(),
+    });
     const base =
       fu.source === "client"
         ? m.ticket_message_received_from({ name: clientAlias, time })
@@ -358,14 +383,10 @@
       editNote: m.ticket_edit_note(),
       deleteNote: m.ticket_delete_note(),
     });
-    if (actions.length === 0 || !ticket) return;
+    if (actions.length === 0 || !decrypt) return;
 
-    const content = followUpCache.decryptContent(
-      fu.id,
-      ticket.keyWrap,
-      fu.encryptedContent,
-    );
-    const plaintext = isDecryptError(content) ? undefined : content;
+    const result = decrypt.followUp(fu.id, fu.encryptedContent);
+    const plaintext = result.status === "ready" ? result.value : undefined;
 
     oncontextmenu?.({ followUpId: fu.id, actions, plaintext });
   }
@@ -541,13 +562,12 @@
 
       <!-- Preview messages that arrived before the ticket query resolved -->
       {#each orderedPreviews as fu (fu.id)}
-        {@const content = followUpCache.decryptContent(
-          fu.id,
-          fu.keyWrap,
-          fu.encryptedContent,
+        {@const previewResult = resolveAsyncDecrypt(
+          followUpCache.decryptContent(fu.id, fu.keyWrap, fu.encryptedContent),
+          fu.keyWrap !== null,
         )}
         <div class="fu-wrapper">
-          <FollowUpBubble followUp={fu} {content} {clientAlias} />
+          <FollowUpBubble followUp={fu} result={previewResult} {clientAlias} />
         </div>
       {/each}
     </Messages>
@@ -595,13 +615,20 @@
 
         <!-- Real preview messages from the ticket list (already decrypting) -->
         {#each orderedPreviews as fu (fu.id)}
-          {@const content = followUpCache.decryptContent(
-            fu.id,
-            fu.keyWrap,
-            fu.encryptedContent,
+          {@const previewResult = resolveAsyncDecrypt(
+            followUpCache.decryptContent(
+              fu.id,
+              fu.keyWrap,
+              fu.encryptedContent,
+            ),
+            fu.keyWrap !== null,
           )}
           <div class="fu-wrapper">
-            <FollowUpBubble followUp={fu} {content} {clientAlias} />
+            <FollowUpBubble
+              followUp={fu}
+              result={previewResult}
+              {clientAlias}
+            />
           </div>
         {/each}
       </Messages>
@@ -649,11 +676,10 @@
             })}
               {@const fu = item}
               {@const kind = followUpKind(fu)}
-              {@const content = followUpCache.decryptContent(
-                fu.id,
-                ticket.keyWrap,
-                fu.encryptedContent,
-              )}
+              {@const contentResult =
+                decrypt != null
+                  ? decrypt.followUp(fu.id, fu.encryptedContent)
+                  : resolveAsyncDecrypt(undefined, false)}
               {@const prevTimestamp =
                 i > 0 ? followUps[i - 1]?.createdAt : undefined}
 
@@ -687,16 +713,19 @@
                 role={kind === "system" ? undefined : "article"}
                 aria-label={kind === "system"
                   ? undefined
-                  : bubbleAriaLabel(fu, content)}
+                  : bubbleAriaLabel(fu, contentResult)}
                 onkeydown={kind === "system"
                   ? undefined
                   : handleBubbleKeydown(fu)}
               >
                 {#if kind === "system"}
-                  <SystemEvent {content} timestamp={fu.createdAt} />
+                  <SystemEvent
+                    result={contentResult}
+                    timestamp={fu.createdAt}
+                  />
                 {:else if kind === "note"}
                   <PrivateNote
-                    {content}
+                    result={contentResult}
                     authorName={resolveVolunteerName(fu.createdBy)}
                     timestamp={fu.createdAt}
                     isOwn={fu.createdBy === currentUserId}
@@ -712,7 +741,7 @@
                   <Message
                     type={messageType(fu)}
                     name={fu.source === "client" ? clientAlias : undefined}
-                    aria-label={bubbleAriaLabel(fu, content)}
+                    aria-label={bubbleAriaLabel(fu, contentResult)}
                   >
                     {#snippet text()}
                       <!-- svelte-ignore a11y_no_static_element_interactions -->
@@ -723,7 +752,7 @@
                         onpointercancel={cancelLongPress}
                       >
                         <DecryptPlaceholder
-                          {content}
+                          result={contentResult}
                           ciphertext={fu.encryptedContent}
                           length={30}
                           block
@@ -776,6 +805,7 @@
     flex: 1;
     min-height: 0;
     overflow-y: auto;
+    overflow-anchor: auto;
     overscroll-behavior: contain;
     display: flex;
     flex-direction: column;

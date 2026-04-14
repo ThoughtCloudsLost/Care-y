@@ -19,6 +19,7 @@
   "error_generic": "Something went wrong. Please try again.",
   "error_decryption_failed": "This content could not be decrypted.",
   "decrypt_placeholder_loading": "Decrypting",
+  "decrypt_placeholder_denied": "No access to this content",
   "error_network": "Could not reach the server. Check your connection.",
 
   "error_not_authenticated": "You are not signed in.",

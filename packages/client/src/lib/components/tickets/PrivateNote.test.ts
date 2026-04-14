@@ -23,7 +23,10 @@ afterEach(() => {
 
 describe("PrivateNote", () => {
   const baseProps = {
-    content: "Client seems distressed about the timeline",
+    result: {
+      status: "ready" as const,
+      value: "Client seems distressed about the timeline",
+    },
     authorName: "Alice",
     timestamp: "2026-04-05T10:40:00Z",
     isOwn: true,
@@ -54,17 +57,19 @@ describe("PrivateNote", () => {
     expect(label).toContain("Alice");
   });
 
-  it("renders shimmer when content is undefined (pending)", () => {
+  it("renders shimmer when result is loading", () => {
     const { container } = render(PrivateNote, {
-      props: { ...baseProps, content: undefined },
+      props: { ...baseProps, result: { status: "loading" as const } },
     });
-    const shimmer = container.querySelector("[aria-busy='true']");
+    // DecryptPlaceholder container (.dp) renders immediately; the scramble
+    // (aria-busy) is delayed by 150ms, so check the container only.
+    const shimmer = container.querySelector(".dp");
     expect(shimmer).not.toBeNull();
   });
 
-  it("renders error text for DECRYPT_ERROR_SENTINEL", () => {
+  it("renders error text for error result", () => {
     const { container } = render(PrivateNote, {
-      props: { ...baseProps, content: "\0DECRYPT_FAILED" },
+      props: { ...baseProps, result: { status: "error" as const } },
     });
     expect(container.textContent).toContain(
       "This content could not be decrypted.",

@@ -203,7 +203,9 @@ describe("Dashboard page", () => {
     });
 
     const { container } = render(PageModule.default);
-    expect(container.querySelector("[role='status']")).toBeTruthy();
+    // DecryptPlaceholder container (.dp) renders immediately; the scramble
+    // (role="status") is delayed by 150ms, so check the container only.
+    expect(container.querySelector(".dp")).toBeTruthy();
   });
 
   it("renders section headers even on query failure (progressive loading)", () => {

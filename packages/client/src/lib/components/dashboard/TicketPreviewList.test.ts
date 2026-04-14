@@ -18,7 +18,7 @@ const ontickettap = vi.fn();
 function makeTicket(id: string, overrides?: Record<string, unknown>) {
   return {
     ticketId: id,
-    title: `Ticket ${id}`,
+    titleResult: { status: "ready" as const, value: `Ticket ${id}` },
     status: "open",
     priority: "normal" as const,
     onHold: false,

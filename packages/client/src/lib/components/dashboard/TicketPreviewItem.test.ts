@@ -21,7 +21,7 @@ describe("TicketPreviewItem", () => {
 
   const defaults = {
     ticketId: "t-001",
-    title: "Test ticket title",
+    titleResult: { status: "ready" as const, value: "Test ticket title" },
     status: "open",
     priority: "normal" as const,
     onHold: false,
@@ -39,9 +39,9 @@ describe("TicketPreviewItem", () => {
     expect(container.textContent).toContain("Test ticket title");
   });
 
-  it("shows 'Encrypted ticket' placeholder when title is undefined", () => {
+  it("shows 'Encrypted ticket' placeholder when title is loading", () => {
     const { container } = render(TicketPreviewItem, {
-      props: { ...defaults, title: undefined },
+      props: { ...defaults, titleResult: { status: "loading" as const } },
     });
     expect(container.textContent).toContain("Encrypted ticket");
   });
@@ -124,7 +124,7 @@ describe("formatRelativeTime (via rendered output)", () => {
 
   const base = {
     ticketId: "t-time",
-    title: "Time test",
+    titleResult: { status: "ready" as const, value: "Time test" },
     status: "open",
     priority: "normal" as const,
     onHold: false,
