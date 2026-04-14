@@ -28,9 +28,9 @@
     getOrgKeyManager,
     getPreviewLoader,
     getCurrentUserId,
-    getCurrentUserRoleId,
+    getCurrentPermissions,
   } from "$lib/crypto/context.js";
-  import { RoleId } from "@care-y/shared";
+  import { Permission } from "@care-y/shared";
   import { isDecryptError } from "$lib/crypto/async-decrypt-cache.js";
   import {
     type DecryptResult,
@@ -119,9 +119,11 @@
   const previewLoader = getPreviewLoader();
   const currentUserIdGetter = getCurrentUserId();
   const currentUserId = $derived(currentUserIdGetter());
-  const currentUserRoleIdGetter = getCurrentUserRoleId();
-  const currentUserRoleId = $derived(currentUserRoleIdGetter());
-  const isAdmin = $derived(currentUserRoleId === RoleId.ADMIN);
+  const permissionsGetter = getCurrentPermissions();
+  const permissions = $derived(permissionsGetter());
+  const canModerateContent = $derived(
+    permissions.has(Permission.MODERATE_CONTENT),
+  );
 
   // --- Data Loading ---
 
@@ -378,11 +380,16 @@
   }
 
   function openContextMenu(fu: FollowUp): void {
-    const actions = getContextMenuActions(fu, currentUserId, isAdmin, {
-      copy: m.common_copy(),
-      editNote: m.ticket_edit_note(),
-      deleteNote: m.ticket_delete_note(),
-    });
+    const actions = getContextMenuActions(
+      fu,
+      currentUserId,
+      canModerateContent,
+      {
+        copy: m.common_copy(),
+        editNote: m.ticket_edit_note(),
+        deleteNote: m.ticket_delete_note(),
+      },
+    );
     if (actions.length === 0 || !decrypt) return;
 
     const result = decrypt.followUp(fu.id, fu.encryptedContent);

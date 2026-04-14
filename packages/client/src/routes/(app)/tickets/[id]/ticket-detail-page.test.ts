@@ -166,7 +166,15 @@ vi.mock("$lib/crypto/context.js", () => ({
     decryptBlob: vi.fn().mockRejectedValue(new Error("mock")),
   }),
   getCurrentUserId: () => () => "user-001",
-  getCurrentUserRoleId: () => () => 2,
+  getCurrentUserRoleId: () => () => "dXwG0zR9BtJp",
+  getCurrentPermissions: () => () =>
+    new Set([
+      "view_tickets",
+      "manage_own_tickets",
+      "view_knowledge_base",
+      "edit_knowledge_base",
+      "view_own_shifts",
+    ]),
   getPreviewLoader: () => ({
     get: vi.fn().mockReturnValue(undefined),
     observe: vi.fn(),

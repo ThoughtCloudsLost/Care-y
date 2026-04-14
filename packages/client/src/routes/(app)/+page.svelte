@@ -14,7 +14,6 @@
     FilePlus,
     LayersPlus,
     FolderPlus,
-    CalendarPlus,
     UserPlus,
     Plus,
   } from "@lucide/svelte";
@@ -30,9 +29,9 @@
     getOrgDecryptCache,
     getTicketDecryptCache,
     getCurrentUserId,
-    getCurrentUserRoleId,
+    getCurrentPermissions,
   } from "$lib/crypto/context.js";
-  import { RoleId } from "@care-y/shared";
+  import { Permission } from "@care-y/shared";
   import ShellPopover from "$lib/shell/ShellPopover.svelte";
   import { getNavbarOverrideCtx } from "$lib/shell/context.js";
   import { resolveAsyncDecrypt } from "$lib/crypto/decrypt-result.js";
@@ -44,10 +43,8 @@
   const ticketCache = getTicketDecryptCache();
   const currentUserIdGetter = getCurrentUserId();
   const currentUserId = $derived(currentUserIdGetter());
-  const currentUserRoleIdGetter = getCurrentUserRoleId();
-  const currentUserRoleId = $derived(currentUserRoleIdGetter());
-  const isAdmin = $derived(currentUserRoleId === RoleId.ADMIN);
-  const isManager = $derived(currentUserRoleId === RoleId.MANAGER || isAdmin);
+  const permissionsGetter = getCurrentPermissions();
+  const permissions = $derived(permissionsGetter());
   const navbarCtx = getNavbarOverrideCtx();
 
   // --- Create menu (navbar "+" popover) ---
@@ -62,18 +59,33 @@
     const options: CreateOption[] = [
       { id: "ticket", label: m.create_new_ticket(), icon: TicketPlus },
     ];
-    if (isManager) {
-      options.push(
-        { id: "article", label: m.create_new_article(), icon: FilePlus },
-        { id: "category", label: m.create_new_category(), icon: FolderPlus },
-        { id: "shift", label: m.create_new_shift(), icon: CalendarPlus },
-      );
+    if (permissions.has(Permission.EDIT_KNOWLEDGE_BASE)) {
+      options.push({
+        id: "article",
+        label: m.create_new_article(),
+        icon: FilePlus,
+      });
     }
-    if (isAdmin) {
-      options.push(
-        { id: "queue", label: m.create_new_queue(), icon: LayersPlus },
-        { id: "user", label: m.create_invite_user(), icon: UserPlus },
-      );
+    if (permissions.has(Permission.MANAGE_KNOWLEDGE_BASE_CATEGORIES)) {
+      options.push({
+        id: "category",
+        label: m.create_new_category(),
+        icon: FolderPlus,
+      });
+    }
+    if (permissions.has(Permission.MANAGE_QUEUES)) {
+      options.push({
+        id: "queue",
+        label: m.create_new_queue(),
+        icon: LayersPlus,
+      });
+    }
+    if (permissions.has(Permission.MANAGE_USERS)) {
+      options.push({
+        id: "user",
+        label: m.create_invite_user(),
+        icon: UserPlus,
+      });
     }
     return options;
   });
@@ -260,7 +272,7 @@
   }
 
   function handleKBTap(itemId: string): void {
-    void goto(resolve(`/kb/${itemId}`));
+    void goto(resolve(`/library/${itemId}`));
   }
 
   // Login summary notification slot (6k provides content).
