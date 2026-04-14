@@ -101,6 +101,18 @@ vi.mock("$lib/crypto/context.js", () => ({
     size: 0,
   }),
   getCurrentUserId: () => () => "user-001",
+  getCurrentPermissions: () => () =>
+    new Set([
+      "view_tickets",
+      "manage_own_tickets",
+      "view_knowledge_base",
+      "edit_knowledge_base",
+      "view_own_shifts",
+    ]),
+}));
+
+vi.mock("$lib/shell/context.js", () => ({
+  getNavbarOverrideCtx: () => ({ current: undefined }),
 }));
 
 // --- Helpers ---

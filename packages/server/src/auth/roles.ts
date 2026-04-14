@@ -24,6 +24,7 @@ const VOLUNTEER_PERMISSIONS: ReadonlySet<Permission> = new Set([
 
 const MANAGER_PERMISSIONS: ReadonlySet<Permission> = new Set([
   ...VOLUNTEER_PERMISSIONS,
+  Permission.MODERATE_CONTENT,
   Permission.MANAGE_USERS,
   Permission.MANAGE_QUEUES,
   Permission.MANAGE_PRESETS,

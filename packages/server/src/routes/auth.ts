@@ -29,7 +29,12 @@ import {
   adminProcedure,
   withErrorWrapping,
 } from "../trpc/trpc.js";
-import { hasPermission, getDefaultRoleId } from "../auth/roles.js";
+import {
+  hasPermission,
+  getDefaultRoleId,
+  isValidRoleId,
+  ROLE_CONFIG,
+} from "../auth/roles.js";
 import { ForbiddenError, NotFoundError, RateLimitError } from "../errors.js";
 import type { RateLimiter } from "../ratelimit/rate-limiter.js";
 import type { UserRecord } from "../auth/service.js";
@@ -249,7 +254,12 @@ export function createAuthRouter(deps: AuthRouterDeps) {
     }),
 
     me: authedProcedure.query(({ ctx }) => {
-      return { user: toUserResponse(ctx.user) };
+      const { roleId } = ctx.user;
+      const config = isValidRoleId(roleId)
+        ? ROLE_CONFIG.get(roleId)
+        : undefined;
+      const permissions = config ? [...config.permissions] : [];
+      return { user: toUserResponse(ctx.user), permissions };
     }),
 
     assignRole: adminProcedure.input(assignRoleInputSchema).mutation(

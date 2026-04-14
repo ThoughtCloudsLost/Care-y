@@ -13,6 +13,7 @@ export {
   setTicketDecryptCache,
   setCurrentUserId,
   setCurrentUserRoleId,
+  setCurrentPermissions,
   setFollowUpDecryptCache,
   setPreviewLoader,
 } from "./context.js";
