@@ -26,6 +26,7 @@
   "library_encrypted_body": "No se pudo descifrar este contenido.",
   "library_loading": "Cargando artículos...",
   "library_search_loading": "Cargando índice de búsqueda...",
+  "library_search_rating_label": "{percent}% útil",
   "library_schedule_coming_soon": "El horario estará disponible pronto.",
   "library_empty_description": "Sin descripción",
   "library_sort": "Ordenar",

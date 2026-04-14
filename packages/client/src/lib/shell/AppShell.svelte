@@ -60,10 +60,9 @@
     createTicketSearchProvider,
     type RawCachedTicket,
   } from "$lib/search/providers/tickets.js";
-  import {
-    kbStubProvider,
-    volunteersStubProvider,
-  } from "$lib/search/providers/stubs.js";
+  import { volunteersStubProvider } from "$lib/search/providers/stubs.js";
+  import { createKbSearchProvider } from "$lib/search/providers/kb.js";
+  import { trpc } from "$lib/trpc/index.js";
   import {
     registerSearchProvider,
     resetFullSearch,
@@ -246,7 +245,11 @@
   // only run client-side.
 
   const promotedProviderId = $derived(
-    activeTab === "tickets" ? "tickets" : undefined,
+    activeTab === "tickets"
+      ? "tickets"
+      : activeTab === "library"
+        ? "kb"
+        : undefined,
   );
 
   // Memoized flat ticket list (raw records, no decryption).
@@ -364,8 +367,62 @@
       }),
     );
 
-    // Placeholder providers for sections not yet built (removed by 6f/6g).
-    const unregisterKb = registerSearchProvider(kbStubProvider);
+    // KB search provider: lazy-loads all articles, decrypts titles + excerpts
+    // into a SvelteMap cache, then filters in-memory with fuzzy matching.
+    // KBResultItem wraps ArticleCard, so the provider resolves category
+    // names and author names reactively from the TanStack Query cache.
+    const kbRouter = trpc.kb;
+    const unregisterKb = kbRouter
+      ? registerSearchProvider(
+          createKbSearchProvider({
+            fetchPage: async (cursor) =>
+              kbRouter.listItems.query({ limit: 100, cursor }),
+            decryptOrg: (cacheKey, ciphertext) => {
+              if (!isOrgCiphertext(ciphertext)) return null;
+              return orgCache.decrypt(cacheKey, ciphertext);
+            },
+            ensureCategoriesLoaded: async () => {
+              await queryClient.ensureQueryData({
+                queryKey: ["kb", "categories"],
+                queryFn: async () => kbRouter.listCategories.query(),
+              });
+            },
+            resolveCategoryName: (categoryId) => {
+              // Read from TanStack Query cache populated by the library page.
+              const cats = queryClient.getQueryData<
+                readonly { id: string; encryptedName: unknown }[]
+              >(["kb", "categories"]);
+              const cat = cats?.find((c) => c.id === categoryId);
+              if (!cat) return null;
+              if (!isOrgCiphertext(cat.encryptedName)) return null;
+              return orgCache.decrypt(
+                `kb-cat:${categoryId}`,
+                cat.encryptedName,
+              );
+            },
+            resolveAuthorName: (userId) => {
+              if (userId === currentUserIdGetter()) {
+                return m.dashboard_assigned_you();
+              }
+              const volunteers = queryClient.getQueryData<
+                readonly {
+                  id: string;
+                  encryptedDisplayName: unknown;
+                }[]
+              >(["volunteers"]);
+              const vol = volunteers?.find((v) => v.id === userId);
+              if (!vol) return null;
+              if (!isOrgCiphertext(vol.encryptedDisplayName)) return null;
+              return orgCache.decrypt(
+                `volunteer:${vol.id}`,
+                vol.encryptedDisplayName,
+              );
+            },
+          }),
+        )
+      : () => undefined;
+
+    // Placeholder provider for volunteers search (removed by 6g).
     const unregisterVol = registerSearchProvider(volunteersStubProvider);
 
     return () => {

@@ -1,13 +1,14 @@
 /**
  * Placeholder search providers for sections not yet implemented.
  * Show section headers with "(0)" to give the full search layout feel.
- * Remove these when the real providers are registered:
- *   - KB articles: when KB search lands
- *   - Volunteers: when volunteer search lands
+ * Remove each stub when the real provider is registered.
+ *
+ * KB articles: replaced by real provider (kb.ts).
+ * Volunteers: replaced when volunteer search lands (6g).
  */
 import type { Component } from "svelte";
 import type { SearchProvider } from "../types.js";
-import { BookOpen, UsersRound } from "@lucide/svelte";
+import { UsersRound } from "@lucide/svelte";
 import * as m from "$lib/paraglide/messages.js";
 
 function stubProvider(
@@ -30,13 +31,6 @@ function stubProvider(
     ResultItem: (() => undefined) as unknown as SearchProvider["ResultItem"],
   };
 }
-
-export const kbStubProvider = stubProvider(
-  "kb",
-  () => m.search_section_kb(),
-  BookOpen,
-  "/kb",
-);
 
 export const volunteersStubProvider = stubProvider(
   "volunteers",

@@ -26,6 +26,7 @@
   "library_encrypted_body": "This content could not be decrypted.",
   "library_loading": "Loading articles...",
   "library_search_loading": "Loading search index...",
+  "library_search_rating_label": "{percent}% helpful",
   "library_schedule_coming_soon": "Schedule is coming soon.",
   "library_empty_description": "No description",
   "library_sort": "Sort",
