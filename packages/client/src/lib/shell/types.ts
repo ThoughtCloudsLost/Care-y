@@ -9,6 +9,8 @@
  */
 
 import type { Component, Snippet } from "svelte";
+import type { SavedFilterRecord } from "@care-y/shared";
+import type { PillDefinition } from "$lib/components/filters/filter-types.js";
 
 // ── Tab identifiers ──────────────────────────────────────────────────
 
@@ -214,4 +216,52 @@ export interface TabbarOverride {
     readonly ariaLabel: string;
     readonly onclick: () => void;
   };
+}
+
+// ── SubNavbar filter layout config ─────────────────────────────────
+// Grouped config types for SubNavbarFilterLayout. Routes build these
+// objects and pass them as props. Grouping enforces structural contracts:
+// adding a field to a config type produces compile errors at every
+// call site that doesn't satisfy it.
+
+export interface SortOption {
+  readonly field: string;
+  readonly label: string;
+}
+
+export interface ViewToggleConfig {
+  readonly mode: "list" | "grid";
+  readonly onchange: (mode: "list" | "grid") => void;
+  readonly listLabel: string;
+  readonly gridLabel: string;
+}
+
+export interface SortConfig {
+  readonly label: string;
+  readonly options: readonly SortOption[];
+  readonly currentField: string;
+  readonly currentDirection: "asc" | "desc";
+  readonly onchange: (field: string, direction: "asc" | "desc") => void;
+}
+
+export interface SavedFiltersConfig {
+  readonly filters: SavedFilterRecord[];
+  readonly count: number;
+  readonly onapply: (record: SavedFilterRecord) => void;
+  readonly ondelete: (id: string) => void;
+  readonly ontoggleshare: (id: string) => void;
+}
+
+export interface FilterPillsConfig {
+  readonly pills: PillDefinition[];
+  readonly activeCount: number;
+  readonly dateFrom?: string;
+  readonly dateTo?: string;
+  readonly dateActive?: boolean;
+  readonly dateLabel?: string;
+  readonly ontoggle: (pillId: string, value: string) => void;
+  readonly onselect: (pillId: string, value: string | null) => void;
+  readonly ondatechange: (from: Date | null, to: Date | null) => void;
+  readonly onclearall: () => void;
+  readonly oncreateshortcut?: () => void;
 }
