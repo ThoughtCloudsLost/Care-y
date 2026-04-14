@@ -12,7 +12,7 @@ import type { Component, Snippet } from "svelte";
 
 // ── Tab identifiers ──────────────────────────────────────────────────
 
-export const TAB_IDS = ["home", "tickets", "calendar"] as const;
+export const TAB_IDS = ["home", "tickets", "library"] as const;
 export type TabId = (typeof TAB_IDS)[number];
 
 // ── Shell wrapper props ──────────────────────────────────────────────

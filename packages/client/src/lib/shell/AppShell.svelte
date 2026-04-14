@@ -37,7 +37,7 @@
   import {
     House,
     Ticket,
-    CalendarDays,
+    BookOpen,
     Ellipsis,
     Search,
     TicketPlus,
@@ -392,7 +392,7 @@
   const allTabs: readonly TabDef[] = [
     { id: "home", label: () => m.nav_home(), icon: House },
     { id: "tickets", label: () => m.nav_tickets(), icon: Ticket },
-    { id: "calendar", label: () => m.nav_calendar(), icon: CalendarDays },
+    { id: "library", label: () => m.tab_library(), icon: BookOpen },
   ];
 
   // ── Pull-to-refresh ──────────────────────────────────────────────────
