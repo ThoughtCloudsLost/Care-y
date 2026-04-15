@@ -487,5 +487,19 @@
   "search_full_hint_no_results": "You've searched loaded data only. Tap \"Search all\" to check everything you have access to.",
   "search_full_hint_default": "Only showing results from loaded data. Tap to search everything you have access to.",
   "attachment_download": "Download {filename}",
-  "attachment_downloading": "Downloading {filename}..."
+  "attachment_downloading": "Downloading {filename}...",
+  "library_manage_categories": "Manage categories",
+  "library_category_sheet_title": "Manage Categories",
+  "library_category_add": "Add Category",
+  "library_category_name": "Name",
+  "library_category_description": "Description",
+  "library_category_save": "Save",
+  "library_category_delete": "Delete Category",
+  "library_category_delete_blocked": "Move or delete all articles in this category first",
+  "library_category_created": "Category created",
+  "library_category_updated": "Category updated",
+  "library_category_deleted": "Category deleted",
+  "library_category_edit": "Edit",
+  "library_category_name_required": "Category name is required",
+  "library_category_articles": "{count} articles"
 }
