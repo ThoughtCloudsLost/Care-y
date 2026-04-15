@@ -258,6 +258,13 @@ export {
   voteDirectionSchema,
   castVoteInputSchema,
   removeVoteInputSchema,
+  uploadKbAttachmentInputSchema,
+  downloadKbAttachmentInputSchema,
+  listKbAttachmentsInputSchema,
+  kbContentTypeSchema,
+  KB_ATTACHMENT_MAX_BYTES,
+  KB_MAX_ATTACHMENTS_PER_ARTICLE,
+  KB_ALLOWED_CONTENT_TYPES,
   type CreateKbCategoryInput,
   type UpdateKbCategoryInput,
   type CreateKbItemInput,
@@ -268,6 +275,10 @@ export {
   type VoteDirection,
   type CastVoteInput,
   type RemoveVoteInput,
+  type UploadKbAttachmentInput,
+  type DownloadKbAttachmentInput,
+  type ListKbAttachmentsInput,
+  type KbAllowedContentType,
 } from "./schemas/kb.js";
 
 // --- Notification, search, audit schemas ---

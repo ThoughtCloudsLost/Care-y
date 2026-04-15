@@ -184,6 +184,7 @@
 
   "error_kb_category_not_found": "Category not found.",
   "error_kb_article_not_found": "Article not found.",
+  "error_kb_attachment_not_found": "Attachment not found.",
 
   "error_telephony_not_configured": "Telephony is not configured for this organization.",
   "error_no_consultant_registration": "No consultant registration found.",

@@ -3,7 +3,12 @@
 // size limits, or access control at this layer.
 
 /** Categories partition blobs by purpose. Storage key includes category. */
-export type BlobCategory = "attachment" | "recording" | "greeting" | "export";
+export type BlobCategory =
+  | "attachment"
+  | "recording"
+  | "greeting"
+  | "export"
+  | "kb-attachment";
 
 /** Dumb byte store. Callers handle encryption, validation, and access control. */
 export interface BlobStore {
