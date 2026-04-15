@@ -81,6 +81,53 @@ export const kbSavedFilterStateSchema = z.object({
 });
 export type KbSavedFilterState = z.infer<typeof kbSavedFilterStateSchema>;
 
+// --- Attachment schemas ---
+
+/** 10MB in bytes. Enforced client-side and server-side. */
+export const KB_ATTACHMENT_MAX_BYTES = 10 * 1024 * 1024;
+
+/** Hard cap on attachments per article. Prevents storage exhaustion. */
+export const KB_MAX_ATTACHMENTS_PER_ARTICLE = 50;
+
+export const KB_ALLOWED_CONTENT_TYPES = [
+  "image/png",
+  "image/jpeg",
+  "image/gif",
+  "image/webp",
+  "application/pdf",
+  "application/msword",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+] as const;
+
+export type KbAllowedContentType = (typeof KB_ALLOWED_CONTENT_TYPES)[number];
+
+export const kbContentTypeSchema = z.enum(KB_ALLOWED_CONTENT_TYPES);
+
+export const uploadKbAttachmentInputSchema = z.object({
+  itemId: z.uuid(),
+  blob: base64String("blob"),
+  sizeBytes: z.number().int().min(1).max(KB_ATTACHMENT_MAX_BYTES),
+  encryptedFilename: base64String("encryptedFilename").optional(),
+  contentType: kbContentTypeSchema,
+});
+export type UploadKbAttachmentInput = z.infer<
+  typeof uploadKbAttachmentInputSchema
+>;
+
+export const downloadKbAttachmentInputSchema = z.object({
+  attachmentId: z.uuid(),
+});
+export type DownloadKbAttachmentInput = z.infer<
+  typeof downloadKbAttachmentInputSchema
+>;
+
+export const listKbAttachmentsInputSchema = z.object({
+  itemId: z.uuid(),
+});
+export type ListKbAttachmentsInput = z.infer<
+  typeof listKbAttachmentsInputSchema
+>;
+
 // --- Voting schemas ---
 
 export const voteDirectionSchema = z.enum(["up", "down"]);
