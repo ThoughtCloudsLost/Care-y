@@ -21,7 +21,9 @@
     SortConfig,
     SavedFiltersConfig,
     FilterPillsConfig,
+    ManageConfig,
   } from "$lib/shell/types.js";
+  import { Settings } from "@lucide/svelte";
   import ShellPopover from "$lib/shell/ShellPopover.svelte";
   import FilterPillBar from "$lib/components/filters/FilterPillBar.svelte";
   import SavedFilterList from "$lib/components/filters/SavedFilterList.svelte";
@@ -35,6 +37,7 @@
     onselect: () => void;
     savedFilters: SavedFiltersConfig;
     filterPills: FilterPillsConfig;
+    manage?: ManageConfig;
   }
 
   let {
@@ -46,6 +49,7 @@
     onselect,
     savedFilters,
     filterPills,
+    manage,
   }: Props = $props();
 
   // Sort popover state (internal to this component).
@@ -119,6 +123,19 @@
       >
         <SquareCheckBig size={16} aria-hidden="true" />
       </Button>
+      {#if manage}
+        <Button
+          tonal
+          rounded
+          small
+          inline
+          class="manage-btn"
+          aria-label={manage.label}
+          onclick={manage.onclick}
+        >
+          <Settings size={16} aria-hidden="true" />
+        </Button>
+      {/if}
     </div>
   </div>
   <SavedFilterList
@@ -223,10 +240,15 @@
   }
 
   :global(.sort-btn),
-  :global(.select-btn) {
+  :global(.select-btn),
+  :global(.manage-btn) {
     width: 1.75rem !important;
     padding-left: 0 !important;
     padding-right: 0 !important;
+  }
+
+  :global(.manage-btn) {
+    color: var(--brand-accent) !important;
   }
 
   :global(.sort-dir-icon) {

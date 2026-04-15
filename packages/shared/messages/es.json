@@ -487,5 +487,19 @@
   "search_full_hint_no_results": "Solo se buscó en datos cargados. Toca \"Buscar todo\" para revisar todo lo que tienes acceso.",
   "search_full_hint_default": "Solo se muestran resultados de datos cargados. Toca para buscar en todo lo que tienes acceso.",
   "attachment_download": "Descargar {filename}",
-  "attachment_downloading": "Descargando {filename}..."
+  "attachment_downloading": "Descargando {filename}...",
+  "library_manage_categories": "Administrar categorías",
+  "library_category_sheet_title": "Administrar categorías",
+  "library_category_add": "Agregar categoría",
+  "library_category_name": "Nombre",
+  "library_category_description": "Descripción",
+  "library_category_save": "Guardar",
+  "library_category_delete": "Eliminar categoría",
+  "library_category_delete_blocked": "Primero mueve o elimina todos los artículos de esta categoría",
+  "library_category_created": "Categoría creada",
+  "library_category_updated": "Categoría actualizada",
+  "library_category_deleted": "Categoría eliminada",
+  "library_category_edit": "Editar",
+  "library_category_name_required": "El nombre de la categoría es obligatorio",
+  "library_category_articles": "{count} artículos"
 }

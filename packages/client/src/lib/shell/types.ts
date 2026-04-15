@@ -252,6 +252,13 @@ export interface SavedFiltersConfig {
   readonly ontoggleshare: (id: string) => void;
 }
 
+export interface ManageConfig {
+  /** Accessible label for the manage button (e.g., "Manage categories"). */
+  readonly label: string;
+  /** Called when the manage gear button is tapped. */
+  readonly onclick: () => void;
+}
+
 export interface FilterPillsConfig {
   readonly pills: PillDefinition[];
   readonly activeCount: number;

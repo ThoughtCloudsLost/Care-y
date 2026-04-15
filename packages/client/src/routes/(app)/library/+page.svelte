@@ -15,6 +15,7 @@
     SortConfig,
     SavedFiltersConfig,
     FilterPillsConfig,
+    ManageConfig,
     TabbarOverrideAction,
   } from "$lib/shell/types.js";
   import * as m from "$lib/paraglide/messages.js";
@@ -49,6 +50,7 @@
   import VirtualList from "$lib/components/tickets/VirtualList.svelte";
   import ArticleCard from "$lib/components/library/ArticleCard.svelte";
   import MoveCategorySheet from "$lib/components/library/MoveCategorySheet.svelte";
+  import CategoryManageSheet from "$lib/components/library/CategoryManageSheet.svelte";
   import QueryError from "$lib/components/QueryError.svelte";
   import { haptic } from "$lib/utils/haptic.js";
 
@@ -59,6 +61,9 @@
   const permissionsGetter = getCurrentPermissions();
   const permissions = $derived(permissionsGetter());
   const canDelete = $derived(permissions.has(Permission.MANAGE_USERS));
+  const canManageCategories = $derived(
+    permissions.has(Permission.MANAGE_KNOWLEDGE_BASE_CATEGORIES),
+  );
   if (!trpc.kb) throw new RouterNotAvailableError("kb");
   const kbRouter = trpc.kb;
   const queryClient = useQueryClient();
@@ -182,6 +187,7 @@
   let pendingAction = $state(false);
   let moveSheetOpen = $state(false);
   let deleteDialogOpen = $state(false);
+  let categorySheetOpen = $state(false);
 
   function handleBulkMove(): void {
     if (selectedIds.size === 0 || pendingAction) return;
@@ -549,6 +555,36 @@
     })),
   );
 
+  // Categories for manage sheet (with article counts).
+  // Only computed when the sheet is open to avoid re-counting on every
+  // infinite scroll page load. Returns empty when closed (sheet is hidden).
+  const manageCategoryOptions = $derived.by(() => {
+    if (!categorySheetOpen) return [];
+    const countMap = new SvelteMap<string, number>();
+    for (const a of allArticles) {
+      countMap.set(a.categoryId, (countMap.get(a.categoryId) ?? 0) + 1);
+    }
+    return (categoriesQuery.data ?? []).map((c: CategoryRecord) => ({
+      id: c.id,
+      name: categoryNameMap.get(c.id) ?? null,
+      description: c.encryptedDescription
+        ? orgCache.decrypt(`kb-cat-desc:${c.id}`, c.encryptedDescription)
+        : null,
+      articleCount: countMap.get(c.id) ?? 0,
+    }));
+  });
+
+  const manageConfig: ManageConfig | undefined = $derived(
+    canManageCategories
+      ? {
+          label: m.library_manage_categories(),
+          onclick: () => {
+            categorySheetOpen = true;
+          },
+        }
+      : undefined,
+  );
+
   function skeletonNoop(): void {
     /* skeleton card, no interaction */
   }
@@ -572,6 +608,7 @@
     onselect={toggleMultiSelect}
     savedFilters={savedFiltersConfig}
     filterPills={filterPillsConfig}
+    manage={manageConfig}
   />
 {/snippet}
 
@@ -680,6 +717,14 @@
     moveSheetOpen = false;
   }}
   onmove={(catId: string) => void handleMoveToCategory(catId)}
+/>
+
+<CategoryManageSheet
+  opened={categorySheetOpen}
+  categories={manageCategoryOptions}
+  ondismiss={() => {
+    categorySheetOpen = false;
+  }}
 />
 
 <Dialog

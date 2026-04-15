@@ -1,0 +1,16 @@
+/**
+* | output |
+* | --- |
+* | "Name" |
+*
+* @param {Library_Category_NameInputs} inputs
+* @param {{ locale?: "en" | "es" }} options
+* @returns {LocalizedString}
+*/
+export const library_category_name: ((inputs?: Library_Category_NameInputs, options?: {
+    locale?: "en" | "es";
+}) => LocalizedString) & import("../runtime.js").MessageMetadata<Library_Category_NameInputs, {
+    locale?: "en" | "es";
+}, {}>;
+export type LocalizedString = import("../runtime.js").LocalizedString;
+export type Library_Category_NameInputs = {};
