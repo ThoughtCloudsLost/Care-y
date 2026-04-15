@@ -335,6 +335,7 @@ const marks: Record<string, MarkSpec> = {
         typeof node.attrs.title === "string" ? node.attrs.title : null;
       const attrs: Record<string, string> = {
         href,
+        target: "_blank",
         rel: "noopener noreferrer",
       };
       if (title !== null) attrs.title = title;
