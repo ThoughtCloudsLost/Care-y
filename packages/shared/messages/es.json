@@ -485,5 +485,7 @@
   "search_full_summary": "Se encontraron {found} resultados en {total} elementos",
   "search_full_hint_no_data": "Aún no se han cargado datos. Toca \"Buscar todo\" para buscar en todo lo que tienes acceso.",
   "search_full_hint_no_results": "Solo se buscó en datos cargados. Toca \"Buscar todo\" para revisar todo lo que tienes acceso.",
-  "search_full_hint_default": "Solo se muestran resultados de datos cargados. Toca para buscar en todo lo que tienes acceso."
+  "search_full_hint_default": "Solo se muestran resultados de datos cargados. Toca para buscar en todo lo que tienes acceso.",
+  "attachment_download": "Descargar {filename}",
+  "attachment_downloading": "Descargando {filename}..."
 }
