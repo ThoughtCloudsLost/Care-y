@@ -456,4 +456,6 @@ export * from "./search_full_summary.js";
 export * from "./search_full_hint_no_data.js";
 export * from "./search_full_hint_no_results.js";
 export * from "./search_full_hint_default.js";
+export * from "./attachment_download.js";
+export * from "./attachment_downloading.js";
 export type LocalizedString = import("../runtime.js").LocalizedString;

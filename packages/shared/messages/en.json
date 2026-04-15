@@ -485,5 +485,7 @@
   "search_full_summary": "Found {found} results across {total} items",
   "search_full_hint_no_data": "No data loaded yet. Tap \"Search all\" to search across everything you have access to.",
   "search_full_hint_no_results": "You've searched loaded data only. Tap \"Search all\" to check everything you have access to.",
-  "search_full_hint_default": "Only showing results from loaded data. Tap to search everything you have access to."
+  "search_full_hint_default": "Only showing results from loaded data. Tap to search everything you have access to.",
+  "attachment_download": "Download {filename}",
+  "attachment_downloading": "Downloading {filename}..."
 }
