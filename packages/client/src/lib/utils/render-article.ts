@@ -1,105 +1,138 @@
 import DOMPurify, { type Config } from "dompurify";
+import { DOMSerializer, Node as PMNode } from "prosemirror-model";
+import { kbArticleSchema } from "$lib/editor/prosemirror-schema.js";
 
 /**
  * Sanitization config for rendered article HTML.
- * Allowlist-based: only safe elements and attributes pass through.
- * No script, style, form, or event handler attributes.
+ * Allowlist derived from the ProseMirror schema's toDOM output.
+ * Every tag and attribute here corresponds to a schema-defined
+ * node or mark. No speculative extras.
  *
- * This allowlist is speculative for the plain-text renderer. The editor
- * phase will rewrite it to match the actual ProseMirror schema output.
+ * `target` and `rel` are produced by the link mark's toDOM (render-layer
+ * security attrs, not stored in the document JSON). They're in ALLOWED_ATTR
+ * so DOMPurify doesn't strip them from serialized output.
  */
 const PURIFY_CONFIG: Config = {
   ALLOWED_TAGS: [
     "p",
-    "br",
-    "strong",
-    "em",
-    "u",
-    "s",
-    "del",
     "h1",
     "h2",
     "h3",
     "h4",
-    "h5",
-    "h6",
+    "blockquote",
     "ul",
     "ol",
     "li",
-    "a",
-    "blockquote",
     "pre",
     "code",
     "img",
+    "hr",
     "figure",
     "figcaption",
     "table",
-    "thead",
     "tbody",
     "tr",
-    "th",
     "td",
-    "hr",
-    "sup",
-    "sub",
+    "th",
+    "br",
+    "strong",
+    "em",
+    "s",
+    "a",
   ],
   ALLOWED_ATTR: [
     "href",
     "title",
     "alt",
     "src",
-    "width",
-    "height",
     "target",
     "rel",
-    "class",
     "colspan",
     "rowspan",
-    "scope",
+    "start",
   ],
   ALLOW_DATA_ATTR: false,
-  ADD_ATTR: ["target"],
   FORCE_BODY: true,
 };
 
-// Force all sanitized links to open in a new tab with noopener.
-// Registered once at module load (ES modules are singletons).
-DOMPurify.addHook("afterSanitizeAttributes", (currentNode) => {
-  if (currentNode.tagName === "A" && currentNode.hasAttribute("href")) {
-    currentNode.setAttribute("target", "_blank");
-    currentNode.setAttribute("rel", "noopener noreferrer");
-  }
-});
+const serializer = DOMSerializer.fromSchema(kbArticleSchema);
+const decoder = new TextDecoder();
 
 /**
- * Render article body bytes to sanitized HTML string.
- *
- * Current implementation: treats decrypted bytes as UTF-8 plain text,
- * converts double-newline-separated blocks to paragraph tags, and sanitizes.
- *
- * The editor phase replaces this with a ProseMirror JSON renderer that
- * uses DOMSerializer.fromSchema() + DOMPurify. The PURIFY_CONFIG allowlist
- * will be rewritten to match the actual schema output.
+ * Render article body bytes to sanitized HTML.
+ * Expects ProseMirror JSON (UTF-8 encoded). Falls back to
+ * plain-text paragraph wrapping for legacy pre-editor articles.
  */
 export function renderArticleBody(decryptedBytes: Uint8Array): string {
-  const text = new TextDecoder().decode(decryptedBytes);
+  const text = decoder.decode(decryptedBytes);
+  if (text.length === 0) return "";
 
+  let json: unknown;
+  try {
+    json = JSON.parse(text);
+  } catch {
+    // Legacy plain-text article (pre-06f.2): wrap in paragraphs
+    return sanitizeLegacyPlainText(text);
+  }
+
+  let doc: PMNode;
+  try {
+    doc = PMNode.fromJSON(kbArticleSchema, json);
+  } catch {
+    // Invalid ProseMirror JSON: treat as plain text
+    return sanitizeLegacyPlainText(text);
+  }
+
+  const fragment = serializer.serializeFragment(doc.content);
+  const div = document.createElement("div");
+  div.appendChild(fragment);
+  return sanitizeArticleHtml(div.innerHTML);
+}
+
+/**
+ * Sanitize HTML through DOMPurify using the schema-derived allowlist.
+ */
+export function sanitizeArticleHtml(html: string): string {
+  return DOMPurify.sanitize(html, PURIFY_CONFIG);
+}
+
+/**
+ * Extract a plain-text excerpt from a ProseMirror document.
+ * Walks the doc tree, concatenates text content, skips images
+ * and other non-text nodes. Truncates to maxLength with ellipsis.
+ */
+export function extractExcerpt(doc: PMNode, maxLength = 150): string {
+  const parts: string[] = [];
+  let length = 0;
+
+  doc.descendants((node) => {
+    if (length >= maxLength) return false;
+    if (node.isText && node.text !== undefined) {
+      parts.push(node.text);
+      length += node.text.length;
+    } else if (
+      node.isBlock &&
+      parts.length > 0 &&
+      parts[parts.length - 1] !== " "
+    ) {
+      parts.push(" ");
+      length += 1;
+    }
+  });
+
+  const full = parts.join("").trim();
+  if (full.length <= maxLength) return full;
+  return full.slice(0, maxLength).trimEnd() + "...";
+}
+
+/** Wrap legacy plain text in paragraphs, escaping HTML. */
+function sanitizeLegacyPlainText(text: string): string {
   const paragraphs = text
     .split(/\n{2,}/)
     .filter((p) => p.trim().length > 0)
     .map((p) => `<p>${escapeHtml(p.trim())}</p>`)
     .join("");
-
-  return DOMPurify.sanitize(paragraphs, PURIFY_CONFIG);
-}
-
-/**
- * Sanitize arbitrary HTML through DOMPurify.
- * Used by the future format-aware renderer (06f.2) after converting
- * editor JSON to HTML.
- */
-export function sanitizeArticleHtml(html: string): string {
-  return DOMPurify.sanitize(html, PURIFY_CONFIG);
+  return sanitizeArticleHtml(paragraphs);
 }
 
 /** Escape HTML special characters in plain text. */
@@ -108,5 +141,6 @@ function escapeHtml(text: string): string {
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
 }
