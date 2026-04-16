@@ -384,6 +384,7 @@ export interface KBItemsTable {
   category_id: string;
   encrypted_title: Buffer;
   encrypted_body: Buffer;
+  encrypted_excerpt: Buffer | null;
   created_by: string;
   vote_up_count: ColumnType<number, number | undefined, number>;
   vote_down_count: ColumnType<number, number | undefined, number>;
@@ -398,6 +399,17 @@ export interface KBVotesTable {
   voter_pseudonym: string;
   direction: string;
   created_at: Generated<Date>;
+}
+
+export interface KBAttachmentsTable {
+  id: Generated<string>;
+  item_id: string;
+  blob_key: string;
+  size_bytes: number;
+  encrypted_filename: Buffer | null;
+  content_type: string | null;
+  created_at: Generated<Date>;
+  deleted_at: Date | null;
 }
 
 export interface QueueAssignmentsTable {
@@ -497,6 +509,7 @@ export interface TenantDatabase {
   kb_categories: KBCategoriesTable;
   kb_items: KBItemsTable;
   kb_votes: KBVotesTable;
+  kb_attachments: KBAttachmentsTable;
   // Workflow join tables
   queue_assignments: QueueAssignmentsTable;
   ticket_watchers: TicketWatchersTable;

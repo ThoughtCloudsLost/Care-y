@@ -22,6 +22,11 @@ import type {
   KBItemService,
   KBVoteService,
 } from "../kb/service.js";
+import type { KBMediaService } from "../kb/kb-media-service.js";
+import type { BlobStore } from "../storage/store.js";
+import type { RateLimiter } from "../ratelimit/rate-limiter.js";
+import { NotFoundError, ValidationError } from "../errors.js";
+import { TRPCError } from "@trpc/server";
 import {
   createKbCategoryInputSchema,
   updateKbCategoryInputSchema,
@@ -30,6 +35,11 @@ import {
   kbItemListInputSchema,
   castVoteInputSchema,
   removeVoteInputSchema,
+  uploadKbAttachmentInputSchema,
+  downloadKbAttachmentInputSchema,
+  listKbAttachmentsInputSchema,
+  KB_ATTACHMENT_MAX_BYTES,
+  ErrorCode,
 } from "@care-y/shared";
 
 export interface KBRouterDeps {
@@ -38,6 +48,9 @@ export interface KBRouterDeps {
   ) => KBCategoryService;
   readonly createItemSvc: (tDb: OrgContext["tenantDb"]) => KBItemService;
   readonly createVoteSvc: (tDb: OrgContext["tenantDb"]) => KBVoteService;
+  readonly createMediaSvc: (tDb: OrgContext["tenantDb"]) => KBMediaService;
+  readonly blobStore: BlobStore;
+  readonly uploadLimiter: RateLimiter;
 }
 
 // care-y-ignore-next-line missing-return-type -- tRPC router() returns a deeply generic type that cannot be written explicitly
@@ -103,6 +116,10 @@ export function createKbRouter(deps: KBRouterDeps) {
           categoryId: input.categoryId,
           encryptedTitle: Buffer.from(input.encryptedTitle, "base64"),
           encryptedBody: Buffer.from(input.encryptedBody, "base64"),
+          encryptedExcerpt:
+            input.encryptedExcerpt !== undefined
+              ? Buffer.from(input.encryptedExcerpt, "base64")
+              : undefined,
         });
       }),
     ),
@@ -119,6 +136,12 @@ export function createKbRouter(deps: KBRouterDeps) {
         const svc = deps.createItemSvc(ctx.org.tenantDb);
         return svc.list({
           categoryId: input.categoryId,
+          sortBy: input.sortBy,
+          sortDirection: input.sortDirection,
+          minRating: input.minRating,
+          createdBy: input.createdBy,
+          createdAfter: input.createdAfter,
+          createdBefore: input.createdBefore,
           limit: input.limit,
           cursor: input.cursor,
         });
@@ -139,6 +162,10 @@ export function createKbRouter(deps: KBRouterDeps) {
             input.encryptedBody !== undefined
               ? Buffer.from(input.encryptedBody, "base64")
               : undefined,
+          encryptedExcerpt:
+            input.encryptedExcerpt !== undefined
+              ? Buffer.from(input.encryptedExcerpt, "base64")
+              : undefined,
         });
       }),
     ),
@@ -148,6 +175,14 @@ export function createKbRouter(deps: KBRouterDeps) {
         const svc = deps.createItemSvc(ctx.org.tenantDb);
         // care-y-ignore-next-line route-delegates-to-service -- single service call, no business logic
         await svc.delete(input.itemId);
+      }),
+    ),
+
+    // --- Authors (for client-side filter dropdown) ---
+    listAuthors: volunteerProcedure.query(
+      withErrorWrapping(async ({ ctx }) => {
+        const svc = deps.createItemSvc(ctx.org.tenantDb);
+        return svc.listAuthors();
       }),
     ),
 
@@ -185,5 +220,88 @@ export function createKbRouter(deps: KBRouterDeps) {
         return svc.getUserVote(ctx.user.id, input.itemId);
       }),
     ),
+
+    // --- Attachments ---
+    uploadAttachment: volunteerProcedure
+      .input(uploadKbAttachmentInputSchema)
+      .mutation(
+        withErrorWrapping(async ({ ctx, input }) => {
+          // Rate limit: 5 uploads per minute per user
+          const rateResult = deps.uploadLimiter.check(ctx.user.id);
+          if (!rateResult.allowed) {
+            throw new TRPCError({
+              code: "TOO_MANY_REQUESTS",
+              message: `Upload rate limited. Retry after ${String(Math.ceil(rateResult.retryAfterMs / 1000))}s`,
+            });
+          }
+
+          const mediaSvc = deps.createMediaSvc(ctx.org.tenantDb);
+
+          // Server-side size validation (client limit is easily bypassed)
+          const blobBuffer = Buffer.from(input.blob, "base64");
+          if (blobBuffer.byteLength > KB_ATTACHMENT_MAX_BYTES) {
+            throw new ValidationError(
+              `Attachment exceeds ${String(KB_ATTACHMENT_MAX_BYTES)} byte limit`,
+            );
+          }
+
+          // Declared size must match actual blob size (catches client bugs and tampering)
+          if (input.sizeBytes !== blobBuffer.byteLength) {
+            throw new ValidationError(
+              `Declared size ${String(input.sizeBytes)} does not match actual blob size ${String(blobBuffer.byteLength)}`,
+            );
+          }
+
+          // care-y-ignore-next-line route-delegates-to-service -- blobStore.put is infrastructure (wire format), not business logic
+          const blobKey = await deps.blobStore.put(
+            ctx.org.orgSchema,
+            "kb-attachment",
+            blobBuffer,
+          );
+
+          try {
+            return await mediaSvc.createAttachment({
+              itemId: input.itemId,
+              blobKey,
+              sizeBytes: blobBuffer.byteLength,
+              encryptedFilename:
+                input.encryptedFilename !== undefined
+                  ? Buffer.from(input.encryptedFilename, "base64")
+                  : undefined,
+              contentType: input.contentType,
+            });
+          } catch (err: unknown) {
+            // Best-effort cleanup: remove the orphaned blob if the DB insert fails.
+            // Failure here is harmless (orphaned blob on disk, no DB reference).
+            await deps.blobStore.delete(blobKey).catch((_: unknown) => {
+              // Intentional: blob orphan is harmless, swallow delete failure
+            });
+            throw err;
+          }
+        }),
+      ),
+
+    downloadAttachmentBlob: volunteerProcedure
+      .input(downloadKbAttachmentInputSchema)
+      .query(
+        withErrorWrapping(async ({ ctx, input }) => {
+          const mediaSvc = deps.createMediaSvc(ctx.org.tenantDb);
+          const record = await mediaSvc.getAttachment(input.attachmentId);
+          const blob = await deps.blobStore.get(record.blobKey);
+          if (!blob) {
+            throw new NotFoundError(ErrorCode.KB_ATTACHMENT_NOT_FOUND);
+          }
+          return { data: blob.toString("base64") };
+        }),
+      ),
+
+    listAttachments: volunteerProcedure
+      .input(listKbAttachmentsInputSchema)
+      .query(
+        withErrorWrapping(async ({ ctx, input }) => {
+          const mediaSvc = deps.createMediaSvc(ctx.org.tenantDb);
+          return mediaSvc.listAttachments(input.itemId);
+        }),
+      ),
   });
 }

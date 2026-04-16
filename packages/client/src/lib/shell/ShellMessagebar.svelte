@@ -140,23 +140,18 @@
     padding-bottom: var(--k-safe-area-bottom) !important;
   }
 
-  /* Note mode: tint the Glass pill elements only. Glass elements carry
-     the backdrop-blur-lg class. In light mode they use bg-ios-light-glass,
-     in dark mode Tailwind activates dark:bg-ios-dark-glass on the same
-     element. We target backdrop-blur-lg to hit the Glass component
-     without affecting the toolbar background div. */
-  .note-mode :global(.backdrop-blur-lg) {
+  /* Note mode: tint the Glass pill elements with brand-accent. Uses
+     --glass-surface so the tint follows the glass mode system (no need
+     for separate .dark override).
+     Specificity: the glass mode overrides in shared.css target
+     html.glass-*.light/dark .backdrop-blur-lg at (0,3,1).
+     :global(html) prefix bumps this selector to (0,3,1) minimum,
+     and component styles load after global CSS so source order wins. */
+  :global(html) .note-mode :global(.backdrop-blur-lg) {
     background-color: color-mix(
       in srgb,
-      var(--brand-primary) 25%,
-      var(--color-ios-light-glass)
-    ) !important;
-  }
-  :global(.dark) .note-mode :global(.backdrop-blur-lg) {
-    background-color: color-mix(
-      in srgb,
-      var(--brand-primary) 20%,
-      var(--color-ios-dark-glass)
+      var(--brand-accent) 20%,
+      var(--glass-surface)
     ) !important;
   }
 </style>

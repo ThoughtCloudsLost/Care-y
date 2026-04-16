@@ -13,6 +13,7 @@
  */
 
 import { createContext } from "svelte";
+import type { Permission } from "@care-y/shared";
 import type { CryptoBridge } from "$lib/workers/crypto-bridge.js";
 import type { OrgKeyManager } from "./org-key.js";
 import type { OrgDecryptCache } from "./org-decrypt-cache.js";
@@ -30,6 +31,8 @@ const [getCurrentUserId, setCurrentUserId] =
   createContext<() => string | undefined>();
 const [getCurrentUserRoleId, setCurrentUserRoleId] =
   createContext<() => string | undefined>();
+const [getCurrentPermissions, setCurrentPermissions] =
+  createContext<() => ReadonlySet<Permission>>();
 const [getFollowUpDecryptCache, setFollowUpDecryptCache] =
   createContext<FollowUpDecryptCache>();
 const [getPreviewLoader, setPreviewLoader] = createContext<PreviewLoader>();
@@ -42,6 +45,7 @@ export {
   getTicketDecryptCache,
   getCurrentUserId,
   getCurrentUserRoleId,
+  getCurrentPermissions,
   getFollowUpDecryptCache,
   getPreviewLoader,
 };
@@ -54,6 +58,7 @@ export {
   setTicketDecryptCache,
   setCurrentUserId,
   setCurrentUserRoleId,
+  setCurrentPermissions,
   setFollowUpDecryptCache,
   setPreviewLoader,
 };

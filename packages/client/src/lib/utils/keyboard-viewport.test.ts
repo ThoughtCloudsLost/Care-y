@@ -2,25 +2,34 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { initKeyboardViewport } from "./keyboard-viewport.js";
 
 let resizeHandler: (() => void) | null = null;
+let scrollHandler: (() => void) | null = null;
 let mockHeight: number;
+let mockOffsetTop: number;
 
 function createMockVisualViewport(height: number): VisualViewport {
   mockHeight = height;
+  mockOffsetTop = 0;
   return {
     get height() {
       return mockHeight;
     },
-    addEventListener: vi.fn((_event: string, handler: () => void) => {
-      resizeHandler = handler;
+    get offsetTop() {
+      return mockOffsetTop;
+    },
+    addEventListener: vi.fn((event: string, handler: () => void) => {
+      if (event === "resize") resizeHandler = handler;
+      if (event === "scroll") scrollHandler = handler;
     }),
     removeEventListener: vi.fn((_event: string, _handler: () => void) => {
       resizeHandler = null;
+      scrollHandler = null;
     }),
   } as unknown as VisualViewport;
 }
 
 beforeEach(() => {
   resizeHandler = null;
+  scrollHandler = null;
   vi.stubGlobal("requestAnimationFrame", (cb: () => void) => {
     cb();
     return 1;
@@ -53,7 +62,7 @@ describe("initKeyboardViewport", () => {
     cleanup();
   });
 
-  it("sets --app-height on init", () => {
+  it("sets --app-height, --vv-offset-top, and --keyboard-height on init", () => {
     const vv = createMockVisualViewport(800);
     vi.stubGlobal("window", { visualViewport: vv, innerHeight: 800 });
 
@@ -62,6 +71,14 @@ describe("initKeyboardViewport", () => {
     expect(document.documentElement.style.setProperty).toHaveBeenCalledWith(
       "--app-height",
       "800px",
+    );
+    expect(document.documentElement.style.setProperty).toHaveBeenCalledWith(
+      "--vv-offset-top",
+      "0px",
+    );
+    expect(document.documentElement.style.setProperty).toHaveBeenCalledWith(
+      "--keyboard-height",
+      "0px",
     );
     cleanup();
   });
@@ -90,6 +107,10 @@ describe("initKeyboardViewport", () => {
       "--app-height",
       "400px",
     );
+    expect(document.documentElement.style.setProperty).toHaveBeenCalledWith(
+      "--keyboard-height",
+      "400px",
+    );
   });
 
   it("does not toggle .keyboard-open for small viewport changes", () => {
@@ -111,7 +132,41 @@ describe("initKeyboardViewport", () => {
     );
   });
 
-  it("cleanup removes listener and resets DOM", () => {
+  it("updates --vv-offset-top on scroll events", () => {
+    const vv = createMockVisualViewport(400);
+    vi.stubGlobal("window", { visualViewport: vv, innerHeight: 800 });
+
+    initKeyboardViewport();
+
+    vi.mocked(document.documentElement.style.setProperty).mockClear();
+
+    // Simulate scroll while keyboard is open
+    mockOffsetTop = 120;
+    scrollHandler?.();
+
+    expect(document.documentElement.style.setProperty).toHaveBeenCalledWith(
+      "--vv-offset-top",
+      "120px",
+    );
+  });
+
+  it("listens to both resize and scroll events", () => {
+    const vv = createMockVisualViewport(800);
+    vi.stubGlobal("window", { visualViewport: vv, innerHeight: 800 });
+
+    initKeyboardViewport();
+
+    expect(vv.addEventListener).toHaveBeenCalledWith(
+      "resize",
+      expect.any(Function),
+    );
+    expect(vv.addEventListener).toHaveBeenCalledWith(
+      "scroll",
+      expect.any(Function),
+    );
+  });
+
+  it("cleanup removes both listeners and resets DOM", () => {
     const vv = createMockVisualViewport(800);
     vi.stubGlobal("window", { visualViewport: vv, innerHeight: 800 });
 
@@ -122,8 +177,18 @@ describe("initKeyboardViewport", () => {
       "resize",
       expect.any(Function),
     );
+    expect(vv.removeEventListener).toHaveBeenCalledWith(
+      "scroll",
+      expect.any(Function),
+    );
     expect(document.documentElement.style.removeProperty).toHaveBeenCalledWith(
       "--app-height",
+    );
+    expect(document.documentElement.style.removeProperty).toHaveBeenCalledWith(
+      "--vv-offset-top",
+    );
+    expect(document.documentElement.style.removeProperty).toHaveBeenCalledWith(
+      "--keyboard-height",
     );
     expect(document.documentElement.classList.remove).toHaveBeenCalledWith(
       "keyboard-open",

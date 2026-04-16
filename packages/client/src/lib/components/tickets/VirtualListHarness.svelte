@@ -7,6 +7,7 @@
     estimateHeight?: number;
     overscan?: number;
     columns?: number;
+    virtualizeThreshold?: number;
     onloadmore?: () => void;
     onloadprevious?: () => void;
   }
@@ -17,6 +18,7 @@
     estimateHeight = 200,
     overscan = 3,
     columns = 1,
+    virtualizeThreshold,
     onloadmore,
     onloadprevious,
   }: Props = $props();
@@ -28,6 +30,7 @@
   {estimateHeight}
   {overscan}
   {columns}
+  {virtualizeThreshold}
   _forceVirtualize={true}
   getKey={(item: string) => item}
   {onloadmore}

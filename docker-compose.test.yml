@@ -1,42 +1,117 @@
-# Test compose override. Targets the "test" Dockerfile stage and bind-mounts
-# test infrastructure that .dockerignore (correctly) excludes from production.
+# Standalone test compose. Runs alongside the dev stack without conflicts.
 #
-# Start with watch mode so lockfile changes trigger automatic image rebuilds:
-#   docker compose -f docker-compose.yml -f docker-compose.test.yml watch
+# Uses a separate project name (care-y-test), separate DB volume, and no
+# host-exposed ports. Tests run via `docker compose exec`, not from the host.
 #
-# Then run tests from a second terminal:
-#   pnpm test:server:db          (server tests with DB)
-#   pnpm test:coverage           (all Docker-compatible projects with coverage)
+# Usage:
+#   docker compose -f docker-compose.test.yml up -d --build
+#   pnpm test:server:db
+#   docker compose -f docker-compose.test.yml down
 #
-# Client tests run on the host (SvelteKit deps are not in the Docker image):
-#   pnpm vitest run --project client
+# To tear down and wipe the test DB volume:
+#   docker compose -f docker-compose.test.yml down -v
+
+name: care-y-test
 
 services:
   app:
     build:
       context: .
       target: test
-    # Test container is ephemeral and local-only. Relax read_only so
-    # bind mounts and vitest can write temp files.
+    user: "1001"
+    # Relaxed from dev's read_only: true. Vitest writes temp files, and
+    # bind-mounted source dirs need writable overlays.
     read_only: false
+    # security_opt inherited from base docker-compose.yml (no-new-privileges).
+    # Do not redeclare here: CI overlays both files and Compose rejects duplicates.
+    mem_limit: 512m
+    cpus: "1.0"
+    tmpfs:
+      - /tmp
+    # No host ports. Tests exec into this container; nothing listens externally.
+    networks: [internal]
     volumes:
       # Vitest config (excluded by .dockerignore, needed for test runner)
       - ./vitest.config.ts:/app/vitest.config.ts:ro
-      # Source dirs with test files (.dockerignore excludes *.test.ts).
-      # Bind-mount the full src dirs so test files are present alongside
-      # the source they test. :ro because tests don't write to source.
+      # Source dirs with test files (.dockerignore excludes *.test.ts from prod).
+      # Bind-mount the full src dirs so test files sit alongside their source.
       - ./packages/server/src:/app/packages/server/src:ro
       - ./packages/shared/src:/app/packages/shared/src:ro
       - ./packages/crypto/src:/app/packages/crypto/src:ro
-      # OPRF socket volume so integration tests can reach OPRF processes
+      # OPRF socket volume for integration tests
       - oprf_sockets:/run/oprf
-      # Client tests run on the host (SvelteKit deps not in Docker image).
-      # Use `pnpm vitest run --project client` locally for client coverage.
+    depends_on:
+      db:
+        condition: service_healthy
+      oprf-a:
+        condition: service_started
+      oprf-b:
+        condition: service_started
+    env_file: .env
+    environment:
+      - NODE_ENV=test
+      - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+      - OPRF_SOCKET_A=/run/oprf/oprf-a.sock
+      - OPRF_SOCKET_B=/run/oprf/oprf-b.sock
+
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      - test_postgres_data:/var/lib/postgresql/data
+    networks: [internal]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  oprf-a:
+    build:
+      context: .
+      dockerfile: Dockerfile.oprf
+    user: "2001"
+    read_only: true
+    mem_limit: 128m
+    cpus: "0.25"
+    tmpfs:
+      - /tmp
+    environment:
+      - OPRF_SOCKET_PATH=/run/oprf/oprf-a.sock
+      - OPRF_SHARE_HEX=${OPRF_SHARE_A_HEX}
+    volumes:
+      - oprf_sockets:/run/oprf
+    networks: [internal]
+
+  oprf-b:
+    build:
+      context: .
+      dockerfile: Dockerfile.oprf
+    user: "2001"
+    read_only: true
+    mem_limit: 128m
+    cpus: "0.25"
+    tmpfs:
+      - /tmp
+    environment:
+      - OPRF_SOCKET_PATH=/run/oprf/oprf-b.sock
+      - OPRF_SHARE_HEX=${OPRF_SHARE_B_HEX}
+    volumes:
+      - oprf_sockets:/run/oprf
+    networks: [internal]
 
 volumes:
+  test_postgres_data:
   oprf_sockets:
     driver: local
     driver_opts:
       type: tmpfs
       device: tmpfs
       o: size=1m,uid=2001,gid=3001,mode=0770
+
+networks:
+  internal:
+    driver: bridge

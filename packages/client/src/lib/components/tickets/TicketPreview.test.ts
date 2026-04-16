@@ -59,7 +59,9 @@ describe("TicketPreview (mini-bubbles)", () => {
     const { container } = render(TicketPreview, {
       props: { followUps: undefined },
     });
-    const placeholders = container.querySelectorAll("[aria-busy='true']");
+    // DecryptPlaceholder container (.dp) renders immediately; the scramble
+    // (aria-busy) is delayed by 150ms, so check the container only.
+    const placeholders = container.querySelectorAll(".dp");
     expect(placeholders.length).toBeGreaterThan(0);
   });
 
@@ -77,7 +79,9 @@ describe("TicketPreview (mini-bubbles)", () => {
     const { container } = render(TicketPreview, {
       props: { followUps: [fu] },
     });
-    const dp = container.querySelector("[aria-busy='true']");
+    // DecryptPlaceholder container (.dp) renders immediately; the scramble
+    // (aria-busy) is delayed by 150ms, so check the container only.
+    const dp = container.querySelector(".dp");
     expect(dp).not.toBeNull();
   });
 

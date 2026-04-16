@@ -97,6 +97,8 @@
     // Knowledge base
     [ErrorCode.KB_CATEGORY_NOT_FOUND]: () => m.error_kb_category_not_found(),
     [ErrorCode.KB_ARTICLE_NOT_FOUND]: () => m.error_kb_article_not_found(),
+    [ErrorCode.KB_ATTACHMENT_NOT_FOUND]: () =>
+      m.error_kb_attachment_not_found(),
 
     // Telephony
     [ErrorCode.TELEPHONY_NOT_CONFIGURED]: () =>

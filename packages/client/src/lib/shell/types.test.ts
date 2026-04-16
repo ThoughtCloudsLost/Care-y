@@ -8,6 +8,8 @@ import {
   type ShellSheetProps,
   type ShellPopupProps,
   type ShellActionSheetProps,
+  type NavbarOverride,
+  type TabbarOverride,
 } from "./types";
 
 /**
@@ -17,11 +19,11 @@ import {
 describe("shell types", () => {
   it("exports TAB_IDS as a readonly tuple", () => {
     expectTypeOf(TAB_IDS).toExtend<readonly string[]>();
-    expect(TAB_IDS).toEqual(["home", "tickets", "calendar"]);
+    expect(TAB_IDS).toEqual(["home", "tickets", "library"]);
   });
 
   it("TabId is a union of the tab ID strings", () => {
-    expectTypeOf<TabId>().toEqualTypeOf<"home" | "tickets" | "calendar">();
+    expectTypeOf<TabId>().toEqualTypeOf<"home" | "tickets" | "library">();
   });
 
   it("AppShellProps has activeTab, ontabchange, and children", () => {
@@ -55,5 +57,16 @@ describe("shell types", () => {
   it("ShellActionSheetProps has opened and ondismiss", () => {
     expectTypeOf<ShellActionSheetProps>().toHaveProperty("opened");
     expectTypeOf<ShellActionSheetProps>().toHaveProperty("ondismiss");
+  });
+
+  it("NavbarOverride has searchHidden", () => {
+    expectTypeOf<NavbarOverride>().toHaveProperty("searchHidden");
+  });
+
+  it("TabbarOverride has left, middle, right snippet slots", () => {
+    expectTypeOf<TabbarOverride>().toHaveProperty("left");
+    expectTypeOf<TabbarOverride>().toHaveProperty("middle");
+    expectTypeOf<TabbarOverride>().toHaveProperty("right");
+    expectTypeOf<TabbarOverride>().toHaveProperty("ariaLabel");
   });
 });

@@ -9,6 +9,7 @@
 
 import { z } from "zod";
 import { base64String } from "./validators.js";
+import { sortDirectionSchema } from "./tickets.js";
 
 // --- Category schemas ---
 
@@ -31,6 +32,7 @@ export const createKbItemInputSchema = z.object({
   categoryId: z.uuid(),
   encryptedTitle: base64String("encryptedTitle"),
   encryptedBody: base64String("encryptedBody"),
+  encryptedExcerpt: base64String("encryptedExcerpt").optional(),
 });
 export type CreateKbItemInput = z.infer<typeof createKbItemInputSchema>;
 
@@ -39,17 +41,92 @@ export const updateKbItemInputSchema = z.object({
   categoryId: z.uuid().optional(),
   encryptedTitle: base64String("encryptedTitle").optional(),
   encryptedBody: base64String("encryptedBody").optional(),
+  encryptedExcerpt: base64String("encryptedExcerpt").optional(),
 });
 export type UpdateKbItemInput = z.infer<typeof updateKbItemInputSchema>;
+
+// --- Sort + filter for article listing ---
+
+export const kbSortFieldSchema = z.enum(["created_at", "updated_at", "rating"]);
+export type KbSortField = z.infer<typeof kbSortFieldSchema>;
+
+// Re-export sortDirectionSchema for convenience (already defined in tickets.ts)
+export { sortDirectionSchema } from "./tickets.js";
 
 // --- Article listing (paginated) ---
 
 export const kbItemListInputSchema = z.object({
   categoryId: z.uuid().optional(),
+  sortBy: kbSortFieldSchema.default("created_at"),
+  sortDirection: sortDirectionSchema.default("desc"),
+  minRating: z.number().min(0).max(1).optional(),
+  createdBy: z.string().optional(),
+  createdAfter: z.iso.datetime().optional(),
+  createdBefore: z.iso.datetime().optional(),
   limit: z.number().int().min(1).max(100).default(50),
-  cursor: z.string().optional(), // opaque cursor: "created_at|id"
+  cursor: z.string().optional(), // opaque cursor: "sortValue|id"
 });
 export type KbItemListInput = z.infer<typeof kbItemListInputSchema>;
+
+// --- Saved filter state (serialized inside SavedFilterRecord.state) ---
+
+export const kbSavedFilterStateSchema = z.object({
+  categoryIds: z.array(z.string()),
+  minRating: z.number().nullable(),
+  createdBy: z.string().nullable(),
+  dateFrom: z.string().nullable(),
+  dateTo: z.string().nullable(),
+  sortField: kbSortFieldSchema,
+  sortDirection: sortDirectionSchema,
+});
+export type KbSavedFilterState = z.infer<typeof kbSavedFilterStateSchema>;
+
+// --- Attachment schemas ---
+
+/** 10MB in bytes. Enforced client-side and server-side. */
+export const KB_ATTACHMENT_MAX_BYTES = 10 * 1024 * 1024;
+
+/** Hard cap on attachments per article. Prevents storage exhaustion. */
+export const KB_MAX_ATTACHMENTS_PER_ARTICLE = 50;
+
+export const KB_ALLOWED_CONTENT_TYPES = [
+  "image/png",
+  "image/jpeg",
+  "image/gif",
+  "image/webp",
+  "application/pdf",
+  "application/msword",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+] as const;
+
+export type KbAllowedContentType = (typeof KB_ALLOWED_CONTENT_TYPES)[number];
+
+export const kbContentTypeSchema = z.enum(KB_ALLOWED_CONTENT_TYPES);
+
+export const uploadKbAttachmentInputSchema = z.object({
+  itemId: z.uuid(),
+  blob: base64String("blob"),
+  sizeBytes: z.number().int().min(1).max(KB_ATTACHMENT_MAX_BYTES),
+  encryptedFilename: base64String("encryptedFilename").optional(),
+  contentType: kbContentTypeSchema,
+});
+export type UploadKbAttachmentInput = z.infer<
+  typeof uploadKbAttachmentInputSchema
+>;
+
+export const downloadKbAttachmentInputSchema = z.object({
+  attachmentId: z.uuid(),
+});
+export type DownloadKbAttachmentInput = z.infer<
+  typeof downloadKbAttachmentInputSchema
+>;
+
+export const listKbAttachmentsInputSchema = z.object({
+  itemId: z.uuid(),
+});
+export type ListKbAttachmentsInput = z.infer<
+  typeof listKbAttachmentsInputSchema
+>;
 
 // --- Voting schemas ---
 

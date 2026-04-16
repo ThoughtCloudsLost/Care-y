@@ -101,6 +101,18 @@ vi.mock("$lib/crypto/context.js", () => ({
     size: 0,
   }),
   getCurrentUserId: () => () => "user-001",
+  getCurrentPermissions: () => () =>
+    new Set([
+      "view_tickets",
+      "manage_own_tickets",
+      "view_knowledge_base",
+      "edit_knowledge_base",
+      "view_own_shifts",
+    ]),
+}));
+
+vi.mock("$lib/shell/context.js", () => ({
+  getNavbarOverrideCtx: () => ({ current: undefined }),
 }));
 
 // --- Helpers ---
@@ -203,7 +215,9 @@ describe("Dashboard page", () => {
     });
 
     const { container } = render(PageModule.default);
-    expect(container.querySelector("[role='status']")).toBeTruthy();
+    // DecryptPlaceholder container (.dp) renders immediately; the scramble
+    // (role="status") is delayed by 150ms, so check the container only.
+    expect(container.querySelector(".dp")).toBeTruthy();
   });
 
   it("renders section headers even on query failure (progressive loading)", () => {

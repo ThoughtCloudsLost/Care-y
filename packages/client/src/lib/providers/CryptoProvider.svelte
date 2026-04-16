@@ -34,8 +34,10 @@
     setFollowUpDecryptCache,
     setCurrentUserId,
     setCurrentUserRoleId,
+    setCurrentPermissions,
     setPreviewLoader,
   } from "$lib/crypto/context-init.js";
+  import type { Permission } from "@care-y/shared";
 
   import type { Snippet } from "svelte";
 
@@ -91,6 +93,13 @@
   setCurrentUserId(() => currentUserId);
   const currentUserRoleId = $derived(meQuery.data?.user.roleId);
   setCurrentUserRoleId(() => currentUserRoleId);
+  const EMPTY_PERMISSIONS: ReadonlySet<Permission> = new Set();
+  const currentPermissions = $derived(
+    meQuery.data?.permissions
+      ? new Set(meQuery.data.permissions)
+      : EMPTY_PERMISSIONS,
+  );
+  setCurrentPermissions(() => currentPermissions);
 </script>
 
 {@render children()}

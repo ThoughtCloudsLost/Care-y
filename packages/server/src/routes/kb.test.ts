@@ -43,6 +43,7 @@ function createMockItemSvc(): KBItemService {
     update: vi.fn(),
     delete: vi.fn(),
     listRecentlyUpdated: vi.fn(),
+    listAuthors: vi.fn(),
   };
 }
 
@@ -132,6 +133,7 @@ const MOCK_ITEM: KBItemRecord = {
   categoryId: VALID_UUID,
   encryptedTitle: Buffer.from("title"),
   encryptedBody: Buffer.from("body"),
+  encryptedExcerpt: null,
   createdBy: USER_ID,
   voteUpCount: 0,
   voteDownCount: 0,
@@ -157,11 +159,53 @@ let mockCatSvc: KBCategoryService;
 let mockItemSvc: KBItemService;
 let mockVoteSvc: KBVoteService;
 
+const mockBlobStore = {
+  put: vi.fn().mockResolvedValue("blob-key-1"),
+  get: vi.fn().mockResolvedValue(Buffer.from("encrypted-blob")),
+  delete: vi.fn().mockResolvedValue(undefined),
+  exists: vi.fn().mockResolvedValue(true),
+};
+
+const mockMediaSvc = {
+  createAttachment: vi.fn().mockResolvedValue({
+    id: "att-1",
+    itemId: "item-1",
+    blobKey: "blob-key-1",
+    sizeBytes: 1024,
+    encryptedFilename: null,
+    contentType: "image/png",
+    createdAt: NOW,
+    deletedAt: null,
+  }),
+  getAttachment: vi.fn().mockResolvedValue({
+    id: "att-1",
+    itemId: "item-1",
+    blobKey: "blob-key-1",
+    sizeBytes: 1024,
+    encryptedFilename: null,
+    contentType: "image/png",
+    createdAt: NOW,
+    deletedAt: null,
+  }),
+  listAttachments: vi.fn().mockResolvedValue([]),
+  softDeleteAttachment: vi.fn().mockResolvedValue(undefined),
+};
+
+const mockUploadLimiter = {
+  check: vi
+    .fn()
+    .mockReturnValue({ allowed: true, remaining: 4, retryAfterMs: 0 }),
+  reset: vi.fn(),
+};
+
 function buildDeps(): KBRouterDeps {
   return {
     createCategorySvc: () => mockCatSvc,
     createItemSvc: () => mockItemSvc,
     createVoteSvc: () => mockVoteSvc,
+    createMediaSvc: () => mockMediaSvc,
+    blobStore: mockBlobStore,
+    uploadLimiter: mockUploadLimiter,
   };
 }
 
@@ -179,6 +223,7 @@ beforeEach(() => {
   mockCatSvc = createMockCategorySvc();
   mockItemSvc = createMockItemSvc();
   mockVoteSvc = createMockVoteSvc();
+  vi.clearAllMocks();
 });
 
 // --- Category tests ---
@@ -305,6 +350,36 @@ describe("KB Article routes", () => {
     const result = await caller.listItems({ limit: 10 });
     expect(result.items).toHaveLength(1);
     expect(result.nextCursor).toBeNull();
+
+    // Verify sort/filter defaults are passed through
+    const call = vi.mocked(mockItemSvc.list).mock.calls[0]![0];
+    expect(call.sortBy).toBe("created_at");
+    expect(call.sortDirection).toBe("desc");
+    expect(call.minRating).toBeUndefined();
+    expect(call.createdBy).toBeUndefined();
+  });
+
+  it("volunteer can list articles with sort and filter params", async () => {
+    vi.mocked(mockItemSvc.list).mockResolvedValue(MOCK_ITEM_PAGE);
+    const caller = buildVolunteerCaller();
+
+    await caller.listItems({
+      limit: 20,
+      sortBy: "rating",
+      sortDirection: "asc",
+      minRating: 0.5,
+      createdBy: "user-1",
+      createdAfter: "2026-01-01T00:00:00.000Z",
+      createdBefore: "2026-12-31T23:59:59.999Z",
+    });
+
+    const call = vi.mocked(mockItemSvc.list).mock.calls[0]![0];
+    expect(call.sortBy).toBe("rating");
+    expect(call.sortDirection).toBe("asc");
+    expect(call.minRating).toBe(0.5);
+    expect(call.createdBy).toBe("user-1");
+    expect(call.createdAfter).toBe("2026-01-01T00:00:00.000Z");
+    expect(call.createdBefore).toBe("2026-12-31T23:59:59.999Z");
   });
 
   it("volunteer can update an article", async () => {
@@ -375,5 +450,138 @@ describe("KB Voting routes", () => {
 
     const result = await caller.getUserVote({ itemId: VALID_UUID });
     expect(result).toBeNull();
+  });
+});
+
+// --- Attachment tests ---
+
+describe("KB Attachment routes", () => {
+  const SMALL_BLOB = Buffer.from("small-encrypted-data").toString("base64");
+
+  it("volunteer can upload an attachment", async () => {
+    const caller = buildVolunteerCaller();
+
+    const result = await caller.uploadAttachment({
+      itemId: VALID_UUID,
+      blob: SMALL_BLOB,
+      sizeBytes: 20,
+      contentType: "image/png",
+    });
+
+    expect(result.id).toBe("att-1");
+    expect(mockBlobStore.put).toHaveBeenCalledOnce();
+    expect(mockMediaSvc.createAttachment).toHaveBeenCalledOnce();
+  });
+
+  it("upload rejects files exceeding 10MB via Zod schema", async () => {
+    const caller = buildVolunteerCaller();
+
+    // sizeBytes exceeds the max: Zod will reject before the route runs
+    await expect(
+      caller.uploadAttachment({
+        itemId: VALID_UUID,
+        blob: SMALL_BLOB,
+        sizeBytes: 10 * 1024 * 1024 + 1,
+        contentType: "image/png",
+      }),
+    ).rejects.toThrow();
+
+    // blobStore.put should never be called
+    expect(mockBlobStore.put).not.toHaveBeenCalled();
+  });
+
+  it("upload rejects disallowed content types", async () => {
+    const caller = buildVolunteerCaller();
+
+    await expect(
+      caller.uploadAttachment({
+        itemId: VALID_UUID,
+        blob: SMALL_BLOB,
+        sizeBytes: 100,
+        // @ts-expect-error testing invalid content type
+        contentType: "text/html",
+      }),
+    ).rejects.toThrow();
+
+    expect(mockBlobStore.put).not.toHaveBeenCalled();
+  });
+
+  it("volunteer can download an attachment blob", async () => {
+    const caller = buildVolunteerCaller();
+
+    const result = await caller.downloadAttachmentBlob({
+      attachmentId: VALID_UUID,
+    });
+
+    expect(result.data).toBeDefined();
+    expect(typeof result.data).toBe("string");
+    expect(mockMediaSvc.getAttachment).toHaveBeenCalledWith(VALID_UUID);
+    expect(mockBlobStore.get).toHaveBeenCalledWith("blob-key-1");
+  });
+
+  it("download throws when blob is missing from store", async () => {
+    mockBlobStore.get.mockResolvedValueOnce(null);
+    const caller = buildVolunteerCaller();
+
+    await expect(
+      caller.downloadAttachmentBlob({ attachmentId: VALID_UUID }),
+    ).rejects.toThrow(TRPCError);
+  });
+
+  it("volunteer can list attachments for an item", async () => {
+    mockMediaSvc.listAttachments.mockResolvedValueOnce([
+      {
+        id: "att-1",
+        itemId: VALID_UUID,
+        blobKey: "key-1",
+        sizeBytes: 100,
+        encryptedFilename: null,
+        contentType: "image/png",
+        createdAt: NOW,
+        deletedAt: null,
+      },
+    ]);
+
+    const caller = buildVolunteerCaller();
+    const result = await caller.listAttachments({ itemId: VALID_UUID });
+
+    expect(result).toHaveLength(1);
+    expect(result[0]!.id).toBe("att-1");
+  });
+
+  it("upload is rate-limited (5/min per user)", async () => {
+    mockUploadLimiter.check.mockReturnValueOnce({
+      allowed: false,
+      remaining: 0,
+      retryAfterMs: 30_000,
+    });
+
+    const caller = buildVolunteerCaller();
+    await expect(
+      caller.uploadAttachment({
+        itemId: VALID_UUID,
+        blob: SMALL_BLOB,
+        sizeBytes: 20,
+        contentType: "image/png",
+      }),
+    ).rejects.toThrow(TRPCError);
+
+    expect(mockBlobStore.put).not.toHaveBeenCalled();
+  });
+
+  it("upload rejects sizeBytes mismatch with actual blob", async () => {
+    const caller = buildVolunteerCaller();
+
+    // Declared sizeBytes (999) does not match actual blob (20 bytes)
+    await expect(
+      caller.uploadAttachment({
+        itemId: VALID_UUID,
+        blob: SMALL_BLOB,
+        sizeBytes: 999,
+        contentType: "image/png",
+      }),
+    ).rejects.toThrow(TRPCError);
+
+    expect(mockBlobStore.put).not.toHaveBeenCalled();
   });
 });

@@ -1,27 +1,28 @@
 /**
- * Shared download-and-decrypt utility for file attachments, plus
- * MIME type helpers (icon mapping, label extraction, file type display).
+ * Ticket-specific attachment download pipeline.
  *
- * Handles the fetch -> decrypt -> blob URL -> browser download pipeline.
- * Both AttachmentChip and TicketPanelContent use this same flow;
- * the calling component owns the downloading-state guard (single boolean
- * vs SvelteSet, respectively).
+ * Fetches an encrypted attachment blob via the ticket tRPC router,
+ * decrypts it through the crypto Worker (ECIES per-ticket key), then
+ * triggers a browser download via the shared download utility.
+ *
+ * MIME type helpers (fileIcon, fileTypeLabel) and the browser download
+ * trigger (triggerBlobDownload) live in the shared attachment-download
+ * module. Re-exported here for backwards compatibility with existing
+ * ticket component imports.
  */
 
 import type { CryptoBridge } from "$lib/workers/crypto-bridge.js";
 import type { TicketKeyWrap } from "$lib/crypto/ticket-decrypt-cache.js";
 import type { TRPCClient } from "@trpc/client";
 import type { AppRouter } from "@care-y/server";
-import {
-  Paperclip,
-  FileText,
-  FileArchive,
-  FileSpreadsheet,
-  FileHeadphone,
-  FilePlay,
-  File,
-  type LucideIcon,
-} from "@lucide/svelte";
+import { triggerBlobDownload } from "$lib/components/shared/attachment-download.js";
+
+// Re-export shared utilities so existing callers don't need path changes
+export {
+  fileIcon,
+  fileTypeLabel,
+  triggerBlobDownload,
+} from "$lib/components/shared/attachment-download.js";
 
 type TicketRouter = NonNullable<TRPCClient<AppRouter>["tickets"]>;
 
@@ -55,83 +56,5 @@ export async function downloadDecryptedAttachment(
     encryptedBase64,
   );
 
-  const blob = new Blob([decryptedBuf]);
-  const url = URL.createObjectURL(blob);
-
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = filename;
-  a.click();
-
-  URL.revokeObjectURL(url);
-}
-
-// ── MIME type helpers ──────────────────────────────────────────────────
-
-/** Map MIME content type to a Lucide icon component. */
-export function fileIcon(ct: string | null): LucideIcon {
-  if (ct === null || ct === "") return File;
-  if (ct.startsWith("text/")) return FileText;
-  if (ct === "application/pdf") return FileText;
-  if (ct === "application/msword") return FileText;
-  if (
-    ct ===
-    "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-  )
-    return FileText;
-  if (
-    ct === "application/zip" ||
-    ct === "application/gzip" ||
-    ct === "application/x-tar" ||
-    ct === "application/x-7z-compressed" ||
-    ct === "application/x-rar-compressed"
-  )
-    return FileArchive;
-  if (
-    ct === "application/vnd.ms-excel" ||
-    ct ===
-      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" ||
-    ct === "text/csv"
-  )
-    return FileSpreadsheet;
-  if (ct.startsWith("audio/")) return FileHeadphone;
-  if (ct.startsWith("video/")) return FilePlay;
-  return Paperclip;
-}
-
-/** Known MIME type to short label mapping. */
-const MIME_LABELS = new Map<string, string>([
-  ["application/pdf", "PDF"],
-  ["application/zip", "ZIP"],
-  ["application/gzip", "GZIP"],
-  ["application/x-tar", "TAR"],
-  ["application/x-7z-compressed", "7Z"],
-  ["application/x-rar-compressed", "RAR"],
-  ["application/vnd.ms-excel", "XLS"],
-  ["application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "XLSX"],
-  ["application/msword", "DOC"],
-  [
-    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-    "DOCX",
-  ],
-  ["application/vnd.ms-powerpoint", "PPT"],
-  [
-    "application/vnd.openxmlformats-officedocument.presentationml.presentation",
-    "PPTX",
-  ],
-  ["text/plain", "TXT"],
-  ["text/csv", "CSV"],
-  ["text/html", "HTML"],
-  ["application/json", "JSON"],
-  ["application/xml", "XML"],
-]);
-
-/** Extract short label from MIME type (e.g. "application/pdf" -> "PDF"). */
-export function fileTypeLabel(ct: string | null): string {
-  if (ct === null || ct === "") return "";
-  const known = MIME_LABELS.get(ct);
-  if (known !== undefined) return known;
-  const sub = ct.split("/")[1];
-  if (sub === undefined || sub === "") return "";
-  return sub.replace(/^x-/, "").toUpperCase();
+  triggerBlobDownload(decryptedBuf, filename);
 }

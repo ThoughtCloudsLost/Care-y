@@ -67,6 +67,21 @@
           ontap={(id: string) => handleResultTap(id, group.providerId)}
           loading={group.loading}
         />
+      {:else if group.renderMode === "list"}
+        {@const provider = getProvider(group.providerId)}
+        {#if provider}
+          {@const ResultItem = provider.ResultItem}
+          <div role="list" class="search-list-results">
+            {#each group.results as result (result.id)}
+              <div role="listitem">
+                <ResultItem
+                  result={result.data}
+                  ontap={(id: string) => handleResultTap(id, group.providerId)}
+                />
+              </div>
+            {/each}
+          </div>
+        {/if}
       {/if}
     </SearchSection>
   {/each}

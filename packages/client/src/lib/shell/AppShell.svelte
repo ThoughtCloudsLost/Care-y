@@ -34,14 +34,7 @@
     TabbarLink,
     ToolbarPane,
   } from "konsta/svelte";
-  import {
-    House,
-    Ticket,
-    CalendarDays,
-    Ellipsis,
-    Search,
-    TicketPlus,
-  } from "@lucide/svelte";
+  import { House, Ticket, BookOpen, Ellipsis, Search } from "@lucide/svelte";
   import { tick, onMount } from "svelte";
   import { SvelteMap, SvelteSet } from "svelte/reactivity";
   import type { Component } from "svelte";
@@ -67,10 +60,9 @@
     createTicketSearchProvider,
     type RawCachedTicket,
   } from "$lib/search/providers/tickets.js";
-  import {
-    kbStubProvider,
-    volunteersStubProvider,
-  } from "$lib/search/providers/stubs.js";
+  import { volunteersStubProvider } from "$lib/search/providers/stubs.js";
+  import { createKbSearchProvider } from "$lib/search/providers/kb.js";
+  import { trpc } from "$lib/trpc/index.js";
   import {
     registerSearchProvider,
     resetFullSearch,
@@ -253,7 +245,11 @@
   // only run client-side.
 
   const promotedProviderId = $derived(
-    activeTab === "tickets" ? "tickets" : undefined,
+    activeTab === "tickets"
+      ? "tickets"
+      : activeTab === "library"
+        ? "kb"
+        : undefined,
   );
 
   // Memoized flat ticket list (raw records, no decryption).
@@ -371,8 +367,62 @@
       }),
     );
 
-    // Placeholder providers for sections not yet built (removed by 6f/6g).
-    const unregisterKb = registerSearchProvider(kbStubProvider);
+    // KB search provider: lazy-loads all articles, decrypts titles + excerpts
+    // into a SvelteMap cache, then filters in-memory with fuzzy matching.
+    // KBResultItem wraps ArticleCard, so the provider resolves category
+    // names and author names reactively from the TanStack Query cache.
+    const kbRouter = trpc.kb;
+    const unregisterKb = kbRouter
+      ? registerSearchProvider(
+          createKbSearchProvider({
+            fetchPage: async (cursor) =>
+              kbRouter.listItems.query({ limit: 100, cursor }),
+            decryptOrg: (cacheKey, ciphertext) => {
+              if (!isOrgCiphertext(ciphertext)) return null;
+              return orgCache.decrypt(cacheKey, ciphertext);
+            },
+            ensureCategoriesLoaded: async () => {
+              await queryClient.ensureQueryData({
+                queryKey: ["kb", "categories"],
+                queryFn: async () => kbRouter.listCategories.query(),
+              });
+            },
+            resolveCategoryName: (categoryId) => {
+              // Read from TanStack Query cache populated by the library page.
+              const cats = queryClient.getQueryData<
+                readonly { id: string; encryptedName: unknown }[]
+              >(["kb", "categories"]);
+              const cat = cats?.find((c) => c.id === categoryId);
+              if (!cat) return null;
+              if (!isOrgCiphertext(cat.encryptedName)) return null;
+              return orgCache.decrypt(
+                `kb-cat:${categoryId}`,
+                cat.encryptedName,
+              );
+            },
+            resolveAuthorName: (userId) => {
+              if (userId === currentUserIdGetter()) {
+                return m.dashboard_assigned_you();
+              }
+              const volunteers = queryClient.getQueryData<
+                readonly {
+                  id: string;
+                  encryptedDisplayName: unknown;
+                }[]
+              >(["volunteers"]);
+              const vol = volunteers?.find((v) => v.id === userId);
+              if (!vol) return null;
+              if (!isOrgCiphertext(vol.encryptedDisplayName)) return null;
+              return orgCache.decrypt(
+                `volunteer:${vol.id}`,
+                vol.encryptedDisplayName,
+              );
+            },
+          }),
+        )
+      : () => undefined;
+
+    // Placeholder provider for volunteers search (removed by 6g).
     const unregisterVol = registerSearchProvider(volunteersStubProvider);
 
     return () => {
@@ -392,7 +442,7 @@
   const allTabs: readonly TabDef[] = [
     { id: "home", label: () => m.nav_home(), icon: House },
     { id: "tickets", label: () => m.nav_tickets(), icon: Ticket },
-    { id: "calendar", label: () => m.nav_calendar(), icon: CalendarDays },
+    { id: "library", label: () => m.tab_library(), icon: BookOpen },
   ];
 
   // ── Pull-to-refresh ──────────────────────────────────────────────────
@@ -642,7 +692,7 @@
       {/if}
     {/snippet}
     {#snippet right()}
-      {#if !searchOpen}
+      {#if !searchOpen && navbarOverride?.searchHidden !== true}
         <Link
           iconOnly
           role="button"
@@ -654,10 +704,6 @@
       {/if}
       {#if navbarOverride?.right && !searchOpen}
         {@render navbarOverride.right()}
-      {:else if !searchOpen}
-        <Link iconOnly role="button" aria-label={m.nav_new_ticket()}>
-          <TicketPlus size={22} aria-hidden="true" />
-        </Link>
       {/if}
     {/snippet}
     {#if searchOpen}
@@ -762,38 +808,36 @@
   {#if tabbarHidden}
     <!-- Tabbar hidden: route provides its own bottom bar (e.g., ShellMessagebar) -->
   {:else if tabbarOverride}
-    {@const DismissIcon = tabbarOverride.dismiss.icon}
-    <div role="toolbar" aria-label={tabbarOverride.ariaLabel}>
+    <div
+      role="toolbar"
+      aria-label={tabbarOverride.ariaLabel}
+      class="tabbar-override"
+    >
       <Toolbar tabbar tabbarIcons class="native-tabbar left-0 bottom-0 fixed">
-        {#if themeStore.uiTheme === "ios"}
+        {#if themeStore.uiTheme === "ios" && tabbarOverride.middle}
           <div
-            class="backdrop-blur-[2px] fixed left-0 bottom-0 w-full h-[calc(env(safe-area-inset-bottom,0px)+48px+32px)] mask-t-to-100% mask-t-from-70% pointer-events-none bg-gradient-to-t from-ios-light-surface to-transparent dark:from-ios-dark-surface/50"
+            class="tabbar-override-blur fixed left-0 bottom-0 w-full h-[calc(env(safe-area-inset-bottom,0px)+48px+32px)] mask-t-to-100% mask-t-from-70% pointer-events-none bg-gradient-to-t from-ios-light-surface to-transparent dark:from-ios-dark-surface/50"
           ></div>
         {/if}
-        <ToolbarPane tabbar={false}>
-          {#each tabbarOverride.actions as action (action.id)}
-            {@const ActionIcon = action.icon}
-            <Link iconOnly onclick={action.onclick} aria-label={action.label}>
-              <ActionIcon size={24} aria-hidden="true" />
-            </Link>
-          {/each}
-        </ToolbarPane>
-        <ToolbarPane tabbar={false}>
-          <Link
-            iconOnly
-            aria-label={tabbarOverride.dismiss.ariaLabel}
-            onclick={tabbarOverride.dismiss.onclick}
-          >
-            <DismissIcon size={24} aria-hidden="true" />
-          </Link>
-        </ToolbarPane>
+        {#if tabbarOverride.left}
+          <ToolbarPane tabbar={false}>
+            {@render tabbarOverride.left()}
+          </ToolbarPane>
+        {/if}
+        {#if tabbarOverride.middle}
+          <div class="tabbar-middle">
+            {@render tabbarOverride.middle()}
+          </div>
+        {/if}
+        {#if tabbarOverride.right}
+          {#if !tabbarOverride.left && !tabbarOverride.middle}
+            <div style:flex="1"></div>
+          {/if}
+          <ToolbarPane tabbar={false}>
+            {@render tabbarOverride.right()}
+          </ToolbarPane>
+        {/if}
       </Toolbar>
-      <span
-        class="fixed bottom-0 left-0 right-0 flex items-center justify-center pointer-events-none font-semibold text-sm h-12 z-50"
-        role="status"
-      >
-        {tabbarOverride.label}
-      </span>
     </div>
   {:else}
     <nav aria-label={m.nav_main()}>
@@ -813,6 +857,8 @@
               aria-label={tab.label()}
               aria-selected={activeTab === tab.id}
               colors={{
+                textIos: "text-[var(--glass-text)]",
+                textMaterial: "text-[var(--glass-text)]",
                 textActiveIos: "text-[var(--brand-text)]",
                 textActiveMaterial: "text-[var(--brand-text)]",
               }}
@@ -837,6 +883,7 @@
     bind:this={mainEl}
     id="main-content"
     class="main-content"
+    aria-label={m.shell_main_content()}
     class:tabbar-hidden={tabbarHidden}
     class:has-subnavbar={navbarOverride?.subnavbar != null}
     style:--subnavbar-h="{subnavbarHeight}px"
@@ -878,6 +925,19 @@
     height: calc(var(--k-safe-area-bottom) + 48px) !important;
   }
 
+  /* Tabbar override mode: Konsta Toolbar keeps safe-area layout but
+     the glass/blur background is removed so it doesn't block taps on
+     content behind it. Only actual slot content receives clicks. */
+  .tabbar-override :global(.native-tabbar.k-toolbar) {
+    pointer-events: none;
+  }
+  .tabbar-override :global(.native-tabbar.k-toolbar > div:first-child) {
+    display: none;
+  }
+  .tabbar-override :global(.native-tabbar.k-toolbar > div:nth-child(2)) {
+    pointer-events: auto;
+  }
+
   /* Navbar keeps Konsta's default sticky + z-20. */
 
   @media (prefers-contrast: more) {
@@ -894,6 +954,16 @@
       background: none !important;
       mask-image: none !important;
       -webkit-mask-image: none !important;
+    }
+
+    /* Tabbar override blur overlay: solid opaque instead of blur */
+    .tabbar-override-blur {
+      -webkit-backdrop-filter: none !important;
+      backdrop-filter: none !important;
+      background: Canvas !important;
+      mask-image: none !important;
+      -webkit-mask-image: none !important;
+      opacity: 1 !important;
     }
   }
 
@@ -931,6 +1001,21 @@
   .main-content.tabbar-hidden {
     padding-bottom: 0 !important;
     overflow: hidden;
+  }
+
+  .tabbar-override-blur {
+    -webkit-backdrop-filter: blur(2px);
+    backdrop-filter: blur(2px);
+  }
+
+  .tabbar-middle {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    pointer-events: none;
+    position: relative;
+    z-index: 1;
   }
 
   .navbar-avatar {
@@ -993,6 +1078,7 @@
      (e.g., filter pill dropdowns) can render outside the bounds. */
   .shell-subnavbar--hidden {
     overflow: hidden;
+    pointer-events: none;
   }
 
   /* No background on the subnavbar itself. The Navbar's bg/blur layers
@@ -1006,13 +1092,10 @@
       opacity 200ms ease;
   }
 
-  /* Material: Navbar has no bgBlur layer, so the subnavbar provides
-     its own backdrop blur with a soft fade-out at the bottom. */
+  /* Material: solid elevated surface instead of iOS glass blur. */
   :global(.k-material) .shell-subnavbar-inner {
-    backdrop-filter: blur(2px);
-    -webkit-backdrop-filter: blur(2px);
-    -webkit-mask-image: linear-gradient(to bottom, black 90%, transparent);
-    mask-image: linear-gradient(to bottom, black 90%, transparent);
+    background: var(--paper);
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
   }
 
   .shell-subnavbar--hidden .shell-subnavbar-inner {

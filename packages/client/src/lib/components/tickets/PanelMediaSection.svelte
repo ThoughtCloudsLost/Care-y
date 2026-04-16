@@ -24,7 +24,10 @@
     getFollowUpDecryptCache,
   } from "$lib/crypto/context.js";
   import { SvelteSet } from "svelte/reactivity";
-  import { isDecryptError } from "$lib/crypto/async-decrypt-cache.js";
+  import {
+    resolveAsyncDecrypt,
+    isDecryptReady,
+  } from "$lib/crypto/decrypt-result.js";
   import { RouterNotAvailableError } from "$lib/errors.js";
   import type { TicketKeyWrap } from "$lib/crypto/ticket-decrypt-cache.js";
 
@@ -100,24 +103,6 @@
   const fileAttachments = $derived(
     attachments.filter((a) => a.contentType?.startsWith("image/") !== true),
   );
-
-  // --- Decrypt ---
-
-  function decryptFilename(
-    attId: string,
-    encryptedFilename:
-      | Parameters<typeof followUpCache.decryptContent>[2]
-      | null,
-  ): string | undefined {
-    if (keyWrap === null || encryptedFilename === null) return undefined;
-    const result = followUpCache.decryptContent(
-      `filename:${attId}`,
-      keyWrap,
-      encryptedFilename,
-    );
-    if (isDecryptError(result)) return undefined;
-    return result;
-  }
 
   // --- File download ---
 
@@ -208,7 +193,21 @@
   <Block strong inset class="!my-3">
     <div class="file-grid">
       {#each fileAttachments as att (att.id)}
-        {@const filename = decryptFilename(att.id, att.encryptedFilename)}
+        {@const fnResult =
+          att.encryptedFilename != null
+            ? resolveAsyncDecrypt(
+                followUpCache.decryptContent(
+                  `filename:${att.id}`,
+                  keyWrap,
+                  att.encryptedFilename,
+                ),
+                keyWrap !== null,
+              )
+            : undefined}
+        {@const filename =
+          fnResult != null && isDecryptReady(fnResult)
+            ? fnResult.value
+            : undefined}
         {@const Icon = fileIcon(att.contentType)}
         <div class="file-cell">
           <button

@@ -2,9 +2,17 @@
   import type { Snippet } from "svelte";
   import * as m from "$lib/paraglide/messages.js";
   import { isDecryptError } from "$lib/crypto/async-decrypt-cache.js";
+  import {
+    LOADING,
+    ERROR,
+    type DecryptResult,
+  } from "$lib/crypto/decrypt-result.js";
 
   interface Props {
-    /** Decrypted value: undefined/null = loading, error sentinel = error, string = ready */
+    /** Typed DecryptResult (preferred). When provided, takes precedence over content. */
+    result?: DecryptResult;
+    /** Decrypted value: undefined/null = loading, error sentinel = error, string = ready.
+     *  Legacy prop, use result instead for new code. */
     content?: string | null;
     /** Encrypted data for automatic length estimation (ciphertext bytes - 40 = plaintext chars).
      *  Accepts unknown to avoid forcing callers to import SerializedBuffer. Runtime type-checked. */
@@ -32,6 +40,7 @@
   }
 
   let {
+    result,
     content,
     ciphertext,
     mode = "text",
@@ -43,8 +52,20 @@
     children,
   }: Props = $props();
 
-  const loading = $derived(content === undefined || content === null);
-  const isError = $derived(!loading && isDecryptError(content));
+  // Normalize both prop forms into a single DecryptResult.
+  // When result is provided it wins. Otherwise derive from the legacy content prop.
+  const resolved = $derived.by((): DecryptResult => {
+    if (result !== undefined) return result;
+    if (content === undefined || content === null) return LOADING;
+    if (isDecryptError(content)) return ERROR;
+    return { status: "ready", value: content };
+  });
+
+  const loading = $derived(resolved.status === "loading");
+  const isError = $derived(
+    resolved.status === "error" || resolved.status === "denied",
+  );
+  const isDenied = $derived(resolved.status === "denied");
   const effectiveLength = $derived(estimateLength(ciphertext, length));
   const estimatedLines = $derived.by(() => {
     const lines = Math.max(1, Math.ceil(effectiveLength / charsPerLine));
@@ -72,6 +93,28 @@
   const variant = $derived(isMedia ? mediaVariant : textVariant);
   const delay = `${String(-(Math.random() * 1.8))}s`;
 
+  // Delay threshold: don't show the scramble animation until loading
+  // has lasted 150ms. Most Worker decrypts resolve faster, so most
+  // instances skip the scramble entirely and render content directly.
+  let showScramble = $state(false);
+  let wasScrambleShown = $state(false);
+
+  $effect(() => {
+    if (resolved.status === "loading") {
+      showScramble = false;
+      wasScrambleShown = false;
+      const timer = setTimeout(() => {
+        showScramble = true;
+        wasScrambleShown = true;
+      }, 150);
+      return () => clearTimeout(timer);
+    }
+    showScramble = false;
+  });
+
+  const scrambleVisible = $derived(loading && showScramble);
+  const fastResolve = $derived(!loading && !wasScrambleShown);
+
   let paused = $state(false);
 
   function observeViewport(node: HTMLElement): { destroy: () => void } {
@@ -95,7 +138,8 @@
   use:observeViewport
   class="dp {className}"
   class:block={block || isMedia}
-  class:loading
+  class:loading={scrambleVisible}
+  class:fast-resolve={fastResolve}
   class:paused
   class:media={isMedia}
   class:v1={!isMedia && variant === 1}
@@ -106,31 +150,37 @@
   class:m2={isMedia && variant === 2}
   data-variant={!isMedia ? `v${String(variant)}` : undefined}
   data-media-variant={isMedia ? `m${String(variant)}` : undefined}
-  role={loading ? "status" : undefined}
-  aria-busy={loading ? "true" : undefined}
+  role={scrambleVisible ? "status" : undefined}
+  aria-busy={scrambleVisible ? "true" : undefined}
 >
-  <span
-    class="scramble"
-    class:scramble-media={isMedia}
-    class:scramble-block={block && !isMedia}
-    style:width={isMedia || block ? undefined : `${String(effectiveLength)}ch`}
-    style:max-height={block && !isMedia
-      ? `${String(estimatedLines)}lh`
-      : undefined}
-    style:--delay={delay}
-    aria-hidden="true"
-  ></span>
-  {#if loading}
+  {#if scrambleVisible}
+    <span
+      class="scramble"
+      class:scramble-media={isMedia}
+      class:scramble-block={block && !isMedia}
+      style:width={isMedia || block
+        ? undefined
+        : `${String(effectiveLength)}ch`}
+      style:max-height={block && !isMedia
+        ? `${String(estimatedLines)}lh`
+        : undefined}
+      style:--delay={delay}
+      aria-hidden="true"
+    ></span>
     <span class="dp-sr-only">{m.decrypt_placeholder_loading()}</span>
   {/if}
   <span class="content">
     {#if isError}
-      <span class="decrypt-error">{m.error_decryption_failed()}</span>
+      <span class="decrypt-error"
+        >{isDenied
+          ? m.decrypt_placeholder_denied()
+          : m.error_decryption_failed()}</span
+      >
     {:else if !loading}
       {#if children}
         {@render children()}
-      {:else}
-        {content}
+      {:else if resolved.status === "ready"}
+        {resolved.value}
       {/if}
     {/if}
   </span>
@@ -167,11 +217,11 @@
     white-space: nowrap;
     max-width: 100%;
     user-select: none;
+    /* Visual-only transitions. No width/max-height transitions to avoid
+       continuous layout shifting during the scramble-to-content swap. */
     transition:
-      filter 0.4s ease-out,
-      opacity 0.3s ease-out 0.1s,
-      max-height 0.5s ease-in-out 0.1s,
-      width 0.5s ease-in-out 0.1s;
+      filter 0.3s ease-out,
+      opacity 0.2s ease-out;
   }
 
   /* Block text mode: ::before content wraps within the container.
@@ -192,8 +242,6 @@
     filter: blur(0);
     opacity: 0;
     pointer-events: none;
-    /* Smoothly collapse to 0 so the content determines container size
-       without an instant layout jump. !important overrides inline styles. */
     max-height: 0 !important;
     width: 0 !important;
     overflow: hidden;
@@ -397,6 +445,12 @@
 
   .dp:not(.loading) .content {
     opacity: 1;
+  }
+
+  /* Fast resolve: content arrived before the scramble threshold (150ms).
+     Shorter fade-in since there's no scramble to crossfade with. */
+  .dp.fast-resolve .content {
+    transition: opacity 0.1s ease-out;
   }
 
   /* ── Reduced motion ── */

@@ -79,6 +79,7 @@ describe("ErrorCode", () => {
       // Knowledge base
       "KB_CATEGORY_NOT_FOUND",
       "KB_ARTICLE_NOT_FOUND",
+      "KB_ATTACHMENT_NOT_FOUND",
 
       // Telephony
       "TELEPHONY_NOT_CONFIGURED",

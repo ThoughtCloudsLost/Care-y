@@ -43,6 +43,7 @@ export enum Permission {
   VIEW_OWN_SHIFTS = "view_own_shifts",
 
   // Manager-level
+  MODERATE_CONTENT = "moderate_content",
   MANAGE_USERS = "manage_users",
   MANAGE_QUEUES = "manage_queues",
   MANAGE_PRESETS = "manage_presets",

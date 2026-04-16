@@ -264,8 +264,9 @@ describe("Ticket list page", () => {
     };
 
     const { container } = render(PageModule.default);
-    // Skeleton component renders with role="status"
-    expect(container.querySelector("[role='status']")).toBeTruthy();
+    // DecryptPlaceholder container (.dp) renders immediately; the scramble
+    // (role="status") is delayed by 150ms, so check the container only.
+    expect(container.querySelector(".dp")).toBeTruthy();
   });
 
   it("renders error message on query failure", () => {

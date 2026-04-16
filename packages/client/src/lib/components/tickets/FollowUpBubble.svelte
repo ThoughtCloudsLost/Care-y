@@ -7,6 +7,7 @@
   import { Message } from "konsta/svelte";
   import { formatRelativeTime } from "$lib/utils/format-time.js";
   import { followUpKind } from "$lib/tickets/follow-up-utils.js";
+  import type { DecryptResult } from "$lib/crypto/decrypt-result.js";
   import DecryptPlaceholder from "$lib/components/DecryptPlaceholder.svelte";
   import SystemEvent from "$lib/components/tickets/SystemEvent.svelte";
   import PrivateNote from "$lib/components/tickets/PrivateNote.svelte";
@@ -19,7 +20,7 @@
       readonly encryptedContent: unknown;
       readonly createdAt: string;
     };
-    content: string | undefined;
+    result: DecryptResult;
     clientAlias?: string;
     isOwnNote?: boolean;
     onnoteedit?: (followUpId: string, text: string) => void;
@@ -27,7 +28,7 @@
 
   let {
     followUp,
-    content,
+    result,
     clientAlias,
     isOwnNote = false,
     onnoteedit,
@@ -38,13 +39,13 @@
 
 {#if kind === "system"}
   <SystemEvent
-    {content}
+    {result}
     encryptedContent={followUp.encryptedContent}
     timestamp={followUp.createdAt}
   />
 {:else if kind === "note"}
   <PrivateNote
-    {content}
+    {result}
     encryptedContent={followUp.encryptedContent}
     authorName={undefined}
     timestamp={followUp.createdAt}
@@ -61,7 +62,7 @@
     {#snippet text()}
       <span class="bubble-text">
         <DecryptPlaceholder
-          {content}
+          {result}
           ciphertext={followUp.encryptedContent}
           length={30}
           block

@@ -108,6 +108,7 @@ import {
   createKBItemService,
   createKBVoteService,
 } from "./kb/service.js";
+import { createKBMediaService } from "./kb/kb-media-service.js";
 
 // --- DB startup probe ---
 
@@ -443,6 +444,12 @@ const appRouter = createAppRouter({
     createCategorySvc: createKBCategoryService,
     createItemSvc: createKBItemService,
     createVoteSvc: createKBVoteService,
+    createMediaSvc: (tDb) => createKBMediaService(tDb),
+    blobStore,
+    uploadLimiter: createInMemoryRateLimiter({
+      windowMs: 60_000,
+      maxRequests: 5,
+    }),
   },
   notificationDeps: {
     createPushSubSvc: (tDb) => createPushSubscriptionService(tDb, pushSender),
