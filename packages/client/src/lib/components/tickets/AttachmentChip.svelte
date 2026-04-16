@@ -1,23 +1,17 @@
 <!--
-  File attachment Chip for the chat timeline.
+  Ticket-specific attachment chip. Thin wrapper around BaseAttachmentChip
+  that injects the ECIES per-ticket decryption pipeline.
 
-  Renders inside a Konsta Message `text` snippet. Self-fetching on tap:
-  receives attachment metadata as props, decrypts on demand when tapped
-  (not eagerly), triggers browser download of decrypted file.
-
-  Security: blob URL revoked immediately after download link click.
+  Renders inside a Konsta Message `text` snippet. Decrypts on demand
+  when tapped (not eagerly), triggers browser download of decrypted file.
 -->
 <script lang="ts">
-  import { Chip, Preloader } from "konsta/svelte";
-  import { Paperclip } from "@lucide/svelte";
-  import * as m from "$lib/paraglide/messages.js";
-  import { formatFileSize } from "$lib/utils/time.js";
-  import { onKeyActivate } from "$lib/utils/a11y.js";
+  import BaseAttachmentChip from "$lib/components/shared/BaseAttachmentChip.svelte";
+  import { downloadDecryptedAttachment } from "$lib/tickets/attachment-download.js";
   import { trpc } from "$lib/trpc/index.js";
   import { getCryptoBridge } from "$lib/crypto/context.js";
   import { RouterNotAvailableError } from "$lib/errors.js";
   import type { TicketKeyWrap } from "$lib/crypto/ticket-decrypt-cache.js";
-  import { downloadDecryptedAttachment } from "$lib/tickets/attachment-download.js";
 
   interface Props {
     /** Attachment UUID from AttachmentRecord. */
@@ -39,69 +33,21 @@
   const ticketRouter = trpc.tickets;
   const bridge = getCryptoBridge();
 
-  let downloading = $state(false);
-
-  async function download(): Promise<void> {
-    if (keyWrap === null || downloading) return;
-    downloading = true;
-
-    try {
-      await downloadDecryptedAttachment(attachmentId, filename, {
-        ticketRouter,
-        bridge,
-        ticketId,
-        keyWrap,
-      });
-    } finally {
-      downloading = false;
-    }
+  async function handleDownload(aid: string): Promise<void> {
+    if (keyWrap === null) return;
+    await downloadDecryptedAttachment(aid, filename, {
+      ticketRouter,
+      bridge,
+      ticketId,
+      keyWrap,
+    });
   }
 </script>
 
-<Chip
-  outline
-  class="attachment-chip mt-1 {downloading
-    ? 'opacity-50 pointer-events-none'
-    : ''}"
-  role="button"
-  tabindex={downloading || keyWrap === null ? -1 : 0}
-  onclick={() => void download()}
-  onkeydown={onKeyActivate(() => void download())}
-  aria-label={downloading
-    ? m.ticket_downloading_attachment({ filename })
-    : m.ticket_download_attachment({ filename })}
-  aria-busy={downloading}
-  aria-disabled={downloading || keyWrap === null}
->
-  {#snippet media()}
-    {#if downloading}
-      <Preloader class="attachment-preloader" />
-    {:else}
-      <Paperclip size={14} aria-hidden="true" class="attachment-icon" />
-    {/if}
-  {/snippet}
-  <span class="attachment-name">{filename}</span>
-  <span class="attachment-size">{formatFileSize(sizeBytes)}</span>
-</Chip>
-
-<style>
-  .attachment-name {
-    font-size: 0.8125rem;
-    max-width: 12rem;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  .attachment-size {
-    font-size: 0.6875rem;
-    color: var(--muted);
-    margin-left: 0.25rem;
-    white-space: nowrap;
-  }
-
-  :global(.attachment-preloader) {
-    width: 14px !important;
-    height: 14px !important;
-  }
-</style>
+<BaseAttachmentChip
+  {attachmentId}
+  {filename}
+  {sizeBytes}
+  ondownload={handleDownload}
+  disabled={keyWrap === null}
+/>

@@ -6,6 +6,7 @@ import type {
 import { fuzzySearch } from "../fuzzy.js";
 import type { DisplayStatus } from "$lib/tickets/display-status.js";
 import type { RawFollowUpPreview } from "$lib/tickets/preview-loader.svelte.js";
+import type { DecryptResult } from "$lib/crypto/decrypt-result.js";
 import TicketSearchResult from "$lib/components/search/TicketSearchResult.svelte";
 import { Ticket } from "@lucide/svelte";
 import * as m from "$lib/paraglide/messages.js";
@@ -45,7 +46,7 @@ export interface TicketSearchData {
   readonly queueName: string | null;
   readonly displayStatus: DisplayStatus;
   readonly priority: "low" | "normal" | "high" | "urgent";
-  readonly title: string | undefined;
+  readonly titleResult: DecryptResult;
   readonly encryptedTitle: unknown;
   readonly clientAlias: string;
   readonly assignedName: string | null;
@@ -166,7 +167,7 @@ export function createTicketSearchProvider(
               raw.followUpCount,
             ),
             priority: raw.priority,
-            title,
+            titleResult: { status: "ready", value: title },
             encryptedTitle: raw.encryptedTitle,
             clientAlias: raw.clientAlias,
             assignedName: deps.resolveAssignedName(

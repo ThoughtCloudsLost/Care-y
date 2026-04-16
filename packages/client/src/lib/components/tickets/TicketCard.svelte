@@ -12,7 +12,6 @@
   import { formatRelativeTime } from "$lib/utils/format-time.js";
   import { onKeyActivate } from "$lib/utils/a11y.js";
   import { getPreviewLoader } from "$lib/crypto/context.js";
-  import { isDecryptError } from "$lib/crypto/async-decrypt-cache.js";
   import DecryptPlaceholder from "$lib/components/DecryptPlaceholder.svelte";
   import InlineSkeleton from "$lib/components/InlineSkeleton.svelte";
   import PriorityBadge from "$lib/components/PriorityBadge.svelte";
@@ -27,7 +26,7 @@
     queueName,
     displayStatus,
     priority,
-    title,
+    titleResult,
     encryptedTitle,
     clientAlias,
     assignedName,
@@ -192,15 +191,17 @@
         <div class="content-group">
           <span class="client-alias">{clientAlias}</span>
           <div class="row-title">
-            {#if isDecryptError(title)}
+            {#if titleResult.status === "denied" || titleResult.status === "error"}
               <EncryptedTitle onhelp={onencryptedhelp} />
             {:else}
               <DecryptPlaceholder
-                content={title}
+                result={titleResult}
                 ciphertext={encryptedTitle}
                 length={25}
               >
-                <span class="title-text">{title}</span>
+                {#if titleResult.status === "ready"}
+                  <span class="title-text">{titleResult.value}</span>
+                {/if}
               </DecryptPlaceholder>
             {/if}
           </div>

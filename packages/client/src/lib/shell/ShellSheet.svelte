@@ -1,6 +1,7 @@
 <!--
   Sheet modal wrapper. Portaled to .k-page so it escapes stacking contexts.
   Uses Konsta's glass tokens for iOS frosted glass appearance.
+  Includes a drag indicator and swipe-to-dismiss gesture.
 
   Configurable via props:
     backdrop (default true) - show overlay behind the sheet
@@ -13,6 +14,7 @@
   import { Sheet } from "konsta/svelte";
   import type { ShellSheetProps } from "./types";
   import { useFocusTrap } from "./use-focus-trap.svelte";
+  import { useSheetDrag } from "./use-sheet-drag.svelte";
   import { portal } from "./portal";
 
   let {
@@ -35,8 +37,22 @@
     },
   });
 
+  let handleRef: HTMLElement | undefined = $state();
+
+  const drag = useSheetDrag({
+    get ondismiss() {
+      return trap.handleDismiss;
+    },
+    get opened() {
+      return opened;
+    },
+    get handleEl() {
+      return handleRef;
+    },
+  });
+
   const sheetClass = $derived(
-    ["shell-sheet", extraClass].filter(Boolean).join(" "),
+    ["glass", "shell-sheet", extraClass].filter(Boolean).join(" "),
   );
 </script>
 
@@ -50,31 +66,49 @@
     <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
     <div
       bind:this={trap.dialogEl}
+      use:drag.action
       {role}
       aria-modal={role === "dialog" ? "true" : undefined}
       aria-label={ariaLabel}
       tabindex={trapFocus ? -1 : undefined}
       class="shell-sheet-content"
     >
+      <div class="sheet-drag-handle" bind:this={handleRef} aria-hidden="true">
+        <div class="sheet-drag-indicator"></div>
+      </div>
       {@render children()}
     </div>
   </Sheet>
 </div>
 
 <style>
-  /* iOS frosted glass using Konsta's glass color tokens.
-     .dark is on <html>, .k-ios is on Konsta's <App> wrapper (separate elements). */
-  :global(.k-ios .shell-sheet) {
-    background: rgba(245, 245, 245, 0.55) !important;
-    backdrop-filter: saturate(180%) blur(20px);
-    -webkit-backdrop-filter: saturate(180%) blur(20px);
-  }
-  :global(.dark .k-ios .shell-sheet) {
-    background: var(--color-ios-dark-glass, rgba(50, 50, 50, 0.5)) !important;
-  }
+  /* iOS: handled by .glass utility (shared.css) */
 
   .shell-sheet-content {
     min-height: 30vh;
+    max-height: calc(85dvh - var(--k-safe-area-top, 0px));
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
     padding-bottom: calc(var(--k-safe-area-bottom) + 1.5rem);
+  }
+
+  .sheet-drag-handle {
+    display: flex;
+    justify-content: center;
+    padding: 10px 0 6px;
+    cursor: grab;
+    touch-action: none;
+  }
+
+  .sheet-drag-handle:active {
+    cursor: grabbing;
+  }
+
+  .sheet-drag-indicator {
+    width: 36px;
+    height: 5px;
+    border-radius: 2.5px;
+    background: var(--muted, rgba(128, 128, 128, 0.4));
+    opacity: 0.5;
   }
 </style>

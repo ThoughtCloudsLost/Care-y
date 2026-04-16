@@ -112,7 +112,9 @@ body.fouc-guard {
 }
 
 /* Prevent iOS Safari auto-zoom on input focus (triggers below 16px).
-   Applies to all form controls so the native-app feel is preserved. */
+   Applies to form controls. Contenteditable is NOT included because
+   the editor needs WYSIWYG fidelity (same font-size as published).
+   Editor pages suppress zoom via viewport meta tag instead. */
 input,
 textarea,
 select {
@@ -211,6 +213,105 @@ html.glass-light.dark .backdrop-blur-lg {
   color: #1a1a1a;
 }
 
+/* Increased contrast: disable Konsta's native glass effects.
+   Targets the same .backdrop-blur-lg class used by Konsta's Glass
+   component (navbar pills, toolbar panes, etc.).
+   Selectors match the glass-mode overrides above (0,3,1) so
+   high contrast wins when both apply. */
+@media (prefers-contrast: more) {
+  html.light .backdrop-blur-lg,
+  html.dark .backdrop-blur-lg,
+  html.glass-dark.light .backdrop-blur-lg,
+  html.glass-light.dark .backdrop-blur-lg {
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+    background: Canvas !important;
+    color: CanvasText !important;
+    box-shadow: none !important;
+  }
+}
+
+/* ── Glass surface tokens ─────────────────────────────────────
+   Resolve to the active glass color, following the glass mode
+   system. Components use these instead of hardcoding
+   --color-ios-light/dark-glass by color scheme.
+   --glass-surface: background color for glass elements.
+   --glass-text: foreground text on glass (contrasts with surface).
+   --glass-highlight: hairline inset border for definition.
+   --glass-shadow: multi-layer inset shadow from Konsta's glass.css. */
+html.light {
+  --glass-surface: var(--color-ios-light-glass, rgba(255, 255, 255, 0.75));
+  --glass-text: var(--ink);
+  --glass-highlight: rgba(0, 0, 0, 0.06);
+  --glass-shadow: var(--shadow-ios-light-glass);
+}
+
+html.dark {
+  --glass-surface: var(--color-ios-dark-glass, rgba(50, 50, 50, 0.5));
+  --glass-text: var(--ink);
+  --glass-highlight: rgba(255, 255, 255, 0.1);
+  --glass-shadow: var(--shadow-ios-dark-glass);
+}
+
+html.glass-dark.light {
+  --glass-surface: var(--color-ios-dark-glass, rgba(50, 50, 50, 0.5));
+  --glass-text: #f5f5f7;
+  --glass-highlight: rgba(255, 255, 255, 0.1);
+  --glass-shadow: var(--shadow-ios-dark-glass);
+}
+
+html.glass-light.dark {
+  --glass-surface: var(--color-ios-light-glass, rgba(255, 255, 255, 0.75));
+  --glass-text: #1a1a1a;
+  --glass-highlight: rgba(0, 0, 0, 0.06);
+  --glass-shadow: var(--shadow-ios-light-glass);
+}
+
+/* Increased contrast: flatten all glass tokens to solid system colors.
+   Overrides every glass-mode variant above so --glass-text (used by
+   tabbar icons, editor buttons, etc.) resolves to CanvasText. */
+@media (prefers-contrast: more) {
+  html.light,
+  html.dark,
+  html.glass-dark.light,
+  html.glass-light.dark {
+    --glass-surface: Canvas;
+    --glass-text: CanvasText;
+    --glass-highlight: CanvasText;
+    --glass-shadow: none;
+  }
+}
+
+/* ── .glass utility ──────────────────────────────────────────
+   Matches Konsta's Glass component exactly (GlassClasses.js):
+   bg + backdrop-blur-lg (16px) + multi-layer inset shadow.
+   iOS-only: Material gets no glass treatment, matching Konsta.
+   Apply to any element that should look like a Konsta navbar pill.
+   !important on background overrides Konsta component defaults
+   (Sheet, Popup, etc.) since this class is always intentional. */
+.k-ios .glass {
+  background: var(--glass-surface) !important;
+  color: var(--glass-text);
+  -webkit-backdrop-filter: blur(16px);
+  backdrop-filter: blur(16px);
+  box-shadow: var(--glass-shadow);
+}
+
+/* Increased contrast: drop all translucency and decorative shadows.
+   System colors (Canvas/CanvasText) guarantee WCAG contrast regardless
+   of OS theme. Applies to both iOS and Material. */
+@media (prefers-contrast: more) {
+  .k-ios .glass,
+  .glass {
+    background: Canvas !important;
+    color: CanvasText !important;
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+    box-shadow: none !important;
+    border: 1px solid CanvasText;
+  }
+}
+
 /* Semantic heading classes: base styles (themes override with their own fonts/effects) */
 .heading-display {
   font-weight: 800;
@@ -227,6 +328,20 @@ html.glass-light.dark .backdrop-blur-lg {
   border: 1px solid rgba(128, 128, 128, 0.12);
 }
 
+/* ── Keyboard-open global rules ─────────────────────────────────────
+   .keyboard-open is toggled on <html> by keyboard-viewport.ts when the
+   software keyboard is detected via the visualViewport API.
+   Hide the tabbar when the keyboard is open so it does not peek above
+   the keyboard on Android (where interactive-widget=resizes-content
+   actually works and shrinks the layout viewport). On iOS Safari the
+   tabbar is already behind the keyboard, but hiding it avoids any
+   z-index overlap with the keyboard toolbar. Uses visibility:hidden
+   instead of display:none to preserve layout (no padding-bottom jump). */
+html.keyboard-open .native-tabbar {
+  visibility: hidden;
+  pointer-events: none;
+}
+
 /* Skeleton bar: structural base. Animation set in animations.css via
    --anim-skeleton-* tokens; themes override tokens or the animation directly. */
 .skeleton-bar {
@@ -235,4 +350,71 @@ html.glass-light.dark .backdrop-blur-lg {
   border-radius: 2px;
   transform-origin: left;
   opacity: 0.3;
+}
+
+/* ── KB image decrypt placeholder (use:resolveKbImages action) ──
+   Mirrors DecryptPlaceholder media mode: blurred block characters that
+   animate while fetch+decrypt runs. Used for kb-attachment:// images
+   inside {@html} rendered article bodies. */
+
+.kb-img-decrypt {
+  display: block;
+  position: relative;
+  width: 100%;
+  max-width: 400px;
+  min-height: 120px;
+  overflow: hidden;
+  border-radius: var(--card-radius);
+  background: var(--surface-1);
+}
+
+.kb-img-scramble {
+  display: block;
+  width: 100%;
+  height: 100%;
+  min-height: 120px;
+  color: var(--muted, #888);
+  filter: blur(2.5px);
+  white-space: pre-wrap;
+  word-break: break-all;
+  line-height: 1.1;
+  font-size: 0.75rem;
+  letter-spacing: 0.05em;
+  overflow: hidden;
+  user-select: none;
+}
+
+.kb-img-scramble::before {
+  content: "█░ ██ ░█ ░██░ █ ██░█ ░█░██ ░ ██░█░ █ ░██ █░ ██░ █░██ ░█ ░██░█ ░ ██░█░██ ░ █░██ ░█ ██░ █░██░ ██ ░█ ░█░██ ░ ██░█░ █ ░██░█░██ ░ █ ██░█ ░██ ░█ ██░█░ ██ ░ █░██ ░█░██ █ ░██░█ ░ ██░ █░██ ░█░██ ░ █ ██░";
+  animation: kb-scramble-m 1.8s steps(1) infinite;
+}
+
+@keyframes kb-scramble-m {
+  0% {
+    content: "█░ ██ ░█ ░██░ █ ██░█ ░█░██ ░ ██░█░ █ ░██ █░ ██░ █░██ ░█ ░██░█ ░ ██░█░██ ░ █░██ ░█ ██░ █░██░ ██ ░█ ░█░██ ░ ██░█░ █ ░██░█░██ ░ █ ██░█ ░██ ░█ ██░█░ ██ ░ █░██ ░█░██ █ ░██░█ ░ ██░ █░██ ░█░██ ░ █ ██░";
+  }
+  16% {
+    content: "░██ █░ ██░█ ░██ ░ █░██ ░█░██ █ ░██░ ██░█ ░ ██░ █░██ ░█ ██░█░ ░██ █ ░██░█░ █ ░█░██ ░ ██░█░██ ░ █ ██░█ ░██ ░█ ██░█░██ ░█ ██░ ░██ █ ░ █░██ ░█░██ █ ░██░ ██░█ ░ ██░ █░██ ░█ ██░█░██ ░ █ ██░█ ░ ██░ █░██░";
+  }
+  33% {
+    content: " ██░█ ░█░██ ░ ██░█░ █ ░██ █░ ██░ █░██ ░█ ░██░█ ░ ██░█░██ ░ █░██ █░██░ ██ ░█ ░█░██ ░ ██░ ░█ ░██░█ ░ ██░█░██ ░ █░██ ░█ ██░ █░██░ ██ ░█ ░█░██ ░ ██░█░ █ ░██░█░██ ░ █ ██░█ ░██ ░█ ██░ █░██ ░█░██ ░ █ ██░█░";
+  }
+  50% {
+    content: "░█ ██░ █░██░ ██ ░█ ░█░██ ░ ██░█░ █ ░██░█░██ ░ █ ██░█ ░██ ░█ ██░░██ █ ░ █░██ ░█░██ █ ░██░ ██░█ ░ ██░ █░██ ░█ ██░█░██ ░ █ ██░█ ░██ ░█ ██░█░██ ░█ ██░ ░██ █ ░ █░██ ░█░██ █ ░██░ ██░█ ░ ██░ █░██ ░█ ██░█░██";
+  }
+  66% {
+    content: "██░█ ░ ██░ █░██ ░█░██ ░ █ ██░█ ░██ ░█ ██░█░ ██ ░ █░██ ░█░██ █░██░█ ░██ ░█ ██░█░██ ░█ ██░ ░██ █ ░ █░██ ░█░██ █ ░██░ ██░█ ░ ██░ █░██ █░ ██░ █░██ ░█ ░██░█ ░ ██░█░██ ░ █░██ ░█ ██░ █░██░ ██ ░█ ░█░██ ░ ██░";
+  }
+  83% {
+    content: " ░██░█░██ ░ █ ██░█ ░██ ░█ ██░█░██ ░█ ██░ ░██ █ ░ █░██ ░█░██ █░██░ ██ ░█ ░█░██ ░ ██░█░ █ ░██░█░██ ░ █ ██░█ ░██ ░█ ██░ █░██ ░█░██ ░ ██░█░ █ ░██ █░ ██░ █░██ ░█ ░██░█ ░ ██░█░██ ░ █░██ ░█ ██░ █░██░ ██ ░█░";
+  }
+}
+
+.kb-img-error {
+  padding: var(--space-md);
+  font-size: var(--text-sm);
+  color: var(--muted);
+  font-style: italic;
+  background: var(--surface-1);
+  border-radius: var(--card-radius);
 }

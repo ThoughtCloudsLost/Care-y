@@ -8,22 +8,23 @@
 <script lang="ts">
   import { Chip } from "konsta/svelte";
   import { formatRelativeTime } from "$lib/utils/format-time.js";
+  import type { DecryptResult } from "$lib/crypto/decrypt-result.js";
   import DecryptPlaceholder from "$lib/components/DecryptPlaceholder.svelte";
 
   interface Props {
-    content: string | undefined;
+    result: DecryptResult;
     encryptedContent?: unknown;
     timestamp: string;
   }
 
-  let { content, encryptedContent, timestamp }: Props = $props();
+  let { result, encryptedContent, timestamp }: Props = $props();
 
   const timeLabel = $derived(formatRelativeTime(new Date(timestamp)));
 </script>
 
 <div class="system-event" role="status">
   <Chip outline class="system-chip">
-    <DecryptPlaceholder {content} ciphertext={encryptedContent} length={15} />
+    <DecryptPlaceholder {result} ciphertext={encryptedContent} length={15} />
   </Chip>
   <time class="system-time" datetime={timestamp}>{timeLabel}</time>
 </div>

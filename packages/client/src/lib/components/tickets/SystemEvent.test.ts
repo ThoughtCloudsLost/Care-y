@@ -25,28 +25,30 @@ describe("SystemEvent", () => {
   it("renders decrypted content inside a Chip", () => {
     const { container } = render(SystemEvent, {
       props: {
-        content: "Status changed to closed",
+        result: { status: "ready" as const, value: "Status changed to closed" },
         timestamp: "2026-04-05T12:00:00Z",
       },
     });
     expect(container.textContent).toContain("Status changed to closed");
   });
 
-  it("renders shimmer when content is undefined (decrypt pending)", () => {
+  it("renders shimmer when result is loading", () => {
     const { container } = render(SystemEvent, {
       props: {
-        content: undefined,
+        result: { status: "loading" as const },
         timestamp: "2026-04-05T12:00:00Z",
       },
     });
-    const shimmer = container.querySelector("[aria-busy='true']");
+    // DecryptPlaceholder container (.dp) renders immediately; the scramble
+    // (aria-busy) is delayed by 150ms, so check the container only.
+    const shimmer = container.querySelector(".dp");
     expect(shimmer).not.toBeNull();
   });
 
-  it("renders error text when content is DECRYPT_ERROR_SENTINEL", () => {
+  it("renders error text when result is error", () => {
     const { container } = render(SystemEvent, {
       props: {
-        content: "\0DECRYPT_FAILED",
+        result: { status: "error" as const },
         timestamp: "2026-04-05T12:00:00Z",
       },
     });
@@ -58,7 +60,7 @@ describe("SystemEvent", () => {
   it("has role='status' for screen reader announcements", () => {
     const { container } = render(SystemEvent, {
       props: {
-        content: "Priority raised to high",
+        result: { status: "ready" as const, value: "Priority raised to high" },
         timestamp: "2026-04-05T12:00:00Z",
       },
     });
@@ -70,7 +72,7 @@ describe("SystemEvent", () => {
     const ts = "2026-04-05T12:00:00Z";
     const { container } = render(SystemEvent, {
       props: {
-        content: "Tickets merged",
+        result: { status: "ready" as const, value: "Tickets merged" },
         timestamp: ts,
       },
     });
@@ -88,7 +90,7 @@ describe("SystemEvent", () => {
   ])("renders event content '%s' without error", (eventContent) => {
     const { container } = render(SystemEvent, {
       props: {
-        content: eventContent,
+        result: { status: "ready" as const, value: eventContent },
         timestamp: "2026-04-05T12:00:00Z",
       },
     });

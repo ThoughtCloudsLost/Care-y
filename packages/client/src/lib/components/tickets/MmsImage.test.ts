@@ -54,7 +54,9 @@ describe("MmsImage", () => {
 
   it("renders shimmer placeholder initially (fetch in progress)", () => {
     const { container } = render(MmsImage, { props: baseProps });
-    const placeholder = container.querySelector("[aria-busy='true']");
+    // DecryptPlaceholder container (.dp) renders immediately; the scramble
+    // (aria-busy) is delayed by 150ms, so check the container only.
+    const placeholder = container.querySelector(".dp");
     expect(placeholder).not.toBeNull();
     expect(container.querySelector("img")).toBeNull();
   });

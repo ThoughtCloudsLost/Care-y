@@ -1,27 +1,22 @@
 <script lang="ts">
-  import { createInfiniteQuery, useQueryClient } from "@tanstack/svelte-query";
+  import {
+    createInfiniteQuery,
+    createQuery,
+    useQueryClient,
+  } from "@tanstack/svelte-query";
   import { createCountsQuery } from "$lib/tickets/queries.js";
   import { untrack } from "svelte";
   import { SvelteMap, SvelteSet } from "svelte/reactivity";
   import { page } from "$app/state";
   import { goto } from "$app/navigation";
   import { resolve } from "$app/paths";
-  import {
-    BlockTitle,
-    Button,
-    Segmented,
-    SegmentedButton,
-    List as KList,
-    ListItem,
-  } from "konsta/svelte";
-  import {
-    List,
-    LayoutGrid,
-    ArrowUpDown,
-    ArrowUp,
-    ArrowDown,
-    SquareCheckBig,
-  } from "@lucide/svelte";
+  import SubNavbarFilterLayout from "$lib/shell/SubNavbarFilterLayout.svelte";
+  import type {
+    ViewToggleConfig,
+    SortConfig,
+    SavedFiltersConfig,
+    FilterPillsConfig,
+  } from "$lib/shell/types.js";
   import * as m from "$lib/paraglide/messages.js";
   import { trpc } from "$lib/trpc/index.js";
   import {
@@ -36,7 +31,8 @@
     getNavbarOverrideCtx,
   } from "$lib/shell/context.js";
   import { useScrollDirection } from "$lib/shell/use-scroll-direction.svelte.js";
-  import { UserPlus, Pause, X } from "@lucide/svelte";
+  import { Link } from "konsta/svelte";
+  import { UserPlus, Pause, X, TicketPlus } from "@lucide/svelte";
   import { deriveDisplayStatus } from "$lib/tickets/display-status.js";
   import { filterStore } from "$lib/stores/filters.svelte.js";
   import { viewModeStore } from "$lib/stores/view-mode.svelte.js";
@@ -47,14 +43,19 @@
   } from "$lib/components/tickets/ticket-types.js";
 
   import { RouterNotAvailableError } from "$lib/errors.js";
-  import ShellPopover from "$lib/shell/ShellPopover.svelte";
-  import type { SortField } from "$lib/stores/filters.svelte.js";
+  import type { SortField, FilterStatus } from "$lib/stores/filters.svelte.js";
+  import { savedFilterStore } from "$lib/stores/saved-filters.svelte.js";
+  import {
+    savedFilterStateSchema,
+    ticketPrioritySchema,
+    type SavedFilterRecord,
+    type SavedFilterColor,
+  } from "@care-y/shared";
   import StatusDot from "$lib/components/StatusDot.svelte";
   import TicketCard from "$lib/components/tickets/TicketCard.svelte";
   import SwipeableCard from "$lib/components/tickets/SwipeableCard.svelte";
-  import FilterPillBar from "$lib/components/tickets/FilterPillBar.svelte";
-  import SavedFilterList from "$lib/components/tickets/SavedFilterList.svelte";
-  import CreateSavedFilter from "$lib/components/tickets/CreateSavedFilter.svelte";
+  import type { PillDefinition } from "$lib/components/filters/filter-types.js";
+  import CreateSavedFilter from "$lib/components/filters/CreateSavedFilter.svelte";
   import VirtualList from "$lib/components/tickets/VirtualList.svelte";
   import QueryError from "$lib/components/QueryError.svelte";
   import AssignSheet from "$lib/components/tickets/AssignSheet.svelte";
@@ -66,6 +67,7 @@
   import { haptic } from "$lib/utils/haptic.js";
   import type { SerializedBuffer } from "$lib/utils/buffer-encoding.js";
   import type { RawFollowUpPreview } from "$lib/tickets/preview-loader.svelte.js";
+  import { resolveAsyncDecrypt } from "$lib/crypto/decrypt-result.js";
 
   const ticketCache = getTicketDecryptCache();
   const orgCache = getOrgDecryptCache();
@@ -255,7 +257,10 @@
       queueName: orgCache.decrypt(`queue:${t.queueId}`, t.encryptedQueueName),
       displayStatus: deriveDisplayStatus(t.status, t.onHold, t.followUpCount),
       priority: t.priority,
-      title: ticketCache.decryptTitle(t.id, t.keyWrap, t.encryptedTitle),
+      titleResult: resolveAsyncDecrypt(
+        ticketCache.decryptTitle(t.id, t.keyWrap, t.encryptedTitle),
+        t.keyWrap !== null,
+      ),
       clientAlias: t.clientAlias,
       assignedName,
       createdAt: new Date(t.createdAt),
@@ -446,32 +451,15 @@
   }
 
   // Sync multi-select state to the tabbar override. When active, the
-  // tab bar is replaced with Assign/Hold actions + dismiss button.
-  // When inactive, the normal tab bar is restored.
+  // tab bar is replaced with action snippets. When inactive, the
+  // normal tab bar is restored.
   $effect(() => {
     if (multiSelectActive) {
       tabbarOverride.current = {
-        label: m.tickets_selected({ count: selectedIds.size }),
+        left: batchLeft,
+        middle: batchMiddle,
+        right: batchRight,
         ariaLabel: m.tickets_selected({ count: selectedIds.size }),
-        actions: [
-          {
-            id: "assign",
-            label: m.tickets_action_assign(),
-            icon: UserPlus,
-            onclick: handleBulkAssign,
-          },
-          {
-            id: "hold",
-            label: m.tickets_action_hold(),
-            icon: Pause,
-            onclick: () => void handleBulkHold(),
-          },
-        ],
-        dismiss: {
-          icon: X,
-          ariaLabel: m.tickets_exit_multiselect(),
-          onclick: exitMultiSelect,
-        },
       };
     } else {
       tabbarOverride.current = undefined;
@@ -490,6 +478,7 @@
   // reactively without the override object needing to change.
   $effect(() => {
     navbarCtx.current = {
+      right: navRight,
       subnavbar: ticketSubnavbar,
       subnavbarHidden: () => scrollDir.hidden,
     };
@@ -594,121 +583,379 @@
   const activeCount = $derived(countsQuery.data?.active ?? 0);
   const holdCount = $derived(countsQuery.data?.onHold ?? 0);
 
+  // Queue list for the filter pill bar (was inside old FilterPillBar).
+  const queuesQuery = createQuery(() => ({
+    queryKey: ["tickets", "myQueues"],
+    queryFn: async () => ticketRouter.myQueues.query(),
+  }));
+
+  // --- Filter pill definitions (wiring ticket stores to generic FilterPillBar) ---
+
+  const counts = $derived(countsQuery.data);
+  const priorityCounts = $derived(counts?.byPriority);
+
+  const statusOptions = $derived([
+    {
+      value: "new",
+      label: `${m.tickets_filter_new()} (${String(counts?.new ?? 0)})`,
+    },
+    {
+      value: "active",
+      label: `${m.tickets_filter_active()} (${String(counts?.active ?? 0)})`,
+    },
+    {
+      value: "hold",
+      label: `${m.tickets_filter_hold()} (${String(counts?.onHold ?? 0)})`,
+    },
+    {
+      value: "closed",
+      label: `${m.tickets_filter_closed()} (${String(counts?.closed ?? 0)})`,
+    },
+  ]);
+
+  const priorityOptions = $derived([
+    {
+      value: "low",
+      label: `${m.tickets_filter_priority_low()} (${String(priorityCounts?.low ?? 0)})`,
+    },
+    {
+      value: "normal",
+      label: `${m.tickets_filter_priority_normal()} (${String(priorityCounts?.normal ?? 0)})`,
+    },
+    {
+      value: "high",
+      label: `${m.tickets_filter_priority_high()} (${String(priorityCounts?.high ?? 0)})`,
+    },
+    {
+      value: "urgent",
+      label: `${m.tickets_filter_priority_urgent()} (${String(priorityCounts?.urgent ?? 0)})`,
+    },
+  ]);
+
+  const queueOptions = $derived(
+    (queuesQuery.data ?? []).map(
+      (q: {
+        id: string;
+        encrypted_name: SerializedBuffer | Uint8Array | null;
+        openCount: string;
+      }) => ({
+        value: q.id,
+        label: `${orgCache.decrypt(`queue:${q.id}`, q.encrypted_name) ?? "..."} (${q.openCount})`,
+      }),
+    ),
+  );
+
+  const assigneeOptions = $derived.by(() => {
+    const opts: { value: string; label: string }[] = [];
+    if (currentUserId !== undefined) {
+      opts.push({
+        value: currentUserId,
+        label: `${m.tickets_filter_me()} (${String(counts?.mine ?? 0)})`,
+      });
+    }
+    opts.push({
+      value: "__unassigned__",
+      label: `${m.tickets_unassigned()} (${String(counts?.unassigned ?? 0)})`,
+    });
+    return opts;
+  });
+
+  const ticketPills: PillDefinition[] = $derived([
+    {
+      id: "status",
+      label: m.tickets_filter_status(),
+      mode: "multi",
+      options: statusOptions,
+      selected: filterStore.statuses,
+    },
+    {
+      id: "queue",
+      label: m.tickets_filter_queue(),
+      mode: "multi",
+      options: queueOptions,
+      selected: filterStore.queueIds,
+      loading: queuesQuery.isLoading,
+    },
+    {
+      id: "priority",
+      label: m.tickets_filter_priority(),
+      mode: "multi",
+      options: priorityOptions,
+      selected: filterStore.priorities,
+    },
+    {
+      id: "assignee",
+      label: m.tickets_filter_assignee(),
+      mode: "single",
+      options: assigneeOptions,
+      selected:
+        filterStore.assigneeId === null
+          ? "__unassigned__"
+          : (filterStore.assigneeId ?? null),
+    },
+    {
+      id: "date",
+      label: m.tickets_filter_date_range(),
+      mode: "date",
+      options: [],
+      selected: null,
+    },
+  ]);
+
+  const validStatuses: ReadonlySet<FilterStatus> = new Set<FilterStatus>([
+    "new",
+    "active",
+    "hold",
+    "closed",
+  ]);
+
+  function isFilterStatus(v: string): v is FilterStatus {
+    return (validStatuses as ReadonlySet<string>).has(v);
+  }
+
+  function handlePillToggle(pillId: string, value: string): void {
+    switch (pillId) {
+      case "status":
+        if (isFilterStatus(value)) filterStore.toggleStatus(value);
+        break;
+      case "queue":
+        filterStore.toggleQueue(value);
+        break;
+      case "priority": {
+        const parsed = ticketPrioritySchema.safeParse(value);
+        if (parsed.success) filterStore.togglePriority(parsed.data);
+        break;
+      }
+    }
+  }
+
+  function handlePillSelect(pillId: string, value: string | null): void {
+    if (pillId === "assignee") {
+      filterStore.setAssignee(value === "__unassigned__" ? null : value);
+    }
+  }
+
+  function handlePillDateChange(from: Date | null, to: Date | null): void {
+    filterStore.setDateRange(from, to);
+  }
+
+  const dateRangeActive = $derived(
+    filterStore.dateFrom !== null || filterStore.dateTo !== null,
+  );
+
+  const dateFromStr = $derived(
+    filterStore.dateFrom !== null
+      ? filterStore.dateFrom.toISOString().slice(0, 10)
+      : "",
+  );
+  const dateToStr = $derived(
+    filterStore.dateTo !== null
+      ? filterStore.dateTo.toISOString().slice(0, 10)
+      : "",
+  );
+
+  const dateRangeLabel = $derived.by(() => {
+    const from = filterStore.dateFrom;
+    const to = filterStore.dateTo;
+    if (from !== null && to !== null)
+      return `${from.toLocaleDateString()} - ${to.toLocaleDateString()}`;
+    if (from !== null)
+      return `${m.tickets_filter_date_from()} ${from.toLocaleDateString()}`;
+    if (to !== null)
+      return `${m.tickets_filter_date_to()} ${to.toLocaleDateString()}`;
+    return m.tickets_filter_date_range();
+  });
+
+  // --- Saved filter wiring ---
+
+  function handleSavedFilterApply(record: SavedFilterRecord): void {
+    const parsed: unknown = JSON.parse(record.state);
+    const result = savedFilterStateSchema.safeParse(parsed);
+    if (result.success) {
+      filterStore.applyState(result.data);
+    }
+  }
+
+  function handleSavedFilterDelete(id: string): void {
+    savedFilterStore.remove(id);
+  }
+
+  function handleSavedFilterToggleShare(id: string): void {
+    savedFilterStore.toggleShare(id);
+  }
+
+  const filterSummary = $derived.by(() => {
+    const parts: string[] = [];
+    if (filterStore.statuses.size > 0)
+      parts.push([...filterStore.statuses].join(", "));
+    if (filterStore.priorities.size > 0)
+      parts.push([...filterStore.priorities].join(", "));
+    if (filterStore.queueIds.size > 0) {
+      const count = filterStore.queueIds.size;
+      parts.push(`${String(count)} queue${count > 1 ? "s" : ""}`);
+    }
+    if (filterStore.assigneeId !== null) parts.push("assigned");
+    if (filterStore.dateFrom !== null || filterStore.dateTo !== null)
+      parts.push("date range");
+    return parts.length > 0 ? parts.join(", ") : "No filters";
+  });
+
+  function handleCreateSavedFilter(meta: {
+    encryptedName: string;
+    color: SavedFilterColor;
+    icon: string;
+  }): void {
+    const record: SavedFilterRecord = {
+      id: crypto.randomUUID(),
+      encryptedName: meta.encryptedName,
+      color: meta.color,
+      icon: meta.icon,
+      state: JSON.stringify(filterStore.captureState()),
+      shared: false,
+      ownerId: currentUserId ?? "",
+      createdAt: new Date().toISOString(),
+    };
+    savedFilterStore.add(record);
+    toastStore.show(m.saved_filter_saved());
+  }
+
   // Saved filter modal state.
   let savedFilterModalOpen = $state(false);
 
-  // Sort dropdown state.
-  let sortOpen = $state(false);
-  let sortAnchorEl = $state<HTMLElement | undefined>(undefined);
+  // --- SubNavbar config objects ---
+  const viewConfig: ViewToggleConfig = $derived({
+    mode: viewModeStore.mode,
+    onchange: (mode: "list" | "grid") => viewModeStore.set(mode),
+    listLabel: m.tickets_view_list(),
+    gridLabel: m.tickets_view_grid(),
+  });
 
-  interface SortOption {
-    readonly field: SortField;
-    readonly label: string;
-  }
-
-  const sortOptions: SortOption[] = [
-    { field: "date", label: m.tickets_sort_newest() },
-    { field: "priority", label: m.tickets_sort_priority() },
-    { field: "last_activity", label: m.tickets_sort_activity() },
-    { field: "queue", label: m.tickets_sort_queue() },
+  const SORT_FIELDS: readonly SortField[] = [
+    "date",
+    "priority",
+    "last_activity",
+    "queue",
   ];
 
-  function toggleSort(): void {
-    sortOpen = !sortOpen;
+  function isSortField(value: string): value is SortField {
+    return (SORT_FIELDS as readonly string[]).includes(value);
   }
 
-  function handleSortTap(field: SortField): void {
-    if (filterStore.sort.field === field) {
-      // Toggle direction on re-tap.
-      filterStore.setSort(
-        field,
-        filterStore.sort.direction === "asc" ? "desc" : "asc",
-      );
-    } else {
-      // New field: default to desc (newest/highest first).
-      filterStore.setSort(field, "desc");
-    }
+  function handleSortChange(field: string, dir: "asc" | "desc"): void {
+    if (isSortField(field)) filterStore.setSort(field, dir);
   }
+
+  const sortConfig: SortConfig = $derived({
+    label: m.tickets_sort(),
+    options: [
+      { field: "date", label: m.tickets_sort_newest() },
+      { field: "priority", label: m.tickets_sort_priority() },
+      { field: "last_activity", label: m.tickets_sort_activity() },
+      { field: "queue", label: m.tickets_sort_queue() },
+    ],
+    currentField: filterStore.sort.field,
+    currentDirection: filterStore.sort.direction,
+    onchange: handleSortChange,
+  });
+
+  const savedFiltersConfig: SavedFiltersConfig = $derived({
+    filters: savedFilterStore.filters,
+    count: savedFilterStore.count,
+    onapply: handleSavedFilterApply,
+    ondelete: handleSavedFilterDelete,
+    ontoggleshare: handleSavedFilterToggleShare,
+  });
+
+  const filterPillsConfig: FilterPillsConfig = $derived({
+    pills: ticketPills,
+    activeCount: filterStore.activeCount,
+    dateFrom: dateFromStr,
+    dateTo: dateToStr,
+    dateActive: dateRangeActive,
+    dateLabel: dateRangeLabel,
+    ontoggle: handlePillToggle,
+    onselect: handlePillSelect,
+    ondatechange: handlePillDateChange,
+    onclearall: () => filterStore.clearAll(),
+    oncreateshortcut: () => {
+      savedFilterModalOpen = true;
+    },
+  });
 </script>
 
+{#snippet navRight()}
+  <Link
+    iconOnly
+    onclick={() => void goto(resolve("/tickets/new"))}
+    role="button"
+    aria-label={m.nav_new_ticket()}
+  >
+    <TicketPlus size={22} aria-hidden="true" />
+  </Link>
+{/snippet}
+
+{#snippet batchLeft()}
+  <Link
+    iconOnly
+    onclick={handleBulkAssign}
+    aria-label={m.tickets_action_assign()}
+  >
+    <UserPlus size={24} aria-hidden="true" />
+  </Link>
+  <Link
+    iconOnly
+    onclick={() => void handleBulkHold()}
+    aria-label={m.tickets_action_hold()}
+  >
+    <Pause size={24} aria-hidden="true" />
+  </Link>
+{/snippet}
+
+{#snippet batchMiddle()}
+  <span class="font-semibold text-sm" role="status">
+    {m.tickets_selected({ count: selectedIds.size })}
+  </span>
+{/snippet}
+
+{#snippet batchRight()}
+  <Link
+    iconOnly
+    aria-label={m.tickets_exit_multiselect()}
+    onclick={exitMultiSelect}
+  >
+    <X size={24} aria-hidden="true" />
+  </Link>
+{/snippet}
+
+{#snippet ticketStats()}
+  <span class="stat-item">
+    <StatusDot status="new" />
+    {newCount}
+    {m.tickets_status_new()}
+  </span>
+  <span class="stat-item">
+    <StatusDot status="active" />
+    {activeCount}
+    {m.tickets_status_active()}
+  </span>
+  <span class="stat-item">
+    <StatusDot status="hold" />
+    {holdCount}
+    {m.tickets_status_on_hold()}
+  </span>
+{/snippet}
+
 {#snippet ticketSubnavbar()}
-  <div class="ticket-header-content">
-    <div class="page-header">
-      <BlockTitle large class="page-title">{m.tickets_title()}</BlockTitle>
-      <Segmented strong class="view-toggle">
-        <SegmentedButton
-          active={viewModeStore.mode === "list"}
-          aria-pressed={viewModeStore.mode === "list"}
-          aria-label={m.tickets_view_list()}
-          onclick={() => viewModeStore.set("list")}
-          ><List size={16} aria-hidden="true" /></SegmentedButton
-        >
-        <SegmentedButton
-          active={viewModeStore.mode === "grid"}
-          aria-pressed={viewModeStore.mode === "grid"}
-          aria-label={m.tickets_view_grid()}
-          onclick={() => viewModeStore.set("grid")}
-          ><LayoutGrid size={16} aria-hidden="true" /></SegmentedButton
-        >
-      </Segmented>
-    </div>
-    <div class="stats-row">
-      <div class="stats-counts">
-        <span class="stat-item">
-          <StatusDot status="new" />
-          {newCount}
-          {m.tickets_status_new()}
-        </span>
-        <span class="stat-item">
-          <StatusDot status="active" />
-          {activeCount}
-          {m.tickets_status_active()}
-        </span>
-        <span class="stat-item">
-          <StatusDot status="hold" />
-          {holdCount}
-          {m.tickets_status_on_hold()}
-        </span>
-      </div>
-      <div class="view-controls">
-        <span bind:this={sortAnchorEl} class="sort-anchor">
-          <Button
-            tonal
-            rounded
-            small
-            inline
-            class="sort-btn"
-            aria-label={m.tickets_sort()}
-            aria-haspopup="listbox"
-            aria-expanded={sortOpen}
-            onclick={toggleSort}
-          >
-            <ArrowUpDown size={16} aria-hidden="true" />
-          </Button>
-        </span>
-        <Button
-          tonal
-          rounded
-          small
-          inline
-          class="select-btn"
-          aria-label={m.tickets_select_mode()}
-          onclick={toggleMultiSelect}
-        >
-          <SquareCheckBig size={16} aria-hidden="true" />
-        </Button>
-      </div>
-    </div>
-    <SavedFilterList />
-    <div class="ticket-controls">
-      <FilterPillBar
-        {currentUserId}
-        oncreateshortcut={() => {
-          savedFilterModalOpen = true;
-        }}
-      />
-    </div>
-  </div>
+  <SubNavbarFilterLayout
+    title={m.tickets_title()}
+    view={viewConfig}
+    stats={ticketStats}
+    sort={sortConfig}
+    selectLabel={m.tickets_select_mode()}
+    onselect={toggleMultiSelect}
+    savedFilters={savedFiltersConfig}
+    filterPills={filterPillsConfig}
+  />
 {/snippet}
 
 <div class="ticket-page pb-20">
@@ -722,7 +969,7 @@
           queueName={null}
           displayStatus="active"
           priority="normal"
-          title={undefined}
+          titleResult={{ status: "loading" }}
           clientAlias=""
           assignedName={null}
           createdAt={new Date()}
@@ -744,6 +991,7 @@
         items={displayFiltered}
         scrollContainer={scrollEl}
         estimateHeight={viewModeStore.mode === "grid" ? 200 : 140}
+        virtualizeThreshold={200}
         columns={gridColumns}
         getKey={(t: TicketRecord) => t.id}
         onloadmore={loadNextPage}
@@ -779,9 +1027,11 @@
 
 <CreateSavedFilter
   opened={savedFilterModalOpen}
+  {filterSummary}
   ondismiss={() => {
     savedFilterModalOpen = false;
   }}
+  onsave={handleCreateSavedFilter}
 />
 
 <AssignSheet
@@ -826,45 +1076,7 @@
   <CallOptionsContent hasVerifiedPhone={false} onaction={handleCallAction} />
 </ShellActionSheet>
 
-<ShellPopover
-  opened={sortOpen}
-  target={sortAnchorEl}
-  placement="bottom"
-  ondismiss={() => {
-    sortOpen = false;
-  }}
->
-  <KList nested role="listbox" aria-label={m.tickets_sort()}>
-    {#each sortOptions as opt (opt.field)}
-      {@const isSelected = filterStore.sort.field === opt.field}
-      <ListItem
-        title={opt.label}
-        role="option"
-        aria-selected={isSelected}
-        onclick={() => handleSortTap(opt.field)}
-      >
-        {#snippet after()}
-          {#if isSelected}
-            {#if filterStore.sort.direction === "asc"}
-              <ArrowUp size={14} class="sort-dir-icon" />
-            {:else}
-              <ArrowDown size={14} class="sort-dir-icon" />
-            {/if}
-          {/if}
-        {/snippet}
-      </ListItem>
-    {/each}
-  </KList>
-</ShellPopover>
-
 <style>
-  .ticket-header-content {
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-lg);
-    padding: 0.25rem var(--page-pad-x) 0;
-  }
-
   .ticket-page {
     padding: 0.25rem var(--page-pad-x) 0;
     display: flex;
@@ -872,78 +1084,10 @@
     gap: var(--space-lg);
   }
 
-  .page-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: var(--space-md);
-  }
-
-  :global(.page-title) {
-    margin: 0 !important;
-    padding-left: 0 !important;
-  }
-
-  .stats-row {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: var(--space-lg);
-  }
-
-  .stats-counts {
-    display: flex;
-    align-items: center;
-    gap: var(--space-xl);
-    font-size: var(--text-sm);
-    color: var(--muted);
-  }
-
   .stat-item {
     display: inline-flex;
     align-items: center;
     gap: 0.25rem;
-  }
-
-  .view-controls {
-    display: flex;
-    align-items: center;
-    gap: 0.375rem;
-    flex-shrink: 0;
-  }
-
-  .sort-anchor {
-    display: inline-flex;
-    flex-shrink: 0;
-  }
-
-  :global(.sort-btn),
-  :global(.select-btn) {
-    width: 1.75rem !important;
-    padding-left: 0 !important;
-    padding-right: 0 !important;
-  }
-
-  :global(.sort-dir-icon) {
-    color: var(--brand-text);
-    flex-shrink: 0;
-  }
-
-  .ticket-controls {
-    display: flex;
-    align-items: center;
-    gap: var(--space-xl);
-  }
-
-  :global(.view-toggle) {
-    flex-shrink: 0;
-    width: auto !important;
-    height: 1.75rem !important;
-  }
-
-  :global(.view-toggle .k-segmented-button) {
-    height: 1.75rem !important;
-    min-height: unset !important;
   }
 
   .ticket-list {

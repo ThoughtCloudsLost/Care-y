@@ -55,7 +55,7 @@ describe("TicketCard", () => {
     queueName: "Intake",
     displayStatus: "active" as const,
     priority: "normal" as const,
-    title: "Test ticket title",
+    titleResult: { status: "ready" as const, value: "Test ticket title" },
     clientAlias: "Sparrow",
     assignedName: null,
     createdAt: new Date("2026-04-05T11:30:00Z"),
@@ -81,17 +81,19 @@ describe("TicketCard", () => {
     expect(container.textContent).toContain("Test ticket title");
   });
 
-  it("shows DecryptPlaceholder when title is undefined (encrypting state)", () => {
+  it("shows DecryptPlaceholder when title is loading", async () => {
     const { container } = render(TicketCard, {
-      props: { ...defaults, title: undefined },
+      props: { ...defaults, titleResult: { status: "loading" as const } },
     });
+    // Advance past the 150ms scramble delay so aria-busy appears.
+    await vi.advanceTimersByTimeAsync(200);
     const dp = container.querySelector("[aria-busy='true']");
     expect(dp).not.toBeNull();
   });
 
-  it("shows encrypted placeholder when title decryption fails (sentinel value)", () => {
+  it("shows encrypted placeholder when title decryption fails (error state)", () => {
     const { container } = render(TicketCard, {
-      props: { ...defaults, title: "\0DECRYPT_FAILED" },
+      props: { ...defaults, titleResult: { status: "error" as const } },
     });
     expect(container.textContent).toContain("Encrypted ticket");
     // Should NOT show DecryptPlaceholder (no loading indicator in the title area)
@@ -115,10 +117,12 @@ describe("TicketCard", () => {
     expect(container.textContent).toContain("No messages yet");
   });
 
-  it("renders DecryptPlaceholder when follow-ups are undefined (not loaded)", () => {
+  it("renders DecryptPlaceholder when follow-ups are undefined (not loaded)", async () => {
     const { container } = render(TicketCard, {
       props: { ...defaults, previewFollowUps: undefined },
     });
+    // Advance past the 150ms scramble delay so aria-busy appears.
+    await vi.advanceTimersByTimeAsync(200);
     const placeholders = container.querySelectorAll("[aria-busy='true']");
     expect(placeholders.length).toBeGreaterThan(0);
   });

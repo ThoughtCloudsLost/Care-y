@@ -29,8 +29,14 @@
   import type { DisplayStatus } from "$lib/tickets/display-status.js";
   import { createQuery } from "@tanstack/svelte-query";
   import { trpc } from "$lib/trpc/index.js";
-  import { getTicketDecryptCache } from "$lib/crypto/context.js";
-  import { isDecryptError } from "$lib/crypto/async-decrypt-cache.js";
+  import {
+    getTicketDecryptCache,
+    getFollowUpDecryptCache,
+    getOrgDecryptCache,
+    getOrgKeyManager,
+  } from "$lib/crypto/context.js";
+  import { createTicketDecryptScope } from "$lib/crypto/ticket-decrypt-scope.js";
+  import { isDecryptReady } from "$lib/crypto/decrypt-result.js";
   import { RouterNotAvailableError } from "$lib/errors.js";
   import DecryptPlaceholder from "$lib/components/DecryptPlaceholder.svelte";
   import InlineSkeleton from "$lib/components/InlineSkeleton.svelte";
@@ -56,6 +62,9 @@
   const ticketRouter = trpc.tickets;
 
   const ticketCache = getTicketDecryptCache();
+  const followUpCache = getFollowUpDecryptCache();
+  const orgCache = getOrgDecryptCache();
+  const orgKeyManager = getOrgKeyManager();
 
   // --- TanStack queries (same keys as TicketDetail, deduplicated) ---
 
@@ -90,17 +99,31 @@
         : m.ticket_action_open(),
   );
 
-  // Decrypt ticket title via shared cache.
-  const decryptedTitle = $derived.by(() => {
-    if (ticket == null) return undefined;
-    const raw = ticketCache.decryptTitle(
-      ticket.id,
-      ticket.keyWrap,
-      ticket.encryptedTitle,
-    );
-    if (raw === undefined || isDecryptError(raw)) return undefined;
-    return raw;
-  });
+  // Pre-bind ticket context for clean decrypt calls.
+  const decrypt = $derived(
+    ticket != null
+      ? createTicketDecryptScope({
+          ticketCache,
+          followUpCache,
+          orgCache,
+          orgKeyManager,
+          ticketId: ticket.id,
+          keyWrap: ticket.keyWrap,
+        })
+      : null,
+  );
+
+  const titleResult = $derived(
+    ticket != null && decrypt != null
+      ? decrypt.title(ticket.encryptedTitle)
+      : undefined,
+  );
+
+  const decryptedTitle = $derived(
+    titleResult != null && isDecryptReady(titleResult)
+      ? titleResult.value
+      : undefined,
+  );
 </script>
 
 <div class="panel-content">

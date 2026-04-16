@@ -76,14 +76,14 @@ jobs:
             | grep '^OPRF_SHARE_' >> .env
 
       - name: Start test containers
-        run: docker compose -f docker-compose.yml -f docker-compose.test.yml up -d --build --wait
+        run: docker compose -f docker-compose.test.yml up -d --build --wait
 
       - name: Tests + coverage
-        run: docker compose -f docker-compose.yml -f docker-compose.test.yml exec app pnpm vitest run --coverage
+        run: docker compose -f docker-compose.test.yml exec app pnpm vitest run --coverage
 
       - name: Stop test containers
         if: always()
-        run: docker compose -f docker-compose.yml -f docker-compose.test.yml down
+        run: docker compose -f docker-compose.test.yml down
 
       - name: Secret scanning
         uses: gitleaks/gitleaks-action@ff98106e4c7b2bc287b24eaf42907196329070c7 # v2.3.9

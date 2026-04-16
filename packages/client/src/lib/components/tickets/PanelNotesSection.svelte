@@ -18,7 +18,7 @@
     getFollowUpDecryptCache,
     getOrgDecryptCache,
   } from "$lib/crypto/context.js";
-  import { isDecryptError } from "$lib/crypto/async-decrypt-cache.js";
+  import { resolveAsyncDecrypt } from "$lib/crypto/decrypt-result.js";
   import { RouterNotAvailableError } from "$lib/errors.js";
   import { formatRelativeTime } from "$lib/utils/format-time.js";
   import DecryptPlaceholder from "$lib/components/DecryptPlaceholder.svelte";
@@ -82,22 +82,6 @@
   function resolveVolunteerName(userId: string | null): string | undefined {
     return resolveVolName(userId, volunteerMap, orgCache);
   }
-
-  // --- Decrypt ---
-
-  function decryptNoteContent(
-    noteId: string,
-    encryptedContent: Parameters<typeof followUpCache.decryptContent>[2],
-  ): string | undefined {
-    if (keyWrap === null) return undefined;
-    const result = followUpCache.decryptContent(
-      noteId,
-      keyWrap,
-      encryptedContent,
-    );
-    if (isDecryptError(result)) return undefined;
-    return result;
-  }
 </script>
 
 {#if notesQuery.isLoading}
@@ -121,7 +105,10 @@
   <BlockTitle class="!mt-6 !-mb-2">{m.ticket_panel_notes()}</BlockTitle>
   <List strong inset class="!my-3">
     {#each notes as note (note.id)}
-      {@const content = decryptNoteContent(note.id, note.encryptedContent)}
+      {@const noteResult = resolveAsyncDecrypt(
+        followUpCache.decryptContent(note.id, keyWrap, note.encryptedContent),
+        keyWrap !== null,
+      )}
       {@const authorName =
         resolveVolunteerName(note.createdBy) ??
         m.ticket_private_note_author_fallback()}
@@ -134,7 +121,7 @@
       >
         {#snippet subtitle()}
           <DecryptPlaceholder
-            {content}
+            result={noteResult}
             ciphertext={note.encryptedContent}
             length={40}
           />

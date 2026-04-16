@@ -75,8 +75,19 @@ vi.mock("$lib/crypto/context.js", () => ({
   getOrgDecryptCache: () => ({
     decrypt: vi.fn().mockReturnValue(null),
   }),
+  getOrgKeyManager: () => ({
+    isLoaded: false,
+  }),
   getCurrentUserId: () => () => "user-001",
-  getCurrentUserRoleId: () => () => 2, // VOLUNTEER
+  getCurrentUserRoleId: () => () => "dXwG0zR9BtJp",
+  getCurrentPermissions: () => () =>
+    new Set([
+      "view_tickets",
+      "manage_own_tickets",
+      "view_knowledge_base",
+      "edit_knowledge_base",
+      "view_own_shifts",
+    ]),
   getPreviewLoader: () => ({
     get: vi.fn().mockReturnValue(undefined),
     observe: vi.fn(),
@@ -218,10 +229,9 @@ describe("TicketDetail", () => {
       };
 
       const { container } = render(TicketDetail, { props: baseProps });
-      // Skeleton renders with role="status" and aria-busy="true".
-      const skeleton = container.querySelector(
-        '[role="status"][aria-busy="true"]',
-      );
+      // DecryptPlaceholder container (.dp) renders immediately; the scramble
+      // (role="status") is delayed by 150ms, so check the container only.
+      const skeleton = container.querySelector(".dp");
       expect(skeleton).not.toBeNull();
     });
 
@@ -260,8 +270,9 @@ describe("TicketDetail", () => {
       };
 
       const { container } = render(TicketDetail, { props: baseProps });
-      // Skeleton inside the chat log renders with aria-busy.
-      const skeleton = container.querySelector('[aria-busy="true"]');
+      // DecryptPlaceholder container (.dp) renders immediately; the scramble
+      // (aria-busy) is delayed by 150ms, so check the container only.
+      const skeleton = container.querySelector(".dp");
       expect(skeleton).not.toBeNull();
     });
   });

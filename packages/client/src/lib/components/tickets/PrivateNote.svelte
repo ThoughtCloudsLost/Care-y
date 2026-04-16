@@ -15,13 +15,16 @@
 <script lang="ts">
   import { Card, Chip, Button, List, ListInput } from "konsta/svelte";
   import { StickyNote } from "@lucide/svelte";
-  import { isDecryptError } from "$lib/crypto/async-decrypt-cache.js";
   import { formatRelativeTime } from "$lib/utils/format-time.js";
   import * as m from "$lib/paraglide/messages.js";
+  import {
+    type DecryptResult,
+    isDecryptReady,
+  } from "$lib/crypto/decrypt-result.js";
   import DecryptPlaceholder from "$lib/components/DecryptPlaceholder.svelte";
 
   interface Props {
-    content: string | undefined;
+    result: DecryptResult;
     encryptedContent?: unknown;
     authorName: string | undefined;
     timestamp: string;
@@ -40,7 +43,7 @@
   }
 
   let {
-    content,
+    result,
     encryptedContent,
     authorName,
     timestamp,
@@ -63,8 +66,8 @@
   // cache are ignored while editing.
   $effect(() => {
     if (editing && !prevEditing) {
-      if (content !== undefined && !isDecryptError(content)) {
-        editText = content;
+      if (isDecryptReady(result)) {
+        editText = result.value;
       }
     }
     prevEditing = editing;
@@ -72,7 +75,8 @@
 
   function handleSave(): void {
     const trimmed = editText.trim();
-    if (!trimmed || trimmed === content) {
+    const currentValue = isDecryptReady(result) ? result.value : undefined;
+    if (!trimmed || trimmed === currentValue) {
       oncanceledit?.();
       return;
     }
@@ -157,7 +161,7 @@
     {:else}
       <div class="note-body">
         <DecryptPlaceholder
-          {content}
+          {result}
           ciphertext={encryptedContent}
           length={40}
           block
