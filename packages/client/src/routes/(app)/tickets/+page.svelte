@@ -31,7 +31,8 @@
     getNavbarOverrideCtx,
   } from "$lib/shell/context.js";
   import { useScrollDirection } from "$lib/shell/use-scroll-direction.svelte.js";
-  import { UserPlus, Pause, X } from "@lucide/svelte";
+  import { Link } from "konsta/svelte";
+  import { UserPlus, Pause, X, TicketPlus } from "@lucide/svelte";
   import { deriveDisplayStatus } from "$lib/tickets/display-status.js";
   import { filterStore } from "$lib/stores/filters.svelte.js";
   import { viewModeStore } from "$lib/stores/view-mode.svelte.js";
@@ -450,32 +451,15 @@
   }
 
   // Sync multi-select state to the tabbar override. When active, the
-  // tab bar is replaced with Assign/Hold actions + dismiss button.
-  // When inactive, the normal tab bar is restored.
+  // tab bar is replaced with action snippets. When inactive, the
+  // normal tab bar is restored.
   $effect(() => {
     if (multiSelectActive) {
       tabbarOverride.current = {
-        label: m.tickets_selected({ count: selectedIds.size }),
+        left: batchLeft,
+        middle: batchMiddle,
+        right: batchRight,
         ariaLabel: m.tickets_selected({ count: selectedIds.size }),
-        actions: [
-          {
-            id: "assign",
-            label: m.tickets_action_assign(),
-            icon: UserPlus,
-            onclick: handleBulkAssign,
-          },
-          {
-            id: "hold",
-            label: m.tickets_action_hold(),
-            icon: Pause,
-            onclick: () => void handleBulkHold(),
-          },
-        ],
-        dismiss: {
-          icon: X,
-          ariaLabel: m.tickets_exit_multiselect(),
-          onclick: exitMultiSelect,
-        },
       };
     } else {
       tabbarOverride.current = undefined;
@@ -494,6 +478,7 @@
   // reactively without the override object needing to change.
   $effect(() => {
     navbarCtx.current = {
+      right: navRight,
       subnavbar: ticketSubnavbar,
       subnavbarHidden: () => scrollDir.hidden,
     };
@@ -897,6 +882,50 @@
     },
   });
 </script>
+
+{#snippet navRight()}
+  <Link
+    iconOnly
+    onclick={() => void goto(resolve("/tickets/new"))}
+    role="button"
+    aria-label={m.nav_new_ticket()}
+  >
+    <TicketPlus size={22} aria-hidden="true" />
+  </Link>
+{/snippet}
+
+{#snippet batchLeft()}
+  <Link
+    iconOnly
+    onclick={handleBulkAssign}
+    aria-label={m.tickets_action_assign()}
+  >
+    <UserPlus size={24} aria-hidden="true" />
+  </Link>
+  <Link
+    iconOnly
+    onclick={() => void handleBulkHold()}
+    aria-label={m.tickets_action_hold()}
+  >
+    <Pause size={24} aria-hidden="true" />
+  </Link>
+{/snippet}
+
+{#snippet batchMiddle()}
+  <span class="font-semibold text-sm" role="status">
+    {m.tickets_selected({ count: selectedIds.size })}
+  </span>
+{/snippet}
+
+{#snippet batchRight()}
+  <Link
+    iconOnly
+    aria-label={m.tickets_exit_multiselect()}
+    onclick={exitMultiSelect}
+  >
+    <X size={24} aria-hidden="true" />
+  </Link>
+{/snippet}
 
 {#snippet ticketStats()}
   <span class="stat-item">

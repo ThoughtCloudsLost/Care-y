@@ -8,6 +8,8 @@ import {
   type ShellSheetProps,
   type ShellPopupProps,
   type ShellActionSheetProps,
+  type NavbarOverride,
+  type TabbarOverride,
 } from "./types";
 
 /**
@@ -55,5 +57,16 @@ describe("shell types", () => {
   it("ShellActionSheetProps has opened and ondismiss", () => {
     expectTypeOf<ShellActionSheetProps>().toHaveProperty("opened");
     expectTypeOf<ShellActionSheetProps>().toHaveProperty("ondismiss");
+  });
+
+  it("NavbarOverride has searchHidden", () => {
+    expectTypeOf<NavbarOverride>().toHaveProperty("searchHidden");
+  });
+
+  it("TabbarOverride has left, middle, right snippet slots", () => {
+    expectTypeOf<TabbarOverride>().toHaveProperty("left");
+    expectTypeOf<TabbarOverride>().toHaveProperty("middle");
+    expectTypeOf<TabbarOverride>().toHaveProperty("right");
+    expectTypeOf<TabbarOverride>().toHaveProperty("ariaLabel");
   });
 });

@@ -8,6 +8,7 @@ vi.mock("$lib/paraglide/messages.js", () => ({
   library_category_name: () => "Name",
   library_category_description: () => "Description",
   library_category_save: () => "Save",
+  library_category_save_label: () => "Save category",
   library_category_delete: () => "Delete Category",
   library_category_delete_blocked: () =>
     "Move or delete all articles in this category first",

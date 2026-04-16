@@ -23,9 +23,9 @@ export const [getScrollContainer, setScrollContainer] =
 
 /**
  * Tabbar override: any route can temporarily replace the tab bar
- * with custom actions by setting this context. AppShell renders the
- * override actions as TabbarLink items. Set to undefined to restore
- * the normal tab bar.
+ * with custom left/middle/right snippet content by setting this
+ * context. AppShell renders each slot in its own ToolbarPane with
+ * tabbar={false}. Set to undefined to restore the normal tab bar.
  *
  * Flow: AppShell (parent) creates the reactive container and calls
  * setTabbarOverrideCtx(container). Child routes call getTabbarOverrideCtx()

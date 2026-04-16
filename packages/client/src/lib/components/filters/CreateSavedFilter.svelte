@@ -128,6 +128,7 @@
       class="save-btn"
       disabled={!canSave}
       onclick={handleSave}
+      aria-label={m.saved_filter_save_label()}
     >
       {m.saved_filter_save()}
     </button>

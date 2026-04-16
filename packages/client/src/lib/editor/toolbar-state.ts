@@ -9,8 +9,8 @@
 
 import type { EditorState, Command } from "prosemirror-state";
 import type { MarkType, NodeType, Schema } from "prosemirror-model";
-import { toggleMark, setBlockType, wrapIn } from "prosemirror-commands";
-import { wrapInList } from "prosemirror-schema-list";
+import { toggleMark, setBlockType, wrapIn, lift } from "prosemirror-commands";
+import { wrapInList, liftListItem } from "prosemirror-schema-list";
 import { undo, redo } from "prosemirror-history";
 
 // ---------------------------------------------------------------------------
@@ -138,9 +138,12 @@ interface CachedCommands {
   toggleCode?: Command;
   toggleLink?: Command;
   wrapBlockquote?: Command;
+  liftBlockquote: Command;
   setCodeBlock?: Command;
+  setParagraph?: Command;
   wrapBulletList?: Command;
   wrapOrderedList?: Command;
+  liftListItem?: Command;
 }
 
 const commandCache = new WeakMap<Schema, CachedCommands>();
@@ -162,14 +165,21 @@ function getCommands(schema: Schema): CachedCommands {
     wrapBlockquote: schema.nodes.blockquote
       ? wrapIn(schema.nodes.blockquote)
       : undefined,
+    liftBlockquote: lift,
     setCodeBlock: schema.nodes.code_block
       ? setBlockType(schema.nodes.code_block)
+      : undefined,
+    setParagraph: schema.nodes.paragraph
+      ? setBlockType(schema.nodes.paragraph)
       : undefined,
     wrapBulletList: schema.nodes.bullet_list
       ? wrapInList(schema.nodes.bullet_list)
       : undefined,
     wrapOrderedList: schema.nodes.ordered_list
       ? wrapInList(schema.nodes.ordered_list)
+      : undefined,
+    liftListItem: schema.nodes.list_item
+      ? liftListItem(schema.nodes.list_item)
       : undefined,
   };
   commandCache.set(schema, cmds);
@@ -190,16 +200,21 @@ export function deriveToolbarState(state: EditorState): ToolbarState {
   const { schema } = state;
   const cmds = getCommands(schema);
 
+  const bqActive = blockOn(state, schema.nodes.blockquote);
+  const cbActive = blockOn(state, schema.nodes.code_block);
+  const blActive = blockOn(state, schema.nodes.bullet_list);
+  const olActive = blockOn(state, schema.nodes.ordered_list);
+
   return {
     boldActive: markOn(state, schema.marks.strong),
     italicActive: markOn(state, schema.marks.em),
     strikethroughActive: markOn(state, schema.marks.strikethrough),
     codeActive: markOn(state, schema.marks.code),
     linkActive: markOn(state, schema.marks.link),
-    blockquoteActive: blockOn(state, schema.nodes.blockquote),
-    codeBlockActive: blockOn(state, schema.nodes.code_block),
-    bulletListActive: blockOn(state, schema.nodes.bullet_list),
-    orderedListActive: blockOn(state, schema.nodes.ordered_list),
+    blockquoteActive: bqActive,
+    codeBlockActive: cbActive,
+    bulletListActive: blActive,
+    orderedListActive: olActive,
     headingLevel: activeHeadingLevel(state),
     insideTable: blockOn(state, schema.nodes.table),
 
@@ -208,10 +223,11 @@ export function deriveToolbarState(state: EditorState): ToolbarState {
     canStrikethrough: canRun(state, cmds.toggleStrikethrough),
     canCode: canRun(state, cmds.toggleCode),
     canLink: canRun(state, cmds.toggleLink),
-    canBlockquote: canRun(state, cmds.wrapBlockquote),
-    canCodeBlock: canRun(state, cmds.setCodeBlock),
-    canBulletList: canRun(state, cmds.wrapBulletList),
-    canOrderedList: canRun(state, cmds.wrapOrderedList),
+    // When already inside, the button toggles off (lift/unwrap), so it stays enabled.
+    canBlockquote: bqActive || canRun(state, cmds.wrapBlockquote),
+    canCodeBlock: cbActive || canRun(state, cmds.setCodeBlock),
+    canBulletList: blActive || canRun(state, cmds.wrapBulletList),
+    canOrderedList: olActive || canRun(state, cmds.wrapOrderedList),
     canUndo: canRun(state, undo),
     canRedo: canRun(state, redo),
   };

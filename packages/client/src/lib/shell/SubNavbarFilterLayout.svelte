@@ -247,6 +247,14 @@
     padding-right: 0 !important;
   }
 
+  /* Material: standard icon button sizing (36dp) */
+  :global(.k-material .sort-btn),
+  :global(.k-material .select-btn),
+  :global(.k-material .manage-btn) {
+    width: 2.25rem !important;
+    height: 2.25rem !important;
+  }
+
   :global(.manage-btn) {
     color: var(--brand-accent) !important;
   }
