@@ -22,8 +22,8 @@ services:
     # Relaxed from dev's read_only: true. Vitest writes temp files, and
     # bind-mounted source dirs need writable overlays.
     read_only: false
-    security_opt:
-      - no-new-privileges:true
+    # security_opt inherited from base docker-compose.yml (no-new-privileges).
+    # Do not redeclare here: CI overlays both files and Compose rejects duplicates.
     mem_limit: 512m
     cpus: "1.0"
     tmpfs:
@@ -75,8 +75,6 @@ services:
       dockerfile: Dockerfile.oprf
     user: "2001"
     read_only: true
-    security_opt:
-      - no-new-privileges:true
     mem_limit: 128m
     cpus: "0.25"
     tmpfs:
@@ -94,8 +92,6 @@ services:
       dockerfile: Dockerfile.oprf
     user: "2001"
     read_only: true
-    security_opt:
-      - no-new-privileges:true
     mem_limit: 128m
     cpus: "0.25"
     tmpfs:
