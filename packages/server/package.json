@@ -12,7 +12,7 @@
     "@care-y/shared": "workspace:*",
     "@trpc/server": "11.10.0",
     "kysely": "0.28.15",
-    "nodemailer": "8.0.4",
+    "nodemailer": "8.0.5",
     "pg": "8.20.0",
     "sodium-native": "^5.1.0",
     "zod": "4.3.6"
