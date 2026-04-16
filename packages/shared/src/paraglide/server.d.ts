@@ -29,7 +29,10 @@
  *      If your framework handles URL localization itself (e.g., TanStack Router's `rewrite` option), use the original
  *      request instead to avoid redirect loops.
  *   - `locale`: The determined locale for this request.
- * @param {{ onRedirect:(response: Response) => void }} [callbacks] - Callbacks to handle events from middleware
+ * @param {{
+ *   effectiveRequestUrl?: string | URL | ((request: Request) => string | URL),
+ *   onRedirect?: (response: Response) => void
+ * }} [options] - Options to control middleware behavior. `effectiveRequestUrl` sets the effective request URL used for route matching, URL-based locale detection, redirects, and `getUrlOrigin()`.
  * @returns {Promise<Response>}
  *
  * @example
@@ -87,6 +90,7 @@
 export function paraglideMiddleware<T>(request: Request, resolve: (args: {
     request: Request;
     locale: import("./runtime.js").Locale;
-}) => T | Promise<T>, callbacks?: {
-    onRedirect: (response: Response) => void;
+}) => T | Promise<T>, options?: {
+    effectiveRequestUrl?: string | URL | ((request: Request) => string | URL);
+    onRedirect?: (response: Response) => void;
 }): Promise<Response>;

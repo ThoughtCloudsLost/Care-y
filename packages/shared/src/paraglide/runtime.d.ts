@@ -222,7 +222,7 @@ export function aggregateGroups(match: any): Record<string, string | null | unde
 /**
  * @typedef {object} ShouldRedirectServerInput
  * @property {Request} request
- * @property {string | URL} [url]
+ * @property {string | URL} [effectiveRequestUrl] - Effective request URL to use for route matching, locale detection with the URL strategy, and redirect targets.
  * @property {Locale} [locale]
  *
  * @typedef {object} ShouldRedirectClientInput
@@ -268,6 +268,23 @@ export function aggregateGroups(match: any): Record<string, string | null | unde
  *   }
  *
  *   return render(request, decision.locale);
+ * }
+ *
+ * @example
+ * // Server side usage behind a proxy where request.url is not public-facing
+ * export async function handle(request) {
+ *   const effectiveRequestUrl = new URL(request.url);
+ *   effectiveRequestUrl.protocol = "https:";
+ *   effectiveRequestUrl.host = "example.com";
+ *
+ *   const decision = await shouldRedirect({
+ *     request,
+ *     effectiveRequestUrl,
+ *   });
+ *
+ *   if (decision.shouldRedirect) {
+ *     return Response.redirect(decision.redirectUrl, 307);
+ *   }
  * }
  *
  * @param {ShouldRedirectInput} [input]
@@ -556,9 +573,11 @@ export function overwriteSetLocale(fn: SetLocaleFn): void;
  */
 export let getUrlOrigin: () => string;
 export function overwriteGetUrlOrigin(fn: () => string): void;
-export function extractLocaleFromRequest(request: Request): Locale;
-export function extractLocaleFromRequestWithStrategies(request: Request, strategies: typeof strategy): Locale;
-export function extractLocaleFromRequestAsync(request: Request): Promise<Locale>;
+export function extractLocaleFromRequest(request: Request, options?: ExtractLocaleFromRequestOptions): Locale;
+export function extractLocaleFromRequestWithStrategies(request: Request, strategies: typeof strategy, url?: string | URL): Locale;
+export function extractLocaleFromRequestAsync(request: Request, options?: {
+    effectiveRequestUrl?: string | URL;
+}): Promise<Locale>;
 /**
  * @typedef {"cookie" | "baseLocale" | "globalVariable" | "url" | "preferredLanguage" | "localStorage"} BuiltInStrategy
  */
@@ -583,7 +602,10 @@ export const customServerStrategies: Map<string, CustomServerStrategyHandler>;
 export const customClientStrategies: Map<string, CustomClientStrategyHandler>;
 export type ShouldRedirectServerInput = {
     request: Request;
-    url?: string | URL;
+    /**
+     * - Effective request URL to use for route matching, locale detection with the URL strategy, and redirect targets.
+     */
+    effectiveRequestUrl?: string | URL;
     locale?: Locale;
 };
 export type ShouldRedirectClientInput = {
@@ -621,6 +643,12 @@ export type ParaglideAsyncLocalStorage = {
 export type SetLocaleFn = (newLocale: Locale, options?: {
     reload?: boolean;
 }) => void | Promise<void>;
+export type ExtractLocaleFromRequestOptions = {
+    /**
+     * - Effective request URL to use for route matching and locale detection with the URL strategy.
+     */
+    effectiveRequestUrl?: string | URL;
+};
 export type BuiltInStrategy = "cookie" | "baseLocale" | "globalVariable" | "url" | "preferredLanguage" | "localStorage";
 export type CustomStrategy = `custom_${string}`;
 export type Strategy = BuiltInStrategy | CustomStrategy;
