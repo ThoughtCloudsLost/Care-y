@@ -7,8 +7,8 @@
   import { SvelteMap, SvelteSet } from "svelte/reactivity";
   import { goto } from "$app/navigation";
   import { resolve } from "$app/paths";
-  import { Dialog, DialogButton } from "konsta/svelte";
-  import { FolderInput, Trash2, Download, X } from "@lucide/svelte";
+  import { Dialog, DialogButton, Link } from "konsta/svelte";
+  import { FolderInput, Trash2, Download, X, FilePlus } from "@lucide/svelte";
   import SubNavbarFilterLayout from "$lib/shell/SubNavbarFilterLayout.svelte";
   import type {
     ViewToggleConfig,
@@ -16,7 +16,6 @@
     SavedFiltersConfig,
     FilterPillsConfig,
     ManageConfig,
-    TabbarOverrideAction,
   } from "$lib/shell/types.js";
   import * as m from "$lib/paraglide/messages.js";
   import { trpc } from "$lib/trpc/index.js";
@@ -60,6 +59,7 @@
   const currentUserId = $derived(currentUserIdGetter());
   const permissionsGetter = getCurrentPermissions();
   const permissions = $derived(permissionsGetter());
+  const canEdit = $derived(permissions.has(Permission.EDIT_KNOWLEDGE_BASE));
   const canDelete = $derived(permissions.has(Permission.MANAGE_USERS));
   const canManageCategories = $derived(
     permissions.has(Permission.MANAGE_KNOWLEDGE_BASE_CATEGORIES),
@@ -271,37 +271,11 @@
   // Tabbar override for multi-select.
   $effect(() => {
     if (multiSelectActive) {
-      const actions: TabbarOverrideAction[] = [
-        {
-          id: "move",
-          label: m.library_action_move(),
-          icon: FolderInput,
-          onclick: handleBulkMove,
-        },
-      ];
-      if (canDelete) {
-        actions.push({
-          id: "delete",
-          label: m.library_action_delete(),
-          icon: Trash2,
-          onclick: handleBulkDelete,
-        });
-      }
-      actions.push({
-        id: "export",
-        label: m.library_action_export(),
-        icon: Download,
-        onclick: handleBulkExport,
-      });
       tabbarOverride.current = {
-        label: m.library_selected({ count: selectedIds.size }),
+        left: batchLeft,
+        middle: batchMiddle,
+        right: batchRight,
         ariaLabel: m.library_selected({ count: selectedIds.size }),
-        actions,
-        dismiss: {
-          icon: X,
-          ariaLabel: m.library_exit_multiselect(),
-          onclick: exitMultiSelect,
-        },
       };
     } else {
       tabbarOverride.current = undefined;
@@ -317,6 +291,7 @@
   // Subnavbar override.
   $effect(() => {
     navbarCtx.current = {
+      right: canEdit ? navRight : undefined,
       subnavbar: librarySubnavbar,
       subnavbarHidden: () => scrollDir.hidden,
     };
@@ -589,6 +564,55 @@
     /* skeleton card, no interaction */
   }
 </script>
+
+{#snippet navRight()}
+  <Link
+    iconOnly
+    onclick={() => void goto(resolve("/library/new"))}
+    role="button"
+    aria-label={m.library_new_article()}
+  >
+    <FilePlus size={22} aria-hidden="true" />
+  </Link>
+{/snippet}
+
+{#snippet batchLeft()}
+  <Link iconOnly onclick={handleBulkMove} aria-label={m.library_action_move()}>
+    <FolderInput size={24} aria-hidden="true" />
+  </Link>
+  {#if canDelete}
+    <Link
+      iconOnly
+      onclick={handleBulkDelete}
+      aria-label={m.library_action_delete()}
+    >
+      <Trash2 size={24} aria-hidden="true" />
+    </Link>
+  {/if}
+  <Link
+    iconOnly
+    onclick={handleBulkExport}
+    aria-label={m.library_action_export()}
+  >
+    <Download size={24} aria-hidden="true" />
+  </Link>
+{/snippet}
+
+{#snippet batchMiddle()}
+  <span class="font-semibold text-sm" role="status">
+    {m.library_selected({ count: selectedIds.size })}
+  </span>
+{/snippet}
+
+{#snippet batchRight()}
+  <Link
+    iconOnly
+    aria-label={m.library_exit_multiselect()}
+    onclick={exitMultiSelect}
+  >
+    <X size={24} aria-hidden="true" />
+  </Link>
+{/snippet}
 
 {#snippet libraryStats()}
   {#if !articlesQuery.isLoading}

@@ -1,6 +1,13 @@
 import DOMPurify, { type Config } from "dompurify";
-import { DOMSerializer, Node as PMNode } from "prosemirror-model";
+import { DOMSerializer, Fragment, Node as PMNode } from "prosemirror-model";
 import { kbArticleSchema } from "$lib/editor/prosemirror-schema.js";
+
+export interface RenderArticleOptions {
+  /** If provided, a first heading whose text matches (case-insensitive)
+   *  is stripped from the output. Prevents duplication when the title
+   *  is displayed separately above the body. */
+  title?: string;
+}
 
 /**
  * Sanitization config for rendered article HTML.
@@ -12,6 +19,15 @@ import { kbArticleSchema } from "$lib/editor/prosemirror-schema.js";
  * security attrs, not stored in the document JSON). They're in ALLOWED_ATTR
  * so DOMPurify doesn't strip them from serialized output.
  */
+/**
+ * DOMPurify strips src/href attributes with unrecognized URI schemes
+ * by default. kb-attachment:// is our custom scheme for encrypted
+ * blob references. Allow it alongside standard web protocols.
+ * The detail page resolves these URIs post-render via fetch+decrypt.
+ */
+const ALLOWED_URI =
+  /^(?:(?:https?|blob|data|ftp|mailto|tel|kb-attachment):|[^a-z]|[a-z+.\-]+(?:[^a-z+.\-:]|$))/i;
+
 const PURIFY_CONFIG: Config = {
   ALLOWED_TAGS: [
     "p",
@@ -51,6 +67,7 @@ const PURIFY_CONFIG: Config = {
     "rowspan",
     "start",
   ],
+  ALLOWED_URI_REGEXP: ALLOWED_URI,
   ALLOW_DATA_ATTR: false,
   FORCE_BODY: true,
 };
@@ -63,7 +80,10 @@ const decoder = new TextDecoder();
  * Expects ProseMirror JSON (UTF-8 encoded). Falls back to
  * plain-text paragraph wrapping for legacy pre-editor articles.
  */
-export function renderArticleBody(decryptedBytes: Uint8Array): string {
+export function renderArticleBody(
+  decryptedBytes: Uint8Array,
+  options?: RenderArticleOptions,
+): string {
   const text = decoder.decode(decryptedBytes);
   if (text.length === 0) return "";
 
@@ -83,7 +103,24 @@ export function renderArticleBody(decryptedBytes: Uint8Array): string {
     return sanitizeLegacyPlainText(text);
   }
 
-  const fragment = serializer.serializeFragment(doc.content);
+  // Strip first heading if it duplicates the title shown above the body.
+  let content = doc.content;
+  if (options?.title !== undefined && content.childCount > 0) {
+    const first = content.child(0);
+    if (
+      first.type.name === "heading" &&
+      first.textContent.trim().toLowerCase() ===
+        options.title.trim().toLowerCase()
+    ) {
+      const remaining: PMNode[] = [];
+      for (let i = 1; i < content.childCount; i++) {
+        remaining.push(content.child(i));
+      }
+      content = Fragment.from(remaining);
+    }
+  }
+
+  const fragment = serializer.serializeFragment(content);
   const div = document.createElement("div");
   div.appendChild(fragment);
   return sanitizeArticleHtml(div.innerHTML);

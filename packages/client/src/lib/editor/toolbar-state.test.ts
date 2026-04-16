@@ -297,4 +297,40 @@ describe("deriveToolbarState", () => {
     expect(ts.italicActive).toBe(true);
     expect(ts.strikethroughActive).toBe(false);
   });
+
+  // ── Toggle-off: can* stays true when already inside the block type ──
+
+  it("canBlockquote is true when already inside a blockquote (toggle off)", () => {
+    const state = stateAt([bq([p("quoted")])], 3);
+    const ts = deriveToolbarState(state);
+    expect(ts.blockquoteActive).toBe(true);
+    expect(ts.canBlockquote).toBe(true);
+  });
+
+  it("canCodeBlock is true when already inside a code block (toggle off)", () => {
+    const state = stateAt(
+      [{ type: "code_block", content: [t("const x = 1")] }],
+      5,
+    );
+    const ts = deriveToolbarState(state);
+    expect(ts.codeBlockActive).toBe(true);
+    expect(ts.canCodeBlock).toBe(true);
+  });
+
+  it("canBulletList is true when already inside a bullet list (toggle off)", () => {
+    const state = stateAt([{ type: "bullet_list", content: [li("item")] }], 3);
+    const ts = deriveToolbarState(state);
+    expect(ts.bulletListActive).toBe(true);
+    expect(ts.canBulletList).toBe(true);
+  });
+
+  it("canOrderedList is true when already inside an ordered list (toggle off)", () => {
+    const state = stateAt(
+      [{ type: "ordered_list", attrs: { order: 1 }, content: [li("item")] }],
+      3,
+    );
+    const ts = deriveToolbarState(state);
+    expect(ts.orderedListActive).toBe(true);
+    expect(ts.canOrderedList).toBe(true);
+  });
 });

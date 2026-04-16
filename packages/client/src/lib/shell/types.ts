@@ -8,7 +8,7 @@
  * This file is append-only. All downstream view modules depend on it.
  */
 
-import type { Component, Snippet } from "svelte";
+import type { Snippet } from "svelte";
 import type { SavedFilterRecord } from "@care-y/shared";
 import type { PillDefinition } from "$lib/components/filters/filter-types.js";
 
@@ -187,35 +187,27 @@ export interface NavbarOverride {
   readonly subnavbar?: Snippet;
   /** Reactive getter: returns true when the subnavbar should be hidden. */
   readonly subnavbarHidden?: () => boolean;
+  /** When true, the search icon in the navbar right slot is hidden. */
+  readonly searchHidden?: boolean;
 }
 
 // ── Tabbar override ─────────────────────────────────────────────────
-// Any route can temporarily replace the tab bar with custom actions.
-// The shell renders Link items (not TabbarLink, which drives the
-// Material highlight bar). Content components build this descriptor;
-// the shell handles rendering. For native migration, only the shell
-// renderer changes.
-
-export interface TabbarOverrideAction {
-  readonly id: string;
-  readonly label: string;
-  readonly icon: Component;
-  readonly onclick: () => void;
-}
+// Any route can temporarily replace the tab bar with custom snippet
+// content (left/middle/right slots), matching the NavbarOverride
+// pattern. The shell renders each slot in its own ToolbarPane with
+// tabbar={false} (no Material highlight bar). Content components
+// build snippets; the shell handles Toolbar structure, iOS blur,
+// and safe-area handling.
 
 export interface TabbarOverride {
-  /** Actions rendered as Link items in the main ToolbarPane. */
-  readonly actions: readonly TabbarOverrideAction[];
-  /** Text label shown in the toolbar (e.g., "3 selected"). */
-  readonly label: string;
+  /** Snippet rendered in the left slot. */
+  readonly left?: Snippet;
+  /** Snippet rendered in the center slot. */
+  readonly middle?: Snippet;
+  /** Snippet rendered in the right slot. */
+  readonly right?: Snippet;
   /** Accessible label for the toolbar element. */
   readonly ariaLabel: string;
-  /** Dismiss action (icon-only Link in its own ToolbarPane, like the "..." button). */
-  readonly dismiss: {
-    readonly icon: Component;
-    readonly ariaLabel: string;
-    readonly onclick: () => void;
-  };
 }
 
 // ── SubNavbar filter layout config ─────────────────────────────────

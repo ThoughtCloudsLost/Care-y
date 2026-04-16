@@ -10,7 +10,7 @@
 
 import { onMount } from "svelte";
 import { createSubscriber } from "svelte/reactivity";
-import { EditorView } from "prosemirror-view";
+import { EditorView, type NodeViewConstructor } from "prosemirror-view";
 import { EditorState, type Plugin, type Transaction } from "prosemirror-state";
 import type { Node, Schema } from "prosemirror-model";
 
@@ -23,6 +23,7 @@ export interface UseProseMirrorOptions {
   schema: Schema;
   plugins: readonly Plugin[];
   doc?: Node;
+  nodeViews?: Record<string, NodeViewConstructor>;
   onTransaction?: (tr: Transaction) => void;
 }
 
@@ -58,6 +59,7 @@ export function useProseMirror(
 
     const editorView = new EditorView(el, {
       state,
+      nodeViews: options.nodeViews,
       dispatchTransaction(tr: Transaction): void {
         const newState = editorView.state.apply(tr);
         editorView.updateState(newState);

@@ -1,7 +1,5 @@
 <script lang="ts">
   import { Toolbar } from "bits-ui";
-  // care-y-ignore-next-line no-mixed-konsta-bits -- Bits UI Toolbar for ARIA + Konsta Button for styling (Design Decision: Toolbar implementation)
-  import { List as KList, ListItem } from "konsta/svelte";
   import {
     Bold,
     Italic,
@@ -17,11 +15,8 @@
     Paperclip,
     Table,
     Minus,
-    Undo2,
-    Redo2,
   } from "@lucide/svelte";
   import * as m from "$lib/paraglide/messages.js";
-  import ShellPopover from "$lib/shell/ShellPopover.svelte";
   import type {
     ToolbarState,
     ToolbarCommand,
@@ -34,8 +29,8 @@
 
   let { toolbarState, oncommand }: Props = $props();
 
-  let headingPopoverOpen = $state(false);
-  let headingAnchorEl = $state<HTMLElement | undefined>(undefined);
+  /** Heading levels to cycle through. null = paragraph. */
+  const HEADING_CYCLE: readonly (number | null)[] = [null, 1, 2, 3, 4];
 
   // ---------------------------------------------------------------------------
   // Button config (data-driven to avoid 16 near-identical template blocks)
@@ -160,205 +155,203 @@
     },
   ]);
 
-  let historyButtons: ButtonDef[] = $derived([
-    {
-      label: m.library_editor_undo(),
-      icon: Undo2,
-      command: { kind: "undo" },
-      disabled: !toolbarState.canUndo,
-    },
-    {
-      label: m.library_editor_redo(),
-      icon: Redo2,
-      command: { kind: "redo" },
-      disabled: !toolbarState.canRedo,
-    },
-  ]);
-
-  const HEADING_OPTIONS: readonly {
-    level: number | null;
-    label: () => string;
-  }[] = [
-    { level: null, label: () => m.library_editor_paragraph() },
-    ...[1, 2, 3, 4].map((level) => ({
-      level,
-      label: () => m.library_editor_heading_level({ level: String(level) }),
-    })),
-  ];
-
-  function handleHeadingSelect(level: number | null): void {
-    if (level === null) {
+  /** Cycle to the next heading level (paragraph -> h1 -> h2 -> h3 -> h4 -> paragraph). */
+  function cycleHeading(): void {
+    const currentIdx = HEADING_CYCLE.indexOf(toolbarState.headingLevel);
+    const nextLevel =
+      HEADING_CYCLE[(currentIdx + 1) % HEADING_CYCLE.length] ?? null;
+    if (nextLevel === null) {
       oncommand({ kind: "setParagraph" });
     } else {
-      oncommand({ kind: "setHeading", level });
+      oncommand({ kind: "setHeading", level: nextLevel });
     }
-    headingPopoverOpen = false;
   }
 </script>
 
+<!-- Scrollable 2-row toolbar. The outer div scrolls horizontally when
+     the rows overflow (e.g. on iPhone SE). Each row is a non-wrapping
+     flex container. This layout works identically in the subnavbar
+     (desktop) and the keyboard-docked toolbar (mobile). -->
 <div class="ed-toolbar-scroll">
   <Toolbar.Root aria-label={m.library_editor_toolbar()} class="ed-toolbar">
-    <!-- Mark toggles: bold, italic, strikethrough, inline code -->
-    <Toolbar.Group type="multiple" bind:value={() => markValues, markValueNoop}>
-      {#each marks as btn (btn.value)}
-        {@const Icon = btn.icon}
-        <Toolbar.GroupItem
-          value={btn.value}
-          aria-pressed={btn.active}
-          aria-label={btn.label}
-          disabled={btn.disabled}
-          class="ed-toolbar-btn"
-          onclick={() => oncommand(btn.command)}
+    <!-- Row 1: Marks, Heading + Block types -->
+    <div class="ed-toolbar-row">
+      <div
+        class="ed-toolbar-group glass"
+        role="group"
+        aria-label={m.library_editor_bold()}
+      >
+        <Toolbar.Group
+          type="multiple"
+          bind:value={() => markValues, markValueNoop}
         >
-          <Icon size={18} aria-hidden="true" />
-        </Toolbar.GroupItem>
-      {/each}
-    </Toolbar.Group>
+          {#each marks as btn (btn.value)}
+            {@const Icon = btn.icon}
+            <Toolbar.GroupItem
+              value={btn.value}
+              aria-pressed={btn.active}
+              aria-label={btn.label}
+              aria-disabled={btn.disabled}
+              class="ed-toolbar-btn {btn.disabled ? 'ed-toolbar-btn--off' : ''}"
+              onclick={() => oncommand(btn.command)}
+            >
+              <Icon size={18} aria-hidden="true" />
+            </Toolbar.GroupItem>
+          {/each}
+        </Toolbar.Group>
+      </div>
 
-    <div class="ed-toolbar-sep" aria-hidden="true"></div>
-
-    <!-- Heading dropdown (unique structure, not data-driven) -->
-    <span class="heading-anchor" bind:this={headingAnchorEl}>
-      <Toolbar.Button
+      <div
+        class="ed-toolbar-group glass"
+        role="group"
         aria-label={m.library_editor_heading()}
-        aria-haspopup="listbox"
-        aria-expanded={headingPopoverOpen}
-        class="ed-toolbar-btn ed-toolbar-heading"
-        onclick={() => {
-          headingPopoverOpen = !headingPopoverOpen;
-        }}
       >
-        <Heading size={18} aria-hidden="true" />
-        {#if toolbarState.headingLevel !== null}
-          <span class="heading-level" aria-hidden="true"
-            >{toolbarState.headingLevel}</span
+        <Toolbar.Button
+          aria-label={m.library_editor_heading()}
+          class="ed-toolbar-btn ed-toolbar-heading"
+          onclick={cycleHeading}
+        >
+          <Heading size={18} aria-hidden="true" />
+          {#if toolbarState.headingLevel !== null}
+            <span class="heading-level" aria-hidden="true"
+              >{toolbarState.headingLevel}</span
+            >
+          {/if}
+        </Toolbar.Button>
+
+        {#each blockButtons as btn (btn.command.kind)}
+          {@const Icon = btn.icon}
+          <Toolbar.Button
+            aria-label={btn.label}
+            aria-pressed={btn.pressed}
+            aria-disabled={btn.disabled === true}
+            class="ed-toolbar-btn {btn.disabled === true
+              ? 'ed-toolbar-btn--off'
+              : ''}"
+            onclick={() => oncommand(btn.command)}
           >
-        {/if}
-      </Toolbar.Button>
-    </span>
+            <Icon size={18} aria-hidden="true" />
+          </Toolbar.Button>
+        {/each}
+      </div>
+    </div>
 
-    <!-- Block type buttons -->
-    {#each blockButtons as btn (btn.command.kind)}
-      {@const Icon = btn.icon}
-      <Toolbar.Button
-        aria-label={btn.label}
-        aria-pressed={btn.pressed}
-        disabled={btn.disabled}
-        class="ed-toolbar-btn"
-        onclick={() => oncommand(btn.command)}
+    <!-- Row 2: Insert -->
+    <div class="ed-toolbar-row">
+      <div
+        class="ed-toolbar-group glass"
+        role="group"
+        aria-label={m.library_editor_link()}
       >
-        <Icon size={18} aria-hidden="true" />
-      </Toolbar.Button>
-    {/each}
-
-    <div class="ed-toolbar-sep" aria-hidden="true"></div>
-
-    <!-- Insert buttons -->
-    {#each insertButtons as btn (btn.command.kind)}
-      {@const Icon = btn.icon}
-      <Toolbar.Button
-        aria-label={btn.label}
-        aria-pressed={btn.pressed}
-        disabled={btn.disabled}
-        class="ed-toolbar-btn"
-        onclick={() => oncommand(btn.command)}
-      >
-        <Icon size={18} aria-hidden="true" />
-      </Toolbar.Button>
-    {/each}
-
-    <div class="ed-toolbar-sep" aria-hidden="true"></div>
-
-    <!-- Undo/Redo -->
-    {#each historyButtons as btn (btn.command.kind)}
-      {@const Icon = btn.icon}
-      <Toolbar.Button
-        aria-label={btn.label}
-        disabled={btn.disabled}
-        class="ed-toolbar-btn"
-        onclick={() => oncommand(btn.command)}
-      >
-        <Icon size={18} aria-hidden="true" />
-      </Toolbar.Button>
-    {/each}
+        {#each insertButtons as btn (btn.command.kind)}
+          {@const Icon = btn.icon}
+          <Toolbar.Button
+            aria-label={btn.label}
+            aria-pressed={btn.pressed}
+            aria-disabled={btn.disabled === true}
+            class="ed-toolbar-btn {btn.disabled === true
+              ? 'ed-toolbar-btn--off'
+              : ''}"
+            onclick={() => oncommand(btn.command)}
+          >
+            <Icon size={18} aria-hidden="true" />
+          </Toolbar.Button>
+        {/each}
+      </div>
+    </div>
   </Toolbar.Root>
 </div>
 
-<ShellPopover
-  opened={headingPopoverOpen}
-  target={headingAnchorEl}
-  placement="bottom"
-  ondismiss={() => {
-    headingPopoverOpen = false;
-  }}
->
-  <KList nested role="listbox" aria-label={m.library_editor_heading()}>
-    {#each HEADING_OPTIONS as opt (opt.level)}
-      {@const isSelected =
-        opt.level === null
-          ? toolbarState.headingLevel === null
-          : toolbarState.headingLevel === opt.level}
-      <ListItem
-        title={opt.label()}
-        role="option"
-        aria-selected={isSelected}
-        onclick={() => handleHeadingSelect(opt.level)}
-      />
-    {/each}
-  </KList>
-</ShellPopover>
-
 <style>
+  /* Scroll container: handles horizontal overflow when rows are wider
+     than the viewport (e.g. iPhone SE). Hidden scrollbar for clean look. */
   .ed-toolbar-scroll {
     overflow-x: auto;
     overflow-y: hidden;
-    -webkit-overflow-scrolling: touch;
     scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
   }
 
   .ed-toolbar-scroll::-webkit-scrollbar {
     display: none;
   }
 
+  /* Toolbar root: vertical stack of exactly 2 rows. width:max-content
+     prevents rows from wrapping; the scroll container handles overflow. */
   :global(.ed-toolbar) {
     display: flex;
+    flex-direction: column;
+    gap: var(--space-xs);
+    padding: var(--space-xs) var(--page-pad-x);
+    width: max-content;
+    min-width: 100%;
+  }
+
+  /* Each row is a non-wrapping horizontal strip of groups. */
+  .ed-toolbar-row {
+    display: flex;
     align-items: center;
-    gap: 2px;
-    flex-wrap: nowrap;
-    white-space: nowrap;
-    padding: 0.25rem var(--page-pad-x);
+    gap: var(--space-md);
+  }
+
+  /* Group pill: platform-adaptive surface. */
+  .ed-toolbar-group {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-xs);
+    border-radius: var(--card-radius, 0.75rem);
+    padding: 3px;
+    flex-shrink: 0;
+    transition: opacity 0.15s ease;
+  }
+
+  /* iOS: handled by .glass utility (shared.css) */
+
+  /* Material: solid tonal surface. */
+  :global(.k-material) .ed-toolbar-group {
+    background: var(--surface-1);
   }
 
   :global(.ed-toolbar-btn) {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    min-width: 2.75rem;
-    min-height: 2.75rem;
+    min-width: 2.25rem;
+    min-height: 2.25rem;
     border: none;
-    border-radius: 0.5rem;
+    border-radius: calc(var(--card-radius, 0.75rem) - 3px);
     background: transparent;
-    color: var(--ink);
+    color: var(--glass-text, var(--ink));
     cursor: pointer;
     flex-shrink: 0;
-    transition: background-color 0.15s ease;
+    transition:
+      background-color 0.15s ease,
+      color 0.15s ease;
   }
 
   :global(.ed-toolbar-btn:hover:not(:disabled)) {
-    background: var(--surface-1);
+    background: color-mix(
+      in srgb,
+      var(--glass-text, var(--ink)) 8%,
+      transparent
+    );
   }
 
   :global(.ed-toolbar-btn:active:not(:disabled)) {
-    background: var(--surface-1);
-    opacity: 0.8;
+    background: color-mix(
+      in srgb,
+      var(--glass-text, var(--ink)) 12%,
+      transparent
+    );
   }
 
   :global(.ed-toolbar-btn[aria-pressed="true"]) {
-    background: color-mix(in srgb, var(--brand-accent) 15%, transparent);
+    background: color-mix(in srgb, var(--brand-accent) 20%, transparent);
     color: var(--brand-text);
   }
 
-  :global(.ed-toolbar-btn:disabled) {
+  :global(.ed-toolbar-btn:disabled),
+  :global(.ed-toolbar-btn--off) {
     opacity: 0.3;
     cursor: default;
   }
@@ -368,11 +361,6 @@
     position: relative;
   }
 
-  .heading-anchor {
-    display: inline-flex;
-    flex-shrink: 0;
-  }
-
   .heading-level {
     font-size: var(--text-xs);
     font-weight: 700;
@@ -380,11 +368,13 @@
     line-height: 1;
   }
 
-  .ed-toolbar-sep {
-    width: 1px;
-    height: 1.25rem;
-    background: var(--divider);
-    flex-shrink: 0;
-    margin: 0 0.25rem;
+  /* High contrast: drop glass effects, use system canvas colors */
+  @media (prefers-contrast: more) {
+    .ed-toolbar-group {
+      backdrop-filter: none;
+      -webkit-backdrop-filter: none;
+      background: Canvas;
+      border: 1px solid CanvasText;
+    }
   }
 </style>

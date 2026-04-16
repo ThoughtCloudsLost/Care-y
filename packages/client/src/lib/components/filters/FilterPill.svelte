@@ -66,7 +66,7 @@
 <span bind:this={anchorEl} class="pill-anchor">
   <Chip
     outline={!isActive}
-    class="filter-pill {isActive ? 'filter-pill--active' : ''}"
+    class="glass filter-pill {isActive ? 'filter-pill--active' : ''}"
     onclick={handleClick}
     onkeydown={handleKeydown}
     role="button"
@@ -93,25 +93,57 @@
     cursor: pointer;
     user-select: none;
     flex-shrink: 0;
-    backdrop-filter: blur(8px);
-    -webkit-backdrop-filter: blur(8px);
-    background-color: rgb(128 128 128 / 0.15);
     transition: background-color 150ms ease;
   }
 
-  @media (prefers-contrast: more) {
-    :global(.filter-pill) {
-      backdrop-filter: none;
-      -webkit-backdrop-filter: none;
-      background-color: Canvas;
-      color: CanvasText;
-      border: 1px solid CanvasText;
-    }
+  /* iOS: handled by .glass utility (shared.css) */
+
+  /* Material: solid tonal chip */
+  :global(.k-material .filter-pill) {
+    background: var(--surface-1);
+    color: var(--ink);
   }
 
+  /* Active: solid opaque, override glass */
   :global(.filter-pill--active) {
-    background-color: var(--ink);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+    box-shadow: none;
+  }
+
+  :global(.k-ios .filter-pill.filter-pill--active) {
+    background: color-mix(
+      in srgb,
+      var(--brand-accent) 40%,
+      var(--glass-surface)
+    ) !important;
+  }
+
+  :global(.k-material .filter-pill--active) {
+    background-color: var(--brand-accent) !important;
     color: var(--paper);
+  }
+
+  /* Increased contrast: MUST come after active rules (same specificity +
+     !important, so source order decides). Overrides both .glass utility
+     and Konsta Chip color classes. */
+  @media (prefers-contrast: more) {
+    :global(.k-ios .filter-pill),
+    :global(.k-material .filter-pill) {
+      background: Canvas !important;
+      color: CanvasText !important;
+      -webkit-backdrop-filter: none !important;
+      backdrop-filter: none !important;
+      box-shadow: none !important;
+      border: 1px solid CanvasText !important;
+    }
+
+    :global(.k-ios .filter-pill.filter-pill--active),
+    :global(.k-material .filter-pill.filter-pill--active) {
+      background: var(--brand-accent) !important;
+      color: Canvas !important;
+      border-color: var(--brand-accent) !important;
+    }
   }
 
   .pill-label {

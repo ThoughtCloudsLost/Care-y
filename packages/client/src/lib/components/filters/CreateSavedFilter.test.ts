@@ -19,6 +19,7 @@ vi.mock("$lib/paraglide/messages.js", () => ({
   saved_filter_icon_label: () => "Icon",
   saved_filter_preview_label: () => "Filters",
   saved_filter_save: () => "Save",
+  saved_filter_save_label: () => "Save filter",
   shell_close: () => "Close",
 }));
 

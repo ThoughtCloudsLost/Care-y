@@ -297,6 +297,14 @@ describe("sanitizeArticleHtml (allowlist vs schema)", () => {
     expect(html).not.toContain("javascript:");
   });
 
+  it("preserves kb-attachment:// URIs in img src", () => {
+    const html = sanitizeArticleHtml(
+      '<img src="kb-attachment://att-uuid-123" alt="Photo">',
+    );
+    expect(html).toContain('src="kb-attachment://att-uuid-123"');
+    expect(html).toContain('alt="Photo"');
+  });
+
   it("preserves target and rel from schema-produced link output", () => {
     // The link mark's toDOM produces target="_blank" and rel="noopener noreferrer".
     // DOMPurify must allow both through (they're in ALLOWED_ATTR).
@@ -392,6 +400,141 @@ describe("renderArticleBody", () => {
   it("collapses multiple blank lines in legacy text", () => {
     const html = renderArticleBody(toBytes("A\n\n\n\nB"));
     expect(html).toBe("<p>A</p><p>B</p>");
+  });
+
+  describe("title deduplication (options.title)", () => {
+    it("strips first heading when it matches the title", () => {
+      const json = {
+        type: "doc",
+        content: [
+          {
+            type: "heading",
+            attrs: { level: 1 },
+            content: [{ type: "text", text: "My Article" }],
+          },
+          {
+            type: "paragraph",
+            content: [{ type: "text", text: "Body text" }],
+          },
+        ],
+      };
+      const html = renderArticleBody(docToBytes(json), {
+        title: "My Article",
+      });
+      expect(html).not.toContain("<h1>");
+      expect(html).toContain("Body text");
+    });
+
+    it("strips first heading case-insensitively", () => {
+      const json = {
+        type: "doc",
+        content: [
+          {
+            type: "heading",
+            attrs: { level: 1 },
+            content: [{ type: "text", text: "INTAKE PROTOCOL" }],
+          },
+          {
+            type: "paragraph",
+            content: [{ type: "text", text: "Steps below" }],
+          },
+        ],
+      };
+      const html = renderArticleBody(docToBytes(json), {
+        title: "intake protocol",
+      });
+      expect(html).not.toContain("INTAKE PROTOCOL");
+      expect(html).toContain("Steps below");
+    });
+
+    it("preserves heading when title does not match", () => {
+      const json = {
+        type: "doc",
+        content: [
+          {
+            type: "heading",
+            attrs: { level: 1 },
+            content: [{ type: "text", text: "Different Heading" }],
+          },
+          {
+            type: "paragraph",
+            content: [{ type: "text", text: "Body" }],
+          },
+        ],
+      };
+      const html = renderArticleBody(docToBytes(json), {
+        title: "My Article",
+      });
+      expect(html).toContain("<h1>Different Heading</h1>");
+    });
+
+    it("does not strip heading when title option is undefined", () => {
+      const json = {
+        type: "doc",
+        content: [
+          {
+            type: "heading",
+            attrs: { level: 1 },
+            content: [{ type: "text", text: "My Article" }],
+          },
+          {
+            type: "paragraph",
+            content: [{ type: "text", text: "Body" }],
+          },
+        ],
+      };
+      const html = renderArticleBody(docToBytes(json));
+      expect(html).toContain("<h1>My Article</h1>");
+    });
+
+    it("only strips the first heading, not subsequent matches", () => {
+      const json = {
+        type: "doc",
+        content: [
+          {
+            type: "heading",
+            attrs: { level: 1 },
+            content: [{ type: "text", text: "Title" }],
+          },
+          {
+            type: "paragraph",
+            content: [{ type: "text", text: "Middle" }],
+          },
+          {
+            type: "heading",
+            attrs: { level: 2 },
+            content: [{ type: "text", text: "Title" }],
+          },
+        ],
+      };
+      const html = renderArticleBody(docToBytes(json), { title: "Title" });
+      // First heading stripped, second preserved
+      expect(html).not.toContain("<h1>");
+      expect(html).toContain("<h2>Title</h2>");
+    });
+
+    it("does not strip first child if it is not a heading", () => {
+      const json = {
+        type: "doc",
+        content: [
+          {
+            type: "paragraph",
+            content: [{ type: "text", text: "My Article" }],
+          },
+          {
+            type: "heading",
+            attrs: { level: 1 },
+            content: [{ type: "text", text: "My Article" }],
+          },
+        ],
+      };
+      const html = renderArticleBody(docToBytes(json), {
+        title: "My Article",
+      });
+      // Paragraph is first child, not a heading, so nothing stripped
+      expect(html).toContain("<p>My Article</p>");
+      expect(html).toContain("<h1>My Article</h1>");
+    });
   });
 });
 

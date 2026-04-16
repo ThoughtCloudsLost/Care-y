@@ -104,9 +104,15 @@
     createPopoverOpen = true;
   }
 
-  function handleCreateOption(_optionId: string): void {
+  function handleCreateOption(optionId: string): void {
     createPopoverOpen = false;
-    toastStore.show(m.create_coming_soon(), 2500);
+    if (optionId === "article") {
+      void goto(resolve("/library/new"));
+    } else if (optionId === "category") {
+      void goto(resolve("/library"));
+    } else {
+      toastStore.show(m.create_coming_soon(), 2500);
+    }
   }
 
   // Navbar right-action override: "+" button with create popover.

@@ -17,7 +17,7 @@
   import { page } from "$app/state";
   import { goto } from "$app/navigation";
   import { resolve } from "$app/paths";
-  import { Link, Chip } from "konsta/svelte";
+  import { Link } from "konsta/svelte";
   import { ChevronLeft, Pencil } from "@lucide/svelte";
   import * as m from "$lib/paraglide/messages.js";
   import { trpc } from "$lib/trpc/index.js";
@@ -35,7 +35,12 @@
   import { toastStore } from "$lib/stores/toast.svelte.js";
   import { announceToLiveRegion } from "$lib/utils/announce.js";
   import type { SerializedBuffer } from "$lib/utils/buffer-encoding.js";
+  import {
+    resolveKbImages,
+    type KbImageResolverDeps,
+  } from "$lib/utils/resolve-kb-images.js";
   import ArticleVote from "$lib/components/library/ArticleVote.svelte";
+  import KbAttachmentChip from "$lib/components/library/KbAttachmentChip.svelte";
   import DecryptPlaceholder from "$lib/components/DecryptPlaceholder.svelte";
   import InlineSkeleton from "$lib/components/InlineSkeleton.svelte";
 
@@ -170,7 +175,9 @@
           ? raw
           : new Uint8Array((raw as SerializedBuffer).data);
       const plainBytes = orgKeyManager.decrypt(ciphertext);
-      return renderArticleBody(plainBytes);
+      const title =
+        titleResult.status === "ready" ? titleResult.value : undefined;
+      return renderArticleBody(plainBytes, { title });
     } catch (err: unknown) {
       console.error("[KB] Article body decryption failed", { articleId, err });
       return null;
@@ -187,6 +194,60 @@
       orgKeyManager.isLoaded &&
       renderedBody === null,
   );
+
+  // ── Resolve kb-attachment:// images in rendered body ──
+  // Passed to the use:resolveKbImages action on the article body element.
+  // The action handles fetch+decrypt+blob URL lifecycle and shows a
+  // DecryptPlaceholder-style scramble animation while loading.
+
+  const imageResolverDeps: KbImageResolverDeps = $derived({
+    downloadBlob: async (attachmentId: string) =>
+      kbRouter.downloadAttachmentBlob.query({ attachmentId }),
+    decrypt: (ciphertext: Uint8Array) => orgKeyManager.decrypt(ciphertext),
+    contentKey: renderedBody,
+  });
+
+  // ── Non-image attachments (PDFs, docs) ──
+  // Images render inline via resolveKbImages; everything else shows as
+  // downloadable KbAttachmentChip components below the article body.
+
+  const attachmentsQuery = createQuery(() => ({
+    queryKey: ["kb", "attachments", articleId],
+    queryFn: async () => kbRouter.listAttachments.query({ itemId: articleId }),
+    enabled: articleId !== "",
+  }));
+
+  interface DecryptedAttachment {
+    id: string;
+    filename: string;
+    sizeBytes: number;
+  }
+
+  const nonImageAttachments: DecryptedAttachment[] = $derived.by(() => {
+    const raw = attachmentsQuery.data;
+    if (raw == null || !orgKeyManager.isLoaded) return [];
+    const results: DecryptedAttachment[] = [];
+    for (const att of raw) {
+      if (att.contentType?.startsWith("image/") === true) continue;
+      let filename = "attachment";
+      if (att.encryptedFilename != null) {
+        try {
+          const ct =
+            att.encryptedFilename instanceof Uint8Array
+              ? att.encryptedFilename
+              : new Uint8Array(
+                  (att.encryptedFilename as SerializedBuffer).data,
+                );
+          const plain = orgKeyManager.decrypt(ct);
+          filename = new TextDecoder().decode(plain);
+        } catch {
+          // Decryption failed; fall back to generic name
+        }
+      }
+      results.push({ id: att.id, filename, sizeBytes: att.sizeBytes });
+    }
+    return results;
+  });
 
   // ── Voting ──
 
@@ -356,11 +417,6 @@
 {/snippet}
 
 <div class="article-detail">
-  <!-- Category badge -->
-  {#if categoryName}
-    <Chip outline class="category-chip">{categoryName}</Chip>
-  {/if}
-
   <!-- Title (h1, outside .article-body prose container) -->
   <h1 class="article-title">
     <DecryptPlaceholder result={titleResult} length={30}>
@@ -388,7 +444,7 @@
 
   <!-- Article body -->
   {#if renderedBody !== null}
-    <article class="article-body">
+    <article class="article-body" use:resolveKbImages={imageResolverDeps}>
       <!-- eslint-disable-next-line svelte/no-at-html-tags -- sanitized by DOMPurify in renderArticleBody() -->
       {@html renderedBody}
     </article>
@@ -396,6 +452,19 @@
     <DecryptPlaceholder block length={200} />
   {:else if bodyDecryptFailed}
     <DecryptPlaceholder result={{ status: "error" }} block length={100} />
+  {/if}
+
+  <!-- Non-image attachments -->
+  {#if nonImageAttachments.length > 0}
+    <section class="attachments" aria-label={m.library_attachments()}>
+      {#each nonImageAttachments as att (att.id)}
+        <KbAttachmentChip
+          attachmentId={att.id}
+          filename={att.filename}
+          sizeBytes={att.sizeBytes}
+        />
+      {/each}
+    </section>
   {/if}
 
   <!-- Voting (available from list cache before detail query resolves) -->
@@ -413,22 +482,15 @@
 
 <style>
   .article-detail {
-    padding: var(--space-lg) var(--space-md);
+    padding: var(--space-lg) var(--page-pad-x);
     display: flex;
     flex-direction: column;
     gap: var(--space-md);
   }
 
-  :global(.category-chip) {
-    align-self: flex-start;
-    height: 1.25rem !important;
-    font-size: var(--text-xs) !important;
-    padding-left: var(--space-md) !important;
-    padding-right: var(--space-md) !important;
-  }
-
   .article-title {
-    font-size: var(--text-lg);
+    font-size: 1.5rem;
+    font-family: var(--font-display);
     font-weight: 600;
     color: var(--ink);
     line-height: 1.3;
@@ -448,6 +510,12 @@
     margin-right: var(--space-md);
   }
 
+  .attachments {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-sm);
+  }
+
   /* ── Prose styling for rendered article body ──
      Shared contract with 06f.2 editor preview. */
   .article-body {
@@ -458,11 +526,29 @@
 
   .article-body :global(h1),
   .article-body :global(h2),
-  .article-body :global(h3) {
+  .article-body :global(h3),
+  .article-body :global(h4) {
     font-family: var(--font-display);
+    font-weight: 600;
     color: var(--ink);
     margin-top: 1.5em;
     margin-bottom: 0.5em;
+  }
+
+  .article-body :global(h1) {
+    font-size: 1.5rem;
+  }
+
+  .article-body :global(h2) {
+    font-size: 1.25rem;
+  }
+
+  .article-body :global(h3) {
+    font-size: 1.0625rem;
+  }
+
+  .article-body :global(h4) {
+    font-size: 0.9375rem;
   }
 
   .article-body :global(p) {
@@ -488,8 +574,14 @@
     overflow-x: auto;
   }
 
-  .article-body :global(ul),
+  .article-body :global(ul) {
+    list-style-type: disc;
+    padding-left: 1.5em;
+    margin-bottom: 0.75em;
+  }
+
   .article-body :global(ol) {
+    list-style-type: decimal;
     padding-left: 1.5em;
     margin-bottom: 0.75em;
   }

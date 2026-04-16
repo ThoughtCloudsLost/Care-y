@@ -133,20 +133,36 @@
 </script>
 
 {#snippet editForm(categoryId: string | undefined)}
+  <!-- Konsta ListInput renders labels as <div>, not <label for="">.
+       Hidden <label> elements provide axe-compliant accessible names
+       for the underlying inputs via inputId + for pairing. -->
+  <label for="cat-name-input" class="sr-only">{m.library_category_name()}</label
+  >
+  <label for="cat-desc-input" class="sr-only"
+    >{m.library_category_description()}</label
+  >
   <List nested>
     <ListInput
       label={m.library_category_name()}
+      inputId="cat-name-input"
       type="text"
       bind:value={editName}
     />
     <ListInput
       label={m.library_category_description()}
+      inputId="cat-desc-input"
       type="textarea"
       bind:value={editDescription}
     />
   </List>
   <div class="edit-actions">
-    <Button small inline disabled={!canSave} onclick={() => void handleSave()}>
+    <Button
+      small
+      inline
+      disabled={!canSave}
+      onclick={() => void handleSave()}
+      aria-label={m.library_category_save_label()}
+    >
       {m.library_category_save()}
     </Button>
     <Button small inline clear onclick={cancelEdit}>

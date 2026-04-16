@@ -23,7 +23,11 @@
 </script>
 
 <div use:portal={".k-page"}>
-  <Popup {opened} onBackdropClick={trap.handleDismiss} class="shell-popup">
+  <Popup
+    {opened}
+    onBackdropClick={trap.handleDismiss}
+    class="glass shell-popup"
+  >
     <div
       bind:this={trap.dialogEl}
       role="dialog"
@@ -49,15 +53,7 @@
 </div>
 
 <style>
-  /* iOS frosted glass, matching ShellSheet */
-  :global(.k-ios .shell-popup) {
-    background: rgba(245, 245, 245, 0.55) !important;
-    backdrop-filter: saturate(180%) blur(20px);
-    -webkit-backdrop-filter: saturate(180%) blur(20px);
-  }
-  :global(.dark .k-ios .shell-popup) {
-    background: var(--color-ios-dark-glass, rgba(50, 50, 50, 0.5)) !important;
-  }
+  /* iOS: handled by .glass utility (shared.css) */
 
   .popup-dialog {
     display: flex;

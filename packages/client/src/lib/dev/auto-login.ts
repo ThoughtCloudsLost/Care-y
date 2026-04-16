@@ -205,6 +205,12 @@ function hr(): PmNode {
   return { type: "horizontal_rule" };
 }
 
+function img(src: string, alt?: string): PmNode {
+  const attrs: Record<string, unknown> = { src };
+  if (alt !== undefined) attrs.alt = alt;
+  return { type: "image", attrs };
+}
+
 const bold: PmMark = { type: "strong" };
 const italic: PmMark = { type: "em" };
 const strike: PmMark = { type: "strikethrough" };
@@ -393,12 +399,12 @@ const KB_ARTICLES: readonly {
         li(
           p(
             t(
-              "Document the handoff in the ticket timeline, including who took over and at what time.",
+              "Document the transfer in the ticket timeline. Note who took over and when.",
             ),
           ),
         ),
       ),
-      h(2, t("Handoff documentation")),
+      h(2, t("Transfer documentation")),
       p(
         t(
           "When transferring a crisis call, paste the following template into the ticket timeline:",
@@ -784,6 +790,173 @@ const KB_ARTICLES: readonly {
         t(
           " The plan belongs to the caller. It contains names, addresses, and strategies that could put them at greater risk if disclosed. The ticket should only confirm that a plan exists.",
         ),
+      ),
+    ),
+  },
+
+  // ── A11y test article ─────────────────────────────────────────────
+  // This article intentionally violates every ATAG check so the a11y
+  // plugin and preview page have real content to flag. Keep in sync
+  // with the checks in atag-checks.ts.
+  {
+    category: "Resources",
+    title: "Accessibility issues example",
+    excerpt:
+      "Reference article with intentional accessibility violations. Each section demonstrates a common mistake and explains why it fails.",
+    body: pmDoc(
+      h(2, t("About this article")),
+      p(
+        t(
+          "This article is intentionally written with accessibility violations. Each section below demonstrates a common authoring mistake and explains why it creates a barrier for people who use assistive technology. The accessibility checker should flag every issue listed here.",
+        ),
+      ),
+
+      hr(),
+
+      // ── Heading skip ──────────────────────────────────────────────
+      h(2, t("Skipped heading levels")),
+      p(
+        t(
+          "Headings form an outline that screen reader users navigate to jump between sections. When a level is skipped (for example, jumping from H2 to H4), the outline has a gap. A screen reader user cannot tell whether they missed a section or the author used the wrong level for visual styling. Always step headings down one level at a time.",
+        ),
+      ),
+
+      // ❌ heading-skip: H4 directly after H2 (skipped H3)
+      h(4, t("This heading skips from H2 to H4")),
+      p(
+        t(
+          "The heading above should be H3, not H4. The checker flags this as a heading level skip.",
+        ),
+      ),
+
+      // ── Empty headings ────────────────────────────────────────────
+      h(2, t("Empty headings")),
+      p(
+        t(
+          'An empty heading is announced by screen readers as a heading with no label. The user hears something like "heading level 3, blank" and has no way to know what section they entered. Empty headings are often left behind after deleting text or pasting from another document. Delete the heading node entirely if it has no content.',
+        ),
+      ),
+
+      // ❌ empty-heading: heading node with zero text content
+      h(3),
+
+      p(
+        t(
+          "The empty heading above has no text at all. The checker flags it as an empty heading.",
+        ),
+      ),
+
+      // ❌ empty-heading: heading with only whitespace
+      h(3, t(" ")),
+
+      p(
+        t(
+          "The heading above contains only a space character, which is treated the same as empty. Whitespace-only headings are equally invisible to assistive technology.",
+        ),
+      ),
+
+      // ── Missing alt text ──────────────────────────────────────────
+      h(2, t("Images without alt text")),
+      p(
+        t(
+          'When an image has no alt text, screen readers either skip it entirely or read the raw file URL, which sounds like "image, https colon slash slash example dot com slash photos slash workstation dash layout dot jpg." Neither outcome tells the user what the image shows. Every image should have alt text that conveys the same information a sighted user gets from looking at it.',
+        ),
+      ),
+
+      // ❌ missing-alt: image with no alt attribute
+      img("https://example.com/photos/workstation-layout.jpg"),
+
+      p(
+        t(
+          "The image above has no alt attribute. The checker flags it as missing alt text.",
+        ),
+      ),
+
+      p(t("For comparison, here is the same image with proper alt text:")),
+
+      // ✅ Control case: image with descriptive alt text (should NOT trigger)
+      p(
+        img(
+          "https://example.com/photos/workstation-layout.jpg",
+          "Recommended desk layout showing monitor, keyboard, phone, and headset positions",
+        ),
+      ),
+
+      // ❌ missing-alt: second image without alt text
+      img("https://example.com/photos/headset-comparison.jpg"),
+
+      p(
+        t(
+          "This second image also lacks alt text. The checker should flag each instance independently.",
+        ),
+      ),
+
+      // ── Generic link text ─────────────────────────────────────────
+      h(2, t("Generic link text")),
+      p(
+        t(
+          'Screen reader users often navigate by pulling up a list of all links on the page. When every link says "click here" or "read more," the list is useless. Link text should describe where the link goes or what it does, so it makes sense out of context.',
+        ),
+      ),
+
+      // ❌ heading-skip: H4 after H2 (second heading skip example)
+      h(4, t("Examples of generic link text")),
+
+      // ❌ generic-link-text: "click here"
+      p(
+        t("Bad: "),
+        t("click here", link("https://example.com/extension")),
+        t(" to install the browser extension."),
+      ),
+      p(
+        t("Better: Install the "),
+        t(
+          "encrypted clipboard browser extension",
+          link("https://example.com/extension"),
+        ),
+        t("."),
+      ),
+
+      // ❌ generic-link-text: "Read more"
+      p(
+        t("Bad: "),
+        t("Read more", link("https://example.com/password-managers")),
+        t(" about password managers."),
+      ),
+      p(
+        t("Better: See our "),
+        t(
+          "list of supported password managers",
+          link("https://example.com/password-managers"),
+        ),
+        t("."),
+      ),
+
+      // ❌ generic-link-text: "here"
+      p(
+        t("Bad: The microphone test instructions are "),
+        t("here", link("https://example.com/mic-test")),
+        t("."),
+      ),
+      p(
+        t("Better: Follow the "),
+        t("microphone test instructions", link("https://example.com/mic-test")),
+        t(" before your first call."),
+      ),
+
+      // ❌ generic-link-text: "Learn more"
+      p(
+        t("Bad: "),
+        t("Learn more", link("https://example.com/handbook")),
+        t(" about multi-line call handling."),
+      ),
+      p(
+        t("Better: The "),
+        t(
+          "volunteer handbook chapter on multi-line calls",
+          link("https://example.com/handbook"),
+        ),
+        t(" covers hold, transfer, and conference features."),
       ),
     ),
   },
