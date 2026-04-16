@@ -26,6 +26,9 @@ updates:
     open-pull-requests-limit: 3
     reviewers:
       - ThoughtCloudsLost
+    ignore:
+      - dependency-name: "pnpm/action-setup"
+        update-types: ["version-update:semver-major"]
     groups:
       github-actions:
         patterns:
