@@ -13,7 +13,7 @@
   import * as m from "$lib/paraglide/messages.js";
   import Skeleton from "$lib/components/Skeleton.svelte";
   import FilterPill from "./FilterPill.svelte";
-  import type { FilterOption, PillDefinition } from "./filter-types.js";
+  import type { PillDefinition } from "./filter-types.js";
 
   interface Props {
     pills: PillDefinition[];

@@ -14,10 +14,8 @@
     excerptResult={result.excerptResult}
     categoryName={result.categoryName}
     authorName={result.authorName}
-    rating={result.rating}
     voteUpCount={result.voteUpCount}
     voteTotalCount={result.voteTotalCount}
-    createdAt={result.createdAt}
     updatedAt={result.updatedAt}
     selected={false}
     multiSelectActive={false}

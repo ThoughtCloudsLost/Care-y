@@ -18,7 +18,7 @@
     List as KList,
     ListItem,
   } from "konsta/svelte";
-  import { ChevronDown, Check } from "@lucide/svelte";
+  import { Check } from "@lucide/svelte";
   import * as m from "$lib/paraglide/messages.js";
   import { getOrgKeyManager } from "$lib/crypto/context.js";
   import { trpc } from "$lib/trpc/index.js";
@@ -195,11 +195,6 @@
 
   const canPublish = $derived(
     title.trim().length > 0 && selectedCategoryId !== "" && !saving,
-  );
-
-  const hasContent = $derived(
-    title.trim().length > 0 ||
-      (editor.state !== null && editor.state.doc.content.size > 2),
   );
 
   const dirty = $derived(
