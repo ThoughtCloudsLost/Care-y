@@ -18,10 +18,8 @@
     encryptedExcerpt?: unknown;
     categoryName: string | null;
     authorName: string | null;
-    rating: number;
     voteUpCount: number;
     voteTotalCount: number;
-    createdAt: Date;
     updatedAt: Date;
     viewMode: "list" | "grid";
     selected?: boolean;
@@ -40,10 +38,8 @@
     encryptedExcerpt,
     categoryName,
     authorName,
-    rating,
     voteUpCount,
     voteTotalCount,
-    createdAt,
     updatedAt,
     viewMode,
     selected = false,

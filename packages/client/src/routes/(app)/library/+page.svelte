@@ -137,8 +137,6 @@
     articlesQuery.data?.pages.flatMap((p) => p.items) ?? [],
   );
 
-  type ArticleRecord = (typeof allArticles)[number];
-
   // Client-side category post-filter: when multiple categories are selected,
   // the server receives no categoryId filter (it only supports one). We
   // filter client-side instead.
@@ -651,10 +649,8 @@
           excerptResult={{ status: "loading" }}
           categoryName={null}
           authorName={null}
-          rating={0}
           voteUpCount={0}
           voteTotalCount={0}
-          createdAt={new Date()}
           updatedAt={new Date()}
           ontap={skeletonNoop}
         />
@@ -708,10 +704,8 @@
             encryptedExcerpt={article.encryptedExcerpt}
             categoryName={categoryNameMap.get(article.categoryId) ?? null}
             authorName={resolveAuthorName(article.createdBy)}
-            rating={article.rating}
             voteUpCount={article.voteUpCount}
             voteTotalCount={article.voteUpCount + article.voteDownCount}
-            createdAt={new Date(article.createdAt)}
             updatedAt={new Date(article.updatedAt)}
             selected={selectedIds.has(article.id)}
             {multiSelectActive}
