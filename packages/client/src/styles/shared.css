@@ -410,6 +410,16 @@ html.keyboard-open .native-tabbar {
   }
 }
 
+/* Konsta overlay title sizing: bump from text-sm/text-[18px] defaults */
+.k-actions-label {
+  font-size: var(--text-lg) !important;
+  font-weight: 600;
+}
+
+.k-dialog-title {
+  font-size: var(--text-lg) !important;
+}
+
 .kb-img-error {
   padding: var(--space-md);
   font-size: var(--text-sm);

@@ -700,5 +700,37 @@
   "admin_queue_editor_no_org_key": "Clave de la organizacion no cargada. No se pueden crear ni editar colas.",
   "admin_queue_created": "Cola creada",
   "admin_queue_updated": "Cola actualizada",
-  "admin_queue_editor_delete": "Eliminar cola"
+  "admin_queue_editor_delete": "Eliminar cola",
+
+  "admin_org_title": "Organizacion",
+  "admin_tab_keys": "Claves",
+  "admin_tab_branding": "Marca",
+  "admin_tab_retention": "Retencion",
+  "admin_tab_reports": "Informes",
+  "admin_org_no_access": "No tienes permiso para acceder a la configuracion de la organizacion.",
+  "admin_branding_placeholder": "Disponible en una futura actualizacion",
+  "admin_reports_placeholder": "Disponible en una futura actualizacion",
+
+  "admin_keys_title": "Claves de cifrado",
+  "admin_keys_org_key_loaded": "Clave de la organizacion cargada",
+  "admin_keys_org_key_missing": "Clave de la organizacion no configurada",
+  "admin_keys_explainer": "La clave de tu organizacion cifra los datos compartidos: nombres de voluntarios, articulos de la base de conocimiento, nombres de colas y marca. Las conversaciones de tickets y la informacion de clientes usan claves separadas por ticket.",
+  "admin_keys_rotate_button": "Rotar clave de la organizacion",
+  "admin_keys_export_button": "Exportar archivo de custodia",
+
+  "admin_rotation_dialog_title": "Rotar clave de la organizacion",
+  "admin_rotation_dialog_why": "Rota tu clave si un miembro del equipo deja la organizacion, si sospechas acceso no autorizado, o como parte de un calendario regular de seguridad.",
+  "admin_rotation_dialog_body": "Esto crea una nueva clave de cifrado para los datos compartidos de tu organizacion: nombres de voluntarios, articulos de la base de conocimiento, nombres de colas y marca de la organizacion. Los {count} voluntarios activos recibiran la clave actualizada en su proximo inicio de sesion. Las conversaciones de tickets y la informacion de clientes usan cifrado separado y mas fuerte, y no se ven afectadas por este cambio.",
+  "admin_rotation_confirm": "Rotar clave",
+  "admin_rotation_generating": "Generando nueva clave...",
+  "admin_rotation_wrapping": "Envolviendo clave para {count} voluntarios...",
+  "admin_rotation_submitting": "Enviando al servidor...",
+  "admin_rotation_complete": "Rotacion de clave completada",
+  "admin_rotation_error": "La rotacion de clave fallo. Tu clave anterior sigue activa.",
+  "admin_rotation_retry": "Reintentar",
+  "admin_rotation_done": "OK",
+  "admin_key_rotated": "Clave de la organizacion rotada",
+
+  "admin_retention_title": "Retencion de datos personales",
+  "admin_retention_placeholder": "Disponible en una futura actualizacion"
 }

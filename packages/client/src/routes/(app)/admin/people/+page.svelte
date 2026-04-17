@@ -1,11 +1,11 @@
 <script lang="ts">
   import { BlockTitle, Segmented, SegmentedButton, Link } from "konsta/svelte";
   import { page } from "$app/state";
-  import { goto } from "$app/navigation";
+  import { goto, replaceState } from "$app/navigation";
   import { resolve } from "$app/paths";
   import { Permission, RoleId } from "@care-y/shared";
   import type { RoleIdValue } from "@care-y/shared";
-  import { UserPlus, LayersPlus } from "@lucide/svelte";
+  import { Users, Layers, UserPlus, LayersPlus } from "@lucide/svelte";
   import * as m from "$lib/paraglide/messages.js";
   import {
     getNavbarOverrideCtx,
@@ -64,6 +64,12 @@
   $effect(() => {
     if (urlTab !== null) activeTab = urlTab;
   });
+
+  function switchTab(tab: PeopleTab): void {
+    activeTab = tab;
+    // eslint-disable-next-line svelte/no-navigation-without-resolve -- shallow routing, same page query param
+    replaceState(`?tab=${tab}`, {});
+  }
 
   // Scroll direction for subnavbar collapse.
   const getScroll = getScrollContainer();
@@ -252,23 +258,25 @@
       {#if canManageUsers}
         <SegmentedButton
           active={activeTab === "users"}
-          onclick={() => (activeTab = "users")}
+          onclick={() => switchTab("users")}
           aria-selected={activeTab === "users"}
           aria-controls="panel-users"
+          aria-label={m.admin_tab_users()}
           id="tab-users"
         >
-          {m.admin_tab_users()}
+          <Users size={16} aria-hidden="true" />
         </SegmentedButton>
       {/if}
       {#if canManageQueues}
         <SegmentedButton
           active={activeTab === "queues"}
-          onclick={() => (activeTab = "queues")}
+          onclick={() => switchTab("queues")}
           aria-selected={activeTab === "queues"}
           aria-controls="panel-queues"
+          aria-label={m.admin_tab_queues()}
           id="tab-queues"
         >
-          {m.admin_tab_queues()}
+          <Layers size={16} aria-hidden="true" />
         </SegmentedButton>
       {/if}
     </Segmented>
