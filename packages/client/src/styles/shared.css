@@ -5,7 +5,7 @@
 @theme {
   --breakpoint-tablet: 768px;
   --breakpoint-desktop: 1024px;
-  --color-brand-primary: #f05030;
+  --color-brand-primary: #10b981;
 }
 
 /* Font bridge: Konsta's .k-ios/.k-material classes resolve font-family through
@@ -20,7 +20,7 @@
 
 /* App-level defaults (invariant across themes, overridden per-org) */
 :root {
-  --brand-primary: #f05030;
+  --brand-primary: #10b981;
   --brand-primary-40: color-mix(in srgb, var(--brand-primary) 40%, transparent);
   --brand-primary-20: color-mix(in srgb, var(--brand-primary) 20%, transparent);
   /* Dual contrast tokens: set at runtime by konsta-palette.ts.
@@ -33,8 +33,8 @@
   --brand-primary-fill: var(--brand-primary);
 
   /* Accent brand color (optional, set per-org) */
-  --brand-accent: var(--brand-primary);
-  --brand-accent-on: #fff;
+  --brand-accent: #f59e0b;
+  --brand-accent-on: #000;
   --brand-accent-text: var(--brand-accent);
   --brand-accent-fill: var(--brand-accent);
   --brand-accent-40: color-mix(in srgb, var(--brand-accent) 40%, transparent);

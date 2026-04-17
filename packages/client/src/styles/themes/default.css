@@ -9,13 +9,13 @@
   --muted: #888888;
 
   /* Konsta iOS surface overrides */
-  --color-ios-light-surface: #ffffff;
-  --color-ios-light-surface-1: #f5f5f5;
-  --color-ios-light-surface-1-shade: #e8e8e8;
-  --color-ios-light-surface-1-tint: #ffffff;
-  --color-ios-light-surface-2: #eeeeee;
-  --color-ios-light-surface-3: #f5f5f5;
-  --color-ios-light-surface-variant: #eeeeee;
+  --color-ios-light-surface: #f9fafb;
+  --color-ios-light-surface-1: #f0f1f3;
+  --color-ios-light-surface-1-shade: #e2e4e7;
+  --color-ios-light-surface-1-tint: #f9fafb;
+  --color-ios-light-surface-2: #e8eaed;
+  --color-ios-light-surface-3: #f0f1f3;
+  --color-ios-light-surface-variant: #e8eaed;
 
   --color-ios-dark-surface: #000000;
   --color-ios-dark-surface-1: #1c1c1d;
@@ -26,10 +26,10 @@
   --color-ios-dark-surface-variant: #2c2c2c;
 
   /* Konsta Material surface overrides */
-  --color-md-light-surface-1: #f5f5f5;
-  --color-md-light-surface-2: #eeeeee;
-  --color-md-light-surface-3: #f5f5f5;
-  --color-md-light-surface-variant: #eeeeee;
+  --color-md-light-surface-1: #f0f1f3;
+  --color-md-light-surface-2: #e8eaed;
+  --color-md-light-surface-3: #f0f1f3;
+  --color-md-light-surface-variant: #e8eaed;
   --color-md-dark-surface: #000000;
   --color-md-dark-surface-1: #1c1c1d;
   --color-md-dark-surface-2: #2c2c2c;

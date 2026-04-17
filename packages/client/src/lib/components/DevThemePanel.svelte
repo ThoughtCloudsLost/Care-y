@@ -25,8 +25,8 @@
   const PRIMARY_KEY = "care-y-dev-brand-color";
   const ACCENT_KEY = "care-y-dev-brand-accent";
   const PALETTE_KEY = "care-y-dev-palette";
-  const DEFAULT_PRIMARY = "#f05030";
-  const DEFAULT_ACCENT = "#2563eb";
+  const DEFAULT_PRIMARY = "#10b981";
+  const DEFAULT_ACCENT = "#f59e0b";
 
   interface Palette {
     name: string;

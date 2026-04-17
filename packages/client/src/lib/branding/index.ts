@@ -6,7 +6,8 @@ import {
 } from "$lib/branding/konsta-palette.js";
 
 const BRANDING_CACHE_KEY = "care-y-branding";
-const DEFAULT_PRIMARY = "#f05030";
+const DEFAULT_PRIMARY = "#10b981";
+const DEFAULT_ACCENT = "#f59e0b";
 
 let previousLogoBlobUrl: string | null = null;
 
@@ -28,7 +29,7 @@ export async function loadBranding(
       data.accentColor !== "" &&
       isValidHexColor(data.accentColor)
         ? data.accentColor
-        : null,
+        : DEFAULT_ACCENT,
     logoBlobUrl: data.logoBlob ? createLogoBlobUrl(data.logoBlob) : null,
   };
 
