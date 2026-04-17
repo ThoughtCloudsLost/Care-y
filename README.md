@@ -4,15 +4,15 @@
 
 > **Pre-alpha.** Under active development. Not yet released.
 
-A call intake and case management system for mutual aid organizations serving at-risk populations. Both clients and volunteers face real danger if their identities or case details are exposed. CARE-Y treats this as the primary design constraint, not an afterthought.
+A call intake and case management system for mutual aid organizations serving at-risk populations. Both clients and volunteers face real danger if their identities or case details are exposed. CARE-Y treats this as the primary design constraint.
 
 End-to-end encrypted. Self-hosted. Provider-agnostic telephony.
 
 <p align="center">
-  <img src="docs/images/iOS%20PWA%20Images/CARE-Y Home Dashboard.png" alt="CARE-Y dashboard showing shift status, queue counts, and priority tickets" width="200">
-  <img src="docs/images/iOS%20PWA%20Images/CARE-Y Ticket List Filtered.png" alt="Ticket list with filter pills, priority badges, and message previews" width="200">
-  <img src="docs/images/iOS%20PWA%20Images/CARE-Y Ticket Detail.png" alt="Ticket chat view with client messages, volunteer replies, and private notes" width="200">
-  <img src="docs/images/iOS%20PWA%20Images/CARE-Y Knowledge Base Library.png" alt="Knowledge base with categorized articles and filters" width="200">
+  <img src="docs/images/ios-pwa/care-y-home-dashboard.png" alt="CARE-Y dashboard showing shift status, queue counts, and priority tickets" width="200">
+  <img src="docs/images/ios-pwa/care-y-ticket-list-filtered.png" alt="Ticket list with filter pills, priority badges, and message previews" width="200">
+  <img src="docs/images/ios-pwa/care-y-ticket-detail.png" alt="Ticket chat view with client messages, volunteer replies, and private notes" width="200">
+  <img src="docs/images/ios-pwa/care-y-knowledge-base-library.png" alt="Knowledge base with categorized articles and filters" width="200">
 </p>
 
 ---
@@ -31,7 +31,7 @@ CARE-Y runs as a multi-tenant hosted service or a self-hosted single-tenant inst
 
 If a server can read the data it stores, so can anyone who compromises or subpoenas that server. For organizations where a breach means real people get hurt, that is not an acceptable tradeoff.
 
-CARE-Y makes that scenario architecturally impossible. The server stores only ciphertext and encrypted key material. Decryption requires the volunteer's password plus cryptographic evaluation from two independent servers in separate legal jurisdictions. No single server, no single country, and no single breach can produce readable data. A subpoena to one hosting provider yields encrypted blobs and a single unusable key share.
+CARE-Y makes that scenario architecturally impossible. The server stores only ciphertext and encrypted key material. Decryption requires the volunteer's password plus cryptographic evaluation from two independent servers in separate legal jurisdictions. A breach of any one component produces nothing readable. A subpoena to one hosting provider yields encrypted blobs and a single unusable key share.
 
 **Threat model:**
 
@@ -48,10 +48,10 @@ CARE-Y makes that scenario architecturally impossible. The server stores only ci
 ## Features
 
 <p align="center">
-  <img src="docs/images/iOS%20PWA%20Images/CARE-Y Light Mode.png" alt="CARE-Y dashboard in light mode" width="200">
-  <img src="docs/images/iOS%20PWA%20Images/CARE-Y Admin User Panel.png" alt="Admin panel with user management, telephony, and org settings" width="200">
-  <img src="docs/images/iOS%20PWA%20Images/CARE-Y Universal Search.png" alt="Cross-entity search across tickets and articles" width="200">
-  <img src="docs/images/iOS%20PWA%20Images/CARE-Y KB Article Editor Typing.png" alt="Rich text editor with formatting toolbar and keyboard" width="200">
+  <img src="docs/images/ios-pwa/care-y-light-mode.png" alt="CARE-Y dashboard in light mode" width="200">
+  <img src="docs/images/ios-pwa/care-y-admin-user-panel.png" alt="Admin panel with user management, telephony, and org settings" width="200">
+  <img src="docs/images/ios-pwa/care-y-universal-search.png" alt="Cross-entity search across tickets and articles" width="200">
+  <img src="docs/images/ios-pwa/care-y-kb-article-editor-typing.png" alt="Rich text editor with formatting toolbar and keyboard" width="200">
 </p>
 
 - **Encrypted case management.** Tickets, messages, case notes, and client data are encrypted in the browser. The server never sees plaintext.
@@ -67,14 +67,14 @@ CARE-Y makes that scenario architecturally impossible. The server stores only ci
 
 ## Accessibility and Language
 
-CARE-Y serves populations with varied technical literacy, device quality, and language needs. Accessibility is a design constraint, not an afterthought.
+CARE-Y serves populations with varied technical literacy, device quality, and language needs. Accessibility is a design constraint.
 
-- **WCAG AA contrast enforcement.** Brand colors are adjusted algorithmically at runtime to meet 4.5:1 contrast ratios against all surface variants in both light and dark mode. This is not a one-time check. Every org's custom brand palette passes through the same contrast engine.
+- **WCAG AA contrast enforcement.** Brand colors are adjusted algorithmically at runtime to meet 4.5:1 contrast ratios against all surface variants in both light and dark mode. Every org's custom brand palette passes through the same contrast engine at runtime.
 - **Focus management.** Modal sheets and dialogs use focus traps with Tab/Shift+Tab wrapping and focus restoration on dismiss. Keyboard activation (Enter/Space) on all interactive elements.
 - **Reduced motion.** Animations respect `prefers-reduced-motion`. Users who need reduced motion get static alternatives.
 - **Increased contrast.** `prefers-contrast: more` is respected across all interactive elements.
 - **Screen reader support.** ARIA attributes across 50+ components, `aria-live` regions for dynamic content updates, and screen-reader-only text for context that relies on visual cues.
-- **Multilingual.** English and Spanish translations via Paraglide JS (compile-time, tree-shaken). Adding a new language is a JSON file, not a code change.
+- **Multilingual.** English and Spanish translations via Paraglide JS (compile-time, tree-shaken). Adding a new language requires only a JSON file.
 
 ---
 
@@ -84,7 +84,7 @@ The Exposure system helps volunteers understand their own protection level witho
 
 A persistent animated icon in the navigation bar reflects the volunteer's current protection coverage. Tapping it opens a detail page with per-layer status cards covering connection security, key health, session integrity, and device signals. Each card uses a two-part format: "What's happening" and "Why you should care." Contextual hints appear as toasts when volunteers take security-relevant actions (opening a ticket on public Wi-Fi, for example). A login summary on each session shows what changed since the last visit.
 
-The goal is education through ambient awareness, not alarm fatigue. Volunteers learn security concepts through their own real-time state, not a training module.
+Volunteers learn security concepts through their own real-time state rather than a training module.
 
 The Exposure system is under active development.
 
@@ -179,9 +179,9 @@ Each organization gets an isolated PostgreSQL schema (`org_<uuid>`). Cross-org q
 **Data flow:**
 
 - **Web intake forms and case notes:** true end-to-end encryption. Plaintext never reaches the server.
-- **Outbound SMS/calls:** volunteer's browser decrypts, sends to one-shot relay endpoint, server forwards to telephony provider and zeros the buffer immediately. Never stored, never logged.
+- **Outbound SMS/calls:** volunteer's browser decrypts, sends to one-shot relay endpoint, server forwards to telephony provider and zeros the buffer immediately. The server does not store or log the content.
 - **Inbound SMS:** encrypted on receipt, plaintext purged. Telephony provider retains independently (~30 days).
-- **Telephony abstraction:** Twilio initially, SignalWire hybrid (self-hosted voice) planned. Provider swap, not rewrite.
+- **Telephony abstraction:** Twilio initially, SignalWire hybrid (self-hosted voice) planned. Switching providers requires configuration changes only.
 
 ---
 
@@ -245,7 +245,7 @@ Key security principles:
 
 - **Server cannot decrypt client data.** Decryption requires the volunteer's password plus OPRF evaluation from both threshold servers.
 - **E2E for all client-authored content.** Encrypted in the browser before transmission.
-- **Telephony relay zeroes memory.** `Buffer.fill(0)` in `finally` blocks, no strings, no logging.
+- **Telephony relay zeroes memory.** `Buffer.fill(0)` in `finally` blocks. Plaintext is never held as a JS string and relay requests are not logged.
 - **Webhook signatures always validated**, even in development.
 - **2FA mandatory for data access.** All volunteers, all environments. Authentication succeeds without 2FA, but accessing any encrypted data requires a verified second factor.
 - **EU hosting.** Hetzner VPS, LUKS full-disk encryption, outside US legal jurisdiction.
