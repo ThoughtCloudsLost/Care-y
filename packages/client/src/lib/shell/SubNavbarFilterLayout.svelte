@@ -30,7 +30,8 @@
 
   interface Props {
     title: string;
-    view: ViewToggleConfig;
+    view?: ViewToggleConfig;
+    headerRight?: Snippet;
     stats: Snippet;
     sort: SortConfig;
     selectLabel: string;
@@ -43,6 +44,7 @@
   let {
     title,
     view,
+    headerRight,
     stats,
     sort,
     selectLabel,
@@ -73,24 +75,28 @@
 <div class="subnavbar-filter-content">
   <div class="page-header">
     <BlockTitle large class="page-title">{title}</BlockTitle>
-    <Segmented strong class="view-toggle">
-      <SegmentedButton
-        active={view.mode === "list"}
-        aria-pressed={view.mode === "list"}
-        aria-label={view.listLabel}
-        onclick={() => view.onchange("list")}
-      >
-        <List size={16} aria-hidden="true" />
-      </SegmentedButton>
-      <SegmentedButton
-        active={view.mode === "grid"}
-        aria-pressed={view.mode === "grid"}
-        aria-label={view.gridLabel}
-        onclick={() => view.onchange("grid")}
-      >
-        <LayoutGrid size={16} aria-hidden="true" />
-      </SegmentedButton>
-    </Segmented>
+    {#if view}
+      <Segmented strong class="view-toggle">
+        <SegmentedButton
+          active={view.mode === "list"}
+          aria-pressed={view.mode === "list"}
+          aria-label={view.listLabel}
+          onclick={() => view.onchange("list")}
+        >
+          <List size={16} aria-hidden="true" />
+        </SegmentedButton>
+        <SegmentedButton
+          active={view.mode === "grid"}
+          aria-pressed={view.mode === "grid"}
+          aria-label={view.gridLabel}
+          onclick={() => view.onchange("grid")}
+        >
+          <LayoutGrid size={16} aria-hidden="true" />
+        </SegmentedButton>
+      </Segmented>
+    {:else if headerRight}
+      {@render headerRight()}
+    {/if}
   </div>
   <div class="stats-row">
     <div class="stats-counts">

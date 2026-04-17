@@ -1,19 +1,14 @@
 <script lang="ts">
-  import {
-    List,
-    ListItem,
-    Block,
-    Button,
-    Chip,
-    DialogButton,
-  } from "konsta/svelte";
+  import { Block, DialogButton, Link } from "konsta/svelte";
   import {
     createQuery,
     createMutation,
     useQueryClient,
   } from "@tanstack/svelte-query";
+  import { SvelteSet } from "svelte/reactivity";
   import { RoleId } from "@care-y/shared";
   import type { RoleIdValue } from "@care-y/shared";
+  import { UserMinus, X } from "@lucide/svelte";
   import * as m from "$lib/paraglide/messages.js";
   import { trpc } from "$lib/trpc/index.js";
   import { getOrgDecryptCache, getCurrentUserId } from "$lib/crypto/context.js";
@@ -21,10 +16,16 @@
   import { haptic } from "$lib/utils/haptic.js";
   import { toastStore } from "$lib/stores/toast.svelte.js";
   import { announceToLiveRegion } from "$lib/utils/announce.js";
-  import DecryptPlaceholder from "$lib/components/DecryptPlaceholder.svelte";
+  import {
+    userFilterStore,
+    type KeyStatus,
+  } from "$lib/stores/user-filters.svelte.js";
+  import { getTabbarOverrideCtx } from "$lib/shell/context.js";
   import QueryError from "$lib/components/QueryError.svelte";
   import ShellDialog from "$lib/shell/ShellDialog.svelte";
   import RolePopover from "./RolePopover.svelte";
+  import InviteUser from "./InviteUser.svelte";
+  import UserCard from "./UserCard.svelte";
 
   interface UsersSectionProps {
     readonly autoAction?: string | null;
@@ -78,19 +79,6 @@
     },
   }));
 
-  function roleLabelFor(roleId: string): string {
-    switch (roleId) {
-      case RoleId.VOLUNTEER:
-        return m.admin_role_volunteer();
-      case RoleId.MANAGER:
-        return m.admin_role_manager();
-      case RoleId.ADMIN:
-        return m.admin_role_admin();
-      default:
-        return m.admin_role_unknown();
-    }
-  }
-
   function decryptDisplayName(
     userId: string,
     encryptedBase64: string,
@@ -99,16 +87,102 @@
     return orgCache.decrypt(`user:${userId}`, bytes);
   }
 
-  function keyStatusLabel(hasKeys: boolean, hasOrgKeyWrap: boolean): string {
-    if (hasKeys && hasOrgKeyWrap) return m.admin_key_status_ok();
-    if (!hasKeys) return m.admin_key_status_no_keys();
-    return m.admin_key_status_no_org_key();
+  // ── Client-side filtering + sorting ──
+
+  type UserRecord = NonNullable<typeof usersQuery.data>[number];
+
+  function deriveKeyStatus(u: UserRecord): KeyStatus {
+    if (u.hasKeys && u.hasOrgKeyWrap) return "ok";
+    if (!u.hasKeys) return "no_keys";
+    return "no_org_key";
   }
 
-  function noop(): void {
-    // InviteUser popup wired in next task
+  const ROLE_ID_SET: ReadonlySet<string> = new Set([
+    RoleId.VOLUNTEER,
+    RoleId.MANAGER,
+    RoleId.ADMIN,
+  ]);
+
+  const ROLE_SORT_ORDER: Record<string, number> = {
+    [RoleId.ADMIN]: 0,
+    [RoleId.MANAGER]: 1,
+    [RoleId.VOLUNTEER]: 2,
+  };
+
+  const filteredUsers = $derived.by(() => {
+    const all = usersQuery.data ?? [];
+    let result = all;
+
+    if (userFilterStore.roles.size > 0) {
+      result = result.filter(
+        (u) =>
+          ROLE_ID_SET.has(u.roleId) &&
+          (userFilterStore.roles as ReadonlySet<string>).has(u.roleId),
+      );
+    }
+    if (userFilterStore.statuses.size > 0) {
+      result = result.filter((u) =>
+        (userFilterStore.statuses as ReadonlySet<string>).has(
+          u.isActive ? "active" : "inactive",
+        ),
+      );
+    }
+    if (userFilterStore.keyStatuses.size > 0) {
+      result = result.filter((u) =>
+        userFilterStore.keyStatuses.has(deriveKeyStatus(u)),
+      );
+    }
+
+    const sorted = [...result];
+    const { field, direction } = userFilterStore.sort;
+    const dir = direction === "asc" ? 1 : -1;
+
+    sorted.sort((a, b) => {
+      switch (field) {
+        case "name": {
+          const nameA =
+            decryptDisplayName(a.id, a.encryptedDisplayName) ?? "\uffff";
+          const nameB =
+            decryptDisplayName(b.id, b.encryptedDisplayName) ?? "\uffff";
+          return dir * nameA.localeCompare(nameB);
+        }
+        case "role":
+          return (
+            dir *
+            ((ROLE_SORT_ORDER[a.roleId] ?? 3) -
+              (ROLE_SORT_ORDER[b.roleId] ?? 3))
+          );
+        case "status": {
+          const aVal = a.isActive ? 0 : 1;
+          const bVal = b.isActive ? 0 : 1;
+          return dir * (aVal - bVal);
+        }
+        default:
+          return 0;
+      }
+    });
+
+    return sorted;
+  });
+
+  // ── Stats (exported as functions per Svelte 5 derived_invalid_export rule) ──
+  const _activeCount = $derived(
+    (usersQuery.data ?? []).filter((u) => u.isActive).length,
+  );
+  const _inactiveCount = $derived(
+    (usersQuery.data ?? []).filter((u) => !u.isActive).length,
+  );
+  const totalCount = $derived((usersQuery.data ?? []).length);
+
+  export function activeCount(): number {
+    return _activeCount;
   }
 
+  export function inactiveCount(): number {
+    return _inactiveCount;
+  }
+
+  // ── Role popover ──
   let popoverOpened = $state(false);
   let popoverTarget = $state<HTMLElement | undefined>(undefined);
   let popoverUserId = $state<string>("");
@@ -132,6 +206,7 @@
     }
   }
 
+  // ── Deactivation dialog (single user) ──
   let dialogOpened = $state(false);
   let dialogUserId = $state<string>("");
   let dialogUserName = $state<string>("");
@@ -155,118 +230,190 @@
       isActive: dialogIsReactivation,
     });
   }
+
+  // ── Invite ──
+  let inviteOpened = $state(false);
+
+  export function openInvite(): void {
+    inviteOpened = true;
+  }
+
+  $effect(() => {
+    if (autoAction === "invite") {
+      inviteOpened = true;
+    }
+  });
+
+  // ── Tap handler ──
+  function handleUserTap(userId: string): void {
+    const user = (usersQuery.data ?? []).find((u) => u.id === userId);
+    if (!user) return;
+    const isSelf = userId === currentUserId;
+    if (isSelf) return;
+    const name = decryptDisplayName(userId, user.encryptedDisplayName);
+    openDeactivateDialog(userId, name, !user.isActive);
+  }
+
+  // ── Multi-select ──
+  let multiSelectActive = $state(false);
+  const selectedIds = new SvelteSet<string>();
+
+  const tabbarOverride = getTabbarOverrideCtx();
+
+  export function toggleMultiSelect(): void {
+    if (multiSelectActive) {
+      exitMultiSelect();
+    } else {
+      multiSelectActive = true;
+    }
+  }
+
+  function toggleSelection(userId: string): void {
+    if (selectedIds.has(userId)) {
+      selectedIds.delete(userId);
+    } else {
+      selectedIds.add(userId);
+    }
+  }
+
+  function exitMultiSelect(): void {
+    multiSelectActive = false;
+    selectedIds.clear();
+  }
+
+  $effect(() => {
+    if (multiSelectActive) {
+      tabbarOverride.current = {
+        left: batchLeft,
+        middle: batchMiddle,
+        right: batchRight,
+        ariaLabel: m.admin_users_selected({ count: selectedIds.size }),
+      };
+    } else {
+      tabbarOverride.current = undefined;
+    }
+  });
+
+  $effect(() => {
+    return () => {
+      tabbarOverride.current = undefined;
+    };
+  });
+
+  async function handleBatchDeactivate(): Promise<void> {
+    const ids = [...selectedIds];
+    if (ids.length === 0) return;
+
+    let succeeded = 0;
+
+    for (const uid of ids) {
+      try {
+        await authRouter.setUserActive.mutate({ userId: uid, isActive: false });
+        succeeded++;
+      } catch {
+        toastStore.show(m.error_generic(), 3000);
+        exitMultiSelect();
+        return;
+      }
+    }
+
+    haptic();
+    toastStore.show(m.admin_users_batch_deactivated({ count: succeeded }));
+    exitMultiSelect();
+    void queryClient.invalidateQueries({ queryKey: ["admin", "users"] });
+  }
 </script>
 
-{#if usersQuery.isLoading}
-  <List strong inset>
-    {#each { length: 3 } as _, i (i)}
-      <ListItem>
-        {#snippet title()}
-          <DecryptPlaceholder content={null} length={14} />
-        {/snippet}
-        {#snippet after()}
-          <span
-            class="h-5 w-16 motion-safe:animate-pulse rounded bg-[--surface-2]"
-          ></span>
-        {/snippet}
-      </ListItem>
-    {/each}
-  </List>
-{:else if usersQuery.isError}
-  <QueryError
-    error={usersQuery.error}
-    onretry={() => void usersQuery.refetch()}
-  />
-{:else if usersQuery.data?.length === 0}
-  <Block class="text-center text-[--muted]">
-    {m.admin_no_users()}
-  </Block>
-{:else if usersQuery.data}
-  <div class="flex justify-end px-[--space-md] pb-[--space-sm]">
-    <Button small outline class="invite-btn" onclick={noop}>
-      {m.admin_invite_button()}
-    </Button>
-  </div>
+{#snippet batchLeft()}
+  <Link
+    iconOnly
+    onclick={() => void handleBatchDeactivate()}
+    aria-label={m.admin_users_batch_deactivate()}
+  >
+    <UserMinus size={24} aria-hidden="true" />
+  </Link>
+{/snippet}
 
-  <List strong inset>
-    {#each usersQuery.data as user (user.id)}
-      {@const isSelf = user.id === currentUserId}
-      {@const displayName = decryptDisplayName(
-        user.id,
-        user.encryptedDisplayName,
-      )}
-      {@const roleLabel = roleLabelFor(user.roleId)}
-      {@const keyStatus = keyStatusLabel(user.hasKeys, user.hasOrgKeyWrap)}
-      <ListItem>
-        {#snippet title()}
-          <div class="flex items-center gap-[--space-sm]">
-            <DecryptPlaceholder
-              content={displayName}
-              length={14}
-              class="font-medium"
-            />
-            {#if !user.isActive}
-              <span class="text-xs text-[--muted]">
-                ({m.admin_status_inactive()})
-              </span>
-            {/if}
-          </div>
-        {/snippet}
-        {#snippet subtitle()}
-          <span class="text-xs text-[--muted]">{keyStatus}</span>
-        {/snippet}
-        {#snippet after()}
-          <div class="flex items-center gap-[--space-sm]">
-            <button
-              class="touch-feedback"
-              onclick={(e) => openRolePopover(e, user.id, user.roleId)}
-              disabled={isSelf}
-              aria-label={m.admin_role_change()}
-              aria-disabled={isSelf}
-            >
-              <Chip class={isSelf ? "opacity-60" : ""} outline>
-                {roleLabel}
-              </Chip>
-            </button>
+{#snippet batchMiddle()}
+  <span class="font-semibold text-sm" role="status">
+    {m.admin_users_selected({ count: selectedIds.size })}
+  </span>
+{/snippet}
 
-            <span
-              class="inline-block h-2.5 w-2.5 shrink-0 rounded-full"
-              class:bg-[--color-green-500]={user.isActive}
-              class:bg-[--color-red-500]={!user.isActive}
-              aria-label={user.isActive
-                ? m.admin_status_active()
-                : m.admin_status_inactive()}
-              role="img"
-            ></span>
+{#snippet batchRight()}
+  <Link
+    iconOnly
+    aria-label={m.admin_users_exit_multiselect()}
+    onclick={exitMultiSelect}
+  >
+    <X size={24} aria-hidden="true" />
+  </Link>
+{/snippet}
 
-            {#if !isSelf}
-              {#if user.isActive}
-                <Button
-                  small
-                  tonal
-                  class="text-[--color-red-500]"
-                  onclick={() =>
-                    openDeactivateDialog(user.id, displayName, false)}
-                >
-                  {m.admin_deactivate()}
-                </Button>
-              {:else}
-                <Button
-                  small
-                  tonal
-                  onclick={() =>
-                    openDeactivateDialog(user.id, displayName, true)}
-                >
-                  {m.admin_reactivate()}
-                </Button>
-              {/if}
-            {/if}
-          </div>
-        {/snippet}
-      </ListItem>
-    {/each}
-  </List>
-{/if}
+<div class="users-page pb-20">
+  {#if usersQuery.isLoading}
+    <div class="user-list">
+      {#each { length: 4 } as _, i (i)}
+        <UserCard
+          viewMode="list"
+          userId=""
+          displayName={null}
+          roleId=""
+          isActive={true}
+          hasKeys={true}
+          hasOrgKeyWrap={true}
+          isSelf={false}
+          ontap={() => {
+            /* loading skeleton */
+          }}
+          onrolechange={() => {
+            /* loading skeleton */
+          }}
+        />
+      {/each}
+    </div>
+  {:else if usersQuery.isError}
+    <QueryError
+      error={usersQuery.error}
+      onretry={() => void usersQuery.refetch()}
+    />
+  {:else if filteredUsers.length === 0 && totalCount === 0}
+    <Block class="text-center text-[--muted]">
+      {m.admin_no_users()}
+    </Block>
+  {:else}
+    <div class="user-list">
+      {#each filteredUsers as user (user.id)}
+        {@const isSelf = user.id === currentUserId}
+        {@const displayName = decryptDisplayName(
+          user.id,
+          user.encryptedDisplayName,
+        )}
+        <UserCard
+          viewMode="list"
+          userId={user.id}
+          {displayName}
+          roleId={user.roleId}
+          isActive={user.isActive}
+          hasKeys={user.hasKeys}
+          hasOrgKeyWrap={user.hasOrgKeyWrap}
+          {isSelf}
+          selected={selectedIds.has(user.id)}
+          {multiSelectActive}
+          ontap={handleUserTap}
+          onselect={toggleSelection}
+          onrolechange={openRolePopover}
+        />
+      {/each}
+    </div>
+
+    {#if filteredUsers.length === 0}
+      <div class="empty-state" role="status">
+        <p>{m.admin_users_empty_filter()}</p>
+      </div>
+    {/if}
+  {/if}
+</div>
 
 <RolePopover
   opened={popoverOpened}
@@ -309,3 +456,28 @@
     </DialogButton>
   {/snippet}
 </ShellDialog>
+
+<InviteUser opened={inviteOpened} ondismiss={() => (inviteOpened = false)} />
+
+<style>
+  .users-page {
+    padding: 0.25rem var(--page-pad-x) 0;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-lg);
+  }
+
+  .user-list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-md);
+    min-width: 0;
+  }
+
+  .empty-state {
+    text-align: center;
+    padding: 3rem 1rem;
+    color: var(--muted);
+    font-size: var(--text-base);
+  }
+</style>
