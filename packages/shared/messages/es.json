@@ -588,5 +588,10 @@
   "admin_coming_soon": "Proximamente",
   "role_admin": "Administrador",
   "role_manager": "Gerente",
-  "role_volunteer": "Voluntario"
+  "role_volunteer": "Voluntario",
+  "admin_people_title": "Personas",
+  "admin_tab_users": "Usuarios",
+  "admin_tab_queues": "Colas",
+  "admin_users_placeholder": "Cargando gestion de usuarios...",
+  "admin_queues_placeholder": "Cargando gestion de colas..."
 }
