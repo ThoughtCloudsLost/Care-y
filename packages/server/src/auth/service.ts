@@ -71,7 +71,11 @@ export interface AuthService {
   updateUserRole(userId: string, newRoleId: string): Promise<UserRecord>;
 
   /** Activates or deactivates a user. Deactivation kills sessions and revokes org key. */
-  setUserActive(userId: string, isActive: boolean): Promise<UserRecord>;
+  setUserActive(
+    actorId: string,
+    userId: string,
+    isActive: boolean,
+  ): Promise<UserRecord>;
 
   /** Updates the org's PII retention setting in org_config. */
   setPiiRetentionDays(days: number | null): Promise<void>;
@@ -298,11 +302,16 @@ export function createAuthService(
   }
 
   async function setUserActive(
+    actorId: string,
     userId: string,
     isActive: boolean,
   ): Promise<UserRecord> {
     return db.transaction().execute(async (tx) => {
       if (!isActive) {
+        if (userId === actorId) {
+          throw new ForbiddenError(ErrorCode.CANNOT_DEACTIVATE_SELF);
+        }
+
         const targetUser = await tx
           .selectFrom("users")
           .selectAll()
@@ -319,7 +328,6 @@ export function createAuthService(
             .select(tx.fn.countAll<string>().as("count"))
             .where("role_id", "=", RoleId.ADMIN)
             .where("is_active", "=", true)
-            .forUpdate()
             .executeTakeFirstOrThrow();
           if (toCount(result) <= 1) {
             throw new ForbiddenError(ErrorCode.CANNOT_DEACTIVATE_LAST_ADMIN);

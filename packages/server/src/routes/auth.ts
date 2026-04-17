@@ -324,12 +324,10 @@ export function createAuthRouter(deps: AuthRouterDeps) {
 
     setUserActive: adminProcedure.input(setUserActiveInputSchema).mutation(
       withErrorWrapping(async ({ ctx, input }) => {
-        if (input.userId === ctx.user.id) {
-          throw new ForbiddenError(ErrorCode.CANNOT_DEACTIVATE_SELF);
-        }
         const sessions = createTenantSessions(ctx.org, deps.tokenizer);
         const authService = createScopedAuthService(ctx.org, sessions, deps);
         const updated = await authService.setUserActive(
+          ctx.user.id,
           input.userId,
           input.isActive,
         );

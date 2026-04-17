@@ -70,8 +70,14 @@ describe("ErrorCode", () => {
       "MERGE_UNDO_LOCKED",
       "ALIAS_GENERATION_FAILED",
 
+      // Admin: user management
+      "CANNOT_DEACTIVATE_SELF",
+      "CANNOT_DEACTIVATE_LAST_ADMIN",
+
       // Queues / presets / media
       "QUEUE_NOT_FOUND",
+      "CANNOT_DELETE_LAST_QUEUE",
+      "QUEUE_HAS_TICKETS",
       "PRESET_REPLY_NOT_FOUND",
       "RECORDING_NOT_FOUND",
       "ATTACHMENT_NOT_FOUND",
