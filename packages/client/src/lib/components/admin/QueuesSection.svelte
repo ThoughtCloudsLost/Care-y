@@ -6,6 +6,9 @@
     DialogButton,
     List,
     ListItem,
+    ActionsGroup,
+    ActionsButton,
+    ActionsLabel,
   } from "konsta/svelte";
   import {
     createQuery,
@@ -17,8 +20,7 @@
   import {
     ChevronUp,
     ChevronDown,
-    Pencil,
-    Trash2,
+    EllipsisVertical,
     Plus,
     X,
   } from "@lucide/svelte";
@@ -36,6 +38,7 @@
   import { ErrorCode } from "@care-y/shared";
   import ShellDialog from "$lib/shell/ShellDialog.svelte";
   import ShellSheet from "$lib/shell/ShellSheet.svelte";
+  import ShellActionSheet from "$lib/shell/ShellActionSheet.svelte";
   import QueueMemberPicker from "./QueueMemberPicker.svelte";
 
   interface QueuesSectionProps {
@@ -286,6 +289,33 @@
     pickerOpened = false;
   }
 
+  // ── Queue action sheet ──
+  let queueSheetOpened = $state(false);
+  let queueSheetId = $state("");
+  let queueSheetName = $state("");
+
+  function openQueueSheet(queue: QueueRecord): void {
+    queueSheetId = queue.id;
+    queueSheetName = decryptQueueName(queue) ?? queue.id.slice(0, 8);
+    queueSheetOpened = true;
+  }
+
+  function closeQueueSheet(): void {
+    queueSheetOpened = false;
+  }
+
+  function handleSheetEdit(): void {
+    const id = queueSheetId;
+    closeQueueSheet();
+    openEditor(id);
+  }
+
+  function handleSheetDelete(): void {
+    const queue = (queuesQuery.data ?? []).find((q) => q.id === queueSheetId);
+    closeQueueSheet();
+    if (queue) openDeleteDialog(queue);
+  }
+
   // ── Edit handler (QueueEditor wires into this) ──
 
   let editorQueueId = $state<string | null>(null);
@@ -370,17 +400,6 @@
               <div class="queue-actions">
                 <button
                   class="icon-btn"
-                  aria-label={m.admin_queue_edit()}
-                  onclick={(e) => {
-                    e.stopPropagation();
-                    openEditor(queue.id);
-                  }}
-                >
-                  <Pencil size={18} aria-hidden="true" />
-                </button>
-
-                <button
-                  class="icon-btn"
                   aria-label={m.admin_queue_move_up()}
                   disabled={index === 0}
                   onclick={(e) => {
@@ -404,15 +423,14 @@
                 </button>
 
                 <button
-                  class="icon-btn icon-btn--danger"
-                  aria-label={m.admin_queue_delete()}
-                  disabled={!canDelete}
+                  class="icon-btn"
+                  aria-label={m.admin_queue_edit()}
                   onclick={(e) => {
                     e.stopPropagation();
-                    openDeleteDialog(queue);
+                    openQueueSheet(queue);
                   }}
                 >
-                  <Trash2 size={18} aria-hidden="true" />
+                  <EllipsisVertical size={18} aria-hidden="true" />
                 </button>
               </div>
             </div>
@@ -473,6 +491,28 @@
     </div>
   {/if}
 </div>
+
+<ShellActionSheet opened={queueSheetOpened} ondismiss={closeQueueSheet}>
+  <ActionsGroup>
+    <ActionsLabel>{queueSheetName}</ActionsLabel>
+    <ActionsButton onclick={handleSheetEdit}>
+      {m.admin_queue_edit()}
+    </ActionsButton>
+    <ActionsButton
+      colors={canDelete
+        ? { textIos: "text-red-500", textMaterial: "text-red-500" }
+        : {}}
+      onclick={canDelete ? handleSheetDelete : undefined}
+    >
+      {m.admin_queue_delete()}
+    </ActionsButton>
+  </ActionsGroup>
+  <ActionsGroup>
+    <ActionsButton bold onclick={closeQueueSheet}>
+      {m.common_cancel()}
+    </ActionsButton>
+  </ActionsGroup>
+</ShellActionSheet>
 
 <!-- Step 1: simple delete confirmation -->
 <ShellDialog
@@ -631,10 +671,6 @@
   .icon-btn:focus-visible {
     outline: 2px solid var(--brand-text);
     outline-offset: 2px;
-  }
-
-  .icon-btn--danger:hover:not(:disabled) {
-    color: var(--color-red-500);
   }
 
   /* ── Member section ── */
