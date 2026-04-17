@@ -1130,6 +1130,26 @@ async function reEncryptSeedNames(orgPublicKey: Uint8Array): Promise<void> {
     });
   }
   console.log("[dev] re-encrypted KB category names with real org key");
+
+  // Re-encrypt admin user's display name (seed encrypted with throwaway key)
+  const { user } = await trpc.auth.me.query();
+  const sealedAdminName = sealForOrgKey(
+    encoder.encode("Dev Admin"),
+    orgPublicKey,
+  );
+  // devReEncryptDisplayName is dev-only (conditionally spread on server)
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- dev-only, runtime guard follows
+  const auth = trpc.auth as unknown as
+    | Record<string, { mutate: (input: unknown) => Promise<unknown> }>
+    | undefined;
+  const reEncrypt = auth?.devReEncryptDisplayName;
+  if (reEncrypt) {
+    await reEncrypt.mutate({
+      userId: user.id,
+      encryptedDisplayName: encode(sealedAdminName),
+    });
+    console.log("[dev] re-encrypted admin display name with real org key");
+  }
 }
 
 export async function devAutoLogin(
