@@ -23,6 +23,7 @@ import {
   ErrorCode,
 } from "@care-y/shared";
 import { TRPCError } from "@trpc/server";
+import { z } from "zod";
 import {
   router,
   orgProcedure,
@@ -381,6 +382,29 @@ export function createAuthRouter(deps: AuthRouterDeps) {
               return { success: true as const };
             }),
           ),
+
+          devReEncryptDisplayName: adminProcedure
+            .input(
+              z.object({
+                userId: z.uuid(),
+                encryptedDisplayName: z.string().min(1),
+              }),
+            )
+            .mutation(
+              withErrorWrapping(async ({ ctx, input }) => {
+                await ctx.org.tenantDb
+                  .updateTable("users")
+                  .set({
+                    encrypted_display_name: Buffer.from(
+                      input.encryptedDisplayName,
+                      "base64",
+                    ),
+                  })
+                  .where("id", "=", input.userId)
+                  .execute();
+                return { success: true as const };
+              }),
+            ),
         }
       : {}),
   });
