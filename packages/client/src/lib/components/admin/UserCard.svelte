@@ -1,5 +1,6 @@
 <script lang="ts">
   import { Card, Chip, Checkbox } from "konsta/svelte";
+  import { EllipsisVertical } from "@lucide/svelte";
   import { RoleId } from "@care-y/shared";
   import * as m from "$lib/paraglide/messages.js";
   import { onKeyActivate } from "$lib/utils/a11y.js";
@@ -16,13 +17,8 @@
     readonly isSelf: boolean;
     readonly selected?: boolean;
     readonly multiSelectActive?: boolean;
-    readonly ontap: (userId: string) => void;
+    readonly onedit: (userId: string) => void;
     readonly onselect?: (userId: string) => void;
-    readonly onrolechange: (
-      event: MouseEvent | KeyboardEvent,
-      userId: string,
-      roleId: string,
-    ) => void;
   }
 
   let {
@@ -36,9 +32,8 @@
     isSelf,
     selected = false,
     multiSelectActive = false,
-    ontap,
+    onedit,
     onselect,
-    onrolechange,
   }: UserCardProps = $props();
 
   const isList = $derived(viewMode === "list");
@@ -70,9 +65,12 @@
   function handleCardClick(): void {
     if (multiSelectActive) {
       onselect?.(userId);
-    } else {
-      ontap(userId);
     }
+  }
+
+  function handleEditClick(e: MouseEvent): void {
+    e.stopPropagation();
+    onedit(userId);
   }
 </script>
 
@@ -82,11 +80,14 @@
       class="card-inner"
       class:card-inner--list={isList}
       class:card-inner--grid={!isList}
-      role="button"
-      tabindex="0"
-      aria-label={displayName ?? userId.slice(0, 8)}
-      onclick={handleCardClick}
-      onkeydown={onKeyActivate(handleCardClick)}
+      class:card-inner--selectable={multiSelectActive}
+      role={multiSelectActive ? "button" : undefined}
+      tabindex={multiSelectActive ? 0 : undefined}
+      aria-label={multiSelectActive
+        ? (displayName ?? userId.slice(0, 8))
+        : undefined}
+      onclick={multiSelectActive ? handleCardClick : undefined}
+      onkeydown={multiSelectActive ? onKeyActivate(handleCardClick) : undefined}
     >
       {#if multiSelectActive}
         <div
@@ -137,34 +138,35 @@
         <span class="key-status {keyStatusClass}">{keyStatusLabel}</span>
       </div>
 
-      <!-- Role chip (tappable for non-self users) -->
+      <!-- Role chip (display-only) -->
       <div class="role-area">
-        <button
-          class="role-chip-btn"
-          onclick={(e) => {
-            e.stopPropagation();
-            onrolechange(e, userId, roleId);
-          }}
-          disabled={isSelf}
-          aria-label={m.admin_role_change()}
-          aria-disabled={isSelf}
-        >
-          <Chip class={isSelf ? "opacity-60" : ""} outline>
-            {roleLabel}
-          </Chip>
-        </button>
+        <Chip class={isSelf ? "opacity-60" : ""} outline>
+          {roleLabel}
+        </Chip>
       </div>
 
-      <!-- Active/inactive dot -->
-      <span
-        class="status-dot"
-        class:bg-[--color-green-500]={isActive}
-        class:bg-[--color-red-500]={!isActive}
-        aria-label={isActive
-          ? m.admin_status_active()
-          : m.admin_status_inactive()}
-        role="img"
-      ></span>
+      <!-- Edit button or status dot -->
+      {#if isSelf}
+        <span
+          class="status-dot"
+          class:bg-[--color-green-500]={isActive}
+          class:bg-[--color-red-500]={!isActive}
+          aria-label={isActive
+            ? m.admin_status_active()
+            : m.admin_status_inactive()}
+          role="img"
+        ></span>
+      {:else}
+        <button
+          class="edit-btn"
+          onclick={handleEditClick}
+          onkeydown={onKeyActivate(() => onedit(userId))}
+          aria-label={m.admin_user_edit_actions()}
+          type="button"
+        >
+          <EllipsisVertical size={20} aria-hidden="true" />
+        </button>
+      {/if}
     </div>
   </Card>
 </div>
@@ -192,7 +194,6 @@
     gap: var(--space-md);
     padding: var(--card-pad-y) var(--card-pad-x);
     text-align: left;
-    cursor: pointer;
     -webkit-tap-highlight-color: transparent;
     width: 100%;
     background: none;
@@ -201,7 +202,11 @@
     color: inherit;
   }
 
-  .card-inner:focus-visible {
+  .card-inner--selectable {
+    cursor: pointer;
+  }
+
+  .card-inner--selectable:focus-visible {
     outline: 2px solid var(--brand-text);
     outline-offset: -2px;
     border-radius: var(--card-radius);
@@ -272,16 +277,37 @@
     flex-shrink: 0;
   }
 
-  .role-chip-btn {
+  /* ── Edit button ── */
+  .edit-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 2.75rem;
+    height: 2.75rem;
+    min-width: 2.75rem;
+    min-height: 2.75rem;
+    border-radius: 50%;
     background: none;
     border: none;
     padding: 0;
     cursor: pointer;
+    color: var(--muted);
+    flex-shrink: 0;
     -webkit-tap-highlight-color: transparent;
+    transition: background-color 150ms linear;
   }
 
-  .role-chip-btn:disabled {
-    cursor: default;
+  .edit-btn:hover {
+    background: color-mix(in srgb, var(--ink) 8%, transparent);
+  }
+
+  .edit-btn:active {
+    background: color-mix(in srgb, var(--ink) 14%, transparent);
+  }
+
+  .edit-btn:focus-visible {
+    outline: 2px solid var(--brand-text);
+    outline-offset: 2px;
   }
 
   /* ── Status dot ── */
@@ -319,6 +345,7 @@
     text-align: center;
     padding: var(--space-lg) var(--card-pad-x);
     min-height: 10rem;
+    position: relative;
   }
 
   .card-inner--grid .avatar {
@@ -343,13 +370,15 @@
     margin-top: auto;
   }
 
+  .card-inner--grid .edit-btn {
+    position: absolute;
+    top: var(--space-sm);
+    right: var(--space-sm);
+  }
+
   .card-inner--grid .status-dot {
     position: absolute;
     top: var(--space-md);
     right: var(--space-md);
-  }
-
-  .card-inner--grid {
-    position: relative;
   }
 </style>

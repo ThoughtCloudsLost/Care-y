@@ -1,5 +1,12 @@
 <script lang="ts">
-  import { Block, DialogButton, Link } from "konsta/svelte";
+  import {
+    Block,
+    DialogButton,
+    Link,
+    ActionsGroup,
+    ActionsButton,
+    ActionsLabel,
+  } from "konsta/svelte";
   import {
     createQuery,
     createMutation,
@@ -23,6 +30,7 @@
   import { getTabbarOverrideCtx } from "$lib/shell/context.js";
   import QueryError from "$lib/components/QueryError.svelte";
   import ShellDialog from "$lib/shell/ShellDialog.svelte";
+  import ShellActionSheet from "$lib/shell/ShellActionSheet.svelte";
   import RolePopover from "./RolePopover.svelte";
   import InviteUser from "./InviteUser.svelte";
   import UserCard from "./UserCard.svelte";
@@ -182,28 +190,54 @@
     return _inactiveCount;
   }
 
-  // ── Role popover ──
-  let popoverOpened = $state(false);
-  let popoverTarget = $state<HTMLElement | undefined>(undefined);
-  let popoverUserId = $state<string>("");
-  let popoverCurrentRole = $state<string>("");
+  // ── Action sheet (per-user actions) ──
+  let sheetOpened = $state(false);
+  let sheetUserId = $state<string>("");
+  let sheetUserName = $state<string>("");
+  let sheetUserRoleId = $state<string>("");
+  let sheetIsActive = $state(true);
+  let roleActionBtnEl = $state<HTMLElement | undefined>(undefined);
 
-  function openRolePopover(
-    event: MouseEvent | KeyboardEvent,
-    userId: string,
-    roleId: string,
-  ): void {
-    const target = event.currentTarget;
-    popoverTarget = target instanceof HTMLElement ? target : undefined;
-    popoverUserId = userId;
-    popoverCurrentRole = roleId;
+  function handleUserEdit(userId: string): void {
+    const user = (usersQuery.data ?? []).find((u) => u.id === userId);
+    if (!user) return;
+    sheetUserId = userId;
+    sheetUserName =
+      decryptDisplayName(userId, user.encryptedDisplayName) ??
+      userId.slice(0, 8);
+    sheetUserRoleId = user.roleId;
+    sheetIsActive = user.isActive;
+    sheetOpened = true;
+  }
+
+  function closeSheet(): void {
+    sheetOpened = false;
+  }
+
+  function handleSheetDeactivate(): void {
+    closeSheet();
+    openDeactivateDialog(sheetUserId, sheetUserName, !sheetIsActive);
+  }
+
+  function handleSheetRoleChange(e: MouseEvent): void {
+    const el = e.currentTarget;
+    if (el instanceof HTMLElement) roleActionBtnEl = el;
     popoverOpened = true;
   }
 
+  // ── Role popover (anchored to action sheet button) ──
+  let popoverOpened = $state(false);
+
   function handleRoleSelect(roleId: RoleIdValue): void {
-    if (popoverUserId && roleId !== popoverCurrentRole) {
-      assignRoleMutation.mutate({ userId: popoverUserId, roleId });
+    popoverOpened = false;
+    closeSheet();
+    if (sheetUserId && roleId !== sheetUserRoleId) {
+      assignRoleMutation.mutate({ userId: sheetUserId, roleId });
     }
+  }
+
+  function handlePopoverDismiss(): void {
+    popoverOpened = false;
   }
 
   // ── Deactivation dialog (single user) ──
@@ -243,16 +277,6 @@
       inviteOpened = true;
     }
   });
-
-  // ── Tap handler ──
-  function handleUserTap(userId: string): void {
-    const user = (usersQuery.data ?? []).find((u) => u.id === userId);
-    if (!user) return;
-    const isSelf = userId === currentUserId;
-    if (isSelf) return;
-    const name = decryptDisplayName(userId, user.encryptedDisplayName);
-    openDeactivateDialog(userId, name, !user.isActive);
-  }
 
   // ── Multi-select ──
   let multiSelectActive = $state(false);
@@ -362,12 +386,9 @@
           isActive={true}
           hasKeys={true}
           hasOrgKeyWrap={true}
-          isSelf={false}
-          ontap={() => {
-            /* loading skeleton */
-          }}
-          onrolechange={() => {
-            /* loading skeleton */
+          isSelf={true}
+          onedit={() => {
+            /* skeleton: isSelf hides the button */
           }}
         />
       {/each}
@@ -400,9 +421,8 @@
           {isSelf}
           selected={selectedIds.has(user.id)}
           {multiSelectActive}
-          ontap={handleUserTap}
+          onedit={handleUserEdit}
           onselect={toggleSelection}
-          onrolechange={openRolePopover}
         />
       {/each}
     </div>
@@ -415,11 +435,34 @@
   {/if}
 </div>
 
+<ShellActionSheet opened={sheetOpened} ondismiss={closeSheet}>
+  <ActionsGroup>
+    <ActionsLabel>{sheetUserName}</ActionsLabel>
+    <ActionsButton onclick={handleSheetRoleChange}>
+      {m.admin_role_change()}
+    </ActionsButton>
+    <ActionsButton
+      colors={sheetIsActive
+        ? { textIos: "text-red-500", textMaterial: "text-red-500" }
+        : {}}
+      onclick={handleSheetDeactivate}
+    >
+      {sheetIsActive ? m.admin_deactivate() : m.admin_reactivate()}
+    </ActionsButton>
+  </ActionsGroup>
+  <ActionsGroup>
+    <ActionsButton bold onclick={closeSheet}>
+      {m.common_cancel()}
+    </ActionsButton>
+  </ActionsGroup>
+</ShellActionSheet>
+
 <RolePopover
   opened={popoverOpened}
-  target={popoverTarget}
-  currentRoleId={popoverCurrentRole}
-  ondismiss={() => (popoverOpened = false)}
+  target={roleActionBtnEl}
+  currentRoleId={sheetUserRoleId}
+  placement="top"
+  ondismiss={handlePopoverDismiss}
   onselect={handleRoleSelect}
 />
 

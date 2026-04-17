@@ -10,12 +10,19 @@
     readonly opened: boolean;
     readonly target: HTMLElement | undefined;
     readonly currentRoleId: string;
+    readonly placement?: "top" | "bottom";
     readonly ondismiss: () => void;
     readonly onselect: (roleId: RoleIdValue) => void;
   }
 
-  let { opened, target, currentRoleId, ondismiss, onselect }: RolePopoverProps =
-    $props();
+  let {
+    opened,
+    target,
+    currentRoleId,
+    placement,
+    ondismiss,
+    onselect,
+  }: RolePopoverProps = $props();
 
   const roles: readonly { id: RoleIdValue; label: () => string }[] = [
     { id: RoleId.VOLUNTEER, label: () => m.admin_role_volunteer() },
@@ -31,7 +38,7 @@
   }
 </script>
 
-<ShellPopover {opened} {ondismiss} {target}>
+<ShellPopover {opened} {ondismiss} {target} {placement}>
   <List nested class="role-popover-list">
     {#each roles as role (role.id)}
       <ListItem
