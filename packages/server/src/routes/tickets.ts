@@ -68,6 +68,7 @@ import {
   createQueueInputSchema,
   updateQueueInputSchema,
   reorderQueuesInputSchema,
+  deleteQueueInputSchema,
   assignTicketInputSchema,
   takeTicketInputSchema,
   releaseTicketInputSchema,
@@ -766,6 +767,19 @@ export function createTicketRouter(deps: TicketRouterDeps) {
             sortOrder: item.sortOrder,
           })),
         );
+      }),
+    ),
+
+    deleteQueue: adminProcedure.input(deleteQueueInputSchema).mutation(
+      withErrorWrapping(async ({ ctx, input }) => {
+        const svc = deps.createQueueSvc(ctx.org.tenantDb);
+        await svc.delete(input.queueId, input.reassignTo);
+        audit(ctx.org.tenantDb, {
+          eventType: "queue_deleted",
+          actorId: ctx.user.id,
+          metadata: { queueId: input.queueId },
+        });
+        return { success: true as const };
       }),
     ),
 

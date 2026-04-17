@@ -92,10 +92,15 @@ export const reorderQueuesInputSchema = z.array(
 );
 export type ReorderQueuesInput = z.infer<typeof reorderQueuesInputSchema>;
 
-export const deleteQueueInputSchema = z.object({
-  queueId: z.uuid(),
-  reassignTo: z.uuid().optional(),
-});
+export const deleteQueueInputSchema = z
+  .object({
+    queueId: z.uuid(),
+    reassignTo: z.uuid().optional(),
+  })
+  .refine((d) => d.reassignTo === undefined || d.reassignTo !== d.queueId, {
+    message: "Cannot reassign tickets to the queue being deleted",
+    path: ["reassignTo"],
+  });
 export type DeleteQueueInput = z.infer<typeof deleteQueueInputSchema>;
 
 export const createPresetReplyInputSchema = z.object({

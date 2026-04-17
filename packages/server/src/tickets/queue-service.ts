@@ -9,7 +9,7 @@
 
 import type { Kysely } from "kysely";
 import type { TenantDatabase } from "../db/types.js";
-import { NotFoundError } from "../errors.js";
+import { NotFoundError, ValidationError } from "../errors.js";
 import { ErrorCode } from "@care-y/shared";
 
 export interface QueueRecord {
@@ -32,6 +32,7 @@ export interface QueueService {
     input: { encryptedName?: Buffer; escalateDays?: number },
   ): Promise<QueueRecord>;
   reorder(items: { queueId: string; sortOrder: number }[]): Promise<void>;
+  delete(queueId: string, reassignTo?: string): Promise<void>;
 }
 
 function toRecord(row: {
@@ -140,6 +141,62 @@ export function createQueueService(db: Kysely<TenantDatabase>): QueueService {
             .where("id", "=", item.queueId)
             .execute();
         }
+      });
+    },
+
+    async delete(queueId, reassignTo) {
+      await db.transaction().execute(async (tx) => {
+        const queueCount = await tx
+          .selectFrom("queues")
+          .select(db.fn.countAll<string>().as("count"))
+          .executeTakeFirstOrThrow();
+        if (Number(queueCount.count) <= 1) {
+          throw new ValidationError(ErrorCode.CANNOT_DELETE_LAST_QUEUE);
+        }
+
+        const exists = await tx
+          .selectFrom("queues")
+          .select("id")
+          .where("id", "=", queueId)
+          .executeTakeFirst();
+        if (!exists) {
+          throw new NotFoundError(ErrorCode.QUEUE_NOT_FOUND);
+        }
+
+        const ticketCount = await tx
+          .selectFrom("tickets")
+          .select(db.fn.countAll<string>().as("count"))
+          .where("queue_id", "=", queueId)
+          .executeTakeFirstOrThrow();
+
+        if (Number(ticketCount.count) > 0) {
+          if (reassignTo === undefined) {
+            throw new ValidationError(ErrorCode.QUEUE_HAS_TICKETS);
+          }
+          const target = await tx
+            .selectFrom("queues")
+            .select("id")
+            .where("id", "=", reassignTo)
+            .executeTakeFirst();
+          if (!target) {
+            throw new NotFoundError(ErrorCode.QUEUE_NOT_FOUND);
+          }
+          await tx
+            .updateTable("tickets")
+            .set({ queue_id: reassignTo })
+            .where("queue_id", "=", queueId)
+            .execute();
+        }
+
+        await tx
+          .deleteFrom("queue_assignments")
+          .where("queue_id", "=", queueId)
+          .execute();
+        await tx
+          .deleteFrom("queue_watchers")
+          .where("queue_id", "=", queueId)
+          .execute();
+        await tx.deleteFrom("queues").where("id", "=", queueId).execute();
       });
     },
   };
