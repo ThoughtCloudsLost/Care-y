@@ -588,5 +588,10 @@
   "admin_coming_soon": "Coming soon",
   "role_admin": "Admin",
   "role_manager": "Manager",
-  "role_volunteer": "Volunteer"
+  "role_volunteer": "Volunteer",
+  "admin_people_title": "People",
+  "admin_tab_users": "Users",
+  "admin_tab_queues": "Queues",
+  "admin_users_placeholder": "User management loading...",
+  "admin_queues_placeholder": "Queue management loading..."
 }
