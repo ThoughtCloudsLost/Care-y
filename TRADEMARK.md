@@ -2,8 +2,6 @@
 
 **Copyright (c) CARE-Y Org**
 
-_This document will be updated with the legal entity name before public release._
-
 ---
 
 ## Overview
@@ -48,7 +46,7 @@ Organizations running unmodified official CARE-Y releases for their own internal
 The following uses require prior written permission from CARE-Y Org:
 
 - **Product names:** Using "CARE-Y" (or a confusingly similar variation) as the name of your product, service, or distribution of modified code.
-- **Domain names:** Registering or using a domain name that includes "CARE-Y" in a way that could suggest official status or affiliation (for example, care-y.org, care-y-app.com, getcarey.io).
+- **Domain names:** Registering or using a domain name that includes "CARE-Y" in a way that could suggest official status or affiliation (for example, care-y-app.com, getcarey.io, mycarey.org).
 - **App store listings:** Publishing a modified fork to any app store under the CARE-Y name or a name that incorporates it.
 - **Logos and branding:** Using the CARE-Y logo, wordmark, color scheme, or other branding elements in your product's UI, marketing, or communications.
 - **Implied endorsement:** Describing your product or organization in any way that implies it is officially affiliated with, endorsed by, or sponsored by CARE-Y Org.
@@ -76,7 +74,7 @@ CARE-Y is a call intake and support system for at-risk populations. Users of CAR
 
 ## Contact
 
-To request permission for a use not covered by this policy, or to report a potential violation, contact: **[trademark contact email to be added before public release]**
+To request permission for a use not covered by this policy, or to report a potential violation, contact: **trademark@care-y.app**
 
 ---
 
