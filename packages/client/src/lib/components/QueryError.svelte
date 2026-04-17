@@ -88,8 +88,16 @@
     [ErrorCode.ALIAS_GENERATION_FAILED]: () =>
       m.error_alias_generation_failed(),
 
+    // Admin: user management
+    [ErrorCode.CANNOT_DEACTIVATE_SELF]: () => m.error_cannot_deactivate_self(),
+    [ErrorCode.CANNOT_DEACTIVATE_LAST_ADMIN]: () =>
+      m.error_cannot_deactivate_last_admin(),
+
     // Queues / presets / media
     [ErrorCode.QUEUE_NOT_FOUND]: () => m.error_queue_not_found(),
+    [ErrorCode.CANNOT_DELETE_LAST_QUEUE]: () =>
+      m.error_cannot_delete_last_queue(),
+    [ErrorCode.QUEUE_HAS_TICKETS]: () => m.error_queue_has_tickets(),
     [ErrorCode.PRESET_REPLY_NOT_FOUND]: () => m.error_preset_reply_not_found(),
     [ErrorCode.RECORDING_NOT_FOUND]: () => m.error_recording_not_found(),
     [ErrorCode.ATTACHMENT_NOT_FOUND]: () => m.error_attachment_not_found(),

@@ -21,7 +21,13 @@ import type {
   BlindIndexer,
 } from "../crypto/field-encryptor.js";
 import type { SessionTokenizer } from "../crypto/session-tokenizer.js";
-import { AuthError, ConflictError, NotFoundError } from "../errors.js";
+import type { SealedBoxEncryptor } from "../crypto/sealed-box.js";
+import {
+  AuthError,
+  ConflictError,
+  ForbiddenError,
+  NotFoundError,
+} from "../errors.js";
 import { ErrorCode, RoleId } from "@care-y/shared";
 
 export interface UserRecord {
@@ -64,6 +70,9 @@ export interface AuthService {
   /** Updates a user's role. Returns the updated user record. */
   updateUserRole(userId: string, newRoleId: string): Promise<UserRecord>;
 
+  /** Activates or deactivates a user. Deactivation kills sessions and revokes org key. */
+  setUserActive(userId: string, isActive: boolean): Promise<UserRecord>;
+
   /** Updates the org's PII retention setting in org_config. */
   setPiiRetentionDays(days: number | null): Promise<void>;
 }
@@ -100,6 +109,7 @@ export function createAuthService(
   hasher: PasswordHasher,
   sessions: SessionRepository,
   encryptor: FieldEncryptor,
+  sealedBox: SealedBoxEncryptor,
   indexer: BlindIndexer,
   tokenizer: SessionTokenizer,
   orgId: string,
@@ -229,7 +239,8 @@ export function createAuthService(
   }): Promise<Selectable<UsersTable>> {
     const identifierHash = indexer.hash(input.identifier, orgId);
     const encryptedIdentifier = encryptor.encrypt(input.identifier);
-    const encryptedDisplayName = encryptor.encrypt(input.displayName);
+    // ADR-016: display_name is Tier 1 (sealed box with org public key)
+    const encryptedDisplayName = sealedBox.seal(input.displayName);
     const encryptedNotificationAddr =
       input.notificationEmail !== undefined && input.notificationEmail !== ""
         ? encryptor.encrypt(input.notificationEmail)
@@ -284,6 +295,59 @@ export function createAuthService(
     }
 
     return toUserRecord(row, encryptor);
+  }
+
+  async function setUserActive(
+    userId: string,
+    isActive: boolean,
+  ): Promise<UserRecord> {
+    return db.transaction().execute(async (tx) => {
+      if (!isActive) {
+        const targetUser = await tx
+          .selectFrom("users")
+          .selectAll()
+          .where("id", "=", userId)
+          .executeTakeFirst();
+
+        if (!targetUser) {
+          throw new NotFoundError(ErrorCode.USER_NOT_FOUND);
+        }
+
+        if (targetUser.role_id === RoleId.ADMIN) {
+          const result = await tx
+            .selectFrom("users")
+            .select(tx.fn.countAll<string>().as("count"))
+            .where("role_id", "=", RoleId.ADMIN)
+            .where("is_active", "=", true)
+            .forUpdate()
+            .executeTakeFirstOrThrow();
+          if (toCount(result) <= 1) {
+            throw new ForbiddenError(ErrorCode.CANNOT_DEACTIVATE_LAST_ADMIN);
+          }
+        }
+      }
+
+      const updated = await tx
+        .updateTable("users")
+        .set({ is_active: isActive })
+        .where("id", "=", userId)
+        .returningAll()
+        .executeTakeFirst();
+
+      if (!updated) {
+        throw new NotFoundError(ErrorCode.USER_NOT_FOUND);
+      }
+
+      if (!isActive) {
+        await tx.deleteFrom("sessions").where("user_id", "=", userId).execute();
+        await tx
+          .deleteFrom("wrapped_org_keys")
+          .where("user_id", "=", userId)
+          .execute();
+      }
+
+      return toUserRecord(updated, encryptor);
+    });
   }
 
   async function setPiiRetentionDays(days: number | null): Promise<void> {
@@ -353,6 +417,7 @@ export function createAuthService(
 
     countActiveAdmins,
     updateUserRole,
+    setUserActive,
     setPiiRetentionDays,
   };
 }

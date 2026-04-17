@@ -26,6 +26,8 @@ export {
   getSaltOutputSchema,
   assignRoleInputSchema,
   setPiiRetentionInputSchema,
+  setUserActiveInputSchema,
+  listUsersOutputItemSchema,
 } from "./schemas/auth.js";
 
 // --- Roles and permissions ---
@@ -179,6 +181,7 @@ export {
   createQueueInputSchema,
   updateQueueInputSchema,
   reorderQueuesInputSchema,
+  deleteQueueInputSchema,
   createPresetReplyInputSchema,
   updatePresetReplyInputSchema,
   addDependencyInputSchema,
@@ -212,6 +215,7 @@ export {
   type CreateQueueInput,
   type UpdateQueueInput,
   type ReorderQueuesInput,
+  type DeleteQueueInput,
   type CreatePresetReplyInput,
   type UpdatePresetReplyInput,
   type AddDependencyInput,

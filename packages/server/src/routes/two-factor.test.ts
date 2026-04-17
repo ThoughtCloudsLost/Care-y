@@ -250,6 +250,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         hasher,
         sessions,
         testFieldEncryptor,
+        testSealedBox,
         testBlindIndexer,
         testSessionTokenizer,
         orgContext.orgId,
