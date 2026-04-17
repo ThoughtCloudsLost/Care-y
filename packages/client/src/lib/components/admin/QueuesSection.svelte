@@ -40,6 +40,7 @@
   import ShellSheet from "$lib/shell/ShellSheet.svelte";
   import ShellActionSheet from "$lib/shell/ShellActionSheet.svelte";
   import QueueMemberPicker from "./QueueMemberPicker.svelte";
+  import QueueEditor from "./QueueEditor.svelte";
 
   interface QueuesSectionProps {
     readonly autoAction?: string | null;
@@ -336,6 +337,24 @@
 
   const totalCount = $derived((queuesQuery.data ?? []).length);
   const canDelete = $derived(totalCount > 1);
+
+  // ── Queue editor state ──
+
+  const editorOpened = $derived(editorQueueId !== null);
+
+  const editorQueue = $derived.by((): QueueRecord | null => {
+    if (editorQueueId === null || editorQueueId === "new") return null;
+    return (queuesQuery.data ?? []).find((q) => q.id === editorQueueId) ?? null;
+  });
+
+  function handleEditorDismiss(): void {
+    editorQueueId = null;
+  }
+
+  function handleEditorDeleteQueue(qId: string): void {
+    const queue = (queuesQuery.data ?? []).find((q) => q.id === qId);
+    if (queue) openDeleteDialog(queue);
+  }
 </script>
 
 <div class="queues-page pb-20">
@@ -580,6 +599,16 @@
   queueId={pickerQueueId}
   currentMemberIds={getMemberSet(pickerQueueId)}
   ondismiss={handlePickerDismiss}
+/>
+
+<!-- Queue editor sheet (create / edit) -->
+<QueueEditor
+  opened={editorOpened}
+  ondismiss={handleEditorDismiss}
+  queueId={editorQueue?.id ?? null}
+  queueEncryptedName={editorQueue?.encryptedName ?? null}
+  queueEscalateDays={editorQueue?.escalateDays ?? 0}
+  ondeletequeue={canDelete ? handleEditorDeleteQueue : undefined}
 />
 
 <style>

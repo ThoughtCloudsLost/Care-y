@@ -687,5 +687,18 @@
   "admin_queue_member_picker_search": "Search volunteers",
   "admin_queue_member_picker_empty": "No volunteers available to add",
   "admin_queue_member_picker_no_results": "No matches",
-  "admin_queue_escalation_days": "{count} days"
+  "admin_queue_escalation_days": "{count} days",
+  "admin_queue_editor_create_title": "Create Queue",
+  "admin_queue_editor_edit_title": "Edit Queue",
+  "admin_queue_editor_name_label": "Queue Name",
+  "admin_queue_editor_name_placeholder": "e.g. General Intake",
+  "admin_queue_editor_escalation_label": "Escalation Days",
+  "admin_queue_editor_escalation_hint": "Days before a ticket auto-escalates. Leave empty to disable.",
+  "admin_queue_editor_pii_warning": "Queue names appear in email notifications sent to volunteers. Use functional names like \"General Intake\" or \"Evening Line\" rather than names that could identify people, cases, or locations.",
+  "admin_queue_editor_save": "Save",
+  "admin_queue_editor_name_required": "Queue name is required",
+  "admin_queue_editor_no_org_key": "Organization key not loaded. Cannot create or edit queues.",
+  "admin_queue_created": "Queue created",
+  "admin_queue_updated": "Queue updated",
+  "admin_queue_editor_delete": "Delete Queue"
 }

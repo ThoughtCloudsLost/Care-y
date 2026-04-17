@@ -687,5 +687,18 @@
   "admin_queue_member_picker_search": "Buscar voluntarios",
   "admin_queue_member_picker_empty": "No hay voluntarios disponibles para agregar",
   "admin_queue_member_picker_no_results": "Sin resultados",
-  "admin_queue_escalation_days": "{count} dias"
+  "admin_queue_escalation_days": "{count} dias",
+  "admin_queue_editor_create_title": "Crear cola",
+  "admin_queue_editor_edit_title": "Editar cola",
+  "admin_queue_editor_name_label": "Nombre de la cola",
+  "admin_queue_editor_name_placeholder": "ej. Recepcion General",
+  "admin_queue_editor_escalation_label": "Dias de escalacion",
+  "admin_queue_editor_escalation_hint": "Dias antes de que un ticket se escale automaticamente. Dejar vacio para desactivar.",
+  "admin_queue_editor_pii_warning": "Los nombres de las colas aparecen en las notificaciones por correo enviadas a los voluntarios. Usa nombres funcionales como \"Recepcion General\" o \"Linea Nocturna\" en lugar de nombres que puedan identificar personas, casos o ubicaciones.",
+  "admin_queue_editor_save": "Guardar",
+  "admin_queue_editor_name_required": "El nombre de la cola es obligatorio",
+  "admin_queue_editor_no_org_key": "Clave de la organizacion no cargada. No se pueden crear ni editar colas.",
+  "admin_queue_created": "Cola creada",
+  "admin_queue_updated": "Cola actualizada",
+  "admin_queue_editor_delete": "Eliminar cola"
 }
