@@ -2,18 +2,16 @@
 /**
  * People page behavior tests.
  *
- * Tests tab switching, deep-link URL handling, permission-based segment
- * visibility, and autoAction passthrough.
- *
- * Note: Konsta SegmentedButton renders <button role="button"> internally,
- * overriding any role="tab" prop (H-011 ARIA gap). Tests query by
- * role="button" to match actual rendered output. The tablist wrapper and
- * tabpanel associations (aria-controls, aria-labelledby) are ours and
- * work correctly.
+ * Tests permission gating, tab state management, deep-link handling,
+ * navbar context propagation, and section rendering. The subnavbar
+ * (tab switcher) lives in a snippet set on navbarCtx and is rendered
+ * by AppShell, not inline. These tests verify the page's own behavior:
+ * which section it renders, how it reacts to URL params, and what it
+ * sets on the navbar context.
  */
 
 import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
-import { render, screen, cleanup, fireEvent } from "@testing-library/svelte";
+import { render, screen, cleanup } from "@testing-library/svelte";
 
 // --- Controllable mock state ---
 
@@ -36,6 +34,7 @@ vi.mock("$app/state", () => ({
 
 vi.mock("$app/navigation", () => ({
   goto: mockGoto,
+  replaceState: vi.fn(),
   onNavigate: vi.fn(),
 }));
 
@@ -50,18 +49,80 @@ vi.mock("$lib/crypto/context.js", () => ({
 }));
 
 const mockNavbarCtx = { current: undefined as unknown };
+const mockTabbarCtx = { current: undefined as unknown };
 
 vi.mock("$lib/shell/context.js", () => ({
   getNavbarOverrideCtx: () => mockNavbarCtx,
+  getScrollContainer: () => () => null,
+  getTabbarOverrideCtx: () => mockTabbarCtx,
+}));
+
+vi.mock("$lib/shell/use-scroll-direction.svelte.js", () => ({
+  useScrollDirection: () => ({ hidden: false }),
+}));
+
+vi.mock("$lib/stores/user-filters.svelte.js", () => ({
+  userFilterStore: {
+    roles: new Set(),
+    statuses: new Set(),
+    keyStatuses: new Set(),
+    sort: { field: "name", direction: "asc" },
+    activeCount: 0,
+    setSort: vi.fn(),
+    toggleRole: vi.fn(),
+    toggleStatus: vi.fn(),
+    toggleKeyStatus: vi.fn(),
+    clearAll: vi.fn(),
+  },
 }));
 
 vi.mock("$lib/paraglide/messages.js", () => ({
   admin_people_title: () => "People",
   admin_tab_users: () => "Users",
   admin_tab_queues: () => "Queues",
-  admin_users_placeholder: () => "User management loading...",
-  admin_queues_placeholder: () => "Queue management loading...",
+  admin_users_title: () => "Users",
+  admin_users_sort: () => "Sort",
+  admin_users_sort_name: () => "Name",
+  admin_users_sort_role: () => "Role",
+  admin_users_sort_status: () => "Status",
+  admin_role_volunteer: () => "Volunteer",
+  admin_role_manager: () => "Manager",
+  admin_role_admin: () => "Admin",
+  admin_status_active: () => "Active",
+  admin_status_inactive: () => "Inactive",
+  admin_users_key_ok: () => "OK",
+  admin_users_key_no_keys: () => "No keys",
+  admin_users_key_no_org: () => "No org key",
+  admin_users_filter_role: () => "Role",
+  admin_users_filter_status: () => "Status",
+  admin_users_filter_keys: () => "Keys",
+  admin_invite_button: () => "Invite",
+  admin_queues_create_button: () => "Create queue",
+  admin_users_stat_active: () => "active",
+  admin_users_stat_inactive: () => "inactive",
+  admin_users_select_mode: () => "Select",
 }));
+
+vi.mock("$lib/components/admin/UsersSection.svelte", async () => ({
+  default: (await import("./test-helpers/StubUsersSection.svelte")).default,
+}));
+
+vi.mock("$lib/components/admin/QueuesSection.svelte", async () => ({
+  default: (await import("./test-helpers/StubQueuesSection.svelte")).default,
+}));
+
+vi.mock("$lib/shell/SubNavbarFilterLayout.svelte", async () => ({
+  default: (await import("./test-helpers/StubSubNavbarFilterLayout.svelte"))
+    .default,
+}));
+
+vi.mock("$lib/components/StatusDot.svelte", async () => ({
+  default: (
+    await import("$lib/components/tickets/test-helpers/PassthroughShell.svelte")
+  ).default,
+}));
+
+vi.mock("$lib/components/filters/filter-types.js", () => ({}));
 
 // jsdom lacks Web Animations API (used by Konsta transitions).
 if (typeof Element.prototype.animate !== "function") {
@@ -82,14 +143,6 @@ function setUrl(path: string): void {
   mockPageUrl = new URL(`http://localhost${path}`);
 }
 
-function getSegmentButton(name: string): HTMLElement {
-  return screen.getByRole("button", { name });
-}
-
-function querySegmentButton(name: string): HTMLElement | null {
-  return screen.queryByRole("button", { name });
-}
-
 // --- Setup ---
 
 beforeEach(() => {
@@ -103,155 +156,107 @@ afterEach(cleanup);
 
 const PageModule = await import("./+page.svelte");
 
+function renderPage(): ReturnType<typeof render> {
+  return render(PageModule.default);
+}
+
 // --- Tests ---
 
 describe("People page", () => {
-  describe("segment visibility by permission", () => {
-    it("renders both segment buttons when user has both permissions", () => {
-      setPermissions("manage_users", "manage_queues");
-      render(PageModule.default);
+  describe("permission guard", () => {
+    it("redirects to home when user has neither permission", () => {
+      setPermissions();
+      renderPage();
 
-      expect(getSegmentButton("Users")).toBeTruthy();
-      expect(getSegmentButton("Queues")).toBeTruthy();
+      expect(mockGoto).toHaveBeenCalledWith("/");
     });
 
-    it("renders only Users segment when user lacks MANAGE_QUEUES", () => {
+    it("does not redirect when user has MANAGE_USERS", () => {
       setPermissions("manage_users");
-      render(PageModule.default);
+      renderPage();
 
-      expect(getSegmentButton("Users")).toBeTruthy();
-      expect(querySegmentButton("Queues")).toBeNull();
+      expect(mockGoto).not.toHaveBeenCalled();
     });
 
-    it("renders only Queues segment when user lacks MANAGE_USERS", () => {
+    it("does not redirect when user has MANAGE_QUEUES", () => {
       setPermissions("manage_queues");
-      render(PageModule.default);
+      renderPage();
 
-      expect(querySegmentButton("Users")).toBeNull();
-      expect(getSegmentButton("Queues")).toBeTruthy();
+      expect(mockGoto).not.toHaveBeenCalled();
     });
   });
 
-  describe("tab switching", () => {
-    it("shows Users section by default when user has MANAGE_USERS", () => {
+  describe("section rendering", () => {
+    it("renders UsersSection by default when user has MANAGE_USERS", () => {
       setPermissions("manage_users", "manage_queues");
-      render(PageModule.default);
+      renderPage();
 
-      const usersBtn = getSegmentButton("Users");
-      expect(usersBtn.getAttribute("aria-selected")).toBe("true");
       expect(screen.getByText("User management loading...")).toBeTruthy();
+      expect(screen.queryByText("Queue management loading...")).toBeNull();
     });
 
-    it("switches to Queues section on segment click", async () => {
+    it("renders QueuesSection when URL has ?tab=queues", () => {
       setPermissions("manage_users", "manage_queues");
-      render(PageModule.default);
+      setUrl("/admin/people?tab=queues");
+      renderPage();
 
-      await fireEvent.click(getSegmentButton("Queues"));
-
-      expect(getSegmentButton("Queues").getAttribute("aria-selected")).toBe(
-        "true",
-      );
-      expect(getSegmentButton("Users").getAttribute("aria-selected")).toBe(
-        "false",
-      );
       expect(screen.getByText("Queue management loading...")).toBeTruthy();
       expect(screen.queryByText("User management loading...")).toBeNull();
     });
 
-    it("switches back to Users section on segment click", async () => {
-      setPermissions("manage_users", "manage_queues");
-      render(PageModule.default);
+    it("defaults to QueuesSection when user only has MANAGE_QUEUES", () => {
+      setPermissions("manage_queues");
+      renderPage();
 
-      await fireEvent.click(getSegmentButton("Queues"));
-      await fireEvent.click(getSegmentButton("Users"));
-
-      expect(getSegmentButton("Users").getAttribute("aria-selected")).toBe(
-        "true",
-      );
-      expect(screen.getByText("User management loading...")).toBeTruthy();
-    });
-  });
-
-  describe("deep-link via URL params", () => {
-    it("opens Queues section when URL has ?tab=queues", () => {
-      setPermissions("manage_users", "manage_queues");
-      setUrl("/admin/people?tab=queues");
-      render(PageModule.default);
-
-      expect(getSegmentButton("Queues").getAttribute("aria-selected")).toBe(
-        "true",
-      );
       expect(screen.getByText("Queue management loading...")).toBeTruthy();
     });
 
     it("ignores invalid tab param and defaults to Users", () => {
       setPermissions("manage_users", "manage_queues");
       setUrl("/admin/people?tab=invalid");
-      render(PageModule.default);
+      renderPage();
 
-      expect(getSegmentButton("Users").getAttribute("aria-selected")).toBe(
-        "true",
-      );
-    });
-
-    it("defaults to Queues when user only has MANAGE_QUEUES and no tab param", () => {
-      setPermissions("manage_queues");
-      setUrl("/admin/people");
-      render(PageModule.default);
-
-      expect(screen.getByText("Queue management loading...")).toBeTruthy();
+      expect(screen.getByText("User management loading...")).toBeTruthy();
     });
   });
 
-  describe("permission guard", () => {
-    it("redirects to home when user has neither permission", () => {
-      setPermissions();
-      render(PageModule.default);
-
-      expect(mockGoto).toHaveBeenCalledWith("/");
-    });
-  });
-
-  describe("navbar override", () => {
-    it("sets navbar title to People on mount", () => {
+  describe("tabpanel ARIA", () => {
+    it("wraps the active section in a labeled tabpanel", () => {
       setPermissions("manage_users", "manage_queues");
-      render(PageModule.default);
-
-      expect(mockNavbarCtx.current).toEqual({ title: "People" });
-    });
-  });
-
-  describe("ARIA structure", () => {
-    it("wraps segments in a labeled tablist", () => {
-      setPermissions("manage_users", "manage_queues");
-      render(PageModule.default);
-
-      const tablist = screen.getByRole("tablist");
-      expect(tablist.getAttribute("aria-label")).toBe("People");
-    });
-
-    it("associates segment button with tabpanel via aria-controls", () => {
-      setPermissions("manage_users", "manage_queues");
-      render(PageModule.default);
-
-      const usersBtn = getSegmentButton("Users");
-      expect(usersBtn.getAttribute("aria-controls")).toBe("panel-users");
-      expect(usersBtn.id).toBe("tab-users");
+      renderPage();
 
       const panel = screen.getByRole("tabpanel");
       expect(panel.id).toBe("panel-users");
       expect(panel.getAttribute("aria-labelledby")).toBe("tab-users");
     });
 
-    it("switches tabpanel association when tab changes", async () => {
+    it("switches tabpanel ID for queues tab", () => {
       setPermissions("manage_users", "manage_queues");
-      render(PageModule.default);
-
-      await fireEvent.click(getSegmentButton("Queues"));
+      setUrl("/admin/people?tab=queues");
+      renderPage();
 
       const panel = screen.getByRole("tabpanel");
       expect(panel.id).toBe("panel-queues");
       expect(panel.getAttribute("aria-labelledby")).toBe("tab-queues");
+    });
+  });
+
+  describe("navbar context", () => {
+    it("sets navbar title to People on mount", () => {
+      setPermissions("manage_users", "manage_queues");
+      renderPage();
+
+      const ctx = mockNavbarCtx.current as Record<string, unknown>;
+      expect(ctx.title).toBe("People");
+    });
+
+    it("provides a subnavbar snippet to the navbar context", () => {
+      setPermissions("manage_users", "manage_queues");
+      renderPage();
+
+      const ctx = mockNavbarCtx.current as Record<string, unknown>;
+      expect(ctx.subnavbar).toBeDefined();
+      expect(typeof ctx.subnavbar).toBe("function");
     });
   });
 });

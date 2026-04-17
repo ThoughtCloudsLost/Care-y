@@ -700,5 +700,37 @@
   "admin_queue_editor_no_org_key": "Organization key not loaded. Cannot create or edit queues.",
   "admin_queue_created": "Queue created",
   "admin_queue_updated": "Queue updated",
-  "admin_queue_editor_delete": "Delete Queue"
+  "admin_queue_editor_delete": "Delete Queue",
+
+  "admin_org_title": "Organization",
+  "admin_tab_keys": "Keys",
+  "admin_tab_branding": "Branding",
+  "admin_tab_retention": "Retention",
+  "admin_tab_reports": "Reports",
+  "admin_org_no_access": "You do not have permission to access organization settings.",
+  "admin_branding_placeholder": "Coming in a future update",
+  "admin_reports_placeholder": "Coming in a future update",
+
+  "admin_keys_title": "Encryption Keys",
+  "admin_keys_org_key_loaded": "Organization key loaded",
+  "admin_keys_org_key_missing": "Organization key not configured",
+  "admin_keys_explainer": "Your organization key encrypts shared data: volunteer names, knowledge base articles, queue names, and branding. Ticket conversations and client information use separate per-ticket keys.",
+  "admin_keys_rotate_button": "Rotate Organization Key",
+  "admin_keys_export_button": "Export Escrow File",
+
+  "admin_rotation_dialog_title": "Rotate organization key",
+  "admin_rotation_dialog_why": "Rotate your key if a team member leaves the organization, if you suspect unauthorized access, or as part of a regular security schedule.",
+  "admin_rotation_dialog_body": "This creates a new encryption key for your organization's shared data: volunteer names, knowledge base articles, queue names, and organization branding. All {count} active volunteers will receive the updated key on their next login. Ticket conversations and client information use separate, stronger encryption and are not affected by this change.",
+  "admin_rotation_confirm": "Rotate Key",
+  "admin_rotation_generating": "Generating new key...",
+  "admin_rotation_wrapping": "Wrapping key for {count} volunteers...",
+  "admin_rotation_submitting": "Submitting to server...",
+  "admin_rotation_complete": "Key rotation complete",
+  "admin_rotation_error": "Key rotation failed. Your previous key is still active.",
+  "admin_rotation_retry": "Retry",
+  "admin_rotation_done": "OK",
+  "admin_key_rotated": "Organization key rotated",
+
+  "admin_retention_title": "PII Retention",
+  "admin_retention_placeholder": "Coming in a future update"
 }
