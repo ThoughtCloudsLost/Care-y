@@ -5,7 +5,7 @@
   import { resolve } from "$app/paths";
   import { Permission, RoleId } from "@care-y/shared";
   import type { RoleIdValue } from "@care-y/shared";
-  import { UserPlus } from "@lucide/svelte";
+  import { UserPlus, LayersPlus } from "@lucide/svelte";
   import * as m from "$lib/paraglide/messages.js";
   import {
     getNavbarOverrideCtx,
@@ -59,7 +59,7 @@
     return "queues";
   }
 
-  let activeTab = $state<PeopleTab>(urlTab ?? defaultTab());
+  let activeTab = $state<PeopleTab>(defaultTab());
 
   $effect(() => {
     if (urlTab !== null) activeTab = urlTab;
@@ -74,16 +74,24 @@
     },
   });
 
-  // UsersSection ref for exported state.
+  // Section refs for exported state.
   let usersSectionRef = $state<ReturnType<typeof UsersSection> | null>(null);
+  let queuesSectionRef = $state<ReturnType<typeof QueuesSection> | null>(null);
 
   // Navbar override: subnavbar always visible (tab switcher lives inside it).
   const navbarCtx = getNavbarOverrideCtx();
 
   $effect(() => {
+    const rightSnippet =
+      activeTab === "users" && canManageUsers
+        ? navRight
+        : activeTab === "queues" && canManageQueues
+          ? navRightQueues
+          : undefined;
+
     navbarCtx.current = {
       title: m.admin_people_title(),
-      right: activeTab === "users" && canManageUsers ? navRight : undefined,
+      right: rightSnippet,
       subnavbar:
         activeTab === "users" && canManageUsers
           ? usersSubnavbar
@@ -231,6 +239,10 @@
   function handleInvite(): void {
     usersSectionRef?.openInvite();
   }
+
+  function handleCreateQueue(): void {
+    queuesSectionRef?.openEditor("new");
+  }
 </script>
 
 <!-- Shared tab segmented used in both subnavbar variants -->
@@ -271,6 +283,17 @@
     aria-label={m.admin_invite_button()}
   >
     <UserPlus size={22} aria-hidden="true" />
+  </Link>
+{/snippet}
+
+{#snippet navRightQueues()}
+  <Link
+    iconOnly
+    onclick={handleCreateQueue}
+    role="button"
+    aria-label={m.admin_queues_create_button()}
+  >
+    <LayersPlus size={22} aria-hidden="true" />
   </Link>
 {/snippet}
 
@@ -315,7 +338,7 @@
   </div>
 {:else if activeTab === "queues" && canManageQueues}
   <div role="tabpanel" id="panel-queues" aria-labelledby="tab-queues">
-    <QueuesSection autoAction={urlAction} />
+    <QueuesSection bind:this={queuesSectionRef} autoAction={urlAction} />
   </div>
 {/if}
 
