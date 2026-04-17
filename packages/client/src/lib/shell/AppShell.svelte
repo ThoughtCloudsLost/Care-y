@@ -34,16 +34,24 @@
     TabbarLink,
     ToolbarPane,
   } from "konsta/svelte";
-  import { House, Ticket, BookOpen, Ellipsis, Search } from "@lucide/svelte";
+  import {
+    House,
+    Ticket,
+    BookOpen,
+    Ellipsis,
+    Search,
+    User,
+  } from "@lucide/svelte";
   import { tick, onMount } from "svelte";
   import { SvelteMap, SvelteSet } from "svelte/reactivity";
   import type { Component } from "svelte";
-  import { beforeNavigate, afterNavigate } from "$app/navigation";
+  import { browser } from "$app/environment";
+  import { beforeNavigate, afterNavigate, goto } from "$app/navigation";
   import * as m from "$lib/paraglide/messages.js";
   import type { TabId, AppShellProps } from "./types";
   import { providePTR } from "./ptr-context.svelte.js";
   import { themeStore } from "$lib/stores/theme.svelte";
-  import { useQueryClient } from "@tanstack/svelte-query";
+  import { useQueryClient, createQuery } from "@tanstack/svelte-query";
   import {
     setScrollContainer,
     setTabbarOverrideCtx,
@@ -55,6 +63,8 @@
   } from "./context";
   import { markNavigated } from "./navigation.js";
   import ShellSheet from "./ShellSheet.svelte";
+  import ShellPanel from "./ShellPanel.svelte";
+  import AvatarPanel from "$lib/components/admin/AvatarPanel.svelte";
   import SearchResults from "$lib/components/search/SearchResults.svelte";
   import {
     createTicketSearchProvider,
@@ -70,12 +80,18 @@
   import {
     getTicketDecryptCache,
     getOrgDecryptCache,
+    getOrgKeyManager,
     getCurrentUserId,
+    getCurrentUserRoleId,
+    getCurrentPermissions,
     getPreviewLoader,
   } from "$lib/crypto/context.js";
   import { deriveDisplayStatus } from "$lib/tickets/display-status.js";
   import type { TicketKeyWrap } from "$lib/crypto/ticket-decrypt-cache.js";
-  import type { SerializedBuffer } from "$lib/utils/buffer-encoding.js";
+  import {
+    type SerializedBuffer,
+    base64ToUint8Array,
+  } from "$lib/utils/buffer-encoding.js";
 
   // Main content element, resolved via bind:this. This is the scroll
   // container for all routes (Page has overflow:hidden, main scrolls).
@@ -142,7 +158,41 @@
   setNavbarOverrideCtx(navbarOverrideContainer);
   const navbarOverride = $derived(navbarOverrideContainer.current);
 
-  // Subnavbar + Navbar height measurement.
+  // ── Avatar panel ─────────────────────────────────────────────────
+  let panelOpen = $state(false);
+  const roleIdGetter = getCurrentUserRoleId();
+  const permissionsGetter = getCurrentPermissions();
+  const currentRoleId = $derived(roleIdGetter() ?? "");
+  const currentPermissions = $derived(permissionsGetter());
+  const meQuery = createQuery(() => ({
+    queryKey: ["auth", "me"],
+    queryFn: async () => trpc.auth.me.query(),
+    staleTime: Infinity,
+  }));
+
+  // Org decrypt cache + key manager are only set client-side by
+  // CryptoProvider (gated behind `browser`). Access lazily so the
+  // context getter isn't called during SSR where it would throw.
+  const avatarOrgCache = browser ? getOrgDecryptCache() : null;
+
+  const avatarDisplayName = $derived.by(() => {
+    if (avatarOrgCache == null) return null;
+    const enc = meQuery.data?.user.encryptedDisplayName;
+    if (enc == null) return null;
+    const ciphertext = typeof enc === "string" ? base64ToUint8Array(enc) : null;
+    return avatarOrgCache.decrypt("me:display_name", ciphertext);
+  });
+
+  const userInitials = $derived.by(() => {
+    if (avatarDisplayName == null) return null;
+    return avatarDisplayName
+      .split(/\s+/)
+      .slice(0, 2)
+      .map((w) => w.charAt(0).toUpperCase())
+      .join("");
+  });
+
+  // ── Subnavbar + Navbar height measurement.
   // ResizeObserver tracks the inner content height so we can set
   // padding-top on <main> and position the subnavbar correctly.
   let subnavbarInnerEl = $state<HTMLElement | undefined>();
@@ -673,8 +723,19 @@
       {#if navbarOverride?.left}
         {@render navbarOverride.left()}
       {:else}
-        <Link iconOnly role="button" aria-label={m.nav_account()}>
-          <span class="navbar-avatar" aria-hidden="true">JN</span>
+        <Link
+          iconOnly
+          role="button"
+          aria-label={m.nav_account()}
+          onclick={() => (panelOpen = true)}
+        >
+          <span class="navbar-avatar" aria-hidden="true">
+            {#if userInitials}
+              {userInitials}
+            {:else}
+              <User size={18} />
+            {/if}
+          </span>
         </Link>
       {/if}
     {/snippet}
@@ -910,6 +971,30 @@
       }}
     />
   </ShellSheet>
+
+  {#if browser}
+    <ShellPanel
+      opened={panelOpen}
+      ondismiss={() => (panelOpen = false)}
+      ariaLabel={m.nav_account()}
+    >
+      <AvatarPanel
+        encryptedDisplayName={meQuery.data?.user.encryptedDisplayName}
+        roleId={currentRoleId}
+        permissions={currentPermissions}
+        onnavigate={(path: string) => {
+          panelOpen = false;
+          // eslint-disable-next-line svelte/no-navigation-without-resolve -- admin routes created in later tasks
+          void goto(path);
+        }}
+        onlogout={() => {
+          panelOpen = false;
+          // eslint-disable-next-line svelte/no-navigation-without-resolve -- logout route created in later tasks
+          void goto("/logout");
+        }}
+      />
+    </ShellPanel>
+  {/if}
 </Page>
 
 <style>

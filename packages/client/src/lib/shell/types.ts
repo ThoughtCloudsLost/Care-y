@@ -251,6 +251,19 @@ export interface ManageConfig {
   readonly onclick: () => void;
 }
 
+export interface ShellPanelProps {
+  /** Whether the panel is open. */
+  readonly opened: boolean;
+  /** Callback when the panel is dismissed (backdrop click or Escape). */
+  readonly ondismiss: () => void;
+  /** Which side the panel opens from. Default: "left". */
+  readonly side?: "left" | "right";
+  /** Accessible label for the panel dialog. */
+  readonly ariaLabel: string;
+  /** Panel content. */
+  readonly children: Snippet;
+}
+
 export interface FilterPillsConfig {
   readonly pills: PillDefinition[];
   readonly activeCount: number;
