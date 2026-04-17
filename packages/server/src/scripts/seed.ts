@@ -152,6 +152,7 @@ async function seed(): Promise<void> {
     hasher,
     sessions,
     encryptor,
+    sealedBox,
     indexer,
     tokenizer,
     orgId,

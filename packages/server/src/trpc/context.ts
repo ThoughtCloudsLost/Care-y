@@ -147,6 +147,7 @@ export function createScopedAuthService(
     deps.hasher,
     sessions,
     deps.encryptor,
+    orgCtx.sealedBox,
     deps.indexer,
     deps.tokenizer,
     orgCtx.orgId,

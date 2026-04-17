@@ -17,6 +17,7 @@ import {
   getSaltInputSchema,
   assignRoleInputSchema,
   setPiiRetentionInputSchema,
+  setUserActiveInputSchema,
   RoleId,
   Permission,
   ErrorCode,
@@ -49,6 +50,7 @@ import {
   createTenantSessions,
   type AuthServiceDeps,
 } from "../trpc/context.js";
+import { createUserService } from "../users/user-service.js";
 import { createSaltDefense } from "../auth/salt-defense.js";
 import { encode } from "@care-y/crypto";
 import type { OrgContext } from "../trpc/context.js";
@@ -301,6 +303,71 @@ export function createAuthRouter(deps: AuthRouterDeps) {
         const authService = createScopedAuthService(ctx.org, sessions, deps);
         await authService.setPiiRetentionDays(input.days);
         return { success: true as const };
+      }),
+    ),
+
+    listUsers: adminProcedure.query(
+      withErrorWrapping(async ({ ctx }) => {
+        const svc = createUserService(ctx.org.tenantDb);
+        const users = await svc.listAllForAdmin();
+        return users.map((u) => ({
+          id: u.id,
+          encryptedDisplayName: u.encryptedDisplayName.toString("base64"),
+          roleId: u.roleId,
+          isActive: u.isActive,
+          hasKeys: u.hasKeys,
+          hasOrgKeyWrap: u.hasOrgKeyWrap,
+          volPublic: u.volPublic ? u.volPublic.toString("base64") : null,
+        }));
+      }),
+    ),
+
+    setUserActive: adminProcedure.input(setUserActiveInputSchema).mutation(
+      withErrorWrapping(async ({ ctx, input }) => {
+        if (input.userId === ctx.user.id) {
+          throw new ForbiddenError(ErrorCode.CANNOT_DEACTIVATE_SELF);
+        }
+        const sessions = createTenantSessions(ctx.org, deps.tokenizer);
+        const authService = createScopedAuthService(ctx.org, sessions, deps);
+        const updated = await authService.setUserActive(
+          input.userId,
+          input.isActive,
+        );
+        return { user: toUserResponse(updated) };
+      }),
+    ),
+
+    hubStatus: adminProcedure.query(
+      withErrorWrapping(async ({ ctx }) => {
+        const db = ctx.org.tenantDb;
+        const [userCount, queueCount, keyStatus, retentionConfig] =
+          await Promise.all([
+            db
+              .selectFrom("users")
+              .select(db.fn.countAll<string>().as("c"))
+              .where("is_active", "=", true)
+              .executeTakeFirstOrThrow(),
+            db
+              .selectFrom("queues")
+              .select(db.fn.countAll<string>().as("c"))
+              .executeTakeFirstOrThrow(),
+            db
+              .selectFrom("org_config")
+              .select("org_public_key")
+              .executeTakeFirst(),
+            db
+              .selectFrom("org_config")
+              .select("pii_retention_days")
+              .executeTakeFirst(),
+          ]);
+        return {
+          activeUserCount: Number(userCount.c),
+          queueCount: Number(queueCount.c),
+          keyStatus: keyStatus?.org_public_key
+            ? ("ok" as const)
+            : ("missing" as const),
+          retentionDays: retentionConfig?.pii_retention_days ?? null,
+        };
       }),
     ),
 

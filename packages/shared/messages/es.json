@@ -124,6 +124,8 @@
   "error_user_not_found": "Usuario no encontrado.",
   "error_cannot_change_own_role": "No puedes cambiar tu propio rol.",
   "error_cannot_demote_last_admin": "No se puede degradar al último administrador.",
+  "error_cannot_deactivate_self": "No puedes desactivar tu propia cuenta.",
+  "error_cannot_deactivate_last_admin": "No se puede desactivar al último administrador.",
   "error_only_admins_can_assign_roles": "Solo los administradores pueden asignar roles no predeterminados.",
   "error_login_rate_limited": "Demasiados intentos de inicio de sesión. Inténtalo más tarde.",
   "error_request_rate_limited": "Demasiadas solicitudes. Inténtalo más tarde.",
@@ -178,6 +180,8 @@
   "error_alias_generation_failed": "No se pudo generar un alias único para el cliente. Inténtalo de nuevo.",
 
   "error_queue_not_found": "Cola no encontrada.",
+  "error_cannot_delete_last_queue": "No se puede eliminar la última cola.",
+  "error_queue_has_tickets": "La cola tiene tickets. Elige una cola para reasignarlos.",
   "error_preset_reply_not_found": "Respuesta predefinida no encontrada.",
   "error_recording_not_found": "Grabación no encontrada.",
   "error_attachment_not_found": "Archivo adjunto no encontrado.",

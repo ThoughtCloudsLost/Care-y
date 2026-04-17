@@ -60,6 +60,7 @@ function makeAuthService(
     createScryptHasher(),
     sessions,
     testFieldEncryptor,
+    testSealedBox,
     testBlindIndexer,
     testSessionTokenizer,
     orgId,

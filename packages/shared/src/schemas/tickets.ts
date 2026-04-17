@@ -92,6 +92,12 @@ export const reorderQueuesInputSchema = z.array(
 );
 export type ReorderQueuesInput = z.infer<typeof reorderQueuesInputSchema>;
 
+export const deleteQueueInputSchema = z.object({
+  queueId: z.uuid(),
+  reassignTo: z.uuid().optional(),
+});
+export type DeleteQueueInput = z.infer<typeof deleteQueueInputSchema>;
+
 export const createPresetReplyInputSchema = z.object({
   encryptedTitle: base64String("encryptedTitle"),
   encryptedBody: base64String("encryptedBody"),

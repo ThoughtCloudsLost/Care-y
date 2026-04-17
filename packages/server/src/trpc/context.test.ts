@@ -293,6 +293,7 @@ describe.skipIf(!HAS_DB)("context factory (DB integration)", () => {
         hasher,
         sessions,
         testFieldEncryptor,
+        testSealedBox,
         testBlindIndexer,
         testSessionTokenizer,
         orgId,
