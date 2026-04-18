@@ -1,7 +1,6 @@
 <script lang="ts">
-  import { BlockTitle, Segmented, SegmentedButton } from "konsta/svelte";
-  import { page } from "$app/state";
-  import { goto, replaceState } from "$app/navigation";
+  import { SvelteSet } from "svelte/reactivity";
+  import { goto } from "$app/navigation";
   import { resolve } from "$app/paths";
   import type { Component } from "svelte";
   import { Permission } from "@care-y/shared";
@@ -9,101 +8,76 @@
   import * as m from "$lib/paraglide/messages.js";
   import { getNavbarOverrideCtx } from "$lib/shell/context.js";
   import { getCurrentPermissions } from "$lib/crypto/context.js";
+  import {
+    createSectionScroll,
+    type ScrollSection,
+  } from "$lib/components/useSectionScroll.svelte.js";
+  import SectionScrollNav from "$lib/components/SectionScrollNav.svelte";
+  import CollapsibleSection from "$lib/components/dashboard/CollapsibleSection.svelte";
   import KeysSection from "$lib/components/admin/KeysSection.svelte";
   import BrandingSection from "$lib/components/admin/BrandingSection.svelte";
   import RetentionSection from "$lib/components/admin/RetentionSection.svelte";
   import ReportsSection from "$lib/components/admin/ReportsSection.svelte";
 
-  type OrgTab = "keys" | "branding" | "retention" | "reports";
-
-  interface TabConfig {
-    readonly label: () => string;
-    readonly icon: Component;
+  interface OrgSection extends ScrollSection {
     readonly permission: Permission;
+    readonly component: Component;
   }
 
-  const TAB_CONFIG = new Map<OrgTab, TabConfig>([
-    [
-      "branding",
-      {
-        label: m.admin_tab_branding,
-        icon: Palette,
-        permission: Permission.MANAGE_ORG_CONFIG,
-      },
-    ],
-    [
-      "keys",
-      {
-        label: m.admin_tab_keys,
-        icon: Key,
-        permission: Permission.MANAGE_KEYS,
-      },
-    ],
-    [
-      "retention",
-      {
-        label: m.admin_tab_retention,
-        icon: Calendar,
-        permission: Permission.MANAGE_ORG_CONFIG,
-      },
-    ],
-    [
-      "reports",
-      {
-        label: m.admin_tab_reports,
-        icon: ChartColumn,
-        permission: Permission.VIEW_REPORTS,
-      },
-    ],
-  ]);
-
-  const TAB_ORDER: readonly OrgTab[] = [
-    "branding",
-    "keys",
-    "retention",
-    "reports",
+  const SECTIONS: readonly OrgSection[] = [
+    {
+      id: "keys",
+      label: m.admin_tab_keys,
+      icon: Key,
+      permission: Permission.MANAGE_KEYS,
+      component: KeysSection,
+    },
+    {
+      id: "retention",
+      label: m.admin_tab_retention,
+      icon: Calendar,
+      permission: Permission.MANAGE_ORG_CONFIG,
+      component: RetentionSection,
+    },
+    {
+      id: "branding",
+      label: m.admin_tab_branding,
+      icon: Palette,
+      permission: Permission.MANAGE_ORG_CONFIG,
+      component: BrandingSection,
+    },
+    {
+      id: "reports",
+      label: m.admin_tab_reports,
+      icon: ChartColumn,
+      permission: Permission.VIEW_REPORTS,
+      component: ReportsSection,
+    },
   ];
-
-  function getTabConfig(tab: OrgTab): TabConfig {
-    const cfg = TAB_CONFIG.get(tab);
-    if (!cfg) throw new RangeError(`Unknown tab: ${tab}`);
-    return cfg;
-  }
 
   const permissionsGetter = getCurrentPermissions();
   const permissions = $derived(permissionsGetter());
 
-  const visibleTabs = $derived(
-    TAB_ORDER.filter((tab) => permissions.has(getTabConfig(tab).permission)),
+  const visibleSections = $derived(
+    SECTIONS.filter((s) => permissions.has(s.permission)),
   );
-  const hasAccess = $derived(visibleTabs.length > 0);
+  const hasAccess = $derived(visibleSections.length > 0);
 
   $effect(() => {
     if (!hasAccess) void goto(resolve("/"));
   });
 
-  function isOrgTab(value: string): value is OrgTab {
-    return (TAB_ORDER as readonly string[]).includes(value);
-  }
+  const collapsedSections = new SvelteSet<string>();
 
-  const urlTab = $derived.by(() => {
-    const raw = page.url.searchParams.get("tab");
-    return raw !== null && isOrgTab(raw) ? raw : null;
-  });
-
-  let activeTab = $state<OrgTab>("branding");
-
-  $effect(() => {
-    if (urlTab !== null && visibleTabs.includes(urlTab)) {
-      activeTab = urlTab;
+  function toggleSection(id: string): void {
+    if (collapsedSections.has(id)) {
+      collapsedSections.delete(id);
+    } else {
+      collapsedSections.add(id);
     }
-  });
-
-  function switchTab(tab: OrgTab): void {
-    activeTab = tab;
-    // eslint-disable-next-line svelte/no-navigation-without-resolve -- shallow routing, same page query param
-    replaceState(`?tab=${tab}`, {});
   }
+
+  const scroll = createSectionScroll(() => visibleSections);
 
   const navbarCtx = getNavbarOverrideCtx();
 
@@ -119,82 +93,32 @@
 </script>
 
 {#snippet orgSubnavbar()}
-  <div class="subnavbar-content">
-    <div class="page-header">
-      <BlockTitle large class="page-title">
-        {getTabConfig(activeTab).label()}
-      </BlockTitle>
-      <div role="tablist" aria-label={m.admin_org_title()} class="tab-toggle">
-        <Segmented strong>
-          {#each visibleTabs as tab (tab)}
-            {@const cfg = getTabConfig(tab)}
-            {@const Icon = cfg.icon}
-            <SegmentedButton
-              active={activeTab === tab}
-              onclick={() => switchTab(tab)}
-              aria-selected={activeTab === tab}
-              aria-controls="panel-{tab}"
-              aria-label={cfg.label()}
-              id="tab-{tab}"
-            >
-              <Icon size={16} aria-hidden="true" />
-            </SegmentedButton>
-          {/each}
-        </Segmented>
-      </div>
-    </div>
-  </div>
+  <SectionScrollNav
+    sections={visibleSections}
+    active={scroll.active}
+    onscroll={(id: string) => scroll.scrollTo(id)}
+    ariaLabel={m.admin_org_title()}
+  />
 {/snippet}
 
-{#if activeTab === "keys"}
-  <div role="tabpanel" id="panel-keys" aria-labelledby="tab-keys">
-    <KeysSection />
+{#each visibleSections as section (section.id)}
+  {@const Content = section.component}
+  {@const Icon = section.icon}
+  <div id="section-{section.id}" class="org-section">
+    <CollapsibleSection
+      heading={section.label()}
+      icon={Icon}
+      iconColor="var(--brand-accent)"
+      expanded={!collapsedSections.has(section.id)}
+      ontoggle={() => toggleSection(section.id)}
+    >
+      <Content />
+    </CollapsibleSection>
   </div>
-{:else if activeTab === "branding"}
-  <div role="tabpanel" id="panel-branding" aria-labelledby="tab-branding">
-    <BrandingSection />
-  </div>
-{:else if activeTab === "retention"}
-  <div role="tabpanel" id="panel-retention" aria-labelledby="tab-retention">
-    <RetentionSection />
-  </div>
-{:else if activeTab === "reports"}
-  <div role="tabpanel" id="panel-reports" aria-labelledby="tab-reports">
-    <ReportsSection />
-  </div>
-{/if}
+{/each}
 
 <style>
-  .subnavbar-content {
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-lg);
-    padding: 0.25rem var(--page-pad-x) 0;
-  }
-
-  .page-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: var(--space-md);
-  }
-
-  :global(.page-title) {
-    margin: 0 !important;
-    padding-left: 0 !important;
-  }
-
-  .tab-toggle {
-    flex-shrink: 0;
-  }
-
-  .tab-toggle :global(.k-segmented) {
-    height: 1.75rem;
-  }
-
-  .tab-toggle :global(.k-segmented-button) {
-    font-size: var(--text-xs);
-    min-height: unset;
-    padding: 0 0.375rem;
+  .org-section {
+    scroll-margin-top: 7rem;
   }
 </style>
