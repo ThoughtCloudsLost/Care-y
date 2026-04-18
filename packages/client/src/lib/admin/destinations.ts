@@ -10,7 +10,7 @@ import {
   MessageSquare,
   Palette,
   Key,
-  Calendar,
+  Shredder,
   ChartColumn,
 } from "@lucide/svelte";
 
@@ -116,7 +116,7 @@ export const ADMIN_DESTINATIONS: readonly AdminDestination[] = [
   {
     id: "retention",
     group: "organization",
-    icon: Calendar,
+    icon: Shredder,
     label: m.panel_retention,
     subtitle: m.hub_retention_subtitle,
     path: "/admin/organization?tab=retention",

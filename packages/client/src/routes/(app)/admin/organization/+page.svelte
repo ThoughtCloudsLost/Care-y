@@ -1,10 +1,11 @@
 <script lang="ts">
+  import { tick } from "svelte";
   import { SvelteSet } from "svelte/reactivity";
   import { goto } from "$app/navigation";
   import { resolve } from "$app/paths";
   import type { Component } from "svelte";
   import { Permission } from "@care-y/shared";
-  import { Key, Palette, Calendar, ChartColumn } from "@lucide/svelte";
+  import { Key, Palette, Shredder, ChartColumn } from "@lucide/svelte";
   import * as m from "$lib/paraglide/messages.js";
   import { getNavbarOverrideCtx } from "$lib/shell/context.js";
   import { getCurrentPermissions } from "$lib/crypto/context.js";
@@ -26,6 +27,13 @@
 
   const SECTIONS: readonly OrgSection[] = [
     {
+      id: "branding",
+      label: m.admin_tab_branding,
+      icon: Palette,
+      permission: Permission.MANAGE_ORG_CONFIG,
+      component: BrandingSection,
+    },
+    {
       id: "keys",
       label: m.admin_tab_keys,
       icon: Key,
@@ -35,16 +43,9 @@
     {
       id: "retention",
       label: m.admin_tab_retention,
-      icon: Calendar,
+      icon: Shredder,
       permission: Permission.MANAGE_ORG_CONFIG,
       component: RetentionSection,
-    },
-    {
-      id: "branding",
-      label: m.admin_tab_branding,
-      icon: Palette,
-      permission: Permission.MANAGE_ORG_CONFIG,
-      component: BrandingSection,
     },
     {
       id: "reports",
@@ -79,6 +80,18 @@
 
   const scroll = createSectionScroll(() => visibleSections);
 
+  async function expandAndScroll(id: string): Promise<void> {
+    collapsedSections.delete(id);
+    await tick();
+    const skipTransition = window.matchMedia(
+      "(prefers-reduced-motion: reduce)",
+    ).matches;
+    if (!skipTransition) {
+      await new Promise<void>((r) => setTimeout(r, 210));
+    }
+    scroll.scrollTo(id);
+  }
+
   const navbarCtx = getNavbarOverrideCtx();
 
   $effect(() => {
@@ -96,7 +109,7 @@
   <SectionScrollNav
     sections={visibleSections}
     active={scroll.active}
-    onscroll={(id: string) => scroll.scrollTo(id)}
+    onscroll={(id: string) => void expandAndScroll(id)}
     ariaLabel={m.admin_org_title()}
   />
 {/snippet}
