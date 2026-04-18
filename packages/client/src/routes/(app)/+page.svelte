@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { tick } from "svelte";
   import { createQuery } from "@tanstack/svelte-query";
   import { Notification, Link, List, ListItem } from "konsta/svelte";
   import { goto } from "$app/navigation";
@@ -16,6 +17,10 @@
     FolderPlus,
     UserPlus,
     Plus,
+    CalendarDays,
+    Activity,
+    BookOpen,
+    Layers,
   } from "@lucide/svelte";
   import TicketPreviewList from "$lib/components/dashboard/TicketPreviewList.svelte";
   import CollapsibleSection from "$lib/components/dashboard/CollapsibleSection.svelte";
@@ -36,6 +41,11 @@
   import { getNavbarOverrideCtx } from "$lib/shell/context.js";
   import { resolveAsyncDecrypt } from "$lib/crypto/decrypt-result.js";
   import { bucketTickets } from "$lib/components/dashboard/filters.js";
+  import {
+    createSectionScroll,
+    type ScrollSection,
+  } from "$lib/components/useSectionScroll.svelte.js";
+  import SectionScrollNav from "$lib/components/SectionScrollNav.svelte";
   import * as m from "$lib/paraglide/messages.js";
 
   // Singletons from (app) layout context.
@@ -117,7 +127,7 @@
 
   // Navbar right-action override: "+" button with create popover.
   $effect(() => {
-    navbarCtx.current = { right: createButton };
+    navbarCtx.current = { right: createButton, subnavbar: dashboardSubnavbar };
     return () => {
       navbarCtx.current = undefined;
     };
@@ -173,6 +183,47 @@
   const unassigned = $derived(buckets.unassigned);
   const onHold = $derived(buckets.onHold);
 
+  // --- Section scroll nav ---
+
+  const dashboardSections = $derived.by((): readonly ScrollSection[] => {
+    const sections: ScrollSection[] = [
+      { id: "shift", label: m.dashboard_shift_heading, icon: CalendarDays },
+      { id: "activity", label: m.dashboard_activity_heading, icon: Activity },
+      { id: "kb", label: m.dashboard_kb_heading, icon: BookOpen },
+      { id: "queues", label: m.dashboard_queues_heading, icon: Layers },
+    ];
+    if (ticketsQuery.isLoading || needsAttention.length > 0) {
+      sections.push({
+        id: "needs-attention",
+        label: m.dashboard_section_needs_attention,
+        icon: TicketAlert,
+      });
+    }
+    sections.push({
+      id: "my-tickets",
+      label: m.dashboard_section_my_tickets,
+      icon: TicketIcon,
+    });
+    sections.push({
+      id: "unassigned",
+      label: m.dashboard_section_unassigned,
+      icon: TicketMinus,
+    });
+    if (
+      ticketsQuery.isLoading ||
+      (countsQuery.data?.onHold ?? onHold.length) > 0
+    ) {
+      sections.push({
+        id: "on-hold",
+        label: m.dashboard_section_on_hold,
+        icon: TicketPause,
+      });
+    }
+    return sections;
+  });
+
+  const scroll = createSectionScroll(() => dashboardSections);
+
   // --- Pre-computed derived props (avoid inline .map() in template) ---
 
   const activityProps = $derived(
@@ -212,6 +263,29 @@
   let myTicketsExpanded = $state(true);
   let unassignedExpanded = $state(false);
   let onHoldExpanded = $state(false);
+
+  const expandedBySection = new Map<string, () => void>([
+    ["shift", () => (shiftExpanded = true)],
+    ["activity", () => (activityExpanded = true)],
+    ["kb", () => (kbExpanded = true)],
+    ["queues", () => (queuesExpanded = true)],
+    ["needs-attention", () => (needsAttentionExpanded = true)],
+    ["my-tickets", () => (myTicketsExpanded = true)],
+    ["unassigned", () => (unassignedExpanded = true)],
+    ["on-hold", () => (onHoldExpanded = true)],
+  ]);
+
+  async function expandAndScroll(id: string): Promise<void> {
+    expandedBySection.get(id)?.();
+    await tick();
+    const skipTransition = window.matchMedia(
+      "(prefers-reduced-motion: reduce)",
+    ).matches;
+    if (!skipTransition) {
+      await new Promise<void>((r) => setTimeout(r, 210));
+    }
+    scroll.scrollTo(id);
+  }
 
   // Ticket title decryption is handled by ticketCache (TicketDecryptCache).
   // It uses a SvelteMap internally, so reads are reactive. Decryption is
@@ -289,6 +363,15 @@
   }
 </script>
 
+{#snippet dashboardSubnavbar()}
+  <SectionScrollNav
+    sections={dashboardSections}
+    active={scroll.active}
+    onscroll={(id: string) => void expandAndScroll(id)}
+    ariaLabel={m.nav_home()}
+  />
+{/snippet}
+
 <div class="dashboard">
   <h1 class="sr-only">{m.nav_home()}</h1>
   <Notification
@@ -299,124 +382,140 @@
     onClose={dismissExposureNotification}
   />
 
-  <ShiftSection
-    shift={shiftQuery.data?.shift ?? null}
-    loading={shiftQuery.isLoading}
-    expanded={shiftExpanded}
-    ontoggle={() => (shiftExpanded = !shiftExpanded)}
-  />
+  <div id="section-shift" class="scroll-target">
+    <ShiftSection
+      shift={shiftQuery.data?.shift ?? null}
+      loading={shiftQuery.isLoading}
+      expanded={shiftExpanded}
+      ontoggle={() => (shiftExpanded = !shiftExpanded)}
+    />
+  </div>
 
-  <ActivitySection
-    activity={activityProps}
-    loading={activityQuery.isLoading}
-    expanded={activityExpanded}
-    ontoggle={() => (activityExpanded = !activityExpanded)}
-    ontap={handleActivityTap}
-  />
+  <div id="section-activity" class="scroll-target">
+    <ActivitySection
+      activity={activityProps}
+      loading={activityQuery.isLoading}
+      expanded={activityExpanded}
+      ontoggle={() => (activityExpanded = !activityExpanded)}
+      ontap={handleActivityTap}
+    />
+  </div>
 
-  <KBSection
-    kbItems={kbProps}
-    loading={kbQuery.isLoading}
-    expanded={kbExpanded}
-    ontoggle={() => (kbExpanded = !kbExpanded)}
-    ontap={handleKBTap}
-  />
+  <div id="section-kb" class="scroll-target">
+    <KBSection
+      kbItems={kbProps}
+      loading={kbQuery.isLoading}
+      expanded={kbExpanded}
+      ontoggle={() => (kbExpanded = !kbExpanded)}
+      ontap={handleKBTap}
+    />
+  </div>
 
-  <QueueCards
-    queues={queueProps}
-    loading={queuesQuery.isLoading}
-    expanded={queuesExpanded}
-    ontoggle={() => (queuesExpanded = !queuesExpanded)}
-    ontap={handleQueueTap}
-  />
+  <div id="section-queues" class="scroll-target">
+    <QueueCards
+      queues={queueProps}
+      loading={queuesQuery.isLoading}
+      expanded={queuesExpanded}
+      ontoggle={() => (queuesExpanded = !queuesExpanded)}
+      ontap={handleQueueTap}
+    />
+  </div>
 
   <div class="ticket-sections" data-total={allTickets.length}>
     {#if ticketsQuery.isLoading || needsAttention.length > 0}
-      <CollapsibleSection
-        heading={m.dashboard_section_needs_attention()}
-        count={ticketsQuery.isLoading ? undefined : needsAttention.length}
-        loading={ticketsQuery.isLoading}
-        icon={TicketAlert}
-        iconColor="var(--brand-accent)"
-        expanded={needsAttentionExpanded}
-        ontoggle={() => (needsAttentionExpanded = !needsAttentionExpanded)}
-      >
-        <TicketPreviewList
+      <div id="section-needs-attention" class="scroll-target">
+        <CollapsibleSection
           heading={m.dashboard_section_needs_attention()}
-          hideHeading
+          count={ticketsQuery.isLoading ? undefined : needsAttention.length}
           loading={ticketsQuery.isLoading}
-          tickets={needsAttentionProps}
-          ontickettap={handleTicketTap}
-          onencryptedhelp={showEncryptedHelp}
-        />
-      </CollapsibleSection>
+          icon={TicketAlert}
+          iconColor="var(--brand-accent)"
+          expanded={needsAttentionExpanded}
+          ontoggle={() => (needsAttentionExpanded = !needsAttentionExpanded)}
+        >
+          <TicketPreviewList
+            heading={m.dashboard_section_needs_attention()}
+            hideHeading
+            loading={ticketsQuery.isLoading}
+            tickets={needsAttentionProps}
+            ontickettap={handleTicketTap}
+            onencryptedhelp={showEncryptedHelp}
+          />
+        </CollapsibleSection>
+      </div>
     {/if}
 
-    <CollapsibleSection
-      heading={m.dashboard_section_my_tickets()}
-      count={ticketsQuery.isLoading ? undefined : myOpen.length}
-      loading={ticketsQuery.isLoading}
-      icon={TicketIcon}
-      iconColor="var(--brand-accent)"
-      expanded={myTicketsExpanded}
-      ontoggle={() => (myTicketsExpanded = !myTicketsExpanded)}
-    >
-      <TicketPreviewList
-        heading={m.dashboard_section_my_tickets()}
-        hideHeading
-        loading={ticketsQuery.isLoading}
-        tickets={myOpenProps}
-        ontickettap={handleTicketTap}
-        onseeall={handleSeeAllMyOpen}
-        onencryptedhelp={showEncryptedHelp}
-      />
-    </CollapsibleSection>
-
-    <CollapsibleSection
-      heading={m.dashboard_section_unassigned()}
-      count={ticketsQuery.isLoading
-        ? undefined
-        : (countsQuery.data?.unassigned ?? unassigned.length)}
-      loading={ticketsQuery.isLoading}
-      icon={TicketMinus}
-      iconColor="var(--brand-accent)"
-      expanded={unassignedExpanded}
-      ontoggle={() => (unassignedExpanded = !unassignedExpanded)}
-    >
-      <TicketPreviewList
-        heading={m.dashboard_section_unassigned()}
-        hideHeading
-        loading={ticketsQuery.isLoading}
-        tickets={unassignedProps}
-        totalCount={countsQuery.data?.unassigned}
-        ontickettap={handleTicketTap}
-        onseeall={handleSeeAllUnassigned}
-        onencryptedhelp={showEncryptedHelp}
-      />
-    </CollapsibleSection>
-
-    {#if ticketsQuery.isLoading || (countsQuery.data?.onHold ?? onHold.length) > 0}
+    <div id="section-my-tickets" class="scroll-target">
       <CollapsibleSection
-        heading={m.dashboard_section_on_hold()}
-        count={ticketsQuery.isLoading
-          ? undefined
-          : (countsQuery.data?.onHold ?? onHold.length)}
+        heading={m.dashboard_section_my_tickets()}
+        count={ticketsQuery.isLoading ? undefined : myOpen.length}
         loading={ticketsQuery.isLoading}
-        icon={TicketPause}
+        icon={TicketIcon}
         iconColor="var(--brand-accent)"
-        expanded={onHoldExpanded}
-        ontoggle={() => (onHoldExpanded = !onHoldExpanded)}
+        expanded={myTicketsExpanded}
+        ontoggle={() => (myTicketsExpanded = !myTicketsExpanded)}
       >
         <TicketPreviewList
-          heading={m.dashboard_section_on_hold()}
+          heading={m.dashboard_section_my_tickets()}
           hideHeading
           loading={ticketsQuery.isLoading}
-          tickets={onHoldProps}
-          totalCount={countsQuery.data?.onHold}
+          tickets={myOpenProps}
           ontickettap={handleTicketTap}
+          onseeall={handleSeeAllMyOpen}
           onencryptedhelp={showEncryptedHelp}
         />
       </CollapsibleSection>
+    </div>
+
+    <div id="section-unassigned" class="scroll-target">
+      <CollapsibleSection
+        heading={m.dashboard_section_unassigned()}
+        count={ticketsQuery.isLoading
+          ? undefined
+          : (countsQuery.data?.unassigned ?? unassigned.length)}
+        loading={ticketsQuery.isLoading}
+        icon={TicketMinus}
+        iconColor="var(--brand-accent)"
+        expanded={unassignedExpanded}
+        ontoggle={() => (unassignedExpanded = !unassignedExpanded)}
+      >
+        <TicketPreviewList
+          heading={m.dashboard_section_unassigned()}
+          hideHeading
+          loading={ticketsQuery.isLoading}
+          tickets={unassignedProps}
+          totalCount={countsQuery.data?.unassigned}
+          ontickettap={handleTicketTap}
+          onseeall={handleSeeAllUnassigned}
+          onencryptedhelp={showEncryptedHelp}
+        />
+      </CollapsibleSection>
+    </div>
+
+    {#if ticketsQuery.isLoading || (countsQuery.data?.onHold ?? onHold.length) > 0}
+      <div id="section-on-hold" class="scroll-target">
+        <CollapsibleSection
+          heading={m.dashboard_section_on_hold()}
+          count={ticketsQuery.isLoading
+            ? undefined
+            : (countsQuery.data?.onHold ?? onHold.length)}
+          loading={ticketsQuery.isLoading}
+          icon={TicketPause}
+          iconColor="var(--brand-accent)"
+          expanded={onHoldExpanded}
+          ontoggle={() => (onHoldExpanded = !onHoldExpanded)}
+        >
+          <TicketPreviewList
+            heading={m.dashboard_section_on_hold()}
+            hideHeading
+            loading={ticketsQuery.isLoading}
+            tickets={onHoldProps}
+            totalCount={countsQuery.data?.onHold}
+            ontickettap={handleTicketTap}
+            onencryptedhelp={showEncryptedHelp}
+          />
+        </CollapsibleSection>
+      </div>
     {/if}
   </div>
 </div>
@@ -456,5 +555,9 @@
 <style>
   .dashboard {
     padding: 0.25rem 0 1rem;
+  }
+
+  .scroll-target {
+    scroll-margin-top: 7rem;
   }
 </style>
