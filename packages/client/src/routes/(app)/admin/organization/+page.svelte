@@ -1,8 +1,7 @@
 <script lang="ts">
-  import { tick, untrack } from "svelte";
+  import { tick } from "svelte";
   import { SvelteSet } from "svelte/reactivity";
-  import { page } from "$app/state";
-  import { goto } from "$app/navigation";
+  import { afterNavigate, goto } from "$app/navigation";
   import { resolve } from "$app/paths";
   import type { Component } from "svelte";
   import { Permission } from "@care-y/shared";
@@ -81,14 +80,9 @@
 
   const scroll = createSectionScroll(() => visibleSections);
 
-  let initialTabHandled = false;
-
-  $effect(() => {
-    if (initialTabHandled) return;
-    const tab = page.url.searchParams.get("tab");
-    const sections = untrack(() => visibleSections);
-    if (tab !== null && sections.some((s) => s.id === tab)) {
-      initialTabHandled = true;
+  afterNavigate(({ to }) => {
+    const tab = to?.url.searchParams.get("tab") ?? null;
+    if (tab !== null && visibleSections.some((s) => s.id === tab)) {
       void expandAndScroll(tab);
     }
   });
