@@ -1,16 +1,18 @@
 <script lang="ts">
-  import { Button, Card } from "konsta/svelte";
+  import { Card } from "konsta/svelte";
   import { createQuery } from "@tanstack/svelte-query";
-  import { ShieldCheck, ShieldAlert, RotateCw } from "@lucide/svelte";
+  import { ShieldCheck, ShieldAlert, RotateCw, Download } from "@lucide/svelte";
   import * as m from "$lib/paraglide/messages.js";
   import { trpc } from "$lib/trpc/index.js";
   import { getOrgKeyManager } from "$lib/crypto/context.js";
+  import SoftButton from "$lib/components/SoftButton.svelte";
 
   interface KeyStatusProps {
     readonly onrotate: () => void;
+    readonly onexport: () => void;
   }
 
-  let { onrotate }: KeyStatusProps = $props();
+  let { onrotate, onexport }: KeyStatusProps = $props();
 
   const orgKeyManager = getOrgKeyManager();
   const keysRouter = trpc.keys;
@@ -54,12 +56,14 @@
 
     <!-- Actions -->
     <div class="key-actions">
-      <Button large outline onclick={onrotate}>
-        <span class="btn-content">
-          <RotateCw size={18} aria-hidden="true" />
-          {m.admin_keys_rotate_button()}
-        </span>
-      </Button>
+      <SoftButton onclick={onrotate}>
+        <RotateCw size={18} aria-hidden="true" />
+        {m.admin_keys_rotate_button()}
+      </SoftButton>
+      <SoftButton onclick={onexport}>
+        <Download size={18} aria-hidden="true" />
+        {m.admin_keys_export_button()}
+      </SoftButton>
     </div>
   </div>
 </Card>
@@ -114,12 +118,12 @@
   }
 
   .key-actions {
+    display: flex;
+    gap: var(--space-sm);
     padding-top: var(--space-xs);
   }
 
-  .btn-content {
-    display: inline-flex;
-    align-items: center;
-    gap: var(--space-sm);
+  .key-actions :global(.soft-btn) {
+    flex: 1;
   }
 </style>
