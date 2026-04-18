@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Rotate Organization Key" |
+* | "Rotate Org Key" |
 *
 * @param {Admin_Keys_Rotate_ButtonInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

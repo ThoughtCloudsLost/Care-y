@@ -56,6 +56,11 @@
     background: color-mix(in srgb, var(--ink) 15%, transparent);
   }
 
+  .soft-btn:focus-visible {
+    outline: 2px solid var(--brand-text);
+    outline-offset: 2px;
+  }
+
   .soft-btn:disabled {
     opacity: 0.4;
     cursor: default;

@@ -6,17 +6,17 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Admin_Keys_Rotate_ButtonInputs */
 
 const en_admin_keys_rotate_button = /** @type {(inputs: Admin_Keys_Rotate_ButtonInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Rotate Organization Key`)
+	return /** @type {LocalizedString} */ (`Rotate Org Key`)
 };
 
 const es_admin_keys_rotate_button = /** @type {(inputs: Admin_Keys_Rotate_ButtonInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Rotar clave de la organizacion`)
+	return /** @type {LocalizedString} */ (`Rotar clave org`)
 };
 
 /**
 * | output |
 * | --- |
-* | "Rotate Organization Key" |
+* | "Rotate Org Key" |
 *
 * @param {Admin_Keys_Rotate_ButtonInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

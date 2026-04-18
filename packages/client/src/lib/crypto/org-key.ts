@@ -108,6 +108,17 @@ export class OrgKeyManager {
     }
   }
 
+  /**
+   * Return a copy of the raw org secret key bytes for escrow export.
+   * Returns null if the key is not loaded. The caller receives a copy
+   * so it can be passed to encryptWithPassphrase without exposing the
+   * internal buffer to external zeroing.
+   */
+  getSecretKey(): Uint8Array | null {
+    if (!this.orgSecret) return null;
+    return new Uint8Array(this.orgSecret);
+  }
+
   /** Whether the org key is currently loaded (for UI status indicators). */
   get isLoaded(): boolean {
     return this.orgSecret !== null;
