@@ -6,17 +6,17 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Admin_Retention_TitleInputs */
 
 const en_admin_retention_title = /** @type {(inputs: Admin_Retention_TitleInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`PII Retention`)
+	return /** @type {LocalizedString} */ (`Personal Identifying Information Retention`)
 };
 
 const es_admin_retention_title = /** @type {(inputs: Admin_Retention_TitleInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Retencion de datos personales`)
+	return /** @type {LocalizedString} */ (`Retencion de informacion personal identificable`)
 };
 
 /**
 * | output |
 * | --- |
-* | "PII Retention" |
+* | "Personal Identifying Information Retention" |
 *
 * @param {Admin_Retention_TitleInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

@@ -583,7 +583,7 @@
   "hub_sms_templates_subtitle": "Automated SMS message templates",
   "hub_branding_subtitle": "Organization name, colors, and theme",
   "hub_keys_subtitle": "Encryption key status and rotation",
-  "hub_retention_subtitle": "PII retention and data lifecycle",
+  "hub_retention_subtitle": "Personal identifying information retention and lifecycle",
   "hub_reports_subtitle": "Usage statistics and activity reports",
   "admin_coming_soon": "Coming soon",
   "role_admin": "Admin",
@@ -765,6 +765,21 @@
   "admin_escrow_error": "Export failed",
   "admin_escrow_continue": "Continue",
 
-  "admin_retention_title": "PII Retention",
-  "admin_retention_placeholder": "Coming in a future update"
+  "admin_retention_title": "Personal Identifying Information Retention",
+  "admin_retention_placeholder": "Coming in a future update",
+  "admin_retention_toggle_label": "Automatic data deletion",
+  "admin_retention_days_label": "Retention period (days)",
+  "admin_retention_days_placeholder": "Disabled",
+  "admin_retention_range_hint": "Between 1 and 3,650 days (10 years)",
+  "admin_retention_set_title": "Set data retention to {days} days?",
+  "admin_retention_set_body": "Tickets, messages, and caller personal information older than {days} days will be permanently and automatically deleted. This cannot be undone. Deleted data cannot be recovered, even with the escrow file.",
+  "admin_retention_clear_title": "Disable automatic data deletion?",
+  "admin_retention_clear_body": "Tickets, messages, and caller personal information will be kept indefinitely until manually deleted.",
+  "admin_retention_active_description": "Tickets, messages, and caller personal information older than {days} days are automatically deleted.",
+  "admin_retention_inactive_description": "Automatic deletion is off. Tickets, messages, and caller personal information are kept until manually deleted.",
+  "admin_retention_unsaved_hint": "Unsaved change",
+  "admin_retention_saved": "Retention setting saved",
+  "admin_retention_error": "Failed to update retention setting",
+  "admin_retention_confirm": "Set retention",
+  "admin_retention_disable": "Disable"
 }

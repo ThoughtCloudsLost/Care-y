@@ -583,7 +583,7 @@
   "hub_sms_templates_subtitle": "Plantillas de mensajes SMS automatizados",
   "hub_branding_subtitle": "Nombre, colores y tema de la organizacion",
   "hub_keys_subtitle": "Estado de claves de cifrado y rotacion",
-  "hub_retention_subtitle": "Retencion de PII y ciclo de vida de datos",
+  "hub_retention_subtitle": "Retencion de informacion personal identificable y ciclo de vida",
   "hub_reports_subtitle": "Estadisticas de uso e informes de actividad",
   "admin_coming_soon": "Proximamente",
   "role_admin": "Administrador",
@@ -765,6 +765,21 @@
   "admin_escrow_error": "La exportacion fallo",
   "admin_escrow_continue": "Continuar",
 
-  "admin_retention_title": "Retencion de datos personales",
-  "admin_retention_placeholder": "Disponible en una futura actualizacion"
+  "admin_retention_title": "Retencion de informacion personal identificable",
+  "admin_retention_placeholder": "Disponible en una futura actualizacion",
+  "admin_retention_toggle_label": "Eliminacion automatica de datos",
+  "admin_retention_days_label": "Periodo de retencion (dias)",
+  "admin_retention_days_placeholder": "Desactivado",
+  "admin_retention_range_hint": "Entre 1 y 3,650 dias (10 anos)",
+  "admin_retention_set_title": "Establecer retencion de datos en {days} dias?",
+  "admin_retention_set_body": "Los tickets, mensajes e informacion personal de los llamantes con mas de {days} dias se eliminaran permanente y automaticamente. Esto no se puede deshacer. Los datos eliminados no se pueden recuperar, ni siquiera con el archivo de custodia.",
+  "admin_retention_clear_title": "Desactivar la eliminacion automatica de datos?",
+  "admin_retention_clear_body": "Los tickets, mensajes e informacion personal de los llamantes se conservaran indefinidamente hasta que se eliminen manualmente.",
+  "admin_retention_active_description": "Los tickets, mensajes e informacion personal de los llamantes con mas de {days} dias se eliminan automaticamente.",
+  "admin_retention_inactive_description": "La eliminacion automatica esta desactivada. Los tickets, mensajes e informacion personal de los llamantes se conservan hasta que se eliminen manualmente.",
+  "admin_retention_unsaved_hint": "Cambio sin guardar",
+  "admin_retention_saved": "Configuracion de retencion guardada",
+  "admin_retention_error": "Error al actualizar la configuracion de retencion",
+  "admin_retention_confirm": "Establecer retencion",
+  "admin_retention_disable": "Desactivar"
 }

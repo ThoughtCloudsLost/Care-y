@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "PII retention and data lifecycle" |
+* | "Personal identifying information retention and lifecycle" |
 *
 * @param {Hub_Retention_SubtitleInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

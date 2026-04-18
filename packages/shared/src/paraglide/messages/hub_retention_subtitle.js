@@ -6,17 +6,17 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Hub_Retention_SubtitleInputs */
 
 const en_hub_retention_subtitle = /** @type {(inputs: Hub_Retention_SubtitleInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`PII retention and data lifecycle`)
+	return /** @type {LocalizedString} */ (`Personal identifying information retention and lifecycle`)
 };
 
 const es_hub_retention_subtitle = /** @type {(inputs: Hub_Retention_SubtitleInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Retencion de PII y ciclo de vida de datos`)
+	return /** @type {LocalizedString} */ (`Retencion de informacion personal identificable y ciclo de vida`)
 };
 
 /**
 * | output |
 * | --- |
-* | "PII retention and data lifecycle" |
+* | "Personal identifying information retention and lifecycle" |
 *
 * @param {Hub_Retention_SubtitleInputs} inputs
 * @param {{ locale?: "en" | "es" }} options
