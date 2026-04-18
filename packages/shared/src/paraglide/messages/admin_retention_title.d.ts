@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "PII Retention" |
+* | "Personal Identifying Information Retention" |
 *
 * @param {Admin_Retention_TitleInputs} inputs
 * @param {{ locale?: "en" | "es" }} options
