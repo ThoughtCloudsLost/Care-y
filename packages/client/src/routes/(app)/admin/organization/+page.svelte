@@ -1,6 +1,7 @@
 <script lang="ts">
-  import { tick } from "svelte";
+  import { tick, untrack } from "svelte";
   import { SvelteSet } from "svelte/reactivity";
+  import { page } from "$app/state";
   import { goto } from "$app/navigation";
   import { resolve } from "$app/paths";
   import type { Component } from "svelte";
@@ -79,6 +80,18 @@
   }
 
   const scroll = createSectionScroll(() => visibleSections);
+
+  let initialTabHandled = false;
+
+  $effect(() => {
+    if (initialTabHandled) return;
+    const tab = page.url.searchParams.get("tab");
+    const sections = untrack(() => visibleSections);
+    if (tab !== null && sections.some((s) => s.id === tab)) {
+      initialTabHandled = true;
+      void expandAndScroll(tab);
+    }
+  });
 
   async function expandAndScroll(id: string): Promise<void> {
     collapsedSections.delete(id);
