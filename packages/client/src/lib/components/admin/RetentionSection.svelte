@@ -6,7 +6,7 @@
     createMutation,
     useQueryClient,
   } from "@tanstack/svelte-query";
-  import { Calendar, Save } from "@lucide/svelte";
+  import { Save } from "@lucide/svelte";
   import * as m from "$lib/paraglide/messages.js";
   import { trpc } from "$lib/trpc/index.js";
   import { haptic } from "$lib/utils/haptic.js";
@@ -119,12 +119,6 @@
   {#if hubStatusQuery.isLoading}
     <Card raised contentWrap={false} class="retention-card">
       <div class="retention-inner">
-        <div class="status-row">
-          <div class="status-icon">
-            <Calendar size={24} aria-hidden="true" />
-          </div>
-          <p class="status-label">{m.admin_retention_title()}</p>
-        </div>
         <div class="toggle-row">
           <span class="toggle-label">{m.admin_retention_toggle_label()}</span>
           <Toggle disabled />
@@ -139,11 +133,9 @@
   {:else}
     <Card raised contentWrap={false} class="retention-card">
       <div class="retention-inner">
-        <div class="status-row">
-          <div class="status-icon" class:active={serverDays !== null}>
-            <Calendar size={24} aria-hidden="true" />
-          </div>
-          <p class="status-label">{m.admin_retention_title()}</p>
+        <div class="toggle-row">
+          <span class="toggle-label">{m.admin_retention_toggle_label()}</span>
+          <Toggle checked={enabled} onchange={handleToggle} />
         </div>
 
         <p class="explainer">
@@ -151,11 +143,6 @@
             ? m.admin_retention_active_description({ days: serverDays })
             : m.admin_retention_inactive_description()}
         </p>
-
-        <div class="toggle-row">
-          <span class="toggle-label">{m.admin_retention_toggle_label()}</span>
-          <Toggle checked={enabled} onchange={handleToggle} />
-        </div>
 
         <div class="input-row">
           <label class="days-label" for="retention-days">
@@ -267,34 +254,6 @@
     flex-direction: column;
     gap: var(--space-md);
     padding: var(--card-pad-y) var(--card-pad-x);
-  }
-
-  .status-row {
-    display: flex;
-    align-items: center;
-    gap: var(--space-md);
-  }
-
-  .status-icon {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 2.5rem;
-    height: 2.5rem;
-    border-radius: 50%;
-    flex-shrink: 0;
-    background: color-mix(in srgb, var(--ink) 8%, transparent);
-    color: var(--muted);
-  }
-
-  .status-icon.active {
-    background: color-mix(in srgb, var(--color-green-500) 15%, transparent);
-    color: var(--color-green-500);
-  }
-
-  .status-label {
-    font-weight: 600;
-    font-size: var(--text-base);
   }
 
   .explainer {
