@@ -788,5 +788,23 @@
   "admin_retention_saved": "Retention setting saved",
   "admin_retention_error": "Failed to update retention setting",
   "admin_retention_confirm": "Set retention",
-  "admin_retention_disable": "Disable"
+  "admin_retention_disable": "Disable",
+
+  "vol_page_title": "Volunteer",
+  "vol_section_access": "Your Access",
+  "vol_access_tickets": "Take and reply to tickets in your queues",
+  "vol_access_call": "Call and text clients",
+  "vol_access_kb": "Browse the Knowledge Base",
+  "vol_access_shifts": "Manage your shifts",
+  "vol_access_security": "View your security status",
+  "vol_section_queues": "Your Queues",
+  "vol_queues_empty": "You are not assigned to any queues yet.",
+  "vol_section_protected": "How You're Protected",
+  "vol_protected_name": "Your real name is end-to-end encrypted. Only your team can read it.",
+  "vol_protected_identifier": "Your login identifier is a pseudonym, not linked to your real identity.",
+  "vol_protected_keys": "Your encryption keys are derived from your password. The server never holds them.",
+  "vol_section_clients": "How Clients Are Protected",
+  "vol_clients_encrypted": "All client information is encrypted before it reaches the server. Only your team can decrypt it.",
+  "vol_link_security_status": "View Security Status",
+  "vol_link_replay_tour": "Replay App Tour"
 }

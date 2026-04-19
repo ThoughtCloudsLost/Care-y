@@ -36,5 +36,16 @@
 <style>
   .section-scroll-nav {
     padding: 0.5rem var(--page-pad-x);
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+
+  .section-scroll-nav::-webkit-scrollbar {
+    display: none;
+  }
+
+  .section-scroll-nav :global(.k-button) {
+    flex: 1;
   }
 </style>
