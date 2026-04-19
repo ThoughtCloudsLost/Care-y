@@ -51,15 +51,12 @@
     }
   });
 
-  const keyStatusLabel = $derived.by(() => {
-    if (hasKeys && hasOrgKeyWrap) return m.admin_users_key_ok();
-    if (!hasKeys) return m.admin_users_key_no_keys();
-    return m.admin_users_key_no_org();
-  });
-
-  const keyStatusClass = $derived.by(() => {
-    if (hasKeys && hasOrgKeyWrap) return "key-ok";
-    return "key-warn";
+  const keyStatus = $derived.by(() => {
+    if (hasKeys && hasOrgKeyWrap)
+      return { label: m.admin_users_key_ok(), cls: "key-ok" };
+    if (!hasKeys)
+      return { label: m.admin_users_key_no_keys(), cls: "key-warn" };
+    return { label: m.admin_users_key_no_org(), cls: "key-warn" };
   });
 
   function handleCardClick(): void {
@@ -135,7 +132,7 @@
             </span>
           {/if}
         </div>
-        <span class="key-status {keyStatusClass}">{keyStatusLabel}</span>
+        <span class="key-status {keyStatus.cls}">{keyStatus.label}</span>
       </div>
 
       <!-- Role chip (display-only) -->

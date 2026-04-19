@@ -46,11 +46,9 @@
     return n;
   });
 
-  const hasChanges = $derived.by(() => {
-    if (enabled && parsedDays !== null && parsedDays !== serverDays)
-      return true;
-    return false;
-  });
+  const hasChanges = $derived(
+    enabled && parsedDays !== null && parsedDays !== serverDays,
+  );
 
   const setRetentionMutation = createMutation(() => ({
     mutationFn: async (days: number | null) =>

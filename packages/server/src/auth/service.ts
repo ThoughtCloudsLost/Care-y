@@ -79,6 +79,13 @@ export interface AuthService {
 
   /** Updates the org's PII retention setting in org_config. */
   setPiiRetentionDays(days: number | null): Promise<void>;
+
+  getHubStatus(): Promise<{
+    activeUserCount: number;
+    queueCount: number;
+    keyStatus: "ok" | "missing";
+    retentionDays: number | null;
+  }>;
 }
 
 export const SESSION_COOKIE_NAME = "care_y_session" as const;
@@ -106,6 +113,38 @@ function logCleanupFailure(err: unknown): void {
     "Failed to purge expired sessions:",
     err instanceof Error ? err.message : String(err),
   );
+}
+
+async function validateDeactivation(
+  tx: Kysely<TenantDatabase>,
+  actorId: string,
+  userId: string,
+): Promise<void> {
+  if (userId === actorId) {
+    throw new ForbiddenError(ErrorCode.CANNOT_DEACTIVATE_SELF);
+  }
+
+  const targetUser = await tx
+    .selectFrom("users")
+    .selectAll()
+    .where("id", "=", userId)
+    .executeTakeFirst();
+
+  if (!targetUser) {
+    throw new NotFoundError(ErrorCode.USER_NOT_FOUND);
+  }
+
+  if (targetUser.role_id === RoleId.ADMIN) {
+    const result = await tx
+      .selectFrom("users")
+      .select(tx.fn.countAll<string>().as("count"))
+      .where("role_id", "=", RoleId.ADMIN)
+      .where("is_active", "=", true)
+      .executeTakeFirstOrThrow();
+    if (toCount(result) <= 1) {
+      throw new ForbiddenError(ErrorCode.CANNOT_DEACTIVATE_LAST_ADMIN);
+    }
+  }
 }
 
 export function createAuthService(
@@ -308,31 +347,7 @@ export function createAuthService(
   ): Promise<UserRecord> {
     return db.transaction().execute(async (tx) => {
       if (!isActive) {
-        if (userId === actorId) {
-          throw new ForbiddenError(ErrorCode.CANNOT_DEACTIVATE_SELF);
-        }
-
-        const targetUser = await tx
-          .selectFrom("users")
-          .selectAll()
-          .where("id", "=", userId)
-          .executeTakeFirst();
-
-        if (!targetUser) {
-          throw new NotFoundError(ErrorCode.USER_NOT_FOUND);
-        }
-
-        if (targetUser.role_id === RoleId.ADMIN) {
-          const result = await tx
-            .selectFrom("users")
-            .select(tx.fn.countAll<string>().as("count"))
-            .where("role_id", "=", RoleId.ADMIN)
-            .where("is_active", "=", true)
-            .executeTakeFirstOrThrow();
-          if (toCount(result) <= 1) {
-            throw new ForbiddenError(ErrorCode.CANNOT_DEACTIVATE_LAST_ADMIN);
-          }
-        }
+        await validateDeactivation(tx, actorId, userId);
       }
 
       const updated = await tx
@@ -427,5 +442,39 @@ export function createAuthService(
     updateUserRole,
     setUserActive,
     setPiiRetentionDays,
+
+    async getHubStatus(): Promise<{
+      activeUserCount: number;
+      queueCount: number;
+      keyStatus: "ok" | "missing";
+      retentionDays: number | null;
+    }> {
+      const [userCount, queueCount, keyStatus, retentionConfig] =
+        await Promise.all([
+          db
+            .selectFrom("users")
+            .select(db.fn.countAll<string>().as("c"))
+            .where("is_active", "=", true)
+            .executeTakeFirstOrThrow(),
+          db
+            .selectFrom("queues")
+            .select(db.fn.countAll<string>().as("c"))
+            .executeTakeFirstOrThrow(),
+          db
+            .selectFrom("org_config")
+            .select("org_public_key")
+            .executeTakeFirst(),
+          db
+            .selectFrom("org_config")
+            .select("pii_retention_days")
+            .executeTakeFirst(),
+        ]);
+      return {
+        activeUserCount: Number(userCount.c),
+        queueCount: Number(queueCount.c),
+        keyStatus: keyStatus?.org_public_key ? "ok" : "missing",
+        retentionDays: retentionConfig?.pii_retention_days ?? null,
+      };
+    },
   };
 }

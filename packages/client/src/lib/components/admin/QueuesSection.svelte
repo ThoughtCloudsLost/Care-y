@@ -80,8 +80,11 @@
 
   // ── Decrypt helpers ──
 
-  function decryptQueueName(queue: QueueRecord): string | null {
-    return orgCache.decrypt(`queue:${queue.id}`, queue.encryptedName);
+  function decryptQueueName(queue: QueueRecord): string {
+    return (
+      orgCache.decrypt(`queue:${queue.id}`, queue.encryptedName) ??
+      queue.id.slice(0, 8)
+    );
   }
 
   function decryptUserName(userId: string): string | null {
@@ -101,35 +104,19 @@
     })),
   }));
 
-  const membersByQueue = $derived.by(
-    (): SvelteMap<string, readonly string[]> => {
-      const queues = queuesQuery.data ?? [];
-      const map = new SvelteMap<string, readonly string[]>();
-      const results = memberResults;
-      let idx = 0;
-      for (const q of queues) {
-        const result = results[idx++];
-        if (result?.data) map.set(q.id, result.data);
-      }
-      return map;
-    },
-  );
-
-  const memberLoadingByQueue = $derived.by((): SvelteMap<string, boolean> => {
+  const memberData = $derived.by(() => {
     const queues = queuesQuery.data ?? [];
-    const map = new SvelteMap<string, boolean>();
+    const members = new SvelteMap<string, readonly string[]>();
+    const loading = new SvelteMap<string, boolean>();
     const results = memberResults;
     let idx = 0;
     for (const q of queues) {
       const result = results[idx++];
-      map.set(q.id, result?.isLoading ?? true);
+      if (result?.data) members.set(q.id, result.data);
+      loading.set(q.id, result?.isLoading ?? true);
     }
-    return map;
+    return { members, loading };
   });
-
-  function getMemberSet(queueId: string): ReadonlySet<string> {
-    return new Set(membersByQueue.get(queueId) ?? []);
-  }
 
   // ── Expandable sections (expanded by default) ──
 
@@ -201,27 +188,17 @@
 
   // ── Reorder ──
 
-  function handleMoveUp(index: number): void {
+  function handleMove(index: number, direction: -1 | 1): void {
     const queues = queuesQuery.data;
-    if (!queues || index <= 0) return;
+    if (!queues) return;
+    const outOfBounds =
+      direction === -1 ? index <= 0 : index >= queues.length - 1;
+    if (outOfBounds) return;
     const newOrder = [...queues];
     const removed = newOrder.splice(index, 1);
     const item = removed[0];
     if (item === undefined) return;
-    newOrder.splice(index - 1, 0, item);
-    reorderMutation.mutate(
-      newOrder.map((q, i) => ({ queueId: q.id, sortOrder: i })),
-    );
-  }
-
-  function handleMoveDown(index: number): void {
-    const queues = queuesQuery.data;
-    if (!queues || index >= queues.length - 1) return;
-    const newOrder = [...queues];
-    const removed = newOrder.splice(index, 1);
-    const item = removed[0];
-    if (item === undefined) return;
-    newOrder.splice(index + 1, 0, item);
+    newOrder.splice(index + direction, 0, item);
     reorderMutation.mutate(
       newOrder.map((q, i) => ({ queueId: q.id, sortOrder: i })),
     );
@@ -243,7 +220,7 @@
 
   function openDeleteDialog(queue: QueueRecord): void {
     deleteQueueId = queue.id;
-    deleteQueueName = decryptQueueName(queue) ?? queue.id.slice(0, 8);
+    deleteQueueName = decryptQueueName(queue);
     reassignTargetId = "";
     deleteDialogOpened = true;
   }
@@ -280,6 +257,9 @@
 
   let pickerOpened = $state(false);
   let pickerQueueId = $state("");
+  const pickerMemberSet: ReadonlySet<string> = $derived(
+    new Set(memberData.members.get(pickerQueueId) ?? []),
+  );
 
   function openMemberPicker(queueId: string): void {
     pickerQueueId = queueId;
@@ -297,7 +277,7 @@
 
   function openQueueSheet(queue: QueueRecord): void {
     queueSheetId = queue.id;
-    queueSheetName = decryptQueueName(queue) ?? queue.id.slice(0, 8);
+    queueSheetName = decryptQueueName(queue);
     queueSheetOpened = true;
   }
 
@@ -388,8 +368,8 @@
       {#each queuesQuery.data ?? [] as queue, index (queue.id)}
         {@const queueName = decryptQueueName(queue)}
         {@const isExpanded = expandedQueues.has(queue.id)}
-        {@const members = membersByQueue.get(queue.id) ?? []}
-        {@const isLoading = memberLoadingByQueue.get(queue.id) ?? true}
+        {@const members = memberData.members.get(queue.id) ?? []}
+        {@const isLoading = memberData.loading.get(queue.id) ?? true}
 
         <Card raised contentWrap={false} class="queue-card">
           <div class="queue-card-inner">
@@ -399,7 +379,7 @@
               role="button"
               tabindex="0"
               aria-expanded={isExpanded}
-              aria-label={queueName ?? queue.id.slice(0, 8)}
+              aria-label={queueName}
               onclick={() => toggleExpand(queue.id)}
               onkeydown={onKeyActivate(() => toggleExpand(queue.id))}
             >
@@ -423,7 +403,7 @@
                   disabled={index === 0}
                   onclick={(e) => {
                     e.stopPropagation();
-                    handleMoveUp(index);
+                    handleMove(index, -1);
                   }}
                 >
                   <ChevronUp size={18} aria-hidden="true" />
@@ -435,7 +415,7 @@
                   disabled={index === (queuesQuery.data?.length ?? 0) - 1}
                   onclick={(e) => {
                     e.stopPropagation();
-                    handleMoveDown(index);
+                    handleMove(index, 1);
                   }}
                 >
                   <ChevronDown size={18} aria-hidden="true" />
@@ -597,7 +577,7 @@
 <QueueMemberPicker
   opened={pickerOpened}
   queueId={pickerQueueId}
-  currentMemberIds={getMemberSet(pickerQueueId)}
+  currentMemberIds={pickerMemberSet}
   ondismiss={handlePickerDismiss}
 />
 

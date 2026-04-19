@@ -39,7 +39,7 @@ import {
 } from "../auth/roles.js";
 import { ForbiddenError, NotFoundError, RateLimitError } from "../errors.js";
 import type { RateLimiter } from "../ratelimit/rate-limiter.js";
-import type { UserRecord } from "../auth/service.js";
+import type { UserRecord, AuthService } from "../auth/service.js";
 import { SESSION_MAX_AGE_MS } from "../auth/service.js";
 import {
   buildSessionCookie,
@@ -86,6 +86,11 @@ function toUserResponse(user: UserRecord): UserResponse {
     encryptedDisplayName: user.encryptedDisplayName,
     roleId: user.roleId,
   };
+}
+
+function getAuthService(org: OrgContext, deps: AuthRouterDeps): AuthService {
+  const sessions = createTenantSessions(org, deps.tokenizer);
+  return createScopedAuthService(org, sessions, deps);
 }
 
 /**
@@ -187,8 +192,6 @@ export function createAuthRouter(deps: AuthRouterDeps) {
 
         setSessionCookie(ctx.res, session.token, isSecureCookie);
 
-        // Query enrolled 2FA methods. Reuses the same sessions instance
-        // created above to avoid redundant construction.
         const { twoFactor } = await createScopedTwoFactorServices(
           ctx.org,
           sessions,
@@ -231,8 +234,7 @@ export function createAuthRouter(deps: AuthRouterDeps) {
             throw new ForbiddenError(ErrorCode.ONLY_ADMINS_CAN_ASSIGN_ROLES);
           }
 
-          const sessions = createTenantSessions(ctx.org, deps.tokenizer);
-          const authService = createScopedAuthService(ctx.org, sessions, deps);
+          const authService = getAuthService(ctx.org, deps);
           const user = await authService.register({
             identifier: input.identifier,
             password: input.password,
@@ -248,8 +250,7 @@ export function createAuthRouter(deps: AuthRouterDeps) {
       ),
 
     logout: authedProcedure.mutation(async ({ ctx }) => {
-      const sessions = createTenantSessions(ctx.org, deps.tokenizer);
-      const authService = createScopedAuthService(ctx.org, sessions, deps);
+      const authService = getAuthService(ctx.org, deps);
       await authService.logout(ctx.session.token);
       ctx.res.setHeader("Set-Cookie", buildClearSessionCookie());
 
@@ -272,8 +273,7 @@ export function createAuthRouter(deps: AuthRouterDeps) {
           throw new ForbiddenError(ErrorCode.CANNOT_CHANGE_OWN_ROLE);
         }
 
-        const sessions = createTenantSessions(ctx.org, deps.tokenizer);
-        const authService = createScopedAuthService(ctx.org, sessions, deps);
+        const authService = getAuthService(ctx.org, deps);
         const targetUser = await authService.findUserById(input.userId);
         if (!targetUser) {
           throw new NotFoundError(ErrorCode.USER_NOT_FOUND);
@@ -300,8 +300,7 @@ export function createAuthRouter(deps: AuthRouterDeps) {
 
     setPiiRetention: adminProcedure.input(setPiiRetentionInputSchema).mutation(
       withErrorWrapping(async ({ ctx, input }) => {
-        const sessions = createTenantSessions(ctx.org, deps.tokenizer);
-        const authService = createScopedAuthService(ctx.org, sessions, deps);
+        const authService = getAuthService(ctx.org, deps);
         await authService.setPiiRetentionDays(input.days);
         return { success: true as const };
       }),
@@ -325,8 +324,7 @@ export function createAuthRouter(deps: AuthRouterDeps) {
 
     setUserActive: adminProcedure.input(setUserActiveInputSchema).mutation(
       withErrorWrapping(async ({ ctx, input }) => {
-        const sessions = createTenantSessions(ctx.org, deps.tokenizer);
-        const authService = createScopedAuthService(ctx.org, sessions, deps);
+        const authService = getAuthService(ctx.org, deps);
         const updated = await authService.setUserActive(
           ctx.user.id,
           input.userId,
@@ -338,35 +336,8 @@ export function createAuthRouter(deps: AuthRouterDeps) {
 
     hubStatus: adminProcedure.query(
       withErrorWrapping(async ({ ctx }) => {
-        const db = ctx.org.tenantDb;
-        const [userCount, queueCount, keyStatus, retentionConfig] =
-          await Promise.all([
-            db
-              .selectFrom("users")
-              .select(db.fn.countAll<string>().as("c"))
-              .where("is_active", "=", true)
-              .executeTakeFirstOrThrow(),
-            db
-              .selectFrom("queues")
-              .select(db.fn.countAll<string>().as("c"))
-              .executeTakeFirstOrThrow(),
-            db
-              .selectFrom("org_config")
-              .select("org_public_key")
-              .executeTakeFirst(),
-            db
-              .selectFrom("org_config")
-              .select("pii_retention_days")
-              .executeTakeFirst(),
-          ]);
-        return {
-          activeUserCount: Number(userCount.c),
-          queueCount: Number(queueCount.c),
-          keyStatus: keyStatus?.org_public_key
-            ? ("ok" as const)
-            : ("missing" as const),
-          retentionDays: retentionConfig?.pii_retention_days ?? null,
-        };
+        const authService = getAuthService(ctx.org, deps);
+        return await authService.getHubStatus();
       }),
     ),
 
