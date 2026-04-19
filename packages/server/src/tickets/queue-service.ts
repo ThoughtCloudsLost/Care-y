@@ -19,6 +19,7 @@ export interface QueueRecord {
   readonly escalateDays: number;
   readonly isActive: boolean;
   readonly createdAt: Date;
+  readonly openCount: string;
 }
 
 export interface QueueService {
@@ -35,14 +36,17 @@ export interface QueueService {
   delete(queueId: string, reassignTo?: string): Promise<void>;
 }
 
-function toRecord(row: {
-  id: string;
-  encrypted_name: Buffer;
-  sort_order: number;
-  escalate_days: number;
-  is_active: boolean;
-  created_at: Date;
-}): QueueRecord {
+function toRecord(
+  row: {
+    id: string;
+    encrypted_name: Buffer;
+    sort_order: number;
+    escalate_days: number;
+    is_active: boolean;
+    created_at: Date;
+  },
+  openCount = "0",
+): QueueRecord {
   return {
     id: row.id,
     encryptedName: row.encrypted_name,
@@ -50,6 +54,7 @@ function toRecord(row: {
     escalateDays: row.escalate_days,
     isActive: row.is_active,
     createdAt: row.created_at,
+    openCount,
   };
 }
 
@@ -82,13 +87,32 @@ export function createQueueService(db: Kysely<TenantDatabase>): QueueService {
 
     async listActive() {
       const rows = await db
-        .selectFrom("queues")
-        .selectAll()
-        .where("is_active", "=", true)
-        .orderBy("sort_order", "asc")
+        .selectFrom("queues as q")
+        .leftJoin("tickets as t", (join) =>
+          join.onRef("t.queue_id", "=", "q.id").on("t.status", "=", "open"),
+        )
+        .select([
+          "q.id",
+          "q.encrypted_name",
+          "q.sort_order",
+          "q.escalate_days",
+          "q.is_active",
+          "q.created_at",
+        ])
+        .select((eb) => eb.fn.count<string>("t.id").as("openCount"))
+        .where("q.is_active", "=", true)
+        .groupBy([
+          "q.id",
+          "q.encrypted_name",
+          "q.sort_order",
+          "q.escalate_days",
+          "q.is_active",
+          "q.created_at",
+        ])
+        .orderBy("q.sort_order", "asc")
         .execute();
 
-      return rows.map(toRecord);
+      return rows.map((r) => toRecord(r, r.openCount));
     },
 
     async update(queueId, input) {

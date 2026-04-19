@@ -806,5 +806,20 @@
   "vol_section_clients": "How Clients Are Protected",
   "vol_clients_encrypted": "All client information is encrypted before it reaches the server. Only your team can decrypt it.",
   "vol_link_security_status": "View Security Status",
-  "vol_link_replay_tour": "Replay App Tour"
+  "vol_link_replay_tour": "Replay App Tour",
+
+  "mgr_page_title": "Manager",
+  "mgr_section_role": "Your Role",
+  "mgr_role_reports": "View reports and team metrics",
+  "mgr_role_queues": "See all queues, not just your assignments",
+  "mgr_role_tickets": "Elevated ticket management permissions",
+  "mgr_section_ops": "Operations Snapshot",
+  "mgr_ops_total_tickets": "{count} open tickets",
+  "mgr_ops_queue_depth": "{count} open",
+  "mgr_ops_no_queues": "No active queues",
+  "mgr_section_queues": "Your Queues",
+  "mgr_section_protected": "Protection",
+  "mgr_protected_summary": "Your identity and client data are end-to-end encrypted. The server never holds plaintext.",
+  "mgr_link_reports": "View Reports",
+  "mgr_link_security_status": "View Security Status"
 }
