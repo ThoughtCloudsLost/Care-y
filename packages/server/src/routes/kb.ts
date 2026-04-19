@@ -172,8 +172,15 @@ export function createKbRouter(deps: KBRouterDeps) {
 
     deleteItem: managerProcedure.input(z.object({ itemId: z.uuid() })).mutation(
       withErrorWrapping(async ({ ctx, input }) => {
+        const mediaSvc = deps.createMediaSvc(ctx.org.tenantDb);
+        const attachments = await mediaSvc.listAttachments(input.itemId, {
+          includeSoftDeleted: true,
+        });
+        for (const att of attachments) {
+          await deps.blobStore.delete(att.blobKey);
+        }
+
         const svc = deps.createItemSvc(ctx.org.tenantDb);
-        // care-y-ignore-next-line route-delegates-to-service -- single service call, no business logic
         await svc.delete(input.itemId);
       }),
     ),

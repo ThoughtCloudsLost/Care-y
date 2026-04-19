@@ -100,10 +100,17 @@ index f83845881302040a240af0d836464932551573e6..711eaddc598a715800f44f46cd475226
  
    let {
 diff --git a/svelte/components/Link.svelte b/svelte/components/Link.svelte
-index 5b219dc6403e587a20f5b2ce79fcc1cbc152db3f..dc6dd5504cce9cc0243910915a4c1433785483ae 100644
+index 5b219dc6403e587a20f5b2ce79fcc1cbc152db3f..04b079572a40038fcc746f75487dc5c9839a9689 100644
 --- a/svelte/components/Link.svelte
 +++ b/svelte/components/Link.svelte
-@@ -123,10 +123,10 @@
+@@ -119,15 +119,27 @@
+   });
+ </script>
+ 
++<!-- WAI-ARIA: keyboard activation for non-native interactive elements.
++     Enter activates all interactive roles. Space activates buttons/tabs
++     but NOT links (WAI-ARIA Link pattern). -->
+ <svelte:element
    this={component}
    bind:this={el}
    class={classes}
@@ -114,8 +121,18 @@ index 5b219dc6403e587a20f5b2ce79fcc1cbc152db3f..dc6dd5504cce9cc0243910915a4c1433
 +  {...restProps}
 +  {...linkProps}
    onclick={onClick || onclick}
++  onkeydown={(e) => {
++    restProps.onkeydown?.(e);
++    if (e.defaultPrevented) return;
++    const role = e.currentTarget?.getAttribute('role');
++    if (e.key === 'Enter' || (e.key === ' ' && role !== 'link')) {
++      e.preventDefault();
++      e.currentTarget?.click();
++    }
++  }}
  >
    {@render children?.()}
+ </svelte:element>
 diff --git a/svelte/components/Messagebar.svelte b/svelte/components/Messagebar.svelte
 index c2fbdb2c614369629d1cdff35bbccee3d38ee173..20a4ae45e250d4142cd2087feb592ba39d1cd9bb 100644
 --- a/svelte/components/Messagebar.svelte
