@@ -417,6 +417,7 @@ const appRouter = createAppRouter({
   telephonyAdminDeps: {
     configService: telephonyConfigService,
     webhookBaseUrl: env.WEBHOOK_BASE_URL,
+    indexer,
   },
   ticketDeps: {
     blobStore,
