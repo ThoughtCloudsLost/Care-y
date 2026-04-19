@@ -153,13 +153,16 @@ describe("AvatarPanel", () => {
     expect(onnavigate).toHaveBeenCalledWith("/admin/people?tab=users");
   });
 
-  it("fires coming soon toast for unimplemented destination", async () => {
-    renderPanel();
+  it("fires onnavigate for communications destination", async () => {
+    const onnavigate = vi.fn();
+    renderPanel({ onnavigate });
 
     const telephonyItem = screen.getByText("Telephony");
     await fireEvent.click(telephonyItem);
 
-    expect(mockToastShow).toHaveBeenCalledWith("Coming soon");
+    expect(onnavigate).toHaveBeenCalledWith(
+      "/admin/communications?tab=telephony",
+    );
   });
 
   it("fires onnavigate with admin hub path when admin role label tapped", async () => {

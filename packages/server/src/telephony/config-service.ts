@@ -92,6 +92,15 @@ export interface TelephonyConfigService {
   lookupProvisionedPhones(
     orgId: string,
   ): Promise<readonly { number: string; sid: string }[]>;
+
+  /**
+   * Dev-only: seed a config blob that includes fake phone numbers.
+   * Skips provider validation since no real Twilio account exists.
+   */
+  devSeedConfigWithPhones?(
+    orgId: string,
+    phones: readonly { number: string; sid: string; label?: string }[],
+  ): Promise<void>;
 }
 
 export function createTelephonyConfigService(
@@ -307,5 +316,50 @@ export function createTelephonyConfigService(
         sid: pn.sid ?? pn.id ?? pn.number,
       }));
     },
+
+    ...(process.env.NODE_ENV === "development"
+      ? {
+          async devSeedConfigWithPhones(
+            orgId: string,
+            phones: readonly {
+              number: string;
+              sid: string;
+              label?: string;
+            }[],
+          ): Promise<void> {
+            const configObj = {
+              mode: "byot" as const,
+              accountSid: "ACdev00000000000000000000000mock",
+              authToken: "dev_mock_auth_token_000000000000",
+              phoneNumbers: phones.map((p) => ({
+                number: p.number,
+                sid: p.sid,
+                label: p.label,
+                friendlyName: p.label ?? p.number,
+              })),
+            };
+
+            const sealed = encryptConfig(configObj);
+
+            await db
+              .insertInto("telephony_config")
+              .values({
+                org_id: orgId,
+                provider: "twilio",
+                config: sealed,
+              })
+              .onConflict((oc) =>
+                oc.column("org_id").doUpdateSet({
+                  provider: "twilio",
+                  config: sealed,
+                  updated_at: new Date(),
+                }),
+              )
+              .execute();
+
+            providerFactory.invalidate(orgId);
+          },
+        }
+      : {}),
   };
 }

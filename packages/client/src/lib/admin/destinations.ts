@@ -57,9 +57,9 @@ export const ADMIN_DESTINATIONS: readonly AdminDestination[] = [
     icon: Phone,
     label: m.panel_telephony,
     subtitle: m.hub_telephony_subtitle,
-    path: "/admin/telephony",
+    path: "/admin/communications?tab=telephony",
     permission: Permission.MANAGE_INFRASTRUCTURE,
-    implemented: false,
+    implemented: true,
   },
   {
     id: "blacklist",
@@ -67,9 +67,9 @@ export const ADMIN_DESTINATIONS: readonly AdminDestination[] = [
     icon: Ban,
     label: m.panel_blacklist,
     subtitle: m.hub_blacklist_subtitle,
-    path: "/admin/telephony?tab=blacklist",
+    path: "/admin/communications?tab=blacklist",
     permission: Permission.MANAGE_INFRASTRUCTURE,
-    implemented: false,
+    implemented: true,
   },
   {
     id: "greetings",
@@ -77,9 +77,9 @@ export const ADMIN_DESTINATIONS: readonly AdminDestination[] = [
     icon: Mic,
     label: m.panel_greetings,
     subtitle: m.hub_greetings_subtitle,
-    path: "/admin/messages?tab=greetings",
+    path: "/admin/communications?tab=greetings",
     permission: Permission.MANAGE_INFRASTRUCTURE,
-    implemented: false,
+    implemented: true,
   },
   {
     id: "sms-templates",
@@ -87,9 +87,9 @@ export const ADMIN_DESTINATIONS: readonly AdminDestination[] = [
     icon: MessageSquare,
     label: m.panel_sms_templates,
     subtitle: m.hub_sms_templates_subtitle,
-    path: "/admin/messages?tab=templates",
+    path: "/admin/communications?tab=templates",
     permission: Permission.MANAGE_INFRASTRUCTURE,
-    implemented: false,
+    implemented: true,
   },
 
   // ORGANIZATION

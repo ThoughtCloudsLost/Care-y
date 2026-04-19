@@ -1222,7 +1222,18 @@ export async function devAutoLogin(
     await seedKBArticles(orgPublicKey, orgKeyManager);
   }
 
-  // 7. Seed test tickets (server creates tickets with real ECIES key wraps)
+  // 7. Seed telephony config (server encrypts with its own secretsEncryptor)
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- dev-only, conditionally spread route
+  const telAdmin = trpc.telephonyAdmin as
+    | Record<string, { mutate: () => Promise<unknown> }>
+    | undefined;
+  const seedTel = telAdmin?.devSeedTelephony;
+  if (seedTel) {
+    await seedTel.mutate();
+    console.log("[dev] devSeedTelephony: telephony config seeded");
+  }
+
+  // 8. Seed test tickets (server creates tickets with real ECIES key wraps)
   await getDevSeedTickets().mutate();
   console.log("[dev] devSeedTickets: tickets seeded");
 }

@@ -34,6 +34,7 @@
     "dev": "node scripts/dev-setup.mjs && pnpm --filter @care-y/client dev",
     "dev:mobile": "node scripts/dev-setup.mjs && pnpm --filter @care-y/client dev:mobile",
     "dev:setup": "node scripts/dev-setup.mjs",
+    "dev:db:clean": "docker compose down -v",
     "postinstall": "lefthook install"
   },
   "pnpm": {
