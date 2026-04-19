@@ -58,3 +58,27 @@ export const createManagedTelephonyInputSchema = z.object({
 export type CreateManagedTelephonyInput = z.infer<
   typeof createManagedTelephonyInputSchema
 >;
+
+/** Input for adding a phone number to the blacklist. E.164 format required. */
+export const addToBlacklistInputSchema = z.object({
+  phoneNumber: z.string().regex(/^\+[1-9]\d{1,14}$/, "Must be E.164 format"),
+});
+
+export type AddToBlacklistInput = z.infer<typeof addToBlacklistInputSchema>;
+
+/** Input for removing a phone number from the blacklist. */
+export const removeFromBlacklistInputSchema = z.object({
+  id: z.uuid(),
+});
+
+export type RemoveFromBlacklistInput = z.infer<
+  typeof removeFromBlacklistInputSchema
+>;
+
+/** Input for assigning phone number purposes (outbound, system). */
+export const setPhonePurposeInputSchema = z.object({
+  outboundSid: z.string().nullable(),
+  systemSid: z.string().nullable(),
+});
+
+export type SetPhonePurposeInput = z.infer<typeof setPhonePurposeInputSchema>;

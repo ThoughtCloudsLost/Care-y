@@ -118,6 +118,12 @@ export {
   type MaskedTelephonyConfigOutput,
   createManagedTelephonyInputSchema,
   type CreateManagedTelephonyInput,
+  addToBlacklistInputSchema,
+  type AddToBlacklistInput,
+  removeFromBlacklistInputSchema,
+  type RemoveFromBlacklistInput,
+  setPhonePurposeInputSchema,
+  type SetPhonePurposeInput,
 } from "./schemas/telephony.js";
 
 // --- Telephony content schemas ---

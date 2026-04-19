@@ -88,12 +88,17 @@ describe("createTelephonyAdminRouter", () => {
     mockConfigService = createMockConfigService();
   });
 
+  const mockIndexer = {
+    hash: vi.fn((input: string, orgId: string) => `hash_${orgId}_${input}`),
+  };
+
   function buildDeps(
     serviceOverride?: TelephonyConfigService,
   ): TelephonyAdminRouterDeps {
     return {
       configService: serviceOverride ?? mockConfigService,
       webhookBaseUrl: "https://example.com",
+      indexer: mockIndexer,
     };
   }
 
@@ -102,7 +107,7 @@ describe("createTelephonyAdminRouter", () => {
     expect(routerInstance).toBeDefined();
   });
 
-  it("router exposes saveConfig, getConfig, and provisionWebhooks procedures", () => {
+  it("router exposes all expected procedures", () => {
     const routerInstance = createTelephonyAdminRouter(buildDeps());
     const def = routerInstance._def;
     expect(def.procedures).toBeDefined();
@@ -110,6 +115,10 @@ describe("createTelephonyAdminRouter", () => {
     expect(keys).toContain("saveConfig");
     expect(keys).toContain("getConfig");
     expect(keys).toContain("provisionWebhooks");
+    expect(keys).toContain("addToBlacklist");
+    expect(keys).toContain("removeFromBlacklist");
+    expect(keys).toContain("listBlacklist");
+    expect(keys).toContain("setPhonePurpose");
   });
 
   describe("saveConfig", () => {
