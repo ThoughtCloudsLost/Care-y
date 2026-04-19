@@ -10,9 +10,9 @@ overrides:
   serialize-javascript: '>=7.0.3'
 
 patchedDependencies:
-  konsta@5.0.8:
-    hash: df10c62eb10f8e27e4d6a8fff795f9f90a2969e256dcfd0be003ca04fd5abac9
-    path: patches/konsta@5.0.8.patch
+  konsta:
+    hash: f04f43bff4707f2cf6388655e4e5dbc24686198f657e8c5a72ec206f745c6ff6
+    path: patches/konsta.patch
 
 importers:
 
@@ -104,7 +104,7 @@ importers:
         version: 3.4.0
       konsta:
         specifier: 5.0.8
-        version: 5.0.8(patch_hash=df10c62eb10f8e27e4d6a8fff795f9f90a2969e256dcfd0be003ca04fd5abac9)
+        version: 5.0.8(patch_hash=f04f43bff4707f2cf6388655e4e5dbc24686198f657e8c5a72ec206f745c6ff6)
       prosemirror-commands:
         specifier: 1.7.1
         version: 1.7.1
@@ -7219,7 +7219,7 @@ snapshots:
 
   kolorist@1.8.0: {}
 
-  konsta@5.0.8(patch_hash=df10c62eb10f8e27e4d6a8fff795f9f90a2969e256dcfd0be003ca04fd5abac9):
+  konsta@5.0.8(patch_hash=f04f43bff4707f2cf6388655e4e5dbc24686198f657e8c5a72ec206f745c6ff6):
     dependencies:
       tailwind-merge: 3.5.0
 

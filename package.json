@@ -48,7 +48,7 @@
       "serialize-javascript": ">=7.0.3"
     },
     "patchedDependencies": {
-      "konsta@5.0.8": "patches/konsta@5.0.8.patch"
+      "konsta": "patches/konsta.patch"
     }
   },
   "devDependencies": {
