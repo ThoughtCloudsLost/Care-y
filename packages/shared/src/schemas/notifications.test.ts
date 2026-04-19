@@ -270,6 +270,7 @@ describe("auditEventTypeSchema", () => {
     "media_hard_deleted",
     "queue_created",
     "queue_updated",
+    "queue_deleted",
     "preset_created",
     "preset_updated",
   ];

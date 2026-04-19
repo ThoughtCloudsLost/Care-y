@@ -75,20 +75,12 @@
       : null,
   );
 
-  const roleName = $derived(
+  const roleInfo = $derived(
     roleId === RoleId.ADMIN
-      ? m.role_admin()
+      ? { name: m.role_admin(), path: "/admin" }
       : roleId === RoleId.MANAGER
-        ? m.role_manager()
-        : m.role_volunteer(),
-  );
-
-  const rolePagePath = $derived(
-    roleId === RoleId.ADMIN
-      ? "/admin"
-      : roleId === RoleId.MANAGER
-        ? "/admin/manager"
-        : "/admin/volunteer",
+        ? { name: m.role_manager(), path: "/admin/manager" }
+        : { name: m.role_volunteer(), path: "/admin/volunteer" },
   );
 
   const visibleDestinations = $derived(getVisibleDestinations(permissions));
@@ -136,8 +128,8 @@
           <span class="panel-name">{nameResult.value}</span>
         {/if}
       </DecryptPlaceholder>
-      <button class="panel-role" onclick={() => onnavigate(rolePagePath)}>
-        {roleName}
+      <button class="panel-role" onclick={() => onnavigate(roleInfo.path)}>
+        {roleInfo.name}
       </button>
     </div>
 

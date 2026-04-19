@@ -3,7 +3,6 @@ import { Permission } from "@care-y/shared";
 import {
   ADMIN_DESTINATIONS,
   GROUP_ORDER,
-  GROUP_LABEL_KEYS,
   getVisibleDestinations,
   groupDestinations,
   type AdminGroup,
@@ -34,13 +33,6 @@ describe("ADMIN_DESTINATIONS", () => {
     const groups = new Set<AdminGroup>(ADMIN_DESTINATIONS.map((d) => d.group));
     for (const group of groups) {
       expect(GROUP_ORDER).toContain(group);
-    }
-  });
-
-  it("GROUP_LABEL_KEYS has an entry for each group in GROUP_ORDER", () => {
-    for (const group of GROUP_ORDER) {
-      expect(GROUP_LABEL_KEYS[group]).toBeDefined();
-      expect(GROUP_LABEL_KEYS[group].length).toBeGreaterThan(0);
     }
   });
 });

@@ -1,5 +1,4 @@
 <script lang="ts">
-  import { tick } from "svelte";
   import { SvelteSet } from "svelte/reactivity";
   import { afterNavigate, goto } from "$app/navigation";
   import { resolve } from "$app/paths";
@@ -83,20 +82,12 @@
   afterNavigate(({ to }) => {
     const tab = to?.url.searchParams.get("tab") ?? null;
     if (tab !== null && visibleSections.some((s) => s.id === tab)) {
-      void expandAndScroll(tab);
+      expandAndScroll(tab);
     }
   });
 
-  async function expandAndScroll(id: string): Promise<void> {
-    collapsedSections.delete(id);
-    await tick();
-    const skipTransition = window.matchMedia(
-      "(prefers-reduced-motion: reduce)",
-    ).matches;
-    if (!skipTransition) {
-      await new Promise<void>((r) => setTimeout(r, 210));
-    }
-    scroll.scrollTo(id);
+  function expandAndScroll(id: string): void {
+    void scroll.expandAndScroll(id, () => collapsedSections.delete(id));
   }
 
   const navbarCtx = getNavbarOverrideCtx();
@@ -116,7 +107,7 @@
   <SectionScrollNav
     sections={visibleSections}
     active={scroll.active}
-    onscroll={(id: string) => void expandAndScroll(id)}
+    onscroll={(id: string) => expandAndScroll(id)}
     ariaLabel={m.admin_org_title()}
   />
 {/snippet}

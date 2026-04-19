@@ -48,47 +48,42 @@
       !exporting,
   );
 
-  function getStrengthLabel(s: PassphraseStrength): () => string {
+  interface StrengthDisplay {
+    label: () => string;
+    color: string;
+    width: string;
+  }
+
+  function getStrengthConfig(s: PassphraseStrength): StrengthDisplay {
     switch (s) {
       case "too-short":
-        return m.admin_escrow_strength_too_short;
+        return {
+          label: m.admin_escrow_strength_too_short,
+          color: "var(--color-red-500)",
+          width: "25%",
+        };
       case "acceptable":
-        return m.admin_escrow_strength_acceptable;
+        return {
+          label: m.admin_escrow_strength_acceptable,
+          color: "var(--color-amber-500)",
+          width: "50%",
+        };
       case "good":
-        return m.admin_escrow_strength_good;
+        return {
+          label: m.admin_escrow_strength_good,
+          color: "var(--color-green-500)",
+          width: "75%",
+        };
       case "strong":
-        return m.admin_escrow_strength_strong;
+        return {
+          label: m.admin_escrow_strength_strong,
+          color: "var(--color-green-500)",
+          width: "100%",
+        };
     }
   }
 
-  function getStrengthColor(s: PassphraseStrength): string {
-    switch (s) {
-      case "too-short":
-        return "var(--color-red-500)";
-      case "acceptable":
-        return "var(--color-amber-500)";
-      case "good":
-      case "strong":
-        return "var(--color-green-500)";
-    }
-  }
-
-  function getStrengthWidth(s: PassphraseStrength): string {
-    switch (s) {
-      case "too-short":
-        return "25%";
-      case "acceptable":
-        return "50%";
-      case "good":
-        return "75%";
-      case "strong":
-        return "100%";
-    }
-  }
-
-  const strengthLabel = $derived(getStrengthLabel(strength));
-  const strengthColor = $derived(getStrengthColor(strength));
-  const strengthWidth = $derived(getStrengthWidth(strength));
+  const strengthConfig = $derived(getStrengthConfig(strength));
 
   export function open(): void {
     opened = true;
@@ -120,7 +115,6 @@
     try {
       const blob = encryptWithPassphrase(orgSecretKey, passBytes);
       const serialized = serializeEscrowBlob(blob);
-
       const downloadBytes = new Uint8Array(serialized.length);
       downloadBytes.set(serialized);
       const fileBlob = new Blob([downloadBytes], {
@@ -225,11 +219,11 @@
           <div class="strength-track">
             <div
               class="strength-fill"
-              style="width: {strengthWidth}; background: {strengthColor}"
+              style="width: {strengthConfig.width}; background: {strengthConfig.color}"
             ></div>
           </div>
-          <span class="strength-label" style="color: {strengthColor}">
-            {strengthLabel()}
+          <span class="strength-label" style="color: {strengthConfig.color}">
+            {strengthConfig.label()}
           </span>
         </div>
       </Block>

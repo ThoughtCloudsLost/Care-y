@@ -58,6 +58,26 @@ function toRecord(
   };
 }
 
+async function reassignTickets(
+  tx: Kysely<TenantDatabase>,
+  fromQueueId: string,
+  toQueueId: string,
+): Promise<void> {
+  const target = await tx
+    .selectFrom("queues")
+    .select("id")
+    .where("id", "=", toQueueId)
+    .executeTakeFirst();
+  if (!target) {
+    throw new NotFoundError(ErrorCode.QUEUE_NOT_FOUND);
+  }
+  await tx
+    .updateTable("tickets")
+    .set({ queue_id: toQueueId })
+    .where("queue_id", "=", fromQueueId)
+    .execute();
+}
+
 export function createQueueService(db: Kysely<TenantDatabase>): QueueService {
   return {
     async create(input) {
@@ -197,19 +217,7 @@ export function createQueueService(db: Kysely<TenantDatabase>): QueueService {
           if (reassignTo === undefined) {
             throw new ValidationError(ErrorCode.QUEUE_HAS_TICKETS);
           }
-          const target = await tx
-            .selectFrom("queues")
-            .select("id")
-            .where("id", "=", reassignTo)
-            .executeTakeFirst();
-          if (!target) {
-            throw new NotFoundError(ErrorCode.QUEUE_NOT_FOUND);
-          }
-          await tx
-            .updateTable("tickets")
-            .set({ queue_id: reassignTo })
-            .where("queue_id", "=", queueId)
-            .execute();
+          await reassignTickets(tx, queueId, reassignTo);
         }
 
         await tx

@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { tick } from "svelte";
+  import { SvelteSet } from "svelte/reactivity";
   import { createQuery } from "@tanstack/svelte-query";
   import { Notification, Link, List, ListItem } from "konsta/svelte";
   import { goto } from "$app/navigation";
@@ -194,6 +194,10 @@
 
   // --- Section scroll nav ---
 
+  const showOnHold = $derived(
+    ticketsQuery.isLoading || (countsQuery.data?.onHold ?? onHold.length) > 0,
+  );
+
   const dashboardSections = $derived.by((): readonly ScrollSection[] => {
     const sections: ScrollSection[] = [
       { id: "shift", label: m.dashboard_shift_heading, icon: CalendarDays },
@@ -218,10 +222,7 @@
       label: m.dashboard_section_unassigned,
       icon: TicketMinus,
     });
-    if (
-      ticketsQuery.isLoading ||
-      (countsQuery.data?.onHold ?? onHold.length) > 0
-    ) {
+    if (showOnHold) {
       sections.push({
         id: "on-hold",
         label: m.dashboard_section_on_hold,
@@ -263,37 +264,15 @@
   const unassignedProps = $derived(unassigned.map(toPreviewProps));
   const onHoldProps = $derived(onHold.map(toPreviewProps));
 
-  // --- Collapsible section state (all expanded by default) ---
-  let shiftExpanded = $state(true);
-  let needsAttentionExpanded = $state(true);
-  let queuesExpanded = $state(true);
-  let activityExpanded = $state(true);
-  let kbExpanded = $state(true);
-  let myTicketsExpanded = $state(true);
-  let unassignedExpanded = $state(false);
-  let onHoldExpanded = $state(false);
+  // --- Collapsible section state (all expanded except unassigned/on-hold) ---
+  const collapsedSections = new SvelteSet<string>(["unassigned", "on-hold"]);
 
-  const expandedBySection = new Map<string, () => void>([
-    ["shift", () => (shiftExpanded = true)],
-    ["activity", () => (activityExpanded = true)],
-    ["kb", () => (kbExpanded = true)],
-    ["queues", () => (queuesExpanded = true)],
-    ["needs-attention", () => (needsAttentionExpanded = true)],
-    ["my-tickets", () => (myTicketsExpanded = true)],
-    ["unassigned", () => (unassignedExpanded = true)],
-    ["on-hold", () => (onHoldExpanded = true)],
-  ]);
-
-  async function expandAndScroll(id: string): Promise<void> {
-    expandedBySection.get(id)?.();
-    await tick();
-    const skipTransition = window.matchMedia(
-      "(prefers-reduced-motion: reduce)",
-    ).matches;
-    if (!skipTransition) {
-      await new Promise<void>((r) => setTimeout(r, 210));
+  function toggleSection(id: string): void {
+    if (collapsedSections.has(id)) {
+      collapsedSections.delete(id);
+    } else {
+      collapsedSections.add(id);
     }
-    scroll.scrollTo(id);
   }
 
   // Ticket title decryption is handled by ticketCache (TicketDecryptCache).
@@ -356,10 +335,6 @@
     toastStore.show(m.dashboard_encrypted_help(), 5000);
   }
 
-  function handleActivityTap(ticketId: string): void {
-    void goto(resolve(`/tickets/${ticketId}`));
-  }
-
   function handleKBTap(itemId: string): void {
     void goto(resolve(`/library/${itemId}`));
   }
@@ -376,7 +351,8 @@
   <SectionScrollNav
     sections={dashboardSections}
     active={scroll.active}
-    onscroll={(id: string) => void expandAndScroll(id)}
+    onscroll={(id: string) =>
+      void scroll.expandAndScroll(id, () => collapsedSections.delete(id))}
     ariaLabel={m.nav_home()}
   />
 {/snippet}
@@ -395,8 +371,8 @@
     <ShiftSection
       shift={shiftQuery.data?.shift ?? null}
       loading={shiftQuery.isLoading}
-      expanded={shiftExpanded}
-      ontoggle={() => (shiftExpanded = !shiftExpanded)}
+      expanded={!collapsedSections.has("shift")}
+      ontoggle={() => toggleSection("shift")}
     />
   </div>
 
@@ -404,9 +380,9 @@
     <ActivitySection
       activity={activityProps}
       loading={activityQuery.isLoading}
-      expanded={activityExpanded}
-      ontoggle={() => (activityExpanded = !activityExpanded)}
-      ontap={handleActivityTap}
+      expanded={!collapsedSections.has("activity")}
+      ontoggle={() => toggleSection("activity")}
+      ontap={handleTicketTap}
     />
   </div>
 
@@ -414,8 +390,8 @@
     <KBSection
       kbItems={kbProps}
       loading={kbQuery.isLoading}
-      expanded={kbExpanded}
-      ontoggle={() => (kbExpanded = !kbExpanded)}
+      expanded={!collapsedSections.has("kb")}
+      ontoggle={() => toggleSection("kb")}
       ontap={handleKBTap}
     />
   </div>
@@ -424,8 +400,8 @@
     <QueueCards
       queues={queueProps}
       loading={queuesQuery.isLoading}
-      expanded={queuesExpanded}
-      ontoggle={() => (queuesExpanded = !queuesExpanded)}
+      expanded={!collapsedSections.has("queues")}
+      ontoggle={() => toggleSection("queues")}
       ontap={handleQueueTap}
     />
   </div>
@@ -439,8 +415,8 @@
           loading={ticketsQuery.isLoading}
           icon={TicketAlert}
           iconColor="var(--brand-accent)"
-          expanded={needsAttentionExpanded}
-          ontoggle={() => (needsAttentionExpanded = !needsAttentionExpanded)}
+          expanded={!collapsedSections.has("needs-attention")}
+          ontoggle={() => toggleSection("needs-attention")}
         >
           <TicketPreviewList
             heading={m.dashboard_section_needs_attention()}
@@ -461,8 +437,8 @@
         loading={ticketsQuery.isLoading}
         icon={TicketIcon}
         iconColor="var(--brand-accent)"
-        expanded={myTicketsExpanded}
-        ontoggle={() => (myTicketsExpanded = !myTicketsExpanded)}
+        expanded={!collapsedSections.has("my-tickets")}
+        ontoggle={() => toggleSection("my-tickets")}
       >
         <TicketPreviewList
           heading={m.dashboard_section_my_tickets()}
@@ -485,8 +461,8 @@
         loading={ticketsQuery.isLoading}
         icon={TicketMinus}
         iconColor="var(--brand-accent)"
-        expanded={unassignedExpanded}
-        ontoggle={() => (unassignedExpanded = !unassignedExpanded)}
+        expanded={!collapsedSections.has("unassigned")}
+        ontoggle={() => toggleSection("unassigned")}
       >
         <TicketPreviewList
           heading={m.dashboard_section_unassigned()}
@@ -501,7 +477,7 @@
       </CollapsibleSection>
     </div>
 
-    {#if ticketsQuery.isLoading || (countsQuery.data?.onHold ?? onHold.length) > 0}
+    {#if showOnHold}
       <div id="section-on-hold" class="scroll-target">
         <CollapsibleSection
           heading={m.dashboard_section_on_hold()}
@@ -511,8 +487,8 @@
           loading={ticketsQuery.isLoading}
           icon={TicketPause}
           iconColor="var(--brand-accent)"
-          expanded={onHoldExpanded}
-          ontoggle={() => (onHoldExpanded = !onHoldExpanded)}
+          expanded={!collapsedSections.has("on-hold")}
+          ontoggle={() => toggleSection("on-hold")}
         >
           <TicketPreviewList
             heading={m.dashboard_section_on_hold()}

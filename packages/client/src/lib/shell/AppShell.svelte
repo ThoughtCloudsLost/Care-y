@@ -43,7 +43,7 @@
     User,
   } from "@lucide/svelte";
   import { tick, onMount } from "svelte";
-  import { SvelteMap, SvelteSet } from "svelte/reactivity";
+  import { SvelteMap } from "svelte/reactivity";
   import type { Component } from "svelte";
   import { browser } from "$app/environment";
   import { beforeNavigate, afterNavigate, goto } from "$app/navigation";
@@ -306,8 +306,24 @@
   // Updated by the cache subscription effect. Empty during SSR.
   let flatTicketList = $state<readonly RawCachedTicket[]>([]);
 
-  // All crypto context access + cache subscription + provider registration
-  // in a single effect (browser-only, never runs during SSR).
+  function isKeyWrap(val: unknown): val is TicketKeyWrap {
+    return (
+      typeof val === "object" &&
+      val !== null &&
+      "ephemeralPoint" in val &&
+      "nonce" in val &&
+      "wrappedKey" in val
+    );
+  }
+
+  function isSerializedBuffer(val: unknown): val is SerializedBuffer {
+    return typeof val === "object" && val !== null && "type" in val;
+  }
+
+  function isOrgCiphertext(val: unknown): val is SerializedBuffer | Uint8Array {
+    return val instanceof Uint8Array || isSerializedBuffer(val);
+  }
+
   $effect(() => {
     const ticketCache = getTicketDecryptCache();
     const orgCache = getOrgDecryptCache();
@@ -328,7 +344,8 @@
         RawCachedTicket[] | { pages: RawCachedTicket[][] }
       >({ queryKey: ["tickets", "list"] });
 
-      const seen = new SvelteSet<string>();
+      // eslint-disable-next-line svelte/prefer-svelte-reactivity -- function-local dedup set, not reactive
+      const seen = new Set<string>();
       const result: RawCachedTicket[] = [];
       for (const [, data] of entries) {
         if (data == null) continue;
@@ -358,34 +375,6 @@
         flatTicketList = rebuildFlatList();
       }
     });
-
-    // Register the ticket search provider with decrypt trigger functions.
-    // The provider's search() calls these in a $derived context, so all
-    // reactive SvelteMap reads are tracked. Results update automatically
-    // as titles are decrypted, queue names are resolved, etc.
-    // Type-narrowing helpers for the unknown -> concrete boundary.
-    // The query cache stores server response data whose encrypted fields
-    // are typed as unknown in RawCachedTicket. These helpers satisfy
-    // strict-type-checked ESLint without losing safety.
-    function isKeyWrap(val: unknown): val is TicketKeyWrap {
-      return (
-        typeof val === "object" &&
-        val !== null &&
-        "ephemeralPoint" in val &&
-        "nonce" in val &&
-        "wrappedKey" in val
-      );
-    }
-
-    function isSerializedBuffer(val: unknown): val is SerializedBuffer {
-      return typeof val === "object" && val !== null && "type" in val;
-    }
-
-    function isOrgCiphertext(
-      val: unknown,
-    ): val is SerializedBuffer | Uint8Array {
-      return val instanceof Uint8Array || isSerializedBuffer(val);
-    }
 
     const unregisterProvider = registerSearchProvider(
       createTicketSearchProvider({

@@ -1,3 +1,4 @@
+import { tick } from "svelte";
 import type { Component } from "svelte";
 
 export interface ScrollSection {
@@ -13,6 +14,7 @@ interface SectionScrollOptions {
 export interface SectionScroll {
   readonly active: string;
   scrollTo(id: string): void;
+  expandAndScroll(id: string, expand: () => void): Promise<void>;
 }
 
 export function createSectionScroll(
@@ -57,15 +59,23 @@ export function createSectionScroll(
   $effect(() => {
     const sections = getSections();
     const offset = offsetRem * 16;
+    const SCROLL_SLOP = 16;
+
+    // eslint-disable-next-line svelte/prefer-svelte-reactivity -- effect-local DOM cache, not reactive
+    const elCache = new Map<string, HTMLElement>();
+    for (const section of sections) {
+      const el = document.getElementById(`section-${section.id}`);
+      if (el) elCache.set(section.id, el);
+    }
 
     function updateActive(): void {
       if (programmaticScroll) return;
       let current = sections[0]?.id;
 
       for (const section of sections) {
-        const el = document.getElementById(`section-${section.id}`);
+        const el = elCache.get(section.id);
         if (!el) continue;
-        if (el.getBoundingClientRect().top <= offset + 16) {
+        if (el.getBoundingClientRect().top <= offset + SCROLL_SLOP) {
           current = section.id;
         }
       }
@@ -92,10 +102,26 @@ export function createSectionScroll(
       document.removeEventListener("scroll", onScroll, { capture: true });
   });
 
+  async function expandAndScroll(
+    id: string,
+    expand: () => void,
+  ): Promise<void> {
+    expand();
+    await tick();
+    const skipTransition = window.matchMedia(
+      "(prefers-reduced-motion: reduce)",
+    ).matches;
+    if (!skipTransition) {
+      await new Promise<void>((r) => setTimeout(r, 210));
+    }
+    scrollTo(id);
+  }
+
   return {
     get active(): string {
       return active;
     },
     scrollTo,
+    expandAndScroll,
   };
 }

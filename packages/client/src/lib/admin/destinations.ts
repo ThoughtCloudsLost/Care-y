@@ -141,12 +141,6 @@ export const GROUP_ORDER: readonly AdminGroup[] = [
   "organization",
 ];
 
-export const GROUP_LABEL_KEYS: Record<AdminGroup, string> = {
-  people: "panel_group_people",
-  communications: "panel_group_communications",
-  organization: "panel_group_organization",
-};
-
 export function getVisibleDestinations(
   permissions: ReadonlySet<Permission>,
 ): readonly AdminDestination[] {

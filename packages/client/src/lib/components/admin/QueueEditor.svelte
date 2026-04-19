@@ -74,18 +74,20 @@
 
   const canSubmit = $derived(orgKeyLoaded && !nameEmpty && escalationValid);
 
+  function onMutationSuccess(message: string): void {
+    haptic();
+    toastStore.show(message);
+    announceToLiveRegion("polite", message);
+    void queryClient.invalidateQueries({ queryKey: ["queues"] });
+    ondismiss();
+  }
+
   const createMut = createMutation(() => ({
     mutationFn: async (input: {
       encryptedName: string;
       escalateDays: number;
     }) => ticketRouter.createQueue.mutate(input),
-    onSuccess: () => {
-      haptic();
-      toastStore.show(m.admin_queue_created());
-      announceToLiveRegion("polite", m.admin_queue_created());
-      void queryClient.invalidateQueries({ queryKey: ["queues"] });
-      ondismiss();
-    },
+    onSuccess: () => onMutationSuccess(m.admin_queue_created()),
     onError: () => {
       toastStore.show(m.error_generic());
     },
@@ -97,13 +99,7 @@
       encryptedName?: string;
       escalateDays?: number;
     }) => ticketRouter.updateQueue.mutate(input),
-    onSuccess: () => {
-      haptic();
-      toastStore.show(m.admin_queue_updated());
-      announceToLiveRegion("polite", m.admin_queue_updated());
-      void queryClient.invalidateQueries({ queryKey: ["queues"] });
-      ondismiss();
-    },
+    onSuccess: () => onMutationSuccess(m.admin_queue_updated()),
     onError: () => {
       toastStore.show(m.error_generic());
     },

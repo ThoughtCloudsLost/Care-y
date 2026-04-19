@@ -52,6 +52,7 @@ vi.mock("$lib/paraglide/messages.js", () => ({
   admin_rotation_error: () => "Key rotation failed.",
   admin_rotation_retry: () => "Retry",
   admin_key_rotated: () => "Organization key rotated",
+  admin_rotation_done: () => "Done",
   common_cancel: () => "Cancel",
 }));
 

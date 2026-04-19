@@ -399,7 +399,7 @@ test.describe.serial("Ticket Detail (Chat View)", () => {
 
     // Wait for voicemail player to appear (it eagerly decrypts).
     // The player has a play button with aria-label.
-    const playBtn = page
+    const _playBtn = page
       .locator("button", { hasText: /play|pause/i })
       .or(page.locator('[aria-label*="Play"]'));
 

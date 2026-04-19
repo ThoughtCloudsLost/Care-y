@@ -43,8 +43,8 @@ export function useDragDismiss(config: DragDismissConfig): DragDismissReturn {
   let committed = false;
   let fromHandle = false;
   let currentOffset = 0;
-  let prevPos = 0;
-  let lastPos = 0;
+  let prevTouchPos = 0;
+  let currentTouchPos = 0;
 
   let baseRef: HTMLElement | null = null;
 
@@ -99,8 +99,8 @@ export function useDragDismiss(config: DragDismissConfig): DragDismissReturn {
       startTime = Date.now();
     }
 
-    prevPos = lastPos;
-    lastPos = current;
+    prevTouchPos = currentTouchPos;
+    currentTouchPos = current;
 
     const dragDelta = current - startPos;
     currentOffset =
@@ -121,7 +121,9 @@ export function useDragDismiss(config: DragDismissConfig): DragDismissReturn {
     const velocity = absOffset / elapsed;
 
     const swipingBack =
-      config.direction === 1 ? lastPos < prevPos : lastPos > prevPos;
+      config.direction === 1
+        ? currentTouchPos < prevTouchPos
+        : currentTouchPos > prevTouchPos;
 
     const shouldDismiss =
       !swipingBack &&

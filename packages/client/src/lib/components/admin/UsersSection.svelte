@@ -105,12 +105,6 @@
     return "no_org_key";
   }
 
-  const ROLE_ID_SET: ReadonlySet<string> = new Set([
-    RoleId.VOLUNTEER,
-    RoleId.MANAGER,
-    RoleId.ADMIN,
-  ]);
-
   const ROLE_SORT_ORDER: Record<string, number> = {
     [RoleId.ADMIN]: 0,
     [RoleId.MANAGER]: 1,
@@ -122,10 +116,8 @@
     let result = all;
 
     if (userFilterStore.roles.size > 0) {
-      result = result.filter(
-        (u) =>
-          ROLE_ID_SET.has(u.roleId) &&
-          (userFilterStore.roles as ReadonlySet<string>).has(u.roleId),
+      result = result.filter((u) =>
+        (userFilterStore.roles as ReadonlySet<string>).has(u.roleId),
       );
     }
     if (userFilterStore.statuses.size > 0) {
@@ -145,15 +137,26 @@
     const { field, direction } = userFilterStore.sort;
     const dir = direction === "asc" ? 1 : -1;
 
+    // eslint-disable-next-line svelte/prefer-svelte-reactivity -- derived-local sort cache, not reactive
+    const nameCache = new Map<string, string>();
+    if (field === "name") {
+      for (const u of sorted) {
+        nameCache.set(
+          u.id,
+          decryptDisplayName(u.id, u.encryptedDisplayName) ?? "\uffff",
+        );
+      }
+    }
+
     sorted.sort((a, b) => {
       switch (field) {
-        case "name": {
-          const nameA =
-            decryptDisplayName(a.id, a.encryptedDisplayName) ?? "\uffff";
-          const nameB =
-            decryptDisplayName(b.id, b.encryptedDisplayName) ?? "\uffff";
-          return dir * nameA.localeCompare(nameB);
-        }
+        case "name":
+          return (
+            dir *
+            (nameCache.get(a.id) ?? "\uffff").localeCompare(
+              nameCache.get(b.id) ?? "\uffff",
+            )
+          );
         case "role":
           return (
             dir *
@@ -174,49 +177,56 @@
   });
 
   // ── Stats (exported as functions per Svelte 5 derived_invalid_export rule) ──
-  const _activeCount = $derived(
-    (usersQuery.data ?? []).filter((u) => u.isActive).length,
-  );
-  const _inactiveCount = $derived(
-    (usersQuery.data ?? []).filter((u) => !u.isActive).length,
-  );
-  const totalCount = $derived((usersQuery.data ?? []).length);
+  const userCounts = $derived.by(() => {
+    let active = 0;
+    let inactive = 0;
+    for (const u of usersQuery.data ?? []) {
+      if (u.isActive) active++;
+      else inactive++;
+    }
+    return { active, inactive, total: active + inactive };
+  });
 
   export function activeCount(): number {
-    return _activeCount;
+    return userCounts.active;
   }
 
   export function inactiveCount(): number {
-    return _inactiveCount;
+    return userCounts.inactive;
   }
 
   // ── Action sheet (per-user actions) ──
-  let sheetOpened = $state(false);
-  let sheetUserId = $state<string>("");
-  let sheetUserName = $state<string>("");
-  let sheetUserRoleId = $state<string>("");
-  let sheetIsActive = $state(true);
+  interface SheetState {
+    userId: string;
+    userName: string;
+    roleId: string;
+    isActive: boolean;
+  }
+  let sheetState = $state<SheetState | null>(null);
   let roleActionBtnEl = $state<HTMLElement | undefined>(undefined);
 
   function handleUserEdit(userId: string): void {
     const user = (usersQuery.data ?? []).find((u) => u.id === userId);
     if (!user) return;
-    sheetUserId = userId;
-    sheetUserName =
-      decryptDisplayName(userId, user.encryptedDisplayName) ??
-      userId.slice(0, 8);
-    sheetUserRoleId = user.roleId;
-    sheetIsActive = user.isActive;
-    sheetOpened = true;
+    sheetState = {
+      userId,
+      userName:
+        decryptDisplayName(userId, user.encryptedDisplayName) ??
+        userId.slice(0, 8),
+      roleId: user.roleId,
+      isActive: user.isActive,
+    };
   }
 
   function closeSheet(): void {
-    sheetOpened = false;
+    sheetState = null;
   }
 
   function handleSheetDeactivate(): void {
+    if (!sheetState) return;
+    const { userId, userName, isActive } = sheetState;
     closeSheet();
-    openDeactivateDialog(sheetUserId, sheetUserName, !sheetIsActive);
+    openDeactivateDialog(userId, userName, !isActive);
   }
 
   function handleSheetRoleChange(e: MouseEvent): void {
@@ -230,10 +240,10 @@
 
   function handleRoleSelect(roleId: RoleIdValue): void {
     popoverOpened = false;
-    closeSheet();
-    if (sheetUserId && roleId !== sheetUserRoleId) {
-      assignRoleMutation.mutate({ userId: sheetUserId, roleId });
+    if (sheetState && roleId !== sheetState.roleId) {
+      assignRoleMutation.mutate({ userId: sheetState.userId, roleId });
     }
+    closeSheet();
   }
 
   function handlePopoverDismiss(): void {
@@ -398,7 +408,7 @@
       error={usersQuery.error}
       onretry={() => void usersQuery.refetch()}
     />
-  {:else if filteredUsers.length === 0 && totalCount === 0}
+  {:else if filteredUsers.length === 0 && userCounts.total === 0}
     <Block class="text-center text-[--muted]">
       {m.admin_no_users()}
     </Block>
@@ -435,19 +445,21 @@
   {/if}
 </div>
 
-<ShellActionSheet opened={sheetOpened} ondismiss={closeSheet}>
+<ShellActionSheet opened={sheetState !== null} ondismiss={closeSheet}>
   <ActionsGroup>
-    <ActionsLabel>{sheetUserName}</ActionsLabel>
+    <ActionsLabel>{sheetState?.userName ?? ""}</ActionsLabel>
     <ActionsButton onclick={handleSheetRoleChange}>
       {m.admin_role_change()}
     </ActionsButton>
     <ActionsButton
-      colors={sheetIsActive
+      colors={sheetState?.isActive === true
         ? { textIos: "text-red-500", textMaterial: "text-red-500" }
         : {}}
       onclick={handleSheetDeactivate}
     >
-      {sheetIsActive ? m.admin_deactivate() : m.admin_reactivate()}
+      {sheetState?.isActive === true
+        ? m.admin_deactivate()
+        : m.admin_reactivate()}
     </ActionsButton>
   </ActionsGroup>
   <ActionsGroup>
@@ -460,7 +472,7 @@
 <RolePopover
   opened={popoverOpened}
   target={roleActionBtnEl}
-  currentRoleId={sheetUserRoleId}
+  currentRoleId={sheetState?.roleId ?? ""}
   placement="top"
   ondismiss={handlePopoverDismiss}
   onselect={handleRoleSelect}

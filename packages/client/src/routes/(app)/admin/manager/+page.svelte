@@ -54,12 +54,11 @@
   type AllQueueRecord = NonNullable<typeof queuesQuery.data>[number];
   type MyQueueRecord = NonNullable<typeof myQueuesQuery.data>[number];
 
-  function decryptAllQueueName(queue: AllQueueRecord): string | null {
-    return orgCache.decrypt(`queue:${queue.id}`, queue.encryptedName);
-  }
-
-  function decryptMyQueueName(queue: MyQueueRecord): string | null {
-    return orgCache.decrypt(`queue:${queue.id}`, queue.encrypted_name);
+  function decryptQueueDisplayName(
+    id: string,
+    cipher: AllQueueRecord["encryptedName"],
+  ): string | null {
+    return orgCache.decrypt(`queue:${id}`, cipher);
   }
 
   const totalOpenTickets = $derived.by((): number => {
@@ -146,7 +145,7 @@
           {/snippet}
         </ListItem>
         {#each queuesQuery.data as queue (queue.id)}
-          {@const name = decryptAllQueueName(queue)}
+          {@const name = decryptQueueDisplayName(queue.id, queue.encryptedName)}
           <ListItem
             after={m.mgr_ops_queue_depth({
               count: queue.openCount,
@@ -177,7 +176,10 @@
         <ListItem title="..." />
       {:else if myQueuesQuery.data && myQueuesQuery.data.length > 0}
         {#each myQueuesQuery.data as queue (queue.id)}
-          {@const name = decryptMyQueueName(queue)}
+          {@const name = decryptQueueDisplayName(
+            queue.id,
+            queue.encrypted_name,
+          )}
           <ListItem>
             {#snippet title()}
               {#if name}
