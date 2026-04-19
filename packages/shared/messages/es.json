@@ -788,5 +788,23 @@
   "admin_retention_saved": "Configuracion de retencion guardada",
   "admin_retention_error": "Error al actualizar la configuracion de retencion",
   "admin_retention_confirm": "Establecer retencion",
-  "admin_retention_disable": "Desactivar"
+  "admin_retention_disable": "Desactivar",
+
+  "vol_page_title": "Voluntario",
+  "vol_section_access": "Tu Acceso",
+  "vol_access_tickets": "Tomar y responder tickets en tus colas",
+  "vol_access_call": "Llamar y enviar mensajes a clientes",
+  "vol_access_kb": "Explorar la Base de Conocimiento",
+  "vol_access_shifts": "Administrar tus turnos",
+  "vol_access_security": "Ver tu estado de seguridad",
+  "vol_section_queues": "Tus Colas",
+  "vol_queues_empty": "No tienes colas asignadas todavia.",
+  "vol_section_protected": "Como Estas Protegido",
+  "vol_protected_name": "Tu nombre real tiene cifrado de extremo a extremo. Solo tu equipo puede leerlo.",
+  "vol_protected_identifier": "Tu identificador de inicio de sesion es un seudonimo, no vinculado a tu identidad real.",
+  "vol_protected_keys": "Tus claves de cifrado se derivan de tu contrasena. El servidor nunca las almacena.",
+  "vol_section_clients": "Como Estan Protegidos los Clientes",
+  "vol_clients_encrypted": "Toda la informacion del cliente se cifra antes de llegar al servidor. Solo tu equipo puede descifrarla.",
+  "vol_link_security_status": "Ver Estado de Seguridad",
+  "vol_link_replay_tour": "Repetir Tour de la App"
 }
