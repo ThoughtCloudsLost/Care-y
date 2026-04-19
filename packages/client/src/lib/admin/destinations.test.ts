@@ -109,3 +109,46 @@ describe("groupDestinations", () => {
     expect(ids).toEqual(["branding", "keys", "retention", "reports"]);
   });
 });
+
+describe("communications destinations", () => {
+  const commsIds = ["telephony", "blacklist", "greetings", "sms-templates"];
+  const commsDests = ADMIN_DESTINATIONS.filter((d) => commsIds.includes(d.id));
+
+  it("all communications destinations are implemented", () => {
+    for (const dest of commsDests) {
+      expect(dest.implemented).toBe(true);
+    }
+  });
+
+  it("all communications paths point to /admin/communications?tab=...", () => {
+    for (const dest of commsDests) {
+      expect(dest.path).toMatch(/^\/admin\/communications\?tab=/);
+    }
+  });
+
+  it("telephony path targets the telephony tab", () => {
+    const telephony = commsDests.find((d) => d.id === "telephony");
+    expect(telephony?.path).toBe("/admin/communications?tab=telephony");
+  });
+
+  it("blacklist path targets the blacklist tab", () => {
+    const blacklist = commsDests.find((d) => d.id === "blacklist");
+    expect(blacklist?.path).toBe("/admin/communications?tab=blacklist");
+  });
+
+  it("greetings path targets the greetings tab", () => {
+    const greetings = commsDests.find((d) => d.id === "greetings");
+    expect(greetings?.path).toBe("/admin/communications?tab=greetings");
+  });
+
+  it("sms-templates path targets the templates tab", () => {
+    const templates = commsDests.find((d) => d.id === "sms-templates");
+    expect(templates?.path).toBe("/admin/communications?tab=templates");
+  });
+
+  it("all communications destinations require MANAGE_INFRASTRUCTURE", () => {
+    for (const dest of commsDests) {
+      expect(dest.permission).toBe(Permission.MANAGE_INFRASTRUCTURE);
+    }
+  });
+});

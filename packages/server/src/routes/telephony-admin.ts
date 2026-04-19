@@ -82,6 +82,25 @@ export function createTelephonyAdminRouter(deps: TelephonyAdminRouterDeps) {
       }),
     ),
 
+    getProvisionedPhones: adminProcedure.query(
+      withErrorWrapping(async ({ ctx }) => {
+        return configService.lookupProvisionedPhones(ctx.org.orgId);
+      }),
+    ),
+
+    getPhonePurpose: adminProcedure.query(
+      withErrorWrapping(async ({ ctx }) => {
+        const row = await ctx.org.tenantDb
+          .selectFrom("org_config")
+          .select(["phone_outbound_sid", "phone_system_sid"])
+          .executeTakeFirstOrThrow();
+        return {
+          outboundSid: row.phone_outbound_sid,
+          systemSid: row.phone_system_sid,
+        };
+      }),
+    ),
+
     setPhonePurpose: adminProcedure.input(setPhonePurposeInputSchema).mutation(
       withErrorWrapping(async ({ ctx, input }) => {
         await ctx.org.tenantDb
@@ -93,5 +112,47 @@ export function createTelephonyAdminRouter(deps: TelephonyAdminRouterDeps) {
           .execute();
       }),
     ),
+
+    ...(process.env.NODE_ENV === "development"
+      ? {
+          devSeedTelephony: adminProcedure.mutation(
+            withErrorWrapping(async ({ ctx }) => {
+              const existing = await configService.getMaskedConfig(
+                ctx.org.orgId,
+              );
+              if (existing) return { skipped: true as const };
+
+              const devPhones = [
+                { number: "+15550001111", sid: "PNdev001", label: "Main" },
+                { number: "+15550002222", sid: "PNdev002", label: "Support" },
+              ] as const;
+
+              if (configService.devSeedConfigWithPhones) {
+                await configService.devSeedConfigWithPhones(
+                  ctx.org.orgId,
+                  devPhones,
+                );
+
+                await ctx.org.tenantDb
+                  .updateTable("org_config")
+                  .set({
+                    phone_outbound_sid: devPhones[0].sid,
+                    phone_system_sid: devPhones[1].sid,
+                  })
+                  .execute();
+              } else {
+                await configService.saveConfig({
+                  orgId: ctx.org.orgId,
+                  provider: "twilio",
+                  accountId: "ACdev00000000000000000000000mock",
+                  authToken: "dev_mock_auth_token_000000000000",
+                });
+              }
+
+              return { skipped: false as const };
+            }),
+          ),
+        }
+      : {}),
   });
 }
