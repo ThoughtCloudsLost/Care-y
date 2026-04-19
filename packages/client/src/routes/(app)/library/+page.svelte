@@ -7,6 +7,7 @@
   import { SvelteMap, SvelteSet } from "svelte/reactivity";
   import { goto } from "$app/navigation";
   import { resolve } from "$app/paths";
+  import { page } from "$app/state";
   import { Dialog, DialogButton, Link } from "konsta/svelte";
   import { FolderInput, Trash2, Download, X, FilePlus } from "@lucide/svelte";
   import SubNavbarFilterLayout from "$lib/shell/SubNavbarFilterLayout.svelte";
@@ -186,6 +187,14 @@
   let moveSheetOpen = $state(false);
   let deleteDialogOpen = $state(false);
   let categorySheetOpen = $state(false);
+
+  const urlAction = $derived(page.url.searchParams.get("action"));
+
+  $effect(() => {
+    if (urlAction === "manage-categories" && canManageCategories) {
+      categorySheetOpen = true;
+    }
+  });
 
   function handleBulkMove(): void {
     if (selectedIds.size === 0 || pendingAction) return;

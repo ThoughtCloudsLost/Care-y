@@ -116,12 +116,21 @@
 
   function handleCreateOption(optionId: string): void {
     createPopoverOpen = false;
-    if (optionId === "article") {
-      void goto(resolve("/library/new"));
-    } else if (optionId === "category") {
-      void goto(resolve("/library"));
-    } else {
-      toastStore.show(m.create_coming_soon(), 2500);
+    switch (optionId) {
+      case "article":
+        void goto(resolve("/library/new"));
+        break;
+      case "category":
+        void goto(resolve("/library?action=manage-categories"));
+        break;
+      case "queue":
+        void goto(resolve("/admin/people?tab=queues&action=create"));
+        break;
+      case "user":
+        void goto(resolve("/admin/people?tab=users&action=invite"));
+        break;
+      default:
+        break;
     }
   }
 
