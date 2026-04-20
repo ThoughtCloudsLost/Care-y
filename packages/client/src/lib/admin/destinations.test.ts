@@ -111,7 +111,7 @@ describe("groupDestinations", () => {
 });
 
 describe("communications destinations", () => {
-  const commsIds = ["telephony", "blacklist", "greetings", "sms-templates"];
+  const commsIds = ["telephony", "blocklist", "greetings", "sms-templates"];
   const commsDests = ADMIN_DESTINATIONS.filter((d) => commsIds.includes(d.id));
 
   it("all communications destinations are implemented", () => {
@@ -131,9 +131,9 @@ describe("communications destinations", () => {
     expect(telephony?.path).toBe("/admin/communications?tab=telephony");
   });
 
-  it("blacklist path targets the blacklist tab", () => {
-    const blacklist = commsDests.find((d) => d.id === "blacklist");
-    expect(blacklist?.path).toBe("/admin/communications?tab=blacklist");
+  it("blocklist path targets the blocklist tab", () => {
+    const blocklist = commsDests.find((d) => d.id === "blocklist");
+    expect(blocklist?.path).toBe("/admin/communications?tab=blocklist");
   });
 
   it("greetings path targets the greetings tab", () => {

@@ -15,7 +15,7 @@
   import SectionScrollNav from "$lib/components/SectionScrollNav.svelte";
   import CollapsibleSection from "$lib/components/dashboard/CollapsibleSection.svelte";
   import TelephonyConfigSection from "$lib/components/admin/TelephonyConfigSection.svelte";
-  import BlacklistSection from "$lib/components/admin/BlacklistSection.svelte";
+  import BlocklistSection from "$lib/components/admin/BlocklistSection.svelte";
   import GreetingsSection from "$lib/components/admin/GreetingsSection.svelte";
   import SmsTemplatesSection from "$lib/components/admin/SmsTemplatesSection.svelte";
 
@@ -47,11 +47,11 @@
       component: SmsTemplatesSection,
     },
     {
-      id: "blacklist",
-      label: m.admin_tab_blacklist,
+      id: "blocklist",
+      label: m.admin_tab_blocklist,
       icon: Ban,
       permission: Permission.MANAGE_INFRASTRUCTURE,
-      component: BlacklistSection,
+      component: BlocklistSection,
     },
   ];
 

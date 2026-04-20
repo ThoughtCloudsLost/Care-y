@@ -115,9 +115,9 @@ describe("createTelephonyAdminRouter", () => {
     expect(keys).toContain("saveConfig");
     expect(keys).toContain("getConfig");
     expect(keys).toContain("provisionWebhooks");
-    expect(keys).toContain("addToBlacklist");
-    expect(keys).toContain("removeFromBlacklist");
-    expect(keys).toContain("listBlacklist");
+    expect(keys).toContain("addToBlocklist");
+    expect(keys).toContain("removeFromBlocklist");
+    expect(keys).toContain("listBlocklist");
     expect(keys).toContain("setPhonePurpose");
   });
 
