@@ -35,7 +35,7 @@ vi.mock("$lib/shell/context.js", () => ({
 
 vi.mock("$lib/paraglide/messages.js", () => ({
   admin_tab_telephony: () => "Telephony",
-  admin_tab_blacklist: () => "Blacklist",
+  admin_tab_blocklist: () => "Blocklist",
   admin_tab_greetings: () => "Greetings",
   admin_tab_sms_templates: () => "SMS Templates",
   admin_comms_title: () => "Communications",
@@ -63,7 +63,7 @@ vi.mock("$lib/components/admin/TelephonyConfigSection.svelte", async () => ({
   ).default,
 }));
 
-vi.mock("$lib/components/admin/BlacklistSection.svelte", async () => ({
+vi.mock("$lib/components/admin/BlocklistSection.svelte", async () => ({
   default: (
     await import("$lib/components/tickets/test-helpers/PassthroughShell.svelte")
   ).default,
@@ -136,7 +136,7 @@ describe("Communications page", () => {
       const { container } = renderPage();
 
       expect(container.querySelector("#section-telephony")).toBeTruthy();
-      expect(container.querySelector("#section-blacklist")).toBeTruthy();
+      expect(container.querySelector("#section-blocklist")).toBeTruthy();
       expect(container.querySelector("#section-greetings")).toBeTruthy();
       expect(container.querySelector("#section-templates")).toBeTruthy();
     });
@@ -146,7 +146,7 @@ describe("Communications page", () => {
       const { container } = renderPage();
 
       expect(container.querySelector("#section-telephony")).toBeNull();
-      expect(container.querySelector("#section-blacklist")).toBeNull();
+      expect(container.querySelector("#section-blocklist")).toBeNull();
       expect(container.querySelector("#section-greetings")).toBeNull();
       expect(container.querySelector("#section-templates")).toBeNull();
     });
@@ -177,7 +177,7 @@ describe("Communications page", () => {
       expect(divs[0]?.id).toBe("section-telephony");
       expect(divs[1]?.id).toBe("section-greetings");
       expect(divs[2]?.id).toBe("section-templates");
-      expect(divs[3]?.id).toBe("section-blacklist");
+      expect(divs[3]?.id).toBe("section-blocklist");
     });
   });
 });

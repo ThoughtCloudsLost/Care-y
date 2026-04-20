@@ -462,9 +462,9 @@ export interface TicketReadCursorsTable {
   encrypted_read_cursor: Buffer;
 }
 
-// --- Phone blacklist ---
+// --- Phone blocklist ---
 
-export interface PhoneBlacklistTable {
+export interface PhoneBlocklistTable {
   id: Generated<string>;
   phone_hash: string;
   encrypted_number: Buffer;
@@ -536,7 +536,7 @@ export interface TenantDatabase {
   push_subscriptions: PushSubscriptionsTable;
   push_challenges: PushChallengesTable;
   audit_log: AuditLogTable;
-  phone_blacklist: PhoneBlacklistTable;
+  phone_blocklist: PhoneBlocklistTable;
   // Shifts (shifts, shift_occurrences)
   // Client portal (portal_channels)
 }

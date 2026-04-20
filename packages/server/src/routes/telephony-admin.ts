@@ -1,19 +1,19 @@
 /**
  * Telephony admin router: config management for org telephony providers,
- * phone blacklist, and phone purpose assignment.
+ * phone blocklist, and phone purpose assignment.
  *
  * All endpoints require admin-level permissions (MANAGE_ROLES).
- * Business logic is delegated to TelephonyConfigService and BlacklistRepository.
+ * Business logic is delegated to TelephonyConfigService and BlocklistRepository.
  */
 
 import { router, adminProcedure, withErrorWrapping } from "../trpc/trpc.js";
 import type { TelephonyConfigService } from "../telephony/config-service.js";
 import type { BlindIndexer } from "../crypto/field-encryptor.js";
-import { createBlacklistRepository } from "../telephony/models/blacklist-repo.js";
+import { createBlocklistRepository } from "../telephony/models/blocklist-repo.js";
 import {
   saveTelephonyConfigInputSchema,
-  addToBlacklistInputSchema,
-  removeFromBlacklistInputSchema,
+  addToBlocklistInputSchema,
+  removeFromBlocklistInputSchema,
   setPhonePurposeInputSchema,
 } from "@care-y/shared";
 import { ConflictError } from "../errors.js";
@@ -52,9 +52,9 @@ export function createTelephonyAdminRouter(deps: TelephonyAdminRouterDeps) {
       }),
     ),
 
-    addToBlacklist: adminProcedure.input(addToBlacklistInputSchema).mutation(
+    addToBlocklist: adminProcedure.input(addToBlocklistInputSchema).mutation(
       withErrorWrapping(async ({ ctx, input }) => {
-        const repo = createBlacklistRepository(ctx.org.tenantDb);
+        const repo = createBlocklistRepository(ctx.org.tenantDb);
         const phoneHash = indexer.hash(input.phoneNumber, ctx.org.orgId);
 
         if (await repo.exists(phoneHash)) {
@@ -66,18 +66,18 @@ export function createTelephonyAdminRouter(deps: TelephonyAdminRouterDeps) {
       }),
     ),
 
-    removeFromBlacklist: adminProcedure
-      .input(removeFromBlacklistInputSchema)
+    removeFromBlocklist: adminProcedure
+      .input(removeFromBlocklistInputSchema)
       .mutation(
         withErrorWrapping(async ({ ctx, input }) => {
-          const repo = createBlacklistRepository(ctx.org.tenantDb);
+          const repo = createBlocklistRepository(ctx.org.tenantDb);
           await repo.remove(input.id);
         }),
       ),
 
-    listBlacklist: adminProcedure.query(
+    listBlocklist: adminProcedure.query(
       withErrorWrapping(async ({ ctx }) => {
-        const repo = createBlacklistRepository(ctx.org.tenantDb);
+        const repo = createBlocklistRepository(ctx.org.tenantDb);
         return repo.list();
       }),
     ),
