@@ -3,9 +3,8 @@
     Block,
     DialogButton,
     Link,
-    ActionsGroup,
-    ActionsButton,
-    ActionsLabel,
+    Segmented,
+    SegmentedButton,
   } from "konsta/svelte";
   import {
     createQuery,
@@ -15,7 +14,7 @@
   import { SvelteSet } from "svelte/reactivity";
   import { RoleId } from "@care-y/shared";
   import type { RoleIdValue } from "@care-y/shared";
-  import { UserMinus, X } from "@lucide/svelte";
+  import { UserMinus, X, Save } from "@lucide/svelte";
   import * as m from "$lib/paraglide/messages.js";
   import { trpc } from "$lib/trpc/index.js";
   import { getOrgDecryptCache, getCurrentUserId } from "$lib/crypto/context.js";
@@ -30,8 +29,8 @@
   import { getTabbarOverrideCtx } from "$lib/shell/context.js";
   import QueryError from "$lib/components/QueryError.svelte";
   import ShellDialog from "$lib/shell/ShellDialog.svelte";
-  import ShellActionSheet from "$lib/shell/ShellActionSheet.svelte";
-  import RolePopover from "./RolePopover.svelte";
+  import ShellSheet from "$lib/shell/ShellSheet.svelte";
+  import SoftButton from "$lib/components/SoftButton.svelte";
   import InviteUser from "./InviteUser.svelte";
   import UserCard from "./UserCard.svelte";
 
@@ -195,7 +194,7 @@
     return userCounts.inactive;
   }
 
-  // ── Action sheet (per-user actions) ──
+  // ── Edit user sheet ──
   interface SheetState {
     userId: string;
     userName: string;
@@ -203,12 +202,12 @@
     isActive: boolean;
   }
   let sheetState = $state<SheetState | null>(null);
-  let roleActionBtnEl = $state<HTMLElement | undefined>(undefined);
+  let editRoleId = $state<RoleIdValue>(RoleId.VOLUNTEER);
 
   function handleUserEdit(userId: string): void {
     const user = (usersQuery.data ?? []).find((u) => u.id === userId);
     if (!user) return;
-    sheetState = {
+    const state: SheetState = {
       userId,
       userName:
         decryptDisplayName(userId, user.encryptedDisplayName) ??
@@ -216,10 +215,28 @@
       roleId: user.roleId,
       isActive: user.isActive,
     };
+    sheetState = state;
+    editRoleId =
+      user.roleId === RoleId.ADMIN || user.roleId === RoleId.MANAGER
+        ? user.roleId
+        : RoleId.VOLUNTEER;
   }
 
   function closeSheet(): void {
     sheetState = null;
+  }
+
+  const roleChanged = $derived(
+    sheetState !== null && editRoleId !== sheetState.roleId,
+  );
+
+  function handleSaveUser(): void {
+    if (!sheetState || !roleChanged) return;
+    assignRoleMutation.mutate({
+      userId: sheetState.userId,
+      roleId: editRoleId,
+    });
+    closeSheet();
   }
 
   function handleSheetDeactivate(): void {
@@ -227,27 +244,6 @@
     const { userId, userName, isActive } = sheetState;
     closeSheet();
     openDeactivateDialog(userId, userName, !isActive);
-  }
-
-  function handleSheetRoleChange(e: MouseEvent): void {
-    const el = e.currentTarget;
-    if (el instanceof HTMLElement) roleActionBtnEl = el;
-    popoverOpened = true;
-  }
-
-  // ── Role popover (anchored to action sheet button) ──
-  let popoverOpened = $state(false);
-
-  function handleRoleSelect(roleId: RoleIdValue): void {
-    popoverOpened = false;
-    if (sheetState && roleId !== sheetState.roleId) {
-      assignRoleMutation.mutate({ userId: sheetState.userId, roleId });
-    }
-    closeSheet();
-  }
-
-  function handlePopoverDismiss(): void {
-    popoverOpened = false;
   }
 
   // ── Deactivation dialog (single user) ──
@@ -445,38 +441,63 @@
   {/if}
 </div>
 
-<ShellActionSheet opened={sheetState !== null} ondismiss={closeSheet}>
-  <ActionsGroup>
-    <ActionsLabel>{sheetState?.userName ?? ""}</ActionsLabel>
-    <ActionsButton onclick={handleSheetRoleChange}>
-      {m.admin_role_change()}
-    </ActionsButton>
-    <ActionsButton
-      colors={sheetState?.isActive === true
-        ? { textIos: "text-red-500", textMaterial: "text-red-500" }
-        : {}}
-      onclick={handleSheetDeactivate}
+<ShellSheet
+  opened={sheetState !== null}
+  ondismiss={closeSheet}
+  title={sheetState?.userName ?? ""}
+  ariaLabel={m.admin_user_edit_actions()}
+>
+  {#snippet headerRight()}
+    <SoftButton
+      onclick={handleSaveUser}
+      disabled={!roleChanged || assignRoleMutation.isPending}
     >
-      {sheetState?.isActive === true
-        ? m.admin_deactivate()
-        : m.admin_reactivate()}
-    </ActionsButton>
-  </ActionsGroup>
-  <ActionsGroup>
-    <ActionsButton bold onclick={closeSheet}>
-      {m.common_cancel()}
-    </ActionsButton>
-  </ActionsGroup>
-</ShellActionSheet>
+      {#if assignRoleMutation.isPending}
+        {m.common_loading()}
+      {:else}
+        <Save size={16} aria-hidden="true" />
+        {m.admin_user_save_changes()}
+      {/if}
+    </SoftButton>
+  {/snippet}
+  <div class="edit-user-content">
+    <div class="role-section">
+      <p class="section-label">{m.admin_invite_role_label()}</p>
+      <Segmented strong>
+        <SegmentedButton
+          active={editRoleId === RoleId.VOLUNTEER}
+          onclick={() => (editRoleId = RoleId.VOLUNTEER)}
+        >
+          {m.admin_role_volunteer()}
+        </SegmentedButton>
+        <SegmentedButton
+          active={editRoleId === RoleId.MANAGER}
+          onclick={() => (editRoleId = RoleId.MANAGER)}
+        >
+          {m.admin_role_manager()}
+        </SegmentedButton>
+        <SegmentedButton
+          active={editRoleId === RoleId.ADMIN}
+          onclick={() => (editRoleId = RoleId.ADMIN)}
+        >
+          {m.admin_role_admin()}
+        </SegmentedButton>
+      </Segmented>
+    </div>
 
-<RolePopover
-  opened={popoverOpened}
-  target={roleActionBtnEl}
-  currentRoleId={sheetState?.roleId ?? ""}
-  placement="top"
-  ondismiss={handlePopoverDismiss}
-  onselect={handleRoleSelect}
-/>
+    <div class="deactivate-action">
+      <button
+        type="button"
+        class="deactivate-btn"
+        onclick={handleSheetDeactivate}
+      >
+        {sheetState?.isActive === true
+          ? m.admin_deactivate()
+          : m.admin_reactivate()}
+      </button>
+    </div>
+  </div>
+</ShellSheet>
 
 <ShellDialog
   opened={dialogOpened}
@@ -534,5 +555,44 @@
     padding: 3rem 1rem;
     color: var(--muted);
     font-size: var(--text-base);
+  }
+
+  .edit-user-content {
+    display: flex;
+    flex-direction: column;
+    padding: var(--space-md) var(--space-lg);
+    flex: 1;
+  }
+
+  .role-section {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-sm);
+  }
+
+  .section-label {
+    font-size: var(--text-xs);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--muted);
+  }
+
+  .deactivate-action {
+    padding: var(--space-2xl) var(--space-lg) 0;
+  }
+
+  .deactivate-btn {
+    display: block;
+    width: 100%;
+    padding: 0.625rem;
+    font-size: var(--text-sm);
+    font-weight: 500;
+    color: var(--color-red-500);
+    background: none;
+    border: none;
+    cursor: pointer;
+    text-align: center;
+    min-height: 44px;
   }
 </style>

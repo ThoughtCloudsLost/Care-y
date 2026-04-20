@@ -5,7 +5,7 @@
     createMutation,
     useQueryClient,
   } from "@tanstack/svelte-query";
-  import { Plus, Pencil, Trash2 } from "@lucide/svelte";
+  import { Plus, Pencil, Trash2, Save } from "@lucide/svelte";
   import type { SmsResponseType } from "@care-y/shared";
   import * as m from "$lib/paraglide/messages.js";
   import { trpc } from "$lib/trpc/index.js";
@@ -310,14 +310,23 @@
   ariaLabel={isEditing
     ? m.admin_templates_edit_title()
     : m.admin_templates_add_title()}
+  title={isEditing
+    ? m.admin_templates_edit_title()
+    : m.admin_templates_add_title()}
 >
+  {#snippet headerRight()}
+    <SoftButton onclick={handleSave} disabled={!formValid || isSaving}>
+      {#if isSaving}
+        {m.common_loading()}
+      {:else}
+        <Save size={16} aria-hidden="true" />
+        {isEditing
+          ? m.admin_templates_save_edit()
+          : m.admin_templates_save_create()}
+      {/if}
+    </SoftButton>
+  {/snippet}
   <div class="sheet-content">
-    <h3 class="sheet-title">
-      {isEditing
-        ? m.admin_templates_edit_title()
-        : m.admin_templates_add_title()}
-    </h3>
-
     <List strongIos outlineIos nested>
       <ListInput
         type="select"
@@ -395,16 +404,8 @@
       </p>
     {/if}
 
-    <div class="sheet-actions">
-      <SoftButton onclick={handleSave} disabled={!formValid || isSaving} full>
-        {#if isSaving}
-          {m.common_loading()}
-        {:else}
-          {m.admin_templates_save()}
-        {/if}
-      </SoftButton>
-
-      {#if isEditing}
+    {#if isEditing}
+      <div class="sheet-actions">
         <button
           type="button"
           class="delete-btn touch-feedback"
@@ -415,8 +416,8 @@
           <Trash2 size={14} />
           {m.admin_templates_delete()}
         </button>
-      {/if}
-    </div>
+      </div>
+    {/if}
   </div>
 </ShellSheet>
 
@@ -603,12 +604,7 @@
     flex-direction: column;
     gap: var(--space-md);
     padding: var(--space-lg) var(--page-pad-x);
-  }
-
-  .sheet-title {
-    font-size: var(--text-lg);
-    font-weight: 600;
-    color: var(--ink);
+    flex: 1;
   }
 
   .char-count-row {
@@ -644,7 +640,7 @@
     display: flex;
     flex-direction: column;
     gap: var(--space-sm);
-    padding-top: var(--space-sm);
+    padding-top: var(--space-2xl);
   }
 
   .delete-btn {

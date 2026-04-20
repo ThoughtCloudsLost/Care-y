@@ -371,12 +371,24 @@
   opened={credSheetOpen}
   ondismiss={closeCredSheet}
   ariaLabel={m.admin_telephony_credentials_heading({ provider: providerName })}
+  title={m.admin_telephony_credentials_heading({ provider: providerName })}
 >
+  {#snippet headerRight()}
+    <SoftButton
+      onclick={handleSaveCredentials}
+      disabled={!accountIdInput ||
+        !authTokenInput ||
+        saveCredentialsMutation.isPending}
+    >
+      {#if saveCredentialsMutation.isPending}
+        <Preloader class="w-4 h-4" />
+      {:else}
+        <Save size={16} aria-hidden="true" />
+      {/if}
+      {m.admin_telephony_save_credentials()}
+    </SoftButton>
+  {/snippet}
   <div class="sheet-content">
-    <h3 class="sheet-title">
-      {m.admin_telephony_credentials_heading({ provider: providerName })}
-    </h3>
-
     <List strongIos outlineIos class="cred-list">
       <ListInput
         label={m.admin_telephony_account_id()}
@@ -408,23 +420,6 @@
       <Info size={18} aria-hidden="true" />
       <p>{m.admin_telephony_grace_period()}</p>
     </div>
-
-    <div class="sheet-actions">
-      <SoftButton
-        onclick={handleSaveCredentials}
-        disabled={!accountIdInput ||
-          !authTokenInput ||
-          saveCredentialsMutation.isPending}
-        full
-      >
-        {#if saveCredentialsMutation.isPending}
-          <Preloader class="w-5 h-5" />
-        {:else}
-          <Save size={18} aria-hidden="true" />
-          {m.admin_telephony_save_credentials()}
-        {/if}
-      </SoftButton>
-    </div>
   </div>
 </ShellSheet>
 
@@ -433,9 +428,22 @@
   opened={rolesSheetOpen}
   ondismiss={() => (rolesSheetOpen = false)}
   ariaLabel={m.admin_telephony_number_roles()}
+  title={m.admin_telephony_number_roles()}
 >
+  {#snippet headerRight()}
+    <SoftButton
+      onclick={handleSavePurpose}
+      disabled={!purposeChanged || setPurposeMutation.isPending}
+    >
+      {#if setPurposeMutation.isPending}
+        <Preloader class="w-4 h-4" />
+      {:else}
+        <Save size={16} aria-hidden="true" />
+      {/if}
+      {m.admin_telephony_save_purpose()}
+    </SoftButton>
+  {/snippet}
   <div class="sheet-content">
-    <h3 class="sheet-title">{m.admin_telephony_number_roles()}</h3>
     <p class="section-description">
       {m.admin_telephony_number_roles_description()}
     </p>
@@ -481,23 +489,6 @@
         {/each}
       </ListInput>
     </List>
-
-    {#if purposeChanged}
-      <div class="sheet-actions">
-        <SoftButton
-          onclick={handleSavePurpose}
-          disabled={setPurposeMutation.isPending}
-          full
-        >
-          {#if setPurposeMutation.isPending}
-            <Preloader class="w-5 h-5" />
-          {:else}
-            <Save size={18} aria-hidden="true" />
-            {m.admin_telephony_save_purpose()}
-          {/if}
-        </SoftButton>
-      </div>
-    {/if}
   </div>
 </ShellSheet>
 
@@ -705,15 +696,5 @@
     flex-direction: column;
     gap: var(--space-md);
     padding: var(--space-lg) var(--page-pad-x);
-  }
-
-  .sheet-title {
-    font-size: var(--text-lg);
-    font-weight: 600;
-    color: var(--ink);
-  }
-
-  .sheet-actions {
-    padding-top: var(--space-sm);
   }
 </style>

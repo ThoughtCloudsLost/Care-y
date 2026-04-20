@@ -1,6 +1,6 @@
 <script lang="ts">
-  import { Button, List, ListItem, ListInput, BlockTitle } from "konsta/svelte";
-  import { Pencil } from "@lucide/svelte";
+  import { Button, List, ListItem, ListInput } from "konsta/svelte";
+  import { Pencil, Save, Trash2 } from "@lucide/svelte";
   import { useQueryClient } from "@tanstack/svelte-query";
   import * as m from "$lib/paraglide/messages.js";
   import { trpc } from "$lib/trpc/index.js";
@@ -10,6 +10,7 @@
   import { haptic } from "$lib/utils/haptic.js";
   import { RouterNotAvailableError } from "$lib/errors.js";
   import ShellSheet from "$lib/shell/ShellSheet.svelte";
+  import SoftButton from "$lib/components/SoftButton.svelte";
 
   export interface CategoryEntry {
     id: string;
@@ -156,29 +157,22 @@
     />
   </List>
   <div class="edit-actions">
-    <Button
-      small
-      inline
-      disabled={!canSave}
-      onclick={() => void handleSave()}
-      aria-label={m.library_category_save_label()}
-    >
+    <SoftButton disabled={!canSave} onclick={() => void handleSave()}>
+      <Save size={14} aria-hidden="true" />
       {m.library_category_save()}
-    </Button>
+    </SoftButton>
     <Button small inline clear onclick={cancelEdit}>
       {m.common_cancel()}
     </Button>
     {#if categoryId !== undefined}
-      <Button
-        small
-        inline
-        clear
-        class="delete-btn"
-        colors={{ textIos: "text-red-500", textMaterial: "text-red-500" }}
+      <button
+        type="button"
+        class="delete-inline-btn"
         onclick={() => void handleDelete(categoryId)}
+        aria-label={m.library_category_delete()}
       >
-        {m.library_category_delete()}
-      </Button>
+        <Trash2 size={16} aria-hidden="true" />
+      </button>
     {/if}
   </div>
 {/snippet}
@@ -189,11 +183,8 @@
     cancelEdit();
     ondismiss();
   }}
+  title={m.library_category_sheet_title()}
 >
-  <BlockTitle large class="sheet-title">
-    {m.library_category_sheet_title()}
-  </BlockTitle>
-
   <List>
     {#each categories as cat (cat.id)}
       {#if editingId === cat.id}
@@ -250,6 +241,24 @@
     padding: 0.5rem 0;
   }
 
+  .delete-inline-btn {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 44px;
+    height: 44px;
+    border: none;
+    border-radius: 0.5rem;
+    background: none;
+    color: var(--color-red-500);
+    cursor: pointer;
+  }
+
+  .delete-inline-btn:active {
+    background: color-mix(in srgb, var(--color-red-500) 10%, transparent);
+  }
+
   .add-row {
     padding: 0.5rem var(--page-pad-x);
   }
@@ -262,9 +271,5 @@
     width: 2rem !important;
     padding: 0 !important;
     color: var(--muted) !important;
-  }
-
-  :global(.sheet-title) {
-    padding-top: 1rem !important;
   }
 </style>

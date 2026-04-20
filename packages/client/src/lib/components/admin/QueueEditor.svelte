@@ -1,5 +1,6 @@
 <script lang="ts">
-  import { List, ListInput, Block, Button } from "konsta/svelte";
+  import { List, ListInput, Block } from "konsta/svelte";
+  import { Save } from "@lucide/svelte";
   import { createMutation, useQueryClient } from "@tanstack/svelte-query";
   import * as m from "$lib/paraglide/messages.js";
   import { trpc } from "$lib/trpc/index.js";
@@ -10,6 +11,7 @@
   import { announceToLiveRegion } from "$lib/utils/announce.js";
   import { RouterNotAvailableError } from "$lib/errors.js";
   import ShellSheet from "$lib/shell/ShellSheet.svelte";
+  import SoftButton from "$lib/components/SoftButton.svelte";
   import type { SerializedBuffer } from "$lib/utils/buffer-encoding.js";
 
   interface QueueEditorProps {
@@ -42,6 +44,8 @@
   let queueName = $state("");
   let escalationDays = $state("");
   let wasOpen = $state(false);
+  let initialName = $state("");
+  let initialEscalation = $state("");
 
   const textEncoder = new TextEncoder();
 
@@ -50,17 +54,26 @@
       if (isCreateMode) {
         queueName = "";
         escalationDays = "";
+        initialName = "";
+        initialEscalation = "";
       } else {
         const id = queueId ?? "";
         const decrypted = orgCache.decrypt(`queue:${id}`, queueEncryptedName);
         queueName = decrypted ?? "";
         escalationDays = queueEscalateDays > 0 ? String(queueEscalateDays) : "";
+        initialName = queueName;
+        initialEscalation = escalationDays;
       }
     }
     wasOpen = opened;
   });
 
   const nameEmpty = $derived(queueName.trim().length === 0);
+  const hasChanges = $derived(
+    isCreateMode ||
+      queueName !== initialName ||
+      escalationDays !== initialEscalation,
+  );
 
   const parsedEscalationDays = $derived.by((): number => {
     const trimmed = escalationDays.trim();
@@ -72,7 +85,9 @@
 
   const escalationValid = $derived(parsedEscalationDays >= 0);
 
-  const canSubmit = $derived(orgKeyLoaded && !nameEmpty && escalationValid);
+  const canSubmit = $derived(
+    orgKeyLoaded && !nameEmpty && escalationValid && hasChanges,
+  );
 
   function onMutationSuccess(message: string): void {
     haptic();
@@ -139,10 +154,20 @@
   );
 </script>
 
-<ShellSheet {opened} {ondismiss} ariaLabel={title}>
+<ShellSheet {opened} {ondismiss} ariaLabel={title} {title}>
+  {#snippet headerRight()}
+    <SoftButton onclick={handleSubmit} disabled={!canSubmit || isPending}>
+      {#if isPending}
+        {m.common_loading()}
+      {:else}
+        <Save size={16} aria-hidden="true" />
+        {isCreateMode
+          ? m.admin_queue_editor_save_create()
+          : m.admin_queue_editor_save_edit()}
+      {/if}
+    </SoftButton>
+  {/snippet}
   <div class="editor-content">
-    <h2 class="editor-title">{title}</h2>
-
     {#if !orgKeyLoaded}
       <Block>
         <p class="text-sm text-[--color-amber-500] font-medium" role="alert">
@@ -194,18 +219,8 @@
       </Block>
     {/if}
 
-    <Block>
-      <Button onclick={handleSubmit} disabled={!canSubmit || isPending}>
-        {#if isPending}
-          {m.common_loading()}
-        {:else}
-          {m.admin_queue_editor_save()}
-        {/if}
-      </Button>
-    </Block>
-
     {#if !isCreateMode && ondeletequeue}
-      <Block>
+      <div class="delete-action">
         <button
           type="button"
           class="delete-btn"
@@ -214,21 +229,21 @@
         >
           {m.admin_queue_editor_delete()}
         </button>
-      </Block>
+      </div>
     {/if}
   </div>
 </ShellSheet>
 
 <style>
   .editor-content {
+    display: flex;
+    flex-direction: column;
     padding: 0 0 var(--space-lg);
+    flex: 1;
   }
 
-  .editor-title {
-    font-size: var(--text-lg);
-    font-weight: 600;
-    color: var(--ink);
-    padding: var(--space-md) var(--page-pad-x) 0;
+  .delete-action {
+    padding: var(--space-2xl) var(--k-block-padding-horizontal) 0;
   }
 
   .pii-warning {

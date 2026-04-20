@@ -6,9 +6,6 @@
     DialogButton,
     List,
     ListItem,
-    ActionsGroup,
-    ActionsButton,
-    ActionsLabel,
   } from "konsta/svelte";
   import {
     createQuery,
@@ -17,13 +14,7 @@
     useQueryClient,
   } from "@tanstack/svelte-query";
   import { SvelteSet, SvelteMap } from "svelte/reactivity";
-  import {
-    ChevronUp,
-    ChevronDown,
-    EllipsisVertical,
-    Plus,
-    X,
-  } from "@lucide/svelte";
+  import { ChevronUp, ChevronDown, Pencil, Plus, X } from "@lucide/svelte";
   import * as m from "$lib/paraglide/messages.js";
   import { trpc } from "$lib/trpc/index.js";
   import { getOrgDecryptCache } from "$lib/crypto/context.js";
@@ -38,7 +29,6 @@
   import { ErrorCode } from "@care-y/shared";
   import ShellDialog from "$lib/shell/ShellDialog.svelte";
   import ShellSheet from "$lib/shell/ShellSheet.svelte";
-  import ShellActionSheet from "$lib/shell/ShellActionSheet.svelte";
   import QueueMemberPicker from "./QueueMemberPicker.svelte";
   import QueueEditor from "./QueueEditor.svelte";
 
@@ -270,33 +260,6 @@
     pickerOpened = false;
   }
 
-  // ── Queue action sheet ──
-  let queueSheetOpened = $state(false);
-  let queueSheetId = $state("");
-  let queueSheetName = $state("");
-
-  function openQueueSheet(queue: QueueRecord): void {
-    queueSheetId = queue.id;
-    queueSheetName = decryptQueueName(queue);
-    queueSheetOpened = true;
-  }
-
-  function closeQueueSheet(): void {
-    queueSheetOpened = false;
-  }
-
-  function handleSheetEdit(): void {
-    const id = queueSheetId;
-    closeQueueSheet();
-    openEditor(id);
-  }
-
-  function handleSheetDelete(): void {
-    const queue = (queuesQuery.data ?? []).find((q) => q.id === queueSheetId);
-    closeQueueSheet();
-    if (queue) openDeleteDialog(queue);
-  }
-
   // ── Edit handler (QueueEditor wires into this) ──
 
   let editorQueueId = $state<string | null>(null);
@@ -426,10 +389,10 @@
                   aria-label={m.admin_queue_edit()}
                   onclick={(e) => {
                     e.stopPropagation();
-                    openQueueSheet(queue);
+                    openEditor(queue.id);
                   }}
                 >
-                  <EllipsisVertical size={18} aria-hidden="true" />
+                  <Pencil size={16} aria-hidden="true" />
                 </button>
               </div>
             </div>
@@ -490,28 +453,6 @@
     </div>
   {/if}
 </div>
-
-<ShellActionSheet opened={queueSheetOpened} ondismiss={closeQueueSheet}>
-  <ActionsGroup>
-    <ActionsLabel>{queueSheetName}</ActionsLabel>
-    <ActionsButton onclick={handleSheetEdit}>
-      {m.admin_queue_edit()}
-    </ActionsButton>
-    <ActionsButton
-      colors={canDelete
-        ? { textIos: "text-red-500", textMaterial: "text-red-500" }
-        : {}}
-      onclick={canDelete ? handleSheetDelete : undefined}
-    >
-      {m.admin_queue_delete()}
-    </ActionsButton>
-  </ActionsGroup>
-  <ActionsGroup>
-    <ActionsButton bold onclick={closeQueueSheet}>
-      {m.common_cancel()}
-    </ActionsButton>
-  </ActionsGroup>
-</ShellActionSheet>
 
 <!-- Step 1: simple delete confirmation -->
 <ShellDialog

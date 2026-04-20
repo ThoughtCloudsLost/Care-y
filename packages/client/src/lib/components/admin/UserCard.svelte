@@ -1,6 +1,6 @@
 <script lang="ts">
   import { Card, Chip, Checkbox } from "konsta/svelte";
-  import { EllipsisVertical } from "@lucide/svelte";
+  import { Pencil } from "@lucide/svelte";
   import { RoleId } from "@care-y/shared";
   import * as m from "$lib/paraglide/messages.js";
   import { onKeyActivate } from "$lib/utils/a11y.js";
@@ -161,7 +161,7 @@
           aria-label={m.admin_user_edit_actions()}
           type="button"
         >
-          <EllipsisVertical size={20} aria-hidden="true" />
+          <Pencil size={16} aria-hidden="true" />
         </button>
       {/if}
     </div>
