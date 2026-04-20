@@ -66,7 +66,9 @@
 
   const guard = useNavigationGuard({
     isDirty: () => bridge.dirty,
-    fallbackUrl: resolve(`/library/${articleId}`),
+    get fallbackUrl() {
+      return resolve(`/library/${articleId}`);
+    },
     onLeave: () => ptr.setEnabled(true),
   });
 

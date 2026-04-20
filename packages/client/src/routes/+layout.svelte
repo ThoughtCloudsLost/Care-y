@@ -8,6 +8,7 @@
   import { browser } from "$app/environment";
   import favicon from "$lib/assets/favicon.svg";
   import { initKeyboardViewport } from "$lib/utils/keyboard-viewport";
+  import { getBrandingTitle } from "$lib/branding/title.svelte.js";
   import CryptoProvider from "$lib/providers/CryptoProvider.svelte";
   import SSEProvider from "$lib/providers/SSEProvider.svelte";
   import BrandingProvider from "$lib/providers/BrandingProvider.svelte";
@@ -70,7 +71,7 @@
 </script>
 
 <svelte:head>
-  <title>CARE-Y</title>
+  <title>{getBrandingTitle()}</title>
   <link rel="icon" href={favicon} />
 </svelte:head>
 
@@ -96,7 +97,11 @@
     <SSEProvider>
       <BrandingProvider>
         <ThemeProvider>
-          <AppShell {activeTab} ontabchange={handleTabChange}>
+          <AppShell
+            {activeTab}
+            orgName={getBrandingTitle()}
+            ontabchange={handleTabChange}
+          >
             {@render children()}
           </AppShell>
         </ThemeProvider>

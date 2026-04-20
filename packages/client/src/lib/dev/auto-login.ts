@@ -14,6 +14,7 @@
  * so Vite's dead-code elimination strips it from production builds entirely.
  */
 import { trpc } from "$lib/trpc/index.js";
+import { setOrgKeyReady } from "$lib/crypto/org-key-ready.svelte.js";
 import { registerCrypto } from "$lib/auth/register-crypto.js";
 import { loginCrypto } from "$lib/auth/login-crypto.js";
 import {
@@ -1208,6 +1209,7 @@ export async function devAutoLogin(
     // The seed encrypted them with the throwaway keypair which is now gone.
     await reEncryptSeedNames(orgPublicKey);
   }
+  setOrgKeyReady(true);
 
   // 6. Seed KB articles client-side (first run only)
   // Need the org public key. On first run we have it from bootstrapOrgKeypair.

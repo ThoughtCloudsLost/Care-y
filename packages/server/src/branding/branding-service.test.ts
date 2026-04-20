@@ -74,6 +74,7 @@ describe("createBrandingService", () => {
         encryptedClientText: Buffer.from("enc-text").toString("base64"),
         clientEncryptedBranding:
           Buffer.from("enc-client-blob").toString("base64"),
+        hasIcons: false,
       });
     });
 

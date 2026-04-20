@@ -74,6 +74,10 @@ export default defineConfig({
       srcDir: "src",
       filename: "service-worker.ts",
       registerType: "prompt",
+      devOptions: {
+        enabled: true,
+        type: "module",
+      },
       injectManifest: {
         // Skip Workbox manifest injection. SvelteKit's $service-worker module
         // provides build/files/version natively. The plugin still handles
@@ -105,6 +109,16 @@ export default defineConfig({
       "/api/greetings": {
         target: "http://localhost:3000",
         changeOrigin: true,
+      },
+      "/api/branding": {
+        target: "http://localhost:3000",
+        changeOrigin: true,
+        headers: { "x-org-slug": "dev-org" },
+      },
+      "/manifest.webmanifest": {
+        target: "http://localhost:3000",
+        changeOrigin: true,
+        headers: { "x-org-slug": "dev-org" },
       },
     },
     fs: {

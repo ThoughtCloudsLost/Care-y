@@ -7,6 +7,7 @@
   } from "@tanstack/svelte-query";
   import { Palette, ImagePlus, Save } from "@lucide/svelte";
   import { encryptClientBranding } from "@care-y/crypto";
+  import { generateIconVariants } from "$lib/branding/icon-generator.js";
   import * as m from "$lib/paraglide/messages.js";
   import { trpc } from "$lib/trpc/index.js";
   import { haptic } from "$lib/utils/haptic.js";
@@ -15,6 +16,10 @@
   import { getOrgDecryptCache, getOrgKeyManager } from "$lib/crypto/context.js";
   import { isValidHexColor } from "$lib/branding/color-utils.js";
   import { applyKonstaPalette } from "$lib/branding/konsta-palette.js";
+  import { updateBrandingCache } from "$lib/branding/index.js";
+  import { setBrandingTitle } from "$lib/branding/title.svelte.js";
+  import { setAppleTouchIconHref } from "$lib/branding/icon-link.svelte.js";
+  import { getOrgSlug } from "$lib/utils/org-slug.js";
   import {
     uint8ArrayToBase64,
     base64ToUint8Array,
@@ -114,8 +119,8 @@
   let sheetOpened = $state(false);
 
   let editName = $state("");
-  let editColor = $state("#10b981");
-  let editAccent = $state("#f59e0b");
+  let editColor = $state("#98a448");
+  let editAccent = $state("#f476af");
   let editText = $state("");
   let editLogoFile = $state<File | null>(null);
   let editLogoPreviewUrl = $state<string | null>(null);
@@ -126,7 +131,7 @@
       decryptedColor !== "" &&
       isValidHexColor(decryptedColor)
       ? decryptedColor
-      : "#10b981";
+      : "#98a448";
   }
 
   function currentAccent(): string {
@@ -134,7 +139,7 @@
       decryptedAccent !== "" &&
       isValidHexColor(decryptedAccent)
       ? decryptedAccent
-      : "#f59e0b";
+      : "#f476af";
   }
 
   function openSheet(): void {
@@ -149,16 +154,18 @@
     void applyKonstaPalette({ primary: editColor, accent: editAccent });
   }
 
-  function closeSheet(): void {
+  function closeSheet(revertPalette = true): void {
     sheetOpened = false;
     if (editLogoPreviewUrl !== null) {
       URL.revokeObjectURL(editLogoPreviewUrl);
       editLogoPreviewUrl = null;
     }
-    void applyKonstaPalette({
-      primary: currentColor(),
-      accent: currentAccent(),
-    });
+    if (revertPalette) {
+      void applyKonstaPalette({
+        primary: currentColor(),
+        accent: currentAccent(),
+      });
+    }
   }
 
   // ── Change detection ──
@@ -330,21 +337,71 @@
         });
       }
     },
-    onSuccess: async () => {
+    onSuccess: () => {
       haptic();
-      await queryClient.invalidateQueries({ queryKey: ["admin", "branding"] });
       orgCache.delete("branding:name");
       orgCache.delete("branding:color");
       orgCache.delete("branding:accent");
       orgCache.delete("branding:text");
       toastStore.show(m.admin_branding_saved());
       announceToLiveRegion("polite", m.admin_branding_saved());
-      closeSheet();
+      closeSheet(false);
+      void queryClient.invalidateQueries({ queryKey: ["admin", "branding"] });
     },
     onError: () => {
       toastStore.show(m.admin_branding_error(), 3000);
     },
   }));
+
+  // PWA icon generation: runs after logo save (ADR-024, H-037)
+  let iconUploadInFlight = $state(false);
+
+  async function uploadPwaIcons(logoFile: File): Promise<void> {
+    if (iconUploadInFlight) return;
+    iconUploadInFlight = true;
+
+    try {
+      const orgPubKey = orgKeyManager.getPublicKey();
+      if (!orgPubKey) return;
+
+      const variants = await generateIconVariants(logoFile);
+
+      let icon192 = "";
+      let icon512 = "";
+      let iconMaskable = "";
+
+      for (const variant of variants) {
+        const arrayBuffer = await variant.blob.arrayBuffer();
+        const encrypted = encryptClientBranding(
+          new Uint8Array(arrayBuffer),
+          orgPubKey,
+        );
+        const b64 = uint8ArrayToBase64(encrypted);
+
+        if (variant.purpose === "maskable") {
+          iconMaskable = b64;
+        } else if (variant.size === 192) {
+          icon192 = b64;
+        } else {
+          icon512 = b64;
+        }
+      }
+
+      await brandingRouter.uploadIcons.mutate({
+        icon192,
+        icon512,
+        iconMaskable,
+      });
+      void updateBrandingCache({ hasIcons: true });
+      const slug = getOrgSlug();
+      if (slug !== null)
+        setAppleTouchIconHref(`/api/branding/${slug}/icon-192.png`);
+    } catch {
+      toastStore.show(m.admin_branding_icons_error(), 3000);
+    } finally {
+      iconUploadInFlight = false;
+    }
+  }
 
   async function handleSave(): Promise<void> {
     if (!hasChanges) return;
@@ -421,7 +478,34 @@
     }
 
     if (fields.length === 0) return;
-    saveMutation.mutate(fields);
+
+    // Store file reference for PWA icon generation in onSuccess
+    const logoFileForIcons = logoChanged ? editLogoFile : null;
+
+    saveMutation.mutate(fields, {
+      onSuccess: () => {
+        // Update reactive title and palette immediately
+        setBrandingTitle(finalName || "CARE-Y");
+        void applyKonstaPalette({
+          primary: finalColor,
+          accent: finalAccent || undefined,
+        });
+
+        // Update SW branding cache for manifest + apple-touch-icon
+        void updateBrandingCache({
+          orgName: finalName || "CARE-Y",
+          primaryColor: finalColor,
+          accentColor: finalAccent || null,
+          orgSlug: getOrgSlug(),
+          hasIcons: brandingQuery.data?.hasIcons ?? false,
+        });
+
+        // Fire PWA icon generation in background (ADR-024, H-037)
+        if (logoFileForIcons !== null) {
+          void uploadPwaIcons(logoFileForIcons);
+        }
+      },
+    });
   }
 </script>
 

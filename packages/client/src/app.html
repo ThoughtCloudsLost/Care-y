@@ -46,6 +46,37 @@
         d.style.colorScheme = cs;
         var m = document.querySelector('meta[name="color-scheme"]');
         if (m) m.setAttribute("content", cs);
+        // Hydrate brand colors from localStorage (instant, no FOUC).
+        // The branding module writes these on save; app.html reads them before paint.
+        var bp = s.getItem("care-y-brand-primary");
+        if (bp) {
+          d.style.setProperty("--brand-primary", bp);
+          // Konsta uses rgb() format for --k-color-primary
+          var hex = bp.replace("#", "");
+          if (hex.length === 3)
+            hex = hex[0] + hex[0] + hex[1] + hex[1] + hex[2] + hex[2];
+          var r = parseInt(hex.substring(0, 2), 16);
+          var g = parseInt(hex.substring(2, 4), 16);
+          var b = parseInt(hex.substring(4, 6), 16);
+          if (!isNaN(r))
+            d.style.setProperty(
+              "--k-color-primary",
+              "rgb(" + r + " " + g + " " + b + ")",
+            );
+        }
+        var ba = s.getItem("care-y-brand-accent");
+        if (ba) d.style.setProperty("--brand-accent", ba);
+        var bn = s.getItem("care-y-brand-name");
+        if (bn) document.title = bn;
+        var bslug = s.getItem("care-y-brand-slug");
+        var bicons = s.getItem("care-y-brand-has-icons");
+        if (bslug && bicons) {
+          var link = document.createElement("link");
+          link.rel = "apple-touch-icon";
+          link.setAttribute("sizes", "180x180");
+          link.href = "/api/branding/" + bslug + "/icon-192.png";
+          document.head.appendChild(link);
+        }
       })();
     </script>
     %sveltekit.head%

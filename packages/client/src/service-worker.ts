@@ -160,6 +160,8 @@ async function serveDynamicManifest(): Promise<Response> {
 
   let name = DEFAULT_NAME;
   let themeColor = DEFAULT_THEME;
+  let orgSlug: string | null = null;
+  let hasIcons = false;
 
   try {
     const cache = await caches.open(BRANDING_CACHE_KEY);
@@ -168,13 +170,42 @@ async function serveDynamicManifest(): Promise<Response> {
       const branding = (await brandingResponse.json()) as {
         orgName?: string;
         primaryColor?: string;
+        orgSlug?: string;
+        hasIcons?: boolean;
       };
       if (branding.orgName) name = branding.orgName;
       if (branding.primaryColor) themeColor = branding.primaryColor;
+      if (branding.orgSlug) orgSlug = branding.orgSlug;
+      if (branding.hasIcons) hasIcons = true;
     }
   } catch {
     // Fall through to defaults
   }
+
+  const icons =
+    orgSlug !== null && hasIcons
+      ? [
+          {
+            src: `/api/branding/${orgSlug}/icon-192.png`,
+            sizes: "192x192",
+            type: "image/png",
+          },
+          {
+            src: `/api/branding/${orgSlug}/icon-512.png`,
+            sizes: "512x512",
+            type: "image/png",
+          },
+          {
+            src: `/api/branding/${orgSlug}/icon-maskable.png`,
+            sizes: "512x512",
+            type: "image/png",
+            purpose: "maskable",
+          },
+        ]
+      : [
+          { src: "/icon-192.png", sizes: "192x192", type: "image/png" },
+          { src: "/icon-512.png", sizes: "512x512", type: "image/png" },
+        ];
 
   const manifest = {
     name,
@@ -182,10 +213,7 @@ async function serveDynamicManifest(): Promise<Response> {
     display: "standalone",
     background_color: DEFAULT_BG,
     theme_color: themeColor,
-    icons: [
-      { src: "/icon-192.png", sizes: "192x192", type: "image/png" },
-      { src: "/icon-512.png", sizes: "512x512", type: "image/png" },
-    ],
+    icons,
   };
 
   return new Response(JSON.stringify(manifest), {
