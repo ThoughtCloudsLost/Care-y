@@ -20,7 +20,7 @@
   import { haptic } from "$lib/utils/haptic.js";
   import { toastStore } from "$lib/stores/toast.svelte.js";
   import { announceToLiveRegion } from "$lib/utils/announce.js";
-  import { RouterNotAvailableError } from "$lib/errors.js";
+  import { ClientError, RouterNotAvailableError } from "$lib/errors.js";
   import QueryError from "$lib/components/QueryError.svelte";
   import InlineSkeleton from "$lib/components/InlineSkeleton.svelte";
   import SoftButton from "$lib/components/SoftButton.svelte";
@@ -286,9 +286,9 @@
       uploadFile = await convertToWav(file);
     }
     const contentType = resolveAudioContentType(uploadFile.type);
-    if (!contentType) throw new Error("Invalid audio format");
+    if (!contentType) throw new ClientError("Invalid audio format");
     if (uploadFile.size > GREETING_AUDIO_MAX_BYTES) {
-      throw new Error("too_large");
+      throw new ClientError("too_large");
     }
     uploadPhase = "uploading";
     const base64 = await fileToBase64(uploadFile);
@@ -319,7 +319,7 @@
   const uploadAudioMut = createMutation(() => ({
     mutationFn: async (greetingId: string) => {
       try {
-        if (!formAudioFile) throw new Error("No file selected");
+        if (!formAudioFile) throw new ClientError("No file selected");
         const { base64, contentType } = await prepareAudioFile(formAudioFile);
         return await telephonyContent.uploadGreetingAudio.mutate({
           greetingId,
@@ -338,7 +338,7 @@
   const createAudioMut = createMutation(() => ({
     mutationFn: async () => {
       try {
-        if (!formAudioFile) throw new Error("No file selected");
+        if (!formAudioFile) throw new ClientError("No file selected");
         const { base64, contentType } = await prepareAudioFile(formAudioFile);
         return await telephonyContent.createAudioGreeting.mutate({
           phoneNumber: formPhoneNumber,

@@ -25,6 +25,7 @@ import {
   listSmsResponsesInputSchema,
 } from "@care-y/shared";
 import type { BlobStore } from "../storage/store.js";
+import { InternalError } from "../errors.js";
 
 export interface TelephonyContentRouterDeps {
   readonly createService: (
@@ -82,7 +83,7 @@ export function createTelephonyContentRouter(
       .mutation(
         withErrorWrapping(async ({ ctx, input }) => {
           if (!blobStore) {
-            throw new Error("BlobStore not configured");
+            throw new InternalError("BlobStore not configured");
           }
           const svc = createService(ctx.org.tenantDb);
           return svc.uploadGreetingAudio(
@@ -100,7 +101,7 @@ export function createTelephonyContentRouter(
       .mutation(
         withErrorWrapping(async ({ ctx, input }) => {
           if (!blobStore) {
-            throw new Error("BlobStore not configured");
+            throw new InternalError("BlobStore not configured");
           }
           const svc = createService(ctx.org.tenantDb);
           return svc.createAudioGreeting(blobStore, ctx.org.orgSchema, input);

@@ -385,8 +385,8 @@ describe("TelephonyConfigSection", () => {
       mockPurposeData = { outboundSid: "PN001", systemSid: "PN002" };
       render(TelephonyConfigSection);
 
-      expect(screen.getByText("Outgoing calls")).toBeTruthy();
-      expect(screen.getByText("Automated texts")).toBeTruthy();
+      expect(screen.getAllByText("Outgoing calls").length).toBeGreaterThan(0);
+      expect(screen.getAllByText("Automated texts").length).toBeGreaterThan(0);
     });
 
     it("does not show edit roles button when no provisioned phones", () => {

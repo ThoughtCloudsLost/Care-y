@@ -13,6 +13,7 @@
   import { Button } from "konsta/svelte";
   import { Play, Pause } from "@lucide/svelte";
   import * as m from "$lib/paraglide/messages.js";
+  import { ClientError } from "$lib/errors.js";
   import { formatDuration } from "$lib/utils/time.js";
 
   interface Props {
@@ -83,7 +84,7 @@
     void (async () => {
       try {
         const resp = await fetch(src, { signal: ac.signal });
-        if (!resp.ok) throw new Error(`HTTP ${String(resp.status)}`);
+        if (!resp.ok) throw new ClientError(`HTTP ${String(resp.status)}`);
         if (aborted()) return;
 
         const arrayBuf = await resp.arrayBuffer();

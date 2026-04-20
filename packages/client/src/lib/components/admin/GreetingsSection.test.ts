@@ -447,10 +447,9 @@ describe("GreetingsSection", () => {
     ];
     render(GreetingsSection);
 
-    const audioRow = document.querySelector(
-      '[aria-label*="Welcome message"][aria-label*="Audio"]',
-    );
-    expect(audioRow).toBeTruthy();
+    const playerWrap = document.querySelector(".gr-player-wrap");
+    expect(playerWrap).toBeTruthy();
+    expect(screen.queryByText("(audio greeting)")).toBeNull();
   });
 
   it("shows segmented control (Text/Audio) in add sheet", async () => {

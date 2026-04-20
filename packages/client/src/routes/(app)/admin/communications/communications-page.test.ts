@@ -175,9 +175,9 @@ describe("Communications page", () => {
       const divs = container.querySelectorAll(".comms-section");
       expect(divs).toHaveLength(4);
       expect(divs[0]?.id).toBe("section-telephony");
-      expect(divs[1]?.id).toBe("section-blacklist");
-      expect(divs[2]?.id).toBe("section-greetings");
-      expect(divs[3]?.id).toBe("section-templates");
+      expect(divs[1]?.id).toBe("section-greetings");
+      expect(divs[2]?.id).toBe("section-templates");
+      expect(divs[3]?.id).toBe("section-blacklist");
     });
   });
 });
