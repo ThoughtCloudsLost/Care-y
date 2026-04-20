@@ -326,3 +326,13 @@ export type {
 } from "./telephony/browser-call.js";
 
 export { ErrorCode, type ErrorCodeType } from "./error-codes.js";
+
+// --- Branding schemas ---
+export {
+  saveBrandingFieldInputSchema,
+  uploadIconsInputSchema,
+  type BrandingField,
+  type SaveBrandingFieldInput,
+  type UploadIconsInput,
+  type BrandingData,
+} from "./schemas/branding.js";

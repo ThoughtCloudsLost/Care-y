@@ -471,6 +471,9 @@ const appRouter = createAppRouter({
     createPushSubSvc: (tDb) => createPushSubscriptionService(tDb, pushSender),
     vapidPublicKey: vapidKeys.publicKey,
   },
+  brandingDeps: {
+    blobStore,
+  },
 });
 
 export type AppRouter = typeof appRouter;

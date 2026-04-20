@@ -8,7 +8,8 @@ export type BlobCategory =
   | "recording"
   | "greeting"
   | "export"
-  | "kb-attachment";
+  | "kb-attachment"
+  | "branding";
 
 /** Dumb byte store. Callers handle encryption, validation, and access control. */
 export interface BlobStore {
