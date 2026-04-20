@@ -9,6 +9,6 @@
   },
   "dependencies": {
     "@care-y/shared": "workspace:*",
-    "libsodium-wrappers-sumo": "0.8.2"
+    "libsodium-wrappers-sumo": "0.8.4"
   }
 }
