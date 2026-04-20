@@ -121,6 +121,10 @@ export interface OrgConfigTable {
   // Email branding (notification sender identity per org)
   email_from_name: ColumnType<string, string | undefined, string>;
   email_from_address: ColumnType<string, string | undefined, string>;
+  // PWA icon blob keys (ADR-024)
+  icon_192_blob_key: string | null;
+  icon_512_blob_key: string | null;
+  icon_maskable_blob_key: string | null;
 }
 
 // --- User keys (full interface, replaces UserKeysStubTable) ---
