@@ -173,6 +173,7 @@ export function createWebhookDispatch(
         clientRepo,
         greetingRepo,
         orgId,
+        orgSchema: org.orgSchema,
         webhookBaseUrl,
         defaultLocale: "en-US",
       });

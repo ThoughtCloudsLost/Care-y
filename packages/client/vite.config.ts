@@ -102,6 +102,10 @@ export default defineConfig({
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/trpc/, ""),
       },
+      "/api/greetings": {
+        target: "http://localhost:3000",
+        changeOrigin: true,
+      },
     },
     fs: {
       // Module Workers resolve imports through Vite's dev server (not the

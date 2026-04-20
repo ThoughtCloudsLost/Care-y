@@ -27,7 +27,12 @@
   });
 </script>
 
-<div use:portal={".k-page"} bind:this={trap.dialogEl}>
+<div
+  use:portal={".k-page"}
+  bind:this={trap.dialogEl}
+  role="dialog"
+  aria-modal={opened ? "true" : undefined}
+>
   <Dialog {opened} {title} onBackdropClick={trap.handleDismiss}>
     {@render contentSnippet()}
     {#snippet buttons()}

@@ -56,8 +56,9 @@ function createMockClientRepo(): ClientRepository {
 
 function createMockGreetingRepo(): GreetingRepository {
   return {
-    findByPhoneAndLocaleAndType: vi.fn().mockResolvedValue(null),
-    listByPhone: vi.fn().mockResolvedValue([]),
+    findByNumberAndLocaleAndType: vi.fn().mockResolvedValue(null),
+    listByNumber: vi.fn().mockResolvedValue([]),
+    listAll: vi.fn().mockResolvedValue([]),
     create: vi.fn(),
     update: vi.fn(),
     delete: vi.fn(),
@@ -86,6 +87,7 @@ function makeDeps(overrides?: Partial<InboundCallDeps>): InboundCallDeps {
     clientRepo: createMockClientRepo(),
     greetingRepo: createMockGreetingRepo(),
     orgId: "org-1",
+    orgSchema: "org_test",
     webhookBaseUrl: "https://example.com",
     defaultLocale: "en-US",
     ...overrides,
@@ -163,15 +165,16 @@ describe("handleInboundCall", () => {
 
     const existingGreeting = {
       id: "greeting-1",
-      phoneId: "phone-existing",
+      phoneNumber: "+15559876543",
       greetingType: "existing_client",
       locale: "es-MX",
       text: "Bienvenido de nuevo.",
       isAudio: false,
       audioBlobKey: null,
+      audioContentType: null,
     };
     // First call: existing_client greeting
-    vi.mocked(deps.greetingRepo.findByPhoneAndLocaleAndType)
+    vi.mocked(deps.greetingRepo.findByNumberAndLocaleAndType)
       .mockResolvedValueOnce(existingGreeting)
       // Second call: language_prompt greeting (null for no reselection)
       .mockResolvedValueOnce(null);
@@ -205,23 +208,25 @@ describe("handleInboundCall", () => {
 
     const existingGreeting = {
       id: "greeting-1",
-      phoneId: "phone-existing",
+      phoneNumber: "+15559876543",
       greetingType: "existing_client",
       locale: "en-US",
       text: "Welcome back.",
       isAudio: false,
       audioBlobKey: null,
+      audioContentType: null,
     };
     const reselectionGreeting = {
       id: "greeting-2",
-      phoneId: "phone-existing",
+      phoneNumber: "+15559876543",
       greetingType: "language_prompt",
       locale: "en-US",
       text: "Press 1 for English.",
       isAudio: false,
       audioBlobKey: null,
+      audioContentType: null,
     };
-    vi.mocked(deps.greetingRepo.findByPhoneAndLocaleAndType)
+    vi.mocked(deps.greetingRepo.findByNumberAndLocaleAndType)
       .mockResolvedValueOnce(existingGreeting)
       .mockResolvedValueOnce(reselectionGreeting);
 
@@ -253,7 +258,7 @@ describe("handleInboundCall", () => {
     vi.mocked(deps.phoneRepo.findByHash).mockResolvedValueOnce(existingPhone);
 
     // Both greeting lookups return null
-    vi.mocked(deps.greetingRepo.findByPhoneAndLocaleAndType)
+    vi.mocked(deps.greetingRepo.findByNumberAndLocaleAndType)
       .mockResolvedValueOnce(null)
       .mockResolvedValueOnce(null);
 
@@ -355,7 +360,7 @@ describe("handleInboundCall", () => {
   // --- Fallback greeting ---
 
   it("uses fallback greeting text when no greeting is configured", async () => {
-    // greetingRepo.findByPhoneAndLocaleAndType already returns null by default
+    // greetingRepo.findByNumberAndLocaleAndType already returns null by default
     const body: Record<string, string> = { Digits: "1" };
     const result = await handleInboundCall(callData, body, deps);
 
@@ -368,15 +373,16 @@ describe("handleInboundCall", () => {
 
   it("uses configured greeting text when greeting exists", async () => {
     vi.mocked(
-      deps.greetingRepo.findByPhoneAndLocaleAndType,
+      deps.greetingRepo.findByNumberAndLocaleAndType,
     ).mockResolvedValueOnce({
       id: "greeting-1",
-      phoneId: "phone-1",
+      phoneNumber: "+15559876543",
       greetingType: "new_client",
       locale: "en-US",
       text: "You have reached our helpline.",
       isAudio: false,
       audioBlobKey: null,
+      audioContentType: null,
     });
 
     const body: Record<string, string> = { Digits: "1" };
@@ -434,15 +440,16 @@ describe("handleInboundCall", () => {
       isActive: true,
     };
     vi.mocked(deps2.phoneRepo.findByHash).mockResolvedValueOnce(existingPhone);
-    vi.mocked(deps2.greetingRepo.findByPhoneAndLocaleAndType)
+    vi.mocked(deps2.greetingRepo.findByNumberAndLocaleAndType)
       .mockResolvedValueOnce({
         id: "g-1",
-        phoneId: "phone-existing",
+        phoneNumber: "+15559876543",
         greetingType: "existing_client",
         locale: "en-US",
         text: "Welcome back.",
         isAudio: false,
         audioBlobKey: null,
+        audioContentType: null,
       })
       .mockResolvedValueOnce(null);
 
@@ -479,15 +486,16 @@ describe("handleInboundCall", () => {
       isActive: true,
     };
     vi.mocked(deps.phoneRepo.findByHash).mockResolvedValueOnce(existingPhone);
-    vi.mocked(deps.greetingRepo.findByPhoneAndLocaleAndType)
+    vi.mocked(deps.greetingRepo.findByNumberAndLocaleAndType)
       .mockResolvedValueOnce({
         id: "g-1",
-        phoneId: "phone-existing",
+        phoneNumber: "+15559876543",
         greetingType: "existing_client",
         locale: "en-US",
         text: "Hello.",
         isAudio: false,
         audioBlobKey: null,
+        audioContentType: null,
       })
       .mockResolvedValueOnce(null);
 

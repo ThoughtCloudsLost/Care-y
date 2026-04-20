@@ -156,6 +156,13 @@ export {
   type RegisterConsultantInput,
   type UpdateConsultantInput,
   type VerifyConsultantInput,
+  GREETING_AUDIO_MAX_BYTES,
+  greetingAudioContentTypeSchema,
+  uploadGreetingAudioInputSchema,
+  createAudioGreetingInputSchema,
+  type GreetingAudioContentType,
+  type UploadGreetingAudioInput,
+  type CreateAudioGreetingInput,
 } from "./schemas/telephony-content.js";
 
 // --- Relay schemas ---

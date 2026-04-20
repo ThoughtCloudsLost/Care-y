@@ -242,12 +242,13 @@ export interface ClientsTable {
 
 export interface PhoneGreetingsTable {
   id: Generated<string>;
-  phone_id: string;
+  phone_number: string;
   greeting_type: string;
   locale: string;
   text: string;
   is_audio: ColumnType<boolean, boolean | undefined, boolean>;
   audio_blob_key: string | null;
+  audio_content_type: string | null;
   created_at: Generated<Date>;
   updated_at: Generated<Date>;
 }

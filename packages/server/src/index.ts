@@ -58,6 +58,8 @@ import {
   twilioProviderStatic,
 } from "./telephony/twilio.js";
 import { createWebhookHandler } from "./routes/webhooks.js";
+import { createTelephonyContentService } from "./telephony/telephony-content-service.js";
+import { createGreetingAudioHandler } from "./routes/greeting-audio.js";
 import { createRelayHandler, type PendingCall } from "./routes/relay.js";
 import { authenticateRelay } from "./routes/relay-utils.js";
 import { extractOrgSlug } from "./org/slug-resolver.js";
@@ -191,6 +193,10 @@ function createHttpServer(
   onWebhook?: (req: IncomingMessage, res: ServerResponse) => Promise<void>,
   onRelay?: (req: IncomingMessage, res: ServerResponse) => Promise<void>,
   onSse?: (req: IncomingMessage, res: ServerResponse) => void,
+  onGreetingAudio?: (
+    req: IncomingMessage,
+    res: ServerResponse,
+  ) => Promise<void>,
 ): ReturnType<typeof createServer> {
   return createServer((req: IncomingMessage, res: ServerResponse) => {
     if (req.method === "OPTIONS") {
@@ -213,6 +219,11 @@ function createHttpServer(
 
     if (onSse !== undefined && url.startsWith("/notifications/stream")) {
       onSse(req, res);
+      return;
+    }
+
+    if (onGreetingAudio !== undefined && url.startsWith("/api/greetings/")) {
+      void onGreetingAudio(req, res);
       return;
     }
 
@@ -418,6 +429,10 @@ const appRouter = createAppRouter({
     configService: telephonyConfigService,
     webhookBaseUrl: env.WEBHOOK_BASE_URL,
     indexer,
+  },
+  telephonyContentDeps: {
+    createService: createTelephonyContentService,
+    blobStore,
   },
   ticketDeps: {
     blobStore,
@@ -673,12 +688,18 @@ function handleSse(req: IncomingMessage, res: ServerResponse): void {
   })();
 }
 
+const greetingAudioHandler = createGreetingAudioHandler({
+  blobStore,
+  corsHeaders: cors.base,
+});
+
 const server = createHttpServer(
   trpcHandler,
   cors.preflight,
   webhookHandler,
   relayHandler,
   handleSse,
+  greetingAudioHandler,
 );
 const port = Number(process.env.PORT ?? 3000);
 server.listen(port);
