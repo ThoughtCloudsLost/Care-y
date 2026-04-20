@@ -15,10 +15,11 @@ const VALID_CATEGORIES: ReadonlySet<string> = new Set<BlobCategory>([
   "greeting",
   "export",
   "kb-attachment",
+  "branding",
 ]);
 // Storage keys returned by put() are always <orgSchema>/<category>/<uuid>
 const VALID_KEY =
-  /^org_[0-9a-f-]+\/(attachment|recording|greeting|export|kb-attachment)\/[0-9a-f-]+$/;
+  /^org_[0-9a-f-]+\/(attachment|recording|greeting|export|kb-attachment|branding)\/[0-9a-f-]+$/;
 
 /** Validates that a storage key won't escape the base directory. */
 function assertSafeKey(key: string): void {

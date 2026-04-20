@@ -194,10 +194,11 @@ import BrandingSection from "./BrandingSection.svelte";
 const LOADED_DATA: BrandingData = {
   encryptedName: btoa("Safe Harbor Hotline"),
   encryptedLogo: null,
-  encryptedPrimaryColor: btoa("#10b981"),
-  encryptedAccentColor: btoa("#f59e0b"),
+  encryptedPrimaryColor: btoa("#98a448"),
+  encryptedAccentColor: btoa("#f476af"),
   encryptedClientText: btoa("We provide confidential support."),
   clientEncryptedBranding: null,
+  hasIcons: false,
 };
 
 function renderWithData(data?: Partial<BrandingData>): void {

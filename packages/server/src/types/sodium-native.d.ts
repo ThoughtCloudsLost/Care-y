@@ -86,6 +86,22 @@ declare module "sodium-native" {
     secretKey: Buffer,
   ): boolean;
 
+  // --- Hashing (BLAKE2b) ---
+  export const crypto_generichash_BYTES: 32;
+  export const crypto_generichash_BYTES_MIN: 16;
+  export const crypto_generichash_BYTES_MAX: 64;
+
+  /**
+   * Computes a BLAKE2b hash of `input` into `output`.
+   * `output` must be between crypto_generichash_BYTES_MIN and BYTES_MAX.
+   * `key` is optional (null for unkeyed hashing).
+   */
+  export function crypto_generichash(
+    output: Buffer,
+    input: Buffer,
+    key?: Buffer | null,
+  ): void;
+
   // --- Memory hardening (OPRF process) ---
 
   /**

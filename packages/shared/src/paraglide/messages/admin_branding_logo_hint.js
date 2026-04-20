@@ -6,17 +6,17 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Admin_Branding_Logo_HintInputs */
 
 const en_admin_branding_logo_hint = /** @type {(inputs: Admin_Branding_Logo_HintInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Appears in the app and on client-facing pages.`)
+	return /** @type {LocalizedString} */ (`Appears in the app and on client-facing pages. Also used as the app icon when saved to a phone's home screen.`)
 };
 
 const es_admin_branding_logo_hint = /** @type {(inputs: Admin_Branding_Logo_HintInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Aparece en la aplicacion y en las paginas para clientes.`)
+	return /** @type {LocalizedString} */ (`Aparece en la aplicacion y en las paginas para clientes. Tambien se usa como icono de la app al guardarla en la pantalla de inicio.`)
 };
 
 /**
 * | output |
 * | --- |
-* | "Appears in the app and on client-facing pages." |
+* | "Appears in the app and on client-facing pages. Also used as the app icon when saved to a phone's home screen." |
 *
 * @param {Admin_Branding_Logo_HintInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

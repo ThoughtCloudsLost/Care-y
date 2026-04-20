@@ -66,6 +66,7 @@ export function createBrandingService(
           "encrypted_accent_color",
           "encrypted_client_text",
           "client_encrypted_branding",
+          "icon_192_blob_key",
         ])
         .executeTakeFirstOrThrow();
 
@@ -78,6 +79,7 @@ export function createBrandingService(
         clientEncryptedBranding: bufferToBase64(
           config.client_encrypted_branding,
         ),
+        hasIcons: config.icon_192_blob_key !== null,
       };
     },
 

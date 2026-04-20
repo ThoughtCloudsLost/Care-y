@@ -73,6 +73,7 @@
 
 <div class="user-card-wrap">
   <Card raised contentWrap={false} class="user-card">
+    <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
     <div
       class="card-inner"
       class:card-inner--list={isList}

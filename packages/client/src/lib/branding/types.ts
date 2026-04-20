@@ -11,4 +11,6 @@ export interface CachedBranding {
   primaryColor: string;
   accentColor: string | null;
   logoBlobUrl: string | null;
+  orgSlug: string | null;
+  hasIcons: boolean;
 }

@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Appears in the app and on client-facing pages." |
+* | "Appears in the app and on client-facing pages. Also used as the app icon when saved to a phone's home screen." |
 *
 * @param {Admin_Branding_Logo_HintInputs} inputs
 * @param {{ locale?: "en" | "es" }} options
