@@ -2,12 +2,8 @@ import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import {
   createTestDb,
   type TestDb,
-  TEST_ORG_ID,
-  testBlindIndexer,
-  testSealedBox,
   seedOrgPublicKey,
 } from "../../test-utils.js";
-import { createPhoneRepository, type PhoneRepository } from "./phone-repo.js";
 import {
   createGreetingRepository,
   type GreetingRepository,
@@ -15,44 +11,35 @@ import {
 
 describe.skipIf(!process.env.DATABASE_URL)("GreetingRepository", () => {
   let testDb: TestDb;
-  let phoneRepo: PhoneRepository;
   let greetingRepo: GreetingRepository;
-  let phoneId: string;
+  const PHONE_NUMBER = "+15550020001";
 
   beforeAll(async () => {
     testDb = await createTestDb();
     await seedOrgPublicKey(testDb.db);
-    phoneRepo = createPhoneRepository(testDb.db);
     greetingRepo = createGreetingRepository(testDb.db);
-
-    // Create a phone record that greetings will reference
-    const phone = await phoneRepo.create({
-      phoneHash: testBlindIndexer.hash("+15550020001", TEST_ORG_ID),
-      encryptedNumber: testSealedBox.sealBuffer(Buffer.from("+15550020001")),
-    });
-    phoneId = phone.id;
   });
 
   afterAll(async () => {
     await testDb.cleanup();
   });
 
-  it("create inserts a greeting and findByPhoneAndLocaleAndType retrieves it", async () => {
+  it("create inserts a greeting and findByNumberAndLocaleAndType retrieves it", async () => {
     const greeting = await greetingRepo.create({
-      phoneId,
+      phoneNumber: PHONE_NUMBER,
       greetingType: "welcome",
       locale: "en-US",
       text: "Welcome to our service.",
     });
 
     expect(greeting.id).toBeDefined();
-    expect(greeting.phoneId).toBe(phoneId);
+    expect(greeting.phoneNumber).toBe(PHONE_NUMBER);
     expect(greeting.greetingType).toBe("welcome");
     expect(greeting.locale).toBe("en-US");
     expect(greeting.text).toBe("Welcome to our service.");
 
-    const found = await greetingRepo.findByPhoneAndLocaleAndType(
-      phoneId,
+    const found = await greetingRepo.findByNumberAndLocaleAndType(
+      PHONE_NUMBER,
       "en-US",
       "welcome",
     );
@@ -61,36 +48,37 @@ describe.skipIf(!process.env.DATABASE_URL)("GreetingRepository", () => {
     expect(found!.text).toBe("Welcome to our service.");
   });
 
-  it("listByPhone returns all greetings for that phone", async () => {
-    // Create a second phone so its greetings don't interfere
-    const phone2 = await phoneRepo.create({
-      phoneHash: testBlindIndexer.hash("+15550020002", TEST_ORG_ID),
-      encryptedNumber: testSealedBox.sealBuffer(Buffer.from("+15550020002")),
-    });
+  it("listByNumber returns all greetings for that phone number", async () => {
+    const phone2 = "+15550020002";
 
     await greetingRepo.create({
-      phoneId: phone2.id,
+      phoneNumber: phone2,
       greetingType: "voicemail",
       locale: "en-US",
       text: "Leave a message.",
     });
     await greetingRepo.create({
-      phoneId: phone2.id,
+      phoneNumber: phone2,
       greetingType: "after_hours",
       locale: "en-US",
       text: "We are closed.",
     });
 
-    const list = await greetingRepo.listByPhone(phone2.id);
+    const list = await greetingRepo.listByNumber(phone2);
     expect(list).toHaveLength(2);
 
     const types = list.map((g) => g.greetingType).sort();
     expect(types).toEqual(["after_hours", "voicemail"]);
   });
 
+  it("listAll returns greetings across all phone numbers", async () => {
+    const all = await greetingRepo.listAll();
+    expect(all.length).toBeGreaterThanOrEqual(3);
+  });
+
   it("update changes text", async () => {
     const greeting = await greetingRepo.create({
-      phoneId,
+      phoneNumber: PHONE_NUMBER,
       greetingType: "hold",
       locale: "en-US",
       text: "Please hold.",
@@ -104,9 +92,25 @@ describe.skipIf(!process.env.DATABASE_URL)("GreetingRepository", () => {
     expect(updated.id).toBe(greeting.id);
   });
 
+  it("update changes phoneNumber (reassignment)", async () => {
+    const greeting = await greetingRepo.create({
+      phoneNumber: "+15550090001",
+      greetingType: "reassign_test",
+      locale: "en-US",
+      text: "Reassignment test.",
+    });
+
+    const updated = await greetingRepo.update(greeting.id, {
+      phoneNumber: "+15550090002",
+    });
+
+    expect(updated.phoneNumber).toBe("+15550090002");
+    expect(updated.id).toBe(greeting.id);
+  });
+
   it("delete removes the greeting", async () => {
     const greeting = await greetingRepo.create({
-      phoneId,
+      phoneNumber: PHONE_NUMBER,
       greetingType: "goodbye",
       locale: "en-US",
       text: "Goodbye.",
@@ -114,32 +118,28 @@ describe.skipIf(!process.env.DATABASE_URL)("GreetingRepository", () => {
 
     await greetingRepo.delete(greeting.id);
 
-    const found = await greetingRepo.findByPhoneAndLocaleAndType(
-      phoneId,
+    const found = await greetingRepo.findByNumberAndLocaleAndType(
+      PHONE_NUMBER,
       "en-US",
       "goodbye",
     );
     expect(found).toBeNull();
   });
 
-  it("findByPhoneAndLocaleAndType returns null for no match", async () => {
-    const found = await greetingRepo.findByPhoneAndLocaleAndType(
-      phoneId,
+  it("findByNumberAndLocaleAndType returns null for no match", async () => {
+    const found = await greetingRepo.findByNumberAndLocaleAndType(
+      PHONE_NUMBER,
       "ja-JP",
       "nonexistent",
     );
     expect(found).toBeNull();
   });
 
-  it("duplicate (phone_id, locale, greeting_type) throws", async () => {
-    // Create a fresh phone to avoid collision with earlier tests
-    const phone3 = await phoneRepo.create({
-      phoneHash: testBlindIndexer.hash("+15550020003", TEST_ORG_ID),
-      encryptedNumber: testSealedBox.sealBuffer(Buffer.from("+15550020003")),
-    });
+  it("duplicate (phone_number, locale, greeting_type) throws", async () => {
+    const phone3 = "+15550020003";
 
     await greetingRepo.create({
-      phoneId: phone3.id,
+      phoneNumber: phone3,
       greetingType: "intro",
       locale: "en-US",
       text: "First.",
@@ -147,7 +147,7 @@ describe.skipIf(!process.env.DATABASE_URL)("GreetingRepository", () => {
 
     await expect(
       greetingRepo.create({
-        phoneId: phone3.id,
+        phoneNumber: phone3,
         greetingType: "intro",
         locale: "en-US",
         text: "Second.",
@@ -157,7 +157,7 @@ describe.skipIf(!process.env.DATABASE_URL)("GreetingRepository", () => {
 
   it("created greeting has default isAudio=false", async () => {
     const greeting = await greetingRepo.create({
-      phoneId,
+      phoneNumber: PHONE_NUMBER,
       greetingType: "transfer",
       locale: "en-US",
       text: "Transferring your call.",
@@ -165,5 +165,6 @@ describe.skipIf(!process.env.DATABASE_URL)("GreetingRepository", () => {
 
     expect(greeting.isAudio).toBe(false);
     expect(greeting.audioBlobKey).toBeNull();
+    expect(greeting.audioContentType).toBeNull();
   });
 });

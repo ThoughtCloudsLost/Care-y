@@ -18,7 +18,10 @@ import {
   createTelephonyAdminRouter,
   type TelephonyAdminRouterDeps,
 } from "./telephony-admin.js";
-import { createTelephonyContentRouter } from "./telephony-content.js";
+import {
+  createTelephonyContentRouter,
+  type TelephonyContentRouterDeps,
+} from "./telephony-content.js";
 import { createConsultantRouter } from "./consultant.js";
 import { createTicketRouter, type TicketRouterDeps } from "./tickets.js";
 import { createKbRouter, type KBRouterDeps } from "./kb.js";
@@ -41,6 +44,7 @@ export interface RouterDeps {
   readonly orgService: OrgService;
   readonly providerFactory: ProviderFactory;
   readonly telephonyAdminDeps?: TelephonyAdminRouterDeps;
+  readonly telephonyContentDeps?: TelephonyContentRouterDeps;
   readonly includeTelephonyContent?: boolean;
   readonly includeConsultant?: boolean;
   readonly ticketDeps?: TicketRouterDeps;
@@ -69,7 +73,11 @@ export function createAppRouter(deps: RouterDeps) {
         }
       : {}),
     ...(deps.includeTelephonyContent !== false
-      ? { telephonyContent: createTelephonyContentRouter() }
+      ? {
+          telephonyContent: createTelephonyContentRouter(
+            deps.telephonyContentDeps,
+          ),
+        }
       : {}),
     ...(deps.includeConsultant !== false
       ? { consultant: createConsultantRouter() }

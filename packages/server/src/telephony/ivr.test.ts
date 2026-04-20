@@ -12,12 +12,13 @@ import type { VoiceInstruction } from "./provider.js";
 function makeGreeting(overrides: Partial<GreetingRecord> = {}): GreetingRecord {
   return {
     id: "greeting-1",
-    phoneId: "phone-1",
+    phoneNumber: "+15551234567",
     greetingType: "main",
     locale: "en-US",
     text: "Hello, please leave a message.",
     isAudio: false,
     audioBlobKey: null,
+    audioContentType: null,
     ...overrides,
   };
 }
