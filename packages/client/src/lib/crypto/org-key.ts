@@ -119,6 +119,16 @@ export class OrgKeyManager {
     return new Uint8Array(this.orgSecret);
   }
 
+  /**
+   * Return a copy of the org public key (Curve25519, 32 bytes).
+   * Used for client branding key derivation (BLAKE2b hash, not EC ops).
+   * Returns null if the key is not loaded.
+   */
+  getPublicKey(): Uint8Array | null {
+    if (!this.orgPublicKey) return null;
+    return new Uint8Array(this.orgPublicKey);
+  }
+
   /** Whether the org key is currently loaded (for UI status indicators). */
   get isLoaded(): boolean {
     return this.orgSecret !== null;

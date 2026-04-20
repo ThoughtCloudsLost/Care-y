@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Save roles" |
+* | "Save changes" |
 *
 * @param {Admin_Telephony_Save_PurposeInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

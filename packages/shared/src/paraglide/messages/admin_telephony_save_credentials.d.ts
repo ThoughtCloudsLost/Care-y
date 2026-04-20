@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Save" |
+* | "Save changes" |
 *
 * @param {Admin_Telephony_Save_CredentialsInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

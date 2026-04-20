@@ -12,14 +12,13 @@ import {
   type SodiumBackend,
 } from "./sodium.js";
 import { DecryptionError, InvalidKeyError } from "./errors.js";
-import type { RistrettoPoint } from "./types.js";
 
 /**
- * Test helper: generate a ristretto255 public key (for org).
+ * Test helper: generate a Curve25519 public key (matching org_config.org_public_key).
  */
-function generateOrgPublicKey(sodium: SodiumBackend): RistrettoPoint {
-  const scalar = sodium.crypto_core_ristretto255_scalar_random();
-  return sodium.crypto_scalarmult_ristretto255_base(scalar) as RistrettoPoint;
+function generateOrgPublicKey(sodium: SodiumBackend): Uint8Array {
+  const kp = sodium.crypto_box_keypair();
+  return kp.publicKey;
 }
 
 describe("branding encryption", () => {
@@ -53,12 +52,12 @@ describe("branding encryption", () => {
     });
 
     it("throws InvalidKeyError for wrong-length org public key", () => {
-      const shortKey = new Uint8Array(16) as RistrettoPoint;
+      const shortKey = new Uint8Array(16);
       expect(() => deriveClientBrandingKey(shortKey)).toThrow(InvalidKeyError);
     });
 
     it("throws InvalidKeyError for 64-byte org public key", () => {
-      const longKey = new Uint8Array(64) as RistrettoPoint;
+      const longKey = new Uint8Array(64);
       expect(() => deriveClientBrandingKey(longKey)).toThrow(InvalidKeyError);
     });
   });
