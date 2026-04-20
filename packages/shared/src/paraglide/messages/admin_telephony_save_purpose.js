@@ -6,17 +6,17 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Admin_Telephony_Save_PurposeInputs */
 
 const en_admin_telephony_save_purpose = /** @type {(inputs: Admin_Telephony_Save_PurposeInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Save roles`)
+	return /** @type {LocalizedString} */ (`Save changes`)
 };
 
 const es_admin_telephony_save_purpose = /** @type {(inputs: Admin_Telephony_Save_PurposeInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Guardar roles`)
+	return /** @type {LocalizedString} */ (`Guardar cambios`)
 };
 
 /**
 * | output |
 * | --- |
-* | "Save roles" |
+* | "Save changes" |
 *
 * @param {Admin_Telephony_Save_PurposeInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

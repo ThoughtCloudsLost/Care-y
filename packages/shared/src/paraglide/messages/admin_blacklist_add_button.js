@@ -6,17 +6,17 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Admin_Blacklist_Add_ButtonInputs */
 
 const en_admin_blacklist_add_button = /** @type {(inputs: Admin_Blacklist_Add_ButtonInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Add Number`)
+	return /** @type {LocalizedString} */ (`Add blocked number`)
 };
 
 const es_admin_blacklist_add_button = /** @type {(inputs: Admin_Blacklist_Add_ButtonInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Agregar numero`)
+	return /** @type {LocalizedString} */ (`Agregar numero bloqueado`)
 };
 
 /**
 * | output |
 * | --- |
-* | "Add Number" |
+* | "Add blocked number" |
 *
 * @param {Admin_Blacklist_Add_ButtonInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

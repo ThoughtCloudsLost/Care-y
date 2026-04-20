@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Add Number" |
+* | "Add blocked number" |
 *
 * @param {Admin_Blacklist_Add_ButtonInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

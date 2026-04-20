@@ -87,6 +87,11 @@ export class OrgDecryptCache {
     return this.cache.get(id);
   }
 
+  /** Remove a single cached entry so the next decrypt re-decrypts fresh ciphertext. */
+  delete(id: string): boolean {
+    return this.cache.delete(id);
+  }
+
   /** Clear all cached decryptions (e.g., on logout or key rotation). */
   clear(): void {
     this.cache.clear();

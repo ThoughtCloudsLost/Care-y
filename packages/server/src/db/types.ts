@@ -108,6 +108,7 @@ export interface OrgConfigTable {
   encrypted_name: Buffer | null;
   encrypted_logo: Buffer | null;
   encrypted_primary_color: Buffer | null;
+  encrypted_accent_color: Buffer | null;
   encrypted_client_text: Buffer | null;
   client_encrypted_branding: Buffer | null;
   pii_retention_days: number | null;
