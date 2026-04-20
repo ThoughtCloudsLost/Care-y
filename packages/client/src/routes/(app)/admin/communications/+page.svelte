@@ -33,13 +33,6 @@
       component: TelephonyConfigSection,
     },
     {
-      id: "blacklist",
-      label: m.admin_tab_blacklist,
-      icon: Ban,
-      permission: Permission.MANAGE_INFRASTRUCTURE,
-      component: BlacklistSection,
-    },
-    {
       id: "greetings",
       label: m.admin_tab_greetings,
       icon: Mic,
@@ -52,6 +45,13 @@
       icon: MessageSquare,
       permission: Permission.MANAGE_INFRASTRUCTURE,
       component: SmsTemplatesSection,
+    },
+    {
+      id: "blacklist",
+      label: m.admin_tab_blacklist,
+      icon: Ban,
+      permission: Permission.MANAGE_INFRASTRUCTURE,
+      component: BlacklistSection,
     },
   ];
 

@@ -299,7 +299,9 @@ describe("SmsTemplatesSection", () => {
     await fireEvent.click(screen.getByText("Add template"));
 
     expect(
-      screen.getByText("Sent to first-time callers via SMS."),
+      screen.getByText(
+        "Sent automatically to every incoming text message. Lets the sender know their message was received and a volunteer will follow up.",
+      ),
     ).toBeTruthy();
   });
 
