@@ -6,7 +6,7 @@
     createMutation,
     useQueryClient,
   } from "@tanstack/svelte-query";
-  import { Plus, X } from "@lucide/svelte";
+  import { X, PhoneOff } from "@lucide/svelte";
   import { formatRelativeTime } from "$lib/utils/format-time.js";
   import * as m from "$lib/paraglide/messages.js";
   import { trpc } from "$lib/trpc/index.js";
@@ -175,18 +175,13 @@
     />
   {:else if filteredEntries.length === 0 && !filterText}
     <div class="bl-content">
-      <div class="bl-toolbar">
-        <button
-          type="button"
-          class="bl-add-btn touch-feedback"
-          onclick={openAddSheet}
-          aria-label={m.admin_blacklist_add_button()}
-        >
-          <Plus size={16} />
-          {m.admin_blacklist_add_button()}
-        </button>
-      </div>
       <p class="bl-empty">{m.admin_blacklist_empty()}</p>
+      <div class="bl-toolbar">
+        <SoftButton onclick={openAddSheet} full>
+          <PhoneOff size={16} />
+          {m.admin_blacklist_add_button()}
+        </SoftButton>
+      </div>
     </div>
   {:else}
     <div class="bl-content">
@@ -205,14 +200,9 @@
             outline
           />
         </div>
-        <button
-          type="button"
-          class="bl-add-btn touch-feedback"
-          onclick={openAddSheet}
-          aria-label={m.admin_blacklist_add_button()}
-        >
-          <Plus size={16} />
-        </button>
+        <SoftButton onclick={openAddSheet}>
+          <PhoneOff size={16} />
+        </SoftButton>
       </div>
 
       <div class="bl-surface">
@@ -261,10 +251,22 @@
     resetAddForm();
   }}
   ariaLabel={m.admin_blacklist_add_title()}
+  title={m.admin_blacklist_add_title()}
 >
+  {#snippet headerRight()}
+    <SoftButton
+      onclick={handleAdd}
+      disabled={!phoneValid || addMutation.isPending}
+    >
+      {#if addMutation.isPending}
+        {m.common_loading()}
+      {:else}
+        <PhoneOff size={16} aria-hidden="true" />
+        {m.admin_blacklist_block_button()}
+      {/if}
+    </SoftButton>
+  {/snippet}
   <div class="sheet-content">
-    <h3 class="sheet-title">{m.admin_blacklist_add_title()}</h3>
-
     <div class="phone-fields">
       <!-- Number field first in DOM so focus trap lands here -->
       <div class="number-field">
@@ -306,20 +308,6 @@
         {m.admin_blacklist_invalid_format()}
       </p>
     {/if}
-
-    <div class="sheet-actions">
-      <SoftButton
-        onclick={handleAdd}
-        disabled={!phoneValid || addMutation.isPending}
-        full
-      >
-        {#if addMutation.isPending}
-          {m.common_loading()}
-        {:else}
-          {m.admin_blacklist_block_button()}
-        {/if}
-      </SoftButton>
-    </div>
   </div>
 </ShellSheet>
 
@@ -379,23 +367,6 @@
 
   .bl-toolbar .filter-row {
     flex: 1;
-  }
-
-  .bl-add-btn {
-    display: flex;
-    align-items: center;
-    gap: var(--space-xs);
-    flex-shrink: 0;
-    padding: 0.5rem 0.75rem;
-    border: 1px solid color-mix(in srgb, var(--ink) 12%, transparent);
-    border-radius: 0.5rem;
-    background: transparent;
-    color: var(--brand-text);
-    font-size: var(--text-sm);
-    font-weight: 500;
-    font-family: inherit;
-    cursor: pointer;
-    -webkit-tap-highlight-color: transparent;
   }
 
   .bl-empty {
@@ -481,12 +452,6 @@
     padding: var(--space-lg) var(--page-pad-x);
   }
 
-  .sheet-title {
-    font-size: var(--text-lg);
-    font-weight: 600;
-    color: var(--ink);
-  }
-
   .phone-fields {
     display: flex;
     gap: var(--space-sm);
@@ -535,9 +500,5 @@
     font-size: var(--text-xs);
     color: var(--color-red-500);
     margin: 0;
-  }
-
-  .sheet-actions {
-    padding-top: var(--space-sm);
   }
 </style>

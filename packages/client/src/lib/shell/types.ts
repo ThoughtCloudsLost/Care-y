@@ -61,6 +61,11 @@ export interface ShellSheetProps {
   ondismiss: () => void;
   /** Sheet content. */
   children: Snippet;
+  /** Title rendered in a sticky header bar. When provided (with or without
+   *  headerRight), the sheet splits into a pinned header + scrollable body. */
+  title?: string;
+  /** Snippet rendered in the top-right of the sticky header (save/action button). */
+  headerRight?: Snippet;
   /** Show backdrop overlay behind the sheet. Default: true. */
   backdrop?: boolean;
   /** Trap focus inside the sheet. Disable when an external input (e.g.,
