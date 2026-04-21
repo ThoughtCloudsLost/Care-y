@@ -103,6 +103,8 @@
         return m.panel_group_communications();
       case "organization":
         return m.panel_group_organization();
+      case "analytics":
+        return m.panel_group_analytics();
     }
   }
 

@@ -3,7 +3,12 @@
   import { goto } from "$app/navigation";
   import { resolve } from "$app/paths";
   import { Permission } from "@care-y/shared";
-  import { UsersRound, RadioTower, Building2 } from "@lucide/svelte";
+  import {
+    UsersRound,
+    RadioTower,
+    Building2,
+    ChartColumn,
+  } from "@lucide/svelte";
   import { createQuery } from "@tanstack/svelte-query";
   import * as m from "$lib/paraglide/messages.js";
   import { getNavbarOverrideCtx } from "$lib/shell/context.js";
@@ -31,6 +36,8 @@
         return RadioTower;
       case "organization":
         return Building2;
+      case "analytics":
+        return ChartColumn;
     }
   }
 
@@ -114,6 +121,8 @@
         return m.panel_group_communications();
       case "organization":
         return m.panel_group_organization();
+      case "analytics":
+        return m.panel_group_analytics();
     }
   }
 
