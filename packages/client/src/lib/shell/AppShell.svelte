@@ -42,6 +42,7 @@
     Search,
     User,
   } from "@lucide/svelte";
+  import { getOrgLogoUrl } from "$lib/branding/logo-url.svelte.js";
   import { tick, onMount } from "svelte";
   import { SvelteMap } from "svelte/reactivity";
   import type { Component } from "svelte";
@@ -159,6 +160,7 @@
   const navbarOverride = $derived(navbarOverrideContainer.current);
 
   // ── Avatar panel ─────────────────────────────────────────────────
+  const navLogoUrl = $derived(getOrgLogoUrl());
   let panelOpen = $state(false);
   const roleIdGetter = getCurrentUserRoleId();
   const permissionsGetter = getCurrentPermissions();
@@ -719,7 +721,14 @@
           onclick={() => (panelOpen = true)}
         >
           <span class="navbar-avatar" aria-hidden="true">
-            {#if userInitials}
+            {#if navLogoUrl}
+              <img
+                src={navLogoUrl}
+                alt=""
+                class="navbar-avatar-logo"
+                loading="eager"
+              />
+            {:else if userInitials}
               {userInitials}
             {:else}
               <User size={18} />
@@ -1104,6 +1113,13 @@
     font-size: 0.625rem;
     font-weight: 600;
     letter-spacing: 0.02em;
+    overflow: hidden;
+  }
+
+  .navbar-avatar-logo {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
   }
 
   .heading-hidden {

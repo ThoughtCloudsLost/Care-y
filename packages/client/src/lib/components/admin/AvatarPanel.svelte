@@ -19,6 +19,7 @@
     type SerializedBuffer,
   } from "$lib/utils/buffer-encoding.js";
   import { User } from "@lucide/svelte";
+  import { getOrgLogoUrl } from "$lib/branding/logo-url.svelte.js";
 
   interface AvatarPanelProps {
     readonly encryptedDisplayName: unknown;
@@ -83,6 +84,8 @@
         : { name: m.role_volunteer(), path: "/admin/volunteer" },
   );
 
+  const orgLogoUrl = $derived(getOrgLogoUrl());
+
   const visibleDestinations = $derived(getVisibleDestinations(permissions));
   const grouped = $derived(groupDestinations(visibleDestinations));
   const visibleGroups = $derived(
@@ -117,7 +120,14 @@
     <!-- Profile header -->
     <div class="panel-profile">
       <span class="panel-avatar" aria-hidden="true">
-        {#if initials}
+        {#if orgLogoUrl}
+          <img
+            src={orgLogoUrl}
+            alt=""
+            class="panel-avatar-logo"
+            loading="eager"
+          />
+        {:else if initials}
           {initials}
         {:else}
           <User size={22} />
@@ -239,6 +249,13 @@
     color: var(--k-color-on-primary, #fff);
     font-size: 18px;
     font-weight: 600;
+    overflow: hidden;
+  }
+
+  .panel-avatar-logo {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
   }
 
   .panel-name {

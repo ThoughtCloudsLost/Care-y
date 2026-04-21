@@ -7,7 +7,7 @@
       content="width=device-width, initial-scale=1, maximum-scale=5, viewport-fit=cover, interactive-widget=resizes-content"
     />
     <meta name="color-scheme" content="dark light" />
-    <script>
+    <script nonce="%sveltekit.nonce%">
       // Blocking theme init: reads class preferences from localStorage
       // and applies them to <html> before first paint. CSS theme files
       // provide all color values; this script only sets classes.
@@ -70,6 +70,20 @@
         if (bn) document.title = bn;
         var bslug = s.getItem("care-y-brand-slug");
         var bicons = s.getItem("care-y-brand-has-icons");
+        // rAF fires after DOM is built but before first paint
+        requestAnimationFrame(function () {
+          if (bn) {
+            var nameEl = document.getElementById("splash-name");
+            if (nameEl) nameEl.textContent = bn;
+          }
+          var logoEl = document.getElementById("splash-logo");
+          if (logoEl && bslug && bicons) {
+            logoEl.onload = function () {
+              logoEl.classList.add("visible");
+            };
+            logoEl.src = "/api/branding/" + bslug + "/icon-192.png";
+          }
+        });
         if (bslug && bicons) {
           var link = document.createElement("link");
           link.rel = "apple-touch-icon";
@@ -81,7 +95,49 @@
     </script>
     %sveltekit.head%
   </head>
-  <body data-sveltekit-preload-data="hover" class="fouc-guard">
+  <body data-sveltekit-preload-data="hover">
+    <style nonce="%sveltekit.nonce%">
+      #splash {
+        position: fixed;
+        inset: 0;
+        z-index: 99999;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        background: radial-gradient(
+          ellipse at center,
+          color-mix(in srgb, var(--brand-primary, #98a448) 15%, #0a0a0a) 0%,
+          #0a0a0a 70%
+        );
+        transition: opacity 400ms ease-out;
+      }
+      #splash-logo {
+        border-radius: 20px;
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+        opacity: 0;
+        transition: opacity 300ms ease;
+      }
+      #splash-logo.visible {
+        opacity: 1;
+      }
+      #splash-name {
+        font-family: -apple-system, system-ui, sans-serif;
+        font-size: 17px;
+        font-weight: 600;
+        color: rgba(255, 255, 255, 0.85);
+        letter-spacing: 0.02em;
+        margin-top: 16px;
+      }
+      body.hydrated #splash {
+        opacity: 0;
+        pointer-events: none;
+      }
+    </style>
+    <div id="splash" aria-hidden="true">
+      <img id="splash-logo" alt="" width="96" height="96" />
+      <span id="splash-name">CARE-Y</span>
+    </div>
     <div style="display: contents">%sveltekit.body%</div>
   </body>
 </html>

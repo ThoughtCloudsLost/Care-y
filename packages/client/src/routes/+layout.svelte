@@ -59,9 +59,6 @@
   onMount(() => {
     if (!browser) return;
 
-    // Reveal page now that CSS is loaded and hydration is complete.
-    document.body.classList.remove("fouc-guard");
-
     const cleanupKeyboard = initKeyboardViewport();
 
     return () => {
