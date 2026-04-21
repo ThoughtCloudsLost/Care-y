@@ -8,6 +8,7 @@ import type { BlindIndexer } from "../crypto/field-encryptor.js";
 import type { PhoneRepository } from "./models/phone-repo.js";
 import type { ClientRepository } from "./models/client-repo.js";
 import type { GreetingRepository } from "./models/greeting-repo.js";
+import type { BlocklistRepository } from "./models/blocklist-repo.js";
 
 // ---------------------------------------------------------------------------
 // Mock factories
@@ -54,6 +55,15 @@ function createMockClientRepo(): ClientRepository {
   };
 }
 
+function createMockBlocklistRepo(): BlocklistRepository {
+  return {
+    add: vi.fn(),
+    remove: vi.fn(),
+    list: vi.fn().mockResolvedValue([]),
+    exists: vi.fn().mockResolvedValue(false),
+  };
+}
+
 function createMockGreetingRepo(): GreetingRepository {
   return {
     findByNumberAndLocaleAndType: vi.fn().mockResolvedValue(null),
@@ -86,6 +96,7 @@ function makeDeps(overrides?: Partial<InboundCallDeps>): InboundCallDeps {
     phoneRepo: createMockPhoneRepo(),
     clientRepo: createMockClientRepo(),
     greetingRepo: createMockGreetingRepo(),
+    blocklistRepo: createMockBlocklistRepo(),
     orgId: "org-1",
     orgSchema: "org_test",
     webhookBaseUrl: "https://example.com",
@@ -120,6 +131,36 @@ describe("handleInboundCall", () => {
   beforeEach(() => {
     deps = makeDeps();
     callData = makeCallData();
+  });
+
+  // --- Blocklist ---
+
+  it("returns reject with busy reason when phone is blocked", async () => {
+    vi.mocked(deps.blocklistRepo.exists).mockResolvedValueOnce(true);
+    const body: Record<string, string> = {};
+
+    const result = await handleInboundCall(callData, body, deps);
+
+    expect(result).toEqual([
+      { type: "reject", attributes: { reason: "busy" } },
+    ]);
+    expect(deps.clientRepo.findOrCreateByPhoneHash).not.toHaveBeenCalled();
+    expect(deps.phoneRepo.findByHash).not.toHaveBeenCalled();
+    expect(
+      deps.greetingRepo.findByNumberAndLocaleAndType,
+    ).not.toHaveBeenCalled();
+  });
+
+  it("checks blocklist before any IVR processing", async () => {
+    vi.mocked(deps.blocklistRepo.exists).mockResolvedValueOnce(true);
+    const body: Record<string, string> = { Digits: "1" };
+
+    const result = await handleInboundCall(callData, body, deps);
+
+    expect(result).toEqual([
+      { type: "reject", attributes: { reason: "busy" } },
+    ]);
+    expect(deps.clientRepo.findOrCreateByPhoneHash).not.toHaveBeenCalled();
   });
 
   // --- Path 3: New caller, no Digits ---

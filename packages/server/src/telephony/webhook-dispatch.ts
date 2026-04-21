@@ -20,6 +20,7 @@ import { createPhoneRepository } from "./models/phone-repo.js";
 import { createClientRepository } from "./models/client-repo.js";
 import { createSmsResponseRepository } from "./models/sms-response-repo.js";
 import { createGreetingRepository } from "./models/greeting-repo.js";
+import { createBlocklistRepository } from "./models/blocklist-repo.js";
 import { handleInboundSms } from "./inbound-sms.js";
 import { handleInboundCall } from "./inbound-call.js";
 import { handleRecordingComplete } from "./recording-handler.js";
@@ -107,6 +108,7 @@ export function createWebhookDispatch(
       const phoneRepo = createPhoneRepository(org.tDb);
       const clientRepo = createClientRepository(org.tDb, phoneRepo);
       const smsResponseRepo = createSmsResponseRepository(org.tDb);
+      const blocklistRepo = createBlocklistRepository(org.tDb);
 
       const smsData = provider.parseIncomingSms(body);
 
@@ -118,10 +120,14 @@ export function createWebhookDispatch(
         jobQueue,
         clientRepo,
         smsResponseRepo,
+        blocklistRepo,
         orgId,
         orgSchema: org.orgSchema,
         defaultLocale: "en-US",
       });
+
+      // Blocked number: silently drop (no storage, no reply)
+      if (result === null) return null;
 
       // Process MMS attachments if present
       if (smsData.numMedia > 0) {
@@ -163,6 +169,7 @@ export function createWebhookDispatch(
       const phoneRepo = createPhoneRepository(org.tDb);
       const clientRepo = createClientRepository(org.tDb, phoneRepo);
       const greetingRepo = createGreetingRepository(org.tDb);
+      const blocklistRepo = createBlocklistRepository(org.tDb);
 
       const callData = provider.parseIncomingCall(body);
 
@@ -172,6 +179,7 @@ export function createWebhookDispatch(
         phoneRepo,
         clientRepo,
         greetingRepo,
+        blocklistRepo,
         orgId,
         orgSchema: org.orgSchema,
         webhookBaseUrl,

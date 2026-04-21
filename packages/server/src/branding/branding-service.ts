@@ -6,6 +6,10 @@ import type {
   SaveBrandingFieldInput,
   UploadIconsInput,
 } from "@care-y/shared";
+import { validateMagicBytes } from "../telephony/attachment-validator.js";
+import { ValidationError } from "../errors.js";
+
+const ICON_MAX_BYTES = 2 * 1024 * 1024; // 2 MB per icon
 
 function noop(): void {
   // intentional no-op for best-effort catch
@@ -108,6 +112,19 @@ export function createBrandingService(
       orgSchema: string,
       input: UploadIconsInput,
     ): Promise<void> {
+      const buf192 = Buffer.from(input.icon192, "base64");
+      const buf512 = Buffer.from(input.icon512, "base64");
+      const bufMaskable = Buffer.from(input.iconMaskable, "base64");
+
+      for (const buf of [buf192, buf512, bufMaskable]) {
+        if (buf.byteLength > ICON_MAX_BYTES) {
+          throw new ValidationError(
+            `Icon exceeds ${String(ICON_MAX_BYTES)} byte limit`,
+          );
+        }
+        validateMagicBytes(buf, "image/png");
+      }
+
       const existing = await tenantDb
         .selectFrom("org_config")
         .select([
@@ -118,13 +135,9 @@ export function createBrandingService(
         .executeTakeFirstOrThrow();
 
       const [key192, key512, keyMaskable] = await Promise.all([
-        store.put(orgSchema, "branding", Buffer.from(input.icon192, "base64")),
-        store.put(orgSchema, "branding", Buffer.from(input.icon512, "base64")),
-        store.put(
-          orgSchema,
-          "branding",
-          Buffer.from(input.iconMaskable, "base64"),
-        ),
+        store.put(orgSchema, "branding", buf192),
+        store.put(orgSchema, "branding", buf512),
+        store.put(orgSchema, "branding", bufMaskable),
       ]);
 
       await tenantDb.transaction().execute(async (tx) => {

@@ -194,13 +194,11 @@
       />
     </List>
 
-    {#if showIdentifierWarning}
-      <Block>
-        <p class="pii-warning" role="alert">
-          {m.admin_invite_identifier_pii_warning()}
-        </p>
-      </Block>
-    {/if}
+    <Block>
+      <p class="pii-warning" role="alert">
+        {m.admin_invite_identifier_pii_warning()}
+      </p>
+    </Block>
 
     <List>
       <ListInput

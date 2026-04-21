@@ -6,17 +6,17 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Admin_Invite_Identifier_LabelInputs */
 
 const en_admin_invite_identifier_label = /** @type {(inputs: Admin_Invite_Identifier_LabelInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Identifier`)
+	return /** @type {LocalizedString} */ (`Login Username`)
 };
 
 const es_admin_invite_identifier_label = /** @type {(inputs: Admin_Invite_Identifier_LabelInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Identificador`)
+	return /** @type {LocalizedString} */ (`Nombre de usuario`)
 };
 
 /**
 * | output |
 * | --- |
-* | "Identifier" |
+* | "Login Username" |
 *
 * @param {Admin_Invite_Identifier_LabelInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

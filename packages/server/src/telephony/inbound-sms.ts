@@ -15,6 +15,7 @@ import type { BlobStore } from "../storage/store.js";
 import type { JobQueue } from "../jobs/queue.js";
 import type { ClientRepository } from "./models/client-repo.js";
 import type { SmsResponseRepository } from "./models/sms-response-repo.js";
+import type { BlocklistRepository } from "./models/blocklist-repo.js";
 import { selectAutoReply } from "./sms-auto-reply.js";
 import { enqueueLogDeletion } from "../jobs/log-deletion.js";
 import { TelephonyError } from "../errors.js";
@@ -35,6 +36,7 @@ export interface InboundSmsDeps {
   readonly jobQueue: JobQueue;
   readonly clientRepo: ClientRepository;
   readonly smsResponseRepo: SmsResponseRepository;
+  readonly blocklistRepo: BlocklistRepository;
   readonly orgId: string;
   readonly orgSchema: string;
   readonly defaultLocale: string;
@@ -47,7 +49,7 @@ export interface InboundSmsDeps {
 export async function handleInboundSms(
   smsData: IncomingSmsData,
   deps: InboundSmsDeps,
-): Promise<InboundSmsResult> {
+): Promise<InboundSmsResult | null> {
   const {
     provider,
     sealedBox,
@@ -56,32 +58,37 @@ export async function handleInboundSms(
     jobQueue,
     clientRepo,
     smsResponseRepo,
+    blocklistRepo,
     orgId,
     orgSchema,
     defaultLocale,
   } = deps;
 
-  // 1. Encrypt SMS body (sealed box, server-blind)
+  // 1. Compute blind index and check blocklist BEFORE any storage
+  const phoneHash = indexer.hash(smsData.from, orgId);
+  const isBlocked = await blocklistRepo.exists(phoneHash);
+  if (isBlocked) return null;
+
+  // 2. Encrypt SMS body (sealed box, server-blind)
   const encryptedBody = sealString(sealedBox, smsData.body);
 
-  // 2. Store encrypted body blob
+  // 3. Store encrypted body blob
   const bodyBlobKey = await blobStore.put(
     orgSchema,
     "attachment",
     encryptedBody,
   );
 
-  // 3. Encrypt caller phone and compute blind index
+  // 4. Encrypt caller phone
   const encryptedPhone = sealString(sealedBox, smsData.from);
-  const phoneHash = indexer.hash(smsData.from, orgId);
 
-  // 4. Find or create client by phone hash
+  // 5. Find or create client by phone hash
   const { client, phone, isNew } = await clientRepo.findOrCreateByPhoneHash(
     phoneHash,
     encryptedPhone,
   );
 
-  // 5. Send auto-reply
+  // 6. Send auto-reply
   const autoReply = await selectAutoReply(
     smsResponseRepo,
     phone.locale,
@@ -90,7 +97,7 @@ export async function handleInboundSms(
   );
   await provider.sendSms(smsData.from, autoReply.text, smsData.to);
 
-  // 6. Delete provider message log (GAP-16 M2)
+  // 7. Delete provider message log (GAP-16 M2)
   try {
     await provider.deleteMessageLog(smsData.messageId);
   } catch (deleteErr: unknown) {
@@ -115,7 +122,7 @@ export async function handleInboundSms(
     }
   }
 
-  // 7. Return result
+  // 8. Return result
   return {
     clientId: client.id,
     phoneId: phone.id,

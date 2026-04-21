@@ -48,47 +48,21 @@ export interface AttachmentValidationResult {
 }
 
 /**
- * Validates an MMS attachment buffer against size limits, the
- * content-type allowlist, and magic byte signatures.
- *
- * Throws AttachmentValidationError with a machine-readable `reason`
- * field ("size", "content_type", or "magic_bytes") on failure.
+ * Validates magic bytes only (no size check, no allowlist).
+ * Throws if the declared content type has a known signature that
+ * doesn't match the buffer. Silently returns for content types
+ * with no known signature.
  */
-export function validateAttachment(
+export function validateMagicBytes(
   data: Buffer,
   declaredContentType: string,
-): AttachmentValidationResult {
-  // 1. Size check
-  if (data.length > MAX_SIZE_BYTES) {
-    throw new AttachmentValidationError(
-      `Attachment size ${String(data.length)} bytes exceeds limit of ${String(MAX_SIZE_BYTES)} bytes`,
-      "size",
-    );
-  }
-
-  // 2. Normalize and check content-type
+): void {
   const contentType = (declaredContentType.split(";")[0] ?? "")
     .trim()
     .toLowerCase();
 
-  if (!ALLOWED_CONTENT_TYPES.has(contentType)) {
-    throw new AttachmentValidationError(
-      `Content type "${contentType}" is not allowed`,
-      "content_type",
-    );
-  }
-
-  // 3. Magic bytes verification
   const entry = MAGIC_BYTES.find((m) => m.contentType === contentType);
-
-  if (!entry) {
-    // No magic bytes entry for this content type (should not happen given
-    // the allowlist mirrors MAGIC_BYTES, but guard defensively).
-    throw new AttachmentValidationError(
-      `No magic bytes signature defined for "${contentType}"`,
-      "magic_bytes",
-    );
-  }
+  if (!entry) return;
 
   const requiredLength = entry.offset + entry.bytes.length;
   if (data.length < requiredLength) {
@@ -107,6 +81,38 @@ export function validateAttachment(
       );
     }
   }
+}
+
+/**
+ * Validates an MMS attachment buffer against size limits, the
+ * content-type allowlist, and magic byte signatures.
+ *
+ * Throws AttachmentValidationError with a machine-readable `reason`
+ * field ("size", "content_type", or "magic_bytes") on failure.
+ */
+export function validateAttachment(
+  data: Buffer,
+  declaredContentType: string,
+): AttachmentValidationResult {
+  if (data.length > MAX_SIZE_BYTES) {
+    throw new AttachmentValidationError(
+      `Attachment size ${String(data.length)} bytes exceeds limit of ${String(MAX_SIZE_BYTES)} bytes`,
+      "size",
+    );
+  }
+
+  const contentType = (declaredContentType.split(";")[0] ?? "")
+    .trim()
+    .toLowerCase();
+
+  if (!ALLOWED_CONTENT_TYPES.has(contentType)) {
+    throw new AttachmentValidationError(
+      `Content type "${contentType}" is not allowed`,
+      "content_type",
+    );
+  }
+
+  validateMagicBytes(data, contentType);
 
   return {
     valid: true,

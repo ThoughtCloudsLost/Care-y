@@ -2,11 +2,13 @@
 import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
 import { render, screen, cleanup, fireEvent } from "@testing-library/svelte";
 
-const { mockCreateQueue, mockUpdateQueue, mockToastShow } = vi.hoisted(() => ({
-  mockCreateQueue: vi.fn().mockResolvedValue({}),
-  mockUpdateQueue: vi.fn().mockResolvedValue({}),
-  mockToastShow: vi.fn(),
-}));
+const { mockCreateQueue, mockUpdateQueue, mockToastShow, mockOrgCacheDelete } =
+  vi.hoisted(() => ({
+    mockCreateQueue: vi.fn().mockResolvedValue({}),
+    mockUpdateQueue: vi.fn().mockResolvedValue({}),
+    mockToastShow: vi.fn(),
+    mockOrgCacheDelete: vi.fn(),
+  }));
 
 let mockOrgKeyLoaded = true;
 
@@ -37,6 +39,7 @@ vi.mock("$lib/crypto/context.js", () => ({
   }),
   getOrgDecryptCache: () => ({
     decrypt: () => "Decrypted Name",
+    delete: mockOrgCacheDelete,
   }),
 }));
 
@@ -178,6 +181,31 @@ describe("QueueEditor", () => {
         encryptedName: "AQID",
       }),
     );
+  });
+
+  it("evicts orgCache entry on successful update", async () => {
+    renderEditor({
+      queueId: "q-1",
+      queueEncryptedName: new Uint8Array([1, 2]),
+    });
+
+    await fireEvent.click(screen.getByText("Save"));
+
+    expect(mockOrgCacheDelete).toHaveBeenCalledWith("queue:q-1");
+  });
+
+  it("does not evict orgCache on create (no existing entry)", async () => {
+    renderEditor();
+
+    const inputs = document.querySelectorAll<HTMLInputElement>(
+      ".k-list-input input",
+    );
+    const nameInput = inputs[0]!;
+    await fireEvent.input(nameInput, { target: { value: "New" } });
+
+    await fireEvent.click(screen.getByText("Save"));
+
+    expect(mockOrgCacheDelete).not.toHaveBeenCalled();
   });
 
   it("shows delete button in edit mode with ondeletequeue provided", () => {

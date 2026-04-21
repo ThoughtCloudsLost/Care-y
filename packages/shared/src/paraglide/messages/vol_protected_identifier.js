@@ -6,17 +6,17 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Vol_Protected_IdentifierInputs */
 
 const en_vol_protected_identifier = /** @type {(inputs: Vol_Protected_IdentifierInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Your login identifier is a pseudonym, not linked to your real identity.`)
+	return /** @type {LocalizedString} */ (`Your login username is a pseudonym, not linked to your real identity.`)
 };
 
 const es_vol_protected_identifier = /** @type {(inputs: Vol_Protected_IdentifierInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Tu identificador de inicio de sesion es un seudonimo, no vinculado a tu identidad real.`)
+	return /** @type {LocalizedString} */ (`Tu nombre de usuario es un seudonimo, no vinculado a tu identidad real.`)
 };
 
 /**
 * | output |
 * | --- |
-* | "Your login identifier is a pseudonym, not linked to your real identity." |
+* | "Your login username is a pseudonym, not linked to your real identity." |
 *
 * @param {Vol_Protected_IdentifierInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

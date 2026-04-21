@@ -56,7 +56,8 @@ export interface VoiceInstruction {
     | "record"
     | "hangup"
     | "dial"
-    | "pause";
+    | "pause"
+    | "reject";
   readonly attributes?: Record<string, string | number | boolean>;
   readonly children?: readonly VoiceInstruction[];
 }

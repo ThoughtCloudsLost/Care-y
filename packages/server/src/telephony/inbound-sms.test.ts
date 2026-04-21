@@ -9,6 +9,7 @@ import type { BlobStore } from "../storage/store.js";
 import type { JobQueue } from "../jobs/queue.js";
 import type { ClientRepository } from "./models/client-repo.js";
 import type { SmsResponseRepository } from "./models/sms-response-repo.js";
+import type { BlocklistRepository } from "./models/blocklist-repo.js";
 import { TelephonyError } from "../errors.js";
 
 // ---------------------------------------------------------------------------
@@ -89,6 +90,15 @@ function createMockClientRepo(): ClientRepository {
   };
 }
 
+function createMockBlocklistRepo(): BlocklistRepository {
+  return {
+    add: vi.fn(),
+    remove: vi.fn(),
+    list: vi.fn().mockResolvedValue([]),
+    exists: vi.fn().mockResolvedValue(false),
+  };
+}
+
 function createMockSmsResponseRepo(): SmsResponseRepository {
   return {
     findByLocaleAndType: vi.fn(),
@@ -131,6 +141,7 @@ function makeDeps(overrides?: Partial<InboundSmsDeps>): InboundSmsDeps {
     jobQueue: createMockJobQueue(),
     clientRepo: createMockClientRepo(),
     smsResponseRepo: createMockSmsResponseRepo(),
+    blocklistRepo: createMockBlocklistRepo(),
     orgId: "org-1",
     orgSchema: "org_test",
     defaultLocale: "en-US",
@@ -149,6 +160,34 @@ describe("handleInboundSms", () => {
   beforeEach(() => {
     deps = makeDeps();
     smsData = makeSmsData();
+  });
+
+  // --- Blocklist ---
+
+  it("returns null when phone is blocked", async () => {
+    vi.mocked(deps.blocklistRepo.exists).mockResolvedValueOnce(true);
+
+    const result = await handleInboundSms(smsData, deps);
+
+    expect(result).toBeNull();
+  });
+
+  it("does not store blob or create client when phone is blocked", async () => {
+    vi.mocked(deps.blocklistRepo.exists).mockResolvedValueOnce(true);
+
+    await handleInboundSms(smsData, deps);
+
+    expect(deps.blobStore.put).not.toHaveBeenCalled();
+    expect(deps.clientRepo.findOrCreateByPhoneHash).not.toHaveBeenCalled();
+    expect(deps.provider.sendSms).not.toHaveBeenCalled();
+  });
+
+  it("checks blocklist before encrypting body", async () => {
+    vi.mocked(deps.blocklistRepo.exists).mockResolvedValueOnce(true);
+
+    await handleInboundSms(smsData, deps);
+
+    expect(deps.sealedBox.sealBuffer).not.toHaveBeenCalled();
   });
 
   // --- Encryption ---
@@ -353,7 +392,8 @@ describe("handleInboundSms", () => {
 
     const result = await handleInboundSms(smsData, deps);
 
-    expect(result.isNewClient).toBe(false);
-    expect(result.clientId).toBe("client-2");
+    expect(result).not.toBeNull();
+    expect(result!.isNewClient).toBe(false);
+    expect(result!.clientId).toBe("client-2");
   });
 });

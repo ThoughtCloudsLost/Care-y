@@ -913,6 +913,13 @@ export function createTicketRouter(deps: TicketRouterDeps) {
         }),
       ),
 
+    getUserQueues: adminProcedure.input(z.object({ userId: z.uuid() })).query(
+      withErrorWrapping(async ({ ctx, input }) => {
+        const svc = deps.createQueuePermissionsSvc(ctx.org.tenantDb);
+        return svc.getUserQueues(input.userId);
+      }),
+    ),
+
     // --- Volunteers (for @mention autocomplete) ---
     listVolunteers: volunteerProcedure.query(
       withErrorWrapping(async ({ ctx }) => {

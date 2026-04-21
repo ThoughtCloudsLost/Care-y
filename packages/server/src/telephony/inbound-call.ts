@@ -16,6 +16,7 @@ import type {
   GreetingRecord,
   GreetingRepository,
 } from "./models/greeting-repo.js";
+import type { BlocklistRepository } from "./models/blocklist-repo.js";
 import {
   buildLanguageSelectionIvr,
   buildReturningCallerIvr,
@@ -30,6 +31,7 @@ export interface InboundCallDeps {
   readonly phoneRepo: PhoneRepository;
   readonly clientRepo: ClientRepository;
   readonly greetingRepo: GreetingRepository;
+  readonly blocklistRepo: BlocklistRepository;
   readonly orgId: string;
   readonly orgSchema: string;
   readonly webhookBaseUrl: string;
@@ -80,6 +82,7 @@ export async function handleInboundCall(
     phoneRepo,
     clientRepo,
     greetingRepo,
+    blocklistRepo,
     orgId,
     orgSchema,
     webhookBaseUrl,
@@ -89,6 +92,9 @@ export async function handleInboundCall(
   // eslint-disable-next-line @typescript-eslint/dot-notation
   const digits = body["Digits"];
   const phoneHash = indexer.hash(callData.from, orgId);
+
+  const isBlocked = await blocklistRepo.exists(phoneHash);
+  if (isBlocked) return [{ type: "reject", attributes: { reason: "busy" } }];
 
   // Single voice webhook URL handles DTMF, recording, and status callbacks
   const voiceWebhookUrl = `${webhookBaseUrl}/webhooks/twilio/${orgId}/voice`;

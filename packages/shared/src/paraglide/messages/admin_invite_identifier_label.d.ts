@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Identifier" |
+* | "Login Username" |
 *
 * @param {Admin_Invite_Identifier_LabelInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

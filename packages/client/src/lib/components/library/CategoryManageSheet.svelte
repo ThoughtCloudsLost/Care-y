@@ -4,7 +4,7 @@
   import { useQueryClient } from "@tanstack/svelte-query";
   import * as m from "$lib/paraglide/messages.js";
   import { trpc } from "$lib/trpc/index.js";
-  import { getOrgKeyManager } from "$lib/crypto/context.js";
+  import { getOrgKeyManager, getOrgDecryptCache } from "$lib/crypto/context.js";
   import { uint8ArrayToBase64 } from "$lib/utils/buffer-encoding.js";
   import { toastStore } from "$lib/stores/toast.svelte.js";
   import { haptic } from "$lib/utils/haptic.js";
@@ -28,6 +28,7 @@
   let { opened, categories, ondismiss }: CategoryManageSheetProps = $props();
 
   const orgKeyManager = getOrgKeyManager();
+  const orgCache = getOrgDecryptCache();
   const queryClient = useQueryClient();
   if (!trpc.kb) throw new RouterNotAvailableError("kb");
   const kbRouter = trpc.kb;
@@ -97,6 +98,10 @@
         toastStore.show(m.library_category_updated());
       }
 
+      if (editingId !== undefined) {
+        orgCache.delete(`kb-cat:${editingId}`);
+        orgCache.delete(`kb-cat-desc:${editingId}`);
+      }
       cancelEdit();
       void queryClient.invalidateQueries({ queryKey: ["kb", "categories"] });
     } catch {
@@ -118,6 +123,8 @@
       await kbRouter.deleteCategory.mutate({ categoryId });
       haptic();
       toastStore.show(m.library_category_deleted());
+      orgCache.delete(`kb-cat:${categoryId}`);
+      orgCache.delete(`kb-cat-desc:${categoryId}`);
       cancelEdit();
       void queryClient.invalidateQueries({ queryKey: ["kb", "categories"] });
     } catch {
