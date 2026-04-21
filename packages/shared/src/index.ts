@@ -327,6 +327,18 @@ export type {
 
 export { ErrorCode, type ErrorCodeType } from "./error-codes.js";
 
+// --- Reports schemas ---
+export {
+  queueStatSchema,
+  monthlyVolumeSchema,
+  monthlyResolutionSchema,
+  priorityStatSchema,
+  type QueueStat,
+  type MonthlyVolume,
+  type MonthlyResolution,
+  type PriorityStat,
+} from "./schemas/reports.js";
+
 // --- Branding schemas ---
 export {
   saveBrandingFieldInputSchema,
