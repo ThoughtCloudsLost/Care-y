@@ -319,6 +319,15 @@ function applyPrimaryTokens(
   isDark: boolean,
 ): { text: string; fill: string } {
   const primary = deriveDualTokens(brand.primary, isDark);
+  el.style.setProperty("--brand-primary", brand.primary);
+  el.style.setProperty(
+    "--brand-primary-40",
+    `color-mix(in srgb, ${brand.primary} 40%, transparent)`,
+  );
+  el.style.setProperty(
+    "--brand-primary-20",
+    `color-mix(in srgb, ${brand.primary} 20%, transparent)`,
+  );
   el.style.setProperty("--brand-primary-text", primary.text);
   el.style.setProperty("--brand-primary-fill", primary.fill);
   el.style.setProperty("--brand-text", primary.text);
@@ -416,6 +425,9 @@ export function resetKonstaPalette(): void {
 
   const el = document.documentElement;
   const brandProps = [
+    "--brand-primary",
+    "--brand-primary-40",
+    "--brand-primary-20",
     "--brand-text",
     "--brand-fill",
     "--brand-primary-text",

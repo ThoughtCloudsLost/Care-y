@@ -487,7 +487,7 @@
 >
   <div class="reassign-sheet-content">
     <p class="reassign-title">{m.admin_queue_delete_confirm_tickets()}</p>
-    <List strong inset>
+    <List>
       {#each otherQueues as q (q.id)}
         {@const name = decryptQueueName(q)}
         <ListItem

@@ -1182,6 +1182,16 @@
       opacity 200ms ease;
   }
 
+  /* Konsta's --shadow-ios-light-glass includes a heavy 25px outer shadow
+     designed for navbar-scale surfaces. Inside the subnavbar it creates a
+     visible dark blob beneath the segmented control in light themes.
+     Strip the outer shadow, keep only the inset highlights. */
+  .shell-subnavbar-inner :global(.glass) {
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.5),
+      inset 0 0 0 0.5px rgba(255, 255, 255, 0.15) !important;
+  }
+
   /* Material: solid elevated surface instead of iOS glass blur. */
   :global(.k-material) .shell-subnavbar-inner {
     background: var(--paper);

@@ -16,7 +16,8 @@ export type VisualTheme =
   | "default"
   | "frutiger"
   | "brutalist"
-  | "cupertino";
+  | "cupertino"
+  | "prism";
 
 const UI_THEME_KEY = "care-y-theme";
 const COLOR_SCHEME_KEY = "care-y-color-scheme";
@@ -141,7 +142,8 @@ function createThemeStore(): ThemeStore {
         storedVisual === "default" ||
         storedVisual === "frutiger" ||
         storedVisual === "brutalist" ||
-        storedVisual === "cupertino"
+        storedVisual === "cupertino" ||
+        storedVisual === "prism"
       ) {
         state.visual = storedVisual;
       }

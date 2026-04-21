@@ -149,7 +149,7 @@
   </Block>
 
   <!-- Ticket metadata -->
-  <List strong inset class="!my-3">
+  <List class="!my-3">
     <ListItem title={m.ticket_panel_status()}>
       {#snippet after()}
         {#if ticketQuery.isLoading}
@@ -176,7 +176,7 @@
   <PanelNotesSection {ticketId} {keyWrap} {onnotetap} />
 
   <!-- Ticket actions -->
-  <List strong inset class="!my-3">
+  <List class="!my-3">
     <ListItem
       link
       chevron
@@ -201,7 +201,7 @@
     </ListItem>
   </List>
 
-  <List strong inset class="!my-3">
+  <List class="!my-3">
     <ListItem
       link
       chevron
@@ -229,7 +229,7 @@
 
   <!-- Recent tickets -->
   <BlockTitle class="!mt-6 !-mb-2">{m.ticket_recent_history()}</BlockTitle>
-  <Block strong inset class="!my-3 !mb-8">
+  <Block class="!my-3 !mb-8">
     <p class="empty-text">{m.ticket_panel_recent_coming_soon()}</p>
   </Block>
 </div>

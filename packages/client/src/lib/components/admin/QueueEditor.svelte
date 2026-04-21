@@ -176,8 +176,9 @@
       </Block>
     {/if}
 
-    <List strong inset>
+    <List>
       <ListInput
+        outline
         label={m.admin_queue_editor_name_label()}
         type="text"
         placeholder={m.admin_queue_editor_name_placeholder()}
@@ -196,8 +197,9 @@
       </div>
     </Block>
 
-    <List strong inset>
+    <List>
       <ListInput
+        outline
         label={m.admin_queue_editor_escalation_label()}
         type="number"
         placeholder="0"

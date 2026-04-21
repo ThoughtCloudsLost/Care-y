@@ -10,6 +10,7 @@
   import { onMount } from "svelte";
   import { Settings, RefreshCw, X } from "@lucide/svelte";
   import { applyKonstaPalette } from "$lib/branding/konsta-palette";
+  import { DEFAULT_PRIMARY } from "$lib/branding/index.js";
   import { setDevDelay } from "$lib/trpc/index.js";
   import {
     logBuffer,
@@ -51,6 +52,7 @@
       "frutiger",
       "brutalist",
       "cupertino",
+      "prism",
     ];
     themeStore.setVisualTheme(cycleEnum(themes, themeStore.visualTheme));
   }
@@ -122,11 +124,11 @@
         class="dev-pill"
         onclick={() => {
           themeStore.toggleColorScheme();
-          const current =
-            getComputedStyle(document.documentElement)
-              .getPropertyValue("--brand-primary")
-              .trim() || "#98a448";
-          queueMicrotask(() => void applyKonstaPalette(current));
+          const primary =
+            localStorage.getItem("care-y-brand-primary") ?? DEFAULT_PRIMARY;
+          const accent =
+            localStorage.getItem("care-y-brand-accent") ?? undefined;
+          queueMicrotask(() => void applyKonstaPalette({ primary, accent }));
         }}
       >
         {themeStore.resolvedScheme === "dark" ? "Dark" : "Light"}

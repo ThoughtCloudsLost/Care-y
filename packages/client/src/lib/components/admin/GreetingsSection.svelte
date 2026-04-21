@@ -543,6 +543,7 @@
   <div class="sheet-content">
     <List strongIos outlineIos nested>
       <ListInput
+        outline
         type="select"
         dropdown
         label={m.admin_greetings_phone_number_label()}
@@ -559,6 +560,7 @@
       </ListInput>
 
       <ListInput
+        outline
         type="select"
         dropdown
         label={m.admin_greetings_type_label()}
@@ -578,6 +580,7 @@
       </ListInput>
 
       <ListInput
+        outline
         type="select"
         dropdown
         label={m.admin_greetings_locale_label()}
@@ -621,6 +624,7 @@
     {#if formMode === "text"}
       <List strongIos outlineIos nested>
         <ListInput
+          outline
           type="textarea"
           label={m.admin_greetings_text_label()}
           inputId="gr-text"
@@ -794,7 +798,9 @@
   .gr-surface {
     display: flex;
     flex-direction: column;
-    background: var(--surface-1);
+    background: var(--card-bg, var(--surface-1));
+    border: 1px solid var(--card-border, transparent);
+    box-shadow: var(--card-shadow, none);
     border-radius: var(--card-radius);
     overflow: hidden;
   }
@@ -920,7 +926,9 @@
   }
 
   .audio-preview {
-    background: var(--surface-1);
+    background: var(--card-bg, var(--surface-1));
+    border: 1px solid var(--card-border, transparent);
+    box-shadow: var(--card-shadow, none);
     border-radius: var(--card-radius);
     padding: var(--space-sm);
   }

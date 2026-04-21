@@ -16,7 +16,11 @@
   import { getOrgDecryptCache, getOrgKeyManager } from "$lib/crypto/context.js";
   import { isValidHexColor } from "$lib/branding/color-utils.js";
   import { applyKonstaPalette } from "$lib/branding/konsta-palette.js";
-  import { updateBrandingCache } from "$lib/branding/index.js";
+  import {
+    updateBrandingCache,
+    DEFAULT_PRIMARY,
+    DEFAULT_ACCENT,
+  } from "$lib/branding/index.js";
   import { setBrandingTitle } from "$lib/branding/title.svelte.js";
   import { setAppleTouchIconHref } from "$lib/branding/icon-link.svelte.js";
   import { getOrgSlug } from "$lib/utils/org-slug.js";
@@ -119,8 +123,8 @@
   let sheetOpened = $state(false);
 
   let editName = $state("");
-  let editColor = $state("#98a448");
-  let editAccent = $state("#f476af");
+  let editColor = $state(DEFAULT_PRIMARY);
+  let editAccent = $state(DEFAULT_ACCENT);
   let editText = $state("");
   let editLogoFile = $state<File | null>(null);
   let editLogoPreviewUrl = $state<string | null>(null);
@@ -131,7 +135,7 @@
       decryptedColor !== "" &&
       isValidHexColor(decryptedColor)
       ? decryptedColor
-      : "#98a448";
+      : DEFAULT_PRIMARY;
   }
 
   function currentAccent(): string {
@@ -139,7 +143,7 @@
       decryptedAccent !== "" &&
       isValidHexColor(decryptedAccent)
       ? decryptedAccent
-      : "#f476af";
+      : DEFAULT_ACCENT;
   }
 
   function openSheet(): void {
@@ -572,17 +576,43 @@
             </div>
           {/if}
           <div class="logo-meta">
-            {#if logoBlobUrl}
-              <DecryptPlaceholder content={decryptedName}>
-                <span class="org-name-display">{decryptedName}</span>
-              </DecryptPlaceholder>
-            {:else}
+            {#if logoBlobUrl == null}
               <span class="text-[--muted] text-sm">
                 {m.admin_branding_card_no_logo()}
               </span>
             {/if}
           </div>
         </div>
+
+        <div class="section-divider"></div>
+
+        <!-- Name -->
+        <div class="card-section-label">
+          {m.admin_branding_card_name_label()}
+        </div>
+        {#if brandingQuery.data?.encryptedName}
+          <DecryptPlaceholder content={decryptedName}>
+            <span class="field-value">{decryptedName}</span>
+          </DecryptPlaceholder>
+        {:else}
+          <span class="text-[--muted] text-sm">-</span>
+        {/if}
+
+        <div class="section-divider"></div>
+
+        <!-- Client text -->
+        <div class="card-section-label">
+          {m.admin_branding_card_text_label()}
+        </div>
+        {#if brandingQuery.data?.encryptedClientText}
+          <DecryptPlaceholder content={decryptedText}>
+            <span class="field-value text-truncate">{decryptedText}</span>
+          </DecryptPlaceholder>
+        {:else}
+          <span class="text-[--muted] text-sm">
+            {m.admin_branding_card_no_text()}
+          </span>
+        {/if}
 
         <div class="section-divider"></div>
 
@@ -619,36 +649,6 @@
             <span class="color-hex">{decryptedAccent}</span>
           {/if}
         </div>
-
-        <div class="section-divider"></div>
-
-        <!-- Name -->
-        <div class="card-section-label">
-          {m.admin_branding_card_name_label()}
-        </div>
-        {#if brandingQuery.data?.encryptedName}
-          <DecryptPlaceholder content={decryptedName}>
-            <span class="field-value">{decryptedName}</span>
-          </DecryptPlaceholder>
-        {:else}
-          <span class="text-[--muted] text-sm">-</span>
-        {/if}
-
-        <div class="section-divider"></div>
-
-        <!-- Client text -->
-        <div class="card-section-label">
-          {m.admin_branding_card_text_label()}
-        </div>
-        {#if brandingQuery.data?.encryptedClientText}
-          <DecryptPlaceholder content={decryptedText}>
-            <span class="field-value text-truncate">{decryptedText}</span>
-          </DecryptPlaceholder>
-        {:else}
-          <span class="text-[--muted] text-sm">
-            {m.admin_branding_card_no_text()}
-          </span>
-        {/if}
 
         <!-- Edit button -->
         <div class="edit-action">
@@ -731,6 +731,7 @@
     <!-- Organization Name -->
     <div class="sheet-field">
       <ListInput
+        outline
         label={m.admin_branding_card_name_label()}
         type="text"
         value={editName}
@@ -738,6 +739,21 @@
           if (e.target instanceof HTMLInputElement) editName = e.target.value;
         }}
         info={m.admin_branding_name_hint()}
+      />
+    </div>
+
+    <!-- Client Welcome Text -->
+    <div class="sheet-field">
+      <ListInput
+        outline
+        label={m.admin_branding_card_text_label()}
+        type="textarea"
+        value={editText}
+        onchange={(e: Event) => {
+          if (e.target instanceof HTMLTextAreaElement)
+            editText = e.target.value;
+        }}
+        info={m.admin_branding_text_hint()}
       />
     </div>
 
@@ -813,22 +829,6 @@
           >{m.admin_branding_color_contrast_note()}</span
         >
       </div>
-    </div>
-
-    <div class="section-divider"></div>
-
-    <!-- Client Welcome Text -->
-    <div class="sheet-field">
-      <ListInput
-        label={m.admin_branding_card_text_label()}
-        type="textarea"
-        value={editText}
-        onchange={(e: Event) => {
-          if (e.target instanceof HTMLTextAreaElement)
-            editText = e.target.value;
-        }}
-        info={m.admin_branding_text_hint()}
-      />
     </div>
   </div>
 </ShellSheet>

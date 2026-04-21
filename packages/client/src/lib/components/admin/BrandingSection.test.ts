@@ -190,12 +190,13 @@ vi.mock("$lib/components/QueryError.svelte", async () => ({
 }));
 
 import BrandingSection from "./BrandingSection.svelte";
+import { DEFAULT_PRIMARY, DEFAULT_ACCENT } from "$lib/branding/index.js";
 
 const LOADED_DATA: BrandingData = {
   encryptedName: btoa("Safe Harbor Hotline"),
   encryptedLogo: null,
-  encryptedPrimaryColor: btoa("#98a448"),
-  encryptedAccentColor: btoa("#f476af"),
+  encryptedPrimaryColor: btoa(DEFAULT_PRIMARY),
+  encryptedAccentColor: btoa(DEFAULT_ACCENT),
   encryptedClientText: btoa("We provide confidential support."),
   clientEncryptedBranding: null,
   hasIcons: false,

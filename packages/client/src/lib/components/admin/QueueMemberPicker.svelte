@@ -116,7 +116,7 @@
   </div>
 
   {#if volunteersQuery.isLoading}
-    <List strong inset>
+    <List>
       {#each [1, 2, 3] as n (n)}
         <ListItem>
           <InlineSkeleton width="10ch" />
@@ -135,7 +135,7 @@
       <p>{m.admin_queue_member_picker_empty()}</p>
     </div>
   {:else}
-    <List strong inset>
+    <List>
       {#each filteredVolunteers as vol (vol.id)}
         <ListItem link onClick={() => handleSelect(vol.id)} chevron={false}>
           {#snippet title()}

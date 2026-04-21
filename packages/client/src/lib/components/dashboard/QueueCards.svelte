@@ -89,9 +89,10 @@
     gap: var(--space-xs);
     padding: 0.875rem 0.25rem;
     text-align: center;
-    background: var(--surface-1);
+    background: var(--card-bg, var(--surface-1));
     border-radius: var(--card-radius);
-    border: none;
+    border: 1px solid var(--card-border, transparent);
+    box-shadow: var(--card-shadow, none);
     cursor: pointer;
     font-family: inherit;
     -webkit-tap-highlight-color: transparent;
