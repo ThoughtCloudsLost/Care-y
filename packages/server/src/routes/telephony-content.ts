@@ -25,13 +25,16 @@ import {
   listSmsResponsesInputSchema,
 } from "@care-y/shared";
 import type { BlobStore } from "../storage/store.js";
+import type { RateLimiter } from "../ratelimit/rate-limiter.js";
 import { InternalError } from "../errors.js";
+import { TRPCError } from "@trpc/server";
 
 export interface TelephonyContentRouterDeps {
   readonly createService: (
     tenantDb: OrgContext["tenantDb"],
   ) => TelephonyContentService;
   readonly blobStore?: BlobStore;
+  readonly uploadLimiter?: RateLimiter;
 }
 
 const defaultDeps: TelephonyContentRouterDeps = {
@@ -42,7 +45,7 @@ const defaultDeps: TelephonyContentRouterDeps = {
 export function createTelephonyContentRouter(
   deps: TelephonyContentRouterDeps = defaultDeps,
 ) {
-  const { createService, blobStore } = deps;
+  const { createService, blobStore, uploadLimiter } = deps;
 
   return router({
     listGreetings: adminProcedure.input(listGreetingsInputSchema).query(
@@ -82,6 +85,15 @@ export function createTelephonyContentRouter(
       .input(uploadGreetingAudioInputSchema)
       .mutation(
         withErrorWrapping(async ({ ctx, input }) => {
+          if (uploadLimiter) {
+            const rateResult = uploadLimiter.check(ctx.user.id);
+            if (!rateResult.allowed) {
+              throw new TRPCError({
+                code: "TOO_MANY_REQUESTS",
+                message: `Upload rate limited. Retry after ${String(Math.ceil(rateResult.retryAfterMs / 1000))}s`,
+              });
+            }
+          }
           if (!blobStore) {
             throw new InternalError("BlobStore not configured");
           }
@@ -100,6 +112,15 @@ export function createTelephonyContentRouter(
       .input(createAudioGreetingInputSchema)
       .mutation(
         withErrorWrapping(async ({ ctx, input }) => {
+          if (uploadLimiter) {
+            const rateResult = uploadLimiter.check(ctx.user.id);
+            if (!rateResult.allowed) {
+              throw new TRPCError({
+                code: "TOO_MANY_REQUESTS",
+                message: `Upload rate limited. Retry after ${String(Math.ceil(rateResult.retryAfterMs / 1000))}s`,
+              });
+            }
+          }
           if (!blobStore) {
             throw new InternalError("BlobStore not configured");
           }

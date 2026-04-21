@@ -6,17 +6,17 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Admin_Invite_Identifier_Pii_WarningInputs */
 
 const en_admin_invite_identifier_pii_warning = /** @type {(inputs: Admin_Invite_Identifier_Pii_WarningInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Identifiers are stored with weaker encryption than display names. Avoid using real names or email addresses.`)
+	return /** @type {LocalizedString} */ (`Login Usernames are stored with weaker encryption than display names because the server needs to be able to read them. Avoid using real names or email addresses.`)
 };
 
 const es_admin_invite_identifier_pii_warning = /** @type {(inputs: Admin_Invite_Identifier_Pii_WarningInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Los identificadores se almacenan con cifrado mas debil que los nombres. Evite usar nombres reales o correos electronicos.`)
+	return /** @type {LocalizedString} */ (`Los nombres de usuario se almacenan con cifrado mas debil que los nombres. Evite usar nombres reales o correos electronicos.`)
 };
 
 /**
 * | output |
 * | --- |
-* | "Identifiers are stored with weaker encryption than display names. Avoid using real names or email addresses." |
+* | "Login Usernames are stored with weaker encryption than display names because the server needs to be able to read them. Avoid using real names or email addres..." |
 *
 * @param {Admin_Invite_Identifier_Pii_WarningInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

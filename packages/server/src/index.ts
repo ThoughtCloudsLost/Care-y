@@ -424,6 +424,10 @@ const appRouter = createAppRouter({
   telephonyContentDeps: {
     createService: createTelephonyContentService,
     blobStore,
+    uploadLimiter: createInMemoryRateLimiter({
+      windowMs: 60_000,
+      maxRequests: 3,
+    }),
   },
   ticketDeps: {
     blobStore,
@@ -464,6 +468,10 @@ const appRouter = createAppRouter({
   },
   brandingDeps: {
     blobStore,
+    uploadLimiter: createInMemoryRateLimiter({
+      windowMs: 60_000,
+      maxRequests: 3,
+    }),
   },
 });
 

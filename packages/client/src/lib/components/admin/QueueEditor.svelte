@@ -93,6 +93,9 @@
     haptic();
     toastStore.show(message);
     announceToLiveRegion("polite", message);
+    if (queueId !== null) {
+      orgCache.delete(`queue:${queueId}`);
+    }
     void queryClient.invalidateQueries({ queryKey: ["queues"] });
     ondismiss();
   }

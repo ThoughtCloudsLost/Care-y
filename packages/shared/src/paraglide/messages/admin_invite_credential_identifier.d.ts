@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Identifier" |
+* | "Login Username" |
 *
 * @param {Admin_Invite_Credential_IdentifierInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

@@ -3,8 +3,11 @@
     Block,
     DialogButton,
     Link,
+    List,
+    ListItem,
     Segmented,
     SegmentedButton,
+    Toggle,
   } from "konsta/svelte";
   import {
     createQuery,
@@ -22,6 +25,7 @@
   import { haptic } from "$lib/utils/haptic.js";
   import { toastStore } from "$lib/stores/toast.svelte.js";
   import { announceToLiveRegion } from "$lib/utils/announce.js";
+  import { RouterNotAvailableError } from "$lib/errors.js";
   import {
     userFilterStore,
     type KeyStatus,
@@ -31,6 +35,7 @@
   import ShellDialog from "$lib/shell/ShellDialog.svelte";
   import ShellSheet from "$lib/shell/ShellSheet.svelte";
   import SoftButton from "$lib/components/SoftButton.svelte";
+  import InlineSkeleton from "$lib/components/InlineSkeleton.svelte";
   import InviteUser from "./InviteUser.svelte";
   import UserCard from "./UserCard.svelte";
 
@@ -41,6 +46,8 @@
   let { autoAction = null }: UsersSectionProps = $props();
 
   const authRouter = trpc.auth;
+  if (!trpc.tickets) throw new RouterNotAvailableError("tickets");
+  const ticketRouter = trpc.tickets;
   const queryClient = useQueryClient();
 
   const orgCache = getOrgDecryptCache();
@@ -50,6 +57,11 @@
   const usersQuery = createQuery(() => ({
     queryKey: ["admin", "users"],
     queryFn: async () => authRouter.listUsers.query(),
+  }));
+
+  const queuesQuery = createQuery(() => ({
+    queryKey: ["queues"],
+    queryFn: async () => ticketRouter.listQueues.query(),
   }));
 
   const assignRoleMutation = createMutation(() => ({
@@ -204,6 +216,10 @@
   let sheetState = $state<SheetState | null>(null);
   let editRoleId = $state<RoleIdValue>(RoleId.VOLUNTEER);
 
+  let memberQueueIds = new SvelteSet<string>();
+  let originalQueueIds = new SvelteSet<string>();
+  let queuesLoading = $state(false);
+
   function handleUserEdit(userId: string): void {
     const user = (usersQuery.data ?? []).find((u) => u.id === userId);
     if (!user) return;
@@ -220,6 +236,24 @@
       user.roleId === RoleId.ADMIN || user.roleId === RoleId.MANAGER
         ? user.roleId
         : RoleId.VOLUNTEER;
+
+    memberQueueIds.clear();
+    originalQueueIds.clear();
+    queuesLoading = true;
+    ticketRouter.getUserQueues
+      .query({ userId })
+      .then((ids: readonly string[]) => {
+        for (const id of ids) {
+          memberQueueIds.add(id);
+          originalQueueIds.add(id);
+        }
+      })
+      .catch(() => {
+        toastStore.show(m.error_generic());
+      })
+      .finally(() => {
+        queuesLoading = false;
+      });
   }
 
   function closeSheet(): void {
@@ -230,12 +264,60 @@
     sheetState !== null && editRoleId !== sheetState.roleId,
   );
 
-  function handleSaveUser(): void {
-    if (!sheetState || !roleChanged) return;
-    assignRoleMutation.mutate({
-      userId: sheetState.userId,
-      roleId: editRoleId,
-    });
+  const queueChanged = $derived.by(() => {
+    if (memberQueueIds.size !== originalQueueIds.size) return true;
+    for (const id of memberQueueIds) {
+      if (!originalQueueIds.has(id)) return true;
+    }
+    return false;
+  });
+
+  const hasChanges = $derived(roleChanged || queueChanged);
+
+  function toggleQueue(queueId: string): void {
+    if (memberQueueIds.has(queueId)) {
+      memberQueueIds.delete(queueId);
+    } else {
+      memberQueueIds.add(queueId);
+    }
+  }
+
+  async function handleSaveUser(): Promise<void> {
+    if (!sheetState || !hasChanges) return;
+    const userId = sheetState.userId;
+
+    if (roleChanged) {
+      assignRoleMutation.mutate({ userId, roleId: editRoleId });
+    }
+
+    if (queueChanged) {
+      const added = [...memberQueueIds].filter(
+        (id) => !originalQueueIds.has(id),
+      );
+      const removed = [...originalQueueIds].filter(
+        (id) => !memberQueueIds.has(id),
+      );
+
+      for (const queueId of added) {
+        try {
+          await ticketRouter.addQueueMember.mutate({ queueId, userId });
+        } catch {
+          toastStore.show(m.error_generic());
+          break;
+        }
+      }
+      for (const queueId of removed) {
+        try {
+          await ticketRouter.removeQueueMember.mutate({ queueId, userId });
+        } catch {
+          toastStore.show(m.error_generic());
+          break;
+        }
+      }
+
+      void queryClient.invalidateQueries({ queryKey: ["queue-members"] });
+    }
+
     closeSheet();
   }
 
@@ -449,8 +531,8 @@
 >
   {#snippet headerRight()}
     <SoftButton
-      onclick={handleSaveUser}
-      disabled={!roleChanged || assignRoleMutation.isPending}
+      onclick={() => void handleSaveUser()}
+      disabled={!hasChanges || assignRoleMutation.isPending}
     >
       {#if assignRoleMutation.isPending}
         {m.common_loading()}
@@ -484,6 +566,35 @@
         </SegmentedButton>
       </Segmented>
     </div>
+
+    {#if (queuesQuery.data ?? []).length > 0}
+      <div class="queue-section">
+        <p class="section-label">{m.admin_user_queue_assignments()}</p>
+        <List nested>
+          {#if queuesLoading}
+            {#each { length: 2 } as _, i (i)}
+              <ListItem>
+                {#snippet title()}<InlineSkeleton width="8ch" />{/snippet}
+              </ListItem>
+            {/each}
+          {:else}
+            {#each queuesQuery.data ?? [] as queue (queue.id)}
+              {@const queueName =
+                orgCache.decrypt(`queue:${queue.id}`, queue.encryptedName) ??
+                "..."}
+              <ListItem title={queueName}>
+                {#snippet after()}
+                  <Toggle
+                    checked={memberQueueIds.has(queue.id)}
+                    onchange={() => toggleQueue(queue.id)}
+                  />
+                {/snippet}
+              </ListItem>
+            {/each}
+          {/if}
+        </List>
+      </div>
+    {/if}
 
     <div class="deactivate-action">
       <button
@@ -576,6 +687,13 @@
     text-transform: uppercase;
     letter-spacing: 0.05em;
     color: var(--muted);
+  }
+
+  .queue-section {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-sm);
+    margin-top: var(--space-lg);
   }
 
   .deactivate-action {

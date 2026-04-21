@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Identifiers are stored with weaker encryption than display names. Avoid using real names or email addresses." |
+* | "Login Usernames are stored with weaker encryption than display names because the server needs to be able to read them. Avoid using real names or email addres..." |
 *
 * @param {Admin_Invite_Identifier_Pii_WarningInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

@@ -599,6 +599,7 @@ export * from "./admin_reactivate_title.js";
 export * from "./admin_reactivate_body.js";
 export * from "./admin_user_edit_actions.js";
 export * from "./admin_user_save_changes.js";
+export * from "./admin_user_queue_assignments.js";
 export * from "./admin_user_deactivated.js";
 export * from "./admin_user_reactivated.js";
 export * from "./admin_key_status_ok.js";

@@ -25,8 +25,21 @@ import type {
 import type { KBMediaService } from "../kb/kb-media-service.js";
 import type { BlobStore } from "../storage/store.js";
 import type { RateLimiter } from "../ratelimit/rate-limiter.js";
-import { NotFoundError, ValidationError } from "../errors.js";
+import {
+  NotFoundError,
+  ValidationError,
+  AttachmentValidationError,
+} from "../errors.js";
 import { TRPCError } from "@trpc/server";
+import { validateMagicBytes } from "../telephony/attachment-validator.js";
+
+const KB_ALLOWED_CONTENT_TYPES: ReadonlySet<string> = new Set([
+  "image/jpeg",
+  "image/png",
+  "image/gif",
+  "image/webp",
+  "application/pdf",
+]);
 import {
   createKbCategoryInputSchema,
   updateKbCategoryInputSchema,
@@ -257,6 +270,25 @@ export function createKbRouter(deps: KBRouterDeps) {
             throw new ValidationError(
               `Declared size ${String(input.sizeBytes)} does not match actual blob size ${String(blobBuffer.byteLength)}`,
             );
+          }
+
+          // Content type allowlist
+          const normalizedType = (input.contentType.split(";")[0] ?? "")
+            .trim()
+            .toLowerCase();
+          if (
+            normalizedType.length > 0 &&
+            !KB_ALLOWED_CONTENT_TYPES.has(normalizedType)
+          ) {
+            throw new AttachmentValidationError(
+              `Content type "${normalizedType}" is not allowed. Accepted: ${[...KB_ALLOWED_CONTENT_TYPES].join(", ")}`,
+              "content_type",
+            );
+          }
+
+          // Magic byte verification (prevents content-type spoofing)
+          if (normalizedType.length > 0) {
+            validateMagicBytes(blobBuffer, normalizedType);
           }
 
           // care-y-ignore-next-line route-delegates-to-service -- blobStore.put is infrastructure (wire format), not business logic
