@@ -104,13 +104,6 @@ body {
   font-family: var(--theme-font-ui);
 }
 
-/* FOUC guard: body starts hidden (class set in app.html), removed by
-   +layout.svelte onMount after hydration. visibility:hidden still
-   participates in layout, so no content shift on reveal. */
-body.fouc-guard {
-  visibility: hidden;
-}
-
 /* Prevent iOS Safari auto-zoom on input focus (triggers below 16px).
    Applies to form controls. Contenteditable is NOT included because
    the editor needs WYSIWYG fidelity (same font-size as published).

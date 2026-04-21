@@ -22,6 +22,7 @@
     setAppleTouchIconHref,
     getAppleTouchIconHref,
   } from "$lib/branding/icon-link.svelte.js";
+  import { setOrgLogoUrl } from "$lib/branding/logo-url.svelte.js";
   import { getOrgKeyManager } from "$lib/crypto/context.js";
   import { isOrgKeyReady } from "$lib/crypto/org-key-ready.svelte.js";
   import { trpc } from "$lib/trpc/index.js";
@@ -45,18 +46,58 @@
   }
   let hydrated = $state(false);
 
+  function syncToLocalStorage(
+    cached: NonNullable<Awaited<ReturnType<typeof getCachedBranding>>>,
+  ): void {
+    try {
+      localStorage.setItem("care-y-brand-name", cached.orgName);
+      localStorage.setItem("care-y-brand-primary", cached.primaryColor);
+      if (cached.accentColor !== null) {
+        localStorage.setItem("care-y-brand-accent", cached.accentColor);
+      }
+      if (cached.orgSlug !== null) {
+        localStorage.setItem("care-y-brand-slug", cached.orgSlug);
+      }
+      if (cached.hasIcons) {
+        localStorage.setItem("care-y-brand-has-icons", "1");
+      } else {
+        localStorage.removeItem("care-y-brand-has-icons");
+      }
+    } catch {
+      // localStorage unavailable
+    }
+  }
+
+  function dismissSplash(): void {
+    document.body.classList.add("hydrated");
+    const splash = document.getElementById("splash");
+    if (splash) {
+      splash.addEventListener("transitionend", () => splash.remove(), {
+        once: true,
+      });
+    }
+  }
+
   // Path 1: instant hydration from cache (pre-login)
   $effect(() => {
     if (!browser) return;
 
     void getCachedBranding().then((cached) => {
-      if (!cached) return;
+      if (!cached) {
+        dismissSplash();
+        return;
+      }
       void applyBranding(cached);
       setBrandingTitle(cached.orgName);
       if (cached.orgSlug !== null && cached.hasIcons) {
-        setAppleTouchIconHref(`/api/branding/${cached.orgSlug}/icon-192.png`);
+        const iconBase = `/api/branding/${cached.orgSlug}/icon-192.png`;
+        setAppleTouchIconHref(iconBase);
+        setOrgLogoUrl(iconBase);
       }
+      // Sync SW cache state to localStorage for next page load's splash screen.
+      syncToLocalStorage(cached);
       hydrated = true;
+      dismissSplash();
     });
   });
 
@@ -96,13 +137,19 @@
         void applyBranding(cached);
         setBrandingTitle(cached.orgName);
         if (cached.orgSlug !== null && cached.hasIcons) {
-          setAppleTouchIconHref(`/api/branding/${cached.orgSlug}/icon-192.png`);
+          const iconBase = `/api/branding/${cached.orgSlug}/icon-192.png`;
+          setAppleTouchIconHref(iconBase);
+          setOrgLogoUrl(iconBase);
+        } else {
+          setOrgLogoUrl(null);
         }
       }
 
       hydrated = true;
+      dismissSplash();
     } catch {
       // Non-fatal: branding stays at defaults
+      dismissSplash();
     }
   }
 
