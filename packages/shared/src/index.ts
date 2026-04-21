@@ -89,6 +89,20 @@ export {
   type RotateOrgKeyInput,
 } from "./schemas/keys.js";
 
+// --- Profile schemas ---
+export {
+  updateDisplayNameSchema,
+  adminUpdateDisplayNameSchema,
+  updateUsernameSchema,
+  adminUpdateUsernameSchema,
+  updatePasswordHashSchema,
+  type UpdateDisplayNameInput,
+  type AdminUpdateDisplayNameInput,
+  type UpdateUsernameInput,
+  type AdminUpdateUsernameInput,
+  type UpdatePasswordHashInput,
+} from "./schemas/profile.js";
+
 // --- OPRF schemas ---
 export {
   oprfEvaluateInputSchema,
