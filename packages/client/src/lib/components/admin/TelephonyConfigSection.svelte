@@ -316,7 +316,7 @@
             {/if}
           </div>
         {:else}
-          <List strongIos outlineIos class="phones-list">
+          <List class="phones-list">
             {#each config.phoneNumbers as phone (phone.number)}
               {@const role = getPhoneRole(phone)}
               <ListItem title={phone.number} subtitle={phone.label ?? ""}>
@@ -389,7 +389,7 @@
     </SoftButton>
   {/snippet}
   <div class="sheet-content">
-    <List strongIos outlineIos class="cred-list">
+    <List class="cred-list">
       <ListInput
         label={m.admin_telephony_account_id()}
         type="text"
@@ -448,8 +448,9 @@
       {m.admin_telephony_number_roles_description()}
     </p>
 
-    <List strongIos outlineIos class="purpose-list">
+    <List class="purpose-list">
       <ListInput
+        outline
         label={m.admin_telephony_outbound_calls()}
         type="select"
         dropdown
@@ -470,6 +471,7 @@
       </ListInput>
 
       <ListInput
+        outline
         label={m.admin_telephony_system_messages()}
         type="select"
         dropdown

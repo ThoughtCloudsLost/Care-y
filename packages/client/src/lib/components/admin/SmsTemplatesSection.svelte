@@ -329,6 +329,7 @@
   <div class="sheet-content">
     <List strongIos outlineIos nested>
       <ListInput
+        outline
         type="select"
         dropdown
         label={m.admin_templates_type_label()}
@@ -348,6 +349,7 @@
       </ListInput>
 
       <ListInput
+        outline
         type="select"
         dropdown
         label={m.admin_templates_locale_label()}
@@ -364,6 +366,7 @@
       </ListInput>
 
       <ListInput
+        outline
         type="textarea"
         label={m.admin_templates_text_label()}
         inputId="tpl-text"
@@ -511,7 +514,9 @@
   .tpl-surface {
     display: flex;
     flex-direction: column;
-    background: var(--surface-1);
+    background: var(--card-bg, var(--surface-1));
+    border: 1px solid var(--card-border, transparent);
+    box-shadow: var(--card-shadow, none);
     border-radius: var(--card-radius);
     overflow: hidden;
   }

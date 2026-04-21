@@ -16,6 +16,7 @@
     getCachedBranding,
     applyBranding,
     updateBrandingCache,
+    DEFAULT_PRIMARY,
   } from "$lib/branding/index.js";
   import { setBrandingTitle } from "$lib/branding/title.svelte.js";
   import {
@@ -120,7 +121,7 @@
 
       const orgName = decryptField(data.encryptedName) ?? "CARE-Y";
       const primaryColor =
-        decryptField(data.encryptedPrimaryColor) ?? "#98a448";
+        decryptField(data.encryptedPrimaryColor) ?? DEFAULT_PRIMARY;
       const accentColor = decryptField(data.encryptedAccentColor) ?? null;
       const orgSlug = getOrgSlug();
 

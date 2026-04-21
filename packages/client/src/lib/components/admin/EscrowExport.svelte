@@ -191,8 +191,9 @@
       <p class="body-text">{m.admin_escrow_passphrase_guidance()}</p>
     </Block>
 
-    <List strong inset>
+    <List>
       <ListInput
+        outline
         label={m.admin_escrow_passphrase_label()}
         type="password"
         value={passphrase}
@@ -201,6 +202,7 @@
         }}
       />
       <ListInput
+        outline
         label={m.admin_escrow_confirm_label()}
         type="password"
         value={confirmPassphrase}

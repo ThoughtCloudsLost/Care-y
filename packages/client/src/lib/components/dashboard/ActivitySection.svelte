@@ -163,8 +163,10 @@
     display: flex;
     flex-direction: column;
     gap: 0;
-    background: var(--surface-1);
+    background: var(--card-bg, var(--surface-1));
     border-radius: var(--card-radius);
+    border: 1px solid var(--card-border, transparent);
+    box-shadow: var(--card-shadow, none);
     overflow: hidden;
   }
 

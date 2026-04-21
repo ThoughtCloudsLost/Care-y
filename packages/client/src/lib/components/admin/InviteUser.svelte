@@ -132,7 +132,7 @@
       </p>
     </Block>
 
-    <Block strong inset class="credential-card">
+    <Block class="credential-card">
       <div class="credential-row">
         <span class="credential-label"
           >{m.admin_invite_credential_identifier()}</span
@@ -180,8 +180,9 @@
       </Block>
     {/if}
 
-    <List strong inset>
+    <List>
       <ListInput
+        outline
         label={m.admin_invite_identifier_label()}
         type="text"
         value={identifier}
@@ -201,8 +202,9 @@
       </Block>
     {/if}
 
-    <List strong inset>
+    <List>
       <ListInput
+        outline
         label={m.admin_invite_display_name_label()}
         type="text"
         value={displayName}
@@ -215,8 +217,9 @@
       />
     </List>
 
-    <List strong inset>
+    <List>
       <ListInput
+        outline
         label={m.admin_invite_password_label()}
         type="password"
         value={tempPassword}

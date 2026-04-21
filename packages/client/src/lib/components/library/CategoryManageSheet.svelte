@@ -144,12 +144,14 @@
   >
   <List nested>
     <ListInput
+      outline
       label={m.library_category_name()}
       inputId="cat-name-input"
       type="text"
       bind:value={editName}
     />
     <ListInput
+      outline
       label={m.library_category_description()}
       inputId="cat-desc-input"
       type="textarea"

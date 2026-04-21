@@ -123,7 +123,7 @@
     {/snippet}
     {#if editing}
       <div class="note-edit-area">
-        <List strong inset nested class="note-edit-list">
+        <List nested class="note-edit-list">
           <ListInput
             type="textarea"
             bind:value={editText}

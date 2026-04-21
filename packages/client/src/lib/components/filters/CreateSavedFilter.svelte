@@ -57,6 +57,7 @@
 <ShellPopup {opened} {ondismiss} title={m.saved_filter_modal_title()}>
   <List>
     <ListInput
+      outline
       label={m.saved_filter_name_label()}
       type="text"
       placeholder={m.saved_filter_name_placeholder()}

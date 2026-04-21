@@ -3,6 +3,7 @@ import {
   sanitizeOrgName,
   updateBrandingCache,
   getCachedBranding,
+  DEFAULT_PRIMARY,
 } from "./index";
 
 // Cache API mock for branding cache tests
@@ -62,7 +63,7 @@ describe("updateBrandingCache", () => {
     const body = JSON.parse(await response.text()) as Record<string, unknown>;
     expect(body.orgName).toBe("Test Org");
     expect(body.hasIcons).toBe(true);
-    expect(body.primaryColor).toBe("#98a448");
+    expect(body.primaryColor).toBe(DEFAULT_PRIMARY);
     expect(body.orgSlug).toBeNull();
   });
 

@@ -86,7 +86,7 @@
 
 {#if notesQuery.isLoading}
   <BlockTitle class="!mt-6 !-mb-2">{m.ticket_panel_notes()}</BlockTitle>
-  <List strong inset class="!my-3">
+  <List class="!my-3">
     {#each [1, 2] as n (n)}
       <ListItem>
         {#snippet title()}
@@ -103,7 +103,7 @@
   </List>
 {:else if notes.length > 0}
   <BlockTitle class="!mt-6 !-mb-2">{m.ticket_panel_notes()}</BlockTitle>
-  <List strong inset class="!my-3">
+  <List class="!my-3">
     {#each notes as note (note.id)}
       {@const noteResult = resolveAsyncDecrypt(
         followUpCache.decryptContent(note.id, keyWrap, note.encryptedContent),

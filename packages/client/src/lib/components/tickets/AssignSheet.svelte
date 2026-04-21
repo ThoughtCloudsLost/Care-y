@@ -125,7 +125,7 @@
   </div>
 
   {#if volunteersQuery.isLoading}
-    <List strong inset>
+    <List>
       {#each [1, 2, 3] as n (n)}
         <ListItem>
           <InlineSkeleton width="8ch" />
@@ -143,7 +143,7 @@
       </button>
     </div>
   {:else}
-    <List strong inset>
+    <List>
       {#each filteredVolunteers as vol (vol.id)}
         <ListItem title={vol.displayName}>
           {#snippet after()}

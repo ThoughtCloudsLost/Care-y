@@ -197,7 +197,6 @@
             }}
             clearButton={filterText.length > 0}
             onClear={() => (filterText = "")}
-            outline
           />
         </div>
         <SoftButton onclick={openAddSheet}>
@@ -380,7 +379,9 @@
   .bl-surface {
     display: flex;
     flex-direction: column;
-    background: var(--surface-1);
+    background: var(--card-bg, var(--surface-1));
+    border: 1px solid var(--card-border, transparent);
+    box-shadow: var(--card-shadow, none);
     border-radius: var(--card-radius);
     overflow: hidden;
   }
