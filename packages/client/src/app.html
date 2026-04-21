@@ -98,6 +98,7 @@
   </head>
   <body data-sveltekit-preload-data="hover">
     <style nonce="%sveltekit.nonce%">
+      /* --- Base splash (shared across all themes) --- */
       #splash {
         position: fixed;
         inset: 0;
@@ -106,16 +107,11 @@
         flex-direction: column;
         align-items: center;
         justify-content: center;
-        background: radial-gradient(
-          ellipse at center,
-          color-mix(in srgb, var(--brand-primary, #636366) 15%, #0a0a0a) 0%,
-          #0a0a0a 70%
-        );
         transition: opacity 400ms ease-out;
       }
       #splash-logo {
-        border-radius: 20px;
-        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+        width: 96px;
+        height: 96px;
         opacity: 0;
         transition: opacity 300ms ease;
       }
@@ -123,16 +119,235 @@
         opacity: 1;
       }
       #splash-name {
-        font-family: -apple-system, system-ui, sans-serif;
+        font-family:
+          system-ui,
+          -apple-system,
+          sans-serif;
         font-size: 17px;
         font-weight: 600;
-        color: rgba(255, 255, 255, 0.85);
         letter-spacing: 0.02em;
         margin-top: 16px;
       }
       body.hydrated #splash {
         opacity: 0;
         pointer-events: none;
+      }
+
+      /* --- Default text color by scheme --- */
+      .light #splash-name {
+        color: rgba(0, 0, 0, 0.8);
+      }
+      .dark #splash-name {
+        color: rgba(255, 255, 255, 0.85);
+      }
+
+      /* --- Default theme --- */
+      .theme-default.light #splash {
+        background: #f9fafb;
+      }
+      .theme-default.dark #splash {
+        background: #000000;
+      }
+      .theme-default #splash-logo {
+        border-radius: 20px;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+      }
+
+      /* --- Riso theme --- */
+      .theme-riso.light #splash {
+        background: color-mix(
+          in oklch,
+          #f0ece5 85%,
+          var(--brand-primary, #636366) 15%
+        );
+      }
+      .theme-riso.dark #splash {
+        background: #141416;
+      }
+      .theme-riso #splash {
+        isolation: isolate;
+      }
+      .theme-riso #splash::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        background-image: url("/styles/grain.svg");
+        background-repeat: repeat;
+        background-size: 182px;
+        pointer-events: none;
+        z-index: 1;
+      }
+      .theme-riso.light #splash::before {
+        opacity: 0.03;
+      }
+      .theme-riso.dark #splash::before {
+        opacity: 0.12;
+      }
+      .theme-riso #splash-logo {
+        border-radius: 20px;
+        box-shadow: 0 4px 16px rgba(60, 40, 20, 0.3);
+      }
+      .theme-riso.light #splash-name {
+        color: #0a0a0a;
+      }
+      .theme-riso.dark #splash-name {
+        color: #f2ede4;
+      }
+
+      /* --- Frutiger Aero theme --- */
+      .theme-frutiger.light #splash {
+        background: linear-gradient(
+          145deg,
+          #48b0d8 0%,
+          #70c8e8 12%,
+          #90d8f0 28%,
+          #b0e4f6 45%,
+          #a8e0e8 58%,
+          #98e0d0 72%,
+          #b0e8c8 85%,
+          #c8f0d0 100%
+        );
+      }
+      .theme-frutiger.dark #splash {
+        background: linear-gradient(
+          145deg,
+          #020a14 0%,
+          #061220 18%,
+          #0a1a30 40%,
+          #0c2038 60%,
+          #081830 80%,
+          #061220 100%
+        );
+      }
+      .theme-frutiger #splash-logo {
+        border-radius: 1.75rem 2rem 1.5rem 1.75rem;
+      }
+      .theme-frutiger.light #splash-logo {
+        box-shadow:
+          0 6px 20px rgba(0, 80, 140, 0.25),
+          0 2px 6px rgba(0, 60, 110, 0.15),
+          inset 0 1px 0 rgba(255, 255, 255, 0.4);
+      }
+      .theme-frutiger.dark #splash-logo {
+        box-shadow:
+          0 6px 20px rgba(0, 0, 0, 0.4),
+          0 2px 6px rgba(0, 40, 80, 0.3),
+          inset 0 1px 0 rgba(80, 160, 230, 0.15);
+      }
+      .theme-frutiger.light #splash-name {
+        color: #0c2840;
+      }
+      .theme-frutiger.dark #splash-name {
+        color: #c0daf0;
+      }
+
+      /* --- Brutalist theme --- */
+      .theme-brutalist.light #splash {
+        background: #d8d4ce;
+      }
+      .theme-brutalist.dark #splash {
+        background: #141414;
+      }
+      .theme-brutalist #splash-logo {
+        border-radius: 0;
+        box-shadow: 2px 2px 0 rgba(0, 0, 0, 0.7);
+      }
+      .theme-brutalist.light #splash-logo {
+        border: 1px solid #1a1a1a;
+      }
+      .theme-brutalist.dark #splash-logo {
+        border: 1px solid #c8c4be;
+      }
+      .theme-brutalist #splash-name {
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        font-weight: 700;
+      }
+      .theme-brutalist.light #splash-name {
+        color: #1a1a1a;
+      }
+      .theme-brutalist.dark #splash-name {
+        color: #c8c4be;
+      }
+
+      /* --- Cupertino theme --- */
+      .theme-cupertino.light #splash {
+        background: #f2f2f7;
+      }
+      .theme-cupertino.dark #splash {
+        background: #000000;
+      }
+      .theme-cupertino #splash-logo {
+        border-radius: 1rem;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+      }
+
+      /* --- Prism theme --- */
+      .theme-prism.light #splash {
+        background:
+          radial-gradient(
+            ellipse 60% 50% at 15% 20%,
+            color-mix(in srgb, var(--brand-primary, #636366) 20%, transparent)
+              0%,
+            transparent 70%
+          ),
+          radial-gradient(
+            ellipse 50% 45% at 85% 60%,
+            color-mix(
+                in srgb,
+                var(--brand-accent, var(--brand-primary, #636366)) 16%,
+                transparent
+              )
+              0%,
+            transparent 70%
+          ),
+          radial-gradient(
+            ellipse 40% 35% at 50% 90%,
+            color-mix(in srgb, var(--brand-primary, #636366) 10%, transparent)
+              0%,
+            transparent 70%
+          ),
+          #f2f2f7;
+      }
+      .theme-prism.dark #splash {
+        background:
+          radial-gradient(
+            ellipse 60% 50% at 15% 20%,
+            color-mix(in srgb, var(--brand-primary, #636366) 18%, transparent)
+              0%,
+            transparent 70%
+          ),
+          radial-gradient(
+            ellipse 50% 45% at 85% 60%,
+            color-mix(
+                in srgb,
+                var(--brand-accent, var(--brand-primary, #636366)) 14%,
+                transparent
+              )
+              0%,
+            transparent 70%
+          ),
+          radial-gradient(
+            ellipse 40% 35% at 50% 90%,
+            color-mix(in srgb, var(--brand-primary, #636366) 8%, transparent) 0%,
+            transparent 70%
+          ),
+          #000000;
+      }
+      .theme-prism #splash-logo {
+        border-radius: 20px;
+      }
+      .theme-prism.light #splash-logo {
+        box-shadow:
+          0 4px 16px rgba(0, 0, 0, 0.12),
+          0 0 24px
+            color-mix(in srgb, var(--brand-primary, #636366) 15%, transparent);
+      }
+      .theme-prism.dark #splash-logo {
+        box-shadow:
+          0 4px 16px rgba(0, 0, 0, 0.4),
+          0 0 24px
+            color-mix(in srgb, var(--brand-primary, #636366) 20%, transparent);
       }
     </style>
     <div id="splash" aria-hidden="true">
