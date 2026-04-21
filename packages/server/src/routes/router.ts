@@ -30,6 +30,7 @@ import {
   type NotificationRouterDeps,
 } from "./notifications.js";
 import { createBrandingRouter, type BrandingRouterDeps } from "./branding.js";
+import { createReportsRouter } from "./reports.js";
 import type { AuthRouterDeps } from "./auth.js";
 import type { OrgService } from "../org/service.js";
 import type { ProviderFactory } from "../telephony/factory.js";
@@ -48,6 +49,7 @@ export interface RouterDeps {
   readonly telephonyContentDeps?: TelephonyContentRouterDeps;
   readonly includeTelephonyContent?: boolean;
   readonly includeConsultant?: boolean;
+  readonly includeReports?: boolean;
   readonly ticketDeps?: TicketRouterDeps;
   readonly kbDeps?: KBRouterDeps;
   readonly notificationDeps?: NotificationRouterDeps;
@@ -93,6 +95,9 @@ export function createAppRouter(deps: RouterDeps) {
       : {}),
     ...(deps.brandingDeps
       ? { branding: createBrandingRouter(deps.brandingDeps) }
+      : {}),
+    ...(deps.includeReports !== false
+      ? { reports: createReportsRouter() }
       : {}),
   });
 }
