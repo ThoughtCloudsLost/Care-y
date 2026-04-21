@@ -11,10 +11,16 @@ import {
   Palette,
   Key,
   Shredder,
-  ChartColumn,
+  LayoutDashboard,
+  ChartBar,
+  Search,
 } from "@lucide/svelte";
 
-export type AdminGroup = "people" | "communications" | "organization";
+export type AdminGroup =
+  | "people"
+  | "communications"
+  | "organization"
+  | "analytics";
 
 export interface AdminDestination {
   readonly id: string;
@@ -123,15 +129,37 @@ export const ADMIN_DESTINATIONS: readonly AdminDestination[] = [
     permission: Permission.MANAGE_ORG_CONFIG,
     implemented: true,
   },
+
+  // ANALYTICS
   {
-    id: "reports",
-    group: "organization",
-    icon: ChartColumn,
-    label: m.panel_reports,
-    subtitle: m.hub_reports_subtitle,
-    path: "/admin/organization?tab=reports",
+    id: "analytics-overview",
+    group: "analytics",
+    icon: LayoutDashboard,
+    label: m.panel_analytics_overview,
+    subtitle: m.hub_analytics_overview_subtitle,
+    path: "/admin/analytics?tab=dash-1",
     permission: Permission.VIEW_REPORTS,
-    implemented: true,
+    implemented: false,
+  },
+  {
+    id: "analytics-operations",
+    group: "analytics",
+    icon: ChartBar,
+    label: m.panel_analytics_operations,
+    subtitle: m.hub_analytics_operations_subtitle,
+    path: "/admin/analytics?tab=dash-2",
+    permission: Permission.VIEW_REPORTS,
+    implemented: false,
+  },
+  {
+    id: "analytics-deep",
+    group: "analytics",
+    icon: Search,
+    label: m.panel_analytics_deep,
+    subtitle: m.hub_analytics_deep_subtitle,
+    path: "/admin/analytics?tab=dash-3",
+    permission: Permission.VIEW_REPORTS,
+    implemented: false,
   },
 ];
 
@@ -139,6 +167,7 @@ export const GROUP_ORDER: readonly AdminGroup[] = [
   "people",
   "communications",
   "organization",
+  "analytics",
 ];
 
 export function getVisibleDestinations(
