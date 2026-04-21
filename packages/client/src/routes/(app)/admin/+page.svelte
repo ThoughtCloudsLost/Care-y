@@ -97,6 +97,22 @@
               count: String(data.retentionDays),
             })
           : m.admin_hub_badge_retention_disabled();
+      case "telephony":
+        return data.phoneCount > 0
+          ? m.admin_hub_badge_phones({ count: String(data.phoneCount) })
+          : m.admin_hub_badge_no_phones();
+      case "blocklist":
+        return m.admin_hub_badge_blocked({
+          count: String(data.blocklistCount),
+        });
+      case "greetings":
+        return m.admin_hub_badge_greetings({
+          count: String(data.greetingCount),
+        });
+      case "sms-templates":
+        return m.admin_hub_badge_templates({
+          count: String(data.templateCount),
+        });
       default:
         return null;
     }
@@ -107,10 +123,18 @@
   ): "default" | "success" | "warning" | null {
     const data = hubStatusQuery.data;
     if (!data) return null;
-    if (destId === "keys") {
-      return data.keyStatus === "ok" ? "success" : "warning";
+    switch (destId) {
+      case "keys":
+        return data.keyStatus === "ok" ? "success" : "warning";
+      case "telephony":
+        return data.phoneCount > 0 ? "success" : "warning";
+      case "greetings":
+        return data.greetingCount > 0 ? "default" : "warning";
+      case "sms-templates":
+        return data.templateCount > 0 ? "default" : "warning";
+      default:
+        return "default";
     }
-    return "default";
   }
 
   function groupLabel(group: AdminGroup): string {

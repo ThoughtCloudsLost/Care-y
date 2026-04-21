@@ -85,6 +85,10 @@ export interface AuthService {
     queueCount: number;
     keyStatus: "ok" | "missing";
     retentionDays: number | null;
+    phoneCount: number;
+    blocklistCount: number;
+    greetingCount: number;
+    templateCount: number;
   }>;
 }
 
@@ -448,32 +452,61 @@ export function createAuthService(
       queueCount: number;
       keyStatus: "ok" | "missing";
       retentionDays: number | null;
+      phoneCount: number;
+      blocklistCount: number;
+      greetingCount: number;
+      templateCount: number;
     }> {
-      const [userCount, queueCount, keyStatus, retentionConfig] =
-        await Promise.all([
-          db
-            .selectFrom("users")
-            .select(db.fn.countAll<string>().as("c"))
-            .where("is_active", "=", true)
-            .executeTakeFirstOrThrow(),
-          db
-            .selectFrom("queues")
-            .select(db.fn.countAll<string>().as("c"))
-            .executeTakeFirstOrThrow(),
-          db
-            .selectFrom("org_config")
-            .select("org_public_key")
-            .executeTakeFirst(),
-          db
-            .selectFrom("org_config")
-            .select("pii_retention_days")
-            .executeTakeFirst(),
-        ]);
+      const [
+        userCount,
+        queueCount,
+        keyStatus,
+        retentionConfig,
+        phoneCount,
+        blocklistCount,
+        greetingCount,
+        templateCount,
+      ] = await Promise.all([
+        db
+          .selectFrom("users")
+          .select(db.fn.countAll<string>().as("c"))
+          .where("is_active", "=", true)
+          .executeTakeFirstOrThrow(),
+        db
+          .selectFrom("queues")
+          .select(db.fn.countAll<string>().as("c"))
+          .executeTakeFirstOrThrow(),
+        db.selectFrom("org_config").select("org_public_key").executeTakeFirst(),
+        db
+          .selectFrom("org_config")
+          .select("pii_retention_days")
+          .executeTakeFirst(),
+        db
+          .selectFrom("phones")
+          .select(db.fn.countAll<string>().as("c"))
+          .executeTakeFirstOrThrow(),
+        db
+          .selectFrom("phone_blocklist")
+          .select(db.fn.countAll<string>().as("c"))
+          .executeTakeFirstOrThrow(),
+        db
+          .selectFrom("phone_greetings")
+          .select(db.fn.countAll<string>().as("c"))
+          .executeTakeFirstOrThrow(),
+        db
+          .selectFrom("sms_responses")
+          .select(db.fn.countAll<string>().as("c"))
+          .executeTakeFirstOrThrow(),
+      ]);
       return {
         activeUserCount: Number(userCount.c),
         queueCount: Number(queueCount.c),
         keyStatus: keyStatus?.org_public_key ? "ok" : "missing",
         retentionDays: retentionConfig?.pii_retention_days ?? null,
+        phoneCount: Number(phoneCount.c),
+        blocklistCount: Number(blocklistCount.c),
+        greetingCount: Number(greetingCount.c),
+        templateCount: Number(templateCount.c),
       };
     },
   };

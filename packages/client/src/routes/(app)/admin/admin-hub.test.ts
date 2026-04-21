@@ -100,6 +100,13 @@ vi.mock("$lib/paraglide/messages.js", () => ({
   admin_hub_badge_retention_days: ({ count }: { count: string }) =>
     `${count} days`,
   admin_hub_badge_retention_disabled: () => "Disabled",
+  admin_hub_badge_phones: ({ count }: { count: string }) => `${count} numbers`,
+  admin_hub_badge_no_phones: () => "No phones",
+  admin_hub_badge_blocked: ({ count }: { count: string }) => `${count} blocked`,
+  admin_hub_badge_greetings: ({ count }: { count: string }) =>
+    `${count} greetings`,
+  admin_hub_badge_templates: ({ count }: { count: string }) =>
+    `${count} templates`,
   admin_coming_soon: () => "Coming soon",
 }));
 
@@ -259,6 +266,66 @@ describe("Admin hub page", () => {
 
       expect(screen.getByText("Action needed")).toBeTruthy();
       expect(screen.getByText("Disabled")).toBeTruthy();
+    });
+
+    it("renders communications badges with success variant when counts > 0", () => {
+      mockHubStatusData = {
+        activeUserCount: 2,
+        queueCount: 1,
+        keyStatus: "ok",
+        retentionDays: 30,
+        phoneCount: 4,
+        blocklistCount: 7,
+        greetingCount: 3,
+        templateCount: 5,
+      };
+      renderPage();
+
+      expect(screen.getByText("4 numbers")).toBeTruthy();
+      expect(screen.getByText("7 blocked")).toBeTruthy();
+      expect(screen.getByText("3 greetings")).toBeTruthy();
+      expect(screen.getByText("5 templates")).toBeTruthy();
+
+      // Telephony badge shows success when phones are provisioned
+      const phoneBadge = screen.getByText("4 numbers");
+      expect(phoneBadge.closest(".hub-badge-success")).toBeTruthy();
+
+      // Greetings/templates show default (no warning) when counts > 0
+      const greetingBadge = screen.getByText("3 greetings");
+      expect(greetingBadge.closest(".hub-badge-warning")).toBeNull();
+      const templateBadge = screen.getByText("5 templates");
+      expect(templateBadge.closest(".hub-badge-warning")).toBeNull();
+    });
+
+    it("shows warning variant when communications counts are zero", () => {
+      mockHubStatusData = {
+        activeUserCount: 1,
+        queueCount: 0,
+        keyStatus: "ok",
+        retentionDays: null,
+        phoneCount: 0,
+        blocklistCount: 0,
+        greetingCount: 0,
+        templateCount: 0,
+      };
+      renderPage();
+
+      expect(screen.getByText("No phones")).toBeTruthy();
+      expect(screen.getByText("0 blocked")).toBeTruthy();
+      expect(screen.getByText("0 greetings")).toBeTruthy();
+      expect(screen.getByText("0 templates")).toBeTruthy();
+
+      // Telephony, greetings, templates show warning when at zero
+      const phoneBadge = screen.getByText("No phones");
+      expect(phoneBadge.closest(".hub-badge-warning")).toBeTruthy();
+      const greetingBadge = screen.getByText("0 greetings");
+      expect(greetingBadge.closest(".hub-badge-warning")).toBeTruthy();
+      const templateBadge = screen.getByText("0 templates");
+      expect(templateBadge.closest(".hub-badge-warning")).toBeTruthy();
+
+      // Blocklist at 0 is normal (no warning)
+      const blockBadge = screen.getByText("0 blocked");
+      expect(blockBadge.closest(".hub-badge-warning")).toBeNull();
     });
 
     it("does not render badges when query has no data yet", () => {
