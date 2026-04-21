@@ -546,4 +546,36 @@ describe.skipIf(!HAS_DB)("auth + org routers (DB integration)", () => {
       "LOGIN_RATE_LIMITED",
     );
   });
+
+  // --- Auth: hubStatus ---
+
+  it("auth.hubStatus returns communication counts", async () => {
+    const authService = makeAuthService(tenantDb);
+    const admin = await authService.register({
+      identifier: `hub-admin-${randomUUID().slice(0, 8)}`,
+      password: "hub-admin-password-long-enough",
+      displayName: "Hub Admin",
+      roleId: RoleId.ADMIN,
+    });
+
+    const { caller } = createAuthedCaller(admin, `hub-token-${randomUUID()}`);
+    const result = await caller.auth.hubStatus();
+
+    expect(result).toHaveProperty("activeUserCount");
+    expect(result).toHaveProperty("queueCount");
+    expect(result).toHaveProperty("keyStatus");
+    expect(result).toHaveProperty("retentionDays");
+    expect(result).toHaveProperty("phoneCount");
+    expect(result).toHaveProperty("blocklistCount");
+    expect(result).toHaveProperty("greetingCount");
+    expect(result).toHaveProperty("templateCount");
+    expect(typeof result.phoneCount).toBe("number");
+    expect(typeof result.blocklistCount).toBe("number");
+    expect(typeof result.greetingCount).toBe("number");
+    expect(typeof result.templateCount).toBe("number");
+    expect(result.phoneCount).toBeGreaterThanOrEqual(0);
+    expect(result.blocklistCount).toBeGreaterThanOrEqual(0);
+    expect(result.greetingCount).toBeGreaterThanOrEqual(0);
+    expect(result.templateCount).toBeGreaterThanOrEqual(0);
+  });
 });
