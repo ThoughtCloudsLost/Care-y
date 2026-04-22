@@ -4,6 +4,7 @@
     DialogButton,
     Link,
     List,
+    ListInput,
     ListItem,
     Segmented,
     SegmentedButton,
@@ -20,8 +21,15 @@
   import { UserMinus, X, Save } from "@lucide/svelte";
   import * as m from "$lib/paraglide/messages.js";
   import { trpc } from "$lib/trpc/index.js";
-  import { getOrgDecryptCache, getCurrentUserId } from "$lib/crypto/context.js";
-  import { base64ToUint8Array } from "$lib/utils/buffer-encoding.js";
+  import {
+    getOrgDecryptCache,
+    getOrgKeyManager,
+    getCurrentUserId,
+  } from "$lib/crypto/context.js";
+  import {
+    base64ToUint8Array,
+    uint8ArrayToBase64,
+  } from "$lib/utils/buffer-encoding.js";
   import { haptic } from "$lib/utils/haptic.js";
   import { toastStore } from "$lib/stores/toast.svelte.js";
   import { announceToLiveRegion } from "$lib/utils/announce.js";
@@ -48,9 +56,12 @@
   const authRouter = trpc.auth;
   if (!trpc.tickets) throw new RouterNotAvailableError("tickets");
   const ticketRouter = trpc.tickets;
+  const profileRouter = trpc.profile;
   const queryClient = useQueryClient();
 
   const orgCache = getOrgDecryptCache();
+  const orgKeyManager = getOrgKeyManager();
+  const textEncoder = new TextEncoder();
   const currentUserIdGetter = getCurrentUserId();
   const currentUserId = $derived(currentUserIdGetter());
 
@@ -72,6 +83,27 @@
       void queryClient.invalidateQueries({ queryKey: ["admin", "users"] });
       toastStore.show(m.admin_role_changed());
       announceToLiveRegion("polite", m.admin_role_changed());
+    },
+    onError: () => {
+      toastStore.show(m.error_generic());
+    },
+  }));
+
+  const adminDisplayNameMutation = createMutation(() => ({
+    mutationFn: async (input: {
+      userId: string;
+      encryptedDisplayName: string;
+    }) => profileRouter.adminUpdateDisplayName.mutate(input),
+    onSuccess: (
+      _data: unknown,
+      variables: { userId: string; encryptedDisplayName: string },
+    ) => {
+      haptic();
+      orgCache.delete(`user:${variables.userId}`);
+      void queryClient.invalidateQueries({ queryKey: ["admin", "users"] });
+      const msg = m.admin_display_name_updated();
+      toastStore.show(msg);
+      announceToLiveRegion("polite", msg);
     },
     onError: () => {
       toastStore.show(m.error_generic());
@@ -215,6 +247,7 @@
   }
   let sheetState = $state<SheetState | null>(null);
   let editRoleId = $state<RoleIdValue>(RoleId.VOLUNTEER);
+  let editDisplayName = $state("");
 
   let memberQueueIds = new SvelteSet<string>();
   let originalQueueIds = new SvelteSet<string>();
@@ -232,6 +265,7 @@
       isActive: user.isActive,
     };
     sheetState = state;
+    editDisplayName = state.userName;
     editRoleId =
       user.roleId === RoleId.ADMIN || user.roleId === RoleId.MANAGER
         ? user.roleId
@@ -264,6 +298,16 @@
     sheetState !== null && editRoleId !== sheetState.roleId,
   );
 
+  const trimmedDisplayName = $derived(editDisplayName.trim());
+  const displayNameValid = $derived(
+    trimmedDisplayName.length >= 1 && trimmedDisplayName.length <= 100,
+  );
+  const displayNameChanged = $derived(
+    sheetState !== null &&
+      displayNameValid &&
+      trimmedDisplayName !== sheetState.userName,
+  );
+
   const queueChanged = $derived.by(() => {
     if (memberQueueIds.size !== originalQueueIds.size) return true;
     for (const id of memberQueueIds) {
@@ -272,7 +316,9 @@
     return false;
   });
 
-  const hasChanges = $derived(roleChanged || queueChanged);
+  const hasChanges = $derived(
+    roleChanged || queueChanged || displayNameChanged,
+  );
 
   function toggleQueue(queueId: string): void {
     if (memberQueueIds.has(queueId)) {
@@ -285,6 +331,13 @@
   async function handleSaveUser(): Promise<void> {
     if (!sheetState || !hasChanges) return;
     const userId = sheetState.userId;
+
+    if (displayNameChanged) {
+      const plainBytes = textEncoder.encode(trimmedDisplayName);
+      const cipherBytes = orgKeyManager.encrypt(plainBytes);
+      const encryptedDisplayName = uint8ArrayToBase64(cipherBytes);
+      adminDisplayNameMutation.mutate({ userId, encryptedDisplayName });
+    }
 
     if (roleChanged) {
       assignRoleMutation.mutate({ userId, roleId: editRoleId });
@@ -532,9 +585,11 @@
   {#snippet headerRight()}
     <SoftButton
       onclick={() => void handleSaveUser()}
-      disabled={!hasChanges || assignRoleMutation.isPending}
+      disabled={!hasChanges ||
+        assignRoleMutation.isPending ||
+        adminDisplayNameMutation.isPending}
     >
-      {#if assignRoleMutation.isPending}
+      {#if assignRoleMutation.isPending || adminDisplayNameMutation.isPending}
         {m.common_loading()}
       {:else}
         <Save size={16} aria-hidden="true" />
@@ -543,6 +598,23 @@
     </SoftButton>
   {/snippet}
   <div class="edit-user-content">
+    <div class="display-name-section">
+      <p class="section-label">{m.admin_display_name_label()}</p>
+      <List nested>
+        <ListInput
+          outline
+          label={m.settings_display_name()}
+          type="text"
+          value={editDisplayName}
+          oninput={(e: Event) => {
+            if (e.target instanceof HTMLInputElement)
+              editDisplayName = e.target.value;
+          }}
+          disabled={adminDisplayNameMutation.isPending}
+        />
+      </List>
+    </div>
+
     <div class="role-section">
       <p class="section-label">{m.admin_invite_role_label()}</p>
       <Segmented strong>
@@ -675,10 +747,17 @@
     flex: 1;
   }
 
+  .display-name-section {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-sm);
+  }
+
   .role-section {
     display: flex;
     flex-direction: column;
     gap: var(--space-sm);
+    margin-top: var(--space-lg);
   }
 
   .section-label {
