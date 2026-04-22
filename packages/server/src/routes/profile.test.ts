@@ -17,9 +17,11 @@ import {
   createMockEmailSender,
   createMockOprfDeps,
   createMockProviderFactory,
+  TEST_ORG_ID,
   type TestDb,
 } from "../test-utils.js";
 import { createScryptHasher } from "../auth/password.js";
+import { createAuthService } from "../auth/service.js";
 import { createInMemoryRateLimiter } from "../ratelimit/rate-limiter.js";
 import { createDbSessionRepository } from "../auth/session-repository.js";
 import { createOrgService } from "../org/service.js";
@@ -246,6 +248,24 @@ describe.skipIf(!process.env.DATABASE_URL)(
       });
     });
 
+    function makeAuthService(): ReturnType<typeof createAuthService> {
+      const sessions = createDbSessionRepository(
+        tenantDb,
+        testSessionTokenizer,
+        testSealedBox,
+      );
+      return createAuthService(
+        tenantDb,
+        hasher,
+        sessions,
+        testFieldEncryptor,
+        testSealedBox,
+        testBlindIndexer,
+        testSessionTokenizer,
+        TEST_ORG_ID,
+      );
+    }
+
     describe("adminUpdateDisplayName", () => {
       it("allows admin to update another user's display name", async () => {
         const admin = await createTestUser(tenantDb, {
@@ -308,6 +328,222 @@ describe.skipIf(!process.env.DATABASE_URL)(
             encryptedDisplayName: "dGVzdA==",
           }),
           "NOT_FOUND",
+        );
+      });
+    });
+
+    describe("updateUsername", () => {
+      it("updates username with correct password", async () => {
+        const authService = makeAuthService();
+        const user = await authService.register({
+          identifier: `uname-self-${randomUUID().slice(0, 8)}`,
+          password: "test-password-long-enough",
+          displayName: "Username Self",
+          roleId: RoleId.VOLUNTEER,
+        });
+        const session = await createSession(user.id);
+        const caller = buildCaller(authedCtx(user.id, session));
+
+        const newName = `new-uname-${randomUUID().slice(0, 8)}`;
+        const result = await caller.profile.updateUsername({
+          currentPassword: "test-password-long-enough",
+          newIdentifier: newName,
+        });
+
+        expect(result.success).toBe(true);
+
+        const row = await tenantDb
+          .selectFrom("users")
+          .select("identifier_hash")
+          .where("id", "=", user.id)
+          .executeTakeFirstOrThrow();
+
+        expect(row.identifier_hash).toBe(
+          testBlindIndexer.hash(newName, TEST_ORG_ID),
+        );
+      });
+
+      it("rejects wrong password", async () => {
+        const authService = makeAuthService();
+        const user = await authService.register({
+          identifier: `uname-wrongpw-${randomUUID().slice(0, 8)}`,
+          password: "correct-password-long-enough",
+          displayName: "Wrong PW User",
+          roleId: RoleId.VOLUNTEER,
+        });
+        const session = await createSession(user.id);
+        const caller = buildCaller(authedCtx(user.id, session));
+
+        await expectTrpcError(
+          caller.profile.updateUsername({
+            currentPassword: "wrong-password-long-enough!",
+            newIdentifier: "anything-valid",
+          }),
+          "UNAUTHORIZED",
+          "INVALID_CREDENTIALS",
+        );
+      });
+
+      it("rejects duplicate username without revealing it exists", async () => {
+        const authService = makeAuthService();
+        const existing = await authService.register({
+          identifier: `uname-dup-existing-${randomUUID().slice(0, 8)}`,
+          password: "existing-password-long-enough",
+          displayName: "Existing User",
+          roleId: RoleId.VOLUNTEER,
+        });
+        const user = await authService.register({
+          identifier: `uname-dup-changer-${randomUUID().slice(0, 8)}`,
+          password: "changer-password-long-enough",
+          displayName: "Changer User",
+          roleId: RoleId.VOLUNTEER,
+        });
+        const session = await createSession(user.id);
+        const caller = buildCaller(authedCtx(user.id, session));
+
+        const err = await expectTrpcError(
+          caller.profile.updateUsername({
+            currentPassword: "changer-password-long-enough",
+            newIdentifier: existing.identifier,
+          }),
+          "BAD_REQUEST",
+        );
+        expect(err.message).not.toContain("USERNAME_ALREADY_TAKEN");
+      });
+
+      it("new username works for login after change", async () => {
+        const authService = makeAuthService();
+        const oldName = `uname-login-${randomUUID().slice(0, 8)}`;
+        const user = await authService.register({
+          identifier: oldName,
+          password: "login-test-password-long-enough",
+          displayName: "Login Test User",
+          roleId: RoleId.VOLUNTEER,
+        });
+        const session = await createSession(user.id);
+        const caller = buildCaller(authedCtx(user.id, session));
+
+        const newName = `uname-login-new-${randomUUID().slice(0, 8)}`;
+        await caller.profile.updateUsername({
+          currentPassword: "login-test-password-long-enough",
+          newIdentifier: newName,
+        });
+
+        const loginResult = await authService.login({
+          identifier: newName,
+          password: "login-test-password-long-enough",
+          ipAddress: "127.0.0.1",
+          userAgent: "test-agent",
+        });
+        expect(loginResult.user.id).toBe(user.id);
+      });
+    });
+
+    describe("adminUpdateUsername", () => {
+      it("admin can change another user's username without password", async () => {
+        const authService = makeAuthService();
+        const admin = await authService.register({
+          identifier: `uname-admin-${randomUUID().slice(0, 8)}`,
+          password: "admin-password-long-enough!!",
+          displayName: "Admin User",
+          roleId: RoleId.ADMIN,
+        });
+        const target = await createTestUser(tenantDb);
+        const session = await createSession(admin.id);
+        const caller = buildCaller(
+          authedCtx(admin.id, session, RoleId.ADMIN, true),
+        );
+
+        const newName = `admin-set-${randomUUID().slice(0, 8)}`;
+        const result = await caller.profile.adminUpdateUsername({
+          userId: target.id,
+          newIdentifier: newName,
+        });
+
+        expect(result.success).toBe(true);
+
+        const row = await tenantDb
+          .selectFrom("users")
+          .select("identifier_hash")
+          .where("id", "=", target.id)
+          .executeTakeFirstOrThrow();
+
+        expect(row.identifier_hash).toBe(
+          testBlindIndexer.hash(newName, TEST_ORG_ID),
+        );
+      });
+
+      it("rejects non-admin caller", async () => {
+        const vol = await createTestUser(tenantDb);
+        const target = await createTestUser(tenantDb);
+        const session = await createSession(vol.id);
+        const caller = buildCaller(
+          authedCtx(vol.id, session, RoleId.VOLUNTEER, true),
+        );
+
+        await expectTrpcError(
+          caller.profile.adminUpdateUsername({
+            userId: target.id,
+            newIdentifier: "anything-valid",
+          }),
+          "FORBIDDEN",
+        );
+      });
+
+      it("rejects admin changing own username via admin endpoint", async () => {
+        const authService = makeAuthService();
+        const admin = await authService.register({
+          identifier: `uname-selfadm-${randomUUID().slice(0, 8)}`,
+          password: "selfadm-password-long-enough",
+          displayName: "Self Admin",
+          roleId: RoleId.ADMIN,
+        });
+        const session = await createSession(admin.id);
+        const caller = buildCaller(
+          authedCtx(admin.id, session, RoleId.ADMIN, true),
+        );
+
+        await expectTrpcError(
+          caller.profile.adminUpdateUsername({
+            userId: admin.id,
+            newIdentifier: "new-admin-name",
+          }),
+          "FORBIDDEN",
+        );
+      });
+
+      it("rejects duplicate username via admin endpoint", async () => {
+        const authService = makeAuthService();
+        const admin = await authService.register({
+          identifier: `uname-admdup-${randomUUID().slice(0, 8)}`,
+          password: "admdup-password-long-enough!",
+          displayName: "Admin Dup",
+          roleId: RoleId.ADMIN,
+        });
+        const existing = await authService.register({
+          identifier: `uname-admdup-tgt-${randomUUID().slice(0, 8)}`,
+          password: "admdup-target-password-long!",
+          displayName: "Dup Target",
+          roleId: RoleId.VOLUNTEER,
+        });
+        const target = await authService.register({
+          identifier: `uname-admdup-chg-${randomUUID().slice(0, 8)}`,
+          password: "admdup-changer-password-long",
+          displayName: "To Be Changed",
+          roleId: RoleId.VOLUNTEER,
+        });
+        const session = await createSession(admin.id);
+        const caller = buildCaller(
+          authedCtx(admin.id, session, RoleId.ADMIN, true),
+        );
+
+        await expectTrpcError(
+          caller.profile.adminUpdateUsername({
+            userId: target.id,
+            newIdentifier: existing.identifier,
+          }),
+          "CONFLICT",
+          "USERNAME_ALREADY_TAKEN",
         );
       });
     });

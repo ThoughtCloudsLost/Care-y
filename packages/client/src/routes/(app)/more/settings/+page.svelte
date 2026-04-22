@@ -9,6 +9,7 @@
   import { shellBack } from "$lib/shell/navigation.js";
   import { base64ToUint8Array } from "$lib/utils/buffer-encoding.js";
   import DisplayNameSheet from "$lib/components/settings/DisplayNameSheet.svelte";
+  import UsernameSheet from "$lib/components/settings/UsernameSheet.svelte";
 
   const orgCache = getOrgDecryptCache();
   const navbarCtx = getNavbarOverrideCtx();
@@ -33,6 +34,7 @@
   const currentUsername = $derived(meQuery.data?.user.identifier ?? "");
 
   let displayNameSheetOpen = $state(false);
+  let usernameSheetOpen = $state(false);
 
   function goBack(): void {
     shellBack("/more");
@@ -72,6 +74,9 @@
       title={m.settings_username()}
       after={currentUsername || m.common_loading()}
       link
+      onclick={() => {
+        usernameSheetOpen = true;
+      }}
     />
   </List>
 
@@ -86,6 +91,14 @@
     displayNameSheetOpen = false;
   }}
   currentName={currentDisplayName}
+/>
+
+<UsernameSheet
+  opened={usernameSheetOpen}
+  ondismiss={() => {
+    usernameSheetOpen = false;
+  }}
+  {currentUsername}
 />
 
 <style>

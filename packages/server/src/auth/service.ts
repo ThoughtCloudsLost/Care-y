@@ -83,6 +83,17 @@ export interface AuthService {
     encryptedDisplayName: Buffer,
   ): Promise<void>;
 
+  /**
+   * Updates a user's login identifier (username).
+   * If currentPassword is provided, verifies it first (self-service path).
+   * If omitted, caller is assumed to be admin (admin-service path).
+   */
+  updateUsername(
+    userId: string,
+    newIdentifier: string,
+    currentPassword?: string,
+  ): Promise<void>;
+
   /** Updates the org's PII retention setting in org_config. */
   setPiiRetentionDays(days: number | null): Promise<void>;
 
@@ -466,6 +477,48 @@ export function createAuthService(
 
       if (result.numUpdatedRows === 0n) {
         throw new NotFoundError(ErrorCode.USER_NOT_FOUND);
+      }
+    },
+
+    async updateUsername(
+      userId: string,
+      newIdentifier: string,
+      currentPassword?: string,
+    ): Promise<void> {
+      const row = await findActiveUserById(userId);
+      if (!row) {
+        throw new NotFoundError(ErrorCode.USER_NOT_FOUND);
+      }
+
+      if (currentPassword !== undefined) {
+        const valid = await hasher.verify(currentPassword, row.password_hash);
+        if (!valid) {
+          throw new AuthError(ErrorCode.INVALID_CREDENTIALS);
+        }
+      }
+
+      const newIdentifierHash = indexer.hash(newIdentifier, orgId);
+      const newEncryptedIdentifier = encryptor.encrypt(newIdentifier);
+
+      try {
+        const result = await db
+          .updateTable("users")
+          .set({
+            identifier_hash: newIdentifierHash,
+            encrypted_identifier: newEncryptedIdentifier,
+          })
+          .where("id", "=", userId)
+          .where("is_active", "=", true)
+          .executeTakeFirst();
+
+        if (result.numUpdatedRows === 0n) {
+          throw new NotFoundError(ErrorCode.USER_NOT_FOUND);
+        }
+      } catch (err: unknown) {
+        if (isPgUniqueViolation(err)) {
+          throw new ConflictError(ErrorCode.USERNAME_ALREADY_TAKEN);
+        }
+        throw err;
       }
     },
 

@@ -1,7 +1,10 @@
 import {
   updateDisplayNameSchema,
   adminUpdateDisplayNameSchema,
+  updateUsernameSchema,
+  adminUpdateUsernameSchema,
 } from "@care-y/shared";
+import { ConflictError, ForbiddenError, ValidationError } from "../errors.js";
 import {
   router,
   authedProcedure,
@@ -46,6 +49,42 @@ export function createProfileRouter(deps: ProfileRouterDeps) {
             input.userId,
             Buffer.from(input.encryptedDisplayName, "base64"),
           );
+          return { success: true as const };
+        }),
+      ),
+
+    updateUsername: authedProcedure.input(updateUsernameSchema).mutation(
+      withErrorWrapping(async ({ ctx, input }) => {
+        const authService = getAuthService(ctx.org, deps);
+        try {
+          await authService.updateUsername(
+            ctx.session.userId,
+            input.newIdentifier,
+            input.currentPassword,
+          );
+        } catch (err: unknown) {
+          // Suppress USERNAME_ALREADY_TAKEN to prevent enumeration.
+          // Self-service callers learn only that the change failed.
+          if (err instanceof ConflictError) {
+            throw new ValidationError("Could not update username");
+          }
+          throw err;
+        }
+        return { success: true as const };
+      }),
+    ),
+
+    adminUpdateUsername: adminProcedure
+      .input(adminUpdateUsernameSchema)
+      .mutation(
+        withErrorWrapping(async ({ ctx, input }) => {
+          if (input.userId === ctx.session.userId) {
+            throw new ForbiddenError(
+              "Use self-service endpoint to change your own username",
+            );
+          }
+          const authService = getAuthService(ctx.org, deps);
+          await authService.updateUsername(input.userId, input.newIdentifier);
           return { success: true as const };
         }),
       ),

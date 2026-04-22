@@ -74,6 +74,9 @@ describe("ErrorCode", () => {
       "CANNOT_DEACTIVATE_SELF",
       "CANNOT_DEACTIVATE_LAST_ADMIN",
 
+      // Profile
+      "USERNAME_ALREADY_TAKEN",
+
       // Queues / presets / media
       "QUEUE_NOT_FOUND",
       "CANNOT_DELETE_LAST_QUEUE",
