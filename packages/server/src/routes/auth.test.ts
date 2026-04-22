@@ -150,6 +150,12 @@ describe.skipIf(!HAS_DB)("auth + org routers (DB integration)", () => {
         providerFactory: createMockProviderFactory(),
         resolveCallerId: vi.fn().mockResolvedValue("+15551234567"),
       },
+      profileDeps: {
+        hasher,
+        encryptor: testFieldEncryptor,
+        indexer: testBlindIndexer,
+        tokenizer: testSessionTokenizer,
+      },
       twoFactorDeps: {
         emailSender: createMockEmailSender(),
         encryptor: testFieldEncryptor,

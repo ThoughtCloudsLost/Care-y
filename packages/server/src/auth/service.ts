@@ -77,6 +77,12 @@ export interface AuthService {
     isActive: boolean,
   ): Promise<UserRecord>;
 
+  /** Updates an encrypted display name (ciphertext only, client encrypts). */
+  updateDisplayName(
+    userId: string,
+    encryptedDisplayName: Buffer,
+  ): Promise<void>;
+
   /** Updates the org's PII retention setting in org_config. */
   setPiiRetentionDays(days: number | null): Promise<void>;
 
@@ -446,6 +452,22 @@ export function createAuthService(
     updateUserRole,
     setUserActive,
     setPiiRetentionDays,
+
+    async updateDisplayName(
+      userId: string,
+      encryptedDisplayName: Buffer,
+    ): Promise<void> {
+      const result = await db
+        .updateTable("users")
+        .set({ encrypted_display_name: encryptedDisplayName })
+        .where("id", "=", userId)
+        .where("is_active", "=", true)
+        .executeTakeFirst();
+
+      if (result.numUpdatedRows === 0n) {
+        throw new NotFoundError(ErrorCode.USER_NOT_FOUND);
+      }
+    },
 
     async getHubStatus(): Promise<{
       activeUserCount: number;

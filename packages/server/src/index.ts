@@ -403,6 +403,12 @@ const appRouter = createAppRouter({
     providerFactory,
     resolveCallerId: phoneResolver,
   },
+  profileDeps: {
+    hasher,
+    encryptor,
+    indexer,
+    tokenizer,
+  },
   twoFactorDeps: {
     emailSender,
     encryptor,
