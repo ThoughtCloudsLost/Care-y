@@ -16,6 +16,7 @@ export interface VolunteerListRecord {
 
 export interface AdminUserListRecord {
   readonly id: string;
+  readonly encryptedIdentifier: Buffer;
   readonly encryptedDisplayName: Buffer;
   readonly roleId: string;
   readonly isActive: boolean;
@@ -49,6 +50,7 @@ export function createUserService(db: Kysely<TenantDatabase>): UserService {
         .selectFrom("users")
         .select([
           "users.id",
+          "users.encrypted_identifier",
           "users.encrypted_display_name",
           "users.role_id",
           "users.is_active",
@@ -74,6 +76,7 @@ export function createUserService(db: Kysely<TenantDatabase>): UserService {
 
       return rows.map((r) => ({
         id: r.id,
+        encryptedIdentifier: r.encrypted_identifier,
         encryptedDisplayName: r.encrypted_display_name,
         roleId: r.role_id,
         isActive: r.is_active,

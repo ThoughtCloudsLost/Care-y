@@ -68,6 +68,7 @@ export const setUserActiveInputSchema = z.object({
 
 export const listUsersOutputItemSchema = z.object({
   id: z.uuid(),
+  identifier: z.string(),
   encryptedDisplayName: z.string(),
   roleId: z.string(),
   isActive: z.boolean(),

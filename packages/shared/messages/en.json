@@ -126,6 +126,7 @@
   "error_cannot_demote_last_admin": "Cannot demote the last admin.",
   "error_cannot_deactivate_self": "You cannot deactivate your own account.",
   "error_cannot_deactivate_last_admin": "Cannot deactivate the last admin.",
+  "error_username_already_taken": "This username is already taken.",
   "error_only_admins_can_assign_roles": "Only admins can assign non-default roles.",
   "error_login_rate_limited": "Too many login attempts. Try again later.",
   "error_request_rate_limited": "Too many requests. Try again later.",

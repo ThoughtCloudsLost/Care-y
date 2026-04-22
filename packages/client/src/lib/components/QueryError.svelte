@@ -93,6 +93,9 @@
     [ErrorCode.CANNOT_DEACTIVATE_LAST_ADMIN]: () =>
       m.error_cannot_deactivate_last_admin(),
 
+    // Profile
+    [ErrorCode.USERNAME_ALREADY_TAKEN]: () => m.error_username_already_taken(),
+
     // Queues / presets / media
     [ErrorCode.QUEUE_NOT_FOUND]: () => m.error_queue_not_found(),
     [ErrorCode.CANNOT_DELETE_LAST_QUEUE]: () =>

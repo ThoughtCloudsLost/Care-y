@@ -126,6 +126,7 @@
   "error_cannot_demote_last_admin": "No se puede degradar al último administrador.",
   "error_cannot_deactivate_self": "No puedes desactivar tu propia cuenta.",
   "error_cannot_deactivate_last_admin": "No se puede desactivar al último administrador.",
+  "error_username_already_taken": "Este usuario ya esta en uso.",
   "error_only_admins_can_assign_roles": "Solo los administradores pueden asignar roles no predeterminados.",
   "error_login_rate_limited": "Demasiados intentos de inicio de sesión. Inténtalo más tarde.",
   "error_request_rate_limited": "Demasiadas solicitudes. Inténtalo más tarde.",

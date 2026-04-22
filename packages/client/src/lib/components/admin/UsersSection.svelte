@@ -26,6 +26,7 @@
     getOrgKeyManager,
     getCurrentUserId,
   } from "$lib/crypto/context.js";
+  import { ErrorCode, identifierSchema } from "@care-y/shared";
   import {
     base64ToUint8Array,
     uint8ArrayToBase64,
@@ -107,6 +108,25 @@
     },
     onError: () => {
       toastStore.show(m.error_generic());
+    },
+  }));
+
+  const adminUsernameMutation = createMutation(() => ({
+    mutationFn: async (input: { userId: string; newIdentifier: string }) =>
+      profileRouter.adminUpdateUsername.mutate(input),
+    onSuccess: () => {
+      haptic();
+      void queryClient.invalidateQueries({ queryKey: ["admin", "users"] });
+      const msg = m.admin_username_updated();
+      toastStore.show(msg);
+      announceToLiveRegion("polite", msg);
+    },
+    onError: (err: Error) => {
+      if (err.message === ErrorCode.USERNAME_ALREADY_TAKEN) {
+        toastStore.show(m.settings_username_taken());
+      } else {
+        toastStore.show(m.error_generic());
+      }
     },
   }));
 
@@ -242,12 +262,14 @@
   interface SheetState {
     userId: string;
     userName: string;
+    userIdentifier: string;
     roleId: string;
     isActive: boolean;
   }
   let sheetState = $state<SheetState | null>(null);
   let editRoleId = $state<RoleIdValue>(RoleId.VOLUNTEER);
   let editDisplayName = $state("");
+  let editUsername = $state("");
 
   let memberQueueIds = new SvelteSet<string>();
   let originalQueueIds = new SvelteSet<string>();
@@ -261,11 +283,13 @@
       userName:
         decryptDisplayName(userId, user.encryptedDisplayName) ??
         userId.slice(0, 8),
+      userIdentifier: user.identifier,
       roleId: user.roleId,
       isActive: user.isActive,
     };
     sheetState = state;
     editDisplayName = state.userName;
+    editUsername = state.userIdentifier;
     editRoleId =
       user.roleId === RoleId.ADMIN || user.roleId === RoleId.MANAGER
         ? user.roleId
@@ -308,6 +332,19 @@
       trimmedDisplayName !== sheetState.userName,
   );
 
+  const parsedUsername = $derived(identifierSchema.safeParse(editUsername));
+  const trimmedUsername = $derived(
+    parsedUsername.success
+      ? parsedUsername.data
+      : editUsername.trim().toLowerCase(),
+  );
+  const usernameValid = $derived(parsedUsername.success);
+  const usernameChanged = $derived(
+    sheetState !== null &&
+      usernameValid &&
+      trimmedUsername !== sheetState.userIdentifier,
+  );
+
   const queueChanged = $derived.by(() => {
     if (memberQueueIds.size !== originalQueueIds.size) return true;
     for (const id of memberQueueIds) {
@@ -317,7 +354,7 @@
   });
 
   const hasChanges = $derived(
-    roleChanged || queueChanged || displayNameChanged,
+    roleChanged || queueChanged || displayNameChanged || usernameChanged,
   );
 
   function toggleQueue(queueId: string): void {
@@ -337,6 +374,10 @@
       const cipherBytes = orgKeyManager.encrypt(plainBytes);
       const encryptedDisplayName = uint8ArrayToBase64(cipherBytes);
       adminDisplayNameMutation.mutate({ userId, encryptedDisplayName });
+    }
+
+    if (usernameChanged) {
+      adminUsernameMutation.mutate({ userId, newIdentifier: trimmedUsername });
     }
 
     if (roleChanged) {
@@ -587,9 +628,10 @@
       onclick={() => void handleSaveUser()}
       disabled={!hasChanges ||
         assignRoleMutation.isPending ||
-        adminDisplayNameMutation.isPending}
+        adminDisplayNameMutation.isPending ||
+        adminUsernameMutation.isPending}
     >
-      {#if assignRoleMutation.isPending || adminDisplayNameMutation.isPending}
+      {#if assignRoleMutation.isPending || adminDisplayNameMutation.isPending || adminUsernameMutation.isPending}
         {m.common_loading()}
       {:else}
         <Save size={16} aria-hidden="true" />
@@ -613,6 +655,24 @@
           disabled={adminDisplayNameMutation.isPending}
         />
       </List>
+    </div>
+
+    <div class="username-section">
+      <p class="section-label">{m.admin_username_label()}</p>
+      <List nested>
+        <ListInput
+          outline
+          label={m.settings_username()}
+          type="text"
+          value={editUsername}
+          oninput={(e: Event) => {
+            if (e.target instanceof HTMLInputElement)
+              editUsername = e.target.value;
+          }}
+          disabled={adminUsernameMutation.isPending}
+        />
+      </List>
+      <p class="pii-warning">{m.admin_invite_identifier_pii_warning()}</p>
     </div>
 
     <div class="role-section">
@@ -751,6 +811,22 @@
     display: flex;
     flex-direction: column;
     gap: var(--space-sm);
+  }
+
+  .username-section {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-sm);
+    margin-top: var(--space-lg);
+  }
+
+  .pii-warning {
+    font-size: 0.8125rem;
+    color: var(--color-amber-500);
+    background: color-mix(in srgb, var(--color-amber-500) 10%, transparent);
+    padding: var(--space-sm) var(--space-md);
+    border-radius: 8px;
+    margin: 0;
   }
 
   .role-section {

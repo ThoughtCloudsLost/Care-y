@@ -312,6 +312,7 @@ export function createAuthRouter(deps: AuthRouterDeps) {
         const users = await svc.listAllForAdmin();
         return users.map((u) => ({
           id: u.id,
+          identifier: deps.encryptor.decrypt(u.encryptedIdentifier),
           encryptedDisplayName: u.encryptedDisplayName.toString("base64"),
           roleId: u.roleId,
           isActive: u.isActive,
