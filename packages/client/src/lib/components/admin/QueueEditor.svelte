@@ -179,7 +179,7 @@
       </Block>
     {/if}
 
-    <List>
+    <List nested>
       <ListInput
         outline
         label={m.admin_queue_editor_name_label()}
@@ -200,7 +200,7 @@
       </div>
     </Block>
 
-    <List>
+    <List nested>
       <ListInput
         outline
         label={m.admin_queue_editor_escalation_label()}

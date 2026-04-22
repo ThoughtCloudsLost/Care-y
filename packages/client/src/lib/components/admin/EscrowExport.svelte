@@ -191,7 +191,7 @@
       <p class="body-text">{m.admin_escrow_passphrase_guidance()}</p>
     </Block>
 
-    <List>
+    <List nested>
       <ListInput
         outline
         label={m.admin_escrow_passphrase_label()}
