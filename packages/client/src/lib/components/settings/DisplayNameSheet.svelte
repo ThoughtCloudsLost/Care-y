@@ -90,7 +90,7 @@
     </SoftButton>
   {/snippet}
   <div class="sheet-content">
-    <List>
+    <List nested>
       <ListInput
         outline
         label={m.settings_display_name_new()}

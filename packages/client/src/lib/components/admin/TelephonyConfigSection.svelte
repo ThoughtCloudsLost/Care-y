@@ -389,7 +389,7 @@
     </SoftButton>
   {/snippet}
   <div class="sheet-content">
-    <List class="cred-list">
+    <List nested class="cred-list">
       <ListInput
         label={m.admin_telephony_account_id()}
         type="text"
@@ -448,7 +448,7 @@
       {m.admin_telephony_number_roles_description()}
     </p>
 
-    <List class="purpose-list">
+    <List nested class="purpose-list">
       <ListInput
         outline
         label={m.admin_telephony_outbound_calls()}

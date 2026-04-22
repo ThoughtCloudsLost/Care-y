@@ -487,7 +487,7 @@
 >
   <div class="reassign-sheet-content">
     <p class="reassign-title">{m.admin_queue_delete_confirm_tickets()}</p>
-    <List>
+    <List nested>
       {#each otherQueues as q (q.id)}
         {@const name = decryptQueueName(q)}
         <ListItem
@@ -706,6 +706,7 @@
     font-size: var(--text-base);
     font-weight: 600;
     color: var(--brand-text);
+    margin: 0;
   }
 
   .reassign-actions {

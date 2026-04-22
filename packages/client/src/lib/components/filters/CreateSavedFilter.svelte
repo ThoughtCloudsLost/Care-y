@@ -1,6 +1,8 @@
 <script lang="ts">
-  import { List, ListInput, Block } from "konsta/svelte";
-  import ShellPopup from "$lib/shell/ShellPopup.svelte";
+  import { List, ListInput } from "konsta/svelte";
+  import { Save } from "@lucide/svelte";
+  import ShellSheet from "$lib/shell/ShellSheet.svelte";
+  import SoftButton from "$lib/components/SoftButton.svelte";
   import * as m from "$lib/paraglide/messages.js";
   import { getOrgKeyManager } from "$lib/crypto/context.js";
   import {
@@ -12,10 +14,8 @@
 
   interface Props {
     opened: boolean;
-    /** Human-readable summary of the current filter state (pre-computed by caller) */
     filterSummary: string;
     ondismiss: () => void;
-    /** Called with encrypted name + visual metadata. Caller handles captureState + store.add. */
     onsave: (meta: {
       encryptedName: string;
       color: SavedFilterColor;
@@ -46,7 +46,6 @@
       icon: selectedIcon,
     });
 
-    // Reset form state.
     name = "";
     selectedColor = "blue";
     selectedIcon = "tag";
@@ -54,89 +53,97 @@
   }
 </script>
 
-<ShellPopup {opened} {ondismiss} title={m.saved_filter_modal_title()}>
-  <List>
-    <ListInput
-      outline
-      label={m.saved_filter_name_label()}
-      type="text"
-      placeholder={m.saved_filter_name_placeholder()}
-      bind:value={name}
-    />
-  </List>
-
-  <Block>
-    <div class="section-label">{m.saved_filter_preview_label()}</div>
-    <p class="filter-preview">{filterSummary}</p>
-  </Block>
-
-  <Block>
-    <div class="section-label">{m.saved_filter_color_label()}</div>
-    <div
-      class="color-picker"
-      role="radiogroup"
-      aria-label={m.saved_filter_color_label()}
-    >
-      {#each SAVED_FILTER_COLORS as color (color.id)}
-        <button
-          type="button"
-          class="color-swatch"
-          class:color-swatch--selected={selectedColor === color.id}
-          style="--swatch-color: {color.hex}"
-          role="radio"
-          aria-checked={selectedColor === color.id}
-          aria-label={color.id}
-          onclick={() => {
-            selectedColor = color.id;
-          }}
-        >
-          {#if selectedColor === color.id}
-            <span class="swatch-check" aria-hidden="true">&#10003;</span>
-          {/if}
-        </button>
-      {/each}
-    </div>
-  </Block>
-
-  <Block>
-    <div class="section-label">{m.saved_filter_icon_label()}</div>
-    <div
-      class="icon-picker"
-      role="radiogroup"
-      aria-label={m.saved_filter_icon_label()}
-    >
-      {#each SAVED_FILTER_ICONS as icon (icon.id)}
-        <button
-          type="button"
-          class="icon-option"
-          class:icon-option--selected={selectedIcon === icon.id}
-          role="radio"
-          aria-checked={selectedIcon === icon.id}
-          aria-label={icon.id}
-          onclick={() => {
-            selectedIcon = icon.id;
-          }}
-        >
-          <icon.component size={20} aria-hidden="true" />
-        </button>
-      {/each}
-    </div>
-  </Block>
-
-  <Block>
-    <button
-      type="button"
-      class="save-btn"
-      disabled={!canSave}
-      onclick={handleSave}
-      aria-label={m.saved_filter_save_label()}
-    >
+<ShellSheet
+  {opened}
+  {ondismiss}
+  title={m.saved_filter_modal_title()}
+  ariaLabel={m.saved_filter_modal_title()}
+>
+  {#snippet headerRight()}
+    <SoftButton onclick={handleSave} disabled={!canSave}>
+      <Save size={16} aria-hidden="true" />
       {m.saved_filter_save()}
-    </button>
-  </Block>
-</ShellPopup>
+    </SoftButton>
+  {/snippet}
+  <div class="sheet-content">
+    <List nested>
+      <ListInput
+        outline
+        label={m.saved_filter_name_label()}
+        type="text"
+        placeholder={m.saved_filter_name_placeholder()}
+        bind:value={name}
+      />
+    </List>
+
+    <div class="section">
+      <div class="section-label">{m.saved_filter_preview_label()}</div>
+      <p class="filter-preview">{filterSummary}</p>
+    </div>
+
+    <div class="section">
+      <div class="section-label">{m.saved_filter_color_label()}</div>
+      <div
+        class="color-picker"
+        role="radiogroup"
+        aria-label={m.saved_filter_color_label()}
+      >
+        {#each SAVED_FILTER_COLORS as color (color.id)}
+          <button
+            type="button"
+            class="color-swatch"
+            class:color-swatch--selected={selectedColor === color.id}
+            style="--swatch-color: {color.hex}"
+            role="radio"
+            aria-checked={selectedColor === color.id}
+            aria-label={color.id}
+            onclick={() => {
+              selectedColor = color.id;
+            }}
+          >
+            {#if selectedColor === color.id}
+              <span class="swatch-check" aria-hidden="true">&#10003;</span>
+            {/if}
+          </button>
+        {/each}
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-label">{m.saved_filter_icon_label()}</div>
+      <div
+        class="icon-picker"
+        role="radiogroup"
+        aria-label={m.saved_filter_icon_label()}
+      >
+        {#each SAVED_FILTER_ICONS as icon (icon.id)}
+          <button
+            type="button"
+            class="icon-option"
+            class:icon-option--selected={selectedIcon === icon.id}
+            role="radio"
+            aria-checked={selectedIcon === icon.id}
+            aria-label={icon.id}
+            onclick={() => {
+              selectedIcon = icon.id;
+            }}
+          >
+            <icon.component size={20} aria-hidden="true" />
+          </button>
+        {/each}
+      </div>
+    </div>
+  </div>
+</ShellSheet>
 
 <style>
+  .sheet-content {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-lg);
+    padding: 0 var(--space-lg) var(--space-lg);
+  }
+
   .section-label {
     font-size: 0.75rem;
     font-weight: 600;
@@ -210,23 +217,5 @@
     background-color: var(--ink);
     color: var(--paper);
     border-color: var(--ink);
-  }
-
-  .save-btn {
-    width: 100%;
-    padding: 0.75rem;
-    border: none;
-    border-radius: 8px;
-    background-color: var(--ink);
-    color: var(--paper);
-    font-size: 0.9375rem;
-    font-weight: 600;
-    cursor: pointer;
-    transition: opacity 150ms linear;
-  }
-
-  .save-btn:disabled {
-    opacity: 0.4;
-    cursor: not-allowed;
   }
 </style>
