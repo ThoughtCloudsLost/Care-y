@@ -188,6 +188,7 @@ export default tseslint.config(
             "createTicketRouter",
             "createTwoFactorRouter",
             "createKbRouter",
+            "createProfileRouter",
           ],
         },
       ],

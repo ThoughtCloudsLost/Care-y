@@ -31,6 +31,7 @@ import {
 } from "./notifications.js";
 import { createBrandingRouter, type BrandingRouterDeps } from "./branding.js";
 import { createReportsRouter } from "./reports.js";
+import { createProfileRouter, type ProfileRouterDeps } from "./profile.js";
 import type { AuthRouterDeps } from "./auth.js";
 import type { OrgService } from "../org/service.js";
 import type { ProviderFactory } from "../telephony/factory.js";
@@ -41,6 +42,7 @@ function healthCheck(): { status: "ok" } {
 
 export interface RouterDeps {
   readonly authDeps: AuthRouterDeps;
+  readonly profileDeps: ProfileRouterDeps;
   readonly twoFactorDeps: TwoFactorRouterDeps;
   readonly oprfDeps: OprfRouterDeps;
   readonly orgService: OrgService;
@@ -63,11 +65,13 @@ export function createAppRouter(deps: RouterDeps) {
   const twoFactorRouter = createTwoFactorRouter(deps.twoFactorDeps);
   const oprfRouter = createOprfRouter(deps.oprfDeps);
   const keysRouter = createKeysRouter();
+  const profileRouter = createProfileRouter(deps.profileDeps);
 
   return router({
     health: publicProcedure.query(healthCheck),
     auth: authRouter,
     org: orgRouter,
+    profile: profileRouter,
     twoFactor: twoFactorRouter,
     oprf: oprfRouter,
     keys: keysRouter,

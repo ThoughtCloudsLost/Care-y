@@ -46,6 +46,7 @@
     }
   }
   let hydrated = $state(false);
+  let serverHydrated = false;
 
   function syncToLocalStorage(
     cached: NonNullable<Awaited<ReturnType<typeof getCachedBranding>>>,
@@ -102,10 +103,14 @@
     });
   });
 
-  // Path 2: authoritative fetch after org key is available
+  // Path 2: authoritative fetch after org key is available.
+  // Always runs once when the org key is ready, even if Path 1 already
+  // hydrated from cache. The cache may hold stale colors from a previous
+  // session; only a server fetch + decrypt is authoritative.
   $effect(() => {
     if (!browser || orgKeyManager === null || !isOrgKeyReady()) return;
-    if (hydrated) return;
+    if (serverHydrated) return;
+    serverHydrated = true;
 
     void hydrateFromServer();
   });
