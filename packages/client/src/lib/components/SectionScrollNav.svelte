@@ -41,6 +41,10 @@
     scrollbar-width: none;
   }
 
+  .section-scroll-nav :global(span) {
+    background-color: var(--brand-text) !important;
+  }
+
   .section-scroll-nav::-webkit-scrollbar {
     display: none;
   }

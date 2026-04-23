@@ -9,7 +9,14 @@
   import { resolve } from "$app/paths";
   import { page } from "$app/state";
   import { Dialog, DialogButton, Link } from "konsta/svelte";
-  import { FolderInput, Trash2, Download, X, FilePlus } from "@lucide/svelte";
+  import {
+    FolderInput,
+    FolderPen,
+    Trash2,
+    Download,
+    X,
+    FilePlus,
+  } from "@lucide/svelte";
   import SubNavbarFilterLayout from "$lib/shell/SubNavbarFilterLayout.svelte";
   import type {
     ViewToggleConfig,
@@ -560,6 +567,7 @@
     canManageCategories
       ? {
           label: m.library_manage_categories(),
+          icon: FolderPen,
           onclick: () => {
             categorySheetOpen = true;
           },

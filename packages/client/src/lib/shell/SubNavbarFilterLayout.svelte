@@ -130,6 +130,7 @@
         <SquareCheckBig size={16} aria-hidden="true" />
       </Button>
       {#if manage}
+        {@const ManageIcon = manage.icon ?? Settings}
         <Button
           tonal
           rounded
@@ -139,7 +140,7 @@
           aria-label={manage.label}
           onclick={manage.onclick}
         >
-          <Settings size={16} aria-hidden="true" />
+          <ManageIcon size={16} aria-hidden="true" />
         </Button>
       {/if}
     </div>

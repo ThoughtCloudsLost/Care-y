@@ -29,6 +29,8 @@ function createUserFilterStore(): {
   toggleStatus(v: UserStatus): void;
   readonly keyStatuses: SvelteSet<KeyStatus>;
   toggleKeyStatus(v: KeyStatus): void;
+  readonly queueIds: SvelteSet<string>;
+  toggleQueueId(v: string): void;
   readonly sort: UserSortConfig;
   setSort(field: UserSortField, direction: SortDirection): void;
   readonly activeCount: number;
@@ -37,6 +39,7 @@ function createUserFilterStore(): {
   const roles = new SvelteSet<RoleIdValue>();
   const statuses = new SvelteSet<UserStatus>();
   const keyStatuses = new SvelteSet<KeyStatus>();
+  const queueIds = new SvelteSet<string>();
 
   let sort = $state<UserSortConfig>({
     field: "name",
@@ -46,7 +49,8 @@ function createUserFilterStore(): {
   const activeCount = $derived(
     (roles.size > 0 ? 1 : 0) +
       (statuses.size > 0 ? 1 : 0) +
-      (keyStatuses.size > 0 ? 1 : 0),
+      (keyStatuses.size > 0 ? 1 : 0) +
+      (queueIds.size > 0 ? 1 : 0),
   );
 
   return {
@@ -74,6 +78,14 @@ function createUserFilterStore(): {
       else keyStatuses.add(v);
     },
 
+    get queueIds(): SvelteSet<string> {
+      return queueIds;
+    },
+    toggleQueueId(v: string): void {
+      if (queueIds.has(v)) queueIds.delete(v);
+      else queueIds.add(v);
+    },
+
     get sort(): UserSortConfig {
       return sort;
     },
@@ -89,6 +101,7 @@ function createUserFilterStore(): {
       roles.clear();
       statuses.clear();
       keyStatuses.clear();
+      queueIds.clear();
     },
   };
 }
