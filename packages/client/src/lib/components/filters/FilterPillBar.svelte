@@ -334,7 +334,7 @@
     min-width: 0;
     scrollbar-width: none;
     -webkit-overflow-scrolling: touch;
-    padding: 2px 0;
+    padding: 0;
   }
 
   .pill-scroll::-webkit-scrollbar {

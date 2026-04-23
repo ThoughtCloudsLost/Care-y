@@ -110,19 +110,46 @@ describe("userFilterStore", () => {
     });
   });
 
+  describe("toggleQueueId", () => {
+    it("adds a queue ID on first call", async () => {
+      const store = await getStore();
+      store.toggleQueueId("q1");
+      expect(store.queueIds.has("q1")).toBe(true);
+      expect(store.queueIds.size).toBe(1);
+    });
+
+    it("removes a queue ID on second call", async () => {
+      const store = await getStore();
+      store.toggleQueueId("q1");
+      store.toggleQueueId("q1");
+      expect(store.queueIds.has("q1")).toBe(false);
+      expect(store.queueIds.size).toBe(0);
+    });
+
+    it("accumulates multiple queue IDs", async () => {
+      const store = await getStore();
+      store.toggleQueueId("q1");
+      store.toggleQueueId("q2");
+      store.toggleQueueId("q3");
+      expect(store.queueIds.size).toBe(3);
+    });
+  });
+
   describe("clearAll", () => {
-    it("empties all three sets", async () => {
+    it("empties all four sets", async () => {
       const store = await getStore();
       store.toggleRole(RoleId.VOLUNTEER);
       store.toggleRole(RoleId.MANAGER);
       store.toggleStatus("active");
       store.toggleKeyStatus("no_keys");
+      store.toggleQueueId("q1");
 
       store.clearAll();
 
       expect(store.roles.size).toBe(0);
       expect(store.statuses.size).toBe(0);
       expect(store.keyStatuses.size).toBe(0);
+      expect(store.queueIds.size).toBe(0);
     });
 
     it("does not reset sort", async () => {

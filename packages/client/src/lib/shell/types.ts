@@ -8,7 +8,7 @@
  * This file is append-only. All downstream view modules depend on it.
  */
 
-import type { Snippet } from "svelte";
+import type { Component, Snippet } from "svelte";
 import type { SavedFilterRecord } from "@care-y/shared";
 import type { PillDefinition } from "$lib/components/filters/filter-types.js";
 
@@ -254,6 +254,8 @@ export interface ManageConfig {
   readonly label: string;
   /** Called when the manage gear button is tapped. */
   readonly onclick: () => void;
+  /** Icon component for the manage button. Defaults to Settings (cog). */
+  readonly icon?: Component;
 }
 
 export interface ShellPanelProps {
