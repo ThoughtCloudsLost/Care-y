@@ -9,7 +9,8 @@
  * This key is deterministically derivable from the publicly available org public
  * key, so serving does not weaken the security model (ADR-024).
  *
- * Aggressive caching minimizes repeated decryption overhead.
+ * ETag (blob key) + must-revalidate ensures clients always get the current
+ * icon while skipping decryption on 304 responses.
  */
 
 import type { IncomingMessage, ServerResponse } from "node:http";
@@ -17,6 +18,10 @@ import sodium from "sodium-native";
 import type { BlobStore } from "../storage/store.js";
 import type { OrgService } from "../org/service.js";
 import { tenantDb } from "../db/db.js";
+import {
+  deriveBrandingKey,
+  decryptBrandingBlob,
+} from "../branding/branding-crypto.js";
 
 export interface BrandingIconHandlerDeps {
   readonly blobStore: BlobStore;
@@ -24,57 +29,16 @@ export interface BrandingIconHandlerDeps {
   readonly corsHeaders: Readonly<Record<string, string>>;
 }
 
-const CACHE_CONTROL = "public, max-age=604800, immutable";
+const CACHE_CONTROL = "public, max-age=300, must-revalidate";
 const PATH_PREFIX = "/api/branding/";
-const BRANDING_LABEL = "care-y-branding-v1";
 
 type IconSize = "192" | "512" | "maskable";
-
-const ICON_COLUMN_MAP: Readonly<
-  Record<
-    IconSize,
-    "icon_192_blob_key" | "icon_512_blob_key" | "icon_maskable_blob_key"
-  >
-> = {
-  "192": "icon_192_blob_key",
-  "512": "icon_512_blob_key",
-  maskable: "icon_maskable_blob_key",
-};
 
 function parseIconSize(filename: string): IconSize | null {
   if (filename === "icon-192.png") return "192";
   if (filename === "icon-512.png") return "512";
   if (filename === "icon-maskable.png") return "maskable";
   return null;
-}
-
-function deriveBrandingKey(orgPublicKey: Buffer): Buffer {
-  const labelBytes = Buffer.from(BRANDING_LABEL, "utf-8");
-  const input = Buffer.concat([labelBytes, orgPublicKey]);
-  const key = Buffer.alloc(sodium.crypto_secretbox_KEYBYTES);
-  sodium.crypto_generichash(key, input);
-  return key;
-}
-
-function decryptIconBlob(encryptedBlob: Buffer, key: Buffer): Buffer | null {
-  const nonceLen = sodium.crypto_secretbox_NONCEBYTES;
-  const macLen = sodium.crypto_secretbox_MACBYTES;
-
-  if (encryptedBlob.length < nonceLen + macLen) return null;
-
-  const nonce = encryptedBlob.subarray(0, nonceLen);
-  const ciphertext = encryptedBlob.subarray(nonceLen);
-  const plaintext = Buffer.alloc(ciphertext.length - macLen);
-
-  const ok = sodium.crypto_secretbox_open_easy(
-    plaintext,
-    ciphertext,
-    nonce,
-    key,
-  );
-  if (!ok) return null;
-
-  return plaintext;
 }
 
 export function createBrandingIconHandler(
@@ -89,7 +53,9 @@ export function createBrandingIconHandler(
       return;
     }
 
-    const url = req.url ?? "";
+    const rawUrl = req.url ?? "";
+    const qIdx = rawUrl.indexOf("?");
+    const url = qIdx === -1 ? rawUrl : rawUrl.slice(0, qIdx);
     if (!url.startsWith(PATH_PREFIX)) {
       res.writeHead(404);
       res.end();
@@ -154,6 +120,14 @@ export function createBrandingIconHandler(
         return;
       }
 
+      const etag = `"${blobKey}"`;
+      const ifNoneMatch = req.headers["if-none-match"];
+      if (ifNoneMatch === etag) {
+        res.writeHead(304, { ...corsHeaders, ETag: etag });
+        res.end();
+        return;
+      }
+
       const encryptedBlob = await blobStore.get(blobKey);
       if (encryptedBlob === null) {
         res.writeHead(404);
@@ -164,7 +138,7 @@ export function createBrandingIconHandler(
       const key = deriveBrandingKey(orgPublicKey);
       let plaintext: Buffer | null;
       try {
-        plaintext = decryptIconBlob(encryptedBlob, key);
+        plaintext = decryptBrandingBlob(encryptedBlob, key);
       } finally {
         sodium.sodium_memzero(key);
       }
@@ -182,6 +156,7 @@ export function createBrandingIconHandler(
         "Content-Disposition": "inline",
         "X-Content-Type-Options": "nosniff",
         "Cache-Control": CACHE_CONTROL,
+        ETag: etag,
       });
       res.end(plaintext);
     } catch {

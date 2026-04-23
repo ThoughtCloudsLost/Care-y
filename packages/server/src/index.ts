@@ -408,6 +408,10 @@ const appRouter = createAppRouter({
     encryptor,
     indexer,
     tokenizer,
+    passwordChangeLimiter: createInMemoryRateLimiter({
+      windowMs: 60_000,
+      maxRequests: 5,
+    }),
   },
   twoFactorDeps: {
     emailSender,

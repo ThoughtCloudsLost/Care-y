@@ -17,6 +17,40 @@ export interface SectionScroll {
   expandAndScroll(id: string, expand: () => void): Promise<void>;
 }
 
+function findScrollContainer(el: HTMLElement): HTMLElement {
+  let node: HTMLElement | null = el.parentElement;
+  while (node) {
+    const { overflowY } = getComputedStyle(node);
+    if (overflowY === "auto" || overflowY === "scroll") return node;
+    node = node.parentElement;
+  }
+  return document.documentElement;
+}
+
+let spacer: HTMLDivElement | null = null;
+
+function ensureScrollRoom(container: HTMLElement, desiredScroll: number): void {
+  if (spacer) spacer.style.height = "0";
+
+  const maxScroll = container.scrollHeight - container.clientHeight;
+  const deficit = desiredScroll - maxScroll;
+
+  if (deficit <= 0) return;
+
+  if (!spacer) {
+    spacer = document.createElement("div");
+    spacer.setAttribute("aria-hidden", "true");
+    spacer.style.flexShrink = "0";
+  }
+
+  if (spacer.parentElement !== container) {
+    container.appendChild(spacer);
+  }
+
+  spacer.style.height = `${String(Math.ceil(deficit))}px`;
+  void container.scrollHeight;
+}
+
 export function createSectionScroll(
   getSections: () => readonly ScrollSection[],
   options?: SectionScrollOptions,
@@ -40,9 +74,25 @@ export function createSectionScroll(
       target.setAttribute("tabindex", "-1");
     }
 
-    target.scrollIntoView({
+    const container = findScrollContainer(target);
+    const style = getComputedStyle(container);
+    const navbarH =
+      parseFloat(style.getPropertyValue("--navbar-h")) || offsetRem * 8;
+    const subnavbarH =
+      parseFloat(style.getPropertyValue("--subnavbar-h")) || offsetRem * 8;
+    const offsetPx = navbarH + subnavbarH;
+
+    const targetY =
+      target.getBoundingClientRect().top -
+      container.getBoundingClientRect().top +
+      container.scrollTop;
+    const desiredScroll = Math.max(0, targetY - offsetPx);
+
+    ensureScrollRoom(container, desiredScroll);
+
+    container.scrollTo({
+      top: desiredScroll,
       behavior: reducedMotion ? "instant" : "smooth",
-      block: "start",
     });
 
     if (reducedMotion) {

@@ -137,6 +137,79 @@ describe.skipIf(!process.env.DATABASE_URL)("createDbSessionRepository", () => {
     expect(await repo.findByToken("tok-user-b")).not.toBeNull();
   });
 
+  it("deleteByUserIdExceptToken keeps the specified token and deletes others", async () => {
+    const user = await createTestUser(testDb.db);
+    const keep = await repo.create({
+      token: "tok-keep-this",
+      userId: user.id,
+      ipAddress: "127.0.0.1",
+      userAgent: "test",
+      expiresAt: new Date(Date.now() + 3600_000),
+    });
+    await repo.create({
+      token: "tok-delete-this-1",
+      userId: user.id,
+      ipAddress: "127.0.0.1",
+      userAgent: "test",
+      expiresAt: new Date(Date.now() + 3600_000),
+    });
+    await repo.create({
+      token: "tok-delete-this-2",
+      userId: user.id,
+      ipAddress: "127.0.0.1",
+      userAgent: "test",
+      expiresAt: new Date(Date.now() + 3600_000),
+    });
+
+    const count = await repo.deleteByUserIdExceptToken(user.id, keep.token);
+
+    expect(count).toBe(2);
+    expect(await repo.findByToken("tok-keep-this")).not.toBeNull();
+    expect(await repo.findByToken("tok-delete-this-1")).toBeNull();
+    expect(await repo.findByToken("tok-delete-this-2")).toBeNull();
+  });
+
+  it("deleteByUserIdExceptToken does not affect other users", async () => {
+    const userA = await createTestUser(testDb.db);
+    const userB = await createTestUser(testDb.db);
+
+    await repo.create({
+      token: "tok-except-a",
+      userId: userA.id,
+      ipAddress: "127.0.0.1",
+      userAgent: "test",
+      expiresAt: new Date(Date.now() + 3600_000),
+    });
+    await repo.create({
+      token: "tok-except-b",
+      userId: userB.id,
+      ipAddress: "127.0.0.1",
+      userAgent: "test",
+      expiresAt: new Date(Date.now() + 3600_000),
+    });
+
+    await repo.deleteByUserIdExceptToken(userA.id, "tok-except-a");
+
+    expect(await repo.findByToken("tok-except-a")).not.toBeNull();
+    expect(await repo.findByToken("tok-except-b")).not.toBeNull();
+  });
+
+  it("deleteByUserIdExceptToken returns 0 when only the excepted session exists", async () => {
+    const user = await createTestUser(testDb.db);
+    await repo.create({
+      token: "tok-only-one",
+      userId: user.id,
+      ipAddress: "127.0.0.1",
+      userAgent: "test",
+      expiresAt: new Date(Date.now() + 3600_000),
+    });
+
+    const count = await repo.deleteByUserIdExceptToken(user.id, "tok-only-one");
+
+    expect(count).toBe(0);
+    expect(await repo.findByToken("tok-only-one")).not.toBeNull();
+  });
+
   it("deleteExpired removes sessions past their expires_at", async () => {
     const user = await createTestUser(testDb.db);
     // Create an already-expired session via the factory (bypasses repo.create

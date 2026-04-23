@@ -3,14 +3,24 @@ import {
   adminUpdateDisplayNameSchema,
   updateUsernameSchema,
   adminUpdateUsernameSchema,
+  updatePasswordHashSchema,
 } from "@care-y/shared";
-import { ConflictError, ForbiddenError, ValidationError } from "../errors.js";
+import {
+  ConflictError,
+  ForbiddenError,
+  RateLimitError,
+  ValidationError,
+} from "../errors.js";
+import { ErrorCode } from "@care-y/shared";
+import type { RateLimiter } from "../ratelimit/rate-limiter.js";
+import { extractClientIp } from "../http/request-utils.js";
 import {
   router,
   authedProcedure,
   adminProcedure,
   withErrorWrapping,
 } from "../trpc/trpc.js";
+import { TRPCError } from "@trpc/server";
 import {
   createScopedAuthService,
   createTenantSessions,
@@ -19,7 +29,9 @@ import {
 import type { OrgContext } from "../trpc/context.js";
 import type { AuthService } from "../auth/service.js";
 
-export type ProfileRouterDeps = AuthServiceDeps;
+export interface ProfileRouterDeps extends AuthServiceDeps {
+  readonly passwordChangeLimiter: RateLimiter;
+}
 
 function getAuthService(org: OrgContext, deps: ProfileRouterDeps): AuthService {
   const sessions = createTenantSessions(org, deps.tokenizer);
@@ -85,6 +97,36 @@ export function createProfileRouter(deps: ProfileRouterDeps) {
           }
           const authService = getAuthService(ctx.org, deps);
           await authService.updateUsername(input.userId, input.newIdentifier);
+          return { success: true as const };
+        }),
+      ),
+
+    updatePasswordHash: authedProcedure
+      .input(updatePasswordHashSchema)
+      .mutation(
+        withErrorWrapping(async ({ ctx, input }) => {
+          const ip = extractClientIp(ctx.req);
+          const result = deps.passwordChangeLimiter.check(
+            `pw:${ctx.session.userId}:${ip}`,
+          );
+          if (!result.allowed) {
+            throw new TRPCError({
+              code: "TOO_MANY_REQUESTS",
+              message: ErrorCode.REQUEST_RATE_LIMITED,
+              cause: new RateLimitError(
+                ErrorCode.REQUEST_RATE_LIMITED,
+                Math.ceil(result.retryAfterMs / 1000),
+              ),
+            });
+          }
+
+          const authService = getAuthService(ctx.org, deps);
+          await authService.updatePasswordHash(
+            ctx.session.userId,
+            ctx.session.token,
+            input.currentPassword,
+            input.newPassword,
+          );
           return { success: true as const };
         }),
       ),

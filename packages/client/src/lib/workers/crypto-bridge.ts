@@ -253,6 +253,43 @@ export class CryptoBridge {
   }
 
   /**
+   * Preload a ticket key into the Worker cache without requiring ciphertext.
+   * Used by password change to pre-cache all tks before re-wrapping.
+   */
+  async unwrapTk(
+    ticketId: string,
+    ephemeralPoint: string,
+    nonce: string,
+    wrappedKey: string,
+  ): Promise<void> {
+    await this.sendRequest({
+      type: "unwrapTk",
+      ticketId,
+      ephemeralPoint,
+      nonce,
+      wrappedKey,
+    });
+  }
+
+  /**
+   * ECIES-encrypt data with the Worker's current volPublic.
+   * Used by password change to re-wrap the org private key after key re-derivation.
+   */
+  async wrapWithVolPublic(
+    data: string,
+  ): Promise<{ ephemeralPoint: string; nonce: string; wrappedKey: string }> {
+    const resp = expectResponse(
+      await this.sendRequest({ type: "wrapWithVolPublic", data }),
+      "wrapWithVolPublic",
+    );
+    return {
+      ephemeralPoint: resp.ephemeralPoint,
+      nonce: resp.nonce,
+      wrappedKey: resp.wrappedKey,
+    };
+  }
+
+  /**
    * Re-encrypt a cached tk for a new recipient's volPublic.
    * Returns the ECIES wrapping output (ephemeralPoint, nonce, wrappedKey).
    */

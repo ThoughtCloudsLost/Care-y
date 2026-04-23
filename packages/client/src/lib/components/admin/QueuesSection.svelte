@@ -14,7 +14,7 @@
     useQueryClient,
   } from "@tanstack/svelte-query";
   import { SvelteSet, SvelteMap } from "svelte/reactivity";
-  import { ChevronUp, ChevronDown, Pencil, Plus, X } from "@lucide/svelte";
+  import { ChevronUp, ChevronDown, Pencil, X } from "@lucide/svelte";
   import * as m from "$lib/paraglide/messages.js";
   import { trpc } from "$lib/trpc/index.js";
   import { getOrgDecryptCache } from "$lib/crypto/context.js";
@@ -26,9 +26,11 @@
   import { RouterNotAvailableError } from "$lib/errors.js";
   import QueryError from "$lib/components/QueryError.svelte";
   import DecryptPlaceholder from "$lib/components/DecryptPlaceholder.svelte";
+  import SoftButton from "$lib/components/SoftButton.svelte";
   import { ErrorCode } from "@care-y/shared";
   import ShellDialog from "$lib/shell/ShellDialog.svelte";
   import ShellSheet from "$lib/shell/ShellSheet.svelte";
+  import { queueFilterStore } from "$lib/stores/queue-filters.svelte.js";
   import QueueMemberPicker from "./QueueMemberPicker.svelte";
   import QueueEditor from "./QueueEditor.svelte";
 
@@ -281,6 +283,78 @@
   const totalCount = $derived((queuesQuery.data ?? []).length);
   const canDelete = $derived(totalCount > 1);
 
+  // ── Reorder mode ──
+
+  let reorderMode = $state(false);
+
+  $effect(() => {
+    if (queueFilterStore.sort.field !== "order") {
+      reorderMode = false;
+    }
+  });
+
+  export function toggleReorderMode(): void {
+    if (queueFilterStore.sort.field !== "order") return;
+    reorderMode = !reorderMode;
+  }
+
+  // ── Client-side sorting ──
+
+  const sortedQueues = $derived.by(() => {
+    const queues = queuesQuery.data ?? [];
+    const { field, direction } = queueFilterStore.sort;
+
+    if (field === "order") return queues;
+
+    const sorted = [...queues];
+    const dir = direction === "asc" ? 1 : -1;
+
+    if (field === "name") {
+      // eslint-disable-next-line svelte/prefer-svelte-reactivity -- local sort cache
+      const nameCache = new Map<string, string>();
+      for (const q of sorted) {
+        nameCache.set(q.id, decryptQueueName(q));
+      }
+      sorted.sort(
+        (a, b) =>
+          dir *
+          (nameCache.get(a.id) ?? "").localeCompare(nameCache.get(b.id) ?? ""),
+      );
+    } else {
+      function numericVal(q: (typeof sorted)[number], f: typeof field): number {
+        if (f === "members") return Number(q.memberCount);
+        if (f === "open") return Number(q.openCount);
+        if (f === "closed") return Number(q.closedCount);
+        return Number(q.holdCount);
+      }
+      sorted.sort(
+        (a, b) => dir * (numericVal(a, field) - numericVal(b, field)),
+      );
+    }
+
+    return sorted;
+  });
+
+  // ── Exported stat functions for subnavbar ──
+
+  export function totalQueues(): number {
+    return (queuesQuery.data ?? []).length;
+  }
+
+  export function totalOpenTickets(): number {
+    return (queuesQuery.data ?? []).reduce(
+      (sum, q) => sum + Number(q.openCount),
+      0,
+    );
+  }
+
+  export function totalMembers(): number {
+    return (queuesQuery.data ?? []).reduce(
+      (sum, q) => sum + Number(q.memberCount),
+      0,
+    );
+  }
+
   // ── Queue editor state ──
 
   const editorOpened = $derived(editorQueueId !== null);
@@ -328,7 +402,7 @@
     </Block>
   {:else}
     <div class="queue-list">
-      {#each queuesQuery.data ?? [] as queue, index (queue.id)}
+      {#each sortedQueues as queue, index (queue.id)}
         {@const queueName = decryptQueueName(queue)}
         {@const isExpanded = expandedQueues.has(queue.id)}
         {@const members = memberData.members.get(queue.id) ?? []}
@@ -352,37 +426,50 @@
                   length={16}
                   class="font-semibold"
                 />
+                <span class="queue-stats">
+                  {m.admin_queue_stat_open({ count: Number(queue.openCount) })}
+                  /
+                  {m.admin_queue_stat_closed({
+                    count: Number(queue.closedCount),
+                  })}
+                  /
+                  {m.admin_queue_stat_hold({ count: Number(queue.holdCount) })}
+                </span>
                 <span class="queue-meta">
-                  {members.length > 0
-                    ? m.admin_queue_members({ count: members.length })
+                  {Number(queue.memberCount) > 0
+                    ? m.admin_queue_members({
+                        count: Number(queue.memberCount),
+                      })
                     : m.admin_queue_no_members()}
                 </span>
               </div>
 
               <div class="queue-actions">
-                <button
-                  class="icon-btn"
-                  aria-label={m.admin_queue_move_up()}
-                  disabled={index === 0}
-                  onclick={(e) => {
-                    e.stopPropagation();
-                    handleMove(index, -1);
-                  }}
-                >
-                  <ChevronUp size={18} aria-hidden="true" />
-                </button>
+                {#if reorderMode}
+                  <button
+                    class="icon-btn"
+                    aria-label={m.admin_queue_move_up()}
+                    disabled={index === 0}
+                    onclick={(e) => {
+                      e.stopPropagation();
+                      handleMove(index, -1);
+                    }}
+                  >
+                    <ChevronUp size={18} aria-hidden="true" />
+                  </button>
 
-                <button
-                  class="icon-btn"
-                  aria-label={m.admin_queue_move_down()}
-                  disabled={index === (queuesQuery.data?.length ?? 0) - 1}
-                  onclick={(e) => {
-                    e.stopPropagation();
-                    handleMove(index, 1);
-                  }}
-                >
-                  <ChevronDown size={18} aria-hidden="true" />
-                </button>
+                  <button
+                    class="icon-btn"
+                    aria-label={m.admin_queue_move_down()}
+                    disabled={index === sortedQueues.length - 1}
+                    onclick={(e) => {
+                      e.stopPropagation();
+                      handleMove(index, 1);
+                    }}
+                  >
+                    <ChevronDown size={18} aria-hidden="true" />
+                  </button>
+                {/if}
 
                 <button
                   class="icon-btn"
@@ -429,15 +516,11 @@
                         </button>
                       </Chip>
                     {/each}
-
-                    <button
-                      class="add-member-btn"
-                      aria-label={m.admin_queue_add_member()}
-                      onclick={() => openMemberPicker(queue.id)}
-                    >
-                      <Plus size={16} aria-hidden="true" />
-                    </button>
                   </div>
+
+                  <SoftButton onclick={() => openMemberPicker(queue.id)}>
+                    {m.admin_queue_add_member_button()}
+                  </SoftButton>
 
                   {#if members.length === 0}
                     <p class="no-members">
@@ -581,6 +664,11 @@
     flex: 1;
   }
 
+  .queue-stats {
+    font-size: var(--text-xs);
+    color: var(--muted);
+  }
+
   .queue-meta {
     font-size: var(--text-xs);
     color: var(--muted);
@@ -627,6 +715,9 @@
   .member-section {
     border-top: 1px solid color-mix(in srgb, var(--muted) 20%, transparent);
     padding: var(--space-md) var(--card-pad-x) var(--card-pad-y);
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-sm);
   }
 
   .member-loading {
@@ -662,30 +753,6 @@
   .chip-remove:focus-visible {
     outline: 2px solid var(--brand-text);
     outline-offset: 1px;
-  }
-
-  .add-member-btn {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 2rem;
-    height: 2rem;
-    border-radius: 50%;
-    border: 1px dashed var(--muted);
-    background: none;
-    color: var(--muted);
-    cursor: pointer;
-    -webkit-tap-highlight-color: transparent;
-  }
-
-  .add-member-btn:hover {
-    color: var(--brand-text);
-    border-color: var(--brand-text);
-  }
-
-  .add-member-btn:focus-visible {
-    outline: 2px solid var(--brand-text);
-    outline-offset: 2px;
   }
 
   .no-members {

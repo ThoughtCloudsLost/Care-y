@@ -133,6 +133,10 @@ describe.skipIf(!process.env.DATABASE_URL)(
           encryptor: testFieldEncryptor,
           indexer: testBlindIndexer,
           tokenizer: testSessionTokenizer,
+          passwordChangeLimiter: createInMemoryRateLimiter({
+            windowMs: 60_000,
+            maxRequests: 100,
+          }),
         },
         twoFactorDeps: {
           emailSender: createMockEmailSender(),
@@ -545,6 +549,138 @@ describe.skipIf(!process.env.DATABASE_URL)(
           "CONFLICT",
           "USERNAME_ALREADY_TAKEN",
         );
+      });
+    });
+
+    describe("updatePasswordHash", () => {
+      it("updates password hash with correct current password", async () => {
+        const authService = makeAuthService();
+        const user = await authService.register({
+          identifier: `pw-change-${randomUUID().slice(0, 8)}`,
+          password: "old-password-long-enough!!",
+          displayName: "PW Change User",
+          roleId: RoleId.VOLUNTEER,
+        });
+        const session = await createSession(user.id);
+        const caller = buildCaller(authedCtx(user.id, session));
+
+        const result = await caller.profile.updatePasswordHash({
+          currentPassword: "old-password-long-enough!!",
+          newPassword: "new-password-long-enough!!",
+        });
+
+        expect(result.success).toBe(true);
+      });
+
+      it("rejects wrong current password", async () => {
+        const authService = makeAuthService();
+        const user = await authService.register({
+          identifier: `pw-wrong-${randomUUID().slice(0, 8)}`,
+          password: "correct-password-long-enough",
+          displayName: "Wrong PW",
+          roleId: RoleId.VOLUNTEER,
+        });
+        const session = await createSession(user.id);
+        const caller = buildCaller(authedCtx(user.id, session));
+
+        await expectTrpcError(
+          caller.profile.updatePasswordHash({
+            currentPassword: "wrong-password-long-enough!!",
+            newPassword: "does-not-matter-long-enough",
+          }),
+          "UNAUTHORIZED",
+          "INVALID_CREDENTIALS",
+        );
+      });
+
+      it("new password works for login after change", async () => {
+        const authService = makeAuthService();
+        const identifier = `pw-login-${randomUUID().slice(0, 8)}`;
+        const user = await authService.register({
+          identifier,
+          password: "original-password-long-enough",
+          displayName: "Login After PW",
+          roleId: RoleId.VOLUNTEER,
+        });
+        const session = await createSession(user.id);
+        const caller = buildCaller(authedCtx(user.id, session));
+
+        await caller.profile.updatePasswordHash({
+          currentPassword: "original-password-long-enough",
+          newPassword: "brand-new-password-long-enough",
+        });
+
+        const loginResult = await authService.login({
+          identifier,
+          password: "brand-new-password-long-enough",
+          ipAddress: "127.0.0.1",
+          userAgent: "test-agent",
+        });
+        expect(loginResult.user.id).toBe(user.id);
+      });
+
+      it("old password fails login after change", async () => {
+        const authService = makeAuthService();
+        const identifier = `pw-old-fail-${randomUUID().slice(0, 8)}`;
+        await authService.register({
+          identifier,
+          password: "the-old-password-long-enough",
+          displayName: "Old PW Fail",
+          roleId: RoleId.VOLUNTEER,
+        });
+
+        const loginResult = await authService.login({
+          identifier,
+          password: "the-old-password-long-enough",
+          ipAddress: "127.0.0.1",
+          userAgent: "test-agent",
+        });
+        const session = loginResult.session;
+        const caller = buildCaller(authedCtx(loginResult.user.id, session));
+
+        await caller.profile.updatePasswordHash({
+          currentPassword: "the-old-password-long-enough",
+          newPassword: "the-new-password-long-enough",
+        });
+
+        await expect(
+          authService.login({
+            identifier,
+            password: "the-old-password-long-enough",
+            ipAddress: "127.0.0.1",
+            userAgent: "test-agent",
+          }),
+        ).rejects.toThrow();
+      });
+
+      it("kills other sessions but preserves the current one", async () => {
+        const authService = makeAuthService();
+        const user = await authService.register({
+          identifier: `pw-sessions-${randomUUID().slice(0, 8)}`,
+          password: "session-test-password-long!!",
+          displayName: "Session Kill Test",
+          roleId: RoleId.VOLUNTEER,
+        });
+
+        const currentSession = await createSession(user.id);
+        const otherSession1 = await createSession(user.id);
+        const otherSession2 = await createSession(user.id);
+
+        const caller = buildCaller(authedCtx(user.id, currentSession));
+
+        await caller.profile.updatePasswordHash({
+          currentPassword: "session-test-password-long!!",
+          newPassword: "new-session-test-password!!!!",
+        });
+
+        const repo = createDbSessionRepository(
+          tenantDb,
+          testSessionTokenizer,
+          testSealedBox,
+        );
+        expect(await repo.findByToken(currentSession.token)).not.toBeNull();
+        expect(await repo.findByToken(otherSession1.token)).toBeNull();
+        expect(await repo.findByToken(otherSession2.token)).toBeNull();
       });
     });
   },

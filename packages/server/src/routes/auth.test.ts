@@ -155,6 +155,10 @@ describe.skipIf(!HAS_DB)("auth + org routers (DB integration)", () => {
         encryptor: testFieldEncryptor,
         indexer: testBlindIndexer,
         tokenizer: testSessionTokenizer,
+        passwordChangeLimiter: createInMemoryRateLimiter({
+          windowMs: 60_000,
+          maxRequests: 100,
+        }),
       },
       twoFactorDeps: {
         emailSender: createMockEmailSender(),

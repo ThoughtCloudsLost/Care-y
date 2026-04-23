@@ -48,11 +48,18 @@
   import InviteUser from "./InviteUser.svelte";
   import UserCard from "./UserCard.svelte";
 
-  interface UsersSectionProps {
-    readonly autoAction?: string | null;
+  interface QueueAssignment {
+    readonly queueId: string;
+    readonly userId: string;
   }
 
-  let { autoAction = null }: UsersSectionProps = $props();
+  interface UsersSectionProps {
+    readonly autoAction?: string | null;
+    readonly queueAssignments?: readonly QueueAssignment[];
+  }
+
+  let { autoAction = null, queueAssignments = [] }: UsersSectionProps =
+    $props();
 
   const authRouter = trpc.auth;
   if (!trpc.tickets) throw new RouterNotAvailableError("tickets");
@@ -174,6 +181,20 @@
     [RoleId.VOLUNTEER]: 2,
   };
 
+  const userQueueMap = $derived.by((): Map<string, Set<string>> => {
+    // eslint-disable-next-line svelte/prefer-svelte-reactivity -- local computation inside $derived, not reactive state
+    const map = new Map<string, Set<string>>();
+    for (const a of queueAssignments) {
+      let set = map.get(a.userId);
+      if (!set) {
+        set = new Set<string>(); // eslint-disable-line svelte/prefer-svelte-reactivity
+        map.set(a.userId, set);
+      }
+      set.add(a.queueId);
+    }
+    return map;
+  });
+
   const filteredUsers = $derived.by(() => {
     const all = usersQuery.data ?? [];
     let result = all;
@@ -194,6 +215,16 @@
       result = result.filter((u) =>
         userFilterStore.keyStatuses.has(deriveKeyStatus(u)),
       );
+    }
+    if (userFilterStore.queueIds.size > 0) {
+      result = result.filter((u) => {
+        const userQueues = userQueueMap.get(u.id);
+        if (!userQueues) return false;
+        for (const qId of userFilterStore.queueIds) {
+          if (userQueues.has(qId)) return true;
+        }
+        return false;
+      });
     }
 
     const sorted = [...result];
