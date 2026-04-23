@@ -920,6 +920,13 @@ export function createTicketRouter(deps: TicketRouterDeps) {
       }),
     ),
 
+    listAllQueueAssignments: adminProcedure.query(
+      withErrorWrapping(async ({ ctx }) => {
+        const svc = deps.createQueuePermissionsSvc(ctx.org.tenantDb);
+        return svc.listAllAssignments();
+      }),
+    ),
+
     // --- Volunteers (for @mention autocomplete) ---
     listVolunteers: volunteerProcedure.query(
       withErrorWrapping(async ({ ctx }) => {

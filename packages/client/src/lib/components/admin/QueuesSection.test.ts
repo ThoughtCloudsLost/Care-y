@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
 import { render, screen, cleanup, fireEvent } from "@testing-library/svelte";
+import { tick } from "svelte";
 
 vi.stubGlobal(
   "IntersectionObserver",
@@ -30,6 +31,10 @@ interface QueueData {
   escalateDays: number;
   isActive: boolean;
   createdAt: string;
+  openCount: string;
+  closedCount: string;
+  holdCount: string;
+  memberCount: string;
 }
 
 let mockQueuesData: QueueData[] | undefined;
@@ -75,6 +80,10 @@ vi.mock("$lib/paraglide/messages.js", () => ({
   admin_queue_member_picker_empty: () => "No volunteers",
   admin_queue_member_picker_no_results: () => "No results",
   admin_queues_create: () => "Create",
+  admin_queue_stat_open: ({ count }: { count: number }) => `${count} open`,
+  admin_queue_stat_closed: ({ count }: { count: number }) => `${count} closed`,
+  admin_queue_stat_hold: ({ count }: { count: number }) => `${count} hold`,
+  admin_queue_add_member_button: () => "Add member",
   common_cancel: () => "Cancel",
   common_loading: () => "Loading",
   error_generic: () => "Something went wrong",
@@ -235,6 +244,10 @@ function makeQueue(id: string, sortOrder: number): QueueData {
     escalateDays: 0,
     isActive: true,
     createdAt: new Date().toISOString(),
+    openCount: "3",
+    closedCount: "1",
+    holdCount: "0",
+    memberCount: "2",
   };
 }
 
@@ -270,7 +283,7 @@ describe("QueuesSection", () => {
   });
 
   it("shows No members text for queues without members", () => {
-    mockQueuesData = [makeQueue("q-1", 0)];
+    mockQueuesData = [{ ...makeQueue("q-1", 0), memberCount: "0" }];
     render(QueuesSection);
     expect(screen.getAllByText("No members").length).toBeGreaterThanOrEqual(1);
   });
@@ -282,25 +295,31 @@ describe("QueuesSection", () => {
     expect(header?.getAttribute("aria-expanded")).toBeTruthy();
   });
 
-  it("move up button is disabled on the first queue", () => {
+  it("move up button is disabled on the first queue in reorder mode", async () => {
     mockQueuesData = [makeQueue("q-1", 0), makeQueue("q-2", 1)];
-    render(QueuesSection);
+    const { component } = render(QueuesSection);
+    component.toggleReorderMode();
+    await tick();
     const moveUpBtns = screen.getAllByLabelText("Move up");
     expect((moveUpBtns[0] as HTMLButtonElement).disabled).toBe(true);
   });
 
-  it("move down button is disabled on the last queue", () => {
+  it("move down button is disabled on the last queue in reorder mode", async () => {
     mockQueuesData = [makeQueue("q-1", 0), makeQueue("q-2", 1)];
-    render(QueuesSection);
+    const { component } = render(QueuesSection);
+    component.toggleReorderMode();
+    await tick();
     const moveDownBtns = screen.getAllByLabelText("Move down");
     expect(
       (moveDownBtns[moveDownBtns.length - 1] as HTMLButtonElement).disabled,
     ).toBe(true);
   });
 
-  it("move up calls reorder mutation", async () => {
+  it("move up calls reorder mutation in reorder mode", async () => {
     mockQueuesData = [makeQueue("q-1", 0), makeQueue("q-2", 1)];
-    render(QueuesSection);
+    const { component } = render(QueuesSection);
+    component.toggleReorderMode();
+    await tick();
 
     const moveUpBtns = screen.getAllByLabelText("Move up");
     await fireEvent.click(moveUpBtns[1]!);
@@ -308,14 +327,23 @@ describe("QueuesSection", () => {
     expect(mockReorderQueues).toHaveBeenCalledTimes(1);
   });
 
-  it("move down calls reorder mutation", async () => {
+  it("move down calls reorder mutation in reorder mode", async () => {
     mockQueuesData = [makeQueue("q-1", 0), makeQueue("q-2", 1)];
-    render(QueuesSection);
+    const { component } = render(QueuesSection);
+    component.toggleReorderMode();
+    await tick();
 
     const moveDownBtns = screen.getAllByLabelText("Move down");
     await fireEvent.click(moveDownBtns[0]!);
 
     expect(mockReorderQueues).toHaveBeenCalledTimes(1);
+  });
+
+  it("hides reorder arrows when not in reorder mode", () => {
+    mockQueuesData = [makeQueue("q-1", 0), makeQueue("q-2", 1)];
+    render(QueuesSection);
+    expect(screen.queryAllByLabelText("Move up")).toHaveLength(0);
+    expect(screen.queryAllByLabelText("Move down")).toHaveLength(0);
   });
 
   it("renders queues-page container", () => {
