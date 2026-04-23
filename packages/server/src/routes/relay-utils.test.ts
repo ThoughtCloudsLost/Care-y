@@ -247,6 +247,7 @@ describe("authenticateRelay", () => {
       create: vi.fn(),
       deleteByToken: vi.fn(),
       deleteByUserId: vi.fn(),
+      deleteByUserIdExceptToken: vi.fn().mockResolvedValue(0),
       deleteExpired: vi.fn(),
       markTwoFactorVerified: vi.fn(),
       clearTwoFactorVerified: vi.fn(),

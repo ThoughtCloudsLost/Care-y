@@ -61,6 +61,8 @@ import type {
   EncryptContentRequest,
   EvictTkRequest,
   UnwrapOrgKeyRequest,
+  UnwrapTkRequest,
+  WrapWithVolPublicRequest,
   RewrapTkRequest,
   WorkerRequestType,
 } from "./crypto-protocol.js";
@@ -461,6 +463,45 @@ function handleUnwrapOrgKey(req: UnwrapOrgKeyRequest): void {
   }
 }
 
+function handleUnwrapTk(req: UnwrapTkRequest): void {
+  if (!requireKeyed(req.id, "unwrapTk")) return;
+
+  // resolveTk unwraps via ECIES and caches the tk as a side effect.
+  // The returned value is unused here; the goal is the cache fill.
+  const tk = resolveTk(req);
+  if (!tk) return;
+
+  const msg: WorkerResponse = { id: req.id, ok: true, type: "unwrapTk" };
+  self.postMessage(msg);
+}
+
+function handleWrapWithVolPublic(req: WrapWithVolPublicRequest): void {
+  if (!requireKeyed(req.id, "wrapWithVolPublic")) return;
+
+  const data = decode(req.data);
+
+  try {
+    const wrap = eciesEncrypt(data, assertPresent(volPublic, "volPublic"));
+
+    const msg: WorkerResponse = {
+      id: req.id,
+      ok: true,
+      type: "wrapWithVolPublic",
+      ephemeralPoint: encode(wrap.ephemeralPoint),
+      nonce: encode(wrap.nonce),
+      wrappedKey: encode(wrap.ciphertext),
+    };
+    self.postMessage(msg);
+  } catch (err: unknown) {
+    postError(
+      req.id,
+      "wrapWithVolPublic",
+      err instanceof Error ? err.message : String(err),
+      "ENCRYPT_FAILED",
+    );
+  }
+}
+
 function handleRewrapTk(req: RewrapTkRequest): void {
   if (!requireKeyed(req.id, "rewrapTk")) return;
 
@@ -538,6 +579,12 @@ self.addEventListener("message", (event: MessageEvent<WorkerRequest>): void => {
         break;
       case "unwrapOrgKey":
         handleUnwrapOrgKey(req);
+        break;
+      case "unwrapTk":
+        handleUnwrapTk(req);
+        break;
+      case "wrapWithVolPublic":
+        handleWrapWithVolPublic(req);
         break;
       case "rewrapTk":
         handleRewrapTk(req);

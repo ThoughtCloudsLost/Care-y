@@ -116,6 +116,25 @@ export interface DecryptBlobRequest {
   readonly ciphertext: string;
 }
 
+export interface UnwrapTkRequest {
+  readonly type: "unwrapTk";
+  readonly id: number;
+  readonly ticketId: string;
+  /** ECIES ephemeral point, base64. */
+  readonly ephemeralPoint: string;
+  /** ECIES nonce, base64. */
+  readonly nonce: string;
+  /** ECIES-wrapped ticket key, base64. */
+  readonly wrappedKey: string;
+}
+
+export interface WrapWithVolPublicRequest {
+  readonly type: "wrapWithVolPublic";
+  readonly id: number;
+  /** Data to ECIES-encrypt with the Worker's volPublic, base64. */
+  readonly data: string;
+}
+
 export interface RewrapTkRequest {
   readonly type: "rewrapTk";
   readonly id: number;
@@ -136,6 +155,8 @@ export type WorkerRequest =
   | ZeroAllRequest
   | GetVolPublicRequest
   | UnwrapOrgKeyRequest
+  | UnwrapTkRequest
+  | WrapWithVolPublicRequest
   | RewrapTkRequest;
 
 /** All valid request type discriminants. */
@@ -209,6 +230,20 @@ export interface DecryptBlobResponse extends SuccessBase {
   readonly data: ArrayBuffer;
 }
 
+export interface UnwrapTkResponse extends SuccessBase {
+  readonly type: "unwrapTk";
+}
+
+export interface WrapWithVolPublicResponse extends SuccessBase {
+  readonly type: "wrapWithVolPublic";
+  /** ECIES ephemeral point, base64. */
+  readonly ephemeralPoint: string;
+  /** ECIES nonce, base64. */
+  readonly nonce: string;
+  /** ECIES-wrapped data, base64. */
+  readonly wrappedKey: string;
+}
+
 export interface RewrapTkResponse extends SuccessBase {
   readonly type: "rewrapTk";
   /** ECIES ephemeral point for new wrapping, base64. */
@@ -237,6 +272,8 @@ export type WorkerSuccessResponse =
   | DecryptBlobResponse
   | GetVolPublicResponse
   | UnwrapOrgKeyResponse
+  | UnwrapTkResponse
+  | WrapWithVolPublicResponse
   | RewrapTkResponse
   | EvictTkResponse
   | ZeroAllResponse;

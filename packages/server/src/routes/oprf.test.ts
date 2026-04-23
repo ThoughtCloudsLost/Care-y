@@ -396,6 +396,10 @@ describe("OPRF tRPC route", () => {
         encryptor: testFieldEncryptor,
         indexer: testBlindIndexer,
         tokenizer: testSessionTokenizer,
+        passwordChangeLimiter: createInMemoryRateLimiter({
+          windowMs: 60_000,
+          maxRequests: 100,
+        }),
       },
       twoFactorDeps: {
         emailSender: createMockEmailSender(),
@@ -602,6 +606,10 @@ describe.skipIf(!DOCKER_OPRF_AVAILABLE)(
           encryptor: testFieldEncryptor,
           indexer: testBlindIndexer,
           tokenizer: testSessionTokenizer,
+          passwordChangeLimiter: createInMemoryRateLimiter({
+            windowMs: 60_000,
+            maxRequests: 100,
+          }),
         },
         twoFactorDeps: {
           emailSender: createMockEmailSender(),

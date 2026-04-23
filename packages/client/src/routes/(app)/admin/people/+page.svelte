@@ -1,8 +1,9 @@
 <script lang="ts">
-  import { BlockTitle, Segmented, SegmentedButton, Link } from "konsta/svelte";
+  import { Segmented, SegmentedButton, Link } from "konsta/svelte";
   import { page } from "$app/state";
   import { goto, replaceState } from "$app/navigation";
   import { resolve } from "$app/paths";
+  import { createQuery } from "@tanstack/svelte-query";
   import { Permission, RoleId } from "@care-y/shared";
   import type { RoleIdValue } from "@care-y/shared";
   import { Users, Layers, UserPlus, LayersPlus } from "@lucide/svelte";
@@ -12,7 +13,12 @@
     getScrollContainer,
   } from "$lib/shell/context.js";
   import { useScrollDirection } from "$lib/shell/use-scroll-direction.svelte.js";
-  import { getCurrentPermissions } from "$lib/crypto/context.js";
+  import {
+    getCurrentPermissions,
+    getOrgDecryptCache,
+  } from "$lib/crypto/context.js";
+  import { trpc } from "$lib/trpc/index.js";
+  import { RouterNotAvailableError } from "$lib/errors.js";
   import SubNavbarFilterLayout from "$lib/shell/SubNavbarFilterLayout.svelte";
   import type {
     SortConfig,
@@ -26,6 +32,10 @@
     type UserStatus,
     type KeyStatus,
   } from "$lib/stores/user-filters.svelte.js";
+  import {
+    queueFilterStore,
+    type QueueSortField,
+  } from "$lib/stores/queue-filters.svelte.js";
   import StatusDot from "$lib/components/StatusDot.svelte";
   import UsersSection from "$lib/components/admin/UsersSection.svelte";
   import QueuesSection from "$lib/components/admin/QueuesSection.svelte";
@@ -41,6 +51,30 @@
 
   $effect(() => {
     if (!hasAccess) void goto(resolve("/"));
+  });
+
+  // ── Queries for queue filter pill ──
+
+  if (!trpc.tickets) throw new RouterNotAvailableError("tickets");
+  const ticketRouter = trpc.tickets;
+  const orgCache = getOrgDecryptCache();
+
+  const queuesQuery = createQuery(() => ({
+    queryKey: ["queues"],
+    queryFn: async () => ticketRouter.listQueues.query(),
+  }));
+
+  const queueAssignmentsQuery = createQuery(() => ({
+    queryKey: ["admin", "queue-assignments"],
+    queryFn: async () => ticketRouter.listAllQueueAssignments.query(),
+  }));
+
+  const queuePillOptions = $derived.by(() => {
+    const queues = queuesQuery.data ?? [];
+    return queues.map((q) => {
+      const name = orgCache.decrypt(`queue:${q.id}`, q.encryptedName);
+      return { value: q.id, label: name ?? q.id.slice(0, 8) };
+    });
   });
 
   function isPeopleTab(value: string): value is PeopleTab {
@@ -133,6 +167,61 @@
     onchange: handleSortChange,
   });
 
+  // ��─ Queue sort config ──
+
+  const QUEUE_SORT_FIELDS: readonly QueueSortField[] = [
+    "order",
+    "name",
+    "members",
+    "open",
+    "closed",
+    "hold",
+  ];
+
+  function isQueueSortField(value: string): value is QueueSortField {
+    return (QUEUE_SORT_FIELDS as readonly string[]).includes(value);
+  }
+
+  function handleQueueSortChange(field: string, dir: "asc" | "desc"): void {
+    if (isQueueSortField(field)) queueFilterStore.setSort(field, dir);
+  }
+
+  const queueSortConfig: SortConfig = $derived({
+    label: m.admin_queues_sort(),
+    options: [
+      { field: "order", label: m.admin_queues_sort_order() },
+      { field: "name", label: m.admin_queues_sort_name() },
+      { field: "members", label: m.admin_queues_sort_members() },
+      { field: "open", label: m.admin_queues_sort_open() },
+      { field: "closed", label: m.admin_queues_sort_closed() },
+      { field: "hold", label: m.admin_queues_sort_hold() },
+    ],
+    currentField: queueFilterStore.sort.field,
+    currentDirection: queueFilterStore.sort.direction,
+    onchange: handleQueueSortChange,
+  });
+
+  const queueSavedFiltersConfig: SavedFiltersConfig = {
+    filters: [],
+    count: 0,
+    onapply: noop,
+    ondelete: noop,
+    ontoggleshare: noop,
+  };
+
+  const queueFilterPillsConfig: FilterPillsConfig = $derived({
+    pills: [],
+    activeCount: 0,
+    ontoggle: noop,
+    onselect: noop,
+    ondatechange: noop,
+    onclearall: noop,
+  });
+
+  function handleToggleReorderMode(): void {
+    queuesSectionRef?.toggleReorderMode();
+  }
+
   const savedFiltersConfig: SavedFiltersConfig = {
     filters: [],
     count: 0,
@@ -201,6 +290,13 @@
       options: keyStatusOptions,
       selected: userFilterStore.keyStatuses as ReadonlySet<string>,
     },
+    {
+      id: "queue",
+      label: m.admin_users_filter_queue(),
+      mode: "multi",
+      options: queuePillOptions,
+      selected: userFilterStore.queueIds as ReadonlySet<string>,
+    },
   ]);
 
   function isRoleId(v: string): v is RoleIdValue {
@@ -225,6 +321,9 @@
         break;
       case "keys":
         if (isKeyStatus(value)) userFilterStore.toggleKeyStatus(value);
+        break;
+      case "queue":
+        userFilterStore.toggleQueueId(value);
         break;
     }
   }
@@ -331,18 +430,45 @@
   />
 {/snippet}
 
+{#snippet queuesStats()}
+  <span class="stat-item">
+    {m.admin_queues_stat_total({
+      count: Number(queuesSectionRef?.totalQueues() ?? 0),
+    })}
+  </span>
+  <span class="stat-item">
+    <StatusDot status="active" />
+    {m.admin_queues_stat_open({
+      count: Number(queuesSectionRef?.totalOpenTickets() ?? 0),
+    })}
+  </span>
+  <span class="stat-item">
+    {m.admin_queues_stat_members({
+      count: Number(queuesSectionRef?.totalMembers() ?? 0),
+    })}
+  </span>
+{/snippet}
+
 {#snippet queuesSubnavbar()}
-  <div class="subnavbar-filter-content">
-    <div class="page-header">
-      <BlockTitle large class="page-title">{m.admin_tab_queues()}</BlockTitle>
-      {@render tabSegmented()}
-    </div>
-  </div>
+  <SubNavbarFilterLayout
+    title={m.admin_queues_title()}
+    headerRight={tabSegmented}
+    stats={queuesStats}
+    sort={queueSortConfig}
+    selectLabel={m.admin_queues_select_mode()}
+    onselect={handleToggleReorderMode}
+    savedFilters={queueSavedFiltersConfig}
+    filterPills={queueFilterPillsConfig}
+  />
 {/snippet}
 
 {#if activeTab === "users" && canManageUsers}
   <div role="tabpanel" id="panel-users" aria-labelledby="tab-users">
-    <UsersSection bind:this={usersSectionRef} autoAction={urlAction} />
+    <UsersSection
+      bind:this={usersSectionRef}
+      autoAction={urlAction}
+      queueAssignments={queueAssignmentsQuery.data ?? []}
+    />
   </div>
 {:else if activeTab === "queues" && canManageQueues}
   <div role="tabpanel" id="panel-queues" aria-labelledby="tab-queues">
@@ -368,25 +494,5 @@
   .tab-toggle :global(.k-segmented-button) {
     font-size: var(--text-sm);
     min-height: unset;
-  }
-
-  /* Mirror SubNavbarFilterLayout's page-header for the queues variant */
-  .subnavbar-filter-content {
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-lg);
-    padding: 0.25rem var(--page-pad-x) 0;
-  }
-
-  .page-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: var(--space-md);
-  }
-
-  :global(.page-title) {
-    margin: 0 !important;
-    padding-left: 0 !important;
   }
 </style>

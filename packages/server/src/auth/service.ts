@@ -94,6 +94,17 @@ export interface AuthService {
     currentPassword?: string,
   ): Promise<void>;
 
+  /**
+   * Updates a user's password hash and kills all other sessions.
+   * Crypto key rotation (rotateKeys) is a separate step handled by the client.
+   */
+  updatePasswordHash(
+    userId: string,
+    sessionToken: string,
+    currentPassword: string,
+    newPassword: string,
+  ): Promise<void>;
+
   /** Updates the org's PII retention setting in org_config. */
   setPiiRetentionDays(days: number | null): Promise<void>;
 
@@ -520,6 +531,40 @@ export function createAuthService(
         }
         throw err;
       }
+    },
+
+    async updatePasswordHash(
+      userId: string,
+      sessionToken: string,
+      currentPassword: string,
+      newPassword: string,
+    ): Promise<void> {
+      const row = await findActiveUserById(userId);
+      if (!row) {
+        throw new NotFoundError(ErrorCode.USER_NOT_FOUND);
+      }
+
+      const valid = await hasher.verify(currentPassword, row.password_hash);
+      if (!valid) {
+        throw new AuthError(ErrorCode.INVALID_CREDENTIALS);
+      }
+
+      const newHash = await hasher.hash(newPassword);
+
+      await db.transaction().execute(async (tx) => {
+        await tx
+          .updateTable("users")
+          .set({ password_hash: newHash })
+          .where("id", "=", userId)
+          .where("is_active", "=", true)
+          .execute();
+
+        await tx
+          .deleteFrom("sessions")
+          .where("user_id", "=", userId)
+          .where("token", "!=", sessionToken)
+          .execute();
+      });
     },
 
     async getHubStatus(): Promise<{

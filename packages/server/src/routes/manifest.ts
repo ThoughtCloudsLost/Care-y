@@ -73,6 +73,7 @@ export function createManifestHandler(
     let themeColor = DEFAULT_THEME;
     let orgSlug: string | null = null;
     let hasIcons = false;
+    let iconVersion: string | null = null;
 
     try {
       const slug = extractOrgSlug(req);
@@ -118,27 +119,44 @@ export function createManifestHandler(
           hasIcons =
             config?.icon_192_blob_key !== null &&
             config?.icon_192_blob_key !== undefined;
+          if (
+            hasIcons &&
+            config?.icon_192_blob_key !== null &&
+            config?.icon_192_blob_key !== undefined
+          ) {
+            iconVersion = config.icon_192_blob_key.slice(0, 8);
+          }
         }
       }
     } catch {
       // Fall through to defaults
     }
 
+    function vUrl(slug: string, size: string): string {
+      const base = `/api/branding/${slug}/icon-${size}.png`;
+      if (iconVersion !== null) {
+        const v: string = iconVersion;
+        return `${base}?v=${v}`;
+      }
+      return base;
+    }
+
+    const slug = orgSlug;
     const icons =
-      orgSlug !== null && hasIcons
+      slug !== null && hasIcons
         ? [
             {
-              src: `/api/branding/${orgSlug}/icon-192.png`,
+              src: vUrl(slug, "192"),
               sizes: "192x192",
               type: "image/png",
             },
             {
-              src: `/api/branding/${orgSlug}/icon-512.png`,
+              src: vUrl(slug, "512"),
               sizes: "512x512",
               type: "image/png",
             },
             {
-              src: `/api/branding/${orgSlug}/icon-maskable.png`,
+              src: vUrl(slug, "maskable"),
               sizes: "512x512",
               type: "image/png",
               purpose: "maskable",
