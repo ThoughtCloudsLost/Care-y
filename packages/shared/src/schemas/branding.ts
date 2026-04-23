@@ -37,4 +37,5 @@ export interface BrandingData {
   readonly encryptedClientText: string | null;
   readonly clientEncryptedBranding: string | null;
   readonly hasIcons: boolean;
+  readonly iconVersion: string | null;
 }

@@ -14,6 +14,7 @@ let previousLogoBlobUrl: string | null = null;
 export interface OrgContext {
   readonly orgSlug: string;
   readonly hasIcons: boolean;
+  readonly iconVersion: string | null;
 }
 
 /** Fetch encrypted branding from server, decrypt with org key, cache in SW. */
@@ -39,6 +40,7 @@ export async function loadBranding(
     logoBlobUrl: data.logoBlob ? createLogoBlobUrl(data.logoBlob) : null,
     orgSlug: orgContext.orgSlug,
     hasIcons: orgContext.hasIcons,
+    iconVersion: orgContext.iconVersion,
   };
 
   await cacheBranding(cached);
@@ -86,6 +88,7 @@ async function doUpdateBrandingCache(
     logoBlobUrl: null,
     orgSlug: patch.orgSlug ?? existing?.orgSlug ?? null,
     hasIcons: patch.hasIcons ?? existing?.hasIcons ?? false,
+    iconVersion: patch.iconVersion ?? existing?.iconVersion ?? null,
   };
   await cacheBranding(merged);
 }
@@ -108,6 +111,8 @@ export async function clearBrandingCache(): Promise<void> {
     localStorage.removeItem("care-y-brand-name");
     localStorage.removeItem("care-y-brand-slug");
     localStorage.removeItem("care-y-brand-has-icons");
+    localStorage.removeItem("care-y-brand-icon-v");
+    localStorage.removeItem("care-y-brand-ts");
   } catch {
     // localStorage unavailable in some contexts
   }
@@ -131,6 +136,12 @@ async function cacheBranding(data: CachedBranding): Promise<void> {
     } else {
       localStorage.removeItem("care-y-brand-has-icons");
     }
+    if (data.iconVersion !== null) {
+      localStorage.setItem("care-y-brand-icon-v", data.iconVersion);
+    } else {
+      localStorage.removeItem("care-y-brand-icon-v");
+    }
+    localStorage.setItem("care-y-brand-ts", String(Date.now()));
   } catch {
     // localStorage unavailable in some contexts
   }
@@ -142,6 +153,7 @@ async function cacheBranding(data: CachedBranding): Promise<void> {
     accentColor: data.accentColor,
     orgSlug: data.orgSlug,
     hasIcons: data.hasIcons,
+    iconVersion: data.iconVersion,
     logoBlobUrl: null,
   });
   await cache.put(
@@ -159,6 +171,7 @@ interface RawCachedData {
   logoBlobUrl?: string | null;
   orgSlug?: string | null;
   hasIcons?: boolean;
+  iconVersion?: string | null;
 }
 
 function isRawCachedBranding(data: unknown): data is RawCachedData {
@@ -178,6 +191,7 @@ function normalizeCachedBranding(raw: RawCachedData): CachedBranding {
     logoBlobUrl: null,
     orgSlug: raw.orgSlug ?? null,
     hasIcons: raw.hasIcons ?? false,
+    iconVersion: raw.iconVersion ?? null,
   };
 }
 
@@ -187,6 +201,15 @@ function createLogoBlobUrl(logoBlob: BlobPart): string {
   }
   previousLogoBlobUrl = URL.createObjectURL(new Blob([logoBlob]));
   return previousLogoBlobUrl;
+}
+
+export function brandingIconUrl(
+  slug: string,
+  size: "192" | "512" | "maskable",
+  version: string | null,
+): string {
+  const base = `/api/branding/${slug}/icon-${size}.png`;
+  return version !== null ? `${base}?v=${version}` : base;
 }
 
 /** Strip HTML tags from org name. DOM-free for SW compatibility. */

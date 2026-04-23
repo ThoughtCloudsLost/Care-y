@@ -162,6 +162,7 @@ async function serveDynamicManifest(): Promise<Response> {
   let themeColor = DEFAULT_THEME;
   let orgSlug: string | null = null;
   let hasIcons = false;
+  let iconVersion: string | null = null;
 
   try {
     const cache = await caches.open(BRANDING_CACHE_KEY);
@@ -172,31 +173,38 @@ async function serveDynamicManifest(): Promise<Response> {
         primaryColor?: string;
         orgSlug?: string;
         hasIcons?: boolean;
+        iconVersion?: string | null;
       };
       if (branding.orgName) name = branding.orgName;
       if (branding.primaryColor) themeColor = branding.primaryColor;
       if (branding.orgSlug) orgSlug = branding.orgSlug;
       if (branding.hasIcons) hasIcons = true;
+      if (branding.iconVersion) iconVersion = branding.iconVersion;
     }
   } catch {
     // Fall through to defaults
+  }
+
+  function vUrl(size: string): string {
+    const base = `/api/branding/${orgSlug}/icon-${size}.png`;
+    return iconVersion !== null ? `${base}?v=${iconVersion}` : base;
   }
 
   const icons =
     orgSlug !== null && hasIcons
       ? [
           {
-            src: `/api/branding/${orgSlug}/icon-192.png`,
+            src: vUrl("192"),
             sizes: "192x192",
             type: "image/png",
           },
           {
-            src: `/api/branding/${orgSlug}/icon-512.png`,
+            src: vUrl("512"),
             sizes: "512x512",
             type: "image/png",
           },
           {
-            src: `/api/branding/${orgSlug}/icon-maskable.png`,
+            src: vUrl("maskable"),
             sizes: "512x512",
             type: "image/png",
             purpose: "maskable",

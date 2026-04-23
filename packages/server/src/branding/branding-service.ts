@@ -1,4 +1,5 @@
 import type { Kysely } from "kysely";
+import sodium from "sodium-native";
 import type { OrgConfigTable, TenantDatabase } from "../db/types.js";
 import type { BlobStore } from "../storage/store.js";
 import type {
@@ -8,6 +9,7 @@ import type {
 } from "@care-y/shared";
 import { validateMagicBytes } from "../telephony/attachment-validator.js";
 import { ValidationError } from "../errors.js";
+import { deriveBrandingKey, decryptBrandingBlob } from "./branding-crypto.js";
 
 const ICON_MAX_BYTES = 2 * 1024 * 1024; // 2 MB per icon
 
@@ -84,6 +86,7 @@ export function createBrandingService(
           config.client_encrypted_branding,
         ),
         hasIcons: config.icon_192_blob_key !== null,
+        iconVersion: config.icon_192_blob_key?.slice(0, 8) ?? null,
       };
     },
 
@@ -122,17 +125,36 @@ export function createBrandingService(
             `Icon exceeds ${String(ICON_MAX_BYTES)} byte limit`,
           );
         }
-        validateMagicBytes(buf, "image/png");
       }
 
-      const existing = await tenantDb
+      const config = await tenantDb
         .selectFrom("org_config")
         .select([
+          "org_public_key",
           "icon_192_blob_key",
           "icon_512_blob_key",
           "icon_maskable_blob_key",
         ])
         .executeTakeFirstOrThrow();
+
+      if (config.org_public_key === null) {
+        throw new ValidationError("Org public key not available");
+      }
+
+      const brandingKey = deriveBrandingKey(config.org_public_key);
+      try {
+        for (const buf of [buf192, buf512, bufMaskable]) {
+          const plaintext = decryptBrandingBlob(buf, brandingKey);
+          if (plaintext === null) {
+            throw new ValidationError("Icon decryption failed");
+          }
+          validateMagicBytes(plaintext, "image/png");
+        }
+      } finally {
+        sodium.sodium_memzero(brandingKey);
+      }
+
+      const existing = config;
 
       const [key192, key512, keyMaskable] = await Promise.all([
         store.put(orgSchema, "branding", buf192),

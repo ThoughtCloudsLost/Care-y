@@ -207,7 +207,7 @@
 
   // ── Logo handling ──
 
-  function handleLogoSelect(e: Event): void {
+  async function handleLogoSelect(e: Event): Promise<void> {
     const target = e.target;
     if (
       !(target instanceof HTMLInputElement) ||
@@ -226,15 +226,31 @@
       return;
     }
 
-    if (file.size > MAX_LOGO_SIZE) {
-      logoError = m.admin_branding_logo_too_large();
-      target.value = "";
-      return;
-    }
+    try {
+      const arrayBuffer = await file.arrayBuffer();
+      let pngBuffer: ArrayBuffer;
+      if (file.type === "image/svg+xml") {
+        pngBuffer = await rasterizeSvg(arrayBuffer);
+      } else {
+        pngBuffer = await rasterizeImage(arrayBuffer, file.type);
+      }
 
-    editLogoFile = file;
-    if (editLogoPreviewUrl !== null) URL.revokeObjectURL(editLogoPreviewUrl);
-    editLogoPreviewUrl = URL.createObjectURL(file);
+      if (pngBuffer.byteLength > MAX_LOGO_SIZE) {
+        logoError = m.admin_branding_logo_too_large();
+        target.value = "";
+        return;
+      }
+
+      const processedBlob = new Blob([pngBuffer], { type: "image/png" });
+      editLogoFile = new File([processedBlob], file.name, {
+        type: "image/png",
+      });
+      if (editLogoPreviewUrl !== null) URL.revokeObjectURL(editLogoPreviewUrl);
+      editLogoPreviewUrl = URL.createObjectURL(processedBlob);
+    } catch {
+      logoError = m.admin_branding_logo_invalid_type();
+      target.value = "";
+    }
   }
 
   // ── Encrypt helpers ──
@@ -247,13 +263,7 @@
 
   async function encryptLogo(file: File): Promise<string> {
     const arrayBuffer = await file.arrayBuffer();
-    let pngBuffer: ArrayBuffer;
-    if (file.type === "image/svg+xml") {
-      pngBuffer = await rasterizeSvg(arrayBuffer);
-    } else {
-      pngBuffer = await rasterizeImage(arrayBuffer, file.type);
-    }
-    const cipherBytes = orgKeyManager.encrypt(new Uint8Array(pngBuffer));
+    const cipherBytes = orgKeyManager.encrypt(new Uint8Array(arrayBuffer));
     return uint8ArrayToBase64(cipherBytes);
   }
 
@@ -396,10 +406,13 @@
         icon512,
         iconMaskable,
       });
-      void updateBrandingCache({ hasIcons: true });
+      const newVersion = String(Date.now());
+      void updateBrandingCache({ hasIcons: true, iconVersion: newVersion });
       const slug = getOrgSlug();
       if (slug !== null)
-        setAppleTouchIconHref(`/api/branding/${slug}/icon-192.png`);
+        setAppleTouchIconHref(
+          `/api/branding/${slug}/icon-192.png?v=${newVersion}`,
+        );
     } catch {
       toastStore.show(m.admin_branding_icons_error(), 3000);
     } finally {
@@ -711,7 +724,7 @@
               type="file"
               accept="image/png,image/jpeg,image/svg+xml"
               class="file-input"
-              onchange={handleLogoSelect}
+              onchange={(e) => void handleLogoSelect(e)}
             />
             <span class="file-btn">
               {m.admin_branding_logo_change()}

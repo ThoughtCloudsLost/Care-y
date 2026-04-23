@@ -6,7 +6,9 @@ function getInitialLogoUrl(): string | null {
     const slug = localStorage.getItem("care-y-brand-slug");
     const hasIcons = localStorage.getItem("care-y-brand-has-icons");
     if (slug !== null && slug !== "" && hasIcons !== null) {
-      return `/api/branding/${slug}/icon-192.png`;
+      const v = localStorage.getItem("care-y-brand-icon-v");
+      const base = `/api/branding/${slug}/icon-192.png`;
+      return v !== null ? `${base}?v=${v}` : base;
     }
   } catch {
     // localStorage unavailable

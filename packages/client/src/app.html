@@ -67,10 +67,17 @@
         }
         var ba = s.getItem("care-y-brand-accent");
         if (ba) d.style.setProperty("--brand-accent", ba);
-        var bn = s.getItem("care-y-brand-name");
+        var bts = Number(s.getItem("care-y-brand-ts") || "0");
+        var fresh = Date.now() - bts < 300000;
+        var bn = fresh ? s.getItem("care-y-brand-name") : null;
         if (bn) document.title = bn;
-        var bslug = s.getItem("care-y-brand-slug");
-        var bicons = s.getItem("care-y-brand-has-icons");
+        var bslug = fresh ? s.getItem("care-y-brand-slug") : null;
+        var bicons = fresh ? s.getItem("care-y-brand-has-icons") : null;
+        var biv = fresh ? s.getItem("care-y-brand-icon-v") : null;
+        function iconUrl(slug, size) {
+          var u = "/api/branding/" + slug + "/icon-" + size + ".png";
+          return biv ? u + "?v=" + biv : u;
+        }
         // rAF fires after DOM is built but before first paint
         requestAnimationFrame(function () {
           if (bn) {
@@ -82,14 +89,14 @@
             logoEl.onload = function () {
               logoEl.classList.add("visible");
             };
-            logoEl.src = "/api/branding/" + bslug + "/icon-192.png";
+            logoEl.src = iconUrl(bslug, "192");
           }
         });
         if (bslug && bicons) {
           var link = document.createElement("link");
           link.rel = "apple-touch-icon";
           link.setAttribute("sizes", "180x180");
-          link.href = "/api/branding/" + bslug + "/icon-192.png";
+          link.href = iconUrl(bslug, "192");
           document.head.appendChild(link);
         }
       })();

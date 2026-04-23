@@ -2,6 +2,19 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { createBrandingService } from "./branding-service.js";
 import type { BlobStore } from "../storage/store.js";
 
+vi.mock("sodium-native", () => ({
+  default: { sodium_memzero: vi.fn() },
+}));
+
+vi.mock("./branding-crypto.js", () => ({
+  deriveBrandingKey: () => Buffer.alloc(32),
+  decryptBrandingBlob: (_buf: Buffer) => _buf,
+}));
+
+vi.mock("../telephony/attachment-validator.js", () => ({
+  validateMagicBytes: vi.fn(),
+}));
+
 function createMockDb(): {
   db: Parameters<typeof createBrandingService>[0];
   selectResult: Record<string, unknown>;
@@ -14,6 +27,7 @@ function createMockDb(): {
     encrypted_accent_color: Buffer.from("enc-accent"),
     encrypted_client_text: Buffer.from("enc-text"),
     client_encrypted_branding: Buffer.from("enc-client-blob"),
+    org_public_key: Buffer.alloc(32),
     icon_192_blob_key: null,
     icon_512_blob_key: null,
     icon_maskable_blob_key: null,
@@ -75,6 +89,7 @@ describe("createBrandingService", () => {
         clientEncryptedBranding:
           Buffer.from("enc-client-blob").toString("base64"),
         hasIcons: false,
+        iconVersion: null,
       });
     });
 

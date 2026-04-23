@@ -16,6 +16,7 @@
     getCachedBranding,
     applyBranding,
     updateBrandingCache,
+    brandingIconUrl,
     DEFAULT_PRIMARY,
   } from "$lib/branding/index.js";
   import { setBrandingTitle } from "$lib/branding/title.svelte.js";
@@ -65,6 +66,11 @@
       } else {
         localStorage.removeItem("care-y-brand-has-icons");
       }
+      if (cached.iconVersion !== null) {
+        localStorage.setItem("care-y-brand-icon-v", cached.iconVersion);
+      } else {
+        localStorage.removeItem("care-y-brand-icon-v");
+      }
     } catch {
       // localStorage unavailable
     }
@@ -92,9 +98,13 @@
       void applyBranding(cached);
       setBrandingTitle(cached.orgName);
       if (cached.orgSlug !== null && cached.hasIcons) {
-        const iconBase = `/api/branding/${cached.orgSlug}/icon-192.png`;
-        setAppleTouchIconHref(iconBase);
-        setOrgLogoUrl(iconBase);
+        const iconUrl = brandingIconUrl(
+          cached.orgSlug,
+          "192",
+          cached.iconVersion,
+        );
+        setAppleTouchIconHref(iconUrl);
+        setOrgLogoUrl(iconUrl);
       }
       // Sync SW cache state to localStorage for next page load's splash screen.
       syncToLocalStorage(cached);
@@ -136,6 +146,7 @@
         accentColor,
         orgSlug,
         hasIcons: data.hasIcons,
+        iconVersion: data.iconVersion,
       });
 
       const cached = await getCachedBranding();
@@ -143,9 +154,13 @@
         void applyBranding(cached);
         setBrandingTitle(cached.orgName);
         if (cached.orgSlug !== null && cached.hasIcons) {
-          const iconBase = `/api/branding/${cached.orgSlug}/icon-192.png`;
-          setAppleTouchIconHref(iconBase);
-          setOrgLogoUrl(iconBase);
+          const iconUrl = brandingIconUrl(
+            cached.orgSlug,
+            "192",
+            cached.iconVersion,
+          );
+          setAppleTouchIconHref(iconUrl);
+          setOrgLogoUrl(iconUrl);
         } else {
           setOrgLogoUrl(null);
         }
