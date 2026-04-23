@@ -1,11 +1,12 @@
 import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
-import { randomUUID } from "node:crypto";
+import { randomBytes, randomUUID } from "node:crypto";
 import { sql, type Kysely } from "kysely";
 import { RoleId } from "@care-y/shared";
 import type { PlatformDatabase, TenantDatabase } from "../db/types.js";
 import {
   createTestDb,
   createTestUser,
+  createTestTicketFixture,
   testFieldEncryptor,
   testBlindIndexer,
   testSessionTokenizer,
@@ -17,9 +18,9 @@ import {
   createMockEmailSender,
   createMockOprfDeps,
   createMockProviderFactory,
-  TEST_ORG_ID,
   type TestDb,
 } from "../test-utils.js";
+import { encode, getSodium } from "@care-y/crypto";
 import { createScryptHasher } from "../auth/password.js";
 import { createAuthService } from "../auth/service.js";
 import { createInMemoryRateLimiter } from "../ratelimit/rate-limiter.js";
@@ -58,6 +59,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
     const fakeSaltKey = Buffer.alloc(32, 0);
 
     beforeAll(async () => {
+      await getSodium();
       testDb = await createTestDb();
       tenantDb = testDb.db;
 
@@ -223,7 +225,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         const caller = buildCaller({
           req: mockReq(),
           res: mockRes(),
-          org: null,
+          org: orgContext,
           session: null,
           user: null,
         });
@@ -266,7 +268,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         testSealedBox,
         testBlindIndexer,
         testSessionTokenizer,
-        TEST_ORG_ID,
+        orgContext.orgId,
       );
     }
 
@@ -363,7 +365,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
           .executeTakeFirstOrThrow();
 
         expect(row.identifier_hash).toBe(
-          testBlindIndexer.hash(newName, TEST_ORG_ID),
+          testBlindIndexer.hash(newName, orgContext.orgId),
         );
       });
 
@@ -473,7 +475,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
           .executeTakeFirstOrThrow();
 
         expect(row.identifier_hash).toBe(
-          testBlindIndexer.hash(newName, TEST_ORG_ID),
+          testBlindIndexer.hash(newName, orgContext.orgId),
         );
       });
 
@@ -681,6 +683,86 @@ describe.skipIf(!process.env.DATABASE_URL)(
         expect(await repo.findByToken(currentSession.token)).not.toBeNull();
         expect(await repo.findByToken(otherSession1.token)).toBeNull();
         expect(await repo.findByToken(otherSession2.token)).toBeNull();
+      });
+    });
+
+    describe("myTicketKeyWraps", () => {
+      async function insertKeyWrap(
+        ticketId: string,
+        volunteerId: string,
+        keyGeneration: string,
+      ): Promise<{
+        ephemeralPoint: Buffer;
+        nonce: Buffer;
+        wrappedKey: Buffer;
+      }> {
+        const ephemeralPoint = randomBytes(32);
+        const nonce = randomBytes(24);
+        const wrappedKey = randomBytes(48);
+
+        // care-y-ignore-next-line no-plaintext-db-write -- test key wrap data, not real cryptographic material
+        await tenantDb
+          .insertInto("ticket_key_wraps")
+          .values({
+            ticket_id: ticketId,
+            volunteer_id: volunteerId,
+            key_generation: keyGeneration,
+            ephemeral_point: ephemeralPoint,
+            nonce,
+            wrapped_key: wrappedKey,
+            algorithm: "ecies-ristretto255-v1",
+          })
+          .execute();
+
+        return { ephemeralPoint, nonce, wrappedKey };
+      }
+
+      it("returns wraps for the calling user only", async () => {
+        const user = await createTestUser(tenantDb);
+        const otherUser = await createTestUser(tenantDb);
+        const session = await createSession(user.id);
+
+        const fixture1 = await createTestTicketFixture(tenantDb);
+        const fixture2 = await createTestTicketFixture(tenantDb);
+        const fixture3 = await createTestTicketFixture(tenantDb);
+
+        const kg1 = randomUUID();
+        const kg2 = randomUUID();
+        const kg3 = randomUUID();
+
+        const wrap1 = await insertKeyWrap(fixture1.ticketId, user.id, kg1);
+        const wrap2 = await insertKeyWrap(fixture2.ticketId, user.id, kg2);
+        await insertKeyWrap(fixture3.ticketId, otherUser.id, kg3);
+
+        const caller = buildCaller(authedCtx(user.id, session));
+        const result = await caller.profile.myTicketKeyWraps();
+
+        expect(result).toHaveLength(2);
+
+        const ids = result.map((r) => r.ticketId).sort();
+        expect(ids).toEqual([fixture1.ticketId, fixture2.ticketId].sort());
+
+        const first = result.find((r) => r.ticketId === fixture1.ticketId)!;
+        expect(first.keyGeneration).toBe(kg1);
+        expect(first.ephemeralPoint).toBe(encode(wrap1.ephemeralPoint));
+        expect(first.nonce).toBe(encode(wrap1.nonce));
+        expect(first.wrappedKey).toBe(encode(wrap1.wrappedKey));
+
+        const second = result.find((r) => r.ticketId === fixture2.ticketId)!;
+        expect(second.keyGeneration).toBe(kg2);
+        expect(second.ephemeralPoint).toBe(encode(wrap2.ephemeralPoint));
+        expect(second.nonce).toBe(encode(wrap2.nonce));
+        expect(second.wrappedKey).toBe(encode(wrap2.wrappedKey));
+      });
+
+      it("returns empty array when user has no wraps", async () => {
+        const user = await createTestUser(tenantDb);
+        const session = await createSession(user.id);
+        const caller = buildCaller(authedCtx(user.id, session));
+
+        const result = await caller.profile.myTicketKeyWraps();
+
+        expect(result).toEqual([]);
       });
     });
   },

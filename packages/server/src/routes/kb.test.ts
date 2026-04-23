@@ -456,7 +456,14 @@ describe("KB Voting routes", () => {
 // --- Attachment tests ---
 
 describe("KB Attachment routes", () => {
-  const SMALL_BLOB = Buffer.from("small-encrypted-data").toString("base64");
+  // PNG magic bytes prefix so validateMagicBytes accepts it as image/png
+  const pngHeader = Buffer.from([
+    0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a,
+  ]);
+  const SMALL_BLOB = Buffer.concat([
+    pngHeader,
+    Buffer.from("test-payload"),
+  ]).toString("base64");
 
   it("volunteer can upload an attachment", async () => {
     const caller = buildVolunteerCaller();

@@ -214,6 +214,7 @@ describe.skipIf(!HAS_DB)("auth + org routers (DB integration)", () => {
       isActive: boolean;
     },
     sessionToken: string,
+    twofaVerified = false,
   ) {
     const res = mockRes();
     const ctx: Context = {
@@ -227,7 +228,7 @@ describe.skipIf(!HAS_DB)("auth + org routers (DB integration)", () => {
         ipToken: "test-ip-token",
         uaToken: "test-ua-token",
         expiresAt: new Date(Date.now() + 60 * 60 * 1000),
-        twofaVerified: false,
+        twofaVerified,
         webauthnChallenge: null,
       },
       user,
@@ -568,7 +569,11 @@ describe.skipIf(!HAS_DB)("auth + org routers (DB integration)", () => {
       roleId: RoleId.ADMIN,
     });
 
-    const { caller } = createAuthedCaller(admin, `hub-token-${randomUUID()}`);
+    const { caller } = createAuthedCaller(
+      admin,
+      `hub-token-${randomUUID()}`,
+      true,
+    );
     const result = await caller.auth.hubStatus();
 
     expect(result).toHaveProperty("activeUserCount");

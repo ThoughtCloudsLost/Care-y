@@ -5,6 +5,7 @@ import {
   adminUpdateUsernameSchema,
   updatePasswordHashSchema,
 } from "@care-y/shared";
+import { encode } from "@care-y/crypto";
 import {
   ConflictError,
   ForbiddenError,
@@ -130,5 +131,29 @@ export function createProfileRouter(deps: ProfileRouterDeps) {
           return { success: true as const };
         }),
       ),
+
+    myTicketKeyWraps: authedProcedure.query(
+      withErrorWrapping(async ({ ctx }) => {
+        const rows = await ctx.org.tenantDb
+          .selectFrom("ticket_key_wraps")
+          .select([
+            "ticket_id",
+            "key_generation",
+            "ephemeral_point",
+            "nonce",
+            "wrapped_key",
+          ])
+          .where("volunteer_id", "=", ctx.session.userId)
+          .execute();
+
+        return rows.map((r) => ({
+          ticketId: r.ticket_id,
+          keyGeneration: r.key_generation,
+          ephemeralPoint: encode(r.ephemeral_point),
+          nonce: encode(r.nonce),
+          wrappedKey: encode(r.wrapped_key),
+        }));
+      }),
+    ),
   });
 }

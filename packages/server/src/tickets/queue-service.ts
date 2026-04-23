@@ -160,10 +160,10 @@ export function createQueueService(db: Kysely<TenantDatabase>): QueueService {
 
       return rows.map((r) =>
         toRecord(r, {
-          openCount: r.openCount ?? "0",
-          closedCount: r.closedCount ?? "0",
-          holdCount: r.holdCount ?? "0",
-          memberCount: r.memberCount ?? "0",
+          openCount: String(r.openCount ?? 0),
+          closedCount: String(r.closedCount ?? 0),
+          holdCount: String(r.holdCount ?? 0),
+          memberCount: String(r.memberCount ?? 0),
         }),
       );
     },
