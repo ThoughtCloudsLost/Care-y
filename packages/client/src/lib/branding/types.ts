@@ -13,4 +13,5 @@ export interface CachedBranding {
   logoBlobUrl: string | null;
   orgSlug: string | null;
   hasIcons: boolean;
+  iconVersion: string | null;
 }

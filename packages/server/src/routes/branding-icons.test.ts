@@ -151,4 +151,11 @@ describe("createBrandingIconHandler", () => {
     }
     expect(deps.orgService.findBySlug).toHaveBeenCalledTimes(3);
   });
+
+  it("strips query parameters from icon URL before matching", () => {
+    const req = mockReq("GET", "/api/branding/test/icon-192.png?v=abc12345");
+    const res = mockRes();
+    void handler(req, res);
+    expect(deps.orgService.findBySlug).toHaveBeenCalledWith("test");
+  });
 });

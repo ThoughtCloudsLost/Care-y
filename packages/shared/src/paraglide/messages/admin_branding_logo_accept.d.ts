@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "PNG, JPEG, or SVG. Max 512 KB." |
+* | "PNG, JPEG, or SVG. Resized to 512px automatically." |
 *
 * @param {Admin_Branding_Logo_AcceptInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

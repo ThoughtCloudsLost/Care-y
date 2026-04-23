@@ -23,9 +23,11 @@ vi.mock("$lib/paraglide/messages.js", () => ({
   admin_branding_sheet_title: () => "Edit Branding",
   admin_branding_logo_hint: () =>
     "Appears in the app and on client-facing pages.",
-  admin_branding_logo_accept: () => "PNG, JPEG, or SVG. Max 512 KB.",
+  admin_branding_logo_accept: () =>
+    "PNG, JPEG, or SVG. Resized to 512px automatically.",
   admin_branding_logo_change: () => "Change logo",
-  admin_branding_logo_too_large: () => "Image must be under 512 KB.",
+  admin_branding_logo_too_large: () =>
+    "Image could not be compressed to fit. Try a simpler image.",
   admin_branding_logo_invalid_type: () =>
     "Only PNG, JPEG, and SVG images are accepted.",
   admin_branding_color_hint: () => "Used for buttons and highlights.",
@@ -177,6 +179,30 @@ vi.stubGlobal(
   }),
 );
 
+// OffscreenCanvas + createImageBitmap stubs for logo rasterization
+// Configurable output size lets tests control whether the processed image
+// passes or exceeds the 512KB limit.
+let canvasOutputBytes = 1024;
+
+vi.stubGlobal(
+  "OffscreenCanvas",
+  vi.fn(function (this: {
+    getContext: () => {
+      drawImage: () => void;
+    };
+    convertToBlob: () => Promise<Blob>;
+  }) {
+    this.getContext = () => ({ drawImage: vi.fn() });
+    this.convertToBlob = () =>
+      Promise.resolve(new Blob([new ArrayBuffer(canvasOutputBytes)]));
+  }),
+);
+
+vi.stubGlobal(
+  "createImageBitmap",
+  vi.fn(() => Promise.resolve({ width: 200, height: 200, close: vi.fn() })),
+);
+
 vi.mock("$lib/shell/ShellSheet.svelte", async () => ({
   default: (
     await import("$lib/components/tickets/test-helpers/PassthroughShell.svelte")
@@ -200,6 +226,7 @@ const LOADED_DATA: BrandingData = {
   encryptedClientText: btoa("We provide confidential support."),
   clientEncryptedBranding: null,
   hasIcons: false,
+  iconVersion: null,
 };
 
 function renderWithData(data?: Partial<BrandingData>): void {
@@ -265,18 +292,46 @@ describe("BrandingSection", () => {
     expect(picker.getAttribute("aria-label")).toBe("Primary");
   });
 
-  it("rejects logo files over 512KB", async () => {
+  it("rejects logo when processed image still exceeds 512KB", async () => {
+    canvasOutputBytes = 600 * 1024;
     renderWithData();
     const fileInput = document.querySelector(
       'input[type="file"]',
     ) as HTMLInputElement;
-    const largeFile = new File([new ArrayBuffer(600 * 1024)], "huge.png", {
+    const file = new File([new ArrayBuffer(1024)], "huge.png", {
       type: "image/png",
     });
-    await fireEvent.change(fileInput, { target: { files: [largeFile] } });
+    await fireEvent.change(fileInput, { target: { files: [file] } });
 
-    expect(screen.getByRole("alert")).toBeTruthy();
-    expect(screen.getByText("Image must be under 512 KB.")).toBeTruthy();
+    await vi.waitFor(() => {
+      expect(screen.getByRole("alert")).toBeTruthy();
+    });
+    expect(
+      screen.getByText(
+        "Image could not be compressed to fit. Try a simpler image.",
+      ),
+    ).toBeTruthy();
+    canvasOutputBytes = 1024;
+  });
+
+  it("accepts logo after canvas processing shrinks it under limit", async () => {
+    canvasOutputBytes = 1024;
+    renderWithData();
+    const fileInput = document.querySelector(
+      'input[type="file"]',
+    ) as HTMLInputElement;
+    const file = new File([new ArrayBuffer(800 * 1024)], "big.png", {
+      type: "image/png",
+    });
+    await fireEvent.change(fileInput, { target: { files: [file] } });
+
+    await vi.waitFor(() => {
+      const preview = document.querySelector(
+        'img[alt="New logo preview"]',
+      ) as HTMLImageElement | null;
+      expect(preview).toBeTruthy();
+    });
+    expect(document.querySelector('[role="alert"]')).toBeNull();
   });
 
   it("rejects non-image file types", async () => {

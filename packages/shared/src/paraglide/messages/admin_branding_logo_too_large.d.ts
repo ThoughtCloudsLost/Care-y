@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Image must be under 512 KB." |
+* | "Image could not be compressed to fit. Try a simpler image." |
 *
 * @param {Admin_Branding_Logo_Too_LargeInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

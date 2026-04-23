@@ -6,17 +6,17 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Admin_Branding_Logo_Too_LargeInputs */
 
 const en_admin_branding_logo_too_large = /** @type {(inputs: Admin_Branding_Logo_Too_LargeInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Image must be under 512 KB.`)
+	return /** @type {LocalizedString} */ (`Image could not be compressed to fit. Try a simpler image.`)
 };
 
 const es_admin_branding_logo_too_large = /** @type {(inputs: Admin_Branding_Logo_Too_LargeInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`La imagen debe ser menor a 512 KB.`)
+	return /** @type {LocalizedString} */ (`No se pudo comprimir la imagen. Prueba con una imagen mas simple.`)
 };
 
 /**
 * | output |
 * | --- |
-* | "Image must be under 512 KB." |
+* | "Image could not be compressed to fit. Try a simpler image." |
 *
 * @param {Admin_Branding_Logo_Too_LargeInputs} inputs
 * @param {{ locale?: "en" | "es" }} options
