@@ -8,6 +8,11 @@
 import type { Kysely } from "kysely";
 import type { TenantDatabase } from "../db/types.js";
 
+export interface QueueAssignment {
+  readonly queueId: string;
+  readonly userId: string;
+}
+
 export interface QueuePermissionsService {
   /** Get all queue IDs this user is assigned to. */
   getUserQueues(userId: string): Promise<string[]>;
@@ -19,6 +24,8 @@ export interface QueuePermissionsService {
   removeMember(queueId: string, userId: string): Promise<void>;
   /** List all members of a queue. Returns user IDs. */
   getQueueMembers(queueId: string): Promise<string[]>;
+  /** List all queue-user assignments (bulk, for admin filtering). */
+  listAllAssignments(): Promise<readonly QueueAssignment[]>;
 }
 
 export function createQueuePermissionsService(
@@ -67,6 +74,17 @@ export function createQueuePermissionsService(
         .where("queue_id", "=", queueId)
         .execute();
       return rows.map((r) => r.user_id);
+    },
+
+    async listAllAssignments() {
+      const rows = await db
+        .selectFrom("queue_assignments")
+        .select(["queue_id", "user_id"])
+        .execute();
+      return rows.map((r) => ({
+        queueId: r.queue_id,
+        userId: r.user_id,
+      }));
     },
   };
 }

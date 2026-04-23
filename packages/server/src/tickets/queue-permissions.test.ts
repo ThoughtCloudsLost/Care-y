@@ -94,5 +94,22 @@ describe.skipIf(!process.env.DATABASE_URL)(
       expect(await svc.isMember(userB, queueA)).toBe(false);
       expect(await svc.isMember(userB, queueB)).toBe(true);
     });
+
+    it("listAllAssignments returns all queue-user pairs", async () => {
+      await svc.addMember(queueA, userA);
+      await svc.addMember(queueA, userB);
+      const all = await svc.listAllAssignments();
+      const forQueueA = all.filter((a) => a.queueId === queueA);
+      expect(forQueueA.length).toBeGreaterThanOrEqual(2);
+      expect(forQueueA.map((a) => a.userId)).toContain(userA);
+      expect(forQueueA.map((a) => a.userId)).toContain(userB);
+    });
+
+    it("listAllAssignments returns entries for all queues", async () => {
+      const all = await svc.listAllAssignments();
+      const queueIds = new Set(all.map((a) => a.queueId));
+      expect(queueIds.has(queueA)).toBe(true);
+      expect(queueIds.has(queueB)).toBe(true);
+    });
   },
 );
