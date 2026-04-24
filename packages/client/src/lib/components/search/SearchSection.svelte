@@ -9,9 +9,13 @@
     icon: Component;
     count: number;
     totalCached: number;
+    totalItems?: number;
+    totalResults?: number;
     showAllHref: string;
     loading: boolean;
     ondismiss: () => void;
+    onviewall?: (query: string) => void;
+    query?: string;
     children: Snippet;
   }
 
@@ -20,11 +24,17 @@
     icon: Icon,
     count,
     totalCached,
+    totalItems,
+    totalResults,
     showAllHref,
     loading,
     ondismiss,
+    onviewall,
+    query = "",
     children,
   }: SearchSectionProps = $props();
+
+  const displayCount = $derived(totalResults ?? count);
 </script>
 
 <div class="search-section">
@@ -33,23 +43,35 @@
       <h3 class="section-label">
         <Icon size={16} aria-hidden="true" class="section-icon" />
         <span class="heading-text">{label}</span>
-        <span class="count-badge">{loading ? "..." : count}</span>
+        <span class="count-badge">{loading ? "..." : displayCount}</span>
       </h3>
-      {#if count > 0}
+      {#if displayCount > 0}
         <button
           type="button"
           class="show-all-link"
           onclick={() => {
-            ondismiss();
-            void goto(resolve(`/${showAllHref.replace(/^\//, "")}`));
+            if (onviewall) {
+              const q = query;
+              ondismiss();
+              onviewall(q);
+            } else {
+              ondismiss();
+              void goto(resolve(`/${showAllHref.replace(/^\//, "")}`));
+            }
           }}
         >
-          {m.search_show_all({ count })}
+          {m.search_show_all({ count: displayCount })}
         </button>
       {/if}
     </div>
     <p class="scope-hint" aria-live="polite">
-      {#if loading}
+      {#if totalItems != null && totalItems > totalCached}
+        {#if loading}
+          {m.search_scope_hint_of({ searched: totalCached, total: totalItems })}
+        {:else}
+          {m.search_scope_done_of({ searched: totalCached, total: totalItems })}
+        {/if}
+      {:else if loading}
         {m.search_scope_hint({ count: totalCached })}
       {:else}
         {m.search_scope_done({ count: totalCached })}

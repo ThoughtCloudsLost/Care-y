@@ -109,7 +109,7 @@
   /* iOS: handled by .glass utility (shared.css) */
 
   .shell-sheet-content {
-    min-height: 60vh;
+    min-height: 50vh;
     max-height: calc(85dvh - var(--k-safe-area-top, 0px));
     overflow-y: auto;
     -webkit-overflow-scrolling: touch;

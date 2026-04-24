@@ -1,10 +1,10 @@
 // @vitest-environment jsdom
 import { describe, it, expect, afterEach, vi } from "vitest";
 import { render, cleanup } from "@testing-library/svelte";
-import ChatZoomHarness from "./ChatZoomHarness.svelte";
-import type { TimelineItem } from "./chat-zoom-types.js";
+import FollowUpTimelineHarness from "./FollowUpTimelineHarness.svelte";
+import type { TimelineItem } from "./follow-up-timeline-types.js";
 
-// Mock i18n (ChatZoom uses several message functions).
+// Mock i18n (FollowUpTimeline uses several message functions).
 vi.mock("$lib/paraglide/messages.js", () => ({
   ticket_zoom_summary: ({
     count,
@@ -60,6 +60,7 @@ function makeItems(): TimelineItem[] {
       id: "fu-1",
       source: "client",
       type: "message",
+      createdBy: null,
       createdAt: "2026-04-01T10:00:00Z",
       encryptedContent: null,
       hasRecording: false,
@@ -71,6 +72,7 @@ function makeItems(): TimelineItem[] {
       id: "fu-2",
       source: "system",
       type: "assignment_change",
+      createdBy: null,
       createdAt: "2026-04-01T10:05:00Z",
       encryptedContent: "encrypted-data",
       hasRecording: false,
@@ -82,6 +84,7 @@ function makeItems(): TimelineItem[] {
       id: "fu-3",
       source: "volunteer",
       type: "message",
+      createdBy: null,
       createdAt: "2026-04-01T10:10:00Z",
       encryptedContent: null,
       hasRecording: false,
@@ -93,6 +96,7 @@ function makeItems(): TimelineItem[] {
       id: "fu-4",
       source: "volunteer",
       type: "internal_note",
+      createdBy: null,
       createdAt: "2026-04-01T10:15:00Z",
       encryptedContent: "encrypted-note",
       hasRecording: false,
@@ -104,6 +108,7 @@ function makeItems(): TimelineItem[] {
       id: "fu-5",
       source: "client",
       type: "message",
+      createdBy: null,
       createdAt: "2026-04-01T11:00:00Z",
       encryptedContent: null,
       hasRecording: true,
@@ -115,6 +120,7 @@ function makeItems(): TimelineItem[] {
       id: "fu-6",
       source: "client",
       type: "message",
+      createdBy: null,
       createdAt: "2026-04-02T09:00:00Z",
       encryptedContent: null,
       hasRecording: false,
@@ -125,14 +131,10 @@ function makeItems(): TimelineItem[] {
   ];
 }
 
-describe("ChatZoom component (normal mode)", () => {
+describe("FollowUpTimeline component (normal mode)", () => {
   it("renders children when not zoomed", () => {
-    const { container } = render(ChatZoomHarness, {
-      props: {
-        totalMessages: 47,
-        earliestDate: "2026-04-01T10:00:00Z",
-        latestDate: "2026-04-04T14:15:00Z",
-      },
+    const { container } = render(FollowUpTimelineHarness, {
+      props: {},
     });
     // Harness injects test bubbles with data-fu-id.
     const bubbles = container.querySelectorAll("[data-fu-id]");
@@ -140,11 +142,8 @@ describe("ChatZoom component (normal mode)", () => {
   });
 
   it("hides timeline view when timeline is inactive", () => {
-    const { container } = render(ChatZoomHarness, {
+    const { container } = render(FollowUpTimelineHarness, {
       props: {
-        totalMessages: 6,
-        earliestDate: "2026-04-01T10:00:00Z",
-        latestDate: "2026-04-02T09:00:00Z",
         items: makeItems(),
       },
     });

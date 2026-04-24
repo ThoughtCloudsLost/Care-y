@@ -15,6 +15,9 @@ type VolunteersData = Awaited<
   ReturnType<TicketRouter["listVolunteers"]["query"]>
 >;
 type CountsData = Awaited<ReturnType<TicketRouter["counts"]["query"]>>;
+type ParticipantsData = Awaited<
+  ReturnType<TicketRouter["listParticipants"]["query"]>
+>;
 
 export function createVolunteersQuery(
   ticketRouter: TicketRouter,
@@ -22,6 +25,19 @@ export function createVolunteersQuery(
   return createQuery(() => ({
     queryKey: ["volunteers"] as const,
     queryFn: async () => ticketRouter.listVolunteers.query(),
+    staleTime: 5 * 60 * 1000,
+  }));
+}
+
+export function createParticipantsQuery(
+  ticketRouter: TicketRouter,
+  ticketId: () => string,
+): CreateQueryResult<ParticipantsData> {
+  return createQuery(() => ({
+    queryKey: ["ticket", ticketId(), "participants"] as const,
+    queryFn: async () =>
+      ticketRouter.listParticipants.query({ ticketId: ticketId() }),
+    enabled: ticketId() !== "",
     staleTime: 5 * 60 * 1000,
   }));
 }

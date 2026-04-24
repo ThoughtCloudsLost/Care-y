@@ -119,4 +119,9 @@ export class AsyncDecryptCache {
   get size(): number {
     return this.cache.size;
   }
+
+  /** Iterate all cached entries (key -> plaintext or error sentinel). */
+  entries(): IterableIterator<[string, string]> {
+    return this.cache.entries();
+  }
 }

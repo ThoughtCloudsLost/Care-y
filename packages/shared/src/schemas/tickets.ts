@@ -190,12 +190,20 @@ export type RecentFollowUpsInput = z.infer<typeof recentFollowUpsInputSchema>;
 
 export const followUpListDirectionSchema = z.enum(["newer", "older"]);
 
+export const mediaFlagSchema = z.enum(["recording", "image", "file"]);
+export type MediaFlag = z.infer<typeof mediaFlagSchema>;
+
 export const followUpListInputSchema = z.object({
   ticketId: z.uuid(),
-  limit: z.number().int().min(1).max(100).default(50),
+  limit: z.number().int().min(1).max(500).default(50),
   cursor: z.uuid().optional(),
   direction: followUpListDirectionSchema.default("newer"),
   types: z.array(followUpTypeSchema).optional(),
+  mediaFlags: z.array(mediaFlagSchema).optional(),
+  createdBy: z.array(z.uuid()).optional(),
+  includeClientSource: z.boolean().optional(),
+  dateFrom: z.iso.datetime({ offset: true }).optional(),
+  dateTo: z.iso.datetime({ offset: true }).optional(),
 });
 export type FollowUpListInput = z.infer<typeof followUpListInputSchema>;
 
@@ -206,6 +214,11 @@ export const followUpSummaryInputSchema = z.object({
   cursor: z.uuid().optional(),
   direction: followUpListDirectionSchema.default("newer"),
   types: z.array(followUpTypeSchema).optional(),
+  mediaFlags: z.array(mediaFlagSchema).optional(),
+  createdBy: z.array(z.uuid()).optional(),
+  includeClientSource: z.boolean().optional(),
+  dateFrom: z.iso.datetime({ offset: true }).optional(),
+  dateTo: z.iso.datetime({ offset: true }).optional(),
 });
 export type FollowUpSummaryInput = z.infer<typeof followUpSummaryInputSchema>;
 
@@ -216,6 +229,12 @@ export const followUpsByIdsInputSchema = z.object({
   types: z.array(followUpTypeSchema).optional(),
 });
 export type FollowUpsByIdsInput = z.infer<typeof followUpsByIdsInputSchema>;
+
+/** List distinct volunteer participants on a ticket. */
+export const listParticipantsInputSchema = z.object({
+  ticketId: z.uuid(),
+});
+export type ListParticipantsInput = z.infer<typeof listParticipantsInputSchema>;
 
 // --- Media list schemas ---
 

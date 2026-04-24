@@ -13,7 +13,7 @@
   the mutation is in flight. Parent sets `editing = false` only on success.
 -->
 <script lang="ts">
-  import { Card, Chip, Button, List, ListInput } from "konsta/svelte";
+  import { Card, Button, List, ListInput } from "konsta/svelte";
   import { StickyNote } from "@lucide/svelte";
   import { formatRelativeTime } from "$lib/utils/format-time.js";
   import * as m from "$lib/paraglide/messages.js";
@@ -40,6 +40,7 @@
     onpointerdown?: (e: PointerEvent) => void;
     onpointerup?: (e: PointerEvent) => void;
     onpointercancel?: (e: PointerEvent) => void;
+    searchTerm?: string | null;
   }
 
   let {
@@ -55,6 +56,7 @@
     onpointerdown,
     onpointerup,
     onpointercancel,
+    searchTerm = null,
   }: Props = $props();
 
   let editText = $state("");
@@ -97,7 +99,7 @@
 <div class="private-note-wrapper" class:own-note={isOwn}>
   <Card
     outline
-    contentWrapPadding="pt-1 pb-3 px-3"
+    contentWrapPadding="py-2.5 px-3"
     class="private-note-card"
     role="article"
     aria-label={m.ticket_private_note_by({ author: displayAuthor })}
@@ -105,22 +107,10 @@
     onpointerup={editing ? undefined : onpointerup}
     onpointercancel={editing ? undefined : onpointercancel}
   >
-    {#snippet header()}
-      <div class="note-header">
-        <div class="note-header-row">
-          <Chip outline class="note-chip">
-            <span class="note-chip-content">
-              <StickyNote size={11} class="note-icon" />
-              {m.ticket_private_note_label()}
-            </span>
-          </Chip>
-          <time class="note-time" datetime={timestamp}>{timeLabel}</time>
-        </div>
-        {#if authorName}
-          <span class="note-author" data-author>{authorName}</span>
-        {/if}
-      </div>
-    {/snippet}
+    <span class="note-badge">
+      <StickyNote size={11} class="note-icon" />
+      {m.ticket_note_team_only()}
+    </span>
     {#if editing}
       <div class="note-edit-area">
         <List nested class="note-edit-list">
@@ -165,9 +155,16 @@
           ciphertext={encryptedContent}
           length={40}
           block
+          {searchTerm}
         />
       </div>
     {/if}
+    <div class="note-meta">
+      {#if authorName}
+        <span class="note-author">{authorName}</span>
+      {/if}
+      <time class="note-time" datetime={timestamp}>{timeLabel}</time>
+    </div>
   </Card>
 </div>
 
@@ -179,22 +176,16 @@
     touch-action: pan-y;
   }
 
-  .note-header {
-    display: flex;
-    flex-direction: column;
-    gap: 0.1875rem;
-  }
-
-  .note-header-row {
-    display: flex;
-    align-items: center;
-    gap: 0.375rem;
-  }
-
-  .note-chip-content {
+  .note-badge {
     display: inline-flex;
     align-items: center;
     gap: 0.25rem;
+    font-size: 0.625rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--brand-accent, var(--brand-primary));
+    margin-bottom: 0.375rem;
   }
 
   :global(.note-icon) {
@@ -202,35 +193,30 @@
     flex-shrink: 0;
   }
 
-  /* Scale down the Chip to fit inline in the header row. */
-  :global(.note-chip) {
-    font-size: 0.625rem !important;
-    height: auto !important;
-    padding-left: 0.375rem !important;
-    padding-right: 0.375rem !important;
-    padding-top: 0.0625rem !important;
-    padding-bottom: 0.0625rem !important;
-  }
-
-  .note-time {
-    margin-left: auto;
-    font-size: 0.625rem;
-    color: var(--muted);
-    white-space: nowrap;
-  }
-
-  .note-author {
-    font-size: 0.75rem;
-    font-weight: 600;
-    color: var(--ink);
-    opacity: 0.85;
-  }
-
   .note-body {
     font-size: 0.875rem;
     line-height: 1.5;
     color: var(--ink);
     word-break: break-word;
+  }
+
+  .note-meta {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-top: 0.375rem;
+    font-size: 0.625rem;
+    color: var(--muted);
+  }
+
+  .note-author {
+    font-weight: 500;
+  }
+
+  .note-time {
+    font-size: 0.625rem;
+    color: var(--muted);
+    white-space: nowrap;
   }
 
   .note-edit-area {
