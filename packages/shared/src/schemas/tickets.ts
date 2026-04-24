@@ -53,6 +53,7 @@ export const createFollowUpInputSchema = z.object({
   type: followUpTypeSchema,
   isPrivate: z.boolean().default(false),
   mentionedPseudonyms: z.array(z.string()).default([]),
+  noteTypeId: z.uuid().optional(),
 });
 export type CreateFollowUpInput = z.infer<typeof createFollowUpInputSchema>;
 
@@ -295,6 +296,7 @@ export type QueueWatcherInput = z.infer<typeof queueWatcherInputSchema>;
 export const updateInternalNoteInputSchema = z.object({
   followUpId: z.uuid(),
   encryptedContent: base64String("encryptedContent"),
+  noteTypeId: z.uuid().optional(),
 });
 export type UpdateInternalNoteInput = z.infer<
   typeof updateInternalNoteInputSchema
@@ -375,3 +377,30 @@ export const ticketActionSchema = z.enum([
   "cancel",
 ]);
 export type TicketAction = z.infer<typeof ticketActionSchema>;
+
+// --- Note type schemas (internal note categorization + escalation routing) ---
+
+export const escalationTargetSchema = z.discriminatedUnion("type", [
+  z.object({ type: z.literal("role"), value: z.enum(["admin", "manager"]) }),
+  z.object({ type: z.literal("permission"), value: z.string().min(1) }),
+  z.object({ type: z.literal("queue"), value: z.uuid() }),
+]);
+export type EscalationTarget = z.infer<typeof escalationTargetSchema>;
+
+export const createNoteTypeInputSchema = z.object({
+  encryptedName: base64String("encryptedName"),
+  encryptedIcon: base64String("encryptedIcon"),
+  escalationTargets: z.array(escalationTargetSchema),
+  requiresOnClose: z.boolean().optional(),
+});
+export type CreateNoteTypeInput = z.infer<typeof createNoteTypeInputSchema>;
+
+export const updateNoteTypeInputSchema = z.object({
+  id: z.uuid(),
+  encryptedName: base64String("encryptedName").optional(),
+  encryptedIcon: base64String("encryptedIcon").optional(),
+  escalationTargets: z.array(escalationTargetSchema).optional(),
+  isActive: z.boolean().optional(),
+  requiresOnClose: z.boolean().optional(),
+});
+export type UpdateNoteTypeInput = z.infer<typeof updateNoteTypeInputSchema>;

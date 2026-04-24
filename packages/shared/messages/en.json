@@ -186,6 +186,7 @@
   "error_preset_reply_not_found": "Preset reply not found.",
   "error_recording_not_found": "Recording not found.",
   "error_attachment_not_found": "Attachment not found.",
+  "error_note_type_not_found": "Note type not found.",
 
   "error_kb_category_not_found": "Category not found.",
   "error_kb_article_not_found": "Article not found.",

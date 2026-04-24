@@ -278,6 +278,12 @@ export {
   type SavedFilterRecord,
   ticketActionSchema,
   type TicketAction,
+  escalationTargetSchema,
+  createNoteTypeInputSchema,
+  updateNoteTypeInputSchema,
+  type EscalationTarget,
+  type CreateNoteTypeInput,
+  type UpdateNoteTypeInput,
 } from "./schemas/tickets.js";
 
 // --- Knowledge Base schemas ---
