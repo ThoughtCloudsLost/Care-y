@@ -539,6 +539,8 @@
   "search_conversation_previous": "Coincidencia anterior",
   "search_conversation_next": "Siguiente coincidencia",
   "search_conversation_nav_label": "Navegacion de busqueda",
+  "search_refine_label": "Refinar busqueda",
+  "search_nav_shortcuts": "Enter para siguiente, Shift+Enter para anterior, Escape para cerrar",
   "attachment_download": "Descargar {filename}",
   "attachment_downloading": "Descargando {filename}...",
   "library_manage_categories": "Administrar categorías",

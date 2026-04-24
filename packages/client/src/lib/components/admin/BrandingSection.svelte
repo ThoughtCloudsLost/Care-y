@@ -917,12 +917,6 @@
     gap: var(--space-xs);
   }
 
-  .org-name-display {
-    font-weight: 600;
-    font-size: var(--text-base);
-    color: var(--ink);
-  }
-
   .color-row {
     display: flex;
     align-items: center;
@@ -960,6 +954,7 @@
   .text-truncate {
     display: -webkit-box;
     -webkit-line-clamp: 2;
+    line-clamp: 2;
     -webkit-box-orient: vertical;
     overflow: hidden;
   }

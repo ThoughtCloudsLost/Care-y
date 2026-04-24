@@ -68,6 +68,9 @@
   import type { SerializedBuffer } from "$lib/utils/buffer-encoding.js";
   import type { RawFollowUpPreview } from "$lib/tickets/preview-loader.svelte.js";
   import { resolveAsyncDecrypt } from "$lib/crypto/decrypt-result.js";
+  import { createSearchOverlay } from "$lib/search/search-overlay.svelte.js";
+  import SearchNavigator from "$lib/components/search/SearchNavigator.svelte";
+  import { fuzzySearch } from "$lib/search/fuzzy.js";
 
   const ticketCache = getTicketDecryptCache();
   const orgCache = getOrgDecryptCache();
@@ -287,6 +290,74 @@
     return map;
   });
 
+  // --- Search overlay ---
+
+  const overlay = createSearchOverlay({
+    matches: () => searchMatches,
+    getElementId: (id) => `ticket-${id}`,
+    scrollContainer: () => scrollEl,
+  });
+
+  const searchMatches = $derived.by((): string[] => {
+    if (overlay.term == null) return [];
+    const ids: string[] = [];
+    const haystack: string[] = [];
+    for (const [id, props] of cardPropsMap) {
+      const title =
+        props.titleResult.status === "ready" ? props.titleResult.value : null;
+      if (title == null) continue;
+      ids.push(id);
+      haystack.push(`${title} ${props.clientAlias}`);
+    }
+    const matches = fuzzySearch(haystack, overlay.term);
+    return matches
+      .map((fm) => ids[fm.index])
+      .filter((id): id is string => id != null);
+  });
+
+  let useMatchOrder = $state(true);
+
+  $effect(() => {
+    if (overlay.active) {
+      useMatchOrder = true;
+    }
+  });
+
+  const displayItems = $derived.by(() => {
+    if (!overlay.active || overlay.term == null || overlay.term.length < 2) {
+      return displayFiltered;
+    }
+    const matchSet = new Set(searchMatches);
+    if (!useMatchOrder) {
+      return displayFiltered.filter((t) => matchSet.has(t.id));
+    }
+    const idToTicket = new Map(displayFiltered.map((t) => [t.id, t]));
+    const sorted: typeof displayFiltered = [];
+    for (const id of searchMatches) {
+      const t = idToTicket.get(id);
+      if (t != null) sorted.push(t);
+    }
+    return sorted;
+  });
+
+  $effect(() => {
+    const q = page.url.searchParams.get("q");
+    if (q != null && q !== "") {
+      overlay.enter(q);
+    }
+  });
+
+  let prevViewMode = $state(viewModeStore.mode);
+  $effect(() => {
+    const mode = viewModeStore.mode;
+    if (mode !== prevViewMode) {
+      prevViewMode = mode;
+      if (overlay.activeId != null) {
+        overlay.requestScroll();
+      }
+    }
+  });
+
   function showEncryptedHelp(): void {
     toastStore.show(m.dashboard_encrypted_help(), 5000);
   }
@@ -480,7 +551,7 @@
     navbarCtx.current = {
       right: navRight,
       subnavbar: ticketSubnavbar,
-      subnavbarHidden: () => scrollDir.hidden,
+      subnavbarHidden: () => scrollDir.hidden && !overlay.active,
     };
     return () => {
       navbarCtx.current = undefined;
@@ -843,6 +914,7 @@
 
   function handleSortChange(field: string, dir: "asc" | "desc"): void {
     if (isSortField(field)) filterStore.setSort(field, dir);
+    if (overlay.active) useMatchOrder = false;
   }
 
   const sortConfig: SortConfig = $derived({
@@ -945,6 +1017,18 @@
   </span>
 {/snippet}
 
+{#snippet searchNavigatorRow()}
+  <SearchNavigator
+    term={overlay.term ?? ""}
+    position={overlay.position}
+    total={overlay.matchCount}
+    onup={overlay.up}
+    ondown={overlay.down}
+    onexit={overlay.exit}
+    ontermchange={overlay.setTerm}
+  />
+{/snippet}
+
 {#snippet ticketSubnavbar()}
   <SubNavbarFilterLayout
     title={m.tickets_title()}
@@ -955,6 +1039,7 @@
     onselect={toggleMultiSelect}
     savedFilters={savedFiltersConfig}
     filterPills={filterPillsConfig}
+    searchNavigator={overlay.active ? searchNavigatorRow : undefined}
   />
 {/snippet}
 
@@ -988,7 +1073,7 @@
   {:else}
     <div class="ticket-list" data-ticket-list>
       <VirtualList
-        items={displayFiltered}
+        items={displayItems}
         scrollContainer={scrollEl}
         estimateHeight={viewModeStore.mode === "grid" ? 200 : 140}
         virtualizeThreshold={200}
@@ -997,29 +1082,41 @@
         onloadmore={loadNextPage}
       >
         {#snippet children({ item }: { item: TicketRecord; index: number })}
-          <SwipeableCard
-            ticketId={item.id}
-            disabled={multiSelectActive}
-            onaction={handleAction}
-            onlongpress={handleLongPress}
+          <div
+            id="ticket-{item.id}"
+            class="search-target"
+            class:match-active={overlay.activeId === item.id}
+            aria-current={overlay.activeId === item.id ? "true" : undefined}
           >
-            {@const dataProps = cardPropsMap.get(item.id)}
-            {#if dataProps}
-              <TicketCard
-                {...dataProps}
-                viewMode={viewModeStore.mode}
-                selected={selectedIds.has(item.id)}
-                {multiSelectActive}
-              />
-            {/if}
-          </SwipeableCard>
+            <SwipeableCard
+              ticketId={item.id}
+              disabled={multiSelectActive}
+              onaction={handleAction}
+              onlongpress={handleLongPress}
+            >
+              {@const dataProps = cardPropsMap.get(item.id)}
+              {#if dataProps}
+                <TicketCard
+                  {...dataProps}
+                  viewMode={viewModeStore.mode}
+                  selected={selectedIds.has(item.id)}
+                  {multiSelectActive}
+                  searchTerm={overlay.term}
+                />
+              {/if}
+            </SwipeableCard>
+          </div>
         {/snippet}
       </VirtualList>
     </div>
 
-    {#if displayFiltered.length === 0}
+    {#if displayItems.length === 0}
       <div class="empty-state" role="status">
-        <p>{m.tickets_empty_filter()}</p>
+        <p>
+          {overlay.active
+            ? m.search_conversation_no_matches()
+            : m.tickets_empty_filter()}
+        </p>
       </div>
     {/if}
   {/if}
@@ -1107,5 +1204,10 @@
     padding: 3rem 1rem;
     color: var(--muted);
     font-size: var(--text-base);
+  }
+
+  .search-target {
+    min-width: 0;
+    overflow: hidden;
   }
 </style>

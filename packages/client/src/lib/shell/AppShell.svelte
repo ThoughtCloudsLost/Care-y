@@ -405,6 +405,13 @@
         },
         getPreviewFollowUps: (ticketId) => previewLoader.get(ticketId),
         deriveDisplayStatus,
+        getTotalItemCount: () => {
+          const counts = queryClient.getQueryData<{ total?: number }>([
+            "tickets",
+            "counts",
+          ]);
+          return counts?.total;
+        },
       }),
     );
 
