@@ -25,11 +25,18 @@ export interface ReWrappedKey {
   readonly wrappedKey: Buffer;
 }
 
+export interface ReWrappedOrgKey {
+  readonly ephemeralPoint: Buffer;
+  readonly nonce: Buffer;
+  readonly wrappedKey: Buffer;
+}
+
 export interface KeyRotationInput {
   readonly userId: string;
   readonly saltNew: Buffer;
   readonly volPublicNew: Buffer;
   readonly reWrappedKeys: readonly ReWrappedKey[];
+  readonly reWrappedOrgKey?: ReWrappedOrgKey;
 }
 
 export interface KeyRotationService {
@@ -200,6 +207,18 @@ export function createKeyRotationService(
               throw err;
             }
           }
+        }
+
+        if (input.reWrappedOrgKey) {
+          await tx
+            .updateTable("wrapped_org_keys")
+            .set({
+              ephemeral_point: input.reWrappedOrgKey.ephemeralPoint,
+              nonce: input.reWrappedOrgKey.nonce,
+              wrapped_key: input.reWrappedOrgKey.wrappedKey,
+            })
+            .where("user_id", "=", input.userId)
+            .execute();
         }
       });
     },

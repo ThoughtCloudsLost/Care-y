@@ -35,6 +35,22 @@ describe.skipIf(!process.env.DATABASE_URL)("KeyRotationService", () => {
       .execute();
   }
 
+  /** Inserts a wrapped_org_keys row for the given user. */
+  async function seedWrappedOrgKey(userId: string): Promise<{
+    ephemeral_point: Buffer;
+    nonce: Buffer;
+    wrapped_key: Buffer;
+  }> {
+    const row = {
+      user_id: userId,
+      ephemeral_point: crypto.randomBytes(32),
+      nonce: crypto.randomBytes(24),
+      wrapped_key: crypto.randomBytes(64),
+    };
+    await testDb.db.insertInto("wrapped_org_keys").values(row).execute();
+    return row;
+  }
+
   describe("storeVolPublic", () => {
     it("stores vol_public for a user with null vol_public", async () => {
       const user = await createTestUser(testDb.db);
@@ -304,6 +320,67 @@ describe.skipIf(!process.env.DATABASE_URL)("KeyRotationService", () => {
 
       // And acquireLock should succeed again (proves lock was fully released)
       await expect(service.acquireLock(user.id)).resolves.toBeUndefined();
+    });
+
+    it("updates wrapped_org_keys when reWrappedOrgKey is provided", async () => {
+      const user = await createTestUser(testDb.db);
+      await seedUserKeys(user.id, { vol_public: crypto.randomBytes(32) });
+      await seedWrappedOrgKey(user.id);
+      await service.acquireLock(user.id);
+
+      const newOrgWrap = {
+        ephemeralPoint: crypto.randomBytes(32),
+        nonce: crypto.randomBytes(24),
+        wrappedKey: crypto.randomBytes(64),
+      };
+
+      await service.applyRotation({
+        userId: user.id,
+        saltNew: crypto.randomBytes(32),
+        volPublicNew: crypto.randomBytes(32),
+        reWrappedKeys: [],
+        reWrappedOrgKey: newOrgWrap,
+      });
+
+      const row = await testDb.db
+        .selectFrom("wrapped_org_keys")
+        .selectAll()
+        .where("user_id", "=", user.id)
+        .executeTakeFirstOrThrow();
+
+      expect(
+        Buffer.compare(row.ephemeral_point, newOrgWrap.ephemeralPoint),
+      ).toBe(0);
+      expect(Buffer.compare(row.nonce, newOrgWrap.nonce)).toBe(0);
+      expect(Buffer.compare(row.wrapped_key, newOrgWrap.wrappedKey)).toBe(0);
+    });
+
+    it("skips wrapped_org_keys update when reWrappedOrgKey is undefined", async () => {
+      const user = await createTestUser(testDb.db);
+      await seedUserKeys(user.id, { vol_public: crypto.randomBytes(32) });
+      const originalOrgWrap = await seedWrappedOrgKey(user.id);
+      await service.acquireLock(user.id);
+
+      await service.applyRotation({
+        userId: user.id,
+        saltNew: crypto.randomBytes(32),
+        volPublicNew: crypto.randomBytes(32),
+        reWrappedKeys: [],
+      });
+
+      const row = await testDb.db
+        .selectFrom("wrapped_org_keys")
+        .selectAll()
+        .where("user_id", "=", user.id)
+        .executeTakeFirstOrThrow();
+
+      expect(
+        Buffer.compare(row.ephemeral_point, originalOrgWrap.ephemeral_point),
+      ).toBe(0);
+      expect(Buffer.compare(row.nonce, originalOrgWrap.nonce)).toBe(0);
+      expect(Buffer.compare(row.wrapped_key, originalOrgWrap.wrapped_key)).toBe(
+        0,
+      );
     });
   });
 });

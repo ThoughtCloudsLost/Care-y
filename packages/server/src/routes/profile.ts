@@ -3,9 +3,10 @@ import {
   adminUpdateDisplayNameSchema,
   updateUsernameSchema,
   adminUpdateUsernameSchema,
-  updatePasswordHashSchema,
+  changePasswordSchema,
 } from "@care-y/shared";
 import { encode } from "@care-y/crypto";
+import { createKeyRotationService } from "../crypto/key-rotation.js";
 import {
   ConflictError,
   ForbiddenError,
@@ -102,35 +103,80 @@ export function createProfileRouter(deps: ProfileRouterDeps) {
         }),
       ),
 
-    updatePasswordHash: authedProcedure
-      .input(updatePasswordHashSchema)
-      .mutation(
-        withErrorWrapping(async ({ ctx, input }) => {
-          const ip = extractClientIp(ctx.req);
-          const result = deps.passwordChangeLimiter.check(
-            `pw:${ctx.session.userId}:${ip}`,
-          );
-          if (!result.allowed) {
-            throw new TRPCError({
-              code: "TOO_MANY_REQUESTS",
-              message: ErrorCode.REQUEST_RATE_LIMITED,
-              cause: new RateLimitError(
-                ErrorCode.REQUEST_RATE_LIMITED,
-                Math.ceil(result.retryAfterMs / 1000),
-              ),
-            });
-          }
+    // Atomic password change: verifies old password, hashes new,
+    // rotates crypto keys, and kills other sessions in a single request.
+    // updatePasswordHash and applyRotation are separate DB transactions
+    // within this handler. A server crash between them could leave
+    // stale crypto keys (password changed, keys not rotated). This
+    // window is milliseconds on controlled infrastructure vs. the
+    // minutes-long client-side gap this replaces.
+    changePassword: authedProcedure.input(changePasswordSchema).mutation(
+      withErrorWrapping(async ({ ctx, input }) => {
+        const ip = extractClientIp(ctx.req);
+        const result = deps.passwordChangeLimiter.check(
+          `pw:${ctx.session.userId}:${ip}`,
+        );
+        if (!result.allowed) {
+          throw new TRPCError({
+            code: "TOO_MANY_REQUESTS",
+            message: ErrorCode.REQUEST_RATE_LIMITED,
+            cause: new RateLimitError(
+              ErrorCode.REQUEST_RATE_LIMITED,
+              Math.ceil(result.retryAfterMs / 1000),
+            ),
+          });
+        }
 
-          const authService = getAuthService(ctx.org, deps);
-          await authService.updatePasswordHash(
-            ctx.session.userId,
-            ctx.session.token,
-            input.currentPassword,
-            input.newPassword,
-          );
-          return { success: true as const };
-        }),
-      ),
+        const authService = getAuthService(ctx.org, deps);
+        const keyRotation = createKeyRotationService(ctx.org.tenantDb);
+        const userId = ctx.session.userId;
+
+        await authService.updatePasswordHash(
+          userId,
+          ctx.session.token,
+          input.currentPassword,
+          input.newPassword,
+        );
+
+        await keyRotation.acquireLock(userId);
+        let rotationSucceeded = false;
+        try {
+          await keyRotation.applyRotation({
+            userId,
+            saltNew: Buffer.from(input.saltNew, "base64"),
+            volPublicNew: Buffer.from(input.volPublicNew, "base64"),
+            reWrappedKeys: input.reWrappedKeys.map((k) => ({
+              ticketId: k.ticketId,
+              keyGeneration: k.keyGeneration,
+              ephemeralPoint: Buffer.from(k.ephemeralPoint, "base64"),
+              nonce: Buffer.from(k.nonce, "base64"),
+              wrappedKey: Buffer.from(k.wrappedKey, "base64"),
+            })),
+            reWrappedOrgKey: input.reWrappedOrgKey
+              ? {
+                  ephemeralPoint: Buffer.from(
+                    input.reWrappedOrgKey.ephemeralPoint,
+                    "base64",
+                  ),
+                  nonce: Buffer.from(input.reWrappedOrgKey.nonce, "base64"),
+                  wrappedKey: Buffer.from(
+                    input.reWrappedOrgKey.wrappedKey,
+                    "base64",
+                  ),
+                }
+              : undefined,
+          });
+          rotationSucceeded = true;
+        } finally {
+          if (!rotationSucceeded) {
+            // eslint-disable-next-line @typescript-eslint/no-empty-function -- intentional: don't mask the original rotation error
+            await keyRotation.releaseLock(userId).catch(() => {});
+          }
+        }
+
+        return { success: true as const };
+      }),
+    ),
 
     myTicketKeyWraps: authedProcedure.query(
       withErrorWrapping(async ({ ctx }) => {
