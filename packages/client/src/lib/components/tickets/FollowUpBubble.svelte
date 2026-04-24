@@ -24,6 +24,7 @@
     clientAlias?: string;
     isOwnNote?: boolean;
     onnoteedit?: (followUpId: string, text: string) => void;
+    searchTerm?: string | null;
   }
 
   let {
@@ -32,6 +33,7 @@
     clientAlias,
     isOwnNote = false,
     onnoteedit,
+    searchTerm = null,
   }: FollowUpBubbleProps = $props();
 
   const kind = $derived(followUpKind(followUp));
@@ -50,6 +52,7 @@
     authorName={undefined}
     timestamp={followUp.createdAt}
     isOwn={isOwnNote}
+    {searchTerm}
     onedit={onnoteedit
       ? (newText: string) => onnoteedit(followUp.id, newText)
       : undefined}
@@ -66,6 +69,7 @@
           ciphertext={followUp.encryptedContent}
           length={30}
           block
+          {searchTerm}
         />
       </span>
     {/snippet}

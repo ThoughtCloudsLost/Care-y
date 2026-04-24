@@ -80,7 +80,7 @@ vi.mock("@tanstack/svelte-query", () => ({
       };
     }
 
-    // followUpSummary query (ChatZoom)
+    // followUpSummary query (FollowUpTimeline)
     if (key[2] === "followUpSummary") {
       return {
         isLoading: false,

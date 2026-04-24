@@ -164,8 +164,9 @@ export interface ShellMessagebarProps {
   mode?: ComposeMode;
   /** Called when the send/save button is tapped. */
   onsend: () => void;
-  /** Called when the + compose actions button is tapped (opens attach/preset sheet). */
-  onplus: () => void;
+  /** Called when the + compose actions button is tapped. Receives the
+   *  button element for popover anchoring. */
+  onplus: (anchorEl: HTMLElement) => void;
   /** Forwarded from the textarea's native input event. Used by @mention autocomplete to read cursor position. */
   oninput?: (e: Event) => void;
   /** Whether the send button is visually disabled. */
@@ -231,6 +232,10 @@ export interface ViewToggleConfig {
   readonly onchange: (mode: "list" | "grid") => void;
   readonly listLabel: string;
   readonly gridLabel: string;
+  /** Override list-mode icon (defaults to lucide List). */
+  readonly listIcon?: Component<{ size?: number }>;
+  /** Override grid-mode icon (defaults to lucide LayoutGrid). */
+  readonly gridIcon?: Component<{ size?: number }>;
 }
 
 export interface SortConfig {

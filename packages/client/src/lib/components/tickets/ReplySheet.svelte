@@ -17,15 +17,12 @@
   import { RouterNotAvailableError } from "$lib/errors.js";
   import { toastStore } from "$lib/stores/toast.svelte.js";
   import { haptic } from "$lib/utils/haptic.js";
-  import { ActionsGroup, ActionsButton } from "konsta/svelte";
   import ShellSheet from "$lib/shell/ShellSheet.svelte";
-  import ShellActionSheet from "$lib/shell/ShellActionSheet.svelte";
   import ShellMessagebar from "$lib/shell/ShellMessagebar.svelte";
   import FollowUpBubble from "$lib/components/tickets/FollowUpBubble.svelte";
   import MentionAutocomplete from "$lib/components/tickets/MentionAutocomplete.svelte";
-  import PresetReplyContent from "$lib/components/tickets/PresetReplyContent.svelte";
+  import ComposeActions from "$lib/components/tickets/ComposeActions.svelte";
   import type { RawFollowUpPreview } from "$lib/tickets/preview-loader.svelte.js";
-  import type { ComposeMode } from "$lib/shell/types.js";
 
   interface ReplySheetProps {
     opened: boolean;
@@ -53,7 +50,6 @@
   const followUpCache = getFollowUpDecryptCache();
 
   let draftText = $state("");
-  let composeMode = $state<ComposeMode>("reply");
   let cursorPosition = $state(0);
   let sending = $state(false);
   let dismissTimer: ReturnType<typeof setTimeout> | null = null;
@@ -113,13 +109,11 @@
     try {
       const encryptedContent = await cryptoBridge.encrypt(ticketId, text);
 
-      const followUpType = composeMode === "note" ? "internal_note" : "message";
-
       // Show optimistic bubble.
       optimisticMessage = {
         id: `optimistic-${String(Date.now())}`,
         text,
-        type: followUpType,
+        type: "message",
         createdAt: new Date().toISOString(),
       };
 
@@ -127,17 +121,12 @@
         ticketId,
         encryptedContent,
         source: "volunteer",
-        type: followUpType,
-        isPrivate: composeMode === "note",
+        type: "message",
+        isPrivate: false,
       });
 
       haptic();
-
-      const toastMsg =
-        composeMode === "note"
-          ? m.ticket_note_saved()
-          : m.ticket_toast_message_sent();
-      toastStore.show(toastMsg);
+      toastStore.show(m.ticket_toast_message_sent());
 
       // Auto-dismiss after 1.5s so the user sees the optimistic bubble.
       dismissTimer = setTimeout(() => {
@@ -156,20 +145,11 @@
   }
 
   let composeActionsOpen = $state(false);
-  let presetSheetOpen = $state(false);
+  let composeActionsAnchor = $state<HTMLElement | undefined>();
 
-  function handlePlus(): void {
+  function handlePlus(anchor: HTMLElement): void {
+    composeActionsAnchor = anchor;
     composeActionsOpen = true;
-  }
-
-  function handleAttach(): void {
-    composeActionsOpen = false;
-    // Stub: file attachment wired separately.
-  }
-
-  function handlePresetFromCompose(): void {
-    composeActionsOpen = false;
-    presetSheetOpen = true;
   }
 </script>
 
@@ -229,7 +209,6 @@
     <ShellMessagebar
       inline
       bind:value={draftText}
-      bind:mode={composeMode}
       onsend={() => void handleSend()}
       onplus={handlePlus}
       oninput={handleInput}
@@ -238,45 +217,17 @@
   {/if}
 </ShellSheet>
 
-<ShellActionSheet
+<ComposeActions
   opened={composeActionsOpen}
   ondismiss={() => {
     composeActionsOpen = false;
   }}
->
-  <ActionsGroup>
-    <ActionsButton onclick={handleAttach}>
-      {m.ticket_attach_file()}
-    </ActionsButton>
-    <ActionsButton onclick={handlePresetFromCompose}>
-      {m.ticket_preset_replies()}
-    </ActionsButton>
-  </ActionsGroup>
-  <ActionsGroup>
-    <ActionsButton
-      onclick={() => {
-        composeActionsOpen = false;
-      }}
-      bold
-    >
-      {m.common_cancel()}
-    </ActionsButton>
-  </ActionsGroup>
-</ShellActionSheet>
-
-<ShellSheet
-  opened={presetSheetOpen}
-  ondismiss={() => {
-    presetSheetOpen = false;
+  target={composeActionsAnchor}
+  {ticketId}
+  onpresetselect={(body: string) => {
+    draftText = body;
   }}
->
-  <PresetReplyContent
-    onselect={(body: string) => {
-      draftText = body;
-      presetSheetOpen = false;
-    }}
-  />
-</ShellSheet>
+/>
 
 <style>
   .reply-sheet-header {

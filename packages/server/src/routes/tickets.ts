@@ -83,6 +83,7 @@ import {
   deleteInternalNoteInputSchema,
   followUpSummaryInputSchema,
   followUpsByIdsInputSchema,
+  listParticipantsInputSchema,
   recordingListInputSchema,
   attachmentListInputSchema,
   RoleId,
@@ -430,6 +431,11 @@ export function createTicketRouter(deps: TicketRouterDeps) {
           cursor: input.cursor,
           direction: input.direction,
           types: input.types,
+          mediaFlags: input.mediaFlags,
+          createdBy: input.createdBy,
+          includeClientSource: input.includeClientSource,
+          dateFrom: input.dateFrom,
+          dateTo: input.dateTo,
         });
       }),
     ),
@@ -445,6 +451,11 @@ export function createTicketRouter(deps: TicketRouterDeps) {
             cursor: input.cursor,
             direction: input.direction,
             types: input.types,
+            mediaFlags: input.mediaFlags,
+            createdBy: input.createdBy,
+            includeClientSource: input.includeClientSource,
+            dateFrom: input.dateFrom,
+            dateTo: input.dateTo,
           });
         }),
       ),
@@ -934,6 +945,17 @@ export function createTicketRouter(deps: TicketRouterDeps) {
         return svc.listActiveVolunteers();
       }),
     ),
+
+    // --- Ticket participants (distinct volunteer authors) ---
+    listParticipants: volunteerProcedure
+      .input(listParticipantsInputSchema)
+      .query(
+        withErrorWrapping(async ({ ctx, input }) => {
+          const access = deps.createTicketAccess(ctx.org.tenantDb);
+          const svc = deps.createFollowUpSvc(ctx.org.tenantDb, access);
+          return svc.listParticipants(ctx.user.id, input.ticketId);
+        }),
+      ),
 
     // --- Dashboard: activity feed (scoped to user's queues) ---
     recentActivity: volunteerProcedure

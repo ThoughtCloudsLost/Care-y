@@ -13,7 +13,7 @@
 <script lang="ts">
   import { tick } from "svelte";
   import { createQuery, useQueryClient } from "@tanstack/svelte-query";
-  import { Messages, Message } from "konsta/svelte";
+  import { Messages, Message, Checkbox, Button } from "konsta/svelte";
   import * as m from "$lib/paraglide/messages.js";
   import { trpc } from "$lib/trpc/index.js";
   import { createVolunteersQuery } from "$lib/tickets/queries.js";
@@ -30,7 +30,10 @@
     getCurrentUserId,
     getCurrentPermissions,
   } from "$lib/crypto/context.js";
-  import { Permission } from "@care-y/shared";
+  import { Permission, type FollowUpListInput } from "@care-y/shared";
+
+  type FollowUpType = NonNullable<FollowUpListInput["types"]>[number];
+  type MediaFlag = NonNullable<FollowUpListInput["mediaFlags"]>[number];
   import { isDecryptError } from "$lib/crypto/async-decrypt-cache.js";
   import {
     type DecryptResult,
@@ -40,6 +43,7 @@
   import { createTicketDecryptScope } from "$lib/crypto/ticket-decrypt-scope.js";
   import { SvelteMap } from "svelte/reactivity";
   import { RouterNotAvailableError } from "$lib/errors.js";
+  import { onKeyActivate } from "$lib/utils/a11y.js";
   import { formatRelativeTime } from "$lib/utils/format-time.js";
   import { formatDateSeparator, needsDateSeparator } from "$lib/utils/time.js";
   import InlineSkeleton from "$lib/components/InlineSkeleton.svelte";
@@ -49,21 +53,30 @@
   import PrivateNote from "$lib/components/tickets/PrivateNote.svelte";
   import FollowUpMedia from "$lib/components/tickets/FollowUpMedia.svelte";
   import VirtualList from "$lib/components/tickets/VirtualList.svelte";
-  import ChatZoom from "$lib/components/tickets/ChatZoom.svelte";
+  import FollowUpTimeline from "$lib/components/tickets/FollowUpTimeline.svelte";
   import type {
     TimelineItem,
     ClusterRecord,
-  } from "$lib/components/tickets/chat-zoom-types.js";
+  } from "$lib/components/tickets/follow-up-timeline-types.js";
   import MentionAutocomplete from "$lib/components/tickets/MentionAutocomplete.svelte";
   import FollowUpBubble from "$lib/components/tickets/FollowUpBubble.svelte";
+  import GapIndicator from "$lib/components/GapIndicator.svelte";
   import { followUpKind } from "$lib/tickets/follow-up-utils.js";
 
+  import { computeGaps } from "$lib/tickets/gap-indicators.js";
   import { createScrollManager } from "$lib/tickets/scroll-manager.svelte.js";
   import { createChatPaginator } from "$lib/tickets/chat-paginator.svelte.js";
   import {
     getContextMenuActions,
     type ContextMenuEvent,
   } from "./context-menu-actions.js";
+
+  if (!trpc.tickets) throw new RouterNotAvailableError("tickets");
+  const ticketRouter = trpc.tickets;
+
+  type FollowUpRecord = Awaited<
+    ReturnType<typeof ticketRouter.listFollowUps.query>
+  >[number];
 
   interface TicketDetailProps {
     ticketId: string;
@@ -93,6 +106,45 @@
     readUpTo?: Date | null | undefined;
     /** Called when the latest visible follow-up timestamp changes (for read cursor updates). */
     onreadprogress?: (latestVisibleTimestamp: string) => void;
+    /** Whether select mode is active (route owns this state). */
+    selectModeActive?: boolean;
+    /** Set of selected follow-up IDs (route owns this state). */
+    selectedIds?: ReadonlySet<string>;
+    /** Toggle a follow-up's selection. */
+    toggleSelected?: (id: string) => void;
+    /** Active type filter values (empty = no filter). */
+    filterTypes?: readonly string[];
+    /** Active author filter values (empty = no filter). */
+    filterAuthors?: readonly string[];
+    /** Date range filter: start. */
+    filterDateFrom?: Date | null;
+    /** Date range filter: end. */
+    filterDateTo?: Date | null;
+    /** Called when empty filter state's "Clear filters" is tapped. */
+    onclearfilters?: () => void;
+    /** Two-way bindable: filtered follow-ups exposed to route for copy. */
+    filteredFollowUps?: FollowUpRecord[];
+    /** Two-way bindable: all searchable follow-ups (includes timeline items when active). */
+    searchableFollowUps?: readonly {
+      id: string;
+      source: string;
+      type: string;
+      createdBy: string | null;
+      createdAt: string;
+      encryptedContent: unknown;
+    }[];
+    /** Two-way bindable: exposes the chat scroll container for scroll-direction tracking. */
+    scrollContainerEl?: HTMLElement | undefined;
+    /** Two-way bindable: true after scroll-to-unread initialization is complete. */
+    scrollReady?: boolean;
+    /** Active search term for match highlighting (null = no search overlay). */
+    searchTerm?: string | null;
+    /** ID of the currently navigated search match (gets glow animation). */
+    searchActiveMatchId?: string | null;
+    /** When true, FollowUpTimeline should scroll to the active match and expand its cluster. */
+    searchScrollRequested?: boolean;
+    /** Called after FollowUpTimeline processes a scroll request. */
+    onsearchscrollcomplete?: () => void;
   }
 
   let {
@@ -110,6 +162,22 @@
     timelineActive = $bindable(false),
     readUpTo,
     onreadprogress,
+    selectModeActive = false,
+    selectedIds,
+    toggleSelected,
+    filterTypes,
+    filterAuthors,
+    filterDateFrom = null,
+    filterDateTo = null,
+    onclearfilters,
+    filteredFollowUps = $bindable(undefined),
+    searchableFollowUps = $bindable(undefined),
+    scrollContainerEl = $bindable(undefined),
+    scrollReady = $bindable(false),
+    searchTerm = null,
+    searchActiveMatchId = null,
+    searchScrollRequested = false,
+    onsearchscrollcomplete,
   }: TicketDetailProps = $props();
 
   const ticketCache = getTicketDecryptCache();
@@ -127,8 +195,6 @@
 
   // --- Data Loading ---
 
-  if (!trpc.tickets) throw new RouterNotAvailableError("tickets");
-  const ticketRouter = trpc.tickets;
   const queryClient = useQueryClient();
 
   const PAGE_SIZE = 50;
@@ -178,10 +244,6 @@
 
   // --- Pagination ---
 
-  type FollowUpRecord = Awaited<
-    ReturnType<typeof ticketRouter.listFollowUps.query>
-  >[number];
-
   const paginator = createChatPaginator({
     pageSize: PAGE_SIZE,
     queryClient,
@@ -207,28 +269,185 @@
   const hasMoreOlder = $derived(paginator.hasMore);
   const loadingOlder = $derived(paginator.loadingOlder);
 
+  // --- Conversation filter application (server-side) ---
+
+  const hasActiveFilters = $derived(
+    (filterTypes != null && filterTypes.length > 0) ||
+      (filterAuthors != null && filterAuthors.length > 0) ||
+      filterDateFrom !== null ||
+      filterDateTo !== null,
+  );
+
+  // Translate client-side pseudo-types to server filter params.
+  const serverFilterTypes = $derived.by((): FollowUpType[] => {
+    const types: FollowUpType[] = [];
+    for (const t of filterTypes ?? []) {
+      if (t !== "__images__" && t !== "__recordings__" && t !== "__files__") {
+        // filterTypes prop contains both FollowUpType values and media pseudo-types;
+        // after excluding pseudo-types the remainder are valid FollowUpType values.
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- pseudo-types excluded above
+        types.push(t as FollowUpType);
+      }
+    }
+    return types;
+  });
+
+  const serverMediaFlags = $derived.by((): MediaFlag[] => {
+    const flags: MediaFlag[] = [];
+    for (const t of filterTypes ?? []) {
+      if (t === "__recordings__") flags.push("recording");
+      else if (t === "__images__") flags.push("image");
+      else if (t === "__files__") flags.push("file");
+    }
+    return flags;
+  });
+
+  const serverCreatedBy = $derived.by((): string[] => {
+    const ids: string[] = [];
+    for (const a of filterAuthors ?? []) {
+      if (a !== "__client__") ids.push(a);
+    }
+    return ids;
+  });
+
+  const serverIncludeClient = $derived(
+    (filterAuthors ?? []).includes("__client__"),
+  );
+
+  const FILTERED_PAGE_SIZE = 200;
+
+  const filteredFollowUpsQuery = createQuery(() => ({
+    queryKey: [
+      "ticket",
+      ticketId,
+      "followUps",
+      "filtered",
+      serverFilterTypes,
+      serverMediaFlags,
+      serverCreatedBy,
+      serverIncludeClient,
+      filterDateFrom?.toISOString() ?? null,
+      filterDateTo?.toISOString() ?? null,
+    ],
+    queryFn: async () =>
+      ticketRouter.listFollowUps.query({
+        ticketId,
+        limit: FILTERED_PAGE_SIZE,
+        direction: "older",
+        types: serverFilterTypes.length > 0 ? serverFilterTypes : undefined,
+        mediaFlags: serverMediaFlags.length > 0 ? serverMediaFlags : undefined,
+        createdBy: serverCreatedBy.length > 0 ? serverCreatedBy : undefined,
+        includeClientSource: serverIncludeClient || undefined,
+        dateFrom: filterDateFrom?.toISOString(),
+        dateTo: filterDateTo?.toISOString(),
+      }),
+    enabled: hasActiveFilters,
+  }));
+
+  const displayFollowUps = $derived(
+    hasActiveFilters ? (filteredFollowUpsQuery.data ?? []) : followUps,
+  );
+
+  $effect(() => {
+    filteredFollowUps = displayFollowUps;
+  });
+
+  // Expose the broadest available follow-up list for search matching.
+  // Timeline view loads all follow-ups via the summary endpoint;
+  // Messages view only has the paginated subset.
+  $effect(() => {
+    if (timelineActive && summaryQuery.data) {
+      searchableFollowUps = summaryQuery.data;
+    } else {
+      searchableFollowUps = displayFollowUps;
+    }
+  });
+
+  const hiddenGaps = $derived.by((): Map<string, number> => {
+    if (!hasActiveFilters || displayFollowUps.length === 0)
+      return new Map<string, number>();
+    const first = displayFollowUps[0];
+    if (first?.fullPosition === undefined) return new Map<string, number>();
+
+    const entries = displayFollowUps
+      .filter(
+        (fu): fu is typeof fu & { fullPosition: number } =>
+          fu.fullPosition !== undefined,
+      )
+      .map((fu) => ({
+        key: fu.id,
+        firstPosition: fu.fullPosition,
+        lastPosition: fu.fullPosition,
+      }));
+    return computeGaps(entries, first.totalCount);
+  });
+
   // --- Timeline summary query (fetched lazily when zoomed) ---
 
+  // Summary query includes filter params so the server returns only matching items.
   const summaryQuery = createQuery(() => ({
-    queryKey: ["ticket", ticketId, "followUpSummary"],
-    queryFn: async () => ticketRouter.listFollowUpSummary.query({ ticketId }),
+    queryKey: [
+      "ticket",
+      ticketId,
+      "followUpSummary",
+      serverFilterTypes,
+      serverMediaFlags,
+      serverCreatedBy,
+      serverIncludeClient,
+      filterDateFrom?.toISOString() ?? null,
+      filterDateTo?.toISOString() ?? null,
+    ],
+    queryFn: async () =>
+      ticketRouter.listFollowUpSummary.query({
+        ticketId,
+        types: serverFilterTypes.length > 0 ? serverFilterTypes : undefined,
+        mediaFlags: serverMediaFlags.length > 0 ? serverMediaFlags : undefined,
+        createdBy: serverCreatedBy.length > 0 ? serverCreatedBy : undefined,
+        includeClientSource: serverIncludeClient || undefined,
+        dateFrom: filterDateFrom?.toISOString(),
+        dateTo: filterDateTo?.toISOString(),
+      }),
     enabled: timelineActive,
   }));
 
-  // Build timeline items from the summary endpoint response.
-  const timelineItems = $derived.by((): TimelineItem[] =>
-    (summaryQuery.data ?? []).map((fu) => ({
+  function toTimelineItem(
+    fu: NonNullable<typeof summaryQuery.data>[number],
+  ): TimelineItem {
+    return {
       id: fu.id,
       source: fu.source,
       type: fu.type,
+      createdBy: fu.createdBy,
       createdAt: fu.createdAt,
       encryptedContent: fu.encryptedContent,
       hasRecording: fu.hasRecording,
       recordingDurationSeconds: fu.recordingDurationSeconds,
       hasImage: fu.hasImage,
       hasFile: fu.hasFile,
-    })),
-  );
+      fullPosition: fu.fullPosition,
+      totalCount: fu.totalCount,
+    };
+  }
+
+  // Build timeline items from the summary endpoint, falling back to
+  // already-loaded paginator items while the summary query is in flight.
+  const displayTimelineItems = $derived.by((): TimelineItem[] => {
+    if (summaryQuery.data) {
+      return summaryQuery.data.map(toTimelineItem);
+    }
+    return followUps.map((fu) => ({
+      id: fu.id,
+      source: fu.source,
+      type: fu.type,
+      createdBy: fu.createdBy,
+      createdAt: fu.createdAt,
+      encryptedContent: fu.encryptedContent,
+      hasRecording: fu.hasRecording,
+      recordingDurationSeconds: null,
+      hasImage: fu.hasImage,
+      hasFile: fu.hasFile,
+    }));
+  });
 
   // Decrypt system event and note content for timeline display.
   // Patches incrementally: skips items already resolved, only processes new ones.
@@ -283,8 +502,14 @@
       return {
         id,
         source: summary?.source ?? "volunteer",
+        type: summary?.type ?? "message",
         encryptedContent: null,
+        createdBy: summary?.createdBy ?? null,
         createdAt: summary?.createdAt ?? "",
+        isPrivate: false,
+        hasRecording: summary?.hasRecording ?? false,
+        hasImage: summary?.hasImage ?? false,
+        hasFile: summary?.hasFile ?? false,
       };
     });
     expandedClusters.set(key, placeholders);
@@ -297,12 +522,18 @@
     });
 
     // Replace placeholders with real records. Decryption happens reactively
-    // in ChatZoom's template via followUpCache.decryptContent.
+    // in FollowUpTimeline's template via followUpCache.decryptContent.
     const records: ClusterRecord[] = fullRecords.map((fu) => ({
       id: fu.id,
       source: fu.source,
+      type: fu.type,
       encryptedContent: fu.encryptedContent,
+      createdBy: fu.createdBy,
       createdAt: fu.createdAt,
+      isPrivate: fu.isPrivate,
+      hasRecording: fu.hasRecording,
+      hasImage: fu.hasImage,
+      hasFile: fu.hasFile,
     }));
     expandedClusters.set(key, records);
   }
@@ -433,6 +664,7 @@
     if (readUpTo === undefined) return;
     if (!initialFollowUpsQuery.data) return;
     if (followUps.length === 0 || !scroll.scrollContainerEl) return;
+    if (!initialBatchReady) return;
 
     scrollInitPhase = "loading";
 
@@ -460,25 +692,22 @@
             scrollEl.scrollTop = scrollEl.scrollHeight;
           }
           scrollInitPhase = "done";
+          scrollReady = true;
         });
       });
     })();
   });
 
-  // --- ChatZoom data ---
-
-  const earliestDate = $derived(
-    followUps.length > 0 ? followUps[0]?.createdAt : undefined,
-  );
-  const latestDate = $derived(
-    followUps.length > 0
-      ? followUps[followUps.length - 1]?.createdAt
-      : undefined,
-  );
+  // --- FollowUpTimeline data ---
 
   // --- Scroll container ---
 
   const scroll = createScrollManager();
+
+  // Expose internal scroll container to the route page for scroll-direction tracking.
+  $effect(() => {
+    scrollContainerEl = scroll.scrollContainerEl;
+  });
 
   // Auto-scroll when new follow-ups arrive via SSE and user was near bottom.
   const followUpCount = $derived(followUps.length);
@@ -532,7 +761,64 @@
     }
     return result;
   });
+
+  // --- Batch rendering gate ---
+  // Hold the skeleton view until the initial visible batch of messages has
+  // stable heights (decrypted, errored, or denied). Prevents scroll drift
+  // from per-message height transitions during decrypt.
+  const VISIBLE_BATCH = 20;
+
+  const initialBatchReady = $derived.by((): boolean => {
+    if (decrypt == null || followUps.length === 0) return false;
+    const startIdx = Math.max(0, followUps.length - VISIBLE_BATCH);
+    for (let i = startIdx; i < followUps.length; i++) {
+      const fu = followUps[i]; // eslint-disable-line security/detect-object-injection -- i is a loop counter bounded by followUps.length
+      if (!fu?.encryptedContent) continue;
+      const result = decrypt.followUp(fu.id, fu.encryptedContent);
+      if (result.status === "loading") return false;
+    }
+    return true;
+  });
 </script>
+
+{#snippet chatPlaceholder()}
+  <Messages>
+    {#each placeholderBubbles as bubble, i (i)}
+      {#if bubble.kind === "system"}
+        <div class="fu-wrapper filler-pulse">
+          <div class="system-event-placeholder">
+            <DecryptPlaceholder length={bubble.length} />
+          </div>
+        </div>
+      {:else}
+        <div class="fu-wrapper filler-pulse">
+          <Message type={bubble.type}>
+            {#snippet text()}
+              <span class="bubble-text">
+                <DecryptPlaceholder length={bubble.length} block />
+              </span>
+            {/snippet}
+            {#snippet footer()}
+              <span class="bubble-time">
+                <InlineSkeleton width="4ch" />
+              </span>
+            {/snippet}
+          </Message>
+        </div>
+      {/if}
+    {/each}
+
+    {#each orderedPreviews as fu (fu.id)}
+      {@const previewResult = resolveAsyncDecrypt(
+        followUpCache.decryptContent(fu.id, fu.keyWrap, fu.encryptedContent),
+        fu.keyWrap !== null,
+      )}
+      <div class="fu-wrapper">
+        <FollowUpBubble followUp={fu} result={previewResult} {clientAlias} />
+      </div>
+    {/each}
+  </Messages>
+{/snippet}
 
 {#if ticketQuery.isLoading}
   <div
@@ -541,43 +827,7 @@
     aria-label={m.shell_loading()}
     use:scroll.scrollToBottom
   >
-    <Messages>
-      {#each placeholderBubbles as bubble, i (i)}
-        {#if bubble.kind === "system"}
-          <div class="fu-wrapper filler-pulse">
-            <div class="system-event-placeholder">
-              <DecryptPlaceholder length={bubble.length} />
-            </div>
-          </div>
-        {:else}
-          <div class="fu-wrapper filler-pulse">
-            <Message type={bubble.type}>
-              {#snippet text()}
-                <span class="bubble-text">
-                  <DecryptPlaceholder length={bubble.length} block />
-                </span>
-              {/snippet}
-              {#snippet footer()}
-                <span class="bubble-time">
-                  <InlineSkeleton width="4ch" />
-                </span>
-              {/snippet}
-            </Message>
-          </div>
-        {/if}
-      {/each}
-
-      <!-- Preview messages that arrived before the ticket query resolved -->
-      {#each orderedPreviews as fu (fu.id)}
-        {@const previewResult = resolveAsyncDecrypt(
-          followUpCache.decryptContent(fu.id, fu.keyWrap, fu.encryptedContent),
-          fu.keyWrap !== null,
-        )}
-        <div class="fu-wrapper">
-          <FollowUpBubble followUp={fu} result={previewResult} {clientAlias} />
-        </div>
-      {/each}
-    </Messages>
+    {@render chatPlaceholder()}
   </div>
 {:else if ticketQuery.isError}
   <div class="detail-error">
@@ -593,55 +843,21 @@
     aria-label={m.ticket_conversation_with({ alias: clientAlias })}
   >
     {#if initialFollowUpsQuery.isLoading}
-      <Messages>
-        <!-- Filler placeholders to fill the viewport above preview data -->
-        {#each placeholderBubbles as bubble, i (i)}
-          {#if bubble.kind === "system"}
-            <div class="fu-wrapper filler-pulse">
-              <div class="system-event-placeholder">
-                <DecryptPlaceholder length={bubble.length} />
-              </div>
-            </div>
-          {:else}
-            <div class="fu-wrapper filler-pulse">
-              <Message type={bubble.type}>
-                {#snippet text()}
-                  <span class="bubble-text">
-                    <DecryptPlaceholder length={bubble.length} block />
-                  </span>
-                {/snippet}
-                {#snippet footer()}
-                  <span class="bubble-time">
-                    <InlineSkeleton width="4ch" />
-                  </span>
-                {/snippet}
-              </Message>
-            </div>
-          {/if}
-        {/each}
-
-        <!-- Real preview messages from the ticket list (already decrypting) -->
-        {#each orderedPreviews as fu (fu.id)}
-          {@const previewResult = resolveAsyncDecrypt(
-            followUpCache.decryptContent(
-              fu.id,
-              fu.keyWrap,
-              fu.encryptedContent,
-            ),
-            fu.keyWrap !== null,
-          )}
-          <div class="fu-wrapper">
-            <FollowUpBubble
-              followUp={fu}
-              result={previewResult}
-              {clientAlias}
-            />
-          </div>
-        {/each}
-      </Messages>
+      {@render chatPlaceholder()}
+    {:else if !initialBatchReady}
+      {@render chatPlaceholder()}
     {:else if followUps.length === 0}
       <div class="empty-chat" role="status">
         <p>{m.empty_no_data()}</p>
+      </div>
+    {:else if hasActiveFilters && filteredFollowUpsQuery.isLoading}
+      {@render chatPlaceholder()}
+    {:else if hasActiveFilters && displayFollowUps.length === 0}
+      <div class="empty-chat" role="status">
+        <p>{m.ticket_no_filter_results()}</p>
+        <Button tonal small onclick={() => onclearfilters?.()}>
+          {m.ticket_clear_filters()}
+        </Button>
       </div>
     {:else}
       {#if loadingOlder}
@@ -650,22 +866,87 @@
         </div>
       {/if}
 
-      <ChatZoom
+      <FollowUpTimeline
         scrollContainerEl={scroll.scrollContainerEl}
-        totalMessages={followUps.length}
-        {earliestDate}
-        {latestDate}
-        items={timelineItems}
+        items={displayTimelineItems}
         decryptedContent={timelineDecryptedContent}
         {expandedClusters}
         onexpandcluster={handleExpandCluster}
-        {followUpCache}
-        keyWrap={ticket.keyWrap}
         bind:timelineActive
+        {searchActiveMatchId}
+        {searchScrollRequested}
+        {onsearchscrollcomplete}
       >
+        {#snippet renderExpanded({
+          record: rec,
+          onzoom,
+        }: {
+          record: ClusterRecord;
+          onzoom: () => void;
+        })}
+          {@const recResult =
+            decrypt != null && rec.encryptedContent !== null
+              ? decrypt.followUp(rec.id, rec.encryptedContent)
+              : resolveAsyncDecrypt(undefined, false)}
+          {@const kind = followUpKind(rec)}
+          <div
+            id="tl-fu-{rec.id}"
+            class="cluster-bubble-tap"
+            class:match-active-row={searchActiveMatchId === rec.id}
+            role="button"
+            tabindex={0}
+            onclick={onzoom}
+            onkeydown={onKeyActivate(onzoom)}
+          >
+            {#if kind === "system"}
+              <SystemEvent result={recResult} timestamp={rec.createdAt} />
+            {:else if kind === "note"}
+              <PrivateNote
+                result={recResult}
+                authorName={resolveVolunteerName(rec.createdBy)}
+                timestamp={rec.createdAt}
+                isOwn={rec.createdBy === currentUserId}
+                {searchTerm}
+              />
+            {:else}
+              <Message
+                type={rec.source === "client" ? "received" : "sent"}
+                name={rec.source === "client" ? clientAlias : undefined}
+              >
+                {#snippet text()}
+                  <span class="bubble-text">
+                    <DecryptPlaceholder
+                      result={recResult}
+                      ciphertext={rec.encryptedContent}
+                      length={30}
+                      block
+                      {searchTerm}
+                    />
+                  </span>
+                  {#if rec.hasRecording || rec.hasImage || rec.hasFile}
+                    <FollowUpMedia
+                      followupId={rec.id}
+                      {ticketId}
+                      keyWrap={ticket.keyWrap}
+                      hasRecording={rec.hasRecording}
+                      hasImage={rec.hasImage}
+                      hasFile={rec.hasFile}
+                      onlightbox={(url: string) => onlightbox?.(url)}
+                    />
+                  {/if}
+                {/snippet}
+                {#snippet footer()}
+                  <time class="bubble-time" datetime={rec.createdAt}>
+                    {formatRelativeTime(new Date(rec.createdAt))}
+                  </time>
+                {/snippet}
+              </Message>
+            {/if}
+          </div>
+        {/snippet}
         <Messages>
           <VirtualList
-            items={followUps}
+            items={displayFollowUps}
             scrollContainer={scroll.scrollContainerEl}
             estimateHeight={80}
             columns={1}
@@ -688,7 +969,13 @@
                   ? decrypt.followUp(fu.id, fu.encryptedContent)
                   : resolveAsyncDecrypt(undefined, false)}
               {@const prevTimestamp =
-                i > 0 ? followUps[i - 1]?.createdAt : undefined}
+                i > 0 ? displayFollowUps[i - 1]?.createdAt : undefined}
+              {@const isSelected = selectedIds?.has(fu.id) ?? false}
+              {@const checkboxSide =
+                messageType(fu) === "sent" ? "right" : "left"}
+              {@const gapBefore = hiddenGaps.get(fu.id) ?? 0}
+
+              <GapIndicator count={gapBefore} />
 
               {#if needsDateSeparator(fu.createdAt, prevTimestamp)}
                 <div class="date-separator" role="separator">
@@ -716,15 +1003,46 @@
                 id="fu-{fu.id}"
                 data-fu-id={fu.id}
                 class="fu-wrapper"
-                tabindex={kind === "system" ? undefined : 0}
-                role={kind === "system" ? undefined : "article"}
+                class:match-active={searchActiveMatchId === fu.id}
+                class:fu-select-mode={selectModeActive}
+                class:fu-select-left={selectModeActive &&
+                  checkboxSide === "left"}
+                class:fu-select-right={selectModeActive &&
+                  checkboxSide === "right"}
+                tabindex={kind === "system" && !selectModeActive
+                  ? undefined
+                  : 0}
+                role={selectModeActive
+                  ? "option"
+                  : kind === "system"
+                    ? undefined
+                    : "article"}
                 aria-label={kind === "system"
                   ? undefined
                   : bubbleAriaLabel(fu, contentResult)}
-                onkeydown={kind === "system"
-                  ? undefined
-                  : handleBubbleKeydown(fu)}
+                aria-selected={selectModeActive ? isSelected : undefined}
+                onkeydown={selectModeActive
+                  ? (e: KeyboardEvent) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        toggleSelected?.(fu.id);
+                      }
+                    }
+                  : kind === "system"
+                    ? undefined
+                    : handleBubbleKeydown(fu)}
+                onclick={selectModeActive
+                  ? () => toggleSelected?.(fu.id)
+                  : undefined}
               >
+                {#if selectModeActive}
+                  <div class="select-checkbox select-checkbox-{checkboxSide}">
+                    <Checkbox
+                      checked={isSelected}
+                      onChange={() => toggleSelected?.(fu.id)}
+                    />
+                  </div>
+                {/if}
                 {#if kind === "system"}
                   <SystemEvent
                     result={contentResult}
@@ -740,6 +1058,7 @@
                     saving={editingFollowUpId === fu.id && savingNote}
                     onedit={(newText: string) => onnoteedit?.(fu.id, newText)}
                     {oncanceledit}
+                    {searchTerm}
                     onpointerdown={startLongPress(fu)}
                     onpointerup={cancelLongPress}
                     onpointercancel={cancelLongPress}
@@ -763,6 +1082,7 @@
                           ciphertext={fu.encryptedContent}
                           length={30}
                           block
+                          {searchTerm}
                         />
                       </span>
 
@@ -788,8 +1108,9 @@
               </div>
             {/snippet}
           </VirtualList>
+          <GapIndicator count={hiddenGaps.get("__after__") ?? 0} />
         </Messages>
-      </ChatZoom>
+      </FollowUpTimeline>
     {/if}
   </div>
 
@@ -816,6 +1137,8 @@
     overscroll-behavior: contain;
     display: flex;
     flex-direction: column;
+    margin-top: calc(-1 * (var(--navbar-h, 0px) + var(--subnavbar-h, 0px)));
+    padding-top: calc(var(--navbar-h, 0px) + var(--subnavbar-h, 0px));
   }
 
   /* Override Konsta Messages' built-in mb-12/mb-16 with the measured
@@ -832,6 +1155,26 @@
      work through the wrapper without breaking the Messages flex column. */
   .fu-wrapper {
     display: contents;
+  }
+
+  /* In select mode, switch to flex row for checkbox placement. */
+  .fu-select-mode {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.25rem;
+  }
+
+  .fu-select-left {
+    flex-direction: row;
+  }
+
+  .fu-select-right {
+    flex-direction: row-reverse;
+  }
+
+  .select-checkbox {
+    flex-shrink: 0;
+    padding-top: 0.5rem;
   }
 
   /* VirtualList wraps each item in a .virtual-row div which breaks
@@ -904,6 +1247,7 @@
     align-items: center;
     gap: 0.75rem;
     padding: 0.5rem 1rem;
+    scroll-margin-top: calc(var(--navbar-h, 0px) + var(--subnavbar-h, 0px));
   }
 
   .unread-divider::before,
@@ -968,5 +1312,20 @@
       animation: none;
       opacity: 0.7;
     }
+  }
+
+  /* Full-width highlight on the currently navigated search match. */
+  :global(.virtual-row:has(.match-active)),
+  .match-active-row {
+    background: color-mix(in srgb, var(--brand-accent) 12%, transparent);
+  }
+
+  :global(.match-active .k-message),
+  :global(.match-active .k-card),
+  :global(.match-active-row .k-message),
+  :global(.match-active-row .k-card) {
+    box-shadow: 0 0 0 1.5px
+      color-mix(in srgb, var(--brand-accent) 30%, transparent) !important;
+    border-radius: 0.75rem;
   }
 </style>

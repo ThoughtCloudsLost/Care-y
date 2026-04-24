@@ -14,12 +14,7 @@
 -->
 <script lang="ts">
   import { Messagebar, Link } from "konsta/svelte";
-  import {
-    Plus,
-    Send,
-    NotepadTextDashed,
-    MessageSquareText,
-  } from "@lucide/svelte";
+  import { Plus, Send } from "@lucide/svelte";
   import type { ShellMessagebarProps } from "./types.js";
   import * as m from "$lib/paraglide/messages.js";
 
@@ -42,10 +37,6 @@
   const sendLabel = $derived(
     mode === "note" ? m.ticket_save_note() : m.ticket_send(),
   );
-
-  function toggleMode(): void {
-    mode = mode === "reply" ? "note" : "reply";
-  }
 
   // Publish the messagebar's rendered height as a CSS variable so
   // siblings (e.g., chat-container) can use it for padding-bottom.
@@ -83,28 +74,19 @@
 <div
   bind:this={anchorEl}
   class="shell-messagebar-anchor"
-  class:note-mode={mode === "note"}
   class:shell-messagebar-inline={inline}
 >
   <Messagebar bind:value {placeholder} {oninput} class="shell-messagebar">
     {#snippet left()}
-      <Link iconOnly onclick={onplus} aria-label={m.ticket_compose_actions()}>
-        <Plus size={20} aria-hidden="true" />
-      </Link>
       <Link
         iconOnly
-        onclick={toggleMode}
-        role="switch"
-        aria-checked={mode === "note" ? "true" : "false"}
-        aria-label={mode === "note"
-          ? m.ticket_switch_to_reply()
-          : m.ticket_switch_to_note()}
+        onclick={(e: MouseEvent) => {
+          const el = e.currentTarget;
+          if (el instanceof HTMLElement) onplus(el);
+        }}
+        aria-label={m.ticket_compose_actions()}
       >
-        {#if mode === "note"}
-          <NotepadTextDashed size={20} aria-hidden="true" />
-        {:else}
-          <MessageSquareText size={20} aria-hidden="true" />
-        {/if}
+        <Plus size={20} aria-hidden="true" />
       </Link>
     {/snippet}
     {#snippet right()}
@@ -138,20 +120,5 @@
   /* Match the tabbar safe-area override: strip extra 16px Konsta adds. */
   :global(.k-ios .shell-messagebar .k-toolbar) {
     padding-bottom: var(--k-safe-area-bottom) !important;
-  }
-
-  /* Note mode: tint the Glass pill elements with brand-accent. Uses
-     --glass-surface so the tint follows the glass mode system (no need
-     for separate .dark override).
-     Specificity: the glass mode overrides in shared.css target
-     html.glass-*.light/dark .backdrop-blur-lg at (0,3,1).
-     :global(html) prefix bumps this selector to (0,3,1) minimum,
-     and component styles load after global CSS so source order wins. */
-  :global(html) .note-mode :global(.backdrop-blur-lg) {
-    background-color: color-mix(
-      in srgb,
-      var(--brand-accent) 20%,
-      var(--glass-surface)
-    ) !important;
   }
 </style>

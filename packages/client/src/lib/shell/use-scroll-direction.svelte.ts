@@ -16,6 +16,8 @@ export interface UseScrollDirectionOptions {
   threshold?: number;
   /** Minimum delta (px) to register a direction change. Default: 8. */
   deadZone?: number;
+  /** Invert the hide direction: hide on scroll up, show on scroll down (for chat views). Default: false. */
+  invert?: boolean;
 }
 
 export interface UseScrollDirectionReturn {
@@ -26,6 +28,8 @@ export interface UseScrollDirectionReturn {
 export interface ScrollDirectionTrackerOptions {
   threshold?: number;
   deadZone?: number;
+  /** Invert the hide direction. Default: false. */
+  invert?: boolean;
   /** Called whenever the hidden state changes. */
   onChange?: (hidden: boolean) => void;
 }
@@ -39,6 +43,7 @@ export interface ScrollDirectionTrackerOptions {
 export class ScrollDirectionTracker {
   private readonly threshold: number;
   private readonly deadZone: number;
+  private readonly invert: boolean;
   private readonly onChange: ((hidden: boolean) => void) | undefined;
   private lastScrollTop = 0;
   private scrollHandler: (() => void) | null = null;
@@ -50,6 +55,7 @@ export class ScrollDirectionTracker {
   constructor(options: ScrollDirectionTrackerOptions = {}) {
     this.threshold = options.threshold ?? 60;
     this.deadZone = options.deadZone ?? 8;
+    this.invert = options.invert ?? false;
     this.onChange = options.onChange;
   }
 
@@ -84,7 +90,7 @@ export class ScrollDirectionTracker {
       return;
     }
 
-    const newHidden = delta > 0; // positive = scrolling down = hide
+    const newHidden = this.invert ? delta < 0 : delta > 0;
     const changed = this.hidden !== newHidden;
     this.hidden = newHidden;
     this.lastScrollTop = currentTop;
@@ -138,6 +144,7 @@ export function useScrollDirection(
   const tracker = new ScrollDirectionTracker({
     threshold: options.threshold,
     deadZone: options.deadZone,
+    invert: options.invert,
     onChange: (value) => {
       hidden = value;
     },

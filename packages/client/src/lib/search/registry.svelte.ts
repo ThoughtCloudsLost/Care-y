@@ -10,6 +10,23 @@ import type {
 // provider registration/unregistration.
 const providers = new SvelteMap<string, SearchProvider>();
 
+// Route-level override for promoted provider. When set, takes precedence
+// over the AppShell-derived promotedProviderId in searchAll().
+let promotedOverride = $state<string | undefined>(undefined);
+
+/**
+ * Override the promoted provider ID for the duration of a route mount.
+ * Returns a cleanup function that clears the override.
+ */
+export function setPromotedOverride(providerId: string): () => void {
+  promotedOverride = providerId;
+  return () => {
+    if (promotedOverride === providerId) {
+      promotedOverride = undefined;
+    }
+  };
+}
+
 /**
  * Register a search provider. Returns a cleanup function
  * that removes it (call in onDestroy or $effect cleanup).
@@ -48,24 +65,30 @@ export function searchAll(
   const groups: SearchResultGroup[] = [];
 
   for (const [, provider] of providers) {
-    const { results, loading, totalCached } = provider.search(query);
+    const searchResult = provider.search(query);
     groups.push({
       providerId: provider.id,
       label: provider.label(),
       icon: provider.icon,
-      results,
+      results: searchResult.results,
       renderMode: provider.renderMode,
       showAllHref: provider.showAllHref(query),
-      loading,
-      totalCached,
+      loading: searchResult.loading,
+      totalCached: searchResult.totalCached,
+      totalItems: searchResult.totalItems,
+      totalResults: searchResult.totalResults,
+      onviewall: provider.onviewall?.bind(provider),
+      onresulttap: provider.onresulttap?.bind(provider),
     });
   }
 
   // Stable sort: promoted provider first, others in registration order.
-  if (promotedProviderId !== undefined && promotedProviderId !== "") {
+  // Route-level override takes precedence over the AppShell-derived value.
+  const effectivePromoted = promotedOverride ?? promotedProviderId;
+  if (effectivePromoted !== undefined && effectivePromoted !== "") {
     groups.sort((a, b) => {
-      if (a.providerId === promotedProviderId) return -1;
-      if (b.providerId === promotedProviderId) return 1;
+      if (a.providerId === effectivePromoted) return -1;
+      if (b.providerId === effectivePromoted) return 1;
       return 0;
     });
   }
