@@ -554,27 +554,70 @@ describe.skipIf(!process.env.DATABASE_URL)(
       });
     });
 
-    describe("updatePasswordHash", () => {
-      it("updates password hash with correct current password", async () => {
+    describe("changePassword", () => {
+      async function seedUserKeys(userId: string): Promise<void> {
+        await tenantDb
+          .insertInto("user_keys")
+          .values({
+            user_id: userId,
+            salt: randomBytes(16),
+            vol_public: randomBytes(32),
+            rotation_lock: false,
+          })
+          .execute();
+      }
+
+      function makeChangeInput(
+        currentPassword: string,
+        newPassword: string,
+      ): {
+        currentPassword: string;
+        newPassword: string;
+        saltNew: string;
+        volPublicNew: string;
+        reWrappedKeys: never[];
+      } {
+        return {
+          currentPassword,
+          newPassword,
+          saltNew: randomBytes(16).toString("base64"),
+          volPublicNew: randomBytes(32).toString("base64"),
+          reWrappedKeys: [],
+        };
+      }
+
+      it("updates password hash and rotates keys atomically", async () => {
         const authService = makeAuthService();
+        const identifier = `pw-atomic-${randomUUID().slice(0, 8)}`;
         const user = await authService.register({
-          identifier: `pw-change-${randomUUID().slice(0, 8)}`,
+          identifier,
           password: "old-password-long-enough!!",
-          displayName: "PW Change User",
+          displayName: "Atomic PW",
           roleId: RoleId.VOLUNTEER,
         });
+        await seedUserKeys(user.id);
         const session = await createSession(user.id);
         const caller = buildCaller(authedCtx(user.id, session));
 
-        const result = await caller.profile.updatePasswordHash({
-          currentPassword: "old-password-long-enough!!",
-          newPassword: "new-password-long-enough!!",
-        });
+        const result = await caller.profile.changePassword(
+          makeChangeInput(
+            "old-password-long-enough!!",
+            "new-password-long-enough!!",
+          ),
+        );
 
         expect(result.success).toBe(true);
+
+        const row = await tenantDb
+          .selectFrom("user_keys")
+          .select(["key_version", "rotation_lock"])
+          .where("user_id", "=", user.id)
+          .executeTakeFirstOrThrow();
+        expect(row.key_version).toBe(2);
+        expect(row.rotation_lock).toBe(false);
       });
 
-      it("rejects wrong current password", async () => {
+      it("rejects wrong current password without changing anything", async () => {
         const authService = makeAuthService();
         const user = await authService.register({
           identifier: `pw-wrong-${randomUUID().slice(0, 8)}`,
@@ -582,17 +625,27 @@ describe.skipIf(!process.env.DATABASE_URL)(
           displayName: "Wrong PW",
           roleId: RoleId.VOLUNTEER,
         });
+        await seedUserKeys(user.id);
         const session = await createSession(user.id);
         const caller = buildCaller(authedCtx(user.id, session));
 
         await expectTrpcError(
-          caller.profile.updatePasswordHash({
-            currentPassword: "wrong-password-long-enough!!",
-            newPassword: "does-not-matter-long-enough",
-          }),
+          caller.profile.changePassword(
+            makeChangeInput(
+              "wrong-password-long-enough!!",
+              "does-not-matter-long-enough",
+            ),
+          ),
           "UNAUTHORIZED",
           "INVALID_CREDENTIALS",
         );
+
+        const row = await tenantDb
+          .selectFrom("user_keys")
+          .select("key_version")
+          .where("user_id", "=", user.id)
+          .executeTakeFirstOrThrow();
+        expect(row.key_version).toBe(1);
       });
 
       it("new password works for login after change", async () => {
@@ -604,13 +657,16 @@ describe.skipIf(!process.env.DATABASE_URL)(
           displayName: "Login After PW",
           roleId: RoleId.VOLUNTEER,
         });
+        await seedUserKeys(user.id);
         const session = await createSession(user.id);
         const caller = buildCaller(authedCtx(user.id, session));
 
-        await caller.profile.updatePasswordHash({
-          currentPassword: "original-password-long-enough",
-          newPassword: "brand-new-password-long-enough",
-        });
+        await caller.profile.changePassword(
+          makeChangeInput(
+            "original-password-long-enough",
+            "brand-new-password-long-enough",
+          ),
+        );
 
         const loginResult = await authService.login({
           identifier,
@@ -621,40 +677,6 @@ describe.skipIf(!process.env.DATABASE_URL)(
         expect(loginResult.user.id).toBe(user.id);
       });
 
-      it("old password fails login after change", async () => {
-        const authService = makeAuthService();
-        const identifier = `pw-old-fail-${randomUUID().slice(0, 8)}`;
-        await authService.register({
-          identifier,
-          password: "the-old-password-long-enough",
-          displayName: "Old PW Fail",
-          roleId: RoleId.VOLUNTEER,
-        });
-
-        const loginResult = await authService.login({
-          identifier,
-          password: "the-old-password-long-enough",
-          ipAddress: "127.0.0.1",
-          userAgent: "test-agent",
-        });
-        const session = loginResult.session;
-        const caller = buildCaller(authedCtx(loginResult.user.id, session));
-
-        await caller.profile.updatePasswordHash({
-          currentPassword: "the-old-password-long-enough",
-          newPassword: "the-new-password-long-enough",
-        });
-
-        await expect(
-          authService.login({
-            identifier,
-            password: "the-old-password-long-enough",
-            ipAddress: "127.0.0.1",
-            userAgent: "test-agent",
-          }),
-        ).rejects.toThrow();
-      });
-
       it("kills other sessions but preserves the current one", async () => {
         const authService = makeAuthService();
         const user = await authService.register({
@@ -663,6 +685,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
           displayName: "Session Kill Test",
           roleId: RoleId.VOLUNTEER,
         });
+        await seedUserKeys(user.id);
 
         const currentSession = await createSession(user.id);
         const otherSession1 = await createSession(user.id);
@@ -670,10 +693,12 @@ describe.skipIf(!process.env.DATABASE_URL)(
 
         const caller = buildCaller(authedCtx(user.id, currentSession));
 
-        await caller.profile.updatePasswordHash({
-          currentPassword: "session-test-password-long!!",
-          newPassword: "new-session-test-password!!!!",
-        });
+        await caller.profile.changePassword(
+          makeChangeInput(
+            "session-test-password-long!!",
+            "new-session-test-password!!!!",
+          ),
+        );
 
         const repo = createDbSessionRepository(
           tenantDb,

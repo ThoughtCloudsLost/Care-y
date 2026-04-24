@@ -96,11 +96,13 @@ export {
   updateUsernameSchema,
   adminUpdateUsernameSchema,
   updatePasswordHashSchema,
+  changePasswordSchema,
   type UpdateDisplayNameInput,
   type AdminUpdateDisplayNameInput,
   type UpdateUsernameInput,
   type AdminUpdateUsernameInput,
   type UpdatePasswordHashInput,
+  type ChangePasswordInput,
 } from "./schemas/profile.js";
 
 // --- OPRF schemas ---
@@ -220,6 +222,7 @@ export {
   followUpListInputSchema,
   followUpSummaryInputSchema,
   followUpsByIdsInputSchema,
+  listParticipantsInputSchema,
   recordingListInputSchema,
   attachmentListInputSchema,
   assignTicketInputSchema,

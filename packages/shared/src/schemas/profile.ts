@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { identifierSchema, passwordSchema } from "./auth.js";
+import { passwordChangeKeysSchema } from "./keys.js";
 
 /** Self-service display name update. Server stores ciphertext only (Tier 1 sealed box). */
 export const updateDisplayNameSchema = z.object({
@@ -39,3 +40,11 @@ export type AdminUpdateUsernameInput = z.infer<
   typeof adminUpdateUsernameSchema
 >;
 export type UpdatePasswordHashInput = z.infer<typeof updatePasswordHashSchema>;
+
+/** Atomic password change: verify old, hash new, rotate keys, kill sessions. */
+export const changePasswordSchema = passwordChangeKeysSchema.extend({
+  currentPassword: passwordSchema,
+  newPassword: passwordSchema,
+});
+
+export type ChangePasswordInput = z.infer<typeof changePasswordSchema>;

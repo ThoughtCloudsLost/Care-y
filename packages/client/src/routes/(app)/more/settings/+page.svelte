@@ -10,6 +10,7 @@
   import { base64ToUint8Array } from "$lib/utils/buffer-encoding.js";
   import DisplayNameSheet from "$lib/components/settings/DisplayNameSheet.svelte";
   import UsernameSheet from "$lib/components/settings/UsernameSheet.svelte";
+  import PasswordSheet from "$lib/components/settings/PasswordSheet.svelte";
 
   const orgCache = getOrgDecryptCache();
   const navbarCtx = getNavbarOverrideCtx();
@@ -32,9 +33,11 @@
       : null,
   );
   const currentUsername = $derived(meQuery.data?.user.identifier ?? "");
+  const userId = $derived(meQuery.data?.user.id ?? "");
 
   let displayNameSheetOpen = $state(false);
   let usernameSheetOpen = $state(false);
+  let passwordSheetOpen = $state(false);
 
   function goBack(): void {
     shellBack("/more");
@@ -81,7 +84,14 @@
   </List>
 
   <List strong inset>
-    <ListItem title={m.settings_password()} after="********" link />
+    <ListItem
+      title={m.settings_password()}
+      after="********"
+      link
+      onclick={() => {
+        passwordSheetOpen = true;
+      }}
+    />
   </List>
 </div>
 
@@ -99,6 +109,14 @@
     usernameSheetOpen = false;
   }}
   {currentUsername}
+/>
+
+<PasswordSheet
+  opened={passwordSheetOpen}
+  ondismiss={() => {
+    passwordSheetOpen = false;
+  }}
+  {userId}
 />
 
 <style>
