@@ -126,6 +126,7 @@ export interface OrgConfigTable {
   icon_192_blob_key: string | null;
   icon_512_blob_key: string | null;
   icon_maskable_blob_key: string | null;
+  default_note_type_id: string | null;
 }
 
 // --- User keys (full interface, replaces UserKeysStubTable) ---
@@ -324,6 +325,7 @@ export interface FollowupsTable {
   created_by: string | null;
   deleted_at: Date | null;
   created_at: Generated<Date>;
+  note_type_id: string | null;
 }
 
 export interface RecordingsTable {
@@ -472,6 +474,18 @@ export interface PhoneBlocklistTable {
   created_at: ColumnType<Date, Date | undefined, never>;
 }
 
+// --- Note types (internal note categorization + escalation routing) ---
+
+export interface NoteTypesTable {
+  id: Generated<string>;
+  encrypted_name: Buffer;
+  encrypted_icon: Buffer;
+  encrypted_escalation_targets: Buffer;
+  is_active: ColumnType<boolean, boolean | undefined, boolean>;
+  requires_on_close: ColumnType<boolean, boolean | undefined, boolean>;
+  created_at: Generated<Date>;
+}
+
 // --- Audit log ---
 
 export interface AuditLogTable {
@@ -537,6 +551,8 @@ export interface TenantDatabase {
   push_challenges: PushChallengesTable;
   audit_log: AuditLogTable;
   phone_blocklist: PhoneBlocklistTable;
+  // Note types (internal note categorization)
+  note_types: NoteTypesTable;
   // Shifts (shifts, shift_occurrences)
   // Client portal (portal_channels)
 }

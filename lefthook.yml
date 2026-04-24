@@ -15,7 +15,7 @@ pre-commit:
         if git diff --cached --name-only | grep -q 'messages/.*\.json$'; then
           pnpm run typecheck
         else
-          tsc --build && pnpm --filter @care-y/client exec svelte-check --tsconfig ./tsconfig.json
+          pnpm exec tsc --build && pnpm --filter @care-y/client exec svelte-check --tsconfig ./tsconfig.json
         fi
     lint:
       glob: "*.{ts,js,mjs,svelte}"

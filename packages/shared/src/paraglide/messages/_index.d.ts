@@ -177,6 +177,7 @@ export * from "./error_queue_has_tickets.js";
 export * from "./error_preset_reply_not_found.js";
 export * from "./error_recording_not_found.js";
 export * from "./error_attachment_not_found.js";
+export * from "./error_note_type_not_found.js";
 export * from "./error_kb_category_not_found.js";
 export * from "./error_kb_article_not_found.js";
 export * from "./error_kb_attachment_not_found.js";

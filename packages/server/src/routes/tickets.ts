@@ -38,6 +38,7 @@ import type { AuditService } from "../tickets/audit.js";
 import type { ReadCursorService } from "../tickets/read-cursor-service.js";
 import type { NotificationService } from "../notifications/service.js";
 import type { AuditEntry } from "../tickets/audit.js";
+import type { NoteTypeService } from "../tickets/note-type-service.js";
 import type { NotificationEventType, TicketPriority } from "@care-y/shared";
 import { ErrorCode } from "@care-y/shared";
 import { NotFoundError } from "../errors.js";
@@ -86,6 +87,8 @@ import {
   listParticipantsInputSchema,
   recordingListInputSchema,
   attachmentListInputSchema,
+  createNoteTypeInputSchema,
+  updateNoteTypeInputSchema,
   RoleId,
 } from "@care-y/shared";
 
@@ -132,6 +135,8 @@ export interface TicketRouterDeps {
     tDb: OrgContext["tenantDb"],
     access: TicketAccessChecker,
   ) => ReadCursorService;
+  // Note types
+  readonly createNoteTypeSvc?: (tDb: OrgContext["tenantDb"]) => NoteTypeService;
   // Search + audit (optional, injected by 5d wiring)
   readonly createSearchSvc?: (tDb: OrgContext["tenantDb"]) => SearchService;
   readonly createAuditSvc?: (tDb: OrgContext["tenantDb"]) => AuditService;
@@ -156,6 +161,73 @@ function buildSearchRoutes(
         return search.contentSearch(input, ctx.user.id);
       }),
     ),
+  };
+}
+
+function buildNoteTypeRoutes(
+  factory: (tDb: OrgContext["tenantDb"]) => NoteTypeService,
+  auditFn: (tDb: OrgContext["tenantDb"], entry: AuditEntry) => void,
+) {
+  return {
+    noteTypes: router({
+      list: adminProcedure.query(
+        withErrorWrapping(async ({ ctx }) => {
+          const svc = factory(ctx.org.tenantDb);
+          return svc.list();
+        }),
+      ),
+
+      listActive: volunteerProcedure.query(
+        withErrorWrapping(async ({ ctx }) => {
+          const svc = factory(ctx.org.tenantDb);
+          return svc.listActive();
+        }),
+      ),
+
+      create: adminProcedure.input(createNoteTypeInputSchema).mutation(
+        withErrorWrapping(async ({ ctx, input }) => {
+          const svc = factory(ctx.org.tenantDb);
+          const result = await svc.create({
+            encryptedName: Buffer.from(input.encryptedName, "base64"),
+            encryptedIcon: Buffer.from(input.encryptedIcon, "base64"),
+            escalationTargets: input.escalationTargets,
+            requiresOnClose: input.requiresOnClose,
+          });
+          auditFn(ctx.org.tenantDb, {
+            eventType: "note_type_created",
+            actorId: ctx.user.id,
+            metadata: { noteTypeId: result.id },
+          });
+          return result;
+        }),
+      ),
+
+      update: adminProcedure.input(updateNoteTypeInputSchema).mutation(
+        withErrorWrapping(async ({ ctx, input }) => {
+          const svc = factory(ctx.org.tenantDb);
+          const result = await svc.update({
+            id: input.id,
+            encryptedName:
+              input.encryptedName !== undefined
+                ? Buffer.from(input.encryptedName, "base64")
+                : undefined,
+            encryptedIcon:
+              input.encryptedIcon !== undefined
+                ? Buffer.from(input.encryptedIcon, "base64")
+                : undefined,
+            escalationTargets: input.escalationTargets,
+            isActive: input.isActive,
+            requiresOnClose: input.requiresOnClose,
+          });
+          auditFn(ctx.org.tenantDb, {
+            eventType: "note_type_updated",
+            actorId: ctx.user.id,
+            metadata: { noteTypeId: input.id },
+          });
+          return result;
+        }),
+      ),
+    }),
   };
 }
 
@@ -1040,6 +1112,11 @@ export function createTicketRouter(deps: TicketRouterDeps) {
         };
       }),
     ),
+
+    // --- Note types ---
+    ...(deps.createNoteTypeSvc
+      ? buildNoteTypeRoutes(deps.createNoteTypeSvc, audit)
+      : {}),
 
     // --- Metadata search (injected by 5d wiring) ---
     ...(deps.createSearchSvc ? buildSearchRoutes(deps.createSearchSvc) : {}),

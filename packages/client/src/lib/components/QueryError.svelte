@@ -104,6 +104,7 @@
     [ErrorCode.PRESET_REPLY_NOT_FOUND]: () => m.error_preset_reply_not_found(),
     [ErrorCode.RECORDING_NOT_FOUND]: () => m.error_recording_not_found(),
     [ErrorCode.ATTACHMENT_NOT_FOUND]: () => m.error_attachment_not_found(),
+    [ErrorCode.NOTE_TYPE_NOT_FOUND]: () => m.error_note_type_not_found(),
 
     // Knowledge base
     [ErrorCode.KB_CATEGORY_NOT_FOUND]: () => m.error_kb_category_not_found(),
