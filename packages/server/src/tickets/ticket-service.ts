@@ -123,6 +123,7 @@ export interface TicketService {
 }
 
 export interface TicketCounts {
+  readonly total: number;
   readonly new: number;
   readonly active: number;
   readonly closed: number;
@@ -633,6 +634,7 @@ export function createTicketService(
       const queueIds = await getAccessibleQueueIds(userId);
       if (queueIds.length === 0) {
         return {
+          total: 0,
           new: 0,
           active: 0,
           closed: 0,
@@ -813,10 +815,12 @@ export function createTicketService(
                   .end(),
               )
               .as("mine_count"),
+          (eb) => eb.fn.countAll().as("total_count"),
         ])
         .executeTakeFirstOrThrow();
 
       return {
+        total: Number(rows.total_count),
         new: Number(rows.new_count),
         active: Number(rows.active_count),
         closed: Number(rows.closed_count),

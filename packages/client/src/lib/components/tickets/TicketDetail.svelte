@@ -1313,19 +1313,4 @@
       opacity: 0.7;
     }
   }
-
-  /* Full-width highlight on the currently navigated search match. */
-  :global(.virtual-row:has(.match-active)),
-  .match-active-row {
-    background: color-mix(in srgb, var(--brand-accent) 12%, transparent);
-  }
-
-  :global(.match-active .k-message),
-  :global(.match-active .k-card),
-  :global(.match-active-row .k-message),
-  :global(.match-active-row .k-card) {
-    box-shadow: 0 0 0 1.5px
-      color-mix(in srgb, var(--brand-accent) 30%, transparent) !important;
-    border-radius: 0.75rem;
-  }
 </style>

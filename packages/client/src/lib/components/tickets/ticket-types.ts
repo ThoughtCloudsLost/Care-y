@@ -30,4 +30,5 @@ export interface TicketCardProps {
   readonly onaction?: (ticketId: string, action: TicketQuickAction) => void;
   readonly onencryptedhelp?: () => void;
   readonly loading?: boolean;
+  readonly searchTerm?: string | null;
 }

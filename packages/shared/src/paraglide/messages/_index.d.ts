@@ -508,6 +508,8 @@ export * from "./search_conversation_position.js";
 export * from "./search_conversation_previous.js";
 export * from "./search_conversation_next.js";
 export * from "./search_conversation_nav_label.js";
+export * from "./search_refine_label.js";
+export * from "./search_nav_shortcuts.js";
 export * from "./attachment_download.js";
 export * from "./attachment_downloading.js";
 export * from "./library_manage_categories.js";

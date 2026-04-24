@@ -12,13 +12,10 @@
 -->
 <script lang="ts">
   import type { Snapshot } from "./$types.js";
-  import { tick } from "svelte";
   import { page } from "$app/state";
   import { Link, Button } from "konsta/svelte";
   import {
     ChevronLeft,
-    ArrowUp,
-    ArrowDown,
     MessageSquareText,
     Timeline,
     BookUser,
@@ -92,6 +89,8 @@
   import { createConversationSearchProvider } from "$lib/search/providers/conversation.js";
   import { DECRYPT_ERROR_SENTINEL } from "$lib/crypto/async-decrypt-cache.js";
   import { fuzzySearch } from "$lib/search/fuzzy.js";
+  import { createSearchOverlay } from "$lib/search/search-overlay.svelte.js";
+  import SearchNavigator from "$lib/components/search/SearchNavigator.svelte";
 
   if (!trpc.tickets) throw new RouterNotAvailableError("tickets");
   const ticketRouter = trpc.tickets;
@@ -297,7 +296,7 @@
       subnavbar: ticketSubnavbar,
       subnavbarHidden: () =>
         // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- $state/$derived values read lazily inside callback
-        chatScrollReady && scrollDir.hidden && !searchOverlayActive,
+        chatScrollReady && scrollDir.hidden && !overlay.active,
     };
     return () => {
       navbarCtx.current = undefined;
@@ -578,18 +577,7 @@
     exitSelectMode();
   }
 
-  // --- Search overlay mode (ID-first design) ---
-  //
-  // Primary state: activeId (which match is highlighted).
-  // Position ("3 of 28") is derived from activeId's index in matches.
-  // This avoids index drift when the matches array recomputes
-  // (view switches, new decryptions, filter changes).
-
-  let searchOverlayTerm = $state<string | null>(null);
-  let searchActiveId = $state<string | null>(null);
-  let searchScrollRequested = $state(false);
-
-  const searchOverlayActive = $derived(searchOverlayTerm !== null);
+  // --- Search overlay (composable + page-specific match computation) ---
 
   let searchableFollowUps = $state<
     | readonly {
@@ -606,8 +594,23 @@
     searchableFollowUps ?? filteredFollowUps,
   );
 
+  const overlay = createSearchOverlay({
+    matches: () => searchMatches,
+    getElementId: (id) => `${timelineActive ? "tl-fu" : "fu"}-${id}`,
+    scrollContainer: () => chatScrollEl,
+    onscroll: (id) => {
+      if (timelineActive) return;
+      requestAnimationFrame(() => {
+        const el = document.getElementById(`fu-${id}`);
+        if (el == null) return;
+        const target = el.firstElementChild ?? el;
+        target.scrollIntoView({ behavior: "smooth", block: "center" });
+      });
+    },
+  });
+
   const searchMatches = $derived.by((): string[] => {
-    if (searchOverlayTerm == null || !displayFollowUpsForSearch) return [];
+    if (overlay.term == null || !displayFollowUpsForSearch) return [];
     const searchable: { id: string; plaintext: string }[] = [];
     for (const fu of displayFollowUpsForSearch) {
       const plaintext = followUpCache.get(fu.id);
@@ -617,7 +620,7 @@
       searchable.push({ id: fu.id, plaintext });
     }
     const haystack = searchable.map((e) => e.plaintext);
-    const fuzzyMatches = fuzzySearch(haystack, searchOverlayTerm);
+    const fuzzyMatches = fuzzySearch(haystack, overlay.term);
     const matchIndices = fuzzyMatches.map((fm) => fm.index);
     matchIndices.sort((a, b) => a - b);
     const ids: string[] = [];
@@ -628,142 +631,12 @@
     return ids;
   });
 
-  const searchOverlayPosition = $derived(
-    searchActiveId != null ? searchMatches.indexOf(searchActiveId) : -1,
-  );
-
-  const searchActiveMatchId = $derived(searchActiveId);
-
-  function enterSearchOverlay(term: string, targetId?: string): void {
-    searchOverlayTerm = term;
-    void tick().then(() => {
-      if (
-        targetId != null &&
-        targetId !== "" &&
-        searchMatches.includes(targetId)
-      ) {
-        searchActiveId = targetId;
-      } else {
-        searchActiveId = searchMatches[searchMatches.length - 1] ?? null;
-      }
-      searchScrollRequested = true;
-      scrollToMatch();
-    });
-  }
-
-  function exitSearchOverlay(): void {
-    searchOverlayTerm = null;
-    searchActiveId = null;
-  }
-
-  function navigateSearchUp(): void {
-    if (searchMatches.length === 0) return;
-    navigateWithoutScrollTracking(() => {
-      const idx = searchOverlayPosition;
-      const prevIdx = idx <= 0 ? searchMatches.length - 1 : idx - 1;
-      searchActiveId = searchMatches.at(prevIdx) ?? null;
-      searchScrollRequested = true;
-      void tick().then(() => scrollToMatch());
-    });
-  }
-
-  function navigateSearchDown(): void {
-    if (searchMatches.length === 0) return;
-    navigateWithoutScrollTracking(() => {
-      const idx = searchOverlayPosition;
-      const nextIdx = idx >= searchMatches.length - 1 ? 0 : idx + 1;
-      searchActiveId = searchMatches.at(nextIdx) ?? null;
-      searchScrollRequested = true;
-      void tick().then(() => scrollToMatch());
-    });
-  }
-
-  function scrollToMatch(): void {
-    const id = searchActiveId;
-    if (id == null) return;
-    requestAnimationFrame(() => {
-      const prefix = timelineActive ? "tl-fu" : "fu";
-      const wrapper = document.getElementById(`${prefix}-${id}`);
-      if (wrapper == null) return;
-      const target = wrapper.firstElementChild ?? wrapper;
-      target.scrollIntoView({ behavior: "smooth", block: "center" });
-    });
-  }
-
-  // Track which search match is nearest the viewport center while scrolling.
-  let scrollTrackingEnabled = $state(true);
-
-  function updateMatchFromScroll(): void {
-    if (!scrollTrackingEnabled || !searchOverlayActive) return;
-    if (searchMatches.length === 0 || chatScrollEl == null) return;
-
-    const containerRect = chatScrollEl.getBoundingClientRect();
-    const viewportCenter = containerRect.top + containerRect.height / 2;
-    let closestId: string | null = null;
-    let closestDist = Infinity;
-    const prefix = timelineActive ? "tl-fu" : "fu";
-
-    for (const id of searchMatches) {
-      const wrapper = document.getElementById(`${prefix}-${id}`);
-      if (wrapper == null) continue;
-      const el = wrapper.firstElementChild ?? wrapper;
-      const rect = el.getBoundingClientRect();
-      const elCenter = rect.top + rect.height / 2;
-      const dist = Math.abs(elCenter - viewportCenter);
-      if (dist < closestDist) {
-        closestDist = dist;
-        closestId = id;
-      }
-    }
-
-    if (closestId != null && closestId !== searchActiveId) {
-      searchActiveId = closestId;
-    }
-  }
-
-  let scrollRafId: number | null = null;
-
-  function handleSearchScroll(): void {
-    if (!searchOverlayActive || !scrollTrackingEnabled) return;
-    if (scrollRafId != null) return;
-    scrollRafId = requestAnimationFrame(() => {
-      scrollRafId = null;
-      updateMatchFromScroll();
-    });
-  }
-
-  $effect(() => {
-    if (!searchOverlayActive || chatScrollEl == null) return;
-    const el = chatScrollEl;
-    el.addEventListener("scroll", handleSearchScroll, { passive: true });
-    return () => {
-      el.removeEventListener("scroll", handleSearchScroll);
-      if (scrollRafId != null) {
-        cancelAnimationFrame(scrollRafId);
-        scrollRafId = null;
-      }
-    };
-  });
-
-  function navigateWithoutScrollTracking(fn: () => void): void {
-    scrollTrackingEnabled = false;
-    fn();
-    setTimeout(() => {
-      scrollTrackingEnabled = true;
-    }, 600);
-  }
-
-  // Scroll to active match when switching views.
-  // activeId stays stable; just need to scroll to its element in the new view.
   let prevTimelineActive = $state(false);
   $effect(() => {
     const switched = timelineActive !== prevTimelineActive;
     prevTimelineActive = timelineActive;
-    if (switched && searchActiveId != null) {
-      searchScrollRequested = true;
-      if (!timelineActive) {
-        void tick().then(() => scrollToMatch());
-      }
+    if (switched && overlay.activeId != null) {
+      overlay.requestScroll();
     }
   });
 
@@ -785,10 +658,10 @@
         getTotalFollowUpCount: () => ticket?.followUpCount ?? 0,
         getTicketId: () => ticketId,
         onviewall: (query: string) => {
-          enterSearchOverlay(query);
+          overlay.enter(query);
         },
         onresulttap: (id: string, query: string) => {
-          enterSearchOverlay(query, id);
+          overlay.enter(query, id);
         },
       }),
     );
@@ -1135,58 +1008,15 @@
 {/snippet}
 
 {#snippet searchNavigatorRow()}
-  <div
-    class="search-navigator"
-    role="toolbar"
-    aria-label={m.search_conversation_nav_label()}
-  >
-    <Button
-      tonal
-      rounded
-      small
-      inline
-      class="search-close-btn"
-      aria-label={m.common_cancel()}
-      onclick={exitSearchOverlay}
-    >
-      <X size={16} aria-hidden="true" />
-    </Button>
-    <span class="search-term" title={searchOverlayTerm ?? ""}>
-      "{searchOverlayTerm}"
-    </span>
-    <span class="search-position">
-      {m.search_conversation_position({
-        current: String(
-          searchOverlayPosition >= 0 ? searchOverlayPosition + 1 : 0,
-        ),
-        total: String(searchMatches.length),
-      })}
-    </span>
-    <div class="search-nav-buttons">
-      <Button
-        tonal
-        rounded
-        small
-        inline
-        class="search-nav-btn"
-        aria-label={m.search_conversation_previous()}
-        onclick={navigateSearchUp}
-      >
-        <ArrowUp size={16} aria-hidden="true" />
-      </Button>
-      <Button
-        tonal
-        rounded
-        small
-        inline
-        class="search-nav-btn"
-        aria-label={m.search_conversation_next()}
-        onclick={navigateSearchDown}
-      >
-        <ArrowDown size={16} aria-hidden="true" />
-      </Button>
-    </div>
-  </div>
+  <SearchNavigator
+    term={overlay.term ?? ""}
+    position={overlay.position}
+    total={overlay.matchCount}
+    onup={overlay.up}
+    ondown={overlay.down}
+    onexit={overlay.exit}
+    ontermchange={overlay.setTerm}
+  />
 {/snippet}
 
 {#snippet ticketSubnavbar()}
@@ -1198,7 +1028,7 @@
     selectLabel={m.ticket_select_mode()}
     onselect={selectModeActive ? exitSelectMode : enterSelectMode}
     filterPills={detailFilterPills}
-    searchNavigator={searchOverlayActive ? searchNavigatorRow : undefined}
+    searchNavigator={overlay.active ? searchNavigatorRow : undefined}
   />
 {/snippet}
 
@@ -1230,12 +1060,10 @@
     bind:searchableFollowUps
     bind:scrollContainerEl={chatScrollEl}
     bind:scrollReady={chatScrollReady}
-    searchTerm={searchOverlayTerm}
-    {searchActiveMatchId}
-    {searchScrollRequested}
-    onsearchscrollcomplete={() => {
-      searchScrollRequested = false;
-    }}
+    searchTerm={overlay.term}
+    searchActiveMatchId={overlay.activeId}
+    searchScrollRequested={overlay.scrollRequested}
+    onsearchscrollcomplete={overlay.markScrollComplete}
   />
 </div>
 
@@ -1416,66 +1244,5 @@
     max-height: 80vh;
     object-fit: contain;
     border-radius: 0.5rem;
-  }
-
-  /* Search navigator (subnavbar row 3) */
-
-  .search-navigator {
-    display: flex;
-    align-items: center;
-    padding: 0.25rem 0.25rem;
-    gap: 0.25rem;
-    border-top: 1px solid
-      color-mix(in srgb, var(--brand-primary) 15%, transparent);
-  }
-
-  .search-term {
-    font-size: var(--text-sm);
-    font-weight: 600;
-    color: var(--ink);
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    min-width: 0;
-  }
-
-  .search-position {
-    font-size: var(--text-sm);
-    font-weight: 500;
-    color: var(--ink);
-    white-space: nowrap;
-    margin-left: auto;
-    margin-right: auto;
-  }
-
-  .search-nav-buttons {
-    display: flex;
-    align-items: center;
-    gap: 0.375rem;
-    flex-shrink: 0;
-  }
-
-  :global(.search-nav-btn),
-  :global(.search-close-btn) {
-    width: 1.75rem !important;
-    padding-left: 0 !important;
-    padding-right: 0 !important;
-    background: color-mix(
-      in srgb,
-      var(--brand-accent) 15%,
-      transparent
-    ) !important;
-  }
-
-  :global(.search-nav-btn svg) {
-    color: var(--ink) !important;
-  }
-
-  :global(.search-close-btn) {
-    background: color-mix(in srgb, #e53e3e 15%, transparent) !important;
-  }
-
-  :global(.search-close-btn svg) {
-    color: #e53e3e !important;
   }
 </style>

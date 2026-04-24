@@ -684,19 +684,4 @@
     outline-offset: -2px;
     border-radius: 0.5rem;
   }
-
-  .bubble-time {
-    font-size: 0.625rem;
-    color: var(--muted, #666);
-  }
-
-  .note-label {
-    display: block;
-    font-size: 0.65rem;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
-    color: var(--muted, #888);
-    margin-bottom: 0.125rem;
-  }
 </style>

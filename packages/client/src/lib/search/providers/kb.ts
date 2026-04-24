@@ -60,10 +60,11 @@ interface CachedKBArticle {
 
 /** Dependency injection for testability. */
 export interface KBSearchProviderDeps {
-  /** Fetch a page of articles from the server. Returns items + next cursor. */
+  /** Fetch a page of articles from the server. Returns items + next cursor + total. */
   readonly fetchPage: (cursor: string | undefined) => Promise<{
     items: readonly RawKBItem[];
     nextCursor: string | null;
+    total?: number;
   }>;
   /** Decrypt an org-key ciphertext. Returns plaintext string or null if key not loaded / decrypt fails. */
   readonly decryptOrg: (cacheKey: string, ciphertext: unknown) => string | null;
@@ -83,6 +84,7 @@ export function createKbSearchProvider(
   const cache = cacheRegistry.createMap<string, CachedKBArticle>("KBSearch");
   let loaded = false;
   let loading = false;
+  let totalItemCount: number | undefined;
 
   async function loadAll(): Promise<void> {
     if (loaded || loading) return;
@@ -94,6 +96,7 @@ export function createKbSearchProvider(
       let cursor: string | undefined;
       do {
         const page = await deps.fetchPage(cursor);
+        if (page.total !== undefined) totalItemCount = page.total;
         for (const item of page.items) {
           if (cache.has(item.id)) continue;
           const title = deps.decryptOrg(
@@ -176,7 +179,12 @@ export function createKbSearchProvider(
         });
       }
 
-      return { results: results.slice(0, 5), loading, totalCached: cache.size };
+      return {
+        results: results.slice(0, 5),
+        loading,
+        totalCached: cache.size,
+        totalItems: totalItemCount,
+      };
     },
 
     ResultItem: KBResultItem as Component<{

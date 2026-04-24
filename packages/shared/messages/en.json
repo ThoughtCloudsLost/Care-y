@@ -539,6 +539,8 @@
   "search_conversation_previous": "Previous match",
   "search_conversation_next": "Next match",
   "search_conversation_nav_label": "Search navigation",
+  "search_refine_label": "Refine search",
+  "search_nav_shortcuts": "Enter for next, Shift+Enter for previous, Escape to close",
   "attachment_download": "Download {filename}",
   "attachment_downloading": "Downloading {filename}...",
   "library_manage_categories": "Manage categories",

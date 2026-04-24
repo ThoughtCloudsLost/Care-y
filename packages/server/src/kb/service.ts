@@ -52,6 +52,7 @@ export interface KBItemRecord extends KBItemSummary {
 export interface KBItemPage {
   readonly items: KBItemSummary[];
   readonly nextCursor: string | null;
+  readonly total: number;
 }
 
 // --- Author records ---
@@ -468,9 +469,38 @@ export function createKBItemService(db: Kysely<TenantDatabase>): KBItemService {
         }
       }
 
+      let countQuery = db
+        .selectFrom("kb_items")
+        .select((eb) => eb.fn.countAll<number>().as("total"));
+      if (input.categoryId !== undefined) {
+        countQuery = countQuery.where("category_id", "=", input.categoryId);
+      }
+      if (input.minRating !== undefined) {
+        countQuery = countQuery.where("rating", ">=", input.minRating);
+      }
+      if (input.createdBy !== undefined) {
+        countQuery = countQuery.where("created_by", "=", input.createdBy);
+      }
+      if (input.createdAfter !== undefined) {
+        countQuery = countQuery.where(
+          "created_at",
+          ">=",
+          new Date(input.createdAfter),
+        );
+      }
+      if (input.createdBefore !== undefined) {
+        countQuery = countQuery.where(
+          "created_at",
+          "<=",
+          new Date(input.createdBefore),
+        );
+      }
+      const countRow = await countQuery.executeTakeFirstOrThrow();
+
       return {
         items: pageRows.map(toItemSummary),
         nextCursor,
+        total: countRow.total,
       };
     },
 

@@ -145,6 +145,7 @@ const MOCK_ITEM: KBItemRecord = {
 const MOCK_ITEM_PAGE: KBItemPage = {
   items: [MOCK_ITEM],
   nextCursor: null,
+  total: 1,
 };
 
 const MOCK_VOTE: KBVoteRecord = {

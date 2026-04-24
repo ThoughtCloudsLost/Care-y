@@ -105,6 +105,8 @@ export interface TicketSearchProviderDeps {
    * Optional: full search implementation for server-backed search.
    * Called when user taps "Search all". Omit to disable full search.
    */
+  /** Total ticket count (from server counts query). Enables "Searched X of Y" hint. */
+  readonly getTotalItemCount?: () => number | undefined;
   readonly fullSearch?: (
     query: string,
     state: FullSearchState<TicketSearchData>,
@@ -119,7 +121,7 @@ export function createTicketSearchProvider(
     label: () => m.search_section_tickets(),
     icon: Ticket,
     renderMode: "card-strip",
-    showAllHref: () => "/tickets",
+    showAllHref: (query) => `/tickets?q=${encodeURIComponent(query)}`,
     getResultHref: (id: string) => `/tickets/${id}`,
 
     search(query: string) {
@@ -184,7 +186,12 @@ export function createTicketSearchProvider(
         });
       }
 
-      return { results, loading: false, totalCached: rawTickets.length };
+      return {
+        results,
+        loading: false,
+        totalCached: rawTickets.length,
+        totalItems: deps.getTotalItemCount?.(),
+      };
     },
 
     ResultItem: TicketSearchResult,

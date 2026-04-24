@@ -60,6 +60,9 @@
   import CategoryManageSheet from "$lib/components/library/CategoryManageSheet.svelte";
   import QueryError from "$lib/components/QueryError.svelte";
   import { haptic } from "$lib/utils/haptic.js";
+  import { createSearchOverlay } from "$lib/search/search-overlay.svelte.js";
+  import SearchNavigator from "$lib/components/search/SearchNavigator.svelte";
+  import { fuzzySearch } from "$lib/search/fuzzy.js";
 
   const orgCache = getOrgDecryptCache();
   const orgKeyManager = getOrgKeyManager();
@@ -156,6 +159,81 @@
   });
 
   const isOrgKeyLoaded = $derived(orgKeyManager.isLoaded);
+
+  // --- Search overlay ---
+
+  const overlay = createSearchOverlay({
+    matches: () => searchMatches,
+    getElementId: (id) => `article-${id}`,
+    scrollContainer: () => scrollEl,
+  });
+
+  const searchMatches = $derived.by((): string[] => {
+    if (overlay.term == null) return [];
+    const ids: string[] = [];
+    const haystack: string[] = [];
+    for (const article of filteredArticles) {
+      const title = orgCache.decrypt(
+        `kb-item:${article.id}`,
+        article.encryptedTitle,
+      );
+      if (title == null) continue;
+      const excerpt =
+        orgCache.decrypt(
+          `kb-excerpt:${article.id}`,
+          article.encryptedExcerpt,
+        ) ?? "";
+      ids.push(article.id);
+      haystack.push(`${title} ${excerpt}`);
+    }
+    const matches = fuzzySearch(haystack, overlay.term);
+    return matches
+      .map((fm) => ids[fm.index])
+      .filter((id): id is string => id != null);
+  });
+
+  let useMatchOrder = $state(true);
+
+  $effect(() => {
+    if (overlay.active) {
+      useMatchOrder = true;
+    }
+  });
+
+  const displayItems = $derived.by(() => {
+    if (!overlay.active || overlay.term == null || overlay.term.length < 2) {
+      return filteredArticles;
+    }
+    const matchSet = new Set(searchMatches);
+    if (!useMatchOrder) {
+      return filteredArticles.filter((a) => matchSet.has(a.id));
+    }
+    const idToArticle = new Map(filteredArticles.map((a) => [a.id, a]));
+    const sorted: typeof filteredArticles = [];
+    for (const id of searchMatches) {
+      const a = idToArticle.get(id);
+      if (a != null) sorted.push(a);
+    }
+    return sorted;
+  });
+
+  $effect(() => {
+    const q = page.url.searchParams.get("q");
+    if (q != null && q !== "") {
+      overlay.enter(q);
+    }
+  });
+
+  let prevViewMode = $state(kbViewModeStore.mode);
+  $effect(() => {
+    const mode = kbViewModeStore.mode;
+    if (mode !== prevViewMode) {
+      prevViewMode = mode;
+      if (overlay.activeId != null) {
+        overlay.requestScroll();
+      }
+    }
+  });
 
   // --- Multi-select ---
   let multiSelectActive = $state(false);
@@ -307,7 +385,7 @@
     navbarCtx.current = {
       right: canEdit ? navRight : undefined,
       subnavbar: librarySubnavbar,
-      subnavbarHidden: () => scrollDir.hidden,
+      subnavbarHidden: () => scrollDir.hidden && !overlay.active,
     };
     return () => {
       navbarCtx.current = undefined;
@@ -334,6 +412,7 @@
 
   function handleSortChange(field: string, dir: "asc" | "desc"): void {
     if (isKbSortField(field)) kbFilterStore.setSort(field, dir);
+    if (overlay.active) useMatchOrder = false;
   }
 
   const sortConfig: SortConfig = $derived({
@@ -637,6 +716,18 @@
   {/if}
 {/snippet}
 
+{#snippet searchNavigatorRow()}
+  <SearchNavigator
+    term={overlay.term ?? ""}
+    position={overlay.position}
+    total={overlay.matchCount}
+    onup={overlay.up}
+    ondown={overlay.down}
+    onexit={overlay.exit}
+    ontermchange={overlay.setTerm}
+  />
+{/snippet}
+
 {#snippet librarySubnavbar()}
   <SubNavbarFilterLayout
     title={m.library_title()}
@@ -648,6 +739,7 @@
     savedFilters={savedFiltersConfig}
     filterPills={filterPillsConfig}
     manage={manageConfig}
+    searchNavigator={overlay.active ? searchNavigatorRow : undefined}
   />
 {/snippet}
 
@@ -675,7 +767,7 @@
     </div>
   {:else if articlesQuery.isError}
     <QueryError error={articlesQuery.error} />
-  {:else if filteredArticles.length === 0}
+  {:else if displayItems.length === 0}
     <div
       class="empty-state"
       role="status"
@@ -690,46 +782,57 @@
   {:else}
     <div class="article-list">
       <VirtualList
-        items={filteredArticles}
+        items={displayItems}
         scrollContainer={scrollEl}
         estimateHeight={kbViewModeStore.mode === "grid" ? 200 : 140}
         columns={kbViewModeStore.mode === "grid" ? 2 : 1}
-        getKey={(article: (typeof filteredArticles)[number]) => article.id}
+        getKey={(article: (typeof displayItems)[number]) => article.id}
         onloadmore={articlesQuery.hasNextPage ? loadNextPage : undefined}
       >
         {#snippet children({
           item: article,
         }: {
-          item: (typeof filteredArticles)[number];
+          item: (typeof displayItems)[number];
           index: number;
         })}
-          <ArticleCard
-            articleId={article.id}
-            viewMode={kbViewModeStore.mode}
-            titleResult={resolveOrgDecrypt(
-              orgCache.decrypt(`kb-item:${article.id}`, article.encryptedTitle),
-              isOrgKeyLoaded,
-            )}
-            excerptResult={resolveOrgDecrypt(
-              orgCache.decrypt(
-                `kb-excerpt:${article.id}`,
-                article.encryptedExcerpt,
-              ),
-              isOrgKeyLoaded,
-            )}
-            encryptedTitle={article.encryptedTitle}
-            encryptedExcerpt={article.encryptedExcerpt}
-            categoryName={categoryNameMap.get(article.categoryId) ?? null}
-            authorName={resolveAuthorName(article.createdBy)}
-            voteUpCount={article.voteUpCount}
-            voteTotalCount={article.voteUpCount + article.voteDownCount}
-            updatedAt={new Date(article.updatedAt)}
-            selected={selectedIds.has(article.id)}
-            {multiSelectActive}
-            ontap={handleArticleTap}
-            onselect={toggleSelection}
-            onlongpress={handleLongPress}
-          />
+          <div
+            id="article-{article.id}"
+            class="search-target"
+            class:match-active={overlay.activeId === article.id}
+            aria-current={overlay.activeId === article.id ? "true" : undefined}
+          >
+            <ArticleCard
+              articleId={article.id}
+              viewMode={kbViewModeStore.mode}
+              titleResult={resolveOrgDecrypt(
+                orgCache.decrypt(
+                  `kb-item:${article.id}`,
+                  article.encryptedTitle,
+                ),
+                isOrgKeyLoaded,
+              )}
+              excerptResult={resolveOrgDecrypt(
+                orgCache.decrypt(
+                  `kb-excerpt:${article.id}`,
+                  article.encryptedExcerpt,
+                ),
+                isOrgKeyLoaded,
+              )}
+              encryptedTitle={article.encryptedTitle}
+              encryptedExcerpt={article.encryptedExcerpt}
+              categoryName={categoryNameMap.get(article.categoryId) ?? null}
+              authorName={resolveAuthorName(article.createdBy)}
+              voteUpCount={article.voteUpCount}
+              voteTotalCount={article.voteUpCount + article.voteDownCount}
+              updatedAt={new Date(article.updatedAt)}
+              selected={selectedIds.has(article.id)}
+              {multiSelectActive}
+              ontap={handleArticleTap}
+              onselect={toggleSelection}
+              onlongpress={handleLongPress}
+              searchTerm={overlay.term}
+            />
+          </div>
         {/snippet}
       </VirtualList>
     </div>
@@ -813,5 +916,10 @@
     padding: 3rem 1rem;
     color: var(--muted);
     font-size: var(--text-base);
+  }
+
+  .search-target {
+    min-width: 0;
+    overflow: hidden;
   }
 </style>
