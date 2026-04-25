@@ -916,7 +916,16 @@ describe.skipIf(!process.env.DATABASE_URL)("FollowUpService (DB)", () => {
   // ── View gating ──
 
   it("listByTicket filters notes by min_view_role", async () => {
-    const { userId, ticketId } = await createTicketFixture();
+    const { userId, ticketId, queueId } = await createTicketFixture();
+
+    // Second user creates the restricted note so the "own notes always
+    // visible" bypass does not mask the role filter.
+    const otherUser = await createTestUser(testDb.db);
+    await testDb.db
+      .insertInto("queue_assignments")
+      .values({ queue_id: queueId, user_id: otherUser.id })
+      .onConflict((oc) => oc.columns(["queue_id", "user_id"]).doNothing())
+      .execute();
 
     const noteTypeId = await createNoteTypeWithViewRole(
       testDb.db,
@@ -931,7 +940,7 @@ describe.skipIf(!process.env.DATABASE_URL)("FollowUpService (DB)", () => {
       isPrivate: true,
       mentionedPseudonyms: [],
     });
-    await svc.create(userId, {
+    await svc.create(otherUser.id, {
       ticketId,
       encryptedContent: Buffer.from("restricted-note"),
       source: "volunteer",
