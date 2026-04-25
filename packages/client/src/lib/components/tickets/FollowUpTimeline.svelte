@@ -13,7 +13,12 @@
   import { tick } from "svelte";
   import { SvelteMap, SvelteSet } from "svelte/reactivity";
   import { ListGroup, ListItem, Messages, Message } from "konsta/svelte";
-  import { MessagesSquare, ChevronDown, type LucideIcon } from "@lucide/svelte";
+  import {
+    MessageSquare,
+    MessagesSquare,
+    ChevronDown,
+    type LucideIcon,
+  } from "@lucide/svelte";
   import * as m from "$lib/paraglide/messages.js";
   import { onKeyActivate } from "$lib/utils/a11y.js";
   import { resolveFollowUpTypeIcon } from "$lib/utils/note-type-icons.js";
@@ -452,10 +457,19 @@
               {@const summary = clusterLabel(entry.incoming, entry.outgoing)}
               {@const clusterTime = formatTime(entry.firstCreatedAt)}
 
+              {@const isMixed = entry.incoming > 0 && entry.outgoing > 0}
+              {@const isOutgoing = !isMixed && entry.outgoing > 0}
               <div class="tl-row" data-tl-ids={entry.ids.join(" ")}>
                 <span class="tl-time">{clusterTime}</span>
                 <span class="tl-marker" aria-hidden="true">
-                  <MessagesSquare size={16} />
+                  {#if isMixed}
+                    <MessagesSquare size={16} />
+                  {:else}
+                    <MessageSquare
+                      size={16}
+                      class={isOutgoing ? "tl-icon-mirror" : ""}
+                    />
+                  {/if}
                 </span>
                 <ListItem
                   link
@@ -611,6 +625,10 @@
 
   :global(.dark) .tl-marker {
     background: var(--k-page-bg, #1c1c1e);
+  }
+
+  :global(.tl-icon-mirror) {
+    transform: scaleX(-1);
   }
 
   /* Group title (date header) */
