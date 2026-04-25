@@ -485,6 +485,7 @@ export * from "./reaction_complete.js";
 export * from "./reaction_add.js";
 export * from "./reaction_count.js";
 export * from "./reaction_you.js";
+export * from "./reaction_summary.js";
 export * from "./ticket_note_saving.js";
 export * from "./ticket_note_team_only.js";
 export * from "./ticket_note_description.js";

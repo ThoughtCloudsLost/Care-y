@@ -48,6 +48,7 @@
   import {
     savedFilterStateSchema,
     ticketPrioritySchema,
+    type ReactionSummary,
     type SavedFilterRecord,
     type SavedFilterColor,
   } from "@care-y/shared";
@@ -235,6 +236,36 @@
     }
   });
 
+  // Batch-fetch reactions for internal notes in loaded previews.
+  // Keyed by follow-up ID so cards can look up their notes' reactions.
+  const previewReactionsMap = new SvelteMap<string, ReactionSummary[]>();
+  // eslint-disable-next-line svelte/prefer-svelte-reactivity -- tracks fetched IDs, not rendered state
+  const fetchedReactionIds = new Set<string>();
+
+  $effect(() => {
+    const previews = previewLoader.rawPreviews;
+    const noteIds: string[] = [];
+    for (const followUps of previews.values()) {
+      for (const fu of followUps) {
+        if (fu.type === "internal_note" && !fetchedReactionIds.has(fu.id)) {
+          noteIds.push(fu.id);
+        }
+      }
+    }
+    if (noteIds.length === 0) return;
+    for (const id of noteIds) fetchedReactionIds.add(id);
+    void ticketRouter.getReactions
+      .query({ followUpIds: noteIds.slice(0, 100) })
+      .then((result) => {
+        for (const [id, summaries] of Object.entries(result)) {
+          if (summaries.length > 0) previewReactionsMap.set(id, summaries);
+        }
+      })
+      .catch(() => {
+        /* best-effort */
+      });
+  });
+
   // Map server record to TicketCard props (triggers lazy decryption).
   // Data-derived card props: only recompute when ticket data, decryption
   // caches, or preview content changes. Excludes volatile per-interaction
@@ -244,6 +275,22 @@
     TicketCardProps,
     "viewMode" | "selected" | "multiSelectActive"
   >;
+
+  function reactionsForTicket(
+    ticketId: string,
+  ): Record<string, ReactionSummary[]> | undefined {
+    const followUps = previewLoader.get(ticketId);
+    if (!followUps) return undefined;
+    let result: Record<string, ReactionSummary[]> | undefined;
+    for (const fu of followUps) {
+      const reactions = previewReactionsMap.get(fu.id);
+      if (reactions) {
+        result ??= {};
+        result[fu.id] = reactions;
+      }
+    }
+    return result;
+  }
 
   function toDataCardProps(t: TicketRecord): DataCardProps {
     let assignedName: string | null = null;
@@ -272,6 +319,7 @@
       followUpCount: t.followUpCount,
       unreadCount: 0,
       previewFollowUps: previewLoader.get(t.id),
+      previewReactions: reactionsForTicket(t.id),
       ontap: handleTicketTap,
       onselect: toggleSelection,
       onaction: handleAction,
