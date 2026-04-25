@@ -654,6 +654,58 @@ describe.skipIf(!process.env.DATABASE_URL)("KBItemService (DB)", () => {
     expect(page.items[0]!.id).toBe(itemA.id);
     expect(page.items[1]!.id).toBe(itemB.id);
   });
+
+  // --- listBodies tests ---
+
+  it("listBodies returns bodies for requested IDs", async () => {
+    const a = await svc.create("user-1", {
+      categoryId,
+      encryptedTitle: Buffer.from("body-a-title"),
+      encryptedBody: Buffer.from("body-a-content"),
+    });
+    const b = await svc.create("user-1", {
+      categoryId,
+      encryptedTitle: Buffer.from("body-b-title"),
+      encryptedBody: Buffer.from("body-b-content"),
+    });
+    const c = await svc.create("user-1", {
+      categoryId,
+      encryptedTitle: Buffer.from("body-c-title"),
+      encryptedBody: Buffer.from("body-c-content"),
+    });
+
+    const results = await svc.listBodies([a.id, c.id]);
+    expect(results).toHaveLength(2);
+
+    const ids = results.map((r) => r.id);
+    expect(ids).toContain(a.id);
+    expect(ids).toContain(c.id);
+    expect(ids).not.toContain(b.id);
+
+    const foundA = results.find((r) => r.id === a.id)!;
+    expect(Buffer.isBuffer(foundA.encryptedBody)).toBe(true);
+    expect(foundA.encryptedBody.toString()).toBe("body-a-content");
+  });
+
+  it("listBodies returns empty array for non-existent IDs", async () => {
+    const results = await svc.listBodies([
+      "00000000-0000-0000-0000-000000000099",
+    ]);
+    expect(results).toHaveLength(0);
+  });
+
+  it("listBodies handles single item", async () => {
+    const item = await svc.create("user-1", {
+      categoryId,
+      encryptedTitle: Buffer.from("single-body"),
+      encryptedBody: Buffer.from("single-content"),
+    });
+
+    const results = await svc.listBodies([item.id]);
+    expect(results).toHaveLength(1);
+    expect(results[0]!.id).toBe(item.id);
+    expect(results[0]!.encryptedBody.toString()).toBe("single-content");
+  });
 });
 
 describe.skipIf(!process.env.DATABASE_URL)(

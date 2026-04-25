@@ -139,6 +139,11 @@ export interface KBItemService {
 
   /** Return distinct authors who have written KB articles. */
   listAuthors(): Promise<KBAuthorRecord[]>;
+
+  /** Return encrypted bodies for a set of item IDs (max 200). */
+  listBodies(
+    itemIds: readonly string[],
+  ): Promise<readonly { id: string; encryptedBody: Buffer }[]>;
 }
 
 export interface KBVoteService {
@@ -598,6 +603,16 @@ export function createKBItemService(db: Kysely<TenantDatabase>): KBItemService {
         id: r.id,
         encryptedDisplayName: r.encrypted_display_name,
       }));
+    },
+
+    async listBodies(itemIds) {
+      if (itemIds.length === 0) return [];
+      const rows = await db
+        .selectFrom("kb_items")
+        .select(["id", "encrypted_body"])
+        .where("id", "in", [...itemIds])
+        .execute();
+      return rows.map((r) => ({ id: r.id, encryptedBody: r.encrypted_body }));
     },
   };
 }

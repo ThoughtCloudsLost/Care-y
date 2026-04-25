@@ -44,6 +44,7 @@ function createMockItemSvc(): KBItemService {
     delete: vi.fn(),
     listRecentlyUpdated: vi.fn(),
     listAuthors: vi.fn(),
+    listBodies: vi.fn(),
   };
 }
 
@@ -412,6 +413,31 @@ describe("KB Article routes", () => {
 
     await caller.deleteItem({ itemId: VALID_UUID });
     expect(mockItemSvc.delete).toHaveBeenCalledWith(VALID_UUID);
+  });
+});
+
+// --- Bulk body fetch tests ---
+
+describe("KB listBodies route", () => {
+  const ITEM_ID_1 = "550e8400-e29b-41d4-a716-446655440001";
+  const ITEM_ID_2 = "550e8400-e29b-41d4-a716-446655440002";
+
+  it("volunteer can fetch bodies by item IDs", async () => {
+    const mockResults = [
+      { id: ITEM_ID_1, encryptedBody: Buffer.from("body-1") },
+      { id: ITEM_ID_2, encryptedBody: Buffer.from("body-2") },
+    ];
+    vi.mocked(mockItemSvc.listBodies).mockResolvedValue(mockResults);
+    const caller = buildVolunteerCaller();
+
+    const result = await caller.listBodies({ itemIds: [ITEM_ID_1, ITEM_ID_2] });
+    expect(result).toHaveLength(2);
+    expect(mockItemSvc.listBodies).toHaveBeenCalledWith([ITEM_ID_1, ITEM_ID_2]);
+  });
+
+  it("rejects empty itemIds array", async () => {
+    const caller = buildVolunteerCaller();
+    await expect(caller.listBodies({ itemIds: [] })).rejects.toThrow();
   });
 });
 
