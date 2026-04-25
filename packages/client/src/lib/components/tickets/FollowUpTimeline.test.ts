@@ -67,6 +67,7 @@ function makeItems(): TimelineItem[] {
       recordingDurationSeconds: null,
       hasImage: false,
       hasFile: false,
+      noteTypeId: null,
     },
     {
       id: "fu-2",
@@ -79,6 +80,7 @@ function makeItems(): TimelineItem[] {
       recordingDurationSeconds: null,
       hasImage: false,
       hasFile: false,
+      noteTypeId: null,
     },
     {
       id: "fu-3",
@@ -91,6 +93,7 @@ function makeItems(): TimelineItem[] {
       recordingDurationSeconds: null,
       hasImage: false,
       hasFile: false,
+      noteTypeId: null,
     },
     {
       id: "fu-4",
@@ -103,6 +106,7 @@ function makeItems(): TimelineItem[] {
       recordingDurationSeconds: null,
       hasImage: false,
       hasFile: false,
+      noteTypeId: null,
     },
     {
       id: "fu-5",
@@ -115,6 +119,7 @@ function makeItems(): TimelineItem[] {
       recordingDurationSeconds: 47,
       hasImage: false,
       hasFile: false,
+      noteTypeId: null,
     },
     {
       id: "fu-6",
@@ -127,6 +132,7 @@ function makeItems(): TimelineItem[] {
       recordingDurationSeconds: null,
       hasImage: true,
       hasFile: false,
+      noteTypeId: null,
     },
   ];
 }

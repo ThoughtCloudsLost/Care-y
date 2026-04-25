@@ -4,7 +4,7 @@
   import { resolve } from "$app/paths";
   import type { Component } from "svelte";
   import { Permission } from "@care-y/shared";
-  import { Key, Palette, Shredder } from "@lucide/svelte";
+  import { Key, Palette, Shredder, ClipboardPenLine } from "@lucide/svelte";
   import * as m from "$lib/paraglide/messages.js";
   import { getNavbarOverrideCtx } from "$lib/shell/context.js";
   import { getCurrentPermissions } from "$lib/crypto/context.js";
@@ -17,6 +17,7 @@
   import KeysSection from "$lib/components/admin/KeysSection.svelte";
   import BrandingSection from "$lib/components/admin/BrandingSection.svelte";
   import RetentionSection from "$lib/components/admin/RetentionSection.svelte";
+  import NoteTypesSection from "$lib/components/admin/NoteTypesSection.svelte";
 
   interface OrgSection extends ScrollSection {
     readonly permission: Permission;
@@ -44,6 +45,13 @@
       icon: Shredder,
       permission: Permission.MANAGE_ORG_CONFIG,
       component: RetentionSection,
+    },
+    {
+      id: "note-types",
+      label: m.admin_tab_note_types,
+      icon: ClipboardPenLine,
+      permission: Permission.MANAGE_ORG_CONFIG,
+      component: NoteTypesSection,
     },
   ];
 

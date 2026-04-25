@@ -1,20 +1,22 @@
 <!--
   Internal note compose sheet. Separated from the reply compose bar to
   prevent accidental cross-contamination between client-facing replies
-  and team-only notes.
+  and internal notes.
 
   Owns encryption, mutation, and dismiss lifecycle (same pattern as
   DisplayNameSheet). Callers just provide ticketId + opened/ondismiss.
 -->
 <script lang="ts">
-  import { Chip, List, ListInput } from "konsta/svelte";
-  import { StickyNote } from "@lucide/svelte";
+  import { List, ListInput } from "konsta/svelte";
   import { useQueryClient } from "@tanstack/svelte-query";
   import * as m from "$lib/paraglide/messages.js";
   import { trpc } from "$lib/trpc/index.js";
-  import { getCryptoBridge } from "$lib/crypto/context.js";
+  import { getCryptoBridge, getOrgDecryptCache } from "$lib/crypto/context.js";
   import { RouterNotAvailableError } from "$lib/errors.js";
   import { toastStore } from "$lib/stores/toast.svelte.js";
+  import { haptic } from "$lib/utils/haptic.js";
+  import { announceToLiveRegion } from "$lib/utils/announce.js";
+  import { createNoteTypesQuery } from "$lib/tickets/queries.js";
   import ShellSheet from "$lib/shell/ShellSheet.svelte";
   import SoftButton from "$lib/components/SoftButton.svelte";
 
@@ -22,28 +24,97 @@
     opened: boolean;
     ondismiss: () => void;
     ticketId: string;
+    editFollowUpId?: string;
+    editInitialContent?: string;
+    editInitialNoteTypeId?: string;
+    ondelete?: (followUpId: string) => void;
   }
 
-  let { opened, ondismiss, ticketId }: InternalNoteSheetProps = $props();
+  let {
+    opened,
+    ondismiss,
+    ticketId,
+    editFollowUpId,
+    editInitialContent,
+    editInitialNoteTypeId,
+    ondelete,
+  }: InternalNoteSheetProps = $props();
+
+  const isEditMode = $derived(editFollowUpId !== undefined);
 
   if (!trpc.tickets) throw new RouterNotAvailableError("tickets");
   const ticketRouter = trpc.tickets;
+  if (!ticketRouter.noteTypes) throw new RouterNotAvailableError("noteTypes");
+  const noteTypesRouter = ticketRouter.noteTypes;
   const cryptoBridge = getCryptoBridge();
+  const orgCache = getOrgDecryptCache();
   const queryClient = useQueryClient();
+
+  const noteTypesResult = createNoteTypesQuery(noteTypesRouter);
 
   let noteText = $state("");
   let saving = $state(false);
   let wasOpen = $state(false);
+  // User's explicit selection. Null = use the org default.
+  let selectedNoteTypeId = $state<string | null>(null);
 
-  // Reset draft each time the sheet opens (not re-opens).
+  // Reset or pre-fill each time the sheet opens.
   $effect(() => {
     if (opened && !wasOpen) {
-      noteText = "";
+      noteText = editInitialContent ?? "";
+      selectedNoteTypeId = editInitialNoteTypeId ?? null;
     }
     wasOpen = opened;
   });
 
-  const canSave = $derived(noteText.trim().length > 0 && !saving);
+  const isDirty = $derived.by(() => {
+    if (!isEditMode) return noteText.trim().length > 0;
+    const textChanged = noteText.trim() !== (editInitialContent ?? "").trim();
+    const typeChanged =
+      selectedNoteTypeId !== null &&
+      selectedNoteTypeId !== (editInitialNoteTypeId ?? null);
+    return textChanged || typeChanged;
+  });
+
+  // Effective type: user's pick, falling back to the org default.
+  // Reactive to both user selection and query data arrival.
+  const effectiveNoteTypeId = $derived(
+    selectedNoteTypeId ?? noteTypesResult.data?.defaultNoteTypeId ?? undefined,
+  );
+
+  const typeDescription = $derived.by(() => {
+    if (!noteTypesResult.data || effectiveNoteTypeId === undefined)
+      return undefined;
+    const nt = noteTypesResult.data.types.find(
+      (t) => t.id === effectiveNoteTypeId,
+    );
+    if (!nt?.encryptedDescription) return undefined;
+    return (
+      orgCache.decrypt(nt.id + ":desc", nt.encryptedDescription) ?? undefined
+    );
+  });
+
+  const HINT_LABELS = new Map<string, () => string>([
+    ["ticket_access", m.ticket_note_hint_participants],
+    ["role:admin", m.ticket_note_hint_admins],
+    ["role:manager", m.ticket_note_hint_managers],
+  ]);
+
+  const notificationHintText = $derived.by(() => {
+    if (!noteTypesResult.data || effectiveNoteTypeId === undefined)
+      return undefined;
+    const nt = noteTypesResult.data.types.find(
+      (t) => t.id === effectiveNoteTypeId,
+    );
+    if (!nt) return undefined;
+    const parts = nt.notificationHints
+      .map((h) => HINT_LABELS.get(h)?.())
+      .filter((s): s is string => s !== undefined);
+    if (parts.length === 0) return undefined;
+    return m.ticket_note_notifies({ targets: parts.join(", ") });
+  });
+
+  const canSave = $derived(isDirty && noteText.trim().length > 0 && !saving);
 
   async function handleSave(): Promise<void> {
     const text = noteText.trim();
@@ -52,15 +123,29 @@
     saving = true;
     try {
       const encryptedContent = await cryptoBridge.encrypt(ticketId, text);
-      await ticketRouter.createFollowUp.mutate({
-        ticketId,
-        type: "internal_note",
-        source: "volunteer",
-        isPrivate: true,
-        encryptedContent,
-      });
+
+      if (isEditMode && editFollowUpId !== undefined) {
+        await ticketRouter.updateInternalNote.mutate({
+          followUpId: editFollowUpId,
+          encryptedContent,
+          noteTypeId: effectiveNoteTypeId,
+        });
+        toastStore.show(m.note_type_updated());
+      } else {
+        await ticketRouter.createFollowUp.mutate({
+          ticketId,
+          type: "internal_note",
+          source: "volunteer",
+          isPrivate: true,
+          encryptedContent,
+          noteTypeId: effectiveNoteTypeId,
+        });
+        toastStore.show(m.ticket_note_saved());
+      }
+
       ondismiss();
-      toastStore.show(m.ticket_note_saved());
+      haptic();
+      announceToLiveRegion("polite", m.ticket_note_saved());
       void queryClient.invalidateQueries({
         queryKey: ["ticket", ticketId, "followUps"],
       });
@@ -70,29 +155,63 @@
       saving = false;
     }
   }
+
+  function handleDelete(): void {
+    if (editFollowUpId !== undefined && ondelete) {
+      ondelete(editFollowUpId);
+    }
+  }
 </script>
 
 <ShellSheet
   {opened}
   {ondismiss}
-  ariaLabel={m.ticket_add_internal_note()}
-  title={m.ticket_add_internal_note()}
+  ariaLabel={isEditMode ? m.ticket_edit_note() : m.ticket_add_internal_note()}
+  title={isEditMode ? m.ticket_edit_note() : m.ticket_add_internal_note()}
 >
   {#snippet headerRight()}
     <SoftButton onclick={() => void handleSave()} disabled={!canSave}>
-      {saving ? m.ticket_note_saving() : m.ticket_save_note()}
+      {saving
+        ? m.ticket_note_saving()
+        : isEditMode
+          ? m.common_update()
+          : m.ticket_save_note()}
     </SoftButton>
   {/snippet}
 
   <div class="note-sheet-body">
-    <div class="note-team-chip">
-      <Chip outline class="team-chip">
-        <span class="team-chip-content">
-          <StickyNote size={11} class="team-chip-icon" />
-          {m.ticket_note_team_only()}
-        </span>
-      </Chip>
-    </div>
+    <p class="note-description">{m.ticket_note_description()}</p>
+
+    {#if noteTypesResult.data}
+      {@const types = noteTypesResult.data.types}
+      <List strongIos outlineIos nested class="note-type-select-list">
+        <ListInput
+          outline
+          dropdown
+          label={m.note_compose_type_label()}
+          type="select"
+          value={effectiveNoteTypeId}
+          onChange={(e: Event) => {
+            const target = e.target;
+            if (target instanceof HTMLSelectElement) {
+              selectedNoteTypeId = target.value;
+            }
+          }}
+        >
+          {#each types as nt (nt.id)}
+            <option value={nt.id}>
+              {orgCache.decrypt(nt.id + ":name", nt.encryptedName) ?? ""}
+            </option>
+          {/each}
+        </ListInput>
+      </List>
+      {#if typeDescription}
+        <p class="note-type-desc">{typeDescription}</p>
+      {/if}
+      {#if notificationHintText}
+        <p class="note-notify-hint">{notificationHintText}</p>
+      {/if}
+    {/if}
 
     <List nested class="note-input-list">
       <ListInput
@@ -112,6 +231,19 @@
         inputClass="note-textarea"
       />
     </List>
+
+    {#if isEditMode && ondelete}
+      <div class="deactivate-action">
+        <button
+          type="button"
+          class="deactivate-btn"
+          onclick={handleDelete}
+          disabled={saving}
+        >
+          {m.ticket_delete_note()}
+        </button>
+      </div>
+    {/if}
   </div>
 </ShellSheet>
 
@@ -123,23 +255,26 @@
     gap: var(--space-md);
   }
 
-  .note-team-chip {
-    display: flex;
+  .note-description {
+    font-size: 0.75rem;
+    color: var(--muted);
+    margin: 0;
+    line-height: 1.4;
   }
 
-  .team-chip-content {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.25rem;
+  .note-type-desc {
+    font-size: 0.75rem;
+    color: var(--ink);
+    margin: 0;
+    line-height: 1.4;
+    white-space: pre-line;
   }
 
-  :global(.team-chip-icon) {
-    color: var(--brand-accent, var(--brand-primary));
-    flex-shrink: 0;
-  }
-
-  :global(.team-chip) {
-    font-size: 0.6875rem !important;
+  .note-notify-hint {
+    font-size: 0.6875rem;
+    color: var(--muted);
+    margin: 0;
+    font-style: italic;
   }
 
   :global(.note-textarea) {
@@ -150,5 +285,27 @@
 
   :global(.note-input-list) {
     margin: 0 !important;
+  }
+
+  :global(.note-type-select-list) {
+    margin: 0 !important;
+  }
+
+  .deactivate-action {
+    padding: var(--space-2xl) var(--space-lg) 0;
+  }
+
+  .deactivate-btn {
+    display: block;
+    width: 100%;
+    padding: 0.625rem;
+    font-size: var(--text-sm);
+    font-weight: 500;
+    color: var(--color-red-500);
+    background: none;
+    border: none;
+    cursor: pointer;
+    text-align: center;
+    min-height: 44px;
   }
 </style>

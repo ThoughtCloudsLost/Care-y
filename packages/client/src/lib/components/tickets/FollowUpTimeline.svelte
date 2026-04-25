@@ -13,18 +13,10 @@
   import { tick } from "svelte";
   import { SvelteMap, SvelteSet } from "svelte/reactivity";
   import { ListGroup, ListItem, Messages, Message } from "konsta/svelte";
-  import {
-    MessagesSquare,
-    MessageSquare,
-    Lock,
-    Play,
-    Image as ImageIcon,
-    Paperclip,
-    Dot,
-    ChevronDown,
-  } from "@lucide/svelte";
+  import { MessagesSquare, ChevronDown, type LucideIcon } from "@lucide/svelte";
   import * as m from "$lib/paraglide/messages.js";
   import { onKeyActivate } from "$lib/utils/a11y.js";
+  import { resolveFollowUpTypeIcon } from "$lib/utils/note-type-icons.js";
   import { needsDateSeparator, formatDateSeparator } from "$lib/utils/time.js";
   import { computeGaps } from "$lib/tickets/gap-indicators.js";
   import type {
@@ -71,6 +63,8 @@
     searchScrollRequested?: boolean;
     /** Called after scroll request is processed. Parent should set searchScrollRequested=false. */
     onsearchscrollcomplete?: () => void;
+    /** Resolve a note type's icon by noteTypeId (null = use default). Returns the LucideIcon component or undefined. */
+    resolveNoteIcon?: (noteTypeId: string | null) => LucideIcon | undefined;
     children: Snippet;
   }
 
@@ -85,6 +79,7 @@
     searchActiveMatchId = null,
     searchScrollRequested = false,
     onsearchscrollcomplete,
+    resolveNoteIcon,
     children,
   }: FollowUpTimelineProps = $props();
 
@@ -103,12 +98,15 @@
   }
 
   function landmarkIcon(item: TimelineItem): Component {
-    if (item.source === "system") return Dot;
-    if (item.type === "internal_note") return Lock;
-    if (item.hasRecording) return Play;
-    if (item.hasImage) return ImageIcon;
-    if (item.hasFile) return Paperclip;
-    return MessageSquare;
+    if (item.hasRecording)
+      return resolveFollowUpTypeIcon(item.type, "recording");
+    if (item.hasImage) return resolveFollowUpTypeIcon(item.type, "image");
+    if (item.hasFile) return resolveFollowUpTypeIcon(item.type, "file");
+    if (item.type === "internal_note" && resolveNoteIcon !== undefined) {
+      const icon = resolveNoteIcon(item.noteTypeId);
+      if (icon !== undefined) return icon;
+    }
+    return resolveFollowUpTypeIcon(item.type);
   }
 
   function landmarkLabel(item: TimelineItem): string {

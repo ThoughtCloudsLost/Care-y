@@ -193,6 +193,10 @@ function buildNoteTypeRoutes(
           const result = await svc.create({
             encryptedName: Buffer.from(input.encryptedName, "base64"),
             encryptedIcon: Buffer.from(input.encryptedIcon, "base64"),
+            encryptedDescription:
+              input.encryptedDescription !== undefined
+                ? Buffer.from(input.encryptedDescription, "base64")
+                : undefined,
             escalationTargets: input.escalationTargets,
             requiresOnClose: input.requiresOnClose,
           });
@@ -217,6 +221,12 @@ function buildNoteTypeRoutes(
             encryptedIcon:
               input.encryptedIcon !== undefined
                 ? Buffer.from(input.encryptedIcon, "base64")
+                : undefined,
+            encryptedDescription:
+              input.encryptedDescription !== undefined
+                ? input.encryptedDescription !== null
+                  ? Buffer.from(input.encryptedDescription, "base64")
+                  : null
                 : undefined,
             escalationTargets: input.escalationTargets,
             isActive: input.isActive,
@@ -288,6 +298,7 @@ export function createTicketRouter(deps: TicketRouterDeps) {
   async function resolveNoteTypeEscalation(
     tDb: OrgContext["tenantDb"],
     noteTypeId: string | undefined,
+    ticketId?: string,
   ): Promise<string[] | undefined> {
     if (noteTypeId === undefined || !deps.createNoteTypeSvc) return undefined;
 
@@ -297,15 +308,30 @@ export function createTicketRouter(deps: TicketRouterDeps) {
     const qp = deps.createQueuePermissionsSvc(tDb);
     const userSvc = createUserService(tDb);
 
-    const userIds = await resolveEscalationTargets(targets, {
-      getUsersByRole: async (role) => {
-        const roleId = role === "admin" ? RoleId.ADMIN : RoleId.MANAGER;
-        return [...(await userSvc.listActiveIdsByRoleId(roleId))];
+    const userIds = await resolveEscalationTargets(
+      targets,
+      {
+        getUsersByRole: async (role) => {
+          const roleId = role === "admin" ? RoleId.ADMIN : RoleId.MANAGER;
+          return [...(await userSvc.listActiveIdsByRoleId(roleId))];
+        },
+        // eslint-disable-next-line @typescript-eslint/require-await -- stub for future permission-based targeting
+        getUsersByPermission: async () => [],
+        getQueueMembers: async (queueId) => qp.getQueueMembers(queueId),
+        getTicketKeyWrapHolders: async (tid) => {
+          const rows = await tDb
+            .selectFrom("ticket_key_wraps as tkw")
+            .innerJoin("users as u", "u.id", "tkw.volunteer_id")
+            .select("tkw.volunteer_id")
+            .where("tkw.ticket_id", "=", tid)
+            .where("u.is_active", "=", true)
+            .groupBy("tkw.volunteer_id")
+            .execute();
+          return rows.map((r) => r.volunteer_id);
+        },
       },
-      // eslint-disable-next-line @typescript-eslint/require-await -- stub for future permission-based targeting
-      getUsersByPermission: async () => [],
-      getQueueMembers: async (queueId) => qp.getQueueMembers(queueId),
-    });
+      ticketId,
+    );
 
     return userIds.length > 0 ? userIds : undefined;
   }
@@ -358,6 +384,7 @@ export function createTicketRouter(deps: TicketRouterDeps) {
         const escalationUserIds = await resolveNoteTypeEscalation(
           tDb,
           noteTypeId,
+          ticket.id,
         );
 
         const recipients = await buildRecipientList(

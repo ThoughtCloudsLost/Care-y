@@ -480,6 +480,7 @@ export interface NoteTypesTable {
   id: Generated<string>;
   encrypted_name: Buffer;
   encrypted_icon: Buffer;
+  encrypted_description: Buffer | null;
   encrypted_escalation_targets: Buffer;
   is_active: ColumnType<boolean, boolean | undefined, boolean>;
   requires_on_close: ColumnType<boolean, boolean | undefined, boolean>;

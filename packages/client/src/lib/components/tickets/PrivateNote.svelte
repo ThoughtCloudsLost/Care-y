@@ -2,25 +2,16 @@
   Private/internal note in the chat timeline.
 
   Uses a Konsta Card (outline) to stay visually consistent with the
-  component library. A Chip marks the note as team-only. The Card's
-  header snippet holds the author + chip, footer holds the timestamp.
-
-  Edit lifecycle: parent controls `editing` boolean. When editing transitions
-  from false to true, this component snapshots `content` into an internal
-  `editText` draft. The draft persists across re-renders and content changes
-  while editing is true. Parent calls `onedit(text)` on Save, which triggers
-  encryption + mutation. `saving` disables the textarea and buttons while
-  the mutation is in flight. Parent sets `editing = false` only on success.
+  component library. A badge shows the note type icon and name. Own notes
+  show a pencil icon that opens the edit sheet (managed by parent).
 -->
 <script lang="ts">
-  import { Card, Button, List, ListInput } from "konsta/svelte";
-  import { StickyNote } from "@lucide/svelte";
+  import { Card } from "konsta/svelte";
+  import { StickyNote, Pencil } from "@lucide/svelte";
   import { formatRelativeTime } from "$lib/utils/format-time.js";
+  import { resolveNoteTypeIcon } from "$lib/utils/note-type-icons.js";
   import * as m from "$lib/paraglide/messages.js";
-  import {
-    type DecryptResult,
-    isDecryptReady,
-  } from "$lib/crypto/decrypt-result.js";
+  import type { DecryptResult } from "$lib/crypto/decrypt-result.js";
   import DecryptPlaceholder from "$lib/components/DecryptPlaceholder.svelte";
 
   interface Props {
@@ -29,18 +20,10 @@
     authorName: string | undefined;
     timestamp: string;
     isOwn: boolean;
-    /** When true, note body becomes a textarea for editing. */
-    editing?: boolean;
-    /** When true, Save/Cancel are disabled and a saving indicator shows. */
-    saving?: boolean;
-    /** Called with the new plaintext when the user taps Save. */
-    onedit?: (newContent: string) => void;
-    /** Called when the user cancels editing. */
-    oncanceledit?: () => void;
-    onpointerdown?: (e: PointerEvent) => void;
-    onpointerup?: (e: PointerEvent) => void;
-    onpointercancel?: (e: PointerEvent) => void;
+    onopenedit?: () => void;
     searchTerm?: string | null;
+    noteTypeName?: string;
+    noteTypeIcon?: string;
   }
 
   let {
@@ -49,51 +32,20 @@
     authorName,
     timestamp,
     isOwn,
-    editing = false,
-    saving = false,
-    onedit,
-    oncanceledit,
-    onpointerdown,
-    onpointerup,
-    onpointercancel,
+    onopenedit,
     searchTerm = null,
+    noteTypeName,
+    noteTypeIcon,
   }: Props = $props();
 
-  let editText = $state("");
-  let prevEditing = false;
-
-  // Seed editText only on the false -> true transition of `editing`.
-  // While editing stays true (including error-recovery re-renders),
-  // the user's draft is preserved. Content changes from the decrypt
-  // cache are ignored while editing.
-  $effect(() => {
-    if (editing && !prevEditing) {
-      if (isDecryptReady(result)) {
-        editText = result.value;
-      }
-    }
-    prevEditing = editing;
-  });
-
-  function handleSave(): void {
-    const trimmed = editText.trim();
-    const currentValue = isDecryptReady(result) ? result.value : undefined;
-    if (!trimmed || trimmed === currentValue) {
-      oncanceledit?.();
-      return;
-    }
-    onedit?.(trimmed);
-  }
-
-  function handleCancel(): void {
-    oncanceledit?.();
-  }
+  const NoteTypeIconComponent = $derived(
+    noteTypeIcon !== undefined ? resolveNoteTypeIcon(noteTypeIcon) : null,
+  );
 
   const timeLabel = $derived(formatRelativeTime(new Date(timestamp)));
   const displayAuthor = $derived(
     authorName ?? m.ticket_private_note_author_fallback(),
   );
-  const canSave = $derived(editText.trim().length > 0 && !saving);
 </script>
 
 <div class="private-note-wrapper" class:own-note={isOwn}>
@@ -103,62 +55,36 @@
     class="private-note-card"
     role="article"
     aria-label={m.ticket_private_note_by({ author: displayAuthor })}
-    onpointerdown={editing ? undefined : onpointerdown}
-    onpointerup={editing ? undefined : onpointerup}
-    onpointercancel={editing ? undefined : onpointercancel}
   >
     <span class="note-badge">
-      <StickyNote size={11} class="note-icon" />
+      {#if NoteTypeIconComponent && noteTypeName}
+        <NoteTypeIconComponent size={11} class="note-icon" aria-hidden="true" />
+        <span class="note-type-name">{noteTypeName}</span>
+        <span class="note-badge-sep" aria-hidden="true">&middot;</span>
+      {:else}
+        <StickyNote size={11} class="note-icon" aria-hidden="true" />
+      {/if}
       {m.ticket_note_team_only()}
+      {#if isOwn && onopenedit}
+        <button
+          type="button"
+          class="note-edit-btn"
+          onclick={onopenedit}
+          aria-label={m.ticket_edit_note()}
+        >
+          <Pencil size={11} />
+        </button>
+      {/if}
     </span>
-    {#if editing}
-      <div class="note-edit-area">
-        <List nested class="note-edit-list">
-          <ListInput
-            type="textarea"
-            bind:value={editText}
-            aria-label={m.ticket_edit_note()}
-            inputClass="resize-y min-h-[3rem]"
-            disabled={saving}
-          />
-        </List>
-        <div class="note-edit-actions">
-          <Button
-            clear
-            small
-            inline
-            onclick={handleCancel}
-            disabled={saving}
-            class="note-edit-cancel"
-          >
-            {m.common_cancel()}
-          </Button>
-          <Button
-            small
-            inline
-            onclick={handleSave}
-            disabled={!canSave}
-            class="note-edit-save"
-          >
-            {#if saving}
-              {m.common_loading()}
-            {:else}
-              {m.common_save()}
-            {/if}
-          </Button>
-        </div>
-      </div>
-    {:else}
-      <div class="note-body">
-        <DecryptPlaceholder
-          {result}
-          ciphertext={encryptedContent}
-          length={40}
-          block
-          {searchTerm}
-        />
-      </div>
-    {/if}
+    <div class="note-body">
+      <DecryptPlaceholder
+        {result}
+        ciphertext={encryptedContent}
+        length={40}
+        block
+        {searchTerm}
+      />
+    </div>
     <div class="note-meta">
       {#if authorName}
         <span class="note-author">{authorName}</span>
@@ -193,11 +119,20 @@
     flex-shrink: 0;
   }
 
+  .note-type-name {
+    font-weight: 600;
+  }
+
+  .note-badge-sep {
+    opacity: 0.5;
+  }
+
   .note-body {
     font-size: 0.875rem;
     line-height: 1.5;
     color: var(--ink);
     word-break: break-word;
+    white-space: pre-line;
   }
 
   .note-meta {
@@ -219,19 +154,17 @@
     white-space: nowrap;
   }
 
-  .note-edit-area {
+  .note-edit-btn {
+    margin-left: auto;
     display: flex;
-    flex-direction: column;
-    gap: 0.375rem;
-  }
-
-  .note-edit-actions {
-    display: flex;
-    justify-content: flex-end;
-    gap: 0.5rem;
-  }
-
-  :global(.note-edit-list) {
-    margin: 0 !important;
+    align-items: center;
+    justify-content: center;
+    padding: 0.25rem;
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: var(--muted);
+    border-radius: 0.25rem;
+    -webkit-tap-highlight-color: transparent;
   }
 </style>

@@ -26,6 +26,13 @@ vi.mock("$lib/crypto/context.js", () => ({
   getFollowUpDecryptCache: () => ({
     decryptContent: mockDecryptContent,
   }),
+  getOrgDecryptCache: () => ({
+    decrypt: () => null,
+  }),
+}));
+
+vi.mock("$lib/trpc/index.js", () => ({
+  trpc: { tickets: undefined },
 }));
 
 afterEach(() => {
@@ -50,6 +57,7 @@ function makeFollowUp(
     hasRecording: false,
     hasImage: false,
     hasFile: false,
+    noteTypeId: null,
     ...overrides,
   };
 }

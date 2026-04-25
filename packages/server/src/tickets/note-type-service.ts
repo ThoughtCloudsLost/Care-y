@@ -21,9 +21,11 @@ export interface NoteTypeRecord {
   readonly id: string;
   readonly encryptedName: Buffer;
   readonly encryptedIcon: Buffer;
+  readonly encryptedDescription: Buffer | null;
   readonly isActive: boolean;
   readonly requiresOnClose: boolean;
   readonly createdAt: Date;
+  readonly notificationHints: readonly string[];
 }
 
 export interface NoteTypeAdminRecord extends NoteTypeRecord {
@@ -39,6 +41,7 @@ export interface NoteTypeService {
   create(input: {
     encryptedName: Buffer;
     encryptedIcon: Buffer;
+    encryptedDescription?: Buffer;
     escalationTargets: EscalationTarget[];
     requiresOnClose?: boolean;
   }): Promise<NoteTypeRecord>;
@@ -46,6 +49,7 @@ export interface NoteTypeService {
     id: string;
     encryptedName?: Buffer;
     encryptedIcon?: Buffer;
+    encryptedDescription?: Buffer | null;
     escalationTargets?: EscalationTarget[];
     isActive?: boolean;
     requiresOnClose?: boolean;
@@ -58,20 +62,37 @@ interface NoteTypeRow {
   id: string;
   encrypted_name: Buffer;
   encrypted_icon: Buffer;
+  encrypted_description: Buffer | null;
   encrypted_escalation_targets: Buffer;
   is_active: boolean;
   requires_on_close: boolean;
   created_at: Date;
 }
 
-function toRecord(row: NoteTypeRow): NoteTypeRecord {
+function buildNotificationHints(targets: EscalationTarget[]): string[] {
+  const hints: string[] = [];
+  for (const t of targets) {
+    if (t.type === "ticket_access") hints.push("ticket_access");
+    else if (t.type === "role") hints.push(`role:${t.value}`);
+    else if (t.type === "permission") hints.push(`permission:${t.value}`);
+    else hints.push("queue");
+  }
+  return hints;
+}
+
+function toRecord(
+  row: NoteTypeRow,
+  hints: readonly string[] = [],
+): NoteTypeRecord {
   return {
     id: row.id,
     encryptedName: row.encrypted_name,
     encryptedIcon: row.encrypted_icon,
+    encryptedDescription: row.encrypted_description,
     isActive: row.is_active,
     requiresOnClose: row.requires_on_close,
     createdAt: row.created_at,
+    notificationHints: hints,
   };
 }
 
@@ -144,7 +165,13 @@ export function createNoteTypeService(
       ]);
 
       return {
-        types: rows.map(toRecord),
+        types: rows.map((row) => {
+          const targets = decryptTargets(
+            row.encrypted_escalation_targets,
+            secretsEncryptor,
+          );
+          return toRecord(row, buildNotificationHints(targets));
+        }),
         defaultNoteTypeId: config?.default_note_type_id ?? null,
       };
     },
@@ -160,6 +187,7 @@ export function createNoteTypeService(
         .values({
           encrypted_name: input.encryptedName,
           encrypted_icon: input.encryptedIcon,
+          encrypted_description: input.encryptedDescription ?? null,
           encrypted_escalation_targets: encryptedTargets,
           requires_on_close: input.requiresOnClose ?? false,
         })
@@ -190,6 +218,9 @@ export function createNoteTypeService(
       }
       if (input.encryptedIcon !== undefined) {
         updates.encrypted_icon = input.encryptedIcon;
+      }
+      if (input.encryptedDescription !== undefined) {
+        updates.encrypted_description = input.encryptedDescription;
       }
       if (input.escalationTargets !== undefined) {
         updates.encrypted_escalation_targets = encryptTargets(
@@ -249,6 +280,7 @@ export function createNoteTypeService(
 export interface DefaultNoteTypeDef {
   readonly name: string;
   readonly icon: string;
+  readonly description: string;
   readonly escalationTargets: EscalationTarget[];
   readonly requiresOnClose: boolean;
 }
@@ -257,30 +289,36 @@ export const DEFAULT_NOTE_TYPES: readonly DefaultNoteTypeDef[] = [
   {
     name: "Comment",
     icon: "message-square-dashed",
-    escalationTargets: [],
+    description: "General notes and observations about this ticket.",
+    escalationTargets: [{ type: "ticket_access" }],
     requiresOnClose: false,
   },
   {
     name: "Resolution",
     icon: "clipboard-check",
-    escalationTargets: [],
+    description: "Documents how the ticket was resolved. Prompted on close.",
+    escalationTargets: [{ type: "ticket_access" }],
     requiresOnClose: true,
   },
   {
     name: "Safety Concern",
     icon: "life-buoy",
+    description: "Use when someone's wellbeing may be at risk.",
     escalationTargets: [
       { type: "role", value: "admin" },
       { type: "role", value: "manager" },
+      { type: "ticket_access" },
     ],
     requiresOnClose: false,
   },
   {
     name: "Request",
     icon: "heart-handshake",
+    description: "Requests additional resources or assistance for this ticket.",
     escalationTargets: [
       { type: "role", value: "admin" },
       { type: "role", value: "manager" },
+      { type: "ticket_access" },
     ],
     requiresOnClose: false,
   },
@@ -305,6 +343,7 @@ export async function seedDefaultNoteTypes(
       .values({
         encrypted_name: sealedBox.seal(def.name),
         encrypted_icon: sealedBox.seal(def.icon),
+        encrypted_description: sealedBox.seal(def.description),
         encrypted_escalation_targets: encryptTargets(
           def.escalationTargets,
           secretsEncryptor,

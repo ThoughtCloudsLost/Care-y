@@ -68,6 +68,7 @@ export interface FollowUpPreview {
   readonly hasRecording: boolean;
   readonly hasImage: boolean;
   readonly hasFile: boolean;
+  readonly noteTypeId: string | null;
 }
 
 export interface CreateTicketInput {
@@ -941,6 +942,7 @@ export function createTicketService(
           eb.ref("f.type").as("type"),
           eb.ref("f.encrypted_content").as("encrypted_content"),
           eb.ref("f.created_at").as("created_at"),
+          eb.ref("f.note_type_id").as("note_type_id"),
           eb.fn
             .agg<number>("row_number")
             .over((ob) =>
@@ -1013,6 +1015,7 @@ export function createTicketService(
           "ranked_f.has_recording",
           "ranked_f.has_image",
           "ranked_f.has_file",
+          "ranked_f.note_type_id",
           "tkw.ephemeral_point",
           "tkw.nonce",
           "tkw.wrapped_key",
@@ -1047,6 +1050,7 @@ export function createTicketService(
           hasRecording: Boolean(row.has_recording),
           hasImage: Boolean(row.has_image),
           hasFile: Boolean(row.has_file),
+          noteTypeId: row.note_type_id ?? null,
         };
         const list = result[row.ticket_id];
         if (list) {

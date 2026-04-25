@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Team only" |
+* | "Internal note" |
 *
 * @param {Ticket_Note_Team_OnlyInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

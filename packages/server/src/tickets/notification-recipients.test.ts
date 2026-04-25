@@ -5,6 +5,7 @@ import {
   type RecipientBuilderDeps,
   type EscalationResolverDeps,
 } from "./notification-recipients.js";
+import { DEFAULT_NOTE_TYPES } from "./note-type-service.js";
 import type { EscalationTarget } from "@care-y/shared";
 
 function createMockDeps(overrides?: {
@@ -222,6 +223,7 @@ function createMockEscalationDeps(overrides?: {
   managerUsers?: string[];
   permissionUsers?: Record<string, string[]>;
   queueMembers?: Record<string, string[]>;
+  ticketKeyWrapHolders?: Record<string, string[]>;
 }): EscalationResolverDeps {
   return {
     getUsersByRole: async (role) => {
@@ -232,6 +234,8 @@ function createMockEscalationDeps(overrides?: {
       overrides?.permissionUsers?.[permission] ?? [],
     getQueueMembers: async (queueId) =>
       overrides?.queueMembers?.[queueId] ?? [],
+    getTicketKeyWrapHolders: async (ticketId) =>
+      overrides?.ticketKeyWrapHolders?.[ticketId] ?? [],
   };
 }
 
@@ -303,5 +307,91 @@ describe("resolveEscalationTargets", () => {
     const result = await resolveEscalationTargets([], deps);
 
     expect(result).toEqual([]);
+  });
+
+  it("resolves ticket_access targets to key wrap holders when ticketId provided", async () => {
+    const deps = createMockEscalationDeps({
+      ticketKeyWrapHolders: { "ticket-42": ["vol-1", "vol-2"] },
+    });
+    const targets: EscalationTarget[] = [{ type: "ticket_access" }];
+
+    const result = await resolveEscalationTargets(targets, deps, "ticket-42");
+
+    expect(result).toEqual(["vol-1", "vol-2"]);
+  });
+
+  it("ticket_access with no ticketId returns empty (no-op)", async () => {
+    const deps = createMockEscalationDeps({
+      ticketKeyWrapHolders: { "ticket-42": ["vol-1"] },
+    });
+    const targets: EscalationTarget[] = [{ type: "ticket_access" }];
+
+    const result = await resolveEscalationTargets(targets, deps);
+
+    expect(result).toEqual([]);
+  });
+
+  it("ticket_access deduplicates with role targets", async () => {
+    const deps = createMockEscalationDeps({
+      adminUsers: ["shared-user", "admin-only"],
+      ticketKeyWrapHolders: { "ticket-1": ["shared-user", "vol-only"] },
+    });
+    const targets: EscalationTarget[] = [
+      { type: "role", value: "admin" },
+      { type: "ticket_access" },
+    ];
+
+    const result = await resolveEscalationTargets(targets, deps, "ticket-1");
+
+    expect(result).toHaveLength(3);
+    expect(result).toContain("shared-user");
+    expect(result).toContain("admin-only");
+    expect(result).toContain("vol-only");
+  });
+
+  it("ticket_access with unknown ticketId returns empty", async () => {
+    const deps = createMockEscalationDeps({
+      ticketKeyWrapHolders: { "ticket-42": ["vol-1"] },
+    });
+    const targets: EscalationTarget[] = [{ type: "ticket_access" }];
+
+    const result = await resolveEscalationTargets(
+      targets,
+      deps,
+      "nonexistent-ticket",
+    );
+
+    expect(result).toEqual([]);
+  });
+});
+
+describe("DEFAULT_NOTE_TYPES seed validation", () => {
+  it("all 4 defaults include ticket_access escalation target", () => {
+    expect(DEFAULT_NOTE_TYPES).toHaveLength(4);
+    for (const def of DEFAULT_NOTE_TYPES) {
+      const hasTicketAccess = def.escalationTargets.some(
+        (t) => t.type === "ticket_access",
+      );
+      expect(hasTicketAccess, `${def.name} should include ticket_access`).toBe(
+        true,
+      );
+    }
+  });
+
+  it("Safety Concern and Request also include admin + manager targets", () => {
+    const safety = DEFAULT_NOTE_TYPES.find((d) => d.name === "Safety Concern");
+    const request = DEFAULT_NOTE_TYPES.find((d) => d.name === "Request");
+
+    for (const def of [safety, request]) {
+      expect(def).toBeDefined();
+      expect(def!.escalationTargets).toContainEqual({
+        type: "role",
+        value: "admin",
+      });
+      expect(def!.escalationTargets).toContainEqual({
+        type: "role",
+        value: "manager",
+      });
+    }
   });
 });
