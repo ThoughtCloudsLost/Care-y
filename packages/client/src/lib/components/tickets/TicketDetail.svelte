@@ -33,7 +33,12 @@
     getCurrentUserId,
     getCurrentPermissions,
   } from "$lib/crypto/context.js";
-  import { Permission, type FollowUpListInput } from "@care-y/shared";
+  import {
+    Permission,
+    type FollowUpListInput,
+    type ReactionSummary,
+    type ReactionType,
+  } from "@care-y/shared";
 
   type FollowUpType = NonNullable<FollowUpListInput["types"]>[number];
   type MediaFlag = NonNullable<FollowUpListInput["mediaFlags"]>[number];
@@ -78,9 +83,10 @@
   if (!trpc.tickets) throw new RouterNotAvailableError("tickets");
   const ticketRouter = trpc.tickets;
 
-  type FollowUpRecord = Awaited<
+  type ListFollowUpsResult = Awaited<
     ReturnType<typeof ticketRouter.listFollowUps.query>
-  >[number];
+  >;
+  type FollowUpRecord = ListFollowUpsResult["followUps"][number];
 
   interface TicketDetailProps {
     ticketId: string;
@@ -198,6 +204,25 @@
 
   const PAGE_SIZE = 50;
 
+  // Optimistic reaction overrides: followupId -> ReactionSummary[]
+  const reactionOverrides = new SvelteMap<string, ReactionSummary[]>();
+
+  function mergeReactions(reactions: Record<string, ReactionSummary[]>): void {
+    for (const [id, rs] of Object.entries(reactions)) {
+      if (!reactionOverrides.has(id)) {
+        reactionOverrides.set(id, rs);
+      }
+    }
+  }
+
+  async function fetchFollowUps(
+    params: Parameters<typeof ticketRouter.listFollowUps.query>[0],
+  ): Promise<FollowUpRecord[]> {
+    const result = await ticketRouter.listFollowUps.query(params);
+    mergeReactions(result.reactions);
+    return result.followUps;
+  }
+
   const ticketQuery = createQuery(() => ({
     queryKey: ["ticket", ticketId],
     queryFn: async () => ticketRouter.get.query({ ticketId }),
@@ -207,7 +232,7 @@
   const initialFollowUpsQuery = createQuery(() => ({
     queryKey: ["ticket", ticketId, "followUps", "initial"],
     queryFn: async () =>
-      ticketRouter.listFollowUps.query({
+      fetchFollowUps({
         ticketId,
         limit: PAGE_SIZE,
         direction: "older",
@@ -281,7 +306,7 @@
     queryClient,
     getTicketId: () => ticketId,
     fetchPage: async (cursor) =>
-      ticketRouter.listFollowUps.query({
+      fetchFollowUps({
         ticketId,
         limit: PAGE_SIZE,
         cursor,
@@ -386,7 +411,7 @@
       filterDateTo?.toISOString() ?? null,
     ],
     queryFn: async () =>
-      ticketRouter.listFollowUps.query({
+      fetchFollowUps({
         ticketId,
         limit: FILTERED_PAGE_SIZE,
         direction: "older",
@@ -423,8 +448,8 @@
   // Timeline view loads all follow-ups via the summary endpoint;
   // Messages view only has the paginated subset.
   $effect(() => {
-    if (timelineActive && summaryQuery.data) {
-      searchableFollowUps = summaryQuery.data;
+    if (timelineActive && summaryData) {
+      searchableFollowUps = summaryData;
     } else {
       searchableFollowUps = displayFollowUps;
     }
@@ -477,8 +502,60 @@
     enabled: timelineActive,
   }));
 
+  const summaryData = $derived(summaryQuery.data?.summaries ?? null);
+  const reactionsData = $derived(summaryQuery.data?.reactions ?? {});
+
+  function getReactions(followUpId: string): ReactionSummary[] {
+    const override = reactionOverrides.get(followUpId);
+    if (override !== undefined) return override;
+    const server = Object.hasOwn(reactionsData, followUpId)
+      ? // eslint-disable-next-line security/detect-object-injection -- key is a UUID from our own query, not user input
+        reactionsData[followUpId]
+      : undefined;
+    return server ?? [];
+  }
+
+  function handleToggleReaction(
+    followUpId: string,
+    reaction: ReactionType,
+  ): void {
+    const uid = currentUserId;
+    if (uid === undefined) return;
+    const current = getReactions(followUpId);
+    const existing = current.find((r) => r.reaction === reaction);
+    const alreadyReacted = existing?.userIds.includes(uid) ?? false;
+
+    let optimistic: ReactionSummary[];
+    if (alreadyReacted && existing) {
+      const filtered = existing.userIds.filter((id) => id !== uid);
+      optimistic =
+        filtered.length > 0
+          ? current.map((r) =>
+              r.reaction === reaction ? { ...r, userIds: filtered } : r,
+            )
+          : current.filter((r) => r.reaction !== reaction);
+    } else if (existing) {
+      optimistic = current.map((r) =>
+        r.reaction === reaction ? { ...r, userIds: [...r.userIds, uid] } : r,
+      );
+    } else {
+      optimistic = [...current, { reaction, userIds: [uid] }];
+    }
+
+    reactionOverrides.set(followUpId, optimistic);
+
+    void ticketRouter.toggleReaction
+      .mutate({ followUpId, reaction })
+      .then((serverReactions: ReactionSummary[]) => {
+        reactionOverrides.set(followUpId, serverReactions);
+      })
+      .catch(() => {
+        reactionOverrides.delete(followUpId);
+      });
+  }
+
   function toTimelineItem(
-    fu: NonNullable<typeof summaryQuery.data>[number],
+    fu: NonNullable<typeof summaryData>[number],
   ): TimelineItem {
     return {
       id: fu.id,
@@ -500,8 +577,8 @@
   // Build timeline items from the summary endpoint, falling back to
   // already-loaded paginator items while the summary query is in flight.
   const displayTimelineItems = $derived.by((): TimelineItem[] => {
-    if (summaryQuery.data) {
-      return summaryQuery.data.map(toTimelineItem);
+    if (summaryData) {
+      return summaryData.map(toTimelineItem);
     }
     return followUps.map((fu) => ({
       id: fu.id,
@@ -539,7 +616,7 @@
 
   $effect(() => {
     if (!ticket) return;
-    for (const item of summaryQuery.data ?? []) {
+    for (const item of summaryData ?? []) {
       if (item.encryptedContent === null) continue;
       if (resolvedIds.has(item.id)) continue;
       const content = followUpCache.decryptContent(
@@ -567,7 +644,7 @@
 
     // Expand immediately with placeholder rows.
     const placeholders: ClusterRecord[] = followUpIds.map((id) => {
-      const summary = (summaryQuery.data ?? []).find((s) => s.id === id);
+      const summary = (summaryData ?? []).find((s) => s.id === id);
       return {
         id,
         source: summary?.source ?? "volunteer",
@@ -820,6 +897,21 @@
       : [],
   );
 
+  $effect(() => {
+    const noteIds = orderedPreviews
+      .filter((fu) => fu.type === "internal_note")
+      .map((fu) => fu.id);
+    if (noteIds.length === 0) return;
+    const unfetched = noteIds.filter((id) => !reactionOverrides.has(id));
+    if (unfetched.length === 0) return;
+    void ticketRouter.getReactions
+      .query({ followUpIds: unfetched })
+      .then((result) => mergeReactions(result))
+      .catch((_e: unknown) => {
+        /* best-effort */
+      });
+  });
+
   // Total message slots: prop (instant from list cache) > ticket query > fallback.
   // Previews replace the bottom N slots (not added on top).
   const totalSlots = $derived(
@@ -890,7 +982,13 @@
         fu.keyWrap !== null,
       )}
       <div class="fu-wrapper">
-        <FollowUpBubble followUp={fu} result={previewResult} {clientAlias} />
+        <FollowUpBubble
+          followUp={fu}
+          result={previewResult}
+          {clientAlias}
+          reactions={getReactions(fu.id)}
+          {currentUserId}
+        />
       </div>
     {/each}
   </Messages>
@@ -986,6 +1084,11 @@
                 noteTypeName={resolveNoteTypeName(rec.noteTypeId)}
                 noteTypeIcon={resolveNoteTypeIcon(rec.noteTypeId)}
                 {searchTerm}
+                reactions={getReactions(rec.id)}
+                {currentUserId}
+                ontogglereaction={(reaction: ReactionType) =>
+                  handleToggleReaction(rec.id, reaction)}
+                resolveUserName={(uid: string) => resolveVolunteerName(uid)}
               />
             {:else}
               <Message
@@ -1145,6 +1248,11 @@
                         }
                       : undefined}
                     {searchTerm}
+                    reactions={getReactions(fu.id)}
+                    {currentUserId}
+                    ontogglereaction={(reaction: ReactionType) =>
+                      handleToggleReaction(fu.id, reaction)}
+                    resolveUserName={(uid: string) => resolveVolunteerName(uid)}
                   />
                 {:else}
                   <Message

@@ -889,27 +889,25 @@ export function createFollowUpService(
         throw new ForbiddenError(ErrorCode.INSUFFICIENT_ROLE);
       }
 
-      const existing = await db
-        .selectFrom("followup_reactions")
-        .select("id")
-        .where("followup_id", "=", followUpId)
-        .where("user_id", "=", userId)
-        .where("reaction", "=", reaction)
+      const inserted = await db
+        .insertInto("followup_reactions")
+        .values({
+          followup_id: followUpId,
+          user_id: userId,
+          reaction,
+        })
+        .onConflict((oc) =>
+          oc.constraint("uq_followup_reactions_user_reaction").doNothing(),
+        )
+        .returning("id")
         .executeTakeFirst();
 
-      if (existing !== undefined) {
+      if (inserted === undefined) {
         await db
           .deleteFrom("followup_reactions")
-          .where("id", "=", existing.id)
-          .execute();
-      } else {
-        await db
-          .insertInto("followup_reactions")
-          .values({
-            followup_id: followUpId,
-            user_id: userId,
-            reaction,
-          })
+          .where("followup_id", "=", followUpId)
+          .where("user_id", "=", userId)
+          .where("reaction", "=", reaction)
           .execute();
       }
 
@@ -961,6 +959,9 @@ function toReactionType(value: string): ReactionType {
   for (const rt of REACTION_TYPES) {
     if (rt === value) return rt;
   }
+  console.warn(
+    `Unknown reaction type in DB: "${value}", falling back to "acknowledge"`,
+  );
   return "acknowledge";
 }
 

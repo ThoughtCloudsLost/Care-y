@@ -103,7 +103,7 @@
 
   type FollowUpList = Awaited<
     ReturnType<typeof ticketRouter.listFollowUps.query>
-  >;
+  >["followUps"];
 
   const ticketId = $derived(page.params.id ?? "");
   const tabbarHidden = getTabbarHiddenCtx();

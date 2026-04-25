@@ -86,7 +86,7 @@ vi.mock("@tanstack/svelte-query", () => ({
         isLoading: false,
         isError: false,
         error: null,
-        data: [],
+        data: { summaries: [], reactions: {} },
       };
     }
 
@@ -115,7 +115,9 @@ vi.mock("$lib/trpc/index.js", () => ({
   trpc: {
     tickets: {
       get: { query: vi.fn() },
-      listFollowUps: { query: vi.fn() },
+      listFollowUps: {
+        query: vi.fn().mockResolvedValue({ followUps: [], reactions: {} }),
+      },
       listRecordings: { query: vi.fn() },
       listAttachments: { query: vi.fn() },
       listVolunteers: { query: vi.fn() },
@@ -131,7 +133,9 @@ vi.mock("$lib/trpc/index.js", () => ({
       updateInternalNote: { mutate: vi.fn() },
       getReadCursor: { query: vi.fn().mockResolvedValue(null) },
       updateReadCursor: { mutate: vi.fn() },
-      listFollowUpSummary: { query: vi.fn().mockResolvedValue([]) },
+      listFollowUpSummary: {
+        query: vi.fn().mockResolvedValue({ summaries: [], reactions: {} }),
+      },
       assignTo: { mutate: vi.fn().mockResolvedValue({}) },
     },
     consultant: {

@@ -44,6 +44,24 @@ describe.skipIf(!process.env.DATABASE_URL)("FollowUpService (DB)", () => {
     };
   }
 
+  async function createNoteTypeWithViewRole(
+    db: TestDb["db"],
+    minViewRole: string,
+  ): Promise<string> {
+    const row = await db
+      .insertInto("note_types")
+      .values({
+        encrypted_name: Buffer.from("restricted-type"),
+        encrypted_icon: Buffer.from("shield"),
+        encrypted_escalation_targets: Buffer.from(JSON.stringify([])),
+        min_view_role: minViewRole,
+        min_create_role: minViewRole,
+      })
+      .returning("id")
+      .executeTakeFirstOrThrow();
+    return row.id;
+  }
+
   it("create inserts follow-up with encrypted_content", async () => {
     const { userId, ticketId } = await createTicketFixture();
 
@@ -808,5 +826,170 @@ describe.skipIf(!process.env.DATABASE_URL)("FollowUpService (DB)", () => {
     const note = results.find((r) => r.type === "internal_note");
     expect(note).toBeDefined();
     expect(note!.noteTypeId).toBeNull();
+  });
+
+  // ── Reactions ──
+
+  it("toggleReaction adds then removes a reaction", async () => {
+    const { userId, ticketId } = await createTicketFixture();
+
+    const note = await svc.create(userId, {
+      ticketId,
+      encryptedContent: Buffer.from("react-test"),
+      source: "volunteer",
+      type: "internal_note",
+      isPrivate: true,
+      mentionedPseudonyms: [],
+    });
+
+    const added = await svc.toggleReaction(
+      userId,
+      "dXwG0zR9BtJp",
+      note.id,
+      "acknowledge",
+    );
+    expect(added).toHaveLength(1);
+    expect(added[0]!.reaction).toBe("acknowledge");
+    expect(added[0]!.userIds).toContain(userId);
+
+    const removed = await svc.toggleReaction(
+      userId,
+      "dXwG0zR9BtJp",
+      note.id,
+      "acknowledge",
+    );
+    expect(removed).toHaveLength(0);
+  });
+
+  it("toggleReaction rejects non-internal_note followups", async () => {
+    const { userId, ticketId } = await createTicketFixture();
+
+    const msg = await svc.create(userId, {
+      ticketId,
+      encryptedContent: Buffer.from("just a message"),
+      source: "volunteer",
+      type: "message",
+      isPrivate: false,
+      mentionedPseudonyms: [],
+    });
+
+    await expect(
+      svc.toggleReaction(userId, "dXwG0zR9BtJp", msg.id, "approve"),
+    ).rejects.toThrow(ForbiddenError);
+  });
+
+  it("getReactions batch-loads reactions for multiple followups", async () => {
+    const { userId, ticketId } = await createTicketFixture();
+
+    const n1 = await svc.create(userId, {
+      ticketId,
+      encryptedContent: Buffer.from("note-1"),
+      source: "volunteer",
+      type: "internal_note",
+      isPrivate: true,
+      mentionedPseudonyms: [],
+    });
+    const n2 = await svc.create(userId, {
+      ticketId,
+      encryptedContent: Buffer.from("note-2"),
+      source: "volunteer",
+      type: "internal_note",
+      isPrivate: true,
+      mentionedPseudonyms: [],
+    });
+
+    await svc.toggleReaction(userId, "dXwG0zR9BtJp", n1.id, "flag");
+    await svc.toggleReaction(userId, "dXwG0zR9BtJp", n2.id, "complete");
+
+    const map = await svc.getReactions([n1.id, n2.id]);
+    expect(map.get(n1.id)).toHaveLength(1);
+    expect(map.get(n1.id)![0]!.reaction).toBe("flag");
+    expect(map.get(n2.id)).toHaveLength(1);
+    expect(map.get(n2.id)![0]!.reaction).toBe("complete");
+  });
+
+  it("getReactions returns empty map for empty input", async () => {
+    const map = await svc.getReactions([]);
+    expect(map.size).toBe(0);
+  });
+
+  // ── View gating ──
+
+  it("listByTicket filters notes by min_view_role", async () => {
+    const { userId, ticketId } = await createTicketFixture();
+
+    const noteTypeId = await createNoteTypeWithViewRole(
+      testDb.db,
+      "POFKWG7erXEJ",
+    );
+
+    await svc.create(userId, {
+      ticketId,
+      encryptedContent: Buffer.from("visible-note"),
+      source: "volunteer",
+      type: "internal_note",
+      isPrivate: true,
+      mentionedPseudonyms: [],
+    });
+    await svc.create(userId, {
+      ticketId,
+      encryptedContent: Buffer.from("restricted-note"),
+      source: "volunteer",
+      type: "internal_note",
+      isPrivate: true,
+      mentionedPseudonyms: [],
+      noteTypeId,
+    });
+
+    const asVolunteer = await svc.listByTicket(userId, ticketId, {
+      limit: 50,
+      userRoleId: "dXwG0zR9BtJp",
+    });
+    const noteTexts = asVolunteer
+      .filter((r) => r.type === "internal_note")
+      .map((r) => r.encryptedContent.toString());
+
+    expect(noteTexts).toContain("visible-note");
+    expect(noteTexts).not.toContain("restricted-note");
+
+    const asAdmin = await svc.listByTicket(userId, ticketId, {
+      limit: 50,
+      userRoleId: "POFKWG7erXEJ",
+    });
+    const adminNoteTexts = asAdmin
+      .filter((r) => r.type === "internal_note")
+      .map((r) => r.encryptedContent.toString());
+
+    expect(adminNoteTexts).toContain("visible-note");
+    expect(adminNoteTexts).toContain("restricted-note");
+  });
+
+  it("listByTicket always shows own notes regardless of role gating", async () => {
+    const { userId, ticketId } = await createTicketFixture();
+
+    const noteTypeId = await createNoteTypeWithViewRole(
+      testDb.db,
+      "POFKWG7erXEJ",
+    );
+
+    await svc.create(userId, {
+      ticketId,
+      encryptedContent: Buffer.from("my-restricted-note"),
+      source: "volunteer",
+      type: "internal_note",
+      isPrivate: true,
+      mentionedPseudonyms: [],
+      noteTypeId,
+    });
+
+    const results = await svc.listByTicket(userId, ticketId, {
+      limit: 50,
+      userRoleId: "dXwG0zR9BtJp",
+    });
+    const noteTexts = results
+      .filter((r) => r.type === "internal_note")
+      .map((r) => r.encryptedContent.toString());
+
+    expect(noteTexts).toContain("my-restricted-note");
   });
 });

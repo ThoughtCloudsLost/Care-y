@@ -8,6 +8,7 @@
   import { formatRelativeTime } from "$lib/utils/format-time.js";
   import { followUpKind } from "$lib/tickets/follow-up-utils.js";
   import type { DecryptResult } from "$lib/crypto/decrypt-result.js";
+  import type { ReactionSummary, ReactionType } from "@care-y/shared";
   import DecryptPlaceholder from "$lib/components/DecryptPlaceholder.svelte";
   import SystemEvent from "$lib/components/tickets/SystemEvent.svelte";
   import PrivateNote from "$lib/components/tickets/PrivateNote.svelte";
@@ -26,6 +27,9 @@
     searchTerm?: string | null;
     noteTypeName?: string;
     noteTypeIcon?: string;
+    reactions?: ReactionSummary[];
+    currentUserId?: string;
+    ontogglereaction?: (reaction: ReactionType) => void;
   }
 
   let {
@@ -36,6 +40,9 @@
     searchTerm = null,
     noteTypeName,
     noteTypeIcon,
+    reactions,
+    currentUserId,
+    ontogglereaction,
   }: FollowUpBubbleProps = $props();
 
   const kind = $derived(followUpKind(followUp));
@@ -57,6 +64,9 @@
     {searchTerm}
     {noteTypeName}
     {noteTypeIcon}
+    {reactions}
+    {currentUserId}
+    {ontogglereaction}
   />
 {:else}
   <Message

@@ -46,7 +46,7 @@ describe("PrivateNote", () => {
 
   it("renders the internal note visibility label", () => {
     const { container } = render(PrivateNote, { props: baseProps });
-    expect(container.textContent).toContain("Only your team can see this");
+    expect(container.textContent).toContain("Internal note");
   });
 
   it("has role='article' with aria-label containing author", () => {
@@ -89,5 +89,75 @@ describe("PrivateNote", () => {
     const timeEl = container.querySelector("time");
     expect(timeEl).not.toBeNull();
     expect(timeEl?.getAttribute("datetime")).toBe("2026-04-05T10:40:00Z");
+  });
+
+  it("renders reaction pills when reactions are provided", () => {
+    const { container } = render(PrivateNote, {
+      props: {
+        ...baseProps,
+        reactions: [
+          { reaction: "acknowledge" as const, userIds: ["u1", "u2"] },
+          { reaction: "flag" as const, userIds: ["u1"] },
+        ],
+        currentUserId: "u1",
+        ontogglereaction: vi.fn(),
+      },
+    });
+    const pills = container.querySelectorAll(".reaction-pill");
+    expect(pills).toHaveLength(2);
+    const counts = [...pills].map(
+      (p) => p.querySelector(".reaction-count")?.textContent,
+    );
+    expect(counts).toEqual(["2", "1"]);
+  });
+
+  it("highlights pills for the current user", () => {
+    const { container } = render(PrivateNote, {
+      props: {
+        ...baseProps,
+        reactions: [{ reaction: "approve" as const, userIds: ["u1"] }],
+        currentUserId: "u1",
+        ontogglereaction: vi.fn(),
+      },
+    });
+    const mine = container.querySelector(".reaction-mine");
+    expect(mine).not.toBeNull();
+  });
+
+  it("does not highlight pills for other users", () => {
+    const { container } = render(PrivateNote, {
+      props: {
+        ...baseProps,
+        reactions: [{ reaction: "approve" as const, userIds: ["u2"] }],
+        currentUserId: "u1",
+        ontogglereaction: vi.fn(),
+      },
+    });
+    const mine = container.querySelector(".reaction-mine");
+    expect(mine).toBeNull();
+  });
+
+  it("hides reaction bar when ontogglereaction is not provided", () => {
+    const { container } = render(PrivateNote, {
+      props: {
+        ...baseProps,
+        reactions: [{ reaction: "acknowledge" as const, userIds: ["u1"] }],
+        currentUserId: "u1",
+      },
+    });
+    const bar = container.querySelector(".reaction-bar");
+    expect(bar).toBeNull();
+  });
+
+  it("renders add-reaction button with aria-label", () => {
+    const { container } = render(PrivateNote, {
+      props: {
+        ...baseProps,
+        ontogglereaction: vi.fn(),
+      },
+    });
+    const addBtn = container.querySelector(".reaction-add-btn");
+    expect(addBtn).not.toBeNull();
+    expect(addBtn?.getAttribute("aria-label")).toBeTruthy();
   });
 });

@@ -13,7 +13,9 @@
     getCryptoBridge,
     getFollowUpDecryptCache,
     getOrgDecryptCache,
+    getCurrentUserId,
   } from "$lib/crypto/context.js";
+  import type { ReactionSummary, ReactionType } from "@care-y/shared";
   import { resolveAsyncDecrypt } from "$lib/crypto/decrypt-result.js";
   import { RouterNotAvailableError } from "$lib/errors.js";
   import { toastStore } from "$lib/stores/toast.svelte.js";
@@ -51,6 +53,51 @@
   const cryptoBridge = getCryptoBridge();
   const followUpCache = getFollowUpDecryptCache();
   const orgCache = getOrgDecryptCache();
+  const currentUserIdGetter = getCurrentUserId();
+  const currentUserId = $derived(currentUserIdGetter());
+
+  let replyReactions = $state<Record<string, ReactionSummary[]>>({});
+
+  $effect(() => {
+    if (!opened || !previewFollowUps) {
+      replyReactions = {};
+      return;
+    }
+    const noteIds = previewFollowUps
+      .filter((fu) => fu.type === "internal_note")
+      .map((fu) => fu.id);
+    if (noteIds.length === 0) return;
+    void ticketRouter.getReactions
+      .query({ followUpIds: noteIds })
+      .then((r: Record<string, ReactionSummary[]>) => {
+        replyReactions = r;
+      })
+      .catch((_e: unknown) => {
+        /* best-effort */
+      });
+  });
+
+  function getReplyReactions(followUpId: string): ReactionSummary[] {
+    const reactions = Object.hasOwn(replyReactions, followUpId)
+      ? // eslint-disable-next-line security/detect-object-injection -- key is a UUID from our own query, not user input
+        replyReactions[followUpId]
+      : undefined;
+    return reactions ?? [];
+  }
+
+  function handleToggleReaction(
+    followUpId: string,
+    reaction: ReactionType,
+  ): void {
+    void ticketRouter.toggleReaction
+      .mutate({ followUpId, reaction })
+      .then((updated: ReactionSummary[]) => {
+        replyReactions = { ...replyReactions, [followUpId]: updated };
+      })
+      .catch((_e: unknown) => {
+        /* best-effort */
+      });
+  }
 
   const noteTypesQuery = ticketRouter.noteTypes
     ? createNoteTypesQuery(ticketRouter.noteTypes)
@@ -215,6 +262,10 @@
             {clientAlias}
             noteTypeName={resolveNoteTypeName(fu.noteTypeId)}
             noteTypeIcon={resolveNoteTypeIconSlug(fu.noteTypeId)}
+            reactions={getReplyReactions(fu.id)}
+            {currentUserId}
+            ontogglereaction={(reaction: ReactionType) =>
+              handleToggleReaction(fu.id, reaction)}
           />
         {/each}
       {/if}

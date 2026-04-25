@@ -39,7 +39,11 @@ import type { ReadCursorService } from "../tickets/read-cursor-service.js";
 import type { NotificationService } from "../notifications/service.js";
 import type { AuditEntry } from "../tickets/audit.js";
 import type { NoteTypeService } from "../tickets/note-type-service.js";
-import type { NotificationEventType, TicketPriority } from "@care-y/shared";
+import type {
+  NotificationEventType,
+  ReactionSummary,
+  TicketPriority,
+} from "@care-y/shared";
 import { ErrorCode, meetsRoleThreshold } from "@care-y/shared";
 import { ForbiddenError, NotFoundError } from "../errors.js";
 import {
@@ -308,13 +312,14 @@ export function createTicketRouter(deps: TicketRouterDeps) {
     if (noteTypeId === undefined || !deps.createNoteTypeSvc) return undefined;
 
     const ntSvc = deps.createNoteTypeSvc(tDb);
-    const targets = await ntSvc.getEscalationTargets(noteTypeId);
+    const ctx = await ntSvc.getEscalationContext(noteTypeId);
+    if (!ctx) return undefined;
 
     const qp = deps.createQueuePermissionsSvc(tDb);
     const userSvc = createUserService(tDb);
 
     const userIds = await resolveEscalationTargets(
-      targets,
+      ctx.targets,
       {
         getUsersByRole: async (role) => {
           const roleId = role === "admin" ? RoleId.ADMIN : RoleId.MANAGER;
@@ -338,7 +343,21 @@ export function createTicketRouter(deps: TicketRouterDeps) {
       ticketId,
     );
 
-    return userIds.length > 0 ? userIds : undefined;
+    if (userIds.length === 0) return undefined;
+
+    if (ctx.minViewRole === RoleId.VOLUNTEER) return userIds;
+
+    const userRows = await tDb
+      .selectFrom("users")
+      .select(["id", "role_id"])
+      .where("id", "in", userIds)
+      .execute();
+
+    const filtered = userRows
+      .filter((u) => meetsRoleThreshold(u.role_id, ctx.minViewRole))
+      .map((u) => u.id);
+
+    return filtered.length > 0 ? filtered : undefined;
   }
 
   // Audit helper: best-effort, never blocks. No-op when audit service not injected.
@@ -588,7 +607,7 @@ export function createTicketRouter(deps: TicketRouterDeps) {
       withErrorWrapping(async ({ ctx, input }) => {
         const access = deps.createTicketAccess(ctx.org.tenantDb);
         const svc = deps.createFollowUpSvc(ctx.org.tenantDb, access);
-        return svc.listByTicket(ctx.user.id, input.ticketId, {
+        const followUps = await svc.listByTicket(ctx.user.id, input.ticketId, {
           limit: input.limit,
           cursor: input.cursor,
           direction: input.direction,
@@ -600,6 +619,15 @@ export function createTicketRouter(deps: TicketRouterDeps) {
           dateTo: input.dateTo,
           userRoleId: ctx.user.roleId,
         });
+
+        const noteIds = followUps
+          .filter((fu) => fu.type === "internal_note")
+          .map((fu) => fu.id);
+        const reactionsMap = await svc.getReactions(noteIds);
+        const reactions: Record<string, ReactionSummary[]> =
+          Object.fromEntries(reactionsMap);
+
+        return { followUps, reactions };
       }),
     ),
 
@@ -609,7 +637,7 @@ export function createTicketRouter(deps: TicketRouterDeps) {
         withErrorWrapping(async ({ ctx, input }) => {
           const access = deps.createTicketAccess(ctx.org.tenantDb);
           const svc = deps.createFollowUpSvc(ctx.org.tenantDb, access);
-          return svc.listSummary(ctx.user.id, input.ticketId, {
+          const summaries = await svc.listSummary(ctx.user.id, input.ticketId, {
             limit: input.limit,
             cursor: input.cursor,
             direction: input.direction,
@@ -621,6 +649,15 @@ export function createTicketRouter(deps: TicketRouterDeps) {
             dateTo: input.dateTo,
             userRoleId: ctx.user.roleId,
           });
+
+          const noteIds = summaries
+            .filter((s) => s.type === "internal_note")
+            .map((s) => s.id);
+          const reactionsMap = await svc.getReactions(noteIds);
+          const reactions: Record<string, ReactionSummary[]> =
+            Object.fromEntries(reactionsMap);
+
+          return { summaries, reactions };
         }),
       ),
 
@@ -719,6 +756,17 @@ export function createTicketRouter(deps: TicketRouterDeps) {
             input.followUpId,
             input.reaction,
           );
+        }),
+      ),
+
+    getReactions: volunteerProcedure
+      .input(z.object({ followUpIds: z.array(z.uuid()).max(100) }))
+      .query(
+        withErrorWrapping(async ({ ctx, input }) => {
+          const access = deps.createTicketAccess(ctx.org.tenantDb);
+          const svc = deps.createFollowUpSvc(ctx.org.tenantDb, access);
+          const map = await svc.getReactions(input.followUpIds);
+          return Object.fromEntries(map) as Record<string, ReactionSummary[]>;
         }),
       ),
 

@@ -4,14 +4,24 @@
   Uses a Konsta Card (outline) to stay visually consistent with the
   component library. A badge shows the note type icon and name. Own notes
   show a pencil icon that opens the edit sheet (managed by parent).
+
+  Reaction UX follows iOS Messages / Signal: long-press the card to open
+  the picker, pills cluster at the bottom-right corner of the card.
 -->
 <script lang="ts">
-  import { Card } from "konsta/svelte";
-  import { StickyNote, Pencil } from "@lucide/svelte";
+  import { Card, Popover } from "konsta/svelte";
+  import { StickyNote, Pencil, Plus } from "@lucide/svelte";
   import { formatRelativeTime } from "$lib/utils/format-time.js";
   import { resolveNoteTypeIcon } from "$lib/utils/note-type-icons.js";
+  import {
+    REACTION_ENTRIES,
+    reactionIcon,
+    reactionLabel,
+  } from "$lib/utils/reaction-icons.js";
+  import { haptic } from "$lib/utils/haptic.js";
   import * as m from "$lib/paraglide/messages.js";
   import type { DecryptResult } from "$lib/crypto/decrypt-result.js";
+  import type { ReactionSummary, ReactionType } from "@care-y/shared";
   import DecryptPlaceholder from "$lib/components/DecryptPlaceholder.svelte";
 
   interface Props {
@@ -24,6 +34,10 @@
     searchTerm?: string | null;
     noteTypeName?: string;
     noteTypeIcon?: string;
+    reactions?: ReactionSummary[];
+    currentUserId?: string;
+    ontogglereaction?: (reaction: ReactionType) => void;
+    resolveUserName?: (userId: string) => string | undefined;
   }
 
   let {
@@ -36,6 +50,10 @@
     searchTerm = null,
     noteTypeName,
     noteTypeIcon,
+    reactions = [],
+    currentUserId,
+    ontogglereaction,
+    resolveUserName,
   }: Props = $props();
 
   const NoteTypeIconComponent = $derived(
@@ -46,60 +64,203 @@
   const displayAuthor = $derived(
     authorName ?? m.ticket_private_note_author_fallback(),
   );
+  const hasReactions = $derived(reactions.length > 0);
+
+  // ── Picker state ──
+
+  let pickerOpen = $state(false);
+  let cardEl = $state<HTMLElement | undefined>(undefined);
+  let longPressTimer: ReturnType<typeof setTimeout> | null = null;
+
+  function openPicker(): void {
+    if (!ontogglereaction || !cardEl) return;
+    pickerOpen = true;
+  }
+
+  function handleToggle(type: ReactionType): void {
+    ontogglereaction?.(type);
+    haptic();
+    pickerOpen = false;
+  }
+
+  function userReacted(reaction: ReactionSummary): boolean {
+    if (currentUserId === undefined) return false;
+    return reaction.userIds.includes(currentUserId);
+  }
+
+  function whoReacted(reaction: ReactionSummary): string {
+    if (!resolveUserName) return "";
+    return reaction.userIds
+      .map((uid) =>
+        uid === currentUserId ? m.reaction_you() : (resolveUserName(uid) ?? ""),
+      )
+      .filter((n) => n.length > 0)
+      .join(", ");
+  }
+
+  // ── Long-press handling ──
+
+  function handlePointerDown(e: PointerEvent): void {
+    if (!ontogglereaction) return;
+    const target = e.target;
+    if (
+      target instanceof HTMLButtonElement ||
+      target instanceof HTMLAnchorElement
+    )
+      return;
+    longPressTimer = setTimeout(() => {
+      longPressTimer = null;
+      openPicker();
+      haptic();
+    }, 500);
+  }
+
+  function cancelLongPress(): void {
+    if (longPressTimer !== null) {
+      clearTimeout(longPressTimer);
+      longPressTimer = null;
+    }
+  }
 </script>
 
-<div class="private-note-wrapper" class:own-note={isOwn}>
-  <Card
-    outline
-    contentWrapPadding="py-2.5 px-3"
-    class="private-note-card"
-    role="article"
-    aria-label={m.ticket_private_note_by({ author: displayAuthor })}
+<div
+  class="private-note-wrapper"
+  class:own-note={isOwn}
+  class:has-reactions={hasReactions}
+>
+  <div
+    class="note-card-wrap"
+    bind:this={cardEl}
+    onpointerdown={handlePointerDown}
+    onpointerup={cancelLongPress}
+    onpointercancel={cancelLongPress}
+    onpointermove={cancelLongPress}
+    oncontextmenu={(e) => {
+      if (ontogglereaction) e.preventDefault();
+    }}
+    role="presentation"
   >
-    <span class="note-badge">
-      {#if NoteTypeIconComponent && noteTypeName}
-        <NoteTypeIconComponent size={11} class="note-icon" aria-hidden="true" />
-        <span class="note-type-name">{noteTypeName}</span>
-        <span class="note-badge-sep" aria-hidden="true">&middot;</span>
-      {:else}
-        <StickyNote size={11} class="note-icon" aria-hidden="true" />
-      {/if}
-      {m.ticket_note_team_only()}
-      {#if isOwn && onopenedit}
+    <Card
+      outline
+      contentWrapPadding="py-2.5 px-3"
+      class="private-note-card"
+      role="article"
+      aria-label={m.ticket_private_note_by({ author: displayAuthor })}
+    >
+      <span class="note-badge">
+        {#if NoteTypeIconComponent && noteTypeName}
+          <NoteTypeIconComponent
+            size={11}
+            class="note-icon"
+            aria-hidden="true"
+          />
+          <span class="note-type-name">{noteTypeName}</span>
+          <span class="note-badge-sep" aria-hidden="true">&middot;</span>
+        {:else}
+          <StickyNote size={11} class="note-icon" aria-hidden="true" />
+        {/if}
+        {m.ticket_note_team_only()}
+        {#if isOwn && onopenedit}
+          <button
+            type="button"
+            class="note-edit-btn"
+            onclick={onopenedit}
+            aria-label={m.ticket_edit_note()}
+          >
+            <Pencil size={11} />
+          </button>
+        {/if}
+      </span>
+      <div class="note-body">
+        <DecryptPlaceholder
+          {result}
+          ciphertext={encryptedContent}
+          length={40}
+          block
+          {searchTerm}
+        />
+      </div>
+      <div class="note-meta">
+        {#if authorName}
+          <span class="note-author">{authorName}</span>
+        {/if}
+        <time class="note-time" datetime={timestamp}>{timeLabel}</time>
+      </div>
+    </Card>
+
+    {#if ontogglereaction}
+      <div class="reaction-tray">
+        {#each reactions as r (r.reaction)}
+          {@const Icon = reactionIcon(r.reaction)}
+          {@const mine = userReacted(r)}
+          {@const names = whoReacted(r)}
+          <button
+            type="button"
+            class="reaction-pill"
+            class:reaction-mine={mine}
+            onclick={openPicker}
+            title={names}
+          >
+            <Icon size={11} aria-hidden="true" />
+            <span class="reaction-count">{r.userIds.length}</span>
+          </button>
+        {/each}
         <button
           type="button"
-          class="note-edit-btn"
-          onclick={onopenedit}
-          aria-label={m.ticket_edit_note()}
+          class="reaction-add-btn"
+          onclick={openPicker}
+          aria-label={m.reaction_add()}
+          aria-expanded={pickerOpen}
         >
-          <Pencil size={11} />
+          <Plus size={10} />
         </button>
-      {/if}
-    </span>
-    <div class="note-body">
-      <DecryptPlaceholder
-        {result}
-        ciphertext={encryptedContent}
-        length={40}
-        block
-        {searchTerm}
-      />
-    </div>
-    <div class="note-meta">
-      {#if authorName}
-        <span class="note-author">{authorName}</span>
-      {/if}
-      <time class="note-time" datetime={timestamp}>{timeLabel}</time>
-    </div>
-  </Card>
+      </div>
+    {/if}
+  </div>
 </div>
+
+<Popover
+  opened={pickerOpen}
+  target={cardEl}
+  onBackdropClick={() => {
+    pickerOpen = false;
+  }}
+>
+  <div class="reaction-picker-strip">
+    {#each REACTION_ENTRIES as entry (entry.type)}
+      {@const EntryIcon = entry.icon}
+      {@const alreadyReacted = reactions.some(
+        (r) => r.reaction === entry.type && userReacted(r),
+      )}
+      <button
+        type="button"
+        class="reaction-picker-opt"
+        class:reaction-picker-active={alreadyReacted}
+        onclick={() => handleToggle(entry.type)}
+      >
+        <EntryIcon size={20} />
+        <span class="reaction-picker-label">{entry.label()}</span>
+      </button>
+    {/each}
+  </div>
+</Popover>
 
 <style>
   .private-note-wrapper {
     margin: 0.25rem 0;
-    user-select: text;
-    -webkit-user-select: text;
     touch-action: pan-y;
+  }
+
+  .private-note-wrapper.has-reactions {
+    margin-bottom: 0.75rem;
+  }
+
+  .note-card-wrap {
+    position: relative;
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-touch-callout: none;
+    --k-safe-area-top: var(--navbar-h, 44px);
   }
 
   .note-badge {
@@ -166,5 +327,112 @@
     color: var(--muted);
     border-radius: 0.25rem;
     -webkit-tap-highlight-color: transparent;
+  }
+
+  /* ── Reaction tray: bottom-right corner, overlapping card edge ── */
+
+  .reaction-tray {
+    position: absolute;
+    bottom: -0.5rem;
+    right: 0.75rem;
+    display: flex;
+    align-items: center;
+    gap: 0.1875rem;
+  }
+
+  .reaction-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.1875rem;
+    padding: 0.125rem 0.375rem;
+    font-size: 0.6875rem;
+    border-radius: 999px;
+    border: 1px solid var(--surface-2);
+    background: var(--paper);
+    color: var(--muted);
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+    min-height: 1.375rem;
+    box-shadow: 0 1px 3px rgb(0 0 0 / 0.08);
+  }
+
+  .reaction-mine {
+    border-color: var(--brand-accent, var(--brand-primary));
+    color: var(--brand-accent, var(--brand-primary));
+    background: color-mix(
+      in srgb,
+      var(--brand-accent, var(--brand-primary)) 8%,
+      var(--paper)
+    );
+  }
+
+  .reaction-count {
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .reaction-add-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.375rem;
+    height: 1.375rem;
+    border-radius: 999px;
+    border: 1px solid var(--surface-2);
+    background: var(--paper);
+    color: var(--muted);
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+    box-shadow: 0 1px 3px rgb(0 0 0 / 0.08);
+  }
+
+  /* ── Popover picker strip ── */
+
+  .reaction-picker-strip {
+    display: flex;
+    padding: 0.5rem 0.625rem;
+    gap: 0.25rem;
+    overflow-x: auto;
+    overscroll-behavior: contain;
+    scrollbar-width: none;
+  }
+
+  .reaction-picker-strip::-webkit-scrollbar {
+    display: none;
+  }
+
+  .reaction-picker-opt {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.1875rem;
+    padding: 0.5rem 0.625rem;
+    border-radius: 0.625rem;
+    border: none;
+    background: none;
+    color: var(--ink);
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+    flex-shrink: 0;
+  }
+
+  .reaction-picker-opt:active {
+    background: var(--surface-1);
+  }
+
+  .reaction-picker-active {
+    color: var(--brand-accent, var(--brand-primary));
+    background: color-mix(
+      in srgb,
+      var(--brand-accent, var(--brand-primary)) 10%,
+      transparent
+    );
+  }
+
+  .reaction-picker-label {
+    font-size: 0.5625rem;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    white-space: nowrap;
   }
 </style>

@@ -48,27 +48,31 @@
 
   const notesQuery = createQuery(() => ({
     queryKey: ["ticket", ticketId, "followUps", "notes"],
-    queryFn: async () =>
-      ticketRouter.listFollowUps.query({
+    queryFn: async () => {
+      const result = await ticketRouter.listFollowUps.query({
         ticketId,
         types: ["internal_note"],
         limit: NOTES_LIMIT,
         direction: "older",
-      }),
+      });
+      return result.followUps;
+    },
     enabled: ticketId !== "" && keyWrap !== null,
   }));
 
   const notesPaginated = createPaginatedQuery({
     query: notesQuery,
     limit: NOTES_LIMIT,
-    fetchPage: async (cursor) =>
-      ticketRouter.listFollowUps.query({
+    fetchPage: async (cursor) => {
+      const result = await ticketRouter.listFollowUps.query({
         ticketId,
         types: ["internal_note"],
         limit: NOTES_LIMIT,
         direction: "older",
         cursor,
-      }),
+      });
+      return result.followUps;
+    },
     getCursor: (note) => note.id,
   });
 
