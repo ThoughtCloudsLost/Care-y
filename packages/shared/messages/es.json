@@ -187,6 +187,7 @@
   "error_recording_not_found": "Grabación no encontrada.",
   "error_attachment_not_found": "Archivo adjunto no encontrado.",
   "error_note_type_not_found": "Tipo de nota no encontrado.",
+  "error_cannot_deactivate_default_note_type": "El tipo de nota predeterminado no se puede desactivar.",
 
   "error_kb_category_not_found": "Categoría no encontrada.",
   "error_kb_article_not_found": "Artículo no encontrado.",

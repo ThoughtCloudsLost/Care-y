@@ -187,6 +187,7 @@
   "error_recording_not_found": "Recording not found.",
   "error_attachment_not_found": "Attachment not found.",
   "error_note_type_not_found": "Note type not found.",
+  "error_cannot_deactivate_default_note_type": "The default note type cannot be deactivated.",
 
   "error_kb_category_not_found": "Category not found.",
   "error_kb_article_not_found": "Article not found.",

@@ -42,7 +42,10 @@ import type { NoteTypeService } from "../tickets/note-type-service.js";
 import type { NotificationEventType, TicketPriority } from "@care-y/shared";
 import { ErrorCode } from "@care-y/shared";
 import { NotFoundError } from "../errors.js";
-import { buildRecipientList } from "../tickets/notification-recipients.js";
+import {
+  buildRecipientList,
+  resolveEscalationTargets,
+} from "../tickets/notification-recipients.js";
 import type { ShiftProvider } from "../tickets/shift-provider.js";
 import { createStubShiftProvider } from "../tickets/shift-provider.js";
 import { createUserService } from "../users/user-service.js";
@@ -276,6 +279,37 @@ export function createTicketRouter(deps: TicketRouterDeps) {
     return deps.createMediaSvc(tDb, deps.blobStore, access);
   }
 
+  /**
+   * Resolve escalation target user IDs for a note type.
+   * Always fetches and decrypts the note type regardless of whether
+   * targets are empty, to avoid timing side channels between note types
+   * with and without escalation.
+   */
+  async function resolveNoteTypeEscalation(
+    tDb: OrgContext["tenantDb"],
+    noteTypeId: string | undefined,
+  ): Promise<string[] | undefined> {
+    if (noteTypeId === undefined || !deps.createNoteTypeSvc) return undefined;
+
+    const ntSvc = deps.createNoteTypeSvc(tDb);
+    const targets = await ntSvc.getEscalationTargets(noteTypeId);
+
+    const qp = deps.createQueuePermissionsSvc(tDb);
+    const userSvc = createUserService(tDb);
+
+    const userIds = await resolveEscalationTargets(targets, {
+      getUsersByRole: async (role) => {
+        const roleId = role === "admin" ? RoleId.ADMIN : RoleId.MANAGER;
+        return [...(await userSvc.listActiveIdsByRoleId(roleId))];
+      },
+      // eslint-disable-next-line @typescript-eslint/require-await -- stub for future permission-based targeting
+      getUsersByPermission: async () => [],
+      getQueueMembers: async (queueId) => qp.getQueueMembers(queueId),
+    });
+
+    return userIds.length > 0 ? userIds : undefined;
+  }
+
   // Audit helper: best-effort, never blocks. No-op when audit service not injected.
   function audit(tDb: OrgContext["tenantDb"], entry: AuditEntry): void {
     if (!deps.createAuditSvc) return;
@@ -295,19 +329,23 @@ export function createTicketRouter(deps: TicketRouterDeps) {
     ticket: { id: string; queueId: string; assignedTo: string | null },
     auditEntry: AuditEntry,
     mentionedPseudonyms: string[] = [],
+    noteTypeId?: string,
   ): void {
     audit(ctx.org.tenantDb, auditEntry);
-    notify(ctx, eventType, ticket, mentionedPseudonyms);
+    notify(ctx, eventType, ticket, mentionedPseudonyms, noteTypeId);
   }
 
   // Notification dispatch helper: best-effort, never blocks.
   // Builds recipient list and dispatches across all channels.
   // Passes queueId (not queue name) since names are encrypted (ADR-030).
+  // Escalation resolution happens inside the fire-and-forget block so
+  // transient errors in the escalation path cannot fail the mutation.
   function notify(
     ctx: { org: OrgContext; user: { id: string } },
     eventType: NotificationEventType,
     ticket: { id: string; queueId: string; assignedTo: string | null },
     mentionedPseudonyms: string[] = [],
+    noteTypeId?: string,
   ): void {
     if (!deps.notificationService) return;
     const ns = deps.notificationService;
@@ -317,6 +355,11 @@ export function createTicketRouter(deps: TicketRouterDeps) {
 
     void (async () => {
       try {
+        const escalationUserIds = await resolveNoteTypeEscalation(
+          tDb,
+          noteTypeId,
+        );
+
         const recipients = await buildRecipientList(
           {
             getTicketWatchers: async (ticketId) =>
@@ -328,6 +371,7 @@ export function createTicketRouter(deps: TicketRouterDeps) {
           ticket,
           mentionedPseudonyms,
           ctx.user.id,
+          escalationUserIds,
         );
         await ns.dispatch(
           tDb,
@@ -339,8 +383,6 @@ export function createTicketRouter(deps: TicketRouterDeps) {
           recipients,
         );
       } catch (err: unknown) {
-        // Notification failures are non-critical. Never block the response.
-        // Log the error type without any PII (no ticket content, no names).
         console.error(
           "Notification dispatch failed:",
           err instanceof Error ? err.message : String(err),
@@ -473,6 +515,7 @@ export function createTicketRouter(deps: TicketRouterDeps) {
             type: input.type,
             isPrivate: input.isPrivate,
             mentionedPseudonyms: input.mentionedPseudonyms,
+            noteTypeId: input.noteTypeId,
           });
           // Look up ticket for notification context
           const { svc: tSvc } = ticketSvc(ctx.org.tenantDb);
@@ -489,6 +532,7 @@ export function createTicketRouter(deps: TicketRouterDeps) {
               ticketId: input.ticketId,
             },
             input.mentionedPseudonyms,
+            input.noteTypeId,
           );
           return followUp;
         }),
@@ -577,11 +621,26 @@ export function createTicketRouter(deps: TicketRouterDeps) {
         withErrorWrapping(async ({ ctx, input }) => {
           const access = deps.createTicketAccess(ctx.org.tenantDb);
           const svc = deps.createFollowUpSvc(ctx.org.tenantDb, access);
-          return svc.updateInternalNote(
+          const { record, previousNoteTypeId } = await svc.updateInternalNote(
             ctx.user.id,
             input.followUpId,
             Buffer.from(input.encryptedContent, "base64"),
+            input.noteTypeId,
           );
+
+          // Trigger escalation only when the note type actually changed
+          // (server-side comparison, not client-trust).
+          const typeChanged =
+            input.noteTypeId !== undefined &&
+            input.noteTypeId !== previousNoteTypeId;
+
+          if (typeChanged) {
+            const { svc: tSvc } = ticketSvc(ctx.org.tenantDb);
+            const ticket = await tSvc.findById(record.ticketId, ctx.user.id);
+            notify(ctx, "followup_added", ticket, [], input.noteTypeId);
+          }
+
+          return record;
         }),
       ),
 

@@ -7,8 +7,8 @@
  * server can decrypt them for notification routing.
  */
 
-import type { Kysely } from "kysely";
-import type { TenantDatabase } from "../db/types.js";
+import type { Kysely, Updateable } from "kysely";
+import type { TenantDatabase, NoteTypesTable } from "../db/types.js";
 import type { SecretsEncryptor } from "../config/secrets.js";
 import type { SealedBoxEncryptor } from "../crypto/sealed-box.js";
 import { escalationTargetSchema } from "@care-y/shared";
@@ -51,6 +51,7 @@ export interface NoteTypeService {
     requiresOnClose?: boolean;
   }): Promise<NoteTypeRecord>;
   getDefaultTypeId(): Promise<string | null>;
+  getEscalationTargets(noteTypeId: string): Promise<EscalationTarget[]>;
 }
 
 interface NoteTypeRow {
@@ -177,11 +178,13 @@ export function createNoteTypeService(
           .executeTakeFirst();
 
         if (config?.default_note_type_id === input.id) {
-          throw new ForbiddenError("Cannot deactivate the default note type");
+          throw new ForbiddenError(
+            ErrorCode.CANNOT_DEACTIVATE_DEFAULT_NOTE_TYPE,
+          );
         }
       }
 
-      const updates: Record<string, unknown> = {};
+      const updates: Updateable<NoteTypesTable> = {};
       if (input.encryptedName !== undefined) {
         updates.encrypted_name = input.encryptedName;
       }
@@ -228,6 +231,17 @@ export function createNoteTypeService(
         .select("default_note_type_id")
         .executeTakeFirst();
       return config?.default_note_type_id ?? null;
+    },
+
+    async getEscalationTargets(noteTypeId): Promise<EscalationTarget[]> {
+      const row = await db
+        .selectFrom("note_types")
+        .select("encrypted_escalation_targets")
+        .where("id", "=", noteTypeId)
+        .executeTakeFirst();
+
+      if (!row) return [];
+      return decryptTargets(row.encrypted_escalation_targets, secretsEncryptor);
     },
   };
 }
