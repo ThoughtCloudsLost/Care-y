@@ -2,6 +2,7 @@
   import { List, ListInput } from "konsta/svelte";
   import { Save } from "@lucide/svelte";
   import { createMutation, useQueryClient } from "@tanstack/svelte-query";
+  import { authKeys } from "$lib/query/keys.js";
   import * as m from "$lib/paraglide/messages.js";
   import { trpc } from "$lib/trpc/index.js";
   import { getOrgKeyManager, getOrgDecryptCache } from "$lib/crypto/context.js";
@@ -51,7 +52,7 @@
       const msg = m.settings_display_name_saved();
       toastStore.show(msg);
       announceToLiveRegion("polite", msg);
-      await queryClient.invalidateQueries({ queryKey: ["auth", "me"] });
+      await queryClient.invalidateQueries({ queryKey: authKeys.me() });
       orgCache.delete("me:display_name");
       ondismiss();
     },

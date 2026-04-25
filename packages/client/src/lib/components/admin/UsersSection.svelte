@@ -21,6 +21,7 @@
   import { UserMinus, X, Save } from "@lucide/svelte";
   import * as m from "$lib/paraglide/messages.js";
   import { trpc } from "$lib/trpc/index.js";
+  import { adminKeys, queueKeys } from "$lib/query/keys.js";
   import {
     getOrgDecryptCache,
     getOrgKeyManager,
@@ -74,12 +75,12 @@
   const currentUserId = $derived(currentUserIdGetter());
 
   const usersQuery = createQuery(() => ({
-    queryKey: ["admin", "users"],
+    queryKey: adminKeys.users(),
     queryFn: async () => authRouter.listUsers.query(),
   }));
 
   const queuesQuery = createQuery(() => ({
-    queryKey: ["queues"],
+    queryKey: queueKeys.all,
     queryFn: async () => ticketRouter.listQueues.query(),
   }));
 
@@ -88,7 +89,7 @@
       authRouter.assignRole.mutate(input),
     onSuccess: () => {
       haptic();
-      void queryClient.invalidateQueries({ queryKey: ["admin", "users"] });
+      void queryClient.invalidateQueries({ queryKey: adminKeys.users() });
       toastStore.show(m.admin_role_changed());
       announceToLiveRegion("polite", m.admin_role_changed());
     },
@@ -108,7 +109,7 @@
     ) => {
       haptic();
       orgCache.delete(`user:${variables.userId}`);
-      void queryClient.invalidateQueries({ queryKey: ["admin", "users"] });
+      void queryClient.invalidateQueries({ queryKey: adminKeys.users() });
       const msg = m.admin_display_name_updated();
       toastStore.show(msg);
       announceToLiveRegion("polite", msg);
@@ -123,7 +124,7 @@
       profileRouter.adminUpdateUsername.mutate(input),
     onSuccess: () => {
       haptic();
-      void queryClient.invalidateQueries({ queryKey: ["admin", "users"] });
+      void queryClient.invalidateQueries({ queryKey: adminKeys.users() });
       const msg = m.admin_username_updated();
       toastStore.show(msg);
       announceToLiveRegion("polite", msg);
@@ -145,7 +146,7 @@
       variables: { userId: string; isActive: boolean },
     ) => {
       haptic();
-      void queryClient.invalidateQueries({ queryKey: ["admin", "users"] });
+      void queryClient.invalidateQueries({ queryKey: adminKeys.users() });
       const msg = variables.isActive
         ? m.admin_user_reactivated()
         : m.admin_user_deactivated();
@@ -440,7 +441,7 @@
         }
       }
 
-      void queryClient.invalidateQueries({ queryKey: ["queue-members"] });
+      void queryClient.invalidateQueries({ queryKey: queueKeys.membersAll() });
     }
 
     closeSheet();
@@ -557,7 +558,7 @@
     haptic();
     toastStore.show(m.admin_users_batch_deactivated({ count: succeeded }));
     exitMultiSelect();
-    void queryClient.invalidateQueries({ queryKey: ["admin", "users"] });
+    void queryClient.invalidateQueries({ queryKey: adminKeys.users() });
   }
 </script>
 

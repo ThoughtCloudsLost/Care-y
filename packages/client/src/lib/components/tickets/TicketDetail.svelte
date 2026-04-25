@@ -13,6 +13,7 @@
 <script lang="ts">
   import { tick } from "svelte";
   import { createQuery, useQueryClient } from "@tanstack/svelte-query";
+  import { ticketKeys } from "$lib/query/keys";
   import { Messages, Message, Checkbox, Button } from "konsta/svelte";
   import * as m from "$lib/paraglide/messages.js";
   import { trpc } from "$lib/trpc/index.js";
@@ -224,13 +225,13 @@
   }
 
   const ticketQuery = createQuery(() => ({
-    queryKey: ["ticket", ticketId],
+    queryKey: ticketKeys.detail(ticketId),
     queryFn: async () => ticketRouter.get.query({ ticketId }),
   }));
 
   // Initial query: most recent PAGE_SIZE follow-ups (direction='older', no cursor).
   const initialFollowUpsQuery = createQuery(() => ({
-    queryKey: ["ticket", ticketId, "followUps", "initial"],
+    queryKey: ticketKeys.followUpsInitial(ticketId),
     queryFn: async () =>
       fetchFollowUps({
         ticketId,
@@ -398,18 +399,15 @@
   const FILTERED_PAGE_SIZE = 200;
 
   const filteredFollowUpsQuery = createQuery(() => ({
-    queryKey: [
-      "ticket",
+    queryKey: ticketKeys.followUpsFiltered(
       ticketId,
-      "followUps",
-      "filtered",
       serverFilterTypes,
       serverMediaFlags,
       serverCreatedBy,
       serverIncludeClient,
       filterDateFrom?.toISOString() ?? null,
       filterDateTo?.toISOString() ?? null,
-    ],
+    ),
     queryFn: async () =>
       fetchFollowUps({
         ticketId,
@@ -474,17 +472,15 @@
 
   // Summary query includes filter params so the server returns only matching items.
   const summaryQuery = createQuery(() => ({
-    queryKey: [
-      "ticket",
+    queryKey: ticketKeys.followUpSummary(
       ticketId,
-      "followUpSummary",
       serverFilterTypes,
       serverMediaFlags,
       serverCreatedBy,
       serverIncludeClient,
       filterDateFrom?.toISOString() ?? null,
       filterDateTo?.toISOString() ?? null,
-    ],
+    ),
     queryFn: async () =>
       ticketRouter.listFollowUpSummary.query({
         ticketId,
@@ -595,55 +591,94 @@
     });
   });
 
-  // Decrypt system event and note content for timeline display.
-  // Patches incrementally: skips items already resolved, only processes new ones.
-  //
-  // Uses a plain Set (not SvelteSet) to track resolved IDs so that writes
-  // to timelineDecryptedContent don't re-trigger this effect. The only
-  // re-run triggers are followUpCache's internal SvelteMap updates (when a
-  // Worker completes decryption) and summaryQuery.data changes.
-  const timelineDecryptedContent = new SvelteMap<string, string | undefined>();
-  // eslint-disable-next-line svelte/prefer-svelte-reactivity -- intentionally non-reactive to avoid feedback loop in the $effect below
-  const resolvedIds = new Set<string>();
-
-  // Clear when switching tickets.
-  $effect(() => {
-    // Read ticketId to track it as a dependency.
-    void ticketId;
-    timelineDecryptedContent.clear();
-    resolvedIds.clear();
-  });
-
+  // Trigger decryption for summary items not already cached (items outside
+  // the paginated messages view). resolveTimelineDecrypted reads from
+  // followUpCache directly, so no intermediate copy is needed.
   $effect(() => {
     if (!ticket) return;
     for (const item of summaryData ?? []) {
       if (item.encryptedContent === null) continue;
-      if (resolvedIds.has(item.id)) continue;
-      const content = followUpCache.decryptContent(
+      followUpCache.decryptContent(
         item.id,
         ticket.keyWrap,
         item.encryptedContent,
       );
-      if (content !== undefined) {
-        resolvedIds.add(item.id);
-        timelineDecryptedContent.set(
-          item.id,
-          isDecryptError(content) ? undefined : content,
-        );
-      }
     }
   });
+
+  function resolveTimelineDecrypted(id: string): string | undefined {
+    const cached = followUpCache.get(id);
+    if (cached === undefined || isDecryptError(cached)) return undefined;
+    return cached;
+  }
+
+  function resolveExpandedDecrypt(rec: ClusterRecord): DecryptResult {
+    if (decrypt == null) return resolveAsyncDecrypt(undefined, false);
+    if (rec.encryptedContent !== null) {
+      return decrypt.followUp(rec.id, rec.encryptedContent);
+    }
+    return resolveAsyncDecrypt(followUpCache.get(rec.id), true);
+  }
 
   // --- Expandable timeline clusters ---
 
   const expandedClusters = new SvelteMap<string, ClusterRecord[]>();
 
+  function toClusterRecord(fu: {
+    id: string;
+    source: string;
+    type: string;
+    encryptedContent: ClusterRecord["encryptedContent"];
+    createdBy: string | null;
+    createdAt: string;
+    isPrivate: boolean;
+    hasRecording: boolean;
+    hasImage: boolean;
+    hasFile: boolean;
+    noteTypeId?: string | null;
+  }): ClusterRecord {
+    return {
+      id: fu.id,
+      source: fu.source,
+      type: fu.type,
+      encryptedContent: fu.encryptedContent,
+      createdBy: fu.createdBy,
+      createdAt: fu.createdAt,
+      isPrivate: fu.isPrivate,
+      hasRecording: fu.hasRecording,
+      hasImage: fu.hasImage,
+      hasFile: fu.hasFile,
+      noteTypeId: fu.noteTypeId ?? null,
+    };
+  }
+
   async function handleExpandCluster(followUpIds: string[]): Promise<void> {
     const key = followUpIds.join(",");
     if (expandedClusters.has(key) || !ticket) return;
 
-    // Expand immediately with placeholder rows.
-    const placeholders: ClusterRecord[] = followUpIds.map((id) => {
+    // Check which IDs are already loaded in the paginator.
+    const wantedIds = new Set(followUpIds);
+    // eslint-disable-next-line svelte/prefer-svelte-reactivity -- local to async function, not reactive state
+    const localById = new Map<string, FollowUpRecord>();
+    for (const fu of followUps) {
+      if (wantedIds.has(fu.id)) localById.set(fu.id, fu);
+    }
+
+    if (localById.size === followUpIds.length) {
+      // All records available locally. No network request needed.
+      const records = followUpIds
+        .map((id) => localById.get(id))
+        .filter((fu): fu is FollowUpRecord => fu !== undefined)
+        .map(toClusterRecord);
+      expandedClusters.set(key, records);
+      return;
+    }
+
+    // Some IDs not loaded yet (user hasn't scrolled back far enough).
+    // Show placeholders for missing records, local data for the rest.
+    const initial: ClusterRecord[] = followUpIds.map((id) => {
+      const local = localById.get(id);
+      if (local) return toClusterRecord(local);
       const summary = (summaryData ?? []).find((s) => s.id === id);
       return {
         id,
@@ -659,31 +694,16 @@
         noteTypeId: summary?.noteTypeId ?? null,
       };
     });
-    expandedClusters.set(key, placeholders);
+    expandedClusters.set(key, initial);
 
-    // Fetch full follow-ups by IDs.
+    // Fetch full records from the server for the missing IDs.
     const fullRecords = await queryClient.fetchQuery({
-      queryKey: ["ticket", ticketId, "followUpsByIds", key],
+      queryKey: ticketKeys.followUpsByIds(ticketId, key),
       queryFn: async () =>
         ticketRouter.listFollowUpsByIds.query({ ticketId, followUpIds }),
     });
 
-    // Replace placeholders with real records. Decryption happens reactively
-    // in FollowUpTimeline's template via followUpCache.decryptContent.
-    const records: ClusterRecord[] = fullRecords.map((fu) => ({
-      id: fu.id,
-      source: fu.source,
-      type: fu.type,
-      encryptedContent: fu.encryptedContent,
-      createdBy: fu.createdBy,
-      createdAt: fu.createdAt,
-      isPrivate: fu.isPrivate,
-      hasRecording: fu.hasRecording,
-      hasImage: fu.hasImage,
-      hasFile: fu.hasFile,
-      noteTypeId: fu.noteTypeId ?? null,
-    }));
-    expandedClusters.set(key, records);
+    expandedClusters.set(key, fullRecords.map(toClusterRecord));
   }
 
   // Decrypt ticket title (warm the cache for display elsewhere).
@@ -1043,7 +1063,7 @@
       <FollowUpTimeline
         scrollContainerEl={scroll.scrollContainerEl}
         items={displayTimelineItems}
-        decryptedContent={timelineDecryptedContent}
+        resolveDecrypted={resolveTimelineDecrypted}
         {expandedClusters}
         onexpandcluster={handleExpandCluster}
         bind:timelineActive
@@ -1059,10 +1079,7 @@
           record: ClusterRecord;
           onzoom: () => void;
         })}
-          {@const recResult =
-            decrypt != null && rec.encryptedContent !== null
-              ? decrypt.followUp(rec.id, rec.encryptedContent)
-              : resolveAsyncDecrypt(undefined, false)}
+          {@const recResult = resolveExpandedDecrypt(rec)}
           {@const kind = followUpKind(rec)}
           <div
             id="tl-fu-{rec.id}"

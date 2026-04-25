@@ -9,6 +9,12 @@
 import { createQuery, type CreateQueryResult } from "@tanstack/svelte-query";
 import type { TRPCClient } from "@trpc/client";
 import type { AppRouter } from "@care-y/server";
+import {
+  volunteerKeys,
+  ticketKeys,
+  ticketsKeys,
+  noteTypeKeys,
+} from "$lib/query/keys";
 
 type TicketRouter = NonNullable<TRPCClient<AppRouter>["tickets"]>;
 type VolunteersData = Awaited<
@@ -28,7 +34,7 @@ export function createVolunteersQuery(
   ticketRouter: TicketRouter,
 ): CreateQueryResult<VolunteersData> {
   return createQuery(() => ({
-    queryKey: ["volunteers"] as const,
+    queryKey: volunteerKeys.all,
     queryFn: async () => ticketRouter.listVolunteers.query(),
     staleTime: 5 * 60 * 1000,
   }));
@@ -39,7 +45,7 @@ export function createParticipantsQuery(
   ticketId: () => string,
 ): CreateQueryResult<ParticipantsData> {
   return createQuery(() => ({
-    queryKey: ["ticket", ticketId(), "participants"] as const,
+    queryKey: ticketKeys.participants(ticketId()),
     queryFn: async () =>
       ticketRouter.listParticipants.query({ ticketId: ticketId() }),
     enabled: ticketId() !== "",
@@ -51,7 +57,7 @@ export function createCountsQuery(
   ticketRouter: TicketRouter,
 ): CreateQueryResult<CountsData> {
   return createQuery(() => ({
-    queryKey: ["tickets", "counts"] as const,
+    queryKey: ticketsKeys.counts(),
     queryFn: async () => ticketRouter.counts.query(),
   }));
 }
@@ -60,7 +66,7 @@ export function createNoteTypesQuery(
   noteTypesRouter: NoteTypesRouter,
 ): CreateQueryResult<NoteTypesData> {
   return createQuery(() => ({
-    queryKey: ["noteTypes"] as const,
+    queryKey: noteTypeKeys.all,
     queryFn: async () => noteTypesRouter.listActive.query(),
     staleTime: 5 * 60 * 1000,
   }));
@@ -70,7 +76,7 @@ export function createAllNoteTypesQuery(
   noteTypesRouter: NoteTypesRouter,
 ): CreateQueryResult<AllNoteTypesData> {
   return createQuery(() => ({
-    queryKey: ["noteTypes", "all"] as const,
+    queryKey: noteTypeKeys.full(),
     queryFn: async () => noteTypesRouter.list.query(),
     staleTime: 5 * 60 * 1000,
   }));

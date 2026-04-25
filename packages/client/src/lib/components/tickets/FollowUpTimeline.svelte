@@ -55,7 +55,7 @@
   interface FollowUpTimelineProps {
     scrollContainerEl: HTMLDivElement | undefined;
     items?: TimelineItem[];
-    decryptedContent?: Map<string, string | undefined>;
+    resolveDecrypted?: (id: string) => string | undefined;
     expandedClusters?: Map<string, ClusterRecord[]>;
     onexpandcluster?: (followUpIds: string[]) => void;
     /** Render a single expanded follow-up. Parent provides this so expanded items
@@ -76,7 +76,7 @@
   let {
     scrollContainerEl,
     items = [],
-    decryptedContent = new Map(),
+    resolveDecrypted = () => undefined,
     expandedClusters = new Map(),
     onexpandcluster,
     renderExpanded,
@@ -116,7 +116,7 @@
 
   function landmarkLabel(item: TimelineItem): string {
     if (item.source === "system") {
-      const decrypted = decryptedContent.get(item.id);
+      const decrypted = resolveDecrypted(item.id);
       if (decrypted !== undefined && decrypted !== "") return decrypted;
       if (item.type === "assignment_change") return "Assigned";
       if (item.type === "status_change") return "Status changed";
@@ -126,7 +126,7 @@
     }
 
     if (item.type === "internal_note") {
-      const decrypted = decryptedContent.get(item.id);
+      const decrypted = resolveDecrypted(item.id);
       if (decrypted !== undefined && decrypted !== "") {
         return decrypted.length > 40
           ? decrypted.slice(0, 40) + "\u2026"

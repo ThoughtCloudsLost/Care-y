@@ -56,6 +56,7 @@
     type CallAction,
   } from "$lib/components/tickets/CallOptionsContent.svelte";
   import { createQuery, useQueryClient } from "@tanstack/svelte-query";
+  import { ticketKeys, ticketsKeys, consultantKeys } from "$lib/query/keys";
   import { trpc } from "$lib/trpc/index.js";
   import {
     getCryptoBridge,
@@ -123,7 +124,7 @@
 
   // Ticket data for navbar display.
   const ticketQuery = createQuery(() => ({
-    queryKey: ["ticket", ticketId],
+    queryKey: ticketKeys.detail(ticketId),
     queryFn: async () => ticketRouter.get.query({ ticketId }),
   }));
 
@@ -149,7 +150,7 @@
       followUpCount: number;
     }
     const entries = queryClient.getQueriesData<{ pages: TicketRow[][] }>({
-      queryKey: ["tickets", "list"],
+      queryKey: ticketsKeys.lists(),
     });
     for (const [, data] of entries) {
       if (!data?.pages) continue;
@@ -164,7 +165,7 @@
   // --- Read cursor ---
 
   const readCursorQuery = createQuery(() => ({
-    queryKey: ["ticket", ticketId, "readCursor"],
+    queryKey: ticketKeys.readCursor(ticketId),
     queryFn: async () => ticketRouter.getReadCursor.query({ ticketId }),
     enabled: ticketId !== "",
   }));
@@ -252,7 +253,7 @@
 
   // Consultant phone registration (for call options).
   const consultantQuery = createQuery(() => ({
-    queryKey: ["consultant"],
+    queryKey: consultantKeys.all,
     queryFn: async () => trpc.consultant?.get.query() ?? null,
     staleTime: 5 * 60 * 1000,
   }));
@@ -795,7 +796,7 @@
         noteTypeId: closeQueueNoteTypeId,
       });
       void queryClient.invalidateQueries({
-        queryKey: ["ticket", ticketId, "followUps"],
+        queryKey: ticketKeys.followUps(ticketId),
       });
       advanceCloseQueue();
     } catch {
@@ -939,7 +940,7 @@
     closeDeleteConfirm();
     if (targetId === null) return;
 
-    const followUpsKey = ["ticket", ticketId, "followUps", "initial"];
+    const followUpsKey = ticketKeys.followUpsInitial(ticketId);
 
     // Snapshot for rollback.
     const previousData = queryClient.getQueryData<FollowUpList>(followUpsKey);
@@ -956,7 +957,7 @@
       // Refetch to get authoritative server state. Prefix match invalidates
       // both the initial key and any paginated page keys.
       void queryClient.invalidateQueries({
-        queryKey: ["ticket", ticketId, "followUps"],
+        queryKey: ticketKeys.followUps(ticketId),
       });
     } catch {
       // Rollback: restore the cached list.
@@ -1226,9 +1227,11 @@
       .mutate({ ticketId: tid, targetUserId })
       .then(() => {
         haptic();
-        void queryClient.invalidateQueries({ queryKey: ["ticket", ticketId] });
         void queryClient.invalidateQueries({
-          queryKey: ["tickets", "list"],
+          queryKey: ticketKeys.detail(ticketId),
+        });
+        void queryClient.invalidateQueries({
+          queryKey: ticketsKeys.lists(),
         });
       })
       .catch(() => {

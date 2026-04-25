@@ -17,6 +17,7 @@
   import { GREETING_AUDIO_MAX_BYTES } from "@care-y/shared";
   import * as m from "$lib/paraglide/messages.js";
   import { trpc } from "$lib/trpc/index.js";
+  import { adminKeys } from "$lib/query/keys.js";
   import { haptic } from "$lib/utils/haptic.js";
   import { toastStore } from "$lib/stores/toast.svelte.js";
   import { announceToLiveRegion } from "$lib/utils/announce.js";
@@ -84,14 +85,14 @@
   // ── Queries ──
 
   const phonesQuery = createQuery(() => ({
-    queryKey: ["admin", "telephony", "provisionedPhones"],
+    queryKey: adminKeys.telephonyPhones(),
     queryFn: async () => telephonyAdmin.getProvisionedPhones.query(),
   }));
 
   const phones = $derived(phonesQuery.data ?? []);
 
   const greetingsQuery = createQuery(() => ({
-    queryKey: ["admin", "greetings"],
+    queryKey: adminKeys.greetings(),
     queryFn: async () => telephonyContent.listGreetings.query({}),
   }));
 
@@ -215,7 +216,7 @@
       sheetOpen = false;
       resetForm();
       void queryClient.invalidateQueries({
-        queryKey: ["admin", "greetings"],
+        queryKey: adminKeys.greetings(),
       });
     },
     onError: () => {
@@ -251,7 +252,7 @@
       sheetOpen = false;
       resetForm();
       void queryClient.invalidateQueries({
-        queryKey: ["admin", "greetings"],
+        queryKey: adminKeys.greetings(),
       });
     },
     onError: () => {
@@ -312,7 +313,7 @@
     sheetOpen = false;
     resetForm();
     void queryClient.invalidateQueries({
-      queryKey: ["admin", "greetings"],
+      queryKey: adminKeys.greetings(),
     });
   }
 
@@ -404,7 +405,7 @@
       sheetOpen = false;
       resetForm();
       void queryClient.invalidateQueries({
-        queryKey: ["admin", "greetings"],
+        queryKey: adminKeys.greetings(),
       });
     },
     onError: () => {

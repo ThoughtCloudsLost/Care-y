@@ -1,6 +1,7 @@
 <script lang="ts">
   import { DialogButton, Preloader } from "konsta/svelte";
   import { createQuery, useQueryClient } from "@tanstack/svelte-query";
+  import { adminKeys, orgKeyKeys } from "$lib/query/keys.js";
   import {
     generateOrgKeypair,
     wrapKey,
@@ -31,7 +32,7 @@
   const orgKeyManager = getOrgKeyManager();
 
   const usersQuery = createQuery(() => ({
-    queryKey: ["admin", "users"],
+    queryKey: adminKeys.users(),
     queryFn: async () => authRouter.listUsers.query(),
   }));
 
@@ -104,9 +105,9 @@
         haptic();
         toastStore.show(m.admin_key_rotated());
         announceToLiveRegion("assertive", m.admin_key_rotated());
-        void queryClient.invalidateQueries({ queryKey: ["admin", "users"] });
+        void queryClient.invalidateQueries({ queryKey: adminKeys.users() });
         void queryClient.invalidateQueries({
-          queryKey: ["keys", "wrappedOrgKey"],
+          queryKey: orgKeyKeys.wrappedOrgKey(),
         });
       } finally {
         const { requireSodium } = await import("@care-y/crypto");

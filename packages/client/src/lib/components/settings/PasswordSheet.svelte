@@ -2,6 +2,7 @@
   import { List, ListInput, Preloader } from "konsta/svelte";
   import { Save } from "@lucide/svelte";
   import { useQueryClient } from "@tanstack/svelte-query";
+  import { authKeys } from "$lib/query/keys.js";
   import * as m from "$lib/paraglide/messages.js";
   import { getCryptoBridge, getOrgKeyManager } from "$lib/crypto/context.js";
   import { CryptoBridge } from "$lib/workers/crypto-bridge.js";
@@ -120,7 +121,7 @@
     const msg = m.settings_password_saved();
     toastStore.show(msg);
     announceToLiveRegion("polite", msg);
-    await queryClient.invalidateQueries({ queryKey: ["auth", "me"] });
+    await queryClient.invalidateQueries({ queryKey: authKeys.me() });
     ondismiss();
   }
 </script>

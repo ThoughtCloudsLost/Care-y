@@ -28,6 +28,7 @@
   import { telephonyProviderSchema } from "@care-y/shared";
   import * as m from "$lib/paraglide/messages.js";
   import { trpc } from "$lib/trpc/index.js";
+  import { adminKeys } from "$lib/query/keys.js";
   import { RouterNotAvailableError } from "$lib/errors.js";
   import { haptic } from "$lib/utils/haptic.js";
   import { toastStore } from "$lib/stores/toast.svelte.js";
@@ -45,18 +46,18 @@
   // ── Queries ──
 
   const configQuery = createQuery(() => ({
-    queryKey: ["admin", "telephony", "config"],
+    queryKey: adminKeys.telephonyConfig(),
     queryFn: async () => telephonyAdmin.getConfig.query(),
   }));
 
   const phonesQuery = createQuery(() => ({
-    queryKey: ["admin", "telephony", "provisionedPhones"],
+    queryKey: adminKeys.telephonyPhones(),
     queryFn: async () => telephonyAdmin.getProvisionedPhones.query(),
     enabled: configQuery.data != null,
   }));
 
   const purposeQuery = createQuery(() => ({
-    queryKey: ["admin", "telephony", "phonePurpose"],
+    queryKey: adminKeys.telephonyPhonePurpose(),
     queryFn: async () => telephonyAdmin.getPhonePurpose.query(),
     enabled: configQuery.data != null,
   }));
@@ -98,7 +99,7 @@
       announceToLiveRegion("polite", m.admin_telephony_credentials_saved());
       closeCredSheet();
       void queryClient.invalidateQueries({
-        queryKey: ["admin", "telephony", "config"],
+        queryKey: adminKeys.telephonyConfig(),
       });
     },
     onError: () => {
@@ -121,7 +122,7 @@
       toastStore.show(m.admin_telephony_numbers_refreshed());
       announceToLiveRegion("polite", m.admin_telephony_numbers_refreshed());
       void queryClient.invalidateQueries({
-        queryKey: ["admin", "telephony"],
+        queryKey: adminKeys.telephony(),
       });
     },
     onError: () => {
@@ -161,7 +162,7 @@
       toastStore.show(m.admin_telephony_purpose_saved());
       announceToLiveRegion("polite", m.admin_telephony_purpose_saved());
       void queryClient.invalidateQueries({
-        queryKey: ["admin", "telephony", "phonePurpose"],
+        queryKey: adminKeys.telephonyPhonePurpose(),
       });
     },
     onError: () => {

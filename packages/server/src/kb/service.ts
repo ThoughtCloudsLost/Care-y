@@ -47,6 +47,7 @@ export interface KBItemSummary {
 /** Full item record for detail endpoints (includes body). */
 export interface KBItemRecord extends KBItemSummary {
   readonly encryptedBody: Buffer;
+  readonly attachmentCount: number;
 }
 
 export interface KBItemPage {
@@ -203,22 +204,26 @@ function toItemSummary(row: {
   };
 }
 
-function toItemRecord(row: {
-  id: string;
-  category_id: string;
-  encrypted_title: Buffer;
-  encrypted_body: Buffer;
-  encrypted_excerpt: Buffer | null;
-  created_by: string;
-  vote_up_count: number;
-  vote_down_count: number;
-  rating: number;
-  created_at: Date;
-  updated_at: Date;
-}): KBItemRecord {
+function toItemRecord(
+  row: {
+    id: string;
+    category_id: string;
+    encrypted_title: Buffer;
+    encrypted_body: Buffer;
+    encrypted_excerpt: Buffer | null;
+    created_by: string;
+    vote_up_count: number;
+    vote_down_count: number;
+    rating: number;
+    created_at: Date;
+    updated_at: Date;
+  },
+  attachmentCount: number,
+): KBItemRecord {
   return {
     ...toItemSummary(row),
     encryptedBody: row.encrypted_body,
+    attachmentCount,
   };
 }
 
@@ -365,17 +370,25 @@ export function createKBItemService(db: Kysely<TenantDatabase>): KBItemService {
         })
         .returningAll()
         .executeTakeFirstOrThrow();
-      return toItemRecord(row);
+      return toItemRecord(row, 0);
     },
 
     async findById(itemId) {
       const row = await db
         .selectFrom("kb_items")
         .selectAll()
+        .select((eb) =>
+          eb
+            .selectFrom("kb_attachments")
+            .select(eb.fn.countAll<string>().as("cnt"))
+            .whereRef("kb_attachments.item_id", "=", "kb_items.id")
+            .where("kb_attachments.deleted_at", "is", null)
+            .as("attachment_count"),
+        )
         .where("id", "=", itemId)
         .executeTakeFirst();
       if (!row) throw new NotFoundError(ErrorCode.KB_ARTICLE_NOT_FOUND);
-      return toItemRecord(row);
+      return toItemRecord(row, Number(row.attachment_count ?? 0));
     },
 
     async list(input) {
@@ -524,25 +537,18 @@ export function createKBItemService(db: Kysely<TenantDatabase>): KBItemService {
         updates.encrypted_excerpt = input.encryptedExcerpt;
 
       if (Object.keys(updates).length === 0) {
-        const existing = await db
-          .selectFrom("kb_items")
-          .selectAll()
-          .where("id", "=", itemId)
-          .executeTakeFirst();
-        if (!existing) throw new NotFoundError(ErrorCode.KB_ARTICLE_NOT_FOUND);
-        return toItemRecord(existing);
+        return this.findById(itemId);
       }
 
       updates.updated_at = new Date();
 
-      const row = await db
+      await db
         .updateTable("kb_items")
         .set(updates)
         .where("id", "=", itemId)
-        .returningAll()
-        .executeTakeFirst();
-      if (!row) throw new NotFoundError(ErrorCode.KB_ARTICLE_NOT_FOUND);
-      return toItemRecord(row);
+        .execute();
+
+      return this.findById(itemId);
     },
 
     async delete(itemId) {

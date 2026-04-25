@@ -8,6 +8,7 @@
   } from "konsta/svelte";
   import { Save } from "@lucide/svelte";
   import { createMutation, useQueryClient } from "@tanstack/svelte-query";
+  import { adminKeys } from "$lib/query/keys.js";
   import { RoleId } from "@care-y/shared";
   import type { RoleIdValue } from "@care-y/shared";
   import * as m from "$lib/paraglide/messages.js";
@@ -65,7 +66,7 @@
       haptic();
       toastStore.show(m.admin_invite_success());
       announceToLiveRegion("polite", m.admin_invite_success());
-      void queryClient.invalidateQueries({ queryKey: ["admin", "users"] });
+      void queryClient.invalidateQueries({ queryKey: adminKeys.users() });
       showCredentialConfirmation = true;
     },
     onError: () => {

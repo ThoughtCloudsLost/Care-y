@@ -10,6 +10,7 @@
     SegmentedButton,
   } from "konsta/svelte";
   import { useQueryClient } from "@tanstack/svelte-query";
+  import { noteTypeKeys } from "$lib/query/keys.js";
   import {
     MessagesSquare,
     ArrowLeftRight,
@@ -212,8 +213,8 @@
       const msg = newActive ? m.note_type_updated() : m.note_type_deactivated();
       toastStore.show(msg);
       announceToLiveRegion("polite", msg);
-      void queryClient.invalidateQueries({ queryKey: ["noteTypes"] });
-      void queryClient.invalidateQueries({ queryKey: ["noteTypes", "all"] });
+      void queryClient.invalidateQueries({ queryKey: noteTypeKeys.all });
+      void queryClient.invalidateQueries({ queryKey: noteTypeKeys.full() });
       dismissSheet();
     } catch {
       toastStore.show(m.error_generic(), 3000);
@@ -334,8 +335,8 @@
         announceToLiveRegion("polite", m.note_type_updated());
       }
 
-      void queryClient.invalidateQueries({ queryKey: ["noteTypes"] });
-      void queryClient.invalidateQueries({ queryKey: ["noteTypes", "all"] });
+      void queryClient.invalidateQueries({ queryKey: noteTypeKeys.all });
+      void queryClient.invalidateQueries({ queryKey: noteTypeKeys.full() });
       dismissSheet();
     } catch {
       toastStore.show(m.error_generic(), 3000);

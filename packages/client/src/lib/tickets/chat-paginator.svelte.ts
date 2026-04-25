@@ -8,6 +8,7 @@
  */
 
 import type { QueryClient } from "@tanstack/svelte-query";
+import { ticketKeys } from "$lib/query/keys";
 
 /** Minimal constraint for records managed by the paginator. */
 export interface PaginatedRecord {
@@ -68,13 +69,7 @@ export function createChatPaginator<T extends PaginatedRecord>(
 
     try {
       const older = await queryClient.fetchQuery({
-        queryKey: [
-          "ticket",
-          options.getTicketId(),
-          "followUps",
-          "page",
-          oldestId,
-        ],
+        queryKey: ticketKeys.followUpsPage(options.getTicketId(), oldestId),
         queryFn: async () => fetchPage(oldestId),
       });
 
@@ -106,13 +101,7 @@ export function createChatPaginator<T extends PaginatedRecord>(
         if (oldestId === undefined) break;
 
         const older = await queryClient.fetchQuery({
-          queryKey: [
-            "ticket",
-            options.getTicketId(),
-            "followUps",
-            "page",
-            oldestId,
-          ],
+          queryKey: ticketKeys.followUpsPage(options.getTicketId(), oldestId),
           queryFn: async () => fetchPage(oldestId),
         });
 

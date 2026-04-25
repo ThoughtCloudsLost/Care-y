@@ -20,6 +20,7 @@
   } from "@lucide/svelte";
   import * as m from "$lib/paraglide/messages.js";
   import { trpc } from "$lib/trpc/index.js";
+  import { kbKeys } from "$lib/query/keys.js";
   import { getOrgDecryptCache } from "$lib/crypto/context.js";
   import {
     getNavbarOverrideCtx,
@@ -75,7 +76,7 @@
   // ── Categories for the selector ──
 
   const categoriesQuery = createQuery(() => ({
-    queryKey: ["kb", "categories"],
+    queryKey: kbKeys.categories(),
     queryFn: async () => kbRouter.listCategories.query(),
   }));
 
@@ -93,7 +94,7 @@
 
   function handleSaved(): void {
     guard.allowNavigation();
-    void queryClient.invalidateQueries({ queryKey: ["kb", "items"] });
+    void queryClient.invalidateQueries({ queryKey: kbKeys.items() });
     void goto(resolve("/library"));
   }
 

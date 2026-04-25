@@ -17,6 +17,7 @@
   import { ChevronUp, ChevronDown, Pencil, X } from "@lucide/svelte";
   import * as m from "$lib/paraglide/messages.js";
   import { trpc } from "$lib/trpc/index.js";
+  import { adminKeys, queueKeys } from "$lib/query/keys.js";
   import { getOrgDecryptCache } from "$lib/crypto/context.js";
   import { haptic } from "$lib/utils/haptic.js";
   import { base64ToUint8Array } from "$lib/utils/buffer-encoding.js";
@@ -49,13 +50,13 @@
   // ── Queries ──
 
   const queuesQuery = createQuery(() => ({
-    queryKey: ["queues"],
+    queryKey: queueKeys.all,
     queryFn: async () => ticketRouter.listQueues.query(),
   }));
 
   // Admin user list for looking up display names from member IDs
   const usersQuery = createQuery(() => ({
-    queryKey: ["admin", "users"],
+    queryKey: adminKeys.users(),
     queryFn: async () => authRouter.listUsers.query(),
   }));
 
@@ -90,7 +91,7 @@
 
   const memberResults = createQueries(() => ({
     queries: (queuesQuery.data ?? []).map((q) => ({
-      queryKey: ["queue-members", q.id] as const,
+      queryKey: queueKeys.members(q.id),
       queryFn: async () =>
         ticketRouter.listQueueMembers.query({ queueId: q.id }),
     })),
@@ -145,7 +146,7 @@
       toastStore.show(m.admin_queue_member_removed());
       announceToLiveRegion("polite", m.admin_queue_member_removed());
       void queryClient.invalidateQueries({
-        queryKey: ["queue-members", variables.queueId],
+        queryKey: queueKeys.members(variables.queueId),
       });
     },
     onError: () => {
@@ -160,7 +161,7 @@
       haptic();
       toastStore.show(m.admin_queue_reordered());
       announceToLiveRegion("polite", m.admin_queue_reordered());
-      void queryClient.invalidateQueries({ queryKey: ["queues"] });
+      void queryClient.invalidateQueries({ queryKey: queueKeys.all });
     },
     onError: () => {
       toastStore.show(m.error_generic());
@@ -174,7 +175,7 @@
       haptic();
       toastStore.show(m.admin_queue_deleted());
       announceToLiveRegion("assertive", m.admin_queue_deleted());
-      void queryClient.invalidateQueries({ queryKey: ["queues"] });
+      void queryClient.invalidateQueries({ queryKey: queueKeys.all });
     },
   }));
 

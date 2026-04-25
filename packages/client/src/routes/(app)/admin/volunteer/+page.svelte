@@ -2,6 +2,7 @@
   import { List, ListItem, Block } from "konsta/svelte";
   import SoftButton from "$lib/components/SoftButton.svelte";
   import { createQuery } from "@tanstack/svelte-query";
+  import { ticketsKeys } from "$lib/query/keys.js";
   import {
     KeyRound,
     Phone,
@@ -32,7 +33,7 @@
   const orgCache = getOrgDecryptCache();
 
   const queuesQuery = createQuery(() => ({
-    queryKey: ["tickets", "myQueues"],
+    queryKey: ticketsKeys.myQueues(),
     queryFn: async () => ticketRouter.myQueues.query(),
   }));
 

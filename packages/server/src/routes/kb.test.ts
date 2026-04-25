@@ -138,6 +138,7 @@ const MOCK_ITEM: KBItemRecord = {
   voteUpCount: 0,
   voteDownCount: 0,
   rating: 0,
+  attachmentCount: 0,
   createdAt: NOW,
   updatedAt: NOW,
 };

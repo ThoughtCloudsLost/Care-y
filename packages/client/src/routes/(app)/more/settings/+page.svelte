@@ -4,6 +4,7 @@
   import { createQuery } from "@tanstack/svelte-query";
   import * as m from "$lib/paraglide/messages.js";
   import { trpc } from "$lib/trpc/index.js";
+  import { authKeys } from "$lib/query/keys.js";
   import { getOrgDecryptCache } from "$lib/crypto/context.js";
   import { getNavbarOverrideCtx } from "$lib/shell/context.js";
   import { shellBack } from "$lib/shell/navigation.js";
@@ -16,7 +17,7 @@
   const navbarCtx = getNavbarOverrideCtx();
 
   const meQuery = createQuery(() => ({
-    queryKey: ["auth", "me"],
+    queryKey: authKeys.me(),
     queryFn: async () => trpc.auth.me.query(),
     staleTime: Infinity,
   }));

@@ -2,6 +2,7 @@
   import { List, ListInput, Block } from "konsta/svelte";
   import { Save } from "@lucide/svelte";
   import { createMutation, useQueryClient } from "@tanstack/svelte-query";
+  import { queueKeys } from "$lib/query/keys.js";
   import * as m from "$lib/paraglide/messages.js";
   import { trpc } from "$lib/trpc/index.js";
   import { getOrgKeyManager, getOrgDecryptCache } from "$lib/crypto/context.js";
@@ -96,7 +97,7 @@
     if (queueId !== null) {
       orgCache.delete(`queue:${queueId}`);
     }
-    void queryClient.invalidateQueries({ queryKey: ["queues"] });
+    void queryClient.invalidateQueries({ queryKey: queueKeys.all });
     ondismiss();
   }
 
