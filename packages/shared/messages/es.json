@@ -519,6 +519,7 @@
   "ticket_note_saving": "Guardando...",
   "ticket_note_team_only": "Nota interna",
   "ticket_note_description": "Solo visible para otros miembros de tu organizacion.",
+  "ticket_note_visible_to_role": "Solo visible para {role} y superiores",
   "ticket_note_notifies": "Notifica a {targets}",
   "ticket_note_no_notifications": "Sin notificaciones",
   "ticket_note_hint_participants": "participantes",

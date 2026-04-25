@@ -488,6 +488,7 @@ export * from "./reaction_you.js";
 export * from "./ticket_note_saving.js";
 export * from "./ticket_note_team_only.js";
 export * from "./ticket_note_description.js";
+export * from "./ticket_note_visible_to_role.js";
 export * from "./ticket_note_notifies.js";
 export * from "./ticket_note_no_notifications.js";
 export * from "./ticket_note_hint_participants.js";
