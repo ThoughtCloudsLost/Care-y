@@ -51,6 +51,7 @@ import {
   uploadKbAttachmentInputSchema,
   downloadKbAttachmentInputSchema,
   listKbAttachmentsInputSchema,
+  listKbBodiesInputSchema,
   KB_ATTACHMENT_MAX_BYTES,
   ErrorCode,
 } from "@care-y/shared";
@@ -215,6 +216,14 @@ export function createKbRouter(deps: KBRouterDeps) {
           return svc.listRecentlyUpdated(input.limit);
         }),
       ),
+
+    // --- Bulk body fetch (for full search) ---
+    listBodies: volunteerProcedure.input(listKbBodiesInputSchema).query(
+      withErrorWrapping(async ({ ctx, input }) => {
+        const svc = deps.createItemSvc(ctx.org.tenantDb);
+        return svc.listBodies(input.itemIds);
+      }),
+    ),
 
     // --- Voting ---
     castVote: volunteerProcedure.input(castVoteInputSchema).mutation(

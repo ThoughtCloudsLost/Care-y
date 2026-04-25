@@ -329,6 +329,8 @@ export {
   type DownloadKbAttachmentInput,
   type ListKbAttachmentsInput,
   type KbAllowedContentType,
+  listKbBodiesInputSchema,
+  type ListKbBodiesInput,
 } from "./schemas/kb.js";
 
 // --- Notification, search, audit schemas ---
