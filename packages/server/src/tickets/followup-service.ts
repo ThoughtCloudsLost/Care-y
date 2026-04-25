@@ -10,7 +10,13 @@ import type { Kysely } from "kysely";
 import type { TenantDatabase } from "../db/types.js";
 import type { TicketAccessChecker } from "./access.js";
 import { ForbiddenError, NotFoundError } from "../errors.js";
-import { ErrorCode, getAllowedRoleIds } from "@care-y/shared";
+import {
+  ErrorCode,
+  getAllowedRoleIds,
+  meetsRoleThreshold,
+} from "@care-y/shared";
+import { REACTION_TYPES } from "@care-y/shared";
+import type { ReactionSummary, ReactionType } from "@care-y/shared";
 
 export interface FollowUpRecord {
   readonly id: string;
@@ -115,6 +121,15 @@ export interface FollowUpService {
     userId: string,
     ticketId: string,
   ): Promise<readonly { volunteerId: string; encryptedDisplayName: Buffer }[]>;
+  /** Toggle a reaction on an internal note. Returns updated summaries. */
+  toggleReaction(
+    userId: string,
+    userRoleId: string,
+    followUpId: string,
+    reaction: ReactionType,
+  ): Promise<ReactionSummary[]>;
+  /** Batch-load reactions for a list of followup IDs. */
+  getReactions(followUpIds: string[]): Promise<Map<string, ReactionSummary[]>>;
 }
 
 function toRecord(row: {
@@ -841,5 +856,138 @@ export function createFollowUpService(
           : [],
       );
     },
+
+    async toggleReaction(userId, userRoleId, followUpId, reaction) {
+      const row = await db
+        .selectFrom("followups")
+        .leftJoin("note_types as nt", "nt.id", "followups.note_type_id")
+        .select([
+          "followups.type",
+          "followups.deleted_at",
+          "followups.created_by",
+          "followups.ticket_id",
+          "nt.min_view_role",
+        ])
+        .where("followups.id", "=", followUpId)
+        .executeTakeFirst();
+
+      if (row === undefined) {
+        throw new NotFoundError(ErrorCode.FOLLOWUP_NOT_FOUND);
+      }
+      if (row.deleted_at !== null) {
+        throw new NotFoundError(ErrorCode.FOLLOWUP_NOT_FOUND);
+      }
+      if (row.type !== "internal_note") {
+        throw new ForbiddenError(ErrorCode.INSUFFICIENT_PERMISSIONS);
+      }
+
+      if (
+        row.min_view_role !== null &&
+        row.created_by !== userId &&
+        !meetsRoleThreshold(userRoleId, row.min_view_role)
+      ) {
+        throw new ForbiddenError(ErrorCode.INSUFFICIENT_ROLE);
+      }
+
+      const existing = await db
+        .selectFrom("followup_reactions")
+        .select("id")
+        .where("followup_id", "=", followUpId)
+        .where("user_id", "=", userId)
+        .where("reaction", "=", reaction)
+        .executeTakeFirst();
+
+      if (existing !== undefined) {
+        await db
+          .deleteFrom("followup_reactions")
+          .where("id", "=", existing.id)
+          .execute();
+      } else {
+        await db
+          .insertInto("followup_reactions")
+          .values({
+            followup_id: followUpId,
+            user_id: userId,
+            reaction,
+          })
+          .execute();
+      }
+
+      return buildReactionSummaries(db, followUpId);
+    },
+
+    async getReactions(followUpIds) {
+      if (followUpIds.length === 0) return new Map();
+
+      const rows = await db
+        .selectFrom("followup_reactions")
+        .select(["followup_id", "user_id", "reaction"])
+        .where("followup_id", "in", followUpIds)
+        .orderBy("created_at", "asc")
+        .execute();
+
+      const grouped = new Map<string, Map<string, string[]>>();
+      for (const r of rows) {
+        let byReaction = grouped.get(r.followup_id);
+        if (byReaction === undefined) {
+          byReaction = new Map();
+          grouped.set(r.followup_id, byReaction);
+        }
+        let users = byReaction.get(r.reaction);
+        if (users === undefined) {
+          users = [];
+          byReaction.set(r.reaction, users);
+        }
+        users.push(r.user_id);
+      }
+
+      const result = new Map<string, ReactionSummary[]>();
+      for (const [fId, byReaction] of grouped) {
+        const summaries: ReactionSummary[] = [];
+        for (const [reaction, userIds] of byReaction) {
+          summaries.push({
+            reaction: toReactionType(reaction),
+            userIds,
+          });
+        }
+        result.set(fId, summaries);
+      }
+      return result;
+    },
   };
+}
+
+function toReactionType(value: string): ReactionType {
+  for (const rt of REACTION_TYPES) {
+    if (rt === value) return rt;
+  }
+  return "acknowledge";
+}
+
+async function buildReactionSummaries(
+  db: Kysely<TenantDatabase>,
+  followUpId: string,
+): Promise<ReactionSummary[]> {
+  const rows = await db
+    .selectFrom("followup_reactions")
+    .select(["reaction", "user_id"])
+    .where("followup_id", "=", followUpId)
+    .orderBy("created_at", "asc")
+    .execute();
+
+  const grouped = new Map<string, string[]>();
+  for (const r of rows) {
+    let users = grouped.get(r.reaction);
+    if (users === undefined) {
+      users = [];
+      grouped.set(r.reaction, users);
+    }
+    users.push(r.user_id);
+  }
+
+  const summaries: ReactionSummary[] = [];
+  for (const [reaction, userIds] of grouped) {
+    summaries.push({ reaction: toReactionType(reaction), userIds });
+  }
+  return summaries;
 }
