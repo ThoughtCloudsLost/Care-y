@@ -183,7 +183,7 @@ function buildNoteTypeRoutes(
       listActive: volunteerProcedure.query(
         withErrorWrapping(async ({ ctx }) => {
           const svc = factory(ctx.org.tenantDb);
-          return svc.listActive();
+          return svc.listActive(ctx.user.roleId);
         }),
       ),
 
@@ -199,6 +199,8 @@ function buildNoteTypeRoutes(
                 : undefined,
             escalationTargets: input.escalationTargets,
             requiresOnClose: input.requiresOnClose,
+            minViewRole: input.minViewRole,
+            minCreateRole: input.minCreateRole,
           });
           auditFn(ctx.org.tenantDb, {
             eventType: "note_type_created",
@@ -231,6 +233,8 @@ function buildNoteTypeRoutes(
             escalationTargets: input.escalationTargets,
             isActive: input.isActive,
             requiresOnClose: input.requiresOnClose,
+            minViewRole: input.minViewRole,
+            minCreateRole: input.minCreateRole,
           });
           auditFn(ctx.org.tenantDb, {
             eventType: "note_type_updated",

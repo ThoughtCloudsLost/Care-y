@@ -484,6 +484,16 @@ export interface NoteTypesTable {
   encrypted_escalation_targets: Buffer;
   is_active: ColumnType<boolean, boolean | undefined, boolean>;
   requires_on_close: ColumnType<boolean, boolean | undefined, boolean>;
+  min_view_role: ColumnType<string, string | undefined, string>;
+  min_create_role: ColumnType<string, string | undefined, string>;
+  created_at: Generated<Date>;
+}
+
+export interface FollowupReactionsTable {
+  id: Generated<string>;
+  followup_id: string;
+  user_id: string;
+  reaction: string;
   created_at: Generated<Date>;
 }
 
@@ -554,6 +564,7 @@ export interface TenantDatabase {
   phone_blocklist: PhoneBlocklistTable;
   // Note types (internal note categorization)
   note_types: NoteTypesTable;
+  followup_reactions: FollowupReactionsTable;
   // Shifts (shifts, shift_occurrences)
   // Client portal (portal_channels)
 }

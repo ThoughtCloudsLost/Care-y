@@ -9,6 +9,7 @@
 
 import { z } from "zod";
 import { base64String } from "./validators.js";
+import { ROLE_ID_VALUES_TUPLE } from "../roles.js";
 
 // --- Ticket enums ---
 
@@ -388,12 +389,16 @@ export const escalationTargetSchema = z.discriminatedUnion("type", [
 ]);
 export type EscalationTarget = z.infer<typeof escalationTargetSchema>;
 
+export const roleIdSchema = z.enum(ROLE_ID_VALUES_TUPLE);
+
 export const createNoteTypeInputSchema = z.object({
   encryptedName: base64String("encryptedName"),
   encryptedIcon: base64String("encryptedIcon"),
   encryptedDescription: base64String("encryptedDescription").optional(),
   escalationTargets: z.array(escalationTargetSchema),
   requiresOnClose: z.boolean().optional(),
+  minViewRole: roleIdSchema.optional(),
+  minCreateRole: roleIdSchema.optional(),
 });
 export type CreateNoteTypeInput = z.infer<typeof createNoteTypeInputSchema>;
 
@@ -407,5 +412,30 @@ export const updateNoteTypeInputSchema = z.object({
   escalationTargets: z.array(escalationTargetSchema).optional(),
   isActive: z.boolean().optional(),
   requiresOnClose: z.boolean().optional(),
+  minViewRole: roleIdSchema.optional(),
+  minCreateRole: roleIdSchema.optional(),
 });
 export type UpdateNoteTypeInput = z.infer<typeof updateNoteTypeInputSchema>;
+
+// --- Reactions (internal note feedback) ---
+
+export const REACTION_TYPES = [
+  "acknowledge",
+  "approve",
+  "disagree",
+  "flag",
+  "complete",
+] as const;
+export type ReactionType = (typeof REACTION_TYPES)[number];
+export const reactionTypeSchema = z.enum(REACTION_TYPES);
+
+export const toggleReactionInputSchema = z.object({
+  followUpId: z.uuid(),
+  reaction: reactionTypeSchema,
+});
+export type ToggleReactionInput = z.infer<typeof toggleReactionInputSchema>;
+
+export interface ReactionSummary {
+  readonly reaction: ReactionType;
+  readonly userIds: readonly string[];
+}
