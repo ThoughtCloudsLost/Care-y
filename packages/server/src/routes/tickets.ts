@@ -40,8 +40,8 @@ import type { NotificationService } from "../notifications/service.js";
 import type { AuditEntry } from "../tickets/audit.js";
 import type { NoteTypeService } from "../tickets/note-type-service.js";
 import type { NotificationEventType, TicketPriority } from "@care-y/shared";
-import { ErrorCode } from "@care-y/shared";
-import { NotFoundError } from "../errors.js";
+import { ErrorCode, meetsRoleThreshold } from "@care-y/shared";
+import { ForbiddenError, NotFoundError } from "../errors.js";
 import {
   buildRecipientList,
   resolveEscalationTargets,
@@ -537,6 +537,20 @@ export function createTicketRouter(deps: TicketRouterDeps) {
       .input(createFollowUpInputSchema)
       .mutation(
         withErrorWrapping(async ({ ctx, input }) => {
+          if (
+            input.type === "internal_note" &&
+            input.noteTypeId !== undefined &&
+            deps.createNoteTypeSvc
+          ) {
+            const ntSvc = deps.createNoteTypeSvc(ctx.org.tenantDb);
+            const minRole = await ntSvc.getMinCreateRole(input.noteTypeId);
+            if (
+              minRole !== undefined &&
+              !meetsRoleThreshold(ctx.user.roleId, minRole)
+            ) {
+              throw new ForbiddenError(ErrorCode.INSUFFICIENT_ROLE);
+            }
+          }
           const access = deps.createTicketAccess(ctx.org.tenantDb);
           const svc = deps.createFollowUpSvc(ctx.org.tenantDb, access);
           const followUp = await svc.create(ctx.user.id, {
@@ -583,6 +597,7 @@ export function createTicketRouter(deps: TicketRouterDeps) {
           includeClientSource: input.includeClientSource,
           dateFrom: input.dateFrom,
           dateTo: input.dateTo,
+          userRoleId: ctx.user.roleId,
         });
       }),
     ),
@@ -603,6 +618,7 @@ export function createTicketRouter(deps: TicketRouterDeps) {
             includeClientSource: input.includeClientSource,
             dateFrom: input.dateFrom,
             dateTo: input.dateTo,
+            userRoleId: ctx.user.roleId,
           });
         }),
       ),

@@ -66,6 +66,7 @@ export interface NoteTypeService {
   }): Promise<NoteTypeRecord>;
   getDefaultTypeId(): Promise<string | null>;
   getEscalationTargets(noteTypeId: string): Promise<EscalationTarget[]>;
+  getMinCreateRole(noteTypeId: string): Promise<string | undefined>;
 }
 
 interface NoteTypeRow {
@@ -324,6 +325,15 @@ export function createNoteTypeService(
 
       if (!row) return [];
       return decryptTargets(row.encrypted_escalation_targets, secretsEncryptor);
+    },
+
+    async getMinCreateRole(noteTypeId): Promise<string | undefined> {
+      const row = await db
+        .selectFrom("note_types")
+        .select("min_create_role")
+        .where("id", "=", noteTypeId)
+        .executeTakeFirst();
+      return row?.min_create_role;
     },
   };
 }
