@@ -11,10 +11,14 @@ import type { Kysely, Updateable } from "kysely";
 import type { TenantDatabase, NoteTypesTable } from "../db/types.js";
 import type { SecretsEncryptor } from "../config/secrets.js";
 import type { SealedBoxEncryptor } from "../crypto/sealed-box.js";
-import { escalationTargetSchema } from "@care-y/shared";
-import type { EscalationTarget } from "@care-y/shared";
+import {
+  escalationTargetSchema,
+  meetsRoleThreshold,
+  RoleId,
+  ErrorCode,
+} from "@care-y/shared";
+import type { EscalationTarget, RoleIdValue } from "@care-y/shared";
 import { ForbiddenError, NotFoundError } from "../errors.js";
-import { ErrorCode } from "@care-y/shared";
 import { z } from "zod";
 
 export interface NoteTypeRecord {
@@ -24,6 +28,8 @@ export interface NoteTypeRecord {
   readonly encryptedDescription: Buffer | null;
   readonly isActive: boolean;
   readonly requiresOnClose: boolean;
+  readonly minViewRole: string;
+  readonly minCreateRole: string;
   readonly createdAt: Date;
   readonly notificationHints: readonly string[];
 }
@@ -34,8 +40,8 @@ export interface NoteTypeAdminRecord extends NoteTypeRecord {
 
 export interface NoteTypeService {
   list(): Promise<NoteTypeAdminRecord[]>;
-  listActive(): Promise<{
-    types: NoteTypeRecord[];
+  listActive(userRoleId: string): Promise<{
+    types: (NoteTypeRecord & { readonly canCreate: boolean })[];
     defaultNoteTypeId: string | null;
   }>;
   create(input: {
@@ -44,6 +50,8 @@ export interface NoteTypeService {
     encryptedDescription?: Buffer;
     escalationTargets: EscalationTarget[];
     requiresOnClose?: boolean;
+    minViewRole?: string;
+    minCreateRole?: string;
   }): Promise<NoteTypeRecord>;
   update(input: {
     id: string;
@@ -53,6 +61,8 @@ export interface NoteTypeService {
     escalationTargets?: EscalationTarget[];
     isActive?: boolean;
     requiresOnClose?: boolean;
+    minViewRole?: string;
+    minCreateRole?: string;
   }): Promise<NoteTypeRecord>;
   getDefaultTypeId(): Promise<string | null>;
   getEscalationTargets(noteTypeId: string): Promise<EscalationTarget[]>;
@@ -66,6 +76,8 @@ interface NoteTypeRow {
   encrypted_escalation_targets: Buffer;
   is_active: boolean;
   requires_on_close: boolean;
+  min_view_role: string;
+  min_create_role: string;
   created_at: Date;
 }
 
@@ -91,6 +103,8 @@ function toRecord(
     encryptedDescription: row.encrypted_description,
     isActive: row.is_active,
     requiresOnClose: row.requires_on_close,
+    minViewRole: row.min_view_role,
+    minCreateRole: row.min_create_role,
     createdAt: row.created_at,
     notificationHints: hints,
   };
@@ -147,8 +161,8 @@ export function createNoteTypeService(
       );
     },
 
-    async listActive(): Promise<{
-      types: NoteTypeRecord[];
+    async listActive(userRoleId: string): Promise<{
+      types: (NoteTypeRecord & { readonly canCreate: boolean })[];
       defaultNoteTypeId: string | null;
     }> {
       const [rows, config] = await Promise.all([
@@ -170,13 +184,23 @@ export function createNoteTypeService(
             row.encrypted_escalation_targets,
             secretsEncryptor,
           );
-          return toRecord(row, buildNotificationHints(targets));
+          return {
+            ...toRecord(row, buildNotificationHints(targets)),
+            canCreate: meetsRoleThreshold(userRoleId, row.min_create_role),
+          };
         }),
         defaultNoteTypeId: config?.default_note_type_id ?? null,
       };
     },
 
     async create(input): Promise<NoteTypeRecord> {
+      const viewRole = input.minViewRole ?? RoleId.VOLUNTEER;
+      const createRole = input.minCreateRole ?? RoleId.VOLUNTEER;
+
+      if (!meetsRoleThreshold(createRole, viewRole)) {
+        throw new ForbiddenError(ErrorCode.INVALID_ROLE_GATING);
+      }
+
       const encryptedTargets = encryptTargets(
         input.escalationTargets,
         secretsEncryptor,
@@ -190,6 +214,8 @@ export function createNoteTypeService(
           encrypted_description: input.encryptedDescription ?? null,
           encrypted_escalation_targets: encryptedTargets,
           requires_on_close: input.requiresOnClose ?? false,
+          min_view_role: viewRole,
+          min_create_role: createRole,
         })
         .returningAll()
         .executeTakeFirstOrThrow();
@@ -233,6 +259,31 @@ export function createNoteTypeService(
       }
       if (input.requiresOnClose !== undefined) {
         updates.requires_on_close = input.requiresOnClose;
+      }
+      if (input.minViewRole !== undefined) {
+        updates.min_view_role = input.minViewRole;
+      }
+      if (input.minCreateRole !== undefined) {
+        updates.min_create_role = input.minCreateRole;
+      }
+
+      if (
+        input.minViewRole !== undefined ||
+        input.minCreateRole !== undefined
+      ) {
+        const existing = await db
+          .selectFrom("note_types")
+          .select(["min_view_role", "min_create_role"])
+          .where("id", "=", input.id)
+          .executeTakeFirst();
+        if (!existing) throw new NotFoundError(ErrorCode.NOTE_TYPE_NOT_FOUND);
+
+        const finalView = input.minViewRole ?? existing.min_view_role;
+        const finalCreate = input.minCreateRole ?? existing.min_create_role;
+
+        if (!meetsRoleThreshold(finalCreate, finalView)) {
+          throw new ForbiddenError(ErrorCode.INVALID_ROLE_GATING);
+        }
       }
 
       if (Object.keys(updates).length === 0) {

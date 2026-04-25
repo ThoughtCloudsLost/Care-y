@@ -29,6 +29,29 @@ export const ROLE_ID_VALUES_TUPLE: [RoleIdValue, ...RoleIdValue[]] = [
   RoleId.ADMIN,
 ];
 
+/** Hierarchy levels for role comparison. Add new roles here. */
+export const ROLE_LEVEL: ReadonlyMap<string, number> = new Map<string, number>([
+  [RoleId.VOLUNTEER, 1],
+  [RoleId.MANAGER, 2],
+  [RoleId.ADMIN, 3],
+]);
+
+/** Returns true if the user's role meets or exceeds the minimum required role. */
+export function meetsRoleThreshold(
+  userRoleId: string,
+  minRoleId: string,
+): boolean {
+  const userLevel = ROLE_LEVEL.get(userRoleId) ?? 0;
+  const minLevel = ROLE_LEVEL.get(minRoleId) ?? 0;
+  return userLevel >= minLevel;
+}
+
+/** Returns all role IDs at or below the given role's level (for SQL IN filtering). */
+export function getAllowedRoleIds(userRoleId: string): RoleIdValue[] {
+  const userLevel = ROLE_LEVEL.get(userRoleId) ?? 0;
+  return ROLE_ID_VALUES.filter((id) => (ROLE_LEVEL.get(id) ?? 0) <= userLevel);
+}
+
 /**
  * Permissions are action-level, not resource-level.
  * The ticket system adds queue-specific permissions.

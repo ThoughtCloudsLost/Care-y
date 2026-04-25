@@ -36,6 +36,9 @@ export {
   type RoleIdValue,
   ROLE_ID_VALUES,
   ROLE_ID_VALUES_TUPLE,
+  ROLE_LEVEL,
+  meetsRoleThreshold,
+  getAllowedRoleIds,
   Permission,
 } from "./roles.js";
 
@@ -279,11 +282,18 @@ export {
   ticketActionSchema,
   type TicketAction,
   escalationTargetSchema,
+  roleIdSchema,
   createNoteTypeInputSchema,
   updateNoteTypeInputSchema,
   type EscalationTarget,
   type CreateNoteTypeInput,
   type UpdateNoteTypeInput,
+  REACTION_TYPES,
+  type ReactionType,
+  reactionTypeSchema,
+  toggleReactionInputSchema,
+  type ToggleReactionInput,
+  type ReactionSummary,
 } from "./schemas/tickets.js";
 
 // --- Knowledge Base schemas ---
