@@ -92,6 +92,7 @@ import {
   attachmentListInputSchema,
   createNoteTypeInputSchema,
   updateNoteTypeInputSchema,
+  toggleReactionInputSchema,
   RoleId,
 } from "@care-y/shared";
 
@@ -702,6 +703,21 @@ export function createTicketRouter(deps: TicketRouterDeps) {
             ctx.user.id,
             input.followUpId,
             isAdmin,
+          );
+        }),
+      ),
+
+    toggleReaction: volunteerProcedure
+      .input(toggleReactionInputSchema)
+      .mutation(
+        withErrorWrapping(async ({ ctx, input }) => {
+          const access = deps.createTicketAccess(ctx.org.tenantDb);
+          const svc = deps.createFollowUpSvc(ctx.org.tenantDb, access);
+          return svc.toggleReaction(
+            ctx.user.id,
+            ctx.user.roleId,
+            input.followUpId,
+            input.reaction,
           );
         }),
       ),
