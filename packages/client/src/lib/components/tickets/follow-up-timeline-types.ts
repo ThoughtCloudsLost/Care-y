@@ -15,6 +15,7 @@ export interface TimelineItem {
   hasFile: boolean;
   fullPosition?: number;
   totalCount?: number;
+  noteTypeId: string | null;
 }
 
 /** Follow-up record for expanded timeline entries. */
@@ -30,4 +31,5 @@ export interface ClusterRecord {
   hasRecording: boolean;
   hasImage: boolean;
   hasFile: boolean;
+  noteTypeId: string | null;
 }

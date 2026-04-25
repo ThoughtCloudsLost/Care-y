@@ -16,7 +16,10 @@
   import { Messages, Message, Checkbox, Button } from "konsta/svelte";
   import * as m from "$lib/paraglide/messages.js";
   import { trpc } from "$lib/trpc/index.js";
-  import { createVolunteersQuery } from "$lib/tickets/queries.js";
+  import {
+    createVolunteersQuery,
+    createNoteTypesQuery,
+  } from "$lib/tickets/queries.js";
   import {
     buildVolunteerMap,
     resolveVolunteerName as resolveVolName,
@@ -62,6 +65,7 @@
   import FollowUpBubble from "$lib/components/tickets/FollowUpBubble.svelte";
   import GapIndicator from "$lib/components/GapIndicator.svelte";
   import { followUpKind } from "$lib/tickets/follow-up-utils.js";
+  import { resolveNoteTypeIcon as resolveNoteTypeIconComponent } from "$lib/utils/note-type-icons.js";
 
   import { computeGaps } from "$lib/tickets/gap-indicators.js";
   import { createScrollManager } from "$lib/tickets/scroll-manager.svelte.js";
@@ -92,14 +96,12 @@
     onlightbox?: (imageUrl: string) => void;
     /** Called when a long-press context menu should open. */
     oncontextmenu?: (event: ContextMenuEvent) => void;
-    /** Called when a note edit is saved (plaintext). Route encrypts + submits. */
-    onnoteedit?: (followUpId: string, newPlaintext: string) => void;
-    /** The follow-up ID currently in edit mode (set by route after context menu). */
-    editingFollowUpId?: string | null;
-    /** Whether a note edit mutation is in flight. */
-    savingNote?: boolean;
-    /** Called when editing is cancelled (route clears editingFollowUpId). */
-    oncanceledit?: () => void;
+    /** Called when a note edit icon is tapped. Opens the edit sheet. */
+    onopenedit?: (
+      followUpId: string,
+      content: string,
+      noteTypeId: string | null,
+    ) => void;
     /** Two-way bindable: whether the timeline TOC view is active. */
     timelineActive?: boolean;
     /** Decrypted read cursor: undefined = still loading, null = all unread, Date = read up to. */
@@ -155,10 +157,7 @@
     onmentionselect,
     onlightbox,
     oncontextmenu,
-    onnoteedit,
-    editingFollowUpId = null,
-    savingNote = false,
-    oncanceledit,
+    onopenedit,
     timelineActive = $bindable(false),
     readUpTo,
     onreadprogress,
@@ -217,6 +216,39 @@
 
   // Volunteer list (cached, shared with MentionAutocomplete).
   const volunteersQuery = createVolunteersQuery(ticketRouter);
+  const noteTypesQuery = ticketRouter.noteTypes
+    ? createNoteTypesQuery(ticketRouter.noteTypes)
+    : undefined;
+
+  function effectiveNoteTypeId(noteTypeId: string | null): string | undefined {
+    if (!noteTypesQuery?.data) return undefined;
+    if (noteTypeId !== null) return noteTypeId;
+    return noteTypesQuery.data.defaultNoteTypeId ?? undefined;
+  }
+
+  function resolveNoteTypeName(noteTypeId: string | null): string | undefined {
+    const id = effectiveNoteTypeId(noteTypeId);
+    if (id === undefined || !noteTypesQuery?.data) return undefined;
+    const nt = noteTypesQuery.data.types.find((t) => t.id === id);
+    if (!nt) return undefined;
+    return orgCache.decrypt(nt.id + ":name", nt.encryptedName) ?? undefined;
+  }
+
+  function resolveNoteTypeIcon(noteTypeId: string | null): string | undefined {
+    const id = effectiveNoteTypeId(noteTypeId);
+    if (id === undefined || !noteTypesQuery?.data) return undefined;
+    const nt = noteTypesQuery.data.types.find((t) => t.id === id);
+    if (!nt) return undefined;
+    return orgCache.decrypt(nt.id + ":icon", nt.encryptedIcon) ?? undefined;
+  }
+
+  function resolveNoteIconForTimeline(
+    noteTypeId: string | null,
+  ): ReturnType<typeof resolveNoteTypeIconComponent> | undefined {
+    const slug = resolveNoteTypeIcon(noteTypeId);
+    if (slug === undefined) return undefined;
+    return resolveNoteTypeIconComponent(slug);
+  }
 
   // Ticket data shortcuts.
   const ticket = $derived(ticketQuery.data);
@@ -279,17 +311,41 @@
   );
 
   // Translate client-side pseudo-types to server filter params.
+  // note_type:<uuid> entries are converted to "internal_note" for the server query;
+  // client-side filtering by specific noteTypeId happens in the rendering layer.
   const serverFilterTypes = $derived.by((): FollowUpType[] => {
     const types: FollowUpType[] = [];
+    let hasNoteTypeFilter = false;
     for (const t of filterTypes ?? []) {
-      if (t !== "__images__" && t !== "__recordings__" && t !== "__files__") {
+      if (t.startsWith("note_type:")) {
+        hasNoteTypeFilter = true;
+      } else if (
+        t !== "__images__" &&
+        t !== "__recordings__" &&
+        t !== "__files__"
+      ) {
         // filterTypes prop contains both FollowUpType values and media pseudo-types;
         // after excluding pseudo-types the remainder are valid FollowUpType values.
         // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- pseudo-types excluded above
         types.push(t as FollowUpType);
       }
     }
+    if (hasNoteTypeFilter && !types.includes("internal_note")) {
+      types.push("internal_note" as FollowUpType);
+    }
     return types;
+  });
+
+  // Active note type ID filters (extracted from note_type:<uuid> filter values).
+  const activeNoteTypeIds = $derived.by((): Set<string> => {
+    // eslint-disable-next-line svelte/prefer-svelte-reactivity -- ephemeral computed value, not a reactive container
+    const ids = new Set<string>();
+    for (const t of filterTypes ?? []) {
+      if (t.startsWith("note_type:")) {
+        ids.add(t.slice("note_type:".length));
+      }
+    }
+    return ids;
   });
 
   const serverMediaFlags = $derived.by((): MediaFlag[] => {
@@ -344,9 +400,20 @@
     enabled: hasActiveFilters,
   }));
 
-  const displayFollowUps = $derived(
-    hasActiveFilters ? (filteredFollowUpsQuery.data ?? []) : followUps,
-  );
+  const displayFollowUps = $derived.by(() => {
+    const base = hasActiveFilters
+      ? (filteredFollowUpsQuery.data ?? [])
+      : followUps;
+    if (activeNoteTypeIds.size === 0) return base;
+    return base.filter((fu) => {
+      if (fu.type !== "internal_note") return true;
+      if (fu.noteTypeId !== null && activeNoteTypeIds.has(fu.noteTypeId))
+        return true;
+      // Pre-feature notes (null noteTypeId): include when any note type filter is active
+      if (fu.noteTypeId === null) return true;
+      return false;
+    });
+  });
 
   $effect(() => {
     filteredFollowUps = displayFollowUps;
@@ -426,6 +493,7 @@
       hasFile: fu.hasFile,
       fullPosition: fu.fullPosition,
       totalCount: fu.totalCount,
+      noteTypeId: fu.noteTypeId ?? null,
     };
   }
 
@@ -446,6 +514,7 @@
       recordingDurationSeconds: null,
       hasImage: fu.hasImage,
       hasFile: fu.hasFile,
+      noteTypeId: fu.noteTypeId ?? null,
     }));
   });
 
@@ -510,6 +579,7 @@
         hasRecording: summary?.hasRecording ?? false,
         hasImage: summary?.hasImage ?? false,
         hasFile: summary?.hasFile ?? false,
+        noteTypeId: summary?.noteTypeId ?? null,
       };
     });
     expandedClusters.set(key, placeholders);
@@ -534,6 +604,7 @@
       hasRecording: fu.hasRecording,
       hasImage: fu.hasImage,
       hasFile: fu.hasFile,
+      noteTypeId: fu.noteTypeId ?? null,
     }));
     expandedClusters.set(key, records);
   }
@@ -626,7 +697,12 @@
     const result = decrypt.followUp(fu.id, fu.encryptedContent);
     const plaintext = result.status === "ready" ? result.value : undefined;
 
-    oncontextmenu?.({ followUpId: fu.id, actions, plaintext });
+    oncontextmenu?.({
+      followUpId: fu.id,
+      actions,
+      plaintext,
+      noteTypeId: fu.noteTypeId ?? null,
+    });
   }
 
   // --- Unread divider ---
@@ -876,6 +952,7 @@
         {searchActiveMatchId}
         {searchScrollRequested}
         {onsearchscrollcomplete}
+        resolveNoteIcon={resolveNoteIconForTimeline}
       >
         {#snippet renderExpanded({
           record: rec,
@@ -906,6 +983,8 @@
                 authorName={resolveVolunteerName(rec.createdBy)}
                 timestamp={rec.createdAt}
                 isOwn={rec.createdBy === currentUserId}
+                noteTypeName={resolveNoteTypeName(rec.noteTypeId)}
+                noteTypeIcon={resolveNoteTypeIcon(rec.noteTypeId)}
                 {searchTerm}
               />
             {:else}
@@ -1054,14 +1133,18 @@
                     authorName={resolveVolunteerName(fu.createdBy)}
                     timestamp={fu.createdAt}
                     isOwn={fu.createdBy === currentUserId}
-                    editing={editingFollowUpId === fu.id}
-                    saving={editingFollowUpId === fu.id && savingNote}
-                    onedit={(newText: string) => onnoteedit?.(fu.id, newText)}
-                    {oncanceledit}
+                    noteTypeName={resolveNoteTypeName(fu.noteTypeId)}
+                    noteTypeIcon={resolveNoteTypeIcon(fu.noteTypeId)}
+                    onopenedit={onopenedit
+                      ? () => {
+                          const text =
+                            contentResult.status === "ready"
+                              ? contentResult.value
+                              : "";
+                          onopenedit(fu.id, text, fu.noteTypeId ?? null);
+                        }
+                      : undefined}
                     {searchTerm}
-                    onpointerdown={startLongPress(fu)}
-                    onpointerup={cancelLongPress}
-                    onpointercancel={cancelLongPress}
                   />
                 {:else}
                   <Message

@@ -12,11 +12,13 @@
   import {
     getCryptoBridge,
     getFollowUpDecryptCache,
+    getOrgDecryptCache,
   } from "$lib/crypto/context.js";
   import { resolveAsyncDecrypt } from "$lib/crypto/decrypt-result.js";
   import { RouterNotAvailableError } from "$lib/errors.js";
   import { toastStore } from "$lib/stores/toast.svelte.js";
   import { haptic } from "$lib/utils/haptic.js";
+  import { createNoteTypesQuery } from "$lib/tickets/queries.js";
   import ShellSheet from "$lib/shell/ShellSheet.svelte";
   import ShellMessagebar from "$lib/shell/ShellMessagebar.svelte";
   import FollowUpBubble from "$lib/components/tickets/FollowUpBubble.svelte";
@@ -48,6 +50,35 @@
   const ticketRouter = trpc.tickets;
   const cryptoBridge = getCryptoBridge();
   const followUpCache = getFollowUpDecryptCache();
+  const orgCache = getOrgDecryptCache();
+
+  const noteTypesQuery = ticketRouter.noteTypes
+    ? createNoteTypesQuery(ticketRouter.noteTypes)
+    : undefined;
+
+  function effectiveTypeId(noteTypeId: string | null): string | undefined {
+    if (!noteTypesQuery?.data) return undefined;
+    if (noteTypeId !== null) return noteTypeId;
+    return noteTypesQuery.data.defaultNoteTypeId ?? undefined;
+  }
+
+  function resolveNoteTypeName(noteTypeId: string | null): string | undefined {
+    const id = effectiveTypeId(noteTypeId);
+    if (id === undefined || !noteTypesQuery?.data) return undefined;
+    const nt = noteTypesQuery.data.types.find((t) => t.id === id);
+    if (!nt) return undefined;
+    return orgCache.decrypt(nt.id + ":name", nt.encryptedName) ?? undefined;
+  }
+
+  function resolveNoteTypeIconSlug(
+    noteTypeId: string | null,
+  ): string | undefined {
+    const id = effectiveTypeId(noteTypeId);
+    if (id === undefined || !noteTypesQuery?.data) return undefined;
+    const nt = noteTypesQuery.data.types.find((t) => t.id === id);
+    if (!nt) return undefined;
+    return orgCache.decrypt(nt.id + ":icon", nt.encryptedIcon) ?? undefined;
+  }
 
   let draftText = $state("");
   let cursorPosition = $state(0);
@@ -178,7 +209,13 @@
             ),
             fu.keyWrap !== null,
           )}
-          <FollowUpBubble followUp={fu} result={fuResult} {clientAlias} />
+          <FollowUpBubble
+            followUp={fu}
+            result={fuResult}
+            {clientAlias}
+            noteTypeName={resolveNoteTypeName(fu.noteTypeId)}
+            noteTypeIcon={resolveNoteTypeIconSlug(fu.noteTypeId)}
+          />
         {/each}
       {/if}
 

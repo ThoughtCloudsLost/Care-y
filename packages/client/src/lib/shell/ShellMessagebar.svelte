@@ -2,7 +2,7 @@
   Shell wrapper for Konsta Messagebar (compose bar).
 
   Fixed at the bottom of the viewport. Supports two modes:
-  "reply" (send SMS to client) and "note" (team-only internal note).
+  "reply" (send SMS to client) and "note" (internal note).
 
   Left slot: + button (compose actions), mode toggle icon.
   Right slot: send button.

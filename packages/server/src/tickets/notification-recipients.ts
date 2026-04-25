@@ -44,11 +44,13 @@ export interface EscalationResolverDeps {
   readonly getUsersByRole: (role: "admin" | "manager") => Promise<string[]>;
   readonly getUsersByPermission: (permission: string) => Promise<string[]>;
   readonly getQueueMembers: (queueId: string) => Promise<string[]>;
+  readonly getTicketKeyWrapHolders: (ticketId: string) => Promise<string[]>;
 }
 
 export async function resolveEscalationTargets(
   targets: EscalationTarget[],
   deps: EscalationResolverDeps,
+  ticketId?: string,
 ): Promise<string[]> {
   const userIds = new Set<string>();
   for (const target of targets) {
@@ -64,6 +66,12 @@ export async function resolveEscalationTargets(
       case "queue":
         for (const uid of await deps.getQueueMembers(target.value))
           userIds.add(uid);
+        break;
+      case "ticket_access":
+        if (ticketId !== undefined) {
+          for (const uid of await deps.getTicketKeyWrapHolders(ticketId))
+            userIds.add(uid);
+        }
         break;
     }
   }

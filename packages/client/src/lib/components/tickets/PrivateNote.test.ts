@@ -44,7 +44,7 @@ describe("PrivateNote", () => {
     expect(container.textContent).toContain("Alice");
   });
 
-  it("renders the team-only label", () => {
+  it("renders the internal note visibility label", () => {
     const { container } = render(PrivateNote, { props: baseProps });
     expect(container.textContent).toContain("Only your team can see this");
   });

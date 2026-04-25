@@ -18,6 +18,11 @@ type CountsData = Awaited<ReturnType<TicketRouter["counts"]["query"]>>;
 type ParticipantsData = Awaited<
   ReturnType<TicketRouter["listParticipants"]["query"]>
 >;
+export type NoteTypesRouter = NonNullable<TicketRouter["noteTypes"]>;
+type NoteTypesData = Awaited<
+  ReturnType<NoteTypesRouter["listActive"]["query"]>
+>;
+type AllNoteTypesData = Awaited<ReturnType<NoteTypesRouter["list"]["query"]>>;
 
 export function createVolunteersQuery(
   ticketRouter: TicketRouter,
@@ -48,5 +53,25 @@ export function createCountsQuery(
   return createQuery(() => ({
     queryKey: ["tickets", "counts"] as const,
     queryFn: async () => ticketRouter.counts.query(),
+  }));
+}
+
+export function createNoteTypesQuery(
+  noteTypesRouter: NoteTypesRouter,
+): CreateQueryResult<NoteTypesData> {
+  return createQuery(() => ({
+    queryKey: ["noteTypes"] as const,
+    queryFn: async () => noteTypesRouter.listActive.query(),
+    staleTime: 5 * 60 * 1000,
+  }));
+}
+
+export function createAllNoteTypesQuery(
+  noteTypesRouter: NoteTypesRouter,
+): CreateQueryResult<AllNoteTypesData> {
+  return createQuery(() => ({
+    queryKey: ["noteTypes", "all"] as const,
+    queryFn: async () => noteTypesRouter.list.query(),
+    staleTime: 5 * 60 * 1000,
   }));
 }

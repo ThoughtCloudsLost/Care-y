@@ -6,17 +6,17 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Ticket_Note_Team_OnlyInputs */
 
 const en_ticket_note_team_only = /** @type {(inputs: Ticket_Note_Team_OnlyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Team only`)
+	return /** @type {LocalizedString} */ (`Internal note`)
 };
 
 const es_ticket_note_team_only = /** @type {(inputs: Ticket_Note_Team_OnlyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Solo equipo`)
+	return /** @type {LocalizedString} */ (`Nota interna`)
 };
 
 /**
 * | output |
 * | --- |
-* | "Team only" |
+* | "Internal note" |
 *
 * @param {Ticket_Note_Team_OnlyInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

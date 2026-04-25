@@ -384,12 +384,14 @@ export const escalationTargetSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("role"), value: z.enum(["admin", "manager"]) }),
   z.object({ type: z.literal("permission"), value: z.string().min(1) }),
   z.object({ type: z.literal("queue"), value: z.uuid() }),
+  z.object({ type: z.literal("ticket_access") }),
 ]);
 export type EscalationTarget = z.infer<typeof escalationTargetSchema>;
 
 export const createNoteTypeInputSchema = z.object({
   encryptedName: base64String("encryptedName"),
   encryptedIcon: base64String("encryptedIcon"),
+  encryptedDescription: base64String("encryptedDescription").optional(),
   escalationTargets: z.array(escalationTargetSchema),
   requiresOnClose: z.boolean().optional(),
 });
@@ -399,6 +401,9 @@ export const updateNoteTypeInputSchema = z.object({
   id: z.uuid(),
   encryptedName: base64String("encryptedName").optional(),
   encryptedIcon: base64String("encryptedIcon").optional(),
+  encryptedDescription: base64String("encryptedDescription")
+    .nullable()
+    .optional(),
   escalationTargets: z.array(escalationTargetSchema).optional(),
   isActive: z.boolean().optional(),
   requiresOnClose: z.boolean().optional(),

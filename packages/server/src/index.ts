@@ -91,6 +91,7 @@ import {
 import { createQueueService } from "./tickets/queue-service.js";
 import { createAssignmentService } from "./tickets/assignment.js";
 import { createWatchersService } from "./tickets/watchers.js";
+import { createNoteTypeService } from "./tickets/note-type-service.js";
 import { createQueuePermissionsService } from "./tickets/queue-permissions.js";
 import {
   registerEscalationHandler,
@@ -459,6 +460,7 @@ const appRouter = createAppRouter({
         return qps.getUserQueues(userId);
       }),
     createAuditSvc: createAuditService,
+    createNoteTypeSvc: (tDb) => createNoteTypeService(tDb, secretsEncryptor),
     notificationService,
   },
   kbDeps: {

@@ -67,6 +67,7 @@
   import {
     createVolunteersQuery,
     createParticipantsQuery,
+    createNoteTypesQuery,
   } from "$lib/tickets/queries.js";
   import {
     buildVolunteerMap,
@@ -91,6 +92,9 @@
   import { fuzzySearch } from "$lib/search/fuzzy.js";
   import { createSearchOverlay } from "$lib/search/search-overlay.svelte.js";
   import SearchNavigator from "$lib/components/search/SearchNavigator.svelte";
+  import CloseResolutionSheet from "$lib/components/tickets/CloseResolutionSheet.svelte";
+  import InternalNoteSheet from "$lib/components/tickets/InternalNoteSheet.svelte";
+  import { resolveNoteTypeIcon } from "$lib/utils/note-type-icons.js";
 
   if (!trpc.tickets) throw new RouterNotAvailableError("tickets");
   const ticketRouter = trpc.tickets;
@@ -316,8 +320,10 @@
   let contextMenuData = $state<ContextMenuEvent | null>(null);
   let deleteConfirmOpen = $state(false);
   let deleteTargetId = $state<string | null>(null);
-  let editingFollowUpId = $state<string | null>(null);
-  let savingNote = $state(false);
+  let editNoteSheetOpen = $state(false);
+  let editNoteFollowUpId = $state<string | undefined>(undefined);
+  let editNoteContent = $state<string | undefined>(undefined);
+  let editNoteTypeId = $state<string | undefined>(undefined);
   let timelineActive = $state(false);
 
   // Filtered follow-ups (bound from TicketDetail for select mode copy).
@@ -331,6 +337,9 @@
   const followUpCache = getFollowUpDecryptCache();
   const volunteersQuery = createVolunteersQuery(ticketRouter);
   const volunteerMap = $derived(buildVolunteerMap(volunteersQuery.data));
+  const noteTypesQuery = ticketRouter.noteTypes
+    ? createNoteTypesQuery(ticketRouter.noteTypes)
+    : undefined;
   const participantsQuery = createParticipantsQuery(
     ticketRouter,
     () => ticketId,
@@ -390,8 +399,15 @@
     void pillId;
   }
 
+  const noteTypeFilterEntries = $derived(
+    (noteTypesQuery?.data?.types ?? []).map((nt) => ({
+      value: `note_type:${nt.id}`,
+      label: orgCache.decrypt(nt.id + ":name", nt.encryptedName) ?? "...",
+    })),
+  );
+
   const typeFilterOptions = $derived([
-    { value: "internal_note", label: m.ticket_filter_type_notes() },
+    ...noteTypeFilterEntries,
     { value: MEDIA_RECORDINGS, label: m.ticket_filter_type_recordings() },
     { value: MEDIA_IMAGES, label: m.ticket_filter_type_images() },
     { value: MEDIA_FILES, label: m.ticket_filter_type_files() },
@@ -709,6 +725,90 @@
 
   // --- Action dispatchers ---
 
+  // --- Close flow (sequential resolution sheets) ---
+
+  let closeQueue = $state<string[]>([]);
+  let closeQueueIndex = $state(0);
+  let closeSheetOpen = $state(false);
+  let closeSaving = $state(false);
+
+  const closeQueueNoteTypeId = $derived(closeQueue.at(closeQueueIndex));
+  const closeQueueNoteType = $derived(
+    closeQueueNoteTypeId !== undefined && noteTypesQuery?.data
+      ? noteTypesQuery.data.types.find((t) => t.id === closeQueueNoteTypeId)
+      : undefined,
+  );
+  const closeQueueTypeName = $derived(
+    closeQueueNoteType
+      ? (orgCache.decrypt(
+          closeQueueNoteType.id + ":name",
+          closeQueueNoteType.encryptedName,
+        ) ?? "")
+      : "",
+  );
+  const closeQueueTypeIcon = $derived(
+    closeQueueNoteType
+      ? resolveNoteTypeIcon(
+          orgCache.decrypt(
+            closeQueueNoteType.id + ":icon",
+            closeQueueNoteType.encryptedIcon,
+          ),
+        )
+      : resolveNoteTypeIcon(null),
+  );
+
+  function handleCloseAction(): void {
+    const types = noteTypesQuery?.data?.types ?? [];
+    const requiresOnClose = types
+      .filter((nt) => nt.requiresOnClose)
+      .map((nt) => nt.id);
+
+    if (requiresOnClose.length === 0) {
+      mutateWithToast(ticketRouter.close.mutate({ ticketId }));
+      return;
+    }
+
+    closeQueue = requiresOnClose;
+    closeQueueIndex = 0;
+    closeSheetOpen = true;
+  }
+
+  function advanceCloseQueue(): void {
+    closeQueueIndex++;
+    if (closeQueueIndex >= closeQueue.length) {
+      closeSheetOpen = false;
+      mutateWithToast(ticketRouter.close.mutate({ ticketId }));
+    }
+  }
+
+  async function handleCloseSheetSubmit(text: string): Promise<void> {
+    if (closeQueueNoteTypeId === undefined) return;
+    closeSaving = true;
+    try {
+      const encryptedContent = await cryptoBridge.encrypt(ticketId, text);
+      await ticketRouter.createFollowUp.mutate({
+        ticketId,
+        type: "internal_note",
+        source: "volunteer",
+        isPrivate: true,
+        encryptedContent,
+        noteTypeId: closeQueueNoteTypeId,
+      });
+      void queryClient.invalidateQueries({
+        queryKey: ["ticket", ticketId, "followUps"],
+      });
+      advanceCloseQueue();
+    } catch {
+      toastStore.show(m.error_generic(), 3000);
+    } finally {
+      closeSaving = false;
+    }
+  }
+
+  function handleCloseSheetSkip(): void {
+    advanceCloseQueue();
+  }
+
   /** Fire a mutation and show a generic error toast on failure. */
   function mutateWithToast<T>(promise: Promise<T>): void {
     void promise.catch(() => {
@@ -742,7 +842,7 @@
         );
         break;
       case "close":
-        mutateWithToast(ticketRouter.close.mutate({ ticketId }));
+        handleCloseAction();
         break;
       case "reopen":
         mutateWithToast(
@@ -802,7 +902,11 @@
         break;
       }
       case "edit": {
-        editingFollowUpId = data.followUpId;
+        openNoteEditSheet(
+          data.followUpId,
+          data.plaintext ?? "",
+          data.noteTypeId ?? null,
+        );
         break;
       }
       case "delete": {
@@ -861,40 +965,22 @@
     }
   }
 
-  // --- Note edit handlers ---
-
-  async function handleNoteEdit(
+  function openNoteEditSheet(
     followUpId: string,
-    newPlaintext: string,
-  ): Promise<void> {
-    // Stay in edit mode. Show saving indicator.
-    savingNote = true;
-
-    try {
-      const encryptedContent = await cryptoBridge.encrypt(
-        ticketId,
-        newPlaintext,
-      );
-      await ticketRouter.updateInternalNote.mutate({
-        followUpId,
-        encryptedContent,
-      });
-      // Success: exit edit mode and refresh.
-      editingFollowUpId = null;
-      savingNote = false;
-      void queryClient.invalidateQueries({
-        queryKey: ["ticket", ticketId, "followUps"],
-      });
-    } catch {
-      // Stay in edit mode with the user's text intact.
-      savingNote = false;
-      toastStore.show(m.error_followup_not_editable());
-    }
+    content: string,
+    noteTypeId: string | null,
+  ): void {
+    editNoteFollowUpId = followUpId;
+    editNoteContent = content;
+    editNoteTypeId = noteTypeId ?? undefined;
+    editNoteSheetOpen = true;
   }
 
-  function cancelNoteEdit(): void {
-    editingFollowUpId = null;
-    savingNote = false;
+  function dismissNoteEditSheet(): void {
+    editNoteSheetOpen = false;
+    editNoteFollowUpId = undefined;
+    editNoteContent = undefined;
+    editNoteTypeId = undefined;
   }
 
   // --- Overlay helpers ---
@@ -1041,10 +1127,7 @@
     onmentionselect={handleMentionSelect}
     onlightbox={openLightbox}
     oncontextmenu={openContextMenu}
-    {editingFollowUpId}
-    {savingNote}
-    onnoteedit={(fid: string, text: string) => void handleNoteEdit(fid, text)}
-    oncanceledit={cancelNoteEdit}
+    onopenedit={openNoteEditSheet}
     bind:timelineActive
     {readUpTo}
     onreadprogress={handleReadProgress}
@@ -1204,6 +1287,21 @@
   {/if}
 </ShellActionSheet>
 
+<!-- Edit note sheet -->
+<InternalNoteSheet
+  opened={editNoteSheetOpen}
+  ondismiss={dismissNoteEditSheet}
+  {ticketId}
+  editFollowUpId={editNoteFollowUpId}
+  editInitialContent={editNoteContent}
+  editInitialNoteTypeId={editNoteTypeId}
+  ondelete={(followUpId: string) => {
+    dismissNoteEditSheet();
+    deleteTargetId = followUpId;
+    deleteConfirmOpen = true;
+  }}
+/>
+
 <!-- Delete note confirmation dialog -->
 <ShellDialog
   opened={deleteConfirmOpen}
@@ -1222,6 +1320,18 @@
     </DialogButton>
   {/snippet}
 </ShellDialog>
+
+<CloseResolutionSheet
+  opened={closeSheetOpen}
+  noteTypeId={closeQueueNoteTypeId ?? ""}
+  noteTypeName={closeQueueTypeName}
+  NoteTypeIcon={closeQueueTypeIcon}
+  current={closeQueueIndex + 1}
+  total={closeQueue.length}
+  saving={closeSaving}
+  onsubmit={(text: string) => void handleCloseSheetSubmit(text)}
+  onskip={handleCloseSheetSkip}
+/>
 
 <style>
   .ticket-detail-page {
