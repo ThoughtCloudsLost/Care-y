@@ -27,6 +27,7 @@
   } from "$lib/shell/types.js";
   import * as m from "$lib/paraglide/messages.js";
   import { trpc } from "$lib/trpc/index.js";
+  import { kbKeys } from "$lib/query/keys.js";
   import {
     getOrgDecryptCache,
     getOrgKeyManager,
@@ -92,7 +93,7 @@
 
   // --- Categories query (for filter options and card labels) ---
   const categoriesQuery = createQuery(() => ({
-    queryKey: ["kb", "categories"],
+    queryKey: kbKeys.categories(),
     queryFn: async () => kbRouter.listCategories.query(),
   }));
 
@@ -109,7 +110,7 @@
 
   // --- Authors query (distinct KB article authors with display names) ---
   const authorsQuery = createQuery(() => ({
-    queryKey: ["kb", "authors"],
+    queryKey: kbKeys.authors(),
     queryFn: async () => kbRouter.listAuthors.query(),
     staleTime: 10 * 60 * 1000,
   }));
@@ -134,7 +135,7 @@
 
   // --- Article list with infinite scroll ---
   const articlesQuery = createInfiniteQuery(() => ({
-    queryKey: ["kb", "items", kbFilterStore.serverParams],
+    queryKey: kbKeys.itemList(kbFilterStore.serverParams),
     queryFn: async ({ pageParam }) =>
       kbRouter.listItems.query({
         ...kbFilterStore.serverParams,
@@ -315,7 +316,7 @@
     toastStore.show(m.library_move_all_success({ count: String(moved) }));
     pendingAction = false;
     exitMultiSelect();
-    void queryClient.invalidateQueries({ queryKey: ["kb", "items"] });
+    void queryClient.invalidateQueries({ queryKey: kbKeys.items() });
   }
 
   function handleBulkDelete(): void {
@@ -353,7 +354,7 @@
     toastStore.show(m.library_delete_all_success({ count: String(deleted) }));
     pendingAction = false;
     exitMultiSelect();
-    void queryClient.invalidateQueries({ queryKey: ["kb", "items"] });
+    void queryClient.invalidateQueries({ queryKey: kbKeys.items() });
   }
 
   function handleBulkExport(): void {

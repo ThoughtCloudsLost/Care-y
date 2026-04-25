@@ -12,6 +12,7 @@
   import { formatRelativeTime } from "$lib/utils/format-time.js";
   import { formatFileSize } from "$lib/utils/time.js";
   import { createQuery } from "@tanstack/svelte-query";
+  import { ticketKeys } from "$lib/query/keys";
   import { createPaginatedQuery } from "$lib/query/paginated.svelte.js";
   import { trpc } from "$lib/trpc/index.js";
   import {
@@ -50,14 +51,14 @@
   // --- Queries ---
 
   const attachmentsQuery = createQuery(() => ({
-    queryKey: ["ticket", ticketId, "attachments"],
+    queryKey: ticketKeys.attachments(ticketId),
     queryFn: async () =>
       ticketRouter.listAttachments.query({ ticketId, limit: 50 }),
     enabled: ticketId !== "" && keyWrap !== null,
   }));
 
   const recordingsQuery = createQuery(() => ({
-    queryKey: ["ticket", ticketId, "recordings"],
+    queryKey: ticketKeys.recordings(ticketId),
     queryFn: async () =>
       ticketRouter.listRecordings.query({ ticketId, limit: 50 }),
     enabled: ticketId !== "" && keyWrap !== null,

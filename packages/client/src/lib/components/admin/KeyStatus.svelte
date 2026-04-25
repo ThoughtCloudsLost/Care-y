@@ -1,6 +1,7 @@
 <script lang="ts">
   import { Card } from "konsta/svelte";
   import { createQuery } from "@tanstack/svelte-query";
+  import { orgKeyKeys } from "$lib/query/keys.js";
   import { ShieldCheck, ShieldAlert, RotateCw, Download } from "@lucide/svelte";
   import * as m from "$lib/paraglide/messages.js";
   import { trpc } from "$lib/trpc/index.js";
@@ -18,7 +19,7 @@
   const keysRouter = trpc.keys;
 
   const wrappedKeyQuery = createQuery(() => ({
-    queryKey: ["keys", "wrappedOrgKey"],
+    queryKey: orgKeyKeys.wrappedOrgKey(),
     queryFn: async () => keysRouter.getWrappedOrgKey.query(),
   }));
 

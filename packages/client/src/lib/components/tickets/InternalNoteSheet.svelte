@@ -9,6 +9,7 @@
 <script lang="ts">
   import { List, ListInput } from "konsta/svelte";
   import { useQueryClient } from "@tanstack/svelte-query";
+  import { ticketKeys } from "$lib/query/keys";
   import * as m from "$lib/paraglide/messages.js";
   import { trpc } from "$lib/trpc/index.js";
   import { getCryptoBridge, getOrgDecryptCache } from "$lib/crypto/context.js";
@@ -179,7 +180,7 @@
       haptic();
       announceToLiveRegion("polite", m.ticket_note_saved());
       void queryClient.invalidateQueries({
-        queryKey: ["ticket", ticketId, "followUps"],
+        queryKey: ticketKeys.followUps(ticketId),
       });
     } catch {
       toastStore.show(m.error_generic(), 3000);

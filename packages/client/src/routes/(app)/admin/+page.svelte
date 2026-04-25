@@ -10,6 +10,7 @@
     ChartColumn,
   } from "@lucide/svelte";
   import { createQuery } from "@tanstack/svelte-query";
+  import { adminKeys } from "$lib/query/keys.js";
   import * as m from "$lib/paraglide/messages.js";
   import { getNavbarOverrideCtx } from "$lib/shell/context.js";
   import { getCurrentPermissions } from "$lib/crypto/context.js";
@@ -72,7 +73,7 @@
   const scroll = createSectionScroll(() => scrollSections);
 
   const hubStatusQuery = createQuery(() => ({
-    queryKey: ["admin", "hubStatus"],
+    queryKey: adminKeys.hubStatus(),
     queryFn: async () => authRouter.hubStatus.query(),
     staleTime: 60_000,
   }));

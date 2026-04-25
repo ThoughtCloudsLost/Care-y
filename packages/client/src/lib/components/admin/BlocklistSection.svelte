@@ -10,6 +10,7 @@
   import { formatRelativeTime } from "$lib/utils/format-time.js";
   import * as m from "$lib/paraglide/messages.js";
   import { trpc } from "$lib/trpc/index.js";
+  import { adminKeys } from "$lib/query/keys.js";
   import { haptic } from "$lib/utils/haptic.js";
   import { toastStore } from "$lib/stores/toast.svelte.js";
   import { announceToLiveRegion } from "$lib/utils/announce.js";
@@ -35,7 +36,7 @@
   // ── Queries ──
 
   const blocklistQuery = createQuery(() => ({
-    queryKey: ["admin", "blocklist"],
+    queryKey: adminKeys.blocklist(),
     queryFn: async () => telephonyAdmin.listBlocklist.query(),
   }));
 
@@ -108,7 +109,7 @@
       announceToLiveRegion("polite", m.admin_blocklist_added());
       resetAddForm();
       addSheetOpen = false;
-      void queryClient.invalidateQueries({ queryKey: ["admin", "blocklist"] });
+      void queryClient.invalidateQueries({ queryKey: adminKeys.blocklist() });
     },
     onError: () => {
       toastStore.show(m.admin_blocklist_already_blocked());
@@ -134,7 +135,7 @@
       announceToLiveRegion("polite", m.admin_blocklist_removed());
       removeDialogOpen = false;
       removeTarget = null;
-      void queryClient.invalidateQueries({ queryKey: ["admin", "blocklist"] });
+      void queryClient.invalidateQueries({ queryKey: adminKeys.blocklist() });
     },
     onError: () => {
       toastStore.show(m.error_generic());

@@ -5,6 +5,7 @@
     createMutation,
     useQueryClient,
   } from "@tanstack/svelte-query";
+  import { adminKeys } from "$lib/query/keys.js";
   import { Plus, Pencil, Trash2, Save } from "@lucide/svelte";
   import type { SmsResponseType } from "@care-y/shared";
   import * as m from "$lib/paraglide/messages.js";
@@ -62,7 +63,7 @@
   // ── Query ──
 
   const templatesQuery = createQuery(() => ({
-    queryKey: ["admin", "smsTemplates"],
+    queryKey: adminKeys.smsTemplates(),
     queryFn: async () => telephonyContent.listSmsResponses.query({}),
   }));
 
@@ -147,7 +148,7 @@
       sheetOpen = false;
       resetForm();
       void queryClient.invalidateQueries({
-        queryKey: ["admin", "smsTemplates"],
+        queryKey: adminKeys.smsTemplates(),
       });
     },
     onError: () => {
@@ -171,7 +172,7 @@
       sheetOpen = false;
       resetForm();
       void queryClient.invalidateQueries({
-        queryKey: ["admin", "smsTemplates"],
+        queryKey: adminKeys.smsTemplates(),
       });
     },
     onError: () => {
@@ -207,7 +208,7 @@
       sheetOpen = false;
       resetForm();
       void queryClient.invalidateQueries({
-        queryKey: ["admin", "smsTemplates"],
+        queryKey: adminKeys.smsTemplates(),
       });
     },
     onError: () => {

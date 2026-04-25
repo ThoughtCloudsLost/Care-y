@@ -6,7 +6,8 @@
   import { BlockTitle, List, ListItem } from "konsta/svelte";
   import { StickyNote } from "@lucide/svelte";
   import * as m from "$lib/paraglide/messages.js";
-  import { createQuery } from "@tanstack/svelte-query";
+  import { createQuery, useQueryClient } from "@tanstack/svelte-query";
+  import { ticketKeys } from "$lib/query/keys";
   import { createPaginatedQuery } from "$lib/query/paginated.svelte.js";
   import { trpc } from "$lib/trpc/index.js";
   import { createVolunteersQuery } from "$lib/tickets/queries.js";
@@ -38,6 +39,7 @@
 
   if (!trpc.tickets) throw new RouterNotAvailableError("tickets");
   const ticketRouter = trpc.tickets;
+  const queryClient = useQueryClient();
 
   const followUpCache = getFollowUpDecryptCache();
   const orgCache = getOrgDecryptCache();
@@ -46,8 +48,25 @@
 
   const NOTES_LIMIT = 100;
 
+  type FollowUpRecord = Awaited<
+    ReturnType<typeof ticketRouter.listFollowUps.query>
+  >["followUps"][number];
+
+  function getCachedNotes(): FollowUpRecord[] | undefined {
+    const entries = queryClient.getQueriesData<FollowUpRecord[]>({
+      queryKey: ticketKeys.followUps(ticketId),
+    });
+    const all: FollowUpRecord[] = [];
+    for (const [, data] of entries) {
+      if (data) all.push(...data);
+    }
+    if (all.length === 0) return undefined;
+    const notes = all.filter((fu) => fu.type === "internal_note");
+    return notes.length > 0 ? notes : undefined;
+  }
+
   const notesQuery = createQuery(() => ({
-    queryKey: ["ticket", ticketId, "followUps", "notes"],
+    queryKey: ticketKeys.followUpsNotes(ticketId),
     queryFn: async () => {
       const result = await ticketRouter.listFollowUps.query({
         ticketId,
@@ -58,6 +77,7 @@
       return result.followUps;
     },
     enabled: ticketId !== "" && keyWrap !== null,
+    initialData: getCachedNotes(),
   }));
 
   const notesPaginated = createPaginatedQuery({

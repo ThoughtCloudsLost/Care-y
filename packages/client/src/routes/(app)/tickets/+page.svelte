@@ -4,6 +4,7 @@
     createQuery,
     useQueryClient,
   } from "@tanstack/svelte-query";
+  import { ticketsKeys, volunteerKeys } from "$lib/query/keys";
   import { createCountsQuery } from "$lib/tickets/queries.js";
   import { untrack } from "svelte";
   import { SvelteMap, SvelteSet } from "svelte/reactivity";
@@ -88,9 +89,9 @@
       id: string;
       encryptedDisplayName: SerializedBuffer | Uint8Array | null;
     }
-    const volunteers = queryClient.getQueryData<readonly VolunteerRecord[]>([
-      "volunteers",
-    ]);
+    const volunteers = queryClient.getQueryData<readonly VolunteerRecord[]>(
+      volunteerKeys.all,
+    );
     const vol = volunteers?.find((v) => v.id === userId);
     if (vol) {
       const name = orgCache.decrypt(
@@ -187,7 +188,7 @@
 
   // Main ticket list with infinite scroll (keyset pagination).
   const ticketsQuery = createInfiniteQuery(() => ({
-    queryKey: ["tickets", "list", filterStore.serverParams],
+    queryKey: ticketsKeys.list(filterStore.serverParams),
     queryFn: async ({ pageParam }) =>
       ticketRouter.list.query({
         ...filterStore.serverParams,
@@ -438,7 +439,7 @@
     if (pendingHoldIds.has(ticketId)) return;
     pendingHoldIds.add(ticketId);
 
-    const listKey = ["tickets", "list", filterStore.serverParams];
+    const listKey = ticketsKeys.list(filterStore.serverParams);
 
     // Snapshot for rollback.
     const previous = queryClient.getQueryData<{
@@ -461,7 +462,7 @@
       await ticketRouter.update.mutate({ ticketId, onHold });
       haptic();
       toastStore.show(onHold ? m.ticket_toast_held() : m.ticket_toast_unheld());
-      void queryClient.invalidateQueries({ queryKey: ["tickets", "list"] });
+      void queryClient.invalidateQueries({ queryKey: ticketsKeys.lists() });
     } catch {
       // Rollback.
       queryClient.setQueryData(listKey, previous);
@@ -483,7 +484,7 @@
     ticketId: string,
     targetUserId: string | null,
   ): Promise<void> {
-    const listKey = ["tickets", "list", filterStore.serverParams];
+    const listKey = ticketsKeys.list(filterStore.serverParams);
 
     // Snapshot for rollback.
     const previous = queryClient.getQueryData<{
@@ -514,7 +515,7 @@
           m.ticket_toast_assigned({ name: resolveVolunteerName(targetUserId) }),
         );
       }
-      void queryClient.invalidateQueries({ queryKey: ["tickets", "list"] });
+      void queryClient.invalidateQueries({ queryKey: ticketsKeys.lists() });
     } catch {
       queryClient.setQueryData(listKey, previous);
       toastStore.show(m.error_generic(), 3000);
@@ -533,7 +534,7 @@
 
   function handleReplySent(ticketId: string): void {
     replySheetOpen = false;
-    void queryClient.invalidateQueries({ queryKey: ["tickets", "list"] });
+    void queryClient.invalidateQueries({ queryKey: ticketsKeys.lists() });
     void previewLoader.eagerLoad([ticketId]);
   }
 
@@ -650,7 +651,7 @@
       }),
     );
     exitMultiSelect();
-    void queryClient.invalidateQueries({ queryKey: ["tickets", "list"] });
+    void queryClient.invalidateQueries({ queryKey: ticketsKeys.lists() });
   }
 
   async function handleBulkHold(): Promise<void> {
@@ -677,7 +678,7 @@
     haptic();
     toastStore.show(m.ticket_toast_bulk_held({ count: String(succeeded) }));
     exitMultiSelect();
-    void queryClient.invalidateQueries({ queryKey: ["tickets", "list"] });
+    void queryClient.invalidateQueries({ queryKey: ticketsKeys.lists() });
   }
 
   function handleLongPress(ticketId: string): void {
@@ -704,7 +705,7 @@
 
   // Queue list for the filter pill bar (was inside old FilterPillBar).
   const queuesQuery = createQuery(() => ({
-    queryKey: ["tickets", "myQueues"],
+    queryKey: ticketsKeys.myQueues(),
     queryFn: async () => ticketRouter.myQueues.query(),
   }));
 

@@ -6,6 +6,7 @@
     createMutation,
     useQueryClient,
   } from "@tanstack/svelte-query";
+  import { adminKeys } from "$lib/query/keys.js";
   import { Save } from "@lucide/svelte";
   import * as m from "$lib/paraglide/messages.js";
   import { trpc } from "$lib/trpc/index.js";
@@ -20,7 +21,7 @@
   const queryClient = useQueryClient();
 
   const hubStatusQuery = createQuery(() => ({
-    queryKey: ["admin", "hubStatus"],
+    queryKey: adminKeys.hubStatus(),
     queryFn: async () => authRouter.hubStatus.query(),
     staleTime: 60_000,
   }));
@@ -55,7 +56,7 @@
       authRouter.setPiiRetention.mutate({ days }),
     onSuccess: () => {
       haptic();
-      void queryClient.invalidateQueries({ queryKey: ["admin", "hubStatus"] });
+      void queryClient.invalidateQueries({ queryKey: adminKeys.hubStatus() });
       toastStore.show(m.admin_retention_saved());
       announceToLiveRegion("polite", m.admin_retention_saved());
     },

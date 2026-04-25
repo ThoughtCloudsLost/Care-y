@@ -10,6 +10,7 @@
   import { generateIconVariants } from "$lib/branding/icon-generator.js";
   import * as m from "$lib/paraglide/messages.js";
   import { trpc } from "$lib/trpc/index.js";
+  import { adminKeys } from "$lib/query/keys.js";
   import { haptic } from "$lib/utils/haptic.js";
   import { toastStore } from "$lib/stores/toast.svelte.js";
   import { announceToLiveRegion } from "$lib/utils/announce.js";
@@ -50,7 +51,7 @@
   // ── Query ──
 
   const brandingQuery = createQuery(() => ({
-    queryKey: ["admin", "branding"],
+    queryKey: adminKeys.branding(),
     queryFn: async () => brandingRouter.getBranding.query(),
   }));
 
@@ -360,7 +361,7 @@
       toastStore.show(m.admin_branding_saved());
       announceToLiveRegion("polite", m.admin_branding_saved());
       closeSheet(false);
-      void queryClient.invalidateQueries({ queryKey: ["admin", "branding"] });
+      void queryClient.invalidateQueries({ queryKey: adminKeys.branding() });
     },
     onError: () => {
       toastStore.show(m.admin_branding_error(), 3000);

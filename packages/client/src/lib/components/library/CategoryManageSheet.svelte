@@ -2,6 +2,7 @@
   import { Button, List, ListItem, ListInput } from "konsta/svelte";
   import { Pencil, Save, Trash2 } from "@lucide/svelte";
   import { useQueryClient } from "@tanstack/svelte-query";
+  import { kbKeys } from "$lib/query/keys.js";
   import * as m from "$lib/paraglide/messages.js";
   import { trpc } from "$lib/trpc/index.js";
   import { getOrgKeyManager, getOrgDecryptCache } from "$lib/crypto/context.js";
@@ -103,7 +104,7 @@
         orgCache.delete(`kb-cat-desc:${editingId}`);
       }
       cancelEdit();
-      void queryClient.invalidateQueries({ queryKey: ["kb", "categories"] });
+      void queryClient.invalidateQueries({ queryKey: kbKeys.categories() });
     } catch {
       toastStore.show(m.error_generic(), 3000);
     } finally {
@@ -126,7 +127,7 @@
       orgCache.delete(`kb-cat:${categoryId}`);
       orgCache.delete(`kb-cat-desc:${categoryId}`);
       cancelEdit();
-      void queryClient.invalidateQueries({ queryKey: ["kb", "categories"] });
+      void queryClient.invalidateQueries({ queryKey: kbKeys.categories() });
     } catch {
       // The server's FK RESTRICT constraint is the authoritative guard.
       // The client-side articleCount check above is a fast-path optimization

@@ -10,7 +10,7 @@
   interface Props {
     scrollContainerEl?: HTMLDivElement;
     items?: TimelineItem[];
-    decryptedContent?: Map<string, string | undefined>;
+    resolveDecrypted?: (id: string) => string | undefined;
     expandedClusters?: Map<string, ClusterRecord[]>;
     onexpandcluster?: (ids: string[]) => void;
   }
@@ -18,7 +18,7 @@
   let {
     scrollContainerEl,
     items = [],
-    decryptedContent = new Map(),
+    resolveDecrypted = () => undefined,
     expandedClusters = new Map(),
     onexpandcluster,
   }: Props = $props();
@@ -32,7 +32,7 @@
   <FollowUpTimeline
     scrollContainerEl={resolvedContainer}
     {items}
-    {decryptedContent}
+    {resolveDecrypted}
     {expandedClusters}
     {onexpandcluster}
   >

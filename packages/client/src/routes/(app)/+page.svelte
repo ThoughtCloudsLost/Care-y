@@ -5,6 +5,7 @@
   import { goto } from "$app/navigation";
   import { resolve } from "$app/paths";
   import { trpc } from "$lib/trpc/index.js";
+  import { ticketsKeys, kbKeys } from "$lib/query/keys.js";
   import { toastStore } from "$lib/stores/toast.svelte.js";
   import { RouterNotAvailableError } from "$lib/errors.js";
   import type { TicketPreviewItemProps } from "$lib/components/dashboard/types.js";
@@ -147,7 +148,7 @@
   const ticketRouter = trpc.tickets;
 
   const ticketsQuery = createQuery(() => ({
-    queryKey: ["tickets", "list", { statuses: ["open"] }],
+    queryKey: ticketsKeys.list({ statuses: ["open"] }),
     queryFn: async () =>
       ticketRouter.list.query({ statuses: ["open"], limit: 100 }),
   }));
@@ -157,22 +158,22 @@
   // --- Dashboard info queries ---
 
   const activityQuery = createQuery(() => ({
-    queryKey: ["tickets", "recentActivity"],
+    queryKey: ticketsKeys.recentActivity(),
     queryFn: async () => ticketRouter.recentActivity.query({ limit: 5 }),
   }));
 
   const queuesQuery = createQuery(() => ({
-    queryKey: ["tickets", "myQueues"],
+    queryKey: ticketsKeys.myQueues(),
     queryFn: async () => ticketRouter.myQueues.query(),
   }));
 
   const shiftQuery = createQuery(() => ({
-    queryKey: ["tickets", "dashboardInfo"],
+    queryKey: ticketsKeys.dashboardInfo(),
     queryFn: async () => ticketRouter.dashboardInfo.query(),
   }));
 
   const kbQuery = createQuery(() => ({
-    queryKey: ["kb", "recentItems"],
+    queryKey: kbKeys.recentItems(),
     queryFn: async () => {
       if (!trpc.kb) return [];
       return trpc.kb.recentItems.query({ limit: 2 });
@@ -180,7 +181,7 @@
   }));
 
   const countsQuery = createQuery(() => ({
-    queryKey: ["tickets", "counts"],
+    queryKey: ticketsKeys.counts(),
     queryFn: async () => ticketRouter.counts.query(),
   }));
 

@@ -28,6 +28,7 @@
   import { formatRelativeTime } from "$lib/utils/format-time.js";
   import type { DisplayStatus } from "$lib/tickets/display-status.js";
   import { createQuery } from "@tanstack/svelte-query";
+  import { ticketKeys } from "$lib/query/keys";
   import { trpc } from "$lib/trpc/index.js";
   import {
     getTicketDecryptCache,
@@ -69,12 +70,12 @@
   // --- TanStack queries (same keys as TicketDetail, deduplicated) ---
 
   const ticketQuery = createQuery(() => ({
-    queryKey: ["ticket", ticketId],
+    queryKey: ticketKeys.detail(ticketId),
     queryFn: async () => ticketRouter.get.query({ ticketId }),
   }));
 
   const watchingQuery = createQuery(() => ({
-    queryKey: ["isWatching", ticketId],
+    queryKey: ticketKeys.isWatching(ticketId),
     queryFn: async () => ticketRouter.isWatching.query({ ticketId }),
     enabled: ticketId !== "",
   }));

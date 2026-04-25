@@ -1,6 +1,7 @@
 <script lang="ts">
   import { Card, List, ListItem, Block, Preloader } from "konsta/svelte";
   import { createQuery } from "@tanstack/svelte-query";
+  import { adminKeys } from "$lib/query/keys.js";
   import * as m from "$lib/paraglide/messages.js";
   import { trpc } from "$lib/trpc/index.js";
   import { getOrgDecryptCache } from "$lib/crypto/context.js";
@@ -25,25 +26,25 @@
   // ── Queries ──
 
   const activeCountQuery = createQuery(() => ({
-    queryKey: ["admin", "reports", "activeCount"],
+    queryKey: adminKeys.reportActiveCount(),
     queryFn: async () => reportsRouter.activeCount.query(),
     staleTime: 60_000,
   }));
 
   const volumeQuery = createQuery(() => ({
-    queryKey: ["admin", "reports", "volumeTrends"],
+    queryKey: adminKeys.reportVolumeTrends(),
     queryFn: async () => reportsRouter.volumeTrends.query(),
     staleTime: 60_000,
   }));
 
   const resolutionQuery = createQuery(() => ({
-    queryKey: ["admin", "reports", "resolutionTrends"],
+    queryKey: adminKeys.reportResolutionTrends(),
     queryFn: async () => reportsRouter.resolutionTrends.query(),
     staleTime: 60_000,
   }));
 
   const queueStatsQuery = createQuery(() => ({
-    queryKey: ["admin", "reports", "queueStats"],
+    queryKey: adminKeys.reportQueueStats(),
     queryFn: async () => reportsRouter.queueStats.query(),
     staleTime: 60_000,
   }));

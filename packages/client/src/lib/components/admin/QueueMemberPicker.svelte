@@ -1,6 +1,7 @@
 <script lang="ts">
   import { BlockTitle, Searchbar, List, ListItem } from "konsta/svelte";
   import { createMutation, useQueryClient } from "@tanstack/svelte-query";
+  import { queueKeys } from "$lib/query/keys.js";
   import * as m from "$lib/paraglide/messages.js";
   import { trpc } from "$lib/trpc/index.js";
   import { createVolunteersQuery } from "$lib/tickets/queries.js";
@@ -38,7 +39,7 @@
       toastStore.show(m.admin_queue_member_added());
       announceToLiveRegion("polite", m.admin_queue_member_added());
       void queryClient.invalidateQueries({
-        queryKey: ["queue-members", queueId],
+        queryKey: queueKeys.members(queueId),
       });
     },
     onError: () => {

@@ -5,6 +5,7 @@
   import { identifierSchema } from "@care-y/shared";
   import * as m from "$lib/paraglide/messages.js";
   import { trpc } from "$lib/trpc/index.js";
+  import { authKeys } from "$lib/query/keys.js";
   import { haptic } from "$lib/utils/haptic.js";
   import { toastStore } from "$lib/stores/toast.svelte.js";
   import { announceToLiveRegion } from "$lib/utils/announce.js";
@@ -56,7 +57,7 @@
       const msg = m.settings_username_saved();
       toastStore.show(msg);
       announceToLiveRegion("polite", msg);
-      await queryClient.invalidateQueries({ queryKey: ["auth", "me"] });
+      await queryClient.invalidateQueries({ queryKey: authKeys.me() });
       currentPassword = "";
       ondismiss();
     },

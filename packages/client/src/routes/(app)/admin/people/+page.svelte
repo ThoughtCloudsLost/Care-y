@@ -4,6 +4,7 @@
   import { goto, replaceState } from "$app/navigation";
   import { resolve } from "$app/paths";
   import { createQuery } from "@tanstack/svelte-query";
+  import { queueKeys, adminKeys } from "$lib/query/keys.js";
   import { Permission, RoleId } from "@care-y/shared";
   import type { RoleIdValue } from "@care-y/shared";
   import { Users, Layers, UserPlus, LayersPlus } from "@lucide/svelte";
@@ -60,12 +61,12 @@
   const orgCache = getOrgDecryptCache();
 
   const queuesQuery = createQuery(() => ({
-    queryKey: ["queues"],
+    queryKey: queueKeys.all,
     queryFn: async () => ticketRouter.listQueues.query(),
   }));
 
   const queueAssignmentsQuery = createQuery(() => ({
-    queryKey: ["admin", "queue-assignments"],
+    queryKey: adminKeys.queueAssignments(),
     queryFn: async () => ticketRouter.listAllQueueAssignments.query(),
   }));
 

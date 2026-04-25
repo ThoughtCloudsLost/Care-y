@@ -8,6 +8,7 @@
 <script lang="ts">
   import { List, ListItem, Block, BlockTitle } from "konsta/svelte";
   import { createQuery } from "@tanstack/svelte-query";
+  import { presetKeys } from "$lib/query/keys";
   import * as m from "$lib/paraglide/messages.js";
   import { trpc } from "$lib/trpc/index.js";
   import { getOrgDecryptCache } from "$lib/crypto/context.js";
@@ -29,7 +30,7 @@
   const orgCache = getOrgDecryptCache();
 
   const presetsQuery = createQuery(() => ({
-    queryKey: ["presets", queueId],
+    queryKey: presetKeys.byQueue(queueId),
     queryFn: async () => ticketRouter.listPresets.query({ queueId }),
     staleTime: 5 * 60 * 1000,
   }));

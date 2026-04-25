@@ -10,6 +10,12 @@
 
 import { browser } from "$app/environment";
 import type { QueryClient } from "@tanstack/svelte-query";
+import {
+  ticketsKeys,
+  ticketKeys,
+  kbKeys,
+  notificationKeys,
+} from "$lib/query/keys";
 
 export interface SSEEvent {
   type: string;
@@ -29,31 +35,33 @@ export function handleEvent(event: SSEEvent, queryClient: QueryClient): void {
   switch (event.type) {
     case "ticket:updated":
     case "ticket:created":
-      void queryClient.invalidateQueries({ queryKey: ["tickets"] });
+      void queryClient.invalidateQueries({ queryKey: ticketsKeys.all });
       if (event.ticketId !== undefined) {
         void queryClient.invalidateQueries({
-          queryKey: ["ticket", event.ticketId],
+          queryKey: ticketKeys.all(event.ticketId),
         });
       }
       break;
     case "followup:created":
       if (event.ticketId !== undefined) {
         void queryClient.invalidateQueries({
-          queryKey: ["ticket", event.ticketId, "followUps"],
+          queryKey: ticketKeys.followUps(event.ticketId),
         });
         void queryClient.invalidateQueries({
-          queryKey: ["ticket", event.ticketId, "recordings"],
+          queryKey: ticketKeys.recordings(event.ticketId),
         });
         void queryClient.invalidateQueries({
-          queryKey: ["ticket", event.ticketId, "attachments"],
+          queryKey: ticketKeys.attachments(event.ticketId),
         });
       }
       break;
     case "kb:updated":
-      void queryClient.invalidateQueries({ queryKey: ["kb"] });
+      void queryClient.invalidateQueries({ queryKey: kbKeys.all });
       break;
     case "notification":
-      void queryClient.invalidateQueries({ queryKey: ["notifications"] });
+      void queryClient.invalidateQueries({
+        queryKey: notificationKeys.all,
+      });
       break;
   }
 }

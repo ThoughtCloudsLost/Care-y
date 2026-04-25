@@ -54,6 +54,12 @@
   import { themeStore } from "$lib/stores/theme.svelte";
   import { useQueryClient, createQuery } from "@tanstack/svelte-query";
   import {
+    authKeys,
+    ticketsKeys,
+    kbKeys,
+    volunteerKeys,
+  } from "$lib/query/keys.js";
+  import {
     setScrollContainer,
     setTabbarOverrideCtx,
     setTabbarHiddenCtx,
@@ -167,7 +173,7 @@
   const currentRoleId = $derived(roleIdGetter() ?? "");
   const currentPermissions = $derived(permissionsGetter());
   const meQuery = createQuery(() => ({
-    queryKey: ["auth", "me"],
+    queryKey: authKeys.me(),
     queryFn: async () => trpc.auth.me.query(),
     staleTime: Infinity,
   }));
@@ -344,7 +350,7 @@
     function rebuildFlatList(): readonly RawCachedTicket[] {
       const entries = queryClient.getQueriesData<
         RawCachedTicket[] | { pages: RawCachedTicket[][] }
-      >({ queryKey: ["tickets", "list"] });
+      >({ queryKey: ticketsKeys.lists() });
 
       // eslint-disable-next-line svelte/prefer-svelte-reactivity -- function-local dedup set, not reactive
       const seen = new Set<string>();
@@ -406,10 +412,9 @@
         getPreviewFollowUps: (ticketId) => previewLoader.get(ticketId),
         deriveDisplayStatus,
         getTotalItemCount: () => {
-          const counts = queryClient.getQueryData<{ total?: number }>([
-            "tickets",
-            "counts",
-          ]);
+          const counts = queryClient.getQueryData<{ total?: number }>(
+            ticketsKeys.counts(),
+          );
           return counts?.total;
         },
       }),
@@ -431,7 +436,7 @@
             },
             ensureCategoriesLoaded: async () => {
               await queryClient.ensureQueryData({
-                queryKey: ["kb", "categories"],
+                queryKey: kbKeys.categories(),
                 queryFn: async () => kbRouter.listCategories.query(),
               });
             },
@@ -439,7 +444,7 @@
               // Read from TanStack Query cache populated by the library page.
               const cats = queryClient.getQueryData<
                 readonly { id: string; encryptedName: unknown }[]
-              >(["kb", "categories"]);
+              >(kbKeys.categories());
               const cat = cats?.find((c) => c.id === categoryId);
               if (!cat) return null;
               if (!isOrgCiphertext(cat.encryptedName)) return null;
@@ -457,7 +462,7 @@
                   id: string;
                   encryptedDisplayName: unknown;
                 }[]
-              >(["volunteers"]);
+              >(volunteerKeys.all);
               const vol = volunteers?.find((v) => v.id === userId);
               if (!vol) return null;
               if (!isOrgCiphertext(vol.encryptedDisplayName)) return null;
