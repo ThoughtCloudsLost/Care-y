@@ -55,7 +55,9 @@ vi.mock("$lib/trpc/index.js", () => ({
   trpc: {
     tickets: {
       get: { query: vi.fn() },
-      listFollowUps: { query: vi.fn() },
+      listFollowUps: {
+        query: vi.fn().mockResolvedValue({ followUps: [], reactions: {} }),
+      },
       listFollowUpSummary: { query: vi.fn() },
       listFollowUpsByIds: { query: vi.fn() },
       listRecordings: { query: vi.fn() },
@@ -201,7 +203,7 @@ beforeEach(() => {
     isLoading: false,
     isError: false,
     error: null,
-    data: [],
+    data: { summaries: [], reactions: {} },
   };
 
   volunteersQueryState = {

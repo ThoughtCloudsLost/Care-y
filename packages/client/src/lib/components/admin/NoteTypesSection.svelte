@@ -6,6 +6,8 @@
     ListInput,
     Toggle,
     Button,
+    Segmented,
+    SegmentedButton,
   } from "konsta/svelte";
   import { useQueryClient } from "@tanstack/svelte-query";
   import {
@@ -39,7 +41,12 @@
   import DecryptPlaceholder from "$lib/components/DecryptPlaceholder.svelte";
   import ShellSheet from "$lib/shell/ShellSheet.svelte";
   import SoftButton from "$lib/components/SoftButton.svelte";
-  import type { EscalationTarget } from "@care-y/shared";
+  import {
+    RoleId,
+    ROLE_ID_VALUES,
+    type EscalationTarget,
+    type RoleIdValue,
+  } from "@care-y/shared";
   import type { SerializedBuffer } from "$lib/utils/buffer-encoding.js";
 
   if (!trpc.tickets) throw new RouterNotAvailableError("tickets");
@@ -131,6 +138,29 @@
       : m.admin_note_types_no_escalation();
   }
 
+  function roleGatingSummary(
+    minViewRole: string,
+    minCreateRole: string,
+  ): string | null {
+    const isViewRestricted = minViewRole !== RoleId.VOLUNTEER;
+    const isCreateRestricted = minCreateRole !== RoleId.VOLUNTEER;
+    if (!isViewRestricted && !isCreateRestricted) return null;
+    const parts: string[] = [];
+    if (isViewRestricted) {
+      parts.push(
+        m.admin_note_types_view_restricted({ role: roleLabelFor(minViewRole) }),
+      );
+    }
+    if (isCreateRestricted) {
+      parts.push(
+        m.admin_note_types_create_restricted({
+          role: roleLabelFor(minCreateRole),
+        }),
+      );
+    }
+    return parts.join(", ");
+  }
+
   // ── Edit/create sheet state ──
 
   interface EditingNoteType {
@@ -148,7 +178,20 @@
   let editNotifyParticipants = $state(false);
   let editRequiresOnClose = $state(false);
   let editIsActive = $state(true);
+  let editMinViewRole = $state<RoleIdValue>(RoleId.VOLUNTEER);
+  let editMinCreateRole = $state<RoleIdValue>(RoleId.VOLUNTEER);
   let sheetSaving = $state(false);
+
+  const ROLE_OPTIONS: readonly { id: RoleIdValue; label: () => string }[] = [
+    { id: RoleId.VOLUNTEER, label: m.admin_role_volunteer },
+    { id: RoleId.MANAGER, label: m.admin_role_manager },
+    { id: RoleId.ADMIN, label: m.admin_role_admin },
+  ];
+
+  function roleLabelFor(roleId: string): string {
+    const opt = ROLE_OPTIONS.find((r) => r.id === roleId);
+    return opt ? opt.label() : m.admin_role_volunteer();
+  }
 
   const isCreateMode = $derived(editingType === null);
   const sheetTitle = $derived(
@@ -192,6 +235,8 @@
     editNotifyParticipants = false;
     editRequiresOnClose = false;
     editIsActive = true;
+    editMinViewRole = RoleId.VOLUNTEER;
+    editMinCreateRole = RoleId.VOLUNTEER;
     sheetOpen = true;
   }
 
@@ -200,6 +245,8 @@
     escalationTargets: EscalationTarget[];
     requiresOnClose: boolean;
     isActive: boolean;
+    minViewRole: string;
+    minCreateRole: string;
     encryptedName: SerializedBuffer;
     encryptedIcon: SerializedBuffer;
     encryptedDescription: SerializedBuffer | null;
@@ -222,6 +269,10 @@
     );
     editRequiresOnClose = nt.requiresOnClose;
     editIsActive = nt.isActive;
+    const viewId = ROLE_ID_VALUES.find((id) => id === nt.minViewRole);
+    editMinViewRole = viewId ?? RoleId.VOLUNTEER;
+    const createId = ROLE_ID_VALUES.find((id) => id === nt.minCreateRole);
+    editMinCreateRole = createId ?? RoleId.VOLUNTEER;
     sheetOpen = true;
   }
 
@@ -257,6 +308,8 @@
           encryptedDescription,
           escalationTargets,
           requiresOnClose: editRequiresOnClose,
+          minViewRole: editMinViewRole,
+          minCreateRole: editMinCreateRole,
         });
         haptic();
         toastStore.show(m.note_type_created());
@@ -270,6 +323,8 @@
           encryptedDescription: desc.length > 0 ? encryptedDescription : null,
           escalationTargets,
           requiresOnClose: editRequiresOnClose,
+          minViewRole: editMinViewRole,
+          minCreateRole: editMinCreateRole,
         });
         orgCache.delete(editId + ":name");
         orgCache.delete(editId + ":icon");
@@ -325,6 +380,7 @@
           orgCache.decrypt(nt.id + ":icon", nt.encryptedIcon),
         )}
         {@const isDefault = nt.id === defaultNoteTypeId}
+        {@const gating = roleGatingSummary(nt.minViewRole, nt.minCreateRole)}
         <button
           type="button"
           class="fut-row fut-row-interactive touch-feedback"
@@ -347,7 +403,8 @@
               <span class="fut-row-sub">
                 {escalationSummary(nt.escalationTargets)}{nt.requiresOnClose
                   ? ` · ${m.admin_note_types_close_required()}`
-                  : ""}
+                  : ""}{#if gating}
+                  · {gating}{/if}
               </span>
               {#if nt.encryptedDescription}
                 {@const desc = orgCache.decrypt(
@@ -498,6 +555,46 @@
           {/snippet}
         </ListItem>
       </List>
+    </div>
+
+    <div class="edit-sheet-section">
+      <span class="edit-sheet-label">
+        {m.admin_note_types_role_gating_label()}
+      </span>
+      <div class="role-gating-row">
+        <span class="role-gating-sublabel"
+          >{m.admin_note_types_min_view_role()}</span
+        >
+        <Segmented strong class="role-gating-seg">
+          {#each ROLE_OPTIONS as opt (opt.id)}
+            <SegmentedButton
+              active={editMinViewRole === opt.id}
+              onclick={() => {
+                editMinViewRole = opt.id;
+              }}
+            >
+              {opt.label()}
+            </SegmentedButton>
+          {/each}
+        </Segmented>
+      </div>
+      <div class="role-gating-row">
+        <span class="role-gating-sublabel"
+          >{m.admin_note_types_min_create_role()}</span
+        >
+        <Segmented strong class="role-gating-seg">
+          {#each ROLE_OPTIONS as opt (opt.id)}
+            <SegmentedButton
+              active={editMinCreateRole === opt.id}
+              onclick={() => {
+                editMinCreateRole = opt.id;
+              }}
+            >
+              {opt.label()}
+            </SegmentedButton>
+          {/each}
+        </Segmented>
+      </div>
     </div>
 
     <List nested class="edit-sheet-list">
@@ -701,6 +798,21 @@
 
   :global(.edit-sheet-list) {
     margin: 0 !important;
+  }
+
+  .role-gating-row {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+  }
+
+  .role-gating-sublabel {
+    font-size: var(--text-xs);
+    color: var(--muted);
+  }
+
+  :global(.role-gating-seg) {
+    width: 100%;
   }
 
   .deactivate-action {

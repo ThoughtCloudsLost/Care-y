@@ -114,6 +114,20 @@
     return m.ticket_note_notifies({ targets: parts.join(", ") });
   });
 
+  const creatableTypes = $derived.by(() => {
+    if (!noteTypesResult.data) return [];
+    const all = noteTypesResult.data.types;
+    const creatable = all.filter((t) => t.canCreate);
+    if (isEditMode && editInitialNoteTypeId !== undefined) {
+      const hasInitial = creatable.some((t) => t.id === editInitialNoteTypeId);
+      if (!hasInitial) {
+        const initial = all.find((t) => t.id === editInitialNoteTypeId);
+        if (initial) return [initial, ...creatable];
+      }
+    }
+    return creatable;
+  });
+
   const canSave = $derived(isDirty && noteText.trim().length > 0 && !saving);
 
   async function handleSave(): Promise<void> {
@@ -182,8 +196,7 @@
   <div class="note-sheet-body">
     <p class="note-description">{m.ticket_note_description()}</p>
 
-    {#if noteTypesResult.data}
-      {@const types = noteTypesResult.data.types}
+    {#if noteTypesResult.data && creatableTypes.length > 0}
       <List strongIos outlineIos nested class="note-type-select-list">
         <ListInput
           outline
@@ -198,7 +211,7 @@
             }
           }}
         >
-          {#each types as nt (nt.id)}
+          {#each creatableTypes as nt (nt.id)}
             <option value={nt.id}>
               {orgCache.decrypt(nt.id + ":name", nt.encryptedName) ?? ""}
             </option>
@@ -211,6 +224,8 @@
       {#if notificationHintText}
         <p class="note-notify-hint">{notificationHintText}</p>
       {/if}
+    {:else if noteTypesResult.data && creatableTypes.length === 0}
+      <p class="note-no-types">{m.ticket_note_no_creatable_types()}</p>
     {/if}
 
     <List nested class="note-input-list">
@@ -272,6 +287,13 @@
 
   .note-notify-hint {
     font-size: 0.6875rem;
+    color: var(--muted);
+    margin: 0;
+    font-style: italic;
+  }
+
+  .note-no-types {
+    font-size: 0.75rem;
     color: var(--muted);
     margin: 0;
     font-style: italic;

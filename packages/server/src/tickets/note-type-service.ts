@@ -66,6 +66,10 @@ export interface NoteTypeService {
   }): Promise<NoteTypeRecord>;
   getDefaultTypeId(): Promise<string | null>;
   getEscalationTargets(noteTypeId: string): Promise<EscalationTarget[]>;
+  getEscalationContext(noteTypeId: string): Promise<{
+    targets: EscalationTarget[];
+    minViewRole: string;
+  } | null>;
   getMinCreateRole(noteTypeId: string): Promise<string | undefined>;
 }
 
@@ -198,10 +202,6 @@ export function createNoteTypeService(
       const viewRole = input.minViewRole ?? RoleId.VOLUNTEER;
       const createRole = input.minCreateRole ?? RoleId.VOLUNTEER;
 
-      if (!meetsRoleThreshold(createRole, viewRole)) {
-        throw new ForbiddenError(ErrorCode.INVALID_ROLE_GATING);
-      }
-
       const encryptedTargets = encryptTargets(
         input.escalationTargets,
         secretsEncryptor,
@@ -268,25 +268,6 @@ export function createNoteTypeService(
         updates.min_create_role = input.minCreateRole;
       }
 
-      if (
-        input.minViewRole !== undefined ||
-        input.minCreateRole !== undefined
-      ) {
-        const existing = await db
-          .selectFrom("note_types")
-          .select(["min_view_role", "min_create_role"])
-          .where("id", "=", input.id)
-          .executeTakeFirst();
-        if (!existing) throw new NotFoundError(ErrorCode.NOTE_TYPE_NOT_FOUND);
-
-        const finalView = input.minViewRole ?? existing.min_view_role;
-        const finalCreate = input.minCreateRole ?? existing.min_create_role;
-
-        if (!meetsRoleThreshold(finalCreate, finalView)) {
-          throw new ForbiddenError(ErrorCode.INVALID_ROLE_GATING);
-        }
-      }
-
       if (Object.keys(updates).length === 0) {
         const existing = await db
           .selectFrom("note_types")
@@ -325,6 +306,23 @@ export function createNoteTypeService(
 
       if (!row) return [];
       return decryptTargets(row.encrypted_escalation_targets, secretsEncryptor);
+    },
+
+    async getEscalationContext(noteTypeId) {
+      const row = await db
+        .selectFrom("note_types")
+        .select(["encrypted_escalation_targets", "min_view_role"])
+        .where("id", "=", noteTypeId)
+        .executeTakeFirst();
+
+      if (!row) return null;
+      return {
+        targets: decryptTargets(
+          row.encrypted_escalation_targets,
+          secretsEncryptor,
+        ),
+        minViewRole: row.min_view_role,
+      };
     },
 
     async getMinCreateRole(noteTypeId): Promise<string | undefined> {
