@@ -28,6 +28,7 @@ export interface AdminUserListRecord {
 export interface UserService {
   listActiveVolunteers(): Promise<readonly VolunteerListRecord[]>;
   listAllForAdmin(): Promise<readonly AdminUserListRecord[]>;
+  listActiveIdsByRoleId(roleId: string): Promise<readonly string[]>;
 }
 
 export function createUserService(db: Kysely<TenantDatabase>): UserService {
@@ -84,6 +85,17 @@ export function createUserService(db: Kysely<TenantDatabase>): UserService {
         hasOrgKeyWrap: Number(r.wrap_count ?? 0) > 0,
         volPublic: r.vol_public ?? null,
       }));
+    },
+
+    async listActiveIdsByRoleId(roleId): Promise<readonly string[]> {
+      const rows = await db
+        .selectFrom("users")
+        .select("id")
+        .where("role_id", "=", roleId)
+        .where("is_active", "=", true)
+        .execute();
+
+      return rows.map((r) => r.id);
     },
   };
 }

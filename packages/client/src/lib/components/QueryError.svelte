@@ -105,6 +105,8 @@
     [ErrorCode.RECORDING_NOT_FOUND]: () => m.error_recording_not_found(),
     [ErrorCode.ATTACHMENT_NOT_FOUND]: () => m.error_attachment_not_found(),
     [ErrorCode.NOTE_TYPE_NOT_FOUND]: () => m.error_note_type_not_found(),
+    [ErrorCode.CANNOT_DEACTIVATE_DEFAULT_NOTE_TYPE]: () =>
+      m.error_cannot_deactivate_default_note_type(),
 
     // Knowledge base
     [ErrorCode.KB_CATEGORY_NOT_FOUND]: () => m.error_kb_category_not_found(),

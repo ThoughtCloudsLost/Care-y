@@ -151,7 +151,7 @@ describe.skipIf(!process.env.DATABASE_URL)("FollowUpService (DB)", () => {
       mentionedPseudonyms: [],
     });
 
-    const updated = await svc.updateInternalNote(
+    const { record: updated } = await svc.updateInternalNote(
       userId,
       fu.id,
       Buffer.from("edited-note"),
@@ -638,5 +638,175 @@ describe.skipIf(!process.env.DATABASE_URL)("FollowUpService (DB)", () => {
     expect(fu.hasRecording).toBe(false);
     expect(fu.hasImage).toBe(false);
     expect(fu.hasFile).toBe(false);
+  });
+
+  it("create persists noteTypeId on internal notes", async () => {
+    const { userId, ticketId } = await createTicketFixture();
+
+    const noteTypeId = crypto.randomUUID();
+    await testDb.db
+      .insertInto("note_types")
+      .values({
+        id: noteTypeId,
+        encrypted_name: Buffer.from("name"),
+        encrypted_icon: Buffer.from("icon"),
+        encrypted_escalation_targets: Buffer.from("[]"),
+        is_active: true,
+        requires_on_close: false,
+      })
+      .execute();
+
+    const fu = await svc.create(userId, {
+      ticketId,
+      encryptedContent: Buffer.from("typed-note"),
+      source: "volunteer",
+      type: "internal_note",
+      isPrivate: true,
+      mentionedPseudonyms: [],
+      noteTypeId,
+    });
+
+    expect(fu.noteTypeId).toBe(noteTypeId);
+  });
+
+  it("create without noteTypeId stores null", async () => {
+    const { userId, ticketId } = await createTicketFixture();
+
+    const fu = await svc.create(userId, {
+      ticketId,
+      encryptedContent: Buffer.from("untyped-note"),
+      source: "volunteer",
+      type: "internal_note",
+      isPrivate: true,
+      mentionedPseudonyms: [],
+    });
+
+    expect(fu.noteTypeId).toBeNull();
+  });
+
+  it("updateInternalNote changes noteTypeId when provided", async () => {
+    const { userId, ticketId } = await createTicketFixture();
+
+    const noteTypeA = crypto.randomUUID();
+    const noteTypeB = crypto.randomUUID();
+    await testDb.db
+      .insertInto("note_types")
+      .values([
+        {
+          id: noteTypeA,
+          encrypted_name: Buffer.from("type-a"),
+          encrypted_icon: Buffer.from("icon-a"),
+          encrypted_escalation_targets: Buffer.from("[]"),
+        },
+        {
+          id: noteTypeB,
+          encrypted_name: Buffer.from("type-b"),
+          encrypted_icon: Buffer.from("icon-b"),
+          encrypted_escalation_targets: Buffer.from("[]"),
+        },
+      ])
+      .execute();
+
+    const fu = await svc.create(userId, {
+      ticketId,
+      encryptedContent: Buffer.from("note-content"),
+      source: "volunteer",
+      type: "internal_note",
+      isPrivate: true,
+      mentionedPseudonyms: [],
+      noteTypeId: noteTypeA,
+    });
+
+    const { record: updated, previousNoteTypeId } =
+      await svc.updateInternalNote(
+        userId,
+        fu.id,
+        Buffer.from("updated-content"),
+        noteTypeB,
+      );
+
+    expect(updated.noteTypeId).toBe(noteTypeB);
+    expect(previousNoteTypeId).toBe(noteTypeA);
+  });
+
+  it("updateInternalNote preserves noteTypeId when not provided", async () => {
+    const { userId, ticketId } = await createTicketFixture();
+
+    const noteTypeId = crypto.randomUUID();
+    await testDb.db
+      .insertInto("note_types")
+      .values({
+        id: noteTypeId,
+        encrypted_name: Buffer.from("name"),
+        encrypted_icon: Buffer.from("icon"),
+        encrypted_escalation_targets: Buffer.from("[]"),
+      })
+      .execute();
+
+    const fu = await svc.create(userId, {
+      ticketId,
+      encryptedContent: Buffer.from("note-content"),
+      source: "volunteer",
+      type: "internal_note",
+      isPrivate: true,
+      mentionedPseudonyms: [],
+      noteTypeId,
+    });
+
+    const { record: updated } = await svc.updateInternalNote(
+      userId,
+      fu.id,
+      Buffer.from("edited-content"),
+    );
+
+    expect(updated.noteTypeId).toBe(noteTypeId);
+  });
+
+  it("listSummary includes noteTypeId in results", async () => {
+    const { userId, ticketId } = await createTicketFixture();
+
+    const noteTypeId = crypto.randomUUID();
+    await testDb.db
+      .insertInto("note_types")
+      .values({
+        id: noteTypeId,
+        encrypted_name: Buffer.from("name"),
+        encrypted_icon: Buffer.from("icon"),
+        encrypted_escalation_targets: Buffer.from("[]"),
+      })
+      .execute();
+
+    await svc.create(userId, {
+      ticketId,
+      encryptedContent: Buffer.from("typed-note"),
+      source: "volunteer",
+      type: "internal_note",
+      isPrivate: true,
+      mentionedPseudonyms: [],
+      noteTypeId,
+    });
+
+    const results = await svc.listSummary(userId, ticketId, { limit: 10 });
+    const note = results.find((r) => r.type === "internal_note");
+    expect(note).toBeDefined();
+    expect(note!.noteTypeId).toBe(noteTypeId);
+  });
+
+  it("listSummary returns null noteTypeId for pre-feature notes", async () => {
+    const { userId, ticketId } = await createTicketFixture();
+
+    await svc.create(userId, {
+      ticketId,
+      encryptedContent: Buffer.from("old-note"),
+      source: "volunteer",
+      type: "internal_note",
+      isPrivate: true,
+      mentionedPseudonyms: [],
+    });
+
+    const results = await svc.listSummary(userId, ticketId, { limit: 10 });
+    const note = results.find((r) => r.type === "internal_note");
+    expect(note).toBeDefined();
+    expect(note!.noteTypeId).toBeNull();
   });
 });

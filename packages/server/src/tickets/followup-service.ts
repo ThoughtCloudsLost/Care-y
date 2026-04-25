@@ -25,6 +25,7 @@ export interface FollowUpRecord {
   readonly hasRecording: boolean;
   readonly hasImage: boolean;
   readonly hasFile: boolean;
+  readonly noteTypeId: string | null;
   readonly fullPosition?: number;
   readonly totalCount?: number;
 }
@@ -36,6 +37,7 @@ export interface CreateFollowUpInput {
   readonly type: string;
   readonly isPrivate: boolean;
   readonly mentionedPseudonyms: string[];
+  readonly noteTypeId?: string;
 }
 
 /** Lightweight follow-up for timeline rendering. Plain messages omit encryptedContent. */
@@ -52,6 +54,7 @@ export interface FollowUpSummaryRecord {
   readonly recordingDurationSeconds: number | null;
   readonly hasImage: boolean;
   readonly hasFile: boolean;
+  readonly noteTypeId: string | null;
   readonly fullPosition?: number;
   readonly totalCount?: number;
 }
@@ -93,12 +96,13 @@ export interface FollowUpService {
     followUpIds: string[],
     opts?: { types?: string[] },
   ): Promise<FollowUpRecord[]>;
-  /** Update encrypted content of an internal note. Only the author can edit. */
+  /** Update encrypted content and/or note type of an internal note. Only the author can edit. */
   updateInternalNote(
     userId: string,
     followUpId: string,
     encryptedContent: Buffer,
-  ): Promise<FollowUpRecord>;
+    noteTypeId?: string,
+  ): Promise<{ record: FollowUpRecord; previousNoteTypeId: string | null }>;
   /** Soft-delete an internal note. Author or admin can delete. */
   softDeleteInternalNote(
     userId: string,
@@ -123,6 +127,7 @@ function toRecord(row: {
   created_by: string | null;
   deleted_at: Date | null;
   created_at: Date;
+  note_type_id?: string | null;
   has_recording?: boolean | number;
   has_image?: boolean | number;
   has_file?: boolean | number;
@@ -142,6 +147,7 @@ function toRecord(row: {
     hasRecording: Boolean(row.has_recording),
     hasImage: Boolean(row.has_image),
     hasFile: Boolean(row.has_file),
+    noteTypeId: row.note_type_id ?? null,
     fullPosition:
       row.full_position !== undefined ? Number(row.full_position) : undefined,
     totalCount:
@@ -179,6 +185,7 @@ export function createFollowUpService(
           mentioned_pseudonyms: JSON.stringify(input.mentionedPseudonyms),
           encrypted_content: input.encryptedContent,
           created_by: userId,
+          note_type_id: input.noteTypeId ?? null,
         })
         .returningAll()
         .executeTakeFirstOrThrow();
@@ -401,6 +408,7 @@ export function createFollowUpService(
           "followups.encrypted_content",
           "followups.created_by",
           "followups.created_at",
+          "followups.note_type_id",
         ])
         .where("followups.ticket_id", "=", ticketId)
         .where("followups.deleted_at", "is", null);
@@ -636,6 +644,7 @@ export function createFollowUpService(
           recordingDurationSeconds: rec?.maxDuration ?? null,
           hasImage: att?.hasImage ?? false,
           hasFile: att?.hasFile ?? false,
+          noteTypeId: row.note_type_id ?? null,
           fullPosition: fullPos !== undefined ? Number(fullPos) : undefined,
           totalCount: totCnt !== undefined ? Number(totCnt) : undefined,
         };
@@ -702,7 +711,7 @@ export function createFollowUpService(
       return rows.map(toRecord);
     },
 
-    async updateInternalNote(userId, followUpId, encryptedContent) {
+    async updateInternalNote(userId, followUpId, encryptedContent, noteTypeId) {
       const existing = await db
         .selectFrom("followups")
         .selectAll()
@@ -723,18 +732,26 @@ export function createFollowUpService(
         throw new NotFoundError(ErrorCode.FOLLOWUP_NOT_FOUND);
       }
 
-      // Author check: WHERE created_by = userId ensures only the author
-      // can edit. If the row doesn't match, the update returns nothing.
+      const updates: Record<string, unknown> = {
+        encrypted_content: encryptedContent,
+      };
+      if (noteTypeId !== undefined) {
+        updates.note_type_id = noteTypeId;
+      }
+
       const row = await db
         .updateTable("followups")
-        .set({ encrypted_content: encryptedContent })
+        .set(updates)
         .where("id", "=", followUpId)
         .where("created_by", "=", userId)
         .returningAll()
         .executeTakeFirst();
 
       if (!row) throw new ForbiddenError(ErrorCode.FOLLOWUP_NOT_OWNED);
-      return toRecord(row);
+      return {
+        record: toRecord(row),
+        previousNoteTypeId: existing.note_type_id ?? null,
+      };
     },
 
     async softDeleteInternalNote(userId, followUpId, isAdmin) {

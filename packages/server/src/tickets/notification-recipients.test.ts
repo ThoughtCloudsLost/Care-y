@@ -1,8 +1,11 @@
 import { describe, it, expect } from "vitest";
 import {
   buildRecipientList,
+  resolveEscalationTargets,
   type RecipientBuilderDeps,
+  type EscalationResolverDeps,
 } from "./notification-recipients.js";
+import type { EscalationTarget } from "@care-y/shared";
 
 function createMockDeps(overrides?: {
   ticketWatchers?: string[];
@@ -152,5 +155,153 @@ describe("buildRecipientList", () => {
       { userId: "qw-1", source: "queue_watcher" },
       { userId: "mentioned-1", source: "mention" },
     ]);
+  });
+
+  it("escalation users added after mentions", async () => {
+    const deps = createMockDeps({
+      ticketWatchers: ["watcher-1"],
+    });
+
+    const result = await buildRecipientList(deps, baseTicket, [], "actor-999", [
+      "escalation-1",
+      "escalation-2",
+    ]);
+
+    expect(result.recipients).toEqual([
+      { userId: "owner-1", source: "owner" },
+      { userId: "watcher-1", source: "cc" },
+      { userId: "escalation-1", source: "note_escalation" },
+      { userId: "escalation-2", source: "note_escalation" },
+    ]);
+  });
+
+  it("escalation user already in owner is not duplicated", async () => {
+    const deps = createMockDeps();
+
+    const result = await buildRecipientList(deps, baseTicket, [], "actor-999", [
+      "owner-1",
+    ]);
+
+    expect(result.recipients).toEqual([{ userId: "owner-1", source: "owner" }]);
+  });
+
+  it("acting user excluded from escalation recipients", async () => {
+    const deps = createMockDeps();
+
+    const result = await buildRecipientList(deps, baseTicket, [], "actor-999", [
+      "actor-999",
+    ]);
+
+    expect(
+      result.recipients.find((r) => r.userId === "actor-999"),
+    ).toBeUndefined();
+  });
+
+  it("undefined escalationUserIds does not affect existing behavior", async () => {
+    const deps = createMockDeps({
+      ticketWatchers: ["watcher-1"],
+    });
+
+    const result = await buildRecipientList(
+      deps,
+      baseTicket,
+      [],
+      "actor-999",
+      undefined,
+    );
+
+    expect(result.recipients).toEqual([
+      { userId: "owner-1", source: "owner" },
+      { userId: "watcher-1", source: "cc" },
+    ]);
+  });
+});
+
+function createMockEscalationDeps(overrides?: {
+  adminUsers?: string[];
+  managerUsers?: string[];
+  permissionUsers?: Record<string, string[]>;
+  queueMembers?: Record<string, string[]>;
+}): EscalationResolverDeps {
+  return {
+    getUsersByRole: async (role) => {
+      if (role === "admin") return overrides?.adminUsers ?? [];
+      return overrides?.managerUsers ?? [];
+    },
+    getUsersByPermission: async (permission) =>
+      overrides?.permissionUsers?.[permission] ?? [],
+    getQueueMembers: async (queueId) =>
+      overrides?.queueMembers?.[queueId] ?? [],
+  };
+}
+
+describe("resolveEscalationTargets", () => {
+  it("resolves role targets to admin user IDs", async () => {
+    const deps = createMockEscalationDeps({ adminUsers: ["admin-1"] });
+    const targets: EscalationTarget[] = [{ type: "role", value: "admin" }];
+
+    const result = await resolveEscalationTargets(targets, deps);
+
+    expect(result).toEqual(["admin-1"]);
+  });
+
+  it("resolves role targets to manager user IDs", async () => {
+    const deps = createMockEscalationDeps({ managerUsers: ["mgr-1", "mgr-2"] });
+    const targets: EscalationTarget[] = [{ type: "role", value: "manager" }];
+
+    const result = await resolveEscalationTargets(targets, deps);
+
+    expect(result).toEqual(["mgr-1", "mgr-2"]);
+  });
+
+  it("resolves permission targets to matching user IDs", async () => {
+    const deps = createMockEscalationDeps({
+      permissionUsers: { manage_queues: ["perm-1"] },
+    });
+    const targets: EscalationTarget[] = [
+      { type: "permission", value: "manage_queues" },
+    ];
+
+    const result = await resolveEscalationTargets(targets, deps);
+
+    expect(result).toEqual(["perm-1"]);
+  });
+
+  it("resolves queue targets to queue members", async () => {
+    const deps = createMockEscalationDeps({
+      queueMembers: { "queue-uuid": ["q-1", "q-2"] },
+    });
+    const targets: EscalationTarget[] = [
+      { type: "queue", value: "queue-uuid" },
+    ];
+
+    const result = await resolveEscalationTargets(targets, deps);
+
+    expect(result).toEqual(["q-1", "q-2"]);
+  });
+
+  it("merges and deduplicates multiple targets", async () => {
+    const deps = createMockEscalationDeps({
+      adminUsers: ["shared-user", "admin-only"],
+      managerUsers: ["shared-user", "mgr-only"],
+    });
+    const targets: EscalationTarget[] = [
+      { type: "role", value: "admin" },
+      { type: "role", value: "manager" },
+    ];
+
+    const result = await resolveEscalationTargets(targets, deps);
+
+    expect(result).toHaveLength(3);
+    expect(result).toContain("shared-user");
+    expect(result).toContain("admin-only");
+    expect(result).toContain("mgr-only");
+  });
+
+  it("empty targets array returns empty array", async () => {
+    const deps = createMockEscalationDeps();
+    const result = await resolveEscalationTargets([], deps);
+
+    expect(result).toEqual([]);
   });
 });
