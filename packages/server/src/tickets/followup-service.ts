@@ -10,7 +10,7 @@ import type { Kysely } from "kysely";
 import type { TenantDatabase } from "../db/types.js";
 import type { TicketAccessChecker } from "./access.js";
 import { ForbiddenError, NotFoundError } from "../errors.js";
-import { ErrorCode } from "@care-y/shared";
+import { ErrorCode, getAllowedRoleIds } from "@care-y/shared";
 
 export interface FollowUpRecord {
   readonly id: string;
@@ -69,6 +69,7 @@ export interface FollowUpListOpts {
   includeClientSource?: boolean;
   dateFrom?: string;
   dateTo?: string;
+  userRoleId?: string;
 }
 
 export interface FollowUpService {
@@ -198,9 +199,15 @@ export function createFollowUpService(
 
       const isOlder = opts.direction === "older";
 
+      const allowedViewRoles =
+        opts.userRoleId !== undefined
+          ? getAllowedRoleIds(opts.userRoleId)
+          : undefined;
+
       let query = db
         .selectFrom("followups")
-        .selectAll()
+        .leftJoin("note_types as nt", "nt.id", "followups.note_type_id")
+        .selectAll("followups")
         .select((eb) => [
           eb
             .exists(
@@ -237,8 +244,19 @@ export function createFollowUpService(
             )
             .as("has_file"),
         ])
-        .where("ticket_id", "=", ticketId)
-        .where("deleted_at", "is", null);
+        .where("followups.ticket_id", "=", ticketId)
+        .where("followups.deleted_at", "is", null);
+
+      if (allowedViewRoles !== undefined) {
+        query = query.where((eb) =>
+          eb.or([
+            eb("followups.type", "!=", "internal_note"),
+            eb("followups.note_type_id", "is", null),
+            eb("followups.created_by", "=", userId),
+            eb("nt.min_view_role", "in", allowedViewRoles),
+          ]),
+        );
+      }
 
       // Position tracking for gap indicators (only when filters active)
       const hasAnyFilter =
@@ -284,7 +302,7 @@ export function createFollowUpService(
         const flags = new Set(opts.mediaFlags ?? []);
         query = query.where((eb) => {
           const conditions = [];
-          if (hasTypes) conditions.push(eb("type", "in", types));
+          if (hasTypes) conditions.push(eb("followups.type", "in", types));
           if (flags.has("recording"))
             conditions.push(
               eb.exists(
@@ -335,9 +353,11 @@ export function createFollowUpService(
         query = query.where((eb) => {
           const conditions = [];
           if (opts.includeClientSource === true)
-            conditions.push(eb("source", "=", "client"));
+            conditions.push(eb("followups.source", "=", "client"));
           if (hasCreatedBy)
-            conditions.push(eb("created_by", "in", opts.createdBy ?? []));
+            conditions.push(
+              eb("followups.created_by", "in", opts.createdBy ?? []),
+            );
           return conditions.length === 1
             ? (conditions[0] ?? eb.or(conditions))
             : eb.or(conditions);
@@ -346,46 +366,43 @@ export function createFollowUpService(
 
       // --- Date range filter (AND'd) ---
       if (opts.dateFrom !== undefined) {
-        query = query.where("created_at", ">=", new Date(opts.dateFrom));
+        query = query.where(
+          "followups.created_at",
+          ">=",
+          new Date(opts.dateFrom),
+        );
       }
       if (opts.dateTo !== undefined) {
         const dayEnd = new Date(opts.dateTo);
         dayEnd.setHours(23, 59, 59, 999);
-        query = query.where("created_at", "<=", dayEnd);
+        query = query.where("followups.created_at", "<=", dayEnd);
       }
 
       if (opts.cursor !== undefined) {
-        // Keyset pagination: skip past the cursor row.
-        // Uses subquery to keep timestamp comparison in PostgreSQL,
-        // avoiding JS Date millisecond precision loss (PostgreSQL
-        // stores timestamptz with microsecond precision).
         const cursorId = opts.cursor;
         const cursorCreatedAt = db
           .selectFrom("followups")
           .select("created_at")
           .where("id", "=", cursorId);
 
-        // "newer" pages forward (after cursor), "older" pages backward (before cursor).
         const timeOp = isOlder ? "<" : ">";
         const tieOp = isOlder ? "<" : ">";
 
         query = query.where((eb) =>
           eb.or([
-            eb("created_at", timeOp, cursorCreatedAt),
+            eb("followups.created_at", timeOp, cursorCreatedAt),
             eb.and([
-              eb("created_at", "=", cursorCreatedAt),
-              eb("id", tieOp, cursorId),
+              eb("followups.created_at", "=", cursorCreatedAt),
+              eb("followups.id", tieOp, cursorId),
             ]),
           ]),
         );
       }
 
-      // "older" queries DESC to get the N rows closest to the cursor,
-      // then reverses to chronological order before returning.
       const sortDir = isOlder ? "desc" : "asc";
       const rows = await query
-        .orderBy("created_at", sortDir)
-        .orderBy("id", sortDir)
+        .orderBy("followups.created_at", sortDir)
+        .orderBy("followups.id", sortDir)
         .limit(opts.limit)
         .execute();
 
@@ -397,9 +414,14 @@ export function createFollowUpService(
       await access.assertAccess(userId, ticketId);
 
       const isOlder = opts.direction === "older";
+      const allowedViewRoles =
+        opts.userRoleId !== undefined
+          ? getAllowedRoleIds(opts.userRoleId)
+          : undefined;
 
       let query = db
         .selectFrom("followups")
+        .leftJoin("note_types as nt", "nt.id", "followups.note_type_id")
         .select([
           "followups.id",
           "followups.ticket_id",
@@ -412,6 +434,17 @@ export function createFollowUpService(
         ])
         .where("followups.ticket_id", "=", ticketId)
         .where("followups.deleted_at", "is", null);
+
+      if (allowedViewRoles !== undefined) {
+        query = query.where((eb) =>
+          eb.or([
+            eb("followups.type", "!=", "internal_note"),
+            eb("followups.note_type_id", "is", null),
+            eb("followups.created_by", "=", userId),
+            eb("nt.min_view_role", "in", allowedViewRoles),
+          ]),
+        );
+      }
 
       // --- Type + media filter group (OR'd together) ---
       const hasTypes = opts.types !== undefined && opts.types.length > 0;
