@@ -35,6 +35,7 @@
     followUpCount,
     unreadCount,
     previewFollowUps,
+    previewReactions,
     selected = false,
     multiSelectActive = false,
     ontap,
@@ -156,6 +157,7 @@
             followUps={previewFollowUps}
             multiline={isList}
             {followUpCount}
+            reactions={previewReactions}
           />
         </div>
 

@@ -1,6 +1,7 @@
 import type { RawFollowUpPreview } from "$lib/tickets/preview-loader.svelte.js";
 import type { DisplayStatus } from "$lib/tickets/display-status.js";
 import type { DecryptResult } from "$lib/crypto/decrypt-result.js";
+import type { ReactionSummary } from "@care-y/shared";
 
 export type TicketQuickAction = "reply" | "call" | "hold" | "unhold" | "assign";
 
@@ -23,6 +24,8 @@ export interface TicketCardProps {
   readonly unreadCount: number;
   /** undefined = not loaded from server yet */
   readonly previewFollowUps: RawFollowUpPreview[] | undefined;
+  /** Reaction summaries keyed by follow-up ID (display-only in preview). */
+  readonly previewReactions?: Record<string, ReactionSummary[]>;
   readonly selected?: boolean;
   readonly multiSelectActive?: boolean;
   readonly ontap: (ticketId: string) => void;

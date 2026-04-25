@@ -10,19 +10,16 @@
 -->
 <script lang="ts">
   import { Card, Popover } from "konsta/svelte";
-  import { StickyNote, Pencil, Plus } from "@lucide/svelte";
+  import { StickyNote, Pencil } from "@lucide/svelte";
   import { formatRelativeTime } from "$lib/utils/format-time.js";
   import { resolveNoteTypeIcon } from "$lib/utils/note-type-icons.js";
-  import {
-    REACTION_ENTRIES,
-    reactionIcon,
-    reactionLabel,
-  } from "$lib/utils/reaction-icons.js";
+  import { REACTION_ENTRIES } from "$lib/utils/reaction-icons.js";
   import { haptic } from "$lib/utils/haptic.js";
   import * as m from "$lib/paraglide/messages.js";
   import type { DecryptResult } from "$lib/crypto/decrypt-result.js";
   import type { ReactionSummary, ReactionType } from "@care-y/shared";
   import DecryptPlaceholder from "$lib/components/DecryptPlaceholder.svelte";
+  import ReactionTray from "./ReactionTray.svelte";
 
   interface Props {
     result: DecryptResult;
@@ -66,6 +63,11 @@
   );
   const hasReactions = $derived(reactions.length > 0);
 
+  function userReacted(reaction: ReactionSummary): boolean {
+    if (currentUserId === undefined) return false;
+    return reaction.userIds.includes(currentUserId);
+  }
+
   // ── Picker state ──
 
   let pickerOpen = $state(false);
@@ -81,21 +83,6 @@
     ontogglereaction?.(type);
     haptic();
     pickerOpen = false;
-  }
-
-  function userReacted(reaction: ReactionSummary): boolean {
-    if (currentUserId === undefined) return false;
-    return reaction.userIds.includes(currentUserId);
-  }
-
-  function whoReacted(reaction: ReactionSummary): string {
-    if (!resolveUserName) return "";
-    return reaction.userIds
-      .map((uid) =>
-        uid === currentUserId ? m.reaction_you() : (resolveUserName(uid) ?? ""),
-      )
-      .filter((n) => n.length > 0)
-      .join(", ");
   }
 
   // ── Long-press handling ──
@@ -189,32 +176,12 @@
     </Card>
 
     {#if ontogglereaction}
-      <div class="reaction-tray">
-        {#each reactions as r (r.reaction)}
-          {@const Icon = reactionIcon(r.reaction)}
-          {@const mine = userReacted(r)}
-          {@const names = whoReacted(r)}
-          <button
-            type="button"
-            class="reaction-pill"
-            class:reaction-mine={mine}
-            onclick={openPicker}
-            title={names}
-          >
-            <Icon size={11} aria-hidden="true" />
-            <span class="reaction-count">{r.userIds.length}</span>
-          </button>
-        {/each}
-        <button
-          type="button"
-          class="reaction-add-btn"
-          onclick={openPicker}
-          aria-label={m.reaction_add()}
-          aria-expanded={pickerOpen}
-        >
-          <Plus size={10} />
-        </button>
-      </div>
+      <ReactionTray
+        {reactions}
+        {currentUserId}
+        {resolveUserName}
+        onopenpicker={openPicker}
+      />
     {/if}
   </div>
 </div>
@@ -327,63 +294,6 @@
     color: var(--muted);
     border-radius: 0.25rem;
     -webkit-tap-highlight-color: transparent;
-  }
-
-  /* ── Reaction tray: bottom-right corner, overlapping card edge ── */
-
-  .reaction-tray {
-    position: absolute;
-    bottom: -0.5rem;
-    right: 0.75rem;
-    display: flex;
-    align-items: center;
-    gap: 0.1875rem;
-  }
-
-  .reaction-pill {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.1875rem;
-    padding: 0.125rem 0.375rem;
-    font-size: 0.6875rem;
-    border-radius: 999px;
-    border: 1px solid var(--surface-2);
-    background: var(--paper);
-    color: var(--muted);
-    cursor: pointer;
-    -webkit-tap-highlight-color: transparent;
-    min-height: 1.375rem;
-    box-shadow: 0 1px 3px rgb(0 0 0 / 0.08);
-  }
-
-  .reaction-mine {
-    border-color: var(--brand-accent, var(--brand-primary));
-    color: var(--brand-accent, var(--brand-primary));
-    background: color-mix(
-      in srgb,
-      var(--brand-accent, var(--brand-primary)) 8%,
-      var(--paper)
-    );
-  }
-
-  .reaction-count {
-    font-weight: 600;
-    font-variant-numeric: tabular-nums;
-  }
-
-  .reaction-add-btn {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 1.375rem;
-    height: 1.375rem;
-    border-radius: 999px;
-    border: 1px solid var(--surface-2);
-    background: var(--paper);
-    color: var(--muted);
-    cursor: pointer;
-    -webkit-tap-highlight-color: transparent;
-    box-shadow: 0 1px 3px rgb(0 0 0 / 0.08);
   }
 
   /* ── Popover picker strip ── */

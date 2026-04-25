@@ -516,6 +516,7 @@
   "reaction_add": "Add reaction",
   "reaction_count": "{count} {label}",
   "reaction_you": "You",
+  "reaction_summary": "Reactions",
   "ticket_note_saving": "Saving...",
   "ticket_note_team_only": "Internal note",
   "ticket_note_description": "Only visible to other members of your organization.",
