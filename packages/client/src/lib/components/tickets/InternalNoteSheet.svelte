@@ -16,6 +16,7 @@
   import { toastStore } from "$lib/stores/toast.svelte.js";
   import { haptic } from "$lib/utils/haptic.js";
   import { announceToLiveRegion } from "$lib/utils/announce.js";
+  import { RoleId } from "@care-y/shared";
   import { createNoteTypesQuery } from "$lib/tickets/queries.js";
   import ShellSheet from "$lib/shell/ShellSheet.svelte";
   import SoftButton from "$lib/components/SoftButton.svelte";
@@ -100,6 +101,11 @@
     ["role:manager", m.ticket_note_hint_managers],
   ]);
 
+  const ROLE_LABELS = new Map<string, () => string>([
+    [RoleId.MANAGER, m.role_manager],
+    [RoleId.ADMIN, m.role_admin],
+  ]);
+
   const notificationHintText = $derived.by(() => {
     if (!noteTypesResult.data || effectiveNoteTypeId === undefined)
       return undefined;
@@ -112,6 +118,18 @@
       .filter((s): s is string => s !== undefined);
     if (parts.length === 0) return undefined;
     return m.ticket_note_notifies({ targets: parts.join(", ") });
+  });
+
+  const visibilityText = $derived.by(() => {
+    if (!noteTypesResult.data || effectiveNoteTypeId === undefined)
+      return m.ticket_note_description();
+    const nt = noteTypesResult.data.types.find(
+      (t) => t.id === effectiveNoteTypeId,
+    );
+    if (!nt) return m.ticket_note_description();
+    const roleLabel = ROLE_LABELS.get(nt.minViewRole);
+    if (!roleLabel) return m.ticket_note_description();
+    return m.ticket_note_visible_to_role({ role: roleLabel() });
   });
 
   const creatableTypes = $derived.by(() => {
@@ -194,7 +212,7 @@
   {/snippet}
 
   <div class="note-sheet-body">
-    <p class="note-description">{m.ticket_note_description()}</p>
+    <p class="note-description">{visibilityText}</p>
 
     {#if noteTypesResult.data && creatableTypes.length > 0}
       <List strongIos outlineIos nested class="note-type-select-list">
