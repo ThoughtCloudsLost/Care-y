@@ -432,11 +432,7 @@
     if (activeNoteTypeIds.size === 0) return base;
     return base.filter((fu) => {
       if (fu.type !== "internal_note") return true;
-      if (fu.noteTypeId !== null && activeNoteTypeIds.has(fu.noteTypeId))
-        return true;
-      // Pre-feature notes (null noteTypeId): include when any note type filter is active
-      if (fu.noteTypeId === null) return true;
-      return false;
+      return fu.noteTypeId !== null && activeNoteTypeIds.has(fu.noteTypeId);
     });
   });
 
@@ -577,22 +573,26 @@
   // Build timeline items from the summary endpoint, falling back to
   // already-loaded paginator items while the summary query is in flight.
   const displayTimelineItems = $derived.by((): TimelineItem[] => {
-    if (summaryData) {
-      return summaryData.map(toTimelineItem);
-    }
-    return followUps.map((fu) => ({
-      id: fu.id,
-      source: fu.source,
-      type: fu.type,
-      createdBy: fu.createdBy,
-      createdAt: fu.createdAt,
-      encryptedContent: fu.encryptedContent,
-      hasRecording: fu.hasRecording,
-      recordingDurationSeconds: null,
-      hasImage: fu.hasImage,
-      hasFile: fu.hasFile,
-      noteTypeId: fu.noteTypeId ?? null,
-    }));
+    const raw: TimelineItem[] = summaryData
+      ? summaryData.map(toTimelineItem)
+      : followUps.map((fu) => ({
+          id: fu.id,
+          source: fu.source,
+          type: fu.type,
+          createdBy: fu.createdBy,
+          createdAt: fu.createdAt,
+          encryptedContent: fu.encryptedContent,
+          hasRecording: fu.hasRecording,
+          recordingDurationSeconds: null,
+          hasImage: fu.hasImage,
+          hasFile: fu.hasFile,
+          noteTypeId: fu.noteTypeId ?? null,
+        }));
+    if (activeNoteTypeIds.size === 0) return raw;
+    return raw.filter((item) => {
+      if (item.type !== "internal_note") return true;
+      return item.noteTypeId !== null && activeNoteTypeIds.has(item.noteTypeId);
+    });
   });
 
   // Decrypt system event and note content for timeline display.
