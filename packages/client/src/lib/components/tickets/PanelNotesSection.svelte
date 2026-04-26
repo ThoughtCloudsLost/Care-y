@@ -58,7 +58,7 @@
     });
     const all: FollowUpRecord[] = [];
     for (const [, data] of entries) {
-      if (data) all.push(...data);
+      if (Array.isArray(data)) all.push(...data);
     }
     if (all.length === 0) return undefined;
     const notes = all.filter((fu) => fu.type === "internal_note");

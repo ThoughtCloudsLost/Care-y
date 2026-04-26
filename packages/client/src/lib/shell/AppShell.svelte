@@ -53,7 +53,9 @@
   import { providePTR } from "./ptr-context.svelte.js";
   import { themeStore } from "$lib/stores/theme.svelte";
   import { useQueryClient, createQuery } from "@tanstack/svelte-query";
+  import { RoleId } from "@care-y/shared";
   import {
+    adminKeys,
     authKeys,
     ticketsKeys,
     kbKeys,
@@ -77,8 +79,8 @@
     createTicketSearchProvider,
     type RawCachedTicket,
   } from "$lib/search/providers/tickets.js";
-  import { volunteersStubProvider } from "$lib/search/providers/stubs.js";
   import { createKbSearchProvider } from "$lib/search/providers/kb.js";
+  import { createVolunteerSearchProvider } from "$lib/search/providers/volunteers.js";
   import { trpc } from "$lib/trpc/index.js";
   import {
     registerSearchProvider,
@@ -516,8 +518,29 @@
         )
       : () => undefined;
 
-    // Placeholder provider for volunteers search (removed by 6g).
-    const unregisterVol = registerSearchProvider(volunteersStubProvider);
+    // Volunteer search: admin/manager only. Reads from TanStack cache,
+    // decrypts display names via OrgDecryptCache. No server-side fullSearch.
+    const isAdminOrManager =
+      currentRoleId === RoleId.ADMIN || currentRoleId === RoleId.MANAGER;
+    const unregisterVol = isAdminOrManager
+      ? registerSearchProvider(
+          createVolunteerSearchProvider({
+            fetchUsers: async () =>
+              queryClient.ensureQueryData({
+                queryKey: adminKeys.users(),
+                queryFn: async () => trpc.auth.listUsers.query(),
+              }),
+            decryptDisplayName: (userId, ciphertext) => {
+              if (typeof ciphertext !== "string") return null;
+              return orgCache.decrypt(
+                `user:${userId}`,
+                base64ToUint8Array(ciphertext),
+              );
+            },
+            currentUserId: () => currentUserIdGetter(),
+          }),
+        )
+      : () => undefined;
 
     return () => {
       unsubscribeCache();

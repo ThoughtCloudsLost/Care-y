@@ -36,6 +36,7 @@
   import { toastStore } from "$lib/stores/toast.svelte.js";
   import { announceToLiveRegion } from "$lib/utils/announce.js";
   import { RouterNotAvailableError } from "$lib/errors.js";
+  import { normalizeForSearch } from "$lib/search/normalize.js";
   import {
     userFilterStore,
     type KeyStatus,
@@ -57,10 +58,16 @@
   interface UsersSectionProps {
     readonly autoAction?: string | null;
     readonly queueAssignments?: readonly QueueAssignment[];
+    readonly searchQuery?: string;
+    readonly highlightUserId?: string | null;
   }
 
-  let { autoAction = null, queueAssignments = [] }: UsersSectionProps =
-    $props();
+  let {
+    autoAction = null,
+    queueAssignments = [],
+    searchQuery = "",
+    highlightUserId = null,
+  }: UsersSectionProps = $props();
 
   const authRouter = trpc.auth;
   if (!trpc.tickets) throw new RouterNotAvailableError("tickets");
@@ -228,6 +235,15 @@
       });
     }
 
+    if (searchQuery.length >= 2) {
+      const norm = normalizeForSearch(searchQuery);
+      result = result.filter((u) => {
+        const name = decryptDisplayName(u.id, u.encryptedDisplayName);
+        if (name === null) return false;
+        return normalizeForSearch(name).includes(norm);
+      });
+    }
+
     const sorted = [...result];
     const { field, direction } = userFilterStore.sort;
     const dir = direction === "asc" ? 1 : -1;
@@ -289,6 +305,17 @@
   export function inactiveCount(): number {
     return userCounts.inactive;
   }
+
+  // ── Scroll to highlighted user (from search result tap) ──
+  $effect(() => {
+    if (highlightUserId === null) return;
+    const el = document.getElementById(`user-${highlightUserId}`);
+    if (!el) return;
+    el.scrollIntoView({ behavior: "smooth", block: "center" });
+    el.classList.add("user-highlight");
+    const timer = setTimeout(() => el.classList.remove("user-highlight"), 1500);
+    return () => clearTimeout(timer);
+  });
 
   // ── Edit user sheet ──
   interface SheetState {
@@ -624,20 +651,22 @@
           user.id,
           user.encryptedDisplayName,
         )}
-        <UserCard
-          viewMode="list"
-          userId={user.id}
-          {displayName}
-          roleId={user.roleId}
-          isActive={user.isActive}
-          hasKeys={user.hasKeys}
-          hasOrgKeyWrap={user.hasOrgKeyWrap}
-          {isSelf}
-          selected={selectedIds.has(user.id)}
-          {multiSelectActive}
-          onedit={handleUserEdit}
-          onselect={toggleSelection}
-        />
+        <div id="user-{user.id}">
+          <UserCard
+            viewMode="list"
+            userId={user.id}
+            {displayName}
+            roleId={user.roleId}
+            isActive={user.isActive}
+            hasKeys={user.hasKeys}
+            hasOrgKeyWrap={user.hasOrgKeyWrap}
+            {isSelf}
+            selected={selectedIds.has(user.id)}
+            {multiSelectActive}
+            onedit={handleUserEdit}
+            onselect={toggleSelection}
+          />
+        </div>
       {/each}
     </div>
 
@@ -899,5 +928,20 @@
     cursor: pointer;
     text-align: center;
     min-height: 44px;
+  }
+
+  @keyframes highlight-pulse {
+    0% {
+      box-shadow: 0 0 0 2px
+        color-mix(in srgb, var(--brand-accent) 60%, transparent);
+    }
+    100% {
+      box-shadow: none;
+    }
+  }
+
+  :global(.user-highlight) {
+    animation: highlight-pulse 1.5s ease-out;
+    border-radius: var(--card-radius);
   }
 </style>
