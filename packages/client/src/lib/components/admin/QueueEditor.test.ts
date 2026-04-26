@@ -95,6 +95,14 @@ vi.mock("$lib/shell/ShellSheet.svelte", async () => ({
   ).default,
 }));
 
+// --- Mock shell context ---
+vi.mock("$lib/shell/context.js", () => ({
+  getScrollContainer: () => () => undefined,
+  getTabbarOverrideCtx: () => ({ current: undefined }),
+  getTabbarHiddenCtx: () => ({ current: false }),
+  getNavbarOverrideCtx: () => ({ current: undefined }),
+}));
+
 import QueueEditor from "./QueueEditor.svelte";
 
 function renderEditor(

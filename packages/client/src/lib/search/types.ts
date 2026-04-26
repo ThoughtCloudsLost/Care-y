@@ -71,9 +71,13 @@ export interface SearchProvider<T = unknown> {
   /**
    * Optional server-backed full search. Called when the user taps "Search all".
    * Providers that only have client-side data omit this.
-   * Implementations should update `state` progressively as batches are processed.
+   * Mutate `state` fields and call `onProgress()` to propagate changes to the UI.
    */
-  fullSearch?(query: string, state: FullSearchState<T>): Promise<void>;
+  fullSearch?(
+    query: string,
+    state: FullSearchState,
+    onProgress: () => void,
+  ): Promise<void>;
   /**
    * Optional callback for "View all" that bypasses navigation. When present,
    * the search UI calls this instead of navigating via showAllHref. Used by
@@ -86,15 +90,21 @@ export interface SearchProvider<T = unknown> {
    * selection in-page (e.g., scroll-to-match in conversation search).
    */
   onresulttap?(id: string, query: string): void;
+  /**
+   * Called when the search sheet closes or the query changes.
+   * Providers should clear full-search state (content match sets,
+   * cached decrypted follow-up content) to free memory.
+   */
+  reset?(): void;
 }
 
-/** Per-provider state for opt-in full search. Managed by the registry. */
-export interface FullSearchState<T = unknown> {
+/** Per-provider progress state for opt-in full search. Managed by the registry. */
+export interface FullSearchState {
   status: "idle" | "searching" | "done";
-  /** Results found so far (accumulates across pages). */
-  results: SearchResult<T>[];
   /** Items processed so far. */
   searched: number;
-  /** Total items to process (from server count). */
+  /** Total items to process. */
   total: number;
+  /** Matches found so far (title + content). */
+  matchCount: number;
 }

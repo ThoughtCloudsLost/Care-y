@@ -195,7 +195,7 @@ export function createSearchService(
 
       const followups = rows.map((row) => ({
         ...row,
-        encryptedContent: row.encryptedContent.toString("base64"),
+        encryptedContent: row.encryptedContent.toString("base64url"),
       }));
 
       return {

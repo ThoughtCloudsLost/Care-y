@@ -77,6 +77,14 @@ vi.mock("$lib/stores/toast.svelte.js", () => ({
   toastStore: { show: mockToastShow },
 }));
 
+// --- Mock shell context ---
+vi.mock("$lib/shell/context.js", () => ({
+  getScrollContainer: () => () => undefined,
+  getTabbarOverrideCtx: () => ({ current: undefined }),
+  getTabbarHiddenCtx: () => ({ current: false }),
+  getNavbarOverrideCtx: () => ({ current: undefined }),
+}));
+
 import AvatarPanel from "./AvatarPanel.svelte";
 
 afterEach(() => {

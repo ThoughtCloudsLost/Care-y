@@ -31,6 +31,14 @@ vi.mock("$lib/crypto/context.js", () => ({
   }),
 }));
 
+// --- Mock shell context ---
+vi.mock("$lib/shell/context.js", () => ({
+  getScrollContainer: () => () => undefined,
+  getTabbarOverrideCtx: () => ({ current: undefined }),
+  getTabbarHiddenCtx: () => ({ current: false }),
+  getNavbarOverrideCtx: () => ({ current: undefined }),
+}));
+
 afterEach(cleanup);
 
 describe("TicketCard", () => {
