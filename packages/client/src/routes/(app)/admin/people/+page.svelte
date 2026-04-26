@@ -38,6 +38,8 @@
     queueFilterStore,
     type QueueSortField,
   } from "$lib/stores/queue-filters.svelte.js";
+  import { createSearchOverlay } from "$lib/search/search-overlay.svelte.js";
+  import SearchNavigator from "$lib/components/search/SearchNavigator.svelte";
   import StatusDot from "$lib/components/StatusDot.svelte";
   import UsersSection from "$lib/components/admin/UsersSection.svelte";
   import QueuesSection from "$lib/components/admin/QueuesSection.svelte";
@@ -96,19 +98,6 @@
 
   const urlAction = $derived(page.url.searchParams.get("action"));
   const urlUser = $derived(page.url.searchParams.get("user"));
-  const urlSearch = $derived(page.url.searchParams.get("q") ?? "");
-
-  // Strip `user` param after first render so the highlight is one-shot.
-  let highlightUserId = $state<string | null>(null);
-  $effect(() => {
-    if (urlUser === null) return;
-    highlightUserId = urlUser;
-    // Strip the param to prevent re-highlight on navigation.
-    const next = new URL(page.url);
-    next.searchParams.delete("user");
-    // eslint-disable-next-line svelte/no-navigation-without-resolve -- shallow routing, same page
-    replaceState(next.pathname + next.search, {});
-  });
 
   function defaultTab(): PeopleTab {
     if (permissions.has(Permission.MANAGE_USERS)) return "users";
@@ -141,6 +130,35 @@
   let usersSectionRef = $state<ReturnType<typeof UsersSection> | null>(null);
   let queuesSectionRef = $state<ReturnType<typeof QueuesSection> | null>(null);
 
+  // ── Search overlay (SearchNavigator pattern) ──
+
+  const searchMatches = $derived(
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- bind:this ref loses exported function return types
+    (usersSectionRef?.matchedUserIds() as readonly string[] | undefined) ?? [],
+  );
+
+  const overlay = createSearchOverlay({
+    matches: () => searchMatches,
+    getElementId: (id) => `user-${id}`,
+    scrollContainer: () => scrollEl,
+  });
+
+  $effect(() => {
+    const q = page.url.searchParams.get("q");
+    if (q !== null && q !== "") {
+      overlay.enter(q);
+    }
+  });
+
+  $effect(() => {
+    if (urlUser === null) return;
+    usersSectionRef?.editUser(urlUser);
+    const next = new URL(page.url);
+    next.searchParams.delete("user");
+    // eslint-disable-next-line svelte/no-navigation-without-resolve -- shallow routing, same page
+    replaceState(next.pathname + next.search, {});
+  });
+
   // Navbar override: subnavbar always visible (tab switcher lives inside it).
   const navbarCtx = getNavbarOverrideCtx();
 
@@ -159,7 +177,7 @@
         activeTab === "users" && canManageUsers
           ? usersSubnavbar
           : queuesSubnavbar,
-      subnavbarHidden: () => scrollDir.hidden,
+      subnavbarHidden: () => scrollDir.hidden && !overlay.active,
     };
     return () => {
       navbarCtx.current = undefined;
@@ -440,6 +458,18 @@
   </span>
 {/snippet}
 
+{#snippet searchNavigatorRow()}
+  <SearchNavigator
+    term={overlay.term ?? ""}
+    position={overlay.position}
+    total={overlay.matchCount}
+    onup={overlay.up}
+    ondown={overlay.down}
+    onexit={overlay.exit}
+    ontermchange={overlay.setTerm}
+  />
+{/snippet}
+
 {#snippet usersSubnavbar()}
   <SubNavbarFilterLayout
     title={m.admin_users_title()}
@@ -450,6 +480,7 @@
     onselect={handleToggleMultiSelect}
     savedFilters={savedFiltersConfig}
     filterPills={filterPillsConfig}
+    searchNavigator={overlay.active ? searchNavigatorRow : undefined}
   />
 {/snippet}
 
@@ -491,8 +522,8 @@
       bind:this={usersSectionRef}
       autoAction={urlAction}
       queueAssignments={queueAssignmentsQuery.data ?? []}
-      searchQuery={urlSearch}
-      {highlightUserId}
+      searchQuery={overlay.term ?? ""}
+      activeMatchId={overlay.activeId}
     />
   </div>
 {:else if activeTab === "queues" && canManageQueues}
