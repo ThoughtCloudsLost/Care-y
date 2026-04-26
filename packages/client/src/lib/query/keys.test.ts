@@ -56,6 +56,8 @@ describe("query key factories", () => {
     });
   });
 
+  // Cache invalidation depends on these exact prefixes. Changing a key
+  // shape without updating invalidateQueries calls causes stale-data bugs.
   describe("key shapes", () => {
     it("authKeys.me", () => {
       expect(authKeys.me()).toEqual(["auth", "me"]);
