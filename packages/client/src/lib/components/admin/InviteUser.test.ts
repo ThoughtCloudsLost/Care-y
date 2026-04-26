@@ -61,6 +61,7 @@ vi.mock("$lib/crypto/context.js", () => ({
 vi.mock("@tanstack/svelte-query", () => ({
   useQueryClient: () => ({
     invalidateQueries: mockInvalidateQueries,
+    getQueriesData: vi.fn().mockReturnValue([]),
   }),
   createMutation: (optsFn: () => Record<string, unknown>) => {
     const opts = optsFn();
@@ -163,9 +164,9 @@ describe("InviteUser", () => {
     expect(screen.getByText(/stored with weaker encryption/)).toBeTruthy();
   });
 
-  it("does not show PII warning for random identifier", () => {
+  it("always shows PII warning regardless of identifier", () => {
     render(InviteUser, { opened: true, ondismiss: vi.fn() });
-    expect(screen.queryByText(/stored with weaker encryption/)).toBeNull();
+    expect(screen.getByText(/stored with weaker encryption/)).toBeTruthy();
   });
 
   it("shows org key warning when org key not loaded", () => {

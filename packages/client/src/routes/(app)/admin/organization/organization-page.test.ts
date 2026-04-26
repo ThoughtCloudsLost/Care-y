@@ -39,6 +39,7 @@ vi.mock("$lib/paraglide/messages.js", () => ({
   admin_tab_keys: () => "Keys",
   admin_tab_retention: () => "Retention",
   admin_tab_reports: () => "Reports",
+  admin_tab_note_types: () => "Follow-Ups",
   admin_org_title: () => "Organization",
   admin_org_no_access: () => "No access",
 }));
@@ -78,6 +79,12 @@ vi.mock("$lib/components/admin/RetentionSection.svelte", async () => ({
 }));
 
 vi.mock("$lib/components/admin/ReportsSection.svelte", async () => ({
+  default: (
+    await import("$lib/components/tickets/test-helpers/PassthroughShell.svelte")
+  ).default,
+}));
+
+vi.mock("$lib/components/admin/NoteTypesSection.svelte", async () => ({
   default: (
     await import("$lib/components/tickets/test-helpers/PassthroughShell.svelte")
   ).default,
@@ -153,7 +160,7 @@ describe("Organization page", () => {
       expect(container.querySelector("#section-branding")).toBeTruthy();
       expect(container.querySelector("#section-keys")).toBeTruthy();
       expect(container.querySelector("#section-retention")).toBeTruthy();
-      expect(container.querySelector("#section-reports")).toBeTruthy();
+      expect(container.querySelector("#section-note-types")).toBeTruthy();
     });
 
     it("only renders sections the user has permission for", () => {
@@ -163,7 +170,7 @@ describe("Organization page", () => {
       expect(container.querySelector("#section-keys")).toBeTruthy();
       expect(container.querySelector("#section-branding")).toBeNull();
       expect(container.querySelector("#section-retention")).toBeNull();
-      expect(container.querySelector("#section-reports")).toBeNull();
+      expect(container.querySelector("#section-note-types")).toBeNull();
     });
 
     it("branding and retention both appear with MANAGE_ORG_CONFIG", () => {
@@ -172,8 +179,8 @@ describe("Organization page", () => {
 
       expect(container.querySelector("#section-branding")).toBeTruthy();
       expect(container.querySelector("#section-retention")).toBeTruthy();
+      expect(container.querySelector("#section-note-types")).toBeTruthy();
       expect(container.querySelector("#section-keys")).toBeNull();
-      expect(container.querySelector("#section-reports")).toBeNull();
     });
   });
 
@@ -202,7 +209,7 @@ describe("Organization page", () => {
       expect(divs[0]?.id).toBe("section-branding");
       expect(divs[1]?.id).toBe("section-keys");
       expect(divs[2]?.id).toBe("section-retention");
-      expect(divs[3]?.id).toBe("section-reports");
+      expect(divs[3]?.id).toBe("section-note-types");
     });
   });
 });

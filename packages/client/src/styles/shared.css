@@ -487,8 +487,14 @@ html.glass-dark.light
 /* Konsta's iOS Glass applies a touch-tracking radial gradient highlight
    (useIosHighlight) that follows the pointer. On scroll, pointerleave
    never fires, so the highlight spans accumulate and never get removed.
-   Disable the highlight inside Popovers to prevent the buildup. */
+   Disable inside scrollable glass containers. Popovers always scroll;
+   messagebar only scrolls when textarea hits max height (overflow-y: auto). */
 .k-popover
+  [style*="pointer-events: none"][style*="overflow: hidden"][style*="position: absolute"] {
+  display: none !important;
+}
+
+.k-messagebar:has([style*="overflow-y: auto"])
   [style*="pointer-events: none"][style*="overflow: hidden"][style*="position: absolute"] {
   display: none !important;
 }

@@ -46,6 +46,13 @@ vi.mock("$app/paths", () => ({
 
 vi.mock("$lib/crypto/context.js", () => ({
   getCurrentPermissions: () => () => mockPermissions,
+  getOrgDecryptCache: () => ({
+    decrypt: vi.fn().mockReturnValue(null),
+    get: vi.fn().mockReturnValue(undefined),
+    has: vi.fn().mockReturnValue(false),
+  }),
+  getCurrentUserId: () => () => "user-001",
+  getCurrentUserRoleId: () => () => "admin-role-id",
 }));
 
 const mockNavbarCtx = { current: undefined as unknown };
@@ -59,6 +66,33 @@ vi.mock("$lib/shell/context.js", () => ({
 
 vi.mock("$lib/shell/use-scroll-direction.svelte.js", () => ({
   useScrollDirection: () => ({ hidden: false }),
+}));
+
+vi.mock("$lib/trpc/index.js", () => ({
+  trpc: {
+    tickets: {
+      listQueues: { query: vi.fn().mockResolvedValue([]) },
+      getUserQueues: { query: vi.fn().mockResolvedValue([]) },
+    },
+  },
+}));
+
+vi.mock("$lib/errors.js", () => ({
+  RouterNotAvailableError: class extends Error {},
+}));
+
+vi.mock("@tanstack/svelte-query", () => ({
+  createQuery: () => ({
+    isLoading: false,
+    isError: false,
+    error: null,
+    data: [],
+    refetch: vi.fn(),
+  }),
+  useQueryClient: () => ({
+    invalidateQueries: vi.fn(),
+    getQueriesData: vi.fn().mockReturnValue([]),
+  }),
 }));
 
 vi.mock("$lib/stores/user-filters.svelte.js", () => ({

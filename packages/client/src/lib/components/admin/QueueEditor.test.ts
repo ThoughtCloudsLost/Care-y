@@ -22,7 +22,8 @@ vi.mock("$lib/paraglide/messages.js", () => ({
   admin_queue_editor_escalation_hint: () => "0 = no auto-escalation",
   admin_queue_editor_no_org_key: () => "Organization key not loaded.",
   admin_queue_editor_pii_warning: () => "Queue names are encrypted.",
-  admin_queue_editor_save: () => "Save",
+  admin_queue_editor_save_create: () => "Save queue",
+  admin_queue_editor_save_edit: () => "Save changes",
   admin_queue_editor_delete: () => "Delete Queue",
   admin_queue_created: () => "Queue created",
   admin_queue_updated: () => "Queue updated",
@@ -39,6 +40,8 @@ vi.mock("$lib/crypto/context.js", () => ({
   }),
   getOrgDecryptCache: () => ({
     decrypt: () => "Decrypted Name",
+    get: vi.fn().mockReturnValue(undefined),
+    has: vi.fn().mockReturnValue(false),
     delete: mockOrgCacheDelete,
   }),
 }));
@@ -70,7 +73,10 @@ vi.mock("@tanstack/svelte-query", () => ({
       },
     };
   },
-  useQueryClient: () => ({ invalidateQueries: vi.fn() }),
+  useQueryClient: () => ({
+    invalidateQueries: vi.fn(),
+    getQueriesData: vi.fn().mockReturnValue([]),
+  }),
 }));
 
 vi.mock("$lib/stores/toast.svelte.js", () => ({
@@ -166,7 +172,7 @@ describe("QueueEditor", () => {
     const nameInput = inputs[0]!;
     await fireEvent.input(nameInput, { target: { value: "Intake" } });
 
-    await fireEvent.click(screen.getByText("Save"));
+    await fireEvent.click(screen.getByText("Save queue"));
 
     expect(mockCreateQueue).toHaveBeenCalledWith({
       encryptedName: "AQID",
@@ -181,7 +187,13 @@ describe("QueueEditor", () => {
       queueEscalateDays: 5,
     });
 
-    await fireEvent.click(screen.getByText("Save"));
+    const inputs = document.querySelectorAll<HTMLInputElement>(
+      ".k-list-input input",
+    );
+    const nameInput = inputs[0]!;
+    await fireEvent.input(nameInput, { target: { value: "Updated Queue" } });
+
+    await fireEvent.click(screen.getByText("Save changes"));
 
     expect(mockUpdateQueue).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -197,7 +209,13 @@ describe("QueueEditor", () => {
       queueEncryptedName: new Uint8Array([1, 2]),
     });
 
-    await fireEvent.click(screen.getByText("Save"));
+    const inputs = document.querySelectorAll<HTMLInputElement>(
+      ".k-list-input input",
+    );
+    const nameInput = inputs[0]!;
+    await fireEvent.input(nameInput, { target: { value: "Renamed Queue" } });
+
+    await fireEvent.click(screen.getByText("Save changes"));
 
     expect(mockOrgCacheDelete).toHaveBeenCalledWith("queue:q-1");
   });
@@ -211,7 +229,7 @@ describe("QueueEditor", () => {
     const nameInput = inputs[0]!;
     await fireEvent.input(nameInput, { target: { value: "New" } });
 
-    await fireEvent.click(screen.getByText("Save"));
+    await fireEvent.click(screen.getByText("Save queue"));
 
     expect(mockOrgCacheDelete).not.toHaveBeenCalled();
   });

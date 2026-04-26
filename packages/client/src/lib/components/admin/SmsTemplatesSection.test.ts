@@ -66,6 +66,8 @@ vi.mock("$lib/paraglide/messages.js", () => ({
     "Sent automatically to every incoming text message. Lets the sender know their message was received and a volunteer will follow up.",
   admin_templates_type_error_help: () =>
     "Sent when the system cannot process an incoming message.",
+  admin_templates_save_create: () => "Save template",
+  admin_templates_save_edit: () => "Save changes",
   common_loading: () => "Loading",
   common_cancel: () => "Cancel",
   error_generic: () => "Something went wrong",
@@ -222,7 +224,7 @@ describe("SmsTemplatesSection", () => {
       target: { value: "Welcome to our service." },
     });
 
-    await fireEvent.click(screen.getByText("Save"));
+    await fireEvent.click(screen.getByText("Save template"));
     expect(mockCreateSmsResponse).toHaveBeenCalled();
   });
 
@@ -250,7 +252,7 @@ describe("SmsTemplatesSection", () => {
       target: { value: "Updated welcome text." },
     });
 
-    await fireEvent.click(screen.getByText("Save"));
+    await fireEvent.click(screen.getByText("Save changes"));
     expect(mockUpdateSmsResponse).toHaveBeenCalled();
   });
 
@@ -338,7 +340,7 @@ describe("SmsTemplatesSection", () => {
     await fireEvent.input(textInput, {
       target: { value: "Thanks for contacting us." },
     });
-    await fireEvent.click(screen.getByText("Save"));
+    await fireEvent.click(screen.getByText("Save template"));
 
     await vi.waitFor(() => {
       expect(mockToastShow).toHaveBeenCalledWith("Template created.");

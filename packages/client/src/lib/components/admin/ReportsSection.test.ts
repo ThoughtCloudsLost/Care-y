@@ -110,12 +110,17 @@ vi.mock("@tanstack/svelte-query", () => ({
     if (key === "queueStats") return queueStatsState;
     return loadedState(null);
   },
-  useQueryClient: () => ({ invalidateQueries: vi.fn() }),
+  useQueryClient: () => ({
+    invalidateQueries: vi.fn(),
+    getQueriesData: vi.fn().mockReturnValue([]),
+  }),
 }));
 
 vi.mock("$lib/crypto/context.js", () => ({
   getOrgDecryptCache: () => ({
     decrypt: (_id: string, _data: unknown) => "General Intake",
+    get: vi.fn().mockReturnValue(undefined),
+    has: vi.fn().mockReturnValue(false),
   }),
 }));
 

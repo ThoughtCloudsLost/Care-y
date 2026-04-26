@@ -20,6 +20,9 @@
 
 {#if opened}
   <div data-testid="stub-dialog" data-title={title}>
+    {#if title}
+      <h3>{title}</h3>
+    {/if}
     {#if contentSnippet}
       {@render contentSnippet()}
     {/if}

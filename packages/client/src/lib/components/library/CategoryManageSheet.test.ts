@@ -53,6 +53,8 @@ vi.mock("$lib/crypto/context.js", () => ({
   }),
   getOrgDecryptCache: () => ({
     decrypt: vi.fn(),
+    get: vi.fn().mockReturnValue(undefined),
+    has: vi.fn().mockReturnValue(false),
     delete: mockOrgCacheDelete,
   }),
 }));
@@ -66,6 +68,7 @@ vi.mock("$lib/utils/buffer-encoding.js", () => ({
 vi.mock("@tanstack/svelte-query", () => ({
   useQueryClient: () => ({
     invalidateQueries: mockInvalidateQueries,
+    getQueriesData: vi.fn().mockReturnValue([]),
   }),
 }));
 
@@ -170,7 +173,7 @@ describe("CategoryManageSheet", () => {
     await fireEvent.click(editButtons[0]!);
 
     // Now the delete button should be visible
-    const deleteBtn = screen.getByText("Delete Category");
+    const deleteBtn = screen.getByLabelText("Delete Category");
     await fireEvent.click(deleteBtn);
 
     expect(mockToastShow).toHaveBeenCalledWith(
@@ -222,7 +225,7 @@ describe("CategoryManageSheet", () => {
     await fireEvent.click(editButtons[2]!);
 
     // Click Delete Category
-    const deleteBtn = screen.getByText("Delete Category");
+    const deleteBtn = screen.getByLabelText("Delete Category");
     await fireEvent.click(deleteBtn);
 
     expect(mockDeleteCategory).toHaveBeenCalledWith({ categoryId: "cat-3" });
@@ -311,7 +314,7 @@ describe("CategoryManageSheet", () => {
     await fireEvent.click(editButtons[2]!);
 
     // Click Delete
-    await fireEvent.click(screen.getByText("Delete Category"));
+    await fireEvent.click(screen.getByLabelText("Delete Category"));
 
     // Wait for the async rejection to resolve
     await vi.waitFor(() => {
@@ -351,7 +354,7 @@ describe("CategoryManageSheet", () => {
 
     const editButtons = screen.getAllByLabelText("Edit");
     await fireEvent.click(editButtons[2]!);
-    await fireEvent.click(screen.getByText("Delete Category"));
+    await fireEvent.click(screen.getByLabelText("Delete Category"));
 
     await vi.waitFor(() => {
       expect(mockOrgCacheDelete).toHaveBeenCalledWith("kb-cat:cat-3");

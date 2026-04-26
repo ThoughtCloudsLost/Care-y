@@ -44,6 +44,7 @@ vi.mock("@tanstack/svelte-query", () => ({
     getQueryData: vi.fn(),
     setQueryData: vi.fn(),
     invalidateQueries: vi.fn(),
+    getQueriesData: vi.fn().mockReturnValue([]),
   }),
   createQuery: (optsFn: () => Record<string, unknown>) => {
     optsFn();
@@ -82,6 +83,8 @@ vi.mock("$lib/paraglide/messages.js", () => ({
   panel_keys: () => "Keys",
   panel_retention: () => "Retention",
   panel_reports: () => "Reports",
+  panel_note_types: () => "Follow-Up Types",
+  hub_note_types_subtitle: () => "Note categories",
   hub_users_subtitle: () => "Manage users, roles, and invitations",
   hub_queues_subtitle: () => "Create and assign ticket queues",
   hub_telephony_subtitle: () => "Phone numbers and call routing",
@@ -109,6 +112,13 @@ vi.mock("$lib/paraglide/messages.js", () => ({
   admin_hub_badge_templates: ({ count }: { count: string }) =>
     `${count} templates`,
   admin_coming_soon: () => "Coming soon",
+  panel_group_analytics: () => "Analytics",
+  panel_analytics_overview: () => "Overview",
+  panel_analytics_operations: () => "Operations",
+  panel_analytics_deep: () => "Deep Analytics",
+  hub_analytics_overview_subtitle: () => "Dashboard overview",
+  hub_analytics_operations_subtitle: () => "Operational metrics",
+  hub_analytics_deep_subtitle: () => "Advanced analytics",
 }));
 
 vi.mock("$lib/components/SectionScrollNav.svelte", async () => ({

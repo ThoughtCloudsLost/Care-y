@@ -63,6 +63,18 @@ vi.mock("$lib/trpc/index.js", () => ({
       listRecordings: { query: vi.fn() },
       listAttachments: { query: vi.fn() },
       listVolunteers: { query: vi.fn() },
+      noteTypes: {
+        listActive: {
+          query: vi
+            .fn()
+            .mockResolvedValue({ types: [], defaultNoteTypeId: null }),
+        },
+        list: {
+          query: vi
+            .fn()
+            .mockResolvedValue({ types: [], defaultNoteTypeId: null }),
+        },
+      },
     },
   },
 }));
@@ -73,9 +85,13 @@ vi.mock("$lib/crypto/context.js", () => ({
   }),
   getFollowUpDecryptCache: () => ({
     decryptContent: vi.fn().mockReturnValue("Decrypted message content"),
+    get: vi.fn().mockReturnValue(undefined),
+    has: vi.fn().mockReturnValue(false),
   }),
   getOrgDecryptCache: () => ({
     decrypt: vi.fn().mockReturnValue(null),
+    get: vi.fn().mockReturnValue(undefined),
+    has: vi.fn().mockReturnValue(false),
   }),
   getOrgKeyManager: () => ({
     isLoaded: false,
@@ -258,7 +274,7 @@ describe("TicketDetail", () => {
       expect(container.textContent).toContain("Something went wrong");
     });
 
-    it("renders empty chat state when no follow-ups exist", () => {
+    it("renders placeholder when no follow-ups exist", () => {
       followUpsQueryState = {
         isLoading: false,
         isError: false,
@@ -267,8 +283,8 @@ describe("TicketDetail", () => {
       };
 
       const { container } = render(TicketDetail, { props: baseProps });
-      const emptyEl = container.querySelector('[role="status"]');
-      expect(emptyEl).not.toBeNull();
+      const logEl = container.querySelector('[role="log"]');
+      expect(logEl).not.toBeNull();
     });
 
     it("shows loading indicator while follow-ups load", () => {
