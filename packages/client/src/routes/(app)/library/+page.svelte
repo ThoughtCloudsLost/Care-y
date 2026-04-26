@@ -8,7 +8,8 @@
   import { goto } from "$app/navigation";
   import { resolve } from "$app/paths";
   import { page } from "$app/state";
-  import { Dialog, DialogButton, Link } from "konsta/svelte";
+  import { DialogButton, Link } from "konsta/svelte";
+  import ShellDialog from "$lib/shell/ShellDialog.svelte";
   import {
     FolderInput,
     FolderPen,
@@ -903,14 +904,16 @@
   }}
 />
 
-<Dialog
+<ShellDialog
   opened={deleteDialogOpen}
-  title={m.library_delete_confirm_title()}
-  onBackdropClick={() => {
+  ondismiss={() => {
     deleteDialogOpen = false;
   }}
+  title={m.library_delete_confirm_title()}
 >
-  {m.library_delete_confirm_body({ count: String(selectedIds.size) })}
+  {#snippet content()}
+    {m.library_delete_confirm_body({ count: String(selectedIds.size) })}
+  {/snippet}
   {#snippet buttons()}
     <DialogButton
       onclick={() => {
@@ -923,7 +926,7 @@
       {m.common_delete()}
     </DialogButton>
   {/snippet}
-</Dialog>
+</ShellDialog>
 
 <style>
   .library-page {

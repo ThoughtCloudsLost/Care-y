@@ -173,7 +173,7 @@ describe("Communications page", () => {
     it("has scroll-anchored divs for all sections", () => {
       const { container } = renderPage();
 
-      const divs = container.querySelectorAll(".comms-section");
+      const divs = container.querySelectorAll(".csp-section");
       expect(divs).toHaveLength(4);
       expect(divs[0]?.id).toBe("section-telephony");
       expect(divs[1]?.id).toBe("section-greetings");

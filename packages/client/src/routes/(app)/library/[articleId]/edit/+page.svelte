@@ -10,7 +10,8 @@
   import { createQuery, useQueryClient } from "@tanstack/svelte-query";
   import { page } from "$app/state";
   import { resolve } from "$app/paths";
-  import { Link, Preloader, Dialog, DialogButton } from "konsta/svelte";
+  import { Link, Preloader, DialogButton } from "konsta/svelte";
+  import ShellDialog from "$lib/shell/ShellDialog.svelte";
   import {
     ChevronLeft,
     Save,
@@ -298,12 +299,14 @@
   </div>
 {/if}
 
-<Dialog
+<ShellDialog
   opened={guard.discardDialogOpen}
+  ondismiss={() => guard.dismiss()}
   title={m.library_discard_title()}
-  onBackdropClick={() => guard.dismiss()}
 >
-  {m.library_discard_body()}
+  {#snippet content()}
+    {m.library_discard_body()}
+  {/snippet}
   {#snippet buttons()}
     <DialogButton onclick={() => guard.dismiss()}>
       {m.common_cancel()}
@@ -312,7 +315,7 @@
       {m.library_discard_confirm()}
     </DialogButton>
   {/snippet}
-</Dialog>
+</ShellDialog>
 
 <style>
   /* Keyboard-docked toolbar: docked above the software keyboard on iOS
