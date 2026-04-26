@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Search tickets, articles, and more" |
+* | "Search loaded tickets and articles" |
 *
 * @param {Search_HintInputs} inputs
 * @param {{ locale?: "en" | "es" }} options
