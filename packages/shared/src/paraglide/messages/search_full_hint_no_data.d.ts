@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "No data loaded yet. Tap \"Search all\" to search across everything you have access to." |
+* | "No data loaded yet. Tap to search everything you have access to." |
 *
 * @param {Search_Full_Hint_No_DataInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

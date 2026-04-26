@@ -6,17 +6,17 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Search_Full_Hint_No_DataInputs */
 
 const en_search_full_hint_no_data = /** @type {(inputs: Search_Full_Hint_No_DataInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`No data loaded yet. Tap "Search all" to search across everything you have access to.`)
+	return /** @type {LocalizedString} */ (`No data loaded yet. Tap to search everything you have access to.`)
 };
 
 const es_search_full_hint_no_data = /** @type {(inputs: Search_Full_Hint_No_DataInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Aún no se han cargado datos. Toca "Buscar todo" para buscar en todo lo que tienes acceso.`)
+	return /** @type {LocalizedString} */ (`Aun no se han cargado datos. Toca para buscar en todo lo que tienes acceso.`)
 };
 
 /**
 * | output |
 * | --- |
-* | "No data loaded yet. Tap \"Search all\" to search across everything you have access to." |
+* | "No data loaded yet. Tap to search everything you have access to." |
 *
 * @param {Search_Full_Hint_No_DataInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

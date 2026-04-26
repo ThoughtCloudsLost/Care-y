@@ -6,17 +6,17 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Search_Full_Hint_DefaultInputs */
 
 const en_search_full_hint_default = /** @type {(inputs: Search_Full_Hint_DefaultInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Only showing results from loaded data. Tap to search everything you have access to.`)
+	return /** @type {LocalizedString} */ (`Showing results from loaded data. Tap to search everything you have access to.`)
 };
 
 const es_search_full_hint_default = /** @type {(inputs: Search_Full_Hint_DefaultInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Solo se muestran resultados de datos cargados. Toca para buscar en todo lo que tienes acceso.`)
+	return /** @type {LocalizedString} */ (`Mostrando resultados de datos cargados. Toca para buscar en todo lo que tienes acceso.`)
 };
 
 /**
 * | output |
 * | --- |
-* | "Only showing results from loaded data. Tap to search everything you have access to." |
+* | "Showing results from loaded data. Tap to search everything you have access to." |
 *
 * @param {Search_Full_Hint_DefaultInputs} inputs
 * @param {{ locale?: "en" | "es" }} options
