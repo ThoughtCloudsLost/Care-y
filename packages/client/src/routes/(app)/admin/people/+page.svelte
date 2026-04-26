@@ -18,6 +18,7 @@
     getCurrentPermissions,
     getOrgDecryptCache,
   } from "$lib/crypto/context.js";
+  import { setPromotedOverride } from "$lib/search/registry.svelte.js";
   import { trpc } from "$lib/trpc/index.js";
   import { RouterNotAvailableError } from "$lib/errors.js";
   import SubNavbarFilterLayout from "$lib/shell/SubNavbarFilterLayout.svelte";
@@ -54,6 +55,12 @@
     if (!hasAccess) void goto(resolve("/"));
   });
 
+  // Promote volunteer search section to the top while on this page.
+  $effect(() => {
+    const clear = setPromotedOverride("volunteers");
+    return clear;
+  });
+
   // ── Queries for queue filter pill ──
 
   if (!trpc.tickets) throw new RouterNotAvailableError("tickets");
@@ -88,6 +95,20 @@
   });
 
   const urlAction = $derived(page.url.searchParams.get("action"));
+  const urlUser = $derived(page.url.searchParams.get("user"));
+  const urlSearch = $derived(page.url.searchParams.get("q") ?? "");
+
+  // Strip `user` param after first render so the highlight is one-shot.
+  let highlightUserId = $state<string | null>(null);
+  $effect(() => {
+    if (urlUser === null) return;
+    highlightUserId = urlUser;
+    // Strip the param to prevent re-highlight on navigation.
+    const next = new URL(page.url);
+    next.searchParams.delete("user");
+    // eslint-disable-next-line svelte/no-navigation-without-resolve -- shallow routing, same page
+    replaceState(next.pathname + next.search, {});
+  });
 
   function defaultTab(): PeopleTab {
     if (permissions.has(Permission.MANAGE_USERS)) return "users";
@@ -97,7 +118,8 @@
   let activeTab = $state<PeopleTab>(defaultTab());
 
   $effect(() => {
-    if (urlTab !== null) activeTab = urlTab;
+    if (urlUser !== null && activeTab !== "users") activeTab = "users";
+    else if (urlTab !== null) activeTab = urlTab;
   });
 
   function switchTab(tab: PeopleTab): void {
@@ -469,6 +491,8 @@
       bind:this={usersSectionRef}
       autoAction={urlAction}
       queueAssignments={queueAssignmentsQuery.data ?? []}
+      searchQuery={urlSearch}
+      {highlightUserId}
     />
   </div>
 {:else if activeTab === "queues" && canManageQueues}
