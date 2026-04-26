@@ -78,12 +78,6 @@ vi.mock("$lib/components/admin/RetentionSection.svelte", async () => ({
   ).default,
 }));
 
-vi.mock("$lib/components/admin/ReportsSection.svelte", async () => ({
-  default: (
-    await import("$lib/components/tickets/test-helpers/PassthroughShell.svelte")
-  ).default,
-}));
-
 vi.mock("$lib/components/admin/NoteTypesSection.svelte", async () => ({
   default: (
     await import("$lib/components/tickets/test-helpers/PassthroughShell.svelte")
@@ -204,7 +198,7 @@ describe("Organization page", () => {
     it("has scroll-anchored divs for visible sections", () => {
       const { container } = renderPage();
 
-      const divs = container.querySelectorAll(".org-section");
+      const divs = container.querySelectorAll(".csp-section");
       expect(divs).toHaveLength(4);
       expect(divs[0]?.id).toBe("section-branding");
       expect(divs[1]?.id).toBe("section-keys");
