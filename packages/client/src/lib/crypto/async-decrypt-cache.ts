@@ -30,6 +30,7 @@ export function isDecryptError(value: string | null | undefined): boolean {
 export class AsyncDecryptCache {
   private readonly cache: SvelteMap<string, string>;
   private readonly pending = new Set<string>();
+  private settlers: (() => void)[] = [];
   protected readonly bridge: CryptoBridge;
   private readonly label: string;
 
@@ -89,6 +90,11 @@ export class AsyncDecryptCache {
       })
       .finally(() => {
         this.pending.delete(cacheKey);
+        if (this.pending.size === 0 && this.settlers.length > 0) {
+          const batch = this.settlers;
+          this.settlers = [];
+          for (const resolve of batch) resolve();
+        }
       });
 
     return undefined;
@@ -103,6 +109,17 @@ export class AsyncDecryptCache {
     this.cache.set(key, DECRYPT_ERROR_SENTINEL);
   }
 
+  /**
+   * Returns a Promise that resolves when all pending decrypts have completed.
+   * Resolves immediately if nothing is pending.
+   */
+  async whenSettled(): Promise<void> {
+    if (this.pending.size === 0) return Promise.resolve();
+    return new Promise<void>((resolve) => {
+      this.settlers.push(resolve);
+    });
+  }
+
   has(key: string): boolean {
     return this.cache.has(key);
   }
@@ -114,6 +131,17 @@ export class AsyncDecryptCache {
   clear(): void {
     this.cache.clear();
     this.pending.clear();
+    const batch = this.settlers;
+    this.settlers = [];
+    for (const resolve of batch) resolve();
+  }
+
+  deleteByPrefix(prefix: string): void {
+    for (const key of [...this.cache.keys()]) {
+      if (key.startsWith(prefix)) {
+        this.cache.delete(key);
+      }
+    }
   }
 
   get size(): number {

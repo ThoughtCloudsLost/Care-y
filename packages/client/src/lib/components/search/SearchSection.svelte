@@ -1,8 +1,11 @@
 <script lang="ts">
   import { goto } from "$app/navigation";
   import { resolve } from "$app/paths";
+  import { Progressbar } from "konsta/svelte";
+  import { Search } from "@lucide/svelte";
   import type { Component, Snippet } from "svelte";
   import * as m from "$lib/paraglide/messages.js";
+  import { getFullSearchStateForProvider } from "$lib/search/registry.svelte.js";
 
   interface SearchSectionProps {
     label: string;
@@ -16,6 +19,9 @@
     ondismiss: () => void;
     onviewall?: (query: string) => void;
     query?: string;
+    hasFullSearch?: boolean;
+    onFullSearch?: () => void;
+    providerId?: string;
     children: Snippet;
   }
 
@@ -31,10 +37,29 @@
     ondismiss,
     onviewall,
     query = "",
+    hasFullSearch = false,
+    onFullSearch,
+    providerId,
     children,
   }: SearchSectionProps = $props();
 
   const displayCount = $derived(totalResults ?? count);
+
+  const fsStatus = $derived(
+    providerId != null && providerId !== ""
+      ? getFullSearchStateForProvider(providerId)?.status
+      : undefined,
+  );
+  const fsSearched = $derived(
+    providerId != null && providerId !== ""
+      ? (getFullSearchStateForProvider(providerId)?.searched ?? 0)
+      : 0,
+  );
+  const fsTotal = $derived(
+    providerId != null && providerId !== ""
+      ? (getFullSearchStateForProvider(providerId)?.total ?? 0)
+      : 0,
+  );
 </script>
 
 <div class="search-section">
@@ -64,19 +89,55 @@
         </button>
       {/if}
     </div>
-    <p class="scope-hint" aria-live="polite">
-      {#if totalItems != null && totalItems > totalCached}
-        {#if loading}
-          {m.search_scope_hint_of({ searched: totalCached, total: totalItems })}
+    <div class="scope-row">
+      <p class="scope-hint" aria-live="polite">
+        {#if totalItems != null && totalItems > totalCached}
+          {#if loading}
+            {m.search_scope_hint_of({
+              searched: totalCached,
+              total: totalItems,
+            })}
+          {:else}
+            {m.search_scope_done_of({
+              searched: totalCached,
+              total: totalItems,
+            })}
+          {/if}
+        {:else if loading}
+          {m.search_scope_hint({ count: totalCached })}
         {:else}
-          {m.search_scope_done_of({ searched: totalCached, total: totalItems })}
+          {m.search_scope_done({ count: totalCached })}
         {/if}
-      {:else if loading}
-        {m.search_scope_hint({ count: totalCached })}
-      {:else}
-        {m.search_scope_done({ count: totalCached })}
+      </p>
+      {#if hasFullSearch && onFullSearch}
+        <span class="section-full-search" aria-live="polite">
+          {#if fsStatus === "searching"}
+            <span class="section-full-progress">
+              <Progressbar progress={fsSearched / Math.max(fsTotal, 1)} />
+              <span class="section-full-count">
+                {m.search_section_full_searching({
+                  searched: fsSearched,
+                  total: fsTotal,
+                })}
+              </span>
+            </span>
+          {:else if fsStatus === "done"}
+            <span class="section-full-done">
+              {m.search_section_full_done({ total: fsTotal })}
+            </span>
+          {:else}
+            <button
+              type="button"
+              class="section-full-trigger"
+              onclick={onFullSearch}
+            >
+              <Search size={12} aria-hidden="true" />
+              {m.search_section_full_trigger({ section: label })}
+            </button>
+          {/if}
+        </span>
       {/if}
-    </p>
+    </div>
   </div>
   {@render children()}
 </div>
@@ -145,9 +206,53 @@
     flex-shrink: 0;
   }
 
+  .scope-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-md, 12px);
+    margin: var(--space-xs, 4px) 0 0;
+  }
+
   .scope-hint {
     font-size: var(--text-xs, 0.75rem);
     color: var(--muted);
-    margin: var(--space-xs, 4px) 0 0;
+    margin: 0;
+  }
+
+  .section-full-search {
+    flex-shrink: 0;
+  }
+
+  .section-full-trigger {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: var(--text-xs, 0.75rem);
+    font-weight: 500;
+    color: var(--brand-primary);
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 0;
+    white-space: nowrap;
+  }
+
+  .section-full-progress {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-xs, 4px);
+    max-width: 140px;
+  }
+
+  .section-full-count {
+    font-size: var(--text-xs, 0.75rem);
+    color: var(--muted);
+    white-space: nowrap;
+  }
+
+  .section-full-done {
+    font-size: var(--text-xs, 0.75rem);
+    color: var(--muted);
   }
 </style>
