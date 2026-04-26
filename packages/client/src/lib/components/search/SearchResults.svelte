@@ -2,14 +2,19 @@
   import { goto } from "$app/navigation";
   import { resolve } from "$app/paths";
   import * as m from "$lib/paraglide/messages.js";
-  import { searchAll, getProvider } from "$lib/search/registry.svelte.js";
+  import {
+    searchAll,
+    getProvider,
+    providerHasFullSearch,
+    runFullSearchForProvider,
+  } from "$lib/search/registry.svelte.js";
+  import type { SearchResultGroup } from "$lib/search/types.js";
   import { searchRecents } from "$lib/search/recents.svelte.js";
   import SearchSection from "./SearchSection.svelte";
   import TicketResultStrip from "./TicketResultStrip.svelte";
   import SearchRecents from "./SearchRecents.svelte";
   import FullSearchPanel from "./FullSearchPanel.svelte";
   import EmptyState from "$lib/components/EmptyState.svelte";
-  import type { SearchResultGroup } from "$lib/search/types.js";
 
   interface SearchResultsProps {
     query: string;
@@ -76,6 +81,10 @@
       {ondismiss}
       onviewall={group.onviewall}
       query={trimmedQuery}
+      hasFullSearch={providerHasFullSearch(group.providerId)}
+      onFullSearch={() =>
+        runFullSearchForProvider(group.providerId, trimmedQuery)}
+      providerId={group.providerId}
     >
       {#if group.renderMode === "card-strip"}
         <TicketResultStrip

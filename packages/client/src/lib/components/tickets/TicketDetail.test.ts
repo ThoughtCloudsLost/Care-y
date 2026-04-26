@@ -101,6 +101,14 @@ vi.mock("$lib/errors.js", () => ({
   RouterNotAvailableError: class extends Error {},
 }));
 
+// --- Mock shell context ---
+vi.mock("$lib/shell/context.js", () => ({
+  getScrollContainer: () => () => undefined,
+  getTabbarOverrideCtx: () => ({ current: undefined }),
+  getTabbarHiddenCtx: () => ({ current: false }),
+  getNavbarOverrideCtx: () => ({ current: undefined }),
+}));
+
 // jsdom lacks Web Animations API (used by Konsta transitions).
 if (typeof Element.prototype.animate !== "function") {
   Element.prototype.animate = vi.fn().mockReturnValue({

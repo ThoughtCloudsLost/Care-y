@@ -150,6 +150,7 @@ const mockNavbarCtx = { current: undefined as unknown };
 vi.mock("$lib/shell/context.js", () => ({
   getTabbarHiddenCtx: () => mockTabbarHidden,
   getNavbarOverrideCtx: () => mockNavbarCtx,
+  getTabbarOverrideCtx: () => ({ current: undefined }),
 }));
 
 vi.mock("$lib/crypto/context.js", () => ({

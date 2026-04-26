@@ -215,6 +215,14 @@ vi.mock("$lib/components/QueryError.svelte", async () => ({
   ).default,
 }));
 
+// --- Mock shell context ---
+vi.mock("$lib/shell/context.js", () => ({
+  getScrollContainer: () => () => undefined,
+  getTabbarOverrideCtx: () => ({ current: undefined }),
+  getTabbarHiddenCtx: () => ({ current: false }),
+  getNavbarOverrideCtx: () => ({ current: undefined }),
+}));
+
 import BrandingSection from "./BrandingSection.svelte";
 import { DEFAULT_PRIMARY, DEFAULT_ACCENT } from "$lib/branding/index.js";
 

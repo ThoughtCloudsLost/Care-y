@@ -184,6 +184,14 @@ vi.mock("$lib/utils/a11y.js", () => ({
   },
 }));
 
+// --- Mock shell context ---
+vi.mock("$lib/shell/context.js", () => ({
+  getScrollContainer: () => () => undefined,
+  getTabbarOverrideCtx: () => ({ current: undefined }),
+  getTabbarHiddenCtx: () => ({ current: false }),
+  getNavbarOverrideCtx: () => ({ current: undefined }),
+}));
+
 import GreetingsSection from "./GreetingsSection.svelte";
 
 const PHONES: Phone[] = [{ number: "+15551234567", sid: "PN-abc123" }];

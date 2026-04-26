@@ -67,4 +67,28 @@ export class TicketDecryptCache extends AsyncDecryptCache {
       ciphertext,
     );
   }
+
+  /**
+   * Request decryption of a follow-up's encrypted content using the
+   * ticket's key wrap. Same trigger-and-cache pattern as decryptTitle.
+   * The Worker reuses the ticket key cached from title decryption.
+   */
+  decryptFollowUp(
+    ticketId: string,
+    followupId: string,
+    keyWrap: TicketKeyWrap,
+    ciphertext: string,
+  ): string | undefined {
+    return this.decrypt(
+      `fu:${ticketId}:${followupId}`,
+      keyWrap.ephemeralPoint,
+      keyWrap.nonce,
+      keyWrap.wrappedKey,
+      ciphertext,
+    );
+  }
+
+  clearFollowUps(): void {
+    this.deleteByPrefix("fu:");
+  }
 }

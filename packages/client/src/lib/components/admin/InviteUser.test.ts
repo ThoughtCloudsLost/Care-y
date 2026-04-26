@@ -111,6 +111,14 @@ vi.mock("$lib/shell/ShellPopup.svelte", async () => ({
     .default,
 }));
 
+// --- Mock shell context ---
+vi.mock("$lib/shell/context.js", () => ({
+  getScrollContainer: () => () => undefined,
+  getTabbarOverrideCtx: () => ({ current: undefined }),
+  getTabbarHiddenCtx: () => ({ current: false }),
+  getNavbarOverrideCtx: () => ({ current: undefined }),
+}));
+
 import { RoleId } from "@care-y/shared";
 import InviteUser from "./InviteUser.svelte";
 

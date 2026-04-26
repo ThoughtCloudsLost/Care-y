@@ -63,7 +63,7 @@
       <div class="done-area">
         <p class="done-text">
           {m.search_full_summary({
-            found: states.reduce((sum, s) => sum + s.results.length, 0),
+            found: states.reduce((sum, s) => sum + s.matchCount, 0),
             total: states.reduce((sum, s) => sum + s.total, 0),
           })}
         </p>
