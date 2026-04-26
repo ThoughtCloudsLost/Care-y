@@ -14,6 +14,7 @@
     ArrowUpDown,
     ArrowUp,
     ArrowDown,
+    Search,
     SquareCheckBig,
   } from "@lucide/svelte";
   import type {
@@ -43,6 +44,9 @@
     manage?: ManageConfig;
     /** Optional row 3: search navigator (rendered below filter pills). */
     searchNavigator?: Snippet;
+    /** When provided, shows a search button in the filter pill row. */
+    onsearch?: () => void;
+    searchLabel?: string;
   }
 
   let {
@@ -58,6 +62,8 @@
     filterPills,
     manage,
     searchNavigator,
+    onsearch,
+    searchLabel,
   }: Props = $props();
 
   // Sort popover state (internal to this component).
@@ -187,20 +193,35 @@
       ontoggleshare={savedFilters.ontoggleshare}
     />
   {/if}
-  <FilterPillBar
-    pills={filterPills.pills}
-    activeCount={filterPills.activeCount}
-    filterLabel={filterPills.filterLabel}
-    dateFrom={filterPills.dateFrom}
-    dateTo={filterPills.dateTo}
-    dateActive={filterPills.dateActive}
-    dateLabel={filterPills.dateLabel}
-    ontoggle={filterPills.ontoggle}
-    onselect={filterPills.onselect}
-    ondatechange={filterPills.ondatechange}
-    onclearall={filterPills.onclearall}
-    oncreateshortcut={filterPills.oncreateshortcut}
-  />
+  <div class="filter-row">
+    {#if onsearch}
+      <Button
+        tonal
+        rounded
+        small
+        inline
+        class="filter-search-btn"
+        aria-label={searchLabel ?? "Search"}
+        onclick={onsearch}
+      >
+        <Search size={16} aria-hidden="true" />
+      </Button>
+    {/if}
+    <FilterPillBar
+      pills={filterPills.pills}
+      activeCount={filterPills.activeCount}
+      filterLabel={filterPills.filterLabel}
+      dateFrom={filterPills.dateFrom}
+      dateTo={filterPills.dateTo}
+      dateActive={filterPills.dateActive}
+      dateLabel={filterPills.dateLabel}
+      ontoggle={filterPills.ontoggle}
+      onselect={filterPills.onselect}
+      ondatechange={filterPills.ondatechange}
+      onclearall={filterPills.onclearall}
+      oncreateshortcut={filterPills.oncreateshortcut}
+    />
+  </div>
   {#if searchNavigator}
     {@render searchNavigator()}
   {/if}
@@ -303,9 +324,16 @@
     flex-shrink: 0;
   }
 
+  .filter-row {
+    display: flex;
+    align-items: center;
+    gap: var(--space-xs, 4px);
+  }
+
   :global(.sort-btn),
   :global(.select-btn),
-  :global(.manage-btn) {
+  :global(.manage-btn),
+  :global(.filter-search-btn) {
     width: 1.75rem !important;
     padding-left: 0 !important;
     padding-right: 0 !important;
@@ -317,10 +345,24 @@
     color: var(--ink) !important;
   }
 
+  :global(.filter-search-btn) {
+    flex-shrink: 0;
+    background: color-mix(
+      in srgb,
+      var(--brand-accent) 15%,
+      transparent
+    ) !important;
+  }
+
+  :global(.filter-search-btn svg) {
+    color: var(--brand-accent) !important;
+  }
+
   /* Material: standard icon button sizing (36dp) */
   :global(.k-material .sort-btn),
   :global(.k-material .select-btn),
-  :global(.k-material .manage-btn) {
+  :global(.k-material .manage-btn),
+  :global(.k-material .filter-search-btn) {
     width: 2.25rem !important;
     height: 2.25rem !important;
   }

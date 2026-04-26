@@ -1,6 +1,6 @@
 <script lang="ts">
-  import { Button } from "konsta/svelte";
-  import { ArrowDown, ArrowUp, X } from "@lucide/svelte";
+  import { Button, Progressbar } from "konsta/svelte";
+  import { ArrowDown, ArrowUp, ScanSearch, X } from "@lucide/svelte";
   import * as m from "$lib/paraglide/messages.js";
 
   interface Props {
@@ -14,6 +14,11 @@
     /** Called when the user edits the search term inline. */
     ontermchange?: (term: string) => void;
     navLabel?: string;
+    /** When present, shows a deep search button. */
+    ondeepsearch?: () => void;
+    deepSearchStatus?: "idle" | "searching" | "done";
+    deepSearchSearched?: number;
+    deepSearchTotal?: number;
   }
 
   const {
@@ -25,6 +30,10 @@
     onexit,
     ontermchange,
     navLabel,
+    ondeepsearch,
+    deepSearchStatus,
+    deepSearchSearched = 0,
+    deepSearchTotal = 0,
   }: Props = $props();
 
   let debounceTimer: ReturnType<typeof setTimeout> | undefined;
@@ -92,6 +101,40 @@
   <span class="sr-only" id="search-nav-hints">
     {m.search_nav_shortcuts()}
   </span>
+  {#if ondeepsearch != null || deepSearchStatus === "searching" || deepSearchStatus === "done"}
+    <span class="deep-search-area" aria-live="polite">
+      {#if deepSearchStatus === "searching"}
+        <span class="deep-search-inline-progress">
+          <Progressbar
+            progress={deepSearchTotal > deepSearchSearched
+              ? deepSearchSearched / Math.max(deepSearchTotal, 1)
+              : 0}
+          />
+          <span class="deep-search-fraction">
+            {#if deepSearchTotal > deepSearchSearched}
+              {m.search_deep_nav_searching({
+                searched: deepSearchSearched,
+                total: deepSearchTotal,
+              })}
+            {:else}
+              {m.search_deep_nav_loading({ count: deepSearchSearched })}
+            {/if}
+          </span>
+        </span>
+      {:else if deepSearchStatus === "done"}
+        <ScanSearch size={12} aria-hidden="true" class="deep-done-icon" />
+      {:else}
+        <button
+          type="button"
+          class="deep-search-trigger"
+          aria-label={m.search_deep_nav_trigger()}
+          onclick={ondeepsearch}
+        >
+          <ScanSearch size={16} aria-hidden="true" />
+        </button>
+      {/if}
+    </span>
+  {/if}
   <span class="search-position" aria-live="polite" aria-atomic="true">
     {m.search_conversation_position({
       current: String(position >= 0 ? position + 1 : 0),
@@ -178,6 +221,50 @@
     display: flex;
     align-items: center;
     gap: 0.375rem;
+    flex-shrink: 0;
+  }
+
+  .deep-search-area {
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+  }
+
+  .deep-search-inline-progress {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-xs, 4px);
+    max-width: 100px;
+  }
+
+  .deep-search-fraction {
+    font-size: var(--text-xs, 0.75rem);
+    color: var(--muted);
+    white-space: nowrap;
+  }
+
+  .deep-search-trigger {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.75rem;
+    height: 1.75rem;
+    color: var(--brand-primary);
+    background: color-mix(in srgb, var(--brand-primary) 15%, transparent);
+    border: none;
+    cursor: pointer;
+    padding: 0;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+
+  .deep-search-trigger:active {
+    background: color-mix(in srgb, var(--brand-primary) 25%, transparent);
+  }
+
+  :global(.deep-done-icon) {
+    color: var(--brand-primary);
+    opacity: 0.5;
     flex-shrink: 0;
   }
 

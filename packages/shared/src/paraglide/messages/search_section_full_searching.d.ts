@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Searching {searched} of {total}..." |
+* | "Decrypting {searched}/{total}..." |
 *
 * @param {Search_Section_Full_SearchingInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

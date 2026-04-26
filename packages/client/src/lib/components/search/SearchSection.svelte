@@ -2,7 +2,7 @@
   import { goto } from "$app/navigation";
   import { resolve } from "$app/paths";
   import { Progressbar } from "konsta/svelte";
-  import { Search } from "@lucide/svelte";
+  import { ScanSearch } from "@lucide/svelte";
   import type { Component, Snippet } from "svelte";
   import * as m from "$lib/paraglide/messages.js";
   import { getFullSearchStateForProvider } from "$lib/search/registry.svelte.js";
@@ -90,6 +90,32 @@
       {/if}
     </div>
     <div class="scope-row">
+      {#if hasFullSearch && onFullSearch}
+        <span class="section-deep-search" aria-live="polite">
+          {#if fsStatus === "searching"}
+            <span class="section-deep-progress">
+              <Progressbar progress={fsSearched / Math.max(fsTotal, 1)} />
+              <span class="section-deep-count">
+                {m.search_section_full_searching({
+                  searched: fsSearched,
+                  total: fsTotal,
+                })}
+              </span>
+            </span>
+          {:else if fsStatus === "done"}
+            <ScanSearch size={12} aria-hidden="true" class="deep-done-icon" />
+          {:else}
+            <button
+              type="button"
+              class="section-deep-trigger"
+              onclick={onFullSearch}
+            >
+              <ScanSearch size={12} aria-hidden="true" />
+              {m.search_section_full_trigger({ section: label })}
+            </button>
+          {/if}
+        </span>
+      {/if}
       <p class="scope-hint" aria-live="polite">
         {#if totalItems != null && totalItems > totalCached}
           {#if loading}
@@ -109,34 +135,6 @@
           {m.search_scope_done({ count: totalCached })}
         {/if}
       </p>
-      {#if hasFullSearch && onFullSearch}
-        <span class="section-full-search" aria-live="polite">
-          {#if fsStatus === "searching"}
-            <span class="section-full-progress">
-              <Progressbar progress={fsSearched / Math.max(fsTotal, 1)} />
-              <span class="section-full-count">
-                {m.search_section_full_searching({
-                  searched: fsSearched,
-                  total: fsTotal,
-                })}
-              </span>
-            </span>
-          {:else if fsStatus === "done"}
-            <span class="section-full-done">
-              {m.search_section_full_done({ total: fsTotal })}
-            </span>
-          {:else}
-            <button
-              type="button"
-              class="section-full-trigger"
-              onclick={onFullSearch}
-            >
-              <Search size={12} aria-hidden="true" />
-              {m.search_section_full_trigger({ section: label })}
-            </button>
-          {/if}
-        </span>
-      {/if}
     </div>
   </div>
   {@render children()}
@@ -209,8 +207,7 @@
   .scope-row {
     display: flex;
     align-items: center;
-    justify-content: space-between;
-    gap: var(--space-md, 12px);
+    gap: var(--space-sm, 8px);
     margin: var(--space-xs, 4px) 0 0;
   }
 
@@ -220,11 +217,11 @@
     margin: 0;
   }
 
-  .section-full-search {
+  .section-deep-search {
     flex-shrink: 0;
   }
 
-  .section-full-trigger {
+  .section-deep-trigger {
     display: inline-flex;
     align-items: center;
     gap: 4px;
@@ -238,21 +235,21 @@
     white-space: nowrap;
   }
 
-  .section-full-progress {
+  .section-deep-progress {
     display: inline-flex;
     align-items: center;
     gap: var(--space-xs, 4px);
     max-width: 140px;
   }
 
-  .section-full-count {
+  .section-deep-count {
     font-size: var(--text-xs, 0.75rem);
     color: var(--muted);
     white-space: nowrap;
   }
 
-  .section-full-done {
-    font-size: var(--text-xs, 0.75rem);
-    color: var(--muted);
+  :global(.deep-done-icon) {
+    color: var(--brand-primary);
+    opacity: 0.6;
   }
 </style>

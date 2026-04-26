@@ -648,6 +648,51 @@
     return ids;
   });
 
+  // -- Deep search: load all conversation pages --
+
+  let hasMoreMessages = $state(false);
+  let loadOlderPage = $state<(() => Promise<void>) | undefined>(undefined);
+  let deepPhase = $state<"idle" | "searching" | "done">("idle");
+  let deepSearchTerm = $state<string | null>(null);
+
+  async function triggerConversationDeepSearch(): Promise<void> {
+    if (deepPhase !== "idle" || !loadOlderPage) return;
+    const term = overlay.term ?? "";
+    if (term.length < 2) return;
+
+    deepSearchTerm = term;
+    deepPhase = "searching";
+
+    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition, @typescript-eslint/strict-boolean-expressions -- $state updated reactively by TicketDetail child
+    while (hasMoreMessages && loadOlderPage) {
+      await loadOlderPage();
+      if ((deepPhase as string) !== "searching") return;
+    }
+
+    deepPhase = "done";
+  }
+
+  $effect(() => {
+    if (deepSearchTerm == null) return;
+    if (!overlay.active || overlay.term !== deepSearchTerm) {
+      deepPhase = "idle";
+      deepSearchTerm = null;
+    }
+  });
+
+  $effect(() => {
+    if (
+      overlay.active &&
+      overlay.term != null &&
+      overlay.term.length >= 2 &&
+      searchMatches.length === 0 &&
+      deepPhase === "idle" &&
+      hasMoreMessages // eslint-disable-line @typescript-eslint/no-unnecessary-condition -- $state updated reactively by TicketDetail child
+    ) {
+      void triggerConversationDeepSearch();
+    }
+  });
+
   let prevTimelineActive = $state(false);
   $effect(() => {
     const switched = timelineActive !== prevTimelineActive;
@@ -1103,6 +1148,12 @@
     ondown={overlay.down}
     onexit={overlay.exit}
     ontermchange={overlay.setTerm}
+    ondeepsearch={hasMoreMessages && deepPhase === "idle"
+      ? () => void triggerConversationDeepSearch()
+      : undefined}
+    deepSearchStatus={deepPhase}
+    deepSearchSearched={displayFollowUpsForSearch?.length ?? 0}
+    deepSearchTotal={displayFollowUpsForSearch?.length ?? 0}
   />
 {/snippet}
 
@@ -1116,6 +1167,8 @@
     onselect={selectModeActive ? exitSelectMode : enterSelectMode}
     filterPills={detailFilterPills}
     searchNavigator={overlay.active ? searchNavigatorRow : undefined}
+    onsearch={!overlay.active ? () => overlay.enter("") : undefined}
+    searchLabel={m.search_inline_trigger()}
   />
 {/snippet}
 
@@ -1148,6 +1201,8 @@
     searchActiveMatchId={overlay.activeId}
     searchScrollRequested={overlay.scrollRequested}
     onsearchscrollcomplete={overlay.markScrollComplete}
+    bind:hasMoreMessages
+    bind:loadOlderPage
   />
 </div>
 

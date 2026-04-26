@@ -6,17 +6,17 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{ section: NonNullable<unknown> }} Search_Section_Full_TriggerInputs */
 
 const en_search_section_full_trigger = /** @type {(inputs: Search_Section_Full_TriggerInputs) => LocalizedString} */ (i) => {
-	return /** @type {LocalizedString} */ (`Search all ${i?.section}`)
+	return /** @type {LocalizedString} */ (`Search encrypted ${i?.section}`)
 };
 
 const es_search_section_full_trigger = /** @type {(inputs: Search_Section_Full_TriggerInputs) => LocalizedString} */ (i) => {
-	return /** @type {LocalizedString} */ (`Buscar todos los ${i?.section}`)
+	return /** @type {LocalizedString} */ (`Buscar cifrados ${i?.section}`)
 };
 
 /**
 * | output |
 * | --- |
-* | "Search all {section}" |
+* | "Search encrypted {section}" |
 *
 * @param {Search_Section_Full_TriggerInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

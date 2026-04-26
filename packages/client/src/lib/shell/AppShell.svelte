@@ -284,6 +284,7 @@
   let searchContainerEl: HTMLDivElement | undefined = $state();
 
   async function openSearch(): Promise<void> {
+    resetFullSearch();
     searchOpen = true;
     await tick();
     searchContainerEl
@@ -294,7 +295,6 @@
   function closeSearch(): void {
     searchOpen = false;
     searchQuery = "";
-    resetFullSearch();
   }
 
   // ── Search provider registration ────────────────────────────────────

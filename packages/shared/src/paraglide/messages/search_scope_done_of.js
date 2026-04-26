@@ -6,17 +6,17 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{ searched: NonNullable<unknown>, total: NonNullable<unknown> }} Search_Scope_Done_OfInputs */
 
 const en_search_scope_done_of = /** @type {(inputs: Search_Scope_Done_OfInputs) => LocalizedString} */ (i) => {
-	return /** @type {LocalizedString} */ (`Searched ${i?.searched} of ${i?.total} items`)
+	return /** @type {LocalizedString} */ (`Searched ${i?.searched} of ${i?.total} loaded and decrypted`)
 };
 
 const es_search_scope_done_of = /** @type {(inputs: Search_Scope_Done_OfInputs) => LocalizedString} */ (i) => {
-	return /** @type {LocalizedString} */ (`Se buscaron ${i?.searched} de ${i?.total} elementos`)
+	return /** @type {LocalizedString} */ (`Se buscaron ${i?.searched} de ${i?.total} cargados y descifrados`)
 };
 
 /**
 * | output |
 * | --- |
-* | "Searched {searched} of {total} items" |
+* | "Searched {searched} of {total} loaded and decrypted" |
 *
 * @param {Search_Scope_Done_OfInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

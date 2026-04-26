@@ -481,6 +481,8 @@
     savedFilters={savedFiltersConfig}
     filterPills={filterPillsConfig}
     searchNavigator={overlay.active ? searchNavigatorRow : undefined}
+    onsearch={!overlay.active ? () => overlay.enter("") : undefined}
+    searchLabel={m.search_inline_trigger()}
   />
 {/snippet}
 

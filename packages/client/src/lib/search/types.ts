@@ -91,6 +91,12 @@ export interface SearchProvider<T = unknown> {
    */
   onresulttap?(id: string, query: string): void;
   /**
+   * Returns IDs matched by content search during fullSearch().
+   * Pages use this to merge content matches into in-page search overlays.
+   * Reactive (backed by SvelteSet), so $derived contexts track additions.
+   */
+  getContentMatchIds?(): ReadonlySet<string>;
+  /**
    * Called when the search sheet closes or the query changes.
    * Providers should clear full-search state (content match sets,
    * cached decrypted follow-up content) to free memory.

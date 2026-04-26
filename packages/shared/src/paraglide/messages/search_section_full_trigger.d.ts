@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Search all {section}" |
+* | "Search encrypted {section}" |
 *
 * @param {Search_Section_Full_TriggerInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

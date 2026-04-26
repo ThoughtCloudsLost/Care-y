@@ -195,6 +195,13 @@ export function getFullSearchStateForProvider(
   return fullSearchStates.find((s) => s.providerId === providerId);
 }
 
+/** Content match IDs from a provider's fullSearch (reactive SvelteSet). */
+export function getContentMatchIds(
+  providerId: string,
+): ReadonlySet<string> | undefined {
+  return providers.get(providerId)?.getContentMatchIds?.();
+}
+
 /** Trigger full search for a single provider. */
 export function runFullSearchForProvider(
   providerId: string,
@@ -244,4 +251,12 @@ export function resetFullSearch(): void {
   for (const [, provider] of providers) {
     provider.reset?.();
   }
+}
+
+/** Reset full search state for a single provider. */
+export function resetFullSearchForProvider(providerId: string): void {
+  fullSearchStates = fullSearchStates.filter(
+    (s) => s.providerId !== providerId,
+  );
+  providers.get(providerId)?.reset?.();
 }

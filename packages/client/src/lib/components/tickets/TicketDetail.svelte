@@ -154,6 +154,10 @@
     searchScrollRequested?: boolean;
     /** Called after FollowUpTimeline processes a scroll request. */
     onsearchscrollcomplete?: () => void;
+    /** Two-way bindable: true when the paginator has more older messages to load. */
+    hasMoreMessages?: boolean;
+    /** Two-way bindable: function to load one older page. */
+    loadOlderPage?: () => Promise<void>;
   }
 
   let {
@@ -184,6 +188,8 @@
     searchActiveMatchId = null,
     searchScrollRequested = false,
     onsearchscrollcomplete,
+    hasMoreMessages = $bindable(false),
+    loadOlderPage: loadOlderPageProp = $bindable(undefined),
   }: TicketDetailProps = $props();
 
   const ticketCache = getTicketDecryptCache();
@@ -326,6 +332,12 @@
   const followUps = $derived(paginator.items);
   const hasMoreOlder = $derived(paginator.hasMore);
   const loadingOlder = $derived(paginator.loadingOlder);
+
+  // Expose paginator state for deep search in the route page.
+  $effect(() => {
+    hasMoreMessages = hasMoreOlder;
+    loadOlderPageProp = async () => paginator.loadOlderPage();
+  });
 
   // --- Conversation filter application (server-side) ---
 

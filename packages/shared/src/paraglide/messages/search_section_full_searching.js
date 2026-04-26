@@ -6,17 +6,17 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{ searched: NonNullable<unknown>, total: NonNullable<unknown> }} Search_Section_Full_SearchingInputs */
 
 const en_search_section_full_searching = /** @type {(inputs: Search_Section_Full_SearchingInputs) => LocalizedString} */ (i) => {
-	return /** @type {LocalizedString} */ (`Searching ${i?.searched} of ${i?.total}...`)
+	return /** @type {LocalizedString} */ (`Decrypting ${i?.searched}/${i?.total}...`)
 };
 
 const es_search_section_full_searching = /** @type {(inputs: Search_Section_Full_SearchingInputs) => LocalizedString} */ (i) => {
-	return /** @type {LocalizedString} */ (`Buscando ${i?.searched} de ${i?.total}...`)
+	return /** @type {LocalizedString} */ (`Descifrando ${i?.searched}/${i?.total}...`)
 };
 
 /**
 * | output |
 * | --- |
-* | "Searching {searched} of {total}..." |
+* | "Decrypting {searched}/{total}..." |
 *
 * @param {Search_Section_Full_SearchingInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

@@ -192,6 +192,10 @@ export function createKbSearchProvider(
       ontap: (id: string) => void;
     }>,
 
+    getContentMatchIds(): ReadonlySet<string> {
+      return contentMatchIds;
+    },
+
     reset() {
       contentMatchIds.clear();
       lastFullSearchQuery = "";
