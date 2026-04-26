@@ -59,14 +59,14 @@
     readonly autoAction?: string | null;
     readonly queueAssignments?: readonly QueueAssignment[];
     readonly searchQuery?: string;
-    readonly highlightUserId?: string | null;
+    readonly activeMatchId?: string | null;
   }
 
   let {
     autoAction = null,
     queueAssignments = [],
     searchQuery = "",
-    highlightUserId = null,
+    activeMatchId = null,
   }: UsersSectionProps = $props();
 
   const authRouter = trpc.auth;
@@ -306,16 +306,9 @@
     return userCounts.inactive;
   }
 
-  // ── Scroll to highlighted user (from search result tap) ──
-  $effect(() => {
-    if (highlightUserId === null) return;
-    const el = document.getElementById(`user-${highlightUserId}`);
-    if (!el) return;
-    el.scrollIntoView({ behavior: "smooth", block: "center" });
-    el.classList.add("user-highlight");
-    const timer = setTimeout(() => el.classList.remove("user-highlight"), 1500);
-    return () => clearTimeout(timer);
-  });
+  export function matchedUserIds(): readonly string[] {
+    return filteredUsers.map((u) => u.id);
+  }
 
   // ── Edit user sheet ──
   interface SheetState {
@@ -333,6 +326,10 @@
   let memberQueueIds = new SvelteSet<string>();
   let originalQueueIds = new SvelteSet<string>();
   let queuesLoading = $state(false);
+
+  export function editUser(userId: string): void {
+    handleUserEdit(userId);
+  }
 
   function handleUserEdit(userId: string): void {
     const user = (usersQuery.data ?? []).find((u) => u.id === userId);
@@ -651,7 +648,7 @@
           user.id,
           user.encryptedDisplayName,
         )}
-        <div id="user-{user.id}">
+        <div id="user-{user.id}" class:match-active={activeMatchId === user.id}>
           <UserCard
             viewMode="list"
             userId={user.id}
@@ -928,20 +925,5 @@
     cursor: pointer;
     text-align: center;
     min-height: 44px;
-  }
-
-  @keyframes highlight-pulse {
-    0% {
-      box-shadow: 0 0 0 2px
-        color-mix(in srgb, var(--brand-accent) 60%, transparent);
-    }
-    100% {
-      box-shadow: none;
-    }
-  }
-
-  :global(.user-highlight) {
-    animation: highlight-pulse 1.5s ease-out;
-    border-radius: var(--card-radius);
   }
 </style>
