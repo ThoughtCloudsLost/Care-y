@@ -88,7 +88,8 @@ describe("groupDestinations", () => {
     expect(grouped.has("organization")).toBe(true);
   });
 
-  it("people group contains users and queues", () => {
+  // Render order within groups is user-facing (admin hub lists items top-to-bottom).
+  it("people group contains users and queues in render order", () => {
     const grouped = groupDestinations(ADMIN_DESTINATIONS);
     const people = grouped.get("people") ?? [];
 
@@ -101,6 +102,7 @@ describe("groupDestinations", () => {
     expect(grouped.size).toBe(0);
   });
 
+  // Render order within groups is user-facing (admin hub lists items top-to-bottom).
   it("preserves insertion order within groups", () => {
     const grouped = groupDestinations(ADMIN_DESTINATIONS);
     const org = grouped.get("organization") ?? [];

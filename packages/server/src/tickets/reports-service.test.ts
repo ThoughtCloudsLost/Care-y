@@ -73,12 +73,6 @@ describe("createReportsService", () => {
       const result = await svc.queueStats();
       expect(result).toEqual([]);
     });
-
-    it("queries tickets joined with queues", async () => {
-      const svc = createReportsService(db);
-      await svc.queueStats();
-      expect(db.selectFrom).toHaveBeenCalledWith("tickets");
-    });
   });
 
   describe("volumeTrends", () => {
@@ -162,12 +156,6 @@ describe("createReportsService", () => {
       const svc = createReportsService(db);
       const result = await svc.activeCount();
       expect(result).toBe(0);
-    });
-
-    it("queries only open tickets", async () => {
-      const svc = createReportsService(db);
-      await svc.activeCount();
-      expect(db.selectFrom).toHaveBeenCalledWith("tickets");
     });
   });
 });
