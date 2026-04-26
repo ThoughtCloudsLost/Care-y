@@ -229,6 +229,10 @@ export function createTicketSearchProvider(
 
     ResultItem: TicketSearchResult,
 
+    getContentMatchIds(): ReadonlySet<string> {
+      return contentMatchIds;
+    },
+
     reset() {
       contentMatchIds.clear();
       lastFullSearchQuery = "";

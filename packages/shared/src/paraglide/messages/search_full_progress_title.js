@@ -6,17 +6,17 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Search_Full_Progress_TitleInputs */
 
 const en_search_full_progress_title = /** @type {(inputs: Search_Full_Progress_TitleInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Searching all...`)
+	return /** @type {LocalizedString} */ (`Decrypting and searching...`)
 };
 
 const es_search_full_progress_title = /** @type {(inputs: Search_Full_Progress_TitleInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Buscando en todo...`)
+	return /** @type {LocalizedString} */ (`Descifrando y buscando...`)
 };
 
 /**
 * | output |
 * | --- |
-* | "Searching all..." |
+* | "Decrypting and searching..." |
 *
 * @param {Search_Full_Progress_TitleInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

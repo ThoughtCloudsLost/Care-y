@@ -71,6 +71,7 @@
   import type { RawFollowUpPreview } from "$lib/tickets/preview-loader.svelte.js";
   import { resolveAsyncDecrypt } from "$lib/crypto/decrypt-result.js";
   import { createSearchOverlay } from "$lib/search/search-overlay.svelte.js";
+  import { createDeepSearch } from "$lib/search/deep-search.svelte.js";
   import SearchNavigator from "$lib/components/search/SearchNavigator.svelte";
   import { fuzzySearch } from "$lib/search/fuzzy.js";
 
@@ -347,7 +348,7 @@
     scrollContainer: () => scrollEl,
   });
 
-  const searchMatches = $derived.by((): string[] => {
+  const titleMatchIds = $derived.by((): string[] => {
     if (overlay.term == null) return [];
     const ids: string[] = [];
     const haystack: string[] = [];
@@ -362,6 +363,32 @@
     return matches
       .map((fm) => ids[fm.index])
       .filter((id): id is string => id != null);
+  });
+
+  const deepSearch = createDeepSearch({
+    overlay,
+    providerId: "tickets",
+    hasNextPage: () => ticketsQuery.hasNextPage,
+    isFetchingNextPage: () => ticketsQuery.isFetchingNextPage,
+    fetchNextPage: async () => ticketsQuery.fetchNextPage(),
+    isInitialLoading: () => ticketsQuery.isLoading,
+    loadedCount: () => allTickets.length,
+    matchCount: () => titleMatchIds.length,
+  });
+
+  // Merge title matches + content matches from encrypted search
+  const searchMatches = $derived.by((): string[] => {
+    const cms = deepSearch.contentMatchIds;
+    if (cms == null || cms.size === 0) return titleMatchIds;
+
+    const seen = new Set(titleMatchIds);
+    const merged = [...titleMatchIds];
+    for (const id of cms) {
+      if (!seen.has(id) && cardPropsMap.has(id)) {
+        merged.push(id);
+      }
+    }
+    return merged;
   });
 
   let useMatchOrder = $state(true);
@@ -393,6 +420,7 @@
     const q = page.url.searchParams.get("q");
     if (q != null && q !== "") {
       overlay.enter(q);
+      deepSearch.scheduleFromNavigation();
     }
   });
 
@@ -1075,6 +1103,10 @@
     ondown={overlay.down}
     onexit={overlay.exit}
     ontermchange={overlay.setTerm}
+    ondeepsearch={deepSearch.canTrigger ? deepSearch.trigger : undefined}
+    deepSearchStatus={deepSearch.status}
+    deepSearchSearched={deepSearch.searched}
+    deepSearchTotal={deepSearch.total}
   />
 {/snippet}
 
@@ -1089,6 +1121,8 @@
     savedFilters={savedFiltersConfig}
     filterPills={filterPillsConfig}
     searchNavigator={overlay.active ? searchNavigatorRow : undefined}
+    onsearch={!overlay.active ? () => overlay.enter("") : undefined}
+    searchLabel={m.search_inline_trigger()}
   />
 {/snippet}
 

@@ -6,17 +6,17 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{ count: NonNullable<unknown> }} Search_Scope_DoneInputs */
 
 const en_search_scope_done = /** @type {(inputs: Search_Scope_DoneInputs) => LocalizedString} */ (i) => {
-	return /** @type {LocalizedString} */ (`Searched ${i?.count} items`)
+	return /** @type {LocalizedString} */ (`Searched ${i?.count} loaded and decrypted`)
 };
 
 const es_search_scope_done = /** @type {(inputs: Search_Scope_DoneInputs) => LocalizedString} */ (i) => {
-	return /** @type {LocalizedString} */ (`Se buscaron ${i?.count} elementos`)
+	return /** @type {LocalizedString} */ (`Se buscaron ${i?.count} cargados y descifrados`)
 };
 
 /**
 * | output |
 * | --- |
-* | "Searched {count} items" |
+* | "Searched {count} loaded and decrypted" |
 *
 * @param {Search_Scope_DoneInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

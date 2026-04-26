@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Searched {count} items" |
+* | "Searched {count} loaded and decrypted" |
 *
 * @param {Search_Scope_DoneInputs} inputs
 * @param {{ locale?: "en" | "es" }} options
