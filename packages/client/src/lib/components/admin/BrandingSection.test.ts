@@ -107,7 +107,10 @@ vi.mock("@tanstack/svelte-query", () => ({
       },
     };
   },
-  useQueryClient: () => ({ invalidateQueries: vi.fn() }),
+  useQueryClient: () => ({
+    invalidateQueries: vi.fn(),
+    getQueriesData: vi.fn().mockReturnValue([]),
+  }),
 }));
 
 vi.mock("$lib/utils/haptic.js", () => ({ haptic: mockHaptic }));
@@ -126,6 +129,9 @@ vi.mock("$lib/crypto/context.js", () => ({
       }
       return typeof encrypted === "string" ? encrypted : null;
     },
+    get: vi.fn().mockReturnValue(undefined),
+    has: vi.fn().mockReturnValue(false),
+    delete: vi.fn(),
   }),
   getOrgKeyManager: () => ({
     isLoaded: true,

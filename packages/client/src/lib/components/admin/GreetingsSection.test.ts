@@ -111,6 +111,8 @@ vi.mock("$lib/paraglide/messages.js", () => ({
   ticket_voicemail_pause: () => "Pause",
   ticket_voicemail_group: () => "Audio player",
   ticket_voicemail_progress: () => "Progress",
+  admin_greetings_save_create: () => "Save greeting",
+  admin_greetings_save_edit: () => "Save changes",
   common_loading: () => "Loading",
   common_cancel: () => "Cancel",
   error_generic: () => "Something went wrong",
@@ -311,7 +313,7 @@ describe("GreetingsSection", () => {
       target: { value: "Welcome to our helpline." },
     });
 
-    const saveBtn = screen.getByText("Save");
+    const saveBtn = screen.getByText("Save greeting");
     await fireEvent.click(saveBtn);
 
     expect(mockCreateGreeting).toHaveBeenCalled();
@@ -345,7 +347,7 @@ describe("GreetingsSection", () => {
       target: { value: "Updated greeting text." },
     });
 
-    const saveBtn = screen.getByText("Save");
+    const saveBtn = screen.getByText("Save changes");
     await fireEvent.click(saveBtn);
 
     expect(mockUpdateGreeting).toHaveBeenCalled();
@@ -416,7 +418,7 @@ describe("GreetingsSection", () => {
     await fireEvent.input(textInput, {
       target: { value: "Hello there!" },
     });
-    await fireEvent.click(screen.getByText("Save"));
+    await fireEvent.click(screen.getByText("Save greeting"));
 
     await vi.waitFor(() => {
       expect(mockToastShow).toHaveBeenCalledWith("Greeting created.");

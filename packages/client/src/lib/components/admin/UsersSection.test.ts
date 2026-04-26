@@ -64,6 +64,15 @@ vi.mock("$lib/paraglide/messages.js", () => ({
   admin_invite_credential_hide: () => "Hide",
   admin_invite_credential_done: () => "Done",
   admin_user_edit_actions: () => "Actions",
+  admin_user_save_changes: () => "Save changes",
+  admin_user_queue_assignments: () => "Queue Assignments",
+  admin_display_name_label: () => "Display Name",
+  admin_display_name_updated: () => "Display name updated",
+  admin_username_label: () => "Username",
+  admin_username_updated: () => "Username updated",
+  settings_display_name: () => "Display Name",
+  settings_username: () => "Username",
+  settings_username_taken: () => "Username already taken",
   common_cancel: () => "Cancel",
   common_loading: () => "Loading",
   error_generic: () => "Something went wrong",
@@ -74,9 +83,25 @@ vi.mock("$lib/trpc/index.js", () => ({
   trpc: {
     auth: {
       listUsers: { query: vi.fn() },
+      listAllForAdmin: { query: vi.fn().mockResolvedValue([]) },
       assignRole: { mutate: mockAssignRole },
       setUserActive: { mutate: mockSetUserActive },
       register: { mutate: vi.fn().mockResolvedValue({ user: { id: "u1" } }) },
+    },
+    tickets: {
+      counts: {
+        query: vi.fn().mockResolvedValue({ new: 0, active: 0, onHold: 0 }),
+      },
+      list: { query: vi.fn() },
+      myQueues: { query: vi.fn().mockResolvedValue([]) },
+      listQueues: { query: vi.fn().mockResolvedValue([]) },
+      getUserQueues: { query: vi.fn().mockResolvedValue([]) },
+      addQueueMember: { mutate: vi.fn().mockResolvedValue({}) },
+      removeQueueMember: { mutate: vi.fn().mockResolvedValue({}) },
+    },
+    profile: {
+      adminUpdateDisplayName: { mutate: vi.fn().mockResolvedValue({}) },
+      adminUpdateUsername: { mutate: vi.fn().mockResolvedValue({}) },
     },
   },
 }));
@@ -117,12 +142,17 @@ vi.mock("@tanstack/svelte-query", () => ({
       },
     };
   },
-  useQueryClient: () => ({ invalidateQueries: vi.fn() }),
+  useQueryClient: () => ({
+    invalidateQueries: vi.fn(),
+    getQueriesData: vi.fn().mockReturnValue([]),
+  }),
 }));
 
 vi.mock("$lib/crypto/context.js", () => ({
   getOrgDecryptCache: () => ({
     decrypt: () => "Decrypted Name",
+    get: vi.fn().mockReturnValue(undefined),
+    has: vi.fn().mockReturnValue(false),
   }),
   getCurrentUserId: () => () => "current-user-id",
   getOrgKeyManager: () => ({
@@ -150,18 +180,27 @@ vi.mock("$lib/stores/user-filters.svelte.js", () => ({
     roles: new Set(),
     statuses: new Set(),
     keyStatuses: new Set(),
+    queueIds: new Set(),
     sort: { field: "name", direction: "asc" },
     activeCount: 0,
     setSort: vi.fn(),
     toggleRole: vi.fn(),
     toggleStatus: vi.fn(),
     toggleKeyStatus: vi.fn(),
+    toggleQueue: vi.fn(),
     clearAll: vi.fn(),
   },
 }));
 
 vi.mock("$lib/shell/context.js", () => ({
+  getScrollContainer: () => () => undefined,
   getTabbarOverrideCtx: () => ({ current: undefined }),
+  getTabbarHiddenCtx: () => ({ current: false }),
+  getNavbarOverrideCtx: () => ({ current: undefined }),
+}));
+
+vi.mock("$lib/search/normalize.js", () => ({
+  normalizeForSearch: (s: string) => s.toLowerCase(),
 }));
 
 vi.mock("$lib/components/QueryError.svelte", async () => ({
@@ -193,6 +232,12 @@ vi.mock("$lib/shell/ShellDialog.svelte", async () => ({
 }));
 
 vi.mock("$lib/shell/ShellActionSheet.svelte", async () => ({
+  default: (
+    await import("$lib/components/tickets/test-helpers/PassthroughShell.svelte")
+  ).default,
+}));
+
+vi.mock("$lib/shell/ShellSheet.svelte", async () => ({
   default: (
     await import("$lib/components/tickets/test-helpers/PassthroughShell.svelte")
   ).default,

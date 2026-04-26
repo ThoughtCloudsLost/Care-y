@@ -41,6 +41,15 @@ vi.mock("$lib/paraglide/messages.js", () => ({
   panel_keys: () => "Keys",
   panel_retention: () => "Retention",
   panel_reports: () => "Reports",
+  panel_note_types: () => "Follow-Up Types",
+  hub_note_types_subtitle: () => "Note categories",
+  panel_group_analytics: () => "Analytics",
+  panel_analytics_overview: () => "Overview",
+  panel_analytics_operations: () => "Operations",
+  panel_analytics_deep: () => "Deep Analytics",
+  hub_analytics_overview_subtitle: () => "Dashboard overview",
+  hub_analytics_operations_subtitle: () => "Operational metrics",
+  hub_analytics_deep_subtitle: () => "Advanced analytics",
   panel_settings: () => "Settings",
   panel_logout: () => "Log out",
   admin_coming_soon: () => "Coming soon",
@@ -61,7 +70,11 @@ vi.mock("$lib/paraglide/messages.js", () => ({
 
 // --- Mock crypto context ---
 vi.mock("$lib/crypto/context.js", () => ({
-  getOrgDecryptCache: () => ({ decrypt: mockOrgDecrypt }),
+  getOrgDecryptCache: () => ({
+    decrypt: mockOrgDecrypt,
+    get: vi.fn().mockReturnValue(undefined),
+    has: vi.fn().mockReturnValue(false),
+  }),
   getOrgKeyManager: () => ({ isLoaded: true }),
 }));
 
