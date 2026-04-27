@@ -1,30 +1,73 @@
 <script lang="ts">
-  import Skeleton from "./Skeleton.svelte";
+  import type { Component } from "svelte";
+  import { Button } from "konsta/svelte";
   import * as m from "$lib/paraglide/messages.js";
 
-  let { message }: { message?: string } = $props();
+  let {
+    message,
+    icon,
+    title,
+    subtitle,
+    action,
+  }: {
+    message?: string;
+    icon?: Component;
+    title?: string;
+    subtitle?: string;
+    action?: { label: string; onclick: () => void };
+  } = $props();
 
-  const label = $derived(message ?? m.empty_no_data());
+  const displayTitle = $derived(title ?? message ?? m.empty_no_data());
 </script>
 
-<div class="empty-state" aria-label={label}>
-  <Skeleton lines={4} />
-  <p class="empty-label">{label}</p>
+<div class="empty-state" role="status" aria-label={displayTitle}>
+  {#if icon}
+    {@const Icon = icon}
+    <div class="empty-icon">
+      <Icon size={48} aria-hidden="true" />
+    </div>
+  {/if}
+  <p class="empty-title">{displayTitle}</p>
+  {#if subtitle}
+    <p class="empty-subtitle">{subtitle}</p>
+  {/if}
+  {#if action}
+    <div class="empty-action">
+      <Button outline small onclick={action.onclick}>
+        {action.label}
+      </Button>
+    </div>
+  {/if}
 </div>
 
 <style>
   .empty-state {
     text-align: center;
-    padding: 2rem 1rem;
-    opacity: 0.5;
+    padding: 3rem 1rem;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.5rem;
   }
 
-  .empty-label {
-    margin-top: 1rem;
+  .empty-icon {
     color: var(--muted);
+    opacity: 0.5;
+    margin-bottom: 0.25rem;
   }
 
-  .empty-state :global(.skeleton-bar) {
-    animation: none;
+  .empty-title {
+    color: var(--muted);
+    font-size: var(--text-base);
+  }
+
+  .empty-subtitle {
+    color: var(--muted);
+    font-size: var(--text-sm);
+    opacity: 0.7;
+  }
+
+  .empty-action {
+    margin-top: 0.5rem;
   }
 </style>

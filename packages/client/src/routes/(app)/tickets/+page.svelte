@@ -50,7 +50,6 @@
     savedFilterStateSchema,
     ticketPrioritySchema,
     type ReactionSummary,
-    type SavedFilterRecord,
     type SavedFilterColor,
   } from "@care-y/shared";
   import StatusDot from "$lib/components/StatusDot.svelte";
@@ -67,6 +66,7 @@
     type CallAction,
   } from "$lib/components/tickets/CallOptionsContent.svelte";
   import { haptic } from "$lib/utils/haptic.js";
+  import { createFilterDispatch } from "$lib/composables/create-filter-dispatch.svelte.js";
   import type { SerializedBuffer } from "$lib/utils/buffer-encoding.js";
   import type { RawFollowUpPreview } from "$lib/tickets/preview-loader.svelte.js";
   import { resolveAsyncDecrypt } from "$lib/crypto/decrypt-result.js";
@@ -861,31 +861,57 @@
     return (validStatuses as ReadonlySet<string>).has(v);
   }
 
-  function handlePillToggle(pillId: string, value: string): void {
-    switch (pillId) {
-      case "status":
-        if (isFilterStatus(value)) filterStore.toggleStatus(value);
-        break;
-      case "queue":
-        filterStore.toggleQueue(value);
-        break;
-      case "priority": {
-        const parsed = ticketPrioritySchema.safeParse(value);
-        if (parsed.success) filterStore.togglePriority(parsed.data);
-        break;
-      }
-    }
-  }
-
-  function handlePillSelect(pillId: string, value: string | null): void {
-    if (pillId === "assignee") {
-      filterStore.setAssignee(value === "__unassigned__" ? null : value);
-    }
-  }
-
-  function handlePillDateChange(from: Date | null, to: Date | null): void {
-    filterStore.setDateRange(from, to);
-  }
+  const dispatch = createFilterDispatch({
+    fields: {
+      status: {
+        type: "multi-toggle",
+        toggle: (v: string) => {
+          if (isFilterStatus(v)) filterStore.toggleStatus(v);
+        },
+      },
+      queue: {
+        type: "multi-toggle",
+        toggle: (v: string) => filterStore.toggleQueue(v),
+      },
+      priority: {
+        type: "multi-toggle",
+        toggle: (v: string) => {
+          const parsed = ticketPrioritySchema.safeParse(v);
+          if (parsed.success) filterStore.togglePriority(parsed.data);
+        },
+      },
+      assignee: {
+        type: "single-select",
+        set: (v: string | null) =>
+          filterStore.setAssignee(v === "__unassigned__" ? null : v),
+      },
+      date: {
+        type: "date-range",
+        set: (from: Date | null, to: Date | null) =>
+          filterStore.setDateRange(from, to),
+      },
+    },
+    sort: {
+      validate: isSortField,
+      set: (field: string, dir: "asc" | "desc") => {
+        if (isSortField(field)) filterStore.setSort(field, dir);
+      },
+    },
+    savedFilters: {
+      store: savedFilterStore,
+      captureState: () => filterStore.captureState(),
+      applyState: (state: unknown) => {
+        const result = savedFilterStateSchema.safeParse(state);
+        if (result.success) filterStore.applyState(result.data);
+      },
+      stateSchema: savedFilterStateSchema,
+      getCurrentUserId: () => currentUserId ?? null,
+    },
+    clearAll: () => filterStore.clearAll(),
+    onchange: () => {
+      if (overlay.active) useMatchOrder = false;
+    },
+  });
 
   const dateRangeActive = $derived(
     filterStore.dateFrom !== null || filterStore.dateTo !== null,
@@ -914,24 +940,6 @@
     return m.tickets_filter_date_range();
   });
 
-  // --- Saved filter wiring ---
-
-  function handleSavedFilterApply(record: SavedFilterRecord): void {
-    const parsed: unknown = JSON.parse(record.state);
-    const result = savedFilterStateSchema.safeParse(parsed);
-    if (result.success) {
-      filterStore.applyState(result.data);
-    }
-  }
-
-  function handleSavedFilterDelete(id: string): void {
-    savedFilterStore.remove(id);
-  }
-
-  function handleSavedFilterToggleShare(id: string): void {
-    savedFilterStore.toggleShare(id);
-  }
-
   const filterSummary = $derived.by(() => {
     const parts: string[] = [];
     if (filterStore.statuses.size > 0)
@@ -953,17 +961,7 @@
     color: SavedFilterColor;
     icon: string;
   }): void {
-    const record: SavedFilterRecord = {
-      id: crypto.randomUUID(),
-      encryptedName: meta.encryptedName,
-      color: meta.color,
-      icon: meta.icon,
-      state: JSON.stringify(filterStore.captureState()),
-      shared: false,
-      ownerId: currentUserId ?? "",
-      createdAt: new Date().toISOString(),
-    };
-    savedFilterStore.add(record);
+    dispatch.handleCreateSavedFilter(meta);
     toastStore.show(m.saved_filter_saved());
   }
 
@@ -989,11 +987,6 @@
     return (SORT_FIELDS as readonly string[]).includes(value);
   }
 
-  function handleSortChange(field: string, dir: "asc" | "desc"): void {
-    if (isSortField(field)) filterStore.setSort(field, dir);
-    if (overlay.active) useMatchOrder = false;
-  }
-
   const sortConfig: SortConfig = $derived({
     label: m.tickets_sort(),
     options: [
@@ -1004,15 +997,15 @@
     ],
     currentField: filterStore.sort.field,
     currentDirection: filterStore.sort.direction,
-    onchange: handleSortChange,
+    onchange: dispatch.handleSortChange,
   });
 
   const savedFiltersConfig: SavedFiltersConfig = $derived({
     filters: savedFilterStore.filters,
     count: savedFilterStore.count,
-    onapply: handleSavedFilterApply,
-    ondelete: handleSavedFilterDelete,
-    ontoggleshare: handleSavedFilterToggleShare,
+    onapply: dispatch.handleSavedFilterApply,
+    ondelete: dispatch.handleSavedFilterDelete,
+    ontoggleshare: dispatch.handleSavedFilterToggleShare,
   });
 
   const filterPillsConfig: FilterPillsConfig = $derived({
@@ -1022,10 +1015,10 @@
     dateTo: dateToStr,
     dateActive: dateRangeActive,
     dateLabel: dateRangeLabel,
-    ontoggle: handlePillToggle,
-    onselect: handlePillSelect,
-    ondatechange: handlePillDateChange,
-    onclearall: () => filterStore.clearAll(),
+    ontoggle: dispatch.handlePillToggle,
+    onselect: dispatch.handlePillSelect,
+    ondatechange: dispatch.handlePillDateChange,
+    onclearall: dispatch.clearAll,
     oncreateshortcut: () => {
       savedFilterModalOpen = true;
     },
