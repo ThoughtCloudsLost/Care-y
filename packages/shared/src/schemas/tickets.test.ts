@@ -18,6 +18,8 @@ import {
   undoMergeInputSchema,
   updateTicketInputSchema,
   followUpListInputSchema,
+  searchClientsInputSchema,
+  callStatusSchema,
 } from "./tickets.js";
 
 /** Base64-encode a string of n arbitrary bytes. */
@@ -83,6 +85,10 @@ describe("followUpTypeSchema", () => {
       "priority_change",
       "assignment_change",
       "internal_note",
+      "sms_outbound",
+      "sms_inbound",
+      "phone_call",
+      "voicemail",
     ];
     for (const t of valid) {
       expect(followUpTypeSchema.safeParse(t).success).toBe(true);
@@ -448,5 +454,67 @@ describe("undoMergeInputSchema", () => {
       encryptedSnapshot: VALID_BASE64,
     });
     expect(result.success).toBe(true);
+  });
+});
+
+describe("searchClientsInputSchema", () => {
+  it("accepts valid query with default limit", () => {
+    const result = searchClientsInputSchema.safeParse({ query: "calm" });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.limit).toBe(10);
+    }
+  });
+
+  it("accepts query with explicit limit", () => {
+    const result = searchClientsInputSchema.safeParse({
+      query: "pebble",
+      limit: 5,
+    });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.limit).toBe(5);
+    }
+  });
+
+  it("rejects empty query", () => {
+    expect(searchClientsInputSchema.safeParse({ query: "" }).success).toBe(
+      false,
+    );
+  });
+
+  it("rejects query exceeding max length", () => {
+    expect(
+      searchClientsInputSchema.safeParse({ query: "a".repeat(101) }).success,
+    ).toBe(false);
+  });
+
+  it("rejects limit below 1", () => {
+    expect(
+      searchClientsInputSchema.safeParse({ query: "x", limit: 0 }).success,
+    ).toBe(false);
+  });
+
+  it("rejects limit above 20", () => {
+    expect(
+      searchClientsInputSchema.safeParse({ query: "x", limit: 21 }).success,
+    ).toBe(false);
+  });
+});
+
+describe("callStatusSchema", () => {
+  it("accepts all valid statuses", () => {
+    const valid = ["completed", "no_answer", "busy", "failed", "canceled"];
+    for (const s of valid) {
+      expect(callStatusSchema.safeParse(s).success).toBe(true);
+    }
+  });
+
+  it("rejects invalid status", () => {
+    expect(callStatusSchema.safeParse("ringing").success).toBe(false);
+  });
+
+  it("rejects Twilio's hyphenated format", () => {
+    expect(callStatusSchema.safeParse("no-answer").success).toBe(false);
   });
 });

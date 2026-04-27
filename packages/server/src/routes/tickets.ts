@@ -42,6 +42,7 @@ import type { ReadCursorService } from "../tickets/read-cursor-service.js";
 import type { NotificationService } from "../notifications/service.js";
 import type { AuditEntry } from "../tickets/audit.js";
 import type { NoteTypeService } from "../tickets/note-type-service.js";
+import type { FieldEncryptor } from "../crypto/field-encryptor.js";
 import type {
   NotificationEventType,
   ReactionSummary,
@@ -63,6 +64,7 @@ import {
   toRistrettoPoint,
   encode as cryptoEncode,
 } from "@care-y/crypto";
+import { rewrapFollowUp } from "../tickets/rewrap-service.js";
 import {
   createTicketInputSchema,
   updateTicketInputSchema,
@@ -100,6 +102,7 @@ import {
   createNoteTypeInputSchema,
   updateNoteTypeInputSchema,
   toggleReactionInputSchema,
+  searchClientsInputSchema,
   RoleId,
 } from "@care-y/shared";
 
@@ -156,6 +159,8 @@ export interface TicketRouterDeps {
   readonly notificationService?: NotificationService;
   // Shared pending clients map for clientToken consumption (injected by relay)
   readonly pendingClients?: Map<string, PendingClient>;
+  // OPS-tier field encryptor for phone number masking (client search)
+  readonly fieldEncryptor?: FieldEncryptor;
 }
 
 function buildSearchRoutes(
@@ -305,6 +310,19 @@ export function createTicketRouter(deps: TicketRouterDeps) {
   function mediaSvc(tDb: OrgContext["tenantDb"]): MediaService {
     const access = deps.createTicketAccess(tDb);
     return deps.createMediaSvc(tDb, deps.blobStore, access);
+  }
+
+  function sanitizeLike(input: string): string {
+    return input.replace(/[%_\\]/g, "\\$&");
+  }
+
+  function maskPhone(phoneBuf: Buffer): string {
+    try {
+      const str = phoneBuf.toString("utf-8");
+      return `***${str.slice(-4)}`;
+    } finally {
+      phoneBuf.fill(0);
+    }
   }
 
   /**
@@ -507,6 +525,36 @@ export function createTicketRouter(deps: TicketRouterDeps) {
       withErrorWrapping(async ({ ctx }) => {
         const { svc } = ticketSvc(ctx.org.tenantDb);
         return svc.counts(ctx.user.id);
+      }),
+    ),
+
+    searchClients: volunteerProcedure.input(searchClientsInputSchema).query(
+      withErrorWrapping(async ({ ctx, input }) => {
+        const tDb = ctx.org.tenantDb;
+        const results = await tDb
+          .selectFrom("clients as c")
+          .innerJoin("phones as p", "p.id", "c.phone_id")
+          .select(["c.id", "c.alias", "p.encrypted_number"])
+          .where("c.merged_into", "is", null)
+          .where("c.alias", "ilike", `%${sanitizeLike(input.query)}%`)
+          .orderBy("c.alias", "asc")
+          .limit(input.limit)
+          .execute();
+
+        if (!deps.fieldEncryptor) {
+          return results.map((r) => ({
+            id: r.id,
+            alias: r.alias,
+            maskedPhone: "***",
+          }));
+        }
+
+        const encryptor = deps.fieldEncryptor;
+        return results.map((r) => ({
+          id: r.id,
+          alias: r.alias,
+          maskedPhone: maskPhone(encryptor.decryptToBuffer(r.encrypted_number)),
+        }));
       }),
     ),
 
@@ -1308,6 +1356,45 @@ export function createTicketRouter(deps: TicketRouterDeps) {
 
     // --- Audit log query (manager+ only, injected by 5d wiring) ---
     ...(deps.createAuditSvc ? buildAuditRoutes(deps.createAuditSvc) : {}),
+
+    // --- Re-wrap: volunteer re-encrypts tk_temp content with canonical tk ---
+    rewrapFollowUp: volunteerProcedure
+      .input(
+        z.object({
+          followUpId: z.uuid(),
+          encryptedContent: z.string().min(1),
+          blobUpdates: z
+            .array(
+              z.object({
+                oldBlobKey: z.string().min(1),
+                encryptedData: z.string().min(1),
+                category: z.enum(["attachment", "recording"] as const),
+              }),
+            )
+            .optional(),
+        }),
+      )
+      .mutation(
+        withErrorWrapping(async ({ ctx, input }) => {
+          const access = deps.createTicketAccess(ctx.org.tenantDb);
+          return rewrapFollowUp(
+            ctx.org.tenantDb,
+            access,
+            ctx.user.id,
+            {
+              followUpId: input.followUpId,
+              encryptedContent: Buffer.from(input.encryptedContent, "base64"),
+              blobUpdates: input.blobUpdates?.map((b) => ({
+                oldBlobKey: b.oldBlobKey,
+                encryptedData: Buffer.from(b.encryptedData, "base64"),
+                category: b.category,
+              })),
+            },
+            deps.blobStore,
+            ctx.org.orgSchema,
+          );
+        }),
+      ),
 
     // --- Dev-only: seed test tickets with real ECIES key wraps ---
     ...(process.env.NODE_ENV === "development"

@@ -18,6 +18,7 @@
     ChevronsUp,
     CirclePause,
     Replace,
+    Phone,
     Plus,
     Pencil,
     type LucideIcon,
@@ -112,6 +113,11 @@
       icon: Replace,
       label: m.followup_type_merge_note,
       description: m.followup_type_merge_note_desc,
+    },
+    {
+      icon: Phone,
+      label: m.followup_type_phone_call,
+      description: m.followup_type_phone_call_desc,
     },
   ];
 

@@ -32,6 +32,9 @@ export interface FollowUpRecord {
   readonly hasImage: boolean;
   readonly hasFile: boolean;
   readonly noteTypeId: string | null;
+  readonly callSid: string | null;
+  readonly callStatus: string | null;
+  readonly callDurationSeconds: number | null;
   readonly fullPosition?: number;
   readonly totalCount?: number;
 }
@@ -44,6 +47,9 @@ export interface CreateFollowUpInput {
   readonly isPrivate: boolean;
   readonly mentionedPseudonyms: string[];
   readonly noteTypeId?: string;
+  readonly callSid?: string;
+  readonly callStatus?: string;
+  readonly callDurationSeconds?: number;
 }
 
 /** Lightweight follow-up for timeline rendering. Plain messages omit encryptedContent. */
@@ -61,6 +67,8 @@ export interface FollowUpSummaryRecord {
   readonly hasImage: boolean;
   readonly hasFile: boolean;
   readonly noteTypeId: string | null;
+  readonly callStatus: string | null;
+  readonly callDurationSeconds: number | null;
   readonly fullPosition?: number;
   readonly totalCount?: number;
 }
@@ -144,6 +152,9 @@ function toRecord(row: {
   deleted_at: Date | null;
   created_at: Date;
   note_type_id?: string | null;
+  call_sid?: string | null;
+  call_status?: string | null;
+  call_duration_seconds?: number | null;
   has_recording?: boolean | number;
   has_image?: boolean | number;
   has_file?: boolean | number;
@@ -164,6 +175,9 @@ function toRecord(row: {
     hasImage: Boolean(row.has_image),
     hasFile: Boolean(row.has_file),
     noteTypeId: row.note_type_id ?? null,
+    callSid: row.call_sid ?? null,
+    callStatus: row.call_status ?? null,
+    callDurationSeconds: row.call_duration_seconds ?? null,
     fullPosition:
       row.full_position !== undefined ? Number(row.full_position) : undefined,
     totalCount:
@@ -202,6 +216,9 @@ export function createFollowUpService(
           encrypted_content: input.encryptedContent,
           created_by: userId,
           note_type_id: input.noteTypeId ?? null,
+          call_sid: input.callSid ?? null,
+          call_status: input.callStatus ?? null,
+          call_duration_seconds: input.callDurationSeconds ?? null,
         })
         .returningAll()
         .executeTakeFirstOrThrow();
@@ -446,6 +463,8 @@ export function createFollowUpService(
           "followups.created_by",
           "followups.created_at",
           "followups.note_type_id",
+          "followups.call_status",
+          "followups.call_duration_seconds",
         ])
         .where("followups.ticket_id", "=", ticketId)
         .where("followups.deleted_at", "is", null);
@@ -674,7 +693,9 @@ export function createFollowUpService(
 
       return orderedRows.map((row): FollowUpSummaryRecord => {
         const isPlainMessage =
-          row.source !== "system" && row.type !== "internal_note";
+          row.source !== "system" &&
+          row.type !== "internal_note" &&
+          row.type !== "phone_call";
         const rec = recByFu.get(row.id);
         const att = attByFu.get(row.id);
 
@@ -693,6 +714,8 @@ export function createFollowUpService(
           hasImage: att?.hasImage ?? false,
           hasFile: att?.hasFile ?? false,
           noteTypeId: row.note_type_id ?? null,
+          callStatus: row.call_status ?? null,
+          callDurationSeconds: row.call_duration_seconds ?? null,
           fullPosition: fullPos !== undefined ? Number(fullPos) : undefined,
           totalCount: totCnt !== undefined ? Number(totCnt) : undefined,
         };

@@ -16,6 +16,8 @@ export interface TimelineItem {
   fullPosition?: number;
   totalCount?: number;
   noteTypeId: string | null;
+  callStatus: string | null;
+  callDurationSeconds: number | null;
 }
 
 /** Follow-up record for expanded timeline entries. */

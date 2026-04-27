@@ -126,6 +126,7 @@ function makeDeps(overrides?: Partial<RelayHandlerDeps>): RelayHandlerDeps {
     fieldEncryptor: {
       encrypt: vi.fn().mockReturnValue(Buffer.from("encrypted")),
       decrypt: vi.fn().mockReturnValue("decrypted"),
+      decryptToBuffer: vi.fn().mockReturnValue(Buffer.from("decrypted")),
     },
     pendingClients: new Map(),
     webhookBaseUrl: "https://api.care-y.app",

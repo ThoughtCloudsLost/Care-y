@@ -1202,5 +1202,14 @@
   "ticket_close_resolution_subtitle": "Agrega una nota antes de cerrar (opcional)",
   "ticket_close_skip": "Omitir",
   "ticket_close_submit_continue": "Enviar",
-  "ticket_close_progress": "{current} de {total}"
+  "ticket_close_progress": "{current} de {total}",
+  "ticket_filter_type_calls": "Llamadas",
+  "followup_type_phone_call": "Llamadas",
+  "followup_type_phone_call_desc": "Registros de llamadas entrantes y salientes",
+  "call_status_completed_outbound": "Llamada saliente ({duration})",
+  "call_status_completed_inbound": "Llamada entrante ({duration})",
+  "call_status_no_answer": "Sin respuesta",
+  "call_status_busy": "Ocupado",
+  "call_status_failed": "Llamada fallida",
+  "call_status_canceled": "Llamada cancelada"
 }

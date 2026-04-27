@@ -24,6 +24,7 @@ import {
   resolveLocaleFromDtmf,
 } from "./ivr.js";
 import { sealString } from "./crypto-helpers.js";
+import type { CallTracker } from "./call-tracker.js";
 
 export interface InboundCallDeps {
   readonly sealedBox: SealedBoxEncryptor;
@@ -36,6 +37,7 @@ export interface InboundCallDeps {
   readonly orgSchema: string;
   readonly webhookBaseUrl: string;
   readonly defaultLocale: string;
+  readonly callTracker?: CallTracker;
 }
 
 const FALLBACK_GREETING: GreetingRecord = {
@@ -103,10 +105,21 @@ export async function handleInboundCall(
     const locale = resolveLocaleFromDtmf(digits) ?? defaultLocale;
 
     const encryptedNumber = sealString(sealedBox, callData.from);
-    const { phone } = await clientRepo.findOrCreateByPhoneHash(
+    const { client, phone } = await clientRepo.findOrCreateByPhoneHash(
       phoneHash,
       encryptedNumber,
     );
+
+    if (deps.callTracker) {
+      deps.callTracker.track(callData.callId, {
+        ticketId: "",
+        userId: null,
+        direction: "inbound",
+        orgSchema: deps.orgSchema,
+        clientId: client.id,
+        createdAt: Date.now(),
+      });
+    }
 
     // Update locale if the caller picked something different
     if (phone.locale !== locale) {
@@ -129,6 +142,20 @@ export async function handleInboundCall(
   // Path 2: Returning caller (phone hash already exists)
   const existingPhone = await phoneRepo.findByHash(phoneHash);
   if (existingPhone) {
+    if (deps.callTracker) {
+      const existingClient = await clientRepo.findByPhoneId(existingPhone.id);
+      if (existingClient) {
+        deps.callTracker.track(callData.callId, {
+          ticketId: "",
+          userId: null,
+          direction: "inbound",
+          orgSchema: deps.orgSchema,
+          clientId: existingClient.id,
+          createdAt: Date.now(),
+        });
+      }
+    }
+
     const greeting = await greetingRepo.findByNumberAndLocaleAndType(
       callData.to,
       existingPhone.locale,

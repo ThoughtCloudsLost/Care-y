@@ -1,53 +1,47 @@
 /**
  * Recording-complete webhook handler. Fetches raw audio from the telephony
- * provider, encrypts it with sealed-box (server-blind), stores the ciphertext
- * in BlobStore, then requests deletion of the provider-side recording and
- * call log (GAP-16 mitigations M3 and M1).
+ * provider, encrypts it with per-ticket ECIES via createEncryptedFollowUp,
+ * stores the ciphertext in BlobStore, then requests deletion of the
+ * provider-side recording and call log (GAP-16 mitigations M3 and M1).
  *
- * Raw audio Buffers are zeroed immediately after encryption. No plaintext
- * audio is logged or returned.
+ * Raw audio Buffers are zeroed by the follow-up creation function.
+ * No plaintext audio is logged or returned.
  */
 
+import type { Kysely } from "kysely";
 import type { TelephonyProvider } from "./provider.js";
-import type { SealedBoxEncryptor } from "../crypto/sealed-box.js";
 import type { BlobStore } from "../storage/store.js";
 import type { JobQueue } from "../jobs/queue.js";
+import type { TenantDatabase } from "../db/types.js";
+import type { CallTracker } from "./call-tracker.js";
 import { TelephonyError } from "../errors.js";
-import { sealBufferAndZero } from "./crypto-helpers.js";
 import { deleteOrEnqueue } from "./log-deletion-helpers.js";
+import { resolveOrCreateTicket } from "../tickets/server-ticket-create.js";
+import { createEncryptedFollowUp } from "../tickets/server-followup-create.js";
+import { requireSodium } from "@care-y/crypto";
 
 export interface RecordingHandlerDeps {
   readonly provider: TelephonyProvider;
-  readonly sealedBox: SealedBoxEncryptor;
   readonly blobStore: BlobStore;
   readonly jobQueue: JobQueue;
+  readonly callTracker: CallTracker;
+  readonly getTenantDb: (orgSchema: string) => Kysely<TenantDatabase>;
+  readonly intakeQueueId: string | null;
   readonly orgSchema: string;
   readonly orgId: string;
 }
 
 export interface RecordingResult {
-  readonly blobKey: string;
-  readonly durationSeconds: number;
+  readonly ticketId: string | null;
+  readonly followUpId: string | null;
 }
 
-/**
- * Process a recording-complete callback. Fetches the audio, encrypts it,
- * stores the ciphertext, and schedules provider-side deletion.
- *
- * Deletion failures are non-fatal: they enqueue a retry job rather than
- * failing the entire recording ingest. The caller still gets a valid
- * RecordingResult so the voicemail can be linked to a ticket.
- */
 interface ParsedRecordingCallback {
   readonly recordingSid: string;
   readonly callSid: string;
   readonly durationSeconds: number;
 }
 
-/**
- * Extracts and validates required fields from a recording-complete webhook body.
- * Throws TelephonyError if RecordingSid or CallSid is missing.
- */
 function parseRecordingCallback(
   body: Record<string, string>,
 ): ParsedRecordingCallback {
@@ -73,22 +67,94 @@ export async function handleRecordingComplete(
   body: Record<string, string>,
   deps: RecordingHandlerDeps,
 ): Promise<RecordingResult> {
-  const { provider, sealedBox, blobStore, jobQueue, orgSchema, orgId } = deps;
+  const {
+    provider,
+    blobStore,
+    jobQueue,
+    callTracker,
+    getTenantDb,
+    intakeQueueId,
+    orgSchema,
+    orgId,
+  } = deps;
   const { recordingSid, callSid, durationSeconds } =
     parseRecordingCallback(body);
 
-  // Fetch raw audio from the provider, encrypt, and zero the plaintext
+  // Look up tracked call for ticket context
+  const tracked = callTracker.get(callSid);
+
+  if (!tracked) {
+    // Server restarted mid-call, tracker entry expired. Schedule cleanup only.
+    await deleteOrEnqueue(provider, jobQueue, orgId, "recording", recordingSid);
+    await deleteOrEnqueue(provider, jobQueue, orgId, "call", callSid);
+    return { ticketId: null, followUpId: null };
+  }
+
+  const tDb = getTenantDb(tracked.orgSchema || orgSchema);
+
+  // Resolve ticket: use tracked ticketId if available, otherwise resolve
+  let ticketId = tracked.ticketId;
+
+  if (ticketId === "" && tracked.clientId !== null) {
+    if (intakeQueueId === null) {
+      await deleteOrEnqueue(
+        provider,
+        jobQueue,
+        orgId,
+        "recording",
+        recordingSid,
+      );
+      await deleteOrEnqueue(provider, jobQueue, orgId, "call", callSid);
+      return { ticketId: null, followUpId: null };
+    }
+
+    const titleBuf = Buffer.from(`Call from ${tracked.clientId}`, "utf-8");
+    const descBuf = Buffer.from("Inbound call with voicemail", "utf-8");
+
+    const result = await resolveOrCreateTicket(
+      tDb,
+      tracked.clientId,
+      intakeQueueId,
+      titleBuf,
+      descBuf,
+    );
+
+    if (result.tk) {
+      const sodium = requireSodium();
+      sodium.memzero(result.tk);
+    }
+
+    ticketId = result.ticketId;
+  }
+
+  if (!ticketId) {
+    await deleteOrEnqueue(provider, jobQueue, orgId, "recording", recordingSid);
+    await deleteOrEnqueue(provider, jobQueue, orgId, "call", callSid);
+    return { ticketId: null, followUpId: null };
+  }
+
+  // Fetch raw audio from the provider
   const rawAudio = await provider.getRecording(recordingSid);
-  const encryptedAudio = sealBufferAndZero(sealedBox, rawAudio);
 
-  // Store encrypted audio in BlobStore
-  const blobKey = await blobStore.put(orgSchema, "recording", encryptedAudio);
+  // Create encrypted follow-up with recording data
+  const fuResult = await createEncryptedFollowUp(
+    tDb,
+    ticketId,
+    Buffer.from("Voicemail recording", "utf-8"),
+    "voicemail",
+    "client",
+    {
+      recording: { data: rawAudio, durationSeconds },
+      blobStore,
+      orgSchema,
+    },
+  );
 
-  // M3: Delete the recording from the provider. Enqueue retry on failure.
+  // M3: Delete the recording from the provider
   await deleteOrEnqueue(provider, jobQueue, orgId, "recording", recordingSid);
 
-  // M1: Delete the call log from the provider. Enqueue retry on failure.
+  // M1: Delete the call log from the provider
   await deleteOrEnqueue(provider, jobQueue, orgId, "call", callSid);
 
-  return { blobKey, durationSeconds };
+  return { ticketId, followUpId: fuResult.followUpId };
 }

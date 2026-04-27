@@ -32,8 +32,22 @@ export const followUpTypeSchema = z.enum([
   "priority_change",
   "assignment_change",
   "internal_note",
+  "sms_outbound",
+  "sms_inbound",
+  "phone_call",
+  "voicemail",
 ]);
 export type FollowUpType = z.infer<typeof followUpTypeSchema>;
+
+// Call status: terminal states for phone calls
+export const callStatusSchema = z.enum([
+  "completed",
+  "no_answer",
+  "busy",
+  "failed",
+  "canceled",
+]);
+export type CallStatus = z.infer<typeof callStatusSchema>;
 
 // --- Key wrap schema (ECIES-wrapped symmetric ticket key) ---
 
@@ -454,3 +468,11 @@ export interface ReactionSummary {
   readonly reaction: ReactionType;
   readonly userIds: readonly string[];
 }
+
+// --- Client search ---
+
+export const searchClientsInputSchema = z.object({
+  query: z.string().min(1).max(100),
+  limit: z.number().int().min(1).max(20).default(10),
+});
+export type SearchClientsInput = z.infer<typeof searchClientsInputSchema>;

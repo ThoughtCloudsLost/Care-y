@@ -24,7 +24,8 @@ import { createBlocklistRepository } from "./models/blocklist-repo.js";
 import { handleInboundSms } from "./inbound-sms.js";
 import { handleInboundCall } from "./inbound-call.js";
 import { handleRecordingComplete } from "./recording-handler.js";
-import { processAttachments } from "./inbound-mms.js";
+import type { CallTracker } from "./call-tracker.js";
+import { handleCallStatus } from "./call-status-handler.js";
 
 // ---------------------------------------------------------------------------
 // Org context resolution
@@ -35,11 +36,13 @@ export interface WebhookOrgContext {
   readonly orgSchema: string;
   readonly tDb: Kysely<TenantDatabase>;
   readonly sealedBox: SealedBoxEncryptor;
+  readonly intakeQueueId: string | null;
 }
 
 /**
  * Resolves org context for webhook processing: verifies the org is active,
- * opens a tenant DB, and builds a SealedBoxEncryptor from the org's public key.
+ * opens a tenant DB, builds a SealedBoxEncryptor from the org's public key,
+ * and fetches the intake queue ID for server-initiated ticket creation.
  *
  * Returns null if the org does not exist, is inactive, or has no public key.
  */
@@ -54,13 +57,19 @@ export async function resolveOrgForWebhook(
   const tDb = tenantDb(org.schemaName);
   const row = await tDb
     .selectFrom("org_config")
-    .select("org_public_key")
+    .select(["org_public_key", "intake_queue_id"])
     .executeTakeFirst();
 
   if (!row?.org_public_key) return null;
 
   const sealedBox = createSealedBoxEncryptor(row.org_public_key);
-  return { orgId: org.id, orgSchema: org.schemaName, tDb, sealedBox };
+  return {
+    orgId: org.id,
+    orgSchema: org.schemaName,
+    tDb,
+    sealedBox,
+    intakeQueueId: row.intake_queue_id ?? null,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -75,6 +84,7 @@ export interface WebhookDispatchDeps {
   readonly blobStore: BlobStore;
   readonly jobQueue: JobQueue;
   readonly webhookBaseUrl: string;
+  readonly callTracker?: CallTracker;
 }
 
 /**
@@ -104,6 +114,8 @@ export function createWebhookDispatch(
       const org = await resolveOrgForWebhook(orgId, orgService, tenantDb);
       if (!org) return null;
 
+      if (org.intakeQueueId === null) return null;
+
       const provider = await providerFactory.getProvider(orgId);
       const phoneRepo = createPhoneRepository(org.tDb);
       const clientRepo = createClientRepository(org.tDb, phoneRepo);
@@ -112,7 +124,7 @@ export function createWebhookDispatch(
 
       const smsData = provider.parseIncomingSms(body);
 
-      const result = await handleInboundSms(smsData, {
+      await handleInboundSms(smsData, {
         provider,
         sealedBox: org.sealedBox,
         indexer,
@@ -121,24 +133,13 @@ export function createWebhookDispatch(
         clientRepo,
         smsResponseRepo,
         blocklistRepo,
+        tDb: org.tDb,
+        intakeQueueId: org.intakeQueueId,
         orgId,
         orgSchema: org.orgSchema,
         defaultLocale: "en-US",
       });
 
-      // Blocked number: silently drop (no storage, no reply)
-      if (result === null) return null;
-
-      // Process MMS attachments if present
-      if (smsData.numMedia > 0) {
-        await processAttachments(smsData.mediaUrls, smsData.mediaContentTypes, {
-          sealedBox: org.sealedBox,
-          blobStore,
-          orgSchema: org.orgSchema,
-        });
-      }
-
-      void result; // Consumed by ticket creation when wired
       return null; // No TwiML response (auto-reply sent via API)
     },
 
@@ -155,11 +156,14 @@ export function createWebhookDispatch(
       // eslint-disable-next-line @typescript-eslint/dot-notation
       const recordingSid = body["RecordingSid"];
       if (recordingSid !== undefined && recordingSid !== "") {
+        if (!deps.callTracker) return null;
         await handleRecordingComplete(body, {
           provider,
-          sealedBox: org.sealedBox,
           blobStore,
           jobQueue,
+          callTracker: deps.callTracker,
+          getTenantDb: tenantDb,
+          intakeQueueId: org.intakeQueueId,
           orgSchema: org.orgSchema,
           orgId,
         });
@@ -184,12 +188,28 @@ export function createWebhookDispatch(
         orgSchema: org.orgSchema,
         webhookBaseUrl,
         defaultLocale: "en-US",
+        callTracker: deps.callTracker,
       });
 
       return provider.generateVoiceResponse(instructions);
     },
 
-    // onStatusCallback: not wired yet. Ticket system will use status
-    // callbacks for state updates.
+    ...(deps.callTracker
+      ? {
+          onStatusCallback: async (
+            orgId: string,
+            body: Record<string, string>,
+          ): Promise<void> => {
+            const org = await resolveOrgForWebhook(orgId, orgService, tenantDb);
+            if (!org) return;
+            if (!deps.callTracker) return;
+            await handleCallStatus(org.orgSchema, body, {
+              callTracker: deps.callTracker,
+              getTenantDb: tenantDb,
+              intakeQueueId: org.intakeQueueId,
+            });
+          },
+        }
+      : {}),
   };
 }

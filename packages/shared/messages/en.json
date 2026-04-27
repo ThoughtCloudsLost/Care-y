@@ -1202,5 +1202,14 @@
   "ticket_close_resolution_subtitle": "Add a note before closing (optional)",
   "ticket_close_skip": "Skip",
   "ticket_close_submit_continue": "Submit",
-  "ticket_close_progress": "{current} of {total}"
+  "ticket_close_progress": "{current} of {total}",
+  "ticket_filter_type_calls": "Phone Calls",
+  "followup_type_phone_call": "Phone Calls",
+  "followup_type_phone_call_desc": "Inbound and outbound call records",
+  "call_status_completed_outbound": "Outbound call ({duration})",
+  "call_status_completed_inbound": "Inbound call ({duration})",
+  "call_status_no_answer": "No answer",
+  "call_status_busy": "Busy",
+  "call_status_failed": "Call failed",
+  "call_status_canceled": "Call canceled"
 }
