@@ -31,7 +31,6 @@
   import { useScrollDirection } from "$lib/shell/use-scroll-direction.svelte.js";
   import { usePTR } from "$lib/shell/ptr-context.svelte.js";
   import { RouterNotAvailableError } from "$lib/errors.js";
-  import type { SerializedBuffer } from "$lib/utils/buffer-encoding.js";
   import { createEditorBridge } from "$lib/editor/editor-bridge.svelte.js";
   import { useNavigationGuard } from "$lib/editor/use-navigation-guard.svelte.js";
   import { shellBack } from "$lib/shell/navigation.js";
@@ -99,7 +98,7 @@
       const ciphertext =
         article.encryptedTitle instanceof Uint8Array
           ? article.encryptedTitle
-          : new Uint8Array((article.encryptedTitle as SerializedBuffer).data);
+          : new Uint8Array(article.encryptedTitle.data);
       const plainBytes = orgKeyManager.decrypt(ciphertext);
       return new TextDecoder().decode(plainBytes);
     } catch {
@@ -113,7 +112,7 @@
       const ciphertext =
         article.encryptedBody instanceof Uint8Array
           ? article.encryptedBody
-          : new Uint8Array((article.encryptedBody as SerializedBuffer).data);
+          : new Uint8Array(article.encryptedBody.data);
       const plainBytes = orgKeyManager.decrypt(ciphertext);
       const text = new TextDecoder().decode(plainBytes);
       return JSON.parse(text) as unknown;
@@ -139,10 +138,7 @@
   const categoryOptions = $derived(
     (categoriesQuery.data ?? []).map((c) => ({
       id: c.id,
-      name: orgCache.decrypt(
-        `kb-cat:${c.id}`,
-        c.encryptedName as SerializedBuffer,
-      ),
+      name: orgCache.decrypt(`kb-cat:${c.id}`, c.encryptedName),
     })),
   );
 
