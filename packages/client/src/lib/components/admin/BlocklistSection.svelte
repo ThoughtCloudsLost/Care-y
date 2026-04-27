@@ -1,6 +1,6 @@
 <script lang="ts">
   import { tick } from "svelte";
-  import { Block, ListInput, DialogButton } from "konsta/svelte";
+  import { ListInput, DialogButton } from "konsta/svelte";
   import {
     createQuery,
     createMutation,

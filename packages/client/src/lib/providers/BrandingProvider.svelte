@@ -46,7 +46,7 @@
       // Outside CryptoProvider (shouldn't happen in normal tree, but safe)
     }
   }
-  let hydrated = $state(false);
+  let _hydrated = $state(false);
   let serverHydrated = false;
 
   function syncToLocalStorage(
@@ -108,7 +108,7 @@
       }
       // Sync SW cache state to localStorage for next page load's splash screen.
       syncToLocalStorage(cached);
-      hydrated = true;
+      _hydrated = true;
       dismissSplash();
     });
   });
@@ -166,7 +166,7 @@
         }
       }
 
-      hydrated = true;
+      _hydrated = true;
       dismissSplash();
     } catch {
       // Non-fatal: branding stays at defaults

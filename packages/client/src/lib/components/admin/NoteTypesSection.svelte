@@ -380,7 +380,6 @@
         {@const Icon = resolveNoteTypeIcon(
           orgCache.decrypt(nt.id + ":icon", nt.encryptedIcon),
         )}
-        {@const isDefault = nt.id === defaultNoteTypeId}
         {@const gating = roleGatingSummary(nt.minViewRole, nt.minCreateRole)}
         <button
           type="button"

@@ -12,7 +12,7 @@
   import type { Snippet, Component } from "svelte";
   import { tick } from "svelte";
   import { SvelteMap, SvelteSet } from "svelte/reactivity";
-  import { ListGroup, ListItem, Messages, Message } from "konsta/svelte";
+  import { ListGroup, ListItem } from "konsta/svelte";
   import {
     MessageSquare,
     MessagesSquare,
@@ -20,7 +20,6 @@
     type LucideIcon,
   } from "@lucide/svelte";
   import * as m from "$lib/paraglide/messages.js";
-  import { onKeyActivate } from "$lib/utils/a11y.js";
   import { resolveFollowUpTypeIcon } from "$lib/utils/note-type-icons.js";
   import { needsDateSeparator, formatDateSeparator } from "$lib/utils/time.js";
   import { computeGaps } from "$lib/tickets/gap-indicators.js";

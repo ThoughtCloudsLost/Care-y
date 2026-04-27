@@ -41,13 +41,6 @@
 
   const orgKeyLoaded = $derived(orgKeyManager.isLoaded);
 
-  const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-  const identifierLooksLikeEmail = $derived(EMAIL_PATTERN.test(identifier));
-  const identifierHasSpaces = $derived(identifier.includes(" "));
-  const showIdentifierWarning = $derived(
-    identifierLooksLikeEmail || identifierHasSpaces,
-  );
-
   const passwordTooShort = $derived(
     tempPassword.length > 0 && tempPassword.length < 16,
   );

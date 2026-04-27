@@ -53,7 +53,6 @@
   }));
 
   type AllQueueRecord = NonNullable<typeof queuesQuery.data>[number];
-  type MyQueueRecord = NonNullable<typeof myQueuesQuery.data>[number];
 
   function decryptQueueDisplayName(
     id: string,

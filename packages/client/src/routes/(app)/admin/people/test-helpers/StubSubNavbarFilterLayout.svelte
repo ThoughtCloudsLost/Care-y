@@ -14,7 +14,7 @@
     [key: string]: unknown;
   }
 
-  let { headerRight, stats, children, ...rest }: Props = $props();
+  let { headerRight, stats, children, ..._rest }: Props = $props();
 </script>
 
 <div data-testid="stub-subnavbar">

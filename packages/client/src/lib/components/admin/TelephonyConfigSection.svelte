@@ -1,12 +1,5 @@
 <script lang="ts">
-  import {
-    Block,
-    Card,
-    List,
-    ListItem,
-    ListInput,
-    Preloader,
-  } from "konsta/svelte";
+  import { Card, List, ListItem, ListInput, Preloader } from "konsta/svelte";
   import { goto } from "$app/navigation";
   import { resolve } from "$app/paths";
   import {
