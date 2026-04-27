@@ -21,6 +21,7 @@
   import { setPromotedOverride } from "$lib/search/registry.svelte.js";
   import { trpc } from "$lib/trpc/index.js";
   import { RouterNotAvailableError } from "$lib/errors.js";
+  import { createFilterDispatch } from "$lib/composables/create-filter-dispatch.svelte.js";
   import SubNavbarFilterLayout from "$lib/shell/SubNavbarFilterLayout.svelte";
   import type {
     SortConfig,
@@ -192,9 +193,39 @@
     return (SORT_FIELDS as readonly string[]).includes(value);
   }
 
-  function handleSortChange(field: string, dir: "asc" | "desc"): void {
-    if (isSortField(field)) userFilterStore.setSort(field, dir);
-  }
+  const userDispatch = createFilterDispatch({
+    fields: {
+      role: {
+        type: "multi-toggle",
+        toggle: (v: string) => {
+          if (isRoleId(v)) userFilterStore.toggleRole(v);
+        },
+      },
+      status: {
+        type: "multi-toggle",
+        toggle: (v: string) => {
+          if (isUserStatus(v)) userFilterStore.toggleStatus(v);
+        },
+      },
+      keys: {
+        type: "multi-toggle",
+        toggle: (v: string) => {
+          if (isKeyStatus(v)) userFilterStore.toggleKeyStatus(v);
+        },
+      },
+      queue: {
+        type: "multi-toggle",
+        toggle: (v: string) => userFilterStore.toggleQueueId(v),
+      },
+    },
+    sort: {
+      validate: isSortField,
+      set: (field: string, dir: "asc" | "desc") => {
+        if (isSortField(field)) userFilterStore.setSort(field, dir);
+      },
+    },
+    clearAll: () => userFilterStore.clearAll(),
+  });
 
   const sortConfig: SortConfig = $derived({
     label: m.admin_users_sort(),
@@ -205,7 +236,7 @@
     ],
     currentField: userFilterStore.sort.field,
     currentDirection: userFilterStore.sort.direction,
-    onchange: handleSortChange,
+    onchange: userDispatch.handleSortChange,
   });
 
   // ��─ Queue sort config ──
@@ -223,9 +254,16 @@
     return (QUEUE_SORT_FIELDS as readonly string[]).includes(value);
   }
 
-  function handleQueueSortChange(field: string, dir: "asc" | "desc"): void {
-    if (isQueueSortField(field)) queueFilterStore.setSort(field, dir);
-  }
+  const queueDispatch = createFilterDispatch({
+    fields: {},
+    sort: {
+      validate: isQueueSortField,
+      set: (field: string, dir: "asc" | "desc") => {
+        if (isQueueSortField(field)) queueFilterStore.setSort(field, dir);
+      },
+    },
+    clearAll: noop,
+  });
 
   const queueSortConfig: SortConfig = $derived({
     label: m.admin_queues_sort(),
@@ -239,7 +277,7 @@
     ],
     currentField: queueFilterStore.sort.field,
     currentDirection: queueFilterStore.sort.direction,
-    onchange: handleQueueSortChange,
+    onchange: queueDispatch.handleSortChange,
   });
 
   const queueSavedFiltersConfig: SavedFiltersConfig = {
@@ -352,30 +390,13 @@
     return VALID_KEY_STATUSES.has(v);
   }
 
-  function handlePillToggle(pillId: string, value: string): void {
-    switch (pillId) {
-      case "role":
-        if (isRoleId(value)) userFilterStore.toggleRole(value);
-        break;
-      case "status":
-        if (isUserStatus(value)) userFilterStore.toggleStatus(value);
-        break;
-      case "keys":
-        if (isKeyStatus(value)) userFilterStore.toggleKeyStatus(value);
-        break;
-      case "queue":
-        userFilterStore.toggleQueueId(value);
-        break;
-    }
-  }
-
   const filterPillsConfig: FilterPillsConfig = $derived({
     pills: userPills,
     activeCount: userFilterStore.activeCount,
-    ontoggle: handlePillToggle,
+    ontoggle: userDispatch.handlePillToggle,
     onselect: noop,
     ondatechange: noop,
-    onclearall: () => userFilterStore.clearAll(),
+    onclearall: userDispatch.clearAll,
   });
 
   function handleToggleMultiSelect(): void {

@@ -50,7 +50,6 @@
     kbSavedFilterStateSchema,
     Permission,
     type KbSortField,
-    type SavedFilterRecord,
     type SavedFilterColor,
   } from "@care-y/shared";
   import { resolveOrgDecrypt } from "$lib/crypto/decrypt-result.js";
@@ -61,7 +60,9 @@
   import MoveCategorySheet from "$lib/components/library/MoveCategorySheet.svelte";
   import CategoryManageSheet from "$lib/components/library/CategoryManageSheet.svelte";
   import QueryError from "$lib/components/QueryError.svelte";
+  import EmptyState from "$lib/components/EmptyState.svelte";
   import { haptic } from "$lib/utils/haptic.js";
+  import { createFilterDispatch } from "$lib/composables/create-filter-dispatch.svelte.js";
   import { createSearchOverlay } from "$lib/search/search-overlay.svelte.js";
   import { createDeepSearch } from "$lib/search/deep-search.svelte.js";
   import SearchNavigator from "$lib/components/search/SearchNavigator.svelte";
@@ -443,10 +444,51 @@
     return (KB_SORT_FIELDS as readonly string[]).includes(value);
   }
 
-  function handleSortChange(field: string, dir: "asc" | "desc"): void {
-    if (isKbSortField(field)) kbFilterStore.setSort(field, dir);
-    if (overlay.active) useMatchOrder = false;
-  }
+  const dispatch = createFilterDispatch({
+    fields: {
+      category: {
+        type: "multi-toggle",
+        toggle: (v: string) => kbFilterStore.toggleCategory(v),
+      },
+      rating: {
+        type: "single-select",
+        set: (v: string | null) => {
+          if (v === "high") kbFilterStore.setMinRating(0.5);
+          else if (v === "positive") kbFilterStore.setMinRating(0.01);
+          else kbFilterStore.setMinRating(undefined);
+        },
+      },
+      author: {
+        type: "single-select",
+        set: (v: string | null) => kbFilterStore.setCreatedBy(v ?? undefined),
+      },
+      date: {
+        type: "date-range",
+        set: (from: Date | null, to: Date | null) =>
+          kbFilterStore.setDateRange(from, to),
+      },
+    },
+    sort: {
+      validate: isKbSortField,
+      set: (field: string, dir: "asc" | "desc") => {
+        if (isKbSortField(field)) kbFilterStore.setSort(field, dir);
+      },
+    },
+    savedFilters: {
+      store: kbSavedFilterStore,
+      captureState: () => kbFilterStore.captureState(),
+      applyState: (state: unknown) => {
+        const result = kbSavedFilterStateSchema.safeParse(state);
+        if (result.success) kbFilterStore.applyState(result.data);
+      },
+      stateSchema: kbSavedFilterStateSchema,
+      getCurrentUserId: () => currentUserId ?? null,
+    },
+    clearAll: () => kbFilterStore.clearAll(),
+    onchange: () => {
+      if (overlay.active) useMatchOrder = false;
+    },
+  });
 
   const sortConfig: SortConfig = $derived({
     label: m.library_sort(),
@@ -457,15 +499,15 @@
     ],
     currentField: kbFilterStore.sort.field,
     currentDirection: kbFilterStore.sort.direction,
-    onchange: handleSortChange,
+    onchange: dispatch.handleSortChange,
   });
 
   const savedFiltersConfig: SavedFiltersConfig = $derived({
     filters: kbSavedFilterStore.filters,
     count: kbSavedFilterStore.count,
-    onapply: handleSavedFilterApply,
-    ondelete: handleSavedFilterDelete,
-    ontoggleshare: handleSavedFilterToggleShare,
+    onapply: dispatch.handleSavedFilterApply,
+    ondelete: dispatch.handleSavedFilterDelete,
+    ontoggleshare: dispatch.handleSavedFilterToggleShare,
   });
 
   // --- Filter pill definitions ---
@@ -527,26 +569,6 @@
     },
   ]);
 
-  function handlePillToggle(pillId: string, value: string): void {
-    if (pillId === "category") {
-      kbFilterStore.toggleCategory(value);
-    }
-  }
-
-  function handlePillSelect(pillId: string, value: string | null): void {
-    if (pillId === "rating") {
-      if (value === "high") kbFilterStore.setMinRating(0.5);
-      else if (value === "positive") kbFilterStore.setMinRating(0.01);
-      else kbFilterStore.setMinRating(undefined);
-    } else if (pillId === "author") {
-      kbFilterStore.setCreatedBy(value ?? undefined);
-    }
-  }
-
-  function handlePillDateChange(from: Date | null, to: Date | null): void {
-    kbFilterStore.setDateRange(from, to);
-  }
-
   const dateRangeActive = $derived(
     kbFilterStore.dateFrom !== null || kbFilterStore.dateTo !== null,
   );
@@ -574,31 +596,14 @@
     dateTo: dateToStr,
     dateActive: dateRangeActive,
     dateLabel: dateRangeLabel,
-    ontoggle: handlePillToggle,
-    onselect: handlePillSelect,
-    ondatechange: handlePillDateChange,
-    onclearall: () => kbFilterStore.clearAll(),
+    ontoggle: dispatch.handlePillToggle,
+    onselect: dispatch.handlePillSelect,
+    ondatechange: dispatch.handlePillDateChange,
+    onclearall: dispatch.clearAll,
     oncreateshortcut: () => {
       savedFilterModalOpen = true;
     },
   });
-
-  // --- Saved filter wiring ---
-  function handleSavedFilterApply(record: SavedFilterRecord): void {
-    const parsed: unknown = JSON.parse(record.state);
-    const result = kbSavedFilterStateSchema.safeParse(parsed);
-    if (result.success) {
-      kbFilterStore.applyState(result.data);
-    }
-  }
-
-  function handleSavedFilterDelete(id: string): void {
-    kbSavedFilterStore.remove(id);
-  }
-
-  function handleSavedFilterToggleShare(id: string): void {
-    kbSavedFilterStore.toggleShare(id);
-  }
 
   const filterSummary = $derived.by(() => {
     const parts: string[] = [];
@@ -618,17 +623,7 @@
     color: SavedFilterColor;
     icon: string;
   }): void {
-    const record: SavedFilterRecord = {
-      id: crypto.randomUUID(),
-      encryptedName: meta.encryptedName,
-      color: meta.color,
-      icon: meta.icon,
-      state: JSON.stringify(kbFilterStore.captureState()),
-      shared: false,
-      ownerId: currentUserId ?? "",
-      createdAt: new Date().toISOString(),
-    };
-    kbSavedFilterStore.add(record);
+    dispatch.handleCreateSavedFilter(meta);
     toastStore.show(m.saved_filter_saved());
   }
 
@@ -807,17 +802,11 @@
   {:else if articlesQuery.isError}
     <QueryError error={articlesQuery.error} />
   {:else if displayItems.length === 0}
-    <div
-      class="empty-state"
-      role="status"
-      aria-label={m.library_article_list_empty()}
-    >
-      <p>
-        {kbFilterStore.activeCount > 0
-          ? m.library_empty_filter()
-          : m.library_empty_articles()}
-      </p>
-    </div>
+    <EmptyState
+      title={kbFilterStore.activeCount > 0
+        ? m.library_empty_filter()
+        : m.library_empty_articles()}
+    />
   {:else}
     <div class="article-list">
       <VirtualList
@@ -950,13 +939,6 @@
     display: grid;
     grid-template-columns: repeat(2, 1fr);
     gap: var(--space-md);
-  }
-
-  .empty-state {
-    text-align: center;
-    padding: 3rem 1rem;
-    color: var(--muted);
-    font-size: var(--text-base);
   }
 
   .search-target {
