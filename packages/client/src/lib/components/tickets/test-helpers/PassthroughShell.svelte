@@ -14,7 +14,7 @@
     [key: string]: unknown;
   }
 
-  let { children, opened, ondismiss, title, headerRight, ...rest }: Props =
+  let { children, opened, ondismiss, title, headerRight, ..._rest }: Props =
     $props();
 </script>
 

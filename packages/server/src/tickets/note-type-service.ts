@@ -17,7 +17,7 @@ import {
   RoleId,
   ErrorCode,
 } from "@care-y/shared";
-import type { EscalationTarget, RoleIdValue } from "@care-y/shared";
+import type { EscalationTarget } from "@care-y/shared";
 import { ForbiddenError, NotFoundError } from "../errors.js";
 import { z } from "zod";
 

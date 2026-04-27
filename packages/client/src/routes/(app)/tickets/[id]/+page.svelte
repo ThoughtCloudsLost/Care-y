@@ -13,7 +13,7 @@
 <script lang="ts">
   import type { Snapshot } from "./$types.js";
   import { page } from "$app/state";
-  import { Link, Button } from "konsta/svelte";
+  import { Link } from "konsta/svelte";
   import {
     ChevronLeft,
     MessageSquareText,

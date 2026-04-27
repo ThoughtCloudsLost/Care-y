@@ -84,7 +84,6 @@ export async function handleInboundCall(
     greetingRepo,
     blocklistRepo,
     orgId,
-    orgSchema,
     webhookBaseUrl,
     defaultLocale,
   } = deps;
