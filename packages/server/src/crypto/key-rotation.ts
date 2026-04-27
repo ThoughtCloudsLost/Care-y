@@ -166,7 +166,7 @@ export function createKeyRotationService(
             // have a CREATE TABLE migration yet. The `as never` casts let
             // Kysely issue SQL against a table the schema doesn't guarantee;
             // the catch block below rolls back to the savepoint on failure.
-            /* eslint-disable @typescript-eslint/no-unsafe-type-assertion */
+            /* eslint-disable @typescript-eslint/no-unsafe-type-assertion, @typescript-eslint/no-unnecessary-type-assertion */
             await tx
               .deleteFrom("ticket_key_wraps" as never)
               .where("volunteer_id" as never, "=", input.userId as never)
@@ -174,7 +174,7 @@ export function createKeyRotationService(
 
             for (const wrap of input.reWrappedKeys) {
               await tx
-                .insertInto("ticket_key_wraps" as never)
+                .insertInto("ticket_key_wraps")
                 .values({
                   ticket_id: wrap.ticketId,
                   volunteer_id: input.userId,
@@ -186,7 +186,7 @@ export function createKeyRotationService(
                 } as never)
                 .execute();
             }
-            /* eslint-enable @typescript-eslint/no-unsafe-type-assertion */
+            /* eslint-enable @typescript-eslint/no-unsafe-type-assertion, @typescript-eslint/no-unnecessary-type-assertion */
             await sql`RELEASE SAVEPOINT rewrap`.execute(tx);
           } catch (err: unknown) {
             // Roll back to the savepoint so the outer transaction (user_keys

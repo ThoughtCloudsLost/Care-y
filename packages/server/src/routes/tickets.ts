@@ -766,7 +766,7 @@ export function createTicketRouter(deps: TicketRouterDeps) {
           const access = deps.createTicketAccess(ctx.org.tenantDb);
           const svc = deps.createFollowUpSvc(ctx.org.tenantDb, access);
           const map = await svc.getReactions(input.followUpIds);
-          return Object.fromEntries(map) as Record<string, ReactionSummary[]>;
+          return Object.fromEntries(map);
         }),
       ),
 

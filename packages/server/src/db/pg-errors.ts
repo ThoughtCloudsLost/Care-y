@@ -12,6 +12,6 @@ export function isPgUniqueViolation(err: unknown): boolean {
     typeof err === "object" &&
     err !== null &&
     "code" in err &&
-    (err as { code: unknown }).code === PG_UNIQUE_VIOLATION
+    err.code === PG_UNIQUE_VIOLATION
   );
 }

@@ -113,7 +113,7 @@
     if (typeof ct === "string")
       return Math.max(1, Math.ceil((ct.length * 3) / 4) - 40);
     if (typeof ct === "object" && "data" in ct) {
-      const obj: Record<string, unknown> = ct as Record<string, unknown>;
+      const obj: Record<string, unknown> = ct;
       if (Array.isArray(obj.data)) {
         return Math.max(1, obj.data.length - 40);
       }

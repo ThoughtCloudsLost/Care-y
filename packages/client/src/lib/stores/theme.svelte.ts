@@ -97,8 +97,10 @@ function createThemeStore(): ThemeStore {
   const state = $state({
     uiTheme: DEFAULT_UI_THEME,
     colorPref: DEFAULT_COLOR_SCHEME,
+    // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion -- localStorage returns string, need to narrow
     resolved: "dark" as "dark" | "light",
     visual: DEFAULT_VISUAL_THEME,
+    // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion -- localStorage returns string, need to narrow
     glass: "auto" as GlassMode,
   });
 
