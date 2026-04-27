@@ -31,18 +31,18 @@
   } from "$lib/shell/context.js";
   import { shellBack } from "$lib/shell/navigation.js";
   import { useScrollDirection } from "$lib/shell/use-scroll-direction.svelte.js";
-  import type {
-    ViewToggleConfig,
-    FilterPillsConfig,
-  } from "$lib/shell/types.js";
+  import type { ViewToggleConfig } from "$lib/shell/types.js";
   import SubNavbarFilterLayout from "$lib/shell/SubNavbarFilterLayout.svelte";
   import TicketDetail from "$lib/components/tickets/TicketDetail.svelte";
   import PriorityBadge from "$lib/components/PriorityBadge.svelte";
-  import type { PillDefinition } from "$lib/components/filters/filter-types.js";
-  import type {
-    ContextActionId,
-    ContextMenuEvent,
-  } from "$lib/components/tickets/context-menu-actions.js";
+  import type { ContextMenuEvent } from "$lib/components/tickets/context-menu-actions.js";
+  import { createLightbox } from "$lib/composables/ticket-detail/create-lightbox.svelte.js";
+  import { createContextMenu } from "$lib/composables/ticket-detail/create-context-menu.svelte.js";
+  import { createSelectMode } from "$lib/composables/ticket-detail/create-select-mode.svelte.js";
+  import { createReadCursor } from "$lib/composables/ticket-detail/create-read-cursor.svelte.js";
+  import { createCloseResolution } from "$lib/composables/ticket-detail/create-close-resolution.svelte.js";
+  import { createDetailFilters } from "$lib/composables/ticket-detail/create-detail-filters.svelte.js";
+  import { copyToClipboard } from "$lib/composables/ticket-detail/clipboard-copy.js";
   import ShellMessagebar from "$lib/shell/ShellMessagebar.svelte";
   import ShellActionSheet from "$lib/shell/ShellActionSheet.svelte";
   import ShellPopup from "$lib/shell/ShellPopup.svelte";
@@ -74,16 +74,9 @@
     buildVolunteerMap,
     resolveVolunteerName as resolveVolName,
   } from "$lib/tickets/resolve-volunteer.js";
-  import { SvelteSet } from "svelte/reactivity";
   import { RouterNotAvailableError } from "$lib/errors.js";
   import { toastStore } from "$lib/stores/toast.svelte.js";
-  import { formatRelativeTime } from "$lib/utils/format-time.js";
-  import {
-    resolveAsyncDecrypt,
-    matchDecryptResult,
-  } from "$lib/crypto/decrypt-result.js";
   import { haptic } from "$lib/utils/haptic.js";
-  import { serializedBufferToBase64 } from "$lib/utils/buffer-encoding.js";
   import {
     registerSearchProvider,
     setPromotedOverride,
@@ -96,6 +89,8 @@
   import CloseResolutionSheet from "$lib/components/tickets/CloseResolutionSheet.svelte";
   import InternalNoteSheet from "$lib/components/tickets/InternalNoteSheet.svelte";
   import { resolveNoteTypeIcon } from "$lib/utils/note-type-icons.js";
+
+  // ── Composable initialization ──
 
   if (!trpc.tickets) throw new RouterNotAvailableError("tickets");
   const ticketRouter = trpc.tickets;
@@ -162,7 +157,7 @@
     return undefined;
   });
 
-  // --- Read cursor ---
+  // --- Read cursor (composable) ---
 
   const readCursorQuery = createQuery(() => ({
     queryKey: ticketKeys.readCursor(ticketId),
@@ -170,84 +165,13 @@
     enabled: ticketId !== "",
   }));
 
-  // Decrypt the read cursor to get the readUpTo timestamp.
-  // undefined = still loading, null = unread (dummy or decrypt failed).
-  let readUpTo = $state<Date | null | undefined>(undefined);
-
-  $effect(() => {
-    const cursor = readCursorQuery.data;
-    const t = ticket;
-    if (!cursor || !t?.keyWrap) return;
-
-    const ciphertext = serializedBufferToBase64(cursor.encryptedReadCursor);
-    const kw = t.keyWrap;
-
-    cryptoBridge
-      .decrypt(ticketId, kw.ephemeralPoint, kw.nonce, kw.wrappedKey, ciphertext)
-      .then((plaintext) => {
-        try {
-          const parsed: unknown = JSON.parse(plaintext);
-          if (
-            parsed !== null &&
-            typeof parsed === "object" &&
-            "readUpTo" in parsed
-          ) {
-            const ts = (parsed as Record<string, unknown>).readUpTo;
-            if (typeof ts === "string") {
-              readUpTo = new Date(ts);
-              return;
-            }
-          }
-        } catch {
-          // JSON parse failed: treat as unread
-        }
-        readUpTo = null;
-      })
-      .catch(() => {
-        // AEAD failure (random dummy bytes): all messages are unread.
-        readUpTo = null;
-      });
+  const readCursor = createReadCursor({
+    getTicketId: () => ticketId,
+    getTicketKeyWrap: () => ticket?.keyWrap ?? undefined,
+    getCursorData: () => readCursorQuery.data ?? undefined,
+    cryptoBridge,
+    mutate: async (args) => ticketRouter.updateReadCursor.mutate(args),
   });
-
-  // Debounced read cursor update. Called by TicketDetail when the user
-  // scrolls and new follow-ups become visible.
-  let pendingReadTimestamp: string | null = null;
-  let cursorUpdateTimer: ReturnType<typeof setTimeout> | null = null;
-
-  function handleReadProgress(latestVisibleTimestamp: string): void {
-    // Only advance the cursor forward, never backward.
-    if (
-      pendingReadTimestamp !== null &&
-      latestVisibleTimestamp <= pendingReadTimestamp
-    ) {
-      return;
-    }
-    pendingReadTimestamp = latestVisibleTimestamp;
-
-    if (cursorUpdateTimer) clearTimeout(cursorUpdateTimer);
-    cursorUpdateTimer = setTimeout(() => {
-      void flushReadCursor();
-    }, 3000);
-  }
-
-  async function flushReadCursor(): Promise<void> {
-    const ts = pendingReadTimestamp;
-    if (ts === null) return;
-    pendingReadTimestamp = null;
-
-    try {
-      const payload = JSON.stringify({ readUpTo: ts });
-      const encrypted = await cryptoBridge.encrypt(ticketId, payload);
-      await ticketRouter.updateReadCursor.mutate({
-        ticketId,
-        encryptedReadCursor: encrypted,
-      });
-      // Update local state so the divider adjusts.
-      readUpTo = new Date(ts);
-    } catch {
-      // Failed to update cursor. Not critical; will retry on next scroll.
-    }
-  }
 
   // --- Action sheet data ---
 
@@ -274,7 +198,7 @@
 
   // Tabbar: hidden normally, replaced with select toolbar when select mode is active.
   $effect(() => {
-    if (selectModeActive) {
+    if (selectMode.active) {
       tabbarHidden.current = false;
       tabbarOverride.current = {
         left: selectLeft,
@@ -315,10 +239,7 @@
   let callSheetOpen = $state(false);
   let composeActionsOpen = $state(false);
   let composeActionsAnchor = $state<HTMLElement | undefined>();
-  let lightboxOpen = $state(false);
-  let lightboxUrl = $state<string | null>(null);
-  let contextMenuOpen = $state(false);
-  let contextMenuData = $state<ContextMenuEvent | null>(null);
+  // Lightbox + context menu managed by composables (initialized below after helpers).
   let deleteConfirmOpen = $state(false);
   let deleteTargetId = $state<string | null>(null);
   let editNoteSheetOpen = $state(false);
@@ -330,7 +251,7 @@
   // Filtered follow-ups (bound from TicketDetail for select mode copy).
   let filteredFollowUps = $state<FollowUpList | undefined>(undefined);
 
-  // --- Conversation filters ---
+  // --- Shared context (used by composables and page wiring) ---
 
   const orgCache = getOrgDecryptCache();
   const currentUserIdGetter = getCurrentUserId();
@@ -346,150 +267,31 @@
     () => ticketId,
   );
 
-  const MEDIA_IMAGES = "__images__";
-  const MEDIA_RECORDINGS = "__recordings__";
-  const MEDIA_FILES = "__files__";
+  // --- Conversation filters (composable) ---
 
-  const filterTypes = new SvelteSet<string>();
-  let filterDateFrom = $state<Date | null>(null);
-  let filterDateTo = $state<Date | null>(null);
-  const filterAuthors = new SvelteSet<string>();
-
-  // Derived arrays from SvelteSets so the reactive graph tracks mutations.
-  // Template-level spreads ([...filterTypes]) don't reliably establish
-  // fine-grained tracking on SvelteSet contents in Svelte 5.
-  const filterTypesArr = $derived([...filterTypes]);
-  const filterAuthorsArr = $derived([...filterAuthors]);
-
-  const filterActiveCount = $derived.by((): number => {
-    let count = 0;
-    if (filterTypes.size > 0) count++;
-    if (filterAuthors.size > 0) count++;
-    if (filterDateFrom !== null || filterDateTo !== null) count++;
-    return count;
-  });
-
-  function toggleFilterType(value: string): void {
-    if (filterTypes.has(value)) filterTypes.delete(value);
-    else filterTypes.add(value);
-  }
-
-  function toggleFilterAuthor(value: string): void {
-    if (filterAuthors.has(value)) filterAuthors.delete(value);
-    else filterAuthors.add(value);
-  }
-
-  function handleFilterDateChange(from: Date | null, to: Date | null): void {
-    filterDateFrom = from;
-    filterDateTo = to;
-  }
-
-  function clearAllFilters(): void {
-    filterTypes.clear();
-    filterAuthors.clear();
-    filterDateFrom = null;
-    filterDateTo = null;
-  }
-
-  function handlePillToggle(pillId: string, value: string): void {
-    if (pillId === "type") toggleFilterType(value);
-    else if (pillId === "author") toggleFilterAuthor(value);
-  }
-
-  function handlePillSelect(pillId: string, _value: string | null): void {
-    void pillId;
-  }
-
-  const noteTypeFilterEntries = $derived(
-    (noteTypesQuery?.data?.types ?? []).map((nt) => ({
-      value: `note_type:${nt.id}`,
-      label: orgCache.decrypt(nt.id + ":name", nt.encryptedName) ?? "...",
-    })),
-  );
-
-  const typeFilterOptions = $derived([
-    ...noteTypeFilterEntries,
-    { value: MEDIA_RECORDINGS, label: m.ticket_filter_type_recordings() },
-    { value: MEDIA_IMAGES, label: m.ticket_filter_type_images() },
-    { value: MEDIA_FILES, label: m.ticket_filter_type_files() },
-    { value: "message", label: m.ticket_filter_type_messages() },
-    { value: "assignment_change", label: m.ticket_filter_type_assignment() },
-    { value: "status_change", label: m.ticket_filter_type_status() },
-    { value: "priority_change", label: m.ticket_filter_type_priority() },
-    { value: "hold_change", label: m.ticket_filter_type_hold() },
-    { value: "merge_note", label: m.ticket_filter_type_merge() },
-  ]);
-
-  const authorFilterOptions = $derived.by(() => {
-    const options: { value: string; label: string }[] = [
-      { value: "__client__", label: clientAlias },
-    ];
-    for (const participant of participantsQuery.data ?? []) {
-      const name = orgCache.decrypt(
-        `volunteer:${participant.volunteerId}`,
-        participant.encryptedDisplayName,
-      );
-      const label =
-        participant.volunteerId === currentUserId
-          ? m.ticket_author_you({ name: name ?? "..." })
-          : (name ?? "...");
-      options.push({ value: participant.volunteerId, label });
-    }
-    return options;
-  });
-
-  const dateFromStr = $derived(
-    filterDateFrom ? filterDateFrom.toISOString().slice(0, 10) : "",
-  );
-  const dateToStr = $derived(
-    filterDateTo ? filterDateTo.toISOString().slice(0, 10) : "",
-  );
-  const dateFilterActive = $derived(
-    filterDateFrom !== null || filterDateTo !== null,
-  );
-  const dateFilterLabel = $derived.by((): string | undefined => {
-    if (!dateFilterActive) return undefined;
-    const from = filterDateFrom
-      ? filterDateFrom.toLocaleDateString(undefined, {
-          month: "short",
-          day: "numeric",
-        })
-      : "";
-    const to = filterDateTo
-      ? filterDateTo.toLocaleDateString(undefined, {
-          month: "short",
-          day: "numeric",
-        })
-      : "";
-    if (from && to) return `${from} - ${to}`;
-    if (from) return `${from} -`;
-    return `- ${to}`;
-  });
-
-  const conversationPills = $derived<PillDefinition[]>([
-    {
-      id: "type",
-      label: m.ticket_filter_type(),
-      mode: "multi",
-      options: typeFilterOptions,
-      selected: filterTypes as ReadonlySet<string>,
+  const detailFilters = createDetailFilters({
+    getNoteTypes: () => noteTypesQuery?.data?.types,
+    getParticipants: () => participantsQuery.data,
+    getParticipantsLoading: () => participantsQuery.isLoading,
+    orgCache,
+    getClientAlias: () => clientAlias,
+    getCurrentUserId: () => currentUserId,
+    labels: {
+      filterType: m.ticket_filter_type(),
+      filterAuthor: m.ticket_filter_author(),
+      filterDate: m.ticket_filter_date(),
+      authorYou: (name: string) => m.ticket_author_you({ name }),
+      typeRecordings: m.ticket_filter_type_recordings(),
+      typeImages: m.ticket_filter_type_images(),
+      typeFiles: m.ticket_filter_type_files(),
+      typeMessages: m.ticket_filter_type_messages(),
+      typeAssignment: m.ticket_filter_type_assignment(),
+      typeStatus: m.ticket_filter_type_status(),
+      typePriority: m.ticket_filter_type_priority(),
+      typeHold: m.ticket_filter_type_hold(),
+      typeMerge: m.ticket_filter_type_merge(),
     },
-    {
-      id: "author",
-      label: m.ticket_filter_author(),
-      mode: "multi",
-      options: authorFilterOptions,
-      selected: filterAuthors as ReadonlySet<string>,
-      loading: participantsQuery.isLoading,
-    },
-    {
-      id: "date",
-      label: m.ticket_filter_date(),
-      mode: "date",
-      options: [],
-      selected: null,
-    },
-  ]);
+  });
 
   // --- SubNavbar config objects ---
 
@@ -504,95 +306,21 @@
     gridIcon: Timeline,
   });
 
-  const detailFilterPills: FilterPillsConfig = $derived({
-    pills: conversationPills,
-    activeCount: filterActiveCount,
-    dateFrom: dateFromStr,
-    dateTo: dateToStr,
-    dateActive: dateFilterActive,
-    dateLabel: dateFilterLabel,
-    ontoggle: handlePillToggle,
-    onselect: handlePillSelect,
-    ondatechange: handleFilterDateChange,
-    onclearall: clearAllFilters,
+  // --- Select mode (composable) ---
+
+  const selectMode = createSelectMode({
+    getClientAlias: () => clientAlias,
+    getVolunteerMap: () => volunteerMap,
+    orgCache,
+    followUpCache,
+    getTicketKeyWrap: () => ticket?.keyWrap ?? null,
+    toastStore,
+    labels: {
+      oneCopied: m.ticket_one_message_copied(),
+      manyCopied: (count: string) => m.ticket_messages_copied({ count }),
+      copyFailed: m.common_copy_failed(),
+    },
   });
-
-  // --- Select mode ---
-
-  let selectModeActive = $state(false);
-  const selectedIds = new SvelteSet<string>();
-
-  function enterSelectMode(): void {
-    selectModeActive = true;
-    selectedIds.clear();
-  }
-
-  function exitSelectMode(): void {
-    selectModeActive = false;
-    selectedIds.clear();
-  }
-
-  function toggleSelected(id: string): void {
-    if (selectedIds.has(id)) selectedIds.delete(id);
-    else selectedIds.add(id);
-  }
-
-  async function handleCopySelected(
-    orderedFollowUps: FollowUpList,
-  ): Promise<void> {
-    if (selectedIds.size === 0) return;
-
-    const selected = orderedFollowUps.filter((fu) => selectedIds.has(fu.id));
-    if (selected.length === 0) return;
-
-    const lines: string[] = [];
-    for (const fu of selected) {
-      const time = formatRelativeTime(new Date(fu.createdAt));
-      let author: string;
-      if (fu.source === "system") {
-        author = "[System]";
-      } else if (fu.source === "client") {
-        author = clientAlias;
-      } else {
-        const name = resolveVolName(fu.createdBy, volunteerMap, orgCache);
-        author = name ?? "Volunteer";
-        if (fu.type === "internal_note") {
-          author = `${author} (internal note)`;
-        }
-      }
-
-      let content = "";
-      if (ticket?.keyWrap) {
-        const raw = followUpCache.decryptContent(
-          fu.id,
-          ticket.keyWrap,
-          fu.encryptedContent,
-        );
-        const result = resolveAsyncDecrypt(raw, true);
-        content = matchDecryptResult(result, {
-          loading: () => "[encrypted]",
-          ready: (v) => v,
-          denied: () => "[access denied]",
-          error: () => "[decryption error]",
-        });
-      }
-
-      lines.push(`[${time}] ${author}: ${content}`);
-    }
-
-    try {
-      await navigator.clipboard.writeText(lines.join("\n"));
-      const count = selected.length;
-      toastStore.show(
-        count === 1
-          ? m.ticket_one_message_copied()
-          : m.ticket_messages_copied({ count: String(count) }),
-      );
-    } catch {
-      toastStore.show(m.common_copy_failed());
-    }
-    exitSelectMode();
-  }
 
   // --- Search overlay (composable + page-specific match computation) ---
 
@@ -771,91 +499,21 @@
 
   // --- Action dispatchers ---
 
-  // --- Close flow (sequential resolution sheets) ---
+  // --- Close flow (composable) ---
 
-  let closeQueue = $state<string[]>([]);
-  let closeQueueIndex = $state(0);
-  let closeSheetOpen = $state(false);
-  let closeSaving = $state(false);
+  const closeFlow = createCloseResolution({
+    getTicketId: () => ticketId,
+    cryptoBridge,
+    queryClient,
+    getNoteTypes: () => noteTypesQuery?.data?.types,
+    orgCache,
+    toastStore,
+    labels: { error: m.error_generic() },
+    closeMutate: async (tid) => ticketRouter.close.mutate({ ticketId: tid }),
+    createFollowUpMutate: async (args) =>
+      ticketRouter.createFollowUp.mutate(args),
+  });
 
-  const closeQueueNoteTypeId = $derived(closeQueue.at(closeQueueIndex));
-  const closeQueueNoteType = $derived(
-    closeQueueNoteTypeId !== undefined && noteTypesQuery?.data
-      ? noteTypesQuery.data.types.find((t) => t.id === closeQueueNoteTypeId)
-      : undefined,
-  );
-  const closeQueueTypeName = $derived(
-    closeQueueNoteType
-      ? (orgCache.decrypt(
-          closeQueueNoteType.id + ":name",
-          closeQueueNoteType.encryptedName,
-        ) ?? "")
-      : "",
-  );
-  const closeQueueTypeIcon = $derived(
-    closeQueueNoteType
-      ? resolveNoteTypeIcon(
-          orgCache.decrypt(
-            closeQueueNoteType.id + ":icon",
-            closeQueueNoteType.encryptedIcon,
-          ),
-        )
-      : resolveNoteTypeIcon(null),
-  );
-
-  function handleCloseAction(): void {
-    const types = noteTypesQuery?.data?.types ?? [];
-    const requiresOnClose = types
-      .filter((nt) => nt.requiresOnClose)
-      .map((nt) => nt.id);
-
-    if (requiresOnClose.length === 0) {
-      mutateWithToast(ticketRouter.close.mutate({ ticketId }));
-      return;
-    }
-
-    closeQueue = requiresOnClose;
-    closeQueueIndex = 0;
-    closeSheetOpen = true;
-  }
-
-  function advanceCloseQueue(): void {
-    closeQueueIndex++;
-    if (closeQueueIndex >= closeQueue.length) {
-      closeSheetOpen = false;
-      mutateWithToast(ticketRouter.close.mutate({ ticketId }));
-    }
-  }
-
-  async function handleCloseSheetSubmit(text: string): Promise<void> {
-    if (closeQueueNoteTypeId === undefined) return;
-    closeSaving = true;
-    try {
-      const encryptedContent = await cryptoBridge.encrypt(ticketId, text);
-      await ticketRouter.createFollowUp.mutate({
-        ticketId,
-        type: "internal_note",
-        source: "volunteer",
-        isPrivate: true,
-        encryptedContent,
-        noteTypeId: closeQueueNoteTypeId,
-      });
-      void queryClient.invalidateQueries({
-        queryKey: ticketKeys.followUps(ticketId),
-      });
-      advanceCloseQueue();
-    } catch {
-      toastStore.show(m.error_generic(), 3000);
-    } finally {
-      closeSaving = false;
-    }
-  }
-
-  function handleCloseSheetSkip(): void {
-    advanceCloseQueue();
-  }
-
-  /** Fire a mutation and show a generic error toast on failure. */
   function mutateWithToast<T>(promise: Promise<T>): void {
     void promise.catch(() => {
       toastStore.show(m.error_generic(), 3000);
@@ -888,7 +546,7 @@
         );
         break;
       case "close":
-        handleCloseAction();
+        closeFlow.start();
         break;
       case "reopen":
         mutateWithToast(
@@ -925,53 +583,22 @@
     }
   }
 
-  // --- Context menu handlers ---
+  // --- Context menu + lightbox (composables) ---
 
-  function openContextMenu(event: ContextMenuEvent): void {
-    contextMenuData = event;
-    contextMenuOpen = true;
-  }
+  const lightbox = createLightbox();
 
-  function closeContextMenu(): void {
-    contextMenuOpen = false;
-    contextMenuData = null;
-  }
-
-  function handleContextAction(actionId: ContextActionId): void {
-    const data = contextMenuData;
-    closeContextMenu();
-    if (data === null) return;
-
-    switch (actionId) {
-      case "copy": {
-        void handleCopy(data.plaintext);
-        break;
-      }
-      case "edit": {
-        openNoteEditSheet(
-          data.followUpId,
-          data.plaintext ?? "",
-          data.noteTypeId ?? null,
-        );
-        break;
-      }
-      case "delete": {
-        deleteTargetId = data.followUpId;
-        deleteConfirmOpen = true;
-        break;
-      }
-    }
-  }
-
-  async function handleCopy(plaintext: string | undefined): Promise<void> {
-    if (plaintext === undefined || plaintext === "") return;
-    try {
-      await navigator.clipboard.writeText(plaintext);
-      toastStore.show(m.ticket_copied_to_clipboard());
-    } catch {
-      toastStore.show(m.common_copy_failed());
-    }
-  }
+  const contextMenu = createContextMenu({
+    oncopy: async (plaintext) =>
+      copyToClipboard(plaintext, toastStore, {
+        success: m.ticket_copied_to_clipboard(),
+        failure: m.common_copy_failed(),
+      }),
+    onedit: openNoteEditSheet,
+    ondelete: (followUpId: string) => {
+      deleteTargetId = followUpId;
+      deleteConfirmOpen = true;
+    },
+  });
 
   // --- Delete handlers (optimistic) ---
 
@@ -1048,10 +675,9 @@
     });
   }
 
-  /** Close panel, then open the lightbox with the tapped image. */
   function handlePanelLightbox(imageUrl: string): void {
     closePanel();
-    openLightbox(imageUrl);
+    lightbox.show(imageUrl);
   }
 
   function openCallSheet(): void {
@@ -1059,15 +685,6 @@
   }
   function closeCallSheet(): void {
     callSheetOpen = false;
-  }
-
-  function openLightbox(imageUrl: string): void {
-    lightboxUrl = imageUrl;
-    lightboxOpen = true;
-  }
-  function closeLightbox(): void {
-    lightboxOpen = false;
-    lightboxUrl = null;
   }
 
   // --- SvelteKit Snapshot (draft preservation) ---
@@ -1164,8 +781,10 @@
     view={detailViewConfig}
     stats={detailStats}
     selectLabel={m.ticket_select_mode()}
-    onselect={selectModeActive ? exitSelectMode : enterSelectMode}
-    filterPills={detailFilterPills}
+    onselect={selectMode.active
+      ? () => selectMode.exit()
+      : () => selectMode.enter()}
+    filterPills={detailFilters.pills}
     searchNavigator={overlay.active ? searchNavigatorRow : undefined}
     onsearch={!overlay.active ? () => overlay.enter("") : undefined}
     searchLabel={m.search_inline_trigger()}
@@ -1179,20 +798,20 @@
     bind:draftText
     {cursorPosition}
     onmentionselect={handleMentionSelect}
-    onlightbox={openLightbox}
-    oncontextmenu={openContextMenu}
+    onlightbox={(url: string) => lightbox.show(url)}
+    oncontextmenu={(e: ContextMenuEvent) => contextMenu.show(e)}
     onopenedit={openNoteEditSheet}
     bind:timelineActive
-    {readUpTo}
-    onreadprogress={handleReadProgress}
-    {selectModeActive}
-    selectedIds={new Set(selectedIds)}
-    {toggleSelected}
-    filterTypes={filterTypesArr}
-    filterAuthors={filterAuthorsArr}
-    {filterDateFrom}
-    {filterDateTo}
-    onclearfilters={clearAllFilters}
+    readUpTo={readCursor.readUpTo}
+    onreadprogress={(ts: string) => readCursor.handleProgress(ts)}
+    selectModeActive={selectMode.active}
+    selectedIds={new Set(selectMode.selectedIds)}
+    toggleSelected={(id: string) => selectMode.toggle(id)}
+    filterTypes={detailFilters.filterTypesArr}
+    filterAuthors={detailFilters.filterAuthorsArr}
+    filterDateFrom={detailFilters.filterDateFrom}
+    filterDateTo={detailFilters.filterDateTo}
+    onclearfilters={() => detailFilters.clearAll()}
     bind:filteredFollowUps
     bind:searchableFollowUps
     bind:scrollContainerEl={chatScrollEl}
@@ -1206,7 +825,7 @@
   />
 </div>
 
-{#if !selectModeActive}
+{#if !selectMode.active}
   <ShellMessagebar
     bind:value={draftText}
     onsend={handleSend}
@@ -1222,7 +841,7 @@
     onclick={() => {
       if (filteredFollowUps) {
         for (const fu of filteredFollowUps) {
-          selectedIds.add(fu.id);
+          selectMode.selectedIds.add(fu.id);
         }
       }
     }}
@@ -1233,13 +852,15 @@
   <Link
     iconOnly
     onclick={() => {
-      if (selectedIds.size > 0 && filteredFollowUps) {
-        void handleCopySelected(filteredFollowUps);
+      if (selectMode.selectedIds.size > 0 && filteredFollowUps) {
+        void selectMode.copySelected(filteredFollowUps);
       }
     }}
     aria-label={m.common_copy()}
-    class={selectedIds.size === 0 ? "opacity-30 pointer-events-none" : ""}
-    aria-disabled={selectedIds.size === 0}
+    class={selectMode.selectedIds.size === 0
+      ? "opacity-30 pointer-events-none"
+      : ""}
+    aria-disabled={selectMode.selectedIds.size === 0}
   >
     <Copy size={24} aria-hidden="true" />
   </Link>
@@ -1247,14 +868,18 @@
 
 {#snippet selectMiddle()}
   <span class="font-semibold text-sm" role="status">
-    {selectedIds.size <= 1
+    {selectMode.selectedIds.size <= 1
       ? m.ticket_copy_one_message()
-      : m.ticket_copy_messages({ count: String(selectedIds.size) })}
+      : m.ticket_copy_messages({ count: String(selectMode.selectedIds.size) })}
   </span>
 {/snippet}
 
 {#snippet selectRight()}
-  <Link iconOnly aria-label={m.ticket_select_cancel()} onclick={exitSelectMode}>
+  <Link
+    iconOnly
+    aria-label={m.ticket_select_cancel()}
+    onclick={() => selectMode.exit()}
+  >
     <X size={24} aria-hidden="true" />
   </Link>
 {/snippet}
@@ -1309,11 +934,11 @@
   }}
 />
 
-<ShellPopup opened={lightboxOpen} ondismiss={closeLightbox}>
-  {#if lightboxUrl}
+<ShellPopup opened={lightbox.open} ondismiss={() => lightbox.dismiss()}>
+  {#if lightbox.url}
     <div class="lightbox-content">
       <img
-        src={lightboxUrl}
+        src={lightbox.url}
         alt={m.ticket_mms_lightbox_label()}
         class="lightbox-img"
       />
@@ -1322,12 +947,15 @@
 </ShellPopup>
 
 <!-- Context menu (long-press on message bubble) -->
-<ShellActionSheet opened={contextMenuOpen} ondismiss={closeContextMenu}>
-  {#if contextMenuData !== null}
+<ShellActionSheet
+  opened={contextMenu.open}
+  ondismiss={() => contextMenu.dismiss()}
+>
+  {#if contextMenu.data !== null}
     <ActionsGroup>
-      {#each contextMenuData.actions as action (action.id)}
+      {#each contextMenu.data.actions as action (action.id)}
         <ActionsButton
-          onclick={() => handleContextAction(action.id)}
+          onclick={() => contextMenu.dispatch(action.id)}
           bold={action.destructive === true}
           colors={action.destructive === true
             ? { textIos: "text-red-500", textMaterial: "text-red-500" }
@@ -1338,7 +966,7 @@
       {/each}
     </ActionsGroup>
     <ActionsGroup>
-      <ActionsButton onclick={closeContextMenu} bold>
+      <ActionsButton onclick={() => contextMenu.dismiss()} bold>
         {m.common_cancel()}
       </ActionsButton>
     </ActionsGroup>
@@ -1380,15 +1008,15 @@
 </ShellDialog>
 
 <CloseResolutionSheet
-  opened={closeSheetOpen}
-  noteTypeId={closeQueueNoteTypeId ?? ""}
-  noteTypeName={closeQueueTypeName}
-  NoteTypeIcon={closeQueueTypeIcon}
-  current={closeQueueIndex + 1}
-  total={closeQueue.length}
-  saving={closeSaving}
-  onsubmit={(text: string) => void handleCloseSheetSubmit(text)}
-  onskip={handleCloseSheetSkip}
+  opened={closeFlow.sheetOpen}
+  noteTypeId={closeFlow.noteTypeId ?? ""}
+  noteTypeName={closeFlow.noteTypeName}
+  NoteTypeIcon={resolveNoteTypeIcon(closeFlow.noteTypeIconName)}
+  current={closeFlow.current}
+  total={closeFlow.total}
+  saving={closeFlow.saving}
+  onsubmit={(text: string) => void closeFlow.submit(text)}
+  onskip={() => closeFlow.skip()}
 />
 
 <style>
