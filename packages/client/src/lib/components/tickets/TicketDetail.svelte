@@ -369,7 +369,7 @@
       }
     }
     if (hasNoteTypeFilter && !types.includes("internal_note")) {
-      types.push("internal_note" as FollowUpType);
+      types.push("internal_note");
     }
     return types;
   });

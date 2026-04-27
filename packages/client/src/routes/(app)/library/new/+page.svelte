@@ -31,7 +31,6 @@
   import { useScrollDirection } from "$lib/shell/use-scroll-direction.svelte.js";
   import { usePTR } from "$lib/shell/ptr-context.svelte.js";
   import { RouterNotAvailableError } from "$lib/errors.js";
-  import type { SerializedBuffer } from "$lib/utils/buffer-encoding.js";
   import { createEditorBridge } from "$lib/editor/editor-bridge.svelte.js";
   import { useNavigationGuard } from "$lib/editor/use-navigation-guard.svelte.js";
   import EditorToolbar from "$lib/components/library/EditorToolbar.svelte";
@@ -84,10 +83,7 @@
   const categoryOptions = $derived(
     (categoriesQuery.data ?? []).map((c) => ({
       id: c.id,
-      name: orgCache.decrypt(
-        `kb-cat:${c.id}`,
-        c.encryptedName as SerializedBuffer,
-      ),
+      name: orgCache.decrypt(`kb-cat:${c.id}`, c.encryptedName),
     })),
   );
 

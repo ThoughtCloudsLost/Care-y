@@ -19,7 +19,6 @@ import type {
   SearchProvider,
   SearchResult,
 } from "../types.js";
-import type { Component } from "svelte";
 import type { DecryptResult } from "$lib/crypto/decrypt-result.js";
 import { BookOpen } from "@lucide/svelte";
 import { cacheRegistry } from "$lib/crypto/cache-registry.js";
@@ -138,7 +137,7 @@ export function createKbSearchProvider(
   const provider: SearchProvider<KBSearchData> = {
     id: "kb",
     label: () => m.search_section_kb(),
-    icon: BookOpen as Component,
+    icon: BookOpen,
     renderMode: "card-strip",
     showAllHref: (query) => `/library?q=${encodeURIComponent(query)}`,
     getResultHref: (id) => `/library/${id}`,
@@ -187,10 +186,7 @@ export function createKbSearchProvider(
       };
     },
 
-    ResultItem: KBResultItem as Component<{
-      result: KBSearchData;
-      ontap: (id: string) => void;
-    }>,
+    ResultItem: KBResultItem,
 
     getContentMatchIds(): ReadonlySet<string> {
       return contentMatchIds;

@@ -425,8 +425,7 @@
             limit: 100,
             cursor,
           });
-          // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- tRPC response matches RawCachedTicket shape
-          return result as unknown as readonly RawCachedTicket[];
+          return result;
         },
         ingestTickets: (tickets) => {
           queryClient.setQueryData(
@@ -447,15 +446,7 @@
           const cs = ticketsRouter.contentSearch;
           if (!cs) throw new TypeError("contentSearch router unavailable");
           const result = await cs.query({ ticketIds, page, pageSize });
-          // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- tRPC response shape matches contentSearch return type
-          return result as unknown as {
-            followups: readonly {
-              ticketId: string;
-              followupId: string;
-              encryptedContent: string;
-            }[];
-            total: number;
-          };
+          return result;
         },
       }),
     );

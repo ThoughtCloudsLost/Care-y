@@ -10,7 +10,6 @@
  */
 import { SvelteMap } from "svelte/reactivity";
 import type { SearchProvider, SearchResult } from "../types.js";
-import type { Component } from "svelte";
 import { fuzzySearch } from "../fuzzy.js";
 import { UsersRound } from "@lucide/svelte";
 import * as m from "$lib/paraglide/messages.js";
@@ -74,7 +73,7 @@ export function createVolunteerSearchProvider(
   return {
     id: "volunteers",
     label: () => m.search_section_volunteers(),
-    icon: UsersRound as Component,
+    icon: UsersRound,
     renderMode: "card-strip",
     showAllHref: (query) =>
       `/admin/people?tab=users&q=${encodeURIComponent(query)}`,
@@ -129,9 +128,6 @@ export function createVolunteerSearchProvider(
       };
     },
 
-    ResultItem: VolunteerResultItem as Component<{
-      result: VolunteerSearchData;
-      ontap: (id: string) => void;
-    }>,
+    ResultItem: VolunteerResultItem,
   };
 }
