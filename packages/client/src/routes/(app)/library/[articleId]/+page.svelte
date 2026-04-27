@@ -99,9 +99,7 @@
     article?.categoryId ?? cachedSummary?.categoryId ?? null,
   );
   const encryptedTitle = $derived(
-    (article?.encryptedTitle ??
-      cachedSummary?.encryptedTitle ??
-      null) as SerializedBuffer | null,
+    article?.encryptedTitle ?? cachedSummary?.encryptedTitle ?? null,
   );
   const createdBy = $derived(
     article?.createdBy ?? cachedSummary?.createdBy ?? null,
@@ -138,10 +136,7 @@
     if (categoryId === null || categoryQuery.data == null) return null;
     const cat = categoryQuery.data.find((c) => c.id === categoryId);
     if (cat == null) return null;
-    return orgCache.decrypt(
-      `kb-cat:${cat.id}`,
-      cat.encryptedName as SerializedBuffer,
-    );
+    return orgCache.decrypt(`kb-cat:${cat.id}`, cat.encryptedName);
   });
 
   // ── Author name (decrypt from cache, createdBy available from list) ──
@@ -172,9 +167,7 @@
     try {
       const raw = article.encryptedBody;
       const ciphertext =
-        raw instanceof Uint8Array
-          ? raw
-          : new Uint8Array((raw as SerializedBuffer).data);
+        raw instanceof Uint8Array ? raw : new Uint8Array(raw.data);
       const plainBytes = orgKeyManager.decrypt(ciphertext);
       const title =
         titleResult.status === "ready" ? titleResult.value : undefined;
@@ -236,9 +229,7 @@
           const ct =
             att.encryptedFilename instanceof Uint8Array
               ? att.encryptedFilename
-              : new Uint8Array(
-                  (att.encryptedFilename as SerializedBuffer).data,
-                );
+              : new Uint8Array(att.encryptedFilename.data);
           const plain = orgKeyManager.decrypt(ct);
           filename = new TextDecoder().decode(plain);
         } catch {

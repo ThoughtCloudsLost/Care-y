@@ -48,7 +48,7 @@ export const trpc: TRPCClient<AppRouter> = createTRPCClient<AppRouter>({
         return fetch(url, {
           ...options,
           credentials: "include",
-        } as RequestInit);
+        });
       },
     }),
   ],

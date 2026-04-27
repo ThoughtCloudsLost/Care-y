@@ -94,7 +94,7 @@ export function blockTypeActive(
     const node = $from.node(d);
     if (node.type === type) {
       if (attrs === undefined) return true;
-      const nodeAttrs = node.attrs as Record<string, unknown>;
+      const nodeAttrs = node.attrs;
       // eslint-disable-next-line security/detect-object-injection -- k is from Object.entries of a trusted attrs param
       return Object.entries(attrs).every(([k, v]) => nodeAttrs[k] === v);
     }
