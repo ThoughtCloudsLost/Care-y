@@ -17,7 +17,13 @@ import type { ConsultantRepository } from "../telephony/models/consultant-repo.j
 import type { Kysely } from "kysely";
 import type { TenantDatabase } from "../db/types.js";
 import type { SessionRepository } from "../auth/session-repository.js";
+import type {
+  FieldEncryptor,
+  BlindIndexer,
+} from "../crypto/field-encryptor.js";
+import type { PendingClient } from "../tickets/ticket-service.js";
 import { generateTwilioAccessToken } from "../telephony/twilio-token.js";
+import { createPhoneRepository } from "../telephony/models/phone-repo.js";
 import {
   readRawBody,
   extractBufferField,
@@ -29,6 +35,7 @@ import {
   type OrgResolver,
 } from "./relay-utils.js";
 import { readFormBody } from "./webhooks.js";
+import { randomUUID } from "node:crypto";
 
 // ---------------------------------------------------------------------------
 // Dependencies
@@ -67,6 +74,9 @@ export interface RelayHandlerDeps {
   readonly createSessionRepo: (
     orgSchema: string,
   ) => SessionRepository | Promise<SessionRepository>;
+  readonly indexer: BlindIndexer;
+  readonly fieldEncryptor: FieldEncryptor;
+  readonly pendingClients: Map<string, PendingClient>;
 }
 
 export interface PendingCall {
@@ -131,6 +141,8 @@ export function createRelayHandler(
       await handleCallRelay(req, res, session, deps);
     } else if (url === "/relay/webrtc-token") {
       await handleWebrtcToken(req, res, session, deps);
+    } else if (url === "/relay/phone-lookup") {
+      await handlePhoneLookup(req, res, session, deps);
     } else {
       res.writeHead(404);
       res.end();
@@ -525,6 +537,117 @@ async function handleWebrtcToken(
   );
 
   sendJsonResponse(res, 200, { token, ttl });
+}
+
+// ---------------------------------------------------------------------------
+// Phone Lookup (POST /relay/phone-lookup)
+// ---------------------------------------------------------------------------
+
+const PENDING_CLIENT_TTL_MS = 5 * 60 * 1000; // 5 minutes
+const PENDING_CLIENT_CLEANUP_INTERVAL_MS = 60 * 1000;
+
+let pendingClientCleanupStarted = false;
+
+function startPendingClientCleanup(
+  pendingClients: Map<string, PendingClient>,
+): void {
+  if (pendingClientCleanupStarted) return;
+  pendingClientCleanupStarted = true;
+  setInterval(() => {
+    const now = Date.now();
+    for (const [token, entry] of pendingClients) {
+      if (now - entry.createdAt > PENDING_CLIENT_TTL_MS) {
+        entry.opsEncryptedPhone.fill(0);
+        pendingClients.delete(token);
+      }
+    }
+  }, PENDING_CLIENT_CLEANUP_INTERVAL_MS).unref();
+}
+
+async function handlePhoneLookup(
+  req: IncomingMessage,
+  res: ServerResponse,
+  session: RelaySession,
+  deps: RelayHandlerDeps,
+): Promise<void> {
+  startPendingClientCleanup(deps.pendingClients);
+
+  let rawBody: Buffer | null = null;
+  let phoneBuf: Buffer | null = null;
+
+  try {
+    rawBody = await readRawBody(req, MAX_RELAY_BODY);
+    phoneBuf = extractBufferField(rawBody, "phone");
+
+    if (!phoneBuf || phoneBuf.length === 0) {
+      sendRelayError(res, 400, "MISSING_FIELDS");
+      return;
+    }
+
+    const tenantDb = deps.getTenantDb(session.orgSchema);
+
+    // Derive hash + OPS-encrypted phone in a tight scope so the JS string
+    // reference drops before the await calls below. The string itself is
+    // immutable and persists until GC (accepted residual risk, same as SMS
+    // relay). Scoping minimizes the number of closures that capture it.
+    let phoneHash: string;
+    let opsEncryptedPhone: Buffer;
+    {
+      const phoneStr = phoneBuf.toString("utf-8");
+      phoneHash = deps.indexer.hash(phoneStr, session.orgSchema);
+      opsEncryptedPhone = deps.fieldEncryptor.encrypt(phoneStr);
+    }
+
+    const phoneRepo = createPhoneRepository(tenantDb);
+    const existingPhone = await phoneRepo.findByHash(phoneHash);
+
+    if (existingPhone) {
+      const client = await tenantDb
+        .selectFrom("clients")
+        .select(["id", "alias"])
+        .where("phone_id", "=", existingPhone.id)
+        .where("merged_into", "is", null)
+        .executeTakeFirst();
+
+      if (client) {
+        const openTicket = await tenantDb
+          .selectFrom("tickets")
+          .select("id")
+          .where("client_id", "=", client.id)
+          .where("status", "=", "open")
+          .executeTakeFirst();
+
+        // Existing client found: zero the pre-computed OPS-encrypted phone
+        // since we won't need it for a pending token.
+        opsEncryptedPhone.fill(0);
+
+        sendJsonResponse(res, 200, {
+          found: true,
+          clientId: client.id,
+          alias: client.alias,
+          openTicketId: openTicket?.id ?? null,
+        });
+        return;
+      }
+    }
+
+    // No match: store pre-computed hash + OPS-encrypted phone in pending map.
+    const token = randomUUID();
+    deps.pendingClients.set(token, {
+      phoneHash,
+      opsEncryptedPhone,
+      orgSchema: session.orgSchema,
+      createdAt: Date.now(),
+    });
+
+    sendJsonResponse(res, 200, {
+      found: false,
+      token,
+    });
+  } finally {
+    rawBody?.fill(0);
+    phoneBuf?.fill(0);
+  }
 }
 
 // ---------------------------------------------------------------------------

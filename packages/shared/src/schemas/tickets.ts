@@ -35,16 +35,31 @@ export const followUpTypeSchema = z.enum([
 ]);
 export type FollowUpType = z.infer<typeof followUpTypeSchema>;
 
+// --- Key wrap schema (ECIES-wrapped symmetric ticket key) ---
+
+export const keyWrapSchema = z.object({
+  ephemeralPoint: base64String("ephemeralPoint"),
+  nonce: base64String("nonce"),
+  wrappedKey: base64String("wrappedKey"),
+});
+export type KeyWrap = z.infer<typeof keyWrapSchema>;
+
 // --- Input schemas ---
 
-export const createTicketInputSchema = z.object({
-  queueId: z.uuid(),
-  clientId: z.uuid(),
-  encryptedTitle: base64String("encryptedTitle"),
-  encryptedDescription: base64String("encryptedDescription"),
-  priority: ticketPrioritySchema.default("normal"),
-  keyGeneration: z.uuid(),
-});
+export const createTicketInputSchema = z
+  .object({
+    queueId: z.uuid(),
+    clientId: z.uuid().optional(),
+    clientToken: z.uuid().optional(),
+    encryptedTitle: base64String("encryptedTitle"),
+    encryptedDescription: base64String("encryptedDescription"),
+    priority: ticketPrioritySchema.default("normal"),
+    keyGeneration: z.uuid(),
+    keyWrap: keyWrapSchema,
+  })
+  .refine((data) => Boolean(data.clientId) !== Boolean(data.clientToken), {
+    message: "Provide either clientId or clientToken, not both",
+  });
 export type CreateTicketInput = z.infer<typeof createTicketInputSchema>;
 
 export const createFollowUpInputSchema = z.object({
