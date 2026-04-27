@@ -502,7 +502,8 @@ describe.skipIf(!process.env.DATABASE_URL)("KBItemService (DB)", () => {
       encryptedBody: Buffer.from("body"),
     });
 
-    // Touch "first" to make it newer by updated_at
+    // Small delay so updated_at is distinct (PG now() is transaction-start time)
+    await new Promise((r) => setTimeout(r, 50));
     await svc.update(first.id, {
       encryptedTitle: Buffer.from("first-updated"),
     });
