@@ -4,6 +4,7 @@ import {
   type KBSearchProviderDeps,
   type RawKBItem,
 } from "./kb.js";
+import type { FullSearchState } from "../types.js";
 
 // Mock paraglide messages
 vi.mock("$lib/paraglide/messages.js", () => ({
@@ -331,5 +332,175 @@ describe("createKbSearchProvider", () => {
       expect(totalCached).toBe(3);
     });
     expect(deps.fetchPage).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("KB fullSearch (body content)", () => {
+  const bodyContentMap: Record<string, string> = {
+    a1: "Detailed instructions for intake call processing and documentation requirements",
+    a2: "When a case involves immediate danger, escalate to the supervisor on call",
+    a3: "Safety protocols require two-person teams for all field visits to ensure volunteer protection",
+  };
+
+  function makeState(): FullSearchState {
+    return { status: "idle", searched: 0, total: 0, matchCount: 0 };
+  }
+
+  function createFullSearchDeps(
+    items: readonly RawKBItem[] = testItems,
+  ): KBSearchProviderDeps {
+    return {
+      ...createDeps(items),
+      fetchBodies: vi.fn(async (itemIds: string[]) =>
+        itemIds.map((id) => ({
+          id,
+          encryptedBody: new Uint8Array([99]),
+        })),
+      ),
+      decryptOrg: (cacheKey: string, ciphertext: unknown) => {
+        if (ciphertext === null) return null;
+        const match = /^kb-search:(.+?):(title|excerpt|body)$/.exec(cacheKey);
+        if (!match) return null;
+        const [, id, field] = match;
+        if (!id || !field) return null;
+        if (field === "title") return titleMap[id] ?? null;
+        if (field === "body") return bodyContentMap[id] ?? null;
+        return excerptMap[id] ?? null;
+      },
+    };
+  }
+
+  it("only fetches bodies for non-matching articles", async () => {
+    const deps = createFullSearchDeps();
+    const provider = createKbSearchProvider(deps);
+
+    // Trigger loadAll
+    provider.search("intake");
+    await vi.waitFor(() => {
+      const { totalCached } = provider.search("intake");
+      expect(totalCached).toBe(3);
+    });
+
+    const state = makeState();
+    await provider.fullSearch!("intake", state, vi.fn());
+
+    // "intake" matches a1 on title/excerpt. a2 and a3 don't match.
+    // fetchBodies should be called with a2 and a3 only.
+    expect(deps.fetchBodies).toHaveBeenCalledOnce();
+    const calledIds = (deps.fetchBodies as ReturnType<typeof vi.fn>).mock
+      .calls[0]![0] as string[];
+    expect(calledIds).not.toContain("a1");
+    expect(calledIds).toContain("a2");
+    expect(calledIds).toContain("a3");
+  });
+
+  it("adds body-matched articles to results", async () => {
+    const deps = createFullSearchDeps();
+    const provider = createKbSearchProvider(deps);
+
+    provider.search("danger");
+    await vi.waitFor(() => {
+      const { totalCached } = provider.search("danger");
+      expect(totalCached).toBe(3);
+    });
+
+    const state = makeState();
+    await provider.fullSearch!("danger", state, vi.fn());
+
+    // "danger" doesn't match any title/excerpt, but matches a2's body content.
+    // Content matches propagate through search() via contentMatchIds.
+    const { results } = provider.search("danger");
+    expect(results.some((r) => r.id === "a2")).toBe(true);
+    expect(state.matchCount).toBeGreaterThanOrEqual(1);
+  });
+
+  it("updates progress state", async () => {
+    const deps = createFullSearchDeps();
+    const provider = createKbSearchProvider(deps);
+
+    provider.search("something");
+    await vi.waitFor(() => {
+      const { totalCached } = provider.search("something");
+      expect(totalCached).toBe(3);
+    });
+
+    const state = makeState();
+    await provider.fullSearch!("something", state, vi.fn());
+
+    expect(state.total).toBe(3);
+    expect(state.searched).toBe(3);
+  });
+
+  it("preserves title matches when fetchBodies fails", async () => {
+    const deps: Omit<KBSearchProviderDeps, "fetchBodies"> & {
+      fetchBodies: KBSearchProviderDeps["fetchBodies"];
+    } = {
+      ...createFullSearchDeps(),
+      fetchBodies: vi.fn(async () => {
+        throw new Error("Network error");
+      }),
+    };
+    const provider = createKbSearchProvider(deps);
+
+    provider.search("intake");
+    await vi.waitFor(() => {
+      const { totalCached } = provider.search("intake");
+      expect(totalCached).toBe(3);
+    });
+
+    const state = makeState();
+    await provider.fullSearch!("intake", state, vi.fn());
+
+    // a1 matched on title via search(), matchCount reflects title matches
+    expect(state.matchCount).toBe(1);
+  });
+
+  it("registers fullSearch only when fetchBodies is provided", () => {
+    const withDep = createKbSearchProvider(createFullSearchDeps());
+    expect(withDep.fullSearch).toBeDefined();
+
+    const withoutDep = createKbSearchProvider(createDeps());
+    expect(withoutDep.fullSearch).toBeUndefined();
+  });
+
+  it("skips fetchBodies when all articles match on title/excerpt", async () => {
+    const deps = createFullSearchDeps();
+    const provider = createKbSearchProvider(deps);
+
+    // "guide" matches all three titles/excerpts
+    provider.search("guide");
+    await vi.waitFor(() => {
+      const { totalCached } = provider.search("guide");
+      expect(totalCached).toBe(3);
+    });
+
+    // Only a3 matches "guide" in title ("Safety procedures guide")
+    // but the fullSearch should still call fetchBodies for non-matching ones
+    // Let's test with a query that matches all three
+    const allMatchDeps: KBSearchProviderDeps = {
+      ...createFullSearchDeps(),
+      decryptOrg: (cacheKey: string, ciphertext: unknown) => {
+        if (ciphertext === null) return null;
+        const match = /^kb-search:(.+?):(title|excerpt|body)$/.exec(cacheKey);
+        if (!match) return null;
+        const [, , field] = match;
+        if (!field) return null;
+        if (field === "title") return "Common searchable title";
+        if (field === "excerpt") return "Common searchable excerpt";
+        return "body text";
+      },
+    };
+    const allMatchProvider = createKbSearchProvider(allMatchDeps);
+    allMatchProvider.search("common");
+    await vi.waitFor(() => {
+      const { totalCached } = allMatchProvider.search("common");
+      expect(totalCached).toBe(3);
+    });
+
+    const state = makeState();
+    await allMatchProvider.fullSearch!("common", state, vi.fn());
+
+    expect(state.matchCount).toBe(3);
+    expect(allMatchDeps.fetchBodies).not.toHaveBeenCalled();
   });
 });

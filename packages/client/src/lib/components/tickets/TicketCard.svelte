@@ -35,6 +35,7 @@
     followUpCount,
     unreadCount,
     previewFollowUps,
+    previewReactions,
     selected = false,
     multiSelectActive = false,
     ontap,
@@ -42,6 +43,7 @@
     onaction,
     onencryptedhelp,
     loading = false,
+    searchTerm = null,
   }: TicketCardProps = $props();
 
   const previewLoader = getPreviewLoader();
@@ -155,6 +157,7 @@
             followUps={previewFollowUps}
             multiline={isList}
             {followUpCount}
+            reactions={previewReactions}
           />
         </div>
 
@@ -198,11 +201,8 @@
                 result={titleResult}
                 ciphertext={encryptedTitle}
                 length={25}
-              >
-                {#if titleResult.status === "ready"}
-                  <span class="title-text">{titleResult.value}</span>
-                {/if}
-              </DecryptPlaceholder>
+                {searchTerm}
+              />
             {/if}
           </div>
         </div>
@@ -302,6 +302,7 @@
     overflow: hidden;
     display: flex;
     flex-direction: column;
+    border-radius: var(--card-radius, 0.75rem);
   }
 
   .ticket-card-wrap :global(.k-card) {
@@ -384,8 +385,7 @@
   }
 
   /* ── Row: title ── */
-  .title-text {
-    display: block;
+  .row-title {
     font-size: var(--text-base);
     line-height: 1.3;
     color: var(--ink);
@@ -533,13 +533,20 @@
     font-size: var(--text-base);
   }
 
-  .card-inner--grid .title-text {
+  .card-inner--grid .row-title {
     font-size: var(--text-sm);
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
   }
 
   .card-inner--grid {
     flex: 1;
     min-height: 14rem;
+    max-height: 18rem;
+    overflow: hidden;
   }
 
   .card-inner--grid .row-meta {

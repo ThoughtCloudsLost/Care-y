@@ -10,7 +10,8 @@
   import { createQuery, useQueryClient } from "@tanstack/svelte-query";
   import { page } from "$app/state";
   import { resolve } from "$app/paths";
-  import { Link, Preloader, Dialog, DialogButton } from "konsta/svelte";
+  import { Link, Preloader, DialogButton } from "konsta/svelte";
+  import ShellDialog from "$lib/shell/ShellDialog.svelte";
   import {
     ChevronLeft,
     Save,
@@ -20,6 +21,7 @@
   } from "@lucide/svelte";
   import * as m from "$lib/paraglide/messages.js";
   import { trpc } from "$lib/trpc/index.js";
+  import { kbKeys } from "$lib/query/keys.js";
   import { getOrgDecryptCache, getOrgKeyManager } from "$lib/crypto/context.js";
   import {
     getNavbarOverrideCtx,
@@ -66,7 +68,9 @@
 
   const guard = useNavigationGuard({
     isDirty: () => bridge.dirty,
-    fallbackUrl: resolve(`/library/${articleId}`),
+    get fallbackUrl() {
+      return resolve(`/library/${articleId}`);
+    },
     onLeave: () => ptr.setEnabled(true),
   });
 
@@ -80,7 +84,7 @@
   // ── Load article ──
 
   const articleQuery = createQuery(() => ({
-    queryKey: ["kb", "item", articleId],
+    queryKey: kbKeys.item(articleId),
     queryFn: async () => kbRouter.getItem.query({ itemId: articleId }),
     enabled: articleId !== "",
   }));
@@ -128,7 +132,7 @@
   // ── Categories for the selector ──
 
   const categoriesQuery = createQuery(() => ({
-    queryKey: ["kb", "categories"],
+    queryKey: kbKeys.categories(),
     queryFn: async () => kbRouter.listCategories.query(),
   }));
 
@@ -146,9 +150,9 @@
 
   function handleSaved(): void {
     guard.allowNavigation();
-    void queryClient.invalidateQueries({ queryKey: ["kb", "items"] });
+    void queryClient.invalidateQueries({ queryKey: kbKeys.items() });
     void queryClient.invalidateQueries({
-      queryKey: ["kb", "item", articleId],
+      queryKey: kbKeys.item(articleId),
     });
     shellBack(`/library/${articleId}`);
   }
@@ -295,12 +299,14 @@
   </div>
 {/if}
 
-<Dialog
+<ShellDialog
   opened={guard.discardDialogOpen}
+  ondismiss={() => guard.dismiss()}
   title={m.library_discard_title()}
-  onBackdropClick={() => guard.dismiss()}
 >
-  {m.library_discard_body()}
+  {#snippet content()}
+    {m.library_discard_body()}
+  {/snippet}
   {#snippet buttons()}
     <DialogButton onclick={() => guard.dismiss()}>
       {m.common_cancel()}
@@ -309,7 +315,7 @@
       {m.library_discard_confirm()}
     </DialogButton>
   {/snippet}
-</Dialog>
+</ShellDialog>
 
 <style>
   /* Keyboard-docked toolbar: docked above the software keyboard on iOS

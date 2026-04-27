@@ -16,42 +16,81 @@
   import { Link } from "konsta/svelte";
   import {
     ChevronLeft,
-    CalendarClock,
     MessageSquareText,
-    EllipsisVertical,
+    Timeline,
+    BookUser,
+    X,
+    Copy,
+    SquareCheckBig,
   } from "@lucide/svelte";
   import * as m from "$lib/paraglide/messages.js";
   import {
     getTabbarHiddenCtx,
     getNavbarOverrideCtx,
+    getTabbarOverrideCtx,
   } from "$lib/shell/context.js";
   import { shellBack } from "$lib/shell/navigation.js";
-  import type { ComposeMode } from "$lib/shell/types.js";
+  import { useScrollDirection } from "$lib/shell/use-scroll-direction.svelte.js";
+  import type { ViewToggleConfig } from "$lib/shell/types.js";
+  import SubNavbarFilterLayout from "$lib/shell/SubNavbarFilterLayout.svelte";
   import TicketDetail from "$lib/components/tickets/TicketDetail.svelte";
-  import type {
-    ContextActionId,
-    ContextMenuEvent,
-  } from "$lib/components/tickets/context-menu-actions.js";
+  import PriorityBadge from "$lib/components/PriorityBadge.svelte";
+  import type { ContextMenuEvent } from "$lib/components/tickets/context-menu-actions.js";
+  import { createLightbox } from "$lib/composables/ticket-detail/create-lightbox.svelte.js";
+  import { createContextMenu } from "$lib/composables/ticket-detail/create-context-menu.svelte.js";
+  import { createSelectMode } from "$lib/composables/ticket-detail/create-select-mode.svelte.js";
+  import { createReadCursor } from "$lib/composables/ticket-detail/create-read-cursor.svelte.js";
+  import { createCloseResolution } from "$lib/composables/ticket-detail/create-close-resolution.svelte.js";
+  import { createDetailFilters } from "$lib/composables/ticket-detail/create-detail-filters.svelte.js";
+  import { copyToClipboard } from "$lib/composables/ticket-detail/clipboard-copy.js";
   import ShellMessagebar from "$lib/shell/ShellMessagebar.svelte";
   import ShellActionSheet from "$lib/shell/ShellActionSheet.svelte";
-  import ShellSheet from "$lib/shell/ShellSheet.svelte";
   import ShellPopup from "$lib/shell/ShellPopup.svelte";
   import ShellDialog from "$lib/shell/ShellDialog.svelte";
   import { DialogButton, ActionsGroup, ActionsButton } from "konsta/svelte";
-  import PresetReplyContent from "$lib/components/tickets/PresetReplyContent.svelte";
   import TicketPanelContent from "$lib/components/tickets/TicketPanelContent.svelte";
   import AssignSheet from "$lib/components/tickets/AssignSheet.svelte";
+  import ComposeActions from "$lib/components/tickets/ComposeActions.svelte";
   import type { TicketAction } from "$lib/tickets/types.js";
   import CallOptionsContent, {
     type CallAction,
   } from "$lib/components/tickets/CallOptionsContent.svelte";
   import { createQuery, useQueryClient } from "@tanstack/svelte-query";
+  import { ticketKeys, ticketsKeys, consultantKeys } from "$lib/query/keys";
   import { trpc } from "$lib/trpc/index.js";
-  import { getCryptoBridge } from "$lib/crypto/context.js";
+  import {
+    getCryptoBridge,
+    getOrgDecryptCache,
+    getCurrentUserId,
+    getFollowUpDecryptCache,
+    getTicketDecryptCache,
+  } from "$lib/crypto/context.js";
+  import {
+    createVolunteersQuery,
+    createParticipantsQuery,
+    createNoteTypesQuery,
+  } from "$lib/tickets/queries.js";
+  import {
+    buildVolunteerMap,
+    resolveVolunteerName as resolveVolName,
+  } from "$lib/tickets/resolve-volunteer.js";
   import { RouterNotAvailableError } from "$lib/errors.js";
   import { toastStore } from "$lib/stores/toast.svelte.js";
   import { haptic } from "$lib/utils/haptic.js";
-  import { serializedBufferToBase64 } from "$lib/utils/buffer-encoding.js";
+  import {
+    registerSearchProvider,
+    setPromotedOverride,
+  } from "$lib/search/registry.svelte.js";
+  import { createConversationSearchProvider } from "$lib/search/providers/conversation.js";
+  import { DECRYPT_ERROR_SENTINEL } from "$lib/crypto/async-decrypt-cache.js";
+  import { fuzzySearch } from "$lib/search/fuzzy.js";
+  import { createSearchOverlay } from "$lib/search/search-overlay.svelte.js";
+  import SearchNavigator from "$lib/components/search/SearchNavigator.svelte";
+  import CloseResolutionSheet from "$lib/components/tickets/CloseResolutionSheet.svelte";
+  import InternalNoteSheet from "$lib/components/tickets/InternalNoteSheet.svelte";
+  import { resolveNoteTypeIcon } from "$lib/utils/note-type-icons.js";
+
+  // ── Composable initialization ──
 
   if (!trpc.tickets) throw new RouterNotAvailableError("tickets");
   const ticketRouter = trpc.tickets;
@@ -60,15 +99,15 @@
 
   type FollowUpList = Awaited<
     ReturnType<typeof ticketRouter.listFollowUps.query>
-  >;
+  >["followUps"];
 
   const ticketId = $derived(page.params.id ?? "");
   const tabbarHidden = getTabbarHiddenCtx();
   const navbarCtx = getNavbarOverrideCtx();
+  const tabbarOverride = getTabbarOverrideCtx();
 
   // Draft compose state (shared with ShellMessagebar + TicketDetail).
   let draftText = $state("");
-  let composeMode = $state<ComposeMode>("reply");
   let cursorPosition = $state(0);
 
   function handleInput(e: Event): void {
@@ -80,12 +119,23 @@
 
   // Ticket data for navbar display.
   const ticketQuery = createQuery(() => ({
-    queryKey: ["ticket", ticketId],
+    queryKey: ticketKeys.detail(ticketId),
     queryFn: async () => ticketRouter.get.query({ ticketId }),
   }));
 
   const ticket = $derived(ticketQuery.data);
   const clientAlias = $derived(ticket?.clientAlias ?? "...");
+  const ticketDecryptCache = getTicketDecryptCache();
+
+  const decryptedTitle = $derived.by((): string => {
+    if (!ticket) return "...";
+    const result = ticketDecryptCache.decryptTitle(
+      ticket.id,
+      ticket.keyWrap,
+      ticket.encryptedTitle,
+    );
+    return typeof result === "string" ? result : "...";
+  });
 
   // Look up followUpCount from the ticket list cache (available instantly,
   // no need to wait for the detail query).
@@ -95,7 +145,7 @@
       followUpCount: number;
     }
     const entries = queryClient.getQueriesData<{ pages: TicketRow[][] }>({
-      queryKey: ["tickets", "list"],
+      queryKey: ticketsKeys.lists(),
     });
     for (const [, data] of entries) {
       if (!data?.pages) continue;
@@ -107,98 +157,27 @@
     return undefined;
   });
 
-  // --- Read cursor ---
+  // --- Read cursor (composable) ---
 
   const readCursorQuery = createQuery(() => ({
-    queryKey: ["ticket", ticketId, "readCursor"],
+    queryKey: ticketKeys.readCursor(ticketId),
     queryFn: async () => ticketRouter.getReadCursor.query({ ticketId }),
     enabled: ticketId !== "",
   }));
 
-  // Decrypt the read cursor to get the readUpTo timestamp.
-  // undefined = still loading, null = unread (dummy or decrypt failed).
-  let readUpTo = $state<Date | null | undefined>(undefined);
-
-  $effect(() => {
-    const cursor = readCursorQuery.data;
-    const t = ticket;
-    if (!cursor || !t?.keyWrap) return;
-
-    const ciphertext = serializedBufferToBase64(cursor.encryptedReadCursor);
-    const kw = t.keyWrap;
-
-    cryptoBridge
-      .decrypt(ticketId, kw.ephemeralPoint, kw.nonce, kw.wrappedKey, ciphertext)
-      .then((plaintext) => {
-        try {
-          const parsed: unknown = JSON.parse(plaintext);
-          if (
-            parsed !== null &&
-            typeof parsed === "object" &&
-            "readUpTo" in parsed
-          ) {
-            const ts = (parsed as Record<string, unknown>).readUpTo;
-            if (typeof ts === "string") {
-              readUpTo = new Date(ts);
-              return;
-            }
-          }
-        } catch {
-          // JSON parse failed: treat as unread
-        }
-        readUpTo = null;
-      })
-      .catch(() => {
-        // AEAD failure (random dummy bytes): all messages are unread.
-        readUpTo = null;
-      });
+  const readCursor = createReadCursor({
+    getTicketId: () => ticketId,
+    getTicketKeyWrap: () => ticket?.keyWrap ?? undefined,
+    getCursorData: () => readCursorQuery.data ?? undefined,
+    cryptoBridge,
+    mutate: async (args) => ticketRouter.updateReadCursor.mutate(args),
   });
-
-  // Debounced read cursor update. Called by TicketDetail when the user
-  // scrolls and new follow-ups become visible.
-  let pendingReadTimestamp: string | null = null;
-  let cursorUpdateTimer: ReturnType<typeof setTimeout> | null = null;
-
-  function handleReadProgress(latestVisibleTimestamp: string): void {
-    // Only advance the cursor forward, never backward.
-    if (
-      pendingReadTimestamp !== null &&
-      latestVisibleTimestamp <= pendingReadTimestamp
-    ) {
-      return;
-    }
-    pendingReadTimestamp = latestVisibleTimestamp;
-
-    if (cursorUpdateTimer) clearTimeout(cursorUpdateTimer);
-    cursorUpdateTimer = setTimeout(() => {
-      void flushReadCursor();
-    }, 3000);
-  }
-
-  async function flushReadCursor(): Promise<void> {
-    const ts = pendingReadTimestamp;
-    if (ts === null) return;
-    pendingReadTimestamp = null;
-
-    try {
-      const payload = JSON.stringify({ readUpTo: ts });
-      const encrypted = await cryptoBridge.encrypt(ticketId, payload);
-      await ticketRouter.updateReadCursor.mutate({
-        ticketId,
-        encryptedReadCursor: encrypted,
-      });
-      // Update local state so the divider adjusts.
-      readUpTo = new Date(ts);
-    } catch {
-      // Failed to update cursor. Not critical; will retry on next scroll.
-    }
-  }
 
   // --- Action sheet data ---
 
   // Consultant phone registration (for call options).
   const consultantQuery = createQuery(() => ({
-    queryKey: ["consultant"],
+    queryKey: consultantKeys.all,
     queryFn: async () => trpc.consultant?.get.query() ?? null,
     staleTime: 5 * 60 * 1000,
   }));
@@ -206,17 +185,48 @@
 
   // --- Shell overrides ---
 
-  // Hide the AppShell tabbar while this route is active.
+  // Scroll container ref from TicketDetail (for scroll-direction tracking).
+  let chatScrollEl = $state<HTMLElement | undefined>();
+  let chatScrollReady = $state(false);
+
+  const scrollDir = useScrollDirection({
+    get scrollEl() {
+      return chatScrollEl;
+    },
+    invert: true,
+  });
+
+  // Tabbar: hidden normally, replaced with select toolbar when select mode is active.
   $effect(() => {
-    tabbarHidden.current = true;
+    if (selectMode.active) {
+      tabbarHidden.current = false;
+      tabbarOverride.current = {
+        left: selectLeft,
+        middle: selectMiddle,
+        right: selectRight,
+        ariaLabel: m.ticket_select_mode(),
+      };
+    } else {
+      tabbarOverride.current = undefined;
+      tabbarHidden.current = true;
+    }
     return () => {
+      tabbarOverride.current = undefined;
       tabbarHidden.current = false;
     };
   });
 
-  // Override AppShell Navbar with ticket-specific content.
+  // Override AppShell Navbar with ticket-specific content + subnavbar.
   $effect(() => {
-    navbarCtx.current = { left: navLeft, title: navTitle, right: navRight };
+    navbarCtx.current = {
+      left: navLeft,
+      title: navTitle,
+      right: navRight,
+      subnavbar: ticketSubnavbar,
+      subnavbarHidden: () =>
+        // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- $state/$derived values read lazily inside callback
+        chatScrollReady && scrollDir.hidden && !overlay.active,
+    };
     return () => {
       navbarCtx.current = undefined;
     };
@@ -228,16 +238,230 @@
   let assignSheetOpen = $state(false);
   let callSheetOpen = $state(false);
   let composeActionsOpen = $state(false);
-  let presetSheetOpen = $state(false);
-  let lightboxOpen = $state(false);
-  let lightboxUrl = $state<string | null>(null);
-  let contextMenuOpen = $state(false);
-  let contextMenuData = $state<ContextMenuEvent | null>(null);
+  let composeActionsAnchor = $state<HTMLElement | undefined>();
+  // Lightbox + context menu managed by composables (initialized below after helpers).
   let deleteConfirmOpen = $state(false);
   let deleteTargetId = $state<string | null>(null);
-  let editingFollowUpId = $state<string | null>(null);
-  let savingNote = $state(false);
+  let editNoteSheetOpen = $state(false);
+  let editNoteFollowUpId = $state<string | undefined>(undefined);
+  let editNoteContent = $state<string | undefined>(undefined);
+  let editNoteTypeId = $state<string | undefined>(undefined);
   let timelineActive = $state(false);
+
+  // Filtered follow-ups (bound from TicketDetail for select mode copy).
+  let filteredFollowUps = $state<FollowUpList | undefined>(undefined);
+
+  // --- Shared context (used by composables and page wiring) ---
+
+  const orgCache = getOrgDecryptCache();
+  const currentUserIdGetter = getCurrentUserId();
+  const currentUserId = $derived(currentUserIdGetter());
+  const followUpCache = getFollowUpDecryptCache();
+  const volunteersQuery = createVolunteersQuery(ticketRouter);
+  const volunteerMap = $derived(buildVolunteerMap(volunteersQuery.data));
+  const noteTypesQuery = ticketRouter.noteTypes
+    ? createNoteTypesQuery(ticketRouter.noteTypes)
+    : undefined;
+  const participantsQuery = createParticipantsQuery(
+    ticketRouter,
+    () => ticketId,
+  );
+
+  // --- Conversation filters (composable) ---
+
+  const detailFilters = createDetailFilters({
+    getNoteTypes: () => noteTypesQuery?.data?.types,
+    getParticipants: () => participantsQuery.data,
+    getParticipantsLoading: () => participantsQuery.isLoading,
+    orgCache,
+    getClientAlias: () => clientAlias,
+    getCurrentUserId: () => currentUserId,
+    labels: {
+      filterType: m.ticket_filter_type(),
+      filterAuthor: m.ticket_filter_author(),
+      filterDate: m.ticket_filter_date(),
+      authorYou: (name: string) => m.ticket_author_you({ name }),
+      typeRecordings: m.ticket_filter_type_recordings(),
+      typeImages: m.ticket_filter_type_images(),
+      typeFiles: m.ticket_filter_type_files(),
+      typeMessages: m.ticket_filter_type_messages(),
+      typeAssignment: m.ticket_filter_type_assignment(),
+      typeStatus: m.ticket_filter_type_status(),
+      typePriority: m.ticket_filter_type_priority(),
+      typeHold: m.ticket_filter_type_hold(),
+      typeMerge: m.ticket_filter_type_merge(),
+    },
+  });
+
+  // --- SubNavbar config objects ---
+
+  const detailViewConfig: ViewToggleConfig = $derived({
+    mode: timelineActive ? ("grid" as const) : ("list" as const),
+    onchange: (mode: "list" | "grid") => {
+      timelineActive = mode === "grid";
+    },
+    listLabel: m.ticket_action_messages(),
+    gridLabel: m.ticket_action_timeline(),
+    listIcon: MessageSquareText,
+    gridIcon: Timeline,
+  });
+
+  // --- Select mode (composable) ---
+
+  const selectMode = createSelectMode({
+    getClientAlias: () => clientAlias,
+    getVolunteerMap: () => volunteerMap,
+    orgCache,
+    followUpCache,
+    getTicketKeyWrap: () => ticket?.keyWrap ?? null,
+    toastStore,
+    labels: {
+      oneCopied: m.ticket_one_message_copied(),
+      manyCopied: (count: string) => m.ticket_messages_copied({ count }),
+      copyFailed: m.common_copy_failed(),
+    },
+  });
+
+  // --- Search overlay (composable + page-specific match computation) ---
+
+  let searchableFollowUps = $state<
+    | readonly {
+        id: string;
+        source: string;
+        type: string;
+        createdBy: string | null;
+        createdAt: string;
+        encryptedContent: unknown;
+      }[]
+    | undefined
+  >(undefined);
+  const displayFollowUpsForSearch = $derived(
+    searchableFollowUps ?? filteredFollowUps,
+  );
+
+  const overlay = createSearchOverlay({
+    matches: () => searchMatches,
+    getElementId: (id) => `${timelineActive ? "tl-fu" : "fu"}-${id}`,
+    scrollContainer: () => chatScrollEl,
+    onscroll: (id) => {
+      if (timelineActive) return;
+      requestAnimationFrame(() => {
+        const el = document.getElementById(`fu-${id}`);
+        if (el == null) return;
+        const target = el.firstElementChild ?? el;
+        target.scrollIntoView({ behavior: "smooth", block: "center" });
+      });
+    },
+  });
+
+  const searchMatches = $derived.by((): string[] => {
+    if (overlay.term == null || !displayFollowUpsForSearch) return [];
+    const searchable: { id: string; plaintext: string }[] = [];
+    for (const fu of displayFollowUpsForSearch) {
+      const plaintext = followUpCache.get(fu.id);
+      if (plaintext === undefined || plaintext === DECRYPT_ERROR_SENTINEL) {
+        continue;
+      }
+      searchable.push({ id: fu.id, plaintext });
+    }
+    const haystack = searchable.map((e) => e.plaintext);
+    const fuzzyMatches = fuzzySearch(haystack, overlay.term);
+    const matchIndices = fuzzyMatches.map((fm) => fm.index);
+    matchIndices.sort((a, b) => a - b);
+    const ids: string[] = [];
+    for (const idx of matchIndices) {
+      const entry = searchable[idx]; // eslint-disable-line security/detect-object-injection -- idx from fuzzySearch, bounded by haystack.length
+      if (entry != null) ids.push(entry.id);
+    }
+    return ids;
+  });
+
+  // -- Deep search: load all conversation pages --
+
+  let hasMoreMessages = $state(false);
+  let loadOlderPage = $state<(() => Promise<void>) | undefined>(undefined);
+  let deepPhase = $state<"idle" | "searching" | "done">("idle");
+  let deepSearchTerm = $state<string | null>(null);
+
+  async function triggerConversationDeepSearch(): Promise<void> {
+    if (deepPhase !== "idle" || !loadOlderPage) return;
+    const term = overlay.term ?? "";
+    if (term.length < 2) return;
+
+    deepSearchTerm = term;
+    deepPhase = "searching";
+
+    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition, @typescript-eslint/strict-boolean-expressions -- $state updated reactively by TicketDetail child
+    while (hasMoreMessages && loadOlderPage) {
+      await loadOlderPage();
+      if ((deepPhase as string) !== "searching") return;
+    }
+
+    deepPhase = "done";
+  }
+
+  $effect(() => {
+    if (deepSearchTerm == null) return;
+    if (!overlay.active || overlay.term !== deepSearchTerm) {
+      deepPhase = "idle";
+      deepSearchTerm = null;
+    }
+  });
+
+  $effect(() => {
+    if (
+      overlay.active &&
+      overlay.term != null &&
+      overlay.term.length >= 2 &&
+      searchMatches.length === 0 &&
+      deepPhase === "idle" &&
+      hasMoreMessages // eslint-disable-line @typescript-eslint/no-unnecessary-condition -- $state updated reactively by TicketDetail child
+    ) {
+      void triggerConversationDeepSearch();
+    }
+  });
+
+  let prevTimelineActive = $state(false);
+  $effect(() => {
+    const switched = timelineActive !== prevTimelineActive;
+    prevTimelineActive = timelineActive;
+    if (switched && overlay.activeId != null) {
+      overlay.requestScroll();
+    }
+  });
+
+  // --- Conversation search provider registration ---
+
+  $effect(() => {
+    const fups = filteredFollowUps ?? [];
+    const cache = followUpCache;
+
+    const unregister = registerSearchProvider(
+      createConversationSearchProvider({
+        getFollowUps: () => fups,
+        getDecryptedContent: (id: string) => cache.get(id),
+        resolveAuthorName: (source: string, createdBy: string | null) => {
+          if (source === "system") return undefined;
+          if (source === "client") return clientAlias;
+          return resolveVolName(createdBy, volunteerMap, orgCache);
+        },
+        getTotalFollowUpCount: () => ticket?.followUpCount ?? 0,
+        getTicketId: () => ticketId,
+        onviewall: (query: string) => {
+          overlay.enter(query);
+        },
+        onresulttap: (id: string, query: string) => {
+          overlay.enter(query, id);
+        },
+      }),
+    );
+    const clearPromoted = setPromotedOverride("conversation");
+
+    return () => {
+      unregister();
+      clearPromoted();
+    };
+  });
 
   // --- Navigation ---
 
@@ -250,31 +474,16 @@
   function handleSend(): void {
     // Stub: encryption + submission wired separately.
     if (import.meta.env.DEV) {
-      console.log(
-        `[TicketDetail] send ${composeMode}:`,
-        draftText.slice(0, 50),
-      );
+      console.log("[TicketDetail] send reply:", draftText.slice(0, 50));
     }
   }
 
-  function openComposeActions(): void {
+  function openComposeActions(anchor: HTMLElement): void {
+    composeActionsAnchor = anchor;
     composeActionsOpen = true;
   }
   function closeComposeActions(): void {
     composeActionsOpen = false;
-  }
-
-  function handleAttach(): void {
-    closeComposeActions();
-    // Stub: file attachment wired separately.
-    if (import.meta.env.DEV) {
-      console.log("[TicketDetail] attach");
-    }
-  }
-
-  function handlePresetFromCompose(): void {
-    closeComposeActions();
-    openPresetSheet();
   }
 
   function handleMentionSelect(_userId: string, displayName: string): void {
@@ -290,7 +499,21 @@
 
   // --- Action dispatchers ---
 
-  /** Fire a mutation and show a generic error toast on failure. */
+  // --- Close flow (composable) ---
+
+  const closeFlow = createCloseResolution({
+    getTicketId: () => ticketId,
+    cryptoBridge,
+    queryClient,
+    getNoteTypes: () => noteTypesQuery?.data?.types,
+    orgCache,
+    toastStore,
+    labels: { error: m.error_generic() },
+    closeMutate: async (tid) => ticketRouter.close.mutate({ ticketId: tid }),
+    createFollowUpMutate: async (args) =>
+      ticketRouter.createFollowUp.mutate(args),
+  });
+
   function mutateWithToast<T>(promise: Promise<T>): void {
     void promise.catch(() => {
       toastStore.show(m.error_generic(), 3000);
@@ -323,7 +546,7 @@
         );
         break;
       case "close":
-        mutateWithToast(ticketRouter.close.mutate({ ticketId }));
+        closeFlow.start();
         break;
       case "reopen":
         mutateWithToast(
@@ -360,49 +583,22 @@
     }
   }
 
-  // --- Context menu handlers ---
+  // --- Context menu + lightbox (composables) ---
 
-  function openContextMenu(event: ContextMenuEvent): void {
-    contextMenuData = event;
-    contextMenuOpen = true;
-  }
+  const lightbox = createLightbox();
 
-  function closeContextMenu(): void {
-    contextMenuOpen = false;
-    contextMenuData = null;
-  }
-
-  function handleContextAction(actionId: ContextActionId): void {
-    const data = contextMenuData;
-    closeContextMenu();
-    if (data === null) return;
-
-    switch (actionId) {
-      case "copy": {
-        void handleCopy(data.plaintext);
-        break;
-      }
-      case "edit": {
-        editingFollowUpId = data.followUpId;
-        break;
-      }
-      case "delete": {
-        deleteTargetId = data.followUpId;
-        deleteConfirmOpen = true;
-        break;
-      }
-    }
-  }
-
-  async function handleCopy(plaintext: string | undefined): Promise<void> {
-    if (plaintext === undefined || plaintext === "") return;
-    try {
-      await navigator.clipboard.writeText(plaintext);
-      toastStore.show(m.ticket_copied_to_clipboard());
-    } catch {
-      toastStore.show(m.common_copy_failed());
-    }
-  }
+  const contextMenu = createContextMenu({
+    oncopy: async (plaintext) =>
+      copyToClipboard(plaintext, toastStore, {
+        success: m.ticket_copied_to_clipboard(),
+        failure: m.common_copy_failed(),
+      }),
+    onedit: openNoteEditSheet,
+    ondelete: (followUpId: string) => {
+      deleteTargetId = followUpId;
+      deleteConfirmOpen = true;
+    },
+  });
 
   // --- Delete handlers (optimistic) ---
 
@@ -416,7 +612,7 @@
     closeDeleteConfirm();
     if (targetId === null) return;
 
-    const followUpsKey = ["ticket", ticketId, "followUps", "initial"];
+    const followUpsKey = ticketKeys.followUpsInitial(ticketId);
 
     // Snapshot for rollback.
     const previousData = queryClient.getQueryData<FollowUpList>(followUpsKey);
@@ -433,7 +629,7 @@
       // Refetch to get authoritative server state. Prefix match invalidates
       // both the initial key and any paginated page keys.
       void queryClient.invalidateQueries({
-        queryKey: ["ticket", ticketId, "followUps"],
+        queryKey: ticketKeys.followUps(ticketId),
       });
     } catch {
       // Rollback: restore the cached list.
@@ -442,40 +638,22 @@
     }
   }
 
-  // --- Note edit handlers ---
-
-  async function handleNoteEdit(
+  function openNoteEditSheet(
     followUpId: string,
-    newPlaintext: string,
-  ): Promise<void> {
-    // Stay in edit mode. Show saving indicator.
-    savingNote = true;
-
-    try {
-      const encryptedContent = await cryptoBridge.encrypt(
-        ticketId,
-        newPlaintext,
-      );
-      await ticketRouter.updateInternalNote.mutate({
-        followUpId,
-        encryptedContent,
-      });
-      // Success: exit edit mode and refresh.
-      editingFollowUpId = null;
-      savingNote = false;
-      void queryClient.invalidateQueries({
-        queryKey: ["ticket", ticketId, "followUps"],
-      });
-    } catch {
-      // Stay in edit mode with the user's text intact.
-      savingNote = false;
-      toastStore.show(m.error_followup_not_editable());
-    }
+    content: string,
+    noteTypeId: string | null,
+  ): void {
+    editNoteFollowUpId = followUpId;
+    editNoteContent = content;
+    editNoteTypeId = noteTypeId ?? undefined;
+    editNoteSheetOpen = true;
   }
 
-  function cancelNoteEdit(): void {
-    editingFollowUpId = null;
-    savingNote = false;
+  function dismissNoteEditSheet(): void {
+    editNoteSheetOpen = false;
+    editNoteFollowUpId = undefined;
+    editNoteContent = undefined;
+    editNoteTypeId = undefined;
   }
 
   // --- Overlay helpers ---
@@ -497,10 +675,9 @@
     });
   }
 
-  /** Close panel, then open the lightbox with the tapped image. */
   function handlePanelLightbox(imageUrl: string): void {
     closePanel();
-    openLightbox(imageUrl);
+    lightbox.show(imageUrl);
   }
 
   function openCallSheet(): void {
@@ -510,37 +687,18 @@
     callSheetOpen = false;
   }
 
-  function openPresetSheet(): void {
-    presetSheetOpen = true;
-  }
-  function closePresetSheet(): void {
-    presetSheetOpen = false;
-  }
-
-  function openLightbox(imageUrl: string): void {
-    lightboxUrl = imageUrl;
-    lightboxOpen = true;
-  }
-  function closeLightbox(): void {
-    lightboxOpen = false;
-    lightboxUrl = null;
-  }
-
   // --- SvelteKit Snapshot (draft preservation) ---
 
   interface TicketDetailSnapshot {
     draftText: string;
-    composeMode: ComposeMode;
   }
 
   export const snapshot: Snapshot<TicketDetailSnapshot> = {
     capture: () => ({
       draftText,
-      composeMode,
     }),
     restore: (value) => {
       draftText = value.draftText;
-      composeMode = value.composeMode;
     },
   };
 </script>
@@ -548,21 +706,6 @@
 {#snippet navLeft()}
   <Link iconOnly onclick={goBack} role="button" aria-label={m.common_back()}>
     <ChevronLeft size={22} aria-hidden="true" />
-  </Link>
-  <Link
-    iconOnly
-    onclick={() => (timelineActive = !timelineActive)}
-    role="switch"
-    aria-checked={timelineActive ? "true" : "false"}
-    aria-label={timelineActive
-      ? m.ticket_action_messages()
-      : m.ticket_action_timeline()}
-  >
-    {#if timelineActive}
-      <MessageSquareText size={22} aria-hidden="true" />
-    {:else}
-      <CalendarClock size={22} aria-hidden="true" />
-    {/if}
   </Link>
 {/snippet}
 
@@ -588,8 +731,64 @@
     role="button"
     aria-label={m.ticket_more_actions()}
   >
-    <EllipsisVertical size={22} aria-hidden="true" />
+    <BookUser size={22} aria-hidden="true" />
   </Link>
+{/snippet}
+
+{#snippet detailStats()}
+  <span>
+    {(ticket?.followUpCount ?? 0) === 1
+      ? m.ticket_detail_one_message_stat()
+      : m.ticket_detail_messages_stat({
+          count: String(ticket?.followUpCount ?? 0),
+        })}
+  </span>
+  {@const volCount = participantsQuery.data?.length ?? 0}
+  {#if volCount > 0}
+    <span>
+      {volCount === 1
+        ? m.ticket_detail_one_volunteer_stat()
+        : m.ticket_detail_volunteers_stat({ count: String(volCount) })}
+    </span>
+  {/if}
+  {#if ticket?.priority}
+    <PriorityBadge priority={ticket.priority} />
+  {/if}
+{/snippet}
+
+{#snippet searchNavigatorRow()}
+  <SearchNavigator
+    term={overlay.term ?? ""}
+    position={overlay.position}
+    total={overlay.matchCount}
+    onup={overlay.up}
+    ondown={overlay.down}
+    onexit={overlay.exit}
+    ontermchange={overlay.setTerm}
+    ondeepsearch={hasMoreMessages && deepPhase === "idle"
+      ? () => void triggerConversationDeepSearch()
+      : undefined}
+    deepSearchStatus={deepPhase}
+    deepSearchSearched={displayFollowUpsForSearch?.length ?? 0}
+    deepSearchTotal={displayFollowUpsForSearch?.length ?? 0}
+  />
+{/snippet}
+
+{#snippet ticketSubnavbar()}
+  <SubNavbarFilterLayout
+    title={decryptedTitle}
+    smallTitle
+    view={detailViewConfig}
+    stats={detailStats}
+    selectLabel={m.ticket_select_mode()}
+    onselect={selectMode.active
+      ? () => selectMode.exit()
+      : () => selectMode.enter()}
+    filterPills={detailFilters.pills}
+    searchNavigator={overlay.active ? searchNavigatorRow : undefined}
+    onsearch={!overlay.active ? () => overlay.enter("") : undefined}
+    searchLabel={m.search_inline_trigger()}
+  />
 {/snippet}
 
 <div class="ticket-detail-page">
@@ -599,27 +798,91 @@
     bind:draftText
     {cursorPosition}
     onmentionselect={handleMentionSelect}
-    onlightbox={openLightbox}
-    oncontextmenu={openContextMenu}
-    {editingFollowUpId}
-    {savingNote}
-    onnoteedit={(fid: string, text: string) => void handleNoteEdit(fid, text)}
-    oncanceledit={cancelNoteEdit}
+    onlightbox={(url: string) => lightbox.show(url)}
+    oncontextmenu={(e: ContextMenuEvent) => contextMenu.show(e)}
+    onopenedit={openNoteEditSheet}
     bind:timelineActive
-    {readUpTo}
-    onreadprogress={handleReadProgress}
+    readUpTo={readCursor.readUpTo}
+    onreadprogress={(ts: string) => readCursor.handleProgress(ts)}
+    selectModeActive={selectMode.active}
+    selectedIds={new Set(selectMode.selectedIds)}
+    toggleSelected={(id: string) => selectMode.toggle(id)}
+    filterTypes={detailFilters.filterTypesArr}
+    filterAuthors={detailFilters.filterAuthorsArr}
+    filterDateFrom={detailFilters.filterDateFrom}
+    filterDateTo={detailFilters.filterDateTo}
+    onclearfilters={() => detailFilters.clearAll()}
+    bind:filteredFollowUps
+    bind:searchableFollowUps
+    bind:scrollContainerEl={chatScrollEl}
+    bind:scrollReady={chatScrollReady}
+    searchTerm={overlay.term}
+    searchActiveMatchId={overlay.activeId}
+    searchScrollRequested={overlay.scrollRequested}
+    onsearchscrollcomplete={overlay.markScrollComplete}
+    bind:hasMoreMessages
+    bind:loadOlderPage
   />
 </div>
 
-<!-- Compose bar (shell wrapper, maps to native input accessory view) -->
-<ShellMessagebar
-  bind:value={draftText}
-  bind:mode={composeMode}
-  onsend={handleSend}
-  onplus={openComposeActions}
-  oninput={handleInput}
-  sendDisabled={!draftText.trim()}
-/>
+{#if !selectMode.active}
+  <ShellMessagebar
+    bind:value={draftText}
+    onsend={handleSend}
+    onplus={openComposeActions}
+    oninput={handleInput}
+    sendDisabled={!draftText.trim()}
+  />
+{/if}
+
+{#snippet selectLeft()}
+  <Link
+    iconOnly
+    onclick={() => {
+      if (filteredFollowUps) {
+        for (const fu of filteredFollowUps) {
+          selectMode.selectedIds.add(fu.id);
+        }
+      }
+    }}
+    aria-label={m.ticket_select_all()}
+  >
+    <SquareCheckBig size={24} aria-hidden="true" />
+  </Link>
+  <Link
+    iconOnly
+    onclick={() => {
+      if (selectMode.selectedIds.size > 0 && filteredFollowUps) {
+        void selectMode.copySelected(filteredFollowUps);
+      }
+    }}
+    aria-label={m.common_copy()}
+    class={selectMode.selectedIds.size === 0
+      ? "opacity-30 pointer-events-none"
+      : ""}
+    aria-disabled={selectMode.selectedIds.size === 0}
+  >
+    <Copy size={24} aria-hidden="true" />
+  </Link>
+{/snippet}
+
+{#snippet selectMiddle()}
+  <span class="font-semibold text-sm" role="status">
+    {selectMode.selectedIds.size <= 1
+      ? m.ticket_copy_one_message()
+      : m.ticket_copy_messages({ count: String(selectMode.selectedIds.size) })}
+  </span>
+{/snippet}
+
+{#snippet selectRight()}
+  <Link
+    iconOnly
+    aria-label={m.ticket_select_cancel()}
+    onclick={() => selectMode.exit()}
+  >
+    <X size={24} aria-hidden="true" />
+  </Link>
+{/snippet}
 
 <!-- Overlays (route file owns all shell wrappers) -->
 <ShellPopup opened={panelOpen} ondismiss={closePanel} title={clientAlias}>
@@ -644,9 +907,11 @@
       .mutate({ ticketId: tid, targetUserId })
       .then(() => {
         haptic();
-        void queryClient.invalidateQueries({ queryKey: ["ticket", ticketId] });
         void queryClient.invalidateQueries({
-          queryKey: ["tickets", "list"],
+          queryKey: ticketKeys.detail(ticketId),
+        });
+        void queryClient.invalidateQueries({
+          queryKey: ticketsKeys.lists(),
         });
       })
       .catch(() => {
@@ -659,36 +924,21 @@
   <CallOptionsContent {hasVerifiedPhone} onaction={handleCallAction} />
 </ShellActionSheet>
 
-<ShellActionSheet opened={composeActionsOpen} ondismiss={closeComposeActions}>
-  <ActionsGroup>
-    <ActionsButton onclick={handleAttach}>
-      {m.ticket_attach_file()}
-    </ActionsButton>
-    <ActionsButton onclick={handlePresetFromCompose}>
-      {m.ticket_preset_replies()}
-    </ActionsButton>
-  </ActionsGroup>
-  <ActionsGroup>
-    <ActionsButton onclick={closeComposeActions} bold>
-      {m.common_cancel()}
-    </ActionsButton>
-  </ActionsGroup>
-</ShellActionSheet>
+<ComposeActions
+  opened={composeActionsOpen}
+  ondismiss={closeComposeActions}
+  target={composeActionsAnchor}
+  {ticketId}
+  onpresetselect={(body: string) => {
+    draftText = body;
+  }}
+/>
 
-<ShellSheet opened={presetSheetOpen} ondismiss={closePresetSheet}>
-  <PresetReplyContent
-    onselect={(body: string) => {
-      draftText = body;
-      closePresetSheet();
-    }}
-  />
-</ShellSheet>
-
-<ShellPopup opened={lightboxOpen} ondismiss={closeLightbox}>
-  {#if lightboxUrl}
+<ShellPopup opened={lightbox.open} ondismiss={() => lightbox.dismiss()}>
+  {#if lightbox.url}
     <div class="lightbox-content">
       <img
-        src={lightboxUrl}
+        src={lightbox.url}
         alt={m.ticket_mms_lightbox_label()}
         class="lightbox-img"
       />
@@ -697,12 +947,15 @@
 </ShellPopup>
 
 <!-- Context menu (long-press on message bubble) -->
-<ShellActionSheet opened={contextMenuOpen} ondismiss={closeContextMenu}>
-  {#if contextMenuData !== null}
+<ShellActionSheet
+  opened={contextMenu.open}
+  ondismiss={() => contextMenu.dismiss()}
+>
+  {#if contextMenu.data !== null}
     <ActionsGroup>
-      {#each contextMenuData.actions as action (action.id)}
+      {#each contextMenu.data.actions as action (action.id)}
         <ActionsButton
-          onclick={() => handleContextAction(action.id)}
+          onclick={() => contextMenu.dispatch(action.id)}
           bold={action.destructive === true}
           colors={action.destructive === true
             ? { textIos: "text-red-500", textMaterial: "text-red-500" }
@@ -713,12 +966,27 @@
       {/each}
     </ActionsGroup>
     <ActionsGroup>
-      <ActionsButton onclick={closeContextMenu} bold>
+      <ActionsButton onclick={() => contextMenu.dismiss()} bold>
         {m.common_cancel()}
       </ActionsButton>
     </ActionsGroup>
   {/if}
 </ShellActionSheet>
+
+<!-- Edit note sheet -->
+<InternalNoteSheet
+  opened={editNoteSheetOpen}
+  ondismiss={dismissNoteEditSheet}
+  {ticketId}
+  editFollowUpId={editNoteFollowUpId}
+  editInitialContent={editNoteContent}
+  editInitialNoteTypeId={editNoteTypeId}
+  ondelete={(followUpId: string) => {
+    dismissNoteEditSheet();
+    deleteTargetId = followUpId;
+    deleteConfirmOpen = true;
+  }}
+/>
 
 <!-- Delete note confirmation dialog -->
 <ShellDialog
@@ -738,6 +1006,18 @@
     </DialogButton>
   {/snippet}
 </ShellDialog>
+
+<CloseResolutionSheet
+  opened={closeFlow.sheetOpen}
+  noteTypeId={closeFlow.noteTypeId ?? ""}
+  noteTypeName={closeFlow.noteTypeName}
+  NoteTypeIcon={resolveNoteTypeIcon(closeFlow.noteTypeIconName)}
+  current={closeFlow.current}
+  total={closeFlow.total}
+  saving={closeFlow.saving}
+  onsubmit={(text: string) => void closeFlow.submit(text)}
+  onskip={() => closeFlow.skip()}
+/>
 
 <style>
   .ticket-detail-page {

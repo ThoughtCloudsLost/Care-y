@@ -17,9 +17,11 @@
  *   Volunteer-side: encrypted with org key (full E2E, handled by keywrap/ecies)
  *   Client-side: encrypted with BLAKE2b(label || orgPublicKey) (this module)
  *
+ * The org public key is Curve25519 (from crypto_box_keypair), NOT ristretto255.
+ * See org-keypair.ts and crypto-architecture-v2.md section 6 tier table.
+ *
  * References:
  *   SEC-052  libsodium crypto_secretbox (via content.ts for encrypt/decrypt)
- *   SEC-011  RFC 9496 (ristretto255 public key as branding key input)
  *   B1 decision (crypto-architecture-v2.md, org branding two-tier)
  */
 
@@ -27,12 +29,7 @@ import { requireSodium } from "./sodium.js";
 import { encryptContent, decryptContent } from "./content.js";
 import { assertKeyLength } from "./validation.js";
 import { concatBytes, encodeLabel } from "./bytes.js";
-import {
-  BRANDING_LABEL,
-  type SymmetricKey,
-  type RistrettoPoint,
-  type Ciphertext,
-} from "./types.js";
+import { BRANDING_LABEL, type SymmetricKey, type Ciphertext } from "./types.js";
 
 /**
  * Derive the client-side branding key from an org's public key.
@@ -42,17 +39,17 @@ import {
  * This key is derivable by anyone who knows the org public key (which is
  * public). Provides encryption-at-rest protection only, not E2E.
  *
- * @param orgPublicKey - The org's ristretto255 public point
+ * @param orgPublicKey - The org's Curve25519 public key (32 bytes, from crypto_box_keypair)
  * @returns 32-byte branding key
  * @throws InvalidKeyError if orgPublicKey is wrong length
  */
 export function deriveClientBrandingKey(
-  orgPublicKey: RistrettoPoint,
+  orgPublicKey: Uint8Array,
 ): SymmetricKey {
   const sodium = requireSodium();
   assertKeyLength(
     orgPublicKey,
-    sodium.crypto_core_ristretto255_BYTES,
+    sodium.crypto_box_PUBLICKEYBYTES,
     "Org public key",
   );
 
@@ -67,13 +64,13 @@ export function deriveClientBrandingKey(
  * Derivable from org public key (public intake pages can decrypt).
  *
  * @param payload - Branding data to encrypt (JSON-encoded org name, colors, etc.)
- * @param orgPublicKey - The org's ristretto255 public point
+ * @param orgPublicKey - The org's Curve25519 public key (32 bytes)
  * @returns Encrypted branding blob (nonce || ciphertext)
  * @throws InvalidKeyError if orgPublicKey is wrong length
  */
 export function encryptClientBranding(
   payload: Uint8Array,
-  orgPublicKey: RistrettoPoint,
+  orgPublicKey: Uint8Array,
 ): Ciphertext {
   const key = deriveClientBrandingKey(orgPublicKey);
   try {
@@ -87,14 +84,14 @@ export function encryptClientBranding(
  * Decrypt client-facing branding payload.
  *
  * @param ciphertext - Encrypted branding blob (nonce || ciphertext)
- * @param orgPublicKey - The org's ristretto255 public point
+ * @param orgPublicKey - The org's Curve25519 public key (32 bytes)
  * @returns Decrypted branding data
  * @throws InvalidKeyError if orgPublicKey is wrong length
  * @throws DecryptionError if decryption fails
  */
 export function decryptClientBranding(
   ciphertext: Ciphertext,
-  orgPublicKey: RistrettoPoint,
+  orgPublicKey: Uint8Array,
 ): Uint8Array {
   const key = deriveClientBrandingKey(orgPublicKey);
   try {

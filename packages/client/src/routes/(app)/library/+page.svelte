@@ -7,8 +7,17 @@
   import { SvelteMap, SvelteSet } from "svelte/reactivity";
   import { goto } from "$app/navigation";
   import { resolve } from "$app/paths";
-  import { Dialog, DialogButton, Link } from "konsta/svelte";
-  import { FolderInput, Trash2, Download, X, FilePlus } from "@lucide/svelte";
+  import { page } from "$app/state";
+  import { DialogButton, Link } from "konsta/svelte";
+  import ShellDialog from "$lib/shell/ShellDialog.svelte";
+  import {
+    FolderInput,
+    FolderPen,
+    Trash2,
+    Download,
+    X,
+    FilePlus,
+  } from "@lucide/svelte";
   import SubNavbarFilterLayout from "$lib/shell/SubNavbarFilterLayout.svelte";
   import type {
     ViewToggleConfig,
@@ -19,6 +28,7 @@
   } from "$lib/shell/types.js";
   import * as m from "$lib/paraglide/messages.js";
   import { trpc } from "$lib/trpc/index.js";
+  import { kbKeys } from "$lib/query/keys.js";
   import {
     getOrgDecryptCache,
     getOrgKeyManager,
@@ -40,7 +50,6 @@
     kbSavedFilterStateSchema,
     Permission,
     type KbSortField,
-    type SavedFilterRecord,
     type SavedFilterColor,
   } from "@care-y/shared";
   import { resolveOrgDecrypt } from "$lib/crypto/decrypt-result.js";
@@ -51,7 +60,13 @@
   import MoveCategorySheet from "$lib/components/library/MoveCategorySheet.svelte";
   import CategoryManageSheet from "$lib/components/library/CategoryManageSheet.svelte";
   import QueryError from "$lib/components/QueryError.svelte";
+  import EmptyState from "$lib/components/EmptyState.svelte";
   import { haptic } from "$lib/utils/haptic.js";
+  import { createFilterDispatch } from "$lib/composables/create-filter-dispatch.svelte.js";
+  import { createSearchOverlay } from "$lib/search/search-overlay.svelte.js";
+  import { createDeepSearch } from "$lib/search/deep-search.svelte.js";
+  import SearchNavigator from "$lib/components/search/SearchNavigator.svelte";
+  import { fuzzySearch } from "$lib/search/fuzzy.js";
 
   const orgCache = getOrgDecryptCache();
   const orgKeyManager = getOrgKeyManager();
@@ -81,7 +96,7 @@
 
   // --- Categories query (for filter options and card labels) ---
   const categoriesQuery = createQuery(() => ({
-    queryKey: ["kb", "categories"],
+    queryKey: kbKeys.categories(),
     queryFn: async () => kbRouter.listCategories.query(),
   }));
 
@@ -98,7 +113,7 @@
 
   // --- Authors query (distinct KB article authors with display names) ---
   const authorsQuery = createQuery(() => ({
-    queryKey: ["kb", "authors"],
+    queryKey: kbKeys.authors(),
     queryFn: async () => kbRouter.listAuthors.query(),
     staleTime: 10 * 60 * 1000,
   }));
@@ -123,7 +138,7 @@
 
   // --- Article list with infinite scroll ---
   const articlesQuery = createInfiniteQuery(() => ({
-    queryKey: ["kb", "items", kbFilterStore.serverParams],
+    queryKey: kbKeys.itemList(kbFilterStore.serverParams),
     queryFn: async ({ pageParam }) =>
       kbRouter.listItems.query({
         ...kbFilterStore.serverParams,
@@ -148,6 +163,111 @@
   });
 
   const isOrgKeyLoaded = $derived(orgKeyManager.isLoaded);
+
+  // --- Search overlay ---
+
+  const overlay = createSearchOverlay({
+    matches: () => searchMatches,
+    getElementId: (id) => `article-${id}`,
+    scrollContainer: () => scrollEl,
+  });
+
+  const filteredArticleIds = $derived(
+    new Set(filteredArticles.map((a) => a.id)),
+  );
+
+  const titleMatchIds = $derived.by((): string[] => {
+    if (overlay.term == null) return [];
+    const ids: string[] = [];
+    const haystack: string[] = [];
+    for (const article of filteredArticles) {
+      const title = orgCache.decrypt(
+        `kb-item:${article.id}`,
+        article.encryptedTitle,
+      );
+      if (title == null) continue;
+      const excerpt =
+        orgCache.decrypt(
+          `kb-excerpt:${article.id}`,
+          article.encryptedExcerpt,
+        ) ?? "";
+      ids.push(article.id);
+      haystack.push(`${title} ${excerpt}`);
+    }
+    const matches = fuzzySearch(haystack, overlay.term);
+    return matches
+      .map((fm) => ids[fm.index])
+      .filter((id): id is string => id != null);
+  });
+
+  const deepSearch = createDeepSearch({
+    overlay,
+    providerId: "kb",
+    hasNextPage: () => articlesQuery.hasNextPage,
+    isFetchingNextPage: () => articlesQuery.isFetchingNextPage,
+    fetchNextPage: async () => articlesQuery.fetchNextPage(),
+    isInitialLoading: () => articlesQuery.isLoading,
+    loadedCount: () => allArticles.length,
+    matchCount: () => titleMatchIds.length,
+  });
+
+  const searchMatches = $derived.by((): string[] => {
+    const cms = deepSearch.contentMatchIds;
+    if (cms == null || cms.size === 0) return titleMatchIds;
+
+    const seen = new Set(titleMatchIds);
+    const merged = [...titleMatchIds];
+    for (const id of cms) {
+      if (!seen.has(id) && filteredArticleIds.has(id)) {
+        merged.push(id);
+      }
+    }
+    return merged;
+  });
+
+  let useMatchOrder = $state(true);
+
+  $effect(() => {
+    if (overlay.active) {
+      useMatchOrder = true;
+    }
+  });
+
+  const displayItems = $derived.by(() => {
+    if (!overlay.active || overlay.term == null || overlay.term.length < 2) {
+      return filteredArticles;
+    }
+    const matchSet = new Set(searchMatches);
+    if (!useMatchOrder) {
+      return filteredArticles.filter((a) => matchSet.has(a.id));
+    }
+    const idToArticle = new Map(filteredArticles.map((a) => [a.id, a]));
+    const sorted: typeof filteredArticles = [];
+    for (const id of searchMatches) {
+      const a = idToArticle.get(id);
+      if (a != null) sorted.push(a);
+    }
+    return sorted;
+  });
+
+  $effect(() => {
+    const q = page.url.searchParams.get("q");
+    if (q != null && q !== "") {
+      overlay.enter(q);
+      deepSearch.scheduleFromNavigation();
+    }
+  });
+
+  let prevViewMode = $state(kbViewModeStore.mode);
+  $effect(() => {
+    const mode = kbViewModeStore.mode;
+    if (mode !== prevViewMode) {
+      prevViewMode = mode;
+      if (overlay.activeId != null) {
+        overlay.requestScroll();
+      }
+    }
+  });
 
   // --- Multi-select ---
   let multiSelectActive = $state(false);
@@ -187,6 +307,14 @@
   let deleteDialogOpen = $state(false);
   let categorySheetOpen = $state(false);
 
+  const urlAction = $derived(page.url.searchParams.get("action"));
+
+  $effect(() => {
+    if (urlAction === "manage-categories" && canManageCategories) {
+      categorySheetOpen = true;
+    }
+  });
+
   function handleBulkMove(): void {
     if (selectedIds.size === 0 || pendingAction) return;
     moveSheetOpen = true;
@@ -221,7 +349,7 @@
     toastStore.show(m.library_move_all_success({ count: String(moved) }));
     pendingAction = false;
     exitMultiSelect();
-    void queryClient.invalidateQueries({ queryKey: ["kb", "items"] });
+    void queryClient.invalidateQueries({ queryKey: kbKeys.items() });
   }
 
   function handleBulkDelete(): void {
@@ -259,7 +387,7 @@
     toastStore.show(m.library_delete_all_success({ count: String(deleted) }));
     pendingAction = false;
     exitMultiSelect();
-    void queryClient.invalidateQueries({ queryKey: ["kb", "items"] });
+    void queryClient.invalidateQueries({ queryKey: kbKeys.items() });
   }
 
   function handleBulkExport(): void {
@@ -291,7 +419,7 @@
     navbarCtx.current = {
       right: canEdit ? navRight : undefined,
       subnavbar: librarySubnavbar,
-      subnavbarHidden: () => scrollDir.hidden,
+      subnavbarHidden: () => scrollDir.hidden && !overlay.active,
     };
     return () => {
       navbarCtx.current = undefined;
@@ -316,9 +444,51 @@
     return (KB_SORT_FIELDS as readonly string[]).includes(value);
   }
 
-  function handleSortChange(field: string, dir: "asc" | "desc"): void {
-    if (isKbSortField(field)) kbFilterStore.setSort(field, dir);
-  }
+  const dispatch = createFilterDispatch({
+    fields: {
+      category: {
+        type: "multi-toggle",
+        toggle: (v: string) => kbFilterStore.toggleCategory(v),
+      },
+      rating: {
+        type: "single-select",
+        set: (v: string | null) => {
+          if (v === "high") kbFilterStore.setMinRating(0.5);
+          else if (v === "positive") kbFilterStore.setMinRating(0.01);
+          else kbFilterStore.setMinRating(undefined);
+        },
+      },
+      author: {
+        type: "single-select",
+        set: (v: string | null) => kbFilterStore.setCreatedBy(v ?? undefined),
+      },
+      date: {
+        type: "date-range",
+        set: (from: Date | null, to: Date | null) =>
+          kbFilterStore.setDateRange(from, to),
+      },
+    },
+    sort: {
+      validate: isKbSortField,
+      set: (field: string, dir: "asc" | "desc") => {
+        if (isKbSortField(field)) kbFilterStore.setSort(field, dir);
+      },
+    },
+    savedFilters: {
+      store: kbSavedFilterStore,
+      captureState: () => kbFilterStore.captureState(),
+      applyState: (state: unknown) => {
+        const result = kbSavedFilterStateSchema.safeParse(state);
+        if (result.success) kbFilterStore.applyState(result.data);
+      },
+      stateSchema: kbSavedFilterStateSchema,
+      getCurrentUserId: () => currentUserId ?? null,
+    },
+    clearAll: () => kbFilterStore.clearAll(),
+    onchange: () => {
+      if (overlay.active) useMatchOrder = false;
+    },
+  });
 
   const sortConfig: SortConfig = $derived({
     label: m.library_sort(),
@@ -329,15 +499,15 @@
     ],
     currentField: kbFilterStore.sort.field,
     currentDirection: kbFilterStore.sort.direction,
-    onchange: handleSortChange,
+    onchange: dispatch.handleSortChange,
   });
 
   const savedFiltersConfig: SavedFiltersConfig = $derived({
     filters: kbSavedFilterStore.filters,
     count: kbSavedFilterStore.count,
-    onapply: handleSavedFilterApply,
-    ondelete: handleSavedFilterDelete,
-    ontoggleshare: handleSavedFilterToggleShare,
+    onapply: dispatch.handleSavedFilterApply,
+    ondelete: dispatch.handleSavedFilterDelete,
+    ontoggleshare: dispatch.handleSavedFilterToggleShare,
   });
 
   // --- Filter pill definitions ---
@@ -399,26 +569,6 @@
     },
   ]);
 
-  function handlePillToggle(pillId: string, value: string): void {
-    if (pillId === "category") {
-      kbFilterStore.toggleCategory(value);
-    }
-  }
-
-  function handlePillSelect(pillId: string, value: string | null): void {
-    if (pillId === "rating") {
-      if (value === "high") kbFilterStore.setMinRating(0.5);
-      else if (value === "positive") kbFilterStore.setMinRating(0.01);
-      else kbFilterStore.setMinRating(undefined);
-    } else if (pillId === "author") {
-      kbFilterStore.setCreatedBy(value ?? undefined);
-    }
-  }
-
-  function handlePillDateChange(from: Date | null, to: Date | null): void {
-    kbFilterStore.setDateRange(from, to);
-  }
-
   const dateRangeActive = $derived(
     kbFilterStore.dateFrom !== null || kbFilterStore.dateTo !== null,
   );
@@ -446,31 +596,14 @@
     dateTo: dateToStr,
     dateActive: dateRangeActive,
     dateLabel: dateRangeLabel,
-    ontoggle: handlePillToggle,
-    onselect: handlePillSelect,
-    ondatechange: handlePillDateChange,
-    onclearall: () => kbFilterStore.clearAll(),
+    ontoggle: dispatch.handlePillToggle,
+    onselect: dispatch.handlePillSelect,
+    ondatechange: dispatch.handlePillDateChange,
+    onclearall: dispatch.clearAll,
     oncreateshortcut: () => {
       savedFilterModalOpen = true;
     },
   });
-
-  // --- Saved filter wiring ---
-  function handleSavedFilterApply(record: SavedFilterRecord): void {
-    const parsed: unknown = JSON.parse(record.state);
-    const result = kbSavedFilterStateSchema.safeParse(parsed);
-    if (result.success) {
-      kbFilterStore.applyState(result.data);
-    }
-  }
-
-  function handleSavedFilterDelete(id: string): void {
-    kbSavedFilterStore.remove(id);
-  }
-
-  function handleSavedFilterToggleShare(id: string): void {
-    kbSavedFilterStore.toggleShare(id);
-  }
 
   const filterSummary = $derived.by(() => {
     const parts: string[] = [];
@@ -490,17 +623,7 @@
     color: SavedFilterColor;
     icon: string;
   }): void {
-    const record: SavedFilterRecord = {
-      id: crypto.randomUUID(),
-      encryptedName: meta.encryptedName,
-      color: meta.color,
-      icon: meta.icon,
-      state: JSON.stringify(kbFilterStore.captureState()),
-      shared: false,
-      ownerId: currentUserId ?? "",
-      createdAt: new Date().toISOString(),
-    };
-    kbSavedFilterStore.add(record);
+    dispatch.handleCreateSavedFilter(meta);
     toastStore.show(m.saved_filter_saved());
   }
 
@@ -551,6 +674,7 @@
     canManageCategories
       ? {
           label: m.library_manage_categories(),
+          icon: FolderPen,
           onclick: () => {
             categorySheetOpen = true;
           },
@@ -620,6 +744,22 @@
   {/if}
 {/snippet}
 
+{#snippet searchNavigatorRow()}
+  <SearchNavigator
+    term={overlay.term ?? ""}
+    position={overlay.position}
+    total={overlay.matchCount}
+    onup={overlay.up}
+    ondown={overlay.down}
+    onexit={overlay.exit}
+    ontermchange={overlay.setTerm}
+    ondeepsearch={deepSearch.canTrigger ? deepSearch.trigger : undefined}
+    deepSearchStatus={deepSearch.status}
+    deepSearchSearched={deepSearch.searched}
+    deepSearchTotal={deepSearch.total}
+  />
+{/snippet}
+
 {#snippet librarySubnavbar()}
   <SubNavbarFilterLayout
     title={m.library_title()}
@@ -631,6 +771,9 @@
     savedFilters={savedFiltersConfig}
     filterPills={filterPillsConfig}
     manage={manageConfig}
+    searchNavigator={overlay.active ? searchNavigatorRow : undefined}
+    onsearch={!overlay.active ? () => overlay.enter("") : undefined}
+    searchLabel={m.search_inline_trigger()}
   />
 {/snippet}
 
@@ -658,61 +801,66 @@
     </div>
   {:else if articlesQuery.isError}
     <QueryError error={articlesQuery.error} />
-  {:else if filteredArticles.length === 0}
-    <div
-      class="empty-state"
-      role="status"
-      aria-label={m.library_article_list_empty()}
-    >
-      <p>
-        {kbFilterStore.activeCount > 0
-          ? m.library_empty_filter()
-          : m.library_empty_articles()}
-      </p>
-    </div>
+  {:else if displayItems.length === 0}
+    <EmptyState
+      title={kbFilterStore.activeCount > 0
+        ? m.library_empty_filter()
+        : m.library_empty_articles()}
+    />
   {:else}
     <div class="article-list">
       <VirtualList
-        items={filteredArticles}
+        items={displayItems}
         scrollContainer={scrollEl}
         estimateHeight={kbViewModeStore.mode === "grid" ? 200 : 140}
         columns={kbViewModeStore.mode === "grid" ? 2 : 1}
-        getKey={(article: (typeof filteredArticles)[number]) => article.id}
+        getKey={(article: (typeof displayItems)[number]) => article.id}
         onloadmore={articlesQuery.hasNextPage ? loadNextPage : undefined}
       >
         {#snippet children({
           item: article,
         }: {
-          item: (typeof filteredArticles)[number];
+          item: (typeof displayItems)[number];
           index: number;
         })}
-          <ArticleCard
-            articleId={article.id}
-            viewMode={kbViewModeStore.mode}
-            titleResult={resolveOrgDecrypt(
-              orgCache.decrypt(`kb-item:${article.id}`, article.encryptedTitle),
-              isOrgKeyLoaded,
-            )}
-            excerptResult={resolveOrgDecrypt(
-              orgCache.decrypt(
-                `kb-excerpt:${article.id}`,
-                article.encryptedExcerpt,
-              ),
-              isOrgKeyLoaded,
-            )}
-            encryptedTitle={article.encryptedTitle}
-            encryptedExcerpt={article.encryptedExcerpt}
-            categoryName={categoryNameMap.get(article.categoryId) ?? null}
-            authorName={resolveAuthorName(article.createdBy)}
-            voteUpCount={article.voteUpCount}
-            voteTotalCount={article.voteUpCount + article.voteDownCount}
-            updatedAt={new Date(article.updatedAt)}
-            selected={selectedIds.has(article.id)}
-            {multiSelectActive}
-            ontap={handleArticleTap}
-            onselect={toggleSelection}
-            onlongpress={handleLongPress}
-          />
+          <div
+            id="article-{article.id}"
+            class="search-target"
+            class:match-active={overlay.activeId === article.id}
+            aria-current={overlay.activeId === article.id ? "true" : undefined}
+          >
+            <ArticleCard
+              articleId={article.id}
+              viewMode={kbViewModeStore.mode}
+              titleResult={resolveOrgDecrypt(
+                orgCache.decrypt(
+                  `kb-item:${article.id}`,
+                  article.encryptedTitle,
+                ),
+                isOrgKeyLoaded,
+              )}
+              excerptResult={resolveOrgDecrypt(
+                orgCache.decrypt(
+                  `kb-excerpt:${article.id}`,
+                  article.encryptedExcerpt,
+                ),
+                isOrgKeyLoaded,
+              )}
+              encryptedTitle={article.encryptedTitle}
+              encryptedExcerpt={article.encryptedExcerpt}
+              categoryName={categoryNameMap.get(article.categoryId) ?? null}
+              authorName={resolveAuthorName(article.createdBy)}
+              voteUpCount={article.voteUpCount}
+              voteTotalCount={article.voteUpCount + article.voteDownCount}
+              updatedAt={new Date(article.updatedAt)}
+              selected={selectedIds.has(article.id)}
+              {multiSelectActive}
+              ontap={handleArticleTap}
+              onselect={toggleSelection}
+              onlongpress={handleLongPress}
+              searchTerm={overlay.term}
+            />
+          </div>
         {/snippet}
       </VirtualList>
     </div>
@@ -745,14 +893,16 @@
   }}
 />
 
-<Dialog
+<ShellDialog
   opened={deleteDialogOpen}
-  title={m.library_delete_confirm_title()}
-  onBackdropClick={() => {
+  ondismiss={() => {
     deleteDialogOpen = false;
   }}
+  title={m.library_delete_confirm_title()}
 >
-  {m.library_delete_confirm_body({ count: String(selectedIds.size) })}
+  {#snippet content()}
+    {m.library_delete_confirm_body({ count: String(selectedIds.size) })}
+  {/snippet}
   {#snippet buttons()}
     <DialogButton
       onclick={() => {
@@ -765,7 +915,7 @@
       {m.common_delete()}
     </DialogButton>
   {/snippet}
-</Dialog>
+</ShellDialog>
 
 <style>
   .library-page {
@@ -791,10 +941,8 @@
     gap: var(--space-md);
   }
 
-  .empty-state {
-    text-align: center;
-    padding: 3rem 1rem;
-    color: var(--muted);
-    font-size: var(--text-base);
+  .search-target {
+    min-width: 0;
+    overflow: hidden;
   }
 </style>

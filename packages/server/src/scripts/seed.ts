@@ -49,6 +49,8 @@ import {
   deriveSessionHmacKey,
   createSessionTokenizer,
 } from "../crypto/session-tokenizer.js";
+import { deriveSecretsKey, createSecretsEncryptor } from "../config/secrets.js";
+import { seedDefaultNoteTypes } from "../tickets/note-type-service.js";
 import { generateAlias } from "../telephony/models/alias-generator.js";
 import type { Kysely } from "kysely";
 import type { TenantDatabase } from "../db/types.js";
@@ -105,6 +107,7 @@ async function seed(): Promise<void> {
   const derivedKeys = deriveKeys(opsKey);
   const encryptor = createFieldEncryptor(derivedKeys.fieldEncryptKey);
   const indexer = createBlindIndexer(derivedKeys.blindIndexKey);
+  const secretsEncryptor = createSecretsEncryptor(deriveSecretsKey(opsKey));
   const hasher = createScryptHasher();
 
   const orgService = createOrgService(db, tenantDb);
@@ -152,6 +155,7 @@ async function seed(): Promise<void> {
     hasher,
     sessions,
     encryptor,
+    sealedBox,
     indexer,
     tokenizer,
     orgId,
@@ -350,6 +354,20 @@ async function seed(): Promise<void> {
         .executeTakeFirstOrThrow();
       console.log(`Created KB category "${name}" (${inserted.id})`);
     }
+  }
+
+  // --- Seed default note types ---
+  const existingNoteTypes = await tenantDatabase
+    .selectFrom("note_types")
+    .select("id")
+    .limit(1)
+    .executeTakeFirst();
+
+  if (existingNoteTypes) {
+    console.log("Note types already exist, skipping.");
+  } else {
+    await seedDefaultNoteTypes(tenantDatabase, sealedBox, secretsEncryptor);
+    console.log("Seeded 4 default note types.");
   }
 
   // --- Seed audit log entries (sample activity for dashboard feed) ---

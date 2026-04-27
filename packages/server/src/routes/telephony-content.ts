@@ -17,16 +17,24 @@ import {
   updateGreetingInputSchema,
   deleteGreetingInputSchema,
   listGreetingsInputSchema,
+  uploadGreetingAudioInputSchema,
+  createAudioGreetingInputSchema,
   createSmsResponseInputSchema,
   updateSmsResponseInputSchema,
   deleteSmsResponseInputSchema,
   listSmsResponsesInputSchema,
 } from "@care-y/shared";
+import type { BlobStore } from "../storage/store.js";
+import type { RateLimiter } from "../ratelimit/rate-limiter.js";
+import { InternalError } from "../errors.js";
+import { TRPCError } from "@trpc/server";
 
 export interface TelephonyContentRouterDeps {
   readonly createService: (
     tenantDb: OrgContext["tenantDb"],
   ) => TelephonyContentService;
+  readonly blobStore?: BlobStore;
+  readonly uploadLimiter?: RateLimiter;
 }
 
 const defaultDeps: TelephonyContentRouterDeps = {
@@ -37,13 +45,13 @@ const defaultDeps: TelephonyContentRouterDeps = {
 export function createTelephonyContentRouter(
   deps: TelephonyContentRouterDeps = defaultDeps,
 ) {
-  const { createService } = deps;
+  const { createService, blobStore, uploadLimiter } = deps;
 
   return router({
     listGreetings: adminProcedure.input(listGreetingsInputSchema).query(
       withErrorWrapping(async ({ ctx, input }) => {
         const svc = createService(ctx.org.tenantDb);
-        return svc.listGreetings(input.phoneId);
+        return svc.listGreetings(input.phoneNumber);
       }),
     ),
 
@@ -58,6 +66,7 @@ export function createTelephonyContentRouter(
       withErrorWrapping(async ({ ctx, input }) => {
         const svc = createService(ctx.org.tenantDb);
         return svc.updateGreeting(input.id, {
+          phoneNumber: input.phoneNumber,
           text: input.text,
           isAudio: input.isAudio,
         });
@@ -71,6 +80,54 @@ export function createTelephonyContentRouter(
         return { success: true as const };
       }),
     ),
+
+    uploadGreetingAudio: adminProcedure
+      .input(uploadGreetingAudioInputSchema)
+      .mutation(
+        withErrorWrapping(async ({ ctx, input }) => {
+          if (uploadLimiter) {
+            const rateResult = uploadLimiter.check(ctx.user.id);
+            if (!rateResult.allowed) {
+              throw new TRPCError({
+                code: "TOO_MANY_REQUESTS",
+                message: `Upload rate limited. Retry after ${String(Math.ceil(rateResult.retryAfterMs / 1000))}s`,
+              });
+            }
+          }
+          if (!blobStore) {
+            throw new InternalError("BlobStore not configured");
+          }
+          const svc = createService(ctx.org.tenantDb);
+          return svc.uploadGreetingAudio(
+            blobStore,
+            ctx.org.orgSchema,
+            input.greetingId,
+            input.audioBase64,
+            input.contentType,
+          );
+        }),
+      ),
+
+    createAudioGreeting: adminProcedure
+      .input(createAudioGreetingInputSchema)
+      .mutation(
+        withErrorWrapping(async ({ ctx, input }) => {
+          if (uploadLimiter) {
+            const rateResult = uploadLimiter.check(ctx.user.id);
+            if (!rateResult.allowed) {
+              throw new TRPCError({
+                code: "TOO_MANY_REQUESTS",
+                message: `Upload rate limited. Retry after ${String(Math.ceil(rateResult.retryAfterMs / 1000))}s`,
+              });
+            }
+          }
+          if (!blobStore) {
+            throw new InternalError("BlobStore not configured");
+          }
+          const svc = createService(ctx.org.tenantDb);
+          return svc.createAudioGreeting(blobStore, ctx.org.orgSchema, input);
+        }),
+      ),
 
     listSmsResponses: adminProcedure.input(listSmsResponsesInputSchema).query(
       withErrorWrapping(async ({ ctx, input }) => {

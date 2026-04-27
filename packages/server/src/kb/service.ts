@@ -47,11 +47,13 @@ export interface KBItemSummary {
 /** Full item record for detail endpoints (includes body). */
 export interface KBItemRecord extends KBItemSummary {
   readonly encryptedBody: Buffer;
+  readonly attachmentCount: number;
 }
 
 export interface KBItemPage {
   readonly items: KBItemSummary[];
   readonly nextCursor: string | null;
+  readonly total: number;
 }
 
 // --- Author records ---
@@ -137,6 +139,11 @@ export interface KBItemService {
 
   /** Return distinct authors who have written KB articles. */
   listAuthors(): Promise<KBAuthorRecord[]>;
+
+  /** Return encrypted bodies for a set of item IDs (max 200). */
+  listBodies(
+    itemIds: readonly string[],
+  ): Promise<readonly { id: string; encryptedBody: Buffer }[]>;
 }
 
 export interface KBVoteService {
@@ -202,22 +209,26 @@ function toItemSummary(row: {
   };
 }
 
-function toItemRecord(row: {
-  id: string;
-  category_id: string;
-  encrypted_title: Buffer;
-  encrypted_body: Buffer;
-  encrypted_excerpt: Buffer | null;
-  created_by: string;
-  vote_up_count: number;
-  vote_down_count: number;
-  rating: number;
-  created_at: Date;
-  updated_at: Date;
-}): KBItemRecord {
+function toItemRecord(
+  row: {
+    id: string;
+    category_id: string;
+    encrypted_title: Buffer;
+    encrypted_body: Buffer;
+    encrypted_excerpt: Buffer | null;
+    created_by: string;
+    vote_up_count: number;
+    vote_down_count: number;
+    rating: number;
+    created_at: Date;
+    updated_at: Date;
+  },
+  attachmentCount: number,
+): KBItemRecord {
   return {
     ...toItemSummary(row),
     encryptedBody: row.encrypted_body,
+    attachmentCount,
   };
 }
 
@@ -364,17 +375,25 @@ export function createKBItemService(db: Kysely<TenantDatabase>): KBItemService {
         })
         .returningAll()
         .executeTakeFirstOrThrow();
-      return toItemRecord(row);
+      return toItemRecord(row, 0);
     },
 
     async findById(itemId) {
       const row = await db
         .selectFrom("kb_items")
         .selectAll()
+        .select((eb) =>
+          eb
+            .selectFrom("kb_attachments")
+            .select(eb.fn.countAll<string>().as("cnt"))
+            .whereRef("kb_attachments.item_id", "=", "kb_items.id")
+            .where("kb_attachments.deleted_at", "is", null)
+            .as("attachment_count"),
+        )
         .where("id", "=", itemId)
         .executeTakeFirst();
       if (!row) throw new NotFoundError(ErrorCode.KB_ARTICLE_NOT_FOUND);
-      return toItemRecord(row);
+      return toItemRecord(row, Number(row.attachment_count ?? 0));
     },
 
     async list(input) {
@@ -468,9 +487,38 @@ export function createKBItemService(db: Kysely<TenantDatabase>): KBItemService {
         }
       }
 
+      let countQuery = db
+        .selectFrom("kb_items")
+        .select((eb) => eb.fn.countAll<number>().as("total"));
+      if (input.categoryId !== undefined) {
+        countQuery = countQuery.where("category_id", "=", input.categoryId);
+      }
+      if (input.minRating !== undefined) {
+        countQuery = countQuery.where("rating", ">=", input.minRating);
+      }
+      if (input.createdBy !== undefined) {
+        countQuery = countQuery.where("created_by", "=", input.createdBy);
+      }
+      if (input.createdAfter !== undefined) {
+        countQuery = countQuery.where(
+          "created_at",
+          ">=",
+          new Date(input.createdAfter),
+        );
+      }
+      if (input.createdBefore !== undefined) {
+        countQuery = countQuery.where(
+          "created_at",
+          "<=",
+          new Date(input.createdBefore),
+        );
+      }
+      const countRow = await countQuery.executeTakeFirstOrThrow();
+
       return {
         items: pageRows.map(toItemSummary),
         nextCursor,
+        total: countRow.total,
       };
     },
 
@@ -494,25 +542,18 @@ export function createKBItemService(db: Kysely<TenantDatabase>): KBItemService {
         updates.encrypted_excerpt = input.encryptedExcerpt;
 
       if (Object.keys(updates).length === 0) {
-        const existing = await db
-          .selectFrom("kb_items")
-          .selectAll()
-          .where("id", "=", itemId)
-          .executeTakeFirst();
-        if (!existing) throw new NotFoundError(ErrorCode.KB_ARTICLE_NOT_FOUND);
-        return toItemRecord(existing);
+        return this.findById(itemId);
       }
 
       updates.updated_at = new Date();
 
-      const row = await db
+      await db
         .updateTable("kb_items")
         .set(updates)
         .where("id", "=", itemId)
-        .returningAll()
-        .executeTakeFirst();
-      if (!row) throw new NotFoundError(ErrorCode.KB_ARTICLE_NOT_FOUND);
-      return toItemRecord(row);
+        .execute();
+
+      return this.findById(itemId);
     },
 
     async delete(itemId) {
@@ -562,6 +603,16 @@ export function createKBItemService(db: Kysely<TenantDatabase>): KBItemService {
         id: r.id,
         encryptedDisplayName: r.encrypted_display_name,
       }));
+    },
+
+    async listBodies(itemIds) {
+      if (itemIds.length === 0) return [];
+      const rows = await db
+        .selectFrom("kb_items")
+        .select(["id", "encrypted_body"])
+        .where("id", "in", [...itemIds])
+        .execute();
+      return rows.map((r) => ({ id: r.id, encryptedBody: r.encrypted_body }));
     },
   };
 }

@@ -9,6 +9,7 @@
 
 import { z } from "zod";
 import { base64String } from "./validators.js";
+import { ROLE_ID_VALUES_TUPLE } from "../roles.js";
 
 // --- Ticket enums ---
 
@@ -53,6 +54,7 @@ export const createFollowUpInputSchema = z.object({
   type: followUpTypeSchema,
   isPrivate: z.boolean().default(false),
   mentionedPseudonyms: z.array(z.string()).default([]),
+  noteTypeId: z.uuid().optional(),
 });
 export type CreateFollowUpInput = z.infer<typeof createFollowUpInputSchema>;
 
@@ -91,6 +93,17 @@ export const reorderQueuesInputSchema = z.array(
   }),
 );
 export type ReorderQueuesInput = z.infer<typeof reorderQueuesInputSchema>;
+
+export const deleteQueueInputSchema = z
+  .object({
+    queueId: z.uuid(),
+    reassignTo: z.uuid().optional(),
+  })
+  .refine((d) => d.reassignTo === undefined || d.reassignTo !== d.queueId, {
+    message: "Cannot reassign tickets to the queue being deleted",
+    path: ["reassignTo"],
+  });
+export type DeleteQueueInput = z.infer<typeof deleteQueueInputSchema>;
 
 export const createPresetReplyInputSchema = z.object({
   encryptedTitle: base64String("encryptedTitle"),
@@ -179,12 +192,20 @@ export type RecentFollowUpsInput = z.infer<typeof recentFollowUpsInputSchema>;
 
 export const followUpListDirectionSchema = z.enum(["newer", "older"]);
 
+export const mediaFlagSchema = z.enum(["recording", "image", "file"]);
+export type MediaFlag = z.infer<typeof mediaFlagSchema>;
+
 export const followUpListInputSchema = z.object({
   ticketId: z.uuid(),
-  limit: z.number().int().min(1).max(100).default(50),
+  limit: z.number().int().min(1).max(500).default(50),
   cursor: z.uuid().optional(),
   direction: followUpListDirectionSchema.default("newer"),
   types: z.array(followUpTypeSchema).optional(),
+  mediaFlags: z.array(mediaFlagSchema).optional(),
+  createdBy: z.array(z.uuid()).optional(),
+  includeClientSource: z.boolean().optional(),
+  dateFrom: z.iso.datetime({ offset: true }).optional(),
+  dateTo: z.iso.datetime({ offset: true }).optional(),
 });
 export type FollowUpListInput = z.infer<typeof followUpListInputSchema>;
 
@@ -195,6 +216,11 @@ export const followUpSummaryInputSchema = z.object({
   cursor: z.uuid().optional(),
   direction: followUpListDirectionSchema.default("newer"),
   types: z.array(followUpTypeSchema).optional(),
+  mediaFlags: z.array(mediaFlagSchema).optional(),
+  createdBy: z.array(z.uuid()).optional(),
+  includeClientSource: z.boolean().optional(),
+  dateFrom: z.iso.datetime({ offset: true }).optional(),
+  dateTo: z.iso.datetime({ offset: true }).optional(),
 });
 export type FollowUpSummaryInput = z.infer<typeof followUpSummaryInputSchema>;
 
@@ -205,6 +231,12 @@ export const followUpsByIdsInputSchema = z.object({
   types: z.array(followUpTypeSchema).optional(),
 });
 export type FollowUpsByIdsInput = z.infer<typeof followUpsByIdsInputSchema>;
+
+/** List distinct volunteer participants on a ticket. */
+export const listParticipantsInputSchema = z.object({
+  ticketId: z.uuid(),
+});
+export type ListParticipantsInput = z.infer<typeof listParticipantsInputSchema>;
 
 // --- Media list schemas ---
 
@@ -265,6 +297,7 @@ export type QueueWatcherInput = z.infer<typeof queueWatcherInputSchema>;
 export const updateInternalNoteInputSchema = z.object({
   followUpId: z.uuid(),
   encryptedContent: base64String("encryptedContent"),
+  noteTypeId: z.uuid().optional(),
 });
 export type UpdateInternalNoteInput = z.infer<
   typeof updateInternalNoteInputSchema
@@ -345,3 +378,64 @@ export const ticketActionSchema = z.enum([
   "cancel",
 ]);
 export type TicketAction = z.infer<typeof ticketActionSchema>;
+
+// --- Note type schemas (internal note categorization + escalation routing) ---
+
+export const escalationTargetSchema = z.discriminatedUnion("type", [
+  z.object({ type: z.literal("role"), value: z.enum(["admin", "manager"]) }),
+  z.object({ type: z.literal("permission"), value: z.string().min(1) }),
+  z.object({ type: z.literal("queue"), value: z.uuid() }),
+  z.object({ type: z.literal("ticket_access") }),
+]);
+export type EscalationTarget = z.infer<typeof escalationTargetSchema>;
+
+export const roleIdSchema = z.enum(ROLE_ID_VALUES_TUPLE);
+
+export const createNoteTypeInputSchema = z.object({
+  encryptedName: base64String("encryptedName"),
+  encryptedIcon: base64String("encryptedIcon"),
+  encryptedDescription: base64String("encryptedDescription").optional(),
+  escalationTargets: z.array(escalationTargetSchema),
+  requiresOnClose: z.boolean().optional(),
+  minViewRole: roleIdSchema.optional(),
+  minCreateRole: roleIdSchema.optional(),
+});
+export type CreateNoteTypeInput = z.infer<typeof createNoteTypeInputSchema>;
+
+export const updateNoteTypeInputSchema = z.object({
+  id: z.uuid(),
+  encryptedName: base64String("encryptedName").optional(),
+  encryptedIcon: base64String("encryptedIcon").optional(),
+  encryptedDescription: base64String("encryptedDescription")
+    .nullable()
+    .optional(),
+  escalationTargets: z.array(escalationTargetSchema).optional(),
+  isActive: z.boolean().optional(),
+  requiresOnClose: z.boolean().optional(),
+  minViewRole: roleIdSchema.optional(),
+  minCreateRole: roleIdSchema.optional(),
+});
+export type UpdateNoteTypeInput = z.infer<typeof updateNoteTypeInputSchema>;
+
+// --- Reactions (internal note feedback) ---
+
+export const REACTION_TYPES = [
+  "acknowledge",
+  "approve",
+  "disagree",
+  "flag",
+  "complete",
+] as const;
+export type ReactionType = (typeof REACTION_TYPES)[number];
+export const reactionTypeSchema = z.enum(REACTION_TYPES);
+
+export const toggleReactionInputSchema = z.object({
+  followUpId: z.uuid(),
+  reaction: reactionTypeSchema,
+});
+export type ToggleReactionInput = z.infer<typeof toggleReactionInputSchema>;
+
+export interface ReactionSummary {
+  readonly reaction: ReactionType;
+  readonly userIds: readonly string[];
+}

@@ -70,8 +70,17 @@ describe("ErrorCode", () => {
       "MERGE_UNDO_LOCKED",
       "ALIAS_GENERATION_FAILED",
 
+      // Admin: user management
+      "CANNOT_DEACTIVATE_SELF",
+      "CANNOT_DEACTIVATE_LAST_ADMIN",
+
+      // Profile
+      "USERNAME_ALREADY_TAKEN",
+
       // Queues / presets / media
       "QUEUE_NOT_FOUND",
+      "CANNOT_DELETE_LAST_QUEUE",
+      "QUEUE_HAS_TICKETS",
       "PRESET_REPLY_NOT_FOUND",
       "RECORDING_NOT_FOUND",
       "ATTACHMENT_NOT_FOUND",
@@ -80,6 +89,11 @@ describe("ErrorCode", () => {
       "KB_CATEGORY_NOT_FOUND",
       "KB_ARTICLE_NOT_FOUND",
       "KB_ATTACHMENT_NOT_FOUND",
+
+      // Note types
+      "NOTE_TYPE_NOT_FOUND",
+      "CANNOT_DEACTIVATE_DEFAULT_NOTE_TYPE",
+      "INSUFFICIENT_ROLE",
 
       // Telephony
       "TELEPHONY_NOT_CONFIGURED",

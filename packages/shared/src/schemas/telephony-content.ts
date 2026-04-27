@@ -19,8 +19,10 @@ export const greetingTypeSchema = z.enum([
 ]);
 export type GreetingType = z.infer<typeof greetingTypeSchema>;
 
+const e164Schema = z.string().regex(/^\+[1-9]\d{1,14}$/);
+
 export const createGreetingInputSchema = z.object({
-  phoneId: z.uuid(),
+  phoneNumber: e164Schema,
   locale: z.string().min(2).max(10),
   greetingType: greetingTypeSchema,
   text: z.string().min(1).max(2000),
@@ -30,6 +32,7 @@ export type CreateGreetingInput = z.infer<typeof createGreetingInputSchema>;
 
 export const updateGreetingInputSchema = z.object({
   id: z.uuid(),
+  phoneNumber: e164Schema.optional(),
   text: z.string().min(1).max(2000).optional(),
   isAudio: z.boolean().optional(),
 });
@@ -41,9 +44,40 @@ export const deleteGreetingInputSchema = z.object({
 export type DeleteGreetingInput = z.infer<typeof deleteGreetingInputSchema>;
 
 export const listGreetingsInputSchema = z.object({
-  phoneId: z.uuid(),
+  phoneNumber: e164Schema.optional(),
 });
 export type ListGreetingsInput = z.infer<typeof listGreetingsInputSchema>;
+
+export const GREETING_AUDIO_MAX_BYTES = 5 * 1024 * 1024;
+
+export const greetingAudioContentTypeSchema = z.enum([
+  "audio/wav",
+  "audio/mpeg",
+  "audio/ogg",
+]);
+export type GreetingAudioContentType = z.infer<
+  typeof greetingAudioContentTypeSchema
+>;
+
+export const uploadGreetingAudioInputSchema = z.object({
+  greetingId: z.uuid(),
+  audioBase64: z.string().min(1),
+  contentType: greetingAudioContentTypeSchema,
+});
+export type UploadGreetingAudioInput = z.infer<
+  typeof uploadGreetingAudioInputSchema
+>;
+
+export const createAudioGreetingInputSchema = z.object({
+  phoneNumber: e164Schema,
+  locale: z.string().min(2).max(10),
+  greetingType: greetingTypeSchema,
+  audioBase64: z.string().min(1),
+  contentType: greetingAudioContentTypeSchema,
+});
+export type CreateAudioGreetingInput = z.infer<
+  typeof createAudioGreetingInputSchema
+>;
 
 // --- SMSResponse ---
 

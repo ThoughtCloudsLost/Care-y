@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "You've searched loaded data only. Tap \"Search all\" to check everything you have access to." |
+* | "No matches in decrypted data. Tap to search encrypted items." |
 *
 * @param {Search_Full_Hint_No_ResultsInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

@@ -41,6 +41,7 @@ vi.mock("@tanstack/svelte-query", () => ({
     getQueryData: vi.fn(),
     setQueryData: vi.fn(),
     invalidateQueries: vi.fn(),
+    getQueriesData: vi.fn().mockReturnValue([]),
   }),
   createInfiniteQuery: (optsFn: () => Record<string, unknown>) => {
     optsFn();
@@ -68,6 +69,18 @@ vi.mock("$lib/trpc/index.js", () => ({
       createFollowUp: { mutate: vi.fn().mockResolvedValue({}) },
       counts: {
         query: vi.fn().mockResolvedValue({ new: 0, active: 0, onHold: 0 }),
+      },
+      noteTypes: {
+        listActive: {
+          query: vi
+            .fn()
+            .mockResolvedValue({ types: [], defaultNoteTypeId: null }),
+        },
+        list: {
+          query: vi
+            .fn()
+            .mockResolvedValue({ types: [], defaultNoteTypeId: null }),
+        },
       },
     },
   },

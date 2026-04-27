@@ -1,0 +1,526 @@
+/* Prism theme: colored light environment with translucent surfaces.
+   Brand and accent colors exist as soft gradient blobs in the page
+   background. Cards are semi-transparent so color bleeds through.
+   Glass surfaces (navbar, tabbar) pick up the color naturally via
+   backdrop-filter blur. Scrolling shifts which color zone each
+   surface sits over, creating parallax color variation. */
+
+/* --- Prism palette tokens (light defaults) --- */
+.theme-prism {
+  --theme-font-display: system-ui, -apple-system, sans-serif;
+  --theme-font-ui: system-ui, -apple-system, sans-serif;
+
+  --ink: #1a1a1a;
+  --muted: #8e8e93;
+
+  /* Semantic aliases */
+  --paper: var(--color-ios-light-surface);
+  --surface-1: var(--color-ios-light-surface-1);
+  --surface-2: var(--color-ios-light-surface-2);
+
+  /* Semi-transparent card background: lets the gradient bleed through */
+  --card-bg: rgba(255, 255, 255, 0.45);
+  --card-border: rgba(255, 255, 255, 0.35);
+  --card-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.5),
+    inset 0 -0.5px 0 rgba(255, 255, 255, 0.1),
+    inset 0 0 0 0.5px rgba(255, 255, 255, 0.2),
+    inset 10px 8px 20px -12px rgba(255, 255, 255, 0.3),
+    0 2px 8px rgba(0, 0, 0, 0.06);
+  --card-shadow-elevated:
+    inset 0 1px 0 rgba(255, 255, 255, 0.6),
+    inset 0 -0.5px 0 rgba(255, 255, 255, 0.15),
+    inset 0 0 0 0.5px rgba(255, 255, 255, 0.25),
+    inset 12px 10px 24px -12px rgba(255, 255, 255, 0.35),
+    0 4px 12px rgba(0, 0, 0, 0.08), 0 0 0 0.5px var(--brand-accent-20);
+  --card-radius: 1rem;
+
+  /* Filter pill tokens (accent-tinted) */
+  --pill-bg: color-mix(in srgb, var(--brand-accent) 6%, transparent);
+  --pill-bg-active: var(--ink);
+  --pill-text: var(--muted);
+  --pill-text-active: #ffffff;
+  --pill-radius: 999px;
+
+  /* Chip/tag tokens (accent-tinted) */
+  --chip-bg: color-mix(in srgb, var(--brand-accent) 6%, transparent);
+  --chip-text: var(--muted);
+
+  /* Divider (blended both brand colors) */
+  --divider: color-mix(
+    in srgb,
+    color-mix(in srgb, var(--brand-primary) 50%, var(--brand-accent) 50%) 8%,
+    rgba(0, 0, 0, 0.06)
+  );
+
+  /* Konsta iOS surface overrides (clean, neutral base for brand tint to layer on) */
+  --color-ios-light-surface: #f2f2f7;
+  --color-ios-light-surface-1: #ffffff;
+  --color-ios-light-surface-1-shade: #e8e8ed;
+  --color-ios-light-surface-1-tint: #ffffff;
+  --color-ios-light-surface-2: #f5f5f5;
+  --color-ios-light-surface-3: #ffffff;
+  --color-ios-light-surface-variant: rgba(200, 200, 204, 0.35);
+
+  --color-ios-dark-surface: #000000;
+  --color-ios-dark-surface-1: #1c1c1e;
+  --color-ios-dark-surface-1-shade: #0a0a0a;
+  --color-ios-dark-surface-1-tint: #2c2c2e;
+  --color-ios-dark-surface-2: #1c1c1e;
+  --color-ios-dark-surface-3: #2c2c2e;
+  --color-ios-dark-surface-variant: rgba(255, 255, 255, 0.06);
+
+  /* Konsta Material surface overrides */
+  --color-md-light-surface-1: #ffffff;
+  --color-md-light-surface-2: #f5f5f5;
+  --color-md-light-surface-3: #ffffff;
+  --color-md-light-surface-variant: #e5e5ea;
+  --color-md-dark-surface: #000000;
+  --color-md-dark-surface-1: #1c1c1e;
+  --color-md-dark-surface-2: #1c1c1e;
+  --color-md-dark-surface-3: #2c2c2e;
+  --color-md-dark-surface-variant: #2c2c2e;
+}
+
+/* --- Dark mode: stronger brand tint, deeper shadows --- */
+.theme-prism.dark {
+  --ink: #f5f5f7;
+  --muted: #98989d;
+  --paper: var(--color-ios-dark-surface);
+  --surface-1: var(--color-ios-dark-surface-1);
+  --surface-2: var(--color-ios-dark-surface-2);
+
+  --card-bg: rgba(28, 28, 30, 0.6);
+  --card-border: rgba(255, 255, 255, 0.12);
+  --card-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.18),
+    inset 0 -0.5px 0 rgba(255, 255, 255, 0.05),
+    inset 0 0 0 0.5px rgba(255, 255, 255, 0.08),
+    inset 10px 8px 20px -12px rgba(255, 255, 255, 0.12),
+    0 2px 12px rgba(0, 0, 0, 0.25);
+  --card-shadow-elevated:
+    inset 0 1px 0 rgba(255, 255, 255, 0.22),
+    inset 0 -0.5px 0 rgba(255, 255, 255, 0.06),
+    inset 0 0 0 0.5px rgba(255, 255, 255, 0.1),
+    inset 12px 10px 24px -12px rgba(255, 255, 255, 0.15),
+    0 4px 16px rgba(0, 0, 0, 0.3), 0 0 0 0.5px var(--brand-accent-20);
+
+  --pill-bg: color-mix(in srgb, var(--brand-accent) 10%, transparent);
+  --pill-bg-active: #ffffff;
+  --pill-text: var(--muted);
+  --pill-text-active: #000000;
+  --chip-bg: color-mix(in srgb, var(--brand-accent) 10%, transparent);
+  --chip-text: var(--muted);
+  --divider: color-mix(
+    in srgb,
+    color-mix(in srgb, var(--brand-primary) 50%, var(--brand-accent) 50%) 12%,
+    rgba(255, 255, 255, 0.06)
+  );
+}
+
+/* ==========================================================
+   BLOCKS / CARDS / LISTS: Semi-transparent card surfaces.
+   No !important needed: unlayered CSS beats Tailwind v4's
+   @layer utilities in cascade order.
+   ========================================================== */
+
+.theme-prism :is(.k-block, .k-card, .k-list) {
+  border-radius: var(--card-radius);
+  background: var(--overlay-surface, var(--card-bg));
+  border: 1px solid var(--overlay-border, var(--card-border));
+  box-shadow: var(--overlay-shadow, var(--card-shadow));
+}
+
+.theme-prism .k-list {
+  overflow: hidden;
+}
+
+.theme-prism .card-elevated {
+  box-shadow: var(--card-shadow-elevated);
+}
+
+.theme-prism .k-list .hairline-b::after {
+  background: var(--divider) !important;
+}
+
+/* Lists nested inside cards sit flat on the card surface */
+.theme-prism .k-card .k-list {
+  --card-bg: transparent;
+  --card-border: transparent;
+  --card-shadow: none;
+  border-radius: 0;
+}
+
+/* Glass text on card surfaces: override semantic tokens inside cards
+   so components using var(--ink)/var(--muted) flip automatically.
+   Brand accents and Konsta's own color classes are unaffected. */
+:is(html.glass-dark.light.theme-prism, html.glass-light.dark.theme-prism)
+  :is(
+    .k-block,
+    .k-card,
+    .k-list,
+    .card-elevated,
+    .activity-surface,
+    .kb-surface,
+    .queue-tile
+  ) {
+  --ink: var(--glass-text);
+  --muted: var(--glass-text);
+}
+
+/* Exclude preview window: bubbles have their own bg/text pairing
+   that matches their surface colors, not the glass direction. */
+html.glass-dark.light.theme-prism .preview-window {
+  --ink: #1a1a1a;
+  --muted: #8e8e93;
+}
+
+html.glass-light.dark.theme-prism .preview-window {
+  --ink: #f5f5f7;
+  --muted: #98989d;
+}
+
+/* ==========================================================
+   ETCHED GLASS: Group title headers and preview windows
+   Frosted region with noise texture, like sandblasted glass.
+   Reused across list group titles and ticket preview windows.
+   ========================================================== */
+
+.theme-prism .k-list li[class*="surface-variant"],
+.theme-prism .preview-window {
+  position: relative;
+  -webkit-backdrop-filter: blur(20px) saturate(0.5);
+  backdrop-filter: blur(20px) saturate(0.5);
+}
+
+.theme-prism .k-list li[class*="surface-variant"]::after,
+.theme-prism .preview-window::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.7' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")
+    repeat;
+}
+
+html.light.theme-prism .k-list li[class*="surface-variant"]::after,
+html.light.theme-prism .preview-window::after {
+  opacity: 0.08;
+  filter: invert(1);
+}
+
+html.dark.theme-prism .k-list li[class*="surface-variant"]::after,
+html.dark.theme-prism .preview-window::after {
+  opacity: 0.06;
+}
+
+html.glass-dark.light.theme-prism .k-list li[class*="surface-variant"]::after,
+html.glass-dark.light.theme-prism .preview-window::after {
+  opacity: 0.06;
+  filter: none;
+}
+
+html.glass-light.dark.theme-prism .k-list li[class*="surface-variant"]::after,
+html.glass-light.dark.theme-prism .preview-window::after {
+  opacity: 0.08;
+  filter: invert(1);
+}
+
+/* ==========================================================
+   BACKGROUND: Colored light environment
+   Soft radial gradient blobs of brand + accent color placed at
+   different positions on a fixed background. As content scrolls,
+   different surfaces sit over different color zones. Glass
+   surfaces pick up the color via backdrop-filter automatically.
+   ========================================================== */
+
+.theme-prism.light {
+  background:
+    radial-gradient(
+        ellipse 60% 50% at 15% 20%,
+        color-mix(in srgb, var(--brand-primary) 20%, transparent) 0%,
+        transparent 70%
+      )
+      fixed,
+    radial-gradient(
+        ellipse 50% 45% at 85% 60%,
+        color-mix(in srgb, var(--brand-accent) 16%, transparent) 0%,
+        transparent 70%
+      )
+      fixed,
+    radial-gradient(
+        ellipse 40% 35% at 50% 90%,
+        color-mix(in srgb, var(--brand-primary) 10%, transparent) 0%,
+        transparent 70%
+      )
+      fixed,
+    #f2f2f7;
+}
+
+.theme-prism.dark {
+  background:
+    radial-gradient(
+        ellipse 60% 50% at 15% 20%,
+        color-mix(in srgb, var(--brand-primary) 18%, transparent) 0%,
+        transparent 70%
+      )
+      fixed,
+    radial-gradient(
+        ellipse 50% 45% at 85% 60%,
+        color-mix(in srgb, var(--brand-accent) 14%, transparent) 0%,
+        transparent 70%
+      )
+      fixed,
+    radial-gradient(
+        ellipse 40% 35% at 50% 90%,
+        color-mix(in srgb, var(--brand-primary) 8%, transparent) 0%,
+        transparent 70%
+      )
+      fixed,
+    #000000;
+}
+
+/* Glass mode: flip gradient direction independent of color scheme */
+html.glass-dark.light.theme-prism {
+  --card-bg: rgba(28, 28, 30, 0.6);
+  --card-border: rgba(255, 255, 255, 0.12);
+  --card-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.18),
+    inset 0 -0.5px 0 rgba(255, 255, 255, 0.05),
+    inset 0 0 0 0.5px rgba(255, 255, 255, 0.08),
+    inset 10px 8px 20px -12px rgba(255, 255, 255, 0.12),
+    0 2px 12px rgba(0, 0, 0, 0.25);
+}
+
+html.glass-light.dark.theme-prism {
+  --card-bg: rgba(255, 255, 255, 0.45);
+  --card-border: rgba(255, 255, 255, 0.35);
+  --card-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.5),
+    inset 0 -0.5px 0 rgba(255, 255, 255, 0.1),
+    inset 0 0 0 0.5px rgba(255, 255, 255, 0.2),
+    inset 10px 8px 20px -12px rgba(255, 255, 255, 0.3),
+    0 2px 8px rgba(0, 0, 0, 0.06);
+}
+
+/* Let the gradient show through body and Konsta page */
+.theme-prism body,
+.theme-prism .k-page {
+  background: transparent !important;
+}
+
+/* ==========================================================
+   BUTTONS: Rounded with brand-aware styling
+   ========================================================== */
+
+.theme-prism .k-button {
+  border-radius: 0.75rem;
+}
+
+.theme-prism .soft-btn {
+  position: relative;
+  background: rgba(255, 255, 255, 0.15);
+  border: none;
+  box-shadow: none;
+}
+
+.theme-prism.dark .soft-btn {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.theme-prism .soft-btn::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.7' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")
+    repeat;
+}
+
+html.light.theme-prism .soft-btn::after {
+  opacity: 0.08;
+  filter: invert(1);
+}
+
+html.dark.theme-prism .soft-btn::after {
+  opacity: 0.06;
+}
+
+/* ==========================================================
+   CHIPS & BADGES: Brand-tinted pills
+   ========================================================== */
+
+.theme-prism .k-chip:not(.glass) {
+  border-radius: var(--pill-radius);
+  background: var(--chip-bg);
+  color: var(--chip-text);
+  border: none;
+}
+
+.theme-prism .k-badge {
+  border-radius: var(--pill-radius);
+}
+
+/* ==========================================================
+   SEGMENTED CONTROLS: Brand-tinted pill group
+   ========================================================== */
+
+.theme-prism .k-segmented {
+  border-radius: var(--pill-radius);
+  background: var(--pill-bg);
+}
+
+.theme-prism .k-segmented > span {
+  border-radius: var(--pill-radius);
+}
+
+.theme-prism .k-segmented-button {
+  border-radius: var(--pill-radius);
+}
+
+/* ==========================================================
+   DIALOGS & MODALS: Brand-tinted overlays
+   ========================================================== */
+
+.theme-prism .k-dialog {
+  border-radius: 1.25rem;
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  box-shadow: var(--card-shadow-elevated);
+}
+
+.theme-prism .k-popup {
+  border-radius: 1.25rem 1.25rem 0 0;
+}
+
+.theme-prism .k-sheet {
+  border-radius: 1.25rem 1.25rem 0 0;
+  border-top: 1px solid var(--card-border);
+}
+
+.theme-prism .k-actions-group {
+  border-radius: var(--card-radius);
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  overflow: hidden;
+}
+
+.theme-prism .k-panel .k-list {
+  padding: 0 var(--page-pad-x, 0.75rem);
+}
+
+/* Preview window: background + no border (blur/noise from etched glass section) */
+.theme-prism .preview-window {
+  background: rgba(255, 255, 255, 0.15) !important;
+  box-shadow: none;
+  border: none !important;
+}
+
+.theme-prism.dark .preview-window {
+  background: rgba(255, 255, 255, 0.03) !important;
+}
+
+/* ==========================================================
+   FAB: Brand-tinted elevated circle
+   ========================================================== */
+
+.theme-prism .k-fab {
+  box-shadow: var(--card-shadow-elevated);
+}
+
+/* ==========================================================
+   BLOCK TITLES
+   ========================================================== */
+
+.theme-prism .k-block-title {
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+/* ==========================================================
+   DIVIDER
+   ========================================================== */
+
+.theme-prism .divider-brand {
+  height: 1px;
+  background: var(--divider);
+}
+
+/* Glass: no overrides. Konsta's native glass is used as-is.
+   The .glass utility from shared.css is also unchanged. */
+
+/* ==========================================================
+   SKELETON: Gentle pulse with brand tint
+   ========================================================== */
+
+@media (prefers-reduced-motion: no-preference) {
+  @keyframes prism-skeleton-pulse {
+    0%,
+    100% {
+      opacity: 0.25;
+    }
+    50% {
+      opacity: 0.5;
+    }
+  }
+
+  .theme-prism .skeleton-bar {
+    animation: prism-skeleton-pulse 1.8s ease-in-out infinite;
+    border-radius: 0.375rem;
+  }
+}
+
+/* ==========================================================
+   ACCESSIBILITY: High contrast override
+   ========================================================== */
+
+@media (prefers-contrast: more) {
+  .theme-prism .k-block,
+  .theme-prism .k-card,
+  .theme-prism .k-list,
+  .theme-prism .k-dialog,
+  .theme-prism .k-popup,
+  .theme-prism .k-sheet,
+  .theme-prism .k-actions-group,
+  .theme-prism .card-elevated {
+    border: 2px solid currentColor;
+    box-shadow: none;
+    background: Canvas;
+  }
+
+  .theme-prism .k-navbar,
+  .theme-prism .k-toolbar {
+    background: Canvas;
+    border-color: currentColor;
+  }
+
+  .theme-prism .k-chip {
+    background: Canvas !important;
+    border: 1px solid currentColor !important;
+  }
+
+  /* Kill prism glass effects: noise, blur, transparency */
+  .theme-prism .preview-window,
+  .theme-prism .soft-btn,
+  .theme-prism .activity-surface,
+  .theme-prism .kb-surface,
+  .theme-prism .queue-tile {
+    background: Canvas !important;
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+    border: 1px solid currentColor !important;
+  }
+
+  .theme-prism .preview-window::after,
+  .theme-prism .soft-btn::after {
+    display: none !important;
+  }
+
+  /* Kill background gradient so system colors take over */
+  .theme-prism.light,
+  .theme-prism.dark {
+    background: Canvas !important;
+  }
+}

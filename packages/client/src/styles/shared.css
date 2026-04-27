@@ -5,7 +5,7 @@
 @theme {
   --breakpoint-tablet: 768px;
   --breakpoint-desktop: 1024px;
-  --color-brand-primary: #10b981;
+  --color-brand-primary: #636366;
 }
 
 /* Font bridge: Konsta's .k-ios/.k-material classes resolve font-family through
@@ -20,7 +20,7 @@
 
 /* App-level defaults (invariant across themes, overridden per-org) */
 :root {
-  --brand-primary: #10b981;
+  --brand-primary: #636366;
   --brand-primary-40: color-mix(in srgb, var(--brand-primary) 40%, transparent);
   --brand-primary-20: color-mix(in srgb, var(--brand-primary) 20%, transparent);
   /* Dual contrast tokens: set at runtime by konsta-palette.ts.
@@ -33,7 +33,7 @@
   --brand-primary-fill: var(--brand-primary);
 
   /* Accent brand color (optional, set per-org) */
-  --brand-accent: #f59e0b;
+  --brand-accent: #8e8e93;
   --brand-accent-on: #000;
   --brand-accent-text: var(--brand-accent);
   --brand-accent-fill: var(--brand-accent);
@@ -102,13 +102,6 @@ html.light {
 
 body {
   font-family: var(--theme-font-ui);
-}
-
-/* FOUC guard: body starts hidden (class set in app.html), removed by
-   +layout.svelte onMount after hydration. visibility:hidden still
-   participates in layout, so no content shift on reveal. */
-body.fouc-guard {
-  visibility: hidden;
 }
 
 /* Prevent iOS Safari auto-zoom on input focus (triggers below 16px).
@@ -323,9 +316,10 @@ html.glass-light.dark {
 
 /* Elevated card: base surface. Each theme overrides with its visual treatment. */
 .card-elevated {
-  background: var(--surface-1);
+  background: var(--card-bg, var(--surface-1));
   border-radius: var(--card-radius);
-  border: 1px solid rgba(128, 128, 128, 0.12);
+  border: 1px solid var(--card-border, rgba(128, 128, 128, 0.12));
+  box-shadow: var(--card-shadow, none);
 }
 
 /* ── Keyboard-open global rules ─────────────────────────────────────
@@ -410,6 +404,77 @@ html.keyboard-open .native-tabbar {
   }
 }
 
+/* Konsta overlay title sizing: bump from text-sm/text-[18px] defaults */
+.k-actions-label {
+  font-size: var(--text-lg) !important;
+  font-weight: 600;
+}
+
+.k-dialog-title {
+  font-size: var(--text-lg) !important;
+}
+
+/* Outline ListInput: the floating label needs a background to cut
+   through the border. Konsta hardcodes bg-ios-light-surface-1 but
+   the actual surface varies (sheet, card, page). Override to use
+   --paper so it matches whatever surface the input sits on. */
+.k-list-input div[class*="bg-ios-light-surface"],
+.k-list-input div[class*="bg-ios-dark-surface"],
+.k-list-input div[class*="bg-md-light-surface"],
+.k-list-input div[class*="bg-md-dark-surface"] {
+  background-color: var(--paper) !important;
+  border-radius: 0.25rem;
+}
+
+/* Overlay surface tokens: set on overlay containers so card-level
+   rules can flatten nested surfaces automatically. Any card rule
+   that checks --overlay-surface first in its fallback chain
+   becomes transparent inside sheets/popups/panels. Themes control
+   border and shadow via --overlay-border and --overlay-shadow. */
+.k-sheet:not(.search-sheet),
+.k-popup,
+.k-panel {
+  --overlay-surface: transparent;
+  --overlay-border: transparent;
+  --overlay-shadow: none;
+}
+
+/* Glass mode: flip text color inside overlays so content matches
+   the glass surface direction. Konsta's dark: classes use :where()
+   (zero specificity), so a class-chain descendant rule wins. */
+.k-sheet:not(.search-sheet),
+.k-popup,
+.k-panel,
+.k-popover {
+  color: var(--glass-text);
+}
+
+html.glass-light.dark
+  :is(.k-popup, .k-sheet:not(.search-sheet), .k-panel, .k-popover) {
+  --ink: #1a1a1a;
+  --muted: #8e8e93;
+  --paper: #f2f2f7;
+}
+
+html.glass-light.dark
+  :is(.k-popup, .k-sheet:not(.search-sheet), .k-panel, .k-popover)
+  :where(label, span, p, div, li, input, textarea, h1, h2, h3, h4, h5, h6) {
+  color: var(--glass-text);
+}
+
+html.glass-dark.light
+  :is(.k-popup, .k-sheet:not(.search-sheet), .k-panel, .k-popover) {
+  --ink: #f5f5f7;
+  --muted: #98989d;
+  --paper: #000000;
+}
+
+html.glass-dark.light
+  :is(.k-popup, .k-sheet:not(.search-sheet), .k-panel, .k-popover)
+  :where(label, span, p, div, li, input, textarea, h1, h2, h3, h4, h5, h6) {
+  color: var(--glass-text);
+}
+
 .kb-img-error {
   padding: var(--space-md);
   font-size: var(--text-sm);
@@ -417,4 +482,19 @@ html.keyboard-open .native-tabbar {
   font-style: italic;
   background: var(--surface-1);
   border-radius: var(--card-radius);
+}
+
+/* Konsta's iOS Glass applies a touch-tracking radial gradient highlight
+   (useIosHighlight) that follows the pointer. On scroll, pointerleave
+   never fires, so the highlight spans accumulate and never get removed.
+   Disable inside scrollable glass containers. Popovers always scroll;
+   messagebar only scrolls when textarea hits max height (overflow-y: auto). */
+.k-popover
+  [style*="pointer-events: none"][style*="overflow: hidden"][style*="position: absolute"] {
+  display: none !important;
+}
+
+.k-messagebar:has([style*="overflow-y: auto"])
+  [style*="pointer-events: none"][style*="overflow: hidden"][style*="position: absolute"] {
+  display: none !important;
 }

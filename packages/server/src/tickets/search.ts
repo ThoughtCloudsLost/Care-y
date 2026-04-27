@@ -25,12 +25,12 @@ export interface MetadataSearchResult {
 }
 
 export interface ContentSearchResult {
-  readonly tickets: readonly {
-    readonly id: string;
-    readonly encryptedTitle: string; // base64-encoded ciphertext
-    readonly encryptedDescription: string; // base64-encoded ciphertext
-    readonly status: string;
-    readonly queueId: string;
+  readonly followups: readonly {
+    readonly ticketId: string;
+    readonly followupId: string;
+    readonly encryptedContent: string; // base64-encoded ciphertext
+    readonly type: string;
+    readonly source: string;
     readonly createdAt: Date;
   }[];
   readonly total: number;
@@ -150,7 +150,7 @@ export function createSearchService(
       const accessibleQueues = await getAccessibleQueueIds(userId);
       if (accessibleQueues.length === 0) {
         return {
-          tickets: [],
+          followups: [],
           total: 0,
           page: input.page,
           pageSize: input.pageSize,
@@ -158,14 +158,21 @@ export function createSearchService(
       }
 
       let baseQuery = db
-        .selectFrom("tickets")
-        .where("queue_id", "in", [...accessibleQueues]);
+        .selectFrom("followups")
+        .innerJoin("tickets", "tickets.id", "followups.ticket_id")
+        .where("tickets.queue_id", "in", [...accessibleQueues])
+        .where("followups.deleted_at", "is", null);
 
       if (input.status !== undefined) {
-        baseQuery = baseQuery.where("status", "=", input.status);
+        baseQuery = baseQuery.where("tickets.status", "=", input.status);
       }
       if (input.queueId !== undefined) {
-        baseQuery = baseQuery.where("queue_id", "=", input.queueId);
+        baseQuery = baseQuery.where("tickets.queue_id", "=", input.queueId);
+      }
+      if (input.ticketIds !== undefined && input.ticketIds.length > 0) {
+        baseQuery = baseQuery.where("followups.ticket_id", "in", [
+          ...input.ticketIds,
+        ]);
       }
 
       const countResult = await baseQuery
@@ -174,30 +181,25 @@ export function createSearchService(
 
       const rows = await baseQuery
         .select([
-          "id",
-          "encrypted_title as encryptedTitle",
-          "encrypted_description as encryptedDescription",
-          "status",
-          "queue_id as queueId",
-          "created_at as createdAt",
+          "followups.id as followupId",
+          "followups.ticket_id as ticketId",
+          "followups.encrypted_content as encryptedContent",
+          "followups.type",
+          "followups.source",
+          "followups.created_at as createdAt",
         ])
-        .orderBy("created_at", "desc")
+        .orderBy("followups.created_at", "desc")
         .limit(input.pageSize)
         .offset((input.page - 1) * input.pageSize)
         .execute();
 
-      // Convert Buffer to base64 for JSON transport over tRPC.
-      // Kysely types these as Buffer (bytea columns from TicketsTable).
-      const tickets = rows.map((row) => ({
+      const followups = rows.map((row) => ({
         ...row,
-        encryptedTitle: Buffer.from(row.encryptedTitle).toString("base64"),
-        encryptedDescription: Buffer.from(row.encryptedDescription).toString(
-          "base64",
-        ),
+        encryptedContent: row.encryptedContent.toString("base64url"),
       }));
 
       return {
-        tickets,
+        followups,
         total: toCount(countResult),
         page: input.page,
         pageSize: input.pageSize,

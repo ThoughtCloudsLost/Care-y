@@ -12,6 +12,7 @@
   import { formatRelativeTime } from "$lib/utils/format-time.js";
   import { formatFileSize } from "$lib/utils/time.js";
   import { createQuery } from "@tanstack/svelte-query";
+  import { ticketKeys } from "$lib/query/keys";
   import { createPaginatedQuery } from "$lib/query/paginated.svelte.js";
   import { trpc } from "$lib/trpc/index.js";
   import {
@@ -50,14 +51,14 @@
   // --- Queries ---
 
   const attachmentsQuery = createQuery(() => ({
-    queryKey: ["ticket", ticketId, "attachments"],
+    queryKey: ticketKeys.attachments(ticketId),
     queryFn: async () =>
       ticketRouter.listAttachments.query({ ticketId, limit: 50 }),
     enabled: ticketId !== "" && keyWrap !== null,
   }));
 
   const recordingsQuery = createQuery(() => ({
-    queryKey: ["ticket", ticketId, "recordings"],
+    queryKey: ticketKeys.recordings(ticketId),
     queryFn: async () =>
       ticketRouter.listRecordings.query({ ticketId, limit: 50 }),
     enabled: ticketId !== "" && keyWrap !== null,
@@ -131,7 +132,7 @@
 <!-- Voicemails -->
 {#if recordings.length > 0}
   <BlockTitle class="!mt-6 !-mb-2">{m.ticket_panel_voicemails()}</BlockTitle>
-  <Block strong inset class="!my-3">
+  <Block class="!my-3">
     {#each recordings as rec (rec.id)}
       <div class="voicemail-row">
         <VoicemailPlayer
@@ -156,7 +157,7 @@
 <!-- Images -->
 {#if attachmentsQuery.isLoading}
   <BlockTitle class="!mt-6 !-mb-2">{m.ticket_panel_media()}</BlockTitle>
-  <Block strong inset class="!my-3">
+  <Block class="!my-3">
     <div class="image-grid">
       {#each [1, 2] as n (n)}
         <div class="image-cell">
@@ -167,7 +168,7 @@
   </Block>
 {:else if imageAttachments.length > 0}
   <BlockTitle class="!mt-6 !-mb-2">{m.ticket_panel_media()}</BlockTitle>
-  <Block strong inset class="!my-3">
+  <Block class="!my-3">
     <div class="image-grid">
       {#each imageAttachments as att (att.id)}
         <div class="image-cell">
@@ -190,7 +191,7 @@
 <!-- File attachments -->
 {#if fileAttachments.length > 0}
   <BlockTitle class="!mt-6 !-mb-2">{m.ticket_panel_files()}</BlockTitle>
-  <Block strong inset class="!my-3">
+  <Block class="!my-3">
     <div class="file-grid">
       {#each fileAttachments as att (att.id)}
         {@const fnResult =
@@ -254,7 +255,7 @@
 <!-- Empty state when no media at all -->
 {#if !attachmentsQuery.isLoading && !recordingsQuery.isLoading && imageAttachments.length === 0 && recordings.length === 0 && fileAttachments.length === 0}
   <BlockTitle class="!mt-6 !-mb-2">{m.ticket_panel_media()}</BlockTitle>
-  <Block strong inset class="!my-3">
+  <Block class="!my-3">
     <p class="empty-text">{m.ticket_panel_no_media()}</p>
   </Block>
 {/if}

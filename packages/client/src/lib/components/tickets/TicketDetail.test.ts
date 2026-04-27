@@ -55,12 +55,26 @@ vi.mock("$lib/trpc/index.js", () => ({
   trpc: {
     tickets: {
       get: { query: vi.fn() },
-      listFollowUps: { query: vi.fn() },
+      listFollowUps: {
+        query: vi.fn().mockResolvedValue({ followUps: [], reactions: {} }),
+      },
       listFollowUpSummary: { query: vi.fn() },
       listFollowUpsByIds: { query: vi.fn() },
       listRecordings: { query: vi.fn() },
       listAttachments: { query: vi.fn() },
       listVolunteers: { query: vi.fn() },
+      noteTypes: {
+        listActive: {
+          query: vi
+            .fn()
+            .mockResolvedValue({ types: [], defaultNoteTypeId: null }),
+        },
+        list: {
+          query: vi
+            .fn()
+            .mockResolvedValue({ types: [], defaultNoteTypeId: null }),
+        },
+      },
     },
   },
 }));
@@ -71,9 +85,13 @@ vi.mock("$lib/crypto/context.js", () => ({
   }),
   getFollowUpDecryptCache: () => ({
     decryptContent: vi.fn().mockReturnValue("Decrypted message content"),
+    get: vi.fn().mockReturnValue(undefined),
+    has: vi.fn().mockReturnValue(false),
   }),
   getOrgDecryptCache: () => ({
     decrypt: vi.fn().mockReturnValue(null),
+    get: vi.fn().mockReturnValue(undefined),
+    has: vi.fn().mockReturnValue(false),
   }),
   getOrgKeyManager: () => ({
     isLoaded: false,
@@ -97,6 +115,14 @@ vi.mock("$lib/crypto/context.js", () => ({
 
 vi.mock("$lib/errors.js", () => ({
   RouterNotAvailableError: class extends Error {},
+}));
+
+// --- Mock shell context ---
+vi.mock("$lib/shell/context.js", () => ({
+  getScrollContainer: () => () => undefined,
+  getTabbarOverrideCtx: () => ({ current: undefined }),
+  getTabbarHiddenCtx: () => ({ current: false }),
+  getNavbarOverrideCtx: () => ({ current: undefined }),
 }));
 
 // jsdom lacks Web Animations API (used by Konsta transitions).
@@ -201,7 +227,7 @@ beforeEach(() => {
     isLoading: false,
     isError: false,
     error: null,
-    data: [],
+    data: { summaries: [], reactions: {} },
   };
 
   volunteersQueryState = {
@@ -248,7 +274,7 @@ describe("TicketDetail", () => {
       expect(container.textContent).toContain("Something went wrong");
     });
 
-    it("renders empty chat state when no follow-ups exist", () => {
+    it("renders placeholder when no follow-ups exist", () => {
       followUpsQueryState = {
         isLoading: false,
         isError: false,
@@ -257,8 +283,8 @@ describe("TicketDetail", () => {
       };
 
       const { container } = render(TicketDetail, { props: baseProps });
-      const emptyEl = container.querySelector('[role="status"]');
-      expect(emptyEl).not.toBeNull();
+      const logEl = container.querySelector('[role="log"]');
+      expect(logEl).not.toBeNull();
     });
 
     it("shows loading indicator while follow-ups load", () => {

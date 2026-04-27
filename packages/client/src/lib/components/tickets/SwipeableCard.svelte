@@ -467,7 +467,7 @@
     position: relative;
     z-index: 1;
     will-change: transform;
-    background: var(--paper);
+    background: transparent;
   }
 
   /* ── Peek tray (two buttons side by side at exposed edge) ── */

@@ -18,7 +18,14 @@ import {
   SESSION_MAX_AGE_MS,
   type AuthService,
 } from "./service.js";
-import { AuthError, ConflictError } from "../errors.js";
+import {
+  AuthError,
+  ConflictError,
+  ForbiddenError,
+  NotFoundError,
+} from "../errors.js";
+import { RoleId } from "@care-y/shared";
+import { createTestSession } from "../test-utils.js";
 
 // DB integration tests. Skipped on host (no DATABASE_URL).
 // Run via: docker compose exec app pnpm vitest run --project server
@@ -41,6 +48,7 @@ describe.skipIf(!process.env.DATABASE_URL)("AuthService", () => {
       hasher,
       sessions,
       noopEncryptor,
+      testSealedBox,
       testBlindIndexer,
       testSessionTokenizer,
       TEST_ORG_ID,
@@ -87,6 +95,7 @@ describe.skipIf(!process.env.DATABASE_URL)("AuthService", () => {
         hasher,
         encSessions,
         testFieldEncryptor,
+        testSealedBox,
         testBlindIndexer,
         testSessionTokenizer,
         TEST_ORG_ID,
@@ -594,6 +603,135 @@ describe.skipIf(!process.env.DATABASE_URL)("AuthService", () => {
         "00000000-0000-0000-0000-000000000000",
       );
       expect(found).toBeNull();
+    });
+  });
+
+  // -----------------------------------------------------------------------
+  // setUserActive
+  // -----------------------------------------------------------------------
+
+  describe("setUserActive", () => {
+    const ACTOR_ID = "00000000-0000-0000-0000-000000000001";
+
+    it("deactivates a user", async () => {
+      const user = await service.register({
+        identifier: "deact-target",
+        password: "secretpassword123",
+        displayName: "Deactivate Me",
+        roleId: RoleId.VOLUNTEER,
+      });
+
+      const updated = await service.setUserActive(ACTOR_ID, user.id, false);
+      expect(updated.isActive).toBe(false);
+    });
+
+    it("reactivates a user without restoring wrapped keys", async () => {
+      const user = await service.register({
+        identifier: "react-target",
+        password: "secretpassword123",
+        displayName: "Reactivate Me",
+        roleId: RoleId.VOLUNTEER,
+      });
+
+      await service.setUserActive(ACTOR_ID, user.id, false);
+      const reactivated = await service.setUserActive(ACTOR_ID, user.id, true);
+      expect(reactivated.isActive).toBe(true);
+
+      const wrappedKeys = await testDb.db
+        .selectFrom("wrapped_org_keys")
+        .selectAll()
+        .where("user_id", "=", user.id)
+        .execute();
+      expect(wrappedKeys).toHaveLength(0);
+    });
+
+    it("deletes sessions on deactivation", async () => {
+      const user = await service.register({
+        identifier: "deact-sessions",
+        password: "secretpassword123",
+        displayName: "Session Test",
+        roleId: RoleId.VOLUNTEER,
+      });
+
+      await createTestSession(testDb.db, { user_id: user.id });
+      await createTestSession(testDb.db, { user_id: user.id });
+
+      await service.setUserActive(ACTOR_ID, user.id, false);
+
+      const remaining = await testDb.db
+        .selectFrom("sessions")
+        .selectAll()
+        .where("user_id", "=", user.id)
+        .execute();
+      expect(remaining).toHaveLength(0);
+    });
+
+    it("throws CANNOT_DEACTIVATE_SELF when actor deactivates themselves", async () => {
+      const user = await service.register({
+        identifier: "self-deact",
+        password: "secretpassword123",
+        displayName: "Self",
+        roleId: RoleId.ADMIN,
+      });
+
+      await expect(
+        service.setUserActive(user.id, user.id, false),
+      ).rejects.toBeInstanceOf(ForbiddenError);
+    });
+
+    it("allows self-reactivation (actorId === userId with isActive=true)", async () => {
+      const user = await service.register({
+        identifier: "self-react",
+        password: "secretpassword123",
+        displayName: "Self Reactivate",
+        roleId: RoleId.VOLUNTEER,
+      });
+
+      await service.setUserActive(ACTOR_ID, user.id, false);
+      const reactivated = await service.setUserActive(user.id, user.id, true);
+      expect(reactivated.isActive).toBe(true);
+    });
+
+    it("throws CANNOT_DEACTIVATE_LAST_ADMIN when deactivating the sole admin", async () => {
+      const freshDb = await createTestDb();
+      const freshSessions = createDbSessionRepository(
+        freshDb.db,
+        testSessionTokenizer,
+        testSealedBox,
+      );
+      const freshService = createAuthService(
+        freshDb.db,
+        hasher,
+        freshSessions,
+        noopEncryptor,
+        testSealedBox,
+        testBlindIndexer,
+        testSessionTokenizer,
+        TEST_ORG_ID,
+      );
+
+      const admin = await freshService.register({
+        identifier: "sole-admin",
+        password: "secretpassword123",
+        displayName: "Only Admin",
+        roleId: RoleId.ADMIN,
+      });
+
+      await expect(
+        freshService.setUserActive(ACTOR_ID, admin.id, false),
+      ).rejects.toBeInstanceOf(ForbiddenError);
+
+      await freshDb.cleanup();
+    });
+
+    it("throws USER_NOT_FOUND for nonexistent user", async () => {
+      await expect(
+        service.setUserActive(
+          ACTOR_ID,
+          "00000000-0000-0000-0000-000000000000",
+          false,
+        ),
+      ).rejects.toBeInstanceOf(NotFoundError);
     });
   });
 });

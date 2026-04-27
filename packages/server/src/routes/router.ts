@@ -18,7 +18,10 @@ import {
   createTelephonyAdminRouter,
   type TelephonyAdminRouterDeps,
 } from "./telephony-admin.js";
-import { createTelephonyContentRouter } from "./telephony-content.js";
+import {
+  createTelephonyContentRouter,
+  type TelephonyContentRouterDeps,
+} from "./telephony-content.js";
 import { createConsultantRouter } from "./consultant.js";
 import { createTicketRouter, type TicketRouterDeps } from "./tickets.js";
 import { createKbRouter, type KBRouterDeps } from "./kb.js";
@@ -26,6 +29,9 @@ import {
   createNotificationRouter,
   type NotificationRouterDeps,
 } from "./notifications.js";
+import { createBrandingRouter, type BrandingRouterDeps } from "./branding.js";
+import { createReportsRouter } from "./reports.js";
+import { createProfileRouter, type ProfileRouterDeps } from "./profile.js";
 import type { AuthRouterDeps } from "./auth.js";
 import type { OrgService } from "../org/service.js";
 import type { ProviderFactory } from "../telephony/factory.js";
@@ -36,16 +42,20 @@ function healthCheck(): { status: "ok" } {
 
 export interface RouterDeps {
   readonly authDeps: AuthRouterDeps;
+  readonly profileDeps: ProfileRouterDeps;
   readonly twoFactorDeps: TwoFactorRouterDeps;
   readonly oprfDeps: OprfRouterDeps;
   readonly orgService: OrgService;
   readonly providerFactory: ProviderFactory;
   readonly telephonyAdminDeps?: TelephonyAdminRouterDeps;
+  readonly telephonyContentDeps?: TelephonyContentRouterDeps;
   readonly includeTelephonyContent?: boolean;
   readonly includeConsultant?: boolean;
+  readonly includeReports?: boolean;
   readonly ticketDeps?: TicketRouterDeps;
   readonly kbDeps?: KBRouterDeps;
   readonly notificationDeps?: NotificationRouterDeps;
+  readonly brandingDeps?: BrandingRouterDeps;
 }
 
 // care-y-ignore-next-line missing-return-type -- tRPC router() returns a deeply generic type that cannot be written explicitly
@@ -55,11 +65,13 @@ export function createAppRouter(deps: RouterDeps) {
   const twoFactorRouter = createTwoFactorRouter(deps.twoFactorDeps);
   const oprfRouter = createOprfRouter(deps.oprfDeps);
   const keysRouter = createKeysRouter();
+  const profileRouter = createProfileRouter(deps.profileDeps);
 
   return router({
     health: publicProcedure.query(healthCheck),
     auth: authRouter,
     org: orgRouter,
+    profile: profileRouter,
     twoFactor: twoFactorRouter,
     oprf: oprfRouter,
     keys: keysRouter,
@@ -69,7 +81,11 @@ export function createAppRouter(deps: RouterDeps) {
         }
       : {}),
     ...(deps.includeTelephonyContent !== false
-      ? { telephonyContent: createTelephonyContentRouter() }
+      ? {
+          telephonyContent: createTelephonyContentRouter(
+            deps.telephonyContentDeps,
+          ),
+        }
       : {}),
     ...(deps.includeConsultant !== false
       ? { consultant: createConsultantRouter() }
@@ -80,6 +96,12 @@ export function createAppRouter(deps: RouterDeps) {
     ...(deps.kbDeps ? { kb: createKbRouter(deps.kbDeps) } : {}),
     ...(deps.notificationDeps
       ? { notifications: createNotificationRouter(deps.notificationDeps) }
+      : {}),
+    ...(deps.brandingDeps
+      ? { branding: createBrandingRouter(deps.brandingDeps) }
+      : {}),
+    ...(deps.includeReports !== false
+      ? { reports: createReportsRouter() }
       : {}),
   });
 }

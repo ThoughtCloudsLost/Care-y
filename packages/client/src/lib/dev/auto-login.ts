@@ -14,6 +14,7 @@
  * so Vite's dead-code elimination strips it from production builds entirely.
  */
 import { trpc } from "$lib/trpc/index.js";
+import { setOrgKeyReady } from "$lib/crypto/org-key-ready.svelte.js";
 import { registerCrypto } from "$lib/auth/register-crypto.js";
 import { loginCrypto } from "$lib/auth/login-crypto.js";
 import {
@@ -1130,6 +1131,26 @@ async function reEncryptSeedNames(orgPublicKey: Uint8Array): Promise<void> {
     });
   }
   console.log("[dev] re-encrypted KB category names with real org key");
+
+  // Re-encrypt admin user's display name (seed encrypted with throwaway key)
+  const { user } = await trpc.auth.me.query();
+  const sealedAdminName = sealForOrgKey(
+    encoder.encode("Dev Admin"),
+    orgPublicKey,
+  );
+  // devReEncryptDisplayName is dev-only (conditionally spread on server)
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- dev-only, runtime guard follows
+  const auth = trpc.auth as unknown as
+    | Record<string, { mutate: (input: unknown) => Promise<unknown> }>
+    | undefined;
+  const reEncrypt = auth?.devReEncryptDisplayName;
+  if (reEncrypt) {
+    await reEncrypt.mutate({
+      userId: user.id,
+      encryptedDisplayName: encode(sealedAdminName),
+    });
+    console.log("[dev] re-encrypted admin display name with real org key");
+  }
 }
 
 export async function devAutoLogin(
@@ -1188,6 +1209,7 @@ export async function devAutoLogin(
     // The seed encrypted them with the throwaway keypair which is now gone.
     await reEncryptSeedNames(orgPublicKey);
   }
+  setOrgKeyReady(true);
 
   // 6. Seed KB articles client-side (first run only)
   // Need the org public key. On first run we have it from bootstrapOrgKeypair.
@@ -1202,7 +1224,18 @@ export async function devAutoLogin(
     await seedKBArticles(orgPublicKey, orgKeyManager);
   }
 
-  // 7. Seed test tickets (server creates tickets with real ECIES key wraps)
+  // 7. Seed telephony config (server encrypts with its own secretsEncryptor)
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- dev-only, conditionally spread route
+  const telAdmin = trpc.telephonyAdmin as
+    | Record<string, { mutate: () => Promise<unknown> }>
+    | undefined;
+  const seedTel = telAdmin?.devSeedTelephony;
+  if (seedTel) {
+    await seedTel.mutate();
+    console.log("[dev] devSeedTelephony: telephony config seeded");
+  }
+
+  // 8. Seed test tickets (server creates tickets with real ECIES key wraps)
   await getDevSeedTickets().mutate();
   console.log("[dev] devSeedTickets: tickets seeded");
 }

@@ -12,20 +12,21 @@
   import {
     getCryptoBridge,
     getFollowUpDecryptCache,
+    getOrgDecryptCache,
+    getCurrentUserId,
   } from "$lib/crypto/context.js";
+  import type { ReactionSummary, ReactionType } from "@care-y/shared";
   import { resolveAsyncDecrypt } from "$lib/crypto/decrypt-result.js";
   import { RouterNotAvailableError } from "$lib/errors.js";
   import { toastStore } from "$lib/stores/toast.svelte.js";
   import { haptic } from "$lib/utils/haptic.js";
-  import { ActionsGroup, ActionsButton } from "konsta/svelte";
+  import { createNoteTypesQuery } from "$lib/tickets/queries.js";
   import ShellSheet from "$lib/shell/ShellSheet.svelte";
-  import ShellActionSheet from "$lib/shell/ShellActionSheet.svelte";
   import ShellMessagebar from "$lib/shell/ShellMessagebar.svelte";
   import FollowUpBubble from "$lib/components/tickets/FollowUpBubble.svelte";
   import MentionAutocomplete from "$lib/components/tickets/MentionAutocomplete.svelte";
-  import PresetReplyContent from "$lib/components/tickets/PresetReplyContent.svelte";
+  import ComposeActions from "$lib/components/tickets/ComposeActions.svelte";
   import type { RawFollowUpPreview } from "$lib/tickets/preview-loader.svelte.js";
-  import type { ComposeMode } from "$lib/shell/types.js";
 
   interface ReplySheetProps {
     opened: boolean;
@@ -51,9 +52,82 @@
   const ticketRouter = trpc.tickets;
   const cryptoBridge = getCryptoBridge();
   const followUpCache = getFollowUpDecryptCache();
+  const orgCache = getOrgDecryptCache();
+  const currentUserIdGetter = getCurrentUserId();
+  const currentUserId = $derived(currentUserIdGetter());
+
+  let replyReactions = $state<Record<string, ReactionSummary[]>>({});
+
+  $effect(() => {
+    if (!opened || !previewFollowUps) {
+      replyReactions = {};
+      return;
+    }
+    const noteIds = previewFollowUps
+      .filter((fu) => fu.type === "internal_note")
+      .map((fu) => fu.id);
+    if (noteIds.length === 0) return;
+    void ticketRouter.getReactions
+      .query({ followUpIds: noteIds })
+      .then((r: Record<string, ReactionSummary[]>) => {
+        replyReactions = r;
+      })
+      .catch((_e: unknown) => {
+        /* best-effort */
+      });
+  });
+
+  function getReplyReactions(followUpId: string): ReactionSummary[] {
+    const reactions = Object.hasOwn(replyReactions, followUpId)
+      ? // eslint-disable-next-line security/detect-object-injection -- key is a UUID from our own query, not user input
+        replyReactions[followUpId]
+      : undefined;
+    return reactions ?? [];
+  }
+
+  function handleToggleReaction(
+    followUpId: string,
+    reaction: ReactionType,
+  ): void {
+    void ticketRouter.toggleReaction
+      .mutate({ followUpId, reaction })
+      .then((updated: ReactionSummary[]) => {
+        replyReactions = { ...replyReactions, [followUpId]: updated };
+      })
+      .catch((_e: unknown) => {
+        /* best-effort */
+      });
+  }
+
+  const noteTypesQuery = ticketRouter.noteTypes
+    ? createNoteTypesQuery(ticketRouter.noteTypes)
+    : undefined;
+
+  function effectiveTypeId(noteTypeId: string | null): string | undefined {
+    if (!noteTypesQuery?.data) return undefined;
+    if (noteTypeId !== null) return noteTypeId;
+    return noteTypesQuery.data.defaultNoteTypeId ?? undefined;
+  }
+
+  function resolveNoteTypeName(noteTypeId: string | null): string | undefined {
+    const id = effectiveTypeId(noteTypeId);
+    if (id === undefined || !noteTypesQuery?.data) return undefined;
+    const nt = noteTypesQuery.data.types.find((t) => t.id === id);
+    if (!nt) return undefined;
+    return orgCache.decrypt(nt.id + ":name", nt.encryptedName) ?? undefined;
+  }
+
+  function resolveNoteTypeIconSlug(
+    noteTypeId: string | null,
+  ): string | undefined {
+    const id = effectiveTypeId(noteTypeId);
+    if (id === undefined || !noteTypesQuery?.data) return undefined;
+    const nt = noteTypesQuery.data.types.find((t) => t.id === id);
+    if (!nt) return undefined;
+    return orgCache.decrypt(nt.id + ":icon", nt.encryptedIcon) ?? undefined;
+  }
 
   let draftText = $state("");
-  let composeMode = $state<ComposeMode>("reply");
   let cursorPosition = $state(0);
   let sending = $state(false);
   let dismissTimer: ReturnType<typeof setTimeout> | null = null;
@@ -113,13 +187,11 @@
     try {
       const encryptedContent = await cryptoBridge.encrypt(ticketId, text);
 
-      const followUpType = composeMode === "note" ? "internal_note" : "message";
-
       // Show optimistic bubble.
       optimisticMessage = {
         id: `optimistic-${String(Date.now())}`,
         text,
-        type: followUpType,
+        type: "message",
         createdAt: new Date().toISOString(),
       };
 
@@ -127,17 +199,12 @@
         ticketId,
         encryptedContent,
         source: "volunteer",
-        type: followUpType,
-        isPrivate: composeMode === "note",
+        type: "message",
+        isPrivate: false,
       });
 
       haptic();
-
-      const toastMsg =
-        composeMode === "note"
-          ? m.ticket_note_saved()
-          : m.ticket_toast_message_sent();
-      toastStore.show(toastMsg);
+      toastStore.show(m.ticket_toast_message_sent());
 
       // Auto-dismiss after 1.5s so the user sees the optimistic bubble.
       dismissTimer = setTimeout(() => {
@@ -156,20 +223,11 @@
   }
 
   let composeActionsOpen = $state(false);
-  let presetSheetOpen = $state(false);
+  let composeActionsAnchor = $state<HTMLElement | undefined>();
 
-  function handlePlus(): void {
+  function handlePlus(anchor: HTMLElement): void {
+    composeActionsAnchor = anchor;
     composeActionsOpen = true;
-  }
-
-  function handleAttach(): void {
-    composeActionsOpen = false;
-    // Stub: file attachment wired separately.
-  }
-
-  function handlePresetFromCompose(): void {
-    composeActionsOpen = false;
-    presetSheetOpen = true;
   }
 </script>
 
@@ -198,7 +256,17 @@
             ),
             fu.keyWrap !== null,
           )}
-          <FollowUpBubble followUp={fu} result={fuResult} {clientAlias} />
+          <FollowUpBubble
+            followUp={fu}
+            result={fuResult}
+            {clientAlias}
+            noteTypeName={resolveNoteTypeName(fu.noteTypeId)}
+            noteTypeIcon={resolveNoteTypeIconSlug(fu.noteTypeId)}
+            reactions={getReplyReactions(fu.id)}
+            {currentUserId}
+            ontogglereaction={(reaction: ReactionType) =>
+              handleToggleReaction(fu.id, reaction)}
+          />
         {/each}
       {/if}
 
@@ -229,7 +297,6 @@
     <ShellMessagebar
       inline
       bind:value={draftText}
-      bind:mode={composeMode}
       onsend={() => void handleSend()}
       onplus={handlePlus}
       oninput={handleInput}
@@ -238,45 +305,17 @@
   {/if}
 </ShellSheet>
 
-<ShellActionSheet
+<ComposeActions
   opened={composeActionsOpen}
   ondismiss={() => {
     composeActionsOpen = false;
   }}
->
-  <ActionsGroup>
-    <ActionsButton onclick={handleAttach}>
-      {m.ticket_attach_file()}
-    </ActionsButton>
-    <ActionsButton onclick={handlePresetFromCompose}>
-      {m.ticket_preset_replies()}
-    </ActionsButton>
-  </ActionsGroup>
-  <ActionsGroup>
-    <ActionsButton
-      onclick={() => {
-        composeActionsOpen = false;
-      }}
-      bold
-    >
-      {m.common_cancel()}
-    </ActionsButton>
-  </ActionsGroup>
-</ShellActionSheet>
-
-<ShellSheet
-  opened={presetSheetOpen}
-  ondismiss={() => {
-    presetSheetOpen = false;
+  target={composeActionsAnchor}
+  {ticketId}
+  onpresetselect={(body: string) => {
+    draftText = body;
   }}
->
-  <PresetReplyContent
-    onselect={(body: string) => {
-      draftText = body;
-      presetSheetOpen = false;
-    }}
-  />
-</ShellSheet>
+/>
 
 <style>
   .reply-sheet-header {

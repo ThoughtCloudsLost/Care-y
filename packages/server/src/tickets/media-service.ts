@@ -345,10 +345,12 @@ export function createMediaService(
   };
 }
 
+type MediaTable = "recordings" | "attachments" | "kb_attachments";
+
 /** Soft-deletes rows in a media table where created_at is older than the cutoff. */
 async function softDeleteExpiredMedia(
   tDb: Kysely<TenantDatabase>,
-  table: "recordings" | "attachments",
+  table: MediaTable,
   cutoff: Date,
 ): Promise<void> {
   await tDb
@@ -362,7 +364,7 @@ async function softDeleteExpiredMedia(
 /** Hard-deletes soft-deleted rows past the purge threshold. Deletes blob first for safety. */
 async function purgeDeletedMedia(
   tDb: Kysely<TenantDatabase>,
-  table: "recordings" | "attachments",
+  table: MediaTable,
   cutoff: Date,
   blobStore: BlobStore,
 ): Promise<void> {
@@ -408,6 +410,7 @@ export function registerMediaCleanupHandler(
       await softDeleteExpiredMedia(tDb, "attachments", retentionCutoff);
       await purgeDeletedMedia(tDb, "recordings", purgeCutoff, blobStore);
       await purgeDeletedMedia(tDb, "attachments", purgeCutoff, blobStore);
+      await purgeDeletedMedia(tDb, "kb_attachments", purgeCutoff, blobStore);
     }
   });
 }

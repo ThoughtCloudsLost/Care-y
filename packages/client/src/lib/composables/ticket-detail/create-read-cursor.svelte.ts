@@ -1,0 +1,122 @@
+import type { TicketKeyWrap } from "$lib/crypto/ticket-decrypt-cache.js";
+import type { CryptoBridge } from "$lib/workers/crypto-bridge.js";
+import {
+  serializedBufferToBase64,
+  type SerializedBuffer,
+} from "$lib/utils/buffer-encoding.js";
+
+// ── Config ──
+
+interface ReadCursorData {
+  readonly encryptedReadCursor: SerializedBuffer | string;
+}
+
+export interface ReadCursorConfig {
+  readonly getTicketId: () => string;
+  readonly getTicketKeyWrap: () => TicketKeyWrap | undefined;
+  readonly getCursorData: () => ReadCursorData | undefined;
+  readonly cryptoBridge: CryptoBridge;
+  readonly mutate: (args: {
+    ticketId: string;
+    encryptedReadCursor: string;
+  }) => Promise<unknown>;
+}
+
+// ── Return type ──
+
+export interface ReadCursorState {
+  readonly readUpTo: Date | null | undefined;
+  handleProgress(latestVisibleTimestamp: string): void;
+  flush(): Promise<void>;
+}
+
+const FLUSH_DELAY_MS = 3000;
+
+export function createReadCursor(config: ReadCursorConfig): ReadCursorState {
+  // undefined = still loading, null = unread (dummy or decrypt failed).
+  let readUpTo = $state<Date | null | undefined>(undefined);
+  let pendingReadTimestamp: string | null = null;
+  let cursorUpdateTimer: ReturnType<typeof setTimeout> | null = null;
+
+  // Decrypt the read cursor when query data or key wrap changes.
+  $effect(() => {
+    const cursor = config.getCursorData();
+    const kw = config.getTicketKeyWrap();
+    if (!cursor || !kw) return;
+
+    const ticketId = config.getTicketId();
+    const ciphertext = serializedBufferToBase64(cursor.encryptedReadCursor);
+
+    config.cryptoBridge
+      .decrypt(ticketId, kw.ephemeralPoint, kw.nonce, kw.wrappedKey, ciphertext)
+      .then((plaintext) => {
+        try {
+          const parsed: unknown = JSON.parse(plaintext);
+          if (
+            parsed !== null &&
+            typeof parsed === "object" &&
+            "readUpTo" in parsed
+          ) {
+            const ts = (parsed as Record<string, unknown>).readUpTo;
+            if (typeof ts === "string") {
+              readUpTo = new Date(ts); // eslint-disable-line svelte/prefer-svelte-reactivity -- immutable value, not mutated after assignment
+              return;
+            }
+          }
+        } catch {
+          // JSON parse failed: treat as unread
+        }
+        readUpTo = null;
+      })
+      .catch(() => {
+        // AEAD failure (random dummy bytes): all messages are unread.
+        readUpTo = null;
+      });
+
+    return () => {
+      if (cursorUpdateTimer) {
+        clearTimeout(cursorUpdateTimer);
+        cursorUpdateTimer = null;
+      }
+    };
+  });
+
+  function handleProgress(latestVisibleTimestamp: string): void {
+    if (
+      pendingReadTimestamp !== null &&
+      latestVisibleTimestamp <= pendingReadTimestamp
+    ) {
+      return;
+    }
+    pendingReadTimestamp = latestVisibleTimestamp;
+
+    if (cursorUpdateTimer) clearTimeout(cursorUpdateTimer);
+    cursorUpdateTimer = setTimeout(() => {
+      void flush();
+    }, FLUSH_DELAY_MS);
+  }
+
+  async function flush(): Promise<void> {
+    const ts = pendingReadTimestamp;
+    if (ts === null) return;
+    pendingReadTimestamp = null;
+
+    try {
+      const ticketId = config.getTicketId();
+      const payload = JSON.stringify({ readUpTo: ts });
+      const encrypted = await config.cryptoBridge.encrypt(ticketId, payload);
+      await config.mutate({ ticketId, encryptedReadCursor: encrypted });
+      readUpTo = new Date(ts); // eslint-disable-line svelte/prefer-svelte-reactivity -- immutable value, not mutated after assignment
+    } catch {
+      // Failed to update cursor. Not critical; will retry on next scroll.
+    }
+  }
+
+  return {
+    get readUpTo(): Date | null | undefined {
+      return readUpTo;
+    },
+    handleProgress,
+    flush,
+  };
+}

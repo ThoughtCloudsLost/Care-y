@@ -28,6 +28,7 @@
     ontap: (articleId: string) => void;
     onselect?: (articleId: string) => void;
     onlongpress?: (articleId: string) => void;
+    searchTerm?: string | null;
   }
 
   let {
@@ -48,6 +49,7 @@
     ontap,
     onselect,
     onlongpress,
+    searchTerm = null,
   }: ArticleCardProps = $props();
 
   const isList = $derived(viewMode === "list");
@@ -170,11 +172,8 @@
             result={titleResult}
             ciphertext={encryptedTitle}
             length={20}
-          >
-            {#if titleResult.status === "ready"}
-              <span class="title-text">{titleResult.value}</span>
-            {/if}
-          </DecryptPlaceholder>
+            {searchTerm}
+          />
         </div>
 
         {#if isList}
@@ -183,11 +182,8 @@
               result={excerptResult}
               ciphertext={encryptedExcerpt}
               length={40}
-            >
-              {#if excerptResult.status === "ready"}
-                <span class="excerpt-text">{excerptResult.value}</span>
-              {/if}
-            </DecryptPlaceholder>
+              {searchTerm}
+            />
           </div>
         {/if}
 
@@ -225,6 +221,7 @@
     overflow: hidden;
     display: flex;
     flex-direction: column;
+    border-radius: var(--card-radius, 0.75rem);
   }
 
   .article-card-wrap :global(.k-card) {
@@ -271,8 +268,7 @@
   }
 
   /* ── Title ── */
-  .title-text {
-    display: block;
+  .row-title {
     font-size: var(--text-md);
     font-weight: 600;
     line-height: 1.3;
@@ -283,7 +279,7 @@
   }
 
   /* ── Excerpt (list mode only) ── */
-  .excerpt-text {
+  .row-excerpt {
     font-size: var(--text-sm);
     color: var(--muted);
     display: -webkit-box;
@@ -356,7 +352,7 @@
     min-height: 8rem;
   }
 
-  .card-inner--grid .title-text {
+  .card-inner--grid .row-title {
     white-space: normal;
     display: -webkit-box;
     -webkit-line-clamp: 2;

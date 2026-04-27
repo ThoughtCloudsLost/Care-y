@@ -2,7 +2,7 @@
   Shell wrapper for Konsta Messagebar (compose bar).
 
   Fixed at the bottom of the viewport. Supports two modes:
-  "reply" (send SMS to client) and "note" (team-only internal note).
+  "reply" (send SMS to client) and "note" (internal note).
 
   Left slot: + button (compose actions), mode toggle icon.
   Right slot: send button.
@@ -14,12 +14,7 @@
 -->
 <script lang="ts">
   import { Messagebar, Link } from "konsta/svelte";
-  import {
-    Plus,
-    Send,
-    NotepadTextDashed,
-    MessageSquareText,
-  } from "@lucide/svelte";
+  import { Plus, Send } from "@lucide/svelte";
   import type { ShellMessagebarProps } from "./types.js";
   import * as m from "$lib/paraglide/messages.js";
 
@@ -42,10 +37,6 @@
   const sendLabel = $derived(
     mode === "note" ? m.ticket_save_note() : m.ticket_send(),
   );
-
-  function toggleMode(): void {
-    mode = mode === "reply" ? "note" : "reply";
-  }
 
   // Publish the messagebar's rendered height as a CSS variable so
   // siblings (e.g., chat-container) can use it for padding-bottom.
@@ -78,33 +69,96 @@
       document.documentElement.style.removeProperty("--messagebar-height");
     };
   });
+
+  // Patch Konsta internals after mount so the textarea can auto-grow.
+  // Verified DOM (iOS):
+  //   anchor (.shell-messagebar-anchor, fixed, height:0)
+  //     .k-messagebar (fixed) ← must become relative for anchor to track height
+  //       .k-toolbar (relative)
+  //         bg div (absolute)
+  //         inner div .h-12 (48px fixed) ← must become auto-height
+  //           Glass (+ button) | Glass (textarea .h-10) | Glass (send button)
+  let textareaEl = $state<HTMLTextAreaElement | undefined>();
+
+  $effect(() => {
+    if (!anchorEl) return;
+    textareaEl = anchorEl.querySelector("textarea") ?? undefined;
+
+    const msgbar = anchorEl.querySelector<HTMLElement>(".k-messagebar");
+    if (msgbar) msgbar.style.position = "relative";
+
+    const toolbar = anchorEl.querySelector<HTMLElement>(".k-toolbar");
+    const inner = toolbar?.children[1];
+    if (inner instanceof HTMLElement) {
+      inner.style.height = "auto";
+      inner.style.minHeight = "48px";
+      inner.style.alignItems = "center";
+
+      const left = inner.children[0];
+      const right = inner.children[2];
+      for (const btn of [left, right]) {
+        if (btn instanceof HTMLElement) {
+          btn.style.alignSelf = "flex-end";
+          btn.style.height = "48px";
+          btn.style.flexShrink = "0";
+        }
+      }
+    }
+  });
+
+  const MAX_LINES = 8;
+
+  function handleInput(e: Event): void {
+    const target = e.target;
+    if (target instanceof HTMLTextAreaElement) {
+      target.style.height = "auto";
+      target.style.overflowY = "hidden";
+      const scrollH = target.scrollHeight;
+      const computed = getComputedStyle(target);
+      const lineH = parseFloat(computed.lineHeight) || 16;
+      const padTop = parseFloat(computed.paddingTop) || 0;
+      const padBot = parseFloat(computed.paddingBottom) || 0;
+      const maxH = padTop + lineH * MAX_LINES + padBot;
+
+      if (scrollH > maxH) {
+        target.style.height = `${String(maxH)}px`;
+        target.style.overflowY = "auto";
+      } else {
+        target.style.height = `${String(scrollH)}px`;
+      }
+    }
+    oninput?.(e);
+  }
+
+  $effect(() => {
+    if (value === "" && textareaEl) {
+      textareaEl.style.height = "";
+      textareaEl.style.overflowY = "";
+    }
+  });
 </script>
 
 <div
   bind:this={anchorEl}
   class="shell-messagebar-anchor"
-  class:note-mode={mode === "note"}
   class:shell-messagebar-inline={inline}
 >
-  <Messagebar bind:value {placeholder} {oninput} class="shell-messagebar">
+  <Messagebar
+    bind:value
+    {placeholder}
+    oninput={handleInput}
+    class="shell-messagebar"
+  >
     {#snippet left()}
-      <Link iconOnly onclick={onplus} aria-label={m.ticket_compose_actions()}>
-        <Plus size={20} aria-hidden="true" />
-      </Link>
       <Link
         iconOnly
-        onclick={toggleMode}
-        role="switch"
-        aria-checked={mode === "note" ? "true" : "false"}
-        aria-label={mode === "note"
-          ? m.ticket_switch_to_reply()
-          : m.ticket_switch_to_note()}
+        onclick={(e: MouseEvent) => {
+          const el = e.currentTarget;
+          if (el instanceof HTMLElement) onplus(el);
+        }}
+        aria-label={m.ticket_compose_actions()}
       >
-        {#if mode === "note"}
-          <NotepadTextDashed size={20} aria-hidden="true" />
-        {:else}
-          <MessageSquareText size={20} aria-hidden="true" />
-        {/if}
+        <Plus size={20} aria-hidden="true" />
       </Link>
     {/snippet}
     {#snippet right()}
@@ -140,18 +194,8 @@
     padding-bottom: var(--k-safe-area-bottom) !important;
   }
 
-  /* Note mode: tint the Glass pill elements with brand-accent. Uses
-     --glass-surface so the tint follows the glass mode system (no need
-     for separate .dark override).
-     Specificity: the glass mode overrides in shared.css target
-     html.glass-*.light/dark .backdrop-blur-lg at (0,3,1).
-     :global(html) prefix bumps this selector to (0,3,1) minimum,
-     and component styles load after global CSS so source order wins. */
-  :global(html) .note-mode :global(.backdrop-blur-lg) {
-    background-color: color-mix(
-      in srgb,
-      var(--brand-accent) 20%,
-      var(--glass-surface)
-    ) !important;
+  :global(.shell-messagebar textarea) {
+    resize: none;
+    touch-action: pan-y !important;
   }
 </style>

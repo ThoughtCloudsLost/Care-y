@@ -93,7 +93,9 @@
     width: 170px;
     height: 140px;
     border-radius: var(--space-md, 12px);
-    background: var(--surface-1);
+    background: var(--card-bg, var(--surface-1));
+    border: 1px solid var(--card-border, transparent);
+    box-shadow: var(--card-shadow, none);
   }
 
   .overflow-indicator {

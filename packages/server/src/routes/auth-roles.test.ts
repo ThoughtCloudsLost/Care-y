@@ -139,6 +139,16 @@ describe.skipIf(!process.env.DATABASE_URL)(
           providerFactory: createMockProviderFactory(),
           resolveCallerId: vi.fn().mockResolvedValue("+15551234567"),
         },
+        profileDeps: {
+          hasher,
+          encryptor: testFieldEncryptor,
+          indexer: testBlindIndexer,
+          tokenizer: testSessionTokenizer,
+          passwordChangeLimiter: createInMemoryRateLimiter({
+            windowMs: 60_000,
+            maxRequests: 100,
+          }),
+        },
         twoFactorDeps: {
           emailSender: createMockEmailSender(),
           encryptor: testFieldEncryptor,
@@ -207,6 +217,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         hasher,
         sessions,
         testFieldEncryptor,
+        testSealedBox,
         testBlindIndexer,
         testSessionTokenizer,
         orgContext.orgId,
@@ -348,6 +359,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
           hasher,
           sessions,
           testFieldEncryptor,
+          testSealedBox,
           testBlindIndexer,
           testSessionTokenizer,
           orgContext.orgId,

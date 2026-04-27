@@ -35,6 +35,8 @@ import type {
   EncryptContentResponse,
   GetVolPublicResponse,
   UnwrapOrgKeyResponse,
+  UnwrapTkResponse,
+  WrapWithVolPublicResponse,
   RewrapTkResponse,
   EvictTkResponse,
   ZeroAllResponse,
@@ -488,6 +490,118 @@ describe("crypto.worker", () => {
 
       sodium.memzero(tk);
       sodium.memzero(recipientScalar);
+    });
+  });
+
+  describe("unwrapTk", () => {
+    it("preloads a ticket key into cache without requiring ciphertext", async () => {
+      await sendAndWait({ type: "zeroAll", id: 1100 });
+
+      const sodium = requireSodium();
+      const salt = sodium.randombytes_buf(16);
+      const { volPublic } = await fullLoginFlow("unwrap-tk-test", salt);
+      const decodedVP = decode(volPublic);
+
+      // Create a tk and wrap it to the Worker's volPublic
+      const tk = generateContentKey();
+      const wrap = eciesEncrypt(tk, decodedVP as RistrettoPoint);
+
+      // unwrapTk should cache the tk
+      const resp = (await sendAndWait({
+        type: "unwrapTk",
+        id: 1101,
+        ticketId: "ticket-unwrap",
+        ephemeralPoint: encode(wrap.ephemeralPoint),
+        nonce: encode(wrap.nonce),
+        wrappedKey: encode(wrap.ciphertext),
+      })) as UnwrapTkResponse;
+
+      expect(resp).toEqual({ id: 1101, ok: true, type: "unwrapTk" });
+
+      // Verify the tk is cached by encrypting with it
+      const encResp = (await sendAndWait({
+        type: "encryptContent",
+        id: 1102,
+        ticketId: "ticket-unwrap",
+        plaintext: "Cached via unwrapTk",
+      })) as EncryptContentResponse;
+
+      expect(encResp.ok).toBe(true);
+      expect(encResp.type).toBe("encryptContent");
+
+      sodium.memzero(tk);
+    });
+
+    it("rejects when not KEYED", async () => {
+      await sendAndWait({ type: "zeroAll", id: 1110 });
+      await sendAndWait({ type: "init", id: 1111 });
+
+      const resp = await sendAndWait({
+        type: "unwrapTk",
+        id: 1112,
+        ticketId: "ticket-fail",
+        ephemeralPoint: encode(new Uint8Array(32)),
+        nonce: encode(new Uint8Array(24)),
+        wrappedKey: encode(new Uint8Array(48)),
+      });
+      expect(resp.ok).toBe(false);
+      expect((resp as ErrorResponse).code).toBe("NOT_READY");
+    });
+  });
+
+  describe("wrapWithVolPublic", () => {
+    it("ECIES-encrypts data with the Worker's volPublic", async () => {
+      await sendAndWait({ type: "zeroAll", id: 1200 });
+
+      const sodium = requireSodium();
+      const salt = sodium.randombytes_buf(16);
+      const { volPublic: _volPublic } = await fullLoginFlow(
+        "wrap-vol-test",
+        salt,
+      );
+
+      // Wrap some test data
+      const testData = sodium.randombytes_buf(32);
+      const resp = (await sendAndWait({
+        type: "wrapWithVolPublic",
+        id: 1201,
+        data: encode(testData),
+      })) as WrapWithVolPublicResponse;
+
+      expect(resp.ok).toBe(true);
+      expect(resp.type).toBe("wrapWithVolPublic");
+      expect(resp.ephemeralPoint).toBeDefined();
+      expect(resp.nonce).toBeDefined();
+      expect(resp.wrappedKey).toBeDefined();
+
+      // Verify: manually derive volPrivate from the same login flow
+      // to decrypt and confirm roundtrip. We can't access volPrivate
+      // directly, but we can use unwrapOrgKey (same ECIES decrypt path)
+      // to verify the wrap is valid. Instead, verify the output is
+      // structurally correct (valid base64, correct sizes).
+      const ep = decode(resp.ephemeralPoint);
+      const n = decode(resp.nonce);
+      const wk = decode(resp.wrappedKey);
+      expect(ep.length).toBe(32); // ristretto255 point
+      expect(n.length).toBe(24); // AEAD nonce
+
+      // The wrapped key is the encrypted data + MAC overhead
+      expect(wk.length).toBeGreaterThan(testData.length);
+
+      sodium.memzero(testData);
+    });
+
+    it("rejects when not KEYED", async () => {
+      await sendAndWait({ type: "zeroAll", id: 1210 });
+      await sendAndWait({ type: "init", id: 1211 });
+
+      const resp = await sendAndWait({
+        type: "wrapWithVolPublic",
+        id: 1212,
+        data: encode(new Uint8Array(32)),
+      });
+      expect(resp.ok).toBe(false);
+      expect((resp as ErrorResponse).code).toBe("NOT_READY");
     });
   });
 

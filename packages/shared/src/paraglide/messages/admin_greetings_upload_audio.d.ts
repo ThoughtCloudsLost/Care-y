@@ -1,0 +1,16 @@
+/**
+* | output |
+* | --- |
+* | "Upload audio file" |
+*
+* @param {Admin_Greetings_Upload_AudioInputs} inputs
+* @param {{ locale?: "en" | "es" }} options
+* @returns {LocalizedString}
+*/
+export const admin_greetings_upload_audio: ((inputs?: Admin_Greetings_Upload_AudioInputs, options?: {
+    locale?: "en" | "es";
+}) => LocalizedString) & import("../runtime.js").MessageMetadata<Admin_Greetings_Upload_AudioInputs, {
+    locale?: "en" | "es";
+}, {}>;
+export type LocalizedString = import("../runtime.js").LocalizedString;
+export type Admin_Greetings_Upload_AudioInputs = {};

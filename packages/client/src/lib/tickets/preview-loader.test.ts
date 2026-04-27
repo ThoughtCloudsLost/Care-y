@@ -30,6 +30,7 @@ function makePreview(id: string): RawFollowUpPreview {
     hasRecording: false,
     hasImage: false,
     hasFile: false,
+    noteTypeId: null,
   };
 }
 

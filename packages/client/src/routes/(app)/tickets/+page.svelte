@@ -4,6 +4,7 @@
     createQuery,
     useQueryClient,
   } from "@tanstack/svelte-query";
+  import { ticketsKeys, volunteerKeys } from "$lib/query/keys";
   import { createCountsQuery } from "$lib/tickets/queries.js";
   import { untrack } from "svelte";
   import { SvelteMap, SvelteSet } from "svelte/reactivity";
@@ -48,7 +49,7 @@
   import {
     savedFilterStateSchema,
     ticketPrioritySchema,
-    type SavedFilterRecord,
+    type ReactionSummary,
     type SavedFilterColor,
   } from "@care-y/shared";
   import StatusDot from "$lib/components/StatusDot.svelte";
@@ -65,9 +66,14 @@
     type CallAction,
   } from "$lib/components/tickets/CallOptionsContent.svelte";
   import { haptic } from "$lib/utils/haptic.js";
+  import { createFilterDispatch } from "$lib/composables/create-filter-dispatch.svelte.js";
   import type { SerializedBuffer } from "$lib/utils/buffer-encoding.js";
   import type { RawFollowUpPreview } from "$lib/tickets/preview-loader.svelte.js";
   import { resolveAsyncDecrypt } from "$lib/crypto/decrypt-result.js";
+  import { createSearchOverlay } from "$lib/search/search-overlay.svelte.js";
+  import { createDeepSearch } from "$lib/search/deep-search.svelte.js";
+  import SearchNavigator from "$lib/components/search/SearchNavigator.svelte";
+  import { fuzzySearch } from "$lib/search/fuzzy.js";
 
   const ticketCache = getTicketDecryptCache();
   const orgCache = getOrgDecryptCache();
@@ -84,9 +90,9 @@
       id: string;
       encryptedDisplayName: SerializedBuffer | Uint8Array | null;
     }
-    const volunteers = queryClient.getQueryData<readonly VolunteerRecord[]>([
-      "volunteers",
-    ]);
+    const volunteers = queryClient.getQueryData<readonly VolunteerRecord[]>(
+      volunteerKeys.all,
+    );
     const vol = volunteers?.find((v) => v.id === userId);
     if (vol) {
       const name = orgCache.decrypt(
@@ -183,7 +189,7 @@
 
   // Main ticket list with infinite scroll (keyset pagination).
   const ticketsQuery = createInfiniteQuery(() => ({
-    queryKey: ["tickets", "list", filterStore.serverParams],
+    queryKey: ticketsKeys.list(filterStore.serverParams),
     queryFn: async ({ pageParam }) =>
       ticketRouter.list.query({
         ...filterStore.serverParams,
@@ -232,6 +238,36 @@
     }
   });
 
+  // Batch-fetch reactions for internal notes in loaded previews.
+  // Keyed by follow-up ID so cards can look up their notes' reactions.
+  const previewReactionsMap = new SvelteMap<string, ReactionSummary[]>();
+  // eslint-disable-next-line svelte/prefer-svelte-reactivity -- tracks fetched IDs, not rendered state
+  const fetchedReactionIds = new Set<string>();
+
+  $effect(() => {
+    const previews = previewLoader.rawPreviews;
+    const noteIds: string[] = [];
+    for (const followUps of previews.values()) {
+      for (const fu of followUps) {
+        if (fu.type === "internal_note" && !fetchedReactionIds.has(fu.id)) {
+          noteIds.push(fu.id);
+        }
+      }
+    }
+    if (noteIds.length === 0) return;
+    for (const id of noteIds) fetchedReactionIds.add(id);
+    void ticketRouter.getReactions
+      .query({ followUpIds: noteIds.slice(0, 100) })
+      .then((result) => {
+        for (const [id, summaries] of Object.entries(result)) {
+          if (summaries.length > 0) previewReactionsMap.set(id, summaries);
+        }
+      })
+      .catch(() => {
+        /* best-effort */
+      });
+  });
+
   // Map server record to TicketCard props (triggers lazy decryption).
   // Data-derived card props: only recompute when ticket data, decryption
   // caches, or preview content changes. Excludes volatile per-interaction
@@ -241,6 +277,22 @@
     TicketCardProps,
     "viewMode" | "selected" | "multiSelectActive"
   >;
+
+  function reactionsForTicket(
+    ticketId: string,
+  ): Record<string, ReactionSummary[]> | undefined {
+    const followUps = previewLoader.get(ticketId);
+    if (!followUps) return undefined;
+    let result: Record<string, ReactionSummary[]> | undefined;
+    for (const fu of followUps) {
+      const reactions = previewReactionsMap.get(fu.id);
+      if (reactions) {
+        result ??= {};
+        result[fu.id] = reactions;
+      }
+    }
+    return result;
+  }
 
   function toDataCardProps(t: TicketRecord): DataCardProps {
     let assignedName: string | null = null;
@@ -269,6 +321,7 @@
       followUpCount: t.followUpCount,
       unreadCount: 0,
       previewFollowUps: previewLoader.get(t.id),
+      previewReactions: reactionsForTicket(t.id),
       ontap: handleTicketTap,
       onselect: toggleSelection,
       onaction: handleAction,
@@ -285,6 +338,101 @@
       map.set(t.id, toDataCardProps(t));
     }
     return map;
+  });
+
+  // --- Search overlay ---
+
+  const overlay = createSearchOverlay({
+    matches: () => searchMatches,
+    getElementId: (id) => `ticket-${id}`,
+    scrollContainer: () => scrollEl,
+  });
+
+  const titleMatchIds = $derived.by((): string[] => {
+    if (overlay.term == null) return [];
+    const ids: string[] = [];
+    const haystack: string[] = [];
+    for (const [id, props] of cardPropsMap) {
+      const title =
+        props.titleResult.status === "ready" ? props.titleResult.value : null;
+      if (title == null) continue;
+      ids.push(id);
+      haystack.push(`${title} ${props.clientAlias}`);
+    }
+    const matches = fuzzySearch(haystack, overlay.term);
+    return matches
+      .map((fm) => ids[fm.index])
+      .filter((id): id is string => id != null);
+  });
+
+  const deepSearch = createDeepSearch({
+    overlay,
+    providerId: "tickets",
+    hasNextPage: () => ticketsQuery.hasNextPage,
+    isFetchingNextPage: () => ticketsQuery.isFetchingNextPage,
+    fetchNextPage: async () => ticketsQuery.fetchNextPage(),
+    isInitialLoading: () => ticketsQuery.isLoading,
+    loadedCount: () => allTickets.length,
+    matchCount: () => titleMatchIds.length,
+  });
+
+  // Merge title matches + content matches from encrypted search
+  const searchMatches = $derived.by((): string[] => {
+    const cms = deepSearch.contentMatchIds;
+    if (cms == null || cms.size === 0) return titleMatchIds;
+
+    const seen = new Set(titleMatchIds);
+    const merged = [...titleMatchIds];
+    for (const id of cms) {
+      if (!seen.has(id) && cardPropsMap.has(id)) {
+        merged.push(id);
+      }
+    }
+    return merged;
+  });
+
+  let useMatchOrder = $state(true);
+
+  $effect(() => {
+    if (overlay.active) {
+      useMatchOrder = true;
+    }
+  });
+
+  const displayItems = $derived.by(() => {
+    if (!overlay.active || overlay.term == null || overlay.term.length < 2) {
+      return displayFiltered;
+    }
+    const matchSet = new Set(searchMatches);
+    if (!useMatchOrder) {
+      return displayFiltered.filter((t) => matchSet.has(t.id));
+    }
+    const idToTicket = new Map(displayFiltered.map((t) => [t.id, t]));
+    const sorted: typeof displayFiltered = [];
+    for (const id of searchMatches) {
+      const t = idToTicket.get(id);
+      if (t != null) sorted.push(t);
+    }
+    return sorted;
+  });
+
+  $effect(() => {
+    const q = page.url.searchParams.get("q");
+    if (q != null && q !== "") {
+      overlay.enter(q);
+      deepSearch.scheduleFromNavigation();
+    }
+  });
+
+  let prevViewMode = $state(viewModeStore.mode);
+  $effect(() => {
+    const mode = viewModeStore.mode;
+    if (mode !== prevViewMode) {
+      prevViewMode = mode;
+      if (overlay.activeId != null) {
+        overlay.requestScroll();
+      }
+    }
   });
 
   function showEncryptedHelp(): void {
@@ -319,7 +467,7 @@
     if (pendingHoldIds.has(ticketId)) return;
     pendingHoldIds.add(ticketId);
 
-    const listKey = ["tickets", "list", filterStore.serverParams];
+    const listKey = ticketsKeys.list(filterStore.serverParams);
 
     // Snapshot for rollback.
     const previous = queryClient.getQueryData<{
@@ -342,7 +490,7 @@
       await ticketRouter.update.mutate({ ticketId, onHold });
       haptic();
       toastStore.show(onHold ? m.ticket_toast_held() : m.ticket_toast_unheld());
-      void queryClient.invalidateQueries({ queryKey: ["tickets", "list"] });
+      void queryClient.invalidateQueries({ queryKey: ticketsKeys.lists() });
     } catch {
       // Rollback.
       queryClient.setQueryData(listKey, previous);
@@ -364,7 +512,7 @@
     ticketId: string,
     targetUserId: string | null,
   ): Promise<void> {
-    const listKey = ["tickets", "list", filterStore.serverParams];
+    const listKey = ticketsKeys.list(filterStore.serverParams);
 
     // Snapshot for rollback.
     const previous = queryClient.getQueryData<{
@@ -395,7 +543,7 @@
           m.ticket_toast_assigned({ name: resolveVolunteerName(targetUserId) }),
         );
       }
-      void queryClient.invalidateQueries({ queryKey: ["tickets", "list"] });
+      void queryClient.invalidateQueries({ queryKey: ticketsKeys.lists() });
     } catch {
       queryClient.setQueryData(listKey, previous);
       toastStore.show(m.error_generic(), 3000);
@@ -414,7 +562,7 @@
 
   function handleReplySent(ticketId: string): void {
     replySheetOpen = false;
-    void queryClient.invalidateQueries({ queryKey: ["tickets", "list"] });
+    void queryClient.invalidateQueries({ queryKey: ticketsKeys.lists() });
     void previewLoader.eagerLoad([ticketId]);
   }
 
@@ -480,7 +628,7 @@
     navbarCtx.current = {
       right: navRight,
       subnavbar: ticketSubnavbar,
-      subnavbarHidden: () => scrollDir.hidden,
+      subnavbarHidden: () => scrollDir.hidden && !overlay.active,
     };
     return () => {
       navbarCtx.current = undefined;
@@ -531,7 +679,7 @@
       }),
     );
     exitMultiSelect();
-    void queryClient.invalidateQueries({ queryKey: ["tickets", "list"] });
+    void queryClient.invalidateQueries({ queryKey: ticketsKeys.lists() });
   }
 
   async function handleBulkHold(): Promise<void> {
@@ -558,7 +706,7 @@
     haptic();
     toastStore.show(m.ticket_toast_bulk_held({ count: String(succeeded) }));
     exitMultiSelect();
-    void queryClient.invalidateQueries({ queryKey: ["tickets", "list"] });
+    void queryClient.invalidateQueries({ queryKey: ticketsKeys.lists() });
   }
 
   function handleLongPress(ticketId: string): void {
@@ -585,7 +733,7 @@
 
   // Queue list for the filter pill bar (was inside old FilterPillBar).
   const queuesQuery = createQuery(() => ({
-    queryKey: ["tickets", "myQueues"],
+    queryKey: ticketsKeys.myQueues(),
     queryFn: async () => ticketRouter.myQueues.query(),
   }));
 
@@ -713,31 +861,57 @@
     return (validStatuses as ReadonlySet<string>).has(v);
   }
 
-  function handlePillToggle(pillId: string, value: string): void {
-    switch (pillId) {
-      case "status":
-        if (isFilterStatus(value)) filterStore.toggleStatus(value);
-        break;
-      case "queue":
-        filterStore.toggleQueue(value);
-        break;
-      case "priority": {
-        const parsed = ticketPrioritySchema.safeParse(value);
-        if (parsed.success) filterStore.togglePriority(parsed.data);
-        break;
-      }
-    }
-  }
-
-  function handlePillSelect(pillId: string, value: string | null): void {
-    if (pillId === "assignee") {
-      filterStore.setAssignee(value === "__unassigned__" ? null : value);
-    }
-  }
-
-  function handlePillDateChange(from: Date | null, to: Date | null): void {
-    filterStore.setDateRange(from, to);
-  }
+  const dispatch = createFilterDispatch({
+    fields: {
+      status: {
+        type: "multi-toggle",
+        toggle: (v: string) => {
+          if (isFilterStatus(v)) filterStore.toggleStatus(v);
+        },
+      },
+      queue: {
+        type: "multi-toggle",
+        toggle: (v: string) => filterStore.toggleQueue(v),
+      },
+      priority: {
+        type: "multi-toggle",
+        toggle: (v: string) => {
+          const parsed = ticketPrioritySchema.safeParse(v);
+          if (parsed.success) filterStore.togglePriority(parsed.data);
+        },
+      },
+      assignee: {
+        type: "single-select",
+        set: (v: string | null) =>
+          filterStore.setAssignee(v === "__unassigned__" ? null : v),
+      },
+      date: {
+        type: "date-range",
+        set: (from: Date | null, to: Date | null) =>
+          filterStore.setDateRange(from, to),
+      },
+    },
+    sort: {
+      validate: isSortField,
+      set: (field: string, dir: "asc" | "desc") => {
+        if (isSortField(field)) filterStore.setSort(field, dir);
+      },
+    },
+    savedFilters: {
+      store: savedFilterStore,
+      captureState: () => filterStore.captureState(),
+      applyState: (state: unknown) => {
+        const result = savedFilterStateSchema.safeParse(state);
+        if (result.success) filterStore.applyState(result.data);
+      },
+      stateSchema: savedFilterStateSchema,
+      getCurrentUserId: () => currentUserId ?? null,
+    },
+    clearAll: () => filterStore.clearAll(),
+    onchange: () => {
+      if (overlay.active) useMatchOrder = false;
+    },
+  });
 
   const dateRangeActive = $derived(
     filterStore.dateFrom !== null || filterStore.dateTo !== null,
@@ -766,24 +940,6 @@
     return m.tickets_filter_date_range();
   });
 
-  // --- Saved filter wiring ---
-
-  function handleSavedFilterApply(record: SavedFilterRecord): void {
-    const parsed: unknown = JSON.parse(record.state);
-    const result = savedFilterStateSchema.safeParse(parsed);
-    if (result.success) {
-      filterStore.applyState(result.data);
-    }
-  }
-
-  function handleSavedFilterDelete(id: string): void {
-    savedFilterStore.remove(id);
-  }
-
-  function handleSavedFilterToggleShare(id: string): void {
-    savedFilterStore.toggleShare(id);
-  }
-
   const filterSummary = $derived.by(() => {
     const parts: string[] = [];
     if (filterStore.statuses.size > 0)
@@ -805,17 +961,7 @@
     color: SavedFilterColor;
     icon: string;
   }): void {
-    const record: SavedFilterRecord = {
-      id: crypto.randomUUID(),
-      encryptedName: meta.encryptedName,
-      color: meta.color,
-      icon: meta.icon,
-      state: JSON.stringify(filterStore.captureState()),
-      shared: false,
-      ownerId: currentUserId ?? "",
-      createdAt: new Date().toISOString(),
-    };
-    savedFilterStore.add(record);
+    dispatch.handleCreateSavedFilter(meta);
     toastStore.show(m.saved_filter_saved());
   }
 
@@ -841,10 +987,6 @@
     return (SORT_FIELDS as readonly string[]).includes(value);
   }
 
-  function handleSortChange(field: string, dir: "asc" | "desc"): void {
-    if (isSortField(field)) filterStore.setSort(field, dir);
-  }
-
   const sortConfig: SortConfig = $derived({
     label: m.tickets_sort(),
     options: [
@@ -855,15 +997,15 @@
     ],
     currentField: filterStore.sort.field,
     currentDirection: filterStore.sort.direction,
-    onchange: handleSortChange,
+    onchange: dispatch.handleSortChange,
   });
 
   const savedFiltersConfig: SavedFiltersConfig = $derived({
     filters: savedFilterStore.filters,
     count: savedFilterStore.count,
-    onapply: handleSavedFilterApply,
-    ondelete: handleSavedFilterDelete,
-    ontoggleshare: handleSavedFilterToggleShare,
+    onapply: dispatch.handleSavedFilterApply,
+    ondelete: dispatch.handleSavedFilterDelete,
+    ontoggleshare: dispatch.handleSavedFilterToggleShare,
   });
 
   const filterPillsConfig: FilterPillsConfig = $derived({
@@ -873,10 +1015,10 @@
     dateTo: dateToStr,
     dateActive: dateRangeActive,
     dateLabel: dateRangeLabel,
-    ontoggle: handlePillToggle,
-    onselect: handlePillSelect,
-    ondatechange: handlePillDateChange,
-    onclearall: () => filterStore.clearAll(),
+    ontoggle: dispatch.handlePillToggle,
+    onselect: dispatch.handlePillSelect,
+    ondatechange: dispatch.handlePillDateChange,
+    onclearall: dispatch.clearAll,
     oncreateshortcut: () => {
       savedFilterModalOpen = true;
     },
@@ -945,6 +1087,22 @@
   </span>
 {/snippet}
 
+{#snippet searchNavigatorRow()}
+  <SearchNavigator
+    term={overlay.term ?? ""}
+    position={overlay.position}
+    total={overlay.matchCount}
+    onup={overlay.up}
+    ondown={overlay.down}
+    onexit={overlay.exit}
+    ontermchange={overlay.setTerm}
+    ondeepsearch={deepSearch.canTrigger ? deepSearch.trigger : undefined}
+    deepSearchStatus={deepSearch.status}
+    deepSearchSearched={deepSearch.searched}
+    deepSearchTotal={deepSearch.total}
+  />
+{/snippet}
+
 {#snippet ticketSubnavbar()}
   <SubNavbarFilterLayout
     title={m.tickets_title()}
@@ -955,6 +1113,9 @@
     onselect={toggleMultiSelect}
     savedFilters={savedFiltersConfig}
     filterPills={filterPillsConfig}
+    searchNavigator={overlay.active ? searchNavigatorRow : undefined}
+    onsearch={!overlay.active ? () => overlay.enter("") : undefined}
+    searchLabel={m.search_inline_trigger()}
   />
 {/snippet}
 
@@ -988,7 +1149,7 @@
   {:else}
     <div class="ticket-list" data-ticket-list>
       <VirtualList
-        items={displayFiltered}
+        items={displayItems}
         scrollContainer={scrollEl}
         estimateHeight={viewModeStore.mode === "grid" ? 200 : 140}
         virtualizeThreshold={200}
@@ -997,29 +1158,41 @@
         onloadmore={loadNextPage}
       >
         {#snippet children({ item }: { item: TicketRecord; index: number })}
-          <SwipeableCard
-            ticketId={item.id}
-            disabled={multiSelectActive}
-            onaction={handleAction}
-            onlongpress={handleLongPress}
+          <div
+            id="ticket-{item.id}"
+            class="search-target"
+            class:match-active={overlay.activeId === item.id}
+            aria-current={overlay.activeId === item.id ? "true" : undefined}
           >
-            {@const dataProps = cardPropsMap.get(item.id)}
-            {#if dataProps}
-              <TicketCard
-                {...dataProps}
-                viewMode={viewModeStore.mode}
-                selected={selectedIds.has(item.id)}
-                {multiSelectActive}
-              />
-            {/if}
-          </SwipeableCard>
+            <SwipeableCard
+              ticketId={item.id}
+              disabled={multiSelectActive}
+              onaction={handleAction}
+              onlongpress={handleLongPress}
+            >
+              {@const dataProps = cardPropsMap.get(item.id)}
+              {#if dataProps}
+                <TicketCard
+                  {...dataProps}
+                  viewMode={viewModeStore.mode}
+                  selected={selectedIds.has(item.id)}
+                  {multiSelectActive}
+                  searchTerm={overlay.term}
+                />
+              {/if}
+            </SwipeableCard>
+          </div>
         {/snippet}
       </VirtualList>
     </div>
 
-    {#if displayFiltered.length === 0}
+    {#if displayItems.length === 0}
       <div class="empty-state" role="status">
-        <p>{m.tickets_empty_filter()}</p>
+        <p>
+          {overlay.active
+            ? m.search_conversation_no_matches()
+            : m.tickets_empty_filter()}
+        </p>
       </div>
     {/if}
   {/if}
@@ -1107,5 +1280,10 @@
     padding: 3rem 1rem;
     color: var(--muted);
     font-size: var(--text-base);
+  }
+
+  .search-target {
+    min-width: 0;
+    overflow: hidden;
   }
 </style>

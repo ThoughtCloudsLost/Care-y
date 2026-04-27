@@ -74,6 +74,19 @@ export function createKeysRouter() {
               nonce: Buffer.from(k.nonce, "base64"),
               wrappedKey: Buffer.from(k.wrappedKey, "base64"),
             })),
+            reWrappedOrgKey: input.reWrappedOrgKey
+              ? {
+                  ephemeralPoint: Buffer.from(
+                    input.reWrappedOrgKey.ephemeralPoint,
+                    "base64",
+                  ),
+                  nonce: Buffer.from(input.reWrappedOrgKey.nonce, "base64"),
+                  wrappedKey: Buffer.from(
+                    input.reWrappedOrgKey.wrappedKey,
+                    "base64",
+                  ),
+                }
+              : undefined,
           });
           rotationSucceeded = true;
         } finally {

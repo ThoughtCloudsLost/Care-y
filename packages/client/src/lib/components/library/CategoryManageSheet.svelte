@@ -1,15 +1,17 @@
 <script lang="ts">
-  import { Button, List, ListItem, ListInput, BlockTitle } from "konsta/svelte";
-  import { Pencil } from "@lucide/svelte";
+  import { Button, List, ListItem, ListInput } from "konsta/svelte";
+  import { Pencil, Save, Trash2 } from "@lucide/svelte";
   import { useQueryClient } from "@tanstack/svelte-query";
+  import { kbKeys } from "$lib/query/keys.js";
   import * as m from "$lib/paraglide/messages.js";
   import { trpc } from "$lib/trpc/index.js";
-  import { getOrgKeyManager } from "$lib/crypto/context.js";
+  import { getOrgKeyManager, getOrgDecryptCache } from "$lib/crypto/context.js";
   import { uint8ArrayToBase64 } from "$lib/utils/buffer-encoding.js";
   import { toastStore } from "$lib/stores/toast.svelte.js";
   import { haptic } from "$lib/utils/haptic.js";
   import { RouterNotAvailableError } from "$lib/errors.js";
   import ShellSheet from "$lib/shell/ShellSheet.svelte";
+  import SoftButton from "$lib/components/SoftButton.svelte";
 
   export interface CategoryEntry {
     id: string;
@@ -27,6 +29,7 @@
   let { opened, categories, ondismiss }: CategoryManageSheetProps = $props();
 
   const orgKeyManager = getOrgKeyManager();
+  const orgCache = getOrgDecryptCache();
   const queryClient = useQueryClient();
   if (!trpc.kb) throw new RouterNotAvailableError("kb");
   const kbRouter = trpc.kb;
@@ -96,8 +99,12 @@
         toastStore.show(m.library_category_updated());
       }
 
+      if (editingId !== undefined) {
+        orgCache.delete(`kb-cat:${editingId}`);
+        orgCache.delete(`kb-cat-desc:${editingId}`);
+      }
       cancelEdit();
-      void queryClient.invalidateQueries({ queryKey: ["kb", "categories"] });
+      void queryClient.invalidateQueries({ queryKey: kbKeys.categories() });
     } catch {
       toastStore.show(m.error_generic(), 3000);
     } finally {
@@ -117,8 +124,10 @@
       await kbRouter.deleteCategory.mutate({ categoryId });
       haptic();
       toastStore.show(m.library_category_deleted());
+      orgCache.delete(`kb-cat:${categoryId}`);
+      orgCache.delete(`kb-cat-desc:${categoryId}`);
       cancelEdit();
-      void queryClient.invalidateQueries({ queryKey: ["kb", "categories"] });
+      void queryClient.invalidateQueries({ queryKey: kbKeys.categories() });
     } catch {
       // The server's FK RESTRICT constraint is the authoritative guard.
       // The client-side articleCount check above is a fast-path optimization
@@ -143,12 +152,14 @@
   >
   <List nested>
     <ListInput
+      outline
       label={m.library_category_name()}
       inputId="cat-name-input"
       type="text"
       bind:value={editName}
     />
     <ListInput
+      outline
       label={m.library_category_description()}
       inputId="cat-desc-input"
       type="textarea"
@@ -156,29 +167,22 @@
     />
   </List>
   <div class="edit-actions">
-    <Button
-      small
-      inline
-      disabled={!canSave}
-      onclick={() => void handleSave()}
-      aria-label={m.library_category_save_label()}
-    >
+    <SoftButton disabled={!canSave} onclick={() => void handleSave()}>
+      <Save size={14} aria-hidden="true" />
       {m.library_category_save()}
-    </Button>
+    </SoftButton>
     <Button small inline clear onclick={cancelEdit}>
       {m.common_cancel()}
     </Button>
     {#if categoryId !== undefined}
-      <Button
-        small
-        inline
-        clear
-        class="delete-btn"
-        colors={{ textIos: "text-red-500", textMaterial: "text-red-500" }}
+      <button
+        type="button"
+        class="delete-inline-btn"
         onclick={() => void handleDelete(categoryId)}
+        aria-label={m.library_category_delete()}
       >
-        {m.library_category_delete()}
-      </Button>
+        <Trash2 size={16} aria-hidden="true" />
+      </button>
     {/if}
   </div>
 {/snippet}
@@ -189,11 +193,8 @@
     cancelEdit();
     ondismiss();
   }}
+  title={m.library_category_sheet_title()}
 >
-  <BlockTitle large class="sheet-title">
-    {m.library_category_sheet_title()}
-  </BlockTitle>
-
   <List>
     {#each categories as cat (cat.id)}
       {#if editingId === cat.id}
@@ -250,6 +251,24 @@
     padding: 0.5rem 0;
   }
 
+  .delete-inline-btn {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 44px;
+    height: 44px;
+    border: none;
+    border-radius: 0.5rem;
+    background: none;
+    color: var(--color-red-500);
+    cursor: pointer;
+  }
+
+  .delete-inline-btn:active {
+    background: color-mix(in srgb, var(--color-red-500) 10%, transparent);
+  }
+
   .add-row {
     padding: 0.5rem var(--page-pad-x);
   }
@@ -262,9 +281,5 @@
     width: 2rem !important;
     padding: 0 !important;
     color: var(--muted) !important;
-  }
-
-  :global(.sheet-title) {
-    padding-top: 1rem !important;
   }
 </style>

@@ -25,8 +25,21 @@ import type {
 import type { KBMediaService } from "../kb/kb-media-service.js";
 import type { BlobStore } from "../storage/store.js";
 import type { RateLimiter } from "../ratelimit/rate-limiter.js";
-import { NotFoundError, ValidationError } from "../errors.js";
+import {
+  NotFoundError,
+  ValidationError,
+  AttachmentValidationError,
+} from "../errors.js";
 import { TRPCError } from "@trpc/server";
+import { validateMagicBytes } from "../telephony/attachment-validator.js";
+
+const KB_ALLOWED_CONTENT_TYPES: ReadonlySet<string> = new Set([
+  "image/jpeg",
+  "image/png",
+  "image/gif",
+  "image/webp",
+  "application/pdf",
+]);
 import {
   createKbCategoryInputSchema,
   updateKbCategoryInputSchema,
@@ -38,6 +51,7 @@ import {
   uploadKbAttachmentInputSchema,
   downloadKbAttachmentInputSchema,
   listKbAttachmentsInputSchema,
+  listKbBodiesInputSchema,
   KB_ATTACHMENT_MAX_BYTES,
   ErrorCode,
 } from "@care-y/shared";
@@ -172,8 +186,15 @@ export function createKbRouter(deps: KBRouterDeps) {
 
     deleteItem: managerProcedure.input(z.object({ itemId: z.uuid() })).mutation(
       withErrorWrapping(async ({ ctx, input }) => {
+        const mediaSvc = deps.createMediaSvc(ctx.org.tenantDb);
+        const attachments = await mediaSvc.listAttachments(input.itemId, {
+          includeSoftDeleted: true,
+        });
+        for (const att of attachments) {
+          await deps.blobStore.delete(att.blobKey);
+        }
+
         const svc = deps.createItemSvc(ctx.org.tenantDb);
-        // care-y-ignore-next-line route-delegates-to-service -- single service call, no business logic
         await svc.delete(input.itemId);
       }),
     ),
@@ -195,6 +216,14 @@ export function createKbRouter(deps: KBRouterDeps) {
           return svc.listRecentlyUpdated(input.limit);
         }),
       ),
+
+    // --- Bulk body fetch (for full search) ---
+    listBodies: volunteerProcedure.input(listKbBodiesInputSchema).query(
+      withErrorWrapping(async ({ ctx, input }) => {
+        const svc = deps.createItemSvc(ctx.org.tenantDb);
+        return svc.listBodies(input.itemIds);
+      }),
+    ),
 
     // --- Voting ---
     castVote: volunteerProcedure.input(castVoteInputSchema).mutation(
@@ -250,6 +279,25 @@ export function createKbRouter(deps: KBRouterDeps) {
             throw new ValidationError(
               `Declared size ${String(input.sizeBytes)} does not match actual blob size ${String(blobBuffer.byteLength)}`,
             );
+          }
+
+          // Content type allowlist
+          const normalizedType = (input.contentType.split(";")[0] ?? "")
+            .trim()
+            .toLowerCase();
+          if (
+            normalizedType.length > 0 &&
+            !KB_ALLOWED_CONTENT_TYPES.has(normalizedType)
+          ) {
+            throw new AttachmentValidationError(
+              `Content type "${normalizedType}" is not allowed. Accepted: ${[...KB_ALLOWED_CONTENT_TYPES].join(", ")}`,
+              "content_type",
+            );
+          }
+
+          // Magic byte verification (prevents content-type spoofing)
+          if (normalizedType.length > 0) {
+            validateMagicBytes(blobBuffer, normalizedType);
           }
 
           // care-y-ignore-next-line route-delegates-to-service -- blobStore.put is infrastructure (wire format), not business logic

@@ -16,6 +16,7 @@ import type {
   GreetingRecord,
   GreetingRepository,
 } from "./models/greeting-repo.js";
+import type { BlocklistRepository } from "./models/blocklist-repo.js";
 import {
   buildLanguageSelectionIvr,
   buildReturningCallerIvr,
@@ -30,20 +31,35 @@ export interface InboundCallDeps {
   readonly phoneRepo: PhoneRepository;
   readonly clientRepo: ClientRepository;
   readonly greetingRepo: GreetingRepository;
+  readonly blocklistRepo: BlocklistRepository;
   readonly orgId: string;
+  readonly orgSchema: string;
   readonly webhookBaseUrl: string;
   readonly defaultLocale: string;
 }
 
 const FALLBACK_GREETING: GreetingRecord = {
   id: "fallback",
-  phoneId: "fallback",
+  phoneNumber: "fallback",
   greetingType: "new_client",
   locale: "en-US",
   text: "Please leave a message after the beep.",
   isAudio: false,
   audioBlobKey: null,
+  audioContentType: null,
 };
+
+/** Resolves a greeting's audioBlobKey to a full serving URL for Twilio <Play>. */
+function resolveAudioUrl(
+  greeting: GreetingRecord,
+  webhookBaseUrl: string,
+): GreetingRecord {
+  if (!greeting.isAudio || greeting.audioBlobKey === null) return greeting;
+  return {
+    ...greeting,
+    audioBlobKey: `${webhookBaseUrl}/api/greetings/${greeting.audioBlobKey}`,
+  };
+}
 
 /**
  * Process an inbound voice call and return IVR instructions.
@@ -66,6 +82,7 @@ export async function handleInboundCall(
     phoneRepo,
     clientRepo,
     greetingRepo,
+    blocklistRepo,
     orgId,
     webhookBaseUrl,
     defaultLocale,
@@ -74,6 +91,9 @@ export async function handleInboundCall(
   // eslint-disable-next-line @typescript-eslint/dot-notation
   const digits = body["Digits"];
   const phoneHash = indexer.hash(callData.from, orgId);
+
+  const isBlocked = await blocklistRepo.exists(phoneHash);
+  if (isBlocked) return [{ type: "reject", attributes: { reason: "busy" } }];
 
   // Single voice webhook URL handles DTMF, recording, and status callbacks
   const voiceWebhookUrl = `${webhookBaseUrl}/webhooks/twilio/${orgId}/voice`;
@@ -93,34 +113,42 @@ export async function handleInboundCall(
       await phoneRepo.updateLocale(phone.id, locale);
     }
 
-    const greeting = await greetingRepo.findByPhoneAndLocaleAndType(
-      phone.id,
+    const greeting = await greetingRepo.findByNumberAndLocaleAndType(
+      callData.to,
       locale,
       "new_client",
     );
 
-    return buildVoicemailIvr(greeting ?? FALLBACK_GREETING, voiceWebhookUrl);
+    const resolved = resolveAudioUrl(
+      greeting ?? FALLBACK_GREETING,
+      webhookBaseUrl,
+    );
+    return buildVoicemailIvr(resolved, voiceWebhookUrl);
   }
 
   // Path 2: Returning caller (phone hash already exists)
   const existingPhone = await phoneRepo.findByHash(phoneHash);
   if (existingPhone) {
-    const greeting = await greetingRepo.findByPhoneAndLocaleAndType(
-      existingPhone.id,
+    const greeting = await greetingRepo.findByNumberAndLocaleAndType(
+      callData.to,
       existingPhone.locale,
       "existing_client",
     );
 
-    const reselectionGreeting = await greetingRepo.findByPhoneAndLocaleAndType(
-      existingPhone.id,
+    const reselectionGreeting = await greetingRepo.findByNumberAndLocaleAndType(
+      callData.to,
       existingPhone.locale,
       "language_prompt",
     );
 
     if (greeting) {
+      const resolvedGreeting = resolveAudioUrl(greeting, webhookBaseUrl);
+      const resolvedReselection = reselectionGreeting
+        ? resolveAudioUrl(reselectionGreeting, webhookBaseUrl)
+        : null;
       return buildReturningCallerIvr(
-        greeting,
-        reselectionGreeting,
+        resolvedGreeting,
+        resolvedReselection,
         voiceWebhookUrl,
         voiceWebhookUrl,
       );
