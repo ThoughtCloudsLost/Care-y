@@ -34,16 +34,33 @@
     TabbarLink,
     ToolbarPane,
   } from "konsta/svelte";
-  import { House, Ticket, BookOpen, Ellipsis, Search } from "@lucide/svelte";
+  import {
+    House,
+    Ticket,
+    BookOpen,
+    Ellipsis,
+    Search,
+    User,
+  } from "@lucide/svelte";
+  import { getOrgLogoUrl } from "$lib/branding/logo-url.svelte.js";
   import { tick, onMount } from "svelte";
-  import { SvelteMap, SvelteSet } from "svelte/reactivity";
+  import { SvelteMap } from "svelte/reactivity";
   import type { Component } from "svelte";
-  import { beforeNavigate, afterNavigate } from "$app/navigation";
+  import { browser } from "$app/environment";
+  import { beforeNavigate, afterNavigate, goto } from "$app/navigation";
   import * as m from "$lib/paraglide/messages.js";
   import type { TabId, AppShellProps } from "./types";
   import { providePTR } from "./ptr-context.svelte.js";
   import { themeStore } from "$lib/stores/theme.svelte";
-  import { useQueryClient } from "@tanstack/svelte-query";
+  import { useQueryClient, createQuery } from "@tanstack/svelte-query";
+  import { RoleId } from "@care-y/shared";
+  import {
+    adminKeys,
+    authKeys,
+    ticketsKeys,
+    kbKeys,
+    volunteerKeys,
+  } from "$lib/query/keys.js";
   import {
     setScrollContainer,
     setTabbarOverrideCtx,
@@ -55,13 +72,15 @@
   } from "./context";
   import { markNavigated } from "./navigation.js";
   import ShellSheet from "./ShellSheet.svelte";
+  import ShellPanel from "./ShellPanel.svelte";
+  import AvatarPanel from "$lib/components/admin/AvatarPanel.svelte";
   import SearchResults from "$lib/components/search/SearchResults.svelte";
   import {
     createTicketSearchProvider,
     type RawCachedTicket,
   } from "$lib/search/providers/tickets.js";
-  import { volunteersStubProvider } from "$lib/search/providers/stubs.js";
   import { createKbSearchProvider } from "$lib/search/providers/kb.js";
+  import { createVolunteerSearchProvider } from "$lib/search/providers/volunteers.js";
   import { trpc } from "$lib/trpc/index.js";
   import {
     registerSearchProvider,
@@ -71,11 +90,16 @@
     getTicketDecryptCache,
     getOrgDecryptCache,
     getCurrentUserId,
+    getCurrentUserRoleId,
+    getCurrentPermissions,
     getPreviewLoader,
   } from "$lib/crypto/context.js";
   import { deriveDisplayStatus } from "$lib/tickets/display-status.js";
   import type { TicketKeyWrap } from "$lib/crypto/ticket-decrypt-cache.js";
-  import type { SerializedBuffer } from "$lib/utils/buffer-encoding.js";
+  import {
+    type SerializedBuffer,
+    base64ToUint8Array,
+  } from "$lib/utils/buffer-encoding.js";
 
   // Main content element, resolved via bind:this. This is the scroll
   // container for all routes (Page has overflow:hidden, main scrolls).
@@ -142,7 +166,42 @@
   setNavbarOverrideCtx(navbarOverrideContainer);
   const navbarOverride = $derived(navbarOverrideContainer.current);
 
-  // Subnavbar + Navbar height measurement.
+  // ── Avatar panel ─────────────────────────────────────────────────
+  const navLogoUrl = $derived(getOrgLogoUrl());
+  let panelOpen = $state(false);
+  const roleIdGetter = getCurrentUserRoleId();
+  const permissionsGetter = getCurrentPermissions();
+  const currentRoleId = $derived(roleIdGetter() ?? "");
+  const currentPermissions = $derived(permissionsGetter());
+  const meQuery = createQuery(() => ({
+    queryKey: authKeys.me(),
+    queryFn: async () => trpc.auth.me.query(),
+    staleTime: Infinity,
+  }));
+
+  // Org decrypt cache + key manager are only set client-side by
+  // CryptoProvider (gated behind `browser`). Access lazily so the
+  // context getter isn't called during SSR where it would throw.
+  const avatarOrgCache = browser ? getOrgDecryptCache() : null;
+
+  const avatarDisplayName = $derived.by(() => {
+    if (avatarOrgCache == null) return null;
+    const enc = meQuery.data?.user.encryptedDisplayName;
+    if (enc == null) return null;
+    const ciphertext = typeof enc === "string" ? base64ToUint8Array(enc) : null;
+    return avatarOrgCache.decrypt("me:display_name", ciphertext);
+  });
+
+  const userInitials = $derived.by(() => {
+    if (avatarDisplayName == null) return null;
+    return avatarDisplayName
+      .split(/\s+/)
+      .slice(0, 2)
+      .map((w) => w.charAt(0).toUpperCase())
+      .join("");
+  });
+
+  // ── Subnavbar + Navbar height measurement.
   // ResizeObserver tracks the inner content height so we can set
   // padding-top on <main> and position the subnavbar correctly.
   let subnavbarInnerEl = $state<HTMLElement | undefined>();
@@ -224,6 +283,7 @@
   let searchContainerEl: HTMLDivElement | undefined = $state();
 
   async function openSearch(): Promise<void> {
+    resetFullSearch();
     searchOpen = true;
     await tick();
     searchContainerEl
@@ -234,7 +294,6 @@
   function closeSearch(): void {
     searchOpen = false;
     searchQuery = "";
-    resetFullSearch();
   }
 
   // ── Search provider registration ────────────────────────────────────
@@ -256,8 +315,24 @@
   // Updated by the cache subscription effect. Empty during SSR.
   let flatTicketList = $state<readonly RawCachedTicket[]>([]);
 
-  // All crypto context access + cache subscription + provider registration
-  // in a single effect (browser-only, never runs during SSR).
+  function isKeyWrap(val: unknown): val is TicketKeyWrap {
+    return (
+      typeof val === "object" &&
+      val !== null &&
+      "ephemeralPoint" in val &&
+      "nonce" in val &&
+      "wrappedKey" in val
+    );
+  }
+
+  function isSerializedBuffer(val: unknown): val is SerializedBuffer {
+    return typeof val === "object" && val !== null && "type" in val;
+  }
+
+  function isOrgCiphertext(val: unknown): val is SerializedBuffer | Uint8Array {
+    return val instanceof Uint8Array || isSerializedBuffer(val);
+  }
+
   $effect(() => {
     const ticketCache = getTicketDecryptCache();
     const orgCache = getOrgDecryptCache();
@@ -276,9 +351,10 @@
     function rebuildFlatList(): readonly RawCachedTicket[] {
       const entries = queryClient.getQueriesData<
         RawCachedTicket[] | { pages: RawCachedTicket[][] }
-      >({ queryKey: ["tickets", "list"] });
+      >({ queryKey: ticketsKeys.lists() });
 
-      const seen = new SvelteSet<string>();
+      // eslint-disable-next-line svelte/prefer-svelte-reactivity -- function-local dedup set, not reactive
+      const seen = new Set<string>();
       const result: RawCachedTicket[] = [];
       for (const [, data] of entries) {
         if (data == null) continue;
@@ -309,34 +385,8 @@
       }
     });
 
-    // Register the ticket search provider with decrypt trigger functions.
-    // The provider's search() calls these in a $derived context, so all
-    // reactive SvelteMap reads are tracked. Results update automatically
-    // as titles are decrypted, queue names are resolved, etc.
-    // Type-narrowing helpers for the unknown -> concrete boundary.
-    // The query cache stores server response data whose encrypted fields
-    // are typed as unknown in RawCachedTicket. These helpers satisfy
-    // strict-type-checked ESLint without losing safety.
-    function isKeyWrap(val: unknown): val is TicketKeyWrap {
-      return (
-        typeof val === "object" &&
-        val !== null &&
-        "ephemeralPoint" in val &&
-        "nonce" in val &&
-        "wrappedKey" in val
-      );
-    }
-
-    function isSerializedBuffer(val: unknown): val is SerializedBuffer {
-      return typeof val === "object" && val !== null && "type" in val;
-    }
-
-    function isOrgCiphertext(
-      val: unknown,
-    ): val is SerializedBuffer | Uint8Array {
-      return val instanceof Uint8Array || isSerializedBuffer(val);
-    }
-
+    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- tickets router always exists when search providers are registered (post-auth)
+    const ticketsRouter = trpc.tickets!;
     const unregisterProvider = registerSearchProvider(
       createTicketSearchProvider({
         getAllCachedTickets: () => flatTicketList,
@@ -364,6 +414,49 @@
         },
         getPreviewFollowUps: (ticketId) => previewLoader.get(ticketId),
         deriveDisplayStatus,
+        getTotalItemCount: () => {
+          const counts = queryClient.getQueryData<{ total?: number }>(
+            ticketsKeys.counts(),
+          );
+          return counts?.total;
+        },
+        listAll: async (cursor) => {
+          const result = await ticketsRouter.list.query({
+            limit: 100,
+            cursor,
+          });
+          // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- tRPC response matches RawCachedTicket shape
+          return result as unknown as readonly RawCachedTicket[];
+        },
+        ingestTickets: (tickets) => {
+          queryClient.setQueryData(
+            ticketsKeys.list({ source: "fullSearch" }),
+            tickets,
+          );
+        },
+        whenDecryptsSettled: async () => ticketCache.whenSettled(),
+        decryptFollowUp: (ticketId, followupId, keyWrap, ciphertext) =>
+          ticketCache.decryptFollowUp(
+            ticketId,
+            followupId,
+            keyWrap,
+            ciphertext,
+          ),
+        clearFollowUpCache: () => ticketCache.clearFollowUps(),
+        contentSearch: async (ticketIds, page, pageSize) => {
+          const cs = ticketsRouter.contentSearch;
+          if (!cs) throw new TypeError("contentSearch router unavailable");
+          const result = await cs.query({ ticketIds, page, pageSize });
+          // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- tRPC response shape matches contentSearch return type
+          return result as unknown as {
+            followups: readonly {
+              ticketId: string;
+              followupId: string;
+              encryptedContent: string;
+            }[];
+            total: number;
+          };
+        },
       }),
     );
 
@@ -383,7 +476,7 @@
             },
             ensureCategoriesLoaded: async () => {
               await queryClient.ensureQueryData({
-                queryKey: ["kb", "categories"],
+                queryKey: kbKeys.categories(),
                 queryFn: async () => kbRouter.listCategories.query(),
               });
             },
@@ -391,7 +484,7 @@
               // Read from TanStack Query cache populated by the library page.
               const cats = queryClient.getQueryData<
                 readonly { id: string; encryptedName: unknown }[]
-              >(["kb", "categories"]);
+              >(kbKeys.categories());
               const cat = cats?.find((c) => c.id === categoryId);
               if (!cat) return null;
               if (!isOrgCiphertext(cat.encryptedName)) return null;
@@ -409,7 +502,7 @@
                   id: string;
                   encryptedDisplayName: unknown;
                 }[]
-              >(["volunteers"]);
+              >(volunteerKeys.all);
               const vol = volunteers?.find((v) => v.id === userId);
               if (!vol) return null;
               if (!isOrgCiphertext(vol.encryptedDisplayName)) return null;
@@ -418,12 +511,35 @@
                 vol.encryptedDisplayName,
               );
             },
+            fetchBodies: async (itemIds) =>
+              kbRouter.listBodies.query({ itemIds }),
           }),
         )
       : () => undefined;
 
-    // Placeholder provider for volunteers search (removed by 6g).
-    const unregisterVol = registerSearchProvider(volunteersStubProvider);
+    // Volunteer search: admin/manager only. Reads from TanStack cache,
+    // decrypts display names via OrgDecryptCache. No server-side fullSearch.
+    const isAdminOrManager =
+      currentRoleId === RoleId.ADMIN || currentRoleId === RoleId.MANAGER;
+    const unregisterVol = isAdminOrManager
+      ? registerSearchProvider(
+          createVolunteerSearchProvider({
+            fetchUsers: async () =>
+              queryClient.ensureQueryData({
+                queryKey: adminKeys.users(),
+                queryFn: async () => trpc.auth.listUsers.query(),
+              }),
+            decryptDisplayName: (userId, ciphertext) => {
+              if (typeof ciphertext !== "string") return null;
+              return orgCache.decrypt(
+                `user:${userId}`,
+                base64ToUint8Array(ciphertext),
+              );
+            },
+            currentUserId: () => currentUserIdGetter(),
+          }),
+        )
+      : () => undefined;
 
     return () => {
       unsubscribeCache();
@@ -673,8 +789,26 @@
       {#if navbarOverride?.left}
         {@render navbarOverride.left()}
       {:else}
-        <Link iconOnly role="button" aria-label={m.nav_account()}>
-          <span class="navbar-avatar" aria-hidden="true">JN</span>
+        <Link
+          iconOnly
+          role="button"
+          aria-label={m.nav_account()}
+          onclick={() => (panelOpen = true)}
+        >
+          <span class="navbar-avatar" aria-hidden="true">
+            {#if navLogoUrl}
+              <img
+                src={navLogoUrl}
+                alt=""
+                class="navbar-avatar-logo"
+                loading="eager"
+              />
+            {:else if userInitials}
+              {userInitials}
+            {:else}
+              <User size={18} />
+            {/if}
+          </span>
         </Link>
       {/if}
     {/snippet}
@@ -910,6 +1044,30 @@
       }}
     />
   </ShellSheet>
+
+  {#if browser}
+    <ShellPanel
+      opened={panelOpen}
+      ondismiss={() => (panelOpen = false)}
+      ariaLabel={m.nav_account()}
+    >
+      <AvatarPanel
+        encryptedDisplayName={meQuery.data?.user.encryptedDisplayName}
+        roleId={currentRoleId}
+        permissions={currentPermissions}
+        onnavigate={(path: string) => {
+          panelOpen = false;
+          // eslint-disable-next-line svelte/no-navigation-without-resolve -- admin routes created in later tasks
+          void goto(path);
+        }}
+        onlogout={() => {
+          panelOpen = false;
+          // eslint-disable-next-line svelte/no-navigation-without-resolve -- logout route created in later tasks
+          void goto("/logout");
+        }}
+      />
+    </ShellPanel>
+  {/if}
 </Page>
 
 <style>
@@ -1030,6 +1188,13 @@
     font-size: 0.625rem;
     font-weight: 600;
     letter-spacing: 0.02em;
+    overflow: hidden;
+  }
+
+  .navbar-avatar-logo {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
   }
 
   .heading-hidden {
@@ -1090,6 +1255,16 @@
     transition:
       transform 300ms cubic-bezier(0.4, 0, 0.2, 1),
       opacity 200ms ease;
+  }
+
+  /* Konsta's --shadow-ios-light-glass includes a heavy 25px outer shadow
+     designed for navbar-scale surfaces. Inside the subnavbar it creates a
+     visible dark blob beneath the segmented control in light themes.
+     Strip the outer shadow, keep only the inset highlights. */
+  .shell-subnavbar-inner :global(.glass) {
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.5),
+      inset 0 0 0 0.5px rgba(255, 255, 255, 0.15) !important;
   }
 
   /* Material: solid elevated surface instead of iOS glass blur. */

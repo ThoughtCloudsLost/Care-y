@@ -30,6 +30,7 @@ export interface RawFollowUpPreview {
   readonly hasRecording: boolean;
   readonly hasImage: boolean;
   readonly hasFile: boolean;
+  readonly noteTypeId: string | null;
 }
 
 interface PreviewLoaderOptions {

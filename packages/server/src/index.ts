@@ -58,6 +58,10 @@ import {
   twilioProviderStatic,
 } from "./telephony/twilio.js";
 import { createWebhookHandler } from "./routes/webhooks.js";
+import { createTelephonyContentService } from "./telephony/telephony-content-service.js";
+import { createGreetingAudioHandler } from "./routes/greeting-audio.js";
+import { createBrandingIconHandler } from "./routes/branding-icons.js";
+import { createManifestHandler } from "./routes/manifest.js";
 import { createRelayHandler, type PendingCall } from "./routes/relay.js";
 import { authenticateRelay } from "./routes/relay-utils.js";
 import { extractOrgSlug } from "./org/slug-resolver.js";
@@ -87,6 +91,7 @@ import {
 import { createQueueService } from "./tickets/queue-service.js";
 import { createAssignmentService } from "./tickets/assignment.js";
 import { createWatchersService } from "./tickets/watchers.js";
+import { createNoteTypeService } from "./tickets/note-type-service.js";
 import { createQueuePermissionsService } from "./tickets/queue-permissions.js";
 import {
   registerEscalationHandler,
@@ -182,15 +187,21 @@ function buildCorsHeaders(origin: string): CorsHeaders {
 
 // --- HTTP server ---
 
-/** Creates an http.Server that routes /webhooks/* to the webhook handler,
- *  /relay/* to the relay handler, /notifications/stream to the SSE handler,
- *  and everything else to tRPC. */
+/** A path-prefix route entry. Handler is invoked when req.url starts with prefix. */
+interface HttpRoute {
+  readonly prefix: string;
+  readonly handler: (
+    req: IncomingMessage,
+    res: ServerResponse,
+  ) => void | Promise<void>;
+}
+
+/** Creates an http.Server that dispatches by path prefix (first match wins),
+ *  falling through to tRPC for unmatched routes. */
 function createHttpServer(
   trpcHandler: RequestListener,
   preflightHeaders: Record<string, string>,
-  onWebhook?: (req: IncomingMessage, res: ServerResponse) => Promise<void>,
-  onRelay?: (req: IncomingMessage, res: ServerResponse) => Promise<void>,
-  onSse?: (req: IncomingMessage, res: ServerResponse) => void,
+  routes: readonly HttpRoute[],
 ): ReturnType<typeof createServer> {
   return createServer((req: IncomingMessage, res: ServerResponse) => {
     if (req.method === "OPTIONS") {
@@ -201,19 +212,11 @@ function createHttpServer(
 
     const url = req.url ?? "";
 
-    if (onWebhook !== undefined && url.startsWith("/webhooks/")) {
-      void onWebhook(req, res);
-      return;
-    }
-
-    if (onRelay !== undefined && url.startsWith("/relay/")) {
-      void onRelay(req, res);
-      return;
-    }
-
-    if (onSse !== undefined && url.startsWith("/notifications/stream")) {
-      onSse(req, res);
-      return;
+    for (const route of routes) {
+      if (url.startsWith(route.prefix)) {
+        void Promise.resolve(route.handler(req, res));
+        return;
+      }
     }
 
     trpcHandler(req, res);
@@ -401,6 +404,16 @@ const appRouter = createAppRouter({
     providerFactory,
     resolveCallerId: phoneResolver,
   },
+  profileDeps: {
+    hasher,
+    encryptor,
+    indexer,
+    tokenizer,
+    passwordChangeLimiter: createInMemoryRateLimiter({
+      windowMs: 60_000,
+      maxRequests: 5,
+    }),
+  },
   twoFactorDeps: {
     emailSender,
     encryptor,
@@ -417,6 +430,15 @@ const appRouter = createAppRouter({
   telephonyAdminDeps: {
     configService: telephonyConfigService,
     webhookBaseUrl: env.WEBHOOK_BASE_URL,
+    indexer,
+  },
+  telephonyContentDeps: {
+    createService: createTelephonyContentService,
+    blobStore,
+    uploadLimiter: createInMemoryRateLimiter({
+      windowMs: 60_000,
+      maxRequests: 3,
+    }),
   },
   ticketDeps: {
     blobStore,
@@ -438,6 +460,7 @@ const appRouter = createAppRouter({
         return qps.getUserQueues(userId);
       }),
     createAuditSvc: createAuditService,
+    createNoteTypeSvc: (tDb) => createNoteTypeService(tDb, secretsEncryptor),
     notificationService,
   },
   kbDeps: {
@@ -454,6 +477,13 @@ const appRouter = createAppRouter({
   notificationDeps: {
     createPushSubSvc: (tDb) => createPushSubscriptionService(tDb, pushSender),
     vapidPublicKey: vapidKeys.publicKey,
+  },
+  brandingDeps: {
+    blobStore,
+    uploadLimiter: createInMemoryRateLimiter({
+      windowMs: 60_000,
+      maxRequests: 3,
+    }),
   },
 });
 
@@ -672,13 +702,27 @@ function handleSse(req: IncomingMessage, res: ServerResponse): void {
   })();
 }
 
-const server = createHttpServer(
-  trpcHandler,
-  cors.preflight,
-  webhookHandler,
-  relayHandler,
-  handleSse,
-);
+const greetingAudioHandler = createGreetingAudioHandler({
+  blobStore,
+  corsHeaders: cors.base,
+});
+
+const brandingIconHandler = createBrandingIconHandler({
+  blobStore,
+  orgService,
+  corsHeaders: cors.base,
+});
+
+const manifestHandler = createManifestHandler({ orgService });
+
+const server = createHttpServer(trpcHandler, cors.preflight, [
+  { prefix: "/webhooks/", handler: webhookHandler },
+  { prefix: "/relay/", handler: relayHandler },
+  { prefix: "/notifications/stream", handler: handleSse },
+  { prefix: "/api/greetings/", handler: greetingAudioHandler },
+  { prefix: "/api/branding/", handler: brandingIconHandler },
+  { prefix: "/manifest.webmanifest", handler: manifestHandler },
+]);
 const port = Number(process.env.PORT ?? 3000);
 server.listen(port);
 console.log(`Server ready on port ${String(port)}`);

@@ -21,7 +21,13 @@ import type {
   BlindIndexer,
 } from "../crypto/field-encryptor.js";
 import type { SessionTokenizer } from "../crypto/session-tokenizer.js";
-import { AuthError, ConflictError, NotFoundError } from "../errors.js";
+import type { SealedBoxEncryptor } from "../crypto/sealed-box.js";
+import {
+  AuthError,
+  ConflictError,
+  ForbiddenError,
+  NotFoundError,
+} from "../errors.js";
 import { ErrorCode, RoleId } from "@care-y/shared";
 
 export interface UserRecord {
@@ -64,8 +70,54 @@ export interface AuthService {
   /** Updates a user's role. Returns the updated user record. */
   updateUserRole(userId: string, newRoleId: string): Promise<UserRecord>;
 
+  /** Activates or deactivates a user. Deactivation kills sessions and revokes org key. */
+  setUserActive(
+    actorId: string,
+    userId: string,
+    isActive: boolean,
+  ): Promise<UserRecord>;
+
+  /** Updates an encrypted display name (ciphertext only, client encrypts). */
+  updateDisplayName(
+    userId: string,
+    encryptedDisplayName: Buffer,
+  ): Promise<void>;
+
+  /**
+   * Updates a user's login identifier (username).
+   * If currentPassword is provided, verifies it first (self-service path).
+   * If omitted, caller is assumed to be admin (admin-service path).
+   */
+  updateUsername(
+    userId: string,
+    newIdentifier: string,
+    currentPassword?: string,
+  ): Promise<void>;
+
+  /**
+   * Updates a user's password hash and kills all other sessions.
+   * Crypto key rotation (rotateKeys) is a separate step handled by the client.
+   */
+  updatePasswordHash(
+    userId: string,
+    sessionToken: string,
+    currentPassword: string,
+    newPassword: string,
+  ): Promise<void>;
+
   /** Updates the org's PII retention setting in org_config. */
   setPiiRetentionDays(days: number | null): Promise<void>;
+
+  getHubStatus(): Promise<{
+    activeUserCount: number;
+    queueCount: number;
+    keyStatus: "ok" | "missing";
+    retentionDays: number | null;
+    phoneCount: number;
+    blocklistCount: number;
+    greetingCount: number;
+    templateCount: number;
+  }>;
 }
 
 export const SESSION_COOKIE_NAME = "care_y_session" as const;
@@ -95,11 +147,44 @@ function logCleanupFailure(err: unknown): void {
   );
 }
 
+async function validateDeactivation(
+  tx: Kysely<TenantDatabase>,
+  actorId: string,
+  userId: string,
+): Promise<void> {
+  if (userId === actorId) {
+    throw new ForbiddenError(ErrorCode.CANNOT_DEACTIVATE_SELF);
+  }
+
+  const targetUser = await tx
+    .selectFrom("users")
+    .selectAll()
+    .where("id", "=", userId)
+    .executeTakeFirst();
+
+  if (!targetUser) {
+    throw new NotFoundError(ErrorCode.USER_NOT_FOUND);
+  }
+
+  if (targetUser.role_id === RoleId.ADMIN) {
+    const result = await tx
+      .selectFrom("users")
+      .select(tx.fn.countAll<string>().as("count"))
+      .where("role_id", "=", RoleId.ADMIN)
+      .where("is_active", "=", true)
+      .executeTakeFirstOrThrow();
+    if (toCount(result) <= 1) {
+      throw new ForbiddenError(ErrorCode.CANNOT_DEACTIVATE_LAST_ADMIN);
+    }
+  }
+}
+
 export function createAuthService(
   db: Kysely<TenantDatabase>,
   hasher: PasswordHasher,
   sessions: SessionRepository,
   encryptor: FieldEncryptor,
+  sealedBox: SealedBoxEncryptor,
   indexer: BlindIndexer,
   tokenizer: SessionTokenizer,
   orgId: string,
@@ -229,7 +314,8 @@ export function createAuthService(
   }): Promise<Selectable<UsersTable>> {
     const identifierHash = indexer.hash(input.identifier, orgId);
     const encryptedIdentifier = encryptor.encrypt(input.identifier);
-    const encryptedDisplayName = encryptor.encrypt(input.displayName);
+    // ADR-016: display_name is Tier 1 (sealed box with org public key)
+    const encryptedDisplayName = sealedBox.seal(input.displayName);
     const encryptedNotificationAddr =
       input.notificationEmail !== undefined && input.notificationEmail !== ""
         ? encryptor.encrypt(input.notificationEmail)
@@ -284,6 +370,39 @@ export function createAuthService(
     }
 
     return toUserRecord(row, encryptor);
+  }
+
+  async function setUserActive(
+    actorId: string,
+    userId: string,
+    isActive: boolean,
+  ): Promise<UserRecord> {
+    return db.transaction().execute(async (tx) => {
+      if (!isActive) {
+        await validateDeactivation(tx, actorId, userId);
+      }
+
+      const updated = await tx
+        .updateTable("users")
+        .set({ is_active: isActive })
+        .where("id", "=", userId)
+        .returningAll()
+        .executeTakeFirst();
+
+      if (!updated) {
+        throw new NotFoundError(ErrorCode.USER_NOT_FOUND);
+      }
+
+      if (!isActive) {
+        await tx.deleteFrom("sessions").where("user_id", "=", userId).execute();
+        await tx
+          .deleteFrom("wrapped_org_keys")
+          .where("user_id", "=", userId)
+          .execute();
+      }
+
+      return toUserRecord(updated, encryptor);
+    });
   }
 
   async function setPiiRetentionDays(days: number | null): Promise<void> {
@@ -353,6 +472,162 @@ export function createAuthService(
 
     countActiveAdmins,
     updateUserRole,
+    setUserActive,
     setPiiRetentionDays,
+
+    async updateDisplayName(
+      userId: string,
+      encryptedDisplayName: Buffer,
+    ): Promise<void> {
+      const result = await db
+        .updateTable("users")
+        .set({ encrypted_display_name: encryptedDisplayName })
+        .where("id", "=", userId)
+        .where("is_active", "=", true)
+        .executeTakeFirst();
+
+      if (result.numUpdatedRows === 0n) {
+        throw new NotFoundError(ErrorCode.USER_NOT_FOUND);
+      }
+    },
+
+    async updateUsername(
+      userId: string,
+      newIdentifier: string,
+      currentPassword?: string,
+    ): Promise<void> {
+      const row = await findActiveUserById(userId);
+      if (!row) {
+        throw new NotFoundError(ErrorCode.USER_NOT_FOUND);
+      }
+
+      if (currentPassword !== undefined) {
+        const valid = await hasher.verify(currentPassword, row.password_hash);
+        if (!valid) {
+          throw new AuthError(ErrorCode.INVALID_CREDENTIALS);
+        }
+      }
+
+      const newIdentifierHash = indexer.hash(newIdentifier, orgId);
+      const newEncryptedIdentifier = encryptor.encrypt(newIdentifier);
+
+      try {
+        const result = await db
+          .updateTable("users")
+          .set({
+            identifier_hash: newIdentifierHash,
+            encrypted_identifier: newEncryptedIdentifier,
+          })
+          .where("id", "=", userId)
+          .where("is_active", "=", true)
+          .executeTakeFirst();
+
+        if (result.numUpdatedRows === 0n) {
+          throw new NotFoundError(ErrorCode.USER_NOT_FOUND);
+        }
+      } catch (err: unknown) {
+        if (isPgUniqueViolation(err)) {
+          throw new ConflictError(ErrorCode.USERNAME_ALREADY_TAKEN);
+        }
+        throw err;
+      }
+    },
+
+    async updatePasswordHash(
+      userId: string,
+      sessionToken: string,
+      currentPassword: string,
+      newPassword: string,
+    ): Promise<void> {
+      const row = await findActiveUserById(userId);
+      if (!row) {
+        throw new NotFoundError(ErrorCode.USER_NOT_FOUND);
+      }
+
+      const valid = await hasher.verify(currentPassword, row.password_hash);
+      if (!valid) {
+        throw new AuthError(ErrorCode.INVALID_CREDENTIALS);
+      }
+
+      const newHash = await hasher.hash(newPassword);
+
+      await db.transaction().execute(async (tx) => {
+        await tx
+          .updateTable("users")
+          .set({ password_hash: newHash })
+          .where("id", "=", userId)
+          .where("is_active", "=", true)
+          .execute();
+
+        await tx
+          .deleteFrom("sessions")
+          .where("user_id", "=", userId)
+          .where("token", "!=", sessionToken)
+          .execute();
+      });
+    },
+
+    async getHubStatus(): Promise<{
+      activeUserCount: number;
+      queueCount: number;
+      keyStatus: "ok" | "missing";
+      retentionDays: number | null;
+      phoneCount: number;
+      blocklistCount: number;
+      greetingCount: number;
+      templateCount: number;
+    }> {
+      const [
+        userCount,
+        queueCount,
+        keyStatus,
+        retentionConfig,
+        phoneCount,
+        blocklistCount,
+        greetingCount,
+        templateCount,
+      ] = await Promise.all([
+        db
+          .selectFrom("users")
+          .select(db.fn.countAll<string>().as("c"))
+          .where("is_active", "=", true)
+          .executeTakeFirstOrThrow(),
+        db
+          .selectFrom("queues")
+          .select(db.fn.countAll<string>().as("c"))
+          .executeTakeFirstOrThrow(),
+        db.selectFrom("org_config").select("org_public_key").executeTakeFirst(),
+        db
+          .selectFrom("org_config")
+          .select("pii_retention_days")
+          .executeTakeFirst(),
+        db
+          .selectFrom("phones")
+          .select(db.fn.countAll<string>().as("c"))
+          .executeTakeFirstOrThrow(),
+        db
+          .selectFrom("phone_blocklist")
+          .select(db.fn.countAll<string>().as("c"))
+          .executeTakeFirstOrThrow(),
+        db
+          .selectFrom("phone_greetings")
+          .select(db.fn.countAll<string>().as("c"))
+          .executeTakeFirstOrThrow(),
+        db
+          .selectFrom("sms_responses")
+          .select(db.fn.countAll<string>().as("c"))
+          .executeTakeFirstOrThrow(),
+      ]);
+      return {
+        activeUserCount: Number(userCount.c),
+        queueCount: Number(queueCount.c),
+        keyStatus: keyStatus?.org_public_key ? "ok" : "missing",
+        retentionDays: retentionConfig?.pii_retention_days ?? null,
+        phoneCount: Number(phoneCount.c),
+        blocklistCount: Number(blocklistCount.c),
+        greetingCount: Number(greetingCount.c),
+        templateCount: Number(templateCount.c),
+      };
+    },
   };
 }

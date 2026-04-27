@@ -108,6 +108,7 @@ export interface OrgConfigTable {
   encrypted_name: Buffer | null;
   encrypted_logo: Buffer | null;
   encrypted_primary_color: Buffer | null;
+  encrypted_accent_color: Buffer | null;
   encrypted_client_text: Buffer | null;
   client_encrypted_branding: Buffer | null;
   pii_retention_days: number | null;
@@ -121,6 +122,11 @@ export interface OrgConfigTable {
   // Email branding (notification sender identity per org)
   email_from_name: ColumnType<string, string | undefined, string>;
   email_from_address: ColumnType<string, string | undefined, string>;
+  // PWA icon blob keys (ADR-024)
+  icon_192_blob_key: string | null;
+  icon_512_blob_key: string | null;
+  icon_maskable_blob_key: string | null;
+  default_note_type_id: string | null;
 }
 
 // --- User keys (full interface, replaces UserKeysStubTable) ---
@@ -242,12 +248,13 @@ export interface ClientsTable {
 
 export interface PhoneGreetingsTable {
   id: Generated<string>;
-  phone_id: string;
+  phone_number: string;
   greeting_type: string;
   locale: string;
   text: string;
   is_audio: ColumnType<boolean, boolean | undefined, boolean>;
   audio_blob_key: string | null;
+  audio_content_type: string | null;
   created_at: Generated<Date>;
   updated_at: Generated<Date>;
 }
@@ -318,6 +325,7 @@ export interface FollowupsTable {
   created_by: string | null;
   deleted_at: Date | null;
   created_at: Generated<Date>;
+  note_type_id: string | null;
 }
 
 export interface RecordingsTable {
@@ -456,6 +464,39 @@ export interface TicketReadCursorsTable {
   encrypted_read_cursor: Buffer;
 }
 
+// --- Phone blocklist ---
+
+export interface PhoneBlocklistTable {
+  id: Generated<string>;
+  phone_hash: string;
+  encrypted_number: Buffer;
+  added_by: string;
+  created_at: ColumnType<Date, Date | undefined, never>;
+}
+
+// --- Note types (internal note categorization + escalation routing) ---
+
+export interface NoteTypesTable {
+  id: Generated<string>;
+  encrypted_name: Buffer;
+  encrypted_icon: Buffer;
+  encrypted_description: Buffer | null;
+  encrypted_escalation_targets: Buffer;
+  is_active: ColumnType<boolean, boolean | undefined, boolean>;
+  requires_on_close: ColumnType<boolean, boolean | undefined, boolean>;
+  min_view_role: ColumnType<string, string | undefined, string>;
+  min_create_role: ColumnType<string, string | undefined, string>;
+  created_at: Generated<Date>;
+}
+
+export interface FollowupReactionsTable {
+  id: Generated<string>;
+  followup_id: string;
+  user_id: string;
+  reaction: string;
+  created_at: Generated<Date>;
+}
+
 // --- Audit log ---
 
 export interface AuditLogTable {
@@ -520,6 +561,10 @@ export interface TenantDatabase {
   push_subscriptions: PushSubscriptionsTable;
   push_challenges: PushChallengesTable;
   audit_log: AuditLogTable;
+  phone_blocklist: PhoneBlocklistTable;
+  // Note types (internal note categorization)
+  note_types: NoteTypesTable;
+  followup_reactions: FollowupReactionsTable;
   // Shifts (shifts, shift_occurrences)
   // Client portal (portal_channels)
 }

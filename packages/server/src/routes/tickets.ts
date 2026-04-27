@@ -38,10 +38,18 @@ import type { AuditService } from "../tickets/audit.js";
 import type { ReadCursorService } from "../tickets/read-cursor-service.js";
 import type { NotificationService } from "../notifications/service.js";
 import type { AuditEntry } from "../tickets/audit.js";
-import type { NotificationEventType, TicketPriority } from "@care-y/shared";
-import { ErrorCode } from "@care-y/shared";
-import { NotFoundError } from "../errors.js";
-import { buildRecipientList } from "../tickets/notification-recipients.js";
+import type { NoteTypeService } from "../tickets/note-type-service.js";
+import type {
+  NotificationEventType,
+  ReactionSummary,
+  TicketPriority,
+} from "@care-y/shared";
+import { ErrorCode, meetsRoleThreshold } from "@care-y/shared";
+import { ForbiddenError, NotFoundError } from "../errors.js";
+import {
+  buildRecipientList,
+  resolveEscalationTargets,
+} from "../tickets/notification-recipients.js";
 import type { ShiftProvider } from "../tickets/shift-provider.js";
 import { createStubShiftProvider } from "../tickets/shift-provider.js";
 import { createUserService } from "../users/user-service.js";
@@ -68,6 +76,7 @@ import {
   createQueueInputSchema,
   updateQueueInputSchema,
   reorderQueuesInputSchema,
+  deleteQueueInputSchema,
   assignTicketInputSchema,
   takeTicketInputSchema,
   releaseTicketInputSchema,
@@ -82,8 +91,12 @@ import {
   deleteInternalNoteInputSchema,
   followUpSummaryInputSchema,
   followUpsByIdsInputSchema,
+  listParticipantsInputSchema,
   recordingListInputSchema,
   attachmentListInputSchema,
+  createNoteTypeInputSchema,
+  updateNoteTypeInputSchema,
+  toggleReactionInputSchema,
   RoleId,
 } from "@care-y/shared";
 
@@ -130,6 +143,8 @@ export interface TicketRouterDeps {
     tDb: OrgContext["tenantDb"],
     access: TicketAccessChecker,
   ) => ReadCursorService;
+  // Note types
+  readonly createNoteTypeSvc?: (tDb: OrgContext["tenantDb"]) => NoteTypeService;
   // Search + audit (optional, injected by 5d wiring)
   readonly createSearchSvc?: (tDb: OrgContext["tenantDb"]) => SearchService;
   readonly createAuditSvc?: (tDb: OrgContext["tenantDb"]) => AuditService;
@@ -154,6 +169,87 @@ function buildSearchRoutes(
         return search.contentSearch(input, ctx.user.id);
       }),
     ),
+  };
+}
+
+function buildNoteTypeRoutes(
+  factory: (tDb: OrgContext["tenantDb"]) => NoteTypeService,
+  auditFn: (tDb: OrgContext["tenantDb"], entry: AuditEntry) => void,
+) {
+  return {
+    noteTypes: router({
+      list: adminProcedure.query(
+        withErrorWrapping(async ({ ctx }) => {
+          const svc = factory(ctx.org.tenantDb);
+          return svc.list();
+        }),
+      ),
+
+      listActive: volunteerProcedure.query(
+        withErrorWrapping(async ({ ctx }) => {
+          const svc = factory(ctx.org.tenantDb);
+          return svc.listActive(ctx.user.roleId);
+        }),
+      ),
+
+      create: adminProcedure.input(createNoteTypeInputSchema).mutation(
+        withErrorWrapping(async ({ ctx, input }) => {
+          const svc = factory(ctx.org.tenantDb);
+          const result = await svc.create({
+            encryptedName: Buffer.from(input.encryptedName, "base64"),
+            encryptedIcon: Buffer.from(input.encryptedIcon, "base64"),
+            encryptedDescription:
+              input.encryptedDescription !== undefined
+                ? Buffer.from(input.encryptedDescription, "base64")
+                : undefined,
+            escalationTargets: input.escalationTargets,
+            requiresOnClose: input.requiresOnClose,
+            minViewRole: input.minViewRole,
+            minCreateRole: input.minCreateRole,
+          });
+          auditFn(ctx.org.tenantDb, {
+            eventType: "note_type_created",
+            actorId: ctx.user.id,
+            metadata: { noteTypeId: result.id },
+          });
+          return result;
+        }),
+      ),
+
+      update: adminProcedure.input(updateNoteTypeInputSchema).mutation(
+        withErrorWrapping(async ({ ctx, input }) => {
+          const svc = factory(ctx.org.tenantDb);
+          const result = await svc.update({
+            id: input.id,
+            encryptedName:
+              input.encryptedName !== undefined
+                ? Buffer.from(input.encryptedName, "base64")
+                : undefined,
+            encryptedIcon:
+              input.encryptedIcon !== undefined
+                ? Buffer.from(input.encryptedIcon, "base64")
+                : undefined,
+            encryptedDescription:
+              input.encryptedDescription !== undefined
+                ? input.encryptedDescription !== null
+                  ? Buffer.from(input.encryptedDescription, "base64")
+                  : null
+                : undefined,
+            escalationTargets: input.escalationTargets,
+            isActive: input.isActive,
+            requiresOnClose: input.requiresOnClose,
+            minViewRole: input.minViewRole,
+            minCreateRole: input.minCreateRole,
+          });
+          auditFn(ctx.org.tenantDb, {
+            eventType: "note_type_updated",
+            actorId: ctx.user.id,
+            metadata: { noteTypeId: input.id },
+          });
+          return result;
+        }),
+      ),
+    }),
   };
 }
 
@@ -202,6 +298,68 @@ export function createTicketRouter(deps: TicketRouterDeps) {
     return deps.createMediaSvc(tDb, deps.blobStore, access);
   }
 
+  /**
+   * Resolve escalation target user IDs for a note type.
+   * Always fetches and decrypts the note type regardless of whether
+   * targets are empty, to avoid timing side channels between note types
+   * with and without escalation.
+   */
+  async function resolveNoteTypeEscalation(
+    tDb: OrgContext["tenantDb"],
+    noteTypeId: string | undefined,
+    ticketId?: string,
+  ): Promise<string[] | undefined> {
+    if (noteTypeId === undefined || !deps.createNoteTypeSvc) return undefined;
+
+    const ntSvc = deps.createNoteTypeSvc(tDb);
+    const ctx = await ntSvc.getEscalationContext(noteTypeId);
+    if (!ctx) return undefined;
+
+    const qp = deps.createQueuePermissionsSvc(tDb);
+    const userSvc = createUserService(tDb);
+
+    const userIds = await resolveEscalationTargets(
+      ctx.targets,
+      {
+        getUsersByRole: async (role) => {
+          const roleId = role === "admin" ? RoleId.ADMIN : RoleId.MANAGER;
+          return [...(await userSvc.listActiveIdsByRoleId(roleId))];
+        },
+        // eslint-disable-next-line @typescript-eslint/require-await -- stub for future permission-based targeting
+        getUsersByPermission: async () => [],
+        getQueueMembers: async (queueId) => qp.getQueueMembers(queueId),
+        getTicketKeyWrapHolders: async (tid) => {
+          const rows = await tDb
+            .selectFrom("ticket_key_wraps as tkw")
+            .innerJoin("users as u", "u.id", "tkw.volunteer_id")
+            .select("tkw.volunteer_id")
+            .where("tkw.ticket_id", "=", tid)
+            .where("u.is_active", "=", true)
+            .groupBy("tkw.volunteer_id")
+            .execute();
+          return rows.map((r) => r.volunteer_id);
+        },
+      },
+      ticketId,
+    );
+
+    if (userIds.length === 0) return undefined;
+
+    if (ctx.minViewRole === RoleId.VOLUNTEER) return userIds;
+
+    const userRows = await tDb
+      .selectFrom("users")
+      .select(["id", "role_id"])
+      .where("id", "in", userIds)
+      .execute();
+
+    const filtered = userRows
+      .filter((u) => meetsRoleThreshold(u.role_id, ctx.minViewRole))
+      .map((u) => u.id);
+
+    return filtered.length > 0 ? filtered : undefined;
+  }
+
   // Audit helper: best-effort, never blocks. No-op when audit service not injected.
   function audit(tDb: OrgContext["tenantDb"], entry: AuditEntry): void {
     if (!deps.createAuditSvc) return;
@@ -221,19 +379,23 @@ export function createTicketRouter(deps: TicketRouterDeps) {
     ticket: { id: string; queueId: string; assignedTo: string | null },
     auditEntry: AuditEntry,
     mentionedPseudonyms: string[] = [],
+    noteTypeId?: string,
   ): void {
     audit(ctx.org.tenantDb, auditEntry);
-    notify(ctx, eventType, ticket, mentionedPseudonyms);
+    notify(ctx, eventType, ticket, mentionedPseudonyms, noteTypeId);
   }
 
   // Notification dispatch helper: best-effort, never blocks.
   // Builds recipient list and dispatches across all channels.
   // Passes queueId (not queue name) since names are encrypted (ADR-030).
+  // Escalation resolution happens inside the fire-and-forget block so
+  // transient errors in the escalation path cannot fail the mutation.
   function notify(
     ctx: { org: OrgContext; user: { id: string } },
     eventType: NotificationEventType,
     ticket: { id: string; queueId: string; assignedTo: string | null },
     mentionedPseudonyms: string[] = [],
+    noteTypeId?: string,
   ): void {
     if (!deps.notificationService) return;
     const ns = deps.notificationService;
@@ -243,6 +405,12 @@ export function createTicketRouter(deps: TicketRouterDeps) {
 
     void (async () => {
       try {
+        const escalationUserIds = await resolveNoteTypeEscalation(
+          tDb,
+          noteTypeId,
+          ticket.id,
+        );
+
         const recipients = await buildRecipientList(
           {
             getTicketWatchers: async (ticketId) =>
@@ -254,6 +422,7 @@ export function createTicketRouter(deps: TicketRouterDeps) {
           ticket,
           mentionedPseudonyms,
           ctx.user.id,
+          escalationUserIds,
         );
         await ns.dispatch(
           tDb,
@@ -265,8 +434,6 @@ export function createTicketRouter(deps: TicketRouterDeps) {
           recipients,
         );
       } catch (err: unknown) {
-        // Notification failures are non-critical. Never block the response.
-        // Log the error type without any PII (no ticket content, no names).
         console.error(
           "Notification dispatch failed:",
           err instanceof Error ? err.message : String(err),
@@ -390,6 +557,20 @@ export function createTicketRouter(deps: TicketRouterDeps) {
       .input(createFollowUpInputSchema)
       .mutation(
         withErrorWrapping(async ({ ctx, input }) => {
+          if (
+            input.type === "internal_note" &&
+            input.noteTypeId !== undefined &&
+            deps.createNoteTypeSvc
+          ) {
+            const ntSvc = deps.createNoteTypeSvc(ctx.org.tenantDb);
+            const minRole = await ntSvc.getMinCreateRole(input.noteTypeId);
+            if (
+              minRole !== undefined &&
+              !meetsRoleThreshold(ctx.user.roleId, minRole)
+            ) {
+              throw new ForbiddenError(ErrorCode.INSUFFICIENT_ROLE);
+            }
+          }
           const access = deps.createTicketAccess(ctx.org.tenantDb);
           const svc = deps.createFollowUpSvc(ctx.org.tenantDb, access);
           const followUp = await svc.create(ctx.user.id, {
@@ -399,6 +580,7 @@ export function createTicketRouter(deps: TicketRouterDeps) {
             type: input.type,
             isPrivate: input.isPrivate,
             mentionedPseudonyms: input.mentionedPseudonyms,
+            noteTypeId: input.noteTypeId,
           });
           // Look up ticket for notification context
           const { svc: tSvc } = ticketSvc(ctx.org.tenantDb);
@@ -415,6 +597,7 @@ export function createTicketRouter(deps: TicketRouterDeps) {
               ticketId: input.ticketId,
             },
             input.mentionedPseudonyms,
+            input.noteTypeId,
           );
           return followUp;
         }),
@@ -424,12 +607,27 @@ export function createTicketRouter(deps: TicketRouterDeps) {
       withErrorWrapping(async ({ ctx, input }) => {
         const access = deps.createTicketAccess(ctx.org.tenantDb);
         const svc = deps.createFollowUpSvc(ctx.org.tenantDb, access);
-        return svc.listByTicket(ctx.user.id, input.ticketId, {
+        const followUps = await svc.listByTicket(ctx.user.id, input.ticketId, {
           limit: input.limit,
           cursor: input.cursor,
           direction: input.direction,
           types: input.types,
+          mediaFlags: input.mediaFlags,
+          createdBy: input.createdBy,
+          includeClientSource: input.includeClientSource,
+          dateFrom: input.dateFrom,
+          dateTo: input.dateTo,
+          userRoleId: ctx.user.roleId,
         });
+
+        const noteIds = followUps
+          .filter((fu) => fu.type === "internal_note")
+          .map((fu) => fu.id);
+        const reactionsMap = await svc.getReactions(noteIds);
+        const reactions: Record<string, ReactionSummary[]> =
+          Object.fromEntries(reactionsMap);
+
+        return { followUps, reactions };
       }),
     ),
 
@@ -439,12 +637,27 @@ export function createTicketRouter(deps: TicketRouterDeps) {
         withErrorWrapping(async ({ ctx, input }) => {
           const access = deps.createTicketAccess(ctx.org.tenantDb);
           const svc = deps.createFollowUpSvc(ctx.org.tenantDb, access);
-          return svc.listSummary(ctx.user.id, input.ticketId, {
+          const summaries = await svc.listSummary(ctx.user.id, input.ticketId, {
             limit: input.limit,
             cursor: input.cursor,
             direction: input.direction,
             types: input.types,
+            mediaFlags: input.mediaFlags,
+            createdBy: input.createdBy,
+            includeClientSource: input.includeClientSource,
+            dateFrom: input.dateFrom,
+            dateTo: input.dateTo,
+            userRoleId: ctx.user.roleId,
           });
+
+          const noteIds = summaries
+            .filter((s) => s.type === "internal_note")
+            .map((s) => s.id);
+          const reactionsMap = await svc.getReactions(noteIds);
+          const reactions: Record<string, ReactionSummary[]> =
+            Object.fromEntries(reactionsMap);
+
+          return { summaries, reactions };
         }),
       ),
 
@@ -493,11 +706,26 @@ export function createTicketRouter(deps: TicketRouterDeps) {
         withErrorWrapping(async ({ ctx, input }) => {
           const access = deps.createTicketAccess(ctx.org.tenantDb);
           const svc = deps.createFollowUpSvc(ctx.org.tenantDb, access);
-          return svc.updateInternalNote(
+          const { record, previousNoteTypeId } = await svc.updateInternalNote(
             ctx.user.id,
             input.followUpId,
             Buffer.from(input.encryptedContent, "base64"),
+            input.noteTypeId,
           );
+
+          // Trigger escalation only when the note type actually changed
+          // (server-side comparison, not client-trust).
+          const typeChanged =
+            input.noteTypeId !== undefined &&
+            input.noteTypeId !== previousNoteTypeId;
+
+          if (typeChanged) {
+            const { svc: tSvc } = ticketSvc(ctx.org.tenantDb);
+            const ticket = await tSvc.findById(record.ticketId, ctx.user.id);
+            notify(ctx, "followup_added", ticket, [], input.noteTypeId);
+          }
+
+          return record;
         }),
       ),
 
@@ -513,6 +741,32 @@ export function createTicketRouter(deps: TicketRouterDeps) {
             input.followUpId,
             isAdmin,
           );
+        }),
+      ),
+
+    toggleReaction: volunteerProcedure
+      .input(toggleReactionInputSchema)
+      .mutation(
+        withErrorWrapping(async ({ ctx, input }) => {
+          const access = deps.createTicketAccess(ctx.org.tenantDb);
+          const svc = deps.createFollowUpSvc(ctx.org.tenantDb, access);
+          return svc.toggleReaction(
+            ctx.user.id,
+            ctx.user.roleId,
+            input.followUpId,
+            input.reaction,
+          );
+        }),
+      ),
+
+    getReactions: volunteerProcedure
+      .input(z.object({ followUpIds: z.array(z.uuid()).max(100) }))
+      .query(
+        withErrorWrapping(async ({ ctx, input }) => {
+          const access = deps.createTicketAccess(ctx.org.tenantDb);
+          const svc = deps.createFollowUpSvc(ctx.org.tenantDb, access);
+          const map = await svc.getReactions(input.followUpIds);
+          return Object.fromEntries(map) as Record<string, ReactionSummary[]>;
         }),
       ),
 
@@ -769,6 +1023,19 @@ export function createTicketRouter(deps: TicketRouterDeps) {
       }),
     ),
 
+    deleteQueue: adminProcedure.input(deleteQueueInputSchema).mutation(
+      withErrorWrapping(async ({ ctx, input }) => {
+        const svc = deps.createQueueSvc(ctx.org.tenantDb);
+        await svc.delete(input.queueId, input.reassignTo);
+        audit(ctx.org.tenantDb, {
+          eventType: "queue_deleted",
+          actorId: ctx.user.id,
+          metadata: { queueId: input.queueId },
+        });
+        return { success: true as const };
+      }),
+    ),
+
     // --- Assignment ---
     assign: volunteerProcedure.input(assignTicketInputSchema).mutation(
       withErrorWrapping(async ({ ctx, input }) => {
@@ -899,6 +1166,20 @@ export function createTicketRouter(deps: TicketRouterDeps) {
         }),
       ),
 
+    getUserQueues: adminProcedure.input(z.object({ userId: z.uuid() })).query(
+      withErrorWrapping(async ({ ctx, input }) => {
+        const svc = deps.createQueuePermissionsSvc(ctx.org.tenantDb);
+        return svc.getUserQueues(input.userId);
+      }),
+    ),
+
+    listAllQueueAssignments: adminProcedure.query(
+      withErrorWrapping(async ({ ctx }) => {
+        const svc = deps.createQueuePermissionsSvc(ctx.org.tenantDb);
+        return svc.listAllAssignments();
+      }),
+    ),
+
     // --- Volunteers (for @mention autocomplete) ---
     listVolunteers: volunteerProcedure.query(
       withErrorWrapping(async ({ ctx }) => {
@@ -906,6 +1187,17 @@ export function createTicketRouter(deps: TicketRouterDeps) {
         return svc.listActiveVolunteers();
       }),
     ),
+
+    // --- Ticket participants (distinct volunteer authors) ---
+    listParticipants: volunteerProcedure
+      .input(listParticipantsInputSchema)
+      .query(
+        withErrorWrapping(async ({ ctx, input }) => {
+          const access = deps.createTicketAccess(ctx.org.tenantDb);
+          const svc = deps.createFollowUpSvc(ctx.org.tenantDb, access);
+          return svc.listParticipants(ctx.user.id, input.ticketId);
+        }),
+      ),
 
     // --- Dashboard: activity feed (scoped to user's queues) ---
     recentActivity: volunteerProcedure
@@ -990,6 +1282,11 @@ export function createTicketRouter(deps: TicketRouterDeps) {
         };
       }),
     ),
+
+    // --- Note types ---
+    ...(deps.createNoteTypeSvc
+      ? buildNoteTypeRoutes(deps.createNoteTypeSvc, audit)
+      : {}),
 
     // --- Metadata search (injected by 5d wiring) ---
     ...(deps.createSearchSvc ? buildSearchRoutes(deps.createSearchSvc) : {}),

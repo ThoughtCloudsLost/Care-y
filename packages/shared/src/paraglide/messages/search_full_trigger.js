@@ -6,17 +6,17 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Search_Full_TriggerInputs */
 
 const en_search_full_trigger = /** @type {(inputs: Search_Full_TriggerInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Search all`)
+	return /** @type {LocalizedString} */ (`Search encrypted`)
 };
 
 const es_search_full_trigger = /** @type {(inputs: Search_Full_TriggerInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Buscar todo`)
+	return /** @type {LocalizedString} */ (`Buscar cifrados`)
 };
 
 /**
 * | output |
 * | --- |
-* | "Search all" |
+* | "Search encrypted" |
 *
 * @param {Search_Full_TriggerInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

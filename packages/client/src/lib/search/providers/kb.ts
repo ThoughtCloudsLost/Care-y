@@ -13,7 +13,12 @@
  * visual language exactly (category badge, title, excerpt, thumbs votes,
  * author, timestamp).
  */
-import type { SearchProvider, SearchResult } from "../types.js";
+import { SvelteSet } from "svelte/reactivity";
+import type {
+  FullSearchState,
+  SearchProvider,
+  SearchResult,
+} from "../types.js";
 import type { Component } from "svelte";
 import type { DecryptResult } from "$lib/crypto/decrypt-result.js";
 import { BookOpen } from "@lucide/svelte";
@@ -60,10 +65,11 @@ interface CachedKBArticle {
 
 /** Dependency injection for testability. */
 export interface KBSearchProviderDeps {
-  /** Fetch a page of articles from the server. Returns items + next cursor. */
+  /** Fetch a page of articles from the server. Returns items + next cursor + total. */
   readonly fetchPage: (cursor: string | undefined) => Promise<{
     items: readonly RawKBItem[];
     nextCursor: string | null;
+    total?: number;
   }>;
   /** Decrypt an org-key ciphertext. Returns plaintext string or null if key not loaded / decrypt fails. */
   readonly decryptOrg: (cacheKey: string, ciphertext: unknown) => string | null;
@@ -73,6 +79,10 @@ export interface KBSearchProviderDeps {
   readonly resolveAuthorName: (userId: string) => string | null;
   /** Pre-populate the categories query cache so resolveCategoryName works on first search. */
   readonly ensureCategoriesLoaded: () => Promise<void>;
+  /** Fetch encrypted article bodies for full-text search. Max 200 items. */
+  readonly fetchBodies?: (
+    itemIds: string[],
+  ) => Promise<readonly { id: string; encryptedBody: unknown }[]>;
 }
 
 const EXCERPT_MAX_CHARS = 200;
@@ -81,8 +91,12 @@ export function createKbSearchProvider(
   deps: KBSearchProviderDeps,
 ): SearchProvider<KBSearchData> {
   const cache = cacheRegistry.createMap<string, CachedKBArticle>("KBSearch");
+  const contentMatchIds = new SvelteSet<string>();
+  let lastFullSearchQuery = "";
+  let deepSearchActive = false;
   let loaded = false;
   let loading = false;
+  let totalItemCount: number | undefined;
 
   async function loadAll(): Promise<void> {
     if (loaded || loading) return;
@@ -94,6 +108,7 @@ export function createKbSearchProvider(
       let cursor: string | undefined;
       do {
         const page = await deps.fetchPage(cursor);
+        if (page.total !== undefined) totalItemCount = page.total;
         for (const item of page.items) {
           if (cache.has(item.id)) continue;
           const title = deps.decryptOrg(
@@ -120,7 +135,7 @@ export function createKbSearchProvider(
     }
   }
 
-  return {
+  const provider: SearchProvider<KBSearchData> = {
     id: "kb",
     label: () => m.search_section_kb(),
     icon: BookOpen as Component,
@@ -144,44 +159,125 @@ export function createKbSearchProvider(
 
       const matches = fuzzySearch(haystack, query);
       const results: SearchResult<KBSearchData>[] = [];
+      const seen = new Set<string>();
+
       for (const match of matches) {
         const id = ids[match.index];
         if (id === undefined) continue;
         const cached = cache.get(id);
         if (cached === undefined) continue;
-
-        // Resolve category name and author name reactively. These read from
-        // OrgDecryptCache (SvelteMap), so $derived tracks the reads.
-        const categoryName = deps.resolveCategoryName(cached.raw.categoryId);
-        const authorName = deps.resolveAuthorName(cached.raw.createdBy);
-
-        results.push({
-          id,
-          data: {
-            articleId: cached.raw.id,
-            categoryId: cached.raw.categoryId,
-            titleResult: { status: "ready", value: cached.title },
-            excerptResult:
-              cached.bodyExcerpt.length > 0
-                ? { status: "ready", value: cached.bodyExcerpt }
-                : { status: "loading" },
-            categoryName,
-            authorName,
-            rating: cached.raw.rating,
-            voteUpCount: cached.raw.voteUpCount,
-            voteTotalCount: cached.raw.voteUpCount + cached.raw.voteDownCount,
-            createdAt: new Date(cached.raw.createdAt),
-            updatedAt: new Date(cached.raw.updatedAt),
-          },
-        });
+        seen.add(id);
+        results.push({ id, data: buildSearchData(deps, cached) });
       }
 
-      return { results: results.slice(0, 5), loading, totalCached: cache.size };
+      if (query === lastFullSearchQuery && contentMatchIds.size > 0) {
+        for (const [id, cached] of cache) {
+          if (contentMatchIds.has(id) && !seen.has(id)) {
+            seen.add(id);
+            results.push({ id, data: buildSearchData(deps, cached) });
+          }
+        }
+      }
+
+      return {
+        results: deepSearchActive ? results : results.slice(0, 5),
+        loading,
+        totalCached: cache.size,
+        totalItems: totalItemCount,
+      };
     },
 
     ResultItem: KBResultItem as Component<{
       result: KBSearchData;
       ontap: (id: string) => void;
     }>,
+
+    getContentMatchIds(): ReadonlySet<string> {
+      return contentMatchIds;
+    },
+
+    reset() {
+      contentMatchIds.clear();
+      lastFullSearchQuery = "";
+      deepSearchActive = false;
+    },
+  };
+
+  if (deps.fetchBodies) {
+    const fetchBodies = deps.fetchBodies;
+
+    provider.fullSearch = async (
+      query: string,
+      state: FullSearchState,
+      onProgress: () => void,
+    ): Promise<void> => {
+      contentMatchIds.clear();
+      lastFullSearchQuery = query;
+
+      await loadAll();
+
+      deepSearchActive = true;
+      const titleMatchIds = new Set(
+        provider.search(query).results.map((r) => r.id),
+      );
+      deepSearchActive = false;
+      state.matchCount = titleMatchIds.size;
+      state.total = cache.size;
+      state.searched = cache.size;
+      onProgress();
+
+      const nonMatchingIds: string[] = [];
+      for (const [id] of cache) {
+        if (!titleMatchIds.has(id)) nonMatchingIds.push(id);
+      }
+
+      if (nonMatchingIds.length === 0) return;
+
+      let bodies: readonly { id: string; encryptedBody: unknown }[];
+      try {
+        bodies = await fetchBodies(nonMatchingIds);
+      } catch {
+        return;
+      }
+
+      for (const body of bodies) {
+        if (contentMatchIds.has(body.id)) continue;
+        const plaintext = deps.decryptOrg(
+          `kb-search:${body.id}:body`,
+          body.encryptedBody,
+        );
+        if (plaintext === null) continue;
+
+        if (fuzzySearch([plaintext], query).length > 0) {
+          contentMatchIds.add(body.id);
+          state.matchCount++;
+          onProgress();
+        }
+      }
+    };
+  }
+
+  return provider;
+}
+
+function buildSearchData(
+  deps: KBSearchProviderDeps,
+  cached: CachedKBArticle,
+): KBSearchData {
+  return {
+    articleId: cached.raw.id,
+    categoryId: cached.raw.categoryId,
+    titleResult: { status: "ready", value: cached.title },
+    excerptResult:
+      cached.bodyExcerpt.length > 0
+        ? { status: "ready", value: cached.bodyExcerpt }
+        : { status: "loading" },
+    categoryName: deps.resolveCategoryName(cached.raw.categoryId),
+    authorName: deps.resolveAuthorName(cached.raw.createdBy),
+    rating: cached.raw.rating,
+    voteUpCount: cached.raw.voteUpCount,
+    voteTotalCount: cached.raw.voteUpCount + cached.raw.voteDownCount,
+    createdAt: new Date(cached.raw.createdAt),
+    updatedAt: new Date(cached.raw.updatedAt),
   };
 }

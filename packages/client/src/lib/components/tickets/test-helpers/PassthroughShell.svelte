@@ -1,18 +1,21 @@
 <!--
   Test-only passthrough component that renders its children snippet.
-  Used to mock ShellPopup/ShellActionSheet in component tests.
+  Used to mock ShellPopup/ShellSheet/ShellActionSheet in component tests.
 -->
 <script lang="ts">
   import type { Snippet } from "svelte";
 
   interface Props {
-    children: Snippet;
+    children?: Snippet;
     opened?: boolean;
     ondismiss?: () => void;
     title?: string;
+    headerRight?: Snippet;
+    [key: string]: unknown;
   }
 
-  let { children, opened, ondismiss, title }: Props = $props();
+  let { children, opened, ondismiss, title, headerRight, ..._rest }: Props =
+    $props();
 </script>
 
 <div
@@ -21,5 +24,11 @@
   data-title={title}
   data-has-dismiss={ondismiss != null}
 >
-  {@render children()}
+  {#if title}
+    <h3>{title}</h3>
+  {/if}
+  {#if headerRight}
+    {@render headerRight()}
+  {/if}
+  {@render children?.()}
 </div>

@@ -32,6 +32,7 @@ const {
   mockDeleteCategory,
   mockInvalidateQueries,
   mockToastShow,
+  mockOrgCacheDelete,
 } = vi.hoisted(() => ({
   mockEncrypt: vi.fn().mockReturnValue(new Uint8Array([1, 2, 3, 4])),
   mockCreateCategory: vi.fn().mockResolvedValue({}),
@@ -39,6 +40,7 @@ const {
   mockDeleteCategory: vi.fn().mockResolvedValue({}),
   mockInvalidateQueries: vi.fn(),
   mockToastShow: vi.fn(),
+  mockOrgCacheDelete: vi.fn(),
 }));
 
 vi.mock("$lib/crypto/context.js", () => ({
@@ -48,6 +50,12 @@ vi.mock("$lib/crypto/context.js", () => ({
     isLoaded: true,
     load: vi.fn(),
     zero: vi.fn(),
+  }),
+  getOrgDecryptCache: () => ({
+    decrypt: vi.fn(),
+    get: vi.fn().mockReturnValue(undefined),
+    has: vi.fn().mockReturnValue(false),
+    delete: mockOrgCacheDelete,
   }),
 }));
 
@@ -60,6 +68,7 @@ vi.mock("$lib/utils/buffer-encoding.js", () => ({
 vi.mock("@tanstack/svelte-query", () => ({
   useQueryClient: () => ({
     invalidateQueries: mockInvalidateQueries,
+    getQueriesData: vi.fn().mockReturnValue([]),
   }),
 }));
 
@@ -164,7 +173,7 @@ describe("CategoryManageSheet", () => {
     await fireEvent.click(editButtons[0]!);
 
     // Now the delete button should be visible
-    const deleteBtn = screen.getByText("Delete Category");
+    const deleteBtn = screen.getByLabelText("Delete Category");
     await fireEvent.click(deleteBtn);
 
     expect(mockToastShow).toHaveBeenCalledWith(
@@ -216,7 +225,7 @@ describe("CategoryManageSheet", () => {
     await fireEvent.click(editButtons[2]!);
 
     // Click Delete Category
-    const deleteBtn = screen.getByText("Delete Category");
+    const deleteBtn = screen.getByLabelText("Delete Category");
     await fireEvent.click(deleteBtn);
 
     expect(mockDeleteCategory).toHaveBeenCalledWith({ categoryId: "cat-3" });
@@ -305,7 +314,7 @@ describe("CategoryManageSheet", () => {
     await fireEvent.click(editButtons[2]!);
 
     // Click Delete
-    await fireEvent.click(screen.getByText("Delete Category"));
+    await fireEvent.click(screen.getByLabelText("Delete Category"));
 
     // Wait for the async rejection to resolve
     await vi.waitFor(() => {
@@ -314,6 +323,62 @@ describe("CategoryManageSheet", () => {
         3000,
       );
     });
+  });
+
+  it("evicts orgCache entries on successful update", async () => {
+    render(CategoryManageSheet, {
+      opened: true,
+      categories,
+      ondismiss,
+    });
+
+    const editButtons = screen.getAllByLabelText("Edit");
+    await fireEvent.click(editButtons[0]!);
+
+    const nameInput = document.querySelector("input");
+    await fireEvent.input(nameInput!, { target: { value: "Updated" } });
+    await fireEvent.click(screen.getByText("Save"));
+
+    await vi.waitFor(() => {
+      expect(mockOrgCacheDelete).toHaveBeenCalledWith("kb-cat:cat-1");
+      expect(mockOrgCacheDelete).toHaveBeenCalledWith("kb-cat-desc:cat-1");
+    });
+  });
+
+  it("evicts orgCache entries on successful delete", async () => {
+    render(CategoryManageSheet, {
+      opened: true,
+      categories,
+      ondismiss,
+    });
+
+    const editButtons = screen.getAllByLabelText("Edit");
+    await fireEvent.click(editButtons[2]!);
+    await fireEvent.click(screen.getByLabelText("Delete Category"));
+
+    await vi.waitFor(() => {
+      expect(mockOrgCacheDelete).toHaveBeenCalledWith("kb-cat:cat-3");
+      expect(mockOrgCacheDelete).toHaveBeenCalledWith("kb-cat-desc:cat-3");
+    });
+  });
+
+  it("does not evict orgCache on create (no existing entry)", async () => {
+    render(CategoryManageSheet, {
+      opened: true,
+      categories,
+      ondismiss,
+    });
+
+    await fireEvent.click(screen.getByText("Add Category"));
+
+    const nameInput = document.querySelector("input");
+    await fireEvent.input(nameInput!, { target: { value: "Brand New" } });
+    await fireEvent.click(screen.getByText("Save"));
+
+    await vi.waitFor(() => {
+      expect(mockCreateCategory).toHaveBeenCalled();
+    });
+    expect(mockOrgCacheDelete).not.toHaveBeenCalled();
   });
 
   it("shows generic error toast when create mutation fails", async () => {

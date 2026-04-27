@@ -1,9 +1,9 @@
 /**
  * Phone greeting repository for IVR content.
  *
- * Each greeting is keyed by (phone_id, locale, greeting_type).
- * Text greetings are stored inline; audio greetings reference a
- * BlobStore key for the pre-recorded file.
+ * Each greeting is keyed by (phone_number, locale, greeting_type) where
+ * phone_number is the E.164 org line that callers dial. Text greetings
+ * are stored inline; audio greetings reference a BlobStore key.
  *
  * All queries go through a tenant-scoped Kysely instance. Schema
  * scoping is the caller's responsibility (pass tenantDb(orgSchema)).
@@ -16,32 +16,41 @@ import { ErrorCode } from "@care-y/shared";
 
 export interface GreetingRecord {
   readonly id: string;
-  readonly phoneId: string;
+  readonly phoneNumber: string;
   readonly greetingType: string;
   readonly locale: string;
   readonly text: string;
   readonly isAudio: boolean;
   readonly audioBlobKey: string | null;
+  readonly audioContentType: string | null;
 }
 
 export interface GreetingRepository {
-  findByPhoneAndLocaleAndType(
-    phoneId: string,
+  findByNumberAndLocaleAndType(
+    phoneNumber: string,
     locale: string,
     greetingType: string,
   ): Promise<GreetingRecord | null>;
-  listByPhone(phoneId: string): Promise<readonly GreetingRecord[]>;
+  listByNumber(phoneNumber: string): Promise<readonly GreetingRecord[]>;
+  listAll(): Promise<readonly GreetingRecord[]>;
   create(input: {
-    phoneId: string;
+    phoneNumber: string;
     greetingType: string;
     locale: string;
     text: string;
     isAudio?: boolean;
     audioBlobKey?: string | null;
+    audioContentType?: string | null;
   }): Promise<GreetingRecord>;
   update(
     id: string,
-    input: { text?: string; isAudio?: boolean; audioBlobKey?: string | null },
+    input: {
+      phoneNumber?: string;
+      text?: string;
+      isAudio?: boolean;
+      audioBlobKey?: string | null;
+      audioContentType?: string | null;
+    },
   ): Promise<GreetingRecord>;
   delete(id: string): Promise<void>;
 }
@@ -51,12 +60,13 @@ function toGreetingRecord(
 ): GreetingRecord {
   return {
     id: row.id,
-    phoneId: row.phone_id,
+    phoneNumber: row.phone_number,
     greetingType: row.greeting_type,
     locale: row.locale,
     text: row.text,
     isAudio: row.is_audio,
     audioBlobKey: row.audio_blob_key,
+    audioContentType: row.audio_content_type,
   };
 }
 
@@ -64,15 +74,15 @@ export function createGreetingRepository(
   db: Kysely<TenantDatabase>,
 ): GreetingRepository {
   return {
-    async findByPhoneAndLocaleAndType(
-      phoneId: string,
+    async findByNumberAndLocaleAndType(
+      phoneNumber: string,
       locale: string,
       greetingType: string,
     ): Promise<GreetingRecord | null> {
       const row = await db
         .selectFrom("phone_greetings")
         .selectAll()
-        .where("phone_id", "=", phoneId)
+        .where("phone_number", "=", phoneNumber)
         .where("locale", "=", locale)
         .where("greeting_type", "=", greetingType)
         .executeTakeFirst();
@@ -81,33 +91,43 @@ export function createGreetingRepository(
       return toGreetingRecord(row);
     },
 
-    async listByPhone(phoneId: string): Promise<readonly GreetingRecord[]> {
+    async listByNumber(
+      phoneNumber: string,
+    ): Promise<readonly GreetingRecord[]> {
       const rows = await db
         .selectFrom("phone_greetings")
         .selectAll()
-        .where("phone_id", "=", phoneId)
+        .where("phone_number", "=", phoneNumber)
         .execute();
 
       return rows.map(toGreetingRecord);
     },
 
+    async listAll(): Promise<readonly GreetingRecord[]> {
+      const rows = await db.selectFrom("phone_greetings").selectAll().execute();
+
+      return rows.map(toGreetingRecord);
+    },
+
     async create(input: {
-      phoneId: string;
+      phoneNumber: string;
       greetingType: string;
       locale: string;
       text: string;
       isAudio?: boolean;
       audioBlobKey?: string | null;
+      audioContentType?: string | null;
     }): Promise<GreetingRecord> {
       const row = await db
         .insertInto("phone_greetings")
         .values({
-          phone_id: input.phoneId,
+          phone_number: input.phoneNumber,
           greeting_type: input.greetingType,
           locale: input.locale,
           text: input.text,
           is_audio: input.isAudio ?? false,
           audio_blob_key: input.audioBlobKey ?? null,
+          audio_content_type: input.audioContentType ?? null,
         })
         .returningAll()
         .executeTakeFirstOrThrow();
@@ -117,13 +137,23 @@ export function createGreetingRepository(
 
     async update(
       id: string,
-      input: { text?: string; isAudio?: boolean; audioBlobKey?: string | null },
+      input: {
+        phoneNumber?: string;
+        text?: string;
+        isAudio?: boolean;
+        audioBlobKey?: string | null;
+        audioContentType?: string | null;
+      },
     ): Promise<GreetingRecord> {
       const updateValues: Record<string, unknown> = {};
+      if (input.phoneNumber !== undefined)
+        updateValues.phone_number = input.phoneNumber;
       if (input.text !== undefined) updateValues.text = input.text;
       if (input.isAudio !== undefined) updateValues.is_audio = input.isAudio;
       if (input.audioBlobKey !== undefined)
         updateValues.audio_blob_key = input.audioBlobKey;
+      if (input.audioContentType !== undefined)
+        updateValues.audio_content_type = input.audioContentType;
 
       const row = await db
         .updateTable("phone_greetings")

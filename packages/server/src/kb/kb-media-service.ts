@@ -34,7 +34,10 @@ export interface KBMediaService {
 
   getAttachment(attachmentId: string): Promise<KBAttachmentRecord>;
 
-  listAttachments(itemId: string): Promise<KBAttachmentRecord[]>;
+  listAttachments(
+    itemId: string,
+    opts?: { includeSoftDeleted?: boolean },
+  ): Promise<KBAttachmentRecord[]>;
 
   softDeleteAttachment(attachmentId: string): Promise<void>;
 }
@@ -96,15 +99,19 @@ export function createKBMediaService(
       return toKBAttachmentRecord(row);
     },
 
-    async listAttachments(itemId) {
-      const rows = await db
+    async listAttachments(itemId, opts) {
+      let query = db
         .selectFrom("kb_attachments")
         .selectAll()
-        .where("item_id", "=", itemId)
-        .where("deleted_at", "is", null)
-        .orderBy("created_at", "asc")
-        .limit(KB_MAX_ATTACHMENTS_PER_ARTICLE)
-        .execute();
+        .where("item_id", "=", itemId);
+
+      if (opts?.includeSoftDeleted !== true) {
+        query = query
+          .where("deleted_at", "is", null)
+          .limit(KB_MAX_ATTACHMENTS_PER_ARTICLE);
+      }
+
+      const rows = await query.orderBy("created_at", "asc").execute();
 
       return rows.map(toKBAttachmentRecord);
     },

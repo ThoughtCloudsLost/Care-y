@@ -23,6 +23,8 @@ function createMockService(): TelephonyContentService {
     createGreeting: vi.fn(),
     updateGreeting: vi.fn(),
     deleteGreeting: vi.fn(),
+    uploadGreetingAudio: vi.fn(),
+    createAudioGreeting: vi.fn(),
     listSmsResponses: vi.fn(),
     createSmsResponse: vi.fn(),
     updateSmsResponse: vi.fn(),
@@ -30,20 +32,30 @@ function createMockService(): TelephonyContentService {
   };
 }
 
+function createMockBlobStore() {
+  return {
+    put: vi.fn().mockResolvedValue("blob-key-123"),
+    get: vi.fn(),
+    delete: vi.fn(),
+    exists: vi.fn(),
+  };
+}
+
 // --- Fixtures ---
 
-const PHONE_ID = "00000000-0000-4000-8000-000000000001";
+const PHONE_NUMBER = "+15551234567";
 const GREETING_ID = "00000000-0000-4000-8000-000000000010";
 const SMS_RESPONSE_ID = "00000000-0000-4000-8000-000000000020";
 
 const GREETING_RECORD: GreetingRecord = {
   id: GREETING_ID,
-  phoneId: PHONE_ID,
+  phoneNumber: PHONE_NUMBER,
   greetingType: "answer",
   locale: "en",
   text: "Welcome to CARE-Y",
   isAudio: false,
   audioBlobKey: null,
+  audioContentType: null,
 };
 
 const SMS_RESPONSE_RECORD: SmsResponseRecord = {
@@ -92,9 +104,13 @@ function createAdminContext(): Context {
 
 // --- Tests ---
 
-function buildCaller(mockService: TelephonyContentService) {
+function buildCaller(
+  mockService: TelephonyContentService,
+  blobStore = createMockBlobStore(),
+) {
   const routerInstance = createTelephonyContentRouter({
     createService: () => mockService,
+    blobStore,
   });
   return createCallerFactory(routerInstance)(createAdminContext());
 }
@@ -109,13 +125,24 @@ describe("createTelephonyContentRouter", () => {
   });
 
   describe("listGreetings", () => {
-    it("returns greetings for a phone", async () => {
+    it("returns greetings for a phone number", async () => {
       vi.mocked(mockService.listGreetings).mockResolvedValue([GREETING_RECORD]);
 
-      const result = await caller.listGreetings({ phoneId: PHONE_ID });
+      const result = await caller.listGreetings({
+        phoneNumber: PHONE_NUMBER,
+      });
 
       expect(result).toEqual([GREETING_RECORD]);
-      expect(mockService.listGreetings).toHaveBeenCalledWith(PHONE_ID);
+      expect(mockService.listGreetings).toHaveBeenCalledWith(PHONE_NUMBER);
+    });
+
+    it("returns all greetings when phoneNumber is omitted", async () => {
+      vi.mocked(mockService.listGreetings).mockResolvedValue([GREETING_RECORD]);
+
+      const result = await caller.listGreetings({});
+
+      expect(result).toEqual([GREETING_RECORD]);
+      expect(mockService.listGreetings).toHaveBeenCalledWith(undefined);
     });
   });
 
@@ -124,7 +151,7 @@ describe("createTelephonyContentRouter", () => {
       vi.mocked(mockService.createGreeting).mockResolvedValue(GREETING_RECORD);
 
       const result = await caller.createGreeting({
-        phoneId: PHONE_ID,
+        phoneNumber: PHONE_NUMBER,
         greetingType: "answer",
         locale: "en",
         text: "Welcome to CARE-Y",
@@ -132,7 +159,7 @@ describe("createTelephonyContentRouter", () => {
 
       expect(result).toEqual(GREETING_RECORD);
       expect(mockService.createGreeting).toHaveBeenCalledWith({
-        phoneId: PHONE_ID,
+        phoneNumber: PHONE_NUMBER,
         greetingType: "answer",
         locale: "en",
         text: "Welcome to CARE-Y",
@@ -153,7 +180,26 @@ describe("createTelephonyContentRouter", () => {
 
       expect(result).toEqual(updated);
       expect(mockService.updateGreeting).toHaveBeenCalledWith(GREETING_ID, {
+        phoneNumber: undefined,
         text: "Updated greeting",
+        isAudio: undefined,
+      });
+    });
+
+    it("updates phoneNumber (reassignment)", async () => {
+      const newNumber = "+15559999999";
+      const updated = { ...GREETING_RECORD, phoneNumber: newNumber };
+      vi.mocked(mockService.updateGreeting).mockResolvedValue(updated);
+
+      const result = await caller.updateGreeting({
+        id: GREETING_ID,
+        phoneNumber: newNumber,
+      });
+
+      expect(result).toEqual(updated);
+      expect(mockService.updateGreeting).toHaveBeenCalledWith(GREETING_ID, {
+        phoneNumber: newNumber,
+        text: undefined,
         isAudio: undefined,
       });
     });
@@ -232,6 +278,27 @@ describe("createTelephonyContentRouter", () => {
       expect(mockService.deleteSmsResponse).toHaveBeenCalledWith(
         SMS_RESPONSE_ID,
       );
+    });
+  });
+
+  describe("uploadGreetingAudio", () => {
+    it("calls service with correct params", async () => {
+      const audioResult = {
+        ...GREETING_RECORD,
+        isAudio: true,
+        audioBlobKey: "blob-key-abc",
+        audioContentType: "audio/mpeg",
+      };
+      vi.mocked(mockService.uploadGreetingAudio).mockResolvedValue(audioResult);
+
+      const result = await caller.uploadGreetingAudio({
+        greetingId: GREETING_ID,
+        audioBase64: "AAAA",
+        contentType: "audio/mpeg",
+      });
+
+      expect(result).toEqual(audioResult);
+      expect(mockService.uploadGreetingAudio).toHaveBeenCalled();
     });
   });
 });

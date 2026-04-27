@@ -14,6 +14,7 @@
 import type { TRPCClient } from "@trpc/client";
 import { createTRPCClient, httpBatchLink } from "@trpc/client";
 import type { AppRouter } from "@care-y/server";
+import { DEV_ORG_SLUG } from "$lib/utils/org-slug.js";
 
 // DEV-only artificial delay for testing loading/skeleton states.
 // Adds 5-15s latency to both tRPC calls and ECIES decryption.
@@ -35,7 +36,7 @@ export const trpc: TRPCClient<AppRouter> = createTRPCClient<AppRouter>({
       url: "/trpc",
       // Dev: send X-Org-Slug header for org resolution (no subdomain in dev).
       // import.meta.env.DEV is compile-time; Vite strips the header in prod builds.
-      headers: import.meta.env.DEV ? { "x-org-slug": "dev-org" } : undefined,
+      headers: import.meta.env.DEV ? { "x-org-slug": DEV_ORG_SLUG } : undefined,
       // tRPC's RequestInitEsque has signal?: AbortSignal | undefined, incompatible
       // with native fetch's RequestInit under exactOptionalPropertyTypes (trpc/trpc#1904)
       async fetch(url, options) {

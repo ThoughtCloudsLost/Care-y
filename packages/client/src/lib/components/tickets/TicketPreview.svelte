@@ -15,14 +15,23 @@
     Image as ImageIcon,
     Paperclip,
     StickyNote,
+    type LucideIcon,
   } from "@lucide/svelte";
   import * as m from "$lib/paraglide/messages.js";
-  import { getFollowUpDecryptCache } from "$lib/crypto/context.js";
+  import type { ReactionSummary } from "@care-y/shared";
+  import {
+    getFollowUpDecryptCache,
+    getOrgDecryptCache,
+  } from "$lib/crypto/context.js";
   import {
     resolveAsyncDecrypt,
     isDecryptReady,
   } from "$lib/crypto/decrypt-result.js";
+  import { trpc } from "$lib/trpc/index.js";
+  import { createNoteTypesQuery } from "$lib/tickets/queries.js";
+  import { resolveNoteTypeIcon as resolveNoteTypeIconComponent } from "$lib/utils/note-type-icons.js";
   import DecryptPlaceholder from "$lib/components/DecryptPlaceholder.svelte";
+  import ReactionTray from "./ReactionTray.svelte";
   import type { RawFollowUpPreview } from "$lib/tickets/preview-loader.svelte.js";
   import { followUpKind } from "$lib/tickets/follow-up-utils.js";
 
@@ -32,10 +41,37 @@
     multiline?: boolean;
     /** Known follow-up count. Limits placeholder bubbles when preview hasn't loaded. */
     followUpCount?: number;
+    /** Reaction summaries keyed by follow-up ID (display-only). */
+    reactions?: Record<string, ReactionSummary[]>;
   }
 
-  let { followUps, multiline = false, followUpCount }: Props = $props();
+  let {
+    followUps,
+    multiline = false,
+    followUpCount,
+    reactions,
+  }: Props = $props();
   const followUpCache = getFollowUpDecryptCache();
+  const orgCache = getOrgDecryptCache();
+
+  const noteTypesQuery = trpc.tickets?.noteTypes
+    ? createNoteTypesQuery(trpc.tickets.noteTypes)
+    : undefined;
+
+  function effectiveTypeId(noteTypeId: string | null): string | undefined {
+    if (!noteTypesQuery?.data) return undefined;
+    if (noteTypeId !== null) return noteTypeId;
+    return noteTypesQuery.data.defaultNoteTypeId ?? undefined;
+  }
+
+  function resolveIcon(noteTypeId: string | null): LucideIcon {
+    const id = effectiveTypeId(noteTypeId);
+    if (id === undefined || !noteTypesQuery?.data) return StickyNote;
+    const nt = noteTypesQuery.data.types.find((t) => t.id === id);
+    if (!nt) return StickyNote;
+    const slug = orgCache.decrypt(nt.id + ":icon", nt.encryptedIcon);
+    return resolveNoteTypeIconComponent(slug ?? null);
+  }
 
   function truncate(text: string, maxLen: number): string {
     if (text.length <= maxLen) return text;
@@ -101,18 +137,26 @@
           </DecryptPlaceholder>
         </div>
       {:else if kind === "note"}
-        <div class="mini-note">
-          <StickyNote size={10} class="mini-note-icon" />
-          <DecryptPlaceholder
-            {result}
-            ciphertext={fu.encryptedContent}
-            length={20}
-            block={multiline}
-            charsPerLine={20}
-            maxLines={multiline ? 2 : 1}
-          >
-            <span class="mini-text">{content}</span>
-          </DecryptPlaceholder>
+        {@const NoteIcon = resolveIcon(fu.noteTypeId)}
+        {@const noteReactions = reactions?.[fu.id] ?? []}
+        <div
+          class="mini-note-wrap"
+          class:has-reactions={noteReactions.length > 0}
+        >
+          <div class="mini-note">
+            <NoteIcon size={10} class="mini-note-icon" />
+            <DecryptPlaceholder
+              {result}
+              ciphertext={fu.encryptedContent}
+              length={20}
+              block={multiline}
+              charsPerLine={20}
+              maxLines={multiline ? 2 : 1}
+            >
+              <span class="mini-text">{content}</span>
+            </DecryptPlaceholder>
+          </div>
+          <ReactionTray reactions={noteReactions} size="mini" />
         </div>
       {:else}
         <div
@@ -235,6 +279,14 @@
   }
 
   /* --- Internal notes (outline card style) --- */
+
+  .mini-note-wrap {
+    position: relative;
+  }
+
+  .mini-note-wrap.has-reactions {
+    margin-bottom: 0.625rem;
+  }
 
   .mini-note {
     display: flex;

@@ -154,6 +154,59 @@ export default tseslint.config(
     },
   },
 
+  // Block raw Konsta overlay imports in route files. Routes must use Shell
+  // wrappers (ShellDialog, ShellSheet, etc.) which add focus-trap, portal,
+  // and focus-restore. Content-level components (DialogButton, ActionsGroup,
+  // ActionsButton, ActionsLabel) are allowed inside Shell wrapper children.
+  //
+  // NOTE: ESLint flat config uses last-match-wins, not merge. This override
+  // must duplicate the global patterns so route files keep the deep-import
+  // and context-init restrictions from the block above.
+  {
+    files: ["**/routes/**/*.svelte"],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          patterns: [
+            {
+              group: ["@care-y/*/src/*", "@care-y/*/src/**"],
+              message:
+                "Import from the package barrel export (e.g., @care-y/shared) - not deep paths.",
+            },
+            {
+              group: [
+                "$lib/crypto/context-init",
+                "$lib/crypto/context-init.js",
+                "$lib/crypto/context-init.ts",
+                "**/crypto/context-init",
+                "**/crypto/context-init.js",
+                "**/crypto/context-init.ts",
+              ],
+              message:
+                "Context setters are restricted to CryptoProvider. Import getters from $lib/crypto/context.js instead.",
+            },
+          ],
+          paths: [
+            {
+              name: "konsta/svelte",
+              importNames: [
+                "Dialog",
+                "Sheet",
+                "Actions",
+                "Popup",
+                "Popover",
+                "Panel",
+              ],
+              message:
+                "Use Shell wrappers (ShellDialog, ShellSheet, etc.) in route files.",
+            },
+          ],
+        },
+      ],
+    },
+  },
+
   // Disabled during incremental build-out. PRs enforce it via `pnpm lint:strict`.
   {
     rules: {
@@ -188,6 +241,7 @@ export default tseslint.config(
             "createTicketRouter",
             "createTwoFactorRouter",
             "createKbRouter",
+            "createProfileRouter",
           ],
         },
       ],

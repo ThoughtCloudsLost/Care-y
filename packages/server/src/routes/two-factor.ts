@@ -51,7 +51,11 @@ import {
   type PushChallengeService,
 } from "../auth/push-challenge.js";
 import type { PushNotificationSender } from "../notifications/push.js";
-import { NotFoundError, TelephonyConfigError } from "../errors.js";
+import {
+  NotFoundError,
+  TelephonyConfigError,
+  SecretCryptoError,
+} from "../errors.js";
 import { ErrorCode } from "@care-y/shared";
 import {
   totpVerifySchema,
@@ -131,10 +135,13 @@ export async function createScopedTwoFactorServices(
     // NotFoundError: telephony not configured for this org. SMS 2FA unavailable.
     // TelephonyConfigError: config exists but is invalid. Also treat as unavailable
     // rather than crashing the entire 2FA flow (other methods still work).
+    // SecretCryptoError: config exists but decryption failed (key mismatch after
+    // rotation or corrupt blob). Same graceful degradation.
     // Re-throw unexpected errors (DB connection failures, etc.).
     if (
       !(err instanceof NotFoundError) &&
-      !(err instanceof TelephonyConfigError)
+      !(err instanceof TelephonyConfigError) &&
+      !(err instanceof SecretCryptoError)
     ) {
       throw err;
     }

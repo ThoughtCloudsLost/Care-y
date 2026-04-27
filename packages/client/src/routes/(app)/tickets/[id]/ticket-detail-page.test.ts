@@ -80,13 +80,13 @@ vi.mock("@tanstack/svelte-query", () => ({
       };
     }
 
-    // followUpSummary query (ChatZoom)
+    // followUpSummary query (FollowUpTimeline)
     if (key[2] === "followUpSummary") {
       return {
         isLoading: false,
         isError: false,
         error: null,
-        data: [],
+        data: { summaries: [], reactions: {} },
       };
     }
 
@@ -100,6 +100,16 @@ vi.mock("@tanstack/svelte-query", () => ({
       };
     }
 
+    // noteTypes query (InternalNoteSheet)
+    if (key[0] === "noteTypes") {
+      return {
+        isLoading: false,
+        isError: false,
+        error: null,
+        data: { types: [], defaultNoteTypeId: null },
+      };
+    }
+
     // ticket query
     return ticketQueryState;
   },
@@ -108,6 +118,7 @@ vi.mock("@tanstack/svelte-query", () => ({
     invalidateQueries: vi.fn(),
     getQueryData: vi.fn(),
     setQueryData: vi.fn(),
+    getQueriesData: vi.fn().mockReturnValue([]),
   }),
 }));
 
@@ -115,7 +126,9 @@ vi.mock("$lib/trpc/index.js", () => ({
   trpc: {
     tickets: {
       get: { query: vi.fn() },
-      listFollowUps: { query: vi.fn() },
+      listFollowUps: {
+        query: vi.fn().mockResolvedValue({ followUps: [], reactions: {} }),
+      },
       listRecordings: { query: vi.fn() },
       listAttachments: { query: vi.fn() },
       listVolunteers: { query: vi.fn() },
@@ -131,8 +144,22 @@ vi.mock("$lib/trpc/index.js", () => ({
       updateInternalNote: { mutate: vi.fn() },
       getReadCursor: { query: vi.fn().mockResolvedValue(null) },
       updateReadCursor: { mutate: vi.fn() },
-      listFollowUpSummary: { query: vi.fn().mockResolvedValue([]) },
+      listFollowUpSummary: {
+        query: vi.fn().mockResolvedValue({ summaries: [], reactions: {} }),
+      },
       assignTo: { mutate: vi.fn().mockResolvedValue({}) },
+      noteTypes: {
+        listActive: {
+          query: vi
+            .fn()
+            .mockResolvedValue({ types: [], defaultNoteTypeId: null }),
+        },
+        list: {
+          query: vi
+            .fn()
+            .mockResolvedValue({ types: [], defaultNoteTypeId: null }),
+        },
+      },
     },
     consultant: {
       get: { query: vi.fn().mockResolvedValue(null) },
@@ -146,6 +173,7 @@ const mockNavbarCtx = { current: undefined as unknown };
 vi.mock("$lib/shell/context.js", () => ({
   getTabbarHiddenCtx: () => mockTabbarHidden,
   getNavbarOverrideCtx: () => mockNavbarCtx,
+  getTabbarOverrideCtx: () => ({ current: undefined }),
 }));
 
 vi.mock("$lib/crypto/context.js", () => ({
@@ -154,9 +182,13 @@ vi.mock("$lib/crypto/context.js", () => ({
   }),
   getFollowUpDecryptCache: () => ({
     decryptContent: vi.fn().mockReturnValue("Decrypted content"),
+    get: vi.fn().mockReturnValue(undefined),
+    has: vi.fn().mockReturnValue(false),
   }),
   getOrgDecryptCache: () => ({
     decrypt: vi.fn().mockReturnValue(null),
+    get: vi.fn().mockReturnValue(undefined),
+    has: vi.fn().mockReturnValue(false),
   }),
   getOrgKeyManager: () => ({
     isLoaded: false,
@@ -188,6 +220,18 @@ vi.mock("$lib/errors.js", () => ({
 
 vi.mock("$lib/stores/toast.svelte.js", () => ({
   toastStore: { show: vi.fn() },
+}));
+
+vi.mock("$lib/components/tickets/InternalNoteSheet.svelte", async () => ({
+  default: (
+    await import("$lib/components/tickets/test-helpers/PassthroughShell.svelte")
+  ).default,
+}));
+
+vi.mock("$lib/components/tickets/ComposeActions.svelte", async () => ({
+  default: (
+    await import("$lib/components/tickets/test-helpers/PassthroughShell.svelte")
+  ).default,
 }));
 
 // jsdom lacks Web Animations API (used by Konsta transitions).

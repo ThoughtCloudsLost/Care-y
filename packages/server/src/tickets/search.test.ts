@@ -175,50 +175,111 @@ describe.skipIf(!process.env.DATABASE_URL)("SearchService (DB)", () => {
   });
 
   // -----------------------------------------------------------------------
-  // contentSearch
+  // contentSearch (follow-up content)
   // -----------------------------------------------------------------------
 
-  it("contentSearch returns encrypted ticket data as base64 strings", async () => {
+  async function seedFollowup(
+    ticketId: string,
+    content: string,
+    opts?: { source?: string; type?: string; deletedAt?: Date },
+  ): Promise<string> {
+    const row = await testDb.db
+      .insertInto("followups")
+      .values({
+        ticket_id: ticketId,
+        source: opts?.source ?? "volunteer",
+        type: opts?.type ?? "message",
+        encrypted_content: Buffer.from(content),
+        deleted_at: opts?.deletedAt ?? null,
+      })
+      .returning("id")
+      .executeTakeFirstOrThrow();
+    return row.id;
+  }
+
+  it("contentSearch returns follow-up content as base64", async () => {
     const { userId, ticketId, queueId } = await createFixture();
+    const followupId = await seedFollowup(ticketId, "encrypted-note-content");
 
     const result = await svc.contentSearch(
       { queueId, page: 1, pageSize: 50 },
       userId,
     );
 
-    const match = result.tickets.find((t) => t.id === ticketId);
+    const match = result.followups.find((f) => f.followupId === followupId);
     expect(match).toBeDefined();
-    expect(typeof match!.encryptedTitle).toBe("string");
-    expect(typeof match!.encryptedDescription).toBe("string");
+    expect(match!.ticketId).toBe(ticketId);
+    expect(typeof match!.encryptedContent).toBe("string");
 
-    // Verify the strings are valid base64
-    expect(() => Buffer.from(match!.encryptedTitle, "base64")).not.toThrow();
-    expect(() =>
-      Buffer.from(match!.encryptedDescription, "base64"),
-    ).not.toThrow();
-    // Non-empty ciphertext
-    expect(Buffer.from(match!.encryptedTitle, "base64").length).toBeGreaterThan(
-      0,
-    );
+    const decoded = Buffer.from(match!.encryptedContent, "base64").toString();
+    expect(decoded).toBe("encrypted-note-content");
+    expect(match!.type).toBe("message");
+    expect(match!.source).toBe("volunteer");
   });
 
   it("contentSearch scopes to accessible queues only", async () => {
     const fix = await createFixture();
+    await seedFollowup(fix.ticketId, "scoped-content");
     const outsider = await createTestUser(testDb.db);
 
-    // Outsider has no queue assignments
     const result = await svc.contentSearch(
       { page: 1, pageSize: 50 },
       outsider.id,
     );
-    expect(result.tickets).toHaveLength(0);
+    expect(result.followups).toHaveLength(0);
     expect(result.total).toBe(0);
 
-    // The fixture user can see their own queue's tickets
     const userResult = await svc.contentSearch(
       { queueId: fix.queueId, page: 1, pageSize: 50 },
       fix.userId,
     );
-    expect(userResult.tickets.some((t) => t.id === fix.ticketId)).toBe(true);
+    expect(userResult.followups.some((f) => f.ticketId === fix.ticketId)).toBe(
+      true,
+    );
+  });
+
+  it("contentSearch excludes soft-deleted follow-ups", async () => {
+    const { userId, ticketId, queueId } = await createFixture();
+    await seedFollowup(ticketId, "active-note");
+    await seedFollowup(ticketId, "deleted-note", {
+      deletedAt: new Date(),
+    });
+
+    const result = await svc.contentSearch(
+      { queueId, page: 1, pageSize: 50 },
+      userId,
+    );
+
+    expect(result.followups).toHaveLength(1);
+    const decoded = Buffer.from(
+      result.followups[0]!.encryptedContent,
+      "base64",
+    ).toString();
+    expect(decoded).toBe("active-note");
+  });
+
+  it("contentSearch ticketIds filter returns only follow-ups for specified tickets", async () => {
+    const fix1 = await createFixture();
+    const fix2 = await createTestTicketFixture(testDb.db, {
+      queueId: fix1.queueId,
+    });
+    await seedFollowup(fix1.ticketId, "note-for-ticket-1");
+    await seedFollowup(fix2.ticketId, "note-for-ticket-2");
+
+    const result = await svc.contentSearch(
+      {
+        ticketIds: [fix1.ticketId],
+        page: 1,
+        pageSize: 50,
+      },
+      fix1.userId,
+    );
+
+    expect(result.followups.every((f) => f.ticketId === fix1.ticketId)).toBe(
+      true,
+    );
+    expect(result.followups.some((f) => f.ticketId === fix2.ticketId)).toBe(
+      false,
+    );
   });
 });

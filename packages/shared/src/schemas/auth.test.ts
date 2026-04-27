@@ -7,6 +7,7 @@ import {
   identifierSchema,
   loginInputSchema,
   registerInputSchema,
+  setUserActiveInputSchema,
 } from "./auth.js";
 
 describe("emailSchema", () => {
@@ -338,5 +339,55 @@ describe("registerInputSchema", () => {
       expect(result.data).not.toHaveProperty("isAdmin");
       expect(result.data).not.toHaveProperty("role");
     }
+  });
+});
+
+const VALID_UUID = "550e8400-e29b-41d4-a716-446655440000";
+
+describe("setUserActiveInputSchema", () => {
+  it("accepts valid deactivation input", () => {
+    const result = setUserActiveInputSchema.safeParse({
+      userId: VALID_UUID,
+      isActive: false,
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("accepts valid activation input", () => {
+    const result = setUserActiveInputSchema.safeParse({
+      userId: VALID_UUID,
+      isActive: true,
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("rejects missing userId", () => {
+    expect(
+      setUserActiveInputSchema.safeParse({ isActive: false }).success,
+    ).toBe(false);
+  });
+
+  it("rejects missing isActive", () => {
+    expect(
+      setUserActiveInputSchema.safeParse({ userId: VALID_UUID }).success,
+    ).toBe(false);
+  });
+
+  it("rejects non-UUID userId", () => {
+    expect(
+      setUserActiveInputSchema.safeParse({
+        userId: "not-a-uuid",
+        isActive: false,
+      }).success,
+    ).toBe(false);
+  });
+
+  it("rejects non-boolean isActive", () => {
+    expect(
+      setUserActiveInputSchema.safeParse({
+        userId: VALID_UUID,
+        isActive: "false",
+      }).success,
+    ).toBe(false);
   });
 });

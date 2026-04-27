@@ -8,6 +8,7 @@
   import { formatRelativeTime } from "$lib/utils/format-time.js";
   import { followUpKind } from "$lib/tickets/follow-up-utils.js";
   import type { DecryptResult } from "$lib/crypto/decrypt-result.js";
+  import type { ReactionSummary, ReactionType } from "@care-y/shared";
   import DecryptPlaceholder from "$lib/components/DecryptPlaceholder.svelte";
   import SystemEvent from "$lib/components/tickets/SystemEvent.svelte";
   import PrivateNote from "$lib/components/tickets/PrivateNote.svelte";
@@ -23,7 +24,12 @@
     result: DecryptResult;
     clientAlias?: string;
     isOwnNote?: boolean;
-    onnoteedit?: (followUpId: string, text: string) => void;
+    searchTerm?: string | null;
+    noteTypeName?: string;
+    noteTypeIcon?: string;
+    reactions?: ReactionSummary[];
+    currentUserId?: string;
+    ontogglereaction?: (reaction: ReactionType) => void;
   }
 
   let {
@@ -31,7 +37,12 @@
     result,
     clientAlias,
     isOwnNote = false,
-    onnoteedit,
+    searchTerm = null,
+    noteTypeName,
+    noteTypeIcon,
+    reactions,
+    currentUserId,
+    ontogglereaction,
   }: FollowUpBubbleProps = $props();
 
   const kind = $derived(followUpKind(followUp));
@@ -50,9 +61,12 @@
     authorName={undefined}
     timestamp={followUp.createdAt}
     isOwn={isOwnNote}
-    onedit={onnoteedit
-      ? (newText: string) => onnoteedit(followUp.id, newText)
-      : undefined}
+    {searchTerm}
+    {noteTypeName}
+    {noteTypeIcon}
+    {reactions}
+    {currentUserId}
+    {ontogglereaction}
   />
 {:else}
   <Message
@@ -66,6 +80,7 @@
           ciphertext={followUp.encryptedContent}
           length={30}
           block
+          {searchTerm}
         />
       </span>
     {/snippet}

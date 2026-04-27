@@ -71,6 +71,7 @@ export type MetadataSearchInput = z.infer<typeof metadataSearchInputSchema>;
 export const contentSearchInputSchema = z.object({
   queueId: z.uuid().optional(),
   status: z.enum(["open", "closed"]).optional(),
+  ticketIds: z.array(z.uuid()).max(500).optional(),
   page: z.number().int().min(1).default(1),
   pageSize: z.number().int().min(1).max(50).default(50),
 });
@@ -90,8 +91,11 @@ export const auditEventTypeSchema = z.enum([
   "media_hard_deleted",
   "queue_created",
   "queue_updated",
+  "queue_deleted",
   "preset_created",
   "preset_updated",
+  "note_type_created",
+  "note_type_updated",
 ]);
 export type AuditEventType = z.infer<typeof auditEventTypeSchema>;
 

@@ -11,6 +11,7 @@ import {
   mergeClientsInputSchema,
   createQueueInputSchema,
   updateQueueInputSchema,
+  deleteQueueInputSchema,
   createPresetReplyInputSchema,
   updatePresetReplyInputSchema,
   addDependencyInputSchema,
@@ -327,6 +328,54 @@ describe("updateQueueInputSchema", () => {
       escalateDays: 7,
     });
     expect(result.success).toBe(true);
+  });
+});
+
+describe("deleteQueueInputSchema", () => {
+  it("accepts queueId only (no tickets to reassign)", () => {
+    const result = deleteQueueInputSchema.safeParse({
+      queueId: VALID_UUID,
+    });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.reassignTo).toBeUndefined();
+    }
+  });
+
+  it("accepts queueId with reassignTo", () => {
+    const result = deleteQueueInputSchema.safeParse({
+      queueId: VALID_UUID,
+      reassignTo: VALID_UUID_2,
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("rejects missing queueId", () => {
+    expect(deleteQueueInputSchema.safeParse({}).success).toBe(false);
+  });
+
+  it("rejects non-UUID queueId", () => {
+    expect(
+      deleteQueueInputSchema.safeParse({ queueId: "not-a-uuid" }).success,
+    ).toBe(false);
+  });
+
+  it("rejects non-UUID reassignTo", () => {
+    expect(
+      deleteQueueInputSchema.safeParse({
+        queueId: VALID_UUID,
+        reassignTo: "not-a-uuid",
+      }).success,
+    ).toBe(false);
+  });
+
+  it("rejects reassignTo equal to queueId", () => {
+    expect(
+      deleteQueueInputSchema.safeParse({
+        queueId: VALID_UUID,
+        reassignTo: VALID_UUID,
+      }).success,
+    ).toBe(false);
   });
 });
 

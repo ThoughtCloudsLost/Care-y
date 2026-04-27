@@ -1,33 +1,17 @@
-import { describe, it, expect, beforeAll, afterAll } from "vitest";
-import {
-  createTestDb,
-  type TestDb,
-  TEST_ORG_ID,
-  testBlindIndexer,
-  testSealedBox,
-  seedOrgPublicKey,
-} from "../test-utils.js";
-import { createPhoneRepository } from "./models/phone-repo.js";
+import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
+import { createTestDb, type TestDb, seedOrgPublicKey } from "../test-utils.js";
 import { createTelephonyContentService } from "./telephony-content-service.js";
 import type { TelephonyContentService } from "./telephony-content-service.js";
 
 describe.skipIf(!process.env.DATABASE_URL)("TelephonyContentService", () => {
   let testDb: TestDb;
   let service: TelephonyContentService;
-  let phoneId: string;
+  const PHONE_NUMBER = "+15550040001";
 
   beforeAll(async () => {
     testDb = await createTestDb();
     await seedOrgPublicKey(testDb.db);
     service = createTelephonyContentService(testDb.db);
-
-    // Create a phone record for greeting FK references
-    const phoneRepo = createPhoneRepository(testDb.db);
-    const phone = await phoneRepo.create({
-      phoneHash: testBlindIndexer.hash("+15550040001", TEST_ORG_ID),
-      encryptedNumber: testSealedBox.sealBuffer(Buffer.from("+15550040001")),
-    });
-    phoneId = phone.id;
   });
 
   afterAll(async () => {
@@ -37,35 +21,39 @@ describe.skipIf(!process.env.DATABASE_URL)("TelephonyContentService", () => {
   // --- Greetings ---
 
   it("listGreetings returns empty array initially", async () => {
-    const greetings = await service.listGreetings(phoneId);
+    const greetings = await service.listGreetings(PHONE_NUMBER);
     expect(greetings).toEqual([]);
   });
 
   it("createGreeting creates and listGreetings returns it", async () => {
     const created = await service.createGreeting({
-      phoneId,
+      phoneNumber: PHONE_NUMBER,
       greetingType: "new_client",
       locale: "en-US",
       text: "Welcome to the helpline.",
     });
 
     expect(created.id).toBeDefined();
-    expect(created.phoneId).toBe(phoneId);
+    expect(created.phoneNumber).toBe(PHONE_NUMBER);
     expect(created.greetingType).toBe("new_client");
     expect(created.locale).toBe("en-US");
     expect(created.text).toBe("Welcome to the helpline.");
     expect(created.isAudio).toBe(false);
     expect(created.audioBlobKey).toBeNull();
 
-    const list = await service.listGreetings(phoneId);
+    const list = await service.listGreetings(PHONE_NUMBER);
     expect(list.length).toBeGreaterThanOrEqual(1);
     expect(list.some((g) => g.id === created.id)).toBe(true);
   });
 
+  it("listGreetings without phone number returns all", async () => {
+    const all = await service.listGreetings();
+    expect(all.length).toBeGreaterThanOrEqual(1);
+  });
+
   it("createGreeting with isAudio true sets the flag", async () => {
-    // Use a different greeting type to avoid unique constraint conflict
     const created = await service.createGreeting({
-      phoneId,
+      phoneNumber: PHONE_NUMBER,
       greetingType: "after_hours",
       locale: "en-US",
       text: "audio placeholder",
@@ -77,7 +65,7 @@ describe.skipIf(!process.env.DATABASE_URL)("TelephonyContentService", () => {
 
   it("updateGreeting changes text", async () => {
     const created = await service.createGreeting({
-      phoneId,
+      phoneNumber: PHONE_NUMBER,
       greetingType: "hold_music",
       locale: "en-US",
       text: "Original text.",
@@ -93,7 +81,7 @@ describe.skipIf(!process.env.DATABASE_URL)("TelephonyContentService", () => {
 
   it("updateGreeting changes isAudio flag", async () => {
     const created = await service.createGreeting({
-      phoneId,
+      phoneNumber: PHONE_NUMBER,
       greetingType: "transfer_notice",
       locale: "en-US",
       text: "Transferring.",
@@ -104,13 +92,12 @@ describe.skipIf(!process.env.DATABASE_URL)("TelephonyContentService", () => {
     });
 
     expect(updated.isAudio).toBe(true);
-    // text should remain unchanged
     expect(updated.text).toBe("Transferring.");
   });
 
   it("deleteGreeting removes it from list", async () => {
     const created = await service.createGreeting({
-      phoneId,
+      phoneNumber: PHONE_NUMBER,
       greetingType: "goodbye_msg",
       locale: "en-US",
       text: "Goodbye.",
@@ -118,7 +105,7 @@ describe.skipIf(!process.env.DATABASE_URL)("TelephonyContentService", () => {
 
     await service.deleteGreeting(created.id);
 
-    const list = await service.listGreetings(phoneId);
+    const list = await service.listGreetings(PHONE_NUMBER);
     expect(list.some((g) => g.id === created.id)).toBe(false);
   });
 
@@ -190,7 +177,6 @@ describe.skipIf(!process.env.DATABASE_URL)("TelephonyContentService", () => {
     const enOnly = await service.listSmsResponses("en-US");
     const esOnly = await service.listSmsResponses("es-MX");
 
-    // en-US should include locale_filter_en but not locale_filter_es
     expect(enOnly.some((r) => r.responseType === "locale_filter_en")).toBe(
       true,
     );
@@ -198,7 +184,6 @@ describe.skipIf(!process.env.DATABASE_URL)("TelephonyContentService", () => {
       false,
     );
 
-    // es-MX should include locale_filter_es but not locale_filter_en
     expect(esOnly.some((r) => r.responseType === "locale_filter_es")).toBe(
       true,
     );
@@ -210,9 +195,114 @@ describe.skipIf(!process.env.DATABASE_URL)("TelephonyContentService", () => {
   it("listSmsResponses without locale returns all", async () => {
     const all = await service.listSmsResponses();
 
-    // Should contain both en-US and es-MX responses created above
     const locales = new Set(all.map((r) => r.locale));
     expect(locales.has("en-US")).toBe(true);
     expect(locales.has("es-MX")).toBe(true);
+  });
+
+  // --- Audio Greetings ---
+
+  it("uploadGreetingAudio stores blob and updates greeting", async () => {
+    const greeting = await service.createGreeting({
+      phoneNumber: PHONE_NUMBER,
+      greetingType: "answer",
+      locale: "de",
+      text: "placeholder for audio",
+    });
+
+    // WAV magic bytes (RIFF header)
+    const wavData = Buffer.from([
+      0x52, 0x49, 0x46, 0x46, 0x00, 0x00, 0x00, 0x00, 0x57, 0x41, 0x56, 0x45,
+    ]);
+    const audioBase64 = wavData.toString("base64");
+
+    const mockBlobStore = {
+      put: vi.fn().mockResolvedValue("blob-key-wav-123"),
+      get: vi.fn(),
+      delete: vi.fn(),
+      exists: vi.fn(),
+    };
+
+    const updated = await service.uploadGreetingAudio(
+      mockBlobStore,
+      "org_test",
+      greeting.id,
+      audioBase64,
+      "audio/wav",
+    );
+
+    expect(updated.isAudio).toBe(true);
+    expect(updated.audioBlobKey).toBe("blob-key-wav-123");
+    expect(updated.audioContentType).toBe("audio/wav");
+    expect(mockBlobStore.put).toHaveBeenCalledWith(
+      "org_test",
+      "greeting",
+      expect.any(Buffer),
+    );
+  });
+
+  it("uploadGreetingAudio rejects files exceeding size limit", async () => {
+    const greeting = await service.createGreeting({
+      phoneNumber: PHONE_NUMBER,
+      greetingType: "answer",
+      locale: "fr",
+      text: "placeholder",
+    });
+
+    // Create base64 string representing > 5MB
+    const oversized = Buffer.alloc(6 * 1024 * 1024, 0);
+    // Add WAV header so magic bytes pass
+    oversized[0] = 0x52;
+    oversized[1] = 0x49;
+    oversized[2] = 0x46;
+    oversized[3] = 0x46;
+    const audioBase64 = oversized.toString("base64");
+
+    const mockBlobStore = {
+      put: vi.fn(),
+      get: vi.fn(),
+      delete: vi.fn(),
+      exists: vi.fn(),
+    };
+
+    await expect(
+      service.uploadGreetingAudio(
+        mockBlobStore,
+        "org_test",
+        greeting.id,
+        audioBase64,
+        "audio/wav",
+      ),
+    ).rejects.toThrow(/5 MB/);
+  });
+
+  it("uploadGreetingAudio rejects mismatched magic bytes", async () => {
+    const greeting = await service.createGreeting({
+      phoneNumber: PHONE_NUMBER,
+      greetingType: "answer",
+      locale: "it",
+      text: "placeholder",
+    });
+
+    // Random bytes that don't match MP3 signature
+    const badData = Buffer.from([0x00, 0x01, 0x02, 0x03, 0x04, 0x05]);
+    const audioBase64 = badData.toString("base64");
+
+    const mockBlobStore = {
+      put: vi.fn(),
+      get: vi.fn(),
+      delete: vi.fn(),
+      exists: vi.fn(),
+    };
+
+    await expect(
+      service.uploadGreetingAudio(
+        mockBlobStore,
+        "org_test",
+        greeting.id,
+        audioBase64,
+        "audio/mpeg",
+      ),
+    ).rejects.toThrow(/magic bytes/);
   });
 });

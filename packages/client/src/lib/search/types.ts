@@ -23,8 +23,16 @@ export interface SearchResultGroup<T = unknown> {
   readonly showAllHref: string;
   /** True while the provider is still searching (show skeletons). */
   readonly loading: boolean;
-  /** Total items in this provider's cache (for "Searching N items" hint). */
+  /** Items searched (for "Searched X of Y" hint). */
   readonly totalCached: number;
+  /** Total items in this provider's dataset (including not-yet-searchable). */
+  readonly totalItems?: number;
+  /** Total matching results (when results array is a truncated preview). */
+  readonly totalResults?: number;
+  /** When present, "Show all" calls this instead of navigating via showAllHref. */
+  readonly onviewall?: (query: string) => void;
+  /** When present, result taps call this instead of navigating via getResultHref. */
+  readonly onresulttap?: (id: string, query: string) => void;
 }
 
 /** Contract that every search provider must implement. */
@@ -48,8 +56,12 @@ export interface SearchProvider<T = unknown> {
   search(query: string): {
     results: readonly SearchResult<T>[];
     loading: boolean;
-    /** Total items in this provider's cache (not just matches). Shown as "Searching N items". */
+    /** Items searched (not just matches). */
     totalCached: number;
+    /** Total items in the dataset (including not-yet-searchable). Omit if same as totalCached. */
+    totalItems?: number;
+    /** Total matching results (when results array is a truncated preview). */
+    totalResults?: number;
   };
   /**
    * Svelte component that renders a single result item.
@@ -59,18 +71,46 @@ export interface SearchProvider<T = unknown> {
   /**
    * Optional server-backed full search. Called when the user taps "Search all".
    * Providers that only have client-side data omit this.
-   * Implementations should update `state` progressively as batches are processed.
+   * Mutate `state` fields and call `onProgress()` to propagate changes to the UI.
    */
-  fullSearch?(query: string, state: FullSearchState<T>): Promise<void>;
+  fullSearch?(
+    query: string,
+    state: FullSearchState,
+    onProgress: () => void,
+  ): Promise<void>;
+  /**
+   * Optional callback for "View all" that bypasses navigation. When present,
+   * the search UI calls this instead of navigating via showAllHref. Used by
+   * providers that display results in-page (e.g., conversation search overlay).
+   */
+  onviewall?(query: string): void;
+  /**
+   * Optional callback when a result is tapped. When present, called instead
+   * of navigating via getResultHref. Used by providers that handle result
+   * selection in-page (e.g., scroll-to-match in conversation search).
+   */
+  onresulttap?(id: string, query: string): void;
+  /**
+   * Returns IDs matched by content search during fullSearch().
+   * Pages use this to merge content matches into in-page search overlays.
+   * Reactive (backed by SvelteSet), so $derived contexts track additions.
+   */
+  getContentMatchIds?(): ReadonlySet<string>;
+  /**
+   * Called when the search sheet closes or the query changes.
+   * Providers should clear full-search state (content match sets,
+   * cached decrypted follow-up content) to free memory.
+   */
+  reset?(): void;
 }
 
-/** Per-provider state for opt-in full search. Managed by the registry. */
-export interface FullSearchState<T = unknown> {
+/** Per-provider progress state for opt-in full search. Managed by the registry. */
+export interface FullSearchState {
   status: "idle" | "searching" | "done";
-  /** Results found so far (accumulates across pages). */
-  results: SearchResult<T>[];
   /** Items processed so far. */
   searched: number;
-  /** Total items to process (from server count). */
+  /** Total items to process. */
   total: number;
+  /** Matches found so far (title + content). */
+  matchCount: number;
 }

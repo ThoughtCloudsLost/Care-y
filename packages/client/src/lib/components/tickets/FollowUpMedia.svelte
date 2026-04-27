@@ -1,16 +1,13 @@
 <!--
-  Per-follow-up lazy media loader.
+  Per-follow-up media presenter.
 
-  Replaces the bulk-fetch-and-map approach in TicketDetail. Each
-  instance creates its own TanStack queries gated by media flags
-  (hasRecording, hasImage, hasFile). Media only loads when the
-  follow-up bubble renders, not on ticket open.
-
-  TanStack cache keys use the ["ticket", ticketId, "recordings"] prefix
-  so SSE invalidation via prefix matching catches these caches.
+  Uses ticket-level queries (shared across all FollowUpMedia instances
+  via TanStack key deduplication). The first instance triggers the fetch;
+  all others get instant cache hits. Filters to this follow-up client-side.
 -->
 <script lang="ts">
   import { createQuery } from "@tanstack/svelte-query";
+  import { ticketKeys } from "$lib/query/keys";
   import * as m from "$lib/paraglide/messages.js";
   import { trpc } from "$lib/trpc/index.js";
   import { RouterNotAvailableError } from "$lib/errors.js";
@@ -43,29 +40,25 @@
   const ticketRouter = trpc.tickets;
 
   const recordingsQuery = createQuery(() => ({
-    queryKey: ["ticket", ticketId, "recordings", "followup", followupId],
+    queryKey: ticketKeys.recordings(ticketId),
     queryFn: async () =>
-      ticketRouter.listRecordings.query({
-        ticketId,
-        followupId,
-        limit: 10,
-      }),
+      ticketRouter.listRecordings.query({ ticketId, limit: 50 }),
     enabled: hasRecording,
   }));
 
   const attachmentsQuery = createQuery(() => ({
-    queryKey: ["ticket", ticketId, "attachments", "followup", followupId],
+    queryKey: ticketKeys.attachments(ticketId),
     queryFn: async () =>
-      ticketRouter.listAttachments.query({
-        ticketId,
-        followupId,
-        limit: 10,
-      }),
+      ticketRouter.listAttachments.query({ ticketId, limit: 50 }),
     enabled: hasImage || hasFile,
   }));
 
-  const recordings = $derived(recordingsQuery.data ?? []);
-  const attachments = $derived(attachmentsQuery.data ?? []);
+  const recordings = $derived(
+    (recordingsQuery.data ?? []).filter((r) => r.followupId === followupId),
+  );
+  const attachments = $derived(
+    (attachmentsQuery.data ?? []).filter((a) => a.followupId === followupId),
+  );
 </script>
 
 {#each recordings as rec (rec.id)}

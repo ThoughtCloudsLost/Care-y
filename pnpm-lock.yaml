@@ -10,9 +10,9 @@ overrides:
   serialize-javascript: '>=7.0.3'
 
 patchedDependencies:
-  konsta@5.0.8:
-    hash: df10c62eb10f8e27e4d6a8fff795f9f90a2969e256dcfd0be003ca04fd5abac9
-    path: patches/konsta@5.0.8.patch
+  konsta:
+    hash: f04f43bff4707f2cf6388655e4e5dbc24686198f657e8c5a72ec206f745c6ff6
+    path: patches/konsta.patch
 
 importers:
 
@@ -82,8 +82,8 @@ importers:
         specifier: 1.0.19
         version: 1.0.19
       '@lucide/svelte':
-        specifier: 1.7.0
-        version: 1.7.0(svelte@5.55.4(@typescript-eslint/types@8.58.2))
+        specifier: 1.9.0
+        version: 1.9.0(svelte@5.55.4(@typescript-eslint/types@8.58.2))
       '@material/material-color-utilities':
         specifier: 0.4.0
         version: 0.4.0
@@ -104,7 +104,7 @@ importers:
         version: 3.4.0
       konsta:
         specifier: 5.0.8
-        version: 5.0.8(patch_hash=df10c62eb10f8e27e4d6a8fff795f9f90a2969e256dcfd0be003ca04fd5abac9)
+        version: 5.0.8(patch_hash=f04f43bff4707f2cf6388655e4e5dbc24686198f657e8c5a72ec206f745c6ff6)
       prosemirror-commands:
         specifier: 1.7.1
         version: 1.7.1
@@ -1327,8 +1327,8 @@ packages:
   '@lix-js/server-protocol-schema@0.1.1':
     resolution: {integrity: sha512-jBeALB6prAbtr5q4vTuxnRZZv1M2rKe8iNqRQhFJ4Tv7150unEa0vKyz0hs8Gl3fUGsWaNJBh3J8++fpbrpRBQ==}
 
-  '@lucide/svelte@1.7.0':
-    resolution: {integrity: sha512-YytBKOUBGox7yWcykZnYxOkn5WpR5G1qYXLYXV/j1B79SOTTEKzB+s5yF5Rq9l9OkweDStNH2b4yTqfvhEhV8g==}
+  '@lucide/svelte@1.9.0':
+    resolution: {integrity: sha512-+5RmY0tqeuGGbiI2BnyDp1Ft/EP7AKReStHeFEKJ0mPcW1w51Tm41R2GvUfz0sGLJhmRhVAe2zKaTfqrcpJqqg==}
     peerDependencies:
       svelte: ^5
 
@@ -5464,7 +5464,7 @@ snapshots:
 
   '@lix-js/server-protocol-schema@0.1.1': {}
 
-  '@lucide/svelte@1.7.0(svelte@5.55.4(@typescript-eslint/types@8.58.2))':
+  '@lucide/svelte@1.9.0(svelte@5.55.4(@typescript-eslint/types@8.58.2))':
     dependencies:
       svelte: 5.55.4(@typescript-eslint/types@8.58.2)
 
@@ -7219,7 +7219,7 @@ snapshots:
 
   kolorist@1.8.0: {}
 
-  konsta@5.0.8(patch_hash=df10c62eb10f8e27e4d6a8fff795f9f90a2969e256dcfd0be003ca04fd5abac9):
+  konsta@5.0.8(patch_hash=f04f43bff4707f2cf6388655e4e5dbc24686198f657e8c5a72ec206f745c6ff6):
     dependencies:
       tailwind-merge: 3.5.0
 

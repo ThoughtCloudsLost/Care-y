@@ -96,7 +96,14 @@
     transition: background-color 150ms ease;
   }
 
-  /* iOS: handled by .glass utility (shared.css) */
+  /* Konsta's glass shadow (--shadow-ios-light-glass) has a heavy 25px
+     outer shadow designed for navbar-scale surfaces. On small pills it
+     creates a visible dark blob. Replace with pill-scale highlights. */
+  :global(.k-ios .filter-pill.glass) {
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.5),
+      inset 0 0 0 0.5px rgba(255, 255, 255, 0.15) !important;
+  }
 
   /* Material: solid tonal chip */
   :global(.k-material .filter-pill) {

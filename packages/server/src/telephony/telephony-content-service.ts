@@ -13,6 +13,10 @@
 
 import type { Kysely } from "kysely";
 import type { TenantDatabase } from "../db/types.js";
+import type { BlobStore } from "../storage/store.js";
+import type { GreetingAudioContentType } from "@care-y/shared";
+import { GREETING_AUDIO_MAX_BYTES } from "@care-y/shared";
+import { ValidationError } from "../errors.js";
 import {
   createGreetingRepository,
   type GreetingRecord,
@@ -21,11 +25,12 @@ import {
   createSmsResponseRepository,
   type SmsResponseRecord,
 } from "./models/sms-response-repo.js";
+import { validateAudioMagicBytes } from "./audio-validator.js";
 
 export interface TelephonyContentService {
-  listGreetings(phoneId: string): Promise<readonly GreetingRecord[]>;
+  listGreetings(phoneNumber?: string): Promise<readonly GreetingRecord[]>;
   createGreeting(input: {
-    phoneId: string;
+    phoneNumber: string;
     greetingType: string;
     locale: string;
     text: string;
@@ -33,9 +38,27 @@ export interface TelephonyContentService {
   }): Promise<GreetingRecord>;
   updateGreeting(
     id: string,
-    input: { text?: string; isAudio?: boolean },
+    input: { phoneNumber?: string; text?: string; isAudio?: boolean },
   ): Promise<GreetingRecord>;
   deleteGreeting(id: string): Promise<void>;
+  uploadGreetingAudio(
+    blobStore: BlobStore,
+    orgSchema: string,
+    greetingId: string,
+    audioBase64: string,
+    contentType: GreetingAudioContentType,
+  ): Promise<GreetingRecord>;
+  createAudioGreeting(
+    blobStore: BlobStore,
+    orgSchema: string,
+    input: {
+      phoneNumber: string;
+      greetingType: string;
+      locale: string;
+      audioBase64: string;
+      contentType: GreetingAudioContentType;
+    },
+  ): Promise<GreetingRecord>;
   listSmsResponses(locale?: string): Promise<readonly SmsResponseRecord[]>;
   createSmsResponse(input: {
     responseType: string;
@@ -49,6 +72,31 @@ export interface TelephonyContentService {
   deleteSmsResponse(id: string): Promise<void>;
 }
 
+async function validateAndStoreAudio(
+  blobStore: BlobStore,
+  orgSchema: string,
+  audioBase64: string,
+  contentType: GreetingAudioContentType,
+): Promise<{ blobKey: string; verified: GreetingAudioContentType }> {
+  const audioBuf = Buffer.from(audioBase64, "base64");
+
+  if (audioBuf.length > GREETING_AUDIO_MAX_BYTES) {
+    throw new ValidationError(
+      `Audio file exceeds ${String(GREETING_AUDIO_MAX_BYTES / (1024 * 1024))} MB limit`,
+    );
+  }
+
+  const verified = validateAudioMagicBytes(audioBuf, contentType);
+  if (verified === null) {
+    throw new ValidationError(
+      "Audio magic bytes do not match declared content type",
+    );
+  }
+
+  const blobKey = await blobStore.put(orgSchema, "greeting", audioBuf);
+  return { blobKey, verified };
+}
+
 export function createTelephonyContentService(
   tenantDb: Kysely<TenantDatabase>,
 ): TelephonyContentService {
@@ -56,12 +104,17 @@ export function createTelephonyContentService(
   const smsResponseRepo = createSmsResponseRepository(tenantDb);
 
   return {
-    async listGreetings(phoneId: string): Promise<readonly GreetingRecord[]> {
-      return greetingRepo.listByPhone(phoneId);
+    async listGreetings(
+      phoneNumber?: string,
+    ): Promise<readonly GreetingRecord[]> {
+      if (phoneNumber !== undefined && phoneNumber !== "") {
+        return greetingRepo.listByNumber(phoneNumber);
+      }
+      return greetingRepo.listAll();
     },
 
     async createGreeting(input: {
-      phoneId: string;
+      phoneNumber: string;
       greetingType: string;
       locale: string;
       text: string;
@@ -72,13 +125,61 @@ export function createTelephonyContentService(
 
     async updateGreeting(
       id: string,
-      input: { text?: string; isAudio?: boolean },
+      input: { phoneNumber?: string; text?: string; isAudio?: boolean },
     ): Promise<GreetingRecord> {
       return greetingRepo.update(id, input);
     },
 
     async deleteGreeting(id: string): Promise<void> {
       await greetingRepo.delete(id);
+    },
+
+    async uploadGreetingAudio(
+      blobStore: BlobStore,
+      orgSchema: string,
+      greetingId: string,
+      audioBase64: string,
+      contentType: GreetingAudioContentType,
+    ): Promise<GreetingRecord> {
+      const { blobKey, verified } = await validateAndStoreAudio(
+        blobStore,
+        orgSchema,
+        audioBase64,
+        contentType,
+      );
+      return greetingRepo.update(greetingId, {
+        isAudio: true,
+        audioBlobKey: blobKey,
+        audioContentType: verified,
+      });
+    },
+
+    async createAudioGreeting(
+      blobStore: BlobStore,
+      orgSchema: string,
+      input: {
+        phoneNumber: string;
+        greetingType: string;
+        locale: string;
+        audioBase64: string;
+        contentType: GreetingAudioContentType;
+      },
+    ): Promise<GreetingRecord> {
+      const { blobKey, verified } = await validateAndStoreAudio(
+        blobStore,
+        orgSchema,
+        input.audioBase64,
+        input.contentType,
+      );
+      return greetingRepo.create({
+        phoneNumber: input.phoneNumber,
+        greetingType: input.greetingType,
+        locale: input.locale,
+        text: "",
+        isAudio: true,
+        audioBlobKey: blobKey,
+        audioContentType: verified,
+      });
     },
 
     async listSmsResponses(

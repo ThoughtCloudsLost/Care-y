@@ -22,3 +22,4 @@ Dockerfile.*
 *.png
 **/paraglide/**
 **/project.inlang/**
+*.sh

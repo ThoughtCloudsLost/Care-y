@@ -9,19 +9,46 @@
 import { createQuery, type CreateQueryResult } from "@tanstack/svelte-query";
 import type { TRPCClient } from "@trpc/client";
 import type { AppRouter } from "@care-y/server";
+import {
+  volunteerKeys,
+  ticketKeys,
+  ticketsKeys,
+  noteTypeKeys,
+} from "$lib/query/keys";
 
 type TicketRouter = NonNullable<TRPCClient<AppRouter>["tickets"]>;
 type VolunteersData = Awaited<
   ReturnType<TicketRouter["listVolunteers"]["query"]>
 >;
 type CountsData = Awaited<ReturnType<TicketRouter["counts"]["query"]>>;
+type ParticipantsData = Awaited<
+  ReturnType<TicketRouter["listParticipants"]["query"]>
+>;
+export type NoteTypesRouter = NonNullable<TicketRouter["noteTypes"]>;
+type NoteTypesData = Awaited<
+  ReturnType<NoteTypesRouter["listActive"]["query"]>
+>;
+type AllNoteTypesData = Awaited<ReturnType<NoteTypesRouter["list"]["query"]>>;
 
 export function createVolunteersQuery(
   ticketRouter: TicketRouter,
 ): CreateQueryResult<VolunteersData> {
   return createQuery(() => ({
-    queryKey: ["volunteers"] as const,
+    queryKey: volunteerKeys.all,
     queryFn: async () => ticketRouter.listVolunteers.query(),
+    staleTime: 5 * 60 * 1000,
+  }));
+}
+
+export function createParticipantsQuery(
+  ticketRouter: TicketRouter,
+  ticketId: () => string,
+): CreateQueryResult<ParticipantsData> {
+  return createQuery(() => ({
+    queryKey: ticketKeys.participants(ticketId()),
+    queryFn: async () =>
+      ticketRouter.listParticipants.query({ ticketId: ticketId() }),
+    enabled: ticketId() !== "",
     staleTime: 5 * 60 * 1000,
   }));
 }
@@ -30,7 +57,27 @@ export function createCountsQuery(
   ticketRouter: TicketRouter,
 ): CreateQueryResult<CountsData> {
   return createQuery(() => ({
-    queryKey: ["tickets", "counts"] as const,
+    queryKey: ticketsKeys.counts(),
     queryFn: async () => ticketRouter.counts.query(),
+  }));
+}
+
+export function createNoteTypesQuery(
+  noteTypesRouter: NoteTypesRouter,
+): CreateQueryResult<NoteTypesData> {
+  return createQuery(() => ({
+    queryKey: noteTypeKeys.all,
+    queryFn: async () => noteTypesRouter.listActive.query(),
+    staleTime: 5 * 60 * 1000,
+  }));
+}
+
+export function createAllNoteTypesQuery(
+  noteTypesRouter: NoteTypesRouter,
+): CreateQueryResult<AllNoteTypesData> {
+  return createQuery(() => ({
+    queryKey: noteTypeKeys.full(),
+    queryFn: async () => noteTypesRouter.list.query(),
+    staleTime: 5 * 60 * 1000,
   }));
 }

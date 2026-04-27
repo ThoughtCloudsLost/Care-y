@@ -1,6 +1,6 @@
 <script lang="ts">
   import { Progressbar } from "konsta/svelte";
-  import { Search } from "@lucide/svelte";
+  import { ScanSearch } from "@lucide/svelte";
   import SoftButton from "$lib/components/SoftButton.svelte";
   import * as m from "$lib/paraglide/messages.js";
   import {
@@ -32,6 +32,23 @@
   function handleTrigger(): void {
     runFullSearch(query);
   }
+
+  const anyGroupLoading = $derived(groups.some((g) => g.loading));
+
+  // Auto-trigger when no matches exist in decrypted data
+  $effect(() => {
+    if (
+      fullSearchAvailable &&
+      query.length >= 2 &&
+      !hasAnyResults &&
+      !anyGroupLoading &&
+      !isSearching &&
+      !isDone &&
+      totalCachedItems > 0
+    ) {
+      runFullSearch(query);
+    }
+  });
 </script>
 
 {#if fullSearchAvailable}
@@ -63,14 +80,14 @@
       <div class="done-area">
         <p class="done-text">
           {m.search_full_summary({
-            found: states.reduce((sum, s) => sum + s.results.length, 0),
+            found: states.reduce((sum, s) => sum + s.matchCount, 0),
             total: states.reduce((sum, s) => sum + s.total, 0),
           })}
         </p>
       </div>
     {:else}
       <SoftButton full onclick={handleTrigger}>
-        <Search size={16} aria-hidden="true" />
+        <ScanSearch size={16} aria-hidden="true" />
         <span>{m.search_full_trigger()}</span>
       </SoftButton>
 

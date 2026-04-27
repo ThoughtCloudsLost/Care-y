@@ -37,6 +37,8 @@
     class?: string;
     /** Custom rendering for decrypted content. If omitted, renders content as text. */
     children?: Snippet;
+    /** When set, highlights matching text with <mark> elements in the ready state. */
+    searchTerm?: string | null;
   }
 
   let {
@@ -50,7 +52,40 @@
     maxLines,
     class: className = "",
     children,
+    searchTerm = null,
   }: Props = $props();
+
+  interface TextSegment {
+    text: string;
+    highlight: boolean;
+  }
+
+  function splitByTerm(text: string, term: string): TextSegment[] {
+    const segments: TextSegment[] = [];
+    const lowerText = text.toLowerCase();
+    const lowerTerm = term.toLowerCase();
+    let cursor = 0;
+
+    while (cursor < text.length) {
+      const matchIdx = lowerText.indexOf(lowerTerm, cursor);
+      if (matchIdx === -1) {
+        segments.push({ text: text.slice(cursor), highlight: false });
+        break;
+      }
+      if (matchIdx > cursor) {
+        segments.push({ text: text.slice(cursor, matchIdx), highlight: false });
+      }
+      segments.push({
+        text: text.slice(matchIdx, matchIdx + term.length),
+        highlight: true,
+      });
+      cursor = matchIdx + term.length;
+    }
+
+    return segments;
+  }
+
+  const hasHighlight = $derived(searchTerm != null && searchTerm.length >= 2);
 
   // Normalize both prop forms into a single DecryptResult.
   // When result is provided it wins. Otherwise derive from the legacy content prop.
@@ -180,7 +215,17 @@
       {#if children}
         {@render children()}
       {:else if resolved.status === "ready"}
-        {resolved.value}
+        {#if hasHighlight}
+          {#each splitByTerm(resolved.value, searchTerm ?? "") as seg, i (i)}
+            {#if seg.highlight}
+              <mark class="search-highlight">{seg.text}</mark>
+            {:else}
+              {seg.text}
+            {/if}
+          {/each}
+        {:else}
+          {resolved.value}
+        {/if}
       {/if}
     {/if}
   </span>
@@ -464,6 +509,13 @@
   .decrypt-error {
     color: var(--muted);
     font-style: italic;
+  }
+
+  /* ── Search highlight ── */
+  .search-highlight {
+    background: color-mix(in srgb, var(--brand-accent) 25%, transparent);
+    border-radius: 2px;
+    padding: 0 1px;
   }
 
   /* ── Screen reader only ── */

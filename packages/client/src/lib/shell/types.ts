@@ -8,7 +8,7 @@
  * This file is append-only. All downstream view modules depend on it.
  */
 
-import type { Snippet } from "svelte";
+import type { Component, Snippet } from "svelte";
 import type { SavedFilterRecord } from "@care-y/shared";
 import type { PillDefinition } from "$lib/components/filters/filter-types.js";
 
@@ -61,6 +61,11 @@ export interface ShellSheetProps {
   ondismiss: () => void;
   /** Sheet content. */
   children: Snippet;
+  /** Title rendered in a sticky header bar. When provided (with or without
+   *  headerRight), the sheet splits into a pinned header + scrollable body. */
+  title?: string;
+  /** Snippet rendered in the top-right of the sticky header (save/action button). */
+  headerRight?: Snippet;
   /** Show backdrop overlay behind the sheet. Default: true. */
   backdrop?: boolean;
   /** Trap focus inside the sheet. Disable when an external input (e.g.,
@@ -159,8 +164,9 @@ export interface ShellMessagebarProps {
   mode?: ComposeMode;
   /** Called when the send/save button is tapped. */
   onsend: () => void;
-  /** Called when the + compose actions button is tapped (opens attach/preset sheet). */
-  onplus: () => void;
+  /** Called when the + compose actions button is tapped. Receives the
+   *  button element for popover anchoring. */
+  onplus: (anchorEl: HTMLElement) => void;
   /** Forwarded from the textarea's native input event. Used by @mention autocomplete to read cursor position. */
   oninput?: (e: Event) => void;
   /** Whether the send button is visually disabled. */
@@ -226,6 +232,10 @@ export interface ViewToggleConfig {
   readonly onchange: (mode: "list" | "grid") => void;
   readonly listLabel: string;
   readonly gridLabel: string;
+  /** Override list-mode icon (defaults to lucide List). */
+  readonly listIcon?: Component<{ size?: number }>;
+  /** Override grid-mode icon (defaults to lucide LayoutGrid). */
+  readonly gridIcon?: Component<{ size?: number }>;
 }
 
 export interface SortConfig {
@@ -249,6 +259,21 @@ export interface ManageConfig {
   readonly label: string;
   /** Called when the manage gear button is tapped. */
   readonly onclick: () => void;
+  /** Icon component for the manage button. Defaults to Settings (cog). */
+  readonly icon?: Component;
+}
+
+export interface ShellPanelProps {
+  /** Whether the panel is open. */
+  readonly opened: boolean;
+  /** Callback when the panel is dismissed (backdrop click or Escape). */
+  readonly ondismiss: () => void;
+  /** Which side the panel opens from. Default: "left". */
+  readonly side?: "left" | "right";
+  /** Accessible label for the panel dialog. */
+  readonly ariaLabel: string;
+  /** Panel content. */
+  readonly children: Snippet;
 }
 
 export interface FilterPillsConfig {

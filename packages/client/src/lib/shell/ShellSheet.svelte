@@ -21,12 +21,18 @@
     opened,
     ondismiss,
     children,
+    title,
+    headerRight,
     backdrop = true,
     trapFocus = true,
     role = "dialog",
     ariaLabel,
     class: extraClass,
   }: ShellSheetProps = $props();
+
+  const hasHeader = $derived(
+    (title !== undefined && title !== "") || headerRight !== undefined,
+  );
 
   const trap = useFocusTrap({
     get opened() {
@@ -76,7 +82,25 @@
       <div class="sheet-drag-handle" bind:this={handleRef} aria-hidden="true">
         <div class="sheet-drag-indicator"></div>
       </div>
-      {@render children()}
+      {#if hasHeader}
+        <div class="sheet-header">
+          {#if title}
+            <h3 class="sheet-header-title">{title}</h3>
+          {:else}
+            <span></span>
+          {/if}
+          {#if headerRight}
+            <div class="sheet-header-action">
+              {@render headerRight()}
+            </div>
+          {/if}
+        </div>
+        <div class="sheet-body">
+          {@render children()}
+        </div>
+      {:else}
+        {@render children()}
+      {/if}
     </div>
   </Sheet>
 </div>
@@ -85,8 +109,46 @@
   /* iOS: handled by .glass utility (shared.css) */
 
   .shell-sheet-content {
-    min-height: 30vh;
+    min-height: 50vh;
     max-height: calc(85dvh - var(--k-safe-area-top, 0px));
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: calc(var(--k-safe-area-bottom) + 1.5rem);
+  }
+
+  .shell-sheet-content:has(.sheet-header) {
+    display: flex;
+    flex-direction: column;
+    overflow-y: hidden;
+    padding-bottom: 0;
+  }
+
+  .sheet-header {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: var(--space-sm) var(--space-lg);
+    border-bottom: 1px solid color-mix(in srgb, var(--ink) 8%, transparent);
+    background: var(--surface);
+    flex-shrink: 0;
+  }
+
+  .sheet-header-title {
+    font-size: var(--text-lg);
+    font-weight: 600;
+    color: var(--ink);
+    margin: 0;
+  }
+
+  .sheet-header-action {
+    flex-shrink: 0;
+  }
+
+  .sheet-body {
+    flex: 1;
     overflow-y: auto;
     -webkit-overflow-scrolling: touch;
     padding-bottom: calc(var(--k-safe-area-bottom) + 1.5rem);
@@ -98,6 +160,7 @@
     padding: 10px 0 6px;
     cursor: grab;
     touch-action: none;
+    flex-shrink: 0;
   }
 
   .sheet-drag-handle:active {

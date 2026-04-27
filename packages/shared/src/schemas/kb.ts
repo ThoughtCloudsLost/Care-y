@@ -68,6 +68,13 @@ export const kbItemListInputSchema = z.object({
 });
 export type KbItemListInput = z.infer<typeof kbItemListInputSchema>;
 
+// --- Bulk body fetch (for full search) ---
+
+export const listKbBodiesInputSchema = z.object({
+  itemIds: z.array(z.uuid()).min(1).max(200),
+});
+export type ListKbBodiesInput = z.infer<typeof listKbBodiesInputSchema>;
+
 // --- Saved filter state (serialized inside SavedFilterRecord.state) ---
 
 export const kbSavedFilterStateSchema = z.object({

@@ -17,6 +17,7 @@
 <script lang="ts">
   import { browser } from "$app/environment";
   import { createQuery } from "@tanstack/svelte-query";
+  import { authKeys } from "$lib/query/keys.js";
   import { CryptoBridge } from "$lib/workers/crypto-bridge.js";
   import { OrgKeyManager } from "$lib/crypto/org-key.js";
   import { OrgDecryptCache } from "$lib/crypto/org-decrypt-cache.js";
@@ -85,7 +86,7 @@
 
   // Current user identity, shared to all authenticated pages via context.
   const meQuery = createQuery(() => ({
-    queryKey: ["auth", "me"],
+    queryKey: authKeys.me(),
     queryFn: async () => trpc.auth.me.query(),
     staleTime: Infinity,
   }));

@@ -39,6 +39,10 @@ export interface SessionRepository {
   findByToken(token: string): Promise<SessionData | null>;
   deleteByToken(token: string): Promise<void>;
   deleteByUserId(userId: string): Promise<void>;
+  deleteByUserIdExceptToken(
+    userId: string,
+    exceptToken: string,
+  ): Promise<number>;
   deleteExpired(): Promise<number>;
   markTwoFactorVerified(token: string): Promise<void>;
   clearTwoFactorVerified(token: string): Promise<void>;
@@ -112,6 +116,19 @@ export function createDbSessionRepository(
 
     async deleteByUserId(userId: string): Promise<void> {
       await db.deleteFrom("sessions").where("user_id", "=", userId).execute();
+    },
+
+    async deleteByUserIdExceptToken(
+      userId: string,
+      exceptToken: string,
+    ): Promise<number> {
+      const result = await db
+        .deleteFrom("sessions")
+        .where("user_id", "=", userId)
+        .where("token", "!=", exceptToken)
+        .executeTakeFirst();
+
+      return Number(result.numDeletedRows);
     },
 
     async deleteExpired(): Promise<number> {

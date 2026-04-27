@@ -21,6 +21,7 @@
   import { ChevronLeft, Pencil } from "@lucide/svelte";
   import * as m from "$lib/paraglide/messages.js";
   import { trpc } from "$lib/trpc/index.js";
+  import { kbKeys } from "$lib/query/keys.js";
   import { getOrgDecryptCache, getOrgKeyManager } from "$lib/crypto/context.js";
   import {
     resolveOrgDecrypt,
@@ -72,7 +73,7 @@
   const cachedSummary = $derived.by((): CachedSummary | undefined => {
     const entries = queryClient.getQueriesData<{
       pages: { items: (CachedSummary & { id: string })[] }[];
-    }>({ queryKey: ["kb", "items"] });
+    }>({ queryKey: kbKeys.items() });
     for (const [, data] of entries) {
       if (data?.pages == null) continue;
       for (const queryPage of data.pages) {
@@ -86,7 +87,7 @@
   // ── Detail query (provides encryptedBody, not in the list cache) ──
 
   const articleQuery = createQuery(() => ({
-    queryKey: ["kb", "item", articleId],
+    queryKey: kbKeys.item(articleId),
     queryFn: async () => kbRouter.getItem.query({ itemId: articleId }),
     enabled: articleId !== "",
   }));
@@ -129,7 +130,7 @@
   // ── Category name for navbar ──
 
   const categoryQuery = createQuery(() => ({
-    queryKey: ["kb", "categories"],
+    queryKey: kbKeys.categories(),
     queryFn: async () => kbRouter.listCategories.query(),
   }));
 
@@ -212,9 +213,9 @@
   // downloadable KbAttachmentChip components below the article body.
 
   const attachmentsQuery = createQuery(() => ({
-    queryKey: ["kb", "attachments", articleId],
+    queryKey: kbKeys.attachments(articleId),
     queryFn: async () => kbRouter.listAttachments.query({ itemId: articleId }),
-    enabled: articleId !== "",
+    enabled: articleId !== "" && (article?.attachmentCount ?? 0) > 0,
   }));
 
   interface DecryptedAttachment {
@@ -252,7 +253,7 @@
   // ── Voting ──
 
   const userVoteQuery = createQuery(() => ({
-    queryKey: ["kb", "vote", articleId],
+    queryKey: kbKeys.vote(articleId),
     queryFn: async () => kbRouter.getUserVote.query({ itemId: articleId }),
     enabled: articleId !== "",
   }));
@@ -270,14 +271,14 @@
     mutationFn: async (direction: "up" | "down") =>
       kbRouter.castVote.mutate({ itemId: articleId, direction }),
     onMutate: async (direction) => {
-      await queryClient.cancelQueries({ queryKey: ["kb", "vote", articleId] });
-      await queryClient.cancelQueries({ queryKey: ["kb", "item", articleId] });
+      await queryClient.cancelQueries({ queryKey: kbKeys.vote(articleId) });
+      await queryClient.cancelQueries({ queryKey: kbKeys.item(articleId) });
 
-      const prevVote = queryClient.getQueryData(["kb", "vote", articleId]);
-      const prevItem = queryClient.getQueryData(["kb", "item", articleId]);
+      const prevVote = queryClient.getQueryData(kbKeys.vote(articleId));
+      const prevItem = queryClient.getQueryData(kbKeys.item(articleId));
 
       // Optimistic: update vote direction
-      queryClient.setQueryData(["kb", "vote", articleId], { direction });
+      queryClient.setQueryData(kbKeys.vote(articleId), { direction });
 
       // Optimistic: adjust counts on the article (detail query cache)
       if (article != null) {
@@ -291,7 +292,7 @@
         if (direction === "up") upDelta++;
         else downDelta++;
 
-        queryClient.setQueryData(["kb", "item", articleId], {
+        queryClient.setQueryData(kbKeys.item(articleId), {
           ...article,
           voteUpCount: article.voteUpCount + upDelta,
           voteDownCount: article.voteDownCount + downDelta,
@@ -310,17 +311,17 @@
     },
     onError: (_err, _direction, context) => {
       if (context?.prevVote != null)
-        queryClient.setQueryData(["kb", "vote", articleId], context.prevVote);
+        queryClient.setQueryData(kbKeys.vote(articleId), context.prevVote);
       if (context?.prevItem != null)
-        queryClient.setQueryData(["kb", "item", articleId], context.prevItem);
+        queryClient.setQueryData(kbKeys.item(articleId), context.prevItem);
       toastStore.show(m.error_generic());
     },
     onSettled: () => {
       void queryClient.invalidateQueries({
-        queryKey: ["kb", "vote", articleId],
+        queryKey: kbKeys.vote(articleId),
       });
       void queryClient.invalidateQueries({
-        queryKey: ["kb", "item", articleId],
+        queryKey: kbKeys.item(articleId),
       });
     },
   }));
@@ -328,17 +329,17 @@
   const removeVoteMutation = createMutation(() => ({
     mutationFn: async () => kbRouter.removeVote.mutate({ itemId: articleId }),
     onMutate: async () => {
-      await queryClient.cancelQueries({ queryKey: ["kb", "vote", articleId] });
-      await queryClient.cancelQueries({ queryKey: ["kb", "item", articleId] });
+      await queryClient.cancelQueries({ queryKey: kbKeys.vote(articleId) });
+      await queryClient.cancelQueries({ queryKey: kbKeys.item(articleId) });
 
-      const prevVote = queryClient.getQueryData(["kb", "vote", articleId]);
-      const prevItem = queryClient.getQueryData(["kb", "item", articleId]);
+      const prevVote = queryClient.getQueryData(kbKeys.vote(articleId));
+      const prevItem = queryClient.getQueryData(kbKeys.item(articleId));
 
-      queryClient.setQueryData(["kb", "vote", articleId], null);
+      queryClient.setQueryData(kbKeys.vote(articleId), null);
 
       if (article != null) {
         const prev = userVoteDirection;
-        queryClient.setQueryData(["kb", "item", articleId], {
+        queryClient.setQueryData(kbKeys.item(articleId), {
           ...article,
           voteUpCount: article.voteUpCount + (prev === "up" ? -1 : 0),
           voteDownCount: article.voteDownCount + (prev === "down" ? -1 : 0),
@@ -353,17 +354,17 @@
     },
     onError: (_err, _vars, context) => {
       if (context?.prevVote != null)
-        queryClient.setQueryData(["kb", "vote", articleId], context.prevVote);
+        queryClient.setQueryData(kbKeys.vote(articleId), context.prevVote);
       if (context?.prevItem != null)
-        queryClient.setQueryData(["kb", "item", articleId], context.prevItem);
+        queryClient.setQueryData(kbKeys.item(articleId), context.prevItem);
       toastStore.show(m.error_generic());
     },
     onSettled: () => {
       void queryClient.invalidateQueries({
-        queryKey: ["kb", "vote", articleId],
+        queryKey: kbKeys.vote(articleId),
       });
       void queryClient.invalidateQueries({
-        queryKey: ["kb", "item", articleId],
+        queryKey: kbKeys.item(articleId),
       });
     },
   }));

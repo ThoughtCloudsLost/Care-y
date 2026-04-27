@@ -60,3 +60,19 @@ export const assignRoleInputSchema = z.object({
 export const setPiiRetentionInputSchema = z.object({
   days: z.number().int().min(1).max(3650).nullable(),
 });
+
+export const setUserActiveInputSchema = z.object({
+  userId: z.uuid(),
+  isActive: z.boolean(),
+});
+
+export const listUsersOutputItemSchema = z.object({
+  id: z.uuid(),
+  identifier: z.string(),
+  encryptedDisplayName: z.string(),
+  roleId: z.string(),
+  isActive: z.boolean(),
+  hasKeys: z.boolean(),
+  hasOrgKeyWrap: z.boolean(),
+  volPublic: z.string().nullable(),
+});

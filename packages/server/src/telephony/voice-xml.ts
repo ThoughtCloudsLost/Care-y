@@ -9,10 +9,11 @@ const VERB_MAP: Record<string, string> = {
   hangup: "Hangup",
   dial: "Dial",
   pause: "Pause",
+  reject: "Reject",
 };
 
 /** Verbs that render as self-closing tags (no text body, no children). */
-const SELF_CLOSING_VERBS = new Set(["hangup", "pause", "record"]);
+const SELF_CLOSING_VERBS = new Set(["hangup", "pause", "record", "reject"]);
 
 /**
  * Escape the 5 XML-reserved characters.

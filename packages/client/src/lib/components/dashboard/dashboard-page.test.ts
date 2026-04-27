@@ -15,7 +15,7 @@
  */
 
 import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
-import { render, screen, cleanup } from "@testing-library/svelte";
+import { render, screen, cleanup, fireEvent } from "@testing-library/svelte";
 
 // IntersectionObserver stub for DecryptPlaceholder
 vi.stubGlobal(
@@ -31,10 +31,22 @@ vi.stubGlobal(
   }),
 );
 
+// --- Controllable mock state ---
+
+let mockPermissions = new Set([
+  "view_tickets",
+  "manage_own_tickets",
+  "view_knowledge_base",
+  "edit_knowledge_base",
+  "view_own_shifts",
+]);
+
+const mockGoto = vi.fn();
+
 // --- Mocks ---
 
 vi.mock("$app/navigation", () => ({
-  goto: vi.fn(),
+  goto: mockGoto,
   onNavigate: vi.fn(),
 }));
 
@@ -101,18 +113,12 @@ vi.mock("$lib/crypto/context.js", () => ({
     size: 0,
   }),
   getCurrentUserId: () => () => "user-001",
-  getCurrentPermissions: () => () =>
-    new Set([
-      "view_tickets",
-      "manage_own_tickets",
-      "view_knowledge_base",
-      "edit_knowledge_base",
-      "view_own_shifts",
-    ]),
+  getCurrentPermissions: () => () => mockPermissions,
 }));
 
 vi.mock("$lib/shell/context.js", () => ({
   getNavbarOverrideCtx: () => ({ current: undefined }),
+  getTabbarOverrideCtx: () => ({ current: undefined }),
 }));
 
 // --- Helpers ---
@@ -178,9 +184,19 @@ if (typeof Element.prototype.animate !== "function") {
 
 // --- Setup ---
 
+const DEFAULT_PERMISSIONS = new Set([
+  "view_tickets",
+  "manage_own_tickets",
+  "view_knowledge_base",
+  "edit_knowledge_base",
+  "view_own_shifts",
+]);
+
 beforeEach(() => {
   queryCallIndex = 0;
   queryStates = [];
+  mockGoto.mockClear();
+  mockPermissions = new Set(DEFAULT_PERMISSIONS);
 });
 
 afterEach(cleanup);
@@ -248,5 +264,54 @@ describe("Dashboard page", () => {
     expect(screen.getByRole("button", { name: /Unassigned/ })).toBeTruthy();
     expect(screen.getByRole("button", { name: /Activity/ })).toBeTruthy();
     expect(screen.getByRole("button", { name: /Knowledge Base/ })).toBeTruthy();
+  });
+});
+
+describe("Dashboard create popover", () => {
+  function renderWithAdminPermissions(): void {
+    mockPermissions = new Set([
+      ...DEFAULT_PERMISSIONS,
+      "manage_queues",
+      "manage_users",
+      "manage_knowledge_base_categories",
+    ]);
+    queryStates = buildQueryStates(emptyDataQuery);
+    render(PageModule.default);
+  }
+
+  it("navigates to admin/people?tab=queues&action=create for queue option", () => {
+    renderWithAdminPermissions();
+
+    const queueItem = screen.getByText("New Queue");
+    void fireEvent.click(queueItem);
+
+    expect(mockGoto).toHaveBeenCalledWith(
+      "/admin/people?tab=queues&action=create",
+    );
+  });
+
+  it("navigates to admin/people?tab=users&action=invite for user option", () => {
+    renderWithAdminPermissions();
+
+    const userItem = screen.getByText("Invite User");
+    void fireEvent.click(userItem);
+
+    expect(mockGoto).toHaveBeenCalledWith(
+      "/admin/people?tab=users&action=invite",
+    );
+  });
+
+  it("does not show queue option without manage_queues permission", () => {
+    queryStates = buildQueryStates(emptyDataQuery);
+    render(PageModule.default);
+
+    expect(screen.queryByText("New Queue")).toBeNull();
+  });
+
+  it("does not show user option without manage_users permission", () => {
+    queryStates = buildQueryStates(emptyDataQuery);
+    render(PageModule.default);
+
+    expect(screen.queryByText("Invite User")).toBeNull();
   });
 });

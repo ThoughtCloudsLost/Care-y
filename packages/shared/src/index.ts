@@ -26,6 +26,8 @@ export {
   getSaltOutputSchema,
   assignRoleInputSchema,
   setPiiRetentionInputSchema,
+  setUserActiveInputSchema,
+  listUsersOutputItemSchema,
 } from "./schemas/auth.js";
 
 // --- Roles and permissions ---
@@ -34,6 +36,9 @@ export {
   type RoleIdValue,
   ROLE_ID_VALUES,
   ROLE_ID_VALUES_TUPLE,
+  ROLE_LEVEL,
+  meetsRoleThreshold,
+  getAllowedRoleIds,
   Permission,
 } from "./roles.js";
 
@@ -87,6 +92,22 @@ export {
   type RotateOrgKeyInput,
 } from "./schemas/keys.js";
 
+// --- Profile schemas ---
+export {
+  updateDisplayNameSchema,
+  adminUpdateDisplayNameSchema,
+  updateUsernameSchema,
+  adminUpdateUsernameSchema,
+  updatePasswordHashSchema,
+  changePasswordSchema,
+  type UpdateDisplayNameInput,
+  type AdminUpdateDisplayNameInput,
+  type UpdateUsernameInput,
+  type AdminUpdateUsernameInput,
+  type UpdatePasswordHashInput,
+  type ChangePasswordInput,
+} from "./schemas/profile.js";
+
 // --- OPRF schemas ---
 export {
   oprfEvaluateInputSchema,
@@ -116,6 +137,12 @@ export {
   type MaskedTelephonyConfigOutput,
   createManagedTelephonyInputSchema,
   type CreateManagedTelephonyInput,
+  addToBlocklistInputSchema,
+  type AddToBlocklistInput,
+  removeFromBlocklistInputSchema,
+  type RemoveFromBlocklistInput,
+  setPhonePurposeInputSchema,
+  type SetPhonePurposeInput,
 } from "./schemas/telephony.js";
 
 // --- Telephony content schemas ---
@@ -148,6 +175,13 @@ export {
   type RegisterConsultantInput,
   type UpdateConsultantInput,
   type VerifyConsultantInput,
+  GREETING_AUDIO_MAX_BYTES,
+  greetingAudioContentTypeSchema,
+  uploadGreetingAudioInputSchema,
+  createAudioGreetingInputSchema,
+  type GreetingAudioContentType,
+  type UploadGreetingAudioInput,
+  type CreateAudioGreetingInput,
 } from "./schemas/telephony-content.js";
 
 // --- Relay schemas ---
@@ -179,6 +213,7 @@ export {
   createQueueInputSchema,
   updateQueueInputSchema,
   reorderQueuesInputSchema,
+  deleteQueueInputSchema,
   createPresetReplyInputSchema,
   updatePresetReplyInputSchema,
   addDependencyInputSchema,
@@ -190,6 +225,7 @@ export {
   followUpListInputSchema,
   followUpSummaryInputSchema,
   followUpsByIdsInputSchema,
+  listParticipantsInputSchema,
   recordingListInputSchema,
   attachmentListInputSchema,
   assignTicketInputSchema,
@@ -212,6 +248,7 @@ export {
   type CreateQueueInput,
   type UpdateQueueInput,
   type ReorderQueuesInput,
+  type DeleteQueueInput,
   type CreatePresetReplyInput,
   type UpdatePresetReplyInput,
   type AddDependencyInput,
@@ -244,6 +281,19 @@ export {
   type SavedFilterRecord,
   ticketActionSchema,
   type TicketAction,
+  escalationTargetSchema,
+  roleIdSchema,
+  createNoteTypeInputSchema,
+  updateNoteTypeInputSchema,
+  type EscalationTarget,
+  type CreateNoteTypeInput,
+  type UpdateNoteTypeInput,
+  REACTION_TYPES,
+  type ReactionType,
+  reactionTypeSchema,
+  toggleReactionInputSchema,
+  type ToggleReactionInput,
+  type ReactionSummary,
 } from "./schemas/tickets.js";
 
 // --- Knowledge Base schemas ---
@@ -279,6 +329,8 @@ export {
   type DownloadKbAttachmentInput,
   type ListKbAttachmentsInput,
   type KbAllowedContentType,
+  listKbBodiesInputSchema,
+  type ListKbBodiesInput,
 } from "./schemas/kb.js";
 
 // --- Notification, search, audit schemas ---
@@ -309,3 +361,25 @@ export type {
 } from "./telephony/browser-call.js";
 
 export { ErrorCode, type ErrorCodeType } from "./error-codes.js";
+
+// --- Reports schemas ---
+export {
+  queueStatSchema,
+  monthlyVolumeSchema,
+  monthlyResolutionSchema,
+  priorityStatSchema,
+  type QueueStat,
+  type MonthlyVolume,
+  type MonthlyResolution,
+  type PriorityStat,
+} from "./schemas/reports.js";
+
+// --- Branding schemas ---
+export {
+  saveBrandingFieldInputSchema,
+  uploadIconsInputSchema,
+  type BrandingField,
+  type SaveBrandingFieldInput,
+  type UploadIconsInput,
+  type BrandingData,
+} from "./schemas/branding.js";

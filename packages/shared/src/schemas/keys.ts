@@ -21,11 +21,19 @@ const reWrappedKeySchema = z.object({
   wrappedKey: base64String("wrappedKey"),
 });
 
-/** Password change: new salt + new volPublic + re-wrapped ticket keys */
+/** ECIES-wrapped org key fields (same shape as wrapped_org_keys DB columns). */
+const reWrappedOrgKeySchema = z.object({
+  ephemeralPoint: base64Bytes(32, "ephemeralPoint (ristretto255)"),
+  nonce: base64Bytes(24, "nonce"),
+  wrappedKey: base64String("wrappedKey"),
+});
+
+/** Password change: new salt + new volPublic + re-wrapped ticket keys + optional org key re-wrap */
 export const passwordChangeKeysSchema = z.object({
   saltNew: base64Bytes(16, "Salt"),
   volPublicNew: base64Bytes(32, "volPublic"),
   reWrappedKeys: z.array(reWrappedKeySchema),
+  reWrappedOrgKey: reWrappedOrgKeySchema.optional(),
 });
 
 /** Org public key upload (first admin onboarding). ECIES wrap fields match wrapped_org_keys DB columns. */

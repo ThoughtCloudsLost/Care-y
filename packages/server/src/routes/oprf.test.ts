@@ -391,6 +391,16 @@ describe("OPRF tRPC route", () => {
         providerFactory: createMockProviderFactory(),
         resolveCallerId: vi.fn().mockResolvedValue("+15551234567"),
       },
+      profileDeps: {
+        hasher: createScryptHasher(),
+        encryptor: testFieldEncryptor,
+        indexer: testBlindIndexer,
+        tokenizer: testSessionTokenizer,
+        passwordChangeLimiter: createInMemoryRateLimiter({
+          windowMs: 60_000,
+          maxRequests: 100,
+        }),
+      },
       twoFactorDeps: {
         emailSender: createMockEmailSender(),
         encryptor: testFieldEncryptor,
@@ -590,6 +600,16 @@ describe.skipIf(!DOCKER_OPRF_AVAILABLE)(
           tokenizer: testSessionTokenizer,
           providerFactory: createMockProviderFactory(),
           resolveCallerId: vi.fn().mockResolvedValue("+15551234567"),
+        },
+        profileDeps: {
+          hasher: createScryptHasher(),
+          encryptor: testFieldEncryptor,
+          indexer: testBlindIndexer,
+          tokenizer: testSessionTokenizer,
+          passwordChangeLimiter: createInMemoryRateLimiter({
+            windowMs: 60_000,
+            maxRequests: 100,
+          }),
         },
         twoFactorDeps: {
           emailSender: createMockEmailSender(),

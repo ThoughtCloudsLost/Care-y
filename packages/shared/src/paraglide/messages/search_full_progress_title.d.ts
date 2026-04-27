@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Searching all..." |
+* | "Decrypting and searching..." |
 *
 * @param {Search_Full_Progress_TitleInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

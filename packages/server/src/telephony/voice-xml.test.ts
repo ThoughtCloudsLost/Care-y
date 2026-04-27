@@ -61,6 +61,19 @@ describe("renderInstruction", () => {
     expect(renderInstruction(inst)).toBe("<Record/>");
   });
 
+  it("renders self-closing reject", () => {
+    const inst: VoiceInstruction = { type: "reject" };
+    expect(renderInstruction(inst)).toBe("<Reject/>");
+  });
+
+  it("renders reject with reason attribute", () => {
+    const inst: VoiceInstruction = {
+      type: "reject",
+      attributes: { reason: "busy" },
+    };
+    expect(renderInstruction(inst)).toBe('<Reject reason="busy"/>');
+  });
+
   it("renders gather with nested say child", () => {
     const inst: VoiceInstruction = {
       type: "gather",

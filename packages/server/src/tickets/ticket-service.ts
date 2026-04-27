@@ -68,6 +68,7 @@ export interface FollowUpPreview {
   readonly hasRecording: boolean;
   readonly hasImage: boolean;
   readonly hasFile: boolean;
+  readonly noteTypeId: string | null;
 }
 
 export interface CreateTicketInput {
@@ -123,6 +124,7 @@ export interface TicketService {
 }
 
 export interface TicketCounts {
+  readonly total: number;
   readonly new: number;
   readonly active: number;
   readonly closed: number;
@@ -633,6 +635,7 @@ export function createTicketService(
       const queueIds = await getAccessibleQueueIds(userId);
       if (queueIds.length === 0) {
         return {
+          total: 0,
           new: 0,
           active: 0,
           closed: 0,
@@ -813,10 +816,12 @@ export function createTicketService(
                   .end(),
               )
               .as("mine_count"),
+          (eb) => eb.fn.countAll().as("total_count"),
         ])
         .executeTakeFirstOrThrow();
 
       return {
+        total: Number(rows.total_count),
         new: Number(rows.new_count),
         active: Number(rows.active_count),
         closed: Number(rows.closed_count),
@@ -937,6 +942,7 @@ export function createTicketService(
           eb.ref("f.type").as("type"),
           eb.ref("f.encrypted_content").as("encrypted_content"),
           eb.ref("f.created_at").as("created_at"),
+          eb.ref("f.note_type_id").as("note_type_id"),
           eb.fn
             .agg<number>("row_number")
             .over((ob) =>
@@ -1009,6 +1015,7 @@ export function createTicketService(
           "ranked_f.has_recording",
           "ranked_f.has_image",
           "ranked_f.has_file",
+          "ranked_f.note_type_id",
           "tkw.ephemeral_point",
           "tkw.nonce",
           "tkw.wrapped_key",
@@ -1043,6 +1050,7 @@ export function createTicketService(
           hasRecording: Boolean(row.has_recording),
           hasImage: Boolean(row.has_image),
           hasFile: Boolean(row.has_file),
+          noteTypeId: row.note_type_id ?? null,
         };
         const list = result[row.ticket_id];
         if (list) {

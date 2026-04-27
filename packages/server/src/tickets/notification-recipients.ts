@@ -9,12 +9,20 @@
  * 2. CC/ticket watchers
  * 3. Queue watchers
  * 4. Mentioned users (one-off, not subscribed)
+ * 5. Escalation recipients (from note type targets)
  *
  * Each user appears at most once. First source wins.
  * The acting user (who triggered the event) is excluded.
  */
 
-export type RecipientSource = "owner" | "cc" | "queue_watcher" | "mention";
+import type { EscalationTarget } from "@care-y/shared";
+
+export type RecipientSource =
+  | "owner"
+  | "cc"
+  | "queue_watcher"
+  | "mention"
+  | "note_escalation";
 
 export interface NotificationRecipient {
   readonly userId: string;
@@ -32,6 +40,44 @@ export interface RecipientBuilderDeps {
   readonly resolveValidMentions: (userIds: string[]) => Promise<string[]>;
 }
 
+export interface EscalationResolverDeps {
+  readonly getUsersByRole: (role: "admin" | "manager") => Promise<string[]>;
+  readonly getUsersByPermission: (permission: string) => Promise<string[]>;
+  readonly getQueueMembers: (queueId: string) => Promise<string[]>;
+  readonly getTicketKeyWrapHolders: (ticketId: string) => Promise<string[]>;
+}
+
+export async function resolveEscalationTargets(
+  targets: EscalationTarget[],
+  deps: EscalationResolverDeps,
+  ticketId?: string,
+): Promise<string[]> {
+  const userIds = new Set<string>();
+  for (const target of targets) {
+    switch (target.type) {
+      case "role":
+        for (const uid of await deps.getUsersByRole(target.value))
+          userIds.add(uid);
+        break;
+      case "permission":
+        for (const uid of await deps.getUsersByPermission(target.value))
+          userIds.add(uid);
+        break;
+      case "queue":
+        for (const uid of await deps.getQueueMembers(target.value))
+          userIds.add(uid);
+        break;
+      case "ticket_access":
+        if (ticketId !== undefined) {
+          for (const uid of await deps.getTicketKeyWrapHolders(ticketId))
+            userIds.add(uid);
+        }
+        break;
+    }
+  }
+  return [...userIds];
+}
+
 /**
  * Build the deduplicated notification recipient list for a ticket event.
  */
@@ -40,6 +86,7 @@ export async function buildRecipientList(
   ticket: { assignedTo: string | null; queueId: string; id: string },
   mentionedPseudonyms: string[],
   actingUserId: string,
+  escalationUserIds?: string[],
 ): Promise<NotificationRecipientList> {
   const seen = new Set<string>();
   const recipients: NotificationRecipient[] = [];
@@ -67,6 +114,11 @@ export async function buildRecipientList(
   // 4. Mentions
   const validMentions = await deps.resolveValidMentions(mentionedPseudonyms);
   for (const uid of validMentions) add(uid, "mention");
+
+  // 5. Escalation recipients (from note type targets)
+  if (escalationUserIds !== undefined) {
+    for (const uid of escalationUserIds) add(uid, "note_escalation");
+  }
 
   return { recipients };
 }

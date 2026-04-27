@@ -275,6 +275,81 @@ describe("CryptoBridge", () => {
     });
   });
 
+  describe("unwrapTk", () => {
+    it("sends unwrapTk request with key wrap fields", async () => {
+      const bridge = await createReadyBridge();
+
+      const promise = bridge.unwrapTk("ticket-tk", "ep-b64", "n-b64", "wk-b64");
+
+      const calls = mockWorkerInstance?.postMessage.mock.calls;
+      const tkCall = await vi.waitFor(() => {
+        const found = calls?.find(
+          (c: unknown[]) => (c[0] as { type: string }).type === "unwrapTk",
+        ) as
+          | [
+              {
+                type: string;
+                id: number;
+                ticketId: string;
+                ephemeralPoint: string;
+                nonce: string;
+                wrappedKey: string;
+              },
+            ]
+          | undefined;
+        expect(found).toBeDefined();
+        return found;
+      });
+
+      expect(tkCall?.[0].ticketId).toBe("ticket-tk");
+      expect(tkCall?.[0].ephemeralPoint).toBe("ep-b64");
+      expect(tkCall?.[0].nonce).toBe("n-b64");
+      expect(tkCall?.[0].wrappedKey).toBe("wk-b64");
+
+      respondFromWorker({
+        id: tkCall?.[0].id ?? 0,
+        ok: true,
+        type: "unwrapTk",
+      });
+
+      await promise;
+    });
+  });
+
+  describe("wrapWithVolPublic", () => {
+    it("sends data and returns ECIES output", async () => {
+      const bridge = await createReadyBridge();
+
+      const promise = bridge.wrapWithVolPublic("dGVzdC1kYXRh");
+
+      const calls = mockWorkerInstance?.postMessage.mock.calls;
+      const wrapCall = await vi.waitFor(() => {
+        const found = calls?.find(
+          (c: unknown[]) =>
+            (c[0] as { type: string }).type === "wrapWithVolPublic",
+        ) as [{ type: string; id: number; data: string }] | undefined;
+        expect(found).toBeDefined();
+        return found;
+      });
+
+      expect(wrapCall?.[0].data).toBe("dGVzdC1kYXRh");
+
+      respondFromWorker({
+        id: wrapCall?.[0].id ?? 0,
+        ok: true,
+        type: "wrapWithVolPublic",
+        ephemeralPoint: "ZXBoZW1lcmFs",
+        nonce: "bm9uY2U=",
+        wrappedKey: "d3JhcHBlZA==",
+      });
+
+      const result = await promise;
+      expect(result.ephemeralPoint).toBe("ZXBoZW1lcmFs");
+      expect(result.nonce).toBe("bm9uY2U=");
+      expect(result.wrappedKey).toBe("d3JhcHBlZA==");
+    });
+  });
+
   describe("error handling", () => {
     it("rejects pending promise with CryptoWorkerError on Worker error", async () => {
       const bridge = await createReadyBridge();

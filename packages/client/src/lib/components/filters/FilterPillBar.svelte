@@ -186,13 +186,13 @@
 </script>
 
 <div class="filter-pill-bar" role="toolbar" aria-label={resolvedFilterLabel}>
-  {#if activeCount > 0}
+  {#if activeCount > 0 && oncreateshortcut}
     <Link
       iconOnly
       role="button"
       class="bookmark-link"
       aria-label={resolvedCreateShortcutLabel}
-      onclick={() => oncreateshortcut?.()}
+      onclick={() => oncreateshortcut()}
     >
       <Icon badge={String(activeCount)}><Bookmark size={18} /></Icon>
     </Link>
@@ -256,61 +256,65 @@
       {/if}
     </List>
   {:else if activeMode === "multi"}
-    <List nested role="group" aria-label={activeLabel}>
-      {#if activeLoading}
-        <ListItem>
-          {#snippet title()}
-            <Skeleton lines={2} />
-          {/snippet}
-        </ListItem>
-      {/if}
-      {#each activeOptions as opt (opt.value)}
-        {@const sel = activeSelected}
-        {@const checked = sel instanceof Set && sel.has(opt.value)}
-        <ListItem title={opt.label} onclick={onMultiItemClick(opt.value)}>
-          {#snippet media()}
-            <Checkbox {checked} onChange={onMultiItemClick(opt.value)} />
-          {/snippet}
-        </ListItem>
-      {/each}
-      <ListItem
-        title={resolvedAllLabel}
-        class="filter-pill-all"
-        onclick={handleAllClick}
-      />
-    </List>
-  {:else}
-    <List nested role="listbox" aria-label={activeLabel}>
-      {#each activeOptions as opt (opt.value)}
-        {@const isSelected =
-          typeof activeSelected === "string" && activeSelected === opt.value}
+    <div class="popover-scroll">
+      <List nested role="group" aria-label={activeLabel}>
         <ListItem
-          title={opt.label}
+          title={resolvedAllLabel}
+          class="filter-pill-all"
+          onclick={handleAllClick}
+        />
+        {#if activeLoading}
+          <ListItem>
+            {#snippet title()}
+              <Skeleton lines={2} />
+            {/snippet}
+          </ListItem>
+        {/if}
+        {#each activeOptions as opt (opt.value)}
+          {@const sel = activeSelected}
+          {@const checked = sel instanceof Set && sel.has(opt.value)}
+          <ListItem title={opt.label} onclick={onMultiItemClick(opt.value)}>
+            {#snippet media()}
+              <Checkbox {checked} onChange={onMultiItemClick(opt.value)} />
+            {/snippet}
+          </ListItem>
+        {/each}
+      </List>
+    </div>
+  {:else}
+    <div class="popover-scroll">
+      <List nested role="listbox" aria-label={activeLabel}>
+        <ListItem
+          title={resolvedAllLabel}
           role="option"
-          aria-selected={isSelected}
-          onclick={onSingleItemClick(opt.value)}
+          aria-selected={activeSelected === null}
+          class="filter-pill-all"
+          onclick={handleAllClick}
         >
           {#snippet after()}
-            {#if isSelected}
+            {#if activeSelected === null}
               <Check size={16} class="text-primary" aria-hidden="true" />
             {/if}
           {/snippet}
         </ListItem>
-      {/each}
-      <ListItem
-        title={resolvedAllLabel}
-        role="option"
-        aria-selected={activeSelected === null}
-        class="filter-pill-all"
-        onclick={handleAllClick}
-      >
-        {#snippet after()}
-          {#if activeSelected === null}
-            <Check size={16} class="text-primary" aria-hidden="true" />
-          {/if}
-        {/snippet}
-      </ListItem>
-    </List>
+        {#each activeOptions as opt (opt.value)}
+          {@const isSelected =
+            typeof activeSelected === "string" && activeSelected === opt.value}
+          <ListItem
+            title={opt.label}
+            role="option"
+            aria-selected={isSelected}
+            onclick={onSingleItemClick(opt.value)}
+          >
+            {#snippet after()}
+              {#if isSelected}
+                <Check size={16} class="text-primary" aria-hidden="true" />
+              {/if}
+            {/snippet}
+          </ListItem>
+        {/each}
+      </List>
+    </div>
   {/if}
 </ShellPopover>
 
@@ -334,7 +338,7 @@
     min-width: 0;
     scrollbar-width: none;
     -webkit-overflow-scrolling: touch;
-    padding: 2px 0;
+    padding: 0;
   }
 
   .pill-scroll::-webkit-scrollbar {
@@ -345,8 +349,13 @@
     flex-shrink: 0;
   }
 
+  .popover-scroll {
+    max-height: 50vh;
+    overflow-y: auto;
+  }
+
   :global(.filter-pill-all) {
-    border-top: 1px solid var(--surface-1, rgba(0, 0, 0, 0.08));
+    border-bottom: 1px solid var(--surface-1, rgba(0, 0, 0, 0.08));
     font-weight: 500;
   }
 </style>

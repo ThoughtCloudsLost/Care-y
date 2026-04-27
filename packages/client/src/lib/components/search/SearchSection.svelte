@@ -1,17 +1,27 @@
 <script lang="ts">
   import { goto } from "$app/navigation";
   import { resolve } from "$app/paths";
+  import { Progressbar } from "konsta/svelte";
+  import { ScanSearch } from "@lucide/svelte";
   import type { Component, Snippet } from "svelte";
   import * as m from "$lib/paraglide/messages.js";
+  import { getFullSearchStateForProvider } from "$lib/search/registry.svelte.js";
 
   interface SearchSectionProps {
     label: string;
     icon: Component;
     count: number;
     totalCached: number;
+    totalItems?: number;
+    totalResults?: number;
     showAllHref: string;
     loading: boolean;
     ondismiss: () => void;
+    onviewall?: (query: string) => void;
+    query?: string;
+    hasFullSearch?: boolean;
+    onFullSearch?: () => void;
+    providerId?: string;
     children: Snippet;
   }
 
@@ -20,11 +30,36 @@
     icon: Icon,
     count,
     totalCached,
+    totalItems,
+    totalResults,
     showAllHref,
     loading,
     ondismiss,
+    onviewall,
+    query = "",
+    hasFullSearch = false,
+    onFullSearch,
+    providerId,
     children,
   }: SearchSectionProps = $props();
+
+  const displayCount = $derived(totalResults ?? count);
+
+  const fsStatus = $derived(
+    providerId != null && providerId !== ""
+      ? getFullSearchStateForProvider(providerId)?.status
+      : undefined,
+  );
+  const fsSearched = $derived(
+    providerId != null && providerId !== ""
+      ? (getFullSearchStateForProvider(providerId)?.searched ?? 0)
+      : 0,
+  );
+  const fsTotal = $derived(
+    providerId != null && providerId !== ""
+      ? (getFullSearchStateForProvider(providerId)?.total ?? 0)
+      : 0,
+  );
 </script>
 
 <div class="search-section">
@@ -33,28 +68,74 @@
       <h3 class="section-label">
         <Icon size={16} aria-hidden="true" class="section-icon" />
         <span class="heading-text">{label}</span>
-        <span class="count-badge">{loading ? "..." : count}</span>
+        <span class="count-badge">{loading ? "..." : displayCount}</span>
       </h3>
-      {#if count > 0}
+      {#if displayCount > 0}
         <button
           type="button"
           class="show-all-link"
           onclick={() => {
-            ondismiss();
-            void goto(resolve(`/${showAllHref.replace(/^\//, "")}`));
+            if (onviewall) {
+              const q = query;
+              ondismiss();
+              onviewall(q);
+            } else {
+              ondismiss();
+              void goto(resolve(`/${showAllHref.replace(/^\//, "")}`));
+            }
           }}
         >
-          {m.search_show_all({ count })}
+          {m.search_show_all({ count: displayCount })}
         </button>
       {/if}
     </div>
-    <p class="scope-hint" aria-live="polite">
-      {#if loading}
-        {m.search_scope_hint({ count: totalCached })}
-      {:else}
-        {m.search_scope_done({ count: totalCached })}
+    <div class="scope-row">
+      {#if hasFullSearch && onFullSearch}
+        <span class="section-deep-search" aria-live="polite">
+          {#if fsStatus === "searching"}
+            <span class="section-deep-progress">
+              <Progressbar progress={fsSearched / Math.max(fsTotal, 1)} />
+              <span class="section-deep-count">
+                {m.search_section_full_searching({
+                  searched: fsSearched,
+                  total: fsTotal,
+                })}
+              </span>
+            </span>
+          {:else if fsStatus === "done"}
+            <ScanSearch size={12} aria-hidden="true" class="deep-done-icon" />
+          {:else}
+            <button
+              type="button"
+              class="section-deep-trigger"
+              onclick={onFullSearch}
+            >
+              <ScanSearch size={12} aria-hidden="true" />
+              {m.search_section_full_trigger({ section: label })}
+            </button>
+          {/if}
+        </span>
       {/if}
-    </p>
+      <p class="scope-hint" aria-live="polite">
+        {#if totalItems != null && totalItems > totalCached}
+          {#if loading}
+            {m.search_scope_hint_of({
+              searched: totalCached,
+              total: totalItems,
+            })}
+          {:else}
+            {m.search_scope_done_of({
+              searched: totalCached,
+              total: totalItems,
+            })}
+          {/if}
+        {:else if loading}
+          {m.search_scope_hint({ count: totalCached })}
+        {:else}
+          {m.search_scope_done({ count: totalCached })}
+        {/if}
+      </p>
+    </div>
   </div>
   {@render children()}
 </div>
@@ -123,9 +204,52 @@
     flex-shrink: 0;
   }
 
+  .scope-row {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm, 8px);
+    margin: var(--space-xs, 4px) 0 0;
+  }
+
   .scope-hint {
     font-size: var(--text-xs, 0.75rem);
     color: var(--muted);
-    margin: var(--space-xs, 4px) 0 0;
+    margin: 0;
+  }
+
+  .section-deep-search {
+    flex-shrink: 0;
+  }
+
+  .section-deep-trigger {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: var(--text-xs, 0.75rem);
+    font-weight: 500;
+    color: var(--brand-primary);
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 0;
+    white-space: nowrap;
+  }
+
+  .section-deep-progress {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-xs, 4px);
+    max-width: 140px;
+  }
+
+  .section-deep-count {
+    font-size: var(--text-xs, 0.75rem);
+    color: var(--muted);
+    white-space: nowrap;
+  }
+
+  :global(.deep-done-icon) {
+    color: var(--brand-primary);
+    opacity: 0.6;
   }
 </style>

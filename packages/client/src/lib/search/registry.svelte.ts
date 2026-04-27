@@ -2,13 +2,29 @@ import { SvelteMap } from "svelte/reactivity";
 import type {
   FullSearchState,
   SearchProvider,
-  SearchResult,
   SearchResultGroup,
 } from "./types.js";
 
 // Module-level singleton. SvelteMap so $derived contexts track
 // provider registration/unregistration.
 const providers = new SvelteMap<string, SearchProvider>();
+
+// Route-level override for promoted provider. When set, takes precedence
+// over the AppShell-derived promotedProviderId in searchAll().
+let promotedOverride = $state<string | undefined>(undefined);
+
+/**
+ * Override the promoted provider ID for the duration of a route mount.
+ * Returns a cleanup function that clears the override.
+ */
+export function setPromotedOverride(providerId: string): () => void {
+  promotedOverride = providerId;
+  return () => {
+    if (promotedOverride === providerId) {
+      promotedOverride = undefined;
+    }
+  };
+}
 
 /**
  * Register a search provider. Returns a cleanup function
@@ -45,27 +61,39 @@ export function searchAll(
 ): readonly SearchResultGroup[] {
   if (query.length < 2) return [];
 
+  // Read fullSearchStates so this $derived re-evaluates when onProgress()
+  // fires. Guarantees content match propagation even if SvelteSet reads
+  // from async code don't trigger reactivity on their own.
+  void fullSearchStates.length;
+
   const groups: SearchResultGroup[] = [];
 
   for (const [, provider] of providers) {
-    const { results, loading, totalCached } = provider.search(query);
+    const searchResult = provider.search(query);
+
     groups.push({
       providerId: provider.id,
       label: provider.label(),
       icon: provider.icon,
-      results,
+      results: searchResult.results,
       renderMode: provider.renderMode,
       showAllHref: provider.showAllHref(query),
-      loading,
-      totalCached,
+      loading: searchResult.loading,
+      totalCached: searchResult.totalCached,
+      totalItems: searchResult.totalItems,
+      totalResults: searchResult.totalResults,
+      onviewall: provider.onviewall?.bind(provider),
+      onresulttap: provider.onresulttap?.bind(provider),
     });
   }
 
   // Stable sort: promoted provider first, others in registration order.
-  if (promotedProviderId !== undefined && promotedProviderId !== "") {
+  // Route-level override takes precedence over the AppShell-derived value.
+  const effectivePromoted = promotedOverride ?? promotedProviderId;
+  if (effectivePromoted !== undefined && effectivePromoted !== "") {
     groups.sort((a, b) => {
-      if (a.providerId === promotedProviderId) return -1;
-      if (b.providerId === promotedProviderId) return 1;
+      if (a.providerId === effectivePromoted) return -1;
+      if (b.providerId === effectivePromoted) return 1;
       return 0;
     });
   }
@@ -80,16 +108,32 @@ export function getProvider(id: string): SearchProvider | undefined {
 
 // -- Full search coordination ------------------------------------------------
 
-interface FullSearchProviderState {
+export interface FullSearchProviderState {
   readonly providerId: string;
   readonly label: string;
   status: "idle" | "searching" | "done";
-  results: SearchResult[];
   searched: number;
   total: number;
+  matchCount: number;
 }
 
+// Immutable array reassignment after every async mutation ensures
+// $derived consumers in other modules re-evaluate.
 let fullSearchStates = $state<FullSearchProviderState[]>([]);
+
+function updateProviderState(providerId: string, state: FullSearchState): void {
+  fullSearchStates = fullSearchStates.map((s) =>
+    s.providerId === providerId
+      ? {
+          ...s,
+          status: state.status,
+          searched: state.searched,
+          total: state.total,
+          matchCount: state.matchCount,
+        }
+      : s,
+  );
+}
 
 /** True if at least one registered provider implements fullSearch(). */
 export function hasFullSearch(): boolean {
@@ -103,32 +147,99 @@ export function getFullSearchStates(): readonly FullSearchProviderState[] {
 
 /**
  * Trigger full search across all providers that implement fullSearch().
- * Runs all providers in parallel. Each updates its own state progressively.
+ * Runs all providers in parallel. Each updates its own state progressively
+ * via the onProgress callback, which does immutable array reassignment.
  */
 export function runFullSearch(query: string): void {
   const providersWithFullSearch = [...providers.values()].filter(
     (p) => p.fullSearch !== undefined,
   );
 
-  // Initialize per-provider state.
   fullSearchStates = providersWithFullSearch.map((p) => ({
     providerId: p.id,
     label: p.label(),
-    status: "idle" as const,
-    results: [],
+    status: "searching" as const,
     searched: 0,
     total: 0,
+    matchCount: 0,
   }));
 
-  // Run all in parallel (each provider manages its own API calls).
   for (const provider of providersWithFullSearch) {
-    const state = fullSearchStates.find((s) => s.providerId === provider.id);
-    if (!state || !provider.fullSearch) continue;
-    state.status = "searching";
-    void provider.fullSearch(query, state as FullSearchState).then(() => {
+    if (!provider.fullSearch) continue;
+    const state: FullSearchState = {
+      status: "searching",
+      searched: 0,
+      total: 0,
+      matchCount: 0,
+    };
+    const onProgress = (): void => {
+      updateProviderState(provider.id, state);
+    };
+    void provider.fullSearch(query, state, onProgress).then(() => {
       state.status = "done";
+      updateProviderState(provider.id, state);
     });
   }
+}
+
+/** True if a specific provider implements fullSearch(). */
+export function providerHasFullSearch(providerId: string): boolean {
+  const provider = providers.get(providerId);
+  return provider?.fullSearch !== undefined;
+}
+
+/** Get full search state for a specific provider. */
+export function getFullSearchStateForProvider(
+  providerId: string,
+): FullSearchProviderState | undefined {
+  return fullSearchStates.find((s) => s.providerId === providerId);
+}
+
+/** Content match IDs from a provider's fullSearch (reactive SvelteSet). */
+export function getContentMatchIds(
+  providerId: string,
+): ReadonlySet<string> | undefined {
+  return providers.get(providerId)?.getContentMatchIds?.();
+}
+
+/** Trigger full search for a single provider. */
+export function runFullSearchForProvider(
+  providerId: string,
+  query: string,
+): void {
+  const provider = providers.get(providerId);
+  if (!provider?.fullSearch) return;
+
+  const existing = fullSearchStates.find((s) => s.providerId === providerId);
+  if (existing?.status === "searching") return;
+
+  const state: FullSearchState = {
+    status: "searching",
+    searched: 0,
+    total: 0,
+    matchCount: 0,
+  };
+
+  if (!existing) {
+    fullSearchStates = [
+      ...fullSearchStates,
+      {
+        providerId: provider.id,
+        label: provider.label(),
+        ...state,
+      },
+    ];
+  } else {
+    updateProviderState(providerId, state);
+  }
+
+  const onProgress = (): void => {
+    updateProviderState(providerId, state);
+  };
+  void provider.fullSearch(query, state, onProgress).then(() => {
+    state.status = "done";
+    updateProviderState(providerId, state);
+  });
 }
 
 /**
@@ -137,4 +248,15 @@ export function runFullSearch(query: string): void {
  */
 export function resetFullSearch(): void {
   fullSearchStates = [];
+  for (const [, provider] of providers) {
+    provider.reset?.();
+  }
+}
+
+/** Reset full search state for a single provider. */
+export function resetFullSearchForProvider(providerId: string): void {
+  fullSearchStates = fullSearchStates.filter(
+    (s) => s.providerId !== providerId,
+  );
+  providers.get(providerId)?.reset?.();
 }

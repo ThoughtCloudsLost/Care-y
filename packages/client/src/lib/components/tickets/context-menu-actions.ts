@@ -19,6 +19,7 @@ export interface ContextMenuEvent {
   readonly actions: readonly ContextAction[];
   /** Decrypted text content, for copy action. */
   readonly plaintext: string | undefined;
+  readonly noteTypeId: string | null;
 }
 
 interface FollowUpFields {

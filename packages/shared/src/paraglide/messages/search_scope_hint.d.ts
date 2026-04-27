@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Searching {count} loaded items" |
+* | "Searching {count} loaded and decrypted" |
 *
 * @param {Search_Scope_HintInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

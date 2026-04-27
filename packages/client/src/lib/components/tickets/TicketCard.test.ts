@@ -28,7 +28,42 @@ vi.mock("$lib/crypto/context.js", () => ({
   }),
   getFollowUpDecryptCache: () => ({
     decryptContent: vi.fn().mockReturnValue(undefined),
+    get: vi.fn().mockReturnValue(undefined),
+    has: vi.fn().mockReturnValue(false),
   }),
+  getTicketDecryptCache: () => ({
+    decryptTitle: vi.fn().mockReturnValue(undefined),
+    get: vi.fn().mockReturnValue(undefined),
+    has: vi.fn().mockReturnValue(false),
+  }),
+  getOrgDecryptCache: () => ({
+    decrypt: vi.fn().mockReturnValue(null),
+    get: vi.fn().mockReturnValue(undefined),
+    has: vi.fn().mockReturnValue(false),
+  }),
+}));
+
+vi.mock("@tanstack/svelte-query", () => ({
+  useQueryClient: () => ({
+    invalidateQueries: vi.fn(),
+    getQueriesData: vi.fn().mockReturnValue([]),
+    getQueryData: vi.fn(),
+    setQueryData: vi.fn(),
+  }),
+  createQuery: () => ({
+    isLoading: false,
+    isError: false,
+    error: null,
+    data: undefined,
+  }),
+}));
+
+// --- Mock shell context ---
+vi.mock("$lib/shell/context.js", () => ({
+  getScrollContainer: () => () => undefined,
+  getTabbarOverrideCtx: () => ({ current: undefined }),
+  getTabbarHiddenCtx: () => ({ current: false }),
+  getNavbarOverrideCtx: () => ({ current: undefined }),
 }));
 
 afterEach(cleanup);
