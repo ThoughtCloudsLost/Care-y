@@ -127,6 +127,7 @@ export interface OrgConfigTable {
   icon_512_blob_key: string | null;
   icon_maskable_blob_key: string | null;
   default_note_type_id: string | null;
+  intake_queue_id: string | null;
 }
 
 // --- User keys (full interface, replaces UserKeysStubTable) ---
@@ -326,6 +327,10 @@ export interface FollowupsTable {
   deleted_at: Date | null;
   created_at: Generated<Date>;
   note_type_id: string | null;
+  call_sid: string | null;
+  call_status: string | null;
+  call_duration_seconds: number | null;
+  key_generation: string | null;
 }
 
 export interface RecordingsTable {

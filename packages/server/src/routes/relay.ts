@@ -22,6 +22,7 @@ import type {
   BlindIndexer,
 } from "../crypto/field-encryptor.js";
 import type { PendingClient } from "../tickets/ticket-service.js";
+import type { CallTracker } from "../telephony/call-tracker.js";
 import { generateTwilioAccessToken } from "../telephony/twilio-token.js";
 import { createPhoneRepository } from "../telephony/models/phone-repo.js";
 import {
@@ -77,6 +78,7 @@ export interface RelayHandlerDeps {
   readonly indexer: BlindIndexer;
   readonly fieldEncryptor: FieldEncryptor;
   readonly pendingClients: Map<string, PendingClient>;
+  readonly callTracker?: CallTracker;
 }
 
 export interface PendingCall {
@@ -244,10 +246,12 @@ async function handleCallRelay(
   let rawBody: Buffer | null = null;
   let clientPhoneBuf: Buffer | null = null;
   let consultantPhoneBuf: Buffer | null = null;
+  let ticketIdBuf: Buffer | null = null;
 
   try {
     rawBody = await readRawBody(req, MAX_RELAY_BODY);
     clientPhoneBuf = extractBufferField(rawBody, "clientPhone");
+    ticketIdBuf = extractBufferField(rawBody, "ticketId");
 
     if (!clientPhoneBuf || clientPhoneBuf.length === 0) {
       sendRelayError(res, 400, "MISSING_FIELDS");
@@ -327,10 +331,23 @@ async function handleCallRelay(
       createdAt: Date.now(),
     });
 
+    if (deps.callTracker) {
+      const ticketId = ticketIdBuf ? ticketIdBuf.toString("utf-8") : "";
+      deps.callTracker.track(callSid, {
+        ticketId,
+        userId: session.userId,
+        direction: "outbound",
+        orgSchema: session.orgSchema,
+        clientId: null,
+        createdAt: Date.now(),
+      });
+    }
+
     sendJsonResponse(res, 200, { callSid, method: "phone_callback" });
   } finally {
     rawBody?.fill(0);
     clientPhoneBuf?.fill(0);
+    ticketIdBuf?.fill(0);
     if (consultantPhoneBuf) consultantPhoneBuf.fill(0);
   }
 }

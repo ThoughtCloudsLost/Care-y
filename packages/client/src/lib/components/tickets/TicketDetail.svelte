@@ -575,6 +575,8 @@
       fullPosition: fu.fullPosition,
       totalCount: fu.totalCount,
       noteTypeId: fu.noteTypeId ?? null,
+      callStatus: fu.callStatus ?? null,
+      callDurationSeconds: fu.callDurationSeconds ?? null,
     };
   }
 
@@ -595,6 +597,8 @@
           hasImage: fu.hasImage,
           hasFile: fu.hasFile,
           noteTypeId: fu.noteTypeId ?? null,
+          callStatus: fu.callStatus ?? null,
+          callDurationSeconds: fu.callDurationSeconds ?? null,
         }));
     if (activeNoteTypeIds.size === 0) return raw;
     return raw.filter((item) => {

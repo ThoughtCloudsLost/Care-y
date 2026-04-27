@@ -97,6 +97,7 @@
   function isLandmark(item: TimelineItem): boolean {
     if (item.source === "system") return true;
     if (item.type === "internal_note") return true;
+    if (item.type === "phone_call") return true;
     if (item.hasRecording || item.hasImage || item.hasFile) return true;
     return false;
   }
@@ -146,7 +147,38 @@
     if (item.hasImage) return "Photo";
     if (item.hasFile) return "File";
 
+    if (item.type === "phone_call") {
+      return formatCallLabel(item);
+    }
+
     return "";
+  }
+
+  function formatCallDuration(seconds: number): string {
+    const mins = Math.floor(seconds / 60);
+    const secs = String(seconds % 60).padStart(2, "0");
+    return `${String(mins)}:${secs}`;
+  }
+
+  function formatCallLabel(item: TimelineItem): string {
+    const status = item.callStatus;
+    if (status === null) {
+      return m.followup_type_phone_call();
+    }
+
+    if (status === "completed") {
+      const dur = item.callDurationSeconds;
+      const duration = dur !== null ? formatCallDuration(dur) : "0:00";
+      return item.source === "client"
+        ? m.call_status_completed_inbound({ duration })
+        : m.call_status_completed_outbound({ duration });
+    }
+
+    if (status === "no_answer") return m.call_status_no_answer();
+    if (status === "busy") return m.call_status_busy();
+    if (status === "failed") return m.call_status_failed();
+    if (status === "canceled") return m.call_status_canceled();
+    return m.followup_type_phone_call();
   }
 
   function formatTime(iso: string): string {

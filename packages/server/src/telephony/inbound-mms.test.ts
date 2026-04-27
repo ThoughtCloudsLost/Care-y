@@ -1,42 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
 import { processAttachments } from "./inbound-mms.js";
-import type { MmsHandlerDeps } from "./inbound-mms.js";
-import type { SealedBoxEncryptor } from "../crypto/sealed-box.js";
-import type { BlobStore } from "../storage/store.js";
-
-// ---------------------------------------------------------------------------
-// Mock factories
-// ---------------------------------------------------------------------------
-
-function createMockSealedBox(): SealedBoxEncryptor {
-  return {
-    seal: vi.fn((s: string) => Buffer.from(`sealed:${s}`)),
-    sealBuffer: vi.fn((b: Buffer) => Buffer.from(`sealed:${b.toString()}`)),
-  };
-}
-
-function createMockBlobStore(): BlobStore {
-  let counter = 0;
-  return {
-    put: vi.fn().mockImplementation(() => {
-      counter++;
-      return Promise.resolve(`org_test/attachment/uuid-${String(counter)}`);
-    }),
-    get: vi.fn(),
-    delete: vi.fn(),
-    exists: vi.fn(),
-  };
-}
-
-function makeDeps(overrides?: Partial<MmsHandlerDeps>): MmsHandlerDeps {
-  return {
-    sealedBox: createMockSealedBox(),
-    blobStore: createMockBlobStore(),
-    orgSchema: "org_test",
-    ...overrides,
-  };
-}
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -78,11 +42,9 @@ function mockFetchResponse(data: Buffer, status = 200): Response {
 // ---------------------------------------------------------------------------
 
 describe("processAttachments", () => {
-  let deps: MmsHandlerDeps;
   let fetchSpy: ReturnType<typeof vi.spyOn>;
 
   beforeEach(() => {
-    deps = makeDeps();
     fetchSpy = vi.spyOn(globalThis, "fetch");
   });
 
@@ -92,89 +54,49 @@ describe("processAttachments", () => {
 
   // --- Happy path ---
 
-  it("accepts a valid JPEG attachment: downloads, encrypts, stores, and returns in accepted", async () => {
+  it("accepts a valid JPEG attachment: downloads, validates, and returns raw data", async () => {
     const jpegData = makeJpegBuffer();
     fetchSpy.mockResolvedValueOnce(mockFetchResponse(jpegData));
 
     const result = await processAttachments(
       ["https://api.twilio.com/media/1"],
       ["image/jpeg"],
-      deps,
     );
 
     expect(result.accepted).toHaveLength(1);
     expect(result.rejected).toHaveLength(0);
     expect(result.accepted[0]?.contentType).toBe("image/jpeg");
     expect(result.accepted[0]?.sizeBytes).toBe(128);
-    expect(result.accepted[0]?.blobKey).toMatch(/^org_test\/attachment\//);
-
-    // Verify encryption happened
-    expect(deps.sealedBox.sealBuffer).toHaveBeenCalledOnce();
-
-    // Verify blob was stored
-    expect(deps.blobStore.put).toHaveBeenCalledOnce();
-    expect(deps.blobStore.put).toHaveBeenCalledWith(
-      "org_test",
-      "attachment",
-      expect.any(Buffer),
-    );
+    // Raw data buffer returned for caller to encrypt
+    expect(result.accepted[0]?.data).toBeInstanceOf(Buffer);
+    expect(result.accepted[0]?.data.length).toBe(128);
   });
 
-  // --- Buffer zeroing ---
-  // Security contract: plaintext buffers must be zeroed after encryption (relay endpoint policy)
+  // --- Buffer zeroing on rejection ---
 
-  it("zeros raw attachment buffer after encryption", async () => {
-    let capturedBuf: Buffer | null = null;
-    vi.mocked(deps.sealedBox.sealBuffer).mockImplementation((b: Buffer) => {
-      capturedBuf = b;
-      return Buffer.from("sealed");
-    });
-
-    const jpegData = makeJpegBuffer();
-    fetchSpy.mockResolvedValueOnce(mockFetchResponse(jpegData));
-
-    await processAttachments(
-      ["https://api.twilio.com/media/1"],
-      ["image/jpeg"],
-      deps,
-    );
-
-    expect(capturedBuf).not.toBeNull();
-    expect(capturedBuf!.every((byte) => byte === 0)).toBe(true);
-  });
-
-  it("zeros raw attachment buffer even when validation rejects it", async () => {
-    // Declare image/jpeg but send PNG magic bytes to trigger magic_bytes rejection.
-    // The catch block in processAttachments should still zero the raw buffer.
+  it("zeros raw attachment buffer when validation rejects it", async () => {
+    // Declare image/jpeg but send PNG magic bytes to trigger magic_bytes rejection
     const pngData = makePngBuffer();
     fetchSpy.mockResolvedValueOnce(mockFetchResponse(pngData));
 
-    // We can't capture via sealBuffer (it's never called on rejection),
-    // so verify indirectly: the original buffer should be zeroed after return.
     const result = await processAttachments(
       ["https://api.twilio.com/media/1"],
       ["image/jpeg"],
-      deps,
     );
 
     expect(result.rejected).toHaveLength(1);
-    // The pngData buffer was created outside processAttachments (via fetch mock),
-    // but processAttachments creates its own Buffer.from(arrayBuffer). We verify
-    // the rejection path doesn't throw (zeroing is in the catch block).
     expect(result.rejected[0]?.reason).toBe("magic_bytes");
   });
 
   // --- Rejection: size ---
 
   it("rejects oversized attachment with reason 'size'", async () => {
-    // 5 MB + 1 byte exceeds the 5 MB limit
     const oversized = makeJpegBuffer(5 * 1024 * 1024 + 1);
     fetchSpy.mockResolvedValueOnce(mockFetchResponse(oversized));
 
     const result = await processAttachments(
       ["https://api.twilio.com/media/big"],
       ["image/jpeg"],
-      deps,
     );
 
     expect(result.accepted).toHaveLength(0);
@@ -188,13 +110,12 @@ describe("processAttachments", () => {
   // --- Rejection: content_type ---
 
   it("rejects disallowed content type with reason 'content_type'", async () => {
-    const exeData = Buffer.alloc(64, 0x4d); // 'M' bytes, not a valid type
+    const exeData = Buffer.alloc(64, 0x4d);
     fetchSpy.mockResolvedValueOnce(mockFetchResponse(exeData));
 
     const result = await processAttachments(
       ["https://api.twilio.com/media/exe"],
       ["application/x-msdownload"],
-      deps,
     );
 
     expect(result.accepted).toHaveLength(0);
@@ -205,14 +126,12 @@ describe("processAttachments", () => {
   // --- Rejection: magic_bytes ---
 
   it("rejects magic byte mismatch with reason 'magic_bytes'", async () => {
-    // Declare image/jpeg but send PNG magic bytes
     const pngData = makePngBuffer();
     fetchSpy.mockResolvedValueOnce(mockFetchResponse(pngData));
 
     const result = await processAttachments(
       ["https://api.twilio.com/media/fake-jpeg"],
       ["image/jpeg"],
-      deps,
     );
 
     expect(result.accepted).toHaveLength(0);
@@ -228,7 +147,6 @@ describe("processAttachments", () => {
     const result = await processAttachments(
       ["https://api.twilio.com/media/down"],
       ["image/jpeg"],
-      deps,
     );
 
     expect(result.accepted).toHaveLength(0);
@@ -245,7 +163,6 @@ describe("processAttachments", () => {
     const result = await processAttachments(
       ["https://api.twilio.com/media/err"],
       ["image/jpeg"],
-      deps,
     );
 
     expect(result.accepted).toHaveLength(0);
@@ -267,7 +184,6 @@ describe("processAttachments", () => {
     const result = await processAttachments(
       ["https://api.twilio.com/media/good", "https://api.twilio.com/media/bad"],
       ["image/jpeg", "image/jpeg"],
-      deps,
     );
 
     expect(result.accepted).toHaveLength(1);
@@ -279,7 +195,7 @@ describe("processAttachments", () => {
   // --- Empty list ---
 
   it("returns empty accepted and rejected for empty media list", async () => {
-    const result = await processAttachments([], [], deps);
+    const result = await processAttachments([], []);
 
     expect(result.accepted).toHaveLength(0);
     expect(result.rejected).toHaveLength(0);
@@ -293,9 +209,9 @@ describe("processAttachments", () => {
     const jpeg2 = makeJpegBuffer(256);
 
     fetchSpy
-      .mockRejectedValueOnce(new Error("timeout")) // first fails
-      .mockResolvedValueOnce(mockFetchResponse(jpeg1)) // second succeeds
-      .mockResolvedValueOnce(mockFetchResponse(jpeg2)); // third succeeds
+      .mockRejectedValueOnce(new Error("timeout"))
+      .mockResolvedValueOnce(mockFetchResponse(jpeg1))
+      .mockResolvedValueOnce(mockFetchResponse(jpeg2));
 
     const result = await processAttachments(
       [
@@ -304,7 +220,6 @@ describe("processAttachments", () => {
         "https://api.twilio.com/media/3",
       ],
       ["image/jpeg", "image/jpeg", "image/jpeg"],
-      deps,
     );
 
     expect(result.rejected).toHaveLength(1);
