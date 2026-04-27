@@ -9,15 +9,24 @@
  * - No activity timestamps on the ticket row (ADR-018 section 7)
  */
 
-import { type Kysely } from "kysely";
+import { type Kysely, type Transaction } from "kysely";
 import type { TenantDatabase } from "../db/types.js";
+import { createPhoneRepository } from "../telephony/models/phone-repo.js";
+import { createClientRepository } from "../telephony/models/client-repo.js";
 import type {
   RecentFollowUpsInput,
   TicketStatus,
   TicketPriority,
 } from "@care-y/shared";
 import type { TicketAccessChecker } from "./access.js";
-import { NotFoundError, TicketError, MergeError } from "../errors.js";
+import {
+  NotFoundError,
+  ConflictError,
+  InternalError,
+  ValidationError,
+  TicketError,
+  MergeError,
+} from "../errors.js";
 import { createDependencyService } from "./dependency-service.js";
 import { ErrorCode } from "@care-y/shared";
 import { encode } from "@care-y/crypto";
@@ -71,13 +80,21 @@ export interface FollowUpPreview {
   readonly noteTypeId: string | null;
 }
 
+export interface CreateTicketKeyWrap {
+  readonly ephemeralPoint: Buffer;
+  readonly nonce: Buffer;
+  readonly wrappedKey: Buffer;
+}
+
 export interface CreateTicketInput {
-  readonly clientId: string;
+  readonly clientId?: string;
+  readonly clientToken?: string;
   readonly queueId: string;
   readonly encryptedTitle: Buffer;
   readonly encryptedDescription: Buffer;
   readonly priority: TicketPriority;
   readonly keyGeneration: string;
+  readonly keyWrap: CreateTicketKeyWrap;
 }
 
 export interface UpdateTicketInput {
@@ -213,18 +230,31 @@ function toRecordWithKeyWrap(
   return { ...toListRecord(row), keyWrap };
 }
 
+export interface PendingClient {
+  readonly phoneHash: string;
+  readonly opsEncryptedPhone: Buffer;
+  readonly orgSchema: string;
+  readonly createdAt: number;
+}
+
+export interface TicketServiceDeps {
+  readonly pendingClients?: Map<string, PendingClient>;
+}
+
 export function createTicketService(
   db: Kysely<TenantDatabase>,
   access: TicketAccessChecker,
   getAccessibleQueueIds: (userId: string) => Promise<readonly string[]>,
+  deps?: TicketServiceDeps,
 ): TicketService {
   const depService = createDependencyService(db);
 
   async function createSystemFollowUp(
+    trxOrDb: Kysely<TenantDatabase> | Transaction<TenantDatabase>,
     ticketId: string,
     type: string,
   ): Promise<void> {
-    await db
+    await trxOrDb
       .insertInto("followups")
       .values({
         ticket_id: ticketId,
@@ -235,74 +265,137 @@ export function createTicketService(
       .execute();
   }
 
+  async function insertKeyWrap(
+    trx: Kysely<TenantDatabase> | Transaction<TenantDatabase>,
+    ticketId: string,
+    volunteerId: string,
+    keyGeneration: string,
+    keyWrap: CreateTicketKeyWrap,
+  ): Promise<void> {
+    await trx
+      .insertInto("ticket_key_wraps")
+      .values({
+        ticket_id: ticketId,
+        volunteer_id: volunteerId,
+        key_generation: keyGeneration,
+        ephemeral_point: keyWrap.ephemeralPoint,
+        nonce: keyWrap.nonce,
+        wrapped_key: keyWrap.wrappedKey,
+        algorithm: "ecies-ristretto255-v1",
+      })
+      .execute();
+  }
+
   return {
     async create(userId, input) {
-      // Validate queue exists
-      const queue = await db
-        .selectFrom("queues")
-        .select("id")
-        .where("id", "=", input.queueId)
-        .where("is_active", "=", true)
-        .executeTakeFirst();
-      if (!queue) throw new NotFoundError(ErrorCode.QUEUE_NOT_FOUND);
+      return db.transaction().execute(async (trx) => {
+        // Resolve clientId from token if needed
+        let clientId: string;
 
-      // Validate client exists and is not merged
-      const client = await db
-        .selectFrom("clients")
-        .select(["id", "merged_into"])
-        .where("id", "=", input.clientId)
-        .executeTakeFirst();
-      if (!client) throw new NotFoundError(ErrorCode.CLIENT_NOT_FOUND);
-      if (client.merged_into !== null) {
-        throw new MergeError(ErrorCode.CLIENT_MERGED);
-      }
+        if (input.clientToken !== undefined) {
+          if (!deps?.pendingClients) {
+            throw new InternalError(
+              "pendingClients map not wired into ticket service",
+            );
+          }
+          const pending = deps.pendingClients.get(input.clientToken);
+          if (!pending) throw new NotFoundError(ErrorCode.TOKEN_EXPIRED);
+          deps.pendingClients.delete(input.clientToken);
 
-      // One-ticket-per-client: check for existing ticket
-      const existing = await db
-        .selectFrom("tickets")
-        .selectAll()
-        .where("client_id", "=", input.clientId)
-        .executeTakeFirst();
-
-      if (existing) {
-        if (existing.status === "open") {
-          // Already has an open ticket, return it
-          return toRecord(existing);
+          const phoneRepo = createPhoneRepository(trx);
+          const clientRepo = createClientRepository(trx, phoneRepo);
+          const result = await clientRepo.findOrCreateByPhoneHash(
+            pending.phoneHash,
+            pending.opsEncryptedPhone,
+          );
+          clientId = result.client.id;
+        } else if (input.clientId !== undefined) {
+          clientId = input.clientId;
+        } else {
+          throw new ValidationError(
+            "Either clientId or clientToken must be provided",
+          );
         }
-        // Closed ticket exists: reopen it (ADR-018 section 2)
-        const reopened = await db
-          .updateTable("tickets")
-          .set({
-            status: "open",
-            key_generation: input.keyGeneration,
-            encrypted_title: input.encryptedTitle,
-            encrypted_description: input.encryptedDescription,
-            queue_id: input.queueId,
-            priority: input.priority,
-          })
-          .where("id", "=", existing.id)
-          .returningAll()
-          .executeTakeFirstOrThrow();
 
-        await createSystemFollowUp(existing.id, "status_change");
-        return toRecord(reopened);
-      }
+        // Validate queue exists
+        const queue = await trx
+          .selectFrom("queues")
+          .select("id")
+          .where("id", "=", input.queueId)
+          .where("is_active", "=", true)
+          .executeTakeFirst();
+        if (!queue) throw new NotFoundError(ErrorCode.QUEUE_NOT_FOUND);
 
-      // No existing ticket: create new
-      const row = await db
-        .insertInto("tickets")
-        .values({
-          client_id: input.clientId,
-          queue_id: input.queueId,
-          encrypted_title: input.encryptedTitle,
-          encrypted_description: input.encryptedDescription,
-          priority: input.priority,
-          key_generation: input.keyGeneration,
-        })
-        .returningAll()
-        .executeTakeFirstOrThrow();
+        // Validate client exists and is not merged
+        const client = await trx
+          .selectFrom("clients")
+          .select(["id", "merged_into"])
+          .where("id", "=", clientId)
+          .executeTakeFirst();
+        if (!client) throw new NotFoundError(ErrorCode.CLIENT_NOT_FOUND);
+        if (client.merged_into !== null) {
+          throw new MergeError(ErrorCode.CLIENT_MERGED);
+        }
 
-      return toRecord(row);
+        // One-ticket-per-client: check for existing ticket
+        const existing = await trx
+          .selectFrom("tickets")
+          .selectAll()
+          .where("client_id", "=", clientId)
+          .executeTakeFirst();
+
+        let ticket: TicketRecord;
+
+        if (existing) {
+          if (existing.status === "open") {
+            throw new ConflictError(ErrorCode.TICKET_ALREADY_OPEN);
+          }
+          // Closed ticket exists: reopen it (ADR-018 section 2)
+          const reopened = await trx
+            .updateTable("tickets")
+            .set({
+              status: "open",
+              key_generation: input.keyGeneration,
+              encrypted_title: input.encryptedTitle,
+              encrypted_description: input.encryptedDescription,
+              queue_id: input.queueId,
+              priority: input.priority,
+            })
+            .where("id", "=", existing.id)
+            .returningAll()
+            .executeTakeFirstOrThrow();
+
+          await createSystemFollowUp(trx, existing.id, "status_change");
+          ticket = toRecord(reopened);
+        } else {
+          // No existing ticket: create new
+          const row = await trx
+            .insertInto("tickets")
+            .values({
+              client_id: clientId,
+              queue_id: input.queueId,
+              encrypted_title: input.encryptedTitle,
+              encrypted_description: input.encryptedDescription,
+              priority: input.priority,
+              key_generation: input.keyGeneration,
+            })
+            .returningAll()
+            .executeTakeFirstOrThrow();
+
+          ticket = toRecord(row);
+        }
+
+        // Insert key wrap (ticket + key wrap must succeed or fail together)
+        await insertKeyWrap(
+          trx,
+          ticket.id,
+          userId,
+          input.keyGeneration,
+          input.keyWrap,
+        );
+
+        return ticket;
+      });
     },
 
     async findById(ticketId, userId) {
@@ -867,13 +960,13 @@ export function createTicketService(
 
       // Create system follow-ups for state changes
       if (input.onHold !== undefined) {
-        await createSystemFollowUp(input.ticketId, "hold_change");
+        await createSystemFollowUp(db, input.ticketId, "hold_change");
       }
       if (input.priority !== undefined) {
-        await createSystemFollowUp(input.ticketId, "priority_change");
+        await createSystemFollowUp(db, input.ticketId, "priority_change");
       }
       if (input.status !== undefined) {
-        await createSystemFollowUp(input.ticketId, "status_change");
+        await createSystemFollowUp(db, input.ticketId, "status_change");
       }
 
       return toRecord(row);
@@ -898,7 +991,7 @@ export function createTicketService(
 
       if (!row) throw new NotFoundError(ErrorCode.TICKET_NOT_FOUND_OR_CLOSED);
 
-      await createSystemFollowUp(ticketId, "status_change");
+      await createSystemFollowUp(db, ticketId, "status_change");
       return toRecord(row);
     },
 
@@ -918,7 +1011,7 @@ export function createTicketService(
 
       if (!row) throw new NotFoundError(ErrorCode.TICKET_NOT_FOUND_OR_OPEN);
 
-      await createSystemFollowUp(ticketId, "status_change");
+      await createSystemFollowUp(db, ticketId, "status_change");
       return toRecord(row);
     },
 

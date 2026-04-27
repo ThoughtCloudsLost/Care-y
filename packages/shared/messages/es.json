@@ -156,6 +156,8 @@
   "error_ticket_unresolved_deps": "No se puede cerrar el ticket con dependencias sin resolver.",
   "error_cannot_assign_closed_ticket": "No se puede asignar un ticket cerrado.",
   "error_cannot_take_closed_ticket": "No se puede tomar un ticket cerrado.",
+  "error_ticket_already_open": "Este cliente ya tiene un ticket abierto.",
+  "error_token_expired": "El token de búsqueda de teléfono ha expirado. Intente de nuevo.",
   "error_ticket_already_assigned": "El ticket ya está asignado.",
   "error_not_assigned_to_ticket": "No estás asignado a este ticket.",
   "error_invalid_target_user": "No se puede asignar a este usuario.",

@@ -23,7 +23,10 @@ import {
 import type { BlobStore } from "../storage/store.js";
 import type { OrgContext } from "../trpc/context.js";
 import type { TicketAccessChecker } from "../tickets/access.js";
-import type { TicketService } from "../tickets/ticket-service.js";
+import type {
+  TicketService,
+  PendingClient,
+} from "../tickets/ticket-service.js";
 import type { FollowUpService } from "../tickets/followup-service.js";
 import type { MergeService } from "../tickets/merge-service.js";
 import type { PresetService } from "../tickets/preset-service.js";
@@ -109,6 +112,7 @@ export interface TicketRouterDeps {
     tDb: OrgContext["tenantDb"],
     access: TicketAccessChecker,
     getAccessibleQueueIds: (userId: string) => Promise<readonly string[]>,
+    deps?: { pendingClients: Map<string, PendingClient> },
   ) => TicketService;
   readonly createFollowUpSvc: (
     tDb: OrgContext["tenantDb"],
@@ -150,6 +154,8 @@ export interface TicketRouterDeps {
   readonly createAuditSvc?: (tDb: OrgContext["tenantDb"]) => AuditService;
   // Notification dispatch (optional, injected by 5d wiring)
   readonly notificationService?: NotificationService;
+  // Shared pending clients map for clientToken consumption (injected by relay)
+  readonly pendingClients?: Map<string, PendingClient>;
 }
 
 function buildSearchRoutes(
@@ -276,8 +282,11 @@ export function createTicketRouter(deps: TicketRouterDeps) {
   } {
     const access = deps.createTicketAccess(tDb);
     const qps = deps.createQueuePermissionsSvc(tDb);
-    const svc = deps.createTicketSvc(tDb, access, async (userId) =>
-      qps.getUserQueues(userId),
+    const svc = deps.createTicketSvc(
+      tDb,
+      access,
+      async (userId) => qps.getUserQueues(userId),
+      deps.pendingClients ? { pendingClients: deps.pendingClients } : undefined,
     );
     return { access, svc };
   }
@@ -449,6 +458,7 @@ export function createTicketRouter(deps: TicketRouterDeps) {
         const { svc } = ticketSvc(ctx.org.tenantDb);
         const ticket = await svc.create(ctx.user.id, {
           clientId: input.clientId,
+          clientToken: input.clientToken,
           queueId: input.queueId,
           encryptedTitle: Buffer.from(input.encryptedTitle, "base64"),
           encryptedDescription: Buffer.from(
@@ -457,6 +467,11 @@ export function createTicketRouter(deps: TicketRouterDeps) {
           ),
           priority: input.priority,
           keyGeneration: input.keyGeneration,
+          keyWrap: {
+            ephemeralPoint: Buffer.from(input.keyWrap.ephemeralPoint, "base64"),
+            nonce: Buffer.from(input.keyWrap.nonce, "base64"),
+            wrappedKey: Buffer.from(input.keyWrap.wrappedKey, "base64"),
+          },
         });
         auditAndNotify(ctx, "ticket_created", ticket, {
           eventType: "ticket_created",

@@ -149,6 +149,8 @@ export * from "./error_ticket_not_found_or_open.js";
 export * from "./error_ticket_unresolved_deps.js";
 export * from "./error_cannot_assign_closed_ticket.js";
 export * from "./error_cannot_take_closed_ticket.js";
+export * from "./error_ticket_already_open.js";
+export * from "./error_token_expired.js";
 export * from "./error_ticket_already_assigned.js";
 export * from "./error_not_assigned_to_ticket.js";
 export * from "./error_invalid_target_user.js";

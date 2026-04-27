@@ -78,7 +78,10 @@ import type { Kysely } from "kysely";
 import type { TenantDatabase } from "./db/types.js";
 import { createWebhookDispatch } from "./telephony/webhook-dispatch.js";
 import { createTicketAccessChecker } from "./tickets/access.js";
-import { createTicketService } from "./tickets/ticket-service.js";
+import {
+  createTicketService,
+  type PendingClient,
+} from "./tickets/ticket-service.js";
 import { createFollowUpService } from "./tickets/followup-service.js";
 import { createReadCursorService } from "./tickets/read-cursor-service.js";
 import { createMergeService } from "./tickets/merge-service.js";
@@ -567,6 +570,7 @@ const webhookHandler = createWebhookHandler(
 // --- Relay infrastructure ---
 
 const pendingCalls = new Map<string, PendingCall>();
+const pendingClients = new Map<string, PendingClient>();
 
 /** Zeros sensitive buffers in a pending call entry. */
 function zeroPendingCallBuffers(pending: PendingCall): void {
@@ -591,6 +595,14 @@ function zeroAllPendingCalls(calls: Map<string, PendingCall>): void {
     zeroPendingCallBuffers(pending);
   }
   calls.clear();
+}
+
+/** Zeros OPS-encrypted phone Buffers and clears all pending client tokens. */
+function zeroAllPendingClients(clients: Map<string, PendingClient>): void {
+  for (const [, entry] of clients) {
+    entry.opsEncryptedPhone.fill(0);
+  }
+  clients.clear();
 }
 
 const pendingCallCleanupInterval = setInterval(() => {
@@ -660,6 +672,9 @@ const relayHandler = createRelayHandler({
   orgResolver: relayOrgResolver,
   createSessionRepo: async (orgSchema: string) =>
     createRelaySessionRepo(orgSchema),
+  indexer,
+  fieldEncryptor: encryptor,
+  pendingClients,
 });
 
 // --- HTTP server ---
@@ -736,6 +751,7 @@ async function shutdown(signal: string): Promise<void> {
   webhookDedupStore.stop();
   clearInterval(pendingCallCleanupInterval);
   zeroAllPendingCalls(pendingCalls);
+  zeroAllPendingClients(pendingClients);
   await jobQueue.stop();
   await db.destroy();
   process.exit(0);

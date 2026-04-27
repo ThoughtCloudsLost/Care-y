@@ -122,6 +122,12 @@ function makeDeps(overrides?: Partial<RelayHandlerDeps>): RelayHandlerDeps {
     ),
     resolveCallerIdByPurpose: vi.fn().mockResolvedValue("+15559999999"),
     pendingCalls: new Map<string, PendingCall>(),
+    indexer: { hash: vi.fn().mockReturnValue("fake-hash") },
+    fieldEncryptor: {
+      encrypt: vi.fn().mockReturnValue(Buffer.from("encrypted")),
+      decrypt: vi.fn().mockReturnValue("decrypted"),
+    },
+    pendingClients: new Map(),
     webhookBaseUrl: "https://api.care-y.app",
     getAuthToken: vi.fn().mockResolvedValue("test_auth_token"),
     getAccountSid: vi.fn().mockResolvedValue("ACtest123"),
