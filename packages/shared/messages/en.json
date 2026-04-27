@@ -188,6 +188,7 @@
   "error_attachment_not_found": "Attachment not found.",
   "error_note_type_not_found": "Note type not found.",
   "error_cannot_deactivate_default_note_type": "The default note type cannot be deactivated.",
+  "error_insufficient_role": "Your role does not have access to this note type.",
 
   "error_kb_category_not_found": "Category not found.",
   "error_kb_article_not_found": "Article not found.",

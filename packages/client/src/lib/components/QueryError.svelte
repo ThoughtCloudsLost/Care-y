@@ -107,7 +107,6 @@
     [ErrorCode.NOTE_TYPE_NOT_FOUND]: () => m.error_note_type_not_found(),
     [ErrorCode.CANNOT_DEACTIVATE_DEFAULT_NOTE_TYPE]: () =>
       m.error_cannot_deactivate_default_note_type(),
-    [ErrorCode.INVALID_ROLE_GATING]: () => m.error_generic(),
     [ErrorCode.INSUFFICIENT_ROLE]: () => m.error_generic(),
 
     // Knowledge base

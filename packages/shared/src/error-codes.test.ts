@@ -90,6 +90,11 @@ describe("ErrorCode", () => {
       "KB_ARTICLE_NOT_FOUND",
       "KB_ATTACHMENT_NOT_FOUND",
 
+      // Note types
+      "NOTE_TYPE_NOT_FOUND",
+      "CANNOT_DEACTIVATE_DEFAULT_NOTE_TYPE",
+      "INSUFFICIENT_ROLE",
+
       // Telephony
       "TELEPHONY_NOT_CONFIGURED",
       "NO_CONSULTANT_REGISTRATION",
