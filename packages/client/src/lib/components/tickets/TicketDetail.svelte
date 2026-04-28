@@ -52,6 +52,7 @@
   import { createTicketDecryptScope } from "$lib/crypto/ticket-decrypt-scope.js";
   import { SvelteMap } from "svelte/reactivity";
   import { RouterNotAvailableError } from "$lib/errors.js";
+  import { serializedBufferToBase64 } from "$lib/utils/buffer-encoding.js";
   import { onKeyActivate } from "$lib/utils/a11y.js";
   import { formatRelativeTime } from "$lib/utils/format-time.js";
   import { formatDateSeparator, needsDateSeparator } from "$lib/utils/time.js";
@@ -577,6 +578,7 @@
       noteTypeId: fu.noteTypeId ?? null,
       callStatus: fu.callStatus ?? null,
       callDurationSeconds: fu.callDurationSeconds ?? null,
+      keyGeneration: fu.keyGeneration ?? null,
     };
   }
 
@@ -599,6 +601,7 @@
           noteTypeId: fu.noteTypeId ?? null,
           callStatus: fu.callStatus ?? null,
           callDurationSeconds: fu.callDurationSeconds ?? null,
+          keyGeneration: fu.keyGeneration ?? null,
         }));
     if (activeNoteTypeIds.size === 0) return raw;
     return raw.filter((item) => {
@@ -631,7 +634,16 @@
   function resolveExpandedDecrypt(rec: ClusterRecord): DecryptResult {
     if (decrypt == null) return resolveAsyncDecrypt(undefined, false);
     if (rec.encryptedContent !== null) {
-      return decrypt.followUp(rec.id, rec.encryptedContent);
+      const fuKeyWrap = rec.keyWrap
+        ? {
+            ephemeralPoint: serializedBufferToBase64(
+              rec.keyWrap.ephemeralPoint,
+            ),
+            nonce: serializedBufferToBase64(rec.keyWrap.nonce),
+            wrappedKey: serializedBufferToBase64(rec.keyWrap.wrappedKey),
+          }
+        : null;
+      return decrypt.followUp(rec.id, rec.encryptedContent, fuKeyWrap);
     }
     return resolveAsyncDecrypt(followUpCache.get(rec.id), true);
   }
@@ -652,6 +664,14 @@
     hasImage: boolean;
     hasFile: boolean;
     noteTypeId?: string | null;
+    keyGeneration?: string | null;
+    keyWrap?:
+      | ClusterRecord["keyWrap"]
+      | {
+          readonly ephemeralPoint: { type: "Buffer"; data: number[] };
+          readonly nonce: { type: "Buffer"; data: number[] };
+          readonly wrappedKey: { type: "Buffer"; data: number[] };
+        };
   }): ClusterRecord {
     return {
       id: fu.id,
@@ -665,6 +685,8 @@
       hasImage: fu.hasImage,
       hasFile: fu.hasFile,
       noteTypeId: fu.noteTypeId ?? null,
+      keyGeneration: fu.keyGeneration ?? null,
+      keyWrap: fu.keyWrap ?? null,
     };
   }
 
@@ -708,6 +730,8 @@
         hasImage: summary?.hasImage ?? false,
         hasFile: summary?.hasFile ?? false,
         noteTypeId: summary?.noteTypeId ?? null,
+        keyGeneration: summary?.keyGeneration ?? null,
+        keyWrap: null,
       };
     });
     expandedClusters.set(key, initial);

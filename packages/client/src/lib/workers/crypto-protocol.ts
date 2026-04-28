@@ -1,10 +1,24 @@
 /**
  * Typed message protocol for the main-thread/Worker crypto boundary.
  *
- * Every request carries a monotonic `id` so the bridge can match responses
- * to pending promises. The Worker never initiates communication; it only
- * responds. PII-tier key material (masterKey, volPrivate, tk) never appears
- * in any response type. Only public values (volPublic) and operation results
+ * Two message channels share the same postMessage transport:
+ *
+ *  1. Request-response ("type" discriminant, has "id"):
+ *     Main thread sends a WorkerRequest with a monotonic id. The Worker
+ *     responds with a WorkerResponse carrying the same id. The bridge
+ *     matches responses to pending promises by id.
+ *
+ *  2. Worker-initiated events ("kind" discriminant, no id):
+ *     The Worker posts WorkerEvent messages (e.g., RewrapEvent) when it
+ *     completes a background operation that the main thread should act on.
+ *     The main thread posts MainThreadEvent messages back (e.g.,
+ *     RewrapResultEvent) to report the outcome. These are fire-and-forget
+ *     from the Worker's perspective: no promise, no id matching.
+ *
+ * The bridge dispatches on "kind" vs "type" at the top of onmessage.
+ *
+ * PII-tier key material (masterKey, volPrivate, tk) never appears in any
+ * response or event. Only public values (volPublic) and operation results
  * (plaintext, ciphertext) cross back to the main thread.
  *
  * Fields marked "Transferable" are passed in the postMessage transfer list.
@@ -65,6 +79,47 @@ export interface DecryptContentRequest {
   readonly wrappedKey: string;
   /** Encrypted content (nonce || ciphertext), base64. */
   readonly ciphertext: string;
+}
+
+/**
+ * Decrypt follow-up content encrypted with tk_temp, then re-encrypt with
+ * the ticket's canonical tk and post a RewrapEvent to the main thread.
+ *
+ * The Worker caches tk_temp for this follow-up so the main thread can
+ * later send RewrapBlobRequests for the same follow-up. tk_temp is evicted
+ * when RewrapResultEvent arrives (signaling all re-wrap is complete).
+ */
+export interface DecryptAndRewrapRequest {
+  readonly type: "decryptAndRewrap";
+  readonly id: number;
+  readonly followUpId: string;
+  /** Ticket that owns the canonical tk (already cached from a prior unwrap). */
+  readonly ticketId: string;
+  /** ECIES ephemeral point for tk_temp, base64. */
+  readonly ephemeralPoint: string;
+  /** ECIES nonce for tk_temp, base64. */
+  readonly nonce: string;
+  /** ECIES-wrapped tk_temp, base64. */
+  readonly wrappedKey: string;
+  /** Encrypted content (nonce || ciphertext), base64. */
+  readonly ciphertext: string;
+}
+
+/**
+ * Re-encrypt a single blob from tk_temp to the ticket's canonical tk.
+ * The main thread pre-fetches the encrypted blob via tRPC, sends it here.
+ * The Worker decrypts with the cached tk_temp (from a prior decryptAndRewrap),
+ * re-encrypts with canonical tk, and returns the result.
+ */
+export interface RewrapBlobRequest {
+  readonly type: "rewrapBlob";
+  readonly id: number;
+  readonly followUpId: string;
+  readonly ticketId: string;
+  /** Encrypted blob data (nonce || ciphertext), base64. */
+  readonly ciphertext: string;
+  readonly blobKey: string;
+  readonly category: "attachment" | "recording";
 }
 
 export interface EncryptContentRequest {
@@ -149,6 +204,8 @@ export type WorkerRequest =
   | OprfBlindRequest
   | DeriveKeysRequest
   | DecryptContentRequest
+  | DecryptAndRewrapRequest
+  | RewrapBlobRequest
   | EncryptContentRequest
   | DecryptBlobRequest
   | EvictTkRequest
@@ -203,6 +260,20 @@ export interface DecryptContentResponse extends SuccessBase {
   readonly type: "decryptContent";
   /** UTF-8 decrypted content. */
   readonly plaintext: string;
+}
+
+export interface DecryptAndRewrapResponse extends SuccessBase {
+  readonly type: "decryptAndRewrap";
+  /** UTF-8 decrypted content (displayed to the volunteer). */
+  readonly plaintext: string;
+}
+
+export interface RewrapBlobResponse extends SuccessBase {
+  readonly type: "rewrapBlob";
+  /** Re-encrypted blob data (encrypted with canonical tk), base64. */
+  readonly encryptedData: string;
+  readonly blobKey: string;
+  readonly category: "attachment" | "recording";
 }
 
 export interface EncryptContentResponse extends SuccessBase {
@@ -268,6 +339,8 @@ export type WorkerSuccessResponse =
   | OprfBlindResponse
   | DeriveKeysResponse
   | DecryptContentResponse
+  | DecryptAndRewrapResponse
+  | RewrapBlobResponse
   | EncryptContentResponse
   | DecryptBlobResponse
   | GetVolPublicResponse
@@ -279,6 +352,35 @@ export type WorkerSuccessResponse =
   | ZeroAllResponse;
 
 export type WorkerResponse = WorkerSuccessResponse | ErrorResponse;
+
+// ── Worker-initiated events (Worker -> main, not tied to a request) ──
+
+/**
+ * Worker posts this after decrypting follow-up content with tk_temp and
+ * re-encrypting with the ticket's canonical tk. The main thread should
+ * call the rewrapFollowUp tRPC mutation with the ciphertext, then post
+ * a RewrapResultEvent back.
+ */
+export interface RewrapEvent {
+  readonly kind: "rewrap";
+  readonly followUpId: string;
+  readonly ticketId: string;
+  readonly encryptedContent: string;
+}
+
+export type WorkerEvent = RewrapEvent;
+
+/**
+ * Main thread posts this back to the Worker after the tRPC rewrap
+ * mutation completes (or fails).
+ */
+export interface RewrapResultEvent {
+  readonly kind: "rewrap-result";
+  readonly followUpId: string;
+  readonly success: boolean;
+}
+
+export type MainThreadEvent = RewrapResultEvent;
 
 // ── Type-level helpers ───────────────────────────────────────────────
 

@@ -110,6 +110,40 @@ describe("TicketDecryptScope", () => {
         FOLLOW_UP_ID,
         KEY_WRAP,
         ENCRYPTED_CONTENT,
+        undefined,
+      );
+    });
+
+    it("passes rewrapContext when followUpKeyWrap is provided", () => {
+      const deps = createMocks({ contentReturn: undefined });
+      const scope = createTicketDecryptScope(deps);
+      const fuKeyWrap: TicketKeyWrap = {
+        ephemeralPoint: "fu-ep",
+        nonce: "fu-nonce",
+        wrappedKey: "fu-wk",
+      };
+
+      scope.followUp(FOLLOW_UP_ID, ENCRYPTED_CONTENT, fuKeyWrap);
+
+      expect(deps.mocks.decryptContent).toHaveBeenCalledWith(
+        FOLLOW_UP_ID,
+        KEY_WRAP,
+        ENCRYPTED_CONTENT,
+        { followUpKeyWrap: fuKeyWrap, ticketId: TICKET_ID },
+      );
+    });
+
+    it("omits rewrapContext when followUpKeyWrap is null", () => {
+      const deps = createMocks({ contentReturn: undefined });
+      const scope = createTicketDecryptScope(deps);
+
+      scope.followUp(FOLLOW_UP_ID, ENCRYPTED_CONTENT, null);
+
+      expect(deps.mocks.decryptContent).toHaveBeenCalledWith(
+        FOLLOW_UP_ID,
+        KEY_WRAP,
+        ENCRYPTED_CONTENT,
+        undefined,
       );
     });
 

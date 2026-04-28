@@ -24,6 +24,7 @@ const ENCRYPTED_CONTENT = {
 function createMockBridge(): {
   bridge: CryptoBridge;
   mockDecrypt: ReturnType<typeof vi.fn>;
+  mockDecryptAndRewrap: ReturnType<typeof vi.fn>;
 } {
   const mockDecrypt =
     vi.fn<
@@ -37,19 +38,49 @@ function createMockBridge(): {
     >();
   mockDecrypt.mockResolvedValue("Decrypted follow-up content");
 
+  const mockDecryptAndRewrap =
+    vi.fn<
+      (
+        followUpId: string,
+        ticketId: string,
+        ep: string,
+        nonce: string,
+        wk: string,
+        ct: string,
+      ) => Promise<string>
+    >();
+  mockDecryptAndRewrap.mockResolvedValue("Rewrap-decrypted content");
+
   return {
-    bridge: { decrypt: mockDecrypt } as unknown as CryptoBridge,
+    bridge: {
+      decrypt: mockDecrypt,
+      decryptAndRewrap: mockDecryptAndRewrap,
+    } as unknown as CryptoBridge,
     mockDecrypt,
+    mockDecryptAndRewrap,
   };
 }
+
+const FOLLOW_UP_KEY_WRAP = {
+  ephemeralPoint: "fu-ep-base64",
+  nonce: "fu-nonce-base64",
+  wrappedKey: "fu-wk-base64",
+};
+const TICKET_ID = "ticket-001";
 
 describe("FollowUpDecryptCache", () => {
   let cache: FollowUpDecryptCache;
   let mockDecrypt: ReturnType<typeof vi.fn>;
+  let mockDecryptAndRewrap: ReturnType<typeof vi.fn>;
 
   beforeEach(() => {
-    const { bridge, mockDecrypt: md } = createMockBridge();
+    const {
+      bridge,
+      mockDecrypt: md,
+      mockDecryptAndRewrap: mdr,
+    } = createMockBridge();
     mockDecrypt = md;
+    mockDecryptAndRewrap = mdr;
     cache = new FollowUpDecryptCache(bridge);
   });
 
@@ -121,6 +152,37 @@ describe("FollowUpDecryptCache", () => {
       await vi.waitFor(() => {
         expect(cache.has(FOLLOW_UP_ID)).toBe(false);
       });
+    });
+
+    it("routes to decryptAndRewrap when rewrapContext is provided", () => {
+      const result = cache.decryptContent(
+        FOLLOW_UP_ID,
+        KEY_WRAP,
+        ENCRYPTED_CONTENT,
+        { followUpKeyWrap: FOLLOW_UP_KEY_WRAP, ticketId: TICKET_ID },
+      );
+      expect(result).toBeUndefined();
+      expect(mockDecrypt).not.toHaveBeenCalled();
+      expect(mockDecryptAndRewrap).toHaveBeenCalledOnce();
+      expect(mockDecryptAndRewrap).toHaveBeenCalledWith(
+        FOLLOW_UP_ID,
+        TICKET_ID,
+        FOLLOW_UP_KEY_WRAP.ephemeralPoint,
+        FOLLOW_UP_KEY_WRAP.nonce,
+        FOLLOW_UP_KEY_WRAP.wrappedKey,
+        expect.any(String),
+      );
+    });
+
+    it("falls back to regular decrypt when no rewrapContext", () => {
+      const result = cache.decryptContent(
+        FOLLOW_UP_ID,
+        KEY_WRAP,
+        ENCRYPTED_CONTENT,
+      );
+      expect(result).toBeUndefined();
+      expect(mockDecryptAndRewrap).not.toHaveBeenCalled();
+      expect(mockDecrypt).toHaveBeenCalledOnce();
     });
   });
 });

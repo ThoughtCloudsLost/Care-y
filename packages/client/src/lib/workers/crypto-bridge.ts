@@ -25,6 +25,8 @@ import type {
   WorkerResponse,
   WorkerSuccessResponse,
   ResponseForRequest,
+  WorkerEvent,
+  RewrapResultEvent,
 } from "./crypto-protocol.js";
 
 export type BridgeState = "LOADING" | "READY" | "KEYED" | "DESTROYED";
@@ -57,6 +59,8 @@ function expectResponse<T extends WorkerRequestType>(
   return resp as ResponseForRequest<T>;
 }
 
+export type WorkerEventHandler = (event: WorkerEvent) => void;
+
 export class CryptoBridge {
   private worker: Worker;
   private state: BridgeState = "LOADING";
@@ -71,6 +75,7 @@ export class CryptoBridge {
   /** Captured at construction time to resist postMessage monkey-patching. */
   private readonly post: Worker["postMessage"];
   private readonly readyPromise: Promise<void>;
+  private workerEventHandler: WorkerEventHandler | null = null;
 
   constructor() {
     const worker = new Worker(new URL("./crypto.worker.ts", import.meta.url), {
@@ -78,8 +83,13 @@ export class CryptoBridge {
     });
     this.worker = worker;
     this.post = worker.postMessage.bind(worker);
-    worker.onmessage = (e: MessageEvent<WorkerResponse>) => {
-      this.handleResponse(e.data);
+    worker.onmessage = (e: MessageEvent<WorkerResponse | WorkerEvent>) => {
+      const data = e.data;
+      if ("kind" in data) {
+        this.workerEventHandler?.(data);
+        return;
+      }
+      this.handleResponse(data);
     };
     worker.onerror = (e: ErrorEvent) => {
       console.error(
@@ -166,6 +176,70 @@ export class CryptoBridge {
       "decryptContent",
     );
     return resp.plaintext;
+  }
+
+  /**
+   * Decrypt follow-up content encrypted with tk_temp, display it, and
+   * trigger background re-encryption with the ticket's canonical tk.
+   * Returns UTF-8 plaintext (same as decrypt). The Worker posts a
+   * RewrapEvent to the main thread as a side-effect and caches tk_temp
+   * for subsequent rewrapBlob calls.
+   */
+  async decryptAndRewrap(
+    followUpId: string,
+    ticketId: string,
+    ephemeralPoint: string,
+    nonce: string,
+    wrappedKey: string,
+    ciphertext: string,
+  ): Promise<string> {
+    const resp = expectResponse(
+      await this.sendRequest({
+        type: "decryptAndRewrap",
+        followUpId,
+        ticketId,
+        ephemeralPoint,
+        nonce,
+        wrappedKey,
+        ciphertext,
+      }),
+      "decryptAndRewrap",
+    );
+    return resp.plaintext;
+  }
+
+  /**
+   * Re-encrypt a single blob from tk_temp to canonical tk.
+   * The Worker must have cached tk_temp from a prior decryptAndRewrap call.
+   * Returns the re-encrypted blob data and metadata for the server mutation.
+   */
+  async rewrapBlob(
+    followUpId: string,
+    ticketId: string,
+    ciphertext: string,
+    blobKey: string,
+    category: "attachment" | "recording",
+  ): Promise<{
+    encryptedData: string;
+    blobKey: string;
+    category: "attachment" | "recording";
+  }> {
+    const resp = expectResponse(
+      await this.sendRequest({
+        type: "rewrapBlob",
+        followUpId,
+        ticketId,
+        ciphertext,
+        blobKey,
+        category,
+      }),
+      "rewrapBlob",
+    );
+    return {
+      encryptedData: resp.encryptedData,
+      blobKey: resp.blobKey,
+      category: resp.category,
+    };
   }
 
   /**
@@ -336,6 +410,17 @@ export class CryptoBridge {
       entry.reject(new CryptoWorkerError("Worker destroyed", "WORKER_ERROR"));
     }
     this.pending.clear();
+  }
+
+  /** Register a handler for Worker-initiated events (re-wrap notifications). */
+  onWorkerEvent(handler: WorkerEventHandler): void {
+    this.workerEventHandler = handler;
+  }
+
+  /** Post a non-request event to the Worker (e.g., re-wrap result). */
+  postEvent(event: RewrapResultEvent): void {
+    if (this.state === "DESTROYED") return;
+    this.post.call(this.worker, event);
   }
 
   /** Current bridge state (for UI status indicators). */

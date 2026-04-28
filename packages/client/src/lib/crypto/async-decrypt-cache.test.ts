@@ -35,6 +35,27 @@ class TestDecryptCache extends AsyncDecryptCache {
       ciphertext,
     );
   }
+
+  /** Expose the protected decryptAndRewrap() for testing. */
+  testDecryptAndRewrap(
+    cacheKey: string,
+    followUpId: string,
+    ticketId: string,
+    ephemeralPoint: string,
+    nonce: string,
+    wrappedKey: string,
+    ciphertext: string,
+  ): string | undefined {
+    return this.decryptAndRewrap(
+      cacheKey,
+      followUpId,
+      ticketId,
+      ephemeralPoint,
+      nonce,
+      wrappedKey,
+      ciphertext,
+    );
+  }
 }
 
 const CACHE_KEY = "item-001";
@@ -46,6 +67,7 @@ const CT = "ciphertext-base64";
 function createMockBridge(): {
   bridge: CryptoBridge;
   mockDecrypt: ReturnType<typeof vi.fn>;
+  mockDecryptAndRewrap: ReturnType<typeof vi.fn>;
 } {
   const mockDecrypt =
     vi.fn<
@@ -59,9 +81,26 @@ function createMockBridge(): {
     >();
   mockDecrypt.mockResolvedValue("decrypted-text");
 
+  const mockDecryptAndRewrap =
+    vi.fn<
+      (
+        followUpId: string,
+        ticketId: string,
+        ep: string,
+        nonce: string,
+        wk: string,
+        ct: string,
+      ) => Promise<string>
+    >();
+  mockDecryptAndRewrap.mockResolvedValue("rewrap-decrypted-text");
+
   return {
-    bridge: { decrypt: mockDecrypt } as unknown as CryptoBridge,
+    bridge: {
+      decrypt: mockDecrypt,
+      decryptAndRewrap: mockDecryptAndRewrap,
+    } as unknown as CryptoBridge,
     mockDecrypt,
+    mockDecryptAndRewrap,
   };
 }
 
@@ -126,6 +165,70 @@ describe("AsyncDecryptCache", () => {
     it("isDecryptError returns false for valid plaintext", () => {
       expect(isDecryptError("hello world")).toBe(false);
       expect(isDecryptError(undefined)).toBe(false);
+    });
+  });
+
+  describe("decryptAndRewrap", () => {
+    it("returns undefined on first call and triggers bridge.decryptAndRewrap()", () => {
+      const { bridge, mockDecryptAndRewrap } = createMockBridge();
+      const c = new TestDecryptCache(bridge, `RewrapTest-${Date.now()}`);
+
+      const result = c.testDecryptAndRewrap(
+        CACHE_KEY,
+        "fu-1",
+        "ticket-1",
+        EP,
+        NONCE,
+        WK,
+        CT,
+      );
+      expect(result).toBeUndefined();
+      expect(mockDecryptAndRewrap).toHaveBeenCalledOnce();
+      expect(mockDecryptAndRewrap).toHaveBeenCalledWith(
+        "fu-1",
+        "ticket-1",
+        EP,
+        NONCE,
+        WK,
+        CT,
+      );
+    });
+
+    it("returns cached plaintext after async resolve", async () => {
+      const { bridge, mockDecryptAndRewrap } = createMockBridge();
+      const c = new TestDecryptCache(bridge, `RewrapCache-${Date.now()}`);
+
+      c.testDecryptAndRewrap(CACHE_KEY, "fu-1", "ticket-1", EP, NONCE, WK, CT);
+
+      await vi.waitFor(() => {
+        expect(c.has(CACHE_KEY)).toBe(true);
+      });
+
+      const result = c.testDecryptAndRewrap(
+        CACHE_KEY,
+        "fu-1",
+        "ticket-1",
+        EP,
+        NONCE,
+        WK,
+        CT,
+      );
+      expect(result).toBe("rewrap-decrypted-text");
+      expect(mockDecryptAndRewrap).toHaveBeenCalledOnce();
+    });
+
+    it("stores error sentinel on failure", async () => {
+      const { bridge, mockDecryptAndRewrap } = createMockBridge();
+      mockDecryptAndRewrap.mockRejectedValueOnce(new Error("rewrap failed"));
+      const c = new TestDecryptCache(bridge, `RewrapErr-${Date.now()}`);
+
+      c.testDecryptAndRewrap(CACHE_KEY, "fu-1", "ticket-1", EP, NONCE, WK, CT);
+
+      await vi.waitFor(() => {
+        expect(c.has(CACHE_KEY)).toBe(true);
+      });
+
+      expect(c.get(CACHE_KEY)).toBe(DECRYPT_ERROR_SENTINEL);
     });
   });
 
