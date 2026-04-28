@@ -67,8 +67,8 @@ export class OrgKeyManager {
       throw new OrgKeyNotLoadedError();
     }
 
-    const plaintextB64 = await this.bridge.orgDecrypt(encode(ciphertext));
-    return new TextEncoder().encode(plaintextB64);
+    const rawBytesB64 = await this.bridge.orgDecrypt(encode(ciphertext));
+    return decode(rawBytesB64);
   }
 
   /**

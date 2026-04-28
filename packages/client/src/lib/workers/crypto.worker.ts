@@ -801,11 +801,12 @@ function handleOrgDecrypt(req: OrgDecryptRequest): void {
     );
 
     try {
+      // Return base64 of raw bytes (not UTF-8 text) to support binary content
       const msg: WorkerResponse = {
         id: req.id,
         ok: true,
         type: "orgDecrypt",
-        plaintext: textDecoder.decode(plainBytes),
+        plaintext: encode(plainBytes),
       };
       self.postMessage(msg);
     } finally {
