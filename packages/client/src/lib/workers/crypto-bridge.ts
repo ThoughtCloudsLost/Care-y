@@ -386,6 +386,27 @@ export class CryptoBridge {
     };
   }
 
+  async createTicketEncryption(
+    fields: readonly { name: string; plaintext: string }[],
+  ): Promise<{
+    encryptedFields: readonly { name: string; ciphertext: string }[];
+    keyWrap: { ephemeralPoint: string; nonce: string; wrappedKey: string };
+    keyGeneration: string;
+  }> {
+    const resp = expectResponse(
+      await this.sendRequest({
+        type: "createTicketKey",
+        fields,
+      }),
+      "createTicketKey",
+    );
+    return {
+      encryptedFields: resp.encryptedFields,
+      keyWrap: resp.keyWrap,
+      keyGeneration: resp.keyGeneration,
+    };
+  }
+
   /** Zero all keys, terminate the Worker, reject any pending requests. */
   destroy(): void {
     if (this.state === "DESTROYED") return;

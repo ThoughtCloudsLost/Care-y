@@ -40,6 +40,7 @@ import {
   eciesDecrypt,
   encryptContent,
   decryptContent,
+  generateContentKey,
   encode,
   decode,
   type Scalar,
@@ -66,6 +67,7 @@ import type {
   UnwrapTkRequest,
   WrapWithVolPublicRequest,
   RewrapTkRequest,
+  CreateTicketKeyRequest,
   WorkerRequestType,
   RewrapEvent,
   RewrapResultEvent,
@@ -727,6 +729,47 @@ function handleRewrapTk(req: RewrapTkRequest): void {
   }
 }
 
+function handleCreateTicketKey(req: CreateTicketKeyRequest): void {
+  if (!requireKeyed(req.id, "createTicketKey")) return;
+
+  const sodium = requireSodium();
+  const tk = generateContentKey();
+
+  try {
+    const encryptedFields = req.fields.map((f) => {
+      const plaintextBuf = textEncoder.encode(f.plaintext);
+      const ciphertext = encryptContent(plaintextBuf, tk);
+      return { name: f.name, ciphertext: encode(ciphertext) };
+    });
+
+    const wrap = eciesEncrypt(tk, assertPresent(volPublic, "volPublic"));
+    const keyGeneration = crypto.randomUUID();
+
+    const msg: WorkerResponse = {
+      id: req.id,
+      ok: true,
+      type: "createTicketKey",
+      encryptedFields,
+      keyWrap: {
+        ephemeralPoint: encode(wrap.ephemeralPoint),
+        nonce: encode(wrap.nonce),
+        wrappedKey: encode(wrap.ciphertext),
+      },
+      keyGeneration,
+    };
+    self.postMessage(msg);
+  } catch (err: unknown) {
+    postError(
+      req.id,
+      "createTicketKey",
+      err instanceof Error ? err.message : String(err),
+      "ENCRYPT_FAILED",
+    );
+  } finally {
+    sodium.memzero(tk);
+  }
+}
+
 // ── Message dispatcher ──────────────────────────────────────────────
 
 self.addEventListener(
@@ -789,6 +832,9 @@ self.addEventListener(
           break;
         case "rewrapTk":
           handleRewrapTk(req);
+          break;
+        case "createTicketKey":
+          handleCreateTicketKey(req);
           break;
       }
     };

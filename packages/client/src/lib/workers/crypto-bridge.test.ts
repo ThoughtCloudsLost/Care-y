@@ -350,6 +350,63 @@ describe("CryptoBridge", () => {
     });
   });
 
+  describe("createTicketEncryption", () => {
+    it("sends createTicketKey request and returns structured result", async () => {
+      const bridge = await createReadyBridge();
+
+      const fields = [
+        { name: "title", plaintext: "Test title" },
+        { name: "description", plaintext: "Test desc" },
+      ];
+      const promise = bridge.createTicketEncryption(fields);
+
+      const calls = mockWorkerInstance?.postMessage.mock.calls;
+      const createCall = await vi.waitFor(() => {
+        const found = calls?.find(
+          (c: unknown[]) =>
+            (c[0] as { type: string }).type === "createTicketKey",
+        ) as
+          | [
+              {
+                type: string;
+                id: number;
+                fields: Array<{ name: string; plaintext: string }>;
+              },
+            ]
+          | undefined;
+        expect(found).toBeDefined();
+        return found;
+      });
+
+      expect(createCall?.[0].fields).toEqual(fields);
+
+      respondFromWorker({
+        id: createCall?.[0].id ?? 0,
+        ok: true,
+        type: "createTicketKey",
+        encryptedFields: [
+          { name: "title", ciphertext: "ZW5jLXRpdGxl" },
+          { name: "description", ciphertext: "ZW5jLWRlc2M=" },
+        ],
+        keyWrap: {
+          ephemeralPoint: "ZXBoZW1lcmFs",
+          nonce: "bm9uY2U=",
+          wrappedKey: "d3JhcHBlZA==",
+        },
+        keyGeneration: "550e8400-e29b-41d4-a716-446655440000",
+      });
+
+      const result = await promise;
+      expect(result.encryptedFields).toHaveLength(2);
+      expect(result.encryptedFields[0]!.name).toBe("title");
+      expect(result.encryptedFields[0]!.ciphertext).toBe("ZW5jLXRpdGxl");
+      expect(result.keyWrap.ephemeralPoint).toBe("ZXBoZW1lcmFs");
+      expect(result.keyWrap.nonce).toBe("bm9uY2U=");
+      expect(result.keyWrap.wrappedKey).toBe("d3JhcHBlZA==");
+      expect(result.keyGeneration).toBe("550e8400-e29b-41d4-a716-446655440000");
+    });
+  });
+
   describe("error handling", () => {
     it("rejects pending promise with CryptoWorkerError on Worker error", async () => {
       const bridge = await createReadyBridge();

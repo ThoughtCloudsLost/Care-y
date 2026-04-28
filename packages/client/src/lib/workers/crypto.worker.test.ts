@@ -45,6 +45,7 @@ import type {
   RewrapTkResponse,
   EvictTkResponse,
   ZeroAllResponse,
+  CreateTicketKeyResponse,
   RewrapEvent,
 } from "./crypto-protocol.js";
 import { CryptoWorkerTestError } from "$lib/errors.js";
@@ -870,6 +871,119 @@ describe("crypto.worker", () => {
       });
       expect(resp.ok).toBe(false);
       expect((resp as ErrorResponse).code).toBe("TK_NOT_CACHED");
+    });
+  });
+
+  describe("createTicketKey", () => {
+    it("generates tk, encrypts fields, and returns decryptable ciphertexts with keyWrap", async () => {
+      await sendAndWait({ type: "zeroAll", id: 3000 });
+
+      const sodium = requireSodium();
+      const salt = sodium.randombytes_buf(16);
+      await fullLoginFlow("create-ticket-key-test", salt);
+
+      const resp = (await sendAndWait({
+        type: "createTicketKey",
+        id: 3001,
+        fields: [
+          { name: "title", plaintext: "Test ticket title" },
+          { name: "description", plaintext: "Detailed description here" },
+        ],
+      })) as CreateTicketKeyResponse;
+
+      expect(resp.ok).toBe(true);
+      expect(resp.type).toBe("createTicketKey");
+      expect(resp.encryptedFields).toHaveLength(2);
+      expect(resp.encryptedFields[0]!.name).toBe("title");
+      expect(resp.encryptedFields[1]!.name).toBe("description");
+      expect(resp.keyGeneration).toMatch(
+        /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
+      );
+
+      // Unwrap the tk via ECIES and verify each field decrypts correctly.
+      // We can't access the Worker's volPrivate, but we CAN use the Worker's
+      // own decryptContent to verify the roundtrip: unwrap the tk first via
+      // unwrapTk (caches it), then decrypt each field with that cached tk.
+      //
+      // The keyWrap was created by ECIES-encrypting the tk with the Worker's
+      // volPublic, so the Worker's volPrivate (internal) can unwrap it.
+      // unwrapTk does exactly this: ECIES-decrypt + cache.
+      const unwrapResp = await sendAndWait({
+        type: "unwrapTk",
+        id: 3002,
+        ticketId: "ticket-new-roundtrip",
+        ephemeralPoint: resp.keyWrap.ephemeralPoint,
+        nonce: resp.keyWrap.nonce,
+        wrappedKey: resp.keyWrap.wrappedKey,
+      });
+      expect(unwrapResp.ok).toBe(true);
+
+      // Decrypt each field using the now-cached tk
+      for (const field of resp.encryptedFields) {
+        const decResp = (await sendAndWait({
+          type: "decryptContent",
+          id: 3003,
+          ticketId: "ticket-new-roundtrip",
+          ephemeralPoint: resp.keyWrap.ephemeralPoint,
+          nonce: resp.keyWrap.nonce,
+          wrappedKey: resp.keyWrap.wrappedKey,
+          ciphertext: field.ciphertext,
+        })) as DecryptContentResponse;
+
+        expect(decResp.ok).toBe(true);
+      }
+
+      // Verify actual plaintext values
+      const titleResp = (await sendAndWait({
+        type: "decryptContent",
+        id: 3004,
+        ticketId: "ticket-new-roundtrip",
+        ephemeralPoint: resp.keyWrap.ephemeralPoint,
+        nonce: resp.keyWrap.nonce,
+        wrappedKey: resp.keyWrap.wrappedKey,
+        ciphertext: resp.encryptedFields[0]!.ciphertext,
+      })) as DecryptContentResponse;
+      expect(titleResp.plaintext).toBe("Test ticket title");
+
+      const descResp = (await sendAndWait({
+        type: "decryptContent",
+        id: 3005,
+        ticketId: "ticket-new-roundtrip",
+        ephemeralPoint: resp.keyWrap.ephemeralPoint,
+        nonce: resp.keyWrap.nonce,
+        wrappedKey: resp.keyWrap.wrappedKey,
+        ciphertext: resp.encryptedFields[1]!.ciphertext,
+      })) as DecryptContentResponse;
+      expect(descResp.plaintext).toBe("Detailed description here");
+    });
+
+    it("produces distinct ciphertexts for identical plaintext fields", async () => {
+      const resp = (await sendAndWait({
+        type: "createTicketKey",
+        id: 3010,
+        fields: [
+          { name: "field_a", plaintext: "same content" },
+          { name: "field_b", plaintext: "same content" },
+        ],
+      })) as CreateTicketKeyResponse;
+
+      expect(resp.ok).toBe(true);
+      expect(resp.encryptedFields[0]!.ciphertext).not.toBe(
+        resp.encryptedFields[1]!.ciphertext,
+      );
+    });
+
+    it("rejects in non-KEYED state", async () => {
+      await sendAndWait({ type: "zeroAll", id: 3020 });
+      await sendAndWait({ type: "init", id: 3021 });
+
+      const resp = await sendAndWait({
+        type: "createTicketKey",
+        id: 3022,
+        fields: [{ name: "title", plaintext: "Should fail" }],
+      });
+      expect(resp.ok).toBe(false);
+      expect((resp as ErrorResponse).code).toBe("NOT_READY");
     });
   });
 
