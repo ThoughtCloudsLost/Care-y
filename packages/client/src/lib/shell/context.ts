@@ -72,3 +72,18 @@ export interface NavbarOverrideContainer {
 
 export const [getNavbarOverrideCtx, setNavbarOverrideCtx] =
   createContext<NavbarOverrideContainer>();
+
+/**
+ * New ticket trigger: any route can open the new ticket popup by
+ * calling open() on the container. The (app) layout owns the popup
+ * state and passes it to NewTicketController via bind:opened.
+ *
+ * Flow: Layout creates the container and calls setNewTicketTriggerCtx().
+ * Child routes call getNewTicketTriggerCtx() and invoke container.open().
+ */
+export interface NewTicketTriggerContainer {
+  open: () => void;
+}
+
+export const [getNewTicketTriggerCtx, setNewTicketTriggerCtx] =
+  createContext<NewTicketTriggerContainer>();

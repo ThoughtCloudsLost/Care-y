@@ -176,10 +176,7 @@
         <ListItem title="..." />
       {:else if myQueuesQuery.data && myQueuesQuery.data.length > 0}
         {#each myQueuesQuery.data as queue (queue.id)}
-          {@const name = decryptQueueDisplayName(
-            queue.id,
-            queue.encrypted_name,
-          )}
+          {@const name = decryptQueueDisplayName(queue.id, queue.encryptedName)}
           <ListItem>
             {#snippet title()}
               {#if name}

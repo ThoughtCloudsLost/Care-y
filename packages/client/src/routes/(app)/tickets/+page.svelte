@@ -781,16 +781,10 @@
   ]);
 
   const queueOptions = $derived(
-    (queuesQuery.data ?? []).map(
-      (q: {
-        id: string;
-        encrypted_name: SerializedBuffer | Uint8Array | null;
-        openCount: string;
-      }) => ({
-        value: q.id,
-        label: `${orgCache.decrypt(`queue:${q.id}`, q.encrypted_name) ?? "..."} (${q.openCount})`,
-      }),
-    ),
+    (queuesQuery.data ?? []).map((q) => ({
+      value: q.id,
+      label: `${orgCache.decrypt(`queue:${q.id}`, q.encryptedName) ?? "..."} (${q.openCount})`,
+    })),
   );
 
   const assigneeOptions = $derived.by(() => {
