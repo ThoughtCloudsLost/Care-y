@@ -34,7 +34,7 @@ const {
   mockToastShow,
   mockOrgCacheDelete,
 } = vi.hoisted(() => ({
-  mockEncrypt: vi.fn().mockReturnValue(new Uint8Array([1, 2, 3, 4])),
+  mockEncrypt: vi.fn().mockResolvedValue(new Uint8Array([1, 2, 3, 4])),
   mockCreateCategory: vi.fn().mockResolvedValue({}),
   mockUpdateCategory: vi.fn().mockResolvedValue({}),
   mockDeleteCategory: vi.fn().mockResolvedValue({}),
@@ -203,13 +203,15 @@ describe("CategoryManageSheet", () => {
     const saveBtn = screen.getByText("Save");
     await fireEvent.click(saveBtn);
 
-    expect(mockEncrypt).toHaveBeenCalled();
-    expect(mockCreateCategory).toHaveBeenCalledWith({
-      encryptedName: "AQIDBA==",
-      encryptedDescription: undefined,
-    });
-    expect(mockInvalidateQueries).toHaveBeenCalledWith({
-      queryKey: ["kb", "categories"],
+    await vi.waitFor(() => {
+      expect(mockEncrypt).toHaveBeenCalled();
+      expect(mockCreateCategory).toHaveBeenCalledWith({
+        encryptedName: "AQIDBA==",
+        encryptedDescription: undefined,
+      });
+      expect(mockInvalidateQueries).toHaveBeenCalledWith({
+        queryKey: ["kb", "categories"],
+      });
     });
   });
 
@@ -253,10 +255,12 @@ describe("CategoryManageSheet", () => {
     // Click Save
     await fireEvent.click(screen.getByText("Save"));
 
-    expect(mockUpdateCategory).toHaveBeenCalledWith({
-      categoryId: "cat-1",
-      encryptedName: "AQIDBA==",
-      encryptedDescription: "AQIDBA==",
+    await vi.waitFor(() => {
+      expect(mockUpdateCategory).toHaveBeenCalledWith({
+        categoryId: "cat-1",
+        encryptedName: "AQIDBA==",
+        encryptedDescription: "AQIDBA==",
+      });
     });
   });
 

@@ -119,6 +119,7 @@ vi.mock("$lib/crypto/context.js", () => ({
 vi.mock("$lib/shell/context.js", () => ({
   getNavbarOverrideCtx: () => ({ current: undefined }),
   getTabbarOverrideCtx: () => ({ current: undefined }),
+  getNewTicketTriggerCtx: () => ({ open: vi.fn() }),
 }));
 
 // --- Helpers ---
