@@ -95,6 +95,7 @@
   let decryptedTitle: string | null = $state(null);
   let decryptedBody: unknown = $state(null);
   let decryptAttempted = $state(false);
+  let editDecryptVersion = 0;
 
   $effect(() => {
     if (article == null || !orgKeyManager.isLoaded) {
@@ -112,6 +113,7 @@
       article.encryptedBody instanceof Uint8Array
         ? article.encryptedBody
         : new Uint8Array(article.encryptedBody.data);
+    const version = ++editDecryptVersion;
 
     void (async (): Promise<void> => {
       try {
@@ -119,14 +121,16 @@
           orgKeyManager.decrypt(titleCt),
           orgKeyManager.decrypt(bodyCt),
         ]);
+        if (version !== editDecryptVersion) return;
         decryptedTitle = new TextDecoder().decode(titleBytes);
         const text = new TextDecoder().decode(bodyBytes);
         decryptedBody = JSON.parse(text) as unknown;
       } catch {
+        if (version !== editDecryptVersion) return;
         decryptedTitle = null;
         decryptedBody = null;
       } finally {
-        decryptAttempted = true;
+        if (version === editDecryptVersion) decryptAttempted = true;
       }
     })();
   });

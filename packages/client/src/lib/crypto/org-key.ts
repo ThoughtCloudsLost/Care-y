@@ -15,7 +15,7 @@
  *   SEC-206  ProtonMail Worker key isolation pattern
  */
 
-import { decode } from "@care-y/crypto";
+import { decode, encode } from "@care-y/crypto";
 import type { CryptoBridge } from "$lib/workers/crypto-bridge.js";
 
 /** Thrown when operations are called before the org key has been loaded. */
@@ -54,7 +54,6 @@ export class OrgKeyManager {
       throw new OrgKeyNotLoadedError();
     }
 
-    const { encode } = await import("@care-y/crypto");
     const ciphertextB64 = await this.bridge.orgEncrypt(encode(plaintext));
     return decode(ciphertextB64);
   }
@@ -68,7 +67,6 @@ export class OrgKeyManager {
       throw new OrgKeyNotLoadedError();
     }
 
-    const { encode } = await import("@care-y/crypto");
     const plaintextB64 = await this.bridge.orgDecrypt(encode(ciphertext));
     return new TextEncoder().encode(plaintextB64);
   }
