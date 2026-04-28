@@ -43,6 +43,7 @@
     User,
   } from "@lucide/svelte";
   import { getOrgLogoUrl } from "$lib/branding/logo-url.svelte.js";
+  import CallIndicator from "./CallIndicator.svelte";
   import { tick, onMount } from "svelte";
   import { SvelteMap } from "svelte/reactivity";
   import type { Component } from "svelte";
@@ -817,6 +818,9 @@
       {/if}
     {/snippet}
     {#snippet right()}
+      {#if !searchOpen}
+        <CallIndicator />
+      {/if}
       {#if !searchOpen && navbarOverride?.searchHidden !== true}
         <Link
           iconOnly

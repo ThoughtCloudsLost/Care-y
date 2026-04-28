@@ -79,6 +79,11 @@ export interface RelayHandlerDeps {
   readonly fieldEncryptor: FieldEncryptor;
   readonly pendingClients: Map<string, PendingClient>;
   readonly callTracker?: CallTracker;
+  readonly resolveClientPhone?: (
+    ticketId: string,
+    tenantDb: Kysely<TenantDatabase>,
+    fieldEncryptor: FieldEncryptor,
+  ) => Promise<Buffer | null>;
 }
 
 export interface PendingCall {
@@ -96,7 +101,7 @@ export interface PendingCall {
  * Creates the relay HTTP handler function.
  * Dispatches by URL path prefix:
  *   POST /relay/sms          -> SMS relay
- *   POST /relay/call         -> Call relay (two-leg or WebRTC redirect)
+ *   POST /relay/call         -> Call relay (ticketId + consultantPhone)
  *   POST /relay/webrtc-token -> WebRTC capability token
  *   POST /relay/call-confirm/<orgSchema> -> DTMF callback from Twilio
  */
@@ -157,8 +162,8 @@ export function createRelayHandler(
 // ---------------------------------------------------------------------------
 
 /**
- * Receives { to, body }, forwards to provider.sendSms(), zeros Buffers.
- * Caller ID resolved server-side via org_config.phone_outbound_sid.
+ * Receives { ticketId, body }. Resolves client phone server-side via OPS
+ * decryption, forwards to provider.sendSms(), zeros Buffers.
  */
 async function handleSmsRelay(
   req: IncomingMessage,
@@ -167,22 +172,38 @@ async function handleSmsRelay(
   deps: RelayHandlerDeps,
 ): Promise<void> {
   let rawBody: Buffer | null = null;
-  let toBuf: Buffer | null = null;
+  let ticketIdBuf: Buffer | null = null;
   let bodyBuf: Buffer | null = null;
+  let phoneBuf: Buffer | null = null;
 
   try {
     rawBody = await readRawBody(req, MAX_RELAY_BODY);
 
-    toBuf = extractBufferField(rawBody, "to");
+    ticketIdBuf = extractBufferField(rawBody, "ticketId");
     bodyBuf = extractBufferField(rawBody, "body");
 
-    if (!toBuf || !bodyBuf || toBuf.length === 0 || bodyBuf.length === 0) {
+    if (
+      !ticketIdBuf ||
+      !bodyBuf ||
+      ticketIdBuf.length === 0 ||
+      bodyBuf.length === 0
+    ) {
       sendRelayError(res, 400, "MISSING_FIELDS");
       return;
     }
 
     if (bodyBuf.length > 1600) {
       sendRelayError(res, 400, "BODY_TOO_LONG");
+      return;
+    }
+
+    const tenantDb = deps.getTenantDb(session.orgSchema);
+    const ticketId = ticketIdBuf.toString("utf-8");
+
+    const resolvePhone = deps.resolveClientPhone ?? resolveClientPhone;
+    phoneBuf = await resolvePhone(ticketId, tenantDb, deps.fieldEncryptor);
+    if (!phoneBuf) {
+      sendRelayError(res, 404, "CLIENT_PHONE_NOT_FOUND");
       return;
     }
 
@@ -201,13 +222,10 @@ async function handleSmsRelay(
       return;
     }
 
-    // Convert Buffers to strings at the last possible moment.
-    // RESIDUAL RISK: these JS string copies are immutable and persist until
-    // GC collects them. The TelephonyProvider interface (4a) accepts strings,
-    // not Buffers. The exposure window is short (provider.sendSms awaits a
-    // single HTTP call) and the strings hold no references after this scope
-    // exits, so they become GC-eligible immediately.
-    const toStr = toBuf.toString("utf-8");
+    // RESIDUAL RISK: JS string copies are immutable and persist until GC.
+    // The TelephonyProvider interface accepts strings, not Buffers.
+    // Exposure window is short (provider.sendSms awaits a single HTTP call).
+    const toStr = phoneBuf.toString("utf-8");
     const bodyStr = bodyBuf.toString("utf-8");
 
     let result: { messageId: string };
@@ -221,8 +239,9 @@ async function handleSmsRelay(
     sendJsonResponse(res, 200, { messageId: result.messageId });
   } finally {
     rawBody?.fill(0);
-    toBuf?.fill(0);
+    ticketIdBuf?.fill(0);
     bodyBuf?.fill(0);
+    phoneBuf?.fill(0);
   }
 }
 
@@ -231,11 +250,10 @@ async function handleSmsRelay(
 // ---------------------------------------------------------------------------
 
 /**
- * Initiates an outbound call. The method (phone_callback or webrtc) is
- * determined by the consultant's preference, not the request body.
- *
- * For phone_callback: browser sends { clientPhone, consultantPhone }.
- * Server cannot decrypt consultant's sealed-box encrypted phone (Proton model).
+ * Initiates an outbound call. Receives { ticketId, consultantPhone }.
+ * Client phone resolved server-side via OPS decryption. Consultant phone
+ * is PII-tier encrypted (server can't decrypt it, browser must send it).
+ * Call method determined by consultant's preference.
  */
 async function handleCallRelay(
   req: IncomingMessage,
@@ -244,21 +262,22 @@ async function handleCallRelay(
   deps: RelayHandlerDeps,
 ): Promise<void> {
   let rawBody: Buffer | null = null;
-  let clientPhoneBuf: Buffer | null = null;
   let consultantPhoneBuf: Buffer | null = null;
   let ticketIdBuf: Buffer | null = null;
+  let clientPhoneBuf: Buffer | null = null;
 
   try {
     rawBody = await readRawBody(req, MAX_RELAY_BODY);
-    clientPhoneBuf = extractBufferField(rawBody, "clientPhone");
     ticketIdBuf = extractBufferField(rawBody, "ticketId");
 
-    if (!clientPhoneBuf || clientPhoneBuf.length === 0) {
+    if (!ticketIdBuf || ticketIdBuf.length === 0) {
       sendRelayError(res, 400, "MISSING_FIELDS");
       return;
     }
 
     const tenantDb = deps.getTenantDb(session.orgSchema);
+    const ticketId = ticketIdBuf.toString("utf-8");
+
     const consultantRepo = deps.createConsultantRepo(tenantDb);
     const consultant = await consultantRepo.findByUserId(session.userId);
 
@@ -267,7 +286,6 @@ async function handleCallRelay(
       return;
     }
 
-    // If WebRTC preferred, tell the client to use the token endpoint instead
     if (consultant.preferredCallMethod === "webrtc") {
       sendJsonResponse(res, 200, {
         callSid: "",
@@ -276,7 +294,17 @@ async function handleCallRelay(
       return;
     }
 
-    // Phone callback flow
+    const resolvePhone = deps.resolveClientPhone ?? resolveClientPhone;
+    clientPhoneBuf = await resolvePhone(
+      ticketId,
+      tenantDb,
+      deps.fieldEncryptor,
+    );
+    if (!clientPhoneBuf) {
+      sendRelayError(res, 404, "CLIENT_PHONE_NOT_FOUND");
+      return;
+    }
+
     const provider = await deps.getProvider(session.orgSchema);
     if (!provider) {
       sendRelayError(res, 500, "NO_PROVIDER");
@@ -292,7 +320,7 @@ async function handleCallRelay(
       return;
     }
 
-    // Browser must send consultant's phone (Proton model: server can't decrypt)
+    // Browser sends consultant's phone (PII-tier: server can't decrypt it)
     consultantPhoneBuf = extractBufferField(rawBody, "consultantPhone");
     if (!consultantPhoneBuf || consultantPhoneBuf.length === 0) {
       sendRelayError(res, 400, "MISSING_CONSULTANT_PHONE");
@@ -319,8 +347,6 @@ async function handleCallRelay(
       return;
     }
 
-    // Store pending call state for DTMF confirmation.
-    // Clone the client phone Buffer (original is zeroed in finally).
     const clientPhoneClone = Buffer.from(clientPhoneBuf);
     const callerIdBuf = Buffer.from(callerIdStr);
 
@@ -332,7 +358,6 @@ async function handleCallRelay(
     });
 
     if (deps.callTracker) {
-      const ticketId = ticketIdBuf ? ticketIdBuf.toString("utf-8") : "";
       deps.callTracker.track(callSid, {
         ticketId,
         userId: session.userId,
@@ -346,8 +371,8 @@ async function handleCallRelay(
     sendJsonResponse(res, 200, { callSid, method: "phone_callback" });
   } finally {
     rawBody?.fill(0);
-    clientPhoneBuf?.fill(0);
     ticketIdBuf?.fill(0);
+    clientPhoneBuf?.fill(0);
     if (consultantPhoneBuf) consultantPhoneBuf.fill(0);
   }
 }
@@ -665,6 +690,27 @@ async function handlePhoneLookup(
     rawBody?.fill(0);
     phoneBuf?.fill(0);
   }
+}
+
+// ---------------------------------------------------------------------------
+// Client phone resolution (ticket -> client -> phone -> OPS decrypt)
+// ---------------------------------------------------------------------------
+
+async function resolveClientPhone(
+  ticketId: string,
+  tenantDb: Kysely<TenantDatabase>,
+  fieldEncryptor: FieldEncryptor,
+): Promise<Buffer | null> {
+  const row = await tenantDb
+    .selectFrom("tickets as t")
+    .innerJoin("clients as c", "c.id", "t.client_id")
+    .innerJoin("phones as p", "p.id", "c.phone_id")
+    .select("p.encrypted_number")
+    .where("t.id", "=", ticketId)
+    .executeTakeFirst();
+
+  if (!row) return null;
+  return fieldEncryptor.decryptToBuffer(row.encrypted_number);
 }
 
 // ---------------------------------------------------------------------------
