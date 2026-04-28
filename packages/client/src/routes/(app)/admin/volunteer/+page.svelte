@@ -40,7 +40,7 @@
   type QueueRecord = NonNullable<typeof queuesQuery.data>[number];
 
   function decryptQueueName(queue: QueueRecord): string | null {
-    return orgCache.decrypt(`queue:${queue.id}`, queue.encrypted_name);
+    return orgCache.decrypt(`queue:${queue.id}`, queue.encryptedName);
   }
 
   function handleSecurityStatus(): void {

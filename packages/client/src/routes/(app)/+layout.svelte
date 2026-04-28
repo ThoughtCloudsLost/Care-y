@@ -1,9 +1,14 @@
 <script lang="ts">
   import { browser } from "$app/environment";
   import { getCryptoBridge, getOrgKeyManager } from "$lib/crypto/context.js";
+  import { setNewTicketTriggerCtx } from "$lib/shell/context.js";
+  import NewTicketController from "$lib/components/tickets/NewTicketController.svelte";
   import ToastRenderer from "$lib/shell/ToastRenderer.svelte";
 
   let { children } = $props();
+
+  let newTicketOpen = $state(false);
+  setNewTicketTriggerCtx({ open: () => (newTicketOpen = true) });
 
   // Dev-only auto-login with full production crypto pipeline.
   // Runs registerCrypto + loginCrypto, rotates the throwaway org keypair,
@@ -51,4 +56,5 @@
 {#if devLoginDone}
   {@render children()}
 {/if}
+<NewTicketController bind:opened={newTicketOpen} />
 <ToastRenderer />

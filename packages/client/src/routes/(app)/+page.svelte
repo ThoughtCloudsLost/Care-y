@@ -39,7 +39,10 @@
   } from "$lib/crypto/context.js";
   import { Permission } from "@care-y/shared";
   import ShellPopover from "$lib/shell/ShellPopover.svelte";
-  import { getNavbarOverrideCtx } from "$lib/shell/context.js";
+  import {
+    getNavbarOverrideCtx,
+    getNewTicketTriggerCtx,
+  } from "$lib/shell/context.js";
   import { resolveAsyncDecrypt } from "$lib/crypto/decrypt-result.js";
   import { bucketTickets } from "$lib/components/dashboard/filters.js";
   import {
@@ -57,6 +60,7 @@
   const permissionsGetter = getCurrentPermissions();
   const permissions = $derived(permissionsGetter());
   const navbarCtx = getNavbarOverrideCtx();
+  const newTicketTrigger = getNewTicketTriggerCtx();
 
   // --- Create menu (navbar "+" popover) ---
 
@@ -118,6 +122,9 @@
   function handleCreateOption(optionId: string): void {
     createPopoverOpen = false;
     switch (optionId) {
+      case "ticket":
+        newTicketTrigger.open();
+        break;
       case "article":
         void goto(resolve("/library/new"));
         break;
@@ -255,7 +262,7 @@
   const queueProps = $derived(
     (queuesQuery.data ?? []).map((q) => ({
       id: q.id,
-      name: orgCache.decrypt(`queue:${q.id}`, q.encrypted_name),
+      name: orgCache.decrypt(`queue:${q.id}`, q.encryptedName),
       openCount: Number(q.openCount),
     })),
   );

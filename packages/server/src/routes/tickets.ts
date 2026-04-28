@@ -1310,20 +1310,10 @@ export function createTicketRouter(deps: TicketRouterDeps) {
 
         if (queueIds.length === 0) return [];
 
-        const rows = await tDb
-          .selectFrom("queues as q")
-          .leftJoin("tickets as t", (join) =>
-            join.onRef("t.queue_id", "=", "q.id").on("t.status", "=", "open"),
-          )
-          .select(["q.id", "q.encrypted_name", "q.sort_order"])
-          .select((eb) => eb.fn.count<string>("t.id").as("openCount"))
-          .where("q.id", "in", queueIds)
-          .where("q.is_active", "=", true)
-          .groupBy(["q.id", "q.encrypted_name", "q.sort_order"])
-          .orderBy("q.sort_order", "asc")
-          .execute();
-
-        return rows;
+        const svc = deps.createQueueSvc(tDb);
+        const allQueues = await svc.listActive();
+        const allowed = new Set(queueIds);
+        return allQueues.filter((q) => allowed.has(q.id));
       }),
     ),
 
