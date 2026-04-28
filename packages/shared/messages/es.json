@@ -1265,5 +1265,7 @@
 
   "exposure_hint_sms": "Los SMS no estan cifrados. Tu proveedor de telefonia puede leerlos. Mantiene los detalles sensibles en el chat cifrado.",
   "exposure_hint_call": "Esta llamada pasa por tu proveedor de telefonia. Pueden escuchar la llamada. Mantiene los detalles sensibles en el chat cifrado.",
-  "exposure_hint_dismiss": "Entendido"
+  "exposure_hint_dismiss": "Entendido",
+
+  "call_indicator_label": "Llamada en curso"
 }

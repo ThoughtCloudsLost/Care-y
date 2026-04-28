@@ -1265,5 +1265,7 @@
 
   "exposure_hint_sms": "SMS is not encrypted. Your phone provider can read it. Keep sensitive details in the encrypted chat.",
   "exposure_hint_call": "This call routes through your phone provider. They can hear the call. Keep sensitive details in the encrypted chat.",
-  "exposure_hint_dismiss": "Got it"
+  "exposure_hint_dismiss": "Got it",
+
+  "call_indicator_label": "Call in progress"
 }

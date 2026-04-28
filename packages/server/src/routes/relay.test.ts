@@ -139,6 +139,7 @@ function makeDeps(overrides?: Partial<RelayHandlerDeps>): RelayHandlerDeps {
     createSessionRepo: vi
       .fn()
       .mockReturnValue(mockSessionRepo(makeSessionData())),
+    resolveClientPhone: vi.fn().mockResolvedValue(Buffer.from("+15551234567")),
     ...overrides,
   };
 }
@@ -265,7 +266,7 @@ describe("createRelayHandler", () => {
       const req = createMockReq(
         "POST",
         "/relay/sms",
-        '{"to":"+1555","body":"hi"}',
+        '{"ticketId":"test-ticket-id","body":"hi"}',
         {
           cookie: "",
         },
@@ -286,7 +287,7 @@ describe("createRelayHandler", () => {
       const req = createMockReq(
         "POST",
         "/relay/sms",
-        '{"to":"+1555","body":"hi"}',
+        '{"ticketId":"test-ticket-id","body":"hi"}',
       );
       const res = createMockRes();
       await handler(req, res as unknown as ServerResponse);
@@ -302,7 +303,7 @@ describe("createRelayHandler", () => {
       const req = createMockReq(
         "POST",
         "/relay/sms",
-        '{"to":"+1555","body":"hi"}',
+        '{"ticketId":"test-ticket-id","body":"hi"}',
       );
       const res = createMockRes();
       await handler(req, res as unknown as ServerResponse);
@@ -333,7 +334,7 @@ describe("createRelayHandler", () => {
       const req = createMockReq(
         "POST",
         "/relay/sms",
-        '{"to":"+15551234567","body":"Hello from CARE-Y"}',
+        '{"ticketId":"test-ticket-id","body":"Hello from CARE-Y"}',
       );
       const res = createMockRes();
       await handler(req, res as unknown as ServerResponse);
@@ -347,7 +348,7 @@ describe("createRelayHandler", () => {
       );
     });
 
-    it("returns 400 MISSING_FIELDS when to is missing", async () => {
+    it("returns 400 MISSING_FIELDS when ticketId is missing", async () => {
       const handler = createRelayHandler(makeDeps());
       const req = createMockReq("POST", "/relay/sms", '{"body":"Hello"}');
       const res = createMockRes();
@@ -358,7 +359,11 @@ describe("createRelayHandler", () => {
 
     it("returns 400 MISSING_FIELDS when body is missing", async () => {
       const handler = createRelayHandler(makeDeps());
-      const req = createMockReq("POST", "/relay/sms", '{"to":"+15551234567"}');
+      const req = createMockReq(
+        "POST",
+        "/relay/sms",
+        '{"ticketId":"test-ticket-id"}',
+      );
       const res = createMockRes();
       await handler(req, res as unknown as ServerResponse);
       expect(res.statusCode).toBe(400);
@@ -371,7 +376,7 @@ describe("createRelayHandler", () => {
       const req = createMockReq(
         "POST",
         "/relay/sms",
-        `{"to":"+15551234567","body":"${longBody}"}`,
+        `{"ticketId":"test-ticket-id","body":"${longBody}"}`,
       );
       const res = createMockRes();
       await handler(req, res as unknown as ServerResponse);
@@ -385,12 +390,28 @@ describe("createRelayHandler", () => {
       const req = createMockReq(
         "POST",
         "/relay/sms",
-        '{"to":"+15551234567","body":"hi"}',
+        '{"ticketId":"test-ticket-id","body":"hi"}',
       );
       const res = createMockRes();
       await handler(req, res as unknown as ServerResponse);
       expect(res.statusCode).toBe(500);
       expect(JSON.parse(res.body)).toEqual({ error: "NO_PROVIDER" });
+    });
+
+    it("returns 404 CLIENT_PHONE_NOT_FOUND when ticket has no phone", async () => {
+      const deps = makeDeps({
+        resolveClientPhone: vi.fn().mockResolvedValue(null),
+      });
+      const handler = createRelayHandler(deps);
+      const req = createMockReq(
+        "POST",
+        "/relay/sms",
+        '{"ticketId":"test-ticket-id","body":"hi"}',
+      );
+      const res = createMockRes();
+      await handler(req, res as unknown as ServerResponse);
+      expect(res.statusCode).toBe(404);
+      expect(JSON.parse(res.body)).toEqual({ error: "CLIENT_PHONE_NOT_FOUND" });
     });
 
     it("returns 400 NO_CALLER_ID when no phones provisioned", async () => {
@@ -401,7 +422,7 @@ describe("createRelayHandler", () => {
       const req = createMockReq(
         "POST",
         "/relay/sms",
-        '{"to":"+15551234567","body":"hi"}',
+        '{"ticketId":"test-ticket-id","body":"hi"}',
       );
       const res = createMockRes();
       await handler(req, res as unknown as ServerResponse);
@@ -418,7 +439,7 @@ describe("createRelayHandler", () => {
       });
       const handler = createRelayHandler(deps);
 
-      const bodyJson = '{"to":"+15551234567","body":"secret message"}';
+      const bodyJson = '{"ticketId":"test-ticket-id","body":"secret message"}';
       const req = createMockReq("POST", "/relay/sms", bodyJson);
       const res = createMockRes();
 
@@ -445,7 +466,7 @@ describe("createRelayHandler", () => {
       const req = createMockReq(
         "POST",
         "/relay/call",
-        '{"clientPhone":"+15551111111","consultantPhone":"+15552222222"}',
+        '{"ticketId":"test-ticket-id","consultantPhone":"+15552222222"}',
       );
       const res = createMockRes();
       await handler(req, res as unknown as ServerResponse);
@@ -479,7 +500,7 @@ describe("createRelayHandler", () => {
       const req = createMockReq(
         "POST",
         "/relay/call",
-        '{"clientPhone":"+15551111111"}',
+        '{"ticketId":"test-ticket-id"}',
       );
       const res = createMockRes();
       await handler(req, res as unknown as ServerResponse);
@@ -502,7 +523,7 @@ describe("createRelayHandler", () => {
       const req = createMockReq(
         "POST",
         "/relay/call",
-        '{"clientPhone":"+15551111111"}',
+        '{"ticketId":"test-ticket-id"}',
       );
       const res = createMockRes();
       await handler(req, res as unknown as ServerResponse);
@@ -517,14 +538,14 @@ describe("createRelayHandler", () => {
       const req = createMockReq(
         "POST",
         "/relay/call",
-        '{"clientPhone":"+15551111111"}',
+        '{"ticketId":"test-ticket-id"}',
       );
       const res = createMockRes();
       await handler(req, res as unknown as ServerResponse);
       expect(res.statusCode).toBe(403);
     });
 
-    it("returns 400 when clientPhone is missing", async () => {
+    it("returns 400 when ticketId is missing", async () => {
       const handler = createRelayHandler(makeDeps());
       const req = createMockReq("POST", "/relay/call", "{}");
       const res = createMockRes();
@@ -532,12 +553,30 @@ describe("createRelayHandler", () => {
       expect(res.statusCode).toBe(400);
     });
 
+    it("returns 404 CLIENT_PHONE_NOT_FOUND when ticket has no phone", async () => {
+      const deps = makeDeps({
+        resolveClientPhone: vi.fn().mockResolvedValue(null),
+      });
+      const handler = createRelayHandler(deps);
+      const req = createMockReq(
+        "POST",
+        "/relay/call",
+        '{"ticketId":"test-ticket-id","consultantPhone":"+15552222222"}',
+      );
+      const res = createMockRes();
+      await handler(req, res as unknown as ServerResponse);
+      expect(res.statusCode).toBe(404);
+      expect(JSON.parse(res.body)).toEqual({
+        error: "CLIENT_PHONE_NOT_FOUND",
+      });
+    });
+
     it("returns 400 when consultantPhone missing for phone_callback", async () => {
       const handler = createRelayHandler(makeDeps());
       const req = createMockReq(
         "POST",
         "/relay/call",
-        '{"clientPhone":"+15551111111"}',
+        '{"ticketId":"test-ticket-id"}',
       );
       const res = createMockRes();
       await handler(req, res as unknown as ServerResponse);
@@ -871,7 +910,7 @@ describe("createRelayHandler", () => {
       const req = createMockReq(
         "POST",
         "/relay/sms",
-        '{"to":"+15551234567","body":"secret message"}',
+        '{"ticketId":"test-ticket-id","body":"secret message"}',
       );
       const res = createMockRes();
 
@@ -885,7 +924,11 @@ describe("createRelayHandler", () => {
     it("zeros raw body buffer on MISSING_FIELDS (A2)", async () => {
       const spy = spyOnReadRawBody();
       const handler = createRelayHandler(makeDeps());
-      const req = createMockReq("POST", "/relay/sms", '{"to":"+15551234567"}');
+      const req = createMockReq(
+        "POST",
+        "/relay/sms",
+        '{"ticketId":"test-ticket-id"}',
+      );
       const res = createMockRes();
 
       await handler(req, res as unknown as ServerResponse);
@@ -903,7 +946,7 @@ describe("createRelayHandler", () => {
       const req = createMockReq(
         "POST",
         "/relay/sms",
-        `{"to":"+15551234567","body":"${longBody}"}`,
+        `{"ticketId":"test-ticket-id","body":"${longBody}"}`,
       );
       const res = createMockRes();
 
@@ -922,7 +965,7 @@ describe("createRelayHandler", () => {
       const req = createMockReq(
         "POST",
         "/relay/sms",
-        '{"to":"+15551234567","body":"hi"}',
+        '{"ticketId":"test-ticket-id","body":"hi"}',
       );
       const res = createMockRes();
 
@@ -931,6 +974,48 @@ describe("createRelayHandler", () => {
       expect(res.statusCode).toBe(500);
       expectZeroed(spy.getCapturedBuffer(), "rawBody after NO_PROVIDER (SMS)");
       spy.restore();
+    });
+
+    it("zeros resolved phone buffer after successful SMS send (A2)", async () => {
+      const phoneBuf = Buffer.from("+15551234567");
+      const deps = makeDeps({
+        resolveClientPhone: vi.fn().mockResolvedValue(phoneBuf),
+      });
+      const handler = createRelayHandler(deps);
+      const req = createMockReq(
+        "POST",
+        "/relay/sms",
+        '{"ticketId":"test-ticket-id","body":"hi"}',
+      );
+      const res = createMockRes();
+
+      await handler(req, res as unknown as ServerResponse);
+
+      expect(res.statusCode).toBe(200);
+      expectZeroed(phoneBuf, "resolved phone buffer after SMS success");
+    });
+
+    it("zeros resolved phone buffer after PROVIDER_ERROR (A2)", async () => {
+      const phoneBuf = Buffer.from("+15551234567");
+      const provider = mockProvider({
+        sendSms: vi.fn().mockRejectedValue(new Error("Twilio down")),
+      });
+      const deps = makeDeps({
+        resolveClientPhone: vi.fn().mockResolvedValue(phoneBuf),
+        getProvider: vi.fn().mockResolvedValue(provider),
+      });
+      const handler = createRelayHandler(deps);
+      const req = createMockReq(
+        "POST",
+        "/relay/sms",
+        '{"ticketId":"test-ticket-id","body":"hi"}',
+      );
+      const res = createMockRes();
+
+      await handler(req, res as unknown as ServerResponse);
+
+      expect(res.statusCode).toBe(502);
+      expectZeroed(phoneBuf, "resolved phone buffer after PROVIDER_ERROR");
     });
 
     it("zeros raw body buffer on NO_CALLER_ID for SMS (A2)", async () => {
@@ -942,7 +1027,7 @@ describe("createRelayHandler", () => {
       const req = createMockReq(
         "POST",
         "/relay/sms",
-        '{"to":"+15551234567","body":"hi"}',
+        '{"ticketId":"test-ticket-id","body":"hi"}',
       );
       const res = createMockRes();
 
@@ -962,7 +1047,7 @@ describe("createRelayHandler", () => {
       const req = createMockReq(
         "POST",
         "/relay/call",
-        '{"clientPhone":"+15551111111","consultantPhone":"+15552222222"}',
+        '{"ticketId":"test-ticket-id","consultantPhone":"+15552222222"}',
       );
       const res = createMockRes();
 
@@ -979,7 +1064,7 @@ describe("createRelayHandler", () => {
       const req = createMockReq(
         "POST",
         "/relay/call",
-        '{"clientPhone":"+15551111111"}',
+        '{"ticketId":"test-ticket-id"}',
       );
       const res = createMockRes();
 
@@ -1010,7 +1095,7 @@ describe("createRelayHandler", () => {
       const req = createMockReq(
         "POST",
         "/relay/call",
-        '{"clientPhone":"+15551111111","consultantPhone":"+15552222222"}',
+        '{"ticketId":"test-ticket-id","consultantPhone":"+15552222222"}',
       );
       const res = createMockRes();
 
@@ -1022,6 +1107,25 @@ describe("createRelayHandler", () => {
         "rawBody after PROVIDER_ERROR (call)",
       );
       spy.restore();
+    });
+
+    it("zeros resolved phone buffer after successful call relay (A3)", async () => {
+      const phoneBuf = Buffer.from("+15551234567");
+      const deps = makeDeps({
+        resolveClientPhone: vi.fn().mockResolvedValue(phoneBuf),
+      });
+      const handler = createRelayHandler(deps);
+      const req = createMockReq(
+        "POST",
+        "/relay/call",
+        '{"ticketId":"test-ticket-id","consultantPhone":"+15552222222"}',
+      );
+      const res = createMockRes();
+
+      await handler(req, res as unknown as ServerResponse);
+
+      expect(res.statusCode).toBe(200);
+      expectZeroed(phoneBuf, "resolved phone buffer after call success");
     });
 
     // -- Call-confirm --
@@ -1077,7 +1181,8 @@ describe("createRelayHandler", () => {
       vi.restoreAllMocks();
     });
 
-    const PHONE = "+15551234567";
+    const TICKET_ID = "test-ticket-id";
+    const RESOLVED_PHONE = "+15551234567";
     const SECRET_BODY = "secret message content";
 
     it("PROVIDER_ERROR response does not contain phone or body (B1)", async () => {
@@ -1091,26 +1196,30 @@ describe("createRelayHandler", () => {
       const req = createMockReq(
         "POST",
         "/relay/sms",
-        `{"to":"${PHONE}","body":"${SECRET_BODY}"}`,
+        `{"ticketId":"${TICKET_ID}","body":"${SECRET_BODY}"}`,
       );
       const res = createMockRes();
 
       await handler(req, res as unknown as ServerResponse);
 
       expect(res.statusCode).toBe(502);
-      expect(res.body).not.toContain(PHONE);
+      expect(res.body).not.toContain(RESOLVED_PHONE);
       expect(res.body).not.toContain(SECRET_BODY);
     });
 
     it("MISSING_FIELDS response does not contain partial input (B1)", async () => {
       const handler = createRelayHandler(makeDeps());
-      const req = createMockReq("POST", "/relay/sms", `{"to":"${PHONE}"}`);
+      const req = createMockReq(
+        "POST",
+        "/relay/sms",
+        `{"ticketId":"${TICKET_ID}"}`,
+      );
       const res = createMockRes();
 
       await handler(req, res as unknown as ServerResponse);
 
       expect(res.statusCode).toBe(400);
-      expect(res.body).not.toContain(PHONE);
+      expect(res.body).not.toContain(RESOLVED_PHONE);
     });
 
     it("BODY_TOO_LONG response does not contain oversized content (B1)", async () => {
@@ -1119,14 +1228,14 @@ describe("createRelayHandler", () => {
       const req = createMockReq(
         "POST",
         "/relay/sms",
-        `{"to":"${PHONE}","body":"${oversized}"}`,
+        `{"ticketId":"${TICKET_ID}","body":"${oversized}"}`,
       );
       const res = createMockRes();
 
       await handler(req, res as unknown as ServerResponse);
 
       expect(res.statusCode).toBe(400);
-      expect(res.body).not.toContain(PHONE);
+      expect(res.body).not.toContain(RESOLVED_PHONE);
       expect(res.body).not.toContain(oversized.slice(0, 20));
     });
 
@@ -1136,14 +1245,14 @@ describe("createRelayHandler", () => {
       const req = createMockReq(
         "POST",
         "/relay/sms",
-        `{"to":"${PHONE}","body":"hi"}`,
+        `{"ticketId":"${TICKET_ID}","body":"hi"}`,
       );
       const res = createMockRes();
 
       await handler(req, res as unknown as ServerResponse);
 
       expect(res.statusCode).toBe(500);
-      expect(res.body).not.toContain(PHONE);
+      expect(res.body).not.toContain(RESOLVED_PHONE);
     });
 
     it("NO_CALLER_ID response does not contain phone (B1)", async () => {
@@ -1154,32 +1263,31 @@ describe("createRelayHandler", () => {
       const req = createMockReq(
         "POST",
         "/relay/sms",
-        `{"to":"${PHONE}","body":"hi"}`,
+        `{"ticketId":"${TICKET_ID}","body":"hi"}`,
       );
       const res = createMockRes();
 
       await handler(req, res as unknown as ServerResponse);
 
       expect(res.statusCode).toBe(400);
-      expect(res.body).not.toContain(PHONE);
+      expect(res.body).not.toContain(RESOLVED_PHONE);
     });
 
     it("call relay error responses do not contain phone numbers (B1)", async () => {
-      const clientPhone = "+15551111111";
       const consultantPhone = "+15552222222";
       const deps = makeDeps({ getProvider: vi.fn().mockResolvedValue(null) });
       const handler = createRelayHandler(deps);
       const req = createMockReq(
         "POST",
         "/relay/call",
-        `{"clientPhone":"${clientPhone}","consultantPhone":"${consultantPhone}"}`,
+        `{"ticketId":"${TICKET_ID}","consultantPhone":"${consultantPhone}"}`,
       );
       const res = createMockRes();
 
       await handler(req, res as unknown as ServerResponse);
 
       expect(res.statusCode).toBe(500);
-      expect(res.body).not.toContain(clientPhone);
+      expect(res.body).not.toContain(RESOLVED_PHONE);
       expect(res.body).not.toContain(consultantPhone);
     });
   });
@@ -1210,7 +1318,7 @@ describe("createRelayHandler", () => {
     it("returns 400 for truncated JSON body and zeros buffer (G1)", async () => {
       const spy = spyOnReadRawBody();
       const handler = createRelayHandler(makeDeps());
-      const req = createMockReq("POST", "/relay/sms", '{"to":"+');
+      const req = createMockReq("POST", "/relay/sms", '{"ticketId":"tr');
       const res = createMockRes();
 
       await handler(req, res as unknown as ServerResponse);

@@ -9,6 +9,7 @@
     Paperclip,
     MessageSquareReply,
     NotepadTextDashed,
+    MessageSquare,
   } from "@lucide/svelte";
   import * as m from "$lib/paraglide/messages.js";
   import ShellPopover from "$lib/shell/ShellPopover.svelte";
@@ -23,6 +24,8 @@
     ticketId: string;
     /** Called when a preset reply is selected (caller sets draft text). */
     onpresetselect: (body: string) => void;
+    /** Called when "Text Client" is tapped. Caller handles exposure hint + SMS sheet. */
+    ontextclient?: () => void;
   }
 
   let {
@@ -31,6 +34,7 @@
     target,
     ticketId,
     onpresetselect,
+    ontextclient,
   }: ComposeActionsProps = $props();
 
   let presetSheetOpen = $state(false);
@@ -49,6 +53,11 @@
   function handleNote(): void {
     ondismiss();
     noteSheetOpen = true;
+  }
+
+  function handleTextClient(): void {
+    ondismiss();
+    ontextclient?.();
   }
 </script>
 
@@ -69,6 +78,13 @@
         <NotepadTextDashed size={20} aria-hidden="true" />
       {/snippet}
     </ListItem>
+    {#if ontextclient}
+      <ListItem title={m.ticket_sms_title()} onclick={handleTextClient}>
+        {#snippet media()}
+          <MessageSquare size={20} aria-hidden="true" />
+        {/snippet}
+      </ListItem>
+    {/if}
   </KList>
 </ShellPopover>
 

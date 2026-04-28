@@ -1218,4 +1218,5 @@ export * from "./ticket_call_error_no_phone.js";
 export * from "./exposure_hint_sms.js";
 export * from "./exposure_hint_call.js";
 export * from "./exposure_hint_dismiss.js";
+export * from "./call_indicator_label.js";
 export type LocalizedString = import("../runtime.js").LocalizedString;

@@ -729,68 +729,45 @@
     });
   }
 
-  async function executeCall(action: CallAction): Promise<void> {
+  async function executeCall(_action: CallAction): Promise<void> {
     callInProgress = true;
     callError = null;
 
     try {
-      if (action === "browser-call") {
-        // WebRTC: request token, then initiate browser-based call.
-        // Server resolves client phone internally.
-        const resp = await fetch("/relay/call", {
+      // Decrypt consultant phone if available (needed for phone-callback mode).
+      // The server decides the call method based on consultant preference,
+      // so we always send it regardless of the volunteer's UI selection.
+      const reqBody: Record<string, string> = { ticketId };
+      const encryptedPhone = consultantQuery.data?.encryptedPhone;
+      if (encryptedPhone != null) {
+        reqBody.consultantPhone = await cryptoBridge.orgDecrypt(encryptedPhone);
+      }
+
+      const resp = await fetch("/relay/call", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(reqBody),
+      });
+      if (!resp.ok) throw new RelayError("CALL_FAILED", resp.status);
+
+      const data = parseCallRelayResponse(await resp.json());
+
+      if (data.method === "webrtc") {
+        const tokenResp = await fetch("/relay/webrtc-token", {
           method: "POST",
           credentials: "include",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ ticketId }),
         });
-        if (!resp.ok) throw new RelayError("CALL_FAILED", resp.status);
-
-        const data = parseCallRelayResponse(await resp.json());
-
-        if (data.method === "webrtc") {
-          const tokenResp = await fetch("/relay/webrtc-token", {
-            method: "POST",
-            credentials: "include",
-            headers: { "Content-Type": "application/json" },
-          });
-          if (!tokenResp.ok)
-            throw new RelayError("TOKEN_FAILED", tokenResp.status);
-          callStore.start({ ticketId, callSid: "webrtc" });
-        } else if (data.callSid !== undefined) {
-          callStore.start({ ticketId, callSid: data.callSid });
-        }
-      } else {
-        // Phone callback requires the volunteer's own phone (PII-tier encrypted).
-        // CryptoBridge.decryptConsultantPhone() is not yet implemented.
-        // Block this flow until the Worker protocol supports it.
-        const encryptedPhone = consultantQuery.data?.encryptedPhone;
-        if (encryptedPhone == null) {
-          toastStore.show(m.ticket_call_error_no_phone(), 3000);
-          return;
-        }
-
-        const consultantPhone = await cryptoBridge.orgDecrypt(encryptedPhone);
-
-        const resp = await fetch("/relay/call", {
-          method: "POST",
-          credentials: "include",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ ticketId, consultantPhone }),
-        });
-        if (!resp.ok) throw new RelayError("CALL_FAILED", resp.status);
-
-        const data = parseCallRelayResponse(await resp.json());
-        if (data.callSid !== undefined) {
-          callStore.start({ ticketId, callSid: data.callSid });
-        }
+        if (!tokenResp.ok)
+          throw new RelayError("TOKEN_FAILED", tokenResp.status);
+        callStore.start({ ticketId, callSid: "webrtc" });
+      } else if (data.callSid !== undefined) {
+        callStore.start({ ticketId, callSid: data.callSid });
       }
-    } catch (err: unknown) {
-      if (err instanceof CryptoWorkerError) {
-        toastStore.show(m.ticket_call_error(), 3000);
-      } else {
-        callError = m.ticket_call_error();
-        toastStore.show(m.ticket_call_error(), 3000);
-      }
+    } catch {
+      callError = m.ticket_call_error();
+      toastStore.show(m.ticket_call_error(), 3000);
     } finally {
       callInProgress = false;
     }
