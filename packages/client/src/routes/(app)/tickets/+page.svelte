@@ -61,6 +61,7 @@
   import QueryError from "$lib/components/QueryError.svelte";
   import AssignSheet from "$lib/components/tickets/AssignSheet.svelte";
   import ReplySheet from "$lib/components/tickets/ReplySheet.svelte";
+  import NewTicketController from "$lib/components/tickets/NewTicketController.svelte";
   import ShellActionSheet from "$lib/shell/ShellActionSheet.svelte";
   import CallOptionsContent, {
     type CallAction,
@@ -124,6 +125,9 @@
   // Call action sheet state.
   let callSheetOpen = $state(false);
 
+  // New ticket sheet state.
+  let newTicketOpen = $state(false);
+
   // --- URL filter application (dashboard → tickets navigation) ---
   // When arriving with ?queue=X or ?filter=my-open|unassigned, apply
   // to filterStore once, then strip the params so manual filter
@@ -138,26 +142,32 @@
     const params = page.url.searchParams;
     const queueId = params.get("queue");
     const filter = params.get("filter");
+    const action = params.get("action");
 
-    if (queueId === null && filter === null) return;
+    if (queueId === null && filter === null && action === null) return;
 
     lastAppliedSearch = searchStr;
 
     untrack(() => {
-      filterStore.clearAll();
-
       if (queueId !== null) {
+        filterStore.clearAll();
         filterStore.toggleQueue(queueId);
       } else if (filter === "my-open") {
+        filterStore.clearAll();
         filterStore.toggleStatus("new");
         filterStore.toggleStatus("active");
         if (currentUserId !== undefined) {
           filterStore.setAssignee(currentUserId);
         }
       } else if (filter === "unassigned") {
+        filterStore.clearAll();
         filterStore.toggleStatus("new");
         filterStore.toggleStatus("active");
         filterStore.setAssignee(null);
+      }
+
+      if (action === "new-ticket") {
+        newTicketOpen = true;
       }
     });
 
@@ -1022,7 +1032,9 @@
 {#snippet navRight()}
   <Link
     iconOnly
-    onclick={() => void goto(resolve("/tickets/new"))}
+    onclick={() => {
+      newTicketOpen = true;
+    }}
     role="button"
     aria-label={m.nav_new_ticket()}
   >
@@ -1242,6 +1254,13 @@
 >
   <CallOptionsContent hasVerifiedPhone={false} onaction={handleCallAction} />
 </ShellActionSheet>
+
+<NewTicketController
+  opened={newTicketOpen}
+  ondismiss={() => {
+    newTicketOpen = false;
+  }}
+/>
 
 <style>
   .ticket-page {

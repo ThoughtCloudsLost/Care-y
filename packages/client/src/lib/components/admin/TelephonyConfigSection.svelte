@@ -28,7 +28,7 @@
   import { announceToLiveRegion } from "$lib/utils/announce.js";
   import QueryError from "$lib/components/QueryError.svelte";
   import InlineSkeleton from "$lib/components/InlineSkeleton.svelte";
-  import SoftButton from "$lib/components/SoftButton.svelte";
+  import SoftButton from "$lib/components/inputs/SoftButton.svelte";
   import ShellSheet from "$lib/shell/ShellSheet.svelte";
 
   if (!trpc.telephonyAdmin) throw new RouterNotAvailableError("telephonyAdmin");

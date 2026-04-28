@@ -2,20 +2,10 @@
   Client search/create selector using Bits UI Combobox.
   Separate file: Bits UI cannot coexist with Konsta imports (no-mixed-konsta-bits).
 
-  Two modes:
-  - "search" (default): alias-based combobox search via trpc.tickets.searchClients
-  - "create": phone input for relay phone-lookup (find-or-create)
+  Reusable: parent provides the search function and optional phone lookup.
+  Dropdown styled to match Konsta Popover (glass backdrop, rounded corners).
 -->
-<script lang="ts">
-  import { Combobox } from "bits-ui";
-  import * as m from "$lib/paraglide/messages.js";
-  import { trpc } from "$lib/trpc/index.js";
-  import { RouterNotAvailableError } from "$lib/errors.js";
-  import { DEV_ORG_SLUG } from "$lib/utils/org-slug.js";
-
-  if (!trpc.tickets) throw new RouterNotAvailableError("tickets");
-  const ticketRouter = trpc.tickets;
-
+<script lang="ts" module>
   export type ClientSelection =
     | { mode: "existing"; clientId: string; displayAlias: string }
     | { mode: "new"; token: string }
@@ -27,26 +17,65 @@
     openTicketId: string;
   }
 
+  export interface ClientSearchResult {
+    id: string;
+    alias: string;
+    maskedPhone: string;
+  }
+
+  export type PhoneLookupResult =
+    | { found: false; token: string }
+    | {
+        found: true;
+        clientId: string;
+        alias: string;
+        openTicketId: string | null;
+      };
+</script>
+
+<script lang="ts">
+  import { Combobox } from "bits-ui";
+  import * as m from "$lib/paraglide/messages.js";
+
   interface Props {
+    label: string;
+    placeholder: string;
+    search: (query: string) => Promise<ClientSearchResult[]>;
     onchange: (value: ClientSelection) => void;
+    phoneLookup?: (phone: string) => Promise<PhoneLookupResult>;
     oncollision?: (info: CollisionInfo) => void;
+    createLabel?: string;
+    backLabel?: string;
+    phonePlaceholder?: string;
+    phoneLabel?: string;
     error?: string;
     disabled?: boolean;
   }
 
-  let { onchange, oncollision, error, disabled = false }: Props = $props();
+  let {
+    label,
+    placeholder,
+    search,
+    onchange,
+    phoneLookup,
+    oncollision,
+    createLabel,
+    backLabel,
+    phonePlaceholder,
+    phoneLabel,
+    error,
+    disabled = false,
+  }: Props = $props();
 
   const labelId = `client-label-${crypto.randomUUID().slice(0, 8)}`;
 
   type ViewMode = "search" | "create";
   let viewMode = $state<ViewMode>("search");
   let searchQuery = $state("");
-  let searchResults: { id: string; alias: string; maskedPhone: string }[] =
-    $state([]);
+  let searchResults: ClientSearchResult[] = $state([]);
   let searching = $state(false);
   let debounceTimer: ReturnType<typeof setTimeout> | null = null;
 
-  // Create mode state
   let phoneInput = $state("");
   let lookingUp = $state(false);
   let lookupMessage = $state("");
@@ -67,11 +96,7 @@
 
   async function runSearch(query: string): Promise<void> {
     try {
-      const results = await ticketRouter.searchClients.query({
-        query,
-        limit: 10,
-      });
-      searchResults = results;
+      searchResults = await search(query);
     } catch {
       searchResults = [];
     } finally {
@@ -111,6 +136,7 @@
   }
 
   async function handlePhoneLookup(): Promise<void> {
+    if (!phoneLookup) return;
     const cleaned = phoneInput.replace(/[\s\-().]/g, "");
     if (!validatePhone(cleaned)) return;
 
@@ -118,27 +144,7 @@
     lookupMessage = "";
 
     try {
-      const headers: Record<string, string> = {
-        "Content-Type": "application/json",
-      };
-      if (import.meta.env.DEV) {
-        headers["x-org-slug"] = DEV_ORG_SLUG;
-      }
-
-      const res = await fetch("/relay/phone-lookup", {
-        method: "POST",
-        credentials: "include",
-        headers,
-        body: JSON.stringify({ phone: cleaned }),
-      });
-
-      if (!res.ok) {
-        lookupMessage = m.ticket_new_error_submit_failed();
-        return;
-      }
-
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- relay JSON shape validated by server
-      const data = (await res.json()) as PhoneLookupResponse;
+      const data = await phoneLookup(cleaned);
 
       if (!data.found) {
         onchange({ mode: "new", token: data.token });
@@ -168,20 +174,11 @@
       lookingUp = false;
     }
   }
-
-  type PhoneLookupResponse =
-    | { found: false; token: string }
-    | {
-        found: true;
-        clientId: string;
-        alias: string;
-        openTicketId: string | null;
-      };
 </script>
 
 <div class="client-select" class:client-select-error={Boolean(error)}>
   <span class="client-select-label" id={labelId}>
-    {m.ticket_new_field_client()}
+    {label}
   </span>
 
   {#if viewMode === "search"}
@@ -197,7 +194,7 @@
       <div class="client-select-input-wrapper">
         <Combobox.Input
           class="client-select-input"
-          placeholder={m.ticket_new_field_client_placeholder()}
+          {placeholder}
           aria-invalid={Boolean(error)}
           aria-labelledby={labelId}
           oninput={(e: Event) => {
@@ -233,7 +230,7 @@
         {/if}
       </div>
 
-      <Combobox.Content class="client-select-dropdown" sideOffset={4}>
+      <Combobox.Content class="client-select-popover glass" sideOffset={4}>
         {#each searchResults as client (client.id)}
           <Combobox.Item
             value={client.id}
@@ -249,14 +246,16 @@
           <div class="client-select-empty">{m.empty_no_results()}</div>
         {/if}
 
-        <button
-          type="button"
-          class="client-select-create-btn"
-          onclick={switchToCreate}
-          {disabled}
-        >
-          {m.ticket_new_create_client()}
-        </button>
+        {#if phoneLookup}
+          <button
+            type="button"
+            class="client-select-create-btn"
+            onclick={switchToCreate}
+            {disabled}
+          >
+            {createLabel ?? m.ticket_new_create_client()}
+          </button>
+        {/if}
       </Combobox.Content>
     </Combobox.Root>
 
@@ -269,7 +268,8 @@
         <input
           class="client-create-input"
           type="tel"
-          placeholder={m.ticket_new_field_phone_placeholder()}
+          placeholder={phonePlaceholder ??
+            m.ticket_new_field_phone_placeholder()}
           value={phoneInput}
           oninput={(e: Event) => {
             const target = e.target;
@@ -284,7 +284,7 @@
             }
           }}
           {disabled}
-          aria-label={m.ticket_new_field_phone()}
+          aria-label={phoneLabel ?? m.ticket_new_field_phone()}
           aria-invalid={Boolean(error)}
         />
         {#if lookingUp}
@@ -320,7 +320,7 @@
         onclick={switchToSearch}
         {disabled}
       >
-        {m.ticket_new_back_to_search()}
+        {backLabel ?? m.ticket_new_back_to_search()}
       </button>
     </div>
   {/if}
@@ -332,17 +332,14 @@
 
 <style>
   .client-select {
-    padding: 0.75rem 1rem;
+    padding: 0 1rem;
   }
 
   .client-select-label {
     display: block;
     font-size: var(--k-list-item-label-font-size, 0.75rem);
-    color: var(
-      --k-list-input-label-text-color,
-      var(--k-color-md-light-on-surface-variant)
-    );
-    margin-bottom: 0.25rem;
+    color: var(--k-list-input-label-text-color, var(--muted));
+    margin-bottom: var(--space-xs, 0.25rem);
     font-weight: 500;
   }
 
@@ -352,18 +349,21 @@
     align-items: center;
   }
 
-  :global(.client-select-input) {
+  :global(.client-select-input),
+  .client-create-input {
     width: 100%;
     min-height: 2.75rem;
     padding: 0.5rem 0.75rem;
     border: 1px solid var(--k-hairline-color, rgba(0, 0, 0, 0.12));
-    border-radius: 0.5rem;
-    background: var(--k-bars-bg-color, #fff);
+    border-radius: var(--k-list-input-outline-border-radius, 0.75rem);
+    background: transparent;
+    font-family: inherit;
     font-size: 1rem;
-    color: var(--k-text-color, #000);
+    color: var(--ink);
   }
 
-  :global(.client-select-input:focus-visible) {
+  :global(.client-select-input:focus-visible),
+  .client-create-input:focus-visible {
     outline: 2px solid var(--k-color-primary, #007aff);
     outline-offset: 1px;
   }
@@ -373,24 +373,26 @@
     border-color: var(--k-color-red, #ff3b30);
   }
 
-  :global(.client-select-input::placeholder) {
-    color: var(--k-list-input-placeholder-color, rgba(0, 0, 0, 0.35));
+  :global(.client-select-input::placeholder),
+  .client-create-input::placeholder {
+    color: var(--k-list-input-placeholder-color, var(--muted));
   }
 
   .client-select-spinner {
     position: absolute;
     right: 0.75rem;
-    color: var(--k-list-input-placeholder-color, rgba(0, 0, 0, 0.35));
+    color: var(--muted);
   }
 
-  :global(.client-select-dropdown) {
+  /* Popover dropdown (matches Konsta Popover via .glass utility) */
+
+  :global(.client-select-popover) {
     z-index: 50;
-    max-height: 200px;
+    max-height: 256px;
     overflow-y: auto;
-    border-radius: 0.5rem;
-    background: var(--k-bars-bg-color, #fff);
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
-    border: 1px solid var(--k-hairline-color, rgba(0, 0, 0, 0.12));
+    -webkit-overflow-scrolling: touch;
+    border-radius: var(--k-popover-border-radius, 0.8125rem);
+    box-shadow: var(--k-popover-box-shadow, 0 0.25rem 1rem rgba(0, 0, 0, 0.12));
   }
 
   :global(.client-select-item) {
@@ -400,13 +402,13 @@
     padding: 0.625rem 0.75rem;
     font-size: 1rem;
     cursor: pointer;
-    color: var(--k-text-color, #000);
-    transition: background-color 0.1s;
+    color: var(--ink);
+    min-height: 44px;
   }
 
   :global(.client-select-item:hover),
   :global(.client-select-item[data-highlighted]) {
-    background: var(--k-list-button-pressed-bg-color, rgba(0, 0, 0, 0.05));
+    background: color-mix(in srgb, var(--ink) 5%, transparent);
   }
 
   .client-alias {
@@ -414,16 +416,16 @@
   }
 
   .client-phone-mask {
-    font-size: 0.875rem;
-    color: var(--k-list-input-placeholder-color, rgba(0, 0, 0, 0.35));
-    margin-left: 0.5rem;
+    font-size: var(--text-sm);
+    color: var(--muted);
+    margin-left: var(--space-sm);
     flex-shrink: 0;
   }
 
   .client-select-empty {
     padding: 0.625rem 0.75rem;
-    font-size: 0.875rem;
-    color: var(--k-list-input-placeholder-color, rgba(0, 0, 0, 0.35));
+    font-size: var(--text-sm);
+    color: var(--muted);
     text-align: center;
   }
 
@@ -431,24 +433,26 @@
     display: block;
     width: 100%;
     padding: 0.625rem 0.75rem;
-    font-size: 0.9375rem;
-    color: var(--k-color-primary, #007aff);
+    font-size: var(--text-base);
+    color: var(--brand-text, var(--k-color-primary, #007aff));
     background: none;
     border: none;
     border-top: 1px solid var(--k-hairline-color, rgba(0, 0, 0, 0.12));
     cursor: pointer;
     text-align: left;
     font-weight: 500;
+    font-family: inherit;
+    min-height: 44px;
   }
 
-  .client-select-create-btn:hover {
-    background: var(--k-list-button-pressed-bg-color, rgba(0, 0, 0, 0.05));
+  .client-select-create-btn:active {
+    background: color-mix(in srgb, var(--ink) 5%, transparent);
   }
 
   .client-select-selected {
-    margin-top: 0.25rem;
-    font-size: 0.875rem;
-    color: var(--k-color-primary, #007aff);
+    margin-top: var(--space-xs, 0.25rem);
+    font-size: var(--text-sm);
+    color: var(--brand-text, var(--k-color-primary, #007aff));
     font-weight: 500;
   }
 
@@ -457,7 +461,7 @@
   .client-create-fields {
     display: flex;
     flex-direction: column;
-    gap: 0.5rem;
+    gap: var(--space-sm);
   }
 
   .client-create-phone-row {
@@ -466,43 +470,26 @@
     align-items: center;
   }
 
-  .client-create-input {
-    width: 100%;
-    min-height: 2.75rem;
-    padding: 0.5rem 0.75rem;
-    border: 1px solid var(--k-hairline-color, rgba(0, 0, 0, 0.12));
-    border-radius: 0.5rem;
-    background: var(--k-bars-bg-color, #fff);
-    font-size: 1rem;
-    color: var(--k-text-color, #000);
-  }
-
-  .client-create-input:focus-visible {
-    outline: 2px solid var(--k-color-primary, #007aff);
-    outline-offset: 1px;
-  }
-
-  .client-create-input::placeholder {
-    color: var(--k-list-input-placeholder-color, rgba(0, 0, 0, 0.35));
-  }
-
   .client-lookup-msg {
-    font-size: 0.875rem;
-    color: var(--k-color-primary, #007aff);
+    font-size: var(--text-sm);
+    color: var(--brand-text, var(--k-color-primary, #007aff));
+    margin: 0;
   }
 
   .client-select-back-btn {
     background: none;
     border: none;
-    color: var(--k-color-primary, #007aff);
-    font-size: 0.875rem;
+    color: var(--brand-text, var(--k-color-primary, #007aff));
+    font-size: var(--text-sm);
+    font-family: inherit;
     cursor: pointer;
     padding: 0;
     text-align: left;
+    min-height: 44px;
   }
 
   .client-select-error-text {
-    margin-top: 0.25rem;
+    margin-top: var(--space-xs, 0.25rem);
     font-size: 0.75rem;
     color: var(--k-color-red, #ff3b30);
   }

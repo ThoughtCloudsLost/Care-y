@@ -11,7 +11,7 @@
   import { haptic } from "$lib/utils/haptic.js";
   import { RouterNotAvailableError } from "$lib/errors.js";
   import ShellSheet from "$lib/shell/ShellSheet.svelte";
-  import SoftButton from "$lib/components/SoftButton.svelte";
+  import SoftButton from "$lib/components/inputs/SoftButton.svelte";
 
   export interface CategoryEntry {
     id: string;

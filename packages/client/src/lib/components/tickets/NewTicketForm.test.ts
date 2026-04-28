@@ -1,15 +1,13 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { render, cleanup, fireEvent } from "@testing-library/svelte";
+import { render, cleanup } from "@testing-library/svelte";
 import NewTicketForm from "./NewTicketForm.svelte";
 
 // --- Mocks ---
 
-const mockCreateTicketEncryption = vi.fn();
-
 vi.mock("$lib/crypto/context.js", () => ({
   getCryptoBridge: () => ({
-    createTicketEncryption: mockCreateTicketEncryption,
+    createTicketEncryption: vi.fn(),
   }),
 }));
 
@@ -81,14 +79,16 @@ const defaultQueues = [
   { id: "q2", name: "Evening Line" },
 ];
 
+const mockSearchClients = vi.fn().mockResolvedValue([]);
+
 describe("NewTicketForm", () => {
   describe("rendering", () => {
     it("renders title and description inputs", () => {
       const { container } = render(NewTicketForm, {
         props: {
           queues: defaultQueues,
+          searchClients: mockSearchClients,
           onsubmit: vi.fn(),
-          oncancel: vi.fn(),
         },
       });
 
@@ -96,117 +96,34 @@ describe("NewTicketForm", () => {
       expect(inputs.length).toBeGreaterThanOrEqual(2);
     });
 
-    it("renders priority segmented buttons", () => {
-      const { getByText } = render(NewTicketForm, {
-        props: {
-          queues: defaultQueues,
-          onsubmit: vi.fn(),
-          oncancel: vi.fn(),
-        },
-      });
-
-      expect(getByText("ticket_new_priority_low")).toBeTruthy();
-      expect(getByText("ticket_new_priority_normal")).toBeTruthy();
-      expect(getByText("ticket_new_priority_high")).toBeTruthy();
-      expect(getByText("ticket_new_priority_urgent")).toBeTruthy();
-    });
-
-    it("renders submit and cancel buttons", () => {
-      const { getByText } = render(NewTicketForm, {
-        props: {
-          queues: defaultQueues,
-          onsubmit: vi.fn(),
-          oncancel: vi.fn(),
-        },
-      });
-
-      expect(getByText("ticket_new_submit")).toBeTruthy();
-      expect(getByText("common_cancel")).toBeTruthy();
-    });
-  });
-
-  describe("validation", () => {
-    it("does not call bridge or onsubmit when all fields empty", async () => {
-      const onsubmit = vi.fn();
+    it("renders priority select dropdown with all options", () => {
       const { container } = render(NewTicketForm, {
         props: {
           queues: defaultQueues,
-          onsubmit,
-          oncancel: vi.fn(),
-        },
-      });
-
-      const form = container.querySelector("form")!;
-      await fireEvent.submit(form);
-
-      expect(onsubmit).not.toHaveBeenCalled();
-      expect(mockCreateTicketEncryption).not.toHaveBeenCalled();
-    });
-
-    it("does not call bridge when only title is filled", async () => {
-      const onsubmit = vi.fn();
-      const { container } = render(NewTicketForm, {
-        props: {
-          queues: defaultQueues,
-          onsubmit,
-          oncancel: vi.fn(),
-        },
-      });
-
-      const titleInput = container.querySelector('input[type="text"]')!;
-      await fireEvent.input(titleInput, { target: { value: "Test ticket" } });
-
-      const form = container.querySelector("form")!;
-      await fireEvent.submit(form);
-
-      expect(onsubmit).not.toHaveBeenCalled();
-      expect(mockCreateTicketEncryption).not.toHaveBeenCalled();
-    });
-
-    it("shows title validation error in DOM after submit", async () => {
-      const { container } = render(NewTicketForm, {
-        props: {
-          queues: defaultQueues,
+          searchClients: mockSearchClients,
           onsubmit: vi.fn(),
-          oncancel: vi.fn(),
         },
       });
 
-      const form = container.querySelector("form")!;
-      await fireEvent.submit(form);
-
-      expect(container.textContent).toContain("Title is required");
+      const select = container.querySelector("select");
+      expect(select).toBeTruthy();
+      const options = select!.querySelectorAll("option");
+      expect(options.length).toBe(4);
     });
   });
 
-  describe("cancel", () => {
-    it("calls oncancel when cancel button is clicked", async () => {
-      const oncancel = vi.fn();
-      const { getByText } = render(NewTicketForm, {
+  describe("rendering structure", () => {
+    it("renders as a div (not a form), with submit controlled by parent", () => {
+      const { container } = render(NewTicketForm, {
         props: {
           queues: defaultQueues,
+          searchClients: mockSearchClients,
           onsubmit: vi.fn(),
-          oncancel,
         },
       });
 
-      await fireEvent.click(getByText("common_cancel"));
-      expect(oncancel).toHaveBeenCalledOnce();
-    });
-  });
-
-  describe("submitting state", () => {
-    it("shows submitting text when submitting prop is true", () => {
-      const { getByText } = render(NewTicketForm, {
-        props: {
-          queues: defaultQueues,
-          onsubmit: vi.fn(),
-          oncancel: vi.fn(),
-          submitting: true,
-        },
-      });
-
-      expect(getByText("ticket_new_submitting")).toBeTruthy();
+      expect(container.querySelector("form")).toBeNull();
+      expect(container.querySelector(".new-ticket-body")).toBeTruthy();
     });
   });
 });
