@@ -65,6 +65,7 @@ import {
   encode as cryptoEncode,
 } from "@care-y/crypto";
 import { rewrapFollowUp } from "../tickets/rewrap-service.js";
+import { sanitizeLike, maskPhone } from "../utils/sql.js";
 import {
   createTicketInputSchema,
   updateTicketInputSchema,
@@ -310,19 +311,6 @@ export function createTicketRouter(deps: TicketRouterDeps) {
   function mediaSvc(tDb: OrgContext["tenantDb"]): MediaService {
     const access = deps.createTicketAccess(tDb);
     return deps.createMediaSvc(tDb, deps.blobStore, access);
-  }
-
-  function sanitizeLike(input: string): string {
-    return input.replace(/[%_\\]/g, "\\$&");
-  }
-
-  function maskPhone(phoneBuf: Buffer): string {
-    try {
-      const str = phoneBuf.toString("utf-8");
-      return `***${str.slice(-4)}`;
-    } finally {
-      phoneBuf.fill(0);
-    }
   }
 
   /**

@@ -1001,4 +1001,186 @@ describe.skipIf(!process.env.DATABASE_URL)("FollowUpService (DB)", () => {
 
     expect(noteTexts).toContain("my-restricted-note");
   });
+
+  // ── Key wrap on follow-ups with key_generation (tk_temp) ──
+
+  it("listByTicket returns keyWrap for follow-ups with non-null key_generation", async () => {
+    const { userId, ticketId } = await createTicketFixture();
+    const keyGen = crypto.randomUUID();
+
+    const fu = await svc.create(userId, {
+      ticketId,
+      encryptedContent: Buffer.from("temp-msg"),
+      source: "client",
+      type: "sms_inbound",
+      isPrivate: false,
+      mentionedPseudonyms: [],
+    });
+
+    // Manually set key_generation and insert a key wrap
+    await testDb.db
+      .updateTable("followups")
+      .set({ key_generation: keyGen })
+      .where("id", "=", fu.id)
+      .execute();
+
+    const ep = crypto.randomBytes(32);
+    const nonce = crypto.randomBytes(24);
+    const wk = crypto.randomBytes(48);
+
+    await testDb.db
+      .insertInto("ticket_key_wraps")
+      .values({
+        ticket_id: ticketId,
+        volunteer_id: userId,
+        key_generation: keyGen,
+        ephemeral_point: ep,
+        nonce,
+        wrapped_key: wk,
+        algorithm: "ecies-ristretto255-v1",
+      })
+      .execute();
+
+    const list = await svc.listByTicket(userId, ticketId, { limit: 50 });
+    const found = list.find((f) => f.id === fu.id);
+
+    expect(found).toBeDefined();
+    expect(found!.keyGeneration).toBe(keyGen);
+    expect(found!.keyWrap).not.toBeNull();
+    expect(Buffer.isBuffer(found!.keyWrap!.ephemeralPoint)).toBe(true);
+    expect(found!.keyWrap!.ephemeralPoint).toEqual(ep);
+    expect(found!.keyWrap!.nonce).toEqual(nonce);
+    expect(found!.keyWrap!.wrappedKey).toEqual(wk);
+  });
+
+  it("listByTicket returns keyWrap: null for canonicalized follow-ups", async () => {
+    const { userId, ticketId } = await createTicketFixture();
+
+    const fu = await svc.create(userId, {
+      ticketId,
+      encryptedContent: Buffer.from("canonical-msg"),
+      source: "volunteer",
+      type: "message",
+      isPrivate: false,
+      mentionedPseudonyms: [],
+    });
+
+    const list = await svc.listByTicket(userId, ticketId, { limit: 50 });
+    const found = list.find((f) => f.id === fu.id);
+
+    expect(found).toBeDefined();
+    expect(found!.keyGeneration).toBeNull();
+    expect(found!.keyWrap).toBeNull();
+  });
+
+  it("listByTicket scopes key wraps to the requesting user", async () => {
+    const { userId, ticketId, queueId } = await createTicketFixture();
+    const otherUser = await createTestUser(testDb.db);
+
+    await testDb.db
+      .insertInto("queue_assignments")
+      .values({ queue_id: queueId, user_id: otherUser.id })
+      .onConflict((oc) => oc.columns(["queue_id", "user_id"]).doNothing())
+      .execute();
+
+    const keyGen = crypto.randomUUID();
+
+    const fu = await svc.create(userId, {
+      ticketId,
+      encryptedContent: Buffer.from("temp-msg"),
+      source: "client",
+      type: "sms_inbound",
+      isPrivate: false,
+      mentionedPseudonyms: [],
+    });
+
+    await testDb.db
+      .updateTable("followups")
+      .set({ key_generation: keyGen })
+      .where("id", "=", fu.id)
+      .execute();
+
+    // Insert wrap only for userId, not otherUser
+    await testDb.db
+      .insertInto("ticket_key_wraps")
+      .values({
+        ticket_id: ticketId,
+        volunteer_id: userId,
+        key_generation: keyGen,
+        ephemeral_point: crypto.randomBytes(32),
+        nonce: crypto.randomBytes(24),
+        wrapped_key: crypto.randomBytes(48),
+        algorithm: "ecies-ristretto255-v1",
+      })
+      .execute();
+
+    // otherUser should not see the wrap
+    const otherList = await svc.listByTicket(otherUser.id, ticketId, {
+      limit: 50,
+    });
+    const otherFound = otherList.find((f) => f.id === fu.id);
+    expect(otherFound).toBeDefined();
+    expect(otherFound!.keyWrap).toBeNull();
+  });
+
+  // ── Call metadata fields ──
+
+  it("create persists call metadata fields", async () => {
+    const { userId, ticketId } = await createTicketFixture();
+
+    const fu = await svc.create(userId, {
+      ticketId,
+      encryptedContent: Buffer.from("call-record"),
+      source: "system",
+      type: "phone_call",
+      isPrivate: false,
+      mentionedPseudonyms: [],
+      callSid: "CA_test_001",
+      callStatus: "completed",
+      callDurationSeconds: 120,
+    });
+
+    expect(fu.callSid).toBe("CA_test_001");
+    expect(fu.callStatus).toBe("completed");
+    expect(fu.callDurationSeconds).toBe(120);
+  });
+
+  it("listByTicket returns call metadata on phone_call follow-ups", async () => {
+    const { userId, ticketId } = await createTicketFixture();
+
+    await svc.create(userId, {
+      ticketId,
+      encryptedContent: Buffer.from("call-data"),
+      source: "system",
+      type: "phone_call",
+      isPrivate: false,
+      mentionedPseudonyms: [],
+      callSid: "CA_list_002",
+      callStatus: "no_answer",
+      callDurationSeconds: 0,
+    });
+
+    const list = await svc.listByTicket(userId, ticketId, { limit: 50 });
+    const call = list.find((f) => f.type === "phone_call");
+    expect(call).toBeDefined();
+    expect(call!.callStatus).toBe("no_answer");
+    expect(call!.callDurationSeconds).toBe(0);
+  });
+
+  it("create defaults call metadata to null when not provided", async () => {
+    const { userId, ticketId } = await createTicketFixture();
+
+    const fu = await svc.create(userId, {
+      ticketId,
+      encryptedContent: Buffer.from("plain-msg"),
+      source: "volunteer",
+      type: "message",
+      isPrivate: false,
+      mentionedPseudonyms: [],
+    });
+
+    expect(fu.callSid).toBeNull();
+    expect(fu.callStatus).toBeNull();
+    expect(fu.callDurationSeconds).toBeNull();
+  });
 });
