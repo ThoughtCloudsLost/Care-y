@@ -26,8 +26,8 @@ import {
 export interface LoginCryptoResult {
   /** Base64-encoded volunteer public key (for display or upload). */
   volPublic: string;
-  /** Unwrapped org private key (Transferable, for OrgKeyManager). Null if org not onboarded. */
-  orgPrivateKey: ArrayBuffer | null;
+  /** Org public key (base64). Worker retains the secret. Null if org not onboarded. */
+  orgPublicKey: string | null;
 }
 
 /** Shared progress callbacks for the Argon2id -> OPRF -> derive pipeline. */
@@ -56,7 +56,7 @@ export interface LoginCryptoCallbacks extends CryptoPhaseCallbacks {
  * @param password - Raw password string (zeroed via Transferable after Argon2id)
  * @param bridge - Initialized CryptoBridge instance
  * @param callbacks - Progress callbacks for UI state management
- * @returns volPublic (base64) and orgPrivateKey (ArrayBuffer or null)
+ * @returns volPublic (base64) and orgPublicKey (base64 string or null)
  */
 export async function loginCrypto(
   identifier: string,
@@ -93,9 +93,9 @@ export async function loginCrypto(
   const evaluatedBytes = decodeStandardBase64(evaluatedB64);
   const { volPublic } = await bridge.deriveKeys(toArrayBuffer(evaluatedBytes));
 
-  // 6. Fetch and unwrap org private key (non-fatal if org not onboarded).
-  const orgPrivateKey = await fetchAndUnwrapOrgKey(bridge);
+  // 6. Unwrap org key in Worker (retains secret, returns public key).
+  const orgPublicKey = await fetchAndUnwrapOrgKey(bridge);
 
   callbacks.onDone();
-  return { volPublic, orgPrivateKey };
+  return { volPublic, orgPublicKey };
 }

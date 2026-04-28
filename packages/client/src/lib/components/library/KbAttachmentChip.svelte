@@ -34,7 +34,7 @@
         attachmentId: id,
       });
       const raw = Uint8Array.from(atob(result.data), (c) => c.charCodeAt(0));
-      const decrypted = orgKeyManager.decrypt(raw);
+      const decrypted = await orgKeyManager.decrypt(raw);
       triggerBlobDownload(decrypted, filename);
     } catch (err: unknown) {
       console.error("[KbAttachmentChip] Download failed", { id, err });

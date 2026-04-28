@@ -159,7 +159,7 @@ class KbImageView implements NodeView {
       if (this.aborted) return;
 
       const raw = Uint8Array.from(atob(result.data), (c) => c.charCodeAt(0));
-      const decrypted = this.deps.orgKeyManager.decrypt(raw);
+      const decrypted = await this.deps.orgKeyManager.decrypt(raw);
 
       const blob = new Blob([new Uint8Array(decrypted)]);
       this.blobUrl = URL.createObjectURL(blob);

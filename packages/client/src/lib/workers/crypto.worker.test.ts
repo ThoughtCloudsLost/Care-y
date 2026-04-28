@@ -415,7 +415,7 @@ describe("crypto.worker", () => {
   });
 
   describe("unwrapOrgKey", () => {
-    it("returns the unwrapped org secret as ArrayBuffer", async () => {
+    it("retains secret in Worker and returns public key", async () => {
       await sendAndWait({ type: "zeroAll", id: 960 });
       const sodium = requireSodium();
       const salt = sodium.randombytes_buf(16);
@@ -437,10 +437,9 @@ describe("crypto.worker", () => {
       expect(resp.ok).toBe(true);
       expect(resp.type).toBe("unwrapOrgKey");
 
-      // Verify the unwrapped secret matches the original
-      // care-y-ignore-next-line no-org-private-key-server -- protocol field, client-side test
-      const unwrapped = new Uint8Array(resp.orgPrivateKey);
-      expect(unwrapped).toEqual(fakeOrgSecret);
+      // Worker returns only the public key (secret stays in Worker)
+      const expectedPublicKey = sodium.crypto_scalarmult_base(fakeOrgSecret);
+      expect(resp.orgPublicKey).toBe(encode(expectedPublicKey));
 
       sodium.memzero(fakeOrgSecret);
     });

@@ -103,8 +103,8 @@
     exportError = "";
   }
 
-  function exportEscrow(): void {
-    const orgSecretKey = orgKeyManager.getSecretKey();
+  async function exportEscrow(): Promise<void> {
+    const orgSecretKey = await orgKeyManager.getSecretKey();
     if (!orgSecretKey) return;
 
     exporting = true;

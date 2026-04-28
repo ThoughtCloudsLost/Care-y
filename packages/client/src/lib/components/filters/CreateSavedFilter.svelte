@@ -33,11 +33,11 @@
 
   const canSave = $derived(name.trim().length > 0);
 
-  function handleSave(): void {
+  async function handleSave(): Promise<void> {
     if (!canSave) return;
 
     const plaintext = new TextEncoder().encode(name.trim());
-    const ciphertext = orgKeyManager.encrypt(plaintext);
+    const ciphertext = await orgKeyManager.encrypt(plaintext);
     const encryptedName = uint8ArrayToBase64(ciphertext);
 
     onsave({

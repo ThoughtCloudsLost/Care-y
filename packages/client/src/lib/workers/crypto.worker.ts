@@ -68,6 +68,10 @@ import type {
   WrapWithVolPublicRequest,
   RewrapTkRequest,
   CreateTicketKeyRequest,
+  OrgDecryptRequest,
+  OrgEncryptRequest,
+  OrgDecryptBatchRequest,
+  ExportOrgSecretKeyRequest,
   WorkerRequestType,
   RewrapEvent,
   RewrapResultEvent,
@@ -84,6 +88,10 @@ let blindState: Scalar | null = null;
 let masterKey: SymmetricKey | null = null;
 let volPrivate: Scalar | null = null;
 let volPublic: RistrettoPoint | null = null;
+
+// Org-tier key material (Curve25519, non-PII). Kept in Worker for XSS isolation.
+let orgSecret: Uint8Array | null = null;
+let orgPublicKey: Uint8Array | null = null;
 
 const tkCache = new TkCache({
   maxEntries: 50,
@@ -140,6 +148,14 @@ function requireState(
 function requireKeyed(id: number, type: WorkerRequestType): boolean {
   if (state !== "KEYED") {
     postError(id, type, "Worker not keyed (login required)", "NOT_READY");
+    return false;
+  }
+  return true;
+}
+
+function requireOrgKeyed(id: number, type: WorkerRequestType): boolean {
+  if (orgSecret === null) {
+    postError(id, type, "Org key not loaded", "NOT_READY");
     return false;
   }
   return true;
@@ -585,9 +601,11 @@ function handleZeroAll(id: number): void {
   masterKey = zeroAndClear(sodium, masterKey);
   stretched = zeroAndClear(sodium, stretched);
   blindState = zeroAndClear(sodium, blindState);
+  orgSecret = zeroAndClear(sodium, orgSecret);
 
-  // volPublic is public (stored on server), no memzero needed
+  // Public keys are not secret, no memzero needed
   volPublic = null;
+  orgPublicKey = null;
   state = "READY";
 
   const msg: WorkerResponse = { id, ok: true, type: "zeroAll" };
@@ -612,9 +630,9 @@ function handleUnwrapOrgKey(req: UnwrapOrgKeyRequest): void {
   const ephemeralPoint = decode(req.ephemeralPoint);
   const nonce = decode(req.nonce);
   const wrappedKey = decode(req.wrappedOrgKey);
+  const sodium = requireSodium();
 
   try {
-    // care-y-ignore-next-line no-org-private-key-server -- client-side Worker, not server
     const unwrappedOrgSecret = eciesDecrypt(
       ephemeralPoint as RistrettoPoint,
       nonce as Nonce,
@@ -622,26 +640,23 @@ function handleUnwrapOrgKey(req: UnwrapOrgKeyRequest): void {
       assertPresent(volPrivate, "volPrivate"),
     );
 
-    // Transfer the unwrapped org secret to the main thread (non-PII tier).
-    // Using Transferable so the Worker copy is neutered.
-    // Copy into a fresh ArrayBuffer to ensure correct type and clean ownership.
-    const abuf = new ArrayBuffer(unwrappedOrgSecret.byteLength);
-    new Uint8Array(abuf).set(unwrappedOrgSecret);
-    const sodium = requireSodium();
+    // Zero any previous org key before storing the new one
+    orgSecret = zeroAndClear(sodium, orgSecret);
+    orgPublicKey = null;
+
+    // Keep the secret in the Worker. Derive the Curve25519 public key.
+    orgSecret = new Uint8Array(unwrappedOrgSecret.byteLength);
+    orgSecret.set(unwrappedOrgSecret);
     sodium.memzero(unwrappedOrgSecret);
+    orgPublicKey = sodium.crypto_scalarmult_base(orgSecret);
 
     const msg: WorkerResponse = {
       id: req.id,
       ok: true,
       type: "unwrapOrgKey",
-      // care-y-ignore-next-line no-org-private-key-server -- protocol field name, client-side Worker
-      orgPrivateKey: abuf,
+      orgPublicKey: encode(orgPublicKey),
     };
-    // postMessage with Transferable list. In a Worker global scope,
-    // postMessage accepts (message, transfer[]) but TypeScript resolves
-    // to the Window overload in this compilation target. Use the
-    // structured options form which both overloads accept.
-    self.postMessage(msg, { transfer: [abuf] });
+    self.postMessage(msg);
   } catch (err: unknown) {
     postError(
       req.id,
@@ -770,6 +785,128 @@ function handleCreateTicketKey(req: CreateTicketKeyRequest): void {
   }
 }
 
+// ── Org-tier sealed-box handlers ────────────────────────────────────
+
+function handleOrgDecrypt(req: OrgDecryptRequest): void {
+  if (!requireOrgKeyed(req.id, "orgDecrypt")) return;
+
+  const sodium = requireSodium();
+  const ciphertext = decode(req.ciphertext);
+
+  try {
+    const plainBytes = sodium.crypto_box_seal_open(
+      ciphertext,
+      assertPresent(orgPublicKey, "orgPublicKey"),
+      assertPresent(orgSecret, "orgSecret"),
+    );
+
+    try {
+      const msg: WorkerResponse = {
+        id: req.id,
+        ok: true,
+        type: "orgDecrypt",
+        plaintext: textDecoder.decode(plainBytes),
+      };
+      self.postMessage(msg);
+    } finally {
+      sodium.memzero(plainBytes);
+    }
+  } catch (err: unknown) {
+    postError(
+      req.id,
+      "orgDecrypt",
+      err instanceof Error ? err.message : String(err),
+      "DECRYPT_FAILED",
+    );
+  }
+}
+
+function handleOrgEncrypt(req: OrgEncryptRequest): void {
+  if (!requireOrgKeyed(req.id, "orgEncrypt")) return;
+
+  const sodium = requireSodium();
+  const plaintext = decode(req.plaintext);
+
+  try {
+    const ciphertext = sodium.crypto_box_seal(
+      plaintext,
+      assertPresent(orgPublicKey, "orgPublicKey"),
+    );
+
+    const msg: WorkerResponse = {
+      id: req.id,
+      ok: true,
+      type: "orgEncrypt",
+      ciphertext: encode(ciphertext),
+    };
+    self.postMessage(msg);
+  } catch (err: unknown) {
+    postError(
+      req.id,
+      "orgEncrypt",
+      err instanceof Error ? err.message : String(err),
+      "ENCRYPT_FAILED",
+    );
+  }
+}
+
+function handleOrgDecryptBatch(req: OrgDecryptBatchRequest): void {
+  if (!requireOrgKeyed(req.id, "orgDecryptBatch")) return;
+
+  const sodium = requireSodium();
+  const pk = assertPresent(orgPublicKey, "orgPublicKey");
+  const sk = assertPresent(orgSecret, "orgSecret");
+
+  const results: { cacheKey: string; plaintext: string | null }[] =
+    req.items.map((item) => {
+      try {
+        const ciphertext = decode(item.ciphertext);
+        const plainBytes = sodium.crypto_box_seal_open(ciphertext, pk, sk);
+        const plaintext = textDecoder.decode(plainBytes);
+        sodium.memzero(plainBytes);
+        return { cacheKey: item.cacheKey, plaintext };
+      } catch {
+        return { cacheKey: item.cacheKey, plaintext: null };
+      }
+    });
+
+  const msg: WorkerResponse = {
+    id: req.id,
+    ok: true,
+    type: "orgDecryptBatch",
+    results,
+  };
+  self.postMessage(msg);
+}
+
+function handleExportOrgSecretKey(req: ExportOrgSecretKeyRequest): void {
+  if (!requireOrgKeyed(req.id, "exportOrgSecretKey")) return;
+
+  const sk = assertPresent(orgSecret, "orgSecret");
+  const abuf = new ArrayBuffer(sk.byteLength);
+  new Uint8Array(abuf).set(sk);
+
+  const msg: WorkerResponse = {
+    id: req.id,
+    ok: true,
+    type: "exportOrgSecretKey",
+    orgSecretKey: abuf,
+  };
+  self.postMessage(msg, { transfer: [abuf] });
+}
+
+function handleGetOrgPublicKey(id: number): void {
+  if (!requireOrgKeyed(id, "getOrgPublicKey")) return;
+
+  const msg: WorkerResponse = {
+    id,
+    ok: true,
+    type: "getOrgPublicKey",
+    orgPublicKey: encode(assertPresent(orgPublicKey, "orgPublicKey")),
+  };
+  self.postMessage(msg);
+}
+
 // ── Message dispatcher ──────────────────────────────────────────────
 
 self.addEventListener(
@@ -835,6 +972,21 @@ self.addEventListener(
           break;
         case "createTicketKey":
           handleCreateTicketKey(req);
+          break;
+        case "orgDecrypt":
+          handleOrgDecrypt(req);
+          break;
+        case "orgEncrypt":
+          handleOrgEncrypt(req);
+          break;
+        case "orgDecryptBatch":
+          handleOrgDecryptBatch(req);
+          break;
+        case "exportOrgSecretKey":
+          handleExportOrgSecretKey(req);
+          break;
+        case "getOrgPublicKey":
+          handleGetOrgPublicKey(req.id);
           break;
       }
     };

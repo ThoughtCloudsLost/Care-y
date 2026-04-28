@@ -74,7 +74,11 @@
     buildVolunteerMap,
     resolveVolunteerName as resolveVolName,
   } from "$lib/tickets/resolve-volunteer.js";
-  import { RouterNotAvailableError } from "$lib/errors.js";
+  import {
+    RouterNotAvailableError,
+    RelayError,
+    RateLimitError,
+  } from "$lib/errors.js";
   import { CryptoWorkerError } from "$lib/workers/crypto-bridge-errors.js";
   import { toastStore } from "$lib/stores/toast.svelte.js";
   import { haptic } from "$lib/utils/haptic.js";
@@ -90,6 +94,29 @@
   import CloseResolutionSheet from "$lib/components/tickets/CloseResolutionSheet.svelte";
   import InternalNoteSheet from "$lib/components/tickets/InternalNoteSheet.svelte";
   import { resolveNoteTypeIcon } from "$lib/utils/note-type-icons.js";
+  import ShellSheet from "$lib/shell/ShellSheet.svelte";
+  import ExposureHint from "$lib/components/tickets/ExposureHint.svelte";
+  import SmsComposeContent from "$lib/components/tickets/SmsComposeContent.svelte";
+  import { callStore } from "$lib/stores/call.svelte.js";
+  import { tick } from "svelte";
+
+  interface CallRelayResponse {
+    method: "pstn" | "webrtc";
+    callSid?: string;
+  }
+
+  function parseCallRelayResponse(data: unknown): CallRelayResponse {
+    if (typeof data !== "object" || data === null) {
+      return { method: "pstn", callSid: undefined };
+    }
+    const method =
+      "method" in data && data.method === "webrtc" ? "webrtc" : "pstn";
+    const callSid =
+      "callSid" in data && typeof data.callSid === "string"
+        ? data.callSid
+        : undefined;
+    return { method, callSid } as const;
+  }
 
   // ── Composable initialization ──
 
@@ -249,6 +276,52 @@
   let editNoteContent = $state<string | undefined>(undefined);
   let editNoteTypeId = $state<string | undefined>(undefined);
   let timelineActive = $state(false);
+  let smsSheetOpen = $state(false);
+  let smsSending = $state(false);
+  let smsError = $state<string | null>(null);
+
+  // --- Exposure hint state ---
+
+  // eslint-disable-next-line svelte/prefer-svelte-reactivity -- not reactive, used as mutable dedup tracker
+  const shownExposureHints = new Set<string>();
+  let exposureHintType = $state<"sms" | "call" | null>(null);
+  let exposureHintOpen = $state(false);
+  let pendingAction: (() => void) | null = null;
+
+  function shouldShowHint(type: "sms" | "call"): boolean {
+    if (shownExposureHints.has(type)) return false;
+    shownExposureHints.add(type);
+    return true;
+  }
+
+  function showExposureHint(type: "sms" | "call", callback: () => void): void {
+    if (!shouldShowHint(type)) {
+      callback();
+      return;
+    }
+    exposureHintType = type;
+    exposureHintOpen = true;
+    pendingAction = callback;
+    void tick().then(() => {
+      document
+        .querySelector<HTMLElement>('[data-testid="exposure-dismiss"]')
+        ?.focus();
+    });
+  }
+
+  function dismissExposureHint(): void {
+    exposureHintOpen = false;
+    if (pendingAction) {
+      const action = pendingAction;
+      pendingAction = null;
+      action();
+    }
+  }
+
+  // --- Call state ---
+
+  let callInProgress = $state(false);
+  let callError = $state<string | null>(null);
 
   // Filtered follow-ups (bound from TicketDetail for select mode copy).
   let filteredFollowUps = $state<FollowUpList | undefined>(undefined);
@@ -649,17 +722,138 @@
 
   function handleCallAction(action: CallAction): void {
     closeCallSheet();
-    switch (action) {
-      case "browser-call":
-        // Stub: BrowserCallService.startCall() wired by telephony integration.
-        if (import.meta.env.DEV) console.log("[TicketDetail] browser-call");
-        break;
-      case "phone-call":
-        // Stub: consultant phone callback wired by telephony integration.
-        if (import.meta.env.DEV) console.log("[TicketDetail] phone-call");
-        break;
-      case "cancel":
-        break;
+    if (action === "cancel" || callInProgress) return;
+
+    showExposureHint("call", () => {
+      void executeCall(action);
+    });
+  }
+
+  async function executeCall(action: CallAction): Promise<void> {
+    callInProgress = true;
+    callError = null;
+
+    try {
+      if (action === "browser-call") {
+        // WebRTC: request token, then initiate browser-based call.
+        // Server resolves client phone internally.
+        const resp = await fetch("/relay/call", {
+          method: "POST",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ ticketId }),
+        });
+        if (!resp.ok) throw new RelayError("CALL_FAILED", resp.status);
+
+        const data = parseCallRelayResponse(await resp.json());
+
+        if (data.method === "webrtc") {
+          const tokenResp = await fetch("/relay/webrtc-token", {
+            method: "POST",
+            credentials: "include",
+            headers: { "Content-Type": "application/json" },
+          });
+          if (!tokenResp.ok)
+            throw new RelayError("TOKEN_FAILED", tokenResp.status);
+          callStore.start({ ticketId, callSid: "webrtc" });
+        } else if (data.callSid !== undefined) {
+          callStore.start({ ticketId, callSid: data.callSid });
+        }
+      } else {
+        // Phone callback requires the volunteer's own phone (PII-tier encrypted).
+        // CryptoBridge.decryptConsultantPhone() is not yet implemented.
+        // Block this flow until the Worker protocol supports it.
+        const encryptedPhone = consultantQuery.data?.encryptedPhone;
+        if (encryptedPhone == null) {
+          toastStore.show(m.ticket_call_error_no_phone(), 3000);
+          return;
+        }
+
+        const consultantPhone = await cryptoBridge.orgDecrypt(encryptedPhone);
+
+        const resp = await fetch("/relay/call", {
+          method: "POST",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ ticketId, consultantPhone }),
+        });
+        if (!resp.ok) throw new RelayError("CALL_FAILED", resp.status);
+
+        const data = parseCallRelayResponse(await resp.json());
+        if (data.callSid !== undefined) {
+          callStore.start({ ticketId, callSid: data.callSid });
+        }
+      }
+    } catch (err: unknown) {
+      if (err instanceof CryptoWorkerError) {
+        toastStore.show(m.ticket_call_error(), 3000);
+      } else {
+        callError = m.ticket_call_error();
+        toastStore.show(m.ticket_call_error(), 3000);
+      }
+    } finally {
+      callInProgress = false;
+    }
+  }
+
+  // --- SMS handlers ---
+
+  function handleOpenSmsCompose(): void {
+    showExposureHint("sms", () => {
+      smsSheetOpen = true;
+    });
+  }
+
+  async function handleSmsSend(body: string): Promise<void> {
+    if (smsSending || !body.trim()) return;
+
+    smsSending = true;
+    smsError = null;
+
+    try {
+      const resp = await fetch("/relay/sms", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ticketId, body: body.trim() }),
+      });
+
+      if (resp.status === 429) {
+        const retryAfter = resp.headers.get("Retry-After");
+        const seconds = retryAfter !== null ? parseInt(retryAfter, 10) : 30;
+        throw new RateLimitError(seconds);
+      }
+      if (!resp.ok) throw new RelayError("SMS_FAILED", resp.status);
+
+      // Create follow-up record: encrypt SMS body with ticket's tk for timeline.
+      const encryptedContent = await cryptoBridge.encrypt(
+        ticketId,
+        body.trim(),
+      );
+      await ticketRouter.createFollowUp.mutate({
+        ticketId,
+        encryptedContent,
+        source: "volunteer",
+        type: "sms_outbound",
+        isPrivate: false,
+        mentionedPseudonyms: [],
+      });
+
+      smsSheetOpen = false;
+      void queryClient.invalidateQueries({
+        queryKey: ticketKeys.followUps(ticketId),
+      });
+    } catch (err: unknown) {
+      if (err instanceof RateLimitError) {
+        toastStore.show(
+          m.ticket_sms_rate_limited({ seconds: String(err.retryAfterSeconds) }),
+          5000,
+        );
+      } else {
+        toastStore.show(m.ticket_sms_error_send(), 3000);
+      }
+    } finally {
+      smsSending = false;
     }
   }
 
@@ -1012,7 +1206,29 @@
   onpresetselect={(body: string) => {
     draftText = body;
   }}
+  ontextclient={handleOpenSmsCompose}
 />
+
+<ShellSheet
+  opened={smsSheetOpen}
+  ondismiss={() => (smsSheetOpen = false)}
+  ariaLabel={m.ticket_sms_title()}
+>
+  <SmsComposeContent
+    onsend={handleSmsSend}
+    oncancel={() => (smsSheetOpen = false)}
+    sending={smsSending}
+    error={smsError}
+  />
+</ShellSheet>
+
+{#if exposureHintType}
+  <ExposureHint
+    type={exposureHintType}
+    opened={exposureHintOpen}
+    ondismiss={dismissExposureHint}
+  />
+{/if}
 
 <ShellPopup opened={lightbox.open} ondismiss={() => lightbox.dismiss()}>
   {#if lightbox.url}

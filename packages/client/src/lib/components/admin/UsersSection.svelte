@@ -427,7 +427,7 @@
 
     if (displayNameChanged) {
       const plainBytes = textEncoder.encode(trimmedDisplayName);
-      const cipherBytes = orgKeyManager.encrypt(plainBytes);
+      const cipherBytes = await orgKeyManager.encrypt(plainBytes);
       const encryptedDisplayName = uint8ArrayToBase64(cipherBytes);
       adminDisplayNameMutation.mutate({ userId, encryptedDisplayName });
     }

@@ -67,12 +67,13 @@ export async function evaluateWithPowRetry(
 }
 
 /**
- * Fetch and unwrap the org private key if the org has been onboarded.
- * Returns null if the org keypair doesn't exist yet (non-fatal).
+ * Fetch and unwrap the org key if the org has been onboarded.
+ * The Worker retains the secret; returns only the org public key (base64)
+ * for main-thread caching. Returns null if the org keypair doesn't exist yet.
  */
 export async function fetchAndUnwrapOrgKey(
   bridge: CryptoBridge,
-): Promise<ArrayBuffer | null> {
+): Promise<string | null> {
   try {
     const orgKeyData = await trpc.keys.getWrappedOrgKey.query();
     if (!orgKeyData) return null;
