@@ -101,6 +101,68 @@ export class AsyncDecryptCache {
   }
 
   /**
+   * Decrypt content encrypted with tk_temp and trigger background re-wrap.
+   * Same fire-and-forget pattern as decrypt(): returns cached plaintext or
+   * undefined (pending). The Worker re-encrypts with canonical tk as a
+   * side-effect and posts a RewrapEvent to the main thread.
+   */
+  protected decryptAndRewrap(
+    cacheKey: string,
+    followUpId: string,
+    ticketId: string,
+    ephemeralPoint: string,
+    nonce: string,
+    wrappedKey: string,
+    ciphertext: string,
+  ): string | undefined {
+    const cached = this.cache.get(cacheKey);
+    if (cached !== undefined) return cached;
+    if (this.pending.has(cacheKey)) return undefined;
+
+    this.pending.add(cacheKey);
+
+    const bridgeCall = this.bridge.decryptAndRewrap(
+      followUpId,
+      ticketId,
+      ephemeralPoint,
+      nonce,
+      wrappedKey,
+      ciphertext,
+    );
+
+    const decryptPromise =
+      import.meta.env.DEV && isDevDelayEnabled()
+        ? new Promise<void>((resolve) => {
+            setTimeout(resolve, 5_000 + Math.random() * 10_000);
+          }).then(async () => bridgeCall)
+        : bridgeCall;
+
+    void decryptPromise
+      .then((plaintext) => {
+        this.cache.set(cacheKey, plaintext);
+      })
+      .catch((err: unknown) => {
+        this.cache.set(cacheKey, DECRYPT_ERROR_SENTINEL);
+        if (import.meta.env.DEV) {
+          console.warn(
+            `[${this.label}] decryptAndRewrap failed for ${cacheKey}:`,
+            err,
+          );
+        }
+      })
+      .finally(() => {
+        this.pending.delete(cacheKey);
+        if (this.pending.size === 0 && this.settlers.length > 0) {
+          const batch = this.settlers;
+          this.settlers = [];
+          for (const resolve of batch) resolve();
+        }
+      });
+
+    return undefined;
+  }
+
+  /**
    * Store the error sentinel for a cache key. Used by subclasses when
    * decryption is known to be impossible (e.g., missing key material)
    * without going through the async bridge path.

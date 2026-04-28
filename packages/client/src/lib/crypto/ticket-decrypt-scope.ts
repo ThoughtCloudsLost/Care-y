@@ -48,10 +48,11 @@ export interface TicketDecryptScope {
   /** Decrypt the ticket title. */
   title(encryptedTitle: SerializedBuffer | string): DecryptResult;
 
-  /** Decrypt a follow-up's content by its ID. */
+  /** Decrypt a follow-up's content by its ID. When followUpKeyWrap is provided, uses it for tk_temp unwrapping. */
   followUp(
     followUpId: string,
     encryptedContent: SerializedBuffer | string,
+    followUpKeyWrap?: TicketKeyWrap | null,
   ): DecryptResult;
 
   /** Decrypt a volunteer's display name via the org-tier cache. */
@@ -91,11 +92,15 @@ export function createTicketDecryptScope(
     followUp(
       followUpId: string,
       encryptedContent: SerializedBuffer | string,
+      followUpKeyWrap?: TicketKeyWrap | null,
     ): DecryptResult {
+      const rewrapContext =
+        followUpKeyWrap != null ? { followUpKeyWrap, ticketId } : undefined;
       const raw = followUpCache.decryptContent(
         followUpId,
         keyWrap,
         encryptedContent,
+        rewrapContext,
       );
       return resolveAsyncDecrypt(raw, hasAccess);
     },

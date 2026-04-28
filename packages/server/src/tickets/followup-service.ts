@@ -18,6 +18,12 @@ import {
 import { REACTION_TYPES } from "@care-y/shared";
 import type { ReactionSummary, ReactionType } from "@care-y/shared";
 
+export interface FollowUpKeyWrap {
+  readonly ephemeralPoint: Buffer;
+  readonly nonce: Buffer;
+  readonly wrappedKey: Buffer;
+}
+
 export interface FollowUpRecord {
   readonly id: string;
   readonly ticketId: string;
@@ -35,6 +41,8 @@ export interface FollowUpRecord {
   readonly callSid: string | null;
   readonly callStatus: string | null;
   readonly callDurationSeconds: number | null;
+  readonly keyGeneration: string | null;
+  readonly keyWrap: FollowUpKeyWrap | null;
   readonly fullPosition?: number;
   readonly totalCount?: number;
 }
@@ -69,6 +77,7 @@ export interface FollowUpSummaryRecord {
   readonly noteTypeId: string | null;
   readonly callStatus: string | null;
   readonly callDurationSeconds: number | null;
+  readonly keyGeneration: string | null;
   readonly fullPosition?: number;
   readonly totalCount?: number;
 }
@@ -140,27 +149,65 @@ export interface FollowUpService {
   getReactions(followUpIds: string[]): Promise<Map<string, ReactionSummary[]>>;
 }
 
-function toRecord(row: {
-  id: string;
-  ticket_id: string;
-  source: string;
-  type: string;
-  is_private: boolean;
-  mentioned_pseudonyms: string[];
-  encrypted_content: Buffer;
-  created_by: string | null;
-  deleted_at: Date | null;
-  created_at: Date;
-  note_type_id?: string | null;
-  call_sid?: string | null;
-  call_status?: string | null;
-  call_duration_seconds?: number | null;
-  has_recording?: boolean | number;
-  has_image?: boolean | number;
-  has_file?: boolean | number;
-  full_position?: string | number | bigint;
-  total_count?: string | number | bigint;
-}): FollowUpRecord {
+/**
+ * Batch-fetch per-follow-up ECIES key wraps for rows with non-null key_generation.
+ * Returns a Map keyed by key_generation UUID. Only wraps for the requesting
+ * volunteer (userId) are returned, matching the single-user decrypt use case.
+ */
+async function fetchFollowUpKeyWraps(
+  db: Kysely<TenantDatabase>,
+  userId: string,
+  rows: readonly { key_generation?: string | null }[],
+): Promise<Map<string, FollowUpKeyWrap>> {
+  const keyGens = rows
+    .map((r) => r.key_generation)
+    .filter((kg): kg is string => kg !== null && kg !== undefined);
+
+  if (keyGens.length === 0) return new Map();
+
+  const wraps = await db
+    .selectFrom("ticket_key_wraps")
+    .select(["key_generation", "ephemeral_point", "nonce", "wrapped_key"])
+    .where("volunteer_id", "=", userId)
+    .where("key_generation", "in", keyGens)
+    .execute();
+
+  const result = new Map<string, FollowUpKeyWrap>();
+  for (const w of wraps) {
+    result.set(w.key_generation, {
+      ephemeralPoint: w.ephemeral_point,
+      nonce: w.nonce,
+      wrappedKey: w.wrapped_key,
+    });
+  }
+  return result;
+}
+
+function toRecord(
+  row: {
+    id: string;
+    ticket_id: string;
+    source: string;
+    type: string;
+    is_private: boolean;
+    mentioned_pseudonyms: string[];
+    encrypted_content: Buffer;
+    created_by: string | null;
+    deleted_at: Date | null;
+    created_at: Date;
+    key_generation?: string | null;
+    note_type_id?: string | null;
+    call_sid?: string | null;
+    call_status?: string | null;
+    call_duration_seconds?: number | null;
+    has_recording?: boolean | number;
+    has_image?: boolean | number;
+    has_file?: boolean | number;
+    full_position?: string | number | bigint;
+    total_count?: string | number | bigint;
+  },
+  keyWrap?: FollowUpKeyWrap | null,
+): FollowUpRecord {
   return {
     id: row.id,
     ticketId: row.ticket_id,
@@ -178,6 +225,8 @@ function toRecord(row: {
     callSid: row.call_sid ?? null,
     callStatus: row.call_status ?? null,
     callDurationSeconds: row.call_duration_seconds ?? null,
+    keyGeneration: row.key_generation ?? null,
+    keyWrap: keyWrap ?? null,
     fullPosition:
       row.full_position !== undefined ? Number(row.full_position) : undefined,
     totalCount:
@@ -438,7 +487,10 @@ export function createFollowUpService(
         .limit(opts.limit)
         .execute();
 
-      const records = rows.map(toRecord);
+      const keyWraps = await fetchFollowUpKeyWraps(db, userId, rows);
+      const records = rows.map((row) =>
+        toRecord(row, keyWraps.get(row.key_generation ?? "")),
+      );
       return isOlder ? records.reverse() : records;
     },
 
@@ -465,6 +517,7 @@ export function createFollowUpService(
           "followups.note_type_id",
           "followups.call_status",
           "followups.call_duration_seconds",
+          "followups.key_generation",
         ])
         .where("followups.ticket_id", "=", ticketId)
         .where("followups.deleted_at", "is", null);
@@ -716,6 +769,7 @@ export function createFollowUpService(
           noteTypeId: row.note_type_id ?? null,
           callStatus: row.call_status ?? null,
           callDurationSeconds: row.call_duration_seconds ?? null,
+          keyGeneration: row.key_generation ?? null,
           fullPosition: fullPos !== undefined ? Number(fullPos) : undefined,
           totalCount: totCnt !== undefined ? Number(totCnt) : undefined,
         };
@@ -779,7 +833,10 @@ export function createFollowUpService(
         .orderBy("id", "asc")
         .execute();
 
-      return rows.map(toRecord);
+      const keyWraps = await fetchFollowUpKeyWraps(db, userId, rows);
+      return rows.map((row) =>
+        toRecord(row, keyWraps.get(row.key_generation ?? "")),
+      );
     },
 
     async updateInternalNote(userId, followUpId, encryptedContent, noteTypeId) {

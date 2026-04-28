@@ -57,6 +57,8 @@ import type {
   Argon2idRequest,
   DeriveKeysRequest,
   DecryptContentRequest,
+  DecryptAndRewrapRequest,
+  RewrapBlobRequest,
   DecryptBlobRequest,
   EncryptContentRequest,
   EvictTkRequest,
@@ -65,6 +67,8 @@ import type {
   WrapWithVolPublicRequest,
   RewrapTkRequest,
   WorkerRequestType,
+  RewrapEvent,
+  RewrapResultEvent,
 } from "./crypto-protocol.js";
 import { TkCache } from "./tk-cache.js";
 
@@ -85,6 +89,12 @@ const tkCache = new TkCache({
     requireSodium().memzero(buf);
   },
 });
+
+const pendingRewraps = new Set<string>();
+
+// tk_temp values cached per follow-up ID for blob re-wrap.
+// Evicted when RewrapResultEvent arrives (all re-wrap complete).
+const rewrapTkTempCache = new Map<string, Uint8Array>();
 
 // ── State machine ───────────────────────────────────────────────────
 
@@ -281,15 +291,17 @@ function handleDecryptContent(req: DecryptContentRequest): void {
       tk as SymmetricKey,
     );
 
-    const msg: WorkerResponse = {
-      id: req.id,
-      ok: true,
-      type: "decryptContent",
-      plaintext: textDecoder.decode(plaintext),
-    };
-    self.postMessage(msg);
-
-    sodium.memzero(plaintext);
+    try {
+      const msg: WorkerResponse = {
+        id: req.id,
+        ok: true,
+        type: "decryptContent",
+        plaintext: textDecoder.decode(plaintext),
+      };
+      self.postMessage(msg);
+    } finally {
+      sodium.memzero(plaintext);
+    }
   } catch (err: unknown) {
     postError(
       req.id,
@@ -297,6 +309,175 @@ function handleDecryptContent(req: DecryptContentRequest): void {
       err instanceof Error ? err.message : String(err),
       "DECRYPT_FAILED",
     );
+  }
+}
+
+function unwrapTkTemp(req: DecryptAndRewrapRequest): Uint8Array | null {
+  const ephemeralPoint = decode(req.ephemeralPoint);
+  const nonce = decode(req.nonce);
+  const wrappedKey = decode(req.wrappedKey);
+
+  try {
+    return eciesDecrypt(
+      ephemeralPoint as RistrettoPoint,
+      nonce as Nonce,
+      wrappedKey,
+      assertPresent(volPrivate, "volPrivate"),
+    );
+  } catch (err: unknown) {
+    postError(
+      req.id,
+      "decryptAndRewrap",
+      err instanceof Error ? err.message : String(err),
+      "DECRYPT_FAILED",
+    );
+    return null;
+  }
+}
+
+function handleDecryptAndRewrap(req: DecryptAndRewrapRequest): void {
+  if (!requireKeyed(req.id, "decryptAndRewrap")) return;
+
+  const sodium = requireSodium();
+  const tkTemp = unwrapTkTemp(req);
+  if (!tkTemp) return;
+
+  // Cache tk_temp for later blob re-wrap requests from the main thread.
+  // Evicted when RewrapResultEvent arrives.
+  rewrapTkTempCache.set(req.followUpId, tkTemp);
+
+  const ciphertextBuf = decode(req.ciphertext);
+
+  try {
+    const plaintext = decryptContent(
+      ciphertextBuf as Ciphertext,
+      tkTemp as SymmetricKey,
+    );
+
+    try {
+      const msg: WorkerResponse = {
+        id: req.id,
+        ok: true,
+        type: "decryptAndRewrap",
+        plaintext: textDecoder.decode(plaintext),
+      };
+      self.postMessage(msg);
+    } finally {
+      triggerRewrap(req.followUpId, req.ticketId, plaintext, sodium);
+    }
+  } catch (err: unknown) {
+    postError(
+      req.id,
+      "decryptAndRewrap",
+      err instanceof Error ? err.message : String(err),
+      "DECRYPT_FAILED",
+    );
+  }
+}
+
+function triggerRewrap(
+  followUpId: string,
+  ticketId: string,
+  plaintext: Uint8Array,
+  sodium: ReturnType<typeof requireSodium>,
+): void {
+  if (pendingRewraps.has(followUpId)) {
+    sodium.memzero(plaintext);
+    return;
+  }
+
+  const canonicalTk = tkCache.get(ticketId);
+  if (!canonicalTk) {
+    sodium.memzero(plaintext);
+    return;
+  }
+
+  try {
+    const reEncrypted = encryptContent(plaintext, canonicalTk as SymmetricKey);
+    pendingRewraps.add(followUpId);
+    const event: RewrapEvent = {
+      kind: "rewrap",
+      followUpId,
+      ticketId,
+      encryptedContent: encode(reEncrypted),
+    };
+    self.postMessage(event);
+  } catch (err: unknown) {
+    pendingRewraps.delete(followUpId);
+    if (import.meta.env.DEV) {
+      console.warn("[triggerRewrap] failed for", followUpId, err);
+    }
+  } finally {
+    sodium.memzero(plaintext);
+  }
+}
+
+function handleRewrapBlob(req: RewrapBlobRequest): void {
+  if (!requireKeyed(req.id, "rewrapBlob")) return;
+
+  const sodium = requireSodium();
+  const tkTemp = rewrapTkTempCache.get(req.followUpId);
+  if (!tkTemp) {
+    postError(
+      req.id,
+      "rewrapBlob",
+      `No cached tk_temp for follow-up ${req.followUpId}`,
+      "TK_NOT_CACHED",
+    );
+    return;
+  }
+
+  const canonicalTk = tkCache.get(req.ticketId);
+  if (!canonicalTk) {
+    postError(
+      req.id,
+      "rewrapBlob",
+      `No cached tk for ticket ${req.ticketId}`,
+      "TK_NOT_CACHED",
+    );
+    return;
+  }
+
+  const ciphertextBuf = decode(req.ciphertext);
+
+  try {
+    const blobPlaintext = decryptContent(
+      ciphertextBuf as Ciphertext,
+      tkTemp as SymmetricKey,
+    );
+    try {
+      const reEncrypted = encryptContent(
+        blobPlaintext,
+        canonicalTk as SymmetricKey,
+      );
+      const msg: WorkerResponse = {
+        id: req.id,
+        ok: true,
+        type: "rewrapBlob",
+        encryptedData: encode(reEncrypted),
+        blobKey: req.blobKey,
+        category: req.category,
+      };
+      self.postMessage(msg);
+    } finally {
+      sodium.memzero(blobPlaintext);
+    }
+  } catch (err: unknown) {
+    postError(
+      req.id,
+      "rewrapBlob",
+      err instanceof Error ? err.message : String(err),
+      "REWRAP_FAILED",
+    );
+  }
+}
+
+function handleRewrapResult(event: RewrapResultEvent): void {
+  pendingRewraps.delete(event.followUpId);
+  const tkTemp = rewrapTkTempCache.get(event.followUpId);
+  if (tkTemp) {
+    requireSodium().memzero(tkTemp);
+    rewrapTkTempCache.delete(event.followUpId);
   }
 }
 
@@ -391,6 +572,12 @@ function handleZeroAll(id: number): void {
   const sodium = requireSodium();
 
   tkCache.zeroAll();
+
+  for (const tkTemp of rewrapTkTempCache.values()) {
+    sodium.memzero(tkTemp);
+  }
+  rewrapTkTempCache.clear();
+  pendingRewraps.clear();
 
   volPrivate = zeroAndClear(sodium, volPrivate);
   masterKey = zeroAndClear(sodium, masterKey);
@@ -542,62 +729,77 @@ function handleRewrapTk(req: RewrapTkRequest): void {
 
 // ── Message dispatcher ──────────────────────────────────────────────
 
-self.addEventListener("message", (event: MessageEvent<WorkerRequest>): void => {
-  const req = event.data;
+self.addEventListener(
+  "message",
+  (event: MessageEvent<WorkerRequest | RewrapResultEvent>): void => {
+    const req = event.data;
 
-  const handle = async (): Promise<void> => {
-    switch (req.type) {
-      case "init":
-        await handleInit(req.id);
-        break;
-      case "argon2id":
-        handleArgon2id(req);
-        break;
-      case "oprfBlind":
-        handleOprfBlind(req.id);
-        break;
-      case "deriveKeys":
-        handleDeriveKeys(req);
-        break;
-      case "decryptContent":
-        handleDecryptContent(req);
-        break;
-      case "encryptContent":
-        handleEncryptContent(req);
-        break;
-      case "decryptBlob":
-        handleDecryptBlob(req);
-        break;
-      case "evictTk":
-        handleEvictTk(req);
-        break;
-      case "zeroAll":
-        handleZeroAll(req.id);
-        break;
-      case "getVolPublic":
-        handleGetVolPublic(req.id);
-        break;
-      case "unwrapOrgKey":
-        handleUnwrapOrgKey(req);
-        break;
-      case "unwrapTk":
-        handleUnwrapTk(req);
-        break;
-      case "wrapWithVolPublic":
-        handleWrapWithVolPublic(req);
-        break;
-      case "rewrapTk":
-        handleRewrapTk(req);
-        break;
+    // Handle main-thread events (not request-response)
+    if ("kind" in req) {
+      handleRewrapResult(req);
+      return;
     }
-  };
 
-  handle().catch((err: unknown) => {
-    postError(
-      req.id,
-      req.type,
-      err instanceof Error ? err.message : String(err),
-      "WORKER_ERROR",
-    );
-  });
-});
+    const handle = async (): Promise<void> => {
+      switch (req.type) {
+        case "init":
+          await handleInit(req.id);
+          break;
+        case "argon2id":
+          handleArgon2id(req);
+          break;
+        case "oprfBlind":
+          handleOprfBlind(req.id);
+          break;
+        case "deriveKeys":
+          handleDeriveKeys(req);
+          break;
+        case "decryptContent":
+          handleDecryptContent(req);
+          break;
+        case "decryptAndRewrap":
+          handleDecryptAndRewrap(req);
+          break;
+        case "rewrapBlob":
+          handleRewrapBlob(req);
+          break;
+        case "encryptContent":
+          handleEncryptContent(req);
+          break;
+        case "decryptBlob":
+          handleDecryptBlob(req);
+          break;
+        case "evictTk":
+          handleEvictTk(req);
+          break;
+        case "zeroAll":
+          handleZeroAll(req.id);
+          break;
+        case "getVolPublic":
+          handleGetVolPublic(req.id);
+          break;
+        case "unwrapOrgKey":
+          handleUnwrapOrgKey(req);
+          break;
+        case "unwrapTk":
+          handleUnwrapTk(req);
+          break;
+        case "wrapWithVolPublic":
+          handleWrapWithVolPublic(req);
+          break;
+        case "rewrapTk":
+          handleRewrapTk(req);
+          break;
+      }
+    };
+
+    handle().catch((err: unknown) => {
+      postError(
+        req.id,
+        req.type,
+        err instanceof Error ? err.message : String(err),
+        "WORKER_ERROR",
+      );
+    });
+  },
+);
