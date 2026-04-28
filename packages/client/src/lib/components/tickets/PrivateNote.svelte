@@ -134,7 +134,7 @@
       role="article"
       aria-label={m.ticket_private_note_by({ author: displayAuthor })}
     >
-      <span class="note-badge">
+      <span class="note-badge" data-testid="note-badge">
         {#if NoteTypeIconComponent && noteTypeName}
           <NoteTypeIconComponent
             size={11}

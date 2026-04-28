@@ -98,6 +98,7 @@
   import ExposureHint from "$lib/components/tickets/ExposureHint.svelte";
   import SmsComposeContent from "$lib/components/tickets/SmsComposeContent.svelte";
   import { callStore } from "$lib/stores/call.svelte.js";
+  import { extractMentions } from "$lib/utils/mentions.js";
   import { tick } from "svelte";
 
   interface CallRelayResponse {
@@ -621,14 +622,6 @@
     } finally {
       sending = false;
     }
-  }
-
-  function extractMentions(text: string): string[] {
-    const results: string[] = [];
-    for (const match of text.matchAll(/@(\w+)/g)) {
-      if (match[1] !== undefined) results.push(match[1]);
-    }
-    return results;
   }
 
   function openComposeActions(anchor: HTMLElement): void {

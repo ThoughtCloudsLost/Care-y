@@ -34,6 +34,7 @@
       aria-modal="true"
       aria-label={title}
       tabindex="-1"
+      data-testid="popup-dialog"
       class="popup-dialog"
     >
       {#if title}

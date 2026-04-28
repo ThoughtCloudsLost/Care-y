@@ -35,7 +35,7 @@ test.describe.serial("Dashboard (Home Tab)", () => {
   // ── Stat cards (real data) ────────────────────────────────────────
 
   test("stat cards show correct counts from seeded tickets", async () => {
-    const statCards = page.locator(".stat-card");
+    const statCards = page.locator('[data-testid="stat-card"]');
     await expect(statCards).toHaveCount(3);
 
     // My Open: tickets 1 (Sparrow) + 4 (Robin) = 2
