@@ -164,6 +164,7 @@
 
   let renderedBody: string | null = $state(null);
   let bodyDecryptAttempted = $state(false);
+  let bodyDecryptVersion = 0;
 
   $effect(() => {
     if (article == null || !orgKeyManager.isLoaded) {
@@ -177,19 +178,22 @@
       raw instanceof Uint8Array ? raw : new Uint8Array(raw.data);
     const title =
       titleResult.status === "ready" ? titleResult.value : undefined;
+    const version = ++bodyDecryptVersion;
 
     void (async (): Promise<void> => {
       try {
         const plainBytes = await orgKeyManager.decrypt(ciphertext);
+        if (version !== bodyDecryptVersion) return;
         renderedBody = renderArticleBody(plainBytes, { title });
       } catch (err: unknown) {
+        if (version !== bodyDecryptVersion) return;
         console.error("[KB] Article body decryption failed", {
           articleId,
           err,
         });
         renderedBody = null;
       } finally {
-        bodyDecryptAttempted = true;
+        if (version === bodyDecryptVersion) bodyDecryptAttempted = true;
       }
     })();
   });
@@ -235,6 +239,7 @@
   }
 
   let nonImageAttachments: DecryptedAttachment[] = $state([]);
+  let attachmentDecryptVersion = 0;
 
   $effect(() => {
     const raw = attachmentsQuery.data;
@@ -242,6 +247,8 @@
       nonImageAttachments = [];
       return;
     }
+
+    const version = ++attachmentDecryptVersion;
 
     void (async (): Promise<void> => {
       const results: DecryptedAttachment[] = [];
@@ -262,7 +269,9 @@
         }
         results.push({ id: att.id, filename, sizeBytes: att.sizeBytes });
       }
-      nonImageAttachments = results;
+      if (version === attachmentDecryptVersion) {
+        nonImageAttachments = results;
+      }
     })();
   });
 
