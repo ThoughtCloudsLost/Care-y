@@ -220,6 +220,78 @@ describe("createBlindIndexer", () => {
   });
 });
 
+describe("createFieldEncryptor.decryptToBuffer", () => {
+  const keys = deriveKeys(TEST_KEY);
+  const encryptor = createFieldEncryptor(keys.fieldEncryptKey);
+
+  it("roundtrips: decryptToBuffer(encrypt(x)) returns identical bytes", () => {
+    const input = "hello world";
+    const ct = encryptor.encrypt(input);
+    const buf = encryptor.decryptToBuffer(ct);
+
+    expect(Buffer.isBuffer(buf)).toBe(true);
+    expect(buf.toString("utf-8")).toBe(input);
+  });
+
+  it("roundtrips binary-safe content (non-UTF-8 bytes)", () => {
+    const binaryInput = Buffer.from([0x00, 0x89, 0x50, 0x4e, 0x47, 0xff]);
+    const ct = encryptor.encrypt(binaryInput.toString("utf-8"));
+    const buf = encryptor.decryptToBuffer(ct);
+
+    expect(buf.toString("utf-8")).toBe(binaryInput.toString("utf-8"));
+  });
+
+  it("throws CryptoError for short ciphertext", () => {
+    expect(() => encryptor.decryptToBuffer(Buffer.alloc(10))).toThrow(
+      CryptoError,
+    );
+    expect(() => encryptor.decryptToBuffer(Buffer.alloc(10))).toThrow(
+      "too short",
+    );
+  });
+
+  it("throws CryptoError for tampered ciphertext", () => {
+    const ct = encryptor.encrypt("secret data");
+    const corrupted = Buffer.from(ct);
+    const byte = corrupted[30];
+    if (byte !== undefined) corrupted[30] = byte ^ 0x01;
+
+    expect(() => encryptor.decryptToBuffer(corrupted)).toThrow(CryptoError);
+  });
+
+  it("throws CryptoError with wrong key", () => {
+    const altEncryptor = createFieldEncryptor(
+      deriveKeys(ALT_KEY).fieldEncryptKey,
+    );
+    const ct = encryptor.encrypt("secret");
+    expect(() => altEncryptor.decryptToBuffer(ct)).toThrow(CryptoError);
+  });
+
+  it("wraps unexpected sodium errors as CryptoError", () => {
+    const ct = encryptor.encrypt("test");
+    const spy = vi
+      .spyOn(sodium, "crypto_secretbox_open_easy")
+      .mockImplementation(() => {
+        throw new TypeError("native crash");
+      });
+
+    expect(() => encryptor.decryptToBuffer(ct)).toThrow(CryptoError);
+    expect(() => encryptor.decryptToBuffer(ct)).toThrow("native crash");
+
+    spy.mockRestore();
+  });
+
+  it("roundtrips arbitrary strings (property-based)", () => {
+    fc.assert(
+      fc.property(fc.string(), (s: string) => {
+        const buf = encryptor.decryptToBuffer(encryptor.encrypt(s));
+        return buf.toString("utf-8") === s;
+      }),
+      { numRuns: 100 },
+    );
+  });
+});
+
 describe("createNoopFieldEncryptor", () => {
   const noop = createNoopFieldEncryptor();
 
@@ -235,5 +307,11 @@ describe("createNoopFieldEncryptor", () => {
 
   it("roundtrips empty string", () => {
     expect(noop.decrypt(noop.encrypt(""))).toBe("");
+  });
+
+  it("decryptToBuffer roundtrips correctly", () => {
+    const buf = noop.decryptToBuffer(noop.encrypt("hello"));
+    expect(Buffer.isBuffer(buf)).toBe(true);
+    expect(buf.toString("utf-8")).toBe("hello");
   });
 });
