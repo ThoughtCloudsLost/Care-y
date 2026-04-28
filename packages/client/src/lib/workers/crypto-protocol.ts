@@ -393,7 +393,7 @@ export interface CreateTicketKeyResponse extends SuccessBase {
 
 export interface OrgDecryptResponse extends SuccessBase {
   readonly type: "orgDecrypt";
-  /** UTF-8 decrypted content. */
+  /** Raw decrypted bytes, base64-encoded (binary-safe). */
   readonly plaintext: string;
 }
 

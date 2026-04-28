@@ -17,14 +17,14 @@ beforeAll(async () => {
 
 function createMockBridge(): CryptoBridge {
   return {
-    orgEncrypt: vi.fn(async (plaintext: string) => {
-      return `encrypted:${plaintext}`;
+    orgEncrypt: vi.fn(async (plaintextB64: string) => {
+      // Simulate: seal(plaintext) -> ciphertext. Just prefix for identification.
+      return encode(new TextEncoder().encode(`sealed:${plaintextB64}`));
     }),
-    orgDecrypt: vi.fn(async (ciphertext: string) => {
-      if (ciphertext.startsWith("encrypted:")) {
-        return ciphertext.slice("encrypted:".length);
-      }
-      throw new Error("decrypt failed");
+    orgDecrypt: vi.fn(async (ciphertextB64: string) => {
+      // Simulate: unseal(ciphertext) -> raw bytes as base64.
+      // Return the input ciphertext base64 as-is (identity decrypt for testing).
+      return ciphertextB64;
     }),
     orgDecryptBatch: vi.fn(),
     exportOrgSecretKey: vi.fn(async () => {
@@ -97,7 +97,7 @@ describe("OrgKeyManager", () => {
   describe("decrypt", () => {
     it("delegates to bridge.orgDecrypt", async () => {
       manager.load(pkBase64);
-      const ciphertext = new TextEncoder().encode("encrypted:hello");
+      const ciphertext = new Uint8Array([1, 2, 3, 4]);
       await manager.decrypt(ciphertext);
       expect(bridge.orgDecrypt).toHaveBeenCalledOnce();
     });
@@ -109,12 +109,13 @@ describe("OrgKeyManager", () => {
       );
     });
 
-    it("returns Uint8Array plaintext from bridge response", async () => {
+    it("returns raw Uint8Array bytes from bridge response (binary-safe)", async () => {
       manager.load(pkBase64);
-      const ciphertext = new TextEncoder().encode("encrypted:payload");
-      const result = await manager.decrypt(ciphertext);
+      const inputBytes = new Uint8Array([0x00, 0x89, 0x50, 0x4e, 0x47]);
+      const result = await manager.decrypt(inputBytes);
       expect(result).toBeInstanceOf(Uint8Array);
-      expect(new TextDecoder().decode(result)).toBe("payload");
+      // Mock returns ciphertext as-is (identity), so output equals input
+      expect(result).toEqual(inputBytes);
     });
   });
 
