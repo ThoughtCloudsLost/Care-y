@@ -25,26 +25,31 @@ import type {
   RewrapTkResponse,
   EvictTkResponse,
   ZeroAllResponse,
+  CreateTicketKeyResponse,
 } from "./crypto-protocol.js";
 
 describe("crypto-protocol types", () => {
   it("WorkerRequestType covers all request discriminants", () => {
-    // Compile-time exhaustiveness: if a request type is added to the union
-    // but not listed here, this will fail to compile.
     const allTypes: WorkerRequestType[] = [
       "init",
       "argon2id",
       "oprfBlind",
       "deriveKeys",
       "decryptContent",
+      "decryptAndRewrap",
+      "rewrapBlob",
       "encryptContent",
+      "decryptBlob",
       "evictTk",
       "zeroAll",
       "getVolPublic",
       "unwrapOrgKey",
+      "unwrapTk",
+      "wrapWithVolPublic",
       "rewrapTk",
+      "createTicketKey",
     ];
-    expect(allTypes).toHaveLength(11);
+    expect(allTypes).toHaveLength(17);
   });
 
   it("ResponseForRequest maps each request type to its response", () => {
@@ -80,6 +85,9 @@ describe("crypto-protocol types", () => {
       ? true
       : false;
     true satisfies ResponseForRequest<"zeroAll"> extends ZeroAllResponse
+      ? true
+      : false;
+    true satisfies ResponseForRequest<"createTicketKey"> extends CreateTicketKeyResponse
       ? true
       : false;
 

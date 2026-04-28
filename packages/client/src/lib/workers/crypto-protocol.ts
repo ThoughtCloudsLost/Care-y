@@ -198,6 +198,12 @@ export interface RewrapTkRequest {
   readonly recipientVolPublic: string;
 }
 
+export interface CreateTicketKeyRequest {
+  readonly type: "createTicketKey";
+  readonly id: number;
+  readonly fields: readonly { name: string; plaintext: string }[];
+}
+
 export type WorkerRequest =
   | InitRequest
   | Argon2idRequest
@@ -214,7 +220,8 @@ export type WorkerRequest =
   | UnwrapOrgKeyRequest
   | UnwrapTkRequest
   | WrapWithVolPublicRequest
-  | RewrapTkRequest;
+  | RewrapTkRequest
+  | CreateTicketKeyRequest;
 
 /** All valid request type discriminants. */
 export type WorkerRequestType = WorkerRequest["type"];
@@ -333,6 +340,20 @@ export interface ZeroAllResponse extends SuccessBase {
   readonly type: "zeroAll";
 }
 
+export interface CreateTicketKeyResponse extends SuccessBase {
+  readonly type: "createTicketKey";
+  readonly encryptedFields: readonly {
+    name: string;
+    ciphertext: string;
+  }[];
+  readonly keyWrap: {
+    ephemeralPoint: string;
+    nonce: string;
+    wrappedKey: string;
+  };
+  readonly keyGeneration: string;
+}
+
 export type WorkerSuccessResponse =
   | InitResponse
   | Argon2idResponse
@@ -349,7 +370,8 @@ export type WorkerSuccessResponse =
   | WrapWithVolPublicResponse
   | RewrapTkResponse
   | EvictTkResponse
-  | ZeroAllResponse;
+  | ZeroAllResponse
+  | CreateTicketKeyResponse;
 
 export type WorkerResponse = WorkerSuccessResponse | ErrorResponse;
 
