@@ -14,7 +14,7 @@
   import { toastStore } from "$lib/stores/toast.svelte.js";
   import { announceToLiveRegion } from "$lib/utils/announce.js";
   import QueryError from "$lib/components/QueryError.svelte";
-  import SoftButton from "$lib/components/SoftButton.svelte";
+  import SoftButton from "$lib/components/inputs/SoftButton.svelte";
   import ShellDialog from "$lib/shell/ShellDialog.svelte";
 
   const authRouter = trpc.auth;

@@ -23,36 +23,38 @@
 <script lang="ts">
   /* eslint-disable @typescript-eslint/no-unsafe-assignment -- $state<Record> proxy assignments; types are correct */
   /* eslint-disable @typescript-eslint/strict-boolean-expressions -- $derived proxy values flagged as any */
-  import {
-    List,
-    ListInput,
-    Segmented,
-    SegmentedButton,
-    Button,
-    Block,
-    BlockTitle,
-    Preloader,
-  } from "konsta/svelte";
+  import { List, ListInput, Preloader } from "konsta/svelte";
   import * as m from "$lib/paraglide/messages.js";
   import { getCryptoBridge } from "$lib/crypto/context.js";
-  import type { TicketPriority } from "@care-y/shared";
-  import type { ClientSelection, CollisionInfo } from "./ClientSelect.svelte";
+  import { ticketPrioritySchema, type TicketPriority } from "@care-y/shared";
+  import type {
+    ClientSelection,
+    CollisionInfo,
+    ClientSearchResult,
+    PhoneLookupResult,
+  } from "$lib/components/inputs/ClientSelect.svelte";
   import { ClientError } from "$lib/errors.js";
 
   interface Props {
     queues: { id: string; name: string }[];
+    searchClients: (query: string) => Promise<ClientSearchResult[]>;
+    phoneLookup?: (phone: string) => Promise<PhoneLookupResult>;
     onsubmit: (payload: NewTicketPayload) => void;
-    oncancel: () => void;
     oncollision?: (info: CollisionInfo) => void;
     submitting?: boolean;
+    canSubmit?: boolean;
+    requestSubmit?: () => void;
   }
 
   let {
     queues,
+    searchClients,
+    phoneLookup,
     onsubmit,
-    oncancel,
     oncollision,
     submitting = false,
+    canSubmit = $bindable(false),
+    requestSubmit = $bindable(),
   }: Props = $props();
 
   let title = $state("");
@@ -66,31 +68,11 @@
   const bridge = getCryptoBridge();
   const busy = $derived(encrypting || submitting);
 
-  const priorities: readonly {
-    value: TicketPriority;
-    label: string;
-    color: string;
-  }[] = [
-    {
-      value: "low",
-      label: m.ticket_new_priority_low(),
-      color: "var(--k-color-green, #34c759)",
-    },
-    {
-      value: "normal",
-      label: m.ticket_new_priority_normal(),
-      color: "var(--k-color-blue, #007aff)",
-    },
-    {
-      value: "high",
-      label: m.ticket_new_priority_high(),
-      color: "var(--k-color-orange, #ff9500)",
-    },
-    {
-      value: "urgent",
-      label: m.ticket_new_priority_urgent(),
-      color: "var(--k-color-red, #ff3b30)",
-    },
+  const priorities: readonly { value: TicketPriority; label: string }[] = [
+    { value: "low", label: m.ticket_new_priority_low() },
+    { value: "normal", label: m.ticket_new_priority_normal() },
+    { value: "high", label: m.ticket_new_priority_high() },
+    { value: "urgent", label: m.ticket_new_priority_urgent() },
   ];
 
   function validate(): boolean {
@@ -101,6 +83,10 @@
     errors = next;
     return Object.keys(next).length === 0;
   }
+
+  $effect(() => {
+    canSubmit = !busy && title.trim().length > 0;
+  });
 
   async function handleSubmit(): Promise<void> {
     if (!validate() || busy) return;
@@ -139,6 +125,8 @@
     }
   }
 
+  requestSubmit = () => void handleSubmit();
+
   function handleClientChange(value: ClientSelection): void {
     clientSelection = value;
     if (errors.client !== undefined && value !== null) {
@@ -156,18 +144,27 @@
   }
 </script>
 
-<!-- QueueSelect and ClientSelect are imported lazily by the parent
-     to keep Bits UI out of this Konsta-only file. They render via
-     dedicated slots in the form layout. -->
-<form
-  onsubmit={(e: SubmitEvent) => {
-    e.preventDefault();
-    void handleSubmit();
-  }}
-  class="new-ticket-form"
->
-  <List strongIos outlineIos>
+<div class="new-ticket-body">
+  {#await import("$lib/components/inputs/ClientSelect.svelte")}
+    <div class="import-loading"><Preloader /></div>
+  {:then ClientSelectModule}
+    <ClientSelectModule.default
+      label={m.ticket_new_field_client()}
+      placeholder={m.ticket_new_field_client_placeholder()}
+      search={searchClients}
+      {phoneLookup}
+      onchange={handleClientChange}
+      {oncollision}
+      error={errors.client}
+      disabled={busy}
+    />
+  {:catch}
+    <p class="form-error" role="alert">{m.error_generic()}</p>
+  {/await}
+
+  <List nested>
     <ListInput
+      outline
       label={m.ticket_new_field_title()}
       type="text"
       placeholder={m.ticket_new_field_title_placeholder()}
@@ -188,6 +185,7 @@
     />
 
     <ListInput
+      outline
       label={m.ticket_new_field_description()}
       type="textarea"
       placeholder={m.ticket_new_field_description_placeholder()}
@@ -203,83 +201,63 @@
     />
   </List>
 
-  <BlockTitle>{m.ticket_new_field_priority()}</BlockTitle>
-  <Block>
-    <Segmented strong>
+  <List nested class="new-ticket-priority-list">
+    <ListInput
+      outline
+      dropdown
+      label={m.ticket_new_field_priority()}
+      type="select"
+      value={priority}
+      onChange={(e: Event) => {
+        const target = e.target;
+        if (target instanceof HTMLSelectElement) {
+          const parsed = ticketPrioritySchema.safeParse(target.value);
+          if (parsed.success) priority = parsed.data;
+        }
+      }}
+      disabled={busy}
+    >
       {#each priorities as p (p.value)}
-        <SegmentedButton
-          active={priority === p.value}
-          onclick={() => {
-            if (!busy) priority = p.value;
-          }}
-        >
-          <span
-            class="priority-label"
-            style:--priority-color={p.color}
-            class:priority-active={priority === p.value}
-          >
-            {p.label}
-          </span>
-        </SegmentedButton>
+        <option value={p.value}>{p.label}</option>
       {/each}
-    </Segmented>
-  </Block>
+    </ListInput>
+  </List>
 
-  {#await import("./QueueSelect.svelte")}
-    <div class="import-loading"><Preloader /></div>
-  {:then QueueSelectModule}
-    <QueueSelectModule.default
-      {queues}
+  <List nested class="new-ticket-queue-list">
+    <ListInput
+      outline
+      dropdown
+      label={m.ticket_new_field_queue()}
+      type="select"
       value={queueId}
-      onchange={handleQueueChange}
+      onChange={(e: Event) => {
+        const target = e.target;
+        if (target instanceof HTMLSelectElement) {
+          handleQueueChange(target.value);
+        }
+      }}
       error={errors.queue}
       disabled={busy}
-    />
-  {:catch}
-    <Block><p class="form-error" role="alert">{m.error_generic()}</p></Block>
-  {/await}
-
-  {#await import("./ClientSelect.svelte")}
-    <div class="import-loading"><Preloader /></div>
-  {:then ClientSelectModule}
-    <ClientSelectModule.default
-      onchange={handleClientChange}
-      {oncollision}
-      error={errors.client}
-      disabled={busy}
-    />
-  {:catch}
-    <Block><p class="form-error" role="alert">{m.error_generic()}</p></Block>
-  {/await}
+    >
+      <option value="" disabled>{m.ticket_new_field_queue_placeholder()}</option
+      >
+      {#each queues as q (q.id)}
+        <option value={q.id}>{q.name}</option>
+      {/each}
+    </ListInput>
+  </List>
 
   {#if errors.form}
-    <Block>
-      <p class="form-error" role="alert">{errors.form}</p>
-    </Block>
+    <p class="form-error" role="alert">{errors.form}</p>
   {/if}
-
-  <Block class="new-ticket-actions">
-    <Button large tonal disabled={busy} onclick={oncancel}>
-      {m.common_cancel()}
-    </Button>
-    <Button large type="submit" disabled={busy}>
-      {#if encrypting}
-        {m.ticket_new_submitting()}
-      {:else if submitting}
-        {m.ticket_new_submitting()}
-      {:else}
-        {m.ticket_new_submit()}
-      {/if}
-    </Button>
-  </Block>
-</form>
+</div>
 
 <style>
-  .new-ticket-form {
+  .new-ticket-body {
     display: flex;
     flex-direction: column;
-    gap: 0;
-    padding-bottom: env(safe-area-inset-bottom);
+    gap: var(--space-md);
+    padding: var(--space-md) 0;
   }
 
   .import-loading {
@@ -293,32 +271,16 @@
     resize: vertical;
   }
 
-  .priority-label {
-    font-size: 0.8125rem;
-    transition: color 0.15s;
-  }
-
-  .priority-active {
-    color: var(--priority-color);
-    font-weight: 600;
+  :global(.new-ticket-priority-list),
+  :global(.new-ticket-queue-list) {
+    margin: 0 !important;
   }
 
   .form-error {
     color: var(--k-color-red, #ff3b30);
     font-size: 0.875rem;
     text-align: center;
-  }
-
-  :global(.new-ticket-actions) {
-    display: flex;
-    gap: 0.75rem;
-  }
-
-  :global(.new-ticket-actions > :first-child) {
-    flex: 1;
-  }
-
-  :global(.new-ticket-actions > :last-child) {
-    flex: 2;
+    margin: 0;
+    padding: 0 var(--space-lg);
   }
 </style>

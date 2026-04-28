@@ -45,7 +45,7 @@
   import QueryError from "$lib/components/QueryError.svelte";
   import ShellDialog from "$lib/shell/ShellDialog.svelte";
   import ShellSheet from "$lib/shell/ShellSheet.svelte";
-  import SoftButton from "$lib/components/SoftButton.svelte";
+  import SoftButton from "$lib/components/inputs/SoftButton.svelte";
   import InlineSkeleton from "$lib/components/InlineSkeleton.svelte";
   import InviteUser from "./InviteUser.svelte";
   import UserCard from "./UserCard.svelte";

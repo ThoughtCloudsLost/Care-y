@@ -1,7 +1,7 @@
 <script lang="ts">
   import { List, ListInput, Block, Preloader } from "konsta/svelte";
   import { Download } from "@lucide/svelte";
-  import SoftButton from "$lib/components/SoftButton.svelte";
+  import SoftButton from "$lib/components/inputs/SoftButton.svelte";
   import {
     encryptWithPassphrase,
     serializeEscrowBlob,

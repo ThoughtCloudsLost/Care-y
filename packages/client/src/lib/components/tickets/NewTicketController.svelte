@@ -1,7 +1,7 @@
 <!--
-  New ticket popup controller.
+  New ticket sheet controller.
   Owns data fetching (queues), mutation (createTicket), and collision navigation.
-  Layout renders this with bind:opened. Same pattern as AssignSheet.
+  Same pattern as InternalNoteSheet / DisplayNameSheet.
 -->
 <script lang="ts">
   import { goto } from "$app/navigation";
@@ -11,19 +11,29 @@
     createMutation,
     useQueryClient,
   } from "@tanstack/svelte-query";
-  import ShellPopup from "$lib/shell/ShellPopup.svelte";
+  import ShellSheet from "$lib/shell/ShellSheet.svelte";
+  import SoftButton from "$lib/components/inputs/SoftButton.svelte";
   import NewTicketForm from "./NewTicketForm.svelte";
   import type { NewTicketPayload } from "./NewTicketForm.svelte";
-  import type { CollisionInfo } from "./ClientSelect.svelte";
+  import type {
+    CollisionInfo,
+    ClientSearchResult,
+    PhoneLookupResult,
+  } from "$lib/components/inputs/ClientSelect.svelte";
   import { getOrgDecryptCache } from "$lib/crypto/context.js";
   import { trpc } from "$lib/trpc/index.js";
   import { ticketsKeys } from "$lib/query/keys.js";
   import { toastStore } from "$lib/stores/toast.svelte.js";
   import { RouterNotAvailableError } from "$lib/errors.js";
+  import { DEV_ORG_SLUG } from "$lib/utils/org-slug.js";
   import * as m from "$lib/paraglide/messages.js";
 
-  /* eslint-disable-next-line @typescript-eslint/no-useless-default-assignment -- $bindable() is required for bind:, not a default */
-  let { opened = $bindable() }: { opened: boolean } = $props();
+  interface Props {
+    opened: boolean;
+    ondismiss: () => void;
+  }
+
+  let { opened, ondismiss }: Props = $props();
 
   if (!trpc.tickets) throw new RouterNotAvailableError("tickets");
   const ticketRouter = trpc.tickets;
@@ -44,6 +54,9 @@
     })),
   );
 
+  let canSubmit = $state(false);
+  let requestSubmit: (() => void) | undefined = $state();
+
   /* eslint-disable @typescript-eslint/no-unsafe-assignment -- NewTicketPayload fields are strongly typed; eslint can't resolve .svelte module exports */
   const createTicketMutation = createMutation(() => ({
     mutationFn: async (payload: NewTicketPayload) =>
@@ -59,7 +72,7 @@
       }),
     onSuccess: () => {
       toastStore.show(m.ticket_new_success());
-      opened = false;
+      ondismiss();
       void queryClient.invalidateQueries({ queryKey: ticketsKeys.lists() });
     },
     onError: () => {
@@ -67,23 +80,64 @@
     },
   }));
 
+  const isPending = $derived(createTicketMutation.isPending);
+
   function handleCollision(info: CollisionInfo): void {
-    opened = false;
+    ondismiss();
     const ticketId: string = info.openTicketId;
     void goto(resolve(`/tickets/${ticketId}`));
   }
+
+  async function searchClients(query: string): Promise<ClientSearchResult[]> {
+    return ticketRouter.searchClients.query({ query, limit: 10 });
+  }
+
+  async function phoneLookup(phone: string): Promise<PhoneLookupResult> {
+    const headers: Record<string, string> = {
+      "Content-Type": "application/json",
+    };
+    if (import.meta.env.DEV) {
+      headers["x-org-slug"] = DEV_ORG_SLUG;
+    }
+
+    const res = await fetch("/relay/phone-lookup", {
+      method: "POST",
+      credentials: "include",
+      headers,
+      body: JSON.stringify({ phone }),
+    });
+
+    if (!res.ok) {
+      throw new Error("Phone lookup failed");
+    }
+
+    return (await res.json()) as PhoneLookupResult;
+  }
+
+  function handleHeaderSubmit(): void {
+    requestSubmit?.();
+  }
 </script>
 
-<ShellPopup
+<ShellSheet
   {opened}
-  ondismiss={() => (opened = false)}
+  {ondismiss}
+  ariaLabel={m.ticket_new_title()}
   title={m.ticket_new_title()}
 >
+  {#snippet headerRight()}
+    <SoftButton onclick={handleHeaderSubmit} disabled={!canSubmit || isPending}>
+      {isPending ? m.ticket_new_submitting() : m.ticket_new_submit()}
+    </SoftButton>
+  {/snippet}
   <NewTicketForm
     queues={decryptedQueues}
+    {searchClients}
+    {phoneLookup}
     onsubmit={(p) => createTicketMutation.mutate(p)}
-    oncancel={() => (opened = false)}
     oncollision={handleCollision}
-    submitting={createTicketMutation.isPending}
+    submitting={isPending}
+    bind:canSubmit
+    bind:requestSubmit
   />
-</ShellPopup>
+</ShellSheet>

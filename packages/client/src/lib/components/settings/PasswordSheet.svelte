@@ -15,7 +15,7 @@
   } from "$lib/settings/password-change.js";
   import { solveProofOfWork } from "$lib/auth/pow-solver.js";
   import ShellSheet from "$lib/shell/ShellSheet.svelte";
-  import SoftButton from "$lib/components/SoftButton.svelte";
+  import SoftButton from "$lib/components/inputs/SoftButton.svelte";
 
   interface PasswordSheetProps {
     readonly opened: boolean;

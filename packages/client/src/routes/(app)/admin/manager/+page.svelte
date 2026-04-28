@@ -1,6 +1,6 @@
 <script lang="ts">
   import { List, ListItem, Block } from "konsta/svelte";
-  import SoftButton from "$lib/components/SoftButton.svelte";
+  import SoftButton from "$lib/components/inputs/SoftButton.svelte";
   import { createQuery } from "@tanstack/svelte-query";
   import { queueKeys, ticketsKeys } from "$lib/query/keys.js";
   import { goto } from "$app/navigation";

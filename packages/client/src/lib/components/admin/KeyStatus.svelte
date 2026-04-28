@@ -6,7 +6,7 @@
   import * as m from "$lib/paraglide/messages.js";
   import { trpc } from "$lib/trpc/index.js";
   import { getOrgKeyManager } from "$lib/crypto/context.js";
-  import SoftButton from "$lib/components/SoftButton.svelte";
+  import SoftButton from "$lib/components/inputs/SoftButton.svelte";
 
   interface KeyStatusProps {
     readonly onrotate: () => void;

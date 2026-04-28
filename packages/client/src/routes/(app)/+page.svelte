@@ -39,10 +39,7 @@
   } from "$lib/crypto/context.js";
   import { Permission } from "@care-y/shared";
   import ShellPopover from "$lib/shell/ShellPopover.svelte";
-  import {
-    getNavbarOverrideCtx,
-    getNewTicketTriggerCtx,
-  } from "$lib/shell/context.js";
+  import { getNavbarOverrideCtx } from "$lib/shell/context.js";
   import { resolveAsyncDecrypt } from "$lib/crypto/decrypt-result.js";
   import { bucketTickets } from "$lib/components/dashboard/filters.js";
   import {
@@ -60,7 +57,6 @@
   const permissionsGetter = getCurrentPermissions();
   const permissions = $derived(permissionsGetter());
   const navbarCtx = getNavbarOverrideCtx();
-  const newTicketTrigger = getNewTicketTriggerCtx();
 
   // --- Create menu (navbar "+" popover) ---
 
@@ -123,7 +119,7 @@
     createPopoverOpen = false;
     switch (optionId) {
       case "ticket":
-        newTicketTrigger.open();
+        void goto(resolve("/tickets?action=new-ticket"));
         break;
       case "article":
         void goto(resolve("/library/new"));

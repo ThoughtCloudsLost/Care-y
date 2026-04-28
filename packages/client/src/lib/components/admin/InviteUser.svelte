@@ -19,7 +19,7 @@
   import { announceToLiveRegion } from "$lib/utils/announce.js";
   import { generateRandomIdentifier } from "$lib/utils/random-identifier.js";
   import ShellSheet from "$lib/shell/ShellSheet.svelte";
-  import SoftButton from "$lib/components/SoftButton.svelte";
+  import SoftButton from "$lib/components/inputs/SoftButton.svelte";
 
   interface InviteUserProps {
     readonly opened: boolean;
