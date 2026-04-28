@@ -75,6 +75,7 @@
     resolveVolunteerName as resolveVolName,
   } from "$lib/tickets/resolve-volunteer.js";
   import { RouterNotAvailableError } from "$lib/errors.js";
+  import { CryptoWorkerError } from "$lib/workers/crypto-bridge-errors.js";
   import { toastStore } from "$lib/stores/toast.svelte.js";
   import { haptic } from "$lib/utils/haptic.js";
   import {
@@ -109,6 +110,7 @@
   // Draft compose state (shared with ShellMessagebar + TicketDetail).
   let draftText = $state("");
   let cursorPosition = $state(0);
+  let sending = $state(false);
 
   function handleInput(e: Event): void {
     const target = e.target;
@@ -472,11 +474,88 @@
 
   // --- Compose handlers ---
 
-  function handleSend(): void {
-    // Stub: encryption + submission wired separately.
-    if (import.meta.env.DEV) {
-      console.log("[TicketDetail] send reply:", draftText.slice(0, 50));
+  async function handleSend(): Promise<void> {
+    const text = draftText.trim();
+    if (!text || sending) return;
+
+    sending = true;
+    const followUpsKey = ticketKeys.followUpsInitial(ticketId);
+    const pendingId = `pending-${crypto.randomUUID()}`;
+
+    try {
+      const encryptedContent = await cryptoBridge.encrypt(ticketId, text);
+
+      draftText = "";
+
+      // Optimistic: insert a pending follow-up into the cache immediately.
+      // Uses type assertion because the optimistic entry is a short-lived
+      // placeholder, replaced by server data on the next invalidation.
+      const pendingFollowUp = {
+        id: pendingId,
+        ticketId,
+        source: "volunteer",
+        type: "message",
+        isPrivate: false,
+        mentionedPseudonyms: extractMentions(text),
+        encryptedContent: { type: "Buffer" as const, data: [] },
+        createdBy: currentUserId ?? null,
+        createdAt: new Date().toISOString(),
+        hasRecording: false,
+        hasImage: false,
+        hasFile: false,
+        noteTypeId: null,
+        callSid: null,
+        callStatus: null,
+        callDurationSeconds: null,
+        keyGeneration: null,
+        keyWrap: null,
+      } satisfies FollowUpList[number];
+
+      queryClient.setQueryData<FollowUpList>(followUpsKey, (old) =>
+        old ? [...old, pendingFollowUp] : [pendingFollowUp],
+      );
+
+      // Seed the decrypt cache so the bubble renders plaintext immediately
+      // instead of attempting Worker decryption on the placeholder ciphertext.
+      followUpCache.seed(pendingId, text);
+
+      await ticketRouter.createFollowUp.mutate({
+        ticketId,
+        encryptedContent,
+        source: "volunteer" as const,
+        type: "message" as const,
+        isPrivate: false,
+        mentionedPseudonyms: extractMentions(text),
+      });
+
+      // Replace optimistic entry with server-confirmed data.
+      await queryClient.invalidateQueries({
+        queryKey: ticketKeys.followUps(ticketId),
+      });
+    } catch (err: unknown) {
+      // Rollback optimistic insertion and seeded cache entry.
+      followUpCache.deleteByPrefix(pendingId);
+      queryClient.setQueryData<FollowUpList>(followUpsKey, (old) =>
+        old?.filter((fu) => !fu.id.startsWith("pending-")),
+      );
+      if (!draftText) draftText = text;
+      const msg =
+        err instanceof CryptoWorkerError &&
+        (err.code === "TK_NOT_CACHED" || err.code === "ENCRYPT_FAILED")
+          ? m.ticket_reply_error_encrypt()
+          : m.ticket_reply_error_send();
+      toastStore.show(msg, 3000);
+    } finally {
+      sending = false;
     }
+  }
+
+  function extractMentions(text: string): string[] {
+    const results: string[] = [];
+    for (const match of text.matchAll(/@(\w+)/g)) {
+      if (match[1] !== undefined) results.push(match[1]);
+    }
+    return results;
   }
 
   function openComposeActions(anchor: HTMLElement): void {
@@ -832,7 +911,7 @@
     onsend={handleSend}
     onplus={openComposeActions}
     oninput={handleInput}
-    sendDisabled={!draftText.trim()}
+    sendDisabled={!draftText.trim() || sending}
   />
 {/if}
 

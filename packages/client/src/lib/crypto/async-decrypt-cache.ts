@@ -190,6 +190,16 @@ export class AsyncDecryptCache {
     return this.cache.get(key);
   }
 
+  /**
+   * Pre-populate the cache with a known plaintext value.
+   * Used for optimistic UI insertion where the plaintext is already
+   * available (e.g., the volunteer just typed it) and Worker decryption
+   * would fail on the placeholder ciphertext.
+   */
+  seed(key: string, plaintext: string): void {
+    this.cache.set(key, plaintext);
+  }
+
   clear(): void {
     this.cache.clear();
     this.pending.clear();
