@@ -126,11 +126,11 @@
 
   const isPending = $derived(createMut.isPending || updateMut.isPending);
 
-  function handleSubmit(): void {
+  async function handleSubmit(): Promise<void> {
     if (!canSubmit || isPending) return;
 
     const plainBytes = textEncoder.encode(queueName.trim());
-    const cipherBytes = orgKeyManager.encrypt(plainBytes);
+    const cipherBytes = await orgKeyManager.encrypt(plainBytes);
     const encryptedName = uint8ArrayToBase64(cipherBytes);
     const days = parsedEscalationDays;
 

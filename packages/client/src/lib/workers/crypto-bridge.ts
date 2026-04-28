@@ -305,14 +305,15 @@ export class CryptoBridge {
   }
 
   /**
-   * Unwrap the org secret key via ECIES using the Worker's volPrivate.
-   * Returns the unwrapped key as an ArrayBuffer (non-PII tier, for org-key module).
+   * Unwrap the org key via ECIES using the Worker's volPrivate.
+   * The Worker retains the secret for XSS isolation. Returns only the
+   * org public key (base64) for main-thread caching.
    */
   async unwrapOrgKey(
     wrappedOrgKey: string,
     ephemeralPoint: string,
     nonce: string,
-  ): Promise<ArrayBuffer> {
+  ): Promise<string> {
     const resp = expectResponse(
       await this.sendRequest({
         type: "unwrapOrgKey",
@@ -322,8 +323,7 @@ export class CryptoBridge {
       }),
       "unwrapOrgKey",
     );
-    // care-y-ignore-next-line no-org-private-key-server -- protocol field, client-side bridge
-    return resp.orgPrivateKey;
+    return resp.orgPublicKey;
   }
 
   /**
@@ -405,6 +405,59 @@ export class CryptoBridge {
       keyWrap: resp.keyWrap,
       keyGeneration: resp.keyGeneration,
     };
+  }
+
+  /** Decrypt org-tier sealed-box ciphertext. Returns UTF-8 plaintext. */
+  async orgDecrypt(ciphertext: string): Promise<string> {
+    const resp = expectResponse(
+      await this.sendRequest({ type: "orgDecrypt", ciphertext }),
+      "orgDecrypt",
+    );
+    return resp.plaintext;
+  }
+
+  /** Encrypt plaintext with the org public key (sealed-box). Returns base64 ciphertext. */
+  async orgEncrypt(plaintext: string): Promise<string> {
+    const resp = expectResponse(
+      await this.sendRequest({ type: "orgEncrypt", plaintext }),
+      "orgEncrypt",
+    );
+    return resp.ciphertext;
+  }
+
+  /**
+   * Batch decrypt multiple org-tier sealed-box ciphertexts.
+   * Returns per-item results with null for individual failures.
+   */
+  async orgDecryptBatch(
+    items: readonly { cacheKey: string; ciphertext: string }[],
+  ): Promise<readonly { cacheKey: string; plaintext: string | null }[]> {
+    const resp = expectResponse(
+      await this.sendRequest({ type: "orgDecryptBatch", items }),
+      "orgDecryptBatch",
+    );
+    return resp.results;
+  }
+
+  /**
+   * Export the org secret key from the Worker as a Transferable ArrayBuffer.
+   * For escrow export and password change only. Zero immediately after use.
+   */
+  async exportOrgSecretKey(): Promise<ArrayBuffer> {
+    const resp = expectResponse(
+      await this.sendRequest({ type: "exportOrgSecretKey" }),
+      "exportOrgSecretKey",
+    );
+    return resp.orgSecretKey;
+  }
+
+  /** Get the org public key (base64) from the Worker. */
+  async getOrgPublicKey(): Promise<string> {
+    const resp = expectResponse(
+      await this.sendRequest({ type: "getOrgPublicKey" }),
+      "getOrgPublicKey",
+    );
+    return resp.orgPublicKey;
   }
 
   /** Zero all keys, terminate the Worker, reject any pending requests. */

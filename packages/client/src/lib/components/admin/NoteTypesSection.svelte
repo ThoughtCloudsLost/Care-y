@@ -69,9 +69,9 @@
 
   // ── Encrypt helper ──
 
-  function encryptField(value: string): string {
+  async function encryptField(value: string): Promise<string> {
     const plainBytes = encoder.encode(value);
-    const cipherBytes = orgKeyManager.encrypt(plainBytes);
+    const cipherBytes = await orgKeyManager.encrypt(plainBytes);
     return uint8ArrayToBase64(cipherBytes);
   }
 
@@ -301,11 +301,11 @@
 
     sheetSaving = true;
     try {
-      const encryptedName = encryptField(name);
-      const encryptedIcon = encryptField(editIcon);
+      const encryptedName = await encryptField(name);
+      const encryptedIcon = await encryptField(editIcon);
       const desc = editDescription.trim();
       const encryptedDescription =
-        desc.length > 0 ? encryptField(desc) : undefined;
+        desc.length > 0 ? await encryptField(desc) : undefined;
       const escalationTargets = buildEscalationTargets();
 
       if (isCreateMode) {

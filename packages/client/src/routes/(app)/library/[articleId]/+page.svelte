@@ -160,32 +160,48 @@
     updatedAt !== null ? formatRelativeTime(updatedAt) : null,
   );
 
-  // ── Body decryption (only available after detail query resolves) ──
+  // ── Body decryption (async Worker, $effect + $state) ──
 
-  const renderedBody = $derived.by((): string | null => {
-    if (article == null || !orgKeyManager.isLoaded) return null;
-    try {
-      const raw = article.encryptedBody;
-      const ciphertext =
-        raw instanceof Uint8Array ? raw : new Uint8Array(raw.data);
-      const plainBytes = orgKeyManager.decrypt(ciphertext);
-      const title =
-        titleResult.status === "ready" ? titleResult.value : undefined;
-      return renderArticleBody(plainBytes, { title });
-    } catch (err: unknown) {
-      console.error("[KB] Article body decryption failed", { articleId, err });
-      return null;
+  let renderedBody: string | null = $state(null);
+  let bodyDecryptAttempted = $state(false);
+
+  $effect(() => {
+    if (article == null || !orgKeyManager.isLoaded) {
+      renderedBody = null;
+      bodyDecryptAttempted = false;
+      return;
     }
+
+    const raw = article.encryptedBody;
+    const ciphertext =
+      raw instanceof Uint8Array ? raw : new Uint8Array(raw.data);
+    const title =
+      titleResult.status === "ready" ? titleResult.value : undefined;
+
+    void (async (): Promise<void> => {
+      try {
+        const plainBytes = await orgKeyManager.decrypt(ciphertext);
+        renderedBody = renderArticleBody(plainBytes, { title });
+      } catch (err: unknown) {
+        console.error("[KB] Article body decryption failed", {
+          articleId,
+          err,
+        });
+        renderedBody = null;
+      } finally {
+        bodyDecryptAttempted = true;
+      }
+    })();
   });
 
   const bodyIsLoading = $derived(
     articleQuery.isLoading ||
-      (renderedBody === null && !orgKeyManager.isLoaded),
+      (!bodyDecryptAttempted && !orgKeyManager.isLoaded),
   );
   const bodyDecryptFailed = $derived(
     !articleQuery.isLoading &&
       article != null &&
-      orgKeyManager.isLoaded &&
+      bodyDecryptAttempted &&
       renderedBody === null,
   );
 
@@ -197,7 +213,8 @@
   const imageResolverDeps: KbImageResolverDeps = $derived({
     downloadBlob: async (attachmentId: string) =>
       kbRouter.downloadAttachmentBlob.query({ attachmentId }),
-    decrypt: (ciphertext: Uint8Array) => orgKeyManager.decrypt(ciphertext),
+    decrypt: async (ciphertext: Uint8Array) =>
+      orgKeyManager.decrypt(ciphertext),
     contentKey: renderedBody,
   });
 
@@ -217,28 +234,36 @@
     sizeBytes: number;
   }
 
-  const nonImageAttachments: DecryptedAttachment[] = $derived.by(() => {
+  let nonImageAttachments: DecryptedAttachment[] = $state([]);
+
+  $effect(() => {
     const raw = attachmentsQuery.data;
-    if (raw == null || !orgKeyManager.isLoaded) return [];
-    const results: DecryptedAttachment[] = [];
-    for (const att of raw) {
-      if (att.contentType?.startsWith("image/") === true) continue;
-      let filename = "attachment";
-      if (att.encryptedFilename != null) {
-        try {
-          const ct =
-            att.encryptedFilename instanceof Uint8Array
-              ? att.encryptedFilename
-              : new Uint8Array(att.encryptedFilename.data);
-          const plain = orgKeyManager.decrypt(ct);
-          filename = new TextDecoder().decode(plain);
-        } catch {
-          // Decryption failed; fall back to generic name
-        }
-      }
-      results.push({ id: att.id, filename, sizeBytes: att.sizeBytes });
+    if (raw == null || !orgKeyManager.isLoaded) {
+      nonImageAttachments = [];
+      return;
     }
-    return results;
+
+    void (async (): Promise<void> => {
+      const results: DecryptedAttachment[] = [];
+      for (const att of raw) {
+        if (att.contentType?.startsWith("image/") === true) continue;
+        let filename = "attachment";
+        if (att.encryptedFilename != null) {
+          try {
+            const ct =
+              att.encryptedFilename instanceof Uint8Array
+                ? att.encryptedFilename
+                : new Uint8Array(att.encryptedFilename.data);
+            const plain = await orgKeyManager.decrypt(ct);
+            filename = new TextDecoder().decode(plain);
+          } catch {
+            // Decryption failed; fall back to generic name
+          }
+        }
+        results.push({ id: att.id, filename, sizeBytes: att.sizeBytes });
+      }
+      nonImageAttachments = results;
+    })();
   });
 
   // ── Voting ──

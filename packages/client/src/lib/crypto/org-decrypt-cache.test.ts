@@ -1,82 +1,90 @@
 /**
- * Tests for OrgDecryptCache.
+ * Tests for OrgDecryptCache (async batched Worker pattern).
  *
- * Uses the real @care-y/crypto WASM backend for crypto correctness.
- * Round-trip test: seal with crypto_box_seal (server side), then
- * decrypt via OrgDecryptCache (wrapping OrgKeyManager). This verifies
- * the full wire path from server ciphertext to client plaintext.
+ * Uses a mock CryptoBridge to verify batch behavior, cache hits,
+ * null handling, and whenSettled() synchronization.
  */
 
-import { describe, it, expect, beforeAll, beforeEach } from "vitest";
-import { getSodium, requireSodium } from "@care-y/crypto";
-import sodium from "libsodium-wrappers-sumo";
+import { describe, it, expect, beforeAll, beforeEach, vi } from "vitest";
+import { getSodium, requireSodium, encode } from "@care-y/crypto";
 import { OrgKeyManager } from "./org-key.js";
 import { OrgDecryptCache } from "./org-decrypt-cache.js";
 import { cacheRegistry } from "./cache-registry.js";
+import type { CryptoBridge } from "$lib/workers/crypto-bridge.js";
 
 beforeAll(async () => {
   await getSodium();
-  await sodium.ready;
 });
+
+function createMockBridge(): CryptoBridge & {
+  orgDecryptBatch: ReturnType<typeof vi.fn>;
+} {
+  return {
+    orgDecryptBatch: vi.fn(
+      async (items: readonly { cacheKey: string; ciphertext: string }[]) => {
+        return items.map((item) => ({
+          cacheKey: item.cacheKey,
+          plaintext: `decrypted:${item.cacheKey}`,
+        }));
+      },
+    ),
+    orgEncrypt: vi.fn(),
+    orgDecrypt: vi.fn(),
+    exportOrgSecretKey: vi.fn(),
+    getOrgPublicKey: vi.fn(),
+  } as unknown as CryptoBridge & {
+    orgDecryptBatch: ReturnType<typeof vi.fn>;
+  };
+}
 
 describe("OrgDecryptCache", () => {
   let manager: OrgKeyManager;
+  let bridge: ReturnType<typeof createMockBridge>;
   let cache: OrgDecryptCache;
-  let sk: Uint8Array;
-  let pk: Uint8Array;
+  let pkBase64: string;
 
   beforeEach(() => {
-    manager = new OrgKeyManager();
+    bridge = createMockBridge();
+    manager = new OrgKeyManager(bridge as unknown as CryptoBridge);
     const backend = requireSodium();
-    sk = backend.randombytes_buf(backend.crypto_box_SECRETKEYBYTES);
-    pk = backend.crypto_scalarmult_base(sk);
-    manager.load(sk.buffer);
-    cache = new OrgDecryptCache(manager);
+    const sk = backend.randombytes_buf(backend.crypto_box_SECRETKEYBYTES);
+    const pk = backend.crypto_scalarmult_base(sk);
+    pkBase64 = encode(pk);
+    manager.load(pkBase64);
+    cache = new OrgDecryptCache(manager, bridge as unknown as CryptoBridge);
   });
 
-  /** Seal a string the same way the server does (crypto_box_seal). */
-  function seal(plaintext: string): Uint8Array {
-    return sodium.crypto_box_seal(new TextEncoder().encode(plaintext), pk);
-  }
-
-  /** Convert Uint8Array to tRPC JSON serialized Buffer format. */
-  function toSerializedBuffer(data: Uint8Array): {
-    type: "Buffer";
-    data: number[];
-  } {
-    return { type: "Buffer", data: Array.from(data) };
+  function fakeData(content: string): Uint8Array {
+    return new TextEncoder().encode(content);
   }
 
   describe("decrypt", () => {
-    it("decrypts a sealed box ciphertext (round-trip)", () => {
-      const ct = seal("Housing referral contacts");
-      const result = cache.decrypt("kb-001", ct);
-      expect(result).toBe("Housing referral contacts");
-    });
-
-    it("decrypts from serialized Buffer format (tRPC wire format)", () => {
-      const ct = toSerializedBuffer(seal("Legal aid directory"));
-      const result = cache.decrypt("kb-002", ct);
-      expect(result).toBe("Legal aid directory");
-    });
-
-    it("returns cached value on second call (no re-decrypt)", () => {
-      const ct = seal("Safety planning template");
-      cache.decrypt("kb-003", ct);
-
-      // Zero the key to prove second call uses cache, not decrypt
-      manager.zero();
-      const result = cache.decrypt("kb-003", ct);
-      expect(result).toBe("Safety planning template");
-    });
-
-    it("returns null when org key is not loaded", () => {
-      manager.zero();
-      const ct = seal("Should not decrypt");
-      // Re-create cache after zero so it sees the unloaded state
-      const unloadedCache = new OrgDecryptCache(manager);
-      const result = unloadedCache.decrypt("kb-004", ct);
+    it("returns null on first call (pending Worker response)", () => {
+      const result = cache.decrypt("kb-001", fakeData("test"));
       expect(result).toBeNull();
+    });
+
+    it("returns cached value after batch resolves", async () => {
+      cache.decrypt("kb-001", fakeData("test"));
+      await cache.whenSettled();
+      const result = cache.decrypt("kb-001", fakeData("test"));
+      expect(result).toBe("decrypted:kb-001");
+    });
+
+    it("batches multiple calls in a single microtask", async () => {
+      cache.decrypt("kb-001", fakeData("one"));
+      cache.decrypt("kb-002", fakeData("two"));
+      cache.decrypt("kb-003", fakeData("three"));
+      await cache.whenSettled();
+
+      expect(bridge.orgDecryptBatch).toHaveBeenCalledOnce();
+      expect(bridge.orgDecryptBatch).toHaveBeenCalledWith(
+        expect.arrayContaining([
+          expect.objectContaining({ cacheKey: "kb-001" }),
+          expect.objectContaining({ cacheKey: "kb-002" }),
+          expect.objectContaining({ cacheKey: "kb-003" }),
+        ]),
+      );
     });
 
     it("returns null for null data", () => {
@@ -84,34 +92,32 @@ describe("OrgDecryptCache", () => {
       expect(result).toBeNull();
     });
 
-    it("returns null on decryption failure (wrong key)", () => {
-      const backend = requireSodium();
-      const wrongSk = backend.randombytes_buf(
-        backend.crypto_box_SECRETKEYBYTES,
-      );
-      const wrongPk = backend.crypto_scalarmult_base(wrongSk);
-      const ct = sodium.crypto_box_seal(
-        new TextEncoder().encode("wrong key test"),
-        wrongPk,
-      );
-      const result = cache.decrypt("kb-006", ct);
+    it("returns null when org key is not loaded", () => {
+      manager.zero();
+      const result = cache.decrypt("kb-004", fakeData("test"));
       expect(result).toBeNull();
     });
 
-    it("returns null on truncated ciphertext", () => {
-      const ct = seal("truncation test");
-      const truncated = ct.slice(0, Math.floor(ct.length / 2));
-      const result = cache.decrypt("kb-007", truncated);
-      expect(result).toBeNull();
+    it("does not re-queue a pending item", async () => {
+      cache.decrypt("kb-001", fakeData("test"));
+      cache.decrypt("kb-001", fakeData("test"));
+      await cache.whenSettled();
+
+      expect(bridge.orgDecryptBatch).toHaveBeenCalledOnce();
+      const items = bridge.orgDecryptBatch.mock.calls[0]?.[0] as unknown[];
+      expect(items).toHaveLength(1);
     });
 
-    it("caches different IDs independently", () => {
-      const ct1 = seal("Article One");
-      const ct2 = seal("Article Two");
-      cache.decrypt("kb-010", ct1);
-      cache.decrypt("kb-011", ct2);
-      expect(cache.get("kb-010")).toBe("Article One");
-      expect(cache.get("kb-011")).toBe("Article Two");
+    it("does not cache null results (allows retry)", async () => {
+      bridge.orgDecryptBatch.mockResolvedValueOnce([
+        { cacheKey: "kb-fail", plaintext: null },
+      ]);
+
+      cache.decrypt("kb-fail", fakeData("bad"));
+      await cache.whenSettled();
+
+      // Not cached, so next call returns null (pending) and re-queues
+      expect(cache.has("kb-fail")).toBe(false);
     });
   });
 
@@ -120,9 +126,9 @@ describe("OrgDecryptCache", () => {
       expect(cache.has("kb-missing")).toBe(false);
     });
 
-    it("returns true after successful decrypt", () => {
-      const ct = seal("check");
-      cache.decrypt("kb-020", ct);
+    it("returns true after batch resolves", async () => {
+      cache.decrypt("kb-020", fakeData("check"));
+      await cache.whenSettled();
       expect(cache.has("kb-020")).toBe(true);
     });
   });
@@ -132,17 +138,17 @@ describe("OrgDecryptCache", () => {
       expect(cache.get("kb-missing")).toBeUndefined();
     });
 
-    it("returns cached plaintext after decrypt", () => {
-      const ct = seal("get test");
-      cache.decrypt("kb-030", ct);
-      expect(cache.get("kb-030")).toBe("get test");
+    it("returns cached plaintext after batch resolves", async () => {
+      cache.decrypt("kb-030", fakeData("get test"));
+      await cache.whenSettled();
+      expect(cache.get("kb-030")).toBe("decrypted:kb-030");
     });
   });
 
   describe("clear", () => {
-    it("empties the cache", () => {
-      const ct = seal("clear test");
-      cache.decrypt("kb-040", ct);
+    it("empties the cache", async () => {
+      cache.decrypt("kb-040", fakeData("clear test"));
+      await cache.whenSettled();
       expect(cache.size).toBe(1);
       cache.clear();
       expect(cache.size).toBe(0);
@@ -155,24 +161,34 @@ describe("OrgDecryptCache", () => {
       expect(cache.size).toBe(0);
     });
 
-    it("increments after each successful decrypt", () => {
-      cache.decrypt("kb-050", seal("one"));
-      cache.decrypt("kb-051", seal("two"));
+    it("increments after batch resolves", async () => {
+      cache.decrypt("kb-050", fakeData("one"));
+      cache.decrypt("kb-051", fakeData("two"));
+      await cache.whenSettled();
       expect(cache.size).toBe(2);
     });
+  });
 
-    it("does not increment on decrypt failure", () => {
-      const backend = requireSodium();
-      const wrongSk = backend.randombytes_buf(
-        backend.crypto_box_SECRETKEYBYTES,
-      );
-      const wrongPk = backend.crypto_scalarmult_base(wrongSk);
-      const ct = sodium.crypto_box_seal(
-        new TextEncoder().encode("bad"),
-        wrongPk,
-      );
-      cache.decrypt("kb-052", ct);
-      expect(cache.size).toBe(0);
+  describe("whenSettled", () => {
+    it("resolves immediately when no pending work", async () => {
+      await expect(cache.whenSettled()).resolves.toBeUndefined();
+    });
+
+    it("resolves after batch completes", async () => {
+      cache.decrypt("kb-060", fakeData("settle test"));
+      await cache.whenSettled();
+      expect(cache.has("kb-060")).toBe(true);
+    });
+  });
+
+  describe("error handling", () => {
+    it("clears pending on bridge failure (allows retry)", async () => {
+      bridge.orgDecryptBatch.mockRejectedValueOnce(new Error("Worker crash"));
+
+      cache.decrypt("kb-err", fakeData("test"));
+      await cache.whenSettled();
+
+      expect(cache.has("kb-err")).toBe(false);
     });
   });
 

@@ -157,6 +157,39 @@ export interface UnwrapOrgKeyRequest {
   readonly nonce: string;
 }
 
+export interface OrgDecryptRequest {
+  readonly type: "orgDecrypt";
+  readonly id: number;
+  /** Sealed-box ciphertext, base64. */
+  readonly ciphertext: string;
+}
+
+export interface OrgEncryptRequest {
+  readonly type: "orgEncrypt";
+  readonly id: number;
+  /** UTF-8 plaintext to seal, base64. */
+  readonly plaintext: string;
+}
+
+export interface OrgDecryptBatchRequest {
+  readonly type: "orgDecryptBatch";
+  readonly id: number;
+  readonly items: readonly {
+    readonly cacheKey: string;
+    readonly ciphertext: string;
+  }[];
+}
+
+export interface ExportOrgSecretKeyRequest {
+  readonly type: "exportOrgSecretKey";
+  readonly id: number;
+}
+
+export interface GetOrgPublicKeyRequest {
+  readonly type: "getOrgPublicKey";
+  readonly id: number;
+}
+
 export interface DecryptBlobRequest {
   readonly type: "decryptBlob";
   readonly id: number;
@@ -221,7 +254,12 @@ export type WorkerRequest =
   | UnwrapTkRequest
   | WrapWithVolPublicRequest
   | RewrapTkRequest
-  | CreateTicketKeyRequest;
+  | CreateTicketKeyRequest
+  | OrgDecryptRequest
+  | OrgEncryptRequest
+  | OrgDecryptBatchRequest
+  | ExportOrgSecretKeyRequest
+  | GetOrgPublicKeyRequest;
 
 /** All valid request type discriminants. */
 export type WorkerRequestType = WorkerRequest["type"];
@@ -297,9 +335,8 @@ export interface GetVolPublicResponse extends SuccessBase {
 
 export interface UnwrapOrgKeyResponse extends SuccessBase {
   readonly type: "unwrapOrgKey";
-  /** Unwrapped org key (non-PII tier). Transferable to main thread for the org-key module. */
-  // care-y-ignore-next-line no-org-private-key-server -- Worker-to-main-thread transfer, never sent to server
-  readonly orgPrivateKey: ArrayBuffer;
+  /** Org public key (base64). Worker retains the secret for XSS isolation. */
+  readonly orgPublicKey: string;
 }
 
 export interface DecryptBlobResponse extends SuccessBase {
@@ -354,6 +391,39 @@ export interface CreateTicketKeyResponse extends SuccessBase {
   readonly keyGeneration: string;
 }
 
+export interface OrgDecryptResponse extends SuccessBase {
+  readonly type: "orgDecrypt";
+  /** UTF-8 decrypted content. */
+  readonly plaintext: string;
+}
+
+export interface OrgEncryptResponse extends SuccessBase {
+  readonly type: "orgEncrypt";
+  /** Sealed-box ciphertext, base64. */
+  readonly ciphertext: string;
+}
+
+export interface OrgDecryptBatchResponse extends SuccessBase {
+  readonly type: "orgDecryptBatch";
+  readonly results: readonly {
+    readonly cacheKey: string;
+    /** null on individual item failure (wrong key, corrupted ciphertext). */
+    readonly plaintext: string | null;
+  }[];
+}
+
+export interface ExportOrgSecretKeyResponse extends SuccessBase {
+  readonly type: "exportOrgSecretKey";
+  /** Raw org secret key bytes. Transferable: neutered in Worker after send. */
+  readonly orgSecretKey: ArrayBuffer;
+}
+
+export interface GetOrgPublicKeyResponse extends SuccessBase {
+  readonly type: "getOrgPublicKey";
+  /** Org public key, base64. */
+  readonly orgPublicKey: string;
+}
+
 export type WorkerSuccessResponse =
   | InitResponse
   | Argon2idResponse
@@ -371,7 +441,12 @@ export type WorkerSuccessResponse =
   | RewrapTkResponse
   | EvictTkResponse
   | ZeroAllResponse
-  | CreateTicketKeyResponse;
+  | CreateTicketKeyResponse
+  | OrgDecryptResponse
+  | OrgEncryptResponse
+  | OrgDecryptBatchResponse
+  | ExportOrgSecretKeyResponse
+  | GetOrgPublicKeyResponse;
 
 export type WorkerResponse = WorkerSuccessResponse | ErrorResponse;
 

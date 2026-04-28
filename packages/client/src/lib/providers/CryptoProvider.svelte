@@ -55,10 +55,10 @@
     const bridge = new CryptoBridge();
     setCryptoBridge(bridge);
 
-    const orgKeyManager = new OrgKeyManager();
+    const orgKeyManager = new OrgKeyManager(bridge);
     setOrgKeyManager(orgKeyManager);
 
-    setOrgDecryptCache(new OrgDecryptCache(orgKeyManager));
+    setOrgDecryptCache(new OrgDecryptCache(orgKeyManager, bridge));
     setTicketDecryptCache(new TicketDecryptCache(bridge));
 
     const followUpCache = new FollowUpDecryptCache(bridge);
