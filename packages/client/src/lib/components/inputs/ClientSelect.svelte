@@ -176,6 +176,28 @@
   }
 </script>
 
+{#snippet spinner()}
+  <div class="client-select-spinner" aria-label={m.common_loading()}>
+    <svg
+      width="16"
+      height="16"
+      viewBox="0 0 16 16"
+      class="spin"
+      aria-hidden="true"
+    >
+      <circle
+        cx="8"
+        cy="8"
+        r="6"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-dasharray="20 12"
+      />
+    </svg>
+  </div>
+{/snippet}
+
 <div class="client-select" class:client-select-error={Boolean(error)}>
   <span class="client-select-label" id={labelId}>
     {label}
@@ -208,25 +230,7 @@
           }}
         />
         {#if searching}
-          <div class="client-select-spinner" aria-label={m.common_loading()}>
-            <svg
-              width="16"
-              height="16"
-              viewBox="0 0 16 16"
-              class="spin"
-              aria-hidden="true"
-            >
-              <circle
-                cx="8"
-                cy="8"
-                r="6"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2"
-                stroke-dasharray="20 12"
-              />
-            </svg>
-          </div>
+          {@render spinner()}
         {/if}
       </div>
 
@@ -288,25 +292,7 @@
           aria-invalid={Boolean(error)}
         />
         {#if lookingUp}
-          <div class="client-select-spinner" aria-label={m.common_loading()}>
-            <svg
-              width="16"
-              height="16"
-              viewBox="0 0 16 16"
-              class="spin"
-              aria-hidden="true"
-            >
-              <circle
-                cx="8"
-                cy="8"
-                r="6"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2"
-                stroke-dasharray="20 12"
-              />
-            </svg>
-          </div>
+          {@render spinner()}
         {/if}
       </div>
 

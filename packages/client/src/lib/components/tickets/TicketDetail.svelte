@@ -56,7 +56,7 @@
   import { onKeyActivate } from "$lib/utils/a11y.js";
   import { formatRelativeTime } from "$lib/utils/format-time.js";
   import { formatDateSeparator, needsDateSeparator } from "$lib/utils/time.js";
-  import InlineSkeleton from "$lib/components/InlineSkeleton.svelte";
+
   import QueryError from "$lib/components/QueryError.svelte";
   import DecryptPlaceholder from "$lib/components/DecryptPlaceholder.svelte";
   import SystemEvent from "$lib/components/tickets/SystemEvent.svelte";
@@ -70,12 +70,14 @@
   } from "$lib/components/tickets/follow-up-timeline-types.js";
   import MentionAutocomplete from "$lib/components/tickets/MentionAutocomplete.svelte";
   import FollowUpBubble from "$lib/components/tickets/FollowUpBubble.svelte";
+  import TicketPlaceholder from "$lib/components/tickets/TicketPlaceholder.svelte";
   import GapIndicator from "$lib/components/GapIndicator.svelte";
   import { followUpKind } from "$lib/tickets/follow-up-utils.js";
   import { resolveNoteTypeIcon as resolveNoteTypeIconComponent } from "$lib/utils/note-type-icons.js";
 
   import { computeGaps } from "$lib/tickets/gap-indicators.js";
   import { createScrollManager } from "$lib/tickets/scroll-manager.svelte.js";
+  import { createLongPress } from "$lib/composables/create-long-press.svelte.js";
   import { createChatPaginator } from "$lib/tickets/chat-paginator.svelte.js";
   import {
     getContextMenuActions,
@@ -253,24 +255,27 @@
     ? createNoteTypesQuery(ticketRouter.noteTypes)
     : undefined;
 
-  function effectiveNoteTypeId(noteTypeId: string | null): string | undefined {
+  type NoteTypeRecord = NonNullable<
+    NonNullable<typeof noteTypesQuery>["data"]
+  >["types"][number];
+
+  function resolveNoteType(
+    noteTypeId: string | null,
+  ): NoteTypeRecord | undefined {
     if (!noteTypesQuery?.data) return undefined;
-    if (noteTypeId !== null) return noteTypeId;
-    return noteTypesQuery.data.defaultNoteTypeId ?? undefined;
+    const id = noteTypeId ?? noteTypesQuery.data.defaultNoteTypeId ?? undefined;
+    if (id === undefined) return undefined;
+    return noteTypesQuery.data.types.find((t) => t.id === id);
   }
 
   function resolveNoteTypeName(noteTypeId: string | null): string | undefined {
-    const id = effectiveNoteTypeId(noteTypeId);
-    if (id === undefined || !noteTypesQuery?.data) return undefined;
-    const nt = noteTypesQuery.data.types.find((t) => t.id === id);
+    const nt = resolveNoteType(noteTypeId);
     if (!nt) return undefined;
     return orgCache.decrypt(nt.id + ":name", nt.encryptedName) ?? undefined;
   }
 
   function resolveNoteTypeIcon(noteTypeId: string | null): string | undefined {
-    const id = effectiveNoteTypeId(noteTypeId);
-    if (id === undefined || !noteTypesQuery?.data) return undefined;
-    const nt = noteTypesQuery.data.types.find((t) => t.id === id);
+    const nt = resolveNoteType(noteTypeId);
     if (!nt) return undefined;
     return orgCache.decrypt(nt.id + ":icon", nt.encryptedIcon) ?? undefined;
   }
@@ -559,9 +564,26 @@
       });
   }
 
-  function toTimelineItem(
-    fu: NonNullable<typeof summaryData>[number],
-  ): TimelineItem {
+  interface TimelineSource {
+    readonly id: string;
+    readonly source: string;
+    readonly type: string;
+    readonly createdBy: string | null;
+    readonly createdAt: string;
+    readonly encryptedContent: unknown;
+    readonly hasRecording: boolean;
+    readonly hasImage: boolean;
+    readonly hasFile: boolean;
+    readonly noteTypeId?: string | null;
+    readonly callStatus?: string | null;
+    readonly callDurationSeconds?: number | null;
+    readonly keyGeneration?: string | null;
+    readonly recordingDurationSeconds?: number | null;
+    readonly fullPosition?: number;
+    readonly totalCount?: number;
+  }
+
+  function toTimelineItem(fu: TimelineSource): TimelineItem {
     return {
       id: fu.id,
       source: fu.source,
@@ -570,7 +592,7 @@
       createdAt: fu.createdAt,
       encryptedContent: fu.encryptedContent,
       hasRecording: fu.hasRecording,
-      recordingDurationSeconds: fu.recordingDurationSeconds,
+      recordingDurationSeconds: fu.recordingDurationSeconds ?? null,
       hasImage: fu.hasImage,
       hasFile: fu.hasFile,
       fullPosition: fu.fullPosition,
@@ -582,27 +604,8 @@
     };
   }
 
-  // Build timeline items from the summary endpoint, falling back to
-  // already-loaded paginator items while the summary query is in flight.
   const displayTimelineItems = $derived.by((): TimelineItem[] => {
-    const raw: TimelineItem[] = summaryData
-      ? summaryData.map(toTimelineItem)
-      : followUps.map((fu) => ({
-          id: fu.id,
-          source: fu.source,
-          type: fu.type,
-          createdBy: fu.createdBy,
-          createdAt: fu.createdAt,
-          encryptedContent: fu.encryptedContent,
-          hasRecording: fu.hasRecording,
-          recordingDurationSeconds: null,
-          hasImage: fu.hasImage,
-          hasFile: fu.hasFile,
-          noteTypeId: fu.noteTypeId ?? null,
-          callStatus: fu.callStatus ?? null,
-          callDurationSeconds: fu.callDurationSeconds ?? null,
-          keyGeneration: fu.keyGeneration ?? null,
-        }));
+    const raw: TimelineItem[] = (summaryData ?? followUps).map(toTimelineItem);
     if (activeNoteTypeIds.size === 0) return raw;
     return raw.filter((item) => {
       if (item.type !== "internal_note") return true;
@@ -782,28 +785,19 @@
 
   // --- Long-press handler ---
 
-  let longPressTimer: ReturnType<typeof setTimeout> | null = null;
+  const longPress = createLongPress();
 
   function startLongPress(fu: FollowUp): (e: PointerEvent) => void {
-    return () => {
-      longPressTimer = setTimeout(() => {
-        openContextMenu(fu);
-        longPressTimer = null;
-      }, 500);
-    };
+    return () => longPress.start(() => openContextMenu(fu));
   }
 
   function cancelLongPress(): void {
-    if (longPressTimer) {
-      clearTimeout(longPressTimer);
-      longPressTimer = null;
-    }
+    longPress.cancel();
   }
 
-  // Clear pending timers on unmount to avoid firing into a dead component.
   $effect(() => {
     return () => {
-      if (longPressTimer) clearTimeout(longPressTimer);
+      longPress.cleanup();
       scroll.cleanup();
     };
   });
@@ -929,26 +923,7 @@
     scroll.autoScrollOnNew(followUpCount, timelineActive);
   });
 
-  // --- Loading placeholder shape ---
-  // Use cached preview data (from the ticket list) to match the real
-  // conversation shape. Falls back to a generic pattern if no preview exists.
-
-  interface PlaceholderBubble {
-    kind: "message" | "system";
-    type: "sent" | "received";
-    length: number;
-  }
-
-  // Cycling pattern for placeholder bubbles.
-  const placeholderPattern: PlaceholderBubble[] = [
-    { kind: "message", type: "received", length: 45 },
-    { kind: "message", type: "sent", length: 18 },
-    { kind: "message", type: "received", length: 60 },
-    { kind: "system", type: "received", length: 15 },
-    { kind: "message", type: "sent", length: 30 },
-    { kind: "message", type: "received", length: 20 },
-  ];
-
+  // --- Loading placeholder ---
   // Preview data from the ticket list (server returns newest-first, reverse for chat order).
   const previewData = $derived(previewLoader.get(ticketId));
   const orderedPreviews = $derived(
@@ -972,23 +947,12 @@
       });
   });
 
-  // Total message slots: prop (instant from list cache) > ticket query > fallback.
-  // Previews replace the bottom N slots (not added on top).
   const totalSlots = $derived(
     Math.min(knownFollowUpCount ?? ticket?.followUpCount ?? 6, PAGE_SIZE),
   );
   const fillerCount = $derived(
     Math.max(0, totalSlots - orderedPreviews.length),
   );
-
-  const placeholderBubbles = $derived.by((): PlaceholderBubble[] => {
-    const result: PlaceholderBubble[] = [];
-    for (let i = 0; i < fillerCount; i++) {
-      const bubble = placeholderPattern[i % placeholderPattern.length];
-      if (bubble) result.push(bubble);
-    }
-    return result;
-  });
 
   // --- Batch rendering gate ---
   // Hold the skeleton view until the initial visible batch of messages has
@@ -1010,32 +974,7 @@
 </script>
 
 {#snippet chatPlaceholder()}
-  <Messages>
-    {#each placeholderBubbles as bubble, i (i)}
-      {#if bubble.kind === "system"}
-        <div class="fu-wrapper filler-pulse">
-          <div class="system-event-placeholder">
-            <DecryptPlaceholder length={bubble.length} />
-          </div>
-        </div>
-      {:else}
-        <div class="fu-wrapper filler-pulse">
-          <Message type={bubble.type}>
-            {#snippet text()}
-              <span class="bubble-text">
-                <DecryptPlaceholder length={bubble.length} block />
-              </span>
-            {/snippet}
-            {#snippet footer()}
-              <span class="bubble-time">
-                <InlineSkeleton width="4ch" />
-              </span>
-            {/snippet}
-          </Message>
-        </div>
-      {/if}
-    {/each}
-
+  <TicketPlaceholder {fillerCount}>
     {#each orderedPreviews as fu (fu.id)}
       {@const previewResult = resolveAsyncDecrypt(
         followUpCache.decryptContent(fu.id, fu.keyWrap, fu.encryptedContent),
@@ -1051,7 +990,7 @@
         />
       </div>
     {/each}
-  </Messages>
+  </TicketPlaceholder>
 {/snippet}
 
 {#if ticketQuery.isLoading}
@@ -1529,36 +1468,5 @@
   .bubble-time {
     font-size: 0.625rem;
     color: var(--muted);
-  }
-
-  .system-event-placeholder {
-    display: flex;
-    justify-content: center;
-    padding: 0.5rem 1rem;
-  }
-
-  /* Filler bubbles (shape guesses) pulse to distinguish from real decrypt-pending content.
-     .fu-wrapper is display:contents, so target the Konsta Message root via :global. */
-  .filler-pulse > :global(.k-message),
-  .filler-pulse > .system-event-placeholder {
-    animation: filler-pulse 2.5s ease-in-out infinite;
-  }
-
-  @keyframes filler-pulse {
-    0%,
-    100% {
-      opacity: 1;
-    }
-    50% {
-      opacity: 0.65;
-    }
-  }
-
-  @media (prefers-reduced-motion: reduce) {
-    .filler-pulse > :global(.k-message),
-    .filler-pulse > .system-event-placeholder {
-      animation: none;
-      opacity: 0.7;
-    }
   }
 </style>
