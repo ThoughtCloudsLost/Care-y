@@ -6,10 +6,11 @@
  * volunteer per ticket). See ReadCursorService.
  */
 
-import type { Kysely } from "kysely";
+import type { Kysely, SelectQueryBuilder } from "kysely";
 import type { TenantDatabase } from "../db/types.js";
 import type { TicketAccessChecker } from "./access.js";
 import { ForbiddenError, NotFoundError } from "../errors.js";
+import { mediaExistsSelects } from "./query-helpers.js";
 import {
   ErrorCode,
   getAllowedRoleIds,
@@ -234,6 +235,97 @@ function toRecord(
   };
 }
 
+/* eslint-disable @typescript-eslint/no-explicit-any -- Kysely query builder variance: callers have different O types from different .select() chains, but .where() is invariant over O */
+function applyFollowUpFilters(
+  query: SelectQueryBuilder<any, any, any>,
+  opts: FollowUpListOpts,
+): SelectQueryBuilder<any, any, any> {
+  /* eslint-enable @typescript-eslint/no-explicit-any */
+  const hasTypes = opts.types !== undefined && opts.types.length > 0;
+  const hasMedia = opts.mediaFlags !== undefined && opts.mediaFlags.length > 0;
+  if (hasTypes || hasMedia) {
+    const types = opts.types ?? [];
+    const flags = new Set(opts.mediaFlags ?? []);
+    query = query.where((eb) => {
+      const conditions = [];
+      if (hasTypes) conditions.push(eb("followups.type", "in", types));
+      if (flags.has("recording"))
+        conditions.push(
+          eb.exists(
+            eb
+              .selectFrom("recordings as rf")
+              .whereRef("rf.followup_id", "=", "followups.id")
+              .where("rf.deleted_at", "is", null)
+              .select(eb.lit(1).as("one")),
+          ),
+        );
+      if (flags.has("image"))
+        conditions.push(
+          eb.exists(
+            eb
+              .selectFrom("attachments as ai")
+              .whereRef("ai.followup_id", "=", "followups.id")
+              .where("ai.deleted_at", "is", null)
+              .where("ai.content_type", "like", "image/%")
+              .select(eb.lit(1).as("one")),
+          ),
+        );
+      if (flags.has("file"))
+        conditions.push(
+          eb.exists(
+            eb
+              .selectFrom("attachments as af")
+              .whereRef("af.followup_id", "=", "followups.id")
+              .where("af.deleted_at", "is", null)
+              .where((w) =>
+                w.or([
+                  w("af.content_type", "is", null),
+                  w("af.content_type", "not like", "image/%"),
+                ]),
+              )
+              .select(eb.lit(1).as("one")),
+          ),
+        );
+      return eb.or(conditions);
+    });
+  }
+
+  const hasCreatedBy =
+    opts.createdBy !== undefined && opts.createdBy.length > 0;
+  if (hasCreatedBy || opts.includeClientSource === true) {
+    query = query.where((eb) => {
+      const conditions = [];
+      if (opts.includeClientSource === true)
+        conditions.push(eb("followups.source", "=", "client"));
+      if (hasCreatedBy)
+        conditions.push(eb("followups.created_by", "in", opts.createdBy ?? []));
+      return eb.or(conditions);
+    });
+  }
+
+  if (opts.dateFrom !== undefined) {
+    query = query.where("followups.created_at", ">=", new Date(opts.dateFrom));
+  }
+  if (opts.dateTo !== undefined) {
+    const dayEnd = new Date(opts.dateTo);
+    dayEnd.setHours(23, 59, 59, 999);
+    query = query.where("followups.created_at", "<=", dayEnd);
+  }
+
+  return query;
+}
+
+function hasActiveFilters(opts: FollowUpListOpts): boolean {
+  return (
+    (opts.types !== undefined && opts.types.length > 0) ||
+    (opts.mediaFlags !== undefined && opts.mediaFlags.length > 0) ||
+    (opts.createdBy !== undefined && opts.createdBy.length > 0) ||
+    opts.includeClientSource === true ||
+    opts.dateFrom !== undefined ||
+    opts.dateTo !== undefined
+  );
+}
+
 export function createFollowUpService(
   db: Kysely<TenantDatabase>,
   access: TicketAccessChecker,
@@ -289,42 +381,7 @@ export function createFollowUpService(
         .selectFrom("followups")
         .leftJoin("note_types as nt", "nt.id", "followups.note_type_id")
         .selectAll("followups")
-        .select((eb) => [
-          eb
-            .exists(
-              eb
-                .selectFrom("recordings as r")
-                .whereRef("r.followup_id", "=", "followups.id")
-                .where("r.deleted_at", "is", null)
-                .select(eb.lit(1).as("one")),
-            )
-            .as("has_recording"),
-          eb
-            .exists(
-              eb
-                .selectFrom("attachments as a")
-                .whereRef("a.followup_id", "=", "followups.id")
-                .where("a.deleted_at", "is", null)
-                .where("a.content_type", "like", "image/%")
-                .select(eb.lit(1).as("one")),
-            )
-            .as("has_image"),
-          eb
-            .exists(
-              eb
-                .selectFrom("attachments as a2")
-                .whereRef("a2.followup_id", "=", "followups.id")
-                .where("a2.deleted_at", "is", null)
-                .where((w) =>
-                  w.or([
-                    w("a2.content_type", "is", null),
-                    w("a2.content_type", "not like", "image/%"),
-                  ]),
-                )
-                .select(eb.lit(1).as("one")),
-            )
-            .as("has_file"),
-        ])
+        .select((eb) => mediaExistsSelects(eb))
         .where("followups.ticket_id", "=", ticketId)
         .where("followups.deleted_at", "is", null);
 
@@ -339,16 +396,7 @@ export function createFollowUpService(
         );
       }
 
-      // Position tracking for gap indicators (only when filters active)
-      const hasAnyFilter =
-        (opts.types !== undefined && opts.types.length > 0) ||
-        (opts.mediaFlags !== undefined && opts.mediaFlags.length > 0) ||
-        (opts.createdBy !== undefined && opts.createdBy.length > 0) ||
-        opts.includeClientSource === true ||
-        opts.dateFrom !== undefined ||
-        opts.dateTo !== undefined;
-
-      if (hasAnyFilter) {
+      if (hasActiveFilters(opts)) {
         query = query.select((eb) => [
           eb
             .selectFrom("followups as fp")
@@ -374,90 +422,8 @@ export function createFollowUpService(
         ]);
       }
 
-      // --- Type + media filter group (OR'd together) ---
-      const hasTypes = opts.types !== undefined && opts.types.length > 0;
-      const hasMedia =
-        opts.mediaFlags !== undefined && opts.mediaFlags.length > 0;
-      if (hasTypes || hasMedia) {
-        const types = opts.types ?? [];
-        const flags = new Set(opts.mediaFlags ?? []);
-        query = query.where((eb) => {
-          const conditions = [];
-          if (hasTypes) conditions.push(eb("followups.type", "in", types));
-          if (flags.has("recording"))
-            conditions.push(
-              eb.exists(
-                eb
-                  .selectFrom("recordings as rf")
-                  .whereRef("rf.followup_id", "=", "followups.id")
-                  .where("rf.deleted_at", "is", null)
-                  .select(eb.lit(1).as("one")),
-              ),
-            );
-          if (flags.has("image"))
-            conditions.push(
-              eb.exists(
-                eb
-                  .selectFrom("attachments as ai")
-                  .whereRef("ai.followup_id", "=", "followups.id")
-                  .where("ai.deleted_at", "is", null)
-                  .where("ai.content_type", "like", "image/%")
-                  .select(eb.lit(1).as("one")),
-              ),
-            );
-          if (flags.has("file"))
-            conditions.push(
-              eb.exists(
-                eb
-                  .selectFrom("attachments as af")
-                  .whereRef("af.followup_id", "=", "followups.id")
-                  .where("af.deleted_at", "is", null)
-                  .where((w) =>
-                    w.or([
-                      w("af.content_type", "is", null),
-                      w("af.content_type", "not like", "image/%"),
-                    ]),
-                  )
-                  .select(eb.lit(1).as("one")),
-              ),
-            );
-          return conditions.length === 1
-            ? (conditions[0] ?? eb.or(conditions))
-            : eb.or(conditions);
-        });
-      }
-
-      // --- Author filter group (OR'd: client source OR specific volunteers) ---
-      const hasCreatedBy =
-        opts.createdBy !== undefined && opts.createdBy.length > 0;
-      if (hasCreatedBy || opts.includeClientSource === true) {
-        query = query.where((eb) => {
-          const conditions = [];
-          if (opts.includeClientSource === true)
-            conditions.push(eb("followups.source", "=", "client"));
-          if (hasCreatedBy)
-            conditions.push(
-              eb("followups.created_by", "in", opts.createdBy ?? []),
-            );
-          return conditions.length === 1
-            ? (conditions[0] ?? eb.or(conditions))
-            : eb.or(conditions);
-        });
-      }
-
-      // --- Date range filter (AND'd) ---
-      if (opts.dateFrom !== undefined) {
-        query = query.where(
-          "followups.created_at",
-          ">=",
-          new Date(opts.dateFrom),
-        );
-      }
-      if (opts.dateTo !== undefined) {
-        const dayEnd = new Date(opts.dateTo);
-        dayEnd.setHours(23, 59, 59, 999);
-        query = query.where("followups.created_at", "<=", dayEnd);
-      }
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment -- applyFollowUpFilters uses any for Kysely variance, callers are typed
+      query = applyFollowUpFilters(query, opts);
 
       if (opts.cursor !== undefined) {
         const cursorId = opts.cursor;
@@ -533,101 +499,10 @@ export function createFollowUpService(
         );
       }
 
-      // --- Type + media filter group (OR'd together) ---
-      const hasTypes = opts.types !== undefined && opts.types.length > 0;
-      const hasMedia =
-        opts.mediaFlags !== undefined && opts.mediaFlags.length > 0;
-      if (hasTypes || hasMedia) {
-        const types = opts.types ?? [];
-        const flags = new Set(opts.mediaFlags ?? []);
-        query = query.where((eb) => {
-          const conditions = [];
-          if (hasTypes) conditions.push(eb("followups.type", "in", types));
-          if (flags.has("recording"))
-            conditions.push(
-              eb.exists(
-                eb
-                  .selectFrom("recordings as rf")
-                  .whereRef("rf.followup_id", "=", "followups.id")
-                  .where("rf.deleted_at", "is", null)
-                  .select(eb.lit(1).as("one")),
-              ),
-            );
-          if (flags.has("image"))
-            conditions.push(
-              eb.exists(
-                eb
-                  .selectFrom("attachments as ai")
-                  .whereRef("ai.followup_id", "=", "followups.id")
-                  .where("ai.deleted_at", "is", null)
-                  .where("ai.content_type", "like", "image/%")
-                  .select(eb.lit(1).as("one")),
-              ),
-            );
-          if (flags.has("file"))
-            conditions.push(
-              eb.exists(
-                eb
-                  .selectFrom("attachments as af")
-                  .whereRef("af.followup_id", "=", "followups.id")
-                  .where("af.deleted_at", "is", null)
-                  .where((w) =>
-                    w.or([
-                      w("af.content_type", "is", null),
-                      w("af.content_type", "not like", "image/%"),
-                    ]),
-                  )
-                  .select(eb.lit(1).as("one")),
-              ),
-            );
-          return conditions.length === 1
-            ? (conditions[0] ?? eb.or(conditions))
-            : eb.or(conditions);
-        });
-      }
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment -- applyFollowUpFilters uses any for Kysely variance, callers are typed
+      query = applyFollowUpFilters(query, opts);
 
-      // --- Author filter group (OR'd: client source OR specific volunteers) ---
-      const hasCreatedBy =
-        opts.createdBy !== undefined && opts.createdBy.length > 0;
-      if (hasCreatedBy || opts.includeClientSource === true) {
-        query = query.where((eb) => {
-          const conditions = [];
-          if (opts.includeClientSource === true)
-            conditions.push(eb("followups.source", "=", "client"));
-          if (hasCreatedBy)
-            conditions.push(
-              eb("followups.created_by", "in", opts.createdBy ?? []),
-            );
-          return conditions.length === 1
-            ? (conditions[0] ?? eb.or(conditions))
-            : eb.or(conditions);
-        });
-      }
-
-      // --- Date range filter (AND'd) ---
-      if (opts.dateFrom !== undefined) {
-        query = query.where(
-          "followups.created_at",
-          ">=",
-          new Date(opts.dateFrom),
-        );
-      }
-      if (opts.dateTo !== undefined) {
-        const dayEnd = new Date(opts.dateTo);
-        dayEnd.setHours(23, 59, 59, 999);
-        query = query.where("followups.created_at", "<=", dayEnd);
-      }
-
-      // Position tracking for gap indicators (only when filters active)
-      const hasAnyFilter =
-        (opts.types !== undefined && opts.types.length > 0) ||
-        (opts.mediaFlags !== undefined && opts.mediaFlags.length > 0) ||
-        (opts.createdBy !== undefined && opts.createdBy.length > 0) ||
-        opts.includeClientSource === true ||
-        opts.dateFrom !== undefined ||
-        opts.dateTo !== undefined;
-
-      if (hasAnyFilter) {
+      if (hasActiveFilters(opts)) {
         query = query.select((eb) => [
           eb
             .selectFrom("followups as fp")
@@ -784,42 +659,7 @@ export function createFollowUpService(
       let query = db
         .selectFrom("followups")
         .selectAll()
-        .select((eb) => [
-          eb
-            .exists(
-              eb
-                .selectFrom("recordings as r")
-                .whereRef("r.followup_id", "=", "followups.id")
-                .where("r.deleted_at", "is", null)
-                .select(eb.lit(1).as("one")),
-            )
-            .as("has_recording"),
-          eb
-            .exists(
-              eb
-                .selectFrom("attachments as a")
-                .whereRef("a.followup_id", "=", "followups.id")
-                .where("a.deleted_at", "is", null)
-                .where("a.content_type", "like", "image/%")
-                .select(eb.lit(1).as("one")),
-            )
-            .as("has_image"),
-          eb
-            .exists(
-              eb
-                .selectFrom("attachments as a2")
-                .whereRef("a2.followup_id", "=", "followups.id")
-                .where("a2.deleted_at", "is", null)
-                .where((w) =>
-                  w.or([
-                    w("a2.content_type", "is", null),
-                    w("a2.content_type", "not like", "image/%"),
-                  ]),
-                )
-                .select(eb.lit(1).as("one")),
-            )
-            .as("has_file"),
-        ])
+        .select((eb) => mediaExistsSelects(eb))
         .where("ticket_id", "=", ticketId)
         .where("id", "in", followUpIds)
         .where("deleted_at", "is", null);

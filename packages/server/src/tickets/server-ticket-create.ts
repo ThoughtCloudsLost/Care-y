@@ -4,11 +4,10 @@ import type { TenantDatabase } from "../db/types.js";
 import {
   generateContentKey,
   encryptContent,
-  eciesEncrypt,
-  toRistrettoPoint,
   requireSodium,
   type SymmetricKey,
 } from "@care-y/crypto";
+import { eciesWrapAndStore } from "./key-wrap.js";
 
 export interface ResolveTicketResult {
   readonly ticketId: string;
@@ -133,23 +132,18 @@ export async function resolveOrCreateTicket(
         .where("user_keys.vol_public", "is not", null)
         .execute();
 
-      for (const vol of volunteers) {
-        if (!vol.vol_public) continue;
-        const volPublic = toRistrettoPoint(new Uint8Array(vol.vol_public));
-        const wrap = eciesEncrypt(tk, volPublic);
-        await trx
-          .insertInto("ticket_key_wraps")
-          .values({
-            ticket_id: ticket.id,
-            volunteer_id: vol.user_id,
-            key_generation: keyGeneration,
-            ephemeral_point: Buffer.from(wrap.ephemeralPoint),
-            nonce: Buffer.from(wrap.nonce),
-            wrapped_key: Buffer.from(wrap.ciphertext),
-            algorithm: "ecies-ristretto255-v1",
-          })
-          .execute();
-      }
+      await eciesWrapAndStore(
+        trx,
+        ticket.id,
+        keyGeneration,
+        tk,
+        volunteers
+          .filter(
+            (v): v is typeof v & { vol_public: Buffer } =>
+              v.vol_public !== null,
+          )
+          .map((v) => ({ volunteerId: v.user_id, volPublic: v.vol_public })),
+      );
 
       return { ticketId: ticket.id, isNew: true, tk, keyGeneration };
     } catch (err: unknown) {

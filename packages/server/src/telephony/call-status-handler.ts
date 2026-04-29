@@ -1,8 +1,7 @@
 import type { Kysely } from "kysely";
 import type { TenantDatabase } from "../db/types.js";
 import type { CallTracker } from "./call-tracker.js";
-import { resolveOrCreateTicket } from "../tickets/server-ticket-create.js";
-import { requireSodium } from "@care-y/crypto";
+import { resolveInboundTicket } from "./resolve-inbound-ticket.js";
 
 export interface CallStatusDeps {
   readonly callTracker: CallTracker;
@@ -63,25 +62,12 @@ export async function handleCallStatus(
   ) {
     if (deps.intakeQueueId === null) return;
 
-    const titleBuf = Buffer.from(`Call from ${tracked.clientId}`, "utf-8");
-    const descBuf = Buffer.from("Inbound call", "utf-8");
-
-    const result = await resolveOrCreateTicket(
+    ticketId = await resolveInboundTicket(
       tDb,
       tracked.clientId,
       deps.intakeQueueId,
-      titleBuf,
-      descBuf,
+      "Inbound call",
     );
-
-    // phone_call follow-ups contain no PII content (metadata in columns
-    // only, encrypted_content = "system"). Zero tk immediately.
-    if (result.tk) {
-      const sodium = requireSodium();
-      sodium.memzero(result.tk);
-    }
-
-    ticketId = result.ticketId;
   }
 
   if (ticketId === "") return;

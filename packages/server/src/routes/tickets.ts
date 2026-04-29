@@ -2348,8 +2348,7 @@ export function createTicketRouter(deps: TicketRouterDeps) {
                             ? generatePng()
                             : generateTextFile();
                         const encrypted = encryptContent(raw, tk);
-                        const category =
-                          media.kind === "image" ? "attachment" : "attachment";
+                        const category = "attachment" as const;
                         const blobKey = await deps.blobStore.put(
                           ctx.org.orgSchema,
                           category,

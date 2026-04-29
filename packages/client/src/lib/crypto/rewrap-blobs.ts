@@ -89,44 +89,39 @@ export async function rewrapBlobsForFollowUp(
 
   const updates: BlobUpdate[] = [];
 
-  for (const rec of recordings) {
-    const { data: ciphertext } = await ticketRouter.downloadRecordingBlob.query(
-      {
-        recordingId: rec.id,
-      },
-    );
-    const result = await bridge.rewrapBlob(
-      followUpId,
-      ticketId,
-      ciphertext,
-      rec.blobKey,
-      "recording",
-    );
-    updates.push({
-      oldBlobKey: result.blobKey,
-      encryptedData: result.encryptedData,
-      category: result.category,
-    });
+  async function rewrapItems(
+    items: readonly { id: string; blobKey: string }[],
+    download: (id: string) => Promise<{ data: string }>,
+    category: "recording" | "attachment",
+  ): Promise<void> {
+    for (const item of items) {
+      const { data: ciphertext } = await download(item.id);
+      const result = await bridge.rewrapBlob(
+        followUpId,
+        ticketId,
+        ciphertext,
+        item.blobKey,
+        category,
+      );
+      updates.push({
+        oldBlobKey: result.blobKey,
+        encryptedData: result.encryptedData,
+        category: result.category,
+      });
+    }
   }
 
-  for (const att of attachments) {
-    const { data: ciphertext } =
-      await ticketRouter.downloadAttachmentBlob.query({
-        attachmentId: att.id,
-      });
-    const result = await bridge.rewrapBlob(
-      followUpId,
-      ticketId,
-      ciphertext,
-      att.blobKey,
-      "attachment",
-    );
-    updates.push({
-      oldBlobKey: result.blobKey,
-      encryptedData: result.encryptedData,
-      category: result.category,
-    });
-  }
+  await rewrapItems(
+    recordings,
+    async (id) => ticketRouter.downloadRecordingBlob.query({ recordingId: id }),
+    "recording",
+  );
+  await rewrapItems(
+    attachments,
+    async (id) =>
+      ticketRouter.downloadAttachmentBlob.query({ attachmentId: id }),
+    "attachment",
+  );
 
   return updates;
 }
