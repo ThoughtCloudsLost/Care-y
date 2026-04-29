@@ -65,6 +65,14 @@
   let encrypting = $state(false);
   let errors: Record<string, string> = $state({});
 
+  function clearError(field: string): void {
+    // eslint-disable-next-line security/detect-object-injection -- field is a known string literal from call sites
+    if (errors[field] !== undefined) {
+      const { [field]: _, ...rest } = errors;
+      errors = rest;
+    }
+  }
+
   const bridge = getCryptoBridge();
   const busy = $derived(encrypting || submitting);
 
@@ -129,18 +137,12 @@
 
   function handleClientChange(value: ClientSelection): void {
     clientSelection = value;
-    if (errors.client !== undefined && value !== null) {
-      const { client: _, ...rest } = errors;
-      errors = rest;
-    }
+    if (value !== null) clearError("client");
   }
 
   function handleQueueChange(value: string): void {
     queueId = value;
-    if (errors.queue !== undefined && value !== "") {
-      const { queue: _, ...rest } = errors;
-      errors = rest;
-    }
+    if (value !== "") clearError("queue");
   }
 </script>
 
@@ -173,10 +175,7 @@
         const target = e.target;
         if (target instanceof HTMLInputElement) {
           title = target.value;
-          if (errors.title !== undefined && title.trim() !== "") {
-            const { title: _, ...rest } = errors;
-            errors = rest;
-          }
+          if (title.trim() !== "") clearError("title");
         }
       }}
       error={errors.title}
