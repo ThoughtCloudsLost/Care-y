@@ -234,6 +234,13 @@
   "auth_password_placeholder": "Enter your password",
   "auth_signing_in": "Signing in...",
   "auth_invalid_credentials": "Invalid username or password",
+  "auth_phase_auth": "Verifying credentials...",
+  "auth_phase_argon2id": "Deriving encryption keys...",
+  "auth_phase_oprf": "Verifying with security server...",
+  "auth_phase_pow": "Completing verification...",
+  "auth_phase_derive": "Unlocking your keys...",
+  "auth_phase_done": "Ready",
+  "auth_login_error": "Login failed. Please try again.",
 
   "tickets_title": "Tickets",
   "tickets_status_new": "new",
