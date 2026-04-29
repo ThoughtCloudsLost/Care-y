@@ -20,8 +20,6 @@ import type { OrgKeyManager } from "./org-key.js";
 import type { CryptoBridge } from "$lib/workers/crypto-bridge.js";
 import type { SerializedBuffer } from "$lib/utils/buffer-encoding.js";
 
-const textEncoder = new TextEncoder();
-
 export class OrgDecryptCache {
   private readonly cache = cacheRegistry.createMap<string, string>(
     "OrgDecryptCache",
@@ -94,6 +92,46 @@ export class OrgDecryptCache {
     this.cache.clear();
     this.pending.clear();
     this.batchQueue.clear();
+  }
+
+  /**
+   * Async decrypt for imperative code that cannot rely on SvelteMap reactivity.
+   *
+   * Returns cached plaintext on hit (no Worker round-trip). On miss, sends a
+   * single-item batch to the Worker, stores the result in the cache (so
+   * subsequent sync `decrypt()` calls hit cache), and returns the plaintext.
+   *
+   * Use this in async functions like KB search `loadAll()` where the caller
+   * needs the value immediately and won't re-run on cache updates.
+   */
+  async decryptAsync(
+    id: string,
+    data: SerializedBuffer | Uint8Array | null,
+  ): Promise<string | null> {
+    if (data === null) return null;
+
+    const cached = this.cache.get(id);
+    if (cached !== undefined) return cached;
+
+    if (!this.manager.isLoaded) return null;
+
+    const ciphertext =
+      data instanceof Uint8Array ? data : new Uint8Array(data.data);
+    const ciphertextB64 = encode(ciphertext);
+
+    try {
+      const results = await this.bridge.orgDecryptBatch([
+        { cacheKey: id, ciphertext: ciphertextB64 },
+      ]);
+      const result = results[0];
+      if (result?.plaintext !== null && result?.plaintext !== undefined) {
+        this.cache.set(id, result.plaintext);
+        return result.plaintext;
+      }
+      return null;
+    } catch {
+      return null;
+    }
   }
 
   /** Number of cached entries (useful for tests). */

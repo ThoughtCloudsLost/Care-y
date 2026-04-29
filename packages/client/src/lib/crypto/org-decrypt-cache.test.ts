@@ -181,6 +181,58 @@ describe("OrgDecryptCache", () => {
     });
   });
 
+  describe("decryptAsync", () => {
+    it("returns cached value without Worker call", async () => {
+      cache.decrypt("kb-async-1", fakeData("warm"));
+      await cache.whenSettled();
+
+      bridge.orgDecryptBatch.mockClear();
+      const result = await cache.decryptAsync("kb-async-1", fakeData("warm"));
+      expect(result).toBe("decrypted:kb-async-1");
+      expect(bridge.orgDecryptBatch).not.toHaveBeenCalled();
+    });
+
+    it("awaits Worker response on cache miss", async () => {
+      const result = await cache.decryptAsync("kb-async-2", fakeData("cold"));
+      expect(result).toBe("decrypted:kb-async-2");
+      expect(bridge.orgDecryptBatch).toHaveBeenCalledWith([
+        expect.objectContaining({ cacheKey: "kb-async-2" }),
+      ]);
+    });
+
+    it("populates sync cache after async resolve", async () => {
+      await cache.decryptAsync("kb-async-3", fakeData("populate"));
+      expect(cache.decrypt("kb-async-3", fakeData("populate"))).toBe(
+        "decrypted:kb-async-3",
+      );
+    });
+
+    it("returns null for null data", async () => {
+      const result = await cache.decryptAsync("kb-async-4", null);
+      expect(result).toBeNull();
+    });
+
+    it("returns null when org key is not loaded", async () => {
+      manager.zero();
+      const result = await cache.decryptAsync("kb-async-5", fakeData("test"));
+      expect(result).toBeNull();
+    });
+
+    it("returns null on bridge failure", async () => {
+      bridge.orgDecryptBatch.mockRejectedValueOnce(new Error("Worker crash"));
+      const result = await cache.decryptAsync("kb-async-6", fakeData("fail"));
+      expect(result).toBeNull();
+    });
+
+    it("returns null when Worker returns null plaintext", async () => {
+      bridge.orgDecryptBatch.mockResolvedValueOnce([
+        { cacheKey: "kb-async-7", plaintext: null },
+      ]);
+      const result = await cache.decryptAsync("kb-async-7", fakeData("nil"));
+      expect(result).toBeNull();
+    });
+  });
+
   describe("error handling", () => {
     it("clears pending on bridge failure (allows retry)", async () => {
       bridge.orgDecryptBatch.mockRejectedValueOnce(new Error("Worker crash"));

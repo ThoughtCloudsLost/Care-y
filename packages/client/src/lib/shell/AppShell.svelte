@@ -462,9 +462,9 @@
           createKbSearchProvider({
             fetchPage: async (cursor) =>
               kbRouter.listItems.query({ limit: 100, cursor }),
-            decryptOrg: (cacheKey, ciphertext) => {
+            decryptOrg: async (cacheKey, ciphertext) => {
               if (!isOrgCiphertext(ciphertext)) return null;
-              return orgCache.decrypt(cacheKey, ciphertext);
+              return orgCache.decryptAsync(cacheKey, ciphertext);
             },
             ensureCategoriesLoaded: async () => {
               await queryClient.ensureQueryData({
