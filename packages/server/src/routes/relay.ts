@@ -105,10 +105,15 @@ export interface PendingCall {
  *   POST /relay/webrtc-token -> WebRTC capability token
  *   POST /relay/call-confirm/<orgSchema> -> DTMF callback from Twilio
  */
-export function createRelayHandler(
-  deps: RelayHandlerDeps,
-): (req: IncomingMessage, res: ServerResponse) => Promise<void> {
-  return async function handleRelay(
+export interface RelayHandler {
+  (req: IncomingMessage, res: ServerResponse): Promise<void>;
+  cleanup(): void;
+}
+
+export function createRelayHandler(deps: RelayHandlerDeps): RelayHandler {
+  const cleanupTimer = startPendingClientCleanup(deps.pendingClients);
+
+  async function handler(
     req: IncomingMessage,
     res: ServerResponse,
   ): Promise<void> {
@@ -154,7 +159,13 @@ export function createRelayHandler(
       res.writeHead(404);
       res.end();
     }
-  };
+  }
+
+  return Object.assign(handler, {
+    cleanup(): void {
+      clearInterval(cleanupTimer);
+    },
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -249,12 +260,88 @@ async function handleSmsRelay(
 // Call Relay (POST /relay/call)
 // ---------------------------------------------------------------------------
 
-/**
- * Initiates an outbound call. Receives { ticketId, consultantPhone }.
- * Client phone resolved server-side via OPS decryption. Consultant phone
- * is PII-tier encrypted (server can't decrypt it, browser must send it).
- * Call method determined by consultant's preference.
- */
+interface CallContext {
+  ticketId: string;
+  clientPhoneBuf: Buffer;
+  consultantPhoneBuf: Buffer;
+  provider: TelephonyProvider;
+  callerIdStr: string;
+}
+
+type CallContextResult = { ok: true; ctx: CallContext } | { ok: false };
+
+async function resolveCallContext(
+  rawBody: Buffer,
+  session: RelaySession,
+  deps: RelayHandlerDeps,
+  res: ServerResponse,
+): Promise<CallContextResult> {
+  const ticketIdBuf = extractBufferField(rawBody, "ticketId");
+  if (!ticketIdBuf || ticketIdBuf.length === 0) {
+    sendRelayError(res, 400, "MISSING_FIELDS");
+    return { ok: false };
+  }
+  const ticketId = ticketIdBuf.toString("utf-8");
+  ticketIdBuf.fill(0);
+
+  const tenantDb = deps.getTenantDb(session.orgSchema);
+  const consultantRepo = deps.createConsultantRepo(tenantDb);
+  const consultant = await consultantRepo.findByUserId(session.userId);
+
+  if (consultant?.isVerified !== true) {
+    sendRelayError(res, 403, "CONSULTANT_NOT_VERIFIED");
+    return { ok: false };
+  }
+
+  if (consultant.preferredCallMethod === "webrtc") {
+    sendJsonResponse(res, 200, { callSid: "", method: "webrtc" });
+    return { ok: false };
+  }
+
+  const resolvePhone = deps.resolveClientPhone ?? resolveClientPhone;
+  const clientPhoneBuf = await resolvePhone(
+    ticketId,
+    tenantDb,
+    deps.fieldEncryptor,
+  );
+  if (!clientPhoneBuf) {
+    sendRelayError(res, 404, "CLIENT_PHONE_NOT_FOUND");
+    return { ok: false };
+  }
+
+  const provider = await deps.getProvider(session.orgSchema);
+  if (!provider) {
+    sendRelayError(res, 500, "NO_PROVIDER");
+    return { ok: false };
+  }
+
+  const callerIdStr = await deps.resolveCallerIdByPurpose(
+    session.orgSchema,
+    "outbound",
+  );
+  if (callerIdStr === null) {
+    sendRelayError(res, 400, "NO_CALLER_ID");
+    return { ok: false };
+  }
+
+  const consultantPhoneBuf = extractBufferField(rawBody, "consultantPhone");
+  if (!consultantPhoneBuf || consultantPhoneBuf.length === 0) {
+    sendRelayError(res, 400, "MISSING_CONSULTANT_PHONE");
+    return { ok: false };
+  }
+
+  return {
+    ok: true,
+    ctx: {
+      ticketId,
+      clientPhoneBuf,
+      consultantPhoneBuf,
+      provider,
+      callerIdStr,
+    },
+  };
+}
+
 async function handleCallRelay(
   req: IncomingMessage,
   res: ServerResponse,
@@ -262,83 +349,26 @@ async function handleCallRelay(
   deps: RelayHandlerDeps,
 ): Promise<void> {
   let rawBody: Buffer | null = null;
-  let consultantPhoneBuf: Buffer | null = null;
-  let ticketIdBuf: Buffer | null = null;
-  let clientPhoneBuf: Buffer | null = null;
+  let callCtx: CallContext | null = null;
 
   try {
     rawBody = await readRawBody(req, MAX_RELAY_BODY);
-    ticketIdBuf = extractBufferField(rawBody, "ticketId");
+    const result = await resolveCallContext(rawBody, session, deps, res);
+    if (!result.ok) return;
+    callCtx = result.ctx;
 
-    if (!ticketIdBuf || ticketIdBuf.length === 0) {
-      sendRelayError(res, 400, "MISSING_FIELDS");
-      return;
-    }
-
-    const tenantDb = deps.getTenantDb(session.orgSchema);
-    const ticketId = ticketIdBuf.toString("utf-8");
-
-    const consultantRepo = deps.createConsultantRepo(tenantDb);
-    const consultant = await consultantRepo.findByUserId(session.userId);
-
-    if (consultant?.isVerified !== true) {
-      sendRelayError(res, 403, "CONSULTANT_NOT_VERIFIED");
-      return;
-    }
-
-    if (consultant.preferredCallMethod === "webrtc") {
-      sendJsonResponse(res, 200, {
-        callSid: "",
-        method: "webrtc",
-      });
-      return;
-    }
-
-    const resolvePhone = deps.resolveClientPhone ?? resolveClientPhone;
-    clientPhoneBuf = await resolvePhone(
-      ticketId,
-      tenantDb,
-      deps.fieldEncryptor,
-    );
-    if (!clientPhoneBuf) {
-      sendRelayError(res, 404, "CLIENT_PHONE_NOT_FOUND");
-      return;
-    }
-
-    const provider = await deps.getProvider(session.orgSchema);
-    if (!provider) {
-      sendRelayError(res, 500, "NO_PROVIDER");
-      return;
-    }
-
-    const callerIdStr = await deps.resolveCallerIdByPurpose(
-      session.orgSchema,
-      "outbound",
-    );
-    if (callerIdStr === null) {
-      sendRelayError(res, 400, "NO_CALLER_ID");
-      return;
-    }
-
-    // Browser sends consultant's phone (PII-tier: server can't decrypt it)
-    consultantPhoneBuf = extractBufferField(rawBody, "consultantPhone");
-    if (!consultantPhoneBuf || consultantPhoneBuf.length === 0) {
-      sendRelayError(res, 400, "MISSING_CONSULTANT_PHONE");
-      return;
-    }
-
-    const clientPhoneStr = clientPhoneBuf.toString("utf-8");
-    const consultantPhoneStr = consultantPhoneBuf.toString("utf-8");
+    const clientPhoneStr = callCtx.clientPhoneBuf.toString("utf-8");
+    const consultantPhoneStr = callCtx.consultantPhoneBuf.toString("utf-8");
 
     const confirmUrl = `${deps.webhookBaseUrl}/relay/call-confirm/${session.orgSchema}`;
     const statusUrl = `${deps.webhookBaseUrl}/webhooks/twilio/${session.orgSchema}/status`;
 
     let callSid: string;
     try {
-      callSid = await provider.initiateOutboundCall({
+      callSid = await callCtx.provider.initiateOutboundCall({
         consultantPhone: consultantPhoneStr,
         clientPhone: clientPhoneStr,
-        callerId: callerIdStr,
+        callerId: callCtx.callerIdStr,
         confirmWebhookUrl: confirmUrl,
         statusWebhookUrl: statusUrl,
       });
@@ -347,8 +377,8 @@ async function handleCallRelay(
       return;
     }
 
-    const clientPhoneClone = Buffer.from(clientPhoneBuf);
-    const callerIdBuf = Buffer.from(callerIdStr);
+    const clientPhoneClone = Buffer.from(callCtx.clientPhoneBuf);
+    const callerIdBuf = Buffer.from(callCtx.callerIdStr);
 
     deps.pendingCalls.set(callSid, {
       clientPhoneBuf: clientPhoneClone,
@@ -359,7 +389,7 @@ async function handleCallRelay(
 
     if (deps.callTracker) {
       deps.callTracker.track(callSid, {
-        ticketId,
+        ticketId: callCtx.ticketId,
         userId: session.userId,
         direction: "outbound",
         orgSchema: session.orgSchema,
@@ -371,9 +401,8 @@ async function handleCallRelay(
     sendJsonResponse(res, 200, { callSid, method: "phone_callback" });
   } finally {
     rawBody?.fill(0);
-    ticketIdBuf?.fill(0);
-    clientPhoneBuf?.fill(0);
-    if (consultantPhoneBuf) consultantPhoneBuf.fill(0);
+    callCtx?.clientPhoneBuf.fill(0);
+    callCtx?.consultantPhoneBuf.fill(0);
   }
 }
 
@@ -588,14 +617,10 @@ async function handleWebrtcToken(
 const PENDING_CLIENT_TTL_MS = 5 * 60 * 1000; // 5 minutes
 const PENDING_CLIENT_CLEANUP_INTERVAL_MS = 60 * 1000;
 
-let pendingClientCleanupStarted = false;
-
 function startPendingClientCleanup(
   pendingClients: Map<string, PendingClient>,
-): void {
-  if (pendingClientCleanupStarted) return;
-  pendingClientCleanupStarted = true;
-  setInterval(() => {
+): NodeJS.Timeout {
+  return setInterval(() => {
     const now = Date.now();
     for (const [token, entry] of pendingClients) {
       if (now - entry.createdAt > PENDING_CLIENT_TTL_MS) {
@@ -612,8 +637,6 @@ async function handlePhoneLookup(
   session: RelaySession,
   deps: RelayHandlerDeps,
 ): Promise<void> {
-  startPendingClientCleanup(deps.pendingClients);
-
   let rawBody: Buffer | null = null;
   let phoneBuf: Buffer | null = null;
 

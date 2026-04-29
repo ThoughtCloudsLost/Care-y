@@ -20,6 +20,11 @@ import type { OrgKeyManager } from "./org-key.js";
 import type { CryptoBridge } from "$lib/workers/crypto-bridge.js";
 import type { SerializedBuffer } from "$lib/utils/buffer-encoding.js";
 
+function toBase64(data: Uint8Array | SerializedBuffer): string {
+  const bytes = data instanceof Uint8Array ? data : new Uint8Array(data.data);
+  return encode(bytes);
+}
+
 export class OrgDecryptCache {
   private readonly cache = cacheRegistry.createMap<string, string>(
     "OrgDecryptCache",
@@ -61,9 +66,7 @@ export class OrgDecryptCache {
 
     if (!this.manager.isLoaded) return null;
 
-    const ciphertext =
-      data instanceof Uint8Array ? data : new Uint8Array(data.data);
-    const ciphertextB64 = encode(ciphertext);
+    const ciphertextB64 = toBase64(data);
 
     this.pending.add(id);
     this.batchQueue.set(id, ciphertextB64);
@@ -115,9 +118,7 @@ export class OrgDecryptCache {
 
     if (!this.manager.isLoaded) return null;
 
-    const ciphertext =
-      data instanceof Uint8Array ? data : new Uint8Array(data.data);
-    const ciphertextB64 = encode(ciphertext);
+    const ciphertextB64 = toBase64(data);
 
     try {
       const results = await this.bridge.orgDecryptBatch([

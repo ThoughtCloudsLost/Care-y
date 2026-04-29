@@ -207,6 +207,19 @@ function toListRecord(row: EnrichedTicketRow): TicketListRecord {
   };
 }
 
+function buildKeyWrap(
+  ep: Buffer | null,
+  n: Buffer | null,
+  wk: Buffer | null,
+): TicketKeyWrap | null {
+  if (!ep || !n || !wk) return null;
+  return {
+    ephemeralPoint: encode(new Uint8Array(ep)),
+    nonce: encode(new Uint8Array(n)),
+    wrappedKey: encode(new Uint8Array(wk)),
+  };
+}
+
 function toRecordWithKeyWrap(
   row: EnrichedTicketRow & {
     ephemeral_point: Buffer | null;
@@ -214,20 +227,10 @@ function toRecordWithKeyWrap(
     wrapped_key: Buffer | null;
   },
 ): TicketWithKeyWrap {
-  const ep = row.ephemeral_point;
-  const n = row.nonce;
-  const wk = row.wrapped_key;
-  // All three columns are NOT NULL in ticket_key_wraps. If the LEFT JOIN
-  // matched a row, all three are present. Check all to satisfy the linter.
-  const keyWrap: TicketKeyWrap | null =
-    ep && n && wk
-      ? {
-          ephemeralPoint: encode(new Uint8Array(ep)),
-          nonce: encode(new Uint8Array(n)),
-          wrappedKey: encode(new Uint8Array(wk)),
-        }
-      : null;
-  return { ...toListRecord(row), keyWrap };
+  return {
+    ...toListRecord(row),
+    keyWrap: buildKeyWrap(row.ephemeral_point, row.nonce, row.wrapped_key),
+  };
 }
 
 export interface PendingClient {
@@ -1121,17 +1124,6 @@ export function createTicketService(
 
       const result: Record<string, FollowUpPreview[]> = {};
       for (const row of rows) {
-        const ep = row.ephemeral_point;
-        const n = row.nonce;
-        const wk = row.wrapped_key;
-        const keyWrap: TicketKeyWrap | null =
-          ep && n && wk
-            ? {
-                ephemeralPoint: encode(new Uint8Array(ep)),
-                nonce: encode(new Uint8Array(n)),
-                wrappedKey: encode(new Uint8Array(wk)),
-              }
-            : null;
         const preview: FollowUpPreview = {
           id: row.id,
           ticketId: row.ticket_id,
@@ -1139,7 +1131,11 @@ export function createTicketService(
           type: row.type,
           encryptedContent: row.encrypted_content,
           createdAt: row.created_at,
-          keyWrap,
+          keyWrap: buildKeyWrap(
+            row.ephemeral_point,
+            row.nonce,
+            row.wrapped_key,
+          ),
           hasRecording: Boolean(row.has_recording),
           hasImage: Boolean(row.has_image),
           hasFile: Boolean(row.has_file),

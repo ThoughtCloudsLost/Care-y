@@ -64,6 +64,40 @@ export function deriveKeys(opsSecretsKey: Buffer): DerivedKeys {
 
 // --- Field Encryption ---
 
+function decryptRaw(sealed: Buffer, key: Buffer): Buffer {
+  if (
+    sealed.length <
+    sodium.crypto_secretbox_NONCEBYTES + sodium.crypto_secretbox_MACBYTES
+  ) {
+    throw new CryptoError("Ciphertext too short to contain nonce + MAC");
+  }
+
+  const nonce = sealed.subarray(0, sodium.crypto_secretbox_NONCEBYTES);
+  const ciphertext = sealed.subarray(sodium.crypto_secretbox_NONCEBYTES);
+  const plaintext = Buffer.alloc(
+    ciphertext.length - sodium.crypto_secretbox_MACBYTES,
+  );
+
+  try {
+    const ok = sodium.crypto_secretbox_open_easy(
+      plaintext,
+      ciphertext,
+      nonce,
+      key,
+    );
+    if (!ok) {
+      throw new CryptoError("Decryption failed: authentication tag mismatch");
+    }
+    return plaintext;
+  } catch (err) {
+    plaintext.fill(0);
+    if (err instanceof CryptoError) throw err;
+    throw new CryptoError(
+      `Decryption failed: ${err instanceof Error ? err.message : String(err)}`,
+    );
+  }
+}
+
 /**
  * Creates a FieldEncryptor that uses XSalsa20-Poly1305 (crypto_secretbox).
  * Zeroes plaintext buffers in finally blocks to limit exposure in memory.
@@ -94,71 +128,18 @@ export function createFieldEncryptor(key: Buffer): FieldEncryptor {
     },
 
     decrypt(sealed: Buffer): string {
-      if (
-        sealed.length <
-        sodium.crypto_secretbox_NONCEBYTES + sodium.crypto_secretbox_MACBYTES
-      ) {
-        throw new CryptoError("Ciphertext too short to contain nonce + MAC");
-      }
-
-      const nonce = sealed.subarray(0, sodium.crypto_secretbox_NONCEBYTES);
-      const ciphertext = sealed.subarray(sodium.crypto_secretbox_NONCEBYTES);
-      const plaintext = Buffer.alloc(
-        ciphertext.length - sodium.crypto_secretbox_MACBYTES,
-      );
-
+      const plaintext = decryptRaw(sealed, key);
       try {
-        const ok = sodium.crypto_secretbox_open_easy(
-          plaintext,
-          ciphertext,
-          nonce,
-          key,
-        );
-        if (!ok) {
-          throw new CryptoError(
-            "Decryption failed: authentication tag mismatch",
-          );
-        }
         return plaintext.toString("utf-8");
-      } catch (err) {
-        if (err instanceof CryptoError) throw err;
-        throw new CryptoError(
-          `Decryption failed: ${err instanceof Error ? err.message : String(err)}`,
-        );
       } finally {
         plaintext.fill(0);
       }
     },
 
     decryptToBuffer(sealed: Buffer): Buffer {
-      if (
-        sealed.length <
-        sodium.crypto_secretbox_NONCEBYTES + sodium.crypto_secretbox_MACBYTES
-      ) {
-        throw new CryptoError("Ciphertext too short to contain nonce + MAC");
-      }
-
-      const nonce = sealed.subarray(0, sodium.crypto_secretbox_NONCEBYTES);
-      const ciphertext = sealed.subarray(sodium.crypto_secretbox_NONCEBYTES);
-      const plaintext = Buffer.alloc(
-        ciphertext.length - sodium.crypto_secretbox_MACBYTES,
-      );
-
       try {
-        const ok = sodium.crypto_secretbox_open_easy(
-          plaintext,
-          ciphertext,
-          nonce,
-          key,
-        );
-        if (!ok) {
-          throw new CryptoError(
-            "Decryption failed: authentication tag mismatch",
-          );
-        }
-        return plaintext;
+        return decryptRaw(sealed, key);
       } catch (err) {
-        plaintext.fill(0);
         if (err instanceof CryptoError) throw err;
         throw new CryptoError(
           `Decryption failed: ${err instanceof Error ? err.message : String(err)}`,

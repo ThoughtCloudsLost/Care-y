@@ -16,9 +16,8 @@ import type { TenantDatabase } from "../db/types.js";
 import type { CallTracker } from "./call-tracker.js";
 import { TelephonyError } from "../errors.js";
 import { deleteOrEnqueue } from "./log-deletion-helpers.js";
-import { resolveOrCreateTicket } from "../tickets/server-ticket-create.js";
 import { createEncryptedFollowUp } from "../tickets/server-followup-create.js";
-import { requireSodium } from "@care-y/crypto";
+import { resolveInboundTicket } from "./resolve-inbound-ticket.js";
 
 export interface RecordingHandlerDeps {
   readonly provider: TelephonyProvider;
@@ -108,23 +107,12 @@ export async function handleRecordingComplete(
       return { ticketId: null, followUpId: null };
     }
 
-    const titleBuf = Buffer.from(`Call from ${tracked.clientId}`, "utf-8");
-    const descBuf = Buffer.from("Inbound call with voicemail", "utf-8");
-
-    const result = await resolveOrCreateTicket(
+    ticketId = await resolveInboundTicket(
       tDb,
       tracked.clientId,
       intakeQueueId,
-      titleBuf,
-      descBuf,
+      "Inbound call with voicemail",
     );
-
-    if (result.tk) {
-      const sodium = requireSodium();
-      sodium.memzero(result.tk);
-    }
-
-    ticketId = result.ticketId;
   }
 
   if (!ticketId) {

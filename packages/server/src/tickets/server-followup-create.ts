@@ -5,10 +5,9 @@ import type { SymmetricKey } from "@care-y/crypto";
 import {
   generateContentKey,
   encryptContent,
-  eciesEncrypt,
-  toRistrettoPoint,
   requireSodium,
 } from "@care-y/crypto";
+import { eciesWrapAndStore } from "./key-wrap.js";
 
 export interface EncryptedFollowUpResult {
   readonly followUpId: string;
@@ -32,6 +31,124 @@ export interface EncryptedFollowUpOpts {
   readonly orgSchema?: string;
 }
 
+// --- Shared helpers ---
+
+interface AttachmentRecord {
+  blobKey: string;
+  contentType: string;
+  sizeBytes: number;
+}
+
+interface RecordingRecord {
+  blobKey: string;
+  durationSeconds: number;
+}
+
+interface EncryptedMedia {
+  attachmentRecords: AttachmentRecord[];
+  recordingRecord: RecordingRecord | null;
+}
+
+async function encryptAndStoreMedia(
+  tk: SymmetricKey,
+  opts: EncryptedFollowUpOpts | undefined,
+): Promise<EncryptedMedia> {
+  const attachmentRecords: AttachmentRecord[] = [];
+  if (
+    opts?.attachments &&
+    opts.blobStore !== undefined &&
+    opts.orgSchema !== undefined
+  ) {
+    for (const att of opts.attachments) {
+      const encrypted = encryptContent(new Uint8Array(att.data), tk);
+      att.data.fill(0);
+      const blobKey = await opts.blobStore.put(
+        opts.orgSchema,
+        "attachment",
+        Buffer.from(encrypted),
+      );
+      attachmentRecords.push({
+        blobKey,
+        contentType: att.contentType,
+        sizeBytes: encrypted.length,
+      });
+    }
+  }
+
+  let recordingRecord: RecordingRecord | null = null;
+  if (
+    opts?.recording &&
+    opts.blobStore !== undefined &&
+    opts.orgSchema !== undefined
+  ) {
+    const encrypted = encryptContent(new Uint8Array(opts.recording.data), tk);
+    opts.recording.data.fill(0);
+    const blobKey = await opts.blobStore.put(
+      opts.orgSchema,
+      "recording",
+      Buffer.from(encrypted),
+    );
+    recordingRecord = {
+      blobKey,
+      durationSeconds: opts.recording.durationSeconds,
+    };
+  }
+
+  return { attachmentRecords, recordingRecord };
+}
+
+async function insertFollowUpWithMedia(
+  db: Kysely<TenantDatabase>,
+  ticketId: string,
+  encryptedContent: Uint8Array,
+  type: string,
+  source: string,
+  keyGeneration: string | null,
+  media: EncryptedMedia,
+): Promise<string> {
+  const followUp = await db
+    .insertInto("followups")
+    .values({
+      ticket_id: ticketId,
+      source,
+      type,
+      encrypted_content: Buffer.from(encryptedContent),
+      ...(keyGeneration !== null ? { key_generation: keyGeneration } : {}),
+    })
+    .returning("id")
+    .executeTakeFirstOrThrow();
+
+  for (const att of media.attachmentRecords) {
+    await db
+      .insertInto("attachments")
+      .values({
+        ticket_id: ticketId,
+        followup_id: followUp.id,
+        blob_key: att.blobKey,
+        size_bytes: att.sizeBytes,
+        content_type: att.contentType,
+      })
+      .execute();
+  }
+
+  if (media.recordingRecord) {
+    await db
+      .insertInto("recordings")
+      .values({
+        ticket_id: ticketId,
+        followup_id: followUp.id,
+        blob_key: media.recordingRecord.blobKey,
+        size_bytes: 0,
+        duration_seconds: media.recordingRecord.durationSeconds,
+      })
+      .execute();
+  }
+
+  return followUp.id;
+}
+
+// --- Public API ---
+
 /**
  * Create a follow-up on an existing ticket with its own `tk_temp`.
  * Used when the server has PII content to add to a ticket it didn't just create.
@@ -51,62 +168,10 @@ export async function createEncryptedFollowUp(
   const keyGen = crypto.randomUUID();
 
   try {
-    // Encrypt content
     const encryptedContent = encryptContent(new Uint8Array(content), tkTemp);
     content.fill(0);
 
-    // Encrypt attachments if present
-    const attachmentRecords: {
-      blobKey: string;
-      contentType: string;
-      sizeBytes: number;
-    }[] = [];
-    if (
-      opts?.attachments &&
-      opts.blobStore !== undefined &&
-      opts.orgSchema !== undefined
-    ) {
-      for (const att of opts.attachments) {
-        const encrypted = encryptContent(new Uint8Array(att.data), tkTemp);
-        att.data.fill(0);
-        const blobKey = await opts.blobStore.put(
-          opts.orgSchema,
-          "attachment",
-          Buffer.from(encrypted),
-        );
-        attachmentRecords.push({
-          blobKey,
-          contentType: att.contentType,
-          sizeBytes: encrypted.length,
-        });
-      }
-    }
-
-    // Encrypt recording if present
-    let recordingRecord: {
-      blobKey: string;
-      durationSeconds: number;
-    } | null = null;
-    if (
-      opts?.recording &&
-      opts.blobStore !== undefined &&
-      opts.orgSchema !== undefined
-    ) {
-      const encrypted = encryptContent(
-        new Uint8Array(opts.recording.data),
-        tkTemp,
-      );
-      opts.recording.data.fill(0);
-      const blobKey = await opts.blobStore.put(
-        opts.orgSchema,
-        "recording",
-        Buffer.from(encrypted),
-      );
-      recordingRecord = {
-        blobKey,
-        durationSeconds: opts.recording.durationSeconds,
-      };
-    }
+    const media = await encryptAndStoreMedia(tkTemp, opts);
 
     // Query volunteers with access to this ticket's key wraps
     const volunteers = await db
@@ -122,67 +187,32 @@ export async function createEncryptedFollowUp(
       .groupBy(["ticket_key_wraps.volunteer_id", "user_keys.vol_public"])
       .execute();
 
-    // ECIES wrap tkTemp for each authorized volunteer
-    for (const vol of volunteers) {
-      if (!vol.vol_public) continue;
-      const volPublic = toRistrettoPoint(new Uint8Array(vol.vol_public));
-      const wrap = eciesEncrypt(tkTemp, volPublic);
-      await db
-        .insertInto("ticket_key_wraps")
-        .values({
-          ticket_id: ticketId,
-          volunteer_id: vol.volunteer_id,
-          key_generation: keyGen,
-          ephemeral_point: Buffer.from(wrap.ephemeralPoint),
-          nonce: Buffer.from(wrap.nonce),
-          wrapped_key: Buffer.from(wrap.ciphertext),
-          algorithm: "ecies-ristretto255-v1",
-        })
-        .execute();
-    }
+    await eciesWrapAndStore(
+      db,
+      ticketId,
+      keyGen,
+      tkTemp,
+      volunteers
+        .filter(
+          (v): v is typeof v & { vol_public: Buffer } => v.vol_public !== null,
+        )
+        .map((v) => ({
+          volunteerId: v.volunteer_id,
+          volPublic: v.vol_public,
+        })),
+    );
 
-    // Insert follow-up row
-    const followUp = await db
-      .insertInto("followups")
-      .values({
-        ticket_id: ticketId,
-        source,
-        type,
-        encrypted_content: Buffer.from(encryptedContent),
-        key_generation: keyGen,
-      })
-      .returning("id")
-      .executeTakeFirstOrThrow();
+    const followUpId = await insertFollowUpWithMedia(
+      db,
+      ticketId,
+      encryptedContent,
+      type,
+      source,
+      keyGen,
+      media,
+    );
 
-    // Insert attachment rows
-    for (const att of attachmentRecords) {
-      await db
-        .insertInto("attachments")
-        .values({
-          ticket_id: ticketId,
-          followup_id: followUp.id,
-          blob_key: att.blobKey,
-          size_bytes: att.sizeBytes,
-          content_type: att.contentType,
-        })
-        .execute();
-    }
-
-    // Insert recording row
-    if (recordingRecord) {
-      await db
-        .insertInto("recordings")
-        .values({
-          ticket_id: ticketId,
-          followup_id: followUp.id,
-          blob_key: recordingRecord.blobKey,
-          size_bytes: 0,
-          duration_seconds: recordingRecord.durationSeconds,
-        })
-        .execute();
-    }
-
-    return { followUpId: followUp.id, keyGeneration: keyGen };
+    return { followUpId, keyGeneration: keyGen };
   } finally {
     sodium.memzero(tkTemp);
   }
@@ -207,95 +237,15 @@ export async function createFollowUpWithTk(
   const encryptedContent = encryptContent(new Uint8Array(content), tk);
   content.fill(0);
 
-  // Encrypt attachments if present
-  const attachmentRecords: {
-    blobKey: string;
-    contentType: string;
-    sizeBytes: number;
-  }[] = [];
-  if (
-    opts?.attachments &&
-    opts.blobStore !== undefined &&
-    opts.orgSchema !== undefined
-  ) {
-    for (const att of opts.attachments) {
-      const encrypted = encryptContent(new Uint8Array(att.data), tk);
-      att.data.fill(0);
-      const blobKey = await opts.blobStore.put(
-        opts.orgSchema,
-        "attachment",
-        Buffer.from(encrypted),
-      );
-      attachmentRecords.push({
-        blobKey,
-        contentType: att.contentType,
-        sizeBytes: encrypted.length,
-      });
-    }
-  }
+  const media = await encryptAndStoreMedia(tk, opts);
 
-  // Encrypt recording if present
-  let recordingRecord: {
-    blobKey: string;
-    durationSeconds: number;
-  } | null = null;
-  if (
-    opts?.recording &&
-    opts.blobStore !== undefined &&
-    opts.orgSchema !== undefined
-  ) {
-    const encrypted = encryptContent(new Uint8Array(opts.recording.data), tk);
-    opts.recording.data.fill(0);
-    const blobKey = await opts.blobStore.put(
-      opts.orgSchema,
-      "recording",
-      Buffer.from(encrypted),
-    );
-    recordingRecord = {
-      blobKey,
-      durationSeconds: opts.recording.durationSeconds,
-    };
-  }
-
-  // Insert follow-up (key_generation = null: uses ticket's canonical wraps)
-  const followUp = await db
-    .insertInto("followups")
-    .values({
-      ticket_id: ticketId,
-      source,
-      type,
-      encrypted_content: Buffer.from(encryptedContent),
-    })
-    .returning("id")
-    .executeTakeFirstOrThrow();
-
-  // Insert attachment rows
-  for (const att of attachmentRecords) {
-    await db
-      .insertInto("attachments")
-      .values({
-        ticket_id: ticketId,
-        followup_id: followUp.id,
-        blob_key: att.blobKey,
-        size_bytes: att.sizeBytes,
-        content_type: att.contentType,
-      })
-      .execute();
-  }
-
-  // Insert recording row
-  if (recordingRecord) {
-    await db
-      .insertInto("recordings")
-      .values({
-        ticket_id: ticketId,
-        followup_id: followUp.id,
-        blob_key: recordingRecord.blobKey,
-        size_bytes: 0,
-        duration_seconds: recordingRecord.durationSeconds,
-      })
-      .execute();
-  }
-
-  return followUp.id;
+  return insertFollowUpWithMedia(
+    db,
+    ticketId,
+    encryptedContent,
+    type,
+    source,
+    null,
+    media,
+  );
 }
