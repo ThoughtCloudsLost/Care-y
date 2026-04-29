@@ -67,8 +67,14 @@
     type CallAction,
   } from "$lib/components/tickets/CallOptionsContent.svelte";
   import { haptic } from "$lib/utils/haptic.js";
+  import { optimisticMutation } from "$lib/utils/optimistic-mutation.js";
+  import { createBulkActions } from "$lib/composables/ticket-list/create-bulk-actions.svelte.js";
   import { createFilterDispatch } from "$lib/composables/create-filter-dispatch.svelte.js";
-  import type { SerializedBuffer } from "$lib/utils/buffer-encoding.js";
+  import {
+    buildVolunteerMap,
+    resolveVolunteerName as sharedResolveVolunteerName,
+    type VolunteerRecord,
+  } from "$lib/tickets/resolve-volunteer.js";
   import type { RawFollowUpPreview } from "$lib/tickets/preview-loader.svelte.js";
   import { resolveAsyncDecrypt } from "$lib/crypto/decrypt-result.js";
   import { createSearchOverlay } from "$lib/search/search-overlay.svelte.js";
@@ -84,25 +90,16 @@
   const ticketRouter = trpc.tickets;
   const queryClient = useQueryClient();
 
-  /** Resolve a volunteer's display name from the query cache, falling back to "You" for self. */
   function resolveVolunteerName(userId: string): string {
     if (userId === currentUserId) return m.dashboard_assigned_you();
-    interface VolunteerRecord {
-      id: string;
-      encryptedDisplayName: SerializedBuffer | Uint8Array | null;
-    }
     const volunteers = queryClient.getQueryData<readonly VolunteerRecord[]>(
       volunteerKeys.all,
     );
-    const vol = volunteers?.find((v) => v.id === userId);
-    if (vol) {
-      const name = orgCache.decrypt(
-        `volunteer:${vol.id}`,
-        vol.encryptedDisplayName,
-      );
-      if (name !== null) return name;
-    }
-    return m.dashboard_assigned_you();
+    const volunteerMap = buildVolunteerMap(volunteers);
+    return (
+      sharedResolveVolunteerName(userId, volunteerMap, orgCache) ??
+      m.dashboard_assigned_you()
+    );
   }
 
   // Per-ticket pending guards to prevent double-tap races.
@@ -477,34 +474,33 @@
     if (pendingHoldIds.has(ticketId)) return;
     pendingHoldIds.add(ticketId);
 
-    const listKey = ticketsKeys.list(filterStore.serverParams);
-
-    // Snapshot for rollback.
-    const previous = queryClient.getQueryData<{
-      pages: TicketRecord[][];
-      pageParams: unknown[];
-    }>(listKey);
-
-    // Optimistic update: flip onHold in cache.
-    queryClient.setQueryData<typeof previous>(listKey, (old) => {
-      if (!old) return old;
-      return {
-        ...old,
-        pages: old.pages.map((pg) =>
-          pg.map((t) => (t.id === ticketId ? { ...t, onHold } : t)),
-        ),
-      };
-    });
-
     try {
-      await ticketRouter.update.mutate({ ticketId, onHold });
-      haptic();
-      toastStore.show(onHold ? m.ticket_toast_held() : m.ticket_toast_unheld());
-      void queryClient.invalidateQueries({ queryKey: ticketsKeys.lists() });
-    } catch {
-      // Rollback.
-      queryClient.setQueryData(listKey, previous);
-      toastStore.show(m.error_generic(), 3000);
+      await optimisticMutation<{
+        pages: TicketRecord[][];
+        pageParams: unknown[];
+      }>({
+        queryClient,
+        queryKey: ticketsKeys.list(filterStore.serverParams),
+        update: (old) => ({
+          ...old,
+          pages: old.pages.map((pg) =>
+            pg.map((t) => (t.id === ticketId ? { ...t, onHold } : t)),
+          ),
+        }),
+        mutate: async () => ticketRouter.update.mutate({ ticketId, onHold }),
+        onSuccess: () => {
+          haptic();
+          toastStore.show(
+            onHold ? m.ticket_toast_held() : m.ticket_toast_unheld(),
+          );
+          void queryClient.invalidateQueries({
+            queryKey: ticketsKeys.lists(),
+          });
+        },
+        onError: () => {
+          toastStore.show(m.error_generic(), 3000);
+        },
+      });
     } finally {
       pendingHoldIds.delete(ticketId);
     }
@@ -522,42 +518,39 @@
     ticketId: string,
     targetUserId: string | null,
   ): Promise<void> {
-    const listKey = ticketsKeys.list(filterStore.serverParams);
-
-    // Snapshot for rollback.
-    const previous = queryClient.getQueryData<{
+    await optimisticMutation<{
       pages: TicketRecord[][];
       pageParams: unknown[];
-    }>(listKey);
-
-    // Optimistic update: set assignedTo in cache.
-    queryClient.setQueryData<typeof previous>(listKey, (old) => {
-      if (!old) return old;
-      return {
+    }>({
+      queryClient,
+      queryKey: ticketsKeys.list(filterStore.serverParams),
+      update: (old) => ({
         ...old,
         pages: old.pages.map((pg) =>
           pg.map((t) =>
             t.id === ticketId ? { ...t, assignedTo: targetUserId } : t,
           ),
         ),
-      };
+      }),
+      mutate: async () =>
+        ticketRouter.assignTo.mutate({ ticketId, targetUserId }),
+      onSuccess: () => {
+        haptic();
+        if (targetUserId === null) {
+          toastStore.show(m.ticket_toast_unassigned());
+        } else {
+          toastStore.show(
+            m.ticket_toast_assigned({
+              name: resolveVolunteerName(targetUserId),
+            }),
+          );
+        }
+        void queryClient.invalidateQueries({ queryKey: ticketsKeys.lists() });
+      },
+      onError: () => {
+        toastStore.show(m.error_generic(), 3000);
+      },
     });
-
-    try {
-      await ticketRouter.assignTo.mutate({ ticketId, targetUserId });
-      haptic();
-      if (targetUserId === null) {
-        toastStore.show(m.ticket_toast_unassigned());
-      } else {
-        toastStore.show(
-          m.ticket_toast_assigned({ name: resolveVolunteerName(targetUserId) }),
-        );
-      }
-      void queryClient.invalidateQueries({ queryKey: ticketsKeys.lists() });
-    } catch {
-      queryClient.setQueryData(listKey, previous);
-      toastStore.show(m.error_generic(), 3000);
-    }
   }
 
   function openReplySheet(ticketId: string): void {
@@ -651,73 +644,20 @@
   function handleBulkAssign(): void {
     if (selectedIds.size === 0) return;
     assignCurrentAssigneeId = null;
-    assignTargetTicketId = ""; // Not used for bulk, but required by AssignSheet.
+    assignTargetTicketId = "";
     bulkAssignSheetOpen = true;
   }
 
-  async function handleBulkAssignTo(
-    _ticketId: string,
-    targetUserId: string | null,
-  ): Promise<void> {
-    bulkAssignSheetOpen = false;
-    if (targetUserId === null) return; // Unassign in bulk is a no-op.
-
-    const ids = [...selectedIds];
-    let succeeded = 0;
-
-    for (const tid of ids) {
-      try {
-        await ticketRouter.assignTo.mutate({ ticketId: tid, targetUserId });
-        succeeded++;
-      } catch {
-        const name = resolveVolunteerName(targetUserId);
-        toastStore.show(
-          m.ticket_toast_bulk_assigned({ count: String(succeeded), name }) +
-            ` (${String(ids.length - succeeded)} failed)`,
-          3000,
-        );
-        exitMultiSelect();
-        return;
-      }
-    }
-
-    haptic();
-    toastStore.show(
-      m.ticket_toast_bulk_assigned({
-        count: String(succeeded),
-        name: resolveVolunteerName(targetUserId),
-      }),
-    );
-    exitMultiSelect();
-    void queryClient.invalidateQueries({ queryKey: ticketsKeys.lists() });
-  }
-
-  async function handleBulkHold(): Promise<void> {
-    const ids = [...selectedIds];
-    if (ids.length === 0) return;
-
-    let succeeded = 0;
-
-    for (const tid of ids) {
-      try {
-        await ticketRouter.update.mutate({ ticketId: tid, onHold: true });
-        succeeded++;
-      } catch {
-        toastStore.show(
-          m.ticket_toast_bulk_held({ count: String(succeeded) }) +
-            ` (${String(ids.length - succeeded)} failed)`,
-          3000,
-        );
-        exitMultiSelect();
-        return;
-      }
-    }
-
-    haptic();
-    toastStore.show(m.ticket_toast_bulk_held({ count: String(succeeded) }));
-    exitMultiSelect();
-    void queryClient.invalidateQueries({ queryKey: ticketsKeys.lists() });
-  }
+  const bulkActions = createBulkActions({
+    selectedIds,
+    exitMultiSelect,
+    queryClient,
+    assignTo: async (ticketId, targetUserId) =>
+      ticketRouter.assignTo.mutate({ ticketId, targetUserId }),
+    holdTicket: async (ticketId) =>
+      ticketRouter.update.mutate({ ticketId, onHold: true }),
+    resolveVolunteerName,
+  });
 
   function handleLongPress(ticketId: string): void {
     if (!multiSelectActive) {
@@ -1052,7 +992,7 @@
   </Link>
   <Link
     iconOnly
-    onclick={() => void handleBulkHold()}
+    onclick={() => void bulkActions.handleBulkHold()}
     aria-label={m.tickets_action_hold()}
   >
     <Pause size={24} aria-hidden="true" />
@@ -1230,8 +1170,10 @@
   ondismiss={() => {
     bulkAssignSheetOpen = false;
   }}
-  onassign={(tid: string, uid: string | null) =>
-    void handleBulkAssignTo(tid, uid)}
+  onassign={(tid: string, uid: string | null) => {
+    bulkAssignSheetOpen = false;
+    void bulkActions.handleBulkAssignTo(tid, uid);
+  }}
 />
 
 <ReplySheet

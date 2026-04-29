@@ -74,13 +74,11 @@
     buildVolunteerMap,
     resolveVolunteerName as resolveVolName,
   } from "$lib/tickets/resolve-volunteer.js";
-  import {
-    RouterNotAvailableError,
-    RelayError,
-    RateLimitError,
-  } from "$lib/errors.js";
-  import { CryptoWorkerError } from "$lib/workers/crypto-bridge-errors.js";
+  import { RouterNotAvailableError } from "$lib/errors.js";
   import { toastStore } from "$lib/stores/toast.svelte.js";
+  import { createSendMessage } from "$lib/composables/ticket-detail/create-send-message.svelte.js";
+  import { createSmsSend } from "$lib/composables/ticket-detail/create-sms-send.svelte.js";
+  import { createCallDispatch } from "$lib/composables/ticket-detail/create-call-dispatch.svelte.js";
   import { haptic } from "$lib/utils/haptic.js";
   import {
     registerSearchProvider,
@@ -97,27 +95,7 @@
   import ShellSheet from "$lib/shell/ShellSheet.svelte";
   import ExposureHint from "$lib/components/tickets/ExposureHint.svelte";
   import SmsComposeContent from "$lib/components/tickets/SmsComposeContent.svelte";
-  import { callStore } from "$lib/stores/call.svelte.js";
-  import { extractMentions } from "$lib/utils/mentions.js";
   import { tick } from "svelte";
-
-  interface CallRelayResponse {
-    method: "pstn" | "webrtc";
-    callSid?: string;
-  }
-
-  function parseCallRelayResponse(data: unknown): CallRelayResponse {
-    if (typeof data !== "object" || data === null) {
-      return { method: "pstn", callSid: undefined };
-    }
-    const method =
-      "method" in data && data.method === "webrtc" ? "webrtc" : "pstn";
-    const callSid =
-      "callSid" in data && typeof data.callSid === "string"
-        ? data.callSid
-        : undefined;
-    return { method, callSid } as const;
-  }
 
   // ── Composable initialization ──
 
@@ -138,7 +116,6 @@
   // Draft compose state (shared with ShellMessagebar + TicketDetail).
   let draftText = $state("");
   let cursorPosition = $state(0);
-  let sending = $state(false);
 
   function handleInput(e: Event): void {
     const target = e.target;
@@ -278,8 +255,6 @@
   let editNoteTypeId = $state<string | undefined>(undefined);
   let timelineActive = $state(false);
   let smsSheetOpen = $state(false);
-  let smsSending = $state(false);
-  let smsError = $state<string | null>(null);
 
   // --- Exposure hint state ---
 
@@ -318,11 +293,6 @@
       action();
     }
   }
-
-  // --- Call state ---
-
-  let callInProgress = $state(false);
-  let callError = $state<string | null>(null);
 
   // Filtered follow-ups (bound from TicketDetail for select mode copy).
   let filteredFollowUps = $state<FollowUpList | undefined>(undefined);
@@ -398,6 +368,71 @@
       copyFailed: m.common_copy_failed(),
     },
   });
+
+  // --- Send message (composable) ---
+
+  const messenger = createSendMessage<FollowUpList[number]>({
+    getTicketId: () => ticketId,
+    getCurrentUserId: () => currentUserId ?? null,
+    getDraftText: () => draftText,
+    setDraftText: (v: string) => {
+      draftText = v;
+    },
+    cryptoBridge,
+    followUpCache,
+    queryClient,
+    buildPendingEntry: ({
+      pendingId,
+      ticketId: tid,
+      mentionedPseudonyms,
+      currentUserId: uid,
+    }) =>
+      ({
+        id: pendingId,
+        ticketId: tid,
+        source: "volunteer",
+        type: "message",
+        isPrivate: false,
+        mentionedPseudonyms,
+        encryptedContent: { type: "Buffer" as const, data: [] },
+        createdBy: uid,
+        createdAt: new Date().toISOString(),
+        hasRecording: false,
+        hasImage: false,
+        hasFile: false,
+        noteTypeId: null,
+        callSid: null,
+        callStatus: null,
+        callDurationSeconds: null,
+        keyGeneration: null,
+        keyWrap: null,
+      }) satisfies FollowUpList[number],
+    createFollowUpMutate: async (args) =>
+      ticketRouter.createFollowUp.mutate(args),
+  });
+
+  // --- SMS send (composable) ---
+
+  const sms = createSmsSend({
+    getTicketId: () => ticketId,
+    cryptoBridge,
+    queryClient,
+    createFollowUpMutate: async (args) =>
+      ticketRouter.createFollowUp.mutate(args),
+    onSuccess: () => {
+      smsSheetOpen = false;
+    },
+  });
+  const smsSending = $derived(sms.sending);
+
+  // --- Call dispatch (composable) ---
+
+  const callDispatch = createCallDispatch({
+    getTicketId: () => ticketId,
+    cryptoBridge,
+    getEncryptedPhone: () => consultantQuery.data?.encryptedPhone,
+  });
+  const callInProgress = $derived(callDispatch.inProgress);
 
   // --- Search overlay (composable + page-specific match computation) ---
 
@@ -548,81 +583,8 @@
 
   // --- Compose handlers ---
 
-  async function handleSend(): Promise<void> {
-    const text = draftText.trim();
-    if (!text || sending) return;
-
-    sending = true;
-    const followUpsKey = ticketKeys.followUpsInitial(ticketId);
-    const pendingId = `pending-${crypto.randomUUID()}`;
-
-    try {
-      const encryptedContent = await cryptoBridge.encrypt(ticketId, text);
-
-      draftText = "";
-
-      // Optimistic: insert a pending follow-up into the cache immediately.
-      // Uses type assertion because the optimistic entry is a short-lived
-      // placeholder, replaced by server data on the next invalidation.
-      const pendingFollowUp = {
-        id: pendingId,
-        ticketId,
-        source: "volunteer",
-        type: "message",
-        isPrivate: false,
-        mentionedPseudonyms: extractMentions(text),
-        encryptedContent: { type: "Buffer" as const, data: [] },
-        createdBy: currentUserId ?? null,
-        createdAt: new Date().toISOString(),
-        hasRecording: false,
-        hasImage: false,
-        hasFile: false,
-        noteTypeId: null,
-        callSid: null,
-        callStatus: null,
-        callDurationSeconds: null,
-        keyGeneration: null,
-        keyWrap: null,
-      } satisfies FollowUpList[number];
-
-      queryClient.setQueryData<FollowUpList>(followUpsKey, (old) =>
-        old ? [...old, pendingFollowUp] : [pendingFollowUp],
-      );
-
-      // Seed the decrypt cache so the bubble renders plaintext immediately
-      // instead of attempting Worker decryption on the placeholder ciphertext.
-      followUpCache.seed(pendingId, text);
-
-      await ticketRouter.createFollowUp.mutate({
-        ticketId,
-        encryptedContent,
-        source: "volunteer" as const,
-        type: "message" as const,
-        isPrivate: false,
-        mentionedPseudonyms: extractMentions(text),
-      });
-
-      // Replace optimistic entry with server-confirmed data.
-      await queryClient.invalidateQueries({
-        queryKey: ticketKeys.followUps(ticketId),
-      });
-    } catch (err: unknown) {
-      // Rollback optimistic insertion and seeded cache entry.
-      followUpCache.deleteByPrefix(pendingId);
-      queryClient.setQueryData<FollowUpList>(followUpsKey, (old) =>
-        old?.filter((fu) => !fu.id.startsWith("pending-")),
-      );
-      if (!draftText) draftText = text;
-      const msg =
-        err instanceof CryptoWorkerError &&
-        (err.code === "TK_NOT_CACHED" || err.code === "ENCRYPT_FAILED")
-          ? m.ticket_reply_error_encrypt()
-          : m.ticket_reply_error_send();
-      toastStore.show(msg, 3000);
-    } finally {
-      sending = false;
-    }
-  }
+  const handleSend = messenger.handleSend;
+  const sending = $derived(messenger.sending);
 
   function openComposeActions(anchor: HTMLElement): void {
     composeActionsAnchor = anchor;
@@ -718,52 +680,8 @@
     if (action === "cancel" || callInProgress) return;
 
     showExposureHint("call", () => {
-      void executeCall(action);
+      void callDispatch.executeCall();
     });
-  }
-
-  async function executeCall(_action: CallAction): Promise<void> {
-    callInProgress = true;
-    callError = null;
-
-    try {
-      // Decrypt consultant phone if available (needed for phone-callback mode).
-      // The server decides the call method based on consultant preference,
-      // so we always send it regardless of the volunteer's UI selection.
-      const reqBody: Record<string, string> = { ticketId };
-      const encryptedPhone = consultantQuery.data?.encryptedPhone;
-      if (encryptedPhone != null) {
-        reqBody.consultantPhone = await cryptoBridge.orgDecrypt(encryptedPhone);
-      }
-
-      const resp = await fetch("/relay/call", {
-        method: "POST",
-        credentials: "include",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(reqBody),
-      });
-      if (!resp.ok) throw new RelayError("CALL_FAILED", resp.status);
-
-      const data = parseCallRelayResponse(await resp.json());
-
-      if (data.method === "webrtc") {
-        const tokenResp = await fetch("/relay/webrtc-token", {
-          method: "POST",
-          credentials: "include",
-          headers: { "Content-Type": "application/json" },
-        });
-        if (!tokenResp.ok)
-          throw new RelayError("TOKEN_FAILED", tokenResp.status);
-        callStore.start({ ticketId, callSid: "webrtc" });
-      } else if (data.callSid !== undefined) {
-        callStore.start({ ticketId, callSid: data.callSid });
-      }
-    } catch {
-      callError = m.ticket_call_error();
-      toastStore.show(m.ticket_call_error(), 3000);
-    } finally {
-      callInProgress = false;
-    }
   }
 
   // --- SMS handlers ---
@@ -774,58 +692,7 @@
     });
   }
 
-  async function handleSmsSend(body: string): Promise<void> {
-    if (smsSending || !body.trim()) return;
-
-    smsSending = true;
-    smsError = null;
-
-    try {
-      const resp = await fetch("/relay/sms", {
-        method: "POST",
-        credentials: "include",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ticketId, body: body.trim() }),
-      });
-
-      if (resp.status === 429) {
-        const retryAfter = resp.headers.get("Retry-After");
-        const seconds = retryAfter !== null ? parseInt(retryAfter, 10) : 30;
-        throw new RateLimitError(seconds);
-      }
-      if (!resp.ok) throw new RelayError("SMS_FAILED", resp.status);
-
-      // Create follow-up record: encrypt SMS body with ticket's tk for timeline.
-      const encryptedContent = await cryptoBridge.encrypt(
-        ticketId,
-        body.trim(),
-      );
-      await ticketRouter.createFollowUp.mutate({
-        ticketId,
-        encryptedContent,
-        source: "volunteer",
-        type: "sms_outbound",
-        isPrivate: false,
-        mentionedPseudonyms: [],
-      });
-
-      smsSheetOpen = false;
-      void queryClient.invalidateQueries({
-        queryKey: ticketKeys.followUps(ticketId),
-      });
-    } catch (err: unknown) {
-      if (err instanceof RateLimitError) {
-        toastStore.show(
-          m.ticket_sms_rate_limited({ seconds: String(err.retryAfterSeconds) }),
-          5000,
-        );
-      } else {
-        toastStore.show(m.ticket_sms_error_send(), 3000);
-      }
-    } finally {
-      smsSending = false;
-    }
-  }
+  const handleSmsSend = sms.handleSmsSend;
 
   // --- Context menu + lightbox (composables) ---
 
@@ -1188,7 +1055,7 @@
     onsend={handleSmsSend}
     oncancel={() => (smsSheetOpen = false)}
     sending={smsSending}
-    error={smsError}
+    error={null}
   />
 </ShellSheet>
 
