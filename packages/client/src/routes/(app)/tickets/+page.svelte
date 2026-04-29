@@ -96,10 +96,7 @@
       volunteerKeys.all,
     );
     const volunteerMap = buildVolunteerMap(volunteers);
-    return (
-      sharedResolveVolunteerName(userId, volunteerMap, orgCache) ??
-      m.dashboard_assigned_you()
-    );
+    return sharedResolveVolunteerName(userId, volunteerMap, orgCache) ?? "...";
   }
 
   // Per-ticket pending guards to prevent double-tap races.

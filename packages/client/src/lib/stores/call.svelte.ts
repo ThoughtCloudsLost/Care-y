@@ -1,4 +1,4 @@
-interface ActiveCall {
+export interface ActiveCall {
   ticketId: string;
   callSid: string;
   startedAt: number;
