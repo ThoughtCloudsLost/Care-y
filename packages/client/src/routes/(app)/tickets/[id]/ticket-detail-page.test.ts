@@ -234,6 +234,22 @@ vi.mock("$lib/components/tickets/ComposeActions.svelte", async () => ({
   ).default,
 }));
 
+vi.mock("$lib/composables/ticket-detail/create-send-message.svelte.js", () => ({
+  createSendMessage: () => ({ sending: false, handleSend: vi.fn() }),
+}));
+vi.mock("$lib/composables/ticket-detail/create-sms-send.svelte.js", () => ({
+  createSmsSend: () => ({ sending: false, handleSmsSend: vi.fn() }),
+}));
+vi.mock(
+  "$lib/composables/ticket-detail/create-call-dispatch.svelte.js",
+  () => ({
+    createCallDispatch: () => ({
+      inProgress: false,
+      executeCall: vi.fn(),
+    }),
+  }),
+);
+
 // jsdom lacks Web Animations API (used by Konsta transitions).
 if (typeof Element.prototype.animate !== "function") {
   Element.prototype.animate = vi.fn().mockReturnValue({
