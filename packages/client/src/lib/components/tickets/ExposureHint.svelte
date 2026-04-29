@@ -30,7 +30,7 @@
 {/snippet}
 
 {#if opened}
-  <ShellToast opened={true} position="center" button={dismissButton}>
+  <ShellToast opened position="center" button={dismissButton}>
     <div class="exposure-content" role="status" aria-live="polite">
       {getMessage(type)}
     </div>
