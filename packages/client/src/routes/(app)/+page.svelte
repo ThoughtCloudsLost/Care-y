@@ -118,6 +118,9 @@
   function handleCreateOption(optionId: string): void {
     createPopoverOpen = false;
     switch (optionId) {
+      case "ticket":
+        void goto(resolve("/tickets?action=new-ticket"));
+        break;
       case "article":
         void goto(resolve("/library/new"));
         break;
@@ -255,7 +258,7 @@
   const queueProps = $derived(
     (queuesQuery.data ?? []).map((q) => ({
       id: q.id,
-      name: orgCache.decrypt(`queue:${q.id}`, q.encrypted_name),
+      name: orgCache.decrypt(`queue:${q.id}`, q.encryptedName),
       openCount: Number(q.openCount),
     })),
   );

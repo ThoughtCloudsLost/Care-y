@@ -12,7 +12,8 @@
   } from "@care-y/crypto";
   import * as m from "$lib/paraglide/messages.js";
   import { trpc } from "$lib/trpc/index.js";
-  import { getOrgKeyManager } from "$lib/crypto/context.js";
+  import { getOrgKeyManager, getCryptoBridge } from "$lib/crypto/context.js";
+  import { fetchAndUnwrapOrgKey } from "$lib/auth/crypto-helpers.js";
   import { haptic } from "$lib/utils/haptic.js";
   import { toastStore } from "$lib/stores/toast.svelte.js";
   import { announceToLiveRegion } from "$lib/utils/announce.js";
@@ -30,6 +31,7 @@
   const keysRouter = trpc.keys;
   const queryClient = useQueryClient();
   const orgKeyManager = getOrgKeyManager();
+  const bridge = getCryptoBridge();
 
   const usersQuery = createQuery(() => ({
     queryKey: adminKeys.users(),
@@ -97,9 +99,9 @@
           wrappedKeys,
         });
 
-        const skCopy = new ArrayBuffer(secretKey.byteLength);
-        new Uint8Array(skCopy).set(secretKey);
-        orgKeyManager.load(skCopy);
+        // Load new org key into Worker via normal unwrap path
+        const orgPubB64 = await fetchAndUnwrapOrgKey(bridge);
+        if (orgPubB64 !== null) orgKeyManager.load(orgPubB64);
 
         rotationPhase = "done";
         haptic();

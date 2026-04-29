@@ -19,10 +19,13 @@ import {
   eciesEncrypt,
   eciesDecrypt,
   encryptContent,
+  decryptContent,
   generateContentKey,
   type Scalar,
   type RistrettoPoint,
   type Nonce,
+  type SymmetricKey,
+  type Ciphertext,
 } from "@care-y/crypto";
 import type {
   WorkerResponse,
@@ -32,6 +35,8 @@ import type {
   OprfBlindResponse,
   DeriveKeysResponse,
   DecryptContentResponse,
+  DecryptAndRewrapResponse,
+  RewrapBlobResponse,
   EncryptContentResponse,
   GetVolPublicResponse,
   UnwrapOrgKeyResponse,
@@ -40,6 +45,8 @@ import type {
   RewrapTkResponse,
   EvictTkResponse,
   ZeroAllResponse,
+  CreateTicketKeyResponse,
+  RewrapEvent,
 } from "./crypto-protocol.js";
 import { CryptoWorkerTestError } from "$lib/errors.js";
 
@@ -50,7 +57,7 @@ import { CryptoWorkerTestError } from "$lib/errors.js";
 type MessageHandler = (event: MessageEvent) => void;
 
 let messageHandler: MessageHandler | null = null;
-const posted: WorkerResponse[] = [];
+const posted: (WorkerResponse | RewrapEvent)[] = [];
 
 // Create a mock `self` object that mimics the Worker global scope.
 // In a real Worker, `self` === `globalThis`. In Node/Vitest, `self`
@@ -61,7 +68,7 @@ const mockSelf = {
       messageHandler = handler;
     }
   }),
-  postMessage: vi.fn((msg: WorkerResponse) => {
+  postMessage: vi.fn((msg: WorkerResponse | RewrapEvent) => {
     posted.push(msg);
   }),
 };
@@ -85,8 +92,12 @@ async function sendAndWait(
   messageHandler(new MessageEvent("message", { data }));
   // Allow async handlers (init) to complete
   await new Promise((r) => setTimeout(r, 50));
+  // The first message posted in response to a request is always the
+  // WorkerResponse (has "id"). RewrapEvents (has "kind") may follow.
   const response = posted[countBefore];
   if (!response) throw new CryptoWorkerTestError("No response posted");
+  if (!("id" in response))
+    throw new CryptoWorkerTestError("Expected WorkerResponse, got event");
   return response;
 }
 
@@ -404,7 +415,7 @@ describe("crypto.worker", () => {
   });
 
   describe("unwrapOrgKey", () => {
-    it("returns the unwrapped org secret as ArrayBuffer", async () => {
+    it("retains secret in Worker and returns public key", async () => {
       await sendAndWait({ type: "zeroAll", id: 960 });
       const sodium = requireSodium();
       const salt = sodium.randombytes_buf(16);
@@ -426,10 +437,9 @@ describe("crypto.worker", () => {
       expect(resp.ok).toBe(true);
       expect(resp.type).toBe("unwrapOrgKey");
 
-      // Verify the unwrapped secret matches the original
-      // care-y-ignore-next-line no-org-private-key-server -- protocol field, client-side test
-      const unwrapped = new Uint8Array(resp.orgPrivateKey);
-      expect(unwrapped).toEqual(fakeOrgSecret);
+      // Worker returns only the public key (secret stays in Worker)
+      const expectedPublicKey = sodium.crypto_scalarmult_base(fakeOrgSecret);
+      expect(resp.orgPublicKey).toBe(encode(expectedPublicKey));
 
       sodium.memzero(fakeOrgSecret);
     });
@@ -599,6 +609,377 @@ describe("crypto.worker", () => {
         type: "wrapWithVolPublic",
         id: 1212,
         data: encode(new Uint8Array(32)),
+      });
+      expect(resp.ok).toBe(false);
+      expect((resp as ErrorResponse).code).toBe("NOT_READY");
+    });
+  });
+
+  describe("decryptAndRewrap", () => {
+    it("decrypts with tk_temp, returns plaintext, and posts RewrapEvent with re-encrypted content", async () => {
+      await sendAndWait({ type: "zeroAll", id: 2000 });
+
+      const sodium = requireSodium();
+      const salt = sodium.randombytes_buf(16);
+      const { volPublic } = await fullLoginFlow("rewrap-flow-test", salt);
+      const decodedVP = decode(volPublic);
+
+      // Create canonical tk and cache it by decrypting some ticket content
+      const canonicalTk = generateContentKey();
+      const ticketText = new TextEncoder().encode("Ticket title");
+      const ticketCt = encryptContent(ticketText, canonicalTk);
+      const canonicalWrap = eciesEncrypt(
+        canonicalTk,
+        decodedVP as RistrettoPoint,
+      );
+
+      await sendAndWait({
+        type: "decryptContent",
+        id: 2001,
+        ticketId: "ticket-rewrap-flow",
+        ephemeralPoint: encode(canonicalWrap.ephemeralPoint),
+        nonce: encode(canonicalWrap.nonce),
+        wrappedKey: encode(canonicalWrap.ciphertext),
+        ciphertext: encode(ticketCt),
+      });
+
+      // Create tk_temp and encrypt follow-up content with it
+      const tkTemp = generateContentKey();
+      const fuText = new TextEncoder().encode("Follow-up needing re-wrap");
+      const fuCt = encryptContent(fuText, tkTemp);
+      const tempWrap = eciesEncrypt(tkTemp, decodedVP as RistrettoPoint);
+
+      posted.length = 0;
+
+      const resp = (await sendAndWait({
+        type: "decryptAndRewrap",
+        id: 2002,
+        followUpId: "fu-rewrap-1",
+        ticketId: "ticket-rewrap-flow",
+        ephemeralPoint: encode(tempWrap.ephemeralPoint),
+        nonce: encode(tempWrap.nonce),
+        wrappedKey: encode(tempWrap.ciphertext),
+        ciphertext: encode(fuCt),
+      })) as DecryptAndRewrapResponse;
+
+      expect(resp.ok).toBe(true);
+      expect(resp.plaintext).toBe("Follow-up needing re-wrap");
+
+      // A RewrapEvent should have been posted after the response
+      const rewrapEvent = posted.find((m): m is RewrapEvent => "kind" in m);
+      expect(rewrapEvent).toBeDefined();
+      expect(rewrapEvent!.followUpId).toBe("fu-rewrap-1");
+      expect(rewrapEvent!.ticketId).toBe("ticket-rewrap-flow");
+
+      // The re-encrypted content should be decryptable with canonical tk
+      const reEncryptedBytes = decode(rewrapEvent!.encryptedContent);
+      const roundtrip = decryptContent(
+        reEncryptedBytes as Ciphertext,
+        canonicalTk as SymmetricKey,
+      );
+      const roundtripText = new TextDecoder().decode(roundtrip);
+      expect(roundtripText).toBe("Follow-up needing re-wrap");
+
+      sodium.memzero(roundtrip);
+      sodium.memzero(canonicalTk);
+      sodium.memzero(tkTemp);
+    });
+
+    it("deduplicates re-wrap for the same follow-up ID", async () => {
+      // Worker still has cached state from previous test. Send another
+      // decryptAndRewrap for the same follow-up ID. The Worker's
+      // pendingRewraps Set should prevent a second RewrapEvent.
+      const sodium = requireSodium();
+
+      const tkTemp2 = generateContentKey();
+      const fuText2 = new TextEncoder().encode("Duplicate attempt");
+      const fuCt2 = encryptContent(fuText2, tkTemp2);
+
+      // Get volPublic for wrapping
+      const vpResp = (await sendAndWait({
+        type: "getVolPublic",
+        id: 2010,
+      })) as GetVolPublicResponse;
+      const decodedVP = decode(vpResp.volPublic);
+      const tempWrap2 = eciesEncrypt(tkTemp2, decodedVP as RistrettoPoint);
+
+      posted.length = 0;
+
+      // "fu-rewrap-1" is still in pendingRewraps from the previous test
+      const resp = (await sendAndWait({
+        type: "decryptAndRewrap",
+        id: 2011,
+        followUpId: "fu-rewrap-1",
+        ticketId: "ticket-rewrap-flow",
+        ephemeralPoint: encode(tempWrap2.ephemeralPoint),
+        nonce: encode(tempWrap2.nonce),
+        wrappedKey: encode(tempWrap2.ciphertext),
+        ciphertext: encode(fuCt2),
+      })) as DecryptAndRewrapResponse;
+
+      // Decryption still works (returns plaintext for display)
+      expect(resp.ok).toBe(true);
+      expect(resp.plaintext).toBe("Duplicate attempt");
+
+      // But no second RewrapEvent should be posted (deduplicated)
+      const rewrapEvents = posted.filter((m): m is RewrapEvent => "kind" in m);
+      expect(rewrapEvents).toHaveLength(0);
+
+      sodium.memzero(tkTemp2);
+    });
+
+    it("rejects when not KEYED", async () => {
+      await sendAndWait({ type: "zeroAll", id: 2020 });
+      await sendAndWait({ type: "init", id: 2021 });
+
+      const resp = await sendAndWait({
+        type: "decryptAndRewrap",
+        id: 2022,
+        followUpId: "fu-fail",
+        ticketId: "ticket-fail",
+        ephemeralPoint: encode(new Uint8Array(32)),
+        nonce: encode(new Uint8Array(24)),
+        wrappedKey: encode(new Uint8Array(48)),
+        ciphertext: encode(new Uint8Array(40)),
+      });
+      expect(resp.ok).toBe(false);
+      expect((resp as ErrorResponse).code).toBe("NOT_READY");
+    });
+  });
+
+  describe("rewrapBlob", () => {
+    it("re-encrypts a blob from tk_temp to canonical tk", async () => {
+      await sendAndWait({ type: "zeroAll", id: 2100 });
+
+      const sodium = requireSodium();
+      const salt = sodium.randombytes_buf(16);
+      const { volPublic } = await fullLoginFlow("blob-rewrap-test", salt);
+      const decodedVP = decode(volPublic);
+
+      // Cache canonical tk
+      const canonicalTk = generateContentKey();
+      const ticketCt = encryptContent(
+        new TextEncoder().encode("ticket"),
+        canonicalTk,
+      );
+      const canonicalWrap = eciesEncrypt(
+        canonicalTk,
+        decodedVP as RistrettoPoint,
+      );
+      await sendAndWait({
+        type: "decryptContent",
+        id: 2101,
+        ticketId: "ticket-blob",
+        ephemeralPoint: encode(canonicalWrap.ephemeralPoint),
+        nonce: encode(canonicalWrap.nonce),
+        wrappedKey: encode(canonicalWrap.ciphertext),
+        ciphertext: encode(ticketCt),
+      });
+
+      // decryptAndRewrap to cache tk_temp for the follow-up
+      const tkTemp = generateContentKey();
+      const fuCt = encryptContent(
+        new TextEncoder().encode("follow-up body"),
+        tkTemp,
+      );
+      const tempWrap = eciesEncrypt(tkTemp, decodedVP as RistrettoPoint);
+      await sendAndWait({
+        type: "decryptAndRewrap",
+        id: 2102,
+        followUpId: "fu-blob-1",
+        ticketId: "ticket-blob",
+        ephemeralPoint: encode(tempWrap.ephemeralPoint),
+        nonce: encode(tempWrap.nonce),
+        wrappedKey: encode(tempWrap.ciphertext),
+        ciphertext: encode(fuCt),
+      });
+
+      // Encrypt a blob with tk_temp
+      const blobData = sodium.randombytes_buf(1024);
+      const blobCt = encryptContent(blobData, tkTemp);
+
+      // rewrapBlob: tk_temp -> canonical tk
+      const resp = (await sendAndWait({
+        type: "rewrapBlob",
+        id: 2103,
+        followUpId: "fu-blob-1",
+        ticketId: "ticket-blob",
+        ciphertext: encode(blobCt),
+        blobKey: "blob-key-001",
+        category: "recording",
+      })) as RewrapBlobResponse;
+
+      expect(resp.ok).toBe(true);
+      expect(resp.blobKey).toBe("blob-key-001");
+      expect(resp.category).toBe("recording");
+
+      // Verify the re-encrypted blob is decryptable with canonical tk
+      const reEncryptedBytes = decode(resp.encryptedData);
+      const roundtrip = decryptContent(
+        reEncryptedBytes as Ciphertext,
+        canonicalTk as SymmetricKey,
+      );
+      expect(roundtrip).toEqual(blobData);
+
+      sodium.memzero(roundtrip);
+      sodium.memzero(canonicalTk);
+      sodium.memzero(tkTemp);
+      sodium.memzero(blobData);
+    });
+
+    it("rejects when no tk_temp is cached for the follow-up", async () => {
+      const resp = await sendAndWait({
+        type: "rewrapBlob",
+        id: 2110,
+        followUpId: "fu-no-cache",
+        ticketId: "ticket-blob",
+        ciphertext: encode(new Uint8Array(40)),
+        blobKey: "blob-key-bad",
+        category: "attachment",
+      });
+      expect(resp.ok).toBe(false);
+      expect((resp as ErrorResponse).code).toBe("TK_NOT_CACHED");
+    });
+  });
+
+  describe("handleRewrapResult", () => {
+    it("clears pendingRewraps and evicts tk_temp on success", async () => {
+      // "fu-blob-1" is still in pendingRewraps and rewrapTkTempCache.
+      // Send a RewrapResultEvent to clean it up.
+      if (!messageHandler) throw new CryptoWorkerTestError("No handler");
+      messageHandler(
+        new MessageEvent("message", {
+          data: {
+            kind: "rewrap-result",
+            followUpId: "fu-blob-1",
+            success: true,
+          },
+        }),
+      );
+      await new Promise((r) => setTimeout(r, 10));
+
+      // Verify: rewrapBlob for the same follow-up now fails (tk_temp evicted)
+      const resp = await sendAndWait({
+        type: "rewrapBlob",
+        id: 2200,
+        followUpId: "fu-blob-1",
+        ticketId: "ticket-blob",
+        ciphertext: encode(new Uint8Array(40)),
+        blobKey: "blob-key-after",
+        category: "recording",
+      });
+      expect(resp.ok).toBe(false);
+      expect((resp as ErrorResponse).code).toBe("TK_NOT_CACHED");
+    });
+  });
+
+  describe("createTicketKey", () => {
+    it("generates tk, encrypts fields, and returns decryptable ciphertexts with keyWrap", async () => {
+      await sendAndWait({ type: "zeroAll", id: 3000 });
+
+      const sodium = requireSodium();
+      const salt = sodium.randombytes_buf(16);
+      await fullLoginFlow("create-ticket-key-test", salt);
+
+      const resp = (await sendAndWait({
+        type: "createTicketKey",
+        id: 3001,
+        fields: [
+          { name: "title", plaintext: "Test ticket title" },
+          { name: "description", plaintext: "Detailed description here" },
+        ],
+      })) as CreateTicketKeyResponse;
+
+      expect(resp.ok).toBe(true);
+      expect(resp.type).toBe("createTicketKey");
+      expect(resp.encryptedFields).toHaveLength(2);
+      expect(resp.encryptedFields[0]!.name).toBe("title");
+      expect(resp.encryptedFields[1]!.name).toBe("description");
+      expect(resp.keyGeneration).toMatch(
+        /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
+      );
+
+      // Unwrap the tk via ECIES and verify each field decrypts correctly.
+      // We can't access the Worker's volPrivate, but we CAN use the Worker's
+      // own decryptContent to verify the roundtrip: unwrap the tk first via
+      // unwrapTk (caches it), then decrypt each field with that cached tk.
+      //
+      // The keyWrap was created by ECIES-encrypting the tk with the Worker's
+      // volPublic, so the Worker's volPrivate (internal) can unwrap it.
+      // unwrapTk does exactly this: ECIES-decrypt + cache.
+      const unwrapResp = await sendAndWait({
+        type: "unwrapTk",
+        id: 3002,
+        ticketId: "ticket-new-roundtrip",
+        ephemeralPoint: resp.keyWrap.ephemeralPoint,
+        nonce: resp.keyWrap.nonce,
+        wrappedKey: resp.keyWrap.wrappedKey,
+      });
+      expect(unwrapResp.ok).toBe(true);
+
+      // Decrypt each field using the now-cached tk
+      for (const field of resp.encryptedFields) {
+        const decResp = (await sendAndWait({
+          type: "decryptContent",
+          id: 3003,
+          ticketId: "ticket-new-roundtrip",
+          ephemeralPoint: resp.keyWrap.ephemeralPoint,
+          nonce: resp.keyWrap.nonce,
+          wrappedKey: resp.keyWrap.wrappedKey,
+          ciphertext: field.ciphertext,
+        })) as DecryptContentResponse;
+
+        expect(decResp.ok).toBe(true);
+      }
+
+      // Verify actual plaintext values
+      const titleResp = (await sendAndWait({
+        type: "decryptContent",
+        id: 3004,
+        ticketId: "ticket-new-roundtrip",
+        ephemeralPoint: resp.keyWrap.ephemeralPoint,
+        nonce: resp.keyWrap.nonce,
+        wrappedKey: resp.keyWrap.wrappedKey,
+        ciphertext: resp.encryptedFields[0]!.ciphertext,
+      })) as DecryptContentResponse;
+      expect(titleResp.plaintext).toBe("Test ticket title");
+
+      const descResp = (await sendAndWait({
+        type: "decryptContent",
+        id: 3005,
+        ticketId: "ticket-new-roundtrip",
+        ephemeralPoint: resp.keyWrap.ephemeralPoint,
+        nonce: resp.keyWrap.nonce,
+        wrappedKey: resp.keyWrap.wrappedKey,
+        ciphertext: resp.encryptedFields[1]!.ciphertext,
+      })) as DecryptContentResponse;
+      expect(descResp.plaintext).toBe("Detailed description here");
+    });
+
+    it("produces distinct ciphertexts for identical plaintext fields", async () => {
+      const resp = (await sendAndWait({
+        type: "createTicketKey",
+        id: 3010,
+        fields: [
+          { name: "field_a", plaintext: "same content" },
+          { name: "field_b", plaintext: "same content" },
+        ],
+      })) as CreateTicketKeyResponse;
+
+      expect(resp.ok).toBe(true);
+      expect(resp.encryptedFields[0]!.ciphertext).not.toBe(
+        resp.encryptedFields[1]!.ciphertext,
+      );
+    });
+
+    it("rejects in non-KEYED state", async () => {
+      await sendAndWait({ type: "zeroAll", id: 3020 });
+      await sendAndWait({ type: "init", id: 3021 });
+
+      const resp = await sendAndWait({
+        type: "createTicketKey",
+        id: 3022,
+        fields: [{ name: "title", plaintext: "Should fail" }],
       });
       expect(resp.ok).toBe(false);
       expect((resp as ErrorResponse).code).toBe("NOT_READY");

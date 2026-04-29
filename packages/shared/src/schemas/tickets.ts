@@ -32,19 +32,48 @@ export const followUpTypeSchema = z.enum([
   "priority_change",
   "assignment_change",
   "internal_note",
+  "sms_outbound",
+  "sms_inbound",
+  "phone_call",
+  "voicemail",
 ]);
 export type FollowUpType = z.infer<typeof followUpTypeSchema>;
 
+// Call status: terminal states for phone calls
+export const callStatusSchema = z.enum([
+  "completed",
+  "no_answer",
+  "busy",
+  "failed",
+  "canceled",
+]);
+export type CallStatus = z.infer<typeof callStatusSchema>;
+
+// --- Key wrap schema (ECIES-wrapped symmetric ticket key) ---
+
+export const keyWrapSchema = z.object({
+  ephemeralPoint: base64String("ephemeralPoint"),
+  nonce: base64String("nonce"),
+  wrappedKey: base64String("wrappedKey"),
+});
+export type KeyWrap = z.infer<typeof keyWrapSchema>;
+
 // --- Input schemas ---
 
-export const createTicketInputSchema = z.object({
-  queueId: z.uuid(),
-  clientId: z.uuid(),
-  encryptedTitle: base64String("encryptedTitle"),
-  encryptedDescription: base64String("encryptedDescription"),
-  priority: ticketPrioritySchema.default("normal"),
-  keyGeneration: z.uuid(),
-});
+export const createTicketInputSchema = z
+  .object({
+    queueId: z.uuid(),
+    clientId: z.uuid().optional(),
+    clientToken: z.uuid().optional(),
+    encryptedTitle: base64String("encryptedTitle"),
+    encryptedDescription: base64String("encryptedDescription"),
+    priority: ticketPrioritySchema.default("normal"),
+    keyGeneration: z.uuid(),
+    keyWrap: keyWrapSchema,
+  })
+  .refine((data) => Boolean(data.clientId) !== Boolean(data.clientToken), {
+    message: "Provide either clientId or clientToken, not both",
+  });
 export type CreateTicketInput = z.infer<typeof createTicketInputSchema>;
 
 export const createFollowUpInputSchema = z.object({
@@ -439,3 +468,11 @@ export interface ReactionSummary {
   readonly reaction: ReactionType;
   readonly userIds: readonly string[];
 }
+
+// --- Client search ---
+
+export const searchClientsInputSchema = z.object({
+  query: z.string().min(1).max(100),
+  limit: z.number().int().min(1).max(20).default(10),
+});
+export type SearchClientsInput = z.infer<typeof searchClientsInputSchema>;

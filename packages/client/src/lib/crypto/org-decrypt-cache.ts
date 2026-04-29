@@ -1,48 +1,54 @@
 /**
- * Reactive cache for org-key (non-PII tier) decryption.
+ * Reactive cache for org-key (non-PII tier) decryption via Worker.
  *
- * Wraps OrgKeyManager.decrypt() with a SvelteMap so each ciphertext
- * is decrypted at most once per session. Used for KB titles, KB
- * descriptions, volunteer display names, and future org-key-tier
- * content (branding, org config).
+ * Wraps the crypto Worker's orgDecryptBatch with a SvelteMap so each
+ * ciphertext is decrypted at most once per session. Used for KB titles,
+ * KB descriptions, volunteer display names, and org-key-tier content.
  *
- * Decryption is synchronous (main-thread crypto_box_seal_open via
- * OrgKeyManager), so no async/await is needed. The cache is keyed by
- * a caller-provided string ID (e.g., kb item ID, user ID) to avoid
- * re-decrypting the same content across re-renders.
+ * Decryption is async (Worker sealed-box) but the API returns string|null
+ * synchronously for backward compatibility with $derived expressions.
+ * First call returns null (pending), schedules a microtask batch, and
+ * the SvelteMap reactivity triggers re-render with the cached value.
  *
  * The SvelteMap is natively reactive in Svelte 5 without $state wrapping.
  */
 
 import { untrack } from "svelte";
 import { cacheRegistry } from "./cache-registry.js";
+import { encode } from "@care-y/crypto";
 import type { OrgKeyManager } from "./org-key.js";
+import type { CryptoBridge } from "$lib/workers/crypto-bridge.js";
 import type { SerializedBuffer } from "$lib/utils/buffer-encoding.js";
 
-const textDecoder = new TextDecoder();
+function toBase64(data: Uint8Array | SerializedBuffer): string {
+  const bytes = data instanceof Uint8Array ? data : new Uint8Array(data.data);
+  return encode(bytes);
+}
 
 export class OrgDecryptCache {
   private readonly cache = cacheRegistry.createMap<string, string>(
     "OrgDecryptCache",
   );
   private readonly manager: OrgKeyManager;
+  private readonly bridge: CryptoBridge;
+  private readonly pending = new Set<string>();
+  private readonly batchQueue = new Map<string, string>();
+  private batchScheduled = false;
+  private settledResolvers: (() => void)[] = [];
 
-  constructor(manager: OrgKeyManager) {
+  constructor(manager: OrgKeyManager, bridge: CryptoBridge) {
     this.manager = manager;
+    this.bridge = bridge;
   }
 
   /**
    * Decrypt a sealed-box ciphertext, returning cached plaintext on hit.
    *
    * Safe to call from `$derived` and template expressions. First call
-   * decrypts synchronously and caches via `untrack()` to avoid
-   * `state_unsafe_mutation`. Subsequent calls return the cached value.
-   * The underlying SvelteMap triggers reactivity, so any `$derived`
-   * that received null (key not loaded) will re-evaluate once the org
-   * key loads and a new `.get()` call picks up the populated entry.
-   *
-   * Returns the decrypted UTF-8 string, or null if the org key is not
-   * loaded or decryption fails (e.g., wrong key, corrupted ciphertext).
+   * returns null (pending Worker response) and schedules a microtask
+   * batch. Subsequent calls return the cached value. The underlying
+   * SvelteMap triggers reactivity, so any `$derived` that received null
+   * will re-evaluate once the batch response populates the cache.
    *
    * @param id   Unique key for caching (e.g., kb item ID, user ID)
    * @param data Encrypted ciphertext as serialized Buffer or raw Uint8Array
@@ -56,25 +62,17 @@ export class OrgDecryptCache {
     const cached = this.cache.get(id);
     if (cached !== undefined) return cached;
 
+    if (this.pending.has(id)) return null;
+
     if (!this.manager.isLoaded) return null;
 
-    try {
-      const ciphertext =
-        data instanceof Uint8Array ? data : new Uint8Array(data.data);
+    const ciphertextB64 = toBase64(data);
 
-      const plainBytes = this.manager.decrypt(ciphertext);
-      const plaintext = textDecoder.decode(plainBytes);
-      // untrack: cache population is a side effect, not a reactive signal.
-      // Without this, calling decrypt() from a template expression or
-      // $derived triggers Svelte 5's state_unsafe_mutation error.
-      untrack(() => this.cache.set(id, plaintext));
-      return plaintext;
-    } catch (err: unknown) {
-      if (import.meta.env.DEV) {
-        console.warn(`[OrgDecryptCache] decrypt failed for ${id}:`, err);
-      }
-      return null;
-    }
+    this.pending.add(id);
+    this.batchQueue.set(id, ciphertextB64);
+    this.scheduleBatch();
+
+    return null;
   }
 
   /** Check whether a decrypted value exists in cache. */
@@ -95,10 +93,113 @@ export class OrgDecryptCache {
   /** Clear all cached decryptions (e.g., on logout or key rotation). */
   clear(): void {
     this.cache.clear();
+    this.pending.clear();
+    this.batchQueue.clear();
+  }
+
+  /**
+   * Async decrypt for imperative code that cannot rely on SvelteMap reactivity.
+   *
+   * Returns cached plaintext on hit (no Worker round-trip). On miss, sends a
+   * single-item batch to the Worker, stores the result in the cache (so
+   * subsequent sync `decrypt()` calls hit cache), and returns the plaintext.
+   *
+   * Use this in async functions like KB search `loadAll()` where the caller
+   * needs the value immediately and won't re-run on cache updates.
+   */
+  async decryptAsync(
+    id: string,
+    data: SerializedBuffer | Uint8Array | null,
+  ): Promise<string | null> {
+    if (data === null) return null;
+
+    const cached = this.cache.get(id);
+    if (cached !== undefined) return cached;
+
+    if (!this.manager.isLoaded) return null;
+
+    const ciphertextB64 = toBase64(data);
+
+    try {
+      const results = await this.bridge.orgDecryptBatch([
+        { cacheKey: id, ciphertext: ciphertextB64 },
+      ]);
+      const result = results[0];
+      if (result?.plaintext !== null && result?.plaintext !== undefined) {
+        this.cache.set(id, result.plaintext);
+        return result.plaintext;
+      }
+      return null;
+    } catch {
+      return null;
+    }
   }
 
   /** Number of cached entries (useful for tests). */
   get size(): number {
     return this.cache.size;
+  }
+
+  /**
+   * Returns a promise that resolves when all currently pending decrypts
+   * have settled. For test synchronization.
+   */
+  async whenSettled(): Promise<void> {
+    if (this.pending.size === 0 && this.batchQueue.size === 0) {
+      return;
+    }
+    await new Promise<void>((resolve) => {
+      this.settledResolvers.push(resolve);
+    });
+  }
+
+  private scheduleBatch(): void {
+    if (this.batchScheduled) return;
+    this.batchScheduled = true;
+    queueMicrotask(() => {
+      void this.flushBatch();
+    });
+  }
+
+  private async flushBatch(): Promise<void> {
+    this.batchScheduled = false;
+
+    const items = Array.from(this.batchQueue.entries()).map(
+      ([cacheKey, ciphertext]) => ({ cacheKey, ciphertext }),
+    );
+    this.batchQueue.clear();
+
+    if (items.length === 0) {
+      this.resolveSettled();
+      return;
+    }
+
+    try {
+      const results = await this.bridge.orgDecryptBatch(items);
+
+      for (const { cacheKey, plaintext } of results) {
+        this.pending.delete(cacheKey);
+        if (plaintext !== null) {
+          untrack(() => this.cache.set(cacheKey, plaintext));
+        }
+      }
+    } catch {
+      // Bridge-level failure: clear pending so items can retry on next render
+      for (const { cacheKey } of items) {
+        this.pending.delete(cacheKey);
+      }
+    }
+
+    this.resolveSettled();
+  }
+
+  private resolveSettled(): void {
+    if (this.pending.size === 0 && this.batchQueue.size === 0) {
+      const resolvers = this.settledResolvers;
+      this.settledResolvers = [];
+      for (const resolve of resolvers) {
+        resolve();
+      }
+    }
   }
 }

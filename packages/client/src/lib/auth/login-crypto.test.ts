@@ -61,7 +61,7 @@ function createMockBridge(): MockBridge {
       .fn()
       .mockResolvedValue({ blindedElement: "test-blinded-element-b64" }),
     deriveKeys: vi.fn().mockResolvedValue({ volPublic: "test-vol-public-b64" }),
-    unwrapOrgKey: vi.fn().mockResolvedValue(new ArrayBuffer(32)),
+    unwrapOrgKey: vi.fn().mockResolvedValue("dGVzdC1vcmctcHVibGljLWtleS1iNjQ="),
   };
 }
 
@@ -121,7 +121,7 @@ describe("loginCrypto", () => {
   });
 
   describe("happy path", () => {
-    it("completes full flow and returns volPublic + orgPrivateKey", async () => {
+    it("completes full flow and returns volPublic + orgPublicKey", async () => {
       const { callbacks } = createCallbackSpies();
 
       const result = await loginCrypto(
@@ -132,8 +132,8 @@ describe("loginCrypto", () => {
       );
 
       expect(result.volPublic).toBe("test-vol-public-b64");
-      expect(result.orgPrivateKey).toBeInstanceOf(ArrayBuffer);
-      expect(result.orgPrivateKey?.byteLength).toBe(32);
+      expect(typeof result.orgPublicKey).toBe("string");
+      expect(result.orgPublicKey).not.toBeNull();
     });
 
     it("calls getSalt with the identifier", async () => {
@@ -299,7 +299,7 @@ describe("loginCrypto", () => {
   });
 
   describe("org key unavailable", () => {
-    it("returns null orgPrivateKey when getWrappedOrgKey returns null", async () => {
+    it("returns null orgPublicKey when getWrappedOrgKey returns null", async () => {
       mockGetWrappedOrgKey.mockResolvedValue(null);
 
       const { callbacks } = createCallbackSpies();
@@ -311,11 +311,11 @@ describe("loginCrypto", () => {
         callbacks,
       );
 
-      expect(result.orgPrivateKey).toBeNull();
+      expect(result.orgPublicKey).toBeNull();
       expect(mockBridge.unwrapOrgKey).not.toHaveBeenCalled();
     });
 
-    it("returns null orgPrivateKey when getWrappedOrgKey throws", async () => {
+    it("returns null orgPublicKey when getWrappedOrgKey throws", async () => {
       mockGetWrappedOrgKey.mockRejectedValue(new Error("Network error"));
 
       const { callbacks } = createCallbackSpies();
@@ -327,11 +327,11 @@ describe("loginCrypto", () => {
         callbacks,
       );
 
-      expect(result.orgPrivateKey).toBeNull();
+      expect(result.orgPublicKey).toBeNull();
       expect(callbacks.onDone).toHaveBeenCalled();
     });
 
-    it("returns null orgPrivateKey when unwrapOrgKey throws", async () => {
+    it("returns null orgPublicKey when unwrapOrgKey throws", async () => {
       mockBridge.unwrapOrgKey.mockRejectedValue(new Error("Unwrap failed"));
 
       const { callbacks } = createCallbackSpies();
@@ -343,7 +343,7 @@ describe("loginCrypto", () => {
         callbacks,
       );
 
-      expect(result.orgPrivateKey).toBeNull();
+      expect(result.orgPublicKey).toBeNull();
       expect(callbacks.onDone).toHaveBeenCalled();
     });
   });

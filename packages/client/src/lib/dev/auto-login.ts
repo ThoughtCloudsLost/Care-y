@@ -17,6 +17,7 @@ import { trpc } from "$lib/trpc/index.js";
 import { setOrgKeyReady } from "$lib/crypto/org-key-ready.svelte.js";
 import { registerCrypto } from "$lib/auth/register-crypto.js";
 import { loginCrypto } from "$lib/auth/login-crypto.js";
+import { fetchAndUnwrapOrgKey } from "$lib/auth/crypto-helpers.js";
 import {
   generateOrgKeypair,
   sealForOrgKey,
@@ -999,10 +1000,15 @@ async function bootstrapOrgKeypair(
       ],
     });
 
-    // Load org secret into OrgKeyManager (main thread, non-PII tier)
-    const skCopy = new ArrayBuffer(secretKey.byteLength);
-    new Uint8Array(skCopy).set(secretKey);
-    orgKeyManager.load(skCopy);
+    // Load org key into Worker via normal unwrap path (round-trip to server).
+    // The Worker retains the secret; we get back the public key.
+    const orgPubKeyB64 = await fetchAndUnwrapOrgKey(bridge);
+    if (orgPubKeyB64 === null) {
+      throw new Error(
+        "bootstrapOrgKeypair: fetchAndUnwrapOrgKey returned null after rotation",
+      );
+    }
+    orgKeyManager.load(orgPubKeyB64);
 
     console.log("[dev] org keypair: rotated seed keypair with real one");
     return publicKey;
@@ -1037,7 +1043,7 @@ async function seedKBArticles(
         c.encryptedName instanceof Uint8Array
           ? c.encryptedName
           : new Uint8Array((c.encryptedName as { data: number[] }).data);
-      const plainBytes = orgKeyManager.decrypt(ciphertext);
+      const plainBytes = await orgKeyManager.decrypt(ciphertext);
       categoryMap.set(decoder.decode(plainBytes), c.id);
     } catch {
       // Can't decrypt (wrong key or corrupted), skip
@@ -1185,7 +1191,7 @@ export async function devAutoLogin(
 
   // 4. Login crypto (Worker-based key derivation -> KEYED state)
   await bridge.waitReady();
-  const { orgPrivateKey } = await loginCrypto(
+  const { orgPublicKey: orgPubKeyB64 } = await loginCrypto(
     DEV_IDENTIFIER,
     DEV_PASSWORD,
     bridge,
@@ -1194,14 +1200,14 @@ export async function devAutoLogin(
   console.log("[dev] loginCrypto: Worker is KEYED");
 
   // 5. Org key bootstrap
-  // On first run: orgPrivateKey is null (seed created a throwaway keypair,
+  // On first run: orgPubKeyB64 is null (seed created a throwaway keypair,
   // no wrapped_org_keys row exists). Generate real keypair and rotate.
-  // On re-run: orgPrivateKey is non-null (rotation already happened,
+  // On re-run: orgPubKeyB64 is non-null (rotation already happened,
   // wrapped_org_keys row exists). Load directly.
   let orgPublicKey: Uint8Array | null = null;
 
-  if (orgPrivateKey) {
-    orgKeyManager.load(orgPrivateKey);
+  if (orgPubKeyB64 !== null) {
+    orgKeyManager.load(orgPubKeyB64);
     console.log("[dev] orgKeyManager: org key loaded (existing)");
   } else {
     orgPublicKey = await bootstrapOrgKeypair(bridge, orgKeyManager, user.id);

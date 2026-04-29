@@ -1,7 +1,7 @@
 <script lang="ts">
   import { Progressbar } from "konsta/svelte";
   import { ScanSearch } from "@lucide/svelte";
-  import SoftButton from "$lib/components/SoftButton.svelte";
+  import SoftButton from "$lib/components/inputs/SoftButton.svelte";
   import * as m from "$lib/paraglide/messages.js";
   import {
     runFullSearch,

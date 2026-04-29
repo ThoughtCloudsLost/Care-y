@@ -64,6 +64,7 @@ import { createBrandingIconHandler } from "./routes/branding-icons.js";
 import { createManifestHandler } from "./routes/manifest.js";
 import { createRelayHandler, type PendingCall } from "./routes/relay.js";
 import { authenticateRelay } from "./routes/relay-utils.js";
+import { createCallTracker } from "./telephony/call-tracker.js";
 import { extractOrgSlug } from "./org/slug-resolver.js";
 import { NotFoundError } from "./errors.js";
 import { createPhoneResolver } from "./telephony/phone-resolver.js";
@@ -78,7 +79,10 @@ import type { Kysely } from "kysely";
 import type { TenantDatabase } from "./db/types.js";
 import { createWebhookDispatch } from "./telephony/webhook-dispatch.js";
 import { createTicketAccessChecker } from "./tickets/access.js";
-import { createTicketService } from "./tickets/ticket-service.js";
+import {
+  createTicketService,
+  type PendingClient,
+} from "./tickets/ticket-service.js";
 import { createFollowUpService } from "./tickets/followup-service.js";
 import { createReadCursorService } from "./tickets/read-cursor-service.js";
 import { createMergeService } from "./tickets/merge-service.js";
@@ -390,6 +394,8 @@ const phoneResolver = createPhoneResolver({
   },
 });
 
+const pendingClients = new Map<string, PendingClient>();
+
 const appRouter = createAppRouter({
   authDeps: {
     hasher,
@@ -462,6 +468,8 @@ const appRouter = createAppRouter({
     createAuditSvc: createAuditService,
     createNoteTypeSvc: (tDb) => createNoteTypeService(tDb, secretsEncryptor),
     notificationService,
+    fieldEncryptor: encryptor,
+    pendingClients,
   },
   kbDeps: {
     createCategorySvc: createKBCategoryService,
@@ -534,6 +542,10 @@ registerEscalationHandler(jobQueue, async () => {
 jobQueue.start();
 console.log("Job queue started");
 
+// --- Call tracker ---
+
+const callTracker = createCallTracker();
+
 // --- Webhook dispatch callbacks ---
 
 const webhookDispatch = createWebhookDispatch({
@@ -544,6 +556,7 @@ const webhookDispatch = createWebhookDispatch({
   blobStore,
   jobQueue,
   webhookBaseUrl: env.WEBHOOK_BASE_URL,
+  callTracker,
 });
 
 // --- Webhook handler ---
@@ -591,6 +604,14 @@ function zeroAllPendingCalls(calls: Map<string, PendingCall>): void {
     zeroPendingCallBuffers(pending);
   }
   calls.clear();
+}
+
+/** Zeros OPS-encrypted phone Buffers and clears all pending client tokens. */
+function zeroAllPendingClients(clients: Map<string, PendingClient>): void {
+  for (const [, entry] of clients) {
+    entry.opsEncryptedPhone.fill(0);
+  }
+  clients.clear();
 }
 
 const pendingCallCleanupInterval = setInterval(() => {
@@ -660,6 +681,10 @@ const relayHandler = createRelayHandler({
   orgResolver: relayOrgResolver,
   createSessionRepo: async (orgSchema: string) =>
     createRelaySessionRepo(orgSchema),
+  indexer,
+  fieldEncryptor: encryptor,
+  pendingClients,
+  callTracker,
 });
 
 // --- HTTP server ---
@@ -736,6 +761,7 @@ async function shutdown(signal: string): Promise<void> {
   webhookDedupStore.stop();
   clearInterval(pendingCallCleanupInterval);
   zeroAllPendingCalls(pendingCalls);
+  zeroAllPendingClients(pendingClients);
   await jobQueue.stop();
   await db.destroy();
   process.exit(0);

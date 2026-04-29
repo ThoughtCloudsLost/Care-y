@@ -27,6 +27,7 @@ export interface ConsultantInfo {
   readonly id: string;
   readonly isVerified: boolean;
   readonly preferredCallMethod: string;
+  readonly encryptedPhone: string;
 }
 
 export interface ConsultantService {
@@ -67,6 +68,7 @@ export function createConsultantService(
         id: record.id,
         isVerified: record.isVerified,
         preferredCallMethod: record.preferredCallMethod,
+        encryptedPhone: record.encryptedPhone.toString("base64"),
       };
     },
 

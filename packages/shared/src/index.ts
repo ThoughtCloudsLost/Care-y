@@ -206,6 +206,7 @@ export {
   sortDirectionSchema,
   followUpSourceSchema,
   followUpTypeSchema,
+  keyWrapSchema,
   createTicketInputSchema,
   createFollowUpInputSchema,
   updateReadCursorInputSchema,
@@ -241,6 +242,9 @@ export {
   type SortDirection,
   type FollowUpSource,
   type FollowUpType,
+  callStatusSchema,
+  type CallStatus,
+  type KeyWrap,
   type CreateTicketInput,
   type CreateFollowUpInput,
   type UpdateReadCursorInput,
@@ -294,6 +298,8 @@ export {
   toggleReactionInputSchema,
   type ToggleReactionInput,
   type ReactionSummary,
+  searchClientsInputSchema,
+  type SearchClientsInput,
 } from "./schemas/tickets.js";
 
 // --- Knowledge Base schemas ---

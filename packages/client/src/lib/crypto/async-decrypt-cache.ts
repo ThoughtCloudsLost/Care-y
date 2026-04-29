@@ -50,26 +50,12 @@ export class AsyncDecryptCache {
    * reactivity, causing any `$derived` that previously received
    * `undefined` to re-evaluate and pick up the cached plaintext.
    */
-  protected decrypt(
+  private fireAndForget(
     cacheKey: string,
-    ephemeralPoint: string,
-    nonce: string,
-    wrappedKey: string,
-    ciphertext: string,
-  ): string | undefined {
-    const cached = this.cache.get(cacheKey);
-    if (cached !== undefined) return cached;
-    if (this.pending.has(cacheKey)) return undefined;
-
+    bridgeCall: Promise<string>,
+    logLabel: string,
+  ): void {
     this.pending.add(cacheKey);
-
-    const bridgeCall = this.bridge.decrypt(
-      cacheKey,
-      ephemeralPoint,
-      nonce,
-      wrappedKey,
-      ciphertext,
-    );
 
     const decryptPromise =
       import.meta.env.DEV && isDevDelayEnabled()
@@ -85,7 +71,10 @@ export class AsyncDecryptCache {
       .catch((err: unknown) => {
         this.cache.set(cacheKey, DECRYPT_ERROR_SENTINEL);
         if (import.meta.env.DEV) {
-          console.warn(`[${this.label}] decrypt failed for ${cacheKey}:`, err);
+          console.warn(
+            `[${this.label}] ${logLabel} failed for ${cacheKey}:`,
+            err,
+          );
         }
       })
       .finally(() => {
@@ -96,7 +85,64 @@ export class AsyncDecryptCache {
           for (const resolve of batch) resolve();
         }
       });
+  }
 
+  protected decrypt(
+    cacheKey: string,
+    ephemeralPoint: string,
+    nonce: string,
+    wrappedKey: string,
+    ciphertext: string,
+  ): string | undefined {
+    const cached = this.cache.get(cacheKey);
+    if (cached !== undefined) return cached;
+    if (this.pending.has(cacheKey)) return undefined;
+
+    this.fireAndForget(
+      cacheKey,
+      this.bridge.decrypt(
+        cacheKey,
+        ephemeralPoint,
+        nonce,
+        wrappedKey,
+        ciphertext,
+      ),
+      "decrypt",
+    );
+    return undefined;
+  }
+
+  /**
+   * Decrypt content encrypted with tk_temp and trigger background re-wrap.
+   * Same fire-and-forget pattern as decrypt(): returns cached plaintext or
+   * undefined (pending). The Worker re-encrypts with canonical tk as a
+   * side-effect and posts a RewrapEvent to the main thread.
+   */
+  protected decryptAndRewrap(
+    cacheKey: string,
+    followUpId: string,
+    ticketId: string,
+    ephemeralPoint: string,
+    nonce: string,
+    wrappedKey: string,
+    ciphertext: string,
+  ): string | undefined {
+    const cached = this.cache.get(cacheKey);
+    if (cached !== undefined) return cached;
+    if (this.pending.has(cacheKey)) return undefined;
+
+    this.fireAndForget(
+      cacheKey,
+      this.bridge.decryptAndRewrap(
+        followUpId,
+        ticketId,
+        ephemeralPoint,
+        nonce,
+        wrappedKey,
+        ciphertext,
+      ),
+      "decryptAndRewrap",
+    );
     return undefined;
   }
 
@@ -126,6 +172,16 @@ export class AsyncDecryptCache {
 
   get(key: string): string | undefined {
     return this.cache.get(key);
+  }
+
+  /**
+   * Pre-populate the cache with a known plaintext value.
+   * Used for optimistic UI insertion where the plaintext is already
+   * available (e.g., the volunteer just typed it) and Worker decryption
+   * would fail on the placeholder ciphertext.
+   */
+  seed(key: string, plaintext: string): void {
+    this.cache.set(key, plaintext);
   }
 
   clear(): void {

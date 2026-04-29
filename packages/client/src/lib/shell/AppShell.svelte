@@ -43,6 +43,7 @@
     User,
   } from "@lucide/svelte";
   import { getOrgLogoUrl } from "$lib/branding/logo-url.svelte.js";
+  import CallIndicator from "./CallIndicator.svelte";
   import { tick, onMount } from "svelte";
   import { SvelteMap } from "svelte/reactivity";
   import type { Component } from "svelte";
@@ -461,9 +462,9 @@
           createKbSearchProvider({
             fetchPage: async (cursor) =>
               kbRouter.listItems.query({ limit: 100, cursor }),
-            decryptOrg: (cacheKey, ciphertext) => {
+            decryptOrg: async (cacheKey, ciphertext) => {
               if (!isOrgCiphertext(ciphertext)) return null;
-              return orgCache.decrypt(cacheKey, ciphertext);
+              return orgCache.decryptAsync(cacheKey, ciphertext);
             },
             ensureCategoriesLoaded: async () => {
               await queryClient.ensureQueryData({
@@ -817,6 +818,9 @@
       {/if}
     {/snippet}
     {#snippet right()}
+      {#if !searchOpen}
+        <CallIndicator />
+      {/if}
       {#if !searchOpen && navbarOverride?.searchHidden !== true}
         <Link
           iconOnly

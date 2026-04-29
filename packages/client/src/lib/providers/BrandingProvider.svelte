@@ -134,10 +134,11 @@
 
       const data = await brandingRouter.getBranding.query();
 
-      const orgName = decryptField(data.encryptedName) ?? "CARE-Y";
+      const orgName = (await decryptField(data.encryptedName)) ?? "CARE-Y";
       const primaryColor =
-        decryptField(data.encryptedPrimaryColor) ?? DEFAULT_PRIMARY;
-      const accentColor = decryptField(data.encryptedAccentColor) ?? null;
+        (await decryptField(data.encryptedPrimaryColor)) ?? DEFAULT_PRIMARY;
+      const accentColor =
+        (await decryptField(data.encryptedAccentColor)) ?? null;
       const orgSlug = getOrgSlug();
 
       await updateBrandingCache({
@@ -174,12 +175,14 @@
     }
   }
 
-  function decryptField(encrypted: string | null): string | null {
+  async function decryptField(
+    encrypted: string | null,
+  ): Promise<string | null> {
     if (encrypted === null || encrypted === "" || orgKeyManager === null)
       return null;
     try {
       const bytes = base64ToUint8Array(encrypted);
-      const plaintext = orgKeyManager.decrypt(bytes);
+      const plaintext = await orgKeyManager.decrypt(bytes);
       return decoder.decode(plaintext);
     } catch {
       return null;

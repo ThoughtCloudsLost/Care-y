@@ -1,23 +1,20 @@
 /**
- * MMS attachment processor: download, validate, encrypt, store.
+ * MMS attachment processor: download and validate attachments.
  *
  * Each attachment in an inbound MMS is processed independently.
- * One failure does not abort the others. Accepted attachments are
- * sealed-box encrypted (server-blind) and stored via BlobStore.
- * Rejected attachments are recorded with a machine-readable reason.
+ * One failure does not abort the others. Validated attachments are
+ * returned with raw data Buffers for encryption with per-ticket keys.
+ * Rejected attachments are recorded with a reason.
  *
- * All raw data Buffers are zeroed after use (try/finally) to prevent
- * plaintext from lingering in heap memory.
+ * Raw data Buffers must be zeroed after encryption (the follow-up
+ * creation functions handle this).
  */
 
-import type { SealedBoxEncryptor } from "../crypto/sealed-box.js";
-import type { BlobStore } from "../storage/store.js";
 import { validateAttachment } from "./attachment-validator.js";
 import { AttachmentValidationError } from "../errors.js";
-import { sealBufferAndZero } from "./crypto-helpers.js";
 
-export interface AttachmentResult {
-  readonly blobKey: string;
+export interface AcceptedAttachment {
+  readonly data: Buffer;
   readonly contentType: string;
   readonly sizeBytes: number;
 }
@@ -29,30 +26,19 @@ export interface AttachmentRejection {
 }
 
 export interface ProcessAttachmentsResult {
-  readonly accepted: readonly AttachmentResult[];
+  readonly accepted: AcceptedAttachment[];
   readonly rejected: readonly AttachmentRejection[];
 }
 
-export interface MmsHandlerDeps {
-  readonly sealedBox: SealedBoxEncryptor;
-  readonly blobStore: BlobStore;
-  readonly orgSchema: string;
-}
-
 /**
- * Download, validate, encrypt, and store MMS attachments.
- *
- * For each media URL: download with a 30s timeout, validate content-type
- * and magic bytes, seal-encrypt, and store in the blob store. Failures
- * are captured per-attachment without aborting others.
+ * Download and validate MMS attachments. Returns raw (unencrypted)
+ * Buffers for the caller to encrypt with the appropriate ticket key.
  */
 export async function processAttachments(
   mediaUrls: readonly string[],
   mediaContentTypes: readonly string[],
-  deps: MmsHandlerDeps,
 ): Promise<ProcessAttachmentsResult> {
-  const { sealedBox, blobStore, orgSchema } = deps;
-  const accepted: AttachmentResult[] = [];
+  const accepted: AcceptedAttachment[] = [];
   const rejected: AttachmentRejection[] = [];
 
   for (let i = 0; i < mediaUrls.length; i++) {
@@ -87,7 +73,7 @@ export async function processAttachments(
     // 2. Convert to Buffer
     const rawData = Buffer.from(await response.arrayBuffer());
 
-    // 3. Validate (before encryption, rawData is still plaintext)
+    // 3. Validate (before returning, rawData is still plaintext)
     let validation;
     try {
       validation = validateAttachment(rawData, declaredType);
@@ -104,15 +90,9 @@ export async function processAttachments(
       throw err;
     }
 
-    // 4. Encrypt and zero plaintext
-    const encryptedData = sealBufferAndZero(sealedBox, rawData);
-
-    // 5. Store
-    const blobKey = await blobStore.put(orgSchema, "attachment", encryptedData);
-
-    // 6. Record accepted
+    // 4. Return raw data for caller to encrypt with per-ticket key
     accepted.push({
-      blobKey,
+      data: rawData,
       contentType: validation.contentType,
       sizeBytes: validation.sizeBytes,
     });

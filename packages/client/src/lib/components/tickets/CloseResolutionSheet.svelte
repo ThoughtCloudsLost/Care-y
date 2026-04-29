@@ -8,7 +8,7 @@
   import type { LucideIcon } from "@lucide/svelte";
   import * as m from "$lib/paraglide/messages.js";
   import ShellSheet from "$lib/shell/ShellSheet.svelte";
-  import SoftButton from "$lib/components/SoftButton.svelte";
+  import SoftButton from "$lib/components/inputs/SoftButton.svelte";
 
   interface CloseResolutionSheetProps {
     opened: boolean;

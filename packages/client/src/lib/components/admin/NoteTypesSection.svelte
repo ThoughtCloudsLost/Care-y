@@ -18,6 +18,7 @@
     ChevronsUp,
     CirclePause,
     Replace,
+    Phone,
     Plus,
     Pencil,
     type LucideIcon,
@@ -41,7 +42,7 @@
   import QueryError from "$lib/components/QueryError.svelte";
   import DecryptPlaceholder from "$lib/components/DecryptPlaceholder.svelte";
   import ShellSheet from "$lib/shell/ShellSheet.svelte";
-  import SoftButton from "$lib/components/SoftButton.svelte";
+  import SoftButton from "$lib/components/inputs/SoftButton.svelte";
   import {
     RoleId,
     ROLE_ID_VALUES,
@@ -68,9 +69,9 @@
 
   // ── Encrypt helper ──
 
-  function encryptField(value: string): string {
+  async function encryptField(value: string): Promise<string> {
     const plainBytes = encoder.encode(value);
-    const cipherBytes = orgKeyManager.encrypt(plainBytes);
+    const cipherBytes = await orgKeyManager.encrypt(plainBytes);
     return uint8ArrayToBase64(cipherBytes);
   }
 
@@ -112,6 +113,11 @@
       icon: Replace,
       label: m.followup_type_merge_note,
       description: m.followup_type_merge_note_desc,
+    },
+    {
+      icon: Phone,
+      label: m.followup_type_phone_call,
+      description: m.followup_type_phone_call_desc,
     },
   ];
 
@@ -295,11 +301,11 @@
 
     sheetSaving = true;
     try {
-      const encryptedName = encryptField(name);
-      const encryptedIcon = encryptField(editIcon);
+      const encryptedName = await encryptField(name);
+      const encryptedIcon = await encryptField(editIcon);
       const desc = editDescription.trim();
       const encryptedDescription =
-        desc.length > 0 ? encryptField(desc) : undefined;
+        desc.length > 0 ? await encryptField(desc) : undefined;
       const escalationTargets = buildEscalationTargets();
 
       if (isCreateMode) {

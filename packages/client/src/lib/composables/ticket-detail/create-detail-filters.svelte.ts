@@ -39,6 +39,7 @@ export interface DetailFiltersConfig {
     readonly typePriority: string;
     readonly typeHold: string;
     readonly typeMerge: string;
+    readonly typeCalls: string;
   };
 }
 
@@ -132,6 +133,7 @@ export function createDetailFilters(
     { value: "priority_change", label: config.labels.typePriority },
     { value: "hold_change", label: config.labels.typeHold },
     { value: "merge_note", label: config.labels.typeMerge },
+    { value: "phone_call", label: config.labels.typeCalls },
   ]);
 
   const authorFilterOptions = $derived.by(() => {

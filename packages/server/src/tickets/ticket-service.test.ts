@@ -8,7 +8,11 @@ import {
   createTestClientFixture,
   type TestDb,
 } from "../test-utils.js";
-import { createTicketService, type TicketService } from "./ticket-service.js";
+import {
+  createTicketService,
+  type TicketService,
+  type CreateTicketKeyWrap,
+} from "./ticket-service.js";
 import {
   createTicketAccessChecker,
   type TicketAccessChecker,
@@ -17,6 +21,7 @@ import { createQueuePermissionsService } from "./queue-permissions.js";
 import { createDependencyService } from "./dependency-service.js";
 import {
   NotFoundError,
+  ConflictError,
   ForbiddenError,
   TicketError,
   MergeError,
@@ -55,6 +60,14 @@ describe.skipIf(!process.env.DATABASE_URL)("TicketService (DB)", () => {
     };
   }
 
+  function fakeKeyWrap(): CreateTicketKeyWrap {
+    return {
+      ephemeralPoint: Buffer.from("fake-ephemeral-point"),
+      nonce: Buffer.from("fake-nonce"),
+      wrappedKey: Buffer.from("fake-wrapped-key"),
+    };
+  }
+
   async function createClientFixture() {
     const fix = await createTestClientFixture(testDb.db);
     return { userId: fix.userId, clientId: fix.clientId, queueId: fix.queueId };
@@ -71,6 +84,7 @@ describe.skipIf(!process.env.DATABASE_URL)("TicketService (DB)", () => {
       encryptedDescription: Buffer.from("desc"),
       priority: "normal",
       keyGeneration: keyGen,
+      keyWrap: fakeKeyWrap(),
     });
 
     expect(ticket.status).toBe("open");
@@ -95,6 +109,7 @@ describe.skipIf(!process.env.DATABASE_URL)("TicketService (DB)", () => {
         encryptedDescription: Buffer.from("d"),
         priority: "normal",
         keyGeneration: crypto.randomUUID(),
+        keyWrap: fakeKeyWrap(),
       }),
     ).rejects.toBeInstanceOf(NotFoundError);
   });
@@ -120,6 +135,7 @@ describe.skipIf(!process.env.DATABASE_URL)("TicketService (DB)", () => {
         encryptedDescription: Buffer.from("d"),
         priority: "normal",
         keyGeneration: crypto.randomUUID(),
+        keyWrap: fakeKeyWrap(),
       }),
     ).rejects.toBeInstanceOf(MergeError);
   });
@@ -135,6 +151,7 @@ describe.skipIf(!process.env.DATABASE_URL)("TicketService (DB)", () => {
       encryptedDescription: Buffer.from("old-desc"),
       priority: "normal",
       keyGeneration: crypto.randomUUID(),
+      keyWrap: fakeKeyWrap(),
     });
     await testDb.db
       .updateTable("tickets")
@@ -151,6 +168,7 @@ describe.skipIf(!process.env.DATABASE_URL)("TicketService (DB)", () => {
       encryptedDescription: Buffer.from("new-desc"),
       priority: "high",
       keyGeneration: newKeyGen,
+      keyWrap: fakeKeyWrap(),
     });
 
     expect(reopened.id).toBe(first.id);
@@ -159,29 +177,102 @@ describe.skipIf(!process.env.DATABASE_URL)("TicketService (DB)", () => {
     expect(reopened.priority).toBe("high");
   });
 
-  it("create with existing open ticket returns the existing ticket", async () => {
+  it("create with existing open ticket throws ConflictError", async () => {
     const { userId, clientId, queueId } = await createClientFixture();
 
-    const first = await svc.create(userId, {
+    await svc.create(userId, {
       clientId,
       queueId,
       encryptedTitle: Buffer.from("title"),
       encryptedDescription: Buffer.from("desc"),
       priority: "normal",
       keyGeneration: crypto.randomUUID(),
+      keyWrap: fakeKeyWrap(),
     });
 
-    const second = await svc.create(userId, {
+    await expect(
+      svc.create(userId, {
+        clientId,
+        queueId,
+        encryptedTitle: Buffer.from("other-title"),
+        encryptedDescription: Buffer.from("other-desc"),
+        priority: "high",
+        keyGeneration: crypto.randomUUID(),
+        keyWrap: fakeKeyWrap(),
+      }),
+    ).rejects.toBeInstanceOf(ConflictError);
+  });
+
+  it("create inserts a key wrap row in ticket_key_wraps", async () => {
+    const { userId, clientId, queueId } = await createClientFixture();
+    const keyGen = crypto.randomUUID();
+    const kw = fakeKeyWrap();
+
+    const ticket = await svc.create(userId, {
       clientId,
       queueId,
-      encryptedTitle: Buffer.from("other-title"),
-      encryptedDescription: Buffer.from("other-desc"),
-      priority: "high",
-      keyGeneration: crypto.randomUUID(),
+      encryptedTitle: Buffer.from("title"),
+      encryptedDescription: Buffer.from("desc"),
+      priority: "normal",
+      keyGeneration: keyGen,
+      keyWrap: kw,
     });
 
-    expect(second.id).toBe(first.id);
-    expect(second.status).toBe("open");
+    const wrapRow = await testDb.db
+      .selectFrom("ticket_key_wraps")
+      .selectAll()
+      .where("ticket_id", "=", ticket.id)
+      .where("volunteer_id", "=", userId)
+      .executeTakeFirst();
+
+    expect(wrapRow).toBeDefined();
+    expect(wrapRow!.key_generation).toBe(keyGen);
+    expect(wrapRow!.algorithm).toBe("ecies-ristretto255-v1");
+    expect(Buffer.from(wrapRow!.ephemeral_point).toString()).toBe(
+      kw.ephemeralPoint.toString(),
+    );
+  });
+
+  it("create inserts key wrap for reopened tickets", async () => {
+    const { userId, clientId, queueId } = await createClientFixture();
+
+    const first = await svc.create(userId, {
+      clientId,
+      queueId,
+      encryptedTitle: Buffer.from("t"),
+      encryptedDescription: Buffer.from("d"),
+      priority: "normal",
+      keyGeneration: crypto.randomUUID(),
+      keyWrap: fakeKeyWrap(),
+    });
+
+    await testDb.db
+      .updateTable("tickets")
+      .set({ status: "closed" })
+      .where("id", "=", first.id)
+      .execute();
+
+    const newKeyGen = crypto.randomUUID();
+    const newKw = fakeKeyWrap();
+    await svc.create(userId, {
+      clientId,
+      queueId,
+      encryptedTitle: Buffer.from("new-t"),
+      encryptedDescription: Buffer.from("new-d"),
+      priority: "normal",
+      keyGeneration: newKeyGen,
+      keyWrap: newKw,
+    });
+
+    const wrapRow = await testDb.db
+      .selectFrom("ticket_key_wraps")
+      .selectAll()
+      .where("ticket_id", "=", first.id)
+      .where("key_generation", "=", newKeyGen)
+      .executeTakeFirst();
+
+    expect(wrapRow).toBeDefined();
+    expect(wrapRow!.volunteer_id).toBe(userId);
   });
 
   it("findById returns ticket with all fields mapped to camelCase", async () => {
@@ -495,6 +586,7 @@ describe.skipIf(!process.env.DATABASE_URL)("TicketService (DB)", () => {
       encryptedDescription: Buffer.from("desc"),
       priority: "normal",
       keyGeneration: crypto.randomUUID(),
+      keyWrap: fakeKeyWrap(),
     });
 
     // Create a high-priority ticket for a different client in the same queue
@@ -506,6 +598,7 @@ describe.skipIf(!process.env.DATABASE_URL)("TicketService (DB)", () => {
       encryptedDescription: Buffer.from("desc"),
       priority: "high",
       keyGeneration: crypto.randomUUID(),
+      keyWrap: fakeKeyWrap(),
     });
 
     // Filter to high only
@@ -702,6 +795,7 @@ describe.skipIf(!process.env.DATABASE_URL)("TicketService (DB)", () => {
       encryptedDescription: Buffer.from("desc"),
       priority: "normal",
       keyGeneration: crypto.randomUUID(),
+      keyWrap: fakeKeyWrap(),
     });
 
     // Assign via direct DB update (assignment is a separate service).
@@ -746,6 +840,7 @@ describe.skipIf(!process.env.DATABASE_URL)("TicketService (DB)", () => {
         encryptedDescription: Buffer.from("desc"),
         priority: p,
         keyGeneration: crypto.randomUUID(),
+        keyWrap: fakeKeyWrap(),
       });
       ticketIds.push(t.id);
     }
@@ -787,6 +882,7 @@ describe.skipIf(!process.env.DATABASE_URL)("TicketService (DB)", () => {
         encryptedDescription: Buffer.from("desc"),
         priority: p,
         keyGeneration: crypto.randomUUID(),
+        keyWrap: fakeKeyWrap(),
       });
       ticketIds.push(t.id);
     }
@@ -818,6 +914,7 @@ describe.skipIf(!process.env.DATABASE_URL)("TicketService (DB)", () => {
       encryptedDescription: Buffer.from("desc"),
       priority: "normal",
       keyGeneration: crypto.randomUUID(),
+      keyWrap: fakeKeyWrap(),
     });
 
     // Ticket B: created second, has a follow-up (last_activity = now)
@@ -829,6 +926,7 @@ describe.skipIf(!process.env.DATABASE_URL)("TicketService (DB)", () => {
       encryptedDescription: Buffer.from("desc"),
       priority: "normal",
       keyGeneration: crypto.randomUUID(),
+      keyWrap: fakeKeyWrap(),
     });
 
     // Add a follow-up to ticket B so it has recent activity
@@ -875,6 +973,7 @@ describe.skipIf(!process.env.DATABASE_URL)("TicketService (DB)", () => {
         encryptedDescription: Buffer.from("desc"),
         priority: p,
         keyGeneration: crypto.randomUUID(),
+        keyWrap: fakeKeyWrap(),
       });
       ticketIds.push(t.id);
     }
@@ -934,6 +1033,7 @@ describe.skipIf(!process.env.DATABASE_URL)("TicketService (DB)", () => {
         encryptedDescription: Buffer.from("desc"),
         priority: "normal",
         keyGeneration: crypto.randomUUID(),
+        keyWrap: fakeKeyWrap(),
       });
       ticketIds.push(t.id);
 
@@ -1001,6 +1101,7 @@ describe.skipIf(!process.env.DATABASE_URL)("TicketService (DB)", () => {
         encryptedDescription: Buffer.from("desc"),
         priority: "normal",
         keyGeneration: crypto.randomUUID(),
+        keyWrap: fakeKeyWrap(),
       });
       ticketIds.push(t.id);
     }

@@ -18,6 +18,7 @@ const defaultLabels: DetailFiltersConfig["labels"] = {
   typePriority: "Priority",
   typeHold: "Hold",
   typeMerge: "Merge",
+  typeCalls: "Calls",
 };
 
 function makeConfig(

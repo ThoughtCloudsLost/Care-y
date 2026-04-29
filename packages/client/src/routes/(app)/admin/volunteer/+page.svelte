@@ -1,6 +1,6 @@
 <script lang="ts">
   import { List, ListItem, Block } from "konsta/svelte";
-  import SoftButton from "$lib/components/SoftButton.svelte";
+  import SoftButton from "$lib/components/inputs/SoftButton.svelte";
   import { createQuery } from "@tanstack/svelte-query";
   import { ticketsKeys } from "$lib/query/keys.js";
   import {
@@ -40,7 +40,7 @@
   type QueueRecord = NonNullable<typeof queuesQuery.data>[number];
 
   function decryptQueueName(queue: QueueRecord): string | null {
-    return orgCache.decrypt(`queue:${queue.id}`, queue.encrypted_name);
+    return orgCache.decrypt(`queue:${queue.id}`, queue.encryptedName);
   }
 
   function handleSecurityStatus(): void {

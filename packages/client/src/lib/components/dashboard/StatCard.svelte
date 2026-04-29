@@ -23,6 +23,7 @@
   component="button"
   aria-label="{count} {label}"
   onclick={() => ontap(filterParam)}
+  data-testid="stat-card"
   class="stat-card touch-feedback"
 >
   <div class="stat-inner">

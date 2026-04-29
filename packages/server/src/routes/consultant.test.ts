@@ -99,6 +99,7 @@ describe("createConsultantRouter", () => {
         id: "consultant-1",
         isVerified: false,
         preferredCallMethod: "phone_callback",
+        encryptedPhone: "",
       };
       vi.mocked(mockService.getByUserId).mockResolvedValue(info);
 

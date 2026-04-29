@@ -1,9 +1,6 @@
 import { test, expect, type Page } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
-
-// Crypto pipeline timeout: Argon2id (64 MiB WASM) + OPRF round-trips +
-// ECIES key wrapping + Worker decryption. 60s is generous but safe.
-const CRYPTO_TIMEOUT = 60_000;
+import { CRYPTO_TIMEOUT } from "./helpers";
 
 // Serial tests model a real user session: one login, then SPA navigation.
 // The Worker stays KEYED across test navigations.
@@ -54,7 +51,7 @@ test.describe.serial("Ticket List (Tickets Tab)", () => {
     await expect(page.getByText("Intake").first()).toBeVisible();
 
     // Status labels are visible in card headers.
-    const statusLabels = page.locator(".status-label");
+    const statusLabels = page.locator('[data-testid="status-label"]');
     await expect(statusLabels.first()).toBeVisible();
   });
 
@@ -62,7 +59,7 @@ test.describe.serial("Ticket List (Tickets Tab)", () => {
 
   test("status filter pill filters tickets", async () => {
     // Tap the "Status" filter pill to open its popover.
-    const statusPill = page.locator(".filter-pill-bar").getByText("Status");
+    const statusPill = page.locator('[role="toolbar"]').getByText("Status");
     await statusPill.click();
 
     // The popover should be visible with status options.
@@ -86,7 +83,7 @@ test.describe.serial("Ticket List (Tickets Tab)", () => {
 
     // Pill should show the selected label.
     await expect(
-      page.locator(".filter-pill-bar").getByText("On Hold"),
+      page.locator('[role="toolbar"]').getByText("On Hold"),
     ).toBeVisible();
 
     // Clear the filter for subsequent tests.
@@ -99,7 +96,7 @@ test.describe.serial("Ticket List (Tickets Tab)", () => {
   // ── 3. Queue filter pill ────────────────────────────────────────
 
   test("queue filter pill shows filtered results", async () => {
-    const queuePill = page.locator(".filter-pill-bar").getByText("Queue");
+    const queuePill = page.locator('[role="toolbar"]').getByText("Queue");
     await queuePill.click();
 
     // Select "Crisis" queue.
@@ -130,7 +127,7 @@ test.describe.serial("Ticket List (Tickets Tab)", () => {
 
     // Verify list mode: cards use single-column layout (no grid rows).
     await expect(listBtn).toHaveAttribute("aria-pressed", "true");
-    const gridRow = page.locator(".virtual-row-grid");
+    const gridRow = page.locator('[data-virtual="row"][data-grid]');
     await expect(gridRow).toHaveCount(0);
 
     // Switch to grid.
@@ -138,17 +135,21 @@ test.describe.serial("Ticket List (Tickets Tab)", () => {
     await expect(gridBtn).toHaveAttribute("aria-pressed", "true");
 
     // Grid mode: cards render in 2-column rows.
-    await expect(page.locator(".virtual-row-grid").first()).toBeVisible();
+    await expect(
+      page.locator('[data-virtual="row"][data-grid]').first(),
+    ).toBeVisible();
 
     // In grid mode, action buttons should be hidden (no card-actions div).
-    await expect(page.locator(".card-actions")).toHaveCount(0);
+    await expect(page.locator('[data-testid="card-actions"]')).toHaveCount(0);
 
     // Switch back to list.
     await listBtn.click();
     await expect(listBtn).toHaveAttribute("aria-pressed", "true");
 
     // Action buttons should reappear in list mode.
-    await expect(page.locator(".card-actions").first()).toBeVisible();
+    await expect(
+      page.locator('[data-testid="card-actions"]').first(),
+    ).toBeVisible();
   });
 
   test("view mode preference persists across navigation", async () => {
@@ -176,18 +177,18 @@ test.describe.serial("Ticket List (Tickets Tab)", () => {
     // The dev seed has 12 tickets, which all fit on one page (limit: 50).
     // Verify the virtualizer infrastructure is present: sentinel element
     // exists, spacer elements exist, and visible rows are rendered.
-    const sentinel = page.locator(".scroll-sentinel");
+    const sentinel = page.locator("[data-sentinel]");
     await expect(sentinel).toBeAttached();
 
-    const spacers = page.locator(".virtual-spacer");
-    await expect(spacers).toHaveCount(2); // top + bottom
+    const virtualContainer = page.locator('[data-virtual="container"]');
+    await expect(virtualContainer).toBeAttached();
   });
 
   // ── 6. Multi-select ─────────────────────────────────────────────
 
   test("long-press enters multi-select with checkboxes and action bar", async () => {
     // Long-press a ticket card to enter multi-select mode.
-    const firstCard = page.locator(".swipeable-card").first();
+    const firstCard = page.locator('[data-testid="ticket-card"]').first();
 
     // pointerdown, wait 600ms, pointerup = long-press
     const box = await firstCard.boundingBox();
@@ -200,7 +201,7 @@ test.describe.serial("Ticket List (Tickets Tab)", () => {
     await page.mouse.up();
 
     // Checkboxes should appear on cards.
-    const checkboxes = page.locator(".select-checkbox");
+    const checkboxes = page.locator('[role="checkbox"]');
     // At least one checkbox visible (the long-pressed card + visible cards).
     await expect(checkboxes.first()).toBeVisible();
 
@@ -209,7 +210,7 @@ test.describe.serial("Ticket List (Tickets Tab)", () => {
     await expect(page.getByText(/1 selected/)).toBeVisible();
 
     // Tap another card to add to selection.
-    const secondCard = page.locator(".swipeable-card").nth(1);
+    const secondCard = page.locator('[data-testid="ticket-card"]').nth(1);
     await secondCard.click();
     await expect(page.getByText(/2 selected/)).toBeVisible();
 
@@ -228,7 +229,7 @@ test.describe.serial("Ticket List (Tickets Tab)", () => {
     await page.getByRole("button", { name: "Select" }).click();
 
     // Checkboxes should appear.
-    await expect(page.locator(".select-checkbox").first()).toBeVisible();
+    await expect(page.locator('[role="checkbox"]').first()).toBeVisible();
 
     // Exit via dismiss.
     await page.getByRole("button", { name: "Exit selection mode" }).click();
@@ -238,7 +239,7 @@ test.describe.serial("Ticket List (Tickets Tab)", () => {
 
   test("tapping a card navigates to ticket detail route", async () => {
     // Click the first card's inner button area.
-    const firstCardButton = page.locator(".card-inner").first();
+    const firstCardButton = page.locator('[data-testid="card-inner"]').first();
     await firstCardButton.click();
 
     // Should navigate to /tickets/{uuid}. The detail page doesn't exist
@@ -260,7 +261,7 @@ test.describe.serial("Ticket List (Tickets Tab)", () => {
   test("empty state shown when filters match zero tickets", async () => {
     // Apply a filter combination that matches nothing: "Closed" status.
     // No seeded tickets are closed.
-    const statusPill = page.locator(".filter-pill-bar").getByText("Status");
+    const statusPill = page.locator('[role="toolbar"]').getByText("Status");
     await statusPill.click();
     await page.getByText("Closed").click();
     await statusPill.click();
@@ -282,7 +283,7 @@ test.describe.serial("Ticket List (Tickets Tab)", () => {
     await expect(toolbar).toHaveAttribute("aria-label", "Filter tickets");
 
     // Each filter pill has role="button", aria-haspopup, aria-expanded.
-    const pills = page.locator('.filter-pill-bar [role="button"]');
+    const pills = page.locator('[role="toolbar"] [role="button"]');
     const count = await pills.count();
     expect(count).toBeGreaterThanOrEqual(4); // status, queue, priority, assignee
 
@@ -294,7 +295,7 @@ test.describe.serial("Ticket List (Tickets Tab)", () => {
 
   test("escape closes open filter popover", async () => {
     // Open status pill.
-    const statusPill = page.locator(".filter-pill-bar").getByText("Status");
+    const statusPill = page.locator('[role="toolbar"]').getByText("Status");
     await statusPill.click();
 
     // Popover should be visible.
@@ -326,7 +327,9 @@ test.describe.serial("Ticket List (Tickets Tab)", () => {
 
   test("passes axe accessibility audit in grid mode", async () => {
     await page.getByRole("button", { name: "Grid view" }).click();
-    await expect(page.locator(".virtual-row-grid").first()).toBeVisible();
+    await expect(
+      page.locator('[data-virtual="row"][data-grid]').first(),
+    ).toBeVisible();
 
     const results = await new AxeBuilder({ page })
       .setLegacyMode(true)
@@ -361,7 +364,9 @@ test.describe.serial("Ticket List (Tickets Tab)", () => {
 
       // Verify no layout crash: cards are still visible, filter bar is
       // present, and the view toggle still works.
-      await expect(page.locator(".ticket-card-wrap").first()).toBeVisible();
+      await expect(
+        page.locator('[data-testid="ticket-card-wrap"]').first(),
+      ).toBeVisible();
       await expect(page.locator('[role="toolbar"]')).toBeVisible();
       await expect(
         page.getByRole("button", { name: "List view" }),

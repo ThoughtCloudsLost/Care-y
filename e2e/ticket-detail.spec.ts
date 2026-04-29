@@ -1,51 +1,6 @@
 import { test, expect, type Page } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
-
-// Crypto pipeline timeout: Argon2id (64 MiB WASM) + OPRF round-trips +
-// ECIES key wrapping + Worker decryption. 60s is generous but safe.
-const CRYPTO_TIMEOUT = 60_000;
-
-// Long-press: pointerdown, hold 600ms, pointerup. Matches the 500ms
-// threshold in TicketDetail's startLongPress + margin.
-async function longPress(
-  page: Page,
-  locator: ReturnType<Page["locator"]>,
-): Promise<void> {
-  const box = await locator.boundingBox();
-  if (!box) throw new Error("Element not found for long-press");
-  const cx = box.x + box.width / 2;
-  const cy = box.y + box.height / 2;
-  await page.mouse.move(cx, cy);
-  await page.mouse.down();
-  await page.waitForTimeout(600);
-  await page.mouse.up();
-}
-
-/** Navigate to the ticket list and open a ticket by its decrypted title. */
-async function openTicketByTitle(page: Page, title: string): Promise<void> {
-  // Ensure we're on the ticket list.
-  const currentUrl = page.url();
-  if (!currentUrl.endsWith("/tickets")) {
-    await page.getByRole("tab", { name: "Tickets" }).click();
-    await expect(page).toHaveURL("/tickets");
-  }
-
-  // Wait for the target ticket's decrypted title to appear.
-  await expect(page.getByText(title)).toBeVisible({
-    timeout: CRYPTO_TIMEOUT,
-  });
-
-  // Click the card containing this title. The title is inside a
-  // .card-inner, so find the card that contains this text.
-  const card = page.locator(".swipeable-card", { hasText: title });
-  await card.locator(".card-inner").click();
-
-  // Wait for the detail route.
-  await expect(page).toHaveURL(/\/tickets\/[0-9a-f-]{36}/);
-  await expect(page.locator('[role="log"]')).toBeVisible({
-    timeout: CRYPTO_TIMEOUT,
-  });
-}
+import { CRYPTO_TIMEOUT, openTicketByTitle, longPress } from "./helpers";
 
 // Single shared page instance. One login boots the crypto Worker, then
 // all tests navigate via SPA without re-authenticating.
@@ -76,7 +31,7 @@ test.describe.serial("Ticket Detail (Chat View)", () => {
 
   test("client messages are left-aligned (type=received)", async () => {
     // "I need help finding a place to stay" is a client message.
-    const clientBubble = page.locator(".message-received", {
+    const clientBubble = page.locator('[data-source="client"]', {
       hasText: "I need help finding a place to stay",
     });
     await expect(clientBubble).toBeVisible();
@@ -84,7 +39,7 @@ test.describe.serial("Ticket Detail (Chat View)", () => {
 
   test("volunteer messages are right-aligned (type=sent)", async () => {
     // "I can look into shelters in your area" is a volunteer message.
-    const volBubble = page.locator(".message-sent", {
+    const volBubble = page.locator('[data-source="volunteer"]', {
       hasText: "I can look into shelters in your area",
     });
     await expect(volBubble).toBeVisible();
@@ -116,7 +71,7 @@ test.describe.serial("Ticket Detail (Chat View)", () => {
 
     // The private badge ("Only your team can see this" or similar) should
     // be inside the note.
-    const badge = note.locator(".note-badge");
+    const badge = note.locator('[data-testid="note-badge"]');
     await expect(badge).toBeVisible();
   });
 
@@ -198,20 +153,24 @@ test.describe.serial("Ticket Detail (Chat View)", () => {
     await longPress(page, note);
     await page.getByText("Edit").click();
 
-    // The note should switch to edit mode with a textarea.
-    const textarea = page.locator(".note-edit-list textarea");
+    // The note edit sheet opens as a dialog.
+    const editSheet = page.getByRole("dialog", { name: /edit note/i });
+    await expect(editSheet).toBeVisible();
+
+    const textarea = editSheet.getByRole("textbox");
     await expect(textarea).toBeVisible();
 
-    // Save and Cancel buttons should be present.
-    await expect(page.locator(".note-edit-save")).toBeVisible();
-    await expect(page.locator(".note-edit-cancel")).toBeVisible();
+    // Save button should be present (text varies: "Update" in edit mode).
+    await expect(
+      editSheet.getByRole("button", { name: /update|save/i }),
+    ).toBeVisible();
 
     // The textarea should contain the original note content.
     const value = await textarea.inputValue();
     expect(value).toContain("Client sounds stressed");
 
-    // Cancel to exit edit mode without saving.
-    await page.locator(".note-edit-cancel").click();
+    // Dismiss the sheet to exit edit mode.
+    await page.keyboard.press("Escape");
 
     // Note should be back to read mode.
     await expect(textarea).not.toBeVisible();
@@ -247,18 +206,16 @@ test.describe.serial("Ticket Detail (Chat View)", () => {
     const presetBtn = page.getByRole("link", { name: /preset/i });
     await presetBtn.click();
 
-    // Wait for preset list to appear.
-    const presetContent = page.locator(".preset-reply-content");
-    await expect(presetContent).toBeVisible();
+    // Wait for preset sheet (dialog) to appear.
+    const presetSheet = page.getByRole("dialog").last();
+    await expect(presetSheet).toBeVisible();
 
     // Click the first preset item.
-    const firstPreset = presetContent.locator("li").first();
+    const firstPreset = presetSheet.getByRole("listitem").first();
     await firstPreset.click();
 
     // The compose textarea should now contain text from the preset.
-    const textarea = page.locator(
-      ".messagebar textarea, .messagebar [contenteditable]",
-    );
+    const textarea = page.getByRole("textbox");
     const value = await textarea.inputValue();
     expect(value.length).toBeGreaterThan(0);
 
@@ -271,10 +228,6 @@ test.describe.serial("Ticket Detail (Chat View)", () => {
   test("more actions sheet shows ticket actions", async () => {
     const moreBtn = page.getByRole("button", { name: /more actions/i });
     await moreBtn.click();
-
-    // Verify key actions are present.
-    const content = page.locator(".ticket-actions-content");
-    await expect(content).toBeVisible();
 
     // "Help with housing" is assigned to me, so Release should show.
     await expect(page.getByText("Release")).toBeVisible();
@@ -294,11 +247,12 @@ test.describe.serial("Ticket Detail (Chat View)", () => {
     await page.keyboard.press("Escape");
   });
 
-  test("client alias opens client info sheet", async () => {
-    const aliasBtn = page.locator(".client-alias-btn");
+  test("client alias opens client info panel", async () => {
+    const aliasBtn = page.getByRole("button", { name: /client info/i });
     await aliasBtn.click();
 
-    await expect(page.locator(".client-info-content")).toBeVisible();
+    // Client info panel opens as a dialog.
+    await expect(page.getByRole("dialog").last()).toBeVisible();
 
     // Dismiss.
     await page.keyboard.press("Escape");
@@ -356,9 +310,7 @@ test.describe.serial("Ticket Detail (Chat View)", () => {
   // ── 15. Draft snapshot (Checkpoint 13) ──────────────────────────
 
   test("draft text preserved across navigation via snapshot", async () => {
-    const textarea = page.locator(
-      ".messagebar textarea, .messagebar [contenteditable]",
-    );
+    const textarea = page.getByRole("textbox");
     await textarea.fill("Snapshot test draft");
 
     // Navigate away.
@@ -370,15 +322,11 @@ test.describe.serial("Ticket Detail (Chat View)", () => {
     await openTicketByTitle(page, "Help with housing");
 
     // Draft should be restored.
-    const restored = await page
-      .locator(".messagebar textarea, .messagebar [contenteditable]")
-      .inputValue();
+    const restored = await page.getByRole("textbox").inputValue();
     expect(restored).toBe("Snapshot test draft");
 
     // Clear draft.
-    await page
-      .locator(".messagebar textarea, .messagebar [contenteditable]")
-      .fill("");
+    await page.getByRole("textbox").fill("");
   });
 
   // ── 16. Accessibility audit (axe-core) ──────────────────────────
@@ -403,9 +351,11 @@ test.describe.serial("Ticket Detail (Chat View)", () => {
       .locator("button", { hasText: /play|pause/i })
       .or(page.locator('[aria-label*="Play"]'));
 
-    // The voicemail may still be loading/decrypting. Wait for either
-    // the player or a loading indicator.
-    const playerOrLoading = page.locator(".voicemail-player");
+    // The voicemail may still be loading/decrypting. Wait for the
+    // player element (has role="status" while loading, role="group" when ready).
+    const playerOrLoading = page
+      .getByRole("group")
+      .or(page.getByRole("status"));
     await expect(playerOrLoading.first()).toBeVisible({
       timeout: CRYPTO_TIMEOUT,
     });
@@ -414,18 +364,15 @@ test.describe.serial("Ticket Detail (Chat View)", () => {
   // ── 18. Voicemail accessibility (Checkpoint 24) ─────────────────
 
   test("voicemail player has accessible play button and progress", async () => {
-    const player = page.locator(".voicemail-player").first();
-    await expect(player).toBeVisible();
+    // Audio player wrapper has role="group" with aria-label containing "voicemail".
+    const player = page.getByRole("group", { name: /voicemail/i }).first();
 
-    // Player should have role="group" with aria-label.
-    const groupRole = await player.getAttribute("role");
+    // Player may still be loading (role="status"). Check if the group is visible.
+    const isGroupVisible = await player.isVisible().catch(() => false);
 
-    // If still loading, it has role="status" instead. Both are acceptable.
-    expect(["group", "status"]).toContain(groupRole);
-
-    if (groupRole === "group") {
+    if (isGroupVisible) {
       // Verify play button exists with aria-label.
-      const playBtn = player.locator(".voicemail-play-btn");
+      const playBtn = player.getByRole("button", { name: /play|pause/i });
       await expect(playBtn).toBeVisible();
       const btnLabel = await playBtn.getAttribute("aria-label");
       expect(btnLabel).toBeTruthy();

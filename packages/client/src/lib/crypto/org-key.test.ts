@@ -1,218 +1,168 @@
 /**
- * Tests for OrgKeyManager.
+ * Tests for OrgKeyManager (async facade over crypto Worker).
  *
- * Uses the real @care-y/crypto WASM backend for crypto correctness.
- * Generates Curve25519 keypairs via SodiumBackend and creates sealed
- * boxes via libsodium-wrappers-sumo (devDep) for crypto_box_seal
- * (the seal direction, which SodiumBackend intentionally omits since
- * sealing is a server-side operation done via sodium-native).
+ * Uses a mock CryptoBridge since the real Worker is not available in
+ * unit tests. Verifies the facade correctly delegates to bridge methods,
+ * manages local public key state, and handles error conditions.
  */
 
-import { describe, it, expect, beforeAll, beforeEach } from "vitest";
-import { getSodium, requireSodium } from "@care-y/crypto";
-import sodium from "libsodium-wrappers-sumo";
+import { describe, it, expect, beforeAll, beforeEach, vi } from "vitest";
+import { getSodium, requireSodium, encode } from "@care-y/crypto";
 import { OrgKeyManager, OrgKeyNotLoadedError } from "./org-key.js";
+import type { CryptoBridge } from "$lib/workers/crypto-bridge.js";
 
 beforeAll(async () => {
   await getSodium();
-  await sodium.ready;
 });
+
+function createMockBridge(): CryptoBridge {
+  return {
+    orgEncrypt: vi.fn(async (plaintextB64: string) => {
+      // Simulate: seal(plaintext) -> ciphertext. Just prefix for identification.
+      return encode(new TextEncoder().encode(`sealed:${plaintextB64}`));
+    }),
+    orgDecrypt: vi.fn(async (ciphertextB64: string) => {
+      // Simulate: unseal(ciphertext) -> raw bytes as base64.
+      // Return the input ciphertext base64 as-is (identity decrypt for testing).
+      return ciphertextB64;
+    }),
+    orgDecryptBatch: vi.fn(),
+    exportOrgSecretKey: vi.fn(async () => {
+      const sodium = requireSodium();
+      const sk = sodium.randombytes_buf(32);
+      return sk.buffer as ArrayBuffer;
+    }),
+    getOrgPublicKey: vi.fn(),
+  } as unknown as CryptoBridge;
+}
 
 describe("OrgKeyManager", () => {
   let manager: OrgKeyManager;
-  let sk: Uint8Array;
+  let bridge: CryptoBridge;
   let pk: Uint8Array;
+  let pkBase64: string;
 
   beforeEach(() => {
-    manager = new OrgKeyManager();
+    bridge = createMockBridge();
+    manager = new OrgKeyManager(bridge);
     const backend = requireSodium();
-    sk = backend.randombytes_buf(backend.crypto_box_SECRETKEYBYTES);
+    const sk = backend.randombytes_buf(backend.crypto_box_SECRETKEYBYTES);
     pk = backend.crypto_scalarmult_base(sk);
+    pkBase64 = encode(pk);
   });
 
   describe("load", () => {
     it("sets isLoaded to true", () => {
       expect(manager.isLoaded).toBe(false);
-      manager.load(sk.buffer);
+      manager.load(pkBase64);
       expect(manager.isLoaded).toBe(true);
     });
 
-    it("zeros previous key when loading a replacement", () => {
-      // Create a buffer and wrap it as Uint8Array so we can observe zeroing.
-      // Loading the ArrayBuffer directly (no copy) means the manager's
-      // internal Uint8Array and our view share the same backing memory.
-      // When the manager calls memzero on the old key during replacement,
-      // our view sees the zeroed bytes.
+    it("replaces previous key on re-load", () => {
+      manager.load(pkBase64);
       const backend = requireSodium();
-      const buf = new ArrayBuffer(backend.crypto_box_SECRETKEYBYTES);
-      const view = new Uint8Array(buf);
-      view.set(sk);
-      manager.load(buf);
-
-      // Load a different key (simulates re-login without logout)
       const newSk = backend.randombytes_buf(backend.crypto_box_SECRETKEYBYTES);
-      manager.load(newSk.buffer);
+      const newPk = backend.crypto_scalarmult_base(newSk);
+      const newPkB64 = encode(newPk);
 
-      expect(view.every((b) => b === 0)).toBe(true);
-
-      manager.zero();
-    });
-  });
-
-  describe("decrypt", () => {
-    it("unseals a sealed box (roundtrip)", () => {
-      const message = new TextEncoder().encode("org branding payload");
-      const ciphertext = sodium.crypto_box_seal(message, pk);
-
-      manager.load(sk.buffer);
-      const decrypted = manager.decrypt(ciphertext);
-
-      expect(decrypted).toEqual(message);
-      manager.zero();
-    });
-
-    it("decrypts different messages with same key", () => {
-      manager.load(sk.buffer);
-
-      const msg1 = new TextEncoder().encode("branding name");
-      const msg2 = new TextEncoder().encode("branding color: #ff5733");
-
-      const ct1 = sodium.crypto_box_seal(msg1, pk);
-      const ct2 = sodium.crypto_box_seal(msg2, pk);
-
-      expect(manager.decrypt(ct1)).toEqual(msg1);
-      expect(manager.decrypt(ct2)).toEqual(msg2);
-      manager.zero();
-    });
-
-    it("throws OrgKeyNotLoadedError when key is not loaded", () => {
-      const ciphertext = sodium.crypto_box_seal(
-        new TextEncoder().encode("test"),
-        pk,
-      );
-      expect(() => manager.decrypt(ciphertext)).toThrow(OrgKeyNotLoadedError);
-    });
-
-    it("throws on wrong key (ciphertext sealed with different keypair)", () => {
-      const backend = requireSodium();
-      const wrongSk = backend.randombytes_buf(
-        backend.crypto_box_SECRETKEYBYTES,
-      );
-      const wrongPk = backend.crypto_scalarmult_base(wrongSk);
-
-      const ciphertext = sodium.crypto_box_seal(
-        new TextEncoder().encode("secret"),
-        wrongPk,
-      );
-
-      manager.load(sk.buffer);
-      expect(() => manager.decrypt(ciphertext)).toThrow();
-      manager.zero();
-    });
-
-    it("throws on truncated ciphertext", () => {
-      const message = new TextEncoder().encode("test message");
-      const ciphertext = sodium.crypto_box_seal(message, pk);
-
-      manager.load(sk.buffer);
-      const truncated = ciphertext.slice(0, Math.floor(ciphertext.length / 2));
-      expect(() => manager.decrypt(truncated)).toThrow();
-      manager.zero();
-    });
-
-    it("throws on empty ciphertext", () => {
-      manager.load(sk.buffer);
-      expect(() => manager.decrypt(new Uint8Array(0))).toThrow();
-      manager.zero();
-    });
-
-    it("throws on flipped bits in ciphertext", () => {
-      const message = new TextEncoder().encode("authentic message");
-      const ciphertext = sodium.crypto_box_seal(message, pk);
-
-      const tampered = new Uint8Array(ciphertext);
-      // Sealed box ciphertext is always >= SEALBYTES (48) bytes,
-      // so length - 1 is always a valid index.
-      const lastIdx = tampered.length - 1;
-      tampered[lastIdx] = (tampered[lastIdx] ?? 0) ^ 0x01;
-
-      manager.load(sk.buffer);
-      expect(() => manager.decrypt(tampered)).toThrow();
-      manager.zero();
+      manager.load(newPkB64);
+      expect(manager.isLoaded).toBe(true);
+      expect(manager.getPublicKey()).toEqual(newPk);
     });
   });
 
   describe("encrypt", () => {
-    it("seals plaintext with the org public key (encrypt-then-decrypt roundtrip)", () => {
-      manager.load(sk.buffer);
-
-      const plaintext = new TextEncoder().encode("My Urgent Housing Filter");
-      const ciphertext = manager.encrypt(plaintext);
-
-      // Ciphertext must differ from plaintext.
-      expect(ciphertext.length).toBeGreaterThan(plaintext.length);
-      expect(ciphertext).not.toEqual(plaintext);
-
-      // Decrypt to verify roundtrip.
-      const decrypted = manager.decrypt(ciphertext);
-      expect(decrypted).toEqual(plaintext);
-
-      manager.zero();
+    it("delegates to bridge.orgEncrypt", async () => {
+      manager.load(pkBase64);
+      const plaintext = new TextEncoder().encode("test payload");
+      await manager.encrypt(plaintext);
+      expect(bridge.orgEncrypt).toHaveBeenCalledOnce();
     });
 
-    it("produces different ciphertext each time (sealed box is non-deterministic)", () => {
-      manager.load(sk.buffer);
-
-      const plaintext = new TextEncoder().encode("same input");
-      const ct1 = manager.encrypt(plaintext);
-      const ct2 = manager.encrypt(plaintext);
-
-      // Sealed box uses an ephemeral keypair internally, so two encryptions
-      // of the same plaintext produce different ciphertext.
-      expect(ct1).not.toEqual(ct2);
-
-      // Both must decrypt to the same plaintext.
-      expect(manager.decrypt(ct1)).toEqual(plaintext);
-      expect(manager.decrypt(ct2)).toEqual(plaintext);
-
-      manager.zero();
-    });
-
-    it("throws OrgKeyNotLoadedError when key is not loaded", () => {
+    it("throws OrgKeyNotLoadedError when key is not loaded", async () => {
       const plaintext = new TextEncoder().encode("test");
-      expect(() => manager.encrypt(plaintext)).toThrow(OrgKeyNotLoadedError);
+      await expect(manager.encrypt(plaintext)).rejects.toThrow(
+        OrgKeyNotLoadedError,
+      );
     });
 
-    it("encrypts empty input", () => {
-      manager.load(sk.buffer);
+    it("returns Uint8Array result from bridge", async () => {
+      manager.load(pkBase64);
+      const plaintext = new TextEncoder().encode("test");
+      const result = await manager.encrypt(plaintext);
+      expect(result).toBeInstanceOf(Uint8Array);
+    });
+  });
 
-      const empty = new Uint8Array(0);
-      const ciphertext = manager.encrypt(empty);
-      const decrypted = manager.decrypt(ciphertext);
-      expect(decrypted).toEqual(empty);
+  describe("decrypt", () => {
+    it("delegates to bridge.orgDecrypt", async () => {
+      manager.load(pkBase64);
+      const ciphertext = new Uint8Array([1, 2, 3, 4]);
+      await manager.decrypt(ciphertext);
+      expect(bridge.orgDecrypt).toHaveBeenCalledOnce();
+    });
 
-      manager.zero();
+    it("throws OrgKeyNotLoadedError when key is not loaded", async () => {
+      const ciphertext = new TextEncoder().encode("test");
+      await expect(manager.decrypt(ciphertext)).rejects.toThrow(
+        OrgKeyNotLoadedError,
+      );
+    });
+
+    it("returns raw Uint8Array bytes from bridge response (binary-safe)", async () => {
+      manager.load(pkBase64);
+      const inputBytes = new Uint8Array([0x00, 0x89, 0x50, 0x4e, 0x47]);
+      const result = await manager.decrypt(inputBytes);
+      expect(result).toBeInstanceOf(Uint8Array);
+      // Mock returns ciphertext as-is (identity), so output equals input
+      expect(result).toEqual(inputBytes);
+    });
+  });
+
+  describe("getSecretKey", () => {
+    it("returns null when key is not loaded", async () => {
+      const result = await manager.getSecretKey();
+      expect(result).toBeNull();
+    });
+
+    it("delegates to bridge.exportOrgSecretKey when loaded", async () => {
+      manager.load(pkBase64);
+      const result = await manager.getSecretKey();
+      expect(result).toBeInstanceOf(Uint8Array);
+      expect(bridge.exportOrgSecretKey).toHaveBeenCalledOnce();
+    });
+  });
+
+  describe("getPublicKey", () => {
+    it("returns null when not loaded", () => {
+      expect(manager.getPublicKey()).toBeNull();
+    });
+
+    it("returns a copy of the public key when loaded", () => {
+      manager.load(pkBase64);
+      const result = manager.getPublicKey();
+      expect(result).toEqual(pk);
+      expect(result).not.toBe(pk);
     });
   });
 
   describe("zero", () => {
     it("clears the key and sets isLoaded to false", () => {
-      manager.load(sk.buffer);
+      manager.load(pkBase64);
       expect(manager.isLoaded).toBe(true);
 
       manager.zero();
       expect(manager.isLoaded).toBe(false);
     });
 
-    it("makes subsequent decrypt throw OrgKeyNotLoadedError", () => {
-      manager.load(sk.buffer);
+    it("makes subsequent encrypt throw OrgKeyNotLoadedError", async () => {
+      manager.load(pkBase64);
       manager.zero();
 
-      const ciphertext = sodium.crypto_box_seal(
-        new TextEncoder().encode("test"),
-        pk,
+      const plaintext = new TextEncoder().encode("test");
+      await expect(manager.encrypt(plaintext)).rejects.toThrow(
+        OrgKeyNotLoadedError,
       );
-      expect(() => manager.decrypt(ciphertext)).toThrow(OrgKeyNotLoadedError);
     });
 
     it("is idempotent (no error when called on null key)", () => {
@@ -222,7 +172,7 @@ describe("OrgKeyManager", () => {
     });
 
     it("is idempotent (no error when called twice after load)", () => {
-      manager.load(sk.buffer);
+      manager.load(pkBase64);
       manager.zero();
       expect(() => {
         manager.zero();
@@ -236,13 +186,12 @@ describe("OrgKeyManager", () => {
     });
 
     it("returns true after load", () => {
-      manager.load(sk.buffer);
+      manager.load(pkBase64);
       expect(manager.isLoaded).toBe(true);
-      manager.zero();
     });
 
     it("returns false after zero", () => {
-      manager.load(sk.buffer);
+      manager.load(pkBase64);
       manager.zero();
       expect(manager.isLoaded).toBe(false);
     });
