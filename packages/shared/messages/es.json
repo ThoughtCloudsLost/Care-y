@@ -234,6 +234,13 @@
   "auth_password_placeholder": "Ingresa tu contraseña",
   "auth_signing_in": "Iniciando sesión...",
   "auth_invalid_credentials": "Usuario o contraseña incorrectos",
+  "auth_phase_auth": "Verificando credenciales...",
+  "auth_phase_argon2id": "Derivando claves de cifrado...",
+  "auth_phase_oprf": "Verificando con el servidor de seguridad...",
+  "auth_phase_pow": "Completando verificación...",
+  "auth_phase_derive": "Desbloqueando tus claves...",
+  "auth_phase_done": "Listo",
+  "auth_login_error": "Error de inicio de sesión. Inténtalo de nuevo.",
 
   "tickets_title": "Tickets",
   "tickets_status_new": "nuevo",

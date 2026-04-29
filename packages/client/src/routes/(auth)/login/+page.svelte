@@ -1,43 +1,144 @@
 <script lang="ts">
+  import { browser } from "$app/environment";
   import { goto } from "$app/navigation";
   import { resolve } from "$app/paths";
-  import { Page, Navbar, Block, List, ListInput, Button } from "konsta/svelte";
+  import { List, ListInput, Button } from "konsta/svelte";
   import * as m from "$lib/paraglide/messages.js";
-  import { trpc } from "$lib/trpc";
+  import { trpc } from "$lib/trpc/index.js";
+  import { getCryptoBridge, getOrgKeyManager } from "$lib/crypto/context.js";
+  import { setOrgKeyReady } from "$lib/crypto/org-key-ready.svelte.js";
+  import { installCleanupHandler } from "$lib/auth/cleanup.js";
+  import { loginCrypto } from "$lib/auth/login-crypto.js";
+  import { solveProofOfWork } from "$lib/auth/pow-solver.js";
+  import { announceToLiveRegion } from "$lib/utils/announce.js";
+  import KeyDerivation, {
+    type LoginPhaseId,
+  } from "$lib/components/onboarding/KeyDerivation.svelte";
+  import type { LoginCryptoCallbacks } from "$lib/auth/login-crypto.js";
 
   let identifier = $state("");
   let password = $state("");
+  /* eslint-disable @typescript-eslint/no-unsafe-assignment -- $state<union> rune proxy; type is correct */
+  let phase = $state<LoginPhaseId>("idle");
+  /* eslint-enable @typescript-eslint/no-unsafe-assignment */
   let error = $state("");
-  let loading = $state(false);
+
+  function getPhaseLabel(p: LoginPhaseId): string {
+    switch (p) {
+      case "auth":
+        return m.auth_phase_auth();
+      case "argon2id":
+        return m.auth_phase_argon2id();
+      case "oprf":
+        return m.auth_phase_oprf();
+      case "pow":
+        return m.auth_phase_pow();
+      case "derive":
+        return m.auth_phase_derive();
+      case "done":
+        return m.auth_phase_done();
+      default:
+        return "";
+    }
+  }
+
+  const phaseLabel = $derived(getPhaseLabel(phase));
+  const isSubmitting = $derived(phase !== "idle" && phase !== "error");
+
+  // Redirect authenticated users away from /login
+  if (browser) {
+    void trpc.auth.me
+      .query()
+      .then(() => {
+        void goto(resolve("/"));
+      })
+      .catch(() => {
+        // 401: expected, stay on login page
+      });
+  }
 
   async function handleSubmit(e: SubmitEvent): Promise<void> {
     e.preventDefault();
     error = "";
-    loading = true;
+    phase = "auth";
+
+    const bridge = getCryptoBridge();
+    const orgKeyManager = getOrgKeyManager();
 
     try {
+      // 1. Server-side credential verification + session cookie
       await trpc.auth.login.mutate({ identifier, password });
+
+      // 2. Full crypto pipeline in the Worker
+      const noop = (): void => {
+        /* protocol-required callback, no action needed */
+      };
+      const callbacks: LoginCryptoCallbacks = {
+        onArgon2idStart: () => {
+          phase = "argon2id";
+          announceToLiveRegion("polite", m.auth_phase_argon2id());
+        },
+        onArgon2idDone: noop,
+        onOprfStart: () => {
+          phase = "oprf";
+        },
+        onOprfDone: noop,
+        onDeriveStart: () => {
+          phase = "derive";
+          announceToLiveRegion("polite", m.auth_phase_derive());
+        },
+        onDone: noop,
+        onPowRequired: async (challenge, difficulty) => {
+          phase = "pow";
+          announceToLiveRegion("polite", m.auth_phase_pow());
+          return solveProofOfWork(challenge, difficulty);
+        },
+      };
+
+      const result = await loginCrypto(identifier, password, bridge, callbacks);
+
+      // 3. Load org key if available
+      if (result.orgPublicKey !== null) {
+        orgKeyManager.load(result.orgPublicKey);
+        setOrgKeyReady(true);
+      }
+
+      // 4. Install cleanup handler for key zeroing on unload
+      installCleanupHandler(bridge, orgKeyManager);
+
+      phase = "done";
+
+      // 5. Navigate to app
       await goto(resolve("/"));
-    } catch {
-      error = m.auth_invalid_credentials();
-    } finally {
-      loading = false;
+    } catch (caught: unknown) {
+      phase = "error";
+      const msg = caught instanceof Error ? caught.message : String(caught);
+      if (msg.includes("Invalid") || msg.includes("credentials")) {
+        error = m.auth_invalid_credentials();
+      } else {
+        error = m.auth_login_error();
+      }
+      announceToLiveRegion("assertive", error);
     }
   }
 </script>
 
-<Page>
-  <Navbar title={m.auth_sign_in()} />
+<div class="text-center mb-6">
+  <h1 class="text-2xl font-bold">CARE-Y</h1>
+  <p class="mt-1 text-sm opacity-60">{m.auth_sign_in_continue()}</p>
+</div>
 
-  <Block class="mt-8 text-center">
-    <h1 class="text-2xl font-bold">CARE-Y</h1>
-    <p class="mt-1 text-sm opacity-60">{m.auth_sign_in_continue()}</p>
-  </Block>
-
-  {#if error}
-    <Block class="mt-2">
-      <p role="alert" class="text-center text-red-600 text-sm">{error}</p>
-    </Block>
+{#if phase !== "idle" && phase !== "error"}
+  <KeyDerivation {phase} {phaseLabel} />
+{:else}
+  {#if error !== ""}
+    <p
+      role="alert"
+      class="text-center text-sm mb-4"
+      style="color: var(--error, #dc2626)"
+    >
+      {error}
+    </p>
   {/if}
 
   <form onsubmit={handleSubmit}>
@@ -61,14 +162,14 @@
       />
     </List>
 
-    <Block class="mt-4">
+    <div class="mt-4">
       <Button
         large
         type="submit"
-        disabled={loading || !identifier || !password}
+        disabled={isSubmitting || !identifier || !password}
       >
-        {loading ? m.auth_signing_in() : m.auth_sign_in()}
+        {m.auth_sign_in()}
       </Button>
-    </Block>
+    </div>
   </form>
-</Page>
+{/if}

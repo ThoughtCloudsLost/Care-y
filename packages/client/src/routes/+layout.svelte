@@ -1,20 +1,13 @@
 <script lang="ts">
   import "../app.css";
   import { QueryClient, QueryClientProvider } from "@tanstack/svelte-query";
-  import { goto } from "$app/navigation";
-  import { resolve } from "$app/paths";
-  import { page } from "$app/state";
   import { onMount } from "svelte";
   import { browser } from "$app/environment";
   import favicon from "$lib/assets/favicon.svg";
   import { initKeyboardViewport } from "$lib/utils/keyboard-viewport";
   import { getBrandingTitle } from "$lib/branding/title.svelte.js";
   import CryptoProvider from "$lib/providers/CryptoProvider.svelte";
-  import SSEProvider from "$lib/providers/SSEProvider.svelte";
-  import BrandingProvider from "$lib/providers/BrandingProvider.svelte";
   import ThemeProvider from "$lib/providers/ThemeProvider.svelte";
-  import AppShell from "$lib/shell/AppShell.svelte";
-  import type { TabId } from "$lib/shell/types";
 
   let { children } = $props();
 
@@ -25,36 +18,6 @@
       },
     },
   });
-
-  // Derive active tab from the current URL path.
-  // "more" is a menu trigger (not a route), so it has no entry here.
-  type TabRoute = "/" | "/tickets" | "/library";
-
-  const TAB_ROUTES = new Map<TabId, TabRoute>([
-    ["home", "/"],
-    ["tickets", "/tickets"],
-    ["library", "/library"],
-  ]);
-
-  const TAB_PREFIXES: [string, TabId][] = [
-    ["/tickets", "tickets"],
-    ["/library", "library"],
-  ];
-
-  const activeTab: TabId = $derived.by(() => {
-    const path = page.url.pathname;
-    for (const [prefix, tab] of TAB_PREFIXES) {
-      if (path === prefix || path.startsWith(prefix + "/")) return tab;
-    }
-    return "home";
-  });
-
-  function handleTabChange(tabId: TabId): void {
-    const route = TAB_ROUTES.get(tabId);
-    if (route !== undefined && page.url.pathname !== route) {
-      void goto(resolve(route));
-    }
-  }
 
   onMount(() => {
     if (!browser) return;
@@ -91,19 +54,9 @@
 
 <QueryClientProvider client={queryClient}>
   <CryptoProvider>
-    <SSEProvider>
-      <BrandingProvider>
-        <ThemeProvider>
-          <AppShell
-            {activeTab}
-            orgName={getBrandingTitle()}
-            ontabchange={handleTabChange}
-          >
-            {@render children()}
-          </AppShell>
-        </ThemeProvider>
-      </BrandingProvider>
-    </SSEProvider>
+    <ThemeProvider>
+      {@render children()}
+    </ThemeProvider>
   </CryptoProvider>
 </QueryClientProvider>
 
