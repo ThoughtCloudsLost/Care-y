@@ -56,6 +56,14 @@ vi.mock("@tanstack/svelte-query", () => ({
       data: undefined,
     };
   },
+  createMutation: () => ({
+    mutate: vi.fn(),
+    mutateAsync: vi.fn(),
+    isPending: false,
+    isError: false,
+    error: null,
+    reset: vi.fn(),
+  }),
 }));
 
 vi.mock("$lib/trpc/index.js", () => ({
@@ -67,6 +75,9 @@ vi.mock("$lib/trpc/index.js", () => ({
       listVolunteers: { query: vi.fn().mockResolvedValue([]) },
       assignTo: { mutate: vi.fn().mockResolvedValue({}) },
       createFollowUp: { mutate: vi.fn().mockResolvedValue({}) },
+      create: { mutate: vi.fn().mockResolvedValue({}) },
+      listQueues: { query: vi.fn().mockResolvedValue([]) },
+      searchClients: { query: vi.fn().mockResolvedValue([]) },
       counts: {
         query: vi.fn().mockResolvedValue({ new: 0, active: 0, onHold: 0 }),
       },

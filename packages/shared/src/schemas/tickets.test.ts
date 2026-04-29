@@ -101,12 +101,19 @@ describe("followUpTypeSchema", () => {
 });
 
 describe("createTicketInputSchema", () => {
+  const validKeyWrap = {
+    ephemeralPoint: VALID_BASE64,
+    nonce: VALID_BASE64,
+    wrappedKey: VALID_BASE64,
+  };
+
   const validInput = {
     queueId: VALID_UUID,
     clientId: VALID_UUID_2,
     encryptedTitle: VALID_BASE64,
     encryptedDescription: VALID_BASE64,
     keyGeneration: VALID_UUID,
+    keyWrap: validKeyWrap,
   };
 
   it("accepts valid input with default priority", () => {
