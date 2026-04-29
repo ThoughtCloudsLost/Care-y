@@ -12,7 +12,7 @@
   import { announceToLiveRegion } from "$lib/utils/announce.js";
   import { RouterNotAvailableError } from "$lib/errors.js";
   import ShellSheet from "$lib/shell/ShellSheet.svelte";
-  import SoftButton from "$lib/components/SoftButton.svelte";
+  import SoftButton from "$lib/components/inputs/SoftButton.svelte";
   import type { SerializedBuffer } from "$lib/utils/buffer-encoding.js";
 
   interface QueueEditorProps {
@@ -126,11 +126,11 @@
 
   const isPending = $derived(createMut.isPending || updateMut.isPending);
 
-  function handleSubmit(): void {
+  async function handleSubmit(): Promise<void> {
     if (!canSubmit || isPending) return;
 
     const plainBytes = textEncoder.encode(queueName.trim());
-    const cipherBytes = orgKeyManager.encrypt(plainBytes);
+    const cipherBytes = await orgKeyManager.encrypt(plainBytes);
     const encryptedName = uint8ArrayToBase64(cipherBytes);
     const days = parsedEscalationDays;
 

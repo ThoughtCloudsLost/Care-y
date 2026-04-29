@@ -68,7 +68,7 @@ function createDeps(
       items,
       nextCursor: null,
     })),
-    decryptOrg: (cacheKey: string, ciphertext: unknown) => {
+    decryptOrg: async (cacheKey: string, ciphertext: unknown) => {
       const match = /^kb-search:(a\d+):(title|excerpt)$/.exec(cacheKey);
       if (!match) return null;
       const [, id, field] = match;
@@ -170,7 +170,7 @@ describe("createKbSearchProvider", () => {
         items: manyItems,
         nextCursor: null,
       })),
-      decryptOrg: (cacheKey) => {
+      decryptOrg: async (cacheKey) => {
         const match = /^kb-search:(a\d+):(title|excerpt)$/.exec(cacheKey);
         if (!match) return null;
         const [, id, field] = match;
@@ -245,7 +245,7 @@ describe("createKbSearchProvider", () => {
           nextCursor: null,
         };
       }),
-      decryptOrg: (cacheKey) => {
+      decryptOrg: async (cacheKey) => {
         const match = /^kb-search:(a\d+):(title|excerpt)$/.exec(cacheKey);
         if (!match) return null;
         const [, id, field] = match;
@@ -272,7 +272,7 @@ describe("createKbSearchProvider", () => {
         items: [makeRawItem({ id: "a1" }), makeRawItem({ id: "fail-item" })],
         nextCursor: null,
       })),
-      decryptOrg: (cacheKey) => {
+      decryptOrg: async (cacheKey) => {
         const match = /^kb-search:(.+?):(title|excerpt)$/.exec(cacheKey);
         if (!match) return null;
         const [, id, field] = match;
@@ -298,7 +298,7 @@ describe("createKbSearchProvider", () => {
         items: [makeRawItem({ id: "a1", encryptedExcerpt: null })],
         nextCursor: null,
       })),
-      decryptOrg: (cacheKey, ciphertext) => {
+      decryptOrg: async (cacheKey, ciphertext) => {
         if (ciphertext === null) return null;
         const match = /^kb-search:(a\d+):(title|excerpt)$/.exec(cacheKey);
         if (!match) return null;
@@ -357,7 +357,7 @@ describe("KB fullSearch (body content)", () => {
           encryptedBody: new Uint8Array([99]),
         })),
       ),
-      decryptOrg: (cacheKey: string, ciphertext: unknown) => {
+      decryptOrg: async (cacheKey: string, ciphertext: unknown) => {
         if (ciphertext === null) return null;
         const match = /^kb-search:(.+?):(title|excerpt|body)$/.exec(cacheKey);
         if (!match) return null;
@@ -479,7 +479,7 @@ describe("KB fullSearch (body content)", () => {
     // Let's test with a query that matches all three
     const allMatchDeps: KBSearchProviderDeps = {
       ...createFullSearchDeps(),
-      decryptOrg: (cacheKey: string, ciphertext: unknown) => {
+      decryptOrg: async (cacheKey: string, ciphertext: unknown) => {
         if (ciphertext === null) return null;
         const match = /^kb-search:(.+?):(title|excerpt|body)$/.exec(cacheKey);
         if (!match) return null;

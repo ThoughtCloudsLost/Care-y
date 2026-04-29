@@ -318,6 +318,7 @@
 
 <div
   class="swipeable-card"
+  data-testid="ticket-card"
   role="group"
   onpointerdown={handlePointerDown}
   onpointermove={handlePointerMove}

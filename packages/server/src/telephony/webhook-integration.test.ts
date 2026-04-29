@@ -271,16 +271,32 @@ describe.skipIf(!process.env.DATABASE_URL)(
     let dedupStore: ReturnType<typeof createDedupStore>;
 
     beforeAll(async () => {
+      // Initialize sodium (required by @care-y/crypto before sync crypto ops)
+      const { getSodium } = await import("@care-y/crypto");
+      await getSodium();
+
       // 1. Create isolated test schema (fast, designed for concurrent use)
       testDb = await createTestDb();
       tDb = testDb.db;
 
-      // 2. Insert default org_config row (createTestDb runs migrations but
-      //    doesn't insert the default row; that's done by createOrg in production).
-      //    Then seed the org_public_key so sealed box encryption works.
+      // 2. Insert default org_config row with intake_queue_id.
+      //    createTestDb runs migrations but doesn't insert the default row;
+      //    that's done by createOrg in production.
+      const intakeQueue = await tDb
+        .insertInto("queues")
+        .values({
+          encrypted_name: Buffer.from("Intake"),
+          sort_order: 1,
+        })
+        .returning("id")
+        .executeTakeFirstOrThrow();
+
       await tDb
         .insertInto("org_config")
-        .values({ pii_retention_days: null })
+        .values({
+          pii_retention_days: null,
+          intake_queue_id: intakeQueue.id,
+        })
         .execute();
       await seedOrgPublicKey(tDb);
 
@@ -577,15 +593,30 @@ describe.skipIf(!process.env.DATABASE_URL)(
       expect(clientRow).toBeDefined();
       expect(clientRow!.alias).toBeTruthy(); // auto-generated pseudonym
 
-      // --- Assert: blob store received encrypted body (not plaintext) ---
-      expect(blobStore.storedBlobs.length).toBeGreaterThanOrEqual(1);
-      const storedBlob = blobStore.storedBlobs[0]!;
-      expect(storedBlob.category).toBe("attachment");
-      // The blob must NOT contain plaintext message content
-      expect(storedBlob.blob.toString("utf-8")).not.toContain(messageText);
-      // Sealed box: plaintext (29 bytes) + 48 bytes overhead
-      expect(storedBlob.blob.length).toBeGreaterThanOrEqual(
-        48 + messageText.length,
+      // --- Assert: ticket created for this client ---
+      const tickets = await tDb
+        .selectFrom("tickets")
+        .selectAll()
+        .where("client_id", "=", clientRow!.id)
+        .execute();
+      expect(tickets).toHaveLength(1);
+      expect(tickets[0]!.status).toBe("open");
+
+      // --- Assert: follow-up created with ECIES-encrypted content ---
+      const followups = await tDb
+        .selectFrom("followups")
+        .selectAll()
+        .where("ticket_id", "=", tickets[0]!.id)
+        .where("type", "=", "sms_inbound")
+        .execute();
+      expect(followups).toHaveLength(1);
+      // Encrypted content must NOT contain plaintext
+      expect(followups[0]!.encrypted_content.toString("utf-8")).not.toContain(
+        messageText,
+      );
+      // Content is encrypted with crypto_secretbox: nonce(24) + ciphertext(plaintext + MAC(16))
+      expect(followups[0]!.encrypted_content.length).toBeGreaterThanOrEqual(
+        24 + 16 + messageText.length,
       );
     });
 
@@ -635,6 +666,23 @@ describe.skipIf(!process.env.DATABASE_URL)(
         .execute();
 
       expect(clientRows).toHaveLength(1);
+
+      // Still one ticket (existing open ticket reused)
+      const tickets = await tDb
+        .selectFrom("tickets")
+        .selectAll()
+        .where("client_id", "=", clientRows[0]!.id)
+        .execute();
+      expect(tickets).toHaveLength(1);
+
+      // But two follow-ups (one per SMS)
+      const followups = await tDb
+        .selectFrom("followups")
+        .selectAll()
+        .where("ticket_id", "=", tickets[0]!.id)
+        .where("type", "=", "sms_inbound")
+        .execute();
+      expect(followups).toHaveLength(2);
     });
 
     it("invalid signature is rejected before any DB writes occur", async () => {

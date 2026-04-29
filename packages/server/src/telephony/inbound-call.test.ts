@@ -52,6 +52,7 @@ function createMockClientRepo(): ClientRepository {
       isNew: true,
     }),
     findById: vi.fn(),
+    findByPhoneId: vi.fn().mockResolvedValue(null),
   };
 }
 

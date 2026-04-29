@@ -27,7 +27,7 @@
   import { RouterNotAvailableError } from "$lib/errors.js";
   import QueryError from "$lib/components/QueryError.svelte";
   import DecryptPlaceholder from "$lib/components/DecryptPlaceholder.svelte";
-  import SoftButton from "$lib/components/SoftButton.svelte";
+  import SoftButton from "$lib/components/inputs/SoftButton.svelte";
   import { ErrorCode } from "@care-y/shared";
   import ShellDialog from "$lib/shell/ShellDialog.svelte";
   import ShellSheet from "$lib/shell/ShellSheet.svelte";

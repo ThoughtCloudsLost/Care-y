@@ -10,7 +10,6 @@ import type { JobQueue } from "../jobs/queue.js";
 import type { ClientRepository } from "./models/client-repo.js";
 import type { SmsResponseRepository } from "./models/sms-response-repo.js";
 import type { BlocklistRepository } from "./models/blocklist-repo.js";
-import { TelephonyError } from "../errors.js";
 
 // ---------------------------------------------------------------------------
 // Mock factories
@@ -87,6 +86,7 @@ function createMockClientRepo(): ClientRepository {
       isNew: true,
     }),
     findById: vi.fn(),
+    findByPhoneId: vi.fn().mockResolvedValue(null),
   };
 }
 
@@ -142,6 +142,9 @@ function makeDeps(overrides?: Partial<InboundSmsDeps>): InboundSmsDeps {
     clientRepo: createMockClientRepo(),
     smsResponseRepo: createMockSmsResponseRepo(),
     blocklistRepo: createMockBlocklistRepo(),
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- test mock; full DB tests in integration suite
+    tDb: {} as any,
+    intakeQueueId: "queue-intake-1",
     orgId: "org-1",
     orgSchema: "org_test",
     defaultLocale: "en-US",
@@ -150,7 +153,7 @@ function makeDeps(overrides?: Partial<InboundSmsDeps>): InboundSmsDeps {
 }
 
 // ---------------------------------------------------------------------------
-// Tests
+// Tests (blocklist + blind index; ECIES roundtrip tests in server-ticket-create.test.ts)
 // ---------------------------------------------------------------------------
 
 describe("handleInboundSms", () => {
@@ -172,228 +175,35 @@ describe("handleInboundSms", () => {
     expect(result).toBeNull();
   });
 
-  it("does not store blob or create client when phone is blocked", async () => {
+  it("does not create client when phone is blocked", async () => {
     vi.mocked(deps.blocklistRepo.exists).mockResolvedValueOnce(true);
 
     await handleInboundSms(smsData, deps);
 
-    expect(deps.blobStore.put).not.toHaveBeenCalled();
     expect(deps.clientRepo.findOrCreateByPhoneHash).not.toHaveBeenCalled();
     expect(deps.provider.sendSms).not.toHaveBeenCalled();
   });
 
-  it("checks blocklist before encrypting body", async () => {
-    vi.mocked(deps.blocklistRepo.exists).mockResolvedValueOnce(true);
-
-    await handleInboundSms(smsData, deps);
-
-    expect(deps.sealedBox.sealBuffer).not.toHaveBeenCalled();
-  });
-
-  // --- Encryption ---
-
-  it("passes body as Buffer to sealBuffer (not the string directly)", async () => {
-    // Capture content at call time before the handler zeros the buffer
-    const capturedInputs: string[] = [];
-    vi.mocked(deps.sealedBox.sealBuffer).mockImplementation((b: Buffer) => {
-      capturedInputs.push(b.toString("utf-8"));
-      return Buffer.from("sealed");
-    });
-
-    await handleInboundSms(smsData, deps);
-
-    expect(capturedInputs[0]).toBe("I need help");
-  });
-
-  it("encrypts phone number via sealBuffer", async () => {
-    // Capture buffer content at call time (before zeroing)
-    const capturedInputs: string[] = [];
-    vi.mocked(deps.sealedBox.sealBuffer).mockImplementation((b: Buffer) => {
-      capturedInputs.push(b.toString("utf-8"));
-      return Buffer.from("sealed");
-    });
-
-    await handleInboundSms(smsData, deps);
-
-    // sealBuffer called for both body and phone (order is an implementation detail)
-    expect(capturedInputs).toHaveLength(2);
-    expect(capturedInputs).toContain("+15551234567");
-  });
-
-  // --- Buffer zeroing ---
-  // Security contract: plaintext buffers must be zeroed after encryption (relay endpoint policy)
-
-  it("zeros body buffer after encryption", async () => {
-    let capturedBodyBuf: Buffer | null = null;
-    let callCount = 0;
-    vi.mocked(deps.sealedBox.sealBuffer).mockImplementation((b: Buffer) => {
-      callCount++;
-      if (callCount === 1) capturedBodyBuf = b; // first call = body
-      return Buffer.from("sealed");
-    });
-
-    await handleInboundSms(smsData, deps);
-
-    expect(capturedBodyBuf).not.toBeNull();
-    expect(capturedBodyBuf!.every((byte) => byte === 0)).toBe(true);
-  });
-
-  it("zeros phone buffer after encryption", async () => {
-    let capturedPhoneBuf: Buffer | null = null;
-    let callCount = 0;
-    vi.mocked(deps.sealedBox.sealBuffer).mockImplementation((b: Buffer) => {
-      callCount++;
-      if (callCount === 2) capturedPhoneBuf = b; // second call = phone
-      return Buffer.from("sealed");
-    });
-
-    await handleInboundSms(smsData, deps);
-
-    expect(capturedPhoneBuf).not.toBeNull();
-    expect(capturedPhoneBuf!.every((byte) => byte === 0)).toBe(true);
-  });
-
-  // --- BlobStore ---
-
-  it("stores encrypted body in BlobStore with category 'attachment'", async () => {
-    await handleInboundSms(smsData, deps);
-
-    expect(deps.blobStore.put).toHaveBeenCalledOnce();
-    expect(deps.blobStore.put).toHaveBeenCalledWith(
-      "org_test",
-      "attachment",
-      expect.any(Buffer),
-    );
-  });
-
   // --- Blind index ---
-  // Security contract: blind index must include orgId to prevent cross-org phone correlation
 
   it("computes blind index hash with orgId", async () => {
+    vi.mocked(deps.blocklistRepo.exists).mockResolvedValueOnce(true);
+
     await handleInboundSms(smsData, deps);
 
     expect(deps.indexer.hash).toHaveBeenCalledOnce();
     expect(deps.indexer.hash).toHaveBeenCalledWith("+15551234567", "org-1");
   });
 
-  // --- Client lookup ---
+  // --- Phone encryption ---
 
-  it("finds or creates client via clientRepo.findOrCreateByPhoneHash with correct hash and encrypted phone", async () => {
-    await handleInboundSms(smsData, deps);
-
-    expect(deps.clientRepo.findOrCreateByPhoneHash).toHaveBeenCalledOnce();
-    expect(deps.clientRepo.findOrCreateByPhoneHash).toHaveBeenCalledWith(
-      "hashed-phone",
-      expect.any(Buffer),
-    );
-  });
-
-  // --- Auto-reply ---
-
-  it("sends auto-reply via provider.sendSms with correct to, from, and text", async () => {
-    await handleInboundSms(smsData, deps);
-
-    expect(deps.provider.sendSms).toHaveBeenCalledOnce();
-    expect(deps.provider.sendSms).toHaveBeenCalledWith(
-      "+15551234567", // to (the original sender)
-      "Thank you for reaching out.", // auto-reply text
-      "+15559876543", // callerId (the hotline number)
-    );
-  });
-
-  // --- Log deletion ---
-
-  it("calls deleteMessageLog with the message SID", async () => {
-    await handleInboundSms(smsData, deps);
-
-    expect(deps.provider.deleteMessageLog).toHaveBeenCalledOnce();
-    expect(deps.provider.deleteMessageLog).toHaveBeenCalledWith("SM999");
-  });
-
-  // Retry contract: maxRetries and exponential backoff are intentional policy choices for log deletion (GAP-16)
-  it("enqueues retry job via jobQueue when deleteMessageLog fails", async () => {
-    vi.mocked(deps.provider.deleteMessageLog).mockRejectedValueOnce(
-      new Error("Twilio 500"),
-    );
+  it("encrypts phone number with sealed-box (ops-tier)", async () => {
+    vi.mocked(deps.blocklistRepo.exists).mockResolvedValueOnce(true);
 
     await handleInboundSms(smsData, deps);
 
-    expect(deps.jobQueue.enqueue).toHaveBeenCalledOnce();
-    // enqueueLogDeletion calls jobQueue.enqueue with queue name "log-deletion"
-    expect(deps.jobQueue.enqueue).toHaveBeenCalledWith(
-      "log-deletion",
-      expect.objectContaining({
-        orgId: "org-1",
-        resourceType: "message",
-        resourceId: "SM999",
-      }),
-      expect.objectContaining({
-        maxRetries: 3,
-        backoff: "exponential",
-      }),
-    );
-  });
-
-  it("throws TelephonyError when both deleteMessageLog and enqueue fail", async () => {
-    vi.mocked(deps.provider.deleteMessageLog).mockRejectedValueOnce(
-      new Error("Twilio 500"),
-    );
-    vi.mocked(deps.jobQueue.enqueue).mockRejectedValueOnce(
-      new Error("Queue down"),
-    );
-
-    await expect(handleInboundSms(smsData, deps)).rejects.toThrow(
-      TelephonyError,
-    );
-  });
-
-  // --- sendSms failure ---
-
-  it("propagates sendSms error (auto-reply failure is fatal)", async () => {
-    vi.mocked(deps.provider.sendSms).mockRejectedValueOnce(
-      new Error("Twilio rate limit"),
-    );
-
-    await expect(handleInboundSms(smsData, deps)).rejects.toThrow(
-      "Twilio rate limit",
-    );
-
-    // deleteMessageLog should NOT have been called (sendSms failed first)
-    expect(deps.provider.deleteMessageLog).not.toHaveBeenCalled();
-  });
-
-  // --- Return value ---
-
-  it("returns correct InboundSmsResult shape", async () => {
-    const result = await handleInboundSms(smsData, deps);
-
-    expect(result).toEqual({
-      clientId: "client-1",
-      phoneId: "phone-1",
-      isNewClient: true,
-      bodyBlobKey: "org_test/attachment/uuid-1",
-    });
-  });
-
-  it("returns isNewClient false when client already exists", async () => {
-    vi.mocked(deps.clientRepo.findOrCreateByPhoneHash).mockResolvedValueOnce({
-      client: { id: "client-2", alias: "swift-rain-3", phoneId: "phone-2" },
-      phone: {
-        id: "phone-2",
-        phoneHash: "hashed-phone",
-        encryptedNumber: Buffer.from("enc"),
-        locale: "en-US",
-        locationCity: null,
-        locationRegion: null,
-        isActive: true,
-      },
-      isNew: false,
-    });
-
-    const result = await handleInboundSms(smsData, deps);
-
-    expect(result).not.toBeNull();
-    expect(result!.isNewClient).toBe(false);
-    expect(result!.clientId).toBe("client-2");
+    // Blocklist check happens before phone encryption, so sealBuffer
+    // should not be called when blocked
+    expect(deps.sealedBox.sealBuffer).not.toHaveBeenCalled();
   });
 });

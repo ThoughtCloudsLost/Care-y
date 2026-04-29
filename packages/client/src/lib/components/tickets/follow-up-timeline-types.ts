@@ -16,6 +16,10 @@ export interface TimelineItem {
   fullPosition?: number;
   totalCount?: number;
   noteTypeId: string | null;
+  callStatus: string | null;
+  callDurationSeconds: number | null;
+  /** Non-null when this follow-up was encrypted with tk_temp (needs re-wrap). */
+  keyGeneration: string | null;
 }
 
 /** Follow-up record for expanded timeline entries. */
@@ -32,4 +36,12 @@ export interface ClusterRecord {
   hasImage: boolean;
   hasFile: boolean;
   noteTypeId: string | null;
+  /** Non-null when this follow-up was encrypted with tk_temp (needs re-wrap). */
+  keyGeneration: string | null;
+  /** ECIES key wrap for tk_temp decryption. Present only when keyGeneration is non-null. */
+  keyWrap: {
+    ephemeralPoint: { type: "Buffer"; data: number[] } | string;
+    nonce: { type: "Buffer"; data: number[] } | string;
+    wrappedKey: { type: "Buffer"; data: number[] } | string;
+  } | null;
 }

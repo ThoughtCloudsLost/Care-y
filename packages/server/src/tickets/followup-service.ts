@@ -6,10 +6,11 @@
  * volunteer per ticket). See ReadCursorService.
  */
 
-import type { Kysely } from "kysely";
+import type { Kysely, SelectQueryBuilder } from "kysely";
 import type { TenantDatabase } from "../db/types.js";
 import type { TicketAccessChecker } from "./access.js";
 import { ForbiddenError, NotFoundError } from "../errors.js";
+import { mediaExistsSelects } from "./query-helpers.js";
 import {
   ErrorCode,
   getAllowedRoleIds,
@@ -17,6 +18,12 @@ import {
 } from "@care-y/shared";
 import { REACTION_TYPES } from "@care-y/shared";
 import type { ReactionSummary, ReactionType } from "@care-y/shared";
+
+export interface FollowUpKeyWrap {
+  readonly ephemeralPoint: Buffer;
+  readonly nonce: Buffer;
+  readonly wrappedKey: Buffer;
+}
 
 export interface FollowUpRecord {
   readonly id: string;
@@ -32,6 +39,11 @@ export interface FollowUpRecord {
   readonly hasImage: boolean;
   readonly hasFile: boolean;
   readonly noteTypeId: string | null;
+  readonly callSid: string | null;
+  readonly callStatus: string | null;
+  readonly callDurationSeconds: number | null;
+  readonly keyGeneration: string | null;
+  readonly keyWrap: FollowUpKeyWrap | null;
   readonly fullPosition?: number;
   readonly totalCount?: number;
 }
@@ -44,6 +56,9 @@ export interface CreateFollowUpInput {
   readonly isPrivate: boolean;
   readonly mentionedPseudonyms: string[];
   readonly noteTypeId?: string;
+  readonly callSid?: string;
+  readonly callStatus?: string;
+  readonly callDurationSeconds?: number;
 }
 
 /** Lightweight follow-up for timeline rendering. Plain messages omit encryptedContent. */
@@ -61,6 +76,9 @@ export interface FollowUpSummaryRecord {
   readonly hasImage: boolean;
   readonly hasFile: boolean;
   readonly noteTypeId: string | null;
+  readonly callStatus: string | null;
+  readonly callDurationSeconds: number | null;
+  readonly keyGeneration: string | null;
   readonly fullPosition?: number;
   readonly totalCount?: number;
 }
@@ -132,24 +150,65 @@ export interface FollowUpService {
   getReactions(followUpIds: string[]): Promise<Map<string, ReactionSummary[]>>;
 }
 
-function toRecord(row: {
-  id: string;
-  ticket_id: string;
-  source: string;
-  type: string;
-  is_private: boolean;
-  mentioned_pseudonyms: string[];
-  encrypted_content: Buffer;
-  created_by: string | null;
-  deleted_at: Date | null;
-  created_at: Date;
-  note_type_id?: string | null;
-  has_recording?: boolean | number;
-  has_image?: boolean | number;
-  has_file?: boolean | number;
-  full_position?: string | number | bigint;
-  total_count?: string | number | bigint;
-}): FollowUpRecord {
+/**
+ * Batch-fetch per-follow-up ECIES key wraps for rows with non-null key_generation.
+ * Returns a Map keyed by key_generation UUID. Only wraps for the requesting
+ * volunteer (userId) are returned, matching the single-user decrypt use case.
+ */
+async function fetchFollowUpKeyWraps(
+  db: Kysely<TenantDatabase>,
+  userId: string,
+  rows: readonly { key_generation?: string | null }[],
+): Promise<Map<string, FollowUpKeyWrap>> {
+  const keyGens = rows
+    .map((r) => r.key_generation)
+    .filter((kg): kg is string => kg !== null && kg !== undefined);
+
+  if (keyGens.length === 0) return new Map();
+
+  const wraps = await db
+    .selectFrom("ticket_key_wraps")
+    .select(["key_generation", "ephemeral_point", "nonce", "wrapped_key"])
+    .where("volunteer_id", "=", userId)
+    .where("key_generation", "in", keyGens)
+    .execute();
+
+  const result = new Map<string, FollowUpKeyWrap>();
+  for (const w of wraps) {
+    result.set(w.key_generation, {
+      ephemeralPoint: w.ephemeral_point,
+      nonce: w.nonce,
+      wrappedKey: w.wrapped_key,
+    });
+  }
+  return result;
+}
+
+function toRecord(
+  row: {
+    id: string;
+    ticket_id: string;
+    source: string;
+    type: string;
+    is_private: boolean;
+    mentioned_pseudonyms: string[];
+    encrypted_content: Buffer;
+    created_by: string | null;
+    deleted_at: Date | null;
+    created_at: Date;
+    key_generation?: string | null;
+    note_type_id?: string | null;
+    call_sid?: string | null;
+    call_status?: string | null;
+    call_duration_seconds?: number | null;
+    has_recording?: boolean | number;
+    has_image?: boolean | number;
+    has_file?: boolean | number;
+    full_position?: string | number | bigint;
+    total_count?: string | number | bigint;
+  },
+  keyWrap?: FollowUpKeyWrap | null,
+): FollowUpRecord {
   return {
     id: row.id,
     ticketId: row.ticket_id,
@@ -164,11 +223,107 @@ function toRecord(row: {
     hasImage: Boolean(row.has_image),
     hasFile: Boolean(row.has_file),
     noteTypeId: row.note_type_id ?? null,
+    callSid: row.call_sid ?? null,
+    callStatus: row.call_status ?? null,
+    callDurationSeconds: row.call_duration_seconds ?? null,
+    keyGeneration: row.key_generation ?? null,
+    keyWrap: keyWrap ?? null,
     fullPosition:
       row.full_position !== undefined ? Number(row.full_position) : undefined,
     totalCount:
       row.total_count !== undefined ? Number(row.total_count) : undefined,
   };
+}
+
+/* eslint-disable @typescript-eslint/no-explicit-any -- Kysely query builder variance: callers have different O types from different .select() chains, but .where() is invariant over O */
+function applyFollowUpFilters(
+  query: SelectQueryBuilder<any, any, any>,
+  opts: FollowUpListOpts,
+): SelectQueryBuilder<any, any, any> {
+  /* eslint-enable @typescript-eslint/no-explicit-any */
+  const hasTypes = opts.types !== undefined && opts.types.length > 0;
+  const hasMedia = opts.mediaFlags !== undefined && opts.mediaFlags.length > 0;
+  if (hasTypes || hasMedia) {
+    const types = opts.types ?? [];
+    const flags = new Set(opts.mediaFlags ?? []);
+    query = query.where((eb) => {
+      const conditions = [];
+      if (hasTypes) conditions.push(eb("followups.type", "in", types));
+      if (flags.has("recording"))
+        conditions.push(
+          eb.exists(
+            eb
+              .selectFrom("recordings as rf")
+              .whereRef("rf.followup_id", "=", "followups.id")
+              .where("rf.deleted_at", "is", null)
+              .select(eb.lit(1).as("one")),
+          ),
+        );
+      if (flags.has("image"))
+        conditions.push(
+          eb.exists(
+            eb
+              .selectFrom("attachments as ai")
+              .whereRef("ai.followup_id", "=", "followups.id")
+              .where("ai.deleted_at", "is", null)
+              .where("ai.content_type", "like", "image/%")
+              .select(eb.lit(1).as("one")),
+          ),
+        );
+      if (flags.has("file"))
+        conditions.push(
+          eb.exists(
+            eb
+              .selectFrom("attachments as af")
+              .whereRef("af.followup_id", "=", "followups.id")
+              .where("af.deleted_at", "is", null)
+              .where((w) =>
+                w.or([
+                  w("af.content_type", "is", null),
+                  w("af.content_type", "not like", "image/%"),
+                ]),
+              )
+              .select(eb.lit(1).as("one")),
+          ),
+        );
+      return eb.or(conditions);
+    });
+  }
+
+  const hasCreatedBy =
+    opts.createdBy !== undefined && opts.createdBy.length > 0;
+  if (hasCreatedBy || opts.includeClientSource === true) {
+    query = query.where((eb) => {
+      const conditions = [];
+      if (opts.includeClientSource === true)
+        conditions.push(eb("followups.source", "=", "client"));
+      if (hasCreatedBy)
+        conditions.push(eb("followups.created_by", "in", opts.createdBy ?? []));
+      return eb.or(conditions);
+    });
+  }
+
+  if (opts.dateFrom !== undefined) {
+    query = query.where("followups.created_at", ">=", new Date(opts.dateFrom));
+  }
+  if (opts.dateTo !== undefined) {
+    const dayEnd = new Date(opts.dateTo);
+    dayEnd.setHours(23, 59, 59, 999);
+    query = query.where("followups.created_at", "<=", dayEnd);
+  }
+
+  return query;
+}
+
+function hasActiveFilters(opts: FollowUpListOpts): boolean {
+  return (
+    (opts.types !== undefined && opts.types.length > 0) ||
+    (opts.mediaFlags !== undefined && opts.mediaFlags.length > 0) ||
+    (opts.createdBy !== undefined && opts.createdBy.length > 0) ||
+    opts.includeClientSource === true ||
+    opts.dateFrom !== undefined ||
+    opts.dateTo !== undefined
+  );
 }
 
 export function createFollowUpService(
@@ -202,6 +357,9 @@ export function createFollowUpService(
           encrypted_content: input.encryptedContent,
           created_by: userId,
           note_type_id: input.noteTypeId ?? null,
+          call_sid: input.callSid ?? null,
+          call_status: input.callStatus ?? null,
+          call_duration_seconds: input.callDurationSeconds ?? null,
         })
         .returningAll()
         .executeTakeFirstOrThrow();
@@ -223,42 +381,7 @@ export function createFollowUpService(
         .selectFrom("followups")
         .leftJoin("note_types as nt", "nt.id", "followups.note_type_id")
         .selectAll("followups")
-        .select((eb) => [
-          eb
-            .exists(
-              eb
-                .selectFrom("recordings as r")
-                .whereRef("r.followup_id", "=", "followups.id")
-                .where("r.deleted_at", "is", null)
-                .select(eb.lit(1).as("one")),
-            )
-            .as("has_recording"),
-          eb
-            .exists(
-              eb
-                .selectFrom("attachments as a")
-                .whereRef("a.followup_id", "=", "followups.id")
-                .where("a.deleted_at", "is", null)
-                .where("a.content_type", "like", "image/%")
-                .select(eb.lit(1).as("one")),
-            )
-            .as("has_image"),
-          eb
-            .exists(
-              eb
-                .selectFrom("attachments as a2")
-                .whereRef("a2.followup_id", "=", "followups.id")
-                .where("a2.deleted_at", "is", null)
-                .where((w) =>
-                  w.or([
-                    w("a2.content_type", "is", null),
-                    w("a2.content_type", "not like", "image/%"),
-                  ]),
-                )
-                .select(eb.lit(1).as("one")),
-            )
-            .as("has_file"),
-        ])
+        .select((eb) => mediaExistsSelects(eb))
         .where("followups.ticket_id", "=", ticketId)
         .where("followups.deleted_at", "is", null);
 
@@ -273,16 +396,7 @@ export function createFollowUpService(
         );
       }
 
-      // Position tracking for gap indicators (only when filters active)
-      const hasAnyFilter =
-        (opts.types !== undefined && opts.types.length > 0) ||
-        (opts.mediaFlags !== undefined && opts.mediaFlags.length > 0) ||
-        (opts.createdBy !== undefined && opts.createdBy.length > 0) ||
-        opts.includeClientSource === true ||
-        opts.dateFrom !== undefined ||
-        opts.dateTo !== undefined;
-
-      if (hasAnyFilter) {
+      if (hasActiveFilters(opts)) {
         query = query.select((eb) => [
           eb
             .selectFrom("followups as fp")
@@ -308,90 +422,8 @@ export function createFollowUpService(
         ]);
       }
 
-      // --- Type + media filter group (OR'd together) ---
-      const hasTypes = opts.types !== undefined && opts.types.length > 0;
-      const hasMedia =
-        opts.mediaFlags !== undefined && opts.mediaFlags.length > 0;
-      if (hasTypes || hasMedia) {
-        const types = opts.types ?? [];
-        const flags = new Set(opts.mediaFlags ?? []);
-        query = query.where((eb) => {
-          const conditions = [];
-          if (hasTypes) conditions.push(eb("followups.type", "in", types));
-          if (flags.has("recording"))
-            conditions.push(
-              eb.exists(
-                eb
-                  .selectFrom("recordings as rf")
-                  .whereRef("rf.followup_id", "=", "followups.id")
-                  .where("rf.deleted_at", "is", null)
-                  .select(eb.lit(1).as("one")),
-              ),
-            );
-          if (flags.has("image"))
-            conditions.push(
-              eb.exists(
-                eb
-                  .selectFrom("attachments as ai")
-                  .whereRef("ai.followup_id", "=", "followups.id")
-                  .where("ai.deleted_at", "is", null)
-                  .where("ai.content_type", "like", "image/%")
-                  .select(eb.lit(1).as("one")),
-              ),
-            );
-          if (flags.has("file"))
-            conditions.push(
-              eb.exists(
-                eb
-                  .selectFrom("attachments as af")
-                  .whereRef("af.followup_id", "=", "followups.id")
-                  .where("af.deleted_at", "is", null)
-                  .where((w) =>
-                    w.or([
-                      w("af.content_type", "is", null),
-                      w("af.content_type", "not like", "image/%"),
-                    ]),
-                  )
-                  .select(eb.lit(1).as("one")),
-              ),
-            );
-          return conditions.length === 1
-            ? (conditions[0] ?? eb.or(conditions))
-            : eb.or(conditions);
-        });
-      }
-
-      // --- Author filter group (OR'd: client source OR specific volunteers) ---
-      const hasCreatedBy =
-        opts.createdBy !== undefined && opts.createdBy.length > 0;
-      if (hasCreatedBy || opts.includeClientSource === true) {
-        query = query.where((eb) => {
-          const conditions = [];
-          if (opts.includeClientSource === true)
-            conditions.push(eb("followups.source", "=", "client"));
-          if (hasCreatedBy)
-            conditions.push(
-              eb("followups.created_by", "in", opts.createdBy ?? []),
-            );
-          return conditions.length === 1
-            ? (conditions[0] ?? eb.or(conditions))
-            : eb.or(conditions);
-        });
-      }
-
-      // --- Date range filter (AND'd) ---
-      if (opts.dateFrom !== undefined) {
-        query = query.where(
-          "followups.created_at",
-          ">=",
-          new Date(opts.dateFrom),
-        );
-      }
-      if (opts.dateTo !== undefined) {
-        const dayEnd = new Date(opts.dateTo);
-        dayEnd.setHours(23, 59, 59, 999);
-        query = query.where("followups.created_at", "<=", dayEnd);
-      }
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment -- applyFollowUpFilters uses any for Kysely variance, callers are typed
+      query = applyFollowUpFilters(query, opts);
 
       if (opts.cursor !== undefined) {
         const cursorId = opts.cursor;
@@ -421,7 +453,10 @@ export function createFollowUpService(
         .limit(opts.limit)
         .execute();
 
-      const records = rows.map(toRecord);
+      const keyWraps = await fetchFollowUpKeyWraps(db, userId, rows);
+      const records = rows.map((row) =>
+        toRecord(row, keyWraps.get(row.key_generation ?? "")),
+      );
       return isOlder ? records.reverse() : records;
     },
 
@@ -446,6 +481,9 @@ export function createFollowUpService(
           "followups.created_by",
           "followups.created_at",
           "followups.note_type_id",
+          "followups.call_status",
+          "followups.call_duration_seconds",
+          "followups.key_generation",
         ])
         .where("followups.ticket_id", "=", ticketId)
         .where("followups.deleted_at", "is", null);
@@ -461,101 +499,10 @@ export function createFollowUpService(
         );
       }
 
-      // --- Type + media filter group (OR'd together) ---
-      const hasTypes = opts.types !== undefined && opts.types.length > 0;
-      const hasMedia =
-        opts.mediaFlags !== undefined && opts.mediaFlags.length > 0;
-      if (hasTypes || hasMedia) {
-        const types = opts.types ?? [];
-        const flags = new Set(opts.mediaFlags ?? []);
-        query = query.where((eb) => {
-          const conditions = [];
-          if (hasTypes) conditions.push(eb("followups.type", "in", types));
-          if (flags.has("recording"))
-            conditions.push(
-              eb.exists(
-                eb
-                  .selectFrom("recordings as rf")
-                  .whereRef("rf.followup_id", "=", "followups.id")
-                  .where("rf.deleted_at", "is", null)
-                  .select(eb.lit(1).as("one")),
-              ),
-            );
-          if (flags.has("image"))
-            conditions.push(
-              eb.exists(
-                eb
-                  .selectFrom("attachments as ai")
-                  .whereRef("ai.followup_id", "=", "followups.id")
-                  .where("ai.deleted_at", "is", null)
-                  .where("ai.content_type", "like", "image/%")
-                  .select(eb.lit(1).as("one")),
-              ),
-            );
-          if (flags.has("file"))
-            conditions.push(
-              eb.exists(
-                eb
-                  .selectFrom("attachments as af")
-                  .whereRef("af.followup_id", "=", "followups.id")
-                  .where("af.deleted_at", "is", null)
-                  .where((w) =>
-                    w.or([
-                      w("af.content_type", "is", null),
-                      w("af.content_type", "not like", "image/%"),
-                    ]),
-                  )
-                  .select(eb.lit(1).as("one")),
-              ),
-            );
-          return conditions.length === 1
-            ? (conditions[0] ?? eb.or(conditions))
-            : eb.or(conditions);
-        });
-      }
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment -- applyFollowUpFilters uses any for Kysely variance, callers are typed
+      query = applyFollowUpFilters(query, opts);
 
-      // --- Author filter group (OR'd: client source OR specific volunteers) ---
-      const hasCreatedBy =
-        opts.createdBy !== undefined && opts.createdBy.length > 0;
-      if (hasCreatedBy || opts.includeClientSource === true) {
-        query = query.where((eb) => {
-          const conditions = [];
-          if (opts.includeClientSource === true)
-            conditions.push(eb("followups.source", "=", "client"));
-          if (hasCreatedBy)
-            conditions.push(
-              eb("followups.created_by", "in", opts.createdBy ?? []),
-            );
-          return conditions.length === 1
-            ? (conditions[0] ?? eb.or(conditions))
-            : eb.or(conditions);
-        });
-      }
-
-      // --- Date range filter (AND'd) ---
-      if (opts.dateFrom !== undefined) {
-        query = query.where(
-          "followups.created_at",
-          ">=",
-          new Date(opts.dateFrom),
-        );
-      }
-      if (opts.dateTo !== undefined) {
-        const dayEnd = new Date(opts.dateTo);
-        dayEnd.setHours(23, 59, 59, 999);
-        query = query.where("followups.created_at", "<=", dayEnd);
-      }
-
-      // Position tracking for gap indicators (only when filters active)
-      const hasAnyFilter =
-        (opts.types !== undefined && opts.types.length > 0) ||
-        (opts.mediaFlags !== undefined && opts.mediaFlags.length > 0) ||
-        (opts.createdBy !== undefined && opts.createdBy.length > 0) ||
-        opts.includeClientSource === true ||
-        opts.dateFrom !== undefined ||
-        opts.dateTo !== undefined;
-
-      if (hasAnyFilter) {
+      if (hasActiveFilters(opts)) {
         query = query.select((eb) => [
           eb
             .selectFrom("followups as fp")
@@ -674,7 +621,9 @@ export function createFollowUpService(
 
       return orderedRows.map((row): FollowUpSummaryRecord => {
         const isPlainMessage =
-          row.source !== "system" && row.type !== "internal_note";
+          row.source !== "system" &&
+          row.type !== "internal_note" &&
+          row.type !== "phone_call";
         const rec = recByFu.get(row.id);
         const att = attByFu.get(row.id);
 
@@ -693,6 +642,9 @@ export function createFollowUpService(
           hasImage: att?.hasImage ?? false,
           hasFile: att?.hasFile ?? false,
           noteTypeId: row.note_type_id ?? null,
+          callStatus: row.call_status ?? null,
+          callDurationSeconds: row.call_duration_seconds ?? null,
+          keyGeneration: row.key_generation ?? null,
           fullPosition: fullPos !== undefined ? Number(fullPos) : undefined,
           totalCount: totCnt !== undefined ? Number(totCnt) : undefined,
         };
@@ -707,42 +659,7 @@ export function createFollowUpService(
       let query = db
         .selectFrom("followups")
         .selectAll()
-        .select((eb) => [
-          eb
-            .exists(
-              eb
-                .selectFrom("recordings as r")
-                .whereRef("r.followup_id", "=", "followups.id")
-                .where("r.deleted_at", "is", null)
-                .select(eb.lit(1).as("one")),
-            )
-            .as("has_recording"),
-          eb
-            .exists(
-              eb
-                .selectFrom("attachments as a")
-                .whereRef("a.followup_id", "=", "followups.id")
-                .where("a.deleted_at", "is", null)
-                .where("a.content_type", "like", "image/%")
-                .select(eb.lit(1).as("one")),
-            )
-            .as("has_image"),
-          eb
-            .exists(
-              eb
-                .selectFrom("attachments as a2")
-                .whereRef("a2.followup_id", "=", "followups.id")
-                .where("a2.deleted_at", "is", null)
-                .where((w) =>
-                  w.or([
-                    w("a2.content_type", "is", null),
-                    w("a2.content_type", "not like", "image/%"),
-                  ]),
-                )
-                .select(eb.lit(1).as("one")),
-            )
-            .as("has_file"),
-        ])
+        .select((eb) => mediaExistsSelects(eb))
         .where("ticket_id", "=", ticketId)
         .where("id", "in", followUpIds)
         .where("deleted_at", "is", null);
@@ -756,7 +673,10 @@ export function createFollowUpService(
         .orderBy("id", "asc")
         .execute();
 
-      return rows.map(toRecord);
+      const keyWraps = await fetchFollowUpKeyWraps(db, userId, rows);
+      return rows.map((row) =>
+        toRecord(row, keyWraps.get(row.key_generation ?? "")),
+      );
     },
 
     async updateInternalNote(userId, followUpId, encryptedContent, noteTypeId) {

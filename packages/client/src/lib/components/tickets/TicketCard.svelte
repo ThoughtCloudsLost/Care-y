@@ -138,7 +138,7 @@
     </Card>
   </div>
 {:else}
-  <div class="ticket-card-wrap">
+  <div class="ticket-card-wrap" data-testid="ticket-card-wrap">
     <Card raised contentWrap={false} class="ticket-card">
       <!-- Using div+role instead of <button> to avoid nested-button HTML violation
            when action icon buttons are rendered inside. -->
@@ -146,6 +146,7 @@
         class="card-inner"
         class:card-inner--list={isList}
         class:card-inner--grid={!isList}
+        data-testid="card-inner"
         role="button"
         tabindex="0"
         aria-label={m.tickets_open({ alias: clientAlias })}
@@ -185,7 +186,9 @@
           {/if}
           <span class="status-indicator">
             <StatusDot status={displayStatus} />
-            <span class="status-label">{statusLabel}</span>
+            <span class="status-label" data-testid="status-label"
+              >{statusLabel}</span
+            >
           </span>
           <PriorityBadge {priority} />
         </div>
@@ -229,7 +232,7 @@
         </div>
 
         {#if isList}
-          <div class="card-actions">
+          <div class="card-actions" data-testid="card-actions">
             <Link
               iconOnly
               role="button"

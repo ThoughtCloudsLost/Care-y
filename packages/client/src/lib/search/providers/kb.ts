@@ -70,8 +70,11 @@ export interface KBSearchProviderDeps {
     nextCursor: string | null;
     total?: number;
   }>;
-  /** Decrypt an org-key ciphertext. Returns plaintext string or null if key not loaded / decrypt fails. */
-  readonly decryptOrg: (cacheKey: string, ciphertext: unknown) => string | null;
+  /** Decrypt an org-key ciphertext. Async because the org key lives in the crypto Worker. */
+  readonly decryptOrg: (
+    cacheKey: string,
+    ciphertext: unknown,
+  ) => Promise<string | null>;
   /** Resolve a category name from its ID (reactive, reads OrgDecryptCache). */
   readonly resolveCategoryName: (categoryId: string) => string | null;
   /** Resolve an author display name from user ID (reactive). */
@@ -110,11 +113,11 @@ export function createKbSearchProvider(
         if (page.total !== undefined) totalItemCount = page.total;
         for (const item of page.items) {
           if (cache.has(item.id)) continue;
-          const title = deps.decryptOrg(
+          const title = await deps.decryptOrg(
             `kb-search:${item.id}:title`,
             item.encryptedTitle,
           );
-          const bodyRaw = deps.decryptOrg(
+          const bodyRaw = await deps.decryptOrg(
             `kb-search:${item.id}:excerpt`,
             item.encryptedExcerpt,
           );
@@ -238,7 +241,7 @@ export function createKbSearchProvider(
 
       for (const body of bodies) {
         if (contentMatchIds.has(body.id)) continue;
-        const plaintext = deps.decryptOrg(
+        const plaintext = await deps.decryptOrg(
           `kb-search:${body.id}:body`,
           body.encryptedBody,
         );

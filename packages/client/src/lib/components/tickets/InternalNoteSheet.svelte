@@ -20,7 +20,7 @@
   import { RoleId } from "@care-y/shared";
   import { createNoteTypesQuery } from "$lib/tickets/queries.js";
   import ShellSheet from "$lib/shell/ShellSheet.svelte";
-  import SoftButton from "$lib/components/SoftButton.svelte";
+  import SoftButton from "$lib/components/inputs/SoftButton.svelte";
 
   interface InternalNoteSheetProps {
     opened: boolean;

@@ -76,6 +76,9 @@
   } from "$lib/tickets/resolve-volunteer.js";
   import { RouterNotAvailableError } from "$lib/errors.js";
   import { toastStore } from "$lib/stores/toast.svelte.js";
+  import { createSendMessage } from "$lib/composables/ticket-detail/create-send-message.svelte.js";
+  import { createSmsSend } from "$lib/composables/ticket-detail/create-sms-send.svelte.js";
+  import { createCallDispatch } from "$lib/composables/ticket-detail/create-call-dispatch.svelte.js";
   import { haptic } from "$lib/utils/haptic.js";
   import {
     registerSearchProvider,
@@ -89,6 +92,10 @@
   import CloseResolutionSheet from "$lib/components/tickets/CloseResolutionSheet.svelte";
   import InternalNoteSheet from "$lib/components/tickets/InternalNoteSheet.svelte";
   import { resolveNoteTypeIcon } from "$lib/utils/note-type-icons.js";
+  import ShellSheet from "$lib/shell/ShellSheet.svelte";
+  import ExposureHint from "$lib/components/tickets/ExposureHint.svelte";
+  import SmsComposeContent from "$lib/components/tickets/SmsComposeContent.svelte";
+  import { tick } from "svelte";
 
   // ── Composable initialization ──
 
@@ -247,6 +254,45 @@
   let editNoteContent = $state<string | undefined>(undefined);
   let editNoteTypeId = $state<string | undefined>(undefined);
   let timelineActive = $state(false);
+  let smsSheetOpen = $state(false);
+
+  // --- Exposure hint state ---
+
+  // eslint-disable-next-line svelte/prefer-svelte-reactivity -- not reactive, used as mutable dedup tracker
+  const shownExposureHints = new Set<string>();
+  let exposureHintType = $state<"sms" | "call" | null>(null);
+  let exposureHintOpen = $state(false);
+  let pendingAction: (() => void) | null = null;
+
+  function shouldShowHint(type: "sms" | "call"): boolean {
+    if (shownExposureHints.has(type)) return false;
+    shownExposureHints.add(type);
+    return true;
+  }
+
+  function showExposureHint(type: "sms" | "call", callback: () => void): void {
+    if (!shouldShowHint(type)) {
+      callback();
+      return;
+    }
+    exposureHintType = type;
+    exposureHintOpen = true;
+    pendingAction = callback;
+    void tick().then(() => {
+      document
+        .querySelector<HTMLElement>('[data-testid="exposure-dismiss"]')
+        ?.focus();
+    });
+  }
+
+  function dismissExposureHint(): void {
+    exposureHintOpen = false;
+    if (pendingAction) {
+      const action = pendingAction;
+      pendingAction = null;
+      action();
+    }
+  }
 
   // Filtered follow-ups (bound from TicketDetail for select mode copy).
   let filteredFollowUps = $state<FollowUpList | undefined>(undefined);
@@ -290,6 +336,7 @@
       typePriority: m.ticket_filter_type_priority(),
       typeHold: m.ticket_filter_type_hold(),
       typeMerge: m.ticket_filter_type_merge(),
+      typeCalls: m.ticket_filter_type_calls(),
     },
   });
 
@@ -321,6 +368,71 @@
       copyFailed: m.common_copy_failed(),
     },
   });
+
+  // --- Send message (composable) ---
+
+  const messenger = createSendMessage<FollowUpList[number]>({
+    getTicketId: () => ticketId,
+    getCurrentUserId: () => currentUserId ?? null,
+    getDraftText: () => draftText,
+    setDraftText: (v: string) => {
+      draftText = v;
+    },
+    cryptoBridge,
+    followUpCache,
+    queryClient,
+    buildPendingEntry: ({
+      pendingId,
+      ticketId: tid,
+      mentionedPseudonyms,
+      currentUserId: uid,
+    }) =>
+      ({
+        id: pendingId,
+        ticketId: tid,
+        source: "volunteer",
+        type: "message",
+        isPrivate: false,
+        mentionedPseudonyms,
+        encryptedContent: { type: "Buffer" as const, data: [] },
+        createdBy: uid,
+        createdAt: new Date().toISOString(),
+        hasRecording: false,
+        hasImage: false,
+        hasFile: false,
+        noteTypeId: null,
+        callSid: null,
+        callStatus: null,
+        callDurationSeconds: null,
+        keyGeneration: null,
+        keyWrap: null,
+      }) satisfies FollowUpList[number],
+    createFollowUpMutate: async (args) =>
+      ticketRouter.createFollowUp.mutate(args),
+  });
+
+  // --- SMS send (composable) ---
+
+  const sms = createSmsSend({
+    getTicketId: () => ticketId,
+    cryptoBridge,
+    queryClient,
+    createFollowUpMutate: async (args) =>
+      ticketRouter.createFollowUp.mutate(args),
+    onSuccess: () => {
+      smsSheetOpen = false;
+    },
+  });
+  const smsSending = $derived(sms.sending);
+
+  // --- Call dispatch (composable) ---
+
+  const callDispatch = createCallDispatch({
+    getTicketId: () => ticketId,
+    cryptoBridge,
+    getEncryptedPhone: () => consultantQuery.data?.encryptedPhone,
+  });
+  const callInProgress = $derived(callDispatch.inProgress);
 
   // --- Search overlay (composable + page-specific match computation) ---
 
@@ -471,12 +583,8 @@
 
   // --- Compose handlers ---
 
-  function handleSend(): void {
-    // Stub: encryption + submission wired separately.
-    if (import.meta.env.DEV) {
-      console.log("[TicketDetail] send reply:", draftText.slice(0, 50));
-    }
-  }
+  const handleSend = messenger.handleSend;
+  const sending = $derived(messenger.sending);
 
   function openComposeActions(anchor: HTMLElement): void {
     composeActionsAnchor = anchor;
@@ -569,19 +677,22 @@
 
   function handleCallAction(action: CallAction): void {
     closeCallSheet();
-    switch (action) {
-      case "browser-call":
-        // Stub: BrowserCallService.startCall() wired by telephony integration.
-        if (import.meta.env.DEV) console.log("[TicketDetail] browser-call");
-        break;
-      case "phone-call":
-        // Stub: consultant phone callback wired by telephony integration.
-        if (import.meta.env.DEV) console.log("[TicketDetail] phone-call");
-        break;
-      case "cancel":
-        break;
-    }
+    if (action === "cancel" || callInProgress) return;
+
+    showExposureHint("call", () => {
+      void callDispatch.executeCall();
+    });
   }
+
+  // --- SMS handlers ---
+
+  function handleOpenSmsCompose(): void {
+    showExposureHint("sms", () => {
+      smsSheetOpen = true;
+    });
+  }
+
+  const handleSmsSend = sms.handleSmsSend;
 
   // --- Context menu + lightbox (composables) ---
 
@@ -831,7 +942,7 @@
     onsend={handleSend}
     onplus={openComposeActions}
     oninput={handleInput}
-    sendDisabled={!draftText.trim()}
+    sendDisabled={!draftText.trim() || sending}
   />
 {/if}
 
@@ -932,7 +1043,29 @@
   onpresetselect={(body: string) => {
     draftText = body;
   }}
+  ontextclient={handleOpenSmsCompose}
 />
+
+<ShellSheet
+  opened={smsSheetOpen}
+  ondismiss={() => (smsSheetOpen = false)}
+  ariaLabel={m.ticket_sms_title()}
+>
+  <SmsComposeContent
+    onsend={handleSmsSend}
+    oncancel={() => (smsSheetOpen = false)}
+    sending={smsSending}
+    error={null}
+  />
+</ShellSheet>
+
+{#if exposureHintType}
+  <ExposureHint
+    type={exposureHintType}
+    opened={exposureHintOpen}
+    ondismiss={dismissExposureHint}
+  />
+{/if}
 
 <ShellPopup opened={lightbox.open} ondismiss={() => lightbox.dismiss()}>
   {#if lightbox.url}

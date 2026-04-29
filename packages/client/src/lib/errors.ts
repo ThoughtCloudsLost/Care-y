@@ -52,3 +52,25 @@ export class RouterNotAvailableError extends ClientError {
     this.name = "RouterNotAvailableError";
   }
 }
+
+/** Relay endpoint returned a non-OK response. */
+export class RelayError extends ClientError {
+  readonly code: string;
+  readonly status: number;
+  constructor(code: string, status: number) {
+    super(`Relay error: ${code} (${String(status)})`);
+    this.name = "RelayError";
+    this.code = code;
+    this.status = status;
+  }
+}
+
+/** Relay returned 429. Carries the Retry-After seconds for UI display. */
+export class RateLimitError extends ClientError {
+  readonly retryAfterSeconds: number;
+  constructor(retryAfterSeconds: number) {
+    super(`Rate limited. Retry after ${String(retryAfterSeconds)}s`);
+    this.name = "RateLimitError";
+    this.retryAfterSeconds = retryAfterSeconds;
+  }
+}

@@ -25,6 +25,8 @@ import type {
   WorkerResponse,
   WorkerSuccessResponse,
   ResponseForRequest,
+  WorkerEvent,
+  RewrapResultEvent,
 } from "./crypto-protocol.js";
 
 export type BridgeState = "LOADING" | "READY" | "KEYED" | "DESTROYED";
@@ -57,6 +59,8 @@ function expectResponse<T extends WorkerRequestType>(
   return resp as ResponseForRequest<T>;
 }
 
+export type WorkerEventHandler = (event: WorkerEvent) => void;
+
 export class CryptoBridge {
   private worker: Worker;
   private state: BridgeState = "LOADING";
@@ -71,6 +75,7 @@ export class CryptoBridge {
   /** Captured at construction time to resist postMessage monkey-patching. */
   private readonly post: Worker["postMessage"];
   private readonly readyPromise: Promise<void>;
+  private workerEventHandler: WorkerEventHandler | null = null;
 
   constructor() {
     const worker = new Worker(new URL("./crypto.worker.ts", import.meta.url), {
@@ -78,8 +83,13 @@ export class CryptoBridge {
     });
     this.worker = worker;
     this.post = worker.postMessage.bind(worker);
-    worker.onmessage = (e: MessageEvent<WorkerResponse>) => {
-      this.handleResponse(e.data);
+    worker.onmessage = (e: MessageEvent<WorkerResponse | WorkerEvent>) => {
+      const data = e.data;
+      if ("kind" in data) {
+        this.workerEventHandler?.(data);
+        return;
+      }
+      this.handleResponse(data);
     };
     worker.onerror = (e: ErrorEvent) => {
       console.error(
@@ -169,6 +179,70 @@ export class CryptoBridge {
   }
 
   /**
+   * Decrypt follow-up content encrypted with tk_temp, display it, and
+   * trigger background re-encryption with the ticket's canonical tk.
+   * Returns UTF-8 plaintext (same as decrypt). The Worker posts a
+   * RewrapEvent to the main thread as a side-effect and caches tk_temp
+   * for subsequent rewrapBlob calls.
+   */
+  async decryptAndRewrap(
+    followUpId: string,
+    ticketId: string,
+    ephemeralPoint: string,
+    nonce: string,
+    wrappedKey: string,
+    ciphertext: string,
+  ): Promise<string> {
+    const resp = expectResponse(
+      await this.sendRequest({
+        type: "decryptAndRewrap",
+        followUpId,
+        ticketId,
+        ephemeralPoint,
+        nonce,
+        wrappedKey,
+        ciphertext,
+      }),
+      "decryptAndRewrap",
+    );
+    return resp.plaintext;
+  }
+
+  /**
+   * Re-encrypt a single blob from tk_temp to canonical tk.
+   * The Worker must have cached tk_temp from a prior decryptAndRewrap call.
+   * Returns the re-encrypted blob data and metadata for the server mutation.
+   */
+  async rewrapBlob(
+    followUpId: string,
+    ticketId: string,
+    ciphertext: string,
+    blobKey: string,
+    category: "attachment" | "recording",
+  ): Promise<{
+    encryptedData: string;
+    blobKey: string;
+    category: "attachment" | "recording";
+  }> {
+    const resp = expectResponse(
+      await this.sendRequest({
+        type: "rewrapBlob",
+        followUpId,
+        ticketId,
+        ciphertext,
+        blobKey,
+        category,
+      }),
+      "rewrapBlob",
+    );
+    return {
+      encryptedData: resp.encryptedData,
+      blobKey: resp.blobKey,
+      category: resp.category,
+    };
+  }
+
+  /**
    * Encrypt plaintext with the cached tk for this ticket.
    * Returns base64 ciphertext. The tk must have been cached by a prior decrypt.
    */
@@ -231,14 +305,15 @@ export class CryptoBridge {
   }
 
   /**
-   * Unwrap the org secret key via ECIES using the Worker's volPrivate.
-   * Returns the unwrapped key as an ArrayBuffer (non-PII tier, for org-key module).
+   * Unwrap the org key via ECIES using the Worker's volPrivate.
+   * The Worker retains the secret for XSS isolation. Returns only the
+   * org public key (base64) for main-thread caching.
    */
   async unwrapOrgKey(
     wrappedOrgKey: string,
     ephemeralPoint: string,
     nonce: string,
-  ): Promise<ArrayBuffer> {
+  ): Promise<string> {
     const resp = expectResponse(
       await this.sendRequest({
         type: "unwrapOrgKey",
@@ -248,8 +323,7 @@ export class CryptoBridge {
       }),
       "unwrapOrgKey",
     );
-    // care-y-ignore-next-line no-org-private-key-server -- protocol field, client-side bridge
-    return resp.orgPrivateKey;
+    return resp.orgPublicKey;
   }
 
   /**
@@ -312,6 +386,80 @@ export class CryptoBridge {
     };
   }
 
+  async createTicketEncryption(
+    fields: readonly { name: string; plaintext: string }[],
+  ): Promise<{
+    encryptedFields: readonly { name: string; ciphertext: string }[];
+    keyWrap: { ephemeralPoint: string; nonce: string; wrappedKey: string };
+    keyGeneration: string;
+  }> {
+    const resp = expectResponse(
+      await this.sendRequest({
+        type: "createTicketKey",
+        fields,
+      }),
+      "createTicketKey",
+    );
+    return {
+      encryptedFields: resp.encryptedFields,
+      keyWrap: resp.keyWrap,
+      keyGeneration: resp.keyGeneration,
+    };
+  }
+
+  /** Decrypt org-tier sealed-box ciphertext. Returns UTF-8 plaintext. */
+  async orgDecrypt(ciphertext: string): Promise<string> {
+    const resp = expectResponse(
+      await this.sendRequest({ type: "orgDecrypt", ciphertext }),
+      "orgDecrypt",
+    );
+    return resp.plaintext;
+  }
+
+  /** Encrypt plaintext with the org public key (sealed-box). Returns base64 ciphertext. */
+  async orgEncrypt(plaintext: string): Promise<string> {
+    const resp = expectResponse(
+      await this.sendRequest({ type: "orgEncrypt", plaintext }),
+      "orgEncrypt",
+    );
+    return resp.ciphertext;
+  }
+
+  /**
+   * Batch decrypt multiple org-tier sealed-box ciphertexts.
+   * Returns per-item results with null for individual failures.
+   */
+  async orgDecryptBatch(
+    items: readonly { cacheKey: string; ciphertext: string }[],
+  ): Promise<readonly { cacheKey: string; plaintext: string | null }[]> {
+    const resp = expectResponse(
+      await this.sendRequest({ type: "orgDecryptBatch", items }),
+      "orgDecryptBatch",
+    );
+    return resp.results;
+  }
+
+  /**
+   * Export the org secret key from the Worker as a Transferable ArrayBuffer.
+   * For escrow export and password change only. Zero immediately after use.
+   */
+  async exportOrgSecretKey(): Promise<ArrayBuffer> {
+    const resp = expectResponse(
+      await this.sendRequest({ type: "exportOrgSecretKey" }),
+      "exportOrgSecretKey",
+    );
+    return resp.orgSecretKey;
+  }
+
+  /** Get the org public key (base64) from the Worker. */
+  async getOrgPublicKey(): Promise<string> {
+    const resp = expectResponse(
+      await this.sendRequest({ type: "getOrgPublicKey" }),
+      "getOrgPublicKey",
+    );
+    return resp.orgPublicKey;
+  }
+
   /** Zero all keys, terminate the Worker, reject any pending requests. */
   destroy(): void {
     if (this.state === "DESTROYED") return;
@@ -336,6 +484,17 @@ export class CryptoBridge {
       entry.reject(new CryptoWorkerError("Worker destroyed", "WORKER_ERROR"));
     }
     this.pending.clear();
+  }
+
+  /** Register a handler for Worker-initiated events (re-wrap notifications). */
+  onWorkerEvent(handler: WorkerEventHandler): void {
+    this.workerEventHandler = handler;
+  }
+
+  /** Post a non-request event to the Worker (e.g., re-wrap result). */
+  postEvent(event: RewrapResultEvent): void {
+    if (this.state === "DESTROYED") return;
+    this.post.call(this.worker, event);
   }
 
   /** Current bridge state (for UI status indicators). */

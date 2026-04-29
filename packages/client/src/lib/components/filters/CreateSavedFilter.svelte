@@ -2,7 +2,7 @@
   import { List, ListInput } from "konsta/svelte";
   import { Save } from "@lucide/svelte";
   import ShellSheet from "$lib/shell/ShellSheet.svelte";
-  import SoftButton from "$lib/components/SoftButton.svelte";
+  import SoftButton from "$lib/components/inputs/SoftButton.svelte";
   import * as m from "$lib/paraglide/messages.js";
   import { getOrgKeyManager } from "$lib/crypto/context.js";
   import {
@@ -33,11 +33,11 @@
 
   const canSave = $derived(name.trim().length > 0);
 
-  function handleSave(): void {
+  async function handleSave(): Promise<void> {
     if (!canSave) return;
 
     const plaintext = new TextEncoder().encode(name.trim());
-    const ciphertext = orgKeyManager.encrypt(plaintext);
+    const ciphertext = await orgKeyManager.encrypt(plaintext);
     const encryptedName = uint8ArrayToBase64(ciphertext);
 
     onsave({

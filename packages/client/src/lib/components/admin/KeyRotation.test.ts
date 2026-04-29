@@ -61,6 +61,14 @@ vi.mock("$lib/crypto/context.js", () => ({
     isLoaded: true,
     load: vi.fn(),
   }),
+  getCryptoBridge: () => ({
+    orgEncrypt: vi.fn().mockResolvedValue("encrypted"),
+    orgDecrypt: vi.fn().mockResolvedValue("decrypted"),
+  }),
+}));
+
+vi.mock("$lib/auth/crypto-helpers.js", () => ({
+  fetchAndUnwrapOrgKey: vi.fn().mockResolvedValue("org-public-key-b64"),
 }));
 
 vi.mock("@tanstack/svelte-query", () => ({

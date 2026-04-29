@@ -108,18 +108,14 @@ export async function changePassword(deps: PasswordChangeDeps): Promise<void> {
     const result = await tempBridge.deriveKeys(toArrayBuffer(evaluatedBytes));
     newVolPublic = result.volPublic;
 
-    // 3. Unwrap org key with OLD keys, re-wrap with NEW keys via temp bridge
+    // 3. Export org secret from Worker, re-wrap with NEW keys via temp bridge
     callbacks.onUnwrapOrgKey();
     if (orgKeyData) {
-      const orgPK = await primaryBridge.unwrapOrgKey(
-        orgKeyData.wrappedKey,
-        orgKeyData.ephemeralPoint,
-        orgKeyData.nonce,
-      );
+      const orgSecretBuf = await primaryBridge.exportOrgSecretKey();
       callbacks.onRewrapOrgKey();
-      const orgPKBase64 = encode(new Uint8Array(orgPK));
-      new Uint8Array(orgPK).fill(0);
-      reWrappedOrgKey = await tempBridge.wrapWithVolPublic(orgPKBase64);
+      const orgSecretBase64 = encode(new Uint8Array(orgSecretBuf));
+      new Uint8Array(orgSecretBuf).fill(0);
+      reWrappedOrgKey = await tempBridge.wrapWithVolPublic(orgSecretBase64);
     }
   } finally {
     tempBridge.destroy();
@@ -203,7 +199,7 @@ export async function changePassword(deps: PasswordChangeDeps): Promise<void> {
   // 8. Re-load org key into OrgKeyManager for continued session
   callbacks.onReloadOrgKey();
   const freshOrgKey = await fetchAndUnwrapOrgKey(primaryBridge);
-  if (freshOrgKey) {
+  if (freshOrgKey !== null) {
     orgKeyManager.load(freshOrgKey);
   }
 

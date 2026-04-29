@@ -37,6 +37,7 @@ export interface ClientRepository {
     encryptedNumber: Buffer,
   ): Promise<FindOrCreateResult>;
   findById(id: string): Promise<ClientRecord | null>;
+  findByPhoneId(phoneId: string): Promise<ClientRecord | null>;
 }
 
 function mapClientRow(row: Selectable<ClientsTable>): ClientRecord {
@@ -141,6 +142,18 @@ export function createClientRepository(
         .selectFrom("clients")
         .selectAll()
         .where("id", "=", id)
+        .executeTakeFirst();
+
+      if (!row) return null;
+      return mapClientRow(row);
+    },
+
+    async findByPhoneId(phoneId: string): Promise<ClientRecord | null> {
+      const row = await db
+        .selectFrom("clients")
+        .selectAll()
+        .where("phone_id", "=", phoneId)
+        .where("merged_into", "is", null)
         .executeTakeFirst();
 
       if (!row) return null;

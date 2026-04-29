@@ -90,40 +90,54 @@
 
   const article = $derived(articleQuery.data);
 
-  // ── Decrypt title and body ──
+  // ── Decrypt title and body (async Worker) ──
 
-  const decryptedTitle = $derived.by((): string | null => {
-    if (article == null || !orgKeyManager.isLoaded) return null;
-    try {
-      const ciphertext =
-        article.encryptedTitle instanceof Uint8Array
-          ? article.encryptedTitle
-          : new Uint8Array(article.encryptedTitle.data);
-      const plainBytes = orgKeyManager.decrypt(ciphertext);
-      return new TextDecoder().decode(plainBytes);
-    } catch {
-      return null;
-    }
-  });
+  let decryptedTitle: string | null = $state(null);
+  let decryptedBody: unknown = $state(null);
+  let decryptAttempted = $state(false);
+  let editDecryptVersion = 0;
 
-  const decryptedBody = $derived.by((): unknown => {
-    if (article == null || !orgKeyManager.isLoaded) return null;
-    try {
-      const ciphertext =
-        article.encryptedBody instanceof Uint8Array
-          ? article.encryptedBody
-          : new Uint8Array(article.encryptedBody.data);
-      const plainBytes = orgKeyManager.decrypt(ciphertext);
-      const text = new TextDecoder().decode(plainBytes);
-      return JSON.parse(text) as unknown;
-    } catch {
-      return null;
+  $effect(() => {
+    if (article == null || !orgKeyManager.isLoaded) {
+      decryptedTitle = null;
+      decryptedBody = null;
+      decryptAttempted = false;
+      return;
     }
+
+    const titleCt =
+      article.encryptedTitle instanceof Uint8Array
+        ? article.encryptedTitle
+        : new Uint8Array(article.encryptedTitle.data);
+    const bodyCt =
+      article.encryptedBody instanceof Uint8Array
+        ? article.encryptedBody
+        : new Uint8Array(article.encryptedBody.data);
+    const version = ++editDecryptVersion;
+
+    void (async (): Promise<void> => {
+      try {
+        const [titleBytes, bodyBytes] = await Promise.all([
+          orgKeyManager.decrypt(titleCt),
+          orgKeyManager.decrypt(bodyCt),
+        ]);
+        if (version !== editDecryptVersion) return;
+        decryptedTitle = new TextDecoder().decode(titleBytes);
+        const text = new TextDecoder().decode(bodyBytes);
+        decryptedBody = JSON.parse(text) as unknown;
+      } catch {
+        if (version !== editDecryptVersion) return;
+        decryptedTitle = null;
+        decryptedBody = null;
+      } finally {
+        if (version === editDecryptVersion) decryptAttempted = true;
+      }
+    })();
   });
 
   const isReady = $derived(
     article != null &&
-      orgKeyManager.isLoaded &&
+      decryptAttempted &&
       decryptedTitle !== null &&
       decryptedBody !== null,
   );

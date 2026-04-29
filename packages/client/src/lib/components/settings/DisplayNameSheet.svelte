@@ -11,7 +11,7 @@
   import { toastStore } from "$lib/stores/toast.svelte.js";
   import { announceToLiveRegion } from "$lib/utils/announce.js";
   import ShellSheet from "$lib/shell/ShellSheet.svelte";
-  import SoftButton from "$lib/components/SoftButton.svelte";
+  import SoftButton from "$lib/components/inputs/SoftButton.svelte";
 
   interface DisplayNameSheetProps {
     readonly opened: boolean;
@@ -63,11 +63,11 @@
 
   const isPending = $derived(mut.isPending);
 
-  function handleSubmit(): void {
+  async function handleSubmit(): Promise<void> {
     if (!canSubmit || isPending) return;
 
     const plainBytes = textEncoder.encode(trimmedName);
-    const cipherBytes = orgKeyManager.encrypt(plainBytes);
+    const cipherBytes = await orgKeyManager.encrypt(plainBytes);
     const encryptedDisplayName = uint8ArrayToBase64(cipherBytes);
 
     mut.mutate({ encryptedDisplayName });

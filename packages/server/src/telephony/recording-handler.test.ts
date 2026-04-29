@@ -3,10 +3,10 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { handleRecordingComplete } from "./recording-handler.js";
 import type { RecordingHandlerDeps } from "./recording-handler.js";
 import type { TelephonyProvider } from "./provider.js";
-import type { SealedBoxEncryptor } from "../crypto/sealed-box.js";
 import type { BlobStore } from "../storage/store.js";
 import type { JobQueue } from "../jobs/queue.js";
 import { TelephonyError } from "../errors.js";
+import { createCallTracker, type CallTracker } from "./call-tracker.js";
 
 // ---------------------------------------------------------------------------
 // Mock factories
@@ -33,13 +33,6 @@ function createMockProvider(): TelephonyProvider {
       maskedAuthToken: "********",
       phoneNumbers: [],
     }),
-  };
-}
-
-function createMockSealedBox(): SealedBoxEncryptor {
-  return {
-    seal: vi.fn((s: string) => Buffer.from(`sealed:${s}`)),
-    sealBuffer: vi.fn((b: Buffer) => Buffer.from(`sealed:${b.toString()}`)),
   };
 }
 
@@ -75,13 +68,17 @@ function makeBody(overrides?: Record<string, string>): Record<string, string> {
 }
 
 function makeDeps(
+  callTracker?: CallTracker,
   overrides?: Partial<RecordingHandlerDeps>,
 ): RecordingHandlerDeps {
   return {
     provider: createMockProvider(),
-    sealedBox: createMockSealedBox(),
     blobStore: createMockBlobStore(),
     jobQueue: createMockJobQueue(),
+    callTracker: callTracker ?? createCallTracker(),
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- test mock
+    getTenantDb: vi.fn().mockReturnValue({}) as any,
+    intakeQueueId: null,
     orgSchema: "org_test",
     orgId: "org-1",
     ...overrides,
@@ -89,7 +86,7 @@ function makeDeps(
 }
 
 // ---------------------------------------------------------------------------
-// Tests
+// Tests (validation and cleanup; ECIES roundtrip tests in server-ticket-create.test.ts)
 // ---------------------------------------------------------------------------
 
 describe("handleRecordingComplete", () => {
@@ -99,119 +96,6 @@ describe("handleRecordingComplete", () => {
   beforeEach(() => {
     deps = makeDeps();
     body = makeBody();
-  });
-
-  // --- Fetch + encrypt + store ---
-
-  it("fetches recording from provider using RecordingSid", async () => {
-    await handleRecordingComplete(body, deps);
-
-    expect(deps.provider.getRecording).toHaveBeenCalledOnce();
-    expect(deps.provider.getRecording).toHaveBeenCalledWith("RE123");
-  });
-
-  it("encrypts raw audio via sealBuffer", async () => {
-    // Capture content at call time before the handler zeros the buffer
-    let capturedContent = "";
-    vi.mocked(deps.sealedBox.sealBuffer).mockImplementation((b: Buffer) => {
-      capturedContent = b.toString("utf-8");
-      return Buffer.from("sealed");
-    });
-
-    await handleRecordingComplete(body, deps);
-
-    expect(deps.sealedBox.sealBuffer).toHaveBeenCalledOnce();
-    expect(capturedContent).toBe("raw-audio");
-  });
-
-  // Security contract: plaintext buffers must be zeroed after encryption (relay endpoint policy)
-  it("zeros raw audio buffer after encryption", async () => {
-    let capturedAudioBuf: Buffer | null = null;
-    vi.mocked(deps.sealedBox.sealBuffer).mockImplementation((b: Buffer) => {
-      capturedAudioBuf = b;
-      return Buffer.from("sealed");
-    });
-
-    await handleRecordingComplete(body, deps);
-
-    expect(capturedAudioBuf).not.toBeNull();
-    expect(capturedAudioBuf!.every((byte) => byte === 0)).toBe(true);
-  });
-
-  it("stores encrypted audio in BlobStore with category 'recording'", async () => {
-    await handleRecordingComplete(body, deps);
-
-    expect(deps.blobStore.put).toHaveBeenCalledOnce();
-    expect(deps.blobStore.put).toHaveBeenCalledWith(
-      "org_test",
-      "recording",
-      expect.any(Buffer),
-    );
-  });
-
-  // --- Provider cleanup ---
-
-  it("deletes recording from provider after storage", async () => {
-    await handleRecordingComplete(body, deps);
-
-    expect(deps.provider.deleteRecording).toHaveBeenCalledOnce();
-    expect(deps.provider.deleteRecording).toHaveBeenCalledWith("RE123");
-  });
-
-  it("deletes call log from provider after storage", async () => {
-    await handleRecordingComplete(body, deps);
-
-    expect(deps.provider.deleteCallLog).toHaveBeenCalledOnce();
-    expect(deps.provider.deleteCallLog).toHaveBeenCalledWith("CA456");
-  });
-
-  // --- Deletion failure -> retry enqueue ---
-
-  it("enqueues retry job with resourceType 'recording' when recording deletion fails", async () => {
-    vi.mocked(deps.provider.deleteRecording).mockRejectedValueOnce(
-      new Error("Twilio 500"),
-    );
-
-    await handleRecordingComplete(body, deps);
-
-    expect(deps.jobQueue.enqueue).toHaveBeenCalledWith(
-      "log-deletion",
-      expect.objectContaining({
-        orgId: "org-1",
-        resourceType: "recording",
-        resourceId: "RE123",
-      }),
-    );
-  });
-
-  it("enqueues retry job with resourceType 'call' when call log deletion fails", async () => {
-    vi.mocked(deps.provider.deleteCallLog).mockRejectedValueOnce(
-      new Error("Twilio 500"),
-    );
-
-    await handleRecordingComplete(body, deps);
-
-    expect(deps.jobQueue.enqueue).toHaveBeenCalledWith(
-      "log-deletion",
-      expect.objectContaining({
-        orgId: "org-1",
-        resourceType: "call",
-        resourceId: "CA456",
-      }),
-    );
-  });
-
-  it("enqueues both retry jobs when both deletions fail", async () => {
-    vi.mocked(deps.provider.deleteRecording).mockRejectedValueOnce(
-      new Error("recording fail"),
-    );
-    vi.mocked(deps.provider.deleteCallLog).mockRejectedValueOnce(
-      new Error("call fail"),
-    );
-
-    await handleRecordingComplete(body, deps);
-
-    expect(deps.jobQueue.enqueue).toHaveBeenCalledTimes(2);
   });
 
   // --- Validation ---
@@ -248,30 +132,55 @@ describe("handleRecordingComplete", () => {
     );
   });
 
-  // --- Return value ---
+  // --- No tracked call ---
 
-  it("returns blobKey and durationSeconds with correct values", async () => {
+  it("returns null ticketId/followUpId when CallSid is not tracked", async () => {
     const result = await handleRecordingComplete(body, deps);
 
-    expect(result).toEqual({
-      blobKey: "org_test/recording/uuid-1",
-      durationSeconds: 42,
-    });
+    expect(result.ticketId).toBeNull();
+    expect(result.followUpId).toBeNull();
   });
 
-  it("returns durationSeconds 0 when RecordingDuration is absent", async () => {
-    const noDuration = { RecordingSid: "RE123", CallSid: "CA456" };
+  it("still cleans up provider logs when CallSid is not tracked", async () => {
+    await handleRecordingComplete(body, deps);
 
-    const result = await handleRecordingComplete(noDuration, deps);
-
-    expect(result.durationSeconds).toBe(0);
+    expect(deps.provider.deleteRecording).toHaveBeenCalledOnce();
+    expect(deps.provider.deleteCallLog).toHaveBeenCalledOnce();
   });
 
-  it("returns NaN durationSeconds when RecordingDuration is non-numeric", async () => {
-    const badDuration = makeBody({ RecordingDuration: "abc" });
+  // --- Deletion failure -> retry enqueue ---
 
-    const result = await handleRecordingComplete(badDuration, deps);
+  it("enqueues retry job when recording deletion fails", async () => {
+    vi.mocked(deps.provider.deleteRecording).mockRejectedValueOnce(
+      new Error("Twilio 500"),
+    );
 
-    expect(result.durationSeconds).toBeNaN();
+    await handleRecordingComplete(body, deps);
+
+    expect(deps.jobQueue.enqueue).toHaveBeenCalledWith(
+      "log-deletion",
+      expect.objectContaining({
+        orgId: "org-1",
+        resourceType: "recording",
+        resourceId: "RE123",
+      }),
+    );
+  });
+
+  it("enqueues retry job when call log deletion fails", async () => {
+    vi.mocked(deps.provider.deleteCallLog).mockRejectedValueOnce(
+      new Error("Twilio 500"),
+    );
+
+    await handleRecordingComplete(body, deps);
+
+    expect(deps.jobQueue.enqueue).toHaveBeenCalledWith(
+      "log-deletion",
+      expect.objectContaining({
+        orgId: "org-1",
+        resourceType: "call",
+        resourceId: "CA456",
+      }),
+    );
   });
 });

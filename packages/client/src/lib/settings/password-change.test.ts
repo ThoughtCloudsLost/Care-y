@@ -54,6 +54,7 @@ interface MockBridge {
   wrapWithVolPublic: ReturnType<typeof vi.fn>;
   zeroAll: ReturnType<typeof vi.fn>;
   destroy: ReturnType<typeof vi.fn>;
+  exportOrgSecretKey: ReturnType<typeof vi.fn>;
 }
 
 function createMockBridge(volPublic = "new-vol-public-b64"): MockBridge {
@@ -64,7 +65,7 @@ function createMockBridge(volPublic = "new-vol-public-b64"): MockBridge {
       .fn()
       .mockResolvedValue({ blindedElement: "test-blinded-b64" }),
     deriveKeys: vi.fn().mockResolvedValue({ volPublic }),
-    unwrapOrgKey: vi.fn().mockResolvedValue(new ArrayBuffer(32)),
+    unwrapOrgKey: vi.fn().mockResolvedValue("org-public-key-b64"),
     unwrapTk: vi.fn().mockResolvedValue(undefined),
     rewrapTk: vi.fn().mockResolvedValue({
       ephemeralPoint: "rewrap-ep",
@@ -78,6 +79,7 @@ function createMockBridge(volPublic = "new-vol-public-b64"): MockBridge {
     }),
     zeroAll: vi.fn().mockResolvedValue(undefined),
     destroy: vi.fn(),
+    exportOrgSecretKey: vi.fn().mockResolvedValue(new ArrayBuffer(32)),
   };
 }
 
@@ -301,7 +303,7 @@ describe("changePassword", () => {
       await changePassword(deps);
 
       expect(orgKeyManager.load).toHaveBeenCalledTimes(1);
-      expect(orgKeyManager.load).toHaveBeenCalledWith(expect.any(ArrayBuffer));
+      expect(orgKeyManager.load).toHaveBeenCalledWith(expect.any(String));
     });
   });
 

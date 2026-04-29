@@ -40,6 +40,7 @@ import {
   eciesDecrypt,
   encryptContent,
   decryptContent,
+  generateContentKey,
   encode,
   decode,
   type Scalar,
@@ -57,6 +58,8 @@ import type {
   Argon2idRequest,
   DeriveKeysRequest,
   DecryptContentRequest,
+  DecryptAndRewrapRequest,
+  RewrapBlobRequest,
   DecryptBlobRequest,
   EncryptContentRequest,
   EvictTkRequest,
@@ -64,7 +67,14 @@ import type {
   UnwrapTkRequest,
   WrapWithVolPublicRequest,
   RewrapTkRequest,
+  CreateTicketKeyRequest,
+  OrgDecryptRequest,
+  OrgEncryptRequest,
+  OrgDecryptBatchRequest,
+  ExportOrgSecretKeyRequest,
   WorkerRequestType,
+  RewrapEvent,
+  RewrapResultEvent,
 } from "./crypto-protocol.js";
 import { TkCache } from "./tk-cache.js";
 
@@ -79,12 +89,22 @@ let masterKey: SymmetricKey | null = null;
 let volPrivate: Scalar | null = null;
 let volPublic: RistrettoPoint | null = null;
 
+// Org-tier key material (Curve25519, non-PII). Kept in Worker for XSS isolation.
+let orgSecret: Uint8Array | null = null;
+let orgPublicKey: Uint8Array | null = null;
+
 const tkCache = new TkCache({
   maxEntries: 50,
   memzero: (buf) => {
     requireSodium().memzero(buf);
   },
 });
+
+const pendingRewraps = new Set<string>();
+
+// tk_temp values cached per follow-up ID for blob re-wrap.
+// Evicted when RewrapResultEvent arrives (all re-wrap complete).
+const rewrapTkTempCache = new Map<string, Uint8Array>();
 
 // ── State machine ───────────────────────────────────────────────────
 
@@ -128,6 +148,14 @@ function requireState(
 function requireKeyed(id: number, type: WorkerRequestType): boolean {
   if (state !== "KEYED") {
     postError(id, type, "Worker not keyed (login required)", "NOT_READY");
+    return false;
+  }
+  return true;
+}
+
+function requireOrgKeyed(id: number, type: WorkerRequestType): boolean {
+  if (orgSecret === null) {
+    postError(id, type, "Org key not loaded", "NOT_READY");
     return false;
   }
   return true;
@@ -281,15 +309,17 @@ function handleDecryptContent(req: DecryptContentRequest): void {
       tk as SymmetricKey,
     );
 
-    const msg: WorkerResponse = {
-      id: req.id,
-      ok: true,
-      type: "decryptContent",
-      plaintext: textDecoder.decode(plaintext),
-    };
-    self.postMessage(msg);
-
-    sodium.memzero(plaintext);
+    try {
+      const msg: WorkerResponse = {
+        id: req.id,
+        ok: true,
+        type: "decryptContent",
+        plaintext: textDecoder.decode(plaintext),
+      };
+      self.postMessage(msg);
+    } finally {
+      sodium.memzero(plaintext);
+    }
   } catch (err: unknown) {
     postError(
       req.id,
@@ -297,6 +327,175 @@ function handleDecryptContent(req: DecryptContentRequest): void {
       err instanceof Error ? err.message : String(err),
       "DECRYPT_FAILED",
     );
+  }
+}
+
+function unwrapTkTemp(req: DecryptAndRewrapRequest): Uint8Array | null {
+  const ephemeralPoint = decode(req.ephemeralPoint);
+  const nonce = decode(req.nonce);
+  const wrappedKey = decode(req.wrappedKey);
+
+  try {
+    return eciesDecrypt(
+      ephemeralPoint as RistrettoPoint,
+      nonce as Nonce,
+      wrappedKey,
+      assertPresent(volPrivate, "volPrivate"),
+    );
+  } catch (err: unknown) {
+    postError(
+      req.id,
+      "decryptAndRewrap",
+      err instanceof Error ? err.message : String(err),
+      "DECRYPT_FAILED",
+    );
+    return null;
+  }
+}
+
+function handleDecryptAndRewrap(req: DecryptAndRewrapRequest): void {
+  if (!requireKeyed(req.id, "decryptAndRewrap")) return;
+
+  const sodium = requireSodium();
+  const tkTemp = unwrapTkTemp(req);
+  if (!tkTemp) return;
+
+  // Cache tk_temp for later blob re-wrap requests from the main thread.
+  // Evicted when RewrapResultEvent arrives.
+  rewrapTkTempCache.set(req.followUpId, tkTemp);
+
+  const ciphertextBuf = decode(req.ciphertext);
+
+  try {
+    const plaintext = decryptContent(
+      ciphertextBuf as Ciphertext,
+      tkTemp as SymmetricKey,
+    );
+
+    try {
+      const msg: WorkerResponse = {
+        id: req.id,
+        ok: true,
+        type: "decryptAndRewrap",
+        plaintext: textDecoder.decode(plaintext),
+      };
+      self.postMessage(msg);
+    } finally {
+      triggerRewrap(req.followUpId, req.ticketId, plaintext, sodium);
+    }
+  } catch (err: unknown) {
+    postError(
+      req.id,
+      "decryptAndRewrap",
+      err instanceof Error ? err.message : String(err),
+      "DECRYPT_FAILED",
+    );
+  }
+}
+
+function triggerRewrap(
+  followUpId: string,
+  ticketId: string,
+  plaintext: Uint8Array,
+  sodium: ReturnType<typeof requireSodium>,
+): void {
+  if (pendingRewraps.has(followUpId)) {
+    sodium.memzero(plaintext);
+    return;
+  }
+
+  const canonicalTk = tkCache.get(ticketId);
+  if (!canonicalTk) {
+    sodium.memzero(plaintext);
+    return;
+  }
+
+  try {
+    const reEncrypted = encryptContent(plaintext, canonicalTk as SymmetricKey);
+    pendingRewraps.add(followUpId);
+    const event: RewrapEvent = {
+      kind: "rewrap",
+      followUpId,
+      ticketId,
+      encryptedContent: encode(reEncrypted),
+    };
+    self.postMessage(event);
+  } catch (err: unknown) {
+    pendingRewraps.delete(followUpId);
+    if (import.meta.env.DEV) {
+      console.warn("[triggerRewrap] failed for", followUpId, err);
+    }
+  } finally {
+    sodium.memzero(plaintext);
+  }
+}
+
+function handleRewrapBlob(req: RewrapBlobRequest): void {
+  if (!requireKeyed(req.id, "rewrapBlob")) return;
+
+  const sodium = requireSodium();
+  const tkTemp = rewrapTkTempCache.get(req.followUpId);
+  if (!tkTemp) {
+    postError(
+      req.id,
+      "rewrapBlob",
+      `No cached tk_temp for follow-up ${req.followUpId}`,
+      "TK_NOT_CACHED",
+    );
+    return;
+  }
+
+  const canonicalTk = tkCache.get(req.ticketId);
+  if (!canonicalTk) {
+    postError(
+      req.id,
+      "rewrapBlob",
+      `No cached tk for ticket ${req.ticketId}`,
+      "TK_NOT_CACHED",
+    );
+    return;
+  }
+
+  const ciphertextBuf = decode(req.ciphertext);
+
+  try {
+    const blobPlaintext = decryptContent(
+      ciphertextBuf as Ciphertext,
+      tkTemp as SymmetricKey,
+    );
+    try {
+      const reEncrypted = encryptContent(
+        blobPlaintext,
+        canonicalTk as SymmetricKey,
+      );
+      const msg: WorkerResponse = {
+        id: req.id,
+        ok: true,
+        type: "rewrapBlob",
+        encryptedData: encode(reEncrypted),
+        blobKey: req.blobKey,
+        category: req.category,
+      };
+      self.postMessage(msg);
+    } finally {
+      sodium.memzero(blobPlaintext);
+    }
+  } catch (err: unknown) {
+    postError(
+      req.id,
+      "rewrapBlob",
+      err instanceof Error ? err.message : String(err),
+      "REWRAP_FAILED",
+    );
+  }
+}
+
+function handleRewrapResult(event: RewrapResultEvent): void {
+  pendingRewraps.delete(event.followUpId);
+  const tkTemp = rewrapTkTempCache.get(event.followUpId);
+  if (tkTemp) {
+    requireSodium().memzero(tkTemp);
+    rewrapTkTempCache.delete(event.followUpId);
   }
 }
 
@@ -392,13 +591,21 @@ function handleZeroAll(id: number): void {
 
   tkCache.zeroAll();
 
+  for (const tkTemp of rewrapTkTempCache.values()) {
+    sodium.memzero(tkTemp);
+  }
+  rewrapTkTempCache.clear();
+  pendingRewraps.clear();
+
   volPrivate = zeroAndClear(sodium, volPrivate);
   masterKey = zeroAndClear(sodium, masterKey);
   stretched = zeroAndClear(sodium, stretched);
   blindState = zeroAndClear(sodium, blindState);
+  orgSecret = zeroAndClear(sodium, orgSecret);
 
-  // volPublic is public (stored on server), no memzero needed
+  // Public keys are not secret, no memzero needed
   volPublic = null;
+  orgPublicKey = null;
   state = "READY";
 
   const msg: WorkerResponse = { id, ok: true, type: "zeroAll" };
@@ -423,9 +630,9 @@ function handleUnwrapOrgKey(req: UnwrapOrgKeyRequest): void {
   const ephemeralPoint = decode(req.ephemeralPoint);
   const nonce = decode(req.nonce);
   const wrappedKey = decode(req.wrappedOrgKey);
+  const sodium = requireSodium();
 
   try {
-    // care-y-ignore-next-line no-org-private-key-server -- client-side Worker, not server
     const unwrappedOrgSecret = eciesDecrypt(
       ephemeralPoint as RistrettoPoint,
       nonce as Nonce,
@@ -433,26 +640,23 @@ function handleUnwrapOrgKey(req: UnwrapOrgKeyRequest): void {
       assertPresent(volPrivate, "volPrivate"),
     );
 
-    // Transfer the unwrapped org secret to the main thread (non-PII tier).
-    // Using Transferable so the Worker copy is neutered.
-    // Copy into a fresh ArrayBuffer to ensure correct type and clean ownership.
-    const abuf = new ArrayBuffer(unwrappedOrgSecret.byteLength);
-    new Uint8Array(abuf).set(unwrappedOrgSecret);
-    const sodium = requireSodium();
+    // Zero any previous org key before storing the new one
+    orgSecret = zeroAndClear(sodium, orgSecret);
+    orgPublicKey = null;
+
+    // Keep the secret in the Worker. Derive the Curve25519 public key.
+    orgSecret = new Uint8Array(unwrappedOrgSecret.byteLength);
+    orgSecret.set(unwrappedOrgSecret);
     sodium.memzero(unwrappedOrgSecret);
+    orgPublicKey = sodium.crypto_scalarmult_base(orgSecret);
 
     const msg: WorkerResponse = {
       id: req.id,
       ok: true,
       type: "unwrapOrgKey",
-      // care-y-ignore-next-line no-org-private-key-server -- protocol field name, client-side Worker
-      orgPrivateKey: abuf,
+      orgPublicKey: encode(orgPublicKey),
     };
-    // postMessage with Transferable list. In a Worker global scope,
-    // postMessage accepts (message, transfer[]) but TypeScript resolves
-    // to the Window overload in this compilation target. Use the
-    // structured options form which both overloads accept.
-    self.postMessage(msg, { transfer: [abuf] });
+    self.postMessage(msg);
   } catch (err: unknown) {
     postError(
       req.id,
@@ -540,64 +744,261 @@ function handleRewrapTk(req: RewrapTkRequest): void {
   }
 }
 
-// ── Message dispatcher ──────────────────────────────────────────────
+function handleCreateTicketKey(req: CreateTicketKeyRequest): void {
+  if (!requireKeyed(req.id, "createTicketKey")) return;
 
-self.addEventListener("message", (event: MessageEvent<WorkerRequest>): void => {
-  const req = event.data;
+  const sodium = requireSodium();
+  const tk = generateContentKey();
 
-  const handle = async (): Promise<void> => {
-    switch (req.type) {
-      case "init":
-        await handleInit(req.id);
-        break;
-      case "argon2id":
-        handleArgon2id(req);
-        break;
-      case "oprfBlind":
-        handleOprfBlind(req.id);
-        break;
-      case "deriveKeys":
-        handleDeriveKeys(req);
-        break;
-      case "decryptContent":
-        handleDecryptContent(req);
-        break;
-      case "encryptContent":
-        handleEncryptContent(req);
-        break;
-      case "decryptBlob":
-        handleDecryptBlob(req);
-        break;
-      case "evictTk":
-        handleEvictTk(req);
-        break;
-      case "zeroAll":
-        handleZeroAll(req.id);
-        break;
-      case "getVolPublic":
-        handleGetVolPublic(req.id);
-        break;
-      case "unwrapOrgKey":
-        handleUnwrapOrgKey(req);
-        break;
-      case "unwrapTk":
-        handleUnwrapTk(req);
-        break;
-      case "wrapWithVolPublic":
-        handleWrapWithVolPublic(req);
-        break;
-      case "rewrapTk":
-        handleRewrapTk(req);
-        break;
-    }
-  };
+  try {
+    const encryptedFields = req.fields.map((f) => {
+      const plaintextBuf = textEncoder.encode(f.plaintext);
+      const ciphertext = encryptContent(plaintextBuf, tk);
+      return { name: f.name, ciphertext: encode(ciphertext) };
+    });
 
-  handle().catch((err: unknown) => {
+    const wrap = eciesEncrypt(tk, assertPresent(volPublic, "volPublic"));
+    const keyGeneration = crypto.randomUUID();
+
+    const msg: WorkerResponse = {
+      id: req.id,
+      ok: true,
+      type: "createTicketKey",
+      encryptedFields,
+      keyWrap: {
+        ephemeralPoint: encode(wrap.ephemeralPoint),
+        nonce: encode(wrap.nonce),
+        wrappedKey: encode(wrap.ciphertext),
+      },
+      keyGeneration,
+    };
+    self.postMessage(msg);
+  } catch (err: unknown) {
     postError(
       req.id,
-      req.type,
+      "createTicketKey",
       err instanceof Error ? err.message : String(err),
-      "WORKER_ERROR",
+      "ENCRYPT_FAILED",
     );
-  });
-});
+  } finally {
+    sodium.memzero(tk);
+  }
+}
+
+// ── Org-tier sealed-box handlers ────────────────────────────────────
+
+function handleOrgDecrypt(req: OrgDecryptRequest): void {
+  if (!requireOrgKeyed(req.id, "orgDecrypt")) return;
+
+  const sodium = requireSodium();
+  const ciphertext = decode(req.ciphertext);
+
+  try {
+    const plainBytes = sodium.crypto_box_seal_open(
+      ciphertext,
+      assertPresent(orgPublicKey, "orgPublicKey"),
+      assertPresent(orgSecret, "orgSecret"),
+    );
+
+    try {
+      // Return base64 of raw bytes (not UTF-8 text) to support binary content
+      const msg: WorkerResponse = {
+        id: req.id,
+        ok: true,
+        type: "orgDecrypt",
+        plaintext: encode(plainBytes),
+      };
+      self.postMessage(msg);
+    } finally {
+      sodium.memzero(plainBytes);
+    }
+  } catch (err: unknown) {
+    postError(
+      req.id,
+      "orgDecrypt",
+      err instanceof Error ? err.message : String(err),
+      "DECRYPT_FAILED",
+    );
+  }
+}
+
+function handleOrgEncrypt(req: OrgEncryptRequest): void {
+  if (!requireOrgKeyed(req.id, "orgEncrypt")) return;
+
+  const sodium = requireSodium();
+  const plaintext = decode(req.plaintext);
+
+  try {
+    const ciphertext = sodium.crypto_box_seal(
+      plaintext,
+      assertPresent(orgPublicKey, "orgPublicKey"),
+    );
+
+    const msg: WorkerResponse = {
+      id: req.id,
+      ok: true,
+      type: "orgEncrypt",
+      ciphertext: encode(ciphertext),
+    };
+    self.postMessage(msg);
+  } catch (err: unknown) {
+    postError(
+      req.id,
+      "orgEncrypt",
+      err instanceof Error ? err.message : String(err),
+      "ENCRYPT_FAILED",
+    );
+  }
+}
+
+function handleOrgDecryptBatch(req: OrgDecryptBatchRequest): void {
+  if (!requireOrgKeyed(req.id, "orgDecryptBatch")) return;
+
+  const sodium = requireSodium();
+  const pk = assertPresent(orgPublicKey, "orgPublicKey");
+  const sk = assertPresent(orgSecret, "orgSecret");
+
+  const results: { cacheKey: string; plaintext: string | null }[] =
+    req.items.map((item) => {
+      try {
+        const ciphertext = decode(item.ciphertext);
+        const plainBytes = sodium.crypto_box_seal_open(ciphertext, pk, sk);
+        const plaintext = textDecoder.decode(plainBytes);
+        sodium.memzero(plainBytes);
+        return { cacheKey: item.cacheKey, plaintext };
+      } catch {
+        return { cacheKey: item.cacheKey, plaintext: null };
+      }
+    });
+
+  const msg: WorkerResponse = {
+    id: req.id,
+    ok: true,
+    type: "orgDecryptBatch",
+    results,
+  };
+  self.postMessage(msg);
+}
+
+function handleExportOrgSecretKey(req: ExportOrgSecretKeyRequest): void {
+  if (!requireOrgKeyed(req.id, "exportOrgSecretKey")) return;
+
+  const sk = assertPresent(orgSecret, "orgSecret");
+  const abuf = new ArrayBuffer(sk.byteLength);
+  new Uint8Array(abuf).set(sk);
+
+  const msg: WorkerResponse = {
+    id: req.id,
+    ok: true,
+    type: "exportOrgSecretKey",
+    orgSecretKey: abuf,
+  };
+  self.postMessage(msg, { transfer: [abuf] });
+}
+
+function handleGetOrgPublicKey(id: number): void {
+  if (!requireOrgKeyed(id, "getOrgPublicKey")) return;
+
+  const msg: WorkerResponse = {
+    id,
+    ok: true,
+    type: "getOrgPublicKey",
+    orgPublicKey: encode(assertPresent(orgPublicKey, "orgPublicKey")),
+  };
+  self.postMessage(msg);
+}
+
+// ── Message dispatcher ──────────────────────────────────────────────
+
+self.addEventListener(
+  "message",
+  (event: MessageEvent<WorkerRequest | RewrapResultEvent>): void => {
+    const req = event.data;
+
+    // Handle main-thread events (not request-response)
+    if ("kind" in req) {
+      handleRewrapResult(req);
+      return;
+    }
+
+    const handle = async (): Promise<void> => {
+      switch (req.type) {
+        case "init":
+          await handleInit(req.id);
+          break;
+        case "argon2id":
+          handleArgon2id(req);
+          break;
+        case "oprfBlind":
+          handleOprfBlind(req.id);
+          break;
+        case "deriveKeys":
+          handleDeriveKeys(req);
+          break;
+        case "decryptContent":
+          handleDecryptContent(req);
+          break;
+        case "decryptAndRewrap":
+          handleDecryptAndRewrap(req);
+          break;
+        case "rewrapBlob":
+          handleRewrapBlob(req);
+          break;
+        case "encryptContent":
+          handleEncryptContent(req);
+          break;
+        case "decryptBlob":
+          handleDecryptBlob(req);
+          break;
+        case "evictTk":
+          handleEvictTk(req);
+          break;
+        case "zeroAll":
+          handleZeroAll(req.id);
+          break;
+        case "getVolPublic":
+          handleGetVolPublic(req.id);
+          break;
+        case "unwrapOrgKey":
+          handleUnwrapOrgKey(req);
+          break;
+        case "unwrapTk":
+          handleUnwrapTk(req);
+          break;
+        case "wrapWithVolPublic":
+          handleWrapWithVolPublic(req);
+          break;
+        case "rewrapTk":
+          handleRewrapTk(req);
+          break;
+        case "createTicketKey":
+          handleCreateTicketKey(req);
+          break;
+        case "orgDecrypt":
+          handleOrgDecrypt(req);
+          break;
+        case "orgEncrypt":
+          handleOrgEncrypt(req);
+          break;
+        case "orgDecryptBatch":
+          handleOrgDecryptBatch(req);
+          break;
+        case "exportOrgSecretKey":
+          handleExportOrgSecretKey(req);
+          break;
+        case "getOrgPublicKey":
+          handleGetOrgPublicKey(req.id);
+          break;
+      }
+    };
+
+    handle().catch((err: unknown) => {
+      postError(
+        req.id,
+        req.type,
+        err instanceof Error ? err.message : String(err),
+        "WORKER_ERROR",
+      );
+    });
+  },
+);

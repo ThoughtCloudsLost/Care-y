@@ -72,6 +72,7 @@
   <Message
     type={followUp.source === "client" ? "received" : "sent"}
     name={followUp.source === "client" ? clientAlias : undefined}
+    data-source={followUp.source === "client" ? "client" : "volunteer"}
   >
     {#snippet text()}
       <span class="bubble-text">

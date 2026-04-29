@@ -33,7 +33,7 @@
   import type { BrandingField } from "@care-y/shared";
   import QueryError from "$lib/components/QueryError.svelte";
   import DecryptPlaceholder from "$lib/components/DecryptPlaceholder.svelte";
-  import SoftButton from "$lib/components/SoftButton.svelte";
+  import SoftButton from "$lib/components/inputs/SoftButton.svelte";
   import ShellSheet from "$lib/shell/ShellSheet.svelte";
 
   if (!trpc.branding) throw new RouterNotAvailableError("branding");
@@ -102,21 +102,29 @@
       logoBlobUrl = null;
       return;
     }
-    try {
-      const raw = brandingQuery.data.encryptedLogo;
-      const ciphertext =
-        typeof raw === "string"
-          ? Uint8Array.from(atob(raw), (c) => c.charCodeAt(0))
-          : new Uint8Array((raw as { data: number[] }).data);
-      const plainBytes = orgKeyManager.decrypt(ciphertext);
-      const url = URL.createObjectURL(
-        new Blob([new Uint8Array(plainBytes).buffer]),
-      );
-      logoBlobUrl = url;
-      return () => URL.revokeObjectURL(url);
-    } catch {
-      logoBlobUrl = null;
-    }
+    const raw = brandingQuery.data.encryptedLogo;
+    const ciphertext =
+      typeof raw === "string"
+        ? Uint8Array.from(atob(raw), (c) => c.charCodeAt(0))
+        : new Uint8Array((raw as { data: number[] }).data);
+
+    void (async () => {
+      try {
+        const plainBytes = await orgKeyManager.decrypt(ciphertext);
+        const url = URL.createObjectURL(
+          new Blob([new Uint8Array(plainBytes).buffer]),
+        );
+        // Revoke previous URL before setting new one
+        if (logoBlobUrl !== null) URL.revokeObjectURL(logoBlobUrl);
+        logoBlobUrl = url;
+      } catch {
+        logoBlobUrl = null;
+      }
+    })();
+
+    return () => {
+      if (logoBlobUrl !== null) URL.revokeObjectURL(logoBlobUrl);
+    };
   });
 
   // ── Sheet state ──
@@ -256,15 +264,17 @@
 
   // ── Encrypt helpers ──
 
-  function encryptField(value: string): string {
+  async function encryptField(value: string): Promise<string> {
     const plainBytes = encoder.encode(value);
-    const cipherBytes = orgKeyManager.encrypt(plainBytes);
+    const cipherBytes = await orgKeyManager.encrypt(plainBytes);
     return uint8ArrayToBase64(cipherBytes);
   }
 
   async function encryptLogo(file: File): Promise<string> {
     const arrayBuffer = await file.arrayBuffer();
-    const cipherBytes = orgKeyManager.encrypt(new Uint8Array(arrayBuffer));
+    const cipherBytes = await orgKeyManager.encrypt(
+      new Uint8Array(arrayBuffer),
+    );
     return uint8ArrayToBase64(cipherBytes);
   }
 
@@ -457,7 +467,7 @@
     if (nameChanged) {
       fields.push({
         field: "name",
-        encryptedValue: encryptField(editName),
+        encryptedValue: await encryptField(editName),
         clientEncryptedBranding: clientBlob,
       });
     }
@@ -465,7 +475,7 @@
     if (colorChanged && isValidHexColor(editColor)) {
       fields.push({
         field: "primary_color",
-        encryptedValue: encryptField(editColor),
+        encryptedValue: await encryptField(editColor),
         clientEncryptedBranding: clientBlob,
       });
     }
@@ -473,7 +483,7 @@
     if (accentChanged && isValidHexColor(editAccent)) {
       fields.push({
         field: "accent_color",
-        encryptedValue: encryptField(editAccent),
+        encryptedValue: await encryptField(editAccent),
         clientEncryptedBranding: clientBlob,
       });
     }
@@ -481,7 +491,7 @@
     if (textChanged) {
       fields.push({
         field: "client_text",
-        encryptedValue: encryptField(editText),
+        encryptedValue: await encryptField(editText),
         clientEncryptedBranding: clientBlob,
       });
     }

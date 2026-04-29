@@ -11,7 +11,7 @@
   import { haptic } from "$lib/utils/haptic.js";
   import { RouterNotAvailableError } from "$lib/errors.js";
   import ShellSheet from "$lib/shell/ShellSheet.svelte";
-  import SoftButton from "$lib/components/SoftButton.svelte";
+  import SoftButton from "$lib/components/inputs/SoftButton.svelte";
 
   export interface CategoryEntry {
     id: string;
@@ -43,9 +43,9 @@
 
   const canSave = $derived(editName.trim().length > 0 && !saving);
 
-  function encryptText(text: string): string {
+  async function encryptText(text: string): Promise<string> {
     const plaintext = new TextEncoder().encode(text);
-    const ciphertext = orgKeyManager.encrypt(plaintext);
+    const ciphertext = await orgKeyManager.encrypt(plaintext);
     return uint8ArrayToBase64(ciphertext);
   }
 
@@ -77,9 +77,9 @@
 
     saving = true;
 
-    const encryptedName = encryptText(trimmedName);
+    const encryptedName = await encryptText(trimmedName);
     const encryptedDescription =
-      trimmedDesc.length > 0 ? encryptText(trimmedDesc) : undefined;
+      trimmedDesc.length > 0 ? await encryptText(trimmedDesc) : undefined;
 
     try {
       if (isAdding) {

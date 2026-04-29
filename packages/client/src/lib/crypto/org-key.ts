@@ -1,27 +1,24 @@
 /**
- * Main-thread org key manager for non-PII tier decryption.
+ * Main-thread org key facade for non-PII tier operations.
  *
- * Holds the Curve25519 org secret key in memory for the duration of the
- * session. Used to decrypt branding assets, KB articles, and shared org
- * config that are sealed with the org's public key (crypto_box_seal).
+ * After the Worker isolation migration (ADR-042), this class is a thin
+ * async facade. The org secret key lives exclusively in the crypto Worker.
+ * The main thread retains only the org public key (non-secret, needed for
+ * branding key derivation checks and isLoaded guard).
  *
- * The org secret is received as a Transferable ArrayBuffer from the
- * crypto Worker's unwrapOrgKey response. The Worker uses volPrivate to
- * ECIES-unwrap the org key, then transfers ownership to the main thread.
- *
- * This key is less sensitive than PII-tier keys (shared across all
- * volunteers, not per-user), so it lives on the main thread to avoid
- * postMessage round-trips for every branding/KB decrypt. It is zeroed
- * on logout, idle timeout, and beforeunload.
+ * Encrypt/decrypt operations delegate to the Worker via CryptoBridge.
+ * The public key is cached locally for synchronous access (getPublicKey,
+ * isLoaded) since it is not secret material.
  *
  * References:
+ *   ADR-042  Org key Worker isolation
  *   SEC-206  ProtonMail Worker key isolation pattern
- *   SEC-207  ProtonMail CryptoProxy (non-PII on main thread)
  */
 
-import { requireSodium } from "@care-y/crypto";
+import { decode, encode } from "@care-y/crypto";
+import type { CryptoBridge } from "$lib/workers/crypto-bridge.js";
 
-/** Thrown when decrypt is called before the org key has been loaded. */
+/** Thrown when operations are called before the org key has been loaded. */
 export class OrgKeyNotLoadedError extends Error {
   constructor() {
     super("Org encryption key not loaded. Please log in again.");
@@ -29,100 +26,65 @@ export class OrgKeyNotLoadedError extends Error {
   }
 }
 
-// care-y-ignore-next-line no-org-private-key-server -- this is a CLIENT-SIDE class (packages/client/).
-// The org secret key lives in browser memory only, received via Transferable from the crypto Worker.
-// It is never sent to the server. The server holds only the ECIES-wrapped blob (wrapped_org_keys table).
 export class OrgKeyManager {
-  private orgSecret: Uint8Array | null = null;
   private orgPublicKey: Uint8Array | null = null;
+  private readonly bridge: CryptoBridge;
 
-  /**
-   * Load the org secret key from a buffer.
-   *
-   * Accepts ArrayBufferLike (covers both ArrayBuffer from Transferable
-   * postMessage and Uint8Array.buffer which returns ArrayBufferLike).
-   * Called once after loginCrypto completes and the Worker transfers
-   * the unwrapped org key back to the main thread.
-   */
-  load(orgKeyBuffer: ArrayBufferLike): void {
-    const sodium = requireSodium();
-    if (this.orgSecret) {
-      // Zero the previous key before replacing (e.g., re-login without logout)
-      sodium.memzero(this.orgSecret);
-    }
-    if (this.orgPublicKey) {
-      sodium.memzero(this.orgPublicKey);
-    }
-    this.orgSecret = new Uint8Array(orgKeyBuffer);
-    this.orgPublicKey = sodium.crypto_scalarmult_base(this.orgSecret);
+  constructor(bridge: CryptoBridge) {
+    this.bridge = bridge;
   }
 
   /**
-   * Encrypt plaintext using the org public key (crypto_box_seal).
+   * Load the org public key from a base64 string.
    *
-   * Sealed-box encryption: anyone with the public key can encrypt,
-   * only the holder of the secret key can decrypt. Used for shortcut
-   * names and other org-tier content created client-side.
+   * Called after the Worker's unwrapOrgKey response returns the public key.
+   * The secret stays in the Worker. This just caches the public key locally
+   * for synchronous getPublicKey() and isLoaded checks.
    */
-  encrypt(plaintext: Uint8Array): Uint8Array {
+  load(orgPublicKeyBase64: string): void {
+    this.orgPublicKey = decode(orgPublicKeyBase64);
+  }
+
+  /**
+   * Encrypt plaintext using the org public key (crypto_box_seal) via Worker.
+   * Returns the sealed ciphertext as Uint8Array.
+   */
+  async encrypt(plaintext: Uint8Array): Promise<Uint8Array> {
     if (!this.orgPublicKey) {
       throw new OrgKeyNotLoadedError();
     }
 
-    const sodium = requireSodium();
-    return sodium.crypto_box_seal(plaintext, this.orgPublicKey);
+    const ciphertextB64 = await this.bridge.orgEncrypt(encode(plaintext));
+    return decode(ciphertextB64);
   }
 
   /**
-   * Decrypt a sealed box ciphertext using the org keypair.
-   *
-   * crypto_box_seal_open requires both the public key and secret key.
-   * The public key is derived from the secret key via crypto_scalarmult_base
-   * (Curve25519 base point multiplication). The derived pk is zeroed after use.
+   * Decrypt a sealed box ciphertext via Worker.
+   * Returns the plaintext as Uint8Array.
    */
-  decrypt(ciphertext: Uint8Array): Uint8Array {
-    if (!this.orgSecret || !this.orgPublicKey) {
+  async decrypt(ciphertext: Uint8Array): Promise<Uint8Array> {
+    if (!this.orgPublicKey) {
       throw new OrgKeyNotLoadedError();
     }
 
-    const sodium = requireSodium();
-    return sodium.crypto_box_seal_open(
-      ciphertext,
-      this.orgPublicKey,
-      this.orgSecret,
-    );
-  }
-
-  /** Zero the org secret key. Idempotent (safe to call multiple times). */
-  zero(): void {
-    if (this.orgSecret || this.orgPublicKey) {
-      const sodium = requireSodium();
-      if (this.orgPublicKey) {
-        sodium.memzero(this.orgPublicKey);
-        this.orgPublicKey = null;
-      }
-      if (this.orgSecret) {
-        sodium.memzero(this.orgSecret);
-        this.orgSecret = null;
-      }
-    }
+    const rawBytesB64 = await this.bridge.orgDecrypt(encode(ciphertext));
+    return decode(rawBytesB64);
   }
 
   /**
-   * Return a copy of the raw org secret key bytes for escrow export.
-   * Returns null if the key is not loaded. The caller receives a copy
-   * so it can be passed to encryptWithPassphrase without exposing the
-   * internal buffer to external zeroing.
+   * Export the org secret key from the Worker for escrow/password-change.
+   * The caller MUST zero the returned buffer immediately after use.
    */
-  getSecretKey(): Uint8Array | null {
-    if (!this.orgSecret) return null;
-    return new Uint8Array(this.orgSecret);
+  async getSecretKey(): Promise<Uint8Array | null> {
+    if (!this.orgPublicKey) return null;
+
+    const abuf = await this.bridge.exportOrgSecretKey();
+    return new Uint8Array(abuf);
   }
 
   /**
    * Return a copy of the org public key (Curve25519, 32 bytes).
-   * Used for client branding key derivation (BLAKE2b hash, not EC ops).
-   * Returns null if the key is not loaded.
+   * Synchronous, uses locally cached value. Returns null if not loaded.
    */
   getPublicKey(): Uint8Array | null {
     if (!this.orgPublicKey) return null;
@@ -131,6 +93,11 @@ export class OrgKeyManager {
 
   /** Whether the org key is currently loaded (for UI status indicators). */
   get isLoaded(): boolean {
-    return this.orgSecret !== null;
+    return this.orgPublicKey !== null;
+  }
+
+  /** Clear the local public key. Secret is zeroed by Worker's zeroAll. */
+  zero(): void {
+    this.orgPublicKey = null;
   }
 }

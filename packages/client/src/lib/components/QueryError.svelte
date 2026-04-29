@@ -56,6 +56,8 @@
       m.error_cannot_assign_closed_ticket(),
     [ErrorCode.CANNOT_TAKE_CLOSED_TICKET]: () =>
       m.error_cannot_take_closed_ticket(),
+    [ErrorCode.TICKET_ALREADY_OPEN]: () => m.error_ticket_already_open(),
+    [ErrorCode.TOKEN_EXPIRED]: () => m.error_token_expired(),
     [ErrorCode.TICKET_ALREADY_ASSIGNED]: () =>
       m.error_ticket_already_assigned(),
     [ErrorCode.NOT_ASSIGNED_TO_TICKET]: () => m.error_not_assigned_to_ticket(),
