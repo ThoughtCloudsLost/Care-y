@@ -18,6 +18,7 @@
   import { announceToLiveRegion } from "$lib/utils/announce.js";
   import WizardStepper from "$lib/components/onboarding/WizardStepper.svelte";
   import SetupAccount from "$lib/components/onboarding/SetupAccount.svelte";
+  import SecurityBriefing from "$lib/components/onboarding/SecurityBriefing.svelte";
 
   const STEP_LABELS = [
     m.onboarding_step_account(),
@@ -104,17 +105,7 @@
   {#if step === 0}
     <SetupAccount oncomplete={handleAccountComplete} />
   {:else if step === 1}
-    <Block>
-      <h2 class="step-heading">
-        {m.onboarding_placeholder_heading_briefing()}
-      </h2>
-      <p class="step-subtext">{m.onboarding_placeholder_pending()}</p>
-      <div class="mt-4">
-        <Button large onclick={advanceStep}
-          >{m.onboarding_placeholder_continue()}</Button
-        >
-      </div>
-    </Block>
+    <SecurityBriefing onconfirm={advanceStep} />
   {:else if step === 2}
     <Block>
       <h2 class="step-heading">{m.onboarding_placeholder_heading_org()}</h2>
