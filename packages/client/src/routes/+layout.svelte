@@ -5,7 +5,12 @@
   import { browser } from "$app/environment";
   import favicon from "$lib/assets/favicon.svg";
   import { initKeyboardViewport } from "$lib/utils/keyboard-viewport";
-  import { getBrandingTitle } from "$lib/branding/title.svelte.js";
+  import {
+    getBrandingTitle,
+    setBrandingTitle,
+  } from "$lib/branding/title.svelte.js";
+  import { getCachedBranding, applyBranding } from "$lib/branding/index.js";
+  import { dismissSplash } from "$lib/branding/dismiss-splash.js";
   import CryptoProvider from "$lib/providers/CryptoProvider.svelte";
   import ThemeProvider from "$lib/providers/ThemeProvider.svelte";
 
@@ -23,6 +28,18 @@
     if (!browser) return;
 
     const cleanupKeyboard = initKeyboardViewport();
+
+    // Hydrate cached branding (colors, title) and dismiss the splash screen.
+    // BrandingProvider in (app) routes does a richer server-authoritative
+    // refresh later, but this guarantees the splash clears for ALL route
+    // groups (login, onboarding, app) without waiting for auth.
+    void getCachedBranding().then((cached) => {
+      if (cached) {
+        void applyBranding(cached);
+        setBrandingTitle(cached.orgName);
+      }
+      dismissSplash();
+    });
 
     return () => {
       cleanupKeyboard();

@@ -1,11 +1,23 @@
 <script lang="ts">
-  import { List, ListItem, Link } from "konsta/svelte";
+  import { browser } from "$app/environment";
+  import {
+    List,
+    ListItem,
+    Link,
+    BlockTitle,
+    Block,
+    Button,
+  } from "konsta/svelte";
   import { ChevronLeft } from "@lucide/svelte";
   import { createQuery } from "@tanstack/svelte-query";
   import * as m from "$lib/paraglide/messages.js";
   import { trpc } from "$lib/trpc/index.js";
   import { authKeys } from "$lib/query/keys.js";
-  import { getOrgDecryptCache } from "$lib/crypto/context.js";
+  import {
+    getOrgDecryptCache,
+    getCryptoBridge,
+    getOrgKeyManager,
+  } from "$lib/crypto/context.js";
   import { getNavbarOverrideCtx } from "$lib/shell/context.js";
   import { shellBack } from "$lib/shell/navigation.js";
   import { base64ToUint8Array } from "$lib/utils/buffer-encoding.js";
@@ -39,6 +51,42 @@
   let displayNameSheetOpen = $state(false);
   let usernameSheetOpen = $state(false);
   let passwordSheetOpen = $state(false);
+
+  // ── Dev-only seed ───────────────────────────────────────────────────
+  type SeedPhase = "idle" | "seeding" | "done" | "error";
+  let seedPhase = $state<SeedPhase>("idle");
+  let seedError = $state("");
+
+  let alreadySeeded = $state(false);
+  if (browser) {
+    try {
+      alreadySeeded = localStorage.getItem("care-y:dev-seeded") === "true";
+    } catch {
+      // localStorage unavailable
+    }
+  }
+
+  async function handleDevSeed(): Promise<void> {
+    seedPhase = "seeding";
+    seedError = "";
+    try {
+      const bridge = getCryptoBridge();
+      const orgKeyManager = getOrgKeyManager();
+      const { devSeedData } = await import("$lib/dev/dev-seed.js");
+      await devSeedData(bridge, orgKeyManager);
+      seedPhase = "done";
+      try {
+        localStorage.setItem("care-y:dev-seeded", "true");
+      } catch {
+        // localStorage unavailable
+      }
+      alreadySeeded = true;
+    } catch (err: unknown) {
+      seedPhase = "error";
+      seedError = err instanceof Error ? err.message : String(err);
+      console.error("[dev-seed] Failed:", err);
+    }
+  }
 
   function goBack(): void {
     shellBack("/more");
@@ -94,6 +142,26 @@
       }}
     />
   </List>
+
+  {#if import.meta.env.DEV}
+    <!-- eslint-disable care-y/no-hardcoded-strings -- dev-only UI, tree-shaken from production -->
+    <BlockTitle>Developer</BlockTitle>
+    <Block strong inset>
+      {#if seedPhase === "done"}
+        <p class="dev-seed-status">Seed data created.</p>
+      {:else if seedPhase === "error"}
+        <p class="dev-seed-error">{seedError}</p>
+      {/if}
+      {#if seedPhase === "seeding"}
+        <Button large disabled>Seeding...</Button>
+      {:else if alreadySeeded && seedPhase !== "error"}
+        <Button large outline onclick={handleDevSeed}>Re-seed Dev Data</Button>
+      {:else}
+        <Button large onclick={handleDevSeed}>Seed Dev Data</Button>
+      {/if}
+    </Block>
+    <!-- eslint-enable care-y/no-hardcoded-strings -->
+  {/if}
 </div>
 
 <DisplayNameSheet
@@ -123,5 +191,18 @@
 <style>
   .settings-page {
     padding: var(--space-md) 0;
+  }
+
+  .dev-seed-status {
+    font-size: 0.875rem;
+    color: var(--k-color-brand-green, #16a34a);
+    margin-bottom: 0.5rem;
+  }
+
+  .dev-seed-error {
+    font-size: 0.875rem;
+    color: var(--k-color-brand-red, #dc2626);
+    margin-bottom: 0.5rem;
+    word-break: break-word;
   }
 </style>
