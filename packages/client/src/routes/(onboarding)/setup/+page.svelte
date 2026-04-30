@@ -16,6 +16,7 @@
   import { trpc } from "$lib/trpc/index.js";
   import { onboardingKeys } from "$lib/query/keys.js";
   import { announceToLiveRegion } from "$lib/utils/announce.js";
+  import { RouterNotAvailableError } from "$lib/errors.js";
   import WizardStepper from "$lib/components/onboarding/WizardStepper.svelte";
   import SetupAccount from "$lib/components/onboarding/SetupAccount.svelte";
   import SecurityBriefing from "$lib/components/onboarding/SecurityBriefing.svelte";
@@ -50,7 +51,7 @@
 
   const onboarding = trpc.onboarding;
   if (!onboarding) {
-    throw new Error("Onboarding router not available");
+    throw new RouterNotAvailableError("onboarding");
   }
 
   const statusQuery = createQuery(() => ({
