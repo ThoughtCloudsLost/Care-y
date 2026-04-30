@@ -201,6 +201,9 @@
   "error_invalid_verification_code": "Código de verificación inválido o expirado.",
   "error_greeting_not_found": "Saludo no encontrado.",
   "error_sms_response_not_found": "Respuesta SMS no encontrada.",
+  "error_org_already_setup": "Esta organización ya ha sido configurada.",
+  "error_invalid_invite_token": "Este enlace de invitación es inválido o ha expirado.",
+  "error_bootstrap_rate_limited": "Demasiados intentos de configuración. Inténtalo más tarde.",
 
   "email_verification_subject": "Tu código de verificación",
   "email_verification_body": "Tu código de verificación es: {code}. Este código expira en 5 minutos. Si no solicitaste este código, puedes ignorar este correo.",

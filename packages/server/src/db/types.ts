@@ -126,6 +126,8 @@ export interface OrgConfigTable {
   icon_192_blob_key: string | null;
   icon_512_blob_key: string | null;
   icon_maskable_blob_key: string | null;
+  default_language: ColumnType<string, string | undefined, string>;
+  setup_telephony_config: Buffer | null; // encrypted JSON blob (nonce || ciphertext), set during wizard
   default_note_type_id: string | null;
   intake_queue_id: string | null;
 }
@@ -523,6 +525,18 @@ export interface VapidConfigTable {
   created_at: Generated<Date>;
 }
 
+// --- Invite tokens (onboarding) ---
+export interface InviteTokensTable {
+  id: Generated<string>;
+  token_hash: Buffer;
+  invited_by: string;
+  encrypted_email: Buffer | null;
+  role_id: string;
+  expires_at: Date;
+  consumed_at: Date | null;
+  created_at: Generated<Date>;
+}
+
 export interface TenantDatabase {
   users: UsersTable;
   sessions: SessionsTable;
@@ -570,6 +584,8 @@ export interface TenantDatabase {
   // Note types (internal note categorization)
   note_types: NoteTypesTable;
   followup_reactions: FollowupReactionsTable;
+  // Onboarding
+  invite_tokens: InviteTokensTable;
   // Shifts (shifts, shift_occurrences)
   // Client portal (portal_channels)
 }

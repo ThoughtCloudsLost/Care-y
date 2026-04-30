@@ -493,6 +493,21 @@ const appRouter = createAppRouter({
       maxRequests: 3,
     }),
   },
+  onboardingDeps: {
+    orgService,
+    hasher,
+    encryptor,
+    indexer,
+    tokenizer,
+    bootstrapLimiter: createInMemoryRateLimiter({
+      windowMs: 3600_000,
+      maxRequests: 2,
+    }),
+    isSecureCookie: env.NODE_ENV === "production",
+    tenantDbFactory: tenantDb,
+    secretsEncryptor,
+    emailSender,
+  },
 });
 
 export type AppRouter = typeof appRouter;

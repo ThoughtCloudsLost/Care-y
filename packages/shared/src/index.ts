@@ -389,3 +389,23 @@ export {
   type UploadIconsInput,
   type BrandingData,
 } from "./schemas/branding.js";
+
+// --- Onboarding schemas ---
+export {
+  bootstrapAdminInputSchema,
+  updateOrgBasicsInputSchema,
+  validateInviteInputSchema,
+  registerFromInviteInputSchema,
+  generateInviteInputSchema,
+  saveTelephonyChoiceInputSchema,
+  wrapOrgKeyForUserSchema,
+  unwrappedUserSchema,
+  type BootstrapAdminInput,
+  type UpdateOrgBasicsInput,
+  type ValidateInviteInput,
+  type RegisterFromInviteInput,
+  type GenerateInviteInput,
+  type SaveTelephonyChoiceInput,
+  type WrapOrgKeyForUserInput,
+  type UnwrappedUser,
+} from "./schemas/onboarding.js";

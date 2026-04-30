@@ -201,6 +201,9 @@
   "error_invalid_verification_code": "Invalid or expired verification code.",
   "error_greeting_not_found": "Greeting not found.",
   "error_sms_response_not_found": "SMS response not found.",
+  "error_org_already_setup": "This organization has already been set up.",
+  "error_invalid_invite_token": "This invite link is invalid or has expired.",
+  "error_bootstrap_rate_limited": "Too many setup attempts. Try again later.",
 
   "email_verification_subject": "Your verification code",
   "email_verification_body": "Your verification code is: {code}. This code expires in 5 minutes. If you did not request this code, you can safely ignore this email.",
