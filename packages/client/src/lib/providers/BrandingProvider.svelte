@@ -19,6 +19,7 @@
     brandingIconUrl,
     DEFAULT_PRIMARY,
   } from "$lib/branding/index.js";
+  import { dismissSplash } from "$lib/branding/dismiss-splash.js";
   import { setBrandingTitle } from "$lib/branding/title.svelte.js";
   import {
     setAppleTouchIconHref,
@@ -73,16 +74,6 @@
       }
     } catch {
       // localStorage unavailable
-    }
-  }
-
-  function dismissSplash(): void {
-    document.body.classList.add("hydrated");
-    const splash = document.getElementById("splash");
-    if (splash) {
-      splash.addEventListener("transitionend", () => splash.remove(), {
-        once: true,
-      });
     }
   }
 

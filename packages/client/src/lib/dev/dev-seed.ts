@@ -1,137 +1,23 @@
 /**
- * Dev-only auto-login with full production crypto pipeline.
+ * Dev-only data seeding via production endpoints.
  *
- * Runs registerCrypto (Argon2id -> OPRF -> deriveKeys -> initCryptoKeys)
- * and loginCrypto (Worker-based key derivation -> KEYED state), then
- * rotates the throwaway org keypair (from seed) with a real client-generated
- * Curve25519 keypair, seals KB articles client-side, and seeds test tickets.
+ * Creates queues, KB categories, note types, KB articles, clients + tickets,
+ * and telephony config using the same tRPC mutations and relay endpoints that
+ * the production UI uses. Doubles as an integration test for create pipelines.
  *
- * The org key rotation matches the production flow: the browser generates
- * the keypair, ECIES-wraps the secret for authorized volunteers, and uploads
- * via the rotateOrgKey endpoint. The server never holds the org secret key.
- *
- * This file is dynamically imported only when import.meta.env.DEV is true,
- * so Vite's dead-code elimination strips it from production builds entirely.
+ * Dynamically imported behind `import.meta.env.DEV` so Vite tree-shakes it
+ * from production builds entirely.
  */
 import { trpc } from "$lib/trpc/index.js";
-import { setOrgKeyReady } from "$lib/crypto/org-key-ready.svelte.js";
-import { registerCrypto } from "$lib/auth/register-crypto.js";
-import { loginCrypto } from "$lib/auth/login-crypto.js";
-import { fetchAndUnwrapOrgKey } from "$lib/auth/crypto-helpers.js";
-import {
-  generateOrgKeypair,
-  sealForOrgKey,
-  wrapKey,
-  encode,
-  decode,
-  getSodium,
-  toRistrettoPoint,
-} from "@care-y/crypto";
-import type { RegisterCryptoCallbacks } from "$lib/auth/register-crypto.js";
-import type { LoginCryptoCallbacks } from "$lib/auth/login-crypto.js";
+import { sealForOrgKey, encode } from "@care-y/crypto";
+import { DEV_ORG_SLUG } from "$lib/utils/org-slug.js";
+import { ClientError, RelayError } from "$lib/errors.js";
 import type { CryptoBridge } from "$lib/workers/crypto-bridge.js";
 import type { OrgKeyManager } from "$lib/crypto/org-key.js";
+import type { EscalationTarget } from "@care-y/shared";
 
-const DEV_IDENTIFIER = "admin.dev";
-const DEV_PASSWORD = "dev-password-1234!";
-
-function getBypass2fa(): { mutate: () => Promise<unknown> } {
-  const route = trpc.auth.devBypass2fa;
-  if (!route) throw new Error("devBypass2fa route missing (not in dev mode?)");
-  return route;
-}
-
-function getDevSeedTickets(): { mutate: () => Promise<unknown> } {
-  // tickets and devSeedTickets are both conditionally spread on the server
-  // (ticketDeps optional, devSeedTickets dev-only), so TypeScript doesn't
-  // guarantee their existence. This file only runs in dev mode.
-  // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- dev-only, runtime guard follows
-  const tickets = trpc.tickets as
-    | Record<string, { mutate: () => Promise<unknown> }>
-    | undefined;
-  const route = tickets?.devSeedTickets;
-  if (route === undefined) {
-    throw new Error("devSeedTickets route missing (not in dev mode?)");
-  }
-  return route;
-}
-
-/** No-op callbacks for registerCrypto. Logs phase transitions for dev visibility. */
-const noopRegisterCallbacks: RegisterCryptoCallbacks = {
-  onArgon2idStart: () => {
-    console.log("[dev] registerCrypto: Argon2id start");
-  },
-  onArgon2idDone: () => {
-    console.log("[dev] registerCrypto: Argon2id done");
-  },
-  onOprfStart: () => {
-    console.log("[dev] registerCrypto: OPRF start");
-  },
-  onOprfDone: () => {
-    console.log("[dev] registerCrypto: OPRF done");
-  },
-  onDeriveStart: () => {
-    console.log("[dev] registerCrypto: derive start");
-  },
-  onDone: () => {
-    console.log("[dev] registerCrypto: done");
-  },
-  onUploadStart: () => {
-    console.log("[dev] registerCrypto: upload start");
-  },
-};
-
-/** No-op callbacks for loginCrypto. Logs phase transitions for dev visibility. */
-const noopLoginCallbacks: LoginCryptoCallbacks = {
-  onArgon2idStart: () => {
-    console.log("[dev] loginCrypto: Argon2id start");
-  },
-  onArgon2idDone: () => {
-    console.log("[dev] loginCrypto: Argon2id done");
-  },
-  onOprfStart: () => {
-    console.log("[dev] loginCrypto: OPRF start");
-  },
-  onOprfDone: () => {
-    console.log("[dev] loginCrypto: OPRF done");
-  },
-  onDeriveStart: () => {
-    console.log("[dev] loginCrypto: derive start");
-  },
-  onDone: () => {
-    console.log("[dev] loginCrypto: done");
-  },
-  onPowRequired: () => {
-    throw new Error("PoW should not be required in dev auto-login");
-  },
-};
-
-/**
- * Check if a tRPC error is a CONFLICT (e.g., crypto keys already initialized).
- * tRPC client errors have a `data` property with the server's error shape,
- * and the top-level `code` is the tRPC error code string.
- */
-function isConflictError(err: unknown): boolean {
-  if (typeof err !== "object" || err === null) return false;
-  // TRPCClientError exposes `.code` as the HTTP-style tRPC code
-  if ("code" in err) {
-    const { code } = err as Record<string, unknown>;
-    if (code === "CONFLICT") return true;
-  }
-  // Fallback: check data.httpStatus for 409
-  if ("data" in err) {
-    const { data } = err as Record<string, unknown>;
-    if (typeof data === "object" && data !== null && "httpStatus" in data) {
-      const { httpStatus } = data as Record<string, unknown>;
-      if (httpStatus === 409) return true;
-    }
-  }
-  return false;
-}
-
-// ── ProseMirror JSON helpers for seed content ───────────────────────
-// These build doc.toJSON()-compatible nodes. The real editor (06f.2)
-// will produce the same structure via ProseMirror's serialization.
+// ── ProseMirror JSON helpers ─────────────────────────────────────────
+// Build doc.toJSON()-compatible nodes for KB article bodies.
 
 interface PmMark {
   type: string;
@@ -221,7 +107,106 @@ function link(href: string): PmMark {
   return { type: "link", attrs: { href } };
 }
 
-/** KB article definitions for dev seeding (ProseMirror JSON bodies). */
+// ── Seed data definitions ────────────────────────────────────────────
+
+const QUEUES = [
+  { name: "Intake", escalateDays: 3 },
+  { name: "Crisis", escalateDays: 1 },
+  { name: "Housing", escalateDays: 5 },
+] as const;
+
+const KB_CATEGORIES = ["Procedures", "Resources", "Safety"] as const;
+
+interface NoteTypeDef {
+  name: string;
+  icon: string;
+  escalationTargets: EscalationTarget[];
+  requiresOnClose?: boolean;
+}
+
+const NOTE_TYPES: readonly NoteTypeDef[] = [
+  {
+    name: "Comment",
+    icon: "message-square-dashed",
+    escalationTargets: [{ type: "ticket_access" }],
+  },
+  {
+    name: "Resolution",
+    icon: "clipboard-check",
+    escalationTargets: [{ type: "ticket_access" }],
+    requiresOnClose: true,
+  },
+  {
+    name: "Safety Concern",
+    icon: "life-buoy",
+    escalationTargets: [
+      { type: "role", value: "admin" },
+      { type: "role", value: "manager" },
+      { type: "ticket_access" },
+    ],
+  },
+  {
+    name: "Request",
+    icon: "heart-handshake",
+    escalationTargets: [
+      { type: "role", value: "admin" },
+      { type: "role", value: "manager" },
+      { type: "ticket_access" },
+    ],
+  },
+];
+
+interface TicketDef {
+  title: string;
+  description: string;
+  phone: string;
+  priority: "low" | "normal" | "high" | "urgent";
+  queueIndex: number;
+}
+
+const TICKETS: readonly TicketDef[] = [
+  {
+    title: "Caller needs emergency housing referral",
+    description:
+      "Caller reports being unhoused for two weeks. Has valid ID and is currently staying at a temporary shelter. Needs connection to transitional housing program.",
+    phone: "+15550010001",
+    priority: "high",
+    queueIndex: 2,
+  },
+  {
+    title: "Follow-up on custody hearing preparation",
+    description:
+      "Returning caller. Custody hearing scheduled for next month. Needs legal aid referral updated with new court date. Previously connected with family law legal aid.",
+    phone: "+15550010002",
+    priority: "normal",
+    queueIndex: 0,
+  },
+  {
+    title: "Active safety concern reported",
+    description:
+      "Caller describes escalating conflict at home. Safety plan was created during previous call but caller reports the situation has changed. Requesting crisis volunteer connection.",
+    phone: "+15550010003",
+    priority: "urgent",
+    queueIndex: 1,
+  },
+  {
+    title: "New caller requesting general information",
+    description:
+      "First-time caller asking about available services. Wants to understand what kind of help is available before deciding next steps. No immediate safety concerns reported.",
+    phone: "+15550010004",
+    priority: "low",
+    queueIndex: 0,
+  },
+  {
+    title: "Benefits application assistance needed",
+    description:
+      "Caller needs help navigating benefits application process. Has difficulty with online forms due to limited internet access. Requested callback with step-by-step guidance.",
+    phone: "+15550010005",
+    priority: "normal",
+    queueIndex: 2,
+  },
+];
+
 const KB_ARTICLES: readonly {
   category: string;
   title: string;
@@ -795,11 +780,6 @@ const KB_ARTICLES: readonly {
       ),
     ),
   },
-
-  // ── A11y test article ─────────────────────────────────────────────
-  // This article intentionally violates every ATAG check so the a11y
-  // plugin and preview page have real content to flag. Keep in sync
-  // with the checks in atag-checks.ts.
   {
     category: "Resources",
     title: "Accessibility issues example",
@@ -812,99 +792,69 @@ const KB_ARTICLES: readonly {
           "This article is intentionally written with accessibility violations. Each section below demonstrates a common authoring mistake and explains why it creates a barrier for people who use assistive technology. The accessibility checker should flag every issue listed here.",
         ),
       ),
-
       hr(),
-
-      // ── Heading skip ──────────────────────────────────────────────
       h(2, t("Skipped heading levels")),
       p(
         t(
           "Headings form an outline that screen reader users navigate to jump between sections. When a level is skipped (for example, jumping from H2 to H4), the outline has a gap. A screen reader user cannot tell whether they missed a section or the author used the wrong level for visual styling. Always step headings down one level at a time.",
         ),
       ),
-
-      // ❌ heading-skip: H4 directly after H2 (skipped H3)
       h(4, t("This heading skips from H2 to H4")),
       p(
         t(
           "The heading above should be H3, not H4. The checker flags this as a heading level skip.",
         ),
       ),
-
-      // ── Empty headings ────────────────────────────────────────────
       h(2, t("Empty headings")),
       p(
         t(
           'An empty heading is announced by screen readers as a heading with no label. The user hears something like "heading level 3, blank" and has no way to know what section they entered. Empty headings are often left behind after deleting text or pasting from another document. Delete the heading node entirely if it has no content.',
         ),
       ),
-
-      // ❌ empty-heading: heading node with zero text content
       h(3),
-
       p(
         t(
           "The empty heading above has no text at all. The checker flags it as an empty heading.",
         ),
       ),
-
-      // ❌ empty-heading: heading with only whitespace
       h(3, t(" ")),
-
       p(
         t(
           "The heading above contains only a space character, which is treated the same as empty. Whitespace-only headings are equally invisible to assistive technology.",
         ),
       ),
-
-      // ── Missing alt text ──────────────────────────────────────────
       h(2, t("Images without alt text")),
       p(
         t(
           'When an image has no alt text, screen readers either skip it entirely or read the raw file URL, which sounds like "image, https colon slash slash example dot com slash photos slash workstation dash layout dot jpg." Neither outcome tells the user what the image shows. Every image should have alt text that conveys the same information a sighted user gets from looking at it.',
         ),
       ),
-
-      // ❌ missing-alt: image with no alt attribute
       img("https://example.com/photos/workstation-layout.jpg"),
-
       p(
         t(
           "The image above has no alt attribute. The checker flags it as missing alt text.",
         ),
       ),
-
       p(t("For comparison, here is the same image with proper alt text:")),
-
-      // ✅ Control case: image with descriptive alt text (should NOT trigger)
       p(
         img(
           "https://example.com/photos/workstation-layout.jpg",
           "Recommended desk layout showing monitor, keyboard, phone, and headset positions",
         ),
       ),
-
-      // ❌ missing-alt: second image without alt text
       img("https://example.com/photos/headset-comparison.jpg"),
-
       p(
         t(
           "This second image also lacks alt text. The checker should flag each instance independently.",
         ),
       ),
-
-      // ── Generic link text ─────────────────────────────────────────
       h(2, t("Generic link text")),
       p(
         t(
           'Screen reader users often navigate by pulling up a list of all links on the page. When every link says "click here" or "read more," the list is useless. Link text should describe where the link goes or what it does, so it makes sense out of context.',
         ),
       ),
-
-      // ❌ heading-skip: H4 after H2 (second heading skip example)
       h(4, t("Examples of generic link text")),
-
-      // ❌ generic-link-text: "click here"
       p(
         t("Bad: "),
         t("click here", link("https://example.com/extension")),
@@ -918,8 +868,6 @@ const KB_ARTICLES: readonly {
         ),
         t("."),
       ),
-
-      // ❌ generic-link-text: "Read more"
       p(
         t("Bad: "),
         t("Read more", link("https://example.com/password-managers")),
@@ -933,8 +881,6 @@ const KB_ARTICLES: readonly {
         ),
         t("."),
       ),
-
-      // ❌ generic-link-text: "here"
       p(
         t("Bad: The microphone test instructions are "),
         t("here", link("https://example.com/mic-test")),
@@ -945,8 +891,6 @@ const KB_ARTICLES: readonly {
         t("microphone test instructions", link("https://example.com/mic-test")),
         t(" before your first call."),
       ),
-
-      // ❌ generic-link-text: "Learn more"
       p(
         t("Bad: "),
         t("Learn more", link("https://example.com/handbook")),
@@ -964,284 +908,225 @@ const KB_ARTICLES: readonly {
   },
 ];
 
-/**
- * Rotate the throwaway seed keypair with a real client-generated one.
- * Returns the org public key and loads the secret into OrgKeyManager.
- */
-async function bootstrapOrgKeypair(
-  bridge: CryptoBridge,
-  orgKeyManager: OrgKeyManager,
-  userId: string,
-): Promise<Uint8Array> {
-  await getSodium();
+// ── Helpers ──────────────────────────────────────────────────────────
 
-  // Generate real Curve25519 org keypair in the browser
-  const { publicKey, secretKey } = generateOrgKeypair();
-
-  try {
-    // Get the admin's volPublic for ECIES wrapping
-    const volPublicB64 = await bridge.getVolPublic();
-    const volPublicBytes = decode(volPublicB64);
-    const volPublicPoint = toRistrettoPoint(volPublicBytes);
-
-    // ECIES-wrap org secret for the admin
-    const wrap = wrapKey(secretKey, volPublicPoint);
-
-    // Rotate: replace the throwaway seed keypair with the real one
-    await trpc.keys.rotateOrgKey.mutate({
-      newOrgPublicKey: encode(publicKey),
-      wrappedKeys: [
-        {
-          userId,
-          ephemeralPoint: encode(wrap.ephemeralPoint),
-          nonce: encode(wrap.nonce),
-          wrappedKey: encode(wrap.ciphertext),
-        },
-      ],
-    });
-
-    // Load org key into Worker via normal unwrap path (round-trip to server).
-    // The Worker retains the secret; we get back the public key.
-    const orgPubKeyB64 = await fetchAndUnwrapOrgKey(bridge);
-    if (orgPubKeyB64 === null) {
-      throw new Error(
-        "bootstrapOrgKeypair: fetchAndUnwrapOrgKey returned null after rotation",
-      );
-    }
-    orgKeyManager.load(orgPubKeyB64);
-
-    console.log("[dev] org keypair: rotated seed keypair with real one");
-    return publicKey;
-  } finally {
-    // Zero the org secret key material
-    const sodium = await getSodium();
-    sodium.memzero(secretKey);
-  }
-}
-
-/**
- * Seal and upload KB articles using the real org public key.
- * Skips if articles already exist for the admin user.
- */
-async function seedKBArticles(
-  orgPublicKey: Uint8Array,
-  orgKeyManager: OrgKeyManager,
-): Promise<void> {
-  // kb router is conditionally spread on the server, so TypeScript
-  // doesn't guarantee its existence. This file only runs in dev mode.
-  const kb = trpc.kb;
-  if (!kb) throw new Error("kb router unavailable (not in dev mode?)");
-
-  // Fetch category list from server. Category names are encrypted (ADR-030),
-  // so we decrypt them with the org key to map article definitions by name.
-  const categories = await kb.listCategories.query();
-  const decoder = new TextDecoder();
-  const categoryMap = new Map<string, string>();
-  for (const c of categories) {
-    try {
-      const ciphertext =
-        c.encryptedName instanceof Uint8Array
-          ? c.encryptedName
-          : new Uint8Array((c.encryptedName as { data: number[] }).data);
-      const plainBytes = await orgKeyManager.decrypt(ciphertext);
-      categoryMap.set(decoder.decode(plainBytes), c.id);
-    } catch {
-      // Can't decrypt (wrong key or corrupted), skip
-    }
-  }
-
-  // Check if articles already exist (idempotent re-run)
-  const existingItems = await kb.listItems.query({ limit: 1 });
-  if (existingItems.items.length > 0) {
-    console.log("[dev] KB articles already seeded, skipping.");
-    return;
-  }
-
+function seal(plaintext: string, orgPublicKey: Uint8Array): string {
   const encoder = new TextEncoder();
-
-  for (const article of KB_ARTICLES) {
-    const categoryId = categoryMap.get(article.category);
-    if (categoryId === undefined) {
-      console.warn(
-        `[dev] KB category "${article.category}" not found, skipping article "${article.title}"`,
-      );
-      continue;
-    }
-
-    // Seal title, body, and excerpt client-side with the org public key.
-    // Matches the production publish flow from kb-editor-design.md:
-    // title encrypted independently, body as ProseMirror JSON, excerpt
-    // as plain text (~150 chars).
-    const encryptedTitle = sealForOrgKey(
-      encoder.encode(article.title),
-      orgPublicKey,
-    );
-    const encryptedBody = sealForOrgKey(
-      encoder.encode(article.body),
-      orgPublicKey,
-    );
-    const encryptedExcerpt = sealForOrgKey(
-      encoder.encode(article.excerpt),
-      orgPublicKey,
-    );
-
-    await kb.createItem.mutate({
-      categoryId,
-      encryptedTitle: encode(encryptedTitle),
-      encryptedBody: encode(encryptedBody),
-      encryptedExcerpt: encode(encryptedExcerpt),
-    });
-
-    console.log(`[dev] Created KB article "${article.title}"`);
-  }
+  return encode(sealForOrgKey(encoder.encode(plaintext), orgPublicKey));
 }
 
-/**
- * Re-encrypt seed queue and KB category names with the real org public key.
- * The seed script encrypts with the throwaway keypair; after org key rotation
- * the ciphertext is undecryptable. This re-seals with the real key.
- *
- * Dev-only. Matches known seed names by sort_order (deterministic).
- */
-async function reEncryptSeedNames(orgPublicKey: Uint8Array): Promise<void> {
-  const tickets = trpc.tickets;
-  const kb = trpc.kb;
-  if (!tickets || !kb) return;
-
-  const encoder = new TextEncoder();
-
-  // Re-encrypt queue names by sort_order (seed assigns 1=Intake, 2=Crisis, 3=Housing)
-  const queueNamesBySortOrder = ["Intake", "Crisis", "Housing"];
-  const queues = await tickets.listQueues.query();
-  for (const q of queues) {
-    const expectedName = queueNamesBySortOrder.at(q.sortOrder - 1);
-    if (expectedName === undefined) continue;
-    const sealed = sealForOrgKey(encoder.encode(expectedName), orgPublicKey);
-    await tickets.updateQueue.mutate({
-      queueId: q.id,
-      encryptedName: encode(sealed),
-    });
-  }
-  console.log("[dev] re-encrypted queue names with real org key");
-
-  // Re-encrypt KB category names (seed assigns 1=Procedures, 2=Resources, 3=Safety)
-  const kbNamesBySortOrder = ["Procedures", "Resources", "Safety"];
-  const categories = await kb.listCategories.query();
-  for (const c of categories) {
-    const expectedName = kbNamesBySortOrder.at(c.sortOrder - 1);
-    if (expectedName === undefined) continue;
-    const sealed = sealForOrgKey(encoder.encode(expectedName), orgPublicKey);
-    await kb.updateCategory.mutate({
-      categoryId: c.id,
-      encryptedName: encode(sealed),
-    });
-  }
-  console.log("[dev] re-encrypted KB category names with real org key");
-
-  // Re-encrypt admin user's display name (seed encrypted with throwaway key)
-  const { user } = await trpc.auth.me.query();
-  const sealedAdminName = sealForOrgKey(
-    encoder.encode("Dev Admin"),
-    orgPublicKey,
-  );
-  // devReEncryptDisplayName is dev-only (conditionally spread on server)
-  // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- dev-only, runtime guard follows
-  const auth = trpc.auth as unknown as
-    | Record<string, { mutate: (input: unknown) => Promise<unknown> }>
-    | undefined;
-  const reEncrypt = auth?.devReEncryptDisplayName;
-  if (reEncrypt) {
-    await reEncrypt.mutate({
-      userId: user.id,
-      encryptedDisplayName: encode(sealedAdminName),
-    });
-    console.log("[dev] re-encrypted admin display name with real org key");
-  }
+interface PhoneLookupResult {
+  found: boolean;
+  token?: string;
+  clientId?: string;
+  alias?: string;
+  openTicketId?: string | null;
 }
 
-export async function devAutoLogin(
+async function phoneLookup(phone: string): Promise<PhoneLookupResult> {
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+  };
+  if (import.meta.env.DEV) {
+    headers["x-org-slug"] = DEV_ORG_SLUG;
+  }
+
+  const res = await fetch("/relay/phone-lookup", {
+    method: "POST",
+    credentials: "include",
+    headers,
+    body: JSON.stringify({ phone }),
+  });
+
+  if (!res.ok) {
+    throw new RelayError("PHONE_LOOKUP_FAILED", res.status);
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- dev-only, response shape is known
+  return (await res.json()) as PhoneLookupResult;
+}
+
+// ── Main seed function ───────────────────────────────────────────────
+
+/* eslint-disable @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-type-assertion, @typescript-eslint/no-explicit-any -- dev-only function; tRPC routers are conditionally spread so typed access is impossible without `any` */
+export async function devSeedData(
   bridge: CryptoBridge,
   orgKeyManager: OrgKeyManager,
 ): Promise<void> {
-  // 1. Auth login (creates session)
-  try {
-    await getBypass2fa().mutate();
-  } catch {
-    await trpc.auth.login.mutate({
-      identifier: DEV_IDENTIFIER,
-      password: DEV_PASSWORD,
-    });
-    await getBypass2fa().mutate();
-  }
-
-  // 2. Get userId for registerCrypto
-  const { user } = await trpc.auth.me.query();
-
-  // 3. Register crypto keys (first run only, idempotent on re-runs)
-  try {
-    await registerCrypto(user.id, DEV_PASSWORD, noopRegisterCallbacks);
-    console.log("[dev] registerCrypto: keys initialized");
-  } catch (err: unknown) {
-    if (isConflictError(err)) {
-      console.log("[dev] registerCrypto: keys already exist, skipping");
-    } else {
-      throw err;
-    }
-  }
-
-  // 4. Login crypto (Worker-based key derivation -> KEYED state)
-  await bridge.waitReady();
-  const { orgPublicKey: orgPubKeyB64 } = await loginCrypto(
-    DEV_IDENTIFIER,
-    DEV_PASSWORD,
-    bridge,
-    noopLoginCallbacks,
-  );
-  console.log("[dev] loginCrypto: Worker is KEYED");
-
-  // 5. Org key bootstrap
-  // On first run: orgPubKeyB64 is null (seed created a throwaway keypair,
-  // no wrapped_org_keys row exists). Generate real keypair and rotate.
-  // On re-run: orgPubKeyB64 is non-null (rotation already happened,
-  // wrapped_org_keys row exists). Load directly.
-  let orgPublicKey: Uint8Array | null = null;
-
-  if (orgPubKeyB64 !== null) {
-    orgKeyManager.load(orgPubKeyB64);
-    console.log("[dev] orgKeyManager: org key loaded (existing)");
-  } else {
-    orgPublicKey = await bootstrapOrgKeypair(bridge, orgKeyManager, user.id);
-    // Re-encrypt seed data (queue names, KB category names) with the real org key.
-    // The seed encrypted them with the throwaway keypair which is now gone.
-    await reEncryptSeedNames(orgPublicKey);
-  }
-  setOrgKeyReady(true);
-
-  // 6. Seed KB articles client-side (first run only)
-  // Need the org public key. On first run we have it from bootstrapOrgKeypair.
-  // On re-run, derive it from the secret key in OrgKeyManager.
+  const orgPublicKey = orgKeyManager.getPublicKey();
   if (!orgPublicKey) {
-    // Re-run path: derive public key from secret key. OrgKeyManager holds
-    // the secret. We can derive pk = scalarmult_base(sk), but OrgKeyManager
-    // doesn't expose the raw key. KB articles should already exist on re-run
-    // so we just skip seeding. The listItems check in seedKBArticles handles this.
-    console.log("[dev] KB seeding: skipping (re-run, articles should exist)");
-  } else {
-    await seedKBArticles(orgPublicKey, orgKeyManager);
+    throw new ClientError(
+      "Org public key not loaded. Complete onboarding first.",
+    );
   }
 
-  // 7. Seed telephony config (server encrypts with its own secretsEncryptor)
-  // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- dev-only, conditionally spread route
+  // Tickets and KB routers are conditionally spread on the server, so
+  // TypeScript doesn't guarantee route existence. This file only runs
+  // in dev mode; runtime guards check each route before calling it.
+  const ticketRouter = trpc.tickets as unknown as Record<string, any>;
+  const kbRouter = trpc.kb as unknown as Record<string, any>;
+
+  // ── Step 1: Queues ──────────────────────────────────────────────────
+  const existingQueues = (await ticketRouter.listQueues.query()) as {
+    id: string;
+    sortOrder: number;
+  }[];
+  if (existingQueues.length === 0) {
+    for (const q of QUEUES) {
+      await ticketRouter.createQueue.mutate({
+        encryptedName: seal(q.name, orgPublicKey),
+        escalateDays: q.escalateDays,
+      });
+      console.log(`[dev-seed] Created queue: ${q.name}`);
+    }
+  } else {
+    console.log("[dev-seed] Queues already exist, skipping");
+  }
+
+  // Re-fetch queues for IDs (needed for ticket creation)
+  const queues = (await ticketRouter.listQueues.query()) as {
+    id: string;
+    sortOrder: number;
+  }[];
+
+  // ── Step 2: KB Categories ───────────────────────────────────────────
+  const existingCategories = (await kbRouter.listCategories.query()) as {
+    id: string;
+    sortOrder: number;
+  }[];
+  if (existingCategories.length === 0) {
+    for (const name of KB_CATEGORIES) {
+      await kbRouter.createCategory.mutate({
+        encryptedName: seal(name, orgPublicKey),
+      });
+      console.log(`[dev-seed] Created KB category: ${name}`);
+    }
+  } else {
+    console.log("[dev-seed] KB categories already exist, skipping");
+  }
+
+  // Re-fetch categories for IDs (needed for article creation)
+  const categories = (await kbRouter.listCategories.query()) as {
+    id: string;
+    sortOrder: number;
+  }[];
+
+  // ── Step 3: Note Types ──────────────────────────────────────────────
+  const noteTypesRouter = ticketRouter.noteTypes as
+    | Record<string, any>
+    | undefined;
+  if (noteTypesRouter) {
+    const existingNoteTypes = (await noteTypesRouter.list.query()) as {
+      id: string;
+    }[];
+    if (existingNoteTypes.length === 0) {
+      for (const nt of NOTE_TYPES) {
+        await noteTypesRouter.create.mutate({
+          encryptedName: seal(nt.name, orgPublicKey),
+          encryptedIcon: seal(nt.icon, orgPublicKey),
+          escalationTargets: nt.escalationTargets,
+          requiresOnClose: nt.requiresOnClose,
+        });
+        console.log(`[dev-seed] Created note type: ${nt.name}`);
+      }
+    } else {
+      console.log("[dev-seed] Note types already exist, skipping");
+    }
+  }
+
+  // ── Step 4: KB Articles ─────────────────────────────────────────────
+  const existingItems = (await kbRouter.listItems.query({ limit: 1 })) as {
+    items: unknown[];
+  };
+  if (existingItems.items.length === 0) {
+    // Map category names to IDs by sort_order
+    // Categories are created in order: Procedures=1, Resources=2, Safety=3
+    const categoryNameToSortOrder: Record<string, number> = {
+      Procedures: 1,
+      Resources: 2,
+      Safety: 3,
+    };
+
+    for (const article of KB_ARTICLES) {
+      const targetSort = categoryNameToSortOrder[article.category];
+      const cat = categories.find((c) => c.sortOrder === targetSort);
+      if (!cat) {
+        console.warn(
+          `[dev-seed] Category "${article.category}" not found, skipping article "${article.title}"`,
+        );
+        continue;
+      }
+
+      await kbRouter.createItem.mutate({
+        categoryId: cat.id,
+        encryptedTitle: seal(article.title, orgPublicKey),
+        encryptedBody: seal(article.body, orgPublicKey),
+        encryptedExcerpt: seal(article.excerpt, orgPublicKey),
+      });
+      console.log(`[dev-seed] Created KB article: ${article.title}`);
+    }
+  } else {
+    console.log("[dev-seed] KB articles already exist, skipping");
+  }
+
+  // ── Step 5: Clients + Tickets ───────────────────────────────────────
+  const existingTickets = (await ticketRouter.list.query({})) as {
+    items: unknown[];
+  };
+  if (existingTickets.items.length === 0) {
+    for (const ticket of TICKETS) {
+      // Phone lookup creates the pending client
+      const lookup = await phoneLookup(ticket.phone);
+
+      // Encrypt ticket content via the crypto Worker
+      const encrypted = await bridge.createTicketEncryption([
+        { name: "title", plaintext: ticket.title },
+        { name: "description", plaintext: ticket.description },
+      ]);
+
+      const findField = (name: string): string => {
+        const field = encrypted.encryptedFields.find((f) => f.name === name);
+        if (!field) throw new ClientError("Missing encrypted field: " + name);
+        return field.ciphertext;
+      };
+
+      const targetQueue = queues[ticket.queueIndex];
+      if (!targetQueue) {
+        console.warn(
+          `[dev-seed] Queue index ${String(ticket.queueIndex)} not found, skipping ticket "${ticket.title}"`,
+        );
+        continue;
+      }
+
+      await ticketRouter.create.mutate({
+        ...(lookup.found
+          ? { clientId: lookup.clientId }
+          : { clientToken: lookup.token }),
+        queueId: targetQueue.id,
+        encryptedTitle: findField("title"),
+        encryptedDescription: findField("description"),
+        priority: ticket.priority,
+        keyGeneration: encrypted.keyGeneration,
+        keyWrap: encrypted.keyWrap,
+      });
+      console.log(`[dev-seed] Created ticket: ${ticket.title}`);
+    }
+  } else {
+    console.log("[dev-seed] Tickets already exist, skipping");
+  }
+
+  // ── Step 6: Telephony Config ────────────────────────────────────────
   const telAdmin = trpc.telephonyAdmin as
-    | Record<string, { mutate: () => Promise<unknown> }>
+    | Record<string, { mutate: () => Promise<{ skipped: boolean }> }>
     | undefined;
   const seedTel = telAdmin?.devSeedTelephony;
   if (seedTel) {
-    await seedTel.mutate();
-    console.log("[dev] devSeedTelephony: telephony config seeded");
+    const result = await seedTel.mutate();
+    console.log(
+      `[dev-seed] Telephony config: ${result.skipped ? "already exists" : "seeded"}`,
+    );
   }
 
-  // 8. Seed test tickets (server creates tickets with real ECIES key wraps)
-  await getDevSeedTickets().mutate();
-  console.log("[dev] devSeedTickets: tickets seeded");
+  console.log("[dev-seed] All seed data created");
 }
+/* eslint-enable @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-type-assertion, @typescript-eslint/no-explicit-any */
