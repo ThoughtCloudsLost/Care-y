@@ -33,6 +33,10 @@ import { createBrandingRouter, type BrandingRouterDeps } from "./branding.js";
 import { createReportsRouter } from "./reports.js";
 import { createProfileRouter, type ProfileRouterDeps } from "./profile.js";
 import type { AuthRouterDeps } from "./auth.js";
+import {
+  createOnboardingRouter,
+  type OnboardingRouterDeps,
+} from "./onboarding.js";
 import type { OrgService } from "../org/service.js";
 import type { ProviderFactory } from "../telephony/factory.js";
 
@@ -56,6 +60,7 @@ export interface RouterDeps {
   readonly kbDeps?: KBRouterDeps;
   readonly notificationDeps?: NotificationRouterDeps;
   readonly brandingDeps?: BrandingRouterDeps;
+  readonly onboardingDeps?: OnboardingRouterDeps;
 }
 
 // care-y-ignore-next-line missing-return-type -- tRPC router() returns a deeply generic type that cannot be written explicitly
@@ -102,6 +107,9 @@ export function createAppRouter(deps: RouterDeps) {
       : {}),
     ...(deps.includeReports !== false
       ? { reports: createReportsRouter() }
+      : {}),
+    ...(deps.onboardingDeps
+      ? { onboarding: createOnboardingRouter(deps.onboardingDeps) }
       : {}),
   });
 }

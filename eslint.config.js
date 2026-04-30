@@ -245,6 +245,7 @@ export default tseslint.config(
             "createTwoFactorRouter",
             "createKbRouter",
             "createProfileRouter",
+            "createOnboardingRouter",
           ],
         },
       ],

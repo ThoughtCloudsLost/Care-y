@@ -117,6 +117,11 @@
     [ErrorCode.KB_ATTACHMENT_NOT_FOUND]: () =>
       m.error_kb_attachment_not_found(),
 
+    // Onboarding
+    [ErrorCode.ORG_ALREADY_SETUP]: () => m.error_org_already_setup(),
+    [ErrorCode.INVALID_INVITE_TOKEN]: () => m.error_invalid_invite_token(),
+    [ErrorCode.BOOTSTRAP_RATE_LIMITED]: () => m.error_bootstrap_rate_limited(),
+
     // Telephony
     [ErrorCode.TELEPHONY_NOT_CONFIGURED]: () =>
       m.error_telephony_not_configured(),

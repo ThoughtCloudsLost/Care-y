@@ -13,6 +13,7 @@ import {
   passwordChangeKeysSchema,
   uploadOrgPublicKeySchema,
   rotateOrgKeySchema,
+  wrapOrgKeyForUserSchema,
 } from "@care-y/shared";
 import { encode } from "@care-y/crypto";
 import {
@@ -140,22 +141,29 @@ export function createKeysRouter() {
           .select("org_public_key")
           .executeTakeFirst();
 
-        if (existing?.org_public_key) {
+        const orgPublicKey = Buffer.from(input.orgPublicKey, "base64");
+
+        if (
+          existing?.org_public_key &&
+          !existing.org_public_key.equals(orgPublicKey)
+        ) {
           throw new ConflictError(
             "Org keypair already configured. Use key rotation to replace.",
           );
         }
 
-        const orgPublicKey = Buffer.from(input.orgPublicKey, "base64");
         const ephemeralPoint = Buffer.from(input.ephemeralPoint, "base64");
         const nonce = Buffer.from(input.nonce, "base64");
         const wrappedKey = Buffer.from(input.wrappedKey, "base64");
 
         await tDb.transaction().execute(async (tx) => {
-          await tx
-            .updateTable("org_config")
-            .set({ org_public_key: orgPublicKey })
-            .execute();
+          // Idempotent: bootstrapAdmin may have already stored the key.
+          if (!existing?.org_public_key) {
+            await tx
+              .updateTable("org_config")
+              .set({ org_public_key: orgPublicKey })
+              .execute();
+          }
 
           await tx
             .insertInto("wrapped_org_keys")
@@ -193,5 +201,51 @@ export function createKeysRouter() {
         return { success: true as const };
       }),
     ),
+
+    /**
+     * Wrap the org secret key for a specific user (admin auto-wrap).
+     * Uses INSERT ON CONFLICT DO NOTHING for idempotency.
+     */
+    wrapOrgKeyForUser: adminProcedure.input(wrapOrgKeyForUserSchema).mutation(
+      withErrorWrapping(async ({ ctx, input }) => {
+        await ctx.org.tenantDb
+          .insertInto("wrapped_org_keys")
+          .values({
+            user_id: input.userId,
+            ephemeral_point: Buffer.from(input.ephemeralPoint, "base64"),
+            nonce: Buffer.from(input.nonce, "base64"),
+            wrapped_key: Buffer.from(input.wrappedKey, "base64"),
+          })
+          .onConflict((oc) => oc.column("user_id").doNothing())
+          .execute();
+
+        return { success: true as const };
+      }),
+    ),
+
+    /**
+     * List active users who have a volPublic but no wrapped org key.
+     * Admin auto-wrap queries this to find volunteers needing wrapping.
+     */
+    listUnwrappedUsers: adminProcedure.query(async ({ ctx }) => {
+      const rows = await ctx.org.tenantDb
+        .selectFrom("users")
+        .innerJoin("user_keys", "user_keys.user_id", "users.id")
+        .leftJoin("wrapped_org_keys", "wrapped_org_keys.user_id", "users.id")
+        .where("users.is_active", "=", true)
+        .where("user_keys.vol_public", "is not", null)
+        .where("wrapped_org_keys.user_id", "is", null)
+        .select(["users.id", "user_keys.vol_public"])
+        .execute();
+
+      return rows
+        .filter(
+          (r): r is typeof r & { vol_public: Buffer } => r.vol_public !== null,
+        )
+        .map((r) => ({
+          userId: r.id,
+          volPublic: encode(r.vol_public),
+        }));
+    }),
   });
 }
