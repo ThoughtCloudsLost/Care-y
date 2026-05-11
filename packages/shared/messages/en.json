@@ -1465,5 +1465,26 @@
   "onboarding_invite_skip": "I'll invite volunteers later",
   "onboarding_invite_finish": "Finish Setup",
   "onboarding_invite_another": "Generate Another",
-  "onboarding_invite_card_label": "Invite {index}"
+  "onboarding_invite_card_label": "Invite {index}",
+
+  "onboarding_firstlogin_heading": "Set Up Your Account",
+  "onboarding_firstlogin_subtext": "Your admin has invited you.",
+  "onboarding_firstlogin_username": "Choose a Username",
+  "onboarding_firstlogin_username_placeholder": "Username",
+  "onboarding_firstlogin_display_name": "Display Name (optional)",
+  "onboarding_firstlogin_display_name_placeholder": "How others will see you",
+  "onboarding_firstlogin_password": "Password",
+  "onboarding_firstlogin_password_placeholder": "At least 12 characters",
+  "onboarding_firstlogin_confirm_password": "Confirm Password",
+  "onboarding_firstlogin_confirm_password_placeholder": "Enter password again",
+  "onboarding_firstlogin_submit": "Create Account",
+  "onboarding_firstlogin_error_password_length": "Password must be at least 12 characters.",
+  "onboarding_firstlogin_error_password_mismatch": "Passwords do not match.",
+  "onboarding_firstlogin_error_generic": "Account creation failed. Please try again.",
+  "onboarding_firstlogin_error_invalid_token": "This invite link is invalid or has expired.",
+  "onboarding_firstlogin_success_heading": "Your account is ready.",
+  "onboarding_firstlogin_success_subtext": "Sign in to get started.",
+  "onboarding_firstlogin_signin": "Sign In",
+  "onboarding_firstlogin_creating": "Creating account...",
+  "onboarding_firstlogin_deriving": "Generating encryption keys..."
 }

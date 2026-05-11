@@ -1465,5 +1465,26 @@
   "onboarding_invite_skip": "Invitare voluntarios despues",
   "onboarding_invite_finish": "Finalizar configuracion",
   "onboarding_invite_another": "Generar otro",
-  "onboarding_invite_card_label": "Invitacion {index}"
+  "onboarding_invite_card_label": "Invitacion {index}",
+
+  "onboarding_firstlogin_heading": "Configura tu cuenta",
+  "onboarding_firstlogin_subtext": "Tu administrador te ha invitado.",
+  "onboarding_firstlogin_username": "Elige un nombre de usuario",
+  "onboarding_firstlogin_username_placeholder": "Nombre de usuario",
+  "onboarding_firstlogin_display_name": "Nombre visible (opcional)",
+  "onboarding_firstlogin_display_name_placeholder": "Como te veran los demas",
+  "onboarding_firstlogin_password": "Contrasena",
+  "onboarding_firstlogin_password_placeholder": "Al menos 12 caracteres",
+  "onboarding_firstlogin_confirm_password": "Confirmar contrasena",
+  "onboarding_firstlogin_confirm_password_placeholder": "Ingresa la contrasena de nuevo",
+  "onboarding_firstlogin_submit": "Crear cuenta",
+  "onboarding_firstlogin_error_password_length": "La contrasena debe tener al menos 12 caracteres.",
+  "onboarding_firstlogin_error_password_mismatch": "Las contrasenas no coinciden.",
+  "onboarding_firstlogin_error_generic": "No se pudo crear la cuenta. Intentalo de nuevo.",
+  "onboarding_firstlogin_error_invalid_token": "Este enlace de invitacion no es valido o ha expirado.",
+  "onboarding_firstlogin_success_heading": "Tu cuenta esta lista.",
+  "onboarding_firstlogin_success_subtext": "Inicia sesion para comenzar.",
+  "onboarding_firstlogin_signin": "Iniciar sesion",
+  "onboarding_firstlogin_creating": "Creando cuenta...",
+  "onboarding_firstlogin_deriving": "Generando claves de cifrado..."
 }

@@ -135,6 +135,8 @@ export const orgKeyKeys = {
 export const onboardingKeys = {
   all: ["onboarding"] as const,
   status: () => [...onboardingKeys.all, "status"] as const,
+  validateInvite: (token: string) =>
+    [...onboardingKeys.all, "validateInvite", token] as const,
 };
 
 export const notificationKeys = {

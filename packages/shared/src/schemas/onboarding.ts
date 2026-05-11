@@ -31,7 +31,7 @@ export const registerFromInviteInputSchema = z.object({
   token: z.string().min(1),
   identifier: identifierSchema,
   password: passwordSchema,
-  displayName: displayNameSchema,
+  displayName: displayNameSchema.optional(),
 });
 
 /** Generate a new invite token (admin-only). */

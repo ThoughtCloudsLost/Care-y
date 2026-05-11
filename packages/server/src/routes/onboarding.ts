@@ -389,7 +389,7 @@ export function createOnboardingRouter(deps: OnboardingRouterDeps) {
               const user = await txAuth.register({
                 identifier: input.identifier,
                 password: input.password,
-                displayName: input.displayName,
+                displayName: input.displayName ?? input.identifier,
                 roleId: invite.roleId,
               });
 
