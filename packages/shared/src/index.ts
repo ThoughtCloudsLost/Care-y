@@ -121,7 +121,9 @@ export {
 // --- Telephony: country codes ---
 export {
   E164_COUNTRY_CODES,
+  E164_COUNTRY_CODE_OPTIONS,
   isValidCountryCode,
+  type CountryCodeOption,
 } from "./telephony/country-codes.js";
 
 // --- Telephony schemas ---

@@ -4,7 +4,7 @@
   Steps (array indices 0-8): account, briefing, org, branding,
   queue, telephony, escrow, invites, complete.
 
-  Steps 1-7 are placeholder stubs until their real components land.
+  Steps 5-7 are placeholder stubs until their real components land.
   Each step component calls oncomplete() to advance.
 -->
 <script lang="ts">
@@ -20,6 +20,9 @@
   import WizardStepper from "$lib/components/onboarding/WizardStepper.svelte";
   import SetupAccount from "$lib/components/onboarding/SetupAccount.svelte";
   import SecurityBriefing from "$lib/components/onboarding/SecurityBriefing.svelte";
+  import SetupOrg from "$lib/components/onboarding/SetupOrg.svelte";
+  import SetupBranding from "$lib/components/onboarding/SetupBranding.svelte";
+  import SetupQueue from "$lib/components/onboarding/SetupQueue.svelte";
 
   const STEP_LABELS = [
     m.onboarding_step_account(),
@@ -78,6 +81,30 @@
     advanceStep();
   }
 
+  function handleOrgComplete(data: {
+    orgName: string;
+    language: string;
+    countryCode: string;
+  }): void {
+    wizardData = { ...wizardData, ...data };
+    advanceStep();
+  }
+
+  function handleBrandingComplete(): void {
+    wizardData = { ...wizardData, brandingDone: true };
+    advanceStep();
+  }
+
+  function handleBrandingSkip(): void {
+    wizardData = { ...wizardData, brandingDone: false };
+    advanceStep();
+  }
+
+  function handleQueueComplete(data: { firstQueueCreated: boolean }): void {
+    wizardData = { ...wizardData, ...data };
+    advanceStep();
+  }
+
   function advanceStep(): void {
     completedSteps = new Set([...completedSteps, step]);
     step += 1;
@@ -108,37 +135,15 @@
   {:else if step === 1}
     <SecurityBriefing onconfirm={advanceStep} />
   {:else if step === 2}
-    <Block>
-      <h2 class="step-heading">{m.onboarding_placeholder_heading_org()}</h2>
-      <p class="step-subtext">{m.onboarding_placeholder_pending()}</p>
-      <div class="mt-4">
-        <Button large onclick={advanceStep}
-          >{m.onboarding_placeholder_continue()}</Button
-        >
-      </div>
-    </Block>
+    <SetupOrg oncomplete={handleOrgComplete} />
   {:else if step === 3}
-    <Block>
-      <h2 class="step-heading">
-        {m.onboarding_placeholder_heading_branding()}
-      </h2>
-      <p class="step-subtext">{m.onboarding_placeholder_pending()}</p>
-      <div class="mt-4">
-        <Button large onclick={advanceStep}
-          >{m.onboarding_placeholder_continue()}</Button
-        >
-      </div>
-    </Block>
+    <SetupBranding
+      orgName={wizardData.orgName ?? ""}
+      oncomplete={handleBrandingComplete}
+      onskip={handleBrandingSkip}
+    />
   {:else if step === 4}
-    <Block>
-      <h2 class="step-heading">{m.onboarding_placeholder_heading_queue()}</h2>
-      <p class="step-subtext">{m.onboarding_placeholder_pending()}</p>
-      <div class="mt-4">
-        <Button large onclick={advanceStep}
-          >{m.onboarding_placeholder_continue()}</Button
-        >
-      </div>
-    </Block>
+    <SetupQueue oncomplete={handleQueueComplete} />
   {:else if step === 5}
     <Block>
       <h2 class="step-heading">
