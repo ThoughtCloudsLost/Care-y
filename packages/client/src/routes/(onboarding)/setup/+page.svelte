@@ -3,8 +3,6 @@
 
   Steps (array indices 0-8): account, briefing, org, branding,
   queue, telephony, escrow, invites, complete.
-
-  Steps 5-7 are placeholder stubs until their real components land.
   Each step component calls oncomplete() to advance.
 -->
 <script lang="ts">
@@ -23,6 +21,9 @@
   import SetupOrg from "$lib/components/onboarding/SetupOrg.svelte";
   import SetupBranding from "$lib/components/onboarding/SetupBranding.svelte";
   import SetupQueue from "$lib/components/onboarding/SetupQueue.svelte";
+  import SetupTelephony from "$lib/components/onboarding/SetupTelephony.svelte";
+  import SetupEscrow from "$lib/components/onboarding/SetupEscrow.svelte";
+  import SetupInvite from "$lib/components/onboarding/SetupInvite.svelte";
 
   const STEP_LABELS = [
     m.onboarding_step_account(),
@@ -105,6 +106,23 @@
     advanceStep();
   }
 
+  function handleTelephonyComplete(data: {
+    telephonyMode: "byot" | "managed" | "skip";
+  }): void {
+    wizardData = { ...wizardData, ...data };
+    advanceStep();
+  }
+
+  function handleEscrowComplete(): void {
+    wizardData = { ...wizardData, escrowExported: true };
+    advanceStep();
+  }
+
+  function handleInviteComplete(data: { invitesSent: number }): void {
+    wizardData = { ...wizardData, ...data };
+    advanceStep();
+  }
+
   function advanceStep(): void {
     completedSteps = new Set([...completedSteps, step]);
     step += 1;
@@ -145,37 +163,11 @@
   {:else if step === 4}
     <SetupQueue oncomplete={handleQueueComplete} />
   {:else if step === 5}
-    <Block>
-      <h2 class="step-heading">
-        {m.onboarding_placeholder_heading_telephony()}
-      </h2>
-      <p class="step-subtext">{m.onboarding_placeholder_pending()}</p>
-      <div class="mt-4">
-        <Button large onclick={advanceStep}
-          >{m.onboarding_placeholder_continue()}</Button
-        >
-      </div>
-    </Block>
+    <SetupTelephony oncomplete={handleTelephonyComplete} />
   {:else if step === 6}
-    <Block>
-      <h2 class="step-heading">{m.onboarding_placeholder_heading_escrow()}</h2>
-      <p class="step-subtext">{m.onboarding_placeholder_pending()}</p>
-      <div class="mt-4">
-        <Button large onclick={advanceStep}
-          >{m.onboarding_placeholder_continue()}</Button
-        >
-      </div>
-    </Block>
+    <SetupEscrow oncomplete={handleEscrowComplete} />
   {:else if step === 7}
-    <Block>
-      <h2 class="step-heading">{m.onboarding_placeholder_heading_invites()}</h2>
-      <p class="step-subtext">{m.onboarding_placeholder_pending()}</p>
-      <div class="mt-4">
-        <Button large onclick={advanceStep}
-          >{m.onboarding_placeholder_continue()}</Button
-        >
-      </div>
-    </Block>
+    <SetupInvite oncomplete={handleInviteComplete} />
   {:else if step === 8}
     <Block>
       <div class="complete-screen">
