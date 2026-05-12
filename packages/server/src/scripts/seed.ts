@@ -138,6 +138,11 @@ async function seed(): Promise<void> {
     }
   }
 
+  if (process.argv.includes("--bootstrap-only")) {
+    console.log("Bootstrap complete (org + schema only, no users or data).");
+    return;
+  }
+
   // --- Generate throwaway org keypair (unblocks auth gate) ---
   const tenantDatabase = tenantDb(schemaName);
   const orgPublicKey = await ensureOrgKeypair(tenantDatabase);
