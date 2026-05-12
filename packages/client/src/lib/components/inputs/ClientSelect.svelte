@@ -36,6 +36,7 @@
 <script lang="ts">
   import { Combobox } from "bits-ui";
   import * as m from "$lib/paraglide/messages.js";
+  import { withTerms } from "$lib/terminology/with-terms.js";
 
   interface Props {
     label: string;
@@ -148,7 +149,7 @@
 
       if (!data.found) {
         onchange({ mode: "new", token: data.token });
-        lookupMessage = m.ticket_new_success();
+        lookupMessage = m.ticket_new_success(withTerms());
         return;
       }
 
@@ -169,7 +170,7 @@
       lookupMessage = data.alias;
       selectedDisplay = data.alias;
     } catch {
-      lookupMessage = m.ticket_new_error_submit_failed();
+      lookupMessage = m.ticket_new_error_submit_failed(withTerms());
     } finally {
       lookingUp = false;
     }
@@ -257,7 +258,7 @@
             onclick={switchToCreate}
             {disabled}
           >
-            {createLabel ?? m.ticket_new_create_client()}
+            {createLabel ?? m.ticket_new_create_client(withTerms())}
           </button>
         {/if}
       </Combobox.Content>

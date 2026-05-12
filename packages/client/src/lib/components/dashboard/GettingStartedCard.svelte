@@ -30,6 +30,7 @@
   import CollapsibleSection from "./CollapsibleSection.svelte";
   import { trpc } from "$lib/trpc/index.js";
   import * as m from "$lib/paraglide/messages.js";
+  import { withTerms } from "$lib/terminology/with-terms.js";
   import { haptic } from "$lib/utils/haptic.js";
 
   interface Props {
@@ -122,21 +123,21 @@
     {
       id: "presets",
       label: m.getting_started_presets,
-      desc: m.getting_started_presets_desc,
+      desc: () => m.getting_started_presets_desc(withTerms()),
       icon: Reply,
       href: "/admin/communications",
     },
     {
       id: "kb",
-      label: m.getting_started_kb,
-      desc: m.getting_started_kb_desc,
+      label: () => m.getting_started_kb(withTerms()),
+      desc: () => m.getting_started_kb_desc(withTerms()),
       icon: BookOpen,
       href: "/kb",
     },
     {
       id: "queues",
-      label: m.getting_started_queues,
-      desc: m.getting_started_queues_desc,
+      label: () => m.getting_started_queues(withTerms()),
+      desc: () => m.getting_started_queues_desc(withTerms()),
       icon: Layers,
       href: "/admin/communications",
     },

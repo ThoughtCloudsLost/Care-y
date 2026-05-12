@@ -2,6 +2,7 @@
   import { List, ListItem, BlockTitle } from "konsta/svelte";
   import { Clock, X } from "@lucide/svelte";
   import * as m from "$lib/paraglide/messages.js";
+  import { withTerms } from "$lib/terminology/with-terms.js";
   import { searchRecents } from "$lib/search/recents.svelte.js";
 
   interface SearchRecentsProps {
@@ -46,7 +47,7 @@
   </List>
 {:else}
   <div class="search-hint">
-    <p>{m.search_hint()}</p>
+    <p>{m.search_hint(withTerms())}</p>
   </div>
 {/if}
 

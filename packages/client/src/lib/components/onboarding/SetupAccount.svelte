@@ -22,6 +22,7 @@
     getSodium,
   } from "@care-y/crypto";
   import * as m from "$lib/paraglide/messages.js";
+  import { withTerms } from "$lib/terminology/with-terms.js";
   import { trpc } from "$lib/trpc/index.js";
   import { getCryptoBridge, getOrgKeyManager } from "$lib/crypto/context.js";
   import { setOrgKeyReady } from "$lib/crypto/org-key-ready.svelte.js";
@@ -262,7 +263,7 @@
         label={m.onboarding_account_display_name()}
         type="text"
         placeholder={m.onboarding_account_display_name_placeholder()}
-        info={m.onboarding_account_display_name_info()}
+        info={m.onboarding_account_display_name_info(withTerms())}
         bind:value={displayName}
         required
       />

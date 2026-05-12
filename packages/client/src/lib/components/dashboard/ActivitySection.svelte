@@ -10,6 +10,7 @@
   import { formatRelativeTime } from "$lib/utils/format-time.js";
   import { onKeyActivate } from "$lib/utils/a11y.js";
   import * as m from "$lib/paraglide/messages.js";
+  import { withTerms } from "$lib/terminology/with-terms.js";
   import CollapsibleSection from "./CollapsibleSection.svelte";
   import InlineSkeleton from "$lib/components/InlineSkeleton.svelte";
   import DecryptPlaceholder from "$lib/components/DecryptPlaceholder.svelte";
@@ -42,7 +43,7 @@
   function eventLabel(eventType: string): string {
     switch (eventType) {
       case "ticket_created":
-        return m.dashboard_activity_ticket_created();
+        return m.dashboard_activity_ticket_created(withTerms());
       case "ticket_closed":
         return m.dashboard_activity_ticket_closed();
       case "ticket_reopened":
@@ -123,9 +124,11 @@
             <span class="activity-event">{eventLabel(item.eventType)}</span>
             <span class="activity-alias">{item.clientAlias}</span>
             <span class="activity-queue"
-              >{m.dashboard_activity_in_queue({
-                queue: item.queueName ?? "...",
-              })}</span
+              >{m.dashboard_activity_in_queue(
+                withTerms({
+                  queueName: item.queueName ?? "...",
+                }),
+              )}</span
             >
             <span class="activity-time">
               {formatRelativeTime(

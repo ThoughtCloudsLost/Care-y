@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "{count} open tickets, view filtered list" |
+* | "{count} open {tickets}, view filtered list" |
 *
 * @param {Admin_Reports_View_OpenInputs} inputs
 * @param {{ locale?: "en" | "es" }} options
@@ -15,4 +15,5 @@ export const admin_reports_view_open: ((inputs: Admin_Reports_View_OpenInputs, o
 export type LocalizedString = import("../runtime.js").LocalizedString;
 export type Admin_Reports_View_OpenInputs = {
     count: NonNullable<unknown>;
+    tickets: NonNullable<unknown>;
 };

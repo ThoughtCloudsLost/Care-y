@@ -20,6 +20,7 @@
   } from "@lucide/svelte";
   import { telephonyProviderSchema } from "@care-y/shared";
   import * as m from "$lib/paraglide/messages.js";
+  import { withTerms } from "$lib/terminology/with-terms.js";
   import { trpc } from "$lib/trpc/index.js";
   import { adminKeys } from "$lib/query/keys.js";
   import { RouterNotAvailableError } from "$lib/errors.js";
@@ -450,7 +451,7 @@
         dropdown
         value={outboundSid ?? ""}
         disabled={setPurposeMutation.isPending}
-        info={m.admin_telephony_outbound_calls_helper()}
+        info={m.admin_telephony_outbound_calls_helper(withTerms())}
         onChange={(e: Event) => {
           const target = e.target;
           if (target instanceof HTMLSelectElement) {

@@ -3,26 +3,26 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 
 /** @typedef {import('../runtime.js').LocalizedString} LocalizedString */
 
-/** @typedef {{}} Onboarding_Queue_Name_LabelInputs */
+/** @typedef {{ Queue: NonNullable<unknown>, queue: NonNullable<unknown> }} Onboarding_Queue_Name_LabelInputs */
 
-const en_onboarding_queue_name_label = /** @type {(inputs: Onboarding_Queue_Name_LabelInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Queue Name`)
+const en_onboarding_queue_name_label = /** @type {(inputs: Onboarding_Queue_Name_LabelInputs) => LocalizedString} */ (i) => {
+	return /** @type {LocalizedString} */ (`${i?.Queue} Name`)
 };
 
-const es_onboarding_queue_name_label = /** @type {(inputs: Onboarding_Queue_Name_LabelInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Nombre de la cola`)
+const es_onboarding_queue_name_label = /** @type {(inputs: Onboarding_Queue_Name_LabelInputs) => LocalizedString} */ (i) => {
+	return /** @type {LocalizedString} */ (`Nombre de la ${i?.queue}`)
 };
 
 /**
 * | output |
 * | --- |
-* | "Queue Name" |
+* | "{Queue} Name" |
 *
 * @param {Onboarding_Queue_Name_LabelInputs} inputs
 * @param {{ locale?: "en" | "es" }} options
 * @returns {LocalizedString}
 */
-export const onboarding_queue_name_label = /** @type {((inputs?: Onboarding_Queue_Name_LabelInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Onboarding_Queue_Name_LabelInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const onboarding_queue_name_label = /** @type {((inputs: Onboarding_Queue_Name_LabelInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Onboarding_Queue_Name_LabelInputs, { locale?: "en" | "es" }, {}>} */ ((inputs, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "en") return en_onboarding_queue_name_label(inputs)
 	return es_onboarding_queue_name_label(inputs)

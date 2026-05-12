@@ -20,6 +20,7 @@
   } from "konsta/svelte";
   import { CircleCheck, Circle } from "@lucide/svelte";
   import * as m from "$lib/paraglide/messages.js";
+  import { withTerms } from "$lib/terminology/with-terms.js";
   import { trpc } from "$lib/trpc/index.js";
   import { onboardingKeys } from "$lib/query/keys.js";
   import { announceToLiveRegion } from "$lib/utils/announce.js";
@@ -41,7 +42,7 @@
     m.onboarding_step_briefing(),
     m.onboarding_step_org(),
     m.onboarding_step_branding(),
-    m.onboarding_step_queue(),
+    m.onboarding_step_queue(withTerms()),
     m.onboarding_step_telephony(),
     m.onboarding_step_escrow(),
     m.onboarding_step_invites(),
@@ -245,13 +246,17 @@
     {
       id: "presets",
       label: m.getting_started_presets,
-      desc: m.getting_started_presets_desc,
+      desc: () => m.getting_started_presets_desc(withTerms()),
     },
-    { id: "kb", label: m.getting_started_kb, desc: m.getting_started_kb_desc },
+    {
+      id: "kb",
+      label: () => m.getting_started_kb(withTerms()),
+      desc: () => m.getting_started_kb_desc(withTerms()),
+    },
     {
       id: "queues",
-      label: m.getting_started_queues,
-      desc: m.getting_started_queues_desc,
+      label: () => m.getting_started_queues(withTerms()),
+      desc: () => m.getting_started_queues_desc(withTerms()),
     },
     {
       id: "retention",

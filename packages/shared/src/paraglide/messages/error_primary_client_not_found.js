@@ -3,26 +3,26 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 
 /** @typedef {import('../runtime.js').LocalizedString} LocalizedString */
 
-/** @typedef {{}} Error_Primary_Client_Not_FoundInputs */
+/** @typedef {{ client: NonNullable<unknown>, Client: NonNullable<unknown> }} Error_Primary_Client_Not_FoundInputs */
 
-const en_error_primary_client_not_found = /** @type {(inputs: Error_Primary_Client_Not_FoundInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Primary client not found.`)
+const en_error_primary_client_not_found = /** @type {(inputs: Error_Primary_Client_Not_FoundInputs) => LocalizedString} */ (i) => {
+	return /** @type {LocalizedString} */ (`Primary ${i?.client} not found.`)
 };
 
-const es_error_primary_client_not_found = /** @type {(inputs: Error_Primary_Client_Not_FoundInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Cliente principal no encontrado.`)
+const es_error_primary_client_not_found = /** @type {(inputs: Error_Primary_Client_Not_FoundInputs) => LocalizedString} */ (i) => {
+	return /** @type {LocalizedString} */ (`${i?.Client} principal no encontrado.`)
 };
 
 /**
 * | output |
 * | --- |
-* | "Primary client not found." |
+* | "Primary {client} not found." |
 *
 * @param {Error_Primary_Client_Not_FoundInputs} inputs
 * @param {{ locale?: "en" | "es" }} options
 * @returns {LocalizedString}
 */
-export const error_primary_client_not_found = /** @type {((inputs?: Error_Primary_Client_Not_FoundInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Error_Primary_Client_Not_FoundInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const error_primary_client_not_found = /** @type {((inputs: Error_Primary_Client_Not_FoundInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Error_Primary_Client_Not_FoundInputs, { locale?: "en" | "es" }, {}>} */ ((inputs, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "en") return en_error_primary_client_not_found(inputs)
 	return es_error_primary_client_not_found(inputs)

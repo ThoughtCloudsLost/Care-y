@@ -4,6 +4,7 @@ import { ticketsKeys } from "$lib/query/keys.js";
 import { toastStore } from "$lib/stores/toast.svelte.js";
 import { haptic } from "$lib/utils/haptic.js";
 import * as m from "$lib/paraglide/messages.js";
+import { withTerms } from "$lib/terminology/with-terms.js";
 
 interface BulkActionsDeps {
   readonly selectedIds: SvelteSet<string>;
@@ -72,14 +73,17 @@ export function createBulkActions(deps: BulkActionsDeps): BulkActions {
 
     if (failed) {
       toastStore.show(
-        m.ticket_toast_bulk_assigned({ count: String(succeeded), name }) +
-          ` (${String(total - succeeded)} failed)`,
+        m.ticket_toast_bulk_assigned(
+          withTerms({ count: String(succeeded), name }),
+        ) + ` (${String(total - succeeded)} failed)`,
         3000,
       );
     } else {
       haptic();
       toastStore.show(
-        m.ticket_toast_bulk_assigned({ count: String(succeeded), name }),
+        m.ticket_toast_bulk_assigned(
+          withTerms({ count: String(succeeded), name }),
+        ),
       );
     }
 
@@ -95,13 +99,15 @@ export function createBulkActions(deps: BulkActionsDeps): BulkActions {
 
     if (failed) {
       toastStore.show(
-        m.ticket_toast_bulk_held({ count: String(succeeded) }) +
+        m.ticket_toast_bulk_held(withTerms({ count: String(succeeded) })) +
           ` (${String(total - succeeded)} failed)`,
         3000,
       );
     } else {
       haptic();
-      toastStore.show(m.ticket_toast_bulk_held({ count: String(succeeded) }));
+      toastStore.show(
+        m.ticket_toast_bulk_held(withTerms({ count: String(succeeded) })),
+      );
     }
 
     exitMultiSelect();

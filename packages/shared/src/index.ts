@@ -411,3 +411,14 @@ export {
   type WrapOrgKeyForUserInput,
   type UnwrappedUser,
 } from "./schemas/onboarding.js";
+
+// --- Terminology schemas ---
+export {
+  terminologyLabelsSchema,
+  terminologyConfigSchema,
+  TERMINOLOGY_DEFAULTS,
+  TERMINOLOGY_DEFAULTS_EN,
+  TERMINOLOGY_SUGGESTIONS,
+  type TerminologyLabels,
+  type TerminologyConfig,
+} from "./schemas/terminology.js";

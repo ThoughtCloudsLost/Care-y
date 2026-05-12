@@ -460,14 +460,19 @@ export function createOnboardingRouter(deps: OnboardingRouterDeps) {
           throw new ForbiddenError(ErrorCode.INSUFFICIENT_PERMISSIONS);
         }
 
-        await ctx.org.tenantDb
-          .updateTable("org_config")
-          .set({
-            encrypted_name: Buffer.from(input.encryptedOrgName, "base64"),
-            default_country_code: input.countryCode,
-            default_language: input.defaultLanguage,
-          })
-          .execute();
+        const updates: Record<string, unknown> = {
+          encrypted_name: Buffer.from(input.encryptedOrgName, "base64"),
+          default_country_code: input.countryCode,
+          default_language: input.defaultLanguage,
+        };
+        if (input.encryptedTerminology !== undefined) {
+          updates.encrypted_terminology = Buffer.from(
+            input.encryptedTerminology,
+            "base64",
+          );
+        }
+
+        await ctx.org.tenantDb.updateTable("org_config").set(updates).execute();
 
         return { success: true as const };
       }),

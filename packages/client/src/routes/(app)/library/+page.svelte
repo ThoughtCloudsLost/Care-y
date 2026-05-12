@@ -27,6 +27,7 @@
     ManageConfig,
   } from "$lib/shell/types.js";
   import * as m from "$lib/paraglide/messages.js";
+  import { withTerms } from "$lib/terminology/with-terms.js";
   import { trpc } from "$lib/trpc/index.js";
   import { kbKeys } from "$lib/query/keys.js";
   import {
@@ -762,7 +763,7 @@
 
 {#snippet librarySubnavbar()}
   <SubNavbarFilterLayout
-    title={m.library_title()}
+    title={m.library_title(withTerms())}
     view={viewConfig}
     stats={libraryStats}
     sort={sortConfig}

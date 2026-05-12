@@ -11,6 +11,7 @@
   import { useQueryClient } from "@tanstack/svelte-query";
   import { ticketKeys } from "$lib/query/keys";
   import * as m from "$lib/paraglide/messages.js";
+  import { withTerms } from "$lib/terminology/with-terms.js";
   import { trpc } from "$lib/trpc/index.js";
   import { getCryptoBridge, getOrgDecryptCache } from "$lib/crypto/context.js";
   import { RouterNotAvailableError } from "$lib/errors.js";
@@ -99,11 +100,11 @@
   const HINT_LABELS = new Map<string, () => string>([
     ["ticket_access", m.ticket_note_hint_participants],
     ["role:admin", m.ticket_note_hint_admins],
-    ["role:manager", m.ticket_note_hint_managers],
+    ["role:manager", () => m.ticket_note_hint_managers(withTerms())],
   ]);
 
   const ROLE_LABELS = new Map<string, () => string>([
-    [RoleId.MANAGER, m.role_manager],
+    [RoleId.MANAGER, () => m.role_manager(withTerms())],
     [RoleId.ADMIN, m.role_admin],
   ]);
 

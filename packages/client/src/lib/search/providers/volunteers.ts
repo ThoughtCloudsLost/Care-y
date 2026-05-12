@@ -13,6 +13,7 @@ import type { SearchProvider, SearchResult } from "../types.js";
 import { fuzzySearch } from "../fuzzy.js";
 import { UsersRound } from "@lucide/svelte";
 import * as m from "$lib/paraglide/messages.js";
+import { withTerms } from "$lib/terminology/with-terms.js";
 import VolunteerResultItem from "$lib/components/search/VolunteerResultItem.svelte";
 
 /** Raw admin user record from the TanStack Query cache (listUsers response). */
@@ -72,7 +73,7 @@ export function createVolunteerSearchProvider(
 
   return {
     id: "volunteers",
-    label: () => m.search_section_volunteers(),
+    label: () => m.search_section_volunteers(withTerms()),
     icon: UsersRound,
     renderMode: "card-strip",
     showAllHref: (query) =>

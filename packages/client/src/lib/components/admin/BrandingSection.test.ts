@@ -239,6 +239,7 @@ const LOADED_DATA: BrandingData = {
   encryptedAccentColor: btoa(DEFAULT_ACCENT),
   encryptedClientText: btoa("We provide confidential support."),
   clientEncryptedBranding: null,
+  encryptedTerminology: null,
   hasIcons: false,
   iconVersion: null,
 };

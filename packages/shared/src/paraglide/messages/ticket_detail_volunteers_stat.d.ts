@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "{count} volunteers" |
+* | "{count} {volunteers}" |
 *
 * @param {Ticket_Detail_Volunteers_StatInputs} inputs
 * @param {{ locale?: "en" | "es" }} options
@@ -15,4 +15,5 @@ export const ticket_detail_volunteers_stat: ((inputs: Ticket_Detail_Volunteers_S
 export type LocalizedString = import("../runtime.js").LocalizedString;
 export type Ticket_Detail_Volunteers_StatInputs = {
     count: NonNullable<unknown>;
+    volunteers: NonNullable<unknown>;
 };

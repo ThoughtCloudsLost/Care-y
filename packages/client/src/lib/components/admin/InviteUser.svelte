@@ -12,6 +12,7 @@
   import { RoleId } from "@care-y/shared";
   import type { RoleIdValue } from "@care-y/shared";
   import * as m from "$lib/paraglide/messages.js";
+  import { withTerms } from "$lib/terminology/with-terms.js";
   import { trpc } from "$lib/trpc/index.js";
   import { getOrgKeyManager } from "$lib/crypto/context.js";
   import { haptic } from "$lib/utils/haptic.js";
@@ -140,7 +141,7 @@
     <div class="sheet-content">
       <div class="credential-intro">
         <p class="credential-instructions">
-          {m.admin_invite_credential_instructions()}
+          {m.admin_invite_credential_instructions(withTerms())}
         </p>
       </div>
 
@@ -237,7 +238,7 @@
           disabled={!orgKeyLoaded}
           info={passwordTooShort
             ? m.admin_invite_password_too_short()
-            : m.admin_invite_password_hint()}
+            : m.admin_invite_password_hint(withTerms())}
         />
       </List>
 
@@ -250,13 +251,13 @@
             active={selectedRole === RoleId.VOLUNTEER}
             onclick={() => (selectedRole = RoleId.VOLUNTEER)}
           >
-            {m.admin_role_volunteer()}
+            {m.admin_role_volunteer(withTerms())}
           </SegmentedButton>
           <SegmentedButton
             active={selectedRole === RoleId.MANAGER}
             onclick={() => (selectedRole = RoleId.MANAGER)}
           >
-            {m.admin_role_manager()}
+            {m.admin_role_manager(withTerms())}
           </SegmentedButton>
           <SegmentedButton
             active={selectedRole === RoleId.ADMIN}

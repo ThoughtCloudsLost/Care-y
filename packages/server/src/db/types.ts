@@ -128,6 +128,7 @@ export interface OrgConfigTable {
   icon_maskable_blob_key: string | null;
   default_language: ColumnType<string, string | undefined, string>;
   setup_telephony_config: Buffer | null; // encrypted JSON blob (nonce || ciphertext), set during wizard
+  encrypted_terminology: Buffer | null; // encrypted JSON blob (nonce || ciphertext), per-language labels
   default_note_type_id: string | null;
   intake_queue_id: string | null;
   getting_started_dismissed_at: ColumnType<

@@ -12,6 +12,7 @@
 <script lang="ts">
   import { List, ListItem } from "konsta/svelte";
   import * as m from "$lib/paraglide/messages.js";
+  import { withTerms } from "$lib/terminology/with-terms.js";
   import { trpc } from "$lib/trpc/index.js";
   import { createVolunteersQuery } from "$lib/tickets/queries.js";
   import { getOrgDecryptCache } from "$lib/crypto/context.js";
@@ -88,7 +89,7 @@
   <div
     class="mention-dropdown"
     role="listbox"
-    aria-label={m.ticket_mention_volunteers()}
+    aria-label={m.ticket_mention_volunteers(withTerms())}
   >
     <List nested>
       {#each filteredVolunteers as vol (vol.id)}

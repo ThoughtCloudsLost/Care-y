@@ -22,6 +22,7 @@
   import { encryptClientBranding } from "@care-y/crypto";
   import type { BrandingField } from "@care-y/shared";
   import * as m from "$lib/paraglide/messages.js";
+  import { withTerms } from "$lib/terminology/with-terms.js";
   import { trpc } from "$lib/trpc/index.js";
   import { adminKeys } from "$lib/query/keys.js";
   import { getOrgKeyManager } from "$lib/crypto/context.js";
@@ -301,7 +302,7 @@
 
 <BlockTitle medium>{m.onboarding_branding_heading()}</BlockTitle>
 <Block>
-  <p class="step-desc">{m.onboarding_branding_subtext()}</p>
+  <p class="step-desc">{m.onboarding_branding_subtext(withTerms())}</p>
 </Block>
 
 <form onsubmit={handleSubmit}>
@@ -388,7 +389,7 @@
 
       <!-- Client text -->
       <div class="form-section-label">
-        {m.onboarding_branding_text_label()}
+        {m.onboarding_branding_text_label(withTerms())}
       </div>
     </div>
   </Block>
@@ -396,9 +397,9 @@
   <List strong inset>
     <ListInput
       outline
-      label={m.onboarding_branding_text_label()}
+      label={m.onboarding_branding_text_label(withTerms())}
       type="textarea"
-      placeholder={m.onboarding_branding_text_placeholder()}
+      placeholder={m.onboarding_branding_text_placeholder(withTerms())}
       value={clientText}
       onInput={(e: Event) => {
         if (e.target instanceof HTMLTextAreaElement)

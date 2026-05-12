@@ -8,6 +8,7 @@
     requireSodium,
   } from "@care-y/crypto";
   import * as m from "$lib/paraglide/messages.js";
+  import { withTerms } from "$lib/terminology/with-terms.js";
   import { getOrgKeyManager } from "$lib/crypto/context.js";
   import { haptic } from "$lib/utils/haptic.js";
   import { toastStore } from "$lib/stores/toast.svelte.js";
@@ -153,7 +154,9 @@
     <Block>
       <p class="section-heading">{m.admin_escrow_step_education_heading()}</p>
       <p class="body-text">{m.admin_escrow_step_education_body()}</p>
-      <p class="body-text">{m.admin_escrow_step_education_scope()}</p>
+      <p class="body-text">
+        {m.admin_escrow_step_education_scope(withTerms())}
+      </p>
       <p class="body-text emphasis">
         {m.admin_escrow_step_education_analogy()}
       </p>

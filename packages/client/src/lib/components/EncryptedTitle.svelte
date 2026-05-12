@@ -1,6 +1,7 @@
 <script lang="ts">
   import { CircleQuestionMark } from "@lucide/svelte";
   import * as m from "$lib/paraglide/messages.js";
+  import { withTerms } from "$lib/terminology/with-terms.js";
 
   interface Props {
     onhelp?: () => void;
@@ -16,7 +17,8 @@
 </script>
 
 <span class="encrypted-title">
-  <span class="encrypted-text">{m.dashboard_encrypted_ticket()}</span>
+  <span class="encrypted-text">{m.dashboard_encrypted_ticket(withTerms())}</span
+  >
   {#if onhelp}
     <button
       type="button"

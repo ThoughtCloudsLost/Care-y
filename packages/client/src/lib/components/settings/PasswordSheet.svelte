@@ -4,6 +4,7 @@
   import { useQueryClient } from "@tanstack/svelte-query";
   import { authKeys } from "$lib/query/keys.js";
   import * as m from "$lib/paraglide/messages.js";
+  import { withTerms } from "$lib/terminology/with-terms.js";
   import { getCryptoBridge, getOrgKeyManager } from "$lib/crypto/context.js";
   import { CryptoBridge } from "$lib/workers/crypto-bridge.js";
   import { haptic } from "$lib/utils/haptic.js";
@@ -68,13 +69,13 @@
         stepMessage = m.settings_password_step_fetch();
       },
       onRewrapKeys: () => {
-        stepMessage = m.settings_password_step_rewrap();
+        stepMessage = m.settings_password_step_rewrap(withTerms());
       },
       onRederive: () => {
         stepMessage = m.settings_password_step_derive();
       },
       onRewrapOrgKey: () => {
-        stepMessage = m.settings_password_step_rewrap();
+        stepMessage = m.settings_password_step_rewrap(withTerms());
       },
       onRotateKeys: () => {
         stepMessage = m.settings_password_step_rotate();

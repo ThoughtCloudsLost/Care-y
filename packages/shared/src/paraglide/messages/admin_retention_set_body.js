@@ -3,20 +3,20 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 
 /** @typedef {import('../runtime.js').LocalizedString} LocalizedString */
 
-/** @typedef {{ days: NonNullable<unknown> }} Admin_Retention_Set_BodyInputs */
+/** @typedef {{ Tickets: NonNullable<unknown>, days: NonNullable<unknown>, tickets: NonNullable<unknown> }} Admin_Retention_Set_BodyInputs */
 
 const en_admin_retention_set_body = /** @type {(inputs: Admin_Retention_Set_BodyInputs) => LocalizedString} */ (i) => {
-	return /** @type {LocalizedString} */ (`Tickets, messages, and caller personal information older than ${i?.days} days will be permanently and automatically deleted. This cannot be undone. Deleted data cannot be recovered, even with the escrow file.`)
+	return /** @type {LocalizedString} */ (`${i?.Tickets}, messages, and caller personal information older than ${i?.days} days will be permanently and automatically deleted. This cannot be undone. Deleted data cannot be recovered, even with the escrow file.`)
 };
 
 const es_admin_retention_set_body = /** @type {(inputs: Admin_Retention_Set_BodyInputs) => LocalizedString} */ (i) => {
-	return /** @type {LocalizedString} */ (`Los tickets, mensajes e informacion personal de los llamantes con mas de ${i?.days} dias se eliminaran permanente y automaticamente. Esto no se puede deshacer. Los datos eliminados no se pueden recuperar, ni siquiera con el archivo de custodia.`)
+	return /** @type {LocalizedString} */ (`Los ${i?.tickets}, mensajes e informacion personal de los llamantes con mas de ${i?.days} dias se eliminaran permanente y automaticamente. Esto no se puede deshacer. Los datos eliminados no se pueden recuperar, ni siquiera con el archivo de custodia.`)
 };
 
 /**
 * | output |
 * | --- |
-* | "Tickets, messages, and caller personal information older than {days} days will be permanently and automatically deleted. This cannot be undone. Deleted data ..." |
+* | "{Tickets}, messages, and caller personal information older than {days} days will be permanently and automatically deleted. This cannot be undone. Deleted dat..." |
 *
 * @param {Admin_Retention_Set_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" }} options
