@@ -24,6 +24,7 @@
     type LucideIcon,
   } from "@lucide/svelte";
   import * as m from "$lib/paraglide/messages.js";
+  import { withTerms } from "$lib/terminology/with-terms.js";
   import { trpc } from "$lib/trpc/index.js";
   import { getOrgDecryptCache, getOrgKeyManager } from "$lib/crypto/context.js";
   import {
@@ -97,7 +98,7 @@
     {
       icon: UserCheck,
       label: m.followup_type_assignment_change,
-      description: m.followup_type_assignment_change_desc,
+      description: () => m.followup_type_assignment_change_desc(withTerms()),
     },
     {
       icon: ChevronsUp,
@@ -107,12 +108,12 @@
     {
       icon: CirclePause,
       label: m.followup_type_hold_change,
-      description: m.followup_type_hold_change_desc,
+      description: () => m.followup_type_hold_change_desc(withTerms()),
     },
     {
       icon: Replace,
-      label: m.followup_type_merge_note,
-      description: m.followup_type_merge_note_desc,
+      label: () => m.followup_type_merge_note(withTerms()),
+      description: () => m.followup_type_merge_note_desc(withTerms()),
     },
     {
       icon: Phone,
@@ -125,7 +126,7 @@
 
   const ROLE_SUMMARY_LABELS: Record<string, () => string> = {
     admin: m.admin_note_types_summary_admins,
-    manager: m.admin_note_types_summary_managers,
+    manager: () => m.admin_note_types_summary_managers(withTerms()),
   };
 
   function escalationSummary(targets: EscalationTarget[]): string {
@@ -190,14 +191,14 @@
   let sheetSaving = $state(false);
 
   const ROLE_OPTIONS: readonly { id: RoleIdValue; label: () => string }[] = [
-    { id: RoleId.VOLUNTEER, label: m.admin_role_volunteer },
-    { id: RoleId.MANAGER, label: m.admin_role_manager },
+    { id: RoleId.VOLUNTEER, label: () => m.admin_role_volunteer(withTerms()) },
+    { id: RoleId.MANAGER, label: () => m.admin_role_manager(withTerms()) },
     { id: RoleId.ADMIN, label: m.admin_role_admin },
   ];
 
   function roleLabelFor(roleId: string): string {
     const opt = ROLE_OPTIONS.find((r) => r.id === roleId);
-    return opt ? opt.label() : m.admin_role_volunteer();
+    return opt ? opt.label() : m.admin_role_volunteer(withTerms());
   }
 
   const isCreateMode = $derived(editingType === null);
@@ -527,7 +528,7 @@
         {m.admin_note_types_escalation_label()}
       </span>
       <List nested class="edit-sheet-list">
-        <ListItem title={m.admin_note_types_notify_participants()}>
+        <ListItem title={m.admin_note_types_notify_participants(withTerms())}>
           {#snippet after()}
             <Toggle
               checked={editNotifyParticipants}
@@ -549,7 +550,7 @@
             />
           {/snippet}
         </ListItem>
-        <ListItem title={m.admin_note_types_escalate_manager()}>
+        <ListItem title={m.admin_note_types_escalate_manager(withTerms())}>
           {#snippet after()}
             <Toggle
               checked={editEscalateManager}

@@ -20,6 +20,7 @@
   import { Link } from "konsta/svelte";
   import { ChevronLeft, Pencil } from "@lucide/svelte";
   import * as m from "$lib/paraglide/messages.js";
+  import { withTerms } from "$lib/terminology/with-terms.js";
   import { trpc } from "$lib/trpc/index.js";
   import { kbKeys } from "$lib/query/keys.js";
   import { getOrgDecryptCache, getOrgKeyManager } from "$lib/crypto/context.js";
@@ -411,7 +412,7 @@
   $effect(() => {
     navbarCtx.current = {
       left: navLeft,
-      title: categoryName ?? m.library_title(),
+      title: categoryName ?? m.library_title(withTerms()),
       right: navRight,
     };
     return () => {
@@ -425,7 +426,7 @@
     iconOnly
     onclick={goBack}
     role="button"
-    aria-label={m.library_back_to_library()}
+    aria-label={m.library_back_to_library(withTerms())}
   >
     <ChevronLeft size={22} aria-hidden="true" />
   </Link>

@@ -16,6 +16,7 @@
   import type { GreetingType, GreetingAudioContentType } from "@care-y/shared";
   import { GREETING_AUDIO_MAX_BYTES } from "@care-y/shared";
   import * as m from "$lib/paraglide/messages.js";
+  import { withTerms } from "$lib/terminology/with-terms.js";
   import { trpc } from "$lib/trpc/index.js";
   import { adminKeys } from "$lib/query/keys.js";
   import { haptic } from "$lib/utils/haptic.js";
@@ -78,7 +79,7 @@
     {
       value: "staff_menu",
       label: () => m.admin_greetings_type_staff_menu(),
-      help: () => m.admin_greetings_type_staff_menu_help(),
+      help: () => m.admin_greetings_type_staff_menu_help(withTerms()),
     },
   ];
 

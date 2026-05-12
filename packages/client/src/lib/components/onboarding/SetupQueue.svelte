@@ -15,6 +15,7 @@
   } from "konsta/svelte";
   import { createMutation, useQueryClient } from "@tanstack/svelte-query";
   import * as m from "$lib/paraglide/messages.js";
+  import { withTerms } from "$lib/terminology/with-terms.js";
   import { trpc } from "$lib/trpc/index.js";
   import { queueKeys } from "$lib/query/keys.js";
   import { getOrgKeyManager } from "$lib/crypto/context.js";
@@ -63,15 +64,15 @@
     }) => ticketRouter.createQueue.mutate(input),
     onSuccess: () => {
       haptic();
-      toastStore.show(m.onboarding_queue_created());
-      announceToLiveRegion("polite", m.onboarding_queue_created());
+      toastStore.show(m.onboarding_queue_created(withTerms()));
+      announceToLiveRegion("polite", m.onboarding_queue_created(withTerms()));
       void queryClient.invalidateQueries({ queryKey: queueKeys.all });
       oncomplete({ firstQueueCreated: true });
     },
     onError: () => {
-      error = m.onboarding_queue_error();
-      toastStore.show(m.onboarding_queue_error(), 3000);
-      announceToLiveRegion("assertive", m.onboarding_queue_error());
+      error = m.onboarding_queue_error(withTerms());
+      toastStore.show(m.onboarding_queue_error(withTerms()), 3000);
+      announceToLiveRegion("assertive", m.onboarding_queue_error(withTerms()));
     },
   }));
 
@@ -85,7 +86,7 @@
     error = "";
 
     if (!nameValid) {
-      error = m.onboarding_queue_error_name_required();
+      error = m.onboarding_queue_error_name_required(withTerms());
       return;
     }
     if (!daysValid) {
@@ -104,9 +105,9 @@
   }
 </script>
 
-<BlockTitle medium>{m.onboarding_queue_heading()}</BlockTitle>
+<BlockTitle medium>{m.onboarding_queue_heading(withTerms())}</BlockTitle>
 <Block>
-  <p class="step-desc">{m.onboarding_queue_subtext()}</p>
+  <p class="step-desc">{m.onboarding_queue_subtext(withTerms())}</p>
 </Block>
 
 <form onsubmit={handleSubmit}>
@@ -119,7 +120,7 @@
   <List strong inset>
     <ListInput
       outline
-      label={m.onboarding_queue_name_label()}
+      label={m.onboarding_queue_name_label(withTerms())}
       type="text"
       placeholder={m.onboarding_queue_name_placeholder()}
       value={queueName}
@@ -139,7 +140,7 @@
         if (e.target instanceof HTMLInputElement)
           escalationDays = e.target.value;
       }}
-      info={m.onboarding_queue_escalation_hint()}
+      info={m.onboarding_queue_escalation_hint(withTerms())}
       disabled={createMut.isPending}
     />
   </List>
@@ -149,7 +150,7 @@
       {#if createMut.isPending}
         <Preloader class="w-5 h-5" />
       {:else}
-        {m.onboarding_queue_submit()}
+        {m.onboarding_queue_submit(withTerms())}
       {/if}
     </Button>
   </Block>

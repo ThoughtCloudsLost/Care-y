@@ -4,6 +4,7 @@
   import { createMutation, useQueryClient } from "@tanstack/svelte-query";
   import { queueKeys } from "$lib/query/keys.js";
   import * as m from "$lib/paraglide/messages.js";
+  import { withTerms } from "$lib/terminology/with-terms.js";
   import { trpc } from "$lib/trpc/index.js";
   import { getOrgKeyManager, getOrgDecryptCache } from "$lib/crypto/context.js";
   import { uint8ArrayToBase64 } from "$lib/utils/buffer-encoding.js";
@@ -106,7 +107,7 @@
       encryptedName: string;
       escalateDays: number;
     }) => ticketRouter.createQueue.mutate(input),
-    onSuccess: () => onMutationSuccess(m.admin_queue_created()),
+    onSuccess: () => onMutationSuccess(m.admin_queue_created(withTerms())),
     onError: () => {
       toastStore.show(m.error_generic());
     },
@@ -118,7 +119,7 @@
       encryptedName?: string;
       escalateDays?: number;
     }) => ticketRouter.updateQueue.mutate(input),
-    onSuccess: () => onMutationSuccess(m.admin_queue_updated()),
+    onSuccess: () => onMutationSuccess(m.admin_queue_updated(withTerms())),
     onError: () => {
       toastStore.show(m.error_generic());
     },
@@ -153,8 +154,8 @@
 
   const title = $derived(
     isCreateMode
-      ? m.admin_queue_editor_create_title()
-      : m.admin_queue_editor_edit_title(),
+      ? m.admin_queue_editor_create_title(withTerms())
+      : m.admin_queue_editor_edit_title(withTerms()),
   );
 </script>
 
@@ -166,7 +167,7 @@
       {:else}
         <Save size={16} aria-hidden="true" />
         {isCreateMode
-          ? m.admin_queue_editor_save_create()
+          ? m.admin_queue_editor_save_create(withTerms())
           : m.admin_queue_editor_save_edit()}
       {/if}
     </SoftButton>
@@ -175,7 +176,7 @@
     {#if !orgKeyLoaded}
       <Block>
         <p class="text-sm text-[--color-amber-500] font-medium" role="alert">
-          {m.admin_queue_editor_no_org_key()}
+          {m.admin_queue_editor_no_org_key(withTerms())}
         </p>
       </Block>
     {/if}
@@ -183,7 +184,7 @@
     <List nested>
       <ListInput
         outline
-        label={m.admin_queue_editor_name_label()}
+        label={m.admin_queue_editor_name_label(withTerms())}
         type="text"
         placeholder={m.admin_queue_editor_name_placeholder()}
         value={queueName}
@@ -197,7 +198,7 @@
     <Block>
       <div class="pii-warning" role="note">
         <span class="pii-icon" aria-hidden="true">⚠</span>
-        <p>{m.admin_queue_editor_pii_warning()}</p>
+        <p>{m.admin_queue_editor_pii_warning(withTerms())}</p>
       </div>
     </Block>
 
@@ -213,14 +214,14 @@
             escalationDays = e.target.value;
         }}
         disabled={!orgKeyLoaded || isPending}
-        info={m.admin_queue_editor_escalation_hint()}
+        info={m.admin_queue_editor_escalation_hint(withTerms())}
       />
     </List>
 
     {#if nameEmpty && queueName.length > 0}
       <Block>
         <p class="text-sm text-[--color-red-500]" role="alert">
-          {m.admin_queue_editor_name_required()}
+          {m.admin_queue_editor_name_required(withTerms())}
         </p>
       </Block>
     {/if}
@@ -233,7 +234,7 @@
           onclick={handleDelete}
           disabled={isPending}
         >
-          {m.admin_queue_editor_delete()}
+          {m.admin_queue_editor_delete(withTerms())}
         </button>
       </div>
     {/if}

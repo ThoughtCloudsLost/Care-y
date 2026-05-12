@@ -19,6 +19,7 @@ export const updateOrgBasicsInputSchema = z.object({
   encryptedOrgName: base64String("encryptedOrgName"),
   defaultLanguage: z.string().min(2).max(10),
   countryCode: z.string().min(1).max(5),
+  encryptedTerminology: base64String("encryptedTerminology").optional(),
 });
 
 /** Validate an invite token without consuming it. */

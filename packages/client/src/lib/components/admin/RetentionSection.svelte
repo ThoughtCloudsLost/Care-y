@@ -9,6 +9,7 @@
   import { adminKeys } from "$lib/query/keys.js";
   import { Save } from "@lucide/svelte";
   import * as m from "$lib/paraglide/messages.js";
+  import { withTerms } from "$lib/terminology/with-terms.js";
   import { trpc } from "$lib/trpc/index.js";
   import { haptic } from "$lib/utils/haptic.js";
   import { toastStore } from "$lib/stores/toast.svelte.js";
@@ -139,8 +140,10 @@
 
         <p class="explainer">
           {serverDays !== null
-            ? m.admin_retention_active_description({ days: serverDays })
-            : m.admin_retention_inactive_description()}
+            ? m.admin_retention_active_description(
+                withTerms({ days: serverDays }),
+              )
+            : m.admin_retention_inactive_description(withTerms())}
         </p>
 
         <div class="input-row">
@@ -198,7 +201,7 @@
   {#snippet content()}
     <p class="text-sm text-[--muted]">
       {#if parsedDays !== null}
-        {m.admin_retention_set_body({ days: parsedDays })}
+        {m.admin_retention_set_body(withTerms({ days: parsedDays }))}
       {/if}
     </p>
   {/snippet}
@@ -223,7 +226,7 @@
 >
   {#snippet content()}
     <p class="text-sm text-[--muted]">
-      {m.admin_retention_clear_body()}
+      {m.admin_retention_clear_body(withTerms())}
     </p>
   {/snippet}
   {#snippet buttons()}

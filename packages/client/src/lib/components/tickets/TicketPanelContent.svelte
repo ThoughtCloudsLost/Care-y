@@ -24,6 +24,7 @@
   } from "konsta/svelte";
   import { Phone } from "@lucide/svelte";
   import * as m from "$lib/paraglide/messages.js";
+  import { withTerms } from "$lib/terminology/with-terms.js";
   import StatusDot from "$lib/components/StatusDot.svelte";
   import { formatRelativeTime } from "$lib/utils/format-time.js";
   import type { DisplayStatus } from "$lib/tickets/display-status.js";
@@ -229,9 +230,11 @@
   <PanelMediaSection {ticketId} {keyWrap} {onlightbox} />
 
   <!-- Recent tickets -->
-  <BlockTitle class="!mt-6 !-mb-2">{m.ticket_recent_history()}</BlockTitle>
+  <BlockTitle class="!mt-6 !-mb-2"
+    >{m.ticket_recent_history(withTerms())}</BlockTitle
+  >
   <Block class="!my-3 !mb-8">
-    <p class="empty-text">{m.ticket_panel_recent_coming_soon()}</p>
+    <p class="empty-text">{m.ticket_panel_recent_coming_soon(withTerms())}</p>
   </Block>
 </div>
 

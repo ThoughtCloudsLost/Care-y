@@ -3,20 +3,20 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 
 /** @typedef {import('../runtime.js').LocalizedString} LocalizedString */
 
-/** @typedef {{ count: NonNullable<unknown> }} Admin_Hub_Badge_QueuesInputs */
+/** @typedef {{ count: NonNullable<unknown>, queues: NonNullable<unknown> }} Admin_Hub_Badge_QueuesInputs */
 
 const en_admin_hub_badge_queues = /** @type {(inputs: Admin_Hub_Badge_QueuesInputs) => LocalizedString} */ (i) => {
-	return /** @type {LocalizedString} */ (`${i?.count} queues`)
+	return /** @type {LocalizedString} */ (`${i?.count} ${i?.queues}`)
 };
 
 const es_admin_hub_badge_queues = /** @type {(inputs: Admin_Hub_Badge_QueuesInputs) => LocalizedString} */ (i) => {
-	return /** @type {LocalizedString} */ (`${i?.count} colas`)
+	return /** @type {LocalizedString} */ (`${i?.count} ${i?.queues}`)
 };
 
 /**
 * | output |
 * | --- |
-* | "{count} queues" |
+* | "{count} {queues}" |
 *
 * @param {Admin_Hub_Badge_QueuesInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

@@ -3,20 +3,20 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 
 /** @typedef {import('../runtime.js').LocalizedString} LocalizedString */
 
-/** @typedef {{ queue: NonNullable<unknown> }} Dashboard_Activity_In_QueueInputs */
+/** @typedef {{ queueName: NonNullable<unknown> }} Dashboard_Activity_In_QueueInputs */
 
 const en_dashboard_activity_in_queue = /** @type {(inputs: Dashboard_Activity_In_QueueInputs) => LocalizedString} */ (i) => {
-	return /** @type {LocalizedString} */ (`in ${i?.queue}`)
+	return /** @type {LocalizedString} */ (`in ${i?.queueName}`)
 };
 
 const es_dashboard_activity_in_queue = /** @type {(inputs: Dashboard_Activity_In_QueueInputs) => LocalizedString} */ (i) => {
-	return /** @type {LocalizedString} */ (`en ${i?.queue}`)
+	return /** @type {LocalizedString} */ (`en ${i?.queueName}`)
 };
 
 /**
 * | output |
 * | --- |
-* | "in {queue}" |
+* | "in {queueName}" |
 *
 * @param {Dashboard_Activity_In_QueueInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

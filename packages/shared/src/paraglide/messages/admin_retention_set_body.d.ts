@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Tickets, messages, and caller personal information older than {days} days will be permanently and automatically deleted. This cannot be undone. Deleted data ..." |
+* | "{Tickets}, messages, and caller personal information older than {days} days will be permanently and automatically deleted. This cannot be undone. Deleted dat..." |
 *
 * @param {Admin_Retention_Set_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" }} options
@@ -14,5 +14,7 @@ export const admin_retention_set_body: ((inputs: Admin_Retention_Set_BodyInputs,
 }, {}>;
 export type LocalizedString = import("../runtime.js").LocalizedString;
 export type Admin_Retention_Set_BodyInputs = {
+    Tickets: NonNullable<unknown>;
     days: NonNullable<unknown>;
+    tickets: NonNullable<unknown>;
 };

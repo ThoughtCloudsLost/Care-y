@@ -9,6 +9,7 @@
   import type { RoleIdValue } from "@care-y/shared";
   import { Users, Layers, UserPlus, LayersPlus } from "@lucide/svelte";
   import * as m from "$lib/paraglide/messages.js";
+  import { withTerms } from "$lib/terminology/with-terms.js";
   import {
     getNavbarOverrideCtx,
     getScrollContainer,
@@ -271,8 +272,8 @@
       { field: "order", label: m.admin_queues_sort_order() },
       { field: "name", label: m.admin_queues_sort_name() },
       { field: "members", label: m.admin_queues_sort_members() },
-      { field: "open", label: m.admin_queues_sort_open() },
-      { field: "closed", label: m.admin_queues_sort_closed() },
+      { field: "open", label: m.admin_queues_sort_open(withTerms()) },
+      { field: "closed", label: m.admin_queues_sort_closed(withTerms()) },
       { field: "hold", label: m.admin_queues_sort_hold() },
     ],
     currentField: queueFilterStore.sort.field,
@@ -331,8 +332,8 @@
   ]);
 
   const roleOptions = $derived([
-    { value: RoleId.VOLUNTEER, label: m.admin_role_volunteer() },
-    { value: RoleId.MANAGER, label: m.admin_role_manager() },
+    { value: RoleId.VOLUNTEER, label: m.admin_role_volunteer(withTerms()) },
+    { value: RoleId.MANAGER, label: m.admin_role_manager(withTerms()) },
     { value: RoleId.ADMIN, label: m.admin_role_admin() },
   ]);
 
@@ -371,7 +372,7 @@
     },
     {
       id: "queue",
-      label: m.admin_users_filter_queue(),
+      label: m.admin_users_filter_queue(withTerms()),
       mode: "multi",
       options: queuePillOptions,
       selected: userFilterStore.queueIds as ReadonlySet<string>,
@@ -434,7 +435,7 @@
           onclick={() => switchTab("queues")}
           aria-selected={activeTab === "queues"}
           aria-controls="panel-queues"
-          aria-label={m.admin_tab_queues()}
+          aria-label={m.admin_tab_queues(withTerms())}
           id="tab-queues"
         >
           <Layers size={16} aria-hidden="true" />
@@ -460,7 +461,7 @@
     iconOnly
     onclick={handleCreateQueue}
     role="button"
-    aria-label={m.admin_queues_create_button()}
+    aria-label={m.admin_queues_create_button(withTerms())}
   >
     <LayersPlus size={22} aria-hidden="true" />
   </Link>
@@ -509,9 +510,11 @@
 
 {#snippet queuesStats()}
   <span class="stat-item">
-    {m.admin_queues_stat_total({
-      count: Number(queuesSectionRef?.totalQueues() ?? 0),
-    })}
+    {m.admin_queues_stat_total(
+      withTerms({
+        count: Number(queuesSectionRef?.totalQueues() ?? 0),
+      }),
+    )}
   </span>
   <span class="stat-item">
     <StatusDot status="active" />
@@ -528,7 +531,7 @@
 
 {#snippet queuesSubnavbar()}
   <SubNavbarFilterLayout
-    title={m.admin_queues_title()}
+    title={m.admin_queues_title(withTerms())}
     headerRight={tabSegmented}
     stats={queuesStats}
     sort={queueSortConfig}

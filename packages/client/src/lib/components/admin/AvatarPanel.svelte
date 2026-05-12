@@ -2,6 +2,7 @@
   import { List, ListItem } from "konsta/svelte";
   import { Settings as Cog, LogOut } from "@lucide/svelte";
   import * as m from "$lib/paraglide/messages.js";
+  import { withTerms } from "$lib/terminology/with-terms.js";
   import { type Permission, RoleId } from "@care-y/shared";
   import { getOrgDecryptCache, getOrgKeyManager } from "$lib/crypto/context.js";
   import { resolveOrgDecrypt } from "$lib/crypto/decrypt-result.js";
@@ -80,8 +81,8 @@
     roleId === RoleId.ADMIN
       ? { name: m.role_admin(), path: "/admin" }
       : roleId === RoleId.MANAGER
-        ? { name: m.role_manager(), path: "/admin/manager" }
-        : { name: m.role_volunteer(), path: "/admin/volunteer" },
+        ? { name: m.role_manager(withTerms()), path: "/admin/manager" }
+        : { name: m.role_volunteer(withTerms()), path: "/admin/volunteer" },
   );
 
   const orgLogoUrl = $derived(getOrgLogoUrl());

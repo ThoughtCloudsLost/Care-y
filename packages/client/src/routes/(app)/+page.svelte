@@ -50,6 +50,7 @@
   } from "$lib/components/useSectionScroll.svelte.js";
   import SectionScrollNav from "$lib/components/SectionScrollNav.svelte";
   import * as m from "$lib/paraglide/messages.js";
+  import { withTerms } from "$lib/terminology/with-terms.js";
 
   // Singletons from (app) layout context.
   const orgCache = getOrgDecryptCache();
@@ -70,7 +71,11 @@
 
   const createOptions = $derived.by((): CreateOption[] => {
     const options: CreateOption[] = [
-      { id: "ticket", label: m.create_new_ticket(), icon: TicketPlus },
+      {
+        id: "ticket",
+        label: m.create_new_ticket(withTerms()),
+        icon: TicketPlus,
+      },
     ];
     if (permissions.has(Permission.EDIT_KNOWLEDGE_BASE)) {
       options.push({
@@ -89,7 +94,7 @@
     if (permissions.has(Permission.MANAGE_QUEUES)) {
       options.push({
         id: "queue",
-        label: m.create_new_queue(),
+        label: m.create_new_queue(withTerms()),
         icon: LayersPlus,
       });
     }
@@ -231,8 +236,16 @@
     sections.push(
       { id: "shift", label: m.dashboard_shift_heading, icon: CalendarDays },
       { id: "activity", label: m.dashboard_activity_heading, icon: Activity },
-      { id: "kb", label: m.dashboard_kb_heading, icon: BookOpen },
-      { id: "queues", label: m.dashboard_queues_heading, icon: Layers },
+      {
+        id: "kb",
+        label: () => m.dashboard_kb_heading(withTerms()),
+        icon: BookOpen,
+      },
+      {
+        id: "queues",
+        label: () => m.dashboard_queues_heading(withTerms()),
+        icon: Layers,
+      },
     );
     if (ticketsQuery.isLoading || needsAttention.length > 0) {
       sections.push({
@@ -243,7 +256,7 @@
     }
     sections.push({
       id: "my-tickets",
-      label: m.dashboard_section_my_tickets,
+      label: () => m.dashboard_section_my_tickets(withTerms()),
       icon: TicketIcon,
     });
     sections.push({
@@ -361,7 +374,7 @@
   }
 
   function showEncryptedHelp(): void {
-    toastStore.show(m.dashboard_encrypted_help(), 5000);
+    toastStore.show(m.dashboard_encrypted_help(withTerms()), 5000);
   }
 
   function handleKBTap(itemId: string): void {
@@ -470,7 +483,7 @@
 
     <div id="section-my-tickets" class="scroll-target">
       <CollapsibleSection
-        heading={m.dashboard_section_my_tickets()}
+        heading={m.dashboard_section_my_tickets(withTerms())}
         count={ticketsQuery.isLoading ? undefined : myOpen.length}
         loading={ticketsQuery.isLoading}
         icon={TicketIcon}
@@ -479,7 +492,7 @@
         ontoggle={() => toggleSection("my-tickets")}
       >
         <TicketPreviewList
-          heading={m.dashboard_section_my_tickets()}
+          heading={m.dashboard_section_my_tickets(withTerms())}
           hideHeading
           loading={ticketsQuery.isLoading}
           tickets={myOpenProps}

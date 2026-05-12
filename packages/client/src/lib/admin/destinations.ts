@@ -1,6 +1,7 @@
 import type { Component } from "svelte";
 import { Permission } from "@care-y/shared";
 import * as m from "$lib/paraglide/messages.js";
+import { withTerms } from "$lib/terminology/with-terms.js";
 import {
   Users,
   Layers,
@@ -50,8 +51,8 @@ export const ADMIN_DESTINATIONS: readonly AdminDestination[] = [
     id: "queues",
     group: "people",
     icon: Layers,
-    label: m.panel_queues,
-    subtitle: m.hub_queues_subtitle,
+    label: () => m.panel_queues(withTerms()),
+    subtitle: () => m.hub_queues_subtitle(withTerms()),
     path: "/admin/people?tab=queues",
     permission: Permission.MANAGE_QUEUES,
     implemented: true,

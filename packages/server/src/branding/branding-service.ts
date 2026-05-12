@@ -32,6 +32,7 @@ function brandingColumnUpdate(
     | "encrypted_primary_color"
     | "encrypted_accent_color"
     | "encrypted_client_text"
+    | "encrypted_terminology"
   >
 > {
   switch (field) {
@@ -45,11 +46,21 @@ function brandingColumnUpdate(
       return { encrypted_accent_color: value };
     case "client_text":
       return { encrypted_client_text: value };
+    case "terminology":
+      return { encrypted_terminology: value };
   }
+}
+
+export interface PublicBrandingData {
+  readonly orgPublicKey: string | null;
+  readonly clientEncryptedBranding: string | null;
+  readonly hasIcons: boolean;
+  readonly iconVersion: string | null;
 }
 
 export interface BrandingService {
   getBranding(): Promise<BrandingData>;
+  getPublicBranding(): Promise<PublicBrandingData>;
   saveBrandingField(input: SaveBrandingFieldInput): Promise<void>;
   uploadIcons(
     store: BlobStore,
@@ -72,6 +83,7 @@ export function createBrandingService(
           "encrypted_accent_color",
           "encrypted_client_text",
           "client_encrypted_branding",
+          "encrypted_terminology",
           "icon_192_blob_key",
         ])
         .executeTakeFirstOrThrow();
@@ -85,8 +97,29 @@ export function createBrandingService(
         clientEncryptedBranding: bufferToBase64(
           config.client_encrypted_branding,
         ),
+        encryptedTerminology: bufferToBase64(config.encrypted_terminology),
         hasIcons: config.icon_192_blob_key !== null,
         iconVersion: config.icon_192_blob_key?.slice(0, 8) ?? null,
+      };
+    },
+
+    async getPublicBranding(): Promise<PublicBrandingData> {
+      const config = await tenantDb
+        .selectFrom("org_config")
+        .select([
+          "org_public_key",
+          "client_encrypted_branding",
+          "icon_192_blob_key",
+        ])
+        .executeTakeFirst();
+
+      return {
+        orgPublicKey: bufferToBase64(config?.org_public_key ?? null),
+        clientEncryptedBranding: bufferToBase64(
+          config?.client_encrypted_branding ?? null,
+        ),
+        hasIcons: config?.icon_192_blob_key != null,
+        iconVersion: config?.icon_192_blob_key?.slice(0, 8) ?? null,
       };
     },
 

@@ -20,6 +20,7 @@
   import type { RoleIdValue } from "@care-y/shared";
   import { UserMinus, X, Save } from "@lucide/svelte";
   import * as m from "$lib/paraglide/messages.js";
+  import { withTerms } from "$lib/terminology/with-terms.js";
   import { trpc } from "$lib/trpc/index.js";
   import { adminKeys, queueKeys } from "$lib/query/keys.js";
   import {
@@ -638,7 +639,7 @@
     />
   {:else if filteredUsers.length === 0 && userCounts.total === 0}
     <Block class="text-center text-[--muted]">
-      {m.admin_no_users()}
+      {m.admin_no_users(withTerms())}
     </Block>
   {:else}
     <div class="user-list">
@@ -740,13 +741,13 @@
           active={editRoleId === RoleId.VOLUNTEER}
           onclick={() => (editRoleId = RoleId.VOLUNTEER)}
         >
-          {m.admin_role_volunteer()}
+          {m.admin_role_volunteer(withTerms())}
         </SegmentedButton>
         <SegmentedButton
           active={editRoleId === RoleId.MANAGER}
           onclick={() => (editRoleId = RoleId.MANAGER)}
         >
-          {m.admin_role_manager()}
+          {m.admin_role_manager(withTerms())}
         </SegmentedButton>
         <SegmentedButton
           active={editRoleId === RoleId.ADMIN}
@@ -759,7 +760,9 @@
 
     {#if (queuesQuery.data ?? []).length > 0}
       <div class="queue-section">
-        <p class="section-label">{m.admin_user_queue_assignments()}</p>
+        <p class="section-label">
+          {m.admin_user_queue_assignments(withTerms())}
+        </p>
         <List nested>
           {#if queuesLoading}
             {#each { length: 2 } as _, i (i)}

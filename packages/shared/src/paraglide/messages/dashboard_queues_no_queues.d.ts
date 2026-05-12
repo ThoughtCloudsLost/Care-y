@@ -1,16 +1,18 @@
 /**
 * | output |
 * | --- |
-* | "No queues assigned" |
+* | "No {queues} assigned" |
 *
 * @param {Dashboard_Queues_No_QueuesInputs} inputs
 * @param {{ locale?: "en" | "es" }} options
 * @returns {LocalizedString}
 */
-export const dashboard_queues_no_queues: ((inputs?: Dashboard_Queues_No_QueuesInputs, options?: {
+export const dashboard_queues_no_queues: ((inputs: Dashboard_Queues_No_QueuesInputs, options?: {
     locale?: "en" | "es";
 }) => LocalizedString) & import("../runtime.js").MessageMetadata<Dashboard_Queues_No_QueuesInputs, {
     locale?: "en" | "es";
 }, {}>;
 export type LocalizedString = import("../runtime.js").LocalizedString;
-export type Dashboard_Queues_No_QueuesInputs = {};
+export type Dashboard_Queues_No_QueuesInputs = {
+    queues: NonNullable<unknown>;
+};

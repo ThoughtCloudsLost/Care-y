@@ -32,6 +32,17 @@
   import { getOrgSlug } from "$lib/utils/org-slug.js";
   import { base64ToUint8Array } from "$lib/utils/buffer-encoding.js";
   import type { OrgKeyManager } from "$lib/crypto/org-key.js";
+  import {
+    TERMINOLOGY_DEFAULTS_EN,
+    terminologyConfigSchema,
+    type TerminologyLabels,
+  } from "@care-y/shared";
+  import { setTerminology } from "$lib/terminology/context.js";
+  import {
+    resolveLabels,
+    readCachedTerminology,
+    cacheTerminology,
+  } from "$lib/terminology/index.js";
 
   import type { Snippet } from "svelte";
 
@@ -49,6 +60,18 @@
   }
   let _hydrated = $state(false);
   let serverHydrated = false;
+
+  let terminologyLabels = $state<TerminologyLabels>(TERMINOLOGY_DEFAULTS_EN);
+
+  // Initialize terminology from cache immediately
+  if (browser) {
+    const cachedConfig = readCachedTerminology();
+    const storedLang = localStorage.getItem("care-y-default-lang");
+    const lang = storedLang ?? (document.documentElement.lang || "en");
+    terminologyLabels = resolveLabels(cachedConfig, lang);
+  }
+
+  setTerminology(() => terminologyLabels);
 
   function syncToLocalStorage(
     cached: NonNullable<Awaited<ReturnType<typeof getCachedBranding>>>,
@@ -131,6 +154,23 @@
       const accentColor =
         (await decryptField(data.encryptedAccentColor)) ?? null;
       const orgSlug = getOrgSlug();
+
+      // Decrypt and cache terminology
+      const terminologyJson = await decryptField(data.encryptedTerminology);
+      if (terminologyJson !== null) {
+        try {
+          const parsed: unknown = JSON.parse(terminologyJson);
+          const result = terminologyConfigSchema.safeParse(parsed);
+          if (result.success) {
+            cacheTerminology(result.data);
+            const storedLang2 = localStorage.getItem("care-y-default-lang");
+            const lang = storedLang2 ?? (document.documentElement.lang || "en");
+            terminologyLabels = resolveLabels(result.data, lang);
+          }
+        } catch {
+          // Malformed terminology JSON; keep defaults
+        }
+      }
 
       await updateBrandingCache({
         orgName,

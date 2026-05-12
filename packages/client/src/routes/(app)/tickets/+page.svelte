@@ -19,6 +19,7 @@
     FilterPillsConfig,
   } from "$lib/shell/types.js";
   import * as m from "$lib/paraglide/messages.js";
+  import { withTerms } from "$lib/terminology/with-terms.js";
   import { trpc } from "$lib/trpc/index.js";
   import {
     getTicketDecryptCache,
@@ -440,7 +441,7 @@
   });
 
   function showEncryptedHelp(): void {
-    toastStore.show(m.dashboard_encrypted_help(), 5000);
+    toastStore.show(m.dashboard_encrypted_help(withTerms()), 5000);
   }
 
   function handleTicketTap(ticketId: string): void {
@@ -488,7 +489,9 @@
         onSuccess: () => {
           haptic();
           toastStore.show(
-            onHold ? m.ticket_toast_held() : m.ticket_toast_unheld(),
+            onHold
+              ? m.ticket_toast_held(withTerms())
+              : m.ticket_toast_unheld(withTerms()),
           );
           void queryClient.invalidateQueries({
             queryKey: ticketsKeys.lists(),
@@ -534,7 +537,7 @@
       onSuccess: () => {
         haptic();
         if (targetUserId === null) {
-          toastStore.show(m.ticket_toast_unassigned());
+          toastStore.show(m.ticket_toast_unassigned(withTerms()));
         } else {
           toastStore.show(
             m.ticket_toast_assigned({
@@ -759,7 +762,7 @@
     },
     {
       id: "queue",
-      label: m.tickets_filter_queue(),
+      label: m.tickets_filter_queue(withTerms()),
       mode: "multi",
       options: queueOptions,
       selected: filterStore.queueIds,
@@ -934,7 +937,7 @@
       { field: "date", label: m.tickets_sort_newest() },
       { field: "priority", label: m.tickets_sort_priority() },
       { field: "last_activity", label: m.tickets_sort_activity() },
-      { field: "queue", label: m.tickets_sort_queue() },
+      { field: "queue", label: m.tickets_sort_queue(withTerms()) },
     ],
     currentField: filterStore.sort.field,
     currentDirection: filterStore.sort.direction,
@@ -973,7 +976,7 @@
       newTicketOpen = true;
     }}
     role="button"
-    aria-label={m.nav_new_ticket()}
+    aria-label={m.nav_new_ticket(withTerms())}
   >
     <TicketPlus size={22} aria-hidden="true" />
   </Link>
@@ -1048,7 +1051,7 @@
 
 {#snippet ticketSubnavbar()}
   <SubNavbarFilterLayout
-    title={m.tickets_title()}
+    title={m.tickets_title(withTerms())}
     view={viewConfig}
     stats={ticketStats}
     sort={sortConfig}
@@ -1134,7 +1137,7 @@
         <p>
           {overlay.active
             ? m.search_conversation_no_matches()
-            : m.tickets_empty_filter()}
+            : m.tickets_empty_filter(withTerms())}
         </p>
       </div>
     {/if}

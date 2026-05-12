@@ -9,6 +9,7 @@
     UserPlus,
   } from "@lucide/svelte";
   import * as m from "$lib/paraglide/messages.js";
+  import { withTerms } from "$lib/terminology/with-terms.js";
   import { formatRelativeTime } from "$lib/utils/format-time.js";
   import { onKeyActivate } from "$lib/utils/a11y.js";
   import { getPreviewLoader } from "$lib/crypto/context.js";
@@ -149,7 +150,7 @@
         data-testid="card-inner"
         role="button"
         tabindex="0"
-        aria-label={m.tickets_open({ alias: clientAlias })}
+        aria-label={m.tickets_open(withTerms({ alias: clientAlias }))}
         onclick={handleCardClick}
         onkeydown={onKeyActivate(handleCardClick)}
       >

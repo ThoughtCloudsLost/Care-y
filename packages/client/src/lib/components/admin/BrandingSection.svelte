@@ -9,6 +9,7 @@
   import { encryptClientBranding } from "@care-y/crypto";
   import { generateIconVariants } from "$lib/branding/icon-generator.js";
   import * as m from "$lib/paraglide/messages.js";
+  import { withTerms } from "$lib/terminology/with-terms.js";
   import { trpc } from "$lib/trpc/index.js";
   import { adminKeys } from "$lib/query/keys.js";
   import { haptic } from "$lib/utils/haptic.js";
@@ -566,7 +567,7 @@
         <DecryptPlaceholder length={24} />
         <div class="section-divider"></div>
         <div class="card-section-label">
-          {m.admin_branding_card_text_label()}
+          {m.admin_branding_card_text_label(withTerms())}
         </div>
         <DecryptPlaceholder length={40} />
       </div>
@@ -626,7 +627,7 @@
 
         <!-- Client text -->
         <div class="card-section-label">
-          {m.admin_branding_card_text_label()}
+          {m.admin_branding_card_text_label(withTerms())}
         </div>
         {#if brandingQuery.data?.encryptedClientText}
           <DecryptPlaceholder content={decryptedText}>
@@ -745,7 +746,9 @@
           {#if logoError}
             <span class="field-error" role="alert">{logoError}</span>
           {/if}
-          <span class="field-hint">{m.admin_branding_logo_hint()}</span>
+          <span class="field-hint"
+            >{m.admin_branding_logo_hint(withTerms())}</span
+          >
         </div>
       </div>
     </div>
@@ -762,7 +765,7 @@
         onchange={(e: Event) => {
           if (e.target instanceof HTMLInputElement) editName = e.target.value;
         }}
-        info={m.admin_branding_name_hint()}
+        info={m.admin_branding_name_hint(withTerms())}
       />
     </div>
 
@@ -770,14 +773,14 @@
     <div class="sheet-field">
       <ListInput
         outline
-        label={m.admin_branding_card_text_label()}
+        label={m.admin_branding_card_text_label(withTerms())}
         type="textarea"
         value={editText}
         onchange={(e: Event) => {
           if (e.target instanceof HTMLTextAreaElement)
             editText = e.target.value;
         }}
-        info={m.admin_branding_text_hint()}
+        info={m.admin_branding_text_hint(withTerms())}
       />
     </div>
 

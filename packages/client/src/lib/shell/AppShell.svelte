@@ -51,6 +51,7 @@
   import { beforeNavigate, afterNavigate, goto } from "$app/navigation";
   import { resolve } from "$app/paths";
   import * as m from "$lib/paraglide/messages.js";
+  import { withTerms } from "$lib/terminology/with-terms.js";
   import type { TabId, AppShellProps } from "./types";
   import { providePTR } from "./ptr-context.svelte.js";
   import { themeStore } from "$lib/stores/theme.svelte";
@@ -550,8 +551,8 @@
 
   const allTabs: readonly TabDef[] = [
     { id: "home", label: () => m.nav_home(), icon: House },
-    { id: "tickets", label: () => m.nav_tickets(), icon: Ticket },
-    { id: "library", label: () => m.tab_library(), icon: BookOpen },
+    { id: "tickets", label: () => m.nav_tickets(withTerms()), icon: Ticket },
+    { id: "library", label: () => m.tab_library(withTerms()), icon: BookOpen },
   ];
 
   // ── Pull-to-refresh ──────────────────────────────────────────────────
@@ -1028,7 +1029,7 @@
     backdrop={false}
     trapFocus={false}
     role="search"
-    ariaLabel={m.search_hint()}
+    ariaLabel={m.search_hint(withTerms())}
     class="search-sheet"
   >
     <SearchResults

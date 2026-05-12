@@ -1,16 +1,19 @@
 /**
 * | output |
 * | --- |
-* | "Primary client not found." |
+* | "Primary {client} not found." |
 *
 * @param {Error_Primary_Client_Not_FoundInputs} inputs
 * @param {{ locale?: "en" | "es" }} options
 * @returns {LocalizedString}
 */
-export const error_primary_client_not_found: ((inputs?: Error_Primary_Client_Not_FoundInputs, options?: {
+export const error_primary_client_not_found: ((inputs: Error_Primary_Client_Not_FoundInputs, options?: {
     locale?: "en" | "es";
 }) => LocalizedString) & import("../runtime.js").MessageMetadata<Error_Primary_Client_Not_FoundInputs, {
     locale?: "en" | "es";
 }, {}>;
 export type LocalizedString = import("../runtime.js").LocalizedString;
-export type Error_Primary_Client_Not_FoundInputs = {};
+export type Error_Primary_Client_Not_FoundInputs = {
+    client: NonNullable<unknown>;
+    Client: NonNullable<unknown>;
+};

@@ -3,6 +3,7 @@
   import { createMutation, useQueryClient } from "@tanstack/svelte-query";
   import { queueKeys } from "$lib/query/keys.js";
   import * as m from "$lib/paraglide/messages.js";
+  import { withTerms } from "$lib/terminology/with-terms.js";
   import { trpc } from "$lib/trpc/index.js";
   import { createVolunteersQuery } from "$lib/tickets/queries.js";
   import { getOrgDecryptCache } from "$lib/crypto/context.js";
@@ -103,7 +104,7 @@
 
   <div class="picker-search-wrapper">
     <Searchbar
-      placeholder={m.admin_queue_member_picker_search()}
+      placeholder={m.admin_queue_member_picker_search(withTerms())}
       value={searchValue}
       onInput={(e: Event) => {
         const target = e.target;
@@ -133,7 +134,7 @@
     </div>
   {:else if availableVolunteers.length === 0}
     <div class="picker-empty" role="status">
-      <p>{m.admin_queue_member_picker_empty()}</p>
+      <p>{m.admin_queue_member_picker_empty(withTerms())}</p>
     </div>
   {:else}
     <List>

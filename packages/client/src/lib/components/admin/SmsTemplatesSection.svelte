@@ -9,6 +9,7 @@
   import { Plus, Pencil, Trash2, Save } from "@lucide/svelte";
   import type { SmsResponseType } from "@care-y/shared";
   import * as m from "$lib/paraglide/messages.js";
+  import { withTerms } from "$lib/terminology/with-terms.js";
   import { trpc } from "$lib/trpc/index.js";
   import { haptic } from "$lib/utils/haptic.js";
   import { toastStore } from "$lib/stores/toast.svelte.js";
@@ -44,7 +45,7 @@
     {
       value: "new_client",
       label: () => m.admin_templates_type_new_client(),
-      help: () => m.admin_templates_type_new_client_help(),
+      help: () => m.admin_templates_type_new_client_help(withTerms()),
     },
     {
       value: "error",

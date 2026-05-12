@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "in {queue}" |
+* | "in {queueName}" |
 *
 * @param {Dashboard_Activity_In_QueueInputs} inputs
 * @param {{ locale?: "en" | "es" }} options
@@ -14,5 +14,5 @@ export const dashboard_activity_in_queue: ((inputs: Dashboard_Activity_In_QueueI
 }, {}>;
 export type LocalizedString = import("../runtime.js").LocalizedString;
 export type Dashboard_Activity_In_QueueInputs = {
-    queue: NonNullable<unknown>;
+    queueName: NonNullable<unknown>;
 };

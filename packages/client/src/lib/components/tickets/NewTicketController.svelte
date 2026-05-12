@@ -27,6 +27,7 @@
   import { RouterNotAvailableError } from "$lib/errors.js";
   import { DEV_ORG_SLUG } from "$lib/utils/org-slug.js";
   import * as m from "$lib/paraglide/messages.js";
+  import { withTerms } from "$lib/terminology/with-terms.js";
 
   interface Props {
     opened: boolean;
@@ -71,12 +72,12 @@
         keyWrap: payload.keyWrap,
       }),
     onSuccess: () => {
-      toastStore.show(m.ticket_new_success());
+      toastStore.show(m.ticket_new_success(withTerms()));
       ondismiss();
       void queryClient.invalidateQueries({ queryKey: ticketsKeys.lists() });
     },
     onError: () => {
-      toastStore.show(m.ticket_new_error_submit_failed(), 3000);
+      toastStore.show(m.ticket_new_error_submit_failed(withTerms()), 3000);
     },
   }));
 
@@ -122,12 +123,12 @@
 <ShellSheet
   {opened}
   {ondismiss}
-  ariaLabel={m.ticket_new_title()}
-  title={m.ticket_new_title()}
+  ariaLabel={m.ticket_new_title(withTerms())}
+  title={m.ticket_new_title(withTerms())}
 >
   {#snippet headerRight()}
     <SoftButton onclick={handleHeaderSubmit} disabled={!canSubmit || isPending}>
-      {isPending ? m.ticket_new_submitting() : m.ticket_new_submit()}
+      {isPending ? m.ticket_new_submitting() : m.ticket_new_submit(withTerms())}
     </SoftButton>
   {/snippet}
   <NewTicketForm

@@ -11,6 +11,7 @@
   import { Bookmark, Check } from "@lucide/svelte";
   import ShellPopover from "$lib/shell/ShellPopover.svelte";
   import * as m from "$lib/paraglide/messages.js";
+  import { withTerms } from "$lib/terminology/with-terms.js";
   import Skeleton from "$lib/components/Skeleton.svelte";
   import FilterPill from "./FilterPill.svelte";
   import type { PillDefinition } from "./filter-types.js";
@@ -68,7 +69,9 @@
   }: Props = $props();
 
   // Resolve i18n labels with fallback to ticket-style defaults.
-  const resolvedFilterLabel = $derived(filterLabel ?? m.tickets_filter());
+  const resolvedFilterLabel = $derived(
+    filterLabel ?? m.tickets_filter(withTerms()),
+  );
   const resolvedAllLabel = $derived(allLabel ?? m.tickets_filter_all());
   const resolvedClearLabel = $derived(clearLabel ?? m.tickets_clear_filters());
   const resolvedCreateShortcutLabel = $derived(

@@ -24,6 +24,7 @@
     SquareCheckBig,
   } from "@lucide/svelte";
   import * as m from "$lib/paraglide/messages.js";
+  import { withTerms } from "$lib/terminology/with-terms.js";
   import {
     getTabbarHiddenCtx,
     getNavbarOverrideCtx,
@@ -858,8 +859,10 @@
   {#if volCount > 0}
     <span>
       {volCount === 1
-        ? m.ticket_detail_one_volunteer_stat()
-        : m.ticket_detail_volunteers_stat({ count: String(volCount) })}
+        ? m.ticket_detail_one_volunteer_stat(withTerms())
+        : m.ticket_detail_volunteers_stat(
+            withTerms({ count: String(volCount) }),
+          )}
     </span>
   {/if}
   {#if ticket?.priority}
@@ -1049,7 +1052,7 @@
 <ShellSheet
   opened={smsSheetOpen}
   ondismiss={() => (smsSheetOpen = false)}
-  ariaLabel={m.ticket_sms_title()}
+  ariaLabel={m.ticket_sms_title(withTerms())}
 >
   <SmsComposeContent
     onsend={handleSmsSend}

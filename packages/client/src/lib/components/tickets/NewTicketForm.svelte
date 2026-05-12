@@ -25,6 +25,7 @@
   /* eslint-disable @typescript-eslint/strict-boolean-expressions -- $derived proxy values flagged as any */
   import { List, ListInput, Preloader } from "konsta/svelte";
   import * as m from "$lib/paraglide/messages.js";
+  import { withTerms } from "$lib/terminology/with-terms.js";
   import { getCryptoBridge } from "$lib/crypto/context.js";
   import { ticketPrioritySchema, type TicketPriority } from "@care-y/shared";
   import type {
@@ -86,8 +87,10 @@
   function validate(): boolean {
     const next: Record<string, string> = {};
     if (!title.trim()) next.title = m.ticket_new_error_title_required();
-    if (queueId === "") next.queue = m.ticket_new_error_queue_required();
-    if (!clientSelection) next.client = m.ticket_new_error_client_required();
+    if (queueId === "")
+      next.queue = m.ticket_new_error_queue_required(withTerms());
+    if (!clientSelection)
+      next.client = m.ticket_new_error_client_required(withTerms());
     errors = next;
     return Object.keys(next).length === 0;
   }
@@ -127,7 +130,7 @@
           : { clientToken: selection.token }),
       });
     } catch {
-      errors = { form: m.ticket_new_error_encrypt_failed() };
+      errors = { form: m.ticket_new_error_encrypt_failed(withTerms()) };
     } finally {
       encrypting = false;
     }
@@ -151,7 +154,7 @@
     <div class="import-loading"><Preloader /></div>
   {:then ClientSelectModule}
     <ClientSelectModule.default
-      label={m.ticket_new_field_client()}
+      label={m.ticket_new_field_client(withTerms())}
       placeholder={m.ticket_new_field_client_placeholder()}
       search={searchClients}
       {phoneLookup}
@@ -226,7 +229,7 @@
     <ListInput
       outline
       dropdown
-      label={m.ticket_new_field_queue()}
+      label={m.ticket_new_field_queue(withTerms())}
       type="select"
       value={queueId}
       onChange={(e: Event) => {
@@ -238,7 +241,8 @@
       error={errors.queue}
       disabled={busy}
     >
-      <option value="" disabled>{m.ticket_new_field_queue_placeholder()}</option
+      <option value="" disabled
+        >{m.ticket_new_field_queue_placeholder(withTerms())}</option
       >
       {#each queues as q (q.id)}
         <option value={q.id}>{q.name}</option>

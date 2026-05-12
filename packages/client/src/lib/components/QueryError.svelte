@@ -1,6 +1,7 @@
 <script lang="ts">
   import { Block } from "konsta/svelte";
   import * as m from "$lib/paraglide/messages.js";
+  import { withTerms } from "$lib/terminology/with-terms.js";
   import { ErrorCode, type ErrorCodeType } from "@care-y/shared";
 
   let { error, onretry }: { error: unknown; onretry?: () => void } = $props();
@@ -46,49 +47,54 @@
       m.error_no_phone_numbers_configured(),
 
     // Tickets
-    [ErrorCode.TICKET_NOT_FOUND]: () => m.error_ticket_not_found(),
+    [ErrorCode.TICKET_NOT_FOUND]: () => m.error_ticket_not_found(withTerms()),
     [ErrorCode.TICKET_NOT_FOUND_OR_CLOSED]: () =>
-      m.error_ticket_not_found_or_closed(),
+      m.error_ticket_not_found_or_closed(withTerms()),
     [ErrorCode.TICKET_NOT_FOUND_OR_OPEN]: () =>
-      m.error_ticket_not_found_or_open(),
-    [ErrorCode.TICKET_UNRESOLVED_DEPS]: () => m.error_ticket_unresolved_deps(),
+      m.error_ticket_not_found_or_open(withTerms()),
+    [ErrorCode.TICKET_UNRESOLVED_DEPS]: () =>
+      m.error_ticket_unresolved_deps(withTerms()),
     [ErrorCode.CANNOT_ASSIGN_CLOSED_TICKET]: () =>
-      m.error_cannot_assign_closed_ticket(),
+      m.error_cannot_assign_closed_ticket(withTerms()),
     [ErrorCode.CANNOT_TAKE_CLOSED_TICKET]: () =>
-      m.error_cannot_take_closed_ticket(),
-    [ErrorCode.TICKET_ALREADY_OPEN]: () => m.error_ticket_already_open(),
+      m.error_cannot_take_closed_ticket(withTerms()),
+    [ErrorCode.TICKET_ALREADY_OPEN]: () =>
+      m.error_ticket_already_open(withTerms()),
     [ErrorCode.TOKEN_EXPIRED]: () => m.error_token_expired(),
     [ErrorCode.TICKET_ALREADY_ASSIGNED]: () =>
-      m.error_ticket_already_assigned(),
-    [ErrorCode.NOT_ASSIGNED_TO_TICKET]: () => m.error_not_assigned_to_ticket(),
+      m.error_ticket_already_assigned(withTerms()),
+    [ErrorCode.NOT_ASSIGNED_TO_TICKET]: () =>
+      m.error_not_assigned_to_ticket(withTerms()),
     [ErrorCode.INVALID_TARGET_USER]: () => m.error_invalid_target_user(),
-    [ErrorCode.SELF_DEPENDENCY]: () => m.error_self_dependency(),
+    [ErrorCode.SELF_DEPENDENCY]: () => m.error_self_dependency(withTerms()),
     [ErrorCode.CIRCULAR_DEPENDENCY]: () => m.error_circular_dependency(),
     [ErrorCode.DEPENDENCY_TICKET_NOT_FOUND]: () =>
-      m.error_dependency_ticket_not_found(),
+      m.error_dependency_ticket_not_found(withTerms()),
     [ErrorCode.FOLLOWUP_NOT_FOUND]: () => m.error_followup_not_found(),
     [ErrorCode.FOLLOWUP_NOT_EDITABLE]: () => m.error_followup_not_editable(),
     [ErrorCode.FOLLOWUP_NOT_DELETABLE]: () => m.error_followup_not_deletable(),
     [ErrorCode.FOLLOWUP_NOT_OWNED]: () => m.error_followup_not_owned(),
     [ErrorCode.CANNOT_FOLLOWUP_CLOSED_TICKET]: () =>
-      m.error_cannot_followup_closed_ticket(),
+      m.error_cannot_followup_closed_ticket(withTerms()),
 
     // Clients / merge
-    [ErrorCode.CLIENT_NOT_FOUND]: () => m.error_client_not_found(),
-    [ErrorCode.CLIENT_MERGED]: () => m.error_client_merged(),
-    [ErrorCode.CANNOT_MERGE_INTO_SELF]: () => m.error_cannot_merge_into_self(),
+    [ErrorCode.CLIENT_NOT_FOUND]: () => m.error_client_not_found(withTerms()),
+    [ErrorCode.CLIENT_MERGED]: () => m.error_client_merged(withTerms()),
+    [ErrorCode.CANNOT_MERGE_INTO_SELF]: () =>
+      m.error_cannot_merge_into_self(withTerms()),
     [ErrorCode.PRIMARY_CLIENT_NOT_FOUND]: () =>
-      m.error_primary_client_not_found(),
+      m.error_primary_client_not_found(withTerms()),
     [ErrorCode.SECONDARY_CLIENT_NOT_FOUND]: () =>
-      m.error_secondary_client_not_found(),
+      m.error_secondary_client_not_found(withTerms()),
     [ErrorCode.SECONDARY_ALREADY_MERGED]: () =>
-      m.error_secondary_already_merged(),
-    [ErrorCode.MERGE_UNRESOLVED_DEPS]: () => m.error_merge_unresolved_deps(),
+      m.error_secondary_already_merged(withTerms()),
+    [ErrorCode.MERGE_UNRESOLVED_DEPS]: () =>
+      m.error_merge_unresolved_deps(withTerms()),
     [ErrorCode.MERGE_EVENT_NOT_FOUND]: () => m.error_merge_event_not_found(),
     [ErrorCode.MERGE_ALREADY_UNDONE]: () => m.error_merge_already_undone(),
     [ErrorCode.MERGE_UNDO_LOCKED]: () => m.error_merge_undo_locked(),
     [ErrorCode.ALIAS_GENERATION_FAILED]: () =>
-      m.error_alias_generation_failed(),
+      m.error_alias_generation_failed(withTerms()),
 
     // Admin: user management
     [ErrorCode.CANNOT_DEACTIVATE_SELF]: () => m.error_cannot_deactivate_self(),
@@ -99,10 +105,10 @@
     [ErrorCode.USERNAME_ALREADY_TAKEN]: () => m.error_username_already_taken(),
 
     // Queues / presets / media
-    [ErrorCode.QUEUE_NOT_FOUND]: () => m.error_queue_not_found(),
+    [ErrorCode.QUEUE_NOT_FOUND]: () => m.error_queue_not_found(withTerms()),
     [ErrorCode.CANNOT_DELETE_LAST_QUEUE]: () =>
-      m.error_cannot_delete_last_queue(),
-    [ErrorCode.QUEUE_HAS_TICKETS]: () => m.error_queue_has_tickets(),
+      m.error_cannot_delete_last_queue(withTerms()),
+    [ErrorCode.QUEUE_HAS_TICKETS]: () => m.error_queue_has_tickets(withTerms()),
     [ErrorCode.PRESET_REPLY_NOT_FOUND]: () => m.error_preset_reply_not_found(),
     [ErrorCode.RECORDING_NOT_FOUND]: () => m.error_recording_not_found(),
     [ErrorCode.ATTACHMENT_NOT_FOUND]: () => m.error_attachment_not_found(),

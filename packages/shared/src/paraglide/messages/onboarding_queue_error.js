@@ -3,26 +3,26 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 
 /** @typedef {import('../runtime.js').LocalizedString} LocalizedString */
 
-/** @typedef {{}} Onboarding_Queue_ErrorInputs */
+/** @typedef {{ queue: NonNullable<unknown> }} Onboarding_Queue_ErrorInputs */
 
-const en_onboarding_queue_error = /** @type {(inputs: Onboarding_Queue_ErrorInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Failed to create queue.`)
+const en_onboarding_queue_error = /** @type {(inputs: Onboarding_Queue_ErrorInputs) => LocalizedString} */ (i) => {
+	return /** @type {LocalizedString} */ (`Failed to create ${i?.queue}.`)
 };
 
-const es_onboarding_queue_error = /** @type {(inputs: Onboarding_Queue_ErrorInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`No se pudo crear la cola.`)
+const es_onboarding_queue_error = /** @type {(inputs: Onboarding_Queue_ErrorInputs) => LocalizedString} */ (i) => {
+	return /** @type {LocalizedString} */ (`No se pudo crear la ${i?.queue}.`)
 };
 
 /**
 * | output |
 * | --- |
-* | "Failed to create queue." |
+* | "Failed to create {queue}." |
 *
 * @param {Onboarding_Queue_ErrorInputs} inputs
 * @param {{ locale?: "en" | "es" }} options
 * @returns {LocalizedString}
 */
-export const onboarding_queue_error = /** @type {((inputs?: Onboarding_Queue_ErrorInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Onboarding_Queue_ErrorInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const onboarding_queue_error = /** @type {((inputs: Onboarding_Queue_ErrorInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Onboarding_Queue_ErrorInputs, { locale?: "en" | "es" }, {}>} */ ((inputs, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "en") return en_onboarding_queue_error(inputs)
 	return es_onboarding_queue_error(inputs)

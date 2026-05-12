@@ -3,20 +3,20 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 
 /** @typedef {import('../runtime.js').LocalizedString} LocalizedString */
 
-/** @typedef {{ alias: NonNullable<unknown> }} Tickets_OpenInputs */
+/** @typedef {{ ticket: NonNullable<unknown>, alias: NonNullable<unknown> }} Tickets_OpenInputs */
 
 const en_tickets_open = /** @type {(inputs: Tickets_OpenInputs) => LocalizedString} */ (i) => {
-	return /** @type {LocalizedString} */ (`Open ticket ${i?.alias}`)
+	return /** @type {LocalizedString} */ (`Open ${i?.ticket} ${i?.alias}`)
 };
 
 const es_tickets_open = /** @type {(inputs: Tickets_OpenInputs) => LocalizedString} */ (i) => {
-	return /** @type {LocalizedString} */ (`Abrir ticket ${i?.alias}`)
+	return /** @type {LocalizedString} */ (`Abrir ${i?.ticket} ${i?.alias}`)
 };
 
 /**
 * | output |
 * | --- |
-* | "Open ticket {alias}" |
+* | "Open {ticket} {alias}" |
 *
 * @param {Tickets_OpenInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

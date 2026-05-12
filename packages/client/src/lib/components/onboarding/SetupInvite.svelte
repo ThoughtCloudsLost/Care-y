@@ -16,6 +16,7 @@
   } from "konsta/svelte";
   import { createMutation } from "@tanstack/svelte-query";
   import * as m from "$lib/paraglide/messages.js";
+  import { withTerms } from "$lib/terminology/with-terms.js";
   import { trpc } from "$lib/trpc/index.js";
   import { RoleId, ROLE_ID_VALUES, type RoleIdValue } from "@care-y/shared";
   import { haptic } from "$lib/utils/haptic.js";
@@ -102,7 +103,7 @@
   }
 </script>
 
-<BlockTitle medium>{m.onboarding_invite_heading()}</BlockTitle>
+<BlockTitle medium>{m.onboarding_invite_heading(withTerms())}</BlockTitle>
 <Block>
   <p class="step-desc">{m.onboarding_invite_subtext()}</p>
 </Block>
@@ -131,8 +132,9 @@
   >
     {#snippet input()}
       <select value={selectedRole}>
-        <option value={RoleId.VOLUNTEER}>{m.role_volunteer()}</option>
-        <option value={RoleId.MANAGER}>{m.role_manager()}</option>
+        <option value={RoleId.VOLUNTEER}>{m.role_volunteer(withTerms())}</option
+        >
+        <option value={RoleId.MANAGER}>{m.role_manager(withTerms())}</option>
       </select>
     {/snippet}
   </ListInput>
@@ -210,7 +212,7 @@
       disabled={finishing}
       type="button"
     >
-      {m.onboarding_invite_skip()}
+      {m.onboarding_invite_skip(withTerms())}
     </button>
   </Block>
 {/if}
