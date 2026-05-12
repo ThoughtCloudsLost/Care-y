@@ -1,6 +1,9 @@
 <script lang="ts">
   import { Block, BlockTitle, List, ListItem, Button } from "konsta/svelte";
+  import { Info } from "@lucide/svelte";
+  import { TERMINOLOGY_DEFAULTS_EN } from "@care-y/shared";
   import * as m from "$lib/paraglide/messages.js";
+  import { withTerms, getTerminology } from "$lib/terminology/index.js";
   import { announceToLiveRegion } from "$lib/utils/announce.js";
   import { haptic } from "$lib/utils/haptic.js";
   import { toastStore } from "$lib/stores/toast.svelte.js";
@@ -10,6 +13,15 @@
   }
 
   const { onconfirm }: Props = $props();
+
+  const resolveTerms = getTerminology();
+  const hasCustomTerms = $derived.by(() => {
+    const t = resolveTerms();
+    return (
+      t.volunteer !== TERMINOLOGY_DEFAULTS_EN.volunteer ||
+      t.client !== TERMINOLOGY_DEFAULTS_EN.client
+    );
+  });
 
   let scrolledToBottom = $state(false);
   let sentinelEl: HTMLDivElement | undefined = $state();
@@ -206,6 +218,16 @@
 
 <div class="briefing-content">
   <BlockTitle medium>{m.onboarding_briefing_heading()}</BlockTitle>
+
+  {#if hasCustomTerms}
+    <Block class="terminology-note">
+      <p class="terminology-note-text">
+        <Info size={14} class="terminology-note-icon" />
+        {m.onboarding_briefing_terminology_note(withTerms())}
+      </p>
+    </Block>
+  {/if}
+
   <Block>
     <p class="briefing-prose">{m.onboarding_briefing_intro()}</p>
   </Block>
@@ -341,6 +363,33 @@
 <style>
   .briefing-content {
     padding-bottom: var(--space-2xl);
+  }
+
+  :global(.terminology-note) {
+    background: color-mix(
+      in srgb,
+      var(--brand-primary, #3b82f6) 8%,
+      transparent
+    );
+    border-radius: var(--card-radius);
+    border: 1px solid
+      color-mix(in srgb, var(--brand-primary, #3b82f6) 20%, transparent);
+  }
+
+  .terminology-note-text {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--space-sm);
+    font-size: var(--text-sm);
+    color: var(--muted);
+    margin: 0;
+    line-height: 1.5;
+  }
+
+  .terminology-note-text :global(.terminology-note-icon) {
+    flex-shrink: 0;
+    margin-top: 0.125rem;
+    color: var(--brand-primary, #3b82f6);
   }
 
   .briefing-prose {

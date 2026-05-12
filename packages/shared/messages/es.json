@@ -1464,5 +1464,19 @@
   "onboarding_firstlogin_success_subtext": "Inicia sesion para comenzar.",
   "onboarding_firstlogin_signin": "Iniciar sesion",
   "onboarding_firstlogin_creating": "Creando cuenta...",
-  "onboarding_firstlogin_deriving": "Generando claves de cifrado..."
+  "onboarding_firstlogin_deriving": "Generando claves de cifrado...",
+  "onboarding_briefing_terminology_note": "Su organización usa \"{Volunteer}\" y \"{Client}\" como nombres de roles. Este informe usa los términos predeterminados \"voluntario\" y \"cliente\" para mayor claridad.",
+  "onboarding_org_terminology_heading": "Terminología",
+  "onboarding_org_terminology_subtext": "Personalice los términos que usa su organización. Los valores predeterminados funcionan para la mayoría.",
+  "onboarding_org_term_volunteer_label": "Miembro del equipo (singular)",
+  "onboarding_org_term_volunteers_label": "Miembros del equipo (plural)",
+  "onboarding_org_term_client_label": "Persona asistida (singular)",
+  "onboarding_org_term_clients_label": "Personas asistidas (plural)",
+  "onboarding_org_term_ticket_label": "Elemento de trabajo (singular)",
+  "onboarding_org_term_tickets_label": "Elementos de trabajo (plural)",
+  "onboarding_org_term_manager_label": "Rol superior (singular)",
+  "onboarding_org_term_managers_label": "Roles superiores (plural)",
+  "onboarding_org_term_queue_label": "Grupo de trabajo (singular)",
+  "onboarding_org_term_queues_label": "Grupos de trabajo (plural)",
+  "onboarding_org_term_kb_label": "Biblioteca de referencia"
 }

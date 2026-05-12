@@ -1464,5 +1464,19 @@
   "onboarding_firstlogin_success_subtext": "Sign in to get started.",
   "onboarding_firstlogin_signin": "Sign In",
   "onboarding_firstlogin_creating": "Creating account...",
-  "onboarding_firstlogin_deriving": "Generating encryption keys..."
+  "onboarding_firstlogin_deriving": "Generating encryption keys...",
+  "onboarding_briefing_terminology_note": "Your organization uses \"{Volunteer}\" and \"{Client}\" as role names. This briefing uses the default terms \"volunteer\" and \"client\" for clarity.",
+  "onboarding_org_terminology_heading": "Terminology",
+  "onboarding_org_terminology_subtext": "Customize the terms your organization uses. These defaults work for most orgs.",
+  "onboarding_org_term_volunteer_label": "Team member (singular)",
+  "onboarding_org_term_volunteers_label": "Team members (plural)",
+  "onboarding_org_term_client_label": "Person helped (singular)",
+  "onboarding_org_term_clients_label": "People helped (plural)",
+  "onboarding_org_term_ticket_label": "Work item (singular)",
+  "onboarding_org_term_tickets_label": "Work items (plural)",
+  "onboarding_org_term_manager_label": "Senior role (singular)",
+  "onboarding_org_term_managers_label": "Senior roles (plural)",
+  "onboarding_org_term_queue_label": "Work group (singular)",
+  "onboarding_org_term_queues_label": "Work groups (plural)",
+  "onboarding_org_term_kb_label": "Reference library"
 }
