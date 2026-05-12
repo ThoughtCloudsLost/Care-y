@@ -1,24 +1,22 @@
 /**
  * One-step dev environment setup. Cross-platform (macOS, Linux, Windows).
  *
- * Builds containers, runs migrations, seeds the database, starts everything.
+ * Builds containers, runs migrations, bootstraps the dev org.
+ * By default, only the org row + tenant schema are created (no users or
+ * data), so the onboarding wizard is the entry point.
  *
  * Usage:
- *   pnpm dev:setup               # full setup (build + migrate + seed)
- *   pnpm dev:setup --skip-build  # skip rebuild (faster, uses existing images)
+ *   pnpm dev:setup               # bootstrap only (org + schema, no seed)
+ *   pnpm dev:setup --seed        # full seed (admin user, queues, clients, etc.)
+ *   pnpm dev:setup --skip-build  # skip container rebuild (faster)
  *
- * After this completes:
- *   - tRPC server at http://localhost:3000 (Docker)
- *   - PostgreSQL running (internal, not exposed to host)
- *   - OPRF sidecars running
- *   - Mailpit UI at http://localhost:8025
- *   - Dev org "dev-org" and admin user "admin@dev.local" seeded
- *   - Start the client separately: pnpm --filter @care-y/client dev
+ * Flags can be combined: pnpm dev:setup --skip-build --seed
  */
 
 import { execSync } from "node:child_process";
 
 const skipBuild = process.argv.includes("--skip-build");
+const fullSeed = process.argv.includes("--seed");
 
 function run(label, cmd) {
   console.log(`  ${label}...`);
@@ -63,8 +61,15 @@ run(
   `${serverExec} tsx src/db/migrate.ts --all-schemas`,
 );
 
-// 5. Seed dev data (idempotent: creates org/schema if needed, then data)
-run("Seeding dev data", `${serverExec} tsx src/scripts/seed.ts`);
+// 5. Seed or bootstrap
+if (fullSeed) {
+  run("Seeding dev data", `${serverExec} tsx src/scripts/seed.ts`);
+} else {
+  run(
+    "Bootstrapping dev org",
+    `${serverExec} tsx src/scripts/seed.ts --bootstrap-only`,
+  );
+}
 
 // 6. Tenant migrations (new schemas). On fresh DB the seed just created an
 //    org schema that needs its table migrations applied.
@@ -73,17 +78,30 @@ run(
   `${serverExec} tsx src/db/migrate.ts --all-schemas`,
 );
 
-console.log(`
+if (fullSeed) {
+  console.log(`
 ==> Dev environment ready.
     API:     http://localhost:3000
     Mailpit: http://localhost:8025
     Dev org:  dev-org
     Admin:    admin.dev / dev-password-1234!
 
-    Seeded: org, admin user, phone, queues, 12 clients (generated aliases)
-    Crypto, org keypair rotation, KB articles, and tickets are created by
-    auto-login on first browser page load.
+    Seeded: org, admin user, phone, queues, 120 clients (generated aliases)
 
     Start client:  pnpm --filter @care-y/client dev
     Run E2E tests: npx playwright test
 `);
+} else {
+  console.log(`
+==> Dev environment ready (bootstrap only).
+    API:     http://localhost:3000
+    Mailpit: http://localhost:8025
+    Dev org:  dev-org (no users, no data)
+
+    Visit /setup to run the onboarding wizard.
+    After onboarding, run "pnpm seed" for test data.
+
+    Start client:  pnpm --filter @care-y/client dev
+    Mobile:        pnpm --filter @care-y/client dev:mobile
+`);
+}
