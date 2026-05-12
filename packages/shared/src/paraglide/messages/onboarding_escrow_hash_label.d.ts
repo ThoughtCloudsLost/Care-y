@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "File hash (for verification):" |
+* | "Verification code" |
 *
 * @param {Onboarding_Escrow_Hash_LabelInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

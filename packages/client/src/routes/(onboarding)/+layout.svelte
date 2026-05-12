@@ -17,6 +17,23 @@
     min-height: 0;
     overflow-y: auto;
     overscroll-behavior-y: contain;
-    padding: 1rem;
+    padding: var(--space-2xl) var(--page-pad-x);
+  }
+
+  .onboarding-content :global(.k-block-title) {
+    margin-top: var(--space-2xl);
+    margin-bottom: var(--space-md);
+  }
+
+  :global(.step-desc) {
+    font-size: var(--text-base);
+    color: var(--muted);
+    margin: 0;
+  }
+
+  :global(.step-error) {
+    font-size: var(--text-base);
+    color: var(--error);
+    margin: 0;
   }
 </style>

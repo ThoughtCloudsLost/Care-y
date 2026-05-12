@@ -1,13 +1,14 @@
 <!--
-  WizardStepper: horizontal step indicator for the org setup wizard.
+  WizardStepper: progress indicator for the org setup wizard.
 
-  On narrow viewports (<640px), collapses to "Step X of Y" text.
-  On wider viewports, renders numbered circles with labels.
+  Shows a Konsta Progressbar with step count text below.
+  On wider viewports (640px+), also displays the current step label.
 
   Display-only (not interactive). Steps are not tappable because the
   wizard enforces sequential completion.
 -->
 <script lang="ts">
+  import { Progressbar } from "konsta/svelte";
   import * as m from "$lib/paraglide/messages.js";
 
   interface Props {
@@ -17,130 +18,47 @@
   }
 
   let { steps, currentStep, completedSteps }: Props = $props();
+
+  const progress = $derived(currentStep / steps.length);
+  const currentLabel = $derived(steps.at(currentStep) ?? "");
+  const progressText = $derived(
+    m.onboarding_stepper_progress({
+      current: String(currentStep + 1),
+      total: String(steps.length),
+    }),
+  );
 </script>
 
-<div class="wizard-stepper">
-  <!-- Mobile: text-only progress -->
-  <p class="stepper-mobile" aria-hidden="true">
-    {m.onboarding_stepper_progress({
-      current: String(currentStep + 1),
-      total: String(steps.length),
-    })}
+<div
+  class="wizard-stepper"
+  role="group"
+  aria-label={m.onboarding_stepper_label()}
+>
+  <Progressbar {progress} />
+  <p class="stepper-text" aria-hidden="true">
+    <span>{progressText}</span>
+    <span class="stepper-label">{currentLabel}</span>
   </p>
-
-  <!-- Tablet+: numbered circles -->
-  <ol class="stepper-desktop" aria-label={m.onboarding_stepper_label()}>
-    {#each steps as label, i (i)}
-      {@const isCurrent = i === currentStep}
-      {@const isCompleted = completedSteps.has(i)}
-      <li
-        class="stepper-item"
-        class:stepper-item--active={isCurrent}
-        class:stepper-item--completed={isCompleted}
-        aria-current={isCurrent ? "step" : undefined}
-      >
-        <span class="stepper-circle">
-          {#if isCompleted}
-            <svg
-              aria-hidden="true"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="3"
-              class="stepper-check"
-            >
-              <polyline points="20 6 9 17 4 12" />
-            </svg>
-          {:else}
-            {i + 1}
-          {/if}
-        </span>
-        <span class="stepper-label">{label}</span>
-      </li>
-    {/each}
-  </ol>
-
-  <!-- Screen reader: accessible progress summary -->
-  <span class="sr-only">
-    {m.onboarding_stepper_progress({
-      current: String(currentStep + 1),
-      total: String(steps.length),
-    })}
-  </span>
+  <span class="sr-only">{progressText}</span>
 </div>
 
 <style>
   .wizard-stepper {
-    margin-bottom: 1.5rem;
-  }
-
-  .stepper-mobile {
-    display: block;
-    text-align: center;
-    font-size: 0.875rem;
-    color: var(--muted, #6b7280);
-  }
-
-  .stepper-desktop {
-    display: none;
-    list-style: none;
-    padding: 0;
-    margin: 0;
-    justify-content: center;
-    gap: 0.25rem;
-    flex-wrap: wrap;
-  }
-
-  .stepper-item {
     display: flex;
     flex-direction: column;
-    align-items: center;
-    gap: 0.25rem;
-    min-width: 3rem;
+    gap: var(--space-md);
+    margin-bottom: var(--space-lg);
   }
 
-  .stepper-circle {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 2rem;
-    height: 2rem;
-    border-radius: 9999px;
-    font-size: 0.75rem;
-    font-weight: 600;
-    background: var(--muted, #6b7280);
-    opacity: 0.4;
-    color: white;
-    transition:
-      opacity 150ms linear,
-      background 150ms linear;
-  }
-
-  .stepper-item--active .stepper-circle {
-    background: var(--brand-primary, #4f46e5);
-    opacity: 1;
-  }
-
-  .stepper-item--completed .stepper-circle {
-    background: var(--brand-primary, #4f46e5);
-    opacity: 0.7;
-  }
-
-  .stepper-check {
-    width: 1rem;
-    height: 1rem;
+  .stepper-text {
+    font-size: var(--text-sm);
+    color: var(--muted);
+    text-align: center;
+    margin: 0;
   }
 
   .stepper-label {
-    font-size: 0.625rem;
-    color: var(--muted, #6b7280);
-    text-align: center;
-    white-space: nowrap;
-  }
-
-  .stepper-item--active .stepper-label {
-    color: var(--ink, #1f2937);
-    font-weight: 600;
+    display: none;
   }
 
   .sr-only {
@@ -156,18 +74,12 @@
   }
 
   @media (min-width: 640px) {
-    .stepper-mobile {
-      display: none;
+    .stepper-label {
+      display: inline;
     }
 
-    .stepper-desktop {
-      display: flex;
-    }
-  }
-
-  @media (prefers-reduced-motion: reduce) {
-    .stepper-circle {
-      transition: none;
+    .stepper-label::before {
+      content: " \00b7  ";
     }
   }
 </style>

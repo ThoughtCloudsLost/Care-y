@@ -6,17 +6,17 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Onboarding_Wizard_Complete_BodyInputs */
 
 const en_onboarding_wizard_complete_body = /** @type {(inputs: Onboarding_Wizard_Complete_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Your organization is ready. You can invite more volunteers from the admin panel.`)
+	return /** @type {LocalizedString} */ (`Your organization is ready. Here are some things you may want to configure next.`)
 };
 
 const es_onboarding_wizard_complete_body = /** @type {(inputs: Onboarding_Wizard_Complete_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Tu organizacion esta lista. Puedes invitar mas voluntarios desde el panel de administracion.`)
+	return /** @type {LocalizedString} */ (`Tu organizacion esta lista. Aqui hay algunas cosas que puedes configurar a continuacion.`)
 };
 
 /**
 * | output |
 * | --- |
-* | "Your organization is ready. You can invite more volunteers from the admin panel." |
+* | "Your organization is ready. Here are some things you may want to configure next." |
 *
 * @param {Onboarding_Wizard_Complete_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

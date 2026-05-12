@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Your organization is ready. You can invite more volunteers from the admin panel." |
+* | "Your organization is ready. Here are some things you may want to configure next." |
 *
 * @param {Onboarding_Wizard_Complete_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

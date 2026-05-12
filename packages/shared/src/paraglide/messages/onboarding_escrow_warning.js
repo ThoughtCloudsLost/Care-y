@@ -6,17 +6,17 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Onboarding_Escrow_WarningInputs */
 
 const en_onboarding_escrow_warning = /** @type {(inputs: Onboarding_Escrow_WarningInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Store this file on an encrypted USB drive in a physically secure location. For production deployments, follow the full escrow ceremony in the operations manual.`)
+	return /** @type {LocalizedString} */ (`This file is your emergency recovery key. If every admin loses access to their account, this is the only way to recover your organization's data. Store it somewhere safe and offline, like an encrypted USB drive kept in a locked drawer.`)
 };
 
 const es_onboarding_escrow_warning = /** @type {(inputs: Onboarding_Escrow_WarningInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Almacene este archivo en una unidad USB cifrada en un lugar fisicamente seguro. Para despliegues en produccion, siga la ceremonia completa de custodia en el manual de operaciones.`)
+	return /** @type {LocalizedString} */ (`Este archivo es tu clave de recuperacion de emergencia. Si todos los administradores pierden acceso a sus cuentas, esta es la unica forma de recuperar los datos de tu organizacion. Guardalo en un lugar seguro y sin conexion, como una unidad USB cifrada en un cajon con llave.`)
 };
 
 /**
 * | output |
 * | --- |
-* | "Store this file on an encrypted USB drive in a physically secure location. For production deployments, follow the full escrow ceremony in the operations manual." |
+* | "This file is your emergency recovery key. If every admin loses access to their account, this is the only way to recover your organization's data. Store it so..." |
 *
 * @param {Onboarding_Escrow_WarningInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

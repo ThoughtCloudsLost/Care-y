@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Block, List, ListItem, Button } from "konsta/svelte";
+  import { Block, BlockTitle, List, ListItem, Button } from "konsta/svelte";
   import * as m from "$lib/paraglide/messages.js";
   import { announceToLiveRegion } from "$lib/utils/announce.js";
   import { haptic } from "$lib/utils/haptic.js";
@@ -13,9 +13,83 @@
 
   let scrolledToBottom = $state(false);
   let sentinelEl: HTMLDivElement | undefined = $state();
+  let diagramOpen = $state(false);
+
+  let zoomScale = $state(1);
+  let panX = $state(0);
+  let panY = $state(0);
+  let pinchStartDist = 0;
+  let pinchStartScale = 1;
+  let panStartX = 0;
+  let panStartY = 0;
+  let panStartPanX = 0;
+  let panStartPanY = 0;
+
+  function pinchDistance(a: Touch, b: Touch): number {
+    const dx = a.clientX - b.clientX;
+    const dy = a.clientY - b.clientY;
+    return Math.sqrt(dx * dx + dy * dy);
+  }
+
+  function handleZoomStart(e: TouchEvent): void {
+    const t0 = e.touches[0];
+    const t1 = e.touches[1];
+    if (e.touches.length === 2 && t0 && t1) {
+      pinchStartDist = pinchDistance(t0, t1);
+      pinchStartScale = zoomScale;
+    } else if (e.touches.length === 1 && t0 && zoomScale > 1) {
+      panStartX = t0.clientX;
+      panStartY = t0.clientY;
+      panStartPanX = panX;
+      panStartPanY = panY;
+    }
+  }
+
+  function handleZoomMove(e: TouchEvent): void {
+    e.preventDefault();
+    const t0 = e.touches[0];
+    const t1 = e.touches[1];
+    if (e.touches.length === 2 && t0 && t1) {
+      const dist = pinchDistance(t0, t1);
+      zoomScale = Math.max(
+        1,
+        Math.min(5, pinchStartScale * (dist / pinchStartDist)),
+      );
+    } else if (e.touches.length === 1 && t0 && zoomScale > 1) {
+      panX = panStartPanX + (t0.clientX - panStartX);
+      panY = panStartPanY + (t0.clientY - panStartY);
+    }
+  }
+
+  function handleZoomEnd(): void {
+    if (zoomScale <= 1.05) {
+      zoomScale = 1;
+      panX = 0;
+      panY = 0;
+    }
+  }
+
+  function resetZoom(): void {
+    zoomScale = 1;
+    panX = 0;
+    panY = 0;
+  }
+
+  function closeDiagram(): void {
+    diagramOpen = false;
+    resetZoom();
+  }
+
+  function handleOverlayTap(e: MouseEvent): void {
+    if (e.target === e.currentTarget && zoomScale <= 1) {
+      closeDiagram();
+    }
+  }
 
   $effect(() => {
     if (!sentinelEl) return;
+
+    const scrollContainer = sentinelEl.closest(".onboarding-content");
 
     const observer = new IntersectionObserver(
       (entries) => {
@@ -25,7 +99,7 @@
           }
         }
       },
-      { threshold: 0.1 },
+      { threshold: 0.1, root: scrollContainer },
     );
 
     observer.observe(sentinelEl);
@@ -111,59 +185,98 @@
   const choices = [
     {
       title: m.onboarding_briefing_choice_telephony_title(),
-      body: m.onboarding_briefing_choice_telephony_body(),
+      protects: m.onboarding_briefing_choice_telephony_protects(),
+      whyCare: m.onboarding_briefing_choice_telephony_why(),
+      tradeoff: m.onboarding_briefing_choice_telephony_tradeoff(),
     },
     {
       title: m.onboarding_briefing_choice_2fa_title(),
-      body: m.onboarding_briefing_choice_2fa_body(),
+      protects: m.onboarding_briefing_choice_2fa_protects(),
+      whyCare: m.onboarding_briefing_choice_2fa_why(),
+      tradeoff: m.onboarding_briefing_choice_2fa_tradeoff(),
     },
     {
       title: m.onboarding_briefing_choice_tor_title(),
-      body: m.onboarding_briefing_choice_tor_body(),
+      protects: m.onboarding_briefing_choice_tor_protects(),
+      whyCare: m.onboarding_briefing_choice_tor_why(),
+      tradeoff: m.onboarding_briefing_choice_tor_tradeoff(),
     },
   ];
 </script>
 
 <div class="briefing-content">
+  <BlockTitle medium>{m.onboarding_briefing_heading()}</BlockTitle>
   <Block>
-    <h2 class="briefing-heading">{m.onboarding_briefing_heading()}</h2>
     <p class="briefing-prose">{m.onboarding_briefing_intro()}</p>
   </Block>
 
   <Block>
-    <img
-      src="/images/crypto-overview.png"
-      alt={m.onboarding_briefing_diagram_alt()}
-      class="crypto-diagram"
-    />
+    <p class="diagram-caption">{m.onboarding_briefing_diagram_caption()}</p>
+    <button
+      type="button"
+      class="diagram-tap touch-feedback"
+      onclick={() => (diagramOpen = true)}
+      aria-label={m.onboarding_briefing_diagram_tap()}
+    >
+      <img
+        src="/images/crypto-overview.png"
+        alt={m.onboarding_briefing_diagram_alt()}
+        class="crypto-diagram"
+      />
+      <span class="diagram-hint">{m.onboarding_briefing_diagram_tap()}</span>
+    </button>
   </Block>
 
-  <Block>
-    <h3 class="briefing-subheading">
-      {m.onboarding_briefing_practice_heading()}
-    </h3>
-  </Block>
+  {#if diagramOpen}
+    <div
+      class="diagram-overlay"
+      role="dialog"
+      aria-label={m.onboarding_briefing_diagram_alt()}
+      tabindex="-1"
+      onclick={handleOverlayTap}
+      onkeydown={(e: KeyboardEvent) => {
+        if (e.key === "Escape") {
+          diagramOpen = false;
+        }
+      }}
+      ontouchstart={handleZoomStart}
+      ontouchmove={handleZoomMove}
+      ontouchend={handleZoomEnd}
+    >
+      <button
+        type="button"
+        class="diagram-close"
+        onclick={closeDiagram}
+        aria-label={m.shell_close()}
+      >
+        &times;
+      </button>
+      <img
+        src="/images/crypto-overview.png"
+        alt={m.onboarding_briefing_diagram_alt()}
+        class="diagram-full"
+        style="transform: scale({zoomScale}) translate({panX /
+          zoomScale}px, {panY / zoomScale}px);"
+      />
+      {#if zoomScale <= 1}
+        <p class="diagram-zoom-hint">{m.onboarding_briefing_diagram_zoom()}</p>
+      {/if}
+    </div>
+  {/if}
 
-  <div class="protection-table-header">
-    <span class="col-label"
-      >{m.onboarding_briefing_practice_col_protected()}</span
-    >
-    <span class="col-label">{m.onboarding_briefing_practice_col_access()}</span>
-    <span class="col-label"
-      >{m.onboarding_briefing_practice_col_compromise()}</span
-    >
-  </div>
+  <BlockTitle medium>
+    {m.onboarding_briefing_practice_heading()}
+  </BlockTitle>
+
   <List strong inset>
     {#each protectionRows as row (row.data)}
       <ListItem title={row.data} subtitle={row.access} text={row.compromise} />
     {/each}
   </List>
 
-  <Block>
-    <h3 class="briefing-subheading">
-      {m.onboarding_briefing_scenarios_heading()}
-    </h3>
-  </Block>
+  <BlockTitle medium>
+    {m.onboarding_briefing_scenarios_heading()}
+  </BlockTitle>
 
   {#each scenarios as scenario (scenario.title)}
     <div class="scenario-wrapper">
@@ -178,10 +291,10 @@
     </div>
   {/each}
 
+  <BlockTitle medium>
+    {m.onboarding_briefing_choices_heading()}
+  </BlockTitle>
   <Block>
-    <h3 class="briefing-subheading">
-      {m.onboarding_briefing_choices_heading()}
-    </h3>
     <p class="briefing-prose">{m.onboarding_briefing_choices_intro()}</p>
   </Block>
 
@@ -191,107 +304,159 @@
         <summary class="scenario-summary touch-feedback">{choice.title}</summary
         >
         <div class="scenario-body">
-          <p>{choice.body}</p>
+          <p class="choice-label">
+            {m.onboarding_briefing_choice_label_protects()}
+          </p>
+          <p>{choice.protects}</p>
+          <p class="choice-label">{m.onboarding_briefing_choice_label_why()}</p>
+          <p>{choice.whyCare}</p>
+          <p class="choice-label">
+            {m.onboarding_briefing_choice_label_tradeoff()}
+          </p>
+          <p>{choice.tradeoff}</p>
         </div>
       </details>
     </div>
   {/each}
 
   <div bind:this={sentinelEl} class="scroll-sentinel" aria-hidden="true"></div>
-</div>
 
-<div class="confirm-bar">
-  {#if !scrolledToBottom}
-    <p class="scroll-hint" aria-live="polite">
-      {m.onboarding_briefing_scroll_hint()}
-    </p>
-  {/if}
-  <Button
-    large
-    disabled={!scrolledToBottom}
-    aria-disabled={!scrolledToBottom}
-    onclick={handleConfirm}
-  >
-    {m.onboarding_briefing_confirm()}
-  </Button>
+  <Block>
+    {#if !scrolledToBottom}
+      <p class="scroll-hint" aria-live="polite">
+        {m.onboarding_briefing_scroll_hint()}
+      </p>
+    {/if}
+    <Button
+      large
+      disabled={!scrolledToBottom}
+      aria-disabled={!scrolledToBottom}
+      onclick={handleConfirm}
+    >
+      {m.onboarding_briefing_confirm()}
+    </Button>
+  </Block>
 </div>
 
 <style>
   .briefing-content {
-    padding-bottom: 5rem;
-  }
-
-  .briefing-heading {
-    font-size: 1.25rem;
-    font-weight: 700;
-    color: var(--ink, #1f2937);
-    margin: 0 0 0.75rem;
-  }
-
-  .briefing-subheading {
-    font-size: 1.1rem;
-    font-weight: 600;
-    color: var(--ink, #1f2937);
-    margin: 0 0 0.25rem;
+    padding-bottom: var(--space-2xl);
   }
 
   .briefing-prose {
-    font-size: 0.9375rem;
+    font-size: var(--text-md);
     line-height: 1.6;
-    color: var(--ink, #1f2937);
+    color: var(--ink);
     margin: 0;
+  }
+
+  .diagram-caption {
+    font-size: var(--text-sm);
+    font-weight: 600;
+    color: var(--muted);
+    text-align: center;
+    margin: 0 0 var(--space-md);
+  }
+
+  .diagram-tap {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--space-md);
+    background: none;
+    border: none;
+    padding: 0;
+    cursor: pointer;
+    width: 100%;
   }
 
   .crypto-diagram {
     width: 100%;
     max-width: 480px;
-    margin: 0 auto;
     display: block;
-    border-radius: 0.5rem;
-    background: var(--surface-1, #f9fafb);
-    padding: 0.5rem;
+    border-radius: var(--card-radius);
+    background: var(--surface-1);
+    padding: var(--space-lg);
   }
 
-  .protection-table-header {
+  .diagram-hint {
+    font-size: var(--text-sm);
+    color: var(--muted);
+  }
+
+  .diagram-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 9999;
+    background: rgba(0, 0, 0, 0.95);
     display: flex;
-    gap: 0.5rem;
-    padding: 0 1.5rem;
-    margin-bottom: 0.25rem;
+    align-items: center;
+    justify-content: center;
+    touch-action: none;
+    overflow: hidden;
   }
 
-  .col-label {
-    flex: 1;
-    font-size: 0.6875rem;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
-    color: var(--muted, #6b7280);
+  .diagram-close {
+    position: absolute;
+    top: calc(var(--space-lg) + env(safe-area-inset-top, 0px));
+    right: var(--space-xl);
+    z-index: 1;
+    background: rgba(0, 0, 0, 0.5);
+    border: none;
+    border-radius: 50%;
+    color: white;
+    font-size: 1.5rem;
+    width: 2.5rem;
+    height: 2.5rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+  }
+
+  .diagram-full {
+    max-width: 90vw;
+    max-height: 80vh;
+    object-fit: contain;
+    transform-origin: center center;
+    will-change: transform;
+  }
+
+  .diagram-zoom-hint {
+    position: absolute;
+    bottom: calc(var(--space-2xl) + env(safe-area-inset-bottom, 0px));
+    left: 0;
+    right: 0;
+    text-align: center;
+    font-size: var(--text-sm);
+    color: rgba(255, 255, 255, 0.6);
+    margin: 0;
   }
 
   .scenario-wrapper {
-    margin: 0 1rem 0.5rem;
+    margin: 0 var(--page-pad-x) var(--space-lg);
   }
 
   .scenario-summary {
-    font-size: 0.9375rem;
+    font-size: var(--text-md);
     font-weight: 600;
-    color: var(--ink, #1f2937);
-    padding: 0.75rem 1rem;
-    background: var(--surface-2, #f3f4f6);
-    border-radius: 0.5rem;
+    color: var(--ink);
+    padding: var(--card-pad-y) var(--card-pad-x);
+    background: var(--surface-2);
+    border-radius: var(--card-radius);
     cursor: pointer;
     list-style: none;
     display: flex;
     align-items: center;
-    gap: 0.5rem;
+    gap: var(--space-lg);
   }
 
   .scenario-summary::before {
     content: "\25B6";
-    font-size: 0.625rem;
+    font-size: var(--text-xs);
     transition: transform 150ms linear;
     display: inline-block;
-    color: var(--muted, #6b7280);
+    color: var(--muted);
   }
 
   @media (prefers-reduced-motion: reduce) {
@@ -309,14 +474,27 @@
   }
 
   .scenario-body {
-    padding: 0.75rem 1rem;
-    font-size: 0.875rem;
+    padding: var(--card-pad-y) var(--card-pad-x);
+    font-size: var(--text-base);
     line-height: 1.6;
-    color: var(--ink, #1f2937);
+    color: var(--ink);
   }
 
   .scenario-body p {
     margin: 0;
+  }
+
+  .choice-label {
+    font-size: var(--text-sm);
+    font-weight: 600;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    margin: var(--space-lg) 0 var(--space-xs);
+  }
+
+  .choice-label:first-child {
+    margin-top: 0;
   }
 
   .scroll-sentinel {
@@ -324,18 +502,10 @@
     width: 1px;
   }
 
-  .confirm-bar {
-    position: sticky;
-    bottom: 0;
-    background: var(--paper, #faf8f5);
-    padding: 0.75rem 1rem calc(0.75rem + env(safe-area-inset-bottom, 0px));
-    border-top: 1px solid var(--surface-2, #e5e7eb);
-    text-align: center;
-  }
-
   .scroll-hint {
-    font-size: 0.8125rem;
-    color: var(--muted, #6b7280);
-    margin: 0 0 0.5rem;
+    font-size: var(--text-base);
+    color: var(--muted);
+    text-align: center;
+    margin: 0 0 var(--space-lg);
   }
 </style>

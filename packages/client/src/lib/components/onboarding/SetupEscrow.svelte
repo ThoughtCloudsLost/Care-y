@@ -8,13 +8,21 @@
 -->
 <script lang="ts">
   import { onMount } from "svelte";
-  import { List, ListInput, Button, Block, Preloader } from "konsta/svelte";
+  import {
+    List,
+    ListInput,
+    Button,
+    Block,
+    BlockTitle,
+    Preloader,
+  } from "konsta/svelte";
   import * as m from "$lib/paraglide/messages.js";
   import { getOrgKeyManager } from "$lib/crypto/context.js";
   import { encryptWithPassphrase, serializeEscrowBlob } from "@care-y/crypto";
   import { haptic } from "$lib/utils/haptic.js";
   import { toastStore } from "$lib/stores/toast.svelte.js";
   import { announceToLiveRegion } from "$lib/utils/announce.js";
+  import { isOrgKeyReady } from "$lib/crypto/org-key-ready.svelte.js";
 
   interface Props {
     oncomplete: () => void;
@@ -49,7 +57,7 @@
       confirmValid &&
       !generating &&
       !httpsBlocked &&
-      orgKeyManager.isLoaded,
+      isOrgKeyReady(),
   );
   onMount(() => {
     if (import.meta.env.DEV) return;
@@ -135,14 +143,14 @@
   }
 </script>
 
+<BlockTitle medium>{m.onboarding_escrow_heading()}</BlockTitle>
 <Block>
-  <h2 class="step-heading">{m.onboarding_escrow_heading()}</h2>
-  <p class="step-subtext">{m.onboarding_escrow_subtext()}</p>
+  <p class="step-desc">{m.onboarding_escrow_subtext()}</p>
 </Block>
 
 {#if httpsBlocked}
   <Block>
-    <p class="error-text" role="alert">{m.onboarding_escrow_https_warning()}</p>
+    <p class="step-error" role="alert">{m.onboarding_escrow_https_warning()}</p>
   </Block>
 {:else}
   <Block>
@@ -153,7 +161,7 @@
 
   {#if error}
     <Block>
-      <p class="error-text" role="alert">{error}</p>
+      <p class="step-error" role="alert">{error}</p>
     </Block>
   {/if}
 
@@ -164,6 +172,7 @@
         label={m.onboarding_escrow_passphrase_label()}
         type="password"
         placeholder={m.onboarding_escrow_passphrase_placeholder()}
+        info={m.onboarding_escrow_passphrase_hint()}
         value={passphrase}
         onInput={(e: Event) => {
           if (e.target instanceof HTMLInputElement) passphrase = e.target.value;
@@ -204,6 +213,7 @@
       <code class="hash-value"
         >{m.onboarding_escrow_hash_value({ hash: fileHash })}</code
       >
+      <p class="hash-hint">{m.onboarding_escrow_hash_hint()}</p>
     </Block>
 
     <Block>
@@ -215,48 +225,37 @@
 {/if}
 
 <style>
-  .step-heading {
-    font-size: 1.25rem;
-    font-weight: 700;
-    color: var(--ink, #1f2937);
-    margin: 0 0 0.25rem;
-  }
-
-  .step-subtext {
-    font-size: 0.875rem;
-    color: var(--muted, #6b7280);
-    margin: 0;
-  }
-
-  .error-text {
-    font-size: 0.875rem;
-    color: var(--error, #dc2626);
-  }
-
   .warning-box {
-    background: var(--surface-2, #fef3c7);
-    border-radius: 0.5rem;
-    padding: 0.75rem 1rem;
+    background: var(--surface-2);
+    border-radius: var(--card-radius);
+    padding: var(--card-pad-y) var(--card-pad-x);
   }
 
   .warning-text {
-    font-size: 0.8125rem;
-    color: var(--ink, #1f2937);
+    font-size: var(--text-base);
+    color: var(--ink);
     margin: 0;
     line-height: 1.5;
   }
 
   .hash-label {
-    font-size: 0.8125rem;
-    color: var(--muted, #6b7280);
-    margin: 0 0 0.25rem;
+    font-size: var(--text-base);
+    color: var(--muted);
+    margin: 0 0 var(--space-sm);
   }
 
   .hash-value {
     font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
-    font-size: 0.75rem;
-    color: var(--ink, #1f2937);
+    font-size: var(--text-sm);
+    color: var(--ink);
     word-break: break-all;
     user-select: all;
+  }
+
+  .hash-hint {
+    font-size: var(--text-sm);
+    color: var(--muted);
+    line-height: 1.5;
+    margin: var(--space-lg) 0 0;
   }
 </style>

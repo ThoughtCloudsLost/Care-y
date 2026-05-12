@@ -84,6 +84,10 @@
     phase = "auth";
 
     try {
+      // 0. Reset Worker to READY if it was left in KEYED state from a
+      //    previous session (e.g., onboarding completed without page reload).
+      await bridge.zeroAll();
+
       // 1. Server-side credential verification + session cookie
       await trpc.auth.login.mutate({ identifier, password });
 

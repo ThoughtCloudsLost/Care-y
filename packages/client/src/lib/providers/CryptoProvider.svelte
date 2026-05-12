@@ -12,6 +12,7 @@
 -->
 <script lang="ts">
   import { browser } from "$app/environment";
+  import { getSodium } from "@care-y/crypto";
   import { CryptoBridge } from "$lib/workers/crypto-bridge.js";
   import { OrgKeyManager } from "$lib/crypto/org-key.js";
   import {
@@ -24,6 +25,8 @@
   let { children }: { children: Snippet } = $props();
 
   if (browser) {
+    void getSodium();
+
     const bridge = new CryptoBridge();
     setCryptoBridge(bridge);
 

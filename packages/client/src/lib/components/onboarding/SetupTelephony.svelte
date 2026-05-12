@@ -12,6 +12,7 @@
     ListInput,
     Button,
     Block,
+    BlockTitle,
     Preloader,
     Radio,
   } from "konsta/svelte";
@@ -103,15 +104,15 @@
   }
 </script>
 
+<BlockTitle medium>{m.onboarding_telephony_heading()}</BlockTitle>
 <Block>
-  <h2 class="step-heading">{m.onboarding_telephony_heading()}</h2>
-  <p class="step-subtext">{m.onboarding_telephony_subtext()}</p>
+  <p class="step-desc">{m.onboarding_telephony_subtext()}</p>
 </Block>
 
 <form onsubmit={handleSubmit}>
   {#if error}
     <Block>
-      <p class="error-text" role="alert">{error}</p>
+      <p class="step-error" role="alert">{error}</p>
     </Block>
   {/if}
 
@@ -203,23 +204,3 @@
     </Button>
   </Block>
 </form>
-
-<style>
-  .step-heading {
-    font-size: 1.25rem;
-    font-weight: 700;
-    color: var(--ink, #1f2937);
-    margin: 0 0 0.25rem;
-  }
-
-  .step-subtext {
-    font-size: 0.875rem;
-    color: var(--muted, #6b7280);
-    margin: 0;
-  }
-
-  .error-text {
-    font-size: 0.875rem;
-    color: var(--error, #dc2626);
-  }
-</style>

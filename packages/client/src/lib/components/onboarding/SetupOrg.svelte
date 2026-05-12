@@ -7,7 +7,14 @@
   the server needs for telephony routing and i18n selection).
 -->
 <script lang="ts">
-  import { List, ListInput, Button, Block, Preloader } from "konsta/svelte";
+  import {
+    List,
+    ListInput,
+    Button,
+    Block,
+    BlockTitle,
+    Preloader,
+  } from "konsta/svelte";
   import { createMutation } from "@tanstack/svelte-query";
   import { E164_COUNTRY_CODE_OPTIONS } from "@care-y/shared";
   import * as m from "$lib/paraglide/messages.js";
@@ -18,6 +25,7 @@
   import { toastStore } from "$lib/stores/toast.svelte.js";
   import { announceToLiveRegion } from "$lib/utils/announce.js";
   import { RouterNotAvailableError } from "$lib/errors.js";
+  import { isOrgKeyReady } from "$lib/crypto/org-key-ready.svelte.js";
 
   interface Props {
     oncomplete: (data: {
@@ -74,7 +82,7 @@
     },
   }));
 
-  const orgKeyLoaded = $derived(orgKeyManager.isLoaded);
+  const orgKeyLoaded = $derived(isOrgKeyReady());
   const canSubmit = $derived(
     orgKeyLoaded &&
       nameValid &&
@@ -112,15 +120,15 @@
   }
 </script>
 
+<BlockTitle medium>{m.onboarding_org_heading()}</BlockTitle>
 <Block>
-  <h2 class="step-heading">{m.onboarding_org_heading()}</h2>
-  <p class="step-subtext">{m.onboarding_org_subtext()}</p>
+  <p class="step-desc">{m.onboarding_org_subtext()}</p>
 </Block>
 
 <form onsubmit={handleSubmit}>
   {#if error}
     <Block>
-      <p class="error-text" role="alert">{error}</p>
+      <p class="step-error" role="alert">{error}</p>
     </Block>
   {/if}
 
@@ -182,23 +190,3 @@
     </Button>
   </Block>
 </form>
-
-<style>
-  .step-heading {
-    font-size: 1.25rem;
-    font-weight: 700;
-    color: var(--ink, #1f2937);
-    margin: 0 0 0.25rem;
-  }
-
-  .step-subtext {
-    font-size: 0.875rem;
-    color: var(--muted, #6b7280);
-    margin: 0;
-  }
-
-  .error-text {
-    font-size: 0.875rem;
-    color: var(--error, #dc2626);
-  }
-</style>

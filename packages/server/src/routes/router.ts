@@ -37,6 +37,7 @@ import {
   createOnboardingRouter,
   type OnboardingRouterDeps,
 } from "./onboarding.js";
+import { createDashboardRouter } from "./dashboard.js";
 import type { OrgService } from "../org/service.js";
 import type { ProviderFactory } from "../telephony/factory.js";
 
@@ -80,6 +81,7 @@ export function createAppRouter(deps: RouterDeps) {
     twoFactor: twoFactorRouter,
     oprf: oprfRouter,
     keys: keysRouter,
+    dashboard: createDashboardRouter(),
     ...(deps.telephonyAdminDeps
       ? {
           telephonyAdmin: createTelephonyAdminRouter(deps.telephonyAdminDeps),

@@ -49,6 +49,7 @@
   import type { Component } from "svelte";
   import { browser } from "$app/environment";
   import { beforeNavigate, afterNavigate, goto } from "$app/navigation";
+  import { resolve } from "$app/paths";
   import * as m from "$lib/paraglide/messages.js";
   import type { TabId, AppShellProps } from "./types";
   import { providePTR } from "./ptr-context.svelte.js";
@@ -655,14 +656,14 @@
     await queryClient.invalidateQueries();
 
     // Brief hold so the spinner is visible even on fast responses
-    await new Promise<void>((resolve) => setTimeout(resolve, 400));
+    await new Promise<void>((r) => setTimeout(r, 400));
 
     ptrPhase = "releasing";
     ptrPullY = 0;
     ptrProgress = 0;
 
     // Let the CSS transition finish before going fully idle
-    await new Promise<void>((resolve) => setTimeout(resolve, 300));
+    await new Promise<void>((r) => setTimeout(r, 300));
     ptrPhase = "idle";
   }
 
@@ -1057,8 +1058,7 @@
         }}
         onlogout={() => {
           panelOpen = false;
-          // eslint-disable-next-line svelte/no-navigation-without-resolve -- logout route created in later tasks
-          void goto("/logout");
+          void goto(resolve("/logout"));
         }}
       />
     </ShellPanel>

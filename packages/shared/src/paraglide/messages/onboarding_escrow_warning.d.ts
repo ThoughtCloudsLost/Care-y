@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Store this file on an encrypted USB drive in a physically secure location. For production deployments, follow the full escrow ceremony in the operations manual." |
+* | "This file is your emergency recovery key. If every admin loses access to their account, this is the only way to recover your organization's data. Store it so..." |
 *
 * @param {Onboarding_Escrow_WarningInputs} inputs
 * @param {{ locale?: "en" | "es" }} options
