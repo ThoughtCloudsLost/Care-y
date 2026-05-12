@@ -19,6 +19,7 @@
     encode,
     decode,
     toRistrettoPoint,
+    getSodium,
   } from "@care-y/crypto";
   import * as m from "$lib/paraglide/messages.js";
   import { trpc } from "$lib/trpc/index.js";
@@ -42,6 +43,9 @@
   }
 
   let { oncomplete }: Props = $props();
+
+  const bridge = getCryptoBridge();
+  const orgKeyManager = getOrgKeyManager();
 
   if (!trpc.onboarding) {
     throw new Error("Onboarding router not available");
@@ -80,7 +84,7 @@
   const isSubmitting = $derived(phase !== "idle" && phase !== "error");
 
   function validate(): string | null {
-    if (password.length < 12) {
+    if (password.length < 16) {
       return m.onboarding_account_error_password_length();
     }
     // eslint-disable-next-line security/detect-possible-timing-attacks -- client-side form validation, not credential check
@@ -102,12 +106,10 @@
     error = "";
     phase = "auth";
 
-    const bridge = getCryptoBridge();
-    const orgKeyManager = getOrgKeyManager();
-
     let orgSecretKey: Uint8Array | null = null;
 
     try {
+      await getSodium();
       // 1. Generate org keypair (Curve25519) before calling bootstrapAdmin.
       //    bootstrapAdmin needs orgPublicKey to seal the display name.
       const orgKeypair = generateOrgKeypair();
@@ -248,6 +250,7 @@
         label={m.onboarding_account_username()}
         type="text"
         placeholder={m.onboarding_account_username_placeholder()}
+        info={m.onboarding_account_username_info()}
         bind:value={identifier}
         autocomplete="username"
         autocapitalize="none"
@@ -257,6 +260,7 @@
         label={m.onboarding_account_display_name()}
         type="text"
         placeholder={m.onboarding_account_display_name_placeholder()}
+        info={m.onboarding_account_display_name_info()}
         bind:value={displayName}
         required
       />
@@ -264,6 +268,7 @@
         label={m.onboarding_account_password()}
         type="password"
         placeholder={m.onboarding_account_password_placeholder()}
+        info={m.onboarding_account_password_info()}
         bind:value={password}
         autocomplete="new-password"
         required

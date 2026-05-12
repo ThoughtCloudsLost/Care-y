@@ -69,7 +69,7 @@
   const isSubmitting = $derived(phase !== "idle" && phase !== "error");
 
   function validate(): string | null {
-    if (password.length < 12) {
+    if (password.length < 16) {
       return m.onboarding_firstlogin_error_password_length();
     }
     // eslint-disable-next-line security/detect-possible-timing-attacks -- client-side form validation, not credential check
@@ -194,6 +194,7 @@
         label={m.onboarding_firstlogin_username()}
         type="text"
         placeholder={m.onboarding_firstlogin_username_placeholder()}
+        info={m.onboarding_account_username_info()}
         bind:value={identifier}
         autocomplete="username"
         autocapitalize="none"
@@ -203,12 +204,14 @@
         label={m.onboarding_firstlogin_display_name()}
         type="text"
         placeholder={m.onboarding_firstlogin_display_name_placeholder()}
+        info={m.onboarding_account_display_name_info()}
         bind:value={displayName}
       />
       <ListInput
         label={m.onboarding_firstlogin_password()}
         type="password"
         placeholder={m.onboarding_firstlogin_password_placeholder()}
+        info={m.onboarding_account_password_info()}
         bind:value={password}
         autocomplete="new-password"
         required

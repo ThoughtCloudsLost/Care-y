@@ -6,17 +6,17 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Onboarding_Firstlogin_Password_PlaceholderInputs */
 
 const en_onboarding_firstlogin_password_placeholder = /** @type {(inputs: Onboarding_Firstlogin_Password_PlaceholderInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`At least 12 characters`)
+	return /** @type {LocalizedString} */ (`At least 16 characters`)
 };
 
 const es_onboarding_firstlogin_password_placeholder = /** @type {(inputs: Onboarding_Firstlogin_Password_PlaceholderInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Al menos 12 caracteres`)
+	return /** @type {LocalizedString} */ (`Al menos 16 caracteres`)
 };
 
 /**
 * | output |
 * | --- |
-* | "At least 12 characters" |
+* | "At least 16 characters" |
 *
 * @param {Onboarding_Firstlogin_Password_PlaceholderInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

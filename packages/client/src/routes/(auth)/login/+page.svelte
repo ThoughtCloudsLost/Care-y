@@ -2,9 +2,11 @@
   import { browser } from "$app/environment";
   import { goto } from "$app/navigation";
   import { resolve } from "$app/paths";
+  import { createQuery } from "@tanstack/svelte-query";
   import { List, ListInput, Button } from "konsta/svelte";
   import * as m from "$lib/paraglide/messages.js";
   import { trpc } from "$lib/trpc/index.js";
+  import { onboardingKeys } from "$lib/query/keys.js";
   import { getCryptoBridge, getOrgKeyManager } from "$lib/crypto/context.js";
   import { setOrgKeyReady } from "$lib/crypto/org-key-ready.svelte.js";
   import { installCleanupHandler } from "$lib/auth/cleanup.js";
@@ -15,6 +17,9 @@
     type LoginPhaseId,
   } from "$lib/components/onboarding/KeyDerivation.svelte";
   import type { LoginCryptoCallbacks } from "$lib/auth/login-crypto.js";
+
+  const bridge = getCryptoBridge();
+  const orgKeyManager = getOrgKeyManager();
 
   let identifier = $state("");
   let password = $state("");
@@ -57,13 +62,26 @@
       });
   }
 
+  const statusQuery = createQuery(() => ({
+    queryKey: onboardingKeys.status(),
+    queryFn: async () =>
+      trpc.onboarding?.getStatus.query() ?? { needsSetup: false },
+    retry: false,
+  }));
+
+  const needsSetup = $derived(statusQuery.data?.needsSetup === true);
+  const statusResolved = $derived(statusQuery.isSuccess || statusQuery.isError);
+
+  $effect(() => {
+    if (needsSetup) {
+      void goto(resolve("/setup"));
+    }
+  });
+
   async function handleSubmit(e: SubmitEvent): Promise<void> {
     e.preventDefault();
     error = "";
     phase = "auth";
-
-    const bridge = getCryptoBridge();
-    const orgKeyManager = getOrgKeyManager();
 
     try {
       // 1. Server-side credential verification + session cookie
@@ -123,14 +141,19 @@
   }
 </script>
 
-<div class="text-center mb-6">
-  <h1 class="text-2xl font-bold">CARE-Y</h1>
-  <p class="mt-1 text-sm opacity-60">{m.auth_sign_in_continue()}</p>
-</div>
-
-{#if phase !== "idle" && phase !== "error"}
+{#if !statusResolved || needsSetup}
+  <!-- Waiting for status check, or redirecting to /setup -->
+{:else if phase !== "idle" && phase !== "error"}
+  <div class="text-center mb-6">
+    <h1 class="text-2xl font-bold">CARE-Y</h1>
+  </div>
   <KeyDerivation {phase} {phaseLabel} />
 {:else}
+  <div class="text-center mb-6">
+    <h1 class="text-2xl font-bold">CARE-Y</h1>
+    <p class="mt-1 text-sm opacity-60">{m.auth_sign_in_continue()}</p>
+  </div>
+
   {#if error !== ""}
     <p
       role="alert"

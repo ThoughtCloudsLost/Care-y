@@ -119,7 +119,7 @@ describe("SetupAccount", () => {
     }
 
     expect(
-      screen.getByText("Password must be at least 12 characters."),
+      screen.getByText("Password must be at least 16 characters."),
     ).toBeTruthy();
     expect(oncomplete).not.toHaveBeenCalled();
   });

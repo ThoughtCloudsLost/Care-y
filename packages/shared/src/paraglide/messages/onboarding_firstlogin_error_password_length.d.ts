@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Password must be at least 12 characters." |
+* | "Password must be at least 16 characters." |
 *
 * @param {Onboarding_Firstlogin_Error_Password_LengthInputs} inputs
 * @param {{ locale?: "en" | "es" }} options
