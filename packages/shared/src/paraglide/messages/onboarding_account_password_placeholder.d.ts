@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "At least 12 characters" |
+* | "At least 16 characters" |
 *
 * @param {Onboarding_Account_Password_PlaceholderInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

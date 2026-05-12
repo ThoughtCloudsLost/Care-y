@@ -6,17 +6,17 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Onboarding_Firstlogin_Error_Password_LengthInputs */
 
 const en_onboarding_firstlogin_error_password_length = /** @type {(inputs: Onboarding_Firstlogin_Error_Password_LengthInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Password must be at least 12 characters.`)
+	return /** @type {LocalizedString} */ (`Password must be at least 16 characters.`)
 };
 
 const es_onboarding_firstlogin_error_password_length = /** @type {(inputs: Onboarding_Firstlogin_Error_Password_LengthInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`La contrasena debe tener al menos 12 caracteres.`)
+	return /** @type {LocalizedString} */ (`La contrasena debe tener al menos 16 caracteres.`)
 };
 
 /**
 * | output |
 * | --- |
-* | "Password must be at least 12 characters." |
+* | "Password must be at least 16 characters." |
 *
 * @param {Onboarding_Firstlogin_Error_Password_LengthInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

@@ -275,6 +275,7 @@ export function createOnboardingRouter(deps: OnboardingRouterDeps) {
                 encrypted_user_agent: encryptedUa,
                 ip_token: ipToken,
                 ua_token: uaToken,
+                twofa_verified: true,
                 expires_at: new Date(Date.now() + SESSION_MAX_AGE_MS),
               })
               .execute();
