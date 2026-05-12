@@ -5,7 +5,14 @@
   Follows the same encrypt-then-submit pattern as QueueEditor.
 -->
 <script lang="ts">
-  import { List, ListInput, Button, Block, Preloader } from "konsta/svelte";
+  import {
+    List,
+    ListInput,
+    Button,
+    Block,
+    BlockTitle,
+    Preloader,
+  } from "konsta/svelte";
   import { createMutation, useQueryClient } from "@tanstack/svelte-query";
   import * as m from "$lib/paraglide/messages.js";
   import { trpc } from "$lib/trpc/index.js";
@@ -16,6 +23,7 @@
   import { toastStore } from "$lib/stores/toast.svelte.js";
   import { announceToLiveRegion } from "$lib/utils/announce.js";
   import { RouterNotAvailableError } from "$lib/errors.js";
+  import { isOrgKeyReady } from "$lib/crypto/org-key-ready.svelte.js";
 
   interface Props {
     oncomplete: (data: { firstQueueCreated: boolean }) => void;
@@ -67,7 +75,7 @@
     },
   }));
 
-  const orgKeyLoaded = $derived(orgKeyManager.isLoaded);
+  const orgKeyLoaded = $derived(isOrgKeyReady());
   const canSubmit = $derived(
     orgKeyLoaded && nameValid && daysValid && !createMut.isPending,
   );
@@ -96,15 +104,15 @@
   }
 </script>
 
+<BlockTitle medium>{m.onboarding_queue_heading()}</BlockTitle>
 <Block>
-  <h2 class="step-heading">{m.onboarding_queue_heading()}</h2>
-  <p class="step-subtext">{m.onboarding_queue_subtext()}</p>
+  <p class="step-desc">{m.onboarding_queue_subtext()}</p>
 </Block>
 
 <form onsubmit={handleSubmit}>
   {#if error}
     <Block>
-      <p class="error-text" role="alert">{error}</p>
+      <p class="step-error" role="alert">{error}</p>
     </Block>
   {/if}
 
@@ -146,23 +154,3 @@
     </Button>
   </Block>
 </form>
-
-<style>
-  .step-heading {
-    font-size: 1.25rem;
-    font-weight: 700;
-    color: var(--ink, #1f2937);
-    margin: 0 0 0.25rem;
-  }
-
-  .step-subtext {
-    font-size: 0.875rem;
-    color: var(--muted, #6b7280);
-    margin: 0;
-  }
-
-  .error-text {
-    font-size: 0.875rem;
-    color: var(--error, #dc2626);
-  }
-</style>

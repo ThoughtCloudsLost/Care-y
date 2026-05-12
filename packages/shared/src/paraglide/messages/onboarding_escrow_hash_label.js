@@ -6,17 +6,17 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Onboarding_Escrow_Hash_LabelInputs */
 
 const en_onboarding_escrow_hash_label = /** @type {(inputs: Onboarding_Escrow_Hash_LabelInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`File hash (for verification):`)
+	return /** @type {LocalizedString} */ (`Verification code`)
 };
 
 const es_onboarding_escrow_hash_label = /** @type {(inputs: Onboarding_Escrow_Hash_LabelInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Hash del archivo (para verificacion):`)
+	return /** @type {LocalizedString} */ (`Codigo de verificacion`)
 };
 
 /**
 * | output |
 * | --- |
-* | "File hash (for verification):" |
+* | "Verification code" |
 *
 * @param {Onboarding_Escrow_Hash_LabelInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

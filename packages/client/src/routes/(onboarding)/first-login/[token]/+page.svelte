@@ -12,7 +12,14 @@
   import { resolve } from "$app/paths";
   import { page } from "$app/state";
   import { createQuery } from "@tanstack/svelte-query";
-  import { Preloader, List, ListInput, Button, Block } from "konsta/svelte";
+  import {
+    Preloader,
+    List,
+    ListInput,
+    Button,
+    Block,
+    BlockTitle,
+  } from "konsta/svelte";
   import * as m from "$lib/paraglide/messages.js";
   import { trpc } from "$lib/trpc/index.js";
   import { onboardingKeys } from "$lib/query/keys.js";
@@ -147,44 +154,46 @@
 </script>
 
 {#if inviteQuery.isLoading}
-  <div class="loading-container">
-    <Preloader />
-  </div>
+  <Block>
+    <div class="loading-container">
+      <Preloader />
+    </div>
+  </Block>
 {:else if inviteQuery.data?.valid !== true}
   <Block>
     <div class="error-container" role="alert">
-      <p class="error-heading">
+      <p class="step-error">
         {m.onboarding_firstlogin_error_invalid_token()}
       </p>
     </div>
   </Block>
 {:else if registrationComplete}
+  <BlockTitle medium>
+    {m.onboarding_firstlogin_success_heading()}
+  </BlockTitle>
   <Block>
     <div class="success-container">
-      <h2 class="success-heading">
-        {m.onboarding_firstlogin_success_heading()}
-      </h2>
-      <p class="success-subtext">
+      <p class="step-desc">
         {m.onboarding_firstlogin_success_subtext()}
       </p>
     </div>
   </Block>
-  <div class="mt-4 px-4">
+  <Block>
     <Button large onclick={handleSignIn}>
       {m.onboarding_firstlogin_signin()}
     </Button>
-  </div>
+  </Block>
 {:else if isSubmitting}
   <KeyDerivation {phase} {phaseLabel} />
 {:else}
+  <BlockTitle medium>{m.onboarding_firstlogin_heading()}</BlockTitle>
   <Block>
-    <h2 class="step-heading">{m.onboarding_firstlogin_heading()}</h2>
-    <p class="step-subtext">{m.onboarding_firstlogin_subtext()}</p>
+    <p class="step-desc">{m.onboarding_firstlogin_subtext()}</p>
   </Block>
 
   {#if error !== ""}
-    <Block role="alert" class="error-block">
-      <p class="error-text">{error}</p>
+    <Block role="alert">
+      <p class="step-error">{error}</p>
     </Block>
   {/if}
 
@@ -226,7 +235,7 @@
       />
     </List>
 
-    <div class="mt-4 px-4">
+    <Block>
       <Button
         large
         type="submit"
@@ -234,7 +243,7 @@
       >
         {m.onboarding_firstlogin_submit()}
       </Button>
-    </div>
+    </Block>
   </form>
 {/if}
 
@@ -248,49 +257,11 @@
 
   .error-container {
     text-align: center;
-    padding: 2rem 0;
-  }
-
-  .error-heading {
-    font-size: 1rem;
-    color: var(--error, #dc2626);
-    margin: 0;
+    padding: var(--space-2xl) 0;
   }
 
   .success-container {
     text-align: center;
-    padding: 2rem 0;
-  }
-
-  .success-heading {
-    font-size: 1.25rem;
-    font-weight: 700;
-    color: var(--ink, #1f2937);
-    margin: 0 0 0.25rem;
-  }
-
-  .success-subtext {
-    font-size: 0.875rem;
-    color: var(--muted, #6b7280);
-    margin: 0;
-  }
-
-  .step-heading {
-    font-size: 1.25rem;
-    font-weight: 700;
-    color: var(--ink, #1f2937);
-    margin: 0 0 0.25rem;
-  }
-
-  .step-subtext {
-    font-size: 0.875rem;
-    color: var(--muted, #6b7280);
-    margin: 0;
-  }
-
-  .error-text {
-    font-size: 0.875rem;
-    color: var(--error, #dc2626);
-    margin: 0;
+    padding: var(--space-2xl) 0;
   }
 </style>

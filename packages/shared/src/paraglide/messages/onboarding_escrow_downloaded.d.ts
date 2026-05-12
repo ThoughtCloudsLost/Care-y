@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Escrow file downloaded. Store it safely." |
+* | "Backup file downloaded. Store it safely." |
 *
 * @param {Onboarding_Escrow_DownloadedInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

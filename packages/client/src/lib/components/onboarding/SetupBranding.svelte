@@ -9,7 +9,15 @@
     - Each saved via branding.saveBrandingField
 -->
 <script lang="ts">
-  import { List, ListInput, Button, Block, Preloader } from "konsta/svelte";
+  import {
+    List,
+    ListInput,
+    Button,
+    Block,
+    BlockTitle,
+    Preloader,
+  } from "konsta/svelte";
+  import { ImagePlus } from "@lucide/svelte";
   import { createMutation, useQueryClient } from "@tanstack/svelte-query";
   import { encryptClientBranding } from "@care-y/crypto";
   import type { BrandingField } from "@care-y/shared";
@@ -24,6 +32,7 @@
   import { toastStore } from "$lib/stores/toast.svelte.js";
   import { announceToLiveRegion } from "$lib/utils/announce.js";
   import { RouterNotAvailableError } from "$lib/errors.js";
+  import { isOrgKeyReady } from "$lib/crypto/org-key-ready.svelte.js";
 
   interface Props {
     orgName: string;
@@ -52,7 +61,7 @@
   let logoPreviewUrl: string | null = $state(null);
   let logoError = $state("");
 
-  const orgKeyLoaded = $derived(orgKeyManager.isLoaded);
+  const orgKeyLoaded = $derived(isOrgKeyReady());
   const hasAnyContent = $derived(
     orgName.trim().length > 0 ||
       primaryColor !== DEFAULT_PRIMARY ||
@@ -290,17 +299,24 @@
   }
 </script>
 
+<BlockTitle medium>{m.onboarding_branding_heading()}</BlockTitle>
 <Block>
-  <h2 class="step-heading">{m.onboarding_branding_heading()}</h2>
-  <p class="step-subtext">{m.onboarding_branding_subtext()}</p>
+  <p class="step-desc">{m.onboarding_branding_subtext()}</p>
 </Block>
 
 <form onsubmit={handleSubmit}>
-  <List strong inset>
-    <!-- Logo upload -->
-    <li class="logo-field">
-      <div class="logo-label">{m.onboarding_branding_logo_label()}</div>
-      <div class="logo-row">
+  <Block>
+    <div class="branding-form">
+      <!-- Logo -->
+      <div class="form-section-label">{m.onboarding_branding_logo_label()}</div>
+      <label class="logo-row file-label">
+        <input
+          type="file"
+          accept="image/png,image/jpeg,image/svg+xml"
+          class="file-input"
+          onchange={(e) => void handleLogoSelect(e)}
+          disabled={saveMut.isPending}
+        />
         {#if logoPreviewUrl}
           <img
             src={logoPreviewUrl}
@@ -308,58 +324,76 @@
             class="logo-preview"
           />
         {:else}
-          <div class="logo-empty" aria-hidden="true">
-            <span class="logo-placeholder-text"
-              >{m.onboarding_branding_logo_label()}</span
-            >
+          <div class="logo-empty">
+            <ImagePlus size={32} aria-hidden="true" />
           </div>
         {/if}
         <div class="logo-meta">
-          <label class="file-label">
-            <input
-              type="file"
-              accept="image/png,image/jpeg,image/svg+xml"
-              class="file-input"
-              onchange={(e) => void handleLogoSelect(e)}
-              disabled={saveMut.isPending}
-            />
-            <span class="file-btn touch-feedback">
-              {m.onboarding_branding_logo_choose()}
-            </span>
-          </label>
+          <span class="file-btn touch-feedback">
+            {m.onboarding_branding_logo_choose()}
+          </span>
           <span class="field-hint">{m.onboarding_branding_logo_hint()}</span>
           {#if logoError}
             <span class="field-error" role="alert">{logoError}</span>
           {/if}
         </div>
+      </label>
+
+      <div class="form-divider"></div>
+
+      <!-- Colors -->
+      <div class="color-edit-row">
+        <div class="color-picker-group">
+          <div class="form-section-label">
+            {m.onboarding_branding_primary_label()}
+          </div>
+          <div class="color-picker-row">
+            <input
+              type="color"
+              value={primaryColor}
+              oninput={(e: Event) => {
+                if (e.target instanceof HTMLInputElement)
+                  primaryColor = e.target.value;
+              }}
+              class="color-input"
+              disabled={saveMut.isPending}
+              aria-label={m.onboarding_branding_primary_label()}
+            />
+            <span class="color-hex">{primaryColor}</span>
+          </div>
+        </div>
+
+        <div class="color-picker-group">
+          <div class="form-section-label">
+            {m.onboarding_branding_accent_label()}
+          </div>
+          <div class="color-picker-row">
+            <input
+              type="color"
+              value={accentColor}
+              oninput={(e: Event) => {
+                if (e.target instanceof HTMLInputElement)
+                  accentColor = e.target.value;
+              }}
+              class="color-input"
+              disabled={saveMut.isPending}
+              aria-label={m.onboarding_branding_accent_label()}
+            />
+            <span class="color-hex">{accentColor}</span>
+          </div>
+        </div>
       </div>
-    </li>
 
-    <!-- Primary Color -->
-    <ListInput
-      outline
-      label={m.onboarding_branding_primary_label()}
-      type="color"
-      value={primaryColor}
-      onInput={(e: Event) => {
-        if (e.target instanceof HTMLInputElement) primaryColor = e.target.value;
-      }}
-      disabled={saveMut.isPending}
-    />
+      <div class="form-divider"></div>
 
-    <!-- Accent Color -->
-    <ListInput
-      outline
-      label={m.onboarding_branding_accent_label()}
-      type="color"
-      value={accentColor}
-      onInput={(e: Event) => {
-        if (e.target instanceof HTMLInputElement) accentColor = e.target.value;
-      }}
-      disabled={saveMut.isPending}
-    />
+      <!-- Client text -->
+      <div class="form-section-label">
+        {m.onboarding_branding_text_label()}
+      </div>
+    </div>
+  </Block>
 
-    <!-- Client-Facing Text -->
+  <List strong inset>
     <ListInput
       outline
       label={m.onboarding_branding_text_label()}
@@ -375,7 +409,7 @@
     />
   </List>
 
-  <Block class="button-group">
+  <Block>
     <Button
       large
       type="submit"
@@ -387,13 +421,14 @@
         {m.onboarding_branding_submit()}
       {/if}
     </Button>
+  </Block>
+  <Block>
     <Button
       large
       outline
       type="button"
       onclick={onskip}
       disabled={saveMut.isPending}
-      class="mt-3"
     >
       {m.onboarding_branding_skip()}
     </Button>
@@ -401,66 +436,59 @@
 </form>
 
 <style>
-  .step-heading {
-    font-size: 1.25rem;
-    font-weight: 700;
-    color: var(--ink, #1f2937);
-    margin: 0 0 0.25rem;
+  .branding-form {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-md);
   }
 
-  .step-subtext {
-    font-size: 0.875rem;
-    color: var(--muted, #6b7280);
-    margin: 0;
+  .form-section-label {
+    font-size: var(--text-xs);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--muted);
   }
 
-  .logo-field {
-    padding: 0.75rem 1rem;
-  }
-
-  .logo-label {
-    font-size: 0.75rem;
-    font-weight: 500;
-    color: var(--muted, #6b7280);
-    margin-bottom: 0.5rem;
+  .form-divider {
+    border-top: 1px solid color-mix(in srgb, var(--ink) 8%, transparent);
+    margin: var(--space-xs) 0;
   }
 
   .logo-row {
     display: flex;
-    align-items: center;
-    gap: 1rem;
+    align-items: flex-start;
+    gap: var(--space-xl);
+    cursor: pointer;
   }
 
   .logo-preview {
-    width: 64px;
-    height: 64px;
-    border-radius: 0.5rem;
-    object-fit: cover;
-    border: 1px solid var(--muted, #6b7280);
+    width: 80px;
+    height: 80px;
+    border-radius: var(--card-radius);
+    object-fit: contain;
+    background: color-mix(in srgb, var(--ink) 5%, transparent);
+    flex-shrink: 0;
   }
 
   .logo-empty {
-    width: 64px;
-    height: 64px;
-    border-radius: 0.5rem;
-    border: 2px dashed var(--muted, #6b7280);
+    width: 80px;
+    height: 80px;
+    border-radius: var(--card-radius);
+    background: color-mix(in srgb, var(--ink) 5%, transparent);
     display: flex;
     align-items: center;
     justify-content: center;
     flex-shrink: 0;
-  }
-
-  .logo-placeholder-text {
-    font-size: 0.625rem;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    color: var(--muted, #6b7280);
+    color: var(--muted);
   }
 
   .logo-meta {
     display: flex;
     flex-direction: column;
-    gap: 0.25rem;
+    gap: var(--space-xs);
+    flex: 1;
+    min-width: 0;
   }
 
   .file-label {
@@ -468,26 +496,72 @@
   }
 
   .file-input {
-    display: none;
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
   }
 
   .file-btn {
-    display: inline-block;
-    padding: 0.375rem 0.75rem;
-    border-radius: 0.375rem;
-    font-size: 0.8125rem;
+    display: inline-flex;
+    align-items: center;
+    padding: var(--space-lg) var(--space-xl);
+    border-radius: var(--card-radius);
+    background: color-mix(in srgb, var(--ink) 8%, transparent);
+    color: var(--ink);
+    font-size: var(--text-sm);
     font-weight: 500;
-    color: var(--brand-primary, #636366);
-    background: var(--surface-1, #f3f4f6);
+    min-height: 44px;
+  }
+
+  .file-btn:active {
+    background: color-mix(in srgb, var(--ink) 15%, transparent);
   }
 
   .field-hint {
-    font-size: 0.75rem;
-    color: var(--muted, #6b7280);
+    font-size: var(--text-xs);
+    color: var(--muted);
+    line-height: 1.4;
   }
 
   .field-error {
-    font-size: 0.75rem;
-    color: var(--error, #dc2626);
+    font-size: var(--text-xs);
+    color: var(--error);
+    font-weight: 500;
+  }
+
+  .color-edit-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: var(--space-md);
+  }
+
+  .color-picker-group {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-xs);
+  }
+
+  .color-picker-row {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+  }
+
+  .color-input {
+    width: 44px;
+    height: 44px;
+    border: 1px solid color-mix(in srgb, var(--ink) 15%, transparent);
+    border-radius: var(--card-radius);
+    cursor: pointer;
+    padding: 2px;
+    background: transparent;
+  }
+
+  .color-hex {
+    font-family: ui-monospace, monospace;
+    font-size: var(--text-sm);
+    color: var(--ink);
   }
 </style>

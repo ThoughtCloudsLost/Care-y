@@ -6,17 +6,17 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{ hash: NonNullable<unknown> }} Onboarding_Escrow_Hash_ValueInputs */
 
 const en_onboarding_escrow_hash_value = /** @type {(inputs: Onboarding_Escrow_Hash_ValueInputs) => LocalizedString} */ (i) => {
-	return /** @type {LocalizedString} */ (`sha256:${i?.hash}`)
+	return /** @type {LocalizedString} */ (`${i?.hash}`)
 };
 
 const es_onboarding_escrow_hash_value = /** @type {(inputs: Onboarding_Escrow_Hash_ValueInputs) => LocalizedString} */ (i) => {
-	return /** @type {LocalizedString} */ (`sha256:${i?.hash}`)
+	return /** @type {LocalizedString} */ (`${i?.hash}`)
 };
 
 /**
 * | output |
 * | --- |
-* | "sha256:{hash}" |
+* | "{hash}" |
 *
 * @param {Onboarding_Escrow_Hash_ValueInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

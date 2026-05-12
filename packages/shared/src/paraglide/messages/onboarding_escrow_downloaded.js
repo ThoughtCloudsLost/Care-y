@@ -6,7 +6,7 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Onboarding_Escrow_DownloadedInputs */
 
 const en_onboarding_escrow_downloaded = /** @type {(inputs: Onboarding_Escrow_DownloadedInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Escrow file downloaded. Store it safely.`)
+	return /** @type {LocalizedString} */ (`Backup file downloaded. Store it safely.`)
 };
 
 const es_onboarding_escrow_downloaded = /** @type {(inputs: Onboarding_Escrow_DownloadedInputs) => LocalizedString} */ () => {
@@ -16,7 +16,7 @@ const es_onboarding_escrow_downloaded = /** @type {(inputs: Onboarding_Escrow_Do
 /**
 * | output |
 * | --- |
-* | "Escrow file downloaded. Store it safely." |
+* | "Backup file downloaded. Store it safely." |
 *
 * @param {Onboarding_Escrow_DownloadedInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

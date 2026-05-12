@@ -12,7 +12,7 @@
   registerCrypto zeros all intermediates in its finally block.
 -->
 <script lang="ts">
-  import { List, ListInput, Button, Block } from "konsta/svelte";
+  import { List, ListInput, Button, Block, BlockTitle } from "konsta/svelte";
   import {
     generateOrgKeypair,
     wrapKey,
@@ -28,6 +28,7 @@
   import { installCleanupHandler } from "$lib/auth/cleanup.js";
   import { registerCrypto } from "$lib/auth/register-crypto.js";
   import { loginCrypto } from "$lib/auth/login-crypto.js";
+  import { fetchAndUnwrapOrgKey } from "$lib/auth/crypto-helpers.js";
   import { solveProofOfWork } from "$lib/auth/pow-solver.js";
   import { announceToLiveRegion } from "$lib/utils/announce.js";
   import { haptic } from "$lib/utils/haptic.js";
@@ -198,11 +199,12 @@
         wrappedKey: encode(wrapped.ciphertext),
       });
 
-      // 7. Load org key into OrgKeyManager and signal readiness.
-      if (loginResult.orgPublicKey !== null) {
-        orgKeyManager.load(loginResult.orgPublicKey);
-        setOrgKeyReady(true);
-      }
+      // 7. Now that the wrapped key exists on the server, tell the Worker
+      //    to fetch and unwrap it. loginCrypto (step 4) couldn't do this
+      //    because the upload hadn't happened yet.
+      const unwrappedOrgPub = await fetchAndUnwrapOrgKey(bridge);
+      orgKeyManager.load(unwrappedOrgPub ?? orgPublicKeyB64);
+      setOrgKeyReady(true);
 
       // 8. Install cleanup handler for key zeroing on unload.
       installCleanupHandler(bridge, orgKeyManager);
@@ -233,14 +235,14 @@
   <KeyDerivation {phase} {phaseLabel} />
   <p class="helper-text">{m.onboarding_account_deriving()}</p>
 {:else}
+  <BlockTitle medium>{m.onboarding_account_heading()}</BlockTitle>
   <Block>
-    <h2 class="step-heading">{m.onboarding_account_heading()}</h2>
-    <p class="step-subtext">{m.onboarding_account_subtext()}</p>
+    <p class="step-desc">{m.onboarding_account_subtext()}</p>
   </Block>
 
   {#if error !== ""}
-    <Block role="alert" class="error-block">
-      <p class="error-text">{error}</p>
+    <Block role="alert">
+      <p class="step-error">{error}</p>
     </Block>
   {/if}
 
@@ -283,7 +285,7 @@
       />
     </List>
 
-    <div class="mt-4 px-4">
+    <Block>
       <Button
         large
         type="submit"
@@ -295,34 +297,15 @@
       >
         {m.onboarding_account_submit()}
       </Button>
-    </div>
+    </Block>
   </form>
 {/if}
 
 <style>
-  .step-heading {
-    font-size: 1.25rem;
-    font-weight: 700;
-    color: var(--ink, #1f2937);
-    margin: 0 0 0.25rem;
-  }
-
-  .step-subtext {
-    font-size: 0.875rem;
-    color: var(--muted, #6b7280);
-    margin: 0;
-  }
-
-  .error-text {
-    font-size: 0.875rem;
-    color: var(--error, #dc2626);
-    margin: 0;
-  }
-
   .helper-text {
     text-align: center;
-    font-size: 0.75rem;
-    color: var(--muted, #6b7280);
-    margin-top: 0.5rem;
+    font-size: var(--text-sm);
+    color: var(--muted);
+    margin-top: var(--space-lg);
   }
 </style>

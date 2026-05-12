@@ -57,25 +57,25 @@
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    padding: 2rem 1rem;
+    padding: var(--space-2xl) var(--page-pad-x);
   }
 
   .key-derivation-content {
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 1rem;
+    gap: var(--space-lg);
   }
 
   .key-derivation-label {
-    font-size: 0.875rem;
-    color: var(--muted, #6b7280);
+    font-size: var(--text-base);
+    color: var(--muted);
     text-align: center;
   }
 
   .key-derivation-error {
-    font-size: 0.875rem;
-    color: var(--error, #dc2626);
+    font-size: var(--text-base);
+    color: var(--error);
     text-align: center;
   }
 

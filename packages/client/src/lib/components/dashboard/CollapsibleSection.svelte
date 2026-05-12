@@ -33,6 +33,8 @@
     expanded: boolean;
     /** Callback when the header is toggled */
     ontoggle: () => void;
+    /** Extra content rendered in the header row (e.g., dismiss button) */
+    headerExtra?: Snippet;
     /** Content to render when expanded */
     children?: Snippet;
   }
@@ -45,6 +47,7 @@
     iconColor = "currentColor",
     expanded,
     ontoggle,
+    headerExtra,
     children,
   }: CollapsibleSectionProps = $props();
 </script>
@@ -79,6 +82,9 @@
         <span class="toggle-chevron" class:expanded aria-hidden="true">
           &#x276F;
         </span>
+        {#if headerExtra}
+          {@render headerExtra()}
+        {/if}
       </span>
     </BlockTitle>
   </button>

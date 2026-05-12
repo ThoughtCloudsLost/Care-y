@@ -130,6 +130,11 @@ export interface OrgConfigTable {
   setup_telephony_config: Buffer | null; // encrypted JSON blob (nonce || ciphertext), set during wizard
   default_note_type_id: string | null;
   intake_queue_id: string | null;
+  getting_started_dismissed_at: ColumnType<
+    Date | null,
+    Date | null | undefined,
+    Date | null
+  >;
 }
 
 // --- User keys (full interface, replaces UserKeysStubTable) ---

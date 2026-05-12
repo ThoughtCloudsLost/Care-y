@@ -6,7 +6,14 @@
   multiple invites or skip to finish setup.
 -->
 <script lang="ts">
-  import { List, ListInput, Button, Block, Preloader } from "konsta/svelte";
+  import {
+    List,
+    ListInput,
+    Button,
+    Block,
+    BlockTitle,
+    Preloader,
+  } from "konsta/svelte";
   import { createMutation } from "@tanstack/svelte-query";
   import * as m from "$lib/paraglide/messages.js";
   import { trpc } from "$lib/trpc/index.js";
@@ -95,14 +102,14 @@
   }
 </script>
 
+<BlockTitle medium>{m.onboarding_invite_heading()}</BlockTitle>
 <Block>
-  <h2 class="step-heading">{m.onboarding_invite_heading()}</h2>
-  <p class="step-subtext">{m.onboarding_invite_subtext()}</p>
+  <p class="step-desc">{m.onboarding_invite_subtext()}</p>
 </Block>
 
 {#if error}
   <Block>
-    <p class="error-text" role="alert">{error}</p>
+    <p class="step-error" role="alert">{error}</p>
   </Block>
 {/if}
 
@@ -149,7 +156,7 @@
   <Block>
     {#each generatedInvites as invite, i (invite.url)}
       <div
-        class="invite-card"
+        class="card-elevated invite-card"
         role="group"
         aria-label={m.onboarding_invite_card_label({ index: String(i + 1) })}
       >
@@ -209,66 +216,46 @@
 {/if}
 
 <style>
-  .step-heading {
-    font-size: 1.25rem;
-    font-weight: 700;
-    color: var(--ink, #1f2937);
-    margin: 0 0 0.25rem;
-  }
-
-  .step-subtext {
-    font-size: 0.875rem;
-    color: var(--muted, #6b7280);
-    margin: 0;
-  }
-
-  .error-text {
-    font-size: 0.875rem;
-    color: var(--error, #dc2626);
-  }
-
   .invite-card {
-    border: 1px solid var(--hairline, #e5e7eb);
-    border-radius: 0.5rem;
-    padding: 0.75rem 1rem;
-    margin-bottom: 0.75rem;
+    padding: var(--card-pad-y) var(--card-pad-x);
+    margin-bottom: var(--space-lg);
   }
 
   .invite-label {
-    font-size: 0.75rem;
-    color: var(--muted, #6b7280);
-    margin: 0 0 0.25rem;
+    font-size: var(--text-sm);
+    color: var(--muted);
+    margin: 0 0 var(--space-sm);
   }
 
   .invite-url {
     font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
-    font-size: 0.6875rem;
-    color: var(--ink, #1f2937);
+    font-size: var(--text-xs);
+    color: var(--ink);
     word-break: break-all;
     user-select: all;
     display: block;
-    margin-bottom: 0.25rem;
+    margin-bottom: var(--space-sm);
   }
 
   .invite-expires {
-    font-size: 0.75rem;
-    color: var(--muted, #6b7280);
-    margin: 0 0 0.5rem;
+    font-size: var(--text-sm);
+    color: var(--muted);
+    margin: 0 0 var(--space-lg);
   }
 
   .finish-buttons {
     display: flex;
     flex-direction: column;
-    gap: 0.75rem;
+    gap: var(--space-xl);
   }
 
   .skip-link {
     background: none;
     border: none;
-    color: var(--brand-primary, #3b82f6);
-    font-size: 0.875rem;
+    color: var(--brand-primary);
+    font-size: var(--text-base);
     cursor: pointer;
-    padding: 0.5rem 0;
+    padding: var(--space-lg) 0;
     text-align: center;
     width: 100%;
   }

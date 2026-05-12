@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "sha256:{hash}" |
+* | "{hash}" |
 *
 * @param {Onboarding_Escrow_Hash_ValueInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

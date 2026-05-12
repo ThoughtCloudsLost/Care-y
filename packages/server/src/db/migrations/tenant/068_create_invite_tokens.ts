@@ -11,7 +11,7 @@ export async function up(db: Kysely<unknown>): Promise<void> {
       col.notNull().references("users.id").onDelete("restrict"),
     )
     .addColumn("encrypted_email", "bytea")
-    .addColumn("role_id", "uuid", (col) => col.notNull())
+    .addColumn("role_id", "text", (col) => col.notNull())
     .addColumn("expires_at", "timestamptz", (col) => col.notNull())
     .addColumn("consumed_at", "timestamptz")
     .addColumn("created_at", "timestamptz", (col) =>

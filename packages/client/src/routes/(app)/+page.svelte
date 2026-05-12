@@ -22,10 +22,12 @@
     Activity,
     BookOpen,
     Layers,
+    Rocket,
   } from "@lucide/svelte";
   import TicketPreviewList from "$lib/components/dashboard/TicketPreviewList.svelte";
   import CollapsibleSection from "$lib/components/dashboard/CollapsibleSection.svelte";
   import ShiftSection from "$lib/components/dashboard/ShiftSection.svelte";
+  import GettingStartedCard from "$lib/components/dashboard/GettingStartedCard.svelte";
   import QueueCards from "$lib/components/dashboard/QueueCards.svelte";
   import ActivitySection from "$lib/components/dashboard/ActivitySection.svelte";
   import KBSection from "$lib/components/dashboard/KBSection.svelte";
@@ -196,6 +198,21 @@
   const unassigned = $derived(buckets.unassigned);
   const onHold = $derived(buckets.onHold);
 
+  // --- Getting Started checklist (admin-only, TanStack deduplicates with GettingStartedCard) ---
+
+  const checklistQuery = createQuery(() => ({
+    queryKey: ["dashboard", "setupChecklist"],
+    queryFn: async () => trpc.dashboard.getSetupChecklist.query(),
+    staleTime: 60_000,
+    enabled: permissions.has(Permission.MANAGE_ROLES),
+  }));
+
+  const showGettingStarted = $derived(
+    checklistQuery.isSuccess &&
+      !checklistQuery.data.dismissed &&
+      checklistQuery.data.items.length > 0,
+  );
+
   // --- Section scroll nav ---
 
   const showOnHold = $derived(
@@ -203,12 +220,20 @@
   );
 
   const dashboardSections = $derived.by((): readonly ScrollSection[] => {
-    const sections: ScrollSection[] = [
+    const sections: ScrollSection[] = [];
+    if (showGettingStarted) {
+      sections.push({
+        id: "getting-started",
+        label: m.getting_started_heading,
+        icon: Rocket,
+      });
+    }
+    sections.push(
       { id: "shift", label: m.dashboard_shift_heading, icon: CalendarDays },
       { id: "activity", label: m.dashboard_activity_heading, icon: Activity },
       { id: "kb", label: m.dashboard_kb_heading, icon: BookOpen },
       { id: "queues", label: m.dashboard_queues_heading, icon: Layers },
-    ];
+    );
     if (ticketsQuery.isLoading || needsAttention.length > 0) {
       sections.push({
         id: "needs-attention",
@@ -370,6 +395,15 @@
     subtitle={m.dashboard_exposure_subtitle()}
     onClose={dismissExposureNotification}
   />
+
+  {#if showGettingStarted}
+    <div id="section-getting-started" class="scroll-target">
+      <GettingStartedCard
+        expanded={!collapsedSections.has("getting-started")}
+        ontoggle={() => toggleSection("getting-started")}
+      />
+    </div>
+  {/if}
 
   <div id="section-shift" class="scroll-target">
     <ShiftSection
