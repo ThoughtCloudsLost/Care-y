@@ -6,9 +6,10 @@
   Each step component calls oncomplete() to advance.
 -->
 <script lang="ts">
-  import { onMount } from "svelte";
+  import { onMount, getContext } from "svelte";
   import { goto } from "$app/navigation";
   import { resolve } from "$app/paths";
+  import type { TerminologyLabels } from "@care-y/shared";
   import { createQuery } from "@tanstack/svelte-query";
   import {
     Preloader,
@@ -16,6 +17,7 @@
     BlockTitle,
     Button,
     List,
+    ListInput,
     ListItem,
   } from "konsta/svelte";
   import { CircleCheck, Circle } from "@lucide/svelte";
@@ -24,7 +26,19 @@
   import { trpc } from "$lib/trpc/index.js";
   import { onboardingKeys } from "$lib/query/keys.js";
   import { announceToLiveRegion } from "$lib/utils/announce.js";
+  import {
+    isOrgKeyReady,
+    setOrgKeyReady,
+  } from "$lib/crypto/org-key-ready.svelte.js";
+  import { getCryptoBridge, getOrgKeyManager } from "$lib/crypto/context.js";
+  import { loginCrypto } from "$lib/auth/login-crypto.js";
+  import { solveProofOfWork } from "$lib/auth/pow-solver.js";
+  import { fetchAndUnwrapOrgKey } from "$lib/auth/crypto-helpers.js";
+  import { installCleanupHandler } from "$lib/auth/cleanup.js";
+  import { haptic } from "$lib/utils/haptic.js";
+  import { toastStore } from "$lib/stores/toast.svelte.js";
   import { RouterNotAvailableError } from "$lib/errors.js";
+  import type { LoginCryptoCallbacks } from "$lib/auth/login-crypto.js";
   import WizardStepper from "$lib/components/onboarding/WizardStepper.svelte";
   import SetupAccount from "$lib/components/onboarding/SetupAccount.svelte";
   import SecurityBriefing from "$lib/components/onboarding/SecurityBriefing.svelte";
@@ -111,9 +125,90 @@
   let completedSteps = $state(new Set<number>());
   let wizardData = $state<Partial<WizardData>>({});
 
-  const onboarding = trpc.onboarding;
-  if (!onboarding) {
+  const updateTerminology = getContext<(labels: TerminologyLabels) => void>(
+    "onboarding-update-terminology",
+  );
+
+  if (!trpc.onboarding) {
     throw new RouterNotAvailableError("onboarding");
+  }
+  const onboarding: NonNullable<typeof trpc.onboarding> = trpc.onboarding;
+
+  // ── Re-auth for page refresh recovery ──
+
+  const bridge = getCryptoBridge();
+  const orgKeyManager = getOrgKeyManager();
+
+  let needsReauth = $state(false);
+  let reauthUsername = $state("");
+  let reauthPassword = $state("");
+  let reauthError = $state("");
+  let reauthSubmitting = $state(false);
+
+  async function handleReauth(e: SubmitEvent): Promise<void> {
+    e.preventDefault();
+    reauthError = "";
+    reauthSubmitting = true;
+
+    try {
+      await bridge.zeroAll();
+
+      await onboarding.reauthenticate.mutate({
+        identifier: reauthUsername,
+        password: reauthPassword,
+      });
+
+      const noop = (): void => {
+        /* protocol-required callback, no action needed */
+      };
+      const callbacks: LoginCryptoCallbacks = {
+        onArgon2idStart: noop,
+        onArgon2idDone: noop,
+        onOprfStart: noop,
+        onOprfDone: noop,
+        onDeriveStart: noop,
+        onDone: noop,
+        onPowRequired: async (challenge, difficulty) =>
+          solveProofOfWork(challenge, difficulty),
+      };
+
+      const result = await loginCrypto(
+        reauthUsername,
+        reauthPassword,
+        bridge,
+        callbacks,
+      );
+
+      if (result.orgPublicKey !== null) {
+        orgKeyManager.load(result.orgPublicKey);
+        setOrgKeyReady(true);
+      } else {
+        const unwrapped = await fetchAndUnwrapOrgKey(bridge);
+        if (unwrapped !== null) {
+          orgKeyManager.load(unwrapped);
+          setOrgKeyReady(true);
+        }
+      }
+
+      installCleanupHandler(bridge, orgKeyManager);
+
+      haptic();
+      needsReauth = false;
+
+      const saved = loadSavedState();
+      if (saved !== null && saved.step > 0) {
+        step = saved.step;
+        completedSteps = new Set(saved.completed);
+      } else {
+        step = 2;
+        completedSteps = new Set([0, 1]);
+        saveState(2, completedSteps);
+      }
+    } catch {
+      reauthError = m.auth_invalid_credentials();
+    } finally {
+      reauthSubmitting = false;
+    }
   }
 
   const statusQuery = createQuery(() => ({
@@ -122,10 +217,21 @@
     retry: false,
   }));
 
+  let recoveryHandled = $state(false);
+
   $effect(() => {
     if (!statusQuery.data) return;
+    if (recoveryHandled) return;
 
     if (statusQuery.data.needsSetup) {
+      recoveryHandled = true;
+      return;
+    }
+
+    recoveryHandled = true;
+
+    if (!isOrgKeyReady()) {
+      needsReauth = true;
       return;
     }
 
@@ -134,7 +240,7 @@
       step = saved.step;
       completedSteps = new Set(saved.completed);
     } else {
-      void goto(resolve("/login"));
+      void goto(resolve("/"));
     }
   });
 
@@ -149,6 +255,9 @@
         const ws = (s as Record<string, unknown>).wizardStep;
         if (typeof ws === "number") {
           step = ws;
+          document
+            .querySelector(".onboarding-content")
+            ?.scrollTo({ top: 0, behavior: "instant" });
         }
       }
     }
@@ -171,8 +280,10 @@
     orgName: string;
     language: string;
     countryCode: string;
+    terminology: TerminologyLabels;
   }): void {
     wizardData = { ...wizardData, ...data };
+    updateTerminology(data.terminology);
     advanceStep();
   }
 
@@ -276,6 +387,9 @@
     step += 1;
     saveState(step, completedSteps);
     history.pushState({ wizardStep: step }, "");
+    document
+      .querySelector(".onboarding-content")
+      ?.scrollTo({ top: 0, behavior: "instant" });
     announceToLiveRegion(
       "polite",
       m.onboarding_stepper_progress({
@@ -297,6 +411,54 @@
   <Block>
     <p class="step-error" role="alert">{m.onboarding_setup_error()}</p>
   </Block>
+{:else if needsReauth}
+  <BlockTitle medium>{m.onboarding_account_heading()}</BlockTitle>
+  <Block>
+    <p class="step-desc">{m.onboarding_reauth_message()}</p>
+  </Block>
+
+  {#if reauthError}
+    <Block role="alert">
+      <p class="step-error">{reauthError}</p>
+    </Block>
+  {/if}
+
+  <form onsubmit={handleReauth}>
+    <List strong inset>
+      <ListInput
+        label={m.onboarding_account_username()}
+        type="text"
+        placeholder={m.onboarding_account_username_placeholder()}
+        bind:value={reauthUsername}
+        autocomplete="username"
+        autocapitalize="none"
+        disabled={reauthSubmitting}
+        required
+      />
+      <ListInput
+        label={m.onboarding_account_password()}
+        type="password"
+        placeholder={m.onboarding_account_password_placeholder()}
+        bind:value={reauthPassword}
+        autocomplete="current-password"
+        disabled={reauthSubmitting}
+        required
+      />
+    </List>
+    <Block>
+      <Button
+        large
+        type="submit"
+        disabled={!reauthUsername || !reauthPassword || reauthSubmitting}
+      >
+        {#if reauthSubmitting}
+          <Preloader class="w-5 h-5" />
+        {:else}
+          {m.onboarding_firstlogin_signin()}
+        {/if}
+      </Button>
+    </Block>
+  </form>
 {:else if isReady}
   <WizardStepper steps={STEP_LABELS} currentStep={step} {completedSteps} />
 

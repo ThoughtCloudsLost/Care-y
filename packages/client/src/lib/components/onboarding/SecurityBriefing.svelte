@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Block, BlockTitle, List, ListItem, Button } from "konsta/svelte";
+  import { Block, BlockTitle, Button } from "konsta/svelte";
   import { Info } from "@lucide/svelte";
   import { TERMINOLOGY_DEFAULTS_EN } from "@care-y/shared";
   import * as m from "$lib/paraglide/messages.js";
@@ -290,11 +290,23 @@
     {m.onboarding_briefing_practice_heading()}
   </BlockTitle>
 
-  <List strong inset>
-    {#each protectionRows as row (row.data)}
-      <ListItem title={row.data} subtitle={row.access} text={row.compromise} />
-    {/each}
-  </List>
+  {#each protectionRows as row (row.data)}
+    <div class="scenario-wrapper">
+      <details>
+        <summary class="scenario-summary touch-feedback">{row.data}</summary>
+        <div class="scenario-body">
+          <p class="choice-label">
+            {m.onboarding_briefing_practice_col_access()}
+          </p>
+          <p>{row.access}</p>
+          <p class="choice-label">
+            {m.onboarding_briefing_practice_col_compromise()}
+          </p>
+          <p>{row.compromise}</p>
+        </div>
+      </details>
+    </div>
+  {/each}
 
   <BlockTitle medium>
     {m.onboarding_briefing_scenarios_heading()}

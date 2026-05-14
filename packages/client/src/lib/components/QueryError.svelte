@@ -125,6 +125,7 @@
 
     // Onboarding
     [ErrorCode.ORG_ALREADY_SETUP]: () => m.error_org_already_setup(),
+    [ErrorCode.ORG_KEYPAIR_MISSING]: () => m.error_org_keypair_missing(),
     [ErrorCode.INVALID_INVITE_TOKEN]: () => m.error_invalid_invite_token(),
     [ErrorCode.BOOTSTRAP_RATE_LIMITED]: () => m.error_bootstrap_rate_limited(),
 

@@ -1,6 +1,12 @@
 <script lang="ts">
   import { Permission } from "@care-y/shared";
-  import { Key, Palette, Shredder, ClipboardPenLine } from "@lucide/svelte";
+  import {
+    Key,
+    Palette,
+    Shredder,
+    ClipboardPenLine,
+    Languages,
+  } from "@lucide/svelte";
   import * as m from "$lib/paraglide/messages.js";
   import CollapsibleSectionPage from "$lib/components/admin/CollapsibleSectionPage.svelte";
   import type { SectionDef } from "$lib/components/admin/collapsible-section-types.js";
@@ -8,6 +14,7 @@
   import BrandingSection from "$lib/components/admin/BrandingSection.svelte";
   import RetentionSection from "$lib/components/admin/RetentionSection.svelte";
   import NoteTypesSection from "$lib/components/admin/NoteTypesSection.svelte";
+  import TerminologySection from "$lib/components/admin/TerminologySection.svelte";
 
   const SECTIONS: readonly SectionDef[] = [
     {
@@ -16,6 +23,13 @@
       icon: Palette,
       permission: Permission.MANAGE_ORG_CONFIG,
       component: BrandingSection,
+    },
+    {
+      id: "terminology",
+      label: m.admin_tab_terminology,
+      icon: Languages,
+      permission: Permission.MANAGE_ORG_CONFIG,
+      component: TerminologySection,
     },
     {
       id: "keys",

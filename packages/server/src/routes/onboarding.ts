@@ -16,6 +16,7 @@ import { TRPCError } from "@trpc/server";
 import type { Kysely } from "kysely";
 import {
   bootstrapAdminInputSchema,
+  loginInputSchema,
   updateOrgBasicsInputSchema,
   validateInviteInputSchema,
   registerFromInviteInputSchema,
@@ -515,6 +516,79 @@ export function createOnboardingRouter(deps: OnboardingRouterDeps) {
           return { success: true as const, mode: input.mode };
         }),
       ),
+
+    /**
+     * Re-authenticate during the onboarding wizard (page refresh recovery).
+     *
+     * Validates credentials via the normal auth service, then creates a
+     * session with twofa_verified: true, matching the bootstrap session.
+     * This is safe because the endpoint only succeeds when the calling
+     * user has no 2FA methods enrolled (i.e. still mid-onboarding).
+     * Once the user enrolls 2FA, this endpoint rejects and they must
+     * use the normal login + 2FA verification flow.
+     */
+    reauthenticate: publicProcedure.input(loginInputSchema).mutation(
+      withErrorWrapping(async ({ ctx, input }) => {
+        const resolved = await resolveOrgForOnboarding(
+          ctx.req,
+          orgService,
+          tenantDbFactory,
+        );
+        if (!resolved) {
+          throw new TRPCError({
+            code: "NOT_FOUND",
+            message: "Organization not found",
+          });
+        }
+        if (!resolved.sealedBox) {
+          throw new TRPCError({
+            code: "PRECONDITION_FAILED",
+            message: ErrorCode.ORG_KEYPAIR_MISSING,
+          });
+        }
+
+        const orgCtx: OrgContext = {
+          orgId: resolved.orgId,
+          orgSlug: resolved.orgSlug,
+          orgSchema: resolved.orgSchema,
+          tenantDb: resolved.tenantDb,
+          sealedBox: resolved.sealedBox,
+        };
+
+        const sessions = createTenantSessions(orgCtx, tokenizer);
+        const authService = createScopedAuthService(orgCtx, sessions, deps);
+
+        const ip = extractClientIp(ctx.req);
+        const ua = ctx.req.headers["user-agent"] ?? "unknown";
+
+        const { user, session } = await authService.login({
+          identifier: input.identifier,
+          password: input.password,
+          ipAddress: ip,
+          userAgent: ua,
+        });
+
+        const enrolledCount = await resolved.tenantDb
+          .selectFrom("two_factor_methods")
+          .select(resolved.tenantDb.fn.countAll<string>().as("count"))
+          .where("user_id", "=", user.id)
+          .where("is_active", "=", true)
+          .executeTakeFirstOrThrow();
+
+        if (Number(enrolledCount.count) > 0) {
+          await sessions.deleteByToken(session.token);
+          throw new TRPCError({
+            code: "FORBIDDEN",
+            message: ErrorCode.TWOFA_REQUIRED,
+          });
+        }
+
+        await sessions.markTwoFactorVerified(session.token);
+        setSessionCookie(ctx.res, session.token, isSecureCookie);
+
+        return { userId: user.id };
+      }),
+    ),
 
     /**
      * Mark org setup as complete (called after wizard step 7).

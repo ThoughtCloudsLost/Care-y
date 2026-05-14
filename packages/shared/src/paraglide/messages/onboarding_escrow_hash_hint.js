@@ -6,17 +6,17 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Onboarding_Escrow_Hash_HintInputs */
 
 const en_onboarding_escrow_hash_hint = /** @type {(inputs: Onboarding_Escrow_Hash_HintInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Write this down and keep it separate from the backup file. To verify the file later, run "shasum -a 256 filename.json" on Mac/Linux or "certutil -hashfile filename.json SHA256" on Windows and check that the output matches this code.`)
+	return /** @type {LocalizedString} */ (`This code is unique to the file you just downloaded. Write it down and store it separately from the backup file. To check the file has not been corrupted or tampered with, run "shasum -a 256 filename.json" on Mac/Linux or "certutil -hashfile filename.json SHA256" on Windows and confirm the output matches. If you download again, a new file with a different code will be generated.`)
 };
 
 const es_onboarding_escrow_hash_hint = /** @type {(inputs: Onboarding_Escrow_Hash_HintInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Anotalo y guardalo por separado del archivo de respaldo. Para verificar el archivo despues, ejecuta "shasum -a 256 archivo.json" en Mac/Linux o "certutil -hashfile archivo.json SHA256" en Windows y comprueba que la salida coincida con este codigo.`)
+	return /** @type {LocalizedString} */ (`Este codigo es unico para el archivo que acaba de descargar. Anotelo y guardelo por separado del archivo de respaldo. Para comprobar que el archivo no ha sido corrompido o alterado, ejecute "shasum -a 256 archivo.json" en Mac/Linux o "certutil -hashfile archivo.json SHA256" en Windows y confirme que la salida coincida. Si descarga de nuevo, se generara un archivo nuevo con un codigo diferente.`)
 };
 
 /**
 * | output |
 * | --- |
-* | "Write this down and keep it separate from the backup file. To verify the file later, run \"shasum -a 256 filename.json\" on Mac/Linux or \"certutil -hashfile fi..." |
+* | "This code is unique to the file you just downloaded. Write it down and store it separately from the backup file. To check the file has not been corrupted or ..." |
 *
 * @param {Onboarding_Escrow_Hash_HintInputs} inputs
 * @param {{ locale?: "en" | "es" }} options
