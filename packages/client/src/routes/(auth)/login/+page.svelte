@@ -13,6 +13,8 @@
   import { loginCrypto } from "$lib/auth/login-crypto.js";
   import { solveProofOfWork } from "$lib/auth/pow-solver.js";
   import { announceToLiveRegion } from "$lib/utils/announce.js";
+  import { createPublicBrandingQuery } from "$lib/branding/public-branding.js";
+  import { applyKonstaPalette } from "$lib/branding/konsta-palette.js";
   import KeyDerivation, {
     type LoginPhaseId,
   } from "$lib/components/onboarding/KeyDerivation.svelte";
@@ -76,6 +78,18 @@
     if (needsSetup) {
       void goto(resolve("/setup"));
     }
+  });
+
+  const brandingQuery = createPublicBrandingQuery();
+  const branding = $derived(brandingQuery.data ?? null);
+  const orgName = $derived(branding?.orgName ?? "CARE-Y");
+
+  $effect(() => {
+    if (!browser || branding === null) return;
+    void applyKonstaPalette({
+      primary: branding.primaryColor,
+      accent: branding.accentColor ?? undefined,
+    });
   });
 
   async function handleSubmit(e: SubmitEvent): Promise<void> {
@@ -149,12 +163,30 @@
   <!-- Waiting for status check, or redirecting to /setup -->
 {:else if phase !== "idle" && phase !== "error"}
   <div class="text-center mb-6">
-    <h1 class="text-2xl font-bold">CARE-Y</h1>
+    {#if branding?.iconUrl}
+      <img
+        src={branding.iconUrl}
+        alt=""
+        class="login-logo"
+        width="48"
+        height="48"
+      />
+    {/if}
+    <h1 class="text-2xl font-bold">{orgName}</h1>
   </div>
   <KeyDerivation {phase} {phaseLabel} />
 {:else}
   <div class="text-center mb-6">
-    <h1 class="text-2xl font-bold">CARE-Y</h1>
+    {#if branding?.iconUrl}
+      <img
+        src={branding.iconUrl}
+        alt=""
+        class="login-logo"
+        width="48"
+        height="48"
+      />
+    {/if}
+    <h1 class="text-2xl font-bold">{orgName}</h1>
     <p class="mt-1 text-sm opacity-60">{m.auth_sign_in_continue()}</p>
   </div>
 
@@ -196,3 +228,11 @@
     </div>
   </form>
 {/if}
+
+<style>
+  .login-logo {
+    margin: 0 auto var(--space-sm);
+    border-radius: 8px;
+    display: block;
+  }
+</style>

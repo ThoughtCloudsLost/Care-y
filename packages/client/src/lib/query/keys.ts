@@ -139,6 +139,11 @@ export const onboardingKeys = {
     [...onboardingKeys.all, "validateInvite", token] as const,
 };
 
+export const brandingKeys = {
+  all: ["branding"] as const,
+  public: () => [...brandingKeys.all, "public"] as const,
+};
+
 export const notificationKeys = {
   all: ["notifications"] as const,
 };
