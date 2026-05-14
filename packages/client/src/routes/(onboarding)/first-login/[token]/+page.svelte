@@ -2,10 +2,11 @@
   Volunteer first-login: invite link landing page.
 
   Three states: validating (Preloader), invalid token (error),
-  valid token (registration form -> registerCrypto -> success screen).
+  valid token (registration form -> registerCrypto -> loginCrypto -> dashboard).
 
-  After success the volunteer must sign in via /login to run
-  loginCrypto in the Worker for session-duration key isolation.
+  Chains registerCrypto (main thread key upload) then loginCrypto (Worker
+  key derivation) so the volunteer lands on the dashboard with keys loaded,
+  matching the SetupAccount pattern.
 -->
 <script lang="ts">
   import { goto } from "$app/navigation";
@@ -25,6 +26,11 @@
   import { trpc } from "$lib/trpc/index.js";
   import { onboardingKeys } from "$lib/query/keys.js";
   import { registerCrypto } from "$lib/auth/register-crypto.js";
+  import { loginCrypto } from "$lib/auth/login-crypto.js";
+  import { installCleanupHandler } from "$lib/auth/cleanup.js";
+  import { solveProofOfWork } from "$lib/auth/pow-solver.js";
+  import { getCryptoBridge, getOrgKeyManager } from "$lib/crypto/context.js";
+  import { setOrgKeyReady } from "$lib/crypto/org-key-ready.svelte.js";
   import { announceToLiveRegion } from "$lib/utils/announce.js";
   import { haptic } from "$lib/utils/haptic.js";
   import { toastStore } from "$lib/stores/toast.svelte.js";
@@ -33,8 +39,11 @@
     type LoginPhaseId,
   } from "$lib/components/onboarding/KeyDerivation.svelte";
   import type { RegisterCryptoCallbacks } from "$lib/auth/register-crypto.js";
+  import type { LoginCryptoCallbacks } from "$lib/auth/login-crypto.js";
 
   const token = $derived(page.params.token ?? "");
+  const bridge = getCryptoBridge();
+  const orgKeyManager = getOrgKeyManager();
 
   if (!trpc.onboarding) {
     throw new RouterNotAvailableError("onboarding");
@@ -56,7 +65,6 @@
   let phase = $state<LoginPhaseId>("idle");
   /* eslint-enable @typescript-eslint/no-unsafe-assignment */
   let error = $state("");
-  let registrationComplete = $state(false);
 
   function getPhaseLabel(p: LoginPhaseId): string {
     switch (p) {
@@ -66,6 +74,8 @@
         return m.onboarding_firstlogin_deriving();
       case "oprf":
         return m.auth_phase_oprf();
+      case "pow":
+        return m.auth_phase_pow();
       case "derive":
         return m.auth_phase_derive();
       default:
@@ -115,35 +125,78 @@
         displayName: displayName || undefined,
       });
 
-      const noop = (): void => {
+      // 2. registerCrypto: Argon2id + OPRF + upload salt + volPublic.
+      const regNoop = (): void => {
         /* protocol-required callback */
       };
-      const callbacks: RegisterCryptoCallbacks = {
+      const regCallbacks: RegisterCryptoCallbacks = {
         onArgon2idStart: () => {
           phase = "argon2id";
           announceToLiveRegion("polite", m.onboarding_firstlogin_deriving());
         },
-        onArgon2idDone: noop,
+        onArgon2idDone: regNoop,
         onOprfStart: () => {
           phase = "oprf";
         },
-        onOprfDone: noop,
+        onOprfDone: regNoop,
         onDeriveStart: () => {
           phase = "derive";
           announceToLiveRegion("polite", m.auth_phase_derive());
         },
-        onDone: noop,
-        onUploadStart: noop,
+        onDone: regNoop,
+        onUploadStart: regNoop,
       };
 
-      await registerCrypto(userId, password, callbacks);
+      await registerCrypto(userId, password, regCallbacks);
+
+      // 3. loginCrypto: re-derive keys in Worker (registerCrypto zeroed them).
+      await bridge.zeroAll();
+
+      const loginNoop = (): void => {
+        /* protocol-required callback */
+      };
+      const loginCallbacks: LoginCryptoCallbacks = {
+        onArgon2idStart: () => {
+          phase = "argon2id";
+        },
+        onArgon2idDone: loginNoop,
+        onOprfStart: () => {
+          phase = "oprf";
+        },
+        onOprfDone: loginNoop,
+        onDeriveStart: () => {
+          phase = "derive";
+          announceToLiveRegion("polite", m.auth_phase_derive());
+        },
+        onDone: loginNoop,
+        onPowRequired: async (challenge, difficulty) => {
+          phase = "pow";
+          return solveProofOfWork(challenge, difficulty);
+        },
+      };
+
+      const loginResult = await loginCrypto(
+        identifier,
+        password,
+        bridge,
+        loginCallbacks,
+      );
+
+      // 4. Load org key if available.
+      if (loginResult.orgPublicKey !== null) {
+        orgKeyManager.load(loginResult.orgPublicKey);
+        setOrgKeyReady(true);
+      }
+
+      // 5. Install cleanup handler for key zeroing on unload.
+      installCleanupHandler(bridge, orgKeyManager);
 
       phase = "done";
-      registrationComplete = true;
-
       haptic();
       toastStore.show(m.onboarding_step_complete());
-      announceToLiveRegion("polite", m.onboarding_firstlogin_success_heading());
+
+      // 6. Navigate to app.
+      await goto(resolve("/"));
     } catch (caught: unknown) {
       phase = "error";
       const msg = caught instanceof Error ? caught.message : String(caught);
@@ -154,10 +207,6 @@
       }
       announceToLiveRegion("assertive", error);
     }
-  }
-
-  function handleSignIn(): void {
-    void goto(resolve("/login"));
   }
 </script>
 
@@ -174,22 +223,6 @@
         {m.onboarding_firstlogin_error_invalid_token()}
       </p>
     </div>
-  </Block>
-{:else if registrationComplete}
-  <BlockTitle medium>
-    {m.onboarding_firstlogin_success_heading()}
-  </BlockTitle>
-  <Block>
-    <div class="success-container">
-      <p class="step-desc">
-        {m.onboarding_firstlogin_success_subtext()}
-      </p>
-    </div>
-  </Block>
-  <Block>
-    <Button large onclick={handleSignIn}>
-      {m.onboarding_firstlogin_signin()}
-    </Button>
   </Block>
 {:else if isSubmitting}
   <KeyDerivation {phase} {phaseLabel} />
@@ -270,11 +303,6 @@
   }
 
   .error-container {
-    text-align: center;
-    padding: var(--space-2xl) 0;
-  }
-
-  .success-container {
     text-align: center;
     padding: var(--space-2xl) 0;
   }
