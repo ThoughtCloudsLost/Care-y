@@ -1288,6 +1288,7 @@
   "onboarding_wizard_complete_next_steps": "Proximos pasos recomendados",
   "onboarding_setup_loading": "Verificando estado de configuracion...",
   "onboarding_setup_error": "No se pudo verificar el estado de configuracion. Intenta de nuevo.",
+  "onboarding_setup_invalid_link": "Este enlace de configuracion no es valido o ya fue utilizado. Si necesita un nuevo enlace, contacte al operador de la plataforma.",
   "onboarding_briefing_heading": "Como CARE-Y protege tus datos",
   "onboarding_briefing_intro": "CARE-Y cifra todo en el navegador del voluntario antes de que llegue al servidor. El servidor almacena solo datos ilegibles. Descifrar requiere la contrasena del voluntario mas la verificacion de dos servidores separados en distintos paises. Ningun servidor individual tiene informacion suficiente para descifrar nada.",
   "onboarding_briefing_diagram_alt": "Diagrama simplificado mostrando como CARE-Y deriva claves de cifrado a partir de contrasenas usando dos servidores de verificacion",

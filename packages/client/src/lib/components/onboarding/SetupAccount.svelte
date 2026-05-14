@@ -42,10 +42,11 @@
   import type { LoginCryptoCallbacks } from "$lib/auth/login-crypto.js";
 
   interface Props {
+    setupToken: string;
     oncomplete: (data: { userId: string; adminVolPublic: string }) => void;
   }
 
-  let { oncomplete }: Props = $props();
+  let { setupToken, oncomplete }: Props = $props();
 
   const bridge = getCryptoBridge();
   const orgKeyManager = getOrgKeyManager();
@@ -137,6 +138,7 @@
         password,
         displayName,
         orgPublicKey: orgPublicKeyB64,
+        setupToken,
       });
 
       // 3. registerCrypto: Argon2id + OPRF + upload salt + volPublic.

@@ -82,7 +82,7 @@ beforeEach(() => {
 describe("SetupAccount", () => {
   it("renders the account creation form", () => {
     render(SetupAccount, {
-      props: { oncomplete: vi.fn() },
+      props: { oncomplete: vi.fn(), setupToken: "test-setup-token" },
     });
     expect(screen.getByText("Create Your Admin Account")).toBeTruthy();
     expect(screen.getByText("Create Account")).toBeTruthy();
@@ -90,7 +90,7 @@ describe("SetupAccount", () => {
 
   it("disables submit when required fields are empty", () => {
     render(SetupAccount, {
-      props: { oncomplete: vi.fn() },
+      props: { oncomplete: vi.fn(), setupToken: "test-setup-token" },
     });
     const button = screen.getByText("Create Account");
     expect(button.closest("button")?.hasAttribute("disabled")).toBe(true);
@@ -98,7 +98,9 @@ describe("SetupAccount", () => {
 
   it("shows password length error for short passwords", async () => {
     const oncomplete = vi.fn();
-    render(SetupAccount, { props: { oncomplete } });
+    render(SetupAccount, {
+      props: { oncomplete, setupToken: "test-setup-token" },
+    });
 
     const inputs = document.querySelectorAll("input");
     const usernameInput = inputs[0];
@@ -126,7 +128,9 @@ describe("SetupAccount", () => {
 
   it("shows password mismatch error when passwords differ", async () => {
     const oncomplete = vi.fn();
-    render(SetupAccount, { props: { oncomplete } });
+    render(SetupAccount, {
+      props: { oncomplete, setupToken: "test-setup-token" },
+    });
 
     const inputs = document.querySelectorAll("input");
     const usernameInput = inputs[0];

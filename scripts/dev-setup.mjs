@@ -98,7 +98,7 @@ if (fullSeed) {
     Mailpit: http://localhost:8025
     Dev org:  dev-org (no users, no data)
 
-    Visit /setup to run the onboarding wizard.
+    The setup URL (with token) was printed above by the seed script.
     After onboarding, run "pnpm seed" for test data.
 
     Start client:  pnpm --filter @care-y/client dev

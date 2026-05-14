@@ -12,6 +12,7 @@ export const bootstrapAdminInputSchema = z.object({
   password: passwordSchema,
   displayName: displayNameSchema,
   orgPublicKey: base64Bytes(32, "orgPublicKey (Curve25519)"),
+  setupToken: z.string().min(1),
 });
 
 /** Update org basics during setup (step 2). */

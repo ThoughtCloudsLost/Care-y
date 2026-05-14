@@ -115,10 +115,12 @@ async function seed(): Promise<void> {
   // --- Create org ---
   let orgId: string;
   let schemaName: string;
+  let setupToken: string | null = null;
   try {
     const org = await orgService.createOrg({ slug: DEV_ORG_SLUG });
     orgId = org.id;
     schemaName = org.schemaName;
+    setupToken = org.setupToken;
     console.log(`Created org "${DEV_ORG_SLUG}" (${orgId})`);
   } catch (err) {
     if (err instanceof ConflictError) {
@@ -139,7 +141,13 @@ async function seed(): Promise<void> {
   }
 
   if (process.argv.includes("--bootstrap-only")) {
-    console.log("Bootstrap complete (org + schema only, no users or data).");
+    if (setupToken) {
+      console.log(`\n  Setup URL: http://localhost:5173/setup/${setupToken}\n`);
+    } else {
+      console.log(
+        "Bootstrap complete (org already existed, no new setup token).",
+      );
+    }
     return;
   }
 

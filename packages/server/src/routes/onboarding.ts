@@ -209,6 +209,17 @@ export function createOnboardingRouter(deps: OnboardingRouterDeps) {
           });
         }
 
+        const tokenValid = await orgService.validateSetupToken(
+          org.orgId,
+          input.setupToken,
+        );
+        if (!tokenValid) {
+          throw new TRPCError({
+            code: "UNAUTHORIZED",
+            message: ErrorCode.INVALID_SETUP_TOKEN,
+          });
+        }
+
         const tDb = org.tenantDb;
         const orgPublicKey = Buffer.from(input.orgPublicKey, "base64");
         const sealedBox = createSealedBoxEncryptor(orgPublicKey);
@@ -286,6 +297,8 @@ export function createOnboardingRouter(deps: OnboardingRouterDeps) {
 
         // Cookie set AFTER transaction commits.
         setSessionCookie(ctx.res, sessionToken, isSecureCookie);
+
+        await orgService.consumeSetupToken(org.orgId);
 
         return { userId };
       }),

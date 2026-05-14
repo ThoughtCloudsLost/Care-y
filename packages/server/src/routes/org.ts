@@ -23,6 +23,7 @@ export function createOrgRouter(orgService: OrgService) {
               id: org.id,
               slug: org.slug,
             },
+            setupToken: org.setupToken,
           };
         } catch (err: unknown) {
           throwAsTrpc(err);
