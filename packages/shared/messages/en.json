@@ -1288,6 +1288,7 @@
   "onboarding_wizard_complete_next_steps": "Recommended next steps",
   "onboarding_setup_loading": "Checking setup status...",
   "onboarding_setup_error": "Could not check setup status. Please try again.",
+  "onboarding_setup_invalid_link": "This setup link is invalid or has already been used. If you need a new setup link, contact the platform operator.",
   "onboarding_briefing_heading": "How CARE-Y Protects Your Data",
   "onboarding_briefing_intro": "CARE-Y encrypts everything in the volunteer's browser before it reaches the server. The server stores only scrambled data it cannot read. Decryption requires the volunteer's password plus verification from two separate servers in different countries. No single server holds enough information to decrypt anything.",
   "onboarding_briefing_diagram_alt": "Simplified diagram showing how CARE-Y derives encryption keys from passwords using two verification servers",

@@ -18,6 +18,7 @@ export interface OrgsTable {
   slug: string;
   schema_name: string;
   is_active: ColumnType<boolean, boolean | undefined, boolean>;
+  setup_token_hash: Buffer | null;
 }
 
 // --- OPRF infrastructure ---

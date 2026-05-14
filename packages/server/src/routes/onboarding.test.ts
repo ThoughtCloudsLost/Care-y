@@ -144,6 +144,7 @@ describe.skipIf(!HAS_DB)("onboarding router (DB integration)", () => {
   describe("bootstrapAdmin", () => {
     let freshTestDb: TestDb;
     let freshOrgSlug: string;
+    let freshSetupToken: string;
 
     beforeEach(async () => {
       freshTestDb = await createTestDb();
@@ -161,6 +162,7 @@ describe.skipIf(!HAS_DB)("onboarding router (DB integration)", () => {
       const suffix = randomUUID().slice(0, 8);
       freshOrgSlug = `test-bootstrap-${suffix}`;
       const org = await orgService.createOrg({ slug: freshOrgSlug });
+      freshSetupToken = org.setupToken;
       createdOrgIds.push(org.id);
       createdSchemas.push(org.schemaName);
     });
@@ -177,6 +179,7 @@ describe.skipIf(!HAS_DB)("onboarding router (DB integration)", () => {
         password: "securepassword12345",
         displayName: "Test Admin",
         orgPublicKey: encode(TEST_ORG_PUBLIC_KEY),
+        setupToken: freshSetupToken,
       });
 
       expect(result.userId).toBeDefined();
@@ -187,7 +190,7 @@ describe.skipIf(!HAS_DB)("onboarding router (DB integration)", () => {
       expect(cookies[0]).toContain("care_y_session=");
     });
 
-    it("rejects when org already has an active user", async () => {
+    it("rejects with consumed setup token after successful bootstrap", async () => {
       const { caller } = buildCaller(freshOrgSlug);
 
       await caller.onboarding.bootstrapAdmin({
@@ -195,6 +198,7 @@ describe.skipIf(!HAS_DB)("onboarding router (DB integration)", () => {
         password: "securepassword12345",
         displayName: "First Admin",
         orgPublicKey: encode(TEST_ORG_PUBLIC_KEY),
+        setupToken: freshSetupToken,
       });
 
       await expectTrpcError(
@@ -203,8 +207,9 @@ describe.skipIf(!HAS_DB)("onboarding router (DB integration)", () => {
           password: "securepassword12345",
           displayName: "Second Admin",
           orgPublicKey: encode(TEST_ORG_PUBLIC_KEY),
+          setupToken: freshSetupToken,
         }),
-        "CONFLICT",
+        "UNAUTHORIZED",
       );
     });
 
@@ -216,6 +221,7 @@ describe.skipIf(!HAS_DB)("onboarding router (DB integration)", () => {
         password: "securepassword12345",
         displayName: "Key Admin",
         orgPublicKey: encode(TEST_ORG_PUBLIC_KEY),
+        setupToken: freshSetupToken,
       });
 
       const orgService = createOrgService(
@@ -244,6 +250,7 @@ describe.skipIf(!HAS_DB)("onboarding router (DB integration)", () => {
         password: "securepassword12345",
         displayName: "Role Admin",
         orgPublicKey: encode(TEST_ORG_PUBLIC_KEY),
+        setupToken: freshSetupToken,
       });
 
       const orgService = createOrgService(

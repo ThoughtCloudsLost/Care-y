@@ -49,7 +49,7 @@ describe.skipIf(!process.env.DATABASE_URL)("OrgService", () => {
     await platformDb.destroy();
   });
 
-  it("createOrg succeeds and returns correct OrgRecord", async () => {
+  it("createOrg succeeds and returns correct OrgRecord with setupToken", async () => {
     const org = await service.createOrg({ slug: "test-org-create" });
 
     createdSchemas.push(org.schemaName);
@@ -59,6 +59,9 @@ describe.skipIf(!process.env.DATABASE_URL)("OrgService", () => {
     expect(org.slug).toBe("test-org-create");
     expect(org.schemaName).toBe(`org_${org.id}`);
     expect(org.isActive).toBe(true);
+    expect(org.setupToken).toBeDefined();
+    expect(typeof org.setupToken).toBe("string");
+    expect(org.setupToken.length).toBeGreaterThan(0);
   });
 
   it("createOrg creates a real PostgreSQL schema", async () => {
@@ -165,6 +168,65 @@ describe.skipIf(!process.env.DATABASE_URL)("OrgService", () => {
       "00000000-0000-0000-0000-000000000000",
     );
     expect(found).toBeNull();
+  });
+
+  it("validateSetupToken returns true for valid token", async () => {
+    const org = await service.createOrg({ slug: "test-org-token-valid" });
+
+    createdSchemas.push(org.schemaName);
+    createdOrgIds.push(org.id);
+
+    const valid = await service.validateSetupToken(org.id, org.setupToken);
+    expect(valid).toBe(true);
+  });
+
+  it("validateSetupToken returns false for wrong token", async () => {
+    const org = await service.createOrg({ slug: "test-org-token-wrong" });
+
+    createdSchemas.push(org.schemaName);
+    createdOrgIds.push(org.id);
+
+    const valid = await service.validateSetupToken(
+      org.id,
+      "not-the-right-token",
+    );
+    expect(valid).toBe(false);
+  });
+
+  it("validateSetupToken returns false for nonexistent org", async () => {
+    const valid = await service.validateSetupToken(
+      "00000000-0000-0000-0000-000000000000",
+      "any-token",
+    );
+    expect(valid).toBe(false);
+  });
+
+  it("consumeSetupToken nulls the hash", async () => {
+    const org = await service.createOrg({ slug: "test-org-token-consume" });
+
+    createdSchemas.push(org.schemaName);
+    createdOrgIds.push(org.id);
+
+    const validBefore = await service.validateSetupToken(
+      org.id,
+      org.setupToken,
+    );
+    expect(validBefore).toBe(true);
+
+    await service.consumeSetupToken(org.id);
+
+    const validAfter = await service.validateSetupToken(org.id, org.setupToken);
+    expect(validAfter).toBe(false);
+  });
+
+  it("setup token is base64url-encoded 32 bytes", async () => {
+    const org = await service.createOrg({ slug: "test-org-token-format" });
+
+    createdSchemas.push(org.schemaName);
+    createdOrgIds.push(org.id);
+
+    const decoded = Buffer.from(org.setupToken, "base64url");
+    expect(decoded.length).toBe(32);
   });
 });
 
