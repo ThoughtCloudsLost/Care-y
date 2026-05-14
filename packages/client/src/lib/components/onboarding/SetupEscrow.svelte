@@ -41,6 +41,8 @@
   let downloaded = $state(false);
   let httpsBlocked = $state(false);
 
+  const hashGroups = $derived(fileHash.match(/.{1,4}/g) ?? []);
+
   const PASSPHRASE_MIN_CHARS = 20;
   const PASSPHRASE_MIN_WORDS = 6;
 
@@ -51,7 +53,13 @@
   }
 
   const passphraseValid = $derived(meetsPassphraseRequirement(passphrase));
+  const passphraseTooShort = $derived(
+    passphrase.length > 0 && !passphraseValid,
+  );
   const confirmValid = $derived(passphrase === confirmPassphrase);
+  const passphraseMismatch = $derived(
+    confirmPassphrase.length > 0 && !confirmValid,
+  );
   const canGenerate = $derived(
     passphraseValid &&
       confirmValid &&
@@ -166,6 +174,9 @@
   {/if}
 
   {#if !downloaded}
+    <Block>
+      <p class="step-desc">{m.onboarding_escrow_passphrase_why()}</p>
+    </Block>
     <List strong inset>
       <ListInput
         outline
@@ -178,6 +189,9 @@
           if (e.target instanceof HTMLInputElement) passphrase = e.target.value;
         }}
         disabled={generating}
+        error={passphraseTooShort
+          ? m.onboarding_escrow_error_passphrase_short()
+          : undefined}
       />
 
       <ListInput
@@ -191,6 +205,9 @@
             confirmPassphrase = e.target.value;
         }}
         disabled={generating}
+        error={passphraseMismatch
+          ? m.onboarding_escrow_error_passphrase_mismatch()
+          : undefined}
       />
     </List>
 
@@ -210,15 +227,27 @@
   {:else}
     <Block>
       <p class="hash-label">{m.onboarding_escrow_hash_label()}</p>
-      <code class="hash-value"
-        >{m.onboarding_escrow_hash_value({ hash: fileHash })}</code
-      >
+      <div class="hash-grid" aria-label={fileHash}>
+        {#each hashGroups as group, i (i)}
+          <code class="hash-group">{group}</code>
+        {/each}
+      </div>
       <p class="hash-hint">{m.onboarding_escrow_hash_hint()}</p>
     </Block>
 
-    <Block>
+    <Block class="escrow-actions">
       <Button large onclick={oncomplete}>
         {m.onboarding_escrow_continue()}
+      </Button>
+      <Button
+        large
+        outline
+        onclick={() => {
+          downloaded = false;
+          fileHash = "";
+        }}
+      >
+        {m.onboarding_escrow_download_again()}
       </Button>
     </Block>
   {/if}
@@ -244,12 +273,19 @@
     margin: 0 0 var(--space-sm);
   }
 
-  .hash-value {
-    font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
-    font-size: var(--text-sm);
-    color: var(--ink);
-    word-break: break-all;
+  .hash-grid {
+    display: grid;
+    grid-template-columns: repeat(4, auto);
+    justify-content: start;
+    gap: var(--space-sm) var(--space-lg);
     user-select: all;
+  }
+
+  .hash-group {
+    font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
+    font-size: var(--text-base);
+    letter-spacing: 0.05em;
+    color: var(--ink);
   }
 
   .hash-hint {
@@ -257,5 +293,11 @@
     color: var(--muted);
     line-height: 1.5;
     margin: var(--space-lg) 0 0;
+  }
+
+  :global(.escrow-actions) {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-sm);
   }
 </style>

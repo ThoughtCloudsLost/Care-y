@@ -59,10 +59,24 @@ export const TERMINOLOGY_DEFAULTS: Readonly<Record<string, TerminologyLabels>> =
 export const TERMINOLOGY_SUGGESTIONS: Readonly<
   Record<string, readonly string[]>
 > = {
-  volunteer: ["Advocate", "Counselor", "Staff", "Team Member", "Helper"],
-  client: ["Survivor", "Caller", "Patient", "Petitioner", "Participant"],
-  ticket: ["Case", "Contact", "Session", "Call", "Intake", "Referral"],
-  manager: ["Supervisor", "Coordinator", "Team Lead", "Shift Lead"],
-  queue: ["Team", "Line", "Group", "Department", "Program"],
-  knowledgeBase: ["Library", "Resources", "Handbook", "Guide"],
+  volunteer: ["Volunteer", "Advocate", "Counselor", "Staff", "Team Member"],
+  client: ["Client", "Survivor", "Caller", "Petitioner", "Participant"],
+  ticket: [
+    "Ticket",
+    "Case",
+    "Contact",
+    "Session",
+    "Call",
+    "Intake",
+    "Referral",
+  ],
+  manager: ["Manager", "Supervisor", "Coordinator", "Team Lead", "Shift Lead"],
+  queue: ["Queue", "Team", "Group", "Program"],
+  knowledgeBase: [
+    "Knowledge Base",
+    "Library",
+    "Resources",
+    "Handbook",
+    "Guide",
+  ],
 };

@@ -76,6 +76,13 @@
   const phaseLabel = $derived(getPhaseLabel(phase));
   const isSubmitting = $derived(phase !== "idle" && phase !== "error");
 
+  const passwordTooShort = $derived(
+    password.length > 0 && password.length < 16,
+  );
+  const passwordMismatch = $derived(
+    confirmPassword.length > 0 && password !== confirmPassword,
+  );
+
   function validate(): string | null {
     if (password.length < 16) {
       return m.onboarding_firstlogin_error_password_length();
@@ -225,6 +232,9 @@
         bind:value={password}
         autocomplete="new-password"
         required
+        error={passwordTooShort
+          ? m.onboarding_firstlogin_error_password_length()
+          : undefined}
       />
       <ListInput
         label={m.onboarding_firstlogin_confirm_password()}
@@ -233,6 +243,9 @@
         bind:value={confirmPassword}
         autocomplete="new-password"
         required
+        error={passwordMismatch
+          ? m.onboarding_firstlogin_error_password_mismatch()
+          : undefined}
       />
     </List>
 

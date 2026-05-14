@@ -3,7 +3,7 @@
   import { goto } from "$app/navigation";
   import { resolve } from "$app/paths";
   import { createQuery } from "@tanstack/svelte-query";
-  import { List, ListInput, Button } from "konsta/svelte";
+  import { List, ListInput, Button, Block } from "konsta/svelte";
   import * as m from "$lib/paraglide/messages.js";
   import { trpc } from "$lib/trpc/index.js";
   import { onboardingKeys } from "$lib/query/keys.js";
@@ -159,13 +159,9 @@
   </div>
 
   {#if error !== ""}
-    <p
-      role="alert"
-      class="text-center text-sm mb-4"
-      style="color: var(--error, #dc2626)"
-    >
-      {error}
-    </p>
+    <Block role="alert">
+      <p class="step-error">{error}</p>
+    </Block>
   {/if}
 
   <form onsubmit={handleSubmit}>

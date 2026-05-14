@@ -12,6 +12,7 @@
   registerCrypto zeros all intermediates in its finally block.
 -->
 <script lang="ts">
+  import { tick } from "svelte";
   import { List, ListInput, Button, Block, BlockTitle } from "konsta/svelte";
   import {
     generateOrgKeypair,
@@ -96,12 +97,23 @@
     return null;
   }
 
+  const passwordTooShort = $derived(
+    password.length > 0 && password.length < 16,
+  );
+  const passwordMismatch = $derived(
+    confirmPassword.length > 0 && password !== confirmPassword,
+  );
+
   async function handleSubmit(e: SubmitEvent): Promise<void> {
     e.preventDefault();
     const validationError = validate();
     if (validationError !== null) {
       error = validationError;
       announceToLiveRegion("assertive", error);
+      await tick();
+      document
+        .querySelector(".step-error")
+        ?.scrollIntoView({ behavior: "instant", block: "center" });
       return;
     }
 
@@ -275,6 +287,9 @@
         bind:value={password}
         autocomplete="new-password"
         required
+        error={passwordTooShort
+          ? m.onboarding_account_error_password_length()
+          : undefined}
       />
       <ListInput
         label={m.onboarding_account_confirm_password()}
@@ -283,6 +298,9 @@
         bind:value={confirmPassword}
         autocomplete="new-password"
         required
+        error={passwordMismatch
+          ? m.onboarding_account_error_password_mismatch()
+          : undefined}
       />
     </List>
 

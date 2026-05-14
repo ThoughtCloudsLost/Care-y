@@ -62,18 +62,6 @@
       encryptedName: string;
       escalateDays: number;
     }) => ticketRouter.createQueue.mutate(input),
-    onSuccess: () => {
-      haptic();
-      toastStore.show(m.onboarding_queue_created(withTerms()));
-      announceToLiveRegion("polite", m.onboarding_queue_created(withTerms()));
-      void queryClient.invalidateQueries({ queryKey: queueKeys.all });
-      oncomplete({ firstQueueCreated: true });
-    },
-    onError: () => {
-      error = m.onboarding_queue_error(withTerms());
-      toastStore.show(m.onboarding_queue_error(withTerms()), 3000);
-      announceToLiveRegion("assertive", m.onboarding_queue_error(withTerms()));
-    },
   }));
 
   const orgKeyLoaded = $derived(isOrgKeyReady());
@@ -98,10 +86,21 @@
     const cipherBytes = await orgKeyManager.encrypt(plainBytes);
     const encryptedName = uint8ArrayToBase64(cipherBytes);
 
-    createMut.mutate({
-      encryptedName,
-      escalateDays: parsedDays,
-    });
+    try {
+      await createMut.mutateAsync({
+        encryptedName,
+        escalateDays: parsedDays,
+      });
+      haptic();
+      toastStore.show(m.onboarding_queue_created(withTerms()));
+      announceToLiveRegion("polite", m.onboarding_queue_created(withTerms()));
+      void queryClient.invalidateQueries({ queryKey: queueKeys.all });
+      oncomplete({ firstQueueCreated: true });
+    } catch {
+      error = m.onboarding_queue_error(withTerms());
+      toastStore.show(m.onboarding_queue_error(withTerms()), 3000);
+      announceToLiveRegion("assertive", m.onboarding_queue_error(withTerms()));
+    }
   }
 </script>
 

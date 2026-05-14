@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Write this down and keep it separate from the backup file. To verify the file later, run \"shasum -a 256 filename.json\" on Mac/Linux or \"certutil -hashfile fi..." |
+* | "This code is unique to the file you just downloaded. Write it down and store it separately from the backup file. To check the file has not been corrupted or ..." |
 *
 * @param {Onboarding_Escrow_Hash_HintInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

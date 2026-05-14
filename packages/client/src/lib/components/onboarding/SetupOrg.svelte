@@ -8,6 +8,7 @@
 -->
 <script lang="ts">
   import {
+    Card,
     List,
     ListInput,
     Button,
@@ -18,7 +19,9 @@
   import { createMutation } from "@tanstack/svelte-query";
   import {
     E164_COUNTRY_CODE_OPTIONS,
+    TERMINOLOGY_DEFAULTS,
     TERMINOLOGY_DEFAULTS_EN,
+    TERMINOLOGY_SUGGESTIONS,
     type TerminologyLabels,
   } from "@care-y/shared";
   import * as m from "$lib/paraglide/messages.js";
@@ -36,6 +39,7 @@
       orgName: string;
       language: string;
       countryCode: string;
+      terminology: TerminologyLabels;
     }) => void;
   }
 
@@ -59,6 +63,27 @@
   let countryCode = $state("");
   let error = $state("");
 
+  function autoPlural(singular: string, lang: string): string {
+    const s = singular.trim();
+    if (s === "") return "";
+    if (lang === "es") {
+      if (/[aeiouáéíóú]$/i.test(s)) return s + "s";
+      return s + "es";
+    }
+    if (/(?:s|sh|ch|x|z)$/i.test(s)) return s + "es";
+    if (/[^aeiou]y$/i.test(s)) return s.slice(0, -1) + "ies";
+    return s + "s";
+  }
+
+  function lc(s: string): string {
+    return s.trim().toLowerCase();
+  }
+
+  const activeDefaults = $derived(
+    // eslint-disable-next-line security/detect-object-injection -- language is a typed LangCode from a controlled select
+    TERMINOLOGY_DEFAULTS[language] ?? TERMINOLOGY_DEFAULTS_EN,
+  );
+
   let termVolunteer = $state(TERMINOLOGY_DEFAULTS_EN.volunteer);
   let termVolunteers = $state(TERMINOLOGY_DEFAULTS_EN.volunteers);
   let termClient = $state(TERMINOLOGY_DEFAULTS_EN.client);
@@ -71,13 +96,58 @@
   let termQueues = $state(TERMINOLOGY_DEFAULTS_EN.queues);
   let termKnowledgeBase = $state(TERMINOLOGY_DEFAULTS_EN.knowledgeBase);
 
+  let pluralTouchedVolunteers = $state(false);
+  let pluralTouchedClients = $state(false);
+  let pluralTouchedTickets = $state(false);
+  let pluralTouchedManagers = $state(false);
+  let pluralTouchedQueues = $state(false);
+
+  $effect(() => {
+    if (!pluralTouchedVolunteers)
+      termVolunteers = autoPlural(termVolunteer, language);
+  });
+  $effect(() => {
+    if (!pluralTouchedClients) termClients = autoPlural(termClient, language);
+  });
+  $effect(() => {
+    if (!pluralTouchedTickets) termTickets = autoPlural(termTicket, language);
+  });
+  $effect(() => {
+    if (!pluralTouchedManagers)
+      termManagers = autoPlural(termManager, language);
+  });
+  $effect(() => {
+    if (!pluralTouchedQueues) termQueues = autoPlural(termQueue, language);
+  });
+
+  let prevLang = language;
+  $effect(() => {
+    if (language !== prevLang) {
+      const defaults =
+        // eslint-disable-next-line security/detect-object-injection -- language is a typed LangCode from a controlled select
+        TERMINOLOGY_DEFAULTS[language] ?? TERMINOLOGY_DEFAULTS_EN;
+      termVolunteer = defaults.volunteer;
+      termClient = defaults.client;
+      termTicket = defaults.ticket;
+      termManager = defaults.manager;
+      termQueue = defaults.queue;
+      termKnowledgeBase = defaults.knowledgeBase;
+      pluralTouchedVolunteers = false;
+      pluralTouchedClients = false;
+      pluralTouchedTickets = false;
+      pluralTouchedManagers = false;
+      pluralTouchedQueues = false;
+      prevLang = language;
+    }
+  });
+
   const hasCustomTerminology = $derived(
-    termVolunteer !== TERMINOLOGY_DEFAULTS_EN.volunteer ||
-      termClient !== TERMINOLOGY_DEFAULTS_EN.client ||
-      termTicket !== TERMINOLOGY_DEFAULTS_EN.ticket ||
-      termManager !== TERMINOLOGY_DEFAULTS_EN.manager ||
-      termQueue !== TERMINOLOGY_DEFAULTS_EN.queue ||
-      termKnowledgeBase !== TERMINOLOGY_DEFAULTS_EN.knowledgeBase,
+    termVolunteer !== activeDefaults.volunteer ||
+      termClient !== activeDefaults.client ||
+      termTicket !== activeDefaults.ticket ||
+      termManager !== activeDefaults.manager ||
+      termQueue !== activeDefaults.queue ||
+      termKnowledgeBase !== activeDefaults.knowledgeBase,
   );
 
   const nameValid = $derived(orgName.trim().length > 0);
@@ -99,6 +169,19 @@
         orgName: orgName.trim(),
         language,
         countryCode,
+        terminology: {
+          volunteer: lc(termVolunteer) || activeDefaults.volunteer,
+          volunteers: lc(termVolunteers) || activeDefaults.volunteers,
+          client: lc(termClient) || activeDefaults.client,
+          clients: lc(termClients) || activeDefaults.clients,
+          ticket: lc(termTicket) || activeDefaults.ticket,
+          tickets: lc(termTickets) || activeDefaults.tickets,
+          manager: lc(termManager) || activeDefaults.manager,
+          managers: lc(termManagers) || activeDefaults.managers,
+          queue: lc(termQueue) || activeDefaults.queue,
+          queues: lc(termQueues) || activeDefaults.queues,
+          knowledgeBase: lc(termKnowledgeBase) || activeDefaults.knowledgeBase,
+        },
       });
     },
     onError: () => {
@@ -141,17 +224,17 @@
     let encryptedTerminology: string | undefined;
     if (hasCustomTerminology) {
       const labels: TerminologyLabels = {
-        volunteer: termVolunteer.trim(),
-        volunteers: termVolunteers.trim(),
-        client: termClient.trim(),
-        clients: termClients.trim(),
-        ticket: termTicket.trim(),
-        tickets: termTickets.trim(),
-        manager: termManager.trim(),
-        managers: termManagers.trim(),
-        queue: termQueue.trim(),
-        queues: termQueues.trim(),
-        knowledgeBase: termKnowledgeBase.trim(),
+        volunteer: lc(termVolunteer),
+        volunteers: lc(termVolunteers),
+        client: lc(termClient),
+        clients: lc(termClients),
+        ticket: lc(termTicket),
+        tickets: lc(termTickets),
+        manager: lc(termManager),
+        managers: lc(termManagers),
+        queue: lc(termQueue),
+        queues: lc(termQueues),
+        knowledgeBase: lc(termKnowledgeBase),
       };
       const config = { [language]: labels };
       const termBytes = encoder.encode(JSON.stringify(config));
@@ -231,123 +314,225 @@
   <BlockTitle>{m.onboarding_org_terminology_heading()}</BlockTitle>
   <Block>
     <p class="step-desc">{m.onboarding_org_terminology_subtext()}</p>
+    <p class="step-desc admin-note">
+      {m.onboarding_org_terminology_admin_note()}
+    </p>
   </Block>
 
-  <List strong inset>
-    <ListInput
-      outline
-      label={m.onboarding_org_term_volunteer_label()}
-      type="text"
-      value={termVolunteer}
-      onInput={(e: Event) => {
-        if (e.target instanceof HTMLInputElement)
-          termVolunteer = e.target.value;
-      }}
-      disabled={saveMut.isPending}
-    />
-    <ListInput
-      outline
-      label={m.onboarding_org_term_volunteers_label()}
-      type="text"
-      value={termVolunteers}
-      onInput={(e: Event) => {
-        if (e.target instanceof HTMLInputElement)
-          termVolunteers = e.target.value;
-      }}
-      disabled={saveMut.isPending}
-    />
-    <ListInput
-      outline
-      label={m.onboarding_org_term_client_label()}
-      type="text"
-      value={termClient}
-      onInput={(e: Event) => {
-        if (e.target instanceof HTMLInputElement) termClient = e.target.value;
-      }}
-      disabled={saveMut.isPending}
-    />
-    <ListInput
-      outline
-      label={m.onboarding_org_term_clients_label()}
-      type="text"
-      value={termClients}
-      onInput={(e: Event) => {
-        if (e.target instanceof HTMLInputElement) termClients = e.target.value;
-      }}
-      disabled={saveMut.isPending}
-    />
-    <ListInput
-      outline
-      label={m.onboarding_org_term_ticket_label()}
-      type="text"
-      value={termTicket}
-      onInput={(e: Event) => {
-        if (e.target instanceof HTMLInputElement) termTicket = e.target.value;
-      }}
-      disabled={saveMut.isPending}
-    />
-    <ListInput
-      outline
-      label={m.onboarding_org_term_tickets_label()}
-      type="text"
-      value={termTickets}
-      onInput={(e: Event) => {
-        if (e.target instanceof HTMLInputElement) termTickets = e.target.value;
-      }}
-      disabled={saveMut.isPending}
-    />
-    <ListInput
-      outline
-      label={m.onboarding_org_term_manager_label()}
-      type="text"
-      value={termManager}
-      onInput={(e: Event) => {
-        if (e.target instanceof HTMLInputElement) termManager = e.target.value;
-      }}
-      disabled={saveMut.isPending}
-    />
-    <ListInput
-      outline
-      label={m.onboarding_org_term_managers_label()}
-      type="text"
-      value={termManagers}
-      onInput={(e: Event) => {
-        if (e.target instanceof HTMLInputElement) termManagers = e.target.value;
-      }}
-      disabled={saveMut.isPending}
-    />
-    <ListInput
-      outline
-      label={m.onboarding_org_term_queue_label()}
-      type="text"
-      value={termQueue}
-      onInput={(e: Event) => {
-        if (e.target instanceof HTMLInputElement) termQueue = e.target.value;
-      }}
-      disabled={saveMut.isPending}
-    />
-    <ListInput
-      outline
-      label={m.onboarding_org_term_queues_label()}
-      type="text"
-      value={termQueues}
-      onInput={(e: Event) => {
-        if (e.target instanceof HTMLInputElement) termQueues = e.target.value;
-      }}
-      disabled={saveMut.isPending}
-    />
-    <ListInput
-      outline
-      label={m.onboarding_org_term_kb_label()}
-      type="text"
-      value={termKnowledgeBase}
-      onInput={(e: Event) => {
-        if (e.target instanceof HTMLInputElement)
-          termKnowledgeBase = e.target.value;
-      }}
-      disabled={saveMut.isPending}
-    />
-  </List>
+  <Card raised contentWrap={false} class="term-card">
+    <div class="term-card-inner">
+      <h4 class="term-group-title">{m.admin_terminology_group_volunteer()}</h4>
+      <p class="term-desc">{m.admin_terminology_desc_volunteer()}</p>
+      <List nested>
+        <ListInput
+          outline
+          label={m.admin_terminology_singular()}
+          type="text"
+          value={termVolunteer}
+          onInput={(e: Event) => {
+            if (e.target instanceof HTMLInputElement)
+              termVolunteer = e.target.value;
+          }}
+          disabled={saveMut.isPending}
+        />
+        <ListInput
+          outline
+          label={m.admin_terminology_plural()}
+          type="text"
+          value={termVolunteers}
+          onInput={(e: Event) => {
+            if (e.target instanceof HTMLInputElement) {
+              termVolunteers = e.target.value;
+              pluralTouchedVolunteers = true;
+            }
+          }}
+          disabled={saveMut.isPending}
+        />
+      </List>
+      <p class="term-suggestions">
+        {m.admin_terminology_suggestions_label()}: {TERMINOLOGY_SUGGESTIONS.volunteer?.join(
+          ", ",
+        )}
+      </p>
+    </div>
+  </Card>
+
+  <Card raised contentWrap={false} class="term-card">
+    <div class="term-card-inner">
+      <h4 class="term-group-title">{m.admin_terminology_group_manager()}</h4>
+      <p class="term-desc">{m.admin_terminology_desc_manager()}</p>
+      <List nested>
+        <ListInput
+          outline
+          label={m.admin_terminology_singular()}
+          type="text"
+          value={termManager}
+          onInput={(e: Event) => {
+            if (e.target instanceof HTMLInputElement)
+              termManager = e.target.value;
+          }}
+          disabled={saveMut.isPending}
+        />
+        <ListInput
+          outline
+          label={m.admin_terminology_plural()}
+          type="text"
+          value={termManagers}
+          onInput={(e: Event) => {
+            if (e.target instanceof HTMLInputElement) {
+              termManagers = e.target.value;
+              pluralTouchedManagers = true;
+            }
+          }}
+          disabled={saveMut.isPending}
+        />
+      </List>
+      <p class="term-suggestions">
+        {m.admin_terminology_suggestions_label()}: {TERMINOLOGY_SUGGESTIONS.manager?.join(
+          ", ",
+        )}
+      </p>
+    </div>
+  </Card>
+
+  <Card raised contentWrap={false} class="term-card">
+    <div class="term-card-inner">
+      <h4 class="term-group-title">{m.admin_terminology_group_client()}</h4>
+      <p class="term-desc">{m.admin_terminology_desc_client()}</p>
+      <List nested>
+        <ListInput
+          outline
+          label={m.admin_terminology_singular()}
+          type="text"
+          value={termClient}
+          onInput={(e: Event) => {
+            if (e.target instanceof HTMLInputElement)
+              termClient = e.target.value;
+          }}
+          disabled={saveMut.isPending}
+        />
+        <ListInput
+          outline
+          label={m.admin_terminology_plural()}
+          type="text"
+          value={termClients}
+          onInput={(e: Event) => {
+            if (e.target instanceof HTMLInputElement) {
+              termClients = e.target.value;
+              pluralTouchedClients = true;
+            }
+          }}
+          disabled={saveMut.isPending}
+        />
+      </List>
+      <p class="term-suggestions">
+        {m.admin_terminology_suggestions_label()}: {TERMINOLOGY_SUGGESTIONS.client?.join(
+          ", ",
+        )}
+      </p>
+    </div>
+  </Card>
+
+  <Card raised contentWrap={false} class="term-card">
+    <div class="term-card-inner">
+      <h4 class="term-group-title">{m.admin_terminology_group_ticket()}</h4>
+      <p class="term-desc">{m.admin_terminology_desc_ticket()}</p>
+      <List nested>
+        <ListInput
+          outline
+          label={m.admin_terminology_singular()}
+          type="text"
+          value={termTicket}
+          onInput={(e: Event) => {
+            if (e.target instanceof HTMLInputElement)
+              termTicket = e.target.value;
+          }}
+          disabled={saveMut.isPending}
+        />
+        <ListInput
+          outline
+          label={m.admin_terminology_plural()}
+          type="text"
+          value={termTickets}
+          onInput={(e: Event) => {
+            if (e.target instanceof HTMLInputElement) {
+              termTickets = e.target.value;
+              pluralTouchedTickets = true;
+            }
+          }}
+          disabled={saveMut.isPending}
+        />
+      </List>
+      <p class="term-suggestions">
+        {m.admin_terminology_suggestions_label()}: {TERMINOLOGY_SUGGESTIONS.ticket?.join(
+          ", ",
+        )}
+      </p>
+    </div>
+  </Card>
+
+  <Card raised contentWrap={false} class="term-card">
+    <div class="term-card-inner">
+      <h4 class="term-group-title">{m.admin_terminology_group_queue()}</h4>
+      <p class="term-desc">{m.admin_terminology_desc_queue()}</p>
+      <List nested>
+        <ListInput
+          outline
+          label={m.admin_terminology_singular()}
+          type="text"
+          value={termQueue}
+          onInput={(e: Event) => {
+            if (e.target instanceof HTMLInputElement)
+              termQueue = e.target.value;
+          }}
+          disabled={saveMut.isPending}
+        />
+        <ListInput
+          outline
+          label={m.admin_terminology_plural()}
+          type="text"
+          value={termQueues}
+          onInput={(e: Event) => {
+            if (e.target instanceof HTMLInputElement) {
+              termQueues = e.target.value;
+              pluralTouchedQueues = true;
+            }
+          }}
+          disabled={saveMut.isPending}
+        />
+      </List>
+      <p class="term-suggestions">
+        {m.admin_terminology_suggestions_label()}: {TERMINOLOGY_SUGGESTIONS.queue?.join(
+          ", ",
+        )}
+      </p>
+    </div>
+  </Card>
+
+  <Card raised contentWrap={false} class="term-card">
+    <div class="term-card-inner">
+      <h4 class="term-group-title">{m.admin_terminology_group_kb()}</h4>
+      <p class="term-desc">{m.admin_terminology_desc_kb()}</p>
+      <List nested>
+        <ListInput
+          outline
+          label={m.admin_terminology_singular()}
+          type="text"
+          value={termKnowledgeBase}
+          onInput={(e: Event) => {
+            if (e.target instanceof HTMLInputElement)
+              termKnowledgeBase = e.target.value;
+          }}
+          disabled={saveMut.isPending}
+        />
+      </List>
+      <p class="term-suggestions">
+        {m.admin_terminology_suggestions_label()}: {TERMINOLOGY_SUGGESTIONS.knowledgeBase?.join(
+          ", ",
+        )}
+      </p>
+    </div>
+  </Card>
 
   <Block>
     <Button large type="submit" disabled={!canSubmit}>
@@ -359,3 +544,45 @@
     </Button>
   </Block>
 </form>
+
+<style>
+  .admin-note {
+    margin-top: var(--space-sm);
+    font-size: var(--text-sm);
+    font-style: italic;
+  }
+
+  :global(.term-card) {
+    margin: var(--space-md) var(--page-pad-x) !important;
+  }
+
+  .term-card-inner {
+    padding: var(--card-pad-y) var(--card-pad-x);
+    display: flex;
+    flex-direction: column;
+  }
+
+  .term-group-title {
+    font-size: var(--text-sm);
+    font-weight: 600;
+    margin: 0 0 2px;
+  }
+
+  .term-desc {
+    font-size: var(--text-sm);
+    color: var(--muted);
+    margin: 0 0 var(--space-sm);
+    line-height: 1.4;
+  }
+
+  .term-card-inner :global(.k-list) {
+    margin: 0;
+  }
+
+  .term-suggestions {
+    font-size: var(--text-xs);
+    color: var(--muted);
+    margin: var(--space-xs) 0 0;
+    line-height: 1.4;
+  }
+</style>
