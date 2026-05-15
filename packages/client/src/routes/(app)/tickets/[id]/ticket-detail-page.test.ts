@@ -195,6 +195,7 @@ vi.mock("$lib/crypto/context.js", () => ({
   }),
   getCryptoBridge: () => ({
     encrypt: vi.fn().mockResolvedValue("encrypted-base64"),
+    encryptText: vi.fn().mockResolvedValue("encrypted-text"),
     decryptBlob: vi.fn().mockRejectedValue(new Error("mock")),
   }),
   getCurrentUserId: () => () => "user-001",
@@ -216,6 +217,7 @@ vi.mock("$lib/crypto/context.js", () => ({
 
 vi.mock("$lib/errors.js", () => ({
   RouterNotAvailableError: class extends Error {},
+  requireRouter: <T>(r: T) => r,
 }));
 
 vi.mock("$lib/stores/toast.svelte.js", () => ({

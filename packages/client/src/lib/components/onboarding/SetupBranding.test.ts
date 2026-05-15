@@ -45,6 +45,7 @@ vi.mock("@tanstack/svelte-query", () => ({
 vi.mock("$lib/crypto/context.js", () => ({
   getOrgKeyManager: vi.fn(() => ({
     encrypt: mockEncrypt,
+    encryptText: vi.fn().mockResolvedValue("encrypted-text"),
     isLoaded: true,
     getPublicKey: () => new Uint8Array(32),
   })),
@@ -76,6 +77,10 @@ vi.mock("$lib/query/keys.js", () => ({
 }));
 vi.mock("$lib/errors.js", () => ({
   RouterNotAvailableError: class extends Error {},
+  requireRouter: <T>(r: T) => r,
+}));
+vi.mock("$lib/crypto/org-key-ready.svelte.js", () => ({
+  isOrgKeyReady: () => true,
 }));
 
 const { default: SetupBranding } = await import("./SetupBranding.svelte");

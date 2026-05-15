@@ -45,6 +45,7 @@ vi.mock("$lib/utils/announce.js", () => ({
 }));
 vi.mock("$lib/errors.js", () => ({
   RouterNotAvailableError: class extends Error {},
+  requireRouter: <T>(r: T) => r,
 }));
 
 const { default: SetupTelephony } = await import("./SetupTelephony.svelte");

@@ -150,7 +150,7 @@ describe("SecurityBriefing", () => {
         props: { onconfirm },
       });
       const detailsElements = container.querySelectorAll("details");
-      expect(detailsElements.length).toBe(9);
+      expect(detailsElements.length).toBe(16);
     });
 
     it("scroll sentinel has aria-hidden", () => {
@@ -183,15 +183,15 @@ describe("SecurityBriefing", () => {
         "summary.touch-feedback",
       );
       expect(detailsWithFeedback.length).toBe(0);
-      expect(summariesWithFeedback.length).toBe(9);
+      expect(summariesWithFeedback.length).toBe(16);
     });
 
-    it("renders protection table column headers", () => {
+    it("renders practice section heading and row labels", () => {
       const onconfirm = vi.fn();
       render(SecurityBriefing, { props: { onconfirm } });
-      expect(screen.getByText("What's protected")).toBeTruthy();
-      expect(screen.getByText("Who can read it")).toBeTruthy();
-      expect(screen.getByText("If this server is seized")).toBeTruthy();
+      expect(screen.getByText("What This Means in Practice")).toBeTruthy();
+      const accessLabels = screen.getAllByText("Who can read it");
+      expect(accessLabels.length).toBeGreaterThan(0);
     });
   });
 });

@@ -6,6 +6,7 @@ const mockMutate = vi.fn();
 const mockEncrypt = vi.fn(
   (buf: Uint8Array) => new Uint8Array([...buf].map((b) => b ^ 0x42)),
 );
+const mockEncryptText = vi.fn().mockResolvedValue("encrypted-text");
 
 vi.mock("$lib/trpc/index.js", () => ({
   trpc: {
@@ -39,6 +40,7 @@ vi.mock("@tanstack/svelte-query", () => ({
 vi.mock("$lib/crypto/context.js", () => ({
   getOrgKeyManager: vi.fn(() => ({
     encrypt: mockEncrypt,
+    encryptText: mockEncryptText,
     isLoaded: true,
     getPublicKey: () => new Uint8Array(32),
   })),
@@ -57,6 +59,10 @@ vi.mock("$lib/utils/announce.js", () => ({
 }));
 vi.mock("$lib/errors.js", () => ({
   RouterNotAvailableError: class extends Error {},
+  requireRouter: <T>(r: T) => r,
+}));
+vi.mock("$lib/crypto/org-key-ready.svelte.js", () => ({
+  isOrgKeyReady: () => true,
 }));
 
 const { default: SetupOrg } = await import("./SetupOrg.svelte");
@@ -133,9 +139,6 @@ describe("SetupOrg", () => {
     const form = container.querySelector("form");
     if (form) await fireEvent.submit(form);
 
-    expect(mockEncrypt).toHaveBeenCalled();
-    const encryptArg = mockEncrypt.mock.calls[0]?.[0] as Uint8Array;
-    expect(encryptArg.constructor.name).toBe("Uint8Array");
-    expect(new TextDecoder().decode(encryptArg)).toBe("Test Org");
+    expect(mockEncryptText).toHaveBeenCalledWith("Test Org");
   });
 });

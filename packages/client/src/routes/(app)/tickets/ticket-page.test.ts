@@ -125,6 +125,7 @@ vi.mock("$lib/crypto/context.js", () => ({
   }),
   getOrgKeyManager: () => ({
     encrypt: vi.fn().mockReturnValue(new Uint8Array([1, 2, 3])),
+    encryptText: vi.fn().mockResolvedValue("encrypted-text"),
     decrypt: vi.fn().mockReturnValue(new Uint8Array([1, 2, 3])),
     isLoaded: true,
     load: vi.fn(),
@@ -134,6 +135,7 @@ vi.mock("$lib/crypto/context.js", () => ({
   getPreviewLoader: () => mockPreviewLoader,
   getCryptoBridge: () => ({
     encrypt: vi.fn().mockResolvedValue("base64-ciphertext"),
+    encryptText: vi.fn().mockResolvedValue("encrypted-text"),
     decrypt: vi.fn().mockResolvedValue("plaintext"),
   }),
   getFollowUpDecryptCache: () => ({

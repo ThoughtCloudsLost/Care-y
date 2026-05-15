@@ -160,6 +160,7 @@ vi.mock("$lib/crypto/context.js", () => ({
       return true;
     },
     encrypt: vi.fn().mockReturnValue(new Uint8Array([1, 2, 3])),
+    encryptText: vi.fn().mockResolvedValue("encrypted-text"),
   }),
 }));
 

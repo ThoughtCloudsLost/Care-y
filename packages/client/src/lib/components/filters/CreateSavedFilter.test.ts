@@ -31,6 +31,7 @@ const { mockEncrypt } = vi.hoisted(() => ({
 vi.mock("$lib/crypto/context.js", () => ({
   getOrgKeyManager: () => ({
     encrypt: mockEncrypt,
+    encryptText: vi.fn().mockResolvedValue("encrypted-text"),
     decrypt: vi.fn(),
     isLoaded: true,
     load: vi.fn(),

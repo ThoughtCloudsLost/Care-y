@@ -2,6 +2,9 @@
 import { describe, it, expect, afterEach, vi, beforeEach } from "vitest";
 import { render, screen, cleanup, fireEvent } from "@testing-library/svelte";
 
+// jsdom doesn't implement scrollIntoView
+Element.prototype.scrollIntoView = vi.fn();
+
 // Mock all crypto and tRPC dependencies before importing the component.
 // SetupAccount has heavy dependencies (crypto Worker, tRPC, libsodium).
 // Unit tests validate the form/validation layer; the full crypto pipeline
@@ -121,8 +124,8 @@ describe("SetupAccount", () => {
     }
 
     expect(
-      screen.getByText("Password must be at least 16 characters."),
-    ).toBeTruthy();
+      screen.getAllByText("Password must be at least 16 characters.").length,
+    ).toBeGreaterThan(0);
     expect(oncomplete).not.toHaveBeenCalled();
   });
 
@@ -154,7 +157,9 @@ describe("SetupAccount", () => {
       }
     }
 
-    expect(screen.getByText("Passwords do not match.")).toBeTruthy();
+    expect(
+      screen.getAllByText("Passwords do not match.").length,
+    ).toBeGreaterThan(0);
     expect(oncomplete).not.toHaveBeenCalled();
   });
 });

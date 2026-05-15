@@ -186,6 +186,7 @@ vi.mock("$lib/utils/haptic.js", () => ({ haptic: vi.fn() }));
 vi.mock("$lib/utils/announce.js", () => ({ announceToLiveRegion: vi.fn() }));
 vi.mock("$lib/errors.js", () => ({
   RouterNotAvailableError: class extends Error {},
+  requireRouter: <T>(r: T) => r,
 }));
 vi.mock("$lib/utils/a11y.js", () => ({
   onKeyActivate: (fn: () => void) => (e: KeyboardEvent) => {

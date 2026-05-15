@@ -37,6 +37,7 @@ vi.mock("$lib/crypto/context.js", () => ({
       return mockOrgKeyLoaded;
     },
     encrypt: vi.fn().mockReturnValue(new Uint8Array([1, 2, 3])),
+    encryptText: vi.fn().mockResolvedValue("encrypted-text"),
   }),
   getOrgDecryptCache: () => ({
     decrypt: () => "Decrypted Name",
@@ -175,7 +176,7 @@ describe("QueueEditor", () => {
     await fireEvent.click(screen.getByText("Save queue"));
 
     expect(mockCreateQueue).toHaveBeenCalledWith({
-      encryptedName: "AQID",
+      encryptedName: "encrypted-text",
       escalateDays: 0,
     });
   });
@@ -198,7 +199,7 @@ describe("QueueEditor", () => {
     expect(mockUpdateQueue).toHaveBeenCalledWith(
       expect.objectContaining({
         queueId: "q-1",
-        encryptedName: "AQID",
+        encryptedName: "encrypted-text",
       }),
     );
   });
