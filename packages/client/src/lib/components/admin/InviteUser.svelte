@@ -9,7 +9,7 @@
   import { Save } from "@lucide/svelte";
   import { createMutation, useQueryClient } from "@tanstack/svelte-query";
   import { adminKeys } from "$lib/query/keys.js";
-  import { RoleId } from "@care-y/shared";
+  import { PASSWORD_MIN_LENGTH, RoleId } from "@care-y/shared";
   import type { RoleIdValue } from "@care-y/shared";
   import * as m from "$lib/paraglide/messages.js";
   import { withTerms } from "$lib/terminology/with-terms.js";
@@ -43,7 +43,7 @@
   const orgKeyLoaded = $derived(orgKeyManager.isLoaded);
 
   const passwordTooShort = $derived(
-    tempPassword.length > 0 && tempPassword.length < 16,
+    tempPassword.length > 0 && tempPassword.length < PASSWORD_MIN_LENGTH,
   );
 
   let savedIdentifier = $state("");

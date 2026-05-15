@@ -39,7 +39,7 @@
   } from "$lib/crypto/context.js";
   import { createTicketDecryptScope } from "$lib/crypto/ticket-decrypt-scope.js";
   import { isDecryptReady } from "$lib/crypto/decrypt-result.js";
-  import { RouterNotAvailableError } from "$lib/errors.js";
+  import { requireRouter } from "$lib/errors.js";
   import DecryptPlaceholder from "$lib/components/DecryptPlaceholder.svelte";
   import InlineSkeleton from "$lib/components/InlineSkeleton.svelte";
   import PanelNotesSection from "./PanelNotesSection.svelte";
@@ -60,8 +60,7 @@
 
   // --- Context + caches ---
 
-  if (!trpc.tickets) throw new RouterNotAvailableError("tickets");
-  const ticketRouter = trpc.tickets;
+  const ticketRouter = requireRouter(trpc.tickets, "tickets");
 
   const ticketCache = getTicketDecryptCache();
   const followUpCache = getFollowUpDecryptCache();

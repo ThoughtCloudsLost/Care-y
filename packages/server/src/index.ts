@@ -506,7 +506,6 @@ const appRouter = createAppRouter({
     isSecureCookie: env.NODE_ENV === "production",
     tenantDbFactory: tenantDb,
     secretsEncryptor,
-    emailSender,
   },
 });
 

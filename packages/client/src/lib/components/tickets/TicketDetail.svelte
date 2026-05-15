@@ -51,7 +51,7 @@
   } from "$lib/crypto/decrypt-result.js";
   import { createTicketDecryptScope } from "$lib/crypto/ticket-decrypt-scope.js";
   import { SvelteMap } from "svelte/reactivity";
-  import { RouterNotAvailableError } from "$lib/errors.js";
+  import { requireRouter } from "$lib/errors.js";
   import { serializedBufferToBase64 } from "$lib/utils/buffer-encoding.js";
   import { onKeyActivate } from "$lib/utils/a11y.js";
   import { formatRelativeTime } from "$lib/utils/format-time.js";
@@ -84,8 +84,7 @@
     type ContextMenuEvent,
   } from "./context-menu-actions.js";
 
-  if (!trpc.tickets) throw new RouterNotAvailableError("tickets");
-  const ticketRouter = trpc.tickets;
+  const ticketRouter = requireRouter(trpc.tickets, "tickets");
 
   type ListFollowUpsResult = Awaited<
     ReturnType<typeof ticketRouter.listFollowUps.query>

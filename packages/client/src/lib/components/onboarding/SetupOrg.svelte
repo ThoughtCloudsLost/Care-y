@@ -27,11 +27,11 @@
   import * as m from "$lib/paraglide/messages.js";
   import { trpc } from "$lib/trpc/index.js";
   import { getOrgKeyManager } from "$lib/crypto/context.js";
-  import { uint8ArrayToBase64 } from "$lib/utils/buffer-encoding.js";
+
   import { haptic } from "$lib/utils/haptic.js";
   import { toastStore } from "$lib/stores/toast.svelte.js";
   import { announceToLiveRegion } from "$lib/utils/announce.js";
-  import { RouterNotAvailableError } from "$lib/errors.js";
+  import { requireRouter } from "$lib/errors.js";
   import { isOrgKeyReady } from "$lib/crypto/org-key-ready.svelte.js";
 
   interface Props {
@@ -45,13 +45,9 @@
 
   let { oncomplete }: Props = $props();
 
-  if (!trpc.onboarding) {
-    throw new RouterNotAvailableError("onboarding");
-  }
-  const onboarding: NonNullable<typeof trpc.onboarding> = trpc.onboarding;
+  const onboarding = requireRouter(trpc.onboarding, "onboarding");
 
   const orgKeyManager = getOrgKeyManager();
-  const encoder = new TextEncoder();
 
   const LANGUAGE_OPTIONS = [
     { tag: "en", label: m.onboarding_org_language_en() },
@@ -75,7 +71,7 @@
     return s + "s";
   }
 
-  function lc(s: string): string {
+  function lowercase(s: string): string {
     return s.trim().toLowerCase();
   }
 
@@ -170,17 +166,18 @@
         language,
         countryCode,
         terminology: {
-          volunteer: lc(termVolunteer) || activeDefaults.volunteer,
-          volunteers: lc(termVolunteers) || activeDefaults.volunteers,
-          client: lc(termClient) || activeDefaults.client,
-          clients: lc(termClients) || activeDefaults.clients,
-          ticket: lc(termTicket) || activeDefaults.ticket,
-          tickets: lc(termTickets) || activeDefaults.tickets,
-          manager: lc(termManager) || activeDefaults.manager,
-          managers: lc(termManagers) || activeDefaults.managers,
-          queue: lc(termQueue) || activeDefaults.queue,
-          queues: lc(termQueues) || activeDefaults.queues,
-          knowledgeBase: lc(termKnowledgeBase) || activeDefaults.knowledgeBase,
+          volunteer: lowercase(termVolunteer) || activeDefaults.volunteer,
+          volunteers: lowercase(termVolunteers) || activeDefaults.volunteers,
+          client: lowercase(termClient) || activeDefaults.client,
+          clients: lowercase(termClients) || activeDefaults.clients,
+          ticket: lowercase(termTicket) || activeDefaults.ticket,
+          tickets: lowercase(termTickets) || activeDefaults.tickets,
+          manager: lowercase(termManager) || activeDefaults.manager,
+          managers: lowercase(termManagers) || activeDefaults.managers,
+          queue: lowercase(termQueue) || activeDefaults.queue,
+          queues: lowercase(termQueues) || activeDefaults.queues,
+          knowledgeBase:
+            lowercase(termKnowledgeBase) || activeDefaults.knowledgeBase,
         },
       });
     },
@@ -217,29 +214,27 @@
       return;
     }
 
-    const plainBytes = encoder.encode(orgName.trim());
-    const cipherBytes = await orgKeyManager.encrypt(plainBytes);
-    const encryptedOrgName = uint8ArrayToBase64(cipherBytes);
+    const encryptedOrgName = await orgKeyManager.encryptText(orgName.trim());
 
     let encryptedTerminology: string | undefined;
     if (hasCustomTerminology) {
       const labels: TerminologyLabels = {
-        volunteer: lc(termVolunteer),
-        volunteers: lc(termVolunteers),
-        client: lc(termClient),
-        clients: lc(termClients),
-        ticket: lc(termTicket),
-        tickets: lc(termTickets),
-        manager: lc(termManager),
-        managers: lc(termManagers),
-        queue: lc(termQueue),
-        queues: lc(termQueues),
-        knowledgeBase: lc(termKnowledgeBase),
+        volunteer: lowercase(termVolunteer),
+        volunteers: lowercase(termVolunteers),
+        client: lowercase(termClient),
+        clients: lowercase(termClients),
+        ticket: lowercase(termTicket),
+        tickets: lowercase(termTickets),
+        manager: lowercase(termManager),
+        managers: lowercase(termManagers),
+        queue: lowercase(termQueue),
+        queues: lowercase(termQueues),
+        knowledgeBase: lowercase(termKnowledgeBase),
       };
       const config = { [language]: labels };
-      const termBytes = encoder.encode(JSON.stringify(config));
-      const termCipher = await orgKeyManager.encrypt(termBytes);
-      encryptedTerminology = uint8ArrayToBase64(termCipher);
+      encryptedTerminology = await orgKeyManager.encryptText(
+        JSON.stringify(config),
+      );
     }
 
     saveMut.mutate({

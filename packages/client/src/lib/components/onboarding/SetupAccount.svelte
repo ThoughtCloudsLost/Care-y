@@ -38,6 +38,7 @@
   import KeyDerivation, {
     type LoginPhaseId,
   } from "$lib/components/onboarding/KeyDerivation.svelte";
+  import { PASSWORD_MIN_LENGTH } from "@care-y/shared";
   import type { RegisterCryptoCallbacks } from "$lib/auth/register-crypto.js";
   import type { LoginCryptoCallbacks } from "$lib/auth/login-crypto.js";
 
@@ -88,7 +89,7 @@
   const isSubmitting = $derived(phase !== "idle" && phase !== "error");
 
   function validate(): string | null {
-    if (password.length < 16) {
+    if (password.length < PASSWORD_MIN_LENGTH) {
       return m.onboarding_account_error_password_length();
     }
     // eslint-disable-next-line security/detect-possible-timing-attacks -- client-side form validation, not credential check
@@ -99,7 +100,7 @@
   }
 
   const passwordTooShort = $derived(
-    password.length > 0 && password.length < 16,
+    password.length > 0 && password.length < PASSWORD_MIN_LENGTH,
   );
   const passwordMismatch = $derived(
     confirmPassword.length > 0 && password !== confirmPassword,

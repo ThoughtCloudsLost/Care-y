@@ -29,26 +29,21 @@
   import { toastStore } from "$lib/stores/toast.svelte.js";
   import { announceToLiveRegion } from "$lib/utils/announce.js";
   import { getOrgDecryptCache, getOrgKeyManager } from "$lib/crypto/context.js";
-  import {
-    uint8ArrayToBase64,
-    base64ToUint8Array,
-  } from "$lib/utils/buffer-encoding.js";
+  import { base64ToUint8Array } from "$lib/utils/buffer-encoding.js";
   import { cacheTerminology } from "$lib/terminology/index.js";
-  import { RouterNotAvailableError } from "$lib/errors.js";
+  import { capitalize } from "$lib/terminology/with-terms.js";
+  import { requireRouter } from "$lib/errors.js";
   import type { BrandingField } from "@care-y/shared";
   import QueryError from "$lib/components/QueryError.svelte";
   import DecryptPlaceholder from "$lib/components/DecryptPlaceholder.svelte";
   import SoftButton from "$lib/components/inputs/SoftButton.svelte";
   import ShellSheet from "$lib/shell/ShellSheet.svelte";
 
-  if (!trpc.branding) throw new RouterNotAvailableError("branding");
-  const brandingRouter = trpc.branding;
+  const brandingRouter = requireRouter(trpc.branding, "branding");
 
   const queryClient = useQueryClient();
   const orgCache = getOrgDecryptCache();
   const orgKeyManager = getOrgKeyManager();
-
-  const encoder = new TextEncoder();
 
   const LANGS = ["en", "es"] as const;
   type LangCode = (typeof LANGS)[number];
@@ -140,10 +135,6 @@
     }
   });
 
-  function capitalize(s: string): string {
-    return s.charAt(0).toUpperCase() + s.slice(1);
-  }
-
   function displayLabel(
     field: keyof TerminologyLabels,
     lang: LangCode,
@@ -223,12 +214,6 @@
 
   // ── Encrypt + save ──
 
-  async function encryptField(value: string): Promise<string> {
-    const plainBytes = encoder.encode(value);
-    const cipherBytes = await orgKeyManager.encrypt(plainBytes);
-    return uint8ArrayToBase64(cipherBytes);
-  }
-
   const saveMutation = createMutation(() => ({
     mutationFn: async (
       fields: {
@@ -288,7 +273,7 @@
     }
 
     const json = JSON.stringify(config);
-    const encryptedValue = await encryptField(json);
+    const encryptedValue = await orgKeyManager.encryptText(json);
 
     saveMutation.mutate([{ field: "terminology", encryptedValue }]);
   }

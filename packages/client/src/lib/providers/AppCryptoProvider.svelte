@@ -22,7 +22,7 @@
   import { cacheRegistry } from "$lib/crypto/cache-registry.js";
   import { trpc } from "$lib/trpc/index.js";
   import { createPreviewLoader } from "$lib/tickets/preview-loader.svelte.js";
-  import { RouterNotAvailableError } from "$lib/errors.js";
+  import { requireRouter } from "$lib/errors.js";
   import { useQueryClient } from "@tanstack/svelte-query";
   import { ticketKeys } from "$lib/query/keys.js";
   import { getCryptoBridge, getOrgKeyManager } from "$lib/crypto/context.js";
@@ -52,8 +52,7 @@
     const followUpCache = new FollowUpDecryptCache(bridge);
     setFollowUpDecryptCache(followUpCache);
 
-    if (!trpc.tickets) throw new RouterNotAvailableError("tickets");
-    const ticketRouter = trpc.tickets;
+    const ticketRouter = requireRouter(trpc.tickets, "tickets");
     setPreviewLoader(
       createPreviewLoader({
         queryFn: async (ids) =>

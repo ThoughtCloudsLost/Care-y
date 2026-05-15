@@ -10,7 +10,6 @@
     SAVED_FILTER_ICONS,
   } from "./saved-filter-constants.js";
   import type { SavedFilterColor } from "@care-y/shared";
-  import { uint8ArrayToBase64 } from "$lib/utils/buffer-encoding.js";
 
   interface Props {
     opened: boolean;
@@ -36,9 +35,7 @@
   async function handleSave(): Promise<void> {
     if (!canSave) return;
 
-    const plaintext = new TextEncoder().encode(name.trim());
-    const ciphertext = await orgKeyManager.encrypt(plaintext);
-    const encryptedName = uint8ArrayToBase64(ciphertext);
+    const encryptedName = await orgKeyManager.encryptText(name.trim());
 
     onsave({
       encryptedName,

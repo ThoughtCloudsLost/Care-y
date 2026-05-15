@@ -22,7 +22,7 @@
   import * as m from "$lib/paraglide/messages.js";
   import { getOrgKeyManager } from "$lib/crypto/context.js";
   import { trpc } from "$lib/trpc/index.js";
-  import { RouterNotAvailableError } from "$lib/errors.js";
+  import { requireRouter } from "$lib/errors.js";
   import {
     kbArticleSchema,
     kbEditorPlugins,
@@ -82,8 +82,7 @@
 
   let { existingArticle, categories, bridge, onsave }: Props = $props();
 
-  if (!trpc.kb) throw new RouterNotAvailableError("kb");
-  const kbRouter = trpc.kb;
+  const kbRouter = requireRouter(trpc.kb, "kb");
   const orgKeyManager = getOrgKeyManager();
 
   const isEditMode = $derived(existingArticle !== undefined);

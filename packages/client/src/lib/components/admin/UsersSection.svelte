@@ -36,7 +36,7 @@
   import { haptic } from "$lib/utils/haptic.js";
   import { toastStore } from "$lib/stores/toast.svelte.js";
   import { announceToLiveRegion } from "$lib/utils/announce.js";
-  import { RouterNotAvailableError } from "$lib/errors.js";
+  import { requireRouter } from "$lib/errors.js";
   import { normalizeForSearch } from "$lib/search/normalize.js";
   import {
     userFilterStore,
@@ -71,8 +71,7 @@
   }: UsersSectionProps = $props();
 
   const authRouter = trpc.auth;
-  if (!trpc.tickets) throw new RouterNotAvailableError("tickets");
-  const ticketRouter = trpc.tickets;
+  const ticketRouter = requireRouter(trpc.tickets, "tickets");
   const profileRouter = trpc.profile;
   const queryClient = useQueryClient();
 

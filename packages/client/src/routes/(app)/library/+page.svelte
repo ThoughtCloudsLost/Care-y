@@ -42,7 +42,7 @@
     getNavbarOverrideCtx,
   } from "$lib/shell/context.js";
   import { useScrollDirection } from "$lib/shell/use-scroll-direction.svelte.js";
-  import { RouterNotAvailableError } from "$lib/errors.js";
+  import { requireRouter } from "$lib/errors.js";
   import { kbFilterStore } from "$lib/stores/kb-filters.svelte.js";
   import { kbViewModeStore } from "$lib/stores/kb-view-mode.svelte.js";
   import { kbSavedFilterStore } from "$lib/stores/kb-saved-filters.svelte.js";
@@ -80,8 +80,7 @@
   const canManageCategories = $derived(
     permissions.has(Permission.MANAGE_KNOWLEDGE_BASE_CATEGORIES),
   );
-  if (!trpc.kb) throw new RouterNotAvailableError("kb");
-  const kbRouter = trpc.kb;
+  const kbRouter = requireRouter(trpc.kb, "kb");
   const queryClient = useQueryClient();
 
   // Shell context.

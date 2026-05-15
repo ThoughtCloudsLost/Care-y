@@ -7,13 +7,13 @@
   import { withTerms } from "$lib/terminology/with-terms.js";
   import { trpc } from "$lib/trpc/index.js";
   import { getOrgKeyManager, getOrgDecryptCache } from "$lib/crypto/context.js";
-  import { uint8ArrayToBase64 } from "$lib/utils/buffer-encoding.js";
   import { haptic } from "$lib/utils/haptic.js";
   import { toastStore } from "$lib/stores/toast.svelte.js";
   import { announceToLiveRegion } from "$lib/utils/announce.js";
-  import { RouterNotAvailableError } from "$lib/errors.js";
+  import { requireRouter } from "$lib/errors.js";
   import ShellSheet from "$lib/shell/ShellSheet.svelte";
   import SoftButton from "$lib/components/inputs/SoftButton.svelte";
+  import { MAX_ESCALATION_DAYS } from "@care-y/shared";
   import type { SerializedBuffer } from "$lib/utils/buffer-encoding.js";
 
   interface QueueEditorProps {
@@ -34,8 +34,7 @@
     ondeletequeue,
   }: QueueEditorProps = $props();
 
-  if (!trpc.tickets) throw new RouterNotAvailableError("tickets");
-  const ticketRouter = trpc.tickets;
+  const ticketRouter = requireRouter(trpc.tickets, "tickets");
   const queryClient = useQueryClient();
   const orgKeyManager = getOrgKeyManager();
   const orgCache = getOrgDecryptCache();
@@ -48,8 +47,6 @@
   let wasOpen = $state(false);
   let initialName = $state("");
   let initialEscalation = $state("");
-
-  const textEncoder = new TextEncoder();
 
   $effect(() => {
     if (opened && !wasOpen) {
@@ -81,7 +78,7 @@
     const trimmed = escalationDays.trim();
     if (trimmed === "") return 0;
     const n = Number(trimmed);
-    if (!Number.isInteger(n) || n < 0 || n > 365) return -1;
+    if (!Number.isInteger(n) || n < 0 || n > MAX_ESCALATION_DAYS) return -1;
     return n;
   });
 
@@ -130,9 +127,7 @@
   async function handleSubmit(): Promise<void> {
     if (!canSubmit || isPending) return;
 
-    const plainBytes = textEncoder.encode(queueName.trim());
-    const cipherBytes = await orgKeyManager.encrypt(plainBytes);
-    const encryptedName = uint8ArrayToBase64(cipherBytes);
+    const encryptedName = await orgKeyManager.encryptText(queueName.trim());
     const days = parsedEscalationDays;
 
     if (isCreateMode) {

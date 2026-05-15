@@ -44,7 +44,7 @@
     TicketQuickAction,
   } from "$lib/components/tickets/ticket-types.js";
 
-  import { RouterNotAvailableError } from "$lib/errors.js";
+  import { requireRouter } from "$lib/errors.js";
   import type { SortField, FilterStatus } from "$lib/stores/filters.svelte.js";
   import { savedFilterStore } from "$lib/stores/saved-filters.svelte.js";
   import {
@@ -87,8 +87,7 @@
   const orgCache = getOrgDecryptCache();
   const currentUserIdGetter = getCurrentUserId();
   const currentUserId = $derived(currentUserIdGetter());
-  if (!trpc.tickets) throw new RouterNotAvailableError("tickets");
-  const ticketRouter = trpc.tickets;
+  const ticketRouter = requireRouter(trpc.tickets, "tickets");
   const queryClient = useQueryClient();
 
   function resolveVolunteerName(userId: string): string {
