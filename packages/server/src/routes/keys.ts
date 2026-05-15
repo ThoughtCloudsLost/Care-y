@@ -22,6 +22,10 @@ import {
   adminProcedure,
   withErrorWrapping,
 } from "../trpc/trpc.js";
+
+function b64(s: string): Buffer {
+  return Buffer.from(s, "base64");
+}
 import { createKeyRotationService } from "../crypto/key-rotation.js";
 import { createOrgKeyRotationService } from "../crypto/org-key-rotation.js";
 import { ConflictError } from "../errors.js";
@@ -38,8 +42,8 @@ export function createKeysRouter() {
     initCryptoKeys: authedProcedure.input(initCryptoKeysSchema).mutation(
       withErrorWrapping(async ({ ctx, input }) => {
         const keyRotation = createKeyRotationService(ctx.org.tenantDb);
-        const salt = Buffer.from(input.salt, "base64");
-        const volPublic = Buffer.from(input.volPublic, "base64");
+        const salt = b64(input.salt);
+        const volPublic = b64(input.volPublic);
         await keyRotation.initCryptoKeys(ctx.session.userId, salt, volPublic);
         return { success: true as const };
       }),
@@ -50,7 +54,7 @@ export function createKeysRouter() {
       .input(uploadVolPublicSchema)
       .mutation(async ({ ctx, input }) => {
         const keyRotation = createKeyRotationService(ctx.org.tenantDb);
-        const volPublic = Buffer.from(input.volPublic, "base64");
+        const volPublic = b64(input.volPublic);
         await keyRotation.storeVolPublic(ctx.session.userId, volPublic);
         return { success: true as const };
       }),
@@ -66,26 +70,20 @@ export function createKeysRouter() {
         try {
           await keyRotation.applyRotation({
             userId,
-            saltNew: Buffer.from(input.saltNew, "base64"),
-            volPublicNew: Buffer.from(input.volPublicNew, "base64"),
+            saltNew: b64(input.saltNew),
+            volPublicNew: b64(input.volPublicNew),
             reWrappedKeys: input.reWrappedKeys.map((k) => ({
               ticketId: k.ticketId,
               keyGeneration: k.keyGeneration,
-              ephemeralPoint: Buffer.from(k.ephemeralPoint, "base64"),
-              nonce: Buffer.from(k.nonce, "base64"),
-              wrappedKey: Buffer.from(k.wrappedKey, "base64"),
+              ephemeralPoint: b64(k.ephemeralPoint),
+              nonce: b64(k.nonce),
+              wrappedKey: b64(k.wrappedKey),
             })),
             reWrappedOrgKey: input.reWrappedOrgKey
               ? {
-                  ephemeralPoint: Buffer.from(
-                    input.reWrappedOrgKey.ephemeralPoint,
-                    "base64",
-                  ),
-                  nonce: Buffer.from(input.reWrappedOrgKey.nonce, "base64"),
-                  wrappedKey: Buffer.from(
-                    input.reWrappedOrgKey.wrappedKey,
-                    "base64",
-                  ),
+                  ephemeralPoint: b64(input.reWrappedOrgKey.ephemeralPoint),
+                  nonce: b64(input.reWrappedOrgKey.nonce),
+                  wrappedKey: b64(input.reWrappedOrgKey.wrappedKey),
                 }
               : undefined,
           });
@@ -141,7 +139,7 @@ export function createKeysRouter() {
           .select("org_public_key")
           .executeTakeFirst();
 
-        const orgPublicKey = Buffer.from(input.orgPublicKey, "base64");
+        const orgPublicKey = b64(input.orgPublicKey);
 
         if (
           existing?.org_public_key &&
@@ -152,9 +150,9 @@ export function createKeysRouter() {
           );
         }
 
-        const ephemeralPoint = Buffer.from(input.ephemeralPoint, "base64");
-        const nonce = Buffer.from(input.nonce, "base64");
-        const wrappedKey = Buffer.from(input.wrappedKey, "base64");
+        const ephemeralPoint = b64(input.ephemeralPoint);
+        const nonce = b64(input.nonce);
+        const wrappedKey = b64(input.wrappedKey);
 
         await tDb.transaction().execute(async (tx) => {
           // Idempotent: bootstrapAdmin may have already stored the key.
@@ -190,12 +188,12 @@ export function createKeysRouter() {
       withErrorWrapping(async ({ ctx, input }) => {
         const svc = createOrgKeyRotationService(ctx.org.tenantDb);
         await svc.rotateOrgKey({
-          newOrgPublicKey: Buffer.from(input.newOrgPublicKey, "base64"),
+          newOrgPublicKey: b64(input.newOrgPublicKey),
           wrappedKeys: input.wrappedKeys.map((w) => ({
             userId: w.userId,
-            ephemeralPoint: Buffer.from(w.ephemeralPoint, "base64"),
-            wrappedKey: Buffer.from(w.wrappedKey, "base64"),
-            nonce: Buffer.from(w.nonce, "base64"),
+            ephemeralPoint: b64(w.ephemeralPoint),
+            wrappedKey: b64(w.wrappedKey),
+            nonce: b64(w.nonce),
           })),
         });
         return { success: true as const };
@@ -212,9 +210,9 @@ export function createKeysRouter() {
           .insertInto("wrapped_org_keys")
           .values({
             user_id: input.userId,
-            ephemeral_point: Buffer.from(input.ephemeralPoint, "base64"),
-            nonce: Buffer.from(input.nonce, "base64"),
-            wrapped_key: Buffer.from(input.wrappedKey, "base64"),
+            ephemeral_point: b64(input.ephemeralPoint),
+            nonce: b64(input.nonce),
+            wrapped_key: b64(input.wrappedKey),
           })
           .onConflict((oc) => oc.column("user_id").doNothing())
           .execute();

@@ -11,14 +11,13 @@
   import { setOrgKeyReady } from "$lib/crypto/org-key-ready.svelte.js";
   import { installCleanupHandler } from "$lib/auth/cleanup.js";
   import { loginCrypto } from "$lib/auth/login-crypto.js";
-  import { solveProofOfWork } from "$lib/auth/pow-solver.js";
+  import { buildLoginCallbacks } from "$lib/auth/crypto-callbacks.js";
   import { announceToLiveRegion } from "$lib/utils/announce.js";
   import { createPublicBrandingQuery } from "$lib/branding/public-branding.js";
   import { applyKonstaPalette } from "$lib/branding/konsta-palette.js";
   import KeyDerivation, {
     type LoginPhaseId,
   } from "$lib/components/onboarding/KeyDerivation.svelte";
-  import type { LoginCryptoCallbacks } from "$lib/auth/login-crypto.js";
 
   const bridge = getCryptoBridge();
   const orgKeyManager = getOrgKeyManager();
@@ -106,30 +105,16 @@
       await trpc.auth.login.mutate({ identifier, password });
 
       // 2. Full crypto pipeline in the Worker
-      const noop = (): void => {
-        /* protocol-required callback, no action needed */
-      };
-      const callbacks: LoginCryptoCallbacks = {
-        onArgon2idStart: () => {
-          phase = "argon2id";
-          announceToLiveRegion("polite", m.auth_phase_argon2id());
+      const callbacks = buildLoginCallbacks(
+        (p) => {
+          phase = p;
         },
-        onArgon2idDone: noop,
-        onOprfStart: () => {
-          phase = "oprf";
+        {
+          argon2id: m.auth_phase_argon2id(),
+          derive: m.auth_phase_derive(),
+          pow: m.auth_phase_pow(),
         },
-        onOprfDone: noop,
-        onDeriveStart: () => {
-          phase = "derive";
-          announceToLiveRegion("polite", m.auth_phase_derive());
-        },
-        onDone: noop,
-        onPowRequired: async (challenge, difficulty) => {
-          phase = "pow";
-          announceToLiveRegion("polite", m.auth_phase_pow());
-          return solveProofOfWork(challenge, difficulty);
-        },
-      };
+      );
 
       const result = await loginCrypto(identifier, password, bridge, callbacks);
 

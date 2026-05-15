@@ -29,8 +29,8 @@
   import CollapsibleSection from "./CollapsibleSection.svelte";
   import { trpc } from "$lib/trpc/index.js";
   import * as m from "$lib/paraglide/messages.js";
-  import { withTerms } from "$lib/terminology/with-terms.js";
   import { haptic } from "$lib/utils/haptic.js";
+  import { CHECKLIST_ITEMS } from "$lib/onboarding/checklist-items.js";
 
   interface Props {
     expanded: boolean;
@@ -82,72 +82,33 @@
     },
   }));
 
-  interface ChecklistMeta {
-    readonly id: string;
-    readonly label: () => string;
-    readonly desc: () => string;
-    readonly icon: typeof UserPlus;
-    readonly href: string;
-  }
+  const ICONS: Record<string, typeof UserPlus> = {
+    invite: UserPlus,
+    branding: Palette,
+    greetings: Phone,
+    sms: MessageSquare,
+    presets: Reply,
+    kb: BookOpen,
+    queues: Layers,
+    retention: ShieldCheck,
+  };
 
-  const itemMeta: ChecklistMeta[] = [
-    {
-      id: "invite",
-      label: m.getting_started_invite,
-      desc: m.getting_started_invite_desc,
-      icon: UserPlus,
-      href: "/admin/people",
-    },
-    {
-      id: "branding",
-      label: m.getting_started_branding,
-      desc: m.getting_started_branding_desc,
-      icon: Palette,
-      href: "/admin/organization",
-    },
-    {
-      id: "greetings",
-      label: m.getting_started_greetings,
-      desc: m.getting_started_greetings_desc,
-      icon: Phone,
-      href: "/admin/communications",
-    },
-    {
-      id: "sms",
-      label: m.getting_started_sms,
-      desc: m.getting_started_sms_desc,
-      icon: MessageSquare,
-      href: "/admin/communications",
-    },
-    {
-      id: "presets",
-      label: m.getting_started_presets,
-      desc: () => m.getting_started_presets_desc(withTerms()),
-      icon: Reply,
-      href: "/admin/communications",
-    },
-    {
-      id: "kb",
-      label: () => m.getting_started_kb(withTerms()),
-      desc: () => m.getting_started_kb_desc(withTerms()),
-      icon: BookOpen,
-      href: "/kb",
-    },
-    {
-      id: "queues",
-      label: () => m.getting_started_queues(withTerms()),
-      desc: () => m.getting_started_queues_desc(withTerms()),
-      icon: Layers,
-      href: "/admin/communications",
-    },
-    {
-      id: "retention",
-      label: m.getting_started_retention,
-      desc: m.getting_started_retention_desc,
-      icon: ShieldCheck,
-      href: "/admin/organization",
-    },
-  ];
+  const HREFS: Record<string, string> = {
+    invite: "/admin/people",
+    branding: "/admin/organization",
+    greetings: "/admin/communications",
+    sms: "/admin/communications",
+    presets: "/admin/communications",
+    kb: "/kb",
+    queues: "/admin/communications",
+    retention: "/admin/organization",
+  };
+
+  const itemMeta = CHECKLIST_ITEMS.map((item) => ({
+    ...item,
+    icon: ICONS[item.id] ?? Circle,
+    href: HREFS[item.id] ?? "/",
+  }));
 
   const visible = $derived(
     checklistQuery.isSuccess &&

@@ -113,14 +113,14 @@
     queryFn: async () => brandingRouter.getBranding.query(),
   }));
 
-  function b64Field(value: string | null): Uint8Array | null {
+  function base64FieldToBytes(value: string | null): Uint8Array | null {
     return value !== null && value !== "" ? base64ToUint8Array(value) : null;
   }
 
   const decryptedTerminologyJson = $derived(
     orgCache.decrypt(
       "branding:terminology",
-      b64Field(brandingQuery.data?.encryptedTerminology ?? null),
+      base64FieldToBytes(brandingQuery.data?.encryptedTerminology ?? null),
     ),
   );
 
