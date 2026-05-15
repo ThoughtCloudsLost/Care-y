@@ -12,7 +12,7 @@
   import { createQuery } from "@tanstack/svelte-query";
   import * as m from "$lib/paraglide/messages.js";
   import { trpc } from "$lib/trpc/index.js";
-  import { authKeys } from "$lib/query/keys.js";
+  import { authKeys, twoFactorKeys } from "$lib/query/keys.js";
   import {
     getOrgDecryptCache,
     getCryptoBridge,
@@ -21,9 +21,11 @@
   import { getNavbarOverrideCtx } from "$lib/shell/context.js";
   import { shellBack } from "$lib/shell/navigation.js";
   import { base64ToUint8Array } from "$lib/utils/buffer-encoding.js";
+  import { toastStore } from "$lib/stores/toast.svelte.js";
   import DisplayNameSheet from "$lib/components/settings/DisplayNameSheet.svelte";
   import UsernameSheet from "$lib/components/settings/UsernameSheet.svelte";
   import PasswordSheet from "$lib/components/settings/PasswordSheet.svelte";
+  import TwoFactorSheet from "$lib/components/settings/TwoFactorSheet.svelte";
 
   const orgCache = getOrgDecryptCache();
   const navbarCtx = getNavbarOverrideCtx();
@@ -51,6 +53,19 @@
   let displayNameSheetOpen = $state(false);
   let usernameSheetOpen = $state(false);
   let passwordSheetOpen = $state(false);
+  let twoFactorSheetOpen = $state(false);
+
+  const twoFactorStatusQuery = createQuery(() => ({
+    queryKey: twoFactorKeys.status(),
+    queryFn: async () => trpc.twoFactor.status.query(),
+  }));
+
+  const twoFactorSummary = $derived.by(() => {
+    if (!twoFactorStatusQuery.data) return m.common_loading();
+    const count = twoFactorStatusQuery.data.methods.length;
+    if (count === 0) return m.settings_2fa_none();
+    return m.settings_2fa_methods({ count });
+  });
 
   // ── Dev-only seed ───────────────────────────────────────────────────
   type SeedPhase = "idle" | "seeding" | "done" | "error";
@@ -143,6 +158,25 @@
     />
   </List>
 
+  <BlockTitle>{m.settings_security()}</BlockTitle>
+  <List strong inset>
+    <ListItem
+      title={m.settings_2fa()}
+      after={twoFactorSummary}
+      link
+      onclick={() => {
+        twoFactorSheetOpen = true;
+      }}
+    />
+    <ListItem
+      title={m.settings_replay_walkthrough()}
+      link
+      onclick={() => {
+        toastStore.show(m.feature_coming_soon());
+      }}
+    />
+  </List>
+
   {#if import.meta.env.DEV}
     <!-- eslint-disable care-y/no-hardcoded-strings -- dev-only UI, tree-shaken from production -->
     <BlockTitle>Developer</BlockTitle>
@@ -186,6 +220,15 @@
     passwordSheetOpen = false;
   }}
   {userId}
+/>
+
+<TwoFactorSheet
+  opened={twoFactorSheetOpen}
+  ondismiss={() => {
+    twoFactorSheetOpen = false;
+  }}
+  {userId}
+  username={currentUsername}
 />
 
 <style>
