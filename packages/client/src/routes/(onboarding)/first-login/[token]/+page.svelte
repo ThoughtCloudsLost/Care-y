@@ -28,7 +28,10 @@
   import { registerCrypto } from "$lib/auth/register-crypto.js";
   import { loginCrypto } from "$lib/auth/login-crypto.js";
   import { installCleanupHandler } from "$lib/auth/cleanup.js";
-  import { solveProofOfWork } from "$lib/auth/pow-solver.js";
+  import {
+    buildRegisterCallbacks,
+    buildLoginCallbacks,
+  } from "$lib/auth/crypto-callbacks.js";
   import { getCryptoBridge, getOrgKeyManager } from "$lib/crypto/context.js";
   import { setOrgKeyReady } from "$lib/crypto/org-key-ready.svelte.js";
   import { announceToLiveRegion } from "$lib/utils/announce.js";
@@ -39,8 +42,6 @@
   import KeyDerivation, {
     type LoginPhaseId,
   } from "$lib/components/onboarding/KeyDerivation.svelte";
-  import type { RegisterCryptoCallbacks } from "$lib/auth/register-crypto.js";
-  import type { LoginCryptoCallbacks } from "$lib/auth/login-crypto.js";
 
   const token = $derived(page.params.token ?? "");
   const bridge = getCryptoBridge();
@@ -124,60 +125,29 @@
       });
 
       // 2. registerCrypto: Argon2id + OPRF + upload salt + volPublic.
-      const regNoop = (): void => {
-        /* protocol-required callback */
+      /* eslint-disable @typescript-eslint/no-unsafe-assignment -- $state<union> rune proxy */
+      const setPhase = (p: LoginPhaseId): void => {
+        phase = p;
       };
-      const regCallbacks: RegisterCryptoCallbacks = {
-        onArgon2idStart: () => {
-          phase = "argon2id";
-          announceToLiveRegion("polite", m.onboarding_firstlogin_deriving());
-        },
-        onArgon2idDone: regNoop,
-        onOprfStart: () => {
-          phase = "oprf";
-        },
-        onOprfDone: regNoop,
-        onDeriveStart: () => {
-          phase = "derive";
-          announceToLiveRegion("polite", m.auth_phase_derive());
-        },
-        onDone: regNoop,
-        onUploadStart: regNoop,
-      };
+      /* eslint-enable @typescript-eslint/no-unsafe-assignment */
 
-      await registerCrypto(userId, password, regCallbacks);
+      await registerCrypto(
+        userId,
+        password,
+        buildRegisterCallbacks(setPhase, {
+          argon2id: m.onboarding_firstlogin_deriving(),
+          derive: m.auth_phase_derive(),
+        }),
+      );
 
       // 3. loginCrypto: re-derive keys in Worker (registerCrypto zeroed them).
       await bridge.zeroAll();
-
-      const loginNoop = (): void => {
-        /* protocol-required callback */
-      };
-      const loginCallbacks: LoginCryptoCallbacks = {
-        onArgon2idStart: () => {
-          phase = "argon2id";
-        },
-        onArgon2idDone: loginNoop,
-        onOprfStart: () => {
-          phase = "oprf";
-        },
-        onOprfDone: loginNoop,
-        onDeriveStart: () => {
-          phase = "derive";
-          announceToLiveRegion("polite", m.auth_phase_derive());
-        },
-        onDone: loginNoop,
-        onPowRequired: async (challenge, difficulty) => {
-          phase = "pow";
-          return solveProofOfWork(challenge, difficulty);
-        },
-      };
 
       const loginResult = await loginCrypto(
         identifier,
         password,
         bridge,
-        loginCallbacks,
+        buildLoginCallbacks(setPhase, { derive: m.auth_phase_derive() }),
       );
 
       // 4. Load org key if available.

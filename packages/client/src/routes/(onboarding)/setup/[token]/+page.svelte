@@ -34,12 +34,15 @@
   } from "$lib/crypto/org-key-ready.svelte.js";
   import { getCryptoBridge, getOrgKeyManager } from "$lib/crypto/context.js";
   import { loginCrypto } from "$lib/auth/login-crypto.js";
-  import { solveProofOfWork } from "$lib/auth/pow-solver.js";
+  import {
+    buildLoginCallbacks,
+    type PhaseUpdater,
+  } from "$lib/auth/crypto-callbacks.js";
   import { fetchAndUnwrapOrgKey } from "$lib/auth/crypto-helpers.js";
   import { installCleanupHandler } from "$lib/auth/cleanup.js";
   import { haptic } from "$lib/utils/haptic.js";
   import { requireRouter } from "$lib/errors.js";
-  import type { LoginCryptoCallbacks } from "$lib/auth/login-crypto.js";
+  import { CHECKLIST_ITEMS } from "$lib/onboarding/checklist-items.js";
   import WizardStepper from "$lib/components/onboarding/WizardStepper.svelte";
   import SetupAccount from "$lib/components/onboarding/SetupAccount.svelte";
   import SecurityBriefing from "$lib/components/onboarding/SecurityBriefing.svelte";
@@ -158,25 +161,13 @@
         password: reauthPassword,
       });
 
-      const noop = (): void => {
-        /* protocol-required callback, no action needed */
-      };
-      const callbacks: LoginCryptoCallbacks = {
-        onArgon2idStart: noop,
-        onArgon2idDone: noop,
-        onOprfStart: noop,
-        onOprfDone: noop,
-        onDeriveStart: noop,
-        onDone: noop,
-        onPowRequired: async (challenge, difficulty) =>
-          solveProofOfWork(challenge, difficulty),
-      };
-
+      // eslint-disable-next-line @typescript-eslint/no-empty-function -- reauth has no UI phases to display
+      const noopPhase: PhaseUpdater = () => {};
       const result = await loginCrypto(
         reauthUsername,
         reauthPassword,
         bridge,
-        callbacks,
+        buildLoginCallbacks(noopPhase),
       );
 
       if (result.orgPublicKey !== null) {
@@ -327,54 +318,7 @@
     enabled: step === 8,
   }));
 
-  interface NextStepMeta {
-    readonly id: string;
-    readonly label: () => string;
-    readonly desc: () => string;
-  }
-
-  const nextSteps: NextStepMeta[] = [
-    {
-      id: "invite",
-      label: m.getting_started_invite,
-      desc: m.getting_started_invite_desc,
-    },
-    {
-      id: "branding",
-      label: m.getting_started_branding,
-      desc: m.getting_started_branding_desc,
-    },
-    {
-      id: "greetings",
-      label: m.getting_started_greetings,
-      desc: m.getting_started_greetings_desc,
-    },
-    {
-      id: "sms",
-      label: m.getting_started_sms,
-      desc: m.getting_started_sms_desc,
-    },
-    {
-      id: "presets",
-      label: m.getting_started_presets,
-      desc: () => m.getting_started_presets_desc(withTerms()),
-    },
-    {
-      id: "kb",
-      label: () => m.getting_started_kb(withTerms()),
-      desc: () => m.getting_started_kb_desc(withTerms()),
-    },
-    {
-      id: "queues",
-      label: () => m.getting_started_queues(withTerms()),
-      desc: () => m.getting_started_queues_desc(withTerms()),
-    },
-    {
-      id: "retention",
-      label: m.getting_started_retention,
-      desc: m.getting_started_retention_desc,
-    },
-  ];
+  const nextSteps = CHECKLIST_ITEMS;
 
   function isStepComplete(id: string): boolean {
     return (

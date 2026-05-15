@@ -161,8 +161,8 @@
           const result = terminologyConfigSchema.safeParse(parsed);
           if (result.success) {
             cacheTerminology(result.data);
-            const storedLang2 = localStorage.getItem("care-y-default-lang");
-            const lang = storedLang2 ?? (document.documentElement.lang || "en");
+            const storedLang = localStorage.getItem("care-y-default-lang");
+            const lang = storedLang ?? (document.documentElement.lang || "en");
             terminologyLabels = resolveLabels(result.data, lang);
           }
         } catch {

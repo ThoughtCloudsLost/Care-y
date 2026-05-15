@@ -5,18 +5,13 @@
   Konsta Preloader with labeled phases so the user understands the
   multi-second process is doing security work, not stalling.
 -->
+<script lang="ts" module>
+  export type { LoginPhaseId } from "./login-phase.js";
+</script>
+
 <script lang="ts">
   import { Preloader } from "konsta/svelte";
-
-  export type LoginPhaseId =
-    | "idle"
-    | "auth"
-    | "argon2id"
-    | "oprf"
-    | "pow"
-    | "derive"
-    | "done"
-    | "error";
+  import type { LoginPhaseId } from "./login-phase.js";
 
   interface Props {
     phase: LoginPhaseId;
