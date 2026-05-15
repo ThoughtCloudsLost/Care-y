@@ -7,7 +7,7 @@
   import { trpc } from "$lib/trpc/index.js";
   import { getOrgDecryptCache } from "$lib/crypto/context.js";
   import { base64ToUint8Array } from "$lib/utils/buffer-encoding.js";
-  import { RouterNotAvailableError } from "$lib/errors.js";
+  import { requireRouter } from "$lib/errors.js";
   import QueryError from "$lib/components/QueryError.svelte";
   import DecryptPlaceholder from "$lib/components/DecryptPlaceholder.svelte";
   import SvgChart from "./SvgChart.svelte";
@@ -19,8 +19,7 @@
 
   let { ontap }: ReportsSectionProps = $props();
 
-  if (!trpc.reports) throw new RouterNotAvailableError("reports");
-  const reportsRouter = trpc.reports;
+  const reportsRouter = requireRouter(trpc.reports, "reports");
 
   const orgCache = getOrgDecryptCache();
 

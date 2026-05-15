@@ -23,7 +23,7 @@
   import { withTerms } from "$lib/terminology/with-terms.js";
   import { trpc } from "$lib/trpc/index.js";
   import { adminKeys } from "$lib/query/keys.js";
-  import { RouterNotAvailableError } from "$lib/errors.js";
+  import { requireRouter } from "$lib/errors.js";
   import { haptic } from "$lib/utils/haptic.js";
   import { toastStore } from "$lib/stores/toast.svelte.js";
   import { announceToLiveRegion } from "$lib/utils/announce.js";
@@ -32,8 +32,7 @@
   import SoftButton from "$lib/components/inputs/SoftButton.svelte";
   import ShellSheet from "$lib/shell/ShellSheet.svelte";
 
-  if (!trpc.telephonyAdmin) throw new RouterNotAvailableError("telephonyAdmin");
-  const telephonyAdmin = trpc.telephonyAdmin;
+  const telephonyAdmin = requireRouter(trpc.telephonyAdmin, "telephonyAdmin");
 
   const queryClient = useQueryClient();
 

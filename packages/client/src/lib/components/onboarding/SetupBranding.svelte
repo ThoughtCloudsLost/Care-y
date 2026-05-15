@@ -32,7 +32,7 @@
   import { haptic } from "$lib/utils/haptic.js";
   import { toastStore } from "$lib/stores/toast.svelte.js";
   import { announceToLiveRegion } from "$lib/utils/announce.js";
-  import { RouterNotAvailableError } from "$lib/errors.js";
+  import { requireRouter } from "$lib/errors.js";
   import { isOrgKeyReady } from "$lib/crypto/org-key-ready.svelte.js";
 
   interface Props {
@@ -43,10 +43,7 @@
 
   let { orgName, oncomplete, onskip }: Props = $props();
 
-  if (!trpc.branding) {
-    throw new RouterNotAvailableError("branding");
-  }
-  const brandingRouter = trpc.branding;
+  const brandingRouter = requireRouter(trpc.branding, "branding");
 
   const queryClient = useQueryClient();
   const orgKeyManager = getOrgKeyManager();
@@ -152,12 +149,6 @@
 
   // ── Encrypt helpers ──
 
-  async function encryptField(value: string): Promise<string> {
-    const plainBytes = encoder.encode(value);
-    const cipherBytes = await orgKeyManager.encrypt(plainBytes);
-    return uint8ArrayToBase64(cipherBytes);
-  }
-
   async function encryptLogo(file: File): Promise<string> {
     const arrayBuffer = await file.arrayBuffer();
     const cipherBytes = await orgKeyManager.encrypt(
@@ -254,7 +245,7 @@
     if (finalName.length > 0) {
       fields.push({
         field: "name",
-        encryptedValue: await encryptField(finalName),
+        encryptedValue: await orgKeyManager.encryptText(finalName),
         clientEncryptedBranding: clientBlob,
       });
     }
@@ -262,7 +253,7 @@
     if (finalColor !== DEFAULT_PRIMARY) {
       fields.push({
         field: "primary_color",
-        encryptedValue: await encryptField(finalColor),
+        encryptedValue: await orgKeyManager.encryptText(finalColor),
         clientEncryptedBranding: clientBlob,
       });
     }
@@ -270,7 +261,7 @@
     if (finalAccent !== DEFAULT_ACCENT) {
       fields.push({
         field: "accent_color",
-        encryptedValue: await encryptField(finalAccent),
+        encryptedValue: await orgKeyManager.encryptText(finalAccent),
         clientEncryptedBranding: clientBlob,
       });
     }
@@ -278,7 +269,7 @@
     if (finalText.length > 0) {
       fields.push({
         field: "client_text",
-        encryptedValue: await encryptField(finalText),
+        encryptedValue: await orgKeyManager.encryptText(finalText),
         clientEncryptedBranding: clientBlob,
       });
     }

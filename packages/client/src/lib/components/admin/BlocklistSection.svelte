@@ -16,7 +16,7 @@
   import { announceToLiveRegion } from "$lib/utils/announce.js";
   import { onKeyActivate } from "$lib/utils/a11y.js";
   import { getOrgDecryptCache } from "$lib/crypto/context.js";
-  import { RouterNotAvailableError } from "$lib/errors.js";
+  import { requireRouter } from "$lib/errors.js";
   import QueryError from "$lib/components/QueryError.svelte";
   import DecryptPlaceholder from "$lib/components/DecryptPlaceholder.svelte";
   import InlineSkeleton from "$lib/components/InlineSkeleton.svelte";
@@ -27,8 +27,7 @@
   const COUNTRY_CODE_REGEX = /^\+[1-9]\d{0,2}$/;
   const DIGITS_ONLY_REGEX = /^\d+$/;
 
-  if (!trpc.telephonyAdmin) throw new RouterNotAvailableError("telephonyAdmin");
-  const telephonyAdmin = trpc.telephonyAdmin;
+  const telephonyAdmin = requireRouter(trpc.telephonyAdmin, "telephonyAdmin");
 
   const queryClient = useQueryClient();
   const orgCache = getOrgDecryptCache();

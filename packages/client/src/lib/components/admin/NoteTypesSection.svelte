@@ -35,11 +35,10 @@
     resolveNoteTypeIcon,
     ICON_PICKER_ENTRIES,
   } from "$lib/utils/note-type-icons.js";
-  import { uint8ArrayToBase64 } from "$lib/utils/buffer-encoding.js";
   import { haptic } from "$lib/utils/haptic.js";
   import { toastStore } from "$lib/stores/toast.svelte.js";
   import { announceToLiveRegion } from "$lib/utils/announce.js";
-  import { RouterNotAvailableError } from "$lib/errors.js";
+  import { requireRouter } from "$lib/errors.js";
   import QueryError from "$lib/components/QueryError.svelte";
   import DecryptPlaceholder from "$lib/components/DecryptPlaceholder.svelte";
   import ShellSheet from "$lib/shell/ShellSheet.svelte";
@@ -52,29 +51,17 @@
   } from "@care-y/shared";
   import type { SerializedBuffer } from "$lib/utils/buffer-encoding.js";
 
-  if (!trpc.tickets) throw new RouterNotAvailableError("tickets");
-  const ticketRouter = trpc.tickets;
-  if (!ticketRouter.noteTypes) throw new RouterNotAvailableError("noteTypes");
-  const noteTypesRouter = ticketRouter.noteTypes;
+  const ticketRouter = requireRouter(trpc.tickets, "tickets");
+  const noteTypesRouter = requireRouter(ticketRouter.noteTypes, "noteTypes");
 
   const orgCache = getOrgDecryptCache();
   const orgKeyManager = getOrgKeyManager();
   const queryClient = useQueryClient();
-  const encoder = new TextEncoder();
-
   const noteTypesQuery = createAllNoteTypesQuery(noteTypesRouter);
   const activeTypesQuery = createNoteTypesQuery(noteTypesRouter);
   const defaultNoteTypeId = $derived(
     activeTypesQuery.data?.defaultNoteTypeId ?? null,
   );
-
-  // ── Encrypt helper ──
-
-  async function encryptField(value: string): Promise<string> {
-    const plainBytes = encoder.encode(value);
-    const cipherBytes = await orgKeyManager.encrypt(plainBytes);
-    return uint8ArrayToBase64(cipherBytes);
-  }
 
   // ── System follow-up types (read-only reference) ──
 
@@ -302,11 +289,11 @@
 
     sheetSaving = true;
     try {
-      const encryptedName = await encryptField(name);
-      const encryptedIcon = await encryptField(editIcon);
+      const encryptedName = await orgKeyManager.encryptText(name);
+      const encryptedIcon = await orgKeyManager.encryptText(editIcon);
       const desc = editDescription.trim();
       const encryptedDescription =
-        desc.length > 0 ? await encryptField(desc) : undefined;
+        desc.length > 0 ? await orgKeyManager.encryptText(desc) : undefined;
       const escalationTargets = buildEscalationTargets();
 
       if (isCreateMode) {

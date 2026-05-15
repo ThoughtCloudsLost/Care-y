@@ -7,7 +7,6 @@
 <script lang="ts">
   import { List, ListItem } from "konsta/svelte";
   import { goto } from "$app/navigation";
-  import { resolve } from "$app/paths";
   import {
     createQuery,
     createMutation,

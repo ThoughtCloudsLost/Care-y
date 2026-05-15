@@ -30,15 +30,14 @@
     uint8ArrayToBase64,
     base64ToUint8Array,
   } from "$lib/utils/buffer-encoding.js";
-  import { RouterNotAvailableError } from "$lib/errors.js";
+  import { requireRouter } from "$lib/errors.js";
   import type { BrandingField } from "@care-y/shared";
   import QueryError from "$lib/components/QueryError.svelte";
   import DecryptPlaceholder from "$lib/components/DecryptPlaceholder.svelte";
   import SoftButton from "$lib/components/inputs/SoftButton.svelte";
   import ShellSheet from "$lib/shell/ShellSheet.svelte";
 
-  if (!trpc.branding) throw new RouterNotAvailableError("branding");
-  const brandingRouter = trpc.branding;
+  const brandingRouter = requireRouter(trpc.branding, "branding");
 
   const queryClient = useQueryClient();
   const orgCache = getOrgDecryptCache();
@@ -265,12 +264,6 @@
 
   // ── Encrypt helpers ──
 
-  async function encryptField(value: string): Promise<string> {
-    const plainBytes = encoder.encode(value);
-    const cipherBytes = await orgKeyManager.encrypt(plainBytes);
-    return uint8ArrayToBase64(cipherBytes);
-  }
-
   async function encryptLogo(file: File): Promise<string> {
     const arrayBuffer = await file.arrayBuffer();
     const cipherBytes = await orgKeyManager.encrypt(
@@ -468,7 +461,7 @@
     if (nameChanged) {
       fields.push({
         field: "name",
-        encryptedValue: await encryptField(editName),
+        encryptedValue: await orgKeyManager.encryptText(editName),
         clientEncryptedBranding: clientBlob,
       });
     }
@@ -476,7 +469,7 @@
     if (colorChanged && isValidHexColor(editColor)) {
       fields.push({
         field: "primary_color",
-        encryptedValue: await encryptField(editColor),
+        encryptedValue: await orgKeyManager.encryptText(editColor),
         clientEncryptedBranding: clientBlob,
       });
     }
@@ -484,7 +477,7 @@
     if (accentChanged && isValidHexColor(editAccent)) {
       fields.push({
         field: "accent_color",
-        encryptedValue: await encryptField(editAccent),
+        encryptedValue: await orgKeyManager.encryptText(editAccent),
         clientEncryptedBranding: clientBlob,
       });
     }
@@ -492,7 +485,7 @@
     if (textChanged) {
       fields.push({
         field: "client_text",
-        encryptedValue: await encryptField(editText),
+        encryptedValue: await orgKeyManager.encryptText(editText),
         clientEncryptedBranding: clientBlob,
       });
     }

@@ -8,9 +8,11 @@ export const emailSchema = z
 
 export const notificationEmailSchema = emailSchema.optional();
 
+export const PASSWORD_MIN_LENGTH = 16;
+
 export const passwordSchema = z
   .string()
-  .min(16, "Password must be at least 16 characters")
+  .min(PASSWORD_MIN_LENGTH, "Password must be at least 16 characters")
   .max(256, "Password must be at most 256 characters");
 
 export const displayNameSchema = z.string().trim().min(1).max(100);

@@ -17,6 +17,26 @@ export interface DashboardService {
   dismissSetupChecklist(): Promise<void>;
 }
 
+async function countRows(
+  db: Kysely<TenantDatabase>,
+  table: keyof TenantDatabase,
+): Promise<number> {
+  const row = await db
+    .selectFrom(table)
+    .select(db.fn.countAll<string>().as("count"))
+    .executeTakeFirstOrThrow();
+  return toCount(row);
+}
+
+async function countActiveUsers(db: Kysely<TenantDatabase>): Promise<number> {
+  const row = await db
+    .selectFrom("users")
+    .select(db.fn.countAll<string>().as("count"))
+    .where("is_active", "=", true)
+    .executeTakeFirstOrThrow();
+  return toCount(row);
+}
+
 export function createDashboardService(
   db: Kysely<TenantDatabase>,
 ): DashboardService {
@@ -31,10 +51,7 @@ export function createDashboardService(
         ])
         .executeTakeFirst();
 
-      if (
-        config?.getting_started_dismissed_at !== null &&
-        config?.getting_started_dismissed_at !== undefined
-      ) {
+      if (config?.getting_started_dismissed_at != null) {
         return { dismissed: true, items: [] };
       }
 
@@ -46,44 +63,16 @@ export function createDashboardService(
         kbCount,
         queueCount,
       ] = await Promise.all([
-        db
-          .selectFrom("users")
-          .select(db.fn.countAll<string>().as("count"))
-          .where("is_active", "=", true)
-          .executeTakeFirstOrThrow()
-          .then(toCount),
-        db
-          .selectFrom("phone_greetings")
-          .select(db.fn.countAll<string>().as("count"))
-          .executeTakeFirstOrThrow()
-          .then(toCount),
-        db
-          .selectFrom("sms_responses")
-          .select(db.fn.countAll<string>().as("count"))
-          .executeTakeFirstOrThrow()
-          .then(toCount),
-        db
-          .selectFrom("preset_replies")
-          .select(db.fn.countAll<string>().as("count"))
-          .executeTakeFirstOrThrow()
-          .then(toCount),
-        db
-          .selectFrom("kb_items")
-          .select(db.fn.countAll<string>().as("count"))
-          .executeTakeFirstOrThrow()
-          .then(toCount),
-        db
-          .selectFrom("queues")
-          .select(db.fn.countAll<string>().as("count"))
-          .executeTakeFirstOrThrow()
-          .then(toCount),
+        countActiveUsers(db),
+        countRows(db, "phone_greetings"),
+        countRows(db, "sms_responses"),
+        countRows(db, "preset_replies"),
+        countRows(db, "kb_items"),
+        countRows(db, "queues"),
       ]);
 
-      const hasLogo =
-        config?.encrypted_logo !== null && config?.encrypted_logo !== undefined;
-      const hasRetention =
-        config?.pii_retention_days !== null &&
-        config?.pii_retention_days !== undefined;
+      const hasLogo = config?.encrypted_logo != null;
+      const hasRetention = config?.pii_retention_days != null;
 
       return {
         dismissed: false,

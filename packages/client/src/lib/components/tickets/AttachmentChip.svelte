@@ -10,7 +10,7 @@
   import { downloadDecryptedAttachment } from "$lib/tickets/attachment-download.js";
   import { trpc } from "$lib/trpc/index.js";
   import { getCryptoBridge } from "$lib/crypto/context.js";
-  import { RouterNotAvailableError } from "$lib/errors.js";
+  import { requireRouter } from "$lib/errors.js";
   import type { TicketKeyWrap } from "$lib/crypto/ticket-decrypt-cache.js";
 
   interface Props {
@@ -29,8 +29,7 @@
   let { attachmentId, ticketId, keyWrap, filename, sizeBytes }: Props =
     $props();
 
-  if (!trpc.tickets) throw new RouterNotAvailableError("tickets");
-  const ticketRouter = trpc.tickets;
+  const ticketRouter = requireRouter(trpc.tickets, "tickets");
   const bridge = getCryptoBridge();
 
   async function handleDownload(aid: string): Promise<void> {

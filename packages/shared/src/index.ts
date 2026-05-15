@@ -17,6 +17,7 @@ export { extractSubdomain } from "./utils/subdomain.js";
 export {
   emailSchema,
   notificationEmailSchema,
+  PASSWORD_MIN_LENGTH,
   passwordSchema,
   displayNameSchema,
   identifierSchema,
@@ -213,6 +214,7 @@ export {
   createFollowUpInputSchema,
   updateReadCursorInputSchema,
   updateTicketInputSchema,
+  MAX_ESCALATION_DAYS,
   createQueueInputSchema,
   updateQueueInputSchema,
   reorderQueuesInputSchema,

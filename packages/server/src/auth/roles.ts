@@ -1,4 +1,10 @@
-import { RoleId, Permission, type RoleIdValue } from "@care-y/shared";
+import {
+  RoleId,
+  Permission,
+  ErrorCode,
+  type RoleIdValue,
+} from "@care-y/shared";
+import { ForbiddenError } from "../errors.js";
 
 export interface RoleConfig {
   readonly id: RoleIdValue;
@@ -86,6 +92,16 @@ export function isValidRoleId(roleId: string): roleId is RoleIdValue {
     roleId === RoleId.MANAGER ||
     roleId === RoleId.ADMIN
   );
+}
+
+/** Throws ForbiddenError if the role lacks the given permission. */
+export function requirePermission(
+  roleId: string,
+  permission: Permission,
+): void {
+  if (!hasPermission(roleId, permission)) {
+    throw new ForbiddenError(ErrorCode.INSUFFICIENT_PERMISSIONS);
+  }
 }
 
 /** Returns the default role for new user registration. */

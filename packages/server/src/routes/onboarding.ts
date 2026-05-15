@@ -32,9 +32,9 @@ import {
   authedProcedure,
   withErrorWrapping,
 } from "../trpc/trpc.js";
-import { hasPermission } from "../auth/roles.js";
+import { requirePermission } from "../auth/roles.js";
 import { createInviteService } from "../onboarding/invite-service.js";
-import { ConflictError, ForbiddenError, RateLimitError } from "../errors.js";
+import { ConflictError, RateLimitError } from "../errors.js";
 import { extractClientIp } from "../http/request-utils.js";
 import { buildSessionCookie } from "../auth/cookies.js";
 import { SESSION_MAX_AGE_MS } from "../auth/service.js";
@@ -51,7 +51,7 @@ import type { PasswordHasher } from "../auth/password.js";
 import type { RateLimiter } from "../ratelimit/rate-limiter.js";
 import type { SealedBoxEncryptor } from "../crypto/sealed-box.js";
 import type { SecretsEncryptor } from "../config/secrets.js";
-import type { EmailSender } from "../email/email-sender.js";
+
 import { createSealedBoxEncryptor } from "../crypto/sealed-box.js";
 import {
   createScopedAuthService,
@@ -70,7 +70,6 @@ export interface OnboardingRouterDeps {
   readonly isSecureCookie: boolean;
   readonly tenantDbFactory: (schema: string) => Kysely<TenantDatabase>;
   readonly secretsEncryptor: SecretsEncryptor;
-  readonly emailSender: EmailSender;
 }
 
 /**
@@ -114,6 +113,31 @@ async function resolveOrgForOnboarding(
   };
 }
 
+async function requireOrgForOnboarding(
+  req: IncomingMessage,
+  orgService: OrgService,
+  tenantDbFactory: (schema: string) => Kysely<TenantDatabase>,
+): Promise<{
+  orgId: string;
+  orgSlug: string;
+  orgSchema: string;
+  tenantDb: Kysely<TenantDatabase>;
+  sealedBox: SealedBoxEncryptor | null;
+}> {
+  const result = await resolveOrgForOnboarding(
+    req,
+    orgService,
+    tenantDbFactory,
+  );
+  if (!result) {
+    throw new TRPCError({
+      code: "NOT_FOUND",
+      message: "Organization not found",
+    });
+  }
+  return result;
+}
+
 function setSessionCookie(
   res: ServerResponse,
   token: string,
@@ -138,7 +162,6 @@ export function createOnboardingRouter(deps: OnboardingRouterDeps) {
     isSecureCookie,
     tenantDbFactory,
     secretsEncryptor,
-    emailSender,
   } = deps;
 
   return router({
@@ -148,17 +171,11 @@ export function createOnboardingRouter(deps: OnboardingRouterDeps) {
      */
     getStatus: publicProcedure.query(
       withErrorWrapping(async ({ ctx }) => {
-        const org = await resolveOrgForOnboarding(
+        const org = await requireOrgForOnboarding(
           ctx.req,
           orgService,
           tenantDbFactory,
         );
-        if (!org) {
-          throw new TRPCError({
-            code: "NOT_FOUND",
-            message: "Organization not found",
-          });
-        }
 
         const userCount = await org.tenantDb
           .selectFrom("users")
@@ -197,17 +214,11 @@ export function createOnboardingRouter(deps: OnboardingRouterDeps) {
           });
         }
 
-        const org = await resolveOrgForOnboarding(
+        const org = await requireOrgForOnboarding(
           ctx.req,
           orgService,
           tenantDbFactory,
         );
-        if (!org) {
-          throw new TRPCError({
-            code: "NOT_FOUND",
-            message: "Organization not found",
-          });
-        }
 
         const tokenValid = await orgService.validateSetupToken(
           org.orgId,
@@ -310,17 +321,11 @@ export function createOnboardingRouter(deps: OnboardingRouterDeps) {
      */
     validateInvite: publicProcedure.input(validateInviteInputSchema).query(
       withErrorWrapping(async ({ ctx, input }) => {
-        const org = await resolveOrgForOnboarding(
+        const org = await requireOrgForOnboarding(
           ctx.req,
           orgService,
           tenantDbFactory,
         );
-        if (!org) {
-          throw new TRPCError({
-            code: "NOT_FOUND",
-            message: "Organization not found",
-          });
-        }
 
         const inviteService = createInviteService(org.tenantDb);
         const invite = await inviteService.validate(input.token);
@@ -345,17 +350,11 @@ export function createOnboardingRouter(deps: OnboardingRouterDeps) {
       .input(registerFromInviteInputSchema)
       .mutation(
         withErrorWrapping(async ({ ctx, input }) => {
-          const org = await resolveOrgForOnboarding(
+          const org = await requireOrgForOnboarding(
             ctx.req,
             orgService,
             tenantDbFactory,
           );
-          if (!org) {
-            throw new TRPCError({
-              code: "NOT_FOUND",
-              message: "Organization not found",
-            });
-          }
 
           // Validate token BEFORE the transaction (read-only check).
           const inviteService = createInviteService(org.tenantDb);
@@ -436,9 +435,7 @@ export function createOnboardingRouter(deps: OnboardingRouterDeps) {
      */
     generateInvite: authedProcedure.input(generateInviteInputSchema).mutation(
       withErrorWrapping(async ({ ctx, input }) => {
-        if (!hasPermission(ctx.user.roleId, Permission.MANAGE_ROLES)) {
-          throw new ForbiddenError(ErrorCode.INSUFFICIENT_PERMISSIONS);
-        }
+        requirePermission(ctx.user.roleId, Permission.MANAGE_ROLES);
 
         const inviteService = createInviteService(ctx.org.tenantDb);
 
@@ -470,9 +467,7 @@ export function createOnboardingRouter(deps: OnboardingRouterDeps) {
      */
     updateOrgBasics: authedProcedure.input(updateOrgBasicsInputSchema).mutation(
       withErrorWrapping(async ({ ctx, input }) => {
-        if (!hasPermission(ctx.user.roleId, Permission.MANAGE_ROLES)) {
-          throw new ForbiddenError(ErrorCode.INSUFFICIENT_PERMISSIONS);
-        }
+        requirePermission(ctx.user.roleId, Permission.MANAGE_ROLES);
 
         const updates: Record<string, unknown> = {
           encrypted_name: Buffer.from(input.encryptedOrgName, "base64"),
@@ -500,25 +495,23 @@ export function createOnboardingRouter(deps: OnboardingRouterDeps) {
       .input(saveTelephonyChoiceInputSchema)
       .mutation(
         withErrorWrapping(async ({ ctx, input }) => {
-          if (!hasPermission(ctx.user.roleId, Permission.MANAGE_ROLES)) {
-            throw new ForbiddenError(ErrorCode.INSUFFICIENT_PERMISSIONS);
-          }
+          requirePermission(ctx.user.roleId, Permission.MANAGE_ROLES);
 
-          let configBlob: Record<string, string>;
+          let telephonyConfig: Record<string, string>;
 
           if (input.mode === "byot") {
-            configBlob = {
+            telephonyConfig = {
               mode: "byot",
               provider: "twilio",
               accountSid: input.accountSid,
               authToken: input.authToken,
             };
           } else {
-            configBlob = { mode: input.mode };
+            telephonyConfig = { mode: input.mode };
           }
 
           const encrypted = secretsEncryptor.encrypt(
-            Buffer.from(JSON.stringify(configBlob), "utf8"),
+            Buffer.from(JSON.stringify(telephonyConfig), "utf8"),
           );
 
           await ctx.org.tenantDb
@@ -542,18 +535,12 @@ export function createOnboardingRouter(deps: OnboardingRouterDeps) {
      */
     reauthenticate: publicProcedure.input(loginInputSchema).mutation(
       withErrorWrapping(async ({ ctx, input }) => {
-        const resolved = await resolveOrgForOnboarding(
+        const org = await requireOrgForOnboarding(
           ctx.req,
           orgService,
           tenantDbFactory,
         );
-        if (!resolved) {
-          throw new TRPCError({
-            code: "NOT_FOUND",
-            message: "Organization not found",
-          });
-        }
-        if (!resolved.sealedBox) {
+        if (!org.sealedBox) {
           throw new TRPCError({
             code: "PRECONDITION_FAILED",
             message: ErrorCode.ORG_KEYPAIR_MISSING,
@@ -561,11 +548,11 @@ export function createOnboardingRouter(deps: OnboardingRouterDeps) {
         }
 
         const orgCtx: OrgContext = {
-          orgId: resolved.orgId,
-          orgSlug: resolved.orgSlug,
-          orgSchema: resolved.orgSchema,
-          tenantDb: resolved.tenantDb,
-          sealedBox: resolved.sealedBox,
+          orgId: org.orgId,
+          orgSlug: org.orgSlug,
+          orgSchema: org.orgSchema,
+          tenantDb: org.tenantDb,
+          sealedBox: org.sealedBox,
         };
 
         const sessions = createTenantSessions(orgCtx, tokenizer);
@@ -581,9 +568,9 @@ export function createOnboardingRouter(deps: OnboardingRouterDeps) {
           userAgent: ua,
         });
 
-        const enrolledCount = await resolved.tenantDb
+        const enrolledCount = await org.tenantDb
           .selectFrom("two_factor_methods")
-          .select(resolved.tenantDb.fn.countAll<string>().as("count"))
+          .select(org.tenantDb.fn.countAll<string>().as("count"))
           .where("user_id", "=", user.id)
           .where("is_active", "=", true)
           .executeTakeFirstOrThrow();
@@ -608,9 +595,7 @@ export function createOnboardingRouter(deps: OnboardingRouterDeps) {
      */
     completeSetup: authedProcedure.mutation(
       withErrorWrapping(({ ctx }) => {
-        if (!hasPermission(ctx.user.roleId, Permission.MANAGE_ROLES)) {
-          throw new ForbiddenError(ErrorCode.INSUFFICIENT_PERMISSIONS);
-        }
+        requirePermission(ctx.user.roleId, Permission.MANAGE_ROLES);
 
         return { success: true as const };
       }),

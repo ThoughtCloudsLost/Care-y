@@ -14,7 +14,7 @@
   import { haptic } from "$lib/utils/haptic.js";
   import { toastStore } from "$lib/stores/toast.svelte.js";
   import { announceToLiveRegion } from "$lib/utils/announce.js";
-  import { RouterNotAvailableError } from "$lib/errors.js";
+  import { requireRouter } from "$lib/errors.js";
   import QueryError from "$lib/components/QueryError.svelte";
   import InlineSkeleton from "$lib/components/InlineSkeleton.svelte";
   import SoftButton from "$lib/components/inputs/SoftButton.svelte";
@@ -27,9 +27,10 @@
 
   // ── Router guard ──
 
-  if (!trpc.telephonyContent)
-    throw new RouterNotAvailableError("telephonyContent");
-  const telephonyContent = trpc.telephonyContent;
+  const telephonyContent = requireRouter(
+    trpc.telephonyContent,
+    "telephonyContent",
+  );
 
   const queryClient = useQueryClient();
 

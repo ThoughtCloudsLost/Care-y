@@ -38,7 +38,7 @@
   import { fetchAndUnwrapOrgKey } from "$lib/auth/crypto-helpers.js";
   import { installCleanupHandler } from "$lib/auth/cleanup.js";
   import { haptic } from "$lib/utils/haptic.js";
-  import { RouterNotAvailableError } from "$lib/errors.js";
+  import { requireRouter } from "$lib/errors.js";
   import type { LoginCryptoCallbacks } from "$lib/auth/login-crypto.js";
   import WizardStepper from "$lib/components/onboarding/WizardStepper.svelte";
   import SetupAccount from "$lib/components/onboarding/SetupAccount.svelte";
@@ -132,10 +132,7 @@
     "onboarding-update-terminology",
   );
 
-  if (!trpc.onboarding) {
-    throw new RouterNotAvailableError("onboarding");
-  }
-  const onboarding: NonNullable<typeof trpc.onboarding> = trpc.onboarding;
+  const onboarding = requireRouter(trpc.onboarding, "onboarding");
 
   // ── Re-auth for page refresh recovery ──
 

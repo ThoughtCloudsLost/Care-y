@@ -19,11 +19,11 @@
   import { trpc } from "$lib/trpc/index.js";
   import { queueKeys } from "$lib/query/keys.js";
   import { getOrgKeyManager } from "$lib/crypto/context.js";
-  import { uint8ArrayToBase64 } from "$lib/utils/buffer-encoding.js";
   import { haptic } from "$lib/utils/haptic.js";
   import { toastStore } from "$lib/stores/toast.svelte.js";
   import { announceToLiveRegion } from "$lib/utils/announce.js";
-  import { RouterNotAvailableError } from "$lib/errors.js";
+  import { MAX_ESCALATION_DAYS } from "@care-y/shared";
+  import { requireRouter } from "$lib/errors.js";
   import { isOrgKeyReady } from "$lib/crypto/org-key-ready.svelte.js";
 
   interface Props {
@@ -32,14 +32,10 @@
 
   let { oncomplete }: Props = $props();
 
-  if (!trpc.tickets) {
-    throw new RouterNotAvailableError("tickets");
-  }
-  const ticketRouter: NonNullable<typeof trpc.tickets> = trpc.tickets;
+  const ticketRouter = requireRouter(trpc.tickets, "tickets");
 
   const queryClient = useQueryClient();
   const orgKeyManager = getOrgKeyManager();
-  const encoder = new TextEncoder();
 
   let queueName = $state("");
   let escalationDays = $state("7");
@@ -51,7 +47,7 @@
     const trimmed = escalationDays.trim();
     if (trimmed === "") return 7;
     const n = Number(trimmed);
-    if (!Number.isInteger(n) || n < 1 || n > 365) return -1;
+    if (!Number.isInteger(n) || n < 1 || n > MAX_ESCALATION_DAYS) return -1;
     return n;
   });
 
@@ -82,9 +78,7 @@
       return;
     }
 
-    const plainBytes = encoder.encode(queueName.trim());
-    const cipherBytes = await orgKeyManager.encrypt(plainBytes);
-    const encryptedName = uint8ArrayToBase64(cipherBytes);
+    const encryptedName = await orgKeyManager.encryptText(queueName.trim());
 
     try {
       await createMut.mutateAsync({

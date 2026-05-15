@@ -27,7 +27,6 @@ import {
   mockReq,
   mockRes,
   expectTrpcError,
-  createMockEmailSender,
   type TestDb,
 } from "../test-utils.js";
 import { RoleId } from "@care-y/shared";
@@ -116,7 +115,6 @@ describe.skipIf(!HAS_DB)("onboarding router (DB integration)", () => {
       isSecureCookie: false,
       tenantDbFactory: makeTenantDbFactory(testDb.platformDb),
       secretsEncryptor: createSecretsEncryptor(secretsKey),
-      emailSender: createMockEmailSender(),
     };
   }
 

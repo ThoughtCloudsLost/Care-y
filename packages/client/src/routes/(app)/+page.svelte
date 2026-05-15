@@ -7,7 +7,7 @@
   import { trpc } from "$lib/trpc/index.js";
   import { ticketsKeys, kbKeys } from "$lib/query/keys.js";
   import { toastStore } from "$lib/stores/toast.svelte.js";
-  import { RouterNotAvailableError } from "$lib/errors.js";
+  import { requireRouter } from "$lib/errors.js";
   import type { TicketPreviewItemProps } from "$lib/components/dashboard/types.js";
   import {
     Ticket as TicketIcon,
@@ -154,8 +154,7 @@
   });
 
   // All open tickets for the current user's accessible queues.
-  if (!trpc.tickets) throw new RouterNotAvailableError("tickets");
-  const ticketRouter = trpc.tickets;
+  const ticketRouter = requireRouter(trpc.tickets, "tickets");
 
   const ticketsQuery = createQuery(() => ({
     queryKey: ticketsKeys.list({ statuses: ["open"] }),

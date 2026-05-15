@@ -21,7 +21,7 @@
   } from "$lib/crypto/context.js";
   import { setPromotedOverride } from "$lib/search/registry.svelte.js";
   import { trpc } from "$lib/trpc/index.js";
-  import { RouterNotAvailableError } from "$lib/errors.js";
+  import { requireRouter } from "$lib/errors.js";
   import { createFilterDispatch } from "$lib/composables/create-filter-dispatch.svelte.js";
   import SubNavbarFilterLayout from "$lib/shell/SubNavbarFilterLayout.svelte";
   import type {
@@ -67,8 +67,7 @@
 
   // ── Queries for queue filter pill ──
 
-  if (!trpc.tickets) throw new RouterNotAvailableError("tickets");
-  const ticketRouter = trpc.tickets;
+  const ticketRouter = requireRouter(trpc.tickets, "tickets");
   const orgCache = getOrgDecryptCache();
 
   const queuesQuery = createQuery(() => ({

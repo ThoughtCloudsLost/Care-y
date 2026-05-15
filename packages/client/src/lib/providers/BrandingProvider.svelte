@@ -58,7 +58,6 @@
       // Outside CryptoProvider (shouldn't happen in normal tree, but safe)
     }
   }
-  let _hydrated = $state(false);
   let serverHydrated = false;
 
   let terminologyLabels = $state<TerminologyLabels>(TERMINOLOGY_DEFAULTS_EN);
@@ -122,7 +121,6 @@
       }
       // Sync SW cache state to localStorage for next page load's splash screen.
       syncToLocalStorage(cached);
-      _hydrated = true;
       dismissSplash();
     });
   });
@@ -198,7 +196,6 @@
         }
       }
 
-      _hydrated = true;
       dismissSplash();
     } catch {
       // Non-fatal: branding stays at defaults

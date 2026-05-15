@@ -22,7 +22,7 @@
   import { haptic } from "$lib/utils/haptic.js";
   import { toastStore } from "$lib/stores/toast.svelte.js";
   import { announceToLiveRegion } from "$lib/utils/announce.js";
-  import { RouterNotAvailableError } from "$lib/errors.js";
+  import { requireRouter } from "$lib/errors.js";
 
   interface Props {
     oncomplete: (data: { telephonyMode: "byot" | "managed" | "skip" }) => void;
@@ -30,10 +30,7 @@
 
   let { oncomplete }: Props = $props();
 
-  const onboarding = trpc.onboarding;
-  if (!onboarding) {
-    throw new RouterNotAvailableError("onboarding");
-  }
+  const onboarding = requireRouter(trpc.onboarding, "onboarding");
 
   type TelephonyMode = "byot" | "managed" | "skip";
 

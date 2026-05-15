@@ -16,7 +16,7 @@
   import { trpc } from "$lib/trpc/index.js";
   import { createVolunteersQuery } from "$lib/tickets/queries.js";
   import { getOrgDecryptCache } from "$lib/crypto/context.js";
-  import { RouterNotAvailableError } from "$lib/errors.js";
+  import { requireRouter } from "$lib/errors.js";
 
   interface MentionAutocompleteProps {
     draftText: string;
@@ -27,8 +27,7 @@
   let { draftText, cursorPosition, onselect }: MentionAutocompleteProps =
     $props();
 
-  if (!trpc.tickets) throw new RouterNotAvailableError("tickets");
-  const ticketRouter = trpc.tickets;
+  const ticketRouter = requireRouter(trpc.tickets, "tickets");
 
   const orgCache = getOrgDecryptCache();
 

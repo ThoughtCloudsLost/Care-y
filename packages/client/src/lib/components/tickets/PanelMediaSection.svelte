@@ -29,7 +29,7 @@
     resolveAsyncDecrypt,
     isDecryptReady,
   } from "$lib/crypto/decrypt-result.js";
-  import { RouterNotAvailableError } from "$lib/errors.js";
+  import { requireRouter } from "$lib/errors.js";
   import type { TicketKeyWrap } from "$lib/crypto/ticket-decrypt-cache.js";
 
   interface PanelMediaSectionProps {
@@ -42,8 +42,7 @@
 
   // --- Context caches ---
 
-  if (!trpc.tickets) throw new RouterNotAvailableError("tickets");
-  const ticketRouter = trpc.tickets;
+  const ticketRouter = requireRouter(trpc.tickets, "tickets");
 
   const bridge = getCryptoBridge();
   const followUpCache = getFollowUpDecryptCache();

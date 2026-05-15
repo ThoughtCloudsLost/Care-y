@@ -30,14 +30,13 @@
   } from "$lib/shell/context.js";
   import { useScrollDirection } from "$lib/shell/use-scroll-direction.svelte.js";
   import { usePTR } from "$lib/shell/ptr-context.svelte.js";
-  import { RouterNotAvailableError } from "$lib/errors.js";
+  import { requireRouter } from "$lib/errors.js";
   import { createEditorBridge } from "$lib/editor/editor-bridge.svelte.js";
   import { useNavigationGuard } from "$lib/editor/use-navigation-guard.svelte.js";
   import EditorToolbar from "$lib/components/library/EditorToolbar.svelte";
   import ArticleEditor from "$lib/components/library/ArticleEditor.svelte";
 
-  if (!trpc.kb) throw new RouterNotAvailableError("kb");
-  const kbRouter = trpc.kb;
+  const kbRouter = requireRouter(trpc.kb, "kb");
   const orgCache = getOrgDecryptCache();
   const queryClient = useQueryClient();
   const navbarCtx = getNavbarOverrideCtx();

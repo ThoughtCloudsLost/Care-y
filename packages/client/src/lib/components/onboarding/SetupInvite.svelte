@@ -22,7 +22,7 @@
   import { haptic } from "$lib/utils/haptic.js";
   import { toastStore } from "$lib/stores/toast.svelte.js";
   import { announceToLiveRegion } from "$lib/utils/announce.js";
-  import { RouterNotAvailableError } from "$lib/errors.js";
+  import { requireRouter } from "$lib/errors.js";
 
   interface Props {
     oncomplete: (data: { invitesSent: number }) => void;
@@ -30,10 +30,7 @@
 
   let { oncomplete }: Props = $props();
 
-  if (!trpc.onboarding) {
-    throw new RouterNotAvailableError("onboarding");
-  }
-  const onboarding: NonNullable<typeof trpc.onboarding> = trpc.onboarding;
+  const onboarding = requireRouter(trpc.onboarding, "onboarding");
 
   interface GeneratedInvite {
     url: string;

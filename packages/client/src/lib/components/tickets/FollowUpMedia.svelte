@@ -10,7 +10,7 @@
   import { ticketKeys } from "$lib/query/keys";
   import * as m from "$lib/paraglide/messages.js";
   import { trpc } from "$lib/trpc/index.js";
-  import { RouterNotAvailableError } from "$lib/errors.js";
+  import { requireRouter } from "$lib/errors.js";
   import VoicemailPlayer from "./VoicemailPlayer.svelte";
   import MmsImage from "./MmsImage.svelte";
   import AttachmentChip from "./AttachmentChip.svelte";
@@ -36,8 +36,7 @@
     onlightbox,
   }: Props = $props();
 
-  if (!trpc.tickets) throw new RouterNotAvailableError("tickets");
-  const ticketRouter = trpc.tickets;
+  const ticketRouter = requireRouter(trpc.tickets, "tickets");
 
   const recordingsQuery = createQuery(() => ({
     queryKey: ticketKeys.recordings(ticketId),
