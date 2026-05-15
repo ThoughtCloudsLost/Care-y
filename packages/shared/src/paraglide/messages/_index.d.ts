@@ -193,6 +193,7 @@ export * from "./error_sms_response_not_found.js";
 export * from "./error_org_already_setup.js";
 export * from "./error_org_keypair_missing.js";
 export * from "./error_invalid_invite_token.js";
+export * from "./error_invalid_setup_token.js";
 export * from "./error_bootstrap_rate_limited.js";
 export * from "./email_verification_subject.js";
 export * from "./email_verification_body.js";

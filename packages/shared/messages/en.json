@@ -194,6 +194,7 @@
   "error_org_already_setup": "This organization has already been set up.",
   "error_org_keypair_missing": "Organization setup is incomplete. Please restart the setup process.",
   "error_invalid_invite_token": "This invite link is invalid or has expired.",
+  "error_invalid_setup_token": "The setup token is invalid or has already been used.",
   "error_bootstrap_rate_limited": "Too many setup attempts. Try again later.",
   "email_verification_subject": "Your verification code",
   "email_verification_body": "Your verification code is: {code}. This code expires in 5 minutes. If you did not request this code, you can safely ignore this email.",

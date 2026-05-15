@@ -126,9 +126,10 @@ describe("FirstLoginPage", () => {
       }
     }
 
-    expect(
-      screen.getByText("Password must be at least 16 characters."),
-    ).toBeTruthy();
+    const matches = screen.getAllByText(
+      "Password must be at least 16 characters.",
+    );
+    expect(matches.length).toBeGreaterThanOrEqual(1);
   });
 
   it("shows password mismatch error when passwords differ", async () => {
@@ -159,7 +160,8 @@ describe("FirstLoginPage", () => {
       }
     }
 
-    expect(screen.getByText("Passwords do not match.")).toBeTruthy();
+    const matches = screen.getAllByText("Passwords do not match.");
+    expect(matches.length).toBeGreaterThanOrEqual(1);
   });
 
   it("calls registerFromInvite and registerCrypto on valid submit", async () => {

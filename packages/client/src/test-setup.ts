@@ -60,6 +60,102 @@ vi.mock("$app/environment", () => ({
 }));
 
 // ---------------------------------------------------------------------------
+// $lib/terminology/context
+// ---------------------------------------------------------------------------
+// Svelte 5's createContext requires a live component tree. Component tests
+// render in jsdom without a parent that calls setTerminology(), so the
+// context lookup throws "missing_context". This mock provides the default
+// English labels without requiring a Svelte context.
+
+// vi.mock required: createContext from Svelte 5 throws "missing_context"
+// outside a live component tree. Tests render components in jsdom without
+// a parent that calls setTerminology().
+vi.mock("$lib/terminology/context", () => {
+  const defaults = {
+    volunteer: "volunteer",
+    volunteers: "volunteers",
+    client: "client",
+    clients: "clients",
+    ticket: "ticket",
+    tickets: "tickets",
+    manager: "manager",
+    managers: "managers",
+    queue: "queue",
+    queues: "queues",
+    knowledgeBase: "knowledge base",
+  };
+  const resolver = () => defaults;
+  return {
+    getTerminology: () => resolver,
+    // eslint-disable-next-line @typescript-eslint/no-empty-function -- test mock stub
+    setTerminology: () => {},
+  };
+});
+
+// ---------------------------------------------------------------------------
+// $lib/crypto/context
+// ---------------------------------------------------------------------------
+// vi.mock required: createContext from Svelte 5 throws "missing_context"
+// outside a live component tree. Crypto contexts are set by CryptoProvider
+// in the (app) layout, but component tests don't mount the full layout.
+// Stubs return no-op functions so components can import without crashing.
+vi.mock("$lib/crypto/context", () => {
+  // eslint-disable-next-line @typescript-eslint/no-empty-function -- test mock stub
+  const noop = () => {};
+  // eslint-disable-next-line @typescript-eslint/no-empty-function -- test mock stub
+  const noopAsync = async () => {};
+  const emptySet = new Set();
+  return {
+    getCryptoBridge: () => ({
+      encrypt: noopAsync,
+      decrypt: noopAsync,
+      deriveTicketKey: noopAsync,
+    }),
+    getOrgKeyManager: () => ({
+      unwrapOrgKey: noopAsync,
+      isReady: () => false,
+    }),
+    getOrgDecryptCache: () => ({
+      decrypt: () => null,
+      set: noop,
+    }),
+    getTicketDecryptCache: () => ({
+      decrypt: () => null,
+      set: noop,
+    }),
+    getFollowUpDecryptCache: () => ({
+      decrypt: () => null,
+      set: noop,
+    }),
+    getPreviewLoader: () => ({
+      load: noopAsync,
+    }),
+    getCurrentUserId: () => () => undefined,
+    getCurrentUserRoleId: () => () => undefined,
+    getCurrentPermissions: () => () => emptySet,
+    setCryptoBridge: noop,
+    setOrgKeyManager: noop,
+    setOrgDecryptCache: noop,
+    setTicketDecryptCache: noop,
+    setFollowUpDecryptCache: noop,
+    setPreviewLoader: noop,
+    setCurrentUserId: noop,
+    setCurrentUserRoleId: noop,
+    setCurrentPermissions: noop,
+  };
+});
+
+// ---------------------------------------------------------------------------
+// $lib/crypto/org-key-ready.svelte
+// ---------------------------------------------------------------------------
+// vi.mock required: uses $state rune which needs Svelte compiler pipeline.
+vi.mock("$lib/crypto/org-key-ready.svelte", () => ({
+  // eslint-disable-next-line @typescript-eslint/no-empty-function -- test mock stub
+  setOrgKeyReady: () => {},
+  getOrgKeyReady: () => false,
+}));
+
+// ---------------------------------------------------------------------------
 // @sveltejs/kit/hooks
 // ---------------------------------------------------------------------------
 // The real sequence() accesses an internal AsyncLocalStorage request store
