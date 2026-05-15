@@ -102,7 +102,24 @@
       await bridge.zeroAll();
 
       // 1. Server-side credential verification + session cookie
-      await trpc.auth.login.mutate({ identifier, password });
+      const loginResult = await trpc.auth.login.mutate({
+        identifier,
+        password,
+      });
+
+      // 1b. 2FA redirect: if the user has enrolled methods, defer to /2fa
+      if (loginResult.requiresTwoFactor) {
+        try {
+          sessionStorage.setItem(
+            "care-y-2fa-methods",
+            JSON.stringify(loginResult.enrolledMethods),
+          );
+        } catch {
+          /* sessionStorage unavailable */
+        }
+        await goto(resolve("/2fa"));
+        return;
+      }
 
       // 2. Full crypto pipeline in the Worker
       const callbacks = buildLoginCallbacks(
