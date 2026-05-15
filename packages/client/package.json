@@ -21,6 +21,7 @@
     "@leeoniya/ufuzzy": "1.0.19",
     "@lucide/svelte": "1.16.0",
     "@material/material-color-utilities": "0.4.0",
+    "@paulmillr/qr": "0.3.0",
     "@tanstack/svelte-query": "6.1.33",
     "@trpc/client": "11.10.0",
     "@twilio/voice-sdk": "2.18.3",
