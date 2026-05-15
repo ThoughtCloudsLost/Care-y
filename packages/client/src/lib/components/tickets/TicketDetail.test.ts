@@ -115,6 +115,7 @@ vi.mock("$lib/crypto/context.js", () => ({
 
 vi.mock("$lib/errors.js", () => ({
   RouterNotAvailableError: class extends Error {},
+  requireRouter: <T>(r: T) => r,
 }));
 
 // --- Mock shell context ---

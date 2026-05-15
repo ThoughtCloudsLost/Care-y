@@ -136,6 +136,7 @@ vi.mock("$lib/crypto/context.js", () => ({
   getOrgKeyManager: () => ({
     isLoaded: true,
     encrypt: (bytes: Uint8Array) => bytes,
+    encryptText: vi.fn().mockResolvedValue("encrypted-text"),
     decrypt: (bytes: Uint8Array) => bytes,
     getPublicKey: () => new Uint8Array(32),
   }),

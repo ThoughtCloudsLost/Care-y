@@ -134,6 +134,7 @@ vi.mock("$lib/errors.js", () => ({
       super(`${name} router unavailable`);
     }
   },
+  requireRouter: <T>(r: T) => r,
 }));
 
 vi.mock("$lib/components/QueryError.svelte", () => ({

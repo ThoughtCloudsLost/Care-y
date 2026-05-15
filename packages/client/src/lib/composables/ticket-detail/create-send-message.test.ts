@@ -48,6 +48,7 @@ function makeConfig(
     setDraftText: vi.fn(),
     cryptoBridge: {
       encrypt: vi.fn().mockResolvedValue("enc-base64"),
+      encryptText: vi.fn().mockResolvedValue("encrypted-text"),
     } as unknown as SendMessageConfig<FakeEntry>["cryptoBridge"],
     followUpCache: {
       seed: vi.fn(),
@@ -132,6 +133,7 @@ describe("createSendMessage", () => {
               resolveEncrypt = r;
             }),
         ),
+        encryptText: vi.fn().mockResolvedValue("encrypted-text"),
       } as unknown as SendMessageConfig<FakeEntry>["cryptoBridge"],
     });
     const msg = createSendMessage(config);
@@ -175,6 +177,7 @@ describe("createSendMessage", () => {
         encrypt: vi
           .fn()
           .mockRejectedValue(new CryptoWorkerError("no tk", "TK_NOT_CACHED")),
+        encryptText: vi.fn().mockResolvedValue("encrypted-text"),
       } as unknown as SendMessageConfig<FakeEntry>["cryptoBridge"],
     });
     const msg = createSendMessage(config);
@@ -191,6 +194,7 @@ describe("createSendMessage", () => {
         encrypt: vi
           .fn()
           .mockRejectedValue(new CryptoWorkerError("bad", "ENCRYPT_FAILED")),
+        encryptText: vi.fn().mockResolvedValue("encrypted-text"),
       } as unknown as SendMessageConfig<FakeEntry>["cryptoBridge"],
     });
     const msg = createSendMessage(config);
@@ -211,6 +215,7 @@ describe("createSendMessage", () => {
               resolveEncrypt = r;
             }),
         ),
+        encryptText: vi.fn().mockResolvedValue("encrypted-text"),
       } as unknown as SendMessageConfig<FakeEntry>["cryptoBridge"],
     });
     const msg = createSendMessage(config);

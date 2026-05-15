@@ -27,6 +27,7 @@ vi.mock("$lib/paraglide/messages.js", () => ({
 // --- Hoisted mock fns (vi.mock factories are hoisted above variable decls) ---
 const {
   mockEncrypt,
+  mockEncryptText,
   mockCreateCategory,
   mockUpdateCategory,
   mockDeleteCategory,
@@ -35,6 +36,7 @@ const {
   mockOrgCacheDelete,
 } = vi.hoisted(() => ({
   mockEncrypt: vi.fn().mockResolvedValue(new Uint8Array([1, 2, 3, 4])),
+  mockEncryptText: vi.fn().mockResolvedValue("encrypted-text"),
   mockCreateCategory: vi.fn().mockResolvedValue({}),
   mockUpdateCategory: vi.fn().mockResolvedValue({}),
   mockDeleteCategory: vi.fn().mockResolvedValue({}),
@@ -46,6 +48,7 @@ const {
 vi.mock("$lib/crypto/context.js", () => ({
   getOrgKeyManager: () => ({
     encrypt: mockEncrypt,
+    encryptText: mockEncryptText,
     decrypt: vi.fn(),
     isLoaded: true,
     load: vi.fn(),
@@ -86,6 +89,7 @@ vi.mock("$lib/trpc/index.js", () => ({
 // --- Mock errors ---
 vi.mock("$lib/errors.js", () => ({
   RouterNotAvailableError: class extends Error {},
+  requireRouter: <T>(r: T) => r,
 }));
 
 // --- Mock toast store ---
@@ -204,9 +208,9 @@ describe("CategoryManageSheet", () => {
     await fireEvent.click(saveBtn);
 
     await vi.waitFor(() => {
-      expect(mockEncrypt).toHaveBeenCalled();
+      expect(mockEncryptText).toHaveBeenCalledWith("New Category");
       expect(mockCreateCategory).toHaveBeenCalledWith({
-        encryptedName: "AQIDBA==",
+        encryptedName: "encrypted-text",
         encryptedDescription: undefined,
       });
       expect(mockInvalidateQueries).toHaveBeenCalledWith({
@@ -258,8 +262,8 @@ describe("CategoryManageSheet", () => {
     await vi.waitFor(() => {
       expect(mockUpdateCategory).toHaveBeenCalledWith({
         categoryId: "cat-1",
-        encryptedName: "AQIDBA==",
-        encryptedDescription: "AQIDBA==",
+        encryptedName: "encrypted-text",
+        encryptedDescription: "encrypted-text",
       });
     });
   });
