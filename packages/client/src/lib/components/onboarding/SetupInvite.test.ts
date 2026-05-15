@@ -8,7 +8,14 @@ const mockCompleteSetup = vi.fn(() => Promise.resolve({ success: true }));
 vi.mock("$lib/trpc/index.js", () => ({
   trpc: {
     onboarding: {
-      generateInvite: { mutate: vi.fn() },
+      generateInvite: {
+        mutate: vi.fn(() =>
+          Promise.resolve({
+            inviteUrl: "/first-login/test-token",
+            expiresAt: new Date(Date.now() + 86400000).toISOString(),
+          }),
+        ),
+      },
       completeSetup: { mutate: mockCompleteSetup },
     },
   },

@@ -263,7 +263,9 @@ describe("Dashboard page", () => {
     expect(screen.getByRole("button", { name: /My Tickets/ })).toBeTruthy();
     expect(screen.getByRole("button", { name: /Unassigned/ })).toBeTruthy();
     expect(screen.getByRole("button", { name: /Activity/ })).toBeTruthy();
-    expect(screen.getByRole("button", { name: /Knowledge Base/ })).toBeTruthy();
+    expect(
+      screen.getByRole("button", { name: /Knowledge base/i }),
+    ).toBeTruthy();
   });
 });
 
