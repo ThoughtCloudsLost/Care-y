@@ -32,6 +32,9 @@ vi.mock("$lib/stores/toast.svelte.js", () => ({
 vi.mock("$lib/utils/announce.js", () => ({
   announceToLiveRegion: vi.fn(),
 }));
+vi.mock("$lib/crypto/org-key-ready.svelte.js", () => ({
+  isOrgKeyReady: () => true,
+}));
 
 const { default: SetupEscrow } = await import("./SetupEscrow.svelte");
 
@@ -51,9 +54,7 @@ describe("SetupEscrow", () => {
 
   it("shows sensitivity warning", () => {
     render(SetupEscrow, { props: { oncomplete: vi.fn() } });
-    expect(
-      screen.getByText(/Store this file on an encrypted USB drive/),
-    ).toBeTruthy();
+    expect(screen.getByText(/encrypted USB drive/)).toBeTruthy();
   });
 
   it("download button is disabled when passphrase is too short", () => {

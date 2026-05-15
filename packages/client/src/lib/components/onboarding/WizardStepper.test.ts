@@ -1,4 +1,11 @@
 // @vitest-environment jsdom
+/**
+ * WizardStepper tests.
+ *
+ * The component renders a Konsta Progressbar with step-count text.
+ * No list items or individual step labels are rendered (the old
+ * horizontal stepper was replaced with a progress bar).
+ */
 import { describe, it, expect, afterEach } from "vitest";
 import { render, screen, cleanup } from "@testing-library/svelte";
 import WizardStepper from "./WizardStepper.svelte";
@@ -17,7 +24,7 @@ const STEPS = [
 ];
 
 describe("WizardStepper", () => {
-  it("renders correct step count in mobile text", () => {
+  it("renders correct step count text", () => {
     render(WizardStepper, {
       props: {
         steps: STEPS,
@@ -29,7 +36,7 @@ describe("WizardStepper", () => {
     expect(matches.length).toBeGreaterThanOrEqual(1);
   });
 
-  it("updates mobile text for a middle step", () => {
+  it("updates step count text for a middle step", () => {
     render(WizardStepper, {
       props: {
         steps: STEPS,
@@ -41,33 +48,7 @@ describe("WizardStepper", () => {
     expect(matches.length).toBeGreaterThanOrEqual(1);
   });
 
-  it("marks current step with aria-current", () => {
-    render(WizardStepper, {
-      props: {
-        steps: STEPS,
-        currentStep: 2,
-        completedSteps: new Set([0, 1]),
-      },
-    });
-    const items = screen.getAllByRole("listitem");
-    expect(items[2]?.getAttribute("aria-current")).toBe("step");
-    expect(items[0]?.getAttribute("aria-current")).toBeNull();
-  });
-
-  it("renders all step labels", () => {
-    render(WizardStepper, {
-      props: {
-        steps: STEPS,
-        currentStep: 0,
-        completedSteps: new Set<number>(),
-      },
-    });
-    for (const label of STEPS) {
-      expect(screen.getByText(label)).toBeTruthy();
-    }
-  });
-
-  it("renders checkmark SVG for completed steps", () => {
+  it("renders a progress group with accessible label", () => {
     const { container } = render(WizardStepper, {
       props: {
         steps: STEPS,
@@ -75,19 +56,35 @@ describe("WizardStepper", () => {
         completedSteps: new Set([0, 1]),
       },
     });
-    const checkmarks = container.querySelectorAll(".stepper-check");
-    expect(checkmarks.length).toBe(2);
+    const group = container.querySelector('[role="group"]');
+    expect(group).toBeTruthy();
+    expect(group!.getAttribute("aria-label")).toBeTruthy();
   });
 
-  it("renders accessible progress summary for screen readers", () => {
-    render(WizardStepper, {
+  it("includes screen-reader-only progress text", () => {
+    const { container } = render(WizardStepper, {
       props: {
         steps: STEPS,
         currentStep: 4,
         completedSteps: new Set<number>(),
       },
     });
-    const srText = screen.getAllByText("Step 5 of 8");
-    expect(srText.length).toBeGreaterThanOrEqual(1);
+    const srOnly = container.querySelector(".sr-only");
+    expect(srOnly).toBeTruthy();
+    expect(srOnly!.textContent).toContain("Step 5 of 8");
+  });
+
+  it("renders a Progressbar element", () => {
+    const { container } = render(WizardStepper, {
+      props: {
+        steps: STEPS,
+        currentStep: 2,
+        completedSteps: new Set([0, 1]),
+      },
+    });
+    const progressbar = container.querySelector(
+      ".k-progressbar, [role='progressbar']",
+    );
+    expect(progressbar).toBeTruthy();
   });
 });
