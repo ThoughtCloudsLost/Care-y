@@ -97,6 +97,13 @@ describe("ErrorCode", () => {
       "CANNOT_DEACTIVATE_DEFAULT_NOTE_TYPE",
       "INSUFFICIENT_ROLE",
 
+      // Onboarding
+      "ORG_ALREADY_SETUP",
+      "ORG_KEYPAIR_MISSING",
+      "INVALID_INVITE_TOKEN",
+      "INVALID_SETUP_TOKEN",
+      "BOOTSTRAP_RATE_LIMITED",
+
       // Telephony
       "TELEPHONY_NOT_CONFIGURED",
       "NO_CONSULTANT_REGISTRATION",

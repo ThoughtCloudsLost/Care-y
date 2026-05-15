@@ -27,6 +27,7 @@ function createMockDb(): {
     encrypted_accent_color: Buffer.from("enc-accent"),
     encrypted_client_text: Buffer.from("enc-text"),
     client_encrypted_branding: Buffer.from("enc-client-blob"),
+    encrypted_terminology: Buffer.from("enc-terminology"),
     org_public_key: Buffer.alloc(32),
     icon_192_blob_key: null,
     icon_512_blob_key: null,
@@ -88,6 +89,7 @@ describe("createBrandingService", () => {
         encryptedClientText: Buffer.from("enc-text").toString("base64"),
         clientEncryptedBranding:
           Buffer.from("enc-client-blob").toString("base64"),
+        encryptedTerminology: Buffer.from("enc-terminology").toString("base64"),
         hasIcons: false,
         iconVersion: null,
       });
