@@ -116,12 +116,13 @@
     if (!pluralTouchedQueues) termQueues = autoPlural(termQueue, language);
   });
 
-  let prevLang = language;
+  let prevLang = "en";
   $effect(() => {
-    if (language !== prevLang) {
+    const lang = language;
+    if (lang !== prevLang) {
       const defaults =
         // eslint-disable-next-line security/detect-object-injection -- language is a typed LangCode from a controlled select
-        TERMINOLOGY_DEFAULTS[language] ?? TERMINOLOGY_DEFAULTS_EN;
+        TERMINOLOGY_DEFAULTS[lang] ?? TERMINOLOGY_DEFAULTS_EN;
       termVolunteer = defaults.volunteer;
       termClient = defaults.client;
       termTicket = defaults.ticket;
@@ -133,7 +134,7 @@
       pluralTouchedTickets = false;
       pluralTouchedManagers = false;
       pluralTouchedQueues = false;
-      prevLang = language;
+      prevLang = lang;
     }
   });
 
