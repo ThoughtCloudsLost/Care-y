@@ -38,6 +38,7 @@
     [ErrorCode.TOTP_NOT_ENROLLED]: () => m.error_totp_not_enrolled(),
     [ErrorCode.NO_PENDING_TOTP]: () => m.error_no_pending_totp(),
     [ErrorCode.CANNOT_REMOVE_LAST_2FA]: () => m.error_cannot_remove_last_2fa(),
+    [ErrorCode.NO_METHODS_ENROLLED]: () => m.error_generic(),
     [ErrorCode.NO_BACKUP_CODES]: () => m.error_no_backup_codes(),
     [ErrorCode.UNKNOWN_CREDENTIAL]: () => m.error_unknown_credential(),
     [ErrorCode.NO_NOTIFICATION_EMAIL]: () => m.error_no_notification_email(),

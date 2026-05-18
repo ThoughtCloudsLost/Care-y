@@ -42,6 +42,7 @@
   import KeyDerivation, {
     type LoginPhaseId,
   } from "$lib/components/onboarding/KeyDerivation.svelte";
+  import TwoFactorEnrollment from "$lib/components/onboarding/TwoFactorEnrollment.svelte";
 
   const token = $derived(page.params.token ?? "");
   const bridge = getCryptoBridge();
@@ -60,6 +61,7 @@
   let displayName = $state("");
   let password = $state("");
   let confirmPassword = $state("");
+  let registeredUserId = $state("");
   /* eslint-disable @typescript-eslint/no-unsafe-assignment -- $state<union> rune proxy */
   let phase = $state<LoginPhaseId>("idle");
   /* eslint-enable @typescript-eslint/no-unsafe-assignment */
@@ -77,13 +79,17 @@
         return m.auth_phase_pow();
       case "derive":
         return m.auth_phase_derive();
+      case "twofa":
+        return m.onboarding_twofa_securing();
       default:
         return "";
     }
   }
 
   const phaseLabel = $derived(getPhaseLabel(phase));
-  const isSubmitting = $derived(phase !== "idle" && phase !== "error");
+  const isSubmitting = $derived(
+    phase !== "idle" && phase !== "error" && phase !== "twofa",
+  );
 
   const passwordTooShort = $derived(
     password.length > 0 && password.length < PASSWORD_MIN_LENGTH,
@@ -123,6 +129,7 @@
         password,
         displayName: displayName || undefined,
       });
+      registeredUserId = userId;
 
       // 2. registerCrypto: Argon2id + OPRF + upload salt + volPublic.
       /* eslint-disable @typescript-eslint/no-unsafe-assignment -- $state<union> rune proxy */
@@ -159,12 +166,9 @@
       // 5. Install cleanup handler for key zeroing on unload.
       installCleanupHandler(bridge, orgKeyManager);
 
-      phase = "done";
+      // 6. Show 2FA enrollment before navigating to dashboard.
+      phase = "twofa";
       haptic();
-      toastStore.show(m.onboarding_step_complete());
-
-      // 6. Navigate to app.
-      await goto(resolve("/"));
     } catch (caught: unknown) {
       phase = "error";
       const msg = caught instanceof Error ? caught.message : String(caught);
@@ -174,6 +178,20 @@
         error = m.onboarding_firstlogin_error_generic();
       }
       announceToLiveRegion("assertive", error);
+    }
+  }
+
+  let twofaLoading = $state(false);
+
+  async function handleTwofaEnrolled(): Promise<void> {
+    twofaLoading = true;
+    try {
+      await trpc.twoFactor.enroll.markVerifiedOnFirstEnrollment.mutate();
+      toastStore.show(m.onboarding_step_complete());
+      await goto(resolve("/"));
+    } catch {
+      toastStore.show(m.onboarding_firstlogin_error_generic(), 3000);
+      twofaLoading = false;
     }
   }
 </script>
@@ -194,6 +212,27 @@
   </Block>
 {:else if isSubmitting}
   <KeyDerivation {phase} {phaseLabel} />
+{:else if phase === "twofa"}
+  <BlockTitle medium>{m.onboarding_twofa_vol_heading()}</BlockTitle>
+  <Block>
+    <p class="step-desc">{m.onboarding_twofa_vol_desc()}</p>
+  </Block>
+  {#if twofaLoading}
+    <Block>
+      <div class="loading-container">
+        <Preloader />
+        <p class="step-desc">{m.onboarding_twofa_securing()}</p>
+      </div>
+    </Block>
+  {:else}
+    <TwoFactorEnrollment
+      userId={registeredUserId}
+      username={identifier}
+      onenrolled={() => {
+        void handleTwofaEnrolled();
+      }}
+    />
+  {/if}
 {:else}
   <BlockTitle medium>{m.onboarding_firstlogin_heading()}</BlockTitle>
   <Block>

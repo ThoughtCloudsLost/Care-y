@@ -345,6 +345,30 @@ export function createTwoFactorRouter(deps: TwoFactorRouterDeps) {
         ctx.twoFactor.generateBackupCodes(ctx.user.id),
       ),
     ),
+
+    /**
+     * Mark session as 2FA-verified after first enrollment during onboarding.
+     *
+     * Safe because enrollment already proves possession (TOTP code verified,
+     * WebAuthn ceremony completed, etc.). Only succeeds if at least one
+     * method is enrolled. Idempotent if session is already verified.
+     */
+    markVerifiedOnFirstEnrollment: twoFactorProcedure.mutation(
+      withErrorWrapping(async ({ ctx }) => {
+        const status = await ctx.twoFactor.getStatus(ctx.user.id);
+        if (status.methods.length === 0) {
+          throw new TRPCError({
+            code: "PRECONDITION_FAILED",
+            message: ErrorCode.NO_METHODS_ENROLLED,
+          });
+        }
+        if (ctx.session.twofaVerified) {
+          return { success: true as const };
+        }
+        await ctx.twoFactor.markSessionVerified(ctx.session.token);
+        return { success: true as const };
+      }),
+    ),
   });
 
   // === Verification sub-router ===
