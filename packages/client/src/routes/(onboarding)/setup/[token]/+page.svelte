@@ -50,6 +50,7 @@
   import SetupBranding from "$lib/components/onboarding/SetupBranding.svelte";
   import SetupQueue from "$lib/components/onboarding/SetupQueue.svelte";
   import SetupTelephony from "$lib/components/onboarding/SetupTelephony.svelte";
+  import SetupTwoFactor from "$lib/components/onboarding/SetupTwoFactor.svelte";
   import SetupEscrow from "$lib/components/onboarding/SetupEscrow.svelte";
   import SetupInvite from "$lib/components/onboarding/SetupInvite.svelte";
 
@@ -60,6 +61,7 @@
   const STEP_LABELS = [
     m.onboarding_step_account(),
     m.onboarding_step_briefing(),
+    m.onboarding_step_twofa(),
     m.onboarding_step_org(),
     m.onboarding_step_branding(),
     m.onboarding_step_queue(withTerms()),
@@ -71,6 +73,7 @@
   interface WizardData {
     userId: string;
     adminVolPublic: string;
+    twofaEnrolled: boolean;
     orgName: string;
     language: string;
     countryCode: string;
@@ -80,6 +83,8 @@
     escrowExported: boolean;
     invitesSent: number;
   }
+
+  const WIZARD_STEP_COUNT = STEP_LABELS.length + 1; // labels + completion screen
 
   function loadSavedState(): { step: number; completed: number[] } | null {
     try {
@@ -100,6 +105,10 @@
         Array.isArray(obj.completed) &&
         obj.completed.every((v): v is number => typeof v === "number")
       ) {
+        if (obj.step >= WIZARD_STEP_COUNT) {
+          sessionStorage.removeItem(STORAGE_KEY);
+          return null;
+        }
         return { step: obj.step, completed: obj.completed };
       }
     } catch {
@@ -267,6 +276,11 @@
     advanceStep();
   }
 
+  function handleTwofaComplete(): void {
+    wizardData = { ...wizardData, twofaEnrolled: true };
+    advanceStep();
+  }
+
   function handleOrgComplete(data: {
     orgName: string;
     language: string;
@@ -310,12 +324,12 @@
     advanceStep();
   }
 
-  // --- Completion screen: query checklist state for step 8 ---
+  // --- Completion screen: query checklist state for step 9 ---
 
   const checklistQuery = createQuery(() => ({
     queryKey: ["dashboard", "setupChecklist"],
     queryFn: async () => trpc.dashboard.getSetupChecklist.query(),
-    enabled: step === 8,
+    enabled: step === 9,
   }));
 
   const nextSteps = CHECKLIST_ITEMS;
@@ -411,22 +425,28 @@
   {:else if step === 1}
     <SecurityBriefing onconfirm={advanceStep} />
   {:else if step === 2}
-    <SetupOrg oncomplete={handleOrgComplete} />
+    <SetupTwoFactor
+      oncomplete={handleTwofaComplete}
+      userId={wizardData.userId ?? ""}
+      username={wizardData.userId ?? ""}
+    />
   {:else if step === 3}
+    <SetupOrg oncomplete={handleOrgComplete} />
+  {:else if step === 4}
     <SetupBranding
       orgName={wizardData.orgName ?? ""}
       oncomplete={handleBrandingComplete}
       onskip={handleBrandingSkip}
     />
-  {:else if step === 4}
-    <SetupQueue oncomplete={handleQueueComplete} />
   {:else if step === 5}
-    <SetupTelephony oncomplete={handleTelephonyComplete} />
+    <SetupQueue oncomplete={handleQueueComplete} />
   {:else if step === 6}
-    <SetupEscrow oncomplete={handleEscrowComplete} />
+    <SetupTelephony oncomplete={handleTelephonyComplete} />
   {:else if step === 7}
-    <SetupInvite oncomplete={handleInviteComplete} />
+    <SetupEscrow oncomplete={handleEscrowComplete} />
   {:else if step === 8}
+    <SetupInvite oncomplete={handleInviteComplete} />
+  {:else if step === 9}
     <BlockTitle medium>{m.onboarding_wizard_complete_heading()}</BlockTitle>
     <Block>
       <div class="complete-screen">

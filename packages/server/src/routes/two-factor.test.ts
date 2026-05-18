@@ -706,6 +706,78 @@ describe.skipIf(!process.env.DATABASE_URL)(
     // 8. deriveOrigin helper
     // =========================================================================
 
+    // =========================================================================
+    // 8. markVerifiedOnFirstEnrollment
+    // =========================================================================
+
+    describe("enroll.markVerifiedOnFirstEnrollment", () => {
+      it("marks session verified when at least one method is enrolled", async () => {
+        const user = await registerUser("mark-verified-ok");
+        const session = await createTestSession(
+          tenantDb,
+          { user_id: user.id },
+          testFieldEncryptor,
+        );
+        const { caller } = createAuthedCaller(user, session.token);
+
+        const setup = await caller.twoFactor.enroll.totpSetup();
+        const secret = base32Decode(setup!.secret);
+        const validCode = generateTotpCode(secret, Date.now());
+        await caller.twoFactor.enroll.totpVerify({ code: validCode });
+
+        const result =
+          await caller.twoFactor.enroll.markVerifiedOnFirstEnrollment();
+        expect(result!.success).toBe(true);
+
+        const sessions = createDbSessionRepository(
+          tenantDb,
+          testSessionTokenizer,
+          testSealedBox,
+        );
+        const updatedSession = await sessions.findByToken(session.token);
+        expect(updatedSession!.twofaVerified).toBe(true);
+      });
+
+      it("rejects when no methods are enrolled", async () => {
+        const user = await registerUser("mark-verified-no-methods");
+        const session = await createTestSession(
+          tenantDb,
+          { user_id: user.id },
+          testFieldEncryptor,
+        );
+        const { caller } = createAuthedCaller(user, session.token);
+
+        await expectTrpcError(
+          caller.twoFactor.enroll.markVerifiedOnFirstEnrollment(),
+          "PRECONDITION_FAILED",
+        );
+      });
+
+      it("is idempotent when session is already verified", async () => {
+        const user = await registerUser("mark-verified-idempotent");
+        const session = await createTestSession(
+          tenantDb,
+          { user_id: user.id },
+          testFieldEncryptor,
+        );
+        const { caller } = createAuthedCaller(user, session.token);
+
+        const setup = await caller.twoFactor.enroll.totpSetup();
+        const secret = base32Decode(setup!.secret);
+        const validCode = generateTotpCode(secret, Date.now());
+        await caller.twoFactor.enroll.totpVerify({ code: validCode });
+
+        await caller.twoFactor.enroll.markVerifiedOnFirstEnrollment();
+        const result =
+          await caller.twoFactor.enroll.markVerifiedOnFirstEnrollment();
+        expect(result!.success).toBe(true);
+      });
+    });
+
+    // =========================================================================
+    // 9. deriveOrigin
+    // =========================================================================
+
     describe("deriveOrigin", () => {
       /** Valid registration input that passes the Zod schema. */
       function fakeRegistrationInput(id: string) {

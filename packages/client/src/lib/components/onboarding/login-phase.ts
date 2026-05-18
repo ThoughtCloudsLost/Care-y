@@ -5,5 +5,6 @@ export type LoginPhaseId =
   | "oprf"
   | "pow"
   | "derive"
+  | "twofa"
   | "done"
   | "error";
