@@ -19,6 +19,7 @@
     setCryptoBridge,
     setOrgKeyManager,
   } from "$lib/crypto/context-init.js";
+  import { setOrgKeyReady } from "$lib/crypto/org-key-ready.svelte.js";
 
   import type { Snippet } from "svelte";
 
@@ -38,6 +39,7 @@
     const reconnect = bridge.getReconnectData();
     if (bridge.isReconnected() && reconnect.orgPublicKey != null) {
       orgKeyManager.load(reconnect.orgPublicKey);
+      setOrgKeyReady(true);
     }
   }
 </script>
