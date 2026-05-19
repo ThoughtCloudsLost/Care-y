@@ -1,73 +1,61 @@
 // @vitest-environment jsdom
-import { describe, it, expect, afterEach, vi, beforeEach } from "vitest";
+import { describe, it, expect, afterEach, vi } from "vitest";
 import { render, screen, cleanup, fireEvent } from "@testing-library/svelte";
 import SecurityBriefing from "./SecurityBriefing.svelte";
 
 afterEach(cleanup);
 
-function mockIntersectionObserver(shouldIntersect: boolean): void {
-  const entries = [{ isIntersecting: shouldIntersect }];
-  vi.stubGlobal(
-    "IntersectionObserver",
-    class MockIntersectionObserver {
-      callback: IntersectionObserverCallback;
-      constructor(callback: IntersectionObserverCallback) {
-        this.callback = callback;
-      }
-      observe(): void {
-        this.callback(
-          entries as unknown as IntersectionObserverEntry[],
-          this as unknown as IntersectionObserver,
-        );
-      }
-      // eslint-disable-next-line @typescript-eslint/no-empty-function -- mock stub
-      disconnect(): void {}
-    },
-  );
+async function advanceToPage(
+  container: HTMLElement,
+  targetPage: number,
+): Promise<void> {
+  for (let i = 0; i < targetPage; i++) {
+    const nextButton = screen.getByText("Next");
+    await fireEvent.click(nextButton);
+  }
 }
 
 describe("SecurityBriefing", () => {
-  beforeEach(() => {
-    mockIntersectionObserver(false);
-  });
-
-  describe("rendering", () => {
+  describe("page 0 - How Encryption Works", () => {
     it("renders the main heading", () => {
       const onconfirm = vi.fn();
       render(SecurityBriefing, { props: { onconfirm } });
       expect(screen.getByText("How CARE-Y Protects Your Data")).toBeTruthy();
     });
 
-    it("renders all 6 compromise scenario headings", () => {
+    it("renders the crypto diagram with alt text", () => {
       const onconfirm = vi.fn();
       render(SecurityBriefing, { props: { onconfirm } });
-
-      const scenarioTitles = [
-        "Someone seizes or breaks into the CARE-Y server",
-        "Someone compromises one of the two verification servers",
-        "A volunteer's device is compromised",
-        "A volunteer goes rogue (insider threat)",
-        "The telephony provider is compromised or subpoenaed",
-        "Network surveillance (ISP monitoring, traffic analysis)",
-      ];
-
-      for (const title of scenarioTitles) {
-        expect(screen.getByText(title)).toBeTruthy();
-      }
+      const img = screen.getByAltText(
+        "Simplified diagram showing how CARE-Y derives encryption keys from passwords using two verification servers",
+      );
+      expect(img).toBeTruthy();
+      expect(img.getAttribute("src")).toBe("/images/crypto-overview.png");
     });
 
-    it("renders all 3 setup choice headings", () => {
+    it("renders the intro paragraph", () => {
       const onconfirm = vi.fn();
       render(SecurityBriefing, { props: { onconfirm } });
-
-      expect(screen.getByText("Telephony provider")).toBeTruthy();
-      expect(screen.getByText("Two-factor authentication policy")).toBeTruthy();
-      expect(screen.getByText("Tor hidden service access")).toBeTruthy();
+      expect(
+        screen.getByText(/encrypts everything in the volunteer's browser/),
+      ).toBeTruthy();
     });
 
-    it("renders the protection table with all 7 data categories", () => {
+    it("shows Next button on page 0", () => {
       const onconfirm = vi.fn();
       render(SecurityBriefing, { props: { onconfirm } });
+      expect(screen.getByText("Next")).toBeTruthy();
+      expect(screen.queryByText("Back")).toBeNull();
+    });
+  });
+
+  describe("page 1 - What's Protected", () => {
+    it("renders the protection table with all 7 data categories", async () => {
+      const onconfirm = vi.fn();
+      const { container } = render(SecurityBriefing, {
+        props: { onconfirm },
+      });
+      await advanceToPage(container, 1);
 
       const dataCategories = [
         "Client data (tickets, messages, case notes)",
@@ -84,98 +72,191 @@ describe("SecurityBriefing", () => {
       }
     });
 
-    it("renders the crypto diagram with alt text", () => {
+    it("renders practice section heading and row labels", async () => {
       const onconfirm = vi.fn();
-      render(SecurityBriefing, { props: { onconfirm } });
-      const img = screen.getByAltText(
-        "Simplified diagram showing how CARE-Y derives encryption keys from passwords using two verification servers",
-      );
-      expect(img).toBeTruthy();
-      expect(img.getAttribute("src")).toBe("/images/crypto-overview.png");
+      const { container } = render(SecurityBriefing, {
+        props: { onconfirm },
+      });
+      await advanceToPage(container, 1);
+
+      expect(screen.getByText("What This Means in Practice")).toBeTruthy();
+      const accessLabels = screen.getAllByText("Who can read it");
+      expect(accessLabels.length).toBeGreaterThan(0);
     });
 
-    it("shows scroll hint when not scrolled to bottom", () => {
+    it("has 7 details elements", async () => {
       const onconfirm = vi.fn();
-      render(SecurityBriefing, { props: { onconfirm } });
-      expect(screen.getByText("Scroll to the bottom to continue")).toBeTruthy();
+      const { container } = render(SecurityBriefing, {
+        props: { onconfirm },
+      });
+      await advanceToPage(container, 1);
+
+      const detailsElements = container.querySelectorAll("details");
+      expect(detailsElements.length).toBe(7);
+    });
+
+    it("shows Back and Next buttons", async () => {
+      const onconfirm = vi.fn();
+      const { container } = render(SecurityBriefing, {
+        props: { onconfirm },
+      });
+      await advanceToPage(container, 1);
+
+      expect(screen.getByText("Back")).toBeTruthy();
+      expect(screen.getByText("Next")).toBeTruthy();
     });
   });
 
-  describe("confirm button", () => {
-    it("is disabled when user has not scrolled to bottom", () => {
+  describe("page 2 - Compromise Scenarios", () => {
+    it("renders all 6 compromise scenario headings", async () => {
       const onconfirm = vi.fn();
-      render(SecurityBriefing, { props: { onconfirm } });
-      const button = screen.getByText("I understand");
-      expect(button.closest("button")?.disabled).toBe(true);
+      const { container } = render(SecurityBriefing, {
+        props: { onconfirm },
+      });
+      await advanceToPage(container, 2);
+
+      const scenarioTitles = [
+        "Someone seizes or breaks into the CARE-Y server",
+        "Someone compromises one of the two verification servers",
+        "A volunteer's device is compromised",
+        "A volunteer goes rogue (insider threat)",
+        "The telephony provider is compromised or subpoenaed",
+        "Network surveillance (ISP monitoring, traffic analysis)",
+      ];
+
+      for (const title of scenarioTitles) {
+        expect(screen.getByText(title)).toBeTruthy();
+      }
     });
 
-    it("is enabled after IntersectionObserver fires with isIntersecting", () => {
-      mockIntersectionObserver(true);
+    it("has 6 details elements", async () => {
       const onconfirm = vi.fn();
-      render(SecurityBriefing, { props: { onconfirm } });
+      const { container } = render(SecurityBriefing, {
+        props: { onconfirm },
+      });
+      await advanceToPage(container, 2);
+
+      const detailsElements = container.querySelectorAll("details");
+      expect(detailsElements.length).toBe(6);
+    });
+  });
+
+  describe("page 3 - Security Choices", () => {
+    it("renders all 3 setup choice headings", async () => {
+      const onconfirm = vi.fn();
+      const { container } = render(SecurityBriefing, {
+        props: { onconfirm },
+      });
+      await advanceToPage(container, 3);
+
+      expect(screen.getByText("Telephony provider")).toBeTruthy();
+      expect(screen.getByText("Two-factor authentication policy")).toBeTruthy();
+      expect(screen.getByText("Tor hidden service access")).toBeTruthy();
+    });
+
+    it("has 3 details elements", async () => {
+      const onconfirm = vi.fn();
+      const { container } = render(SecurityBriefing, {
+        props: { onconfirm },
+      });
+      await advanceToPage(container, 3);
+
+      const detailsElements = container.querySelectorAll("details");
+      expect(detailsElements.length).toBe(3);
+    });
+
+    it("confirm button is always enabled", async () => {
+      const onconfirm = vi.fn();
+      const { container } = render(SecurityBriefing, {
+        props: { onconfirm },
+      });
+      await advanceToPage(container, 3);
+
       const button = screen.getByText("I understand");
       expect(button.closest("button")?.disabled).toBe(false);
     });
 
-    it("calls onconfirm when clicked and scrolled to bottom", async () => {
-      mockIntersectionObserver(true);
+    it("calls onconfirm when confirm button is clicked", async () => {
       const onconfirm = vi.fn();
-      render(SecurityBriefing, { props: { onconfirm } });
+      const { container } = render(SecurityBriefing, {
+        props: { onconfirm },
+      });
+      await advanceToPage(container, 3);
+
       const button = screen.getByText("I understand");
       await fireEvent.click(button);
       expect(onconfirm).toHaveBeenCalledOnce();
     });
 
-    it("does not call onconfirm when button is disabled", async () => {
-      mockIntersectionObserver(false);
+    it("shows Back button and confirm, no Next", async () => {
+      const onconfirm = vi.fn();
+      const { container } = render(SecurityBriefing, {
+        props: { onconfirm },
+      });
+      await advanceToPage(container, 3);
+
+      expect(screen.getByText("Back")).toBeTruthy();
+      expect(screen.getByText("I understand")).toBeTruthy();
+      expect(screen.queryByText("Next")).toBeNull();
+    });
+  });
+
+  describe("navigation", () => {
+    it("Next button advances to next page", async () => {
       const onconfirm = vi.fn();
       render(SecurityBriefing, { props: { onconfirm } });
-      const button = screen.getByText("I understand");
-      await fireEvent.click(button);
-      expect(onconfirm).not.toHaveBeenCalled();
+
+      expect(screen.queryByText("What This Means in Practice")).toBeNull();
+      await fireEvent.click(screen.getByText("Next"));
+      expect(screen.getByText("What This Means in Practice")).toBeTruthy();
     });
 
-    it("hides scroll hint after scrolling to bottom", () => {
-      mockIntersectionObserver(true);
+    it("Back button returns to previous page", async () => {
       const onconfirm = vi.fn();
-      render(SecurityBriefing, { props: { onconfirm } });
-      expect(screen.queryByText("Scroll to the bottom to continue")).toBeNull();
+      const { container } = render(SecurityBriefing, {
+        props: { onconfirm },
+      });
+      await advanceToPage(container, 1);
+
+      await fireEvent.click(screen.getByText("Back"));
+      expect(
+        screen.getByText(/encrypts everything in the volunteer's browser/),
+      ).toBeTruthy();
+    });
+
+    it("renders page dots indicator", () => {
+      const onconfirm = vi.fn();
+      const { container } = render(SecurityBriefing, {
+        props: { onconfirm },
+      });
+      const dots = container.querySelectorAll(".page-dot");
+      expect(dots.length).toBe(4);
+    });
+
+    it("active dot updates with page changes", async () => {
+      const onconfirm = vi.fn();
+      const { container } = render(SecurityBriefing, {
+        props: { onconfirm },
+      });
+
+      let activeDots = container.querySelectorAll(".page-dot--active");
+      expect(activeDots.length).toBe(1);
+      expect(activeDots[0]).toBe(container.querySelectorAll(".page-dot")[0]);
+
+      await fireEvent.click(screen.getByText("Next"));
+      activeDots = container.querySelectorAll(".page-dot--active");
+      expect(activeDots[0]).toBe(container.querySelectorAll(".page-dot")[1]);
     });
   });
 
   describe("accessibility", () => {
-    it("uses native details/summary for collapsible scenarios", () => {
+    it("touch-feedback class is on summary, not details", async () => {
       const onconfirm = vi.fn();
       const { container } = render(SecurityBriefing, {
         props: { onconfirm },
       });
-      const detailsElements = container.querySelectorAll("details");
-      expect(detailsElements.length).toBe(16);
-    });
+      await advanceToPage(container, 1);
 
-    it("scroll sentinel has aria-hidden", () => {
-      const onconfirm = vi.fn();
-      const { container } = render(SecurityBriefing, {
-        props: { onconfirm },
-      });
-      const sentinel = container.querySelector(".scroll-sentinel");
-      expect(sentinel?.getAttribute("aria-hidden")).toBe("true");
-    });
-
-    it("scroll hint uses aria-live polite", () => {
-      const onconfirm = vi.fn();
-      const { container } = render(SecurityBriefing, {
-        props: { onconfirm },
-      });
-      const hint = container.querySelector(".scroll-hint");
-      expect(hint?.getAttribute("aria-live")).toBe("polite");
-    });
-
-    it("touch-feedback class is on summary, not details", () => {
-      const onconfirm = vi.fn();
-      const { container } = render(SecurityBriefing, {
-        props: { onconfirm },
-      });
       const detailsWithFeedback = container.querySelectorAll(
         "details.touch-feedback",
       );
@@ -183,15 +264,16 @@ describe("SecurityBriefing", () => {
         "summary.touch-feedback",
       );
       expect(detailsWithFeedback.length).toBe(0);
-      expect(summariesWithFeedback.length).toBe(16);
+      expect(summariesWithFeedback.length).toBe(7);
     });
 
-    it("renders practice section heading and row labels", () => {
+    it("page dots have aria-hidden", () => {
       const onconfirm = vi.fn();
-      render(SecurityBriefing, { props: { onconfirm } });
-      expect(screen.getByText("What This Means in Practice")).toBeTruthy();
-      const accessLabels = screen.getAllByText("Who can read it");
-      expect(accessLabels.length).toBeGreaterThan(0);
+      const { container } = render(SecurityBriefing, {
+        props: { onconfirm },
+      });
+      const dotsContainer = container.querySelector(".page-dots");
+      expect(dotsContainer?.getAttribute("aria-hidden")).toBe("true");
     });
   });
 });

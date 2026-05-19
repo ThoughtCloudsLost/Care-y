@@ -192,6 +192,19 @@ export interface PushDeps {
   readonly pushChallenges: PushChallengeService;
 }
 
+export async function getEnrolledMethodTypes(
+  db: Kysely<TenantDatabase>,
+  userId: string,
+): Promise<string[]> {
+  const rows = await db
+    .selectFrom("two_factor_methods")
+    .select("method_type")
+    .where("user_id", "=", userId)
+    .where("is_active", "=", true)
+    .execute();
+  return rows.map((r) => r.method_type);
+}
+
 export function createTwoFactorService(
   db: Kysely<TenantDatabase>,
   sessions: SessionRepository,

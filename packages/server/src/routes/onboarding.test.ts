@@ -27,9 +27,10 @@ import {
   mockReq,
   mockRes,
   expectTrpcError,
+  registerMethodDirectly,
   type TestDb,
 } from "../test-utils.js";
-import { RoleId } from "@care-y/shared";
+import { RoleId, TwoFactorMethod } from "@care-y/shared";
 import { encode } from "@care-y/crypto";
 import { createScryptHasher } from "../auth/password.js";
 import { createInMemoryRateLimiter } from "../ratelimit/rate-limiter.js";
@@ -267,6 +268,100 @@ describe.skipIf(!HAS_DB)("onboarding router (DB integration)", () => {
         .executeTakeFirst();
 
       expect(user?.role_id).toBe(RoleId.ADMIN);
+    });
+  });
+
+  describe("reauthenticate", () => {
+    let freshTestDb: TestDb;
+    let freshOrgSlug: string;
+    let freshSetupToken: string;
+
+    beforeEach(async () => {
+      freshTestDb = await createTestDb();
+      const freshTenantDb = freshTestDb.db;
+      await freshTenantDb
+        .insertInto("org_config")
+        .values({ pii_retention_days: null })
+        .onConflict((oc) => oc.doNothing())
+        .execute();
+
+      const orgService = createOrgService(
+        freshTestDb.platformDb,
+        makeTenantDbFactory(freshTestDb.platformDb),
+      );
+      const suffix = randomUUID().slice(0, 8);
+      freshOrgSlug = `test-reauth-${suffix}`;
+      const org = await orgService.createOrg({ slug: freshOrgSlug });
+      freshSetupToken = org.setupToken;
+      createdOrgIds.push(org.id);
+      createdSchemas.push(org.schemaName);
+    });
+
+    afterEach(async () => {
+      await freshTestDb.cleanup();
+    });
+
+    /** Bootstrap an admin so the org has a public key and a user with valid credentials. */
+    async function bootstrapAndGetUserId(slug: string): Promise<string> {
+      const { caller } = buildCaller(slug);
+      const result = await caller.onboarding.bootstrapAdmin({
+        identifier: "reauth-admin",
+        password: "reauth-password-long-enough",
+        displayName: "Reauth Admin",
+        orgPublicKey: encode(TEST_ORG_PUBLIC_KEY),
+        setupToken: freshSetupToken,
+      });
+      return result.userId;
+    }
+
+    it("returns requiresTwoFactor=false when user has no 2FA methods", async () => {
+      await bootstrapAndGetUserId(freshOrgSlug);
+
+      const { caller, res } = buildCaller(freshOrgSlug);
+      const result = await caller.onboarding.reauthenticate({
+        identifier: "reauth-admin",
+        password: "reauth-password-long-enough",
+      });
+
+      expect(result.userId).toBeDefined();
+      expect(result.requiresTwoFactor).toBe(false);
+      expect(result.enrolledMethods).toEqual([]);
+
+      // Session cookie must be set (inline 2FA verification requires it).
+      const cookies = res.getCapturedCookies();
+      expect(cookies.length).toBeGreaterThan(0);
+      expect(cookies[0]).toContain("care_y_session=");
+    });
+
+    it("returns requiresTwoFactor=true with enrolled method types when user has 2FA", async () => {
+      const userId = await bootstrapAndGetUserId(freshOrgSlug);
+
+      // Insert a TOTP method directly into the tenant DB.
+      const orgService = createOrgService(
+        freshTestDb.platformDb,
+        makeTenantDbFactory(freshTestDb.platformDb),
+      );
+      const org = await orgService.findBySlug(freshOrgSlug);
+      const tDb = freshTestDb.platformDb.withSchema(
+        org!.schemaName,
+      ) as unknown as Kysely<TenantDatabase>;
+      await registerMethodDirectly(tDb, userId, TwoFactorMethod.TOTP);
+
+      const { caller, res } = buildCaller(freshOrgSlug);
+      const result = await caller.onboarding.reauthenticate({
+        identifier: "reauth-admin",
+        password: "reauth-password-long-enough",
+      });
+
+      expect(result.userId).toBe(userId);
+      expect(result.requiresTwoFactor).toBe(true);
+      expect(result.enrolledMethods).toContain(TwoFactorMethod.TOTP);
+
+      // Session cookie must be set even when 2FA is required (the 2FA
+      // verify endpoints need the session to identify the user).
+      const cookies = res.getCapturedCookies();
+      expect(cookies.length).toBeGreaterThan(0);
+      expect(cookies[0]).toContain("care_y_session=");
     });
   });
 });

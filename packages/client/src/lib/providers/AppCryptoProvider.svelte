@@ -15,7 +15,7 @@
   import { createQuery } from "@tanstack/svelte-query";
   import { authKeys } from "$lib/query/keys.js";
   import type { WorkerEventHandler } from "$lib/workers/crypto-bridge.js";
-  import type { WorkerEvent } from "$lib/workers/crypto-protocol.js";
+  import type { RewrapEvent } from "$lib/workers/crypto-protocol.js";
   import { OrgDecryptCache } from "$lib/crypto/org-decrypt-cache.js";
   import { TicketDecryptCache } from "$lib/crypto/ticket-decrypt-cache.js";
   import { FollowUpDecryptCache } from "$lib/crypto/follow-up-decrypt-cache.js";
@@ -62,11 +62,11 @@
 
     const MAX_CONCURRENT_REWRAPS = 3;
     let activeRewraps = 0;
-    const rewrapQueue: WorkerEvent[] = [];
+    const rewrapQueue: RewrapEvent[] = [];
 
     const queryClient = useQueryClient();
 
-    async function processRewrapEvent(event: WorkerEvent): Promise<void> {
+    async function processRewrapEvent(event: RewrapEvent): Promise<void> {
       let success = false;
       try {
         const blobUpdates = await rewrapBlobsForFollowUp(
@@ -111,6 +111,7 @@
     }
 
     const rewrapHandler: WorkerEventHandler = (event) => {
+      if (event.kind !== "rewrap") return;
       rewrapQueue.push(event);
       drainRewrapQueue();
     };

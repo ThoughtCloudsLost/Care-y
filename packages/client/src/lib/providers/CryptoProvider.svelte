@@ -32,6 +32,13 @@
 
     const orgKeyManager = new OrgKeyManager(bridge);
     setOrgKeyManager(orgKeyManager);
+
+    // SharedWorker reconnection: if the bridge connected to an already-keyed
+    // Worker (refresh scenario), restore the org public key locally.
+    const reconnect = bridge.getReconnectData();
+    if (bridge.isReconnected() && reconnect.orgPublicKey != null) {
+      orgKeyManager.load(reconnect.orgPublicKey);
+    }
   }
 </script>
 

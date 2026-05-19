@@ -208,10 +208,13 @@ export function createAuthRouter(deps: AuthRouterDeps) {
         );
         const enrolledMethods = await twoFactor.getEnrolledMethodTypes(user.id);
 
+        const needsEnrollment = enrolledMethods.length === 0;
+
         return {
           user: toUserResponse(user),
           requiresTwoFactor: enrolledMethods.length > 0,
           enrolledMethods,
+          needsEnrollment,
         };
       }),
     ),

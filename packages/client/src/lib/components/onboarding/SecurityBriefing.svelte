@@ -23,8 +23,8 @@
     );
   });
 
-  let scrolledToBottom = $state(false);
-  let sentinelEl: HTMLDivElement | undefined = $state();
+  const TOTAL_PAGES = 4;
+  let subPage = $state(0);
   let diagramOpen = $state(false);
 
   let zoomScale = $state(1);
@@ -98,31 +98,26 @@
     }
   }
 
-  $effect(() => {
-    if (!sentinelEl) return;
+  function scrollContentToTop(): void {
+    const container = document.querySelector(".onboarding-content");
+    if (container) container.scrollTop = 0;
+  }
 
-    const scrollContainer = sentinelEl.closest(".onboarding-content");
+  function nextPage(): void {
+    if (subPage < TOTAL_PAGES - 1) {
+      subPage++;
+      scrollContentToTop();
+    }
+  }
 
-    const observer = new IntersectionObserver(
-      (entries) => {
-        for (const entry of entries) {
-          if (entry.isIntersecting) {
-            scrolledToBottom = true;
-          }
-        }
-      },
-      { threshold: 0.1, root: scrollContainer },
-    );
-
-    observer.observe(sentinelEl);
-
-    return () => {
-      observer.disconnect();
-    };
-  });
+  function prevPage(): void {
+    if (subPage > 0) {
+      subPage--;
+      scrollContentToTop();
+    }
+  }
 
   function handleConfirm(): void {
-    if (!scrolledToBottom) return;
     haptic();
     toastStore.show(m.onboarding_step_complete());
     announceToLiveRegion("polite", m.onboarding_step_complete());
@@ -228,148 +223,172 @@
     </Block>
   {/if}
 
-  <Block>
-    <p class="briefing-prose">{m.onboarding_briefing_intro()}</p>
-  </Block>
+  <div class="page-dots" aria-hidden="true">
+    {#each Array(TOTAL_PAGES) as _, i (i)}
+      <span class="page-dot" class:page-dot--active={i === subPage}></span>
+    {/each}
+  </div>
 
-  <Block>
-    <p class="diagram-caption">{m.onboarding_briefing_diagram_caption()}</p>
-    <button
-      type="button"
-      class="diagram-tap touch-feedback"
-      onclick={() => (diagramOpen = true)}
-      aria-label={m.onboarding_briefing_diagram_tap()}
-    >
-      <img
-        src="/images/crypto-overview.png"
-        alt={m.onboarding_briefing_diagram_alt()}
-        class="crypto-diagram"
-      />
-      <span class="diagram-hint">{m.onboarding_briefing_diagram_tap()}</span>
-    </button>
-  </Block>
+  {#if subPage === 0}
+    <Block>
+      <p class="briefing-prose">{m.onboarding_briefing_intro()}</p>
+    </Block>
 
-  {#if diagramOpen}
-    <div
-      class="diagram-overlay"
-      role="dialog"
-      aria-label={m.onboarding_briefing_diagram_alt()}
-      tabindex="-1"
-      onclick={handleOverlayTap}
-      onkeydown={(e: KeyboardEvent) => {
-        if (e.key === "Escape") {
-          diagramOpen = false;
-        }
-      }}
-      ontouchstart={handleZoomStart}
-      ontouchmove={handleZoomMove}
-      ontouchend={handleZoomEnd}
-    >
+    <Block>
+      <p class="diagram-caption">{m.onboarding_briefing_diagram_caption()}</p>
       <button
         type="button"
-        class="diagram-close"
-        onclick={closeDiagram}
-        aria-label={m.shell_close()}
+        class="diagram-tap touch-feedback"
+        onclick={() => (diagramOpen = true)}
+        aria-label={m.onboarding_briefing_diagram_tap()}
       >
-        &times;
+        <img
+          src="/images/crypto-overview.png"
+          alt={m.onboarding_briefing_diagram_alt()}
+          class="crypto-diagram"
+        />
+        <span class="diagram-hint">{m.onboarding_briefing_diagram_tap()}</span>
       </button>
-      <img
-        src="/images/crypto-overview.png"
-        alt={m.onboarding_briefing_diagram_alt()}
-        class="diagram-full"
-        style="transform: scale({zoomScale}) translate({panX /
-          zoomScale}px, {panY / zoomScale}px);"
-      />
-      {#if zoomScale <= 1}
-        <p class="diagram-zoom-hint">{m.onboarding_briefing_diagram_zoom()}</p>
-      {/if}
-    </div>
-  {/if}
+    </Block>
 
-  <BlockTitle medium>
-    {m.onboarding_briefing_practice_heading()}
-  </BlockTitle>
-
-  {#each protectionRows as row (row.data)}
-    <div class="scenario-wrapper">
-      <details>
-        <summary class="scenario-summary touch-feedback">{row.data}</summary>
-        <div class="scenario-body">
-          <p class="choice-label">
-            {m.onboarding_briefing_practice_col_access()}
-          </p>
-          <p>{row.access}</p>
-          <p class="choice-label">
-            {m.onboarding_briefing_practice_col_compromise()}
-          </p>
-          <p>{row.compromise}</p>
-        </div>
-      </details>
-    </div>
-  {/each}
-
-  <BlockTitle medium>
-    {m.onboarding_briefing_scenarios_heading()}
-  </BlockTitle>
-
-  {#each scenarios as scenario (scenario.title)}
-    <div class="scenario-wrapper">
-      <details>
-        <summary class="scenario-summary touch-feedback"
-          >{scenario.title}</summary
+    {#if diagramOpen}
+      <div
+        class="diagram-overlay"
+        role="dialog"
+        aria-label={m.onboarding_briefing_diagram_alt()}
+        tabindex="-1"
+        onclick={handleOverlayTap}
+        onkeydown={(e: KeyboardEvent) => {
+          if (e.key === "Escape") {
+            diagramOpen = false;
+          }
+        }}
+        ontouchstart={handleZoomStart}
+        ontouchmove={handleZoomMove}
+        ontouchend={handleZoomEnd}
+      >
+        <button
+          type="button"
+          class="diagram-close"
+          onclick={closeDiagram}
+          aria-label={m.shell_close()}
         >
-        <div class="scenario-body">
-          <p>{scenario.body}</p>
-        </div>
-      </details>
-    </div>
-  {/each}
-
-  <BlockTitle medium>
-    {m.onboarding_briefing_choices_heading()}
-  </BlockTitle>
-  <Block>
-    <p class="briefing-prose">{m.onboarding_briefing_choices_intro()}</p>
-  </Block>
-
-  {#each choices as choice (choice.title)}
-    <div class="scenario-wrapper">
-      <details>
-        <summary class="scenario-summary touch-feedback">{choice.title}</summary
-        >
-        <div class="scenario-body">
-          <p class="choice-label">
-            {m.onboarding_briefing_choice_label_protects()}
+          &times;
+        </button>
+        <img
+          src="/images/crypto-overview.png"
+          alt={m.onboarding_briefing_diagram_alt()}
+          class="diagram-full"
+          style="transform: scale({zoomScale}) translate({panX /
+            zoomScale}px, {panY / zoomScale}px);"
+        />
+        {#if zoomScale <= 1}
+          <p class="diagram-zoom-hint">
+            {m.onboarding_briefing_diagram_zoom()}
           </p>
-          <p>{choice.protects}</p>
-          <p class="choice-label">{m.onboarding_briefing_choice_label_why()}</p>
-          <p>{choice.whyCare}</p>
-          <p class="choice-label">
-            {m.onboarding_briefing_choice_label_tradeoff()}
-          </p>
-          <p>{choice.tradeoff}</p>
-        </div>
-      </details>
-    </div>
-  {/each}
-
-  <div bind:this={sentinelEl} class="scroll-sentinel" aria-hidden="true"></div>
-
-  <Block>
-    {#if !scrolledToBottom}
-      <p class="scroll-hint" aria-live="polite">
-        {m.onboarding_briefing_scroll_hint()}
-      </p>
+        {/if}
+      </div>
     {/if}
-    <Button
-      large
-      disabled={!scrolledToBottom}
-      aria-disabled={!scrolledToBottom}
-      onclick={handleConfirm}
-    >
-      {m.onboarding_briefing_confirm()}
-    </Button>
-  </Block>
+
+    <Block>
+      <div class="briefing-nav">
+        <Button large onclick={nextPage}>{m.common_next()}</Button>
+      </div>
+    </Block>
+  {:else if subPage === 1}
+    <BlockTitle medium>
+      {m.onboarding_briefing_practice_heading()}
+    </BlockTitle>
+
+    {#each protectionRows as row, i (row.data)}
+      <div class="scenario-wrapper">
+        <details open={i === 0}>
+          <summary class="scenario-summary touch-feedback">{row.data}</summary>
+          <div class="scenario-body">
+            <p class="choice-label">
+              {m.onboarding_briefing_practice_col_access()}
+            </p>
+            <p>{row.access}</p>
+            <p class="choice-label">
+              {m.onboarding_briefing_practice_col_compromise()}
+            </p>
+            <p>{row.compromise}</p>
+          </div>
+        </details>
+      </div>
+    {/each}
+
+    <Block>
+      <div class="briefing-nav">
+        <Button large onclick={prevPage}>{m.common_back()}</Button>
+        <Button large onclick={nextPage}>{m.common_next()}</Button>
+      </div>
+    </Block>
+  {:else if subPage === 2}
+    <BlockTitle medium>
+      {m.onboarding_briefing_scenarios_heading()}
+    </BlockTitle>
+
+    {#each scenarios as scenario, i (scenario.title)}
+      <div class="scenario-wrapper">
+        <details open={i === 0}>
+          <summary class="scenario-summary touch-feedback"
+            >{scenario.title}</summary
+          >
+          <div class="scenario-body">
+            <p>{scenario.body}</p>
+          </div>
+        </details>
+      </div>
+    {/each}
+
+    <Block>
+      <div class="briefing-nav">
+        <Button large onclick={prevPage}>{m.common_back()}</Button>
+        <Button large onclick={nextPage}>{m.common_next()}</Button>
+      </div>
+    </Block>
+  {:else if subPage === 3}
+    <BlockTitle medium>
+      {m.onboarding_briefing_choices_heading()}
+    </BlockTitle>
+    <Block>
+      <p class="briefing-prose">{m.onboarding_briefing_choices_intro()}</p>
+    </Block>
+
+    {#each choices as choice, i (choice.title)}
+      <div class="scenario-wrapper">
+        <details open={i === 0}>
+          <summary class="scenario-summary touch-feedback"
+            >{choice.title}</summary
+          >
+          <div class="scenario-body">
+            <p class="choice-label">
+              {m.onboarding_briefing_choice_label_protects()}
+            </p>
+            <p>{choice.protects}</p>
+            <p class="choice-label">
+              {m.onboarding_briefing_choice_label_why()}
+            </p>
+            <p>{choice.whyCare}</p>
+            <p class="choice-label">
+              {m.onboarding_briefing_choice_label_tradeoff()}
+            </p>
+            <p>{choice.tradeoff}</p>
+          </div>
+        </details>
+      </div>
+    {/each}
+
+    <Block>
+      <div class="briefing-nav">
+        <Button large onclick={prevPage}>{m.common_back()}</Button>
+        <Button large onclick={handleConfirm}>
+          {m.onboarding_briefing_confirm()}
+        </Button>
+      </div>
+    </Block>
+  {/if}
 </div>
 
 <style>
@@ -558,15 +577,38 @@
     margin-top: 0;
   }
 
-  .scroll-sentinel {
-    height: 1px;
-    width: 1px;
+  .page-dots {
+    display: flex;
+    justify-content: center;
+    gap: 8px;
+    padding: 12px 0;
   }
 
-  .scroll-hint {
-    font-size: var(--text-base);
-    color: var(--muted);
-    text-align: center;
-    margin: 0 0 var(--space-lg);
+  .page-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: color-mix(in srgb, var(--muted) 30%, transparent);
+    transition: background 150ms ease;
+  }
+
+  .page-dot--active {
+    background: var(--brand-primary);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .page-dot {
+      transition: none;
+    }
+  }
+
+  .briefing-nav {
+    display: flex;
+    justify-content: space-between;
+    gap: var(--space-md);
+  }
+
+  .briefing-nav :global(.k-button:only-child) {
+    margin-left: auto;
   }
 </style>

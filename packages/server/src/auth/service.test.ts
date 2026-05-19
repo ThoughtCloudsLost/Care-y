@@ -372,8 +372,8 @@ describe.skipIf(!process.env.DATABASE_URL)("AuthService", () => {
         userAgent: "TestAgent/1.0",
       });
 
-      // Yield to the microtask queue so the fire-and-forget cleanup settles.
-      await new Promise((resolve) => setTimeout(resolve, 50));
+      // Yield so the fire-and-forget cleanup settles (DB round-trip under Docker load).
+      await new Promise((resolve) => setTimeout(resolve, 200));
 
       // The expired session should be gone.
       const found = await sessions.findByToken("expired-tok-cleanup");
