@@ -131,23 +131,17 @@ describe("downloadBlob", () => {
     vi.spyOn(URL, "createObjectURL").mockReturnValue("blob:mock-url");
     vi.spyOn(URL, "revokeObjectURL").mockImplementation(vi.fn());
 
-    const clickSpy = vi.fn();
-    const appendSpy = vi.spyOn(document.body, "appendChild");
-    const removeSpy = vi.spyOn(document.body, "removeChild");
-
-    vi.spyOn(document, "createElement").mockReturnValue({
-      href: "",
-      download: "",
-      click: clickSpy,
-    } as unknown as HTMLAnchorElement);
+    const realAnchor = document.createElement("a");
+    const clickSpy = vi.spyOn(realAnchor, "click").mockImplementation(vi.fn());
+    vi.spyOn(document, "createElement").mockReturnValue(realAnchor);
 
     const blob = new Blob(["test"], { type: "application/json" });
     downloadBlob(blob, "test-file.json");
 
     expect(URL.createObjectURL).toHaveBeenCalledWith(blob);
+    expect(realAnchor.href).toBe("blob:mock-url");
+    expect(realAnchor.download).toBe("test-file.json");
     expect(clickSpy).toHaveBeenCalled();
-    expect(appendSpy).toHaveBeenCalled();
-    expect(removeSpy).toHaveBeenCalled();
     expect(URL.revokeObjectURL).toHaveBeenCalledWith("blob:mock-url");
   });
 });

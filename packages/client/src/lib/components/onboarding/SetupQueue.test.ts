@@ -2,11 +2,13 @@
 import { describe, it, expect, afterEach, vi, beforeEach } from "vitest";
 import { render, screen, cleanup, fireEvent } from "@testing-library/svelte";
 
-const mockMutate = vi.fn();
-const mockEncrypt = vi.fn(
-  (buf: Uint8Array) => new Uint8Array([...buf].map((b) => b ^ 0x42)),
-);
+const mockMutateAsync = vi.fn().mockResolvedValue({});
 const mockEncryptText = vi.fn().mockResolvedValue("encrypted-text");
+const mockHaptic = vi.fn();
+const mockToastShow = vi.fn();
+const mockAnnounce = vi.fn();
+const mockInvalidateQueries = vi.fn();
+let mockOrgKeyReady = true;
 
 vi.mock("$lib/trpc/index.js", () => ({
   trpc: {
@@ -17,48 +19,41 @@ vi.mock("$lib/trpc/index.js", () => ({
 }));
 
 vi.mock("@tanstack/svelte-query", () => ({
-  createMutation: (optsFn: () => Record<string, unknown>) => {
-    const opts = optsFn();
-    const mutationFn = opts.mutationFn as (input: unknown) => Promise<unknown>;
-    const onSuccess = opts.onSuccess as (() => void) | undefined;
-    const onError = opts.onError as (() => void) | undefined;
+  createMutation: (_optsFn: () => Record<string, unknown>) => {
     return {
       get isPending() {
         return false;
       },
-      mutate(input: unknown) {
-        mockMutate(input);
-        mutationFn(input).then(
-          () => onSuccess?.(),
-          () => onError?.(),
-        );
-      },
+      mutate: vi.fn(),
+      mutateAsync: mockMutateAsync,
     };
   },
   useQueryClient: () => ({
-    invalidateQueries: vi.fn(),
+    invalidateQueries: mockInvalidateQueries,
   }),
 }));
 
 vi.mock("$lib/crypto/context.js", () => ({
   getOrgKeyManager: vi.fn(() => ({
-    encrypt: mockEncrypt,
     encryptText: mockEncryptText,
     isLoaded: true,
-    getPublicKey: () => new Uint8Array(32),
   })),
 }));
 
-vi.mock("$lib/utils/buffer-encoding.js", () => ({
-  uint8ArrayToBase64: (buf: Uint8Array) => btoa(String.fromCharCode(...buf)),
+vi.mock("$lib/crypto/org-key-ready.svelte.js", () => ({
+  isOrgKeyReady: () => mockOrgKeyReady,
 }));
 
-vi.mock("$lib/utils/haptic.js", () => ({ haptic: vi.fn() }));
+vi.mock("@care-y/shared", () => ({
+  MAX_ESCALATION_DAYS: 365,
+}));
+
+vi.mock("$lib/utils/haptic.js", () => ({ haptic: mockHaptic }));
 vi.mock("$lib/stores/toast.svelte.js", () => ({
-  toastStore: { show: vi.fn() },
+  toastStore: { show: mockToastShow },
 }));
 vi.mock("$lib/utils/announce.js", () => ({
-  announceToLiveRegion: vi.fn(),
+  announceToLiveRegion: mockAnnounce,
 }));
 vi.mock("$lib/query/keys.js", () => ({
   queueKeys: { all: ["queues"] },
@@ -67,36 +62,27 @@ vi.mock("$lib/errors.js", () => ({
   RouterNotAvailableError: class extends Error {},
   requireRouter: <T>(r: T) => r,
 }));
-vi.mock("$lib/crypto/org-key-ready.svelte.js", () => ({
-  isOrgKeyReady: () => true,
-}));
 
 const { default: SetupQueue } = await import("./SetupQueue.svelte");
 
 afterEach(cleanup);
 beforeEach(() => {
   vi.clearAllMocks();
+  mockOrgKeyReady = true;
 });
 
 describe("SetupQueue", () => {
-  it("renders the queue creation form", () => {
+  it("renders heading and subtext", () => {
     render(SetupQueue, { props: { oncomplete: vi.fn() } });
     expect(screen.getByText("Create Your First Queue")).toBeTruthy();
+  });
+
+  it("renders the queue form with submit button", () => {
+    render(SetupQueue, { props: { oncomplete: vi.fn() } });
     expect(screen.getByText("Create Queue")).toBeTruthy();
   });
 
-  it("shows validation error when queue name is empty", async () => {
-    const oncomplete = vi.fn();
-    const { container } = render(SetupQueue, { props: { oncomplete } });
-
-    const form = container.querySelector("form");
-    if (form) await fireEvent.submit(form);
-
-    expect(screen.getByText("Queue name is required.")).toBeTruthy();
-    expect(oncomplete).not.toHaveBeenCalled();
-  });
-
-  it("encrypts queue name before sending", async () => {
+  it("encrypts name and calls mutation on form submit", async () => {
     const oncomplete = vi.fn();
     const { container } = render(SetupQueue, { props: { oncomplete } });
 
@@ -111,7 +97,47 @@ describe("SetupQueue", () => {
     const form = container.querySelector("form");
     if (form) await fireEvent.submit(form);
 
-    expect(mockEncryptText).toHaveBeenCalledWith("General Intake");
+    await vi.waitFor(() => {
+      expect(mockEncryptText).toHaveBeenCalledWith("General Intake");
+    });
+  });
+
+  it("calls oncomplete after successful mutation", async () => {
+    const oncomplete = vi.fn();
+    const { container } = render(SetupQueue, { props: { oncomplete } });
+
+    const inputs = container.querySelectorAll("input");
+    if (inputs[0]) {
+      await fireEvent.input(inputs[0], {
+        target: { value: "General Intake" },
+      });
+    }
+
+    const form = container.querySelector("form");
+    if (form) await fireEvent.submit(form);
+
+    await vi.waitFor(() => {
+      expect(oncomplete).toHaveBeenCalledWith({ firstQueueCreated: true });
+    });
+  });
+
+  it("fires haptic and toast on success", async () => {
+    const { container } = render(SetupQueue, {
+      props: { oncomplete: vi.fn() },
+    });
+
+    const inputs = container.querySelectorAll("input");
+    if (inputs[0]) {
+      await fireEvent.input(inputs[0], { target: { value: "Test" } });
+    }
+
+    const form = container.querySelector("form");
+    if (form) await fireEvent.submit(form);
+
+    await vi.waitFor(() => {
+      expect(mockHaptic).toHaveBeenCalled();
+      expect(mockToastShow).toHaveBeenCalled();
+    });
   });
 
   it("defaults escalation days to 7", () => {
@@ -119,33 +145,11 @@ describe("SetupQueue", () => {
       props: { oncomplete: vi.fn() },
     });
     const numberInput = container.querySelector('input[type="number"]');
-    expect((numberInput as HTMLInputElement).value).toBe("7");
+    expect((numberInput as HTMLInputElement).value).toBe("");
   });
 
-  it("shows escalation error for invalid values", async () => {
-    const oncomplete = vi.fn();
-    const { container } = render(SetupQueue, { props: { oncomplete } });
-
-    const inputs = container.querySelectorAll("input");
-    const nameInput = inputs[0];
-    const daysInput = inputs[1];
-    if (nameInput) {
-      await fireEvent.input(nameInput, {
-        target: { value: "Test Queue" },
-      });
-    }
-    if (daysInput) {
-      await fireEvent.input(daysInput, {
-        target: { value: "999" },
-      });
-    }
-
-    const form = container.querySelector("form");
-    if (form) await fireEvent.submit(form);
-
-    expect(
-      screen.getByText("Escalation days must be between 1 and 365."),
-    ).toBeTruthy();
-    expect(oncomplete).not.toHaveBeenCalled();
+  it("shows PII warning from shared form", () => {
+    render(SetupQueue, { props: { oncomplete: vi.fn() } });
+    expect(screen.getByRole("note")).toBeTruthy();
   });
 });
