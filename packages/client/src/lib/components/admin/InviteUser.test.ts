@@ -45,6 +45,14 @@ vi.mock("$lib/paraglide/messages.js", () => ({
   common_loading: () => "Loading",
   error_generic: () => "Something went wrong",
   shell_close: () => "Close",
+  password_show: () => "Show password",
+  password_hide: () => "Hide password",
+  password_strength_too_short: ({ min }: { min: number }) =>
+    `Too short (minimum ${min} characters)`,
+  password_strength_acceptable: () => "Acceptable",
+  password_strength_good: () => "Good",
+  password_strength_strong: () => "Strong",
+  password_common_pattern: () => "Predictable pattern.",
 }));
 
 // --- Mock crypto context ---

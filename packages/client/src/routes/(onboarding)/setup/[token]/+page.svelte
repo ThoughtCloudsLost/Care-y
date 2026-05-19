@@ -54,6 +54,7 @@
   import SetupTwoFactor from "$lib/components/onboarding/SetupTwoFactor.svelte";
   import SetupEscrow from "$lib/components/onboarding/SetupEscrow.svelte";
   import SetupInvite from "$lib/components/onboarding/SetupInvite.svelte";
+  import PasswordInput from "$lib/components/inputs/PasswordInput.svelte";
 
   const setupToken: string = page.params.token ?? "";
 
@@ -430,9 +431,8 @@
         disabled={reauthSubmitting}
         required
       />
-      <ListInput
+      <PasswordInput
         label={m.onboarding_account_password()}
-        type="password"
         placeholder={m.onboarding_account_password_placeholder()}
         bind:value={reauthPassword}
         autocomplete="current-password"

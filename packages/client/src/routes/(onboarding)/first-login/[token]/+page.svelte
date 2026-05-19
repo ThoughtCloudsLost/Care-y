@@ -39,6 +39,8 @@
   import { toastStore } from "$lib/stores/toast.svelte.js";
   import { PASSWORD_MIN_LENGTH } from "@care-y/shared";
   import { requireRouter } from "$lib/errors.js";
+  import PasswordInput from "$lib/components/inputs/PasswordInput.svelte";
+  import PasswordStrengthMeter from "$lib/components/inputs/PasswordStrengthMeter.svelte";
   import KeyDerivation, {
     type LoginPhaseId,
   } from "$lib/components/onboarding/KeyDerivation.svelte";
@@ -102,7 +104,7 @@
     if (password.length < PASSWORD_MIN_LENGTH) {
       return m.onboarding_firstlogin_error_password_length();
     }
-    // eslint-disable-next-line security/detect-possible-timing-attacks -- client-side form validation, not credential check
+    // eslint-disable-next-line security/detect-possible-timing-attacks -- client-side form comparison, not a credential check
     if (password !== confirmPassword) {
       return m.onboarding_firstlogin_error_password_mismatch();
     }
@@ -264,9 +266,8 @@
         info={m.onboarding_account_display_name_info(withTerms())}
         bind:value={displayName}
       />
-      <ListInput
+      <PasswordInput
         label={m.onboarding_firstlogin_password()}
-        type="password"
         placeholder={m.onboarding_firstlogin_password_placeholder()}
         info={m.onboarding_account_password_info()}
         bind:value={password}
@@ -276,9 +277,8 @@
           ? m.onboarding_firstlogin_error_password_length()
           : undefined}
       />
-      <ListInput
+      <PasswordInput
         label={m.onboarding_firstlogin_confirm_password()}
-        type="password"
         placeholder={m.onboarding_firstlogin_confirm_password_placeholder()}
         bind:value={confirmPassword}
         autocomplete="new-password"
@@ -288,6 +288,12 @@
           : undefined}
       />
     </List>
+
+    {#if password.length > 0}
+      <Block>
+        <PasswordStrengthMeter {password} minLength={PASSWORD_MIN_LENGTH} />
+      </Block>
+    {/if}
 
     <Block>
       <Button

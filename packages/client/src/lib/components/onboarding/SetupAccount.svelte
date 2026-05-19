@@ -42,6 +42,8 @@
     type LoginPhaseId,
   } from "$lib/components/onboarding/KeyDerivation.svelte";
   import { PASSWORD_MIN_LENGTH } from "@care-y/shared";
+  import PasswordInput from "$lib/components/inputs/PasswordInput.svelte";
+  import PasswordStrengthMeter from "$lib/components/inputs/PasswordStrengthMeter.svelte";
 
   interface Props {
     setupToken: string;
@@ -255,9 +257,8 @@
         bind:value={displayName}
         required
       />
-      <ListInput
+      <PasswordInput
         label={m.onboarding_account_password()}
-        type="password"
         placeholder={m.onboarding_account_password_placeholder()}
         info={m.onboarding_account_password_info()}
         bind:value={password}
@@ -267,9 +268,8 @@
           ? m.onboarding_account_error_password_length()
           : undefined}
       />
-      <ListInput
+      <PasswordInput
         label={m.onboarding_account_confirm_password()}
-        type="password"
         placeholder={m.onboarding_account_confirm_password_placeholder()}
         bind:value={confirmPassword}
         autocomplete="new-password"
@@ -279,6 +279,12 @@
           : undefined}
       />
     </List>
+
+    {#if password.length > 0}
+      <Block>
+        <PasswordStrengthMeter {password} minLength={PASSWORD_MIN_LENGTH} />
+      </Block>
+    {/if}
 
     <Block>
       <Button

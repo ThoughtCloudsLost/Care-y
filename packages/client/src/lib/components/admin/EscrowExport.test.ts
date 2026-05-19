@@ -32,11 +32,14 @@ vi.mock("$lib/paraglide/messages.js", () => ({
   admin_escrow_confirm_label: () => "Confirm passphrase",
   admin_escrow_passphrase_guidance: () => "Use a long phrase.",
   admin_escrow_passphrase_mismatch: () => "Passphrases don't match",
-  admin_escrow_passphrase_common: () => "Predictable pattern.",
-  admin_escrow_strength_too_short: () => "Too short",
-  admin_escrow_strength_acceptable: () => "Acceptable",
-  admin_escrow_strength_good: () => "Good",
-  admin_escrow_strength_strong: () => "Strong",
+  password_show: () => "Show password",
+  password_hide: () => "Hide password",
+  password_strength_too_short: ({ min }: { min: number }) =>
+    `Too short (minimum ${min} characters)`,
+  password_strength_acceptable: () => "Acceptable",
+  password_strength_good: () => "Good",
+  password_strength_strong: () => "Strong",
+  password_common_pattern: () => "Predictable pattern.",
   admin_escrow_export_button: () => "Create Escrow File",
   admin_escrow_exporting: () => "Creating escrow file...",
   admin_escrow_no_org_key: () => "Organization key not loaded.",
@@ -182,7 +185,7 @@ describe("EscrowExport", () => {
       target: { value: "short" },
     });
 
-    expect(screen.getByText("Too short")).toBeTruthy();
+    expect(screen.getByText("Too short (minimum 20 characters)")).toBeTruthy();
   });
 
   it("shows acceptable strength for 20+ char passphrase", async () => {
