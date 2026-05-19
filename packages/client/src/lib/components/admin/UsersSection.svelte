@@ -49,6 +49,7 @@
   import SoftButton from "$lib/components/inputs/SoftButton.svelte";
   import InlineSkeleton from "$lib/components/InlineSkeleton.svelte";
   import InviteUser from "./InviteUser.svelte";
+  import InviteLinkSheet from "./InviteLinkSheet.svelte";
   import UserCard from "./UserCard.svelte";
 
   interface QueueAssignment {
@@ -505,14 +506,21 @@
 
   // ── Invite ──
   let inviteOpened = $state(false);
+  let inviteLinkOpened = $state(false);
 
   export function openInvite(): void {
     inviteOpened = true;
   }
 
+  export function openInviteLink(): void {
+    inviteLinkOpened = true;
+  }
+
   $effect(() => {
     if (autoAction === "invite") {
       inviteOpened = true;
+    } else if (autoAction === "invite-link") {
+      inviteLinkOpened = true;
     }
   });
 
@@ -837,6 +845,10 @@
 </ShellDialog>
 
 <InviteUser opened={inviteOpened} ondismiss={() => (inviteOpened = false)} />
+<InviteLinkSheet
+  opened={inviteLinkOpened}
+  ondismiss={() => (inviteLinkOpened = false)}
+/>
 
 <style>
   .users-page {
