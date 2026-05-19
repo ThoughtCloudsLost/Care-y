@@ -6,17 +6,17 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Onboarding_Escrow_Passphrase_HintInputs */
 
 const en_onboarding_escrow_passphrase_hint = /** @type {(inputs: Onboarding_Escrow_Passphrase_HintInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Use at least 6 words or 20 characters. A random phrase like "correct horse battery staple river lamp" is strong and easy to remember.`)
+	return /** @type {LocalizedString} */ (`Use at least 20 characters. A random phrase like "correct horse battery staple river lamp" is strong and easy to remember.`)
 };
 
 const es_onboarding_escrow_passphrase_hint = /** @type {(inputs: Onboarding_Escrow_Passphrase_HintInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Usa al menos 6 palabras o 20 caracteres. Una frase al azar como "caballo correcto bateria grapa rio lampara" es fuerte y facil de recordar.`)
+	return /** @type {LocalizedString} */ (`Usa al menos 20 caracteres. Una frase al azar como "caballo correcto bateria grapa rio lampara" es fuerte y facil de recordar.`)
 };
 
 /**
 * | output |
 * | --- |
-* | "Use at least 6 words or 20 characters. A random phrase like \"correct horse battery staple river lamp\" is strong and easy to remember." |
+* | "Use at least 20 characters. A random phrase like \"correct horse battery staple river lamp\" is strong and easy to remember." |
 *
 * @param {Onboarding_Escrow_Passphrase_HintInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

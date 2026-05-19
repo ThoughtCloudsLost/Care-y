@@ -6,8 +6,6 @@
     useQueryClient,
   } from "@tanstack/svelte-query";
   import { Palette, ImagePlus, Save } from "@lucide/svelte";
-  import { encryptClientBranding } from "@care-y/crypto";
-  import { generateIconVariants } from "$lib/branding/icon-generator.js";
   import * as m from "$lib/paraglide/messages.js";
   import { withTerms } from "$lib/terminology/with-terms.js";
   import { trpc } from "$lib/trpc/index.js";
@@ -24,12 +22,14 @@
     DEFAULT_ACCENT,
   } from "$lib/branding/index.js";
   import { setBrandingTitle } from "$lib/branding/title.svelte.js";
-  import { setAppleTouchIconHref } from "$lib/branding/icon-link.svelte.js";
-  import { getOrgSlug } from "$lib/utils/org-slug.js";
+  import { rasterizeSvg, rasterizeImage } from "$lib/branding/rasterize.js";
   import {
-    uint8ArrayToBase64,
-    base64ToUint8Array,
-  } from "$lib/utils/buffer-encoding.js";
+    encryptLogoFile,
+    buildClientBrandingBlob,
+  } from "$lib/branding/encrypt.js";
+  import { uploadPwaIcons } from "$lib/branding/icon-upload.js";
+  import { getOrgSlug } from "$lib/utils/org-slug.js";
+  import { base64ToUint8Array } from "$lib/utils/buffer-encoding.js";
   import { requireRouter } from "$lib/errors.js";
   import type { BrandingField } from "@care-y/shared";
   import QueryError from "$lib/components/QueryError.svelte";
@@ -42,8 +42,6 @@
   const queryClient = useQueryClient();
   const orgCache = getOrgDecryptCache();
   const orgKeyManager = getOrgKeyManager();
-
-  const encoder = new TextEncoder();
 
   const MAX_LOGO_SIZE = 512 * 1024;
   const ACCEPTED_TYPES = new Set(["image/png", "image/jpeg", "image/svg+xml"]);
@@ -262,82 +260,6 @@
     }
   }
 
-  // ── Encrypt helpers ──
-
-  async function encryptLogo(file: File): Promise<string> {
-    const arrayBuffer = await file.arrayBuffer();
-    const cipherBytes = await orgKeyManager.encrypt(
-      new Uint8Array(arrayBuffer),
-    );
-    return uint8ArrayToBase64(cipherBytes);
-  }
-
-  async function rasterizeSvg(svgBuffer: ArrayBuffer): Promise<ArrayBuffer> {
-    const svgBlob = new Blob([svgBuffer], { type: "image/svg+xml" });
-    const url = URL.createObjectURL(svgBlob);
-    try {
-      const img = await createImageBitmap(svgBlob);
-      return await renderToCanvas(img);
-    } finally {
-      URL.revokeObjectURL(url);
-    }
-  }
-
-  async function rasterizeImage(
-    buffer: ArrayBuffer,
-    type: string,
-  ): Promise<ArrayBuffer> {
-    const blob = new Blob([buffer], { type });
-    const img = await createImageBitmap(blob);
-    return renderToCanvas(img);
-  }
-
-  async function renderToCanvas(img: ImageBitmap): Promise<ArrayBuffer> {
-    const maxDim = Math.max(img.width, img.height, 512);
-    const scale = Math.min(1, 512 / maxDim);
-    const w = Math.round(img.width * scale);
-    const h = Math.round(img.height * scale);
-
-    const canvas = new OffscreenCanvas(w, h);
-    const ctx = canvas.getContext("2d");
-    if (ctx === null) {
-      throw new Error("Failed to get 2d context from OffscreenCanvas");
-    }
-    ctx.drawImage(img, 0, 0, w, h);
-    img.close();
-    const blob = await canvas.convertToBlob({ type: "image/png" });
-    return await blob.arrayBuffer();
-  }
-
-  /**
-   * Build the client-side branding blob (SOG-14 dual-blob).
-   *
-   * Contains all text branding fields as JSON, encrypted with the
-   * client branding key (derived from org public key via BLAKE2b).
-   * Client portal pages decrypt this without authentication.
-   */
-  function buildClientBrandingBlob(
-    name: string,
-    primaryColor: string,
-    accentColor: string,
-    clientText: string,
-  ): string {
-    const orgPubKey = orgKeyManager.getPublicKey();
-    if (!orgPubKey) {
-      throw new Error("Org public key not available for client branding blob");
-    }
-
-    const payload = JSON.stringify({
-      name,
-      primaryColor,
-      accentColor,
-      clientText,
-    });
-    const payloadBytes = encoder.encode(payload);
-    const ciphertext = encryptClientBranding(payloadBytes, orgPubKey);
-    return uint8ArrayToBase64(ciphertext);
-  }
-
   // ── Mutations ──
 
   const saveMutation = createMutation(() => ({
@@ -372,58 +294,7 @@
     },
   }));
 
-  // PWA icon generation: runs after logo save (ADR-024, H-037)
   let iconUploadInFlight = $state(false);
-
-  async function uploadPwaIcons(logoFile: File): Promise<void> {
-    if (iconUploadInFlight) return;
-    iconUploadInFlight = true;
-
-    try {
-      const orgPubKey = orgKeyManager.getPublicKey();
-      if (!orgPubKey) return;
-
-      const variants = await generateIconVariants(logoFile);
-
-      let icon192 = "";
-      let icon512 = "";
-      let iconMaskable = "";
-
-      for (const variant of variants) {
-        const arrayBuffer = await variant.blob.arrayBuffer();
-        const encrypted = encryptClientBranding(
-          new Uint8Array(arrayBuffer),
-          orgPubKey,
-        );
-        const b64 = uint8ArrayToBase64(encrypted);
-
-        if (variant.purpose === "maskable") {
-          iconMaskable = b64;
-        } else if (variant.size === 192) {
-          icon192 = b64;
-        } else {
-          icon512 = b64;
-        }
-      }
-
-      await brandingRouter.uploadIcons.mutate({
-        icon192,
-        icon512,
-        iconMaskable,
-      });
-      const newVersion = String(Date.now());
-      void updateBrandingCache({ hasIcons: true, iconVersion: newVersion });
-      const slug = getOrgSlug();
-      if (slug !== null)
-        setAppleTouchIconHref(
-          `/api/branding/${slug}/icon-192.png?v=${newVersion}`,
-        );
-    } catch {
-      toastStore.show(m.admin_branding_icons_error(), 3000);
-    } finally {
-      iconUploadInFlight = false;
-    }
-  }
 
   async function handleSave(): Promise<void> {
     if (!hasChanges) return;
@@ -442,10 +313,13 @@
     let clientBlob: string;
     try {
       clientBlob = buildClientBrandingBlob(
-        finalName,
-        finalColor,
-        finalAccent,
-        finalText,
+        {
+          name: finalName,
+          primaryColor: finalColor,
+          accentColor: finalAccent,
+          clientText: finalText,
+        },
+        orgKeyManager,
       );
     } catch {
       toastStore.show(m.admin_branding_error(), 3000);
@@ -491,7 +365,7 @@
     }
 
     if (logoChanged && editLogoFile) {
-      const encryptedLogo = await encryptLogo(editLogoFile);
+      const encryptedLogo = await encryptLogoFile(editLogoFile, orgKeyManager);
       fields.push({
         field: "logo",
         encryptedValue: encryptedLogo,
@@ -522,9 +396,15 @@
           hasIcons: brandingQuery.data?.hasIcons ?? false,
         });
 
-        // Fire PWA icon generation in background (ADR-024, H-037)
-        if (logoFileForIcons !== null) {
-          void uploadPwaIcons(logoFileForIcons);
+        if (logoFileForIcons !== null && !iconUploadInFlight) {
+          iconUploadInFlight = true;
+          void uploadPwaIcons(logoFileForIcons, orgKeyManager, brandingRouter)
+            .catch(() => {
+              toastStore.show(m.admin_branding_icons_error(), 3000);
+            })
+            .finally(() => {
+              iconUploadInFlight = false;
+            });
         }
       },
     });

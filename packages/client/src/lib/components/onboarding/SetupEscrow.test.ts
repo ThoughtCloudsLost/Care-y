@@ -20,9 +20,26 @@ vi.mock("$lib/crypto/context.js", () => ({
   })),
 }));
 
+const mockMemzero = vi.fn();
+
 vi.mock("@care-y/crypto", () => ({
   encryptWithPassphrase: vi.fn(() => mockEscrowBlob),
   serializeEscrowBlob: vi.fn(() => new Uint8Array(89)),
+  requireSodium: () => ({ memzero: mockMemzero }),
+}));
+
+vi.mock("$lib/utils/passphrase-strength.js", () => ({
+  assessPassphraseStrength: (p: string) => {
+    if (p.length < 20) return "too-short";
+    if (p.length < 30) return "acceptable";
+    if (p.length < 40) return "good";
+    return "strong";
+  },
+  looksLikeCommonPattern: (p: string) => {
+    if (new Set(p).size === 1) return true;
+    if (/^[0-9]+$/.test(p) && p.length < 30) return true;
+    return false;
+  },
 }));
 
 vi.mock("$lib/utils/haptic.js", () => ({ haptic: vi.fn() }));
@@ -130,9 +147,29 @@ describe("SetupEscrow", () => {
     expect(downloadBtn.disabled).toBe(false);
   });
 
-  it("zeros org secret key and clears passphrase state after generation", async () => {
+  it("rejects passphrase with common pattern (all same character)", async () => {
+    const { container } = render(SetupEscrow, {
+      props: { oncomplete: vi.fn() },
+    });
+
+    const phrase = "aaaaaaaaaaaaaaaaaaaaaa";
+    const inputs = container.querySelectorAll('input[type="password"]');
+    await fireEvent.input(inputs[0] as HTMLInputElement, {
+      target: { value: phrase },
+    });
+    await fireEvent.input(inputs[1] as HTMLInputElement, {
+      target: { value: phrase },
+    });
+
+    const buttons = container.querySelectorAll("button");
+    const downloadBtn = Array.from(buttons).find((b) =>
+      b.textContent!.includes("Download"),
+    ) as HTMLButtonElement;
+    expect(downloadBtn.disabled).toBe(true);
+  });
+
+  it("uses sodium.memzero for org secret key zeroing", async () => {
     const secretKey = new Uint8Array(32).fill(0xaa);
-    const fillSpy = vi.spyOn(secretKey, "fill");
     mockGetSecretKey.mockResolvedValueOnce(secretKey);
 
     const { container } = render(SetupEscrow, {
@@ -155,7 +192,7 @@ describe("SetupEscrow", () => {
     if (downloadBtn) await fireEvent.click(downloadBtn);
 
     await vi.waitFor(() => {
-      expect(fillSpy).toHaveBeenCalledWith(0);
+      expect(mockMemzero).toHaveBeenCalledWith(secretKey);
     });
 
     const passwordInputs = container.querySelectorAll('input[type="password"]');

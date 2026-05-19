@@ -6,17 +6,17 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Onboarding_Escrow_Error_Passphrase_ShortInputs */
 
 const en_onboarding_escrow_error_passphrase_short = /** @type {(inputs: Onboarding_Escrow_Error_Passphrase_ShortInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Passphrase must be at least 6 words or 20 characters.`)
+	return /** @type {LocalizedString} */ (`Passphrase must be at least 20 characters.`)
 };
 
 const es_onboarding_escrow_error_passphrase_short = /** @type {(inputs: Onboarding_Escrow_Error_Passphrase_ShortInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`La frase debe tener al menos 6 palabras o 20 caracteres.`)
+	return /** @type {LocalizedString} */ (`La frase debe tener al menos 20 caracteres.`)
 };
 
 /**
 * | output |
 * | --- |
-* | "Passphrase must be at least 6 words or 20 characters." |
+* | "Passphrase must be at least 20 characters." |
 *
 * @param {Onboarding_Escrow_Error_Passphrase_ShortInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

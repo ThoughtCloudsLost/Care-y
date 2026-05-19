@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "At least 6 words or 20 characters" |
+* | "At least 20 characters" |
 *
 * @param {Onboarding_Escrow_Passphrase_PlaceholderInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

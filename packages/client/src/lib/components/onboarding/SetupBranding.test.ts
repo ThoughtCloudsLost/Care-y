@@ -11,10 +11,13 @@ vi.mock("@care-y/crypto", () => ({
   encryptClientBranding: (payload: Uint8Array) => payload,
 }));
 
+const mockUploadIcons = vi.fn().mockResolvedValue({});
+
 vi.mock("$lib/trpc/index.js", () => ({
   trpc: {
     branding: {
       saveBrandingField: { mutate: mockSaveBrandingField },
+      uploadIcons: { mutate: mockUploadIcons },
     },
   },
 }));
@@ -23,7 +26,9 @@ vi.mock("@tanstack/svelte-query", () => ({
   createMutation: (optsFn: () => Record<string, unknown>) => {
     const opts = optsFn();
     const mutationFn = opts.mutationFn as (input: unknown) => Promise<unknown>;
-    const onSuccess = opts.onSuccess as (() => void) | undefined;
+    const onSuccess = opts.onSuccess as
+      | (() => Promise<void> | void)
+      | undefined;
     const onError = opts.onError as (() => void) | undefined;
     return {
       get isPending() {
@@ -31,7 +36,7 @@ vi.mock("@tanstack/svelte-query", () => ({
       },
       mutate(input: unknown) {
         mutationFn(input).then(
-          () => onSuccess?.(),
+          () => void Promise.resolve(onSuccess?.()),
           () => onError?.(),
         );
       },
@@ -55,6 +60,19 @@ vi.mock("$lib/branding/index.js", () => ({
   DEFAULT_PRIMARY: "#636366",
   DEFAULT_ACCENT: "#8e8e93",
   updateBrandingCache: vi.fn(),
+}));
+
+vi.mock("$lib/branding/icon-generator.js", () => ({
+  generateIconVariants: vi.fn().mockResolvedValue([]),
+}));
+
+vi.mock("$lib/branding/icon-link.svelte.js", () => ({
+  setAppleTouchIconHref: vi.fn(),
+}));
+
+vi.mock("$lib/utils/org-slug.js", () => ({
+  DEV_ORG_SLUG: "dev-org",
+  getOrgSlug: () => "dev-org",
 }));
 
 vi.mock("$lib/branding/color-utils.js", () => ({
@@ -85,9 +103,29 @@ vi.mock("$lib/crypto/org-key-ready.svelte.js", () => ({
 
 const { default: SetupBranding } = await import("./SetupBranding.svelte");
 
+const mockCanvasBlob = new Blob([new Uint8Array(8)], { type: "image/png" });
+
 afterEach(cleanup);
 beforeEach(() => {
   vi.clearAllMocks();
+
+  vi.stubGlobal(
+    "createImageBitmap",
+    vi.fn().mockResolvedValue({ width: 64, height: 64, close: vi.fn() }),
+  );
+  vi.stubGlobal(
+    "OffscreenCanvas",
+    vi.fn().mockImplementation(() => ({
+      getContext: () => ({
+        drawImage: vi.fn(),
+        fillStyle: "",
+        fillRect: vi.fn(),
+      }),
+      convertToBlob: vi.fn().mockResolvedValue(mockCanvasBlob),
+    })),
+  );
+  vi.spyOn(URL, "createObjectURL").mockReturnValue("blob:mock-logo-url");
+  vi.spyOn(URL, "revokeObjectURL").mockImplementation(vi.fn());
 });
 
 describe("SetupBranding", () => {
@@ -145,4 +183,26 @@ describe("SetupBranding", () => {
     expect(fileInput).toBeTruthy();
     expect(fileInput?.getAttribute("accept")).toContain("image/png");
   });
+
+  it("save without logo does not trigger icon upload", async () => {
+    const oncomplete = vi.fn();
+    const { container } = render(SetupBranding, {
+      props: { orgName: "Test Org", oncomplete, onskip: vi.fn() },
+    });
+
+    const form = container.querySelector("form");
+    if (form) await fireEvent.submit(form);
+
+    await vi.waitFor(() => {
+      expect(oncomplete).toHaveBeenCalledOnce();
+    });
+    expect(mockUploadIcons).not.toHaveBeenCalled();
+  });
+
+  it.todo(
+    "save with logo triggers icon upload and updates branding cache",
+    // Tested via icon-upload.ts unit tests.
+    // jsdom cannot simulate the file-input -> rasterize -> state chain
+    // (createImageBitmap + OffscreenCanvas are stubs, async handler timing is unreliable).
+  );
 });

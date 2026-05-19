@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Use at least 6 words or 20 characters. A random phrase like \"correct horse battery staple river lamp\" is strong and easy to remember." |
+* | "Use at least 20 characters. A random phrase like \"correct horse battery staple river lamp\" is strong and easy to remember." |
 *
 * @param {Onboarding_Escrow_Passphrase_HintInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

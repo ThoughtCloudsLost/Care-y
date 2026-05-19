@@ -18,7 +18,15 @@
   } from "konsta/svelte";
   import * as m from "$lib/paraglide/messages.js";
   import { getOrgKeyManager } from "$lib/crypto/context.js";
-  import { encryptWithPassphrase, serializeEscrowBlob } from "@care-y/crypto";
+  import {
+    encryptWithPassphrase,
+    serializeEscrowBlob,
+    requireSodium,
+  } from "@care-y/crypto";
+  import {
+    assessPassphraseStrength,
+    looksLikeCommonPattern,
+  } from "$lib/utils/passphrase-strength.js";
   import { haptic } from "$lib/utils/haptic.js";
   import { toastStore } from "$lib/stores/toast.svelte.js";
   import { announceToLiveRegion } from "$lib/utils/announce.js";
@@ -43,18 +51,13 @@
 
   const hashGroups = $derived(fileHash.match(/.{1,4}/g) ?? []);
 
-  const PASSPHRASE_MIN_CHARS = 20;
-  const PASSPHRASE_MIN_WORDS = 6;
-
-  function meetsPassphraseRequirement(value: string): boolean {
-    if (value.length >= PASSPHRASE_MIN_CHARS) return true;
-    const wordCount = value.trim().split(/\s+/).filter(Boolean).length;
-    return wordCount >= PASSPHRASE_MIN_WORDS;
-  }
-
-  const passphraseValid = $derived(meetsPassphraseRequirement(passphrase));
+  const strength = $derived(assessPassphraseStrength(passphrase));
+  const isCommon = $derived(
+    passphrase.length >= 20 && looksLikeCommonPattern(passphrase),
+  );
+  const passphraseValid = $derived(strength !== "too-short" && !isCommon);
   const passphraseTooShort = $derived(
-    passphrase.length > 0 && !passphraseValid,
+    passphrase.length > 0 && strength === "too-short",
   );
   const confirmValid = $derived(passphrase === confirmPassphrase);
   const passphraseMismatch = $derived(
@@ -142,7 +145,8 @@
       toastStore.show(m.onboarding_escrow_error(), 3000);
       announceToLiveRegion("assertive", m.onboarding_escrow_error());
     } finally {
-      orgSecretKey.fill(0);
+      const sodium = requireSodium();
+      sodium.memzero(orgSecretKey);
       if (passphraseBytes) passphraseBytes.fill(0);
       passphrase = "";
       confirmPassphrase = "";
@@ -191,7 +195,9 @@
         disabled={generating}
         error={passphraseTooShort
           ? m.onboarding_escrow_error_passphrase_short()
-          : undefined}
+          : isCommon
+            ? m.onboarding_escrow_error_passphrase_common()
+            : undefined}
       />
 
       <ListInput
