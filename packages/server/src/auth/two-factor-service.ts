@@ -148,7 +148,8 @@ export interface TwoFactorService {
   // Method queries
   getEnrolledMethodTypes(userId: string): Promise<string[]>;
 
-  // User email resolution (decrypts notification email for 2FA code delivery)
+  // User email (store + resolve for 2FA code delivery)
+  setNotificationEmail(userId: string, email: string): Promise<void>;
   resolveUserEmail(userId: string): Promise<string>;
 
   // User SMS phone resolution (decrypts stored SMS phone for code delivery)
@@ -818,6 +819,16 @@ export function createTwoFactorService(
     async getEnrolledMethodTypes(userId: string): Promise<string[]> {
       const methods = await getActiveMethods(userId);
       return methods.map((m) => m.method_type);
+    },
+
+    async setNotificationEmail(userId: string, email: string): Promise<void> {
+      const encrypted = encryptor.encrypt(email);
+      await db
+        .updateTable("users")
+        // care-y-ignore-next-line no-plaintext-db-write -- encrypted via encryptor.encrypt() above
+        .set({ encrypted_notification_addr: encrypted })
+        .where("id", "=", userId)
+        .execute();
     },
 
     async resolveUserEmail(userId: string): Promise<string> {

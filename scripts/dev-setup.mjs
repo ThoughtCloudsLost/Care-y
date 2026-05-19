@@ -14,9 +14,36 @@
  */
 
 import { execSync } from "node:child_process";
+import { readFileSync } from "node:fs";
 
 const skipBuild = process.argv.includes("--skip-build");
 const fullSeed = process.argv.includes("--seed");
+
+// Check /etc/hosts for dev hostname (needed for WebAuthn on mobile).
+// Reads TAILSCALE_IP from client/.env.local so the hint is correct per-machine.
+const DEV_HOSTNAME = "dev.care-y.local";
+try {
+  const hosts = readFileSync("/etc/hosts", "utf8");
+  if (!hosts.includes(DEV_HOSTNAME)) {
+    let ip = "YOUR_TAILSCALE_IP";
+    try {
+      const envLocal = readFileSync("packages/client/.env.local", "utf8");
+      const m = envLocal.match(/^TAILSCALE_IP=(.+)$/m);
+      if (m) ip = m[1].trim();
+    } catch {
+      // .env.local not set up yet
+    }
+    console.log(
+      `\x1b[33m  ⚠ Missing /etc/hosts entry for ${DEV_HOSTNAME}\x1b[0m`,
+    );
+    console.log(`  WebAuthn (passkeys) won't work on mobile without it.`);
+    console.log(
+      `  Run once: sudo sh -c 'echo "${ip}   ${DEV_HOSTNAME}" >> /etc/hosts'\n`,
+    );
+  }
+} catch {
+  // /etc/hosts unreadable
+}
 
 function run(label, cmd) {
   console.log(`  ${label}...`);

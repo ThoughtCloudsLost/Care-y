@@ -37,6 +37,7 @@ describe("ErrorCode", () => {
       "NO_SMS_PHONE_ENROLLED",
       "NO_PUSH_SUBSCRIPTIONS",
       "NO_PHONE_NUMBERS_CONFIGURED",
+      "NO_METHODS_ENROLLED",
 
       // Tickets
       "TICKET_NOT_FOUND",

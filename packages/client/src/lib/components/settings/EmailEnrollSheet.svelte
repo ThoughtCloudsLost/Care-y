@@ -17,6 +17,7 @@
 
   let { opened, ondismiss, onenrolled }: EmailEnrollSheetProps = $props();
 
+  let email = $state("");
   let codeSent = $state(false);
   let code = $state("");
   let sending = $state(false);
@@ -28,6 +29,7 @@
 
   $effect(() => {
     if (opened && !wasOpen) {
+      email = "";
       codeSent = false;
       code = "";
       error = "";
@@ -63,10 +65,11 @@
   }
 
   async function handleSendCode(): Promise<void> {
+    if (email.trim().length === 0) return;
     sending = true;
     error = "";
     try {
-      await trpc.twoFactor.enroll.emailSend.mutate();
+      await trpc.twoFactor.enroll.emailSend.mutate({ email: email.trim() });
       codeSent = true;
       startCooldown();
     } catch {
@@ -130,14 +133,26 @@
 
   <div class="sheet-content">
     {#if !codeSent}
-      <div class="send-section">
-        <p class="instruction-text">{m.twofa_email_desc()}</p>
+      <p class="instruction-text">{m.twofa_email_desc()}</p>
+      <List nested>
+        <ListInput
+          type="email"
+          label={m.twofa_email_address_label()}
+          placeholder={m.twofa_email_address_placeholder()}
+          value={email}
+          oninput={(e: Event) => {
+            if (e.target instanceof HTMLInputElement) email = e.target.value;
+          }}
+          disabled={sending}
+        />
+      </List>
+      <div class="send-action">
         <Button
           large
           onclick={() => {
             void handleSendCode();
           }}
-          disabled={sending}
+          disabled={sending || email.trim().length === 0}
         >
           {#if sending}
             <Preloader class="w-5 h-5" />
@@ -201,10 +216,8 @@
     padding: var(--space-md) var(--space-lg) var(--space-lg);
   }
 
-  .send-section {
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-md);
+  .send-action {
+    padding-top: var(--space-sm);
   }
 
   .instruction-text {

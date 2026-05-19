@@ -39,6 +39,7 @@
   let pushSheetOpen = $state(false);
   let backupCodesSheetOpen = $state(false);
   let hasNotifiedParent = $state(false);
+  let hasShownBackupCodes = $state(false);
 
   const enrolledMethods = $derived(statusQuery.data?.methods ?? []);
   const enrolledCount = $derived(enrolledMethods.length);
@@ -94,11 +95,17 @@
     toastStore.show(msg);
     announceToLiveRegion("polite", msg);
 
-    backupCodesSheetOpen = true;
+    if (!hasShownBackupCodes) {
+      backupCodesSheetOpen = true;
+    } else if (!hasNotifiedParent) {
+      hasNotifiedParent = true;
+      onenrolled();
+    }
   }
 
   function handleBackupCodesDismissed(): void {
     backupCodesSheetOpen = false;
+    hasShownBackupCodes = true;
     if (!hasNotifiedParent) {
       hasNotifiedParent = true;
       onenrolled();

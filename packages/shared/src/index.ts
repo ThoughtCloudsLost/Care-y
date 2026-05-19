@@ -56,6 +56,7 @@ export {
 
 export {
   totpVerifySchema,
+  emailEnrollSchema,
   emailCodeVerifySchema,
   smsEnrollSchema,
   smsCodeVerifySchema,
@@ -68,6 +69,7 @@ export {
   pushChallengeIdSchema,
   pushApprovalSchema,
   type TotpVerifyInput,
+  type EmailEnrollInput,
   type EmailCodeVerifyInput,
   type SmsEnrollInput,
   type SmsCodeVerifyInput,
