@@ -42,6 +42,11 @@ export const generateInviteInputSchema = z.object({
   encryptedEmail: base64String("encryptedEmail").optional(),
 });
 
+/** Revoke a pending invite token (admin-only). */
+export const revokeInviteInputSchema = z.object({
+  tokenId: z.uuid(),
+});
+
 /** Save telephony mode choice during setup (step 5). */
 export const saveTelephonyChoiceInputSchema = z.discriminatedUnion("mode", [
   z.object({
@@ -77,5 +82,6 @@ export type GenerateInviteInput = z.infer<typeof generateInviteInputSchema>;
 export type SaveTelephonyChoiceInput = z.infer<
   typeof saveTelephonyChoiceInputSchema
 >;
+export type RevokeInviteInput = z.infer<typeof revokeInviteInputSchema>;
 export type WrapOrgKeyForUserInput = z.infer<typeof wrapOrgKeyForUserSchema>;
 export type UnwrappedUser = z.infer<typeof unwrappedUserSchema>;

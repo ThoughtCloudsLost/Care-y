@@ -22,7 +22,7 @@
   import * as m from "$lib/paraglide/messages.js";
   import { withTerms } from "$lib/terminology/with-terms.js";
   import { trpc } from "$lib/trpc/index.js";
-  import { adminKeys, queueKeys } from "$lib/query/keys.js";
+  import { adminKeys, inviteKeys, queueKeys } from "$lib/query/keys.js";
   import {
     getOrgDecryptCache,
     getOrgKeyManager,
@@ -50,6 +50,7 @@
   import InlineSkeleton from "$lib/components/InlineSkeleton.svelte";
   import InviteUser from "./InviteUser.svelte";
   import InviteLinkSheet from "./InviteLinkSheet.svelte";
+  import InvitePendingCard from "./InvitePendingCard.svelte";
   import UserCard from "./UserCard.svelte";
 
   interface QueueAssignment {
@@ -74,6 +75,7 @@
   const authRouter = trpc.auth;
   const ticketRouter = requireRouter(trpc.tickets, "tickets");
   const profileRouter = trpc.profile;
+  const onboardingRouter = requireRouter(trpc.onboarding, "onboarding");
   const queryClient = useQueryClient();
 
   const orgCache = getOrgDecryptCache();
@@ -90,6 +92,11 @@
   const queuesQuery = createQuery(() => ({
     queryKey: queueKeys.all,
     queryFn: async () => ticketRouter.listQueues.query(),
+  }));
+
+  const invitesQuery = createQuery(() => ({
+    queryKey: inviteKeys.pending(),
+    queryFn: async () => onboardingRouter.listPendingInvites.query(),
   }));
 
   const assignRoleMutation = createMutation(() => ({
@@ -309,6 +316,65 @@
 
   export function matchedUserIds(): readonly string[] {
     return filteredUsers.map((u) => u.id);
+  }
+
+  export function pendingInviteCount(): number {
+    return invitesQuery.data?.length ?? 0;
+  }
+
+  // ── Pending invites (filtered + revoke) ──
+
+  const ROLE_LABEL_MAP: ReadonlyMap<string, () => string> = new Map([
+    [RoleId.VOLUNTEER, () => m.admin_role_volunteer(withTerms())],
+    [RoleId.MANAGER, () => m.admin_role_manager(withTerms())],
+    [RoleId.ADMIN, () => m.admin_role_admin()],
+  ]);
+
+  function getRoleLabel(roleId: string): string {
+    const fn = ROLE_LABEL_MAP.get(roleId);
+    return fn ? fn() : m.admin_role_unknown();
+  }
+
+  const filteredInvites = $derived.by(() => {
+    const all = invitesQuery.data ?? [];
+    if (userFilterStore.roles.size === 0) return all;
+    return all.filter((inv) =>
+      (userFilterStore.roles as ReadonlySet<string>).has(inv.roleId),
+    );
+  });
+
+  function lookupInviterName(invitedBy: string): string | null {
+    const inviter = (usersQuery.data ?? []).find((u) => u.id === invitedBy);
+    if (!inviter) return null;
+    return decryptDisplayName(inviter.id, inviter.encryptedDisplayName);
+  }
+
+  const revokeMutation = createMutation(() => ({
+    mutationFn: async (input: { tokenId: string }) =>
+      onboardingRouter.revokeInvite.mutate(input),
+    onSuccess: () => {
+      haptic();
+      void queryClient.invalidateQueries({ queryKey: inviteKeys.pending() });
+      const msg = m.admin_invite_pending_revoked();
+      toastStore.show(msg);
+      announceToLiveRegion("polite", msg);
+    },
+    onError: () => {
+      toastStore.show(m.admin_invite_pending_revoke_error());
+    },
+  }));
+
+  let revokeDialogOpened = $state(false);
+  let revokeTokenId = $state("");
+
+  function openRevokeDialog(tokenId: string): void {
+    revokeTokenId = tokenId;
+    revokeDialogOpened = true;
+  }
+
+  function confirmRevoke(): void {
+    revokeDialogOpened = false;
+    revokeMutation.mutate({ tokenId: revokeTokenId });
   }
 
   // ── Edit user sheet ──
@@ -650,6 +716,17 @@
     </Block>
   {:else}
     <div class="user-list">
+      {#each filteredInvites as invite (invite.id)}
+        <InvitePendingCard
+          id={invite.id}
+          roleLabel={getRoleLabel(invite.roleId)}
+          inviterName={lookupInviterName(invite.invitedBy)}
+          expiresAt={invite.expiresAt}
+          revoking={revokeMutation.isPending &&
+            revokeMutation.variables.tokenId === invite.id}
+          onrevoke={openRevokeDialog}
+        />
+      {/each}
       {#each filteredUsers as user (user.id)}
         {@const isSelf = user.id === currentUserId}
         {@const displayName = decryptDisplayName(
@@ -840,6 +917,32 @@
       {:else}
         {m.admin_deactivate()}
       {/if}
+    </DialogButton>
+  {/snippet}
+</ShellDialog>
+
+<ShellDialog
+  opened={revokeDialogOpened}
+  ondismiss={() => (revokeDialogOpened = false)}
+  title={m.admin_invite_pending_revoke_title()}
+>
+  {#snippet content()}
+    <p class="text-sm text-[--muted]">
+      {m.admin_invite_pending_revoke_body()}
+    </p>
+  {/snippet}
+  {#snippet buttons()}
+    <!-- care-y-ignore-next-line no-click-without-keyboard -- DialogButton renders a native <button> -->
+    <DialogButton onclick={() => (revokeDialogOpened = false)}>
+      {m.common_cancel()}
+    </DialogButton>
+    <!-- care-y-ignore-next-line no-click-without-keyboard -- DialogButton renders a native <button> -->
+    <DialogButton
+      strong
+      class="text-[--color-red-500] font-semibold"
+      onclick={confirmRevoke}
+    >
+      {m.admin_invite_pending_revoke()}
     </DialogButton>
   {/snippet}
 </ShellDialog>

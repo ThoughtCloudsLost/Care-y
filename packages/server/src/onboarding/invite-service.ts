@@ -1,8 +1,18 @@
 import { randomBytes, createHash } from "node:crypto";
 import type { Kysely } from "kysely";
+import { ErrorCode } from "@care-y/shared";
 import type { TenantDatabase } from "../db/types.js";
+import { NotFoundError } from "../errors.js";
 
 const DEFAULT_EXPIRY_HOURS = 72;
+
+export interface PendingInviteRecord {
+  readonly id: string;
+  readonly roleId: string;
+  readonly invitedBy: string;
+  readonly expiresAt: Date;
+  readonly createdAt: Date;
+}
 
 export interface InviteService {
   generate(input: {
@@ -20,6 +30,10 @@ export interface InviteService {
   } | null>;
 
   consume(tokenId: string): Promise<void>;
+
+  listPending(): Promise<readonly PendingInviteRecord[]>;
+
+  revoke(tokenId: string): Promise<void>;
 }
 
 function hashToken(rawToken: string): Buffer {
@@ -56,6 +70,7 @@ export function createInviteService(db: Kysely<TenantDatabase>): InviteService {
         .select(["id", "role_id", "invited_by", "expires_at"])
         .where("token_hash", "=", tokenHash)
         .where("consumed_at", "is", null)
+        .where("revoked_at", "is", null)
         .where("expires_at", ">", new Date())
         .executeTakeFirst();
 
@@ -75,6 +90,39 @@ export function createInviteService(db: Kysely<TenantDatabase>): InviteService {
         .set({ consumed_at: new Date() })
         .where("id", "=", tokenId)
         .execute();
+    },
+
+    async listPending() {
+      const rows = await db
+        .selectFrom("invite_tokens")
+        .select(["id", "role_id", "invited_by", "expires_at", "created_at"])
+        .where("consumed_at", "is", null)
+        .where("revoked_at", "is", null)
+        .where("expires_at", ">", new Date())
+        .orderBy("created_at", "desc")
+        .execute();
+
+      return rows.map((r) => ({
+        id: r.id,
+        roleId: r.role_id,
+        invitedBy: r.invited_by,
+        expiresAt: r.expires_at,
+        createdAt: r.created_at,
+      }));
+    },
+
+    async revoke(tokenId) {
+      const result = await db
+        .updateTable("invite_tokens")
+        .set({ revoked_at: new Date() })
+        .where("id", "=", tokenId)
+        .where("consumed_at", "is", null)
+        .where("revoked_at", "is", null)
+        .executeTakeFirst();
+
+      if (result.numUpdatedRows === 0n) {
+        throw new NotFoundError(ErrorCode.INVITE_NOT_FOUND);
+      }
     },
   };
 }

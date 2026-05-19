@@ -7,12 +7,13 @@
     SegmentedButton,
     Preloader,
   } from "konsta/svelte";
-  import { createMutation } from "@tanstack/svelte-query";
+  import { createMutation, useQueryClient } from "@tanstack/svelte-query";
   import { RoleId } from "@care-y/shared";
   import type { RoleIdValue } from "@care-y/shared";
   import * as m from "$lib/paraglide/messages.js";
   import { withTerms } from "$lib/terminology/with-terms.js";
   import { trpc } from "$lib/trpc/index.js";
+  import { inviteKeys } from "$lib/query/keys.js";
   import { haptic } from "$lib/utils/haptic.js";
   import { toastStore } from "$lib/stores/toast.svelte.js";
   import { announceToLiveRegion } from "$lib/utils/announce.js";
@@ -28,6 +29,7 @@
   let { opened, ondismiss }: InviteLinkSheetProps = $props();
 
   const onboarding = requireRouter(trpc.onboarding, "onboarding");
+  const queryClient = useQueryClient();
 
   interface GeneratedInvite {
     url: string;
@@ -51,6 +53,7 @@
         },
       ];
       error = "";
+      void queryClient.invalidateQueries({ queryKey: inviteKeys.pending() });
       toastStore.show(m.admin_invite_link_generated());
       announceToLiveRegion("polite", m.admin_invite_link_generated());
     },

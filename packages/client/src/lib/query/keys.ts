@@ -132,6 +132,11 @@ export const orgKeyKeys = {
   wrappedOrgKey: () => ["keys", "wrappedOrgKey"] as const,
 };
 
+export const inviteKeys = {
+  all: ["invites"] as const,
+  pending: () => [...inviteKeys.all, "pending"] as const,
+};
+
 export const onboardingKeys = {
   all: ["onboarding"] as const,
   status: () => [...onboardingKeys.all, "status"] as const,

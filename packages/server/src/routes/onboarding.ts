@@ -21,6 +21,7 @@ import {
   validateInviteInputSchema,
   registerFromInviteInputSchema,
   generateInviteInputSchema,
+  revokeInviteInputSchema,
   saveTelephonyChoiceInputSchema,
   RoleId,
   ErrorCode,
@@ -459,6 +460,42 @@ export function createOnboardingRouter(deps: OnboardingRouterDeps) {
           inviteUrl,
           expiresAt: expiresAt.toISOString(),
         };
+      }),
+    ),
+
+    /**
+     * List all pending (unconsumed, unrevoked, unexpired) invite tokens.
+     * Admin-only. Used by the People page to show invite rows.
+     */
+    listPendingInvites: authedProcedure.query(
+      withErrorWrapping(async ({ ctx }) => {
+        requirePermission(ctx.user.roleId, Permission.MANAGE_ROLES);
+
+        const inviteService = createInviteService(ctx.org.tenantDb);
+        const invites = await inviteService.listPending();
+
+        return invites.map((inv) => ({
+          id: inv.id,
+          roleId: inv.roleId,
+          invitedBy: inv.invitedBy,
+          expiresAt: inv.expiresAt.toISOString(),
+          createdAt: inv.createdAt.toISOString(),
+        }));
+      }),
+    ),
+
+    /**
+     * Revoke a pending invite token. Sets revoked_at, making the link
+     * unusable. Already-consumed or already-revoked tokens return NOT_FOUND.
+     */
+    revokeInvite: authedProcedure.input(revokeInviteInputSchema).mutation(
+      withErrorWrapping(async ({ ctx, input }) => {
+        requirePermission(ctx.user.roleId, Permission.MANAGE_ROLES);
+
+        const inviteService = createInviteService(ctx.org.tenantDb);
+        await inviteService.revoke(input.tokenId);
+
+        return { success: true as const };
       }),
     ),
 
