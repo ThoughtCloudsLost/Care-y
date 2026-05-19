@@ -1,5 +1,11 @@
 <script lang="ts">
-  import { Segmented, SegmentedButton, Link } from "konsta/svelte";
+  import {
+    Segmented,
+    SegmentedButton,
+    Link,
+    List,
+    ListItem,
+  } from "konsta/svelte";
   import { page } from "$app/state";
   import { goto, replaceState } from "$app/navigation";
   import { resolve } from "$app/paths";
@@ -7,7 +13,7 @@
   import { queueKeys, adminKeys } from "$lib/query/keys.js";
   import { Permission, RoleId } from "@care-y/shared";
   import type { RoleIdValue } from "@care-y/shared";
-  import { Users, Layers, UserPlus, LayersPlus } from "@lucide/svelte";
+  import { Users, Layers, UserPlus, LayersPlus, Link2 } from "@lucide/svelte";
   import * as m from "$lib/paraglide/messages.js";
   import { withTerms } from "$lib/terminology/with-terms.js";
   import {
@@ -43,6 +49,7 @@
   import { createSearchOverlay } from "$lib/search/search-overlay.svelte.js";
   import SearchNavigator from "$lib/components/search/SearchNavigator.svelte";
   import StatusDot from "$lib/components/StatusDot.svelte";
+  import ShellPopover from "$lib/shell/ShellPopover.svelte";
   import UsersSection from "$lib/components/admin/UsersSection.svelte";
   import QueuesSection from "$lib/components/admin/QueuesSection.svelte";
 
@@ -53,6 +60,7 @@
 
   const canManageUsers = $derived(permissions.has(Permission.MANAGE_USERS));
   const canManageQueues = $derived(permissions.has(Permission.MANAGE_QUEUES));
+  const canInviteWithLink = $derived(permissions.has(Permission.MANAGE_ROLES));
   const hasAccess = $derived(canManageUsers || canManageQueues);
 
   $effect(() => {
@@ -403,8 +411,29 @@
     usersSectionRef?.toggleMultiSelect();
   }
 
-  function handleInvite(): void {
-    usersSectionRef?.openInvite();
+  let invitePopoverOpen = $state(false);
+  let inviteButtonEl = $state<HTMLElement | undefined>(undefined);
+
+  function handleInvite(e: MouseEvent): void {
+    if (!canInviteWithLink) {
+      usersSectionRef?.openInvite();
+      return;
+    }
+    const target = e.currentTarget;
+    inviteButtonEl = target instanceof HTMLElement ? target : undefined;
+    invitePopoverOpen = true;
+  }
+
+  function handleInviteOption(optionId: string): void {
+    invitePopoverOpen = false;
+    switch (optionId) {
+      case "link":
+        usersSectionRef?.openInviteLink();
+        break;
+      case "manual":
+        usersSectionRef?.openInvite();
+        break;
+    }
   }
 
   function handleCreateQueue(): void {
@@ -556,6 +585,32 @@
     <QueuesSection bind:this={queuesSectionRef} autoAction={urlAction} />
   </div>
 {/if}
+
+<ShellPopover
+  opened={invitePopoverOpen}
+  target={inviteButtonEl}
+  placement="bottom"
+  ondismiss={() => (invitePopoverOpen = false)}
+>
+  <List nested>
+    <ListItem
+      title={m.admin_invite_menu_link()}
+      onclick={() => handleInviteOption("link")}
+    >
+      {#snippet media()}
+        <Link2 size={20} aria-hidden="true" />
+      {/snippet}
+    </ListItem>
+    <ListItem
+      title={m.admin_invite_menu_manual()}
+      onclick={() => handleInviteOption("manual")}
+    >
+      {#snippet media()}
+        <UserPlus size={20} aria-hidden="true" />
+      {/snippet}
+    </ListItem>
+  </List>
+</ShellPopover>
 
 <style>
   .stat-item {
