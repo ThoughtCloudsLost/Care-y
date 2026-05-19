@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Share invite links with your team. Each link is single-use and expires in 72 hours." |
+* | "Share invite links with your team, or create accounts directly. Each invite link is single-use and expires in 72 hours." |
 *
 * @param {Onboarding_Invite_SubtextInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

@@ -1,17 +1,9 @@
 <script lang="ts">
-  import {
-    List,
-    ListInput,
-    Button,
-    Segmented,
-    SegmentedButton,
-    Preloader,
-  } from "konsta/svelte";
+  import { Button, Preloader } from "konsta/svelte";
   import { createMutation, useQueryClient } from "@tanstack/svelte-query";
   import { RoleId } from "@care-y/shared";
   import type { RoleIdValue } from "@care-y/shared";
   import * as m from "$lib/paraglide/messages.js";
-  import { withTerms } from "$lib/terminology/with-terms.js";
   import { trpc } from "$lib/trpc/index.js";
   import { inviteKeys } from "$lib/query/keys.js";
   import { haptic } from "$lib/utils/haptic.js";
@@ -20,6 +12,8 @@
   import { requireRouter } from "$lib/errors.js";
   import ShellSheet from "$lib/shell/ShellSheet.svelte";
   import SoftButton from "$lib/components/inputs/SoftButton.svelte";
+  import RoleSelector from "$lib/components/shared/RoleSelector.svelte";
+  import InviteLinkResult from "$lib/components/shared/InviteLinkResult.svelte";
 
   interface InviteLinkSheetProps {
     readonly opened: boolean;
@@ -76,11 +70,6 @@
     toastStore.show(m.admin_invite_link_copied());
   }
 
-  function formatExpiry(iso: string): string {
-    const d = new Date(iso);
-    return d.toLocaleString();
-  }
-
   function handleDismiss(): void {
     generatedInvites = [];
     error = "";
@@ -110,31 +99,10 @@
       <p class="error-msg" role="alert">{error}</p>
     {/if}
 
-    <div class="role-section">
-      <p class="section-label">
-        {m.admin_invite_link_role_label()}
-      </p>
-      <Segmented strong>
-        <SegmentedButton
-          active={selectedRole === RoleId.VOLUNTEER}
-          onclick={() => (selectedRole = RoleId.VOLUNTEER)}
-        >
-          {m.admin_role_volunteer(withTerms())}
-        </SegmentedButton>
-        <SegmentedButton
-          active={selectedRole === RoleId.MANAGER}
-          onclick={() => (selectedRole = RoleId.MANAGER)}
-        >
-          {m.admin_role_manager(withTerms())}
-        </SegmentedButton>
-        <SegmentedButton
-          active={selectedRole === RoleId.ADMIN}
-          onclick={() => (selectedRole = RoleId.ADMIN)}
-        >
-          {m.admin_role_admin()}
-        </SegmentedButton>
-      </Segmented>
-    </div>
+    <RoleSelector
+      {selectedRole}
+      onselect={(r: RoleIdValue) => (selectedRole = r)}
+    />
 
     <Button large disabled={generateMut.isPending} onclick={handleGenerate}>
       {#if generateMut.isPending}
@@ -145,24 +113,10 @@
     </Button>
 
     {#if generatedInvites.length > 0}
-      {#each generatedInvites as invite, i (invite.url)}
-        <div
-          class="invite-card"
-          role="group"
-          aria-label={m.admin_invite_link_card_label({ index: String(i + 1) })}
-        >
-          <p class="invite-label">{m.admin_invite_link_url_label()}</p>
-          <code class="invite-url">{window.location.origin}{invite.url}</code>
-          <p class="invite-expires">
-            {m.admin_invite_link_expires({
-              expiresAt: formatExpiry(invite.expiresAt),
-            })}
-          </p>
-          <Button small outline onclick={() => void handleCopy(invite.url)}>
-            {m.admin_invite_link_copy()}
-          </Button>
-        </div>
-      {/each}
+      <InviteLinkResult
+        invites={generatedInvites}
+        oncopy={(url: string) => void handleCopy(url)}
+      />
 
       <Button
         large
@@ -199,45 +153,5 @@
     font-weight: 500;
     color: var(--color-red-500);
     margin: 0;
-  }
-
-  .section-label {
-    font-size: 0.75rem;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
-    color: var(--muted);
-    margin: 0 0 var(--space-sm);
-  }
-
-  .invite-card {
-    background: color-mix(in srgb, var(--ink) 5%, transparent);
-    border-radius: 12px;
-    padding: var(--space-md);
-  }
-
-  .invite-label {
-    font-size: 0.75rem;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
-    color: var(--muted);
-    margin: 0 0 var(--space-sm);
-  }
-
-  .invite-url {
-    font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
-    font-size: 0.75rem;
-    color: var(--ink);
-    word-break: break-all;
-    user-select: all;
-    display: block;
-    margin-bottom: var(--space-sm);
-  }
-
-  .invite-expires {
-    font-size: 0.8125rem;
-    color: var(--muted);
-    margin: 0 0 var(--space-md);
   }
 </style>
