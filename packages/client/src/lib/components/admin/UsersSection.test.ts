@@ -73,6 +73,31 @@ vi.mock("$lib/paraglide/messages.js", () => ({
   settings_display_name: () => "Display Name",
   settings_username: () => "Username",
   settings_username_taken: () => "Username already taken",
+  admin_role_unknown: () => "Unknown",
+  admin_invite_pending_revoke: () => "Revoke",
+  admin_invite_pending_revoke_title: () => "Revoke Invite?",
+  admin_invite_pending_revoke_body: () => "This link will stop working.",
+  admin_invite_pending_revoke_error: () => "Failed to revoke",
+  admin_invite_pending_revoked: () => "Invite revoked",
+  admin_invite_pending_expired: () => "Expired",
+  admin_invite_pending_expires_in: ({ time }: { time: string }) =>
+    `Expires in ${time}`,
+  admin_invite_pending_invited_by: ({ name }: { name: string }) =>
+    `Invited by ${name}`,
+  admin_invite_pending_invited_by_unknown: () => "Invited by unknown",
+  admin_invite_link_title: () => "Invite Link",
+  admin_invite_link_subtext: () => "Generate a link.",
+  admin_invite_link_role_label: () => "Role",
+  admin_invite_link_generate: () => "Generate",
+  admin_invite_link_generated: () => "Link generated",
+  admin_invite_link_url_label: () => "Invite URL",
+  admin_invite_link_card_label: () => "Copy link",
+  admin_invite_link_copy: () => "Copy",
+  admin_invite_link_copied: () => "Copied",
+  admin_invite_link_done: () => "Done",
+  admin_invite_link_another: () => "Generate another",
+  admin_invite_link_expires: ({ time }: { time: string }) => `Expires ${time}`,
+  admin_invite_link_error: () => "Failed to generate",
   common_cancel: () => "Cancel",
   common_loading: () => "Loading",
   error_generic: () => "Something went wrong",
@@ -103,22 +128,35 @@ vi.mock("$lib/trpc/index.js", () => ({
       adminUpdateDisplayName: { mutate: vi.fn().mockResolvedValue({}) },
       adminUpdateUsername: { mutate: vi.fn().mockResolvedValue({}) },
     },
+    onboarding: {
+      listPendingInvites: { query: vi.fn().mockResolvedValue([]) },
+      revokeInvite: { mutate: vi.fn().mockResolvedValue({}) },
+      generateInvite: {
+        mutate: vi.fn().mockResolvedValue({
+          url: "https://test.local/first-login/tok",
+          expiresAt: new Date(Date.now() + 72 * 60 * 60 * 1000).toISOString(),
+        }),
+      },
+    },
   },
 }));
+
+let queryCallIndex = 0;
 
 vi.mock("@tanstack/svelte-query", () => ({
   createQuery: (optsFn: () => Record<string, unknown>) => {
     optsFn();
+    const idx = queryCallIndex++;
     return {
       get isLoading() {
-        return mockUsersLoading;
+        return idx === 0 ? mockUsersLoading : false;
       },
       get isError() {
         return false;
       },
       error: null,
       get data() {
-        return mockUsersData;
+        return idx === 0 ? mockUsersData : [];
       },
       refetch: vi.fn(),
     };
@@ -271,6 +309,7 @@ describe("UsersSection", () => {
   beforeEach(() => {
     mockUsersData = undefined;
     mockUsersLoading = false;
+    queryCallIndex = 0;
     vi.clearAllMocks();
   });
 
