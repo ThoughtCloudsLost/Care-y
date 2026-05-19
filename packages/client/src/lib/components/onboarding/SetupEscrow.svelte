@@ -1,21 +1,8 @@
-<!--
-  SetupEscrow: wizard step 6 (escrow key backup).
-
-  Non-skippable. 3-step flow matching admin EscrowExport:
-  1. Education (what is an escrow file, browser safety)
-  2. Passphrase creation + export (via shared EscrowPassphraseForm)
-  3. Storage guidance + SHA-256 hash display + continue
-
-  All crypto runs client-side via the shared export utility.
-  Key material is zeroed in the shared component's finally blocks.
--->
 <script lang="ts">
-  import { onMount } from "svelte";
   import { Block, BlockTitle, Button } from "konsta/svelte";
   import * as m from "$lib/paraglide/messages.js";
   import { withTerms } from "$lib/terminology/with-terms.js";
   import { isOrgKeyReady } from "$lib/crypto/org-key-ready.svelte.js";
-  import SoftButton from "$lib/components/inputs/SoftButton.svelte";
   import EscrowPassphraseForm from "$lib/components/shared/EscrowPassphraseForm.svelte";
 
   interface Props {
@@ -24,24 +11,49 @@
 
   let { oncomplete }: Props = $props();
 
-  type Step = 1 | 2 | 3;
-
-  let step = $state<Step>(1);
+  const TOTAL_PAGES = 3;
+  let subPage = $state(0);
   let sha256Hex = $state("");
   let httpsBlocked = $state(false);
 
   const orgKeyLoaded = $derived(isOrgKeyReady());
   const hashGroups = $derived(sha256Hex.match(/.{1,4}/g) ?? []);
 
-  onMount(() => {
+  $effect(() => {
     if (import.meta.env.DEV) return;
     const isSecure = window.location.protocol === "https:";
     httpsBlocked = !isSecure;
   });
 
+  function scrollContentToTop(): void {
+    const container = document.querySelector(".onboarding-content");
+    if (container) container.scrollTop = 0;
+  }
+
+  function nextPage(): void {
+    if (subPage < TOTAL_PAGES - 1) {
+      subPage++;
+      scrollContentToTop();
+    }
+  }
+
+  function prevPage(): void {
+    if (subPage > 0) {
+      subPage--;
+      scrollContentToTop();
+    }
+  }
+
   function handleExport(data: { sha256Hex: string }): void {
     sha256Hex = data.sha256Hex;
-    step = 3;
+    subPage = 2;
+    scrollContentToTop();
+  }
+
+  function handleDownloadAgain(): void {
+    sha256Hex = "";
+    subPage = 1;
+    scrollContentToTop();
   }
 </script>
 
@@ -51,92 +63,139 @@
   <Block>
     <p class="step-error" role="alert">{m.onboarding_escrow_https_warning()}</p>
   </Block>
-{:else if step === 1}
-  <!-- Step 1: Education -->
-  <Block>
-    <p class="body-text">{m.admin_escrow_step_education_body()}</p>
-    <p class="body-text">
-      {m.admin_escrow_step_education_scope(withTerms())}
-    </p>
-    <p class="body-text emphasis">
-      {m.admin_escrow_step_education_analogy()}
-    </p>
-  </Block>
+{:else}
+  <div class="page-dots" aria-hidden="true">
+    {#each Array(TOTAL_PAGES) as _, i (i)}
+      <span class="page-dot" class:page-dot--active={i === subPage}></span>
+    {/each}
+  </div>
 
-  <Block>
-    <div class="callout warning">
-      <p class="callout-heading">{m.admin_escrow_browser_safety_heading()}</p>
-      <ul class="callout-list">
-        <li>{m.admin_escrow_browser_safety_extensions()}</li>
-        <li>{m.admin_escrow_browser_safety_tabs()}</li>
-        <li>{m.admin_escrow_browser_safety_screen()}</li>
-        <li>{m.admin_escrow_browser_safety_public()}</li>
-      </ul>
-    </div>
-  </Block>
-
-  {#if !orgKeyLoaded}
+  {#if subPage === 0}
     <Block>
-      <p class="org-key-warning" role="alert">
-        {m.admin_escrow_no_org_key()}
+      <p class="body-text">{m.admin_escrow_step_education_body()}</p>
+      <p class="body-text">
+        {m.admin_escrow_step_education_scope(withTerms())}
+      </p>
+      <p class="body-text emphasis">
+        {m.admin_escrow_step_education_analogy()}
       </p>
     </Block>
+
+    <Block>
+      <div class="callout warning">
+        <p class="callout-heading">{m.admin_escrow_browser_safety_heading()}</p>
+        <ul class="callout-list">
+          <li>{m.admin_escrow_browser_safety_extensions()}</li>
+          <li>{m.admin_escrow_browser_safety_tabs()}</li>
+          <li>{m.admin_escrow_browser_safety_screen()}</li>
+          <li>{m.admin_escrow_browser_safety_public()}</li>
+        </ul>
+      </div>
+    </Block>
+
+    {#if !orgKeyLoaded}
+      <Block>
+        <p class="org-key-warning" role="alert">
+          {m.admin_escrow_no_org_key()}
+        </p>
+      </Block>
+    {/if}
+
+    <Block>
+      <div class="escrow-nav">
+        <Button large onclick={nextPage} disabled={!orgKeyLoaded}>
+          {m.common_next()}
+        </Button>
+      </div>
+    </Block>
+  {:else if subPage === 1}
+    {#key subPage}
+      <EscrowPassphraseForm onexport={handleExport} />
+    {/key}
+
+    <Block>
+      <div class="escrow-nav">
+        <Button large outline onclick={prevPage}>
+          {m.common_back()}
+        </Button>
+      </div>
+    </Block>
+  {:else}
+    <Block>
+      <p class="section-heading">{m.admin_escrow_step_storage_heading()}</p>
+    </Block>
+
+    <Block>
+      <div class="callout success">
+        <ul class="callout-list">
+          <li>{m.admin_escrow_storage_usb()}</li>
+          <li>{m.admin_escrow_storage_locked()}</li>
+          <li>{m.admin_escrow_storage_separate()}</li>
+          <li>{m.admin_escrow_storage_copy()}</li>
+          <li>{m.admin_escrow_storage_test()}</li>
+        </ul>
+      </div>
+    </Block>
+
+    <Block>
+      <p class="hash-label">{m.onboarding_escrow_hash_label()}</p>
+      <div class="hash-grid" aria-label={sha256Hex}>
+        {#each hashGroups as group, i (i)}
+          <code class="hash-group">{group}</code>
+        {/each}
+      </div>
+      <p class="hash-hint">{m.onboarding_escrow_hash_hint()}</p>
+    </Block>
+
+    <Block>
+      <div class="escrow-nav">
+        <Button large outline onclick={handleDownloadAgain}>
+          {m.onboarding_escrow_download_again()}
+        </Button>
+        <Button large onclick={oncomplete}>
+          {m.onboarding_escrow_continue()}
+        </Button>
+      </div>
+    </Block>
   {/if}
-
-  <Block>
-    <SoftButton full onclick={() => (step = 2)} disabled={!orgKeyLoaded}>
-      {m.admin_escrow_continue()}
-    </SoftButton>
-  </Block>
-{:else if step === 2}
-  <!-- Step 2: Passphrase + export -->
-  <EscrowPassphraseForm onexport={handleExport} />
-{:else}
-  <!-- Step 3: Storage guidance + hash -->
-  <Block>
-    <p class="section-heading">{m.admin_escrow_step_storage_heading()}</p>
-  </Block>
-
-  <Block>
-    <div class="callout success">
-      <ul class="callout-list">
-        <li>{m.admin_escrow_storage_usb()}</li>
-        <li>{m.admin_escrow_storage_locked()}</li>
-        <li>{m.admin_escrow_storage_separate()}</li>
-        <li>{m.admin_escrow_storage_copy()}</li>
-        <li>{m.admin_escrow_storage_test()}</li>
-      </ul>
-    </div>
-  </Block>
-
-  <Block>
-    <p class="hash-label">{m.onboarding_escrow_hash_label()}</p>
-    <div class="hash-grid" aria-label={sha256Hex}>
-      {#each hashGroups as group, i (i)}
-        <code class="hash-group">{group}</code>
-      {/each}
-    </div>
-    <p class="hash-hint">{m.onboarding_escrow_hash_hint()}</p>
-  </Block>
-
-  <Block class="escrow-actions">
-    <Button large onclick={oncomplete}>
-      {m.onboarding_escrow_continue()}
-    </Button>
-    <Button
-      large
-      outline
-      onclick={() => {
-        sha256Hex = "";
-        step = 2;
-      }}
-    >
-      {m.onboarding_escrow_download_again()}
-    </Button>
-  </Block>
 {/if}
 
 <style>
+  .page-dots {
+    display: flex;
+    justify-content: center;
+    gap: 8px;
+    padding: 12px 0;
+  }
+
+  .page-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: color-mix(in srgb, var(--muted) 30%, transparent);
+    transition: background 150ms ease;
+  }
+
+  .page-dot--active {
+    background: var(--brand-primary);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .page-dot {
+      transition: none;
+    }
+  }
+
+  .escrow-nav {
+    display: flex;
+    justify-content: space-between;
+    gap: var(--space-md);
+  }
+
+  .escrow-nav :global(.k-button:only-child) {
+    margin-left: auto;
+  }
+
   .section-heading {
     font-size: var(--text-base);
     font-weight: 600;
@@ -235,11 +294,5 @@
     color: var(--muted);
     line-height: 1.5;
     margin: var(--space-lg) 0 0;
-  }
-
-  :global(.escrow-actions) {
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-sm);
   }
 </style>
