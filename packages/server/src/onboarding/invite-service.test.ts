@@ -163,4 +163,182 @@ describe.skipIf(!HAS_DB)("invite-service (DB integration)", () => {
     expect(result).not.toBeNull();
     expect(result!.roleId).toBe(RoleId.MANAGER);
   });
+
+  it("returns null for a revoked token", async () => {
+    const { rawToken } = await inviteService.generate({
+      invitedBy: adminUserId,
+      roleId: RoleId.VOLUNTEER,
+    });
+
+    const invite = await inviteService.validate(rawToken);
+    expect(invite).not.toBeNull();
+
+    await inviteService.revoke(invite!.id);
+
+    const result = await inviteService.validate(rawToken);
+    expect(result).toBeNull();
+  });
+
+  describe("listPending", () => {
+    it("returns pending tokens ordered by created_at desc", async () => {
+      const first = await inviteService.generate({
+        invitedBy: adminUserId,
+        roleId: RoleId.VOLUNTEER,
+      });
+      const second = await inviteService.generate({
+        invitedBy: adminUserId,
+        roleId: RoleId.MANAGER,
+      });
+
+      const pending = await inviteService.listPending();
+
+      // Most recent first
+      const ids = pending.map((p) => p.id);
+      const firstInvite = await inviteService.validate(first.rawToken);
+      const secondInvite = await inviteService.validate(second.rawToken);
+      expect(ids).toContain(firstInvite!.id);
+      expect(ids).toContain(secondInvite!.id);
+      expect(ids.indexOf(secondInvite!.id)).toBeLessThan(
+        ids.indexOf(firstInvite!.id),
+      );
+    });
+
+    it("excludes consumed tokens", async () => {
+      const { rawToken } = await inviteService.generate({
+        invitedBy: adminUserId,
+        roleId: RoleId.VOLUNTEER,
+      });
+
+      const invite = await inviteService.validate(rawToken);
+      await inviteService.consume(invite!.id);
+
+      const pending = await inviteService.listPending();
+      const ids = pending.map((p) => p.id);
+      expect(ids).not.toContain(invite!.id);
+    });
+
+    it("excludes revoked tokens", async () => {
+      const { rawToken } = await inviteService.generate({
+        invitedBy: adminUserId,
+        roleId: RoleId.VOLUNTEER,
+      });
+
+      const invite = await inviteService.validate(rawToken);
+      await inviteService.revoke(invite!.id);
+
+      const pending = await inviteService.listPending();
+      const ids = pending.map((p) => p.id);
+      expect(ids).not.toContain(invite!.id);
+    });
+
+    it("excludes expired tokens", async () => {
+      await inviteService.generate({
+        invitedBy: adminUserId,
+        roleId: RoleId.VOLUNTEER,
+        expiresInHours: 0,
+      });
+
+      const pending = await inviteService.listPending();
+      // All pending tokens should have a future expiry
+      for (const inv of pending) {
+        expect(inv.expiresAt.getTime()).toBeGreaterThan(Date.now());
+      }
+    });
+
+    it("returns correct fields", async () => {
+      const { rawToken } = await inviteService.generate({
+        invitedBy: adminUserId,
+        roleId: RoleId.ADMIN,
+      });
+
+      const invite = await inviteService.validate(rawToken);
+      const pending = await inviteService.listPending();
+      const match = pending.find((p) => p.id === invite!.id);
+
+      expect(match).toBeDefined();
+      expect(match!.roleId).toBe(RoleId.ADMIN);
+      expect(match!.invitedBy).toBe(adminUserId);
+      expect(match!.expiresAt).toBeInstanceOf(Date);
+      expect(match!.createdAt).toBeInstanceOf(Date);
+    });
+  });
+
+  describe("revoke", () => {
+    it("sets revoked_at on a pending token", async () => {
+      const { rawToken } = await inviteService.generate({
+        invitedBy: adminUserId,
+        roleId: RoleId.VOLUNTEER,
+      });
+
+      const invite = await inviteService.validate(rawToken);
+      await inviteService.revoke(invite!.id);
+
+      const row = await tenantDb
+        .selectFrom("invite_tokens")
+        .select("revoked_at")
+        .where("id", "=", invite!.id)
+        .executeTakeFirst();
+
+      expect(row?.revoked_at).toBeInstanceOf(Date);
+    });
+
+    it("throws NotFoundError for nonexistent token id", async () => {
+      const { NotFoundError } = await import("../errors.js");
+      await expect(
+        inviteService.revoke("00000000-0000-0000-0000-000000000000"),
+      ).rejects.toThrow(NotFoundError);
+    });
+
+    it("throws NotFoundError for already-consumed token", async () => {
+      const { NotFoundError } = await import("../errors.js");
+      const { rawToken } = await inviteService.generate({
+        invitedBy: adminUserId,
+        roleId: RoleId.VOLUNTEER,
+      });
+
+      const invite = await inviteService.validate(rawToken);
+      await inviteService.consume(invite!.id);
+
+      await expect(inviteService.revoke(invite!.id)).rejects.toThrow(
+        NotFoundError,
+      );
+    });
+
+    it("throws NotFoundError for already-revoked token", async () => {
+      const { NotFoundError } = await import("../errors.js");
+      const { rawToken } = await inviteService.generate({
+        invitedBy: adminUserId,
+        roleId: RoleId.VOLUNTEER,
+      });
+
+      const invite = await inviteService.validate(rawToken);
+      await inviteService.revoke(invite!.id);
+
+      await expect(inviteService.revoke(invite!.id)).rejects.toThrow(
+        NotFoundError,
+      );
+    });
+
+    it("does not set revoked_at on a consumed token", async () => {
+      const { rawToken } = await inviteService.generate({
+        invitedBy: adminUserId,
+        roleId: RoleId.VOLUNTEER,
+      });
+
+      const invite = await inviteService.validate(rawToken);
+      await inviteService.consume(invite!.id);
+
+      await inviteService.revoke(invite!.id).catch(() => {
+        // Expected NotFoundError; we only care about the DB state below
+      });
+
+      const row = await tenantDb
+        .selectFrom("invite_tokens")
+        .select("revoked_at")
+        .where("id", "=", invite!.id)
+        .executeTakeFirst();
+
+      expect(row?.revoked_at).toBeNull();
+    });
+  });
 });

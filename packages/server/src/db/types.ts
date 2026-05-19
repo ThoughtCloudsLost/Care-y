@@ -541,6 +541,7 @@ export interface InviteTokensTable {
   role_id: string;
   expires_at: Date;
   consumed_at: Date | null;
+  revoked_at: Date | null;
   created_at: Generated<Date>;
 }
 
