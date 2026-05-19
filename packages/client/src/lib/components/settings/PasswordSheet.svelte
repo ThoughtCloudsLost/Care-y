@@ -1,5 +1,7 @@
 <script lang="ts">
-  import { List, ListInput, Preloader } from "konsta/svelte";
+  import { List, Preloader } from "konsta/svelte";
+  import PasswordInput from "$lib/components/inputs/PasswordInput.svelte";
+  import PasswordStrengthMeter from "$lib/components/inputs/PasswordStrengthMeter.svelte";
   import { Save } from "@lucide/svelte";
   import { useQueryClient } from "@tanstack/svelte-query";
   import { authKeys } from "$lib/query/keys.js";
@@ -152,44 +154,34 @@
     {/if}
 
     <List nested>
-      <ListInput
+      <PasswordInput
         outline
         label={m.settings_password_current()}
-        type="password"
         placeholder={m.settings_password_current()}
-        value={currentPassword}
-        oninput={(e: Event) => {
-          if (e.target instanceof HTMLInputElement)
-            currentPassword = e.target.value;
-        }}
+        bind:value={currentPassword}
         disabled={isPending}
       />
     </List>
     <List nested>
-      <ListInput
+      <PasswordInput
         outline
         label={m.settings_password_new()}
-        type="password"
         placeholder={m.settings_password_new()}
-        value={newPassword}
-        oninput={(e: Event) => {
-          if (e.target instanceof HTMLInputElement)
-            newPassword = e.target.value;
-        }}
+        bind:value={newPassword}
         disabled={isPending}
       />
     </List>
+    {#if newPassword.length > 0}
+      <div class="meter-wrap">
+        <PasswordStrengthMeter password={newPassword} minLength={16} />
+      </div>
+    {/if}
     <List nested>
-      <ListInput
+      <PasswordInput
         outline
         label={m.settings_password_confirm()}
-        type="password"
         placeholder={m.settings_password_confirm()}
-        value={confirmPassword}
-        oninput={(e: Event) => {
-          if (e.target instanceof HTMLInputElement)
-            confirmPassword = e.target.value;
-        }}
+        bind:value={confirmPassword}
         disabled={isPending}
       />
     </List>
@@ -217,6 +209,10 @@
     padding: var(--space-sm) var(--space-lg);
     font-size: 0.85rem;
     color: var(--muted);
+  }
+
+  .meter-wrap {
+    padding: 0 var(--space-lg);
   }
 
   .error-text {

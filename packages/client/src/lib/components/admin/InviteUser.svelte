@@ -1,9 +1,11 @@
 <script lang="ts">
-  import { List, ListInput, Button } from "konsta/svelte";
+  import { List, ListInput, Button, Block } from "konsta/svelte";
   import { Save } from "@lucide/svelte";
   import { createMutation, useQueryClient } from "@tanstack/svelte-query";
   import { adminKeys } from "$lib/query/keys.js";
   import { PASSWORD_MIN_LENGTH, RoleId } from "@care-y/shared";
+  import PasswordInput from "$lib/components/inputs/PasswordInput.svelte";
+  import PasswordStrengthMeter from "$lib/components/inputs/PasswordStrengthMeter.svelte";
   import type { RoleIdValue } from "@care-y/shared";
   import * as m from "$lib/paraglide/messages.js";
   import { withTerms } from "$lib/terminology/with-terms.js";
@@ -221,21 +223,25 @@
       </List>
 
       <List nested>
-        <ListInput
+        <PasswordInput
           outline
           label={m.admin_invite_password_label()}
-          type="password"
-          value={tempPassword}
-          oninput={(e: Event) => {
-            if (e.target instanceof HTMLInputElement)
-              tempPassword = e.target.value;
-          }}
+          bind:value={tempPassword}
           disabled={!orgKeyLoaded}
           info={passwordTooShort
             ? m.admin_invite_password_too_short()
             : m.admin_invite_password_hint(withTerms())}
         />
       </List>
+
+      {#if tempPassword.length > 0}
+        <Block>
+          <PasswordStrengthMeter
+            password={tempPassword}
+            minLength={PASSWORD_MIN_LENGTH}
+          />
+        </Block>
+      {/if}
 
       <RoleSelector
         {selectedRole}

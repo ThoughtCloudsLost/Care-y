@@ -2,11 +2,12 @@ export type PassphraseStrength = "too-short" | "acceptable" | "good" | "strong";
 
 export function assessPassphraseStrength(
   passphrase: string,
+  minLength = 20,
 ): PassphraseStrength {
   const len = passphrase.length;
-  if (len < 20) return "too-short";
-  if (len < 30) return "acceptable";
-  if (len < 40) return "good";
+  if (len < minLength) return "too-short";
+  if (len < minLength + 10) return "acceptable";
+  if (len < minLength + 20) return "good";
   return "strong";
 }
 

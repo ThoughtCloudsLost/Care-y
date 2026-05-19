@@ -29,6 +29,7 @@
   } from "$lib/components/onboarding/KeyDerivation.svelte";
   import TwoFactorEnrollment from "$lib/components/onboarding/TwoFactorEnrollment.svelte";
   import TwoFactorChallenge from "$lib/components/auth/TwoFactorChallenge.svelte";
+  import PasswordInput from "$lib/components/inputs/PasswordInput.svelte";
 
   const bridge = getCryptoBridge();
   const orgKeyManager = getOrgKeyManager();
@@ -337,9 +338,8 @@
         autocapitalize="none"
         required
       />
-      <ListInput
+      <PasswordInput
         label={m.auth_password()}
-        type="password"
         placeholder={m.auth_password_placeholder()}
         bind:value={password}
         autocomplete="current-password"
