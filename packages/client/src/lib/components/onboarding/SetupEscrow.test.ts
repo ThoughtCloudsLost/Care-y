@@ -64,6 +64,10 @@ vi.mock("$lib/utils/announce.js", () => ({
 vi.mock("$lib/terminology/with-terms.js", () => ({
   withTerms: () => ({}),
 }));
+vi.mock("$lib/shell/ShellDialog.svelte", async () => ({
+  default: (await import("../admin/test-helpers/StubShellDialog.svelte"))
+    .default,
+}));
 
 const { default: SetupEscrow } = await import("./SetupEscrow.svelte");
 
@@ -232,6 +236,15 @@ describe("SetupEscrow", () => {
     });
 
     await fireEvent.click(findButton(container, "Download Again"));
+
+    const dialog = container.querySelector("[data-testid='stub-dialog']");
+    expect(dialog).toBeTruthy();
+
+    const dialogConfirm = Array.from(dialog!.querySelectorAll("button")).find(
+      (b) => b.textContent.includes("Continue"),
+    );
+    expect(dialogConfirm, "Dialog confirm button not found").toBeTruthy();
+    await fireEvent.click(dialogConfirm!);
 
     expect(screen.getByText("Create a passphrase")).toBeTruthy();
   });
