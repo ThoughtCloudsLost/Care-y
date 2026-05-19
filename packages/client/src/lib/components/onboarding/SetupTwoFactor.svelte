@@ -53,7 +53,7 @@
     line-height: 1.5;
   }
 
-  .continue-block {
+  .setup-twofa :global(.continue-block) {
     margin-top: auto;
     padding-top: var(--space-md);
   }

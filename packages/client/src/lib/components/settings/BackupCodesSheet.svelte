@@ -1,6 +1,6 @@
 <script lang="ts">
-  import { List, ListItem, Preloader, Button } from "konsta/svelte";
-  import { Copy } from "@lucide/svelte";
+  import { Preloader, Button } from "konsta/svelte";
+  import { Copy, Check } from "@lucide/svelte";
   import * as m from "$lib/paraglide/messages.js";
   import { trpc } from "$lib/trpc/index.js";
   import { toastStore } from "$lib/stores/toast.svelte.js";
@@ -11,19 +11,28 @@
   interface BackupCodesSheetProps {
     readonly opened: boolean;
     readonly ondismiss: () => void;
+    readonly regenerating?: boolean;
   }
 
-  let { opened, ondismiss }: BackupCodesSheetProps = $props();
+  let {
+    opened,
+    ondismiss,
+    regenerating = false,
+  }: BackupCodesSheetProps = $props();
 
   let codes = $state<readonly string[]>([]);
   let loading = $state(false);
   let error = $state("");
   let wasOpen = $state(false);
+  let copied = $state(false);
+  let copyTimeout: ReturnType<typeof setTimeout> | undefined;
 
   $effect(() => {
     if (opened && !wasOpen) {
       codes = [];
       error = "";
+      copied = false;
+      clearTimeout(copyTimeout);
       void fetchCodes();
     }
     wasOpen = opened;
@@ -46,6 +55,11 @@
     try {
       await navigator.clipboard.writeText(codes.join("\n"));
       haptic();
+      copied = true;
+      clearTimeout(copyTimeout);
+      copyTimeout = setTimeout(() => {
+        copied = false;
+      }, 2000);
       const msg = m.twofa_backup_codes_copied();
       toastStore.show(msg);
       announceToLiveRegion("polite", msg);
@@ -69,6 +83,12 @@
     {:else if error !== ""}
       <p class="error-text" role="alert">{error}</p>
     {:else if codes.length > 0}
+      {#if regenerating}
+        <div class="warning-banner regen-warning" role="alert">
+          <p>{m.twofa_backup_codes_regenerated()}</p>
+        </div>
+      {/if}
+
       <div class="warning-banner" role="alert">
         <p>{m.twofa_backup_codes_warning()}</p>
       </div>
@@ -87,14 +107,20 @@
 
       <div class="copy-action">
         <Button
-          outline
+          tonal
           large
+          class={copied ? "copied-btn" : ""}
           onclick={() => {
             void handleCopy();
           }}
         >
-          <Copy size={16} aria-hidden="true" />
-          <span class="copy-label">{m.twofa_backup_codes_copy()}</span>
+          {#if copied}
+            <Check size={16} aria-hidden="true" />
+            <span class="copy-label">{m.twofa_backup_codes_copied()}</span>
+          {:else}
+            <Copy size={16} aria-hidden="true" />
+            <span class="copy-label">{m.twofa_backup_codes_copy()}</span>
+          {/if}
         </Button>
       </div>
     {/if}
@@ -129,6 +155,19 @@
     margin: 0;
   }
 
+  .regen-warning {
+    background: color-mix(
+      in srgb,
+      var(--k-color-orange, #ff9500) 10%,
+      transparent
+    );
+    margin-bottom: var(--space-sm);
+  }
+
+  .regen-warning p {
+    color: var(--k-color-orange, #ff9500);
+  }
+
   .codes-grid {
     display: grid;
     grid-template-columns: 1fr 1fr;
@@ -156,6 +195,10 @@
 
   .copy-label {
     margin-left: var(--space-xs);
+  }
+
+  :global(.copied-btn) {
+    opacity: 0.85;
   }
 
   .error-text {

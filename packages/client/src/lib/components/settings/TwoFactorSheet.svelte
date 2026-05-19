@@ -293,6 +293,7 @@
 
 <BackupCodesSheet
   opened={backupCodesSheetOpen}
+  regenerating={!isFirstEnrollment}
   ondismiss={() => {
     backupCodesSheetOpen = false;
   }}

@@ -401,7 +401,9 @@ describe.skipIf(!process.env.DATABASE_URL)(
           "email-send-token",
           emailSender,
         );
-        const result = await caller.twoFactor.enroll.emailSend();
+        const result = await caller.twoFactor.enroll.emailSend({
+          email: "user@example.com",
+        });
 
         expect(result).toEqual({ sent: true });
         expect(emailSender.calls).toHaveLength(1);
@@ -434,7 +436,9 @@ describe.skipIf(!process.env.DATABASE_URL)(
           "email-verify-token",
           emailSender,
         );
-        await caller.twoFactor.enroll.emailSend();
+        await caller.twoFactor.enroll.emailSend({
+          email: "verify@example.com",
+        });
 
         // Extract code from email body
         const code = extractEmailCode(emailSender.calls[0]!.text);
