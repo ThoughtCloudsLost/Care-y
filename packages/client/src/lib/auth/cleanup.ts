@@ -65,11 +65,12 @@ export function installCleanupHandler(
 }
 
 /**
- * Clear all decrypted data from memory.
+ * Clear all decrypted data and deregister caches.
  * Call on logout, session expiry, or idle timeout (not just beforeunload).
+ * Uses reset() so re-login creates fresh registrations without duplicates.
  */
 export function clearAllDecryptedData(): void {
-  cacheRegistry.clearAll();
+  cacheRegistry.reset();
 }
 
 /**

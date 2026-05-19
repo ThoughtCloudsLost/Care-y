@@ -48,9 +48,22 @@
     // When another tab zeroes keys (logout, idle timeout), redirect to login.
     bridge.onStateChange((event: StateChangeEvent) => {
       if (event.state === "READY") {
-        cacheRegistry.clearAll();
+        cacheRegistry.reset();
         void goto(resolve("/login"));
       }
+    });
+
+    // Safety net: session valid but Worker has no keys (Worker crash,
+    // SharedWorker disconnect, or a code path that skipped crypto).
+    // Wait for bridge init to settle before checking.
+    $effect(() => {
+      if (!isAuthenticated) return;
+      void bridge.waitReady().then(() => {
+        if (bridge.getState() === "READY") {
+          cacheRegistry.reset();
+          void goto(resolve("/login?reauth=1"));
+        }
+      });
     });
 
     // Zeros keys across all tabs after 15 minutes of inactivity.
@@ -63,7 +76,7 @@
       },
       onTimeout: () => {
         void bridge.zeroAll();
-        cacheRegistry.clearAll();
+        cacheRegistry.reset();
         void goto(resolve("/login"));
       },
     });

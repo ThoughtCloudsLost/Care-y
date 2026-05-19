@@ -161,23 +161,7 @@
   let reauthTwofaRequired = $state(false);
   let reauthTwofaMethods = $state<string[]>([]);
 
-  function finalizeReauth(): void {
-    haptic();
-    needsReauth = false;
-    reauthTwofaRequired = false;
-
-    const saved = loadSavedState();
-    if (saved !== null && saved.step > 0) {
-      step = saved.step;
-      completedSteps = new Set(saved.completed);
-    } else {
-      step = 2;
-      completedSteps = new Set([0, 1]);
-      saveState(2, completedSteps);
-    }
-  }
-
-  /** Runs crypto key derivation and org key loading after password is verified. */
+  /** Runs crypto key derivation and org key loading after credentials are verified. */
   async function reauthLoadKeys(): Promise<void> {
     // eslint-disable-next-line @typescript-eslint/no-empty-function -- reauth has no UI phases to display
     const noopPhase: PhaseUpdater = () => {};
@@ -202,6 +186,32 @@
     installCleanupHandler(bridge, orgKeyManager);
   }
 
+  /** Completes reauth by running crypto then restoring wizard state. */
+  async function finalizeReauth(): Promise<void> {
+    try {
+      await reauthLoadKeys();
+    } catch {
+      reauthError = m.auth_login_error();
+      reauthTwofaRequired = false;
+      needsReauth = true;
+      return;
+    }
+
+    haptic();
+    needsReauth = false;
+    reauthTwofaRequired = false;
+
+    const saved = loadSavedState();
+    if (saved !== null && saved.step > 0) {
+      step = saved.step;
+      completedSteps = new Set(saved.completed);
+    } else {
+      step = 2;
+      completedSteps = new Set([0, 1]);
+      saveState(2, completedSteps);
+    }
+  }
+
   async function handleReauth(e: SubmitEvent): Promise<void> {
     e.preventDefault();
     reauthError = "";
@@ -215,17 +225,17 @@
         password: reauthPassword,
       });
 
-      await reauthLoadKeys();
-
       if (reauthResult.requiresTwoFactor) {
-        // Show inline 2FA challenge; wizard recovery completes after verification.
+        // Defer crypto to after 2FA verification. Credentials stay
+        // in component state (reauthUsername, reauthPassword).
         reauthTwofaMethods = reauthResult.enrolledMethods;
         reauthTwofaRequired = true;
         reauthSubmitting = false;
         return;
       }
 
-      finalizeReauth();
+      // No 2FA enrolled: run crypto and restore wizard immediately
+      await finalizeReauth();
     } catch {
       reauthError = m.auth_invalid_credentials();
     } finally {

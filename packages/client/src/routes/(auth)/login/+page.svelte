@@ -2,6 +2,7 @@
   import { browser } from "$app/environment";
   import { goto } from "$app/navigation";
   import { resolve } from "$app/paths";
+  import { page } from "$app/state";
   import { createQuery } from "@tanstack/svelte-query";
   import {
     List,
@@ -27,6 +28,7 @@
     type LoginPhaseId,
   } from "$lib/components/onboarding/KeyDerivation.svelte";
   import TwoFactorEnrollment from "$lib/components/onboarding/TwoFactorEnrollment.svelte";
+  import TwoFactorChallenge from "$lib/components/auth/TwoFactorChallenge.svelte";
 
   const bridge = getCryptoBridge();
   const orgKeyManager = getOrgKeyManager();
@@ -37,6 +39,12 @@
   let phase = $state<LoginPhaseId>("idle");
   /* eslint-enable @typescript-eslint/no-unsafe-assignment */
   let error = $state("");
+
+  // 2FA verification: methods list and login flags preserved across
+  // the inline 2FA challenge so crypto can run after verification.
+  let twofaMethods = $state<string[]>([]);
+  let pendingNeedsEnrollment = $state(false);
+  let pendingUserId = $state("");
 
   // Volunteer first-login enrollment recovery: shown when a volunteer
   // refreshes during their initial 2FA enrollment flow.
@@ -64,19 +72,27 @@
 
   const phaseLabel = $derived(getPhaseLabel(phase));
   const isSubmitting = $derived(
-    phase !== "idle" && phase !== "error" && phase !== "twofa",
+    phase !== "idle" &&
+      phase !== "error" &&
+      phase !== "twofa" &&
+      phase !== "twofa-verify",
   );
 
-  // Redirect authenticated users away from /login
+  // Redirect authenticated users away from /login, unless they were
+  // sent here by the recovery safety net (reauth=1 means the Worker
+  // has no keys and the user needs to re-enter credentials).
   if (browser) {
-    void trpc.auth.me
-      .query()
-      .then(() => {
-        void goto(resolve("/"));
-      })
-      .catch(() => {
-        // 401: expected, stay on login page
-      });
+    const isReauth = page.url.searchParams.get("reauth") === "1";
+    if (!isReauth) {
+      void trpc.auth.me
+        .query()
+        .then(() => {
+          void goto(resolve("/"));
+        })
+        .catch(() => {
+          // 401: expected, stay on login page
+        });
+    }
   }
 
   const statusQuery = createQuery(() => ({
@@ -123,47 +139,20 @@
         password,
       });
 
-      // 1b. 2FA redirect: if the user has enrolled methods, defer to /2fa
+      // 1b. 2FA: show inline challenge. Credentials stay in $state so the
+      //     crypto pipeline can run after verification succeeds.
       if (loginResult.requiresTwoFactor) {
-        try {
-          sessionStorage.setItem(
-            "care-y-2fa-methods",
-            JSON.stringify(loginResult.enrolledMethods),
-          );
-        } catch {
-          /* sessionStorage unavailable */
-        }
-        await goto(resolve("/2fa"));
+        twofaMethods = loginResult.enrolledMethods;
+        pendingNeedsEnrollment = loginResult.needsEnrollment;
+        pendingUserId = loginResult.user.id;
+        phase = "twofa-verify";
         return;
       }
 
-      // 2. Full crypto pipeline in the Worker
-      const callbacks = buildLoginCallbacks(
-        (p) => {
-          phase = p;
-        },
-        {
-          argon2id: m.auth_phase_argon2id(),
-          derive: m.auth_phase_derive(),
-          pow: m.auth_phase_pow(),
-        },
-      );
+      // 2. No 2FA: run crypto pipeline immediately
+      await runCryptoPipeline();
 
-      const result = await loginCrypto(identifier, password, bridge, callbacks);
-
-      // 3. Load org key if available
-      if (result.orgPublicKey !== null) {
-        orgKeyManager.load(result.orgPublicKey);
-        setOrgKeyReady(true);
-      }
-
-      // 4. Install cleanup handler for key zeroing on unload
-      installCleanupHandler(bridge, orgKeyManager);
-
-      // 4b. Volunteer enrollment recovery: if the server flagged this account
-      //     as needing 2FA enrollment, show inline enrollment instead of the
-      //     dashboard. This handles the case where a volunteer refreshed
-      //     during their first-login 2FA enrollment flow.
+      // 3. Check enrollment recovery
       if (loginResult.needsEnrollment) {
         enrollmentUserId = loginResult.user.id;
         phase = "twofa";
@@ -171,8 +160,6 @@
       }
 
       phase = "done";
-
-      // 5. Navigate to app
       await goto(resolve("/"));
     } catch (caught: unknown) {
       phase = "error";
@@ -182,6 +169,54 @@
       } else {
         error = m.auth_login_error();
       }
+      announceToLiveRegion("assertive", error);
+    }
+  }
+
+  async function runCryptoPipeline(): Promise<void> {
+    const callbacks = buildLoginCallbacks(
+      (p) => {
+        phase = p;
+      },
+      {
+        argon2id: m.auth_phase_argon2id(),
+        derive: m.auth_phase_derive(),
+        pow: m.auth_phase_pow(),
+      },
+    );
+
+    const result = await loginCrypto(identifier, password, bridge, callbacks);
+
+    if (result.orgPublicKey !== null) {
+      orgKeyManager.load(result.orgPublicKey);
+      setOrgKeyReady(true);
+    }
+
+    installCleanupHandler(bridge, orgKeyManager);
+  }
+
+  async function handleTwofaSuccess(): Promise<void> {
+    error = "";
+
+    try {
+      await runCryptoPipeline();
+
+      // Volunteer enrollment recovery after 2FA
+      if (pendingNeedsEnrollment) {
+        enrollmentUserId = pendingUserId;
+        phase = "twofa";
+        return;
+      }
+
+      phase = "done";
+      await goto(resolve("/"));
+    } catch (caught: unknown) {
+      phase = "error";
+      const msg = caught instanceof Error ? caught.message : String(caught);
+      error =
+        msg.includes("Invalid") || msg.includes("credentials")
+          ? m.auth_invalid_credentials()
+          : m.auth_login_error();
       announceToLiveRegion("assertive", error);
     }
   }
@@ -201,6 +236,39 @@
 
 {#if !statusResolved || needsSetup}
   <!-- Waiting for status check, or redirecting to /setup -->
+{:else if phase === "twofa-verify"}
+  <!-- Inline 2FA verification (crypto runs after success) -->
+  <div class="text-center mb-6">
+    {#if branding?.iconUrl}
+      <img
+        src={branding.iconUrl}
+        alt=""
+        class="login-logo"
+        width="48"
+        height="48"
+      />
+    {/if}
+    <h1 class="text-2xl font-bold">{orgName}</h1>
+  </div>
+  <TwoFactorChallenge
+    methods={twofaMethods}
+    onsuccess={() => {
+      void handleTwofaSuccess();
+    }}
+  />
+  <div class="text-center mt-6">
+    <button
+      type="button"
+      class="back-link"
+      onclick={() => {
+        phase = "idle";
+        error = "";
+        twofaMethods = [];
+      }}
+    >
+      {m.twofa_back_to_login()}
+    </button>
+  </div>
 {:else if phase === "twofa"}
   <!-- Volunteer first-login enrollment recovery -->
   <BlockTitle medium>{m.onboarding_twofa_vol_heading()}</BlockTitle>
@@ -305,5 +373,15 @@
     justify-content: center;
     padding: var(--space-2xl) 0;
     gap: var(--space-lg);
+  }
+
+  .back-link {
+    background: none;
+    border: none;
+    color: var(--brand-primary, var(--k-color-primary, #007aff));
+    font-size: 0.875rem;
+    cursor: pointer;
+    padding: 0.5rem;
+    min-height: 44px;
   }
 </style>
