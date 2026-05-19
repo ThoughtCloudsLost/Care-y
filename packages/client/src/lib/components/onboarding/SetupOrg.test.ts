@@ -61,6 +61,18 @@ vi.mock("$lib/errors.js", () => ({
   RouterNotAvailableError: class extends Error {},
   requireRouter: <T>(r: T) => r,
 }));
+vi.mock("$lib/terminology/index.js", () => ({
+  cacheTerminology: vi.fn(),
+  normalizeLabels: (labels: Record<string, string>) => {
+    const result: Record<string, string> = {};
+    for (const [k, v] of Object.entries(labels)) {
+      result[k] = v.trim().toLowerCase();
+    }
+    return result;
+  },
+  getTerminology: () => () => ({}),
+  withTerms: () => ({}),
+}));
 vi.mock("$lib/crypto/org-key-ready.svelte.js", () => ({
   isOrgKeyReady: () => true,
 }));
@@ -118,6 +130,11 @@ describe("SetupOrg", () => {
     expect(screen.getByText("Organization name is required.")).toBeTruthy();
     expect(oncomplete).not.toHaveBeenCalled();
   });
+
+  it.todo(
+    "caches terminology after save with custom terms",
+    // cacheTerminology should be called in onSuccess when custom terms are provided
+  );
 
   it("encrypts org name before sending", async () => {
     const oncomplete = vi.fn();

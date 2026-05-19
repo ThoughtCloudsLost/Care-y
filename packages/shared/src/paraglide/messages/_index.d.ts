@@ -1460,6 +1460,7 @@ export * from "./onboarding_escrow_download_again.js";
 export * from "./onboarding_escrow_continue.js";
 export * from "./onboarding_escrow_error.js";
 export * from "./onboarding_escrow_error_passphrase_short.js";
+export * from "./onboarding_escrow_error_passphrase_common.js";
 export * from "./onboarding_escrow_error_passphrase_mismatch.js";
 export * from "./onboarding_escrow_error_no_key.js";
 export * from "./onboarding_invite_heading.js";

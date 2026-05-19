@@ -85,3 +85,11 @@ export class RateLimitError extends ClientError {
     this.retryAfterSeconds = retryAfterSeconds;
   }
 }
+
+/** Branding image processing or encryption failures. */
+export class BrandingError extends ClientError {
+  constructor(message: string) {
+    super(message);
+    this.name = "BrandingError";
+  }
+}

@@ -19,16 +19,27 @@
   } from "konsta/svelte";
   import { ImagePlus } from "@lucide/svelte";
   import { createMutation, useQueryClient } from "@tanstack/svelte-query";
-  import { encryptClientBranding } from "@care-y/crypto";
   import type { BrandingField } from "@care-y/shared";
   import * as m from "$lib/paraglide/messages.js";
   import { withTerms } from "$lib/terminology/with-terms.js";
   import { trpc } from "$lib/trpc/index.js";
   import { adminKeys } from "$lib/query/keys.js";
   import { getOrgKeyManager } from "$lib/crypto/context.js";
-  import { uint8ArrayToBase64 } from "$lib/utils/buffer-encoding.js";
   import { isValidHexColor } from "$lib/branding/color-utils.js";
-  import { DEFAULT_PRIMARY, DEFAULT_ACCENT } from "$lib/branding/index.js";
+  import {
+    updateBrandingCache,
+    DEFAULT_PRIMARY,
+    DEFAULT_ACCENT,
+  } from "$lib/branding/index.js";
+  import { rasterizeSvg, rasterizeImage } from "$lib/branding/rasterize.js";
+  import {
+    encryptLogoFile,
+    buildClientBrandingBlob,
+  } from "$lib/branding/encrypt.js";
+  import { uploadPwaIcons } from "$lib/branding/icon-upload.js";
+  import { setBrandingTitle } from "$lib/branding/title.svelte.js";
+  import { applyKonstaPalette } from "$lib/branding/konsta-palette.js";
+  import { getOrgSlug } from "$lib/utils/org-slug.js";
   import { haptic } from "$lib/utils/haptic.js";
   import { toastStore } from "$lib/stores/toast.svelte.js";
   import { announceToLiveRegion } from "$lib/utils/announce.js";
@@ -47,7 +58,6 @@
 
   const queryClient = useQueryClient();
   const orgKeyManager = getOrgKeyManager();
-  const encoder = new TextEncoder();
 
   const MAX_LOGO_SIZE = 512 * 1024;
   const ACCEPTED_TYPES = new Set(["image/png", "image/jpeg", "image/svg+xml"]);
@@ -110,75 +120,6 @@
     }
   }
 
-  async function rasterizeSvg(svgBuffer: ArrayBuffer): Promise<ArrayBuffer> {
-    const svgBlob = new Blob([svgBuffer], { type: "image/svg+xml" });
-    const url = URL.createObjectURL(svgBlob);
-    try {
-      const img = await createImageBitmap(svgBlob);
-      return await renderToCanvas(img);
-    } finally {
-      URL.revokeObjectURL(url);
-    }
-  }
-
-  async function rasterizeImage(
-    buffer: ArrayBuffer,
-    type: string,
-  ): Promise<ArrayBuffer> {
-    const blob = new Blob([buffer], { type });
-    const img = await createImageBitmap(blob);
-    return renderToCanvas(img);
-  }
-
-  async function renderToCanvas(img: ImageBitmap): Promise<ArrayBuffer> {
-    const maxDim = Math.max(img.width, img.height, 512);
-    const scale = Math.min(1, 512 / maxDim);
-    const w = Math.round(img.width * scale);
-    const h = Math.round(img.height * scale);
-
-    const canvas = new OffscreenCanvas(w, h);
-    const ctx = canvas.getContext("2d");
-    if (ctx === null) {
-      throw new Error("Failed to get 2d context from OffscreenCanvas");
-    }
-    ctx.drawImage(img, 0, 0, w, h);
-    img.close();
-    const blob = await canvas.convertToBlob({ type: "image/png" });
-    return await blob.arrayBuffer();
-  }
-
-  // ── Encrypt helpers ──
-
-  async function encryptLogo(file: File): Promise<string> {
-    const arrayBuffer = await file.arrayBuffer();
-    const cipherBytes = await orgKeyManager.encrypt(
-      new Uint8Array(arrayBuffer),
-    );
-    return uint8ArrayToBase64(cipherBytes);
-  }
-
-  function buildClientBrandingBlob(
-    name: string,
-    color: string,
-    accent: string,
-    text: string,
-  ): string {
-    const orgPubKey = orgKeyManager.getPublicKey();
-    if (!orgPubKey) {
-      throw new Error("Org public key not available for client branding blob");
-    }
-
-    const payload = JSON.stringify({
-      name,
-      primaryColor: color,
-      accentColor: accent,
-      clientText: text,
-    });
-    const payloadBytes = encoder.encode(payload);
-    const ciphertext = encryptClientBranding(payloadBytes, orgPubKey);
-    return uint8ArrayToBase64(ciphertext);
-  }
-
   // ── Save ──
 
   const saveMut = createMutation(() => ({
@@ -197,7 +138,35 @@
         });
       }
     },
-    onSuccess: () => {
+    onSuccess: async () => {
+      const finalName = orgName.trim();
+      const finalColor = isValidHexColor(primaryColor)
+        ? primaryColor
+        : DEFAULT_PRIMARY;
+      const finalAccent = isValidHexColor(accentColor)
+        ? accentColor
+        : DEFAULT_ACCENT;
+
+      setBrandingTitle(finalName || "CARE-Y");
+      void applyKonstaPalette({
+        primary: finalColor,
+        accent: finalAccent || undefined,
+      });
+      void updateBrandingCache({
+        orgName: finalName || "CARE-Y",
+        primaryColor: finalColor,
+        accentColor: finalAccent || null,
+        orgSlug: getOrgSlug(),
+      });
+
+      if (logoFile) {
+        try {
+          await uploadPwaIcons(logoFile, orgKeyManager, brandingRouter);
+        } catch {
+          toastStore.show(m.onboarding_branding_error(), 3000);
+        }
+      }
+
       haptic();
       toastStore.show(m.onboarding_branding_saved());
       announceToLiveRegion("polite", m.onboarding_branding_saved());
@@ -226,10 +195,13 @@
     let clientBlob: string;
     try {
       clientBlob = buildClientBrandingBlob(
-        finalName,
-        finalColor,
-        finalAccent,
-        finalText,
+        {
+          name: finalName,
+          primaryColor: finalColor,
+          accentColor: finalAccent,
+          clientText: finalText,
+        },
+        orgKeyManager,
       );
     } catch {
       toastStore.show(m.onboarding_branding_error(), 3000);
@@ -277,7 +249,7 @@
     if (logoFile) {
       fields.push({
         field: "logo",
-        encryptedValue: await encryptLogo(logoFile),
+        encryptedValue: await encryptLogoFile(logoFile, orgKeyManager),
         clientEncryptedBranding: clientBlob,
       });
     }

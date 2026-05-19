@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Passphrase must be at least 6 words or 20 characters." |
+* | "Passphrase must be at least 20 characters." |
 *
 * @param {Onboarding_Escrow_Error_Passphrase_ShortInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

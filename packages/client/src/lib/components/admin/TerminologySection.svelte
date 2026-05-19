@@ -30,7 +30,7 @@
   import { announceToLiveRegion } from "$lib/utils/announce.js";
   import { getOrgDecryptCache, getOrgKeyManager } from "$lib/crypto/context.js";
   import { base64ToUint8Array } from "$lib/utils/buffer-encoding.js";
-  import { cacheTerminology } from "$lib/terminology/index.js";
+  import { cacheTerminology, normalizeLabels } from "$lib/terminology/index.js";
   import { capitalize } from "$lib/terminology/with-terms.js";
   import { requireRouter } from "$lib/errors.js";
   import type { BrandingField } from "@care-y/shared";
@@ -248,28 +248,12 @@
     },
   }));
 
-  function lowercaseLabels(labels: TerminologyLabels): TerminologyLabels {
-    return {
-      volunteer: labels.volunteer.trim().toLowerCase(),
-      volunteers: labels.volunteers.trim().toLowerCase(),
-      client: labels.client.trim().toLowerCase(),
-      clients: labels.clients.trim().toLowerCase(),
-      ticket: labels.ticket.trim().toLowerCase(),
-      tickets: labels.tickets.trim().toLowerCase(),
-      manager: labels.manager.trim().toLowerCase(),
-      managers: labels.managers.trim().toLowerCase(),
-      queue: labels.queue.trim().toLowerCase(),
-      queues: labels.queues.trim().toLowerCase(),
-      knowledgeBase: labels.knowledgeBase.trim().toLowerCase(),
-    };
-  }
-
   async function handleSave(): Promise<void> {
     if (!hasChanges) return;
 
     const config: TerminologyConfig = {};
     for (const lang of LANGS) {
-      config[lang] = lowercaseLabels(editState[lang]);
+      config[lang] = normalizeLabels(editState[lang]);
     }
 
     const json = JSON.stringify(config);

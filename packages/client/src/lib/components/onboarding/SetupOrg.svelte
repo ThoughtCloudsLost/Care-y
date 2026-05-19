@@ -28,6 +28,7 @@
   import { trpc } from "$lib/trpc/index.js";
   import { getOrgKeyManager } from "$lib/crypto/context.js";
 
+  import { cacheTerminology, normalizeLabels } from "$lib/terminology/index.js";
   import { haptic } from "$lib/utils/haptic.js";
   import { toastStore } from "$lib/stores/toast.svelte.js";
   import { announceToLiveRegion } from "$lib/utils/announce.js";
@@ -162,24 +163,30 @@
       haptic();
       toastStore.show(m.onboarding_org_saved());
       announceToLiveRegion("polite", m.onboarding_org_saved());
+
+      const resolvedLabels = normalizeLabels({
+        volunteer: termVolunteer || activeDefaults.volunteer,
+        volunteers: termVolunteers || activeDefaults.volunteers,
+        client: termClient || activeDefaults.client,
+        clients: termClients || activeDefaults.clients,
+        ticket: termTicket || activeDefaults.ticket,
+        tickets: termTickets || activeDefaults.tickets,
+        manager: termManager || activeDefaults.manager,
+        managers: termManagers || activeDefaults.managers,
+        queue: termQueue || activeDefaults.queue,
+        queues: termQueues || activeDefaults.queues,
+        knowledgeBase: termKnowledgeBase || activeDefaults.knowledgeBase,
+      });
+
+      if (hasCustomTerminology) {
+        cacheTerminology({ [language]: resolvedLabels });
+      }
+
       oncomplete({
         orgName: orgName.trim(),
         language,
         countryCode,
-        terminology: {
-          volunteer: lowercase(termVolunteer) || activeDefaults.volunteer,
-          volunteers: lowercase(termVolunteers) || activeDefaults.volunteers,
-          client: lowercase(termClient) || activeDefaults.client,
-          clients: lowercase(termClients) || activeDefaults.clients,
-          ticket: lowercase(termTicket) || activeDefaults.ticket,
-          tickets: lowercase(termTickets) || activeDefaults.tickets,
-          manager: lowercase(termManager) || activeDefaults.manager,
-          managers: lowercase(termManagers) || activeDefaults.managers,
-          queue: lowercase(termQueue) || activeDefaults.queue,
-          queues: lowercase(termQueues) || activeDefaults.queues,
-          knowledgeBase:
-            lowercase(termKnowledgeBase) || activeDefaults.knowledgeBase,
-        },
+        terminology: resolvedLabels,
       });
     },
     onError: () => {
@@ -219,19 +226,19 @@
 
     let encryptedTerminology: string | undefined;
     if (hasCustomTerminology) {
-      const labels: TerminologyLabels = {
-        volunteer: lowercase(termVolunteer),
-        volunteers: lowercase(termVolunteers),
-        client: lowercase(termClient),
-        clients: lowercase(termClients),
-        ticket: lowercase(termTicket),
-        tickets: lowercase(termTickets),
-        manager: lowercase(termManager),
-        managers: lowercase(termManagers),
-        queue: lowercase(termQueue),
-        queues: lowercase(termQueues),
-        knowledgeBase: lowercase(termKnowledgeBase),
-      };
+      const labels = normalizeLabels({
+        volunteer: termVolunteer,
+        volunteers: termVolunteers,
+        client: termClient,
+        clients: termClients,
+        ticket: termTicket,
+        tickets: termTickets,
+        manager: termManager,
+        managers: termManagers,
+        queue: termQueue,
+        queues: termQueues,
+        knowledgeBase: termKnowledgeBase,
+      });
       const config = { [language]: labels };
       encryptedTerminology = await orgKeyManager.encryptText(
         JSON.stringify(config),
