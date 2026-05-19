@@ -1,21 +1,5 @@
-<!--
-  SetupTelephony: wizard step 5 (telephony mode selection).
-
-  Three choices: BYOT (bring your own Twilio), Managed, or Skip.
-  BYOT reveals credential inputs. Credentials are sent over TLS and
-  encrypted server-side with OPS_SECRETS_KEY before DB storage.
--->
 <script lang="ts">
-  import {
-    List,
-    ListItem,
-    ListInput,
-    Button,
-    Block,
-    BlockTitle,
-    Preloader,
-    Radio,
-  } from "konsta/svelte";
+  import { Button, Block, BlockTitle, Preloader } from "konsta/svelte";
   import { createMutation } from "@tanstack/svelte-query";
   import * as m from "$lib/paraglide/messages.js";
   import { trpc } from "$lib/trpc/index.js";
@@ -23,6 +7,7 @@
   import { toastStore } from "$lib/stores/toast.svelte.js";
   import { announceToLiveRegion } from "$lib/utils/announce.js";
   import { requireRouter } from "$lib/errors.js";
+  import TelephonyModePicker from "$lib/components/shared/TelephonyModePicker.svelte";
 
   interface Props {
     oncomplete: (data: { telephonyMode: "byot" | "managed" | "skip" }) => void;
@@ -38,8 +23,6 @@
   let accountSid = $state("");
   let authToken = $state("");
   let error = $state("");
-
-  const isByot = $derived(mode === "byot");
 
   const byotValid = $derived(
     accountSid.trim().length > 0 && authToken.trim().length > 0,
@@ -113,83 +96,15 @@
     </Block>
   {/if}
 
-  <List strong inset>
-    <ListItem
-      label
-      title={m.onboarding_telephony_byot_label()}
-      text={m.onboarding_telephony_byot_description()}
-    >
-      {#snippet media()}
-        <Radio
-          component="div"
-          name="telephony-mode"
-          value="byot"
-          checked={mode === "byot"}
-          onChange={() => (mode = "byot")}
-        />
-      {/snippet}
-    </ListItem>
-
-    <ListItem
-      label
-      title={m.onboarding_telephony_managed_label()}
-      text={m.onboarding_telephony_managed_description()}
-    >
-      {#snippet media()}
-        <Radio
-          component="div"
-          name="telephony-mode"
-          value="managed"
-          checked={mode === "managed"}
-          onChange={() => (mode = "managed")}
-        />
-      {/snippet}
-    </ListItem>
-
-    <ListItem
-      label
-      title={m.onboarding_telephony_skip_label()}
-      text={m.onboarding_telephony_skip_description()}
-    >
-      {#snippet media()}
-        <Radio
-          component="div"
-          name="telephony-mode"
-          value="skip"
-          checked={mode === "skip"}
-          onChange={() => (mode = "skip")}
-        />
-      {/snippet}
-    </ListItem>
-  </List>
-
-  {#if isByot}
-    <List strong inset>
-      <ListInput
-        outline
-        label={m.onboarding_telephony_sid_label()}
-        type="text"
-        placeholder={m.onboarding_telephony_sid_placeholder()}
-        value={accountSid}
-        onInput={(e: Event) => {
-          if (e.target instanceof HTMLInputElement) accountSid = e.target.value;
-        }}
-        disabled={saveMut.isPending}
-      />
-
-      <ListInput
-        outline
-        label={m.onboarding_telephony_token_label()}
-        type="password"
-        placeholder={m.onboarding_telephony_token_placeholder()}
-        value={authToken}
-        onInput={(e: Event) => {
-          if (e.target instanceof HTMLInputElement) authToken = e.target.value;
-        }}
-        disabled={saveMut.isPending}
-      />
-    </List>
-  {/if}
+  <TelephonyModePicker
+    {mode}
+    onmodechange={(v: TelephonyMode) => (mode = v)}
+    {accountSid}
+    onsidchange={(v: string) => (accountSid = v)}
+    {authToken}
+    ontokenchange={(v: string) => (authToken = v)}
+    disabled={saveMut.isPending}
+  />
 
   <Block>
     <Button large type="submit" disabled={!canSubmit}>

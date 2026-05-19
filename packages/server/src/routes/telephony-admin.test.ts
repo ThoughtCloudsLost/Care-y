@@ -40,6 +40,11 @@ function createMockConfigService(
       .mockResolvedValue({ success: true as const, phoneNumberCount: 2 }),
     lookupWebhookConfig: vi.fn().mockResolvedValue(null),
     lookupProvisionedPhones: vi.fn().mockResolvedValue([]),
+    clearConfig: vi.fn().mockResolvedValue(undefined),
+    getPhonePurpose: vi
+      .fn()
+      .mockResolvedValue({ outboundSid: null, systemSid: null }),
+    setPhonePurpose: vi.fn().mockResolvedValue(undefined),
     ...overrides,
   };
 }
@@ -119,6 +124,7 @@ describe("createTelephonyAdminRouter", () => {
     expect(keys).toContain("removeFromBlocklist");
     expect(keys).toContain("listBlocklist");
     expect(keys).toContain("setPhonePurpose");
+    expect(keys).toContain("changeMode");
   });
 
   describe("saveConfig", () => {
@@ -164,6 +170,42 @@ describe("createTelephonyAdminRouter", () => {
       const result = await caller.getConfig();
 
       expect(result).toBeNull();
+    });
+  });
+
+  describe("changeMode", () => {
+    it("delegates to configService.saveConfig for BYOT mode", async () => {
+      const saveSpy = vi.fn().mockResolvedValue({ success: true as const });
+      const service = createMockConfigService({ saveConfig: saveSpy });
+      const appRouter = createTelephonyAdminRouter(buildDeps(service));
+      const caller = createCallerFactory(appRouter)(createMockContext());
+
+      const result = await caller.changeMode({
+        mode: "byot",
+        provider: "twilio",
+        accountId: "ACnew123",
+        authToken: "newtok123",
+      });
+
+      expect(result).toEqual({ success: true, mode: "byot" });
+      expect(saveSpy).toHaveBeenCalledWith({
+        orgId: TEST_ORG_ID,
+        provider: "twilio",
+        accountId: "ACnew123",
+        authToken: "newtok123",
+      });
+    });
+
+    it("delegates to configService.clearConfig for managed mode", async () => {
+      const clearSpy = vi.fn().mockResolvedValue(undefined);
+      const service = createMockConfigService({ clearConfig: clearSpy });
+      const appRouter = createTelephonyAdminRouter(buildDeps(service));
+      const caller = createCallerFactory(appRouter)(createMockContext());
+
+      const result = await caller.changeMode({ mode: "managed" });
+
+      expect(result).toEqual({ success: true, mode: "managed" });
+      expect(clearSpy).toHaveBeenCalledWith(TEST_ORG_ID);
     });
   });
 

@@ -6,17 +6,17 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Admin_Telephony_Go_To_SetupInputs */
 
 const en_admin_telephony_go_to_setup = /** @type {(inputs: Admin_Telephony_Go_To_SetupInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Go to setup`)
+	return /** @type {LocalizedString} */ (`Set up telephony`)
 };
 
 const es_admin_telephony_go_to_setup = /** @type {(inputs: Admin_Telephony_Go_To_SetupInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Ir a configuracion`)
+	return /** @type {LocalizedString} */ (`Configurar telefonia`)
 };
 
 /**
 * | output |
 * | --- |
-* | "Go to setup" |
+* | "Set up telephony" |
 *
 * @param {Admin_Telephony_Go_To_SetupInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

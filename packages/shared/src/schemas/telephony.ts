@@ -82,3 +82,18 @@ export const setPhonePurposeInputSchema = z.object({
 });
 
 export type SetPhonePurposeInput = z.infer<typeof setPhonePurposeInputSchema>;
+
+/** Input for changing telephony mode post-setup. Discriminated union on mode. */
+export const changeTelephonyModeInputSchema = z.discriminatedUnion("mode", [
+  z.object({
+    mode: z.literal("byot"),
+    provider: telephonyProviderSchema,
+    accountId: z.string().min(1, "Account ID is required"),
+    authToken: z.string().min(1, "Auth token is required"),
+  }),
+  z.object({ mode: z.literal("managed") }),
+]);
+
+export type ChangeTelephonyModeInput = z.infer<
+  typeof changeTelephonyModeInputSchema
+>;

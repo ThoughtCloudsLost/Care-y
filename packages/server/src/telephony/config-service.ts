@@ -6,7 +6,7 @@
  */
 
 import type { Kysely } from "kysely";
-import type { PlatformDatabase } from "../db/types.js";
+import type { PlatformDatabase, TenantDatabase } from "../db/types.js";
 import type { SecretsEncryptor } from "../config/secrets.js";
 import type { ProviderFactory } from "./factory.js";
 import type {
@@ -93,6 +93,20 @@ export interface TelephonyConfigService {
     orgId: string,
   ): Promise<readonly { number: string; sid: string }[]>;
 
+  /** Delete BYOT config for an org. Used when switching away from BYOT mode. */
+  clearConfig(orgId: string): Promise<void>;
+
+  /** Read phone purpose assignments from tenant org_config. */
+  getPhonePurpose(
+    tenantDb: Kysely<TenantDatabase>,
+  ): Promise<{ outboundSid: string | null; systemSid: string | null }>;
+
+  /** Update phone purpose assignments in tenant org_config. */
+  setPhonePurpose(
+    tenantDb: Kysely<TenantDatabase>,
+    input: { outboundSid: string | null; systemSid: string | null },
+  ): Promise<void>;
+
   /**
    * Dev-only: seed a config blob that includes fake phone numbers.
    * Skips provider validation since no real Twilio account exists.
@@ -168,6 +182,41 @@ export function createTelephonyConfigService(
       providerFactory.invalidate(input.orgId);
 
       return { success: true as const };
+    },
+
+    async clearConfig(orgId: string): Promise<void> {
+      await db
+        .deleteFrom("telephony_config")
+        .where("org_id", "=", orgId)
+        .execute();
+
+      providerFactory.invalidate(orgId);
+    },
+
+    async getPhonePurpose(
+      tenantDb: Kysely<TenantDatabase>,
+    ): Promise<{ outboundSid: string | null; systemSid: string | null }> {
+      const row = await tenantDb
+        .selectFrom("org_config")
+        .select(["phone_outbound_sid", "phone_system_sid"])
+        .executeTakeFirstOrThrow();
+      return {
+        outboundSid: row.phone_outbound_sid,
+        systemSid: row.phone_system_sid,
+      };
+    },
+
+    async setPhonePurpose(
+      tenantDb: Kysely<TenantDatabase>,
+      input: { outboundSid: string | null; systemSid: string | null },
+    ): Promise<void> {
+      await tenantDb
+        .updateTable("org_config")
+        .set({
+          phone_outbound_sid: input.outboundSid,
+          phone_system_sid: input.systemSid,
+        })
+        .execute();
     },
 
     async getMaskedConfig(

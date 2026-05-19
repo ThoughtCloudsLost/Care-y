@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Go to setup" |
+* | "Set up telephony" |
 *
 * @param {Admin_Telephony_Go_To_SetupInputs} inputs
 * @param {{ locale?: "en" | "es" }} options
