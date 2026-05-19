@@ -1,17 +1,22 @@
 /**
- * Main-thread proxy to the crypto Web Worker.
+ * Main-thread proxy to the crypto Worker (shared or dedicated).
  *
  * Callers use typed async methods (decrypt, encrypt, deriveKeys, etc.)
  * without knowing a Worker is involved. The bridge assigns monotonic IDs
  * to each request, tracks pending promises, and resolves them when the
  * Worker responds. Follows ProtonMail's CryptoProxy pattern (SEC-211).
  *
- * The Worker reference and postMessage binding are captured at construction
- * time. If XSS later patches Worker.prototype.postMessage, the bridge
- * still uses the original function (SEC-210 defense-in-depth).
+ * In "shared" mode (default), the bridge connects to a SharedWorker
+ * that survives page refreshes (ADR-044). On reconnection to an
+ * already-keyed Worker, the bridge skips password derivation. Falls
+ * back to a dedicated Worker if SharedWorker is unavailable.
  *
- * The app creates a singleton bridge during initialization and
- * distributes it via Svelte context (setContext/getContext).
+ * In "dedicated" mode, the bridge uses a standalone dedicated Worker.
+ * Used by password change flows that need an isolated key derivation.
+ *
+ * The postMessage binding is captured at construction time. If XSS
+ * later patches Worker.prototype.postMessage, the bridge still uses
+ * the original function (SEC-210 defense-in-depth).
  *
  * References:
  *   SEC-210  W3C Web Crypto: postMessage key interception risk
@@ -27,9 +32,13 @@ import type {
   ResponseForRequest,
   WorkerEvent,
   RewrapResultEvent,
+  StateChangeEvent,
+  ConnectResponse,
 } from "./crypto-protocol.js";
 
 export type BridgeState = "LOADING" | "READY" | "KEYED" | "DESTROYED";
+export type BridgeMode = "shared" | "dedicated";
+export type StateChangeHandler = (event: StateChangeEvent) => void;
 
 /**
  * Distributive Omit that strips `id` from each union member individually.
@@ -62,7 +71,9 @@ function expectResponse<T extends WorkerRequestType>(
 export type WorkerEventHandler = (event: WorkerEvent) => void;
 
 export class CryptoBridge {
-  private worker: Worker;
+  private worker: Worker | null = null;
+  private sharedWorker: SharedWorker | null = null;
+  private port: MessagePort | null = null;
   private state: BridgeState = "LOADING";
   private nextId = 0;
   private readonly pending = new Map<
@@ -73,17 +84,76 @@ export class CryptoBridge {
     }
   >();
   /** Captured at construction time to resist postMessage monkey-patching. */
-  private readonly post: Worker["postMessage"];
+  private post!: (msg: unknown, options?: StructuredSerializeOptions) => void;
   private readonly readyPromise: Promise<void>;
   private workerEventHandler: WorkerEventHandler | null = null;
+  private stateChangeHandler: StateChangeHandler | null = null;
+  private readonly mode: BridgeMode;
+  private reconnected = false;
+  private reconnectVolPublic: string | undefined;
+  private reconnectOrgPublicKey: string | undefined;
 
-  constructor() {
+  constructor(mode: BridgeMode = "shared") {
+    this.mode = mode;
+
+    if (mode === "shared" && typeof SharedWorker !== "undefined") {
+      this.initShared();
+    } else {
+      this.initDedicated();
+    }
+
+    this.readyPromise = this.initWorker();
+  }
+
+  // ── Initialization ──────────────────────────────────────────────────
+
+  private initShared(): void {
+    const sw = new SharedWorker(
+      new URL("./crypto.shared-worker.ts", import.meta.url),
+      { type: "module", name: "care-y-crypto", extendedLifetime: true },
+    );
+    this.sharedWorker = sw;
+    this.port = sw.port;
+    const boundPost = sw.port.postMessage.bind(sw.port);
+    this.post = (msg, options) => {
+      boundPost(msg, options);
+    };
+
+    sw.port.onmessage = (
+      e: MessageEvent<WorkerResponse | WorkerEvent>,
+    ): void => {
+      const data = e.data;
+      if ("kind" in data) {
+        if (data.kind === "stateChange") {
+          this.handleStateChange(data);
+        } else {
+          this.workerEventHandler?.(data);
+        }
+        return;
+      }
+      this.handleResponse(data);
+    };
+
+    sw.onerror = (e: Event): void => {
+      console.error("[CryptoBridge] SharedWorker error:", e);
+      this.rejectAllPending("SharedWorker failed to load");
+    };
+
+    sw.port.start();
+  }
+
+  private initDedicated(): void {
     const worker = new Worker(new URL("./crypto.worker.ts", import.meta.url), {
       type: "module",
     });
     this.worker = worker;
-    this.post = worker.postMessage.bind(worker);
-    worker.onmessage = (e: MessageEvent<WorkerResponse | WorkerEvent>) => {
+    this.post = (msg, options) => {
+      worker.postMessage(msg, options);
+    };
+
+    worker.onmessage = (
+      e: MessageEvent<WorkerResponse | WorkerEvent>,
+    ): void => {
       const data = e.data;
       if ("kind" in data) {
         this.workerEventHandler?.(data);
@@ -91,33 +161,100 @@ export class CryptoBridge {
       }
       this.handleResponse(data);
     };
-    worker.onerror = (e: ErrorEvent) => {
+
+    worker.onerror = (e: ErrorEvent): void => {
       console.error(
         "[CryptoBridge] Worker error:",
         e.message,
         e.filename,
         e.lineno,
       );
-      // Reject all pending requests so callers don't hang forever
-      for (const [, entry] of this.pending) {
-        entry.reject(
-          new CryptoWorkerError(
-            `Worker failed to load: ${e.message}`,
-            "WORKER_ERROR",
-          ),
-        );
-      }
-      this.pending.clear();
+      this.rejectAllPending(`Worker failed to load: ${e.message}`);
     };
-    this.readyPromise = this.sendRequest({ type: "init" }).then(() => {
-      this.state = "READY";
-    });
   }
+
+  private async initWorker(): Promise<void> {
+    await this.sendRequest({ type: "init" });
+    this.state = "READY";
+
+    if (this.sharedWorker) {
+      const resp = expectResponse(
+        await this.sendRequest({ type: "connect" }),
+        "connect",
+      );
+      if (resp.state === "KEYED") {
+        this.state = "KEYED";
+        this.reconnected = true;
+        this.reconnectVolPublic = resp.volPublic;
+        this.reconnectOrgPublicKey = resp.orgPublicKey;
+      }
+    }
+  }
+
+  private rejectAllPending(message: string): void {
+    for (const [, entry] of this.pending) {
+      entry.reject(new CryptoWorkerError(message, "WORKER_ERROR"));
+    }
+    this.pending.clear();
+  }
+
+  // ── Public API: lifecycle ─────────────────────────────────────────
 
   /** Wait for libsodium initialization in the Worker. */
   async waitReady(): Promise<void> {
     return this.readyPromise;
   }
+
+  /** Whether the bridge reconnected to an already-keyed SharedWorker. */
+  isReconnected(): boolean {
+    return this.reconnected;
+  }
+
+  /** Public keys from the reconnected SharedWorker (undefined if cold start). */
+  getReconnectData(): { volPublic?: string; orgPublicKey?: string } {
+    return {
+      volPublic: this.reconnectVolPublic,
+      orgPublicKey: this.reconnectOrgPublicKey,
+    };
+  }
+
+  /** Current bridge mode. */
+  getMode(): BridgeMode {
+    return this.sharedWorker ? "shared" : "dedicated";
+  }
+
+  /**
+   * Gracefully disconnect this port from the SharedWorker.
+   * In shared mode: sends disconnect message, starts zero-on-last-disconnect timer.
+   * In dedicated mode: fires zeroAll + terminate (same as old destroy behavior).
+   */
+  disconnect(): void {
+    if (this.state === "DESTROYED") return;
+
+    if (this.sharedWorker && this.port) {
+      try {
+        this.post({ type: "disconnect", id: this.nextId++ });
+      } catch (err: unknown) {
+        if (import.meta.env.DEV) {
+          console.warn(
+            "CryptoBridge: could not send disconnect (port already closed)",
+            err instanceof Error ? err.message : String(err),
+          );
+        }
+      }
+      this.state = "DESTROYED";
+      this.rejectAllPending("Bridge disconnected");
+    } else {
+      this.destroy();
+    }
+  }
+
+  /** Register a handler for SharedWorker state change broadcasts. */
+  onStateChange(handler: StateChangeHandler): void {
+    this.stateChangeHandler = handler;
+  }
+
+  // ── Public API: crypto operations ─────────────────────────────────
 
   /**
    * Run Argon2id inside the Worker. password and salt are Transferable:
@@ -460,30 +597,30 @@ export class CryptoBridge {
     return resp.orgPublicKey;
   }
 
-  /** Zero all keys, terminate the Worker, reject any pending requests. */
+  /**
+   * Destroy the bridge. In dedicated mode: zeroAll + terminate.
+   * In shared mode: disconnect port (SharedWorker stays alive for other tabs).
+   */
   destroy(): void {
     if (this.state === "DESTROYED") return;
 
-    // Best-effort zeroAll before termination (fire-and-forget).
-    // The Worker may already be terminated (e.g., browser tab closing),
-    // in which case postMessage throws. This is expected, not an error.
-    try {
-      this.post.call(this.worker, { type: "zeroAll", id: this.nextId++ });
-    } catch (err: unknown) {
-      console.warn(
-        "CryptoBridge: could not send zeroAll before terminate",
-        err instanceof Error ? err.message : String(err),
-      );
+    if (this.worker) {
+      try {
+        this.post({ type: "zeroAll", id: this.nextId++ });
+      } catch (err: unknown) {
+        console.warn(
+          "CryptoBridge: could not send zeroAll before terminate",
+          err instanceof Error ? err.message : String(err),
+        );
+      }
+      this.worker.terminate();
+    } else {
+      this.disconnect();
+      return;
     }
 
-    this.worker.terminate();
     this.state = "DESTROYED";
-
-    // Reject all pending requests
-    for (const [, entry] of this.pending) {
-      entry.reject(new CryptoWorkerError("Worker destroyed", "WORKER_ERROR"));
-    }
-    this.pending.clear();
+    this.rejectAllPending("Worker destroyed");
   }
 
   /** Register a handler for Worker-initiated events (re-wrap notifications). */
@@ -494,7 +631,7 @@ export class CryptoBridge {
   /** Post a non-request event to the Worker (e.g., re-wrap result). */
   postEvent(event: RewrapResultEvent): void {
     if (this.state === "DESTROYED") return;
-    this.post.call(this.worker, event);
+    this.post(event);
   }
 
   /** Current bridge state (for UI status indicators). */
@@ -503,6 +640,15 @@ export class CryptoBridge {
   }
 
   // ── Private ─────────────────────────────────────────────────────────
+
+  private handleStateChange(event: StateChangeEvent): void {
+    if (event.state === "READY") {
+      this.state = "READY";
+    } else {
+      this.state = "KEYED";
+    }
+    this.stateChangeHandler?.(event);
+  }
 
   private async sendRequest(
     req: RequestBody,
@@ -519,16 +665,16 @@ export class CryptoBridge {
       this.pending.set(id, { resolve, reject });
 
       if (transfer) {
-        this.post.call(this.worker, fullReq, { transfer });
+        this.post(fullReq, { transfer });
       } else {
-        this.post.call(this.worker, fullReq);
+        this.post(fullReq);
       }
     });
   }
 
   private handleResponse(res: WorkerResponse): void {
     const entry = this.pending.get(res.id);
-    if (!entry) return; // Stale response (e.g., after destroy)
+    if (!entry) return;
 
     this.pending.delete(res.id);
 

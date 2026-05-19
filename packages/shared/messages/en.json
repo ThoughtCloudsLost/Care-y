@@ -1522,6 +1522,10 @@
   "admin_terminology_lang_es": "Spanish",
   "onboarding_org_terminology_admin_note": "Other languages can be configured later in Organization Settings.",
   "onboarding_reauth_message": "Your encryption keys need to be refreshed. Sign in again to continue setup.",
+  "onboarding_reauth_twofa_message": "Verify your identity to continue setup.",
+  "onboarding_reauth_twofa_error": "Verification failed. Try again.",
+  "auth_redirect_enrollment": "Redirecting to account setup...",
+  "session_idle_warning": "Session will lock in 5 minutes due to inactivity",
 
   "twofa_enroll_title": "Two-factor authentication",
   "twofa_enroll_choose": "Add a verification method",

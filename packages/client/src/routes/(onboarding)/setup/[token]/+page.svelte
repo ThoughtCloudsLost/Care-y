@@ -11,7 +11,7 @@
   import { page } from "$app/state";
   import { goto } from "$app/navigation";
   import { resolve } from "$app/paths";
-  import type { TerminologyLabels } from "@care-y/shared";
+  import { type TerminologyLabels } from "@care-y/shared";
   import { createQuery } from "@tanstack/svelte-query";
   import {
     Preloader,
@@ -42,6 +42,7 @@
   import { installCleanupHandler } from "$lib/auth/cleanup.js";
   import { haptic } from "$lib/utils/haptic.js";
   import { requireRouter } from "$lib/errors.js";
+  import TwoFactorChallenge from "$lib/components/auth/TwoFactorChallenge.svelte";
   import { CHECKLIST_ITEMS } from "$lib/onboarding/checklist-items.js";
   import WizardStepper from "$lib/components/onboarding/WizardStepper.svelte";
   import SetupAccount from "$lib/components/onboarding/SetupAccount.svelte";
@@ -157,6 +158,50 @@
   let reauthError = $state("");
   let reauthSubmitting = $state(false);
 
+  let reauthTwofaRequired = $state(false);
+  let reauthTwofaMethods = $state<string[]>([]);
+
+  function finalizeReauth(): void {
+    haptic();
+    needsReauth = false;
+    reauthTwofaRequired = false;
+
+    const saved = loadSavedState();
+    if (saved !== null && saved.step > 0) {
+      step = saved.step;
+      completedSteps = new Set(saved.completed);
+    } else {
+      step = 2;
+      completedSteps = new Set([0, 1]);
+      saveState(2, completedSteps);
+    }
+  }
+
+  /** Runs crypto key derivation and org key loading after password is verified. */
+  async function reauthLoadKeys(): Promise<void> {
+    // eslint-disable-next-line @typescript-eslint/no-empty-function -- reauth has no UI phases to display
+    const noopPhase: PhaseUpdater = () => {};
+    const result = await loginCrypto(
+      reauthUsername,
+      reauthPassword,
+      bridge,
+      buildLoginCallbacks(noopPhase),
+    );
+
+    if (result.orgPublicKey !== null) {
+      orgKeyManager.load(result.orgPublicKey);
+      setOrgKeyReady(true);
+    } else {
+      const unwrapped = await fetchAndUnwrapOrgKey(bridge);
+      if (unwrapped !== null) {
+        orgKeyManager.load(unwrapped);
+        setOrgKeyReady(true);
+      }
+    }
+
+    installCleanupHandler(bridge, orgKeyManager);
+  }
+
   async function handleReauth(e: SubmitEvent): Promise<void> {
     e.preventDefault();
     reauthError = "";
@@ -165,45 +210,22 @@
     try {
       await bridge.zeroAll();
 
-      await onboarding.reauthenticate.mutate({
+      const reauthResult = await onboarding.reauthenticate.mutate({
         identifier: reauthUsername,
         password: reauthPassword,
       });
 
-      // eslint-disable-next-line @typescript-eslint/no-empty-function -- reauth has no UI phases to display
-      const noopPhase: PhaseUpdater = () => {};
-      const result = await loginCrypto(
-        reauthUsername,
-        reauthPassword,
-        bridge,
-        buildLoginCallbacks(noopPhase),
-      );
+      await reauthLoadKeys();
 
-      if (result.orgPublicKey !== null) {
-        orgKeyManager.load(result.orgPublicKey);
-        setOrgKeyReady(true);
-      } else {
-        const unwrapped = await fetchAndUnwrapOrgKey(bridge);
-        if (unwrapped !== null) {
-          orgKeyManager.load(unwrapped);
-          setOrgKeyReady(true);
-        }
+      if (reauthResult.requiresTwoFactor) {
+        // Show inline 2FA challenge; wizard recovery completes after verification.
+        reauthTwofaMethods = reauthResult.enrolledMethods;
+        reauthTwofaRequired = true;
+        reauthSubmitting = false;
+        return;
       }
 
-      installCleanupHandler(bridge, orgKeyManager);
-
-      haptic();
-      needsReauth = false;
-
-      const saved = loadSavedState();
-      if (saved !== null && saved.step > 0) {
-        step = saved.step;
-        completedSteps = new Set(saved.completed);
-      } else {
-        step = 2;
-        completedSteps = new Set([0, 1]);
-        saveState(2, completedSteps);
-      }
+      finalizeReauth();
     } catch {
       reauthError = m.auth_invalid_credentials();
     } finally {
@@ -369,6 +391,11 @@
   <Block>
     <p class="step-error" role="alert">{m.onboarding_setup_error()}</p>
   </Block>
+{:else if needsReauth && reauthTwofaRequired}
+  <Block>
+    <p class="step-desc">{m.onboarding_reauth_twofa_message()}</p>
+  </Block>
+  <TwoFactorChallenge methods={reauthTwofaMethods} onsuccess={finalizeReauth} />
 {:else if needsReauth}
   <BlockTitle medium>{m.onboarding_account_heading()}</BlockTitle>
   <Block>

@@ -1522,6 +1522,10 @@
   "admin_terminology_lang_es": "Español",
   "onboarding_org_terminology_admin_note": "Otros idiomas se pueden configurar después en la configuración de la organización.",
   "onboarding_reauth_message": "Sus claves de cifrado necesitan actualizarse. Inicie sesión nuevamente para continuar la configuración.",
+  "onboarding_reauth_twofa_message": "Verifique su identidad para continuar la configuración.",
+  "onboarding_reauth_twofa_error": "La verificación falló. Intente de nuevo.",
+  "auth_redirect_enrollment": "Redirigiendo a la configuración de cuenta...",
+  "session_idle_warning": "La sesión se bloqueará en 5 minutos por inactividad",
 
   "twofa_enroll_title": "Autenticación de dos factores",
   "twofa_enroll_choose": "Agregar un método de verificación",

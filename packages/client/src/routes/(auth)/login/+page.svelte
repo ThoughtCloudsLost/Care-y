@@ -3,7 +3,14 @@
   import { goto } from "$app/navigation";
   import { resolve } from "$app/paths";
   import { createQuery } from "@tanstack/svelte-query";
-  import { List, ListInput, Button, Block } from "konsta/svelte";
+  import {
+    List,
+    ListInput,
+    Button,
+    Block,
+    BlockTitle,
+    Preloader,
+  } from "konsta/svelte";
   import * as m from "$lib/paraglide/messages.js";
   import { trpc } from "$lib/trpc/index.js";
   import { onboardingKeys } from "$lib/query/keys.js";
@@ -15,9 +22,11 @@
   import { announceToLiveRegion } from "$lib/utils/announce.js";
   import { createPublicBrandingQuery } from "$lib/branding/public-branding.js";
   import { applyKonstaPalette } from "$lib/branding/konsta-palette.js";
+  import { toastStore } from "$lib/stores/toast.svelte.js";
   import KeyDerivation, {
     type LoginPhaseId,
   } from "$lib/components/onboarding/KeyDerivation.svelte";
+  import TwoFactorEnrollment from "$lib/components/onboarding/TwoFactorEnrollment.svelte";
 
   const bridge = getCryptoBridge();
   const orgKeyManager = getOrgKeyManager();
@@ -28,6 +37,11 @@
   let phase = $state<LoginPhaseId>("idle");
   /* eslint-enable @typescript-eslint/no-unsafe-assignment */
   let error = $state("");
+
+  // Volunteer first-login enrollment recovery: shown when a volunteer
+  // refreshes during their initial 2FA enrollment flow.
+  let enrollmentUserId = $state("");
+  let enrollmentLoading = $state(false);
 
   function getPhaseLabel(p: LoginPhaseId): string {
     switch (p) {
@@ -49,7 +63,9 @@
   }
 
   const phaseLabel = $derived(getPhaseLabel(phase));
-  const isSubmitting = $derived(phase !== "idle" && phase !== "error");
+  const isSubmitting = $derived(
+    phase !== "idle" && phase !== "error" && phase !== "twofa",
+  );
 
   // Redirect authenticated users away from /login
   if (browser) {
@@ -144,6 +160,16 @@
       // 4. Install cleanup handler for key zeroing on unload
       installCleanupHandler(bridge, orgKeyManager);
 
+      // 4b. Volunteer enrollment recovery: if the server flagged this account
+      //     as needing 2FA enrollment, show inline enrollment instead of the
+      //     dashboard. This handles the case where a volunteer refreshed
+      //     during their first-login 2FA enrollment flow.
+      if (loginResult.needsEnrollment) {
+        enrollmentUserId = loginResult.user.id;
+        phase = "twofa";
+        return;
+      }
+
       phase = "done";
 
       // 5. Navigate to app
@@ -159,10 +185,44 @@
       announceToLiveRegion("assertive", error);
     }
   }
+
+  async function handleEnrollmentComplete(): Promise<void> {
+    enrollmentLoading = true;
+    try {
+      await trpc.twoFactor.enroll.markVerifiedOnFirstEnrollment.mutate();
+      toastStore.show(m.onboarding_step_complete());
+      await goto(resolve("/"));
+    } catch {
+      toastStore.show(m.auth_login_error(), 3000);
+      enrollmentLoading = false;
+    }
+  }
 </script>
 
 {#if !statusResolved || needsSetup}
   <!-- Waiting for status check, or redirecting to /setup -->
+{:else if phase === "twofa"}
+  <!-- Volunteer first-login enrollment recovery -->
+  <BlockTitle medium>{m.onboarding_twofa_vol_heading()}</BlockTitle>
+  <Block>
+    <p class="step-desc">{m.onboarding_twofa_vol_desc()}</p>
+  </Block>
+  {#if enrollmentLoading}
+    <Block>
+      <div class="enrollment-loading">
+        <Preloader />
+        <p class="step-desc">{m.onboarding_twofa_securing()}</p>
+      </div>
+    </Block>
+  {:else}
+    <TwoFactorEnrollment
+      userId={enrollmentUserId}
+      username={identifier}
+      onenrolled={() => {
+        void handleEnrollmentComplete();
+      }}
+    />
+  {/if}
 {:else if phase !== "idle" && phase !== "error"}
   <div class="text-center mb-6">
     {#if branding?.iconUrl}
@@ -236,5 +296,14 @@
     margin: 0 auto var(--space-sm);
     border-radius: 8px;
     display: block;
+  }
+
+  .enrollment-loading {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: var(--space-2xl) 0;
+    gap: var(--space-lg);
   }
 </style>

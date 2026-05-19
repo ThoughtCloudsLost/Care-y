@@ -103,7 +103,7 @@
         newPassword,
         callbacks: makeCallbacks(),
         onPowRequired: solveProofOfWork,
-        createTempBridge: () => new CryptoBridge(),
+        createTempBridge: () => new CryptoBridge("dedicated"),
       });
     } catch (err: unknown) {
       stepMessage = null;

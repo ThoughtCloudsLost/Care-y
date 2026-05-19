@@ -53,6 +53,7 @@ import type { SealedBoxEncryptor } from "../crypto/sealed-box.js";
 import type { SecretsEncryptor } from "../config/secrets.js";
 
 import { createSealedBoxEncryptor } from "../crypto/sealed-box.js";
+import { getEnrolledMethodTypes } from "../auth/two-factor-service.js";
 import {
   createScopedAuthService,
   createTenantSessions,
@@ -527,11 +528,11 @@ export function createOnboardingRouter(deps: OnboardingRouterDeps) {
      * Re-authenticate during the onboarding wizard (page refresh recovery).
      *
      * Validates credentials via the normal auth service, then creates a
-     * session with twofa_verified: true, matching the bootstrap session.
-     * This is safe because the endpoint only succeeds when the calling
-     * user has no 2FA methods enrolled (i.e. still mid-onboarding).
-     * Once the user enrolls 2FA, this endpoint rejects and they must
-     * use the normal login + 2FA verification flow.
+     * session. If the user has no 2FA methods enrolled, the session is
+     * immediately marked twofa_verified (matching the bootstrap session).
+     * If 2FA methods exist, the session cookie is set but twofa_verified
+     * remains false, and the response includes the enrolled methods so the
+     * client can show an inline 2FA challenge before proceeding.
      */
     reauthenticate: publicProcedure.input(loginInputSchema).mutation(
       withErrorWrapping(async ({ ctx, input }) => {
@@ -568,25 +569,30 @@ export function createOnboardingRouter(deps: OnboardingRouterDeps) {
           userAgent: ua,
         });
 
-        const enrolledCount = await org.tenantDb
-          .selectFrom("two_factor_methods")
-          .select(org.tenantDb.fn.countAll<string>().as("count"))
-          .where("user_id", "=", user.id)
-          .where("is_active", "=", true)
-          .executeTakeFirstOrThrow();
+        const enrolledMethods = await getEnrolledMethodTypes(
+          org.tenantDb,
+          user.id,
+        );
 
-        if (Number(enrolledCount.count) > 0) {
-          await sessions.deleteByToken(session.token);
-          throw new TRPCError({
-            code: "FORBIDDEN",
-            message: ErrorCode.TWOFA_REQUIRED,
-          });
+        if (enrolledMethods.length > 0) {
+          // Session cookie is set so the 2FA verify endpoints work,
+          // but twofa_verified stays false until inline challenge passes.
+          setSessionCookie(ctx.res, session.token, isSecureCookie);
+          return {
+            userId: user.id,
+            requiresTwoFactor: true as const,
+            enrolledMethods,
+          };
         }
 
         await sessions.markTwoFactorVerified(session.token);
         setSessionCookie(ctx.res, session.token, isSecureCookie);
 
-        return { userId: user.id };
+        return {
+          userId: user.id,
+          requiresTwoFactor: false as const,
+          enrolledMethods: [] as string[],
+        };
       }),
     ),
 
