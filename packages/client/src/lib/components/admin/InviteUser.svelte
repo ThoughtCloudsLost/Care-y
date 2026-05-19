@@ -1,11 +1,5 @@
 <script lang="ts">
-  import {
-    List,
-    ListInput,
-    Button,
-    Segmented,
-    SegmentedButton,
-  } from "konsta/svelte";
+  import { List, ListInput, Button } from "konsta/svelte";
   import { Save } from "@lucide/svelte";
   import { createMutation, useQueryClient } from "@tanstack/svelte-query";
   import { adminKeys } from "$lib/query/keys.js";
@@ -21,6 +15,7 @@
   import { generateRandomIdentifier } from "$lib/utils/random-identifier.js";
   import ShellSheet from "$lib/shell/ShellSheet.svelte";
   import SoftButton from "$lib/components/inputs/SoftButton.svelte";
+  import RoleSelector from "$lib/components/shared/RoleSelector.svelte";
 
   interface InviteUserProps {
     readonly opened: boolean;
@@ -242,31 +237,10 @@
         />
       </List>
 
-      <div class="role-section">
-        <p class="section-label">
-          {m.admin_invite_role_label()}
-        </p>
-        <Segmented strong>
-          <SegmentedButton
-            active={selectedRole === RoleId.VOLUNTEER}
-            onclick={() => (selectedRole = RoleId.VOLUNTEER)}
-          >
-            {m.admin_role_volunteer(withTerms())}
-          </SegmentedButton>
-          <SegmentedButton
-            active={selectedRole === RoleId.MANAGER}
-            onclick={() => (selectedRole = RoleId.MANAGER)}
-          >
-            {m.admin_role_manager(withTerms())}
-          </SegmentedButton>
-          <SegmentedButton
-            active={selectedRole === RoleId.ADMIN}
-            onclick={() => (selectedRole = RoleId.ADMIN)}
-          >
-            {m.admin_role_admin()}
-          </SegmentedButton>
-        </Segmented>
-      </div>
+      <RoleSelector
+        {selectedRole}
+        onselect={(r: RoleIdValue) => (selectedRole = r)}
+      />
     </div>
   {/if}
 </ShellSheet>
@@ -293,15 +267,6 @@
     font-weight: 500;
     color: var(--color-amber-500);
     margin: 0;
-  }
-
-  .section-label {
-    font-size: 0.75rem;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
-    color: var(--muted);
-    margin: 0 0 var(--space-sm);
   }
 
   .credential-intro {
