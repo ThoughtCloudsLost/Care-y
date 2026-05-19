@@ -1593,5 +1593,6 @@
   "settings_2fa": "Two-factor authentication",
   "settings_2fa_methods": "{count} method(s) enrolled",
   "settings_2fa_none": "Not enabled",
-  "settings_replay_walkthrough": "Review security walkthrough"
+  "settings_replay_walkthrough": "Review security walkthrough",
+  "crypto_org_key_pending": "Your encryption keys are being set up by an administrator. Some content may not be visible yet."
 }

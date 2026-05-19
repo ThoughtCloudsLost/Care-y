@@ -35,12 +35,45 @@
     setCurrentPermissions,
     setPreviewLoader,
   } from "$lib/crypto/context-init.js";
-  import type { Permission } from "@care-y/shared";
+  import { Permission } from "@care-y/shared";
   import { rewrapBlobsForFollowUp } from "$lib/crypto/rewrap-blobs.js";
+  import { isOrgKeyReady } from "$lib/crypto/org-key-ready.svelte.js";
+  import { wrapOrgKeyForPending } from "$lib/crypto/org-key-wrap.js";
+  import { toastStore } from "$lib/stores/toast.svelte.js";
+  import * as m from "$lib/paraglide/messages.js";
 
   import type { Snippet } from "svelte";
 
   let { children }: { children: Snippet } = $props();
+
+  const meQuery = createQuery(() => ({
+    queryKey: authKeys.me(),
+    queryFn: async () => trpc.auth.me.query(),
+    staleTime: Infinity,
+  }));
+  const currentUserId = $derived(meQuery.data?.user.id);
+  setCurrentUserId(() => currentUserId);
+  const currentUserRoleId = $derived(meQuery.data?.user.roleId);
+  setCurrentUserRoleId(() => currentUserRoleId);
+  const EMPTY_PERMISSIONS: ReadonlySet<Permission> = new Set();
+  const currentPermissions = $derived(
+    meQuery.data?.permissions
+      ? new Set(meQuery.data.permissions)
+      : EMPTY_PERMISSIONS,
+  );
+  setCurrentPermissions(() => currentPermissions);
+
+  const canManageKeys = $derived(
+    currentPermissions.has(Permission.MANAGE_KEYS),
+  );
+
+  const unwrappedQuery = createQuery(() => ({
+    queryKey: ["keys", "unwrapped"],
+    queryFn: async () => trpc.keys.listUnwrappedUsers.query(),
+    enabled: !!meQuery.data && canManageKeys && isOrgKeyReady(),
+    refetchInterval: 5 * 60 * 1000,
+    staleTime: 60_000,
+  }));
 
   if (browser) {
     const bridge = getCryptoBridge();
@@ -133,24 +166,45 @@
         );
       }
     }
-  }
 
-  const meQuery = createQuery(() => ({
-    queryKey: authKeys.me(),
-    queryFn: async () => trpc.auth.me.query(),
-    staleTime: Infinity,
-  }));
-  const currentUserId = $derived(meQuery.data?.user.id);
-  setCurrentUserId(() => currentUserId);
-  const currentUserRoleId = $derived(meQuery.data?.user.roleId);
-  setCurrentUserRoleId(() => currentUserRoleId);
-  const EMPTY_PERMISSIONS: ReadonlySet<Permission> = new Set();
-  const currentPermissions = $derived(
-    meQuery.data?.permissions
-      ? new Set(meQuery.data.permissions)
-      : EMPTY_PERMISSIONS,
-  );
-  setCurrentPermissions(() => currentPermissions);
+    // ── Admin auto-wrap: distribute org key to new volunteers ────────
+    let wrappingInProgress = false;
+
+    $effect(() => {
+      const pending = unwrappedQuery.data;
+      if (!pending || pending.length === 0) return;
+      if (wrappingInProgress) return;
+
+      wrappingInProgress = true;
+      void wrapOrgKeyForPending(bridge, pending)
+        .then(() => {
+          void queryClient.invalidateQueries({
+            queryKey: ["keys", "unwrapped"],
+          });
+        })
+        .catch((err: unknown) => {
+          if (import.meta.env.DEV) {
+            console.warn("[auto-wrap] batch failed:", err);
+          }
+        })
+        .finally(() => {
+          wrappingInProgress = false;
+        });
+    });
+
+    // ── Volunteer toast: org key not yet available ───────────────────
+    let hasShownOrgKeyToast = false;
+
+    $effect(() => {
+      if (!meQuery.data) return;
+      if (isOrgKeyReady()) return;
+      if (canManageKeys) return;
+      if (hasShownOrgKeyToast) return;
+
+      hasShownOrgKeyToast = true;
+      toastStore.show(m.crypto_org_key_pending(), 5000);
+    });
+  }
 </script>
 
 {@render children()}
