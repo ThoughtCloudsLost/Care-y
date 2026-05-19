@@ -74,6 +74,18 @@ beforeEach(() => {
   vi.spyOn(URL, "revokeObjectURL").mockImplementation(vi.fn());
 });
 
+function findButton(container: HTMLElement, text: string): HTMLElement {
+  const btn = Array.from(container.querySelectorAll("button")).find((b) =>
+    b.textContent.includes(text),
+  );
+  expect(btn, `Button "${text}" not found`).toBeTruthy();
+  return btn!;
+}
+
+async function goToPassphrasePage(container: HTMLElement): Promise<void> {
+  await fireEvent.click(findButton(container, "Next"));
+}
+
 describe("SetupEscrow", () => {
   it("renders the education step first", () => {
     render(SetupEscrow, { props: { oncomplete: vi.fn() } });
@@ -85,16 +97,25 @@ describe("SetupEscrow", () => {
     expect(screen.getByText("Before you continue")).toBeTruthy();
   });
 
-  it("advances to passphrase step when continue is clicked", async () => {
+  it("shows page dots for 3 sub-pages", () => {
+    const { container } = render(SetupEscrow, {
+      props: { oncomplete: vi.fn() },
+    });
+    const dots = container.querySelectorAll(".page-dot");
+    expect(dots).toHaveLength(3);
+    expect(dots[0]?.classList.contains("page-dot--active")).toBe(true);
+  });
+
+  it("advances to passphrase step when Next is clicked", async () => {
     const { container } = render(SetupEscrow, {
       props: { oncomplete: vi.fn() },
     });
 
-    const continueBtn = Array.from(container.querySelectorAll("button")).find(
-      (b) => b.textContent.includes("Continue"),
+    const nextBtn = Array.from(container.querySelectorAll("button")).find((b) =>
+      b.textContent.includes("Next"),
     );
-    expect(continueBtn).toBeTruthy();
-    await fireEvent.click(continueBtn!);
+    expect(nextBtn).toBeTruthy();
+    await fireEvent.click(nextBtn!);
 
     expect(screen.getByText("Create a passphrase")).toBeTruthy();
   });
@@ -104,10 +125,7 @@ describe("SetupEscrow", () => {
       props: { oncomplete: vi.fn() },
     });
 
-    const continueBtn = Array.from(container.querySelectorAll("button")).find(
-      (b) => b.textContent.includes("Continue"),
-    );
-    await fireEvent.click(continueBtn!);
+    await goToPassphrasePage(container);
 
     const inputs = container.querySelectorAll('input[type="password"]');
     await fireEvent.input(inputs[0] as HTMLInputElement, {
@@ -122,10 +140,7 @@ describe("SetupEscrow", () => {
       props: { oncomplete: vi.fn() },
     });
 
-    const continueBtn = Array.from(container.querySelectorAll("button")).find(
-      (b) => b.textContent.includes("Continue"),
-    );
-    await fireEvent.click(continueBtn!);
+    await goToPassphrasePage(container);
 
     const phrase = "this is a long passphrase for testing";
     const inputs = container.querySelectorAll('input[type="password"]');
@@ -136,10 +151,7 @@ describe("SetupEscrow", () => {
       target: { value: phrase },
     });
 
-    const exportBtn = Array.from(container.querySelectorAll("button")).find(
-      (b) => b.textContent.includes("Create Escrow File"),
-    );
-    if (exportBtn) await fireEvent.click(exportBtn);
+    await fireEvent.click(findButton(container, "Create Escrow File"));
 
     await vi.waitFor(() => {
       expect(screen.getByText("Store this file safely")).toBeTruthy();
@@ -151,10 +163,7 @@ describe("SetupEscrow", () => {
       props: { oncomplete: vi.fn() },
     });
 
-    const continueBtn = Array.from(container.querySelectorAll("button")).find(
-      (b) => b.textContent.includes("Continue"),
-    );
-    await fireEvent.click(continueBtn!);
+    await goToPassphrasePage(container);
 
     const phrase = "this is a long passphrase for testing";
     const inputs = container.querySelectorAll('input[type="password"]');
@@ -165,10 +174,7 @@ describe("SetupEscrow", () => {
       target: { value: phrase },
     });
 
-    const exportBtn = Array.from(container.querySelectorAll("button")).find(
-      (b) => b.textContent.includes("Create Escrow File"),
-    );
-    if (exportBtn) await fireEvent.click(exportBtn);
+    await fireEvent.click(findButton(container, "Create Escrow File"));
 
     await vi.waitFor(() => {
       expect(screen.getByText("Verification code")).toBeTruthy();
@@ -181,10 +187,7 @@ describe("SetupEscrow", () => {
       props: { oncomplete },
     });
 
-    const continueBtn = Array.from(container.querySelectorAll("button")).find(
-      (b) => b.textContent.includes("Continue"),
-    );
-    await fireEvent.click(continueBtn!);
+    await goToPassphrasePage(container);
 
     const phrase = "this is a long passphrase for testing";
     const inputs = container.querySelectorAll('input[type="password"]');
@@ -195,19 +198,13 @@ describe("SetupEscrow", () => {
       target: { value: phrase },
     });
 
-    const exportBtn = Array.from(container.querySelectorAll("button")).find(
-      (b) => b.textContent.includes("Create Escrow File"),
-    );
-    if (exportBtn) await fireEvent.click(exportBtn);
+    await fireEvent.click(findButton(container, "Create Escrow File"));
 
     await vi.waitFor(() => {
       expect(screen.getByText("Store this file safely")).toBeTruthy();
     });
 
-    const finalContinue = Array.from(container.querySelectorAll("button")).find(
-      (b) => b.textContent.includes("Continue"),
-    );
-    if (finalContinue) await fireEvent.click(finalContinue);
+    await fireEvent.click(findButton(container, "Continue"));
 
     expect(oncomplete).toHaveBeenCalled();
   });
@@ -217,10 +214,7 @@ describe("SetupEscrow", () => {
       props: { oncomplete: vi.fn() },
     });
 
-    const continueBtn = Array.from(container.querySelectorAll("button")).find(
-      (b) => b.textContent.includes("Continue"),
-    );
-    await fireEvent.click(continueBtn!);
+    await goToPassphrasePage(container);
 
     const phrase = "this is a long passphrase for testing";
     const inputs = container.querySelectorAll('input[type="password"]');
@@ -231,19 +225,13 @@ describe("SetupEscrow", () => {
       target: { value: phrase },
     });
 
-    const exportBtn = Array.from(container.querySelectorAll("button")).find(
-      (b) => b.textContent.includes("Create Escrow File"),
-    );
-    if (exportBtn) await fireEvent.click(exportBtn);
+    await fireEvent.click(findButton(container, "Create Escrow File"));
 
     await vi.waitFor(() => {
       expect(screen.getByText("Store this file safely")).toBeTruthy();
     });
 
-    const downloadAgainBtn = Array.from(
-      container.querySelectorAll("button"),
-    ).find((b) => b.textContent.includes("Download Again"));
-    if (downloadAgainBtn) await fireEvent.click(downloadAgainBtn);
+    await fireEvent.click(findButton(container, "Download Again"));
 
     expect(screen.getByText("Create a passphrase")).toBeTruthy();
   });
