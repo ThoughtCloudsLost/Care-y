@@ -1,9 +1,10 @@
 <script lang="ts">
-  import { Block, BlockTitle, Button } from "konsta/svelte";
+  import { Block, BlockTitle, Button, DialogButton } from "konsta/svelte";
   import * as m from "$lib/paraglide/messages.js";
   import { withTerms } from "$lib/terminology/with-terms.js";
   import { isOrgKeyReady } from "$lib/crypto/org-key-ready.svelte.js";
   import EscrowPassphraseForm from "$lib/components/shared/EscrowPassphraseForm.svelte";
+  import ShellDialog from "$lib/shell/ShellDialog.svelte";
 
   interface Props {
     oncomplete: () => void;
@@ -50,7 +51,10 @@
     scrollContentToTop();
   }
 
-  function handleDownloadAgain(): void {
+  let downloadAgainDialogOpen = $state(false);
+
+  function confirmDownloadAgain(): void {
+    downloadAgainDialogOpen = false;
     sha256Hex = "";
     subPage = 1;
     scrollContentToTop();
@@ -149,7 +153,7 @@
 
     <Block>
       <div class="escrow-nav">
-        <Button large outline onclick={handleDownloadAgain}>
+        <Button large outline onclick={() => (downloadAgainDialogOpen = true)}>
           {m.onboarding_escrow_download_again()}
         </Button>
         <Button large onclick={oncomplete}>
@@ -159,6 +163,28 @@
     </Block>
   {/if}
 {/if}
+
+<ShellDialog
+  opened={downloadAgainDialogOpen}
+  ondismiss={() => (downloadAgainDialogOpen = false)}
+  title={m.onboarding_escrow_download_again_title()}
+>
+  {#snippet content()}
+    <p class="text-sm text-[--muted]">
+      {m.onboarding_escrow_download_again_body()}
+    </p>
+  {/snippet}
+  {#snippet buttons()}
+    <!-- care-y-ignore-next-line no-click-without-keyboard -- DialogButton renders a native <button> -->
+    <DialogButton onclick={() => (downloadAgainDialogOpen = false)}>
+      {m.common_cancel()}
+    </DialogButton>
+    <!-- care-y-ignore-next-line no-click-without-keyboard -- DialogButton renders a native <button> -->
+    <DialogButton strong onclick={confirmDownloadAgain}>
+      {m.onboarding_escrow_download_again_confirm()}
+    </DialogButton>
+  {/snippet}
+</ShellDialog>
 
 <style>
   .page-dots {

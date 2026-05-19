@@ -89,15 +89,18 @@
   const strengthConfig = $derived(getStrengthConfig(strength));
 
   async function handleExport(): Promise<void> {
-    const orgSecretKey = await orgKeyManager.getSecretKey();
-    if (!orgSecretKey) return;
-
-    exporting = true;
-    exportError = "";
-
-    const passBytes = new TextEncoder().encode(passphrase);
+    let orgSecretKey: Uint8Array | null = null;
+    let passBytes: Uint8Array | null = null;
 
     try {
+      orgSecretKey = await orgKeyManager.getSecretKey();
+      if (!orgSecretKey) return;
+
+      exporting = true;
+      exportError = "";
+
+      passBytes = new TextEncoder().encode(passphrase);
+
       const result = await exportEscrowFile(orgSecretKey, passBytes);
       downloadBlob(result.fileBlob, result.filename);
 
@@ -109,10 +112,12 @@
       exportError = err instanceof Error ? err.message : String(err);
       toastStore.show(m.admin_escrow_error(), 3000);
     } finally {
-      passBytes.fill(0);
+      if (passBytes) passBytes.fill(0);
 
-      const sodium = requireSodium();
-      sodium.memzero(orgSecretKey);
+      if (orgSecretKey) {
+        const sodium = requireSodium();
+        sodium.memzero(orgSecretKey);
+      }
 
       passphrase = "";
       confirmPassphrase = "";
