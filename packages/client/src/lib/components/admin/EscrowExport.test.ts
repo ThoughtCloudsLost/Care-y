@@ -50,6 +50,12 @@ vi.mock("$lib/paraglide/messages.js", () => ({
   admin_escrow_success: () => "Escrow file exported",
   admin_escrow_error: () => "Export failed",
   admin_escrow_continue: () => "Continue",
+  onboarding_escrow_hash_label: () => "Verification code",
+  onboarding_escrow_hash_hint: () => "This code is unique to the file.",
+}));
+
+vi.mock("$lib/terminology/with-terms.js", () => ({
+  withTerms: () => ({}),
 }));
 
 vi.mock("$lib/crypto/context.js", () => ({
@@ -85,8 +91,36 @@ vi.mock("@care-y/crypto", () => ({
     nonce: new Uint8Array(24),
     ciphertext: new Uint8Array(48),
   }),
-  serializeEscrowBlob: () => new Uint8Array(89),
+  ARGON2_ESCROW_PARAMS: {
+    memoryKiB: 262144,
+    iterations: 4,
+    parallelism: 4,
+  },
   requireSodium: () => ({ memzero: mockMemzero }),
+}));
+
+vi.mock("$lib/utils/buffer-encoding.js", () => ({
+  uint8ArrayToBase64: (bytes: Uint8Array) => {
+    let binary = "";
+    for (const byte of bytes) {
+      binary += String.fromCharCode(byte);
+    }
+    return btoa(binary);
+  },
+}));
+
+vi.mock("$lib/utils/passphrase-strength.js", () => ({
+  assessPassphraseStrength: (p: string) => {
+    if (p.length < 20) return "too-short";
+    if (p.length < 30) return "acceptable";
+    if (p.length < 40) return "good";
+    return "strong";
+  },
+  looksLikeCommonPattern: (p: string) => {
+    if (new Set(p).size === 1) return true;
+    if (/^[0-9]+$/.test(p) && p.length < 30) return true;
+    return false;
+  },
 }));
 
 import EscrowExport from "./EscrowExport.svelte";
@@ -207,7 +241,7 @@ describe("EscrowExport", () => {
     clickSpy.mockRestore();
   });
 
-  it("shows storage guidance in step 3", async () => {
+  it("shows storage guidance and hash in step 3", async () => {
     const clickSpy = vi
       .spyOn(HTMLAnchorElement.prototype, "click")
       .mockImplementation(() => undefined);
@@ -229,6 +263,7 @@ describe("EscrowExport", () => {
       expect(screen.getByText("Passphrase separate")).toBeTruthy();
       expect(screen.getByText("Second person")).toBeTruthy();
       expect(screen.getByText("Test periodically")).toBeTruthy();
+      expect(screen.getByText("Verification code")).toBeTruthy();
     });
     clickSpy.mockRestore();
   });

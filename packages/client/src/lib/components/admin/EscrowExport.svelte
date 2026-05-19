@@ -1,24 +1,11 @@
 <script lang="ts">
-  import { List, ListInput, Block, Preloader } from "konsta/svelte";
-  import { Download } from "@lucide/svelte";
-  import SoftButton from "$lib/components/inputs/SoftButton.svelte";
-  import {
-    encryptWithPassphrase,
-    serializeEscrowBlob,
-    requireSodium,
-  } from "@care-y/crypto";
+  import { Block } from "konsta/svelte";
   import * as m from "$lib/paraglide/messages.js";
   import { withTerms } from "$lib/terminology/with-terms.js";
   import { getOrgKeyManager } from "$lib/crypto/context.js";
-  import { haptic } from "$lib/utils/haptic.js";
-  import { toastStore } from "$lib/stores/toast.svelte.js";
-  import { announceToLiveRegion } from "$lib/utils/announce.js";
-  import {
-    assessPassphraseStrength,
-    looksLikeCommonPattern,
-    type PassphraseStrength,
-  } from "$lib/utils/passphrase-strength.js";
+  import SoftButton from "$lib/components/inputs/SoftButton.svelte";
   import ShellPopup from "$lib/shell/ShellPopup.svelte";
+  import EscrowPassphraseForm from "$lib/components/shared/EscrowPassphraseForm.svelte";
 
   type Step = 1 | 2 | 3;
 
@@ -26,125 +13,28 @@
 
   let opened = $state(false);
   let step = $state<Step>(1);
-  let passphrase = $state("");
-  let confirmPassphrase = $state("");
-  let exporting = $state(false);
-  let exportError = $state("");
+  let sha256Hex = $state("");
 
   const orgKeyLoaded = $derived(orgKeyManager.isLoaded);
-  const strength = $derived<PassphraseStrength>(
-    assessPassphraseStrength(passphrase),
-  );
-  const isCommon = $derived(
-    passphrase.length >= 20 && looksLikeCommonPattern(passphrase),
-  );
-  const mismatch = $derived(
-    confirmPassphrase.length > 0 && passphrase !== confirmPassphrase,
-  );
-  const canExport = $derived(
-    orgKeyLoaded &&
-      strength !== "too-short" &&
-      passphrase === confirmPassphrase &&
-      !isCommon &&
-      !exporting,
-  );
-
-  interface StrengthDisplay {
-    label: () => string;
-    color: string;
-    width: string;
-  }
-
-  function getStrengthConfig(s: PassphraseStrength): StrengthDisplay {
-    switch (s) {
-      case "too-short":
-        return {
-          label: m.admin_escrow_strength_too_short,
-          color: "var(--color-red-500)",
-          width: "25%",
-        };
-      case "acceptable":
-        return {
-          label: m.admin_escrow_strength_acceptable,
-          color: "var(--color-amber-500)",
-          width: "50%",
-        };
-      case "good":
-        return {
-          label: m.admin_escrow_strength_good,
-          color: "var(--color-green-500)",
-          width: "75%",
-        };
-      case "strong":
-        return {
-          label: m.admin_escrow_strength_strong,
-          color: "var(--color-green-500)",
-          width: "100%",
-        };
-    }
-  }
-
-  const strengthConfig = $derived(getStrengthConfig(strength));
+  const hashGroups = $derived(sha256Hex.match(/.{1,4}/g) ?? []);
 
   export function open(): void {
     opened = true;
   }
 
   function dismiss(): void {
-    if (exporting) return;
     opened = false;
     reset();
   }
 
   function reset(): void {
     step = 1;
-    passphrase = "";
-    confirmPassphrase = "";
-    exporting = false;
-    exportError = "";
+    sha256Hex = "";
   }
 
-  async function exportEscrow(): Promise<void> {
-    const orgSecretKey = await orgKeyManager.getSecretKey();
-    if (!orgSecretKey) return;
-
-    exporting = true;
-    exportError = "";
-
-    const passBytes = new TextEncoder().encode(passphrase);
-
-    try {
-      const blob = encryptWithPassphrase(orgSecretKey, passBytes);
-      const serialized = serializeEscrowBlob(blob);
-      const downloadBytes = new Uint8Array(serialized.length);
-      downloadBytes.set(serialized);
-      const fileBlob = new Blob([downloadBytes], {
-        type: "application/octet-stream",
-      });
-      const url = URL.createObjectURL(fileBlob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `care-y-escrow-${new Date().toISOString().slice(0, 10)}.escrow`;
-      a.click();
-      URL.revokeObjectURL(url);
-
-      haptic();
-      toastStore.show(m.admin_escrow_success());
-      announceToLiveRegion("assertive", m.admin_escrow_success());
-      step = 3;
-    } catch (err: unknown) {
-      exportError = err instanceof Error ? err.message : String(err);
-      toastStore.show(m.admin_escrow_error(), 3000);
-    } finally {
-      passBytes.fill(0);
-
-      const sodium = requireSodium();
-      sodium.memzero(orgSecretKey);
-
-      passphrase = "";
-      confirmPassphrase = "";
-      exporting = false;
-    }
+  function handleExport(data: { sha256Hex: string }): void {
+    sha256Hex = data.sha256Hex;
+    step = 3;
   }
 </script>
 
@@ -188,79 +78,10 @@
       </SoftButton>
     </Block>
   {:else if step === 2}
-    <!-- Step 2: Passphrase creation -->
-    <Block>
-      <p class="section-heading">{m.admin_escrow_step_passphrase_heading()}</p>
-      <p class="body-text">{m.admin_escrow_passphrase_guidance()}</p>
-    </Block>
-
-    <List nested>
-      <ListInput
-        outline
-        label={m.admin_escrow_passphrase_label()}
-        type="password"
-        value={passphrase}
-        oninput={(e: Event) => {
-          if (e.target instanceof HTMLInputElement) passphrase = e.target.value;
-        }}
-      />
-      <ListInput
-        outline
-        label={m.admin_escrow_confirm_label()}
-        type="password"
-        value={confirmPassphrase}
-        oninput={(e: Event) => {
-          if (e.target instanceof HTMLInputElement)
-            confirmPassphrase = e.target.value;
-        }}
-        info={mismatch ? m.admin_escrow_passphrase_mismatch() : undefined}
-      />
-    </List>
-
-    <!-- Strength meter -->
-    {#if passphrase.length > 0}
-      <Block>
-        <div class="strength-meter">
-          <div class="strength-track">
-            <div
-              class="strength-fill"
-              style="width: {strengthConfig.width}; background: {strengthConfig.color}"
-            ></div>
-          </div>
-          <span class="strength-label" style="color: {strengthConfig.color}">
-            {strengthConfig.label()}
-          </span>
-        </div>
-      </Block>
-    {/if}
-
-    {#if isCommon}
-      <Block>
-        <p class="common-warning" role="alert">
-          {m.admin_escrow_passphrase_common()}
-        </p>
-      </Block>
-    {/if}
-
-    {#if exportError}
-      <Block>
-        <p class="export-error" role="alert">{exportError}</p>
-      </Block>
-    {/if}
-
-    <Block>
-      <SoftButton full onclick={exportEscrow} disabled={!canExport}>
-        {#if exporting}
-          <Preloader />
-          {m.admin_escrow_exporting()}
-        {:else}
-          <Download size={18} aria-hidden="true" />
-          {m.admin_escrow_export_button()}
-        {/if}
-      </SoftButton>
-    </Block>
+    <!-- Step 2: Passphrase creation + export -->
+    <EscrowPassphraseForm onexport={handleExport} />
   {:else}
-    <!-- Step 3: Storage guidance -->
+    <!-- Step 3: Storage guidance + hash -->
     <Block>
       <p class="section-heading">{m.admin_escrow_step_storage_heading()}</p>
     </Block>
@@ -276,6 +97,18 @@
         </ul>
       </div>
     </Block>
+
+    {#if sha256Hex}
+      <Block>
+        <p class="hash-label">{m.onboarding_escrow_hash_label()}</p>
+        <div class="hash-grid" aria-label={sha256Hex}>
+          {#each hashGroups as group, i (i)}
+            <code class="hash-group">{group}</code>
+          {/each}
+        </div>
+        <p class="hash-hint">{m.onboarding_escrow_hash_hint()}</p>
+      </Block>
+    {/if}
 
     <Block>
       <SoftButton full onclick={dismiss}>
@@ -358,44 +191,31 @@
     font-weight: 500;
   }
 
-  .strength-meter {
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-xs);
+  .hash-label {
+    font-size: var(--text-base);
+    color: var(--muted);
+    margin: 0 0 var(--space-sm);
   }
 
-  .strength-track {
-    height: 4px;
-    border-radius: 2px;
-    background: color-mix(in srgb, var(--muted) 20%, transparent);
-    overflow: hidden;
+  .hash-grid {
+    display: grid;
+    grid-template-columns: repeat(4, auto);
+    justify-content: start;
+    gap: var(--space-sm) var(--space-lg);
+    user-select: all;
   }
 
-  .strength-fill {
-    height: 100%;
-    border-radius: 2px;
-    transition:
-      width 0.2s ease,
-      background 0.2s ease;
+  .hash-group {
+    font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
+    font-size: var(--text-base);
+    letter-spacing: 0.05em;
+    color: var(--ink);
   }
 
-  .strength-label {
-    font-size: var(--text-xs);
-    font-weight: 500;
-  }
-
-  .common-warning {
-    font-size: 0.8125rem;
-    color: var(--color-amber-500);
-    background: color-mix(in srgb, var(--color-amber-500) 10%, transparent);
-    padding: var(--space-sm) var(--space-md);
-    border-radius: 8px;
-    margin: 0;
-  }
-
-  .export-error {
-    font-size: 0.8125rem;
-    color: var(--color-red-500);
-    margin: 0;
+  .hash-hint {
+    font-size: var(--text-sm);
+    color: var(--muted);
+    line-height: 1.5;
+    margin: var(--space-lg) 0 0;
   }
 </style>
