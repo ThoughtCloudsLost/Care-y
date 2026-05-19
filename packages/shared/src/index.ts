@@ -148,6 +148,8 @@ export {
   type RemoveFromBlocklistInput,
   setPhonePurposeInputSchema,
   type SetPhonePurposeInput,
+  changeTelephonyModeInputSchema,
+  type ChangeTelephonyModeInput,
 } from "./schemas/telephony.js";
 
 // --- Telephony content schemas ---
