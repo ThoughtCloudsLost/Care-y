@@ -84,6 +84,40 @@ describe("CacheRegistry", () => {
     });
   });
 
+  describe("reset", () => {
+    it("clears cache contents and removes all registrations", () => {
+      const nameA = uniqueName("reset-a");
+      const nameB = uniqueName("reset-b");
+      const mapA = cacheRegistry.createMap<string, string>(nameA);
+      const mapB = cacheRegistry.createMap<string, string>(nameB);
+
+      mapA.set("key", "value");
+      mapB.set("key", "value");
+
+      const sizeBefore = cacheRegistry.size;
+      expect(sizeBefore).toBeGreaterThanOrEqual(2);
+
+      cacheRegistry.reset();
+
+      expect(mapA.size).toBe(0);
+      expect(mapB.size).toBe(0);
+      expect(cacheRegistry.size).toBe(0);
+      expect(cacheRegistry.registered).toEqual([]);
+    });
+
+    it("allows fresh registration after reset without duplicate warnings", () => {
+      const name = uniqueName("reset-reuse");
+      cacheRegistry.createMap(name);
+
+      cacheRegistry.reset();
+
+      const warnSpy = vi.spyOn(console, "warn").mockImplementation(vi.fn());
+      cacheRegistry.createMap(name);
+      expect(warnSpy).not.toHaveBeenCalled();
+      warnSpy.mockRestore();
+    });
+  });
+
   describe("duplicate registration", () => {
     it("logs a warning in dev mode", () => {
       const name = uniqueName("dup");

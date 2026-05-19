@@ -45,11 +45,19 @@ class CacheRegistry {
     this.caches.set(name, cache);
   }
 
-  /** Clear ALL registered caches. Called on logout, session expiry, idle timeout. */
+  /** Clear cache contents but keep registrations. Used by beforeunload. */
   clearAll(): void {
     for (const cache of this.caches.values()) {
       cache.clear();
     }
+  }
+
+  /** Clear all caches AND remove registrations. Used by logout/session teardown. */
+  reset(): void {
+    for (const cache of this.caches.values()) {
+      cache.clear();
+    }
+    this.caches.clear();
   }
 
   /** Dev-mode: list registered cache names for audit. */

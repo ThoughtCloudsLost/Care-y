@@ -138,8 +138,12 @@ export async function verifyAuthentication(
     throw new ValidationError("User verification required but not satisfied.");
   }
 
+  // W3C WebAuthn L2 Section 7.2 Step 21: if both stored and response
+  // counters are 0, neither side implements the counter (common with
+  // synced passkeys like iCloud Keychain). Skip clone detection.
   if (
     expected.counter !== undefined &&
+    !(expected.counter === 0 && authenticator.signCount === 0) &&
     authenticator.signCount <= expected.counter
   ) {
     throw new ValidationError(
