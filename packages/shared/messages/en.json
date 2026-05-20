@@ -742,7 +742,7 @@
   "admin_invite_credential_password": "Password",
   "admin_invite_credential_show": "Show",
   "admin_invite_credential_hide": "Hide",
-  "admin_invite_credential_done": "Done",
+  "admin_invite_credential_done": "Create Another",
   "admin_invite_password_too_short": "Password must be at least 16 characters",
   "admin_invite_menu_link": "Invite with Link",
   "admin_invite_menu_manual": "Create User Manually",
