@@ -114,7 +114,7 @@
         disabled={isPending}
       />
     </List>
-    <p class="pii-warning">{m.admin_invite_identifier_pii_warning()}</p>
+    <p class="pii-warning">{m.user_field_login_username_pii_warning()}</p>
     <List nested>
       <PasswordInput
         outline
@@ -139,11 +139,6 @@
   }
 
   .pii-warning {
-    font-size: 0.8125rem;
-    color: var(--color-amber-500);
-    background: color-mix(in srgb, var(--color-amber-500) 10%, transparent);
-    padding: var(--space-sm) var(--space-md);
-    border-radius: 8px;
     margin: 0 var(--space-lg);
   }
 

@@ -6,8 +6,6 @@
     List,
     ListInput,
     ListItem,
-    Segmented,
-    SegmentedButton,
     Toggle,
   } from "konsta/svelte";
   import {
@@ -51,6 +49,7 @@
   import InviteUser from "./InviteUser.svelte";
   import InviteLinkSheet from "./InviteLinkSheet.svelte";
   import InvitePendingCard from "./InvitePendingCard.svelte";
+  import RoleSelector from "$lib/components/shared/RoleSelector.svelte";
   import UserCard from "./UserCard.svelte";
 
   interface QueueAssignment {
@@ -413,10 +412,8 @@
     sheetState = state;
     editDisplayName = state.userName;
     editUsername = state.userIdentifier;
-    editRoleId =
-      user.roleId === RoleId.ADMIN || user.roleId === RoleId.MANAGER
-        ? user.roleId
-        : RoleId.VOLUNTEER;
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- server roleId is always a valid RoleIdValue
+    editRoleId = user.roleId as RoleIdValue;
 
     memberQueueIds.clear();
     originalQueueIds.clear();
@@ -815,32 +812,13 @@
           disabled={adminUsernameMutation.isPending}
         />
       </List>
-      <p class="pii-warning">{m.admin_invite_identifier_pii_warning()}</p>
+      <p class="pii-warning">{m.user_field_login_username_pii_warning()}</p>
     </div>
 
-    <div class="role-section">
-      <p class="section-label">{m.admin_invite_role_label()}</p>
-      <Segmented strong>
-        <SegmentedButton
-          active={editRoleId === RoleId.VOLUNTEER}
-          onclick={() => (editRoleId = RoleId.VOLUNTEER)}
-        >
-          {m.admin_role_volunteer(withTerms())}
-        </SegmentedButton>
-        <SegmentedButton
-          active={editRoleId === RoleId.MANAGER}
-          onclick={() => (editRoleId = RoleId.MANAGER)}
-        >
-          {m.admin_role_manager(withTerms())}
-        </SegmentedButton>
-        <SegmentedButton
-          active={editRoleId === RoleId.ADMIN}
-          onclick={() => (editRoleId = RoleId.ADMIN)}
-        >
-          {m.admin_role_admin()}
-        </SegmentedButton>
-      </Segmented>
-    </div>
+    <RoleSelector
+      selectedRole={editRoleId}
+      onselect={(r: RoleIdValue) => (editRoleId = r)}
+    />
 
     {#if (queuesQuery.data ?? []).length > 0}
       <div class="queue-section">
@@ -858,7 +836,7 @@
             {#each queuesQuery.data ?? [] as queue (queue.id)}
               {@const queueName =
                 orgCache.decrypt(`queue:${queue.id}`, queue.encryptedName) ??
-                "..."}
+                m.common_loading()}
               <ListItem title={queueName}>
                 {#snippet after()}
                   <Toggle
@@ -989,22 +967,6 @@
   }
 
   .username-section {
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-sm);
-    margin-top: var(--space-lg);
-  }
-
-  .pii-warning {
-    font-size: 0.8125rem;
-    color: var(--color-amber-500);
-    background: color-mix(in srgb, var(--color-amber-500) 10%, transparent);
-    padding: var(--space-sm) var(--space-md);
-    border-radius: 8px;
-    margin: 0;
-  }
-
-  .role-section {
     display: flex;
     flex-direction: column;
     gap: var(--space-sm);

@@ -422,7 +422,7 @@
   <form onsubmit={handleReauth}>
     <List strong inset>
       <ListInput
-        label={m.onboarding_account_username()}
+        label={m.user_field_login_username_label()}
         type="text"
         placeholder={m.onboarding_account_username_placeholder()}
         bind:value={reauthUsername}
