@@ -240,20 +240,29 @@
   <form onsubmit={handleSubmit}>
     <List strong inset>
       <ListInput
-        label={m.onboarding_account_username()}
+        label={m.user_field_login_username_label()}
         type="text"
         placeholder={m.onboarding_account_username_placeholder()}
-        info={m.onboarding_account_username_info()}
+        info={m.user_field_login_username_info()}
         bind:value={identifier}
         autocomplete="username"
         autocapitalize="none"
         required
       />
+    </List>
+
+    <Block>
+      <p class="pii-warning" role="note">
+        {m.user_field_login_username_pii_warning()}
+      </p>
+    </Block>
+
+    <List strong inset>
       <ListInput
-        label={m.onboarding_account_display_name()}
+        label={m.user_field_display_name_label()}
         type="text"
         placeholder={m.onboarding_account_display_name_placeholder()}
-        info={m.onboarding_account_display_name_info(withTerms())}
+        info={m.user_field_display_name_info(withTerms())}
         bind:value={displayName}
         required
       />

@@ -283,7 +283,7 @@
   <List strong inset>
     <ListInput
       outline
-      label={m.admin_invite_identifier_label()}
+      label={m.user_field_login_username_label()}
       type="text"
       value={identifier}
       oninput={(e: Event) => {
@@ -296,21 +296,21 @@
 
   <Block>
     <p class="pii-warning" role="note">
-      {m.admin_invite_identifier_pii_warning()}
+      {m.user_field_login_username_pii_warning()}
     </p>
   </Block>
 
   <List strong inset>
     <ListInput
       outline
-      label={m.admin_invite_display_name_label()}
+      label={m.user_field_display_name_label()}
       type="text"
       value={displayName}
       oninput={(e: Event) => {
         if (e.target instanceof HTMLInputElement) displayName = e.target.value;
       }}
       disabled={!orgKeyLoaded}
-      info={m.admin_invite_display_name_hint()}
+      info={m.user_field_display_name_e2e_hint()}
     />
   </List>
 
@@ -466,15 +466,6 @@
   .skip-link:disabled {
     opacity: 0.5;
     cursor: not-allowed;
-  }
-
-  .pii-warning {
-    font-size: 0.8125rem;
-    color: var(--color-amber-500);
-    background: color-mix(in srgb, var(--color-amber-500) 10%, transparent);
-    padding: var(--space-sm) var(--space-md);
-    border-radius: 8px;
-    margin: 0;
   }
 
   .org-key-warning {

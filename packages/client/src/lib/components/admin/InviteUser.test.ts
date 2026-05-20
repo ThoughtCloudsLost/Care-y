@@ -18,12 +18,12 @@ vi.mock("$lib/paraglide/messages.js", () => ({
   admin_invite_title: () => "Invite User",
   admin_invite_cancel: () => "Cancel",
   admin_invite_send: () => "Create Account",
-  admin_invite_identifier_label: () => "Identifier",
   admin_invite_identifier_hint: () => "Auto-generated.",
-  admin_invite_identifier_pii_warning: () =>
+  user_field_login_username_label: () => "Login Username",
+  user_field_login_username_pii_warning: () =>
     "Identifiers are stored with weaker encryption",
-  admin_invite_display_name_label: () => "Display Name",
-  admin_invite_display_name_hint: () => "End-to-end encrypted.",
+  user_field_display_name_label: () => "Display Name",
+  user_field_display_name_e2e_hint: () => "End-to-end encrypted.",
   admin_invite_password_label: () => "Temporary Password",
   admin_invite_password_hint: () => "Share securely.",
   admin_invite_password_too_short: () =>
