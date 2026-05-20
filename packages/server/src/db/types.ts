@@ -542,6 +542,7 @@ export interface InviteTokensTable {
   expires_at: Date;
   consumed_at: Date | null;
   revoked_at: Date | null;
+  encrypted_token: Buffer | null;
   created_at: Generated<Date>;
 }
 

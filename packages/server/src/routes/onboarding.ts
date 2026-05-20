@@ -450,6 +450,7 @@ export function createOnboardingRouter(deps: OnboardingRouterDeps) {
           invitedBy: ctx.session.userId,
           roleId: input.roleId,
           encryptedEmail,
+          seal: (token: string) => ctx.org.sealedBox.seal(token),
         });
 
         // Send email if requested and email sender is configured.
@@ -480,6 +481,7 @@ export function createOnboardingRouter(deps: OnboardingRouterDeps) {
           invitedBy: inv.invitedBy,
           expiresAt: inv.expiresAt.toISOString(),
           createdAt: inv.createdAt.toISOString(),
+          encryptedToken: inv.encryptedToken?.toString("base64") ?? null,
         }));
       }),
     ),

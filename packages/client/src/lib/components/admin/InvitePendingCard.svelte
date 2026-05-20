@@ -1,16 +1,20 @@
 <script lang="ts">
   import { Card, Chip, Preloader } from "konsta/svelte";
-  import { Link2, X } from "@lucide/svelte";
+  import { Link2, X, Copy } from "@lucide/svelte";
   import * as m from "$lib/paraglide/messages.js";
   import { onKeyActivate } from "$lib/utils/a11y.js";
+  import { getOrgDecryptCache } from "$lib/crypto/context.js";
+  import { base64ToUint8Array } from "$lib/utils/buffer-encoding.js";
 
   interface InvitePendingCardProps {
     readonly id: string;
     readonly roleLabel: string;
     readonly inviterName: string | null;
     readonly expiresAt: string;
+    readonly encryptedToken: string | null;
     readonly revoking?: boolean;
     readonly onrevoke: (tokenId: string) => void;
+    readonly oncopy?: (url: string) => void;
   }
 
   let {
@@ -18,9 +22,30 @@
     roleLabel,
     inviterName,
     expiresAt,
+    encryptedToken,
     revoking = false,
     onrevoke,
+    oncopy,
   }: InvitePendingCardProps = $props();
+
+  const orgCache = getOrgDecryptCache();
+
+  const decryptedToken = $derived(
+    encryptedToken !== null
+      ? orgCache.decrypt(`invite:${id}`, base64ToUint8Array(encryptedToken))
+      : null,
+  );
+
+  const inviteUrl = $derived(
+    decryptedToken !== null ? `/first-login/${decryptedToken}` : null,
+  );
+
+  function handleCopy(e: MouseEvent): void {
+    e.stopPropagation();
+    if (inviteUrl !== null && oncopy) {
+      oncopy(`${window.location.origin}${inviteUrl}`);
+    }
+  }
 
   const inviterLabel = $derived(
     inviterName !== null && inviterName.length > 0
@@ -69,26 +94,40 @@
           <span class="pending-label">{inviterLabel}</span>
         </div>
         <span class="expiry-label">{expiryLabel}</span>
-      </div>
-
-      <div class="role-area">
-        <Chip outline>{roleLabel}</Chip>
-      </div>
-
-      <button
-        class="revoke-btn"
-        onclick={handleRevoke}
-        onkeydown={onKeyActivate(() => onrevoke(id))}
-        aria-label={m.admin_invite_pending_revoke()}
-        type="button"
-        disabled={revoking}
-      >
-        {#if revoking}
-          <Preloader class="w-4 h-4" />
-        {:else}
-          <X size={16} aria-hidden="true" />
+        {#if inviteUrl !== null}
+          <span class="invite-url">{window.location.origin}{inviteUrl}</span>
         {/if}
-      </button>
+      </div>
+
+      <div class="action-area">
+        <Chip outline>{roleLabel}</Chip>
+        <div class="action-buttons">
+          {#if inviteUrl !== null && oncopy}
+            <button
+              class="copy-btn"
+              onclick={handleCopy}
+              aria-label={m.admin_invite_link_copy()}
+              type="button"
+            >
+              <Copy size={14} aria-hidden="true" />
+            </button>
+          {/if}
+          <button
+            class="revoke-btn"
+            onclick={handleRevoke}
+            onkeydown={onKeyActivate(() => onrevoke(id))}
+            aria-label={m.admin_invite_pending_revoke()}
+            type="button"
+            disabled={revoking}
+          >
+            {#if revoking}
+              <Preloader class="w-4 h-4" />
+            {:else}
+              <X size={16} aria-hidden="true" />
+            {/if}
+          </button>
+        </div>
+      </div>
     </div>
   </Card>
 </div>
@@ -165,8 +204,58 @@
     opacity: 0.7;
   }
 
-  .role-area {
+  .invite-url {
+    font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
+    font-size: var(--text-xs);
+    color: var(--muted);
+    opacity: 0.6;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .action-area {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: var(--space-xs, 4px);
     flex-shrink: 0;
+  }
+
+  .action-buttons {
+    display: flex;
+    gap: 2px;
+  }
+
+  .copy-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 2.25rem;
+    height: 2.25rem;
+    border-radius: 50%;
+    background: none;
+    border: none;
+    padding: 0;
+    cursor: pointer;
+    color: var(--brand-text);
+    flex-shrink: 0;
+    -webkit-tap-highlight-color: transparent;
+    opacity: 0.7;
+  }
+
+  .copy-btn:hover {
+    background: color-mix(in srgb, var(--brand-text) 10%, transparent);
+    opacity: 1;
+  }
+
+  .copy-btn:active {
+    background: color-mix(in srgb, var(--brand-text) 18%, transparent);
+  }
+
+  .copy-btn:focus-visible {
+    outline: 2px solid var(--brand-text);
+    outline-offset: 2px;
   }
 
   .revoke-btn {
