@@ -25,6 +25,7 @@
   import * as m from "$lib/paraglide/messages.js";
   import { withTerms } from "$lib/terminology/with-terms.js";
   import { trpc } from "$lib/trpc/index.js";
+  import { requireRouter } from "$lib/errors.js";
   import { getCryptoBridge, getOrgKeyManager } from "$lib/crypto/context.js";
   import { setOrgKeyReady } from "$lib/crypto/org-key-ready.svelte.js";
   import { installCleanupHandler } from "$lib/auth/cleanup.js";
@@ -41,7 +42,7 @@
   import KeyDerivation, {
     type LoginPhaseId,
   } from "$lib/components/onboarding/KeyDerivation.svelte";
-  import { PASSWORD_MIN_LENGTH } from "@care-y/shared";
+  import { PASSWORD_MIN_LENGTH, ErrorCode } from "@care-y/shared";
   import PasswordInput from "$lib/components/inputs/PasswordInput.svelte";
   import PasswordStrengthMeter from "$lib/components/inputs/PasswordStrengthMeter.svelte";
 
@@ -55,10 +56,7 @@
   const bridge = getCryptoBridge();
   const orgKeyManager = getOrgKeyManager();
 
-  if (!trpc.onboarding) {
-    throw new Error("Onboarding router not available");
-  }
-  const onboarding: NonNullable<typeof trpc.onboarding> = trpc.onboarding;
+  const onboarding = requireRouter(trpc.onboarding, "onboarding");
 
   let identifier = $state("");
   let displayName = $state("");
@@ -207,9 +205,15 @@
       oncomplete({ userId, adminVolPublic: loginResult.volPublic });
     } catch (caught: unknown) {
       phase = "error";
-      const msg = caught instanceof Error ? caught.message : String(caught);
-      if (msg.includes("ORG_ALREADY_SETUP") || msg.includes("already")) {
+      const code = caught instanceof Error ? caught.message : String(caught);
+      if (code === ErrorCode.ORG_ALREADY_SETUP) {
         error = m.onboarding_setup_already_done();
+      } else if (code === ErrorCode.INVALID_SETUP_TOKEN) {
+        error = m.onboarding_setup_invalid_link();
+      } else if (code === ErrorCode.BOOTSTRAP_RATE_LIMITED) {
+        error = m.error_bootstrap_rate_limited();
+      } else if (code === ErrorCode.ACCOUNT_ALREADY_EXISTS) {
+        error = m.error_account_already_exists();
       } else {
         error = m.onboarding_account_error_generic();
       }

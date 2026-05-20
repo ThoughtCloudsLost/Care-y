@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Done" |
+* | "Create Another" |
 *
 * @param {Admin_Invite_Credential_DoneInputs} inputs
 * @param {{ locale?: "en" | "es" }} options
