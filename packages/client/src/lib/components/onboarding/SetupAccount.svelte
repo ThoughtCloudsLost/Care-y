@@ -13,7 +13,8 @@
 -->
 <script lang="ts">
   import { tick } from "svelte";
-  import { List, ListInput, Button, Block, BlockTitle } from "konsta/svelte";
+  import { List, ListInput, Block, BlockTitle } from "konsta/svelte";
+  import SoftButton from "$lib/components/inputs/SoftButton.svelte";
   import {
     generateOrgKeypair,
     wrapKey,
@@ -300,8 +301,8 @@
     {/if}
 
     <Block>
-      <Button
-        large
+      <SoftButton
+        full
         type="submit"
         disabled={isSubmitting ||
           !identifier ||
@@ -310,7 +311,7 @@
           !confirmPassword}
       >
         {m.onboarding_account_submit()}
-      </Button>
+      </SoftButton>
     </Block>
   </form>
 {/if}
