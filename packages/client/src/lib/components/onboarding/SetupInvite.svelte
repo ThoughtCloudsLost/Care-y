@@ -10,14 +10,11 @@
   InviteUser sheets via exported methods.
 -->
 <script lang="ts">
-  import { Button, Block, BlockTitle, Preloader } from "konsta/svelte";
+  import { Block, BlockTitle, Preloader } from "konsta/svelte";
+  import SoftButton from "$lib/components/inputs/SoftButton.svelte";
   import * as m from "$lib/paraglide/messages.js";
   import { withTerms } from "$lib/terminology/with-terms.js";
-  import { trpc } from "$lib/trpc/index.js";
   import { haptic } from "$lib/utils/haptic.js";
-  import { toastStore } from "$lib/stores/toast.svelte.js";
-  import { announceToLiveRegion } from "$lib/utils/announce.js";
-  import { requireRouter } from "$lib/errors.js";
   import OnboardingCryptoBridge from "$lib/providers/OnboardingCryptoBridge.svelte";
   import UsersSection from "$lib/components/admin/UsersSection.svelte";
 
@@ -28,10 +25,7 @@
 
   let { adminUserId, oncomplete }: Props = $props();
 
-  const onboarding = requireRouter(trpc.onboarding, "onboarding");
-
   let finishing = $state(false);
-  let error = $state("");
   let usersSectionRef = $state<UsersSection>();
 
   /* eslint-disable @typescript-eslint/no-unsafe-assignment -- bind:this ref exposes exported functions as any */
@@ -42,28 +36,18 @@
   });
   /* eslint-enable @typescript-eslint/no-unsafe-assignment */
 
-  async function handleFinish(): Promise<void> {
+  function handleFinish(): void {
     finishing = true;
-    error = "";
-    try {
-      await onboarding.completeSetup.mutate();
-      haptic();
-      /* eslint-disable @typescript-eslint/no-unsafe-assignment -- bind:this ref */
-      const active: number = usersSectionRef?.activeCount() ?? 1;
-      const pending: number = usersSectionRef?.pendingInviteCount() ?? 0;
-      /* eslint-enable @typescript-eslint/no-unsafe-assignment */
-      oncomplete({ invitesSent: active - 1 + pending });
-    } catch {
-      error = m.admin_invite_link_error();
-      toastStore.show(m.admin_invite_link_error(), 3000);
-      announceToLiveRegion("assertive", m.admin_invite_link_error());
-    } finally {
-      finishing = false;
-    }
+    haptic();
+    /* eslint-disable @typescript-eslint/no-unsafe-assignment -- bind:this ref */
+    const active: number = usersSectionRef?.activeCount() ?? 1;
+    const pending: number = usersSectionRef?.pendingInviteCount() ?? 0;
+    /* eslint-enable @typescript-eslint/no-unsafe-assignment */
+    oncomplete({ invitesSent: active - 1 + pending });
   }
 
   function handleSkip(): void {
-    void handleFinish();
+    handleFinish();
   }
 </script>
 
@@ -72,33 +56,26 @@
   <p class="step-desc">{m.onboarding_invite_subtext()}</p>
 </Block>
 
-{#if error}
-  <Block>
-    <p class="step-error" role="alert">{error}</p>
-  </Block>
-{/if}
-
 <Block>
   <div class="action-buttons">
-    <Button
-      large
+    <SoftButton
+      full
       onclick={() => {
         usersSectionRef?.openInviteLink();
       }}
       disabled={finishing}
     >
       {m.admin_invite_link_generate()}
-    </Button>
-    <Button
-      large
-      outline
+    </SoftButton>
+    <SoftButton
+      full
       onclick={() => {
         usersSectionRef?.openInvite();
       }}
       disabled={finishing}
     >
       {m.admin_invite_menu_manual()}
-    </Button>
+    </SoftButton>
   </div>
 </Block>
 
@@ -108,18 +85,13 @@
 
 {#if hasInvites}
   <Block>
-    <Button
-      large
-      outline
-      disabled={finishing}
-      onclick={() => void handleFinish()}
-    >
+    <SoftButton full disabled={finishing} onclick={handleFinish}>
       {#if finishing}
         <Preloader class="w-5 h-5" />
       {:else}
         {m.onboarding_invite_finish()}
       {/if}
-    </Button>
+    </SoftButton>
   </Block>
 {:else}
   <Block>

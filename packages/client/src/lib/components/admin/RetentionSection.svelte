@@ -18,6 +18,21 @@
   import SoftButton from "$lib/components/inputs/SoftButton.svelte";
   import ShellDialog from "$lib/shell/ShellDialog.svelte";
 
+  interface Props {
+    externalSave?: boolean;
+  }
+
+  let { externalSave = false }: Props = $props();
+
+  export function isDirty(): boolean {
+    return hasChanges;
+  }
+
+  export function save(): void {
+    if (!hasChanges || parsedDays === null) return;
+    confirmSet();
+  }
+
   const authRouter = trpc.auth;
   const queryClient = useQueryClient();
 
@@ -171,7 +186,7 @@
           <span class="range-hint">{m.admin_retention_range_hint()}</span>
         </div>
 
-        {#if hasChanges}
+        {#if hasChanges && !externalSave}
           <div class="unsaved-hint" role="status">
             {m.admin_retention_unsaved_hint()}
           </div>

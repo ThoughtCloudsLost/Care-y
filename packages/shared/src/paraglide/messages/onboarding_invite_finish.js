@@ -6,17 +6,17 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Onboarding_Invite_FinishInputs */
 
 const en_onboarding_invite_finish = /** @type {(inputs: Onboarding_Invite_FinishInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Finish Setup`)
+	return /** @type {LocalizedString} */ (`Continue`)
 };
 
 const es_onboarding_invite_finish = /** @type {(inputs: Onboarding_Invite_FinishInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Finalizar configuracion`)
+	return /** @type {LocalizedString} */ (`Continuar`)
 };
 
 /**
 * | output |
 * | --- |
-* | "Finish Setup" |
+* | "Continue" |
 *
 * @param {Onboarding_Invite_FinishInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

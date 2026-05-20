@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Finish Setup" |
+* | "Continue" |
 *
 * @param {Onboarding_Invite_FinishInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

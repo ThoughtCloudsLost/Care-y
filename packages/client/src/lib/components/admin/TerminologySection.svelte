@@ -1,5 +1,6 @@
 <script lang="ts">
   /* eslint-disable security/detect-object-injection -- all Record access uses typed LangCode/keyof TerminologyLabels constants, not user input */
+  import { SvelteSet } from "svelte/reactivity";
   import {
     Card,
     List,
@@ -38,6 +39,20 @@
   import DecryptPlaceholder from "$lib/components/DecryptPlaceholder.svelte";
   import SoftButton from "$lib/components/inputs/SoftButton.svelte";
   import ShellSheet from "$lib/shell/ShellSheet.svelte";
+
+  interface Props {
+    externalSave?: boolean;
+  }
+
+  let { externalSave = false }: Props = $props();
+
+  export function isDirty(): boolean {
+    return hasChanges;
+  }
+
+  export async function save(): Promise<void> {
+    await handleSave();
+  }
 
   const brandingRouter = requireRouter(trpc.branding, "branding");
 
@@ -150,6 +165,26 @@
     return capitalize(value);
   }
 
+  // ── Auto-pluralization ──
+
+  function autoPlural(singular: string, lang: string): string {
+    const s = singular.trim();
+    if (s === "") return "";
+    if (lang === "es") {
+      if (/[aeiouáéíóú]$/i.test(s)) return s + "s";
+      return s + "es";
+    }
+    if (/(?:s|sh|ch|x|z)$/i.test(s)) return s + "es";
+    if (/[^aeiou]y$/i.test(s)) return s.slice(0, -1) + "ies";
+    return s + "s";
+  }
+
+  const pluralTouched = new SvelteSet<string>();
+
+  function pluralKey(lang: LangCode, field: string): string {
+    return `${lang}:${field}`;
+  }
+
   // ── Sheet state ──
 
   let sheetOpened = $state(false);
@@ -164,9 +199,18 @@
   });
 
   function openSheet(): void {
+    pluralTouched.clear();
     for (const lang of LANGS) {
       if (serverConfig?.[lang]) {
         editState[lang] = { ...serverConfig[lang] };
+        for (const group of TERM_GROUPS) {
+          if (group.pluralField === null) continue;
+          const singular = serverConfig[lang][group.singularField];
+          const plural = serverConfig[lang][group.pluralField];
+          if (plural !== autoPlural(singular, lang)) {
+            pluralTouched.add(pluralKey(lang, group.key));
+          }
+        }
       } else {
         const defaults = TERMINOLOGY_DEFAULTS[lang];
         editState[lang] = defaults
@@ -267,6 +311,9 @@
     editState[activeLang] = defaults
       ? { ...defaults }
       : { ...TERMINOLOGY_DEFAULTS_EN };
+    for (const group of TERM_GROUPS) {
+      pluralTouched.delete(pluralKey(activeLang, group.key));
+    }
   }
 </script>
 
@@ -380,6 +427,15 @@
             onInput={(e: Event) => {
               if (e.target instanceof HTMLInputElement) {
                 editState[activeLang][group.singularField] = e.target.value;
+                if (
+                  group.pluralField !== null &&
+                  !pluralTouched.has(pluralKey(activeLang, group.key))
+                ) {
+                  editState[activeLang][group.pluralField] = autoPlural(
+                    e.target.value,
+                    activeLang,
+                  );
+                }
               }
             }}
             disabled={saveMutation.isPending}
@@ -396,6 +452,7 @@
                   group.pluralField !== null
                 ) {
                   editState[activeLang][group.pluralField] = e.target.value;
+                  pluralTouched.add(pluralKey(activeLang, group.key));
                 }
               }}
               disabled={saveMutation.isPending}
