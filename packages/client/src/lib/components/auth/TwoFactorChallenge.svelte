@@ -10,14 +10,8 @@
     - setup/[token] page (inline reauth challenge)
 -->
 <script lang="ts">
-  import {
-    List,
-    ListInput,
-    ListItem,
-    Button,
-    Block,
-    Preloader,
-  } from "konsta/svelte";
+  import { List, ListInput, ListItem, Block, Preloader } from "konsta/svelte";
+  import SoftButton from "$lib/components/inputs/SoftButton.svelte";
   import * as m from "$lib/paraglide/messages.js";
   import { trpc } from "$lib/trpc/index.js";
   import { base64urlToBuffer, bufferToBase64url } from "$lib/utils/webauthn.js";
@@ -61,6 +55,7 @@
   }
 
   let activeMethod = $state<ActiveMethod>(null);
+  let previousMethod = $state<ActiveMethod>(null);
   let error = $state("");
   let submitting = $state(false);
   let codeInput = $state("");
@@ -400,6 +395,7 @@
   // --- Switch method ---
 
   function selectMethod(method: string): void {
+    previousMethod = activeMethod;
     activeMethod = toActiveMethod(method);
     error = "";
     codeInput = "";
@@ -462,8 +458,8 @@
       />
     </List>
     <div class="mt-4">
-      <Button
-        large
+      <SoftButton
+        full
         type="submit"
         disabled={submitting || codeInput.length !== 6}
       >
@@ -472,15 +468,14 @@
         {:else}
           {m.twofa_verify_submit()}
         {/if}
-      </Button>
+      </SoftButton>
     </div>
   </form>
 {:else if activeMethod === "webauthn"}
   <!-- WebAuthn passkey -->
-  <p class="text-sm opacity-70 text-center mb-3">{m.twofa_passkey_use()}</p>
   <div class="mt-4">
-    <Button
-      large
+    <SoftButton
+      full
       onclick={() => {
         void handleWebAuthnVerify();
       }}
@@ -494,14 +489,14 @@
       {:else}
         {m.twofa_passkey_use()}
       {/if}
-    </Button>
+    </SoftButton>
   </div>
 {:else if activeMethod === "email"}
   <!-- Email code -->
   {#if resendCooldown <= 0}
     <div class="mt-4">
-      <Button
-        large
+      <SoftButton
+        full
         onclick={() => {
           void handleEmailSend();
         }}
@@ -512,7 +507,7 @@
         {:else}
           {m.twofa_email_send_code()}
         {/if}
-      </Button>
+      </SoftButton>
     </div>
   {:else}
     <p class="text-sm opacity-70 text-center mb-3">
@@ -535,8 +530,8 @@
         />
       </List>
       <div class="mt-4">
-        <Button
-          large
+        <SoftButton
+          full
           type="submit"
           disabled={submitting || codeInput.length !== 6}
         >
@@ -545,7 +540,7 @@
           {:else}
             {m.twofa_verify_submit()}
           {/if}
-        </Button>
+        </SoftButton>
       </div>
       <p class="text-sm opacity-50 text-center mt-2">
         {m.twofa_email_cooldown({ seconds: String(resendCooldown) })}
@@ -556,8 +551,8 @@
   <!-- SMS code -->
   {#if resendCooldown <= 0}
     <div class="mt-4">
-      <Button
-        large
+      <SoftButton
+        full
         onclick={() => {
           void handleSmsSend();
         }}
@@ -568,7 +563,7 @@
         {:else}
           {m.twofa_sms_send_code()}
         {/if}
-      </Button>
+      </SoftButton>
     </div>
   {:else}
     <p class="text-sm opacity-70 text-center mb-3">
@@ -591,8 +586,8 @@
         />
       </List>
       <div class="mt-4">
-        <Button
-          large
+        <SoftButton
+          full
           type="submit"
           disabled={submitting || codeInput.length !== 6}
         >
@@ -601,7 +596,7 @@
           {:else}
             {m.twofa_verify_submit()}
           {/if}
-        </Button>
+        </SoftButton>
       </div>
       <p class="text-sm opacity-50 text-center mt-2">
         {m.twofa_email_cooldown({ seconds: String(resendCooldown) })}
@@ -617,8 +612,8 @@
     </div>
   {:else}
     <div class="mt-4">
-      <Button
-        large
+      <SoftButton
+        full
         onclick={() => {
           void handlePushSend();
         }}
@@ -629,7 +624,7 @@
         {:else}
           {m.twofa_push_send()}
         {/if}
-      </Button>
+      </SoftButton>
     </div>
   {/if}
 {:else if activeMethod === "backup"}
@@ -652,8 +647,8 @@
       />
     </List>
     <div class="mt-4">
-      <Button
-        large
+      <SoftButton
+        full
         type="submit"
         disabled={submitting || codeInput.length === 0}
       >
@@ -662,8 +657,19 @@
         {:else}
           {m.twofa_verify_submit()}
         {/if}
-      </Button>
+      </SoftButton>
     </div>
+    {#if previousMethod !== null}
+      <button
+        type="button"
+        class="backup-code-link touch-feedback"
+        onclick={() => {
+          if (previousMethod !== null) selectMethod(previousMethod);
+        }}
+      >
+        {m.common_back()}
+      </button>
+    {/if}
   </form>
 {/if}
 
@@ -685,24 +691,24 @@
           {getMethodLabel(altMethod)}
         </button>
       {/each}
-      {#if activeMethod !== "backup"}
-        <button
-          type="button"
-          class="alt-method-btn"
-          onclick={() => {
-            selectMethod("backup");
-          }}
-        >
-          {m.twofa_backup_codes_enter()}
-        </button>
-      {/if}
     </div>
+    {#if activeMethod !== "backup"}
+      <button
+        type="button"
+        class="backup-code-link touch-feedback"
+        onclick={() => {
+          selectMethod("backup");
+        }}
+      >
+        {m.twofa_backup_codes_enter()}
+      </button>
+    {/if}
   </Block>
 {:else if activeMethod !== null && !hasMultipleMethods}
   <Block>
     <button
       type="button"
-      class="alt-method-btn"
+      class="backup-code-link touch-feedback"
       onclick={() => {
         selectMethod("backup");
       }}
@@ -743,5 +749,17 @@
     cursor: pointer;
     min-height: 44px;
     min-width: 44px;
+  }
+
+  .backup-code-link {
+    display: block;
+    width: 100%;
+    background: none;
+    border: none;
+    color: var(--brand-primary);
+    font-size: var(--text-sm);
+    cursor: pointer;
+    padding: var(--space-lg) 0 0;
+    text-align: center;
   }
 </style>
