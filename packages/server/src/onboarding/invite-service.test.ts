@@ -153,6 +153,42 @@ describe.skipIf(!HAS_DB)("invite-service (DB integration)", () => {
     expect(row!.encrypted_email!.equals(fakeEncryptedEmail)).toBe(true);
   });
 
+  it("stores encrypted token when seal function provided", async () => {
+    const mockSeal = (token: string): Buffer => Buffer.from(`sealed:${token}`);
+
+    const { rawToken } = await inviteService.generate({
+      invitedBy: adminUserId,
+      roleId: RoleId.VOLUNTEER,
+      seal: mockSeal,
+    });
+
+    const tokenHash = createHash("sha256").update(rawToken, "utf8").digest();
+    const row = await tenantDb
+      .selectFrom("invite_tokens")
+      .select("encrypted_token")
+      .where("token_hash", "=", tokenHash)
+      .executeTakeFirst();
+
+    expect(row?.encrypted_token).toBeDefined();
+    expect(row!.encrypted_token!.toString("utf8")).toBe(`sealed:${rawToken}`);
+  });
+
+  it("stores null encrypted_token when seal not provided", async () => {
+    const { rawToken } = await inviteService.generate({
+      invitedBy: adminUserId,
+      roleId: RoleId.VOLUNTEER,
+    });
+
+    const tokenHash = createHash("sha256").update(rawToken, "utf8").digest();
+    const row = await tenantDb
+      .selectFrom("invite_tokens")
+      .select("encrypted_token")
+      .where("token_hash", "=", tokenHash)
+      .executeTakeFirst();
+
+    expect(row?.encrypted_token).toBeNull();
+  });
+
   it("stores correct role_id from generate input", async () => {
     const { rawToken } = await inviteService.generate({
       invitedBy: adminUserId,
@@ -245,10 +281,14 @@ describe.skipIf(!HAS_DB)("invite-service (DB integration)", () => {
       }
     });
 
-    it("returns correct fields", async () => {
+    it("returns correct fields including encryptedToken", async () => {
+      const mockSeal = (token: string): Buffer =>
+        Buffer.from(`sealed:${token}`);
+
       const { rawToken } = await inviteService.generate({
         invitedBy: adminUserId,
         roleId: RoleId.ADMIN,
+        seal: mockSeal,
       });
 
       const invite = await inviteService.validate(rawToken);
@@ -260,6 +300,24 @@ describe.skipIf(!HAS_DB)("invite-service (DB integration)", () => {
       expect(match!.invitedBy).toBe(adminUserId);
       expect(match!.expiresAt).toBeInstanceOf(Date);
       expect(match!.createdAt).toBeInstanceOf(Date);
+      expect(match!.encryptedToken).toBeInstanceOf(Buffer);
+      expect(match!.encryptedToken!.toString("utf8")).toBe(
+        `sealed:${rawToken}`,
+      );
+    });
+
+    it("returns null encryptedToken for invites without seal", async () => {
+      const { rawToken } = await inviteService.generate({
+        invitedBy: adminUserId,
+        roleId: RoleId.VOLUNTEER,
+      });
+
+      const invite = await inviteService.validate(rawToken);
+      const pending = await inviteService.listPending();
+      const match = pending.find((p) => p.id === invite!.id);
+
+      expect(match).toBeDefined();
+      expect(match!.encryptedToken).toBeNull();
     });
   });
 
