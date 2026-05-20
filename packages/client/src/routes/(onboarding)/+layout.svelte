@@ -93,7 +93,7 @@
 
   :global(.step-error) {
     font-size: var(--text-base);
-    color: var(--error);
+    color: var(--k-color-red, #ef4444);
     margin: 0;
   }
 

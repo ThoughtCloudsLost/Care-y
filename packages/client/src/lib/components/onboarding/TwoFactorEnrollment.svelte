@@ -47,6 +47,13 @@
     enrolledCount === 1 && !hasNotifiedParent,
   );
 
+  $effect(() => {
+    if (enrolledCount > 0 && !hasNotifiedParent) {
+      hasNotifiedParent = true;
+      onenrolled();
+    }
+  });
+
   function getMethodInfoLabel(labelKey: string): string {
     // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- dynamic paraglide key lookup
     const messages = m as unknown as Record<string, (() => string) | undefined>;
