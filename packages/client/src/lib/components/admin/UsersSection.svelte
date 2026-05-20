@@ -376,6 +376,12 @@
     revokeMutation.mutate({ tokenId: revokeTokenId });
   }
 
+  async function handleCopyInviteLink(url: string): Promise<void> {
+    await navigator.clipboard.writeText(url);
+    haptic();
+    toastStore.show(m.admin_invite_link_copied());
+  }
+
   // ── Edit user sheet ──
   interface SheetState {
     userId: string;
@@ -719,9 +725,11 @@
           roleLabel={getRoleLabel(invite.roleId)}
           inviterName={lookupInviterName(invite.invitedBy)}
           expiresAt={invite.expiresAt}
+          encryptedToken={invite.encryptedToken ?? null}
           revoking={revokeMutation.isPending &&
             revokeMutation.variables.tokenId === invite.id}
           onrevoke={openRevokeDialog}
+          oncopy={handleCopyInviteLink}
         />
       {/each}
       {#each filteredUsers as user (user.id)}
