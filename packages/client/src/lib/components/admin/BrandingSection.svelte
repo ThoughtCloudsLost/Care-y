@@ -37,6 +37,62 @@
   import SoftButton from "$lib/components/inputs/SoftButton.svelte";
   import ShellSheet from "$lib/shell/ShellSheet.svelte";
 
+  interface Props {
+    externalSave?: boolean;
+  }
+
+  let { externalSave = false }: Props = $props();
+
+  export function isDirty(): boolean {
+    return hasChanges;
+  }
+
+  export async function save(): Promise<void> {
+    await handleSave();
+  }
+
+  export async function rebuildBlob(): Promise<void> {
+    orgCache.delete("branding:name");
+    orgCache.delete("branding:color");
+    orgCache.delete("branding:accent");
+    orgCache.delete("branding:text");
+    await queryClient.invalidateQueries({ queryKey: adminKeys.branding() });
+    await brandingQuery.refetch();
+
+    // Trigger decryption by reading the deriveds (fire-and-forget cache),
+    // then wait for all pending decrypts to resolve.
+    void decryptedName;
+    void decryptedColor;
+    void decryptedAccent;
+    void decryptedText;
+    await orgCache.whenSettled();
+
+    const name = decryptedName ?? "";
+    const color = currentColor();
+    const accent = currentAccent();
+    const text = decryptedText ?? "";
+
+    let clientBlob: string;
+    try {
+      clientBlob = buildClientBrandingBlob(
+        { name, primaryColor: color, accentColor: accent, clientText: text },
+        orgKeyManager,
+      );
+    } catch {
+      return;
+    }
+
+    const encryptedValue = await orgKeyManager.encryptText(name);
+    await brandingRouter.saveBrandingField.mutate({
+      field: "name",
+      encryptedValue,
+      clientEncryptedBranding: clientBlob,
+    });
+
+    orgCache.delete("branding:name");
+    void queryClient.invalidateQueries({ queryKey: adminKeys.branding() });
+  }
+
   const brandingRouter = requireRouter(trpc.branding, "branding");
 
   const queryClient = useQueryClient();
@@ -129,7 +185,6 @@
 
   let sheetOpened = $state(false);
 
-  let editName = $state("");
   let editColor = $state(DEFAULT_PRIMARY);
   let editAccent = $state(DEFAULT_ACCENT);
   let editText = $state("");
@@ -154,7 +209,6 @@
   }
 
   function openSheet(): void {
-    editName = decryptedName ?? "";
     editColor = currentColor();
     editAccent = currentAccent();
     editText = decryptedText ?? "";
@@ -181,13 +235,12 @@
 
   // ── Change detection ──
 
-  const nameChanged = $derived(editName !== (decryptedName ?? ""));
   const colorChanged = $derived(editColor !== currentColor());
   const accentChanged = $derived(editAccent !== currentAccent());
   const textChanged = $derived(editText !== (decryptedText ?? ""));
   const logoChanged = $derived(editLogoFile !== null);
   const hasChanges = $derived(
-    nameChanged || colorChanged || accentChanged || textChanged || logoChanged,
+    colorChanged || accentChanged || textChanged || logoChanged,
   );
 
   // ── Color preview ──
@@ -299,8 +352,7 @@
   async function handleSave(): Promise<void> {
     if (!hasChanges) return;
 
-    // Resolve final values for all fields (current or edited)
-    const finalName = nameChanged ? editName : (decryptedName ?? "");
+    const finalName = decryptedName ?? "";
     const finalColor =
       colorChanged && isValidHexColor(editColor) ? editColor : currentColor();
     const finalAccent =
@@ -331,14 +383,6 @@
       encryptedValue: string;
       clientEncryptedBranding: string;
     }[] = [];
-
-    if (nameChanged) {
-      fields.push({
-        field: "name",
-        encryptedValue: await orgKeyManager.encryptText(editName),
-        clientEncryptedBranding: clientBlob,
-      });
-    }
 
     if (colorChanged && isValidHexColor(editColor)) {
       fields.push({
@@ -415,6 +459,7 @@
   {#if brandingQuery.isLoading}
     <Card raised contentWrap={false} class="branding-card">
       <div class="branding-inner">
+        <p class="section-desc">{m.admin_branding_description(withTerms())}</p>
         <div class="card-section-label">
           {m.admin_branding_card_logo_label()}
         </div>
@@ -435,11 +480,6 @@
         </div>
         <div class="section-divider"></div>
         <div class="card-section-label">
-          {m.admin_branding_card_name_label()}
-        </div>
-        <DecryptPlaceholder length={24} />
-        <div class="section-divider"></div>
-        <div class="card-section-label">
           {m.admin_branding_card_text_label(withTerms())}
         </div>
         <DecryptPlaceholder length={40} />
@@ -457,6 +497,7 @@
         role="region"
         aria-label={m.admin_branding_overview_label()}
       >
+        <p class="section-desc">{m.admin_branding_description(withTerms())}</p>
         <!-- Logo -->
         <div class="card-section-label">
           {m.admin_branding_card_logo_label()}
@@ -481,20 +522,6 @@
             {/if}
           </div>
         </div>
-
-        <div class="section-divider"></div>
-
-        <!-- Name -->
-        <div class="card-section-label">
-          {m.admin_branding_card_name_label()}
-        </div>
-        {#if brandingQuery.data?.encryptedName}
-          <DecryptPlaceholder content={decryptedName}>
-            <span class="field-value">{decryptedName}</span>
-          </DecryptPlaceholder>
-        {:else}
-          <span class="text-[--muted] text-sm">-</span>
-        {/if}
 
         <div class="section-divider"></div>
 
@@ -628,20 +655,6 @@
 
     <div class="section-divider"></div>
 
-    <!-- Organization Name -->
-    <div class="sheet-field">
-      <ListInput
-        outline
-        label={m.admin_branding_card_name_label()}
-        type="text"
-        value={editName}
-        onchange={(e: Event) => {
-          if (e.target instanceof HTMLInputElement) editName = e.target.value;
-        }}
-        info={m.admin_branding_name_hint(withTerms())}
-      />
-    </div>
-
     <!-- Client Welcome Text -->
     <div class="sheet-field">
       <ListInput
@@ -750,6 +763,12 @@
     flex-direction: column;
     gap: var(--space-md);
     padding: var(--card-pad-y) var(--card-pad-x);
+  }
+
+  .section-desc {
+    font-size: var(--text-sm);
+    color: var(--muted);
+    line-height: 1.5;
   }
 
   .card-section-label {

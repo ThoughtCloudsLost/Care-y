@@ -343,6 +343,7 @@
 {#if noteTypesQuery.isLoading}
   <Card raised contentWrap={false} class="fut-card">
     <div class="fut-card-inner">
+      <p class="section-desc">{m.admin_note_types_description(withTerms())}</p>
       <h4 class="fut-group-label">{m.admin_note_types_group_configurable()}</h4>
       {#each { length: 4 } as _, i (i)}
         <div class="fut-row">
@@ -369,6 +370,7 @@
 {:else if noteTypesQuery.data}
   <Card raised contentWrap={false} class="fut-card">
     <div class="fut-card-inner">
+      <p class="section-desc">{m.admin_note_types_description(withTerms())}</p>
       <h4 class="fut-group-label">{m.admin_note_types_group_configurable()}</h4>
       {#each noteTypesQuery.data as nt (nt.id)}
         {@const Icon = resolveNoteTypeIcon(
@@ -630,6 +632,13 @@
     display: flex;
     flex-direction: column;
     gap: 0.125rem;
+  }
+
+  .section-desc {
+    font-size: var(--text-sm);
+    color: var(--muted);
+    line-height: 1.5;
+    margin-bottom: var(--space-sm);
   }
 
   .fut-group-label {

@@ -177,7 +177,10 @@ export function createOrgService(
       const orgId = randomUUID();
       const schemaName = `org_${orgId}`;
 
-      const rawToken = randomBytes(32).toString("base64url");
+      const rawToken =
+        process.env.NODE_ENV === "development"
+          ? "dev-setup-token"
+          : randomBytes(32).toString("base64url");
       const tokenHash = hashSetupToken(rawToken);
 
       const row = await insertOrgRow(

@@ -10,7 +10,7 @@ const en_onboarding_reauth_message = /** @type {(inputs: Onboarding_Reauth_Messa
 };
 
 const es_onboarding_reauth_message = /** @type {(inputs: Onboarding_Reauth_MessageInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Sus claves de cifrado necesitan actualizarse. Inicie sesión nuevamente para continuar la configuración.`)
+	return /** @type {LocalizedString} */ (`Sus claves de cifrado necesitan actualizarse. Inicie sesion nuevamente para continuar la configuracion.`)
 };
 
 /**

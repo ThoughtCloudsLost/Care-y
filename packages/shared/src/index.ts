@@ -9,6 +9,7 @@ export {
   RESERVED_SLUGS,
   orgSlugSchema,
   createOrgInputSchema,
+  updateOrgBasicsAdminInputSchema,
 } from "./schemas/org.js";
 
 // --- Utilities ---

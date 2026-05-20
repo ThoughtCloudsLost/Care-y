@@ -2,26 +2,25 @@
   Org setup wizard: single route with client-side step navigation.
   Requires a valid setup token in the URL path.
 
-  Steps (array indices 0-8): account, briefing, org, branding,
-  queue, telephony, escrow, invites, complete.
+  Steps (array indices 0-7): account, briefing, 2FA, organization,
+  invite, queue, communications, escrow.
   Each step component calls oncomplete() to advance.
 -->
 <script lang="ts">
-  import { onMount, getContext } from "svelte";
+  import { onMount } from "svelte";
   import { page } from "$app/state";
   import { goto } from "$app/navigation";
   import { resolve } from "$app/paths";
-  import { type TerminologyLabels } from "@care-y/shared";
   import { createQuery } from "@tanstack/svelte-query";
   import {
     Preloader,
     Block,
     BlockTitle,
-    Button,
     List,
     ListInput,
     ListItem,
   } from "konsta/svelte";
+  import SoftButton from "$lib/components/inputs/SoftButton.svelte";
   import { CircleCheck, Circle } from "@lucide/svelte";
   import * as m from "$lib/paraglide/messages.js";
   import { withTerms } from "$lib/terminology/with-terms.js";
@@ -47,13 +46,12 @@
   import WizardStepper from "$lib/components/onboarding/WizardStepper.svelte";
   import SetupAccount from "$lib/components/onboarding/SetupAccount.svelte";
   import SecurityBriefing from "$lib/components/onboarding/SecurityBriefing.svelte";
-  import SetupOrg from "$lib/components/onboarding/SetupOrg.svelte";
-  import SetupBranding from "$lib/components/onboarding/SetupBranding.svelte";
-  import SetupQueue from "$lib/components/onboarding/SetupQueue.svelte";
-  import SetupTelephony from "$lib/components/onboarding/SetupTelephony.svelte";
   import SetupTwoFactor from "$lib/components/onboarding/SetupTwoFactor.svelte";
-  import SetupEscrow from "$lib/components/onboarding/SetupEscrow.svelte";
+  import SetupOrganization from "$lib/components/onboarding/SetupOrganization.svelte";
   import SetupInvite from "$lib/components/onboarding/SetupInvite.svelte";
+  import SetupQueue from "$lib/components/onboarding/SetupQueue.svelte";
+  import SetupCommunications from "$lib/components/onboarding/SetupCommunications.svelte";
+  import SetupEscrow from "$lib/components/onboarding/SetupEscrow.svelte";
   import PasswordInput from "$lib/components/inputs/PasswordInput.svelte";
 
   const setupToken: string = page.params.token ?? "";
@@ -65,21 +63,16 @@
     m.onboarding_step_briefing(),
     m.onboarding_step_twofa(),
     m.onboarding_step_org(),
-    m.onboarding_step_branding(),
-    m.onboarding_step_queue(withTerms()),
-    m.onboarding_step_telephony(),
-    m.onboarding_step_escrow(),
     m.onboarding_step_invites(),
+    m.onboarding_step_queue(withTerms()),
+    m.onboarding_step_communications(),
+    m.onboarding_step_escrow(),
   ];
 
   interface WizardData {
     userId: string;
     adminVolPublic: string;
     twofaEnrolled: boolean;
-    orgName: string;
-    language: string;
-    countryCode: string;
-    brandingDone: boolean;
     firstQueueCreated: boolean;
     telephonyMode: "byot" | "managed" | "skip";
     escrowExported: boolean;
@@ -141,10 +134,6 @@
   let step = $state(0);
   let completedSteps = $state(new Set<number>());
   let wizardData = $state<Partial<WizardData>>({});
-
-  const updateTerminology = getContext<(labels: TerminologyLabels) => void>(
-    "onboarding-update-terminology",
-  );
 
   const onboarding = requireRouter(trpc.onboarding, "onboarding");
 
@@ -314,41 +303,7 @@
     advanceStep();
   }
 
-  function handleOrgComplete(data: {
-    orgName: string;
-    language: string;
-    countryCode: string;
-    terminology: TerminologyLabels;
-  }): void {
-    wizardData = { ...wizardData, ...data };
-    updateTerminology(data.terminology);
-    advanceStep();
-  }
-
-  function handleBrandingComplete(): void {
-    wizardData = { ...wizardData, brandingDone: true };
-    advanceStep();
-  }
-
-  function handleBrandingSkip(): void {
-    wizardData = { ...wizardData, brandingDone: false };
-    advanceStep();
-  }
-
-  function handleQueueComplete(data: { firstQueueCreated: boolean }): void {
-    wizardData = { ...wizardData, ...data };
-    advanceStep();
-  }
-
-  function handleTelephonyComplete(data: {
-    telephonyMode: "byot" | "managed" | "skip";
-  }): void {
-    wizardData = { ...wizardData, ...data };
-    advanceStep();
-  }
-
-  function handleEscrowComplete(): void {
-    wizardData = { ...wizardData, escrowExported: true };
+  function handleOrganizationComplete(): void {
     advanceStep();
   }
 
@@ -357,12 +312,32 @@
     advanceStep();
   }
 
-  // --- Completion screen: query checklist state for step 9 ---
+  function handleQueueComplete(data: { firstQueueCreated: boolean }): void {
+    wizardData = { ...wizardData, ...data };
+    advanceStep();
+  }
+
+  function handleCommunicationsComplete(data: {
+    telephonyMode: "byot" | "managed" | "skip";
+  }): void {
+    wizardData = { ...wizardData, ...data };
+    advanceStep();
+  }
+
+  async function handleEscrowComplete(): Promise<void> {
+    try {
+      await onboarding.completeSetup.mutate();
+    } catch {
+      /* best-effort; setup is functionally complete at this point */
+    }
+    wizardData = { ...wizardData, escrowExported: true };
+    advanceStep();
+  }
 
   const checklistQuery = createQuery(() => ({
     queryKey: ["dashboard", "setupChecklist"],
     queryFn: async () => trpc.dashboard.getSetupChecklist.query(),
-    enabled: step === 9,
+    enabled: step === 8,
   }));
 
   const nextSteps = CHECKLIST_ITEMS;
@@ -408,7 +383,7 @@
   </Block>
   <TwoFactorChallenge methods={reauthTwofaMethods} onsuccess={finalizeReauth} />
 {:else if needsReauth}
-  <BlockTitle medium>{m.onboarding_account_heading()}</BlockTitle>
+  <BlockTitle medium>{m.onboarding_reauth_heading()}</BlockTitle>
   <Block>
     <p class="step-desc">{m.onboarding_reauth_message()}</p>
   </Block>
@@ -424,7 +399,7 @@
       <ListInput
         label={m.user_field_login_username_label()}
         type="text"
-        placeholder={m.onboarding_account_username_placeholder()}
+        placeholder={m.onboarding_reauth_username_placeholder()}
         bind:value={reauthUsername}
         autocomplete="username"
         autocapitalize="none"
@@ -433,7 +408,7 @@
       />
       <PasswordInput
         label={m.onboarding_account_password()}
-        placeholder={m.onboarding_account_password_placeholder()}
+        placeholder={m.onboarding_reauth_password_placeholder()}
         bind:value={reauthPassword}
         autocomplete="current-password"
         disabled={reauthSubmitting}
@@ -441,8 +416,8 @@
       />
     </List>
     <Block>
-      <Button
-        large
+      <SoftButton
+        full
         type="submit"
         disabled={!reauthUsername || !reauthPassword || reauthSubmitting}
       >
@@ -451,7 +426,7 @@
         {:else}
           {m.onboarding_firstlogin_signin()}
         {/if}
-      </Button>
+      </SoftButton>
     </Block>
   </form>
 {:else if isReady}
@@ -468,25 +443,28 @@
       username={wizardData.userId ?? ""}
     />
   {:else if step === 3}
-    <SetupOrg oncomplete={handleOrgComplete} />
-  {:else if step === 4}
-    <SetupBranding
-      orgName={wizardData.orgName ?? ""}
-      oncomplete={handleBrandingComplete}
-      onskip={handleBrandingSkip}
+    <SetupOrganization
+      adminUserId={wizardData.userId ?? ""}
+      oncomplete={handleOrganizationComplete}
     />
-  {:else if step === 5}
-    <SetupQueue oncomplete={handleQueueComplete} />
-  {:else if step === 6}
-    <SetupTelephony oncomplete={handleTelephonyComplete} />
-  {:else if step === 7}
-    <SetupEscrow oncomplete={handleEscrowComplete} />
-  {:else if step === 8}
+  {:else if step === 4}
     <SetupInvite
       adminUserId={wizardData.userId ?? ""}
       oncomplete={handleInviteComplete}
     />
-  {:else if step === 9}
+  {:else if step === 5}
+    <SetupQueue
+      adminUserId={wizardData.userId ?? ""}
+      oncomplete={handleQueueComplete}
+    />
+  {:else if step === 6}
+    <SetupCommunications
+      adminUserId={wizardData.userId ?? ""}
+      oncomplete={handleCommunicationsComplete}
+    />
+  {:else if step === 7}
+    <SetupEscrow oncomplete={handleEscrowComplete} />
+  {:else if step === 8}
     <BlockTitle medium>{m.onboarding_wizard_complete_heading()}</BlockTitle>
     <Block>
       <div class="complete-screen">
@@ -512,15 +490,15 @@
       {/each}
     </List>
     <Block>
-      <Button
-        large
+      <SoftButton
+        full
         onclick={() => {
           clearState();
           void goto(resolve("/"));
         }}
       >
         {m.onboarding_wizard_complete_go()}
-      </Button>
+      </SoftButton>
     </Block>
   {/if}
 {/if}
