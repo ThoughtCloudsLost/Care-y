@@ -188,6 +188,11 @@
         </p>
       {/if}
 
+      <RoleSelector
+        {selectedRole}
+        onselect={(r: RoleIdValue) => (selectedRole = r)}
+      />
+
       <List nested>
         <ListInput
           outline
@@ -242,11 +247,6 @@
           />
         </Block>
       {/if}
-
-      <RoleSelector
-        {selectedRole}
-        onselect={(r: RoleIdValue) => (selectedRole = r)}
-      />
     </div>
   {/if}
 </ShellSheet>

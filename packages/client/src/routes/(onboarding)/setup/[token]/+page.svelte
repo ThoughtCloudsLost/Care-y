@@ -482,7 +482,10 @@
   {:else if step === 7}
     <SetupEscrow oncomplete={handleEscrowComplete} />
   {:else if step === 8}
-    <SetupInvite oncomplete={handleInviteComplete} />
+    <SetupInvite
+      adminUserId={wizardData.userId ?? ""}
+      oncomplete={handleInviteComplete}
+    />
   {:else if step === 9}
     <BlockTitle medium>{m.onboarding_wizard_complete_heading()}</BlockTitle>
     <Block>

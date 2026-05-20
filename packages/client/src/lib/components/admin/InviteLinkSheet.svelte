@@ -1,5 +1,4 @@
 <script lang="ts">
-  import { Button, Preloader } from "konsta/svelte";
   import { createMutation, useQueryClient } from "@tanstack/svelte-query";
   import { RoleId } from "@care-y/shared";
   import type { RoleIdValue } from "@care-y/shared";
@@ -85,11 +84,13 @@
   ariaLabel={m.admin_invite_link_title()}
 >
   {#snippet headerRight()}
-    {#if generatedInvites.length > 0}
-      <SoftButton onclick={handleDismiss}>
-        {m.admin_invite_link_done()}
-      </SoftButton>
-    {/if}
+    <SoftButton onclick={handleGenerate} disabled={generateMut.isPending}>
+      {#if generateMut.isPending}
+        {m.common_loading()}
+      {:else}
+        {m.admin_invite_link_generate()}
+      {/if}
+    </SoftButton>
   {/snippet}
 
   <div class="sheet-content">
@@ -104,32 +105,11 @@
       onselect={(r: RoleIdValue) => (selectedRole = r)}
     />
 
-    <Button large disabled={generateMut.isPending} onclick={handleGenerate}>
-      {#if generateMut.isPending}
-        <Preloader class="w-5 h-5" />
-      {:else}
-        {m.admin_invite_link_generate()}
-      {/if}
-    </Button>
-
     {#if generatedInvites.length > 0}
       <InviteLinkResult
         invites={generatedInvites}
         oncopy={(url: string) => void handleCopy(url)}
       />
-
-      <Button
-        large
-        outline
-        disabled={generateMut.isPending}
-        onclick={handleGenerate}
-      >
-        {#if generateMut.isPending}
-          <Preloader class="w-5 h-5" />
-        {:else}
-          {m.admin_invite_link_another()}
-        {/if}
-      </Button>
     {/if}
   </div>
 </ShellSheet>
