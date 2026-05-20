@@ -1,5 +1,6 @@
 <script lang="ts">
-  import { Block, Button } from "konsta/svelte";
+  import { Block } from "konsta/svelte";
+  import SoftButton from "$lib/components/inputs/SoftButton.svelte";
   import * as m from "$lib/paraglide/messages.js";
   import TwoFactorEnrollment from "./TwoFactorEnrollment.svelte";
 
@@ -27,9 +28,9 @@
   <TwoFactorEnrollment {userId} {username} onenrolled={handleEnrolled} />
 
   <Block class="continue-block">
-    <Button large onClick={oncomplete} disabled={!enrolled}>
+    <SoftButton full onclick={oncomplete} disabled={!enrolled}>
       {m.onboarding_twofa_continue()}
-    </Button>
+    </SoftButton>
   </Block>
 </div>
 

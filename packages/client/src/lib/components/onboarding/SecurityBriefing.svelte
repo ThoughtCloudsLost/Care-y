@@ -1,5 +1,6 @@
 <script lang="ts">
-  import { Block, BlockTitle, Button } from "konsta/svelte";
+  import { Block, BlockTitle } from "konsta/svelte";
+  import SoftButton from "$lib/components/inputs/SoftButton.svelte";
   import { Info } from "@lucide/svelte";
   import { TERMINOLOGY_DEFAULTS_EN } from "@care-y/shared";
   import * as m from "$lib/paraglide/messages.js";
@@ -292,7 +293,7 @@
 
     <Block>
       <div class="briefing-nav">
-        <Button large onclick={nextPage}>{m.common_next()}</Button>
+        <SoftButton full onclick={nextPage}>{m.common_next()}</SoftButton>
       </div>
     </Block>
   {:else if subPage === 1}
@@ -320,8 +321,8 @@
 
     <Block>
       <div class="briefing-nav">
-        <Button large onclick={prevPage}>{m.common_back()}</Button>
-        <Button large onclick={nextPage}>{m.common_next()}</Button>
+        <SoftButton full onclick={prevPage}>{m.common_back()}</SoftButton>
+        <SoftButton full onclick={nextPage}>{m.common_next()}</SoftButton>
       </div>
     </Block>
   {:else if subPage === 2}
@@ -344,8 +345,8 @@
 
     <Block>
       <div class="briefing-nav">
-        <Button large onclick={prevPage}>{m.common_back()}</Button>
-        <Button large onclick={nextPage}>{m.common_next()}</Button>
+        <SoftButton full onclick={prevPage}>{m.common_back()}</SoftButton>
+        <SoftButton full onclick={nextPage}>{m.common_next()}</SoftButton>
       </div>
     </Block>
   {:else if subPage === 3}
@@ -382,10 +383,10 @@
 
     <Block>
       <div class="briefing-nav">
-        <Button large onclick={prevPage}>{m.common_back()}</Button>
-        <Button large onclick={handleConfirm}>
+        <SoftButton full onclick={prevPage}>{m.common_back()}</SoftButton>
+        <SoftButton full onclick={handleConfirm}>
           {m.onboarding_briefing_confirm()}
-        </Button>
+        </SoftButton>
       </div>
     </Block>
   {/if}

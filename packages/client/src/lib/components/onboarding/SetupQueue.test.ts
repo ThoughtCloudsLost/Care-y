@@ -2,50 +2,20 @@
 import { describe, it, expect, afterEach, vi, beforeEach } from "vitest";
 import { render, screen, cleanup, fireEvent } from "@testing-library/svelte";
 
-const mockMutateAsync = vi.fn().mockResolvedValue({});
-const mockEncryptText = vi.fn().mockResolvedValue("encrypted-text");
 const mockHaptic = vi.fn();
 const mockToastShow = vi.fn();
 const mockAnnounce = vi.fn();
-const mockInvalidateQueries = vi.fn();
-let mockOrgKeyReady = true;
 
-vi.mock("$lib/trpc/index.js", () => ({
-  trpc: {
-    tickets: {
-      createQueue: { mutate: vi.fn() },
-    },
-  },
+vi.mock("$lib/paraglide/messages.js", () => ({
+  onboarding_queue_heading: () => "Create Your First Queue",
+  onboarding_queue_subtext: () => "Queues organize incoming requests.",
+  onboarding_queue_submit: () => "Continue",
+  onboarding_queue_created: () => "Queue created!",
+  admin_queues_create_button: () => "Create queue",
 }));
 
-vi.mock("@tanstack/svelte-query", () => ({
-  createMutation: (_optsFn: () => Record<string, unknown>) => {
-    return {
-      get isPending() {
-        return false;
-      },
-      mutate: vi.fn(),
-      mutateAsync: mockMutateAsync,
-    };
-  },
-  useQueryClient: () => ({
-    invalidateQueries: mockInvalidateQueries,
-  }),
-}));
-
-vi.mock("$lib/crypto/context.js", () => ({
-  getOrgKeyManager: vi.fn(() => ({
-    encryptText: mockEncryptText,
-    isLoaded: true,
-  })),
-}));
-
-vi.mock("$lib/crypto/org-key-ready.svelte.js", () => ({
-  isOrgKeyReady: () => mockOrgKeyReady,
-}));
-
-vi.mock("@care-y/shared", () => ({
-  MAX_ESCALATION_DAYS: 365,
+vi.mock("$lib/terminology/with-terms.js", () => ({
+  withTerms: () => ({}),
 }));
 
 vi.mock("$lib/utils/haptic.js", () => ({ haptic: mockHaptic }));
@@ -55,101 +25,79 @@ vi.mock("$lib/stores/toast.svelte.js", () => ({
 vi.mock("$lib/utils/announce.js", () => ({
   announceToLiveRegion: mockAnnounce,
 }));
-vi.mock("$lib/query/keys.js", () => ({
-  queueKeys: { all: ["queues"] },
+
+vi.mock("$lib/providers/OnboardingCryptoBridge.svelte", async () => ({
+  default: (await import("./test-helpers/StubOnboardingCryptoBridge.svelte"))
+    .default,
 }));
-vi.mock("$lib/errors.js", () => ({
-  RouterNotAvailableError: class extends Error {},
-  requireRouter: <T>(r: T) => r,
+
+vi.mock("$lib/components/admin/QueuesSection.svelte", async () => ({
+  default: (await import("./test-helpers/StubQueuesSection.svelte")).default,
 }));
+
+const { _setTestQueueCount, _resetTestQueueCount } =
+  await import("./test-helpers/StubQueuesSection.svelte");
 
 const { default: SetupQueue } = await import("./SetupQueue.svelte");
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  _resetTestQueueCount();
+});
 beforeEach(() => {
   vi.clearAllMocks();
-  mockOrgKeyReady = true;
 });
 
 describe("SetupQueue", () => {
-  it("renders heading and subtext", () => {
-    render(SetupQueue, { props: { oncomplete: vi.fn() } });
+  const defaultProps = { adminUserId: "admin-1", oncomplete: vi.fn() };
+
+  it("renders heading and description", () => {
+    render(SetupQueue, { props: defaultProps });
     expect(screen.getByText("Create Your First Queue")).toBeTruthy();
+    expect(screen.getByText("Queues organize incoming requests.")).toBeTruthy();
   });
 
-  it("renders the queue form with submit button", () => {
-    render(SetupQueue, { props: { oncomplete: vi.fn() } });
-    expect(screen.getByText("Create Queue")).toBeTruthy();
+  it("renders QueuesSection stub inside the bridge", () => {
+    render(SetupQueue, { props: defaultProps });
+    expect(screen.getByTestId("queues-section")).toBeTruthy();
   });
 
-  it("encrypts name and calls mutation on form submit", async () => {
+  it("renders add queue button", () => {
+    render(SetupQueue, { props: defaultProps });
+    expect(screen.getByText("Create queue")).toBeTruthy();
+  });
+
+  it("hides finish button when no queues exist", () => {
+    render(SetupQueue, { props: defaultProps });
+    expect(screen.queryByText("Continue")).toBeNull();
+  });
+
+  it("shows finish button when queues exist", () => {
+    _setTestQueueCount(1);
+    render(SetupQueue, { props: defaultProps });
+    expect(screen.getByText("Continue")).toBeTruthy();
+  });
+
+  it("calls oncomplete with firstQueueCreated on finish click", async () => {
+    _setTestQueueCount(2);
     const oncomplete = vi.fn();
-    const { container } = render(SetupQueue, { props: { oncomplete } });
+    render(SetupQueue, { props: { ...defaultProps, oncomplete } });
 
-    const inputs = container.querySelectorAll("input");
-    const nameInput = inputs[0];
-    if (nameInput) {
-      await fireEvent.input(nameInput, {
-        target: { value: "General Intake" },
-      });
-    }
+    const finishBtn = screen.getByText("Continue");
+    await fireEvent.click(finishBtn);
 
-    const form = container.querySelector("form");
-    if (form) await fireEvent.submit(form);
-
-    await vi.waitFor(() => {
-      expect(mockEncryptText).toHaveBeenCalledWith("General Intake");
-    });
+    expect(oncomplete).toHaveBeenCalledWith({ firstQueueCreated: true });
   });
 
-  it("calls oncomplete after successful mutation", async () => {
-    const oncomplete = vi.fn();
-    const { container } = render(SetupQueue, { props: { oncomplete } });
+  it("fires haptic and toast on finish", async () => {
+    _setTestQueueCount(1);
+    render(SetupQueue, { props: defaultProps });
 
-    const inputs = container.querySelectorAll("input");
-    if (inputs[0]) {
-      await fireEvent.input(inputs[0], {
-        target: { value: "General Intake" },
-      });
-    }
+    const finishBtn = screen.getByText("Continue");
+    await fireEvent.click(finishBtn);
 
-    const form = container.querySelector("form");
-    if (form) await fireEvent.submit(form);
-
-    await vi.waitFor(() => {
-      expect(oncomplete).toHaveBeenCalledWith({ firstQueueCreated: true });
-    });
-  });
-
-  it("fires haptic and toast on success", async () => {
-    const { container } = render(SetupQueue, {
-      props: { oncomplete: vi.fn() },
-    });
-
-    const inputs = container.querySelectorAll("input");
-    if (inputs[0]) {
-      await fireEvent.input(inputs[0], { target: { value: "Test" } });
-    }
-
-    const form = container.querySelector("form");
-    if (form) await fireEvent.submit(form);
-
-    await vi.waitFor(() => {
-      expect(mockHaptic).toHaveBeenCalled();
-      expect(mockToastShow).toHaveBeenCalled();
-    });
-  });
-
-  it("defaults escalation days to 7", () => {
-    const { container } = render(SetupQueue, {
-      props: { oncomplete: vi.fn() },
-    });
-    const numberInput = container.querySelector('input[type="number"]');
-    expect((numberInput as HTMLInputElement).value).toBe("");
-  });
-
-  it("shows PII warning from shared form", () => {
-    render(SetupQueue, { props: { oncomplete: vi.fn() } });
-    expect(screen.getByRole("note")).toBeTruthy();
+    expect(mockHaptic).toHaveBeenCalled();
+    expect(mockToastShow).toHaveBeenCalledWith("Queue created!");
+    expect(mockAnnounce).toHaveBeenCalledWith("polite", "Queue created!");
   });
 });
