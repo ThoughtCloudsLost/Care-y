@@ -7,7 +7,8 @@
   Each step component calls oncomplete() to advance.
 -->
 <script lang="ts">
-  import { onMount } from "svelte";
+  import { getContext, onMount } from "svelte";
+  import { browser } from "$app/environment";
   import { page } from "$app/state";
   import { goto } from "$app/navigation";
   import { resolve } from "$app/paths";
@@ -16,6 +17,8 @@
     Preloader,
     Block,
     BlockTitle,
+    Button,
+    Link,
     List,
     ListInput,
     ListItem,
@@ -43,7 +46,6 @@
   import { requireRouter } from "$lib/errors.js";
   import TwoFactorChallenge from "$lib/components/auth/TwoFactorChallenge.svelte";
   import { CHECKLIST_ITEMS } from "$lib/onboarding/checklist-items.js";
-  import WizardStepper from "$lib/components/onboarding/WizardStepper.svelte";
   import SetupAccount from "$lib/components/onboarding/SetupAccount.svelte";
   import SecurityBriefing from "$lib/components/onboarding/SecurityBriefing.svelte";
   import SetupTwoFactor from "$lib/components/onboarding/SetupTwoFactor.svelte";
@@ -53,6 +55,7 @@
   import SetupCommunications from "$lib/components/onboarding/SetupCommunications.svelte";
   import SetupEscrow from "$lib/components/onboarding/SetupEscrow.svelte";
   import PasswordInput from "$lib/components/inputs/PasswordInput.svelte";
+  import { getLocale, setLocale, isLocale } from "$lib/paraglide/runtime.js";
 
   const setupToken: string = page.params.token ?? "";
 
@@ -79,7 +82,7 @@
     invitesSent: number;
   }
 
-  const WIZARD_STEP_COUNT = STEP_LABELS.length + 1; // labels + completion screen
+  const WIZARD_STEP_COUNT = STEP_LABELS.length + 1;
 
   function loadSavedState(): { step: number; completed: number[] } | null {
     try {
@@ -131,9 +134,14 @@
     }
   }
 
-  let step = $state(0);
-  let completedSteps = $state(new Set<number>());
+  const savedInit = browser ? loadSavedState() : null;
+  let step = $state(savedInit?.step ?? 0);
+  let completedSteps = $state(new Set<number>(savedInit?.completed ?? []));
   let wizardData = $state<Partial<WizardData>>({});
+
+  const updateStep = getContext<
+    (p: { current: number; total: number; label: string } | null) => void
+  >("onboarding-update-step");
 
   const onboarding = requireRouter(trpc.onboarding, "onboarding");
 
@@ -150,6 +158,7 @@
 
   let reauthTwofaRequired = $state(false);
   let reauthTwofaMethods = $state<string[]>([]);
+  let reauthEncryptedLocale = $state<string | null>(null);
 
   /** Runs crypto key derivation and org key loading after credentials are verified. */
   async function reauthLoadKeys(): Promise<void> {
@@ -187,6 +196,17 @@
       return;
     }
 
+    if (reauthEncryptedLocale !== null) {
+      try {
+        const decrypted = await bridge.orgDecrypt(reauthEncryptedLocale);
+        if (isLocale(decrypted) && decrypted !== getLocale()) {
+          void setLocale(decrypted, { reload: true });
+        }
+      } catch {
+        // Non-fatal: keep current cookie locale
+      }
+    }
+
     haptic();
     needsReauth = false;
     reauthTwofaRequired = false;
@@ -215,6 +235,8 @@
         password: reauthPassword,
       });
 
+      reauthEncryptedLocale = reauthResult.encryptedPreferredLocale ?? null;
+
       if (reauthResult.requiresTwoFactor) {
         // Defer crypto to after 2FA verification. Credentials stay
         // in component state (reauthUsername, reauthPassword).
@@ -240,6 +262,7 @@
   }));
 
   let recoveryHandled = $state(false);
+  let tokenOverride = $state("");
 
   $effect(() => {
     if (!statusQuery.data) return;
@@ -269,6 +292,23 @@
   const isReady = $derived(
     statusQuery.isSuccess && (statusQuery.data.needsSetup || step > 0),
   );
+
+  $effect(() => {
+    if (!isReady || needsReauth) {
+      updateStep(null);
+      return;
+    }
+    const isLabeledStep = step < STEP_LABELS.length;
+    updateStep(
+      isLabeledStep
+        ? {
+            current: step + 1,
+            total: STEP_LABELS.length,
+            label: STEP_LABELS.at(step) ?? "",
+          }
+        : null,
+    );
+  });
 
   onMount(() => {
     function handlePopState(e: PopStateEvent): void {
@@ -377,6 +417,41 @@
   <Block>
     <p class="step-error" role="alert">{m.onboarding_setup_error()}</p>
   </Block>
+  <Block>
+    <Button large onclick={() => void statusQuery.refetch()}
+      >{m.common_retry()}</Button
+    >
+  </Block>
+  <BlockTitle>{m.onboarding_setup_have_token()}</BlockTitle>
+  <List inset strong>
+    <ListInput
+      type="text"
+      autocapitalize="none"
+      autocorrect="off"
+      spellcheck="false"
+      label={m.onboarding_setup_token_label()}
+      placeholder={m.onboarding_setup_token_placeholder()}
+      value={tokenOverride}
+      onInput={(e: Event) => {
+        const target = e.target;
+        if (target instanceof HTMLInputElement) tokenOverride = target.value;
+      }}
+    />
+  </List>
+  <Block>
+    <Button
+      large
+      onclick={() => {
+        const trimmed = tokenOverride.trim();
+        if (trimmed.length > 0) void goto(resolve(`/setup/${trimmed}`));
+      }}
+      disabled={tokenOverride.trim().length === 0}
+      >{m.onboarding_setup_go_to_setup()}</Button
+    >
+    <div class="home-link">
+      <Link onclick={() => void goto(resolve("/"))}>{m.common_go_home()}</Link>
+    </div>
+  </Block>
 {:else if needsReauth && reauthTwofaRequired}
   <Block>
     <p class="step-desc">{m.onboarding_reauth_twofa_message()}</p>
@@ -430,8 +505,6 @@
     </Block>
   </form>
 {:else if isReady}
-  <WizardStepper steps={STEP_LABELS} currentStep={step} {completedSteps} />
-
   {#if step === 0}
     <SetupAccount {setupToken} oncomplete={handleAccountComplete} />
   {:else if step === 1}
@@ -439,7 +512,6 @@
   {:else if step === 2}
     <SetupTwoFactor
       oncomplete={handleTwofaComplete}
-      userId={wizardData.userId ?? ""}
       username={wizardData.userId ?? ""}
     />
   {:else if step === 3}
@@ -504,6 +576,12 @@
 {/if}
 
 <style>
+  .home-link {
+    display: flex;
+    justify-content: center;
+    margin-top: 0.75rem;
+  }
+
   .wizard-loading {
     display: flex;
     flex-direction: column;

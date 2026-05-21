@@ -24,11 +24,10 @@
   interface TwoFactorSheetProps {
     readonly opened: boolean;
     readonly ondismiss: () => void;
-    readonly userId: string;
     readonly username: string;
   }
 
-  let { opened, ondismiss, userId, username }: TwoFactorSheetProps = $props();
+  let { opened, ondismiss, username }: TwoFactorSheetProps = $props();
 
   const queryClient = useQueryClient();
 
@@ -263,7 +262,6 @@
     passkeySheetOpen = false;
   }}
   onenrolled={handleEnrolled}
-  {userId}
   {username}
 />
 

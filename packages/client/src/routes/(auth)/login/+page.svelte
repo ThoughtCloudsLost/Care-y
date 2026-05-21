@@ -30,9 +30,28 @@
   import TwoFactorEnrollment from "$lib/components/onboarding/TwoFactorEnrollment.svelte";
   import TwoFactorChallenge from "$lib/components/auth/TwoFactorChallenge.svelte";
   import PasswordInput from "$lib/components/inputs/PasswordInput.svelte";
+  import LanguagePicker from "$lib/components/inputs/LanguagePicker.svelte";
+  import {
+    getLocale,
+    setLocale,
+    getTextDirection,
+    type Locale,
+    isLocale,
+  } from "$lib/paraglide/runtime.js";
 
   const bridge = getCryptoBridge();
   const orgKeyManager = getOrgKeyManager();
+
+  let uiLocale = $state(getLocale());
+
+  function handleLocaleChange(newLocale: string): void {
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- Locale values validated by LanguagePicker
+    const locale = newLocale as Locale;
+    void setLocale(locale, { reload: false });
+    document.documentElement.lang = locale;
+    document.documentElement.dir = getTextDirection(locale);
+    uiLocale = locale;
+  }
 
   let identifier = $state("");
   let password = $state("");
@@ -46,6 +65,7 @@
   let twofaMethods = $state<string[]>([]);
   let pendingNeedsEnrollment = $state(false);
   let pendingUserId = $state("");
+  let pendingEncryptedLocale = $state<string | null>(null);
 
   // Volunteer first-login enrollment recovery: shown when a volunteer
   // refreshes during their initial 2FA enrollment flow.
@@ -140,6 +160,9 @@
         password,
       });
 
+      pendingEncryptedLocale =
+        loginResult.user.encryptedPreferredLocale ?? null;
+
       // 1b. 2FA: show inline challenge. Credentials stay in $state so the
       //     crypto pipeline can run after verification succeeds.
       if (loginResult.requiresTwoFactor) {
@@ -160,6 +183,7 @@
         return;
       }
 
+      await applyStoredLocale();
       phase = "done";
       await goto(resolve("/"));
     } catch (caught: unknown) {
@@ -196,6 +220,19 @@
     installCleanupHandler(bridge, orgKeyManager);
   }
 
+  async function applyStoredLocale(): Promise<void> {
+    if (pendingEncryptedLocale === null) return;
+    try {
+      const decrypted = await bridge.orgDecrypt(pendingEncryptedLocale);
+      if (!isLocale(decrypted) || decrypted === getLocale()) return;
+      void setLocale(decrypted, { reload: false });
+      document.documentElement.lang = decrypted;
+      document.documentElement.dir = getTextDirection(decrypted);
+    } catch {
+      // Non-fatal: keep current cookie locale if decrypt fails
+    }
+  }
+
   async function handleTwofaSuccess(): Promise<void> {
     error = "";
 
@@ -209,6 +246,7 @@
         return;
       }
 
+      await applyStoredLocale();
       phase = "done";
       await goto(resolve("/"));
     } catch (caught: unknown) {
@@ -239,37 +277,40 @@
   <!-- Waiting for status check, or redirecting to /setup -->
 {:else if phase === "twofa-verify"}
   <!-- Inline 2FA verification (crypto runs after success) -->
-  <div class="text-center mb-6">
-    {#if branding?.iconUrl}
-      <img
-        src={branding.iconUrl}
-        alt=""
-        class="login-logo"
-        width="48"
-        height="48"
-      />
-    {/if}
-    <h1 class="text-2xl font-bold">{orgName}</h1>
-  </div>
-  <TwoFactorChallenge
-    methods={twofaMethods}
-    onsuccess={() => {
-      void handleTwofaSuccess();
-    }}
-  />
-  <div class="text-center mt-6">
-    <button
-      type="button"
-      class="back-link"
-      onclick={() => {
-        phase = "idle";
-        error = "";
-        twofaMethods = [];
+  <LanguagePicker value={uiLocale} onchange={handleLocaleChange} />
+  {#key uiLocale}
+    <div class="text-center mb-6">
+      {#if branding?.iconUrl}
+        <img
+          src={branding.iconUrl}
+          alt=""
+          class="login-logo"
+          width="48"
+          height="48"
+        />
+      {/if}
+      <h1 class="text-2xl font-bold">{orgName}</h1>
+    </div>
+    <TwoFactorChallenge
+      methods={twofaMethods}
+      onsuccess={() => {
+        void handleTwofaSuccess();
       }}
-    >
-      {m.twofa_back_to_login()}
-    </button>
-  </div>
+    />
+    <div class="text-center mt-6">
+      <button
+        type="button"
+        class="back-link"
+        onclick={() => {
+          phase = "idle";
+          error = "";
+          twofaMethods = [];
+        }}
+      >
+        {m.twofa_back_to_login()}
+      </button>
+    </div>
+  {/key}
 {:else if phase === "twofa"}
   <!-- Volunteer first-login enrollment recovery -->
   <BlockTitle medium>{m.onboarding_twofa_vol_heading()}</BlockTitle>
@@ -285,7 +326,6 @@
     </Block>
   {:else}
     <TwoFactorEnrollment
-      userId={enrollmentUserId}
       username={identifier}
       onenrolled={() => {
         void handleEnrollmentComplete();
@@ -307,56 +347,59 @@
   </div>
   <KeyDerivation {phase} {phaseLabel} />
 {:else}
-  <div class="text-center mb-6">
-    {#if branding?.iconUrl}
-      <img
-        src={branding.iconUrl}
-        alt=""
-        class="login-logo"
-        width="48"
-        height="48"
-      />
-    {/if}
-    <h1 class="text-2xl font-bold">{orgName}</h1>
-    <p class="mt-1 text-sm opacity-60">{m.auth_sign_in_continue()}</p>
-  </div>
-
-  {#if error !== ""}
-    <Block role="alert">
-      <p class="step-error">{error}</p>
-    </Block>
-  {/if}
-
-  <form onsubmit={handleSubmit}>
-    <List strong inset>
-      <ListInput
-        label={m.auth_username()}
-        type="text"
-        placeholder={m.auth_username_placeholder()}
-        bind:value={identifier}
-        autocomplete="username"
-        autocapitalize="none"
-        required
-      />
-      <PasswordInput
-        label={m.auth_password()}
-        placeholder={m.auth_password_placeholder()}
-        bind:value={password}
-        autocomplete="current-password"
-        required
-      />
-    </List>
-
-    <div class="mt-4">
-      <Button
-        large
-        type="submit"
-        disabled={isSubmitting || !identifier || !password}
-      >
-        {m.auth_sign_in()}
-      </Button>
+  {#key uiLocale}
+    <div class="text-center mb-6">
+      {#if branding?.iconUrl}
+        <img
+          src={branding.iconUrl}
+          alt=""
+          class="login-logo"
+          width="48"
+          height="48"
+        />
+      {/if}
+      <h1 class="text-2xl font-bold">{orgName}</h1>
+      <p class="mt-1 text-sm opacity-60">{m.auth_sign_in_continue()}</p>
+      <LanguagePicker value={uiLocale} onchange={handleLocaleChange} />
     </div>
-  </form>
+
+    {#if error !== ""}
+      <Block role="alert">
+        <p class="step-error">{error}</p>
+      </Block>
+    {/if}
+
+    <form onsubmit={handleSubmit}>
+      <List strong inset>
+        <ListInput
+          label={m.auth_username()}
+          type="text"
+          placeholder={m.auth_username_placeholder()}
+          bind:value={identifier}
+          autocomplete="username"
+          autocapitalize="none"
+          required
+        />
+        <PasswordInput
+          label={m.auth_password()}
+          placeholder={m.auth_password_placeholder()}
+          bind:value={password}
+          autocomplete="current-password"
+          required
+        />
+      </List>
+
+      <div class="mt-4">
+        <Button
+          large
+          type="submit"
+          disabled={isSubmitting || !identifier || !password}
+        >
+          {m.auth_sign_in()}
+        </Button>
+      </div>
+    </form>
+  {/key}
 {/if}
 
 <style>

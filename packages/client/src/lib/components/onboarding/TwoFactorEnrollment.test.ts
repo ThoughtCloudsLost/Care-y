@@ -83,7 +83,7 @@ beforeEach(() => {
 describe("TwoFactorEnrollment", () => {
   it("renders method list when no methods are enrolled", () => {
     render(TwoFactorEnrollment, {
-      props: { userId: "u1", username: "admin", onenrolled: vi.fn() },
+      props: { username: "admin", onenrolled: vi.fn() },
     });
     expect(
       screen.getByText("Enroll at least one method to continue."),
@@ -99,14 +99,14 @@ describe("TwoFactorEnrollment", () => {
       backupCodesRemaining: 8,
     };
     render(TwoFactorEnrollment, {
-      props: { userId: "u1", username: "admin", onenrolled: vi.fn() },
+      props: { username: "admin", onenrolled: vi.fn() },
     });
     expect(screen.getByText("1 method(s) enrolled")).toBeTruthy();
   });
 
   it("displays available methods as list items", () => {
     render(TwoFactorEnrollment, {
-      props: { userId: "u1", username: "admin", onenrolled: vi.fn() },
+      props: { username: "admin", onenrolled: vi.fn() },
     });
     // METHOD_INFO has 6 entries (platform webauthn, crossplatform, totp, email, sms, push)
     const listItems = screen.getAllByRole("listitem");
@@ -115,7 +115,7 @@ describe("TwoFactorEnrollment", () => {
 
   it("enables query on mount", () => {
     render(TwoFactorEnrollment, {
-      props: { userId: "u1", username: "admin", onenrolled: vi.fn() },
+      props: { username: "admin", onenrolled: vi.fn() },
     });
     expect(queryEnabled).toBe(true);
   });

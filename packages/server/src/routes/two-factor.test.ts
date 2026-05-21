@@ -189,6 +189,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         id: string;
         identifier: string;
         encryptedDisplayName: string;
+        encryptedPreferredLocale: string | null;
         roleId: string;
         isActive: boolean;
       },
@@ -222,6 +223,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         id: string;
         identifier: string;
         encryptedDisplayName: string;
+        encryptedPreferredLocale: string | null;
         roleId: string;
         isActive: boolean;
       },
@@ -392,6 +394,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
           id: user.id,
           identifier: "email-send-user",
           encryptedDisplayName: "Email Send User",
+          encryptedPreferredLocale: null,
           roleId: user.role_id,
           isActive: user.is_active,
         };
@@ -426,6 +429,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
           id: user.id,
           identifier: "email-verify-user",
           encryptedDisplayName: "Email Verify User",
+          encryptedPreferredLocale: null,
           roleId: user.role_id,
           isActive: user.is_active,
         };
@@ -583,6 +587,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
           id: user.id,
           identifier: "verify-email-user",
           encryptedDisplayName: "Verify Email User",
+          encryptedPreferredLocale: null,
           roleId: user.role_id,
           isActive: user.is_active,
         };
@@ -663,6 +668,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
           id: user.id,
           identifier: "methods-remove-user",
           encryptedDisplayName: "Methods Remove User",
+          encryptedPreferredLocale: null,
           roleId: user.role_id,
           isActive: user.is_active,
         };

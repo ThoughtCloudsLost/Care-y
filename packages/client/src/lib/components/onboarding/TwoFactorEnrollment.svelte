@@ -17,12 +17,11 @@
   import BackupCodesSheet from "$lib/components/settings/BackupCodesSheet.svelte";
 
   interface TwoFactorEnrollmentProps {
-    readonly userId: string;
     readonly username: string;
     readonly onenrolled: () => void;
   }
 
-  let { userId, username, onenrolled }: TwoFactorEnrollmentProps = $props();
+  let { username, onenrolled }: TwoFactorEnrollmentProps = $props();
 
   const queryClient = useQueryClient();
 
@@ -179,7 +178,6 @@
     passkeySheetOpen = false;
   }}
   onenrolled={handleEnrolled}
-  {userId}
   {username}
 />
 

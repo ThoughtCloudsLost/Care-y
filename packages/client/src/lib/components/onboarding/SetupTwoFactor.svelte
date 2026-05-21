@@ -6,11 +6,10 @@
 
   interface Props {
     readonly oncomplete: () => void;
-    readonly userId: string;
     readonly username: string;
   }
 
-  let { oncomplete, userId, username }: Props = $props();
+  let { oncomplete, username }: Props = $props();
 
   let enrolled = $state(false);
 
@@ -25,7 +24,7 @@
     <p class="step-desc">{m.onboarding_twofa_desc()}</p>
   </Block>
 
-  <TwoFactorEnrollment {userId} {username} onenrolled={handleEnrolled} />
+  <TwoFactorEnrollment {username} onenrolled={handleEnrolled} />
 
   <Block class="continue-block">
     <SoftButton full onclick={oncomplete} disabled={!enrolled}>

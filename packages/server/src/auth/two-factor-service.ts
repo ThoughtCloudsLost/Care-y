@@ -66,6 +66,7 @@ export interface WebauthnRegistrationOptions {
   readonly challenge: string;
   readonly rpId: string;
   readonly rpName: string;
+  readonly userId: string;
 }
 
 export interface WebauthnAssertionOptions {
@@ -108,6 +109,7 @@ export interface TwoFactorService {
     sessionToken: string,
     rpId: string,
     rpName: string,
+    userId: string,
   ): Promise<WebauthnRegistrationOptions>;
   verifyWebauthnRegistration(
     sessionToken: string,
@@ -630,10 +632,11 @@ export function createTwoFactorService(
       sessionToken: string,
       rpId: string,
       rpName: string,
+      userId: string,
     ): Promise<WebauthnRegistrationOptions> {
       const challenge = randomChallenge();
       await sessions.setWebauthnChallenge(sessionToken, challenge);
-      return { challenge, rpId, rpName };
+      return { challenge, rpId, rpName, userId };
     },
 
     async verifyWebauthnRegistration(

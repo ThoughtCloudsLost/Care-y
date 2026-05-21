@@ -45,6 +45,7 @@
     type LoginPhaseId,
   } from "$lib/components/onboarding/KeyDerivation.svelte";
   import TwoFactorEnrollment from "$lib/components/onboarding/TwoFactorEnrollment.svelte";
+  import { getLocale } from "$lib/paraglide/runtime.js";
 
   const token = $derived(page.params.token ?? "");
   const bridge = getCryptoBridge();
@@ -63,7 +64,6 @@
   let displayName = $state("");
   let password = $state("");
   let confirmPassword = $state("");
-  let registeredUserId = $state("");
   /* eslint-disable @typescript-eslint/no-unsafe-assignment -- $state<union> rune proxy */
   let phase = $state<LoginPhaseId>("idle");
   /* eslint-enable @typescript-eslint/no-unsafe-assignment */
@@ -130,9 +130,8 @@
         identifier,
         password,
         displayName: displayName || undefined,
+        preferredLocale: getLocale(),
       });
-      registeredUserId = userId;
-
       // 2. registerCrypto: Argon2id + OPRF + upload salt + volPublic.
       /* eslint-disable @typescript-eslint/no-unsafe-assignment -- $state<union> rune proxy */
       const setPhase = (p: LoginPhaseId): void => {
@@ -228,7 +227,6 @@
     </Block>
   {:else}
     <TwoFactorEnrollment
-      userId={registeredUserId}
       username={identifier}
       onenrolled={() => {
         void handleTwofaEnrolled();

@@ -12,17 +12,11 @@
     readonly opened: boolean;
     readonly ondismiss: () => void;
     readonly onenrolled: () => void;
-    readonly userId: string;
     readonly username: string;
   }
 
-  let {
-    opened,
-    ondismiss,
-    onenrolled,
-    userId,
-    username,
-  }: PasskeyEnrollSheetProps = $props();
+  let { opened, ondismiss, onenrolled, username }: PasskeyEnrollSheetProps =
+    $props();
 
   let registering = $state(false);
   let error = $state("");
@@ -58,7 +52,7 @@
     try {
       const options = await trpc.twoFactor.enroll.webauthnOptions.mutate();
 
-      const userIdBytes = new TextEncoder().encode(userId);
+      const userIdBytes = new TextEncoder().encode(options.userId);
       const publicKeyOptions: PublicKeyCredentialCreationOptions = {
         challenge: base64urlToBuffer(options.challenge),
         rp: { id: options.rpId, name: options.rpName },
