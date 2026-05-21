@@ -111,6 +111,12 @@ export function createSectionScroll(
     const offset = offsetRem * 16;
     const SCROLL_SLOP = 16;
 
+    // Reset active if the current ID was removed from the sections array
+    // (e.g., getting-started dismissed, conditional section hidden).
+    if (sections.length > 0 && !sections.some((s) => s.id === active)) {
+      active = sections[0]?.id ?? active;
+    }
+
     // eslint-disable-next-line svelte/prefer-svelte-reactivity -- effect-local DOM cache, not reactive
     const elCache = new Map<string, HTMLElement>();
     for (const section of sections) {
@@ -132,6 +138,10 @@ export function createSectionScroll(
 
       if (current !== undefined) active = current;
     }
+
+    // Immediately sync active state when sections change (e.g., a
+    // conditional section was added/removed and shifted indices).
+    updateActive();
 
     let ticking = false;
     function onScroll(): void {
