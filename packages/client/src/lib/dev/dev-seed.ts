@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-non-null-assertion, security/detect-object-injection -- dev-only seed data uses bounded array indexing and known-key object lookups throughout */
 /**
  * Dev-only data seeding via production endpoints.
  *
@@ -109,6 +110,9 @@ function link(href: string): PmMark {
 
 // ── Seed data definitions ────────────────────────────────────────────
 
+const SEED_TICKET_COUNT = 120;
+const FOLLOWUP_TICKET_COUNT = 35;
+
 const QUEUES = [
   { name: "Intake", escalateDays: 3 },
   { name: "Crisis", escalateDays: 1 },
@@ -156,56 +160,197 @@ const NOTE_TYPES: readonly NoteTypeDef[] = [
   },
 ];
 
+// ── User definitions ────────────────────────────────────────────────
+
+interface SeedUserDef {
+  identifier: string;
+  displayName: string;
+  roleId: "volunteer" | "manager";
+  queueIndices: number[];
+}
+
+const SEED_USERS: readonly SeedUserDef[] = [
+  {
+    identifier: "vol.intake",
+    displayName: "Jordan Rivera",
+    roleId: "volunteer",
+    queueIndices: [0],
+  },
+  {
+    identifier: "vol.crisis",
+    displayName: "Morgan Patel",
+    roleId: "volunteer",
+    queueIndices: [1],
+  },
+  {
+    identifier: "vol.housing",
+    displayName: "Avery Chen",
+    roleId: "volunteer",
+    queueIndices: [0, 2],
+  },
+  {
+    identifier: "vol.all",
+    displayName: "Riley Thompson",
+    roleId: "volunteer",
+    queueIndices: [0, 1, 2],
+  },
+  {
+    identifier: "mgr.ops",
+    displayName: "Casey Okafor",
+    roleId: "manager",
+    queueIndices: [0, 1, 2],
+  },
+];
+
+const SEED_PASSWORD = "dev-password-1234!";
+
+// ── Ticket template pools ───────────────────────────────────────────
+
+const TITLE_POOL = [
+  "Caller needs emergency housing referral",
+  "Follow-up on custody hearing preparation",
+  "Active safety concern reported",
+  "New caller requesting general information",
+  "Benefits application assistance needed",
+  "Caller requesting legal aid referral",
+  "Shelter placement follow-up",
+  "Transportation assistance for medical appointment",
+  "Caller needs help with protective order paperwork",
+  "Employment program referral requested",
+  "Child care subsidy application help",
+  "Caller reporting landlord retaliation",
+  "Mental health crisis intervention needed",
+  "Insurance enrollment assistance",
+  "Caller needs food bank and pantry locations",
+  "Domestic violence safety planning",
+  "Immigration legal consultation referral",
+  "Utility shutoff prevention assistance",
+  "School enrollment help for displaced family",
+  "Caller seeking substance abuse treatment options",
+];
+
+const DESC_POOL = [
+  "Caller reports being unhoused for two weeks. Has valid ID and is currently staying at a temporary shelter. Needs connection to transitional housing program.",
+  "Returning caller. Custody hearing scheduled for next month. Needs legal aid referral updated with new court date. Previously connected with family law legal aid.",
+  "Caller describes escalating conflict at home. Safety plan was created during previous call but caller reports the situation has changed. Requesting crisis volunteer connection.",
+  "First-time caller asking about available services. Wants to understand what kind of help is available before deciding next steps. No immediate safety concerns reported.",
+  "Caller needs help navigating benefits application process. Has difficulty with online forms due to limited internet access. Requested callback with step-by-step guidance.",
+  "Caller was referred by a community partner. Seeking legal representation for upcoming hearing. Has documentation ready but needs help understanding the process.",
+  "Caller placed in emergency shelter last week. Checking on timeline for transitional housing placement. Reports feeling safe at current location.",
+  "Caller has medical appointment across town next Tuesday. No personal vehicle and public transit route requires three transfers. Requesting ride assistance.",
+  "Caller needs to file a protective order but is unsure of the process. Has police report number from recent incident. Asking about court filing requirements.",
+  "Caller recently lost employment and is seeking job placement assistance. Has previous experience in food service. Interested in job training programs.",
+  "Caller is a single parent needing child care assistance to maintain employment. Currently on a waitlist for state subsidy. Asking about bridge programs.",
+  "Caller's landlord has initiated eviction proceedings after caller reported code violations. Believes this is retaliatory. Needs tenant rights legal aid.",
+  "Caller expressing suicidal ideation. Currently in a safe location but reports feeling overwhelmed by housing instability. Requesting immediate crisis support.",
+  "Caller's insurance coverage lapsed during a recent move. Open enrollment is approaching and they need help understanding their options.",
+  "Caller is new to the area and has three children. Needs locations for food banks that serve families and have weekend hours.",
+  "Caller has left a dangerous living situation and is staying with a friend temporarily. Needs help creating a safety plan and understanding legal options.",
+  "Caller is undocumented and seeking legal advice about available protections. Has been in the country for eight years and has US-citizen children.",
+  "Caller received a shutoff notice for electricity. Payment is overdue by 60 days. Asking about emergency assistance programs and payment plans.",
+  "Caller's family was displaced and children need to be enrolled in a new school district. Needs help understanding residency requirements and transfer process.",
+  "Caller is interested in treatment options for substance use. Has tried outpatient programs before. Asking about inpatient and residential programs.",
+];
+
+const CLIENT_MSG_POOL = [
+  "I need to update my phone number, can someone help?",
+  "Can someone call me back? I have new information about my case.",
+  "Thank you for the help last time. I have a follow-up question.",
+  "My situation has changed since we last talked. I need to speak with someone.",
+  "I received a letter I do not understand. Can someone explain it?",
+  "Is there someone available who speaks Spanish?",
+  "I missed my appointment. Can it be rescheduled?",
+  "The shelter gave me a referral to call this number.",
+  "I need help filling out some forms before my deadline.",
+  "Things have gotten worse since our last call. Please call me back.",
+  "I found the paperwork you mentioned. What do I do with it?",
+  "My court date was moved. I need to let my advocate know.",
+  "Can I get a copy of the information you sent me?",
+  "I want to thank the person who helped me last week.",
+  "I have a question about the program I was referred to.",
+];
+
+const VOL_REPLY_POOL = [
+  "I have updated your case file with the new information. We will follow up within 48 hours.",
+  "Connecting you with our housing team for next steps.",
+  "I have scheduled a callback for tomorrow between 10am and 12pm.",
+  "Your referral has been sent to the legal aid clinic. They should contact you within 3 business days.",
+  "I have noted your updated contact information in the system.",
+  "A specialist will review your case and reach out by end of day.",
+  "The documents you need are available at the courthouse on 4th Street. Ask for the self-help center.",
+  "I have escalated your case to our crisis team for immediate attention.",
+  "Your appointment has been rescheduled for next Thursday at 2pm.",
+  "I have added the new details to your file. Your assigned advocate will follow up.",
+  "The program you are asking about has openings. I will send you the enrollment information.",
+  "I spoke with the partner agency and they confirmed your referral is active.",
+  "Your case has been transferred to a specialist who handles this type of request.",
+  "I left a message with the organization. They typically respond within 24 hours.",
+  "I have documented your concern. A supervisor will review this within one business day.",
+];
+
+const INTERNAL_NOTE_POOL = [
+  "Caller sounded distressed but confirmed they are in a safe location. Monitoring.",
+  "Verified caller identity against existing records. Information matches.",
+  "Contacted partner agency directly. They confirmed availability for this week.",
+  "Discussed case in team standup. Consensus is to escalate to manager review.",
+  "Previous volunteer left detailed notes. Continuing from where they left off.",
+  "Language barrier noted. Arranged interpreter for next callback.",
+  "Caller has called three times this week. Consider assigning a dedicated advocate.",
+  "Documentation from court received via fax. Scanned and attached to ticket.",
+];
+
+const PRESET_REPLIES = [
+  {
+    title: "Acknowledgment",
+    body: "Thank you for calling. We are reviewing your case and will follow up shortly.",
+  },
+  {
+    title: "Specialist assigned",
+    body: "Your case has been assigned to a specialist. Please call back if your situation changes before we contact you.",
+  },
+  {
+    title: "Resource referral",
+    body: "We have connected you with the appropriate resource. Please let us know if you need anything else.",
+  },
+  {
+    title: "Callback scheduled",
+    body: "We have scheduled a callback. If you need to reach us before then, please call our main line.",
+  },
+];
+
+// ── Ticket generation ───────────────────────────────────────────────
+
+type TicketPriority = "low" | "normal" | "high" | "urgent";
+
 interface TicketDef {
   title: string;
   description: string;
   phone: string;
-  priority: "low" | "normal" | "high" | "urgent";
+  priority: TicketPriority;
   queueIndex: number;
 }
 
-const TICKETS: readonly TicketDef[] = [
-  {
-    title: "Caller needs emergency housing referral",
-    description:
-      "Caller reports being unhoused for two weeks. Has valid ID and is currently staying at a temporary shelter. Needs connection to transitional housing program.",
-    phone: "+15550010001",
-    priority: "high",
-    queueIndex: 2,
-  },
-  {
-    title: "Follow-up on custody hearing preparation",
-    description:
-      "Returning caller. Custody hearing scheduled for next month. Needs legal aid referral updated with new court date. Previously connected with family law legal aid.",
-    phone: "+15550010002",
-    priority: "normal",
-    queueIndex: 0,
-  },
-  {
-    title: "Active safety concern reported",
-    description:
-      "Caller describes escalating conflict at home. Safety plan was created during previous call but caller reports the situation has changed. Requesting crisis volunteer connection.",
-    phone: "+15550010003",
-    priority: "urgent",
-    queueIndex: 1,
-  },
-  {
-    title: "New caller requesting general information",
-    description:
-      "First-time caller asking about available services. Wants to understand what kind of help is available before deciding next steps. No immediate safety concerns reported.",
-    phone: "+15550010004",
-    priority: "low",
-    queueIndex: 0,
-  },
-  {
-    title: "Benefits application assistance needed",
-    description:
-      "Caller needs help navigating benefits application process. Has difficulty with online forms due to limited internet access. Requested callback with step-by-step guidance.",
-    phone: "+15550010005",
-    priority: "normal",
-    queueIndex: 2,
-  },
-];
+function generateTicket(index: number): TicketDef {
+  const priorities: TicketPriority[] = [
+    "normal",
+    "normal",
+    "normal",
+    "normal",
+    "normal",
+    "normal",
+    "high",
+    "high",
+    "low",
+    "urgent",
+  ];
+  return {
+    title: TITLE_POOL[index % TITLE_POOL.length]!,
+    description: DESC_POOL[index % DESC_POOL.length]!,
+    phone: `+1555001${String(index + 1).padStart(4, "0")}`,
+    priority: priorities[index % priorities.length]!,
+    queueIndex: index % 3,
+  };
+}
 
 const KB_ARTICLES: readonly {
   category: string;
@@ -948,10 +1093,13 @@ async function phoneLookup(phone: string): Promise<PhoneLookupResult> {
 
 // ── Main seed function ───────────────────────────────────────────────
 
+export type SeedProgressCallback = (message: string) => void;
+
 /* eslint-disable @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-type-assertion, @typescript-eslint/no-explicit-any -- dev-only function; tRPC routers are conditionally spread so typed access is impossible without `any` */
 export async function devSeedData(
   bridge: CryptoBridge,
   orgKeyManager: OrgKeyManager,
+  onProgress?: SeedProgressCallback,
 ): Promise<void> {
   const orgPublicKey = orgKeyManager.getPublicKey();
   if (!orgPublicKey) {
@@ -960,162 +1108,331 @@ export async function devSeedData(
     );
   }
 
-  // Tickets and KB routers are conditionally spread on the server, so
-  // TypeScript doesn't guarantee route existence. This file only runs
-  // in dev mode; runtime guards check each route before calling it.
+  // eslint-disable-next-line @typescript-eslint/no-empty-function -- no-op fallback for optional progress callback
+  const progress = onProgress ?? (() => {});
+
   const ticketRouter = trpc.tickets as unknown as Record<string, any>;
   const kbRouter = trpc.kb as unknown as Record<string, any>;
+  const authRouter = trpc.auth as unknown as Record<string, any>;
+  const devRouter = trpc.dev as unknown as Record<string, any>;
 
-  // ── Step 1: Queues ──────────────────────────────────────────────────
-  const existingQueues = (await ticketRouter.listQueues.query()) as {
+  // ── Step 0: Reset existing seed data ────────────────────────────────
+  progress("Resetting existing data...");
+  await devRouter.resetSeedData.mutate();
+  console.log("[dev-seed] Reset complete");
+
+  // ── Step 1: Users + queue assignments ───────────────────────────────
+  progress("Creating users...");
+  const existingUsers = (await authRouter.listUsers.query()) as {
     id: string;
-    sortOrder: number;
+    identifier: string;
   }[];
-  if (existingQueues.length === 0) {
-    for (const q of QUEUES) {
-      await ticketRouter.createQueue.mutate({
-        encryptedName: seal(q.name, orgPublicKey),
-        escalateDays: q.escalateDays,
-      });
-      console.log(`[dev-seed] Created queue: ${q.name}`);
+  const existingIdentifiers = new Set(
+    existingUsers.map((u: { identifier: string }) => u.identifier),
+  );
+  const seededUserIds: Record<string, string> = {};
+
+  for (const user of SEED_USERS) {
+    if (existingIdentifiers.has(user.identifier)) {
+      const existing = existingUsers.find(
+        (u: { identifier: string }) => u.identifier === user.identifier,
+      );
+      if (existing) seededUserIds[user.identifier] = existing.id;
+      console.log(
+        `[dev-seed] User "${user.identifier}" already exists, skipping`,
+      );
+      continue;
     }
-  } else {
-    console.log("[dev-seed] Queues already exist, skipping");
+    const result = (await authRouter.register.mutate({
+      identifier: user.identifier,
+      password: SEED_PASSWORD,
+      displayName: user.displayName,
+      roleId: user.roleId,
+    })) as { user: { id: string } };
+    seededUserIds[user.identifier] = result.user.id;
+    console.log(`[dev-seed] Created user: ${user.identifier}`);
   }
 
-  // Re-fetch queues for IDs (needed for ticket creation)
+  // ── Step 2: Queues ──────────────────────────────────────────────────
+  progress("Creating queues...");
+  for (const q of QUEUES) {
+    await ticketRouter.createQueue.mutate({
+      encryptedName: seal(q.name, orgPublicKey),
+      escalateDays: q.escalateDays,
+    });
+    console.log(`[dev-seed] Created queue: ${q.name}`);
+  }
+
   const queues = (await ticketRouter.listQueues.query()) as {
     id: string;
     sortOrder: number;
   }[];
 
-  // ── Step 2: KB Categories ───────────────────────────────────────────
-  const existingCategories = (await kbRouter.listCategories.query()) as {
-    id: string;
-    sortOrder: number;
-  }[];
-  if (existingCategories.length === 0) {
-    for (const name of KB_CATEGORIES) {
-      await kbRouter.createCategory.mutate({
-        encryptedName: seal(name, orgPublicKey),
-      });
-      console.log(`[dev-seed] Created KB category: ${name}`);
-    }
-  } else {
-    console.log("[dev-seed] KB categories already exist, skipping");
+  // Assign admin (current user) to all queues
+  const meResult = (await authRouter.me.query()) as {
+    user: { id: string };
+  };
+  const adminId = meResult.user.id;
+  for (const q of queues) {
+    await ticketRouter.addQueueMember.mutate({
+      queueId: q.id,
+      userId: adminId,
+    });
   }
 
-  // Re-fetch categories for IDs (needed for article creation)
+  // Assign seeded users to their queues
+  for (const user of SEED_USERS) {
+    const userId = seededUserIds[user.identifier];
+    if (userId === undefined || userId === "") continue;
+    for (const qi of user.queueIndices) {
+      const queue = queues[qi];
+      if (!queue) continue;
+      await ticketRouter.addQueueMember.mutate({
+        queueId: queue.id,
+        userId,
+      });
+    }
+  }
+  console.log("[dev-seed] Queue assignments complete");
+
+  // ── Step 3: KB Categories ───────────────────────────────────────────
+  progress("Creating KB categories...");
+  for (const name of KB_CATEGORIES) {
+    await kbRouter.createCategory.mutate({
+      encryptedName: seal(name, orgPublicKey),
+    });
+    console.log(`[dev-seed] Created KB category: ${name}`);
+  }
+
   const categories = (await kbRouter.listCategories.query()) as {
     id: string;
     sortOrder: number;
   }[];
 
-  // ── Step 3: Note Types ──────────────────────────────────────────────
+  // ── Step 4: Note Types ──────────────────────────────────────────────
+  progress("Creating note types...");
   const noteTypesRouter = ticketRouter.noteTypes as
     | Record<string, any>
     | undefined;
+  const noteTypeIds: string[] = [];
   if (noteTypesRouter) {
-    const existingNoteTypes = (await noteTypesRouter.list.query()) as {
-      id: string;
-    }[];
-    if (existingNoteTypes.length === 0) {
-      for (const nt of NOTE_TYPES) {
-        await noteTypesRouter.create.mutate({
-          encryptedName: seal(nt.name, orgPublicKey),
-          encryptedIcon: seal(nt.icon, orgPublicKey),
-          escalationTargets: nt.escalationTargets,
-          requiresOnClose: nt.requiresOnClose,
-        });
-        console.log(`[dev-seed] Created note type: ${nt.name}`);
-      }
-    } else {
-      console.log("[dev-seed] Note types already exist, skipping");
+    for (const nt of NOTE_TYPES) {
+      const result = (await noteTypesRouter.create.mutate({
+        encryptedName: seal(nt.name, orgPublicKey),
+        encryptedIcon: seal(nt.icon, orgPublicKey),
+        escalationTargets: nt.escalationTargets,
+        requiresOnClose: nt.requiresOnClose,
+      })) as { id: string };
+      noteTypeIds.push(result.id);
+      console.log(`[dev-seed] Created note type: ${nt.name}`);
     }
   }
 
-  // ── Step 4: KB Articles ─────────────────────────────────────────────
-  const existingItems = (await kbRouter.listItems.query({ limit: 1 })) as {
-    items: unknown[];
+  // ── Step 5: KB Articles ─────────────────────────────────────────────
+  progress("Creating KB articles...");
+  const categoryNameToSortOrder: Record<string, number> = {
+    Procedures: 1,
+    Resources: 2,
+    Safety: 3,
   };
-  if (existingItems.items.length === 0) {
-    // Map category names to IDs by sort_order
-    // Categories are created in order: Procedures=1, Resources=2, Safety=3
-    const categoryNameToSortOrder: Record<string, number> = {
-      Procedures: 1,
-      Resources: 2,
-      Safety: 3,
+
+  const articleIds: string[] = [];
+  for (const article of KB_ARTICLES) {
+    const targetSort = categoryNameToSortOrder[article.category];
+    const cat = categories.find((c) => c.sortOrder === targetSort);
+    if (!cat) continue;
+
+    const result = (await kbRouter.createItem.mutate({
+      categoryId: cat.id,
+      encryptedTitle: seal(article.title, orgPublicKey),
+      encryptedBody: seal(article.body, orgPublicKey),
+      encryptedExcerpt: seal(article.excerpt, orgPublicKey),
+    })) as { id: string };
+    articleIds.push(result.id);
+    console.log(`[dev-seed] Created KB article: ${article.title}`);
+  }
+
+  // ── Step 6: Tickets ─────────────────────────────────────────────────
+  const ticketIds: string[] = [];
+  for (let i = 0; i < SEED_TICKET_COUNT; i++) {
+    if (i % 10 === 0) {
+      progress(
+        `Creating tickets (${String(i)}/${String(SEED_TICKET_COUNT)})...`,
+      );
+    }
+
+    const ticket = generateTicket(i);
+    const lookup = await phoneLookup(ticket.phone);
+
+    const encrypted = await bridge.createTicketEncryption([
+      { name: "title", plaintext: ticket.title },
+      { name: "description", plaintext: ticket.description },
+    ]);
+
+    const findField = (name: string): string => {
+      const field = encrypted.encryptedFields.find((f) => f.name === name);
+      if (!field) throw new ClientError("Missing encrypted field: " + name);
+      return field.ciphertext;
     };
 
-    for (const article of KB_ARTICLES) {
-      const targetSort = categoryNameToSortOrder[article.category];
-      const cat = categories.find((c) => c.sortOrder === targetSort);
-      if (!cat) {
-        console.warn(
-          `[dev-seed] Category "${article.category}" not found, skipping article "${article.title}"`,
-        );
-        continue;
+    const targetQueue = queues[ticket.queueIndex];
+    if (!targetQueue) continue;
+
+    const result = (await ticketRouter.create.mutate({
+      ...(lookup.found
+        ? { clientId: lookup.clientId }
+        : { clientToken: lookup.token }),
+      queueId: targetQueue.id,
+      encryptedTitle: findField("title"),
+      encryptedDescription: findField("description"),
+      priority: ticket.priority,
+      keyGeneration: encrypted.keyGeneration,
+      keyWrap: encrypted.keyWrap,
+    })) as { id: string };
+    ticketIds.push(result.id);
+
+    if (i % 10 === 0) {
+      console.log(
+        `[dev-seed] Created ticket ${String(i + 1)}/${String(SEED_TICKET_COUNT)}`,
+      );
+    }
+  }
+  console.log(`[dev-seed] Created ${String(ticketIds.length)} tickets`);
+
+  // ── Step 7: Followup timelines ──────────────────────────────────────
+  progress("Adding followup messages...");
+  const followupTickets = ticketIds.slice(0, FOLLOWUP_TICKET_COUNT);
+
+  for (let ti = 0; ti < followupTickets.length; ti++) {
+    const ticketId = followupTickets[ti]!;
+
+    if (ti % 10 === 0) {
+      progress(
+        `Adding followups (${String(ti)}/${String(followupTickets.length)})...`,
+      );
+    }
+
+    const ticketData = (await ticketRouter.get.query({ ticketId })) as {
+      keyWrap: {
+        ephemeralPoint: string;
+        nonce: string;
+        wrappedKey: string;
+      } | null;
+    };
+
+    if (!ticketData.keyWrap) {
+      continue;
+    }
+
+    await bridge.unwrapTk(
+      ticketId,
+      ticketData.keyWrap.ephemeralPoint,
+      ticketData.keyWrap.nonce,
+      ticketData.keyWrap.wrappedKey,
+    );
+
+    const followupCount = 2 + (ti % 5);
+    for (let fi = 0; fi < followupCount; fi++) {
+      const isClientMsg = fi % 3 === 0;
+      const isInternalNote = fi % 5 === 0 && !isClientMsg;
+
+      let source: string;
+      let type: string;
+      let content: string;
+      let noteTypeId: string | undefined;
+
+      if (isClientMsg) {
+        source = "client";
+        type = "sms_inbound";
+        content = CLIENT_MSG_POOL[(ti * 3 + fi) % CLIENT_MSG_POOL.length]!;
+      } else if (isInternalNote && noteTypeIds.length > 0) {
+        source = "volunteer";
+        type = "internal_note";
+        content = INTERNAL_NOTE_POOL[(ti + fi) % INTERNAL_NOTE_POOL.length]!;
+        noteTypeId = noteTypeIds[0];
+      } else {
+        source = "volunteer";
+        type = "message";
+        content = VOL_REPLY_POOL[(ti * 2 + fi) % VOL_REPLY_POOL.length]!;
       }
 
-      await kbRouter.createItem.mutate({
-        categoryId: cat.id,
-        encryptedTitle: seal(article.title, orgPublicKey),
-        encryptedBody: seal(article.body, orgPublicKey),
-        encryptedExcerpt: seal(article.excerpt, orgPublicKey),
+      const encryptedContent = await bridge.encrypt(ticketId, content);
+      await ticketRouter.createFollowUp.mutate({
+        ticketId,
+        encryptedContent,
+        source,
+        type,
+        isPrivate: isInternalNote,
+        mentionedPseudonyms: [],
+        ...(noteTypeId !== undefined ? { noteTypeId } : {}),
       });
-      console.log(`[dev-seed] Created KB article: ${article.title}`);
     }
-  } else {
-    console.log("[dev-seed] KB articles already exist, skipping");
+  }
+  console.log(
+    `[dev-seed] Added followups to ${String(followupTickets.length)} tickets`,
+  );
+
+  // ── Step 8: Ticket state variety ────────────────────────────────────
+  progress("Varying ticket states...");
+  const userIdValues = Object.values(seededUserIds);
+
+  for (let i = 0; i < Math.min(20, ticketIds.length); i++) {
+    await ticketRouter.take.mutate({ ticketId: ticketIds[i] });
   }
 
-  // ── Step 5: Clients + Tickets ───────────────────────────────────────
-  const existingTickets = (await ticketRouter.list.query({})) as {
-    items: unknown[];
-  };
-  if (existingTickets.items.length === 0) {
-    for (const ticket of TICKETS) {
-      // Phone lookup creates the pending client
-      const lookup = await phoneLookup(ticket.phone);
-
-      // Encrypt ticket content via the crypto Worker
-      const encrypted = await bridge.createTicketEncryption([
-        { name: "title", plaintext: ticket.title },
-        { name: "description", plaintext: ticket.description },
-      ]);
-
-      const findField = (name: string): string => {
-        const field = encrypted.encryptedFields.find((f) => f.name === name);
-        if (!field) throw new ClientError("Missing encrypted field: " + name);
-        return field.ciphertext;
-      };
-
-      const targetQueue = queues[ticket.queueIndex];
-      if (!targetQueue) {
-        console.warn(
-          `[dev-seed] Queue index ${String(ticket.queueIndex)} not found, skipping ticket "${ticket.title}"`,
-        );
-        continue;
-      }
-
-      await ticketRouter.create.mutate({
-        ...(lookup.found
-          ? { clientId: lookup.clientId }
-          : { clientToken: lookup.token }),
-        queueId: targetQueue.id,
-        encryptedTitle: findField("title"),
-        encryptedDescription: findField("description"),
-        priority: ticket.priority,
-        keyGeneration: encrypted.keyGeneration,
-        keyWrap: encrypted.keyWrap,
+  for (let i = 20; i < Math.min(35, ticketIds.length); i++) {
+    const targetUserId = userIdValues[i % userIdValues.length];
+    if (targetUserId !== undefined && targetUserId !== "") {
+      await ticketRouter.assignTo.mutate({
+        ticketId: ticketIds[i],
+        targetUserId,
       });
-      console.log(`[dev-seed] Created ticket: ${ticket.title}`);
     }
-  } else {
-    console.log("[dev-seed] Tickets already exist, skipping");
   }
 
-  // ── Step 6: Telephony Config ────────────────────────────────────────
+  for (let i = 80; i < Math.min(90, ticketIds.length); i++) {
+    await ticketRouter.update.mutate({
+      ticketId: ticketIds[i],
+      status: "closed",
+    });
+  }
+
+  for (let i = 50; i < Math.min(58, ticketIds.length); i++) {
+    await ticketRouter.update.mutate({
+      ticketId: ticketIds[i],
+      onHold: true,
+    });
+  }
+
+  for (let i = 60; i < Math.min(65, ticketIds.length); i++) {
+    await ticketRouter.update.mutate({
+      ticketId: ticketIds[i],
+      priority: "urgent",
+    });
+  }
+  console.log("[dev-seed] Ticket state variety applied");
+
+  // ── Step 9: Preset replies ──────────────────────────────────────────
+  progress("Creating preset replies...");
+  for (const preset of PRESET_REPLIES) {
+    await ticketRouter.createPreset.mutate({
+      encryptedTitle: seal(preset.title, orgPublicKey),
+      encryptedBody: seal(preset.body, orgPublicKey),
+    });
+    console.log(`[dev-seed] Created preset reply: ${preset.title}`);
+  }
+
+  // ── Step 10: KB votes ───────────────────────────────────────────────
+  progress("Adding KB votes...");
+  for (let i = 0; i < Math.min(4, articleIds.length); i++) {
+    await kbRouter.castVote.mutate({
+      itemId: articleIds[i],
+      direction: "up",
+    });
+  }
+  console.log("[dev-seed] KB votes cast");
+
+  // ── Step 11: Telephony Config ───────────────────────────────────────
   const telAdmin = trpc.telephonyAdmin as
     | Record<string, { mutate: () => Promise<{ skipped: boolean }> }>
     | undefined;
@@ -1127,6 +1444,7 @@ export async function devSeedData(
     );
   }
 
+  progress("Done!");
   console.log("[dev-seed] All seed data created");
 }
 /* eslint-enable @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-type-assertion, @typescript-eslint/no-explicit-any */
