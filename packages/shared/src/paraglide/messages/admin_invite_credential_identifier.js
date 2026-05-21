@@ -10,7 +10,7 @@ const en_admin_invite_credential_identifier = /** @type {(inputs: Admin_Invite_C
 };
 
 const es_admin_invite_credential_identifier = /** @type {(inputs: Admin_Invite_Credential_IdentifierInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Nombre de usuario`)
+	return /** @type {LocalizedString} */ (`Usuario de inicio de sesion`)
 };
 
 /**

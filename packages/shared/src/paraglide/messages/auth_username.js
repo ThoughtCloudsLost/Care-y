@@ -6,17 +6,17 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Auth_UsernameInputs */
 
 const en_auth_username = /** @type {(inputs: Auth_UsernameInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Username`)
+	return /** @type {LocalizedString} */ (`Login Username`)
 };
 
 const es_auth_username = /** @type {(inputs: Auth_UsernameInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Nombre de usuario`)
+	return /** @type {LocalizedString} */ (`Usuario de inicio de sesion`)
 };
 
 /**
 * | output |
 * | --- |
-* | "Username" |
+* | "Login Username" |
 *
 * @param {Auth_UsernameInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

@@ -6,17 +6,17 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Onboarding_Firstlogin_Username_PlaceholderInputs */
 
 const en_onboarding_firstlogin_username_placeholder = /** @type {(inputs: Onboarding_Firstlogin_Username_PlaceholderInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Username`)
+	return /** @type {LocalizedString} */ (`Login Username`)
 };
 
 const es_onboarding_firstlogin_username_placeholder = /** @type {(inputs: Onboarding_Firstlogin_Username_PlaceholderInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Nombre de usuario`)
+	return /** @type {LocalizedString} */ (`Usuario de inicio de sesion`)
 };
 
 /**
 * | output |
 * | --- |
-* | "Username" |
+* | "Login Username" |
 *
 * @param {Onboarding_Firstlogin_Username_PlaceholderInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

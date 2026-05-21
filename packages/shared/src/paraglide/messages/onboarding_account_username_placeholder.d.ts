@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Choose a username" |
+* | "Choose a login username" |
 *
 * @param {Onboarding_Account_Username_PlaceholderInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

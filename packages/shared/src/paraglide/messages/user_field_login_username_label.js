@@ -10,7 +10,7 @@ const en_user_field_login_username_label = /** @type {(inputs: User_Field_Login_
 };
 
 const es_user_field_login_username_label = /** @type {(inputs: User_Field_Login_Username_LabelInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Nombre de usuario`)
+	return /** @type {LocalizedString} */ (`Usuario de inicio de sesion`)
 };
 
 /**

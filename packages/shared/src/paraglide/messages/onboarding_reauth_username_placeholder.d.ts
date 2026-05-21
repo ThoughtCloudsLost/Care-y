@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Your username" |
+* | "Your login username" |
 *
 * @param {Onboarding_Reauth_Username_PlaceholderInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

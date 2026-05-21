@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Usernames only. No passwords are stored." |
+* | "Login usernames only. No passwords are stored." |
 *
 * @param {Onboarding_Briefing_Practice_Username_CompromiseInputs} inputs
 * @param {{ locale?: "en" | "es" }} options
