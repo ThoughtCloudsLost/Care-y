@@ -64,6 +64,7 @@ function makeContext(roleId: string): Context {
       id: "user-reports-1",
       identifier: "tester",
       encryptedDisplayName: "encrypted",
+      encryptedPreferredLocale: null,
       roleId,
       isActive: true,
     },

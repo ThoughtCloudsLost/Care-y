@@ -458,6 +458,7 @@ describe("OPRF tRPC route", () => {
         id: "d4e5f6a7-b8c9-4d0e-af2a-3b4c5d6e7f80",
         identifier: "session-user",
         encryptedDisplayName: "Session User",
+        encryptedPreferredLocale: null,
         roleId: "volunteer",
         isActive: true,
       },

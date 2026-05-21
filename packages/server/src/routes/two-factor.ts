@@ -278,6 +278,7 @@ export function createTwoFactorRouter(deps: TwoFactorRouterDeps) {
           ctx.session.token,
           deriveRpId(),
           WEBAUTHN_RP_NAME,
+          ctx.user.id,
         ),
       ),
     ),

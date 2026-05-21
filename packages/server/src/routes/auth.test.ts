@@ -211,6 +211,7 @@ describe.skipIf(!HAS_DB)("auth + org routers (DB integration)", () => {
       id: string;
       identifier: string;
       encryptedDisplayName: string;
+      encryptedPreferredLocale: string | null;
       roleId: string;
       isActive: boolean;
     },

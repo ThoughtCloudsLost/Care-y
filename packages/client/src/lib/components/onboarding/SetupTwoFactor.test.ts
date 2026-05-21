@@ -77,14 +77,14 @@ beforeEach(() => {
 describe("SetupTwoFactor", () => {
   it("renders heading and description", () => {
     render(SetupTwoFactor, {
-      props: { oncomplete: vi.fn(), userId: "u1", username: "admin" },
+      props: { oncomplete: vi.fn(), username: "admin" },
     });
     expect(screen.getByText("Set Up Two-Factor Authentication")).toBeTruthy();
   });
 
   it("renders continue button disabled initially", () => {
     render(SetupTwoFactor, {
-      props: { oncomplete: vi.fn(), userId: "u1", username: "admin" },
+      props: { oncomplete: vi.fn(), username: "admin" },
     });
     const button = screen.getByText("Continue");
     expect(button.closest("button")?.disabled).toBe(true);
@@ -92,7 +92,7 @@ describe("SetupTwoFactor", () => {
 
   it("renders the enrollment method list", () => {
     render(SetupTwoFactor, {
-      props: { oncomplete: vi.fn(), userId: "u1", username: "admin" },
+      props: { oncomplete: vi.fn(), username: "admin" },
     });
     expect(
       screen.getByText("Enroll at least one method to continue."),

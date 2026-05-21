@@ -10,6 +10,7 @@
     - setup/[token] page (inline reauth challenge)
 -->
 <script lang="ts">
+  import { untrack } from "svelte";
   import { List, ListInput, ListItem, Block, Preloader } from "konsta/svelte";
   import SoftButton from "$lib/components/inputs/SoftButton.svelte";
   import * as m from "$lib/paraglide/messages.js";
@@ -76,6 +77,29 @@
     }
   });
 
+  // Auto-start the selected method's action (send code, trigger passkey, etc.)
+  $effect(() => {
+    const method = activeMethod;
+    if (method === null || method === "totp" || method === "backup") return;
+
+    untrack(() => {
+      switch (method) {
+        case "webauthn":
+          void handleWebAuthnVerify();
+          break;
+        case "email":
+          void handleEmailSend();
+          break;
+        case "sms":
+          void handleSmsSend();
+          break;
+        case "push":
+          void handlePushSend();
+          break;
+      }
+    });
+  });
+
   const hasMultipleMethods = $derived(methods.length > 1);
 
   // Cleanup intervals on unmount
@@ -102,6 +126,23 @@
         return m.twofa_push_label();
       default:
         return method;
+    }
+  }
+
+  function getMethodDescription(method: string): string {
+    switch (method) {
+      case TwoFactorMethod.TOTP:
+        return m.twofa_totp_desc();
+      case TwoFactorMethod.WEBAUTHN:
+        return m.twofa_webauthn_platform_desc();
+      case TwoFactorMethod.EMAIL:
+        return m.twofa_email_desc();
+      case TwoFactorMethod.SMS:
+        return m.twofa_sms_desc();
+      case TwoFactorMethod.PUSH:
+        return m.twofa_push_desc();
+      default:
+        return "";
     }
   }
 
@@ -424,6 +465,7 @@
     {#each methods as method (method)}
       <ListItem
         title={getMethodLabel(method)}
+        subtitle={getMethodDescription(method)}
         link
         onclick={() => {
           selectMethod(method);
@@ -673,6 +715,10 @@
   </form>
 {/if}
 
+{#if activeMethod !== null && activeMethod !== "backup"}
+  <p class="method-desc">{getMethodDescription(activeMethod)}</p>
+{/if}
+
 <!-- Alternative methods -->
 {#if activeMethod !== null && hasMultipleMethods}
   <Block>
@@ -749,6 +795,14 @@
     cursor: pointer;
     min-height: 44px;
     min-width: 44px;
+  }
+
+  .method-desc {
+    font-size: 0.8125rem;
+    color: var(--muted, #6b7280);
+    text-align: center;
+    line-height: 1.5;
+    margin: 0.75rem 1rem 0;
   }
 
   .backup-code-link {
