@@ -6,17 +6,17 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Error_Invalid_CredentialsInputs */
 
 const en_error_invalid_credentials = /** @type {(inputs: Error_Invalid_CredentialsInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Invalid username or password.`)
+	return /** @type {LocalizedString} */ (`Invalid login username or password.`)
 };
 
 const es_error_invalid_credentials = /** @type {(inputs: Error_Invalid_CredentialsInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Usuario o contraseña incorrectos.`)
+	return /** @type {LocalizedString} */ (`Usuario de inicio de sesion o contraseña incorrectos.`)
 };
 
 /**
 * | output |
 * | --- |
-* | "Invalid username or password." |
+* | "Invalid login username or password." |
 *
 * @param {Error_Invalid_CredentialsInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

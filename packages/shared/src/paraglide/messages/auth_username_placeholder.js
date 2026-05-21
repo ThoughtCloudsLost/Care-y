@@ -6,17 +6,17 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Auth_Username_PlaceholderInputs */
 
 const en_auth_username_placeholder = /** @type {(inputs: Auth_Username_PlaceholderInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`your.username`)
+	return /** @type {LocalizedString} */ (`your login username`)
 };
 
 const es_auth_username_placeholder = /** @type {(inputs: Auth_Username_PlaceholderInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`tu.usuario`)
+	return /** @type {LocalizedString} */ (`tu.usuario.de.sesion`)
 };
 
 /**
 * | output |
 * | --- |
-* | "your.username" |
+* | "your login username" |
 *
 * @param {Auth_Username_PlaceholderInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

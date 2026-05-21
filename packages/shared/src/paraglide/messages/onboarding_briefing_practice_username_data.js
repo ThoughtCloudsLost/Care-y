@@ -6,17 +6,17 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Onboarding_Briefing_Practice_Username_DataInputs */
 
 const en_onboarding_briefing_practice_username_data = /** @type {(inputs: Onboarding_Briefing_Practice_Username_DataInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Volunteer usernames`)
+	return /** @type {LocalizedString} */ (`Volunteer login usernames`)
 };
 
 const es_onboarding_briefing_practice_username_data = /** @type {(inputs: Onboarding_Briefing_Practice_Username_DataInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Nombres de usuario de voluntarios`)
+	return /** @type {LocalizedString} */ (`Usuarios de inicio de sesion de voluntarios`)
 };
 
 /**
 * | output |
 * | --- |
-* | "Volunteer usernames" |
+* | "Volunteer login usernames" |
 *
 * @param {Onboarding_Briefing_Practice_Username_DataInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

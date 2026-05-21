@@ -385,7 +385,7 @@
   // ── Edit user sheet ──
   interface SheetState {
     userId: string;
-    userName: string;
+    userDisplayName: string;
     userIdentifier: string;
     roleId: string;
     isActive: boolean;
@@ -408,7 +408,7 @@
     if (!user) return;
     const state: SheetState = {
       userId,
-      userName:
+      userDisplayName:
         decryptDisplayName(userId, user.encryptedDisplayName) ??
         userId.slice(0, 8),
       userIdentifier: user.identifier,
@@ -416,7 +416,7 @@
       isActive: user.isActive,
     };
     sheetState = state;
-    editDisplayName = state.userName;
+    editDisplayName = state.userDisplayName;
     editUsername = state.userIdentifier;
     // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- server roleId is always a valid RoleIdValue
     editRoleId = user.roleId as RoleIdValue;
@@ -455,7 +455,7 @@
   const displayNameChanged = $derived(
     sheetState !== null &&
       displayNameValid &&
-      trimmedDisplayName !== sheetState.userName,
+      trimmedDisplayName !== sheetState.userDisplayName,
   );
 
   const parsedUsername = $derived(identifierSchema.safeParse(editUsername));
@@ -543,9 +543,9 @@
 
   function handleSheetDeactivate(): void {
     if (!sheetState) return;
-    const { userId, userName, isActive } = sheetState;
+    const { userId, userDisplayName, isActive } = sheetState;
     closeSheet();
-    openDeactivateDialog(userId, userName, !isActive);
+    openDeactivateDialog(userId, userDisplayName, !isActive);
   }
 
   // ── Deactivation dialog (single user) ──
@@ -768,7 +768,7 @@
 <ShellSheet
   opened={sheetState !== null}
   ondismiss={closeSheet}
-  title={sheetState?.userName ?? ""}
+  title={sheetState?.userDisplayName ?? ""}
   ariaLabel={m.admin_user_edit_actions()}
 >
   {#snippet headerRight()}

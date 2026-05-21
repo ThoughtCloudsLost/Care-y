@@ -6,17 +6,17 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Error_Account_Already_ExistsInputs */
 
 const en_error_account_already_exists = /** @type {(inputs: Error_Account_Already_ExistsInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`An account with this username already exists.`)
+	return /** @type {LocalizedString} */ (`An account with this login username already exists.`)
 };
 
 const es_error_account_already_exists = /** @type {(inputs: Error_Account_Already_ExistsInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Ya existe una cuenta con este nombre de usuario.`)
+	return /** @type {LocalizedString} */ (`Ya existe una cuenta con este usuario de inicio de sesion.`)
 };
 
 /**
 * | output |
 * | --- |
-* | "An account with this username already exists." |
+* | "An account with this login username already exists." |
 *
 * @param {Error_Account_Already_ExistsInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

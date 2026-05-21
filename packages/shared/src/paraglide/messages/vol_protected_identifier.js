@@ -10,7 +10,7 @@ const en_vol_protected_identifier = /** @type {(inputs: Vol_Protected_Identifier
 };
 
 const es_vol_protected_identifier = /** @type {(inputs: Vol_Protected_IdentifierInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Tu nombre de usuario es un seudonimo, no vinculado a tu identidad real.`)
+	return /** @type {LocalizedString} */ (`Tu usuario de inicio de sesion es un seudonimo, no vinculado a tu identidad real.`)
 };
 
 /**

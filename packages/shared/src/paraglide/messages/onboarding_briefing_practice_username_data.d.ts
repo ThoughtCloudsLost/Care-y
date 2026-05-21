@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Volunteer usernames" |
+* | "Volunteer login usernames" |
 *
 * @param {Onboarding_Briefing_Practice_Username_DataInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

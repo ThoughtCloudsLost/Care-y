@@ -6,17 +6,17 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Onboarding_Briefing_Practice_Username_CompromiseInputs */
 
 const en_onboarding_briefing_practice_username_compromise = /** @type {(inputs: Onboarding_Briefing_Practice_Username_CompromiseInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Usernames only. No passwords are stored.`)
+	return /** @type {LocalizedString} */ (`Login usernames only. No passwords are stored.`)
 };
 
 const es_onboarding_briefing_practice_username_compromise = /** @type {(inputs: Onboarding_Briefing_Practice_Username_CompromiseInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Solo nombres de usuario. No se almacenan contrasenas.`)
+	return /** @type {LocalizedString} */ (`Solo usuarios de inicio de sesion. No se almacenan contrasenas.`)
 };
 
 /**
 * | output |
 * | --- |
-* | "Usernames only. No passwords are stored." |
+* | "Login usernames only. No passwords are stored." |
 *
 * @param {Onboarding_Briefing_Practice_Username_CompromiseInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

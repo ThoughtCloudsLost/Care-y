@@ -6,7 +6,7 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Auth_Invalid_CredentialsInputs */
 
 const en_auth_invalid_credentials = /** @type {(inputs: Auth_Invalid_CredentialsInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Invalid username or password`)
+	return /** @type {LocalizedString} */ (`Invalid login username or password`)
 };
 
 const es_auth_invalid_credentials = /** @type {(inputs: Auth_Invalid_CredentialsInputs) => LocalizedString} */ () => {
@@ -16,7 +16,7 @@ const es_auth_invalid_credentials = /** @type {(inputs: Auth_Invalid_Credentials
 /**
 * | output |
 * | --- |
-* | "Invalid username or password" |
+* | "Invalid login username or password" |
 *
 * @param {Auth_Invalid_CredentialsInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

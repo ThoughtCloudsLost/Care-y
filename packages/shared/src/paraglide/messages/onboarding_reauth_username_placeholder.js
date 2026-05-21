@@ -6,17 +6,17 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Onboarding_Reauth_Username_PlaceholderInputs */
 
 const en_onboarding_reauth_username_placeholder = /** @type {(inputs: Onboarding_Reauth_Username_PlaceholderInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Your username`)
+	return /** @type {LocalizedString} */ (`Your login username`)
 };
 
 const es_onboarding_reauth_username_placeholder = /** @type {(inputs: Onboarding_Reauth_Username_PlaceholderInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Su nombre de usuario`)
+	return /** @type {LocalizedString} */ (`Su usuario de inicio de sesion`)
 };
 
 /**
 * | output |
 * | --- |
-* | "Your username" |
+* | "Your login username" |
 *
 * @param {Onboarding_Reauth_Username_PlaceholderInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

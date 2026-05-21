@@ -10,7 +10,7 @@ const en_user_field_login_username_pii_warning = /** @type {(inputs: User_Field_
 };
 
 const es_user_field_login_username_pii_warning = /** @type {(inputs: User_Field_Login_Username_Pii_WarningInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Los nombres de usuario se almacenan con cifrado mas debil que los nombres. Evite usar nombres reales o correos electronicos.`)
+	return /** @type {LocalizedString} */ (`Los usuarios de inicio de sesion se almacenan con cifrado mas debil que los nombres visibles. Evite usar nombres reales o correos electronicos.`)
 };
 
 /**

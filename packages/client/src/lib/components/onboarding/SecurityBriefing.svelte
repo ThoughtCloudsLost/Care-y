@@ -310,7 +310,7 @@
               {m.onboarding_briefing_practice_col_access()}
             </p>
             <p>{row.access}</p>
-            <p class="choice-label">
+            <p class="choice-label compromise-label">
               {m.onboarding_briefing_practice_col_compromise()}
             </p>
             <p>{row.compromise}</p>
@@ -576,6 +576,10 @@
 
   .choice-label:first-child {
     margin-top: 0;
+  }
+
+  .compromise-label {
+    color: var(--k-color-red, #ef4444);
   }
 
   .page-dots {

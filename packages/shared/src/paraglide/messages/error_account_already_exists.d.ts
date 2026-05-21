@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "An account with this username already exists." |
+* | "An account with this login username already exists." |
 *
 * @param {Error_Account_Already_ExistsInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

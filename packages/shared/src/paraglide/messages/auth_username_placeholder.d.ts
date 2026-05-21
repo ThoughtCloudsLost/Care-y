@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "your.username" |
+* | "your login username" |
 *
 * @param {Auth_Username_PlaceholderInputs} inputs
 * @param {{ locale?: "en" | "es" }} options
