@@ -34,6 +34,7 @@ export interface UserRecord {
   readonly id: string;
   readonly identifier: string; // still decrypted server-side (Tier 2, needed for login response)
   readonly encryptedDisplayName: string; // base64 ciphertext, client decrypts with org key
+  readonly encryptedPreferredLocale: string | null; // base64 ciphertext, client decrypts with org key
   readonly roleId: string;
   readonly isActive: boolean;
 }
@@ -44,6 +45,7 @@ export interface AuthService {
     password: string;
     displayName: string;
     notificationEmail?: string;
+    preferredLocale?: string;
     roleId: string;
   }): Promise<UserRecord>;
 
@@ -131,6 +133,8 @@ function toUserRecord(
     id: row.id,
     identifier: encryptor.decrypt(row.encrypted_identifier),
     encryptedDisplayName: row.encrypted_display_name.toString("base64"),
+    encryptedPreferredLocale:
+      row.encrypted_preferred_locale?.toString("base64") ?? null,
     roleId: row.role_id,
     isActive: row.is_active,
   };
@@ -310,6 +314,7 @@ export function createAuthService(
     password: string;
     displayName: string;
     notificationEmail?: string;
+    preferredLocale?: string;
     roleId: string;
   }): Promise<Selectable<UsersTable>> {
     const identifierHash = indexer.hash(input.identifier, orgId);
@@ -319,6 +324,10 @@ export function createAuthService(
     const encryptedNotificationAddr =
       input.notificationEmail !== undefined && input.notificationEmail !== ""
         ? encryptor.encrypt(input.notificationEmail)
+        : null;
+    const encryptedPreferredLocale =
+      input.preferredLocale !== undefined
+        ? sealedBox.seal(input.preferredLocale)
         : null;
     const passwordHash = await hasher.hash(input.password);
 
@@ -331,6 +340,7 @@ export function createAuthService(
           password_hash: passwordHash,
           encrypted_display_name: encryptedDisplayName,
           encrypted_notification_addr: encryptedNotificationAddr,
+          encrypted_preferred_locale: encryptedPreferredLocale,
           role_id: input.roleId,
         })
         .returningAll()

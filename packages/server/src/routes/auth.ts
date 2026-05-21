@@ -75,6 +75,7 @@ export interface UserResponse {
   readonly id: string;
   readonly identifier: string;
   readonly encryptedDisplayName: string; // base64 ciphertext, client decrypts
+  readonly encryptedPreferredLocale: string | null; // base64 ciphertext, client decrypts
   readonly roleId: string;
 }
 
@@ -84,6 +85,7 @@ function toUserResponse(user: UserRecord): UserResponse {
     id: user.id,
     identifier: user.identifier,
     encryptedDisplayName: user.encryptedDisplayName,
+    encryptedPreferredLocale: user.encryptedPreferredLocale,
     roleId: user.roleId,
   };
 }

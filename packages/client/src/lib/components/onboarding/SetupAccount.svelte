@@ -24,6 +24,7 @@
     getSodium,
   } from "@care-y/crypto";
   import * as m from "$lib/paraglide/messages.js";
+  import { getLocale } from "$lib/paraglide/runtime.js";
   import { withTerms } from "$lib/terminology/with-terms.js";
   import { trpc } from "$lib/trpc/index.js";
   import { requireRouter } from "$lib/errors.js";
@@ -142,6 +143,7 @@
         displayName,
         orgPublicKey: orgPublicKeyB64,
         setupToken,
+        preferredLocale: getLocale(),
       });
 
       // 3. registerCrypto: Argon2id + OPRF + upload salt + volPublic.
