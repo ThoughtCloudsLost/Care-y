@@ -5,14 +5,14 @@
  * This is intentional: the first org is created when no orgs exist yet.
  * A future phase gates this behind proper authorization (platform admin).
  *
- * getOrgBasics / updateOrgBasics: admin endpoints for org name, language,
+ * getOrgGeneral / updateOrgGeneral: admin endpoints for org name, language,
  * and country code. The server stores the name as encrypted ciphertext
  * and never decrypts it.
  */
 
 import {
   createOrgInputSchema,
-  updateOrgBasicsAdminInputSchema,
+  updateOrgGeneralAdminInputSchema,
 } from "@care-y/shared";
 import {
   router,
@@ -44,19 +44,19 @@ export function createOrgRouter(orgService: OrgService) {
         }
       }),
 
-    getOrgBasics: adminProcedure.query(
+    getOrgGeneral: adminProcedure.query(
       withErrorWrapping(async ({ ctx }) => {
         const svc = createOrgConfigService(ctx.org.tenantDb);
-        return svc.getOrgBasics();
+        return svc.getOrgGeneral();
       }),
     ),
 
-    updateOrgBasics: adminProcedure
-      .input(updateOrgBasicsAdminInputSchema)
+    updateOrgGeneral: adminProcedure
+      .input(updateOrgGeneralAdminInputSchema)
       .mutation(
         withErrorWrapping(async ({ ctx, input }) => {
           const svc = createOrgConfigService(ctx.org.tenantDb);
-          await svc.updateOrgBasics(input);
+          await svc.updateOrgGeneral(input);
           return { success: true as const };
         }),
       ),

@@ -1,11 +1,11 @@
 <!--
   SetupOrganization: consolidated org identity step.
 
-  Wraps five admin organization sections: OrgBasics (always visible),
+  Wraps five admin organization sections: OrgGeneral (always visible),
   Branding, Terminology, Retention, and NoteTypes (in collapsible
-  accordion). OrgBasics is required (org name must be non-empty).
+  accordion). OrgGeneral is required (org name must be non-empty).
   The other sections are optional and save via their own sheet UIs.
-  Continue calls save() on OrgBasics, then advances the wizard.
+  Continue calls save() on OrgGeneral, then advances the wizard.
 -->
 <script lang="ts">
   import { SvelteSet } from "svelte/reactivity";
@@ -24,7 +24,7 @@
   import SoftButton from "$lib/components/inputs/SoftButton.svelte";
   import CollapsibleSection from "$lib/components/dashboard/CollapsibleSection.svelte";
   import OnboardingCryptoBridge from "$lib/providers/OnboardingCryptoBridge.svelte";
-  import OrgBasicsSection from "$lib/components/admin/OrgBasicsSection.svelte";
+  import OrgGeneralSection from "$lib/components/admin/OrgGeneralSection.svelte";
   import BrandingSection from "$lib/components/admin/BrandingSection.svelte";
   import TerminologySection from "$lib/components/admin/TerminologySection.svelte";
   import RetentionSection from "$lib/components/admin/RetentionSection.svelte";
@@ -47,7 +47,7 @@
 
   let saving = $state(false);
 
-  let orgBasicsRef = $state<OrgBasicsSection>();
+  let orgGeneralRef = $state<OrgGeneralSection>();
   let brandingRef = $state<BrandingSection>();
   let terminologyRef = $state<TerminologySection>();
   let retentionRef = $state<RetentionSection>();
@@ -62,16 +62,16 @@
     }
   }
 
-  /* eslint-disable @typescript-eslint/no-unsafe-call, @typescript-eslint/strict-boolean-expressions, @typescript-eslint/no-unsafe-type-assertion, @typescript-eslint/no-unnecessary-condition -- bind:this refs are typed as any by Svelte */
+  /* eslint-disable @typescript-eslint/strict-boolean-expressions, @typescript-eslint/no-unsafe-type-assertion, @typescript-eslint/no-unnecessary-condition -- bind:this refs are typed as any by Svelte */
   const canContinue = $derived.by((): boolean => {
-    return (orgBasicsRef?.hasOrgName() as boolean) ?? false;
+    return (orgGeneralRef?.hasOrgName() as boolean) ?? false;
   });
 
   async function handleContinue(): Promise<void> {
     saving = true;
     try {
-      if (orgBasicsRef?.isDirty()) {
-        await orgBasicsRef.save();
+      if (orgGeneralRef?.isDirty()) {
+        await orgGeneralRef.save();
       }
       if (brandingRef?.isDirty()) {
         await brandingRef.save();
@@ -82,7 +82,7 @@
       if (retentionRef?.isDirty()) {
         await retentionRef.save();
       }
-      /* eslint-enable @typescript-eslint/no-unsafe-call, @typescript-eslint/strict-boolean-expressions, @typescript-eslint/no-unsafe-type-assertion, @typescript-eslint/no-unnecessary-condition */
+      /* eslint-enable @typescript-eslint/strict-boolean-expressions, @typescript-eslint/no-unsafe-type-assertion, @typescript-eslint/no-unnecessary-condition */
 
       if (updateTerminology) {
         const cached = readCachedTerminology();
@@ -91,12 +91,12 @@
       }
 
       haptic();
-      toastStore.show(m.admin_org_basics_saved());
-      announceToLiveRegion("polite", m.admin_org_basics_saved());
+      toastStore.show(m.admin_org_general_saved());
+      announceToLiveRegion("polite", m.admin_org_general_saved());
       oncomplete();
     } catch {
-      toastStore.show(m.admin_org_basics_error(), 3000);
-      announceToLiveRegion("assertive", m.admin_org_basics_error());
+      toastStore.show(m.admin_org_general_error(), 3000);
+      announceToLiveRegion("assertive", m.admin_org_general_error());
     } finally {
       saving = false;
     }
@@ -109,8 +109,8 @@
 </Block>
 
 <OnboardingCryptoBridge {adminUserId}>
-  <OrgBasicsSection
-    bind:this={orgBasicsRef}
+  <OrgGeneralSection
+    bind:this={orgGeneralRef}
     externalSave
     onnamechange={() => void brandingRef?.rebuildBlob()}
   />

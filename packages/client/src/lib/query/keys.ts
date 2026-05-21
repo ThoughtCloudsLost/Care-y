@@ -85,7 +85,7 @@ export const kbKeys = {
 export const adminKeys = {
   all: ["admin"] as const,
   users: () => [...adminKeys.all, "users"] as const,
-  orgBasics: () => [...adminKeys.all, "orgBasics"] as const,
+  orgGeneral: () => [...adminKeys.all, "orgGeneral"] as const,
   hubStatus: () => [...adminKeys.all, "hubStatus"] as const,
   branding: () => [...adminKeys.all, "branding"] as const,
   blocklist: () => [...adminKeys.all, "blocklist"] as const,

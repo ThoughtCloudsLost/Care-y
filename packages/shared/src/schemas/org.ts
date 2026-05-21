@@ -60,7 +60,7 @@ export const createOrgInputSchema = z.object({
   slug: orgSlugSchema,
 });
 
-export const updateOrgBasicsAdminInputSchema = z.object({
+export const updateOrgGeneralAdminInputSchema = z.object({
   encryptedOrgName: z.string().min(1),
   defaultLanguage: z.string().min(2).max(10),
   countryCode: z.string().min(1).max(5),

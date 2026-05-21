@@ -9,7 +9,7 @@ export {
   RESERVED_SLUGS,
   orgSlugSchema,
   createOrgInputSchema,
-  updateOrgBasicsAdminInputSchema,
+  updateOrgGeneralAdminInputSchema,
 } from "./schemas/org.js";
 
 // --- Utilities ---
@@ -402,7 +402,7 @@ export {
 // --- Onboarding schemas ---
 export {
   bootstrapAdminInputSchema,
-  updateOrgBasicsInputSchema,
+  updateOrgGeneralInputSchema,
   validateInviteInputSchema,
   registerFromInviteInputSchema,
   generateInviteInputSchema,
@@ -411,7 +411,7 @@ export {
   wrapOrgKeyForUserSchema,
   unwrappedUserSchema,
   type BootstrapAdminInput,
-  type UpdateOrgBasicsInput,
+  type UpdateOrgGeneralInput,
   type ValidateInviteInput,
   type RegisterFromInviteInput,
   type GenerateInviteInput,

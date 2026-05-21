@@ -17,7 +17,7 @@ import type { Kysely } from "kysely";
 import {
   bootstrapAdminInputSchema,
   loginInputSchema,
-  updateOrgBasicsInputSchema,
+  updateOrgGeneralInputSchema,
   validateInviteInputSchema,
   registerFromInviteInputSchema,
   generateInviteInputSchema,
@@ -240,6 +240,10 @@ export function createOnboardingRouter(deps: OnboardingRouterDeps) {
         const identifierHash = indexer.hash(input.identifier, org.orgId);
         const encryptedIdentifier = encryptor.encrypt(input.identifier);
         const encryptedDisplayName = sealedBox.seal(input.displayName);
+        const encryptedPreferredLocale =
+          input.preferredLocale !== undefined
+            ? sealedBox.seal(input.preferredLocale)
+            : null;
         const passwordHash = await hasher.hash(input.password);
 
         const ua = ctx.req.headers["user-agent"] ?? "unknown";
@@ -273,6 +277,7 @@ export function createOnboardingRouter(deps: OnboardingRouterDeps) {
                   encrypted_identifier: encryptedIdentifier,
                   password_hash: passwordHash,
                   encrypted_display_name: encryptedDisplayName,
+                  encrypted_preferred_locale: encryptedPreferredLocale,
                   role_id: RoleId.ADMIN,
                 })
                 .returning("id")
@@ -406,6 +411,7 @@ export function createOnboardingRouter(deps: OnboardingRouterDeps) {
                 identifier: input.identifier,
                 password: input.password,
                 displayName: input.displayName ?? input.identifier,
+                preferredLocale: input.preferredLocale,
                 roleId: invite.roleId,
               });
 
@@ -502,30 +508,35 @@ export function createOnboardingRouter(deps: OnboardingRouterDeps) {
     ),
 
     /**
-     * Update org basics (name, language, country code) during setup.
+     * Update org general settings (name, language, country code) during setup.
      * Admin-only. authedProcedure (no 2FA) since 2FA not enrolled during setup.
      */
-    updateOrgBasics: authedProcedure.input(updateOrgBasicsInputSchema).mutation(
-      withErrorWrapping(async ({ ctx, input }) => {
-        requirePermission(ctx.user.roleId, Permission.MANAGE_ROLES);
+    updateOrgGeneral: authedProcedure
+      .input(updateOrgGeneralInputSchema)
+      .mutation(
+        withErrorWrapping(async ({ ctx, input }) => {
+          requirePermission(ctx.user.roleId, Permission.MANAGE_ROLES);
 
-        const updates: Record<string, unknown> = {
-          encrypted_name: Buffer.from(input.encryptedOrgName, "base64"),
-          default_country_code: input.countryCode,
-          default_language: input.defaultLanguage,
-        };
-        if (input.encryptedTerminology !== undefined) {
-          updates.encrypted_terminology = Buffer.from(
-            input.encryptedTerminology,
-            "base64",
-          );
-        }
+          const updates: Record<string, unknown> = {
+            encrypted_name: Buffer.from(input.encryptedOrgName, "base64"),
+            default_country_code: input.countryCode,
+            default_language: input.defaultLanguage,
+          };
+          if (input.encryptedTerminology !== undefined) {
+            updates.encrypted_terminology = Buffer.from(
+              input.encryptedTerminology,
+              "base64",
+            );
+          }
 
-        await ctx.org.tenantDb.updateTable("org_config").set(updates).execute();
+          await ctx.org.tenantDb
+            .updateTable("org_config")
+            .set(updates)
+            .execute();
 
-        return { success: true as const };
-      }),
-    ),
+          return { success: true as const };
+        }),
+      ),
 
     /**
      * Save telephony mode choice during setup (step 5).
@@ -619,6 +630,7 @@ export function createOnboardingRouter(deps: OnboardingRouterDeps) {
           setSessionCookie(ctx.res, session.token, isSecureCookie);
           return {
             userId: user.id,
+            encryptedPreferredLocale: user.encryptedPreferredLocale,
             requiresTwoFactor: true as const,
             enrolledMethods,
           };
@@ -629,6 +641,7 @@ export function createOnboardingRouter(deps: OnboardingRouterDeps) {
 
         return {
           userId: user.id,
+          encryptedPreferredLocale: user.encryptedPreferredLocale,
           requiresTwoFactor: false as const,
           enrolledMethods: [] as string[],
         };
