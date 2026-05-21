@@ -1,28 +1,28 @@
 import type { Kysely } from "kysely";
 import type { TenantDatabase } from "../db/types.js";
 
-export interface OrgBasicsResult {
+export interface OrgGeneralResult {
   readonly encryptedName: string | null;
   readonly defaultLanguage: string;
   readonly countryCode: string;
 }
 
-export interface UpdateOrgBasicsInput {
+export interface UpdateOrgGeneralInput {
   readonly encryptedOrgName: string;
   readonly defaultLanguage: string;
   readonly countryCode: string;
 }
 
 export interface OrgConfigService {
-  getOrgBasics(): Promise<OrgBasicsResult>;
-  updateOrgBasics(input: UpdateOrgBasicsInput): Promise<void>;
+  getOrgGeneral(): Promise<OrgGeneralResult>;
+  updateOrgGeneral(input: UpdateOrgGeneralInput): Promise<void>;
 }
 
 export function createOrgConfigService(
   tenantDb: Kysely<TenantDatabase>,
 ): OrgConfigService {
   return {
-    async getOrgBasics(): Promise<OrgBasicsResult> {
+    async getOrgGeneral(): Promise<OrgGeneralResult> {
       const config = await tenantDb
         .selectFrom("org_config")
         .select(["encrypted_name", "default_language", "default_country_code"])
@@ -38,7 +38,7 @@ export function createOrgConfigService(
       };
     },
 
-    async updateOrgBasics(input: UpdateOrgBasicsInput): Promise<void> {
+    async updateOrgGeneral(input: UpdateOrgGeneralInput): Promise<void> {
       await tenantDb
         .updateTable("org_config")
         .set({

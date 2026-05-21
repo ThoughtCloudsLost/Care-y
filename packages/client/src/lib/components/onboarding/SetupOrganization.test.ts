@@ -14,8 +14,8 @@ vi.mock("$lib/paraglide/messages.js", () => ({
   admin_tab_terminology: () => "Terminology",
   admin_tab_retention: () => "Retention",
   admin_tab_note_types: () => "Follow-Ups",
-  admin_org_basics_saved: () => "Organization details saved",
-  admin_org_basics_error: () => "Could not save",
+  admin_org_general_saved: () => "Organization details saved",
+  admin_org_general_error: () => "Could not save",
 }));
 
 vi.mock("$lib/terminology/index.js", () => ({
@@ -40,8 +40,9 @@ vi.mock("$lib/components/dashboard/CollapsibleSection.svelte", async () => ({
     .default,
 }));
 
-vi.mock("$lib/components/admin/OrgBasicsSection.svelte", async () => ({
-  default: (await import("./test-helpers/StubOrgBasicsSection.svelte")).default,
+vi.mock("$lib/components/admin/OrgGeneralSection.svelte", async () => ({
+  default: (await import("./test-helpers/StubOrgGeneralSection.svelte"))
+    .default,
 }));
 
 vi.mock("$lib/components/admin/BrandingSection.svelte", async () => ({
@@ -63,20 +64,28 @@ vi.mock("$lib/components/admin/NoteTypesSection.svelte", async () => ({
   default: (await import("./test-helpers/StubAdminSection.svelte")).default,
 }));
 
+// Svelte's generated types don't expose <script module> exports, so the
+// dynamic import type only includes `default`. Cast to access test helpers.
 const {
   _setTestDirty,
   _setTestHasOrgName,
   _setTestSaveError,
   _getSaveCalls,
-  _reset: resetOrgBasicsStub,
-} = await import("./test-helpers/StubOrgBasicsSection.svelte");
+  _reset: resetOrgGeneralStub,
+} = (await import("./test-helpers/StubOrgGeneralSection.svelte")) as unknown as {
+  _setTestDirty: (dirty: boolean) => void;
+  _setTestHasOrgName: (has: boolean) => void;
+  _setTestSaveError: (err: Error | null) => void;
+  _getSaveCalls: () => number;
+  _reset: () => void;
+};
 
 const { default: SetupOrganization } =
   await import("./SetupOrganization.svelte");
 
 afterEach(() => {
   cleanup();
-  resetOrgBasicsStub();
+  resetOrgGeneralStub();
 });
 beforeEach(() => {
   vi.clearAllMocks();
@@ -91,9 +100,9 @@ describe("SetupOrganization", () => {
     expect(screen.getByText("Set up your organization.")).toBeTruthy();
   });
 
-  it("renders OrgBasicsSection outside collapsible sections", () => {
+  it("renders OrgGeneralSection outside collapsible sections", () => {
     render(SetupOrganization, { props: defaultProps });
-    expect(screen.getByTestId("org-basics-section")).toBeTruthy();
+    expect(screen.getByTestId("org-general-section")).toBeTruthy();
   });
 
   it("renders four collapsible sections with admin labels", () => {
@@ -123,7 +132,7 @@ describe("SetupOrganization", () => {
     expect(btn?.disabled).toBe(false);
   });
 
-  it("calls save() on dirty OrgBasics and then oncomplete on Continue click", async () => {
+  it("calls save() on dirty OrgGeneral and then oncomplete on Continue click", async () => {
     _setTestDirty(true);
     const oncomplete = vi.fn();
     render(SetupOrganization, { props: { ...defaultProps, oncomplete } });
@@ -136,7 +145,7 @@ describe("SetupOrganization", () => {
     });
   });
 
-  it("skips save() on clean OrgBasics and still calls oncomplete", async () => {
+  it("skips save() on clean OrgGeneral and still calls oncomplete", async () => {
     _setTestDirty(false);
     const oncomplete = vi.fn();
     render(SetupOrganization, { props: { ...defaultProps, oncomplete } });

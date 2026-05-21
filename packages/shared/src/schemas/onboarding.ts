@@ -13,10 +13,11 @@ export const bootstrapAdminInputSchema = z.object({
   displayName: displayNameSchema,
   orgPublicKey: base64Bytes(32, "orgPublicKey (Curve25519)"),
   setupToken: z.string().min(1),
+  preferredLocale: z.string().min(2).max(10).optional(),
 });
 
-/** Update org basics during setup (step 2). */
-export const updateOrgBasicsInputSchema = z.object({
+/** Update org general settings during setup (step 2). */
+export const updateOrgGeneralInputSchema = z.object({
   encryptedOrgName: base64String("encryptedOrgName"),
   defaultLanguage: z.string().min(2).max(10),
   countryCode: z.string().min(1).max(5),
@@ -34,6 +35,7 @@ export const registerFromInviteInputSchema = z.object({
   identifier: identifierSchema,
   password: passwordSchema,
   displayName: displayNameSchema.optional(),
+  preferredLocale: z.string().min(2).max(10).optional(),
 });
 
 /** Generate a new invite token (admin-only). */
@@ -73,7 +75,7 @@ export const unwrappedUserSchema = z.object({
 });
 
 export type BootstrapAdminInput = z.infer<typeof bootstrapAdminInputSchema>;
-export type UpdateOrgBasicsInput = z.infer<typeof updateOrgBasicsInputSchema>;
+export type UpdateOrgGeneralInput = z.infer<typeof updateOrgGeneralInputSchema>;
 export type ValidateInviteInput = z.infer<typeof validateInviteInputSchema>;
 export type RegisterFromInviteInput = z.infer<
   typeof registerFromInviteInputSchema

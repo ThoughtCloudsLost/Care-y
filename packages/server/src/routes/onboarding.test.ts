@@ -2,7 +2,7 @@
  * Integration tests for the onboarding tRPC router.
  *
  * Tests bootstrapAdmin (first admin creation), invite generation, and
- * org basics update against a real PostgreSQL database.
+ * org general settings update against a real PostgreSQL database.
  * Requires DATABASE_URL (Docker container).
  */
 
