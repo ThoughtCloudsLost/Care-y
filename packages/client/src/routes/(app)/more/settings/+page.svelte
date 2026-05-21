@@ -1,5 +1,4 @@
 <script lang="ts">
-  import { browser } from "$app/environment";
   import {
     List,
     ListItem,
@@ -28,6 +27,8 @@
   import TwoFactorSheet from "$lib/components/settings/TwoFactorSheet.svelte";
 
   const orgCache = getOrgDecryptCache();
+  const cryptoBridge = getCryptoBridge();
+  const orgKeyManager = getOrgKeyManager();
   const navbarCtx = getNavbarOverrideCtx();
 
   const meQuery = createQuery(() => ({
@@ -71,40 +72,29 @@
   type SeedPhase = "idle" | "seeding" | "done" | "error";
   let seedPhase = $state<SeedPhase>("idle");
   let seedError = $state("");
-
-  let alreadySeeded = $state(false);
-  if (browser) {
-    try {
-      alreadySeeded = localStorage.getItem("care-y:dev-seeded") === "true";
-    } catch {
-      // localStorage unavailable
-    }
-  }
+  let seedStatus = $state("");
 
   async function handleDevSeed(): Promise<void> {
     seedPhase = "seeding";
     seedError = "";
+    seedStatus = "Starting...";
     try {
-      const bridge = getCryptoBridge();
-      const orgKeyManager = getOrgKeyManager();
       const { devSeedData } = await import("$lib/dev/dev-seed.js");
-      await devSeedData(bridge, orgKeyManager);
+      await devSeedData(cryptoBridge, orgKeyManager, (msg) => {
+        seedStatus = msg;
+      });
       seedPhase = "done";
-      try {
-        localStorage.setItem("care-y:dev-seeded", "true");
-      } catch {
-        // localStorage unavailable
-      }
-      alreadySeeded = true;
+      seedStatus = "";
     } catch (err: unknown) {
       seedPhase = "error";
       seedError = err instanceof Error ? err.message : String(err);
+      seedStatus = "";
       console.error("[dev-seed] Failed:", err);
     }
   }
 
   function goBack(): void {
-    shellBack("/more");
+    shellBack("/");
   }
 
   $effect(() => {
@@ -185,11 +175,11 @@
         <p class="dev-seed-status">Seed data created.</p>
       {:else if seedPhase === "error"}
         <p class="dev-seed-error">{seedError}</p>
+      {:else if seedPhase === "seeding" && seedStatus}
+        <p class="dev-seed-progress">{seedStatus}</p>
       {/if}
       {#if seedPhase === "seeding"}
-        <Button large disabled>Seeding...</Button>
-      {:else if alreadySeeded && seedPhase !== "error"}
-        <Button large outline onclick={handleDevSeed}>Re-seed Dev Data</Button>
+        <Button large disabled>{seedStatus || "Seeding..."}</Button>
       {:else}
         <Button large onclick={handleDevSeed}>Seed Dev Data</Button>
       {/if}
@@ -227,7 +217,6 @@
   ondismiss={() => {
     twoFactorSheetOpen = false;
   }}
-  {userId}
   username={currentUsername}
 />
 
@@ -247,5 +236,11 @@
     color: var(--k-color-brand-red, #dc2626);
     margin-bottom: 0.5rem;
     word-break: break-word;
+  }
+
+  .dev-seed-progress {
+    font-size: 0.875rem;
+    color: var(--k-color-brand-blue, #2563eb);
+    margin-bottom: 0.5rem;
   }
 </style>

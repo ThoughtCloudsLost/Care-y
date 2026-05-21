@@ -87,6 +87,7 @@ export interface UsersTable {
   password_hash: string;
   encrypted_display_name: Buffer;
   encrypted_notification_addr: Buffer | null;
+  encrypted_preferred_locale: Buffer | null;
   role_id: string;
   is_active: ColumnType<boolean, boolean | undefined, boolean>;
 }
