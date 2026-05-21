@@ -66,7 +66,8 @@ console.log("==> Starting dev environment...\n");
 if (skipBuild) {
   run("Starting containers (skip build)", `${compose} up -d`);
 } else {
-  run("Building and starting containers", `${compose} up -d --build`);
+  run("Building containers (no cache)", `${compose} build --no-cache`);
+  run("Starting containers", `${compose} up -d`);
 }
 
 // 2. Wait for DB (compose depends_on handles it, but verify explicitly)

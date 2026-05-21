@@ -64,7 +64,7 @@ export default defineConfig({
     paraglideVitePlugin({
       project: "./project.inlang",
       outdir: "./src/lib/paraglide",
-      strategy: ["cookie", "baseLocale"],
+      strategy: ["cookie", "preferredLanguage", "baseLocale"],
     }),
     tailwindcss(),
     sveltekit(),
@@ -105,6 +105,10 @@ export default defineConfig({
         target: "http://localhost:3000",
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/trpc/, ""),
+      },
+      "/relay": {
+        target: "http://localhost:3000",
+        changeOrigin: true,
       },
       "/api/greetings": {
         target: "http://localhost:3000",

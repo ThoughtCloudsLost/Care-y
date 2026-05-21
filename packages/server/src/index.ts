@@ -523,6 +523,7 @@ const appRouter = createAppRouter({
     tenantDbFactory: tenantDb,
     secretsEncryptor,
   },
+  includeDev: env.NODE_ENV !== "production",
 });
 
 export type AppRouter = typeof appRouter;
@@ -648,13 +649,14 @@ const pendingCallCleanupInterval = setInterval(() => {
   evictExpiredPendingCalls(pendingCalls);
 }, 60_000);
 
-// Org resolver for relay endpoints: uses the shared extractOrgSlug utility
-// (same logic as tRPC context), then derives the schema name from the slug.
-// The schema name is org_<slug> by convention (see MT1 in 00-overview.md).
-function relayOrgResolver(req: IncomingMessage): string | null {
+// Org resolver for relay endpoints: looks up the org by slug via orgService
+// (same pattern as tRPC context) to get the correct UUID-based schema name.
+async function relayOrgResolver(req: IncomingMessage): Promise<string | null> {
   const slug = extractOrgSlug(req);
   if (slug === null) return null;
-  return `org_${slug}`;
+  const org = await orgService.findBySlug(slug);
+  if (org?.isActive !== true) return null;
+  return org.schemaName;
 }
 
 // Session repo factory for relay auth. Loads the real org_public_key
