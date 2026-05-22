@@ -55,6 +55,7 @@ function makeCtx(overrides?: Partial<Context>): Context {
       encryptedPreferredLocale: null,
       roleId: RoleId.VOLUNTEER,
       isActive: true,
+      hasSeenBriefing: true,
     },
     ...overrides,
   };
@@ -69,6 +70,7 @@ function makeCtxWithRole(roleId: string): Context {
       encryptedPreferredLocale: null,
       roleId,
       isActive: true,
+      hasSeenBriefing: true,
     },
   });
 }

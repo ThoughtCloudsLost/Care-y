@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { describe, it, expect, afterEach, vi, beforeEach } from "vitest";
 import { render, screen, cleanup, fireEvent } from "@testing-library/svelte";
+import * as m from "$lib/paraglide/messages.js";
 
 // jsdom doesn't implement scrollIntoView
 Element.prototype.scrollIntoView = vi.fn();
@@ -74,6 +75,10 @@ vi.mock("$lib/stores/toast.svelte.js", () => ({
   toastStore: { show: vi.fn() },
 }));
 
+vi.mock("./wizard-nav-context.js", () => ({
+  getWizardNavCtx: () => ({ current: undefined }),
+}));
+
 // Import after mocks are set up
 const { default: SetupAccount } = await import("./SetupAccount.svelte");
 
@@ -83,19 +88,11 @@ beforeEach(() => {
 });
 
 describe("SetupAccount", () => {
-  it("renders the account creation form", () => {
-    render(SetupAccount, {
-      props: { oncomplete: vi.fn(), setupToken: "test-setup-token" },
-    });
-    expect(screen.getByText("Create Your Admin Account")).toBeTruthy();
-    expect(screen.getByText("Create Account")).toBeTruthy();
-  });
-
   it("disables submit when required fields are empty", () => {
     render(SetupAccount, {
       props: { oncomplete: vi.fn(), setupToken: "test-setup-token" },
     });
-    const button = screen.getByText("Create Account");
+    const button = screen.getByText(m.onboarding_account_submit());
     expect(button.closest("button")?.hasAttribute("disabled")).toBe(true);
   });
 

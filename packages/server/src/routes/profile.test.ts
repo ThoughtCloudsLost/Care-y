@@ -193,6 +193,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
           encryptedPreferredLocale: null,
           roleId,
           isActive: true,
+          hasSeenBriefing: true,
         },
       };
     }

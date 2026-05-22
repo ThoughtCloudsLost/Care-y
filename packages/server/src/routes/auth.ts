@@ -77,6 +77,7 @@ export interface UserResponse {
   readonly encryptedDisplayName: string; // base64 ciphertext, client decrypts
   readonly encryptedPreferredLocale: string | null; // base64 ciphertext, client decrypts
   readonly roleId: string;
+  readonly hasSeenBriefing: boolean;
 }
 
 /** Projects a UserRecord to a safe response shape (no password_hash, no internal fields). */
@@ -87,6 +88,7 @@ function toUserResponse(user: UserRecord): UserResponse {
     encryptedDisplayName: user.encryptedDisplayName,
     encryptedPreferredLocale: user.encryptedPreferredLocale,
     roleId: user.roleId,
+    hasSeenBriefing: user.hasSeenBriefing,
   };
 }
 

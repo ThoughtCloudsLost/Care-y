@@ -67,6 +67,7 @@ function makeContext(roleId: string): Context {
       encryptedPreferredLocale: null,
       roleId,
       isActive: true,
+      hasSeenBriefing: true,
     },
   };
 }

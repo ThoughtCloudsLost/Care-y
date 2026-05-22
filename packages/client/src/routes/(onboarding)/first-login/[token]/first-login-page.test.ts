@@ -1,6 +1,9 @@
 // @vitest-environment jsdom
 import { describe, it, expect, afterEach, vi, beforeEach } from "vitest";
 import { render, screen, cleanup, fireEvent } from "@testing-library/svelte";
+import { flushSync } from "svelte";
+import * as m from "$lib/paraglide/messages.js";
+import type { WizardNavContainer } from "$lib/components/onboarding/wizard-nav-context.js";
 
 // Mock query state: controls which branch the component renders.
 let inviteQueryState: {
@@ -53,13 +56,35 @@ vi.mock("$lib/stores/toast.svelte.js", () => ({
   toastStore: { show: vi.fn() },
 }));
 
+const wizardNavContainer: WizardNavContainer = { current: undefined };
+
+vi.mock("$lib/components/onboarding/wizard-nav-context.js", () => ({
+  getWizardNavCtx: () => wizardNavContainer,
+}));
+
 const { default: FirstLoginPage } = await import("./+page.svelte");
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  wizardNavContainer.current = undefined;
+});
 beforeEach(() => {
   vi.clearAllMocks();
   inviteQueryState = { isLoading: true, isError: false, data: undefined };
 });
+
+/** Advance past SecurityBriefing (4 pages: 0->1->2->3, then confirm). */
+function completeBriefing(): void {
+  for (let i = 0; i < 4; i++) {
+    const action = wizardNavContainer.current?.right?.onaction;
+    expect(
+      action,
+      `No right nav action on briefing page ${String(i)}`,
+    ).toBeTruthy();
+    (action as () => void)();
+    flushSync();
+  }
+}
 
 describe("FirstLoginPage", () => {
   it("shows Preloader while validating invite token", () => {
@@ -76,19 +101,20 @@ describe("FirstLoginPage", () => {
     };
     render(FirstLoginPage);
     expect(
-      screen.getByText("This invite link is invalid or has expired."),
+      screen.getByText(m.onboarding_firstlogin_error_invalid_token()),
     ).toBeTruthy();
   });
 
-  it("renders registration form when invite token is valid", () => {
+  it("renders registration form after completing briefing", () => {
     inviteQueryState = {
       isLoading: false,
       isError: false,
       data: { valid: true, expiresAt: "2026-06-01T00:00:00Z" },
     };
     render(FirstLoginPage);
-    expect(screen.getByText("Set Up Your Account")).toBeTruthy();
-    expect(screen.getByText("Create Account")).toBeTruthy();
+    completeBriefing();
+    expect(screen.getByText(m.onboarding_firstlogin_heading())).toBeTruthy();
+    expect(screen.getByText(m.onboarding_firstlogin_submit())).toBeTruthy();
   });
 
   it("disables submit when required fields are empty", () => {
@@ -98,7 +124,8 @@ describe("FirstLoginPage", () => {
       data: { valid: true, expiresAt: "2026-06-01T00:00:00Z" },
     };
     render(FirstLoginPage);
-    const button = screen.getByText("Create Account");
+    completeBriefing();
+    const button = screen.getByText(m.onboarding_firstlogin_submit());
     expect(button.closest("button")?.hasAttribute("disabled")).toBe(true);
   });
 
@@ -109,6 +136,7 @@ describe("FirstLoginPage", () => {
       data: { valid: true, expiresAt: "2026-06-01T00:00:00Z" },
     };
     render(FirstLoginPage);
+    completeBriefing();
 
     const inputs = document.querySelectorAll("input");
     const usernameInput = inputs[0];
@@ -139,6 +167,7 @@ describe("FirstLoginPage", () => {
       data: { valid: true, expiresAt: "2026-06-01T00:00:00Z" },
     };
     render(FirstLoginPage);
+    completeBriefing();
 
     const inputs = document.querySelectorAll("input");
     const usernameInput = inputs[0];
@@ -184,6 +213,7 @@ describe("FirstLoginPage", () => {
     });
 
     render(FirstLoginPage);
+    completeBriefing();
 
     const inputs = document.querySelectorAll("input");
     const usernameInput = inputs[0];
@@ -212,6 +242,7 @@ describe("FirstLoginPage", () => {
         identifier: "volunteer1",
         password: "a-secure-password-123",
         displayName: undefined,
+        preferredLocale: "en",
       });
     });
 

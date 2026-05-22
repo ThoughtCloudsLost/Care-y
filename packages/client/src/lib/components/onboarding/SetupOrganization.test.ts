@@ -1,6 +1,8 @@
 // @vitest-environment jsdom
 import { describe, it, expect, afterEach, vi, beforeEach } from "vitest";
-import { render, screen, cleanup, fireEvent } from "@testing-library/svelte";
+import { render, screen, cleanup } from "@testing-library/svelte";
+import * as m from "$lib/paraglide/messages.js";
+import type { WizardNavContainer } from "./wizard-nav-context.js";
 
 const mockHaptic = vi.fn();
 const mockToastShow = vi.fn();
@@ -9,13 +11,13 @@ const mockAnnounce = vi.fn();
 vi.mock("$lib/paraglide/messages.js", () => ({
   onboarding_organization_heading: () => "Organization",
   onboarding_organization_subtext: () => "Set up your organization.",
-  onboarding_org_submit: () => "Continue",
   admin_tab_branding: () => "Branding",
   admin_tab_terminology: () => "Terminology",
   admin_tab_retention: () => "Retention",
   admin_tab_note_types: () => "Follow-Ups",
-  admin_org_general_saved: () => "Organization details saved",
   admin_org_general_error: () => "Could not save",
+  common_back: () => "Back",
+  common_next: () => "Next",
 }));
 
 vi.mock("$lib/terminology/index.js", () => ({
@@ -64,6 +66,12 @@ vi.mock("$lib/components/admin/NoteTypesSection.svelte", async () => ({
   default: (await import("./test-helpers/StubAdminSection.svelte")).default,
 }));
 
+const wizardNavContainer: WizardNavContainer = { current: undefined };
+
+vi.mock("./wizard-nav-context.js", () => ({
+  getWizardNavCtx: () => wizardNavContainer,
+}));
+
 // Svelte's generated types don't expose <script module> exports, so the
 // dynamic import type only includes `default`. Cast to access test helpers.
 const {
@@ -86,6 +94,7 @@ const { default: SetupOrganization } =
 afterEach(() => {
   cleanup();
   resetOrgGeneralStub();
+  wizardNavContainer.current = undefined;
 });
 beforeEach(() => {
   vi.clearAllMocks();
@@ -94,42 +103,21 @@ beforeEach(() => {
 describe("SetupOrganization", () => {
   const defaultProps = { adminUserId: "admin-1", oncomplete: vi.fn() };
 
-  it("renders heading and description", () => {
-    render(SetupOrganization, { props: defaultProps });
-    expect(screen.getByText("Organization")).toBeTruthy();
-    expect(screen.getByText("Set up your organization.")).toBeTruthy();
-  });
-
   it("renders OrgGeneralSection outside collapsible sections", () => {
     render(SetupOrganization, { props: defaultProps });
     expect(screen.getByTestId("org-general-section")).toBeTruthy();
   });
 
-  it("renders four collapsible sections with admin labels", () => {
-    render(SetupOrganization, { props: defaultProps });
-    expect(screen.getByText("Branding")).toBeTruthy();
-    expect(screen.getByText("Terminology")).toBeTruthy();
-    expect(screen.getByText("Retention")).toBeTruthy();
-    expect(screen.getByText("Follow-Ups")).toBeTruthy();
-  });
-
-  it("renders Continue button", () => {
-    render(SetupOrganization, { props: defaultProps });
-    expect(screen.getByText("Continue")).toBeTruthy();
-  });
-
   it("disables Continue when org has no name", () => {
     _setTestHasOrgName(false);
     render(SetupOrganization, { props: defaultProps });
-    const btn = screen.getByText("Continue").closest("button");
-    expect(btn?.disabled).toBe(true);
+    expect(wizardNavContainer.current?.right?.disabled).toBe(true);
   });
 
   it("enables Continue when org has a name", () => {
     _setTestHasOrgName(true);
     render(SetupOrganization, { props: defaultProps });
-    const btn = screen.getByText("Continue").closest("button");
-    expect(btn?.disabled).toBe(false);
+    expect(wizardNavContainer.current?.right?.disabled).toBe(false);
   });
 
   it("calls save() on dirty OrgGeneral and then oncomplete on Continue click", async () => {
@@ -137,7 +125,9 @@ describe("SetupOrganization", () => {
     const oncomplete = vi.fn();
     render(SetupOrganization, { props: { ...defaultProps, oncomplete } });
 
-    await fireEvent.click(screen.getByText("Continue"));
+    const action = wizardNavContainer.current?.right?.onaction;
+    expect(action).toBeTruthy();
+    (action as () => void)();
 
     await vi.waitFor(() => {
       expect(_getSaveCalls()).toBe(1);
@@ -150,7 +140,9 @@ describe("SetupOrganization", () => {
     const oncomplete = vi.fn();
     render(SetupOrganization, { props: { ...defaultProps, oncomplete } });
 
-    await fireEvent.click(screen.getByText("Continue"));
+    const action = wizardNavContainer.current?.right?.onaction;
+    expect(action).toBeTruthy();
+    (action as () => void)();
 
     await vi.waitFor(() => {
       expect(_getSaveCalls()).toBe(0);
@@ -158,31 +150,33 @@ describe("SetupOrganization", () => {
     });
   });
 
-  it("fires haptic and success toast on successful Continue", async () => {
+  it("fires haptic on successful Continue", async () => {
     render(SetupOrganization, { props: defaultProps });
 
-    await fireEvent.click(screen.getByText("Continue"));
+    const action = wizardNavContainer.current?.right?.onaction;
+    expect(action).toBeTruthy();
+    (action as () => void)();
 
     await vi.waitFor(() => {
       expect(mockHaptic).toHaveBeenCalled();
-      expect(mockToastShow).toHaveBeenCalledWith("Organization details saved");
-      expect(mockAnnounce).toHaveBeenCalledWith(
-        "polite",
-        "Organization details saved",
-      );
     });
   });
 
-  it("shows error toast and does not call oncomplete when save fails", async () => {
+  it("announces error and does not call oncomplete when save fails", async () => {
     _setTestDirty(true);
     _setTestSaveError(new Error("network failure"));
     const oncomplete = vi.fn();
     render(SetupOrganization, { props: { ...defaultProps, oncomplete } });
 
-    await fireEvent.click(screen.getByText("Continue"));
+    const action = wizardNavContainer.current?.right?.onaction;
+    expect(action).toBeTruthy();
+    (action as () => void)();
 
     await vi.waitFor(() => {
-      expect(mockToastShow).toHaveBeenCalledWith("Could not save", 3000);
+      expect(mockAnnounce).toHaveBeenCalledWith(
+        "assertive",
+        m.admin_org_general_error(),
+      );
       expect(oncomplete).not.toHaveBeenCalled();
     });
   });

@@ -90,6 +90,7 @@ export interface UsersTable {
   encrypted_preferred_locale: Buffer | null;
   role_id: string;
   is_active: ColumnType<boolean, boolean | undefined, boolean>;
+  has_seen_briefing: ColumnType<boolean, boolean | undefined, boolean>;
 }
 
 export interface SessionsTable {

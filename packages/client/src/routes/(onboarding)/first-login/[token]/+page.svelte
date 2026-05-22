@@ -2,7 +2,8 @@
   Volunteer first-login: invite link landing page.
 
   Three states: validating (Preloader), invalid token (error),
-  valid token (registration form -> registerCrypto -> loginCrypto -> dashboard).
+  valid token (security briefing -> registration form -> registerCrypto ->
+  loginCrypto -> 2FA enrollment -> dashboard).
 
   Chains registerCrypto (main thread key upload) then loginCrypto (Worker
   key derivation) so the volunteer lands on the dashboard with keys loaded,
@@ -44,6 +45,7 @@
   import KeyDerivation, {
     type LoginPhaseId,
   } from "$lib/components/onboarding/KeyDerivation.svelte";
+  import SecurityBriefing from "$lib/components/onboarding/SecurityBriefing.svelte";
   import TwoFactorEnrollment from "$lib/components/onboarding/TwoFactorEnrollment.svelte";
   import { getLocale } from "$lib/paraglide/runtime.js";
 
@@ -65,7 +67,7 @@
   let password = $state("");
   let confirmPassword = $state("");
   /* eslint-disable @typescript-eslint/no-unsafe-assignment -- $state<union> rune proxy */
-  let phase = $state<LoginPhaseId>("idle");
+  let phase = $state<LoginPhaseId>("briefing");
   /* eslint-enable @typescript-eslint/no-unsafe-assignment */
   let error = $state("");
 
@@ -90,7 +92,10 @@
 
   const phaseLabel = $derived(getPhaseLabel(phase));
   const isSubmitting = $derived(
-    phase !== "idle" && phase !== "error" && phase !== "twofa",
+    phase !== "briefing" &&
+      phase !== "idle" &&
+      phase !== "error" &&
+      phase !== "twofa",
   );
 
   const passwordTooShort = $derived(
@@ -211,6 +216,8 @@
       </p>
     </div>
   </Block>
+{:else if phase === "briefing"}
+  <SecurityBriefing onconfirm={() => (phase = "idle")} />
 {:else if isSubmitting}
   <KeyDerivation {phase} {phaseLabel} />
 {:else if phase === "twofa"}

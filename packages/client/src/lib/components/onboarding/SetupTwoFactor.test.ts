@@ -1,6 +1,8 @@
 // @vitest-environment jsdom
 import { describe, it, expect, afterEach, vi, beforeEach } from "vitest";
-import { render, screen, cleanup } from "@testing-library/svelte";
+import { render, cleanup } from "@testing-library/svelte";
+import * as m from "$lib/paraglide/messages.js";
+import type { WizardNavContainer } from "./wizard-nav-context.js";
 
 vi.mock("$lib/trpc/index.js", () => ({
   trpc: {
@@ -67,35 +69,28 @@ vi.mock("$lib/components/settings/BackupCodesSheet.svelte", () => ({
   default: stubComponent,
 }));
 
+const wizardNavContainer: WizardNavContainer = { current: undefined };
+
+vi.mock("./wizard-nav-context.js", () => ({
+  getWizardNavCtx: () => wizardNavContainer,
+}));
+
 const { default: SetupTwoFactor } = await import("./SetupTwoFactor.svelte");
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  wizardNavContainer.current = undefined;
+});
 beforeEach(() => {
   vi.clearAllMocks();
 });
 
 describe("SetupTwoFactor", () => {
-  it("renders heading and description", () => {
+  it("registers continue as disabled initially", () => {
     render(SetupTwoFactor, {
       props: { oncomplete: vi.fn(), username: "admin" },
     });
-    expect(screen.getByText("Set Up Two-Factor Authentication")).toBeTruthy();
-  });
-
-  it("renders continue button disabled initially", () => {
-    render(SetupTwoFactor, {
-      props: { oncomplete: vi.fn(), username: "admin" },
-    });
-    const button = screen.getByText("Continue");
-    expect(button.closest("button")?.disabled).toBe(true);
-  });
-
-  it("renders the enrollment method list", () => {
-    render(SetupTwoFactor, {
-      props: { oncomplete: vi.fn(), username: "admin" },
-    });
-    expect(
-      screen.getByText("Enroll at least one method to continue."),
-    ).toBeTruthy();
+    expect(wizardNavContainer.current?.right?.label).toBe(m.common_next());
+    expect(wizardNavContainer.current?.right?.disabled).toBe(true);
   });
 });

@@ -10,7 +10,7 @@
 <script lang="ts">
   import { SvelteSet } from "svelte/reactivity";
   import { getContext } from "svelte";
-  import { Block, BlockTitle, Preloader } from "konsta/svelte";
+  import { Block, BlockTitle } from "konsta/svelte";
   import {
     Palette,
     Languages,
@@ -21,8 +21,8 @@
   import { TERMINOLOGY_DEFAULTS_EN } from "@care-y/shared";
   import * as m from "$lib/paraglide/messages.js";
   import { readCachedTerminology } from "$lib/terminology/index.js";
-  import SoftButton from "$lib/components/inputs/SoftButton.svelte";
   import CollapsibleSection from "$lib/components/dashboard/CollapsibleSection.svelte";
+  import { getWizardNavCtx } from "./wizard-nav-context.js";
   import OnboardingCryptoBridge from "$lib/providers/OnboardingCryptoBridge.svelte";
   import OrgGeneralSection from "$lib/components/admin/OrgGeneralSection.svelte";
   import BrandingSection from "$lib/components/admin/BrandingSection.svelte";
@@ -30,15 +30,17 @@
   import RetentionSection from "$lib/components/admin/RetentionSection.svelte";
   import NoteTypesSection from "$lib/components/admin/NoteTypesSection.svelte";
   import { haptic } from "$lib/utils/haptic.js";
-  import { toastStore } from "$lib/stores/toast.svelte.js";
   import { announceToLiveRegion } from "$lib/utils/announce.js";
 
   interface Props {
     adminUserId: string;
     oncomplete: () => void;
+    goBack?: () => void;
   }
 
-  let { adminUserId, oncomplete }: Props = $props();
+  let { adminUserId, oncomplete, goBack }: Props = $props();
+
+  const wizardNav = getWizardNavCtx();
 
   const updateTerminology =
     getContext<((labels: TerminologyLabels) => void) | undefined>(
@@ -91,16 +93,32 @@
       }
 
       haptic();
-      toastStore.show(m.admin_org_general_saved());
-      announceToLiveRegion("polite", m.admin_org_general_saved());
       oncomplete();
     } catch {
-      toastStore.show(m.admin_org_general_error(), 3000);
       announceToLiveRegion("assertive", m.admin_org_general_error());
     } finally {
       saving = false;
     }
   }
+
+  $effect(() => {
+    wizardNav.current = {
+      right: {
+        label: m.common_next(),
+        disabled: saving || !canContinue,
+        loading: saving,
+        onaction: () => void handleContinue(),
+      },
+      left: goBack
+        ? {
+            label: m.common_back(),
+            disabled: saving,
+            loading: false,
+            onaction: goBack,
+          }
+        : undefined,
+    };
+  });
 </script>
 
 <BlockTitle medium>{m.onboarding_organization_heading()}</BlockTitle>
@@ -155,17 +173,3 @@
     <NoteTypesSection />
   </CollapsibleSection>
 </OnboardingCryptoBridge>
-
-<Block>
-  <SoftButton
-    full
-    disabled={saving || !canContinue}
-    onclick={() => void handleContinue()}
-  >
-    {#if saving}
-      <Preloader class="w-5 h-5" />
-    {:else}
-      {m.onboarding_org_submit()}
-    {/if}
-  </SoftButton>
-</Block>

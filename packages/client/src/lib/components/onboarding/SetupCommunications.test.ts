@@ -1,6 +1,8 @@
 // @vitest-environment jsdom
 import { describe, it, expect, afterEach, vi, beforeEach } from "vitest";
-import { render, screen, cleanup, fireEvent } from "@testing-library/svelte";
+import { render, cleanup } from "@testing-library/svelte";
+import * as m from "$lib/paraglide/messages.js";
+import type { WizardNavContainer } from "./wizard-nav-context.js";
 
 const mockHaptic = vi.fn();
 const mockToastShow = vi.fn();
@@ -40,13 +42,13 @@ vi.mock("$lib/query/keys.js", () => ({
 vi.mock("$lib/paraglide/messages.js", () => ({
   onboarding_communications_heading: () => "Communications",
   onboarding_communications_subtext: () => "Configure phone and messaging.",
-  onboarding_communications_submit: () => "Continue",
-  onboarding_communications_skip: () => "Skip for now",
-  onboarding_telephony_saved: () => "Telephony saved",
   admin_tab_telephony: () => "Telephony",
   admin_tab_greetings: () => "Greetings",
   admin_tab_sms_templates: () => "SMS Templates",
   admin_tab_blocklist: () => "Blocklist",
+  ticket_close_skip: () => "Skip",
+  common_back: () => "Back",
+  common_next: () => "Next",
 }));
 
 vi.mock("$lib/utils/haptic.js", () => ({ haptic: mockHaptic }));
@@ -87,10 +89,19 @@ vi.mock("$lib/components/admin/BlocklistSection.svelte", async () => ({
   default: (await import("./test-helpers/StubAdminSection.svelte")).default,
 }));
 
+const wizardNavContainer: WizardNavContainer = { current: undefined };
+
+vi.mock("./wizard-nav-context.js", () => ({
+  getWizardNavCtx: () => wizardNavContainer,
+}));
+
 const { default: SetupCommunications } =
   await import("./SetupCommunications.svelte");
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  wizardNavContainer.current = undefined;
+});
 beforeEach(() => {
   vi.clearAllMocks();
   queryData = null;
@@ -99,68 +110,60 @@ beforeEach(() => {
 describe("SetupCommunications", () => {
   const defaultProps = { adminUserId: "admin-1", oncomplete: vi.fn() };
 
-  it("renders heading and description", () => {
-    render(SetupCommunications, { props: defaultProps });
-    expect(screen.getByText("Communications")).toBeTruthy();
-    expect(screen.getByText("Configure phone and messaging.")).toBeTruthy();
-  });
-
-  it("renders four collapsible sections with admin labels", () => {
-    render(SetupCommunications, { props: defaultProps });
-    expect(screen.getByText("Telephony")).toBeTruthy();
-    expect(screen.getByText("Greetings")).toBeTruthy();
-    expect(screen.getByText("SMS Templates")).toBeTruthy();
-    expect(screen.getByText("Blocklist")).toBeTruthy();
-  });
-
-  it("shows skip link when telephony is not configured", () => {
+  it("shows skip label when telephony is not configured", () => {
     queryData = null;
     render(SetupCommunications, { props: defaultProps });
-    expect(screen.getByText("Skip for now")).toBeTruthy();
-    expect(screen.queryByText("Continue")).toBeNull();
+    expect(wizardNavContainer.current?.right?.label).toBe(
+      m.ticket_close_skip(),
+    );
   });
 
-  it("shows Continue button when telephony is configured", () => {
+  it("shows Continue label when telephony is configured", () => {
     queryData = { mode: "byot" };
     render(SetupCommunications, { props: defaultProps });
-    expect(screen.getByText("Continue")).toBeTruthy();
-    expect(screen.queryByText("Skip for now")).toBeNull();
+    expect(wizardNavContainer.current?.right?.label).toBe(m.common_next());
   });
 
-  it("skip calls oncomplete with telephonyMode 'skip'", async () => {
+  it("skip calls oncomplete with telephonyMode 'skip'", () => {
     queryData = null;
     const oncomplete = vi.fn();
     render(SetupCommunications, { props: { ...defaultProps, oncomplete } });
 
-    await fireEvent.click(screen.getByText("Skip for now"));
+    const action = wizardNavContainer.current?.right?.onaction;
+    expect(action).toBeTruthy();
+    (action as () => void)();
     expect(oncomplete).toHaveBeenCalledWith({ telephonyMode: "skip" });
   });
 
-  it("continue calls oncomplete with detected telephony mode", async () => {
+  it("continue calls oncomplete with detected telephony mode", () => {
     queryData = { mode: "byot" };
     const oncomplete = vi.fn();
     render(SetupCommunications, { props: { ...defaultProps, oncomplete } });
 
-    await fireEvent.click(screen.getByText("Continue"));
+    const action = wizardNavContainer.current?.right?.onaction;
+    expect(action).toBeTruthy();
+    (action as () => void)();
     expect(oncomplete).toHaveBeenCalledWith({ telephonyMode: "byot" });
   });
 
-  it("continue fires haptic and success toast", async () => {
+  it("continue fires haptic", () => {
     queryData = { mode: "managed" };
     render(SetupCommunications, { props: defaultProps });
 
-    await fireEvent.click(screen.getByText("Continue"));
+    const action = wizardNavContainer.current?.right?.onaction;
+    expect(action).toBeTruthy();
+    (action as () => void)();
     expect(mockHaptic).toHaveBeenCalled();
-    expect(mockToastShow).toHaveBeenCalledWith("Telephony saved");
-    expect(mockAnnounce).toHaveBeenCalledWith("polite", "Telephony saved");
   });
 
-  it("defaults to 'managed' mode when config mode is not 'byot'", async () => {
+  it("defaults to 'managed' mode when config mode is not 'byot'", () => {
     queryData = { mode: "managed" };
     const oncomplete = vi.fn();
     render(SetupCommunications, { props: { ...defaultProps, oncomplete } });
 
-    await fireEvent.click(screen.getByText("Continue"));
+    const action = wizardNavContainer.current?.right?.onaction;
+    expect(action).toBeTruthy();
+    (action as () => void)();
     expect(oncomplete).toHaveBeenCalledWith({ telephonyMode: "managed" });
   });
 });

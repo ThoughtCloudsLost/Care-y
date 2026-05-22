@@ -279,6 +279,7 @@ export function createOnboardingRouter(deps: OnboardingRouterDeps) {
                   encrypted_display_name: encryptedDisplayName,
                   encrypted_preferred_locale: encryptedPreferredLocale,
                   role_id: RoleId.ADMIN,
+                  has_seen_briefing: false,
                 })
                 .returning("id")
                 .executeTakeFirstOrThrow();
@@ -415,6 +416,7 @@ export function createOnboardingRouter(deps: OnboardingRouterDeps) {
                 roleId: invite.roleId,
               });
 
+              await txAuth.markBriefingSeen(user.id);
               await txInvite.consume(invite.id);
 
               const session = await txSessions.create({
@@ -631,6 +633,7 @@ export function createOnboardingRouter(deps: OnboardingRouterDeps) {
           return {
             userId: user.id,
             encryptedPreferredLocale: user.encryptedPreferredLocale,
+            hasSeenBriefing: user.hasSeenBriefing,
             requiresTwoFactor: true as const,
             enrolledMethods,
           };
@@ -642,9 +645,19 @@ export function createOnboardingRouter(deps: OnboardingRouterDeps) {
         return {
           userId: user.id,
           encryptedPreferredLocale: user.encryptedPreferredLocale,
+          hasSeenBriefing: user.hasSeenBriefing,
           requiresTwoFactor: false as const,
           enrolledMethods: [] as string[],
         };
+      }),
+    ),
+
+    markBriefingSeen: authedProcedure.mutation(
+      withErrorWrapping(async ({ ctx }) => {
+        const sessions = createTenantSessions(ctx.org, tokenizer);
+        const authService = createScopedAuthService(ctx.org, sessions, deps);
+        await authService.markBriefingSeen(ctx.session.userId);
+        return { success: true as const };
       }),
     ),
 

@@ -63,6 +63,7 @@ function createAuthed2faContext(): Context {
       encryptedPreferredLocale: null,
       roleId: RoleId.VOLUNTEER,
       isActive: true,
+      hasSeenBriefing: true,
     },
   };
 }

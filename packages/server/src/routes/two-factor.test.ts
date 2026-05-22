@@ -192,6 +192,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         encryptedPreferredLocale: string | null;
         roleId: string;
         isActive: boolean;
+        hasSeenBriefing: boolean;
       },
       sessionToken: string,
       emailSender?: MockEmailSender,
@@ -226,6 +227,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         encryptedPreferredLocale: string | null;
         roleId: string;
         isActive: boolean;
+        hasSeenBriefing: boolean;
       },
       sessionToken: string,
     ) {
@@ -397,6 +399,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
           encryptedPreferredLocale: null,
           roleId: user.role_id,
           isActive: user.is_active,
+          hasSeenBriefing: user.has_seen_briefing,
         };
 
         const { caller } = createAuthedCaller(
@@ -432,6 +435,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
           encryptedPreferredLocale: null,
           roleId: user.role_id,
           isActive: user.is_active,
+          hasSeenBriefing: user.has_seen_briefing,
         };
 
         // Send the email to get the code
@@ -590,6 +594,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
           encryptedPreferredLocale: null,
           roleId: user.role_id,
           isActive: user.is_active,
+          hasSeenBriefing: user.has_seen_briefing,
         };
 
         // Enroll email 2FA first (need the method registered)
@@ -671,6 +676,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
           encryptedPreferredLocale: null,
           roleId: user.role_id,
           isActive: user.is_active,
+          hasSeenBriefing: user.has_seen_briefing,
         };
 
         // Enroll TOTP + EMAIL (two methods, so one can be removed)

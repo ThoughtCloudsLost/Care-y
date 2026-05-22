@@ -10,20 +10,24 @@
   InviteUser sheets via exported methods.
 -->
 <script lang="ts">
-  import { Block, BlockTitle, Preloader } from "konsta/svelte";
+  import { Block, BlockTitle } from "konsta/svelte";
   import SoftButton from "$lib/components/inputs/SoftButton.svelte";
   import * as m from "$lib/paraglide/messages.js";
   import { withTerms } from "$lib/terminology/with-terms.js";
   import { haptic } from "$lib/utils/haptic.js";
   import OnboardingCryptoBridge from "$lib/providers/OnboardingCryptoBridge.svelte";
   import UsersSection from "$lib/components/admin/UsersSection.svelte";
+  import { getWizardNavCtx } from "./wizard-nav-context.js";
 
   interface Props {
     adminUserId: string;
     oncomplete: (data: { invitesSent: number }) => void;
+    goBack?: () => void;
   }
 
-  let { adminUserId, oncomplete }: Props = $props();
+  let { adminUserId, oncomplete, goBack }: Props = $props();
+
+  const wizardNav = getWizardNavCtx();
 
   let finishing = $state(false);
   let usersSectionRef = $state<UsersSection>();
@@ -49,6 +53,25 @@
   function handleSkip(): void {
     handleFinish();
   }
+
+  $effect(() => {
+    wizardNav.current = {
+      right: {
+        label: hasInvites ? m.common_next() : m.ticket_close_skip(),
+        disabled: finishing,
+        loading: finishing,
+        onaction: hasInvites ? handleFinish : handleSkip,
+      },
+      left: goBack
+        ? {
+            label: m.common_back(),
+            disabled: finishing,
+            loading: false,
+            onaction: goBack,
+          }
+        : undefined,
+    };
+  });
 </script>
 
 <BlockTitle medium>{m.onboarding_invite_heading(withTerms())}</BlockTitle>
@@ -83,48 +106,9 @@
   <UsersSection bind:this={usersSectionRef} />
 </OnboardingCryptoBridge>
 
-{#if hasInvites}
-  <Block>
-    <SoftButton full disabled={finishing} onclick={handleFinish}>
-      {#if finishing}
-        <Preloader class="w-5 h-5" />
-      {:else}
-        {m.onboarding_invite_finish()}
-      {/if}
-    </SoftButton>
-  </Block>
-{:else}
-  <Block>
-    <button
-      class="skip-link touch-feedback"
-      onclick={handleSkip}
-      disabled={finishing}
-      type="button"
-    >
-      {m.onboarding_invite_skip(withTerms())}
-    </button>
-  </Block>
-{/if}
-
 <style>
   .action-buttons {
     display: flex;
     gap: var(--space-md);
-  }
-
-  .skip-link {
-    background: none;
-    border: none;
-    color: var(--brand-primary);
-    font-size: var(--text-base);
-    cursor: pointer;
-    padding: var(--space-lg) 0;
-    text-align: center;
-    width: 100%;
-  }
-
-  .skip-link:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
   }
 </style>

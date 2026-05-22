@@ -1,19 +1,20 @@
 <script lang="ts">
   import { Block, BlockTitle } from "konsta/svelte";
-  import SoftButton from "$lib/components/inputs/SoftButton.svelte";
   import { Info } from "@lucide/svelte";
   import { TERMINOLOGY_DEFAULTS_EN } from "@care-y/shared";
   import * as m from "$lib/paraglide/messages.js";
   import { withTerms, getTerminology } from "$lib/terminology/index.js";
-  import { announceToLiveRegion } from "$lib/utils/announce.js";
   import { haptic } from "$lib/utils/haptic.js";
-  import { toastStore } from "$lib/stores/toast.svelte.js";
+  import { getWizardNavCtx } from "./wizard-nav-context.js";
 
   interface Props {
     onconfirm: () => void;
+    goBack?: () => void;
   }
 
-  const { onconfirm }: Props = $props();
+  const { onconfirm, goBack }: Props = $props();
+
+  const wizardNav = getWizardNavCtx();
 
   const resolveTerms = getTerminology();
   const hasCustomTerms = $derived.by(() => {
@@ -120,10 +121,36 @@
 
   function handleConfirm(): void {
     haptic();
-    toastStore.show(m.onboarding_step_complete());
-    announceToLiveRegion("polite", m.onboarding_step_complete());
     onconfirm();
   }
+
+  $effect(() => {
+    const isLast = subPage === TOTAL_PAGES - 1;
+    wizardNav.current = {
+      right: {
+        label: isLast ? m.onboarding_briefing_confirm() : m.common_next(),
+        disabled: false,
+        loading: false,
+        onaction: isLast ? handleConfirm : nextPage,
+      },
+      left:
+        subPage > 0
+          ? {
+              label: m.common_back(),
+              disabled: false,
+              loading: false,
+              onaction: prevPage,
+            }
+          : goBack
+            ? {
+                label: m.common_back(),
+                disabled: false,
+                loading: false,
+                onaction: goBack,
+              }
+            : undefined,
+    };
+  });
 
   const protectionRows = [
     {
@@ -209,6 +236,12 @@
       whyCare: m.onboarding_briefing_choice_tor_why(),
       tradeoff: m.onboarding_briefing_choice_tor_tradeoff(),
     },
+    {
+      title: m.onboarding_briefing_choice_vpn_title(),
+      protects: m.onboarding_briefing_choice_vpn_protects(),
+      whyCare: m.onboarding_briefing_choice_vpn_why(),
+      tradeoff: m.onboarding_briefing_choice_vpn_tradeoff(),
+    },
   ];
 </script>
 
@@ -290,12 +323,6 @@
         {/if}
       </div>
     {/if}
-
-    <Block>
-      <div class="briefing-nav">
-        <SoftButton full onclick={nextPage}>{m.common_next()}</SoftButton>
-      </div>
-    </Block>
   {:else if subPage === 1}
     <BlockTitle medium>
       {m.onboarding_briefing_practice_heading()}
@@ -318,13 +345,6 @@
         </details>
       </div>
     {/each}
-
-    <Block>
-      <div class="briefing-nav">
-        <SoftButton full onclick={prevPage}>{m.common_back()}</SoftButton>
-        <SoftButton full onclick={nextPage}>{m.common_next()}</SoftButton>
-      </div>
-    </Block>
   {:else if subPage === 2}
     <BlockTitle medium>
       {m.onboarding_briefing_scenarios_heading()}
@@ -342,13 +362,6 @@
         </details>
       </div>
     {/each}
-
-    <Block>
-      <div class="briefing-nav">
-        <SoftButton full onclick={prevPage}>{m.common_back()}</SoftButton>
-        <SoftButton full onclick={nextPage}>{m.common_next()}</SoftButton>
-      </div>
-    </Block>
   {:else if subPage === 3}
     <BlockTitle medium>
       {m.onboarding_briefing_choices_heading()}
@@ -380,15 +393,6 @@
         </details>
       </div>
     {/each}
-
-    <Block>
-      <div class="briefing-nav">
-        <SoftButton full onclick={prevPage}>{m.common_back()}</SoftButton>
-        <SoftButton full onclick={handleConfirm}>
-          {m.onboarding_briefing_confirm()}
-        </SoftButton>
-      </div>
-    </Block>
   {/if}
 </div>
 
@@ -605,15 +609,5 @@
     .page-dot {
       transition: none;
     }
-  }
-
-  .briefing-nav {
-    display: flex;
-    justify-content: space-between;
-    gap: var(--space-md);
-  }
-
-  .briefing-nav :global(.k-button:only-child) {
-    margin-left: auto;
   }
 </style>
