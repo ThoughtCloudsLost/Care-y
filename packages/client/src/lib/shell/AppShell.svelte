@@ -285,9 +285,8 @@
 
   let uiLocale = $state(getLocale());
 
-  function handleLocaleChange(newLocale: string): void {
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- Locale values validated by LanguagePicker
-    void setLocale(newLocale as Locale);
+  function handleLocaleChange(newLocale: Locale): void {
+    void setLocale(newLocale);
   }
 
   async function openSearch(): Promise<void> {

@@ -1,11 +1,11 @@
 <script lang="ts">
   import { Globe } from "@lucide/svelte";
-  import { locales } from "$lib/paraglide/runtime.js";
+  import { locales, isLocale, type Locale } from "$lib/paraglide/runtime.js";
   import * as m from "$lib/paraglide/messages.js";
 
   interface Props {
     value: string;
-    onchange: (locale: string) => void;
+    onchange: (locale: Locale) => void;
   }
 
   let { value, onchange }: Props = $props();
@@ -22,7 +22,9 @@
     {value}
     onchange={(e: Event) => {
       const target = e.target;
-      if (target instanceof HTMLSelectElement) onchange(target.value);
+      if (target instanceof HTMLSelectElement && isLocale(target.value)) {
+        onchange(target.value);
+      }
     }}
     aria-label={m.language_picker_label()}
   >
