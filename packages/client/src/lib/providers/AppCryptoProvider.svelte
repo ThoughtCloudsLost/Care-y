@@ -12,6 +12,8 @@
 -->
 <script lang="ts">
   import { browser } from "$app/environment";
+  import { goto } from "$app/navigation";
+  import { resolve } from "$app/paths";
   import { createQuery } from "@tanstack/svelte-query";
   import { authKeys } from "$lib/query/keys.js";
   import type { WorkerEventHandler } from "$lib/workers/crypto-bridge.js";
@@ -203,6 +205,19 @@
 
       hasShownOrgKeyToast = true;
       toastStore.show(m.crypto_org_key_pending(), 5000);
+    });
+
+    // ── Admin safety net: org key should always be available ────────
+    // Admins (MANAGE_KEYS) derive the org key at login. If the session
+    // is valid but the org key is missing, crypto is broken and the
+    // admin needs to re-authenticate.
+    $effect(() => {
+      if (!meQuery.data) return;
+      if (isOrgKeyReady()) return;
+      if (!canManageKeys) return;
+
+      cacheRegistry.reset();
+      void goto(resolve("/login?reauth=1"));
     });
   }
 </script>

@@ -19,7 +19,11 @@
   import { setOrgKeyReady } from "$lib/crypto/org-key-ready.svelte.js";
   import { installCleanupHandler } from "$lib/auth/cleanup.js";
   import { loginCrypto } from "$lib/auth/login-crypto.js";
-  import { buildLoginCallbacks } from "$lib/auth/crypto-callbacks.js";
+  import { registerCrypto } from "$lib/auth/register-crypto.js";
+  import {
+    buildLoginCallbacks,
+    buildRegisterCallbacks,
+  } from "$lib/auth/crypto-callbacks.js";
   import { announceToLiveRegion } from "$lib/utils/announce.js";
   import { createPublicBrandingQuery } from "$lib/branding/public-branding.js";
   import { applyKonstaPalette } from "$lib/branding/konsta-palette.js";
@@ -64,6 +68,7 @@
   let twofaMethods = $state<string[]>([]);
   let pendingNeedsEnrollment = $state(false);
   let pendingUserId = $state("");
+  let pendingHasKeys = $state(true);
   let pendingEncryptedLocale = $state<string | null>(null);
   let pendingHasSeenBriefing = $state(true);
 
@@ -164,13 +169,14 @@
       pendingEncryptedLocale =
         loginResult.user.encryptedPreferredLocale ?? null;
       pendingHasSeenBriefing = loginResult.user.hasSeenBriefing;
+      pendingHasKeys = loginResult.hasKeys;
+      pendingUserId = loginResult.user.id;
 
       // 1b. 2FA: show inline challenge. Credentials stay in $state so the
       //     crypto pipeline can run after verification succeeds.
       if (loginResult.requiresTwoFactor) {
         twofaMethods = loginResult.enrolledMethods;
         pendingNeedsEnrollment = loginResult.needsEnrollment;
-        pendingUserId = loginResult.user.id;
         phase = "twofa-verify";
         return;
       }
@@ -200,18 +206,39 @@
   }
 
   async function runCryptoPipeline(): Promise<void> {
-    const callbacks = buildLoginCallbacks(
-      (p) => {
-        phase = p;
-      },
-      {
-        argon2id: m.auth_phase_argon2id(),
-        derive: m.auth_phase_derive(),
-        pow: m.auth_phase_pow(),
-      },
-    );
+    /* eslint-disable @typescript-eslint/no-unsafe-assignment -- $state<union> rune proxy */
+    const setPhase = (p: LoginPhaseId): void => {
+      phase = p;
+    };
+    /* eslint-enable @typescript-eslint/no-unsafe-assignment */
 
-    const result = await loginCrypto(identifier, password, bridge, callbacks);
+    // First-time key setup for manually created users (no user_keys row).
+    // Mirrors the first-login invite page: registerCrypto generates salt +
+    // volPublic and uploads them, then loginCrypto re-derives in the Worker.
+    if (!pendingHasKeys) {
+      await registerCrypto(
+        pendingUserId,
+        password,
+        buildRegisterCallbacks(setPhase, {
+          argon2id: m.auth_phase_argon2id(),
+          derive: m.auth_phase_derive(),
+        }),
+      );
+      await bridge.zeroAll();
+    }
+
+    const loginCallbacks = buildLoginCallbacks(setPhase, {
+      argon2id: m.auth_phase_argon2id(),
+      derive: m.auth_phase_derive(),
+      pow: m.auth_phase_pow(),
+    });
+
+    const result = await loginCrypto(
+      identifier,
+      password,
+      bridge,
+      loginCallbacks,
+    );
 
     if (result.orgPublicKey !== null) {
       orgKeyManager.load(result.orgPublicKey);

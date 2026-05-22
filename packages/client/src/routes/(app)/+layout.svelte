@@ -6,7 +6,7 @@
   import { createQuery } from "@tanstack/svelte-query";
   import { authKeys } from "$lib/query/keys.js";
   import { trpc } from "$lib/trpc/index.js";
-  import { getCryptoBridge } from "$lib/crypto/context.js";
+  import { getCryptoBridge, getOrgKeyManager } from "$lib/crypto/context.js";
   import { cacheRegistry } from "$lib/crypto/cache-registry.js";
   import { IdleTimer } from "$lib/auth/idle-timer.js";
   import { toastStore } from "$lib/stores/toast.svelte.js";
@@ -44,6 +44,7 @@
   // ── Cross-tab state sync + idle timer ──────────────────────────────
   if (browser) {
     const bridge = getCryptoBridge();
+    const orgKeyManager = getOrgKeyManager();
 
     // When another tab zeroes keys (logout, idle timeout), redirect to login.
     bridge.onStateChange((event: StateChangeEvent) => {
@@ -55,11 +56,16 @@
 
     // Safety net: session valid but Worker has no keys (Worker crash,
     // SharedWorker disconnect, or a code path that skipped crypto).
-    // Wait for bridge init to settle before checking.
+    // Also catches the case where the Worker is keyed but the main-thread
+    // OrgKeyManager lost its public key (e.g., onboarding-to-app transition).
     $effect(() => {
       if (!isAuthenticated) return;
       void bridge.waitReady().then(() => {
-        if (bridge.getState() === "READY") {
+        const state = bridge.getState();
+        if (state === "READY") {
+          cacheRegistry.reset();
+          void goto(resolve("/login?reauth=1"));
+        } else if (state === "KEYED" && !orgKeyManager.isLoaded) {
           cacheRegistry.reset();
           void goto(resolve("/login?reauth=1"));
         }

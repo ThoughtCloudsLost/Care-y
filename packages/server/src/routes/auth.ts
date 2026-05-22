@@ -210,7 +210,10 @@ export function createAuthRouter(deps: AuthRouterDeps) {
             pushHmacKey: null,
           },
         );
-        const enrolledMethods = await twoFactor.getEnrolledMethodTypes(user.id);
+        const [enrolledMethods, hasKeys] = await Promise.all([
+          twoFactor.getEnrolledMethodTypes(user.id),
+          authService.hasUserKeys(user.id),
+        ]);
 
         const needsEnrollment = enrolledMethods.length === 0;
 
@@ -219,6 +222,7 @@ export function createAuthRouter(deps: AuthRouterDeps) {
           requiresTwoFactor: enrolledMethods.length > 0,
           enrolledMethods,
           needsEnrollment,
+          hasKeys,
         };
       }),
     ),
