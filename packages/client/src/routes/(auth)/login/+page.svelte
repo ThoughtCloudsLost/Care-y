@@ -27,6 +27,7 @@
   import KeyDerivation, {
     type LoginPhaseId,
   } from "$lib/components/onboarding/KeyDerivation.svelte";
+  import SecurityBriefing from "$lib/components/onboarding/SecurityBriefing.svelte";
   import TwoFactorEnrollment from "$lib/components/onboarding/TwoFactorEnrollment.svelte";
   import TwoFactorChallenge from "$lib/components/auth/TwoFactorChallenge.svelte";
   import PasswordInput from "$lib/components/inputs/PasswordInput.svelte";
@@ -44,9 +45,7 @@
 
   let uiLocale = $state(getLocale());
 
-  function handleLocaleChange(newLocale: string): void {
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- Locale values validated by LanguagePicker
-    const locale = newLocale as Locale;
+  function handleLocaleChange(locale: Locale): void {
     void setLocale(locale, { reload: false });
     document.documentElement.lang = locale;
     document.documentElement.dir = getTextDirection(locale);
@@ -66,6 +65,7 @@
   let pendingNeedsEnrollment = $state(false);
   let pendingUserId = $state("");
   let pendingEncryptedLocale = $state<string | null>(null);
+  let pendingHasSeenBriefing = $state(true);
 
   // Volunteer first-login enrollment recovery: shown when a volunteer
   // refreshes during their initial 2FA enrollment flow.
@@ -93,7 +93,8 @@
 
   const phaseLabel = $derived(getPhaseLabel(phase));
   const isSubmitting = $derived(
-    phase !== "idle" &&
+    phase !== "briefing" &&
+      phase !== "idle" &&
       phase !== "error" &&
       phase !== "twofa" &&
       phase !== "twofa-verify",
@@ -162,6 +163,7 @@
 
       pendingEncryptedLocale =
         loginResult.user.encryptedPreferredLocale ?? null;
+      pendingHasSeenBriefing = loginResult.user.hasSeenBriefing;
 
       // 1b. 2FA: show inline challenge. Credentials stay in $state so the
       //     crypto pipeline can run after verification succeeds.
@@ -184,8 +186,7 @@
       }
 
       await applyStoredLocale();
-      phase = "done";
-      await goto(resolve("/"));
+      await navigateOrBriefing();
     } catch (caught: unknown) {
       phase = "error";
       const msg = caught instanceof Error ? caught.message : String(caught);
@@ -233,6 +234,21 @@
     }
   }
 
+  async function navigateOrBriefing(): Promise<void> {
+    if (!pendingHasSeenBriefing) {
+      phase = "briefing";
+      return;
+    }
+    phase = "done";
+    await goto(resolve("/"));
+  }
+
+  function handleBriefingConfirm(): void {
+    void trpc.profile.markBriefingSeen.mutate();
+    phase = "done";
+    void goto(resolve("/"));
+  }
+
   async function handleTwofaSuccess(): Promise<void> {
     error = "";
 
@@ -247,8 +263,7 @@
       }
 
       await applyStoredLocale();
-      phase = "done";
-      await goto(resolve("/"));
+      await navigateOrBriefing();
     } catch (caught: unknown) {
       phase = "error";
       const msg = caught instanceof Error ? caught.message : String(caught);
@@ -311,6 +326,8 @@
       </button>
     </div>
   {/key}
+{:else if phase === "briefing"}
+  <SecurityBriefing onconfirm={handleBriefingConfirm} />
 {:else if phase === "twofa"}
   <!-- Volunteer first-login enrollment recovery -->
   <BlockTitle medium>{m.onboarding_twofa_vol_heading()}</BlockTitle>

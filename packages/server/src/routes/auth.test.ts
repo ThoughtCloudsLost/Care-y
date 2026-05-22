@@ -214,6 +214,7 @@ describe.skipIf(!HAS_DB)("auth + org routers (DB integration)", () => {
       encryptedPreferredLocale: string | null;
       roleId: string;
       isActive: boolean;
+      hasSeenBriefing: boolean;
     },
     sessionToken: string,
     twofaVerified = false,

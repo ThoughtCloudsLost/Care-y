@@ -7,22 +7,24 @@
   create action, opening the same QueueEditor sheet.
 -->
 <script lang="ts">
-  import { Block, BlockTitle, Preloader } from "konsta/svelte";
+  import { Block, BlockTitle } from "konsta/svelte";
   import SoftButton from "$lib/components/inputs/SoftButton.svelte";
   import * as m from "$lib/paraglide/messages.js";
   import { withTerms } from "$lib/terminology/with-terms.js";
   import { haptic } from "$lib/utils/haptic.js";
-  import { toastStore } from "$lib/stores/toast.svelte.js";
-  import { announceToLiveRegion } from "$lib/utils/announce.js";
   import OnboardingCryptoBridge from "$lib/providers/OnboardingCryptoBridge.svelte";
   import QueuesSection from "$lib/components/admin/QueuesSection.svelte";
+  import { getWizardNavCtx } from "./wizard-nav-context.js";
 
   interface Props {
     adminUserId: string;
     oncomplete: (data: { firstQueueCreated: boolean }) => void;
+    goBack?: () => void;
   }
 
-  let { adminUserId, oncomplete }: Props = $props();
+  let { adminUserId, oncomplete, goBack }: Props = $props();
+
+  const wizardNav = getWizardNavCtx();
 
   let finishing = $state(false);
   let queuesSectionRef = $state<QueuesSection>();
@@ -36,10 +38,27 @@
   function handleFinish(): void {
     finishing = true;
     haptic();
-    toastStore.show(m.onboarding_queue_created(withTerms()));
-    announceToLiveRegion("polite", m.onboarding_queue_created(withTerms()));
     oncomplete({ firstQueueCreated: true });
   }
+
+  $effect(() => {
+    wizardNav.current = {
+      right: {
+        label: m.common_next(),
+        disabled: !hasQueues || finishing,
+        loading: finishing,
+        onaction: handleFinish,
+      },
+      left: goBack
+        ? {
+            label: m.common_back(),
+            disabled: finishing,
+            loading: false,
+            onaction: goBack,
+          }
+        : undefined,
+    };
+  });
 </script>
 
 <BlockTitle medium>{m.onboarding_queue_heading(withTerms())}</BlockTitle>
@@ -56,15 +75,3 @@
 <OnboardingCryptoBridge {adminUserId}>
   <QueuesSection bind:this={queuesSectionRef} />
 </OnboardingCryptoBridge>
-
-{#if hasQueues}
-  <Block>
-    <SoftButton full disabled={finishing} onclick={handleFinish}>
-      {#if finishing}
-        <Preloader class="w-5 h-5" />
-      {:else}
-        {m.onboarding_queue_submit(withTerms())}
-      {/if}
-    </SoftButton>
-  </Block>
-{/if}

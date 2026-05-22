@@ -40,7 +40,6 @@
   } from "$lib/auth/crypto-callbacks.js";
   import { announceToLiveRegion } from "$lib/utils/announce.js";
   import { haptic } from "$lib/utils/haptic.js";
-  import { toastStore } from "$lib/stores/toast.svelte.js";
   import KeyDerivation, {
     type LoginPhaseId,
   } from "$lib/components/onboarding/KeyDerivation.svelte";
@@ -202,8 +201,6 @@
       installCleanupHandler(bridge, orgKeyManager);
 
       haptic();
-      toastStore.show(m.onboarding_step_complete());
-      announceToLiveRegion("polite", m.onboarding_step_complete());
 
       oncomplete({ userId, adminVolPublic: loginResult.volPublic });
     } catch (caught: unknown) {

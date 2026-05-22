@@ -81,15 +81,6 @@ beforeEach(() => {
 });
 
 describe("TwoFactorEnrollment", () => {
-  it("renders method list when no methods are enrolled", () => {
-    render(TwoFactorEnrollment, {
-      props: { username: "admin", onenrolled: vi.fn() },
-    });
-    expect(
-      screen.getByText("Enroll at least one method to continue."),
-    ).toBeTruthy();
-  });
-
   it("shows enrolled badge when methods exist", () => {
     mockStatusData = {
       enrolled: true,

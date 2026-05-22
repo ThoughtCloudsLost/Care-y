@@ -22,6 +22,7 @@
     showHttpsCheck?: boolean;
     showDownloadAgain?: boolean;
     showBackButton?: boolean;
+    externalNav?: boolean;
     scrollContainer?: string;
   }
 
@@ -32,6 +33,7 @@
     showHttpsCheck = false,
     showDownloadAgain = false,
     showBackButton = false,
+    externalNav = false,
     scrollContainer,
   }: Props = $props();
 
@@ -92,6 +94,26 @@
     httpsBlocked = false;
     downloadAgainDialogOpen = false;
   }
+
+  export function getStep(): number {
+    return step;
+  }
+
+  export function isOrgKeyLoaded(): boolean {
+    return orgKeyLoaded;
+  }
+
+  export function goNext(): void {
+    nextStep();
+  }
+
+  export function goPrev(): void {
+    prevStep();
+  }
+
+  export function openDownloadAgainDialog(): void {
+    downloadAgainDialogOpen = true;
+  }
 </script>
 
 {#if showHttpsCheck && httpsBlocked}
@@ -139,18 +161,20 @@
       </Block>
     {/if}
 
-    <Block>
-      <SoftButton full onclick={nextStep} disabled={!orgKeyLoaded}>
-        {m.common_next()}
-      </SoftButton>
-    </Block>
+    {#if !externalNav}
+      <Block>
+        <SoftButton full onclick={nextStep} disabled={!orgKeyLoaded}>
+          {m.common_next()}
+        </SoftButton>
+      </Block>
+    {/if}
   {:else if step === 1}
     <!-- Step 2: Passphrase creation + export -->
     {#key step}
       <EscrowPassphraseForm onexport={handleExport} />
     {/key}
 
-    {#if showBackButton}
+    {#if showBackButton && !externalNav}
       <Block>
         <div class="escrow-nav">
           <SoftButton full onclick={prevStep}>
@@ -189,18 +213,20 @@
       </Block>
     {/if}
 
-    <Block>
-      <div class="escrow-nav">
-        {#if showDownloadAgain}
-          <SoftButton full onclick={() => (downloadAgainDialogOpen = true)}>
-            {m.onboarding_escrow_download_again()}
+    {#if !externalNav}
+      <Block>
+        <div class="escrow-nav">
+          {#if showDownloadAgain}
+            <SoftButton full onclick={() => (downloadAgainDialogOpen = true)}>
+              {m.onboarding_escrow_download_again()}
+            </SoftButton>
+          {/if}
+          <SoftButton full onclick={oncomplete}>
+            {completeLabel}
           </SoftButton>
-        {/if}
-        <SoftButton full onclick={oncomplete}>
-          {completeLabel}
-        </SoftButton>
-      </div>
-    </Block>
+        </div>
+      </Block>
+    {/if}
   {/if}
 {/if}
 

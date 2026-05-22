@@ -1,6 +1,8 @@
 // @vitest-environment jsdom
 import { describe, it, expect, afterEach, vi, beforeEach } from "vitest";
-import { render, screen, cleanup, fireEvent } from "@testing-library/svelte";
+import { render, cleanup } from "@testing-library/svelte";
+import * as m from "$lib/paraglide/messages.js";
+import type { WizardNavContainer } from "./wizard-nav-context.js";
 
 const mockCompleteSetup = vi.fn(() => Promise.resolve({ success: true }));
 
@@ -15,11 +17,11 @@ vi.mock("$lib/trpc/index.js", () => ({
 vi.mock("$lib/paraglide/messages.js", () => ({
   onboarding_invite_heading: () => "Invite Volunteers",
   onboarding_invite_subtext: () => "Share invite links or create accounts.",
-  onboarding_invite_skip: () => "I'll invite volunteers later",
-  onboarding_invite_finish: () => "Finish Setup",
   admin_invite_link_generate: () => "Generate Invite Link",
   admin_invite_menu_manual: () => "Create User Manually",
-  admin_invite_link_error: () => "Failed to generate invite link",
+  ticket_close_skip: () => "Skip",
+  common_back: () => "Back",
+  common_next: () => "Next",
 }));
 
 vi.mock("$lib/terminology/with-terms.js", () => ({
@@ -47,9 +49,18 @@ vi.mock("$lib/components/admin/UsersSection.svelte", async () => ({
   default: (await import("./test-helpers/StubUsersSection.svelte")).default,
 }));
 
+const wizardNavContainer: WizardNavContainer = { current: undefined };
+
+vi.mock("./wizard-nav-context.js", () => ({
+  getWizardNavCtx: () => wizardNavContainer,
+}));
+
 const { default: SetupInvite } = await import("./SetupInvite.svelte");
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  wizardNavContainer.current = undefined;
+});
 beforeEach(() => {
   vi.clearAllMocks();
 });
@@ -57,35 +68,19 @@ beforeEach(() => {
 describe("SetupInvite", () => {
   const defaultProps = { adminUserId: "admin-1", oncomplete: vi.fn() };
 
-  it("renders heading and description", () => {
-    render(SetupInvite, { props: defaultProps });
-    expect(screen.getByText("Invite Volunteers")).toBeTruthy();
-    expect(
-      screen.getByText("Share invite links or create accounts."),
-    ).toBeTruthy();
-  });
-
-  it("renders both action buttons", () => {
-    render(SetupInvite, { props: defaultProps });
-    expect(screen.getByText("Generate Invite Link")).toBeTruthy();
-    expect(screen.getByText("Create User Manually")).toBeTruthy();
-  });
-
-  it("shows skip link when no invites created yet", () => {
-    render(SetupInvite, { props: defaultProps });
-    expect(screen.getByText("I'll invite volunteers later")).toBeTruthy();
-  });
-
-  it("skip calls completeSetup and oncomplete", async () => {
+  it("skip calls oncomplete with invitesSent count", () => {
     const oncomplete = vi.fn();
     render(SetupInvite, { props: { ...defaultProps, oncomplete } });
 
-    const skipBtn = screen.getByText("I'll invite volunteers later");
-    await fireEvent.click(skipBtn);
+    expect(wizardNavContainer.current?.right?.label).toBe(
+      m.ticket_close_skip(),
+    );
 
-    await vi.waitFor(() => {
-      expect(mockCompleteSetup).toHaveBeenCalled();
-    });
+    const action = wizardNavContainer.current?.right?.onaction;
+    expect(action).toBeTruthy();
+    (action as () => void)();
+
+    expect(oncomplete).toHaveBeenCalledWith({ invitesSent: 0 });
   });
 
   it("passes adminUserId to OnboardingCryptoBridge", () => {

@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { describe, it, expect, afterEach, vi, beforeEach } from "vitest";
-import { render, screen, cleanup, fireEvent } from "@testing-library/svelte";
+import { render, screen, cleanup } from "@testing-library/svelte";
+import type { WizardNavContainer } from "./wizard-nav-context.js";
 
 const mockHaptic = vi.fn();
 const mockToastShow = vi.fn();
@@ -9,9 +10,9 @@ const mockAnnounce = vi.fn();
 vi.mock("$lib/paraglide/messages.js", () => ({
   onboarding_queue_heading: () => "Create Your First Queue",
   onboarding_queue_subtext: () => "Queues organize incoming requests.",
-  onboarding_queue_submit: () => "Continue",
-  onboarding_queue_created: () => "Queue created!",
   admin_queues_create_button: () => "Create queue",
+  common_back: () => "Back",
+  common_next: () => "Next",
 }));
 
 vi.mock("$lib/terminology/with-terms.js", () => ({
@@ -35,6 +36,12 @@ vi.mock("$lib/components/admin/QueuesSection.svelte", async () => ({
   default: (await import("./test-helpers/StubQueuesSection.svelte")).default,
 }));
 
+const wizardNavContainer: WizardNavContainer = { current: undefined };
+
+vi.mock("./wizard-nav-context.js", () => ({
+  getWizardNavCtx: () => wizardNavContainer,
+}));
+
 const { _setTestQueueCount, _resetTestQueueCount } =
   await import("./test-helpers/StubQueuesSection.svelte");
 
@@ -43,6 +50,7 @@ const { default: SetupQueue } = await import("./SetupQueue.svelte");
 afterEach(() => {
   cleanup();
   _resetTestQueueCount();
+  wizardNavContainer.current = undefined;
 });
 beforeEach(() => {
   vi.clearAllMocks();
@@ -51,53 +59,42 @@ beforeEach(() => {
 describe("SetupQueue", () => {
   const defaultProps = { adminUserId: "admin-1", oncomplete: vi.fn() };
 
-  it("renders heading and description", () => {
-    render(SetupQueue, { props: defaultProps });
-    expect(screen.getByText("Create Your First Queue")).toBeTruthy();
-    expect(screen.getByText("Queues organize incoming requests.")).toBeTruthy();
-  });
-
   it("renders QueuesSection stub inside the bridge", () => {
     render(SetupQueue, { props: defaultProps });
     expect(screen.getByTestId("queues-section")).toBeTruthy();
   });
 
-  it("renders add queue button", () => {
+  it("disables finish button when no queues exist", () => {
     render(SetupQueue, { props: defaultProps });
-    expect(screen.getByText("Create queue")).toBeTruthy();
+    expect(wizardNavContainer.current?.right?.disabled).toBe(true);
   });
 
-  it("hides finish button when no queues exist", () => {
-    render(SetupQueue, { props: defaultProps });
-    expect(screen.queryByText("Continue")).toBeNull();
-  });
-
-  it("shows finish button when queues exist", () => {
+  it("enables finish button when queues exist", () => {
     _setTestQueueCount(1);
     render(SetupQueue, { props: defaultProps });
-    expect(screen.getByText("Continue")).toBeTruthy();
+    expect(wizardNavContainer.current?.right?.disabled).toBe(false);
   });
 
-  it("calls oncomplete with firstQueueCreated on finish click", async () => {
+  it("calls oncomplete with firstQueueCreated on finish", () => {
     _setTestQueueCount(2);
     const oncomplete = vi.fn();
     render(SetupQueue, { props: { ...defaultProps, oncomplete } });
 
-    const finishBtn = screen.getByText("Continue");
-    await fireEvent.click(finishBtn);
+    const action = wizardNavContainer.current?.right?.onaction;
+    expect(action).toBeTruthy();
+    (action as () => void)();
 
     expect(oncomplete).toHaveBeenCalledWith({ firstQueueCreated: true });
   });
 
-  it("fires haptic and toast on finish", async () => {
+  it("fires haptic on finish", () => {
     _setTestQueueCount(1);
     render(SetupQueue, { props: defaultProps });
 
-    const finishBtn = screen.getByText("Continue");
-    await fireEvent.click(finishBtn);
+    const action = wizardNavContainer.current?.right?.onaction;
+    expect(action).toBeTruthy();
+    (action as () => void)();
 
     expect(mockHaptic).toHaveBeenCalled();
-    expect(mockToastShow).toHaveBeenCalledWith("Queue created!");
-    expect(mockAnnounce).toHaveBeenCalledWith("polite", "Queue created!");
   });
 });

@@ -2,7 +2,11 @@
   import { setContext } from "svelte";
   import { browser } from "$app/environment";
   import { page } from "$app/state";
-  import { Navbar, Progressbar } from "konsta/svelte";
+  import { Navbar, Progressbar, Link, Preloader } from "konsta/svelte";
+  import {
+    setWizardNavCtx,
+    type WizardNavContainer,
+  } from "$lib/components/onboarding/wizard-nav-context.js";
   import {
     TERMINOLOGY_DEFAULTS_EN,
     type TerminologyLabels,
@@ -41,6 +45,12 @@
     stepProgress = progress;
   });
 
+  let wizardNav = $state<WizardNavContainer>({ current: undefined });
+  setWizardNavCtx(wizardNav);
+
+  const navLeft = $derived(wizardNav.current?.left);
+  const navRight = $derived(wizardNav.current?.right);
+
   const isSetupRoute = $derived(page.url.pathname.includes("/setup"));
   const brandingQuery = createPublicBrandingQuery();
   const branding = $derived(isSetupRoute ? null : (brandingQuery.data ?? null));
@@ -48,9 +58,7 @@
 
   let uiLocale = $state(getLocale());
 
-  function handleLocaleChange(newLocale: string): void {
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- Locale values validated by LanguagePicker
-    const locale = newLocale as Locale;
+  function handleLocaleChange(locale: Locale): void {
     void setLocale(locale, { reload: false });
     document.documentElement.lang = locale;
     document.documentElement.dir = getTextDirection(locale);
@@ -69,6 +77,33 @@
 <PageShell>
   {#snippet navbar()}
     <Navbar role="banner">
+      {#snippet left()}
+        {#if navLeft}
+          <Link
+            class={navLeft.disabled ? "nav-disabled" : ""}
+            aria-disabled={navLeft.disabled}
+            onclick={navLeft.disabled ? undefined : navLeft.onaction}
+          >
+            {navLeft.label}
+          </Link>
+        {/if}
+      {/snippet}
+      {#snippet right()}
+        {#if navRight}
+          {@const isDisabled = navRight.disabled || navRight.loading}
+          <Link
+            class={isDisabled ? "nav-disabled" : ""}
+            aria-disabled={isDisabled}
+            onclick={isDisabled ? undefined : () => void navRight.onaction()}
+          >
+            {#if navRight.loading}
+              <Preloader class="w-5 h-5" />
+            {:else}
+              {navRight.label}
+            {/if}
+          </Link>
+        {/if}
+      {/snippet}
       {#snippet title()}
         <div class="navbar-title-group">
           <span class="navbar-brand">
@@ -176,6 +211,11 @@
 
   .navbar-icon {
     border-radius: 4px;
+  }
+
+  :global(.nav-disabled) {
+    opacity: 0.35;
+    pointer-events: none;
   }
 
   .step-indicator {

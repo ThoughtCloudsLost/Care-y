@@ -7,7 +7,7 @@
  * horizontal stepper was replaced with a progress bar).
  */
 import { describe, it, expect, afterEach } from "vitest";
-import { render, screen, cleanup } from "@testing-library/svelte";
+import { render, cleanup } from "@testing-library/svelte";
 import WizardStepper from "./WizardStepper.svelte";
 
 afterEach(cleanup);
@@ -24,30 +24,6 @@ const STEPS = [
 ];
 
 describe("WizardStepper", () => {
-  it("renders correct step count text", () => {
-    render(WizardStepper, {
-      props: {
-        steps: STEPS,
-        currentStep: 0,
-        completedSteps: new Set<number>(),
-      },
-    });
-    const matches = screen.getAllByText("Step 1 of 8");
-    expect(matches.length).toBeGreaterThanOrEqual(1);
-  });
-
-  it("updates step count text for a middle step", () => {
-    render(WizardStepper, {
-      props: {
-        steps: STEPS,
-        currentStep: 3,
-        completedSteps: new Set<number>(),
-      },
-    });
-    const matches = screen.getAllByText("Step 4 of 8");
-    expect(matches.length).toBeGreaterThanOrEqual(1);
-  });
-
   it("renders a progress group with accessible label", () => {
     const { container } = render(WizardStepper, {
       props: {

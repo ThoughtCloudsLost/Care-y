@@ -1,60 +1,48 @@
 <script lang="ts">
-  import { Block } from "konsta/svelte";
-  import SoftButton from "$lib/components/inputs/SoftButton.svelte";
+  import { Block, BlockTitle } from "konsta/svelte";
   import * as m from "$lib/paraglide/messages.js";
   import TwoFactorEnrollment from "./TwoFactorEnrollment.svelte";
+  import { getWizardNavCtx } from "./wizard-nav-context.js";
 
   interface Props {
     readonly oncomplete: () => void;
     readonly username: string;
+    readonly goBack?: () => void;
   }
 
-  let { oncomplete, username }: Props = $props();
+  let { oncomplete, username, goBack }: Props = $props();
+
+  const wizardNav = getWizardNavCtx();
 
   let enrolled = $state(false);
 
   function handleEnrolled(): void {
     enrolled = true;
   }
+
+  $effect(() => {
+    wizardNav.current = {
+      right: {
+        label: m.common_next(),
+        disabled: !enrolled,
+        loading: false,
+        onaction: oncomplete,
+      },
+      left: goBack
+        ? {
+            label: m.common_back(),
+            disabled: false,
+            loading: false,
+            onaction: goBack,
+          }
+        : undefined,
+    };
+  });
 </script>
 
-<div class="setup-twofa">
-  <Block class="step-header">
-    <h2 class="step-heading">{m.onboarding_twofa_heading()}</h2>
-    <p class="step-desc">{m.onboarding_twofa_desc()}</p>
-  </Block>
+<BlockTitle medium>{m.onboarding_twofa_heading()}</BlockTitle>
+<Block>
+  <p class="step-desc">{m.onboarding_twofa_desc()}</p>
+</Block>
 
-  <TwoFactorEnrollment {username} onenrolled={handleEnrolled} />
-
-  <Block class="continue-block">
-    <SoftButton full onclick={oncomplete} disabled={!enrolled}>
-      {m.onboarding_twofa_continue()}
-    </SoftButton>
-  </Block>
-</div>
-
-<style>
-  .setup-twofa {
-    display: flex;
-    flex-direction: column;
-    min-height: 0;
-  }
-
-  .step-heading {
-    font-size: 1.375rem;
-    font-weight: 700;
-    margin: 0 0 var(--space-xs);
-  }
-
-  .step-desc {
-    font-size: 0.9rem;
-    color: var(--muted);
-    margin: 0;
-    line-height: 1.5;
-  }
-
-  .setup-twofa :global(.continue-block) {
-    margin-top: auto;
-    padding-top: var(--space-md);
-  }
-</style>
+<TwoFactorEnrollment {username} onenrolled={handleEnrolled} />

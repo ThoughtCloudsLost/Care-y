@@ -37,6 +37,7 @@ export interface UserRecord {
   readonly encryptedPreferredLocale: string | null; // base64 ciphertext, client decrypts with org key
   readonly roleId: string;
   readonly isActive: boolean;
+  readonly hasSeenBriefing: boolean;
 }
 
 export interface AuthService {
@@ -110,6 +111,8 @@ export interface AuthService {
   /** Updates the org's PII retention setting in org_config. */
   setPiiRetentionDays(days: number | null): Promise<void>;
 
+  markBriefingSeen(userId: string): Promise<void>;
+
   getHubStatus(): Promise<{
     activeUserCount: number;
     queueCount: number;
@@ -137,6 +140,7 @@ function toUserRecord(
       row.encrypted_preferred_locale?.toString("base64") ?? null,
     roleId: row.role_id,
     isActive: row.is_active,
+    hasSeenBriefing: row.has_seen_briefing,
   };
 }
 
@@ -484,6 +488,14 @@ export function createAuthService(
     updateUserRole,
     setUserActive,
     setPiiRetentionDays,
+
+    async markBriefingSeen(userId: string): Promise<void> {
+      await db
+        .updateTable("users")
+        .set({ has_seen_briefing: true })
+        .where("id", "=", userId)
+        .execute();
+    },
 
     async updateDisplayName(
       userId: string,

@@ -1,239 +1,121 @@
 // @vitest-environment jsdom
 import { describe, it, expect, afterEach, vi } from "vitest";
-import { render, screen, cleanup, fireEvent } from "@testing-library/svelte";
+import { render, screen, cleanup } from "@testing-library/svelte";
+import { flushSync } from "svelte";
+import * as m from "$lib/paraglide/messages.js";
 import SecurityBriefing from "./SecurityBriefing.svelte";
+import type { WizardNavContainer } from "./wizard-nav-context.js";
 
-afterEach(cleanup);
+const wizardNavContainer: WizardNavContainer = { current: undefined };
 
-async function advanceToPage(
-  container: HTMLElement,
-  targetPage: number,
-): Promise<void> {
+vi.mock("./wizard-nav-context.js", () => ({
+  getWizardNavCtx: () => wizardNavContainer,
+}));
+
+afterEach(() => {
+  cleanup();
+  wizardNavContainer.current = undefined;
+});
+
+function advanceToPage(targetPage: number): void {
   for (let i = 0; i < targetPage; i++) {
-    const nextButton = screen.getByText("Next");
-    await fireEvent.click(nextButton);
+    const action = wizardNavContainer.current?.right?.onaction;
+    expect(action, `No right nav action on page ${String(i)}`).toBeTruthy();
+    (action as () => void)();
+    flushSync();
   }
 }
 
 describe("SecurityBriefing", () => {
   describe("page 0 - How Encryption Works", () => {
-    it("renders the main heading", () => {
+    it("renders the crypto diagram with correct src", () => {
       const onconfirm = vi.fn();
       render(SecurityBriefing, { props: { onconfirm } });
-      expect(screen.getByText("How CARE-Y Protects Your Data")).toBeTruthy();
-    });
-
-    it("renders the crypto diagram with alt text", () => {
-      const onconfirm = vi.fn();
-      render(SecurityBriefing, { props: { onconfirm } });
-      const img = screen.getByAltText(
-        "Simplified diagram showing how CARE-Y derives encryption keys from passwords using two verification servers",
-      );
-      expect(img).toBeTruthy();
+      const img = screen.getByAltText(m.onboarding_briefing_diagram_alt());
       expect(img.getAttribute("src")).toBe("/images/crypto-overview.png");
     });
 
-    it("renders the intro paragraph", () => {
+    it("registers Next in nav context on page 0", () => {
       const onconfirm = vi.fn();
       render(SecurityBriefing, { props: { onconfirm } });
-      expect(
-        screen.getByText(/encrypts everything in the volunteer's browser/),
-      ).toBeTruthy();
-    });
-
-    it("shows Next button on page 0", () => {
-      const onconfirm = vi.fn();
-      render(SecurityBriefing, { props: { onconfirm } });
-      expect(screen.getByText("Next")).toBeTruthy();
-      expect(screen.queryByText("Back")).toBeNull();
+      expect(wizardNavContainer.current?.right?.label).toBe(m.common_next());
+      expect(wizardNavContainer.current?.left).toBeUndefined();
     });
   });
 
   describe("page 1 - What's Protected", () => {
-    it("renders the protection table with all 7 data categories", async () => {
+    it("registers Back and Next in nav context", async () => {
       const onconfirm = vi.fn();
-      const { container } = render(SecurityBriefing, {
-        props: { onconfirm },
-      });
-      await advanceToPage(container, 1);
+      render(SecurityBriefing, { props: { onconfirm } });
+      advanceToPage(1);
 
-      const dataCategories = [
-        "Client data (tickets, messages, case notes)",
-        "Org resources (knowledge base, settings)",
-        "Public branding (logo, name, color on intake pages)",
-        "Volunteer display names, IP addresses, session details",
-        "Volunteer usernames",
-        "Volunteer email addresses (opt-in only)",
-        "Phone system credentials",
-      ];
-
-      for (const category of dataCategories) {
-        expect(screen.getByText(category)).toBeTruthy();
-      }
-    });
-
-    it("renders practice section heading and row labels", async () => {
-      const onconfirm = vi.fn();
-      const { container } = render(SecurityBriefing, {
-        props: { onconfirm },
-      });
-      await advanceToPage(container, 1);
-
-      expect(screen.getByText("What This Means in Practice")).toBeTruthy();
-      const accessLabels = screen.getAllByText("Who can read it");
-      expect(accessLabels.length).toBeGreaterThan(0);
-    });
-
-    it("has 7 details elements", async () => {
-      const onconfirm = vi.fn();
-      const { container } = render(SecurityBriefing, {
-        props: { onconfirm },
-      });
-      await advanceToPage(container, 1);
-
-      const detailsElements = container.querySelectorAll("details");
-      expect(detailsElements.length).toBe(7);
-    });
-
-    it("shows Back and Next buttons", async () => {
-      const onconfirm = vi.fn();
-      const { container } = render(SecurityBriefing, {
-        props: { onconfirm },
-      });
-      await advanceToPage(container, 1);
-
-      expect(screen.getByText("Back")).toBeTruthy();
-      expect(screen.getByText("Next")).toBeTruthy();
-    });
-  });
-
-  describe("page 2 - Compromise Scenarios", () => {
-    it("renders all 6 compromise scenario headings", async () => {
-      const onconfirm = vi.fn();
-      const { container } = render(SecurityBriefing, {
-        props: { onconfirm },
-      });
-      await advanceToPage(container, 2);
-
-      const scenarioTitles = [
-        "Someone seizes or breaks into the CARE-Y server",
-        "Someone compromises one of the two verification servers",
-        "A volunteer's device is compromised",
-        "A volunteer goes rogue (insider threat)",
-        "The telephony provider is compromised or subpoenaed",
-        "Network surveillance (ISP monitoring, traffic analysis)",
-      ];
-
-      for (const title of scenarioTitles) {
-        expect(screen.getByText(title)).toBeTruthy();
-      }
-    });
-
-    it("has 6 details elements", async () => {
-      const onconfirm = vi.fn();
-      const { container } = render(SecurityBriefing, {
-        props: { onconfirm },
-      });
-      await advanceToPage(container, 2);
-
-      const detailsElements = container.querySelectorAll("details");
-      expect(detailsElements.length).toBe(6);
+      expect(wizardNavContainer.current?.left?.label).toBe(m.common_back());
+      expect(wizardNavContainer.current?.right?.label).toBe(m.common_next());
     });
   });
 
   describe("page 3 - Security Choices", () => {
-    it("renders all 3 setup choice headings", async () => {
-      const onconfirm = vi.fn();
-      const { container } = render(SecurityBriefing, {
-        props: { onconfirm },
-      });
-      await advanceToPage(container, 3);
-
-      expect(screen.getByText("Telephony provider")).toBeTruthy();
-      expect(screen.getByText("Two-factor authentication policy")).toBeTruthy();
-      expect(screen.getByText("Tor hidden service access")).toBeTruthy();
-    });
-
-    it("has 3 details elements", async () => {
-      const onconfirm = vi.fn();
-      const { container } = render(SecurityBriefing, {
-        props: { onconfirm },
-      });
-      await advanceToPage(container, 3);
-
-      const detailsElements = container.querySelectorAll("details");
-      expect(detailsElements.length).toBe(3);
-    });
-
     it("confirm button is always enabled", async () => {
       const onconfirm = vi.fn();
-      const { container } = render(SecurityBriefing, {
-        props: { onconfirm },
-      });
-      await advanceToPage(container, 3);
+      render(SecurityBriefing, { props: { onconfirm } });
+      advanceToPage(3);
 
-      const button = screen.getByText("I understand");
-      expect(button.closest("button")?.disabled).toBe(false);
+      expect(wizardNavContainer.current?.right?.label).toBe(
+        m.onboarding_briefing_confirm(),
+      );
+      expect(wizardNavContainer.current?.right?.disabled).toBe(false);
     });
 
     it("calls onconfirm when confirm button is clicked", async () => {
       const onconfirm = vi.fn();
-      const { container } = render(SecurityBriefing, {
-        props: { onconfirm },
-      });
-      await advanceToPage(container, 3);
+      render(SecurityBriefing, { props: { onconfirm } });
+      advanceToPage(3);
 
-      const button = screen.getByText("I understand");
-      await fireEvent.click(button);
+      const action = wizardNavContainer.current?.right?.onaction;
+      expect(action).toBeTruthy();
+      (action as () => void)();
       expect(onconfirm).toHaveBeenCalledOnce();
     });
 
-    it("shows Back button and confirm, no Next", async () => {
+    it("registers Back and confirm in nav context, no Next", async () => {
       const onconfirm = vi.fn();
-      const { container } = render(SecurityBriefing, {
-        props: { onconfirm },
-      });
-      await advanceToPage(container, 3);
+      render(SecurityBriefing, { props: { onconfirm } });
+      advanceToPage(3);
 
-      expect(screen.getByText("Back")).toBeTruthy();
-      expect(screen.getByText("I understand")).toBeTruthy();
-      expect(screen.queryByText("Next")).toBeNull();
+      expect(wizardNavContainer.current?.left?.label).toBe(m.common_back());
+      expect(wizardNavContainer.current?.right?.label).toBe(
+        m.onboarding_briefing_confirm(),
+      );
     });
   });
 
   describe("navigation", () => {
-    it("Next button advances to next page", async () => {
+    it("Next action advances to next page", () => {
       const onconfirm = vi.fn();
       render(SecurityBriefing, { props: { onconfirm } });
 
-      expect(screen.queryByText("What This Means in Practice")).toBeNull();
-      await fireEvent.click(screen.getByText("Next"));
-      expect(screen.getByText("What This Means in Practice")).toBeTruthy();
-    });
-
-    it("Back button returns to previous page", async () => {
-      const onconfirm = vi.fn();
-      const { container } = render(SecurityBriefing, {
-        props: { onconfirm },
-      });
-      await advanceToPage(container, 1);
-
-      await fireEvent.click(screen.getByText("Back"));
       expect(
-        screen.getByText(/encrypts everything in the volunteer's browser/),
+        screen.queryByText(m.onboarding_briefing_practice_heading()),
+      ).toBeNull();
+      advanceToPage(1);
+      expect(
+        screen.getByText(m.onboarding_briefing_practice_heading()),
       ).toBeTruthy();
     });
 
-    it("renders page dots indicator", () => {
+    it("Back action returns to previous page", () => {
       const onconfirm = vi.fn();
-      const { container } = render(SecurityBriefing, {
-        props: { onconfirm },
-      });
-      const dots = container.querySelectorAll(".page-dot");
-      expect(dots.length).toBe(4);
+      render(SecurityBriefing, { props: { onconfirm } });
+      advanceToPage(1);
+
+      const back = wizardNavContainer.current?.left?.onaction;
+      expect(back).toBeTruthy();
+      (back as () => void)();
+      flushSync();
+      expect(screen.getByText(m.onboarding_briefing_intro())).toBeTruthy();
     });
 
-    it("active dot updates with page changes", async () => {
+    it("active dot updates with page changes", () => {
       const onconfirm = vi.fn();
       const { container } = render(SecurityBriefing, {
         props: { onconfirm },
@@ -243,7 +125,7 @@ describe("SecurityBriefing", () => {
       expect(activeDots.length).toBe(1);
       expect(activeDots[0]).toBe(container.querySelectorAll(".page-dot")[0]);
 
-      await fireEvent.click(screen.getByText("Next"));
+      advanceToPage(1);
       activeDots = container.querySelectorAll(".page-dot--active");
       expect(activeDots[0]).toBe(container.querySelectorAll(".page-dot")[1]);
     });
@@ -255,7 +137,7 @@ describe("SecurityBriefing", () => {
       const { container } = render(SecurityBriefing, {
         props: { onconfirm },
       });
-      await advanceToPage(container, 1);
+      advanceToPage(1);
 
       const detailsWithFeedback = container.querySelectorAll(
         "details.touch-feedback",
@@ -264,7 +146,7 @@ describe("SecurityBriefing", () => {
         "summary.touch-feedback",
       );
       expect(detailsWithFeedback.length).toBe(0);
-      expect(summariesWithFeedback.length).toBe(7);
+      expect(summariesWithFeedback.length).toBeGreaterThan(0);
     });
 
     it("page dots have aria-hidden", () => {

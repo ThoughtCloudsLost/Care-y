@@ -291,6 +291,7 @@ describe("requireAuth middleware (authedProcedure)", () => {
           encryptedPreferredLocale: null,
           roleId: "volunteer",
           isActive: true,
+          hasSeenBriefing: true,
         },
       }),
     );
@@ -347,6 +348,7 @@ describe("require2fa middleware (authed2faProcedure)", () => {
           encryptedPreferredLocale: null,
           roleId: "volunteer",
           isActive: true,
+          hasSeenBriefing: true,
         },
       }),
     );
@@ -374,6 +376,7 @@ describe("require2fa middleware (authed2faProcedure)", () => {
           encryptedPreferredLocale: null,
           roleId: "volunteer",
           isActive: true,
+          hasSeenBriefing: true,
         },
       }),
     );
@@ -404,6 +407,7 @@ describe("withErrorWrapping resolver wrapper", () => {
       encryptedPreferredLocale: null,
       roleId: "volunteer",
       isActive: true,
+      hasSeenBriefing: true,
     },
   });
 
@@ -476,6 +480,7 @@ describe("withErrorWrapping resolver wrapper", () => {
         encryptedPreferredLocale: null,
         roleId: "volunteer",
         isActive: true,
+        hasSeenBriefing: true,
       },
     });
     const testRouter = router({

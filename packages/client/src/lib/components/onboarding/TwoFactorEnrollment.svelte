@@ -6,8 +6,6 @@
   import { trpc } from "$lib/trpc/index.js";
   import { twoFactorKeys } from "$lib/query/keys.js";
   import { haptic } from "$lib/utils/haptic.js";
-  import { toastStore } from "$lib/stores/toast.svelte.js";
-  import { announceToLiveRegion } from "$lib/utils/announce.js";
   import { METHOD_INFO, type TwoFactorMethodInfo } from "@care-y/shared";
   import TotpEnrollSheet from "$lib/components/settings/TotpEnrollSheet.svelte";
   import PasskeyEnrollSheet from "$lib/components/settings/PasskeyEnrollSheet.svelte";
@@ -97,9 +95,6 @@
     pushSheetOpen = false;
 
     haptic();
-    const msg = m.twofa_method_added();
-    toastStore.show(msg);
-    announceToLiveRegion("polite", msg);
 
     if (!hasShownBackupCodes) {
       backupCodesSheetOpen = true;

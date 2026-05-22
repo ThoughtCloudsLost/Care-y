@@ -17,20 +17,23 @@
   import { adminKeys } from "$lib/query/keys.js";
   import { haptic } from "$lib/utils/haptic.js";
   import { requireRouter } from "$lib/errors.js";
-  import SoftButton from "$lib/components/inputs/SoftButton.svelte";
   import CollapsibleSection from "$lib/components/dashboard/CollapsibleSection.svelte";
   import OnboardingCryptoBridge from "$lib/providers/OnboardingCryptoBridge.svelte";
   import TelephonyConfigSection from "$lib/components/admin/TelephonyConfigSection.svelte";
   import GreetingsSection from "$lib/components/admin/GreetingsSection.svelte";
   import SmsTemplatesSection from "$lib/components/admin/SmsTemplatesSection.svelte";
   import BlocklistSection from "$lib/components/admin/BlocklistSection.svelte";
+  import { getWizardNavCtx } from "./wizard-nav-context.js";
 
   interface Props {
     adminUserId: string;
     oncomplete: (data: { telephonyMode: "byot" | "managed" | "skip" }) => void;
+    goBack?: () => void;
   }
 
-  let { adminUserId, oncomplete }: Props = $props();
+  let { adminUserId, oncomplete, goBack }: Props = $props();
+
+  const wizardNav = getWizardNavCtx();
 
   const telephonyAdmin = requireRouter(trpc.telephonyAdmin, "telephonyAdmin");
 
@@ -59,6 +62,25 @@
     haptic();
     oncomplete({ telephonyMode: isConfigured ? configuredMode : "skip" });
   }
+
+  $effect(() => {
+    wizardNav.current = {
+      right: {
+        label: isConfigured ? m.common_next() : m.ticket_close_skip(),
+        disabled: false,
+        loading: false,
+        onaction: handleFinish,
+      },
+      left: goBack
+        ? {
+            label: m.common_back(),
+            disabled: false,
+            loading: false,
+            onaction: goBack,
+          }
+        : undefined,
+    };
+  });
 </script>
 
 <BlockTitle medium>{m.onboarding_communications_heading()}</BlockTitle>
@@ -107,9 +129,3 @@
     <BlocklistSection />
   </CollapsibleSection>
 </OnboardingCryptoBridge>
-
-<Block>
-  <SoftButton full onclick={handleFinish}>
-    {m.onboarding_communications_submit()}
-  </SoftButton>
-</Block>

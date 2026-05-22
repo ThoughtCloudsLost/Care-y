@@ -1,4 +1,5 @@
 export type LoginPhaseId =
+  | "briefing"
   | "idle"
   | "auth"
   | "argon2id"

@@ -461,6 +461,7 @@ describe("OPRF tRPC route", () => {
         encryptedPreferredLocale: null,
         roleId: "volunteer",
         isActive: true,
+        hasSeenBriefing: true,
       },
     });
 

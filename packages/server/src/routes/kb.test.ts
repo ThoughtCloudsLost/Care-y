@@ -93,6 +93,7 @@ function volunteerContext(): Context {
       encryptedPreferredLocale: null,
       roleId: RoleId.VOLUNTEER,
       isActive: true,
+      hasSeenBriefing: true,
     },
   };
 }
@@ -111,6 +112,7 @@ function managerContext(): Context {
       encryptedPreferredLocale: null,
       roleId: RoleId.MANAGER,
       isActive: true,
+      hasSeenBriefing: true,
     },
   };
 }

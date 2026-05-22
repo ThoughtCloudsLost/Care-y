@@ -81,6 +81,7 @@ function createMockContext(): Context {
       encryptedPreferredLocale: null,
       roleId: RoleId.ADMIN,
       isActive: true,
+      hasSeenBriefing: true,
     },
   };
 }

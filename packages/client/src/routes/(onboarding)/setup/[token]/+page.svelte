@@ -54,6 +54,7 @@
   import SetupQueue from "$lib/components/onboarding/SetupQueue.svelte";
   import SetupCommunications from "$lib/components/onboarding/SetupCommunications.svelte";
   import SetupEscrow from "$lib/components/onboarding/SetupEscrow.svelte";
+  import { getWizardNavCtx } from "$lib/components/onboarding/wizard-nav-context.js";
   import PasswordInput from "$lib/components/inputs/PasswordInput.svelte";
   import { getLocale, setLocale, isLocale } from "$lib/paraglide/runtime.js";
 
@@ -143,6 +144,18 @@
     (p: { current: number; total: number; label: string } | null) => void
   >("onboarding-update-step");
 
+  const wizardNav = getWizardNavCtx();
+
+  function goBack(): void {
+    if (step <= 0) return;
+    step -= 1;
+    saveState(step, completedSteps);
+    history.pushState({ wizardStep: step }, "");
+    document
+      .querySelector(".onboarding-content")
+      ?.scrollTo({ top: 0, behavior: "instant" });
+  }
+
   const onboarding = requireRouter(trpc.onboarding, "onboarding");
 
   // ── Re-auth for page refresh recovery ──
@@ -159,6 +172,7 @@
   let reauthTwofaRequired = $state(false);
   let reauthTwofaMethods = $state<string[]>([]);
   let reauthEncryptedLocale = $state<string | null>(null);
+  let reauthHasSeenBriefing = $state(false);
 
   /** Runs crypto key derivation and org key loading after credentials are verified. */
   async function reauthLoadKeys(): Promise<void> {
@@ -215,10 +229,14 @@
     if (saved !== null && saved.step > 0) {
       step = saved.step;
       completedSteps = new Set(saved.completed);
-    } else {
+    } else if (reauthHasSeenBriefing) {
       step = 2;
       completedSteps = new Set([0, 1]);
       saveState(2, completedSteps);
+    } else {
+      step = 1;
+      completedSteps = new Set([0]);
+      saveState(1, completedSteps);
     }
   }
 
@@ -236,6 +254,7 @@
       });
 
       reauthEncryptedLocale = reauthResult.encryptedPreferredLocale ?? null;
+      reauthHasSeenBriefing = reauthResult.hasSeenBriefing;
 
       if (reauthResult.requiresTwoFactor) {
         // Defer crypto to after 2FA verification. Credentials stay
@@ -296,6 +315,7 @@
   $effect(() => {
     if (!isReady || needsReauth) {
       updateStep(null);
+      wizardNav.current = undefined;
       return;
     }
     const isLabeledStep = step < STEP_LABELS.length;
@@ -308,6 +328,9 @@
           }
         : null,
     );
+    if (!isLabeledStep) {
+      wizardNav.current = undefined;
+    }
   });
 
   onMount(() => {
@@ -335,6 +358,11 @@
     adminVolPublic: string;
   }): void {
     wizardData = { ...wizardData, ...data };
+    advanceStep();
+  }
+
+  function handleBriefingConfirm(): void {
+    void onboarding.markBriefingSeen.mutate();
     advanceStep();
   }
 
@@ -508,34 +536,39 @@
   {#if step === 0}
     <SetupAccount {setupToken} oncomplete={handleAccountComplete} />
   {:else if step === 1}
-    <SecurityBriefing onconfirm={advanceStep} />
+    <SecurityBriefing onconfirm={handleBriefingConfirm} {goBack} />
   {:else if step === 2}
     <SetupTwoFactor
       oncomplete={handleTwofaComplete}
       username={wizardData.userId ?? ""}
+      {goBack}
     />
   {:else if step === 3}
     <SetupOrganization
       adminUserId={wizardData.userId ?? ""}
       oncomplete={handleOrganizationComplete}
+      {goBack}
     />
   {:else if step === 4}
     <SetupInvite
       adminUserId={wizardData.userId ?? ""}
       oncomplete={handleInviteComplete}
+      {goBack}
     />
   {:else if step === 5}
     <SetupQueue
       adminUserId={wizardData.userId ?? ""}
       oncomplete={handleQueueComplete}
+      {goBack}
     />
   {:else if step === 6}
     <SetupCommunications
       adminUserId={wizardData.userId ?? ""}
       oncomplete={handleCommunicationsComplete}
+      {goBack}
     />
   {:else if step === 7}
-    <SetupEscrow oncomplete={handleEscrowComplete} />
+    <SetupEscrow oncomplete={handleEscrowComplete} {goBack} />
   {:else if step === 8}
     <BlockTitle medium>{m.onboarding_wizard_complete_heading()}</BlockTitle>
     <Block>
