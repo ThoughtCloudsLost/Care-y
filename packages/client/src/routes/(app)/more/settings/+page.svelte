@@ -25,6 +25,7 @@
   import UsernameSheet from "$lib/components/settings/UsernameSheet.svelte";
   import PasswordSheet from "$lib/components/settings/PasswordSheet.svelte";
   import TwoFactorSheet from "$lib/components/settings/TwoFactorSheet.svelte";
+  import SecurityBriefingPopup from "$lib/components/settings/SecurityBriefingPopup.svelte";
 
   const orgCache = getOrgDecryptCache();
   const cryptoBridge = getCryptoBridge();
@@ -55,6 +56,7 @@
   let usernameSheetOpen = $state(false);
   let passwordSheetOpen = $state(false);
   let twoFactorSheetOpen = $state(false);
+  let briefingPopupOpen = $state(false);
 
   const twoFactorStatusQuery = createQuery(() => ({
     queryKey: twoFactorKeys.status(),
@@ -165,6 +167,13 @@
         toastStore.show(m.feature_coming_soon());
       }}
     />
+    <ListItem
+      title={m.settings_review_briefing()}
+      link
+      onclick={() => {
+        briefingPopupOpen = true;
+      }}
+    />
   </List>
 
   {#if import.meta.env.DEV}
@@ -218,6 +227,13 @@
     twoFactorSheetOpen = false;
   }}
   username={currentUsername}
+/>
+
+<SecurityBriefingPopup
+  opened={briefingPopupOpen}
+  onclose={() => {
+    briefingPopupOpen = false;
+  }}
 />
 
 <style>

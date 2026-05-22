@@ -86,6 +86,12 @@ export interface ShellPopupProps {
   ondismiss: () => void;
   /** Title shown in the popup navbar. */
   title?: string;
+  /** Accessible label for the dialog (falls back to title). */
+  ariaLabel?: string;
+  /** Snippet rendered in the navbar left slot. */
+  left?: Snippet;
+  /** Snippet rendered in the navbar right slot (replaces the default Close link). */
+  right?: Snippet;
   /** Popup content. */
   children: Snippet;
 }
