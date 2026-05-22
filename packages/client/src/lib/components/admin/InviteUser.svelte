@@ -33,6 +33,7 @@
   let identifier = $state(generateRandomIdentifier());
   let displayName = $state("");
   let tempPassword = $state("");
+  let confirmPassword = $state("");
   let selectedRole = $state<RoleIdValue>(RoleId.VOLUNTEER);
   let showCredentialConfirmation = $state(false);
   let showPassword = $state(false);
@@ -41,6 +42,14 @@
 
   const passwordTooShort = $derived(
     tempPassword.length > 0 && tempPassword.length < PASSWORD_MIN_LENGTH,
+  );
+
+  // eslint-disable-next-line security/detect-possible-timing-attacks -- client-side form comparison, not a credential check
+  const passwordsMatch = $derived(tempPassword === confirmPassword);
+  const confirmError = $derived(
+    confirmPassword.length > 0 && !passwordsMatch
+      ? m.admin_invite_password_mismatch()
+      : undefined,
   );
 
   let savedIdentifier = $state("");
@@ -70,13 +79,15 @@
       identifier.trim().length >= 3 &&
       displayName.trim().length > 0 &&
       tempPassword.length >= 16 &&
+      passwordsMatch &&
+      confirmPassword.length > 0 &&
       !registerMutation.isPending,
   );
 
   function handleSubmit(): void {
     if (!canSubmit) return;
 
-    savedIdentifier = identifier.trim();
+    savedIdentifier = identifier.trim().toLowerCase();
     savedPassword = tempPassword;
 
     registerMutation.mutate({
@@ -100,6 +111,7 @@
     identifier = generateRandomIdentifier();
     displayName = "";
     tempPassword = "";
+    confirmPassword = "";
     selectedRole = RoleId.VOLUNTEER;
   }
 
@@ -204,6 +216,9 @@
               identifier = e.target.value;
           }}
           disabled={!orgKeyLoaded}
+          autocapitalize="none"
+          autocorrect="off"
+          autocomplete="off"
           info={m.admin_invite_identifier_hint()}
         />
       </List>
@@ -236,6 +251,13 @@
           info={passwordTooShort
             ? m.admin_invite_password_too_short()
             : m.admin_invite_password_hint(withTerms())}
+        />
+        <PasswordInput
+          outline
+          label={m.admin_invite_confirm_password()}
+          bind:value={confirmPassword}
+          disabled={!orgKeyLoaded}
+          error={confirmError}
         />
       </List>
 

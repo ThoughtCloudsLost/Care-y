@@ -51,7 +51,13 @@
   });
 
   const newPasswordValid = $derived(newPassword.length >= 16);
+  // eslint-disable-next-line security/detect-possible-timing-attacks -- client-side form comparison, not a credential check
   const passwordsMatch = $derived(newPassword === confirmPassword);
+  const confirmError = $derived(
+    confirmPassword.length > 0 && !passwordsMatch
+      ? m.settings_password_mismatch()
+      : undefined,
+  );
   const currentPasswordFilled = $derived(currentPassword.length >= 16);
   const canSubmit = $derived(
     currentPasswordFilled && newPasswordValid && passwordsMatch,
@@ -170,23 +176,19 @@
         bind:value={newPassword}
         disabled={isPending}
       />
-    </List>
-    {#if newPassword.length > 0}
-      <div class="meter-wrap">
-        <PasswordStrengthMeter password={newPassword} minLength={16} />
-      </div>
-    {/if}
-    <List nested>
       <PasswordInput
         outline
         label={m.settings_password_confirm()}
         placeholder={m.settings_password_confirm()}
         bind:value={confirmPassword}
         disabled={isPending}
+        error={confirmError}
       />
     </List>
-    {#if confirmPassword.length > 0 && !passwordsMatch}
-      <p class="error-text" role="alert">{m.settings_password_mismatch()}</p>
+    {#if newPassword.length > 0}
+      <div class="meter-wrap">
+        <PasswordStrengthMeter password={newPassword} minLength={16} />
+      </div>
     {/if}
     {#if errorMessage}
       <p class="error-text" role="alert">{errorMessage}</p>
