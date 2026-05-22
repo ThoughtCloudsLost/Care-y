@@ -1,4 +1,4 @@
-/* eslint-disable @typescript-eslint/no-non-null-assertion, security/detect-object-injection -- dev-only seed data uses bounded array indexing and known-key object lookups throughout */
+/* eslint-disable security/detect-object-injection -- dev-only seed data uses known-key object lookups throughout */
 /**
  * Dev-only data seeding via production endpoints.
  *
@@ -344,10 +344,10 @@ function generateTicket(index: number): TicketDef {
     "urgent",
   ];
   return {
-    title: TITLE_POOL[index % TITLE_POOL.length]!,
-    description: DESC_POOL[index % DESC_POOL.length]!,
+    title: TITLE_POOL.at(index % TITLE_POOL.length) ?? "",
+    description: DESC_POOL.at(index % DESC_POOL.length) ?? "",
     phone: `+1555001${String(index + 1).padStart(4, "0")}`,
-    priority: priorities[index % priorities.length]!,
+    priority: priorities.at(index % priorities.length) ?? "normal",
     queueIndex: index % 3,
   };
 }
@@ -1304,7 +1304,8 @@ export async function devSeedData(
   const followupTickets = ticketIds.slice(0, FOLLOWUP_TICKET_COUNT);
 
   for (let ti = 0; ti < followupTickets.length; ti++) {
-    const ticketId = followupTickets[ti]!;
+    const ticketId = followupTickets.at(ti);
+    if (ticketId === undefined) continue;
 
     if (ti % 10 === 0) {
       progress(
@@ -1344,16 +1345,19 @@ export async function devSeedData(
       if (isClientMsg) {
         source = "client";
         type = "sms_inbound";
-        content = CLIENT_MSG_POOL[(ti * 3 + fi) % CLIENT_MSG_POOL.length]!;
+        content =
+          CLIENT_MSG_POOL.at((ti * 3 + fi) % CLIENT_MSG_POOL.length) ?? "";
       } else if (isInternalNote && noteTypeIds.length > 0) {
         source = "volunteer";
         type = "internal_note";
-        content = INTERNAL_NOTE_POOL[(ti + fi) % INTERNAL_NOTE_POOL.length]!;
+        content =
+          INTERNAL_NOTE_POOL.at((ti + fi) % INTERNAL_NOTE_POOL.length) ?? "";
         noteTypeId = noteTypeIds[0];
       } else {
         source = "volunteer";
         type = "message";
-        content = VOL_REPLY_POOL[(ti * 2 + fi) % VOL_REPLY_POOL.length]!;
+        content =
+          VOL_REPLY_POOL.at((ti * 2 + fi) % VOL_REPLY_POOL.length) ?? "";
       }
 
       const encryptedContent = await bridge.encrypt(ticketId, content);
