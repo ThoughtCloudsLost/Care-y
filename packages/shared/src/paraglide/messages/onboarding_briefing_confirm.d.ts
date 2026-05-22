@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "I understand" |
+* | "Confirm" |
 *
 * @param {Onboarding_Briefing_ConfirmInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

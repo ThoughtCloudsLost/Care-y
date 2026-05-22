@@ -6,17 +6,17 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Onboarding_Briefing_ConfirmInputs */
 
 const en_onboarding_briefing_confirm = /** @type {(inputs: Onboarding_Briefing_ConfirmInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`I understand`)
+	return /** @type {LocalizedString} */ (`Confirm`)
 };
 
 const es_onboarding_briefing_confirm = /** @type {(inputs: Onboarding_Briefing_ConfirmInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Entiendo`)
+	return /** @type {LocalizedString} */ (`Confirmar`)
 };
 
 /**
 * | output |
 * | --- |
-* | "I understand" |
+* | "Confirm" |
 *
 * @param {Onboarding_Briefing_ConfirmInputs} inputs
 * @param {{ locale?: "en" | "es" }} options
