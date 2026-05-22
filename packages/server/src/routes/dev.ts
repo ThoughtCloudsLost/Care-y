@@ -15,7 +15,7 @@ export function createDevRouter() {
   return router({
     resetSeedData: adminProcedure.mutation(
       withErrorWrapping(async ({ ctx }) => {
-        const svc = createDevService(ctx.org.tenantDb, ctx.org.orgSchema);
+        const svc = createDevService(ctx.org.tenantDb);
         return svc.resetSeedData();
       }),
     ),
