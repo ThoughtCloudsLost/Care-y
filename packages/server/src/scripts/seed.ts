@@ -155,6 +155,12 @@ async function seed(): Promise<void> {
   const tenantDatabase = tenantDb(schemaName);
   const orgPublicKey = await ensureOrgKeypair(tenantDatabase);
 
+  // Mark setup as complete (seed bypasses the onboarding wizard)
+  await tenantDatabase
+    .updateTable("org_config")
+    .set({ setup_completed: true })
+    .execute();
+
   // --- Create admin user ---
   const tokenizer = createSessionTokenizer(deriveSessionHmacKey(opsKey));
   const sealedBox = createSealedBoxEncryptor(orgPublicKey);

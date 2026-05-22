@@ -185,14 +185,16 @@ export function createOnboardingRouter(deps: OnboardingRouterDeps) {
           .where("is_active", "=", true)
           .executeTakeFirstOrThrow();
 
-        const hasOrgKey = await org.tenantDb
+        const config = await org.tenantDb
           .selectFrom("org_config")
-          .select("org_public_key")
+          .select(["org_public_key", "setup_completed"])
           .executeTakeFirst();
 
         return {
           needsSetup:
-            Number(userCount.count) === 0 || !hasOrgKey?.org_public_key,
+            Number(userCount.count) === 0 ||
+            !config?.org_public_key ||
+            !config.setup_completed,
         };
       }),
     ),
@@ -665,8 +667,12 @@ export function createOnboardingRouter(deps: OnboardingRouterDeps) {
      * Mark org setup as complete (called after wizard step 7).
      */
     completeSetup: authedProcedure.mutation(
-      withErrorWrapping(({ ctx }) => {
+      withErrorWrapping(async ({ ctx }) => {
         requirePermission(ctx.user.roleId, Permission.MANAGE_ROLES);
+
+        const sessions = createTenantSessions(ctx.org, tokenizer);
+        const authService = createScopedAuthService(ctx.org, sessions, deps);
+        await authService.markSetupCompleted();
 
         return { success: true as const };
       }),

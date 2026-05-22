@@ -113,6 +113,12 @@ export interface AuthService {
 
   markBriefingSeen(userId: string): Promise<void>;
 
+  /** Mark org onboarding setup as complete. */
+  markSetupCompleted(): Promise<void>;
+
+  /** Checks whether a user_keys row exists for the given user. */
+  hasUserKeys(userId: string): Promise<boolean>;
+
   getHubStatus(): Promise<{
     activeUserCount: number;
     queueCount: number;
@@ -488,6 +494,22 @@ export function createAuthService(
     updateUserRole,
     setUserActive,
     setPiiRetentionDays,
+
+    async markSetupCompleted(): Promise<void> {
+      await db
+        .updateTable("org_config")
+        .set({ setup_completed: true })
+        .execute();
+    },
+
+    async hasUserKeys(userId: string): Promise<boolean> {
+      const row = await db
+        .selectFrom("user_keys")
+        .select("user_id")
+        .where("user_id", "=", userId)
+        .executeTakeFirst();
+      return row !== undefined;
+    },
 
     async markBriefingSeen(userId: string): Promise<void> {
       await db
