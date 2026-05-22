@@ -10,7 +10,15 @@
   import { useFocusTrap } from "./use-focus-trap.svelte";
   import { portal } from "./portal";
 
-  let { opened, ondismiss, title, children }: ShellPopupProps = $props();
+  let {
+    opened,
+    ondismiss,
+    title,
+    ariaLabel,
+    left: navLeft,
+    right: navRight,
+    children,
+  }: ShellPopupProps = $props();
 
   const trap = useFocusTrap({
     get opened() {
@@ -32,17 +40,26 @@
       bind:this={trap.dialogEl}
       role="dialog"
       aria-modal="true"
-      aria-label={title}
+      aria-label={ariaLabel ?? title}
       tabindex="-1"
       data-testid="popup-dialog"
       class="popup-dialog"
     >
-      {#if title}
+      {#if (title != null && title !== "") || navLeft != null || navRight != null}
         <Navbar {title}>
+          {#snippet left()}
+            {#if navLeft}
+              {@render navLeft()}
+            {/if}
+          {/snippet}
           {#snippet right()}
-            <Link role="button" onclick={trap.handleDismiss}
-              >{m.shell_close()}</Link
-            >
+            {#if navRight}
+              {@render navRight()}
+            {:else}
+              <Link role="button" onclick={trap.handleDismiss}
+                >{m.shell_close()}</Link
+              >
+            {/if}
           {/snippet}
         </Navbar>
       {/if}

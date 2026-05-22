@@ -28,6 +28,7 @@
   const TOTAL_PAGES = 4;
   let subPage = $state(0);
   let diagramOpen = $state(false);
+  let briefingEl: HTMLDivElement | undefined;
 
   let zoomScale = $state(1);
   let panX = $state(0);
@@ -101,8 +102,15 @@
   }
 
   function scrollContentToTop(): void {
-    const container = document.querySelector(".onboarding-content");
-    if (container) container.scrollTop = 0;
+    let el = briefingEl?.parentElement ?? null;
+    while (el) {
+      const { overflowY } = getComputedStyle(el);
+      if (overflowY === "auto" || overflowY === "scroll") {
+        el.scrollTop = 0;
+        return;
+      }
+      el = el.parentElement;
+    }
   }
 
   function nextPage(): void {
@@ -245,7 +253,7 @@
   ];
 </script>
 
-<div class="briefing-content">
+<div class="briefing-content" bind:this={briefingEl}>
   <BlockTitle medium>{m.onboarding_briefing_heading()}</BlockTitle>
 
   {#if hasCustomTerms}
