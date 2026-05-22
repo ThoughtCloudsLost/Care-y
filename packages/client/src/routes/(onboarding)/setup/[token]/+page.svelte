@@ -284,26 +284,17 @@
   let tokenOverride = $state("");
 
   $effect(() => {
-    if (!statusQuery.data) return;
-    if (recoveryHandled) return;
-
-    if (statusQuery.data.needsSetup) {
-      recoveryHandled = true;
-      return;
-    }
-
+    if (!statusQuery.data || recoveryHandled) return;
     recoveryHandled = true;
 
-    if (!isOrgKeyReady()) {
+    const setupComplete = !statusQuery.data.needsSetup;
+
+    if (step > 0 && !isOrgKeyReady()) {
       needsReauth = true;
       return;
     }
 
-    const saved = loadSavedState();
-    if (saved !== null && saved.step > 0) {
-      step = saved.step;
-      completedSteps = new Set(saved.completed);
-    } else {
+    if (setupComplete && step === 0) {
       void goto(resolve("/"));
     }
   });

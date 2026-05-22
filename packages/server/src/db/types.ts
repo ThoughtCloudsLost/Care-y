@@ -139,6 +139,7 @@ export interface OrgConfigTable {
     Date | null | undefined,
     Date | null
   >;
+  setup_completed: ColumnType<boolean, boolean | undefined, boolean>;
 }
 
 // --- User keys (full interface, replaces UserKeysStubTable) ---
