@@ -292,7 +292,6 @@
   <!-- Waiting for status check, or redirecting to /setup -->
 {:else if phase === "twofa-verify"}
   <!-- Inline 2FA verification (crypto runs after success) -->
-  <LanguagePicker value={uiLocale} onchange={handleLocaleChange} />
   {#key uiLocale}
     <div class="text-center mb-6">
       {#if branding?.iconUrl}
@@ -305,6 +304,7 @@
         />
       {/if}
       <h1 class="text-2xl font-bold">{orgName}</h1>
+      <LanguagePicker value={uiLocale} onchange={handleLocaleChange} />
     </div>
     <TwoFactorChallenge
       methods={twofaMethods}
