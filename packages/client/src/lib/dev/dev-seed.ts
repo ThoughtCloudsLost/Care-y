@@ -15,7 +15,11 @@ import { DEV_ORG_SLUG } from "$lib/utils/org-slug.js";
 import { ClientError, RelayError } from "$lib/errors.js";
 import type { CryptoBridge } from "$lib/workers/crypto-bridge.js";
 import type { OrgKeyManager } from "$lib/crypto/org-key.js";
-import type { EscalationTarget } from "@care-y/shared";
+import {
+  RoleId,
+  type EscalationTarget,
+  type RoleIdValue,
+} from "@care-y/shared";
 
 // ── ProseMirror JSON helpers ─────────────────────────────────────────
 // Build doc.toJSON()-compatible nodes for KB article bodies.
@@ -165,7 +169,7 @@ const NOTE_TYPES: readonly NoteTypeDef[] = [
 interface SeedUserDef {
   identifier: string;
   displayName: string;
-  roleId: "volunteer" | "manager";
+  roleId: RoleIdValue;
   queueIndices: number[];
 }
 
@@ -173,31 +177,31 @@ const SEED_USERS: readonly SeedUserDef[] = [
   {
     identifier: "vol.intake",
     displayName: "Jordan Rivera",
-    roleId: "volunteer",
+    roleId: RoleId.VOLUNTEER,
     queueIndices: [0],
   },
   {
     identifier: "vol.crisis",
     displayName: "Morgan Patel",
-    roleId: "volunteer",
+    roleId: RoleId.VOLUNTEER,
     queueIndices: [1],
   },
   {
     identifier: "vol.housing",
     displayName: "Avery Chen",
-    roleId: "volunteer",
+    roleId: RoleId.VOLUNTEER,
     queueIndices: [0, 2],
   },
   {
     identifier: "vol.all",
     displayName: "Riley Thompson",
-    roleId: "volunteer",
+    roleId: RoleId.VOLUNTEER,
     queueIndices: [0, 1, 2],
   },
   {
     identifier: "mgr.ops",
     displayName: "Casey Okafor",
-    roleId: "manager",
+    roleId: RoleId.MANAGER,
     queueIndices: [0, 1, 2],
   },
 ];
