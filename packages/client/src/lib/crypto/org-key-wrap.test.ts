@@ -103,6 +103,8 @@ describe("wrapOrgKeyForPending", () => {
     expect(mutateMock).toHaveBeenCalledTimes(3);
   });
 
+  // Security contract: org secret key MUST be zeroed after use, even on failure.
+  // Inspecting the buffer is intentional, not a change detector.
   it("zeros org secret key in finally block even when all wraps fail", async () => {
     const users = createPendingUsers(1);
     mutateMock.mockRejectedValue(new Error("server down"));

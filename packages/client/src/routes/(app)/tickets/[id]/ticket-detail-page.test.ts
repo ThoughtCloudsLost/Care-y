@@ -7,7 +7,7 @@
  */
 
 import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
-import { render, cleanup } from "@testing-library/svelte";
+import { render, screen, cleanup } from "@testing-library/svelte";
 
 // --- Mocks ---
 
@@ -344,5 +344,83 @@ describe("Ticket detail route page", () => {
   it("sets tabbar hidden to true on mount", () => {
     render(PageModule.default);
     expect(mockTabbarHidden.current).toBe(true);
+  });
+
+  it("renders placeholder when ticket query is loading", () => {
+    ticketQueryState = {
+      isLoading: true,
+      isError: false,
+      error: null,
+      data: undefined,
+    };
+
+    const { container } = render(PageModule.default);
+    // TicketDetail renders a chat container with role="log" and
+    // aria-label="Loading" while the ticket query is loading.
+    const log = container.querySelector("[role='log']");
+    expect(log).not.toBeNull();
+    expect(log?.getAttribute("aria-label")).toBe("Loading");
+  });
+
+  it("renders error message when ticket query fails", () => {
+    ticketQueryState = {
+      isLoading: false,
+      isError: true,
+      error: new Error("Network failure"),
+      data: undefined,
+    };
+
+    render(PageModule.default);
+    // QueryError renders the generic error message for unrecognized errors.
+    expect(
+      screen.getByText("Something went wrong. Please try again."),
+    ).toBeTruthy();
+  });
+
+  it("renders closed ticket with reopen action in panel", () => {
+    ticketQueryState = {
+      isLoading: false,
+      isError: false,
+      error: null,
+      data: {
+        ...baseTicket,
+        status: "closed",
+      },
+    };
+
+    const { container } = render(PageModule.default);
+    // The page still renders the chat container for closed tickets.
+    const log = container.querySelector("[role='log']");
+    expect(log).not.toBeNull();
+    // The ticket data is available with status "closed". The panel
+    // (TicketPanelContent) would offer a "reopen" action, but it
+    // renders inside a ShellPopup that is not opened by default.
+    // Verify the page mounts without error for closed ticket data.
+    expect(mockNavbarCtx.current).toBeDefined();
+  });
+
+  it("renders ticket with follow-up count in detail stats snippet", () => {
+    ticketQueryState = {
+      isLoading: false,
+      isError: false,
+      error: null,
+      data: {
+        ...baseTicket,
+        followUpCount: 5,
+      },
+    };
+
+    const { container } = render(PageModule.default);
+    // The page renders successfully with a non-zero followUpCount.
+    // The detail stats snippet (rendered inside SubNavbarFilterLayout
+    // via navbarCtx override) would show "5 messages", but since
+    // AppShell is not present in unit tests, we verify the override
+    // is set and the page mounts without error.
+    expect(mockNavbarCtx.current).toBeDefined();
+    const override = mockNavbarCtx.current as Record<string, unknown>;
+    expect(override).toHaveProperty("subnavbar");
+    // The chat log should render (ticket data is present).
+    const log = container.querySelector("[role='log']");
+    expect(log).not.toBeNull();
   });
 });

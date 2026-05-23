@@ -102,6 +102,7 @@ describe("ErrorCode", () => {
       "ORG_ALREADY_SETUP",
       "ORG_KEYPAIR_MISSING",
       "INVALID_INVITE_TOKEN",
+      "INVITE_NOT_FOUND",
       "INVALID_SETUP_TOKEN",
       "BOOTSTRAP_RATE_LIMITED",
 

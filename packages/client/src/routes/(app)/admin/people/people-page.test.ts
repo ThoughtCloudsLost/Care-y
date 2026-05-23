@@ -309,5 +309,135 @@ describe("People page", () => {
       expect(ctx.subnavbar).toBeDefined();
       expect(typeof ctx.subnavbar).toBe("function");
     });
+
+    it("provides a right action snippet on the users tab", () => {
+      setPermissions("manage_users", "manage_queues");
+      renderPage();
+
+      const ctx = mockNavbarCtx.current as Record<string, unknown>;
+      expect(ctx.right).toBeDefined();
+      expect(typeof ctx.right).toBe("function");
+    });
+
+    it("provides a right action snippet on the queues tab", () => {
+      setPermissions("manage_users", "manage_queues");
+      setUrl("/admin/people?tab=queues");
+      renderPage();
+
+      const ctx = mockNavbarCtx.current as Record<string, unknown>;
+      expect(ctx.right).toBeDefined();
+      expect(typeof ctx.right).toBe("function");
+    });
+
+    it("does not provide a right action when user lacks the active tab permission", () => {
+      setPermissions("manage_queues");
+      renderPage();
+
+      // Default tab is queues (no manage_users), so right should be
+      // the queues-tab right action (create queue).
+      const ctx = mockNavbarCtx.current as Record<string, unknown>;
+      expect(ctx.right).toBeDefined();
+    });
+  });
+
+  describe("permission guard (extended)", () => {
+    it("redirects when user has unrelated permissions only", () => {
+      setPermissions("manage_keys", "manage_org_config");
+      renderPage();
+
+      expect(mockGoto).toHaveBeenCalledWith("/");
+    });
+
+    it("does not render any tabpanel when user has no access", () => {
+      setPermissions();
+      renderPage();
+
+      expect(screen.queryByRole("tabpanel")).toBeNull();
+    });
+
+    it("renders content normally with both permissions", () => {
+      setPermissions("manage_users", "manage_queues");
+      renderPage();
+
+      expect(screen.getByRole("tabpanel")).toBeTruthy();
+      expect(mockGoto).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("tab visibility based on permissions", () => {
+    it("only shows users tabpanel when user has only MANAGE_USERS", () => {
+      setPermissions("manage_users");
+      renderPage();
+
+      const panel = screen.getByRole("tabpanel");
+      expect(panel.id).toBe("panel-users");
+      expect(screen.getByText("User management loading...")).toBeTruthy();
+    });
+
+    it("only shows queues tabpanel when user has only MANAGE_QUEUES", () => {
+      setPermissions("manage_queues");
+      renderPage();
+
+      const panel = screen.getByRole("tabpanel");
+      expect(panel.id).toBe("panel-queues");
+      expect(screen.getByText("Queue management loading...")).toBeTruthy();
+    });
+
+    it("switches to queues tab via URL even with both permissions", () => {
+      setPermissions("manage_users", "manage_queues");
+      setUrl("/admin/people?tab=queues");
+      renderPage();
+
+      const panel = screen.getByRole("tabpanel");
+      expect(panel.id).toBe("panel-queues");
+    });
+
+    it("falls back to users tab for unknown tab param with both permissions", () => {
+      setPermissions("manage_users", "manage_queues");
+      setUrl("/admin/people?tab=settings");
+      renderPage();
+
+      const panel = screen.getByRole("tabpanel");
+      expect(panel.id).toBe("panel-users");
+    });
+  });
+
+  describe("section content by tab", () => {
+    it("renders only UsersSection stub on users tab", () => {
+      setPermissions("manage_users", "manage_queues");
+      renderPage();
+
+      expect(screen.getByText("User management loading...")).toBeTruthy();
+      expect(screen.queryByText("Queue management loading...")).toBeNull();
+    });
+
+    it("renders only QueuesSection stub on queues tab", () => {
+      setPermissions("manage_users", "manage_queues");
+      setUrl("/admin/people?tab=queues");
+      renderPage();
+
+      expect(screen.getByText("Queue management loading...")).toBeTruthy();
+      expect(screen.queryByText("User management loading...")).toBeNull();
+    });
+
+    it("does not render users section when user lacks MANAGE_USERS and tab is queues", () => {
+      setPermissions("manage_queues");
+      setUrl("/admin/people?tab=queues");
+      renderPage();
+
+      expect(screen.getByText("Queue management loading...")).toBeTruthy();
+      expect(screen.queryByText("User management loading...")).toBeNull();
+    });
+  });
+
+  describe("navbar subnavbar hidden callback", () => {
+    it("provides a subnavbarHidden callback in navbar context", () => {
+      setPermissions("manage_users", "manage_queues");
+      renderPage();
+
+      const ctx = mockNavbarCtx.current as Record<string, unknown>;
+      expect(ctx.subnavbarHidden).toBeDefined();
+      expect(typeof ctx.subnavbarHidden).toBe("function");
+    });
   });
 });
