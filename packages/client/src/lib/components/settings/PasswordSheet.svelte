@@ -51,7 +51,6 @@
   });
 
   const newPasswordValid = $derived(newPassword.length >= 16);
-  // eslint-disable-next-line security/detect-possible-timing-attacks -- client-side form comparison, not a credential check
   const passwordsMatch = $derived(newPassword === confirmPassword);
   const confirmError = $derived(
     confirmPassword.length > 0 && !passwordsMatch

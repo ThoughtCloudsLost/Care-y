@@ -30,22 +30,11 @@
   import { trpc } from "$lib/trpc/index.js";
   import { onboardingKeys } from "$lib/query/keys.js";
   import { announceToLiveRegion } from "$lib/utils/announce.js";
-  import {
-    isOrgKeyReady,
-    setOrgKeyReady,
-  } from "$lib/crypto/org-key-ready.svelte.js";
-  import { getCryptoBridge, getOrgKeyManager } from "$lib/crypto/context.js";
-  import { loginCrypto } from "$lib/auth/login-crypto.js";
-  import {
-    buildLoginCallbacks,
-    type PhaseUpdater,
-  } from "$lib/auth/crypto-callbacks.js";
-  import { fetchAndUnwrapOrgKey } from "$lib/auth/crypto-helpers.js";
-  import { installCleanupHandler } from "$lib/auth/cleanup.js";
+  import { isOrgKeyReady } from "$lib/crypto/org-key-ready.svelte.js";
   import { haptic } from "$lib/utils/haptic.js";
   import { requireRouter } from "$lib/errors.js";
-  import TwoFactorChallenge from "$lib/components/auth/TwoFactorChallenge.svelte";
   import { CHECKLIST_ITEMS } from "$lib/onboarding/checklist-items.js";
+  import WizardReauth from "$lib/components/onboarding/WizardReauth.svelte";
   import SetupAccount from "$lib/components/onboarding/SetupAccount.svelte";
   import SecurityBriefing from "$lib/components/onboarding/SecurityBriefing.svelte";
   import SetupTwoFactor from "$lib/components/onboarding/SetupTwoFactor.svelte";
@@ -55,8 +44,6 @@
   import SetupCommunications from "$lib/components/onboarding/SetupCommunications.svelte";
   import SetupEscrow from "$lib/components/onboarding/SetupEscrow.svelte";
   import { getWizardNavCtx } from "$lib/components/onboarding/wizard-nav-context.js";
-  import PasswordInput from "$lib/components/inputs/PasswordInput.svelte";
-  import { getLocale, setLocale, isLocale } from "$lib/paraglide/runtime.js";
 
   const setupToken: string = page.params.token ?? "";
 
@@ -160,76 +147,16 @@
 
   // ── Re-auth for page refresh recovery ──
 
-  const bridge = getCryptoBridge();
-  const orgKeyManager = getOrgKeyManager();
-
   let needsReauth = $state(false);
-  let reauthUsername = $state("");
-  let reauthPassword = $state("");
-  let reauthError = $state("");
-  let reauthSubmitting = $state(false);
 
-  let reauthTwofaRequired = $state(false);
-  let reauthTwofaMethods = $state<string[]>([]);
-  let reauthEncryptedLocale = $state<string | null>(null);
-  let reauthHasSeenBriefing = $state(false);
-
-  /** Runs crypto key derivation and org key loading after credentials are verified. */
-  async function reauthLoadKeys(): Promise<void> {
-    // eslint-disable-next-line @typescript-eslint/no-empty-function -- reauth has no UI phases to display
-    const noopPhase: PhaseUpdater = () => {};
-    const result = await loginCrypto(
-      reauthUsername,
-      reauthPassword,
-      bridge,
-      buildLoginCallbacks(noopPhase),
-    );
-
-    if (result.orgPublicKey !== null) {
-      orgKeyManager.load(result.orgPublicKey);
-      setOrgKeyReady(true);
-    } else {
-      const unwrapped = await fetchAndUnwrapOrgKey(bridge);
-      if (unwrapped !== null) {
-        orgKeyManager.load(unwrapped);
-        setOrgKeyReady(true);
-      }
-    }
-
-    installCleanupHandler(bridge, orgKeyManager);
-  }
-
-  /** Completes reauth by running crypto then restoring wizard state. */
-  async function finalizeReauth(): Promise<void> {
-    try {
-      await reauthLoadKeys();
-    } catch {
-      reauthError = m.auth_login_error();
-      reauthTwofaRequired = false;
-      needsReauth = true;
-      return;
-    }
-
-    if (reauthEncryptedLocale !== null) {
-      try {
-        const decrypted = await bridge.orgDecrypt(reauthEncryptedLocale);
-        if (isLocale(decrypted) && decrypted !== getLocale()) {
-          void setLocale(decrypted, { reload: true });
-        }
-      } catch {
-        // Non-fatal: keep current cookie locale
-      }
-    }
-
-    haptic();
+  function handleReauthComplete(data: { hasSeenBriefing: boolean }): void {
     needsReauth = false;
-    reauthTwofaRequired = false;
 
     const saved = loadSavedState();
     if (saved !== null && saved.step > 0) {
       step = saved.step;
       completedSteps = new Set(saved.completed);
-    } else if (reauthHasSeenBriefing) {
+    } else if (data.hasSeenBriefing) {
       step = 2;
       completedSteps = new Set([0, 1]);
       saveState(2, completedSteps);
@@ -238,40 +165,8 @@
       completedSteps = new Set([0]);
       saveState(1, completedSteps);
     }
-  }
 
-  async function handleReauth(e: SubmitEvent): Promise<void> {
-    e.preventDefault();
-    reauthError = "";
-    reauthSubmitting = true;
-
-    try {
-      await bridge.zeroAll();
-
-      const reauthResult = await onboarding.reauthenticate.mutate({
-        identifier: reauthUsername,
-        password: reauthPassword,
-      });
-
-      reauthEncryptedLocale = reauthResult.encryptedPreferredLocale ?? null;
-      reauthHasSeenBriefing = reauthResult.hasSeenBriefing;
-
-      if (reauthResult.requiresTwoFactor) {
-        // Defer crypto to after 2FA verification. Credentials stay
-        // in component state (reauthUsername, reauthPassword).
-        reauthTwofaMethods = reauthResult.enrolledMethods;
-        reauthTwofaRequired = true;
-        reauthSubmitting = false;
-        return;
-      }
-
-      // No 2FA enrolled: run crypto and restore wizard immediately
-      await finalizeReauth();
-    } catch {
-      reauthError = m.auth_invalid_credentials();
-    } finally {
-      reauthSubmitting = false;
-    }
+    haptic();
   }
 
   const statusQuery = createQuery(() => ({
@@ -471,58 +366,8 @@
       <Link onclick={() => void goto(resolve("/"))}>{m.common_go_home()}</Link>
     </div>
   </Block>
-{:else if needsReauth && reauthTwofaRequired}
-  <Block>
-    <p class="step-desc">{m.onboarding_reauth_twofa_message()}</p>
-  </Block>
-  <TwoFactorChallenge methods={reauthTwofaMethods} onsuccess={finalizeReauth} />
 {:else if needsReauth}
-  <BlockTitle medium>{m.onboarding_reauth_heading()}</BlockTitle>
-  <Block>
-    <p class="step-desc">{m.onboarding_reauth_message()}</p>
-  </Block>
-
-  {#if reauthError}
-    <Block role="alert">
-      <p class="step-error">{reauthError}</p>
-    </Block>
-  {/if}
-
-  <form onsubmit={handleReauth}>
-    <List strong inset>
-      <ListInput
-        label={m.user_field_login_username_label()}
-        type="text"
-        placeholder={m.onboarding_reauth_username_placeholder()}
-        bind:value={reauthUsername}
-        autocomplete="username"
-        autocapitalize="none"
-        disabled={reauthSubmitting}
-        required
-      />
-      <PasswordInput
-        label={m.onboarding_account_password()}
-        placeholder={m.onboarding_reauth_password_placeholder()}
-        bind:value={reauthPassword}
-        autocomplete="current-password"
-        disabled={reauthSubmitting}
-        required
-      />
-    </List>
-    <Block>
-      <SoftButton
-        full
-        type="submit"
-        disabled={!reauthUsername || !reauthPassword || reauthSubmitting}
-      >
-        {#if reauthSubmitting}
-          <Preloader class="w-5 h-5" />
-        {:else}
-          {m.onboarding_firstlogin_signin()}
-        {/if}
-      </SoftButton>
-    </Block>
-  </form>
+  <WizardReauth onauthenticated={handleReauthComplete} />
 {:else if isReady}
   {#if step === 0}
     <SetupAccount {setupToken} oncomplete={handleAccountComplete} />

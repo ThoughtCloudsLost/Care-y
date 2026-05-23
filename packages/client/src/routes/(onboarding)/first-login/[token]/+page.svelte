@@ -1,59 +1,152 @@
 <!--
-  Volunteer first-login: invite link landing page.
+  Volunteer first-login wizard: invite link landing page.
 
-  Three states: validating (Preloader), invalid token (error),
-  valid token (security briefing -> registration form -> registerCrypto ->
-  loginCrypto -> 2FA enrollment -> dashboard).
+  Three-step wizard matching the admin setup flow (steps 0-2 only):
+    0. Account creation (SetupInviteAccount)
+    1. Security briefing (SecurityBriefing)
+    2. 2FA enrollment (SetupTwoFactor)
+  Then redirect to dashboard.
 
-  Chains registerCrypto (main thread key upload) then loginCrypto (Worker
-  key derivation) so the volunteer lands on the dashboard with keys loaded,
-  matching the SetupAccount pattern.
+  Uses the same wizard infrastructure as the admin setup wizard
+  (step tracking, wizard nav context, progress indicator, reauth).
 -->
 <script lang="ts">
+  import { getContext, onMount } from "svelte";
+  import { browser } from "$app/environment";
+  import { page } from "$app/state";
   import { goto } from "$app/navigation";
   import { resolve } from "$app/paths";
-  import { page } from "$app/state";
   import { createQuery } from "@tanstack/svelte-query";
-  import {
-    Preloader,
-    List,
-    ListInput,
-    Button,
-    Block,
-    BlockTitle,
-  } from "konsta/svelte";
+  import { Preloader, Block } from "konsta/svelte";
   import * as m from "$lib/paraglide/messages.js";
-  import { withTerms } from "$lib/terminology/with-terms.js";
   import { trpc } from "$lib/trpc/index.js";
   import { onboardingKeys } from "$lib/query/keys.js";
-  import { registerCrypto } from "$lib/auth/register-crypto.js";
-  import { loginCrypto } from "$lib/auth/login-crypto.js";
-  import { installCleanupHandler } from "$lib/auth/cleanup.js";
-  import {
-    buildRegisterCallbacks,
-    buildLoginCallbacks,
-  } from "$lib/auth/crypto-callbacks.js";
-  import { getCryptoBridge, getOrgKeyManager } from "$lib/crypto/context.js";
-  import { setOrgKeyReady } from "$lib/crypto/org-key-ready.svelte.js";
   import { announceToLiveRegion } from "$lib/utils/announce.js";
+  import { isOrgKeyReady } from "$lib/crypto/org-key-ready.svelte.js";
   import { haptic } from "$lib/utils/haptic.js";
-  import { toastStore } from "$lib/stores/toast.svelte.js";
-  import { PASSWORD_MIN_LENGTH } from "@care-y/shared";
   import { requireRouter } from "$lib/errors.js";
-  import PasswordInput from "$lib/components/inputs/PasswordInput.svelte";
-  import PasswordStrengthMeter from "$lib/components/inputs/PasswordStrengthMeter.svelte";
-  import KeyDerivation, {
-    type LoginPhaseId,
-  } from "$lib/components/onboarding/KeyDerivation.svelte";
+  import { toastStore } from "$lib/stores/toast.svelte.js";
+  import { getWizardNavCtx } from "$lib/components/onboarding/wizard-nav-context.js";
+  import SetupInviteAccount from "$lib/components/onboarding/SetupInviteAccount.svelte";
   import SecurityBriefing from "$lib/components/onboarding/SecurityBriefing.svelte";
-  import TwoFactorEnrollment from "$lib/components/onboarding/TwoFactorEnrollment.svelte";
-  import { getLocale } from "$lib/paraglide/runtime.js";
+  import SetupTwoFactor from "$lib/components/onboarding/SetupTwoFactor.svelte";
+  import WizardReauth from "$lib/components/onboarding/WizardReauth.svelte";
 
   const token = $derived(page.params.token ?? "");
-  const bridge = getCryptoBridge();
-  const orgKeyManager = getOrgKeyManager();
+
+  const STORAGE_KEY = "care-y-firstlogin-wizard";
+
+  const STEP_LABELS = [
+    m.onboarding_step_account(),
+    m.onboarding_step_briefing(),
+    m.onboarding_step_twofa(),
+  ];
+
+  interface WizardData {
+    userId: string;
+    identifier: string;
+  }
+
+  const WIZARD_STEP_COUNT = STEP_LABELS.length + 1;
+
+  function loadSavedState(): { step: number; completed: number[] } | null {
+    try {
+      const raw = sessionStorage.getItem(STORAGE_KEY);
+      if (raw === null) return null;
+      const parsed: unknown = JSON.parse(raw);
+      if (
+        typeof parsed !== "object" ||
+        parsed === null ||
+        !("step" in parsed) ||
+        !("completed" in parsed)
+      ) {
+        return null;
+      }
+      const obj = parsed as Record<string, unknown>;
+      if (
+        typeof obj.step === "number" &&
+        Array.isArray(obj.completed) &&
+        obj.completed.every((v): v is number => typeof v === "number")
+      ) {
+        if (obj.step >= WIZARD_STEP_COUNT) {
+          sessionStorage.removeItem(STORAGE_KEY);
+          return null;
+        }
+        return { step: obj.step, completed: obj.completed };
+      }
+    } catch {
+      /* malformed data */
+    }
+    return null;
+  }
+
+  function saveState(s: number, completed: Set<number>): void {
+    try {
+      sessionStorage.setItem(
+        STORAGE_KEY,
+        JSON.stringify({ step: s, completed: [...completed] }),
+      );
+    } catch {
+      /* storage full or unavailable */
+    }
+  }
+
+  function clearState(): void {
+    try {
+      sessionStorage.removeItem(STORAGE_KEY);
+    } catch {
+      /* storage unavailable */
+    }
+  }
+
+  const savedInit = browser ? loadSavedState() : null;
+  let step = $state(savedInit?.step ?? 0);
+  let completedSteps = $state(new Set<number>(savedInit?.completed ?? []));
+  let wizardData = $state<Partial<WizardData>>({});
+
+  const updateStep = getContext<
+    (p: { current: number; total: number; label: string } | null) => void
+  >("onboarding-update-step");
+
+  const wizardNav = getWizardNavCtx();
 
   const onboarding = requireRouter(trpc.onboarding, "onboarding");
+
+  function goBack(): void {
+    if (step <= 0) return;
+    step -= 1;
+    saveState(step, completedSteps);
+    history.pushState({ wizardStep: step }, "");
+    document
+      .querySelector(".onboarding-content")
+      ?.scrollTo({ top: 0, behavior: "instant" });
+  }
+
+  // ── Re-auth for page refresh recovery ──
+
+  let needsReauth = $state(false);
+
+  function handleReauthComplete(data: { hasSeenBriefing: boolean }): void {
+    needsReauth = false;
+
+    const saved = loadSavedState();
+    if (saved !== null && saved.step > 0) {
+      step = saved.step;
+      completedSteps = new Set(saved.completed);
+    } else if (data.hasSeenBriefing) {
+      step = 2;
+      completedSteps = new Set([0, 1]);
+      saveState(2, completedSteps);
+    } else {
+      step = 1;
+      completedSteps = new Set([0]);
+      saveState(1, completedSteps);
+    }
+
+    haptic();
+  }
+
+  // ── Token validation ──
 
   const inviteQuery = createQuery(() => ({
     queryKey: onboardingKeys.validateInvite(token),
@@ -62,149 +155,118 @@
     enabled: token.length > 0,
   }));
 
-  let identifier = $state("");
-  let displayName = $state("");
-  let password = $state("");
-  let confirmPassword = $state("");
-  /* eslint-disable @typescript-eslint/no-unsafe-assignment -- $state<union> rune proxy */
-  let phase = $state<LoginPhaseId>("briefing");
-  /* eslint-enable @typescript-eslint/no-unsafe-assignment */
-  let error = $state("");
+  const isReady = $derived(inviteQuery.isSuccess && inviteQuery.data.valid);
 
-  function getPhaseLabel(p: LoginPhaseId): string {
-    switch (p) {
-      case "auth":
-        return m.onboarding_firstlogin_creating();
-      case "argon2id":
-        return m.onboarding_firstlogin_deriving();
-      case "oprf":
-        return m.auth_phase_oprf();
-      case "pow":
-        return m.auth_phase_pow();
-      case "derive":
-        return m.auth_phase_derive();
-      case "twofa":
-        return m.onboarding_twofa_securing();
-      default:
-        return "";
+  let recoveryHandled = $state(false);
+
+  $effect(() => {
+    if (!inviteQuery.data || recoveryHandled) return;
+    if (!inviteQuery.data.valid) return;
+    recoveryHandled = true;
+
+    if (step > 0 && !isOrgKeyReady()) {
+      needsReauth = true;
     }
-  }
+  });
 
-  const phaseLabel = $derived(getPhaseLabel(phase));
-  const isSubmitting = $derived(
-    phase !== "briefing" &&
-      phase !== "idle" &&
-      phase !== "error" &&
-      phase !== "twofa",
-  );
+  // ── Step progress ──
 
-  const passwordTooShort = $derived(
-    password.length > 0 && password.length < PASSWORD_MIN_LENGTH,
-  );
-  const passwordMismatch = $derived(
-    confirmPassword.length > 0 && password !== confirmPassword,
-  );
-
-  function validate(): string | null {
-    if (password.length < PASSWORD_MIN_LENGTH) {
-      return m.onboarding_firstlogin_error_password_length();
-    }
-    // eslint-disable-next-line security/detect-possible-timing-attacks -- client-side form comparison, not a credential check
-    if (password !== confirmPassword) {
-      return m.onboarding_firstlogin_error_password_mismatch();
-    }
-    return null;
-  }
-
-  async function handleSubmit(e: SubmitEvent): Promise<void> {
-    e.preventDefault();
-    const validationError = validate();
-    if (validationError !== null) {
-      error = validationError;
-      announceToLiveRegion("assertive", error);
+  $effect(() => {
+    if (!isReady || needsReauth) {
+      updateStep(null);
+      wizardNav.current = undefined;
       return;
     }
-
-    error = "";
-    phase = "auth";
-    announceToLiveRegion("polite", m.onboarding_firstlogin_creating());
-
-    try {
-      const { userId } = await onboarding.registerFromInvite.mutate({
-        token,
-        identifier,
-        password,
-        displayName: displayName || undefined,
-        preferredLocale: getLocale(),
-      });
-      // 2. registerCrypto: Argon2id + OPRF + upload salt + volPublic.
-      /* eslint-disable @typescript-eslint/no-unsafe-assignment -- $state<union> rune proxy */
-      const setPhase = (p: LoginPhaseId): void => {
-        phase = p;
-      };
-      /* eslint-enable @typescript-eslint/no-unsafe-assignment */
-
-      await registerCrypto(
-        userId,
-        password,
-        buildRegisterCallbacks(setPhase, {
-          argon2id: m.onboarding_firstlogin_deriving(),
-          derive: m.auth_phase_derive(),
-        }),
-      );
-
-      // 3. loginCrypto: re-derive keys in Worker (registerCrypto zeroed them).
-      await bridge.zeroAll();
-
-      const loginResult = await loginCrypto(
-        identifier,
-        password,
-        bridge,
-        buildLoginCallbacks(setPhase, { derive: m.auth_phase_derive() }),
-      );
-
-      // 4. Load org key if available.
-      if (loginResult.orgPublicKey !== null) {
-        orgKeyManager.load(loginResult.orgPublicKey);
-        setOrgKeyReady(true);
-      }
-
-      // 5. Install cleanup handler for key zeroing on unload.
-      installCleanupHandler(bridge, orgKeyManager);
-
-      // 6. Show 2FA enrollment before navigating to dashboard.
-      phase = "twofa";
-      haptic();
-    } catch (caught: unknown) {
-      phase = "error";
-      const msg = caught instanceof Error ? caught.message : String(caught);
-      if (msg.includes("INVALID_INVITE_TOKEN") || msg.includes("invalid")) {
-        error = m.onboarding_firstlogin_error_invalid_token();
-      } else {
-        error = m.onboarding_firstlogin_error_generic();
-      }
-      announceToLiveRegion("assertive", error);
+    const isLabeledStep = step < STEP_LABELS.length;
+    updateStep(
+      isLabeledStep
+        ? {
+            current: step + 1,
+            total: STEP_LABELS.length,
+            label: STEP_LABELS.at(step) ?? "",
+          }
+        : null,
+    );
+    if (!isLabeledStep) {
+      wizardNav.current = undefined;
     }
+  });
+
+  onMount(() => {
+    function handlePopState(e: PopStateEvent): void {
+      const s: unknown = e.state;
+      if (typeof s === "object" && s !== null && "wizardStep" in s) {
+        const ws = (s as Record<string, unknown>).wizardStep;
+        if (typeof ws === "number") {
+          step = ws;
+          document
+            .querySelector(".onboarding-content")
+            ?.scrollTo({ top: 0, behavior: "instant" });
+        }
+      }
+    }
+
+    window.addEventListener("popstate", handlePopState);
+    return () => {
+      window.removeEventListener("popstate", handlePopState);
+    };
+  });
+
+  // ── Step handlers ──
+
+  function handleAccountComplete(data: {
+    userId: string;
+    identifier: string;
+  }): void {
+    wizardData = { ...wizardData, ...data };
+    advanceStep();
   }
 
-  let twofaLoading = $state(false);
+  function handleBriefingConfirm(): void {
+    void onboarding.markBriefingSeen.mutate();
+    advanceStep();
+  }
 
-  async function handleTwofaEnrolled(): Promise<void> {
-    twofaLoading = true;
+  async function handleTwofaComplete(): Promise<void> {
     try {
       await trpc.twoFactor.enroll.markVerifiedOnFirstEnrollment.mutate();
-      toastStore.show(m.onboarding_step_complete());
-      await goto(resolve("/"));
     } catch {
-      toastStore.show(m.onboarding_firstlogin_error_generic(), 3000);
-      twofaLoading = false;
+      /* best-effort; session is functionally verified at this point */
     }
+    advanceStep();
+  }
+
+  // ── Completion ──
+
+  $effect(() => {
+    if (step === STEP_LABELS.length) {
+      clearState();
+      toastStore.show(m.onboarding_step_complete());
+      void goto(resolve("/"));
+    }
+  });
+
+  function advanceStep(): void {
+    completedSteps = new Set([...completedSteps, step]);
+    step += 1;
+    saveState(step, completedSteps);
+    history.pushState({ wizardStep: step }, "");
+    document
+      .querySelector(".onboarding-content")
+      ?.scrollTo({ top: 0, behavior: "instant" });
+    announceToLiveRegion(
+      "polite",
+      m.onboarding_stepper_progress({
+        current: String(step + 1),
+        total: String(STEP_LABELS.length),
+      }),
+    );
   }
 </script>
 
 {#if inviteQuery.isLoading}
   <Block>
-    <div class="loading-container">
+    <div class="wizard-loading">
       <Preloader />
     </div>
   </Block>
@@ -216,113 +278,24 @@
       </p>
     </div>
   </Block>
-{:else if phase === "briefing"}
-  <SecurityBriefing onconfirm={() => (phase = "idle")} />
-{:else if isSubmitting}
-  <KeyDerivation {phase} {phaseLabel} />
-{:else if phase === "twofa"}
-  <BlockTitle medium>{m.onboarding_twofa_vol_heading()}</BlockTitle>
-  <Block>
-    <p class="step-desc">{m.onboarding_twofa_vol_desc()}</p>
-  </Block>
-  {#if twofaLoading}
-    <Block>
-      <div class="loading-container">
-        <Preloader />
-        <p class="step-desc">{m.onboarding_twofa_securing()}</p>
-      </div>
-    </Block>
-  {:else}
-    <TwoFactorEnrollment
-      username={identifier}
-      onenrolled={() => {
-        void handleTwofaEnrolled();
-      }}
+{:else if needsReauth}
+  <WizardReauth onauthenticated={handleReauthComplete} />
+{:else if isReady}
+  {#if step === 0}
+    <SetupInviteAccount {token} oncomplete={handleAccountComplete} />
+  {:else if step === 1}
+    <SecurityBriefing onconfirm={handleBriefingConfirm} {goBack} />
+  {:else if step === 2}
+    <SetupTwoFactor
+      oncomplete={handleTwofaComplete}
+      username={wizardData.identifier ?? ""}
+      {goBack}
     />
   {/if}
-{:else}
-  <BlockTitle medium>{m.onboarding_firstlogin_heading()}</BlockTitle>
-  <Block>
-    <p class="step-desc">{m.onboarding_firstlogin_subtext()}</p>
-  </Block>
-
-  {#if error !== ""}
-    <Block role="alert">
-      <p class="step-error">{error}</p>
-    </Block>
-  {/if}
-
-  <form onsubmit={handleSubmit}>
-    <List strong inset>
-      <ListInput
-        label={m.user_field_login_username_label()}
-        type="text"
-        placeholder={m.onboarding_firstlogin_username_placeholder()}
-        info={m.user_field_login_username_info()}
-        bind:value={identifier}
-        autocomplete="username"
-        autocapitalize="none"
-        required
-      />
-    </List>
-
-    <Block>
-      <p class="pii-warning" role="note">
-        {m.user_field_login_username_pii_warning()}
-      </p>
-    </Block>
-
-    <List strong inset>
-      <ListInput
-        label={m.user_field_display_name_label()}
-        type="text"
-        placeholder={m.onboarding_firstlogin_display_name_placeholder()}
-        info={m.user_field_display_name_info(withTerms())}
-        bind:value={displayName}
-      />
-      <PasswordInput
-        label={m.onboarding_firstlogin_password()}
-        placeholder={m.onboarding_firstlogin_password_placeholder()}
-        info={m.onboarding_account_password_info()}
-        bind:value={password}
-        autocomplete="new-password"
-        required
-        error={passwordTooShort
-          ? m.onboarding_firstlogin_error_password_length()
-          : undefined}
-      />
-      <PasswordInput
-        label={m.onboarding_firstlogin_confirm_password()}
-        placeholder={m.onboarding_firstlogin_confirm_password_placeholder()}
-        bind:value={confirmPassword}
-        autocomplete="new-password"
-        required
-        error={passwordMismatch
-          ? m.onboarding_firstlogin_error_password_mismatch()
-          : undefined}
-      />
-    </List>
-
-    {#if password.length > 0}
-      <Block>
-        <PasswordStrengthMeter {password} minLength={PASSWORD_MIN_LENGTH} />
-      </Block>
-    {/if}
-
-    <Block>
-      <Button
-        large
-        type="submit"
-        disabled={isSubmitting || !identifier || !password || !confirmPassword}
-      >
-        {m.onboarding_firstlogin_submit()}
-      </Button>
-    </Block>
-  </form>
 {/if}
 
 <style>
-  .loading-container {
+  .wizard-loading {
     display: flex;
     justify-content: center;
     align-items: center;

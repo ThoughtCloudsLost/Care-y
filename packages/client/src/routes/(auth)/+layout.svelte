@@ -1,7 +1,11 @@
 <script lang="ts">
   import { Page, Block } from "konsta/svelte";
+  import { TERMINOLOGY_DEFAULTS_EN } from "@care-y/shared";
+  import { setTerminology } from "$lib/terminology/context.js";
 
   let { children } = $props();
+
+  setTerminology(() => TERMINOLOGY_DEFAULTS_EN);
 </script>
 
 <Page>
