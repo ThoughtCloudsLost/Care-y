@@ -43,19 +43,23 @@
   import { createReadCursor } from "$lib/composables/ticket-detail/create-read-cursor.svelte.js";
   import { createCloseResolution } from "$lib/composables/ticket-detail/create-close-resolution.svelte.js";
   import { createDetailFilters } from "$lib/composables/ticket-detail/create-detail-filters.svelte.js";
+  import { createExposureHint } from "$lib/composables/ticket-detail/create-exposure-hint.svelte.js";
+  import { createDeepSearch } from "$lib/composables/ticket-detail/create-deep-search.svelte.js";
+  import { createPanelActions } from "$lib/composables/ticket-detail/create-panel-actions.svelte.js";
+  import {
+    createDeleteConfirm,
+    createNoteEdit,
+  } from "$lib/composables/ticket-detail/create-overlay-state.svelte.js";
   import { copyToClipboard } from "$lib/composables/ticket-detail/clipboard-copy.js";
+  import {
+    insertMentionAtCursor,
+    searchFollowUps,
+    lookupCachedFollowUpCount,
+  } from "$lib/tickets/ticket-detail-utils.js";
   import ShellMessagebar from "$lib/shell/ShellMessagebar.svelte";
-  import ShellActionSheet from "$lib/shell/ShellActionSheet.svelte";
-  import ShellPopup from "$lib/shell/ShellPopup.svelte";
-  import ShellDialog from "$lib/shell/ShellDialog.svelte";
-  import { DialogButton, ActionsGroup, ActionsButton } from "konsta/svelte";
-  import TicketPanelContent from "$lib/components/tickets/TicketPanelContent.svelte";
-  import AssignSheet from "$lib/components/tickets/AssignSheet.svelte";
-  import ComposeActions from "$lib/components/tickets/ComposeActions.svelte";
   import type { TicketAction } from "$lib/tickets/types.js";
-  import CallOptionsContent, {
-    type CallAction,
-  } from "$lib/components/tickets/CallOptionsContent.svelte";
+  import type { CallAction } from "$lib/components/tickets/CallOptionsContent.svelte";
+  import TicketDetailOverlays from "./TicketDetailOverlays.svelte";
   import { createQuery, useQueryClient } from "@tanstack/svelte-query";
   import { ticketKeys, ticketsKeys, consultantKeys } from "$lib/query/keys";
   import { trpc } from "$lib/trpc/index.js";
@@ -90,13 +94,6 @@
   import { fuzzySearch } from "$lib/search/fuzzy.js";
   import { createSearchOverlay } from "$lib/search/search-overlay.svelte.js";
   import SearchNavigator from "$lib/components/search/SearchNavigator.svelte";
-  import CloseResolutionSheet from "$lib/components/tickets/CloseResolutionSheet.svelte";
-  import InternalNoteSheet from "$lib/components/tickets/InternalNoteSheet.svelte";
-  import { resolveNoteTypeIcon } from "$lib/utils/note-type-icons.js";
-  import ShellSheet from "$lib/shell/ShellSheet.svelte";
-  import ExposureHint from "$lib/components/tickets/ExposureHint.svelte";
-  import SmsComposeContent from "$lib/components/tickets/SmsComposeContent.svelte";
-  import { tick } from "svelte";
 
   // ── Composable initialization ──
 
@@ -144,25 +141,12 @@
     return typeof result === "string" ? result : "...";
   });
 
-  // Look up followUpCount from the ticket list cache (available instantly,
-  // no need to wait for the detail query).
-  const cachedFollowUpCount = $derived.by((): number | undefined => {
-    interface TicketRow {
-      id: string;
-      followUpCount: number;
-    }
-    const entries = queryClient.getQueriesData<{ pages: TicketRow[][] }>({
-      queryKey: ticketsKeys.lists(),
-    });
-    for (const [, data] of entries) {
-      if (!data?.pages) continue;
-      for (const ticketPage of data.pages) {
-        const match = ticketPage.find((t) => t.id === ticketId);
-        if (match) return match.followUpCount;
-      }
-    }
-    return undefined;
-  });
+  const cachedFollowUpCount = $derived(
+    lookupCachedFollowUpCount(
+      queryClient.getQueriesData({ queryKey: ticketsKeys.lists() }),
+      ticketId,
+    ),
+  );
 
   // --- Read cursor (composable) ---
 
@@ -246,53 +230,12 @@
   let callSheetOpen = $state(false);
   let composeActionsOpen = $state(false);
   let composeActionsAnchor = $state<HTMLElement | undefined>();
-  // Lightbox + context menu managed by composables (initialized below after helpers).
-  let deleteConfirmOpen = $state(false);
-  let deleteTargetId = $state<string | null>(null);
-  let editNoteSheetOpen = $state(false);
-  let editNoteFollowUpId = $state<string | undefined>(undefined);
-  let editNoteContent = $state<string | undefined>(undefined);
-  let editNoteTypeId = $state<string | undefined>(undefined);
   let timelineActive = $state(false);
   let smsSheetOpen = $state(false);
 
-  // --- Exposure hint state ---
+  // --- Exposure hint (composable) ---
 
-  // eslint-disable-next-line svelte/prefer-svelte-reactivity -- not reactive, used as mutable dedup tracker
-  const shownExposureHints = new Set<string>();
-  let exposureHintType = $state<"sms" | "call" | null>(null);
-  let exposureHintOpen = $state(false);
-  let pendingAction: (() => void) | null = null;
-
-  function shouldShowHint(type: "sms" | "call"): boolean {
-    if (shownExposureHints.has(type)) return false;
-    shownExposureHints.add(type);
-    return true;
-  }
-
-  function showExposureHint(type: "sms" | "call", callback: () => void): void {
-    if (!shouldShowHint(type)) {
-      callback();
-      return;
-    }
-    exposureHintType = type;
-    exposureHintOpen = true;
-    pendingAction = callback;
-    void tick().then(() => {
-      document
-        .querySelector<HTMLElement>('[data-testid="exposure-dismiss"]')
-        ?.focus();
-    });
-  }
-
-  function dismissExposureHint(): void {
-    exposureHintOpen = false;
-    if (pendingAction) {
-      const action = pendingAction;
-      pendingAction = null;
-      action();
-    }
-  }
+  const exposureHint = createExposureHint();
 
   // Filtered follow-ups (bound from TicketDetail for select mode copy).
   let filteredFollowUps = $state<FollowUpList | undefined>(undefined);
@@ -468,55 +411,30 @@
 
   const searchMatches = $derived.by((): string[] => {
     if (overlay.term == null || !displayFollowUpsForSearch) return [];
-    const searchable: { id: string; plaintext: string }[] = [];
-    for (const fu of displayFollowUpsForSearch) {
-      const plaintext = followUpCache.get(fu.id);
-      if (plaintext === undefined || plaintext === DECRYPT_ERROR_SENTINEL) {
-        continue;
-      }
-      searchable.push({ id: fu.id, plaintext });
-    }
-    const haystack = searchable.map((e) => e.plaintext);
-    const fuzzyMatches = fuzzySearch(haystack, overlay.term);
-    const matchIndices = fuzzyMatches.map((fm) => fm.index);
-    matchIndices.sort((a, b) => a - b);
-    const ids: string[] = [];
-    for (const idx of matchIndices) {
-      const entry = searchable[idx]; // eslint-disable-line security/detect-object-injection -- idx from fuzzySearch, bounded by haystack.length
-      if (entry != null) ids.push(entry.id);
-    }
-    return ids;
+    return searchFollowUps(
+      displayFollowUpsForSearch,
+      followUpCache,
+      overlay.term,
+      DECRYPT_ERROR_SENTINEL,
+      fuzzySearch,
+    );
   });
 
-  // -- Deep search: load all conversation pages --
+  // -- Deep search (composable) --
 
   let hasMoreMessages = $state(false);
   let loadOlderPage = $state<(() => Promise<void>) | undefined>(undefined);
-  let deepPhase = $state<"idle" | "searching" | "done">("idle");
-  let deepSearchTerm = $state<string | null>(null);
 
-  async function triggerConversationDeepSearch(): Promise<void> {
-    if (deepPhase !== "idle" || !loadOlderPage) return;
-    const term = overlay.term ?? "";
-    if (term.length < 2) return;
-
-    deepSearchTerm = term;
-    deepPhase = "searching";
-
-    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition, @typescript-eslint/strict-boolean-expressions -- $state updated reactively by TicketDetail child
-    while (hasMoreMessages && loadOlderPage) {
-      await loadOlderPage();
-      if ((deepPhase as string) !== "searching") return;
-    }
-
-    deepPhase = "done";
-  }
+  const deepSearch = createDeepSearch({
+    getOverlayTerm: () => overlay.term,
+    getHasMoreMessages: () => hasMoreMessages,
+    getLoadOlderPage: () => loadOlderPage,
+  });
 
   $effect(() => {
-    if (deepSearchTerm == null) return;
-    if (!overlay.active || overlay.term !== deepSearchTerm) {
-      deepPhase = "idle";
-      deepSearchTerm = null;
+    if (deepSearch.term == null) return;
+    if (!overlay.active || overlay.term !== deepSearch.term) {
+      deepSearch.reset();
     }
   });
 
@@ -526,10 +444,10 @@
       overlay.term != null &&
       overlay.term.length >= 2 &&
       searchMatches.length === 0 &&
-      deepPhase === "idle" &&
+      deepSearch.phase === "idle" &&
       hasMoreMessages // eslint-disable-line @typescript-eslint/no-unnecessary-condition -- $state updated reactively by TicketDetail child
     ) {
-      void triggerConversationDeepSearch();
+      void deepSearch.trigger();
     }
   });
 
@@ -595,14 +513,14 @@
   }
 
   function handleMentionSelect(_userId: string, displayName: string): void {
-    // Replace the @partial at cursor with @DisplayName followed by a space.
-    const before = draftText.slice(0, cursorPosition);
-    const after = draftText.slice(cursorPosition);
-    const atIndex = before.lastIndexOf("@");
-    if (atIndex === -1) return;
-    const replacement = `@${displayName} `;
-    draftText = before.slice(0, atIndex) + replacement + after;
-    cursorPosition = atIndex + replacement.length;
+    const result = insertMentionAtCursor(
+      draftText,
+      cursorPosition,
+      displayName,
+    );
+    if (result === null) return;
+    draftText = result.text;
+    cursorPosition = result.cursor;
   }
 
   // --- Action dispatchers ---
@@ -622,64 +540,34 @@
       ticketRouter.createFollowUp.mutate(args),
   });
 
-  function mutateWithToast<T>(promise: Promise<T>): void {
-    void promise.catch(() => {
-      toastStore.show(m.error_generic(), 3000);
-    });
-  }
-
-  function handlePanelAction(action: TicketAction): void {
-    switch (action) {
-      case "call":
-        // Close the panel, then open the call options picker.
-        closePanel();
-        openCallSheet();
-        break;
-      case "take":
-        mutateWithToast(ticketRouter.take.mutate({ ticketId }));
-        break;
-      case "release":
-        mutateWithToast(ticketRouter.release.mutate({ ticketId }));
-        break;
-      case "assign":
-        closePanel();
-        assignSheetOpen = true;
-        break;
-      case "hold":
-        mutateWithToast(ticketRouter.update.mutate({ ticketId, onHold: true }));
-        break;
-      case "unhold":
-        mutateWithToast(
-          ticketRouter.update.mutate({ ticketId, onHold: false }),
-        );
-        break;
-      case "close":
-        closeFlow.start();
-        break;
-      case "reopen":
-        mutateWithToast(
-          ticketRouter.reopen.mutate({
-            ticketId,
-            newKeyGeneration: crypto.randomUUID(),
-          }),
-        );
-        break;
-      case "watch":
-        mutateWithToast(ticketRouter.watchTicket.mutate({ ticketId }));
-        break;
-      case "unwatch":
-        mutateWithToast(ticketRouter.unwatchTicket.mutate({ ticketId }));
-        break;
-      case "cancel":
-        break;
-    }
-  }
+  const panelActions = createPanelActions({
+    getTicketId: () => ticketId,
+    toastStore,
+    takeMutate: async (tid) => ticketRouter.take.mutate({ ticketId: tid }),
+    releaseMutate: async (tid) =>
+      ticketRouter.release.mutate({ ticketId: tid }),
+    updateMutate: async (args) => ticketRouter.update.mutate(args),
+    reopenMutate: async (args) => ticketRouter.reopen.mutate(args),
+    watchMutate: async (tid) =>
+      ticketRouter.watchTicket.mutate({ ticketId: tid }),
+    unwatchMutate: async (tid) =>
+      ticketRouter.unwatchTicket.mutate({ ticketId: tid }),
+    onclose: () => closeFlow.start(),
+    oncall: () => {
+      closePanel();
+      openCallSheet();
+    },
+    onassign: () => {
+      closePanel();
+      assignSheetOpen = true;
+    },
+  });
 
   function handleCallAction(action: CallAction): void {
     closeCallSheet();
     if (action === "cancel" || callInProgress) return;
 
-    showExposureHint("call", () => {
+    exposureHint.show("call", () => {
       void callDispatch.executeCall();
     });
   }
@@ -687,12 +575,25 @@
   // --- SMS handlers ---
 
   function handleOpenSmsCompose(): void {
-    showExposureHint("sms", () => {
+    exposureHint.show("sms", () => {
       smsSheetOpen = true;
     });
   }
 
   const handleSmsSend = sms.handleSmsSend;
+
+  // --- Delete confirm + note edit (composables) ---
+
+  const deleteConfirm = createDeleteConfirm({
+    getTicketId: () => ticketId,
+    queryClient,
+    toastStore,
+    deleteNoteMutate: async (followUpId) =>
+      ticketRouter.deleteInternalNote.mutate({ followUpId }),
+    labels: { deleteError: m.error_followup_not_deletable() },
+  });
+
+  const noteEdit = createNoteEdit();
 
   // --- Context menu + lightbox (composables) ---
 
@@ -704,68 +605,10 @@
         success: m.ticket_copied_to_clipboard(),
         failure: m.common_copy_failed(),
       }),
-    onedit: openNoteEditSheet,
-    ondelete: (followUpId: string) => {
-      deleteTargetId = followUpId;
-      deleteConfirmOpen = true;
-    },
+    onedit: (followUpId, content, noteTypeId) =>
+      noteEdit.open(followUpId, content, noteTypeId),
+    ondelete: (followUpId) => deleteConfirm.openConfirm(followUpId),
   });
-
-  // --- Delete handlers (optimistic) ---
-
-  function closeDeleteConfirm(): void {
-    deleteConfirmOpen = false;
-    deleteTargetId = null;
-  }
-
-  async function confirmDelete(): Promise<void> {
-    const targetId = deleteTargetId;
-    closeDeleteConfirm();
-    if (targetId === null) return;
-
-    const followUpsKey = ticketKeys.followUpsInitial(ticketId);
-
-    // Snapshot for rollback.
-    const previousData = queryClient.getQueryData<FollowUpList>(followUpsKey);
-
-    // Optimistically remove the note from the cache.
-    queryClient.setQueryData<FollowUpList>(followUpsKey, (old) =>
-      old?.filter((fu) => fu.id !== targetId),
-    );
-
-    try {
-      await ticketRouter.deleteInternalNote.mutate({
-        followUpId: targetId,
-      });
-      // Refetch to get authoritative server state. Prefix match invalidates
-      // both the initial key and any paginated page keys.
-      void queryClient.invalidateQueries({
-        queryKey: ticketKeys.followUps(ticketId),
-      });
-    } catch {
-      // Rollback: restore the cached list.
-      queryClient.setQueryData<FollowUpList>(followUpsKey, previousData);
-      toastStore.show(m.error_followup_not_deletable());
-    }
-  }
-
-  function openNoteEditSheet(
-    followUpId: string,
-    content: string,
-    noteTypeId: string | null,
-  ): void {
-    editNoteFollowUpId = followUpId;
-    editNoteContent = content;
-    editNoteTypeId = noteTypeId ?? undefined;
-    editNoteSheetOpen = true;
-  }
-
-  function dismissNoteEditSheet(): void {
-    editNoteSheetOpen = false;
-    editNoteFollowUpId = undefined;
-    editNoteContent = undefined;
-    editNoteTypeId = undefined;
-  }
 
   // --- Overlay helpers ---
 
@@ -878,10 +721,10 @@
     ondown={overlay.down}
     onexit={overlay.exit}
     ontermchange={overlay.setTerm}
-    ondeepsearch={hasMoreMessages && deepPhase === "idle"
-      ? () => void triggerConversationDeepSearch()
+    ondeepsearch={hasMoreMessages && deepSearch.phase === "idle"
+      ? () => void deepSearch.trigger()
       : undefined}
-    deepSearchStatus={deepPhase}
+    deepSearchStatus={deepSearch.phase}
     deepSearchSearched={displayFollowUpsForSearch?.length ?? 0}
     deepSearchTotal={displayFollowUpsForSearch?.length ?? 0}
   />
@@ -913,7 +756,11 @@
     onmentionselect={handleMentionSelect}
     onlightbox={(url: string) => lightbox.show(url)}
     oncontextmenu={(e: ContextMenuEvent) => contextMenu.show(e)}
-    onopenedit={openNoteEditSheet}
+    onopenedit={(
+      followUpId: string,
+      content: string,
+      noteTypeId: string | null,
+    ) => noteEdit.open(followUpId, content, noteTypeId)}
     bind:timelineActive
     readUpTo={readCursor.readUpTo}
     onreadprogress={(ts: string) => readCursor.handleProgress(ts)}
@@ -997,21 +844,29 @@
   </Link>
 {/snippet}
 
-<!-- Overlays (route file owns all shell wrappers) -->
-<ShellPopup opened={panelOpen} ondismiss={closePanel} title={clientAlias}>
-  <TicketPanelContent
-    {ticketId}
-    onaction={handlePanelAction}
-    onnotetap={handleNoteTap}
-    onlightbox={handlePanelLightbox}
-  />
-</ShellPopup>
-
-<AssignSheet
-  opened={assignSheetOpen}
+<TicketDetailOverlays
   {ticketId}
+  {clientAlias}
+  {panelOpen}
+  {assignSheetOpen}
+  {callSheetOpen}
+  {composeActionsOpen}
+  {composeActionsAnchor}
+  {smsSheetOpen}
+  {hasVerifiedPhone}
+  {smsSending}
   currentAssigneeId={ticket?.assignedTo ?? null}
-  ondismiss={() => {
+  {deleteConfirm}
+  {noteEdit}
+  {exposureHint}
+  {lightbox}
+  {contextMenu}
+  {closeFlow}
+  onpaneldismiss={closePanel}
+  onpanelaction={(action: TicketAction) => panelActions.dispatch(action)}
+  onnotetap={handleNoteTap}
+  onpanellightbox={handlePanelLightbox}
+  onassigndismiss={() => {
     assignSheetOpen = false;
   }}
   onassign={(tid: string, targetUserId: string | null) => {
@@ -1031,127 +886,20 @@
         toastStore.show(m.error_generic(), 3000);
       });
   }}
-/>
-
-<ShellActionSheet opened={callSheetOpen} ondismiss={closeCallSheet}>
-  <CallOptionsContent {hasVerifiedPhone} onaction={handleCallAction} />
-</ShellActionSheet>
-
-<ComposeActions
-  opened={composeActionsOpen}
-  ondismiss={closeComposeActions}
-  target={composeActionsAnchor}
-  {ticketId}
+  oncallaction={handleCallAction}
+  oncalldismiss={closeCallSheet}
+  oncomposedismiss={closeComposeActions}
   onpresetselect={(body: string) => {
     draftText = body;
   }}
   ontextclient={handleOpenSmsCompose}
-/>
-
-<ShellSheet
-  opened={smsSheetOpen}
-  ondismiss={() => (smsSheetOpen = false)}
-  ariaLabel={m.ticket_sms_title(withTerms())}
->
-  <SmsComposeContent
-    onsend={handleSmsSend}
-    oncancel={() => (smsSheetOpen = false)}
-    sending={smsSending}
-    error={null}
-  />
-</ShellSheet>
-
-{#if exposureHintType}
-  <ExposureHint
-    type={exposureHintType}
-    opened={exposureHintOpen}
-    ondismiss={dismissExposureHint}
-  />
-{/if}
-
-<ShellPopup opened={lightbox.open} ondismiss={() => lightbox.dismiss()}>
-  {#if lightbox.url}
-    <div class="lightbox-content">
-      <img
-        src={lightbox.url}
-        alt={m.ticket_mms_lightbox_label()}
-        class="lightbox-img"
-      />
-    </div>
-  {/if}
-</ShellPopup>
-
-<!-- Context menu (long-press on message bubble) -->
-<ShellActionSheet
-  opened={contextMenu.open}
-  ondismiss={() => contextMenu.dismiss()}
->
-  {#if contextMenu.data !== null}
-    <ActionsGroup>
-      {#each contextMenu.data.actions as action (action.id)}
-        <ActionsButton
-          onclick={() => contextMenu.dispatch(action.id)}
-          bold={action.destructive === true}
-          colors={action.destructive === true
-            ? { textIos: "text-red-500", textMaterial: "text-red-500" }
-            : undefined}
-        >
-          {action.label}
-        </ActionsButton>
-      {/each}
-    </ActionsGroup>
-    <ActionsGroup>
-      <ActionsButton onclick={() => contextMenu.dismiss()} bold>
-        {m.common_cancel()}
-      </ActionsButton>
-    </ActionsGroup>
-  {/if}
-</ShellActionSheet>
-
-<!-- Edit note sheet -->
-<InternalNoteSheet
-  opened={editNoteSheetOpen}
-  ondismiss={dismissNoteEditSheet}
-  {ticketId}
-  editFollowUpId={editNoteFollowUpId}
-  editInitialContent={editNoteContent}
-  editInitialNoteTypeId={editNoteTypeId}
-  ondelete={(followUpId: string) => {
-    dismissNoteEditSheet();
-    deleteTargetId = followUpId;
-    deleteConfirmOpen = true;
+  onsmsdismiss={() => {
+    smsSheetOpen = false;
   }}
-/>
-
-<!-- Delete note confirmation dialog -->
-<ShellDialog
-  opened={deleteConfirmOpen}
-  ondismiss={closeDeleteConfirm}
-  title={m.ticket_delete_note_confirm_title()}
->
-  {#snippet content()}
-    <p>{m.ticket_delete_note_confirm_body()}</p>
-  {/snippet}
-  {#snippet buttons()}
-    <DialogButton onclick={closeDeleteConfirm}>
-      {m.common_cancel()}
-    </DialogButton>
-    <DialogButton onclick={confirmDelete} class="text-red-500 font-semibold">
-      {m.common_delete()}
-    </DialogButton>
-  {/snippet}
-</ShellDialog>
-
-<CloseResolutionSheet
-  opened={closeFlow.sheetOpen}
-  noteTypeId={closeFlow.noteTypeId ?? ""}
-  noteTypeName={closeFlow.noteTypeName}
-  NoteTypeIcon={resolveNoteTypeIcon(closeFlow.noteTypeIconName)}
-  current={closeFlow.current}
-  total={closeFlow.total}
-  saving={closeFlow.saving}
-  onsubmit={(text: string) => void closeFlow.submit(text)}
-  onskip={() => closeFlow.skip()}
+  onsmssend={handleSmsSend}
+  ondraftset={(body: string) => {
+    draftText = body;
+  }}
 />
 
 <style>
@@ -1160,20 +908,5 @@
     flex-direction: column;
     flex: 1;
     min-height: 0;
-  }
-
-  .lightbox-content {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 1rem;
-    min-height: 200px;
-  }
-
-  .lightbox-img {
-    max-width: 100%;
-    max-height: 80vh;
-    object-fit: contain;
-    border-radius: 0.5rem;
   }
 </style>
