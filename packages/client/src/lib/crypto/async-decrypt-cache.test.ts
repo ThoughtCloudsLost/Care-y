@@ -36,6 +36,10 @@ class TestDecryptCache extends AsyncDecryptCache {
     );
   }
 
+  testSetError(key: string): void {
+    this.setError(key);
+  }
+
   /** Expose the protected decryptAndRewrap() for testing. */
   testDecryptAndRewrap(
     cacheKey: string,
@@ -264,6 +268,76 @@ describe("AsyncDecryptCache", () => {
       cache.clear();
       expect(cache.size).toBe(0);
       expect(cache.has(CACHE_KEY)).toBe(false);
+    });
+
+    it("resolves outstanding settlers on clear", async () => {
+      cache.testDecrypt(CACHE_KEY, EP, NONCE, WK, CT);
+      const settled = cache.whenSettled();
+      cache.clear();
+      await expect(settled).resolves.toBeUndefined();
+    });
+  });
+
+  describe("seed", () => {
+    it("pre-populates the cache with a known plaintext", () => {
+      cache.seed("optimistic-key", "typed by user");
+      expect(cache.get("optimistic-key")).toBe("typed by user");
+      expect(cache.has("optimistic-key")).toBe(true);
+    });
+  });
+
+  describe("setError", () => {
+    it("stores the error sentinel for a cache key", () => {
+      cache.testSetError("broken-key");
+      expect(cache.get("broken-key")).toBe(DECRYPT_ERROR_SENTINEL);
+      expect(isDecryptError(cache.get("broken-key"))).toBe(true);
+    });
+  });
+
+  describe("deleteByPrefix", () => {
+    it("removes entries matching the prefix", async () => {
+      cache.seed("fu:t1:a", "val-a");
+      cache.seed("fu:t1:b", "val-b");
+      cache.seed("title:t1", "title");
+      expect(cache.size).toBe(3);
+
+      cache.deleteByPrefix("fu:t1:");
+      expect(cache.size).toBe(1);
+      expect(cache.has("title:t1")).toBe(true);
+      expect(cache.has("fu:t1:a")).toBe(false);
+    });
+
+    it("is a no-op when no entries match", () => {
+      cache.seed("key1", "val");
+      cache.deleteByPrefix("no-match:");
+      expect(cache.size).toBe(1);
+    });
+  });
+
+  describe("entries", () => {
+    it("iterates all cached key-value pairs", () => {
+      cache.seed("k1", "v1");
+      cache.seed("k2", "v2");
+      const result = [...cache.entries()];
+      expect(result).toEqual(
+        expect.arrayContaining([
+          ["k1", "v1"],
+          ["k2", "v2"],
+        ]),
+      );
+    });
+  });
+
+  describe("whenSettled", () => {
+    it("resolves immediately when nothing is pending", async () => {
+      await expect(cache.whenSettled()).resolves.toBeUndefined();
+    });
+
+    it("resolves after all pending decrypts complete", async () => {
+      cache.testDecrypt("k1", EP, NONCE, WK, CT);
+      cache.testDecrypt("k2", EP, NONCE, WK, CT);
+      await cache.whenSettled();
+      expect(cache.size).toBe(2);
     });
   });
 });
