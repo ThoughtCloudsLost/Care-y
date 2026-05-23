@@ -28,6 +28,8 @@ vi.mock("$lib/paraglide/messages.js", () => ({
   admin_invite_password_hint: () => "Share securely.",
   admin_invite_password_too_short: () =>
     "Password must be at least 16 characters",
+  admin_invite_confirm_password: () => "Confirm Password",
+  admin_invite_password_mismatch: () => "Passwords do not match",
   admin_invite_role_label: () => "Role",
   admin_invite_no_org_key: () => "Organization key not loaded.",
   admin_invite_success: () => "Account created",
@@ -136,17 +138,19 @@ function getInputs(): {
   identifier: HTMLInputElement;
   displayName: HTMLInputElement;
   password: HTMLInputElement;
+  confirmPassword: HTMLInputElement;
 } {
   const inputs = document.querySelectorAll<HTMLInputElement>(
     ".k-list-input input",
   );
-  if (!inputs[0] || !inputs[1] || !inputs[2]) {
-    throw new Error("Expected 3 inputs in InviteUser form");
+  if (!inputs[0] || !inputs[1] || !inputs[2] || !inputs[3]) {
+    throw new Error("Expected 4 inputs in InviteUser form");
   }
   return {
     identifier: inputs[0],
     displayName: inputs[1],
     password: inputs[2],
+    confirmPassword: inputs[3],
   };
 }
 
@@ -213,13 +217,16 @@ describe("InviteUser", () => {
 
   it("calls register mutation on submit with correct params", async () => {
     render(InviteUser, { opened: true, ondismiss: vi.fn() });
-    const { identifier, displayName, password } = getInputs();
+    const { identifier, displayName, password, confirmPassword } = getInputs();
 
     await fireEvent.input(identifier, { target: { value: "vol-test12" } });
     await fireEvent.input(displayName, {
       target: { value: "Test Volunteer" },
     });
     await fireEvent.input(password, {
+      target: { value: "averylongpassword16" },
+    });
+    await fireEvent.input(confirmPassword, {
       target: { value: "averylongpassword16" },
     });
 
@@ -236,11 +243,14 @@ describe("InviteUser", () => {
 
   it("shows credential confirmation after successful creation", async () => {
     render(InviteUser, { opened: true, ondismiss: vi.fn() });
-    const { identifier, displayName, password } = getInputs();
+    const { identifier, displayName, password, confirmPassword } = getInputs();
 
     await fireEvent.input(identifier, { target: { value: "vol-abc123" } });
     await fireEvent.input(displayName, { target: { value: "New Person" } });
     await fireEvent.input(password, {
+      target: { value: "securelongpassword" },
+    });
+    await fireEvent.input(confirmPassword, {
       target: { value: "securelongpassword" },
     });
 

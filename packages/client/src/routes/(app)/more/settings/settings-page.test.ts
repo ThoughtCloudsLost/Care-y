@@ -148,6 +148,7 @@ vi.mock("$lib/paraglide/messages.js", () => ({
     `${String(p.count)} method(s) enrolled`,
   settings_2fa_none: () => "Not enabled",
   settings_replay_walkthrough: () => "Review security walkthrough",
+  settings_review_briefing: () => "Review security briefing",
   feature_coming_soon: () => "Feature coming soon",
   common_loading: () => "Loading...",
   common_back: () => "Back",
@@ -172,6 +173,12 @@ vi.mock("$lib/components/settings/PasswordSheet.svelte", async () => ({
 }));
 
 vi.mock("$lib/components/settings/TwoFactorSheet.svelte", async () => ({
+  default: (
+    await import("$lib/components/tickets/test-helpers/PassthroughShell.svelte")
+  ).default,
+}));
+
+vi.mock("$lib/components/settings/SecurityBriefingPopup.svelte", async () => ({
   default: (
     await import("$lib/components/tickets/test-helpers/PassthroughShell.svelte")
   ).default,
