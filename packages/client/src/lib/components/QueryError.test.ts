@@ -50,7 +50,9 @@ describe("QueryError", () => {
 
   it("maps INVALID_CREDENTIALS to translated message", () => {
     render(QueryError, { props: { error: new Error("INVALID_CREDENTIALS") } });
-    expect(screen.getByText("Invalid username or password.")).toBeTruthy();
+    expect(
+      screen.getByText("Invalid login username or password."),
+    ).toBeTruthy();
   });
 
   it("maps TICKET_NOT_FOUND to translated message", () => {

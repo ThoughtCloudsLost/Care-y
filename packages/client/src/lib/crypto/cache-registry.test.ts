@@ -119,18 +119,13 @@ describe("CacheRegistry", () => {
   });
 
   describe("duplicate registration", () => {
-    it("logs a warning in dev mode", () => {
+    it("returns the same map instance (idempotent)", () => {
       const name = uniqueName("dup");
-      const warnSpy = vi.spyOn(console, "warn").mockImplementation(vi.fn());
 
-      cacheRegistry.createMap(name);
-      cacheRegistry.createMap(name);
+      const mapA = cacheRegistry.createMap<string, string>(name);
+      const mapB = cacheRegistry.createMap<string, string>(name);
 
-      expect(warnSpy).toHaveBeenCalledWith(
-        expect.stringContaining("duplicate registration"),
-      );
-
-      warnSpy.mockRestore();
+      expect(mapA).toBe(mapB);
     });
   });
 

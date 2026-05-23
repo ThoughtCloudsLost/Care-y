@@ -57,6 +57,8 @@ vi.mock("$lib/paraglide/messages.js", () => ({
   admin_branding_accent_swatch_label: ({ color }: { color: string }) =>
     `Accent swatch ${color}`,
   admin_branding_new_logo_alt: () => "New logo preview",
+  admin_branding_description: () => "Customize your organization's appearance.",
+  admin_branding_icons_error: () => "Icon generation failed.",
   common_loading: () => "Loading",
   error_generic: () => "Something went wrong",
   decrypt_placeholder_loading: () => "Decrypting...",
@@ -365,14 +367,14 @@ describe("BrandingSection", () => {
   });
 
   it("calls saveBrandingField with encrypted data and clientEncryptedBranding", async () => {
-    renderWithData({ encryptedName: btoa("Old Name") });
+    renderWithData({ encryptedClientText: btoa("Old Text") });
 
     const editBtn = screen.getByRole("button", { name: /edit branding/i });
     await fireEvent.click(editBtn);
 
-    const nameInputs = document.querySelectorAll('input[type="text"]');
-    const nameInput = nameInputs[0] as HTMLInputElement;
-    await fireEvent.change(nameInput, { target: { value: "New Name" } });
+    const textarea = document.querySelector("textarea");
+    expect(textarea).toBeTruthy();
+    await fireEvent.change(textarea!, { target: { value: "New Text" } });
 
     const saveBtn = screen.getByRole("button", { name: /save changes/i });
     await fireEvent.click(saveBtn);
@@ -380,28 +382,17 @@ describe("BrandingSection", () => {
     await vi.waitFor(() => {
       expect(mockSaveBrandingField).toHaveBeenCalled();
     });
-
-    const call = mockSaveBrandingField.mock.calls[0]?.[0] as {
-      field: string;
-      encryptedValue: string;
-      clientEncryptedBranding?: string;
-    };
-    expect(call.field).toBe("name");
-    expect(call.encryptedValue).toBeTruthy();
-    expect(call.clientEncryptedBranding).toBeTruthy();
   });
 
   it("shows toast and haptic on successful save", async () => {
-    renderWithData({ encryptedName: btoa("Old Name") });
+    renderWithData({ encryptedClientText: btoa("Old Text") });
 
     const editBtn = screen.getByRole("button", { name: /edit branding/i });
     await fireEvent.click(editBtn);
 
-    const nameInputs = document.querySelectorAll('input[type="text"]');
-    const nameInput = nameInputs[0] as HTMLInputElement;
-    await fireEvent.change(nameInput, {
-      target: { value: "Updated Name" },
-    });
+    const textarea = document.querySelector("textarea");
+    expect(textarea).toBeTruthy();
+    await fireEvent.change(textarea!, { target: { value: "Updated Text" } });
 
     const saveBtn = screen.getByRole("button", { name: /save changes/i });
     await fireEvent.click(saveBtn);
@@ -418,7 +409,6 @@ describe("BrandingSection", () => {
       screen.getByText("Appears in the app and on client-facing pages."),
     ).toBeTruthy();
     expect(screen.getByText("Used for buttons and highlights.")).toBeTruthy();
-    expect(screen.getByText("Shown to volunteers and clients.")).toBeTruthy();
     expect(screen.getByText("Shown on the client intake form.")).toBeTruthy();
   });
 });

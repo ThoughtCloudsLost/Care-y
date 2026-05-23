@@ -44,6 +44,7 @@ describe("OrgDecryptCache", () => {
   let pkBase64: string;
 
   beforeEach(() => {
+    cacheRegistry.reset();
     bridge = createMockBridge();
     manager = new OrgKeyManager(bridge as unknown as CryptoBridge);
     const backend = requireSodium();
