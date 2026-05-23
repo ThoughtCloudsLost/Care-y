@@ -44,7 +44,6 @@
     tempPassword.length > 0 && tempPassword.length < PASSWORD_MIN_LENGTH,
   );
 
-  // eslint-disable-next-line security/detect-possible-timing-attacks -- client-side form comparison, not a credential check
   const passwordsMatch = $derived(tempPassword === confirmPassword);
   const confirmError = $derived(
     confirmPassword.length > 0 && !passwordsMatch

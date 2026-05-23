@@ -4,14 +4,7 @@
   import { resolve } from "$app/paths";
   import { page } from "$app/state";
   import { createQuery } from "@tanstack/svelte-query";
-  import {
-    List,
-    ListInput,
-    Button,
-    Block,
-    BlockTitle,
-    Preloader,
-  } from "konsta/svelte";
+  import { List, ListInput, Button, Block } from "konsta/svelte";
   import * as m from "$lib/paraglide/messages.js";
   import { trpc } from "$lib/trpc/index.js";
   import { onboardingKeys } from "$lib/query/keys.js";
@@ -31,8 +24,6 @@
   import KeyDerivation, {
     type LoginPhaseId,
   } from "$lib/components/onboarding/KeyDerivation.svelte";
-  import SecurityBriefing from "$lib/components/onboarding/SecurityBriefing.svelte";
-  import TwoFactorEnrollment from "$lib/components/onboarding/TwoFactorEnrollment.svelte";
   import TwoFactorChallenge from "$lib/components/auth/TwoFactorChallenge.svelte";
   import PasswordInput from "$lib/components/inputs/PasswordInput.svelte";
   import LanguagePicker from "$lib/components/inputs/LanguagePicker.svelte";
@@ -72,11 +63,6 @@
   let pendingEncryptedLocale = $state<string | null>(null);
   let pendingHasSeenBriefing = $state(true);
 
-  // Volunteer first-login enrollment recovery: shown when a volunteer
-  // refreshes during their initial 2FA enrollment flow.
-  let enrollmentUserId = $state("");
-  let enrollmentLoading = $state(false);
-
   function getPhaseLabel(p: LoginPhaseId): string {
     switch (p) {
       case "auth":
@@ -98,11 +84,7 @@
 
   const phaseLabel = $derived(getPhaseLabel(phase));
   const isSubmitting = $derived(
-    phase !== "briefing" &&
-      phase !== "idle" &&
-      phase !== "error" &&
-      phase !== "twofa" &&
-      phase !== "twofa-verify",
+    phase !== "idle" && phase !== "error" && phase !== "twofa-verify",
   );
 
   // Redirect authenticated users away from /login, unless they were
@@ -183,16 +165,8 @@
 
       // 2. No 2FA: run crypto pipeline immediately
       await runCryptoPipeline();
-
-      // 3. Check enrollment recovery
-      if (loginResult.needsEnrollment) {
-        enrollmentUserId = loginResult.user.id;
-        phase = "twofa";
-        return;
-      }
-
       await applyStoredLocale();
-      await navigateOrBriefing();
+      await navigateAfterAuth();
     } catch (caught: unknown) {
       phase = "error";
       const msg = caught instanceof Error ? caught.message : String(caught);
@@ -261,19 +235,10 @@
     }
   }
 
-  async function navigateOrBriefing(): Promise<void> {
-    if (!pendingHasSeenBriefing) {
-      phase = "briefing";
-      return;
-    }
+  async function navigateAfterAuth(): Promise<void> {
+    const needsOnboarding = !pendingHasSeenBriefing || pendingNeedsEnrollment;
     phase = "done";
-    await goto(resolve("/"));
-  }
-
-  function handleBriefingConfirm(): void {
-    void trpc.profile.markBriefingSeen.mutate();
-    phase = "done";
-    void goto(resolve("/"));
+    await goto(resolve(needsOnboarding ? "/complete" : "/"));
   }
 
   async function handleTwofaSuccess(): Promise<void> {
@@ -281,16 +246,8 @@
 
     try {
       await runCryptoPipeline();
-
-      // Volunteer enrollment recovery after 2FA
-      if (pendingNeedsEnrollment) {
-        enrollmentUserId = pendingUserId;
-        phase = "twofa";
-        return;
-      }
-
       await applyStoredLocale();
-      await navigateOrBriefing();
+      await navigateAfterAuth();
     } catch (caught: unknown) {
       phase = "error";
       const msg = caught instanceof Error ? caught.message : String(caught);
@@ -299,18 +256,6 @@
           ? m.auth_invalid_credentials()
           : m.auth_login_error();
       announceToLiveRegion("assertive", error);
-    }
-  }
-
-  async function handleEnrollmentComplete(): Promise<void> {
-    enrollmentLoading = true;
-    try {
-      await trpc.twoFactor.enroll.markVerifiedOnFirstEnrollment.mutate();
-      toastStore.show(m.onboarding_step_complete());
-      await goto(resolve("/"));
-    } catch {
-      toastStore.show(m.auth_login_error(), 3000);
-      enrollmentLoading = false;
     }
   }
 </script>
@@ -353,29 +298,6 @@
       </button>
     </div>
   {/key}
-{:else if phase === "briefing"}
-  <SecurityBriefing onconfirm={handleBriefingConfirm} />
-{:else if phase === "twofa"}
-  <!-- Volunteer first-login enrollment recovery -->
-  <BlockTitle medium>{m.onboarding_twofa_vol_heading()}</BlockTitle>
-  <Block>
-    <p class="step-desc">{m.onboarding_twofa_vol_desc()}</p>
-  </Block>
-  {#if enrollmentLoading}
-    <Block>
-      <div class="enrollment-loading">
-        <Preloader />
-        <p class="step-desc">{m.onboarding_twofa_securing()}</p>
-      </div>
-    </Block>
-  {:else}
-    <TwoFactorEnrollment
-      username={identifier}
-      onenrolled={() => {
-        void handleEnrollmentComplete();
-      }}
-    />
-  {/if}
 {:else if phase !== "idle" && phase !== "error"}
   <div class="text-center mb-6">
     {#if branding?.iconUrl}
@@ -451,15 +373,6 @@
     margin: 0 auto var(--space-sm);
     border-radius: 8px;
     display: block;
-  }
-
-  .enrollment-loading {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    padding: var(--space-2xl) 0;
-    gap: var(--space-lg);
   }
 
   .back-link {

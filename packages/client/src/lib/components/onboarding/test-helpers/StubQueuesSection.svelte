@@ -30,7 +30,6 @@
     return null;
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- stub matches QueuesSection API
   export function openEditor(_queueId: string | null): void {
     // noop
   }
