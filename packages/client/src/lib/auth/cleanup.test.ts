@@ -56,14 +56,17 @@ function createMockOrgKey(): {
 
 describe("cleanup handler", () => {
   describe("installCleanupHandler", () => {
-    it("is idempotent (second call does not double-register)", () => {
-      const { bridge } = createMockBridge();
+    it("is idempotent (second call does not double-fire on unload)", () => {
+      const { bridge, disconnectSpy } = createMockBridge();
       const { orgKey } = createMockOrgKey();
 
       installCleanupHandler(bridge, orgKey);
       installCleanupHandler(bridge, orgKey);
 
-      expect(window.addEventListener).toHaveBeenCalledTimes(1);
+      expect(unloadHandler).not.toBeNull();
+      unloadHandler!();
+
+      expect(disconnectSpy).toHaveBeenCalledOnce();
     });
   });
 
