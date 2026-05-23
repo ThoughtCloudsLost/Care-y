@@ -688,3 +688,262 @@ describe("crypto-core decryptAndRewrap", () => {
     sodium.memzero(tkTemp);
   });
 });
+
+describe("crypto-core error paths", () => {
+  beforeEach(async () => {
+    handleZeroAll(-1, testSink);
+    sinkMessages = [];
+    dispatch = createDispatcher(testSink);
+    await dispatchAndWait({ type: "init", id: 700 });
+    sinkMessages = [];
+  });
+
+  it("rejects decryptContent when not keyed", async () => {
+    const resp = await dispatchAndWait({
+      type: "decryptContent",
+      id: 701,
+      ticketId: "t-fail",
+      ephemeralPoint: "x",
+      nonce: "x",
+      wrappedKey: "x",
+      ciphertext: "x",
+    });
+    expect(resp.ok).toBe(false);
+    expect((resp as ErrorResponse).code).toBe("NOT_READY");
+  });
+
+  it("rejects encryptContent when not keyed", async () => {
+    const resp = await dispatchAndWait({
+      type: "encryptContent",
+      id: 702,
+      ticketId: "t-fail",
+      plaintext: "fail",
+    });
+    expect(resp.ok).toBe(false);
+    expect((resp as ErrorResponse).code).toBe("NOT_READY");
+  });
+
+  it("rejects unwrapOrgKey when not keyed", async () => {
+    const resp = await dispatchAndWait({
+      type: "unwrapOrgKey",
+      id: 703,
+      ephemeralPoint: "x",
+      nonce: "x",
+      wrappedOrgKey: "x",
+    });
+    expect(resp.ok).toBe(false);
+    expect((resp as ErrorResponse).code).toBe("NOT_READY");
+  });
+
+  it("rejects orgEncrypt when org key not loaded", async () => {
+    const sodium = requireSodium();
+    const salt = sodium.randombytes_buf(16);
+    await loginFlow("error-path-pw", salt);
+    sinkMessages = [];
+
+    const resp = await dispatchAndWait({
+      type: "orgEncrypt",
+      id: 704,
+      plaintext: encode(new Uint8Array(16)),
+    });
+    expect(resp.ok).toBe(false);
+    expect((resp as ErrorResponse).code).toBe("NOT_READY");
+  });
+
+  it("rejects orgDecrypt when org key not loaded", async () => {
+    const sodium = requireSodium();
+    const salt = sodium.randombytes_buf(16);
+    await loginFlow("error-path-pw2", salt);
+    sinkMessages = [];
+
+    const resp = await dispatchAndWait({
+      type: "orgDecrypt",
+      id: 705,
+      ciphertext: encode(new Uint8Array(48)),
+    });
+    expect(resp.ok).toBe(false);
+    expect((resp as ErrorResponse).code).toBe("NOT_READY");
+  });
+
+  it("rejects orgDecryptBatch when org key not loaded", async () => {
+    const sodium = requireSodium();
+    const salt = sodium.randombytes_buf(16);
+    await loginFlow("error-path-pw3", salt);
+    sinkMessages = [];
+
+    const resp = await dispatchAndWait({
+      type: "orgDecryptBatch",
+      id: 706,
+      items: [{ cacheKey: "k1", ciphertext: encode(new Uint8Array(48)) }],
+    });
+    expect(resp.ok).toBe(false);
+    expect((resp as ErrorResponse).code).toBe("NOT_READY");
+  });
+
+  it("rejects exportOrgSecretKey when org key not loaded", async () => {
+    const sodium = requireSodium();
+    const salt = sodium.randombytes_buf(16);
+    await loginFlow("error-path-pw4", salt);
+    sinkMessages = [];
+
+    const resp = await dispatchAndWait({
+      type: "exportOrgSecretKey",
+      id: 707,
+    });
+    expect(resp.ok).toBe(false);
+    expect((resp as ErrorResponse).code).toBe("NOT_READY");
+  });
+
+  it("rejects getOrgPublicKey when org key not loaded", async () => {
+    const sodium = requireSodium();
+    const salt = sodium.randombytes_buf(16);
+    await loginFlow("error-path-pw5", salt);
+    sinkMessages = [];
+
+    const resp = await dispatchAndWait({
+      type: "getOrgPublicKey",
+      id: 708,
+    });
+    expect(resp.ok).toBe(false);
+    expect((resp as ErrorResponse).code).toBe("NOT_READY");
+  });
+
+  it("returns DECRYPT_FAILED for corrupt ciphertext", async () => {
+    const sodium = requireSodium();
+    const salt = sodium.randombytes_buf(16);
+    const { volPublic } = await loginFlow("corrupt-ct-pw", salt);
+    sinkMessages = [];
+
+    const tk = generateContentKey();
+    const wrap = eciesEncrypt(tk, decode(volPublic) as RistrettoPoint);
+
+    const resp = await dispatchAndWait({
+      type: "decryptContent",
+      id: 709,
+      ticketId: "t-corrupt",
+      ephemeralPoint: encode(wrap.ephemeralPoint),
+      nonce: encode(wrap.nonce),
+      wrappedKey: encode(wrap.ciphertext),
+      ciphertext: encode(new Uint8Array(64)),
+    });
+    expect(resp.ok).toBe(false);
+    expect((resp as ErrorResponse).code).toBe("DECRYPT_FAILED");
+    sodium.memzero(tk);
+  });
+
+  it("returns DECRYPT_FAILED for corrupt ECIES key wrap", async () => {
+    const sodium = requireSodium();
+    const salt = sodium.randombytes_buf(16);
+    await loginFlow("corrupt-wrap-pw", salt);
+    sinkMessages = [];
+
+    const resp = await dispatchAndWait({
+      type: "decryptContent",
+      id: 710,
+      ticketId: "t-bad-wrap",
+      ephemeralPoint: encode(sodium.randombytes_buf(32)),
+      nonce: encode(sodium.randombytes_buf(24)),
+      wrappedKey: encode(sodium.randombytes_buf(48)),
+      ciphertext: encode(new Uint8Array(64)),
+    });
+    expect(resp.ok).toBe(false);
+    expect((resp as ErrorResponse).code).toBe("DECRYPT_FAILED");
+  });
+
+  it("rejects rewrapTk when no tk cached", async () => {
+    const sodium = requireSodium();
+    const salt = sodium.randombytes_buf(16);
+    await loginFlow("rewraptk-err-pw", salt);
+    sinkMessages = [];
+
+    const resp = await dispatchAndWait({
+      type: "rewrapTk",
+      id: 711,
+      ticketId: "t-no-tk",
+      recipientVolPublic: encode(sodium.randombytes_buf(32)),
+    });
+    expect(resp.ok).toBe(false);
+    expect((resp as ErrorResponse).code).toBe("TK_NOT_CACHED");
+  });
+
+  it("rejects rewrapBlob when no tk_temp cached", async () => {
+    const sodium = requireSodium();
+    const salt = sodium.randombytes_buf(16);
+    await loginFlow("rewrapblob-err-pw", salt);
+    sinkMessages = [];
+
+    const resp = await dispatchAndWait({
+      type: "rewrapBlob",
+      id: 712,
+      ticketId: "t-no-temp",
+      followUpId: "fu-miss",
+      ciphertext: encode(new Uint8Array(64)),
+      blobKey: "blob-key",
+      category: "image",
+    });
+    expect(resp.ok).toBe(false);
+    expect((resp as ErrorResponse).code).toBe("TK_NOT_CACHED");
+  });
+
+  it("rejects decryptBlob when not keyed", async () => {
+    const resp = await dispatchAndWait({
+      type: "decryptBlob",
+      id: 713,
+      ticketId: "t-fail",
+      ephemeralPoint: "x",
+      nonce: "x",
+      wrappedKey: "x",
+      ciphertext: "x",
+    });
+    expect(resp.ok).toBe(false);
+    expect((resp as ErrorResponse).code).toBe("NOT_READY");
+  });
+
+  it("rejects wrapWithVolPublic when not keyed", async () => {
+    const resp = await dispatchAndWait({
+      type: "wrapWithVolPublic",
+      id: 714,
+      data: encode(new Uint8Array(32)),
+    });
+    expect(resp.ok).toBe(false);
+    expect((resp as ErrorResponse).code).toBe("NOT_READY");
+  });
+
+  it("rejects createTicketKey when not keyed", async () => {
+    const resp = await dispatchAndWait({
+      type: "createTicketKey",
+      id: 715,
+      fields: [{ name: "title", plaintext: "fail" }],
+    });
+    expect(resp.ok).toBe(false);
+    expect((resp as ErrorResponse).code).toBe("NOT_READY");
+  });
+
+  it("rejects unwrapTk when not keyed", async () => {
+    const resp = await dispatchAndWait({
+      type: "unwrapTk",
+      id: 716,
+      ticketId: "t-fail",
+      ephemeralPoint: "x",
+      nonce: "x",
+      wrappedKey: "x",
+    });
+    expect(resp.ok).toBe(false);
+    expect((resp as ErrorResponse).code).toBe("NOT_READY");
+  });
+
+  it("rejects decryptAndRewrap when not keyed", async () => {
+    const resp = await dispatchAndWait({
+      type: "decryptAndRewrap",
+      id: 717,
+      ticketId: "t-fail",
+      followUpId: "fu-fail",
+      ephemeralPoint: "x",
+      nonce: "x",
+      wrappedKey: "x",
+      ciphertext: "x",
+    });
+    expect(resp.ok).toBe(false);
+    expect((resp as ErrorResponse).code).toBe("NOT_READY");
+  });
+});
