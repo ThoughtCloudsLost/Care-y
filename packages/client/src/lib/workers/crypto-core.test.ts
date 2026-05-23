@@ -11,12 +11,31 @@
  */
 
 import { describe, it, expect, beforeAll, beforeEach } from "vitest";
-import { getSodium, requireSodium, decode } from "@care-y/crypto";
+import {
+  getSodium,
+  requireSodium,
+  encode,
+  decode,
+  eciesEncrypt,
+  encryptContent,
+  generateContentKey,
+  type RistrettoPoint,
+} from "@care-y/crypto";
 import type {
   WorkerResponse,
   RewrapEvent,
+  ErrorResponse,
   OprfBlindResponse,
   DeriveKeysResponse,
+  DecryptContentResponse,
+  EncryptContentResponse,
+  GetVolPublicResponse,
+  CreateTicketKeyResponse,
+  WrapWithVolPublicResponse,
+  UnwrapOrgKeyResponse,
+  OrgEncryptResponse,
+  OrgDecryptResponse,
+  OrgDecryptBatchResponse,
   SharedWorkerState,
 } from "./crypto-protocol.js";
 import {
@@ -24,6 +43,7 @@ import {
   getState,
   getPublicKeys,
   handleZeroAll,
+  handleRewrapResult,
   onStateTransition,
   type Sink,
 } from "./crypto-core.js";
@@ -233,5 +253,438 @@ describe("crypto-core onStateTransition callback", () => {
     handleZeroAll(-1, testSink);
     // eslint-disable-next-line @typescript-eslint/no-empty-function -- reset handler after test
     onStateTransition(() => {});
+  });
+});
+
+// ── KEYED-state handler tests ──────────────────────────────────────
+
+describe("crypto-core decrypt/encrypt roundtrip", () => {
+  let volPublicStr: string;
+
+  beforeEach(async () => {
+    handleZeroAll(-1, testSink);
+    sinkMessages = [];
+    dispatch = createDispatcher(testSink);
+    const sodium = requireSodium();
+    const salt = sodium.randombytes_buf(16);
+    const result = await loginFlow("roundtrip-test-pw", salt);
+    volPublicStr = result.volPublic;
+    sinkMessages = [];
+  });
+
+  it("decrypts content encrypted with a wrapped tk", async () => {
+    const sodium = requireSodium();
+    const tk = generateContentKey();
+    const plaintext = new TextEncoder().encode("secret message");
+    const ct = encryptContent(plaintext, tk);
+    const wrap = eciesEncrypt(tk, decode(volPublicStr) as RistrettoPoint);
+
+    const resp = (await dispatchAndWait({
+      type: "decryptContent",
+      id: 100,
+      ticketId: "t-decrypt",
+      ephemeralPoint: encode(wrap.ephemeralPoint),
+      nonce: encode(wrap.nonce),
+      wrappedKey: encode(wrap.ciphertext),
+      ciphertext: encode(ct),
+    })) as DecryptContentResponse;
+
+    expect(resp.ok).toBe(true);
+    expect(resp.plaintext).toBe("secret message");
+    sodium.memzero(tk);
+  });
+
+  it("encrypts content using a cached tk", async () => {
+    const sodium = requireSodium();
+    const tk = generateContentKey();
+    const text = new TextEncoder().encode("cache me");
+    const ct = encryptContent(text, tk);
+    const wrap = eciesEncrypt(tk, decode(volPublicStr) as RistrettoPoint);
+
+    await dispatchAndWait({
+      type: "decryptContent",
+      id: 101,
+      ticketId: "t-enc",
+      ephemeralPoint: encode(wrap.ephemeralPoint),
+      nonce: encode(wrap.nonce),
+      wrappedKey: encode(wrap.ciphertext),
+      ciphertext: encode(ct),
+    });
+
+    sinkMessages = [];
+    const encResp = (await dispatchAndWait({
+      type: "encryptContent",
+      id: 102,
+      ticketId: "t-enc",
+      plaintext: "encrypt this",
+    })) as EncryptContentResponse;
+
+    expect(encResp.ok).toBe(true);
+    expect(encResp.ciphertext).toBeDefined();
+    expect(decode(encResp.ciphertext).length).toBeGreaterThan(0);
+    sodium.memzero(tk);
+  });
+
+  it("rejects encryptContent when no tk is cached", async () => {
+    const resp = await dispatchAndWait({
+      type: "encryptContent",
+      id: 103,
+      ticketId: "t-no-cache",
+      plaintext: "fail",
+    });
+
+    expect(resp.ok).toBe(false);
+    expect((resp as ErrorResponse).code).toBe("TK_NOT_CACHED");
+  });
+
+  it("evicts a cached tk", async () => {
+    const sodium = requireSodium();
+    const tk = generateContentKey();
+    const ct = encryptContent(new TextEncoder().encode("evict"), tk);
+    const wrap = eciesEncrypt(tk, decode(volPublicStr) as RistrettoPoint);
+
+    await dispatchAndWait({
+      type: "decryptContent",
+      id: 104,
+      ticketId: "t-evict",
+      ephemeralPoint: encode(wrap.ephemeralPoint),
+      nonce: encode(wrap.nonce),
+      wrappedKey: encode(wrap.ciphertext),
+      ciphertext: encode(ct),
+    });
+
+    await dispatchAndWait({ type: "evictTk", id: 105, ticketId: "t-evict" });
+
+    const failResp = await dispatchAndWait({
+      type: "encryptContent",
+      id: 106,
+      ticketId: "t-evict",
+      plaintext: "should fail",
+    });
+    expect(failResp.ok).toBe(false);
+    expect((failResp as ErrorResponse).code).toBe("TK_NOT_CACHED");
+    sodium.memzero(tk);
+  });
+
+  it("returns volPublic via getVolPublic handler", async () => {
+    const resp = (await dispatchAndWait({
+      type: "getVolPublic",
+      id: 107,
+    })) as GetVolPublicResponse;
+
+    expect(resp.ok).toBe(true);
+    expect(resp.volPublic).toBe(volPublicStr);
+  });
+
+  it("rejects getVolPublic when not keyed", async () => {
+    handleZeroAll(-1, testSink);
+    sinkMessages = [];
+    dispatch = createDispatcher(testSink);
+    await dispatchAndWait({ type: "init", id: 108 });
+
+    const resp = await dispatchAndWait({ type: "getVolPublic", id: 109 });
+    expect(resp.ok).toBe(false);
+    expect((resp as ErrorResponse).code).toBe("NOT_READY");
+  });
+});
+
+describe("crypto-core createTicketKey", () => {
+  beforeEach(async () => {
+    handleZeroAll(-1, testSink);
+    sinkMessages = [];
+    dispatch = createDispatcher(testSink);
+    const sodium = requireSodium();
+    const salt = sodium.randombytes_buf(16);
+    await loginFlow("createtk-test-pw", salt);
+    sinkMessages = [];
+  });
+
+  it("generates a tk, encrypts fields, and returns a key wrap", async () => {
+    const resp = (await dispatchAndWait({
+      type: "createTicketKey",
+      id: 200,
+      fields: [
+        { name: "title", plaintext: "Test Title" },
+        { name: "description", plaintext: "Test Description" },
+      ],
+    })) as CreateTicketKeyResponse;
+
+    expect(resp.ok).toBe(true);
+    expect(resp.encryptedFields).toHaveLength(2);
+    expect(resp.encryptedFields[0]?.name).toBe("title");
+    expect(resp.encryptedFields[1]?.name).toBe("description");
+    expect(resp.keyWrap).toBeDefined();
+    expect(resp.keyWrap.ephemeralPoint).toBeDefined();
+    expect(resp.keyWrap.nonce).toBeDefined();
+    expect(resp.keyWrap.wrappedKey).toBeDefined();
+    expect(resp.keyGeneration).toBeDefined();
+  });
+});
+
+describe("crypto-core wrapWithVolPublic", () => {
+  beforeEach(async () => {
+    handleZeroAll(-1, testSink);
+    sinkMessages = [];
+    dispatch = createDispatcher(testSink);
+    const sodium = requireSodium();
+    const salt = sodium.randombytes_buf(16);
+    await loginFlow("wrap-test-pw", salt);
+    sinkMessages = [];
+  });
+
+  it("ECIES-encrypts data with the worker volPublic", async () => {
+    const sodium = requireSodium();
+    const data = sodium.randombytes_buf(32);
+
+    const resp = (await dispatchAndWait({
+      type: "wrapWithVolPublic",
+      id: 300,
+      data: encode(data),
+    })) as WrapWithVolPublicResponse;
+
+    expect(resp.ok).toBe(true);
+    expect(resp.ephemeralPoint).toBeDefined();
+    expect(resp.nonce).toBeDefined();
+    expect(resp.wrappedKey).toBeDefined();
+  });
+});
+
+describe("crypto-core org key operations", () => {
+  let volPublicStr: string;
+
+  beforeEach(async () => {
+    handleZeroAll(-1, testSink);
+    sinkMessages = [];
+    dispatch = createDispatcher(testSink);
+    const sodium = requireSodium();
+    const salt = sodium.randombytes_buf(16);
+    const result = await loginFlow("org-test-pw", salt);
+    volPublicStr = result.volPublic;
+    sinkMessages = [];
+  });
+
+  async function loadOrgKey(): Promise<string> {
+    const sodium = requireSodium();
+    const orgSecret = sodium.crypto_core_ristretto255_scalar_random();
+    const wrap = eciesEncrypt(
+      orgSecret,
+      decode(volPublicStr) as RistrettoPoint,
+    );
+
+    const resp = (await dispatchAndWait({
+      type: "unwrapOrgKey",
+      id: 400,
+      ephemeralPoint: encode(wrap.ephemeralPoint),
+      nonce: encode(wrap.nonce),
+      wrappedOrgKey: encode(wrap.ciphertext),
+    })) as UnwrapOrgKeyResponse;
+
+    expect(resp.ok).toBe(true);
+    sodium.memzero(orgSecret);
+    return resp.orgPublicKey;
+  }
+
+  it("unwraps an org key and returns the public key", async () => {
+    const orgPub = await loadOrgKey();
+    expect(orgPub).toBeDefined();
+    expect(decode(orgPub).length).toBe(32);
+  });
+
+  it("encrypts and decrypts with the org key (sealed box roundtrip)", async () => {
+    await loadOrgKey();
+    sinkMessages = [];
+
+    const sodium = requireSodium();
+    const plaintext = sodium.randombytes_buf(64);
+
+    const encResp = (await dispatchAndWait({
+      type: "orgEncrypt",
+      id: 401,
+      plaintext: encode(plaintext),
+    })) as OrgEncryptResponse;
+
+    expect(encResp.ok).toBe(true);
+
+    const decResp = (await dispatchAndWait({
+      type: "orgDecrypt",
+      id: 402,
+      ciphertext: encResp.ciphertext,
+    })) as OrgDecryptResponse;
+
+    expect(decResp.ok).toBe(true);
+    expect(decode(decResp.plaintext)).toEqual(plaintext);
+    sodium.memzero(plaintext);
+  });
+
+  it("batch-decrypts multiple org-encrypted items", async () => {
+    await loadOrgKey();
+    sinkMessages = [];
+
+    const sodium = requireSodium();
+    const items = ["alice", "bob"].map((name) => {
+      const pt = new TextEncoder().encode(name);
+      const orgPubBytes = decode(getPublicKeys().orgPublicKey!);
+      const ct = sodium.crypto_box_seal(pt, orgPubBytes);
+      return { cacheKey: `user:${name}`, ciphertext: encode(ct) };
+    });
+
+    const resp = (await dispatchAndWait({
+      type: "orgDecryptBatch",
+      id: 403,
+      items,
+    })) as OrgDecryptBatchResponse;
+
+    expect(resp.ok).toBe(true);
+    expect(resp.results).toHaveLength(2);
+    expect(resp.results[0]?.plaintext).toBe("alice");
+    expect(resp.results[1]?.plaintext).toBe("bob");
+  });
+
+  it("rejects org operations when org key is not loaded", async () => {
+    const resp = await dispatchAndWait({
+      type: "orgEncrypt",
+      id: 404,
+      plaintext: encode(new Uint8Array(16)),
+    });
+
+    expect(resp.ok).toBe(false);
+    expect((resp as ErrorResponse).code).toBe("NOT_READY");
+  });
+
+  it("exports org secret key as ArrayBuffer", async () => {
+    await loadOrgKey();
+    sinkMessages = [];
+
+    const resp = await dispatchAndWait({
+      type: "exportOrgSecretKey",
+      id: 405,
+    });
+
+    expect(resp.ok).toBe(true);
+    expect(resp.type).toBe("exportOrgSecretKey");
+  });
+
+  it("returns org public key via getOrgPublicKey handler", async () => {
+    await loadOrgKey();
+    sinkMessages = [];
+
+    const resp = await dispatchAndWait({
+      type: "getOrgPublicKey",
+      id: 406,
+    });
+
+    expect(resp.ok).toBe(true);
+  });
+});
+
+describe("crypto-core unwrapTk", () => {
+  beforeEach(async () => {
+    handleZeroAll(-1, testSink);
+    sinkMessages = [];
+    dispatch = createDispatcher(testSink);
+    const sodium = requireSodium();
+    const salt = sodium.randombytes_buf(16);
+    await loginFlow("unwraptk-test-pw", salt);
+    sinkMessages = [];
+  });
+
+  it("pre-loads a ticket key into the cache", async () => {
+    const tk = generateContentKey();
+    const volPub = decode(getPublicKeys().volPublic!) as RistrettoPoint;
+    const wrap = eciesEncrypt(tk, volPub);
+
+    const resp = await dispatchAndWait({
+      type: "unwrapTk",
+      id: 500,
+      ticketId: "t-preload",
+      ephemeralPoint: encode(wrap.ephemeralPoint),
+      nonce: encode(wrap.nonce),
+      wrappedKey: encode(wrap.ciphertext),
+    });
+
+    expect(resp.ok).toBe(true);
+
+    const sodium = requireSodium();
+    const text = new TextEncoder().encode("after preload");
+    const ct = encryptContent(text, tk);
+
+    const decResp = (await dispatchAndWait({
+      type: "decryptContent",
+      id: 501,
+      ticketId: "t-preload",
+      ephemeralPoint: encode(wrap.ephemeralPoint),
+      nonce: encode(wrap.nonce),
+      wrappedKey: encode(wrap.ciphertext),
+      ciphertext: encode(ct),
+    })) as DecryptContentResponse;
+
+    expect(decResp.ok).toBe(true);
+    expect(decResp.plaintext).toBe("after preload");
+    sodium.memzero(tk);
+  });
+});
+
+describe("crypto-core decryptAndRewrap", () => {
+  let volPublicStr: string;
+
+  beforeEach(async () => {
+    handleZeroAll(-1, testSink);
+    sinkMessages = [];
+    dispatch = createDispatcher(testSink);
+    const sodium = requireSodium();
+    const salt = sodium.randombytes_buf(16);
+    const result = await loginFlow("rewrap-test-pw", salt);
+    volPublicStr = result.volPublic;
+    sinkMessages = [];
+  });
+
+  it("decrypts with tk_temp and emits a RewrapEvent", async () => {
+    const sodium = requireSodium();
+    const volPub = decode(volPublicStr) as RistrettoPoint;
+
+    const canonicalTk = generateContentKey();
+    const wrapCanonical = eciesEncrypt(canonicalTk, volPub);
+    await dispatchAndWait({
+      type: "unwrapTk",
+      id: 600,
+      ticketId: "t-rewrap",
+      ephemeralPoint: encode(wrapCanonical.ephemeralPoint),
+      nonce: encode(wrapCanonical.nonce),
+      wrappedKey: encode(wrapCanonical.ciphertext),
+    });
+
+    const tkTemp = generateContentKey();
+    const wrapTemp = eciesEncrypt(tkTemp, volPub);
+    const tempPlaintext = new TextEncoder().encode("rewrap me");
+    const tempCt = encryptContent(tempPlaintext, tkTemp);
+
+    sinkMessages = [];
+    const resp = (await dispatchAndWait({
+      type: "decryptAndRewrap",
+      id: 601,
+      ticketId: "t-rewrap",
+      followUpId: "fu-001",
+      ephemeralPoint: encode(wrapTemp.ephemeralPoint),
+      nonce: encode(wrapTemp.nonce),
+      wrappedKey: encode(wrapTemp.ciphertext),
+      ciphertext: encode(tempCt),
+    })) as WorkerResponse;
+
+    expect(resp.ok).toBe(true);
+    expect((resp as { plaintext: string }).plaintext).toBe("rewrap me");
+
+    const rewrapEvent = sinkMessages.find((m): m is RewrapEvent => "kind" in m);
+    expect(rewrapEvent).toBeDefined();
+    expect(rewrapEvent?.followUpId).toBe("fu-001");
+    expect(rewrapEvent?.ticketId).toBe("t-rewrap");
+
+    handleRewrapResult({
+      kind: "rewrap-result",
+      followUpId: "fu-001",
+      success: true,
+    });
+
+    sodium.memzero(canonicalTk);
+    sodium.memzero(tkTemp);
   });
 });
