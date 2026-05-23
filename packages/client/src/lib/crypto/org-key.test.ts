@@ -94,6 +94,21 @@ describe("OrgKeyManager", () => {
     });
   });
 
+  describe("encryptText", () => {
+    it("encrypts a UTF-8 string and returns base64 ciphertext", async () => {
+      manager.load(pkBase64);
+      const result = await manager.encryptText("hello world");
+      expect(typeof result).toBe("string");
+      expect(result.length).toBeGreaterThan(0);
+    });
+
+    it("throws OrgKeyNotLoadedError when key is not loaded", async () => {
+      await expect(manager.encryptText("fail")).rejects.toThrow(
+        OrgKeyNotLoadedError,
+      );
+    });
+  });
+
   describe("decrypt", () => {
     it("delegates to bridge.orgDecrypt", async () => {
       manager.load(pkBase64);
