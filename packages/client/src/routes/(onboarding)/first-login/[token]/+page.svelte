@@ -26,6 +26,12 @@
   import { haptic } from "$lib/utils/haptic.js";
   import { requireRouter } from "$lib/errors.js";
   import { toastStore } from "$lib/stores/toast.svelte.js";
+  import {
+    loadSavedState,
+    saveState,
+    clearState,
+    resolveRecoveryStep,
+  } from "$lib/onboarding/wizard-persistence.js";
   import { getWizardNavCtx } from "$lib/components/onboarding/wizard-nav-context.js";
   import SetupInviteAccount from "$lib/components/onboarding/SetupInviteAccount.svelte";
   import SecurityBriefing from "$lib/components/onboarding/SecurityBriefing.svelte";
@@ -49,57 +55,9 @@
 
   const WIZARD_STEP_COUNT = STEP_LABELS.length + 1;
 
-  function loadSavedState(): { step: number; completed: number[] } | null {
-    try {
-      const raw = sessionStorage.getItem(STORAGE_KEY);
-      if (raw === null) return null;
-      const parsed: unknown = JSON.parse(raw);
-      if (
-        typeof parsed !== "object" ||
-        parsed === null ||
-        !("step" in parsed) ||
-        !("completed" in parsed)
-      ) {
-        return null;
-      }
-      const obj = parsed as Record<string, unknown>;
-      if (
-        typeof obj.step === "number" &&
-        Array.isArray(obj.completed) &&
-        obj.completed.every((v): v is number => typeof v === "number")
-      ) {
-        if (obj.step >= WIZARD_STEP_COUNT) {
-          sessionStorage.removeItem(STORAGE_KEY);
-          return null;
-        }
-        return { step: obj.step, completed: obj.completed };
-      }
-    } catch {
-      /* malformed data */
-    }
-    return null;
-  }
-
-  function saveState(s: number, completed: Set<number>): void {
-    try {
-      sessionStorage.setItem(
-        STORAGE_KEY,
-        JSON.stringify({ step: s, completed: [...completed] }),
-      );
-    } catch {
-      /* storage full or unavailable */
-    }
-  }
-
-  function clearState(): void {
-    try {
-      sessionStorage.removeItem(STORAGE_KEY);
-    } catch {
-      /* storage unavailable */
-    }
-  }
-
-  const savedInit = browser ? loadSavedState() : null;
+  const savedInit = browser
+    ? loadSavedState(sessionStorage, STORAGE_KEY, WIZARD_STEP_COUNT)
+    : null;
   let step = $state(savedInit?.step ?? 0);
   let completedSteps = $state(new Set<number>(savedInit?.completed ?? []));
   let wizardData = $state<Partial<WizardData>>({});
@@ -115,7 +73,7 @@
   function goBack(): void {
     if (step <= 0) return;
     step -= 1;
-    saveState(step, completedSteps);
+    saveState(sessionStorage, STORAGE_KEY, step, completedSteps);
     history.pushState({ wizardStep: step }, "");
     document
       .querySelector(".onboarding-content")
@@ -129,19 +87,15 @@
   function handleReauthComplete(data: { hasSeenBriefing: boolean }): void {
     needsReauth = false;
 
-    const saved = loadSavedState();
-    if (saved !== null && saved.step > 0) {
-      step = saved.step;
-      completedSteps = new Set(saved.completed);
-    } else if (data.hasSeenBriefing) {
-      step = 2;
-      completedSteps = new Set([0, 1]);
-      saveState(2, completedSteps);
-    } else {
-      step = 1;
-      completedSteps = new Set([0]);
-      saveState(1, completedSteps);
-    }
+    const recovery = resolveRecoveryStep(
+      sessionStorage,
+      STORAGE_KEY,
+      WIZARD_STEP_COUNT,
+      data.hasSeenBriefing,
+    );
+    step = recovery.step;
+    completedSteps = new Set(recovery.completed);
+    saveState(sessionStorage, STORAGE_KEY, step, completedSteps);
 
     haptic();
   }
@@ -240,7 +194,7 @@
 
   $effect(() => {
     if (step === STEP_LABELS.length) {
-      clearState();
+      clearState(sessionStorage, STORAGE_KEY);
       toastStore.show(m.onboarding_step_complete());
       void goto(resolve("/"));
     }
@@ -249,7 +203,7 @@
   function advanceStep(): void {
     completedSteps = new Set([...completedSteps, step]);
     step += 1;
-    saveState(step, completedSteps);
+    saveState(sessionStorage, STORAGE_KEY, step, completedSteps);
     history.pushState({ wizardStep: step }, "");
     document
       .querySelector(".onboarding-content")
