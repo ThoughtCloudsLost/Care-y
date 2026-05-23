@@ -12,7 +12,6 @@
   import { createQuery } from "@tanstack/svelte-query";
   import { queueKeys, adminKeys } from "$lib/query/keys.js";
   import { Permission, RoleId } from "@care-y/shared";
-  import type { RoleIdValue } from "@care-y/shared";
   import { Users, Layers, UserPlus, LayersPlus, Link2 } from "@lucide/svelte";
   import * as m from "$lib/paraglide/messages.js";
   import { withTerms } from "$lib/terminology/with-terms.js";
@@ -36,24 +35,25 @@
     FilterPillsConfig,
   } from "$lib/shell/types.js";
   import type { PillDefinition } from "$lib/components/filters/filter-types.js";
+  import { userFilterStore } from "$lib/stores/user-filters.svelte.js";
+  import { queueFilterStore } from "$lib/stores/queue-filters.svelte.js";
   import {
-    userFilterStore,
-    type UserSortField,
-    type UserStatus,
-    type KeyStatus,
-  } from "$lib/stores/user-filters.svelte.js";
-  import {
-    queueFilterStore,
-    type QueueSortField,
-  } from "$lib/stores/queue-filters.svelte.js";
+    type PeopleTab,
+    isPeopleTab,
+    defaultTab,
+    isSortField,
+    isQueueSortField,
+    isRoleId,
+    isUserStatus,
+    isKeyStatus,
+  } from "$lib/admin/people-utils.js";
+  import { createInviteFlow } from "$lib/composables/people/create-invite-flow.svelte.js";
   import { createSearchOverlay } from "$lib/search/search-overlay.svelte.js";
   import SearchNavigator from "$lib/components/search/SearchNavigator.svelte";
   import StatusDot from "$lib/components/StatusDot.svelte";
   import ShellPopover from "$lib/shell/ShellPopover.svelte";
   import UsersSection from "$lib/components/admin/UsersSection.svelte";
   import QueuesSection from "$lib/components/admin/QueuesSection.svelte";
-
-  type PeopleTab = "users" | "queues";
 
   const permissionsGetter = getCurrentPermissions();
   const permissions = $derived(permissionsGetter());
@@ -96,10 +96,6 @@
     });
   });
 
-  function isPeopleTab(value: string): value is PeopleTab {
-    return value === "users" || value === "queues";
-  }
-
   const urlTab = $derived.by(() => {
     const raw = page.url.searchParams.get("tab");
     return raw !== null && isPeopleTab(raw) ? raw : null;
@@ -108,12 +104,7 @@
   const urlAction = $derived(page.url.searchParams.get("action"));
   const urlUser = $derived(page.url.searchParams.get("user"));
 
-  function defaultTab(): PeopleTab {
-    if (permissions.has(Permission.MANAGE_USERS)) return "users";
-    return "queues";
-  }
-
-  let activeTab = $state<PeopleTab>(defaultTab());
+  let activeTab = $state<PeopleTab>(defaultTab(permissions));
 
   $effect(() => {
     if (urlUser !== null && activeTab !== "users") activeTab = "users";
@@ -195,12 +186,6 @@
 
   // ── SubNavbar configs ──
 
-  const SORT_FIELDS: readonly UserSortField[] = ["name", "role", "status"];
-
-  function isSortField(value: string): value is UserSortField {
-    return (SORT_FIELDS as readonly string[]).includes(value);
-  }
-
   const userDispatch = createFilterDispatch({
     fields: {
       role: {
@@ -248,19 +233,6 @@
   });
 
   // ��─ Queue sort config ──
-
-  const QUEUE_SORT_FIELDS: readonly QueueSortField[] = [
-    "order",
-    "name",
-    "members",
-    "open",
-    "closed",
-    "hold",
-  ];
-
-  function isQueueSortField(value: string): value is QueueSortField {
-    return (QUEUE_SORT_FIELDS as readonly string[]).includes(value);
-  }
 
   const queueDispatch = createFilterDispatch({
     fields: {},
@@ -323,21 +295,6 @@
 
   // ── Filter pill definitions ──
 
-  const VALID_ROLES: ReadonlySet<string> = new Set([
-    RoleId.VOLUNTEER,
-    RoleId.MANAGER,
-    RoleId.ADMIN,
-  ]);
-  const VALID_STATUSES: ReadonlySet<string> = new Set<UserStatus>([
-    "active",
-    "inactive",
-  ]);
-  const VALID_KEY_STATUSES: ReadonlySet<string> = new Set<KeyStatus>([
-    "ok",
-    "no_keys",
-    "no_org_key",
-  ]);
-
   const roleOptions = $derived([
     { value: RoleId.VOLUNTEER, label: m.admin_role_volunteer(withTerms()) },
     { value: RoleId.MANAGER, label: m.admin_role_manager(withTerms()) },
@@ -386,18 +343,6 @@
     },
   ]);
 
-  function isRoleId(v: string): v is RoleIdValue {
-    return VALID_ROLES.has(v);
-  }
-
-  function isUserStatus(v: string): v is UserStatus {
-    return VALID_STATUSES.has(v);
-  }
-
-  function isKeyStatus(v: string): v is KeyStatus {
-    return VALID_KEY_STATUSES.has(v);
-  }
-
   const filterPillsConfig: FilterPillsConfig = $derived({
     pills: userPills,
     activeCount: userFilterStore.activeCount,
@@ -411,30 +356,15 @@
     usersSectionRef?.toggleMultiSelect();
   }
 
-  let invitePopoverOpen = $state(false);
-  let inviteButtonEl = $state<HTMLElement | undefined>(undefined);
-
-  function handleInvite(e: MouseEvent): void {
-    if (!canInviteWithLink) {
+  const inviteFlow = createInviteFlow({
+    canInviteWithLink: () => canInviteWithLink,
+    onInviteManual: () => {
       usersSectionRef?.openInvite();
-      return;
-    }
-    const target = e.currentTarget;
-    inviteButtonEl = target instanceof HTMLElement ? target : undefined;
-    invitePopoverOpen = true;
-  }
-
-  function handleInviteOption(optionId: string): void {
-    invitePopoverOpen = false;
-    switch (optionId) {
-      case "link":
-        usersSectionRef?.openInviteLink();
-        break;
-      case "manual":
-        usersSectionRef?.openInvite();
-        break;
-    }
-  }
+    },
+    onInviteLink: () => {
+      usersSectionRef?.openInviteLink();
+    },
+  });
 
   function handleCreateQueue(): void {
     queuesSectionRef?.openEditor("new");
@@ -476,7 +406,7 @@
 {#snippet navRight()}
   <Link
     iconOnly
-    onclick={handleInvite}
+    onclick={(e: MouseEvent) => inviteFlow.handleInvite(e)}
     role="button"
     aria-label={m.admin_invite_button()}
   >
@@ -587,15 +517,15 @@
 {/if}
 
 <ShellPopover
-  opened={invitePopoverOpen}
-  target={inviteButtonEl}
+  opened={inviteFlow.popoverOpen}
+  target={inviteFlow.buttonEl}
   placement="bottom"
-  ondismiss={() => (invitePopoverOpen = false)}
+  ondismiss={() => inviteFlow.dismiss()}
 >
   <List nested>
     <ListItem
       title={m.admin_invite_menu_link()}
-      onclick={() => handleInviteOption("link")}
+      onclick={() => inviteFlow.handleOption("link")}
     >
       {#snippet media()}
         <Link2 size={20} aria-hidden="true" />
@@ -603,7 +533,7 @@
     </ListItem>
     <ListItem
       title={m.admin_invite_menu_manual()}
-      onclick={() => handleInviteOption("manual")}
+      onclick={() => inviteFlow.handleOption("manual")}
     >
       {#snippet media()}
         <UserPlus size={20} aria-hidden="true" />
