@@ -701,17 +701,21 @@
         {/if}
       </SoftButton>
     </div>
-    {#if previousMethod !== null}
-      <button
-        type="button"
-        class="backup-code-link touch-feedback"
-        onclick={() => {
-          if (previousMethod !== null) selectMethod(previousMethod);
-        }}
-      >
-        {m.common_back()}
-      </button>
-    {/if}
+    <button
+      type="button"
+      class="backup-code-link touch-feedback"
+      onclick={() => {
+        if (previousMethod !== null) {
+          selectMethod(previousMethod);
+        } else {
+          activeMethod = null;
+          error = "";
+          codeInput = "";
+        }
+      }}
+    >
+      {m.common_back()}
+    </button>
   </form>
 {/if}
 
@@ -750,7 +754,7 @@
       </button>
     {/if}
   </Block>
-{:else if activeMethod !== null && !hasMultipleMethods}
+{:else if activeMethod !== null && !hasMultipleMethods && activeMethod !== "backup"}
   <Block>
     <button
       type="button"
