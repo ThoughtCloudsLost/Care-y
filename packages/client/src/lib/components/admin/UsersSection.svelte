@@ -35,11 +35,18 @@
   import { toastStore } from "$lib/stores/toast.svelte.js";
   import { announceToLiveRegion } from "$lib/utils/announce.js";
   import { requireRouter } from "$lib/errors.js";
-  import { normalizeForSearch } from "$lib/search/normalize.js";
+  import { userFilterStore } from "$lib/stores/user-filters.svelte.js";
   import {
-    userFilterStore,
-    type KeyStatus,
-  } from "$lib/stores/user-filters.svelte.js";
+    deriveKeyStatus,
+    buildUserQueueMap,
+    filterUsers,
+    sortUsers,
+    countUsers,
+    filterInvites,
+    computeQueueDiff,
+    hasQueueChanges,
+    ROLE_SORT_ORDER,
+  } from "$lib/admin/users-section-utils.js";
   import { getTabbarOverrideCtx } from "$lib/shell/context.js";
   import QueryError from "$lib/components/QueryError.svelte";
   import ShellDialog from "$lib/shell/ShellDialog.svelte";
@@ -184,126 +191,29 @@
 
   type UserRecord = NonNullable<typeof usersQuery.data>[number];
 
-  function deriveKeyStatus(u: UserRecord): KeyStatus {
-    if (u.hasKeys && u.hasOrgKeyWrap) return "ok";
-    if (!u.hasKeys) return "no_keys";
-    return "no_org_key";
-  }
+  const userQueueMap = $derived(buildUserQueueMap(queueAssignments));
 
-  const ROLE_SORT_ORDER: Record<string, number> = {
-    [RoleId.ADMIN]: 0,
-    [RoleId.MANAGER]: 1,
-    [RoleId.VOLUNTEER]: 2,
-  };
-
-  const userQueueMap = $derived.by((): Map<string, Set<string>> => {
-    // eslint-disable-next-line svelte/prefer-svelte-reactivity -- local computation inside $derived, not reactive state
-    const map = new Map<string, Set<string>>();
-    for (const a of queueAssignments) {
-      let set = map.get(a.userId);
-      if (!set) {
-        set = new Set<string>(); // eslint-disable-line svelte/prefer-svelte-reactivity
-        map.set(a.userId, set);
-      }
-      set.add(a.queueId);
-    }
-    return map;
-  });
-
-  const filteredUsers = $derived.by(() => {
-    const all = usersQuery.data ?? [];
-    let result = all;
-
-    if (userFilterStore.roles.size > 0) {
-      result = result.filter((u) =>
-        (userFilterStore.roles as ReadonlySet<string>).has(u.roleId),
-      );
-    }
-    if (userFilterStore.statuses.size > 0) {
-      result = result.filter((u) =>
-        (userFilterStore.statuses as ReadonlySet<string>).has(
-          u.isActive ? "active" : "inactive",
-        ),
-      );
-    }
-    if (userFilterStore.keyStatuses.size > 0) {
-      result = result.filter((u) =>
-        userFilterStore.keyStatuses.has(deriveKeyStatus(u)),
-      );
-    }
-    if (userFilterStore.queueIds.size > 0) {
-      result = result.filter((u) => {
-        const userQueues = userQueueMap.get(u.id);
-        if (!userQueues) return false;
-        for (const qId of userFilterStore.queueIds) {
-          if (userQueues.has(qId)) return true;
-        }
-        return false;
-      });
-    }
-
-    if (searchQuery.length >= 2) {
-      const norm = normalizeForSearch(searchQuery);
-      result = result.filter((u) => {
-        const name = decryptDisplayName(u.id, u.encryptedDisplayName);
-        if (name === null) return false;
-        return normalizeForSearch(name).includes(norm);
-      });
-    }
-
-    const sorted = [...result];
-    const { field, direction } = userFilterStore.sort;
-    const dir = direction === "asc" ? 1 : -1;
-
-    // eslint-disable-next-line svelte/prefer-svelte-reactivity -- derived-local sort cache, not reactive
-    const nameCache = new Map<string, string>();
-    if (field === "name") {
-      for (const u of sorted) {
-        nameCache.set(
-          u.id,
-          decryptDisplayName(u.id, u.encryptedDisplayName) ?? "\uffff",
-        );
-      }
-    }
-
-    sorted.sort((a, b) => {
-      switch (field) {
-        case "name":
-          return (
-            dir *
-            (nameCache.get(a.id) ?? "\uffff").localeCompare(
-              nameCache.get(b.id) ?? "\uffff",
-            )
-          );
-        case "role":
-          return (
-            dir *
-            ((ROLE_SORT_ORDER[a.roleId] ?? 3) -
-              (ROLE_SORT_ORDER[b.roleId] ?? 3))
-          );
-        case "status": {
-          const aVal = a.isActive ? 0 : 1;
-          const bVal = b.isActive ? 0 : 1;
-          return dir * (aVal - bVal);
-        }
-        default:
-          return 0;
-      }
-    });
-
-    return sorted;
-  });
+  const filteredUsers = $derived(
+    sortUsers(
+      filterUsers(
+        usersQuery.data ?? [],
+        {
+          roles: userFilterStore.roles,
+          statuses: userFilterStore.statuses,
+          keyStatuses: userFilterStore.keyStatuses,
+          queueIds: userFilterStore.queueIds,
+        },
+        userQueueMap,
+        searchQuery,
+        decryptDisplayName,
+      ),
+      userFilterStore.sort,
+      decryptDisplayName,
+    ),
+  );
 
   // ── Stats (exported as functions per Svelte 5 derived_invalid_export rule) ──
-  const userCounts = $derived.by(() => {
-    let active = 0;
-    let inactive = 0;
-    for (const u of usersQuery.data ?? []) {
-      if (u.isActive) active++;
-      else inactive++;
-    }
-    return { active, inactive, total: active + inactive };
-  });
+  const userCounts = $derived(countUsers(usersQuery.data ?? []));
 
   export function activeCount(): number {
     return userCounts.active;
@@ -334,13 +244,12 @@
     return fn ? fn() : m.admin_role_unknown();
   }
 
-  const filteredInvites = $derived.by(() => {
-    const all = invitesQuery.data ?? [];
-    if (userFilterStore.roles.size === 0) return all;
-    return all.filter((inv) =>
-      (userFilterStore.roles as ReadonlySet<string>).has(inv.roleId),
-    );
-  });
+  const filteredInvites = $derived(
+    filterInvites(
+      invitesQuery.data ?? [],
+      userFilterStore.roles as ReadonlySet<string>,
+    ),
+  );
 
   function lookupInviterName(invitedBy: string): string | null {
     const inviter = (usersQuery.data ?? []).find((u) => u.id === invitedBy);
@@ -471,13 +380,9 @@
       trimmedUsername !== sheetState.userIdentifier,
   );
 
-  const queueChanged = $derived.by(() => {
-    if (memberQueueIds.size !== originalQueueIds.size) return true;
-    for (const id of memberQueueIds) {
-      if (!originalQueueIds.has(id)) return true;
-    }
-    return false;
-  });
+  const queueChanged = $derived(
+    hasQueueChanges(memberQueueIds, originalQueueIds),
+  );
 
   const hasChanges = $derived(
     roleChanged || queueChanged || displayNameChanged || usernameChanged,
@@ -511,11 +416,9 @@
     }
 
     if (queueChanged) {
-      const added = [...memberQueueIds].filter(
-        (id) => !originalQueueIds.has(id),
-      );
-      const removed = [...originalQueueIds].filter(
-        (id) => !memberQueueIds.has(id),
+      const { added, removed } = computeQueueDiff(
+        memberQueueIds,
+        originalQueueIds,
       );
 
       for (const queueId of added) {
