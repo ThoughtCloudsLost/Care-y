@@ -946,4 +946,96 @@ describe("crypto-core error paths", () => {
     expect(resp.ok).toBe(false);
     expect((resp as ErrorResponse).code).toBe("NOT_READY");
   });
+
+  it("rejects rewrapBlob when not keyed", async () => {
+    const resp = await dispatchAndWait({
+      type: "rewrapBlob",
+      id: 718,
+      ticketId: "t-fail",
+      followUpId: "fu-fail",
+      ciphertext: "x",
+      blobKey: "k",
+      category: "image",
+    });
+    expect(resp.ok).toBe(false);
+    expect((resp as ErrorResponse).code).toBe("NOT_READY");
+  });
+});
+
+describe("crypto-core dispatcher edge cases", () => {
+  beforeEach(async () => {
+    handleZeroAll(-1, testSink);
+    sinkMessages = [];
+    dispatch = createDispatcher(testSink);
+  });
+
+  it("silently ignores connect/disconnect messages", async () => {
+    await dispatchAndWait({ type: "init", id: 800 });
+    const countBefore = sinkMessages.length;
+
+    dispatch({
+      type: "connect",
+      id: 801,
+    } as unknown as Parameters<typeof dispatch>[0]);
+    await new Promise((r) => setTimeout(r, 50));
+
+    dispatch({
+      type: "disconnect",
+      id: 802,
+    } as unknown as Parameters<typeof dispatch>[0]);
+    await new Promise((r) => setTimeout(r, 50));
+
+    expect(sinkMessages.length).toBe(countBefore);
+  });
+});
+
+describe("crypto-core orgDecryptBatch error branch", () => {
+  let volPublicStr: string;
+
+  beforeEach(async () => {
+    handleZeroAll(-1, testSink);
+    sinkMessages = [];
+    dispatch = createDispatcher(testSink);
+    const sodium = requireSodium();
+    const salt = sodium.randombytes_buf(16);
+    const result = await loginFlow("batch-err-pw", salt);
+    volPublicStr = result.volPublic;
+    sinkMessages = [];
+  });
+
+  it("returns null plaintext for a corrupt item in a batch", async () => {
+    const sodium = requireSodium();
+    const orgSecret = sodium.crypto_core_ristretto255_scalar_random();
+    const volPub = decode(volPublicStr) as RistrettoPoint;
+    const wrap = eciesEncrypt(orgSecret, volPub);
+
+    await dispatchAndWait({
+      type: "unwrapOrgKey",
+      id: 810,
+      ephemeralPoint: encode(wrap.ephemeralPoint),
+      nonce: encode(wrap.nonce),
+      wrappedOrgKey: encode(wrap.ciphertext),
+    });
+    sinkMessages = [];
+
+    const orgPubBytes = decode(getPublicKeys().orgPublicKey!);
+    const validPt = new TextEncoder().encode("valid");
+    const validCt = sodium.crypto_box_seal(validPt, orgPubBytes);
+
+    const resp = (await dispatchAndWait({
+      type: "orgDecryptBatch",
+      id: 811,
+      items: [
+        { cacheKey: "good", ciphertext: encode(validCt) },
+        { cacheKey: "bad", ciphertext: encode(new Uint8Array(16)) },
+      ],
+    })) as OrgDecryptBatchResponse;
+
+    expect(resp.ok).toBe(true);
+    expect(resp.results).toHaveLength(2);
+    expect(resp.results.at(0)?.plaintext).toBe("valid");
+    expect(resp.results.at(1)?.plaintext).toBeNull();
+
+    sodium.memzero(orgSecret);
+  });
 });
