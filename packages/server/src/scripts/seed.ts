@@ -55,7 +55,7 @@ import { generateAlias } from "../telephony/models/alias-generator.js";
 import type { Kysely } from "kysely";
 import type { TenantDatabase } from "../db/types.js";
 
-const DEV_ORG_SLUG = "dev-org";
+const ORG_SLUG = process.env.SEED_ORG_SLUG ?? "dev-org";
 const ADMIN_IDENTIFIER = "admin.dev";
 const ADMIN_PASSWORD = "dev-password-1234!";
 const ADMIN_DISPLAY_NAME = "Dev Admin";
@@ -117,14 +117,14 @@ async function seed(): Promise<void> {
   let schemaName: string;
   let setupToken: string | null = null;
   try {
-    const org = await orgService.createOrg({ slug: DEV_ORG_SLUG });
+    const org = await orgService.createOrg({ slug: ORG_SLUG });
     orgId = org.id;
     schemaName = org.schemaName;
     setupToken = org.setupToken;
-    console.log(`Created org "${DEV_ORG_SLUG}" (${orgId})`);
+    console.log(`Created org "${ORG_SLUG}" (${orgId})`);
   } catch (err) {
     if (err instanceof ConflictError) {
-      const existing = await orgService.findBySlug(DEV_ORG_SLUG);
+      const existing = await orgService.findBySlug(ORG_SLUG);
       if (!existing) {
         console.error(
           "Org conflict but slug not found. Database may be inconsistent.",
@@ -133,7 +133,7 @@ async function seed(): Promise<void> {
       }
       orgId = existing.id;
       schemaName = existing.schemaName;
-      console.log(`Org "${DEV_ORG_SLUG}" already exists (${orgId}), skipping.`);
+      console.log(`Org "${ORG_SLUG}" already exists (${orgId}), skipping.`);
     } else {
       console.error("Failed to create org:", extractErrorMessage(err));
       process.exit(1);
