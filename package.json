@@ -22,6 +22,11 @@
     "test:up": "docker compose -f docker-compose.test.yml up -d --build",
     "test:down": "docker compose -f docker-compose.test.yml down",
     "test:down:clean": "docker compose -f docker-compose.test.yml down -v",
+    "test:e2e": "playwright test",
+    "test:e2e:coverage": "playwright test --project=chromium",
+    "test:e2e:seed": "docker compose exec -e SEED_ORG_SLUG=e2e-org app pnpm --filter @care-y/server exec tsx src/scripts/seed.ts",
+    "coverage:merge": "node scripts/merge-coverage.mjs",
+    "coverage:full": "curl -sf http://localhost:3000/health > /dev/null || (echo 'Docker API not running on port 3000. Start it with: pnpm dev:setup, pnpm dev, pnpm dev:mobile, or docker compose up -d' && exit 1) && vitest run --project client --coverage && pnpm test:e2e:coverage && pnpm coverage:merge",
     "clean": "tsc --build --clean",
     "migrate": "tsx --env-file=.env packages/server/src/db/migrate.ts --platform",
     "migrate:down": "tsx --env-file=.env packages/server/src/db/migrate.ts down --platform",
@@ -60,6 +65,9 @@
     "@types/node": "25.9.1",
     "@vitest/coverage-v8": "4.1.8",
     "eslint": "10.4.1",
+    "istanbul-lib-coverage": "^3.2.2",
+    "istanbul-lib-report": "^3.0.1",
+    "istanbul-reports": "^3.1.7",
     "eslint-plugin-security": "4.0.0",
     "eslint-plugin-svelte": "3.19.0",
     "fast-check": "4.8.0",
@@ -68,6 +76,7 @@
     "prettier-plugin-svelte": "4.1.0",
     "typescript": "5.9.3",
     "typescript-eslint": "8.60.1",
+    "v8-to-istanbul": "^9.3.0",
     "vitest": "4.1.8"
   }
 }

@@ -170,7 +170,8 @@
     } catch (caught: unknown) {
       phase = "error";
       const msg = caught instanceof Error ? caught.message : String(caught);
-      if (msg.includes("Invalid") || msg.includes("credentials")) {
+      const lower = msg.toLowerCase();
+      if (lower.includes("invalid") || lower.includes("credentials")) {
         error = m.auth_invalid_credentials();
       } else {
         error = m.auth_login_error();
@@ -251,8 +252,9 @@
     } catch (caught: unknown) {
       phase = "error";
       const msg = caught instanceof Error ? caught.message : String(caught);
+      const lower = msg.toLowerCase();
       error =
-        msg.includes("Invalid") || msg.includes("credentials")
+        lower.includes("invalid") || lower.includes("credentials")
           ? m.auth_invalid_credentials()
           : m.auth_login_error();
       announceToLiveRegion("assertive", error);

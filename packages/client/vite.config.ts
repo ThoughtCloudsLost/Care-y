@@ -37,6 +37,7 @@ function crossOriginIsolationPlugin(): Plugin {
 }
 
 const isMobile = process.env.VITE_MOBILE === "true";
+const orgSlug = process.env.VITE_ORG_SLUG ?? "dev-org";
 
 // Prefer mkcert certs (trusted by simulators and browsers).
 // Fall back to basicSsl (self-signed, triggers cert warnings).
@@ -117,12 +118,12 @@ export default defineConfig({
       "/api/branding": {
         target: "http://localhost:3000",
         changeOrigin: true,
-        headers: { "x-org-slug": "dev-org" },
+        headers: { "x-org-slug": orgSlug },
       },
       "/manifest.webmanifest": {
         target: "http://localhost:3000",
         changeOrigin: true,
-        headers: { "x-org-slug": "dev-org" },
+        headers: { "x-org-slug": orgSlug },
       },
     },
     fs: {
