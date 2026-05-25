@@ -274,7 +274,11 @@ export function createAuthRouter(deps: AuthRouterDeps) {
         ? ROLE_CONFIG.get(roleId)
         : undefined;
       const permissions = config ? [...config.permissions] : [];
-      return { user: toUserResponse(ctx.user), permissions };
+      return {
+        user: toUserResponse(ctx.user),
+        permissions,
+        twofaVerified: ctx.session.twofaVerified,
+      };
     }),
 
     assignRole: adminProcedure.input(assignRoleInputSchema).mutation(

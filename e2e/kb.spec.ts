@@ -1,32 +1,24 @@
-import { test, expect, type Page } from "@playwright/test";
+import { test, expect } from "./coverage-fixture";
+import { startCoverage, stopAndWriteCoverage } from "./coverage-fixture";
+import type { Page } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
+import { CRYPTO_TIMEOUT, login } from "./helpers";
 
-// Crypto pipeline timeout: Argon2id (64 MiB WASM) + OPRF round-trips +
-// ECIES key wrapping + Worker decryption.
-const CRYPTO_TIMEOUT = 60_000;
-
-// Serial tests model a real user session: one login, then SPA navigation.
-// The Worker stays KEYED across test navigations.
 test.describe.serial("Knowledge Base (Library Tab)", () => {
   let page: Page;
 
-  // Crypto pipeline (Argon2id + OPRF + ECIES + Worker) can exceed
-  // Playwright's default 30s hook timeout on cold starts.
   test.beforeAll(async ({ browser }, testInfo) => {
     testInfo.setTimeout(CRYPTO_TIMEOUT * 2);
     page = await browser.newPage();
-    await page.goto("/");
-
-    // Wait for the full crypto pipeline to complete.
-    // KB articles on the dashboard are org-key decrypted, so seeing a
-    // decrypted article title proves auto-login succeeded and the Worker
-    // is in KEYED state with org keys loaded.
+    await startCoverage(page);
+    await login(page);
     await expect(page.getByText("Safety planning template")).toBeVisible({
       timeout: CRYPTO_TIMEOUT,
     });
   });
 
   test.afterAll(async () => {
+    await stopAndWriteCoverage(page, "kb");
     await page.close();
   });
 

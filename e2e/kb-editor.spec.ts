@@ -1,15 +1,9 @@
-import { test, expect, type Page } from "@playwright/test";
+import { test, expect } from "./coverage-fixture";
+import { startCoverage, stopAndWriteCoverage } from "./coverage-fixture";
+import type { Page } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
+import { CRYPTO_TIMEOUT, login } from "./helpers";
 
-// Crypto pipeline timeout: Argon2id (64 MiB WASM) + OPRF round-trips +
-// ECIES key wrapping + Worker decryption.
-const CRYPTO_TIMEOUT = 60_000;
-
-// Serial tests model a real user session: one login, then SPA navigation.
-// The Worker stays KEYED across test navigations. Write flows require the
-// full crypto pipeline for org-key encryption of titles, bodies, and excerpts.
-// Unique suffix prevents collisions from previous test runs leaving articles
-// in the database (serial suite shares a persistent dev-org).
 const SUFFIX = String(Date.now()).slice(-6);
 const TEST_ARTICLE_TITLE = `E2E Article ${SUFFIX}`;
 
@@ -19,19 +13,15 @@ test.describe.serial("KB Editor (Create/Edit, Categories, ATAG)", () => {
   test.beforeAll(async ({ browser }, testInfo) => {
     testInfo.setTimeout(CRYPTO_TIMEOUT * 2);
     page = await browser.newPage();
-    await page.goto("/");
-
-    // Wait for the full crypto pipeline to complete. The "Knowledge Base"
-    // section on the dashboard with "recently updated" text proves:
-    // auto-login succeeded, org key loaded, KB articles seeded and
-    // decrypted. Ticket titles use randomized pseudonyms from the seed
-    // script, so we wait for a stable structural element instead.
+    await startCoverage(page);
+    await login(page);
     await expect(page.getByText("recently updated")).toBeVisible({
       timeout: CRYPTO_TIMEOUT,
     });
   });
 
   test.afterAll(async () => {
+    await stopAndWriteCoverage(page, "kb-editor");
     await page.close();
   });
 

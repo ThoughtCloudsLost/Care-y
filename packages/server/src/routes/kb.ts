@@ -12,6 +12,7 @@
 import { z } from "zod";
 import {
   router,
+  authedProcedure,
   volunteerProcedure,
   managerProcedure,
   withErrorWrapping,
@@ -351,5 +352,21 @@ export function createKbRouter(deps: KBRouterDeps) {
           return mediaSvc.listAttachments(input.itemId);
         }),
       ),
+
+    // --- Dev-only: seed KB articles with sealed box encryption ---
+    ...(process.env.NODE_ENV === "development"
+      ? {
+          devSeedKb: authedProcedure.mutation(
+            withErrorWrapping(async ({ ctx }) => {
+              const { seedKbArticles } = await import("../dev/seed-kb.js");
+              return seedKbArticles(
+                ctx.org.tenantDb,
+                ctx.org.sealedBox,
+                ctx.user.id,
+              );
+            }),
+          ),
+        }
+      : {}),
   });
 }

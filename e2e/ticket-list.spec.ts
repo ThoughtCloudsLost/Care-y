@@ -1,17 +1,17 @@
-import { test, expect, type Page } from "@playwright/test";
+import { test, expect } from "./coverage-fixture";
+import { startCoverage, stopAndWriteCoverage } from "./coverage-fixture";
+import type { Page } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
-import { CRYPTO_TIMEOUT } from "./helpers";
+import { CRYPTO_TIMEOUT, login } from "./helpers";
 
-// Serial tests model a real user session: one login, then SPA navigation.
-// The Worker stays KEYED across test navigations.
 test.describe.serial("Ticket List (Tickets Tab)", () => {
   let page: Page;
 
-  test.beforeAll(async ({ browser }) => {
+  test.beforeAll(async ({ browser }, testInfo) => {
+    testInfo.setTimeout(CRYPTO_TIMEOUT * 2);
     page = await browser.newPage();
-    await page.goto("/");
-
-    // Wait for crypto pipeline to complete on dashboard first.
+    await startCoverage(page);
+    await login(page);
     await expect(page.getByText("Help with housing")).toBeVisible({
       timeout: CRYPTO_TIMEOUT,
     });
@@ -29,6 +29,7 @@ test.describe.serial("Ticket List (Tickets Tab)", () => {
   });
 
   test.afterAll(async () => {
+    await stopAndWriteCoverage(page, "ticket-list");
     await page.close();
   });
 
