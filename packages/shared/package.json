@@ -17,6 +17,6 @@
     "zod": "4.3.6"
   },
   "devDependencies": {
-    "@inlang/paraglide-js": "2.16.1"
+    "@inlang/paraglide-js": "2.18.1"
   }
 }
