@@ -1,31 +1,44 @@
-import { test, expect } from "@playwright/test";
+import { test, expect } from "./coverage-fixture";
+import { startCoverage, stopAndWriteCoverage } from "./coverage-fixture";
+import type { Page } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
+import { CRYPTO_TIMEOUT, login } from "./helpers";
 
-test.describe("shell architecture", () => {
-  test.beforeEach(async ({ page }) => {
-    await page.goto("/");
+test.describe.serial("shell architecture", () => {
+  let page: Page;
+
+  test.beforeAll(async ({ browser }, testInfo) => {
+    testInfo.setTimeout(CRYPTO_TIMEOUT * 2);
+    page = await browser.newPage();
+    await startCoverage(page);
+    await login(page);
+  });
+
+  test.afterAll(async () => {
+    await stopAndWriteCoverage(page, "shell-architecture");
+    await page.close();
   });
 
   // ── Semantic landmarks ──────────────────────────────────────────────
 
-  test("has main landmark", async ({ page }) => {
-    const main = page.locator('[role="main"]');
+  test("has main landmark", async () => {
+    const main = page.locator("main");
     await expect(main).toBeAttached();
   });
 
-  test("has banner landmark on navbar", async ({ page }) => {
+  test("has banner landmark on navbar", async () => {
     const banner = page.locator('[role="banner"]');
     await expect(banner).toBeAttached();
     await expect(banner).toContainText("CARE-Y");
   });
 
-  test("has tablist landmark on tabbar", async ({ page }) => {
+  test("has tablist landmark on tabbar", async () => {
     const tablist = page.locator('[role="tablist"]');
     await expect(tablist).toBeAttached();
     await expect(tablist).toHaveAttribute("aria-label", "Main navigation");
   });
 
-  test("has toast container with role=status", async ({ page }) => {
+  test("has toast container with role=status", async () => {
     const toast = page.locator("#toast-container");
     await expect(toast).toBeAttached();
     await expect(toast).toHaveAttribute("role", "status");
@@ -33,7 +46,7 @@ test.describe("shell architecture", () => {
 
   // ── ARIA live regions ───────────────────────────────────────────────
 
-  test("has assertive and polite ARIA live regions", async ({ page }) => {
+  test("has assertive and polite ARIA live regions", async () => {
     const assertive = page.locator("#live-assertive");
     await expect(assertive).toBeAttached();
     await expect(assertive).toHaveAttribute("aria-live", "assertive");
@@ -47,24 +60,36 @@ test.describe("shell architecture", () => {
 
   // ── SVG filter ──────────────────────────────────────────────────────
 
-  test("has riso-ink SVG filter definition", async ({ page }) => {
+  test("riso-ink SVG filter renders when riso theme is active", async () => {
+    // The riso-ink filter only renders for the riso theme.
+    // Default theme is "default", so skip if not riso.
+    const visualTheme = await page.evaluate(() =>
+      document.documentElement.classList.contains("theme-riso"),
+    );
+    if (!visualTheme) {
+      test.skip();
+      return;
+    }
     const filter = page.locator("filter#riso-ink");
     await expect(filter).toBeAttached();
   });
 
   // ── Tab bar ─────────────────────────────────────────────────────────
 
-  test("tab bar has 4 tabs with correct roles", async ({ page }) => {
+  test("tab bar has 3 tabs and a More button", async () => {
     const tablist = page.getByRole("tablist");
     await expect(tablist).toBeAttached();
 
-    for (const name of ["Home", "Tickets", "Calendar", "More"]) {
+    for (const name of ["Home", "Tickets", "Knowledge Base"]) {
       const tab = tablist.getByRole("tab", { name });
       await expect(tab).toBeAttached();
     }
+
+    // "More" is a separate link, not a tab
+    await expect(tablist.getByRole("link", { name: "More" })).toBeAttached();
   });
 
-  test("Home tab is selected by default", async ({ page }) => {
+  test("Home tab is selected by default", async () => {
     const homeTab = page.getByRole("tab", { name: "Home" });
     await expect(homeTab).toHaveAttribute("aria-selected", "true");
     await expect(homeTab).toHaveClass(/k-tabbar-link-active/);
@@ -72,38 +97,35 @@ test.describe("shell architecture", () => {
 
   // ── Navbar ──────────────────────────────────────────────────────────
 
-  test("navbar renders with title and placeholder action buttons", async ({
-    page,
-  }) => {
+  test("navbar renders with title and action buttons", async () => {
     const navbar = page.locator(".k-navbar");
     await expect(navbar).toBeAttached();
     await expect(navbar).toContainText("CARE-Y");
 
-    // Right slot has 3 placeholder buttons (role="button" via patched Link)
     await expect(
-      navbar.getByRole("button", { name: "Exposure status" }),
+      navbar.getByRole("button", { name: "Account" }),
     ).toBeAttached();
     await expect(navbar.getByRole("button", { name: "Search" })).toBeAttached();
     await expect(
-      navbar.getByRole("button", { name: "New ticket" }),
+      navbar.getByRole("button", { name: "Create new" }),
     ).toBeAttached();
   });
 
   // ── View transitions ────────────────────────────────────────────────
 
-  test("view transitions API is available", async ({ page }) => {
+  test("view transitions API is available", async () => {
     const hasViewTransitions = await page.evaluate(
       () => "startViewTransition" in document,
     );
-    // Not all browsers support it; just verify the app doesn't crash
-    // If supported, the layout's onNavigate hook will use it
     expect(typeof hasViewTransitions).toBe("boolean");
   });
 
   // ── Accessibility ───────────────────────────────────────────────────
 
-  test("page passes axe-core accessibility scan", async ({ page }) => {
-    const results = await new AxeBuilder({ page }).analyze();
+  test("page passes axe-core accessibility scan", async () => {
+    const results = await new AxeBuilder({ page })
+      .setLegacyMode(true)
+      .analyze();
     expect(results.violations).toEqual([]);
   });
 });

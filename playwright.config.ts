@@ -15,16 +15,24 @@ export default defineConfig({
   },
   projects: [
     {
+      name: "seed-data",
+      testMatch: "seed-data.setup.ts",
+      use: { ...devices["Desktop Chrome"] },
+    },
+    {
       name: "chromium",
       use: { ...devices["Desktop Chrome"] },
+      dependencies: ["seed-data"],
     },
     {
       name: "firefox",
       use: { ...devices["Desktop Firefox"] },
+      dependencies: ["seed-data"],
     },
     {
       name: "webkit-mobile",
       use: { ...devices["iPhone 13"] },
+      dependencies: ["seed-data"],
     },
   ],
   webServer: {

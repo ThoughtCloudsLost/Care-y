@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Invalid login username or password" |
+* | "Invalid username or password" |
 *
 * @param {Auth_Invalid_CredentialsInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

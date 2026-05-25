@@ -9,11 +9,16 @@ import {
   toRistrettoPoint,
 } from "@care-y/crypto";
 
+export interface SeedTicketOptions {
+  handcraftedOnly?: boolean;
+}
+
 export async function seedTestTickets(
   tDb: Kysely<TenantDatabase>,
   blobStore: BlobStore,
   userId: string,
   orgSchema: string,
+  options?: SeedTicketOptions,
 ): Promise<{ ticketIds: string[] }> {
   // 1. Look up vol_public for the current user
   const userKeys = await tDb
@@ -563,7 +568,8 @@ export async function seedTestTickets(
   // Generate additional tickets programmatically to test
   // virtual scrolling with large lists. Uses a simple
   // deterministic seed so re-runs produce the same data.
-  const GENERATED_COUNT = 106; // 14 handcrafted + 106 = 120 total
+  // Skipped when handcraftedOnly is set (E2E tests use only the 14 above).
+  const GENERATED_COUNT = options?.handcraftedOnly === true ? 0 : 106;
   const queuesArr = ["Intake", "Crisis", "Housing"] as const;
   const priorities: TicketPriority[] = [
     "low",

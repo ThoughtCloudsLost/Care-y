@@ -90,12 +90,16 @@
   // Redirect authenticated users away from /login, unless they were
   // sent here by the recovery safety net (reauth=1 means the Worker
   // has no keys and the user needs to re-enter credentials).
+  // Also verify twofa_verified: a session with 2FA pending should NOT
+  // redirect (it would hit TWOFA_REQUIRED on every volunteerProcedure call
+  // and loop back through /2fa → /login → / indefinitely).
   if (browser) {
     const isReauth = page.url.searchParams.get("reauth") === "1";
     if (!isReauth) {
       void trpc.auth.me
         .query()
-        .then(() => {
+        .then((result) => {
+          if (!result.twofaVerified) return;
           void goto(resolve("/"));
         })
         .catch(() => {
@@ -152,13 +156,13 @@
         loginResult.user.encryptedPreferredLocale ?? null;
       pendingHasSeenBriefing = loginResult.user.hasSeenBriefing;
       pendingHasKeys = loginResult.hasKeys;
+      pendingNeedsEnrollment = loginResult.needsEnrollment;
       pendingUserId = loginResult.user.id;
 
       // 1b. 2FA: show inline challenge. Credentials stay in $state so the
       //     crypto pipeline can run after verification succeeds.
       if (loginResult.requiresTwoFactor) {
         twofaMethods = loginResult.enrolledMethods;
-        pendingNeedsEnrollment = loginResult.needsEnrollment;
         phase = "twofa-verify";
         return;
       }

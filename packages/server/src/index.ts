@@ -245,12 +245,21 @@ const RATE_BOOTSTRAP_MAX = 2;
 
 // --- Rate limiters ---
 
+const noopLimiter: RateLimiter = {
+  check: () => ({ allowed: true, remaining: Infinity, retryAfterMs: 0 }),
+  // eslint-disable-next-line @typescript-eslint/no-empty-function -- intentional no-op for dev
+  reset: () => {},
+};
+
 interface RateLimiters {
   readonly loginLimiter: ReturnType<typeof createInMemoryRateLimiter>;
   readonly saltLimiter: ReturnType<typeof createInMemoryRateLimiter>;
 }
 
 function createAuthRateLimiters(): RateLimiters {
+  if (process.env.NODE_ENV === "development") {
+    return { loginLimiter: noopLimiter, saltLimiter: noopLimiter };
+  }
   return {
     loginLimiter: createInMemoryRateLimiter({
       windowMs: RATE_WINDOW_1M,
@@ -277,12 +286,6 @@ function createOprfInfrastructure(env: EnvVars): OprfEvaluateService {
     socketPathA: env.OPRF_SOCKET_A,
     socketPathB: env.OPRF_SOCKET_B,
   });
-
-  const noopLimiter: RateLimiter = {
-    check: () => ({ allowed: true, remaining: Infinity, retryAfterMs: 0 }),
-    // eslint-disable-next-line @typescript-eslint/no-empty-function -- intentional no-op for dev
-    reset: () => {},
-  };
 
   const userRateLimiter =
     process.env.NODE_ENV === "development"

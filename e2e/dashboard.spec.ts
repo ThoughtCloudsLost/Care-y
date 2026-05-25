@@ -1,34 +1,24 @@
-import { test, expect, type Page } from "@playwright/test";
+import { test, expect } from "./coverage-fixture";
+import { startCoverage, stopAndWriteCoverage } from "./coverage-fixture";
+import type { Page } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
+import { CRYPTO_TIMEOUT, login } from "./helpers";
 
-// Auto-login runs registerCrypto + loginCrypto + devSeedTickets on first
-// page load. All assertions wait for the full crypto pipeline to complete.
-// Timeout for crypto-dependent assertions accounts for Argon2id (64 MiB WASM)
-// + OPRF round-trips + ECIES key wrapping + Worker decryption.
-// registerCrypto runs Argon2id on main thread (~3-5s), then loginCrypto
-// runs Argon2id again in the Worker (~3-5s), plus OPRF round-trips,
-// ticket seeding, and decryption. 60s is generous but safe.
-const CRYPTO_TIMEOUT = 60_000;
-
-// Serial tests with a shared page model a real user session: one login,
-// then SPA navigation. The Worker stays KEYED across test navigations.
 test.describe.serial("Dashboard (Home Tab)", () => {
   let page: Page;
 
-  test.beforeAll(async ({ browser }) => {
+  test.beforeAll(async ({ browser }, testInfo) => {
+    testInfo.setTimeout(CRYPTO_TIMEOUT * 2);
     page = await browser.newPage();
-    await page.goto("/");
-    // Wait for the full crypto pipeline to complete.
-    // "Help with housing" visible means: auto-login succeeded, registerCrypto
-    // stored user_keys, loginCrypto put Worker in KEYED state, devSeedTickets
-    // created tickets with ECIES key wraps, ticket list fetched, and Worker
-    // decrypted the title. If this text appears, the entire pipeline worked.
+    await startCoverage(page);
+    await login(page);
     await expect(page.getByText("Help with housing")).toBeVisible({
       timeout: CRYPTO_TIMEOUT,
     });
   });
 
   test.afterAll(async () => {
+    await stopAndWriteCoverage(page, "dashboard");
     await page.close();
   });
 
@@ -38,19 +28,19 @@ test.describe.serial("Dashboard (Home Tab)", () => {
     const statCards = page.locator('[data-testid="stat-card"]');
     await expect(statCards).toHaveCount(3);
 
-    // My Open: tickets 1 (Sparrow) + 4 (Robin) = 2
+    // My Open: 5 assigned non-hold tickets (housing, legal aid, safety, benefits, encrypted)
     await expect(page.getByRole("button", { name: /my open/i })).toContainText(
-      "2",
+      "5",
     );
 
-    // Unassigned: ticket 2 (Wren) = 1
+    // Unassigned: 6 tickets with no assignee
     await expect(
       page.getByRole("button", { name: /unassigned/i }),
-    ).toContainText("1");
+    ).toContainText("6");
 
-    // On Hold: ticket 3 (Finch) = 1
+    // On Hold: 2 tickets (shelter callback, court date)
     await expect(page.getByRole("button", { name: /on hold/i })).toContainText(
-      "1",
+      "2",
     );
   });
 

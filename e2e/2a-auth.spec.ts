@@ -99,6 +99,7 @@ test.describe("2a-auth: login page", () => {
     const meResponse = await page.evaluate(async () => {
       const res = await fetch("/trpc/auth.me", {
         credentials: "include",
+        headers: { "x-org-slug": "e2e-org" },
       });
       return res.json() as Promise<unknown>;
     });

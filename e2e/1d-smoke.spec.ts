@@ -1,29 +1,45 @@
-import { test, expect } from "@playwright/test";
+import { test, expect } from "./coverage-fixture";
+import { startCoverage, stopAndWriteCoverage } from "./coverage-fixture";
+import type { Page } from "@playwright/test";
+import { CRYPTO_TIMEOUT, login } from "./helpers";
 
-test.describe("1d-smoke", () => {
-  test("page loads and renders shell structure", async ({ page }) => {
-    await page.goto("/");
+test.describe.serial("1d-smoke", () => {
+  let page: Page;
 
+  test.beforeAll(async ({ browser }, testInfo) => {
+    testInfo.setTimeout(CRYPTO_TIMEOUT * 2);
+    page = await browser.newPage();
+    await startCoverage(page);
+    await login(page);
+  });
+
+  test.afterAll(async () => {
+    await stopAndWriteCoverage(page, "1d-smoke");
+    await page.close();
+  });
+
+  test("page loads and renders shell structure", async () => {
     // Konsta App root renders
     const appRoot = page.locator(".k-app").first();
     await expect(appRoot).toBeVisible();
 
     // Main content landmark exists
-    const main = page.locator('[role="main"]');
+    const main = page.locator("main");
     await expect(main).toBeAttached();
 
     // Bottom tab bar renders with correct tabs
     const tabbar = page.locator(".k-toolbar");
     await expect(tabbar).toBeAttached();
 
-    for (const name of ["Home", "Tickets", "Calendar", "More"]) {
-      await expect(tabbar.getByRole("link", { name })).toBeAttached();
+    for (const name of ["Home", "Tickets", "Knowledge Base"]) {
+      await expect(tabbar.getByRole("tab", { name })).toBeAttached();
     }
+
+    // "More" is a link button, not a tab
+    await expect(tabbar.getByRole("link", { name: "More" })).toBeAttached();
   });
 
-  test("default theme is iOS and dark mode", async ({ page }) => {
-    await page.goto("/");
-
+  test("default theme is iOS and dark mode", async () => {
     const appRoot = page.locator(".k-app").first();
     await expect(appRoot).toHaveClass(/k-ios/);
 
