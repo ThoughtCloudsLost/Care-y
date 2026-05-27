@@ -22,26 +22,23 @@ test.describe.serial("Dashboard (Home Tab)", () => {
     await page.close();
   });
 
-  // ── Stat cards (real data) ────────────────────────────────────────
+  // ── Section count badges (real data) ──────────────────────────────
 
-  test("stat cards show correct counts from seeded tickets", async () => {
-    const statCards = page.locator('[data-testid="stat-card"]');
-    await expect(statCards).toHaveCount(3);
-
-    // My Open: 5 assigned non-hold tickets (housing, legal aid, safety, benefits, encrypted)
-    await expect(page.getByRole("button", { name: /my open/i })).toContainText(
-      "5",
-    );
+  test("section badges show correct counts from seeded tickets", async () => {
+    // My Tickets: 5 assigned non-hold tickets
+    const myTickets = page.locator("#section-my-tickets [data-count]");
+    await expect(myTickets).toBeVisible({ timeout: CRYPTO_TIMEOUT });
+    await expect(myTickets).toHaveAttribute("data-count", "5");
 
     // Unassigned: 6 tickets with no assignee
-    await expect(
-      page.getByRole("button", { name: /unassigned/i }),
-    ).toContainText("6");
+    const unassigned = page.locator("#section-unassigned [data-count]");
+    await expect(unassigned).toBeVisible();
+    await expect(unassigned).toHaveAttribute("data-count", "6");
 
     // On Hold: 2 tickets (shelter callback, court date)
-    await expect(page.getByRole("button", { name: /on hold/i })).toContainText(
-      "2",
-    );
+    const onHold = page.locator("#section-on-hold [data-count]");
+    await expect(onHold).toBeVisible();
+    await expect(onHold).toHaveAttribute("data-count", "2");
   });
 
   // ── Decryption (full pipeline) ────────────────────────────────────
@@ -58,10 +55,12 @@ test.describe.serial("Dashboard (Home Tab)", () => {
     await expect(page.getByText("Encrypted ticket")).toBeVisible();
   });
 
-  // ── Stat card labels (i18n) ───────────────────────────────────────
+  // ── Section heading labels (i18n) ─────────────────────────────────
 
-  test("stat cards display labels from i18n", async () => {
-    await expect(page.getByRole("button", { name: /my open/i })).toBeAttached();
+  test("section headings display labels from i18n", async () => {
+    await expect(
+      page.getByRole("button", { name: /my tickets/i }),
+    ).toBeAttached();
     await expect(
       page.getByRole("button", { name: /unassigned/i }),
     ).toBeAttached();
@@ -80,10 +79,13 @@ test.describe.serial("Dashboard (Home Tab)", () => {
     await expect(notification).toHaveCSS("pointer-events", "none");
   });
 
-  // ── Stat card navigation ──────────────────────────────────────────
+  // ── Section "See all" navigation ────────────────────────────────────
 
-  test("stat card navigates to tickets with filter param", async () => {
-    await page.getByRole("button", { name: /unassigned/i }).click();
+  test("'See all' link navigates to tickets with filter param", async () => {
+    const unassignedSection = page.locator("#section-unassigned");
+    const seeAll = unassignedSection.getByRole("link", { name: /see all/i });
+    await expect(seeAll).toBeVisible({ timeout: CRYPTO_TIMEOUT });
+    await seeAll.click();
     await expect(page).toHaveURL(/\/tickets\?filter=unassigned/);
   });
 

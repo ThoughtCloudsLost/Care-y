@@ -25,7 +25,7 @@ test.describe.serial("Knowledge Base (Library Tab)", () => {
   // ── 1. Tab visibility ─────────────────────────────────────────
 
   test("Library tab visible in tabbar", async () => {
-    const libraryTab = page.getByRole("tab", { name: "Library" });
+    const libraryTab = page.getByRole("tab", { name: /knowledge base/i });
     await expect(libraryTab).toBeVisible();
   });
 
@@ -37,7 +37,7 @@ test.describe.serial("Knowledge Base (Library Tab)", () => {
   // ── 2. Library page shows articles ────────────────────────────
 
   test("navigating to Library tab shows article list", async () => {
-    await page.getByRole("tab", { name: "Library" }).click();
+    await page.getByRole("tab", { name: /knowledge base/i }).click();
     await expect(page).toHaveURL("/library");
 
     // Wait for any decrypted article title. These are org-key encrypted
@@ -272,7 +272,7 @@ test.describe.serial("Knowledge Base (Library Tab)", () => {
   // ── 12. Accessibility ─────────────────────────────────────────
 
   test("a11y: library page passes axe-core audit", async () => {
-    await page.getByRole("tab", { name: "Library" }).click();
+    await page.getByRole("tab", { name: /knowledge base/i }).click();
     await expect(page.getByText("Intake call checklist")).toBeVisible({
       timeout: CRYPTO_TIMEOUT,
     });

@@ -15,6 +15,7 @@
     target,
     angle = false,
     placement,
+    ariaLabel,
     children,
   }: ShellPopoverProps = $props();
 
@@ -40,6 +41,7 @@
       bind:this={trap.dialogEl}
       role="dialog"
       aria-modal="true"
+      aria-label={ariaLabel}
       tabindex="-1"
     >
       {@render children()}

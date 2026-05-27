@@ -28,7 +28,7 @@ test.describe.serial("KB Editor (Create/Edit, Categories, ATAG)", () => {
   // ── 1. Article creation flow ────────────────────────────────────
 
   test("navigate to Library tab with seeded articles", async () => {
-    await page.getByRole("tab", { name: "Library" }).click();
+    await page.getByRole("tab", { name: /knowledge base/i }).click();
     await expect(page).toHaveURL("/library");
 
     // Wait for article list to load with decrypted titles.

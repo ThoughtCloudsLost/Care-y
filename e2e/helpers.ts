@@ -294,7 +294,9 @@ export async function openTicketByTitle(
     timeout: CRYPTO_TIMEOUT,
   });
 
-  const card = page.locator('[data-testid="ticket-card"]', { hasText: title });
+  const card = page.locator('[data-testid="ticket-card-wrap"]', {
+    hasText: title,
+  });
   await card.locator('[data-testid="card-inner"]').click();
 
   await expect(page).toHaveURL(/\/tickets\/[0-9a-f-]{36}/);
@@ -378,7 +380,9 @@ export async function assignTicketToSelf(
 
   await expect(page.getByText(title)).toBeVisible({ timeout: CRYPTO_TIMEOUT });
 
-  const card = page.locator('[data-testid="ticket-card"]', { hasText: title });
+  const card = page.locator('[data-testid="ticket-card-wrap"]', {
+    hasText: title,
+  });
   await card.getByRole("button", { name: /assign/i }).click();
 
   // Wait for assignment to reflect (card should update).
@@ -399,7 +403,9 @@ export async function putTicketOnHold(
 
   await expect(page.getByText(title)).toBeVisible({ timeout: CRYPTO_TIMEOUT });
 
-  const card = page.locator('[data-testid="ticket-card"]', { hasText: title });
+  const card = page.locator('[data-testid="ticket-card-wrap"]', {
+    hasText: title,
+  });
   await card.getByRole("button", { name: /hold/i }).click();
 
   await page.waitForTimeout(1_000);

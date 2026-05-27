@@ -994,11 +994,14 @@
         </Toolbar>
       </div>
     {:else}
-      <nav aria-label={m.nav_main()}>
+      <nav
+        aria-label={m.nav_main()}
+        class="tabbar-nav native-tabbar left-0 bottom-0 fixed"
+      >
         <Toolbar
           tabbar
           tabbarIcons
-          class="native-tabbar left-0 bottom-0 fixed"
+          class="tabbar-inner"
           role="tablist"
           aria-label={m.nav_main()}
         >
@@ -1024,12 +1027,15 @@
               </TabbarLink>
             {/each}
           </ToolbarPane>
-          <ToolbarPane tabbar={false}>
-            <Link iconOnly aria-label={m.nav_more()}>
-              <Ellipsis size={24} aria-hidden="true" />
-            </Link>
-          </ToolbarPane>
         </Toolbar>
+        <button
+          type="button"
+          class="more-btn"
+          aria-label={m.nav_more()}
+          onclick={() => (panelOpen = true)}
+        >
+          <Ellipsis size={24} aria-hidden="true" />
+        </button>
       </nav>
     {/if}
 
@@ -1078,15 +1084,51 @@
 </PageShell>
 
 <style>
+  /* Default tabbar nav: flex container for Toolbar + More button.
+     Fixed positioning and safe-area padding live here, not on the Toolbar. */
+  .tabbar-nav {
+    display: flex;
+    align-items: stretch;
+    z-index: 20;
+    width: 100%;
+  }
+
+  .tabbar-nav :global(.k-toolbar) {
+    position: static !important;
+    flex: 1;
+    min-width: 0;
+  }
+
+  .more-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 3rem;
+    flex-shrink: 0;
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: var(--glass-text);
+    padding: 0;
+    padding-bottom: var(--k-safe-area-bottom);
+    -webkit-tap-highlight-color: transparent;
+  }
+
   /* iOS only: override Konsta's pb-safe-4 (safe-area + 16px) to match native
      iOS tab bar positioning. Native uses only the safe-area inset. */
   :global(.k-ios .native-tabbar.k-toolbar) {
+    padding-bottom: var(--k-safe-area-bottom) !important;
+  }
+  :global(.k-ios) .tabbar-nav :global(.k-toolbar) {
     padding-bottom: var(--k-safe-area-bottom) !important;
   }
 
   /* iOS only: the bg layer uses calc(safe-area + 16px + 48px + 16px) = safe-area + 80px.
      Native height is safe-area + 48px (icons-only tabbar). */
   :global(.k-ios .native-tabbar.k-toolbar > div:first-child) {
+    height: calc(var(--k-safe-area-bottom) + 48px) !important;
+  }
+  :global(.k-ios) .tabbar-nav :global(.k-toolbar > div:first-child) {
     height: calc(var(--k-safe-area-bottom) + 48px) !important;
   }
 

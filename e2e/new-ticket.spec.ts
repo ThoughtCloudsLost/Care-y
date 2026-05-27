@@ -45,12 +45,9 @@ test.describe.serial("New Ticket (Create Flow)", () => {
 
   // ── 2. Form validation ─────────────────────────────────────────
 
-  test("submit without filling fields shows validation errors", async () => {
+  test("submit button is disabled when form is empty", async () => {
     const submitBtn = page.getByRole("button", { name: /create ticket/i });
-    await submitBtn.click();
-
-    // Validation errors should appear for required fields.
-    await expect(page.getByText(/title is required/i)).toBeVisible();
+    await expect(submitBtn).toBeDisabled();
   });
 
   // ── 3. Form fields ────────────────────────────────────────────

@@ -36,7 +36,6 @@
   link
   chevron={false}
   tabindex={0}
-  role="button"
   class="touch-feedback"
   onclick={() => ontap(ticketId)}
 >
