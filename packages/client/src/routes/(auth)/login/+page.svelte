@@ -9,7 +9,6 @@
   import { trpc } from "$lib/trpc/index.js";
   import { onboardingKeys } from "$lib/query/keys.js";
   import { getCryptoBridge, getOrgKeyManager } from "$lib/crypto/context.js";
-  import { setOrgKeyReady } from "$lib/crypto/org-key-ready.svelte.js";
   import { installCleanupHandler } from "$lib/auth/cleanup.js";
   import { loginCrypto } from "$lib/auth/login-crypto.js";
   import { registerCrypto } from "$lib/auth/register-crypto.js";
@@ -221,7 +220,6 @@
 
     if (result.orgPublicKey !== null) {
       orgKeyManager.load(result.orgPublicKey);
-      setOrgKeyReady(true);
     }
 
     installCleanupHandler(bridge, orgKeyManager);

@@ -32,9 +32,18 @@ export class OrgKeyNotLoadedError extends Error {
 export class OrgKeyManager {
   private orgPublicKey: Uint8Array | null = null;
   private readonly bridge: CryptoBridge;
+  private loadCallback: ((loaded: boolean) => void) | null = null;
 
   constructor(bridge: CryptoBridge) {
     this.bridge = bridge;
+  }
+
+  /**
+   * Register a handler for load/zero transitions (ADR-049).
+   * CryptoProvider uses this to keep isOrgKeyReady() in sync.
+   */
+  onLoadChange(handler: (loaded: boolean) => void): void {
+    this.loadCallback = handler;
   }
 
   /**
@@ -46,6 +55,7 @@ export class OrgKeyManager {
    */
   load(orgPublicKeyBase64: string): void {
     this.orgPublicKey = decode(orgPublicKeyBase64);
+    this.loadCallback?.(true);
   }
 
   /**
@@ -108,5 +118,6 @@ export class OrgKeyManager {
   /** Clear the local public key. Secret is zeroed by Worker's zeroAll. */
   zero(): void {
     this.orgPublicKey = null;
+    this.loadCallback?.(false);
   }
 }
