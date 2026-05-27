@@ -245,5 +245,16 @@ export function createKeysRouter() {
           volPublic: encode(r.vol_public),
         }));
     }),
+
+    ...(process.env.NODE_ENV === "development"
+      ? {
+          devSeedOrgKey: authedProcedure.mutation(
+            withErrorWrapping(async ({ ctx }) => {
+              const { seedOrgKey } = await import("../dev/seed-org-key.js");
+              return seedOrgKey(ctx.org.tenantDb, ctx.session.userId);
+            }),
+          ),
+        }
+      : {}),
   });
 }

@@ -21,7 +21,7 @@ function saveTotpSecret(secret: string): void {
   writeFileSync(TOTP_SECRET_PATH, secret, "utf-8");
 }
 
-function loadTotpSecret(): string | null {
+export function loadTotpSecret(): string | null {
   try {
     // eslint-disable-next-line security/detect-non-literal-fs-filename -- test infra, path is constant
     return readFileSync(TOTP_SECRET_PATH, "utf-8").trim();
@@ -34,7 +34,7 @@ function loadTotpSecret(): string | null {
  * Generate a TOTP code from a base32-encoded secret.
  * Matches the server's RFC 6238 implementation (HMAC-SHA1, 6 digits, 30s period).
  */
-function generateTotpCode(base32Secret: string): string {
+export function generateTotpCode(base32Secret: string): string {
   const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
   const stripped = base32Secret.toUpperCase().replace(/=+$/, "");
   let bits = 0;
@@ -221,8 +221,17 @@ async function enrollTotp(page: Page): Promise<void> {
   // Target the sheet heading specifically to avoid matching body text.
   const backupHeading = page.getByRole("heading", { name: /backup codes/i });
   await backupHeading.waitFor({ state: "visible", timeout: 10_000 });
-  await page.keyboard.press("Escape");
-  await page.waitForTimeout(500);
+
+  // Dismiss the sheet. Retry Escape in a loop because the sheet's open
+  // animation may still be running, absorbing the first keypress.
+  for (let i = 0; i < 10; i++) {
+    await page.keyboard.press("Escape");
+    const hidden = await backupHeading
+      .waitFor({ state: "hidden", timeout: 1_000 })
+      .then(() => true)
+      .catch(() => false);
+    if (hidden) break;
+  }
 }
 
 /**
