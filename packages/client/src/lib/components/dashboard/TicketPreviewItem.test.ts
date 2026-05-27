@@ -103,7 +103,7 @@ describe("TicketPreviewItem", () => {
     const { container } = render(TicketPreviewItem, {
       props: { ...defaults, ontap: tapHandler },
     });
-    const listItem = container.querySelector('[role="button"]');
+    const listItem = container.querySelector(".k-list-item");
     if (listItem) await fireEvent.click(listItem);
     expect(tapHandler).toHaveBeenCalledWith("t-001");
   });
