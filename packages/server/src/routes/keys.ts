@@ -28,7 +28,7 @@ function b64(s: string): Buffer {
 }
 import { createKeyRotationService } from "../crypto/key-rotation.js";
 import { createOrgKeyRotationService } from "../crypto/org-key-rotation.js";
-import { ConflictError } from "../errors.js";
+import { createOrgKeyQueryService } from "../crypto/org-key-query-service.js";
 
 // care-y-ignore-next-line missing-return-type -- tRPC router() returns a deeply generic type that cannot be written explicitly
 export function createKeysRouter() {
@@ -109,17 +109,12 @@ export function createKeysRouter() {
 
     /** Return the calling volunteer's ECIES-wrapped copy of the org secret key. */
     getWrappedOrgKey: authedProcedure.query(async ({ ctx }) => {
-      const wrap = await ctx.org.tenantDb
-        .selectFrom("wrapped_org_keys")
-        .selectAll()
-        .where("user_id", "=", ctx.session.userId)
-        .executeTakeFirst();
-
-      if (!wrap) return null; // org keypair not generated yet, or user not wrapped
-
+      const svc = createOrgKeyQueryService(ctx.org.tenantDb);
+      const wrap = await svc.getWrappedOrgKey(ctx.session.userId);
+      if (!wrap) return null;
       return {
-        ephemeralPoint: encode(wrap.ephemeral_point),
-        wrappedKey: encode(wrap.wrapped_key),
+        ephemeralPoint: encode(wrap.ephemeralPoint),
+        wrappedKey: encode(wrap.wrappedKey),
         nonce: encode(wrap.nonce),
       };
     }),
@@ -132,48 +127,14 @@ export function createKeysRouter() {
      */
     uploadOrgPublicKey: adminProcedure.input(uploadOrgPublicKeySchema).mutation(
       withErrorWrapping(async ({ ctx, input }) => {
-        const tDb = ctx.org.tenantDb;
-
-        const existing = await tDb
-          .selectFrom("org_config")
-          .select("org_public_key")
-          .executeTakeFirst();
-
-        const orgPublicKey = b64(input.orgPublicKey);
-
-        if (
-          existing?.org_public_key &&
-          !existing.org_public_key.equals(orgPublicKey)
-        ) {
-          throw new ConflictError(
-            "Org keypair already configured. Use key rotation to replace.",
-          );
-        }
-
-        const ephemeralPoint = b64(input.ephemeralPoint);
-        const nonce = b64(input.nonce);
-        const wrappedKey = b64(input.wrappedKey);
-
-        await tDb.transaction().execute(async (tx) => {
-          // Idempotent: bootstrapAdmin may have already stored the key.
-          if (!existing?.org_public_key) {
-            await tx
-              .updateTable("org_config")
-              .set({ org_public_key: orgPublicKey })
-              .execute();
-          }
-
-          await tx
-            .insertInto("wrapped_org_keys")
-            .values({
-              user_id: ctx.session.userId,
-              ephemeral_point: ephemeralPoint,
-              nonce,
-              wrapped_key: wrappedKey,
-            })
-            .execute();
+        const svc = createOrgKeyQueryService(ctx.org.tenantDb);
+        await svc.uploadOrgPublicKey({
+          orgPublicKey: b64(input.orgPublicKey),
+          ephemeralPoint: b64(input.ephemeralPoint),
+          nonce: b64(input.nonce),
+          wrappedKey: b64(input.wrappedKey),
+          userId: ctx.session.userId,
         });
-
         return { success: true as const };
       }),
     ),
@@ -206,17 +167,13 @@ export function createKeysRouter() {
      */
     wrapOrgKeyForUser: adminProcedure.input(wrapOrgKeyForUserSchema).mutation(
       withErrorWrapping(async ({ ctx, input }) => {
-        await ctx.org.tenantDb
-          .insertInto("wrapped_org_keys")
-          .values({
-            user_id: input.userId,
-            ephemeral_point: b64(input.ephemeralPoint),
-            nonce: b64(input.nonce),
-            wrapped_key: b64(input.wrappedKey),
-          })
-          .onConflict((oc) => oc.column("user_id").doNothing())
-          .execute();
-
+        const svc = createOrgKeyQueryService(ctx.org.tenantDb);
+        await svc.wrapOrgKeyForUser({
+          userId: input.userId,
+          ephemeralPoint: b64(input.ephemeralPoint),
+          nonce: b64(input.nonce),
+          wrappedKey: b64(input.wrappedKey),
+        });
         return { success: true as const };
       }),
     ),
@@ -226,24 +183,12 @@ export function createKeysRouter() {
      * Admin auto-wrap queries this to find volunteers needing wrapping.
      */
     listUnwrappedUsers: adminProcedure.query(async ({ ctx }) => {
-      const rows = await ctx.org.tenantDb
-        .selectFrom("users")
-        .innerJoin("user_keys", "user_keys.user_id", "users.id")
-        .leftJoin("wrapped_org_keys", "wrapped_org_keys.user_id", "users.id")
-        .where("users.is_active", "=", true)
-        .where("user_keys.vol_public", "is not", null)
-        .where("wrapped_org_keys.user_id", "is", null)
-        .select(["users.id", "user_keys.vol_public"])
-        .execute();
-
-      return rows
-        .filter(
-          (r): r is typeof r & { vol_public: Buffer } => r.vol_public !== null,
-        )
-        .map((r) => ({
-          userId: r.id,
-          volPublic: encode(r.vol_public),
-        }));
+      const svc = createOrgKeyQueryService(ctx.org.tenantDb);
+      const users = await svc.listUnwrappedUsers();
+      return users.map((u) => ({
+        userId: u.userId,
+        volPublic: encode(u.volPublic),
+      }));
     }),
 
     ...(process.env.NODE_ENV === "development"
