@@ -19,7 +19,6 @@
   import { trpc } from "$lib/trpc/index.js";
   import { requireRouter } from "$lib/errors.js";
   import { getCryptoBridge, getOrgKeyManager } from "$lib/crypto/context.js";
-  import { setOrgKeyReady } from "$lib/crypto/org-key-ready.svelte.js";
   import { installCleanupHandler } from "$lib/auth/cleanup.js";
   import { registerCrypto } from "$lib/auth/register-crypto.js";
   import { loginCrypto } from "$lib/auth/login-crypto.js";
@@ -147,12 +146,10 @@
 
       if (loginResult.orgPublicKey !== null) {
         orgKeyManager.load(loginResult.orgPublicKey);
-        setOrgKeyReady(true);
       } else {
         const unwrapped = await fetchAndUnwrapOrgKey(bridge);
         if (unwrapped !== null) {
           orgKeyManager.load(unwrapped);
-          setOrgKeyReady(true);
         }
       }
 

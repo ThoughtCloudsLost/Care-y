@@ -19,6 +19,7 @@
     setCryptoBridge,
     setOrgKeyManager,
   } from "$lib/crypto/context-init.js";
+  import { setCryptoKeyed } from "$lib/crypto/crypto-keyed.svelte.js";
   import { setOrgKeyReady } from "$lib/crypto/org-key-ready.svelte.js";
 
   import type { Snippet } from "svelte";
@@ -34,12 +35,26 @@
     const orgKeyManager = new OrgKeyManager(bridge);
     setOrgKeyManager(orgKeyManager);
 
+    // Observer callbacks (ADR-049): keep reactive signals in sync with
+    // internal state transitions. CryptoProvider is the single registrant.
+    bridge.onBridgeStateChange((state) => {
+      setCryptoKeyed(state === "KEYED");
+    });
+
+    orgKeyManager.onLoadChange((loaded) => {
+      setOrgKeyReady(loaded);
+    });
+
     // SharedWorker reconnection: if the bridge connected to an already-keyed
     // Worker (refresh scenario), restore the org public key locally.
-    const reconnect = bridge.getReconnectData();
-    if (bridge.isReconnected() && reconnect.orgPublicKey != null) {
-      orgKeyManager.load(reconnect.orgPublicKey);
-      setOrgKeyReady(true);
+    // setCryptoKeyed is handled by the bridge callback (setState("KEYED")
+    // fires during initWorker for reconnected bridges). setOrgKeyReady is
+    // handled by the orgKeyManager callback (load fires onLoadChange).
+    if (bridge.isReconnected()) {
+      const reconnect = bridge.getReconnectData();
+      if (reconnect.orgPublicKey != null) {
+        orgKeyManager.load(reconnect.orgPublicKey);
+      }
     }
   }
 </script>

@@ -156,6 +156,16 @@ vi.mock("$lib/crypto/org-key-ready.svelte", () => ({
 }));
 
 // ---------------------------------------------------------------------------
+// $lib/crypto/crypto-keyed.svelte
+// ---------------------------------------------------------------------------
+// vi.mock required: uses $state rune which needs Svelte compiler pipeline.
+vi.mock("$lib/crypto/crypto-keyed.svelte", () => ({
+  // eslint-disable-next-line @typescript-eslint/no-empty-function -- test mock stub
+  setCryptoKeyed: () => {},
+  isCryptoKeyed: () => true,
+}));
+
+// ---------------------------------------------------------------------------
 // @sveltejs/kit/hooks
 // ---------------------------------------------------------------------------
 // The real sequence() accesses an internal AsyncLocalStorage request store

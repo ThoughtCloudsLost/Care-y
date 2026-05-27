@@ -88,6 +88,7 @@ export class CryptoBridge {
   private readonly readyPromise: Promise<void>;
   private workerEventHandler: WorkerEventHandler | null = null;
   private stateChangeHandler: StateChangeHandler | null = null;
+  private stateCallback: ((state: BridgeState) => void) | null = null;
   private readonly mode: BridgeMode;
   private reconnected = false;
   private reconnectVolPublic: string | undefined;
@@ -136,6 +137,7 @@ export class CryptoBridge {
 
     sw.onerror = (e: Event): void => {
       console.error("[CryptoBridge] SharedWorker error:", e);
+      this.setState("READY");
       this.rejectAllPending("SharedWorker failed to load");
     };
 
@@ -169,13 +171,14 @@ export class CryptoBridge {
         e.filename,
         e.lineno,
       );
+      this.setState("READY");
       this.rejectAllPending(`Worker failed to load: ${e.message}`);
     };
   }
 
   private async initWorker(): Promise<void> {
     await this.sendRequest({ type: "init" });
-    this.state = "READY";
+    this.setState("READY");
 
     if (this.sharedWorker) {
       const resp = expectResponse(
@@ -183,7 +186,7 @@ export class CryptoBridge {
         "connect",
       );
       if (resp.state === "KEYED") {
-        this.state = "KEYED";
+        this.setState("KEYED");
         this.reconnected = true;
         this.reconnectVolPublic = resp.volPublic;
         this.reconnectOrgPublicKey = resp.orgPublicKey;
@@ -242,7 +245,7 @@ export class CryptoBridge {
           );
         }
       }
-      this.state = "DESTROYED";
+      this.setState("DESTROYED");
       this.rejectAllPending("Bridge disconnected");
     } else {
       this.destroy();
@@ -252,6 +255,15 @@ export class CryptoBridge {
   /** Register a handler for SharedWorker state change broadcasts. */
   onStateChange(handler: StateChangeHandler): void {
     this.stateChangeHandler = handler;
+  }
+
+  /**
+   * Register a handler for ALL bridge state transitions (local and remote).
+   * Fires from setState() on every transition. Used by CryptoProvider to
+   * keep the reactive isCryptoKeyed() signal in sync (ADR-049).
+   */
+  onBridgeStateChange(handler: (state: BridgeState) => void): void {
+    this.stateCallback = handler;
   }
 
   // ── Public API: crypto operations ─────────────────────────────────
@@ -289,7 +301,7 @@ export class CryptoBridge {
       await this.sendRequest({ type: "deriveKeys", evaluated }, [evaluated]),
       "deriveKeys",
     );
-    this.state = "KEYED";
+    this.setState("KEYED");
     return { volPublic: resp.volPublic };
   }
 
@@ -429,7 +441,7 @@ export class CryptoBridge {
   /** Zero all key material and return to READY state. */
   async zeroAll(): Promise<void> {
     await this.sendRequest({ type: "zeroAll" });
-    this.state = "READY";
+    this.setState("READY");
   }
 
   /** Get the volunteer's public key (base64). Only valid when KEYED. */
@@ -619,7 +631,7 @@ export class CryptoBridge {
       return;
     }
 
-    this.state = "DESTROYED";
+    this.setState("DESTROYED");
     this.rejectAllPending("Worker destroyed");
   }
 
@@ -641,11 +653,17 @@ export class CryptoBridge {
 
   // ── Private ─────────────────────────────────────────────────────────
 
+  private setState(newState: BridgeState): void {
+    if (this.state === newState) return;
+    this.state = newState;
+    this.stateCallback?.(newState);
+  }
+
   private handleStateChange(event: StateChangeEvent): void {
     if (event.state === "READY") {
-      this.state = "READY";
+      this.setState("READY");
     } else {
-      this.state = "KEYED";
+      this.setState("KEYED");
     }
     this.stateChangeHandler?.(event);
   }

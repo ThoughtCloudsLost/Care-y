@@ -6,11 +6,13 @@
   import { createQuery } from "@tanstack/svelte-query";
   import { authKeys } from "$lib/query/keys.js";
   import { trpc } from "$lib/trpc/index.js";
-  import { getCryptoBridge, getOrgKeyManager } from "$lib/crypto/context.js";
+  import { getCryptoBridge } from "$lib/crypto/context.js";
   import { cacheRegistry } from "$lib/crypto/cache-registry.js";
+  import { isCryptoKeyed } from "$lib/crypto/crypto-keyed.svelte.js";
   import { IdleTimer } from "$lib/auth/idle-timer.js";
   import { toastStore } from "$lib/stores/toast.svelte.js";
   import * as m from "$lib/paraglide/messages.js";
+  import { Page, Block, Preloader } from "konsta/svelte";
   import AppCryptoProvider from "$lib/providers/AppCryptoProvider.svelte";
   import SSEProvider from "$lib/providers/SSEProvider.svelte";
   import BrandingProvider from "$lib/providers/BrandingProvider.svelte";
@@ -41,35 +43,53 @@
     }
   });
 
+  // ── Reactive crypto gate (ADR-049) ──────────────────────────────────
+  // Two-layer design: isCryptoKeyed() tracks bridge state accurately
+  // (goes false during password change's transient zeroAll). The latch
+  // captures the first truthy value and stays true until this component
+  // unmounts (navigation to /login on logout/timeout/cross-tab zero).
+  let cryptoInitialized = $state(false);
+
+  $effect(() => {
+    if (isCryptoKeyed()) {
+      cryptoInitialized = true;
+    }
+  });
+
+  const appReady = $derived(isAuthenticated && cryptoInitialized);
+
+  // Timeout: if authenticated but crypto isn't ready within 5s, redirect
+  // to reauth. Covers Worker crash, SharedWorker disconnect, bfcache
+  // restore without Worker. Normal login flow never hits this because
+  // the signal is set synchronously before goto("/").
+  let cryptoTimedOut = $state(false);
+
+  $effect(() => {
+    if (appReady || !isAuthenticated) {
+      cryptoTimedOut = false;
+      return;
+    }
+    const timer = setTimeout(() => {
+      cryptoTimedOut = true;
+      cacheRegistry.reset();
+      void goto(resolve("/login?reauth=1"));
+    }, 5_000);
+    return () => clearTimeout(timer);
+  });
+
   // ── Cross-tab state sync + idle timer ──────────────────────────────
   if (browser) {
     const bridge = getCryptoBridge();
-    const orgKeyManager = getOrgKeyManager();
 
     // When another tab zeroes keys (logout, idle timeout), redirect to login.
+    // The reactive signal (isCryptoKeyed) is updated automatically by the
+    // bridge's stateCallback (ADR-049), but we still need cache cleanup
+    // and immediate redirect here rather than waiting for the 5s timeout.
     bridge.onStateChange((event: StateChangeEvent) => {
       if (event.state === "READY") {
         cacheRegistry.reset();
         void goto(resolve("/login"));
       }
-    });
-
-    // Safety net: session valid but Worker has no keys (Worker crash,
-    // SharedWorker disconnect, or a code path that skipped crypto).
-    // Also catches the case where the Worker is keyed but the main-thread
-    // OrgKeyManager lost its public key (e.g., onboarding-to-app transition).
-    $effect(() => {
-      if (!isAuthenticated) return;
-      void bridge.waitReady().then(() => {
-        const state = bridge.getState();
-        if (state === "READY") {
-          cacheRegistry.reset();
-          void goto(resolve("/login?reauth=1"));
-        } else if (state === "KEYED" && !orgKeyManager.isLoaded) {
-          cacheRegistry.reset();
-          void goto(resolve("/login?reauth=1"));
-        }
-      });
     });
 
     // Zeros keys across all tabs after 15 minutes of inactivity.
@@ -125,7 +145,7 @@
   }
 </script>
 
-{#if isAuthenticated}
+{#if appReady}
   <AppCryptoProvider>
     <SSEProvider enabled={isAuthenticated}>
       <BrandingProvider>
@@ -139,5 +159,20 @@
       </BrandingProvider>
     </SSEProvider>
   </AppCryptoProvider>
+{:else if isAuthenticated && !cryptoTimedOut}
+  <Page>
+    <Block class="crypto-loading">
+      <Preloader />
+    </Block>
+  </Page>
 {/if}
 <ToastRenderer />
+
+<style>
+  :global(.crypto-loading) {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 200px;
+  }
+</style>

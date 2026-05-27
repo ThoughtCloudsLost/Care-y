@@ -6,7 +6,7 @@
     -> loginCrypto (Worker-based re-derivation to load keys into Worker)
     -> generateOrgKeypair + wrapKey (main thread, ECIES wrap for admin)
     -> uploadOrgPublicKey (server, stores wrapped org secret key for admin)
-    -> orgKeyManager.load + setOrgKeyReady
+    -> orgKeyManager.load (observer callback updates isOrgKeyReady, ADR-049)
 
   The loginCrypto step re-derives everything in the Worker because
   registerCrypto zeros all intermediates in its finally block.
@@ -29,7 +29,6 @@
   import { trpc } from "$lib/trpc/index.js";
   import { requireRouter } from "$lib/errors.js";
   import { getCryptoBridge, getOrgKeyManager } from "$lib/crypto/context.js";
-  import { setOrgKeyReady } from "$lib/crypto/org-key-ready.svelte.js";
   import { installCleanupHandler } from "$lib/auth/cleanup.js";
   import { registerCrypto } from "$lib/auth/register-crypto.js";
   import { loginCrypto } from "$lib/auth/login-crypto.js";
@@ -195,7 +194,6 @@
       //    because the upload hadn't happened yet.
       const unwrappedOrgPub = await fetchAndUnwrapOrgKey(bridge);
       orgKeyManager.load(unwrappedOrgPub ?? orgPublicKeyB64);
-      setOrgKeyReady(true);
 
       // 8. Install cleanup handler for key zeroing on unload.
       installCleanupHandler(bridge, orgKeyManager);
