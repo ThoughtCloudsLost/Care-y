@@ -85,8 +85,9 @@ test.describe.serial("shell architecture", () => {
       await expect(tab).toBeAttached();
     }
 
-    // "More" is a separate link, not a tab
-    await expect(tablist.getByRole("link", { name: "More" })).toBeAttached();
+    // "More" is a button outside the tablist, inside the nav
+    const nav = page.getByRole("navigation", { name: /main/i });
+    await expect(nav.getByRole("button", { name: /more/i })).toBeAttached();
   });
 
   test("Home tab is selected by default", async () => {

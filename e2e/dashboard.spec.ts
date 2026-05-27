@@ -58,13 +58,14 @@ test.describe.serial("Dashboard (Home Tab)", () => {
   // ── Section heading labels (i18n) ─────────────────────────────────
 
   test("section headings display labels from i18n", async () => {
+    const main = page.getByRole("main");
     await expect(
-      page.getByRole("button", { name: /my tickets/i }),
+      main.getByRole("button", { name: /my tickets/i }),
     ).toBeAttached();
     await expect(
-      page.getByRole("button", { name: /unassigned/i }),
+      main.getByRole("button", { name: /unassigned/i }),
     ).toBeAttached();
-    await expect(page.getByRole("button", { name: /on hold/i })).toBeAttached();
+    await expect(main.getByRole("button", { name: /on hold/i })).toBeAttached();
   });
 
   // ── Notification slot ─────────────────────────────────────────────
