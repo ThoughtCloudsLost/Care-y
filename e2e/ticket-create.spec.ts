@@ -33,9 +33,6 @@ test.describe.serial("ticket creation (production UI)", () => {
   test("create ticket form opens from dashboard", async () => {
     await page.goto("/");
 
-    // Wait for dashboard queries to settle (navbar re-renders during query refetch).
-    await page.waitForLoadState("networkidle");
-
     const createBtn = page.getByRole("button", { name: "Create new" });
     await createBtn.waitFor({ state: "visible", timeout: 10_000 });
     await createBtn.click();

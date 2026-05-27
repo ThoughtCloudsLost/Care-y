@@ -75,7 +75,7 @@
       use:drag.action
       {role}
       aria-modal={role === "dialog" ? "true" : undefined}
-      aria-label={ariaLabel}
+      aria-label={ariaLabel ?? title}
       tabindex={trapFocus ? -1 : undefined}
       class="shell-sheet-content"
     >

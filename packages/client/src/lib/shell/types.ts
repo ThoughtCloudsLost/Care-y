@@ -116,6 +116,8 @@ export interface ShellPopoverProps {
   angle?: boolean;
   /** Force vertical placement. Skips auto-detection. */
   placement?: "top" | "bottom";
+  /** Accessible label for the dialog. */
+  ariaLabel?: string;
   /** Popover content. */
   children: Snippet;
 }

@@ -460,6 +460,7 @@
     {#if ticketsQuery.isLoading || needsAttention.length > 0}
       <div id="section-needs-attention" class="scroll-target">
         <CollapsibleSection
+          id="needs-attention"
           heading={m.dashboard_section_needs_attention()}
           count={ticketsQuery.isLoading ? undefined : needsAttention.length}
           loading={ticketsQuery.isLoading}
@@ -482,6 +483,7 @@
 
     <div id="section-my-tickets" class="scroll-target">
       <CollapsibleSection
+        id="my-tickets"
         heading={m.dashboard_section_my_tickets(withTerms())}
         count={ticketsQuery.isLoading ? undefined : myOpen.length}
         loading={ticketsQuery.isLoading}
@@ -504,6 +506,7 @@
 
     <div id="section-unassigned" class="scroll-target">
       <CollapsibleSection
+        id="unassigned"
         heading={m.dashboard_section_unassigned()}
         count={ticketsQuery.isLoading
           ? undefined
@@ -530,6 +533,7 @@
     {#if showOnHold}
       <div id="section-on-hold" class="scroll-target">
         <CollapsibleSection
+          id="on-hold"
           heading={m.dashboard_section_on_hold()}
           count={ticketsQuery.isLoading
             ? undefined
@@ -570,6 +574,7 @@
   opened={createPopoverOpen}
   target={createButtonEl}
   placement="bottom"
+  ariaLabel={m.nav_create_new()}
   ondismiss={() => (createPopoverOpen = false)}
 >
   <List nested>

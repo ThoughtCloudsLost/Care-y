@@ -31,7 +31,7 @@ test.describe.serial("Universal Search", () => {
     // Sheet should slide up with the hint text (no recents on fresh session).
     const sheet = page.locator("[role='search']");
     await expect(sheet).toBeVisible();
-    await expect(sheet.getByText("Search tickets")).toBeVisible();
+    await expect(sheet.getByText(/search.*tickets/i)).toBeVisible();
   });
 
   // ── 2. Typing shows results ────────────────────────────────────
