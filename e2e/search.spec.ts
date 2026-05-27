@@ -43,7 +43,7 @@ test.describe.serial("Universal Search", () => {
 
     // Ticket cards should appear in the results sheet.
     const sheet = page.locator("[role='search']");
-    await expect(sheet.getByText("Tickets")).toBeVisible();
+    await expect(sheet.getByText("Tickets", { exact: true })).toBeVisible();
     await expect(sheet.getByText("Help with housing")).toBeVisible({
       timeout: 5_000,
     });

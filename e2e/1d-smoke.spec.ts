@@ -35,8 +35,9 @@ test.describe.serial("1d-smoke", () => {
       await expect(tabbar.getByRole("tab", { name })).toBeAttached();
     }
 
-    // "More" is a link button, not a tab
-    await expect(tabbar.getByRole("link", { name: "More" })).toBeAttached();
+    // "More" is a button outside the tablist, inside the nav
+    const nav = page.getByRole("navigation", { name: /main/i });
+    await expect(nav.getByRole("button", { name: /more/i })).toBeAttached();
   });
 
   test("default theme is iOS and dark mode", async () => {

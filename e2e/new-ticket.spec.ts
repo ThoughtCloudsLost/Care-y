@@ -31,11 +31,15 @@ test.describe.serial("New Ticket (Create Flow)", () => {
     await createBtn.click();
 
     // Popover should show "New Ticket" option.
-    await expect(page.getByText(/new ticket/i)).toBeVisible();
+    const popover = page.getByRole("dialog", { name: /create new/i });
+    await expect(
+      popover.getByText("New Ticket", { exact: true }),
+    ).toBeVisible();
   });
 
   test("selecting 'New Ticket' from popover opens the popup form", async () => {
-    await page.getByText(/new ticket/i).click();
+    const popover = page.getByRole("dialog", { name: /create new/i });
+    await popover.getByText("New Ticket", { exact: true }).click();
 
     // The NewTicketController popup should open with form fields.
     await expect(page.getByPlaceholder(/brief description/i)).toBeVisible({
@@ -87,7 +91,8 @@ test.describe.serial("New Ticket (Create Flow)", () => {
     await expect(createBtn).toBeVisible();
     await createBtn.click();
 
-    await page.getByText(/new ticket/i).click();
+    const popover = page.getByRole("dialog", { name: /create new/i });
+    await popover.getByText("New Ticket", { exact: true }).click();
 
     await expect(page.getByPlaceholder(/brief description/i)).toBeVisible({
       timeout: 5000,
