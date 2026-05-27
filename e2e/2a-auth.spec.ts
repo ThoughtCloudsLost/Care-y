@@ -10,7 +10,7 @@
 
 import { test, expect } from "./coverage-fixture";
 import AxeBuilder from "@axe-core/playwright";
-import { CRYPTO_TIMEOUT } from "./helpers";
+import { CRYPTO_TIMEOUT, loadTotpSecret, generateTotpCode } from "./helpers";
 
 // Seed credentials (must match seed script: packages/server/src/scripts/seed.ts)
 const DEV_USER = "admin.dev";
@@ -78,6 +78,15 @@ test.describe("2a-auth: login page", () => {
 
     await page.getByRole("button", { name: /sign in/i }).click();
 
+    // Handle inline 2FA challenge (seeded admin has TOTP enrolled).
+    const twofaHeading = page.getByText(/verify your identity/i);
+    await twofaHeading.waitFor({ state: "visible", timeout: CRYPTO_TIMEOUT });
+    const secret = loadTotpSecret();
+    if (!secret) throw new Error("No TOTP secret found");
+    const codeInput = page.getByPlaceholder("000000");
+    await codeInput.fill(generateTotpCode(secret));
+    await page.getByRole("button", { name: /verify/i }).click();
+
     // Seeded admin may land on / or /complete depending on onboarding state.
     await page.waitForURL(/\/(complete)?$/, { timeout: CRYPTO_TIMEOUT });
     expect(page.url()).toMatch(/\/(complete)?$/);
@@ -94,6 +103,16 @@ test.describe("2a-auth: login page", () => {
       .fill(DEV_PASSWORD);
 
     await page.getByRole("button", { name: /sign in/i }).click();
+
+    // Handle inline 2FA challenge.
+    const twofaHeading = page.getByText(/verify your identity/i);
+    await twofaHeading.waitFor({ state: "visible", timeout: CRYPTO_TIMEOUT });
+    const secret = loadTotpSecret();
+    if (!secret) throw new Error("No TOTP secret found");
+    const codeInput = page.getByPlaceholder("000000");
+    await codeInput.fill(generateTotpCode(secret));
+    await page.getByRole("button", { name: /verify/i }).click();
+
     await page.waitForURL(/\/(complete)?$/, { timeout: CRYPTO_TIMEOUT });
 
     const meResponse = await page.evaluate(async () => {

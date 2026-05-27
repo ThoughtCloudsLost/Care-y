@@ -28,6 +28,29 @@ setup("seed crypto-dependent data", async ({ page }) => {
   // crypto Worker key derivation completed and the session is valid.
   await page.waitForTimeout(1_000);
 
+  // 0. Seed the real org keypair + wrapped entry for the admin.
+  // The server seed creates a throwaway org_public_key (secret zeroed)
+  // but no wrapped_org_keys row. This mutation generates a real keypair,
+  // wraps the secret to the admin's vol_public, and stores both.
+  // Subsequent logins will find the wrapped key via getWrappedOrgKey.
+  const orgKeyResult = await page.evaluate(async () => {
+    const res = await fetch("/trpc/keys.devSeedOrgKey", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({}),
+      credentials: "include",
+    });
+    if (!res.ok) {
+      return { ok: false as const, error: await res.text() };
+    }
+    return { ok: true as const };
+  });
+
+  if (!orgKeyResult.ok) {
+    throw new Error(`Org key seeding failed: ${orgKeyResult.error}`);
+  }
+  console.log("[e2e-seed] org keypair + wrapped key ready");
+
   // 1. Seed tickets (handcrafted only, no generated bulk data)
   const ticketResult = await page.evaluate(async () => {
     const res = await fetch("/trpc/tickets.devSeedTickets", {
