@@ -364,12 +364,19 @@ export async function createTicket(
   }
 
   // Select priority if not default.
+  // Konsta ListInput renders labels as divs, not <label> elements,
+  // so getByLabel can't find the <select>. Use the CSS class on the
+  // List wrapper (set in NewTicketForm) to target each select.
   if (opts.priority && opts.priority !== "normal") {
-    await sheet.getByLabel(/priority/i).selectOption(opts.priority);
+    await sheet
+      .locator(".new-ticket-priority-list select")
+      .selectOption(opts.priority);
   }
 
   // Select queue (required). Queue names are decrypted from org key.
-  await sheet.getByLabel(/queue/i).selectOption({ label: opts.queue });
+  await sheet
+    .locator(".new-ticket-queue-list select")
+    .selectOption({ label: opts.queue });
 
   // Submit.
   const submitBtn = sheet.getByRole("button", { name: /create ticket/i });
@@ -494,6 +501,7 @@ export async function longPress(
   page: Page,
   locator: ReturnType<Page["locator"]>,
 ): Promise<void> {
+  await locator.scrollIntoViewIfNeeded();
   const box = await locator.boundingBox();
   if (!box) throw new Error("Element not found for long-press");
   const cx = box.x + box.width / 2;

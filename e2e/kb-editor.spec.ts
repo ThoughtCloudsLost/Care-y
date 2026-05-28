@@ -247,11 +247,12 @@ test.describe.serial("KB Editor (Create/Edit, Categories, ATAG)", () => {
     await editBtn.click();
     await expect(page).toHaveURL(/\/library\/.+\/edit/);
 
-    // Wait for editor to load with decrypted content.
-    // The body decryption can be slow late in the serial suite.
-    const editorArea = page.locator("[role='textbox'][aria-multiline='true']");
-    await expect(editorArea).toBeVisible({ timeout: CRYPTO_TIMEOUT });
-    await expect(editorArea).toContainText("About this article", {
+    // Wait for ProseMirror to mount and render decrypted content.
+    // The editor-area div gets role=textbox immediately, but ProseMirror
+    // creates a .ProseMirror child only after onMount + doc parsing.
+    const pmContent = page.locator(".ProseMirror");
+    await expect(pmContent).toBeVisible({ timeout: CRYPTO_TIMEOUT });
+    await expect(pmContent).toContainText("About this article", {
       timeout: CRYPTO_TIMEOUT * 2,
     });
   });
@@ -370,9 +371,16 @@ test.describe.serial("KB Editor (Create/Edit, Categories, ATAG)", () => {
   // The create flow above verifies the core category management path.
 
   test("category: dismiss management sheet", async () => {
-    // Close the sheet by navigating away via SPA (preserves crypto Worker).
-    // Konsta Sheet may keep DOM content after Escape.
-    await page.getByRole("tab", { name: "Home" }).click();
+    // The category management sheet is still open from the previous test.
+    // Dismiss it first, then navigate via SPA (preserves crypto Worker).
+    await page.keyboard.press("Escape");
+    // Wait for the sheet close animation and any toast to auto-dismiss.
+    await page
+      .locator(".k-toast")
+      .waitFor({ state: "hidden", timeout: 5_000 })
+      .catch(() => undefined);
+    await page.waitForTimeout(500);
+    await page.getByRole("tab", { name: "Home" }).click({ force: true });
     await expect(page).toHaveURL("/");
     await page.getByRole("tab", { name: /knowledge base/i }).click();
     await expect(page).toHaveURL("/library", { timeout: 10_000 });
@@ -441,8 +449,17 @@ test.describe.serial("KB Editor (Create/Edit, Categories, ATAG)", () => {
   });
 
   test("a11y: category management sheet passes axe-core audit", async () => {
+    // Dismiss any lingering sheets/toasts from prior tests before navigating.
+    await page.keyboard.press("Escape");
+    await page
+      .locator(".k-toast")
+      .waitFor({ state: "hidden", timeout: 5_000 })
+      .catch(() => undefined);
+    await page.waitForTimeout(500);
     // SPA navigation to preserve crypto Worker state.
-    await page.getByRole("tab", { name: /knowledge base/i }).click();
+    await page
+      .getByRole("tab", { name: /knowledge base/i })
+      .click({ force: true });
     await expect(page).toHaveURL("/library", { timeout: 10_000 });
     await expect(page.getByText("Intake call checklist")).toBeVisible({
       timeout: CRYPTO_TIMEOUT,

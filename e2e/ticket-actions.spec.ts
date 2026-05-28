@@ -120,18 +120,24 @@ test.describe.serial("Ticket Actions (Call + SMS)", () => {
   // ── 5. Call options via panel ──────────────────────────────────
 
   test("call action from client panel opens call options sheet", async () => {
-    // The call is triggered from the client info panel, not a standalone button.
-    // Open the client info panel via the header button.
-    const clientInfoBtn = page.getByRole("button", {
-      name: /client info/i,
+    // The client info panel may already be open from prior tests in this
+    // serial suite. Only click the header button if the panel is not visible.
+    const panel = page.locator('[role="dialog"]').filter({
+      hasText: "Help with housing",
     });
-    await expect(clientInfoBtn).toBeVisible();
-    await clientInfoBtn.click();
+    if (!(await panel.isVisible().catch(() => false))) {
+      const clientInfoBtn = page.getByRole("button", {
+        name: /view info/i,
+      });
+      await expect(clientInfoBtn).toBeVisible();
+      await clientInfoBtn.click();
+    }
+    await expect(panel).toBeVisible({ timeout: 3000 });
 
-    // In the panel, find the "Call" action.
-    const callAction = page.getByText(/^call$/i);
-    await expect(callAction).toBeVisible({ timeout: 3000 });
-    await callAction.click();
+    // In the panel, find the "Call" button.
+    const callBtn = panel.getByRole("button", { name: "Call" });
+    await expect(callBtn).toBeVisible({ timeout: 3000 });
+    await callBtn.click({ force: true });
 
     // Call options sheet should show "Call via browser" at minimum.
     await expect(page.getByText(/call via browser/i)).toBeVisible({
@@ -140,7 +146,7 @@ test.describe.serial("Ticket Actions (Call + SMS)", () => {
 
     // Close the call sheet by tapping Cancel.
     await page
-      .getByText(/cancel/i)
+      .getByRole("button", { name: /cancel/i })
       .last()
       .click();
   });
