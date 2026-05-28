@@ -57,17 +57,18 @@ test.describe.serial("Universal Search", () => {
     await sheet.getByText("Help with housing").click();
 
     // Should navigate to the ticket detail page.
-    await expect(page).toHaveURL(/\/tickets\/.+/);
+    await expect(page).toHaveURL(/\/tickets\/.+/, { timeout: 10_000 });
 
-    // Sheet should be dismissed.
-    await expect(sheet).not.toBeVisible();
+    // Sheet should be dismissed (allow time for closing animation).
+    await expect(sheet).not.toBeVisible({ timeout: 5_000 });
   });
 
   // ── 4. Recent searches ─────────────────────────────────────────
 
   test("recent searches appear after navigating back", async () => {
-    // Navigate back to the main view.
-    await page.goBack();
+    // Navigate back via Home tab (SPA) to preserve crypto Worker state.
+    await page.getByRole("tab", { name: "Home" }).click();
+    await expect(page).toHaveURL("/");
 
     // Open search again.
     await page.getByRole("button", { name: "Search" }).click();

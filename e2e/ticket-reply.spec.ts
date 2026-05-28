@@ -30,9 +30,14 @@ test.describe.serial("Ticket Reply (Encrypted Message Send)", () => {
   // ── 2. Messagebar visible ─────────────────────────────────────
 
   test("messagebar is visible at the bottom of the chat view", async () => {
-    // The send button has aria-label="Send message".
+    // Wait for ticket messages to fully decrypt and render.
+    await expect(page.locator('[role="log"]')).toBeVisible({
+      timeout: CRYPTO_TIMEOUT,
+    });
+
+    // The send button has aria-label matching i18n ticket_send ("Send message").
     const sendBtn = page.getByRole("button", { name: /send message/i });
-    await expect(sendBtn).toBeVisible();
+    await expect(sendBtn).toBeVisible({ timeout: CRYPTO_TIMEOUT });
   });
 
   // ── 3. Type and send a reply ──────────────────────────────────

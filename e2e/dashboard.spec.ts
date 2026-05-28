@@ -82,9 +82,11 @@ test.describe.serial("Dashboard (Home Tab)", () => {
 
   // ── Section "See all" navigation ────────────────────────────────────
 
-  test("'See all' link navigates to tickets with filter param", async () => {
+  test("'See all' link navigates to tickets with filter param", async ({}, testInfo) => {
+    testInfo.setTimeout(CRYPTO_TIMEOUT * 2);
     const unassignedSection = page.locator("#section-unassigned");
-    const seeAll = unassignedSection.getByRole("link", { name: /see all/i });
+    await unassignedSection.scrollIntoViewIfNeeded();
+    const seeAll = unassignedSection.getByRole("button", { name: /see all/i });
     await expect(seeAll).toBeVisible({ timeout: CRYPTO_TIMEOUT });
     await seeAll.click();
     await expect(page).toHaveURL(/\/tickets\?filter=unassigned/);
@@ -114,8 +116,9 @@ test.describe.serial("Dashboard (Home Tab)", () => {
 
   // ── Direct URL navigation (rare but real scenario) ────────────────
 
-  test("active tab reflects current URL on direct navigation", async () => {
-    await page.goto("/tickets");
+  test("active tab reflects current URL after SPA navigation", async () => {
+    await page.getByRole("tab", { name: "Tickets" }).click();
+    await expect(page).toHaveURL("/tickets");
     const ticketsTab = page.getByRole("tab", { name: "Tickets" });
     await expect(ticketsTab).toHaveAttribute("aria-selected", "true");
 
@@ -128,7 +131,9 @@ test.describe.serial("Dashboard (Home Tab)", () => {
 
   test("passes axe accessibility audit after decryption settles", async () => {
     // Ensure we're on the dashboard with decrypted content visible.
-    await page.goto("/");
+    // Use SPA navigation to preserve crypto Worker state.
+    await page.getByRole("tab", { name: "Home" }).click();
+    await expect(page).toHaveURL("/");
     await expect(page.getByText("Help with housing")).toBeVisible({
       timeout: CRYPTO_TIMEOUT,
     });

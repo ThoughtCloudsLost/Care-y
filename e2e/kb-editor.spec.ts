@@ -2,7 +2,7 @@ import { test, expect } from "./coverage-fixture";
 import { startCoverage, stopAndWriteCoverage } from "./coverage-fixture";
 import type { Page } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
-import { CRYPTO_TIMEOUT, login } from "./helpers";
+import { CRYPTO_TIMEOUT, login, navigateToNewArticle } from "./helpers";
 
 const SUFFIX = String(Date.now()).slice(-6);
 const TEST_ARTICLE_TITLE = `E2E Article ${SUFFIX}`;
@@ -39,14 +39,7 @@ test.describe.serial("KB Editor (Create/Edit, Categories, ATAG)", () => {
   });
 
   test("create: navigate to /library/new", async () => {
-    // The "+" button on the dashboard opens a popover with "New Article".
-    // But from the Library page, the simplest path is direct navigation.
-    await page.goto("/library/new");
-
-    // Navbar should show "New Article" title.
-    await expect(page.getByText("New Article")).toBeVisible({
-      timeout: 10_000,
-    });
+    await navigateToNewArticle(page);
   });
 
   test("create: toolbar is visible with formatting buttons", async () => {
@@ -308,8 +301,9 @@ test.describe.serial("KB Editor (Create/Edit, Categories, ATAG)", () => {
   // ── 4. Category management ─────────────────────────────────────
 
   test("category: gear button visible for admin/manager", async () => {
-    // Ensure we're on the library page with articles loaded.
-    await page.goto("/library");
+    // SPA navigation to preserve crypto Worker state.
+    await page.getByRole("tab", { name: /knowledge base/i }).click();
+    await expect(page).toHaveURL("/library", { timeout: 10_000 });
     await expect(page.getByText("Intake call checklist")).toBeVisible({
       timeout: CRYPTO_TIMEOUT,
     });
@@ -366,9 +360,12 @@ test.describe.serial("KB Editor (Create/Edit, Categories, ATAG)", () => {
   // The create flow above verifies the core category management path.
 
   test("category: dismiss management sheet", async () => {
-    // Close the sheet by navigating away (most reliable).
+    // Close the sheet by navigating away via SPA (preserves crypto Worker).
     // Konsta Sheet may keep DOM content after Escape.
-    await page.goto("/library");
+    await page.getByRole("tab", { name: "Home" }).click();
+    await expect(page).toHaveURL("/");
+    await page.getByRole("tab", { name: /knowledge base/i }).click();
+    await expect(page).toHaveURL("/library", { timeout: 10_000 });
     await expect(page.getByText("Intake call checklist")).toBeVisible({
       timeout: CRYPTO_TIMEOUT,
     });
@@ -377,11 +374,7 @@ test.describe.serial("KB Editor (Create/Edit, Categories, ATAG)", () => {
   // ── 5. Unsaved changes guard ───────────────────────────────────
 
   test("discard dialog appears when canceling with unsaved changes", async () => {
-    // Navigate to create a new article.
-    await page.goto("/library/new");
-    await expect(page.getByText("New Article")).toBeVisible({
-      timeout: 10_000,
-    });
+    await navigateToNewArticle(page);
 
     // Type some content so the editor is dirty.
     const titleInput = page.getByPlaceholder("Article title");
@@ -413,10 +406,7 @@ test.describe.serial("KB Editor (Create/Edit, Categories, ATAG)", () => {
   // ── 6. Accessibility audits ────────────────────────────────────
 
   test("a11y: new article page passes axe-core audit", async () => {
-    await page.goto("/library/new");
-    await expect(page.getByText("New Article")).toBeVisible({
-      timeout: 10_000,
-    });
+    await navigateToNewArticle(page);
 
     // Wait for toolbar to render.
     await expect(page.getByRole("button", { name: "Bold" })).toBeVisible({
@@ -441,7 +431,9 @@ test.describe.serial("KB Editor (Create/Edit, Categories, ATAG)", () => {
   });
 
   test("a11y: category management sheet passes axe-core audit", async () => {
-    await page.goto("/library");
+    // SPA navigation to preserve crypto Worker state.
+    await page.getByRole("tab", { name: /knowledge base/i }).click();
+    await expect(page).toHaveURL("/library", { timeout: 10_000 });
     await expect(page.getByText("Intake call checklist")).toBeVisible({
       timeout: CRYPTO_TIMEOUT,
     });
