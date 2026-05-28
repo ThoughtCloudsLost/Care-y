@@ -65,13 +65,15 @@ test.describe.serial("Ticket List (Tickets Tab)", () => {
     await statusPill.click();
 
     // The popover should be visible with status options.
-    await expect(page.getByText("New")).toBeVisible();
-    await expect(page.getByText("Active")).toBeVisible();
-    await expect(page.getByText("On Hold")).toBeVisible();
-    await expect(page.getByText("Closed")).toBeVisible();
+    // Scope to the filter group (aria-label="Status") to avoid matching stat labels and badges.
+    const filterGroup = page.getByRole("group", { name: "Status" });
+    await expect(filterGroup.getByText("New")).toBeVisible();
+    await expect(filterGroup.getByText("Active")).toBeVisible();
+    await expect(filterGroup.getByText("On Hold")).toBeVisible();
+    await expect(filterGroup.getByText("Closed")).toBeVisible();
 
     // Select "On Hold" to filter to on-hold tickets only.
-    await page.getByText("On Hold").click();
+    await filterGroup.getByText("On Hold").click();
 
     // Close popover by tapping the pill again.
     await statusPill.click();
@@ -300,21 +302,15 @@ test.describe.serial("Ticket List (Tickets Tab)", () => {
     const statusPill = page.locator('[role="toolbar"]').getByText("Status");
     await statusPill.click();
 
-    // Popover should be visible.
-    await expect(page.getByText("New")).toBeVisible();
+    // Popover should be visible with status options.
+    const filterGroup = page.getByRole("group", { name: "Status" });
+    await expect(filterGroup.getByText("New")).toBeVisible();
 
     // Press Escape to close.
     await page.keyboard.press("Escape");
 
-    // Wait for popover to dismiss. Check that "New" in popover context
-    // is no longer visible (the status stat label on the page says "new"
-    // in lowercase, but the filter option says "New" with capital N).
-    // The popover-specific "New" list item should no longer be visible.
-    // Use a more specific locator to distinguish from the stats row.
-    const popoverContent = page.locator(
-      '[role="group"] >> text=New, [role="listbox"] >> text=New',
-    );
-    await expect(popoverContent).toHaveCount(0);
+    // The filter group should no longer be visible after dismissal.
+    await expect(filterGroup).not.toBeVisible({ timeout: 3_000 });
   });
 
   test("passes axe accessibility audit on ticket list", async () => {

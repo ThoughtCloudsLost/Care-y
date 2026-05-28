@@ -31,22 +31,24 @@ test.describe.serial("ticket creation (production UI)", () => {
   });
 
   test("create ticket form opens from dashboard", async () => {
-    await page.goto("/");
+    // After login(), we're already on /. Avoid page.goto("/") which causes
+    // a full reload and resets crypto Worker state.
+    if (!page.url().endsWith("/")) {
+      await page.getByRole("tab", { name: "Home" }).click();
+      await expect(page).toHaveURL("/", { timeout: 10_000 });
+    }
 
     const createBtn = page.getByRole("button", { name: "Create new" });
     await createBtn.waitFor({ state: "visible", timeout: 10_000 });
     await createBtn.click();
 
-    // If multiple create options exist, pick "New Ticket".
-    const newTicketOption = page.getByText(/new ticket/i);
-    if (
-      await newTicketOption.isVisible({ timeout: 2_000 }).catch(() => false)
-    ) {
-      await newTicketOption.click();
-    }
+    // The popover shows create options. Pick "New Ticket".
+    const popover = page.getByRole("dialog", { name: /create new/i });
+    await expect(popover).toBeVisible({ timeout: 5_000 });
+    await popover.getByText("New Ticket", { exact: true }).click();
 
     // Should navigate to /tickets with the new-ticket sheet open.
-    await expect(page).toHaveURL(/\/tickets/);
+    await expect(page).toHaveURL(/\/tickets/, { timeout: 10_000 });
     await expect(page.getByRole("dialog", { name: "New Ticket" })).toBeVisible({
       timeout: 10_000,
     });

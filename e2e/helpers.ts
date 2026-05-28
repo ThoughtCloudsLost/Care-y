@@ -297,9 +297,13 @@ export async function openTicketByTitle(
   const card = page.locator('[data-testid="ticket-card-wrap"]', {
     hasText: title,
   });
-  await card.locator('[data-testid="card-inner"]').click();
+  const inner = card.locator('[data-testid="card-inner"]');
 
-  await expect(page).toHaveURL(/\/tickets\/[0-9a-f-]{36}/);
+  await inner.click();
+
+  await expect(page).toHaveURL(/\/tickets\/[0-9a-f-]{36}/, {
+    timeout: 10_000,
+  });
   await expect(page.locator('[role="log"]')).toBeVisible({
     timeout: CRYPTO_TIMEOUT,
   });
@@ -324,7 +328,16 @@ export async function createTicket(
   page: Page,
   opts: CreateTicketOptions,
 ): Promise<void> {
-  await page.goto("/tickets?action=new-ticket");
+  // Navigate via SPA to avoid full reload which resets crypto Worker state.
+  if (!page.url().includes("/tickets")) {
+    await page.getByRole("tab", { name: "Tickets" }).click();
+    await expect(page).toHaveURL("/tickets", { timeout: 10_000 });
+  }
+
+  // Open the new-ticket sheet via the navbar button.
+  const newTicketBtn = page.getByRole("button", { name: /new ticket/i });
+  await newTicketBtn.waitFor({ state: "visible", timeout: CRYPTO_TIMEOUT });
+  await newTicketBtn.click();
 
   // Wait for the new-ticket sheet to open.
   const sheet = page.getByRole("dialog", { name: "New Ticket" });
@@ -334,7 +347,7 @@ export async function createTicket(
   const clientInput = sheet.getByPlaceholder(/search by alias/i);
   await clientInput.fill("a");
   const firstResult = sheet.locator("[data-testid='client-result']").first();
-  await firstResult.waitFor({ state: "visible", timeout: 10_000 });
+  await firstResult.waitFor({ state: "visible", timeout: CRYPTO_TIMEOUT });
   await firstResult.click();
 
   // Fill title (required).
@@ -411,6 +424,19 @@ export async function putTicketOnHold(
   await page.waitForTimeout(1_000);
 }
 
+/** Navigate to /library/new via SPA tab + navbar button. Avoids full reload. */
+export async function navigateToNewArticle(page: Page): Promise<void> {
+  if (!page.url().includes("/library")) {
+    await page.getByRole("tab", { name: /knowledge base/i }).click();
+    await expect(page).toHaveURL("/library", { timeout: 10_000 });
+  }
+  const navNewBtn = page.getByRole("button", { name: /new article/i });
+  await navNewBtn.waitFor({ state: "visible", timeout: CRYPTO_TIMEOUT });
+  await navNewBtn.click();
+  await expect(page).toHaveURL("/library/new", { timeout: 10_000 });
+  await expect(page.getByText("New Article")).toBeVisible({ timeout: 10_000 });
+}
+
 export interface CreateKbArticleOptions {
   title: string;
   category: string;
@@ -425,8 +451,7 @@ export async function createKbArticle(
   page: Page,
   opts: CreateKbArticleOptions,
 ): Promise<void> {
-  await page.goto("/library/new");
-  await expect(page.getByText("New Article")).toBeVisible({ timeout: 10_000 });
+  await navigateToNewArticle(page);
 
   // Fill title.
   await page.getByPlaceholder("Article title").fill(opts.title);

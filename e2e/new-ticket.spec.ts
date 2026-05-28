@@ -73,13 +73,15 @@ test.describe.serial("New Ticket (Create Flow)", () => {
 
   // ── 4. Cancel ──────────────────────────────────────────────────
 
-  test("cancel dismisses popup without submission", async () => {
-    const cancelBtn = page.getByRole("button", { name: /cancel/i });
-    await cancelBtn.click();
+  test("dismiss closes sheet without submission", async () => {
+    // The new ticket form opens in a ShellSheet. Blur inputs first so
+    // Escape reaches the sheet's focus trap (not swallowed by the input).
+    await page.locator("body").click({ position: { x: 0, y: 0 } });
+    await page.keyboard.press("Escape");
 
-    // Popup should close. The form fields should no longer be visible.
+    // Sheet should close. The form fields should no longer be visible.
     await expect(page.getByPlaceholder(/brief description/i)).not.toBeVisible({
-      timeout: 3000,
+      timeout: 5000,
     });
   });
 
@@ -99,15 +101,14 @@ test.describe.serial("New Ticket (Create Flow)", () => {
     });
 
     const results = await new AxeBuilder({ page })
-      .include('[data-testid="popup-dialog"]')
+      .include('[role="dialog"][aria-label="New Ticket"]')
       .disableRules(["color-contrast"])
       .analyze();
 
     expect(results.violations).toEqual([]);
 
-    // Close the popup.
-    const cancelBtn = page.getByRole("button", { name: /cancel/i });
-    await cancelBtn.click();
+    // Close the sheet via Escape.
+    await page.keyboard.press("Escape");
     await expect(page.getByPlaceholder(/brief description/i)).not.toBeVisible({
       timeout: 3000,
     });

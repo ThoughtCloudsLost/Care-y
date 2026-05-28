@@ -54,7 +54,9 @@ test.describe.serial("KB article creation (production UI)", () => {
   });
 
   test("both UI-created articles visible alongside seeded articles", async () => {
-    await page.goto("/library");
+    // SPA navigation to preserve crypto Worker state.
+    await page.getByRole("tab", { name: /knowledge base/i }).click();
+    await expect(page).toHaveURL("/library", { timeout: 10_000 });
     await expect(page.getByText("UI-created procedures article")).toBeVisible({
       timeout: CRYPTO_TIMEOUT,
     });
