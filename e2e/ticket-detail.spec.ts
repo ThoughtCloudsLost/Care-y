@@ -114,10 +114,15 @@ test.describe.serial("Ticket Detail (Chat View)", () => {
   // ── 7. Long-press on client message shows Copy (Checkpoint 19) ──
 
   test("long-press on client message shows Copy action", async () => {
-    const clientBubble = page.locator("[data-fu-id]", {
+    // Target the .bubble-text span which has the onpointerdown handler.
+    // The [data-fu-id] wrapper has display:contents (no layout box), and
+    // [data-source] is the bubble container whose center might not overlap
+    // the .bubble-text child that binds the pointer events.
+    const bubbleText = page.locator(".bubble-text", {
       hasText: "I need help finding a place to stay",
     });
-    await longPress(page, clientBubble);
+    await expect(bubbleText).toBeVisible({ timeout: CRYPTO_TIMEOUT });
+    await longPress(page, bubbleText);
 
     // Context menu action sheet should appear with Copy.
     await expect(page.getByText("Copy")).toBeVisible();

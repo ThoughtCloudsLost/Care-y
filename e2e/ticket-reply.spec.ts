@@ -3,6 +3,9 @@ import { startCoverage, stopAndWriteCoverage } from "./coverage-fixture";
 import type { Page } from "@playwright/test";
 import { CRYPTO_TIMEOUT, login, openTicketByTitle } from "./helpers";
 
+const REPLY_SUFFIX = String(Date.now()).slice(-6);
+const REPLY_TEXT = `E2E reply ${REPLY_SUFFIX}`;
+
 test.describe.serial("Ticket Reply (Encrypted Message Send)", () => {
   let page: Page;
 
@@ -48,8 +51,8 @@ test.describe.serial("Ticket Reply (Encrypted Message Send)", () => {
     // updates (fill() sets value programmatically which may bypass it).
     const textarea = page.getByRole("textbox", { name: /type a reply/i });
     await textarea.click();
-    await textarea.pressSequentially("E2E test reply message", { delay: 20 });
-    await expect(textarea).toHaveValue("E2E test reply message");
+    await textarea.pressSequentially(REPLY_TEXT, { delay: 20 });
+    await expect(textarea).toHaveValue(REPLY_TEXT);
   });
 
   test("send button triggers encryption and message appears in chat", async () => {
@@ -61,7 +64,7 @@ test.describe.serial("Ticket Reply (Encrypted Message Send)", () => {
     await sendBtn.click();
 
     // Wait for the optimistic message to appear in the chat log.
-    await expect(page.getByText("E2E test reply message")).toBeVisible({
+    await expect(page.getByText(REPLY_TEXT)).toBeVisible({
       timeout: CRYPTO_TIMEOUT,
     });
   });
@@ -78,7 +81,7 @@ test.describe.serial("Ticket Reply (Encrypted Message Send)", () => {
   test("reply renders inside the chat log region", async () => {
     // The chat log has role="log". Verify the reply text is inside it.
     const chatLog = page.locator('[role="log"]');
-    await expect(chatLog.getByText("E2E test reply message")).toBeVisible({
+    await expect(chatLog.getByText(REPLY_TEXT)).toBeVisible({
       timeout: 5000,
     });
   });

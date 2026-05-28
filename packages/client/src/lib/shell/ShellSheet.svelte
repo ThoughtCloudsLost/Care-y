@@ -57,6 +57,21 @@
     },
   });
 
+  // When trapFocus is false the focus-trap never activates, so Escape has
+  // no handler. Add a standalone keydown listener for that case.
+  $effect(() => {
+    if (trapFocus || !opened) return;
+    const dismiss = ondismiss;
+    function onKey(e: KeyboardEvent): void {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        dismiss();
+      }
+    }
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  });
+
   const sheetClass = $derived(
     ["glass", "shell-sheet", extraClass].filter(Boolean).join(" "),
   );

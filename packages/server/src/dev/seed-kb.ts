@@ -256,7 +256,7 @@ const ARTICLES: readonly ArticleDef[] = [
       ),
       h(4, t("Skipped heading level")),
       p(t("The heading above skips from h2 to h4.")),
-      h(2, t("")),
+      h(2),
       p(t("The heading above is empty.")),
       p(
         t("Click "),
