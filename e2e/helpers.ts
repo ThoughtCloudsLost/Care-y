@@ -3,8 +3,10 @@ import { createHmac } from "node:crypto";
 import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
 
-/** Crypto pipeline timeout: Argon2id + OPRF + ECIES + Worker decryption. */
-export const CRYPTO_TIMEOUT = 60_000;
+/** Crypto pipeline timeout: Argon2id + OPRF + ECIES + Worker decryption.
+ *  With VITE_E2E_FAST_KDF=1 (set in playwright.config.ts), Argon2id takes <100ms
+ *  instead of ~30s. 15s covers OPRF roundtrip, key derivation, and initial decryption. */
+export const CRYPTO_TIMEOUT = 15_000;
 
 /** Seed credentials (must match dev seed script: packages/server/src/scripts/seed.ts). */
 const DEV_USER = "admin.dev";
@@ -343,19 +345,22 @@ export async function createTicket(
   const sheet = page.getByRole("dialog", { name: "New Ticket" });
   await expect(sheet).toBeVisible({ timeout: 15_000 });
 
-  // Select a client: type in the search field and pick the first result.
+  // Select a client: click the combobox input and type to trigger search.
+  // Bits UI Combobox opens its dropdown on real keystrokes (not fill()).
+  // The dropdown renders via a popper layer outside the dialog DOM tree.
   const clientInput = sheet.getByPlaceholder(/search by alias/i);
-  await clientInput.fill("a");
-  const firstResult = sheet.locator("[data-testid='client-result']").first();
+  await clientInput.click();
+  await clientInput.pressSequentially("a", { delay: 50 });
+  const firstResult = page.locator("[data-testid='client-result']").first();
   await firstResult.waitFor({ state: "visible", timeout: CRYPTO_TIMEOUT });
   await firstResult.click();
 
-  // Fill title (required).
-  await sheet.getByLabel(/title/i).fill(opts.title);
+  // Fill title (required). The title input uses placeholder, not a label element.
+  await sheet.getByPlaceholder(/brief description/i).fill(opts.title);
 
   // Fill description (optional).
   if (opts.description != null) {
-    await sheet.getByLabel(/description/i).fill(opts.description);
+    await sheet.getByPlaceholder(/details/i).fill(opts.description);
   }
 
   // Select priority if not default.

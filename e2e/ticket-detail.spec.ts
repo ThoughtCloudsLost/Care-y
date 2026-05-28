@@ -35,7 +35,7 @@ test.describe.serial("Ticket Detail (Chat View)", () => {
     const clientBubble = page.locator('[data-source="client"]', {
       hasText: "I need help finding a place to stay",
     });
-    await expect(clientBubble).toBeVisible();
+    await expect(clientBubble).toBeVisible({ timeout: CRYPTO_TIMEOUT });
   });
 
   test("volunteer messages are right-aligned (type=sent)", async () => {
@@ -43,7 +43,7 @@ test.describe.serial("Ticket Detail (Chat View)", () => {
     const volBubble = page.locator('[data-source="volunteer"]', {
       hasText: "I can look into shelters in your area",
     });
-    await expect(volBubble).toBeVisible();
+    await expect(volBubble).toBeVisible({ timeout: CRYPTO_TIMEOUT });
   });
 
   // ── 3. System events as centered Chips (Checkpoint 5) ───────────
@@ -65,7 +65,9 @@ test.describe.serial("Ticket Detail (Chat View)", () => {
 
   test("internal notes show private badge and content", async () => {
     // "Client sounds stressed but stable" is an internal note.
-    const note = page.locator('[role="article"]', {
+    // Target the PrivateNote card (aria-label="Private note by ..."),
+    // not the outer fu-wrapper which also has role="article".
+    const note = page.getByRole("article", { name: /private note/i }).filter({
       hasText: "Client sounds stressed",
     });
     await expect(note).toBeVisible();

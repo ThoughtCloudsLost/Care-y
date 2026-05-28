@@ -86,10 +86,22 @@ test.describe.serial("Dashboard (Home Tab)", () => {
     testInfo.setTimeout(CRYPTO_TIMEOUT * 2);
     const unassignedSection = page.locator("#section-unassigned");
     await unassignedSection.scrollIntoViewIfNeeded();
+
+    // The unassigned section starts collapsed. Expand it first.
+    const heading = unassignedSection.getByRole("button", {
+      name: /unassigned/i,
+    });
+    const isExpanded = await heading.getAttribute("aria-expanded");
+    if (isExpanded !== "true") {
+      await heading.click();
+    }
+
     const seeAll = unassignedSection.getByRole("button", { name: /see all/i });
     await expect(seeAll).toBeVisible({ timeout: CRYPTO_TIMEOUT });
     await seeAll.click();
-    await expect(page).toHaveURL(/\/tickets\?filter=unassigned/);
+    // The tickets page consumes ?filter=unassigned, applies it to the
+    // filter store, then replaces the URL to /tickets (no query string).
+    await expect(page).toHaveURL(/\/tickets$/, { timeout: 10_000 });
   });
 
   // Navigate back to dashboard via Home tab (SPA navigation, like a real user)
@@ -106,7 +118,7 @@ test.describe.serial("Dashboard (Home Tab)", () => {
   });
 
   test("tickets page shows content", async () => {
-    await expect(page.getByText("Tickets")).toBeVisible();
+    await expect(page.getByText("Tickets", { exact: true })).toBeVisible();
   });
 
   test("Home tab navigates back to /", async () => {

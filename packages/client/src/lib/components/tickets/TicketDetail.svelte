@@ -1089,6 +1089,7 @@
               <Message
                 type={rec.source === "client" ? "received" : "sent"}
                 name={rec.source === "client" ? clientAlias : undefined}
+                data-source={rec.source === "client" ? "client" : "volunteer"}
               >
                 {#snippet text()}
                   <span class="bubble-text">
@@ -1253,6 +1254,9 @@
                   <Message
                     type={messageType(fu)}
                     name={fu.source === "client" ? clientAlias : undefined}
+                    data-source={fu.source === "client"
+                      ? "client"
+                      : "volunteer"}
                     aria-label={bubbleAriaLabel(fu, contentResult)}
                   >
                     {#snippet text()}

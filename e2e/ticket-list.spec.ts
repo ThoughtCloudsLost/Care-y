@@ -75,8 +75,9 @@ test.describe.serial("Ticket List (Tickets Tab)", () => {
     // Select "On Hold" to filter to on-hold tickets only.
     await filterGroup.getByText("On Hold").click();
 
-    // Close popover by tapping the pill again.
-    await statusPill.click();
+    // Close popover. The pill text changed from "Status" to "On Hold"
+    // after selection, so the original locator is stale. Escape is reliable.
+    await page.keyboard.press("Escape");
 
     // On-hold tickets should be visible (seeded: "Waiting for callback from shelter",
     // "Pending court date documentation").
@@ -103,16 +104,18 @@ test.describe.serial("Ticket List (Tickets Tab)", () => {
     const queuePill = page.locator('[role="toolbar"]').getByText("Queue");
     await queuePill.click();
 
-    // Select "Crisis" queue.
-    // The popover renders queue names from the server.
-    await page.getByRole("group").getByText("Crisis").click();
+    // Select "Crisis" queue from the filter popover.
+    const queueGroup = page.getByRole("group", { name: "Queue" });
+    await queueGroup.getByText("Crisis").click();
 
-    // Close popover.
-    await queuePill.click();
+    // Close popover (pill text changes after selection, use Escape).
+    await page.keyboard.press("Escape");
 
     // Crisis tickets should be visible.
     await expect(page.getByText("Safety planning session")).toBeVisible();
-    await expect(page.getByText("Emergency referral needed")).toBeVisible();
+    await expect(
+      page.getByText("Emergency referral needed").first(),
+    ).toBeVisible();
 
     // Non-Crisis tickets should be hidden.
     await expect(page.getByText("Help with housing")).not.toBeVisible();

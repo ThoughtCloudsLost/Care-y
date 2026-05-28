@@ -206,7 +206,9 @@ test.describe.serial("KB Editor (Create/Edit, Categories, ATAG)", () => {
     await expect(page).toHaveURL(/\/library/, { timeout: 15_000 });
   });
 
-  test("edit: saved changes are visible on article detail", async () => {
+  test("edit: saved changes are visible on article detail", async ({}, testInfo) => {
+    testInfo.setTimeout(CRYPTO_TIMEOUT * 4);
+
     // Navigate to the article detail to verify saved changes.
     // If we're on the library list, tap the article.
     if (page.url().endsWith("/library")) {
@@ -220,14 +222,19 @@ test.describe.serial("KB Editor (Create/Edit, Categories, ATAG)", () => {
     });
 
     // Navigate back to library for subsequent tests.
-    const backBtn = page.getByRole("button", { name: /back to library/i });
+    const backBtn = page.getByRole("button", {
+      name: /back to knowledge base/i,
+    });
+    await expect(backBtn).toBeVisible({ timeout: 5_000 });
     await backBtn.click();
     await expect(page).toHaveURL("/library");
   });
 
   // ── 3. ATAG accessibility checks ───────────────────────────────
 
-  test("atag: seeded article with a11y violations shows issues", async () => {
+  test("atag: seeded article with a11y violations shows issues", async ({}, testInfo) => {
+    testInfo.setTimeout(CRYPTO_TIMEOUT * 4);
+
     // Open the "Accessibility issues example" article (seeded with violations).
     await page.getByText("Accessibility issues example").click();
     await expect(page).toHaveURL(/\/library\/.+/);
@@ -241,10 +248,11 @@ test.describe.serial("KB Editor (Create/Edit, Categories, ATAG)", () => {
     await expect(page).toHaveURL(/\/library\/.+\/edit/);
 
     // Wait for editor to load with decrypted content.
+    // The body decryption can be slow late in the serial suite.
     const editorArea = page.locator("[role='textbox'][aria-multiline='true']");
     await expect(editorArea).toBeVisible({ timeout: CRYPTO_TIMEOUT });
     await expect(editorArea).toContainText("About this article", {
-      timeout: CRYPTO_TIMEOUT,
+      timeout: CRYPTO_TIMEOUT * 2,
     });
   });
 
@@ -293,7 +301,9 @@ test.describe.serial("KB Editor (Create/Edit, Categories, ATAG)", () => {
     await expect(page).toHaveURL(/\/library\/.+/);
 
     // Go back to library list.
-    const backBtn = page.getByRole("button", { name: /back to library/i });
+    const backBtn = page.getByRole("button", {
+      name: /back to knowledge base/i,
+    });
     await backBtn.click();
     await expect(page).toHaveURL("/library");
   });

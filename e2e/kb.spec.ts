@@ -12,6 +12,10 @@ test.describe.serial("Knowledge Base (Library Tab)", () => {
     page = await browser.newPage();
     await startCoverage(page);
     await login(page);
+    // Navigate to Library tab (the test suite covers this tab, not the
+    // dashboard KB section which only shows the 2 most recent articles).
+    await page.getByRole("tab", { name: /knowledge base/i }).click();
+    await expect(page).toHaveURL("/library");
     await expect(page.getByText("Safety planning template")).toBeVisible({
       timeout: CRYPTO_TIMEOUT,
     });
@@ -189,7 +193,9 @@ test.describe.serial("Knowledge Base (Library Tab)", () => {
 
   test("back button returns to library list", async () => {
     // The back button is in the navbar override (ChevronLeft icon).
-    const backBtn = page.getByRole("button", { name: /back to library/i });
+    const backBtn = page.getByRole("button", {
+      name: /back to knowledge base/i,
+    });
     await backBtn.click();
 
     await expect(page).toHaveURL("/library");
@@ -199,8 +205,8 @@ test.describe.serial("Knowledge Base (Library Tab)", () => {
   // ── 10. Search ────────────────────────────────────────────────
 
   test("KB search returns matching articles", async () => {
-    // Open the universal search sheet.
-    await page.getByRole("button", { name: "Search" }).click();
+    // Open the universal search sheet (exact match avoids "Search this page").
+    await page.getByRole("button", { name: "Search", exact: true }).click();
 
     const sheet = page.locator("[role='search']");
     await expect(sheet).toBeVisible();
@@ -239,7 +245,9 @@ test.describe.serial("Knowledge Base (Library Tab)", () => {
     ).toBeVisible({ timeout: CRYPTO_TIMEOUT });
 
     // Navigate back to library for subsequent tests.
-    const backBtn = page.getByRole("button", { name: /back to library/i });
+    const backBtn = page.getByRole("button", {
+      name: /back to knowledge base/i,
+    });
     await backBtn.click();
     await expect(page).toHaveURL("/library");
   });
@@ -251,18 +259,17 @@ test.describe.serial("Knowledge Base (Library Tab)", () => {
     await page.getByRole("tab", { name: "Home" }).click();
     await expect(page).toHaveURL("/");
 
-    // The KB section on the dashboard shows the 2 most recently updated
-    // articles. Seed data creates them in order, so the last two
-    // (Safety planning template, Legal aid directory) appear here.
-    const kbItem = page.getByText("Safety planning template").first();
-    await expect(kbItem).toBeVisible({ timeout: 10_000 });
-    await kbItem.click();
+    // The KB section shows the 2 most recently updated articles.
+    // With multiple test runs creating articles, the top 2 may vary.
+    // Wait for any decrypted KB article title to appear on the dashboard.
+    const kbSection = page.locator("#section-kb");
+    const kbLink = kbSection.locator("a, button, [role='button']").first();
+    await expect(kbLink).toBeVisible({ timeout: CRYPTO_TIMEOUT });
+    await kbLink.click();
 
     // Should navigate to the article detail page.
     await expect(page).toHaveURL(/\/library\/.+/);
-    await expect(
-      page.locator("h1").getByText("Safety planning template"),
-    ).toBeVisible({ timeout: CRYPTO_TIMEOUT });
+    await expect(page.locator("h1")).toBeVisible({ timeout: CRYPTO_TIMEOUT });
 
     // Return to dashboard for cleanup.
     await page.getByRole("tab", { name: "Home" }).click();

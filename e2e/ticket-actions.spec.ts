@@ -78,7 +78,8 @@ test.describe.serial("Ticket Actions (Call + SMS)", () => {
   });
 
   test("cancel closes SMS compose sheet", async () => {
-    const cancelBtn = page.getByRole("button", { name: /cancel/i });
+    const smsSheet = page.getByLabel(/text client/i);
+    const cancelBtn = smsSheet.getByRole("button", { name: /cancel/i });
     await cancelBtn.click();
 
     // The SMS compose content should no longer be visible.
@@ -110,8 +111,9 @@ test.describe.serial("Ticket Actions (Call + SMS)", () => {
       page.locator('[data-testid="exposure-dismiss"]'),
     ).not.toBeVisible({ timeout: 1000 });
 
-    // Close SMS sheet.
-    const cancelBtn = page.getByRole("button", { name: /cancel/i });
+    // Close SMS sheet (scope to the Text Client sheet to avoid other cancel buttons).
+    const smsSheet = page.getByLabel(/text client/i);
+    const cancelBtn = smsSheet.getByRole("button", { name: /cancel/i });
     await cancelBtn.click();
   });
 

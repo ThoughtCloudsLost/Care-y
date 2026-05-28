@@ -41,6 +41,6 @@ export default defineConfig({
     url: "http://localhost:5174",
     reuseExistingServer: false,
     timeout: 120_000,
-    env: { VITE_ORG_SLUG: "e2e-org" },
+    env: { VITE_ORG_SLUG: "e2e-org", VITE_E2E_FAST_KDF: "1" },
   },
 });
