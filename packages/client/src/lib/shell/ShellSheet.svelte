@@ -77,6 +77,7 @@
       aria-modal={role === "dialog" ? "true" : undefined}
       aria-label={ariaLabel ?? title}
       tabindex={trapFocus ? -1 : undefined}
+      inert={!opened ? true : undefined}
       class="shell-sheet-content"
     >
       <div class="sheet-drag-handle" bind:this={handleRef} aria-hidden="true">
@@ -114,6 +115,17 @@
     overflow-y: auto;
     -webkit-overflow-scrolling: touch;
     padding-bottom: calc(var(--k-safe-area-bottom) + 1.5rem);
+  }
+
+  .shell-sheet-content[inert] {
+    visibility: hidden;
+    transition: visibility 0s 400ms;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .shell-sheet-content[inert] {
+      transition-delay: 0s;
+    }
   }
 
   .shell-sheet-content:has(.sheet-header) {

@@ -66,7 +66,12 @@ test.describe.serial("Universal Search", () => {
   // ── 4. Recent searches ─────────────────────────────────────────
 
   test("recent searches appear after navigating back", async () => {
-    // Navigate back via Home tab (SPA) to preserve crypto Worker state.
+    // We're on the ticket detail page (tabbar overridden). Go back first.
+    const backBtn = page.getByRole("button", { name: "Back" });
+    if (await backBtn.isVisible().catch(() => false)) {
+      await backBtn.click();
+    }
+    // Navigate to Home tab (SPA) to preserve crypto Worker state.
     await page.getByRole("tab", { name: "Home" }).click();
     await expect(page).toHaveURL("/");
 

@@ -241,6 +241,7 @@
             value={client.id}
             class="client-select-item"
             label={client.alias}
+            data-testid="client-result"
           >
             <span class="client-alias">{client.alias}</span>
             <span class="client-phone-mask">{client.maskedPhone}</span>

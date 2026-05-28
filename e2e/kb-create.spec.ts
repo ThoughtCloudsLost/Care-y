@@ -40,9 +40,9 @@ test.describe.serial("KB article creation (production UI)", () => {
   });
 
   test("created article appears in library list", async () => {
-    await expect(page.getByText("UI-created procedures article")).toBeVisible({
-      timeout: CRYPTO_TIMEOUT,
-    });
+    await expect(
+      page.getByText("UI-created procedures article").first(),
+    ).toBeVisible({ timeout: CRYPTO_TIMEOUT });
   });
 
   test("create an article in the Safety category", async () => {
@@ -57,10 +57,12 @@ test.describe.serial("KB article creation (production UI)", () => {
     // SPA navigation to preserve crypto Worker state.
     await page.getByRole("tab", { name: /knowledge base/i }).click();
     await expect(page).toHaveURL("/library", { timeout: 10_000 });
-    await expect(page.getByText("UI-created procedures article")).toBeVisible({
-      timeout: CRYPTO_TIMEOUT,
-    });
-    await expect(page.getByText("UI-created safety article")).toBeVisible();
+    await expect(
+      page.getByText("UI-created procedures article").first(),
+    ).toBeVisible({ timeout: CRYPTO_TIMEOUT });
+    await expect(
+      page.getByText("UI-created safety article").first(),
+    ).toBeVisible();
 
     // Seeded articles should also be visible.
     await expect(page.getByText("Intake call checklist")).toBeVisible({

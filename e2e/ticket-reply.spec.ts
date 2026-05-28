@@ -43,14 +43,21 @@ test.describe.serial("Ticket Reply (Encrypted Message Send)", () => {
   // ── 3. Type and send a reply ──────────────────────────────────
 
   test("can type a message in the compose bar", async () => {
-    // The messagebar textarea is the main text input in the chat view.
-    const textarea = page.getByRole("textbox");
-    await textarea.fill("E2E test reply message");
+    // The messagebar textarea has a unique placeholder from i18n.
+    // Use click + pressSequentially so Konsta Messagebar's value binding
+    // updates (fill() sets value programmatically which may bypass it).
+    const textarea = page.getByRole("textbox", { name: /type a reply/i });
+    await textarea.click();
+    await textarea.pressSequentially("E2E test reply message", { delay: 20 });
     await expect(textarea).toHaveValue("E2E test reply message");
   });
 
   test("send button triggers encryption and message appears in chat", async () => {
     const sendBtn = page.getByRole("button", { name: /send message/i });
+    // Wait for the send button to become enabled (crypto pipeline ready).
+    await expect(sendBtn).not.toHaveAttribute("aria-disabled", "true", {
+      timeout: 5_000,
+    });
     await sendBtn.click();
 
     // Wait for the optimistic message to appear in the chat log.

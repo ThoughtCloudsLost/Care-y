@@ -74,12 +74,11 @@ test.describe.serial("New Ticket (Create Flow)", () => {
   // ── 4. Cancel ──────────────────────────────────────────────────
 
   test("dismiss closes sheet without submission", async () => {
-    // The new ticket form opens in a ShellSheet. Blur inputs first so
-    // Escape reaches the sheet's focus trap (not swallowed by the input).
-    await page.locator("body").click({ position: { x: 0, y: 0 } });
+    // Press Escape to close the sheet (document-level listener).
     await page.keyboard.press("Escape");
 
     // Sheet should close. The form fields should no longer be visible.
+    // (ShellSheet sets inert when closed, making content hidden.)
     await expect(page.getByPlaceholder(/brief description/i)).not.toBeVisible({
       timeout: 5000,
     });
@@ -88,13 +87,11 @@ test.describe.serial("New Ticket (Create Flow)", () => {
   // ── 5. Accessibility ──────────────────────────────────────────
 
   test("new ticket popup passes axe-core accessibility scan", async () => {
-    // Reopen the popup.
-    const createBtn = page.getByRole("button", { name: /create new/i });
-    await expect(createBtn).toBeVisible();
-    await createBtn.click();
-
-    const popover = page.getByRole("dialog", { name: /create new/i });
-    await popover.getByText("New Ticket", { exact: true }).click();
+    // After dismiss, we're on /tickets (the dashboard navigates there).
+    // Reopen the new-ticket sheet via the navbar button.
+    const newTicketBtn = page.getByRole("button", { name: /new ticket/i });
+    await newTicketBtn.waitFor({ state: "visible", timeout: CRYPTO_TIMEOUT });
+    await newTicketBtn.click();
 
     await expect(page.getByPlaceholder(/brief description/i)).toBeVisible({
       timeout: 5000,

@@ -39,6 +39,7 @@ import {
   type Salt,
   type Argon2Params,
   ARGON2_MIN_PARAMS,
+  ARGON2_TEST_PARAMS,
   HKDF_LABELS,
 } from "./types.js";
 
@@ -46,20 +47,30 @@ import {
  * Enforce minimum Argon2id parameters to prevent server-side downgrades.
  * A compromised server could send weaker params to make brute-force cheaper.
  * Each field is clamped to at least the RFC 9106 Section 4 SECOND RECOMMENDED value.
+ *
+ * When VITE_E2E_FAST_KDF is set at build time, the floor drops to ARGON2_TEST_PARAMS
+ * (1 MB / 1 iter / 1 par) so E2E tests finish in seconds instead of minutes.
+ * Vite statically replaces the env check; the production minifier eliminates
+ * the test branch entirely (SEC-009, RFC 9106 Section 4).
  */
 function enforceArgon2Floor(serverParams?: Argon2Params): Argon2Params {
+  const floor =
+    import.meta.env.VITE_E2E_FAST_KDF === "1"
+      ? ARGON2_TEST_PARAMS
+      : ARGON2_MIN_PARAMS;
+
   return {
     memoryKiB: Math.max(
-      serverParams?.memoryKiB ?? ARGON2_MIN_PARAMS.memoryKiB,
-      ARGON2_MIN_PARAMS.memoryKiB,
+      serverParams?.memoryKiB ?? floor.memoryKiB,
+      floor.memoryKiB,
     ),
     iterations: Math.max(
-      serverParams?.iterations ?? ARGON2_MIN_PARAMS.iterations,
-      ARGON2_MIN_PARAMS.iterations,
+      serverParams?.iterations ?? floor.iterations,
+      floor.iterations,
     ),
     parallelism: Math.max(
-      serverParams?.parallelism ?? ARGON2_MIN_PARAMS.parallelism,
-      ARGON2_MIN_PARAMS.parallelism,
+      serverParams?.parallelism ?? floor.parallelism,
+      floor.parallelism,
     ),
   };
 }

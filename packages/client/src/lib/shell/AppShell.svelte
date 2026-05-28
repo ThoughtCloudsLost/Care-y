@@ -136,6 +136,7 @@
 
   afterNavigate(({ to }) => {
     markNavigated();
+    if (searchOpen) closeSearch();
     const el = scrollContainerEl;
     if (!el || !to?.url) return;
     const saved = scrollPositions.get(to.url.pathname);

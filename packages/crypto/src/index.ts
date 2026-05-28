@@ -22,6 +22,7 @@ export type {
 export {
   ARGON2_MIN_PARAMS,
   ARGON2_ESCROW_PARAMS,
+  ARGON2_TEST_PARAMS,
   HKDF_LABELS,
   BRANDING_LABEL,
   toRistrettoPoint,
