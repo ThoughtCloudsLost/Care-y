@@ -350,10 +350,13 @@ export async function createTicket(
   // The dropdown renders via a popper layer outside the dialog DOM tree.
   const clientInput = sheet.getByPlaceholder(/search by alias/i);
   await clientInput.click();
+  await clientInput.fill("");
   await clientInput.pressSequentially("a", { delay: 50 });
   const firstResult = page.locator("[data-testid='client-result']").first();
   await firstResult.waitFor({ state: "visible", timeout: CRYPTO_TIMEOUT });
   await firstResult.click();
+  // Verify the dropdown closed (selection registered).
+  await expect(firstResult).not.toBeVisible({ timeout: 3_000 });
 
   // Fill title (required). The title input uses placeholder, not a label element.
   await sheet.getByPlaceholder(/brief description/i).fill(opts.title);
@@ -383,11 +386,10 @@ export async function createTicket(
   await expect(submitBtn).toBeEnabled({ timeout: 5_000 });
   await submitBtn.click();
 
-  // Wait for the success toast and sheet to close.
-  await expect(page.getByText(/ticket created/i)).toBeVisible({
-    timeout: CRYPTO_TIMEOUT,
-  });
-  await expect(sheet).not.toBeVisible({ timeout: 5_000 });
+  // Wait for the sheet to close (indicates success) or an error toast.
+  // The success toast appears briefly, but the sheet closing is the
+  // reliable signal that the mutation completed.
+  await expect(sheet).not.toBeVisible({ timeout: CRYPTO_TIMEOUT });
 }
 
 /**

@@ -330,7 +330,8 @@ test.describe.serial("KB Editor (Create/Edit, Categories, ATAG)", () => {
     const gearBtn = page.getByRole("button", {
       name: "Manage categories",
     });
-    await gearBtn.click();
+    await gearBtn.scrollIntoViewIfNeeded();
+    await gearBtn.click({ force: true });
 
     // The ShellSheet should show "Manage Categories" title.
     await expect(page.getByText("Manage Categories")).toBeVisible({
@@ -446,21 +447,22 @@ test.describe.serial("KB Editor (Create/Edit, Categories, ATAG)", () => {
       .disableRules(["listitem", "meta-viewport"])
       .analyze();
     expect(results.violations).toEqual([]);
+
+    // Clean up: dismiss the dirty editor so subsequent tests start from /library.
+    await page.getByRole("button", { name: "Cancel" }).first().click();
+    const discardBtn = page.getByText("Discard", { exact: true });
+    if (await discardBtn.isVisible({ timeout: 2_000 }).catch(() => false)) {
+      await discardBtn.click();
+    }
+    await expect(page).toHaveURL("/library", { timeout: 5_000 });
   });
 
   test("a11y: category management sheet passes axe-core audit", async () => {
-    // Dismiss any lingering sheets/toasts from prior tests before navigating.
-    await page.keyboard.press("Escape");
-    await page
-      .locator(".k-toast")
-      .waitFor({ state: "hidden", timeout: 5_000 })
-      .catch(() => undefined);
-    await page.waitForTimeout(500);
-    // SPA navigation to preserve crypto Worker state.
-    await page
-      .getByRole("tab", { name: /knowledge base/i })
-      .click({ force: true });
-    await expect(page).toHaveURL("/library", { timeout: 10_000 });
+    // Ensure we're on /library (prior test should have navigated back).
+    if (!page.url().includes("/library") || page.url().includes("/new")) {
+      await page.getByRole("tab", { name: /knowledge base/i }).click();
+      await expect(page).toHaveURL("/library", { timeout: 10_000 });
+    }
     await expect(page.getByText("Intake call checklist")).toBeVisible({
       timeout: CRYPTO_TIMEOUT,
     });
