@@ -52,7 +52,10 @@
   import { createTicketDecryptScope } from "$lib/crypto/ticket-decrypt-scope.js";
   import { SvelteMap } from "svelte/reactivity";
   import { requireRouter } from "$lib/errors.js";
-  import { serializedBufferToBase64 } from "$lib/utils/buffer-encoding.js";
+  import {
+    serializedBufferToBase64,
+    type SerializedBuffer,
+  } from "$lib/utils/buffer-encoding.js";
   import { onKeyActivate } from "$lib/utils/a11y.js";
   import { formatRelativeTime } from "$lib/utils/format-time.js";
   import { formatDateSeparator, needsDateSeparator } from "$lib/utils/time.js";
@@ -786,7 +789,16 @@
 
   const longPress = createLongPress();
 
-  function startLongPress(fu: FollowUp): (e: PointerEvent) => void {
+  interface ContextMenuTarget {
+    id: string;
+    type: string;
+    source: string;
+    createdBy: string | null;
+    encryptedContent: SerializedBuffer | string | null;
+    noteTypeId: string | null;
+  }
+
+  function startLongPress(fu: ContextMenuTarget): (e: PointerEvent) => void {
     return () => longPress.start(() => openContextMenu(fu));
   }
 
@@ -802,7 +814,9 @@
   });
 
   /** Keyboard equivalent for long-press context menu (Shift+F10). */
-  function handleBubbleKeydown(fu: FollowUp): (e: KeyboardEvent) => void {
+  function handleBubbleKeydown(
+    fu: ContextMenuTarget,
+  ): (e: KeyboardEvent) => void {
     return (e: KeyboardEvent) => {
       if (e.key === "F10" && e.shiftKey) {
         e.preventDefault();
@@ -811,7 +825,7 @@
     };
   }
 
-  function openContextMenu(fu: FollowUp): void {
+  function openContextMenu(fu: ContextMenuTarget): void {
     const actions = getContextMenuActions(
       fu,
       currentUserId,
@@ -822,7 +836,7 @@
         deleteNote: m.ticket_delete_note(),
       },
     );
-    if (actions.length === 0 || !decrypt) return;
+    if (actions.length === 0 || !decrypt || fu.encryptedContent == null) return;
 
     const result = decrypt.followUp(fu.id, fu.encryptedContent);
     const plaintext = result.status === "ready" ? result.value : undefined;
@@ -1066,7 +1080,14 @@
             role="button"
             tabindex={0}
             onclick={onzoom}
-            onkeydown={onKeyActivate(onzoom)}
+            onkeydown={(e: KeyboardEvent) => {
+              if (e.key === "F10" && e.shiftKey) {
+                e.preventDefault();
+                openContextMenu(rec);
+              } else {
+                onKeyActivate(onzoom)(e);
+              }
+            }}
           >
             {#if kind === "system"}
               <SystemEvent result={recResult} timestamp={rec.createdAt} />
@@ -1092,7 +1113,13 @@
                 data-source={rec.source === "client" ? "client" : "volunteer"}
               >
                 {#snippet text()}
-                  <span class="bubble-text">
+                  <!-- svelte-ignore a11y_no_static_element_interactions -->
+                  <span
+                    class="bubble-text"
+                    onpointerdown={startLongPress(rec)}
+                    onpointerup={cancelLongPress}
+                    onpointercancel={cancelLongPress}
+                  >
                     <DecryptPlaceholder
                       result={recResult}
                       ciphertext={rec.encryptedContent}

@@ -108,6 +108,7 @@
   let captureEl: HTMLElement | null = null;
   let didSwipe = false; // true if horizontal movement was detected; suppresses click
   let didDismissPeek = false; // true if a peek was dismissed on pointerdown; suppresses click
+  let didLongPress = false; // true if long-press fired; suppresses the subsequent click
 
   // ── Long-press state ──
   let pressTimer: ReturnType<typeof setTimeout> | null = null;
@@ -193,9 +194,11 @@
     captureEl = e.currentTarget instanceof HTMLElement ? e.currentTarget : null;
 
     clearPress();
+    didLongPress = false;
     pressTimer = setTimeout(() => {
       pressTimer = null;
       if (!isSwiping && locked !== "horizontal") {
+        didLongPress = true;
         onlongpress?.(ticketId);
       }
     }, PRESS_DURATION);
@@ -314,6 +317,12 @@
   // Only block clicks originating from the card-slider (the child card),
   // not from the peek tray buttons.
   function handleClickCapture(e: MouseEvent): void {
+    if (didLongPress) {
+      didLongPress = false;
+      e.stopPropagation();
+      e.preventDefault();
+      return;
+    }
     if (disabled) return;
     if (!didSwipe && !didDismissPeek && peeked === null) return;
 

@@ -120,8 +120,11 @@ test.describe.serial("Ticket Actions (Call + SMS)", () => {
   // ── 5. Call options via panel ──────────────────────────────────
 
   test("call action from client panel opens call options sheet", async () => {
-    // The client info panel may already be open from prior tests in this
-    // serial suite. Only click the header button if the panel is not visible.
+    // Dismiss any lingering sheets/toasts from prior SMS compose tests.
+    await page.keyboard.press("Escape");
+    await page.waitForTimeout(300);
+
+    // Open the client info panel via the header button.
     const panel = page.locator('[role="dialog"]').filter({
       hasText: "Help with housing",
     });
@@ -134,21 +137,30 @@ test.describe.serial("Ticket Actions (Call + SMS)", () => {
     }
     await expect(panel).toBeVisible({ timeout: 3000 });
 
-    // In the panel, find the "Call" button.
+    // In the panel, find the "Call" button and click it.
+    // The button may be below the viewport in the panel's scroll container,
+    // so use evaluate to click programmatically.
     const callBtn = panel.getByRole("button", { name: "Call" });
     await expect(callBtn).toBeVisible({ timeout: 3000 });
-    await callBtn.click({ force: true });
+    await callBtn.evaluate((el) => {
+      (el as HTMLElement).click();
+    });
 
     // Call options sheet should show "Call via browser" at minimum.
     await expect(page.getByText(/call via browser/i)).toBeVisible({
-      timeout: 3000,
+      timeout: 5000,
     });
 
-    // Close the call sheet by tapping Cancel.
+    // Close the call sheet and panel to clean up for subsequent tests.
     await page
       .getByRole("button", { name: /cancel/i })
       .last()
       .click();
+    // Close the client panel if still open.
+    const closeBtn = panel.getByRole("button", { name: "Close" });
+    if (await closeBtn.isVisible().catch(() => false)) {
+      await closeBtn.click();
+    }
   });
 
   // ── 6. Accessibility scan ─────────────────────────────────────

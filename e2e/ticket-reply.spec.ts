@@ -57,10 +57,7 @@ test.describe.serial("Ticket Reply (Encrypted Message Send)", () => {
 
   test("send button triggers encryption and message appears in chat", async () => {
     const sendBtn = page.getByRole("button", { name: /send message/i });
-    // Wait for the send button to become enabled (crypto pipeline ready).
-    await expect(sendBtn).not.toHaveAttribute("aria-disabled", "true", {
-      timeout: 5_000,
-    });
+    await expect(sendBtn).toBeEnabled({ timeout: 5_000 });
     await sendBtn.click();
 
     // Wait for the optimistic message to appear in the chat log.

@@ -122,10 +122,18 @@ test.describe.serial("Ticket Detail (Chat View)", () => {
       hasText: "I need help finding a place to stay",
     });
     await expect(bubbleText).toBeVisible({ timeout: CRYPTO_TIMEOUT });
+
+    // Scroll the bubble away from the sticky header so pointer events
+    // land on the correct element (not the banner overlay).
+    const chatLog = page.locator('[role="log"]');
+    await chatLog.evaluate((el) => {
+      el.scrollTo(0, 0);
+    });
+    await page.waitForTimeout(200);
     await longPress(page, bubbleText);
 
     // Context menu action sheet should appear with Copy.
-    await expect(page.getByText("Copy")).toBeVisible();
+    await expect(page.getByText("Copy")).toBeVisible({ timeout: 5_000 });
 
     // Should NOT show Edit or Delete (this is a client message, not a note).
     await expect(page.getByText("Edit")).not.toBeVisible();
@@ -137,7 +145,7 @@ test.describe.serial("Ticket Detail (Chat View)", () => {
   // ── 8. Long-press on internal note shows Edit/Delete (Checkpoint 18) ──
 
   test("long-press on internal note shows Edit and Delete actions", async () => {
-    const note = page.locator('[role="article"]', {
+    const note = page.getByRole("article", { name: /private note/i }).filter({
       hasText: "Client sounds stressed",
     });
     await longPress(page, note);

@@ -203,9 +203,9 @@ test.describe.serial("Ticket List (Tickets Tab)", () => {
     const firstCard = page.locator('[data-testid="ticket-card"]').first();
     await longPress(page, firstCard);
 
-    // Checkboxes should appear on cards.
-    const checkboxes = page.locator('[role="checkbox"]');
-    // At least one checkbox visible (the long-pressed card + visible cards).
+    // Konsta Checkbox hides the native <input> (display:none) and renders a
+    // visual icon. Check for the wrapper div that TicketCard adds.
+    const checkboxes = page.locator(".checkbox-wrap");
     await expect(checkboxes.first()).toBeVisible({ timeout: 3_000 });
 
     // The tabbar override should show selection count.
@@ -232,7 +232,7 @@ test.describe.serial("Ticket List (Tickets Tab)", () => {
     await page.getByRole("button", { name: "Select" }).click();
 
     // Checkboxes should appear.
-    await expect(page.locator('[role="checkbox"]').first()).toBeVisible();
+    await expect(page.locator(".checkbox-wrap").first()).toBeVisible();
 
     // Exit via dismiss.
     await page.getByRole("button", { name: "Exit selection mode" }).click();
