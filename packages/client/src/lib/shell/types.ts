@@ -101,6 +101,8 @@ export interface ShellActionSheetProps {
   opened: boolean;
   /** Callback when the action sheet is dismissed. */
   ondismiss: () => void;
+  /** Accessible label for the dialog. */
+  ariaLabel?: string;
   /** Action sheet content (typically ActionsGroup + ActionsButton). */
   children: Snippet;
 }

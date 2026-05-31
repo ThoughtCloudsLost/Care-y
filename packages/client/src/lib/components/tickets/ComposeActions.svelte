@@ -62,7 +62,13 @@
   }
 </script>
 
-<ShellPopover {opened} {target} placement="top" {ondismiss}>
+<ShellPopover
+  {opened}
+  {target}
+  placement="top"
+  {ondismiss}
+  ariaLabel={m.ticket_compose_actions()}
+>
   <KList nested>
     <ListItem title={m.ticket_attach_file()} onclick={handleAttach}>
       {#snippet media()}

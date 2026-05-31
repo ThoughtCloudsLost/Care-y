@@ -230,6 +230,7 @@
   opened={activePillId !== null}
   target={popoverTarget}
   placement="bottom"
+  ariaLabel={activeLabel}
   ondismiss={closePopover}
 >
   {#if activeMode === "date"}
@@ -286,11 +287,10 @@
     </div>
   {:else}
     <div class="popover-scroll">
-      <List nested role="listbox" aria-label={activeLabel}>
+      <List nested aria-label={activeLabel}>
         <ListItem
           title={resolvedAllLabel}
-          role="option"
-          aria-selected={activeSelected === null}
+          aria-current={activeSelected === null ? "true" : undefined}
           class="filter-pill-all"
           onclick={handleAllClick}
         >
@@ -305,8 +305,7 @@
             typeof activeSelected === "string" && activeSelected === opt.value}
           <ListItem
             title={opt.label}
-            role="option"
-            aria-selected={isSelected}
+            aria-current={isSelected ? "true" : undefined}
             onclick={onSingleItemClick(opt.value)}
           >
             {#snippet after()}

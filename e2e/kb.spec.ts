@@ -96,19 +96,19 @@ test.describe.serial("Knowledge Base (Library Tab)", () => {
     const sortBtn = page.getByRole("button", { name: /sort/i });
     await sortBtn.click();
 
-    // Sort options should be visible.
-    const sortList = page.locator("[role='listbox']");
-    await expect(sortList).toBeVisible();
+    // Sort options should be visible inside the popover dialog.
+    const sortPopover = page.getByRole("dialog").last();
+    await expect(sortPopover).toBeVisible();
 
     // Tap a sort option (e.g., Rating).
-    await sortList.getByText(/rating/i).click();
+    await sortPopover.getByText(/rating/i).click();
 
     // Articles should still be visible after re-sort.
     await expect(page.getByText("Intake call checklist")).toBeVisible();
 
     // Dismiss the popover by pressing Escape.
     await page.keyboard.press("Escape");
-    await expect(sortList).not.toBeVisible();
+    await expect(sortPopover).not.toBeVisible();
   });
 
   // (Empty state and skeleton loading are not testable in a serial suite
@@ -297,14 +297,11 @@ test.describe.serial("Knowledge Base (Library Tab)", () => {
 
     // Exclude Konsta UI internal a11y violations:
     // - tablist contains role=link (More tab), aria-required-children
-    // - sort listbox contains ul child, aria-required-children
-    // - filter toolbar outside landmark, region rule
     // These are tracked separately from KB-specific tests.
     const results = await new AxeBuilder({ page })
       .setLegacyMode(true)
       .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"])
       .exclude("[role='tablist']")
-      .exclude("[role='listbox']")
       .analyze();
     expect(results.violations).toEqual([]);
   });

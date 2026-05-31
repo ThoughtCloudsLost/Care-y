@@ -68,6 +68,10 @@
 
 <style>
   .priority-indicator {
+    --priority-urgent: #ff3b30;
+    --priority-urgent-dark: #ff6961;
+    --priority-high: #ff9500;
+
     display: inline-flex;
     align-items: center;
     gap: var(--space-sm);
@@ -83,26 +87,27 @@
   }
 
   .priority-urgent {
-    color: #ff3b30;
+    color: var(--priority-urgent);
+  }
+  :global(.dark) .priority-urgent {
+    color: var(--priority-urgent-dark);
   }
   .priority-urgent.priority-badge {
-    background: rgba(255, 59, 48, 0.12);
+    background: color-mix(in srgb, var(--priority-urgent) 12%, transparent);
   }
 
   .priority-high {
-    color: #ff9500;
+    color: var(--priority-high);
   }
   .priority-high.priority-badge {
-    background: rgba(255, 149, 0, 0.12);
+    background: color-mix(in srgb, var(--priority-high) 12%, transparent);
   }
 
   .priority-normal {
     color: var(--muted);
-    opacity: 0.7;
   }
 
   .priority-low {
     color: var(--muted);
-    opacity: 0.5;
   }
 </style>

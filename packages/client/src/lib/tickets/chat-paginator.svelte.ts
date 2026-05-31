@@ -33,6 +33,8 @@ export interface ChatPaginator<T extends PaginatedRecord> {
   readonly loadingUnread: boolean;
   /** Seed with the initial query data. Call from an $effect watching the query. */
   seed(data: T[]): void;
+  /** Replace the initial (most-recent) page with fresh query data. Handles optimistic adds and pending-entry cleanup. */
+  syncInitialPage(data: T[]): void;
   /** Fetch one older page and prepend it, preserving scroll position. */
   loadOlderPage(): Promise<void>;
   /** Fetch pages until the oldest loaded item predates cutoffMs. */
@@ -55,6 +57,18 @@ export function createChatPaginator<T extends PaginatedRecord>(
     if (olderPages.length > 0 || data.length === 0) return;
     olderPages = [data];
     if (data.length < pageSize) hasMore = false;
+  }
+
+  function syncInitialPage(data: T[]): void {
+    if (olderPages.length === 0 || data.length === 0) return;
+    const current = olderPages.at(-1);
+    if (current === undefined) return;
+    if (
+      current.length === data.length &&
+      current.every((r, i) => r.id === data.at(i)?.id)
+    )
+      return;
+    olderPages.splice(-1, 1, data);
   }
 
   async function loadOlderPage(): Promise<void> {
@@ -133,6 +147,7 @@ export function createChatPaginator<T extends PaginatedRecord>(
       return loadingUnread;
     },
     seed,
+    syncInitialPage,
     loadOlderPage,
     loadUntilReadBoundary,
   };

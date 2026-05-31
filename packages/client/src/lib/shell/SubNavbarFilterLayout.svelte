@@ -85,7 +85,7 @@
   }
 </script>
 
-<div class="subnavbar-filter-content">
+<section class="subnavbar-filter-content" aria-label={title}>
   <div class="page-header">
     {#if smallTitle}
       <span class="page-title-small">{title}</span>
@@ -225,24 +225,24 @@
   {#if searchNavigator}
     {@render searchNavigator()}
   {/if}
-</div>
+</section>
 
 {#if sort}
   <ShellPopover
     opened={sortOpen}
     target={sortAnchorEl}
     placement="bottom"
+    ariaLabel={sort.label}
     ondismiss={() => {
       sortOpen = false;
     }}
   >
-    <KList nested role="listbox" aria-label={sort.label}>
+    <KList nested aria-label={sort.label}>
       {#each sort.options as opt (opt.field)}
         {@const isSelected = sort.currentField === opt.field}
         <ListItem
           title={opt.label}
-          role="option"
-          aria-selected={isSelected}
+          aria-current={isSelected ? "true" : undefined}
           onclick={() => handleSortTap(opt.field)}
         >
           {#snippet after()}

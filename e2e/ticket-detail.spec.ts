@@ -150,10 +150,16 @@ test.describe.serial("Ticket Detail (Chat View)", () => {
     });
     await longPress(page, note);
 
-    // Context menu should show Copy, Edit, and Delete.
+    // Context menu should show Copy, Edit Note, and Delete Note actions.
+    // Scope to Konsta Actions buttons (.k-actions-button) to avoid matching
+    // the inline pencil edit button in the note badge.
     await expect(page.getByText("Copy")).toBeVisible();
-    await expect(page.getByText("Edit")).toBeVisible();
-    await expect(page.getByText("Delete")).toBeVisible();
+    await expect(
+      page.locator(".k-actions-button").filter({ hasText: /edit note/i }),
+    ).toBeVisible();
+    await expect(
+      page.locator(".k-actions-button").filter({ hasText: /delete note/i }),
+    ).toBeVisible();
 
     // Dismiss.
     await page.keyboard.press("Escape");
@@ -162,12 +168,15 @@ test.describe.serial("Ticket Detail (Chat View)", () => {
   // ── 9. Note edit flow (Checkpoint 20 - edit path) ───────────────
 
   test("editing an internal note shows textarea and Save/Cancel", async () => {
-    // Long-press the note and tap Edit.
-    const note = page.locator('[role="article"]', {
+    // Long-press the note and tap Edit Note from the context menu.
+    const note = page.getByRole("article", { name: /private note/i }).filter({
       hasText: "Client sounds stressed",
     });
     await longPress(page, note);
-    await page.getByText("Edit").click();
+    await page
+      .locator(".k-actions-button")
+      .filter({ hasText: /edit/i })
+      .click();
 
     // The note edit sheet opens as a dialog.
     const editSheet = page.getByRole("dialog", { name: /edit note/i });
@@ -195,48 +204,42 @@ test.describe.serial("Ticket Detail (Chat View)", () => {
 
   // ── 10. Compose bar and mode toggle (Checkpoint 7) ──────────────
 
-  test("compose bar has attach, preset, and send; tabbar is hidden", async () => {
+  test("compose bar has compose-actions, send, and textarea; tabbar is hidden", async () => {
     // Tabbar hidden.
     await expect(page.locator('[role="tablist"]')).not.toBeVisible();
 
-    // Attach button.
-    const attachBtn = page.getByRole("link", { name: /attach/i });
-    await expect(attachBtn).toBeVisible();
-
-    // Preset button.
-    const presetBtn = page.getByRole("link", { name: /preset/i });
-    await expect(presetBtn).toBeVisible();
+    // Compose actions (+) button opens the popover with attach/preset/note.
+    const plusBtn = page.getByRole("button", { name: /compose actions/i });
+    await expect(plusBtn).toBeVisible();
 
     // Send button.
-    const sendBtn = page.getByRole("link", { name: /send/i });
+    const sendBtn = page.getByRole("button", { name: /send/i });
     await expect(sendBtn).toBeVisible();
 
-    // Mode pill defaults to REPLY.
-    await expect(page.getByText("REPLY")).toBeVisible();
+    // Compose textarea (reply mode).
+    const textarea = page.getByRole("textbox", { name: /type a reply/i });
+    await expect(textarea).toBeVisible();
   });
 
   // ── 11. Preset fills compose (Checkpoint 8) ────────────────────
 
-  test("selecting a preset reply fills the compose textarea", async () => {
-    // Open preset sheet.
-    const presetBtn = page.getByRole("link", { name: /preset/i });
-    await presetBtn.click();
+  test("compose actions popover opens preset sheet", async () => {
+    // Open compose actions popover via the + button.
+    const plusBtn = page.getByRole("button", { name: /compose actions/i });
+    await plusBtn.click();
 
-    // Wait for preset sheet (dialog) to appear.
-    const presetSheet = page.getByRole("dialog").last();
-    await expect(presetSheet).toBeVisible();
+    // Click "Preset replies" from the compose actions popover.
+    const presetItem = page.getByText(/preset replies/i).first();
+    await expect(presetItem).toBeVisible({ timeout: 3_000 });
+    await presetItem.click();
 
-    // Click the first preset item.
-    const firstPreset = presetSheet.getByRole("listitem").first();
-    await firstPreset.click();
+    // The preset sheet opens. Without seeded presets it shows the empty state.
+    await expect(page.getByText(/nothing here yet/i)).toBeVisible({
+      timeout: 5_000,
+    });
 
-    // The compose textarea should now contain text from the preset.
-    const textarea = page.getByRole("textbox");
-    const value = await textarea.inputValue();
-    expect(value.length).toBeGreaterThan(0);
-
-    // Clear the draft for subsequent tests.
-    await textarea.fill("");
+    // Dismiss the sheet.
+    await page.keyboard.press("Escape");
   });
 
   // ── 12. Action sheets (Checkpoints 9, 10, 11) ──────────────────

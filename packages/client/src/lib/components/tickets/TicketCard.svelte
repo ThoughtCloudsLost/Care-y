@@ -11,7 +11,6 @@
   import * as m from "$lib/paraglide/messages.js";
   import { withTerms } from "$lib/terminology/with-terms.js";
   import { formatRelativeTime } from "$lib/utils/format-time.js";
-  import { onKeyActivate } from "$lib/utils/a11y.js";
   import { getPreviewLoader } from "$lib/crypto/context.js";
   import DecryptPlaceholder from "$lib/components/DecryptPlaceholder.svelte";
   import InlineSkeleton from "$lib/components/InlineSkeleton.svelte";
@@ -141,19 +140,20 @@
 {:else}
   <div class="ticket-card-wrap" data-testid="ticket-card-wrap">
     <Card raised contentWrap={false} class="ticket-card">
-      <!-- Using div+role instead of <button> to avoid nested-button HTML violation
-           when action icon buttons are rendered inside. -->
       <div
         class="card-inner"
         class:card-inner--list={isList}
         class:card-inner--grid={!isList}
         data-testid="card-inner"
-        role="button"
-        tabindex="0"
-        aria-label={m.tickets_open(withTerms({ alias: clientAlias }))}
-        onclick={handleCardClick}
-        onkeydown={onKeyActivate(handleCardClick)}
       >
+        <!-- Overlay button covers the card for click/keyboard. Action buttons
+             sit above it via z-index so their clicks don't navigate. -->
+        <button
+          type="button"
+          class="card-open-link"
+          aria-label={m.tickets_open(withTerms({ alias: clientAlias }))}
+          onclick={handleCardClick}
+        ></button>
         <div class="preview-window" data-preview>
           <TicketPreview
             followUps={previewFollowUps}
@@ -318,6 +318,7 @@
 
   /* ── Card inner (base: flex column) ── */
   .card-inner {
+    position: relative;
     display: flex;
     flex-direction: column;
     gap: var(--space-sm);
@@ -332,7 +333,19 @@
     color: inherit;
   }
 
-  .card-inner:focus-visible {
+  .card-open-link {
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    appearance: none;
+    background: none;
+    border: none;
+    padding: 0;
+    margin: 0;
+    cursor: pointer;
+  }
+
+  .card-open-link:focus-visible {
     outline: 2px solid var(--brand-text);
     outline-offset: -2px;
     border-radius: var(--card-radius);
@@ -380,6 +393,8 @@
   }
 
   .checkbox-wrap {
+    position: relative;
+    z-index: 1;
     flex-shrink: 0;
   }
 
@@ -454,8 +469,10 @@
     flex-shrink: 0;
   }
 
-  /* ── Action icons ── */
+  /* ── Action icons (above the card-open-link overlay) ── */
   .card-actions {
+    position: relative;
+    z-index: 1;
     display: flex;
     align-items: center;
     gap: var(--space-xl);
