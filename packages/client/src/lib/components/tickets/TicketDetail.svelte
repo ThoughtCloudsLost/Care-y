@@ -330,10 +330,13 @@
     getScrollContainer: () => scroll.scrollContainerEl,
   });
 
-  // Seed paginator from the initial query once it resolves.
+  // Seed paginator from the initial query, then keep it in sync
+  // (handles optimistic adds and pending-entry cleanup after refetch).
   $effect(() => {
     const data = initialFollowUpsQuery.data;
-    if (data) paginator.seed(data);
+    if (!data) return;
+    paginator.seed(data);
+    paginator.syncInitialPage(data);
   });
 
   // Local aliases for readability in template and downstream $derived.
@@ -1270,6 +1273,7 @@
                           onopenedit(fu.id, text, fu.noteTypeId ?? null);
                         }
                       : undefined}
+                    onlongpress={() => openContextMenu(fu)}
                     {searchTerm}
                     reactions={getReactions(fu.id)}
                     {currentUserId}

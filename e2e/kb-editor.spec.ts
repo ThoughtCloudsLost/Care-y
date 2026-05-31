@@ -449,10 +449,12 @@ test.describe.serial("KB Editor (Create/Edit, Categories, ATAG)", () => {
     expect(results.violations).toEqual([]);
 
     // Clean up: dismiss the dirty editor so subsequent tests start from /library.
+    // Cancel opens a discard dialog whose Discard button triggers navigation,
+    // which detaches the button mid-click. Use force to bypass stability checks.
     await page.getByRole("button", { name: "Cancel" }).first().click();
     const discardBtn = page.getByText("Discard", { exact: true });
     if (await discardBtn.isVisible({ timeout: 2_000 }).catch(() => false)) {
-      await discardBtn.click();
+      await discardBtn.click({ force: true });
     }
     await expect(page).toHaveURL("/library", { timeout: 5_000 });
   });

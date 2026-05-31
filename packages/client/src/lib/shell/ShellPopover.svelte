@@ -41,7 +41,7 @@
       bind:this={trap.dialogEl}
       role="dialog"
       aria-modal="true"
-      aria-label={ariaLabel}
+      aria-label={ariaLabel ?? undefined}
       tabindex="-1"
     >
       {@render children()}

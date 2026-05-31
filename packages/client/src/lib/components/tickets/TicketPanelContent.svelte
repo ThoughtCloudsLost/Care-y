@@ -125,6 +125,13 @@
       ? titleResult.value
       : undefined,
   );
+
+  function labelToggleInput(node: HTMLElement, label: string): void {
+    const input = node.querySelector<HTMLInputElement>(
+      'input[type="checkbox"]',
+    );
+    if (input) input.setAttribute("aria-label", label);
+  }
 </script>
 
 <div class="panel-content">
@@ -186,18 +193,22 @@
     />
     <ListItem title={m.ticket_action_hold()}>
       {#snippet after()}
-        <Toggle
-          checked={isOnHold}
-          onChange={() => onaction(isOnHold ? "unhold" : "hold")}
-        />
+        <span use:labelToggleInput={m.ticket_action_hold()}>
+          <Toggle
+            checked={isOnHold}
+            onChange={() => onaction(isOnHold ? "unhold" : "hold")}
+          />
+        </span>
       {/snippet}
     </ListItem>
     <ListItem title={m.ticket_action_watch()}>
       {#snippet after()}
-        <Toggle
-          checked={isWatching}
-          onChange={() => onaction(isWatching ? "unwatch" : "watch")}
-        />
+        <span use:labelToggleInput={m.ticket_action_watch()}>
+          <Toggle
+            checked={isWatching}
+            onChange={() => onaction(isWatching ? "unwatch" : "watch")}
+          />
+        </span>
       {/snippet}
     </ListItem>
   </List>

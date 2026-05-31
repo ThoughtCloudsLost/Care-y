@@ -1,3 +1,4 @@
+<!-- care-y-ignore no-hardcoded-user-strings -- Props interface and function signatures are not user-facing -->
 <!--
   Client search/create selector using Bits UI Combobox.
   Separate file: Bits UI cannot coexist with Konsta imports (no-mixed-konsta-bits).
@@ -34,6 +35,7 @@
 </script>
 
 <script lang="ts">
+  import { tick } from "svelte";
   import { Combobox } from "bits-ui";
   import * as m from "$lib/paraglide/messages.js";
   import { withTerms } from "$lib/terminology/with-terms.js";
@@ -77,6 +79,7 @@
   let searching = $state(false);
   let debounceTimer: ReturnType<typeof setTimeout> | null = null;
 
+  let comboboxOpen = $state(false);
   let phoneInput = $state("");
   let lookingUp = $state(false);
   let lookupMessage = $state("");
@@ -112,6 +115,9 @@
       mode: "existing",
       clientId: client.id,
       displayAlias: client.alias,
+    });
+    void tick().then(() => {
+      comboboxOpen = false;
     });
   }
 
@@ -207,6 +213,7 @@
   {#if viewMode === "search"}
     <Combobox.Root
       type="single"
+      bind:open={comboboxOpen}
       inputValue={searchQuery}
       onValueChange={(v: string) => {
         const match = searchResults.find((r) => r.id === v);

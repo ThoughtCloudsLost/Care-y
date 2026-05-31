@@ -2,6 +2,7 @@
   import type { CallAction } from "$lib/components/tickets/CallOptionsContent.svelte";
   import type { RawFollowUpPreview } from "$lib/tickets/preview-loader.svelte.js";
   import type { SavedFilterColor } from "@care-y/shared";
+  import * as m from "$lib/paraglide/messages.js";
   import AssignSheet from "$lib/components/tickets/AssignSheet.svelte";
   import ReplySheet from "$lib/components/tickets/ReplySheet.svelte";
   import NewTicketController from "$lib/components/tickets/NewTicketController.svelte";
@@ -106,7 +107,11 @@
   onsent={onreplysent}
 />
 
-<ShellActionSheet opened={callSheetOpen} ondismiss={oncalldismiss}>
+<ShellActionSheet
+  opened={callSheetOpen}
+  ondismiss={oncalldismiss}
+  ariaLabel={m.ticket_call_options()}
+>
   <CallOptionsContent hasVerifiedPhone={false} onaction={oncallaction} />
 </ShellActionSheet>
 

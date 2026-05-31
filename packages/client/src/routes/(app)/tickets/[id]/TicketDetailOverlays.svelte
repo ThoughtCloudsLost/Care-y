@@ -114,7 +114,11 @@
   {onassign}
 />
 
-<ShellActionSheet opened={callSheetOpen} ondismiss={oncalldismiss}>
+<ShellActionSheet
+  opened={callSheetOpen}
+  ondismiss={oncalldismiss}
+  ariaLabel={m.ticket_call_options()}
+>
   <CallOptionsContent {hasVerifiedPhone} onaction={oncallaction} />
 </ShellActionSheet>
 
@@ -148,7 +152,11 @@
   />
 {/if}
 
-<ShellPopup opened={lightbox.open} ondismiss={() => lightbox.dismiss()}>
+<ShellPopup
+  opened={lightbox.open}
+  ondismiss={() => lightbox.dismiss()}
+  ariaLabel={m.ticket_mms_lightbox_label()}
+>
   {#if lightbox.url}
     <div class="lightbox-content">
       <img
@@ -163,6 +171,7 @@
 <ShellActionSheet
   opened={contextMenu.open}
   ondismiss={() => contextMenu.dismiss()}
+  ariaLabel={m.ticket_context_menu_title()}
 >
   {#if contextMenu.data !== null}
     <ActionsGroup>

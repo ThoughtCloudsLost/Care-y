@@ -933,6 +933,7 @@ export async function seedTestTickets(
           is_private: fu.isPrivate ?? false,
           encrypted_content: Buffer.from(encryptedContent),
           created_at: minutesAgo(fu.agoMinutes),
+          ...(fu.source === "volunteer" ? { created_by: userId } : {}),
         })
         .returning("id")
         .executeTakeFirstOrThrow();

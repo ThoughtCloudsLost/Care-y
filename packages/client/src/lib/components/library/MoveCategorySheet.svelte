@@ -15,7 +15,7 @@
     $props();
 </script>
 
-<ShellActionSheet {opened} {ondismiss}>
+<ShellActionSheet {opened} {ondismiss} ariaLabel={m.library_move_category()}>
   <ActionsGroup>
     <ActionsLabel>{m.library_move_title()}</ActionsLabel>
     {#each categories as cat (cat.id)}

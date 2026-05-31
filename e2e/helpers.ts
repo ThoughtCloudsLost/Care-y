@@ -355,8 +355,12 @@ export async function createTicket(
   const firstResult = page.locator("[data-testid='client-result']").first();
   await firstResult.waitFor({ state: "visible", timeout: CRYPTO_TIMEOUT });
   await firstResult.click();
-  // Verify the dropdown closed (selection registered).
   await expect(firstResult).not.toBeVisible({ timeout: 3_000 });
+
+  // Wait for the selected client paragraph to appear (confirms selection registered).
+  await expect(sheet.getByText(/^[a-z]+-[a-z]+-\d+$/)).toBeVisible({
+    timeout: 3_000,
+  });
 
   // Fill title (required). The title input uses placeholder, not a label element.
   await sheet.getByPlaceholder(/brief description/i).fill(opts.title);
@@ -380,6 +384,9 @@ export async function createTicket(
   await sheet
     .locator(".new-ticket-queue-list select")
     .selectOption({ label: opts.queue });
+
+  // Blur any focused combobox so Bits UI fully releases pointer events.
+  await sheet.getByPlaceholder(/brief description/i).click();
 
   // Submit.
   const submitBtn = sheet.getByRole("button", { name: /create ticket/i });
