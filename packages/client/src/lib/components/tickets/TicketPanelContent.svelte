@@ -36,6 +36,7 @@
     getFollowUpDecryptCache,
     getOrgDecryptCache,
     getOrgKeyManager,
+    getCurrentUserId,
   } from "$lib/crypto/context.js";
   import { createTicketDecryptScope } from "$lib/crypto/ticket-decrypt-scope.js";
   import { isDecryptReady } from "$lib/crypto/decrypt-result.js";
@@ -66,6 +67,7 @@
   const followUpCache = getFollowUpDecryptCache();
   const orgCache = getOrgDecryptCache();
   const orgKeyManager = getOrgKeyManager();
+  const currentUserIdGetter = getCurrentUserId();
 
   // --- TanStack queries (same keys as TicketDetail, deduplicated) ---
 
@@ -87,6 +89,10 @@
   const ticketStatus = $derived(ticket?.status ?? "open");
   const isOnHold = $derived(ticket?.onHold ?? false);
   const isWatching = $derived(watchingQuery.data ?? false);
+
+  const isAssignedToMe = $derived(
+    ticket?.assignedTo != null && ticket.assignedTo === currentUserIdGetter(),
+  );
 
   const displayStatus = $derived<DisplayStatus>(
     isOnHold ? "hold" : ticketStatus === "closed" ? "closed" : "active",
@@ -214,12 +220,21 @@
   </List>
 
   <List class="!my-3">
-    <ListItem
-      link
-      chevron
-      title={m.ticket_action_assign()}
-      onclick={() => onaction("assign")}
-    />
+    {#if isAssignedToMe}
+      <ListItem
+        link
+        chevron
+        title={m.ticket_action_release()}
+        onclick={() => onaction("release")}
+      />
+    {:else if ticket?.assignedTo == null}
+      <ListItem
+        link
+        chevron
+        title={m.ticket_action_take()}
+        onclick={() => onaction("take")}
+      />
+    {/if}
     <ListItem
       link
       title={ticketStatus === "open"
@@ -277,7 +292,7 @@
   }
 
   .destructive-text {
-    color: #ef4444;
+    color: var(--k-color-red, #ef4444);
     font-size: var(--text-sm);
   }
 

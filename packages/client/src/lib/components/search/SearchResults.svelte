@@ -1,6 +1,4 @@
 <script lang="ts">
-  import { goto } from "$app/navigation";
-  import { resolve } from "$app/paths";
   import * as m from "$lib/paraglide/messages.js";
   import {
     searchAll,
@@ -20,6 +18,8 @@
     query: string;
     promotedProviderId?: string;
     ondismiss: () => void;
+    /** Emitted when a result is tapped and no group handler exists. Href is root-relative (e.g. "/tickets/abc"). */
+    onnavigate: (href: string) => void;
     onselectrecent: (query: string) => void;
   }
 
@@ -27,6 +27,7 @@
     query,
     promotedProviderId,
     ondismiss,
+    onnavigate,
     onselectrecent,
   }: SearchResultsProps = $props();
 
@@ -52,8 +53,7 @@
     }
     const provider = getProvider(providerId);
     if (provider) {
-      ondismiss();
-      void goto(resolve(`/${provider.getResultHref(id).replace(/^\//, "")}`));
+      onnavigate(`/${provider.getResultHref(id).replace(/^\//, "")}`);
     }
   }
 

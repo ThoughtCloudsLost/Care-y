@@ -54,7 +54,13 @@ test.describe.serial("Universal Search", () => {
   test("tapping a result navigates to ticket detail", async () => {
     // The result card from the previous test should still be visible.
     const sheet = page.locator("[role='search']");
-    await sheet.getByText("Help with housing").click();
+    // Click the card's accessible overlay button (not the text, which sits
+    // below the overlay in z-order and may not trigger the tap handler).
+    const cardBtn = sheet.getByRole("button", {
+      name: /open ticket/i,
+    });
+    await expect(cardBtn).toBeVisible({ timeout: 5_000 });
+    await cardBtn.click();
 
     // Should navigate to the ticket detail page.
     await expect(page).toHaveURL(/\/tickets\/.+/, { timeout: 10_000 });

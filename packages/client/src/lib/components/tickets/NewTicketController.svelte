@@ -55,7 +55,7 @@
   );
 
   let canSubmit = $state(false);
-  let requestSubmit: (() => void) | undefined = $state();
+  const formId = "new-ticket-form";
 
   /* eslint-disable @typescript-eslint/no-unsafe-assignment -- NewTicketPayload fields are strongly typed; eslint can't resolve .svelte module exports */
   const createTicketMutation = createMutation(() => ({
@@ -113,10 +113,6 @@
 
     return (await res.json()) as PhoneLookupResult;
   }
-
-  function handleHeaderSubmit(): void {
-    requestSubmit?.();
-  }
 </script>
 
 <ShellSheet
@@ -126,7 +122,7 @@
   title={m.ticket_new_title(withTerms())}
 >
   {#snippet headerRight()}
-    <SoftButton onclick={handleHeaderSubmit} disabled={!canSubmit || isPending}>
+    <SoftButton type="submit" form={formId} disabled={!canSubmit || isPending}>
       {isPending ? m.ticket_new_submitting() : m.ticket_new_submit(withTerms())}
     </SoftButton>
   {/snippet}
@@ -137,7 +133,7 @@
     onsubmit={(p) => createTicketMutation.mutate(p)}
     oncollision={handleCollision}
     submitting={isPending}
+    {formId}
     bind:canSubmit
-    bind:requestSubmit
   />
 </ShellSheet>

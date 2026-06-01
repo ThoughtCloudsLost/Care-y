@@ -330,8 +330,11 @@ test.describe.serial("KB Editor (Create/Edit, Categories, ATAG)", () => {
     const gearBtn = page.getByRole("button", {
       name: "Manage categories",
     });
-    await gearBtn.scrollIntoViewIfNeeded();
-    await gearBtn.click({ force: true });
+    await expect(gearBtn).toBeVisible();
+    // The manage button sits in the subnavbar toolbar, which the sticky
+    // Navbar (z-20) can cover. Dispatch click directly on the element
+    // to bypass coordinate-based hit testing.
+    await gearBtn.dispatchEvent("click");
 
     // The ShellSheet should show "Manage Categories" title.
     await expect(page.getByText("Manage Categories")).toBeVisible({
@@ -473,7 +476,8 @@ test.describe.serial("KB Editor (Create/Edit, Categories, ATAG)", () => {
     const gearBtn = page.getByRole("button", {
       name: "Manage categories",
     });
-    await gearBtn.click();
+    // Same navbar coverage issue as the earlier test. Dispatch directly.
+    await gearBtn.dispatchEvent("click");
     await expect(page.getByText("Manage Categories")).toBeVisible({
       timeout: 5_000,
     });

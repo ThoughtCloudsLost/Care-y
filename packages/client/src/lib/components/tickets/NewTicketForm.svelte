@@ -44,7 +44,7 @@
     oncollision?: (info: CollisionInfo) => void;
     submitting?: boolean;
     canSubmit?: boolean;
-    requestSubmit?: () => void;
+    formId: string;
   }
 
   let {
@@ -55,7 +55,7 @@
     oncollision,
     submitting = false,
     canSubmit = $bindable(false),
-    requestSubmit = $bindable(),
+    formId,
   }: Props = $props();
 
   let title = $state("");
@@ -95,10 +95,6 @@
     return Object.keys(next).length === 0;
   }
 
-  $effect(() => {
-    canSubmit = !busy && title.trim().length > 0;
-  });
-
   async function handleSubmit(): Promise<void> {
     if (!validate() || busy) return;
     encrypting = true;
@@ -136,7 +132,9 @@
     }
   }
 
-  requestSubmit = () => void handleSubmit();
+  $effect(() => {
+    canSubmit = !busy && title.trim().length > 0;
+  });
 
   function handleClientChange(value: ClientSelection): void {
     clientSelection = value;
@@ -149,7 +147,14 @@
   }
 </script>
 
-<div class="new-ticket-body">
+<form
+  id={formId}
+  class="new-ticket-body"
+  onsubmit={(e: SubmitEvent) => {
+    e.preventDefault();
+    void handleSubmit();
+  }}
+>
   {#await import("$lib/components/inputs/ClientSelect.svelte")}
     <div class="import-loading"><Preloader /></div>
   {:then ClientSelectModule}
@@ -253,7 +258,7 @@
   {#if errors.form}
     <p class="form-error" role="alert">{errors.form}</p>
   {/if}
-</div>
+</form>
 
 <style>
   .new-ticket-body {

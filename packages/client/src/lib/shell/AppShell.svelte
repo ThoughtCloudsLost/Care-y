@@ -1053,6 +1053,10 @@
         query={searchQuery}
         {promotedProviderId}
         ondismiss={closeSearch}
+        onnavigate={(href: string) => {
+          // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- dynamic href from search provider, always starts with /
+          void goto(resolve(href as `/${string}`)).then(closeSearch);
+        }}
         onselectrecent={(q: string) => {
           searchQuery = q;
         }}
