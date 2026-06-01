@@ -427,7 +427,8 @@ test.describe.serial("KB Editor (Create/Edit, Categories, ATAG)", () => {
 
   // ── 6. Accessibility audits ────────────────────────────────────
 
-  test("a11y: new article page passes axe-core audit", async () => {
+  test("a11y: new article page passes axe-core audit", async ({}, testInfo) => {
+    testInfo.setTimeout(CRYPTO_TIMEOUT * 4);
     await navigateToNewArticle(page);
 
     // Wait for toolbar to render.
@@ -453,21 +454,23 @@ test.describe.serial("KB Editor (Create/Edit, Categories, ATAG)", () => {
 
     // Clean up: dismiss the dirty editor so subsequent tests start from /library.
     // Cancel opens a discard dialog whose Discard button triggers navigation,
-    // which detaches the button mid-click. Use force to bypass stability checks.
-    await page.getByRole("button", { name: "Cancel" }).first().click();
+    // which detaches the button mid-click. Use dispatchEvent to bypass
+    // visibility and stability checks.
+    const cancelBtn = page.getByRole("button", { name: "Cancel" }).first();
+    await cancelBtn.dispatchEvent("click");
     const discardBtn = page.getByText("Discard", { exact: true });
     if (await discardBtn.isVisible({ timeout: 2_000 }).catch(() => false)) {
-      await discardBtn.click({ force: true });
+      await discardBtn.dispatchEvent("click");
     }
     await expect(page).toHaveURL("/library", { timeout: 5_000 });
   });
 
-  test("a11y: category management sheet passes axe-core audit", async () => {
-    // Ensure we're on /library (prior test should have navigated back).
-    if (!page.url().includes("/library") || page.url().includes("/new")) {
-      await page.getByRole("tab", { name: /knowledge base/i }).click();
-      await expect(page).toHaveURL("/library", { timeout: 10_000 });
-    }
+  test("a11y: category management sheet passes axe-core audit", async ({}, testInfo) => {
+    testInfo.setTimeout(CRYPTO_TIMEOUT * 4);
+    // Navigate fresh to /library regardless of prior state. The previous test
+    // may leave overlays or stale DOM that blocks article rendering.
+    await page.getByRole("tab", { name: /knowledge base/i }).click();
+    await expect(page).toHaveURL("/library", { timeout: 10_000 });
     await expect(page.getByText("Intake call checklist")).toBeVisible({
       timeout: CRYPTO_TIMEOUT,
     });

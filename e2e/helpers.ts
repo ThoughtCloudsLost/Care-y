@@ -345,59 +345,104 @@ export async function createTicket(
   const sheet = page.getByRole("dialog", { name: "New Ticket" });
   await expect(sheet).toBeVisible({ timeout: 15_000 });
 
-  // Select a client: click the combobox input and type to trigger search.
-  // Bits UI Combobox opens its dropdown on real keystrokes (not fill()).
-  // The dropdown renders via a popper layer outside the dialog DOM tree.
-  const clientInput = sheet.getByPlaceholder(/search by alias/i);
-  await clientInput.click();
-  await clientInput.fill("");
-  await clientInput.pressSequentially("a", { delay: 50 });
-  const firstResult = page.locator("[data-testid='client-result']").first();
-  await firstResult.waitFor({ state: "visible", timeout: CRYPTO_TIMEOUT });
-  await firstResult.click();
-  await expect(firstResult).not.toBeVisible({ timeout: 3_000 });
+  // Select client, fill form, and submit. Retries with a different client
+  // if the server returns TICKET_ALREADY_OPEN (409) for the selected client.
+  for (let attempt = 0; attempt < 3; attempt++) {
+    // Select a client via keyboard (WAI-ARIA descendant pattern).
+    const searchTerm =
+      CLIENT_SEARCH_TERMS.at(
+        clientSearchIndex++ % CLIENT_SEARCH_TERMS.length,
+      ) ?? "azure-";
+    const clientInput = sheet.getByPlaceholder(/search by alias/i);
+    await clientInput.click();
+    await clientInput.fill("");
+    await clientInput.pressSequentially(searchTerm, { delay: 30 });
+    const firstResult = page.locator("[data-testid='client-result']").first();
+    await firstResult.waitFor({ state: "visible", timeout: CRYPTO_TIMEOUT });
+    await clientInput.press("ArrowDown");
+    await clientInput.press("Enter");
+    await expect(firstResult).not.toBeVisible({ timeout: 3_000 });
 
-  // Wait for the selected client paragraph to appear (confirms selection registered).
-  await expect(sheet.getByText(/^[a-z]+-[a-z]+-\d+$/)).toBeVisible({
-    timeout: 3_000,
-  });
+    await expect(sheet.getByText(/^[a-z]+-[a-z]+-\d+$/)).toBeVisible({
+      timeout: 3_000,
+    });
 
-  // Fill title (required). The title input uses placeholder, not a label element.
-  await sheet.getByPlaceholder(/brief description/i).fill(opts.title);
+    // Fill form fields (only on first attempt; subsequent attempts reuse).
+    if (attempt === 0) {
+      await sheet.getByPlaceholder(/brief description/i).fill(opts.title);
+      if (opts.description != null) {
+        await sheet.getByPlaceholder(/details/i).fill(opts.description);
+      }
+      if (opts.priority && opts.priority !== "normal") {
+        await sheet
+          .locator(".new-ticket-priority-list select")
+          .selectOption(opts.priority);
+      }
+      await sheet
+        .locator(".new-ticket-queue-list select")
+        .selectOption({ label: opts.queue });
+    }
 
-  // Fill description (optional).
-  if (opts.description != null) {
-    await sheet.getByPlaceholder(/details/i).fill(opts.description);
+    // Blur combobox and let effects settle.
+    await sheet.getByPlaceholder(/brief description/i).click();
+    await page.waitForTimeout(300);
+
+    // Watch for 409 response during submission.
+    const responsePromise = page
+      .waitForResponse(
+        (r) =>
+          r.url().includes("tickets.create") && r.request().method() === "POST",
+        { timeout: CRYPTO_TIMEOUT },
+      )
+      .catch(() => null);
+
+    const submitBtn = sheet.getByRole("button", { name: /create ticket/i });
+    await expect(submitBtn).toBeEnabled({ timeout: 5_000 });
+    const formEl = page.locator("#new-ticket-form");
+    await formEl.evaluate((f: HTMLFormElement) => {
+      f.requestSubmit();
+    });
+
+    const resp = await responsePromise;
+    if (resp?.status() !== 409) {
+      await expect(sheet).not.toBeVisible({ timeout: CRYPTO_TIMEOUT });
+      return;
+    }
+
+    // 409: client already has an open ticket. Wait for error toast to
+    // clear, then retry with a different client on the next loop iteration.
+    console.log(
+      `[createTicket] 409 on attempt ${String(attempt + 1)}, retrying with different client`,
+    );
+    await page.waitForTimeout(1_000);
   }
 
-  // Select priority if not default.
-  // Konsta ListInput renders labels as divs, not <label> elements,
-  // so getByLabel can't find the <select>. Use the CSS class on the
-  // List wrapper (set in NewTicketForm) to target each select.
-  if (opts.priority && opts.priority !== "normal") {
-    await sheet
-      .locator(".new-ticket-priority-list select")
-      .selectOption(opts.priority);
-  }
-
-  // Select queue (required). Queue names are decrypted from org key.
-  await sheet
-    .locator(".new-ticket-queue-list select")
-    .selectOption({ label: opts.queue });
-
-  // Blur any focused combobox so Bits UI fully releases pointer events.
-  await sheet.getByPlaceholder(/brief description/i).click();
-
-  // Submit.
-  const submitBtn = sheet.getByRole("button", { name: /create ticket/i });
-  await expect(submitBtn).toBeEnabled({ timeout: 5_000 });
-  await submitBtn.click();
-
-  // Wait for the sheet to close (indicates success) or an error toast.
-  // The success toast appears briefly, but the sheet closing is the
-  // reliable signal that the mutation completed.
+  // All retries exhausted.
   await expect(sheet).not.toBeVisible({ timeout: CRYPTO_TIMEOUT });
 }
+
+// Rotate through hyphenated search prefixes so consecutive createTicket
+// calls select different clients. Hyphenated prefixes (e.g., "azure-")
+// match only clients with that exact adjective, avoiding collisions with
+// the ~13 seed-assigned clients. PID offset separates parallel workers.
+const CLIENT_SEARCH_TERMS = [
+  "azure-",
+  "ivory-",
+  "fleet-",
+  "plush-",
+  "proud-",
+  "solar-",
+  "swift-",
+  "bright-",
+  "smooth-",
+  "jolly-p",
+  "clear-r",
+  "rare-c",
+  "deep-s",
+  "full-r",
+  "noble-r",
+];
+let clientSearchIndex = process.pid % CLIENT_SEARCH_TERMS.length;
 
 /**
  * Assign a ticket to self via the card action button on the ticket list.
@@ -419,8 +464,32 @@ export async function assignTicketToSelf(
   });
   await card.getByRole("button", { name: /assign/i }).click();
 
-  // Wait for assignment to reflect (card should update).
-  await page.waitForTimeout(1_000);
+  // The assign button may open a volunteer picker sheet. If only one
+  // volunteer exists, it may self-assign directly. Either way, wait for
+  // any sheet to dismiss and the assignment to reflect on the card.
+  await page.waitForTimeout(500);
+
+  // If a volunteer picker sheet opened, select the first (only) volunteer.
+  const volunteerSheet = page.locator('[placeholder="Search volunteers..."]');
+  if (await volunteerSheet.isVisible({ timeout: 1_000 }).catch(() => false)) {
+    // Click the first volunteer in the list
+    const firstVolunteer = page
+      .locator('[data-testid="volunteer-item"]')
+      .first();
+    if (await firstVolunteer.isVisible({ timeout: 2_000 }).catch(() => false)) {
+      await firstVolunteer.click();
+    }
+    // Wait for the sheet to close
+    await page.waitForTimeout(500);
+  }
+
+  // Dismiss any residual sheets/backdrops via Escape.
+  for (let i = 0; i < 3; i++) {
+    const backdrop = page.locator(".fixed.z-40");
+    if (!(await backdrop.isVisible({ timeout: 300 }).catch(() => false))) break;
+    await page.keyboard.press("Escape");
+    await page.waitForTimeout(300);
+  }
 }
 
 /**
