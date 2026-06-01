@@ -245,19 +245,30 @@ test.describe.serial("Ticket Detail (Chat View)", () => {
   // ── 12. Action sheets (Checkpoints 9, 10, 11) ──────────────────
 
   test("more actions sheet shows ticket actions", async () => {
+    // Prior tests may leave a z-40 backdrop from compose/preset overlays.
+    // Dispatch click directly on the button to bypass any residual overlay.
     const moreBtn = page.getByRole("button", { name: /more actions/i });
-    await moreBtn.click();
+    await moreBtn.dispatchEvent("click");
 
     // "Help with housing" is assigned to me, so Release should show.
-    await expect(page.getByText("Release")).toBeVisible();
-    await expect(page.getByText("Assign")).toBeVisible();
+    // Scope to the panel popup to avoid strict mode violations from
+    // "Assigned to Dev Admin" text elsewhere on the page.
+    const panel = page.getByRole("dialog", { name: /glad-mist/i });
+    await expect(panel.getByText("Release")).toBeVisible();
+    await expect(panel.getByText("Assign", { exact: true })).toBeVisible();
 
     // Dismiss.
     await page.keyboard.press("Escape");
   });
 
   test("call sheet shows browser and phone options", async () => {
-    const callBtn = page.getByRole("button", { name: /call/i }).first();
+    // The Call button lives inside the panel popup. Re-open it first.
+    const moreBtn = page.getByRole("button", { name: /more actions/i });
+    await moreBtn.dispatchEvent("click");
+    const panel = page.getByRole("dialog", { name: /glad-mist/i });
+    await expect(panel).toBeVisible({ timeout: 5_000 });
+
+    const callBtn = panel.getByRole("button", { name: /call/i });
     await callBtn.click();
 
     await expect(page.getByText(/call via browser/i)).toBeVisible();

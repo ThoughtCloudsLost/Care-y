@@ -132,6 +132,11 @@
     padding-bottom: calc(var(--k-safe-area-bottom) + 1.5rem);
   }
 
+  .shell-sheet-content:not([inert]) {
+    visibility: visible;
+    transition: none;
+  }
+
   .shell-sheet-content[inert] {
     visibility: hidden;
     transition: visibility 0s 400ms;

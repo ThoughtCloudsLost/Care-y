@@ -90,6 +90,7 @@ describe("NewTicketForm", () => {
           queues: defaultQueues,
           searchClients: mockSearchClients,
           onsubmit: vi.fn(),
+          formId: "test-form",
         },
       });
 
@@ -103,6 +104,7 @@ describe("NewTicketForm", () => {
           queues: defaultQueues,
           searchClients: mockSearchClients,
           onsubmit: vi.fn(),
+          formId: "test-form",
         },
       });
 
@@ -114,17 +116,20 @@ describe("NewTicketForm", () => {
   });
 
   describe("rendering structure", () => {
-    it("renders as a div (not a form), with submit controlled by parent", () => {
+    it("renders as a form with the provided formId", () => {
       const { container } = render(NewTicketForm, {
         props: {
           queues: defaultQueues,
           searchClients: mockSearchClients,
           onsubmit: vi.fn(),
+          formId: "test-form",
         },
       });
 
-      expect(container.querySelector("form")).toBeNull();
-      expect(container.querySelector(".new-ticket-body")).toBeTruthy();
+      const form = container.querySelector("form");
+      expect(form).toBeTruthy();
+      expect(form!.id).toBe("test-form");
+      expect(form!.classList.contains("new-ticket-body")).toBe(true);
     });
   });
 });

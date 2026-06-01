@@ -187,8 +187,9 @@ test.describe.serial("Ticket Actions (Call + SMS)", () => {
 
     expect(results.violations).toEqual([]);
 
-    // Cleanup: dismiss the SMS compose sheet.
-    const smsSheet = page.getByRole("dialog").last();
-    await smsSheet.getByRole("button", { name: /cancel/i }).click();
+    // Cleanup: dismiss the SMS compose sheet (last test, page may be closing).
+    if (!page.isClosed()) {
+      await page.keyboard.press("Escape");
+    }
   });
 });
