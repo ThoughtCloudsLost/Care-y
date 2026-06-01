@@ -310,8 +310,9 @@ describe("TicketCard", () => {
     const { container } = render(TicketCard, {
       props: { ...defaults, multiSelectActive: true },
     });
-    const inner = container.querySelector("[role='button']");
-    if (inner) await fireEvent.click(inner);
+    const openBtn = container.querySelector("button.card-open-link");
+    expect(openBtn).not.toBeNull();
+    if (openBtn) await fireEvent.click(openBtn);
     expect(onselect).toHaveBeenCalledWith("t-001");
     expect(ontap).not.toHaveBeenCalled();
   });
@@ -374,17 +375,18 @@ describe("TicketCard", () => {
 
   it("fires ontap with ticketId on card click", async () => {
     const { container } = render(TicketCard, { props: defaults });
-    const inner = container.querySelector("[role='button']");
-    if (inner) await fireEvent.click(inner);
+    const openBtn = container.querySelector("button.card-open-link");
+    expect(openBtn).not.toBeNull();
+    if (openBtn) await fireEvent.click(openBtn);
     expect(ontap).toHaveBeenCalledWith("t-001");
   });
 
   // --- Keyboard accessibility ---
 
-  it("card-inner has role=button and tabindex for keyboard access", () => {
+  it("card open button exists with accessible label", () => {
     const { container } = render(TicketCard, { props: defaults });
-    const inner = container.querySelector("[role='button']");
-    expect(inner).not.toBeNull();
-    expect(inner?.getAttribute("tabindex")).toBe("0");
+    const openBtn = container.querySelector("button.card-open-link");
+    expect(openBtn).not.toBeNull();
+    expect(openBtn?.getAttribute("aria-label")).toBeTruthy();
   });
 });

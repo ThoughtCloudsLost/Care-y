@@ -60,5 +60,31 @@ export default async function globalSetup(): Promise<void> {
     "Running tenant migrations (new schemas)",
     `${SERVER_EXEC} tsx src/db/migrate.ts --all-schemas`,
   );
+
+  // Delete stale E2E-created tickets to prevent TICKET_ALREADY_OPEN collisions.
+  // E2E-created tickets have zero followups, while seed tickets always have
+  // at least one (devAutoLogin creates messages during seed).
+  // Pipe SQL via stdin to avoid shell quoting issues with PL/pgSQL $$ blocks.
+  console.log("[e2e] Cleaning stale E2E tickets...");
+  try {
+    const sql = [
+      "DO $fn$ DECLARE s TEXT; BEGIN",
+      `SELECT schema_name INTO s FROM orgs WHERE slug = '${E2E_ORG_SLUG}';`,
+      "IF s IS NOT NULL THEN",
+      "EXECUTE format('DELETE FROM %I.ticket_key_wraps WHERE ticket_id IN (SELECT id FROM %I.tickets t WHERE NOT EXISTS (SELECT 1 FROM %I.followups f WHERE f.ticket_id = t.id))', s, s, s);",
+      "EXECUTE format('DELETE FROM %I.ticket_watchers WHERE ticket_id IN (SELECT id FROM %I.tickets t WHERE NOT EXISTS (SELECT 1 FROM %I.followups f WHERE f.ticket_id = t.id))', s, s, s);",
+      "EXECUTE format('DELETE FROM %I.ticket_read_cursors WHERE ticket_id IN (SELECT id FROM %I.tickets t WHERE NOT EXISTS (SELECT 1 FROM %I.followups f WHERE f.ticket_id = t.id))', s, s, s);",
+      "EXECUTE format('DELETE FROM %I.tickets t WHERE NOT EXISTS (SELECT 1 FROM %I.followups f WHERE f.ticket_id = t.id)', s, s);",
+      "END IF; END $fn$;",
+    ].join("\n");
+    execSync(`${COMPOSE} exec -T db psql -U care_y -d care_y`, {
+      input: sql,
+      stdio: ["pipe", "inherit", "inherit"],
+      cwd: process.cwd(),
+    });
+  } catch {
+    console.warn("[e2e] Could not clean stale tickets (non-fatal)");
+  }
+
   console.log("[e2e] E2E org ready");
 }

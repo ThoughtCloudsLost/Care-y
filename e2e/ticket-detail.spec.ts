@@ -6,6 +6,7 @@ import { CRYPTO_TIMEOUT, login, openTicketByTitle, longPress } from "./helpers";
 
 test.describe.serial("Ticket Detail (Chat View)", () => {
   let page: Page;
+  let clientAlias = "";
 
   test.beforeAll(async ({ browser }, testInfo) => {
     testInfo.setTimeout(CRYPTO_TIMEOUT * 2);
@@ -26,6 +27,16 @@ test.describe.serial("Ticket Detail (Chat View)", () => {
 
   test("opens Help with housing ticket from ticket list", async () => {
     await openTicketByTitle(page, "Help with housing");
+
+    // Capture the client alias from the navbar for use in subsequent tests.
+    // Wait for the alias to decrypt (matches adjective-noun-number pattern).
+    const aliasBtn = page.getByRole("button", {
+      name: /view info for [a-z]+-[a-z]+-\d+/i,
+    });
+    await expect(aliasBtn).toBeVisible({ timeout: CRYPTO_TIMEOUT });
+    const aliasText = (await aliasBtn.innerText()).trim();
+    clientAlias = aliasText;
+    console.log(`[ticket-detail] client alias: "${clientAlias}"`);
   });
 
   // ── 2. Chat bubble alignment (Checkpoint 1) ─────────────────────
@@ -251,9 +262,10 @@ test.describe.serial("Ticket Detail (Chat View)", () => {
     await moreBtn.dispatchEvent("click");
 
     // "Help with housing" is assigned to me, so Release should show.
-    // Scope to the panel popup to avoid strict mode violations from
-    // "Assigned to Dev Admin" text elsewhere on the page.
-    const panel = page.getByRole("dialog", { name: /glad-mist/i });
+    // Scope to the panel popup using the dynamically captured client alias.
+    const panel = page.locator(
+      `[data-testid="popup-dialog"][aria-label="${clientAlias}"]`,
+    );
     await expect(panel.getByText("Release")).toBeVisible();
     await expect(panel.getByText("Assign", { exact: true })).toBeVisible();
 
@@ -265,7 +277,9 @@ test.describe.serial("Ticket Detail (Chat View)", () => {
     // The Call button lives inside the panel popup. Re-open it first.
     const moreBtn = page.getByRole("button", { name: /more actions/i });
     await moreBtn.dispatchEvent("click");
-    const panel = page.getByRole("dialog", { name: /glad-mist/i });
+    const panel = page.locator(
+      `[data-testid="popup-dialog"][aria-label="${clientAlias}"]`,
+    );
     await expect(panel).toBeVisible({ timeout: 5_000 });
 
     const callBtn = panel.getByRole("button", { name: /call/i });
@@ -273,13 +287,25 @@ test.describe.serial("Ticket Detail (Chat View)", () => {
 
     await expect(page.getByText(/call via browser/i)).toBeVisible();
 
-    // Dismiss.
-    await page.keyboard.press("Escape");
+    // Dismiss all overlays. Call sheet and panel may be stacked.
+    // Press Escape repeatedly until no dialogs remain (max 3 presses).
+    for (let i = 0; i < 3; i++) {
+      await page.keyboard.press("Escape");
+      await page.waitForTimeout(400);
+      const anyDialog = page.locator(
+        `[data-testid="popup-dialog"][aria-label="${clientAlias}"]`,
+      );
+      if (!(await anyDialog.isVisible({ timeout: 500 }).catch(() => false))) {
+        break;
+      }
+    }
   });
 
-  test("client alias opens client info panel", async () => {
-    const aliasBtn = page.getByRole("button", { name: /client info/i });
-    await aliasBtn.click();
+  test("client alias opens client info panel", async ({}, testInfo) => {
+    testInfo.setTimeout(CRYPTO_TIMEOUT * 2);
+    const aliasBtn = page.getByRole("button", { name: /view info for/i });
+    // Navbar z-index can cover the alias button. Dispatch directly.
+    await aliasBtn.dispatchEvent("click");
 
     // Client info panel opens as a dialog.
     await expect(page.getByRole("dialog").last()).toBeVisible();

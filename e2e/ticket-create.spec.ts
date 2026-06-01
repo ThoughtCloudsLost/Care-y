@@ -70,7 +70,7 @@ test.describe.serial("ticket creation (production UI)", () => {
     await page.getByRole("tab", { name: "Tickets" }).click();
     await expect(page).toHaveURL("/tickets");
 
-    await expect(page.getByText("UI-created test ticket")).toBeVisible({
+    await expect(page.getByText("UI-created test ticket").first()).toBeVisible({
       timeout: CRYPTO_TIMEOUT,
     });
   });
