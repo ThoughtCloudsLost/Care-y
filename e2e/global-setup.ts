@@ -61,16 +61,19 @@ export default async function globalSetup(): Promise<void> {
     `${SERVER_EXEC} tsx src/db/migrate.ts --all-schemas`,
   );
 
-  // Delete stale E2E-created tickets to prevent TICKET_ALREADY_OPEN collisions.
-  // E2E-created tickets have zero followups, while seed tickets always have
-  // at least one (devAutoLogin creates messages during seed).
-  // Pipe SQL via stdin to avoid shell quoting issues with PL/pgSQL $$ blocks.
+  // Delete stale E2E-created tickets to prevent TICKET_ALREADY_OPEN collisions
+  // and count drift in dashboard assertions. Seed tickets are created by
+  // devSeedTickets and always have user-authored followups (source != 'system').
+  // E2E-created tickets either have zero followups or only system followups
+  // (from take/assign actions). Delete both patterns.
   console.log("[e2e] Cleaning stale E2E tickets...");
   try {
     const sql = [
       "DO $fn$ DECLARE s TEXT; BEGIN",
       `SELECT schema_name INTO s FROM orgs WHERE slug = '${E2E_ORG_SLUG}';`,
       "IF s IS NOT NULL THEN",
+      // Identify non-seed tickets: those with no user-authored followups.
+      "EXECUTE format('DELETE FROM %I.followups WHERE ticket_id IN (SELECT id FROM %I.tickets t WHERE NOT EXISTS (SELECT 1 FROM %I.followups f WHERE f.ticket_id = t.id AND f.source != ''system''))', s, s, s);",
       "EXECUTE format('DELETE FROM %I.ticket_key_wraps WHERE ticket_id IN (SELECT id FROM %I.tickets t WHERE NOT EXISTS (SELECT 1 FROM %I.followups f WHERE f.ticket_id = t.id))', s, s, s);",
       "EXECUTE format('DELETE FROM %I.ticket_watchers WHERE ticket_id IN (SELECT id FROM %I.tickets t WHERE NOT EXISTS (SELECT 1 FROM %I.followups f WHERE f.ticket_id = t.id))', s, s, s);",
       "EXECUTE format('DELETE FROM %I.ticket_read_cursors WHERE ticket_id IN (SELECT id FROM %I.tickets t WHERE NOT EXISTS (SELECT 1 FROM %I.followups f WHERE f.ticket_id = t.id))', s, s, s);",

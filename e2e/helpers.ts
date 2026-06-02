@@ -490,8 +490,8 @@ const CLIENT_SEARCH_TERMS = [
 let clientSearchIndex = process.pid % CLIENT_SEARCH_TERMS.length;
 
 /**
- * Assign a ticket to self via the card action button on the ticket list.
- * The "Assign" button triggers the take/assign flow.
+ * Assign a ticket to self via the "Take" card action button on the ticket list.
+ * Unassigned tickets show a one-tap "Take" button (no sheet, no crypto).
  */
 export async function assignTicketToSelf(
   page: Page,
@@ -502,54 +502,21 @@ export async function assignTicketToSelf(
     await expect(page).toHaveURL("/tickets");
   }
 
-  await expect(page.getByText(title)).toBeVisible({ timeout: CRYPTO_TIMEOUT });
-
-  const card = page.locator('[data-testid="ticket-card-wrap"]', {
-    hasText: title,
+  await expect(page.getByText(title).first()).toBeVisible({
+    timeout: CRYPTO_TIMEOUT,
   });
-  await card.getByRole("button", { name: /assign/i }).click();
 
-  // The assign button opens a volunteer picker sheet (AssignSheet) with
-  // Konsta Toggle controls. Wait for the "(you)" volunteer to appear.
-  // The volunteer name is encrypted and needs org key decryption, so allow
-  // extra time for the crypto pipeline.
-  const youItem = page.getByText(/\(you\)/).first();
-  const sheetLoaded = await youItem
-    .waitFor({ state: "visible", timeout: CRYPTO_TIMEOUT })
-    .then(() => true)
-    .catch(() => false);
+  const card = page
+    .locator('[data-testid="ticket-card-wrap"]', {
+      hasText: title,
+    })
+    .first();
+  await card.getByRole("button", { name: /take/i }).click();
 
-  if (sheetLoaded) {
-    // Find the checkbox via page.evaluate for reliability (avoids locator
-    // chain issues with xpath ancestor traversal across Svelte component
-    // boundaries). Focus it and press Space for a trusted toggle event.
-    const focused = await page.evaluate(() => {
-      const youEl = Array.from(document.querySelectorAll("*")).find(
-        (el) => el.childNodes.length === 1 && el.textContent.includes("(you)"),
-      );
-      const li = youEl?.closest("li");
-      const checkbox = li?.querySelector<HTMLInputElement>(
-        'input[type="checkbox"]',
-      );
-      if (!checkbox) return false;
-      checkbox.focus();
-      return document.activeElement === checkbox;
-    });
-
-    if (focused) {
-      await page.keyboard.press("Space");
-      await page.waitForTimeout(800);
-    }
-  }
-
-  // Dismiss any residual sheets/backdrops via Escape (focus trap handles it).
-  // Use .first() to avoid Playwright strict mode errors when multiple backdrops exist.
-  for (let i = 0; i < 5; i++) {
-    const backdrop = page.locator(".fixed.z-40").first();
-    if (!(await backdrop.isVisible().catch(() => false))) break;
-    await page.keyboard.press("Escape");
-    await page.waitForTimeout(400);
-  }
+  // Wait for the assignment to complete (assignee text changes from "Unassigned").
+  await expect(card.locator(".assignee")).not.toHaveText(/unassigned/i, {
+    timeout: CRYPTO_TIMEOUT,
+  });
 }
 
 /**
@@ -564,11 +531,15 @@ export async function putTicketOnHold(
     await expect(page).toHaveURL("/tickets");
   }
 
-  await expect(page.getByText(title)).toBeVisible({ timeout: CRYPTO_TIMEOUT });
-
-  const card = page.locator('[data-testid="ticket-card-wrap"]', {
-    hasText: title,
+  await expect(page.getByText(title).first()).toBeVisible({
+    timeout: CRYPTO_TIMEOUT,
   });
+
+  const card = page
+    .locator('[data-testid="ticket-card-wrap"]', {
+      hasText: title,
+    })
+    .first();
   await card.getByRole("button", { name: /hold/i }).click();
 
   await page.waitForTimeout(1_000);

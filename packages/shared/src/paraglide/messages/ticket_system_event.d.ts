@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "System event" |
+* | "Event" |
 *
 * @param {Ticket_System_EventInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

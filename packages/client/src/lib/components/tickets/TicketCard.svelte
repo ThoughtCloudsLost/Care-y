@@ -2,6 +2,7 @@
   import { Card, Chip, Badge, Checkbox, Link } from "konsta/svelte";
   import {
     Dot,
+    Hand,
     MessageSquare,
     Phone,
     Pause,
@@ -48,6 +49,7 @@
 
   const previewLoader = getPreviewLoader();
   const isList = $derived(viewMode === "list");
+  const isUnassigned = $derived(assignedName === null);
 
   const statusLabel = $derived.by(() => {
     switch (displayStatus) {
@@ -279,18 +281,33 @@
                 <Pause size={18} />
               {/if}
             </Link>
-            <Link
-              iconOnly
-              role="button"
-              aria-label={m.tickets_action_assign()}
-              onclick={(e: MouseEvent) => {
-                e.stopPropagation();
-                onaction?.(ticketId, "assign");
-              }}
-              class="action-icon p-1 -m-1"
-            >
-              <UserPlus size={18} />
-            </Link>
+            {#if isUnassigned}
+              <Link
+                iconOnly
+                role="button"
+                aria-label={m.tickets_action_take()}
+                onclick={(e: MouseEvent) => {
+                  e.stopPropagation();
+                  onaction?.(ticketId, "take");
+                }}
+                class="action-icon p-1 -m-1"
+              >
+                <Hand size={18} />
+              </Link>
+            {:else}
+              <Link
+                iconOnly
+                role="button"
+                aria-label={m.tickets_action_assign()}
+                onclick={(e: MouseEvent) => {
+                  e.stopPropagation();
+                  onaction?.(ticketId, "assign");
+                }}
+                class="action-icon p-1 -m-1"
+              >
+                <UserPlus size={18} />
+              </Link>
+            {/if}
           </div>
         {/if}
       </div>

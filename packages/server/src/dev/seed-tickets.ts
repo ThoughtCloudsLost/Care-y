@@ -921,9 +921,13 @@ export async function seedTestTickets(
         .execute();
     }
 
-    // Create follow-ups (encrypted with same ticket key)
+    // Create follow-ups (encrypted with same ticket key, except system events
+    // which carry no encrypted content under the Proton model)
     for (const fu of def.followUps) {
-      const encryptedContent = encryptContent(encoder.encode(fu.content), tk);
+      const isSystem = fu.source === "system";
+      const encryptedContent = isSystem
+        ? new Uint8Array(0)
+        : encryptContent(encoder.encode(fu.content), tk);
       const followUp = await tDb
         .insertInto("followups")
         .values({

@@ -977,11 +977,13 @@
   const VISIBLE_BATCH = 20;
 
   const initialBatchReady = $derived.by((): boolean => {
-    if (decrypt == null || followUps.length === 0) return false;
+    if (followUps.length === 0) return false;
     const startIdx = Math.max(0, followUps.length - VISIBLE_BATCH);
     for (let i = startIdx; i < followUps.length; i++) {
       const fu = followUps[i]; // eslint-disable-line security/detect-object-injection -- i is a loop counter bounded by followUps.length
       if (!fu?.encryptedContent) continue;
+      if (fu.source === "system") continue;
+      if (decrypt == null) return false;
       const result = decrypt.followUp(fu.id, fu.encryptedContent);
       if (result.status === "loading") return false;
     }
@@ -1093,7 +1095,7 @@
             }}
           >
             {#if kind === "system"}
-              <SystemEvent result={recResult} timestamp={rec.createdAt} />
+              <SystemEvent type={rec.type} timestamp={rec.createdAt} />
             {:else if kind === "note"}
               <PrivateNote
                 result={recResult}
@@ -1252,10 +1254,7 @@
                   </div>
                 {/if}
                 {#if kind === "system"}
-                  <SystemEvent
-                    result={contentResult}
-                    timestamp={fu.createdAt}
-                  />
+                  <SystemEvent type={fu.type} timestamp={fu.createdAt} />
                 {:else if kind === "note"}
                   <PrivateNote
                     result={contentResult}
