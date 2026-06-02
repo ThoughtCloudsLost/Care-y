@@ -346,29 +346,59 @@ export async function createTicket(
   await expect(sheet).toBeVisible({ timeout: 15_000 });
 
   // Select client, fill form, and submit. Retries with a different client
-  // if the server returns TICKET_ALREADY_OPEN (409) for the selected client.
-  for (let attempt = 0; attempt < 3; attempt++) {
-    // Select a client via keyboard (WAI-ARIA descendant pattern).
+  // if the search term has no matches or the server returns 409 (TICKET_ALREADY_OPEN).
+  let needsFormFill = true;
+  for (let attempt = 0; attempt < 15; attempt++) {
+    // Ensure the sheet is open before each attempt.
+    if (!(await sheet.isVisible({ timeout: 500 }).catch(() => false))) {
+      await newTicketBtn.click();
+      await expect(sheet).toBeVisible({ timeout: 15_000 });
+      needsFormFill = true;
+    }
+
+    // Search for a client. Try the next term if no results appear.
     const searchTerm =
       CLIENT_SEARCH_TERMS.at(
         clientSearchIndex++ % CLIENT_SEARCH_TERMS.length,
       ) ?? "azure-";
     const clientInput = sheet.getByPlaceholder(/search by alias/i);
-    await clientInput.click();
     await clientInput.fill("");
+    await clientInput.click();
     await clientInput.pressSequentially(searchTerm, { delay: 30 });
+
+    // Short wait for search results. If none appear, try the next term.
     const firstResult = page.locator("[data-testid='client-result']").first();
-    await firstResult.waitFor({ state: "visible", timeout: CRYPTO_TIMEOUT });
-    await clientInput.press("ArrowDown");
-    await clientInput.press("Enter");
+    const resultsAppeared = await firstResult
+      .waitFor({ state: "visible", timeout: 5_000 })
+      .then(() => true)
+      .catch(() => false);
+    if (!resultsAppeared) {
+      console.log(
+        `[createTicket] no results for "${searchTerm}" (attempt ${String(attempt + 1)}), trying next term`,
+      );
+      continue;
+    }
+
+    // Click the first result to select it.
+    await firstResult.click();
     await expect(firstResult).not.toBeVisible({ timeout: 3_000 });
 
-    await expect(sheet.getByText(/^[a-z]+-[a-z]+-\d+$/)).toBeVisible({
-      timeout: 3_000,
-    });
+    // Wait for the selected alias to appear (confirms selection stuck).
+    const aliasShown = await sheet
+      .getByText(/^[a-z]+-[a-z]+-\d+$/)
+      .first()
+      .waitFor({ state: "visible", timeout: 3_000 })
+      .then(() => true)
+      .catch(() => false);
+    if (!aliasShown) {
+      console.log(
+        `[createTicket] selection didn't stick for "${searchTerm}" (attempt ${String(attempt + 1)}), retrying`,
+      );
+      continue;
+    }
 
-    // Fill form fields (only on first attempt; subsequent attempts reuse).
-    if (attempt === 0) {
+    // Fill form fields on first attempt and after sheet reopens (fields reset).
+    if (needsFormFill) {
       await sheet.getByPlaceholder(/brief description/i).fill(opts.title);
       if (opts.description != null) {
         await sheet.getByPlaceholder(/details/i).fill(opts.description);
@@ -381,6 +411,7 @@ export async function createTicket(
       await sheet
         .locator(".new-ticket-queue-list select")
         .selectOption({ label: opts.queue });
+      needsFormFill = false;
     }
 
     // Blur combobox and let effects settle.
@@ -409,8 +440,7 @@ export async function createTicket(
       return;
     }
 
-    // 409: client already has an open ticket. Wait for error toast to
-    // clear, then retry with a different client on the next loop iteration.
+    // 409: client already has an open ticket. Retry with a different client.
     console.log(
       `[createTicket] 409 on attempt ${String(attempt + 1)}, retrying with different client`,
     );
@@ -421,26 +451,41 @@ export async function createTicket(
   await expect(sheet).not.toBeVisible({ timeout: CRYPTO_TIMEOUT });
 }
 
-// Rotate through hyphenated search prefixes so consecutive createTicket
-// calls select different clients. Hyphenated prefixes (e.g., "azure-")
-// match only clients with that exact adjective, avoiding collisions with
-// the ~13 seed-assigned clients. PID offset separates parallel workers.
+// Rotate through adjective prefixes to find clients without open tickets.
+// With 120 clients drawn from 83 adjectives (~1.4 per adjective), any
+// single term may not match. Use many full-adjective terms to maximize
+// coverage. PID offset separates parallel workers.
 const CLIENT_SEARCH_TERMS = [
   "azure-",
   "ivory-",
   "fleet-",
   "plush-",
   "proud-",
-  "solar-",
   "swift-",
   "bright-",
   "smooth-",
-  "jolly-p",
-  "clear-r",
-  "rare-c",
-  "deep-s",
-  "full-r",
-  "noble-r",
+  "coral-",
+  "opal-",
+  "merry-",
+  "rosy-",
+  "snowy-",
+  "jolly-",
+  "noble-",
+  "serene-",
+  "humble-",
+  "vivid-",
+  "teal-",
+  "sunny-",
+  "steady-",
+  "silver-",
+  "sandy-",
+  "lucid-",
+  "dusky-",
+  "early-",
+  "gentle-",
+  "solar-",
+  "stone-",
+  "open-",
 ];
 let clientSearchIndex = process.pid % CLIENT_SEARCH_TERMS.length;
 
@@ -464,31 +509,46 @@ export async function assignTicketToSelf(
   });
   await card.getByRole("button", { name: /assign/i }).click();
 
-  // The assign button may open a volunteer picker sheet. If only one
-  // volunteer exists, it may self-assign directly. Either way, wait for
-  // any sheet to dismiss and the assignment to reflect on the card.
-  await page.waitForTimeout(500);
+  // The assign button opens a volunteer picker sheet (AssignSheet) with
+  // Konsta Toggle controls. Wait for the "(you)" volunteer to appear.
+  // The volunteer name is encrypted and needs org key decryption, so allow
+  // extra time for the crypto pipeline.
+  const youItem = page.getByText(/\(you\)/).first();
+  const sheetLoaded = await youItem
+    .waitFor({ state: "visible", timeout: CRYPTO_TIMEOUT })
+    .then(() => true)
+    .catch(() => false);
 
-  // If a volunteer picker sheet opened, select the first (only) volunteer.
-  const volunteerSheet = page.locator('[placeholder="Search volunteers..."]');
-  if (await volunteerSheet.isVisible({ timeout: 1_000 }).catch(() => false)) {
-    // Click the first volunteer in the list
-    const firstVolunteer = page
-      .locator('[data-testid="volunteer-item"]')
-      .first();
-    if (await firstVolunteer.isVisible({ timeout: 2_000 }).catch(() => false)) {
-      await firstVolunteer.click();
+  if (sheetLoaded) {
+    // Find the checkbox via page.evaluate for reliability (avoids locator
+    // chain issues with xpath ancestor traversal across Svelte component
+    // boundaries). Focus it and press Space for a trusted toggle event.
+    const focused = await page.evaluate(() => {
+      const youEl = Array.from(document.querySelectorAll("*")).find(
+        (el) => el.childNodes.length === 1 && el.textContent.includes("(you)"),
+      );
+      const li = youEl?.closest("li");
+      const checkbox = li?.querySelector<HTMLInputElement>(
+        'input[type="checkbox"]',
+      );
+      if (!checkbox) return false;
+      checkbox.focus();
+      return document.activeElement === checkbox;
+    });
+
+    if (focused) {
+      await page.keyboard.press("Space");
+      await page.waitForTimeout(800);
     }
-    // Wait for the sheet to close
-    await page.waitForTimeout(500);
   }
 
-  // Dismiss any residual sheets/backdrops via Escape.
-  for (let i = 0; i < 3; i++) {
-    const backdrop = page.locator(".fixed.z-40");
-    if (!(await backdrop.isVisible({ timeout: 300 }).catch(() => false))) break;
+  // Dismiss any residual sheets/backdrops via Escape (focus trap handles it).
+  // Use .first() to avoid Playwright strict mode errors when multiple backdrops exist.
+  for (let i = 0; i < 5; i++) {
+    const backdrop = page.locator(".fixed.z-40").first();
+    if (!(await backdrop.isVisible().catch(() => false))) break;
     await page.keyboard.press("Escape");
-    await page.waitForTimeout(300);
+    await page.waitForTimeout(400);
   }
 }
 
