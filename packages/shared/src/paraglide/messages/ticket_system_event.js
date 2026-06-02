@@ -6,17 +6,17 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Ticket_System_EventInputs */
 
 const en_ticket_system_event = /** @type {(inputs: Ticket_System_EventInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`System event`)
+	return /** @type {LocalizedString} */ (`Event`)
 };
 
 const es_ticket_system_event = /** @type {(inputs: Ticket_System_EventInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Evento del sistema`)
+	return /** @type {LocalizedString} */ (`Evento`)
 };
 
 /**
 * | output |
 * | --- |
-* | "System event" |
+* | "Event" |
 *
 * @param {Ticket_System_EventInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

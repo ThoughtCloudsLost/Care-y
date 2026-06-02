@@ -263,7 +263,7 @@ export function createTicketService(
         ticket_id: ticketId,
         source: "system",
         type,
-        encrypted_content: Buffer.from("system"),
+        encrypted_content: Buffer.alloc(0),
       })
       .execute();
   }

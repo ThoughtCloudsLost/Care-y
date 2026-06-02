@@ -4,27 +4,30 @@
   Renders follow-ups with source="system" as centered, muted Konsta Chips.
   These are contextual flow markers (assignment, status, hold, priority changes),
   not messages. They show what happened, not what someone said.
+
+  Display text is derived from the follow-up type field, not from encrypted
+  content. System events carry no encrypted payload under the Proton model
+  because the server (which creates them) does not hold the org private key.
 -->
 <script lang="ts">
   import { Chip } from "konsta/svelte";
   import { formatRelativeTime } from "$lib/utils/format-time.js";
-  import type { DecryptResult } from "$lib/crypto/decrypt-result.js";
-  import DecryptPlaceholder from "$lib/components/DecryptPlaceholder.svelte";
+  import { systemEventLabel } from "$lib/tickets/system-event-label.js";
 
   interface Props {
-    result: DecryptResult;
-    encryptedContent?: unknown;
+    type: string;
     timestamp: string;
   }
 
-  let { result, encryptedContent, timestamp }: Props = $props();
+  let { type, timestamp }: Props = $props();
 
+  const label = $derived(systemEventLabel(type));
   const timeLabel = $derived(formatRelativeTime(new Date(timestamp)));
 </script>
 
 <div class="system-event" role="status">
   <Chip outline class="system-chip">
-    <DecryptPlaceholder {result} ciphertext={encryptedContent} length={15} />
+    {label}
   </Chip>
   <time class="system-time" datetime={timestamp}>{timeLabel}</time>
 </div>

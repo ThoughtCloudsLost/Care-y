@@ -23,6 +23,7 @@
   import { resolveFollowUpTypeIcon } from "$lib/utils/note-type-icons.js";
   import { needsDateSeparator, formatDateSeparator } from "$lib/utils/time.js";
   import { computeGaps } from "$lib/tickets/gap-indicators.js";
+  import { systemEventLabel } from "$lib/tickets/system-event-label.js";
   import type {
     TimelineItem,
     ClusterRecord,
@@ -116,13 +117,7 @@
 
   function landmarkLabel(item: TimelineItem): string {
     if (item.source === "system") {
-      const decrypted = resolveDecrypted(item.id);
-      if (decrypted !== undefined && decrypted !== "") return decrypted;
-      if (item.type === "assignment_change") return "Assigned";
-      if (item.type === "status_change") return "Status changed";
-      if (item.type === "hold_change") return "Hold changed";
-      if (item.type === "priority_change") return "Priority changed";
-      return "Event";
+      return systemEventLabel(item.type);
     }
 
     if (item.type === "internal_note") {

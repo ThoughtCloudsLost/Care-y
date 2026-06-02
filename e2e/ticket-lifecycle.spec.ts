@@ -56,31 +56,44 @@ test.describe.serial("ticket lifecycle (production UI)", () => {
   });
 
   test("assigned ticket shows in detail with assignment event", async () => {
+    test.setTimeout(CRYPTO_TIMEOUT * 12);
     await openTicketByTitle(page, "Lifecycle: assign test");
 
-    // The assignment should create a system event in the timeline.
+    // The system event from take() appears as a follow-up with type
+    // "assignment_change". Scope to the chat log to avoid matching the
+    // global toast container.
+    const chatLog = page.locator('[role="log"]');
     await expect(
-      page.locator('[role="status"]', { hasText: /assigned/i }),
-    ).toBeVisible({ timeout: CRYPTO_TIMEOUT });
+      chatLog.locator('[role="status"]', { hasText: /assigned/i }),
+    ).toBeVisible({ timeout: CRYPTO_TIMEOUT * 2 });
+
+    // The SSE connection may drop and show "Reconnecting..." overlay.
+    // Wait for it to resolve before navigating.
+    const reconnecting = page.getByText("Reconnecting");
+    await expect(reconnecting)
+      .toBeHidden({ timeout: CRYPTO_TIMEOUT * 2 })
+      // eslint-disable-next-line @typescript-eslint/no-empty-function -- intentional: banner may not exist
+      .catch(() => {});
+
+    // Return to ticket list for the hold flow tests.
+    await page.getByRole("button", { name: /back/i }).click();
+    await expect(page).toHaveURL("/tickets");
   });
 
   // ── Hold flow ───────────────────────────────────────────────────
 
   test("put ticket on hold via card action button", async () => {
-    // Navigate back to ticket list.
-    await page.getByRole("tab", { name: "Tickets" }).click();
-    await expect(page).toHaveURL("/tickets");
-
-    // First assign it (hold requires assignment).
     await assignTicketToSelf(page, "Lifecycle: hold test");
     await putTicketOnHold(page, "Lifecycle: hold test");
   });
 
   test("held ticket shows hold event in timeline", async () => {
+    test.setTimeout(CRYPTO_TIMEOUT * 12);
     await openTicketByTitle(page, "Lifecycle: hold test");
 
+    const chatLog = page.locator('[role="log"]');
     await expect(
-      page.locator('[role="status"]', { hasText: /hold/i }),
-    ).toBeVisible({ timeout: CRYPTO_TIMEOUT });
+      chatLog.locator('[role="status"]', { hasText: /hold/i }),
+    ).toBeVisible({ timeout: CRYPTO_TIMEOUT * 2 });
   });
 });

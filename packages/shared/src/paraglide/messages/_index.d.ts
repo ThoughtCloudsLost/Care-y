@@ -520,6 +520,7 @@ export * from "./ticket_panel_recent_coming_soon.js";
 export * from "./ticket_toast_held.js";
 export * from "./ticket_toast_unheld.js";
 export * from "./ticket_toast_assigned.js";
+export * from "./ticket_toast_taken.js";
 export * from "./ticket_toast_unassigned.js";
 export * from "./ticket_toast_message_sent.js";
 export * from "./ticket_toast_bulk_assigned.js";

@@ -8,10 +8,10 @@
   - Renders ShellMessagebar compose bar (fixed bottom)
   - Hosts all overlays via shell wrappers (ActionSheet, Sheet, Popup)
   - Manages draft text state shared between compose bar and content
-  - Provides SvelteKit snapshot for draft preservation
+  - Persists drafts in memory across SPA navigations (no disk storage)
 -->
 <script lang="ts">
-  import type { Snapshot } from "./$types.js";
+  import { getDraft, setDraft } from "$lib/tickets/draft-store.svelte.js";
   import { page } from "$app/state";
   import { Link } from "konsta/svelte";
   import {
@@ -111,8 +111,27 @@
   const tabbarOverride = getTabbarOverrideCtx();
 
   // Draft compose state (shared with ShellMessagebar + TicketDetail).
-  let draftText = $state("");
+  // In-memory SvelteMap keyed by ticketId survives SPA navigations.
+  // No disk persistence (sessionStorage) to avoid plaintext PII on disk.
+  // Writable $derived: re-evaluates from store when ticketId changes,
+  // user writes from textarea bind override until next ticketId change.
+  let draftText = $derived(getDraft(ticketId));
   let cursorPosition = $state(0);
+
+  // Sync edits back to the store.
+  $effect(() => {
+    setDraft(ticketId, draftText);
+  });
+
+  // Warn before page refresh/tab close when a draft exists.
+  $effect(() => {
+    if (!draftText.trim()) return;
+    function onBeforeUnload(e: BeforeUnloadEvent): void {
+      e.preventDefault();
+    }
+    window.addEventListener("beforeunload", onBeforeUnload);
+    return () => window.removeEventListener("beforeunload", onBeforeUnload);
+  });
 
   function handleInput(e: Event): void {
     const target = e.target;
@@ -640,21 +659,6 @@
   function closeCallSheet(): void {
     callSheetOpen = false;
   }
-
-  // --- SvelteKit Snapshot (draft preservation) ---
-
-  interface TicketDetailSnapshot {
-    draftText: string;
-  }
-
-  export const snapshot: Snapshot<TicketDetailSnapshot> = {
-    capture: () => ({
-      draftText,
-    }),
-    restore: (value) => {
-      draftText = value.draftText;
-    },
-  };
 </script>
 
 {#snippet navLeft()}

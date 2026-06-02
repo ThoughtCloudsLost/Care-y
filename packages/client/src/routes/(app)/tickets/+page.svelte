@@ -39,6 +39,7 @@
   import { filterStore } from "$lib/stores/filters.svelte.js";
   import { viewModeStore } from "$lib/stores/view-mode.svelte.js";
   import { toastStore } from "$lib/stores/toast.svelte.js";
+  import { haptic } from "$lib/utils/haptic.js";
   import type {
     TicketCardProps,
     TicketQuickAction,
@@ -380,12 +381,29 @@
       case "assign":
         assignFlow.open(ticketId);
         break;
+      case "take":
+        void handleTake(ticketId);
+        break;
       case "reply":
         replyFlow.open(ticketId);
         break;
       case "call":
         callSheetOpen = true;
         break;
+    }
+  }
+
+  async function handleTake(ticketId: string): Promise<void> {
+    try {
+      await ticketRouter.take.mutate({ ticketId });
+      haptic();
+      toastStore.show(m.ticket_toast_taken(withTerms()));
+      void queryClient.invalidateQueries({
+        queryKey: ticketsKeys.lists(),
+      });
+    } catch (err: unknown) {
+      console.error("[tickets] take failed", err);
+      toastStore.show(m.error_generic(), 3000);
     }
   }
 

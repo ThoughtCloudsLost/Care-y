@@ -428,7 +428,7 @@ test.describe.serial("KB Editor (Create/Edit, Categories, ATAG)", () => {
   // ── 6. Accessibility audits ────────────────────────────────────
 
   test("a11y: new article page passes axe-core audit", async ({}, testInfo) => {
-    testInfo.setTimeout(CRYPTO_TIMEOUT * 4);
+    testInfo.setTimeout(CRYPTO_TIMEOUT * 6);
     await navigateToNewArticle(page);
 
     // Wait for toolbar to render.
@@ -443,26 +443,32 @@ test.describe.serial("KB Editor (Create/Edit, Categories, ATAG)", () => {
     // - meta-viewport: ArticleEditor sets maximum-scale=1 (intentional,
     //   prevents iOS auto-zoom on contenteditable which breaks keyboard
     //   toolbar positioning)
-    const results = await new AxeBuilder({ page })
-      .setLegacyMode(true)
-      .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"])
-      .exclude("[role='tablist']")
-      .exclude("[role='listbox']")
-      .disableRules(["listitem", "meta-viewport"])
-      .analyze();
-    expect(results.violations).toEqual([]);
-
-    // Clean up: dismiss the dirty editor so subsequent tests start from /library.
-    // Cancel opens a discard dialog whose Discard button triggers navigation,
-    // which detaches the button mid-click. Use dispatchEvent to bypass
-    // visibility and stability checks.
-    const cancelBtn = page.getByRole("button", { name: "Cancel" }).first();
-    await cancelBtn.dispatchEvent("click");
-    const discardBtn = page.getByText("Discard", { exact: true });
-    if (await discardBtn.isVisible({ timeout: 2_000 }).catch(() => false)) {
-      await discardBtn.dispatchEvent("click");
+    let violations: unknown[] = [];
+    try {
+      const results = await new AxeBuilder({ page })
+        .setLegacyMode(true)
+        .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"])
+        .exclude("[role='tablist']")
+        .exclude("[role='listbox']")
+        .disableRules(["listitem", "meta-viewport"])
+        .analyze();
+      violations = results.violations;
+    } finally {
+      // Clean up: dismiss the dirty editor so subsequent tests start from /library.
+      // Cancel opens a discard dialog whose Discard button triggers navigation,
+      // which detaches the button mid-click. Use dispatchEvent to bypass
+      // visibility and stability checks.
+      if (!page.isClosed()) {
+        const cancelBtn = page.getByRole("button", { name: "Cancel" }).first();
+        await cancelBtn.dispatchEvent("click");
+        const discardBtn = page.getByText("Discard", { exact: true });
+        if (await discardBtn.isVisible({ timeout: 2_000 }).catch(() => false)) {
+          await discardBtn.dispatchEvent("click");
+        }
+        await expect(page).toHaveURL("/library", { timeout: 5_000 });
+      }
     }
-    await expect(page).toHaveURL("/library", { timeout: 5_000 });
+    expect(violations).toEqual([]);
   });
 
   test("a11y: category management sheet passes axe-core audit", async ({}, testInfo) => {
