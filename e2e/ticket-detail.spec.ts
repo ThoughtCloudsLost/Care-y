@@ -164,14 +164,13 @@ test.describe.serial("Ticket Detail (Chat View)", () => {
     await longPress(page, note);
 
     // Context menu should show Copy, Edit Note, and Delete Note actions.
-    // Scope to Konsta Actions buttons (.k-actions-button) to avoid matching
-    // the inline pencil edit button in the note badge.
+    // Scope to the actions sheet to avoid matching the inline pencil edit
+    // button in the note badge.
+    const actionsSheet = page.locator('[data-testid="actions-sheet"]');
     await expect(page.getByText("Copy")).toBeVisible();
+    await expect(actionsSheet.filter({ hasText: /edit note/i })).toBeVisible();
     await expect(
-      page.locator(".k-actions-button").filter({ hasText: /edit note/i }),
-    ).toBeVisible();
-    await expect(
-      page.locator(".k-actions-button").filter({ hasText: /delete note/i }),
+      actionsSheet.filter({ hasText: /delete note/i }),
     ).toBeVisible();
 
     // Dismiss.
@@ -187,7 +186,7 @@ test.describe.serial("Ticket Detail (Chat View)", () => {
     });
     await longPress(page, note);
     await page
-      .locator(".k-actions-button")
+      .locator('[data-testid="actions-sheet"]')
       .filter({ hasText: /edit/i })
       .click();
 

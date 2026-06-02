@@ -70,10 +70,11 @@ async function sendAndWaitPort(
   port: MockPort,
   data: Record<string, unknown>,
 ): Promise<WorkerResponse> {
-  const countBefore = port.postMessage.mock.calls.length;
   sendToPort(port, data);
   await new Promise((r) => setTimeout(r, 50));
-  const call = port.postMessage.mock.calls[countBefore];
+  const call = port.postMessage.mock.calls.find(
+    ([msg]) => (msg as WorkerResponse).id === data.id,
+  );
   if (!call) throw new TestSetupError("No response posted to port");
   return call[0] as WorkerResponse;
 }

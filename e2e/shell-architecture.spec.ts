@@ -93,13 +93,12 @@ test.describe.serial("shell architecture", () => {
   test("Home tab is selected by default", async () => {
     const homeTab = page.getByRole("tab", { name: "Home" });
     await expect(homeTab).toHaveAttribute("aria-selected", "true");
-    await expect(homeTab).toHaveClass(/k-tabbar-link-active/);
   });
 
   // ── Navbar ──────────────────────────────────────────────────────────
 
   test("navbar renders with title and action buttons", async () => {
-    const navbar = page.locator(".k-navbar");
+    const navbar = page.getByRole("banner");
     await expect(navbar).toBeAttached();
     await expect(navbar).toContainText("CARE-Y");
 

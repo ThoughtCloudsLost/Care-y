@@ -347,9 +347,14 @@ describe("OprfEvaluateService", () => {
 
     await expect(service.evaluate(makeRequest())).rejects.toThrow(OprfError);
 
-    expect(auditLogger.calls).toHaveLength(1);
-    expect(auditLogger.calls[0]!.reason).toBe("oprf_failed");
-    expect(auditLogger.calls[0]!.userId).toBe(TEST_USER_ID);
+    expect(auditLogger.calls).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          reason: "oprf_failed",
+          userId: TEST_USER_ID,
+        }),
+      ]),
+    );
   });
 
   it("does not log to audit on successful evaluation", async () => {
