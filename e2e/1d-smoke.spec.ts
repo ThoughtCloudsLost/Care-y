@@ -20,7 +20,7 @@ test.describe.serial("1d-smoke", () => {
 
   test("page loads and renders shell structure", async () => {
     // Konsta App root renders
-    const appRoot = page.locator(".k-app").first();
+    const appRoot = page.locator('[data-testid="app-root"]').first();
     await expect(appRoot).toBeVisible();
 
     // Main content landmark exists
@@ -28,7 +28,7 @@ test.describe.serial("1d-smoke", () => {
     await expect(main).toBeAttached();
 
     // Bottom tab bar renders with correct tabs
-    const tabbar = page.locator(".k-toolbar");
+    const tabbar = page.getByRole("tablist");
     await expect(tabbar).toBeAttached();
 
     for (const name of ["Home", "Tickets", "Knowledge Base"]) {
@@ -41,7 +41,7 @@ test.describe.serial("1d-smoke", () => {
   });
 
   test("default theme is iOS and dark mode", async () => {
-    const appRoot = page.locator(".k-app").first();
+    const appRoot = page.locator('[data-testid="app-root"]').first();
     await expect(appRoot).toHaveClass(/k-ios/);
 
     const html = page.locator("html");

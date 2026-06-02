@@ -25,6 +25,7 @@
 <div use:portal={".k-page"}>
   <Actions {opened} onBackdropClick={trap.handleDismiss}>
     <div
+      data-testid="actions-sheet"
       bind:this={trap.dialogEl}
       role="dialog"
       aria-modal="true"

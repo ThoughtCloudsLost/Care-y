@@ -37,6 +37,7 @@
   theme={themeStore.current}
   dark={themeStore.resolvedScheme === "dark"}
   class="app-shell"
+  data-testid="app-root"
 >
   {@render children()}
   {#if DevPanel}

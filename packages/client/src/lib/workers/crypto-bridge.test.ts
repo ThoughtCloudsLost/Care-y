@@ -58,10 +58,10 @@ async function createReadyBridge(): Promise<CryptoBridge> {
   const { CryptoBridge } = await import("./crypto-bridge.js");
   const bridge = new CryptoBridge();
 
-  // The constructor sends an init request. Find it and respond.
-  const initCall = mockWorkerInstance?.postMessage.mock.calls[0] as
-    | [{ type: string; id: number }]
-    | undefined;
+  // The constructor sends an init request. Find it by type (not position).
+  const initCall = mockWorkerInstance?.postMessage.mock.calls.find(
+    ([msg]) => (msg as { type: string }).type === "init",
+  ) as [{ type: string; id: number }] | undefined;
   if (initCall) {
     respondFromWorker({ id: initCall[0].id, ok: true, type: "init" });
   }
@@ -89,13 +89,13 @@ describe("CryptoBridge", () => {
 
       expect(mockWorkerInstance).not.toBeNull();
 
-      const call = mockWorkerInstance?.postMessage.mock.calls[0] as [
-        { type: string; id: number },
-      ];
-      expect(call[0].type).toBe("init");
+      const call = mockWorkerInstance?.postMessage.mock.calls.find(
+        ([msg]) => (msg as { type: string }).type === "init",
+      ) as [{ type: string; id: number }] | undefined;
+      expect(call).toBeDefined();
 
       // Respond to init so waitReady resolves
-      respondFromWorker({ id: call[0].id, ok: true, type: "init" });
+      respondFromWorker({ id: call![0].id, ok: true, type: "init" });
       await bridge.waitReady();
       expect(bridge.getState()).toBe("READY");
     });
@@ -493,10 +493,10 @@ describe("CryptoBridge", () => {
       const argonPromise = bridge.argon2id(password, salt);
 
       // Now respond to init
-      const initCall = mockWorkerInstance?.postMessage.mock.calls[0] as [
-        { type: string; id: number },
-      ];
-      respondFromWorker({ id: initCall[0].id, ok: true, type: "init" });
+      const initCall = mockWorkerInstance?.postMessage.mock.calls.find(
+        ([msg]) => (msg as { type: string }).type === "init",
+      ) as [{ type: string; id: number }] | undefined;
+      respondFromWorker({ id: initCall![0].id, ok: true, type: "init" });
 
       // Wait for init to complete, then argon2id should have been sent
       await bridge.waitReady();
@@ -568,10 +568,10 @@ async function createReadySharedBridge(
 
   const port = mockSharedWorkerInstance?.port;
 
-  // Respond to init
-  const initCall = port?.postMessage.mock.calls[0] as
-    | [{ type: string; id: number }]
-    | undefined;
+  // Respond to init (find by type, not position)
+  const initCall = port?.postMessage.mock.calls.find(
+    ([msg]) => (msg as { type: string }).type === "init",
+  ) as [{ type: string; id: number }] | undefined;
   if (initCall) {
     respondFromSharedWorker({
       id: initCall[0].id,
@@ -641,10 +641,10 @@ describe("CryptoBridge (SharedWorker mode)", () => {
       expect(bridge.getMode()).toBe("dedicated");
 
       // Respond to init
-      const initCall = mockWorkerInstance?.postMessage.mock.calls[0] as [
-        { type: string; id: number },
-      ];
-      respondFromWorker({ id: initCall[0].id, ok: true, type: "init" });
+      const initCall = mockWorkerInstance?.postMessage.mock.calls.find(
+        ([msg]) => (msg as { type: string }).type === "init",
+      ) as [{ type: string; id: number }] | undefined;
+      respondFromWorker({ id: initCall![0].id, ok: true, type: "init" });
       await bridge.waitReady();
     });
   });
@@ -749,10 +749,10 @@ describe("CryptoBridge (SharedWorker mode)", () => {
       expect(mockSharedWorkerInstance).toBeNull();
       expect(bridge.getMode()).toBe("dedicated");
 
-      const initCall = mockWorkerInstance?.postMessage.mock.calls[0] as [
-        { type: string; id: number },
-      ];
-      respondFromWorker({ id: initCall[0].id, ok: true, type: "init" });
+      const initCall = mockWorkerInstance?.postMessage.mock.calls.find(
+        ([msg]) => (msg as { type: string }).type === "init",
+      ) as [{ type: string; id: number }] | undefined;
+      respondFromWorker({ id: initCall![0].id, ok: true, type: "init" });
       await bridge.waitReady();
     });
 
@@ -760,10 +760,10 @@ describe("CryptoBridge (SharedWorker mode)", () => {
       const { CryptoBridge } = await import("./crypto-bridge.js");
       const bridge = new CryptoBridge("dedicated");
 
-      const initCall = mockWorkerInstance?.postMessage.mock.calls[0] as [
-        { type: string; id: number },
-      ];
-      respondFromWorker({ id: initCall[0].id, ok: true, type: "init" });
+      const initCall = mockWorkerInstance?.postMessage.mock.calls.find(
+        ([msg]) => (msg as { type: string }).type === "init",
+      ) as [{ type: string; id: number }] | undefined;
+      respondFromWorker({ id: initCall![0].id, ok: true, type: "init" });
       await bridge.waitReady();
 
       bridge.destroy();

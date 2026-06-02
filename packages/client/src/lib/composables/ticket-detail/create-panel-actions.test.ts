@@ -97,11 +97,12 @@ describe("createPanelActions", () => {
 
   it("dispatches reopen mutation with new key generation", () => {
     make().dispatch("reopen");
-    expect(reopenMutate).toHaveBeenCalledOnce();
-    const args = reopenMutate.mock.calls[0]?.[0];
-    expect(args).toHaveProperty("ticketId", "t-001");
-    expect(args).toHaveProperty("newKeyGeneration");
-    expect(typeof args?.newKeyGeneration).toBe("string");
+    expect(reopenMutate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        ticketId: "t-001",
+        newKeyGeneration: expect.any(String),
+      }),
+    );
   });
 
   it("dispatches watch mutation", () => {
