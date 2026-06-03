@@ -241,7 +241,7 @@ const RATE_PASSWORD_CHANGE_MAX = 5;
 const RATE_UPLOAD_MAX = 3;
 const RATE_KB_UPLOAD_MAX = 5;
 const RATE_BRANDING_UPLOAD_MAX = 3;
-const RATE_BOOTSTRAP_MAX = 2;
+const RATE_BOOTSTRAP_MAX = process.env.NODE_ENV === "production" ? 2 : 20;
 
 // --- Rate limiters ---
 

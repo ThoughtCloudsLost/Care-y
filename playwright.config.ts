@@ -43,9 +43,15 @@ export default defineConfig({
     },
     {
       name: "onboarding",
-      testMatch: /onboarding\.spec|first-login\.spec/,
+      testMatch: "onboarding.spec.ts",
       use: { ...devices["Desktop Chrome"] },
       dependencies: ["onboarding-setup"],
+    },
+    {
+      name: "first-login",
+      testMatch: "first-login.spec.ts",
+      use: { ...devices["Desktop Chrome"] },
+      dependencies: ["onboarding"],
     },
   ],
   webServer: {
