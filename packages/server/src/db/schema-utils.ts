@@ -8,8 +8,10 @@
 
 import * as path from "node:path";
 import * as fs from "node:fs/promises";
-import type { Kysely, MigrationResult } from "kysely";
-import { FileMigrationProvider, Migrator, sql } from "kysely";
+import type { Kysely } from "kysely";
+import { sql } from "kysely";
+import type { MigrationResult } from "kysely/migration";
+import { FileMigrationProvider, Migrator } from "kysely/migration";
 import type { PlatformDatabase, TenantDatabase } from "./types.js";
 
 // ── Schema validation ────────────────────────────────────────────────

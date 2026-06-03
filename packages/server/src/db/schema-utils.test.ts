@@ -6,7 +6,7 @@ import {
   listTenantSchemas,
   createPlatformMigrator,
 } from "./schema-utils.js";
-import type { MigrationResult } from "kysely";
+import type { MigrationResult } from "kysely/migration";
 import { Kysely, PostgresDialect, sql } from "kysely";
 import pg from "pg";
 import type { PlatformDatabase } from "./types.js";
