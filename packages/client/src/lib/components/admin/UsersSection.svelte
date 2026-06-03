@@ -37,7 +37,6 @@
   import { requireRouter } from "$lib/errors.js";
   import { userFilterStore } from "$lib/stores/user-filters.svelte.js";
   import {
-    deriveKeyStatus,
     buildUserQueueMap,
     filterUsers,
     sortUsers,
@@ -45,7 +44,6 @@
     filterInvites,
     computeQueueDiff,
     hasQueueChanges,
-    ROLE_SORT_ORDER,
   } from "$lib/admin/users-section-utils.js";
   import { getTabbarOverrideCtx } from "$lib/shell/context.js";
   import QueryError from "$lib/components/QueryError.svelte";
@@ -188,8 +186,6 @@
   }
 
   // ── Client-side filtering + sorting ──
-
-  type UserRecord = NonNullable<typeof usersQuery.data>[number];
 
   const userQueueMap = $derived(buildUserQueueMap(queueAssignments));
 

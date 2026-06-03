@@ -33,7 +33,6 @@ import type {
   WorkerEvent,
   RewrapResultEvent,
   StateChangeEvent,
-  ConnectResponse,
 } from "./crypto-protocol.js";
 
 export type BridgeState = "LOADING" | "READY" | "KEYED" | "DESTROYED";

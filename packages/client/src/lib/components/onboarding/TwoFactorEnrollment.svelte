@@ -40,10 +40,6 @@
 
   const enrolledMethods = $derived(statusQuery.data?.methods ?? []);
   const enrolledCount = $derived(enrolledMethods.length);
-  const wasFirstEnrollment = $derived(
-    enrolledCount === 1 && !hasNotifiedParent,
-  );
-
   $effect(() => {
     if (enrolledCount > 0 && !hasNotifiedParent) {
       hasNotifiedParent = true;

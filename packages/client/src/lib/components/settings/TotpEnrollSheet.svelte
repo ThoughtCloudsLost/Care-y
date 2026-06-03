@@ -19,7 +19,7 @@
 
   let { opened, ondismiss, onenrolled }: TotpEnrollSheetProps = $props();
 
-  let otpauthUri = $state("");
+  let _otpauthUri = $state("");
   let secret = $state("");
   let svgMarkup = $state("");
   let code = $state("");
@@ -31,7 +31,7 @@
 
   $effect(() => {
     if (opened && !wasOpen) {
-      otpauthUri = "";
+      _otpauthUri = "";
       secret = "";
       svgMarkup = "";
       code = "";
@@ -46,7 +46,7 @@
     error = "";
     try {
       const result = await trpc.twoFactor.enroll.totpSetup.mutate();
-      otpauthUri = result.uri;
+      _otpauthUri = result.uri;
       secret = result.secret;
       svgMarkup = encodeQR(result.uri, "svg");
       await tick();
