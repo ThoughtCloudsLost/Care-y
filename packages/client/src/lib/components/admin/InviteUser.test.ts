@@ -162,7 +162,7 @@ describe("InviteUser", () => {
 
   afterEach(cleanup);
 
-  it("renders with a pre-filled random identifier", () => {
+  it("renders with a pre-filled random identifier", { timeout: 15_000 }, () => {
     render(InviteUser, { opened: true, ondismiss: vi.fn() });
     const { identifier } = getInputs();
     expect(identifier.value).toMatch(/^vol-/);

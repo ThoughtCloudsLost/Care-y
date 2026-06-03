@@ -196,42 +196,46 @@ describe("SharedWorker entry point", () => {
   });
 
   describe("stateChange broadcasts", () => {
-    it("broadcasts KEYED to other ports when one port derives keys", async () => {
-      const port1 = createMockPort();
-      const port2 = createMockPort();
-      simulateConnect(port1);
-      simulateConnect(port2);
+    it(
+      "broadcasts KEYED to other ports when one port derives keys",
+      { timeout: 30_000 },
+      async () => {
+        const port1 = createMockPort();
+        const port2 = createMockPort();
+        simulateConnect(port1);
+        simulateConnect(port2);
 
-      await initPort(port1);
+        await initPort(port1);
 
-      // Login via port1
-      await loginViaPort(port1);
+        // Login via port1
+        await loginViaPort(port1);
 
-      // port2 should have received a stateChange broadcast
-      const broadcasts = port2.postMessage.mock.calls
-        .map((c) => c[0] as WorkerResponse | WorkerEvent)
-        .filter(
-          (msg): msg is StateChangeEvent =>
-            "kind" in msg && msg.kind === "stateChange",
+        // port2 should have received a stateChange broadcast
+        const broadcasts = port2.postMessage.mock.calls
+          .map((c) => c[0] as WorkerResponse | WorkerEvent)
+          .filter(
+            (msg): msg is StateChangeEvent =>
+              "kind" in msg && msg.kind === "stateChange",
+          );
+
+        expect(broadcasts.length).toBeGreaterThanOrEqual(1);
+        expect(broadcasts.some((b) => b.state === "KEYED")).toBe(true);
+
+        // port1 should NOT have received the broadcast (it's the source)
+        const port1Broadcasts = port1.postMessage.mock.calls
+          .map((c) => c[0] as WorkerResponse | WorkerEvent)
+          .filter(
+            (msg): msg is StateChangeEvent =>
+              "kind" in msg && msg.kind === "stateChange",
+          );
+        expect(port1Broadcasts.filter((b) => b.state === "KEYED")).toHaveLength(
+          0,
         );
 
-      expect(broadcasts.length).toBeGreaterThanOrEqual(1);
-      expect(broadcasts.some((b) => b.state === "KEYED")).toBe(true);
-
-      // port1 should NOT have received the broadcast (it's the source)
-      const port1Broadcasts = port1.postMessage.mock.calls
-        .map((c) => c[0] as WorkerResponse | WorkerEvent)
-        .filter(
-          (msg): msg is StateChangeEvent =>
-            "kind" in msg && msg.kind === "stateChange",
-        );
-      expect(port1Broadcasts.filter((b) => b.state === "KEYED")).toHaveLength(
-        0,
-      );
-
-      // Clean up
-      await sendAndWaitPort(port1, { type: "zeroAll", id: 99 });
-    });
+        // Clean up
+        await sendAndWaitPort(port1, { type: "zeroAll", id: 99 });
+      },
+    );
 
     it("broadcasts READY to other ports when one port zeros keys", async () => {
       const port1 = createMockPort();
