@@ -49,6 +49,7 @@
       "sodium-native"
     ],
     "overrides": {
+      "@babel/plugin-transform-modules-systemjs": ">=7.29.4",
       "@types/node": "25.9.1",
       "devalue": ">=5.6.4",
       "serialize-javascript": ">=7.0.3"
