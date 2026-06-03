@@ -12,7 +12,7 @@
   import * as m from "$lib/paraglide/messages.js";
   import { trpc } from "$lib/trpc/index.js";
   import { getOrgDecryptCache } from "$lib/crypto/context.js";
-  import { RouterNotAvailableError } from "$lib/errors.js";
+  import { requireRouter } from "$lib/errors.js";
   import Skeleton from "$lib/components/Skeleton.svelte";
   import DecryptPlaceholder from "$lib/components/DecryptPlaceholder.svelte";
 
@@ -24,8 +24,7 @@
 
   let { onselect, queueId }: PresetReplyContentProps = $props();
 
-  if (!trpc.tickets) throw new RouterNotAvailableError("tickets");
-  const ticketRouter = trpc.tickets;
+  const ticketRouter = requireRouter(trpc.tickets, "tickets");
 
   const orgCache = getOrgDecryptCache();
 

@@ -17,7 +17,7 @@
   } from "$lib/crypto/context.js";
   import type { ReactionSummary, ReactionType } from "@care-y/shared";
   import { resolveAsyncDecrypt } from "$lib/crypto/decrypt-result.js";
-  import { RouterNotAvailableError } from "$lib/errors.js";
+  import { requireRouter } from "$lib/errors.js";
   import { toastStore } from "$lib/stores/toast.svelte.js";
   import { haptic } from "$lib/utils/haptic.js";
   import { createNoteTypesQuery } from "$lib/tickets/queries.js";
@@ -48,8 +48,7 @@
     onsent,
   }: ReplySheetProps = $props();
 
-  if (!trpc.tickets) throw new RouterNotAvailableError("tickets");
-  const ticketRouter = trpc.tickets;
+  const ticketRouter = requireRouter(trpc.tickets, "tickets");
   const cryptoBridge = getCryptoBridge();
   const followUpCache = getFollowUpDecryptCache();
   const orgCache = getOrgDecryptCache();

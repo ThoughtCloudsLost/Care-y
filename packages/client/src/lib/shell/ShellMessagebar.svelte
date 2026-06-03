@@ -152,6 +152,7 @@
     {#snippet left()}
       <Link
         iconOnly
+        role="button"
         onclick={(e: MouseEvent) => {
           const el = e.currentTarget;
           if (el instanceof HTMLElement) onplus(el);
@@ -164,6 +165,7 @@
     {#snippet right()}
       <Link
         iconOnly
+        role="button"
         onclick={onsend}
         aria-label={sendLabel}
         aria-disabled={sendDisabled ? "true" : undefined}

@@ -12,6 +12,7 @@ import { DECRYPT_ERROR_SENTINEL } from "$lib/crypto/async-decrypt-cache.js";
 import TicketSearchResult from "$lib/components/search/TicketSearchResult.svelte";
 import { Ticket } from "@lucide/svelte";
 import * as m from "$lib/paraglide/messages.js";
+import { withTerms } from "$lib/terminology/with-terms.js";
 
 /**
  * Raw ticket record from the TanStack Query cache. Carries encrypted
@@ -169,7 +170,7 @@ export function createTicketSearchProvider(
 
   const provider: SearchProvider<TicketSearchData> = {
     id: "tickets",
-    label: () => m.search_section_tickets(),
+    label: () => m.search_section_tickets(withTerms()),
     icon: Ticket,
     renderMode: "card-strip",
     showAllHref: (query) => `/tickets?q=${encodeURIComponent(query)}`,

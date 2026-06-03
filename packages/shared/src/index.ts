@@ -9,6 +9,7 @@ export {
   RESERVED_SLUGS,
   orgSlugSchema,
   createOrgInputSchema,
+  updateOrgGeneralAdminInputSchema,
 } from "./schemas/org.js";
 
 // --- Utilities ---
@@ -17,6 +18,7 @@ export { extractSubdomain } from "./utils/subdomain.js";
 export {
   emailSchema,
   notificationEmailSchema,
+  PASSWORD_MIN_LENGTH,
   passwordSchema,
   displayNameSchema,
   identifierSchema,
@@ -55,6 +57,7 @@ export {
 
 export {
   totpVerifySchema,
+  emailEnrollSchema,
   emailCodeVerifySchema,
   smsEnrollSchema,
   smsCodeVerifySchema,
@@ -67,6 +70,7 @@ export {
   pushChallengeIdSchema,
   pushApprovalSchema,
   type TotpVerifyInput,
+  type EmailEnrollInput,
   type EmailCodeVerifyInput,
   type SmsEnrollInput,
   type SmsCodeVerifyInput,
@@ -121,7 +125,9 @@ export {
 // --- Telephony: country codes ---
 export {
   E164_COUNTRY_CODES,
+  E164_COUNTRY_CODE_OPTIONS,
   isValidCountryCode,
+  type CountryCodeOption,
 } from "./telephony/country-codes.js";
 
 // --- Telephony schemas ---
@@ -143,6 +149,8 @@ export {
   type RemoveFromBlocklistInput,
   setPhonePurposeInputSchema,
   type SetPhonePurposeInput,
+  changeTelephonyModeInputSchema,
+  type ChangeTelephonyModeInput,
 } from "./schemas/telephony.js";
 
 // --- Telephony content schemas ---
@@ -211,6 +219,7 @@ export {
   createFollowUpInputSchema,
   updateReadCursorInputSchema,
   updateTicketInputSchema,
+  MAX_ESCALATION_DAYS,
   createQueueInputSchema,
   updateQueueInputSchema,
   reorderQueuesInputSchema,
@@ -389,3 +398,36 @@ export {
   type UploadIconsInput,
   type BrandingData,
 } from "./schemas/branding.js";
+
+// --- Onboarding schemas ---
+export {
+  bootstrapAdminInputSchema,
+  updateOrgGeneralInputSchema,
+  validateInviteInputSchema,
+  registerFromInviteInputSchema,
+  generateInviteInputSchema,
+  revokeInviteInputSchema,
+  saveTelephonyChoiceInputSchema,
+  wrapOrgKeyForUserSchema,
+  unwrappedUserSchema,
+  type BootstrapAdminInput,
+  type UpdateOrgGeneralInput,
+  type ValidateInviteInput,
+  type RegisterFromInviteInput,
+  type GenerateInviteInput,
+  type RevokeInviteInput,
+  type SaveTelephonyChoiceInput,
+  type WrapOrgKeyForUserInput,
+  type UnwrappedUser,
+} from "./schemas/onboarding.js";
+
+// --- Terminology schemas ---
+export {
+  terminologyLabelsSchema,
+  terminologyConfigSchema,
+  TERMINOLOGY_DEFAULTS,
+  TERMINOLOGY_DEFAULTS_EN,
+  TERMINOLOGY_SUGGESTIONS,
+  type TerminologyLabels,
+  type TerminologyConfig,
+} from "./schemas/terminology.js";

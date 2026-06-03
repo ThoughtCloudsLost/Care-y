@@ -51,8 +51,11 @@
   } from "$lib/crypto/decrypt-result.js";
   import { createTicketDecryptScope } from "$lib/crypto/ticket-decrypt-scope.js";
   import { SvelteMap } from "svelte/reactivity";
-  import { RouterNotAvailableError } from "$lib/errors.js";
-  import { serializedBufferToBase64 } from "$lib/utils/buffer-encoding.js";
+  import { requireRouter } from "$lib/errors.js";
+  import {
+    serializedBufferToBase64,
+    type SerializedBuffer,
+  } from "$lib/utils/buffer-encoding.js";
   import { onKeyActivate } from "$lib/utils/a11y.js";
   import { formatRelativeTime } from "$lib/utils/format-time.js";
   import { formatDateSeparator, needsDateSeparator } from "$lib/utils/time.js";
@@ -84,8 +87,7 @@
     type ContextMenuEvent,
   } from "./context-menu-actions.js";
 
-  if (!trpc.tickets) throw new RouterNotAvailableError("tickets");
-  const ticketRouter = trpc.tickets;
+  const ticketRouter = requireRouter(trpc.tickets, "tickets");
 
   type ListFollowUpsResult = Awaited<
     ReturnType<typeof ticketRouter.listFollowUps.query>
@@ -328,10 +330,13 @@
     getScrollContainer: () => scroll.scrollContainerEl,
   });
 
-  // Seed paginator from the initial query once it resolves.
+  // Seed paginator from the initial query, then keep it in sync
+  // (handles optimistic adds and pending-entry cleanup after refetch).
   $effect(() => {
     const data = initialFollowUpsQuery.data;
-    if (data) paginator.seed(data);
+    if (!data) return;
+    paginator.seed(data);
+    paginator.syncInitialPage(data);
   });
 
   // Local aliases for readability in template and downstream $derived.
@@ -787,7 +792,16 @@
 
   const longPress = createLongPress();
 
-  function startLongPress(fu: FollowUp): (e: PointerEvent) => void {
+  interface ContextMenuTarget {
+    id: string;
+    type: string;
+    source: string;
+    createdBy: string | null;
+    encryptedContent: SerializedBuffer | string | null;
+    noteTypeId: string | null;
+  }
+
+  function startLongPress(fu: ContextMenuTarget): (e: PointerEvent) => void {
     return () => longPress.start(() => openContextMenu(fu));
   }
 
@@ -803,7 +817,9 @@
   });
 
   /** Keyboard equivalent for long-press context menu (Shift+F10). */
-  function handleBubbleKeydown(fu: FollowUp): (e: KeyboardEvent) => void {
+  function handleBubbleKeydown(
+    fu: ContextMenuTarget,
+  ): (e: KeyboardEvent) => void {
     return (e: KeyboardEvent) => {
       if (e.key === "F10" && e.shiftKey) {
         e.preventDefault();
@@ -812,7 +828,7 @@
     };
   }
 
-  function openContextMenu(fu: FollowUp): void {
+  function openContextMenu(fu: ContextMenuTarget): void {
     const actions = getContextMenuActions(
       fu,
       currentUserId,
@@ -823,7 +839,7 @@
         deleteNote: m.ticket_delete_note(),
       },
     );
-    if (actions.length === 0 || !decrypt) return;
+    if (actions.length === 0 || !decrypt || fu.encryptedContent == null) return;
 
     const result = decrypt.followUp(fu.id, fu.encryptedContent);
     const plaintext = result.status === "ready" ? result.value : undefined;
@@ -961,11 +977,13 @@
   const VISIBLE_BATCH = 20;
 
   const initialBatchReady = $derived.by((): boolean => {
-    if (decrypt == null || followUps.length === 0) return false;
+    if (followUps.length === 0) return false;
     const startIdx = Math.max(0, followUps.length - VISIBLE_BATCH);
     for (let i = startIdx; i < followUps.length; i++) {
       const fu = followUps[i]; // eslint-disable-line security/detect-object-injection -- i is a loop counter bounded by followUps.length
       if (!fu?.encryptedContent) continue;
+      if (fu.source === "system") continue;
+      if (decrypt == null) return false;
       const result = decrypt.followUp(fu.id, fu.encryptedContent);
       if (result.status === "loading") return false;
     }
@@ -1067,10 +1085,17 @@
             role="button"
             tabindex={0}
             onclick={onzoom}
-            onkeydown={onKeyActivate(onzoom)}
+            onkeydown={(e: KeyboardEvent) => {
+              if (e.key === "F10" && e.shiftKey) {
+                e.preventDefault();
+                openContextMenu(rec);
+              } else {
+                onKeyActivate(onzoom)(e);
+              }
+            }}
           >
             {#if kind === "system"}
-              <SystemEvent result={recResult} timestamp={rec.createdAt} />
+              <SystemEvent type={rec.type} timestamp={rec.createdAt} />
             {:else if kind === "note"}
               <PrivateNote
                 result={recResult}
@@ -1090,9 +1115,16 @@
               <Message
                 type={rec.source === "client" ? "received" : "sent"}
                 name={rec.source === "client" ? clientAlias : undefined}
+                data-source={rec.source === "client" ? "client" : "volunteer"}
               >
                 {#snippet text()}
-                  <span class="bubble-text">
+                  <!-- svelte-ignore a11y_no_static_element_interactions -->
+                  <span
+                    class="bubble-text"
+                    onpointerdown={startLongPress(rec)}
+                    onpointerup={cancelLongPress}
+                    onpointercancel={cancelLongPress}
+                  >
                     <DecryptPlaceholder
                       result={recResult}
                       ciphertext={rec.encryptedContent}
@@ -1222,10 +1254,7 @@
                   </div>
                 {/if}
                 {#if kind === "system"}
-                  <SystemEvent
-                    result={contentResult}
-                    timestamp={fu.createdAt}
-                  />
+                  <SystemEvent type={fu.type} timestamp={fu.createdAt} />
                 {:else if kind === "note"}
                   <PrivateNote
                     result={contentResult}
@@ -1243,6 +1272,7 @@
                           onopenedit(fu.id, text, fu.noteTypeId ?? null);
                         }
                       : undefined}
+                    onlongpress={() => openContextMenu(fu)}
                     {searchTerm}
                     reactions={getReactions(fu.id)}
                     {currentUserId}
@@ -1254,6 +1284,9 @@
                   <Message
                     type={messageType(fu)}
                     name={fu.source === "client" ? clientAlias : undefined}
+                    data-source={fu.source === "client"
+                      ? "client"
+                      : "volunteer"}
                     aria-label={bubbleAriaLabel(fu, contentResult)}
                   >
                     {#snippet text()}

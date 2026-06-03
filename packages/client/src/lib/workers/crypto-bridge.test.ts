@@ -1,15 +1,23 @@
 /**
  * Tests for the CryptoBridge main-thread proxy.
  *
- * Mocks the Worker constructor so no real Worker is created. The mock
- * captures postMessage calls and allows tests to simulate Worker responses
- * by invoking the captured onmessage handler.
+ * Mocks the Worker and SharedWorker constructors so no real workers are
+ * created. The mocks capture postMessage calls and allow tests to simulate
+ * responses by invoking the captured onmessage handler.
+ *
+ * The default constructor (no mode arg) tries SharedWorker first. Since
+ * SharedWorker is not mocked in the dedicated-mode tests, the bridge
+ * falls back to dedicated Worker automatically.
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { CryptoWorkerError } from "./crypto-bridge-errors.js";
 import type { CryptoBridge } from "./crypto-bridge.js";
-import type { WorkerResponse } from "./crypto-protocol.js";
+import type {
+  WorkerResponse,
+  WorkerEvent,
+  StateChangeEvent,
+} from "./crypto-protocol.js";
 
 // ── Mock Worker ─────────────────────────────────────────────────────
 
@@ -50,10 +58,10 @@ async function createReadyBridge(): Promise<CryptoBridge> {
   const { CryptoBridge } = await import("./crypto-bridge.js");
   const bridge = new CryptoBridge();
 
-  // The constructor sends an init request. Find it and respond.
-  const initCall = mockWorkerInstance?.postMessage.mock.calls[0] as
-    | [{ type: string; id: number }]
-    | undefined;
+  // The constructor sends an init request. Find it by type (not position).
+  const initCall = mockWorkerInstance?.postMessage.mock.calls.find(
+    ([msg]) => (msg as { type: string }).type === "init",
+  ) as [{ type: string; id: number }] | undefined;
   if (initCall) {
     respondFromWorker({ id: initCall[0].id, ok: true, type: "init" });
   }
@@ -81,13 +89,13 @@ describe("CryptoBridge", () => {
 
       expect(mockWorkerInstance).not.toBeNull();
 
-      const call = mockWorkerInstance?.postMessage.mock.calls[0] as [
-        { type: string; id: number },
-      ];
-      expect(call[0].type).toBe("init");
+      const call = mockWorkerInstance?.postMessage.mock.calls.find(
+        ([msg]) => (msg as { type: string }).type === "init",
+      ) as [{ type: string; id: number }] | undefined;
+      expect(call).toBeDefined();
 
       // Respond to init so waitReady resolves
-      respondFromWorker({ id: call[0].id, ok: true, type: "init" });
+      respondFromWorker({ id: call![0].id, ok: true, type: "init" });
       await bridge.waitReady();
       expect(bridge.getState()).toBe("READY");
     });
@@ -485,10 +493,10 @@ describe("CryptoBridge", () => {
       const argonPromise = bridge.argon2id(password, salt);
 
       // Now respond to init
-      const initCall = mockWorkerInstance?.postMessage.mock.calls[0] as [
-        { type: string; id: number },
-      ];
-      respondFromWorker({ id: initCall[0].id, ok: true, type: "init" });
+      const initCall = mockWorkerInstance?.postMessage.mock.calls.find(
+        ([msg]) => (msg as { type: string }).type === "init",
+      ) as [{ type: string; id: number }] | undefined;
+      respondFromWorker({ id: initCall![0].id, ok: true, type: "init" });
 
       // Wait for init to complete, then argon2id should have been sent
       await bridge.waitReady();
@@ -508,6 +516,260 @@ describe("CryptoBridge", () => {
       });
 
       await argonPromise;
+    });
+  });
+});
+
+// ── SharedWorker mode tests ─────────────────────────────────────────
+
+interface MockPort {
+  postMessage: ReturnType<typeof vi.fn>;
+  onmessage: ((e: MessageEvent<WorkerResponse | WorkerEvent>) => void) | null;
+  start: ReturnType<typeof vi.fn>;
+  close: ReturnType<typeof vi.fn>;
+}
+
+interface MockSharedWorkerInstance {
+  port: MockPort;
+  onerror: ((e: Event) => void) | null;
+}
+
+let mockSharedWorkerInstance: MockSharedWorkerInstance | null = null;
+
+function MockSharedWorkerConstructor(): MockSharedWorkerInstance {
+  const port: MockPort = {
+    postMessage: vi.fn(),
+    onmessage: null,
+    start: vi.fn(),
+    close: vi.fn(),
+  };
+  const instance: MockSharedWorkerInstance = {
+    port,
+    onerror: null,
+  };
+  mockSharedWorkerInstance = instance;
+  return instance;
+}
+
+function respondFromSharedWorker(data: WorkerResponse | WorkerEvent): void {
+  if (mockSharedWorkerInstance?.port.onmessage) {
+    mockSharedWorkerInstance.port.onmessage(
+      new MessageEvent("message", { data }),
+    );
+  }
+}
+
+async function createReadySharedBridge(
+  connectState: "READY" | "KEYED" = "READY",
+  keys?: { volPublic?: string; orgPublicKey?: string },
+): Promise<CryptoBridge> {
+  const { CryptoBridge } = await import("./crypto-bridge.js");
+  const bridge = new CryptoBridge();
+
+  const port = mockSharedWorkerInstance?.port;
+
+  // Respond to init (find by type, not position)
+  const initCall = port?.postMessage.mock.calls.find(
+    ([msg]) => (msg as { type: string }).type === "init",
+  ) as [{ type: string; id: number }] | undefined;
+  if (initCall) {
+    respondFromSharedWorker({
+      id: initCall[0].id,
+      ok: true,
+      type: "init",
+    });
+  }
+
+  // Respond to connect (sent after init resolves)
+  await vi.waitFor(() => {
+    const calls = port?.postMessage.mock.calls;
+    const found = calls?.find(
+      (c: unknown[]) => (c[0] as { type: string }).type === "connect",
+    );
+    expect(found).toBeDefined();
+  });
+
+  const connectCall = port?.postMessage.mock.calls.find(
+    (c: unknown[]) => (c[0] as { type: string }).type === "connect",
+  ) as [{ type: string; id: number }] | undefined;
+
+  respondFromSharedWorker({
+    id: connectCall?.[0].id ?? 0,
+    ok: true,
+    type: "connect",
+    state: connectState,
+    volPublic: keys?.volPublic,
+    orgPublicKey: keys?.orgPublicKey,
+  });
+
+  await bridge.waitReady();
+  return bridge;
+}
+
+describe("CryptoBridge (SharedWorker mode)", () => {
+  beforeEach(() => {
+    mockSharedWorkerInstance = null;
+    mockWorkerInstance = null;
+    vi.clearAllMocks();
+    vi.stubGlobal("SharedWorker", MockSharedWorkerConstructor);
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.stubGlobal("Worker", MockWorkerConstructor);
+    vi.restoreAllMocks();
+  });
+
+  describe("construction", () => {
+    it("creates a SharedWorker with extendedLifetime and sends init + connect", async () => {
+      const bridge = await createReadySharedBridge();
+
+      expect(mockSharedWorkerInstance).not.toBeNull();
+      expect(mockSharedWorkerInstance?.port.start).toHaveBeenCalledOnce();
+      expect(bridge.getState()).toBe("READY");
+      expect(bridge.getMode()).toBe("shared");
+    });
+
+    it("falls back to dedicated Worker when SharedWorker is unavailable", async () => {
+      vi.stubGlobal("SharedWorker", undefined);
+
+      const { CryptoBridge } = await import("./crypto-bridge.js");
+      const bridge = new CryptoBridge();
+
+      expect(mockWorkerInstance).not.toBeNull();
+      expect(mockSharedWorkerInstance).toBeNull();
+      expect(bridge.getMode()).toBe("dedicated");
+
+      // Respond to init
+      const initCall = mockWorkerInstance?.postMessage.mock.calls.find(
+        ([msg]) => (msg as { type: string }).type === "init",
+      ) as [{ type: string; id: number }] | undefined;
+      respondFromWorker({ id: initCall![0].id, ok: true, type: "init" });
+      await bridge.waitReady();
+    });
+  });
+
+  describe("reconnection", () => {
+    it("detects KEYED state on connect and sets bridge to KEYED", async () => {
+      const bridge = await createReadySharedBridge("KEYED", {
+        volPublic: "dm9sUHVibGlj",
+        orgPublicKey: "b3JnUHVibGlj",
+      });
+
+      expect(bridge.getState()).toBe("KEYED");
+      expect(bridge.isReconnected()).toBe(true);
+      expect(bridge.getReconnectData()).toEqual({
+        volPublic: "dm9sUHVibGlj",
+        orgPublicKey: "b3JnUHVibGlj",
+      });
+    });
+
+    it("reports not reconnected on fresh READY state", async () => {
+      const bridge = await createReadySharedBridge("READY");
+
+      expect(bridge.getState()).toBe("READY");
+      expect(bridge.isReconnected()).toBe(false);
+      expect(bridge.getReconnectData()).toEqual({
+        volPublic: undefined,
+        orgPublicKey: undefined,
+      });
+    });
+  });
+
+  describe("disconnect", () => {
+    it("sends disconnect message and sets state to DESTROYED", async () => {
+      const bridge = await createReadySharedBridge();
+
+      bridge.disconnect();
+
+      const port = mockSharedWorkerInstance?.port;
+      const disconnectCall = port?.postMessage.mock.calls.find(
+        (c: unknown[]) => (c[0] as { type: string }).type === "disconnect",
+      );
+      expect(disconnectCall).toBeDefined();
+      expect(bridge.getState()).toBe("DESTROYED");
+    });
+
+    it("rejects pending requests on disconnect", async () => {
+      const bridge = await createReadySharedBridge();
+
+      const promise = bridge.encrypt("ticket-pending", "data");
+      bridge.disconnect();
+
+      await expect(promise).rejects.toThrow(CryptoWorkerError);
+      await expect(promise).rejects.toThrow("Bridge disconnected");
+    });
+  });
+
+  describe("stateChange handler", () => {
+    it("fires onStateChange callback when Worker broadcasts state change", async () => {
+      const bridge = await createReadySharedBridge();
+
+      const handler = vi.fn();
+      bridge.onStateChange(handler);
+
+      const event: StateChangeEvent = { kind: "stateChange", state: "READY" };
+      respondFromSharedWorker(event);
+
+      expect(handler).toHaveBeenCalledOnce();
+      expect(handler).toHaveBeenCalledWith(event);
+    });
+
+    it("updates bridge state on stateChange READY (another tab logged out)", async () => {
+      const bridge = await createReadySharedBridge("KEYED", {
+        volPublic: "dm9sUHVibGlj",
+      });
+
+      expect(bridge.getState()).toBe("KEYED");
+
+      bridge.onStateChange(() => undefined);
+      respondFromSharedWorker({ kind: "stateChange", state: "READY" });
+
+      expect(bridge.getState()).toBe("READY");
+    });
+
+    it("updates bridge state on stateChange KEYED (another tab logged in)", async () => {
+      const bridge = await createReadySharedBridge("READY");
+
+      expect(bridge.getState()).toBe("READY");
+
+      bridge.onStateChange(() => undefined);
+      respondFromSharedWorker({ kind: "stateChange", state: "KEYED" });
+
+      expect(bridge.getState()).toBe("KEYED");
+    });
+  });
+
+  describe("dedicated mode (explicit)", () => {
+    it("creates a dedicated Worker when mode is 'dedicated'", async () => {
+      const { CryptoBridge } = await import("./crypto-bridge.js");
+      const bridge = new CryptoBridge("dedicated");
+
+      expect(mockWorkerInstance).not.toBeNull();
+      expect(mockSharedWorkerInstance).toBeNull();
+      expect(bridge.getMode()).toBe("dedicated");
+
+      const initCall = mockWorkerInstance?.postMessage.mock.calls.find(
+        ([msg]) => (msg as { type: string }).type === "init",
+      ) as [{ type: string; id: number }] | undefined;
+      respondFromWorker({ id: initCall![0].id, ok: true, type: "init" });
+      await bridge.waitReady();
+    });
+
+    it("destroy() terminates dedicated Worker", async () => {
+      const { CryptoBridge } = await import("./crypto-bridge.js");
+      const bridge = new CryptoBridge("dedicated");
+
+      const initCall = mockWorkerInstance?.postMessage.mock.calls.find(
+        ([msg]) => (msg as { type: string }).type === "init",
+      ) as [{ type: string; id: number }] | undefined;
+      respondFromWorker({ id: initCall![0].id, ok: true, type: "init" });
+      await bridge.waitReady();
+
+      bridge.destroy();
+
+      expect(mockWorkerInstance?.terminate).toHaveBeenCalledOnce();
+      expect(bridge.getState()).toBe("DESTROYED");
     });
   });
 });

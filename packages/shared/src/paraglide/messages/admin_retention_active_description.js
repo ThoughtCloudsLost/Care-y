@@ -3,20 +3,20 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 
 /** @typedef {import('../runtime.js').LocalizedString} LocalizedString */
 
-/** @typedef {{ days: NonNullable<unknown> }} Admin_Retention_Active_DescriptionInputs */
+/** @typedef {{ Tickets: NonNullable<unknown>, days: NonNullable<unknown>, tickets: NonNullable<unknown> }} Admin_Retention_Active_DescriptionInputs */
 
 const en_admin_retention_active_description = /** @type {(inputs: Admin_Retention_Active_DescriptionInputs) => LocalizedString} */ (i) => {
-	return /** @type {LocalizedString} */ (`Tickets, messages, and caller personal information older than ${i?.days} days are automatically deleted.`)
+	return /** @type {LocalizedString} */ (`${i?.Tickets}, messages, and caller personal information older than ${i?.days} days are automatically deleted.`)
 };
 
 const es_admin_retention_active_description = /** @type {(inputs: Admin_Retention_Active_DescriptionInputs) => LocalizedString} */ (i) => {
-	return /** @type {LocalizedString} */ (`Los tickets, mensajes e informacion personal de los llamantes con mas de ${i?.days} dias se eliminan automaticamente.`)
+	return /** @type {LocalizedString} */ (`Los ${i?.tickets}, mensajes e informacion personal de los llamantes con mas de ${i?.days} dias se eliminan automaticamente.`)
 };
 
 /**
 * | output |
 * | --- |
-* | "Tickets, messages, and caller personal information older than {days} days are automatically deleted." |
+* | "{Tickets}, messages, and caller personal information older than {days} days are automatically deleted." |
 *
 * @param {Admin_Retention_Active_DescriptionInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

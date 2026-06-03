@@ -339,11 +339,13 @@ describe.skipIf(!process.env.DATABASE_URL)("TwoFactorService", () => {
         session.token,
         "localhost",
         "CARE-Y Test",
+        user.id,
       );
 
       expect(opts.challenge).toBeTruthy();
       expect(opts.rpId).toBe("localhost");
       expect(opts.rpName).toBe("CARE-Y Test");
+      expect(opts.userId).toBe(user.id);
 
       // Challenge stored on session
       const found = await sessions.findByToken(session.token);
@@ -440,6 +442,7 @@ describe.skipIf(!process.env.DATABASE_URL)("TwoFactorService", () => {
         session.token,
         "localhost",
         "CARE-Y Test",
+        user.id,
       );
 
       const spy = vi
@@ -485,6 +488,7 @@ describe.skipIf(!process.env.DATABASE_URL)("TwoFactorService", () => {
         session.token,
         "localhost",
         "CARE-Y Test",
+        user.id,
       );
 
       const spy = vi
@@ -540,6 +544,7 @@ describe.skipIf(!process.env.DATABASE_URL)("TwoFactorService", () => {
         session.token,
         "localhost",
         "CARE-Y Test",
+        user.id,
       );
 
       const spy = vi.spyOn(webauthnVerify, "verifyRegistration");
@@ -568,6 +573,7 @@ describe.skipIf(!process.env.DATABASE_URL)("TwoFactorService", () => {
         session.token,
         "localhost",
         "CARE-Y Test",
+        user.id,
       );
 
       spy.mockResolvedValue(

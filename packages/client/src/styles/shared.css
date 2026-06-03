@@ -18,6 +18,15 @@
   --font-material: var(--theme-font-ui);
 }
 
+/* iOS Dynamic Type: swap body font to system font so text scales with the
+   user's preferred size in Settings > Accessibility > Display & Text Size.
+   Headings (--theme-font-display) keep the theme's custom font for branding. */
+@supports (-webkit-touch-callout: none) {
+  :root {
+    --theme-font-ui: -apple-system, system-ui, sans-serif;
+  }
+}
+
 /* App-level defaults (invariant across themes, overridden per-org) */
 :root {
   --brand-primary: #636366;
@@ -111,7 +120,7 @@ body {
 input,
 textarea,
 select {
-  font-size: 16px;
+  font-size: max(1rem, 16px);
 }
 
 /* Accessibility: reduced motion */
@@ -280,11 +289,11 @@ html.glass-light.dark {
    bg + backdrop-blur-lg (16px) + multi-layer inset shadow.
    iOS-only: Material gets no glass treatment, matching Konsta.
    Apply to any element that should look like a Konsta navbar pill.
-   !important on background overrides Konsta component defaults
-   (Sheet, Popup, etc.) since this class is always intentional. */
+   !important on background and color overrides Konsta component
+   defaults (Sheet, Popup, Chip, etc.) since this class is always intentional. */
 .k-ios .glass {
   background: var(--glass-surface) !important;
-  color: var(--glass-text);
+  color: var(--glass-text) !important;
   -webkit-backdrop-filter: blur(16px);
   backdrop-filter: blur(16px);
   box-shadow: var(--glass-shadow);
@@ -375,6 +384,7 @@ html.keyboard-open .native-tabbar {
   font-size: 0.75rem;
   letter-spacing: 0.05em;
   overflow: hidden;
+  -webkit-user-select: none;
   user-select: none;
 }
 
@@ -497,4 +507,15 @@ html.glass-dark.light
 .k-messagebar:has([style*="overflow-y: auto"])
   [style*="pointer-events: none"][style*="overflow: hidden"][style*="position: absolute"] {
   display: none !important;
+}
+
+/* PII warning: amber notice for fields with weaker encryption.
+   Components with layout overrides (margin, flex) keep a scoped rule. */
+.pii-warning {
+  font-size: 0.8125rem;
+  color: var(--color-amber-500);
+  background: color-mix(in srgb, var(--color-amber-500) 10%, transparent);
+  padding: var(--space-sm) var(--space-md);
+  border-radius: 8px;
+  margin: 0;
 }

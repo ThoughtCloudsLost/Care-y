@@ -9,6 +9,7 @@
   import { adminKeys } from "$lib/query/keys.js";
   import { Save } from "@lucide/svelte";
   import * as m from "$lib/paraglide/messages.js";
+  import { withTerms } from "$lib/terminology/with-terms.js";
   import { trpc } from "$lib/trpc/index.js";
   import { haptic } from "$lib/utils/haptic.js";
   import { toastStore } from "$lib/stores/toast.svelte.js";
@@ -16,6 +17,21 @@
   import QueryError from "$lib/components/QueryError.svelte";
   import SoftButton from "$lib/components/inputs/SoftButton.svelte";
   import ShellDialog from "$lib/shell/ShellDialog.svelte";
+
+  interface Props {
+    externalSave?: boolean;
+  }
+
+  let { externalSave = false }: Props = $props();
+
+  export function isDirty(): boolean {
+    return hasChanges;
+  }
+
+  export function save(): void {
+    if (!hasChanges || parsedDays === null) return;
+    confirmSet();
+  }
 
   const authRouter = trpc.auth;
   const queryClient = useQueryClient();
@@ -139,8 +155,10 @@
 
         <p class="explainer">
           {serverDays !== null
-            ? m.admin_retention_active_description({ days: serverDays })
-            : m.admin_retention_inactive_description()}
+            ? m.admin_retention_active_description(
+                withTerms({ days: serverDays }),
+              )
+            : m.admin_retention_inactive_description(withTerms())}
         </p>
 
         <div class="input-row">
@@ -168,7 +186,7 @@
           <span class="range-hint">{m.admin_retention_range_hint()}</span>
         </div>
 
-        {#if hasChanges}
+        {#if hasChanges && !externalSave}
           <div class="unsaved-hint" role="status">
             {m.admin_retention_unsaved_hint()}
           </div>
@@ -198,7 +216,7 @@
   {#snippet content()}
     <p class="text-sm text-[--muted]">
       {#if parsedDays !== null}
-        {m.admin_retention_set_body({ days: parsedDays })}
+        {m.admin_retention_set_body(withTerms({ days: parsedDays }))}
       {/if}
     </p>
   {/snippet}
@@ -223,7 +241,7 @@
 >
   {#snippet content()}
     <p class="text-sm text-[--muted]">
-      {m.admin_retention_clear_body()}
+      {m.admin_retention_clear_body(withTerms())}
     </p>
   {/snippet}
   {#snippet buttons()}

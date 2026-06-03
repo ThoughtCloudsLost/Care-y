@@ -28,6 +28,7 @@
     timestamp: string;
     isOwn: boolean;
     onopenedit?: () => void;
+    onlongpress?: () => void;
     searchTerm?: string | null;
     noteTypeName?: string;
     noteTypeIcon?: string;
@@ -44,6 +45,7 @@
     timestamp,
     isOwn,
     onopenedit,
+    onlongpress,
     searchTerm = null,
     noteTypeName,
     noteTypeIcon,
@@ -88,7 +90,7 @@
   // ── Long-press handling ──
 
   function handlePointerDown(e: PointerEvent): void {
-    if (!ontogglereaction) return;
+    if (!ontogglereaction && !onlongpress) return;
     const target = e.target;
     if (
       target instanceof HTMLButtonElement ||
@@ -97,7 +99,11 @@
       return;
     longPressTimer = setTimeout(() => {
       longPressTimer = null;
-      openPicker();
+      if (onlongpress) {
+        onlongpress();
+      } else {
+        openPicker();
+      }
       haptic();
     }, 500);
   }

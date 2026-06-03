@@ -11,6 +11,7 @@
   import { announceToLiveRegion } from "$lib/utils/announce.js";
   import ShellSheet from "$lib/shell/ShellSheet.svelte";
   import SoftButton from "$lib/components/inputs/SoftButton.svelte";
+  import PasswordInput from "$lib/components/inputs/PasswordInput.svelte";
 
   interface UsernameSheetProps {
     readonly opened: boolean;
@@ -113,18 +114,13 @@
         disabled={isPending}
       />
     </List>
-    <p class="pii-warning">{m.admin_invite_identifier_pii_warning()}</p>
+    <p class="pii-warning">{m.user_field_login_username_pii_warning()}</p>
     <List nested>
-      <ListInput
+      <PasswordInput
         outline
         label={m.settings_username_password()}
-        type="password"
         placeholder={m.settings_username_password_hint()}
-        value={currentPassword}
-        oninput={(e: Event) => {
-          if (e.target instanceof HTMLInputElement)
-            currentPassword = e.target.value;
-        }}
+        bind:value={currentPassword}
         disabled={isPending}
       />
     </List>
@@ -143,11 +139,6 @@
   }
 
   .pii-warning {
-    font-size: 0.8125rem;
-    color: var(--color-amber-500);
-    background: color-mix(in srgb, var(--color-amber-500) 10%, transparent);
-    padding: var(--space-sm) var(--space-md);
-    border-radius: 8px;
     margin: 0 var(--space-lg);
   }
 

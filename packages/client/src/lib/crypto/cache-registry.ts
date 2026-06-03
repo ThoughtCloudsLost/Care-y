@@ -18,14 +18,23 @@ interface Clearable {
 
 class CacheRegistry {
   private readonly caches = new Map<string, Clearable>();
+  private readonly maps = new Map<string, SvelteMap<unknown, unknown>>();
 
   /**
    * Create and register a reactive SvelteMap cache.
-   * This is the ONLY approved way to create a SvelteMap that holds
-   * decrypted or decryptable content.
+   * Idempotent: returns the existing map if one with the same name
+   * is already registered. This prevents orphaned maps when components
+   * remount (e.g. OnboardingCryptoBridge creating OrgDecryptCache
+   * on each wizard step).
    */
   createMap<K, V>(name: string): SvelteMap<K, V> {
+    const existing = this.maps.get(name);
+    if (existing) {
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- registry stores erased types, caller knows K,V
+      return existing as SvelteMap<K, V>;
+    }
     const map = new SvelteMap<K, V>();
+    this.maps.set(name, map);
     this.register(name, {
       clear() {
         map.clear();
@@ -39,17 +48,23 @@ class CacheRegistry {
    * Used for caches with additional internal state beyond a SvelteMap.
    */
   register(name: string, cache: Clearable): void {
-    if (import.meta.env.DEV && this.caches.has(name)) {
-      console.warn(`[CacheRegistry] duplicate registration: ${name}`);
-    }
     this.caches.set(name, cache);
   }
 
-  /** Clear ALL registered caches. Called on logout, session expiry, idle timeout. */
+  /** Clear cache contents but keep registrations. Used by beforeunload. */
   clearAll(): void {
     for (const cache of this.caches.values()) {
       cache.clear();
     }
+  }
+
+  /** Clear all caches AND remove registrations. Used by logout/session teardown. */
+  reset(): void {
+    for (const cache of this.caches.values()) {
+      cache.clear();
+    }
+    this.caches.clear();
+    this.maps.clear();
   }
 
   /** Dev-mode: list registered cache names for audit. */

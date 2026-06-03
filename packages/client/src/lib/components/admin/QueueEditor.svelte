@@ -1,18 +1,18 @@
 <script lang="ts">
-  import { List, ListInput, Block } from "konsta/svelte";
   import { Save } from "@lucide/svelte";
   import { createMutation, useQueryClient } from "@tanstack/svelte-query";
   import { queueKeys } from "$lib/query/keys.js";
   import * as m from "$lib/paraglide/messages.js";
+  import { withTerms } from "$lib/terminology/with-terms.js";
   import { trpc } from "$lib/trpc/index.js";
-  import { getOrgKeyManager, getOrgDecryptCache } from "$lib/crypto/context.js";
-  import { uint8ArrayToBase64 } from "$lib/utils/buffer-encoding.js";
+  import { getOrgDecryptCache } from "$lib/crypto/context.js";
   import { haptic } from "$lib/utils/haptic.js";
   import { toastStore } from "$lib/stores/toast.svelte.js";
   import { announceToLiveRegion } from "$lib/utils/announce.js";
-  import { RouterNotAvailableError } from "$lib/errors.js";
+  import { requireRouter } from "$lib/errors.js";
   import ShellSheet from "$lib/shell/ShellSheet.svelte";
   import SoftButton from "$lib/components/inputs/SoftButton.svelte";
+  import QueueForm from "$lib/components/shared/QueueForm.svelte";
   import type { SerializedBuffer } from "$lib/utils/buffer-encoding.js";
 
   interface QueueEditorProps {
@@ -33,62 +33,34 @@
     ondeletequeue,
   }: QueueEditorProps = $props();
 
-  if (!trpc.tickets) throw new RouterNotAvailableError("tickets");
-  const ticketRouter = trpc.tickets;
+  const ticketRouter = requireRouter(trpc.tickets, "tickets");
   const queryClient = useQueryClient();
-  const orgKeyManager = getOrgKeyManager();
   const orgCache = getOrgDecryptCache();
 
   const isCreateMode = $derived(queueId === null);
-  const orgKeyLoaded = $derived(orgKeyManager.isLoaded);
 
-  let queueName = $state("");
-  let escalationDays = $state("");
   let wasOpen = $state(false);
-  let initialName = $state("");
-  let initialEscalation = $state("");
+  let decryptedName = $state("");
+  let initialEscalation = $state<number | undefined>(undefined);
+  let formCanSubmit = $state(false);
+  let formIsPending = $state(false);
 
-  const textEncoder = new TextEncoder();
+  const FORM_ID = "queue-editor-form";
 
   $effect(() => {
     if (opened && !wasOpen) {
       if (isCreateMode) {
-        queueName = "";
-        escalationDays = "";
-        initialName = "";
-        initialEscalation = "";
+        decryptedName = "";
+        initialEscalation = undefined;
       } else {
         const id = queueId ?? "";
-        const decrypted = orgCache.decrypt(`queue:${id}`, queueEncryptedName);
-        queueName = decrypted ?? "";
-        escalationDays = queueEscalateDays > 0 ? String(queueEscalateDays) : "";
-        initialName = queueName;
-        initialEscalation = escalationDays;
+        decryptedName =
+          orgCache.decrypt(`queue:${id}`, queueEncryptedName) ?? "";
+        initialEscalation = queueEscalateDays;
       }
     }
     wasOpen = opened;
   });
-
-  const nameEmpty = $derived(queueName.trim().length === 0);
-  const hasChanges = $derived(
-    isCreateMode ||
-      queueName !== initialName ||
-      escalationDays !== initialEscalation,
-  );
-
-  const parsedEscalationDays = $derived.by((): number => {
-    const trimmed = escalationDays.trim();
-    if (trimmed === "") return 0;
-    const n = Number(trimmed);
-    if (!Number.isInteger(n) || n < 0 || n > 365) return -1;
-    return n;
-  });
-
-  const escalationValid = $derived(parsedEscalationDays >= 0);
-
-  const canSubmit = $derived(
-    orgKeyLoaded && !nameEmpty && escalationValid && hasChanges,
-  );
 
   function onMutationSuccess(message: string): void {
     haptic();
@@ -106,7 +78,7 @@
       encryptedName: string;
       escalateDays: number;
     }) => ticketRouter.createQueue.mutate(input),
-    onSuccess: () => onMutationSuccess(m.admin_queue_created()),
+    onSuccess: () => onMutationSuccess(m.admin_queue_created(withTerms())),
     onError: () => {
       toastStore.show(m.error_generic());
     },
@@ -118,30 +90,46 @@
       encryptedName?: string;
       escalateDays?: number;
     }) => ticketRouter.updateQueue.mutate(input),
-    onSuccess: () => onMutationSuccess(m.admin_queue_updated()),
+    onSuccess: () => onMutationSuccess(m.admin_queue_updated(withTerms())),
     onError: () => {
       toastStore.show(m.error_generic());
     },
   }));
 
-  const isPending = $derived(createMut.isPending || updateMut.isPending);
+  const isPending = $derived(
+    createMut.isPending || updateMut.isPending || formIsPending,
+  );
 
-  async function handleSubmit(): Promise<void> {
-    if (!canSubmit || isPending) return;
-
-    const plainBytes = textEncoder.encode(queueName.trim());
-    const cipherBytes = await orgKeyManager.encrypt(plainBytes);
-    const encryptedName = uint8ArrayToBase64(cipherBytes);
-    const days = parsedEscalationDays;
-
+  function handleFormSubmit(data: {
+    encryptedName: string;
+    escalateDays: number;
+  }): void {
     if (isCreateMode) {
-      createMut.mutate({ encryptedName, escalateDays: days });
+      createMut.mutate({
+        encryptedName: data.encryptedName,
+        escalateDays: data.escalateDays,
+      });
     } else if (queueId !== null) {
       updateMut.mutate({
         queueId,
-        encryptedName,
-        escalateDays: days,
+        encryptedName: data.encryptedName,
+        escalateDays: data.escalateDays,
       });
+    }
+  }
+
+  function handleFormStateChange(state: {
+    canSubmit: boolean;
+    isPending: boolean;
+  }): void {
+    formCanSubmit = state.canSubmit;
+    formIsPending = state.isPending;
+  }
+
+  function triggerSubmit(): void {
+    const form = document.getElementById(FORM_ID);
+    if (form instanceof HTMLFormElement) {
+      form.requestSubmit();
     }
   }
 
@@ -153,77 +141,34 @@
 
   const title = $derived(
     isCreateMode
-      ? m.admin_queue_editor_create_title()
-      : m.admin_queue_editor_edit_title(),
+      ? m.admin_queue_editor_create_title(withTerms())
+      : m.admin_queue_editor_edit_title(withTerms()),
   );
 </script>
 
 <ShellSheet {opened} {ondismiss} ariaLabel={title} {title}>
   {#snippet headerRight()}
-    <SoftButton onclick={handleSubmit} disabled={!canSubmit || isPending}>
+    <SoftButton onclick={triggerSubmit} disabled={!formCanSubmit || isPending}>
       {#if isPending}
         {m.common_loading()}
       {:else}
         <Save size={16} aria-hidden="true" />
         {isCreateMode
-          ? m.admin_queue_editor_save_create()
+          ? m.admin_queue_editor_save_create(withTerms())
           : m.admin_queue_editor_save_edit()}
       {/if}
     </SoftButton>
   {/snippet}
   <div class="editor-content">
-    {#if !orgKeyLoaded}
-      <Block>
-        <p class="text-sm text-[--color-amber-500] font-medium" role="alert">
-          {m.admin_queue_editor_no_org_key()}
-        </p>
-      </Block>
-    {/if}
-
-    <List nested>
-      <ListInput
-        outline
-        label={m.admin_queue_editor_name_label()}
-        type="text"
-        placeholder={m.admin_queue_editor_name_placeholder()}
-        value={queueName}
-        oninput={(e: Event) => {
-          if (e.target instanceof HTMLInputElement) queueName = e.target.value;
-        }}
-        disabled={!orgKeyLoaded || isPending}
-      />
-    </List>
-
-    <Block>
-      <div class="pii-warning" role="note">
-        <span class="pii-icon" aria-hidden="true">⚠</span>
-        <p>{m.admin_queue_editor_pii_warning()}</p>
-      </div>
-    </Block>
-
-    <List nested>
-      <ListInput
-        outline
-        label={m.admin_queue_editor_escalation_label()}
-        type="number"
-        placeholder="0"
-        value={escalationDays}
-        oninput={(e: Event) => {
-          if (e.target instanceof HTMLInputElement)
-            escalationDays = e.target.value;
-        }}
-        disabled={!orgKeyLoaded || isPending}
-        info={m.admin_queue_editor_escalation_hint()}
-      />
-    </List>
-
-    {#if nameEmpty && queueName.length > 0}
-      <Block>
-        <p class="text-sm text-[--color-red-500]" role="alert">
-          {m.admin_queue_editor_name_required()}
-        </p>
-      </Block>
-    {/if}
+    <QueueForm
+      mode={isCreateMode ? "create" : "edit"}
+      initialName={decryptedName}
+      {initialEscalation}
+      disabled={isPending}
+      formId={FORM_ID}
+      onsubmit={handleFormSubmit}
+      onstatechange={handleFormStateChange}
+    />
 
     {#if !isCreateMode && ondeletequeue}
       <div class="delete-action">
@@ -233,7 +178,7 @@
           onclick={handleDelete}
           disabled={isPending}
         >
-          {m.admin_queue_editor_delete()}
+          {m.admin_queue_editor_delete(withTerms())}
         </button>
       </div>
     {/if}
@@ -250,28 +195,6 @@
 
   .delete-action {
     padding: var(--space-2xl) var(--k-block-padding-horizontal) 0;
-  }
-
-  .pii-warning {
-    display: flex;
-    gap: var(--space-sm);
-    font-size: 0.8125rem;
-    color: var(--color-amber-500);
-    background: color-mix(in srgb, var(--color-amber-500) 10%, transparent);
-    padding: var(--space-sm) var(--space-md);
-    border-radius: 8px;
-    margin: 0;
-    line-height: 1.4;
-  }
-
-  .pii-warning p {
-    margin: 0;
-  }
-
-  .pii-icon {
-    flex-shrink: 0;
-    font-size: 1rem;
-    line-height: 1.4;
   }
 
   .delete-btn {

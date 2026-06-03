@@ -52,8 +52,10 @@ function makeCtx(overrides?: Partial<Context>): Context {
       id: "user-id",
       identifier: "testuser",
       encryptedDisplayName: "Test User",
+      encryptedPreferredLocale: null,
       roleId: RoleId.VOLUNTEER,
       isActive: true,
+      hasSeenBriefing: true,
     },
     ...overrides,
   };
@@ -65,8 +67,10 @@ function makeCtxWithRole(roleId: string): Context {
       id: "user-id",
       identifier: "testuser",
       encryptedDisplayName: "Test User",
+      encryptedPreferredLocale: null,
       roleId,
       isActive: true,
+      hasSeenBriefing: true,
     },
   });
 }

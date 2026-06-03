@@ -1,9 +1,12 @@
 <script lang="ts">
-  import { List, ListInput, Preloader } from "konsta/svelte";
+  import { List, Preloader } from "konsta/svelte";
+  import PasswordInput from "$lib/components/inputs/PasswordInput.svelte";
+  import PasswordStrengthMeter from "$lib/components/inputs/PasswordStrengthMeter.svelte";
   import { Save } from "@lucide/svelte";
   import { useQueryClient } from "@tanstack/svelte-query";
   import { authKeys } from "$lib/query/keys.js";
   import * as m from "$lib/paraglide/messages.js";
+  import { withTerms } from "$lib/terminology/with-terms.js";
   import { getCryptoBridge, getOrgKeyManager } from "$lib/crypto/context.js";
   import { CryptoBridge } from "$lib/workers/crypto-bridge.js";
   import { haptic } from "$lib/utils/haptic.js";
@@ -49,6 +52,11 @@
 
   const newPasswordValid = $derived(newPassword.length >= 16);
   const passwordsMatch = $derived(newPassword === confirmPassword);
+  const confirmError = $derived(
+    confirmPassword.length > 0 && !passwordsMatch
+      ? m.settings_password_mismatch()
+      : undefined,
+  );
   const currentPasswordFilled = $derived(currentPassword.length >= 16);
   const canSubmit = $derived(
     currentPasswordFilled && newPasswordValid && passwordsMatch,
@@ -68,13 +76,13 @@
         stepMessage = m.settings_password_step_fetch();
       },
       onRewrapKeys: () => {
-        stepMessage = m.settings_password_step_rewrap();
+        stepMessage = m.settings_password_step_rewrap(withTerms());
       },
       onRederive: () => {
         stepMessage = m.settings_password_step_derive();
       },
       onRewrapOrgKey: () => {
-        stepMessage = m.settings_password_step_rewrap();
+        stepMessage = m.settings_password_step_rewrap(withTerms());
       },
       onRotateKeys: () => {
         stepMessage = m.settings_password_step_rotate();
@@ -102,7 +110,7 @@
         newPassword,
         callbacks: makeCallbacks(),
         onPowRequired: solveProofOfWork,
-        createTempBridge: () => new CryptoBridge(),
+        createTempBridge: () => new CryptoBridge("dedicated"),
       });
     } catch (err: unknown) {
       stepMessage = null;
@@ -151,49 +159,35 @@
     {/if}
 
     <List nested>
-      <ListInput
+      <PasswordInput
         outline
         label={m.settings_password_current()}
-        type="password"
         placeholder={m.settings_password_current()}
-        value={currentPassword}
-        oninput={(e: Event) => {
-          if (e.target instanceof HTMLInputElement)
-            currentPassword = e.target.value;
-        }}
+        bind:value={currentPassword}
         disabled={isPending}
       />
     </List>
     <List nested>
-      <ListInput
+      <PasswordInput
         outline
         label={m.settings_password_new()}
-        type="password"
         placeholder={m.settings_password_new()}
-        value={newPassword}
-        oninput={(e: Event) => {
-          if (e.target instanceof HTMLInputElement)
-            newPassword = e.target.value;
-        }}
+        bind:value={newPassword}
         disabled={isPending}
       />
-    </List>
-    <List nested>
-      <ListInput
+      <PasswordInput
         outline
         label={m.settings_password_confirm()}
-        type="password"
         placeholder={m.settings_password_confirm()}
-        value={confirmPassword}
-        oninput={(e: Event) => {
-          if (e.target instanceof HTMLInputElement)
-            confirmPassword = e.target.value;
-        }}
+        bind:value={confirmPassword}
         disabled={isPending}
+        error={confirmError}
       />
     </List>
-    {#if confirmPassword.length > 0 && !passwordsMatch}
-      <p class="error-text" role="alert">{m.settings_password_mismatch()}</p>
+    {#if newPassword.length > 0}
+      <div class="meter-wrap">
+        <PasswordStrengthMeter password={newPassword} minLength={16} />
+      </div>
     {/if}
     {#if errorMessage}
       <p class="error-text" role="alert">{errorMessage}</p>
@@ -216,6 +210,10 @@
     padding: var(--space-sm) var(--space-lg);
     font-size: 0.85rem;
     color: var(--muted);
+  }
+
+  .meter-wrap {
+    padding: 0 var(--space-lg);
   }
 
   .error-text {

@@ -12,6 +12,7 @@
     MessageSquare,
   } from "@lucide/svelte";
   import * as m from "$lib/paraglide/messages.js";
+  import { withTerms } from "$lib/terminology/with-terms.js";
   import ShellPopover from "$lib/shell/ShellPopover.svelte";
   import ShellSheet from "$lib/shell/ShellSheet.svelte";
   import PresetReplyContent from "$lib/components/tickets/PresetReplyContent.svelte";
@@ -61,7 +62,13 @@
   }
 </script>
 
-<ShellPopover {opened} {target} placement="top" {ondismiss}>
+<ShellPopover
+  {opened}
+  {target}
+  placement="top"
+  {ondismiss}
+  ariaLabel={m.ticket_compose_actions()}
+>
   <KList nested>
     <ListItem title={m.ticket_attach_file()} onclick={handleAttach}>
       {#snippet media()}
@@ -79,7 +86,10 @@
       {/snippet}
     </ListItem>
     {#if ontextclient}
-      <ListItem title={m.ticket_sms_title()} onclick={handleTextClient}>
+      <ListItem
+        title={m.ticket_sms_title(withTerms())}
+        onclick={handleTextClient}
+      >
         {#snippet media()}
           <MessageSquare size={20} aria-hidden="true" />
         {/snippet}

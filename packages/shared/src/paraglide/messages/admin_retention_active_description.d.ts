@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Tickets, messages, and caller personal information older than {days} days are automatically deleted." |
+* | "{Tickets}, messages, and caller personal information older than {days} days are automatically deleted." |
 *
 * @param {Admin_Retention_Active_DescriptionInputs} inputs
 * @param {{ locale?: "en" | "es" }} options
@@ -14,5 +14,7 @@ export const admin_retention_active_description: ((inputs: Admin_Retention_Activ
 }, {}>;
 export type LocalizedString = import("../runtime.js").LocalizedString;
 export type Admin_Retention_Active_DescriptionInputs = {
+    Tickets: NonNullable<unknown>;
     days: NonNullable<unknown>;
+    tickets: NonNullable<unknown>;
 };

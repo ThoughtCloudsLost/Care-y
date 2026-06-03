@@ -32,11 +32,14 @@ vi.mock("$lib/paraglide/messages.js", () => ({
   admin_escrow_confirm_label: () => "Confirm passphrase",
   admin_escrow_passphrase_guidance: () => "Use a long phrase.",
   admin_escrow_passphrase_mismatch: () => "Passphrases don't match",
-  admin_escrow_passphrase_common: () => "Predictable pattern.",
-  admin_escrow_strength_too_short: () => "Too short",
-  admin_escrow_strength_acceptable: () => "Acceptable",
-  admin_escrow_strength_good: () => "Good",
-  admin_escrow_strength_strong: () => "Strong",
+  password_show: () => "Show password",
+  password_hide: () => "Hide password",
+  password_strength_too_short: ({ min }: { min: number }) =>
+    `Too short (minimum ${min} characters)`,
+  password_strength_acceptable: () => "Acceptable",
+  password_strength_good: () => "Good",
+  password_strength_strong: () => "Strong",
+  password_common_pattern: () => "Predictable pattern.",
   admin_escrow_export_button: () => "Create Escrow File",
   admin_escrow_exporting: () => "Creating escrow file...",
   admin_escrow_no_org_key: () => "Organization key not loaded.",
@@ -50,6 +53,21 @@ vi.mock("$lib/paraglide/messages.js", () => ({
   admin_escrow_success: () => "Escrow file exported",
   admin_escrow_error: () => "Export failed",
   admin_escrow_continue: () => "Continue",
+  common_back: () => "Back",
+  common_cancel: () => "Cancel",
+  common_next: () => "Next",
+  onboarding_escrow_hash_label: () => "Verification code",
+  onboarding_escrow_hash_hint: () => "This code is unique to the file.",
+  onboarding_escrow_https_warning: () => "HTTPS required for secure export.",
+  onboarding_escrow_download_again: () => "Download again",
+  onboarding_escrow_download_again_title: () => "Download Again?",
+  onboarding_escrow_download_again_body: () =>
+    "The file will be regenerated with the same passphrase.",
+  onboarding_escrow_download_again_confirm: () => "Download",
+}));
+
+vi.mock("$lib/terminology/with-terms.js", () => ({
+  withTerms: () => ({}),
 }));
 
 vi.mock("$lib/crypto/context.js", () => ({
@@ -85,8 +103,36 @@ vi.mock("@care-y/crypto", () => ({
     nonce: new Uint8Array(24),
     ciphertext: new Uint8Array(48),
   }),
-  serializeEscrowBlob: () => new Uint8Array(89),
+  ARGON2_ESCROW_PARAMS: {
+    memoryKiB: 262144,
+    iterations: 4,
+    parallelism: 4,
+  },
   requireSodium: () => ({ memzero: mockMemzero }),
+}));
+
+vi.mock("$lib/utils/buffer-encoding.js", () => ({
+  uint8ArrayToBase64: (bytes: Uint8Array) => {
+    let binary = "";
+    for (const byte of bytes) {
+      binary += String.fromCharCode(byte);
+    }
+    return btoa(binary);
+  },
+}));
+
+vi.mock("$lib/utils/passphrase-strength.js", () => ({
+  assessPassphraseStrength: (p: string) => {
+    if (p.length < 20) return "too-short";
+    if (p.length < 30) return "acceptable";
+    if (p.length < 40) return "good";
+    return "strong";
+  },
+  looksLikeCommonPattern: (p: string) => {
+    if (new Set(p).size === 1) return true;
+    if (/^[0-9]+$/.test(p) && p.length < 30) return true;
+    return false;
+  },
 }));
 
 import EscrowExport from "./EscrowExport.svelte";
@@ -106,7 +152,9 @@ describe("EscrowExport", () => {
   it("shows education step initially when opened", () => {
     const { component } = render(EscrowExport);
     component.open();
-    expect(screen.getByText("What is an escrow file?")).toBeTruthy();
+    expect(
+      screen.getByText("Your organization's data is encrypted."),
+    ).toBeTruthy();
     expect(screen.getByText("Before you continue")).toBeTruthy();
   });
 
@@ -121,17 +169,15 @@ describe("EscrowExport", () => {
     mockOrgKeyLoaded = false;
     const { component } = render(EscrowExport);
     component.open();
-    const continueBtn = screen.getByText("Continue");
-    expect(
-      continueBtn.closest("button")?.hasAttribute("disabled"),
-    ).toBeTruthy();
+    const nextBtn = screen.getByText("Next");
+    expect(nextBtn.closest("button")?.hasAttribute("disabled")).toBeTruthy();
   });
 
   it("advances to passphrase step on continue", async () => {
     const { component } = render(EscrowExport);
     component.open();
 
-    await fireEvent.click(screen.getByText("Continue"));
+    await fireEvent.click(screen.getByText("Next"));
 
     expect(screen.getByText("Create a passphrase")).toBeTruthy();
     expect(screen.getByText("Use a long phrase.")).toBeTruthy();
@@ -140,7 +186,7 @@ describe("EscrowExport", () => {
   it("shows strength meter when typing passphrase", async () => {
     const { component } = render(EscrowExport);
     component.open();
-    await fireEvent.click(screen.getByText("Continue"));
+    await fireEvent.click(screen.getByText("Next"));
 
     const inputs = screen.getAllByDisplayValue("");
     const passphraseInput = inputs[0]!;
@@ -148,13 +194,13 @@ describe("EscrowExport", () => {
       target: { value: "short" },
     });
 
-    expect(screen.getByText("Too short")).toBeTruthy();
+    expect(screen.getByText("Too short (minimum 20 characters)")).toBeTruthy();
   });
 
   it("shows acceptable strength for 20+ char passphrase", async () => {
     const { component } = render(EscrowExport);
     component.open();
-    await fireEvent.click(screen.getByText("Continue"));
+    await fireEvent.click(screen.getByText("Next"));
 
     const inputs = screen.getAllByDisplayValue("");
     const passphraseInput = inputs[0]!;
@@ -168,7 +214,7 @@ describe("EscrowExport", () => {
   it("shows mismatch warning when confirm differs", async () => {
     const { component } = render(EscrowExport);
     component.open();
-    await fireEvent.click(screen.getByText("Continue"));
+    await fireEvent.click(screen.getByText("Next"));
 
     const inputs = screen.getAllByDisplayValue("");
     await fireEvent.input(inputs[0]!, {
@@ -188,7 +234,7 @@ describe("EscrowExport", () => {
 
     const { component } = render(EscrowExport);
     component.open();
-    await fireEvent.click(screen.getByText("Continue"));
+    await fireEvent.click(screen.getByText("Next"));
 
     const inputs = screen.getAllByDisplayValue("");
     const phrase = "morning river quiet lantern here";
@@ -207,14 +253,14 @@ describe("EscrowExport", () => {
     clickSpy.mockRestore();
   });
 
-  it("shows storage guidance in step 3", async () => {
+  it("shows storage guidance and hash in step 3", async () => {
     const clickSpy = vi
       .spyOn(HTMLAnchorElement.prototype, "click")
       .mockImplementation(() => undefined);
 
     const { component } = render(EscrowExport);
     component.open();
-    await fireEvent.click(screen.getByText("Continue"));
+    await fireEvent.click(screen.getByText("Next"));
 
     const inputs = screen.getAllByDisplayValue("");
     const phrase = "morning river quiet lantern here";
@@ -229,6 +275,7 @@ describe("EscrowExport", () => {
       expect(screen.getByText("Passphrase separate")).toBeTruthy();
       expect(screen.getByText("Second person")).toBeTruthy();
       expect(screen.getByText("Test periodically")).toBeTruthy();
+      expect(screen.getByText("Verification code")).toBeTruthy();
     });
     clickSpy.mockRestore();
   });
@@ -240,7 +287,7 @@ describe("EscrowExport", () => {
 
     const { component } = render(EscrowExport);
     component.open();
-    await fireEvent.click(screen.getByText("Continue"));
+    await fireEvent.click(screen.getByText("Next"));
 
     const inputs = screen.getAllByDisplayValue("");
     const phrase = "morning river quiet lantern here";
@@ -258,7 +305,7 @@ describe("EscrowExport", () => {
   it("shows common pattern warning for repeated characters", async () => {
     const { component } = render(EscrowExport);
     component.open();
-    await fireEvent.click(screen.getByText("Continue"));
+    await fireEvent.click(screen.getByText("Next"));
 
     const inputs = screen.getAllByDisplayValue("");
     await fireEvent.input(inputs[0]!, {

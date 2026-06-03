@@ -14,6 +14,7 @@ function makeConfig(overrides?: Partial<ReadCursorConfig>): ReadCursorConfig {
       encrypt: vi
         .fn<() => Promise<string>>()
         .mockResolvedValue("encrypted-blob"),
+      encryptText: vi.fn().mockResolvedValue("encrypted-text"),
     } as unknown as ReadCursorConfig["cryptoBridge"],
     mutate: vi.fn<() => Promise<unknown>>().mockResolvedValue(undefined),
     ...overrides,

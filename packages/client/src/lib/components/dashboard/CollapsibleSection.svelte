@@ -19,6 +19,8 @@
   });
 
   interface CollapsibleSectionProps {
+    /** Stable ID used to link heading and region for a11y. Generated from heading if omitted. */
+    id?: string;
     /** Section heading text */
     heading: string;
     /** Item count (omit to hide the badge entirely) */
@@ -33,11 +35,14 @@
     expanded: boolean;
     /** Callback when the header is toggled */
     ontoggle: () => void;
+    /** Extra content rendered in the header row (e.g., dismiss button) */
+    headerExtra?: Snippet;
     /** Content to render when expanded */
     children?: Snippet;
   }
 
   let {
+    id,
     heading,
     count,
     loading = false,
@@ -45,47 +50,61 @@
     iconColor = "currentColor",
     expanded,
     ontoggle,
+    headerExtra,
     children,
   }: CollapsibleSectionProps = $props();
+
+  const stableId = $derived(id ?? heading.toLowerCase().replace(/\s+/g, "-"));
+  const headingId = $derived(`${stableId}-heading`);
 </script>
 
 <div class="collapsible-section">
-  <button
-    type="button"
-    class="section-toggle"
-    onclick={ontoggle}
-    aria-expanded={expanded}
-  >
-    <BlockTitle>
-      <span class="heading-inner">
-        {#if Icon}
-          <Icon
-            size={16}
-            color={iconColor}
-            aria-hidden="true"
-            class="section-icon"
-          />
-        {/if}
-        <span class="heading-text">{heading}</span>
-        {#if loading && count === undefined}
-          <span class="count-badge" data-count aria-hidden="true">
-            <DecryptPlaceholder length={3} />
+  <div class="section-header">
+    <button
+      type="button"
+      class="section-toggle"
+      onclick={ontoggle}
+      aria-expanded={expanded}
+      aria-controls={expanded ? `${stableId}-region` : undefined}
+    >
+      <BlockTitle>
+        <span class="heading-inner">
+          {#if Icon}
+            <Icon
+              size={16}
+              color={iconColor}
+              aria-hidden="true"
+              class="section-icon"
+            />
+          {/if}
+          <span id={headingId} class="heading-text">{heading}</span>
+          {#if loading && count === undefined}
+            <span class="count-badge" data-count aria-hidden="true">
+              <DecryptPlaceholder length={3} />
+            </span>
+          {:else if count !== undefined}
+            <span class="count-badge" data-count={count} aria-hidden="true"
+              >{count}</span
+            >
+          {/if}
+          <span class="toggle-chevron" class:expanded aria-hidden="true">
+            &#x276F;
           </span>
-        {:else if count !== undefined}
-          <span class="count-badge" data-count={count} aria-hidden="true"
-            >{count}</span
-          >
-        {/if}
-        <span class="toggle-chevron" class:expanded aria-hidden="true">
-          &#x276F;
         </span>
-      </span>
-    </BlockTitle>
-  </button>
+      </BlockTitle>
+    </button>
+    {#if headerExtra}
+      <div class="header-extra">
+        {@render headerExtra()}
+      </div>
+    {/if}
+  </div>
   {#if expanded}
     <div
+      id={`${stableId}-region`}
       class="section-content"
       role="region"
+      aria-labelledby={headingId}
       transition:slide={{ duration: reducedMotion ? 0 : 200 }}
     >
       {#if children}
@@ -100,7 +119,19 @@
     padding-top: var(--space-2xl);
   }
 
+  .section-header {
+    display: flex;
+    align-items: center;
+  }
+
+  .header-extra {
+    flex-shrink: 0;
+    padding-right: var(--page-pad-x);
+  }
+
   .section-toggle {
+    flex: 1;
+    min-width: 0;
     display: block;
     width: 100%;
     background: none;

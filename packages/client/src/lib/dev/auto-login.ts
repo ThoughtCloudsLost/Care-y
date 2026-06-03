@@ -37,7 +37,8 @@ const DEV_PASSWORD = "dev-password-1234!";
 
 function getBypass2fa(): { mutate: () => Promise<unknown> } {
   const route = trpc.auth.devBypass2fa;
-  if (!route) throw new Error("devBypass2fa route missing (not in dev mode?)");
+  if (!route)
+    throw new TypeError("devBypass2fa route missing (not in dev mode?)");
   return route;
 }
 
@@ -51,7 +52,7 @@ function getDevSeedTickets(): { mutate: () => Promise<unknown> } {
     | undefined;
   const route = tickets?.devSeedTickets;
   if (route === undefined) {
-    throw new Error("devSeedTickets route missing (not in dev mode?)");
+    throw new TypeError("devSeedTickets route missing (not in dev mode?)");
   }
   return route;
 }
@@ -102,7 +103,7 @@ const noopLoginCallbacks: LoginCryptoCallbacks = {
     console.log("[dev] loginCrypto: done");
   },
   onPowRequired: () => {
-    throw new Error("PoW should not be required in dev auto-login");
+    throw new TypeError("PoW should not be required in dev auto-login");
   },
 };
 
@@ -1004,7 +1005,7 @@ async function bootstrapOrgKeypair(
     // The Worker retains the secret; we get back the public key.
     const orgPubKeyB64 = await fetchAndUnwrapOrgKey(bridge);
     if (orgPubKeyB64 === null) {
-      throw new Error(
+      throw new TypeError(
         "bootstrapOrgKeypair: fetchAndUnwrapOrgKey returned null after rotation",
       );
     }
@@ -1030,7 +1031,7 @@ async function seedKBArticles(
   // kb router is conditionally spread on the server, so TypeScript
   // doesn't guarantee its existence. This file only runs in dev mode.
   const kb = trpc.kb;
-  if (!kb) throw new Error("kb router unavailable (not in dev mode?)");
+  if (!kb) throw new TypeError("kb router unavailable (not in dev mode?)");
 
   // Fetch category list from server. Category names are encrypted (ADR-030),
   // so we decrypt them with the org key to map article definitions by name.
@@ -1045,8 +1046,8 @@ async function seedKBArticles(
           : new Uint8Array((c.encryptedName as { data: number[] }).data);
       const plainBytes = await orgKeyManager.decrypt(ciphertext);
       categoryMap.set(decoder.decode(plainBytes), c.id);
-    } catch {
-      // Can't decrypt (wrong key or corrupted), skip
+    } catch (err: unknown) {
+      console.debug("[dev] skipping category decrypt:", err);
     }
   }
 

@@ -106,7 +106,25 @@ vi.mock("$lib/paraglide/messages.js", () => ({
     "Your phone provider keeps its own logs of calls and messages for up to 30 days.",
   admin_telephony_not_configured: () => "Phone service not set up",
   admin_telephony_go_to_setup: () => "Go to setup",
+  admin_telephony_change_mode: () => "Change mode",
+  admin_telephony_change_mode_confirm_title: () => "Change telephony mode?",
+  admin_telephony_change_mode_confirm_body: () =>
+    "Switching modes will reset your current telephony configuration.",
+  admin_telephony_change_mode_confirm: () => "Continue",
+  admin_telephony_mode_changed: () => "Mode changed",
+  common_cancel: () => "Cancel",
   error_generic: () => "Something went wrong",
+  onboarding_telephony_byot_label: () => "Self-managed (BYOT)",
+  onboarding_telephony_byot_description: () => "Bring your own Twilio account.",
+  onboarding_telephony_managed_label: () => "Managed",
+  onboarding_telephony_managed_description: () =>
+    "We manage the phone service for you.",
+  onboarding_telephony_skip_label: () => "Skip for now",
+  onboarding_telephony_skip_description: () => "Set up telephony later.",
+  onboarding_telephony_sid_label: () => "Account SID",
+  onboarding_telephony_sid_placeholder: () => "AC...",
+  onboarding_telephony_token_label: () => "Auth Token",
+  onboarding_telephony_token_placeholder: () => "Enter auth token",
 }));
 
 vi.mock("$lib/trpc/index.js", () => ({

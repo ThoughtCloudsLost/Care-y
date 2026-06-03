@@ -20,6 +20,7 @@
   import { Link } from "konsta/svelte";
   import { ChevronLeft, Pencil } from "@lucide/svelte";
   import * as m from "$lib/paraglide/messages.js";
+  import { withTerms } from "$lib/terminology/with-terms.js";
   import { trpc } from "$lib/trpc/index.js";
   import { kbKeys } from "$lib/query/keys.js";
   import { getOrgDecryptCache, getOrgKeyManager } from "$lib/crypto/context.js";
@@ -29,7 +30,7 @@
   } from "$lib/crypto/decrypt-result.js";
   import { getNavbarOverrideCtx } from "$lib/shell/context.js";
   import { shellBack } from "$lib/shell/navigation.js";
-  import { RouterNotAvailableError } from "$lib/errors.js";
+  import { requireRouter } from "$lib/errors.js";
   import { renderArticleBody } from "$lib/utils/render-article.js";
   import { formatRelativeTime } from "$lib/utils/format-time.js";
   import { haptic } from "$lib/utils/haptic.js";
@@ -45,8 +46,7 @@
   import DecryptPlaceholder from "$lib/components/DecryptPlaceholder.svelte";
   import InlineSkeleton from "$lib/components/InlineSkeleton.svelte";
 
-  if (!trpc.kb) throw new RouterNotAvailableError("kb");
-  const kbRouter = trpc.kb;
+  const kbRouter = requireRouter(trpc.kb, "kb");
   const orgCache = getOrgDecryptCache();
   const orgKeyManager = getOrgKeyManager();
   const queryClient = useQueryClient();
@@ -411,7 +411,7 @@
   $effect(() => {
     navbarCtx.current = {
       left: navLeft,
-      title: categoryName ?? m.library_title(),
+      title: categoryName ?? m.library_title(withTerms()),
       right: navRight,
     };
     return () => {
@@ -425,7 +425,7 @@
     iconOnly
     onclick={goBack}
     role="button"
-    aria-label={m.library_back_to_library()}
+    aria-label={m.library_back_to_library(withTerms())}
   >
     <ChevronLeft size={22} aria-hidden="true" />
   </Link>

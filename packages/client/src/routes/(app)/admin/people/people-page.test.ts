@@ -79,6 +79,7 @@ vi.mock("$lib/trpc/index.js", () => ({
 
 vi.mock("$lib/errors.js", () => ({
   RouterNotAvailableError: class extends Error {},
+  requireRouter: <T>(r: T) => r,
 }));
 
 vi.mock("@tanstack/svelte-query", () => ({
@@ -131,10 +132,26 @@ vi.mock("$lib/paraglide/messages.js", () => ({
   admin_users_filter_status: () => "Status",
   admin_users_filter_keys: () => "Keys",
   admin_invite_button: () => "Invite",
+  admin_invite_menu_link: () => "Invite Link",
+  admin_invite_menu_manual: () => "Manual Entry",
   admin_queues_create_button: () => "Create queue",
+  admin_queues_select_mode: () => "Select",
+  admin_queues_sort: () => "Sort",
+  admin_queues_sort_name: () => "Name",
+  admin_queues_sort_order: () => "Order",
+  admin_queues_sort_members: () => "Members",
+  admin_queues_sort_open: () => "Open",
+  admin_queues_sort_hold: () => "Hold",
+  admin_queues_sort_closed: () => "Closed",
+  admin_queues_stat_total: () => "total",
+  admin_queues_stat_open: () => "open",
+  admin_queues_stat_members: () => "members",
+  admin_queues_title: () => "Queues",
   admin_users_stat_active: () => "active",
   admin_users_stat_inactive: () => "inactive",
   admin_users_select_mode: () => "Select",
+  admin_users_filter_queue: () => "Queue",
+  search_inline_trigger: () => "Search",
 }));
 
 vi.mock("$lib/components/admin/UsersSection.svelte", async () => ({
@@ -291,6 +308,136 @@ describe("People page", () => {
       const ctx = mockNavbarCtx.current as Record<string, unknown>;
       expect(ctx.subnavbar).toBeDefined();
       expect(typeof ctx.subnavbar).toBe("function");
+    });
+
+    it("provides a right action snippet on the users tab", () => {
+      setPermissions("manage_users", "manage_queues");
+      renderPage();
+
+      const ctx = mockNavbarCtx.current as Record<string, unknown>;
+      expect(ctx.right).toBeDefined();
+      expect(typeof ctx.right).toBe("function");
+    });
+
+    it("provides a right action snippet on the queues tab", () => {
+      setPermissions("manage_users", "manage_queues");
+      setUrl("/admin/people?tab=queues");
+      renderPage();
+
+      const ctx = mockNavbarCtx.current as Record<string, unknown>;
+      expect(ctx.right).toBeDefined();
+      expect(typeof ctx.right).toBe("function");
+    });
+
+    it("does not provide a right action when user lacks the active tab permission", () => {
+      setPermissions("manage_queues");
+      renderPage();
+
+      // Default tab is queues (no manage_users), so right should be
+      // the queues-tab right action (create queue).
+      const ctx = mockNavbarCtx.current as Record<string, unknown>;
+      expect(ctx.right).toBeDefined();
+    });
+  });
+
+  describe("permission guard (extended)", () => {
+    it("redirects when user has unrelated permissions only", () => {
+      setPermissions("manage_keys", "manage_org_config");
+      renderPage();
+
+      expect(mockGoto).toHaveBeenCalledWith("/");
+    });
+
+    it("does not render any tabpanel when user has no access", () => {
+      setPermissions();
+      renderPage();
+
+      expect(screen.queryByRole("tabpanel")).toBeNull();
+    });
+
+    it("renders content normally with both permissions", () => {
+      setPermissions("manage_users", "manage_queues");
+      renderPage();
+
+      expect(screen.getByRole("tabpanel")).toBeTruthy();
+      expect(mockGoto).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("tab visibility based on permissions", () => {
+    it("only shows users tabpanel when user has only MANAGE_USERS", () => {
+      setPermissions("manage_users");
+      renderPage();
+
+      const panel = screen.getByRole("tabpanel");
+      expect(panel.id).toBe("panel-users");
+      expect(screen.getByText("User management loading...")).toBeTruthy();
+    });
+
+    it("only shows queues tabpanel when user has only MANAGE_QUEUES", () => {
+      setPermissions("manage_queues");
+      renderPage();
+
+      const panel = screen.getByRole("tabpanel");
+      expect(panel.id).toBe("panel-queues");
+      expect(screen.getByText("Queue management loading...")).toBeTruthy();
+    });
+
+    it("switches to queues tab via URL even with both permissions", () => {
+      setPermissions("manage_users", "manage_queues");
+      setUrl("/admin/people?tab=queues");
+      renderPage();
+
+      const panel = screen.getByRole("tabpanel");
+      expect(panel.id).toBe("panel-queues");
+    });
+
+    it("falls back to users tab for unknown tab param with both permissions", () => {
+      setPermissions("manage_users", "manage_queues");
+      setUrl("/admin/people?tab=settings");
+      renderPage();
+
+      const panel = screen.getByRole("tabpanel");
+      expect(panel.id).toBe("panel-users");
+    });
+  });
+
+  describe("section content by tab", () => {
+    it("renders only UsersSection stub on users tab", () => {
+      setPermissions("manage_users", "manage_queues");
+      renderPage();
+
+      expect(screen.getByText("User management loading...")).toBeTruthy();
+      expect(screen.queryByText("Queue management loading...")).toBeNull();
+    });
+
+    it("renders only QueuesSection stub on queues tab", () => {
+      setPermissions("manage_users", "manage_queues");
+      setUrl("/admin/people?tab=queues");
+      renderPage();
+
+      expect(screen.getByText("Queue management loading...")).toBeTruthy();
+      expect(screen.queryByText("User management loading...")).toBeNull();
+    });
+
+    it("does not render users section when user lacks MANAGE_USERS and tab is queues", () => {
+      setPermissions("manage_queues");
+      setUrl("/admin/people?tab=queues");
+      renderPage();
+
+      expect(screen.getByText("Queue management loading...")).toBeTruthy();
+      expect(screen.queryByText("User management loading...")).toBeNull();
+    });
+  });
+
+  describe("navbar subnavbar hidden callback", () => {
+    it("provides a subnavbarHidden callback in navbar context", () => {
+      setPermissions("manage_users", "manage_queues");
+      renderPage();
+
+      const ctx = mockNavbarCtx.current as Record<string, unknown>;
+      expect(ctx.subnavbarHidden).toBeDefined();
+      expect(typeof ctx.subnavbarHidden).toBe("function");
     });
   });
 });

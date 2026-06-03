@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "{count} tickets assigned to {name}" |
+* | "{count} {tickets} assigned to {name}" |
 *
 * @param {Ticket_Toast_Bulk_AssignedInputs} inputs
 * @param {{ locale?: "en" | "es" }} options
@@ -15,5 +15,6 @@ export const ticket_toast_bulk_assigned: ((inputs: Ticket_Toast_Bulk_AssignedInp
 export type LocalizedString = import("../runtime.js").LocalizedString;
 export type Ticket_Toast_Bulk_AssignedInputs = {
     count: NonNullable<unknown>;
+    tickets: NonNullable<unknown>;
     name: NonNullable<unknown>;
 };

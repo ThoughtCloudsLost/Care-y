@@ -4,8 +4,8 @@
  * Used by both the tRPC context factory and relay handler to identify
  * which org a request is targeting. Shared to avoid logic duplication.
  *
- * Dev: reads X-Org-Slug header (SOG-07 fallback for local development
- * without subdomain routing).
+ * Dev/test: reads X-Org-Slug header (SOG-07 fallback for local development
+ * and integration testing without subdomain routing).
  * Prod: extracts subdomain from Host header (slug.care-y.app -> slug).
  */
 
@@ -16,7 +16,7 @@ import { getEnv } from "../env.js";
 export function extractOrgSlug(req: IncomingMessage): string | null {
   const env = getEnv();
 
-  if (env.NODE_ENV === "development") {
+  if (env.NODE_ENV !== "production") {
     const header = req.headers["x-org-slug"];
     if (typeof header === "string" && header.length > 0) {
       return header;

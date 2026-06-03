@@ -9,11 +9,16 @@ import {
   toRistrettoPoint,
 } from "@care-y/crypto";
 
+export interface SeedTicketOptions {
+  handcraftedOnly?: boolean;
+}
+
 export async function seedTestTickets(
   tDb: Kysely<TenantDatabase>,
   blobStore: BlobStore,
   userId: string,
   orgSchema: string,
+  options?: SeedTicketOptions,
 ): Promise<{ ticketIds: string[] }> {
   // 1. Look up vol_public for the current user
   const userKeys = await tDb
@@ -563,7 +568,8 @@ export async function seedTestTickets(
   // Generate additional tickets programmatically to test
   // virtual scrolling with large lists. Uses a simple
   // deterministic seed so re-runs produce the same data.
-  const GENERATED_COUNT = 106; // 14 handcrafted + 106 = 120 total
+  // Skipped when handcraftedOnly is set (E2E tests use only the 14 above).
+  const GENERATED_COUNT = options?.handcraftedOnly === true ? 0 : 106;
   const queuesArr = ["Intake", "Crisis", "Housing"] as const;
   const priorities: TicketPriority[] = [
     "low",
@@ -915,9 +921,13 @@ export async function seedTestTickets(
         .execute();
     }
 
-    // Create follow-ups (encrypted with same ticket key)
+    // Create follow-ups (encrypted with same ticket key, except system events
+    // which carry no encrypted content under the Proton model)
     for (const fu of def.followUps) {
-      const encryptedContent = encryptContent(encoder.encode(fu.content), tk);
+      const isSystem = fu.source === "system";
+      const encryptedContent = isSystem
+        ? new Uint8Array(0)
+        : encryptContent(encoder.encode(fu.content), tk);
       const followUp = await tDb
         .insertInto("followups")
         .values({
@@ -927,6 +937,7 @@ export async function seedTestTickets(
           is_private: fu.isPrivate ?? false,
           encrypted_content: Buffer.from(encryptedContent),
           created_at: minutesAgo(fu.agoMinutes),
+          ...(fu.source === "volunteer" ? { created_by: userId } : {}),
         })
         .returning("id")
         .executeTakeFirstOrThrow();

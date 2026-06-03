@@ -35,11 +35,13 @@ vi.mock("$lib/shell/context.js", () => ({
 }));
 
 vi.mock("$lib/paraglide/messages.js", () => ({
+  admin_tab_org_general: () => "General",
   admin_tab_branding: () => "Branding",
   admin_tab_keys: () => "Keys",
   admin_tab_retention: () => "Retention",
   admin_tab_reports: () => "Reports",
   admin_tab_note_types: () => "Follow-Ups",
+  admin_tab_terminology: () => "Terminology",
   admin_org_title: () => "Organization",
   admin_org_no_access: () => "No access",
 }));
@@ -79,6 +81,18 @@ vi.mock("$lib/components/admin/RetentionSection.svelte", async () => ({
 }));
 
 vi.mock("$lib/components/admin/NoteTypesSection.svelte", async () => ({
+  default: (
+    await import("$lib/components/tickets/test-helpers/PassthroughShell.svelte")
+  ).default,
+}));
+
+vi.mock("$lib/components/admin/TerminologySection.svelte", async () => ({
+  default: (
+    await import("$lib/components/tickets/test-helpers/PassthroughShell.svelte")
+  ).default,
+}));
+
+vi.mock("$lib/components/admin/OrgGeneralSection.svelte", async () => ({
   default: (
     await import("$lib/components/tickets/test-helpers/PassthroughShell.svelte")
   ).default,
@@ -148,10 +162,12 @@ describe("Organization page", () => {
   });
 
   describe("section rendering", () => {
-    it("renders all 4 section anchors with full permissions", () => {
+    it("renders all 6 section anchors with full permissions", () => {
       const { container } = renderPage();
 
+      expect(container.querySelector("#section-general")).toBeTruthy();
       expect(container.querySelector("#section-branding")).toBeTruthy();
+      expect(container.querySelector("#section-terminology")).toBeTruthy();
       expect(container.querySelector("#section-keys")).toBeTruthy();
       expect(container.querySelector("#section-retention")).toBeTruthy();
       expect(container.querySelector("#section-note-types")).toBeTruthy();
@@ -162,7 +178,9 @@ describe("Organization page", () => {
       const { container } = renderPage();
 
       expect(container.querySelector("#section-keys")).toBeTruthy();
+      expect(container.querySelector("#section-general")).toBeNull();
       expect(container.querySelector("#section-branding")).toBeNull();
+      expect(container.querySelector("#section-terminology")).toBeNull();
       expect(container.querySelector("#section-retention")).toBeNull();
       expect(container.querySelector("#section-note-types")).toBeNull();
     });
@@ -171,7 +189,9 @@ describe("Organization page", () => {
       setPermissions("manage_org_config");
       const { container } = renderPage();
 
+      expect(container.querySelector("#section-general")).toBeTruthy();
       expect(container.querySelector("#section-branding")).toBeTruthy();
+      expect(container.querySelector("#section-terminology")).toBeTruthy();
       expect(container.querySelector("#section-retention")).toBeTruthy();
       expect(container.querySelector("#section-note-types")).toBeTruthy();
       expect(container.querySelector("#section-keys")).toBeNull();
@@ -199,11 +219,13 @@ describe("Organization page", () => {
       const { container } = renderPage();
 
       const divs = container.querySelectorAll(".csp-section");
-      expect(divs).toHaveLength(4);
-      expect(divs[0]?.id).toBe("section-branding");
-      expect(divs[1]?.id).toBe("section-keys");
-      expect(divs[2]?.id).toBe("section-retention");
-      expect(divs[3]?.id).toBe("section-note-types");
+      expect(divs).toHaveLength(6);
+      expect(divs[0]?.id).toBe("section-general");
+      expect(divs[1]?.id).toBe("section-branding");
+      expect(divs[2]?.id).toBe("section-terminology");
+      expect(divs[3]?.id).toBe("section-keys");
+      expect(divs[4]?.id).toBe("section-retention");
+      expect(divs[5]?.id).toBe("section-note-types");
     });
   });
 });

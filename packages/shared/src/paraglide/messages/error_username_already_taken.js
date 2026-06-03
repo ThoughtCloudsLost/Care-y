@@ -6,17 +6,17 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Error_Username_Already_TakenInputs */
 
 const en_error_username_already_taken = /** @type {(inputs: Error_Username_Already_TakenInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`This username is already taken.`)
+	return /** @type {LocalizedString} */ (`This login username is already taken.`)
 };
 
 const es_error_username_already_taken = /** @type {(inputs: Error_Username_Already_TakenInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Este usuario ya esta en uso.`)
+	return /** @type {LocalizedString} */ (`Este usuario de inicio de sesion ya esta en uso.`)
 };
 
 /**
 * | output |
 * | --- |
-* | "This username is already taken." |
+* | "This login username is already taken." |
 *
 * @param {Error_Username_Already_TakenInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

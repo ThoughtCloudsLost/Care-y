@@ -30,7 +30,7 @@
   } from "$lib/shell/context.js";
   import { useScrollDirection } from "$lib/shell/use-scroll-direction.svelte.js";
   import { usePTR } from "$lib/shell/ptr-context.svelte.js";
-  import { RouterNotAvailableError } from "$lib/errors.js";
+  import { requireRouter } from "$lib/errors.js";
   import { createEditorBridge } from "$lib/editor/editor-bridge.svelte.js";
   import { useNavigationGuard } from "$lib/editor/use-navigation-guard.svelte.js";
   import { shellBack } from "$lib/shell/navigation.js";
@@ -39,8 +39,7 @@
   import DecryptPlaceholder from "$lib/components/DecryptPlaceholder.svelte";
   import QueryError from "$lib/components/QueryError.svelte";
 
-  if (!trpc.kb) throw new RouterNotAvailableError("kb");
-  const kbRouter = trpc.kb;
+  const kbRouter = requireRouter(trpc.kb, "kb");
   const orgCache = getOrgDecryptCache();
   const orgKeyManager = getOrgKeyManager();
   const queryClient = useQueryClient();

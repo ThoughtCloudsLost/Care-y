@@ -9,6 +9,8 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import type { CryptoBridge } from "$lib/workers/crypto-bridge.js";
 import { FollowUpDecryptCache } from "./follow-up-decrypt-cache.js";
+import { cacheRegistry } from "./cache-registry.js";
+import { DECRYPT_ERROR_SENTINEL } from "./async-decrypt-cache.js";
 
 const FOLLOW_UP_ID = "fu-001";
 const KEY_WRAP = {
@@ -74,6 +76,7 @@ describe("FollowUpDecryptCache", () => {
   let mockDecryptAndRewrap: ReturnType<typeof vi.fn>;
 
   beforeEach(() => {
+    cacheRegistry.reset();
     const {
       bridge,
       mockDecrypt: md,
@@ -150,8 +153,10 @@ describe("FollowUpDecryptCache", () => {
       expect(result).toBeUndefined();
 
       await vi.waitFor(() => {
-        expect(cache.has(FOLLOW_UP_ID)).toBe(false);
+        expect(cache.has(FOLLOW_UP_ID)).toBe(true);
       });
+
+      expect(cache.get(FOLLOW_UP_ID)).toBe(DECRYPT_ERROR_SENTINEL);
     });
 
     it("routes to decryptAndRewrap when rewrapContext is provided", () => {

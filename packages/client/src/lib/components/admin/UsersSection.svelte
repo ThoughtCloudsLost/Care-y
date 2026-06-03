@@ -6,8 +6,6 @@
     List,
     ListInput,
     ListItem,
-    Segmented,
-    SegmentedButton,
     Toggle,
   } from "konsta/svelte";
   import {
@@ -20,8 +18,9 @@
   import type { RoleIdValue } from "@care-y/shared";
   import { UserMinus, X, Save } from "@lucide/svelte";
   import * as m from "$lib/paraglide/messages.js";
+  import { withTerms } from "$lib/terminology/with-terms.js";
   import { trpc } from "$lib/trpc/index.js";
-  import { adminKeys, queueKeys } from "$lib/query/keys.js";
+  import { adminKeys, inviteKeys, queueKeys } from "$lib/query/keys.js";
   import {
     getOrgDecryptCache,
     getOrgKeyManager,
@@ -35,12 +34,17 @@
   import { haptic } from "$lib/utils/haptic.js";
   import { toastStore } from "$lib/stores/toast.svelte.js";
   import { announceToLiveRegion } from "$lib/utils/announce.js";
-  import { RouterNotAvailableError } from "$lib/errors.js";
-  import { normalizeForSearch } from "$lib/search/normalize.js";
+  import { requireRouter } from "$lib/errors.js";
+  import { userFilterStore } from "$lib/stores/user-filters.svelte.js";
   import {
-    userFilterStore,
-    type KeyStatus,
-  } from "$lib/stores/user-filters.svelte.js";
+    buildUserQueueMap,
+    filterUsers,
+    sortUsers,
+    countUsers,
+    filterInvites,
+    computeQueueDiff,
+    hasQueueChanges,
+  } from "$lib/admin/users-section-utils.js";
   import { getTabbarOverrideCtx } from "$lib/shell/context.js";
   import QueryError from "$lib/components/QueryError.svelte";
   import ShellDialog from "$lib/shell/ShellDialog.svelte";
@@ -48,6 +52,9 @@
   import SoftButton from "$lib/components/inputs/SoftButton.svelte";
   import InlineSkeleton from "$lib/components/InlineSkeleton.svelte";
   import InviteUser from "./InviteUser.svelte";
+  import InviteLinkSheet from "./InviteLinkSheet.svelte";
+  import InvitePendingCard from "./InvitePendingCard.svelte";
+  import RoleSelector from "$lib/components/shared/RoleSelector.svelte";
   import UserCard from "./UserCard.svelte";
 
   interface QueueAssignment {
@@ -70,9 +77,9 @@
   }: UsersSectionProps = $props();
 
   const authRouter = trpc.auth;
-  if (!trpc.tickets) throw new RouterNotAvailableError("tickets");
-  const ticketRouter = trpc.tickets;
+  const ticketRouter = requireRouter(trpc.tickets, "tickets");
   const profileRouter = trpc.profile;
+  const onboardingRouter = requireRouter(trpc.onboarding, "onboarding");
   const queryClient = useQueryClient();
 
   const orgCache = getOrgDecryptCache();
@@ -89,6 +96,11 @@
   const queuesQuery = createQuery(() => ({
     queryKey: queueKeys.all,
     queryFn: async () => ticketRouter.listQueues.query(),
+  }));
+
+  const invitesQuery = createQuery(() => ({
+    queryKey: inviteKeys.pending(),
+    queryFn: async () => onboardingRouter.listPendingInvites.query(),
   }));
 
   const assignRoleMutation = createMutation(() => ({
@@ -175,128 +187,29 @@
 
   // ── Client-side filtering + sorting ──
 
-  type UserRecord = NonNullable<typeof usersQuery.data>[number];
+  const userQueueMap = $derived(buildUserQueueMap(queueAssignments));
 
-  function deriveKeyStatus(u: UserRecord): KeyStatus {
-    if (u.hasKeys && u.hasOrgKeyWrap) return "ok";
-    if (!u.hasKeys) return "no_keys";
-    return "no_org_key";
-  }
-
-  const ROLE_SORT_ORDER: Record<string, number> = {
-    [RoleId.ADMIN]: 0,
-    [RoleId.MANAGER]: 1,
-    [RoleId.VOLUNTEER]: 2,
-  };
-
-  const userQueueMap = $derived.by((): Map<string, Set<string>> => {
-    // eslint-disable-next-line svelte/prefer-svelte-reactivity -- local computation inside $derived, not reactive state
-    const map = new Map<string, Set<string>>();
-    for (const a of queueAssignments) {
-      let set = map.get(a.userId);
-      if (!set) {
-        set = new Set<string>(); // eslint-disable-line svelte/prefer-svelte-reactivity
-        map.set(a.userId, set);
-      }
-      set.add(a.queueId);
-    }
-    return map;
-  });
-
-  const filteredUsers = $derived.by(() => {
-    const all = usersQuery.data ?? [];
-    let result = all;
-
-    if (userFilterStore.roles.size > 0) {
-      result = result.filter((u) =>
-        (userFilterStore.roles as ReadonlySet<string>).has(u.roleId),
-      );
-    }
-    if (userFilterStore.statuses.size > 0) {
-      result = result.filter((u) =>
-        (userFilterStore.statuses as ReadonlySet<string>).has(
-          u.isActive ? "active" : "inactive",
-        ),
-      );
-    }
-    if (userFilterStore.keyStatuses.size > 0) {
-      result = result.filter((u) =>
-        userFilterStore.keyStatuses.has(deriveKeyStatus(u)),
-      );
-    }
-    if (userFilterStore.queueIds.size > 0) {
-      result = result.filter((u) => {
-        const userQueues = userQueueMap.get(u.id);
-        if (!userQueues) return false;
-        for (const qId of userFilterStore.queueIds) {
-          if (userQueues.has(qId)) return true;
-        }
-        return false;
-      });
-    }
-
-    if (searchQuery.length >= 2) {
-      const norm = normalizeForSearch(searchQuery);
-      result = result.filter((u) => {
-        const name = decryptDisplayName(u.id, u.encryptedDisplayName);
-        if (name === null) return false;
-        return normalizeForSearch(name).includes(norm);
-      });
-    }
-
-    const sorted = [...result];
-    const { field, direction } = userFilterStore.sort;
-    const dir = direction === "asc" ? 1 : -1;
-
-    // eslint-disable-next-line svelte/prefer-svelte-reactivity -- derived-local sort cache, not reactive
-    const nameCache = new Map<string, string>();
-    if (field === "name") {
-      for (const u of sorted) {
-        nameCache.set(
-          u.id,
-          decryptDisplayName(u.id, u.encryptedDisplayName) ?? "\uffff",
-        );
-      }
-    }
-
-    sorted.sort((a, b) => {
-      switch (field) {
-        case "name":
-          return (
-            dir *
-            (nameCache.get(a.id) ?? "\uffff").localeCompare(
-              nameCache.get(b.id) ?? "\uffff",
-            )
-          );
-        case "role":
-          return (
-            dir *
-            ((ROLE_SORT_ORDER[a.roleId] ?? 3) -
-              (ROLE_SORT_ORDER[b.roleId] ?? 3))
-          );
-        case "status": {
-          const aVal = a.isActive ? 0 : 1;
-          const bVal = b.isActive ? 0 : 1;
-          return dir * (aVal - bVal);
-        }
-        default:
-          return 0;
-      }
-    });
-
-    return sorted;
-  });
+  const filteredUsers = $derived(
+    sortUsers(
+      filterUsers(
+        usersQuery.data ?? [],
+        {
+          roles: userFilterStore.roles,
+          statuses: userFilterStore.statuses,
+          keyStatuses: userFilterStore.keyStatuses,
+          queueIds: userFilterStore.queueIds,
+        },
+        userQueueMap,
+        searchQuery,
+        decryptDisplayName,
+      ),
+      userFilterStore.sort,
+      decryptDisplayName,
+    ),
+  );
 
   // ── Stats (exported as functions per Svelte 5 derived_invalid_export rule) ──
-  const userCounts = $derived.by(() => {
-    let active = 0;
-    let inactive = 0;
-    for (const u of usersQuery.data ?? []) {
-      if (u.isActive) active++;
-      else inactive++;
-    }
-    return { active, inactive, total: active + inactive };
-  });
+  const userCounts = $derived(countUsers(usersQuery.data ?? []));
 
   export function activeCount(): number {
     return userCounts.active;
@@ -310,10 +223,74 @@
     return filteredUsers.map((u) => u.id);
   }
 
+  export function pendingInviteCount(): number {
+    return invitesQuery.data?.length ?? 0;
+  }
+
+  // ── Pending invites (filtered + revoke) ──
+
+  const ROLE_LABEL_MAP: ReadonlyMap<string, () => string> = new Map([
+    [RoleId.VOLUNTEER, () => m.admin_role_volunteer(withTerms())],
+    [RoleId.MANAGER, () => m.admin_role_manager(withTerms())],
+    [RoleId.ADMIN, () => m.admin_role_admin()],
+  ]);
+
+  function getRoleLabel(roleId: string): string {
+    const fn = ROLE_LABEL_MAP.get(roleId);
+    return fn ? fn() : m.admin_role_unknown();
+  }
+
+  const filteredInvites = $derived(
+    filterInvites(
+      invitesQuery.data ?? [],
+      userFilterStore.roles as ReadonlySet<string>,
+    ),
+  );
+
+  function lookupInviterName(invitedBy: string): string | null {
+    const inviter = (usersQuery.data ?? []).find((u) => u.id === invitedBy);
+    if (!inviter) return null;
+    return decryptDisplayName(inviter.id, inviter.encryptedDisplayName);
+  }
+
+  const revokeMutation = createMutation(() => ({
+    mutationFn: async (input: { tokenId: string }) =>
+      onboardingRouter.revokeInvite.mutate(input),
+    onSuccess: () => {
+      haptic();
+      void queryClient.invalidateQueries({ queryKey: inviteKeys.pending() });
+      const msg = m.admin_invite_pending_revoked();
+      toastStore.show(msg);
+      announceToLiveRegion("polite", msg);
+    },
+    onError: () => {
+      toastStore.show(m.admin_invite_pending_revoke_error());
+    },
+  }));
+
+  let revokeDialogOpened = $state(false);
+  let revokeTokenId = $state("");
+
+  function openRevokeDialog(tokenId: string): void {
+    revokeTokenId = tokenId;
+    revokeDialogOpened = true;
+  }
+
+  function confirmRevoke(): void {
+    revokeDialogOpened = false;
+    revokeMutation.mutate({ tokenId: revokeTokenId });
+  }
+
+  async function handleCopyInviteLink(url: string): Promise<void> {
+    await navigator.clipboard.writeText(url);
+    haptic();
+    toastStore.show(m.admin_invite_link_copied());
+  }
+
   // ── Edit user sheet ──
   interface SheetState {
     userId: string;
-    userName: string;
+    userDisplayName: string;
     userIdentifier: string;
     roleId: string;
     isActive: boolean;
@@ -336,7 +313,7 @@
     if (!user) return;
     const state: SheetState = {
       userId,
-      userName:
+      userDisplayName:
         decryptDisplayName(userId, user.encryptedDisplayName) ??
         userId.slice(0, 8),
       userIdentifier: user.identifier,
@@ -344,12 +321,10 @@
       isActive: user.isActive,
     };
     sheetState = state;
-    editDisplayName = state.userName;
+    editDisplayName = state.userDisplayName;
     editUsername = state.userIdentifier;
-    editRoleId =
-      user.roleId === RoleId.ADMIN || user.roleId === RoleId.MANAGER
-        ? user.roleId
-        : RoleId.VOLUNTEER;
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- server roleId is always a valid RoleIdValue
+    editRoleId = user.roleId as RoleIdValue;
 
     memberQueueIds.clear();
     originalQueueIds.clear();
@@ -385,7 +360,7 @@
   const displayNameChanged = $derived(
     sheetState !== null &&
       displayNameValid &&
-      trimmedDisplayName !== sheetState.userName,
+      trimmedDisplayName !== sheetState.userDisplayName,
   );
 
   const parsedUsername = $derived(identifierSchema.safeParse(editUsername));
@@ -401,13 +376,9 @@
       trimmedUsername !== sheetState.userIdentifier,
   );
 
-  const queueChanged = $derived.by(() => {
-    if (memberQueueIds.size !== originalQueueIds.size) return true;
-    for (const id of memberQueueIds) {
-      if (!originalQueueIds.has(id)) return true;
-    }
-    return false;
-  });
+  const queueChanged = $derived(
+    hasQueueChanges(memberQueueIds, originalQueueIds),
+  );
 
   const hasChanges = $derived(
     roleChanged || queueChanged || displayNameChanged || usernameChanged,
@@ -441,11 +412,9 @@
     }
 
     if (queueChanged) {
-      const added = [...memberQueueIds].filter(
-        (id) => !originalQueueIds.has(id),
-      );
-      const removed = [...originalQueueIds].filter(
-        (id) => !memberQueueIds.has(id),
+      const { added, removed } = computeQueueDiff(
+        memberQueueIds,
+        originalQueueIds,
       );
 
       for (const queueId of added) {
@@ -473,9 +442,9 @@
 
   function handleSheetDeactivate(): void {
     if (!sheetState) return;
-    const { userId, userName, isActive } = sheetState;
+    const { userId, userDisplayName, isActive } = sheetState;
     closeSheet();
-    openDeactivateDialog(userId, userName, !isActive);
+    openDeactivateDialog(userId, userDisplayName, !isActive);
   }
 
   // ── Deactivation dialog (single user) ──
@@ -505,14 +474,21 @@
 
   // ── Invite ──
   let inviteOpened = $state(false);
+  let inviteLinkOpened = $state(false);
 
   export function openInvite(): void {
     inviteOpened = true;
   }
 
+  export function openInviteLink(): void {
+    inviteLinkOpened = true;
+  }
+
   $effect(() => {
     if (autoAction === "invite") {
       inviteOpened = true;
+    } else if (autoAction === "invite-link") {
+      inviteLinkOpened = true;
     }
   });
 
@@ -638,10 +614,23 @@
     />
   {:else if filteredUsers.length === 0 && userCounts.total === 0}
     <Block class="text-center text-[--muted]">
-      {m.admin_no_users()}
+      {m.admin_no_users(withTerms())}
     </Block>
   {:else}
     <div class="user-list">
+      {#each filteredInvites as invite (invite.id)}
+        <InvitePendingCard
+          id={invite.id}
+          roleLabel={getRoleLabel(invite.roleId)}
+          inviterName={lookupInviterName(invite.invitedBy)}
+          expiresAt={invite.expiresAt}
+          encryptedToken={invite.encryptedToken ?? null}
+          revoking={revokeMutation.isPending &&
+            revokeMutation.variables.tokenId === invite.id}
+          onrevoke={openRevokeDialog}
+          oncopy={handleCopyInviteLink}
+        />
+      {/each}
       {#each filteredUsers as user (user.id)}
         {@const isSelf = user.id === currentUserId}
         {@const displayName = decryptDisplayName(
@@ -678,7 +667,7 @@
 <ShellSheet
   opened={sheetState !== null}
   ondismiss={closeSheet}
-  title={sheetState?.userName ?? ""}
+  title={sheetState?.userDisplayName ?? ""}
   ariaLabel={m.admin_user_edit_actions()}
 >
   {#snippet headerRight()}
@@ -730,36 +719,19 @@
           disabled={adminUsernameMutation.isPending}
         />
       </List>
-      <p class="pii-warning">{m.admin_invite_identifier_pii_warning()}</p>
+      <p class="pii-warning">{m.user_field_login_username_pii_warning()}</p>
     </div>
 
-    <div class="role-section">
-      <p class="section-label">{m.admin_invite_role_label()}</p>
-      <Segmented strong>
-        <SegmentedButton
-          active={editRoleId === RoleId.VOLUNTEER}
-          onclick={() => (editRoleId = RoleId.VOLUNTEER)}
-        >
-          {m.admin_role_volunteer()}
-        </SegmentedButton>
-        <SegmentedButton
-          active={editRoleId === RoleId.MANAGER}
-          onclick={() => (editRoleId = RoleId.MANAGER)}
-        >
-          {m.admin_role_manager()}
-        </SegmentedButton>
-        <SegmentedButton
-          active={editRoleId === RoleId.ADMIN}
-          onclick={() => (editRoleId = RoleId.ADMIN)}
-        >
-          {m.admin_role_admin()}
-        </SegmentedButton>
-      </Segmented>
-    </div>
+    <RoleSelector
+      selectedRole={editRoleId}
+      onselect={(r: RoleIdValue) => (editRoleId = r)}
+    />
 
     {#if (queuesQuery.data ?? []).length > 0}
       <div class="queue-section">
-        <p class="section-label">{m.admin_user_queue_assignments()}</p>
+        <p class="section-label">
+          {m.admin_user_queue_assignments(withTerms())}
+        </p>
         <List nested>
           {#if queuesLoading}
             {#each { length: 2 } as _, i (i)}
@@ -771,7 +743,7 @@
             {#each queuesQuery.data ?? [] as queue (queue.id)}
               {@const queueName =
                 orgCache.decrypt(`queue:${queue.id}`, queue.encryptedName) ??
-                "..."}
+                m.common_loading()}
               <ListItem title={queueName}>
                 {#snippet after()}
                   <Toggle
@@ -834,7 +806,37 @@
   {/snippet}
 </ShellDialog>
 
+<ShellDialog
+  opened={revokeDialogOpened}
+  ondismiss={() => (revokeDialogOpened = false)}
+  title={m.admin_invite_pending_revoke_title()}
+>
+  {#snippet content()}
+    <p class="text-sm text-[--muted]">
+      {m.admin_invite_pending_revoke_body()}
+    </p>
+  {/snippet}
+  {#snippet buttons()}
+    <!-- care-y-ignore-next-line no-click-without-keyboard -- DialogButton renders a native <button> -->
+    <DialogButton onclick={() => (revokeDialogOpened = false)}>
+      {m.common_cancel()}
+    </DialogButton>
+    <!-- care-y-ignore-next-line no-click-without-keyboard -- DialogButton renders a native <button> -->
+    <DialogButton
+      strong
+      class="text-[--color-red-500] font-semibold"
+      onclick={confirmRevoke}
+    >
+      {m.admin_invite_pending_revoke()}
+    </DialogButton>
+  {/snippet}
+</ShellDialog>
+
 <InviteUser opened={inviteOpened} ondismiss={() => (inviteOpened = false)} />
+<InviteLinkSheet
+  opened={inviteLinkOpened}
+  ondismiss={() => (inviteLinkOpened = false)}
+/>
 
 <style>
   .users-page {
@@ -872,22 +874,6 @@
   }
 
   .username-section {
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-sm);
-    margin-top: var(--space-lg);
-  }
-
-  .pii-warning {
-    font-size: 0.8125rem;
-    color: var(--color-amber-500);
-    background: color-mix(in srgb, var(--color-amber-500) 10%, transparent);
-    padding: var(--space-sm) var(--space-md);
-    border-radius: 8px;
-    margin: 0;
-  }
-
-  .role-section {
     display: flex;
     flex-direction: column;
     gap: var(--space-sm);

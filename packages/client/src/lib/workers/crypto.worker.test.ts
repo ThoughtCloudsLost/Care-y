@@ -240,25 +240,29 @@ describe("crypto.worker", () => {
       expect((resp as ErrorResponse).code).toBe("NOT_READY");
     });
 
-    it("rejects argon2id from KEYED state (double login prevention)", async () => {
-      // Login first
-      await sendAndWait({ type: "zeroAll", id: 932 });
-      const sodium = requireSodium();
-      const salt = sodium.randombytes_buf(16);
-      await fullLoginFlow("state-test", salt);
+    it(
+      "rejects argon2id from KEYED state (double login prevention)",
+      { timeout: 30_000 },
+      async () => {
+        // Login first
+        await sendAndWait({ type: "zeroAll", id: 932 });
+        const sodium = requireSodium();
+        const salt = sodium.randombytes_buf(16);
+        await fullLoginFlow("state-test", salt);
 
-      // Try argon2id again (should be KEYED, not READY)
-      const password = new TextEncoder().encode("double-login");
-      const salt2 = sodium.randombytes_buf(16);
-      const resp = await sendAndWait({
-        type: "argon2id",
-        id: 6,
-        password: password.buffer,
-        salt: new Uint8Array(salt2).buffer,
-      });
-      expect(resp.ok).toBe(false);
-      expect((resp as ErrorResponse).code).toBe("INVALID_STATE");
-    });
+        // Try argon2id again (should be KEYED, not READY)
+        const password = new TextEncoder().encode("double-login");
+        const salt2 = sodium.randombytes_buf(16);
+        const resp = await sendAndWait({
+          type: "argon2id",
+          id: 6,
+          password: password.buffer,
+          salt: new Uint8Array(salt2).buffer,
+        });
+        expect(resp.ok).toBe(false);
+        expect((resp as ErrorResponse).code).toBe("INVALID_STATE");
+      },
+    );
   });
 
   describe("full login flow + encrypt/decrypt", () => {

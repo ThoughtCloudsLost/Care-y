@@ -237,6 +237,29 @@ export interface CreateTicketKeyRequest {
   readonly fields: readonly { name: string; plaintext: string }[];
 }
 
+// ── SharedWorker lifecycle requests ─────────────────────────────────
+
+/**
+ * Bridge asks the SharedWorker for its current state on (re)connection.
+ * The Worker replies with a ConnectResponse containing the current state
+ * and public keys if keyed. Used after F5 to detect a still-keyed Worker
+ * and skip the password prompt.
+ */
+export interface ConnectRequest {
+  readonly type: "connect";
+  readonly id: number;
+}
+
+/**
+ * Bridge tells the SharedWorker this port is closing (tab closing or
+ * navigating away). The SharedWorker removes the port and starts the
+ * zero-on-last-disconnect timer if no ports remain.
+ */
+export interface DisconnectRequest {
+  readonly type: "disconnect";
+  readonly id: number;
+}
+
 export type WorkerRequest =
   | InitRequest
   | Argon2idRequest
@@ -259,7 +282,9 @@ export type WorkerRequest =
   | OrgEncryptRequest
   | OrgDecryptBatchRequest
   | ExportOrgSecretKeyRequest
-  | GetOrgPublicKeyRequest;
+  | GetOrgPublicKeyRequest
+  | ConnectRequest
+  | DisconnectRequest;
 
 /** All valid request type discriminants. */
 export type WorkerRequestType = WorkerRequest["type"];
@@ -424,6 +449,23 @@ export interface GetOrgPublicKeyResponse extends SuccessBase {
   readonly orgPublicKey: string;
 }
 
+// ── SharedWorker lifecycle responses ────────────────────────────────
+
+export type SharedWorkerState = "READY" | "KEYED";
+
+export interface ConnectResponse extends SuccessBase {
+  readonly type: "connect";
+  readonly state: SharedWorkerState;
+  /** Volunteer public key, base64. Present only when state is KEYED. */
+  readonly volPublic?: string;
+  /** Org public key, base64. Present only when org key is loaded. */
+  readonly orgPublicKey?: string;
+}
+
+export interface DisconnectResponse extends SuccessBase {
+  readonly type: "disconnect";
+}
+
 export type WorkerSuccessResponse =
   | InitResponse
   | Argon2idResponse
@@ -446,7 +488,9 @@ export type WorkerSuccessResponse =
   | OrgEncryptResponse
   | OrgDecryptBatchResponse
   | ExportOrgSecretKeyResponse
-  | GetOrgPublicKeyResponse;
+  | GetOrgPublicKeyResponse
+  | ConnectResponse
+  | DisconnectResponse;
 
 export type WorkerResponse = WorkerSuccessResponse | ErrorResponse;
 
@@ -465,7 +509,18 @@ export interface RewrapEvent {
   readonly encryptedContent: string;
 }
 
-export type WorkerEvent = RewrapEvent;
+/**
+ * SharedWorker broadcasts this to all connected ports when the Worker
+ * state changes (another tab logged out, zeroed keys, or a new tab
+ * completed key derivation). Ports use this to redirect to login or
+ * update their local state.
+ */
+export interface StateChangeEvent {
+  readonly kind: "stateChange";
+  readonly state: SharedWorkerState;
+}
+
+export type WorkerEvent = RewrapEvent | StateChangeEvent;
 
 /**
  * Main thread posts this back to the Worker after the tRPC rewrap

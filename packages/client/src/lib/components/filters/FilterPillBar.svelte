@@ -11,6 +11,7 @@
   import { Bookmark, Check } from "@lucide/svelte";
   import ShellPopover from "$lib/shell/ShellPopover.svelte";
   import * as m from "$lib/paraglide/messages.js";
+  import { withTerms } from "$lib/terminology/with-terms.js";
   import Skeleton from "$lib/components/Skeleton.svelte";
   import FilterPill from "./FilterPill.svelte";
   import type { PillDefinition } from "./filter-types.js";
@@ -68,7 +69,9 @@
   }: Props = $props();
 
   // Resolve i18n labels with fallback to ticket-style defaults.
-  const resolvedFilterLabel = $derived(filterLabel ?? m.tickets_filter());
+  const resolvedFilterLabel = $derived(
+    filterLabel ?? m.tickets_filter(withTerms()),
+  );
   const resolvedAllLabel = $derived(allLabel ?? m.tickets_filter_all());
   const resolvedClearLabel = $derived(clearLabel ?? m.tickets_clear_filters());
   const resolvedCreateShortcutLabel = $derived(
@@ -227,6 +230,7 @@
   opened={activePillId !== null}
   target={popoverTarget}
   placement="bottom"
+  ariaLabel={activeLabel}
   ondismiss={closePopover}
 >
   {#if activeMode === "date"}
@@ -283,11 +287,10 @@
     </div>
   {:else}
     <div class="popover-scroll">
-      <List nested role="listbox" aria-label={activeLabel}>
+      <List nested aria-label={activeLabel}>
         <ListItem
           title={resolvedAllLabel}
-          role="option"
-          aria-selected={activeSelected === null}
+          aria-current={activeSelected === null ? "true" : undefined}
           class="filter-pill-all"
           onclick={handleAllClick}
         >
@@ -302,8 +305,7 @@
             typeof activeSelected === "string" && activeSelected === opt.value}
           <ListItem
             title={opt.label}
-            role="option"
-            aria-selected={isSelected}
+            aria-current={isSelected ? "true" : undefined}
             onclick={onSingleItemClick(opt.value)}
           >
             {#snippet after()}

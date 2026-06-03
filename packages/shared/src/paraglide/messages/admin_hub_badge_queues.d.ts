@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "{count} queues" |
+* | "{count} {queues}" |
 *
 * @param {Admin_Hub_Badge_QueuesInputs} inputs
 * @param {{ locale?: "en" | "es" }} options
@@ -15,4 +15,5 @@ export const admin_hub_badge_queues: ((inputs: Admin_Hub_Badge_QueuesInputs, opt
 export type LocalizedString = import("../runtime.js").LocalizedString;
 export type Admin_Hub_Badge_QueuesInputs = {
     count: NonNullable<unknown>;
+    queues: NonNullable<unknown>;
 };

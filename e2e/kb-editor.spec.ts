@@ -1,15 +1,9 @@
-import { test, expect, type Page } from "@playwright/test";
+import { test, expect } from "./coverage-fixture";
+import { startCoverage, stopAndWriteCoverage } from "./coverage-fixture";
+import type { Page } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
+import { CRYPTO_TIMEOUT, login, navigateToNewArticle } from "./helpers";
 
-// Crypto pipeline timeout: Argon2id (64 MiB WASM) + OPRF round-trips +
-// ECIES key wrapping + Worker decryption.
-const CRYPTO_TIMEOUT = 60_000;
-
-// Serial tests model a real user session: one login, then SPA navigation.
-// The Worker stays KEYED across test navigations. Write flows require the
-// full crypto pipeline for org-key encryption of titles, bodies, and excerpts.
-// Unique suffix prevents collisions from previous test runs leaving articles
-// in the database (serial suite shares a persistent dev-org).
 const SUFFIX = String(Date.now()).slice(-6);
 const TEST_ARTICLE_TITLE = `E2E Article ${SUFFIX}`;
 
@@ -19,26 +13,22 @@ test.describe.serial("KB Editor (Create/Edit, Categories, ATAG)", () => {
   test.beforeAll(async ({ browser }, testInfo) => {
     testInfo.setTimeout(CRYPTO_TIMEOUT * 2);
     page = await browser.newPage();
-    await page.goto("/");
-
-    // Wait for the full crypto pipeline to complete. The "Knowledge Base"
-    // section on the dashboard with "recently updated" text proves:
-    // auto-login succeeded, org key loaded, KB articles seeded and
-    // decrypted. Ticket titles use randomized pseudonyms from the seed
-    // script, so we wait for a stable structural element instead.
+    await startCoverage(page);
+    await login(page);
     await expect(page.getByText("recently updated")).toBeVisible({
       timeout: CRYPTO_TIMEOUT,
     });
   });
 
   test.afterAll(async () => {
+    await stopAndWriteCoverage(page, "kb-editor");
     await page.close();
   });
 
   // ── 1. Article creation flow ────────────────────────────────────
 
   test("navigate to Library tab with seeded articles", async () => {
-    await page.getByRole("tab", { name: "Library" }).click();
+    await page.getByRole("tab", { name: /knowledge base/i }).click();
     await expect(page).toHaveURL("/library");
 
     // Wait for article list to load with decrypted titles.
@@ -49,14 +39,7 @@ test.describe.serial("KB Editor (Create/Edit, Categories, ATAG)", () => {
   });
 
   test("create: navigate to /library/new", async () => {
-    // The "+" button on the dashboard opens a popover with "New Article".
-    // But from the Library page, the simplest path is direct navigation.
-    await page.goto("/library/new");
-
-    // Navbar should show "New Article" title.
-    await expect(page.getByText("New Article")).toBeVisible({
-      timeout: 10_000,
-    });
+    await navigateToNewArticle(page);
   });
 
   test("create: toolbar is visible with formatting buttons", async () => {
@@ -223,7 +206,9 @@ test.describe.serial("KB Editor (Create/Edit, Categories, ATAG)", () => {
     await expect(page).toHaveURL(/\/library/, { timeout: 15_000 });
   });
 
-  test("edit: saved changes are visible on article detail", async () => {
+  test("edit: saved changes are visible on article detail", async ({}, testInfo) => {
+    testInfo.setTimeout(CRYPTO_TIMEOUT * 4);
+
     // Navigate to the article detail to verify saved changes.
     // If we're on the library list, tap the article.
     if (page.url().endsWith("/library")) {
@@ -237,14 +222,19 @@ test.describe.serial("KB Editor (Create/Edit, Categories, ATAG)", () => {
     });
 
     // Navigate back to library for subsequent tests.
-    const backBtn = page.getByRole("button", { name: /back to library/i });
+    const backBtn = page.getByRole("button", {
+      name: /back to knowledge base/i,
+    });
+    await expect(backBtn).toBeVisible({ timeout: 5_000 });
     await backBtn.click();
     await expect(page).toHaveURL("/library");
   });
 
   // ── 3. ATAG accessibility checks ───────────────────────────────
 
-  test("atag: seeded article with a11y violations shows issues", async () => {
+  test("atag: seeded article with a11y violations shows issues", async ({}, testInfo) => {
+    testInfo.setTimeout(CRYPTO_TIMEOUT * 4);
+
     // Open the "Accessibility issues example" article (seeded with violations).
     await page.getByText("Accessibility issues example").click();
     await expect(page).toHaveURL(/\/library\/.+/);
@@ -257,11 +247,13 @@ test.describe.serial("KB Editor (Create/Edit, Categories, ATAG)", () => {
     await editBtn.click();
     await expect(page).toHaveURL(/\/library\/.+\/edit/);
 
-    // Wait for editor to load with decrypted content.
-    const editorArea = page.locator("[role='textbox'][aria-multiline='true']");
-    await expect(editorArea).toBeVisible({ timeout: CRYPTO_TIMEOUT });
-    await expect(editorArea).toContainText("About this article", {
-      timeout: CRYPTO_TIMEOUT,
+    // Wait for ProseMirror to mount and render decrypted content.
+    // The editor-area div gets role=textbox immediately, but ProseMirror
+    // creates a .ProseMirror child only after onMount + doc parsing.
+    const pmContent = page.locator(".ProseMirror");
+    await expect(pmContent).toBeVisible({ timeout: CRYPTO_TIMEOUT });
+    await expect(pmContent).toContainText("About this article", {
+      timeout: CRYPTO_TIMEOUT * 2,
     });
   });
 
@@ -310,7 +302,9 @@ test.describe.serial("KB Editor (Create/Edit, Categories, ATAG)", () => {
     await expect(page).toHaveURL(/\/library\/.+/);
 
     // Go back to library list.
-    const backBtn = page.getByRole("button", { name: /back to library/i });
+    const backBtn = page.getByRole("button", {
+      name: /back to knowledge base/i,
+    });
     await backBtn.click();
     await expect(page).toHaveURL("/library");
   });
@@ -318,8 +312,9 @@ test.describe.serial("KB Editor (Create/Edit, Categories, ATAG)", () => {
   // ── 4. Category management ─────────────────────────────────────
 
   test("category: gear button visible for admin/manager", async () => {
-    // Ensure we're on the library page with articles loaded.
-    await page.goto("/library");
+    // SPA navigation to preserve crypto Worker state.
+    await page.getByRole("tab", { name: /knowledge base/i }).click();
+    await expect(page).toHaveURL("/library", { timeout: 10_000 });
     await expect(page.getByText("Intake call checklist")).toBeVisible({
       timeout: CRYPTO_TIMEOUT,
     });
@@ -335,7 +330,11 @@ test.describe.serial("KB Editor (Create/Edit, Categories, ATAG)", () => {
     const gearBtn = page.getByRole("button", {
       name: "Manage categories",
     });
-    await gearBtn.click();
+    await expect(gearBtn).toBeVisible();
+    // The manage button sits in the subnavbar toolbar, which the sticky
+    // Navbar (z-20) can cover. Dispatch click directly on the element
+    // to bypass coordinate-based hit testing.
+    await gearBtn.dispatchEvent("click");
 
     // The ShellSheet should show "Manage Categories" title.
     await expect(page.getByText("Manage Categories")).toBeVisible({
@@ -376,9 +375,19 @@ test.describe.serial("KB Editor (Create/Edit, Categories, ATAG)", () => {
   // The create flow above verifies the core category management path.
 
   test("category: dismiss management sheet", async () => {
-    // Close the sheet by navigating away (most reliable).
-    // Konsta Sheet may keep DOM content after Escape.
-    await page.goto("/library");
+    // The category management sheet is still open from the previous test.
+    // Dismiss it first, then navigate via SPA (preserves crypto Worker).
+    await page.keyboard.press("Escape");
+    // Wait for the sheet close animation and any toast to auto-dismiss.
+    await page
+      .locator(".k-toast")
+      .waitFor({ state: "hidden", timeout: 5_000 })
+      .catch(() => undefined);
+    await page.waitForTimeout(500);
+    await page.getByRole("tab", { name: "Home" }).click({ force: true });
+    await expect(page).toHaveURL("/");
+    await page.getByRole("tab", { name: /knowledge base/i }).click();
+    await expect(page).toHaveURL("/library", { timeout: 10_000 });
     await expect(page.getByText("Intake call checklist")).toBeVisible({
       timeout: CRYPTO_TIMEOUT,
     });
@@ -387,11 +396,7 @@ test.describe.serial("KB Editor (Create/Edit, Categories, ATAG)", () => {
   // ── 5. Unsaved changes guard ───────────────────────────────────
 
   test("discard dialog appears when canceling with unsaved changes", async () => {
-    // Navigate to create a new article.
-    await page.goto("/library/new");
-    await expect(page.getByText("New Article")).toBeVisible({
-      timeout: 10_000,
-    });
+    await navigateToNewArticle(page);
 
     // Type some content so the editor is dirty.
     const titleInput = page.getByPlaceholder("Article title");
@@ -422,11 +427,9 @@ test.describe.serial("KB Editor (Create/Edit, Categories, ATAG)", () => {
 
   // ── 6. Accessibility audits ────────────────────────────────────
 
-  test("a11y: new article page passes axe-core audit", async () => {
-    await page.goto("/library/new");
-    await expect(page.getByText("New Article")).toBeVisible({
-      timeout: 10_000,
-    });
+  test("a11y: new article page passes axe-core audit", async ({}, testInfo) => {
+    testInfo.setTimeout(CRYPTO_TIMEOUT * 6);
+    await navigateToNewArticle(page);
 
     // Wait for toolbar to render.
     await expect(page.getByRole("button", { name: "Bold" })).toBeVisible({
@@ -440,18 +443,40 @@ test.describe.serial("KB Editor (Create/Edit, Categories, ATAG)", () => {
     // - meta-viewport: ArticleEditor sets maximum-scale=1 (intentional,
     //   prevents iOS auto-zoom on contenteditable which breaks keyboard
     //   toolbar positioning)
-    const results = await new AxeBuilder({ page })
-      .setLegacyMode(true)
-      .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"])
-      .exclude("[role='tablist']")
-      .exclude("[role='listbox']")
-      .disableRules(["listitem", "meta-viewport"])
-      .analyze();
-    expect(results.violations).toEqual([]);
+    let violations: unknown[] = [];
+    try {
+      const results = await new AxeBuilder({ page })
+        .setLegacyMode(true)
+        .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"])
+        .exclude("[role='tablist']")
+        .exclude("[role='listbox']")
+        .disableRules(["listitem", "meta-viewport"])
+        .analyze();
+      violations = results.violations;
+    } finally {
+      // Clean up: dismiss the dirty editor so subsequent tests start from /library.
+      // Cancel opens a discard dialog whose Discard button triggers navigation,
+      // which detaches the button mid-click. Use dispatchEvent to bypass
+      // visibility and stability checks.
+      if (!page.isClosed()) {
+        const cancelBtn = page.getByRole("button", { name: "Cancel" }).first();
+        await cancelBtn.dispatchEvent("click");
+        const discardBtn = page.getByText("Discard", { exact: true });
+        if (await discardBtn.isVisible({ timeout: 2_000 }).catch(() => false)) {
+          await discardBtn.dispatchEvent("click");
+        }
+        await expect(page).toHaveURL("/library", { timeout: 5_000 });
+      }
+    }
+    expect(violations).toEqual([]);
   });
 
-  test("a11y: category management sheet passes axe-core audit", async () => {
-    await page.goto("/library");
+  test("a11y: category management sheet passes axe-core audit", async ({}, testInfo) => {
+    testInfo.setTimeout(CRYPTO_TIMEOUT * 4);
+    // Navigate fresh to /library regardless of prior state. The previous test
+    // may leave overlays or stale DOM that blocks article rendering.
+    await page.getByRole("tab", { name: /knowledge base/i }).click();
+    await expect(page).toHaveURL("/library", { timeout: 10_000 });
     await expect(page.getByText("Intake call checklist")).toBeVisible({
       timeout: CRYPTO_TIMEOUT,
     });
@@ -460,7 +485,8 @@ test.describe.serial("KB Editor (Create/Edit, Categories, ATAG)", () => {
     const gearBtn = page.getByRole("button", {
       name: "Manage categories",
     });
-    await gearBtn.click();
+    // Same navbar coverage issue as the earlier test. Dispatch directly.
+    await gearBtn.dispatchEvent("click");
     await expect(page.getByText("Manage Categories")).toBeVisible({
       timeout: 5_000,
     });

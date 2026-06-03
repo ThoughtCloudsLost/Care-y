@@ -6,10 +6,9 @@
   import * as m from "$lib/paraglide/messages.js";
   import { trpc } from "$lib/trpc/index.js";
   import { getOrgKeyManager, getOrgDecryptCache } from "$lib/crypto/context.js";
-  import { uint8ArrayToBase64 } from "$lib/utils/buffer-encoding.js";
   import { toastStore } from "$lib/stores/toast.svelte.js";
   import { haptic } from "$lib/utils/haptic.js";
-  import { RouterNotAvailableError } from "$lib/errors.js";
+  import { requireRouter } from "$lib/errors.js";
   import ShellSheet from "$lib/shell/ShellSheet.svelte";
   import SoftButton from "$lib/components/inputs/SoftButton.svelte";
 
@@ -31,8 +30,7 @@
   const orgKeyManager = getOrgKeyManager();
   const orgCache = getOrgDecryptCache();
   const queryClient = useQueryClient();
-  if (!trpc.kb) throw new RouterNotAvailableError("kb");
-  const kbRouter = trpc.kb;
+  const kbRouter = requireRouter(trpc.kb, "kb");
 
   // Edit state: null = browsing, { id } = editing existing, { id: undefined } = adding new.
   let editingId = $state<string | undefined>(undefined);
@@ -42,12 +40,6 @@
   let saving = $state(false);
 
   const canSave = $derived(editName.trim().length > 0 && !saving);
-
-  async function encryptText(text: string): Promise<string> {
-    const plaintext = new TextEncoder().encode(text);
-    const ciphertext = await orgKeyManager.encrypt(plaintext);
-    return uint8ArrayToBase64(ciphertext);
-  }
 
   function startEdit(cat: CategoryEntry): void {
     editingId = cat.id;
@@ -77,9 +69,11 @@
 
     saving = true;
 
-    const encryptedName = await encryptText(trimmedName);
+    const encryptedName = await orgKeyManager.encryptText(trimmedName);
     const encryptedDescription =
-      trimmedDesc.length > 0 ? await encryptText(trimmedDesc) : undefined;
+      trimmedDesc.length > 0
+        ? await orgKeyManager.encryptText(trimmedDesc)
+        : undefined;
 
     try {
       if (isAdding) {

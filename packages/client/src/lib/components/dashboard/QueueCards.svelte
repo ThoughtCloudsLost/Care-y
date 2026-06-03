@@ -1,6 +1,7 @@
 <script lang="ts">
   import { Layers } from "@lucide/svelte";
   import * as m from "$lib/paraglide/messages.js";
+  import { withTerms } from "$lib/terminology/with-terms.js";
   import CollapsibleSection from "./CollapsibleSection.svelte";
   import DecryptPlaceholder from "$lib/components/DecryptPlaceholder.svelte";
   import InlineSkeleton from "$lib/components/InlineSkeleton.svelte";
@@ -29,7 +30,7 @@
 </script>
 
 <CollapsibleSection
-  heading={m.dashboard_queues_heading()}
+  heading={m.dashboard_queues_heading(withTerms())}
   icon={Layers}
   iconColor="var(--brand-accent)"
   {loading}
@@ -70,7 +71,7 @@
       {/each}
     </div>
   {:else}
-    <p class="no-queues">{m.dashboard_queues_no_queues()}</p>
+    <p class="no-queues">{m.dashboard_queues_no_queues(withTerms())}</p>
   {/if}
 </CollapsibleSection>
 

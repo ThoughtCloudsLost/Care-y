@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "{count} tickets placed on hold" |
+* | "{count} {tickets} placed on hold" |
 *
 * @param {Ticket_Toast_Bulk_HeldInputs} inputs
 * @param {{ locale?: "en" | "es" }} options
@@ -15,4 +15,5 @@ export const ticket_toast_bulk_held: ((inputs: Ticket_Toast_Bulk_HeldInputs, opt
 export type LocalizedString = import("../runtime.js").LocalizedString;
 export type Ticket_Toast_Bulk_HeldInputs = {
     count: NonNullable<unknown>;
+    tickets: NonNullable<unknown>;
 };

@@ -55,6 +55,7 @@ describe("createPreviewLoader", () => {
   let queryMock: ReturnType<typeof vi.fn>;
 
   beforeEach(() => {
+    cacheRegistry.reset();
     vi.useFakeTimers();
     const { queryFn, mock } = createMockQueryFn();
     queryMock = mock;

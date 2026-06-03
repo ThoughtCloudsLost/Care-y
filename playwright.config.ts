@@ -5,26 +5,56 @@ export default defineConfig({
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
-  workers: process.env.CI ? 1 : undefined,
+  workers: 1,
   reporter: "html",
   globalSetup: "./e2e/global-setup.ts",
   globalTeardown: "./e2e/global-teardown.ts",
+  timeout: 90_000,
   use: {
     baseURL: "http://localhost:5174",
     trace: "on-first-retry",
   },
   projects: [
+    // ── Main E2E suite (e2e-org, fully seeded) ──
     {
-      name: "chromium",
+      name: "seed-data",
+      testMatch: "seed-data.setup.ts",
       use: { ...devices["Desktop Chrome"] },
     },
     {
+      name: "chromium",
+      testIgnore: /onboarding|first-login/,
+      use: { ...devices["Desktop Chrome"] },
+      dependencies: ["seed-data"],
+    },
+    {
       name: "firefox",
+      testIgnore: /onboarding|first-login/,
       use: { ...devices["Desktop Firefox"] },
+      dependencies: ["seed-data"],
     },
     {
       name: "webkit-mobile",
+      testIgnore: /onboarding|first-login/,
       use: { ...devices["iPhone 13"] },
+      dependencies: ["seed-data"],
+    },
+    // ── Onboarding E2E suite (e2e-onboard, bare org) ──
+    {
+      name: "onboarding-setup",
+      testMatch: "onboarding-setup.ts",
+    },
+    {
+      name: "onboarding",
+      testMatch: "onboarding.spec.ts",
+      use: { ...devices["Desktop Chrome"] },
+      dependencies: ["onboarding-setup"],
+    },
+    {
+      name: "first-login",
+      testMatch: "first-login.spec.ts",
+      use: { ...devices["Desktop Chrome"] },
+      dependencies: ["onboarding"],
     },
   ],
   webServer: {
@@ -32,5 +62,6 @@ export default defineConfig({
     url: "http://localhost:5174",
     reuseExistingServer: false,
     timeout: 120_000,
+    env: { VITE_ORG_SLUG: "e2e-org", VITE_E2E_FAST_KDF: "1" },
   },
 });

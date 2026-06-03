@@ -19,7 +19,7 @@
   import { getOrgDecryptCache } from "$lib/crypto/context.js";
   import { trpc } from "$lib/trpc/index.js";
   import { toastStore } from "$lib/stores/toast.svelte.js";
-  import { RouterNotAvailableError } from "$lib/errors.js";
+  import { requireRouter } from "$lib/errors.js";
   import DecryptPlaceholder from "$lib/components/DecryptPlaceholder.svelte";
   import {
     createSectionScroll,
@@ -27,8 +27,7 @@
   } from "$lib/components/useSectionScroll.svelte.js";
   import SectionScrollNav from "$lib/components/SectionScrollNav.svelte";
 
-  if (!trpc.tickets) throw new RouterNotAvailableError("tickets");
-  const ticketRouter = trpc.tickets;
+  const ticketRouter = requireRouter(trpc.tickets, "tickets");
 
   const orgCache = getOrgDecryptCache();
 

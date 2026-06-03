@@ -12,6 +12,7 @@
   import { createQuery } from "@tanstack/svelte-query";
   import { adminKeys } from "$lib/query/keys.js";
   import * as m from "$lib/paraglide/messages.js";
+  import { withTerms } from "$lib/terminology/with-terms.js";
   import { getNavbarOverrideCtx } from "$lib/shell/context.js";
   import { getCurrentPermissions } from "$lib/crypto/context.js";
   import { trpc } from "$lib/trpc/index.js";
@@ -87,7 +88,9 @@
           count: String(data.activeUserCount),
         });
       case "queues":
-        return m.admin_hub_badge_queues({ count: String(data.queueCount) });
+        return m.admin_hub_badge_queues(
+          withTerms({ count: String(data.queueCount) }),
+        );
       case "keys":
         return data.keyStatus === "ok"
           ? m.admin_hub_badge_keys_ok()

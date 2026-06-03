@@ -41,6 +41,12 @@ vi.mock("$lib/paraglide/messages.js", () => ({
   ticket_timeline_jump_to: ({ label, time }: { label: string; time: string }) =>
     `Jump to: ${label}, ${time}`,
   ticket_timeline_decrypting: () => "Decrypting message",
+  ticket_system_assignment_change: () => "Assigned",
+  ticket_system_status_change: () => "Status changed",
+  ticket_system_hold_change: () => "Hold changed",
+  ticket_system_priority_change: () => "Priority changed",
+  ticket_system_merge_note: () => "Tickets merged",
+  ticket_system_event: () => "Event",
   dashboard_time_just_now: () => "just now",
   dashboard_time_minutes_ago: ({ count }: { count: number }) =>
     `${String(count)}m ago`,

@@ -75,7 +75,9 @@ export interface UserResponse {
   readonly id: string;
   readonly identifier: string;
   readonly encryptedDisplayName: string; // base64 ciphertext, client decrypts
+  readonly encryptedPreferredLocale: string | null; // base64 ciphertext, client decrypts
   readonly roleId: string;
+  readonly hasSeenBriefing: boolean;
 }
 
 /** Projects a UserRecord to a safe response shape (no password_hash, no internal fields). */
@@ -84,7 +86,9 @@ function toUserResponse(user: UserRecord): UserResponse {
     id: user.id,
     identifier: user.identifier,
     encryptedDisplayName: user.encryptedDisplayName,
+    encryptedPreferredLocale: user.encryptedPreferredLocale,
     roleId: user.roleId,
+    hasSeenBriefing: user.hasSeenBriefing,
   };
 }
 
@@ -206,12 +210,19 @@ export function createAuthRouter(deps: AuthRouterDeps) {
             pushHmacKey: null,
           },
         );
-        const enrolledMethods = await twoFactor.getEnrolledMethodTypes(user.id);
+        const [enrolledMethods, hasKeys] = await Promise.all([
+          twoFactor.getEnrolledMethodTypes(user.id),
+          authService.hasUserKeys(user.id),
+        ]);
+
+        const needsEnrollment = enrolledMethods.length === 0;
 
         return {
           user: toUserResponse(user),
           requiresTwoFactor: enrolledMethods.length > 0,
           enrolledMethods,
+          needsEnrollment,
+          hasKeys,
         };
       }),
     ),
@@ -263,7 +274,11 @@ export function createAuthRouter(deps: AuthRouterDeps) {
         ? ROLE_CONFIG.get(roleId)
         : undefined;
       const permissions = config ? [...config.permissions] : [];
-      return { user: toUserResponse(ctx.user), permissions };
+      return {
+        user: toUserResponse(ctx.user),
+        permissions,
+        twofaVerified: ctx.session.twofaVerified,
+      };
     }),
 
     assignRole: adminProcedure.input(assignRoleInputSchema).mutation(

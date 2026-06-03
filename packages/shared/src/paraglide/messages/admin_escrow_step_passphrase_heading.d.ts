@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Create a passphrase" |
+* | "Create an escrow file passphrase" |
 *
 * @param {Admin_Escrow_Step_Passphrase_HeadingInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

@@ -9,7 +9,7 @@
 <script lang="ts">
   import { getOrgKeyManager } from "$lib/crypto/context.js";
   import { trpc } from "$lib/trpc/index.js";
-  import { RouterNotAvailableError } from "$lib/errors.js";
+  import { requireRouter } from "$lib/errors.js";
   import { triggerBlobDownload } from "$lib/components/shared/attachment-download.js";
   import { toastStore } from "$lib/stores/toast.svelte.js";
   import * as m from "$lib/paraglide/messages.js";
@@ -24,8 +24,7 @@
 
   let { attachmentId, filename, sizeBytes, disabled = false }: Props = $props();
 
-  if (!trpc.kb) throw new RouterNotAvailableError("kb");
-  const kbRouter = trpc.kb;
+  const kbRouter = requireRouter(trpc.kb, "kb");
   const orgKeyManager = getOrgKeyManager();
 
   async function handleDownload(id: string): Promise<void> {

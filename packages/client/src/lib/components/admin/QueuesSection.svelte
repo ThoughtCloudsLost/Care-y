@@ -16,6 +16,7 @@
   import { SvelteSet, SvelteMap } from "svelte/reactivity";
   import { ChevronUp, ChevronDown, Pencil, X } from "@lucide/svelte";
   import * as m from "$lib/paraglide/messages.js";
+  import { withTerms } from "$lib/terminology/with-terms.js";
   import { trpc } from "$lib/trpc/index.js";
   import { adminKeys, queueKeys } from "$lib/query/keys.js";
   import { getOrgDecryptCache } from "$lib/crypto/context.js";
@@ -24,7 +25,7 @@
   import { toastStore } from "$lib/stores/toast.svelte.js";
   import { announceToLiveRegion } from "$lib/utils/announce.js";
   import { onKeyActivate } from "$lib/utils/a11y.js";
-  import { RouterNotAvailableError } from "$lib/errors.js";
+  import { requireRouter } from "$lib/errors.js";
   import QueryError from "$lib/components/QueryError.svelte";
   import DecryptPlaceholder from "$lib/components/DecryptPlaceholder.svelte";
   import SoftButton from "$lib/components/inputs/SoftButton.svelte";
@@ -41,8 +42,7 @@
 
   let { autoAction = null }: QueuesSectionProps = $props();
 
-  if (!trpc.tickets) throw new RouterNotAvailableError("tickets");
-  const ticketRouter = trpc.tickets;
+  const ticketRouter = requireRouter(trpc.tickets, "tickets");
   const authRouter = trpc.auth;
   const queryClient = useQueryClient();
   const orgCache = getOrgDecryptCache();
@@ -159,8 +159,8 @@
       ticketRouter.reorderQueues.mutate(items),
     onSuccess: () => {
       haptic();
-      toastStore.show(m.admin_queue_reordered());
-      announceToLiveRegion("polite", m.admin_queue_reordered());
+      toastStore.show(m.admin_queue_reordered(withTerms()));
+      announceToLiveRegion("polite", m.admin_queue_reordered(withTerms()));
       void queryClient.invalidateQueries({ queryKey: queueKeys.all });
     },
     onError: () => {
@@ -173,8 +173,8 @@
       ticketRouter.deleteQueue.mutate(input),
     onSuccess: () => {
       haptic();
-      toastStore.show(m.admin_queue_deleted());
-      announceToLiveRegion("assertive", m.admin_queue_deleted());
+      toastStore.show(m.admin_queue_deleted(withTerms()));
+      announceToLiveRegion("assertive", m.admin_queue_deleted(withTerms()));
       void queryClient.invalidateQueries({ queryKey: queueKeys.all });
     },
   }));
@@ -399,7 +399,7 @@
     />
   {:else if totalCount === 0}
     <Block class="text-center text-[--muted]">
-      {m.admin_queues_empty()}
+      {m.admin_queues_empty(withTerms())}
     </Block>
   {:else}
     <div class="queue-list">
@@ -474,7 +474,7 @@
 
                 <button
                   class="icon-btn"
-                  aria-label={m.admin_queue_edit()}
+                  aria-label={m.admin_queue_edit(withTerms())}
                   onclick={(e) => {
                     e.stopPropagation();
                     openEditor(queue.id);
@@ -546,7 +546,7 @@
 >
   {#snippet content()}
     <p class="text-sm text-[--muted]">
-      {m.admin_queue_delete_confirm_empty()}
+      {m.admin_queue_delete_confirm_empty(withTerms())}
     </p>
   {/snippet}
   {#snippet buttons()}
@@ -558,7 +558,7 @@
       class="text-[--color-red-500] font-semibold"
       onclick={confirmDelete}
     >
-      {m.admin_queue_delete()}
+      {m.admin_queue_delete(withTerms())}
     </DialogButton>
   {/snippet}
 </ShellDialog>
@@ -567,10 +567,12 @@
 <ShellSheet
   opened={reassignSheetOpened}
   ondismiss={() => (reassignSheetOpened = false)}
-  ariaLabel={m.admin_queue_delete_reassign_label()}
+  ariaLabel={m.admin_queue_delete_reassign_label(withTerms())}
 >
   <div class="reassign-sheet-content">
-    <p class="reassign-title">{m.admin_queue_delete_confirm_tickets()}</p>
+    <p class="reassign-title">
+      {m.admin_queue_delete_confirm_tickets(withTerms())}
+    </p>
     <List nested>
       {#each otherQueues as q (q.id)}
         {@const name = decryptQueueName(q)}
@@ -592,7 +594,7 @@
         disabled={!reassignTargetId}
         onclick={confirmReassignDelete}
       >
-        {m.admin_queue_delete()}
+        {m.admin_queue_delete(withTerms())}
       </button>
     </div>
   </div>

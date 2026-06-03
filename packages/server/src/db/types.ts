@@ -18,6 +18,7 @@ export interface OrgsTable {
   slug: string;
   schema_name: string;
   is_active: ColumnType<boolean, boolean | undefined, boolean>;
+  setup_token_hash: Buffer | null;
 }
 
 // --- OPRF infrastructure ---
@@ -86,8 +87,10 @@ export interface UsersTable {
   password_hash: string;
   encrypted_display_name: Buffer;
   encrypted_notification_addr: Buffer | null;
+  encrypted_preferred_locale: Buffer | null;
   role_id: string;
   is_active: ColumnType<boolean, boolean | undefined, boolean>;
+  has_seen_briefing: ColumnType<boolean, boolean | undefined, boolean>;
 }
 
 export interface SessionsTable {
@@ -126,8 +129,17 @@ export interface OrgConfigTable {
   icon_192_blob_key: string | null;
   icon_512_blob_key: string | null;
   icon_maskable_blob_key: string | null;
+  default_language: ColumnType<string, string | undefined, string>;
+  setup_telephony_config: Buffer | null; // encrypted JSON blob (nonce || ciphertext), set during wizard
+  encrypted_terminology: Buffer | null; // encrypted JSON blob (nonce || ciphertext), per-language labels
   default_note_type_id: string | null;
   intake_queue_id: string | null;
+  getting_started_dismissed_at: ColumnType<
+    Date | null,
+    Date | null | undefined,
+    Date | null
+  >;
+  setup_completed: ColumnType<boolean, boolean | undefined, boolean>;
 }
 
 // --- User keys (full interface, replaces UserKeysStubTable) ---
@@ -523,6 +535,20 @@ export interface VapidConfigTable {
   created_at: Generated<Date>;
 }
 
+// --- Invite tokens (onboarding) ---
+export interface InviteTokensTable {
+  id: Generated<string>;
+  token_hash: Buffer;
+  invited_by: string;
+  encrypted_email: Buffer | null;
+  role_id: string;
+  expires_at: Date;
+  consumed_at: Date | null;
+  revoked_at: Date | null;
+  encrypted_token: Buffer | null;
+  created_at: Generated<Date>;
+}
+
 export interface TenantDatabase {
   users: UsersTable;
   sessions: SessionsTable;
@@ -570,6 +596,8 @@ export interface TenantDatabase {
   // Note types (internal note categorization)
   note_types: NoteTypesTable;
   followup_reactions: FollowupReactionsTable;
+  // Onboarding
+  invite_tokens: InviteTokensTable;
   // Shifts (shifts, shift_occurrences)
   // Client portal (portal_channels)
 }

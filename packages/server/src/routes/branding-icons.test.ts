@@ -57,7 +57,10 @@ function buildDeps(
         slug: "test",
         schemaName: "org_test",
         isActive: true,
+        setupToken: "test-token",
       })),
+      validateSetupToken: vi.fn(async () => false),
+      consumeSetupToken: vi.fn(async () => undefined),
     },
     corsHeaders: { "Access-Control-Allow-Origin": "*" },
     ...overrides,
@@ -124,7 +127,10 @@ describe("createBrandingIconHandler", () => {
           slug: "test",
           schemaName: "org_test",
           isActive: true,
+          setupToken: "test-token",
         })),
+        validateSetupToken: vi.fn(async () => false),
+        consumeSetupToken: vi.fn(async () => undefined),
       },
     });
     handler = createBrandingIconHandler(inactiveDeps);

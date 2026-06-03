@@ -7,7 +7,7 @@
   import { trpc } from "$lib/trpc/index.js";
   import { ticketsKeys, kbKeys } from "$lib/query/keys.js";
   import { toastStore } from "$lib/stores/toast.svelte.js";
-  import { RouterNotAvailableError } from "$lib/errors.js";
+  import { requireRouter } from "$lib/errors.js";
   import type { TicketPreviewItemProps } from "$lib/components/dashboard/types.js";
   import {
     Ticket as TicketIcon,
@@ -22,10 +22,12 @@
     Activity,
     BookOpen,
     Layers,
+    Rocket,
   } from "@lucide/svelte";
   import TicketPreviewList from "$lib/components/dashboard/TicketPreviewList.svelte";
   import CollapsibleSection from "$lib/components/dashboard/CollapsibleSection.svelte";
   import ShiftSection from "$lib/components/dashboard/ShiftSection.svelte";
+  import GettingStartedCard from "$lib/components/dashboard/GettingStartedCard.svelte";
   import QueueCards from "$lib/components/dashboard/QueueCards.svelte";
   import ActivitySection from "$lib/components/dashboard/ActivitySection.svelte";
   import KBSection from "$lib/components/dashboard/KBSection.svelte";
@@ -48,6 +50,7 @@
   } from "$lib/components/useSectionScroll.svelte.js";
   import SectionScrollNav from "$lib/components/SectionScrollNav.svelte";
   import * as m from "$lib/paraglide/messages.js";
+  import { withTerms } from "$lib/terminology/with-terms.js";
 
   // Singletons from (app) layout context.
   const orgCache = getOrgDecryptCache();
@@ -68,7 +71,11 @@
 
   const createOptions = $derived.by((): CreateOption[] => {
     const options: CreateOption[] = [
-      { id: "ticket", label: m.create_new_ticket(), icon: TicketPlus },
+      {
+        id: "ticket",
+        label: m.create_new_ticket(withTerms()),
+        icon: TicketPlus,
+      },
     ];
     if (permissions.has(Permission.EDIT_KNOWLEDGE_BASE)) {
       options.push({
@@ -87,7 +94,7 @@
     if (permissions.has(Permission.MANAGE_QUEUES)) {
       options.push({
         id: "queue",
-        label: m.create_new_queue(),
+        label: m.create_new_queue(withTerms()),
         icon: LayersPlus,
       });
     }
@@ -147,8 +154,7 @@
   });
 
   // All open tickets for the current user's accessible queues.
-  if (!trpc.tickets) throw new RouterNotAvailableError("tickets");
-  const ticketRouter = trpc.tickets;
+  const ticketRouter = requireRouter(trpc.tickets, "tickets");
 
   const ticketsQuery = createQuery(() => ({
     queryKey: ticketsKeys.list({ statuses: ["open"] }),
@@ -196,6 +202,21 @@
   const unassigned = $derived(buckets.unassigned);
   const onHold = $derived(buckets.onHold);
 
+  // --- Getting Started checklist (admin-only, TanStack deduplicates with GettingStartedCard) ---
+
+  const checklistQuery = createQuery(() => ({
+    queryKey: ["dashboard", "setupChecklist"],
+    queryFn: async () => trpc.dashboard.getSetupChecklist.query(),
+    staleTime: 60_000,
+    enabled: permissions.has(Permission.MANAGE_ROLES),
+  }));
+
+  const showGettingStarted = $derived(
+    checklistQuery.isSuccess &&
+      !checklistQuery.data.dismissed &&
+      checklistQuery.data.items.length > 0,
+  );
+
   // --- Section scroll nav ---
 
   const showOnHold = $derived(
@@ -203,12 +224,28 @@
   );
 
   const dashboardSections = $derived.by((): readonly ScrollSection[] => {
-    const sections: ScrollSection[] = [
+    const sections: ScrollSection[] = [];
+    if (showGettingStarted) {
+      sections.push({
+        id: "getting-started",
+        label: m.getting_started_heading,
+        icon: Rocket,
+      });
+    }
+    sections.push(
       { id: "shift", label: m.dashboard_shift_heading, icon: CalendarDays },
       { id: "activity", label: m.dashboard_activity_heading, icon: Activity },
-      { id: "kb", label: m.dashboard_kb_heading, icon: BookOpen },
-      { id: "queues", label: m.dashboard_queues_heading, icon: Layers },
-    ];
+      {
+        id: "kb",
+        label: () => m.dashboard_kb_heading(withTerms()),
+        icon: BookOpen,
+      },
+      {
+        id: "queues",
+        label: () => m.dashboard_queues_heading(withTerms()),
+        icon: Layers,
+      },
+    );
     if (ticketsQuery.isLoading || needsAttention.length > 0) {
       sections.push({
         id: "needs-attention",
@@ -218,7 +255,7 @@
     }
     sections.push({
       id: "my-tickets",
-      label: m.dashboard_section_my_tickets,
+      label: () => m.dashboard_section_my_tickets(withTerms()),
       icon: TicketIcon,
     });
     sections.push({
@@ -336,7 +373,7 @@
   }
 
   function showEncryptedHelp(): void {
-    toastStore.show(m.dashboard_encrypted_help(), 5000);
+    toastStore.show(m.dashboard_encrypted_help(withTerms()), 5000);
   }
 
   function handleKBTap(itemId: string): void {
@@ -370,6 +407,15 @@
     subtitle={m.dashboard_exposure_subtitle()}
     onClose={dismissExposureNotification}
   />
+
+  {#if showGettingStarted}
+    <div id="section-getting-started" class="scroll-target">
+      <GettingStartedCard
+        expanded={!collapsedSections.has("getting-started")}
+        ontoggle={() => toggleSection("getting-started")}
+      />
+    </div>
+  {/if}
 
   <div id="section-shift" class="scroll-target">
     <ShiftSection
@@ -414,6 +460,7 @@
     {#if ticketsQuery.isLoading || needsAttention.length > 0}
       <div id="section-needs-attention" class="scroll-target">
         <CollapsibleSection
+          id="needs-attention"
           heading={m.dashboard_section_needs_attention()}
           count={ticketsQuery.isLoading ? undefined : needsAttention.length}
           loading={ticketsQuery.isLoading}
@@ -436,7 +483,8 @@
 
     <div id="section-my-tickets" class="scroll-target">
       <CollapsibleSection
-        heading={m.dashboard_section_my_tickets()}
+        id="my-tickets"
+        heading={m.dashboard_section_my_tickets(withTerms())}
         count={ticketsQuery.isLoading ? undefined : myOpen.length}
         loading={ticketsQuery.isLoading}
         icon={TicketIcon}
@@ -445,7 +493,7 @@
         ontoggle={() => toggleSection("my-tickets")}
       >
         <TicketPreviewList
-          heading={m.dashboard_section_my_tickets()}
+          heading={m.dashboard_section_my_tickets(withTerms())}
           hideHeading
           loading={ticketsQuery.isLoading}
           tickets={myOpenProps}
@@ -458,6 +506,7 @@
 
     <div id="section-unassigned" class="scroll-target">
       <CollapsibleSection
+        id="unassigned"
         heading={m.dashboard_section_unassigned()}
         count={ticketsQuery.isLoading
           ? undefined
@@ -484,6 +533,7 @@
     {#if showOnHold}
       <div id="section-on-hold" class="scroll-target">
         <CollapsibleSection
+          id="on-hold"
           heading={m.dashboard_section_on_hold()}
           count={ticketsQuery.isLoading
             ? undefined
@@ -524,6 +574,7 @@
   opened={createPopoverOpen}
   target={createButtonEl}
   placement="bottom"
+  ariaLabel={m.nav_create_new()}
   ondismiss={() => (createPopoverOpen = false)}
 >
   <List nested>

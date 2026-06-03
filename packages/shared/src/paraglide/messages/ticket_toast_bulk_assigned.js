@@ -3,20 +3,20 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 
 /** @typedef {import('../runtime.js').LocalizedString} LocalizedString */
 
-/** @typedef {{ count: NonNullable<unknown>, name: NonNullable<unknown> }} Ticket_Toast_Bulk_AssignedInputs */
+/** @typedef {{ count: NonNullable<unknown>, tickets: NonNullable<unknown>, name: NonNullable<unknown> }} Ticket_Toast_Bulk_AssignedInputs */
 
 const en_ticket_toast_bulk_assigned = /** @type {(inputs: Ticket_Toast_Bulk_AssignedInputs) => LocalizedString} */ (i) => {
-	return /** @type {LocalizedString} */ (`${i?.count} tickets assigned to ${i?.name}`)
+	return /** @type {LocalizedString} */ (`${i?.count} ${i?.tickets} assigned to ${i?.name}`)
 };
 
 const es_ticket_toast_bulk_assigned = /** @type {(inputs: Ticket_Toast_Bulk_AssignedInputs) => LocalizedString} */ (i) => {
-	return /** @type {LocalizedString} */ (`${i?.count} tickets asignados a ${i?.name}`)
+	return /** @type {LocalizedString} */ (`${i?.count} ${i?.tickets} asignados a ${i?.name}`)
 };
 
 /**
 * | output |
 * | --- |
-* | "{count} tickets assigned to {name}" |
+* | "{count} {tickets} assigned to {name}" |
 *
 * @param {Ticket_Toast_Bulk_AssignedInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

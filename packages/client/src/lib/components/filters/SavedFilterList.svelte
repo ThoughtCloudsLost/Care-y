@@ -141,6 +141,7 @@
 <ShellActionSheet
   opened={actionSheetFilterId !== null}
   ondismiss={closeActionSheet}
+  ariaLabel={m.saved_filter_actions()}
 >
   <ActionsGroup>
     {#if activeRecord}

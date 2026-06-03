@@ -49,11 +49,7 @@
 </script>
 
 {#if kind === "system"}
-  <SystemEvent
-    {result}
-    encryptedContent={followUp.encryptedContent}
-    timestamp={followUp.createdAt}
-  />
+  <SystemEvent type={followUp.type} timestamp={followUp.createdAt} />
 {:else if kind === "note"}
   <PrivateNote
     {result}

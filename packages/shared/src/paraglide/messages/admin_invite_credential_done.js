@@ -6,17 +6,17 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Admin_Invite_Credential_DoneInputs */
 
 const en_admin_invite_credential_done = /** @type {(inputs: Admin_Invite_Credential_DoneInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Done`)
+	return /** @type {LocalizedString} */ (`Create Another`)
 };
 
 const es_admin_invite_credential_done = /** @type {(inputs: Admin_Invite_Credential_DoneInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Listo`)
+	return /** @type {LocalizedString} */ (`Crear otro`)
 };
 
 /**
 * | output |
 * | --- |
-* | "Done" |
+* | "Create Another" |
 *
 * @param {Admin_Invite_Credential_DoneInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

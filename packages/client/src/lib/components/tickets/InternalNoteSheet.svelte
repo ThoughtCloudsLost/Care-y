@@ -11,9 +11,10 @@
   import { useQueryClient } from "@tanstack/svelte-query";
   import { ticketKeys } from "$lib/query/keys";
   import * as m from "$lib/paraglide/messages.js";
+  import { withTerms } from "$lib/terminology/with-terms.js";
   import { trpc } from "$lib/trpc/index.js";
   import { getCryptoBridge, getOrgDecryptCache } from "$lib/crypto/context.js";
-  import { RouterNotAvailableError } from "$lib/errors.js";
+  import { requireRouter } from "$lib/errors.js";
   import { toastStore } from "$lib/stores/toast.svelte.js";
   import { haptic } from "$lib/utils/haptic.js";
   import { announceToLiveRegion } from "$lib/utils/announce.js";
@@ -44,10 +45,8 @@
 
   const isEditMode = $derived(editFollowUpId !== undefined);
 
-  if (!trpc.tickets) throw new RouterNotAvailableError("tickets");
-  const ticketRouter = trpc.tickets;
-  if (!ticketRouter.noteTypes) throw new RouterNotAvailableError("noteTypes");
-  const noteTypesRouter = ticketRouter.noteTypes;
+  const ticketRouter = requireRouter(trpc.tickets, "tickets");
+  const noteTypesRouter = requireRouter(ticketRouter.noteTypes, "noteTypes");
   const cryptoBridge = getCryptoBridge();
   const orgCache = getOrgDecryptCache();
   const queryClient = useQueryClient();
@@ -99,11 +98,11 @@
   const HINT_LABELS = new Map<string, () => string>([
     ["ticket_access", m.ticket_note_hint_participants],
     ["role:admin", m.ticket_note_hint_admins],
-    ["role:manager", m.ticket_note_hint_managers],
+    ["role:manager", () => m.ticket_note_hint_managers(withTerms())],
   ]);
 
   const ROLE_LABELS = new Map<string, () => string>([
-    [RoleId.MANAGER, m.role_manager],
+    [RoleId.MANAGER, () => m.role_manager(withTerms())],
     [RoleId.ADMIN, m.role_admin],
   ]);
 

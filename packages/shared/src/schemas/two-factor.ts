@@ -29,6 +29,11 @@ export const totpVerifySchema = z.object({ code: sixDigitCodeSchema });
 
 // --- Email codes ---
 
+/** Enroll email 2FA: provide the email address to receive codes. */
+export const emailEnrollSchema = z.object({
+  email: z.email("Valid email address is required"),
+});
+
 /** Verify a 6-digit email code. */
 export const emailCodeVerifySchema = z.object({ code: sixDigitCodeSchema });
 
@@ -145,6 +150,7 @@ export const pushApprovalSchema = z.object({
 // --- Inferred types ---
 
 export type TotpVerifyInput = z.infer<typeof totpVerifySchema>;
+export type EmailEnrollInput = z.infer<typeof emailEnrollSchema>;
 export type EmailCodeVerifyInput = z.infer<typeof emailCodeVerifySchema>;
 export type SmsEnrollInput = z.infer<typeof smsEnrollSchema>;
 export type SmsCodeVerifyInput = z.infer<typeof smsCodeVerifySchema>;

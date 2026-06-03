@@ -3,13 +3,14 @@
   import { createMutation, useQueryClient } from "@tanstack/svelte-query";
   import { queueKeys } from "$lib/query/keys.js";
   import * as m from "$lib/paraglide/messages.js";
+  import { withTerms } from "$lib/terminology/with-terms.js";
   import { trpc } from "$lib/trpc/index.js";
   import { createVolunteersQuery } from "$lib/tickets/queries.js";
   import { getOrgDecryptCache } from "$lib/crypto/context.js";
   import { haptic } from "$lib/utils/haptic.js";
   import { toastStore } from "$lib/stores/toast.svelte.js";
   import { announceToLiveRegion } from "$lib/utils/announce.js";
-  import { RouterNotAvailableError } from "$lib/errors.js";
+  import { requireRouter } from "$lib/errors.js";
   import ShellSheet from "$lib/shell/ShellSheet.svelte";
   import InlineSkeleton from "$lib/components/InlineSkeleton.svelte";
   import DecryptPlaceholder from "$lib/components/DecryptPlaceholder.svelte";
@@ -24,8 +25,7 @@
   let { opened, queueId, currentMemberIds, ondismiss }: QueueMemberPickerProps =
     $props();
 
-  if (!trpc.tickets) throw new RouterNotAvailableError("tickets");
-  const ticketRouter = trpc.tickets;
+  const ticketRouter = requireRouter(trpc.tickets, "tickets");
   const queryClient = useQueryClient();
   const orgCache = getOrgDecryptCache();
 
@@ -103,7 +103,7 @@
 
   <div class="picker-search-wrapper">
     <Searchbar
-      placeholder={m.admin_queue_member_picker_search()}
+      placeholder={m.admin_queue_member_picker_search(withTerms())}
       value={searchValue}
       onInput={(e: Event) => {
         const target = e.target;
@@ -133,7 +133,7 @@
     </div>
   {:else if availableVolunteers.length === 0}
     <div class="picker-empty" role="status">
-      <p>{m.admin_queue_member_picker_empty()}</p>
+      <p>{m.admin_queue_member_picker_empty(withTerms())}</p>
     </div>
   {:else}
     <List>

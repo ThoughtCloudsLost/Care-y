@@ -64,7 +64,7 @@
     action: "call",
     label: () => m.tickets_action_call(),
     icon: Phone,
-    color: "#34c759",
+    color: "var(--k-color-green, #34c759)",
   };
   const LEFT_NEAR: SwipeZone = {
     action: "assign",
@@ -76,7 +76,7 @@
     action: "hold",
     label: () => m.tickets_action_hold(),
     icon: Pause,
-    color: "#ff9500",
+    color: "var(--k-color-orange, #ff9500)",
   };
 
   // ── Thresholds ──
@@ -105,8 +105,10 @@
   let startY = 0;
   let locked: "horizontal" | "vertical" | null = null;
   let pointerId: number | null = null;
+  let captureEl: HTMLElement | null = null;
   let didSwipe = false; // true if horizontal movement was detected; suppresses click
   let didDismissPeek = false; // true if a peek was dismissed on pointerdown; suppresses click
+  let didLongPress = false; // true if long-press fired; suppresses the subsequent click
 
   // ── Long-press state ──
   let pressTimer: ReturnType<typeof setTimeout> | null = null;
@@ -189,15 +191,14 @@
     pointerId = e.pointerId;
     isSwiping = false;
     didSwipe = false;
-
-    if (e.currentTarget instanceof HTMLElement) {
-      e.currentTarget.setPointerCapture(e.pointerId);
-    }
+    captureEl = e.currentTarget instanceof HTMLElement ? e.currentTarget : null;
 
     clearPress();
+    didLongPress = false;
     pressTimer = setTimeout(() => {
       pressTimer = null;
       if (!isSwiping && locked !== "horizontal") {
+        didLongPress = true;
         onlongpress?.(ticketId);
       }
     }, PRESS_DURATION);
@@ -214,6 +215,9 @@
         return;
       }
       locked = Math.abs(dx) >= Math.abs(dy) ? "horizontal" : "vertical";
+      if (locked === "horizontal" && captureEl !== null) {
+        captureEl.setPointerCapture(e.pointerId);
+      }
     }
 
     if (locked === "vertical") {
@@ -238,7 +242,11 @@
 
   function handlePointerUp(e: PointerEvent): void {
     if (e.pointerId !== pointerId) return;
+    if (captureEl?.hasPointerCapture(e.pointerId) === true) {
+      captureEl.releasePointerCapture(e.pointerId);
+    }
     clearPress();
+    captureEl = null;
     pointerId = null;
 
     if (locked === "horizontal" && isSwiping) {
@@ -278,7 +286,11 @@
 
   function handlePointerCancel(e: PointerEvent): void {
     if (e.pointerId !== pointerId) return;
+    if (captureEl?.hasPointerCapture(e.pointerId) === true) {
+      captureEl.releasePointerCapture(e.pointerId);
+    }
     clearPress();
+    captureEl = null;
     pointerId = null;
     isSwiping = false;
     locked = null;
@@ -305,6 +317,12 @@
   // Only block clicks originating from the card-slider (the child card),
   // not from the peek tray buttons.
   function handleClickCapture(e: MouseEvent): void {
+    if (didLongPress) {
+      didLongPress = false;
+      e.stopPropagation();
+      e.preventDefault();
+      return;
+    }
     if (disabled) return;
     if (!didSwipe && !didDismissPeek && peeked === null) return;
 

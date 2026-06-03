@@ -531,6 +531,21 @@ describe("WebAuthn verify", () => {
       ).rejects.toThrow("Sign count did not increase");
     });
 
+    it("succeeds when both sign count and stored counter are zero (synced passkeys)", async () => {
+      const { authentication, credential, checks } =
+        await buildValidAuthentication({
+          signCount: 0,
+          expectedCounter: 0,
+        });
+
+      const result = await verifyAuthentication(
+        authentication,
+        credential,
+        checks,
+      );
+      expect(result.signCount).toBe(0);
+    });
+
     it("succeeds when sign count is greater than expected counter", async () => {
       const { authentication, credential, checks } =
         await buildValidAuthentication({

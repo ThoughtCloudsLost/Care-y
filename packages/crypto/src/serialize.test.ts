@@ -1,16 +1,10 @@
-import { describe, it, expect, beforeAll } from "vitest";
+import { describe, it, expect } from "vitest";
 import fc from "fast-check";
 import { encode, decode } from "./serialize.js";
-import { getSodium, _resetSodiumForTesting } from "./sodium.js";
 import { InvalidInputError } from "./errors.js";
 import { FC_LIGHT } from "./fc-config.js";
 
 describe("serialize (base64url no-padding)", () => {
-  beforeAll(async () => {
-    _resetSodiumForTesting();
-    await getSodium();
-  });
-
   describe("encode/decode roundtrip", () => {
     it("roundtrips a 32-byte key", () => {
       const data = new Uint8Array(32);
@@ -56,14 +50,15 @@ describe("serialize (base64url no-padding)", () => {
       expect(() => decode("!!!invalid!!!")).toThrow(InvalidInputError);
     });
 
-    it("throws InvalidInputError on standard base64 padding", () => {
-      // "AA==" is valid standard base64 but not valid base64url-no-padding
-      expect(() => decode("AA==")).toThrow(InvalidInputError);
+    it("accepts standard base64 padding (lax decode)", () => {
+      const result = decode("AA==");
+      expect(result).toEqual(new Uint8Array([0x00]));
     });
 
-    it("throws InvalidInputError on standard base64 characters", () => {
-      // "+" and "/" are standard base64, not URL-safe
-      expect(() => decode("ab+cd/ef")).toThrow(InvalidInputError);
+    it("accepts standard base64 characters (lax decode)", () => {
+      const withUrlSafe = decode("ab-cd_ef");
+      const withStandard = decode("ab+cd/ef");
+      expect(withStandard).toEqual(withUrlSafe);
     });
 
     it("thrown error has correct code", () => {

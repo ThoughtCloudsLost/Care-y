@@ -4,6 +4,7 @@
   import { RoleId } from "@care-y/shared";
   import type { RoleIdValue } from "@care-y/shared";
   import * as m from "$lib/paraglide/messages.js";
+  import { withTerms } from "$lib/terminology/with-terms.js";
   import ShellPopover from "$lib/shell/ShellPopover.svelte";
 
   interface RolePopoverProps {
@@ -25,8 +26,8 @@
   }: RolePopoverProps = $props();
 
   const roles: readonly { id: RoleIdValue; label: () => string }[] = [
-    { id: RoleId.VOLUNTEER, label: () => m.admin_role_volunteer() },
-    { id: RoleId.MANAGER, label: () => m.admin_role_manager() },
+    { id: RoleId.VOLUNTEER, label: () => m.admin_role_volunteer(withTerms()) },
+    { id: RoleId.MANAGER, label: () => m.admin_role_manager(withTerms()) },
     { id: RoleId.ADMIN, label: () => m.admin_role_admin() },
   ];
 

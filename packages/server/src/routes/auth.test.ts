@@ -24,9 +24,10 @@ import {
   createMockEmailSender,
   createMockOprfDeps,
   createMockProviderFactory,
+  registerMethodDirectly,
   type TestDb,
 } from "../test-utils.js";
-import { RoleId } from "@care-y/shared";
+import { RoleId, TwoFactorMethod } from "@care-y/shared";
 import { createScryptHasher } from "../auth/password.js";
 import { createInMemoryRateLimiter } from "../ratelimit/rate-limiter.js";
 import { createDbSessionRepository } from "../auth/session-repository.js";
@@ -210,8 +211,10 @@ describe.skipIf(!HAS_DB)("auth + org routers (DB integration)", () => {
       id: string;
       identifier: string;
       encryptedDisplayName: string;
+      encryptedPreferredLocale: string | null;
       roleId: string;
       isActive: boolean;
+      hasSeenBriefing: boolean;
     },
     sessionToken: string,
     twofaVerified = false,
@@ -592,5 +595,50 @@ describe.skipIf(!HAS_DB)("auth + org routers (DB integration)", () => {
     expect(result.blocklistCount).toBeGreaterThanOrEqual(0);
     expect(result.greetingCount).toBeGreaterThanOrEqual(0);
     expect(result.templateCount).toBeGreaterThanOrEqual(0);
+  });
+
+  // --- Auth: login needsEnrollment flag ---
+
+  it("auth.login returns needsEnrollment=true when user has no 2FA methods", async () => {
+    const authService = makeAuthService(tenantDb, orgContext.orgId);
+    await authService.register({
+      identifier: "no-2fa-user",
+      password: "no-2fa-password-long-enough",
+      displayName: "No 2FA User",
+      roleId: RoleId.VOLUNTEER,
+    });
+
+    loginLimiter.reset("127.0.0.1");
+    const { caller } = createTestCaller();
+    const result = await caller.auth.login({
+      identifier: "no-2fa-user",
+      password: "no-2fa-password-long-enough",
+    });
+
+    expect(result.needsEnrollment).toBe(true);
+    expect(result.enrolledMethods).toEqual([]);
+  });
+
+  it("auth.login returns needsEnrollment=false when user has 2FA methods enrolled", async () => {
+    const authService = makeAuthService(tenantDb, orgContext.orgId);
+    const user = await authService.register({
+      identifier: "has-2fa-user",
+      password: "has-2fa-password-long-enough",
+      displayName: "Has 2FA User",
+      roleId: RoleId.VOLUNTEER,
+    });
+
+    await registerMethodDirectly(tenantDb, user.id, TwoFactorMethod.TOTP);
+
+    loginLimiter.reset("127.0.0.1");
+    const { caller } = createTestCaller();
+    const result = await caller.auth.login({
+      identifier: "has-2fa-user",
+      password: "has-2fa-password-long-enough",
+    });
+
+    expect(result.needsEnrollment).toBe(false);
+    expect(result.requiresTwoFactor).toBe(true);
+    expect(result.enrolledMethods).toContain(TwoFactorMethod.TOTP);
   });
 });

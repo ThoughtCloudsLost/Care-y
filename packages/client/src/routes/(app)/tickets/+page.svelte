@@ -7,7 +7,7 @@
   import { ticketsKeys, volunteerKeys } from "$lib/query/keys";
   import { createCountsQuery } from "$lib/tickets/queries.js";
   import { untrack } from "svelte";
-  import { SvelteMap, SvelteSet } from "svelte/reactivity";
+  import { SvelteMap } from "svelte/reactivity";
   import { page } from "$app/state";
   import { goto } from "$app/navigation";
   import { resolve } from "$app/paths";
@@ -19,6 +19,7 @@
     FilterPillsConfig,
   } from "$lib/shell/types.js";
   import * as m from "$lib/paraglide/messages.js";
+  import { withTerms } from "$lib/terminology/with-terms.js";
   import { trpc } from "$lib/trpc/index.js";
   import {
     getTicketDecryptCache,
@@ -38,13 +39,12 @@
   import { filterStore } from "$lib/stores/filters.svelte.js";
   import { viewModeStore } from "$lib/stores/view-mode.svelte.js";
   import { toastStore } from "$lib/stores/toast.svelte.js";
+  import { haptic } from "$lib/utils/haptic.js";
   import type {
     TicketCardProps,
     TicketQuickAction,
   } from "$lib/components/tickets/ticket-types.js";
-
-  import { RouterNotAvailableError } from "$lib/errors.js";
-  import type { SortField, FilterStatus } from "$lib/stores/filters.svelte.js";
+  import { requireRouter } from "$lib/errors.js";
   import { savedFilterStore } from "$lib/stores/saved-filters.svelte.js";
   import {
     savedFilterStateSchema,
@@ -56,18 +56,9 @@
   import TicketCard from "$lib/components/tickets/TicketCard.svelte";
   import SwipeableCard from "$lib/components/tickets/SwipeableCard.svelte";
   import type { PillDefinition } from "$lib/components/filters/filter-types.js";
-  import CreateSavedFilter from "$lib/components/filters/CreateSavedFilter.svelte";
   import VirtualList from "$lib/components/tickets/VirtualList.svelte";
   import QueryError from "$lib/components/QueryError.svelte";
-  import AssignSheet from "$lib/components/tickets/AssignSheet.svelte";
-  import ReplySheet from "$lib/components/tickets/ReplySheet.svelte";
-  import NewTicketController from "$lib/components/tickets/NewTicketController.svelte";
-  import ShellActionSheet from "$lib/shell/ShellActionSheet.svelte";
-  import CallOptionsContent, {
-    type CallAction,
-  } from "$lib/components/tickets/CallOptionsContent.svelte";
-  import { haptic } from "$lib/utils/haptic.js";
-  import { optimisticMutation } from "$lib/utils/optimistic-mutation.js";
+  import type { CallAction } from "$lib/components/tickets/CallOptionsContent.svelte";
   import { createBulkActions } from "$lib/composables/ticket-list/create-bulk-actions.svelte.js";
   import { createFilterDispatch } from "$lib/composables/create-filter-dispatch.svelte.js";
   import {
@@ -75,20 +66,48 @@
     resolveVolunteerName as sharedResolveVolunteerName,
     type VolunteerRecord,
   } from "$lib/tickets/resolve-volunteer.js";
-  import type { RawFollowUpPreview } from "$lib/tickets/preview-loader.svelte.js";
   import { resolveAsyncDecrypt } from "$lib/crypto/decrypt-result.js";
   import { createSearchOverlay } from "$lib/search/search-overlay.svelte.js";
   import { createDeepSearch } from "$lib/search/deep-search.svelte.js";
   import SearchNavigator from "$lib/components/search/SearchNavigator.svelte";
   import { fuzzySearch } from "$lib/search/fuzzy.js";
+  import TicketListOverlays from "./TicketListOverlays.svelte";
+
+  import { createMultiSelect } from "$lib/composables/ticket-list/create-multi-select.svelte.js";
+  import { createHoldAction } from "$lib/composables/ticket-list/create-hold-action.svelte.js";
+  import { createAssignFlow } from "$lib/composables/ticket-list/create-assign-flow.svelte.js";
+  import { createReplyFlow } from "$lib/composables/ticket-list/create-reply-flow.svelte.js";
+  import {
+    filterByDisplayStatus,
+    reactionsForTicket,
+    matchTitles,
+    mergeSearchMatches,
+    applySearchOrder,
+    buildDateRangeLabel,
+    buildFilterSummary,
+    buildAssigneeOptions,
+    isSortField,
+    isFilterStatus,
+  } from "$lib/tickets/ticket-list-utils.js";
+
+  // --- Context & services ---
 
   const ticketCache = getTicketDecryptCache();
   const orgCache = getOrgDecryptCache();
   const currentUserIdGetter = getCurrentUserId();
   const currentUserId = $derived(currentUserIdGetter());
-  if (!trpc.tickets) throw new RouterNotAvailableError("tickets");
-  const ticketRouter = trpc.tickets;
+  const ticketRouter = requireRouter(trpc.tickets, "tickets");
   const queryClient = useQueryClient();
+  const previewLoader = getPreviewLoader();
+  const getScroll = getScrollContainer();
+  const scrollEl = $derived(getScroll());
+  const scrollDir = useScrollDirection({
+    get scrollEl() {
+      return scrollEl;
+    },
+  });
+  const tabbarOverride = getTabbarOverrideCtx();
+  const navbarCtx = getNavbarOverrideCtx();
 
   function resolveVolunteerName(userId: string): string {
     if (userId === currentUserId) return m.dashboard_assigned_you();
@@ -99,38 +118,360 @@
     return sharedResolveVolunteerName(userId, volunteerMap, orgCache) ?? "...";
   }
 
-  // Per-ticket pending guards to prevent double-tap races.
-  const pendingHoldIds = new SvelteSet<string>();
+  // --- Composables ---
 
-  // AssignSheet overlay state.
-  let assignSheetOpen = $state(false);
-  let assignTargetTicketId = $state("");
-  let assignCurrentAssigneeId = $state<string | null>(null);
+  const multiSelect = createMultiSelect();
+  const holdAction = createHoldAction({
+    queryClient,
+    getQueryKey: () => ticketsKeys.list(filterStore.serverParams),
+    holdMutate: async (ticketId, onHold) =>
+      ticketRouter.update.mutate({ ticketId, onHold }),
+  });
+  const assignFlow = createAssignFlow({
+    queryClient,
+    getQueryKey: () => ticketsKeys.list(filterStore.serverParams),
+    assignMutate: async (ticketId, targetUserId) =>
+      ticketRouter.assignTo.mutate({ ticketId, targetUserId }),
+    resolveVolunteerName,
+    getTickets: () => allTickets,
+  });
+  const replyFlow = createReplyFlow({
+    queryClient,
+    getTickets: () => allTickets,
+    getPreviewFollowUps: (id) => previewLoader.get(id),
+    eagerLoadPreviews: async (ids) => previewLoader.eagerLoad(ids),
+  });
 
-  // ReplySheet overlay state.
-  let replySheetOpen = $state(false);
-  let replyTargetTicketId = $state("");
-  let replyClientAlias = $state("");
-  let replyPreviewFollowUps = $state<RawFollowUpPreview[] | undefined>(
-    undefined,
-  );
-  let replyFollowUpCount = $state(0);
+  // --- Overlay state (simple toggles that stay in the page) ---
 
-  // Call action sheet state.
   let callSheetOpen = $state(false);
-
-  // New ticket sheet state.
   let newTicketOpen = $state(false);
+  let bulkAssignSheetOpen = $state(false);
+  let savedFilterModalOpen = $state(false);
 
-  // --- URL filter application (dashboard → tickets navigation) ---
-  // When arriving with ?queue=X or ?filter=my-open|unassigned, apply
-  // to filterStore once, then strip the params so manual filter
-  // changes aren't clobbered if the effect re-runs.
+  // --- Queries ---
+
+  const ticketsQuery = createInfiniteQuery(() => ({
+    queryKey: ticketsKeys.list(filterStore.serverParams),
+    queryFn: async ({ pageParam }) =>
+      ticketRouter.list.query({
+        ...filterStore.serverParams,
+        cursor: pageParam,
+      }),
+    initialPageParam: undefined as string | undefined,
+    getNextPageParam: (lastPage) =>
+      lastPage.length >= filterStore.serverParams.limit
+        ? lastPage[lastPage.length - 1]?.id
+        : undefined,
+  }));
+
+  const allTickets = $derived(ticketsQuery.data?.pages.flat() ?? []);
+  type TicketRecord = (typeof allTickets)[number];
+
+  const countsQuery = createCountsQuery(ticketRouter);
+  const newCount = $derived(countsQuery.data?.new ?? 0);
+  const activeCount = $derived(countsQuery.data?.active ?? 0);
+  const holdCount = $derived(countsQuery.data?.onHold ?? 0);
+
+  const queuesQuery = createQuery(() => ({
+    queryKey: ticketsKeys.myQueues(),
+    queryFn: async () => ticketRouter.myQueues.query(),
+  }));
+
+  // --- Derived display list (Layer C extractions) ---
+
+  const displayFiltered = $derived(
+    filterByDisplayStatus(
+      allTickets,
+      filterStore.needsDisplayStatusPostFilter,
+      filterStore.statuses.has("new"),
+    ),
+  );
+
+  // --- Preview reactions ---
+
+  const previewReactionsMap = new SvelteMap<string, ReactionSummary[]>();
+  // eslint-disable-next-line svelte/prefer-svelte-reactivity -- tracks fetched IDs, not rendered state
+  const fetchedReactionIds = new Set<string>();
+
+  $effect(() => {
+    const tickets = allTickets;
+    if (tickets.length > 0) {
+      void previewLoader.eagerLoad(tickets.map((t) => t.id));
+    }
+  });
+
+  $effect(() => {
+    const previews = previewLoader.rawPreviews;
+    const noteIds: string[] = [];
+    for (const followUps of previews.values()) {
+      for (const fu of followUps) {
+        if (fu.type === "internal_note" && !fetchedReactionIds.has(fu.id)) {
+          noteIds.push(fu.id);
+        }
+      }
+    }
+    if (noteIds.length === 0) return;
+    for (const id of noteIds) fetchedReactionIds.add(id);
+    void ticketRouter.getReactions
+      .query({ followUpIds: noteIds.slice(0, 100) })
+      .then((result) => {
+        for (const [id, summaries] of Object.entries(result)) {
+          if (summaries.length > 0) previewReactionsMap.set(id, summaries);
+        }
+      })
+      .catch(() => {
+        /* best-effort */
+      });
+  });
+
+  // --- Card props mapping ---
+
+  type DataCardProps = Omit<
+    TicketCardProps,
+    "viewMode" | "selected" | "multiSelectActive"
+  >;
+
+  function toDataCardProps(t: TicketRecord): DataCardProps {
+    let assignedName: string | null = null;
+    if (t.assignedTo === currentUserId) {
+      assignedName = m.dashboard_assigned_you();
+    } else if (t.assignedTo !== null) {
+      assignedName =
+        orgCache.decrypt(`assignee:${t.assignedTo}`, t.assignedDisplayName) ??
+        null;
+    }
+
+    return {
+      ticketId: t.id,
+      queueName: orgCache.decrypt(`queue:${t.queueId}`, t.encryptedQueueName),
+      displayStatus: deriveDisplayStatus(t.status, t.onHold, t.followUpCount),
+      priority: t.priority,
+      titleResult: resolveAsyncDecrypt(
+        ticketCache.decryptTitle(t.id, t.keyWrap, t.encryptedTitle),
+        t.keyWrap !== null,
+      ),
+      clientAlias: t.clientAlias,
+      assignedName,
+      createdAt: new Date(t.createdAt),
+      lastActivityAt:
+        t.lastActivityAt !== null ? new Date(t.lastActivityAt) : null,
+      followUpCount: t.followUpCount,
+      unreadCount: 0,
+      previewFollowUps: previewLoader.get(t.id),
+      previewReactions: reactionsForTicket(
+        previewLoader.get(t.id),
+        previewReactionsMap,
+      ),
+      ontap: handleTicketTap,
+      onselect: (id: string) => multiSelect.toggleSelection(id),
+      onaction: handleAction,
+      onencryptedhelp: showEncryptedHelp,
+    };
+  }
+
+  const cardPropsMap = $derived.by(() => {
+    const map = new SvelteMap<string, DataCardProps>();
+    for (const t of displayFiltered) {
+      map.set(t.id, toDataCardProps(t));
+    }
+    return map;
+  });
+
+  // --- Search ---
+
+  const overlay = createSearchOverlay({
+    matches: () => searchMatches,
+    getElementId: (id) => `ticket-${id}`,
+    scrollContainer: () => scrollEl,
+  });
+
+  const titleMatchIds = $derived(
+    overlay.term == null
+      ? []
+      : matchTitles(
+          [...cardPropsMap].map(([id, props]) => ({
+            id,
+            title:
+              props.titleResult.status === "ready"
+                ? props.titleResult.value
+                : null,
+            clientAlias: props.clientAlias,
+          })),
+          overlay.term,
+          fuzzySearch,
+        ),
+  );
+
+  const deepSearch = createDeepSearch({
+    overlay,
+    providerId: "tickets",
+    hasNextPage: () => ticketsQuery.hasNextPage,
+    isFetchingNextPage: () => ticketsQuery.isFetchingNextPage,
+    fetchNextPage: async () => ticketsQuery.fetchNextPage(),
+    isInitialLoading: () => ticketsQuery.isLoading,
+    loadedCount: () => allTickets.length,
+    matchCount: () => titleMatchIds.length,
+  });
+
+  const searchMatches = $derived(
+    mergeSearchMatches(
+      titleMatchIds,
+      deepSearch.contentMatchIds,
+      new Set(cardPropsMap.keys()),
+    ),
+  );
+
+  let useMatchOrder = $state(true);
+
+  $effect(() => {
+    if (overlay.active) {
+      useMatchOrder = true;
+    }
+  });
+
+  const displayItems = $derived(
+    applySearchOrder(
+      displayFiltered,
+      overlay.active,
+      overlay.term,
+      searchMatches,
+      useMatchOrder,
+    ),
+  );
+
+  $effect(() => {
+    const q = page.url.searchParams.get("q");
+    if (q != null && q !== "") {
+      overlay.enter(q);
+      deepSearch.scheduleFromNavigation();
+    }
+  });
+
+  let prevViewMode = $state(viewModeStore.mode);
+  $effect(() => {
+    const mode = viewModeStore.mode;
+    if (mode !== prevViewMode) {
+      prevViewMode = mode;
+      if (overlay.activeId != null) {
+        overlay.requestScroll();
+      }
+    }
+  });
+
+  // --- Event handlers (thin delegation) ---
+
+  function showEncryptedHelp(): void {
+    toastStore.show(m.dashboard_encrypted_help(withTerms()), 5000);
+  }
+
+  function handleTicketTap(ticketId: string): void {
+    void goto(resolve(`/tickets/${ticketId}`));
+  }
+
+  function handleAction(ticketId: string, action: TicketQuickAction): void {
+    switch (action) {
+      case "hold":
+        void holdAction.handleHold(ticketId, false);
+        break;
+      case "unhold":
+        void holdAction.handleHold(ticketId, true);
+        break;
+      case "assign":
+        assignFlow.open(ticketId);
+        break;
+      case "take":
+        void handleTake(ticketId);
+        break;
+      case "reply":
+        replyFlow.open(ticketId);
+        break;
+      case "call":
+        callSheetOpen = true;
+        break;
+    }
+  }
+
+  async function handleTake(ticketId: string): Promise<void> {
+    try {
+      await ticketRouter.take.mutate({ ticketId });
+      haptic();
+      toastStore.show(m.ticket_toast_taken(withTerms()));
+      void queryClient.invalidateQueries({
+        queryKey: ticketsKeys.lists(),
+      });
+    } catch (err: unknown) {
+      console.error("[tickets] take failed", err);
+      toastStore.show(m.error_generic(), 3000);
+    }
+  }
+
+  function handleCallAction(action: CallAction): void {
+    callSheetOpen = false;
+    if (action === "cancel") return;
+    toastStore.show(m.feature_coming_soon());
+  }
+
+  function loadNextPage(): void {
+    if (ticketsQuery.hasNextPage && !ticketsQuery.isFetchingNextPage) {
+      void ticketsQuery.fetchNextPage();
+    }
+  }
+
+  function handleBulkAssign(): void {
+    if (multiSelect.selectedIds.size === 0) return;
+    bulkAssignSheetOpen = true;
+  }
+
+  function handleCreateSavedFilter(meta: {
+    encryptedName: string;
+    color: SavedFilterColor;
+    icon: string;
+  }): void {
+    dispatch.handleCreateSavedFilter(meta);
+    toastStore.show(m.saved_filter_saved());
+  }
+
+  // --- Tabbar / navbar overrides ---
+
+  $effect(() => {
+    if (multiSelect.active) {
+      tabbarOverride.current = {
+        left: batchLeft,
+        middle: batchMiddle,
+        right: batchRight,
+        ariaLabel: m.tickets_selected({
+          count: multiSelect.selectedIds.size,
+        }),
+      };
+    } else {
+      tabbarOverride.current = undefined;
+    }
+  });
+
+  $effect(() => {
+    return () => {
+      tabbarOverride.current = undefined;
+    };
+  });
+
+  $effect(() => {
+    navbarCtx.current = {
+      right: navRight,
+      subnavbar: ticketSubnavbar,
+      subnavbarHidden: () => scrollDir.hidden && !overlay.active,
+    };
+    return () => {
+      navbarCtx.current = undefined;
+    };
+  });
+
+  // --- URL filter application ---
+
   let lastAppliedSearch = "";
 
   $effect(() => {
     const searchStr = page.url.search;
-
     if (searchStr === "" || searchStr === lastAppliedSearch) return;
 
     const params = page.url.searchParams;
@@ -168,486 +509,11 @@
     void goto(resolve("/tickets"), { replaceState: true });
   });
 
-  // Scroll container from AppShell context.
-  // Returns undefined until mount, then the resolved element.
-  const getScroll = getScrollContainer();
-  const scrollEl = $derived(getScroll());
-
-  // Scroll-direction tracker: hides header on scroll-down, reveals on scroll-up.
-  const scrollDir = useScrollDirection({
-    get scrollEl() {
-      return scrollEl;
-    },
-  });
-
-  // Tabbar override container: set actions to replace the tab bar
-  // with multi-select controls, clear to restore normal tabs.
-  const tabbarOverride = getTabbarOverrideCtx();
-
-  // Navbar override container: renders the ticket header as a
-  // subnavbar region in AppShell (outside the scroll container).
-  const navbarCtx = getNavbarOverrideCtx();
-
-  // Preview loader: session-level cache created in CryptoProvider.
-  const previewLoader = getPreviewLoader();
-
-  // Main ticket list with infinite scroll (keyset pagination).
-  const ticketsQuery = createInfiniteQuery(() => ({
-    queryKey: ticketsKeys.list(filterStore.serverParams),
-    queryFn: async ({ pageParam }) =>
-      ticketRouter.list.query({
-        ...filterStore.serverParams,
-        cursor: pageParam,
-      }),
-    initialPageParam: undefined as string | undefined,
-    getNextPageParam: (lastPage) =>
-      lastPage.length >= filterStore.serverParams.limit
-        ? lastPage[lastPage.length - 1]?.id
-        : undefined,
-  }));
-
-  // Flatten all pages into a single array.
-  const allTickets = $derived(ticketsQuery.data?.pages.flat() ?? []);
-
-  // Infer the ticket record type from the query return.
-  type TicketRecord = (typeof allTickets)[number];
-
-  // Client-side display-status post-filter. When the user selects only
-  // "New" or only "Active" (not both), the server can't distinguish them
-  // (both are status "open"). We post-filter by followUpCount.
-  const displayFiltered = $derived.by(() => {
-    if (!filterStore.needsDisplayStatusPostFilter) return allTickets;
-
-    const wantNew = filterStore.statuses.has("new");
-    // wantNew xor wantActive is guaranteed when needsDisplayStatusPostFilter is true
-
-    return allTickets.filter((t) => {
-      if (t.status !== "open") return true; // closed/other pass through
-      if (t.onHold) return true; // on-hold tickets pass through
-      // New = 0 follow-ups, Active = 1+ follow-ups
-      return wantNew ? t.followUpCount === 0 : t.followUpCount > 0;
-    });
-  });
-
-  // Server handles sort via ORDER BY. displayFiltered is the final list
-  // (post-filter for display status, but sort order preserved from server).
-
-  // Eager-load previews for the first page when tickets arrive.
-  // eagerLoad() skips IDs already in the loaded Set, so repeated calls
-  // after pagination are cheap (only new IDs trigger fetches).
-  $effect(() => {
-    const tickets = allTickets;
-    if (tickets.length > 0) {
-      void previewLoader.eagerLoad(tickets.map((t) => t.id));
-    }
-  });
-
-  // Batch-fetch reactions for internal notes in loaded previews.
-  // Keyed by follow-up ID so cards can look up their notes' reactions.
-  const previewReactionsMap = new SvelteMap<string, ReactionSummary[]>();
-  // eslint-disable-next-line svelte/prefer-svelte-reactivity -- tracks fetched IDs, not rendered state
-  const fetchedReactionIds = new Set<string>();
-
-  $effect(() => {
-    const previews = previewLoader.rawPreviews;
-    const noteIds: string[] = [];
-    for (const followUps of previews.values()) {
-      for (const fu of followUps) {
-        if (fu.type === "internal_note" && !fetchedReactionIds.has(fu.id)) {
-          noteIds.push(fu.id);
-        }
-      }
-    }
-    if (noteIds.length === 0) return;
-    for (const id of noteIds) fetchedReactionIds.add(id);
-    void ticketRouter.getReactions
-      .query({ followUpIds: noteIds.slice(0, 100) })
-      .then((result) => {
-        for (const [id, summaries] of Object.entries(result)) {
-          if (summaries.length > 0) previewReactionsMap.set(id, summaries);
-        }
-      })
-      .catch(() => {
-        /* best-effort */
-      });
-  });
-
-  // Map server record to TicketCard props (triggers lazy decryption).
-  // Data-derived card props: only recompute when ticket data, decryption
-  // caches, or preview content changes. Excludes volatile per-interaction
-  // state (selected, multiSelectActive, viewMode) to avoid rebuilding the
-  // entire Map on every selection toggle.
-  type DataCardProps = Omit<
-    TicketCardProps,
-    "viewMode" | "selected" | "multiSelectActive"
-  >;
-
-  function reactionsForTicket(
-    ticketId: string,
-  ): Record<string, ReactionSummary[]> | undefined {
-    const followUps = previewLoader.get(ticketId);
-    if (!followUps) return undefined;
-    let result: Record<string, ReactionSummary[]> | undefined;
-    for (const fu of followUps) {
-      const reactions = previewReactionsMap.get(fu.id);
-      if (reactions) {
-        result ??= {};
-        result[fu.id] = reactions;
-      }
-    }
-    return result;
-  }
-
-  function toDataCardProps(t: TicketRecord): DataCardProps {
-    let assignedName: string | null = null;
-    if (t.assignedTo === currentUserId) {
-      assignedName = m.dashboard_assigned_you();
-    } else if (t.assignedTo !== null) {
-      assignedName =
-        orgCache.decrypt(`assignee:${t.assignedTo}`, t.assignedDisplayName) ??
-        null;
-    }
-
-    return {
-      ticketId: t.id,
-      queueName: orgCache.decrypt(`queue:${t.queueId}`, t.encryptedQueueName),
-      displayStatus: deriveDisplayStatus(t.status, t.onHold, t.followUpCount),
-      priority: t.priority,
-      titleResult: resolveAsyncDecrypt(
-        ticketCache.decryptTitle(t.id, t.keyWrap, t.encryptedTitle),
-        t.keyWrap !== null,
-      ),
-      clientAlias: t.clientAlias,
-      assignedName,
-      createdAt: new Date(t.createdAt),
-      lastActivityAt:
-        t.lastActivityAt !== null ? new Date(t.lastActivityAt) : null,
-      followUpCount: t.followUpCount,
-      unreadCount: 0,
-      previewFollowUps: previewLoader.get(t.id),
-      previewReactions: reactionsForTicket(t.id),
-      ontap: handleTicketTap,
-      onselect: toggleSelection,
-      onaction: handleAction,
-      onencryptedhelp: showEncryptedHelp,
-    };
-  }
-
-  // Pre-compute data-derived card props for the visible ticket list.
-  // Volatile props (viewMode, selected, multiSelectActive) are added at
-  // render time so selection toggles don't rebuild the entire Map.
-  const cardPropsMap = $derived.by(() => {
-    const map = new SvelteMap<string, DataCardProps>();
-    for (const t of displayFiltered) {
-      map.set(t.id, toDataCardProps(t));
-    }
-    return map;
-  });
-
-  // --- Search overlay ---
-
-  const overlay = createSearchOverlay({
-    matches: () => searchMatches,
-    getElementId: (id) => `ticket-${id}`,
-    scrollContainer: () => scrollEl,
-  });
-
-  const titleMatchIds = $derived.by((): string[] => {
-    if (overlay.term == null) return [];
-    const ids: string[] = [];
-    const haystack: string[] = [];
-    for (const [id, props] of cardPropsMap) {
-      const title =
-        props.titleResult.status === "ready" ? props.titleResult.value : null;
-      if (title == null) continue;
-      ids.push(id);
-      haystack.push(`${title} ${props.clientAlias}`);
-    }
-    const matches = fuzzySearch(haystack, overlay.term);
-    return matches
-      .map((fm) => ids[fm.index])
-      .filter((id): id is string => id != null);
-  });
-
-  const deepSearch = createDeepSearch({
-    overlay,
-    providerId: "tickets",
-    hasNextPage: () => ticketsQuery.hasNextPage,
-    isFetchingNextPage: () => ticketsQuery.isFetchingNextPage,
-    fetchNextPage: async () => ticketsQuery.fetchNextPage(),
-    isInitialLoading: () => ticketsQuery.isLoading,
-    loadedCount: () => allTickets.length,
-    matchCount: () => titleMatchIds.length,
-  });
-
-  // Merge title matches + content matches from encrypted search
-  const searchMatches = $derived.by((): string[] => {
-    const cms = deepSearch.contentMatchIds;
-    if (cms == null || cms.size === 0) return titleMatchIds;
-
-    const seen = new Set(titleMatchIds);
-    const merged = [...titleMatchIds];
-    for (const id of cms) {
-      if (!seen.has(id) && cardPropsMap.has(id)) {
-        merged.push(id);
-      }
-    }
-    return merged;
-  });
-
-  let useMatchOrder = $state(true);
-
-  $effect(() => {
-    if (overlay.active) {
-      useMatchOrder = true;
-    }
-  });
-
-  const displayItems = $derived.by(() => {
-    if (!overlay.active || overlay.term == null || overlay.term.length < 2) {
-      return displayFiltered;
-    }
-    const matchSet = new Set(searchMatches);
-    if (!useMatchOrder) {
-      return displayFiltered.filter((t) => matchSet.has(t.id));
-    }
-    const idToTicket = new Map(displayFiltered.map((t) => [t.id, t]));
-    const sorted: typeof displayFiltered = [];
-    for (const id of searchMatches) {
-      const t = idToTicket.get(id);
-      if (t != null) sorted.push(t);
-    }
-    return sorted;
-  });
-
-  $effect(() => {
-    const q = page.url.searchParams.get("q");
-    if (q != null && q !== "") {
-      overlay.enter(q);
-      deepSearch.scheduleFromNavigation();
-    }
-  });
-
-  let prevViewMode = $state(viewModeStore.mode);
-  $effect(() => {
-    const mode = viewModeStore.mode;
-    if (mode !== prevViewMode) {
-      prevViewMode = mode;
-      if (overlay.activeId != null) {
-        overlay.requestScroll();
-      }
-    }
-  });
-
-  function showEncryptedHelp(): void {
-    toastStore.show(m.dashboard_encrypted_help(), 5000);
-  }
-
-  function handleTicketTap(ticketId: string): void {
-    void goto(resolve(`/tickets/${ticketId}`));
-  }
-
-  function handleAction(ticketId: string, action: TicketQuickAction): void {
-    switch (action) {
-      case "hold":
-        void handleHold(ticketId, true);
-        break;
-      case "unhold":
-        void handleHold(ticketId, false);
-        break;
-      case "assign":
-        openAssignSheet(ticketId);
-        break;
-      case "reply":
-        openReplySheet(ticketId);
-        break;
-      case "call":
-        callSheetOpen = true;
-        break;
-    }
-  }
-
-  async function handleHold(ticketId: string, onHold: boolean): Promise<void> {
-    if (pendingHoldIds.has(ticketId)) return;
-    pendingHoldIds.add(ticketId);
-
-    try {
-      await optimisticMutation<{
-        pages: TicketRecord[][];
-        pageParams: unknown[];
-      }>({
-        queryClient,
-        queryKey: ticketsKeys.list(filterStore.serverParams),
-        update: (old) => ({
-          ...old,
-          pages: old.pages.map((pg) =>
-            pg.map((t) => (t.id === ticketId ? { ...t, onHold } : t)),
-          ),
-        }),
-        mutate: async () => ticketRouter.update.mutate({ ticketId, onHold }),
-        onSuccess: () => {
-          haptic();
-          toastStore.show(
-            onHold ? m.ticket_toast_held() : m.ticket_toast_unheld(),
-          );
-          void queryClient.invalidateQueries({
-            queryKey: ticketsKeys.lists(),
-          });
-        },
-        onError: () => {
-          toastStore.show(m.error_generic(), 3000);
-        },
-      });
-    } finally {
-      pendingHoldIds.delete(ticketId);
-    }
-  }
-
-  function openAssignSheet(ticketId: string): void {
-    // Look up current assignee from the list data.
-    const ticket = allTickets.find((t) => t.id === ticketId);
-    assignTargetTicketId = ticketId;
-    assignCurrentAssigneeId = ticket?.assignedTo ?? null;
-    assignSheetOpen = true;
-  }
-
-  async function handleAssign(
-    ticketId: string,
-    targetUserId: string | null,
-  ): Promise<void> {
-    await optimisticMutation<{
-      pages: TicketRecord[][];
-      pageParams: unknown[];
-    }>({
-      queryClient,
-      queryKey: ticketsKeys.list(filterStore.serverParams),
-      update: (old) => ({
-        ...old,
-        pages: old.pages.map((pg) =>
-          pg.map((t) =>
-            t.id === ticketId ? { ...t, assignedTo: targetUserId } : t,
-          ),
-        ),
-      }),
-      mutate: async () =>
-        ticketRouter.assignTo.mutate({ ticketId, targetUserId }),
-      onSuccess: () => {
-        haptic();
-        if (targetUserId === null) {
-          toastStore.show(m.ticket_toast_unassigned());
-        } else {
-          toastStore.show(
-            m.ticket_toast_assigned({
-              name: resolveVolunteerName(targetUserId),
-            }),
-          );
-        }
-        void queryClient.invalidateQueries({ queryKey: ticketsKeys.lists() });
-      },
-      onError: () => {
-        toastStore.show(m.error_generic(), 3000);
-      },
-    });
-  }
-
-  function openReplySheet(ticketId: string): void {
-    const ticket = allTickets.find((t) => t.id === ticketId);
-    if (!ticket) return;
-    replyTargetTicketId = ticketId;
-    replyClientAlias = ticket.clientAlias;
-    replyPreviewFollowUps = previewLoader.get(ticketId);
-    replyFollowUpCount = ticket.followUpCount;
-    replySheetOpen = true;
-  }
-
-  function handleReplySent(ticketId: string): void {
-    replySheetOpen = false;
-    void queryClient.invalidateQueries({ queryKey: ticketsKeys.lists() });
-    void previewLoader.eagerLoad([ticketId]);
-  }
-
-  function handleCallAction(action: CallAction): void {
-    callSheetOpen = false;
-    if (action === "cancel") return;
-    // Call actions are stubs (deferred to telephony session). No haptic.
-    toastStore.show(m.feature_coming_soon());
-  }
-
-  // Multi-select state.
-  let multiSelectActive = $state(false);
-  let selectedIds = new SvelteSet<string>();
-
-  function toggleMultiSelect(): void {
-    if (multiSelectActive) {
-      exitMultiSelect();
-    } else {
-      multiSelectActive = true;
-    }
-  }
-
-  function toggleSelection(ticketId: string): void {
-    if (selectedIds.has(ticketId)) {
-      selectedIds.delete(ticketId);
-    } else {
-      selectedIds.add(ticketId);
-    }
-  }
-
-  function exitMultiSelect(): void {
-    multiSelectActive = false;
-    selectedIds.clear();
-  }
-
-  // Sync multi-select state to the tabbar override. When active, the
-  // tab bar is replaced with action snippets. When inactive, the
-  // normal tab bar is restored.
-  $effect(() => {
-    if (multiSelectActive) {
-      tabbarOverride.current = {
-        left: batchLeft,
-        middle: batchMiddle,
-        right: batchRight,
-        ariaLabel: m.tickets_selected({ count: selectedIds.size }),
-      };
-    } else {
-      tabbarOverride.current = undefined;
-    }
-  });
-
-  // Clean up override on route unmount (navigating away from tickets).
-  $effect(() => {
-    return () => {
-      tabbarOverride.current = undefined;
-    };
-  });
-
-  // Set the subnavbar override once on mount. The hidden getter is a
-  // closure over scrollDir.hidden, so AppShell reads the latest value
-  // reactively without the override object needing to change.
-  $effect(() => {
-    navbarCtx.current = {
-      right: navRight,
-      subnavbar: ticketSubnavbar,
-      subnavbarHidden: () => scrollDir.hidden && !overlay.active,
-    };
-    return () => {
-      navbarCtx.current = undefined;
-    };
-  });
-
-  // Bulk assign: open AssignSheet with no pre-selected assignee.
-  let bulkAssignSheetOpen = $state(false);
-
-  function handleBulkAssign(): void {
-    if (selectedIds.size === 0) return;
-    assignCurrentAssigneeId = null;
-    assignTargetTicketId = "";
-    bulkAssignSheetOpen = true;
-  }
+  // --- Bulk actions ---
 
   const bulkActions = createBulkActions({
-    selectedIds,
-    exitMultiSelect,
+    selectedIds: multiSelect.selectedIds,
+    exitMultiSelect: () => multiSelect.exit(),
     queryClient,
     assignTo: async (ticketId, targetUserId) =>
       ticketRouter.assignTo.mutate({ ticketId, targetUserId }),
@@ -656,35 +522,11 @@
     resolveVolunteerName,
   });
 
-  function handleLongPress(ticketId: string): void {
-    if (!multiSelectActive) {
-      multiSelectActive = true;
-    }
-    toggleSelection(ticketId);
-  }
-
-  function loadNextPage(): void {
-    if (ticketsQuery.hasNextPage && !ticketsQuery.isFetchingNextPage) {
-      void ticketsQuery.fetchNextPage();
-    }
-  }
+  // --- Grid columns ---
 
   const gridColumns = $derived(viewModeStore.mode === "grid" ? 2 : 1);
 
-  // Accurate ticket counts from dedicated server endpoint (not limited by pagination).
-  const countsQuery = createCountsQuery(ticketRouter);
-
-  const newCount = $derived(countsQuery.data?.new ?? 0);
-  const activeCount = $derived(countsQuery.data?.active ?? 0);
-  const holdCount = $derived(countsQuery.data?.onHold ?? 0);
-
-  // Queue list for the filter pill bar (was inside old FilterPillBar).
-  const queuesQuery = createQuery(() => ({
-    queryKey: ticketsKeys.myQueues(),
-    queryFn: async () => ticketRouter.myQueues.query(),
-  }));
-
-  // --- Filter pill definitions (wiring ticket stores to generic FilterPillBar) ---
+  // --- Filter config ---
 
   const counts = $derived(countsQuery.data);
   const priorityCounts = $derived(counts?.byPriority);
@@ -734,20 +576,12 @@
     })),
   );
 
-  const assigneeOptions = $derived.by(() => {
-    const opts: { value: string; label: string }[] = [];
-    if (currentUserId !== undefined) {
-      opts.push({
-        value: currentUserId,
-        label: `${m.tickets_filter_me()} (${String(counts?.mine ?? 0)})`,
-      });
-    }
-    opts.push({
-      value: "__unassigned__",
-      label: `${m.tickets_unassigned()} (${String(counts?.unassigned ?? 0)})`,
-    });
-    return opts;
-  });
+  const assigneeOptions = $derived(
+    buildAssigneeOptions(currentUserId, counts, {
+      me: (count) => `${m.tickets_filter_me()} (${count})`,
+      unassigned: (count) => `${m.tickets_unassigned()} (${count})`,
+    }),
+  );
 
   const ticketPills: PillDefinition[] = $derived([
     {
@@ -759,7 +593,7 @@
     },
     {
       id: "queue",
-      label: m.tickets_filter_queue(),
+      label: m.tickets_filter_queue(withTerms()),
       mode: "multi",
       options: queueOptions,
       selected: filterStore.queueIds,
@@ -790,17 +624,6 @@
       selected: null,
     },
   ]);
-
-  const validStatuses: ReadonlySet<FilterStatus> = new Set<FilterStatus>([
-    "new",
-    "active",
-    "hold",
-    "closed",
-  ]);
-
-  function isFilterStatus(v: string): v is FilterStatus {
-    return (validStatuses as ReadonlySet<string>).has(v);
-  }
 
   const dispatch = createFilterDispatch({
     fields: {
@@ -869,47 +692,26 @@
       : "",
   );
 
-  const dateRangeLabel = $derived.by(() => {
-    const from = filterStore.dateFrom;
-    const to = filterStore.dateTo;
-    if (from !== null && to !== null)
-      return `${from.toLocaleDateString()} - ${to.toLocaleDateString()}`;
-    if (from !== null)
-      return `${m.tickets_filter_date_from()} ${from.toLocaleDateString()}`;
-    if (to !== null)
-      return `${m.tickets_filter_date_to()} ${to.toLocaleDateString()}`;
-    return m.tickets_filter_date_range();
-  });
+  const dateRangeLabel = $derived(
+    buildDateRangeLabel(filterStore.dateFrom, filterStore.dateTo, {
+      from: m.tickets_filter_date_from(),
+      to: m.tickets_filter_date_to(),
+      range: m.tickets_filter_date_range(),
+    }),
+  );
 
-  const filterSummary = $derived.by(() => {
-    const parts: string[] = [];
-    if (filterStore.statuses.size > 0)
-      parts.push([...filterStore.statuses].join(", "));
-    if (filterStore.priorities.size > 0)
-      parts.push([...filterStore.priorities].join(", "));
-    if (filterStore.queueIds.size > 0) {
-      const count = filterStore.queueIds.size;
-      parts.push(`${String(count)} queue${count > 1 ? "s" : ""}`);
-    }
-    if (filterStore.assigneeId !== null) parts.push("assigned");
-    if (filterStore.dateFrom !== null || filterStore.dateTo !== null)
-      parts.push("date range");
-    return parts.length > 0 ? parts.join(", ") : "No filters";
-  });
+  const filterSummary = $derived(
+    buildFilterSummary(
+      filterStore.statuses,
+      filterStore.priorities,
+      filterStore.queueIds.size,
+      filterStore.assigneeId,
+      filterStore.dateFrom !== null || filterStore.dateTo !== null,
+    ),
+  );
 
-  function handleCreateSavedFilter(meta: {
-    encryptedName: string;
-    color: SavedFilterColor;
-    icon: string;
-  }): void {
-    dispatch.handleCreateSavedFilter(meta);
-    toastStore.show(m.saved_filter_saved());
-  }
+  // --- SubNavbar configs ---
 
-  // Saved filter modal state.
-  let savedFilterModalOpen = $state(false);
-
-  // --- SubNavbar config objects ---
   const viewConfig: ViewToggleConfig = $derived({
     mode: viewModeStore.mode,
     onchange: (mode: "list" | "grid") => viewModeStore.set(mode),
@@ -917,24 +719,13 @@
     gridLabel: m.tickets_view_grid(),
   });
 
-  const SORT_FIELDS: readonly SortField[] = [
-    "date",
-    "priority",
-    "last_activity",
-    "queue",
-  ];
-
-  function isSortField(value: string): value is SortField {
-    return (SORT_FIELDS as readonly string[]).includes(value);
-  }
-
   const sortConfig: SortConfig = $derived({
     label: m.tickets_sort(),
     options: [
       { field: "date", label: m.tickets_sort_newest() },
       { field: "priority", label: m.tickets_sort_priority() },
       { field: "last_activity", label: m.tickets_sort_activity() },
-      { field: "queue", label: m.tickets_sort_queue() },
+      { field: "queue", label: m.tickets_sort_queue(withTerms()) },
     ],
     currentField: filterStore.sort.field,
     currentDirection: filterStore.sort.direction,
@@ -973,7 +764,7 @@
       newTicketOpen = true;
     }}
     role="button"
-    aria-label={m.nav_new_ticket()}
+    aria-label={m.nav_new_ticket(withTerms())}
   >
     <TicketPlus size={22} aria-hidden="true" />
   </Link>
@@ -998,7 +789,7 @@
 
 {#snippet batchMiddle()}
   <span class="font-semibold text-sm" role="status">
-    {m.tickets_selected({ count: selectedIds.size })}
+    {m.tickets_selected({ count: multiSelect.selectedIds.size })}
   </span>
 {/snippet}
 
@@ -1006,7 +797,7 @@
   <Link
     iconOnly
     aria-label={m.tickets_exit_multiselect()}
-    onclick={exitMultiSelect}
+    onclick={() => multiSelect.exit()}
   >
     <X size={24} aria-hidden="true" />
   </Link>
@@ -1048,12 +839,12 @@
 
 {#snippet ticketSubnavbar()}
   <SubNavbarFilterLayout
-    title={m.tickets_title()}
+    title={m.tickets_title(withTerms())}
     view={viewConfig}
     stats={ticketStats}
     sort={sortConfig}
     selectLabel={m.tickets_select_mode()}
-    onselect={toggleMultiSelect}
+    onselect={() => multiSelect.toggle()}
     savedFilters={savedFiltersConfig}
     filterPills={filterPillsConfig}
     searchNavigator={overlay.active ? searchNavigatorRow : undefined}
@@ -1109,17 +900,17 @@
           >
             <SwipeableCard
               ticketId={item.id}
-              disabled={multiSelectActive}
+              disabled={multiSelect.active}
               onaction={handleAction}
-              onlongpress={handleLongPress}
+              onlongpress={(id: string) => multiSelect.handleLongPress(id)}
             >
               {@const dataProps = cardPropsMap.get(item.id)}
               {#if dataProps}
                 <TicketCard
                   {...dataProps}
                   viewMode={viewModeStore.mode}
-                  selected={selectedIds.has(item.id)}
-                  {multiSelectActive}
+                  selected={multiSelect.selectedIds.has(item.id)}
+                  multiSelectActive={multiSelect.active}
                   searchTerm={overlay.term}
                 />
               {/if}
@@ -1134,71 +925,50 @@
         <p>
           {overlay.active
             ? m.search_conversation_no_matches()
-            : m.tickets_empty_filter()}
+            : m.tickets_empty_filter(withTerms())}
         </p>
       </div>
     {/if}
   {/if}
 </div>
 
-<CreateSavedFilter
-  opened={savedFilterModalOpen}
-  {filterSummary}
-  ondismiss={() => {
-    savedFilterModalOpen = false;
-  }}
-  onsave={handleCreateSavedFilter}
-/>
-
-<AssignSheet
-  opened={assignSheetOpen}
-  ticketId={assignTargetTicketId}
-  currentAssigneeId={assignCurrentAssigneeId}
-  ondismiss={() => {
-    assignSheetOpen = false;
-  }}
-  onassign={(tid: string, uid: string | null) => void handleAssign(tid, uid)}
-/>
-
-<AssignSheet
-  opened={bulkAssignSheetOpen}
-  ticketId=""
-  currentAssigneeId={null}
-  ondismiss={() => {
+<TicketListOverlays
+  assignSheetOpen={assignFlow.sheetOpen}
+  assignTargetTicketId={assignFlow.targetTicketId}
+  assignCurrentAssigneeId={assignFlow.currentAssigneeId}
+  onassigndismiss={() => assignFlow.dismiss()}
+  onassign={(tid: string, uid: string | null) =>
+    void assignFlow.handleAssign(tid, uid)}
+  {bulkAssignSheetOpen}
+  onbulkassigndismiss={() => {
     bulkAssignSheetOpen = false;
   }}
-  onassign={(tid: string, uid: string | null) => {
+  onbulkassign={(tid: string, uid: string | null) => {
     bulkAssignSheetOpen = false;
     void bulkActions.handleBulkAssignTo(tid, uid);
   }}
-/>
-
-<ReplySheet
-  opened={replySheetOpen}
-  ticketId={replyTargetTicketId}
-  clientAlias={replyClientAlias}
-  previewFollowUps={replyPreviewFollowUps}
-  followUpCount={replyFollowUpCount}
-  ondismiss={() => {
-    replySheetOpen = false;
-  }}
-  onsent={handleReplySent}
-/>
-
-<ShellActionSheet
-  opened={callSheetOpen}
-  ondismiss={() => {
+  replySheetOpen={replyFlow.sheetOpen}
+  replyTargetTicketId={replyFlow.targetTicketId}
+  replyClientAlias={replyFlow.clientAlias}
+  replyPreviewFollowUps={replyFlow.previewFollowUps}
+  replyFollowUpCount={replyFlow.followUpCount}
+  onreplydismiss={() => replyFlow.dismiss()}
+  onreplysent={(tid: string) => replyFlow.handleReplySent(tid)}
+  {callSheetOpen}
+  oncalldismiss={() => {
     callSheetOpen = false;
   }}
->
-  <CallOptionsContent hasVerifiedPhone={false} onaction={handleCallAction} />
-</ShellActionSheet>
-
-<NewTicketController
-  opened={newTicketOpen}
-  ondismiss={() => {
+  oncallaction={handleCallAction}
+  {newTicketOpen}
+  onnewticketdismiss={() => {
     newTicketOpen = false;
   }}
+  {savedFilterModalOpen}
+  {filterSummary}
+  onsavedfilterdismiss={() => {
+    savedFilterModalOpen = false;
+  }}
+  onsavedfiltersave={handleCreateSavedFilter}
 />
 
 <style>

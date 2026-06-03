@@ -34,8 +34,10 @@ export interface UserRecord {
   readonly id: string;
   readonly identifier: string; // still decrypted server-side (Tier 2, needed for login response)
   readonly encryptedDisplayName: string; // base64 ciphertext, client decrypts with org key
+  readonly encryptedPreferredLocale: string | null; // base64 ciphertext, client decrypts with org key
   readonly roleId: string;
   readonly isActive: boolean;
+  readonly hasSeenBriefing: boolean;
 }
 
 export interface AuthService {
@@ -44,6 +46,7 @@ export interface AuthService {
     password: string;
     displayName: string;
     notificationEmail?: string;
+    preferredLocale?: string;
     roleId: string;
   }): Promise<UserRecord>;
 
@@ -108,6 +111,14 @@ export interface AuthService {
   /** Updates the org's PII retention setting in org_config. */
   setPiiRetentionDays(days: number | null): Promise<void>;
 
+  markBriefingSeen(userId: string): Promise<void>;
+
+  /** Mark org onboarding setup as complete. */
+  markSetupCompleted(): Promise<void>;
+
+  /** Checks whether a user_keys row exists for the given user. */
+  hasUserKeys(userId: string): Promise<boolean>;
+
   getHubStatus(): Promise<{
     activeUserCount: number;
     queueCount: number;
@@ -131,8 +142,11 @@ function toUserRecord(
     id: row.id,
     identifier: encryptor.decrypt(row.encrypted_identifier),
     encryptedDisplayName: row.encrypted_display_name.toString("base64"),
+    encryptedPreferredLocale:
+      row.encrypted_preferred_locale?.toString("base64") ?? null,
     roleId: row.role_id,
     isActive: row.is_active,
+    hasSeenBriefing: row.has_seen_briefing,
   };
 }
 
@@ -310,6 +324,7 @@ export function createAuthService(
     password: string;
     displayName: string;
     notificationEmail?: string;
+    preferredLocale?: string;
     roleId: string;
   }): Promise<Selectable<UsersTable>> {
     const identifierHash = indexer.hash(input.identifier, orgId);
@@ -319,6 +334,10 @@ export function createAuthService(
     const encryptedNotificationAddr =
       input.notificationEmail !== undefined && input.notificationEmail !== ""
         ? encryptor.encrypt(input.notificationEmail)
+        : null;
+    const encryptedPreferredLocale =
+      input.preferredLocale !== undefined
+        ? sealedBox.seal(input.preferredLocale)
         : null;
     const passwordHash = await hasher.hash(input.password);
 
@@ -331,6 +350,7 @@ export function createAuthService(
           password_hash: passwordHash,
           encrypted_display_name: encryptedDisplayName,
           encrypted_notification_addr: encryptedNotificationAddr,
+          encrypted_preferred_locale: encryptedPreferredLocale,
           role_id: input.roleId,
         })
         .returningAll()
@@ -474,6 +494,30 @@ export function createAuthService(
     updateUserRole,
     setUserActive,
     setPiiRetentionDays,
+
+    async markSetupCompleted(): Promise<void> {
+      await db
+        .updateTable("org_config")
+        .set({ setup_completed: true })
+        .execute();
+    },
+
+    async hasUserKeys(userId: string): Promise<boolean> {
+      const row = await db
+        .selectFrom("user_keys")
+        .select("user_id")
+        .where("user_id", "=", userId)
+        .executeTakeFirst();
+      return row !== undefined;
+    },
+
+    async markBriefingSeen(userId: string): Promise<void> {
+      await db
+        .updateTable("users")
+        .set({ has_seen_briefing: true })
+        .where("id", "=", userId)
+        .execute();
+    },
 
     async updateDisplayName(
       userId: string,

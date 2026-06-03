@@ -84,7 +84,7 @@ export async function escalateTenantTickets(
         ticket_id: ticket.id,
         source: "system",
         type: "priority_change",
-        encrypted_content: Buffer.from("system"),
+        encrypted_content: Buffer.alloc(0),
       })
       .execute();
 

@@ -3,20 +3,20 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 
 /** @typedef {import('../runtime.js').LocalizedString} LocalizedString */
 
-/** @typedef {{ count: NonNullable<unknown> }} Ticket_Detail_Volunteers_StatInputs */
+/** @typedef {{ count: NonNullable<unknown>, volunteers: NonNullable<unknown> }} Ticket_Detail_Volunteers_StatInputs */
 
 const en_ticket_detail_volunteers_stat = /** @type {(inputs: Ticket_Detail_Volunteers_StatInputs) => LocalizedString} */ (i) => {
-	return /** @type {LocalizedString} */ (`${i?.count} volunteers`)
+	return /** @type {LocalizedString} */ (`${i?.count} ${i?.volunteers}`)
 };
 
 const es_ticket_detail_volunteers_stat = /** @type {(inputs: Ticket_Detail_Volunteers_StatInputs) => LocalizedString} */ (i) => {
-	return /** @type {LocalizedString} */ (`${i?.count} voluntarios`)
+	return /** @type {LocalizedString} */ (`${i?.count} ${i?.volunteers}`)
 };
 
 /**
 * | output |
 * | --- |
-* | "{count} volunteers" |
+* | "{count} {volunteers}" |
 *
 * @param {Ticket_Detail_Volunteers_StatInputs} inputs
 * @param {{ locale?: "en" | "es" }} options
