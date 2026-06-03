@@ -1,12 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
 import pg from "pg";
-import {
-  sql,
-  Kysely,
-  PostgresDialect,
-  FileMigrationProvider,
-  Migrator,
-} from "kysely";
+import { sql, Kysely, PostgresDialect } from "kysely";
+import { FileMigrationProvider, Migrator } from "kysely/migration";
 import * as path from "node:path";
 import * as fs from "node:fs/promises";
 import type { PlatformDatabase } from "../db/types.js";

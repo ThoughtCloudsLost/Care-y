@@ -12,12 +12,8 @@
 import * as path from "node:path";
 import * as fs from "node:fs/promises";
 import pg from "pg";
-import {
-  Kysely,
-  PostgresDialect,
-  FileMigrationProvider,
-  Migrator,
-} from "kysely";
+import { Kysely, PostgresDialect } from "kysely";
+import { FileMigrationProvider, Migrator } from "kysely/migration";
 import type { PlatformDatabase } from "./db/types.js";
 
 export async function setup(): Promise<void> {
