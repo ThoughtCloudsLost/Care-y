@@ -289,11 +289,11 @@ html.glass-light.dark {
    bg + backdrop-blur-lg (16px) + multi-layer inset shadow.
    iOS-only: Material gets no glass treatment, matching Konsta.
    Apply to any element that should look like a Konsta navbar pill.
-   !important on background overrides Konsta component defaults
-   (Sheet, Popup, etc.) since this class is always intentional. */
+   !important on background and color overrides Konsta component
+   defaults (Sheet, Popup, Chip, etc.) since this class is always intentional. */
 .k-ios .glass {
   background: var(--glass-surface) !important;
-  color: var(--glass-text);
+  color: var(--glass-text) !important;
   -webkit-backdrop-filter: blur(16px);
   backdrop-filter: blur(16px);
   box-shadow: var(--glass-shadow);
