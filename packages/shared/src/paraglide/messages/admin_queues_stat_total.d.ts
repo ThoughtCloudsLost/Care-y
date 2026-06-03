@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "{count} queues" |
+* | "{count} {queues}" |
 *
 * @param {Admin_Queues_Stat_TotalInputs} inputs
 * @param {{ locale?: "en" | "es" }} options
@@ -15,4 +15,5 @@ export const admin_queues_stat_total: ((inputs: Admin_Queues_Stat_TotalInputs, o
 export type LocalizedString = import("../runtime.js").LocalizedString;
 export type Admin_Queues_Stat_TotalInputs = {
     count: NonNullable<unknown>;
+    queues: NonNullable<unknown>;
 };

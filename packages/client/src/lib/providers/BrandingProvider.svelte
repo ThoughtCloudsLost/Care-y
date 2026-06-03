@@ -19,6 +19,7 @@
     brandingIconUrl,
     DEFAULT_PRIMARY,
   } from "$lib/branding/index.js";
+  import { dismissSplash } from "$lib/branding/dismiss-splash.js";
   import { setBrandingTitle } from "$lib/branding/title.svelte.js";
   import {
     setAppleTouchIconHref,
@@ -31,6 +32,17 @@
   import { getOrgSlug } from "$lib/utils/org-slug.js";
   import { base64ToUint8Array } from "$lib/utils/buffer-encoding.js";
   import type { OrgKeyManager } from "$lib/crypto/org-key.js";
+  import {
+    TERMINOLOGY_DEFAULTS_EN,
+    terminologyConfigSchema,
+    type TerminologyLabels,
+  } from "@care-y/shared";
+  import { setTerminology } from "$lib/terminology/context.js";
+  import {
+    resolveLabels,
+    readCachedTerminology,
+    cacheTerminology,
+  } from "$lib/terminology/index.js";
 
   import type { Snippet } from "svelte";
 
@@ -46,8 +58,19 @@
       // Outside CryptoProvider (shouldn't happen in normal tree, but safe)
     }
   }
-  let _hydrated = $state(false);
   let serverHydrated = false;
+
+  let terminologyLabels = $state<TerminologyLabels>(TERMINOLOGY_DEFAULTS_EN);
+
+  // Initialize terminology from cache immediately
+  if (browser) {
+    const cachedConfig = readCachedTerminology();
+    const storedLang = localStorage.getItem("care-y-default-lang");
+    const lang = storedLang ?? (document.documentElement.lang || "en");
+    terminologyLabels = resolveLabels(cachedConfig, lang);
+  }
+
+  setTerminology(() => terminologyLabels);
 
   function syncToLocalStorage(
     cached: NonNullable<Awaited<ReturnType<typeof getCachedBranding>>>,
@@ -76,16 +99,6 @@
     }
   }
 
-  function dismissSplash(): void {
-    document.body.classList.add("hydrated");
-    const splash = document.getElementById("splash");
-    if (splash) {
-      splash.addEventListener("transitionend", () => splash.remove(), {
-        once: true,
-      });
-    }
-  }
-
   // Path 1: instant hydration from cache (pre-login)
   $effect(() => {
     if (!browser) return;
@@ -108,7 +121,6 @@
       }
       // Sync SW cache state to localStorage for next page load's splash screen.
       syncToLocalStorage(cached);
-      _hydrated = true;
       dismissSplash();
     });
   });
@@ -141,6 +153,23 @@
         (await decryptField(data.encryptedAccentColor)) ?? null;
       const orgSlug = getOrgSlug();
 
+      // Decrypt and cache terminology
+      const terminologyJson = await decryptField(data.encryptedTerminology);
+      if (terminologyJson !== null) {
+        try {
+          const parsed: unknown = JSON.parse(terminologyJson);
+          const result = terminologyConfigSchema.safeParse(parsed);
+          if (result.success) {
+            cacheTerminology(result.data);
+            const storedLang = localStorage.getItem("care-y-default-lang");
+            const lang = storedLang ?? (document.documentElement.lang || "en");
+            terminologyLabels = resolveLabels(result.data, lang);
+          }
+        } catch {
+          // Malformed terminology JSON; keep defaults
+        }
+      }
+
       await updateBrandingCache({
         orgName,
         primaryColor,
@@ -167,7 +196,6 @@
         }
       }
 
-      _hydrated = true;
       dismissSplash();
     } catch {
       // Non-fatal: branding stays at defaults

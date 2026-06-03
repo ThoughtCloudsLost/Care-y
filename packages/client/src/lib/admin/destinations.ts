@@ -1,6 +1,7 @@
 import type { Component } from "svelte";
 import { Permission } from "@care-y/shared";
 import * as m from "$lib/paraglide/messages.js";
+import { withTerms } from "$lib/terminology/with-terms.js";
 import {
   Users,
   Layers,
@@ -8,7 +9,9 @@ import {
   Ban,
   Mic,
   MessageSquare,
+  Building2,
   Palette,
+  Languages,
   Key,
   Shredder,
   ClipboardPenLine,
@@ -50,8 +53,8 @@ export const ADMIN_DESTINATIONS: readonly AdminDestination[] = [
     id: "queues",
     group: "people",
     icon: Layers,
-    label: m.panel_queues,
-    subtitle: m.hub_queues_subtitle,
+    label: () => m.panel_queues(withTerms()),
+    subtitle: () => m.hub_queues_subtitle(withTerms()),
     path: "/admin/people?tab=queues",
     permission: Permission.MANAGE_QUEUES,
     implemented: true,
@@ -101,12 +104,32 @@ export const ADMIN_DESTINATIONS: readonly AdminDestination[] = [
 
   // ORGANIZATION
   {
+    id: "general",
+    group: "organization",
+    icon: Building2,
+    label: m.panel_general,
+    subtitle: m.hub_general_subtitle,
+    path: "/admin/organization?tab=general",
+    permission: Permission.MANAGE_ORG_CONFIG,
+    implemented: true,
+  },
+  {
     id: "branding",
     group: "organization",
     icon: Palette,
     label: m.panel_branding,
     subtitle: m.hub_branding_subtitle,
     path: "/admin/organization?tab=branding",
+    permission: Permission.MANAGE_ORG_CONFIG,
+    implemented: true,
+  },
+  {
+    id: "terminology",
+    group: "organization",
+    icon: Languages,
+    label: m.panel_terminology,
+    subtitle: m.hub_terminology_subtitle,
+    path: "/admin/organization?tab=terminology",
     permission: Permission.MANAGE_ORG_CONFIG,
     implemented: true,
   },

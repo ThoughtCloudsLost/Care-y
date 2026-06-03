@@ -48,13 +48,14 @@ export function activateFocusTrap(options: FocusTrapOptions): () => void {
     container.focus();
   }
 
-  function handleKeydown(event: KeyboardEvent): void {
+  function handleEscape(event: KeyboardEvent): void {
     if (event.key === "Escape") {
       event.preventDefault();
       onEscape();
-      return;
     }
+  }
 
+  function handleTab(event: KeyboardEvent): void {
     if (event.key !== "Tab") return;
 
     const elements = getFocusableElements(container);
@@ -79,9 +80,13 @@ export function activateFocusTrap(options: FocusTrapOptions): () => void {
     }
   }
 
-  container.addEventListener("keydown", handleKeydown);
+  // Escape listens on document so it works regardless of focus position
+  // (WAI-ARIA dialog pattern: Escape always closes the topmost modal).
+  document.addEventListener("keydown", handleEscape);
+  container.addEventListener("keydown", handleTab);
 
   return () => {
-    container.removeEventListener("keydown", handleKeydown);
+    document.removeEventListener("keydown", handleEscape);
+    container.removeEventListener("keydown", handleTab);
   };
 }

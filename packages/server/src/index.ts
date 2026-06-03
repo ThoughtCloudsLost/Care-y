@@ -227,7 +227,29 @@ function createHttpServer(
   });
 }
 
+// --- Rate limit constants ---
+
+const RATE_WINDOW_1M = 60_000;
+const RATE_WINDOW_1H = 3_600_000;
+const RATE_WINDOW_15M = 15 * 60 * 1000;
+
+const RATE_LOGIN_MAX = 5;
+const RATE_SALT_MAX = 20;
+const RATE_OPRF_USER_MAX = 10;
+const RATE_OPRF_IP_MAX = 50;
+const RATE_PASSWORD_CHANGE_MAX = 5;
+const RATE_UPLOAD_MAX = 3;
+const RATE_KB_UPLOAD_MAX = 5;
+const RATE_BRANDING_UPLOAD_MAX = 3;
+const RATE_BOOTSTRAP_MAX = process.env.NODE_ENV === "production" ? 2 : 20;
+
 // --- Rate limiters ---
+
+const noopLimiter: RateLimiter = {
+  check: () => ({ allowed: true, remaining: Infinity, retryAfterMs: 0 }),
+  // eslint-disable-next-line @typescript-eslint/no-empty-function -- intentional no-op for dev
+  reset: () => {},
+};
 
 interface RateLimiters {
   readonly loginLimiter: ReturnType<typeof createInMemoryRateLimiter>;
@@ -235,14 +257,17 @@ interface RateLimiters {
 }
 
 function createAuthRateLimiters(): RateLimiters {
+  if (process.env.NODE_ENV === "development") {
+    return { loginLimiter: noopLimiter, saltLimiter: noopLimiter };
+  }
   return {
     loginLimiter: createInMemoryRateLimiter({
-      windowMs: 60_000,
-      maxRequests: 5,
+      windowMs: RATE_WINDOW_1M,
+      maxRequests: RATE_LOGIN_MAX,
     }),
     saltLimiter: createInMemoryRateLimiter({
-      windowMs: 60_000,
-      maxRequests: 20,
+      windowMs: RATE_WINDOW_1M,
+      maxRequests: RATE_SALT_MAX,
     }),
   };
 }
@@ -262,25 +287,19 @@ function createOprfInfrastructure(env: EnvVars): OprfEvaluateService {
     socketPathB: env.OPRF_SOCKET_B,
   });
 
-  const noopLimiter: RateLimiter = {
-    check: () => ({ allowed: true, remaining: Infinity, retryAfterMs: 0 }),
-    // eslint-disable-next-line @typescript-eslint/no-empty-function -- intentional no-op for dev
-    reset: () => {},
-  };
-
   const userRateLimiter =
     process.env.NODE_ENV === "development"
       ? noopLimiter
       : createInMemoryRateLimiter({
-          windowMs: 15 * 60 * 1000,
-          maxRequests: 10,
+          windowMs: RATE_WINDOW_15M,
+          maxRequests: RATE_OPRF_USER_MAX,
         });
   const ipRateLimiter =
     process.env.NODE_ENV === "development"
       ? noopLimiter
       : createInMemoryRateLimiter({
-          windowMs: 15 * 60 * 1000,
-          maxRequests: 50,
+          windowMs: RATE_WINDOW_15M,
+          maxRequests: RATE_OPRF_IP_MAX,
         });
 
   const opsKeyBuf = Buffer.from(env.OPS_SECRETS_KEY, "hex");
@@ -416,8 +435,8 @@ const appRouter = createAppRouter({
     indexer,
     tokenizer,
     passwordChangeLimiter: createInMemoryRateLimiter({
-      windowMs: 60_000,
-      maxRequests: 5,
+      windowMs: RATE_WINDOW_1M,
+      maxRequests: RATE_PASSWORD_CHANGE_MAX,
     }),
   },
   twoFactorDeps: {
@@ -442,8 +461,8 @@ const appRouter = createAppRouter({
     createService: createTelephonyContentService,
     blobStore,
     uploadLimiter: createInMemoryRateLimiter({
-      windowMs: 60_000,
-      maxRequests: 3,
+      windowMs: RATE_WINDOW_1M,
+      maxRequests: RATE_UPLOAD_MAX,
     }),
   },
   ticketDeps: {
@@ -478,8 +497,8 @@ const appRouter = createAppRouter({
     createMediaSvc: (tDb) => createKBMediaService(tDb),
     blobStore,
     uploadLimiter: createInMemoryRateLimiter({
-      windowMs: 60_000,
-      maxRequests: 5,
+      windowMs: RATE_WINDOW_1M,
+      maxRequests: RATE_KB_UPLOAD_MAX,
     }),
   },
   notificationDeps: {
@@ -489,10 +508,25 @@ const appRouter = createAppRouter({
   brandingDeps: {
     blobStore,
     uploadLimiter: createInMemoryRateLimiter({
-      windowMs: 60_000,
-      maxRequests: 3,
+      windowMs: RATE_WINDOW_1M,
+      maxRequests: RATE_BRANDING_UPLOAD_MAX,
     }),
   },
+  onboardingDeps: {
+    orgService,
+    hasher,
+    encryptor,
+    indexer,
+    tokenizer,
+    bootstrapLimiter: createInMemoryRateLimiter({
+      windowMs: RATE_WINDOW_1H,
+      maxRequests: RATE_BOOTSTRAP_MAX,
+    }),
+    isSecureCookie: env.NODE_ENV === "production",
+    tenantDbFactory: tenantDb,
+    secretsEncryptor,
+  },
+  includeDev: env.NODE_ENV !== "production",
 });
 
 export type AppRouter = typeof appRouter;
@@ -618,13 +652,14 @@ const pendingCallCleanupInterval = setInterval(() => {
   evictExpiredPendingCalls(pendingCalls);
 }, 60_000);
 
-// Org resolver for relay endpoints: uses the shared extractOrgSlug utility
-// (same logic as tRPC context), then derives the schema name from the slug.
-// The schema name is org_<slug> by convention (see MT1 in 00-overview.md).
-function relayOrgResolver(req: IncomingMessage): string | null {
+// Org resolver for relay endpoints: looks up the org by slug via orgService
+// (same pattern as tRPC context) to get the correct UUID-based schema name.
+async function relayOrgResolver(req: IncomingMessage): Promise<string | null> {
   const slug = extractOrgSlug(req);
   if (slug === null) return null;
-  return `org_${slug}`;
+  const org = await orgService.findBySlug(slug);
+  if (org?.isActive !== true) return null;
+  return org.schemaName;
 }
 
 // Session repo factory for relay auth. Loads the real org_public_key

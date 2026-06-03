@@ -1,10 +1,15 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
 import {
   createKbSearchProvider,
   type KBSearchProviderDeps,
   type RawKBItem,
 } from "./kb.js";
 import type { FullSearchState } from "../types.js";
+import { cacheRegistry } from "$lib/crypto/cache-registry.js";
+
+beforeEach(() => {
+  cacheRegistry.reset();
+});
 
 // Mock paraglide messages
 vi.mock("$lib/paraglide/messages.js", () => ({
@@ -473,10 +478,10 @@ describe("KB fullSearch (body content)", () => {
       const { totalCached } = provider.search("guide");
       expect(totalCached).toBe(3);
     });
+  });
 
-    // Only a3 matches "guide" in title ("Safety procedures guide")
-    // but the fullSearch should still call fetchBodies for non-matching ones
-    // Let's test with a query that matches all three
+  it("skips fetchBodies when all articles match on title/excerpt (fresh cache)", async () => {
+    cacheRegistry.reset();
     const allMatchDeps: KBSearchProviderDeps = {
       ...createFullSearchDeps(),
       decryptOrg: async (cacheKey: string, ciphertext: unknown) => {

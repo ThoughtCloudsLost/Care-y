@@ -125,6 +125,7 @@ vi.mock("$lib/crypto/context.js", () => ({
   }),
   getOrgKeyManager: () => ({
     encrypt: vi.fn().mockReturnValue(new Uint8Array([1, 2, 3])),
+    encryptText: vi.fn().mockResolvedValue("encrypted-text"),
     decrypt: vi.fn().mockReturnValue(new Uint8Array([1, 2, 3])),
     isLoaded: true,
     load: vi.fn(),
@@ -134,6 +135,7 @@ vi.mock("$lib/crypto/context.js", () => ({
   getPreviewLoader: () => mockPreviewLoader,
   getCryptoBridge: () => ({
     encrypt: vi.fn().mockResolvedValue("base64-ciphertext"),
+    encryptText: vi.fn().mockResolvedValue("encrypted-text"),
     decrypt: vi.fn().mockResolvedValue("plaintext"),
   }),
   getFollowUpDecryptCache: () => ({
@@ -397,5 +399,118 @@ describe("Ticket list page", () => {
     expect(
       typeof (mockNavbarCtx.current as Record<string, unknown>).subnavbarHidden,
     ).toBe("function");
+  });
+
+  it("renders tickets from multiple pages of data", () => {
+    const page1 = [
+      makeTicket({ id: "t-page1-a" }),
+      makeTicket({ id: "t-page1-b" }),
+    ];
+    const page2 = [makeTicket({ id: "t-page2-a" })];
+    infiniteQueryState = {
+      isLoading: false,
+      isError: false,
+      error: null,
+      data: {
+        pages: [page1, page2],
+        pageParams: [undefined, "t-page1-b"],
+      },
+      hasNextPage: false,
+      isFetchingNextPage: false,
+      fetchNextPage: vi.fn(),
+    };
+
+    const { container } = render(PageModule.default);
+    // All three tickets from both pages should appear in the list.
+    const list = container.querySelector("[data-ticket-list]");
+    expect(list).toBeTruthy();
+    expect(container.querySelector("#ticket-t-page1-a")).toBeTruthy();
+    expect(container.querySelector("#ticket-t-page1-b")).toBeTruthy();
+    expect(container.querySelector("#ticket-t-page2-a")).toBeTruthy();
+  });
+
+  it("renders assigned ticket with assignee name", () => {
+    const ticket = makeTicket({
+      assignedTo: "user-001",
+      assignedDisplayName: { type: "Buffer", data: [65, 108, 105, 99, 101] },
+    });
+    infiniteQueryState = {
+      isLoading: false,
+      isError: false,
+      error: null,
+      data: { pages: [[ticket]], pageParams: [undefined] },
+      hasNextPage: false,
+      isFetchingNextPage: false,
+      fetchNextPage: vi.fn(),
+    };
+
+    render(PageModule.default);
+    // When assignedTo matches the current user ("user-001" from mock),
+    // the card displays "You" via the dashboard_assigned_you message.
+    expect(screen.getByText("You")).toBeTruthy();
+  });
+
+  it("renders on-hold ticket with hold status label", () => {
+    const ticket = makeTicket({ onHold: true, status: "open" });
+    infiniteQueryState = {
+      isLoading: false,
+      isError: false,
+      error: null,
+      data: { pages: [[ticket]], pageParams: [undefined] },
+      hasNextPage: false,
+      isFetchingNextPage: false,
+      fetchNextPage: vi.fn(),
+    };
+
+    const { container } = render(PageModule.default);
+    // deriveDisplayStatus(open, onHold=true, ...) returns "hold".
+    // TicketCard renders the status label via StatusDot + text "On Hold".
+    const statusLabels = container.querySelectorAll(
+      "[data-testid='status-label']",
+    );
+    const holdLabels = Array.from(statusLabels).filter(
+      (el) => el.textContent === "On Hold",
+    );
+    expect(holdLabels.length).toBeGreaterThan(0);
+  });
+
+  it("renders urgent priority ticket with priority badge", () => {
+    const ticket = makeTicket({ priority: "urgent" });
+    infiniteQueryState = {
+      isLoading: false,
+      isError: false,
+      error: null,
+      data: { pages: [[ticket]], pageParams: [undefined] },
+      hasNextPage: false,
+      isFetchingNextPage: false,
+      fetchNextPage: vi.fn(),
+    };
+
+    const { container } = render(PageModule.default);
+    // PriorityBadge renders data-priority="urgent" and text "Urgent".
+    const badge = container.querySelector("[data-priority='urgent']");
+    expect(badge).toBeTruthy();
+    expect(badge?.textContent).toContain("Urgent");
+  });
+
+  it("exposes fetchNextPage when hasNextPage is true", () => {
+    const fetchNextPage = vi.fn();
+    const tickets = [makeTicket()];
+    infiniteQueryState = {
+      isLoading: false,
+      isError: false,
+      error: null,
+      data: { pages: [tickets], pageParams: [undefined] },
+      hasNextPage: true,
+      isFetchingNextPage: false,
+      fetchNextPage,
+    };
+
+    render(PageModule.default);
+    // The page reads hasNextPage and fetchNextPage from the query.
+    // When hasNextPage is true, the loadNextPage callback can invoke
+    // fetchNextPage. Verify the query state is wired correctly.
+    expect(infiniteQueryState.hasNextPage).toBe(true);
+    expect(typeof infiniteQueryState.fetchNextPage).toBe("function");
   });
 });

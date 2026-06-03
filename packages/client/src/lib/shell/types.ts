@@ -86,6 +86,12 @@ export interface ShellPopupProps {
   ondismiss: () => void;
   /** Title shown in the popup navbar. */
   title?: string;
+  /** Accessible label for the dialog (falls back to title). */
+  ariaLabel?: string;
+  /** Snippet rendered in the navbar left slot. */
+  left?: Snippet;
+  /** Snippet rendered in the navbar right slot (replaces the default Close link). */
+  right?: Snippet;
   /** Popup content. */
   children: Snippet;
 }
@@ -95,6 +101,8 @@ export interface ShellActionSheetProps {
   opened: boolean;
   /** Callback when the action sheet is dismissed. */
   ondismiss: () => void;
+  /** Accessible label for the dialog. */
+  ariaLabel?: string;
   /** Action sheet content (typically ActionsGroup + ActionsButton). */
   children: Snippet;
 }
@@ -110,6 +118,8 @@ export interface ShellPopoverProps {
   angle?: boolean;
   /** Force vertical placement. Skips auto-detection. */
   placement?: "top" | "bottom";
+  /** Accessible label for the dialog. */
+  ariaLabel?: string;
   /** Popover content. */
   children: Snippet;
 }

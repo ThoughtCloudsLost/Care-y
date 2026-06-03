@@ -15,6 +15,7 @@ import {
   addToBlocklistInputSchema,
   removeFromBlocklistInputSchema,
   setPhonePurposeInputSchema,
+  changeTelephonyModeInputSchema,
 } from "@care-y/shared";
 import { ConflictError } from "../errors.js";
 
@@ -49,6 +50,22 @@ export function createTelephonyAdminRouter(deps: TelephonyAdminRouterDeps) {
     provisionWebhooks: adminProcedure.mutation(
       withErrorWrapping(async ({ ctx }) => {
         return configService.provisionWebhooks(ctx.org.orgId, webhookBaseUrl);
+      }),
+    ),
+
+    changeMode: adminProcedure.input(changeTelephonyModeInputSchema).mutation(
+      withErrorWrapping(async ({ ctx, input }) => {
+        if (input.mode === "byot") {
+          await configService.saveConfig({
+            orgId: ctx.org.orgId,
+            provider: input.provider,
+            accountId: input.accountId,
+            authToken: input.authToken,
+          });
+        } else {
+          await configService.clearConfig(ctx.org.orgId);
+        }
+        return { success: true as const, mode: input.mode };
       }),
     ),
 
@@ -90,26 +107,13 @@ export function createTelephonyAdminRouter(deps: TelephonyAdminRouterDeps) {
 
     getPhonePurpose: adminProcedure.query(
       withErrorWrapping(async ({ ctx }) => {
-        const row = await ctx.org.tenantDb
-          .selectFrom("org_config")
-          .select(["phone_outbound_sid", "phone_system_sid"])
-          .executeTakeFirstOrThrow();
-        return {
-          outboundSid: row.phone_outbound_sid,
-          systemSid: row.phone_system_sid,
-        };
+        return configService.getPhonePurpose(ctx.org.tenantDb);
       }),
     ),
 
     setPhonePurpose: adminProcedure.input(setPhonePurposeInputSchema).mutation(
       withErrorWrapping(async ({ ctx, input }) => {
-        await ctx.org.tenantDb
-          .updateTable("org_config")
-          .set({
-            phone_outbound_sid: input.outboundSid,
-            phone_system_sid: input.systemSid,
-          })
-          .execute();
+        await configService.setPhonePurpose(ctx.org.tenantDb, input);
       }),
     ),
 
@@ -133,13 +137,10 @@ export function createTelephonyAdminRouter(deps: TelephonyAdminRouterDeps) {
                   devPhones,
                 );
 
-                await ctx.org.tenantDb
-                  .updateTable("org_config")
-                  .set({
-                    phone_outbound_sid: devPhones[0].sid,
-                    phone_system_sid: devPhones[1].sid,
-                  })
-                  .execute();
+                await configService.setPhonePurpose(ctx.org.tenantDb, {
+                  outboundSid: devPhones[0].sid,
+                  systemSid: devPhones[1].sid,
+                });
               } else {
                 await configService.saveConfig({
                   orgId: ctx.org.orgId,

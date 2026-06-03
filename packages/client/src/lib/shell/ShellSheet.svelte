@@ -57,6 +57,21 @@
     },
   });
 
+  // When trapFocus is false the focus-trap never activates, so Escape has
+  // no handler. Add a standalone keydown listener for that case.
+  $effect(() => {
+    if (trapFocus || !opened) return;
+    const dismiss = ondismiss;
+    function onKey(e: KeyboardEvent): void {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        dismiss();
+      }
+    }
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  });
+
   const sheetClass = $derived(
     ["glass", "shell-sheet", extraClass].filter(Boolean).join(" "),
   );
@@ -75,8 +90,9 @@
       use:drag.action
       {role}
       aria-modal={role === "dialog" ? "true" : undefined}
-      aria-label={ariaLabel}
+      aria-label={ariaLabel ?? title}
       tabindex={trapFocus ? -1 : undefined}
+      inert={!opened ? true : undefined}
       class="shell-sheet-content"
     >
       <div class="sheet-drag-handle" bind:this={handleRef} aria-hidden="true">
@@ -114,6 +130,22 @@
     overflow-y: auto;
     -webkit-overflow-scrolling: touch;
     padding-bottom: calc(var(--k-safe-area-bottom) + 1.5rem);
+  }
+
+  .shell-sheet-content:not([inert]) {
+    visibility: visible;
+    transition: none;
+  }
+
+  .shell-sheet-content[inert] {
+    visibility: hidden;
+    transition: visibility 0s 400ms;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .shell-sheet-content[inert] {
+      transition-delay: 0s;
+    }
   }
 
   .shell-sheet-content:has(.sheet-header) {

@@ -288,8 +288,10 @@ describe("requireAuth middleware (authedProcedure)", () => {
           id: "u1",
           identifier: "testuser",
           encryptedDisplayName: "Test",
+          encryptedPreferredLocale: null,
           roleId: "volunteer",
           isActive: true,
+          hasSeenBriefing: true,
         },
       }),
     );
@@ -343,8 +345,10 @@ describe("require2fa middleware (authed2faProcedure)", () => {
           id: "u1",
           identifier: "testuser",
           encryptedDisplayName: "Test",
+          encryptedPreferredLocale: null,
           roleId: "volunteer",
           isActive: true,
+          hasSeenBriefing: true,
         },
       }),
     );
@@ -369,8 +373,10 @@ describe("require2fa middleware (authed2faProcedure)", () => {
           id: "u1",
           identifier: "testuser",
           encryptedDisplayName: "Test",
+          encryptedPreferredLocale: null,
           roleId: "volunteer",
           isActive: true,
+          hasSeenBriefing: true,
         },
       }),
     );
@@ -398,8 +404,10 @@ describe("withErrorWrapping resolver wrapper", () => {
       id: "u1",
       identifier: "testuser",
       encryptedDisplayName: "Test",
+      encryptedPreferredLocale: null,
       roleId: "volunteer",
       isActive: true,
+      hasSeenBriefing: true,
     },
   });
 
@@ -469,8 +477,10 @@ describe("withErrorWrapping resolver wrapper", () => {
         id: "u1",
         identifier: "testuser",
         encryptedDisplayName: "Test",
+        encryptedPreferredLocale: null,
         roleId: "volunteer",
         isActive: true,
+        hasSeenBriefing: true,
       },
     });
     const testRouter = router({

@@ -134,10 +134,13 @@ export default tseslint.config(
     },
   },
 
-  // CryptoProvider is the sole consumer of context-init.ts (setter imports).
-  // Exempt it from the no-restricted-imports rule that blocks context-init.
+  // CryptoProvider and AppCryptoProvider are the only consumers of
+  // context-init.ts (setter imports). Exempt them from the restriction.
   {
-    files: ["**/providers/CryptoProvider.svelte"],
+    files: [
+      "**/providers/CryptoProvider.svelte",
+      "**/providers/AppCryptoProvider.svelte",
+    ],
     rules: {
       "no-restricted-imports": [
         "error",
@@ -242,6 +245,7 @@ export default tseslint.config(
             "createTwoFactorRouter",
             "createKbRouter",
             "createProfileRouter",
+            "createOnboardingRouter",
           ],
         },
       ],

@@ -86,6 +86,7 @@ vi.mock("$lib/trpc/index.js", () => ({
 // --- Mock errors ---
 vi.mock("$lib/errors.js", () => ({
   RouterNotAvailableError: class extends Error {},
+  requireRouter: <T>(r: T) => r,
 }));
 
 afterEach(() => {

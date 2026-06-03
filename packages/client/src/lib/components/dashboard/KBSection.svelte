@@ -3,6 +3,7 @@
   import { formatRelativeTime } from "$lib/utils/format-time.js";
   import { onKeyActivate } from "$lib/utils/a11y.js";
   import * as m from "$lib/paraglide/messages.js";
+  import { withTerms } from "$lib/terminology/with-terms.js";
   import CollapsibleSection from "./CollapsibleSection.svelte";
   import DecryptPlaceholder from "$lib/components/DecryptPlaceholder.svelte";
   import InlineSkeleton from "$lib/components/InlineSkeleton.svelte";
@@ -33,7 +34,7 @@
 </script>
 
 <CollapsibleSection
-  heading={m.dashboard_kb_heading()}
+  heading={m.dashboard_kb_heading(withTerms())}
   icon={BookOpen}
   iconColor="var(--brand-accent)"
   {loading}

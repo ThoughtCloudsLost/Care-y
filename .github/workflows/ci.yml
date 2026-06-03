@@ -12,8 +12,8 @@ concurrency:
 
 jobs:
   ci:
-    name: Build & Test
     runs-on: ubuntu-24.04
+    timeout-minutes: 20
     permissions:
       contents: read # checkout
       pull-requests: read

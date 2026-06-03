@@ -15,6 +15,7 @@
 import { z } from "zod";
 import {
   router,
+  authedProcedure,
   volunteerProcedure,
   managerProcedure,
   adminProcedure,
@@ -1367,18 +1368,23 @@ export function createTicketRouter(deps: TicketRouterDeps) {
     // --- Dev-only: seed test tickets with real ECIES key wraps ---
     ...(process.env.NODE_ENV === "development"
       ? {
-          devSeedTickets: volunteerProcedure.mutation(
-            withErrorWrapping(async ({ ctx }) => {
-              const { seedTestTickets } =
-                await import("../dev/seed-tickets.js");
-              return seedTestTickets(
-                ctx.org.tenantDb,
-                deps.blobStore,
-                ctx.user.id,
-                ctx.org.orgSchema,
-              );
-            }),
-          ),
+          devSeedTickets: authedProcedure
+            .input(
+              z.object({ handcraftedOnly: z.boolean().optional() }).optional(),
+            )
+            .mutation(
+              withErrorWrapping(async ({ ctx, input }) => {
+                const { seedTestTickets } =
+                  await import("../dev/seed-tickets.js");
+                return seedTestTickets(
+                  ctx.org.tenantDb,
+                  deps.blobStore,
+                  ctx.user.id,
+                  ctx.org.orgSchema,
+                  { handcraftedOnly: input?.handcraftedOnly },
+                );
+              }),
+            ),
         }
       : {}),
   });

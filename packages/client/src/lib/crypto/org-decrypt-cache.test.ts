@@ -44,6 +44,7 @@ describe("OrgDecryptCache", () => {
   let pkBase64: string;
 
   beforeEach(() => {
+    cacheRegistry.reset();
     bridge = createMockBridge();
     manager = new OrgKeyManager(bridge as unknown as CryptoBridge);
     const backend = requireSodium();
@@ -145,6 +146,24 @@ describe("OrgDecryptCache", () => {
     });
   });
 
+  describe("delete", () => {
+    it("removes a single cached entry", async () => {
+      cache.decrypt("kb-del-1", fakeData("val1"));
+      cache.decrypt("kb-del-2", fakeData("val2"));
+      await cache.whenSettled();
+      expect(cache.size).toBe(2);
+
+      cache.delete("kb-del-1");
+      expect(cache.size).toBe(1);
+      expect(cache.has("kb-del-1")).toBe(false);
+      expect(cache.has("kb-del-2")).toBe(true);
+    });
+
+    it("returns false for non-existent key", () => {
+      expect(cache.delete("nonexistent")).toBe(false);
+    });
+  });
+
   describe("clear", () => {
     it("empties the cache", async () => {
       cache.decrypt("kb-040", fakeData("clear test"));
@@ -153,6 +172,12 @@ describe("OrgDecryptCache", () => {
       cache.clear();
       expect(cache.size).toBe(0);
       expect(cache.has("kb-040")).toBe(false);
+    });
+
+    it("clears pending batch queue", () => {
+      cache.decrypt("kb-pending", fakeData("queued"));
+      cache.clear();
+      expect(cache.size).toBe(0);
     });
   });
 

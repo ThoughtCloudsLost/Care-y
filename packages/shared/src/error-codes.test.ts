@@ -37,6 +37,7 @@ describe("ErrorCode", () => {
       "NO_SMS_PHONE_ENROLLED",
       "NO_PUSH_SUBSCRIPTIONS",
       "NO_PHONE_NUMBERS_CONFIGURED",
+      "NO_METHODS_ENROLLED",
 
       // Tickets
       "TICKET_NOT_FOUND",
@@ -96,6 +97,14 @@ describe("ErrorCode", () => {
       "NOTE_TYPE_NOT_FOUND",
       "CANNOT_DEACTIVATE_DEFAULT_NOTE_TYPE",
       "INSUFFICIENT_ROLE",
+
+      // Onboarding
+      "ORG_ALREADY_SETUP",
+      "ORG_KEYPAIR_MISSING",
+      "INVALID_INVITE_TOKEN",
+      "INVITE_NOT_FOUND",
+      "INVALID_SETUP_TOKEN",
+      "BOOTSTRAP_RATE_LIMITED",
 
       // Telephony
       "TELEPHONY_NOT_CONFIGURED",

@@ -53,6 +53,17 @@ export class RouterNotAvailableError extends ClientError {
   }
 }
 
+/** Narrows a possibly-undefined router to its non-nullable type, or throws. */
+export function requireRouter<T>(
+  router: T | undefined,
+  name: string,
+): NonNullable<T> {
+  if (router === undefined || router === null) {
+    throw new RouterNotAvailableError(name);
+  }
+  return router;
+}
+
 /** Relay endpoint returned a non-OK response. */
 export class RelayError extends ClientError {
   readonly code: string;
@@ -72,5 +83,13 @@ export class RateLimitError extends ClientError {
     super(`Rate limited. Retry after ${String(retryAfterSeconds)}s`);
     this.name = "RateLimitError";
     this.retryAfterSeconds = retryAfterSeconds;
+  }
+}
+
+/** Branding image processing or encryption failures. */
+export class BrandingError extends ClientError {
+  constructor(message: string) {
+    super(message);
+    this.name = "BrandingError";
   }
 }

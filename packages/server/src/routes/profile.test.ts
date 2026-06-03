@@ -190,8 +190,10 @@ describe.skipIf(!process.env.DATABASE_URL)(
           id: userId,
           identifier: "test-user",
           encryptedDisplayName: "",
+          encryptedPreferredLocale: null,
           roleId,
           isActive: true,
+          hasSeenBriefing: true,
         },
       };
     }

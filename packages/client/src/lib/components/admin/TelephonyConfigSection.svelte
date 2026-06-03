@@ -1,7 +1,12 @@
 <script lang="ts">
-  import { Card, List, ListItem, ListInput, Preloader } from "konsta/svelte";
-  import { goto } from "$app/navigation";
-  import { resolve } from "$app/paths";
+  import {
+    Card,
+    List,
+    ListItem,
+    ListInput,
+    Preloader,
+    DialogButton,
+  } from "konsta/svelte";
   import {
     createQuery,
     createMutation,
@@ -17,12 +22,17 @@
     BotMessageSquare,
     RefreshCw,
     Settings2,
+    ArrowRightLeft,
   } from "@lucide/svelte";
-  import { telephonyProviderSchema } from "@care-y/shared";
+  import {
+    telephonyProviderSchema,
+    type ChangeTelephonyModeInput,
+  } from "@care-y/shared";
   import * as m from "$lib/paraglide/messages.js";
+  import { withTerms } from "$lib/terminology/with-terms.js";
   import { trpc } from "$lib/trpc/index.js";
   import { adminKeys } from "$lib/query/keys.js";
-  import { RouterNotAvailableError } from "$lib/errors.js";
+  import { requireRouter } from "$lib/errors.js";
   import { haptic } from "$lib/utils/haptic.js";
   import { toastStore } from "$lib/stores/toast.svelte.js";
   import { announceToLiveRegion } from "$lib/utils/announce.js";
@@ -30,9 +40,10 @@
   import InlineSkeleton from "$lib/components/InlineSkeleton.svelte";
   import SoftButton from "$lib/components/inputs/SoftButton.svelte";
   import ShellSheet from "$lib/shell/ShellSheet.svelte";
+  import ShellDialog from "$lib/shell/ShellDialog.svelte";
+  import TelephonyModePicker from "$lib/components/shared/TelephonyModePicker.svelte";
 
-  if (!trpc.telephonyAdmin) throw new RouterNotAvailableError("telephonyAdmin");
-  const telephonyAdmin = trpc.telephonyAdmin;
+  const telephonyAdmin = requireRouter(trpc.telephonyAdmin, "telephonyAdmin");
 
   const queryClient = useQueryClient();
 
@@ -189,6 +200,72 @@
     if (matchedSid === systemSid) return "system";
     return null;
   }
+
+  // ── Mode change ──
+
+  type TelephonyMode = "byot" | "managed" | "skip";
+
+  let changeModeDialogOpen = $state(false);
+  let changeModeSheetOpen = $state(false);
+  let newMode = $state<TelephonyMode>("byot");
+  let newAccountSid = $state("");
+  let newAuthToken = $state("");
+
+  function openChangeModeDialog(): void {
+    changeModeDialogOpen = true;
+  }
+
+  function confirmChangeMode(): void {
+    changeModeDialogOpen = false;
+    newMode = isByot ? "managed" : "byot";
+    newAccountSid = "";
+    newAuthToken = "";
+    changeModeSheetOpen = true;
+  }
+
+  function closeChangeModeSheet(): void {
+    changeModeSheetOpen = false;
+    newAccountSid = "";
+    newAuthToken = "";
+  }
+
+  const changeModeMutation = createMutation(() => ({
+    mutationFn: async (input: ChangeTelephonyModeInput) =>
+      telephonyAdmin.changeMode.mutate(input),
+    onSuccess: () => {
+      haptic();
+      toastStore.show(m.admin_telephony_mode_changed());
+      announceToLiveRegion("polite", m.admin_telephony_mode_changed());
+      closeChangeModeSheet();
+      void queryClient.invalidateQueries({
+        queryKey: adminKeys.telephony(),
+      });
+    },
+    onError: () => {
+      toastStore.show(m.error_generic());
+    },
+  }));
+
+  const canSubmitModeChange = $derived(
+    !changeModeMutation.isPending &&
+      (newMode !== "byot" ||
+        (newAccountSid.trim().length > 0 && newAuthToken.trim().length > 0)),
+  );
+
+  function handleModeChangeSubmit(): void {
+    if (!canSubmitModeChange) return;
+
+    if (newMode === "byot") {
+      changeModeMutation.mutate({
+        mode: "byot",
+        provider: "twilio",
+        accountId: newAccountSid.trim(),
+        authToken: newAuthToken.trim(),
+      });
+    } else {
+      changeModeMutation.mutate({ mode: "managed" });
+    }
+  }
 </script>
 
 <div class="telephony-section">
@@ -224,7 +301,13 @@
             <p class="status-headline">{m.admin_telephony_not_configured()}</p>
           </div>
         </div>
-        <SoftButton onclick={() => void goto(resolve("/setup"))} full>
+        <SoftButton
+          onclick={() => {
+            newMode = "byot";
+            changeModeSheetOpen = true;
+          }}
+          full
+        >
           {m.admin_telephony_go_to_setup()}
         </SoftButton>
       </div>
@@ -289,6 +372,11 @@
             </SoftButton>
           </div>
         {/if}
+
+        <SoftButton onclick={openChangeModeDialog} full>
+          <ArrowRightLeft size={16} aria-hidden="true" />
+          {m.admin_telephony_change_mode()}
+        </SoftButton>
       </div>
     </Card>
 
@@ -450,7 +538,7 @@
         dropdown
         value={outboundSid ?? ""}
         disabled={setPurposeMutation.isPending}
-        info={m.admin_telephony_outbound_calls_helper()}
+        info={m.admin_telephony_outbound_calls_helper(withTerms())}
         onChange={(e: Event) => {
           const target = e.target;
           if (target instanceof HTMLSelectElement) {
@@ -485,6 +573,63 @@
         {/each}
       </ListInput>
     </List>
+  </div>
+</ShellSheet>
+
+<!-- Change Mode Confirmation Dialog -->
+<ShellDialog
+  opened={changeModeDialogOpen}
+  ondismiss={() => (changeModeDialogOpen = false)}
+  title={m.admin_telephony_change_mode_confirm_title()}
+>
+  {#snippet content()}
+    <p class="text-sm text-[--muted]">
+      {m.admin_telephony_change_mode_confirm_body()}
+    </p>
+  {/snippet}
+  {#snippet buttons()}
+    <!-- care-y-ignore-next-line no-click-without-keyboard -- DialogButton renders a native <button> -->
+    <DialogButton onclick={() => (changeModeDialogOpen = false)}>
+      {m.common_cancel()}
+    </DialogButton>
+    <!-- care-y-ignore-next-line no-click-without-keyboard -- DialogButton renders a native <button> -->
+    <DialogButton strong onclick={confirmChangeMode}>
+      {m.admin_telephony_change_mode_confirm()}
+    </DialogButton>
+  {/snippet}
+</ShellDialog>
+
+<!-- Change Mode Sheet -->
+<ShellSheet
+  opened={changeModeSheetOpen}
+  ondismiss={closeChangeModeSheet}
+  ariaLabel={m.admin_telephony_change_mode()}
+  title={m.admin_telephony_change_mode()}
+>
+  {#snippet headerRight()}
+    <SoftButton
+      onclick={handleModeChangeSubmit}
+      disabled={!canSubmitModeChange}
+    >
+      {#if changeModeMutation.isPending}
+        <Preloader class="w-4 h-4" />
+      {:else}
+        <Save size={16} aria-hidden="true" />
+      {/if}
+      {m.admin_telephony_save_credentials()}
+    </SoftButton>
+  {/snippet}
+  <div class="sheet-content">
+    <TelephonyModePicker
+      mode={newMode}
+      onmodechange={(v: TelephonyMode) => (newMode = v)}
+      accountSid={newAccountSid}
+      onsidchange={(v: string) => (newAccountSid = v)}
+      authToken={newAuthToken}
+      ontokenchange={(v: string) => (newAuthToken = v)}
+      showSkip={false}
+      disabled={changeModeMutation.isPending}
+    />
   </div>
 </ShellSheet>
 

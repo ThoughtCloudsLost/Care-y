@@ -310,8 +310,9 @@ describe("TicketCard", () => {
     const { container } = render(TicketCard, {
       props: { ...defaults, multiSelectActive: true },
     });
-    const inner = container.querySelector("[role='button']");
-    if (inner) await fireEvent.click(inner);
+    const openBtn = container.querySelector("button.card-open-link");
+    expect(openBtn).not.toBeNull();
+    if (openBtn) await fireEvent.click(openBtn);
     expect(onselect).toHaveBeenCalledWith("t-001");
     expect(ontap).not.toHaveBeenCalled();
   });
@@ -321,7 +322,7 @@ describe("TicketCard", () => {
   it("renders action icon buttons in list mode", () => {
     const { container } = render(TicketCard, { props: defaults });
     const actions = container.querySelectorAll(
-      '[aria-label="Reply"], [aria-label="Call"], [aria-label="Hold"], [aria-label="Assign"]',
+      '[aria-label="Reply"], [aria-label="Call"], [aria-label="Hold"], [aria-label="Take"]',
     );
     expect(actions.length).toBe(4);
   });
@@ -331,7 +332,7 @@ describe("TicketCard", () => {
       props: { ...defaults, viewMode: "grid" as const },
     });
     const actions = container.querySelectorAll(
-      '[aria-label="Reply"], [aria-label="Call"], [aria-label="Hold"], [aria-label="Assign"]',
+      '[aria-label="Reply"], [aria-label="Call"], [aria-label="Hold"], [aria-label="Take"], [aria-label="Assign"]',
     );
     expect(actions.length).toBe(0);
   });
@@ -344,9 +345,10 @@ describe("TicketCard", () => {
     expect(unhold).not.toBeNull();
   });
 
-  it("renders assign button regardless of assignment state", () => {
+  it("shows Take button for unassigned tickets and Assign for assigned", () => {
     const { container: unassigned } = render(TicketCard, { props: defaults });
-    expect(unassigned.querySelector('[aria-label="Assign"]')).not.toBeNull();
+    expect(unassigned.querySelector('[aria-label="Take"]')).not.toBeNull();
+    expect(unassigned.querySelector('[aria-label="Assign"]')).toBeNull();
 
     cleanup();
 
@@ -354,14 +356,15 @@ describe("TicketCard", () => {
       props: { ...defaults, assignedName: "Jordan" },
     });
     expect(assigned.querySelector('[aria-label="Assign"]')).not.toBeNull();
+    expect(assigned.querySelector('[aria-label="Take"]')).toBeNull();
   });
 
-  it("fires onaction with 'assign' when assign button clicked", async () => {
+  it("fires onaction with 'take' when take button clicked on unassigned card", async () => {
     const { container } = render(TicketCard, { props: defaults });
-    const assignBtn = container.querySelector('[aria-label="Assign"]');
-    expect(assignBtn).not.toBeNull();
-    if (assignBtn) await fireEvent.click(assignBtn);
-    expect(onaction).toHaveBeenCalledWith("t-001", "assign");
+    const takeBtn = container.querySelector('[aria-label="Take"]');
+    expect(takeBtn).not.toBeNull();
+    if (takeBtn) await fireEvent.click(takeBtn);
+    expect(onaction).toHaveBeenCalledWith("t-001", "take");
   });
 
   it("fires onaction with correct action on icon click", async () => {
@@ -374,17 +377,18 @@ describe("TicketCard", () => {
 
   it("fires ontap with ticketId on card click", async () => {
     const { container } = render(TicketCard, { props: defaults });
-    const inner = container.querySelector("[role='button']");
-    if (inner) await fireEvent.click(inner);
+    const openBtn = container.querySelector("button.card-open-link");
+    expect(openBtn).not.toBeNull();
+    if (openBtn) await fireEvent.click(openBtn);
     expect(ontap).toHaveBeenCalledWith("t-001");
   });
 
   // --- Keyboard accessibility ---
 
-  it("card-inner has role=button and tabindex for keyboard access", () => {
+  it("card open button exists with accessible label", () => {
     const { container } = render(TicketCard, { props: defaults });
-    const inner = container.querySelector("[role='button']");
-    expect(inner).not.toBeNull();
-    expect(inner?.getAttribute("tabindex")).toBe("0");
+    const openBtn = container.querySelector("button.card-open-link");
+    expect(openBtn).not.toBeNull();
+    expect(openBtn?.getAttribute("aria-label")).toBeTruthy();
   });
 });

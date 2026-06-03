@@ -146,7 +146,9 @@ export type RelayAuthResult =
  * The orgResolver dependency is injected so relay-utils doesn't import
  * org resolution code directly (keeps it testable with a simple mock).
  */
-export type OrgResolver = (req: IncomingMessage) => string | null;
+export type OrgResolver = (
+  req: IncomingMessage,
+) => string | null | Promise<string | null>;
 
 /**
  * Authenticates a relay request using the session cookie.
@@ -166,7 +168,7 @@ export async function authenticateRelay(
   ) => SessionRepository | Promise<SessionRepository>,
 ): Promise<RelayAuthResult> {
   // Resolve org from Host header (same as tRPC context)
-  const orgSchema = orgResolver(req);
+  const orgSchema = await orgResolver(req);
   if (orgSchema === null) return { ok: false, status: 401 };
 
   // Extract session cookie from Cookie header

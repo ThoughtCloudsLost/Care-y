@@ -3,26 +3,26 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 
 /** @typedef {import('../runtime.js').LocalizedString} LocalizedString */
 
-/** @typedef {{}} Ticket_Assign_SearchInputs */
+/** @typedef {{ volunteers: NonNullable<unknown> }} Ticket_Assign_SearchInputs */
 
-const en_ticket_assign_search = /** @type {(inputs: Ticket_Assign_SearchInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Search volunteers...`)
+const en_ticket_assign_search = /** @type {(inputs: Ticket_Assign_SearchInputs) => LocalizedString} */ (i) => {
+	return /** @type {LocalizedString} */ (`Search ${i?.volunteers}...`)
 };
 
-const es_ticket_assign_search = /** @type {(inputs: Ticket_Assign_SearchInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Buscar voluntarios...`)
+const es_ticket_assign_search = /** @type {(inputs: Ticket_Assign_SearchInputs) => LocalizedString} */ (i) => {
+	return /** @type {LocalizedString} */ (`Buscar ${i?.volunteers}...`)
 };
 
 /**
 * | output |
 * | --- |
-* | "Search volunteers..." |
+* | "Search {volunteers}..." |
 *
 * @param {Ticket_Assign_SearchInputs} inputs
 * @param {{ locale?: "en" | "es" }} options
 * @returns {LocalizedString}
 */
-export const ticket_assign_search = /** @type {((inputs?: Ticket_Assign_SearchInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Ticket_Assign_SearchInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const ticket_assign_search = /** @type {((inputs: Ticket_Assign_SearchInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Ticket_Assign_SearchInputs, { locale?: "en" | "es" }, {}>} */ ((inputs, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "en") return en_ticket_assign_search(inputs)
 	return es_ticket_assign_search(inputs)

@@ -12,10 +12,11 @@
 <script lang="ts">
   import { List, ListItem } from "konsta/svelte";
   import * as m from "$lib/paraglide/messages.js";
+  import { withTerms } from "$lib/terminology/with-terms.js";
   import { trpc } from "$lib/trpc/index.js";
   import { createVolunteersQuery } from "$lib/tickets/queries.js";
   import { getOrgDecryptCache } from "$lib/crypto/context.js";
-  import { RouterNotAvailableError } from "$lib/errors.js";
+  import { requireRouter } from "$lib/errors.js";
 
   interface MentionAutocompleteProps {
     draftText: string;
@@ -26,8 +27,7 @@
   let { draftText, cursorPosition, onselect }: MentionAutocompleteProps =
     $props();
 
-  if (!trpc.tickets) throw new RouterNotAvailableError("tickets");
-  const ticketRouter = trpc.tickets;
+  const ticketRouter = requireRouter(trpc.tickets, "tickets");
 
   const orgCache = getOrgDecryptCache();
 
@@ -88,7 +88,7 @@
   <div
     class="mention-dropdown"
     role="listbox"
-    aria-label={m.ticket_mention_volunteers()}
+    aria-label={m.ticket_mention_volunteers(withTerms())}
   >
     <List nested>
       {#each filteredVolunteers as vol (vol.id)}

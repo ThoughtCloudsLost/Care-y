@@ -16,12 +16,13 @@
   import type { GreetingType, GreetingAudioContentType } from "@care-y/shared";
   import { GREETING_AUDIO_MAX_BYTES } from "@care-y/shared";
   import * as m from "$lib/paraglide/messages.js";
+  import { withTerms } from "$lib/terminology/with-terms.js";
   import { trpc } from "$lib/trpc/index.js";
   import { adminKeys } from "$lib/query/keys.js";
   import { haptic } from "$lib/utils/haptic.js";
   import { toastStore } from "$lib/stores/toast.svelte.js";
   import { announceToLiveRegion } from "$lib/utils/announce.js";
-  import { ClientError, RouterNotAvailableError } from "$lib/errors.js";
+  import { ClientError, requireRouter } from "$lib/errors.js";
   import QueryError from "$lib/components/QueryError.svelte";
   import InlineSkeleton from "$lib/components/InlineSkeleton.svelte";
   import SoftButton from "$lib/components/inputs/SoftButton.svelte";
@@ -40,11 +41,11 @@
 
   // ── Router guards ──
 
-  if (!trpc.telephonyContent)
-    throw new RouterNotAvailableError("telephonyContent");
-  if (!trpc.telephonyAdmin) throw new RouterNotAvailableError("telephonyAdmin");
-  const telephonyContent = trpc.telephonyContent;
-  const telephonyAdmin = trpc.telephonyAdmin;
+  const telephonyContent = requireRouter(
+    trpc.telephonyContent,
+    "telephonyContent",
+  );
+  const telephonyAdmin = requireRouter(trpc.telephonyAdmin, "telephonyAdmin");
 
   const queryClient = useQueryClient();
 
@@ -78,7 +79,7 @@
     {
       value: "staff_menu",
       label: () => m.admin_greetings_type_staff_menu(),
-      help: () => m.admin_greetings_type_staff_menu_help(),
+      help: () => m.admin_greetings_type_staff_menu_help(withTerms()),
     },
   ];
 

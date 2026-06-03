@@ -20,6 +20,8 @@ vi.mock("$lib/paraglide/messages.js", () => ({
   admin_queue_editor_name_required: () => "Name is required",
   admin_queue_editor_escalation_label: () => "Escalation (days)",
   admin_queue_editor_escalation_hint: () => "0 = no auto-escalation",
+  admin_queue_editor_escalation_range: ({ min }: { min: string }) =>
+    `Escalation days must be between ${min} and 365.`,
   admin_queue_editor_no_org_key: () => "Organization key not loaded.",
   admin_queue_editor_pii_warning: () => "Queue names are encrypted.",
   admin_queue_editor_save_create: () => "Save queue",
@@ -29,6 +31,11 @@ vi.mock("$lib/paraglide/messages.js", () => ({
   admin_queue_updated: () => "Queue updated",
   common_loading: () => "Loading",
   error_generic: () => "Something went wrong",
+  onboarding_queue_submit: () => "Create Queue",
+}));
+
+vi.mock("$lib/terminology/with-terms.js", () => ({
+  withTerms: () => ({}),
 }));
 
 vi.mock("$lib/crypto/context.js", () => ({
@@ -37,6 +44,7 @@ vi.mock("$lib/crypto/context.js", () => ({
       return mockOrgKeyLoaded;
     },
     encrypt: vi.fn().mockReturnValue(new Uint8Array([1, 2, 3])),
+    encryptText: vi.fn().mockResolvedValue("encrypted-text"),
   }),
   getOrgDecryptCache: () => ({
     decrypt: () => "Decrypted Name",
@@ -44,6 +52,10 @@ vi.mock("$lib/crypto/context.js", () => ({
     has: vi.fn().mockReturnValue(false),
     delete: mockOrgCacheDelete,
   }),
+}));
+
+vi.mock("$lib/crypto/org-key-ready.svelte.js", () => ({
+  isOrgKeyReady: () => mockOrgKeyLoaded,
 }));
 
 vi.mock("$lib/trpc/index.js", () => ({
@@ -79,6 +91,10 @@ vi.mock("@tanstack/svelte-query", () => ({
   }),
 }));
 
+vi.mock("@care-y/shared", () => ({
+  MAX_ESCALATION_DAYS: 365,
+}));
+
 vi.mock("$lib/stores/toast.svelte.js", () => ({
   toastStore: { show: mockToastShow },
 }));
@@ -101,12 +117,20 @@ vi.mock("$lib/shell/ShellSheet.svelte", async () => ({
   ).default,
 }));
 
-// --- Mock shell context ---
 vi.mock("$lib/shell/context.js", () => ({
   getScrollContainer: () => () => undefined,
   getTabbarOverrideCtx: () => ({ current: undefined }),
   getTabbarHiddenCtx: () => ({ current: false }),
   getNavbarOverrideCtx: () => ({ current: undefined }),
+}));
+
+vi.mock("$lib/query/keys.js", () => ({
+  queueKeys: { all: ["queues"] },
+}));
+
+vi.mock("$lib/errors.js", () => ({
+  RouterNotAvailableError: class extends Error {},
+  requireRouter: <T>(r: T) => r,
 }));
 
 import QueueEditor from "./QueueEditor.svelte";
@@ -158,7 +182,7 @@ describe("QueueEditor", () => {
     expect(screen.getByText("Organization key not loaded.")).toBeTruthy();
   });
 
-  it("always shows PII warning", () => {
+  it("shows PII warning", () => {
     renderEditor();
     expect(screen.getByText("Queue names are encrypted.")).toBeTruthy();
   });
@@ -172,11 +196,17 @@ describe("QueueEditor", () => {
     const nameInput = inputs[0]!;
     await fireEvent.input(nameInput, { target: { value: "Intake" } });
 
-    await fireEvent.click(screen.getByText("Save queue"));
+    const form = document.querySelector<HTMLFormElement>(
+      '[data-testid="queue-form"]',
+    );
+    expect(form).toBeTruthy();
+    if (form) await fireEvent.submit(form);
 
-    expect(mockCreateQueue).toHaveBeenCalledWith({
-      encryptedName: "AQID",
-      escalateDays: 0,
+    await vi.waitFor(() => {
+      expect(mockCreateQueue).toHaveBeenCalledWith({
+        encryptedName: "encrypted-text",
+        escalateDays: 7,
+      });
     });
   });
 
@@ -193,14 +223,19 @@ describe("QueueEditor", () => {
     const nameInput = inputs[0]!;
     await fireEvent.input(nameInput, { target: { value: "Updated Queue" } });
 
-    await fireEvent.click(screen.getByText("Save changes"));
+    const form = document.getElementById("queue-editor-form");
+    if (form instanceof HTMLFormElement) {
+      await fireEvent.submit(form);
+    }
 
-    expect(mockUpdateQueue).toHaveBeenCalledWith(
-      expect.objectContaining({
-        queueId: "q-1",
-        encryptedName: "AQID",
-      }),
-    );
+    await vi.waitFor(() => {
+      expect(mockUpdateQueue).toHaveBeenCalledWith(
+        expect.objectContaining({
+          queueId: "q-1",
+          encryptedName: "encrypted-text",
+        }),
+      );
+    });
   });
 
   it("evicts orgCache entry on successful update", async () => {
@@ -215,9 +250,14 @@ describe("QueueEditor", () => {
     const nameInput = inputs[0]!;
     await fireEvent.input(nameInput, { target: { value: "Renamed Queue" } });
 
-    await fireEvent.click(screen.getByText("Save changes"));
+    const form = document.getElementById("queue-editor-form");
+    if (form instanceof HTMLFormElement) {
+      await fireEvent.submit(form);
+    }
 
-    expect(mockOrgCacheDelete).toHaveBeenCalledWith("queue:q-1");
+    await vi.waitFor(() => {
+      expect(mockOrgCacheDelete).toHaveBeenCalledWith("queue:q-1");
+    });
   });
 
   it("does not evict orgCache on create (no existing entry)", async () => {
@@ -229,8 +269,14 @@ describe("QueueEditor", () => {
     const nameInput = inputs[0]!;
     await fireEvent.input(nameInput, { target: { value: "New" } });
 
-    await fireEvent.click(screen.getByText("Save queue"));
+    const form = document.getElementById("queue-editor-form");
+    if (form instanceof HTMLFormElement) {
+      await fireEvent.submit(form);
+    }
 
+    await vi.waitFor(() => {
+      expect(mockCreateQueue).toHaveBeenCalled();
+    });
     expect(mockOrgCacheDelete).not.toHaveBeenCalled();
   });
 

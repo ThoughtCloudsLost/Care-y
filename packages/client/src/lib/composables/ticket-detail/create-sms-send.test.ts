@@ -38,6 +38,7 @@ function makeConfig(overrides?: Partial<SmsSendConfig>): SmsSendConfig {
     getTicketId: () => "t-1",
     cryptoBridge: {
       encrypt: vi.fn().mockResolvedValue("enc-base64"),
+      encryptText: vi.fn().mockResolvedValue("encrypted-text"),
     } as unknown as SmsSendConfig["cryptoBridge"],
     queryClient: {
       invalidateQueries: vi.fn().mockResolvedValue(undefined),

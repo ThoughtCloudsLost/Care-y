@@ -54,6 +54,7 @@ describe("TicketDecryptCache", () => {
   let mockDecrypt: ReturnType<typeof vi.fn>;
 
   beforeEach(() => {
+    cacheRegistry.reset();
     const { bridge, mockDecrypt: md } = createMockBridge();
     mockDecrypt = md;
     cache = new TicketDecryptCache(bridge);

@@ -1,25 +1,29 @@
 /**
- * Session cleanup handlers for key zeroing on page unload.
+ * Session cleanup handlers for page unload.
  *
- * The beforeunload handler is synchronous. bridge.zeroAll() is async
- * (postMessage round-trip), so we fire it without awaiting. The Worker
- * will process the message if the page stays alive long enough. If the
- * page is killed immediately, the OS reclaims Worker memory.
+ * With SharedWorker (ADR-044), beforeunload calls disconnect() instead
+ * of zeroAll(). This removes the port from the SharedWorker's set and
+ * starts the zero-on-last-disconnect timer (500ms) if no ports remain.
+ * Keys are preserved across F5 refreshes because the new page reconnects
+ * before the timer fires.
+ *
+ * For dedicated Workers (password change temp bridge), disconnect()
+ * falls back to zeroAll + terminate.
  *
  * Both idle timeout and beforeunload may fire in the same session
- * (user closes tab while idle timer is counting). The Worker's
- * handleZeroAll and the bridge's zeroAll are idempotent.
+ * (user closes tab while idle timer is counting). The bridge's
+ * disconnect() is idempotent (no-op if already DESTROYED).
  *
  * All decrypt caches are cleared via cacheRegistry.clearAll(). Every
  * cache holding decrypted content registers itself through the registry
- * at construction time (BF-010 completed this migration).
+ * at construction time.
  */
 
 import { cacheRegistry } from "$lib/crypto/cache-registry.js";
 
-/** Narrow interface: only the method cleanup needs from CryptoBridge. */
+/** Narrow interface: only the methods cleanup needs from CryptoBridge. */
 export interface CleanupBridge {
-  zeroAll(): Promise<void>;
+  disconnect(): void;
 }
 
 /** Narrow interface: only the method cleanup needs from OrgKeyManager. */
@@ -32,14 +36,10 @@ let bridgeRef: CleanupBridge | null = null;
 let orgKeyRef: CleanupOrgKey | null = null;
 
 function handleBeforeUnload(): void {
-  // Clear all registry-tracked caches.
   cacheRegistry.clearAll();
 
-  // Fire-and-forget: do not await, do not block unload
   if (bridgeRef) {
-    bridgeRef.zeroAll().catch(() => {
-      // Swallow: Worker may already be terminated
-    });
+    bridgeRef.disconnect();
   }
   if (orgKeyRef) {
     orgKeyRef.zero();
@@ -65,11 +65,12 @@ export function installCleanupHandler(
 }
 
 /**
- * Clear all decrypted data from memory.
+ * Clear all decrypted data and deregister caches.
  * Call on logout, session expiry, or idle timeout (not just beforeunload).
+ * Uses reset() so re-login creates fresh registrations without duplicates.
  */
 export function clearAllDecryptedData(): void {
-  cacheRegistry.clearAll();
+  cacheRegistry.reset();
 }
 
 /**

@@ -6,9 +6,8 @@
     useQueryClient,
   } from "@tanstack/svelte-query";
   import { Palette, ImagePlus, Save } from "@lucide/svelte";
-  import { encryptClientBranding } from "@care-y/crypto";
-  import { generateIconVariants } from "$lib/branding/icon-generator.js";
   import * as m from "$lib/paraglide/messages.js";
+  import { withTerms } from "$lib/terminology/with-terms.js";
   import { trpc } from "$lib/trpc/index.js";
   import { adminKeys } from "$lib/query/keys.js";
   import { haptic } from "$lib/utils/haptic.js";
@@ -23,27 +22,82 @@
     DEFAULT_ACCENT,
   } from "$lib/branding/index.js";
   import { setBrandingTitle } from "$lib/branding/title.svelte.js";
-  import { setAppleTouchIconHref } from "$lib/branding/icon-link.svelte.js";
-  import { getOrgSlug } from "$lib/utils/org-slug.js";
+  import { rasterizeSvg, rasterizeImage } from "$lib/branding/rasterize.js";
   import {
-    uint8ArrayToBase64,
-    base64ToUint8Array,
-  } from "$lib/utils/buffer-encoding.js";
-  import { RouterNotAvailableError } from "$lib/errors.js";
+    encryptLogoFile,
+    buildClientBrandingBlob,
+  } from "$lib/branding/encrypt.js";
+  import { uploadPwaIcons } from "$lib/branding/icon-upload.js";
+  import { getOrgSlug } from "$lib/utils/org-slug.js";
+  import { base64ToUint8Array } from "$lib/utils/buffer-encoding.js";
+  import { requireRouter } from "$lib/errors.js";
   import type { BrandingField } from "@care-y/shared";
   import QueryError from "$lib/components/QueryError.svelte";
   import DecryptPlaceholder from "$lib/components/DecryptPlaceholder.svelte";
   import SoftButton from "$lib/components/inputs/SoftButton.svelte";
   import ShellSheet from "$lib/shell/ShellSheet.svelte";
 
-  if (!trpc.branding) throw new RouterNotAvailableError("branding");
-  const brandingRouter = trpc.branding;
+  interface Props {
+    externalSave?: boolean;
+  }
+
+  let { externalSave: _externalSave = false }: Props = $props();
+
+  export function isDirty(): boolean {
+    return hasChanges;
+  }
+
+  export async function save(): Promise<void> {
+    await handleSave();
+  }
+
+  export async function rebuildBlob(): Promise<void> {
+    orgCache.delete("branding:name");
+    orgCache.delete("branding:color");
+    orgCache.delete("branding:accent");
+    orgCache.delete("branding:text");
+    await queryClient.invalidateQueries({ queryKey: adminKeys.branding() });
+    await brandingQuery.refetch();
+
+    // Trigger decryption by reading the deriveds (fire-and-forget cache),
+    // then wait for all pending decrypts to resolve.
+    void decryptedName;
+    void decryptedColor;
+    void decryptedAccent;
+    void decryptedText;
+    await orgCache.whenSettled();
+
+    const name = decryptedName ?? "";
+    const color = currentColor();
+    const accent = currentAccent();
+    const text = decryptedText ?? "";
+
+    let clientBlob: string;
+    try {
+      clientBlob = buildClientBrandingBlob(
+        { name, primaryColor: color, accentColor: accent, clientText: text },
+        orgKeyManager,
+      );
+    } catch {
+      return;
+    }
+
+    const encryptedValue = await orgKeyManager.encryptText(name);
+    await brandingRouter.saveBrandingField.mutate({
+      field: "name",
+      encryptedValue,
+      clientEncryptedBranding: clientBlob,
+    });
+
+    orgCache.delete("branding:name");
+    void queryClient.invalidateQueries({ queryKey: adminKeys.branding() });
+  }
+
+  const brandingRouter = requireRouter(trpc.branding, "branding");
 
   const queryClient = useQueryClient();
   const orgCache = getOrgDecryptCache();
   const orgKeyManager = getOrgKeyManager();
-
-  const encoder = new TextEncoder();
 
   const MAX_LOGO_SIZE = 512 * 1024;
   const ACCEPTED_TYPES = new Set(["image/png", "image/jpeg", "image/svg+xml"]);
@@ -131,7 +185,6 @@
 
   let sheetOpened = $state(false);
 
-  let editName = $state("");
   let editColor = $state(DEFAULT_PRIMARY);
   let editAccent = $state(DEFAULT_ACCENT);
   let editText = $state("");
@@ -156,7 +209,6 @@
   }
 
   function openSheet(): void {
-    editName = decryptedName ?? "";
     editColor = currentColor();
     editAccent = currentAccent();
     editText = decryptedText ?? "";
@@ -183,13 +235,12 @@
 
   // ── Change detection ──
 
-  const nameChanged = $derived(editName !== (decryptedName ?? ""));
   const colorChanged = $derived(editColor !== currentColor());
   const accentChanged = $derived(editAccent !== currentAccent());
   const textChanged = $derived(editText !== (decryptedText ?? ""));
   const logoChanged = $derived(editLogoFile !== null);
   const hasChanges = $derived(
-    nameChanged || colorChanged || accentChanged || textChanged || logoChanged,
+    colorChanged || accentChanged || textChanged || logoChanged,
   );
 
   // ── Color preview ──
@@ -262,88 +313,6 @@
     }
   }
 
-  // ── Encrypt helpers ──
-
-  async function encryptField(value: string): Promise<string> {
-    const plainBytes = encoder.encode(value);
-    const cipherBytes = await orgKeyManager.encrypt(plainBytes);
-    return uint8ArrayToBase64(cipherBytes);
-  }
-
-  async function encryptLogo(file: File): Promise<string> {
-    const arrayBuffer = await file.arrayBuffer();
-    const cipherBytes = await orgKeyManager.encrypt(
-      new Uint8Array(arrayBuffer),
-    );
-    return uint8ArrayToBase64(cipherBytes);
-  }
-
-  async function rasterizeSvg(svgBuffer: ArrayBuffer): Promise<ArrayBuffer> {
-    const svgBlob = new Blob([svgBuffer], { type: "image/svg+xml" });
-    const url = URL.createObjectURL(svgBlob);
-    try {
-      const img = await createImageBitmap(svgBlob);
-      return await renderToCanvas(img);
-    } finally {
-      URL.revokeObjectURL(url);
-    }
-  }
-
-  async function rasterizeImage(
-    buffer: ArrayBuffer,
-    type: string,
-  ): Promise<ArrayBuffer> {
-    const blob = new Blob([buffer], { type });
-    const img = await createImageBitmap(blob);
-    return renderToCanvas(img);
-  }
-
-  async function renderToCanvas(img: ImageBitmap): Promise<ArrayBuffer> {
-    const maxDim = Math.max(img.width, img.height, 512);
-    const scale = Math.min(1, 512 / maxDim);
-    const w = Math.round(img.width * scale);
-    const h = Math.round(img.height * scale);
-
-    const canvas = new OffscreenCanvas(w, h);
-    const ctx = canvas.getContext("2d");
-    if (ctx === null) {
-      throw new Error("Failed to get 2d context from OffscreenCanvas");
-    }
-    ctx.drawImage(img, 0, 0, w, h);
-    img.close();
-    const blob = await canvas.convertToBlob({ type: "image/png" });
-    return await blob.arrayBuffer();
-  }
-
-  /**
-   * Build the client-side branding blob (SOG-14 dual-blob).
-   *
-   * Contains all text branding fields as JSON, encrypted with the
-   * client branding key (derived from org public key via BLAKE2b).
-   * Client portal pages decrypt this without authentication.
-   */
-  function buildClientBrandingBlob(
-    name: string,
-    primaryColor: string,
-    accentColor: string,
-    clientText: string,
-  ): string {
-    const orgPubKey = orgKeyManager.getPublicKey();
-    if (!orgPubKey) {
-      throw new Error("Org public key not available for client branding blob");
-    }
-
-    const payload = JSON.stringify({
-      name,
-      primaryColor,
-      accentColor,
-      clientText,
-    });
-    const payloadBytes = encoder.encode(payload);
-    const ciphertext = encryptClientBranding(payloadBytes, orgPubKey);
-    return uint8ArrayToBase64(ciphertext);
-  }
-
   // ── Mutations ──
 
   const saveMutation = createMutation(() => ({
@@ -378,64 +347,12 @@
     },
   }));
 
-  // PWA icon generation: runs after logo save (ADR-024, H-037)
   let iconUploadInFlight = $state(false);
-
-  async function uploadPwaIcons(logoFile: File): Promise<void> {
-    if (iconUploadInFlight) return;
-    iconUploadInFlight = true;
-
-    try {
-      const orgPubKey = orgKeyManager.getPublicKey();
-      if (!orgPubKey) return;
-
-      const variants = await generateIconVariants(logoFile);
-
-      let icon192 = "";
-      let icon512 = "";
-      let iconMaskable = "";
-
-      for (const variant of variants) {
-        const arrayBuffer = await variant.blob.arrayBuffer();
-        const encrypted = encryptClientBranding(
-          new Uint8Array(arrayBuffer),
-          orgPubKey,
-        );
-        const b64 = uint8ArrayToBase64(encrypted);
-
-        if (variant.purpose === "maskable") {
-          iconMaskable = b64;
-        } else if (variant.size === 192) {
-          icon192 = b64;
-        } else {
-          icon512 = b64;
-        }
-      }
-
-      await brandingRouter.uploadIcons.mutate({
-        icon192,
-        icon512,
-        iconMaskable,
-      });
-      const newVersion = String(Date.now());
-      void updateBrandingCache({ hasIcons: true, iconVersion: newVersion });
-      const slug = getOrgSlug();
-      if (slug !== null)
-        setAppleTouchIconHref(
-          `/api/branding/${slug}/icon-192.png?v=${newVersion}`,
-        );
-    } catch {
-      toastStore.show(m.admin_branding_icons_error(), 3000);
-    } finally {
-      iconUploadInFlight = false;
-    }
-  }
 
   async function handleSave(): Promise<void> {
     if (!hasChanges) return;
 
-    // Resolve final values for all fields (current or edited)
-    const finalName = nameChanged ? editName : (decryptedName ?? "");
+    const finalName = decryptedName ?? "";
     const finalColor =
       colorChanged && isValidHexColor(editColor) ? editColor : currentColor();
     const finalAccent =
@@ -448,10 +365,13 @@
     let clientBlob: string;
     try {
       clientBlob = buildClientBrandingBlob(
-        finalName,
-        finalColor,
-        finalAccent,
-        finalText,
+        {
+          name: finalName,
+          primaryColor: finalColor,
+          accentColor: finalAccent,
+          clientText: finalText,
+        },
+        orgKeyManager,
       );
     } catch {
       toastStore.show(m.admin_branding_error(), 3000);
@@ -464,18 +384,10 @@
       clientEncryptedBranding: string;
     }[] = [];
 
-    if (nameChanged) {
-      fields.push({
-        field: "name",
-        encryptedValue: await encryptField(editName),
-        clientEncryptedBranding: clientBlob,
-      });
-    }
-
     if (colorChanged && isValidHexColor(editColor)) {
       fields.push({
         field: "primary_color",
-        encryptedValue: await encryptField(editColor),
+        encryptedValue: await orgKeyManager.encryptText(editColor),
         clientEncryptedBranding: clientBlob,
       });
     }
@@ -483,7 +395,7 @@
     if (accentChanged && isValidHexColor(editAccent)) {
       fields.push({
         field: "accent_color",
-        encryptedValue: await encryptField(editAccent),
+        encryptedValue: await orgKeyManager.encryptText(editAccent),
         clientEncryptedBranding: clientBlob,
       });
     }
@@ -491,13 +403,13 @@
     if (textChanged) {
       fields.push({
         field: "client_text",
-        encryptedValue: await encryptField(editText),
+        encryptedValue: await orgKeyManager.encryptText(editText),
         clientEncryptedBranding: clientBlob,
       });
     }
 
     if (logoChanged && editLogoFile) {
-      const encryptedLogo = await encryptLogo(editLogoFile);
+      const encryptedLogo = await encryptLogoFile(editLogoFile, orgKeyManager);
       fields.push({
         field: "logo",
         encryptedValue: encryptedLogo,
@@ -528,9 +440,15 @@
           hasIcons: brandingQuery.data?.hasIcons ?? false,
         });
 
-        // Fire PWA icon generation in background (ADR-024, H-037)
-        if (logoFileForIcons !== null) {
-          void uploadPwaIcons(logoFileForIcons);
+        if (logoFileForIcons !== null && !iconUploadInFlight) {
+          iconUploadInFlight = true;
+          void uploadPwaIcons(logoFileForIcons, orgKeyManager, brandingRouter)
+            .catch(() => {
+              toastStore.show(m.admin_branding_icons_error(), 3000);
+            })
+            .finally(() => {
+              iconUploadInFlight = false;
+            });
         }
       },
     });
@@ -541,6 +459,7 @@
   {#if brandingQuery.isLoading}
     <Card raised contentWrap={false} class="branding-card">
       <div class="branding-inner">
+        <p class="section-desc">{m.admin_branding_description(withTerms())}</p>
         <div class="card-section-label">
           {m.admin_branding_card_logo_label()}
         </div>
@@ -561,12 +480,7 @@
         </div>
         <div class="section-divider"></div>
         <div class="card-section-label">
-          {m.admin_branding_card_name_label()}
-        </div>
-        <DecryptPlaceholder length={24} />
-        <div class="section-divider"></div>
-        <div class="card-section-label">
-          {m.admin_branding_card_text_label()}
+          {m.admin_branding_card_text_label(withTerms())}
         </div>
         <DecryptPlaceholder length={40} />
       </div>
@@ -583,6 +497,7 @@
         role="region"
         aria-label={m.admin_branding_overview_label()}
       >
+        <p class="section-desc">{m.admin_branding_description(withTerms())}</p>
         <!-- Logo -->
         <div class="card-section-label">
           {m.admin_branding_card_logo_label()}
@@ -610,23 +525,9 @@
 
         <div class="section-divider"></div>
 
-        <!-- Name -->
-        <div class="card-section-label">
-          {m.admin_branding_card_name_label()}
-        </div>
-        {#if brandingQuery.data?.encryptedName}
-          <DecryptPlaceholder content={decryptedName}>
-            <span class="field-value">{decryptedName}</span>
-          </DecryptPlaceholder>
-        {:else}
-          <span class="text-[--muted] text-sm">-</span>
-        {/if}
-
-        <div class="section-divider"></div>
-
         <!-- Client text -->
         <div class="card-section-label">
-          {m.admin_branding_card_text_label()}
+          {m.admin_branding_card_text_label(withTerms())}
         </div>
         {#if brandingQuery.data?.encryptedClientText}
           <DecryptPlaceholder content={decryptedText}>
@@ -745,39 +646,27 @@
           {#if logoError}
             <span class="field-error" role="alert">{logoError}</span>
           {/if}
-          <span class="field-hint">{m.admin_branding_logo_hint()}</span>
+          <span class="field-hint"
+            >{m.admin_branding_logo_hint(withTerms())}</span
+          >
         </div>
       </div>
     </div>
 
     <div class="section-divider"></div>
 
-    <!-- Organization Name -->
-    <div class="sheet-field">
-      <ListInput
-        outline
-        label={m.admin_branding_card_name_label()}
-        type="text"
-        value={editName}
-        onchange={(e: Event) => {
-          if (e.target instanceof HTMLInputElement) editName = e.target.value;
-        }}
-        info={m.admin_branding_name_hint()}
-      />
-    </div>
-
     <!-- Client Welcome Text -->
     <div class="sheet-field">
       <ListInput
         outline
-        label={m.admin_branding_card_text_label()}
+        label={m.admin_branding_card_text_label(withTerms())}
         type="textarea"
         value={editText}
         onchange={(e: Event) => {
           if (e.target instanceof HTMLTextAreaElement)
             editText = e.target.value;
         }}
-        info={m.admin_branding_text_hint()}
+        info={m.admin_branding_text_hint(withTerms())}
       />
     </div>
 
@@ -874,6 +763,12 @@
     flex-direction: column;
     gap: var(--space-md);
     padding: var(--card-pad-y) var(--card-pad-x);
+  }
+
+  .section-desc {
+    font-size: var(--text-sm);
+    color: var(--muted);
+    line-height: 1.5;
   }
 
   .card-section-label {

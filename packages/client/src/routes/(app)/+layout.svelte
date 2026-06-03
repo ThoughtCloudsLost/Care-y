@@ -1,54 +1,178 @@
 <script lang="ts">
   import { browser } from "$app/environment";
-  import { getCryptoBridge, getOrgKeyManager } from "$lib/crypto/context.js";
+  import { goto } from "$app/navigation";
+  import { resolve } from "$app/paths";
+  import { page } from "$app/state";
+  import { createQuery } from "@tanstack/svelte-query";
+  import { authKeys } from "$lib/query/keys.js";
+  import { trpc } from "$lib/trpc/index.js";
+  import { getCryptoBridge } from "$lib/crypto/context.js";
+  import { cacheRegistry } from "$lib/crypto/cache-registry.js";
+  import { isCryptoKeyed } from "$lib/crypto/crypto-keyed.svelte.js";
+  import { IdleTimer } from "$lib/auth/idle-timer.js";
+  import { toastStore } from "$lib/stores/toast.svelte.js";
+  import * as m from "$lib/paraglide/messages.js";
+  import { Page, Block, Preloader } from "konsta/svelte";
+  import AppCryptoProvider from "$lib/providers/AppCryptoProvider.svelte";
+  import SSEProvider from "$lib/providers/SSEProvider.svelte";
+  import BrandingProvider from "$lib/providers/BrandingProvider.svelte";
+  import AppShell from "$lib/shell/AppShell.svelte";
   import ToastRenderer from "$lib/shell/ToastRenderer.svelte";
+  import { getBrandingTitle } from "$lib/branding/title.svelte.js";
+  import type { TabId } from "$lib/shell/types";
+  import type { StateChangeEvent } from "$lib/workers/crypto-protocol.js";
 
   let { children } = $props();
 
-  // Dev-only auto-login with full production crypto pipeline.
-  // Runs registerCrypto + loginCrypto, rotates the throwaway org keypair,
-  // seals KB articles client-side, and seeds test tickets.
-  // The dynamic import is behind import.meta.env.DEV, which Vite replaces
-  // with `false` in production builds. The entire import and the auto-login
-  // module are stripped by dead-code elimination.
-  let devLoginDone = $state(!import.meta.env.DEV);
-  let devLoginError = $state<string | null>(null);
+  // ── Auth guard ─────────────────────────────────────────────────────
+  // Query auth.me to check session. TanStack deduplicates with AppCryptoProvider's
+  // identical query key, so only one network request fires.
+  const meQuery = createQuery(() => ({
+    queryKey: authKeys.me(),
+    queryFn: async () => trpc.auth.me.query(),
+    staleTime: Infinity,
+    retry: false,
+  }));
 
-  if (import.meta.env.DEV && browser) {
+  const isAuthenticated = $derived(meQuery.isSuccess);
+
+  $effect(() => {
+    if (!browser) return;
+    if (meQuery.isError) {
+      void goto(resolve("/login"));
+    }
+  });
+
+  // ── Reactive crypto gate (ADR-049) ──────────────────────────────────
+  // Two-layer design: isCryptoKeyed() tracks bridge state accurately
+  // (goes false during password change's transient zeroAll). The latch
+  // captures the first truthy value and stays true until this component
+  // unmounts (navigation to /login on logout/timeout/cross-tab zero).
+  let cryptoInitialized = $state(false);
+
+  $effect(() => {
+    if (isCryptoKeyed()) {
+      cryptoInitialized = true;
+    }
+  });
+
+  const appReady = $derived(isAuthenticated && cryptoInitialized);
+
+  // Timeout: if authenticated but crypto isn't ready within 5s, redirect
+  // to reauth. Covers Worker crash, SharedWorker disconnect, bfcache
+  // restore without Worker. Normal login flow never hits this because
+  // the signal is set synchronously before goto("/").
+  let cryptoTimedOut = $state(false);
+
+  $effect(() => {
+    if (appReady || !isAuthenticated) {
+      cryptoTimedOut = false;
+      return;
+    }
+    const timer = setTimeout(() => {
+      cryptoTimedOut = true;
+      cacheRegistry.reset();
+      void goto(resolve("/login?reauth=1"));
+    }, 5_000);
+    return () => clearTimeout(timer);
+  });
+
+  // ── Cross-tab state sync + idle timer ──────────────────────────────
+  if (browser) {
     const bridge = getCryptoBridge();
-    const orgKeyManager = getOrgKeyManager();
-    void (async () => {
-      try {
-        const { devAutoLogin } = await import("$lib/dev/auto-login.js");
-        await devAutoLogin(bridge, orgKeyManager);
-      } catch (err: unknown) {
-        console.error("[dev] auto-login failed:", err);
-        // Surface rate limit errors visibly so they're not silently swallowed.
-        const code =
-          typeof err === "object" && err !== null && "code" in err
-            ? (err as Record<string, unknown>).code
-            : undefined;
-        if (code === "TOO_MANY_REQUESTS") {
-          devLoginError =
-            "OPRF rate limit hit. Restart Docker (docker compose restart app) to clear.";
-        } else {
-          devLoginError = `Auto-login failed: ${err instanceof Error ? err.message : String(err)}`;
-        }
+
+    // When another tab zeroes keys (logout, idle timeout), redirect to login.
+    // The reactive signal (isCryptoKeyed) is updated automatically by the
+    // bridge's stateCallback (ADR-049), but we still need cache cleanup
+    // and immediate redirect here rather than waiting for the 5s timeout.
+    bridge.onStateChange((event: StateChangeEvent) => {
+      if (event.state === "READY") {
+        cacheRegistry.reset();
+        void goto(resolve("/login"));
       }
-      devLoginDone = true;
-    })();
+    });
+
+    // Zeros keys across all tabs after 15 minutes of inactivity.
+    // Warning fires at the 10-minute mark (5 minutes before timeout).
+    const idleTimer = new IdleTimer({
+      timeoutMs: 15 * 60 * 1000,
+      warningMs: 5 * 60 * 1000,
+      onWarning: () => {
+        toastStore.show(m.session_idle_warning());
+      },
+      onTimeout: () => {
+        void bridge.zeroAll();
+        cacheRegistry.reset();
+        void goto(resolve("/login"));
+      },
+    });
+
+    $effect(() => {
+      if (isAuthenticated) {
+        idleTimer.start();
+        return () => idleTimer.stop();
+      }
+    });
+  }
+
+  // ── Tab routing ────────────────────────────────────────────────────
+  type TabRoute = "/" | "/tickets" | "/library";
+
+  const TAB_ROUTES = new Map<TabId, TabRoute>([
+    ["home", "/"],
+    ["tickets", "/tickets"],
+    ["library", "/library"],
+  ]);
+
+  const TAB_PREFIXES: [string, TabId][] = [
+    ["/tickets", "tickets"],
+    ["/library", "library"],
+  ];
+
+  const activeTab: TabId = $derived.by(() => {
+    const path = page.url.pathname;
+    for (const [prefix, tab] of TAB_PREFIXES) {
+      if (path === prefix || path.startsWith(prefix + "/")) return tab;
+    }
+    return "home";
+  });
+
+  function handleTabChange(tabId: TabId): void {
+    const route = TAB_ROUTES.get(tabId);
+    if (route !== undefined && page.url.pathname !== route) {
+      void goto(resolve(route));
+    }
   }
 </script>
 
-<!-- Auth guard placeholder: 6i will add session check + redirect here. -->
-{#if devLoginError}
-  <div
-    style="position:fixed;top:0;left:0;right:0;z-index:9999;padding:1rem;background:#7f1d1d;color:#fca5a5;font-family:monospace;font-size:0.875rem;text-align:center;"
-  >
-    {devLoginError}
-  </div>
-{/if}
-{#if devLoginDone}
-  {@render children()}
+{#if appReady}
+  <AppCryptoProvider>
+    <SSEProvider enabled={isAuthenticated}>
+      <BrandingProvider>
+        <AppShell
+          {activeTab}
+          orgName={getBrandingTitle()}
+          ontabchange={handleTabChange}
+        >
+          {@render children()}
+        </AppShell>
+      </BrandingProvider>
+    </SSEProvider>
+  </AppCryptoProvider>
+{:else if isAuthenticated && !cryptoTimedOut}
+  <Page>
+    <Block class="crypto-loading">
+      <Preloader />
+    </Block>
+  </Page>
 {/if}
 <ToastRenderer />
+
+<style>
+  :global(.crypto-loading) {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 200px;
+  }
+</style>

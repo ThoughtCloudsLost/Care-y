@@ -9,11 +9,12 @@
   import { Plus, Pencil, Trash2, Save } from "@lucide/svelte";
   import type { SmsResponseType } from "@care-y/shared";
   import * as m from "$lib/paraglide/messages.js";
+  import { withTerms } from "$lib/terminology/with-terms.js";
   import { trpc } from "$lib/trpc/index.js";
   import { haptic } from "$lib/utils/haptic.js";
   import { toastStore } from "$lib/stores/toast.svelte.js";
   import { announceToLiveRegion } from "$lib/utils/announce.js";
-  import { RouterNotAvailableError } from "$lib/errors.js";
+  import { requireRouter } from "$lib/errors.js";
   import QueryError from "$lib/components/QueryError.svelte";
   import InlineSkeleton from "$lib/components/InlineSkeleton.svelte";
   import SoftButton from "$lib/components/inputs/SoftButton.svelte";
@@ -26,9 +27,10 @@
 
   // ── Router guard ──
 
-  if (!trpc.telephonyContent)
-    throw new RouterNotAvailableError("telephonyContent");
-  const telephonyContent = trpc.telephonyContent;
+  const telephonyContent = requireRouter(
+    trpc.telephonyContent,
+    "telephonyContent",
+  );
 
   const queryClient = useQueryClient();
 
@@ -44,7 +46,7 @@
     {
       value: "new_client",
       label: () => m.admin_templates_type_new_client(),
-      help: () => m.admin_templates_type_new_client_help(),
+      help: () => m.admin_templates_type_new_client_help(withTerms()),
     },
     {
       value: "error",

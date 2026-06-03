@@ -1,35 +1,43 @@
-import { test, expect } from "@playwright/test";
+import { test, expect } from "./coverage-fixture";
+import { startCoverage, stopAndWriteCoverage } from "./coverage-fixture";
+import type { Page } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
+import { CRYPTO_TIMEOUT, login } from "./helpers";
 
-test.describe("visual foundation", () => {
-  test.beforeEach(async ({ page }) => {
-    await page.goto("/");
+test.describe.serial("visual foundation", () => {
+  let page: Page;
+
+  test.beforeAll(async ({ browser }, testInfo) => {
+    testInfo.setTimeout(CRYPTO_TIMEOUT * 2);
+    page = await browser.newPage();
+    await startCoverage(page);
+    await login(page);
+  });
+
+  test.afterAll(async () => {
+    await stopAndWriteCoverage(page, "visual-foundation");
+    await page.close();
   });
 
   // ── Theme defaults ───────────────────────────────────────────────────
 
-  test("html has dark class by default", async ({ page }) => {
+  test("html has dark class by default", async () => {
     const html = page.locator("html");
     await expect(html).toHaveClass(/dark/);
   });
 
-  test("--ink custom property resolves to a dark-mode value", async ({
-    page,
-  }) => {
+  test("--ink custom property resolves to a dark-mode value", async () => {
     const ink = await page.evaluate(() =>
       getComputedStyle(document.documentElement)
         .getPropertyValue("--ink")
         .trim(),
     );
-    // All themes set --ink to a light color in dark mode (e.g. #e5e5e5, #f0ece5)
-    // Just verify it's defined and non-empty
     expect(ink.length).toBeGreaterThan(0);
   });
 
   // ── Theme persistence ──────────────────────────────────────────────
 
-  test("theme persists across page reload", async ({ page }) => {
-    // Switch to light mode via the blocking script's localStorage key
+  test("theme persists across page reload", async () => {
     await page.evaluate(() => {
       localStorage.setItem("care-y-color-scheme", "light");
     });
@@ -42,12 +50,14 @@ test.describe("visual foundation", () => {
     await page.evaluate(() => {
       localStorage.setItem("care-y-color-scheme", "dark");
     });
+    await page.reload();
   });
 
   // ── Accessibility ──────────────────────────────────────────────────
 
-  test("page passes axe-core contrast check", async ({ page }) => {
+  test("page passes axe-core contrast check", async () => {
     const results = await new AxeBuilder({ page })
+      .setLegacyMode(true)
       .withRules(["color-contrast"])
       .analyze();
     expect(results.violations).toEqual([]);
@@ -55,22 +65,19 @@ test.describe("visual foundation", () => {
 
   // ── High contrast mode ─────────────────────────────────────────────
 
-  test("prefers-contrast: more hides decorative textures", async ({ page }) => {
+  test("prefers-contrast: more hides decorative textures", async () => {
     await page.emulateMedia({ contrast: "more" });
-    await page.goto("/");
+    await page.reload();
 
-    // Grain pseudo-elements should be hidden
     const grainDisplay = await page.evaluate(() => {
       const el = document.querySelector(".grain");
       if (!el) return "no-element";
       return getComputedStyle(el, "::before").display;
     });
-    // If no grain element on page, that's fine (not all themes use it)
     if (grainDisplay !== "no-element") {
       expect(grainDisplay).toBe("none");
     }
 
-    // Heading display filter should be disabled
     const headingFilter = await page.evaluate(() => {
       const el = document.querySelector(".heading-display");
       if (!el) return "no-element";

@@ -27,6 +27,7 @@
     ManageConfig,
   } from "$lib/shell/types.js";
   import * as m from "$lib/paraglide/messages.js";
+  import { withTerms } from "$lib/terminology/with-terms.js";
   import { trpc } from "$lib/trpc/index.js";
   import { kbKeys } from "$lib/query/keys.js";
   import {
@@ -41,7 +42,7 @@
     getNavbarOverrideCtx,
   } from "$lib/shell/context.js";
   import { useScrollDirection } from "$lib/shell/use-scroll-direction.svelte.js";
-  import { RouterNotAvailableError } from "$lib/errors.js";
+  import { requireRouter } from "$lib/errors.js";
   import { kbFilterStore } from "$lib/stores/kb-filters.svelte.js";
   import { kbViewModeStore } from "$lib/stores/kb-view-mode.svelte.js";
   import { kbSavedFilterStore } from "$lib/stores/kb-saved-filters.svelte.js";
@@ -79,8 +80,7 @@
   const canManageCategories = $derived(
     permissions.has(Permission.MANAGE_KNOWLEDGE_BASE_CATEGORIES),
   );
-  if (!trpc.kb) throw new RouterNotAvailableError("kb");
-  const kbRouter = trpc.kb;
+  const kbRouter = requireRouter(trpc.kb, "kb");
   const queryClient = useQueryClient();
 
   // Shell context.
@@ -762,7 +762,7 @@
 
 {#snippet librarySubnavbar()}
   <SubNavbarFilterLayout
-    title={m.library_title()}
+    title={m.library_title(withTerms())}
     view={viewConfig}
     stats={libraryStats}
     sort={sortConfig}

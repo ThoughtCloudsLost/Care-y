@@ -28,6 +28,7 @@ function makeConfig(
     getTicketId: () => "ticket-1",
     cryptoBridge: {
       encrypt: vi.fn<() => Promise<string>>().mockResolvedValue("encrypted"),
+      encryptText: vi.fn().mockResolvedValue("encrypted-text"),
     } as unknown as CloseResolutionConfig["cryptoBridge"],
     queryClient: {
       invalidateQueries: vi.fn().mockResolvedValue(undefined),

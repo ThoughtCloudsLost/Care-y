@@ -3,6 +3,7 @@
   import { Pencil } from "@lucide/svelte";
   import { RoleId } from "@care-y/shared";
   import * as m from "$lib/paraglide/messages.js";
+  import { withTerms } from "$lib/terminology/with-terms.js";
   import { onKeyActivate } from "$lib/utils/a11y.js";
   import DecryptPlaceholder from "$lib/components/DecryptPlaceholder.svelte";
 
@@ -41,9 +42,9 @@
   const roleLabel = $derived.by(() => {
     switch (roleId) {
       case RoleId.VOLUNTEER:
-        return m.admin_role_volunteer();
+        return m.admin_role_volunteer(withTerms());
       case RoleId.MANAGER:
-        return m.admin_role_manager();
+        return m.admin_role_manager(withTerms());
       case RoleId.ADMIN:
         return m.admin_role_admin();
       default:

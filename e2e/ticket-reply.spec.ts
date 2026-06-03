@@ -1,20 +1,26 @@
-import { test, expect, type Page } from "@playwright/test";
-import { CRYPTO_TIMEOUT, openTicketByTitle } from "./helpers";
+import { test, expect } from "./coverage-fixture";
+import { startCoverage, stopAndWriteCoverage } from "./coverage-fixture";
+import type { Page } from "@playwright/test";
+import { CRYPTO_TIMEOUT, login, openTicketByTitle } from "./helpers";
+
+const REPLY_SUFFIX = String(Date.now()).slice(-6);
+const REPLY_TEXT = `E2E reply ${REPLY_SUFFIX}`;
 
 test.describe.serial("Ticket Reply (Encrypted Message Send)", () => {
   let page: Page;
 
-  test.beforeAll(async ({ browser }) => {
+  test.beforeAll(async ({ browser }, testInfo) => {
+    testInfo.setTimeout(CRYPTO_TIMEOUT * 2);
     page = await browser.newPage();
-    await page.goto("/");
-
-    // Wait for crypto pipeline to complete on dashboard.
+    await startCoverage(page);
+    await login(page);
     await expect(page.getByText("Help with housing")).toBeVisible({
       timeout: CRYPTO_TIMEOUT,
     });
   });
 
   test.afterAll(async () => {
+    await stopAndWriteCoverage(page, "ticket-reply");
     await page.close();
   });
 
@@ -27,26 +33,35 @@ test.describe.serial("Ticket Reply (Encrypted Message Send)", () => {
   // ── 2. Messagebar visible ─────────────────────────────────────
 
   test("messagebar is visible at the bottom of the chat view", async () => {
-    // The send button has aria-label="Send message".
+    // Wait for ticket messages to fully decrypt and render.
+    await expect(page.locator('[role="log"]')).toBeVisible({
+      timeout: CRYPTO_TIMEOUT,
+    });
+
+    // The send button has aria-label matching i18n ticket_send ("Send message").
     const sendBtn = page.getByRole("button", { name: /send message/i });
-    await expect(sendBtn).toBeVisible();
+    await expect(sendBtn).toBeVisible({ timeout: CRYPTO_TIMEOUT });
   });
 
   // ── 3. Type and send a reply ──────────────────────────────────
 
   test("can type a message in the compose bar", async () => {
-    // The messagebar textarea is the main text input in the chat view.
-    const textarea = page.getByRole("textbox");
-    await textarea.fill("E2E test reply message");
-    await expect(textarea).toHaveValue("E2E test reply message");
+    // The messagebar textarea has a unique placeholder from i18n.
+    // Use click + pressSequentially so Konsta Messagebar's value binding
+    // updates (fill() sets value programmatically which may bypass it).
+    const textarea = page.getByRole("textbox", { name: /type a reply/i });
+    await textarea.click();
+    await textarea.pressSequentially(REPLY_TEXT, { delay: 20 });
+    await expect(textarea).toHaveValue(REPLY_TEXT);
   });
 
   test("send button triggers encryption and message appears in chat", async () => {
     const sendBtn = page.getByRole("button", { name: /send message/i });
+    await expect(sendBtn).toBeEnabled({ timeout: 5_000 });
     await sendBtn.click();
 
     // Wait for the optimistic message to appear in the chat log.
-    await expect(page.getByText("E2E test reply message")).toBeVisible({
+    await expect(page.getByText(REPLY_TEXT)).toBeVisible({
       timeout: CRYPTO_TIMEOUT,
     });
   });
@@ -63,7 +78,7 @@ test.describe.serial("Ticket Reply (Encrypted Message Send)", () => {
   test("reply renders inside the chat log region", async () => {
     // The chat log has role="log". Verify the reply text is inside it.
     const chatLog = page.locator('[role="log"]');
-    await expect(chatLog.getByText("E2E test reply message")).toBeVisible({
+    await expect(chatLog.getByText(REPLY_TEXT)).toBeVisible({
       timeout: 5000,
     });
   });

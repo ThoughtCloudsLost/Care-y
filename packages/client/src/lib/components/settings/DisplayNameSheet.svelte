@@ -6,7 +6,6 @@
   import * as m from "$lib/paraglide/messages.js";
   import { trpc } from "$lib/trpc/index.js";
   import { getOrgKeyManager, getOrgDecryptCache } from "$lib/crypto/context.js";
-  import { uint8ArrayToBase64 } from "$lib/utils/buffer-encoding.js";
   import { haptic } from "$lib/utils/haptic.js";
   import { toastStore } from "$lib/stores/toast.svelte.js";
   import { announceToLiveRegion } from "$lib/utils/announce.js";
@@ -24,8 +23,6 @@
   const queryClient = useQueryClient();
   const orgKeyManager = getOrgKeyManager();
   const orgCache = getOrgDecryptCache();
-
-  const textEncoder = new TextEncoder();
 
   let newName = $state("");
   let wasOpen = $state(false);
@@ -66,9 +63,7 @@
   async function handleSubmit(): Promise<void> {
     if (!canSubmit || isPending) return;
 
-    const plainBytes = textEncoder.encode(trimmedName);
-    const cipherBytes = await orgKeyManager.encrypt(plainBytes);
-    const encryptedDisplayName = uint8ArrayToBase64(cipherBytes);
+    const encryptedDisplayName = await orgKeyManager.encryptText(trimmedName);
 
     mut.mutate({ encryptedDisplayName });
   }

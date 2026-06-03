@@ -66,6 +66,7 @@ export interface WebauthnRegistrationOptions {
   readonly challenge: string;
   readonly rpId: string;
   readonly rpName: string;
+  readonly userId: string;
 }
 
 export interface WebauthnAssertionOptions {
@@ -108,6 +109,7 @@ export interface TwoFactorService {
     sessionToken: string,
     rpId: string,
     rpName: string,
+    userId: string,
   ): Promise<WebauthnRegistrationOptions>;
   verifyWebauthnRegistration(
     sessionToken: string,
@@ -148,7 +150,8 @@ export interface TwoFactorService {
   // Method queries
   getEnrolledMethodTypes(userId: string): Promise<string[]>;
 
-  // User email resolution (decrypts notification email for 2FA code delivery)
+  // User email (store + resolve for 2FA code delivery)
+  setNotificationEmail(userId: string, email: string): Promise<void>;
   resolveUserEmail(userId: string): Promise<string>;
 
   // User SMS phone resolution (decrypts stored SMS phone for code delivery)
@@ -190,6 +193,19 @@ export interface SmsDeps {
 
 export interface PushDeps {
   readonly pushChallenges: PushChallengeService;
+}
+
+export async function getEnrolledMethodTypes(
+  db: Kysely<TenantDatabase>,
+  userId: string,
+): Promise<string[]> {
+  const rows = await db
+    .selectFrom("two_factor_methods")
+    .select("method_type")
+    .where("user_id", "=", userId)
+    .where("is_active", "=", true)
+    .execute();
+  return rows.map((r) => r.method_type);
 }
 
 export function createTwoFactorService(
@@ -616,10 +632,11 @@ export function createTwoFactorService(
       sessionToken: string,
       rpId: string,
       rpName: string,
+      userId: string,
     ): Promise<WebauthnRegistrationOptions> {
       const challenge = randomChallenge();
       await sessions.setWebauthnChallenge(sessionToken, challenge);
-      return { challenge, rpId, rpName };
+      return { challenge, rpId, rpName, userId };
     },
 
     async verifyWebauthnRegistration(
@@ -805,6 +822,16 @@ export function createTwoFactorService(
     async getEnrolledMethodTypes(userId: string): Promise<string[]> {
       const methods = await getActiveMethods(userId);
       return methods.map((m) => m.method_type);
+    },
+
+    async setNotificationEmail(userId: string, email: string): Promise<void> {
+      const encrypted = encryptor.encrypt(email);
+      await db
+        .updateTable("users")
+        // care-y-ignore-next-line no-plaintext-db-write -- encrypted via encryptor.encrypt() above
+        .set({ encrypted_notification_addr: encrypted })
+        .where("id", "=", userId)
+        .execute();
     },
 
     async resolveUserEmail(userId: string): Promise<string> {

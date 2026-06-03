@@ -6,10 +6,11 @@
 <script lang="ts">
   import { BlockTitle, Searchbar, List, ListItem, Toggle } from "konsta/svelte";
   import * as m from "$lib/paraglide/messages.js";
+  import { withTerms } from "$lib/terminology/with-terms.js";
   import { trpc } from "$lib/trpc/index.js";
   import { createVolunteersQuery } from "$lib/tickets/queries.js";
   import { getOrgDecryptCache, getCurrentUserId } from "$lib/crypto/context.js";
-  import { RouterNotAvailableError } from "$lib/errors.js";
+  import { requireRouter } from "$lib/errors.js";
   import ShellSheet from "$lib/shell/ShellSheet.svelte";
   import InlineSkeleton from "$lib/components/InlineSkeleton.svelte";
 
@@ -29,8 +30,7 @@
     onassign,
   }: AssignSheetProps = $props();
 
-  if (!trpc.tickets) throw new RouterNotAvailableError("tickets");
-  const ticketRouter = trpc.tickets;
+  const ticketRouter = requireRouter(trpc.tickets, "tickets");
 
   const orgCache = getOrgDecryptCache();
   const currentUserIdGetter = getCurrentUserId();
@@ -111,7 +111,7 @@
 
   <div class="assign-search-wrapper">
     <Searchbar
-      placeholder={m.ticket_assign_search()}
+      placeholder={m.ticket_assign_search(withTerms())}
       value={searchValue}
       onInput={(e: Event) => {
         const target = e.target;

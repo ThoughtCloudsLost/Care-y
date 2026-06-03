@@ -85,6 +85,7 @@ export const kbKeys = {
 export const adminKeys = {
   all: ["admin"] as const,
   users: () => [...adminKeys.all, "users"] as const,
+  orgGeneral: () => [...adminKeys.all, "orgGeneral"] as const,
   hubStatus: () => [...adminKeys.all, "hubStatus"] as const,
   branding: () => [...adminKeys.all, "branding"] as const,
   blocklist: () => [...adminKeys.all, "blocklist"] as const,
@@ -130,6 +131,28 @@ export const consultantKeys = {
 
 export const orgKeyKeys = {
   wrappedOrgKey: () => ["keys", "wrappedOrgKey"] as const,
+};
+
+export const inviteKeys = {
+  all: ["invites"] as const,
+  pending: () => [...inviteKeys.all, "pending"] as const,
+};
+
+export const onboardingKeys = {
+  all: ["onboarding"] as const,
+  status: () => [...onboardingKeys.all, "status"] as const,
+  validateInvite: (token: string) =>
+    [...onboardingKeys.all, "validateInvite", token] as const,
+};
+
+export const twoFactorKeys = {
+  all: ["twoFactor"] as const,
+  status: () => [...twoFactorKeys.all, "status"] as const,
+};
+
+export const brandingKeys = {
+  all: ["branding"] as const,
+  public: () => [...brandingKeys.all, "public"] as const,
 };
 
 export const notificationKeys = {

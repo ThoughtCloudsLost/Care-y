@@ -7,6 +7,7 @@ import {
   // Types (runtime values)
   ARGON2_MIN_PARAMS,
   ARGON2_ESCROW_PARAMS,
+  ARGON2_TEST_PARAMS,
   HKDF_LABELS,
   BRANDING_LABEL,
 
@@ -179,6 +180,19 @@ describe("barrel export", () => {
       expect(ARGON2_ESCROW_PARAMS.memoryKiB).toBe(262144);
       expect(ARGON2_ESCROW_PARAMS.iterations).toBe(4);
       expect(ARGON2_ESCROW_PARAMS.parallelism).toBe(4);
+    });
+
+    it("ARGON2_TEST_PARAMS are strictly weaker than production minimums", () => {
+      expect(ARGON2_TEST_PARAMS.memoryKiB).toBe(1024);
+      expect(ARGON2_TEST_PARAMS.iterations).toBe(1);
+      expect(ARGON2_TEST_PARAMS.parallelism).toBe(1);
+
+      expect(ARGON2_TEST_PARAMS.memoryKiB).toBeLessThan(
+        ARGON2_MIN_PARAMS.memoryKiB,
+      );
+      expect(ARGON2_TEST_PARAMS.iterations).toBeLessThan(
+        ARGON2_MIN_PARAMS.iterations,
+      );
     });
 
     it("HKDF_LABELS", () => {

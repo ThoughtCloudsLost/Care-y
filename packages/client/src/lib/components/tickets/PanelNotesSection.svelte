@@ -20,7 +20,7 @@
     getOrgDecryptCache,
   } from "$lib/crypto/context.js";
   import { resolveAsyncDecrypt } from "$lib/crypto/decrypt-result.js";
-  import { RouterNotAvailableError } from "$lib/errors.js";
+  import { requireRouter } from "$lib/errors.js";
   import { formatRelativeTime } from "$lib/utils/format-time.js";
   import DecryptPlaceholder from "$lib/components/DecryptPlaceholder.svelte";
   import InlineSkeleton from "$lib/components/InlineSkeleton.svelte";
@@ -37,8 +37,7 @@
 
   // --- Context caches ---
 
-  if (!trpc.tickets) throw new RouterNotAvailableError("tickets");
-  const ticketRouter = trpc.tickets;
+  const ticketRouter = requireRouter(trpc.tickets, "tickets");
   const queryClient = useQueryClient();
 
   const followUpCache = getFollowUpDecryptCache();

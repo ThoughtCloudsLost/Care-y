@@ -137,7 +137,7 @@ export function createMergeService(db: Kysely<TenantDatabase>): MergeService {
               ticket_id: secondaryTicket.id,
               source: "system",
               type: "merge_note",
-              encrypted_content: Buffer.from("merge-system-note"),
+              encrypted_content: Buffer.alloc(0),
             })
             .execute();
         }

@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "This username is already taken." |
+* | "This login username is already taken." |
 *
 * @param {Error_Username_Already_TakenInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

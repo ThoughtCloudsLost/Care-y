@@ -3,20 +3,20 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 
 /** @typedef {import('../runtime.js').LocalizedString} LocalizedString */
 
-/** @typedef {{ count: NonNullable<unknown> }} Admin_Reports_View_MonthInputs */
+/** @typedef {{ count: NonNullable<unknown>, tickets: NonNullable<unknown> }} Admin_Reports_View_MonthInputs */
 
 const en_admin_reports_view_month = /** @type {(inputs: Admin_Reports_View_MonthInputs) => LocalizedString} */ (i) => {
-	return /** @type {LocalizedString} */ (`${i?.count} tickets this month, view filtered list`)
+	return /** @type {LocalizedString} */ (`${i?.count} ${i?.tickets} this month, view filtered list`)
 };
 
 const es_admin_reports_view_month = /** @type {(inputs: Admin_Reports_View_MonthInputs) => LocalizedString} */ (i) => {
-	return /** @type {LocalizedString} */ (`${i?.count} tickets este mes, ver lista filtrada`)
+	return /** @type {LocalizedString} */ (`${i?.count} ${i?.tickets} este mes, ver lista filtrada`)
 };
 
 /**
 * | output |
 * | --- |
-* | "{count} tickets this month, view filtered list" |
+* | "{count} {tickets} this month, view filtered list" |
 *
 * @param {Admin_Reports_View_MonthInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

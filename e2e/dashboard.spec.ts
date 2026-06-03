@@ -1,57 +1,46 @@
-import { test, expect, type Page } from "@playwright/test";
+import { test, expect } from "./coverage-fixture";
+import { startCoverage, stopAndWriteCoverage } from "./coverage-fixture";
+import type { Page } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
+import { CRYPTO_TIMEOUT, login } from "./helpers";
 
-// Auto-login runs registerCrypto + loginCrypto + devSeedTickets on first
-// page load. All assertions wait for the full crypto pipeline to complete.
-// Timeout for crypto-dependent assertions accounts for Argon2id (64 MiB WASM)
-// + OPRF round-trips + ECIES key wrapping + Worker decryption.
-// registerCrypto runs Argon2id on main thread (~3-5s), then loginCrypto
-// runs Argon2id again in the Worker (~3-5s), plus OPRF round-trips,
-// ticket seeding, and decryption. 60s is generous but safe.
-const CRYPTO_TIMEOUT = 60_000;
-
-// Serial tests with a shared page model a real user session: one login,
-// then SPA navigation. The Worker stays KEYED across test navigations.
 test.describe.serial("Dashboard (Home Tab)", () => {
   let page: Page;
 
-  test.beforeAll(async ({ browser }) => {
+  test.beforeAll(async ({ browser }, testInfo) => {
+    testInfo.setTimeout(CRYPTO_TIMEOUT * 2);
     page = await browser.newPage();
-    await page.goto("/");
-    // Wait for the full crypto pipeline to complete.
-    // "Help with housing" visible means: auto-login succeeded, registerCrypto
-    // stored user_keys, loginCrypto put Worker in KEYED state, devSeedTickets
-    // created tickets with ECIES key wraps, ticket list fetched, and Worker
-    // decrypted the title. If this text appears, the entire pipeline worked.
+    await startCoverage(page);
+    await login(page);
     await expect(page.getByText("Help with housing")).toBeVisible({
       timeout: CRYPTO_TIMEOUT,
     });
   });
 
   test.afterAll(async () => {
+    await stopAndWriteCoverage(page, "dashboard");
     await page.close();
   });
 
-  // ── Stat cards (real data) ────────────────────────────────────────
+  // ── Section count badges (real data) ──────────────────────────────
 
-  test("stat cards show correct counts from seeded tickets", async () => {
-    const statCards = page.locator('[data-testid="stat-card"]');
-    await expect(statCards).toHaveCount(3);
+  test("section badges show correct counts from seeded tickets", async () => {
+    // My Tickets: 5 assigned non-hold tickets
+    const myTickets = page.locator("#section-my-tickets [data-count]");
+    await expect(myTickets).toBeVisible({ timeout: CRYPTO_TIMEOUT });
+    await expect(myTickets).toHaveAttribute("data-count", "5");
 
-    // My Open: tickets 1 (Sparrow) + 4 (Robin) = 2
-    await expect(page.getByRole("button", { name: /my open/i })).toContainText(
-      "2",
-    );
+    // Unassigned: at least 6 tickets with no assignee (may be higher if
+    // prior test runs created additional tickets in the shared DB).
+    const unassigned = page.locator("#section-unassigned [data-count]");
+    await expect(unassigned).toBeVisible();
+    const unassignedCount = Number(await unassigned.getAttribute("data-count"));
+    expect(unassignedCount).toBeGreaterThanOrEqual(6);
 
-    // Unassigned: ticket 2 (Wren) = 1
-    await expect(
-      page.getByRole("button", { name: /unassigned/i }),
-    ).toContainText("1");
-
-    // On Hold: ticket 3 (Finch) = 1
-    await expect(page.getByRole("button", { name: /on hold/i })).toContainText(
-      "1",
-    );
+    // On Hold: 2 tickets (shelter callback, court date)
+    const onHold = page.locator("#section-on-hold [data-count]");
+    await expect(onHold).toBeVisible();
+    await expect(onHold).toHaveAttribute("data-count", "2");
   });
 
   // ── Decryption (full pipeline) ────────────────────────────────────
@@ -68,14 +57,17 @@ test.describe.serial("Dashboard (Home Tab)", () => {
     await expect(page.getByText("Encrypted ticket")).toBeVisible();
   });
 
-  // ── Stat card labels (i18n) ───────────────────────────────────────
+  // ── Section heading labels (i18n) ─────────────────────────────────
 
-  test("stat cards display labels from i18n", async () => {
-    await expect(page.getByRole("button", { name: /my open/i })).toBeAttached();
+  test("section headings display labels from i18n", async () => {
+    const main = page.getByRole("main");
     await expect(
-      page.getByRole("button", { name: /unassigned/i }),
+      main.getByRole("button", { name: /my tickets/i }),
     ).toBeAttached();
-    await expect(page.getByRole("button", { name: /on hold/i })).toBeAttached();
+    await expect(
+      main.getByRole("button", { name: /unassigned/i }),
+    ).toBeAttached();
+    await expect(main.getByRole("button", { name: /on hold/i })).toBeAttached();
   });
 
   // ── Notification slot ─────────────────────────────────────────────
@@ -90,11 +82,28 @@ test.describe.serial("Dashboard (Home Tab)", () => {
     await expect(notification).toHaveCSS("pointer-events", "none");
   });
 
-  // ── Stat card navigation ──────────────────────────────────────────
+  // ── Section "See all" navigation ────────────────────────────────────
 
-  test("stat card navigates to tickets with filter param", async () => {
-    await page.getByRole("button", { name: /unassigned/i }).click();
-    await expect(page).toHaveURL(/\/tickets\?filter=unassigned/);
+  test("'See all' link navigates to tickets with filter param", async ({}, testInfo) => {
+    testInfo.setTimeout(CRYPTO_TIMEOUT * 2);
+    const unassignedSection = page.locator("#section-unassigned");
+    await unassignedSection.scrollIntoViewIfNeeded();
+
+    // The unassigned section starts collapsed. Expand it first.
+    const heading = unassignedSection.getByRole("button", {
+      name: /unassigned/i,
+    });
+    const isExpanded = await heading.getAttribute("aria-expanded");
+    if (isExpanded !== "true") {
+      await heading.click();
+    }
+
+    const seeAll = unassignedSection.getByRole("button", { name: /see all/i });
+    await expect(seeAll).toBeVisible({ timeout: CRYPTO_TIMEOUT });
+    await seeAll.click();
+    // The tickets page consumes ?filter=unassigned, applies it to the
+    // filter store, then replaces the URL to /tickets (no query string).
+    await expect(page).toHaveURL(/\/tickets$/, { timeout: 10_000 });
   });
 
   // Navigate back to dashboard via Home tab (SPA navigation, like a real user)
@@ -111,7 +120,7 @@ test.describe.serial("Dashboard (Home Tab)", () => {
   });
 
   test("tickets page shows content", async () => {
-    await expect(page.getByText("Tickets")).toBeVisible();
+    await expect(page.getByText("Tickets", { exact: true })).toBeVisible();
   });
 
   test("Home tab navigates back to /", async () => {
@@ -121,8 +130,9 @@ test.describe.serial("Dashboard (Home Tab)", () => {
 
   // ── Direct URL navigation (rare but real scenario) ────────────────
 
-  test("active tab reflects current URL on direct navigation", async () => {
-    await page.goto("/tickets");
+  test("active tab reflects current URL after SPA navigation", async () => {
+    await page.getByRole("tab", { name: "Tickets" }).click();
+    await expect(page).toHaveURL("/tickets");
     const ticketsTab = page.getByRole("tab", { name: "Tickets" });
     await expect(ticketsTab).toHaveAttribute("aria-selected", "true");
 
@@ -135,7 +145,9 @@ test.describe.serial("Dashboard (Home Tab)", () => {
 
   test("passes axe accessibility audit after decryption settles", async () => {
     // Ensure we're on the dashboard with decrypted content visible.
-    await page.goto("/");
+    // Use SPA navigation to preserve crypto Worker state.
+    await page.getByRole("tab", { name: "Home" }).click();
+    await expect(page).toHaveURL("/");
     await expect(page.getByText("Help with housing")).toBeVisible({
       timeout: CRYPTO_TIMEOUT,
     });

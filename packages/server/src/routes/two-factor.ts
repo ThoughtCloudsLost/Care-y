@@ -59,6 +59,7 @@ import {
 import { ErrorCode } from "@care-y/shared";
 import {
   totpVerifySchema,
+  emailEnrollSchema,
   emailCodeVerifySchema,
   smsEnrollSchema,
   smsCodeVerifySchema,
@@ -175,15 +176,32 @@ export async function createScopedTwoFactorServices(
 }
 
 /**
+ * Derives the WebAuthn RP ID.
+ * In production: care-y.app (shared across org subdomains, ADR-017 Decision 5).
+ * In dev: hostname from CORS_ORIGIN (supports Tailscale MagicDNS, localhost).
+ */
+function deriveRpId(): string {
+  if (
+    process.env.NODE_ENV === "development" &&
+    process.env.CORS_ORIGIN != null &&
+    process.env.CORS_ORIGIN !== ""
+  ) {
+    try {
+      return new URL(process.env.CORS_ORIGIN).hostname;
+    } catch {
+      return "localhost";
+    }
+  }
+  return WEBAUTHN_RP_ID;
+}
+
+/**
  * Derives the WebAuthn origin from the request.
  * In production: https://<subdomain>.care-y.app
- * In dev: http://localhost:<port>
+ * In dev: CORS_ORIGIN (e.g. https://host.ts.net:5173, http://localhost:5173)
  */
 function deriveOrigin(org: OrgContext): string {
-  // Dev mode uses localhost; prod uses the org's subdomain.
-  // The context factory already resolved the org, so we know the slug.
-  const isDev = process.env.NODE_ENV === "development";
-  if (isDev) {
+  if (process.env.NODE_ENV === "development") {
     return process.env.CORS_ORIGIN ?? "http://localhost:5173";
   }
   return `https://${org.orgSlug}.${WEBAUTHN_RP_ID}`;
@@ -258,8 +276,9 @@ export function createTwoFactorRouter(deps: TwoFactorRouterDeps) {
       withErrorWrapping(async ({ ctx }) =>
         ctx.twoFactor.getWebauthnRegistrationOptions(
           ctx.session.token,
-          WEBAUTHN_RP_ID,
+          deriveRpId(),
           WEBAUTHN_RP_NAME,
+          ctx.user.id,
         ),
       ),
     ),
@@ -274,18 +293,18 @@ export function createTwoFactorRouter(deps: TwoFactorRouterDeps) {
             ctx.session.token,
             input,
             origin,
-            WEBAUTHN_RP_ID,
+            deriveRpId(),
             ctx.user.id,
           );
           return { success: true as const };
         }),
       ),
 
-    /** Email: send a verification code to the user's notification email. */
-    emailSend: twoFactorProcedure.mutation(
-      withErrorWrapping(async ({ ctx }) => {
-        const email = await ctx.twoFactor.resolveUserEmail(ctx.user.id);
-        await ctx.emailCodes.sendCode(ctx.user.id, email);
+    /** Email: store the notification email and send a verification code. */
+    emailSend: twoFactorProcedure.input(emailEnrollSchema).mutation(
+      withErrorWrapping(async ({ ctx, input }) => {
+        await ctx.twoFactor.setNotificationEmail(ctx.user.id, input.email);
+        await ctx.emailCodes.sendCode(ctx.user.id, input.email);
         return { sent: true as const };
       }),
     ),
@@ -345,6 +364,30 @@ export function createTwoFactorRouter(deps: TwoFactorRouterDeps) {
         ctx.twoFactor.generateBackupCodes(ctx.user.id),
       ),
     ),
+
+    /**
+     * Mark session as 2FA-verified after first enrollment during onboarding.
+     *
+     * Safe because enrollment already proves possession (TOTP code verified,
+     * WebAuthn ceremony completed, etc.). Only succeeds if at least one
+     * method is enrolled. Idempotent if session is already verified.
+     */
+    markVerifiedOnFirstEnrollment: twoFactorProcedure.mutation(
+      withErrorWrapping(async ({ ctx }) => {
+        const status = await ctx.twoFactor.getStatus(ctx.user.id);
+        if (status.methods.length === 0) {
+          throw new TRPCError({
+            code: "PRECONDITION_FAILED",
+            message: ErrorCode.NO_METHODS_ENROLLED,
+          });
+        }
+        if (ctx.session.twofaVerified) {
+          return { success: true as const };
+        }
+        await ctx.twoFactor.markSessionVerified(ctx.session.token);
+        return { success: true as const };
+      }),
+    ),
   });
 
   // === Verification sub-router ===
@@ -369,7 +412,7 @@ export function createTwoFactorRouter(deps: TwoFactorRouterDeps) {
         ctx.twoFactor.getWebauthnAssertionOptions(
           ctx.session.token,
           ctx.user.id,
-          WEBAUTHN_RP_ID,
+          deriveRpId(),
         ),
       ),
     ),
@@ -384,7 +427,7 @@ export function createTwoFactorRouter(deps: TwoFactorRouterDeps) {
             ctx.session.token,
             input,
             origin,
-            WEBAUTHN_RP_ID,
+            deriveRpId(),
           );
           await ctx.twoFactor.markSessionVerified(ctx.session.token);
           return { success: true as const };

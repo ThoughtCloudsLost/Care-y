@@ -3,10 +3,11 @@
   import { createQuery } from "@tanstack/svelte-query";
   import { adminKeys } from "$lib/query/keys.js";
   import * as m from "$lib/paraglide/messages.js";
+  import { withTerms } from "$lib/terminology/with-terms.js";
   import { trpc } from "$lib/trpc/index.js";
   import { getOrgDecryptCache } from "$lib/crypto/context.js";
   import { base64ToUint8Array } from "$lib/utils/buffer-encoding.js";
-  import { RouterNotAvailableError } from "$lib/errors.js";
+  import { requireRouter } from "$lib/errors.js";
   import QueryError from "$lib/components/QueryError.svelte";
   import DecryptPlaceholder from "$lib/components/DecryptPlaceholder.svelte";
   import SvgChart from "./SvgChart.svelte";
@@ -18,8 +19,7 @@
 
   let { ontap }: ReportsSectionProps = $props();
 
-  if (!trpc.reports) throw new RouterNotAvailableError("reports");
-  const reportsRouter = trpc.reports;
+  const reportsRouter = requireRouter(trpc.reports, "reports");
 
   const orgCache = getOrgDecryptCache();
 
@@ -136,18 +136,22 @@
   <div class="metric-row">
     <MetricCard
       value={activeCountQuery.data ?? 0}
-      label={m.admin_reports_open_tickets()}
+      label={m.admin_reports_open_tickets(withTerms())}
       filterParam="status=open"
-      ariaLabel={m.admin_reports_view_open({
-        count: String(activeCountQuery.data ?? 0),
-      })}
+      ariaLabel={m.admin_reports_view_open(
+        withTerms({
+          count: String(activeCountQuery.data ?? 0),
+        }),
+      )}
       {ontap}
     />
     <MetricCard
       value={thisMonthCount}
       label={m.admin_reports_this_month()}
       filterParam="created=month"
-      ariaLabel={m.admin_reports_view_month({ count: String(thisMonthCount) })}
+      ariaLabel={m.admin_reports_view_month(
+        withTerms({ count: String(thisMonthCount) }),
+      )}
       {ontap}
     />
     {#if avgResolution !== null}
@@ -167,8 +171,8 @@
           data={volumeChartData}
           type="bar"
           xLabel={m.admin_reports_month_label()}
-          yLabel={m.admin_reports_tickets_label()}
-          ariaLabel={m.admin_reports_volume_aria()}
+          yLabel={m.admin_reports_tickets_label(withTerms())}
+          ariaLabel={m.admin_reports_volume_aria(withTerms())}
         />
       </div>
     </Card>
@@ -193,7 +197,9 @@
   <!-- By queue -->
   {#if queueStatsQuery.data && queueStatsQuery.data.length > 0}
     <Card raised contentWrap={false} class="chart-card">
-      <div class="card-section-label">{m.admin_reports_by_queue()}</div>
+      <div class="card-section-label">
+        {m.admin_reports_by_queue(withTerms())}
+      </div>
       <List nested class="queue-list">
         {#each queueStatsQuery.data as stat (stat.queueId)}
           {@const name = decryptQueueName(

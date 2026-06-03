@@ -102,16 +102,18 @@ export const updateTicketInputSchema = z.object({
 });
 export type UpdateTicketInput = z.infer<typeof updateTicketInputSchema>;
 
+export const MAX_ESCALATION_DAYS = 365;
+
 export const createQueueInputSchema = z.object({
   encryptedName: base64String("encryptedName"),
-  escalateDays: z.number().int().min(0).max(365).default(0),
+  escalateDays: z.number().int().min(0).max(MAX_ESCALATION_DAYS).default(0),
 });
 export type CreateQueueInput = z.infer<typeof createQueueInputSchema>;
 
 export const updateQueueInputSchema = z.object({
   queueId: z.uuid(),
   encryptedName: base64String("encryptedName").optional(),
-  escalateDays: z.number().int().min(0).max(365).optional(),
+  escalateDays: z.number().int().min(0).max(MAX_ESCALATION_DAYS).optional(),
 });
 export type UpdateQueueInput = z.infer<typeof updateQueueInputSchema>;
 

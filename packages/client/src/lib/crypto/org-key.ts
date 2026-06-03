@@ -16,7 +16,10 @@
  */
 
 import { decode, encode } from "@care-y/crypto";
+import { uint8ArrayToBase64 } from "$lib/utils/buffer-encoding.js";
 import type { CryptoBridge } from "$lib/workers/crypto-bridge.js";
+
+const textEncoder = new TextEncoder();
 
 /** Thrown when operations are called before the org key has been loaded. */
 export class OrgKeyNotLoadedError extends Error {
@@ -29,9 +32,18 @@ export class OrgKeyNotLoadedError extends Error {
 export class OrgKeyManager {
   private orgPublicKey: Uint8Array | null = null;
   private readonly bridge: CryptoBridge;
+  private loadCallback: ((loaded: boolean) => void) | null = null;
 
   constructor(bridge: CryptoBridge) {
     this.bridge = bridge;
+  }
+
+  /**
+   * Register a handler for load/zero transitions (ADR-049).
+   * CryptoProvider uses this to keep isOrgKeyReady() in sync.
+   */
+  onLoadChange(handler: (loaded: boolean) => void): void {
+    this.loadCallback = handler;
   }
 
   /**
@@ -43,6 +55,7 @@ export class OrgKeyManager {
    */
   load(orgPublicKeyBase64: string): void {
     this.orgPublicKey = decode(orgPublicKeyBase64);
+    this.loadCallback?.(true);
   }
 
   /**
@@ -56,6 +69,12 @@ export class OrgKeyManager {
 
     const ciphertextB64 = await this.bridge.orgEncrypt(encode(plaintext));
     return decode(ciphertextB64);
+  }
+
+  /** Encrypt a UTF-8 string and return its base64 ciphertext. */
+  async encryptText(plaintext: string): Promise<string> {
+    const cipherBytes = await this.encrypt(textEncoder.encode(plaintext));
+    return uint8ArrayToBase64(cipherBytes);
   }
 
   /**
@@ -99,5 +118,6 @@ export class OrgKeyManager {
   /** Clear the local public key. Secret is zeroed by Worker's zeroAll. */
   zero(): void {
     this.orgPublicKey = null;
+    this.loadCallback?.(false);
   }
 }

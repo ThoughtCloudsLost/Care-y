@@ -6,17 +6,17 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Admin_Escrow_Step_Passphrase_HeadingInputs */
 
 const en_admin_escrow_step_passphrase_heading = /** @type {(inputs: Admin_Escrow_Step_Passphrase_HeadingInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Create a passphrase`)
+	return /** @type {LocalizedString} */ (`Create an escrow file passphrase`)
 };
 
 const es_admin_escrow_step_passphrase_heading = /** @type {(inputs: Admin_Escrow_Step_Passphrase_HeadingInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Crear una frase de contrasena`)
+	return /** @type {LocalizedString} */ (`Crear una frase de contrasena para el archivo de custodia`)
 };
 
 /**
 * | output |
 * | --- |
-* | "Create a passphrase" |
+* | "Create an escrow file passphrase" |
 *
 * @param {Admin_Escrow_Step_Passphrase_HeadingInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

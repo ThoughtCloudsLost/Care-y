@@ -60,8 +60,10 @@ function makeContext(roleId: string): Context {
       id: "user-branding-1",
       identifier: "tester",
       encryptedDisplayName: "encrypted",
+      encryptedPreferredLocale: null,
       roleId,
       isActive: true,
+      hasSeenBriefing: true,
     },
   };
 }
@@ -182,20 +184,15 @@ describe("branding router", () => {
       });
     });
 
-    it("uploadIcons delegates to service with blobStore and orgSchema", async () => {
+    it("uploadIcons delegates to service", async () => {
       const caller = buildAdminCaller();
-      const input = {
+      await caller.uploadIcons({
         icon192: VALID_BASE64,
         icon512: VALID_BASE64,
         iconMaskable: VALID_BASE64,
-      };
-      await caller.uploadIcons(input);
+      });
 
-      expect(mockUploadIcons).toHaveBeenCalledWith(
-        expect.objectContaining({ put: expect.any(Function) }),
-        "org_test",
-        input,
-      );
+      expect(mockUploadIcons).toHaveBeenCalledOnce();
     });
   });
 

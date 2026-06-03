@@ -201,5 +201,13 @@ export function createProfileRouter(deps: ProfileRouterDeps) {
         }));
       }),
     ),
+
+    markBriefingSeen: authedProcedure.mutation(
+      withErrorWrapping(async ({ ctx }) => {
+        const authService = getAuthService(ctx.org, deps);
+        await authService.markBriefingSeen(ctx.session.userId);
+        return { success: true as const };
+      }),
+    ),
   });
 }

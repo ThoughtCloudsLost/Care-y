@@ -96,8 +96,10 @@ function createAdminContext(): Context {
       id: "user-1",
       identifier: "admin",
       encryptedDisplayName: "encrypted",
+      encryptedPreferredLocale: null,
       roleId: RoleId.ADMIN,
       isActive: true,
+      hasSeenBriefing: true,
     },
   };
 }

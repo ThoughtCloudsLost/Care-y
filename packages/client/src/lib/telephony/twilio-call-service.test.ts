@@ -1,57 +1,50 @@
-import { describe, it, expect } from "vitest";
-import type { BrowserCallService } from "@care-y/shared";
+import { describe, it, expect, vi, beforeEach } from "vitest";
+import type { BrowserCallService, BrowserCallEvents } from "@care-y/shared";
 
-/**
- * Type-level conformance test for TwilioBrowserCallService.
- *
- * The adapter is thin glue between @twilio/voice-sdk and BrowserCallService.
- * Heavy mocking of the SDK's Device/Call classes couples tests to SDK internals
- * (event names, constructor shapes) and gives false confidence. Behavioral
- * testing of WebRTC calls belongs in E2E (Playwright).
- *
- * This test verifies:
- * 1. The module exports a factory function
- * 2. The returned object satisfies the BrowserCallService interface
- * 3. Initial state is correct
- */
+type EventHandler = (...args: unknown[]) => void;
 
-// We can't import the real implementation without the @twilio/voice-sdk
-// being available in the test environment (it's browser-only). Instead,
-// verify the module structure via a dynamic import with the SDK mocked.
+let deviceHandlers: Map<string, EventHandler>;
+let callHandlers: Map<string, EventHandler>;
+let mockCallInstance: {
+  on: ReturnType<typeof vi.fn>;
+  disconnect: ReturnType<typeof vi.fn>;
+  mute: ReturnType<typeof vi.fn>;
+  sendDigits: ReturnType<typeof vi.fn>;
+};
 
-import { vi } from "vitest";
+function fireDeviceEvent(event: string, ...args: unknown[]): void {
+  deviceHandlers.get(event)?.(...args);
+}
+
+function fireCallEvent(event: string, ...args: unknown[]): void {
+  callHandlers.get(event)?.(...args);
+}
 
 vi.mock("@twilio/voice-sdk", () => ({
   Device: class MockDevice {
-    on(): void {
-      /* noop stub */
+    constructor() {
+      deviceHandlers = new Map();
+    }
+    on(event: string, handler: EventHandler): void {
+      deviceHandlers.set(event, handler);
     }
     async register(): Promise<void> {
-      /* noop stub */
+      /* noop */
     }
-    async connect(): Promise<{
-      on(): void;
-      disconnect(): void;
-      mute(): void;
-      sendDigits(): void;
-    }> {
-      return {
-        on() {
-          /* noop stub */
-        },
-        disconnect() {
-          /* noop stub */
-        },
-        mute() {
-          /* noop stub */
-        },
-        sendDigits() {
-          /* noop stub */
-        },
+    async connect(): Promise<typeof mockCallInstance> {
+      callHandlers = new Map();
+      mockCallInstance = {
+        on: vi.fn((event: string, handler: EventHandler) => {
+          callHandlers.set(event, handler);
+        }),
+        disconnect: vi.fn(),
+        mute: vi.fn(),
+        sendDigits: vi.fn(),
       };
+      return mockCallInstance;
     }
     destroy(): void {
-      /* noop stub */
+      /* noop */
     }
   },
   Call: {},
@@ -61,52 +54,156 @@ const { createTwilioBrowserCallService } =
   await import("./twilio-call-service.js");
 
 describe("TwilioBrowserCallService", () => {
-  it("satisfies the BrowserCallService interface", () => {
-    const service: BrowserCallService = createTwilioBrowserCallService();
+  let service: BrowserCallService;
+  let events: BrowserCallEvents;
 
-    // All interface methods exist and are callable
-    expect(typeof service.register).toBe("function");
-    expect(typeof service.connect).toBe("function");
-    expect(typeof service.disconnect).toBe("function");
-    expect(typeof service.toggleMute).toBe("function");
-    expect(typeof service.sendDtmf).toBe("function");
-    expect(typeof service.getState).toBe("function");
-    expect(typeof service.destroy).toBe("function");
+  beforeEach(() => {
+    service = createTwilioBrowserCallService();
+    events = { onStateChange: vi.fn(), onError: vi.fn() };
+  });
+
+  it("satisfies the BrowserCallService interface", () => {
+    const svc: BrowserCallService = createTwilioBrowserCallService();
+    expect(typeof svc.register).toBe("function");
+    expect(typeof svc.connect).toBe("function");
+    expect(typeof svc.disconnect).toBe("function");
+    expect(typeof svc.toggleMute).toBe("function");
+    expect(typeof svc.sendDtmf).toBe("function");
+    expect(typeof svc.getState).toBe("function");
+    expect(typeof svc.destroy).toBe("function");
   });
 
   it("starts in idle state", () => {
-    const service = createTwilioBrowserCallService();
     expect(service.getState()).toBe("idle");
   });
 
   it("toggleMute returns false when no active call", () => {
-    const service = createTwilioBrowserCallService();
     expect(service.toggleMute()).toBe(false);
   });
 
   it("sendDtmf does not throw when no active call", () => {
-    const service = createTwilioBrowserCallService();
     expect(() => {
       service.sendDtmf("5");
     }).not.toThrow();
   });
 
-  it("disconnect transitions state and fires callback", () => {
-    const service = createTwilioBrowserCallService();
-    const onStateChange = vi.fn();
-    const onError = vi.fn();
-    // Register to capture events reference
-    void service.register("token", { onStateChange, onError });
+  it("disconnect transitions state and fires callback", async () => {
+    await service.register("token", events);
     service.disconnect();
     expect(service.getState()).toBe("disconnected");
-    expect(onStateChange).toHaveBeenCalledWith("disconnected");
+    expect(events.onStateChange).toHaveBeenCalledWith("disconnected");
   });
 
-  it("destroy resets to idle state", () => {
-    const service = createTwilioBrowserCallService();
-    const onStateChange = vi.fn();
-    void service.register("token", { onStateChange, onError: vi.fn() });
+  it("destroy resets to idle state", async () => {
+    await service.register("token", events);
     service.destroy();
     expect(service.getState()).toBe("idle");
+  });
+
+  describe("connect lifecycle", () => {
+    it("transitions connecting -> ringing -> connected", async () => {
+      await service.register("token", events);
+      await service.connect("+15551234567", "+15559876543");
+
+      expect(service.getState()).toBe("connecting");
+
+      fireCallEvent("ringing");
+      expect(service.getState()).toBe("ringing");
+
+      fireCallEvent("accept");
+      expect(service.getState()).toBe("connected");
+    });
+
+    it("throws when device not registered", async () => {
+      await expect(
+        service.connect("+15551234567", "+15559876543"),
+      ).rejects.toThrow("Device not registered");
+    });
+
+    it("call disconnect event transitions to disconnected", async () => {
+      await service.register("token", events);
+      await service.connect("+15551234567", "+15559876543");
+      fireCallEvent("accept");
+
+      fireCallEvent("disconnect");
+      expect(service.getState()).toBe("disconnected");
+    });
+
+    it("call error event transitions to error and fires callback", async () => {
+      await service.register("token", events);
+      await service.connect("+15551234567", "+15559876543");
+      fireCallEvent("accept");
+
+      const err = new Error("network lost");
+      fireCallEvent("error", err);
+      expect(service.getState()).toBe("error");
+      expect(events.onError).toHaveBeenCalledWith(err);
+    });
+  });
+
+  describe("disconnect while ringing", () => {
+    it("caller disconnect during ringing transitions to disconnected", async () => {
+      await service.register("token", events);
+      await service.connect("+15551234567", "+15559876543");
+      fireCallEvent("ringing");
+      expect(service.getState()).toBe("ringing");
+
+      service.disconnect();
+      expect(service.getState()).toBe("disconnected");
+      expect(mockCallInstance.disconnect).toHaveBeenCalledOnce();
+    });
+  });
+
+  describe("mute during active call", () => {
+    it("toggleMute toggles and returns new state", async () => {
+      await service.register("token", events);
+      await service.connect("+15551234567", "+15559876543");
+      fireCallEvent("accept");
+
+      expect(service.toggleMute()).toBe(true);
+      expect(mockCallInstance.mute).toHaveBeenCalledWith(true);
+
+      expect(service.toggleMute()).toBe(false);
+      expect(mockCallInstance.mute).toHaveBeenCalledWith(false);
+    });
+
+    it("sendDtmf delegates to active call", async () => {
+      await service.register("token", events);
+      await service.connect("+15551234567", "+15559876543");
+      fireCallEvent("accept");
+
+      service.sendDtmf("9");
+      expect(mockCallInstance.sendDigits).toHaveBeenCalledWith("9");
+    });
+  });
+
+  describe("device-level errors", () => {
+    it("device error event transitions to error state", async () => {
+      await service.register("token", events);
+      const err = new Error("token expired");
+      fireDeviceEvent("error", err);
+
+      expect(service.getState()).toBe("error");
+      expect(events.onError).toHaveBeenCalledWith(err);
+    });
+
+    it("device unregistered event transitions to error state", async () => {
+      await service.register("token", events);
+      fireDeviceEvent("unregistered");
+
+      expect(service.getState()).toBe("error");
+      expect(events.onError).toHaveBeenCalled();
+    });
+  });
+
+  describe("double disconnect safety", () => {
+    it("disconnect when already disconnected does not throw", async () => {
+      await service.register("token", events);
+      service.disconnect();
+      expect(() => {
+        service.disconnect();
+      }).not.toThrow();
+      expect(service.getState()).toBe("disconnected");
+    });
   });
 });

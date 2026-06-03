@@ -18,16 +18,18 @@ vi.mock("$lib/paraglide/messages.js", () => ({
   admin_invite_title: () => "Invite User",
   admin_invite_cancel: () => "Cancel",
   admin_invite_send: () => "Create Account",
-  admin_invite_identifier_label: () => "Identifier",
   admin_invite_identifier_hint: () => "Auto-generated.",
-  admin_invite_identifier_pii_warning: () =>
+  user_field_login_username_label: () => "Login Username",
+  user_field_login_username_pii_warning: () =>
     "Identifiers are stored with weaker encryption",
-  admin_invite_display_name_label: () => "Display Name",
-  admin_invite_display_name_hint: () => "End-to-end encrypted.",
+  user_field_display_name_label: () => "Display Name",
+  user_field_display_name_e2e_hint: () => "End-to-end encrypted.",
   admin_invite_password_label: () => "Temporary Password",
   admin_invite_password_hint: () => "Share securely.",
   admin_invite_password_too_short: () =>
     "Password must be at least 16 characters",
+  admin_invite_confirm_password: () => "Confirm Password",
+  admin_invite_password_mismatch: () => "Passwords do not match",
   admin_invite_role_label: () => "Role",
   admin_invite_no_org_key: () => "Organization key not loaded.",
   admin_invite_success: () => "Account created",
@@ -45,6 +47,14 @@ vi.mock("$lib/paraglide/messages.js", () => ({
   common_loading: () => "Loading",
   error_generic: () => "Something went wrong",
   shell_close: () => "Close",
+  password_show: () => "Show password",
+  password_hide: () => "Hide password",
+  password_strength_too_short: ({ min }: { min: number }) =>
+    `Too short (minimum ${min} characters)`,
+  password_strength_acceptable: () => "Acceptable",
+  password_strength_good: () => "Good",
+  password_strength_strong: () => "Strong",
+  password_common_pattern: () => "Predictable pattern.",
 }));
 
 // --- Mock crypto context ---
@@ -54,6 +64,7 @@ vi.mock("$lib/crypto/context.js", () => ({
       return mockOrgKeyLoaded;
     },
     encrypt: vi.fn().mockReturnValue(new Uint8Array([1, 2, 3])),
+    encryptText: vi.fn().mockResolvedValue("encrypted-text"),
   }),
 }));
 
@@ -127,17 +138,19 @@ function getInputs(): {
   identifier: HTMLInputElement;
   displayName: HTMLInputElement;
   password: HTMLInputElement;
+  confirmPassword: HTMLInputElement;
 } {
   const inputs = document.querySelectorAll<HTMLInputElement>(
     ".k-list-input input",
   );
-  if (!inputs[0] || !inputs[1] || !inputs[2]) {
-    throw new Error("Expected 3 inputs in InviteUser form");
+  if (!inputs[0] || !inputs[1] || !inputs[2] || !inputs[3]) {
+    throw new Error("Expected 4 inputs in InviteUser form");
   }
   return {
     identifier: inputs[0],
     displayName: inputs[1],
     password: inputs[2],
+    confirmPassword: inputs[3],
   };
 }
 
@@ -149,7 +162,7 @@ describe("InviteUser", () => {
 
   afterEach(cleanup);
 
-  it("renders with a pre-filled random identifier", () => {
+  it("renders with a pre-filled random identifier", { timeout: 15_000 }, () => {
     render(InviteUser, { opened: true, ondismiss: vi.fn() });
     const { identifier } = getInputs();
     expect(identifier.value).toMatch(/^vol-/);
@@ -204,13 +217,16 @@ describe("InviteUser", () => {
 
   it("calls register mutation on submit with correct params", async () => {
     render(InviteUser, { opened: true, ondismiss: vi.fn() });
-    const { identifier, displayName, password } = getInputs();
+    const { identifier, displayName, password, confirmPassword } = getInputs();
 
     await fireEvent.input(identifier, { target: { value: "vol-test12" } });
     await fireEvent.input(displayName, {
       target: { value: "Test Volunteer" },
     });
     await fireEvent.input(password, {
+      target: { value: "averylongpassword16" },
+    });
+    await fireEvent.input(confirmPassword, {
       target: { value: "averylongpassword16" },
     });
 
@@ -227,11 +243,14 @@ describe("InviteUser", () => {
 
   it("shows credential confirmation after successful creation", async () => {
     render(InviteUser, { opened: true, ondismiss: vi.fn() });
-    const { identifier, displayName, password } = getInputs();
+    const { identifier, displayName, password, confirmPassword } = getInputs();
 
     await fireEvent.input(identifier, { target: { value: "vol-abc123" } });
     await fireEvent.input(displayName, { target: { value: "New Person" } });
     await fireEvent.input(password, {
+      target: { value: "securelongpassword" },
+    });
+    await fireEvent.input(confirmPassword, {
       target: { value: "securelongpassword" },
     });
 

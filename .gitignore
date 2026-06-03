@@ -95,6 +95,7 @@ data/
 /playwright-report/
 /blob-report/
 /playwright/.cache/
+/.auth/
 
 # ============================================================
 # PWA / Workbox

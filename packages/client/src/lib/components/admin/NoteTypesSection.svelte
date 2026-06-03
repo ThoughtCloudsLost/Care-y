@@ -24,6 +24,7 @@
     type LucideIcon,
   } from "@lucide/svelte";
   import * as m from "$lib/paraglide/messages.js";
+  import { withTerms } from "$lib/terminology/with-terms.js";
   import { trpc } from "$lib/trpc/index.js";
   import { getOrgDecryptCache, getOrgKeyManager } from "$lib/crypto/context.js";
   import {
@@ -34,11 +35,10 @@
     resolveNoteTypeIcon,
     ICON_PICKER_ENTRIES,
   } from "$lib/utils/note-type-icons.js";
-  import { uint8ArrayToBase64 } from "$lib/utils/buffer-encoding.js";
   import { haptic } from "$lib/utils/haptic.js";
   import { toastStore } from "$lib/stores/toast.svelte.js";
   import { announceToLiveRegion } from "$lib/utils/announce.js";
-  import { RouterNotAvailableError } from "$lib/errors.js";
+  import { requireRouter } from "$lib/errors.js";
   import QueryError from "$lib/components/QueryError.svelte";
   import DecryptPlaceholder from "$lib/components/DecryptPlaceholder.svelte";
   import ShellSheet from "$lib/shell/ShellSheet.svelte";
@@ -51,29 +51,17 @@
   } from "@care-y/shared";
   import type { SerializedBuffer } from "$lib/utils/buffer-encoding.js";
 
-  if (!trpc.tickets) throw new RouterNotAvailableError("tickets");
-  const ticketRouter = trpc.tickets;
-  if (!ticketRouter.noteTypes) throw new RouterNotAvailableError("noteTypes");
-  const noteTypesRouter = ticketRouter.noteTypes;
+  const ticketRouter = requireRouter(trpc.tickets, "tickets");
+  const noteTypesRouter = requireRouter(ticketRouter.noteTypes, "noteTypes");
 
   const orgCache = getOrgDecryptCache();
   const orgKeyManager = getOrgKeyManager();
   const queryClient = useQueryClient();
-  const encoder = new TextEncoder();
-
   const noteTypesQuery = createAllNoteTypesQuery(noteTypesRouter);
   const activeTypesQuery = createNoteTypesQuery(noteTypesRouter);
   const defaultNoteTypeId = $derived(
     activeTypesQuery.data?.defaultNoteTypeId ?? null,
   );
-
-  // ── Encrypt helper ──
-
-  async function encryptField(value: string): Promise<string> {
-    const plainBytes = encoder.encode(value);
-    const cipherBytes = await orgKeyManager.encrypt(plainBytes);
-    return uint8ArrayToBase64(cipherBytes);
-  }
 
   // ── System follow-up types (read-only reference) ──
 
@@ -97,7 +85,7 @@
     {
       icon: UserCheck,
       label: m.followup_type_assignment_change,
-      description: m.followup_type_assignment_change_desc,
+      description: () => m.followup_type_assignment_change_desc(withTerms()),
     },
     {
       icon: ChevronsUp,
@@ -107,12 +95,12 @@
     {
       icon: CirclePause,
       label: m.followup_type_hold_change,
-      description: m.followup_type_hold_change_desc,
+      description: () => m.followup_type_hold_change_desc(withTerms()),
     },
     {
       icon: Replace,
-      label: m.followup_type_merge_note,
-      description: m.followup_type_merge_note_desc,
+      label: () => m.followup_type_merge_note(withTerms()),
+      description: () => m.followup_type_merge_note_desc(withTerms()),
     },
     {
       icon: Phone,
@@ -125,7 +113,7 @@
 
   const ROLE_SUMMARY_LABELS: Record<string, () => string> = {
     admin: m.admin_note_types_summary_admins,
-    manager: m.admin_note_types_summary_managers,
+    manager: () => m.admin_note_types_summary_managers(withTerms()),
   };
 
   function escalationSummary(targets: EscalationTarget[]): string {
@@ -190,14 +178,14 @@
   let sheetSaving = $state(false);
 
   const ROLE_OPTIONS: readonly { id: RoleIdValue; label: () => string }[] = [
-    { id: RoleId.VOLUNTEER, label: m.admin_role_volunteer },
-    { id: RoleId.MANAGER, label: m.admin_role_manager },
+    { id: RoleId.VOLUNTEER, label: () => m.admin_role_volunteer(withTerms()) },
+    { id: RoleId.MANAGER, label: () => m.admin_role_manager(withTerms()) },
     { id: RoleId.ADMIN, label: m.admin_role_admin },
   ];
 
   function roleLabelFor(roleId: string): string {
     const opt = ROLE_OPTIONS.find((r) => r.id === roleId);
-    return opt ? opt.label() : m.admin_role_volunteer();
+    return opt ? opt.label() : m.admin_role_volunteer(withTerms());
   }
 
   const isCreateMode = $derived(editingType === null);
@@ -301,11 +289,11 @@
 
     sheetSaving = true;
     try {
-      const encryptedName = await encryptField(name);
-      const encryptedIcon = await encryptField(editIcon);
+      const encryptedName = await orgKeyManager.encryptText(name);
+      const encryptedIcon = await orgKeyManager.encryptText(editIcon);
       const desc = editDescription.trim();
       const encryptedDescription =
-        desc.length > 0 ? await encryptField(desc) : undefined;
+        desc.length > 0 ? await orgKeyManager.encryptText(desc) : undefined;
       const escalationTargets = buildEscalationTargets();
 
       if (isCreateMode) {
@@ -355,6 +343,7 @@
 {#if noteTypesQuery.isLoading}
   <Card raised contentWrap={false} class="fut-card">
     <div class="fut-card-inner">
+      <p class="section-desc">{m.admin_note_types_description(withTerms())}</p>
       <h4 class="fut-group-label">{m.admin_note_types_group_configurable()}</h4>
       {#each { length: 4 } as _, i (i)}
         <div class="fut-row">
@@ -381,6 +370,7 @@
 {:else if noteTypesQuery.data}
   <Card raised contentWrap={false} class="fut-card">
     <div class="fut-card-inner">
+      <p class="section-desc">{m.admin_note_types_description(withTerms())}</p>
       <h4 class="fut-group-label">{m.admin_note_types_group_configurable()}</h4>
       {#each noteTypesQuery.data as nt (nt.id)}
         {@const Icon = resolveNoteTypeIcon(
@@ -527,7 +517,7 @@
         {m.admin_note_types_escalation_label()}
       </span>
       <List nested class="edit-sheet-list">
-        <ListItem title={m.admin_note_types_notify_participants()}>
+        <ListItem title={m.admin_note_types_notify_participants(withTerms())}>
           {#snippet after()}
             <Toggle
               checked={editNotifyParticipants}
@@ -549,7 +539,7 @@
             />
           {/snippet}
         </ListItem>
-        <ListItem title={m.admin_note_types_escalate_manager()}>
+        <ListItem title={m.admin_note_types_escalate_manager(withTerms())}>
           {#snippet after()}
             <Toggle
               checked={editEscalateManager}
@@ -642,6 +632,13 @@
     display: flex;
     flex-direction: column;
     gap: 0.125rem;
+  }
+
+  .section-desc {
+    font-size: var(--text-sm);
+    color: var(--muted);
+    line-height: 1.5;
+    margin-bottom: var(--space-sm);
   }
 
   .fut-group-label {

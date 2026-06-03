@@ -24,6 +24,7 @@
   } from "konsta/svelte";
   import { Phone } from "@lucide/svelte";
   import * as m from "$lib/paraglide/messages.js";
+  import { withTerms } from "$lib/terminology/with-terms.js";
   import StatusDot from "$lib/components/StatusDot.svelte";
   import { formatRelativeTime } from "$lib/utils/format-time.js";
   import type { DisplayStatus } from "$lib/tickets/display-status.js";
@@ -35,10 +36,11 @@
     getFollowUpDecryptCache,
     getOrgDecryptCache,
     getOrgKeyManager,
+    getCurrentUserId,
   } from "$lib/crypto/context.js";
   import { createTicketDecryptScope } from "$lib/crypto/ticket-decrypt-scope.js";
   import { isDecryptReady } from "$lib/crypto/decrypt-result.js";
-  import { RouterNotAvailableError } from "$lib/errors.js";
+  import { requireRouter } from "$lib/errors.js";
   import DecryptPlaceholder from "$lib/components/DecryptPlaceholder.svelte";
   import InlineSkeleton from "$lib/components/InlineSkeleton.svelte";
   import PanelNotesSection from "./PanelNotesSection.svelte";
@@ -59,13 +61,13 @@
 
   // --- Context + caches ---
 
-  if (!trpc.tickets) throw new RouterNotAvailableError("tickets");
-  const ticketRouter = trpc.tickets;
+  const ticketRouter = requireRouter(trpc.tickets, "tickets");
 
   const ticketCache = getTicketDecryptCache();
   const followUpCache = getFollowUpDecryptCache();
   const orgCache = getOrgDecryptCache();
   const orgKeyManager = getOrgKeyManager();
+  const currentUserIdGetter = getCurrentUserId();
 
   // --- TanStack queries (same keys as TicketDetail, deduplicated) ---
 
@@ -87,6 +89,10 @@
   const ticketStatus = $derived(ticket?.status ?? "open");
   const isOnHold = $derived(ticket?.onHold ?? false);
   const isWatching = $derived(watchingQuery.data ?? false);
+
+  const isAssignedToMe = $derived(
+    ticket?.assignedTo != null && ticket.assignedTo === currentUserIdGetter(),
+  );
 
   const displayStatus = $derived<DisplayStatus>(
     isOnHold ? "hold" : ticketStatus === "closed" ? "closed" : "active",
@@ -125,6 +131,13 @@
       ? titleResult.value
       : undefined,
   );
+
+  function labelToggleInput(node: HTMLElement, label: string): void {
+    const input = node.querySelector<HTMLInputElement>(
+      'input[type="checkbox"]',
+    );
+    if (input) input.setAttribute("aria-label", label);
+  }
 </script>
 
 <div class="panel-content">
@@ -186,29 +199,42 @@
     />
     <ListItem title={m.ticket_action_hold()}>
       {#snippet after()}
-        <Toggle
-          checked={isOnHold}
-          onChange={() => onaction(isOnHold ? "unhold" : "hold")}
-        />
+        <span use:labelToggleInput={m.ticket_action_hold()}>
+          <Toggle
+            checked={isOnHold}
+            onChange={() => onaction(isOnHold ? "unhold" : "hold")}
+          />
+        </span>
       {/snippet}
     </ListItem>
     <ListItem title={m.ticket_action_watch()}>
       {#snippet after()}
-        <Toggle
-          checked={isWatching}
-          onChange={() => onaction(isWatching ? "unwatch" : "watch")}
-        />
+        <span use:labelToggleInput={m.ticket_action_watch()}>
+          <Toggle
+            checked={isWatching}
+            onChange={() => onaction(isWatching ? "unwatch" : "watch")}
+          />
+        </span>
       {/snippet}
     </ListItem>
   </List>
 
   <List class="!my-3">
-    <ListItem
-      link
-      chevron
-      title={m.ticket_action_assign()}
-      onclick={() => onaction("assign")}
-    />
+    {#if isAssignedToMe}
+      <ListItem
+        link
+        chevron
+        title={m.ticket_action_release()}
+        onclick={() => onaction("release")}
+      />
+    {:else if ticket?.assignedTo == null}
+      <ListItem
+        link
+        chevron
+        title={m.ticket_action_take()}
+        onclick={() => onaction("take")}
+      />
+    {/if}
     <ListItem
       link
       title={ticketStatus === "open"
@@ -229,9 +255,11 @@
   <PanelMediaSection {ticketId} {keyWrap} {onlightbox} />
 
   <!-- Recent tickets -->
-  <BlockTitle class="!mt-6 !-mb-2">{m.ticket_recent_history()}</BlockTitle>
+  <BlockTitle class="!mt-6 !-mb-2"
+    >{m.ticket_recent_history(withTerms())}</BlockTitle
+  >
   <Block class="!my-3 !mb-8">
-    <p class="empty-text">{m.ticket_panel_recent_coming_soon()}</p>
+    <p class="empty-text">{m.ticket_panel_recent_coming_soon(withTerms())}</p>
   </Block>
 </div>
 
@@ -264,7 +292,7 @@
   }
 
   .destructive-text {
-    color: #ef4444;
+    color: var(--k-color-red, #ef4444);
     font-size: var(--text-sm);
   }
 

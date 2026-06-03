@@ -8,7 +8,12 @@
 
 import type { Kysely, Selectable } from "kysely";
 import { sql } from "kysely";
-import { randomUUID } from "node:crypto";
+import {
+  randomUUID,
+  randomBytes,
+  createHash,
+  timingSafeEqual,
+} from "node:crypto";
 import { orgSlugSchema } from "@care-y/shared";
 import type {
   PlatformDatabase,
@@ -34,10 +39,20 @@ export interface OrgRecord {
   readonly isActive: boolean;
 }
 
+export interface CreateOrgResult extends OrgRecord {
+  readonly setupToken: string;
+}
+
 export interface OrgService {
-  createOrg(input: { slug: string }): Promise<OrgRecord>;
+  createOrg(input: { slug: string }): Promise<CreateOrgResult>;
   findBySlug(slug: string): Promise<OrgRecord | null>;
   findById(id: string): Promise<OrgRecord | null>;
+  validateSetupToken(orgId: string, rawToken: string): Promise<boolean>;
+  consumeSetupToken(orgId: string): Promise<void>;
+}
+
+function hashSetupToken(raw: string): Buffer {
+  return createHash("sha256").update(raw, "utf8").digest();
 }
 
 function toOrgRecord(row: Selectable<OrgsTable>): OrgRecord {
@@ -80,11 +95,17 @@ async function insertOrgRow(
   orgId: string,
   slug: string,
   schemaName: string,
+  setupTokenHash: Buffer,
 ): Promise<Selectable<OrgsTable>> {
   try {
     return await platformDb
       .insertInto("orgs")
-      .values({ id: orgId, slug, schema_name: schemaName })
+      .values({
+        id: orgId,
+        slug,
+        schema_name: schemaName,
+        setup_token_hash: setupTokenHash,
+      })
       .returningAll()
       .executeTakeFirstOrThrow();
   } catch (err: unknown) {
@@ -151,12 +172,24 @@ export function createOrgService(
   tenantDbFactory: (schema: string) => Kysely<TenantDatabase>,
 ): OrgService {
   return {
-    async createOrg(input: { slug: string }): Promise<OrgRecord> {
+    async createOrg(input: { slug: string }): Promise<CreateOrgResult> {
       const slug = parseSlug(input.slug);
       const orgId = randomUUID();
       const schemaName = `org_${orgId}`;
 
-      const row = await insertOrgRow(platformDb, orgId, slug, schemaName);
+      const rawToken =
+        process.env.NODE_ENV === "development"
+          ? "dev-setup-token"
+          : randomBytes(32).toString("base64url");
+      const tokenHash = hashSetupToken(rawToken);
+
+      const row = await insertOrgRow(
+        platformDb,
+        orgId,
+        slug,
+        schemaName,
+        tokenHash,
+      );
 
       try {
         await createPostgresSchema(platformDb, orgId, schemaName);
@@ -170,7 +203,7 @@ export function createOrgService(
         );
       }
 
-      return toOrgRecord(row);
+      return { ...toOrgRecord(row), setupToken: rawToken };
     },
 
     async findBySlug(slug: string): Promise<OrgRecord | null> {
@@ -191,6 +224,30 @@ export function createOrgService(
         .executeTakeFirst();
 
       return row ? toOrgRecord(row) : null;
+    },
+
+    async validateSetupToken(
+      orgId: string,
+      rawToken: string,
+    ): Promise<boolean> {
+      const row = await platformDb
+        .selectFrom("orgs")
+        .select("setup_token_hash")
+        .where("id", "=", orgId)
+        .executeTakeFirst();
+
+      if (!row?.setup_token_hash) return false;
+
+      const candidateHash = hashSetupToken(rawToken);
+      return timingSafeEqual(candidateHash, row.setup_token_hash);
+    },
+
+    async consumeSetupToken(orgId: string): Promise<void> {
+      await platformDb
+        .updateTable("orgs")
+        .set({ setup_token_hash: null })
+        .where("id", "=", orgId)
+        .execute();
     },
   };
 }

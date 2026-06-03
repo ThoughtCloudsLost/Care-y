@@ -1,3 +1,4 @@
+<!-- care-y-ignore no-hardcoded-user-strings -- Props interface and function signatures are not user-facing -->
 <!--
   Client search/create selector using Bits UI Combobox.
   Separate file: Bits UI cannot coexist with Konsta imports (no-mixed-konsta-bits).
@@ -34,8 +35,10 @@
 </script>
 
 <script lang="ts">
+  import { tick } from "svelte";
   import { Combobox } from "bits-ui";
   import * as m from "$lib/paraglide/messages.js";
+  import { withTerms } from "$lib/terminology/with-terms.js";
 
   interface Props {
     label: string;
@@ -76,6 +79,7 @@
   let searching = $state(false);
   let debounceTimer: ReturnType<typeof setTimeout> | null = null;
 
+  let comboboxOpen = $state(false);
   let phoneInput = $state("");
   let lookingUp = $state(false);
   let lookupMessage = $state("");
@@ -111,6 +115,9 @@
       mode: "existing",
       clientId: client.id,
       displayAlias: client.alias,
+    });
+    void tick().then(() => {
+      comboboxOpen = false;
     });
   }
 
@@ -148,7 +155,7 @@
 
       if (!data.found) {
         onchange({ mode: "new", token: data.token });
-        lookupMessage = m.ticket_new_success();
+        lookupMessage = m.ticket_new_success(withTerms());
         return;
       }
 
@@ -169,7 +176,7 @@
       lookupMessage = data.alias;
       selectedDisplay = data.alias;
     } catch {
-      lookupMessage = m.ticket_new_error_submit_failed();
+      lookupMessage = m.ticket_new_error_submit_failed(withTerms());
     } finally {
       lookingUp = false;
     }
@@ -206,6 +213,7 @@
   {#if viewMode === "search"}
     <Combobox.Root
       type="single"
+      bind:open={comboboxOpen}
       inputValue={searchQuery}
       onValueChange={(v: string) => {
         const match = searchResults.find((r) => r.id === v);
@@ -240,6 +248,7 @@
             value={client.id}
             class="client-select-item"
             label={client.alias}
+            data-testid="client-result"
           >
             <span class="client-alias">{client.alias}</span>
             <span class="client-phone-mask">{client.maskedPhone}</span>
@@ -257,7 +266,7 @@
             onclick={switchToCreate}
             {disabled}
           >
-            {createLabel ?? m.ticket_new_create_client()}
+            {createLabel ?? m.ticket_new_create_client(withTerms())}
           </button>
         {/if}
       </Combobox.Content>

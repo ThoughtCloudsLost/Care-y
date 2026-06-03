@@ -1,17 +1,14 @@
 <script lang="ts">
-  import {
-    List,
-    ListInput,
-    Button,
-    Segmented,
-    SegmentedButton,
-  } from "konsta/svelte";
+  import { List, ListInput, Button, Block } from "konsta/svelte";
   import { Save } from "@lucide/svelte";
   import { createMutation, useQueryClient } from "@tanstack/svelte-query";
   import { adminKeys } from "$lib/query/keys.js";
-  import { RoleId } from "@care-y/shared";
+  import { PASSWORD_MIN_LENGTH, RoleId } from "@care-y/shared";
+  import PasswordInput from "$lib/components/inputs/PasswordInput.svelte";
+  import PasswordStrengthMeter from "$lib/components/inputs/PasswordStrengthMeter.svelte";
   import type { RoleIdValue } from "@care-y/shared";
   import * as m from "$lib/paraglide/messages.js";
+  import { withTerms } from "$lib/terminology/with-terms.js";
   import { trpc } from "$lib/trpc/index.js";
   import { getOrgKeyManager } from "$lib/crypto/context.js";
   import { haptic } from "$lib/utils/haptic.js";
@@ -20,6 +17,7 @@
   import { generateRandomIdentifier } from "$lib/utils/random-identifier.js";
   import ShellSheet from "$lib/shell/ShellSheet.svelte";
   import SoftButton from "$lib/components/inputs/SoftButton.svelte";
+  import RoleSelector from "$lib/components/shared/RoleSelector.svelte";
 
   interface InviteUserProps {
     readonly opened: boolean;
@@ -35,6 +33,7 @@
   let identifier = $state(generateRandomIdentifier());
   let displayName = $state("");
   let tempPassword = $state("");
+  let confirmPassword = $state("");
   let selectedRole = $state<RoleIdValue>(RoleId.VOLUNTEER);
   let showCredentialConfirmation = $state(false);
   let showPassword = $state(false);
@@ -42,7 +41,14 @@
   const orgKeyLoaded = $derived(orgKeyManager.isLoaded);
 
   const passwordTooShort = $derived(
-    tempPassword.length > 0 && tempPassword.length < 16,
+    tempPassword.length > 0 && tempPassword.length < PASSWORD_MIN_LENGTH,
+  );
+
+  const passwordsMatch = $derived(tempPassword === confirmPassword);
+  const confirmError = $derived(
+    confirmPassword.length > 0 && !passwordsMatch
+      ? m.admin_invite_password_mismatch()
+      : undefined,
   );
 
   let savedIdentifier = $state("");
@@ -72,13 +78,15 @@
       identifier.trim().length >= 3 &&
       displayName.trim().length > 0 &&
       tempPassword.length >= 16 &&
+      passwordsMatch &&
+      confirmPassword.length > 0 &&
       !registerMutation.isPending,
   );
 
   function handleSubmit(): void {
     if (!canSubmit) return;
 
-    savedIdentifier = identifier.trim();
+    savedIdentifier = identifier.trim().toLowerCase();
     savedPassword = tempPassword;
 
     registerMutation.mutate({
@@ -102,6 +110,7 @@
     identifier = generateRandomIdentifier();
     displayName = "";
     tempPassword = "";
+    confirmPassword = "";
     selectedRole = RoleId.VOLUNTEER;
   }
 
@@ -140,7 +149,7 @@
     <div class="sheet-content">
       <div class="credential-intro">
         <p class="credential-instructions">
-          {m.admin_invite_credential_instructions()}
+          {m.admin_invite_credential_instructions(withTerms())}
         </p>
       </div>
 
@@ -190,10 +199,15 @@
         </p>
       {/if}
 
+      <RoleSelector
+        {selectedRole}
+        onselect={(r: RoleIdValue) => (selectedRole = r)}
+      />
+
       <List nested>
         <ListInput
           outline
-          label={m.admin_invite_identifier_label()}
+          label={m.user_field_login_username_label()}
           type="text"
           value={identifier}
           oninput={(e: Event) => {
@@ -201,18 +215,21 @@
               identifier = e.target.value;
           }}
           disabled={!orgKeyLoaded}
+          autocapitalize="none"
+          autocorrect="off"
+          autocomplete="off"
           info={m.admin_invite_identifier_hint()}
         />
       </List>
 
       <p class="pii-warning" role="note">
-        {m.admin_invite_identifier_pii_warning()}
+        {m.user_field_login_username_pii_warning()}
       </p>
 
       <List nested>
         <ListInput
           outline
-          label={m.admin_invite_display_name_label()}
+          label={m.user_field_display_name_label()}
           type="text"
           value={displayName}
           oninput={(e: Event) => {
@@ -220,52 +237,37 @@
               displayName = e.target.value;
           }}
           disabled={!orgKeyLoaded}
-          info={m.admin_invite_display_name_hint()}
+          info={m.user_field_display_name_e2e_hint()}
         />
       </List>
 
       <List nested>
-        <ListInput
+        <PasswordInput
           outline
           label={m.admin_invite_password_label()}
-          type="password"
-          value={tempPassword}
-          oninput={(e: Event) => {
-            if (e.target instanceof HTMLInputElement)
-              tempPassword = e.target.value;
-          }}
+          bind:value={tempPassword}
           disabled={!orgKeyLoaded}
           info={passwordTooShort
             ? m.admin_invite_password_too_short()
-            : m.admin_invite_password_hint()}
+            : m.admin_invite_password_hint(withTerms())}
+        />
+        <PasswordInput
+          outline
+          label={m.admin_invite_confirm_password()}
+          bind:value={confirmPassword}
+          disabled={!orgKeyLoaded}
+          error={confirmError}
         />
       </List>
 
-      <div class="role-section">
-        <p class="section-label">
-          {m.admin_invite_role_label()}
-        </p>
-        <Segmented strong>
-          <SegmentedButton
-            active={selectedRole === RoleId.VOLUNTEER}
-            onclick={() => (selectedRole = RoleId.VOLUNTEER)}
-          >
-            {m.admin_role_volunteer()}
-          </SegmentedButton>
-          <SegmentedButton
-            active={selectedRole === RoleId.MANAGER}
-            onclick={() => (selectedRole = RoleId.MANAGER)}
-          >
-            {m.admin_role_manager()}
-          </SegmentedButton>
-          <SegmentedButton
-            active={selectedRole === RoleId.ADMIN}
-            onclick={() => (selectedRole = RoleId.ADMIN)}
-          >
-            {m.admin_role_admin()}
-          </SegmentedButton>
-        </Segmented>
-      </div>
+      {#if tempPassword.length > 0}
+        <Block>
+          <PasswordStrengthMeter
+            password={tempPassword}
+            minLength={PASSWORD_MIN_LENGTH}
+          />
+        </Block>
+      {/if}
     </div>
   {/if}
 </ShellSheet>
@@ -278,29 +280,11 @@
     padding: 0 var(--space-lg) var(--space-lg);
   }
 
-  .pii-warning {
-    font-size: 0.8125rem;
-    color: var(--color-amber-500);
-    background: color-mix(in srgb, var(--color-amber-500) 10%, transparent);
-    padding: var(--space-sm) var(--space-md);
-    border-radius: 8px;
-    margin: 0;
-  }
-
   .org-key-warning {
     font-size: 0.875rem;
     font-weight: 500;
     color: var(--color-amber-500);
     margin: 0;
-  }
-
-  .section-label {
-    font-size: 0.75rem;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
-    color: var(--muted);
-    margin: 0 0 var(--space-sm);
   }
 
   .credential-intro {

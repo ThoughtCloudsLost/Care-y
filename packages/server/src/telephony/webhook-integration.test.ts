@@ -468,6 +468,12 @@ describe.skipIf(!process.env.DATABASE_URL)(
           }
           return null;
         },
+        async validateSetupToken() {
+          return false;
+        },
+        async consumeSetupToken() {
+          /* no-op in test */
+        },
       };
 
       // 12. Real webhook dispatch (wires org resolution, repos, handlers)

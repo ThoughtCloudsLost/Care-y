@@ -16,7 +16,7 @@
   import { trpc } from "$lib/trpc/index.js";
   import DecryptPlaceholder from "$lib/components/DecryptPlaceholder.svelte";
   import { getCryptoBridge } from "$lib/crypto/context.js";
-  import { RouterNotAvailableError } from "$lib/errors.js";
+  import { requireRouter } from "$lib/errors.js";
   import type { TicketKeyWrap } from "$lib/crypto/ticket-decrypt-cache.js";
 
   interface Props {
@@ -34,8 +34,7 @@
 
   let { attachmentId, ticketId, keyWrap, alt, onopen }: Props = $props();
 
-  if (!trpc.tickets) throw new RouterNotAvailableError("tickets");
-  const ticketRouter = trpc.tickets;
+  const ticketRouter = requireRouter(trpc.tickets, "tickets");
   const bridge = getCryptoBridge();
 
   let thumbnailUrl: string | null = $state(null);

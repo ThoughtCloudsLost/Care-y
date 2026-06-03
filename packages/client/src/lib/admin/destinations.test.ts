@@ -108,7 +108,14 @@ describe("groupDestinations", () => {
     const org = grouped.get("organization") ?? [];
     const ids = org.map((d) => d.id);
 
-    expect(ids).toEqual(["branding", "keys", "retention", "note-types"]);
+    expect(ids).toEqual([
+      "general",
+      "branding",
+      "terminology",
+      "keys",
+      "retention",
+      "note-types",
+    ]);
   });
 });
 
