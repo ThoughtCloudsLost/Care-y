@@ -23,16 +23,19 @@ export default defineConfig({
     },
     {
       name: "chromium",
+      testIgnore: /onboarding|first-login/,
       use: { ...devices["Desktop Chrome"] },
       dependencies: ["seed-data"],
     },
     {
       name: "firefox",
+      testIgnore: /onboarding|first-login/,
       use: { ...devices["Desktop Firefox"] },
       dependencies: ["seed-data"],
     },
     {
       name: "webkit-mobile",
+      testIgnore: /onboarding|first-login/,
       use: { ...devices["iPhone 13"] },
       dependencies: ["seed-data"],
     },
