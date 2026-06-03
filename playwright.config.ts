@@ -15,6 +15,7 @@ export default defineConfig({
     trace: "on-first-retry",
   },
   projects: [
+    // ── Main E2E suite (e2e-org, fully seeded) ──
     {
       name: "seed-data",
       testMatch: "seed-data.setup.ts",
@@ -34,6 +35,17 @@ export default defineConfig({
       name: "webkit-mobile",
       use: { ...devices["iPhone 13"] },
       dependencies: ["seed-data"],
+    },
+    // ── Onboarding E2E suite (e2e-onboard, bare org) ──
+    {
+      name: "onboarding-setup",
+      testMatch: "onboarding-setup.ts",
+    },
+    {
+      name: "onboarding",
+      testMatch: /onboarding\.spec|first-login\.spec/,
+      use: { ...devices["Desktop Chrome"] },
+      dependencies: ["onboarding-setup"],
     },
   ],
   webServer: {
