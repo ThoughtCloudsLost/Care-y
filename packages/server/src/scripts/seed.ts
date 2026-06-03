@@ -151,6 +151,17 @@ async function seed(): Promise<void> {
     return;
   }
 
+  if (process.env.SEED_SKIP_ADMIN === "1") {
+    console.log(`ORG_ID=${orgId}`);
+    if (setupToken) {
+      console.log(`SETUP_TOKEN=${setupToken}`);
+    }
+    console.log(
+      "SEED_SKIP_ADMIN: org created with migrations. Skipping admin, keypair, and structural data.",
+    );
+    return;
+  }
+
   // --- Generate throwaway org keypair (unblocks auth gate) ---
   const tenantDatabase = tenantDb(schemaName);
   const orgPublicKey = await ensureOrgKeypair(tenantDatabase);
