@@ -21,12 +21,11 @@ import pg from "pg";
 import {
   Kysely,
   PostgresDialect,
-  FileMigrationProvider,
-  Migrator,
   sql,
   type Insertable,
   type Selectable,
 } from "kysely";
+import { FileMigrationProvider, Migrator } from "kysely/migration";
 import type {
   PlatformDatabase,
   TenantDatabase,
