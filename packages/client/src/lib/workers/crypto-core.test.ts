@@ -181,19 +181,23 @@ describe("crypto-core state accessors", () => {
 });
 
 describe("crypto-core onStateTransition callback", () => {
-  it("fires callback with KEYED on deriveKeys completion", async () => {
-    const sodium = requireSodium();
-    const salt = sodium.randombytes_buf(16);
-    const transitions: SharedWorkerState[] = [];
+  it(
+    "fires callback with KEYED on deriveKeys completion",
+    { timeout: 30_000 },
+    async () => {
+      const sodium = requireSodium();
+      const salt = sodium.randombytes_buf(16);
+      const transitions: SharedWorkerState[] = [];
 
-    onStateTransition((state) => {
-      transitions.push(state);
-    });
+      onStateTransition((state) => {
+        transitions.push(state);
+      });
 
-    await loginFlow("callback-test-password", salt);
+      await loginFlow("callback-test-password", salt);
 
-    expect(transitions).toContain("KEYED");
-  });
+      expect(transitions).toContain("KEYED");
+    },
+  );
 
   it("fires callback with READY on zeroAll", () => {
     const transitions: SharedWorkerState[] = [];

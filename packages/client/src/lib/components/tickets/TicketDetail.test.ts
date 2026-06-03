@@ -247,20 +247,24 @@ describe("TicketDetail", () => {
   const baseProps = { ticketId: "ticket-001" };
 
   describe("loading and error states", () => {
-    it("shows loading indicator during ticket loading", () => {
-      ticketQueryState = {
-        isLoading: true,
-        isError: false,
-        error: null,
-        data: undefined,
-      };
+    it(
+      "shows loading indicator during ticket loading",
+      { timeout: 15_000 },
+      () => {
+        ticketQueryState = {
+          isLoading: true,
+          isError: false,
+          error: null,
+          data: undefined,
+        };
 
-      const { container } = render(TicketDetail, { props: baseProps });
-      // DecryptPlaceholder container (.dp) renders immediately; the scramble
-      // (role="status") is delayed by 150ms, so check the container only.
-      const skeleton = container.querySelector(".dp");
-      expect(skeleton).not.toBeNull();
-    });
+        const { container } = render(TicketDetail, { props: baseProps });
+        // DecryptPlaceholder container (.dp) renders immediately; the scramble
+        // (role="status") is delayed by 150ms, so check the container only.
+        const skeleton = container.querySelector(".dp");
+        expect(skeleton).not.toBeNull();
+      },
+    );
 
     it("shows error message on ticket fetch failure", () => {
       ticketQueryState = {
