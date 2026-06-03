@@ -55,6 +55,7 @@ import {
  */
 function enforceArgon2Floor(serverParams?: Argon2Params): Argon2Params {
   const floor =
+    /* v8 ignore next -- build-time branch: Vite replaces statically */
     import.meta.env.VITE_E2E_FAST_KDF === "1"
       ? ARGON2_TEST_PARAMS
       : ARGON2_MIN_PARAMS;
