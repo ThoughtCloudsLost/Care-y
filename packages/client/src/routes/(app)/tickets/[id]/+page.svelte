@@ -893,9 +893,6 @@
   oncallaction={handleCallAction}
   oncalldismiss={closeCallSheet}
   oncomposedismiss={closeComposeActions}
-  onpresetselect={(body: string) => {
-    draftText = body;
-  }}
   ontextclient={handleOpenSmsCompose}
   onsmsdismiss={() => {
     smsSheetOpen = false;

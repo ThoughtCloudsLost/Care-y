@@ -25,7 +25,7 @@
     onnamechange?: () => void;
   }
 
-  let { externalSave = false, onnamechange }: Props = $props();
+  let { externalSave: _externalSave = false, onnamechange }: Props = $props();
 
   export function isDirty(): boolean {
     return hasChanges;

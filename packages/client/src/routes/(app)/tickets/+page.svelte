@@ -88,7 +88,6 @@
     buildAssigneeOptions,
     isSortField,
     isFilterStatus,
-    SORT_FIELDS,
   } from "$lib/tickets/ticket-list-utils.js";
 
   // --- Context & services ---

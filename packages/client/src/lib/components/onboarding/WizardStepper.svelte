@@ -17,7 +17,7 @@
     completedSteps: Set<number>;
   }
 
-  let { steps, currentStep, completedSteps }: Props = $props();
+  let { steps, currentStep, completedSteps: _completedSteps }: Props = $props();
 
   const progress = $derived(currentStep / steps.length);
   const currentLabel = $derived(steps.at(currentStep) ?? "");

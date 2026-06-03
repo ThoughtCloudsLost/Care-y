@@ -44,7 +44,7 @@
     externalSave?: boolean;
   }
 
-  let { externalSave = false }: Props = $props();
+  let { externalSave: _externalSave = false }: Props = $props();
 
   export function isDirty(): boolean {
     return hasChanges;

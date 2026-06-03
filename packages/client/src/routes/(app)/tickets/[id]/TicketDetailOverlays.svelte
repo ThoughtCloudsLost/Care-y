@@ -18,7 +18,6 @@
   import ExposureHint from "$lib/components/tickets/ExposureHint.svelte";
   import SmsComposeContent from "$lib/components/tickets/SmsComposeContent.svelte";
   import type { TicketAction } from "$lib/tickets/types.js";
-  import type { ContextMenuEvent } from "$lib/components/tickets/context-menu-actions.js";
   import type {
     DeleteConfirmState,
     NoteEditState,
@@ -55,7 +54,6 @@
     oncallaction: (action: CallAction) => void;
     oncalldismiss: () => void;
     oncomposedismiss: () => void;
-    onpresetselect: (body: string) => void;
     ontextclient: () => void;
     onsmsdismiss: () => void;
     onsmssend: (body: string) => Promise<void>;
@@ -89,7 +87,6 @@
     oncallaction,
     oncalldismiss,
     oncomposedismiss,
-    onpresetselect,
     ontextclient,
     onsmsdismiss,
     onsmssend,

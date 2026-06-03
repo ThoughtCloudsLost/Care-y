@@ -1,5 +1,3 @@
-import { SvelteSet } from "svelte/reactivity";
-
 export interface InviteFlowDeps {
   readonly canInviteWithLink: () => boolean;
   readonly onInviteManual: () => void;
