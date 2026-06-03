@@ -187,7 +187,7 @@ test.describe.serial("Ticket Detail (Chat View)", () => {
     await longPress(page, note);
     await page
       .locator('[data-testid="actions-sheet"]')
-      .filter({ hasText: /edit/i })
+      .getByRole("button", { name: /edit note/i })
       .click();
 
     // The note edit sheet opens as a dialog.

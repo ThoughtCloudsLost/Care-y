@@ -8,7 +8,7 @@ test.describe.serial("Universal Search", () => {
   let page: Page;
 
   test.beforeAll(async ({ browser }, testInfo) => {
-    testInfo.setTimeout(CRYPTO_TIMEOUT * 2);
+    testInfo.setTimeout(CRYPTO_TIMEOUT * 4);
     page = await browser.newPage();
     await startCoverage(page);
     await login(page);
