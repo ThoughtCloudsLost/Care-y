@@ -300,3 +300,35 @@ export interface FilterPillsConfig {
   readonly onclearall: () => void;
   readonly oncreateshortcut?: () => void;
 }
+
+// ── Desktop responsive ──────────────────────────────────────────────
+
+export interface NavbarAction {
+  readonly icon: Component;
+  readonly label: string;
+  readonly onclick: () => void;
+}
+
+export interface SidebarSubItem {
+  readonly id: string;
+  readonly label: string;
+  readonly count?: number;
+  readonly icon?: "queue" | "filter";
+  readonly ontap: () => void;
+}
+
+export interface SidebarSection {
+  readonly tabId: TabId | "admin";
+  readonly items: readonly SidebarSubItem[];
+}
+
+export interface DesktopSidebarProps {
+  readonly activeTab: TabId;
+  readonly ontabchange: (tabId: TabId) => void;
+  readonly expanded: boolean;
+  readonly subItems: readonly SidebarSection[];
+  readonly userName: string;
+  readonly userInitials: string;
+  readonly onSettings: () => void;
+  readonly onLogout: () => void;
+}

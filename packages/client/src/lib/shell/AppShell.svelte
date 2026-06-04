@@ -33,25 +33,20 @@
     ToolbarPane,
   } from "konsta/svelte";
   import PageShell from "./PageShell.svelte";
-  import {
-    House,
-    Ticket,
-    BookOpen,
-    Ellipsis,
-    Search,
-    User,
-  } from "@lucide/svelte";
+  import { Ellipsis, Search, User } from "@lucide/svelte";
   import { getOrgLogoUrl } from "$lib/branding/logo-url.svelte.js";
   import CallIndicator from "./CallIndicator.svelte";
   import { tick, onMount } from "svelte";
   import { SvelteMap } from "svelte/reactivity";
-  import type { Component } from "svelte";
   import { browser } from "$app/environment";
   import { beforeNavigate, afterNavigate, goto } from "$app/navigation";
   import { resolve } from "$app/paths";
   import * as m from "$lib/paraglide/messages.js";
   import { withTerms } from "$lib/terminology/with-terms.js";
   import type { TabId, AppShellProps } from "./types";
+  import { allTabs } from "./tabs";
+  import { layoutMode } from "$lib/stores/layout-mode.svelte";
+  import DesktopSidebar from "./DesktopSidebar.svelte";
   import { providePTR } from "./ptr-context.svelte.js";
   import { themeStore } from "$lib/stores/theme.svelte";
   import { useQueryClient, createQuery } from "@tanstack/svelte-query";
@@ -251,7 +246,8 @@
     const el = navbarDomEl;
     if (el == null) return;
     const hasSubnavbar = navbarOverride?.subnavbar != null;
-    const isHidden = navbarOverride?.subnavbarHidden?.() === true;
+    const isHidden =
+      !layoutMode.isDesktop && navbarOverride?.subnavbarHidden?.() === true;
     // The bgBlur layer is the first child of .k-navbar (iOS only).
     // Its gradient mask fades blur too early over the extended area.
     const firstChild = el.firstElementChild;
@@ -547,18 +543,6 @@
     };
   });
 
-  interface TabDef {
-    readonly id: TabId;
-    readonly label: () => string;
-    readonly icon: Component;
-  }
-
-  const allTabs: readonly TabDef[] = [
-    { id: "home", label: () => m.nav_home(), icon: House },
-    { id: "tickets", label: () => m.nav_tickets(withTerms()), icon: Ticket },
-    { id: "library", label: () => m.tab_library(withTerms()), icon: BookOpen },
-  ];
-
   // ── Pull-to-refresh ──────────────────────────────────────────────────
 
   const queryClient = useQueryClient();
@@ -693,6 +677,7 @@
   }
 
   function onPageTouchStart(e: TouchEvent): void {
+    if (layoutMode.isDesktop) return;
     if (!ptr.enabled) return;
     if (ptrPhase === "refreshing" || ptrPhase === "releasing") return;
     if (!mainEl) return;
@@ -781,314 +766,345 @@
   );
 </script>
 
-<PageShell
-  scrollTag="main"
-  scrollClass="main-content{tabbarHidden
-    ? ' tabbar-hidden'
-    : ''}{navbarOverride?.subnavbar != null ? ' has-subnavbar' : ''}"
-  scrollAttrs={{
-    id: "main-content",
-    "aria-label": m.shell_main_content(),
-    style: `--subnavbar-h:${String(subnavbarHeight)}px`,
-  }}
-  onNavbarHeight={handleNavbarHeight}
-  bindScrollEl={handleScrollEl}
->
-  {#snippet navbar()}
-    <Navbar role="banner">
-      {#snippet left()}
-        {#if navbarOverride?.left}
-          {@render navbarOverride.left()}
-        {:else}
-          <Link
-            iconOnly
-            role="button"
-            aria-label={m.nav_account()}
-            onclick={() => (panelOpen = true)}
-          >
-            <span class="navbar-avatar" aria-hidden="true">
-              {#if navLogoUrl}
-                <img
-                  src={navLogoUrl}
-                  alt=""
-                  class="navbar-avatar-logo"
-                  loading="eager"
-                />
-              {:else if userInitials}
-                {userInitials}
-              {:else}
-                <User size={18} />
-              {/if}
-            </span>
-          </Link>
-        {/if}
-      {/snippet}
-      {#snippet title()}
-        {#if navbarOverride?.title}
-          {#if typeof navbarOverride.title === "string"}
-            <span class="heading-compact">{navbarOverride.title}</span>
-          {:else}
-            {@render navbarOverride.title()}
+<div class="app-shell-layout">
+  {#if layoutMode.isDesktop}
+    <DesktopSidebar
+      {activeTab}
+      {ontabchange}
+      expanded={false}
+      subItems={[]}
+      userName={avatarDisplayName ?? ""}
+      userInitials={userInitials ?? ""}
+      onSettings={() => (panelOpen = true)}
+      onLogout={() => void goto(resolve("/logout"))}
+    />
+  {/if}
+  <PageShell
+    scrollTag="main"
+    scrollClass="main-content{tabbarHidden
+      ? ' tabbar-hidden'
+      : ''}{navbarOverride?.subnavbar != null ? ' has-subnavbar' : ''}"
+    scrollAttrs={{
+      id: "main-content",
+      "aria-label": m.shell_main_content(),
+      style: `--subnavbar-h:${String(subnavbarHeight)}px`,
+    }}
+    onNavbarHeight={handleNavbarHeight}
+    bindScrollEl={handleScrollEl}
+  >
+    {#snippet navbar()}
+      <Navbar role="banner">
+        {#snippet left()}
+          {#if navbarOverride?.left}
+            {@render navbarOverride.left()}
+          {:else if !layoutMode.isDesktop}
+            <Link
+              iconOnly
+              role="button"
+              aria-label={m.nav_account()}
+              onclick={() => (panelOpen = true)}
+            >
+              <span class="navbar-avatar" aria-hidden="true">
+                {#if navLogoUrl}
+                  <img
+                    src={navLogoUrl}
+                    alt=""
+                    class="navbar-avatar-logo"
+                    loading="eager"
+                  />
+                {:else if userInitials}
+                  {userInitials}
+                {:else}
+                  <User size={18} />
+                {/if}
+              </span>
+            </Link>
           {/if}
-        {:else}
-          <div class="navbar-title-group" class:heading-hidden={searchOpen}>
-            <span class="heading-compact">{orgName}</span>
-            <LanguagePicker value={uiLocale} onchange={handleLocaleChange} />
+        {/snippet}
+        {#snippet title()}
+          {#if navbarOverride?.title}
+            {#if typeof navbarOverride.title === "string"}
+              <span class="heading-compact">{navbarOverride.title}</span>
+            {:else}
+              {@render navbarOverride.title()}
+            {/if}
+          {:else}
+            <div class="navbar-title-group" class:heading-hidden={searchOpen}>
+              <span class="heading-compact">{orgName}</span>
+              <LanguagePicker value={uiLocale} onchange={handleLocaleChange} />
+            </div>
+          {/if}
+        {/snippet}
+        {#snippet right()}
+          {#if !searchOpen}
+            <CallIndicator />
+          {/if}
+          {#if !searchOpen && navbarOverride?.searchHidden !== true}
+            <Link
+              iconOnly
+              role="button"
+              aria-label={m.nav_search()}
+              onclick={openSearch}
+            >
+              <Search size={22} aria-hidden="true" />
+            </Link>
+          {/if}
+          {#if navbarOverride?.right && !searchOpen}
+            {@render navbarOverride.right()}
+          {/if}
+        {/snippet}
+        {#if searchOpen}
+          <div
+            bind:this={searchContainerEl}
+            class="search-overlay search-overlay-open"
+          >
+            <Searchbar
+              bind:value={searchQuery}
+              disableButton
+              onDisable={closeSearch}
+              onClear={() => (searchQuery = "")}
+            />
           </div>
         {/if}
-      {/snippet}
-      {#snippet right()}
-        {#if !searchOpen}
-          <CallIndicator />
-        {/if}
-        {#if !searchOpen && navbarOverride?.searchHidden !== true}
-          <Link
-            iconOnly
-            role="button"
-            aria-label={m.nav_search()}
-            onclick={openSearch}
-          >
-            <Search size={22} aria-hidden="true" />
-          </Link>
-        {/if}
-        {#if navbarOverride?.right && !searchOpen}
-          {@render navbarOverride.right()}
-        {/if}
-      {/snippet}
-      {#if searchOpen}
+      </Navbar>
+    {/snippet}
+
+    {#snippet beforeScroll()}
+      {#if navbarOverride?.subnavbar}
         <div
-          bind:this={searchContainerEl}
-          class="search-overlay search-overlay-open"
+          class="shell-subnavbar"
+          class:shell-subnavbar--hidden={!layoutMode.isDesktop &&
+            navbarOverride.subnavbarHidden?.() === true}
+          style:--subnavbar-h="{subnavbarHeight}px"
+          style:--navbar-h="{navbarHeight}px"
         >
-          <Searchbar
-            bind:value={searchQuery}
-            disableButton
-            onDisable={closeSearch}
-            onClear={() => (searchQuery = "")}
-          />
+          <div class="shell-subnavbar-inner" bind:this={subnavbarInnerEl}>
+            {@render navbarOverride.subnavbar()}
+          </div>
         </div>
       {/if}
-    </Navbar>
-  {/snippet}
 
-  {#snippet beforeScroll()}
-    {#if navbarOverride?.subnavbar}
-      <div
-        class="shell-subnavbar"
-        class:shell-subnavbar--hidden={navbarOverride.subnavbarHidden?.() ===
-          true}
-        style:--subnavbar-h="{subnavbarHeight}px"
-        style:--navbar-h="{navbarHeight}px"
-      >
-        <div class="shell-subnavbar-inner" bind:this={subnavbarInnerEl}>
-          {@render navbarOverride.subnavbar()}
-        </div>
-      </div>
-    {/if}
-
-    <!-- Pull-to-refresh indicator -->
-    {#if ptrPhase !== "idle"}
-      <div
-        class="ptr-indicator"
-        class:ptr-indicator-ios={themeStore.uiTheme === "ios"}
-        class:ptr-indicator-material={themeStore.uiTheme === "material"}
-        class:ptr-refreshing={ptrPhase === "refreshing"}
-        class:ptr-releasing={ptrPhase === "releasing"}
-        style:top={indicatorTop}
-        aria-hidden="true"
-      >
-        {#if themeStore.uiTheme === "ios"}
-          <!-- Circular arc that fills on pull, spins on release/refresh -->
-          <svg
-            class="ptr-arc"
-            width="28"
-            height="28"
-            viewBox="0 0 28 28"
-            fill="none"
-            xmlns="http://www.w3.org/2000/svg"
-          >
-            <circle
-              class="ptr-arc-track"
-              cx="14"
-              cy="14"
-              r={ARC_R}
-              stroke-width="2.5"
-            />
-            <circle
-              class="ptr-arc-fill"
-              cx="14"
-              cy="14"
-              r={ARC_R}
-              stroke-width="2.5"
-              stroke-linecap="round"
-              stroke-dasharray={ARC_CIRCUM}
-              stroke-dashoffset={ptrPhase === "pulling"
-                ? arcOffset(ptrProgress)
-                : 0}
-              transform="rotate(-90 14 14)"
-            />
-          </svg>
-        {:else}
-          <!-- Material: simple card with a spinner -->
-          <div class="ptr-material-card">
+      <!-- Pull-to-refresh indicator -->
+      {#if ptrPhase !== "idle"}
+        <div
+          class="ptr-indicator"
+          class:ptr-indicator-ios={themeStore.uiTheme === "ios"}
+          class:ptr-indicator-material={themeStore.uiTheme === "material"}
+          class:ptr-refreshing={ptrPhase === "refreshing"}
+          class:ptr-releasing={ptrPhase === "releasing"}
+          style:top={indicatorTop}
+          aria-hidden="true"
+        >
+          {#if themeStore.uiTheme === "ios"}
+            <!-- Circular arc that fills on pull, spins on release/refresh -->
             <svg
-              class="ptr-spinner"
-              width="24"
-              height="24"
-              viewBox="0 0 24 24"
+              class="ptr-arc"
+              width="28"
+              height="28"
+              viewBox="0 0 28 28"
               fill="none"
               xmlns="http://www.w3.org/2000/svg"
             >
               <circle
-                cx="12"
-                cy="12"
-                r="9"
+                class="ptr-arc-track"
+                cx="14"
+                cy="14"
+                r={ARC_R}
+                stroke-width="2.5"
+              />
+              <circle
+                class="ptr-arc-fill"
+                cx="14"
+                cy="14"
+                r={ARC_R}
                 stroke-width="2.5"
                 stroke-linecap="round"
-                stroke-dasharray="56.5"
+                stroke-dasharray={ARC_CIRCUM}
                 stroke-dashoffset={ptrPhase === "pulling"
-                  ? 56.5 * (1 - ptrProgress)
+                  ? arcOffset(ptrProgress)
                   : 0}
+                transform="rotate(-90 14 14)"
               />
             </svg>
-          </div>
-        {/if}
-      </div>
-    {/if}
-  {/snippet}
-
-  {@render children()}
-
-  {#snippet afterScroll()}
-    {#if tabbarHidden}
-      <!-- Tabbar hidden: route provides its own bottom bar (e.g., ShellMessagebar) -->
-    {:else if tabbarOverride}
-      <div
-        role="toolbar"
-        aria-label={tabbarOverride.ariaLabel}
-        class="tabbar-override"
-      >
-        <Toolbar tabbar tabbarIcons class="native-tabbar left-0 bottom-0 fixed">
-          {#if themeStore.uiTheme === "ios" && tabbarOverride.middle}
-            <div
-              class="tabbar-override-blur fixed left-0 bottom-0 w-full h-[calc(env(safe-area-inset-bottom,0px)+48px+32px)] mask-t-to-100% mask-t-from-70% pointer-events-none bg-gradient-to-t from-ios-light-surface to-transparent dark:from-ios-dark-surface/50"
-            ></div>
-          {/if}
-          {#if tabbarOverride.left}
-            <ToolbarPane tabbar={false}>
-              {@render tabbarOverride.left()}
-            </ToolbarPane>
-          {/if}
-          {#if tabbarOverride.middle}
-            <div class="tabbar-middle">
-              {@render tabbarOverride.middle()}
+          {:else}
+            <!-- Material: simple card with a spinner -->
+            <div class="ptr-material-card">
+              <svg
+                class="ptr-spinner"
+                width="24"
+                height="24"
+                viewBox="0 0 24 24"
+                fill="none"
+                xmlns="http://www.w3.org/2000/svg"
+              >
+                <circle
+                  cx="12"
+                  cy="12"
+                  r="9"
+                  stroke-width="2.5"
+                  stroke-linecap="round"
+                  stroke-dasharray="56.5"
+                  stroke-dashoffset={ptrPhase === "pulling"
+                    ? 56.5 * (1 - ptrProgress)
+                    : 0}
+                />
+              </svg>
             </div>
           {/if}
-          {#if tabbarOverride.right}
-            {#if !tabbarOverride.left && !tabbarOverride.middle}
-              <div style:flex="1"></div>
+        </div>
+      {/if}
+    {/snippet}
+
+    {@render children()}
+
+    {#snippet afterScroll()}
+      {#if layoutMode.isDesktop}
+        <!-- Desktop: sidebar replaces bottom tabbar -->
+      {:else if tabbarHidden}
+        <!-- Tabbar hidden: route provides its own bottom bar (e.g., ShellMessagebar) -->
+      {:else if tabbarOverride}
+        <div
+          role="toolbar"
+          aria-label={tabbarOverride.ariaLabel}
+          class="tabbar-override"
+        >
+          <Toolbar
+            tabbar
+            tabbarIcons
+            class="native-tabbar left-0 bottom-0 fixed"
+          >
+            {#if themeStore.uiTheme === "ios" && tabbarOverride.middle}
+              <div
+                class="tabbar-override-blur fixed left-0 bottom-0 w-full h-[calc(env(safe-area-inset-bottom,0px)+48px+32px)] mask-t-to-100% mask-t-from-70% pointer-events-none bg-gradient-to-t from-ios-light-surface to-transparent dark:from-ios-dark-surface/50"
+              ></div>
             {/if}
-            <ToolbarPane tabbar={false}>
-              {@render tabbarOverride.right()}
-            </ToolbarPane>
-          {/if}
-        </Toolbar>
-      </div>
-    {:else}
-      <nav
-        aria-label={m.nav_main()}
-        class="tabbar-nav native-tabbar left-0 bottom-0 fixed"
-      >
-        <Toolbar
-          tabbar
-          tabbarIcons
-          class="tabbar-inner"
-          role="tablist"
+            {#if tabbarOverride.left}
+              <ToolbarPane tabbar={false}>
+                {@render tabbarOverride.left()}
+              </ToolbarPane>
+            {/if}
+            {#if tabbarOverride.middle}
+              <div class="tabbar-middle">
+                {@render tabbarOverride.middle()}
+              </div>
+            {/if}
+            {#if tabbarOverride.right}
+              {#if !tabbarOverride.left && !tabbarOverride.middle}
+                <div style:flex="1"></div>
+              {/if}
+              <ToolbarPane tabbar={false}>
+                {@render tabbarOverride.right()}
+              </ToolbarPane>
+            {/if}
+          </Toolbar>
+        </div>
+      {:else}
+        <nav
           aria-label={m.nav_main()}
+          class="tabbar-nav native-tabbar left-0 bottom-0 fixed"
         >
-          <ToolbarPane>
-            {#each allTabs as tab (tab.id)}
-              <TabbarLink
-                active={activeTab === tab.id}
-                onclick={() => ontabchange(tab.id)}
-                role="tab"
-                aria-label={tab.label()}
-                aria-selected={activeTab === tab.id}
-                colors={{
-                  textIos: "text-[var(--glass-text)]",
-                  textMaterial: "text-[var(--glass-text)]",
-                  textActiveIos: "text-[var(--brand-text)]",
-                  textActiveMaterial: "text-[var(--brand-text)]",
-                }}
-              >
-                {#snippet icon()}{@const Icon = tab.icon}<Icon
-                    size={24}
-                    aria-hidden="true"
-                  />{/snippet}
-              </TabbarLink>
-            {/each}
-          </ToolbarPane>
-        </Toolbar>
-        <button
-          type="button"
-          class="more-btn"
-          aria-label={m.nav_more()}
-          onclick={() => (panelOpen = true)}
-        >
-          <Ellipsis size={24} aria-hidden="true" />
-        </button>
-      </nav>
-    {/if}
+          <Toolbar
+            tabbar
+            tabbarIcons
+            class="tabbar-inner"
+            role="tablist"
+            aria-label={m.nav_main()}
+          >
+            <ToolbarPane>
+              {#each allTabs as tab (tab.id)}
+                <TabbarLink
+                  active={activeTab === tab.id}
+                  onclick={() => ontabchange(tab.id)}
+                  role="tab"
+                  aria-label={tab.label()}
+                  aria-selected={activeTab === tab.id}
+                  colors={{
+                    textIos: "text-[var(--glass-text)]",
+                    textMaterial: "text-[var(--glass-text)]",
+                    textActiveIos: "text-[var(--brand-text)]",
+                    textActiveMaterial: "text-[var(--brand-text)]",
+                  }}
+                >
+                  {#snippet icon()}{@const Icon = tab.icon}<Icon
+                      size={24}
+                      aria-hidden="true"
+                    />{/snippet}
+                </TabbarLink>
+              {/each}
+            </ToolbarPane>
+          </Toolbar>
+          <button
+            type="button"
+            class="more-btn"
+            aria-label={m.nav_more()}
+            onclick={() => (panelOpen = true)}
+          >
+            <Ellipsis size={24} aria-hidden="true" />
+          </button>
+        </nav>
+      {/if}
 
-    <ShellSheet
-      opened={searchOpen}
-      ondismiss={closeSearch}
-      backdrop={false}
-      trapFocus={false}
-      role="search"
-      ariaLabel={m.search_hint(withTerms())}
-      class="search-sheet"
-    >
-      <SearchResults
-        query={searchQuery}
-        {promotedProviderId}
+      <ShellSheet
+        opened={searchOpen}
         ondismiss={closeSearch}
-        onnavigate={(href: string) => {
-          // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- dynamic href from search provider, always starts with /
-          void goto(resolve(href as `/${string}`)).then(closeSearch);
-        }}
-        onselectrecent={(q: string) => {
-          searchQuery = q;
-        }}
-      />
-    </ShellSheet>
-
-    {#if browser}
-      <ShellPanel
-        opened={panelOpen}
-        ondismiss={() => (panelOpen = false)}
-        ariaLabel={m.nav_account()}
+        backdrop={false}
+        trapFocus={false}
+        role="search"
+        ariaLabel={m.search_hint(withTerms())}
+        class="search-sheet"
       >
-        <AvatarPanel
-          encryptedDisplayName={meQuery.data?.user.encryptedDisplayName}
-          roleId={currentRoleId}
-          permissions={currentPermissions}
-          onnavigate={(path: string) => {
-            panelOpen = false;
-            // eslint-disable-next-line svelte/no-navigation-without-resolve -- admin routes created in later tasks
-            void goto(path);
+        <SearchResults
+          query={searchQuery}
+          {promotedProviderId}
+          ondismiss={closeSearch}
+          onnavigate={(href: string) => {
+            // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- dynamic href from search provider, always starts with /
+            void goto(resolve(href as `/${string}`)).then(closeSearch);
           }}
-          onlogout={() => {
-            panelOpen = false;
-            void goto(resolve("/logout"));
+          onselectrecent={(q: string) => {
+            searchQuery = q;
           }}
         />
-      </ShellPanel>
-    {/if}
-  {/snippet}
-</PageShell>
+      </ShellSheet>
+
+      {#if browser && !layoutMode.isDesktop}
+        <ShellPanel
+          opened={panelOpen}
+          ondismiss={() => (panelOpen = false)}
+          ariaLabel={m.nav_account()}
+        >
+          <AvatarPanel
+            encryptedDisplayName={meQuery.data?.user.encryptedDisplayName}
+            roleId={currentRoleId}
+            permissions={currentPermissions}
+            onnavigate={(path: string) => {
+              panelOpen = false;
+              // eslint-disable-next-line svelte/no-navigation-without-resolve -- admin routes created in later tasks
+              void goto(path);
+            }}
+            onlogout={() => {
+              panelOpen = false;
+              void goto(resolve("/logout"));
+            }}
+          />
+        </ShellPanel>
+      {/if}
+    {/snippet}
+  </PageShell>
+</div>
 
 <style>
+  /* ── Desktop layout ── */
+  .app-shell-layout {
+    display: flex;
+    height: var(--app-height, 100dvh);
+  }
+
+  .app-shell-layout > :global(:last-child) {
+    flex: 1;
+    min-width: 0;
+  }
+
   /* Default tabbar nav: flex container for Toolbar + More button.
      Fixed positioning and safe-area padding live here, not on the Toolbar. */
   .tabbar-nav {
