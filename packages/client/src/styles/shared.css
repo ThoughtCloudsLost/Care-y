@@ -78,6 +78,26 @@
   --text-md: 0.9375rem; /* 15px - card titles, client aliases */
 }
 
+/* ── Desktop responsive tokens ── */
+@media (min-width: 1024px) {
+  :root {
+    --page-pad-x: 1.5rem;
+    --text-base: 0.875rem;
+    --text-md: 1rem;
+    --content-max-width: 720px;
+    --sidebar-width-collapsed: 64px;
+    --sidebar-width-expanded: 240px;
+  }
+
+  .native-tabbar {
+    display: none !important;
+  }
+
+  .main-content {
+    padding-bottom: 0 !important;
+  }
+}
+
 /* Color scheme set dynamically by the blocking script in app.html
    and the theme store. Class-scoped so it matches the resolved scheme,
    not the OS preference. */
