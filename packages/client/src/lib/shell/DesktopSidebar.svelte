@@ -90,6 +90,18 @@
         focusTarget(focusedIndex);
         break;
       }
+      case "Home": {
+        e.preventDefault();
+        focusedIndex = 0;
+        focusTarget(focusedIndex);
+        break;
+      }
+      case "End": {
+        e.preventDefault();
+        focusedIndex = len - 1;
+        focusTarget(focusedIndex);
+        break;
+      }
       case "Escape": {
         e.preventDefault();
         hoverExpanded = false;

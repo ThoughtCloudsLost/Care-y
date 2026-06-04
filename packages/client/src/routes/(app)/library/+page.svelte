@@ -41,6 +41,7 @@
     getTabbarOverrideCtx,
     getNavbarOverrideCtx,
   } from "$lib/shell/context.js";
+  import type { NavbarAction } from "$lib/shell/types";
   import { useScrollDirection } from "$lib/shell/use-scroll-direction.svelte.js";
   import { requireRouter } from "$lib/errors.js";
   import { kbFilterStore } from "$lib/stores/kb-filters.svelte.js";
@@ -250,6 +251,8 @@
     return sorted;
   });
 
+  type ArticleItem = (typeof displayItems)[number];
+
   $effect(() => {
     const q = page.url.searchParams.get("q");
     if (q != null && q !== "") {
@@ -313,6 +316,21 @@
     if (urlAction === "manage-categories" && canManageCategories) {
       categorySheetOpen = true;
     }
+  });
+
+  let lastAppliedSavedFilter = "";
+
+  $effect(() => {
+    const savedFilterId = page.url.searchParams.get("savedFilter");
+    if (savedFilterId === null || savedFilterId === lastAppliedSavedFilter)
+      return;
+
+    lastAppliedSavedFilter = savedFilterId;
+    const record = kbSavedFilterStore.filters.find(
+      (f) => f.id === savedFilterId,
+    );
+    if (record != null) dispatch.handleSavedFilterApply(record);
+    void goto(resolve("/library"), { replaceState: true });
   });
 
   function handleBulkMove(): void {
@@ -416,8 +434,13 @@
 
   // Subnavbar override.
   $effect(() => {
+    const newArticleAction: NavbarAction = {
+      icon: FilePlus,
+      label: m.library_new_article(),
+      onclick: () => void goto(resolve("/library/new")),
+    };
     navbarCtx.current = {
-      right: canEdit ? navRight : undefined,
+      actions: canEdit ? [newArticleAction] : [],
       subnavbar: librarySubnavbar,
       subnavbarHidden: () => scrollDir.hidden && !overlay.active,
     };
@@ -687,17 +710,6 @@
   }
 </script>
 
-{#snippet navRight()}
-  <Link
-    iconOnly
-    onclick={() => void goto(resolve("/library/new"))}
-    role="button"
-    aria-label={m.library_new_article()}
-  >
-    <FilePlus size={22} aria-hidden="true" />
-  </Link>
-{/snippet}
-
 {#snippet batchLeft()}
   <Link iconOnly onclick={handleBulkMove} aria-label={m.library_action_move()}>
     <FolderInput size={24} aria-hidden="true" />
@@ -814,13 +826,13 @@
         scrollContainer={scrollEl}
         estimateHeight={kbViewModeStore.mode === "grid" ? 200 : 140}
         columns={kbViewModeStore.mode === "grid" ? 2 : 1}
-        getKey={(article: (typeof displayItems)[number]) => article.id}
+        getKey={(article: ArticleItem) => article.id}
         onloadmore={articlesQuery.hasNextPage ? loadNextPage : undefined}
       >
         {#snippet children({
           item: article,
         }: {
-          item: (typeof displayItems)[number];
+          item: ArticleItem;
           index: number;
         })}
           <div

@@ -32,6 +32,7 @@
     getTabbarOverrideCtx,
     getNavbarOverrideCtx,
   } from "$lib/shell/context.js";
+  import type { NavbarAction } from "$lib/shell/types";
   import { useScrollDirection } from "$lib/shell/use-scroll-direction.svelte.js";
   import { Link } from "konsta/svelte";
   import { UserPlus, Pause, X, TicketPlus } from "@lucide/svelte";
@@ -456,8 +457,15 @@
   });
 
   $effect(() => {
+    const newTicketAction: NavbarAction = {
+      icon: TicketPlus,
+      label: m.nav_new_ticket(withTerms()),
+      onclick: () => {
+        newTicketOpen = true;
+      },
+    };
     navbarCtx.current = {
-      right: navRight,
+      actions: [newTicketAction],
       subnavbar: ticketSubnavbar,
       subnavbarHidden: () => scrollDir.hidden && !overlay.active,
     };
@@ -478,13 +486,25 @@
     const queueId = params.get("queue");
     const filter = params.get("filter");
     const action = params.get("action");
+    const savedFilterId = params.get("savedFilter");
 
-    if (queueId === null && filter === null && action === null) return;
+    if (
+      queueId === null &&
+      filter === null &&
+      action === null &&
+      savedFilterId === null
+    )
+      return;
 
     lastAppliedSearch = searchStr;
 
     untrack(() => {
-      if (queueId !== null) {
+      if (savedFilterId !== null) {
+        const record = savedFilterStore.filters.find(
+          (f) => f.id === savedFilterId,
+        );
+        if (record != null) dispatch.handleSavedFilterApply(record);
+      } else if (queueId !== null) {
         filterStore.clearAll();
         filterStore.toggleQueue(queueId);
       } else if (filter === "my-open") {
@@ -756,19 +776,6 @@
     },
   });
 </script>
-
-{#snippet navRight()}
-  <Link
-    iconOnly
-    onclick={() => {
-      newTicketOpen = true;
-    }}
-    role="button"
-    aria-label={m.nav_new_ticket(withTerms())}
-  >
-    <TicketPlus size={22} aria-hidden="true" />
-  </Link>
-{/snippet}
 
 {#snippet batchLeft()}
   <Link

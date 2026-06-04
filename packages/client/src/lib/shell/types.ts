@@ -197,8 +197,12 @@ export interface NavbarOverride {
   readonly left?: Snippet;
   /** Title string or snippet. */
   readonly title?: string | Snippet;
-  /** Snippet rendered in the right slot (action icons). */
+  /** Snippet rendered in the right slot (action icons). Prefer `actions` for
+   *  structured data that adapts to desktop (icon+label) vs mobile (icon-only). */
   readonly right?: Snippet;
+  /** Structured actions for the navbar right slot. The shell renders icon-only
+   *  on mobile and icon+label on desktop. Routes provide data, not snippets. */
+  readonly actions?: readonly NavbarAction[];
   /** Snippet rendered below the Navbar as a collapsible subnavbar region. */
   readonly subnavbar?: Snippet;
   /** Reactive getter: returns true when the subnavbar should be hidden. */
@@ -306,7 +310,7 @@ export interface FilterPillsConfig {
 export interface NavbarAction {
   readonly icon: Component;
   readonly label: string;
-  readonly onclick: () => void;
+  readonly onclick: (e: MouseEvent) => void;
 }
 
 export interface SidebarSubItem {

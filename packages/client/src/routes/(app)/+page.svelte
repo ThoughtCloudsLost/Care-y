@@ -1,7 +1,7 @@
 <script lang="ts">
   import { SvelteSet } from "svelte/reactivity";
   import { createQuery } from "@tanstack/svelte-query";
-  import { Notification, Link, List, ListItem } from "konsta/svelte";
+  import { Notification, List, ListItem } from "konsta/svelte";
   import { goto } from "$app/navigation";
   import { resolve } from "$app/paths";
   import { trpc } from "$lib/trpc/index.js";
@@ -42,6 +42,7 @@
   import { Permission } from "@care-y/shared";
   import ShellPopover from "$lib/shell/ShellPopover.svelte";
   import { getNavbarOverrideCtx } from "$lib/shell/context.js";
+  import type { NavbarAction } from "$lib/shell/types";
   import { resolveAsyncDecrypt } from "$lib/crypto/decrypt-result.js";
   import { bucketTickets } from "$lib/components/dashboard/filters.js";
   import {
@@ -147,7 +148,15 @@
 
   // Navbar right-action override: "+" button with create popover.
   $effect(() => {
-    navbarCtx.current = { right: createButton, subnavbar: dashboardSubnavbar };
+    const createAction: NavbarAction = {
+      icon: Plus,
+      label: m.nav_create_new(),
+      onclick: handleCreateTap,
+    };
+    navbarCtx.current = {
+      actions: [createAction],
+      subnavbar: dashboardSubnavbar,
+    };
     return () => {
       navbarCtx.current = undefined;
     };
@@ -558,17 +567,6 @@
     {/if}
   </div>
 </div>
-
-{#snippet createButton()}
-  <Link
-    iconOnly
-    role="button"
-    aria-label={m.nav_create_new()}
-    onclick={handleCreateTap}
-  >
-    <Plus size={22} aria-hidden="true" />
-  </Link>
-{/snippet}
 
 <ShellPopover
   opened={createPopoverOpen}

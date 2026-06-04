@@ -43,10 +43,17 @@
   import { resolve } from "$app/paths";
   import * as m from "$lib/paraglide/messages.js";
   import { withTerms } from "$lib/terminology/with-terms.js";
-  import type { TabId, AppShellProps } from "./types";
+  import type {
+    TabId,
+    AppShellProps,
+    SidebarSection,
+    SidebarSubItem,
+  } from "./types";
   import { allTabs } from "./tabs";
   import { layoutMode } from "$lib/stores/layout-mode.svelte";
   import DesktopSidebar from "./DesktopSidebar.svelte";
+  import { savedFilterStore } from "$lib/stores/saved-filters.svelte";
+  import { kbSavedFilterStore } from "$lib/stores/kb-saved-filters.svelte";
   import { providePTR } from "./ptr-context.svelte.js";
   import { themeStore } from "$lib/stores/theme.svelte";
   import { useQueryClient, createQuery } from "@tanstack/svelte-query";
@@ -200,6 +207,106 @@
       .slice(0, 2)
       .map((w) => w.charAt(0).toUpperCase())
       .join("");
+  });
+
+  // ── Sidebar sub-items (desktop only) ──────────────────────────────
+  // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- tickets router exists post-auth (AppShell only renders inside (app) layout)
+  const ticketsRouterRef = trpc.tickets!;
+  const sidebarQueuesQuery = createQuery(() => ({
+    queryKey: ticketsKeys.myQueues(),
+    queryFn: async () => ticketsRouterRef.myQueues.query(),
+    enabled: layoutMode.isDesktop,
+  }));
+
+  const MAX_SIDEBAR_FILTERS = 5;
+
+  const sidebarSubItems = $derived.by((): readonly SidebarSection[] => {
+    if (!layoutMode.isDesktop) return [];
+
+    const sections: SidebarSection[] = [];
+
+    // Tickets tab: queues + saved filters
+    const ticketItems: SidebarSubItem[] = [];
+
+    if (sidebarQueuesQuery.data != null && avatarOrgCache != null) {
+      for (const q of sidebarQueuesQuery.data) {
+        const name = avatarOrgCache.decrypt(`queue:${q.id}`, q.encryptedName);
+        ticketItems.push({
+          id: `queue:${q.id}`,
+          label: name ?? "...",
+          count: Number(q.openCount),
+          icon: "queue",
+          ontap: () =>
+            void goto(resolve(`/tickets?queue=${encodeURIComponent(q.id)}`)),
+        });
+      }
+    }
+
+    for (const f of savedFilterStore.filters.slice(0, MAX_SIDEBAR_FILTERS)) {
+      const nameBytes = base64ToUint8Array(f.encryptedName);
+      const name = avatarOrgCache?.decrypt(`saved-filter:${f.id}`, nameBytes);
+      ticketItems.push({
+        id: `filter:${f.id}`,
+        label: name ?? "...",
+        icon: "filter",
+        ontap: () =>
+          void goto(
+            resolve(`/tickets?savedFilter=${encodeURIComponent(f.id)}`),
+          ),
+      });
+    }
+
+    if (ticketItems.length > 0) {
+      sections.push({ tabId: "tickets", items: ticketItems });
+    }
+
+    // Library tab: saved filters
+    const kbItems: SidebarSubItem[] = [];
+    for (const f of kbSavedFilterStore.filters.slice(0, MAX_SIDEBAR_FILTERS)) {
+      const nameBytes = base64ToUint8Array(f.encryptedName);
+      const name = avatarOrgCache?.decrypt(
+        `kb-saved-filter:${f.id}`,
+        nameBytes,
+      );
+      kbItems.push({
+        id: `kb-filter:${f.id}`,
+        label: name ?? "...",
+        icon: "filter",
+        ontap: () =>
+          void goto(
+            resolve(`/library?savedFilter=${encodeURIComponent(f.id)}`),
+          ),
+      });
+    }
+    if (kbItems.length > 0) {
+      sections.push({ tabId: "library", items: kbItems });
+    }
+
+    // Admin section (role-gated)
+    if (currentPermissions.has(Permission.MANAGE_USERS)) {
+      sections.push({
+        tabId: "admin",
+        items: [
+          {
+            id: "admin:people",
+            label: m.admin_people_title(),
+            ontap: () => void goto(resolve("/admin/people")),
+          },
+          {
+            id: "admin:org",
+            label: m.admin_org_title(),
+            ontap: () => void goto(resolve("/admin/organization")),
+          },
+          {
+            id: "admin:comms",
+            label: m.admin_comms_title(),
+            ontap: () => void goto(resolve("/admin/communications")),
+          },
+        ],
+      });
+    }
+
+    return sections;
   });
 
   // ── Subnavbar + Navbar height measurement.
@@ -772,11 +879,11 @@
       {activeTab}
       {ontabchange}
       expanded={false}
-      subItems={[]}
+      subItems={sidebarSubItems}
       {orgName}
       userName={avatarDisplayName ?? ""}
       userInitials={userInitials ?? ""}
-      onSettings={() => (panelOpen = true)}
+      onSettings={() => void goto(resolve("/admin"))}
       onLogout={() => void goto(resolve("/logout"))}
     />
   {/if}
@@ -850,7 +957,22 @@
               <Search size={22} aria-hidden="true" />
             </Link>
           {/if}
-          {#if navbarOverride?.right && !searchOpen}
+          {#if !searchOpen && navbarOverride?.actions}
+            {#each navbarOverride.actions as action (action.label)}
+              <Link
+                iconOnly={!layoutMode.isDesktop}
+                role="button"
+                aria-label={action.label}
+                onclick={action.onclick}
+              >
+                {@const Icon = action.icon}
+                <Icon size={22} aria-hidden="true" />
+                {#if layoutMode.isDesktop}
+                  <span class="navbar-action-label">{action.label}</span>
+                {/if}
+              </Link>
+            {/each}
+          {:else if navbarOverride?.right && !searchOpen}
             {@render navbarOverride.right()}
           {/if}
         {/snippet}
@@ -1066,7 +1188,7 @@
         />
       </ShellSheet>
 
-      {#if browser}
+      {#if browser && !layoutMode.isDesktop}
         <ShellPanel
           opened={panelOpen}
           ondismiss={() => (panelOpen = false)}
@@ -1250,6 +1372,12 @@
     width: 100%;
     height: 100%;
     object-fit: cover;
+  }
+
+  .navbar-action-label {
+    font-size: var(--text-sm);
+    margin-inline-start: 0.25rem;
+    white-space: nowrap;
   }
 
   .navbar-title-group {
