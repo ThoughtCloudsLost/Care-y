@@ -327,6 +327,7 @@ export interface DesktopSidebarProps {
   readonly ontabchange: (tabId: TabId) => void;
   readonly expanded: boolean;
   readonly subItems: readonly SidebarSection[];
+  readonly orgName?: string;
   readonly userName: string;
   readonly userInitials: string;
   readonly onSettings: () => void;
