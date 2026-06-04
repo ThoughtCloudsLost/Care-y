@@ -73,6 +73,7 @@
   import SearchNavigator from "$lib/components/search/SearchNavigator.svelte";
   import { fuzzySearch } from "$lib/search/fuzzy.js";
   import TicketListOverlays from "./TicketListOverlays.svelte";
+  import { getTicketsLayoutCtx } from "./tickets-layout-ctx.js";
 
   import { createMultiSelect } from "$lib/composables/ticket-list/create-multi-select.svelte.js";
   import { createHoldAction } from "$lib/composables/ticket-list/create-hold-action.svelte.js";
@@ -109,6 +110,7 @@
   });
   const tabbarOverride = getTabbarOverrideCtx();
   const navbarCtx = getNavbarOverrideCtx();
+  const ticketsLayout = getTicketsLayoutCtx();
 
   function resolveVolunteerName(userId: string): string {
     if (userId === currentUserId) return m.dashboard_assigned_you();
@@ -367,7 +369,7 @@
   }
 
   function handleTicketTap(ticketId: string): void {
-    void goto(resolve(`/tickets/${ticketId}`));
+    ticketsLayout.openTicket(ticketId);
   }
 
   function handleAction(ticketId: string, action: TicketQuickAction): void {
@@ -903,7 +905,12 @@
             id="ticket-{item.id}"
             class="search-target"
             class:match-active={overlay.activeId === item.id}
-            aria-current={overlay.activeId === item.id ? "true" : undefined}
+            class:ticket-card-selected={ticketsLayout.selectedTicketId() ===
+              item.id}
+            aria-current={overlay.activeId === item.id ||
+            ticketsLayout.selectedTicketId() === item.id
+              ? "true"
+              : undefined}
           >
             <SwipeableCard
               ticketId={item.id}

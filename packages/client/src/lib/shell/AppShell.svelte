@@ -33,7 +33,7 @@
     ToolbarPane,
   } from "konsta/svelte";
   import PageShell from "./PageShell.svelte";
-  import { Ellipsis, Search, User } from "@lucide/svelte";
+  import { Ellipsis, Maximize2, Search, User, X } from "@lucide/svelte";
   import { getOrgLogoUrl } from "$lib/branding/logo-url.svelte.js";
   import CallIndicator from "./CallIndicator.svelte";
   import { tick, onMount } from "svelte";
@@ -55,6 +55,7 @@
   import { savedFilterStore } from "$lib/stores/saved-filters.svelte";
   import { kbSavedFilterStore } from "$lib/stores/kb-saved-filters.svelte";
   import { providePTR } from "./ptr-context.svelte.js";
+  import { splitNavbar } from "$lib/stores/split-navbar.svelte.js";
   import { themeStore } from "$lib/stores/theme.svelte";
   import { useQueryClient, createQuery } from "@tanstack/svelte-query";
   import { Permission } from "@care-y/shared";
@@ -173,6 +174,10 @@
   });
   setNavbarOverrideCtx(navbarOverrideContainer);
   const navbarOverride = $derived(navbarOverrideContainer.current);
+
+  // ── Split navbar (segmented desktop view) ──
+  const splitNavbarCfg = $derived(splitNavbar.config);
+  const splitRight = $derived(splitNavbarCfg?.rightNavbar.current);
 
   // ── Avatar panel ─────────────────────────────────────────────────
   const navLogoUrl = $derived(getOrgLogoUrl());
@@ -902,7 +907,10 @@
     bindScrollEl={handleScrollEl}
   >
     {#snippet navbar()}
-      <Navbar role="banner">
+      <Navbar
+        role="banner"
+        class={layoutMode.isDesktop && splitNavbarCfg ? "has-split-right" : ""}
+      >
         {#snippet left()}
           {#if navbarOverride?.left}
             {@render navbarOverride.left()}
@@ -990,21 +998,70 @@
             />
           </div>
         {/if}
+        {#if layoutMode.isDesktop && splitNavbarCfg && splitRight}
+          <div
+            class="split-navbar-right"
+            style:width={splitNavbarCfg.rightWidth}
+          >
+            <div class="split-navbar-right-inner">
+              <button
+                class="split-navbar-close"
+                onclick={splitNavbarCfg.onclose}
+                aria-label={m.tickets_detail_close()}
+              >
+                <X size={18} aria-hidden="true" />
+              </button>
+              <div class="split-navbar-title">
+                {#if splitRight.title}
+                  {#if typeof splitRight.title === "string"}
+                    <span class="heading-compact">{splitRight.title}</span>
+                  {:else}
+                    {@render splitRight.title()}
+                  {/if}
+                {/if}
+              </div>
+              <div class="split-navbar-actions">
+                {#if splitRight.right}
+                  {@render splitRight.right()}
+                {/if}
+                <button
+                  class="split-navbar-close"
+                  onclick={splitNavbarCfg.onexpand}
+                  aria-label={m.tickets_detail_expand()}
+                >
+                  <Maximize2 size={16} aria-hidden="true" />
+                </button>
+              </div>
+            </div>
+          </div>
+        {/if}
       </Navbar>
     {/snippet}
 
     {#snippet beforeScroll()}
-      {#if navbarOverride?.subnavbar}
+      {#if navbarOverride?.subnavbar != null || (layoutMode.isDesktop && splitRight?.subnavbar != null)}
         <div
           class="shell-subnavbar"
           class:shell-subnavbar--hidden={!layoutMode.isDesktop &&
-            navbarOverride.subnavbarHidden?.() === true}
+            navbarOverride?.subnavbarHidden?.() === true}
+          class:shell-subnavbar--split={layoutMode.isDesktop &&
+            splitNavbarCfg != null}
           style:--subnavbar-h="{subnavbarHeight}px"
           style:--navbar-h="{navbarHeight}px"
         >
           <div class="shell-subnavbar-inner" bind:this={subnavbarInnerEl}>
-            {@render navbarOverride.subnavbar()}
+            {#if navbarOverride?.subnavbar}
+              {@render navbarOverride.subnavbar()}
+            {/if}
           </div>
+          {#if layoutMode.isDesktop && splitNavbarCfg && splitRight?.subnavbar}
+            <div
+              class="split-subnavbar-right"
+              style:width={splitNavbarCfg.rightWidth}
+            >
+              {@render splitRight.subnavbar()}
+            </div>
+          {/if}
         </div>
       {/if}
 
@@ -1570,5 +1627,85 @@
   /* Search sheet: fill from bottom up to the Navbar */
   :global(.search-sheet) {
     height: calc(100dvh - var(--navbar-h, 64px));
+  }
+
+  /* ── Split navbar overlays (segmented desktop view) ── */
+
+  /* Constrain left-side content so it stops at the split boundary */
+  :global(.k-navbar.has-split-right) > :global(:nth-child(3)) {
+    padding-inline-end: var(--split-detail-width, 480px);
+  }
+
+  .shell-subnavbar--split > .shell-subnavbar-inner {
+    padding-inline-end: var(--split-detail-width, 480px);
+  }
+
+  .split-navbar-right {
+    position: absolute;
+    top: 0;
+    right: 0;
+    height: 100%;
+    z-index: 22;
+    background: var(--glass-surface);
+    backdrop-filter: var(--glass-blur, blur(16px));
+    border-inline-start: 1px solid var(--divider);
+    pointer-events: auto;
+  }
+
+  .split-navbar-right-inner {
+    display: flex;
+    align-items: center;
+    height: 100%;
+    padding: 0 0.5rem;
+    gap: 0.25rem;
+  }
+
+  .split-navbar-close {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    border: none;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--muted);
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+
+  .split-navbar-close:hover {
+    background: var(--surface-hover, rgba(128, 128, 128, 0.1));
+  }
+
+  .split-navbar-title {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .split-navbar-title :global(a),
+  .split-navbar-title :global(.client-alias-btn) {
+    font-size: var(--text-md);
+    font-weight: 600;
+  }
+
+  .split-navbar-actions {
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+  }
+
+  .split-subnavbar-right {
+    position: absolute;
+    top: 0;
+    right: 0;
+    height: 100%;
+    z-index: 1;
+    border-inline-start: 1px solid var(--divider);
+    overflow: hidden;
   }
 </style>

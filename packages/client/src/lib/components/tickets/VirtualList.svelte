@@ -240,6 +240,35 @@
     };
   });
 
+  // --- Width-change remeasure trigger ---
+  // When the scroll container's width changes >50px (entering/exiting
+  // split view, or window resize), card text wraps differently, making
+  // measured heights stale. Reset measurements to force a re-measure.
+  let lastContainerWidth = $state(0);
+
+  $effect(() => {
+    if (!scrollContainer) return;
+    const el = scrollContainer;
+    const ro = new ResizeObserver((entries) => {
+      const entry = entries[0];
+      if (!entry) return;
+      const newWidth = entry.contentRect.width;
+      if (
+        lastContainerWidth > 0 &&
+        Math.abs(newWidth - lastContainerWidth) > 50
+      ) {
+        heights = [];
+        measuredCount = 0;
+        if (virtualized) {
+          virtualized = false;
+        }
+      }
+      lastContainerWidth = newWidth;
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  });
+
   // Svelte action for row elements (both modes).
   // In flat mode, rows are measured silently. In virtualized mode,
   // measurements drive absolute positioning.

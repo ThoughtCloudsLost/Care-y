@@ -87,6 +87,7 @@
     --content-max-width: 720px;
     --sidebar-width-collapsed: 64px;
     --sidebar-width-expanded: 240px;
+    --split-detail-width: 480px;
   }
 
   .native-tabbar {
@@ -105,6 +106,12 @@
 
   .section-scroll-nav {
     display: none;
+  }
+
+  .ticket-card-selected {
+    outline: 2px solid var(--brand-primary);
+    outline-offset: -2px;
+    border-radius: var(--card-radius, 0.75rem);
   }
 }
 
