@@ -49,6 +49,7 @@
   "library_sort_updated": "Última actualización",
   "library_sort_rating": "Valoración",
   "library_select_mode": "Seleccionar",
+  "library_select_article_prompt": "Selecciona un artículo para leer",
   "library_selected": "{count} seleccionados",
   "library_exit_multiselect": "Salir del modo de selección",
   "library_action_move": "Mover",
