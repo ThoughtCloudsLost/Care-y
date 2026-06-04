@@ -2,7 +2,6 @@
   import { Settings, LogOut, ChevronDown, Building2 } from "@lucide/svelte";
   import { SvelteSet } from "svelte/reactivity";
   import * as m from "$lib/paraglide/messages.js";
-  import { withTerms } from "$lib/terminology/with-terms.js";
   import { getOrgLogoUrl } from "$lib/branding/logo-url.svelte.js";
   import { allTabs } from "./tabs";
   import type {
@@ -17,6 +16,7 @@
     ontabchange,
     expanded,
     subItems,
+    orgName,
     userName,
     userInitials,
     onSettings,
@@ -63,11 +63,14 @@
     return section?.items ?? [];
   }
 
+  // Admin section is only rendered if subItems contain an "admin" section
+  const hasAdmin = $derived(subItems.some((s) => s.tabId === "admin"));
+
   // ── Keyboard navigation ────────────────────────────────────────────
   let focusedIndex = $state(0);
   const focusableIds = $derived([
     ...allTabs.map((t) => t.id),
-    "admin" as const,
+    ...(hasAdmin ? (["admin"] as const) : []),
     "settings" as const,
     "logout" as const,
   ]);
@@ -103,9 +106,6 @@
     const el = navEl.querySelector<HTMLElement>(`[data-sidebar-id="${id}"]`);
     el?.focus();
   }
-
-  // Admin section is only rendered if subItems contain an "admin" section
-  const hasAdmin = $derived(subItems.some((s) => s.tabId === "admin"));
 </script>
 
 <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
@@ -113,7 +113,7 @@
   bind:this={navEl}
   class="desktop-sidebar"
   class:expanded={isExpanded}
-  aria-label={m.nav_more()}
+  aria-label={m.nav_sidebar_label()}
   onmouseenter={handleMouseEnter}
   onmouseleave={handleMouseLeave}
   onkeydown={handleKeyDown}
@@ -128,7 +128,7 @@
       {/if}
     </span>
     {#if isExpanded}
-      <span class="sidebar-org-name heading-compact">{m.nav_home()}</span>
+      <span class="sidebar-org-name heading-compact">{orgName ?? ""}</span>
     {/if}
   </div>
 
@@ -265,26 +265,26 @@
       onclick={onSettings}
       type="button"
       class="sidebar-user-action"
-      aria-label={m.nav_account()}
+      aria-label={m.panel_settings()}
       tabindex={focusedIndex === focusableIds.length - 2 ? 0 : -1}
       data-sidebar-id="settings"
     >
       <Settings size={20} aria-hidden="true" />
       {#if isExpanded}
-        <span class="sidebar-action-label">{m.nav_account()}</span>
+        <span class="sidebar-action-label">{m.panel_settings()}</span>
       {/if}
     </button>
     <button
       onclick={onLogout}
       type="button"
       class="sidebar-user-action"
-      aria-label={m.nav_more()}
+      aria-label={m.panel_logout()}
       tabindex={focusedIndex === focusableIds.length - 1 ? 0 : -1}
       data-sidebar-id="logout"
     >
       <LogOut size={20} aria-hidden="true" />
       {#if isExpanded}
-        <span class="sidebar-action-label">{m.nav_more()}</span>
+        <span class="sidebar-action-label">{m.panel_logout()}</span>
       {/if}
     </button>
   </div>

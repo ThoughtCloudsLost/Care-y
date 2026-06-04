@@ -773,6 +773,7 @@
       {ontabchange}
       expanded={false}
       subItems={[]}
+      {orgName}
       userName={avatarDisplayName ?? ""}
       userInitials={userInitials ?? ""}
       onSettings={() => (panelOpen = true)}
@@ -958,9 +959,7 @@
     {@render children()}
 
     {#snippet afterScroll()}
-      {#if layoutMode.isDesktop}
-        <!-- Desktop: sidebar replaces bottom tabbar -->
-      {:else if tabbarHidden}
+      {#if tabbarHidden}
         <!-- Tabbar hidden: route provides its own bottom bar (e.g., ShellMessagebar) -->
       {:else if tabbarOverride}
         <div
@@ -998,7 +997,7 @@
             {/if}
           </Toolbar>
         </div>
-      {:else}
+      {:else if !layoutMode.isDesktop}
         <nav
           aria-label={m.nav_main()}
           class="tabbar-nav native-tabbar left-0 bottom-0 fixed"
@@ -1067,7 +1066,7 @@
         />
       </ShellSheet>
 
-      {#if browser && !layoutMode.isDesktop}
+      {#if browser}
         <ShellPanel
           opened={panelOpen}
           ondismiss={() => (panelOpen = false)}
