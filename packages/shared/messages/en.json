@@ -49,6 +49,7 @@
   "library_sort_updated": "Last updated",
   "library_sort_rating": "Rating",
   "library_select_mode": "Select",
+  "library_select_article_prompt": "Select an article to read",
   "library_selected": "{count} selected",
   "library_exit_multiselect": "Exit selection mode",
   "library_action_move": "Move",

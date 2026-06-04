@@ -64,6 +64,7 @@
   import QueryError from "$lib/components/QueryError.svelte";
   import EmptyState from "$lib/components/EmptyState.svelte";
   import { haptic } from "$lib/utils/haptic.js";
+  import { getLibraryLayoutCtx } from "./library-layout-ctx.js";
   import { createFilterDispatch } from "$lib/composables/create-filter-dispatch.svelte.js";
   import { createSearchOverlay } from "$lib/search/search-overlay.svelte.js";
   import { createDeepSearch } from "$lib/search/deep-search.svelte.js";
@@ -81,6 +82,7 @@
   const canManageCategories = $derived(
     permissions.has(Permission.MANAGE_KNOWLEDGE_BASE_CATEGORIES),
   );
+  const libraryLayout = getLibraryLayoutCtx();
   const kbRouter = requireRouter(trpc.kb, "kb");
   const queryClient = useQueryClient();
 
@@ -657,7 +659,7 @@
 
   function handleArticleTap(articleId: string): void {
     haptic();
-    void goto(resolve(`/library/${articleId}`));
+    libraryLayout.openArticle(articleId);
   }
 
   function loadNextPage(): void {
@@ -839,7 +841,12 @@
             id="article-{article.id}"
             class="search-target"
             class:match-active={overlay.activeId === article.id}
-            aria-current={overlay.activeId === article.id ? "true" : undefined}
+            class:article-card-selected={libraryLayout.selectedArticleId() ===
+              article.id}
+            aria-current={overlay.activeId === article.id ||
+            libraryLayout.selectedArticleId() === article.id
+              ? "true"
+              : undefined}
           >
             <ArticleCard
               articleId={article.id}
@@ -956,5 +963,10 @@
   .search-target {
     min-width: 0;
     overflow: hidden;
+  }
+
+  .article-card-selected {
+    background: var(--brand-primary-20);
+    border-radius: var(--card-radius);
   }
 </style>
