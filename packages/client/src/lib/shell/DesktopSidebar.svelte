@@ -19,6 +19,7 @@
     orgName,
     userName,
     userInitials,
+    onAdmin,
     onSettings,
     onLogout,
   }: DesktopSidebarProps = $props();
@@ -218,7 +219,10 @@
     <div class="sidebar-tab-group">
       <div class="sidebar-tab-row">
         <button
-          onclick={() => toggleSection("admin")}
+          onclick={() => {
+            onAdmin();
+            toggleSection("admin");
+          }}
           type="button"
           class="sidebar-tab"
           aria-label={m.admin_hub_title()}
@@ -281,7 +285,9 @@
       tabindex={focusedIndex === focusableIds.length - 2 ? 0 : -1}
       data-sidebar-id="settings"
     >
-      <Settings size={20} aria-hidden="true" />
+      <span class="sidebar-icon">
+        <Settings size={20} aria-hidden="true" />
+      </span>
       {#if isExpanded}
         <span class="sidebar-action-label">{m.panel_settings()}</span>
       {/if}
@@ -294,7 +300,9 @@
       tabindex={focusedIndex === focusableIds.length - 1 ? 0 : -1}
       data-sidebar-id="logout"
     >
-      <LogOut size={20} aria-hidden="true" />
+      <span class="sidebar-icon">
+        <LogOut size={20} aria-hidden="true" />
+      </span>
       {#if isExpanded}
         <span class="sidebar-action-label">{m.panel_logout()}</span>
       {/if}
@@ -346,6 +354,7 @@
     align-items: center;
     gap: 0.5rem;
     padding: 0.75rem;
+    padding-inline-start: calc(0.75rem + 3px);
     min-height: 48px;
   }
 
@@ -549,6 +558,7 @@
     align-items: center;
     gap: 0.75rem;
     padding: 0.375rem 0.75rem;
+    border-inline-start: 3px solid transparent;
   }
 
   .sidebar-avatar {
@@ -588,6 +598,7 @@
     text-align: start;
     width: 100%;
     transition: background-color 150ms ease;
+    border-inline-start: 3px solid transparent;
   }
 
   .sidebar-user-action:hover {

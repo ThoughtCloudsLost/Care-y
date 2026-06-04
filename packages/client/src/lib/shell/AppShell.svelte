@@ -883,6 +883,7 @@
       {orgName}
       userName={avatarDisplayName ?? ""}
       userInitials={userInitials ?? ""}
+      onAdmin={() => void goto(resolve("/admin"))}
       onSettings={() => void goto(resolve("/admin"))}
       onLogout={() => void goto(resolve("/logout"))}
     />
