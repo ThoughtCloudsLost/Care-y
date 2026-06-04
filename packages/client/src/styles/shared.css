@@ -96,6 +96,16 @@
   .main-content {
     padding-bottom: 0 !important;
   }
+
+  .main-content > * {
+    max-width: var(--content-max-width, 720px);
+    margin-inline: auto;
+    width: 100%;
+  }
+
+  .section-scroll-nav {
+    display: none;
+  }
 }
 
 /* Color scheme set dynamically by the blocking script in app.html

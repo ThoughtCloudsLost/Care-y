@@ -334,6 +334,7 @@ export interface DesktopSidebarProps {
   readonly orgName?: string;
   readonly userName: string;
   readonly userInitials: string;
+  readonly onAdmin: () => void;
   readonly onSettings: () => void;
   readonly onLogout: () => void;
 }

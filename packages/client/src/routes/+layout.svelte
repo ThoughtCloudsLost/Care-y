@@ -94,13 +94,13 @@
     overflow: hidden !important;
     display: flex !important;
     flex-direction: column !important;
+    position: relative !important;
   }
 
   /* Dark mode: paper texture on the page canvas.
      TODO: Replace with scanned dark paper stock texture.
      Cards sit above (Konsta Block has z-10). */
   :global(html.dark .k-page) {
-    position: relative;
     isolation: isolate;
   }
 
