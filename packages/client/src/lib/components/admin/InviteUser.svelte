@@ -1,7 +1,7 @@
 <script lang="ts">
   import { List, ListInput, Button, Block } from "konsta/svelte";
   import { Save } from "@lucide/svelte";
-  import { createMutation, useQueryClient } from "@tanstack/svelte-query";
+  import { useQueryClient } from "@tanstack/svelte-query";
   import { adminKeys } from "$lib/query/keys.js";
   import { PASSWORD_MIN_LENGTH, RoleId } from "@care-y/shared";
   import PasswordInput from "$lib/components/inputs/PasswordInput.svelte";
@@ -10,7 +10,8 @@
   import * as m from "$lib/paraglide/messages.js";
   import { withTerms } from "$lib/terminology/with-terms.js";
   import { trpc } from "$lib/trpc/index.js";
-  import { getOrgKeyManager } from "$lib/crypto/context.js";
+  import { getOrgKeyManager, getCryptoBridge } from "$lib/crypto/context.js";
+  import { adminBootstrapUserCrypto } from "$lib/auth/admin-bootstrap-crypto.js";
   import { haptic } from "$lib/utils/haptic.js";
   import { toastStore } from "$lib/stores/toast.svelte.js";
   import { announceToLiveRegion } from "$lib/utils/announce.js";
@@ -29,6 +30,7 @@
   const authRouter = trpc.auth;
   const queryClient = useQueryClient();
   const orgKeyManager = getOrgKeyManager();
+  const bridge = getCryptoBridge();
 
   let identifier = $state(generateRandomIdentifier());
   let displayName = $state("");
@@ -53,25 +55,8 @@
 
   let savedIdentifier = $state("");
   let savedPassword = $state("");
-
-  const registerMutation = createMutation(() => ({
-    mutationFn: async (input: {
-      identifier: string;
-      password: string;
-      displayName: string;
-      roleId: RoleIdValue;
-    }) => authRouter.register.mutate(input),
-    onSuccess: () => {
-      haptic();
-      toastStore.show(m.admin_invite_success());
-      announceToLiveRegion("polite", m.admin_invite_success());
-      void queryClient.invalidateQueries({ queryKey: adminKeys.users() });
-      showCredentialConfirmation = true;
-    },
-    onError: () => {
-      toastStore.show(m.error_generic());
-    },
-  }));
+  let isSubmitting = $state(false);
+  let cryptoStatus = $state<string>("");
 
   const canSubmit = $derived(
     orgKeyLoaded &&
@@ -80,21 +65,60 @@
       tempPassword.length >= 16 &&
       passwordsMatch &&
       confirmPassword.length > 0 &&
-      !registerMutation.isPending,
+      !isSubmitting,
   );
 
-  function handleSubmit(): void {
+  async function handleSubmit(): Promise<void> {
     if (!canSubmit) return;
 
     savedIdentifier = identifier.trim().toLowerCase();
     savedPassword = tempPassword;
+    isSubmitting = true;
+    cryptoStatus = "";
 
-    registerMutation.mutate({
-      identifier: savedIdentifier,
-      password: tempPassword,
-      displayName: displayName.trim(),
-      roleId: selectedRole,
-    });
+    try {
+      const result = await authRouter.register.mutate({
+        identifier: savedIdentifier,
+        password: tempPassword,
+        displayName: displayName.trim(),
+        roleId: selectedRole,
+      });
+
+      cryptoStatus = m.admin_invite_crypto_deriving();
+
+      await adminBootstrapUserCrypto(result.user.id, tempPassword, bridge, {
+        onDeriveStart: () => {
+          cryptoStatus = m.admin_invite_crypto_deriving();
+        },
+        onDeriveComplete: () => {
+          cryptoStatus = m.admin_invite_crypto_wrapping();
+        },
+        onWrapStart: () => {
+          cryptoStatus = m.admin_invite_crypto_wrapping();
+        },
+        onComplete: () => {
+          cryptoStatus = m.admin_invite_crypto_complete();
+        },
+      });
+
+      haptic();
+      toastStore.show(m.admin_invite_success());
+      announceToLiveRegion("polite", m.admin_invite_success());
+      void queryClient.invalidateQueries({ queryKey: adminKeys.users() });
+      showCredentialConfirmation = true;
+    } catch (err: unknown) {
+      if (cryptoStatus !== "") {
+        toastStore.show(m.admin_invite_crypto_error());
+      } else {
+        toastStore.show(m.error_generic());
+      }
+      if (import.meta.env.DEV) {
+        console.warn("[InviteUser] creation failed:", err);
+      }
+    } finally {
+      isSubmitting = false;
+      cryptoStatus = "";
+    }
   }
 
   function handleDone(): void {
@@ -115,6 +139,7 @@
   }
 
   function handleDismiss(): void {
+    if (isSubmitting) return;
     if (showCredentialConfirmation) {
       handleDone();
       return;
@@ -134,9 +159,9 @@
 >
   {#snippet headerRight()}
     {#if !showCredentialConfirmation}
-      <SoftButton onclick={handleSubmit} disabled={!canSubmit}>
-        {#if registerMutation.isPending}
-          {m.common_loading()}
+      <SoftButton onclick={() => void handleSubmit()} disabled={!canSubmit}>
+        {#if isSubmitting}
+          {cryptoStatus || m.common_loading()}
         {:else}
           <Save size={16} aria-hidden="true" />
           {m.admin_invite_send()}

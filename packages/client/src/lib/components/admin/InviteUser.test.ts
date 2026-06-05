@@ -3,13 +3,17 @@ import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
 import { render, screen, cleanup, fireEvent } from "@testing-library/svelte";
 
 // --- Hoisted mock fns ---
-const { mockRegister, mockInvalidateQueries, mockToastShow } = vi.hoisted(
-  () => ({
-    mockRegister: vi.fn().mockResolvedValue({ user: { id: "u1" } }),
-    mockInvalidateQueries: vi.fn(),
-    mockToastShow: vi.fn(),
-  }),
-);
+const {
+  mockRegister,
+  mockInvalidateQueries,
+  mockToastShow,
+  mockBootstrapCrypto,
+} = vi.hoisted(() => ({
+  mockRegister: vi.fn().mockResolvedValue({ user: { id: "u1" } }),
+  mockInvalidateQueries: vi.fn(),
+  mockToastShow: vi.fn(),
+  mockBootstrapCrypto: vi.fn().mockResolvedValue(undefined),
+}));
 
 let mockOrgKeyLoaded = true;
 
@@ -46,6 +50,10 @@ vi.mock("$lib/paraglide/messages.js", () => ({
   admin_role_admin: () => "Admin",
   common_loading: () => "Loading",
   error_generic: () => "Something went wrong",
+  admin_invite_crypto_deriving: () => "Generating encryption keys...",
+  admin_invite_crypto_wrapping: () => "Distributing organization key...",
+  admin_invite_crypto_complete: () => "Keys distributed successfully",
+  admin_invite_crypto_error: () => "Key distribution failed",
   shell_close: () => "Close",
   password_show: () => "Show password",
   password_hide: () => "Hide password",
@@ -66,6 +74,14 @@ vi.mock("$lib/crypto/context.js", () => ({
     encrypt: vi.fn().mockReturnValue(new Uint8Array([1, 2, 3])),
     encryptText: vi.fn().mockResolvedValue("encrypted-text"),
   }),
+  getCryptoBridge: () => ({
+    exportOrgSecretKey: vi.fn().mockResolvedValue(new ArrayBuffer(32)),
+  }),
+}));
+
+// --- Mock admin bootstrap crypto ---
+vi.mock("$lib/auth/admin-bootstrap-crypto.js", () => ({
+  adminBootstrapUserCrypto: mockBootstrapCrypto,
 }));
 
 // --- Mock TanStack Query ---
@@ -74,23 +90,6 @@ vi.mock("@tanstack/svelte-query", () => ({
     invalidateQueries: mockInvalidateQueries,
     getQueriesData: vi.fn().mockReturnValue([]),
   }),
-  createMutation: (optsFn: () => Record<string, unknown>) => {
-    const opts = optsFn();
-    const mutationFn = opts.mutationFn as (input: unknown) => Promise<unknown>;
-    const onSuccess = opts.onSuccess as (() => void) | undefined;
-    const onError = opts.onError as (() => void) | undefined;
-    return {
-      get isPending() {
-        return false;
-      },
-      mutate(input: unknown) {
-        mutationFn(input).then(
-          () => onSuccess?.(),
-          () => onError?.(),
-        );
-      },
-    };
-  },
 }));
 
 // --- Mock tRPC ---

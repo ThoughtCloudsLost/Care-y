@@ -89,11 +89,13 @@ export {
   passwordChangeKeysSchema,
   uploadOrgPublicKeySchema,
   rotateOrgKeySchema,
+  adminBootstrapUserKeysSchema,
   type InitCryptoKeysInput,
   type UploadVolPublicInput,
   type PasswordChangeKeysInput,
   type UploadOrgPublicKeyInput,
   type RotateOrgKeyInput,
+  type AdminBootstrapUserKeysInput,
 } from "./schemas/keys.js";
 
 // --- Profile schemas ---
