@@ -120,6 +120,7 @@ export interface OprfEvaluateResult {
 
 export interface OprfEvaluateService {
   evaluate(request: OprfEvaluateRequest): Promise<OprfEvaluateResult>;
+  adminEvaluate(request: OprfEvaluateRequest): Promise<OprfEvaluateResult>;
 }
 
 const POW_FAILURE_THRESHOLD = 3;
@@ -239,6 +240,15 @@ export function createOprfEvaluateService(
         req.powSolution,
       );
       await delay(getDelayMs(failureCount));
+
+      return evaluateBlindedElement(userId, ip, blindedElement);
+    },
+
+    async adminEvaluate(req: OprfEvaluateRequest): Promise<OprfEvaluateResult> {
+      const { userId, ip, blindedElement } = req;
+
+      await enforceUserRateLimit(userId, ip);
+      await enforceIpRateLimit(userId, ip);
 
       return evaluateBlindedElement(userId, ip, blindedElement);
     },

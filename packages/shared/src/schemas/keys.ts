@@ -58,8 +58,28 @@ export const rotateOrgKeySchema = z.object({
   wrappedKeys: z.array(wrappedOrgKeyEntrySchema).min(1),
 });
 
+/**
+ * Admin-initiated crypto bootstrap: sets up user_keys AND wrapped_org_keys
+ * for a manually created user whose password the admin knows. Combines
+ * initCryptoKeys + wrapOrgKeyForUser into one call so the new user is
+ * fully bootstrapped before the admin's creation flow completes.
+ */
+export const adminBootstrapUserKeysSchema = z.object({
+  userId: z.uuid(),
+  salt: base64Bytes(16, "Argon2id salt"),
+  volPublic: base64Bytes(32, "volPublic (ristretto255 point)"),
+  wrappedOrgKey: z.object({
+    ephemeralPoint: base64Bytes(32, "ephemeralPoint (ristretto255)"),
+    nonce: base64Bytes(24, "nonce"),
+    wrappedKey: base64String("wrappedKey"),
+  }),
+});
+
 export type InitCryptoKeysInput = z.infer<typeof initCryptoKeysSchema>;
 export type UploadVolPublicInput = z.infer<typeof uploadVolPublicSchema>;
 export type PasswordChangeKeysInput = z.infer<typeof passwordChangeKeysSchema>;
 export type UploadOrgPublicKeyInput = z.infer<typeof uploadOrgPublicKeySchema>;
 export type RotateOrgKeyInput = z.infer<typeof rotateOrgKeySchema>;
+export type AdminBootstrapUserKeysInput = z.infer<
+  typeof adminBootstrapUserKeysSchema
+>;

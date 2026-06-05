@@ -14,6 +14,7 @@ import {
   uploadOrgPublicKeySchema,
   rotateOrgKeySchema,
   wrapOrgKeyForUserSchema,
+  adminBootstrapUserKeysSchema,
 } from "@care-y/shared";
 import { encode } from "@care-y/crypto";
 import {
@@ -190,6 +191,36 @@ export function createKeysRouter() {
         volPublic: encode(u.volPublic),
       }));
     }),
+
+    /**
+     * Admin crypto bootstrap: initialize user_keys AND wrap the org key
+     * for a manually created user in a single operation. The admin's
+     * browser derives the new user's keys (it knows the password) and
+     * wraps the org key using the new user's volPublic.
+     */
+    adminBootstrapUserKeys: adminProcedure
+      .input(adminBootstrapUserKeysSchema)
+      .mutation(
+        withErrorWrapping(async ({ ctx, input }) => {
+          const keyRotation = createKeyRotationService(ctx.org.tenantDb);
+          const orgKeyQuery = createOrgKeyQueryService(ctx.org.tenantDb);
+
+          await keyRotation.initCryptoKeys(
+            input.userId,
+            b64(input.salt),
+            b64(input.volPublic),
+          );
+
+          await orgKeyQuery.wrapOrgKeyForUser({
+            userId: input.userId,
+            ephemeralPoint: b64(input.wrappedOrgKey.ephemeralPoint),
+            nonce: b64(input.wrappedOrgKey.nonce),
+            wrappedKey: b64(input.wrappedOrgKey.wrappedKey),
+          });
+
+          return { success: true as const };
+        }),
+      ),
 
     ...(process.env.NODE_ENV === "development"
       ? {
