@@ -155,6 +155,7 @@
     flex-direction: column;
     height: 100%;
     overflow: hidden;
+    padding-top: var(--subnavbar-h, 0px);
   }
 
   .split-placeholder {

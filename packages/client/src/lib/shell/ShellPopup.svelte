@@ -87,4 +87,11 @@
     -webkit-overflow-scrolling: touch;
     overscroll-behavior-y: contain;
   }
+
+  @media (min-width: 1024px) {
+    .popup-dialog {
+      max-width: 480px;
+      margin-inline: auto;
+    }
+  }
 </style>

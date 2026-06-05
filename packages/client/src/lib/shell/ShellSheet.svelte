@@ -16,6 +16,8 @@
   import { useFocusTrap } from "./use-focus-trap.svelte";
   import { useSheetDrag } from "./use-sheet-drag.svelte";
   import { portal } from "./portal";
+  import { layoutMode } from "$lib/stores/layout-mode.svelte";
+  import ShellPopup from "./ShellPopup.svelte";
 
   let {
     opened,
@@ -29,6 +31,8 @@
     ariaLabel,
     class: extraClass,
   }: ShellSheetProps = $props();
+
+  const usePopup = $derived(layoutMode.isDesktop && backdrop && trapFocus);
 
   const hasHeader = $derived(
     (title !== undefined && title !== "") || headerRight !== undefined,
@@ -77,49 +81,55 @@
   );
 </script>
 
-<div use:portal={".k-page"}>
-  <Sheet
-    {opened}
-    {backdrop}
-    onBackdropClick={backdrop ? trap.handleDismiss : undefined}
-    class={sheetClass}
-  >
-    <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
-    <div
-      bind:this={trap.dialogEl}
-      use:drag.action
-      {role}
-      aria-modal={role === "dialog" ? "true" : undefined}
-      aria-label={ariaLabel ?? title}
-      tabindex={trapFocus ? -1 : undefined}
-      inert={!opened ? true : undefined}
-      class="shell-sheet-content"
+{#if usePopup}
+  <ShellPopup {opened} {ondismiss} {title} right={headerRight} {ariaLabel}>
+    {@render children()}
+  </ShellPopup>
+{:else}
+  <div use:portal={".k-page"}>
+    <Sheet
+      {opened}
+      {backdrop}
+      onBackdropClick={backdrop ? trap.handleDismiss : undefined}
+      class={sheetClass}
     >
-      <div class="sheet-drag-handle" bind:this={handleRef} aria-hidden="true">
-        <div class="sheet-drag-indicator"></div>
-      </div>
-      {#if hasHeader}
-        <div class="sheet-header">
-          {#if title}
-            <h3 class="sheet-header-title">{title}</h3>
-          {:else}
-            <span></span>
-          {/if}
-          {#if headerRight}
-            <div class="sheet-header-action">
-              {@render headerRight()}
-            </div>
-          {/if}
+      <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
+      <div
+        bind:this={trap.dialogEl}
+        use:drag.action
+        {role}
+        aria-modal={role === "dialog" ? "true" : undefined}
+        aria-label={ariaLabel ?? title}
+        tabindex={trapFocus ? -1 : undefined}
+        inert={!opened ? true : undefined}
+        class="shell-sheet-content"
+      >
+        <div class="sheet-drag-handle" bind:this={handleRef} aria-hidden="true">
+          <div class="sheet-drag-indicator"></div>
         </div>
-        <div class="sheet-body">
+        {#if hasHeader}
+          <div class="sheet-header">
+            {#if title}
+              <h3 class="sheet-header-title">{title}</h3>
+            {:else}
+              <span></span>
+            {/if}
+            {#if headerRight}
+              <div class="sheet-header-action">
+                {@render headerRight()}
+              </div>
+            {/if}
+          </div>
+          <div class="sheet-body">
+            {@render children()}
+          </div>
+        {:else}
           {@render children()}
-        </div>
-      {:else}
-        {@render children()}
-      {/if}
-    </div>
-  </Sheet>
-</div>
+        {/if}
+      </div>
+    </Sheet>
+  </div>
+{/if}
 
 <style>
   /* iOS: handled by .glass utility (shared.css) */

@@ -418,7 +418,7 @@
   />
 
   {#if showGettingStarted}
-    <div id="section-getting-started" class="scroll-target">
+    <div id="section-getting-started" class="scroll-target" data-column="left">
       <GettingStartedCard
         expanded={!collapsedSections.has("getting-started")}
         ontoggle={() => toggleSection("getting-started")}
@@ -426,7 +426,7 @@
     </div>
   {/if}
 
-  <div id="section-shift" class="scroll-target">
+  <div id="section-shift" class="scroll-target" data-column="left">
     <ShiftSection
       shift={shiftQuery.data?.shift ?? null}
       loading={shiftQuery.isLoading}
@@ -435,7 +435,7 @@
     />
   </div>
 
-  <div id="section-activity" class="scroll-target">
+  <div id="section-activity" class="scroll-target" data-column="right">
     <ActivitySection
       activity={activityProps}
       loading={activityQuery.isLoading}
@@ -445,7 +445,7 @@
     />
   </div>
 
-  <div id="section-kb" class="scroll-target">
+  <div id="section-kb" class="scroll-target" data-column="left">
     <KBSection
       kbItems={kbProps}
       loading={kbQuery.isLoading}
@@ -455,7 +455,7 @@
     />
   </div>
 
-  <div id="section-queues" class="scroll-target">
+  <div id="section-queues" class="scroll-target" data-column="left">
     <QueueCards
       queues={queueProps}
       loading={queuesQuery.isLoading}
@@ -465,107 +465,105 @@
     />
   </div>
 
-  <div class="ticket-sections" data-total={allTickets.length}>
-    {#if ticketsQuery.isLoading || needsAttention.length > 0}
-      <div id="section-needs-attention" class="scroll-target">
-        <CollapsibleSection
-          id="needs-attention"
-          heading={m.dashboard_section_needs_attention()}
-          count={ticketsQuery.isLoading ? undefined : needsAttention.length}
-          loading={ticketsQuery.isLoading}
-          icon={TicketAlert}
-          iconColor="var(--brand-accent)"
-          expanded={!collapsedSections.has("needs-attention")}
-          ontoggle={() => toggleSection("needs-attention")}
-        >
-          <TicketPreviewList
-            heading={m.dashboard_section_needs_attention()}
-            hideHeading
-            loading={ticketsQuery.isLoading}
-            tickets={needsAttentionProps}
-            ontickettap={handleTicketTap}
-            onencryptedhelp={showEncryptedHelp}
-          />
-        </CollapsibleSection>
-      </div>
-    {/if}
-
-    <div id="section-my-tickets" class="scroll-target">
+  {#if ticketsQuery.isLoading || needsAttention.length > 0}
+    <div id="section-needs-attention" class="scroll-target" data-column="right">
       <CollapsibleSection
-        id="my-tickets"
-        heading={m.dashboard_section_my_tickets(withTerms())}
-        count={ticketsQuery.isLoading ? undefined : myOpen.length}
+        id="needs-attention"
+        heading={m.dashboard_section_needs_attention()}
+        count={ticketsQuery.isLoading ? undefined : needsAttention.length}
         loading={ticketsQuery.isLoading}
-        icon={TicketIcon}
+        icon={TicketAlert}
         iconColor="var(--brand-accent)"
-        expanded={!collapsedSections.has("my-tickets")}
-        ontoggle={() => toggleSection("my-tickets")}
+        expanded={!collapsedSections.has("needs-attention")}
+        ontoggle={() => toggleSection("needs-attention")}
       >
         <TicketPreviewList
-          heading={m.dashboard_section_my_tickets(withTerms())}
+          heading={m.dashboard_section_needs_attention()}
           hideHeading
           loading={ticketsQuery.isLoading}
-          tickets={myOpenProps}
+          tickets={needsAttentionProps}
           ontickettap={handleTicketTap}
-          onseeall={handleSeeAllMyOpen}
           onencryptedhelp={showEncryptedHelp}
         />
       </CollapsibleSection>
     </div>
+  {/if}
 
-    <div id="section-unassigned" class="scroll-target">
-      <CollapsibleSection
-        id="unassigned"
+  <div id="section-my-tickets" class="scroll-target" data-column="right">
+    <CollapsibleSection
+      id="my-tickets"
+      heading={m.dashboard_section_my_tickets(withTerms())}
+      count={ticketsQuery.isLoading ? undefined : myOpen.length}
+      loading={ticketsQuery.isLoading}
+      icon={TicketIcon}
+      iconColor="var(--brand-accent)"
+      expanded={!collapsedSections.has("my-tickets")}
+      ontoggle={() => toggleSection("my-tickets")}
+    >
+      <TicketPreviewList
+        heading={m.dashboard_section_my_tickets(withTerms())}
+        hideHeading
+        loading={ticketsQuery.isLoading}
+        tickets={myOpenProps}
+        ontickettap={handleTicketTap}
+        onseeall={handleSeeAllMyOpen}
+        onencryptedhelp={showEncryptedHelp}
+      />
+    </CollapsibleSection>
+  </div>
+
+  <div id="section-unassigned" class="scroll-target" data-column="right">
+    <CollapsibleSection
+      id="unassigned"
+      heading={m.dashboard_section_unassigned()}
+      count={ticketsQuery.isLoading
+        ? undefined
+        : (countsQuery.data?.unassigned ?? unassigned.length)}
+      loading={ticketsQuery.isLoading}
+      icon={TicketMinus}
+      iconColor="var(--brand-accent)"
+      expanded={!collapsedSections.has("unassigned")}
+      ontoggle={() => toggleSection("unassigned")}
+    >
+      <TicketPreviewList
         heading={m.dashboard_section_unassigned()}
+        hideHeading
+        loading={ticketsQuery.isLoading}
+        tickets={unassignedProps}
+        totalCount={countsQuery.data?.unassigned}
+        ontickettap={handleTicketTap}
+        onseeall={handleSeeAllUnassigned}
+        onencryptedhelp={showEncryptedHelp}
+      />
+    </CollapsibleSection>
+  </div>
+
+  {#if showOnHold}
+    <div id="section-on-hold" class="scroll-target" data-column="right">
+      <CollapsibleSection
+        id="on-hold"
+        heading={m.dashboard_section_on_hold()}
         count={ticketsQuery.isLoading
           ? undefined
-          : (countsQuery.data?.unassigned ?? unassigned.length)}
+          : (countsQuery.data?.onHold ?? onHold.length)}
         loading={ticketsQuery.isLoading}
-        icon={TicketMinus}
+        icon={TicketPause}
         iconColor="var(--brand-accent)"
-        expanded={!collapsedSections.has("unassigned")}
-        ontoggle={() => toggleSection("unassigned")}
+        expanded={!collapsedSections.has("on-hold")}
+        ontoggle={() => toggleSection("on-hold")}
       >
         <TicketPreviewList
-          heading={m.dashboard_section_unassigned()}
+          heading={m.dashboard_section_on_hold()}
           hideHeading
           loading={ticketsQuery.isLoading}
-          tickets={unassignedProps}
-          totalCount={countsQuery.data?.unassigned}
+          tickets={onHoldProps}
+          totalCount={countsQuery.data?.onHold}
           ontickettap={handleTicketTap}
-          onseeall={handleSeeAllUnassigned}
           onencryptedhelp={showEncryptedHelp}
         />
       </CollapsibleSection>
     </div>
-
-    {#if showOnHold}
-      <div id="section-on-hold" class="scroll-target">
-        <CollapsibleSection
-          id="on-hold"
-          heading={m.dashboard_section_on_hold()}
-          count={ticketsQuery.isLoading
-            ? undefined
-            : (countsQuery.data?.onHold ?? onHold.length)}
-          loading={ticketsQuery.isLoading}
-          icon={TicketPause}
-          iconColor="var(--brand-accent)"
-          expanded={!collapsedSections.has("on-hold")}
-          ontoggle={() => toggleSection("on-hold")}
-        >
-          <TicketPreviewList
-            heading={m.dashboard_section_on_hold()}
-            hideHeading
-            loading={ticketsQuery.isLoading}
-            tickets={onHoldProps}
-            totalCount={countsQuery.data?.onHold}
-            ontickettap={handleTicketTap}
-            onencryptedhelp={showEncryptedHelp}
-          />
-        </CollapsibleSection>
-      </div>
-    {/if}
-  </div>
+  {/if}
 </div>
 
 <ShellPopover
@@ -597,5 +595,27 @@
 
   .scroll-target {
     scroll-margin-top: 7rem;
+  }
+
+  @media (min-width: 1024px) {
+    .dashboard {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: var(--space-xl, 1.5rem);
+      max-width: none;
+      padding-inline: var(--page-pad-x);
+    }
+
+    .dashboard [data-column="left"] {
+      grid-column: 1;
+    }
+
+    .dashboard [data-column="right"] {
+      grid-column: 2;
+    }
+
+    .dashboard > :not([data-column]) {
+      grid-column: 1 / -1;
+    }
   }
 </style>
