@@ -97,6 +97,29 @@
   const tabbarOverride = getTabbarOverrideCtx();
   const navbarCtx = getNavbarOverrideCtx();
 
+  // --- Grid columns (dynamic based on container width) ---
+
+  const GRID_CARD_MIN_WIDTH = 320;
+  let containerWidth = $state(0);
+
+  $effect(() => {
+    const el = scrollEl;
+    if (!el) return;
+    containerWidth = el.clientWidth;
+    const ro = new ResizeObserver((entries) => {
+      const entry = entries[0];
+      if (entry) containerWidth = entry.contentRect.width;
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  });
+
+  const gridColumns = $derived(
+    kbViewModeStore.mode === "grid"
+      ? Math.max(1, Math.floor(containerWidth / GRID_CARD_MIN_WIDTH))
+      : 1,
+  );
+
   // --- Categories query (for filter options and card labels) ---
   const categoriesQuery = createQuery(() => ({
     queryKey: kbKeys.categories(),
@@ -827,7 +850,7 @@
         items={displayItems}
         scrollContainer={scrollEl}
         estimateHeight={kbViewModeStore.mode === "grid" ? 200 : 140}
-        columns={kbViewModeStore.mode === "grid" ? 2 : 1}
+        columns={gridColumns}
         getKey={(article: ArticleItem) => article.id}
         onloadmore={articlesQuery.hasNextPage ? loadNextPage : undefined}
       >
@@ -956,7 +979,7 @@
 
   .article-grid {
     display: grid;
-    grid-template-columns: repeat(2, 1fr);
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
     gap: var(--space-md);
   }
 
