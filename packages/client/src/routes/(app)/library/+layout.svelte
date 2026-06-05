@@ -73,6 +73,16 @@
     openArticle,
     selectedArticleId: () => selectedArticleId,
   });
+
+  // Desktop→mobile: if a detail is open in split view and the viewport
+  // shrinks below 1024px, navigate to the full-page detail route so
+  // the user doesn't lose the article they were viewing.
+  $effect(() => {
+    if (!layoutMode.isDesktop && selectedArticleId != null) {
+      replaceState("", {});
+      void goto(resolve(`/library/${selectedArticleId}`));
+    }
+  });
 </script>
 
 {#if isSplitView}

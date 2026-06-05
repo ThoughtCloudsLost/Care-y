@@ -544,9 +544,28 @@
     resolveVolunteerName,
   });
 
-  // --- Grid columns ---
+  // --- Grid columns (dynamic based on container width) ---
 
-  const gridColumns = $derived(viewModeStore.mode === "grid" ? 2 : 1);
+  const GRID_CARD_MIN_WIDTH = 320;
+  let containerWidth = $state(0);
+
+  $effect(() => {
+    const el = scrollEl;
+    if (!el) return;
+    containerWidth = el.clientWidth;
+    const ro = new ResizeObserver((entries) => {
+      const entry = entries[0];
+      if (entry) containerWidth = entry.contentRect.width;
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  });
+
+  const gridColumns = $derived(
+    viewModeStore.mode === "grid"
+      ? Math.max(1, Math.floor(containerWidth / GRID_CARD_MIN_WIDTH))
+      : 1,
+  );
 
   // --- Filter config ---
 
@@ -1008,7 +1027,7 @@
 
   .ticket-list.ticket-grid {
     display: grid;
-    grid-template-columns: repeat(2, 1fr);
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
   }
 
   .empty-state {

@@ -72,6 +72,16 @@
     openTicket,
     selectedTicketId: () => selectedTicketId,
   });
+
+  // Desktop→mobile: if a detail is open in split view and the viewport
+  // shrinks below 1024px, navigate to the full-page detail route so
+  // the user doesn't lose the ticket they were viewing.
+  $effect(() => {
+    if (!layoutMode.isDesktop && selectedTicketId != null) {
+      replaceState("", {});
+      void goto(resolve(`/tickets/${selectedTicketId}`));
+    }
+  });
 </script>
 
 {#if isSplitView}

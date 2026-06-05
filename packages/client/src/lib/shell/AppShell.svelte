@@ -39,7 +39,13 @@
   import { tick, onMount } from "svelte";
   import { SvelteMap } from "svelte/reactivity";
   import { browser } from "$app/environment";
-  import { beforeNavigate, afterNavigate, goto } from "$app/navigation";
+  import {
+    beforeNavigate,
+    afterNavigate,
+    goto,
+    replaceState,
+  } from "$app/navigation";
+  import { page } from "$app/state";
   import { resolve } from "$app/paths";
   import * as m from "$lib/paraglide/messages.js";
   import { withTerms } from "$lib/terminology/with-terms.js";
@@ -344,9 +350,9 @@
   }
 
   $effect(() => {
-    const page = mainEl?.closest(".k-page");
-    if (page == null) return;
-    const navbar = page.querySelector<HTMLElement>(":scope > .k-navbar");
+    const pageEl = mainEl?.closest(".k-page");
+    if (pageEl == null) return;
+    const navbar = pageEl.querySelector<HTMLElement>(":scope > .k-navbar");
     navbarDomEl = navbar ?? undefined;
   });
 
@@ -558,10 +564,10 @@
             ciphertext,
           ),
         clearFollowUpCache: () => ticketCache.clearFollowUps(),
-        contentSearch: async (ticketIds, page, pageSize) => {
+        contentSearch: async (ticketIds, pageNum, pageSize) => {
           const cs = ticketsRouter.contentSearch;
           if (!cs) throw new TypeError("contentSearch router unavailable");
-          const result = await cs.query({ ticketIds, page, pageSize });
+          const result = await cs.query({ ticketIds, page: pageNum, pageSize });
           return result;
         },
       }),
@@ -855,6 +861,73 @@
     return () => {
       el.removeEventListener("touchstart", onPageTouchStart);
       cleanupWindowListeners();
+    };
+  });
+
+  // ── Desktop keyboard shortcuts ───────────────────────────────────────
+
+  const TAB_SHORTCUT_KEYS: Record<string, TabId> = {
+    "1": "home",
+    "2": "tickets",
+    "3": "library",
+  };
+
+  function isTextInput(el: Element | null): boolean {
+    if (!el) return false;
+    const tag = el.tagName;
+    return (
+      tag === "INPUT" ||
+      tag === "TEXTAREA" ||
+      el.hasAttribute("contenteditable")
+    );
+  }
+
+  function handleDesktopKeydown(e: KeyboardEvent): void {
+    const mod = e.metaKey || e.ctrlKey;
+
+    if (mod && e.key === "k") {
+      e.preventDefault();
+      void openSearch();
+      return;
+    }
+
+    if (mod && e.key === "n") {
+      if (!isTextInput(document.activeElement)) {
+        e.preventDefault();
+        if (activeTab === "tickets" && navbarOverride?.actions?.[0]) {
+          navbarOverride.actions[0].onclick(new MouseEvent("click"));
+        } else {
+          ontabchange("tickets");
+        }
+      }
+      return;
+    }
+
+    if (e.key === "Escape") {
+      const state = page.state;
+      if (
+        typeof state.ticketId === "string" ||
+        typeof state.articleId === "string"
+      ) {
+        replaceState("", {});
+      }
+      return;
+    }
+
+    if (!isTextInput(document.activeElement)) {
+      const tabId = TAB_SHORTCUT_KEYS[e.key];
+      if (tabId) {
+        e.preventDefault();
+        ontabchange(tabId);
+      }
+    }
+  }
+
+  $effect(() => {
+    if (!layoutMode.isDesktop) return;
+    window.addEventListener("keydown", handleDesktopKeydown);
+    return () => {
+      window.removeEventListener("keydown", handleDesktopKeydown);
     };
   });
 
