@@ -907,10 +907,7 @@
     bindScrollEl={handleScrollEl}
   >
     {#snippet navbar()}
-      <Navbar
-        role="banner"
-        class={layoutMode.isDesktop && splitNavbarCfg ? "has-split-right" : ""}
-      >
+      <Navbar role="banner" class="">
         {#snippet left()}
           {#if navbarOverride?.left}
             {@render navbarOverride.left()}
@@ -998,43 +995,8 @@
             />
           </div>
         {/if}
-        {#if layoutMode.isDesktop && splitNavbarCfg && splitRight}
-          <div
-            class="split-navbar-right"
-            style:width={splitNavbarCfg.rightWidth}
-          >
-            <div class="split-navbar-right-inner">
-              <button
-                class="split-navbar-close"
-                onclick={splitNavbarCfg.onclose}
-                aria-label={m.tickets_detail_close()}
-              >
-                <X size={18} aria-hidden="true" />
-              </button>
-              <div class="split-navbar-title">
-                {#if splitRight.title}
-                  {#if typeof splitRight.title === "string"}
-                    <span class="heading-compact">{splitRight.title}</span>
-                  {:else}
-                    {@render splitRight.title()}
-                  {/if}
-                {/if}
-              </div>
-              <div class="split-navbar-actions">
-                {#if splitRight.right}
-                  {@render splitRight.right()}
-                {/if}
-                <button
-                  class="split-navbar-close"
-                  onclick={splitNavbarCfg.onexpand}
-                  aria-label={m.tickets_detail_expand()}
-                >
-                  <Maximize2 size={16} aria-hidden="true" />
-                </button>
-              </div>
-            </div>
-          </div>
-        {/if}
+        <!-- Split-view detail header rendered inside the detail pane
+             (SplitDetailPane), not in the shared navbar. -->
       </Navbar>
     {/snippet}
 
@@ -1223,28 +1185,62 @@
         </nav>
       {/if}
 
-      <ShellSheet
-        opened={searchOpen}
-        ondismiss={closeSearch}
-        backdrop={false}
-        trapFocus={false}
-        role="search"
-        ariaLabel={m.search_hint(withTerms())}
-        class="search-sheet"
-      >
-        <SearchResults
-          query={searchQuery}
-          {promotedProviderId}
+      {#if layoutMode.isDesktop}
+        {#if searchOpen}
+          <!-- svelte-ignore a11y_no_static_element_interactions -->
+          <div
+            class="search-dropdown-backdrop"
+            style:top="{navbarHeight}px"
+            onclick={closeSearch}
+            onkeydown={undefined}
+          ></div>
+          <div
+            class="search-dropdown"
+            role="search"
+            aria-label={m.search_hint(withTerms())}
+            style:top="{navbarHeight}px"
+            style:background-color="var(--glass-surface)"
+            style:backdrop-filter="saturate(180%) blur(20px)"
+            style:-webkit-backdrop-filter="saturate(180%) blur(20px)"
+          >
+            <SearchResults
+              query={searchQuery}
+              {promotedProviderId}
+              ondismiss={closeSearch}
+              onnavigate={(href: string) => {
+                // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- dynamic href from search provider, always starts with /
+                void goto(resolve(href as `/${string}`)).then(closeSearch);
+              }}
+              onselectrecent={(q: string) => {
+                searchQuery = q;
+              }}
+            />
+          </div>
+        {/if}
+      {:else}
+        <ShellSheet
+          opened={searchOpen}
           ondismiss={closeSearch}
-          onnavigate={(href: string) => {
-            // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- dynamic href from search provider, always starts with /
-            void goto(resolve(href as `/${string}`)).then(closeSearch);
-          }}
-          onselectrecent={(q: string) => {
-            searchQuery = q;
-          }}
-        />
-      </ShellSheet>
+          backdrop={false}
+          trapFocus={false}
+          role="search"
+          ariaLabel={m.search_hint(withTerms())}
+          class="search-sheet"
+        >
+          <SearchResults
+            query={searchQuery}
+            {promotedProviderId}
+            ondismiss={closeSearch}
+            onnavigate={(href: string) => {
+              // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- dynamic href from search provider, always starts with /
+              void goto(resolve(href as `/${string}`)).then(closeSearch);
+            }}
+            onselectrecent={(q: string) => {
+              searchQuery = q;
+            }}
+          />
+        </ShellSheet>
+      {/if}
 
       {#if browser && !layoutMode.isDesktop}
         <ShellPanel
@@ -1472,6 +1468,20 @@
     transform: scaleX(1);
   }
 
+  @media (min-width: 1024px) {
+    .search-overlay {
+      max-width: 80%;
+      left: 50%;
+      right: auto;
+      transform: translateX(-50%) scaleX(0.85);
+      transform-origin: center center;
+    }
+
+    .search-overlay-open {
+      transform: translateX(-50%) scaleX(1);
+    }
+  }
+
   /* ── Subnavbar (collapsible region below Navbar) ────────────────── */
   /* Absolutely positioned so it does NOT participate in flex layout.
      <main> reserves space via padding-top instead. This prevents iOS
@@ -1629,74 +1639,37 @@
     height: calc(100dvh - var(--navbar-h, 64px));
   }
 
-  /* ── Split navbar overlays (segmented desktop view) ── */
-
-  /* Constrain left-side content so it stops at the split boundary */
-  :global(.k-navbar.has-split-right) > :global(:nth-child(3)) {
-    padding-inline-end: var(--split-detail-width, 480px);
+  :global(.search-dropdown-backdrop) {
+    position: fixed;
+    /* top set via inline style to sit below navbar */
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 29;
   }
+
+  :global(.search-dropdown) {
+    position: absolute;
+    /* top set via inline style to match navbar height */
+    left: 50%;
+    transform: translateX(-50%);
+    width: 80%;
+    max-width: 80%;
+    z-index: 30;
+    max-height: calc(100vh - var(--navbar-h, 64px));
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-y: contain;
+    border-bottom: 1px solid var(--divider);
+    border-radius: 0 0 var(--card-radius, 0.75rem) var(--card-radius, 0.75rem);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+    padding-bottom: var(--space-md, 0.75rem);
+  }
+
+  /* ── Split subnavbar overlay (segmented desktop view) ── */
 
   .shell-subnavbar--split > .shell-subnavbar-inner {
     padding-inline-end: var(--split-detail-width, 480px);
-  }
-
-  .split-navbar-right {
-    position: absolute;
-    top: 0;
-    right: 0;
-    height: 100%;
-    z-index: 22;
-    background: var(--glass-surface);
-    backdrop-filter: var(--glass-blur, blur(16px));
-    border-inline-start: 1px solid var(--divider);
-    pointer-events: auto;
-  }
-
-  .split-navbar-right-inner {
-    display: flex;
-    align-items: center;
-    height: 100%;
-    padding: 0 0.5rem;
-    gap: 0.25rem;
-  }
-
-  .split-navbar-close {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 32px;
-    height: 32px;
-    border: none;
-    border-radius: 6px;
-    background: transparent;
-    color: var(--muted);
-    cursor: pointer;
-    flex-shrink: 0;
-  }
-
-  .split-navbar-close:hover {
-    background: var(--surface-hover, rgba(128, 128, 128, 0.1));
-  }
-
-  .split-navbar-title {
-    flex: 1;
-    min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  .split-navbar-title :global(a),
-  .split-navbar-title :global(.client-alias-btn) {
-    font-size: var(--text-md);
-    font-weight: 600;
-  }
-
-  .split-navbar-actions {
-    flex-shrink: 0;
-    display: flex;
-    align-items: center;
-    gap: 0.25rem;
   }
 
   .split-subnavbar-right {

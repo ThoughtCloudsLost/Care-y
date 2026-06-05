@@ -6,10 +6,11 @@
   $effect blocks write to these containers harmlessly.
 
   Registers the inert navbar with the splitNavbar store so AppShell
-  can render the segmented navbar overlay (close, title, actions)
-  and the subnavbar overlay for the right segment.
+  can render the subnavbar overlay for the right segment. The detail
+  header (close, title, actions) is rendered locally in this pane.
 -->
 <script lang="ts">
+  import SplitPaneHeader from "$lib/shell/SplitPaneHeader.svelte";
   import { goto } from "$app/navigation";
   import { resolve } from "$app/paths";
   import {
@@ -53,10 +54,15 @@
     };
   });
 
+  const splitTitle = $derived(inertNavbar.current?.title);
+  const splitRight = $derived(inertNavbar.current?.right);
+
   function handleEdit(): void {
     void goto(resolve(`/library/${articleId}/edit`));
   }
 </script>
+
+<SplitPaneHeader title={splitTitle} right={splitRight} {onclose} {onexpand} />
 
 <div class="split-pane-content">
   <ArticleDetailView {articleId} onback={onclose} onedit={handleEdit} />
@@ -70,6 +76,7 @@
     min-height: 0;
     overflow-y: auto;
     overflow-x: hidden;
+    margin-top: calc(-1 * var(--subnavbar-h, 0px));
     padding-top: var(--subnavbar-h, 0px);
   }
 </style>
