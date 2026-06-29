@@ -111,11 +111,7 @@ const rewrapTkTempCache = new Map<string, Uint8Array>();
 // ── State machine ───────────────────────────────────────────────────
 
 type WorkerStateInternal =
-  | "UNINITIALIZED"
-  | "READY"
-  | "STRETCHED"
-  | "BLINDED"
-  | "KEYED";
+  "UNINITIALIZED" | "READY" | "STRETCHED" | "BLINDED" | "KEYED";
 let state: WorkerStateInternal = "UNINITIALIZED";
 
 // ── State transition callback ───────────────────────────────────────

@@ -21,10 +21,7 @@ import {
 } from "@lucide/svelte";
 
 export type AdminGroup =
-  | "people"
-  | "communications"
-  | "organization"
-  | "analytics";
+  "people" | "communications" | "organization" | "analytics";
 
 export interface AdminDestination {
   readonly id: string;

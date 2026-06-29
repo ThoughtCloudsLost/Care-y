@@ -4,12 +4,7 @@ import type { DecryptResult } from "$lib/crypto/decrypt-result.js";
 import type { ReactionSummary } from "@care-y/shared";
 
 export type TicketQuickAction =
-  | "reply"
-  | "call"
-  | "hold"
-  | "unhold"
-  | "assign"
-  | "take";
+  "reply" | "call" | "hold" | "unhold" | "assign" | "take";
 
 export type ViewMode = "list" | "grid";
 

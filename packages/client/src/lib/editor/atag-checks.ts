@@ -14,10 +14,7 @@ import type { Node as PMNode } from "prosemirror-model";
 
 export interface AtagWarning {
   readonly type:
-    | "heading-skip"
-    | "missing-alt"
-    | "generic-link-text"
-    | "empty-heading";
+    "heading-skip" | "missing-alt" | "generic-link-text" | "empty-heading";
   readonly message: string;
   /** Document position for "Fix now" scroll-to. */
   readonly pos: number;
