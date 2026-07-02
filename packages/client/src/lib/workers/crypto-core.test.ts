@@ -10,7 +10,15 @@
  * handleZeroAll between logical groups.
  */
 
-import { describe, it, expect, beforeAll, beforeEach } from "vitest";
+import {
+  describe,
+  it,
+  expect,
+  beforeAll,
+  beforeEach,
+  afterEach,
+  vi,
+} from "vitest";
 import {
   getSodium,
   requireSodium,
@@ -45,6 +53,7 @@ import {
   handleZeroAll,
   handleRewrapResult,
   onStateTransition,
+  IDLE_SELF_ZERO_MS,
   type Sink,
 } from "./crypto-core.js";
 import { CryptoWorkerTestError } from "$lib/errors.js";
@@ -73,7 +82,11 @@ async function dispatchAndWait(
 ): Promise<WorkerResponse> {
   const countBefore = sinkMessages.length;
   dispatch(data as unknown as Parameters<typeof dispatch>[0]);
-  await new Promise((r) => setTimeout(r, 50));
+  if (vi.isFakeTimers()) {
+    await vi.advanceTimersByTimeAsync(50);
+  } else {
+    await new Promise((r) => setTimeout(r, 50));
+  }
   const response = sinkMessages[countBefore];
   if (!response || !("id" in response)) {
     throw new CryptoWorkerTestError("No WorkerResponse in sink after dispatch");
@@ -1042,4 +1055,120 @@ describe("crypto-core orgDecryptBatch error branch", () => {
 
     sodium.memzero(orgSecret);
   });
+});
+
+describe("crypto-core idle self-zero", () => {
+  // Every test starts with a real-timer handleZeroAll: it resets module
+  // state AND cancels any idle timer armed under real timers by earlier
+  // tests. Only then are fake timers installed, so every timer the test
+  // advances was created through the fake clock.
+  beforeEach(() => {
+    handleZeroAll(-1, testSink);
+    sinkMessages = [];
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it(
+    "zeroes key material after the idle interval with no requests",
+    { timeout: 30_000 },
+    async () => {
+      const sodium = requireSodium();
+      await loginFlow("idle-zero-password-1", sodium.randombytes_buf(16));
+      expect(getState()).toBe("KEYED");
+
+      await vi.advanceTimersByTimeAsync(IDLE_SELF_ZERO_MS);
+
+      expect(getState()).toBe("READY");
+      expect(getPublicKeys().volPublic).toBeUndefined();
+    },
+  );
+
+  it(
+    "resets the idle clock on every request",
+    { timeout: 30_000 },
+    async () => {
+      const sodium = requireSodium();
+      await loginFlow("idle-zero-password-2", sodium.randombytes_buf(16));
+
+      await vi.advanceTimersByTimeAsync(IDLE_SELF_ZERO_MS - 60_000);
+      const resp = await dispatchAndWait({ type: "getVolPublic", id: 910 });
+      expect(resp.ok).toBe(true);
+
+      // One minute short of the interval since the last request: still keyed.
+      await vi.advanceTimersByTimeAsync(IDLE_SELF_ZERO_MS - 60_000);
+      expect(getState()).toBe("KEYED");
+
+      await vi.advanceTimersByTimeAsync(60_000);
+      expect(getState()).toBe("READY");
+    },
+  );
+
+  it(
+    "notifies the state transition callback when the idle zero fires",
+    { timeout: 30_000 },
+    async () => {
+      const sodium = requireSodium();
+      await loginFlow("idle-zero-password-3", sodium.randombytes_buf(16));
+
+      const transitions: SharedWorkerState[] = [];
+      onStateTransition((state) => {
+        transitions.push(state);
+      });
+
+      await vi.advanceTimersByTimeAsync(IDLE_SELF_ZERO_MS);
+
+      expect(transitions).toEqual(["READY"]);
+    },
+  );
+
+  it("does not zero or broadcast when no key material is held", async () => {
+    await dispatchAndWait({ type: "init", id: 920 });
+
+    const transitions: SharedWorkerState[] = [];
+    onStateTransition((state) => {
+      transitions.push(state);
+    });
+
+    await vi.advanceTimersByTimeAsync(IDLE_SELF_ZERO_MS * 2);
+
+    expect(transitions).toEqual([]);
+    expect(getState()).toBe("READY");
+  });
+
+  it(
+    "zeroes a stalled login flow before key derivation completes",
+    { timeout: 30_000 },
+    async () => {
+      await dispatchAndWait({ type: "init", id: 930 });
+
+      const pwBuf = new TextEncoder().encode("stalled-login-password");
+      const salt = requireSodium().randombytes_buf(16);
+      await dispatchAndWait({
+        type: "argon2id",
+        id: 931,
+        password: pwBuf.buffer,
+        salt: salt.buffer,
+      });
+
+      const transitions: SharedWorkerState[] = [];
+      onStateTransition((state) => {
+        transitions.push(state);
+      });
+
+      await vi.advanceTimersByTimeAsync(IDLE_SELF_ZERO_MS);
+
+      // The stretched key was zeroed and the state machine reset, so
+      // continuing the abandoned login flow fails.
+      expect(transitions).toEqual(["READY"]);
+      const resp = await dispatchAndWait({ type: "oprfBlind", id: 932 });
+      expect(resp.ok).toBe(false);
+      if (!resp.ok) {
+        expect(resp.code).toBe("INVALID_STATE");
+      }
+    },
+  );
 });
