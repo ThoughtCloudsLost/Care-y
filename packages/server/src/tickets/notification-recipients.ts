@@ -18,11 +18,7 @@
 import type { EscalationTarget } from "@care-y/shared";
 
 export type RecipientSource =
-  | "owner"
-  | "cc"
-  | "queue_watcher"
-  | "mention"
-  | "note_escalation";
+  "owner" | "cc" | "queue_watcher" | "mention" | "note_escalation";
 
 export interface NotificationRecipient {
   readonly userId: string;

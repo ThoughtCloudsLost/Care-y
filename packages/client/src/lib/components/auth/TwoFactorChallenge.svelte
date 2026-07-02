@@ -30,13 +30,7 @@
   // --- State ---
 
   type ActiveMethod =
-    | "totp"
-    | "webauthn"
-    | "email"
-    | "sms"
-    | "push"
-    | "backup"
-    | null;
+    "totp" | "webauthn" | "email" | "sms" | "push" | "backup" | null;
 
   const KNOWN_METHODS = new Set<string>([
     "totp",

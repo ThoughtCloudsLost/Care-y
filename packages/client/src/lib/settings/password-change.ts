@@ -85,8 +85,7 @@ export async function changePassword(deps: PasswordChangeDeps): Promise<void> {
   const newSalt = crypto.getRandomValues(new Uint8Array(16));
   let newVolPublic: string;
   let reWrappedOrgKey:
-    | { ephemeralPoint: string; nonce: string; wrappedKey: string }
-    | undefined;
+    { ephemeralPoint: string; nonce: string; wrappedKey: string } | undefined;
 
   const tempBridge = createTempBridge();
   try {

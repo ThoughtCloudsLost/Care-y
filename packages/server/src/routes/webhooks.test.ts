@@ -168,13 +168,11 @@ function createMockConfigService(
 
 function createMockRateLimiter(allowed = true): RateLimiter {
   return {
-    check: vi.fn(
-      (): RateLimitResult => ({
-        allowed,
-        remaining: allowed ? 99 : 0,
-        retryAfterMs: allowed ? 0 : 60_000,
-      }),
-    ),
+    check: vi.fn((): RateLimitResult => ({
+      allowed,
+      remaining: allowed ? 99 : 0,
+      retryAfterMs: allowed ? 0 : 60_000,
+    })),
     reset: vi.fn(),
   };
 }

@@ -134,8 +134,7 @@ export interface RelaySession {
 }
 
 export type RelayAuthResult =
-  | { ok: true; session: RelaySession }
-  | { ok: false; status: 401 | 403 };
+  { ok: true; session: RelaySession } | { ok: false; status: 401 | 403 };
 
 /**
  * Resolves the org schema from the request Host header.

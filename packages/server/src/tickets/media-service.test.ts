@@ -618,8 +618,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
 
       // Capture the cleanup handler via a mock JobQueue
       let capturedHandler:
-        | ((payload: Record<string, unknown>) => Promise<void>)
-        | undefined;
+        ((payload: Record<string, unknown>) => Promise<void>) | undefined;
 
       const mockJobQueue: JobQueue = {
         process(queue, handler) {

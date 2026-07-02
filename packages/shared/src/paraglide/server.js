@@ -23,7 +23,7 @@ import * as runtime from "./runtime.js";
  * - If URL doesn't match the determined locale, redirects to localized URL (only for document requests)
  * - De-localizes URLs before passing to server (e.g., `/fr/about` → `/about`)
  *
- * @see https://inlang.com/m/gerre34r/library-inlang-paraglideJs/middleware
+ * @see https://paraglidejs.com/middleware
  *
  * @template T - The return type of the resolve function
  *
@@ -164,7 +164,12 @@ export async function paraglideMiddleware(request, resolve, options) {
         const escapedMessages = messages
             .join(",")
             .replace(/<\/(script)/gi, "<\\/$1");
-        const script = `<script>globalThis.__paraglide = globalThis.__paraglide ?? {}; globalThis.__paraglide.ssr = { ${escapedMessages} }</script>`;
+        // Reuse the request's CSP nonce (if any) so the injected script is allowed under a strict CSP
+        const nonce = response.headers
+            .get("Content-Security-Policy")
+            ?.match(/'nonce-([\w+/=-]+)'/)?.[1];
+        const nonceAttr = nonce ? `nonce="${nonce}"` : "";
+        const script = `<script ${nonceAttr}>globalThis.__paraglide = globalThis.__paraglide ?? {}; globalThis.__paraglide.ssr = { ${escapedMessages} }</script>`;
         // Insert the script before the closing head tag
         const newBody = body.replace("</head>", `${script}</head>`);
         // Create a new response with the modified body

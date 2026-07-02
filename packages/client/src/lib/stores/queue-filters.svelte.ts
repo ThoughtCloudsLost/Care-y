@@ -6,12 +6,7 @@
  */
 
 export type QueueSortField =
-  | "order"
-  | "name"
-  | "members"
-  | "open"
-  | "closed"
-  | "hold";
+  "order" | "name" | "members" | "open" | "closed" | "hold";
 export type SortDirection = "asc" | "desc";
 
 export interface QueueSortConfig {
