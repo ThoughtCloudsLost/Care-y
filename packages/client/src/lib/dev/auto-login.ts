@@ -48,8 +48,7 @@ function getDevSeedTickets(): { mutate: () => Promise<unknown> } {
   // guarantee their existence. This file only runs in dev mode.
   // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- dev-only, runtime guard follows
   const tickets = trpc.tickets as
-    | Record<string, { mutate: () => Promise<unknown> }>
-    | undefined;
+    Record<string, { mutate: () => Promise<unknown> }> | undefined;
   const route = tickets?.devSeedTickets;
   if (route === undefined) {
     throw new TypeError("devSeedTickets route missing (not in dev mode?)");
@@ -1234,8 +1233,7 @@ export async function devAutoLogin(
   // 7. Seed telephony config (server encrypts with its own secretsEncryptor)
   // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- dev-only, conditionally spread route
   const telAdmin = trpc.telephonyAdmin as
-    | Record<string, { mutate: () => Promise<unknown> }>
-    | undefined;
+    Record<string, { mutate: () => Promise<unknown> }> | undefined;
   const seedTel = telAdmin?.devSeedTelephony;
   if (seedTel) {
     await seedTel.mutate();

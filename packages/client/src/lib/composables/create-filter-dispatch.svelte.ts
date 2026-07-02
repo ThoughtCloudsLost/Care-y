@@ -19,9 +19,7 @@ interface DateRangeField {
 }
 
 export type FilterFieldDef =
-  | MultiToggleField
-  | SingleSelectField
-  | DateRangeField;
+  MultiToggleField | SingleSelectField | DateRangeField;
 
 // ── Sort config ──
 
