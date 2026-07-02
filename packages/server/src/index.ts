@@ -28,6 +28,7 @@ import { createOrgService } from "./org/service.js";
 import { createScryptHasher } from "./auth/password.js";
 import {
   createInMemoryRateLimiter,
+  assertSingleInstanceRateLimiting,
   type RateLimiter,
 } from "./ratelimit/rate-limiter.js";
 import {
@@ -319,6 +320,11 @@ function createOprfInfrastructure(env: EnvVars): OprfEvaluateService {
 await probeDatabase();
 
 const env: EnvVars = getEnv();
+
+// Fail fast when a multi-instance deployment is declared but only the
+// process-local in-memory rate limiter is available.
+assertSingleInstanceRateLimiting(env.APP_MULTI_INSTANCE);
+
 const { encryptor, indexer, fakeSaltKey, tokenizer, pushChallengeHmacKey } =
   await deriveCryptoServices(env.OPS_SECRETS_KEY);
 

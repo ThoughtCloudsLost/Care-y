@@ -32,6 +32,15 @@ const envSchema = z.object({
   // applies for production (Caddy reverse proxy) and direct API testing.
   CORS_ORIGIN: z.string().default("http://localhost:5173"),
 
+  // Set true only when running more than one app-server instance behind a load
+  // balancer. The in-memory rate limiter holds state per process, so multiple
+  // instances would multiply every limit by the instance count. Boot refuses
+  // this until a shared-store RateLimiter is configured.
+  APP_MULTI_INSTANCE: z
+    .enum(["true", "false"])
+    .default("false")
+    .transform((v) => v === "true"),
+
   // OPRF IPC sockets
   OPRF_SOCKET_A: z.string().default("/run/oprf/oprf-a.sock"),
   OPRF_SOCKET_B: z.string().default("/run/oprf/oprf-b.sock"),
