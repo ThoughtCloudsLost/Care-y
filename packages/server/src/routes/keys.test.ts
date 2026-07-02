@@ -920,7 +920,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         expect(wrap!.nonce).toEqual(Buffer.alloc(24, 0xd1));
       });
 
-      it("is idempotent when called twice for the same user", async () => {
+      it("rejects duplicate bootstrap (prevents key replacement)", async () => {
         const admin = await createTestUser(tenantDb, {
           overrides: { role_id: RoleId.ADMIN },
         });
@@ -929,8 +929,11 @@ describe.skipIf(!process.env.DATABASE_URL)(
 
         const input = bootstrapInput(target.id);
         await caller.keys.adminBootstrapUserKeys(input);
-        const second = await caller.keys.adminBootstrapUserKeys(input);
-        expect(second.success).toBe(true);
+
+        await expectTrpcError(
+          caller.keys.adminBootstrapUserKeys(input),
+          "CONFLICT",
+        );
       });
 
       it("rejects non-admin caller", async () => {
