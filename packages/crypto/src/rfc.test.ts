@@ -280,5 +280,30 @@ describe("RFC 9380 / 9497 building blocks", () => {
       expect(withByte[0]).toBe(0x00);
       expect(withByte[1]).toBe(0x01);
     });
+
+    it("throws InvalidInputError when input exceeds 65535 bytes", () => {
+      const input = new Uint8Array(65536);
+      const unblinded = new Uint8Array(32);
+      expect(() => buildFinalizeInput(input, unblinded)).toThrow(
+        InvalidInputError,
+      );
+    });
+
+    it("throws InvalidInputError when the unblinded element exceeds 65535 bytes", () => {
+      const input = new Uint8Array(2);
+      const unblinded = new Uint8Array(65536);
+      expect(() => buildFinalizeInput(input, unblinded)).toThrow(
+        InvalidInputError,
+      );
+    });
+
+    it("encodes a 65535-byte length at the two-byte boundary", () => {
+      const input = new Uint8Array(65535);
+      const unblinded = new Uint8Array(32);
+      const result = buildFinalizeInput(input, unblinded);
+      // I2OSP(65535, 2) = [0xff, 0xff]
+      expect(result[0]).toBe(0xff);
+      expect(result[1]).toBe(0xff);
+    });
   });
 });
