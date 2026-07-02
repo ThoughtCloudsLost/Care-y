@@ -60,7 +60,11 @@ export async function exportEscrowFile(
     kdf_params: {
       opslimit: ARGON2_ESCROW_PARAMS.iterations,
       memlimit: ARGON2_ESCROW_PARAMS.memoryKiB * 1024,
-      parallelism: ARGON2_ESCROW_PARAMS.parallelism,
+      // libsodium's Argon2id always runs a single lane, so the ciphertext was
+      // derived with parallelism 1. The self-describing envelope must report
+      // the true value or a by-the-book air-gapped recovery would derive the
+      // wrong key.
+      parallelism: 1,
     },
     salt: uint8ArrayToBase64(blob.salt),
     nonce: uint8ArrayToBase64(blob.nonce),

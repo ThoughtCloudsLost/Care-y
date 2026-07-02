@@ -66,7 +66,7 @@ describe("key derivation", () => {
 
     it("enforces minimum params when server sends weaker values", () => {
       const password = new TextEncoder().encode("param-test");
-      const weakParams = { memoryKiB: 1, iterations: 1, parallelism: 1 };
+      const weakParams = { memoryKiB: 1, iterations: 1 };
 
       // With weak params (floor-enforced to minimums)
       const withWeak = deriveAccountKey(password, fixedSalt, weakParams);
@@ -82,7 +82,6 @@ describe("key derivation", () => {
       const strongParams = {
         memoryKiB: ARGON2_MIN_PARAMS.memoryKiB * 2,
         iterations: ARGON2_MIN_PARAMS.iterations + 1,
-        parallelism: ARGON2_MIN_PARAMS.parallelism,
       };
 
       const withStrong = deriveAccountKey(password, fixedSalt, strongParams);
@@ -126,15 +125,14 @@ describe("key derivation", () => {
 
     it("partially weak params are individually floor-enforced", () => {
       const password = new TextEncoder().encode("partial-weak-test");
-      // Only memoryKiB is weak, iterations and parallelism are above floor
+      // Only memoryKiB is weak, iterations is above floor
       const partialWeak = {
         memoryKiB: 1,
         iterations: ARGON2_MIN_PARAMS.iterations + 2,
-        parallelism: ARGON2_MIN_PARAMS.parallelism + 1,
       };
       const result = deriveAccountKey(password, fixedSalt, partialWeak);
 
-      // With iterations and parallelism above floor, the output should differ
+      // With iterations above floor, the output should differ
       // from the default (which uses floor values for everything)
       const withDefaults = deriveAccountKey(password, fixedSalt);
       expect(result).not.toEqual(withDefaults);

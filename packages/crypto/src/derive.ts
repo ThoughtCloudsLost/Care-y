@@ -49,7 +49,7 @@ import {
  * Each field is clamped to at least the RFC 9106 Section 4 SECOND RECOMMENDED value.
  *
  * When VITE_E2E_FAST_KDF is set at build time, the floor drops to ARGON2_TEST_PARAMS
- * (1 MB / 1 iter / 1 par) so E2E tests finish in seconds instead of minutes.
+ * (1 MB / 1 iter) so E2E tests finish in seconds instead of minutes.
  * Vite statically replaces the env check; the production minifier eliminates
  * the test branch entirely (SEC-009, RFC 9106 Section 4).
  */
@@ -68,10 +68,6 @@ function enforceArgon2Floor(serverParams?: Argon2Params): Argon2Params {
     iterations: Math.max(
       serverParams?.iterations ?? floor.iterations,
       floor.iterations,
-    ),
-    parallelism: Math.max(
-      serverParams?.parallelism ?? floor.parallelism,
-      floor.parallelism,
     ),
   };
 }
