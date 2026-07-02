@@ -127,6 +127,44 @@ function notifyStateTransition(): void {
   stateTransitionCallback?.(getState());
 }
 
+// ── Idle self-zero backstop ─────────────────────────────────────────
+
+/**
+ * Zeroes all key material after this long without a single crypto
+ * request. Backstop for tabs that die without sending "disconnect"
+ * (crash, force-kill): their port stays in the SharedWorker's set, the
+ * last-port-gone zero timer never starts, and keys would otherwise
+ * stay resident until the browser process exits (ADR-044
+ * extendedLifetime). Bounds key residency for a seized device.
+ *
+ * Set to twice the 15-minute main-thread idle timeout in
+ * (app)/+layout.svelte. That timer tracks human input and sends an
+ * explicit zeroAll; crypto requests are sparser than input events, so
+ * a shorter interval here would zero keys out from under a session
+ * that is active but not currently decrypting.
+ */
+export const IDLE_SELF_ZERO_MS = 30 * 60 * 1000;
+
+let idleSelfZeroTimer: ReturnType<typeof setTimeout> | null = null;
+
+const noopSink: Sink = () => undefined;
+
+function hasKeyMaterial(): boolean {
+  return state === "STRETCHED" || state === "BLINDED" || state === "KEYED";
+}
+
+function armIdleSelfZero(): void {
+  if (idleSelfZeroTimer !== null) clearTimeout(idleSelfZeroTimer);
+  idleSelfZeroTimer = setTimeout(() => {
+    idleSelfZeroTimer = null;
+    // Without key material a zero would only broadcast a spurious READY
+    // state change, which live tabs treat as a logout signal.
+    if (hasKeyMaterial()) {
+      handleZeroAll(-1, noopSink);
+    }
+  }, IDLE_SELF_ZERO_MS);
+}
+
 // ── Public accessors for SharedWorker ───────────────────────────────
 
 export function getState(): SharedWorkerState {
@@ -637,6 +675,12 @@ function handleEvictTk(req: EvictTkRequest, sink: Sink): void {
 export function handleZeroAll(id: number, sink: Sink): void {
   const sodium = requireSodium();
 
+  // Nothing left to protect; the next request re-arms the backstop.
+  if (idleSelfZeroTimer !== null) {
+    clearTimeout(idleSelfZeroTimer);
+    idleSelfZeroTimer = null;
+  }
+
   tkCache.zeroAll();
 
   for (const tkTemp of rewrapTkTempCache.values()) {
@@ -970,6 +1014,9 @@ export function createDispatcher(
   sink: Sink,
 ): (req: WorkerRequest | RewrapResultEvent) => void {
   return (req: WorkerRequest | RewrapResultEvent): void => {
+    // Every message counts as activity for the idle self-zero backstop.
+    armIdleSelfZero();
+
     if ("kind" in req) {
       handleRewrapResult(req);
       return;

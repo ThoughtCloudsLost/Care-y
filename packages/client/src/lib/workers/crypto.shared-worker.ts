@@ -14,6 +14,12 @@
  *   6. New port before timer: timer cancelled, keys preserved
  *   7. Timer fires: all keys zeroed, Worker stays alive but unkeyed
  *
+ * A tab that crashes or is force-killed never sends "disconnect", so
+ * its port stays in the set and step 5 never runs. The idle self-zero
+ * backstop in crypto-core.ts covers that gap: with no crypto requests
+ * for IDLE_SELF_ZERO_MS, the worker zeroes all keys on its own and
+ * broadcasts READY to any surviving ports.
+ *
  * State broadcasts:
  *   - zeroAll from any port: broadcast stateChange "READY" to all OTHER ports
  *   - deriveKeys completes: broadcast stateChange "KEYED" to all OTHER ports
