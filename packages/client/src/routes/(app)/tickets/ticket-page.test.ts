@@ -156,6 +156,13 @@ vi.mock("$lib/shell/context.js", () => ({
   getNavbarOverrideCtx: () => mockNavbarCtx,
 }));
 
+vi.mock("./tickets-layout-ctx.js", () => ({
+  getTicketsLayoutCtx: () => ({
+    openTicket: vi.fn(),
+    selectedTicketId: () => undefined,
+  }),
+}));
+
 let currentViewMode = "list";
 
 vi.mock("$lib/stores/view-mode.svelte.js", () => ({

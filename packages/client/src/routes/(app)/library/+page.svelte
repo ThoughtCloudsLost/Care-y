@@ -41,6 +41,7 @@
     getTabbarOverrideCtx,
     getNavbarOverrideCtx,
   } from "$lib/shell/context.js";
+  import type { NavbarAction } from "$lib/shell/types";
   import { useScrollDirection } from "$lib/shell/use-scroll-direction.svelte.js";
   import { requireRouter } from "$lib/errors.js";
   import { kbFilterStore } from "$lib/stores/kb-filters.svelte.js";
@@ -63,6 +64,7 @@
   import QueryError from "$lib/components/QueryError.svelte";
   import EmptyState from "$lib/components/EmptyState.svelte";
   import { haptic } from "$lib/utils/haptic.js";
+  import { getLibraryLayoutCtx } from "./library-layout-ctx.js";
   import { createFilterDispatch } from "$lib/composables/create-filter-dispatch.svelte.js";
   import { createSearchOverlay } from "$lib/search/search-overlay.svelte.js";
   import { createDeepSearch } from "$lib/search/deep-search.svelte.js";
@@ -80,6 +82,7 @@
   const canManageCategories = $derived(
     permissions.has(Permission.MANAGE_KNOWLEDGE_BASE_CATEGORIES),
   );
+  const libraryLayout = getLibraryLayoutCtx();
   const kbRouter = requireRouter(trpc.kb, "kb");
   const queryClient = useQueryClient();
 
@@ -93,6 +96,29 @@
   });
   const tabbarOverride = getTabbarOverrideCtx();
   const navbarCtx = getNavbarOverrideCtx();
+
+  // --- Grid columns (dynamic based on container width) ---
+
+  const GRID_CARD_MIN_WIDTH = 320;
+  let containerWidth = $state(0);
+
+  $effect(() => {
+    const el = scrollEl;
+    if (!el) return;
+    containerWidth = el.clientWidth;
+    const ro = new ResizeObserver((entries) => {
+      const entry = entries[0];
+      if (entry) containerWidth = entry.contentRect.width;
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  });
+
+  const gridColumns = $derived(
+    kbViewModeStore.mode === "grid"
+      ? Math.max(1, Math.floor(containerWidth / GRID_CARD_MIN_WIDTH))
+      : 1,
+  );
 
   // --- Categories query (for filter options and card labels) ---
   const categoriesQuery = createQuery(() => ({
@@ -250,6 +276,8 @@
     return sorted;
   });
 
+  type ArticleItem = (typeof displayItems)[number];
+
   $effect(() => {
     const q = page.url.searchParams.get("q");
     if (q != null && q !== "") {
@@ -313,6 +341,21 @@
     if (urlAction === "manage-categories" && canManageCategories) {
       categorySheetOpen = true;
     }
+  });
+
+  let lastAppliedSavedFilter = "";
+
+  $effect(() => {
+    const savedFilterId = page.url.searchParams.get("savedFilter");
+    if (savedFilterId === null || savedFilterId === lastAppliedSavedFilter)
+      return;
+
+    lastAppliedSavedFilter = savedFilterId;
+    const record = kbSavedFilterStore.filters.find(
+      (f) => f.id === savedFilterId,
+    );
+    if (record != null) dispatch.handleSavedFilterApply(record);
+    void goto(resolve("/library"), { replaceState: true });
   });
 
   function handleBulkMove(): void {
@@ -416,8 +459,13 @@
 
   // Subnavbar override.
   $effect(() => {
+    const newArticleAction: NavbarAction = {
+      icon: FilePlus,
+      label: m.library_new_article(),
+      onclick: () => void goto(resolve("/library/new")),
+    };
     navbarCtx.current = {
-      right: canEdit ? navRight : undefined,
+      actions: canEdit ? [newArticleAction] : [],
       subnavbar: librarySubnavbar,
       subnavbarHidden: () => scrollDir.hidden && !overlay.active,
     };
@@ -634,7 +682,7 @@
 
   function handleArticleTap(articleId: string): void {
     haptic();
-    void goto(resolve(`/library/${articleId}`));
+    libraryLayout.openArticle(articleId);
   }
 
   function loadNextPage(): void {
@@ -686,17 +734,6 @@
     /* skeleton card, no interaction */
   }
 </script>
-
-{#snippet navRight()}
-  <Link
-    iconOnly
-    onclick={() => void goto(resolve("/library/new"))}
-    role="button"
-    aria-label={m.library_new_article()}
-  >
-    <FilePlus size={22} aria-hidden="true" />
-  </Link>
-{/snippet}
 
 {#snippet batchLeft()}
   <Link iconOnly onclick={handleBulkMove} aria-label={m.library_action_move()}>
@@ -813,21 +850,26 @@
         items={displayItems}
         scrollContainer={scrollEl}
         estimateHeight={kbViewModeStore.mode === "grid" ? 200 : 140}
-        columns={kbViewModeStore.mode === "grid" ? 2 : 1}
-        getKey={(article: (typeof displayItems)[number]) => article.id}
+        columns={gridColumns}
+        getKey={(article: ArticleItem) => article.id}
         onloadmore={articlesQuery.hasNextPage ? loadNextPage : undefined}
       >
         {#snippet children({
           item: article,
         }: {
-          item: (typeof displayItems)[number];
+          item: ArticleItem;
           index: number;
         })}
           <div
             id="article-{article.id}"
             class="search-target"
             class:match-active={overlay.activeId === article.id}
-            aria-current={overlay.activeId === article.id ? "true" : undefined}
+            class:article-card-selected={libraryLayout.selectedArticleId() ===
+              article.id}
+            aria-current={overlay.activeId === article.id ||
+            libraryLayout.selectedArticleId() === article.id
+              ? "true"
+              : undefined}
           >
             <ArticleCard
               articleId={article.id}
@@ -937,12 +979,17 @@
 
   .article-grid {
     display: grid;
-    grid-template-columns: repeat(2, 1fr);
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
     gap: var(--space-md);
   }
 
   .search-target {
     min-width: 0;
     overflow: hidden;
+  }
+
+  .article-card-selected {
+    background: var(--brand-primary-20);
+    border-radius: var(--card-radius);
   }
 </style>

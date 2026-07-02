@@ -868,5 +868,92 @@ describe.skipIf(!process.env.DATABASE_URL)(
         await expectTrpcError(caller.keys.listUnwrappedUsers(), "FORBIDDEN");
       });
     });
+
+    // -----------------------------------------------------------------------
+    // adminBootstrapUserKeys
+    // -----------------------------------------------------------------------
+
+    describe("adminBootstrapUserKeys", () => {
+      function bootstrapInput(userId: string) {
+        return {
+          userId,
+          salt: testSalt(),
+          volPublic: testVolPublic(0xb1),
+          wrappedOrgKey: {
+            ephemeralPoint: testEphemeralPoint(0xc1),
+            nonce: testNonce(0xd1),
+            wrappedKey: testWrappedKey(0xe1),
+          },
+        };
+      }
+
+      it("initializes user_keys and wrapped_org_keys in one call", async () => {
+        const admin = await createTestUser(tenantDb, {
+          overrides: { role_id: RoleId.ADMIN },
+        });
+        const target = await createTestUser(tenantDb);
+        const caller = createAuthedCaller(admin);
+
+        const result = await caller.keys.adminBootstrapUserKeys(
+          bootstrapInput(target.id),
+        );
+        expect(result.success).toBe(true);
+
+        const keys = await tenantDb
+          .selectFrom("user_keys")
+          .selectAll()
+          .where("user_id", "=", target.id)
+          .executeTakeFirst();
+
+        expect(keys).toBeDefined();
+        expect(keys!.salt).toEqual(Buffer.alloc(16, 0xaa));
+        expect(keys!.vol_public).toEqual(Buffer.alloc(32, 0xb1));
+
+        const wrap = await tenantDb
+          .selectFrom("wrapped_org_keys")
+          .selectAll()
+          .where("user_id", "=", target.id)
+          .executeTakeFirst();
+
+        expect(wrap).toBeDefined();
+        expect(wrap!.ephemeral_point).toEqual(Buffer.alloc(32, 0xc1));
+        expect(wrap!.nonce).toEqual(Buffer.alloc(24, 0xd1));
+      });
+
+      it("rejects duplicate bootstrap (prevents key replacement)", async () => {
+        const admin = await createTestUser(tenantDb, {
+          overrides: { role_id: RoleId.ADMIN },
+        });
+        const target = await createTestUser(tenantDb);
+        const caller = createAuthedCaller(admin);
+
+        const input = bootstrapInput(target.id);
+        await caller.keys.adminBootstrapUserKeys(input);
+
+        await expectTrpcError(
+          caller.keys.adminBootstrapUserKeys(input),
+          "CONFLICT",
+        );
+      });
+
+      it("rejects non-admin caller", async () => {
+        const volunteer = await createTestUser(tenantDb);
+        const caller = createAuthedCaller(volunteer);
+
+        await expectTrpcError(
+          caller.keys.adminBootstrapUserKeys(bootstrapInput(randomUUID())),
+          "FORBIDDEN",
+        );
+      });
+
+      it("rejects unauthenticated caller", async () => {
+        const caller = createUnauthCaller();
+
+        await expectTrpcError(
+          caller.keys.adminBootstrapUserKeys(bootstrapInput(randomUUID())),
+          "UNAUTHORIZED",
+        );
+      });
+    });
   },
 );

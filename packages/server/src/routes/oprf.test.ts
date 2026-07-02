@@ -50,6 +50,7 @@ import {
   ValidationError,
   OprfError,
 } from "../errors.js";
+import { RoleId } from "@care-y/shared";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -476,6 +477,171 @@ describe("OPRF tRPC route", () => {
         blindedElement: VALID_BLINDED_ELEMENT,
       }),
       "FORBIDDEN",
+    );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 3b. adminEvaluate route (auth gating + delegation)
+// ---------------------------------------------------------------------------
+
+describe("OPRF adminEvaluate route", () => {
+  function buildAdminCaller(ctxOverrides?: Partial<Context>) {
+    const mockAdminEvaluate = vi.fn().mockResolvedValue({
+      evaluated: VALID_BLINDED_ELEMENT,
+    });
+    const service = createOprfEvaluateService(makeServiceDeps());
+    const spiedService = {
+      ...service,
+      adminEvaluate: mockAdminEvaluate,
+    };
+    const appRouter = createAppRouter({
+      authDeps: {
+        hasher: createScryptHasher(),
+        loginLimiter: createInMemoryRateLimiter({
+          windowMs: 60_000,
+          maxRequests: 100,
+        }),
+        saltLimiter: createInMemoryRateLimiter({
+          windowMs: 60_000,
+          maxRequests: 100,
+        }),
+        fakeSaltKey: Buffer.alloc(32, 0),
+        encryptor: testFieldEncryptor,
+        indexer: testBlindIndexer,
+        isSecureCookie: false,
+        emailSender: createMockEmailSender(),
+        tokenizer: testSessionTokenizer,
+        providerFactory: createMockProviderFactory(),
+        resolveCallerId: vi.fn().mockResolvedValue("+15551234567"),
+      },
+      profileDeps: {
+        hasher: createScryptHasher(),
+        encryptor: testFieldEncryptor,
+        indexer: testBlindIndexer,
+        tokenizer: testSessionTokenizer,
+        passwordChangeLimiter: createInMemoryRateLimiter({
+          windowMs: 60_000,
+          maxRequests: 100,
+        }),
+      },
+      twoFactorDeps: {
+        emailSender: createMockEmailSender(),
+        encryptor: testFieldEncryptor,
+        indexer: testBlindIndexer,
+        tokenizer: testSessionTokenizer,
+        providerFactory: createMockProviderFactory(),
+        resolveCallerId: vi.fn().mockResolvedValue("+15551234567"),
+        pushSender: null,
+        pushHmacKey: null,
+      },
+      oprfDeps: { oprfService: spiedService },
+      orgService: {
+        findBySlug: async () => null,
+        createOrg: async () => {
+          throw new OprfError("not implemented in test");
+        },
+      } as unknown as Parameters<typeof createAppRouter>[0]["orgService"],
+      providerFactory: createMockProviderFactory(),
+    });
+    const factory = createCallerFactory(appRouter);
+    const ctx: Context = {
+      req: mockReq({ headers: { "x-forwarded-for": TEST_IP } }),
+      res: mockRes(),
+      org: {
+        orgId: "test-org-id",
+        orgSlug: "test-org",
+        orgSchema: "org_test",
+        tenantDb: null as never,
+        sealedBox: null as never,
+      },
+      session: {
+        id: "admin-session",
+        token: "admin-token",
+        userId: "admin-user-id",
+        ipToken: "admin-ip",
+        uaToken: "admin-ua",
+        expiresAt: new Date(Date.now() + 3_600_000),
+        twofaVerified: true,
+        webauthnChallenge: null,
+      },
+      user: {
+        id: "admin-user-id",
+        identifier: "admin-hash",
+        encryptedDisplayName: "QWRtaW4=",
+        encryptedPreferredLocale: null,
+        roleId: RoleId.ADMIN,
+        isActive: true,
+        hasSeenBriefing: true,
+      },
+      ...ctxOverrides,
+    };
+    return { caller: factory(ctx), mockAdminEvaluate };
+  }
+
+  it("delegates to service.adminEvaluate with sessionUserId null", async () => {
+    const { caller, mockAdminEvaluate } = buildAdminCaller();
+    const result = await caller.oprf.adminEvaluate({
+      userId: TEST_USER_ID,
+      blindedElement: VALID_BLINDED_ELEMENT,
+    });
+
+    expect(result.evaluated).toBe(VALID_BLINDED_ELEMENT);
+    expect(mockAdminEvaluate).toHaveBeenCalledOnce();
+    expect(mockAdminEvaluate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        userId: TEST_USER_ID,
+        sessionUserId: null,
+        powChallenge: undefined,
+        powSolution: undefined,
+      }),
+    );
+  });
+
+  it("rejects non-admin (volunteer) caller", async () => {
+    const { caller } = buildAdminCaller({
+      user: {
+        id: "vol-user-id",
+        identifier: "vol-hash",
+        encryptedDisplayName: "Vm9s",
+        encryptedPreferredLocale: null,
+        roleId: RoleId.VOLUNTEER,
+        isActive: true,
+        hasSeenBriefing: true,
+      },
+      session: {
+        id: "vol-session",
+        token: "vol-token",
+        userId: "vol-user-id",
+        ipToken: "vol-ip",
+        uaToken: "vol-ua",
+        expiresAt: new Date(Date.now() + 3_600_000),
+        twofaVerified: true,
+        webauthnChallenge: null,
+      },
+    });
+
+    await expectTrpcError(
+      caller.oprf.adminEvaluate({
+        userId: TEST_USER_ID,
+        blindedElement: VALID_BLINDED_ELEMENT,
+      }),
+      "FORBIDDEN",
+    );
+  });
+
+  it("rejects unauthenticated caller", async () => {
+    const { caller } = buildAdminCaller({
+      session: null,
+      user: null,
+    });
+
+    await expectTrpcError(
+      caller.oprf.adminEvaluate({
+        userId: TEST_USER_ID,
+        blindedElement: VALID_BLINDED_ELEMENT,
+      }),
+      "UNAUTHORIZED",
     );
   });
 });

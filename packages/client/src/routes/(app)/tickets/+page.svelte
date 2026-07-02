@@ -32,6 +32,7 @@
     getTabbarOverrideCtx,
     getNavbarOverrideCtx,
   } from "$lib/shell/context.js";
+  import type { NavbarAction } from "$lib/shell/types";
   import { useScrollDirection } from "$lib/shell/use-scroll-direction.svelte.js";
   import { Link } from "konsta/svelte";
   import { UserPlus, Pause, X, TicketPlus } from "@lucide/svelte";
@@ -72,6 +73,7 @@
   import SearchNavigator from "$lib/components/search/SearchNavigator.svelte";
   import { fuzzySearch } from "$lib/search/fuzzy.js";
   import TicketListOverlays from "./TicketListOverlays.svelte";
+  import { getTicketsLayoutCtx } from "./tickets-layout-ctx.js";
 
   import { createMultiSelect } from "$lib/composables/ticket-list/create-multi-select.svelte.js";
   import { createHoldAction } from "$lib/composables/ticket-list/create-hold-action.svelte.js";
@@ -108,6 +110,7 @@
   });
   const tabbarOverride = getTabbarOverrideCtx();
   const navbarCtx = getNavbarOverrideCtx();
+  const ticketsLayout = getTicketsLayoutCtx();
 
   function resolveVolunteerName(userId: string): string {
     if (userId === currentUserId) return m.dashboard_assigned_you();
@@ -366,7 +369,7 @@
   }
 
   function handleTicketTap(ticketId: string): void {
-    void goto(resolve(`/tickets/${ticketId}`));
+    ticketsLayout.openTicket(ticketId);
   }
 
   function handleAction(ticketId: string, action: TicketQuickAction): void {
@@ -456,8 +459,15 @@
   });
 
   $effect(() => {
+    const newTicketAction: NavbarAction = {
+      icon: TicketPlus,
+      label: m.nav_new_ticket(withTerms()),
+      onclick: () => {
+        newTicketOpen = true;
+      },
+    };
     navbarCtx.current = {
-      right: navRight,
+      actions: [newTicketAction],
       subnavbar: ticketSubnavbar,
       subnavbarHidden: () => scrollDir.hidden && !overlay.active,
     };
@@ -478,13 +488,25 @@
     const queueId = params.get("queue");
     const filter = params.get("filter");
     const action = params.get("action");
+    const savedFilterId = params.get("savedFilter");
 
-    if (queueId === null && filter === null && action === null) return;
+    if (
+      queueId === null &&
+      filter === null &&
+      action === null &&
+      savedFilterId === null
+    )
+      return;
 
     lastAppliedSearch = searchStr;
 
     untrack(() => {
-      if (queueId !== null) {
+      if (savedFilterId !== null) {
+        const record = savedFilterStore.filters.find(
+          (f) => f.id === savedFilterId,
+        );
+        if (record != null) dispatch.handleSavedFilterApply(record);
+      } else if (queueId !== null) {
         filterStore.clearAll();
         filterStore.toggleQueue(queueId);
       } else if (filter === "my-open") {
@@ -522,9 +544,28 @@
     resolveVolunteerName,
   });
 
-  // --- Grid columns ---
+  // --- Grid columns (dynamic based on container width) ---
 
-  const gridColumns = $derived(viewModeStore.mode === "grid" ? 2 : 1);
+  const GRID_CARD_MIN_WIDTH = 320;
+  let containerWidth = $state(0);
+
+  $effect(() => {
+    const el = scrollEl;
+    if (!el) return;
+    containerWidth = el.clientWidth;
+    const ro = new ResizeObserver((entries) => {
+      const entry = entries[0];
+      if (entry) containerWidth = entry.contentRect.width;
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  });
+
+  const gridColumns = $derived(
+    viewModeStore.mode === "grid"
+      ? Math.max(1, Math.floor(containerWidth / GRID_CARD_MIN_WIDTH))
+      : 1,
+  );
 
   // --- Filter config ---
 
@@ -757,19 +798,6 @@
   });
 </script>
 
-{#snippet navRight()}
-  <Link
-    iconOnly
-    onclick={() => {
-      newTicketOpen = true;
-    }}
-    role="button"
-    aria-label={m.nav_new_ticket(withTerms())}
-  >
-    <TicketPlus size={22} aria-hidden="true" />
-  </Link>
-{/snippet}
-
 {#snippet batchLeft()}
   <Link
     iconOnly
@@ -896,7 +924,12 @@
             id="ticket-{item.id}"
             class="search-target"
             class:match-active={overlay.activeId === item.id}
-            aria-current={overlay.activeId === item.id ? "true" : undefined}
+            class:ticket-card-selected={ticketsLayout.selectedTicketId() ===
+              item.id}
+            aria-current={overlay.activeId === item.id ||
+            ticketsLayout.selectedTicketId() === item.id
+              ? "true"
+              : undefined}
           >
             <SwipeableCard
               ticketId={item.id}
@@ -994,7 +1027,7 @@
 
   .ticket-list.ticket-grid {
     display: grid;
-    grid-template-columns: repeat(2, 1fr);
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
   }
 
   .empty-state {
