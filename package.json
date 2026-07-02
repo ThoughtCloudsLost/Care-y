@@ -49,7 +49,7 @@
       "sodium-native"
     ],
     "overrides": {
-      "@babel/plugin-transform-modules-systemjs": ">=7.29.4",
+      "@babel/plugin-transform-modules-systemjs": ">=7.29.4 <8.0.0",
       "@types/node": "25.9.1",
       "brace-expansion": ">=5.0.6",
       "cookie": ">=0.7.0",
