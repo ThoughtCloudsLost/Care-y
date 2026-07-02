@@ -12,8 +12,6 @@
 -->
 <script lang="ts">
   import { browser } from "$app/environment";
-  import { goto } from "$app/navigation";
-  import { resolve } from "$app/paths";
   import { createQuery } from "@tanstack/svelte-query";
   import { authKeys } from "$lib/query/keys.js";
   import type { WorkerEventHandler } from "$lib/workers/crypto-bridge.js";

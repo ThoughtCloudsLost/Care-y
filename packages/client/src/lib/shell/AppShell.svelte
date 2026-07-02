@@ -33,7 +33,7 @@
     ToolbarPane,
   } from "konsta/svelte";
   import PageShell from "./PageShell.svelte";
-  import { Ellipsis, Maximize2, Search, User, X } from "@lucide/svelte";
+  import { Ellipsis, Search, User } from "@lucide/svelte";
   import { getOrgLogoUrl } from "$lib/branding/logo-url.svelte.js";
   import CallIndicator from "./CallIndicator.svelte";
   import { tick, onMount } from "svelte";
