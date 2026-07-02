@@ -49,32 +49,33 @@ export interface EscrowBlob {
   readonly ciphertext: Uint8Array;
 }
 
-/** Argon2id parameters (hardcoded minimums enforced at use site) */
+/**
+ * Argon2id parameters (hardcoded minimums enforced at use site).
+ *
+ * libsodium's crypto_pwhash fixes the Argon2 lane count at 1, so parallelism
+ * is not a tunable parameter and is intentionally absent here.
+ */
 export interface Argon2Params {
   readonly memoryKiB: number;
   readonly iterations: number;
-  readonly parallelism: number;
 }
 
-/** Minimum Argon2id params (SECOND RECOMMENDED, RFC 9106 Section 4) */
+/** Minimum Argon2id params (SECOND RECOMMENDED memory and iterations, RFC 9106 Section 4) */
 export const ARGON2_MIN_PARAMS: Argon2Params = {
   memoryKiB: 65536, // 64 MB
   iterations: 3,
-  parallelism: 4,
 } as const;
 
 /** Minimal Argon2id params for E2E tests (gated by VITE_E2E_FAST_KDF, dead-code eliminated in prod) */
 export const ARGON2_TEST_PARAMS: Argon2Params = {
   memoryKiB: 1024, // 1 MB
   iterations: 1,
-  parallelism: 1,
 } as const;
 
 /** Escrow-specific Argon2id params (heavier, admin workstation only) */
 export const ARGON2_ESCROW_PARAMS: Argon2Params = {
   memoryKiB: 262144, // 256 MB
   iterations: 4,
-  parallelism: 4,
 } as const;
 
 /** HKDF domain separation labels (centralized to prevent typos) */
