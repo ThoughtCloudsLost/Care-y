@@ -60,10 +60,18 @@ export interface Argon2Params {
   readonly iterations: number;
 }
 
-/** Minimum Argon2id params (SECOND RECOMMENDED memory and iterations, RFC 9106 Section 4) */
+/**
+ * Minimum Argon2id params. Memory is the RFC 9106 Section 4 SECOND RECOMMENDED
+ * value (64 MB), held there for low-end mobile compatibility. Iterations are
+ * raised to 4, one above the RFC baseline of 3, for extra offline-cracking
+ * margin. At launch a single server seizure yields the OPRF key and database, so
+ * PII security reduces to the cost of brute-forcing each password through
+ * Argon2id, and the password strength floor plus this iteration count set that
+ * cost (SEC-009).
+ */
 export const ARGON2_MIN_PARAMS: Argon2Params = {
-  memoryKiB: 65536, // 64 MB
-  iterations: 3,
+  memoryKiB: 65536, // 64 MB (mobile-compatible)
+  iterations: 4,
 } as const;
 
 /** Minimal Argon2id params for E2E tests (gated by VITE_E2E_FAST_KDF, dead-code eliminated in prod) */

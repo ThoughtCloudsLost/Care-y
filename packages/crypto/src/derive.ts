@@ -29,6 +29,7 @@
 
 import { requireSodium } from "./sodium.js";
 import { hkdf, hkdfDerive32 } from "./hkdf.js";
+import { zeroAll } from "./mem.js";
 import { InvalidKeyError } from "./errors.js";
 import { assertInputLength } from "./validation.js";
 import { concatBytes, encodeLabel } from "./bytes.js";
@@ -123,18 +124,17 @@ export function deriveMasterKey(
     throw new InvalidKeyError("OPRF output must be 64 bytes");
   }
 
-  // When pqShared is absent, ikm aliases oprfOutput (caller's buffer).
-  // Only zero ikm when it's a new concatenated buffer we own.
-  const ikm = pqShared ? concatBytes(oprfOutput, pqShared) : oprfOutput;
+  // Always derive from an owned ikm copy so this function alone zeroes it,
+  // whether or not pqShared is present. slice() copies the OPRF output rather
+  // than aliasing it, so the caller keeps ownership of oprfOutput (and pqShared)
+  // and zeroes those buffers itself.
+  const ikm = pqShared ? concatBytes(oprfOutput, pqShared) : oprfOutput.slice();
 
-  const result = hkdfDerive32(ikm, HKDF_LABELS.MASTER_KEY);
-
-  if (pqShared) {
-    const sodium = requireSodium();
-    sodium.memzero(ikm);
+  try {
+    return hkdfDerive32(ikm, HKDF_LABELS.MASTER_KEY) as SymmetricKey;
+  } finally {
+    zeroAll(ikm);
   }
-
-  return result as SymmetricKey;
 }
 
 /**
