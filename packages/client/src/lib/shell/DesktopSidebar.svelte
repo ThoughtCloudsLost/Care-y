@@ -4,12 +4,7 @@
   import * as m from "$lib/paraglide/messages.js";
   import { getOrgLogoUrl } from "$lib/branding/logo-url.svelte.js";
   import { allTabs } from "./tabs";
-  import type {
-    TabId,
-    DesktopSidebarProps,
-    SidebarSection,
-    SidebarSubItem,
-  } from "./types";
+  import type { TabId, DesktopSidebarProps, SidebarSubItem } from "./types";
 
   let {
     activeTab,
