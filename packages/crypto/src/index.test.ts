@@ -172,7 +172,7 @@ describe("barrel export", () => {
   describe("exported constants have correct values", () => {
     it("ARGON2_MIN_PARAMS", () => {
       expect(ARGON2_MIN_PARAMS.memoryKiB).toBe(65536);
-      expect(ARGON2_MIN_PARAMS.iterations).toBe(3);
+      expect(ARGON2_MIN_PARAMS.iterations).toBe(4);
     });
 
     it("ARGON2_ESCROW_PARAMS", () => {

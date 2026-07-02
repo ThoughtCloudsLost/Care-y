@@ -173,6 +173,26 @@ describe("key derivation", () => {
       const withPQ = deriveMasterKey(oprfOutput, pqShared);
       expect(withPQ).not.toEqual(withoutPQ);
     });
+
+    it("does not mutate the caller's oprfOutput buffer", () => {
+      const oprfOutput = new Uint8Array(64);
+      oprfOutput.fill(0x7a);
+      const snapshot = oprfOutput.slice();
+      deriveMasterKey(oprfOutput);
+      expect(oprfOutput).toEqual(snapshot);
+    });
+
+    it("does not mutate oprfOutput or pqShared in the hybrid path", () => {
+      const oprfOutput = new Uint8Array(64);
+      oprfOutput.fill(0x11);
+      const pqShared = new Uint8Array(32);
+      pqShared.fill(0x22);
+      const oprfSnapshot = oprfOutput.slice();
+      const pqSnapshot = pqShared.slice();
+      deriveMasterKey(oprfOutput, pqShared);
+      expect(oprfOutput).toEqual(oprfSnapshot);
+      expect(pqShared).toEqual(pqSnapshot);
+    });
   });
 
   describe("volunteer key derivation", () => {
