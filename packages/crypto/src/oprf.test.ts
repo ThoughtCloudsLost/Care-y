@@ -306,6 +306,35 @@ describe("OPRF protocol", () => {
     });
   });
 
+  describe("oprfFinalize input validation", () => {
+    it("throws InvalidInputError for a truncated evaluated element", () => {
+      const input = new TextEncoder().encode("len-test");
+      const { blindState } = oprfBlind(input);
+      const short = new Uint8Array(16) as RistrettoPoint;
+      expect(() => oprfFinalize(blindState, short, input)).toThrow(
+        InvalidInputError,
+      );
+    });
+
+    it("throws InvalidInputError for an empty evaluated element", () => {
+      const input = new TextEncoder().encode("len-test");
+      const { blindState } = oprfBlind(input);
+      const empty = new Uint8Array(0) as RistrettoPoint;
+      expect(() => oprfFinalize(blindState, empty, input)).toThrow(
+        InvalidInputError,
+      );
+    });
+
+    it("throws InvalidInputError for a 64-byte evaluated element", () => {
+      const input = new TextEncoder().encode("len-test");
+      const { blindState } = oprfBlind(input);
+      const long = new Uint8Array(64) as RistrettoPoint;
+      expect(() => oprfFinalize(blindState, long, input)).toThrow(
+        InvalidInputError,
+      );
+    });
+  });
+
   describe("adversarial server responses", () => {
     it("finalize with identity point (all zeros) does not crash", () => {
       const input = new TextEncoder().encode("identity-test");
