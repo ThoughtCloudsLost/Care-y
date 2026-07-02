@@ -1,11 +1,6 @@
 /** Call state transitions: idle -> connecting -> ringing -> connected -> disconnected. */
 export type BrowserCallState =
-  | "idle"
-  | "connecting"
-  | "ringing"
-  | "connected"
-  | "disconnected"
-  | "error";
+  "idle" | "connecting" | "ringing" | "connected" | "disconnected" | "error";
 
 export interface BrowserCallEvents {
   onStateChange(state: BrowserCallState): void;

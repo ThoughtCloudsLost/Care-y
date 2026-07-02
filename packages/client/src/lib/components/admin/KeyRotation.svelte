@@ -20,12 +20,7 @@
   import ShellDialog from "$lib/shell/ShellDialog.svelte";
 
   type RotationPhase =
-    | "idle"
-    | "generating"
-    | "wrapping"
-    | "submitting"
-    | "done"
-    | "error";
+    "idle" | "generating" | "wrapping" | "submitting" | "done" | "error";
 
   const authRouter = trpc.auth;
   const keysRouter = trpc.keys;

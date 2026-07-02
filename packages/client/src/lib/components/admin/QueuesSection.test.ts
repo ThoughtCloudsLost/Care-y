@@ -141,8 +141,7 @@ vi.mock("@tanstack/svelte-query", () => ({
     const opts = optsFn();
     const mutationFn = opts.mutationFn as (input: unknown) => Promise<unknown>;
     const onSuccess = opts.onSuccess as
-      | ((data: unknown, vars: unknown) => void)
-      | undefined;
+      ((data: unknown, vars: unknown) => void) | undefined;
     const onError = opts.onError as ((err: unknown) => void) | undefined;
     return {
       get isPending() {

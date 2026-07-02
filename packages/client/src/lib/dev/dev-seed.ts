@@ -1216,8 +1216,7 @@ export async function devSeedData(
   // ── Step 4: Note Types ──────────────────────────────────────────────
   progress("Creating note types...");
   const noteTypesRouter = ticketRouter.noteTypes as
-    | Record<string, any>
-    | undefined;
+    Record<string, any> | undefined;
   const noteTypeIds: string[] = [];
   if (noteTypesRouter) {
     for (const nt of NOTE_TYPES) {
@@ -1442,8 +1441,7 @@ export async function devSeedData(
 
   // ── Step 11: Telephony Config ───────────────────────────────────────
   const telAdmin = trpc.telephonyAdmin as
-    | Record<string, { mutate: () => Promise<{ skipped: boolean }> }>
-    | undefined;
+    Record<string, { mutate: () => Promise<{ skipped: boolean }> }> | undefined;
   const seedTel = telAdmin?.devSeedTelephony;
   if (seedTel) {
     const result = await seedTel.mutate();
