@@ -10,8 +10,25 @@
  */
 
 import { createCleanupInterval } from "../utils/intervals.js";
+import { ConfigError } from "../errors.js";
 
 const CLEANUP_INTERVAL_MS = 60_000;
+
+/**
+ * Refuse to boot when the process-local in-memory limiter would run across more
+ * than one app instance. Its counters live in a per-process Map, so N instances
+ * behind a load balancer would allow N times the intended rate. A shared-store
+ * RateLimiter (same interface) must back multi-instance deployments; until one
+ * is wired, multi-instance is unsupported.
+ */
+export function assertSingleInstanceRateLimiting(multiInstance: boolean): void {
+  if (multiInstance) {
+    throw new ConfigError(
+      "In-memory rate limiting is not safe across multiple app instances. " +
+        "Configure a shared-store RateLimiter before enabling APP_MULTI_INSTANCE.",
+    );
+  }
+}
 
 export interface RateLimitConfig {
   readonly windowMs: number;

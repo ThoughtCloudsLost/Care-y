@@ -1,5 +1,9 @@
 import { describe, expect, it, vi, afterEach } from "vitest";
-import { createInMemoryRateLimiter } from "./rate-limiter.js";
+import {
+  createInMemoryRateLimiter,
+  assertSingleInstanceRateLimiting,
+} from "./rate-limiter.js";
+import { ConfigError } from "../errors.js";
 
 describe("createInMemoryRateLimiter", () => {
   const config = { windowMs: 10_000, maxRequests: 3 };
@@ -166,5 +170,19 @@ describe("cleanup interval", () => {
     const resultB = limiter.check("ip:b");
     expect(resultB.allowed).toBe(true);
     expect(resultB.remaining).toBe(1);
+  });
+});
+
+describe("assertSingleInstanceRateLimiting", () => {
+  it("allows boot for a single-instance deployment", () => {
+    expect(() => {
+      assertSingleInstanceRateLimiting(false);
+    }).not.toThrow();
+  });
+
+  it("refuses boot when a multi-instance deployment is declared", () => {
+    expect(() => {
+      assertSingleInstanceRateLimiting(true);
+    }).toThrow(ConfigError);
   });
 });
