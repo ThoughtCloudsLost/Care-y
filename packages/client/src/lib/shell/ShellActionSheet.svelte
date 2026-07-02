@@ -23,7 +23,11 @@
 </script>
 
 <div use:portal={".k-page"}>
-  <Actions {opened} onBackdropClick={trap.handleDismiss}>
+  <Actions
+    {opened}
+    onBackdropClick={trap.handleDismiss}
+    class="shell-action-sheet"
+  >
     <div
       data-testid="actions-sheet"
       bind:this={trap.dialogEl}
@@ -36,3 +40,12 @@
     </div>
   </Actions>
 </div>
+
+<style>
+  @media (min-width: 1024px) {
+    :global(.shell-action-sheet) {
+      max-width: 400px;
+      margin-inline: auto;
+    }
+  }
+</style>

@@ -33,26 +33,35 @@
     ToolbarPane,
   } from "konsta/svelte";
   import PageShell from "./PageShell.svelte";
-  import {
-    House,
-    Ticket,
-    BookOpen,
-    Ellipsis,
-    Search,
-    User,
-  } from "@lucide/svelte";
+  import { Ellipsis, Search, User } from "@lucide/svelte";
   import { getOrgLogoUrl } from "$lib/branding/logo-url.svelte.js";
   import CallIndicator from "./CallIndicator.svelte";
   import { tick, onMount } from "svelte";
   import { SvelteMap } from "svelte/reactivity";
-  import type { Component } from "svelte";
   import { browser } from "$app/environment";
-  import { beforeNavigate, afterNavigate, goto } from "$app/navigation";
+  import {
+    beforeNavigate,
+    afterNavigate,
+    goto,
+    replaceState,
+  } from "$app/navigation";
+  import { page } from "$app/state";
   import { resolve } from "$app/paths";
   import * as m from "$lib/paraglide/messages.js";
   import { withTerms } from "$lib/terminology/with-terms.js";
-  import type { TabId, AppShellProps } from "./types";
+  import type {
+    TabId,
+    AppShellProps,
+    SidebarSection,
+    SidebarSubItem,
+  } from "./types";
+  import { allTabs } from "./tabs";
+  import { layoutMode } from "$lib/stores/layout-mode.svelte";
+  import DesktopSidebar from "./DesktopSidebar.svelte";
+  import { savedFilterStore } from "$lib/stores/saved-filters.svelte";
+  import { kbSavedFilterStore } from "$lib/stores/kb-saved-filters.svelte";
   import { providePTR } from "./ptr-context.svelte.js";
+  import { splitNavbar } from "$lib/stores/split-navbar.svelte.js";
   import { themeStore } from "$lib/stores/theme.svelte";
   import { useQueryClient, createQuery } from "@tanstack/svelte-query";
   import { Permission } from "@care-y/shared";
@@ -172,6 +181,10 @@
   setNavbarOverrideCtx(navbarOverrideContainer);
   const navbarOverride = $derived(navbarOverrideContainer.current);
 
+  // ── Split navbar (segmented desktop view) ──
+  const splitNavbarCfg = $derived(splitNavbar.config);
+  const splitRight = $derived(splitNavbarCfg?.rightNavbar.current);
+
   // ── Avatar panel ─────────────────────────────────────────────────
   const navLogoUrl = $derived(getOrgLogoUrl());
   let panelOpen = $state(false);
@@ -207,6 +220,106 @@
       .join("");
   });
 
+  // ── Sidebar sub-items (desktop only) ──────────────────────────────
+  // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- tickets router exists post-auth (AppShell only renders inside (app) layout)
+  const ticketsRouterRef = trpc.tickets!;
+  const sidebarQueuesQuery = createQuery(() => ({
+    queryKey: ticketsKeys.myQueues(),
+    queryFn: async () => ticketsRouterRef.myQueues.query(),
+    enabled: layoutMode.isDesktop,
+  }));
+
+  const MAX_SIDEBAR_FILTERS = 5;
+
+  const sidebarSubItems = $derived.by((): readonly SidebarSection[] => {
+    if (!layoutMode.isDesktop) return [];
+
+    const sections: SidebarSection[] = [];
+
+    // Tickets tab: queues + saved filters
+    const ticketItems: SidebarSubItem[] = [];
+
+    if (sidebarQueuesQuery.data != null && avatarOrgCache != null) {
+      for (const q of sidebarQueuesQuery.data) {
+        const name = avatarOrgCache.decrypt(`queue:${q.id}`, q.encryptedName);
+        ticketItems.push({
+          id: `queue:${q.id}`,
+          label: name ?? "...",
+          count: Number(q.openCount),
+          icon: "queue",
+          ontap: () =>
+            void goto(resolve(`/tickets?queue=${encodeURIComponent(q.id)}`)),
+        });
+      }
+    }
+
+    for (const f of savedFilterStore.filters.slice(0, MAX_SIDEBAR_FILTERS)) {
+      const nameBytes = base64ToUint8Array(f.encryptedName);
+      const name = avatarOrgCache?.decrypt(`saved-filter:${f.id}`, nameBytes);
+      ticketItems.push({
+        id: `filter:${f.id}`,
+        label: name ?? "...",
+        icon: "filter",
+        ontap: () =>
+          void goto(
+            resolve(`/tickets?savedFilter=${encodeURIComponent(f.id)}`),
+          ),
+      });
+    }
+
+    if (ticketItems.length > 0) {
+      sections.push({ tabId: "tickets", items: ticketItems });
+    }
+
+    // Library tab: saved filters
+    const kbItems: SidebarSubItem[] = [];
+    for (const f of kbSavedFilterStore.filters.slice(0, MAX_SIDEBAR_FILTERS)) {
+      const nameBytes = base64ToUint8Array(f.encryptedName);
+      const name = avatarOrgCache?.decrypt(
+        `kb-saved-filter:${f.id}`,
+        nameBytes,
+      );
+      kbItems.push({
+        id: `kb-filter:${f.id}`,
+        label: name ?? "...",
+        icon: "filter",
+        ontap: () =>
+          void goto(
+            resolve(`/library?savedFilter=${encodeURIComponent(f.id)}`),
+          ),
+      });
+    }
+    if (kbItems.length > 0) {
+      sections.push({ tabId: "library", items: kbItems });
+    }
+
+    // Admin section (role-gated)
+    if (currentPermissions.has(Permission.MANAGE_USERS)) {
+      sections.push({
+        tabId: "admin",
+        items: [
+          {
+            id: "admin:people",
+            label: m.admin_people_title(),
+            ontap: () => void goto(resolve("/admin/people")),
+          },
+          {
+            id: "admin:org",
+            label: m.admin_org_title(),
+            ontap: () => void goto(resolve("/admin/organization")),
+          },
+          {
+            id: "admin:comms",
+            label: m.admin_comms_title(),
+            ontap: () => void goto(resolve("/admin/communications")),
+          },
+        ],
+      });
+    }
+
+    return sections;
+  });
+
   // ── Subnavbar + Navbar height measurement.
   // ResizeObserver tracks the inner content height so we can set
   // padding-top on <main> and position the subnavbar correctly.
@@ -237,9 +350,9 @@
   }
 
   $effect(() => {
-    const page = mainEl?.closest(".k-page");
-    if (page == null) return;
-    const navbar = page.querySelector<HTMLElement>(":scope > .k-navbar");
+    const pageEl = mainEl?.closest(".k-page");
+    if (pageEl == null) return;
+    const navbar = pageEl.querySelector<HTMLElement>(":scope > .k-navbar");
     navbarDomEl = navbar ?? undefined;
   });
 
@@ -251,7 +364,8 @@
     const el = navbarDomEl;
     if (el == null) return;
     const hasSubnavbar = navbarOverride?.subnavbar != null;
-    const isHidden = navbarOverride?.subnavbarHidden?.() === true;
+    const isHidden =
+      !layoutMode.isDesktop && navbarOverride?.subnavbarHidden?.() === true;
     // The bgBlur layer is the first child of .k-navbar (iOS only).
     // Its gradient mask fades blur too early over the extended area.
     const firstChild = el.firstElementChild;
@@ -450,10 +564,10 @@
             ciphertext,
           ),
         clearFollowUpCache: () => ticketCache.clearFollowUps(),
-        contentSearch: async (ticketIds, page, pageSize) => {
+        contentSearch: async (ticketIds, pageNum, pageSize) => {
           const cs = ticketsRouter.contentSearch;
           if (!cs) throw new TypeError("contentSearch router unavailable");
-          const result = await cs.query({ ticketIds, page, pageSize });
+          const result = await cs.query({ ticketIds, page: pageNum, pageSize });
           return result;
         },
       }),
@@ -546,18 +660,6 @@
       unregisterVol();
     };
   });
-
-  interface TabDef {
-    readonly id: TabId;
-    readonly label: () => string;
-    readonly icon: Component;
-  }
-
-  const allTabs: readonly TabDef[] = [
-    { id: "home", label: () => m.nav_home(), icon: House },
-    { id: "tickets", label: () => m.nav_tickets(withTerms()), icon: Ticket },
-    { id: "library", label: () => m.tab_library(withTerms()), icon: BookOpen },
-  ];
 
   // ── Pull-to-refresh ──────────────────────────────────────────────────
 
@@ -693,6 +795,7 @@
   }
 
   function onPageTouchStart(e: TouchEvent): void {
+    if (layoutMode.isDesktop) return;
     if (!ptr.enabled) return;
     if (ptrPhase === "refreshing" || ptrPhase === "releasing") return;
     if (!mainEl) return;
@@ -761,6 +864,73 @@
     };
   });
 
+  // ── Desktop keyboard shortcuts ───────────────────────────────────────
+
+  const TAB_SHORTCUT_KEYS: Record<string, TabId> = {
+    "1": "home",
+    "2": "tickets",
+    "3": "library",
+  };
+
+  function isTextInput(el: Element | null): boolean {
+    if (!el) return false;
+    const tag = el.tagName;
+    return (
+      tag === "INPUT" ||
+      tag === "TEXTAREA" ||
+      el.hasAttribute("contenteditable")
+    );
+  }
+
+  function handleDesktopKeydown(e: KeyboardEvent): void {
+    const mod = e.metaKey || e.ctrlKey;
+
+    if (mod && e.key === "k") {
+      e.preventDefault();
+      void openSearch();
+      return;
+    }
+
+    if (mod && e.key === "n") {
+      if (!isTextInput(document.activeElement)) {
+        e.preventDefault();
+        if (activeTab === "tickets" && navbarOverride?.actions?.[0]) {
+          navbarOverride.actions[0].onclick(new MouseEvent("click"));
+        } else {
+          ontabchange("tickets");
+        }
+      }
+      return;
+    }
+
+    if (e.key === "Escape") {
+      const state = page.state;
+      if (
+        typeof state.ticketId === "string" ||
+        typeof state.articleId === "string"
+      ) {
+        replaceState("", {});
+      }
+      return;
+    }
+
+    if (!isTextInput(document.activeElement)) {
+      const tabId = TAB_SHORTCUT_KEYS[e.key];
+      if (tabId) {
+        e.preventDefault();
+        ontabchange(tabId);
+      }
+    }
+  }
+
+  $effect(() => {
+    if (!layoutMode.isDesktop) return;
+    window.addEventListener("keydown", handleDesktopKeydown);
+    return () => {
+      window.removeEventListener("keydown", handleDesktopKeydown);
+    };
+  });
+
   // ── iOS arc indicator helpers ────────────────────────────────────────
 
   const ARC_R = 11; // SVG circle radius
@@ -781,314 +951,408 @@
   );
 </script>
 
-<PageShell
-  scrollTag="main"
-  scrollClass="main-content{tabbarHidden
-    ? ' tabbar-hidden'
-    : ''}{navbarOverride?.subnavbar != null ? ' has-subnavbar' : ''}"
-  scrollAttrs={{
-    id: "main-content",
-    "aria-label": m.shell_main_content(),
-    style: `--subnavbar-h:${String(subnavbarHeight)}px`,
-  }}
-  onNavbarHeight={handleNavbarHeight}
-  bindScrollEl={handleScrollEl}
->
-  {#snippet navbar()}
-    <Navbar role="banner">
-      {#snippet left()}
-        {#if navbarOverride?.left}
-          {@render navbarOverride.left()}
-        {:else}
-          <Link
-            iconOnly
-            role="button"
-            aria-label={m.nav_account()}
-            onclick={() => (panelOpen = true)}
-          >
-            <span class="navbar-avatar" aria-hidden="true">
-              {#if navLogoUrl}
-                <img
-                  src={navLogoUrl}
-                  alt=""
-                  class="navbar-avatar-logo"
-                  loading="eager"
-                />
-              {:else if userInitials}
-                {userInitials}
-              {:else}
-                <User size={18} />
-              {/if}
-            </span>
-          </Link>
-        {/if}
-      {/snippet}
-      {#snippet title()}
-        {#if navbarOverride?.title}
-          {#if typeof navbarOverride.title === "string"}
-            <span class="heading-compact">{navbarOverride.title}</span>
-          {:else}
-            {@render navbarOverride.title()}
+<div class="app-shell-layout">
+  {#if layoutMode.isDesktop}
+    <DesktopSidebar
+      {activeTab}
+      {ontabchange}
+      expanded={false}
+      subItems={sidebarSubItems}
+      {orgName}
+      userName={avatarDisplayName ?? ""}
+      userInitials={userInitials ?? ""}
+      onAdmin={() => void goto(resolve("/admin"))}
+      onSettings={() => void goto(resolve("/admin"))}
+      onLogout={() => void goto(resolve("/logout"))}
+    />
+  {/if}
+  <PageShell
+    scrollTag="main"
+    scrollClass="main-content{tabbarHidden
+      ? ' tabbar-hidden'
+      : ''}{navbarOverride?.subnavbar != null ? ' has-subnavbar' : ''}"
+    scrollAttrs={{
+      id: "main-content",
+      "aria-label": m.shell_main_content(),
+      style: `--subnavbar-h:${String(subnavbarHeight)}px`,
+    }}
+    onNavbarHeight={handleNavbarHeight}
+    bindScrollEl={handleScrollEl}
+  >
+    {#snippet navbar()}
+      <Navbar role="banner" class="">
+        {#snippet left()}
+          {#if navbarOverride?.left}
+            {@render navbarOverride.left()}
+          {:else if !layoutMode.isDesktop}
+            <Link
+              iconOnly
+              role="button"
+              aria-label={m.nav_account()}
+              onclick={() => (panelOpen = true)}
+            >
+              <span class="navbar-avatar" aria-hidden="true">
+                {#if navLogoUrl}
+                  <img
+                    src={navLogoUrl}
+                    alt=""
+                    class="navbar-avatar-logo"
+                    loading="eager"
+                  />
+                {:else if userInitials}
+                  {userInitials}
+                {:else}
+                  <User size={18} />
+                {/if}
+              </span>
+            </Link>
           {/if}
-        {:else}
-          <div class="navbar-title-group" class:heading-hidden={searchOpen}>
-            <span class="heading-compact">{orgName}</span>
-            <LanguagePicker value={uiLocale} onchange={handleLocaleChange} />
+        {/snippet}
+        {#snippet title()}
+          {#if navbarOverride?.title}
+            {#if typeof navbarOverride.title === "string"}
+              <span class="heading-compact">{navbarOverride.title}</span>
+            {:else}
+              {@render navbarOverride.title()}
+            {/if}
+          {:else}
+            <div class="navbar-title-group" class:heading-hidden={searchOpen}>
+              <span class="heading-compact">{orgName}</span>
+              <LanguagePicker value={uiLocale} onchange={handleLocaleChange} />
+            </div>
+          {/if}
+        {/snippet}
+        {#snippet right()}
+          {#if !searchOpen}
+            <CallIndicator />
+          {/if}
+          {#if !searchOpen && navbarOverride?.searchHidden !== true}
+            <Link
+              iconOnly
+              role="button"
+              aria-label={m.nav_search()}
+              onclick={openSearch}
+            >
+              <Search size={22} aria-hidden="true" />
+            </Link>
+          {/if}
+          {#if !searchOpen && navbarOverride?.actions}
+            {#each navbarOverride.actions as action (action.label)}
+              <Link
+                iconOnly={!layoutMode.isDesktop}
+                role="button"
+                aria-label={action.label}
+                onclick={action.onclick}
+              >
+                {@const Icon = action.icon}
+                <Icon size={22} aria-hidden="true" />
+                {#if layoutMode.isDesktop}
+                  <span class="navbar-action-label">{action.label}</span>
+                {/if}
+              </Link>
+            {/each}
+          {:else if navbarOverride?.right && !searchOpen}
+            {@render navbarOverride.right()}
+          {/if}
+        {/snippet}
+        {#if searchOpen}
+          <div
+            bind:this={searchContainerEl}
+            class="search-overlay search-overlay-open"
+          >
+            <Searchbar
+              bind:value={searchQuery}
+              disableButton
+              onDisable={closeSearch}
+              onClear={() => (searchQuery = "")}
+            />
           </div>
         {/if}
-      {/snippet}
-      {#snippet right()}
-        {#if !searchOpen}
-          <CallIndicator />
-        {/if}
-        {#if !searchOpen && navbarOverride?.searchHidden !== true}
-          <Link
-            iconOnly
-            role="button"
-            aria-label={m.nav_search()}
-            onclick={openSearch}
-          >
-            <Search size={22} aria-hidden="true" />
-          </Link>
-        {/if}
-        {#if navbarOverride?.right && !searchOpen}
-          {@render navbarOverride.right()}
-        {/if}
-      {/snippet}
-      {#if searchOpen}
+        <!-- Split-view detail header rendered inside the detail pane
+             (SplitDetailPane), not in the shared navbar. -->
+      </Navbar>
+    {/snippet}
+
+    {#snippet beforeScroll()}
+      {#if navbarOverride?.subnavbar != null || (layoutMode.isDesktop && splitRight?.subnavbar != null)}
         <div
-          bind:this={searchContainerEl}
-          class="search-overlay search-overlay-open"
+          class="shell-subnavbar"
+          class:shell-subnavbar--hidden={!layoutMode.isDesktop &&
+            navbarOverride?.subnavbarHidden?.() === true}
+          class:shell-subnavbar--split={layoutMode.isDesktop &&
+            splitNavbarCfg != null}
+          style:--subnavbar-h="{subnavbarHeight}px"
+          style:--navbar-h="{navbarHeight}px"
         >
-          <Searchbar
-            bind:value={searchQuery}
-            disableButton
-            onDisable={closeSearch}
-            onClear={() => (searchQuery = "")}
-          />
+          <div class="shell-subnavbar-inner" bind:this={subnavbarInnerEl}>
+            {#if navbarOverride?.subnavbar}
+              {@render navbarOverride.subnavbar()}
+            {/if}
+          </div>
+          {#if layoutMode.isDesktop && splitNavbarCfg && splitRight?.subnavbar}
+            <div
+              class="split-subnavbar-right"
+              style:width={splitNavbarCfg.rightWidth}
+            >
+              {@render splitRight.subnavbar()}
+            </div>
+          {/if}
         </div>
       {/if}
-    </Navbar>
-  {/snippet}
 
-  {#snippet beforeScroll()}
-    {#if navbarOverride?.subnavbar}
-      <div
-        class="shell-subnavbar"
-        class:shell-subnavbar--hidden={navbarOverride.subnavbarHidden?.() ===
-          true}
-        style:--subnavbar-h="{subnavbarHeight}px"
-        style:--navbar-h="{navbarHeight}px"
-      >
-        <div class="shell-subnavbar-inner" bind:this={subnavbarInnerEl}>
-          {@render navbarOverride.subnavbar()}
-        </div>
-      </div>
-    {/if}
-
-    <!-- Pull-to-refresh indicator -->
-    {#if ptrPhase !== "idle"}
-      <div
-        class="ptr-indicator"
-        class:ptr-indicator-ios={themeStore.uiTheme === "ios"}
-        class:ptr-indicator-material={themeStore.uiTheme === "material"}
-        class:ptr-refreshing={ptrPhase === "refreshing"}
-        class:ptr-releasing={ptrPhase === "releasing"}
-        style:top={indicatorTop}
-        aria-hidden="true"
-      >
-        {#if themeStore.uiTheme === "ios"}
-          <!-- Circular arc that fills on pull, spins on release/refresh -->
-          <svg
-            class="ptr-arc"
-            width="28"
-            height="28"
-            viewBox="0 0 28 28"
-            fill="none"
-            xmlns="http://www.w3.org/2000/svg"
-          >
-            <circle
-              class="ptr-arc-track"
-              cx="14"
-              cy="14"
-              r={ARC_R}
-              stroke-width="2.5"
-            />
-            <circle
-              class="ptr-arc-fill"
-              cx="14"
-              cy="14"
-              r={ARC_R}
-              stroke-width="2.5"
-              stroke-linecap="round"
-              stroke-dasharray={ARC_CIRCUM}
-              stroke-dashoffset={ptrPhase === "pulling"
-                ? arcOffset(ptrProgress)
-                : 0}
-              transform="rotate(-90 14 14)"
-            />
-          </svg>
-        {:else}
-          <!-- Material: simple card with a spinner -->
-          <div class="ptr-material-card">
+      <!-- Pull-to-refresh indicator -->
+      {#if ptrPhase !== "idle"}
+        <div
+          class="ptr-indicator"
+          class:ptr-indicator-ios={themeStore.uiTheme === "ios"}
+          class:ptr-indicator-material={themeStore.uiTheme === "material"}
+          class:ptr-refreshing={ptrPhase === "refreshing"}
+          class:ptr-releasing={ptrPhase === "releasing"}
+          style:top={indicatorTop}
+          aria-hidden="true"
+        >
+          {#if themeStore.uiTheme === "ios"}
+            <!-- Circular arc that fills on pull, spins on release/refresh -->
             <svg
-              class="ptr-spinner"
-              width="24"
-              height="24"
-              viewBox="0 0 24 24"
+              class="ptr-arc"
+              width="28"
+              height="28"
+              viewBox="0 0 28 28"
               fill="none"
               xmlns="http://www.w3.org/2000/svg"
             >
               <circle
-                cx="12"
-                cy="12"
-                r="9"
+                class="ptr-arc-track"
+                cx="14"
+                cy="14"
+                r={ARC_R}
+                stroke-width="2.5"
+              />
+              <circle
+                class="ptr-arc-fill"
+                cx="14"
+                cy="14"
+                r={ARC_R}
                 stroke-width="2.5"
                 stroke-linecap="round"
-                stroke-dasharray="56.5"
+                stroke-dasharray={ARC_CIRCUM}
                 stroke-dashoffset={ptrPhase === "pulling"
-                  ? 56.5 * (1 - ptrProgress)
+                  ? arcOffset(ptrProgress)
                   : 0}
+                transform="rotate(-90 14 14)"
               />
             </svg>
-          </div>
-        {/if}
-      </div>
-    {/if}
-  {/snippet}
-
-  {@render children()}
-
-  {#snippet afterScroll()}
-    {#if tabbarHidden}
-      <!-- Tabbar hidden: route provides its own bottom bar (e.g., ShellMessagebar) -->
-    {:else if tabbarOverride}
-      <div
-        role="toolbar"
-        aria-label={tabbarOverride.ariaLabel}
-        class="tabbar-override"
-      >
-        <Toolbar tabbar tabbarIcons class="native-tabbar left-0 bottom-0 fixed">
-          {#if themeStore.uiTheme === "ios" && tabbarOverride.middle}
-            <div
-              class="tabbar-override-blur fixed left-0 bottom-0 w-full h-[calc(env(safe-area-inset-bottom,0px)+48px+32px)] mask-t-to-100% mask-t-from-70% pointer-events-none bg-gradient-to-t from-ios-light-surface to-transparent dark:from-ios-dark-surface/50"
-            ></div>
-          {/if}
-          {#if tabbarOverride.left}
-            <ToolbarPane tabbar={false}>
-              {@render tabbarOverride.left()}
-            </ToolbarPane>
-          {/if}
-          {#if tabbarOverride.middle}
-            <div class="tabbar-middle">
-              {@render tabbarOverride.middle()}
+          {:else}
+            <!-- Material: simple card with a spinner -->
+            <div class="ptr-material-card">
+              <svg
+                class="ptr-spinner"
+                width="24"
+                height="24"
+                viewBox="0 0 24 24"
+                fill="none"
+                xmlns="http://www.w3.org/2000/svg"
+              >
+                <circle
+                  cx="12"
+                  cy="12"
+                  r="9"
+                  stroke-width="2.5"
+                  stroke-linecap="round"
+                  stroke-dasharray="56.5"
+                  stroke-dashoffset={ptrPhase === "pulling"
+                    ? 56.5 * (1 - ptrProgress)
+                    : 0}
+                />
+              </svg>
             </div>
           {/if}
-          {#if tabbarOverride.right}
-            {#if !tabbarOverride.left && !tabbarOverride.middle}
-              <div style:flex="1"></div>
+        </div>
+      {/if}
+    {/snippet}
+
+    {@render children()}
+
+    {#snippet afterScroll()}
+      {#if tabbarHidden}
+        <!-- Tabbar hidden: route provides its own bottom bar (e.g., ShellMessagebar) -->
+      {:else if tabbarOverride}
+        <div
+          role="toolbar"
+          aria-label={tabbarOverride.ariaLabel}
+          class="tabbar-override"
+        >
+          <Toolbar
+            tabbar
+            tabbarIcons
+            class="native-tabbar left-0 bottom-0 fixed"
+          >
+            {#if themeStore.uiTheme === "ios" && tabbarOverride.middle}
+              <div
+                class="tabbar-override-blur fixed left-0 bottom-0 w-full h-[calc(env(safe-area-inset-bottom,0px)+48px+32px)] mask-t-to-100% mask-t-from-70% pointer-events-none bg-gradient-to-t from-ios-light-surface to-transparent dark:from-ios-dark-surface/50"
+              ></div>
             {/if}
-            <ToolbarPane tabbar={false}>
-              {@render tabbarOverride.right()}
-            </ToolbarPane>
-          {/if}
-        </Toolbar>
-      </div>
-    {:else}
-      <nav
-        aria-label={m.nav_main()}
-        class="tabbar-nav native-tabbar left-0 bottom-0 fixed"
-      >
-        <Toolbar
-          tabbar
-          tabbarIcons
-          class="tabbar-inner"
-          role="tablist"
+            {#if tabbarOverride.left}
+              <ToolbarPane tabbar={false}>
+                {@render tabbarOverride.left()}
+              </ToolbarPane>
+            {/if}
+            {#if tabbarOverride.middle}
+              <div class="tabbar-middle">
+                {@render tabbarOverride.middle()}
+              </div>
+            {/if}
+            {#if tabbarOverride.right}
+              {#if !tabbarOverride.left && !tabbarOverride.middle}
+                <div style:flex="1"></div>
+              {/if}
+              <ToolbarPane tabbar={false}>
+                {@render tabbarOverride.right()}
+              </ToolbarPane>
+            {/if}
+          </Toolbar>
+        </div>
+      {:else if !layoutMode.isDesktop}
+        <nav
           aria-label={m.nav_main()}
+          class="tabbar-nav native-tabbar left-0 bottom-0 fixed"
         >
-          <ToolbarPane>
-            {#each allTabs as tab (tab.id)}
-              <TabbarLink
-                active={activeTab === tab.id}
-                onclick={() => ontabchange(tab.id)}
-                role="tab"
-                aria-label={tab.label()}
-                aria-selected={activeTab === tab.id}
-                colors={{
-                  textIos: "text-[var(--glass-text)]",
-                  textMaterial: "text-[var(--glass-text)]",
-                  textActiveIos: "text-[var(--brand-text)]",
-                  textActiveMaterial: "text-[var(--brand-text)]",
-                }}
-              >
-                {#snippet icon()}{@const Icon = tab.icon}<Icon
-                    size={24}
-                    aria-hidden="true"
-                  />{/snippet}
-              </TabbarLink>
-            {/each}
-          </ToolbarPane>
-        </Toolbar>
-        <button
-          type="button"
-          class="more-btn"
-          aria-label={m.nav_more()}
-          onclick={() => (panelOpen = true)}
+          <Toolbar
+            tabbar
+            tabbarIcons
+            class="tabbar-inner"
+            role="tablist"
+            aria-label={m.nav_main()}
+          >
+            <ToolbarPane>
+              {#each allTabs as tab (tab.id)}
+                <TabbarLink
+                  active={activeTab === tab.id}
+                  onclick={() => ontabchange(tab.id)}
+                  role="tab"
+                  aria-label={tab.label()}
+                  aria-selected={activeTab === tab.id}
+                  colors={{
+                    textIos: "text-[var(--glass-text)]",
+                    textMaterial: "text-[var(--glass-text)]",
+                    textActiveIos: "text-[var(--brand-text)]",
+                    textActiveMaterial: "text-[var(--brand-text)]",
+                  }}
+                >
+                  {#snippet icon()}{@const Icon = tab.icon}<Icon
+                      size={24}
+                      aria-hidden="true"
+                    />{/snippet}
+                </TabbarLink>
+              {/each}
+            </ToolbarPane>
+          </Toolbar>
+          <button
+            type="button"
+            class="more-btn"
+            aria-label={m.nav_more()}
+            onclick={() => (panelOpen = true)}
+          >
+            <Ellipsis size={24} aria-hidden="true" />
+          </button>
+        </nav>
+      {/if}
+
+      {#if layoutMode.isDesktop}
+        {#if searchOpen}
+          <!-- svelte-ignore a11y_no_static_element_interactions -->
+          <div
+            class="search-dropdown-backdrop"
+            style:top="{navbarHeight}px"
+            onclick={closeSearch}
+            onkeydown={undefined}
+          ></div>
+          <div
+            class="search-dropdown"
+            role="search"
+            aria-label={m.search_hint(withTerms())}
+            style:top="{navbarHeight}px"
+            style:background-color="var(--glass-surface)"
+            style:backdrop-filter="saturate(180%) blur(20px)"
+            style:-webkit-backdrop-filter="saturate(180%) blur(20px)"
+          >
+            <SearchResults
+              query={searchQuery}
+              {promotedProviderId}
+              ondismiss={closeSearch}
+              onnavigate={(href: string) => {
+                // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- dynamic href from search provider, always starts with /
+                void goto(resolve(href as `/${string}`)).then(closeSearch);
+              }}
+              onselectrecent={(q: string) => {
+                searchQuery = q;
+              }}
+            />
+          </div>
+        {/if}
+      {:else}
+        <ShellSheet
+          opened={searchOpen}
+          ondismiss={closeSearch}
+          backdrop={false}
+          trapFocus={false}
+          role="search"
+          ariaLabel={m.search_hint(withTerms())}
+          class="search-sheet"
         >
-          <Ellipsis size={24} aria-hidden="true" />
-        </button>
-      </nav>
-    {/if}
+          <SearchResults
+            query={searchQuery}
+            {promotedProviderId}
+            ondismiss={closeSearch}
+            onnavigate={(href: string) => {
+              // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- dynamic href from search provider, always starts with /
+              void goto(resolve(href as `/${string}`)).then(closeSearch);
+            }}
+            onselectrecent={(q: string) => {
+              searchQuery = q;
+            }}
+          />
+        </ShellSheet>
+      {/if}
 
-    <ShellSheet
-      opened={searchOpen}
-      ondismiss={closeSearch}
-      backdrop={false}
-      trapFocus={false}
-      role="search"
-      ariaLabel={m.search_hint(withTerms())}
-      class="search-sheet"
-    >
-      <SearchResults
-        query={searchQuery}
-        {promotedProviderId}
-        ondismiss={closeSearch}
-        onnavigate={(href: string) => {
-          // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- dynamic href from search provider, always starts with /
-          void goto(resolve(href as `/${string}`)).then(closeSearch);
-        }}
-        onselectrecent={(q: string) => {
-          searchQuery = q;
-        }}
-      />
-    </ShellSheet>
-
-    {#if browser}
-      <ShellPanel
-        opened={panelOpen}
-        ondismiss={() => (panelOpen = false)}
-        ariaLabel={m.nav_account()}
-      >
-        <AvatarPanel
-          encryptedDisplayName={meQuery.data?.user.encryptedDisplayName}
-          roleId={currentRoleId}
-          permissions={currentPermissions}
-          onnavigate={(path: string) => {
-            panelOpen = false;
-            // eslint-disable-next-line svelte/no-navigation-without-resolve -- admin routes created in later tasks
-            void goto(path);
-          }}
-          onlogout={() => {
-            panelOpen = false;
-            void goto(resolve("/logout"));
-          }}
-        />
-      </ShellPanel>
-    {/if}
-  {/snippet}
-</PageShell>
+      {#if browser && !layoutMode.isDesktop}
+        <ShellPanel
+          opened={panelOpen}
+          ondismiss={() => (panelOpen = false)}
+          ariaLabel={m.nav_account()}
+        >
+          <AvatarPanel
+            encryptedDisplayName={meQuery.data?.user.encryptedDisplayName}
+            roleId={currentRoleId}
+            permissions={currentPermissions}
+            onnavigate={(path: string) => {
+              panelOpen = false;
+              // eslint-disable-next-line svelte/no-navigation-without-resolve -- admin routes created in later tasks
+              void goto(path);
+            }}
+            onlogout={() => {
+              panelOpen = false;
+              void goto(resolve("/logout"));
+            }}
+          />
+        </ShellPanel>
+      {/if}
+    {/snippet}
+  </PageShell>
+</div>
 
 <style>
+  /* ── Desktop layout ── */
+  .app-shell-layout {
+    display: flex;
+    height: var(--app-height, 100dvh);
+  }
+
+  .app-shell-layout > :global(:last-child) {
+    flex: 1;
+    min-width: 0;
+  }
+
   /* Default tabbar nav: flex container for Toolbar + More button.
      Fixed positioning and safe-area padding live here, not on the Toolbar. */
   .tabbar-nav {
@@ -1237,6 +1501,12 @@
     object-fit: cover;
   }
 
+  .navbar-action-label {
+    font-size: var(--text-sm);
+    margin-inline-start: 0.25rem;
+    white-space: nowrap;
+  }
+
   .navbar-title-group {
     display: flex;
     flex-direction: column;
@@ -1269,6 +1539,20 @@
     opacity: 1;
     pointer-events: auto;
     transform: scaleX(1);
+  }
+
+  @media (min-width: 1024px) {
+    .search-overlay {
+      max-width: 80%;
+      left: 50%;
+      right: auto;
+      transform: translateX(-50%) scaleX(0.85);
+      transform-origin: center center;
+    }
+
+    .search-overlay-open {
+      transform: translateX(-50%) scaleX(1);
+    }
   }
 
   /* ── Subnavbar (collapsible region below Navbar) ────────────────── */
@@ -1426,5 +1710,48 @@
   /* Search sheet: fill from bottom up to the Navbar */
   :global(.search-sheet) {
     height: calc(100dvh - var(--navbar-h, 64px));
+  }
+
+  :global(.search-dropdown-backdrop) {
+    position: fixed;
+    /* top set via inline style to sit below navbar */
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 29;
+  }
+
+  :global(.search-dropdown) {
+    position: absolute;
+    /* top set via inline style to match navbar height */
+    left: 50%;
+    transform: translateX(-50%);
+    width: 80%;
+    max-width: 80%;
+    z-index: 30;
+    max-height: calc(100vh - var(--navbar-h, 64px));
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-y: contain;
+    border-bottom: 1px solid var(--divider);
+    border-radius: 0 0 var(--card-radius, 0.75rem) var(--card-radius, 0.75rem);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+    padding-bottom: var(--space-md, 0.75rem);
+  }
+
+  /* ── Split subnavbar overlay (segmented desktop view) ── */
+
+  .shell-subnavbar--split > .shell-subnavbar-inner {
+    padding-inline-end: var(--split-detail-width, 480px);
+  }
+
+  .split-subnavbar-right {
+    position: absolute;
+    top: 0;
+    right: 0;
+    height: 100%;
+    z-index: 1;
+    border-inline-start: 1px solid var(--divider);
+    overflow: hidden;
   }
 </style>

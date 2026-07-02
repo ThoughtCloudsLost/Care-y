@@ -9,6 +9,7 @@
   import { getCryptoBridge } from "$lib/crypto/context.js";
   import { cacheRegistry } from "$lib/crypto/cache-registry.js";
   import { isCryptoKeyed } from "$lib/crypto/crypto-keyed.svelte.js";
+  import { isAdminOrgKeyPolling } from "$lib/crypto/admin-org-key-poll.svelte.js";
   import { IdleTimer } from "$lib/auth/idle-timer.js";
   import { toastStore } from "$lib/stores/toast.svelte.js";
   import * as m from "$lib/paraglide/messages.js";
@@ -147,17 +148,34 @@
 
 {#if appReady}
   <AppCryptoProvider>
-    <SSEProvider enabled={isAuthenticated}>
-      <BrandingProvider>
-        <AppShell
-          {activeTab}
-          orgName={getBrandingTitle()}
-          ontabchange={handleTabChange}
-        >
-          {@render children()}
-        </AppShell>
-      </BrandingProvider>
-    </SSEProvider>
+    {#if isAdminOrgKeyPolling()}
+      <Page>
+        <div class="org-key-waiting" role="status">
+          <Preloader />
+          <h2 class="org-key-waiting-title">
+            {m.crypto_org_key_waiting_title()}
+          </h2>
+          <p class="org-key-waiting-body">
+            {m.crypto_org_key_waiting_body()}
+          </p>
+          <p class="org-key-waiting-retry">
+            {m.crypto_org_key_waiting_retry()}
+          </p>
+        </div>
+      </Page>
+    {:else}
+      <SSEProvider enabled={isAuthenticated}>
+        <BrandingProvider>
+          <AppShell
+            {activeTab}
+            orgName={getBrandingTitle()}
+            ontabchange={handleTabChange}
+          >
+            {@render children()}
+          </AppShell>
+        </BrandingProvider>
+      </SSEProvider>
+    {/if}
   </AppCryptoProvider>
 {:else if isAuthenticated && !cryptoTimedOut}
   <Page>
@@ -174,5 +192,38 @@
     justify-content: center;
     align-items: center;
     min-height: 200px;
+  }
+
+  .org-key-waiting {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: var(--space-xl, 2rem);
+    min-height: 60vh;
+    gap: var(--space-md, 1rem);
+  }
+
+  .org-key-waiting-title {
+    font-size: 1.125rem;
+    font-weight: 600;
+    color: var(--ink);
+    margin: var(--space-sm, 0.5rem) 0 0;
+  }
+
+  .org-key-waiting-body {
+    font-size: 0.875rem;
+    color: var(--muted);
+    max-width: 20rem;
+    margin: 0;
+    line-height: 1.5;
+  }
+
+  .org-key-waiting-retry {
+    font-size: 0.75rem;
+    color: var(--muted);
+    opacity: 0.7;
+    margin: 0;
   }
 </style>

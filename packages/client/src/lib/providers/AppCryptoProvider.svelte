@@ -12,8 +12,6 @@
 -->
 <script lang="ts">
   import { browser } from "$app/environment";
-  import { goto } from "$app/navigation";
-  import { resolve } from "$app/paths";
   import { createQuery } from "@tanstack/svelte-query";
   import { authKeys } from "$lib/query/keys.js";
   import type { WorkerEventHandler } from "$lib/workers/crypto-bridge.js";
@@ -40,6 +38,7 @@
   import { Permission } from "@care-y/shared";
   import { rewrapBlobsForFollowUp } from "$lib/crypto/rewrap-blobs.js";
   import { isOrgKeyReady } from "$lib/crypto/org-key-ready.svelte.js";
+  import { setAdminOrgKeyPolling } from "$lib/crypto/admin-org-key-poll.svelte.js";
   import { wrapOrgKeyForPending } from "$lib/crypto/org-key-wrap.js";
   import { toastStore } from "$lib/stores/toast.svelte.js";
   import * as m from "$lib/paraglide/messages.js";
@@ -207,17 +206,58 @@
       toastStore.show(m.crypto_org_key_pending(), 5000);
     });
 
-    // ── Admin safety net: org key should always be available ────────
-    // Admins (MANAGE_KEYS) derive the org key at login. If the session
-    // is valid but the org key is missing, crypto is broken and the
-    // admin needs to re-authenticate.
+    // ── Admin safety net: poll for org key if missing ────────────────
+    // New admins (link-invited) may not have a wrapped_org_keys row yet.
+    // Instead of redirecting to /login (which creates a loop), poll
+    // getWrappedOrgKey until another admin's auto-wrap distributes it.
+    // For existing admins whose Worker lost the key (crash/bfcache), the
+    // poll also serves as recovery without forcing re-authentication.
+    let orgKeyPollTimer: ReturnType<typeof setInterval> | null = null;
+    let isPollingForOrgKey = false;
+
+    async function tryUnwrapOrgKey(): Promise<void> {
+      try {
+        const data = await trpc.keys.getWrappedOrgKey.query();
+        if (!data) return;
+
+        const orgPublicKey = await bridge.unwrapOrgKey(
+          data.wrappedKey,
+          data.ephemeralPoint,
+          data.nonce,
+        );
+        orgKeyManager.load(orgPublicKey);
+      } catch {
+        // Non-fatal: will retry on next poll tick
+      }
+    }
+
     $effect(() => {
       if (!meQuery.data) return;
-      if (isOrgKeyReady()) return;
+      if (isOrgKeyReady()) {
+        if (orgKeyPollTimer !== null) {
+          clearInterval(orgKeyPollTimer);
+          orgKeyPollTimer = null;
+          isPollingForOrgKey = false;
+          setAdminOrgKeyPolling(false);
+        }
+        return;
+      }
       if (!canManageKeys) return;
+      if (isPollingForOrgKey) return;
 
-      cacheRegistry.reset();
-      void goto(resolve("/login?reauth=1"));
+      isPollingForOrgKey = true;
+      setAdminOrgKeyPolling(true);
+      void tryUnwrapOrgKey();
+      orgKeyPollTimer = setInterval(() => void tryUnwrapOrgKey(), 5_000);
+
+      return () => {
+        if (orgKeyPollTimer !== null) {
+          clearInterval(orgKeyPollTimer);
+          orgKeyPollTimer = null;
+          isPollingForOrgKey = false;
+          setAdminOrgKeyPolling(false);
+        }
+      };
     });
   }
 </script>

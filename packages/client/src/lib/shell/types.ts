@@ -197,8 +197,12 @@ export interface NavbarOverride {
   readonly left?: Snippet;
   /** Title string or snippet. */
   readonly title?: string | Snippet;
-  /** Snippet rendered in the right slot (action icons). */
+  /** Snippet rendered in the right slot (action icons). Prefer `actions` for
+   *  structured data that adapts to desktop (icon+label) vs mobile (icon-only). */
   readonly right?: Snippet;
+  /** Structured actions for the navbar right slot. The shell renders icon-only
+   *  on mobile and icon+label on desktop. Routes provide data, not snippets. */
+  readonly actions?: readonly NavbarAction[];
   /** Snippet rendered below the Navbar as a collapsible subnavbar region. */
   readonly subnavbar?: Snippet;
   /** Reactive getter: returns true when the subnavbar should be hidden. */
@@ -299,4 +303,38 @@ export interface FilterPillsConfig {
   readonly ondatechange: (from: Date | null, to: Date | null) => void;
   readonly onclearall: () => void;
   readonly oncreateshortcut?: () => void;
+}
+
+// ── Desktop responsive ──────────────────────────────────────────────
+
+export interface NavbarAction {
+  readonly icon: Component;
+  readonly label: string;
+  readonly onclick: (e: MouseEvent) => void;
+}
+
+export interface SidebarSubItem {
+  readonly id: string;
+  readonly label: string;
+  readonly count?: number;
+  readonly icon?: "queue" | "filter";
+  readonly ontap: () => void;
+}
+
+export interface SidebarSection {
+  readonly tabId: TabId | "admin";
+  readonly items: readonly SidebarSubItem[];
+}
+
+export interface DesktopSidebarProps {
+  readonly activeTab: TabId;
+  readonly ontabchange: (tabId: TabId) => void;
+  readonly expanded: boolean;
+  readonly subItems: readonly SidebarSection[];
+  readonly orgName?: string;
+  readonly userName: string;
+  readonly userInitials: string;
+  readonly onAdmin: () => void;
+  readonly onSettings: () => void;
+  readonly onLogout: () => void;
 }

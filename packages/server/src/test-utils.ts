@@ -890,6 +890,9 @@ export function createMockOprfDeps(): OprfRouterDeps {
       async evaluate() {
         throw new TestSetupError("Mock OPRF service called unexpectedly");
       },
+      async adminEvaluate() {
+        throw new TestSetupError("Mock OPRF service called unexpectedly");
+      },
     },
   };
 }
