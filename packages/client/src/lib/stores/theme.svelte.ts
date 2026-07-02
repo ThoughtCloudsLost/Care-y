@@ -12,12 +12,7 @@ export type ColorScheme = "dark" | "light" | "system";
 export type KonstaTheme = "ios" | "material";
 export type GlassMode = "auto" | "light" | "dark";
 export type VisualTheme =
-  | "riso"
-  | "default"
-  | "frutiger"
-  | "brutalist"
-  | "cupertino"
-  | "prism";
+  "riso" | "default" | "frutiger" | "brutalist" | "cupertino" | "prism";
 
 const UI_THEME_KEY = "care-y-theme";
 const COLOR_SCHEME_KEY = "care-y-color-scheme";
