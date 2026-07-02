@@ -118,6 +118,33 @@ export const testSealedBox: SealedBoxEncryptor =
   createSealedBoxEncryptor(TEST_ORG_PUBLIC_KEY);
 
 /**
+ * Test-only: opens a sealed box produced with TEST_ORG_PUBLIC_KEY.
+ * Lets tests verify that org-key-tier ciphertexts (display names,
+ * identifiers per ADR-052) round-trip. Production code never unseals
+ * on the server; only clients holding the org secret key can.
+ */
+export function testUnseal(ciphertext: Buffer | string): string {
+  const ct =
+    typeof ciphertext === "string"
+      ? Buffer.from(ciphertext, "base64")
+      : ciphertext;
+  const plaintext = Buffer.alloc(ct.length - sodium.crypto_box_SEALBYTES);
+  // care-y-ignore-next-line server-no-decrypt -- test-only helper; verifies seal round-trips with the committed test keypair, never runs in production
+  const opened = sodium.crypto_box_seal_open(
+    plaintext,
+    ct,
+    testKeypair.publicKey,
+    testKeypair.secretKey,
+  );
+  if (!opened) {
+    throw new TestSetupError(
+      "testUnseal: sealed box did not open with the test org keypair",
+    );
+  }
+  return plaintext.toString("utf-8");
+}
+
+/**
  * Seeds the org_config singleton row in a test schema.
  * Inserts the row if it doesn't exist, then sets org_public_key.
  * Call in beforeAll after createTestDb() so that org resolution and

@@ -6,6 +6,7 @@ import {
   testBlindIndexer,
   testSessionTokenizer,
   testSealedBox,
+  testUnseal,
   TEST_ORG_ID,
   type TestDb,
 } from "../test-utils.js";
@@ -21,6 +22,7 @@ import {
 import {
   AuthError,
   ConflictError,
+  CryptoError,
   ForbiddenError,
   NotFoundError,
 } from "../errors.js";
@@ -73,7 +75,7 @@ describe.skipIf(!process.env.DATABASE_URL)("AuthService", () => {
       });
 
       expect(user.id).toBeDefined();
-      expect(user.identifier).toBe("alice");
+      expect(testUnseal(user.encryptedIdentifier)).toBe("alice");
       expect(user.encryptedDisplayName).toBeDefined();
       expect(user.encryptedDisplayName.length).toBeGreaterThan(0);
       expect(user.roleId).toBe("volunteer");
@@ -125,6 +127,41 @@ describe.skipIf(!process.env.DATABASE_URL)("AuthService", () => {
       expect(rawRow.encrypted_display_name.toString("utf-8")).not.toBe(
         "Enc Check",
       );
+    });
+
+    it("seals the identifier so only the org key can read it back", async () => {
+      const user = await service.register({
+        identifier: "sealed-ident-user",
+        password: "secretpassword123",
+        displayName: "Sealed Ident",
+        roleId: "volunteer",
+      });
+
+      const rawRow = await testDb.db
+        .selectFrom("users")
+        .selectAll()
+        .where(
+          "identifier_hash",
+          "=",
+          testBlindIndexer.hash("sealed-ident-user", TEST_ORG_ID),
+        )
+        .executeTakeFirstOrThrow();
+
+      // Stored bytes are a sealed box: not plaintext, not decryptable
+      // with the server's OPS field key, recoverable only with the org
+      // secret key (the client-side path).
+      expect(rawRow.encrypted_identifier.toString("utf-8")).not.toBe(
+        "sealed-ident-user",
+      );
+      expect(() =>
+        testFieldEncryptor.decrypt(rawRow.encrypted_identifier),
+      ).toThrow(CryptoError);
+      expect(testUnseal(rawRow.encrypted_identifier)).toBe("sealed-ident-user");
+
+      // The domain object carries only ciphertext, never a plaintext
+      // identifier property.
+      expect(user).not.toHaveProperty("identifier");
+      expect(testUnseal(user.encryptedIdentifier)).toBe("sealed-ident-user");
     });
 
     it("stores blind index hash for identifier", async () => {
@@ -293,7 +330,7 @@ describe.skipIf(!process.env.DATABASE_URL)("AuthService", () => {
         userAgent: "TestAgent/1.0",
       });
 
-      expect(result.user.identifier).toBe(LOGIN_ID);
+      expect(testUnseal(result.user.encryptedIdentifier)).toBe(LOGIN_ID);
       expect(result.session.userId).toBe(result.user.id);
       expect(result.session.token).toBeDefined();
     });
@@ -571,7 +608,9 @@ describe.skipIf(!process.env.DATABASE_URL)("AuthService", () => {
       );
 
       expect(result).not.toBeNull();
-      expect(result?.user.identifier).toBe("ip-mismatch-user");
+      expect(testUnseal(result?.user.encryptedIdentifier ?? "")).toBe(
+        "ip-mismatch-user",
+      );
 
       warnSpy.mockRestore();
     });
@@ -594,7 +633,9 @@ describe.skipIf(!process.env.DATABASE_URL)("AuthService", () => {
 
       expect(found).not.toBeNull();
       expect(found?.id).toBe(registered.id);
-      expect(found?.identifier).toBe("find-user-test");
+      expect(testUnseal(found?.encryptedIdentifier ?? "")).toBe(
+        "find-user-test",
+      );
       expect(found?.encryptedDisplayName).toBeDefined();
     });
 

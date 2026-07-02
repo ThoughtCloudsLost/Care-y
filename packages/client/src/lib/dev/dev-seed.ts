@@ -1129,19 +1129,29 @@ export async function devSeedData(
   progress("Creating users...");
   const existingUsers = (await authRouter.listUsers.query()) as {
     id: string;
-    identifier: string;
+    encryptedIdentifier: string;
   }[];
-  const existingIdentifiers = new Set(
-    existingUsers.map((u: { identifier: string }) => u.identifier),
+  // Identifiers are org-key sealed (ADR-052); the server cannot return
+  // plaintext. Decrypt through the worker to match seed users on re-runs.
+  const decrypted = await bridge.orgDecryptBatch(
+    existingUsers.map((u) => ({
+      cacheKey: u.id,
+      ciphertext: u.encryptedIdentifier,
+    })),
   );
+  const existingIdByIdentifier = new Map<string, string>();
+  for (const r of decrypted) {
+    if (r.plaintext !== null) {
+      // care-y-ignore-next-line no-plaintext-db-write -- in-memory Map for seed idempotency, not a DB write
+      existingIdByIdentifier.set(r.plaintext, r.cacheKey);
+    }
+  }
   const seededUserIds: Record<string, string> = {};
 
   for (const user of SEED_USERS) {
-    if (existingIdentifiers.has(user.identifier)) {
-      const existing = existingUsers.find(
-        (u: { identifier: string }) => u.identifier === user.identifier,
-      );
-      if (existing) seededUserIds[user.identifier] = existing.id;
+    const existingId = existingIdByIdentifier.get(user.identifier);
+    if (existingId !== undefined) {
+      seededUserIds[user.identifier] = existingId;
       console.log(
         `[dev-seed] User "${user.identifier}" already exists, skipping`,
       );

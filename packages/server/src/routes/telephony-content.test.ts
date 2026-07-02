@@ -94,7 +94,7 @@ function createAdminContext(): Context {
     },
     user: {
       id: "user-1",
-      identifier: "admin",
+      encryptedIdentifier: "admin",
       encryptedDisplayName: "encrypted",
       encryptedPreferredLocale: null,
       roleId: RoleId.ADMIN,

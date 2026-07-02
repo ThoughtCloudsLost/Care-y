@@ -130,7 +130,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         },
         user: {
           id: dbRow.id,
-          identifier: dbRow.identifier_hash,
+          encryptedIdentifier: dbRow.identifier_hash,
           encryptedDisplayName: dbRow.encrypted_display_name.toString("base64"),
           encryptedPreferredLocale: null,
           roleId: dbRow.role_id,
@@ -560,7 +560,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
             },
             user: {
               id: admin.id,
-              identifier: admin.identifier_hash,
+              encryptedIdentifier: admin.identifier_hash,
               encryptedDisplayName:
                 admin.encrypted_display_name.toString("base64"),
               encryptedPreferredLocale: null,

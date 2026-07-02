@@ -141,8 +141,12 @@
   const adminUsernameMutation = createMutation(() => ({
     mutationFn: async (input: { userId: string; newIdentifier: string }) =>
       profileRouter.adminUpdateUsername.mutate(input),
-    onSuccess: () => {
+    onSuccess: (
+      _data: unknown,
+      variables: { userId: string; newIdentifier: string },
+    ) => {
       haptic();
+      orgCache.delete(`user-ident:${variables.userId}`);
       void queryClient.invalidateQueries({ queryKey: adminKeys.users() });
       const msg = m.admin_username_updated();
       toastStore.show(msg);
@@ -183,6 +187,16 @@
   ): string | null {
     const bytes = base64ToUint8Array(encryptedBase64);
     return orgCache.decrypt(`user:${userId}`, bytes);
+  }
+
+  // Identifiers are org-key sealed like display names (ADR-052). Decrypted
+  // on demand when the edit sheet opens, not during list render.
+  async function decryptIdentifier(
+    userId: string,
+    encryptedBase64: string,
+  ): Promise<string | null> {
+    const bytes = base64ToUint8Array(encryptedBase64);
+    return orgCache.decryptAsync(`user-ident:${userId}`, bytes);
   }
 
   // ── Client-side filtering + sorting ──
@@ -305,18 +319,22 @@
   let queuesLoading = $state(false);
 
   export function editUser(userId: string): void {
-    handleUserEdit(userId);
+    void handleUserEdit(userId);
   }
 
-  function handleUserEdit(userId: string): void {
+  async function handleUserEdit(userId: string): Promise<void> {
     const user = (usersQuery.data ?? []).find((u) => u.id === userId);
     if (!user) return;
+    const identifier = await decryptIdentifier(
+      userId,
+      user.encryptedIdentifier,
+    );
     const state: SheetState = {
       userId,
       userDisplayName:
         decryptDisplayName(userId, user.encryptedDisplayName) ??
         userId.slice(0, 8),
-      userIdentifier: user.identifier,
+      userIdentifier: identifier ?? "",
       roleId: user.roleId,
       isActive: user.isActive,
     };
@@ -649,7 +667,7 @@
             {isSelf}
             selected={selectedIds.has(user.id)}
             {multiSelectActive}
-            onedit={handleUserEdit}
+            onedit={(id: string) => void handleUserEdit(id)}
             onselect={toggleSelection}
           />
         </div>
