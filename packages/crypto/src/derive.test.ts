@@ -43,18 +43,22 @@ describe("key derivation", () => {
     const fixedSalt = new Uint8Array(16) as Salt;
     fixedSalt.fill(0x42);
 
+    // Argon2id at the enforced floor takes seconds per derivation, and
+    // coverage instrumentation roughly doubles that, so every test that
+    // stretches a password carries an explicit timeout (same convention as
+    // the escrow tests).
     it("returns a 32-byte stretched key", () => {
       const password = new TextEncoder().encode("test-password");
       const result = deriveAccountKey(password, fixedSalt);
       expect(result.length).toBe(32);
-    });
+    }, 60_000);
 
     it("is deterministic for same input", () => {
       const password = new TextEncoder().encode("deterministic");
       const a = deriveAccountKey(password, fixedSalt);
       const b = deriveAccountKey(password, fixedSalt);
       expect(a).toEqual(b);
-    });
+    }, 60_000);
 
     it("throws InvalidInputError for wrong-length salt", () => {
       const password = new TextEncoder().encode("test");
@@ -75,7 +79,7 @@ describe("key derivation", () => {
 
       // Both should produce the same output since weak params get floored
       expect(withWeak).toEqual(withDefaults);
-    });
+    }, 60_000);
 
     it("accepts stronger-than-minimum params", () => {
       const password = new TextEncoder().encode("strong-test");
@@ -89,7 +93,7 @@ describe("key derivation", () => {
 
       // Stronger params produce different output
       expect(withStrong).not.toEqual(withDefaults);
-    });
+    }, 60_000);
 
     it("different passwords produce different outputs", () => {
       const a = deriveAccountKey(
@@ -101,7 +105,7 @@ describe("key derivation", () => {
         fixedSalt,
       );
       expect(a).not.toEqual(b);
-    });
+    }, 60_000);
 
     it("different salts produce different outputs", () => {
       const password = new TextEncoder().encode("same-password");
@@ -112,7 +116,7 @@ describe("key derivation", () => {
       const a = deriveAccountKey(password, salt1);
       const b = deriveAccountKey(password, salt2);
       expect(a).not.toEqual(b);
-    });
+    }, 60_000);
 
     it("handles empty password without crashing", () => {
       // Argon2id accepts empty passwords (libsodium does not reject them).
@@ -121,7 +125,7 @@ describe("key derivation", () => {
       const emptyPassword = new Uint8Array(0);
       const result = deriveAccountKey(emptyPassword, fixedSalt);
       expect(result.length).toBe(32);
-    });
+    }, 60_000);
 
     it("partially weak params are individually floor-enforced", () => {
       const password = new TextEncoder().encode("partial-weak-test");
@@ -136,7 +140,7 @@ describe("key derivation", () => {
       // from the default (which uses floor values for everything)
       const withDefaults = deriveAccountKey(password, fixedSalt);
       expect(result).not.toEqual(withDefaults);
-    });
+    }, 60_000);
   });
 
   describe("deriveMasterKey", () => {
