@@ -489,7 +489,7 @@ describe("OPRF tRPC route", () => {
       },
       user: {
         id: "d4e5f6a7-b8c9-4d0e-af2a-3b4c5d6e7f80",
-        identifier: "session-user",
+        encryptedIdentifier: "session-user",
         encryptedDisplayName: "Session User",
         encryptedPreferredLocale: null,
         roleId: "volunteer",
@@ -594,7 +594,7 @@ describe("OPRF adminEvaluate route", () => {
       },
       user: {
         id: "admin-user-id",
-        identifier: "admin-hash",
+        encryptedIdentifier: "admin-hash",
         encryptedDisplayName: "QWRtaW4=",
         encryptedPreferredLocale: null,
         roleId: RoleId.ADMIN,
@@ -629,7 +629,7 @@ describe("OPRF adminEvaluate route", () => {
     const { caller } = buildAdminCaller({
       user: {
         id: "vol-user-id",
-        identifier: "vol-hash",
+        encryptedIdentifier: "vol-hash",
         encryptedDisplayName: "Vm9s",
         encryptedPreferredLocale: null,
         roleId: RoleId.VOLUNTEER,

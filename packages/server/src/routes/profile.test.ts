@@ -188,7 +188,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         session: twofaVerified ? { ...session, twofaVerified: true } : session,
         user: {
           id: userId,
-          identifier: "test-user",
+          encryptedIdentifier: "test-user",
           encryptedDisplayName: "",
           encryptedPreferredLocale: null,
           roleId,
@@ -394,8 +394,9 @@ describe.skipIf(!process.env.DATABASE_URL)(
 
       it("rejects duplicate username without revealing it exists", async () => {
         const authService = makeAuthService();
-        const existing = await authService.register({
-          identifier: `uname-dup-existing-${randomUUID().slice(0, 8)}`,
+        const existingIdentifier = `uname-dup-existing-${randomUUID().slice(0, 8)}`;
+        await authService.register({
+          identifier: existingIdentifier,
           password: "existing-password-long-enough",
           displayName: "Existing User",
           roleId: RoleId.VOLUNTEER,
@@ -412,7 +413,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         const err = await expectTrpcError(
           caller.profile.updateUsername({
             currentPassword: "changer-password-long-enough",
-            newIdentifier: existing.identifier,
+            newIdentifier: existingIdentifier,
           }),
           "BAD_REQUEST",
         );
@@ -528,8 +529,9 @@ describe.skipIf(!process.env.DATABASE_URL)(
           displayName: "Admin Dup",
           roleId: RoleId.ADMIN,
         });
-        const existing = await authService.register({
-          identifier: `uname-admdup-tgt-${randomUUID().slice(0, 8)}`,
+        const existingIdentifier = `uname-admdup-tgt-${randomUUID().slice(0, 8)}`;
+        await authService.register({
+          identifier: existingIdentifier,
           password: "admdup-target-password-long!",
           displayName: "Dup Target",
           roleId: RoleId.VOLUNTEER,
@@ -548,7 +550,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         await expectTrpcError(
           caller.profile.adminUpdateUsername({
             userId: target.id,
-            newIdentifier: existing.identifier,
+            newIdentifier: existingIdentifier,
           }),
           "CONFLICT",
           "USERNAME_ALREADY_TAKEN",

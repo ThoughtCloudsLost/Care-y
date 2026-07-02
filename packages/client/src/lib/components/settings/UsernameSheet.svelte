@@ -6,6 +6,7 @@
   import * as m from "$lib/paraglide/messages.js";
   import { trpc } from "$lib/trpc/index.js";
   import { authKeys } from "$lib/query/keys.js";
+  import { getOrgDecryptCache } from "$lib/crypto/context.js";
   import { haptic } from "$lib/utils/haptic.js";
   import { toastStore } from "$lib/stores/toast.svelte.js";
   import { announceToLiveRegion } from "$lib/utils/announce.js";
@@ -22,6 +23,7 @@
   let { opened, ondismiss, currentUsername }: UsernameSheetProps = $props();
 
   const queryClient = useQueryClient();
+  const orgCache = getOrgDecryptCache();
 
   let newUsername = $state("");
   let currentPassword = $state("");
@@ -58,6 +60,8 @@
       const msg = m.settings_username_saved();
       toastStore.show(msg);
       announceToLiveRegion("polite", msg);
+      // The refetched me response carries fresh sealed ciphertext (ADR-052)
+      orgCache.delete("me:identifier");
       await queryClient.invalidateQueries({ queryKey: authKeys.me() });
       currentPassword = "";
       ondismiss();

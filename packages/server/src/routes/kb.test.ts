@@ -88,7 +88,7 @@ function volunteerContext(): Context {
     },
     user: {
       id: USER_ID,
-      identifier: "volunteer",
+      encryptedIdentifier: "volunteer",
       encryptedDisplayName: "encrypted",
       encryptedPreferredLocale: null,
       roleId: RoleId.VOLUNTEER,
@@ -107,7 +107,7 @@ function managerContext(): Context {
     },
     user: {
       id: MANAGER_ID,
-      identifier: "manager",
+      encryptedIdentifier: "manager",
       encryptedDisplayName: "encrypted",
       encryptedPreferredLocale: null,
       roleId: RoleId.MANAGER,

@@ -49,7 +49,17 @@
         )
       : null,
   );
-  const currentUsername = $derived(meQuery.data?.user.identifier ?? "");
+  const encryptedIdentifier = $derived(
+    meQuery.data?.user.encryptedIdentifier ?? null,
+  );
+  const currentUsername = $derived(
+    encryptedIdentifier !== null
+      ? (orgCache.decrypt(
+          "me:identifier",
+          base64ToUint8Array(encryptedIdentifier),
+        ) ?? "")
+      : "",
+  );
   const userId = $derived(meQuery.data?.user.id ?? "");
 
   let displayNameSheetOpen = $state(false);

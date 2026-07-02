@@ -9,7 +9,7 @@ export interface UserRecord {
   readonly hasKeys: boolean;
   readonly hasOrgKeyWrap: boolean;
   readonly encryptedDisplayName: string;
-  readonly identifier: string;
+  readonly encryptedIdentifier: string;
 }
 
 export interface UserFilterCriteria {
