@@ -135,6 +135,7 @@ export async function changePassword(deps: PasswordChangeDeps): Promise<void> {
     for (const wrap of batch) {
       await primaryBridge.unwrapTk(
         wrap.ticketId,
+        wrap.ticketId,
         wrap.ephemeralPoint,
         wrap.nonce,
         wrap.wrappedKey,

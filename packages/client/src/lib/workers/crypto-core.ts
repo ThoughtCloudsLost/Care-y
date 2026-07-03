@@ -38,6 +38,10 @@ import {
   encryptContent,
   decryptContent,
   generateContentKey,
+  buildContentAad,
+  followupSlot,
+  blobSlot,
+  fieldSlot,
   encode,
   decode,
   type Scalar,
@@ -342,13 +346,14 @@ interface KeyWrapRequest {
   readonly id: number;
   readonly type: WorkerRequestType;
   readonly ticketId: string;
+  readonly keyCacheId: string;
   readonly ephemeralPoint: string;
   readonly nonce: string;
   readonly wrappedKey: string;
 }
 
 function resolveTk(req: KeyWrapRequest, sink: Sink): Uint8Array | null {
-  const cached = tkCache.get(req.ticketId);
+  const cached = tkCache.get(req.keyCacheId);
   if (cached) return cached;
 
   const ephemeralPoint = decode(req.ephemeralPoint);
@@ -362,7 +367,7 @@ function resolveTk(req: KeyWrapRequest, sink: Sink): Uint8Array | null {
       wrappedKey,
       assertPresent(volPrivate, "volPrivate"),
     );
-    tkCache.set(req.ticketId, tk);
+    tkCache.set(req.keyCacheId, tk);
     return tk;
   } catch (err: unknown) {
     postError(
@@ -389,6 +394,7 @@ function handleDecryptContent(req: DecryptContentRequest, sink: Sink): void {
     const plaintext = decryptContent(
       ciphertextBuf as Ciphertext,
       tk as SymmetricKey,
+      buildContentAad(req.ticketId, req.slot),
     );
 
     try {
@@ -453,11 +459,15 @@ function handleDecryptAndRewrap(
   rewrapTkTempCache.set(req.followUpId, tkTemp);
 
   const ciphertextBuf = decode(req.ciphertext);
+  // Same AAD before and after the rewrap: the content stays in the same
+  // followup slot of the same ticket, only the key changes (ADR-053).
+  const aad = buildContentAad(req.ticketId, followupSlot(req.followUpId));
 
   try {
     const plaintext = decryptContent(
       ciphertextBuf as Ciphertext,
       tkTemp as SymmetricKey,
+      aad,
     );
 
     try {
@@ -469,7 +479,7 @@ function handleDecryptAndRewrap(
       };
       sink(msg);
     } finally {
-      triggerRewrap(req.followUpId, req.ticketId, plaintext, sodium, sink);
+      triggerRewrap(req.followUpId, req.ticketId, plaintext, aad, sodium, sink);
     }
   } catch (err: unknown) {
     postError(
@@ -486,6 +496,7 @@ function triggerRewrap(
   followUpId: string,
   ticketId: string,
   plaintext: Uint8Array,
+  aad: Uint8Array,
   sodium: ReturnType<typeof requireSodium>,
   sink: Sink,
 ): void {
@@ -501,7 +512,11 @@ function triggerRewrap(
   }
 
   try {
-    const reEncrypted = encryptContent(plaintext, canonicalTk as SymmetricKey);
+    const reEncrypted = encryptContent(
+      plaintext,
+      canonicalTk as SymmetricKey,
+      aad,
+    );
     pendingRewraps.add(followUpId);
     const event: RewrapEvent = {
       kind: "rewrap",
@@ -549,16 +564,21 @@ function handleRewrapBlob(req: RewrapBlobRequest, sink: Sink): void {
   }
 
   const ciphertextBuf = decode(req.ciphertext);
+  // Bound to the attachments/recordings row id, which is stable across
+  // the rewrap; the storage blobKey changes when the server re-stores.
+  const aad = buildContentAad(req.ticketId, blobSlot(req.blobId));
 
   try {
     const blobPlaintext = decryptContent(
       ciphertextBuf as Ciphertext,
       tkTemp as SymmetricKey,
+      aad,
     );
     try {
       const reEncrypted = encryptContent(
         blobPlaintext,
         canonicalTk as SymmetricKey,
+        aad,
       );
       const msg: WorkerResponse = {
         id: req.id,
@@ -604,6 +624,7 @@ function handleDecryptBlob(req: DecryptBlobRequest, sink: Sink): void {
     const plainBytes = decryptContent(
       ciphertextBuf as Ciphertext,
       tk as SymmetricKey,
+      buildContentAad(req.ticketId, req.slot),
     );
 
     const abuf = new ArrayBuffer(plainBytes.byteLength);
@@ -646,7 +667,11 @@ function handleEncryptContent(req: EncryptContentRequest, sink: Sink): void {
   const plaintextBuf = textEncoder.encode(req.plaintext);
 
   try {
-    const ciphertext = encryptContent(plaintextBuf, tk as SymmetricKey);
+    const ciphertext = encryptContent(
+      plaintextBuf,
+      tk as SymmetricKey,
+      buildContentAad(req.ticketId, req.slot),
+    );
 
     const msg: WorkerResponse = {
       id: req.id,
@@ -848,7 +873,15 @@ function handleCreateTicketKey(req: CreateTicketKeyRequest, sink: Sink): void {
   try {
     const encryptedFields = req.fields.map((f) => {
       const plaintextBuf = textEncoder.encode(f.plaintext);
-      const ciphertext = encryptContent(plaintextBuf, tk);
+      const slot =
+        f.name === "title" || f.name === "description"
+          ? f.name
+          : fieldSlot(f.name);
+      const ciphertext = encryptContent(
+        plaintextBuf,
+        tk,
+        buildContentAad(req.ticketId, slot),
+      );
       return { name: f.name, ciphertext: encode(ciphertext) };
     });
 

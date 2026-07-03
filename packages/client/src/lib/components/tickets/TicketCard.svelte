@@ -101,7 +101,7 @@
         aria-hidden="true"
       >
         <div class="preview-window">
-          <TicketPreview followUps={undefined} multiline={isList} />
+          <TicketPreview {ticketId} followUps={undefined} multiline={isList} />
         </div>
 
         <div class="row-top">
@@ -158,6 +158,7 @@
         ></button>
         <div class="preview-window" data-preview>
           <TicketPreview
+            {ticketId}
             followUps={previewFollowUps}
             multiline={isList}
             {followUpCount}

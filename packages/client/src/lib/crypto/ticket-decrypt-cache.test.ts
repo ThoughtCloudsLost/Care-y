@@ -67,6 +67,8 @@ describe("TicketDecryptCache", () => {
       expect(mockDecrypt).toHaveBeenCalledOnce();
       expect(mockDecrypt).toHaveBeenCalledWith(
         TICKET_ID,
+        "title",
+        TICKET_ID,
         KEY_WRAP.ephemeralPoint,
         KEY_WRAP.nonce,
         KEY_WRAP.wrappedKey,
@@ -120,6 +122,8 @@ describe("TicketDecryptCache", () => {
     it("handles string encryptedTitle (already base64)", () => {
       cache.decryptTitle(TICKET_ID, KEY_WRAP, "already-base64-string");
       expect(mockDecrypt).toHaveBeenCalledWith(
+        TICKET_ID,
+        "title",
         TICKET_ID,
         KEY_WRAP.ephemeralPoint,
         KEY_WRAP.nonce,

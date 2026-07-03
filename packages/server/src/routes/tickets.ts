@@ -59,6 +59,7 @@ import { rewrapFollowUp } from "../tickets/rewrap-service.js";
 import { sanitizeLike, maskPhone } from "../utils/sql.js";
 import {
   createTicketInputSchema,
+  resolveCreateTargetInputSchema,
   updateTicketInputSchema,
   ticketListInputSchema,
   recentFollowUpsInputSchema,
@@ -454,6 +455,7 @@ export function createTicketRouter(deps: TicketRouterDeps) {
       withErrorWrapping(async ({ ctx, input }) => {
         const { svc } = ticketSvc(ctx.org.tenantDb);
         const ticket = await svc.create(ctx.user.id, {
+          id: input.id,
           clientId: input.clientId,
           clientToken: input.clientToken,
           queueId: input.queueId,
@@ -478,6 +480,19 @@ export function createTicketRouter(deps: TicketRouterDeps) {
         return ticket;
       }),
     ),
+
+    // What ticket a create for this client will land on: an open ticket
+    // blocks the create, a closed one is reopened under its existing id.
+    // The client needs the target id before encrypting because the AAD
+    // binds it (ADR-053).
+    resolveCreateTarget: volunteerProcedure
+      .input(resolveCreateTargetInputSchema)
+      .query(
+        withErrorWrapping(async ({ ctx, input }) => {
+          const { svc } = ticketSvc(ctx.org.tenantDb);
+          return svc.getCreateTarget(input.clientId);
+        }),
+      ),
 
     get: volunteerProcedure.input(z.object({ ticketId: z.uuid() })).query(
       withErrorWrapping(async ({ ctx, input }) => {
@@ -616,6 +631,7 @@ export function createTicketRouter(deps: TicketRouterDeps) {
           const access = deps.createTicketAccess(ctx.org.tenantDb);
           const svc = deps.createFollowUpSvc(ctx.org.tenantDb, access);
           const followUp = await svc.create(ctx.user.id, {
+            id: input.id,
             ticketId: input.ticketId,
             encryptedContent: Buffer.from(input.encryptedContent, "base64"),
             source: input.source,

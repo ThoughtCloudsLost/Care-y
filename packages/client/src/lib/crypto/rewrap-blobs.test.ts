@@ -177,6 +177,7 @@ describe("rewrapBlobsForFollowUp", () => {
       TICKET_ID,
       "encrypted-blob-base64",
       "blob-rec-1",
+      "rec-1",
       "recording",
     );
   });

@@ -29,6 +29,8 @@ class TestDecryptCache extends AsyncDecryptCache {
   ): string | undefined {
     return this.decrypt(
       cacheKey,
+      "ticket-test",
+      "title",
       ephemeralPoint,
       nonce,
       wrappedKey,
@@ -131,7 +133,15 @@ describe("AsyncDecryptCache", () => {
       const result = cache.testDecrypt(CACHE_KEY, EP, NONCE, WK, CT);
       expect(result).toBeUndefined();
       expect(mockDecrypt).toHaveBeenCalledOnce();
-      expect(mockDecrypt).toHaveBeenCalledWith(CACHE_KEY, EP, NONCE, WK, CT);
+      expect(mockDecrypt).toHaveBeenCalledWith(
+        "ticket-test",
+        "title",
+        CACHE_KEY,
+        EP,
+        NONCE,
+        WK,
+        CT,
+      );
     });
 
     it("returns cached plaintext after async resolve", async () => {

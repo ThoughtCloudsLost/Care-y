@@ -5,12 +5,15 @@ import {
   generateContentKey,
   encryptContent,
   decryptContent,
+  buildContentAad,
 } from "./content.js";
 import { encryptBlob, decryptBlob } from "./blob.js";
 import { concatBytes } from "./bytes.js";
 import { getSodium, _resetSodiumForTesting } from "./sodium.js";
 import { DecryptionError } from "./errors.js";
 import type { Ciphertext, SymmetricKey } from "./types.js";
+
+const AAD = buildContentAad("sec-invariant-ticket", "title");
 
 /**
  * Property-based security invariants for content and blob encryption.
@@ -20,7 +23,7 @@ import type { Ciphertext, SymmetricKey } from "./types.js";
  * refactor could silently weaken while every roundtrip test stays green:
  *
  *   1. Cross-key isolation: ciphertext under one key never decrypts under
- *      any other key, including a key differing in a single bit. A partial
+ *      any other key, even a key differing in a single bit. A partial
  *      key comparison or truncated key schedule would break this.
  *   2. Tamper evidence at every position: flipping any single bit anywhere
  *      in the stored blob (nonce or ciphertext portion) fails closed. A MAC
@@ -33,6 +36,9 @@ import type { Ciphertext, SymmetricKey } from "./types.js";
  *      into the output).
  *   5. Callers keep ownership of their buffers: encrypt and decrypt never
  *      mutate plaintext, key, or blob arguments.
+ *   6. Context binding: a ciphertext never decrypts under a different
+ *      associated data value (ticket or slot change), for any pair of
+ *      distinct contexts (ADR-053).
  *
  * These complement the roundtrip and single-example negative tests in
  * content.test.ts and blob.test.ts (SEC-052 libsodium crypto_secretbox).
@@ -75,8 +81,8 @@ describe("content encryption security invariants", () => {
           (plaintext) => {
             const key = generateContentKey();
             const otherKey = generateContentKey();
-            const blob = encryptContent(plaintext, key);
-            expect(() => decryptContent(blob, otherKey)).toThrow(
+            const blob = encryptContent(plaintext, key, AAD);
+            expect(() => decryptContent(blob, otherKey, AAD)).toThrow(
               DecryptionError,
             );
           },
@@ -96,8 +102,8 @@ describe("content encryption security invariants", () => {
           (plaintext, keyBit) => {
             const key = generateContentKey();
             const nearKey = flipBit(key, keyBit) as SymmetricKey;
-            const blob = encryptContent(plaintext, key);
-            expect(() => decryptContent(blob, nearKey)).toThrow(
+            const blob = encryptContent(plaintext, key, AAD);
+            expect(() => decryptContent(blob, nearKey, AAD)).toThrow(
               DecryptionError,
             );
           },
@@ -114,8 +120,10 @@ describe("content encryption security invariants", () => {
         fc.property(fc.uint8Array({ minLength: 0, maxLength: 512 }), (data) => {
           const key = generateContentKey();
           const otherKey = generateContentKey();
-          const blob = encryptBlob(data, key);
-          expect(() => decryptBlob(blob, otherKey)).toThrow(DecryptionError);
+          const blob = encryptBlob(data, key, AAD);
+          expect(() => decryptBlob(blob, otherKey, AAD)).toThrow(
+            DecryptionError,
+          );
         }),
         { numRuns: FC_MEDIUM },
       );
@@ -133,10 +141,10 @@ describe("content encryption security invariants", () => {
           fc.integer({ min: 0, max: 1_000_000 }),
           (plaintext, bitSeed) => {
             const key = generateContentKey();
-            const blob = encryptContent(plaintext, key);
+            const blob = encryptContent(plaintext, key, AAD);
             const bit = bitSeed % (blob.length * 8);
             const tampered = flipBit(blob, bit) as Ciphertext;
-            expect(() => decryptContent(tampered, key)).toThrow(
+            expect(() => decryptContent(tampered, key, AAD)).toThrow(
               DecryptionError,
             );
           },
@@ -152,10 +160,10 @@ describe("content encryption security invariants", () => {
           fc.integer({ min: 0, max: 1_000_000 }),
           (plaintext, cutSeed) => {
             const key = generateContentKey();
-            const blob = encryptContent(plaintext, key);
+            const blob = encryptContent(plaintext, key, AAD);
             const cut = cutSeed % blob.length;
             const truncated = blob.subarray(0, cut) as Ciphertext;
-            expect(() => decryptContent(truncated, key)).toThrow(
+            expect(() => decryptContent(truncated, key, AAD)).toThrow(
               DecryptionError,
             );
           },
@@ -174,9 +182,9 @@ describe("content encryption security invariants", () => {
           fc.uint8Array({ minLength: 1, maxLength: 32 }),
           (plaintext, extra) => {
             const key = generateContentKey();
-            const blob = encryptContent(plaintext, key);
+            const blob = encryptContent(plaintext, key, AAD);
             const extended = concatBytes(blob, extra) as Ciphertext;
-            expect(() => decryptContent(extended, key)).toThrow(
+            expect(() => decryptContent(extended, key, AAD)).toThrow(
               DecryptionError,
             );
           },
@@ -197,7 +205,7 @@ describe("content encryption security invariants", () => {
           fc.uint8Array({ minLength: 16, maxLength: 512 }),
           (plaintext) => {
             const key = generateContentKey();
-            const blob = encryptContent(plaintext, key);
+            const blob = encryptContent(plaintext, key, AAD);
             expect(containsSubarray(blob, plaintext)).toBe(false);
           },
         ),
@@ -214,10 +222,54 @@ describe("content encryption security invariants", () => {
           fc.uint8Array({ minLength: 0, maxLength: 512 }),
           (plaintext) => {
             const key = generateContentKey();
-            const blob = encryptContent(plaintext, key);
+            const blob = encryptContent(plaintext, key, AAD);
             expect(containsSubarray(blob, key.subarray(0, 16))).toBe(false);
           },
         ),
+        { numRuns: FC_MEDIUM },
+      );
+    });
+  });
+
+  describe("context binding", () => {
+    it("never decrypts under a different ticket/slot AAD", () => {
+      fc.assert(
+        fc.property(
+          fc.uint8Array({ minLength: 0, maxLength: 256 }),
+          fc.string({ minLength: 1, maxLength: 48 }),
+          fc.string({ minLength: 1, maxLength: 48 }),
+          fc.string({ minLength: 1, maxLength: 48 }),
+          fc.string({ minLength: 1, maxLength: 48 }),
+          (plaintext, ticketA, slotA, ticketB, slotB) => {
+            fc.pre(`${ticketA}:${slotA}` !== `${ticketB}:${slotB}`);
+            const key = generateContentKey();
+            const blob = encryptContent(
+              plaintext,
+              key,
+              buildContentAad(ticketA, slotA),
+            );
+            expect(() =>
+              decryptContent(blob, key, buildContentAad(ticketB, slotB)),
+            ).toThrow(DecryptionError);
+          },
+        ),
+        { numRuns: FC_MEDIUM },
+      );
+    });
+
+    it("blob API inherits context binding", () => {
+      fc.assert(
+        fc.property(fc.uint8Array({ minLength: 0, maxLength: 256 }), (data) => {
+          const key = generateContentKey();
+          const blob = encryptBlob(
+            data,
+            key,
+            buildContentAad("t1", "blob:key-a"),
+          );
+          expect(() =>
+            decryptBlob(blob, key, buildContentAad("t1", "blob:key-b")),
+          ).toThrow(DecryptionError);
+        }),
         { numRuns: FC_MEDIUM },
       );
     });
@@ -235,7 +287,7 @@ describe("content encryption security invariants", () => {
             const key = generateContentKey();
             const plaintextSnapshot = plaintext.slice();
             const keySnapshot = key.slice();
-            encryptContent(plaintext, key);
+            encryptContent(plaintext, key, AAD);
             expect(plaintext).toEqual(plaintextSnapshot);
             expect(key).toEqual(keySnapshot);
           },
@@ -250,10 +302,10 @@ describe("content encryption security invariants", () => {
           fc.uint8Array({ minLength: 0, maxLength: 256 }),
           (plaintext) => {
             const key = generateContentKey();
-            const blob = encryptContent(plaintext, key);
+            const blob = encryptContent(plaintext, key, AAD);
             const blobSnapshot = blob.slice();
             const keySnapshot = key.slice();
-            decryptContent(blob, key);
+            decryptContent(blob, key, AAD);
             expect(blob).toEqual(blobSnapshot);
             expect(key).toEqual(keySnapshot);
           },

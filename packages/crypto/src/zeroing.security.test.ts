@@ -77,6 +77,17 @@ function instrument(real: SodiumBackend): {
     crypto_secretbox_KEYBYTES: real.crypto_secretbox_KEYBYTES,
     crypto_secretbox_MACBYTES: real.crypto_secretbox_MACBYTES,
 
+    crypto_aead_xchacha20poly1305_ietf_encrypt: (m, ad, nsec, npub, key) =>
+      real.crypto_aead_xchacha20poly1305_ietf_encrypt(m, ad, nsec, npub, key),
+    crypto_aead_xchacha20poly1305_ietf_decrypt: (nsec, c, ad, npub, key) =>
+      real.crypto_aead_xchacha20poly1305_ietf_decrypt(nsec, c, ad, npub, key),
+    crypto_aead_xchacha20poly1305_ietf_NPUBBYTES:
+      real.crypto_aead_xchacha20poly1305_ietf_NPUBBYTES,
+    crypto_aead_xchacha20poly1305_ietf_ABYTES:
+      real.crypto_aead_xchacha20poly1305_ietf_ABYTES,
+    crypto_aead_xchacha20poly1305_ietf_KEYBYTES:
+      real.crypto_aead_xchacha20poly1305_ietf_KEYBYTES,
+
     crypto_auth_hmacsha512: (message, key) =>
       real.crypto_auth_hmacsha512(message, key),
     crypto_auth_hmacsha512_BYTES: real.crypto_auth_hmacsha512_BYTES,

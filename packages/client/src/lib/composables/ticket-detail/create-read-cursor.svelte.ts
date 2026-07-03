@@ -1,3 +1,4 @@
+import { cursorSlot } from "@care-y/crypto";
 import type { TicketKeyWrap } from "$lib/crypto/ticket-decrypt-cache.js";
 import type { CryptoBridge } from "$lib/workers/crypto-bridge.js";
 import {
@@ -13,6 +14,8 @@ interface ReadCursorData {
 
 export interface ReadCursorConfig {
   readonly getTicketId: () => string;
+  /** Current user id: the read cursor row and its AAD are per-user (ADR-053). */
+  readonly getUserId: () => string;
   readonly getTicketKeyWrap: () => TicketKeyWrap | undefined;
   readonly getCursorData: () => ReadCursorData | undefined;
   readonly cryptoBridge: CryptoBridge;
@@ -42,13 +45,22 @@ export function createReadCursor(config: ReadCursorConfig): ReadCursorState {
   $effect(() => {
     const cursor = config.getCursorData();
     const kw = config.getTicketKeyWrap();
-    if (!cursor || !kw) return;
+    const userId = config.getUserId();
+    if (!cursor || !kw || userId === "") return;
 
     const ticketId = config.getTicketId();
     const ciphertext = serializedBufferToBase64(cursor.encryptedReadCursor);
 
     config.cryptoBridge
-      .decrypt(ticketId, kw.ephemeralPoint, kw.nonce, kw.wrappedKey, ciphertext)
+      .decrypt(
+        ticketId,
+        cursorSlot(userId),
+        ticketId,
+        kw.ephemeralPoint,
+        kw.nonce,
+        kw.wrappedKey,
+        ciphertext,
+      )
       .then((plaintext) => {
         try {
           const parsed: unknown = JSON.parse(plaintext);
@@ -103,8 +115,14 @@ export function createReadCursor(config: ReadCursorConfig): ReadCursorState {
 
     try {
       const ticketId = config.getTicketId();
+      const userId = config.getUserId();
+      if (userId === "") return;
       const payload = JSON.stringify({ readUpTo: ts });
-      const encrypted = await config.cryptoBridge.encrypt(ticketId, payload);
+      const encrypted = await config.cryptoBridge.encrypt(
+        ticketId,
+        cursorSlot(userId),
+        payload,
+      );
       await config.mutate({ ticketId, encryptedReadCursor: encrypted });
       readUpTo = new Date(ts); // eslint-disable-line svelte/prefer-svelte-reactivity -- immutable value, not mutated after assignment
     } catch {

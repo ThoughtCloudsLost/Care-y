@@ -3,6 +3,7 @@
   and decryption. Renders the skeleton, note list, and load-more control.
 -->
 <script lang="ts">
+  import { followupSlot } from "@care-y/crypto";
   import { BlockTitle, List, ListItem } from "konsta/svelte";
   import { StickyNote } from "@lucide/svelte";
   import * as m from "$lib/paraglide/messages.js";
@@ -129,7 +130,13 @@
   <List class="!my-3">
     {#each notes as note (note.id)}
       {@const noteResult = resolveAsyncDecrypt(
-        followUpCache.decryptContent(note.id, keyWrap, note.encryptedContent),
+        followUpCache.decryptContent(
+          note.id,
+          ticketId,
+          followupSlot(note.id),
+          keyWrap,
+          note.encryptedContent,
+        ),
         keyWrap !== null,
       )}
       {@const authorName =

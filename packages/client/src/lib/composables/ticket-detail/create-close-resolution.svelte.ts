@@ -1,3 +1,4 @@
+import { followupSlot } from "@care-y/crypto";
 import type { OrgDecryptCache } from "$lib/crypto/org-decrypt-cache.js";
 import type { CryptoBridge } from "$lib/workers/crypto-bridge.js";
 import type { QueryClient } from "@tanstack/svelte-query";
@@ -30,6 +31,7 @@ export interface CloseResolutionConfig {
   };
   readonly closeMutate: (ticketId: string) => Promise<unknown>;
   readonly createFollowUpMutate: (args: {
+    id: string;
     ticketId: string;
     type: "internal_note";
     source: "volunteer";
@@ -121,11 +123,14 @@ export function createCloseResolution(
     saving = true;
     try {
       const ticketId = config.getTicketId();
+      const followUpId = crypto.randomUUID();
       const encryptedContent = await config.cryptoBridge.encrypt(
         ticketId,
+        followupSlot(followUpId),
         text,
       );
       await config.createFollowUpMutate({
+        id: followUpId,
         ticketId,
         type: "internal_note",
         source: "volunteer",

@@ -70,7 +70,11 @@ describe("createSmsSend", () => {
         method: "POST",
       }),
     );
-    expect(config.cryptoBridge.encrypt).toHaveBeenCalledWith("t-1", "hi there");
+    expect(config.cryptoBridge.encrypt).toHaveBeenCalledWith(
+      "t-1",
+      expect.stringMatching(/^followup:/),
+      "hi there",
+    );
     expect(config.createFollowUpMutate).toHaveBeenCalledWith(
       expect.objectContaining({
         ticketId: "t-1",

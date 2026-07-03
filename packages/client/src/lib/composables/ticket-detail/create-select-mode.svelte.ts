@@ -1,3 +1,4 @@
+import { followupSlot } from "@care-y/crypto";
 import { SvelteSet } from "svelte/reactivity";
 import type { TicketKeyWrap } from "$lib/crypto/ticket-decrypt-cache.js";
 import type { FollowUpDecryptCache } from "$lib/crypto/follow-up-decrypt-cache.js";
@@ -30,6 +31,7 @@ export interface SelectableFollowUp {
 // ── Config ──
 
 export interface SelectModeConfig {
+  readonly getTicketId: () => string;
   readonly getClientAlias: () => string;
   readonly getVolunteerMap: () => Map<string, VolunteerRecord>;
   readonly orgCache: OrgDecryptCache;
@@ -106,6 +108,8 @@ export function createSelectMode(config: SelectModeConfig): SelectModeState {
       if (keyWrap) {
         const raw = config.followUpCache.decryptContent(
           fu.id,
+          config.getTicketId(),
+          followupSlot(fu.id),
           keyWrap,
           fu.encryptedContent,
         );
