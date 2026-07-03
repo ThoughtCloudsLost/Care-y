@@ -26,8 +26,13 @@ import {
   decode,
   eciesEncrypt,
   encryptContent,
+  decryptContent,
   generateContentKey,
+  buildContentAad,
+  followupSlot,
+  type Ciphertext,
   type RistrettoPoint,
+  type SymmetricKey,
 } from "@care-y/crypto";
 import type {
   WorkerResponse,
@@ -293,13 +298,19 @@ describe("crypto-core decrypt/encrypt roundtrip", () => {
     const sodium = requireSodium();
     const tk = generateContentKey();
     const plaintext = new TextEncoder().encode("secret message");
-    const ct = encryptContent(plaintext, tk);
+    const ct = encryptContent(
+      plaintext,
+      tk,
+      buildContentAad("t-decrypt", "title"),
+    );
     const wrap = eciesEncrypt(tk, decode(volPublicStr) as RistrettoPoint);
 
     const resp = (await dispatchAndWait({
       type: "decryptContent",
       id: 100,
       ticketId: "t-decrypt",
+      keyCacheId: "t-decrypt",
+      slot: "title",
       ephemeralPoint: encode(wrap.ephemeralPoint),
       nonce: encode(wrap.nonce),
       wrappedKey: encode(wrap.ciphertext),
@@ -311,17 +322,46 @@ describe("crypto-core decrypt/encrypt roundtrip", () => {
     sodium.memzero(tk);
   });
 
+  it("rejects content relocated to a different slot (AAD mismatch)", async () => {
+    const sodium = requireSodium();
+    const tk = generateContentKey();
+    const ct = encryptContent(
+      new TextEncoder().encode("bound to title"),
+      tk,
+      buildContentAad("t-relocate", "title"),
+    );
+    const wrap = eciesEncrypt(tk, decode(volPublicStr) as RistrettoPoint);
+
+    const resp = await dispatchAndWait({
+      type: "decryptContent",
+      id: 110,
+      ticketId: "t-relocate",
+      keyCacheId: "t-relocate",
+      slot: "description",
+      ephemeralPoint: encode(wrap.ephemeralPoint),
+      nonce: encode(wrap.nonce),
+      wrappedKey: encode(wrap.ciphertext),
+      ciphertext: encode(ct),
+    });
+
+    expect(resp.ok).toBe(false);
+    expect((resp as ErrorResponse).code).toBe("DECRYPT_FAILED");
+    sodium.memzero(tk);
+  });
+
   it("encrypts content using a cached tk", async () => {
     const sodium = requireSodium();
     const tk = generateContentKey();
     const text = new TextEncoder().encode("cache me");
-    const ct = encryptContent(text, tk);
+    const ct = encryptContent(text, tk, buildContentAad("t-enc", "title"));
     const wrap = eciesEncrypt(tk, decode(volPublicStr) as RistrettoPoint);
 
     await dispatchAndWait({
       type: "decryptContent",
       id: 101,
       ticketId: "t-enc",
+      keyCacheId: "t-enc",
+      slot: "title",
       ephemeralPoint: encode(wrap.ephemeralPoint),
       nonce: encode(wrap.nonce),
       wrappedKey: encode(wrap.ciphertext),
@@ -333,12 +373,18 @@ describe("crypto-core decrypt/encrypt roundtrip", () => {
       type: "encryptContent",
       id: 102,
       ticketId: "t-enc",
+      slot: followupSlot("fu-enc-1"),
       plaintext: "encrypt this",
     })) as EncryptContentResponse;
 
     expect(encResp.ok).toBe(true);
     expect(encResp.ciphertext).toBeDefined();
-    expect(decode(encResp.ciphertext).length).toBeGreaterThan(0);
+    const roundTripped = decryptContent(
+      decode(encResp.ciphertext) as Ciphertext,
+      tk as SymmetricKey,
+      buildContentAad("t-enc", followupSlot("fu-enc-1")),
+    );
+    expect(new TextDecoder().decode(roundTripped)).toBe("encrypt this");
     sodium.memzero(tk);
   });
 
@@ -357,13 +403,19 @@ describe("crypto-core decrypt/encrypt roundtrip", () => {
   it("evicts a cached tk", async () => {
     const sodium = requireSodium();
     const tk = generateContentKey();
-    const ct = encryptContent(new TextEncoder().encode("evict"), tk);
+    const ct = encryptContent(
+      new TextEncoder().encode("evict"),
+      tk,
+      buildContentAad("t-evict", "title"),
+    );
     const wrap = eciesEncrypt(tk, decode(volPublicStr) as RistrettoPoint);
 
     await dispatchAndWait({
       type: "decryptContent",
       id: 104,
       ticketId: "t-evict",
+      keyCacheId: "t-evict",
+      slot: "title",
       ephemeralPoint: encode(wrap.ephemeralPoint),
       nonce: encode(wrap.nonce),
       wrappedKey: encode(wrap.ciphertext),
@@ -420,6 +472,7 @@ describe("crypto-core createTicketKey", () => {
     const resp = (await dispatchAndWait({
       type: "createTicketKey",
       id: 200,
+      ticketId: "t-create-1",
       fields: [
         { name: "title", plaintext: "Test Title" },
         { name: "description", plaintext: "Test Description" },
@@ -614,6 +667,7 @@ describe("crypto-core unwrapTk", () => {
       type: "unwrapTk",
       id: 500,
       ticketId: "t-preload",
+      keyCacheId: "t-preload",
       ephemeralPoint: encode(wrap.ephemeralPoint),
       nonce: encode(wrap.nonce),
       wrappedKey: encode(wrap.ciphertext),
@@ -623,12 +677,14 @@ describe("crypto-core unwrapTk", () => {
 
     const sodium = requireSodium();
     const text = new TextEncoder().encode("after preload");
-    const ct = encryptContent(text, tk);
+    const ct = encryptContent(text, tk, buildContentAad("t-preload", "title"));
 
     const decResp = (await dispatchAndWait({
       type: "decryptContent",
       id: 501,
       ticketId: "t-preload",
+      keyCacheId: "t-preload",
+      slot: "title",
       ephemeralPoint: encode(wrap.ephemeralPoint),
       nonce: encode(wrap.nonce),
       wrappedKey: encode(wrap.ciphertext),
@@ -665,6 +721,7 @@ describe("crypto-core decryptAndRewrap", () => {
       type: "unwrapTk",
       id: 600,
       ticketId: "t-rewrap",
+      keyCacheId: "t-rewrap",
       ephemeralPoint: encode(wrapCanonical.ephemeralPoint),
       nonce: encode(wrapCanonical.nonce),
       wrappedKey: encode(wrapCanonical.ciphertext),
@@ -673,7 +730,11 @@ describe("crypto-core decryptAndRewrap", () => {
     const tkTemp = generateContentKey();
     const wrapTemp = eciesEncrypt(tkTemp, volPub);
     const tempPlaintext = new TextEncoder().encode("rewrap me");
-    const tempCt = encryptContent(tempPlaintext, tkTemp);
+    const tempCt = encryptContent(
+      tempPlaintext,
+      tkTemp,
+      buildContentAad("t-rewrap", followupSlot("fu-001")),
+    );
 
     sinkMessages = [];
     const resp = (await dispatchAndWait({
@@ -694,6 +755,15 @@ describe("crypto-core decryptAndRewrap", () => {
     expect(rewrapEvent).toBeDefined();
     expect(rewrapEvent?.followUpId).toBe("fu-001");
     expect(rewrapEvent?.ticketId).toBe("t-rewrap");
+
+    // The rewrap re-encrypts under the canonical tk with the SAME
+    // followup-slot AAD (ADR-053).
+    const reEncrypted = decryptContent(
+      decode(rewrapEvent!.encryptedContent) as Ciphertext,
+      canonicalTk as SymmetricKey,
+      buildContentAad("t-rewrap", followupSlot("fu-001")),
+    );
+    expect(new TextDecoder().decode(reEncrypted)).toBe("rewrap me");
 
     handleRewrapResult({
       kind: "rewrap-result",

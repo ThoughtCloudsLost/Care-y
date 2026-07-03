@@ -9,6 +9,7 @@
   synchronously from the pre-decoded buffer.
 -->
 <script lang="ts">
+  import { blobSlot } from "@care-y/crypto";
   import * as m from "$lib/paraglide/messages.js";
   import DecryptPlaceholder from "$lib/components/DecryptPlaceholder.svelte";
   import AudioPlayer from "$lib/components/AudioPlayer.svelte";
@@ -58,6 +59,7 @@
 
         const decryptedBuf = await bridge.decryptBlob(
           ticketId,
+          blobSlot(recordingId),
           keyWrap.ephemeralPoint,
           keyWrap.nonce,
           keyWrap.wrappedKey,

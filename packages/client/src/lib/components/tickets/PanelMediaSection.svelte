@@ -4,6 +4,7 @@
   the empty state. Gets crypto caches from Svelte context.
 -->
 <script lang="ts">
+  import { filenameSlot } from "@care-y/crypto";
   import { Block, BlockTitle } from "konsta/svelte";
   import * as m from "$lib/paraglide/messages.js";
   import MmsImage from "$lib/components/tickets/MmsImage.svelte";
@@ -198,6 +199,8 @@
             ? resolveAsyncDecrypt(
                 followUpCache.decryptContent(
                   `filename:${att.id}`,
+                  ticketId,
+                  filenameSlot(att.id),
                   keyWrap,
                   att.encryptedFilename,
                 ),

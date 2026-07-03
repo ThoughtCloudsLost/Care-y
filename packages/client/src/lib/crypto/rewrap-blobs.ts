@@ -101,6 +101,7 @@ export async function rewrapBlobsForFollowUp(
         ticketId,
         ciphertext,
         item.blobKey,
+        item.id,
         category,
       );
       updates.push({

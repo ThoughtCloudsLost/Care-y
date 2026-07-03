@@ -61,6 +61,7 @@
   const createTicketMutation = createMutation(() => ({
     mutationFn: async (payload: NewTicketPayload) =>
       ticketRouter.create.mutate({
+        id: payload.id,
         clientId: payload.clientId,
         clientToken: payload.clientToken,
         queueId: payload.queueId,
@@ -127,6 +128,8 @@
     </SoftButton>
   {/snippet}
   <NewTicketForm
+    resolveCreateTarget={async (clientId: string) =>
+      ticketRouter.resolveCreateTarget.query({ clientId })}
     queues={decryptedQueues}
     {searchClients}
     {phoneLookup}

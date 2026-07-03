@@ -188,6 +188,8 @@ describe("CryptoBridge", () => {
 
       const promise = bridge.decrypt(
         "ticket-1",
+        "title",
+        "ticket-1",
         "ep-base64",
         "nonce-base64",
         "wk-base64",
@@ -217,7 +219,7 @@ describe("CryptoBridge", () => {
     it("sends encrypt request and returns ciphertext", async () => {
       const bridge = await createReadyBridge();
 
-      const promise = bridge.encrypt("ticket-1", "Secret message");
+      const promise = bridge.encrypt("ticket-1", "title", "Secret message");
 
       const calls = mockWorkerInstance?.postMessage.mock.calls;
       const encCall = calls?.find(
@@ -287,7 +289,13 @@ describe("CryptoBridge", () => {
     it("sends unwrapTk request with key wrap fields", async () => {
       const bridge = await createReadyBridge();
 
-      const promise = bridge.unwrapTk("ticket-tk", "ep-b64", "n-b64", "wk-b64");
+      const promise = bridge.unwrapTk(
+        "ticket-tk",
+        "ticket-tk",
+        "ep-b64",
+        "n-b64",
+        "wk-b64",
+      );
 
       const calls = mockWorkerInstance?.postMessage.mock.calls;
       const tkCall = await vi.waitFor(() => {
@@ -366,7 +374,7 @@ describe("CryptoBridge", () => {
         { name: "title", plaintext: "Test title" },
         { name: "description", plaintext: "Test desc" },
       ];
-      const promise = bridge.createTicketEncryption(fields);
+      const promise = bridge.createTicketEncryption("ticket-cte-1", fields);
 
       const calls = mockWorkerInstance?.postMessage.mock.calls;
       const createCall = await vi.waitFor(() => {
@@ -419,7 +427,7 @@ describe("CryptoBridge", () => {
     it("rejects pending promise with CryptoWorkerError on Worker error", async () => {
       const bridge = await createReadyBridge();
 
-      const promise = bridge.encrypt("ticket-fail", "data");
+      const promise = bridge.encrypt("ticket-fail", "title", "data");
 
       const calls = mockWorkerInstance?.postMessage.mock.calls;
       const encCall = calls?.find(
@@ -451,7 +459,7 @@ describe("CryptoBridge", () => {
       const bridge = await createReadyBridge();
 
       // Start a request that won't be answered
-      const promise = bridge.encrypt("ticket-pending", "data");
+      const promise = bridge.encrypt("ticket-pending", "title", "data");
 
       bridge.destroy();
 
@@ -466,10 +474,10 @@ describe("CryptoBridge", () => {
       const bridge = await createReadyBridge();
       bridge.destroy();
 
-      await expect(bridge.encrypt("t", "data")).rejects.toThrow(
+      await expect(bridge.encrypt("t", "title", "data")).rejects.toThrow(
         CryptoWorkerError,
       );
-      await expect(bridge.encrypt("t", "data")).rejects.toThrow(
+      await expect(bridge.encrypt("t", "title", "data")).rejects.toThrow(
         "Bridge is destroyed",
       );
     });
@@ -693,7 +701,7 @@ describe("CryptoBridge (SharedWorker mode)", () => {
     it("rejects pending requests on disconnect", async () => {
       const bridge = await createReadySharedBridge();
 
-      const promise = bridge.encrypt("ticket-pending", "data");
+      const promise = bridge.encrypt("ticket-pending", "title", "data");
       bridge.disconnect();
 
       await expect(promise).rejects.toThrow(CryptoWorkerError);

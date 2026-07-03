@@ -78,6 +78,7 @@ describe.skipIf(!process.env.DATABASE_URL)("TicketService (DB)", () => {
     const keyGen = crypto.randomUUID();
 
     const ticket = await svc.create(userId, {
+      id: crypto.randomUUID(),
       clientId,
       queueId,
       encryptedTitle: Buffer.from("title"),
@@ -103,6 +104,7 @@ describe.skipIf(!process.env.DATABASE_URL)("TicketService (DB)", () => {
 
     await expect(
       svc.create(userId, {
+        id: crypto.randomUUID(),
         clientId,
         queueId: crypto.randomUUID(),
         encryptedTitle: Buffer.from("t"),
@@ -129,6 +131,7 @@ describe.skipIf(!process.env.DATABASE_URL)("TicketService (DB)", () => {
 
     await expect(
       svc.create(userId, {
+        id: crypto.randomUUID(),
         clientId,
         queueId,
         encryptedTitle: Buffer.from("t"),
@@ -145,6 +148,7 @@ describe.skipIf(!process.env.DATABASE_URL)("TicketService (DB)", () => {
 
     // Create and close a ticket
     const first = await svc.create(userId, {
+      id: crypto.randomUUID(),
       clientId,
       queueId,
       encryptedTitle: Buffer.from("old-title"),
@@ -159,9 +163,12 @@ describe.skipIf(!process.env.DATABASE_URL)("TicketService (DB)", () => {
       .where("id", "=", first.id)
       .execute();
 
-    // Create again for the same client
+    // Create again for the same client. The reopen path requires the
+    // existing ticket's id, which the client learns via getCreateTarget
+    // before encrypting (ADR-053).
     const newKeyGen = crypto.randomUUID();
     const reopened = await svc.create(userId, {
+      id: first.id,
       clientId,
       queueId,
       encryptedTitle: Buffer.from("new-title"),
@@ -177,10 +184,100 @@ describe.skipIf(!process.env.DATABASE_URL)("TicketService (DB)", () => {
     expect(reopened.priority).toBe("high");
   });
 
+  it("create against a stale reopen target throws ConflictError", async () => {
+    const { userId, clientId, queueId } = await createClientFixture();
+
+    const first = await svc.create(userId, {
+      id: crypto.randomUUID(),
+      clientId,
+      queueId,
+      encryptedTitle: Buffer.from("t"),
+      encryptedDescription: Buffer.from("d"),
+      priority: "normal",
+      keyGeneration: crypto.randomUUID(),
+      keyWrap: fakeKeyWrap(),
+    });
+    await testDb.db
+      .updateTable("tickets")
+      .set({ status: "closed" })
+      .where("id", "=", first.id)
+      .execute();
+
+    // A minted id that does not match the closed ticket means the client
+    // encrypted against the wrong target; the create must fail closed.
+    await expect(
+      svc.create(userId, {
+        id: crypto.randomUUID(),
+        clientId,
+        queueId,
+        encryptedTitle: Buffer.from("t2"),
+        encryptedDescription: Buffer.from("d2"),
+        priority: "normal",
+        keyGeneration: crypto.randomUUID(),
+        keyWrap: fakeKeyWrap(),
+      }),
+    ).rejects.toBeInstanceOf(ConflictError);
+  });
+
+  it("getCreateTarget reports open, reopen, and fresh targets", async () => {
+    const { userId, clientId, queueId } = await createClientFixture();
+
+    expect(await svc.getCreateTarget(clientId)).toEqual({
+      openTicketId: null,
+      reopenTicketId: null,
+    });
+
+    const ticket = await svc.create(userId, {
+      id: crypto.randomUUID(),
+      clientId,
+      queueId,
+      encryptedTitle: Buffer.from("t"),
+      encryptedDescription: Buffer.from("d"),
+      priority: "normal",
+      keyGeneration: crypto.randomUUID(),
+      keyWrap: fakeKeyWrap(),
+    });
+
+    expect(await svc.getCreateTarget(clientId)).toEqual({
+      openTicketId: ticket.id,
+      reopenTicketId: null,
+    });
+
+    await testDb.db
+      .updateTable("tickets")
+      .set({ status: "closed" })
+      .where("id", "=", ticket.id)
+      .execute();
+
+    expect(await svc.getCreateTarget(clientId)).toEqual({
+      openTicketId: null,
+      reopenTicketId: ticket.id,
+    });
+  });
+
+  it("create stores the client-minted id on fresh tickets", async () => {
+    const { userId, clientId, queueId } = await createClientFixture();
+    const mintedId = crypto.randomUUID();
+
+    const ticket = await svc.create(userId, {
+      id: mintedId,
+      clientId,
+      queueId,
+      encryptedTitle: Buffer.from("t"),
+      encryptedDescription: Buffer.from("d"),
+      priority: "normal",
+      keyGeneration: crypto.randomUUID(),
+      keyWrap: fakeKeyWrap(),
+    });
+
+    expect(ticket.id).toBe(mintedId);
+  });
+
   it("create with existing open ticket throws ConflictError", async () => {
     const { userId, clientId, queueId } = await createClientFixture();
 
     await svc.create(userId, {
+      id: crypto.randomUUID(),
       clientId,
       queueId,
       encryptedTitle: Buffer.from("title"),
@@ -192,6 +289,7 @@ describe.skipIf(!process.env.DATABASE_URL)("TicketService (DB)", () => {
 
     await expect(
       svc.create(userId, {
+        id: crypto.randomUUID(),
         clientId,
         queueId,
         encryptedTitle: Buffer.from("other-title"),
@@ -209,6 +307,7 @@ describe.skipIf(!process.env.DATABASE_URL)("TicketService (DB)", () => {
     const kw = fakeKeyWrap();
 
     const ticket = await svc.create(userId, {
+      id: crypto.randomUUID(),
       clientId,
       queueId,
       encryptedTitle: Buffer.from("title"),
@@ -237,6 +336,7 @@ describe.skipIf(!process.env.DATABASE_URL)("TicketService (DB)", () => {
     const { userId, clientId, queueId } = await createClientFixture();
 
     const first = await svc.create(userId, {
+      id: crypto.randomUUID(),
       clientId,
       queueId,
       encryptedTitle: Buffer.from("t"),
@@ -255,6 +355,7 @@ describe.skipIf(!process.env.DATABASE_URL)("TicketService (DB)", () => {
     const newKeyGen = crypto.randomUUID();
     const newKw = fakeKeyWrap();
     await svc.create(userId, {
+      id: first.id,
       clientId,
       queueId,
       encryptedTitle: Buffer.from("new-t"),
@@ -580,6 +681,7 @@ describe.skipIf(!process.env.DATABASE_URL)("TicketService (DB)", () => {
     const { userId, clientId, queueId } = await createClientFixture();
 
     const normalTicket = await svc.create(userId, {
+      id: crypto.randomUUID(),
       clientId,
       queueId,
       encryptedTitle: Buffer.from("normal-priority"),
@@ -592,6 +694,7 @@ describe.skipIf(!process.env.DATABASE_URL)("TicketService (DB)", () => {
     // Create a high-priority ticket for a different client in the same queue
     const otherClient = await createTestClientFixture(testDb.db, { queueId });
     const highTicket = await svc.create(userId, {
+      id: crypto.randomUUID(),
       clientId: otherClient.clientId,
       queueId,
       encryptedTitle: Buffer.from("high-priority"),
@@ -789,6 +892,7 @@ describe.skipIf(!process.env.DATABASE_URL)("TicketService (DB)", () => {
     const { userId, clientId, queueId } = await createClientFixture();
 
     const ticket = await svc.create(userId, {
+      id: crypto.randomUUID(),
       clientId,
       queueId,
       encryptedTitle: Buffer.from("assign-display-test"),
@@ -834,6 +938,7 @@ describe.skipIf(!process.env.DATABASE_URL)("TicketService (DB)", () => {
     for (const p of priorities) {
       const c = await createTestClientFixture(testDb.db, { queueId });
       const t = await svc.create(c.userId, {
+        id: crypto.randomUUID(),
         clientId: c.clientId,
         queueId,
         encryptedTitle: Buffer.from(`title-${p}`),
@@ -876,6 +981,7 @@ describe.skipIf(!process.env.DATABASE_URL)("TicketService (DB)", () => {
     for (const p of priorities) {
       const c = await createTestClientFixture(testDb.db, { queueId });
       const t = await svc.create(c.userId, {
+        id: crypto.randomUUID(),
         clientId: c.clientId,
         queueId,
         encryptedTitle: Buffer.from(`title-${p}`),
@@ -908,6 +1014,7 @@ describe.skipIf(!process.env.DATABASE_URL)("TicketService (DB)", () => {
     // Ticket A: created first, no follow-ups (last_activity = null)
     const clientA = await createTestClientFixture(testDb.db, { queueId });
     const ticketA = await svc.create(clientA.userId, {
+      id: crypto.randomUUID(),
       clientId: clientA.clientId,
       queueId,
       encryptedTitle: Buffer.from("old-no-activity"),
@@ -920,6 +1027,7 @@ describe.skipIf(!process.env.DATABASE_URL)("TicketService (DB)", () => {
     // Ticket B: created second, has a follow-up (last_activity = now)
     const clientB = await createTestClientFixture(testDb.db, { queueId });
     const ticketB = await svc.create(clientB.userId, {
+      id: crypto.randomUUID(),
       clientId: clientB.clientId,
       queueId,
       encryptedTitle: Buffer.from("recent-activity"),
@@ -967,6 +1075,7 @@ describe.skipIf(!process.env.DATABASE_URL)("TicketService (DB)", () => {
     for (const p of priorities) {
       const c = await createTestClientFixture(testDb.db, { queueId });
       const t = await svc.create(c.userId, {
+        id: crypto.randomUUID(),
         clientId: c.clientId,
         queueId,
         encryptedTitle: Buffer.from(`title-${p}-${ticketIds.length}`),
@@ -1027,6 +1136,7 @@ describe.skipIf(!process.env.DATABASE_URL)("TicketService (DB)", () => {
     for (let i = 0; i < 5; i++) {
       const c = await createTestClientFixture(testDb.db, { queueId });
       const t = await svc.create(c.userId, {
+        id: crypto.randomUUID(),
         clientId: c.clientId,
         queueId,
         encryptedTitle: Buffer.from(`activity-page-${i}`),
@@ -1095,6 +1205,7 @@ describe.skipIf(!process.env.DATABASE_URL)("TicketService (DB)", () => {
     for (let i = 0; i < 3; i++) {
       const c = await createTestClientFixture(testDb.db, { queueId });
       const t = await svc.create(c.userId, {
+        id: crypto.randomUUID(),
         clientId: c.clientId,
         queueId,
         encryptedTitle: Buffer.from(`title-${i}`),

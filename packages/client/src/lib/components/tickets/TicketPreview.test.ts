@@ -65,7 +65,7 @@ function makeFollowUp(
 describe("TicketPreview (mini-bubbles)", () => {
   it("renders DecryptPlaceholder when followUps is undefined (not loaded)", () => {
     const { container } = render(TicketPreview, {
-      props: { followUps: undefined },
+      props: { ticketId: "ticket-preview-1", followUps: undefined },
     });
     // DecryptPlaceholder container (.dp) renders immediately; the scramble
     // (aria-busy) is delayed by 150ms, so check the container only.
@@ -75,7 +75,7 @@ describe("TicketPreview (mini-bubbles)", () => {
 
   it("renders empty state when followUps is empty array", () => {
     const { container } = render(TicketPreview, {
-      props: { followUps: [] },
+      props: { ticketId: "ticket-preview-1", followUps: [] },
     });
     expect(container.querySelector("[role='status']")).not.toBeNull();
     expect(container.textContent).toBeTruthy();
@@ -85,7 +85,7 @@ describe("TicketPreview (mini-bubbles)", () => {
     mockDecryptContent.mockReturnValue(undefined);
     const fu = makeFollowUp();
     const { container } = render(TicketPreview, {
-      props: { followUps: [fu] },
+      props: { ticketId: "ticket-preview-1", followUps: [fu] },
     });
     // DecryptPlaceholder container (.dp) renders immediately; the scramble
     // (aria-busy) is delayed by 150ms, so check the container only.
@@ -97,7 +97,7 @@ describe("TicketPreview (mini-bubbles)", () => {
     mockDecryptContent.mockReturnValue("Hello, test message");
     const fu = makeFollowUp();
     const { container } = render(TicketPreview, {
-      props: { followUps: [fu] },
+      props: { ticketId: "ticket-preview-1", followUps: [fu] },
     });
     expect(container.textContent).toContain("Hello, test message");
   });
@@ -106,7 +106,7 @@ describe("TicketPreview (mini-bubbles)", () => {
     mockDecryptContent.mockReturnValue("Volunteer reply");
     const fu = makeFollowUp({ source: "volunteer" });
     const { container } = render(TicketPreview, {
-      props: { followUps: [fu] },
+      props: { ticketId: "ticket-preview-1", followUps: [fu] },
     });
     const row = container.querySelector("[data-direction='sent']");
     expect(row).not.toBeNull();
@@ -116,7 +116,7 @@ describe("TicketPreview (mini-bubbles)", () => {
     mockDecryptContent.mockReturnValue("Client message");
     const fu = makeFollowUp({ source: "client" });
     const { container } = render(TicketPreview, {
-      props: { followUps: [fu] },
+      props: { ticketId: "ticket-preview-1", followUps: [fu] },
     });
     const row = container.querySelector("[data-direction='received']");
     expect(row).not.toBeNull();
@@ -126,7 +126,7 @@ describe("TicketPreview (mini-bubbles)", () => {
     mockDecryptContent.mockReturnValue("Status changed to closed");
     const fu = makeFollowUp({ source: "system", type: "status_change" });
     const { container } = render(TicketPreview, {
-      props: { followUps: [fu] },
+      props: { ticketId: "ticket-preview-1", followUps: [fu] },
     });
     const sysEl = container.querySelector("[data-type='system']");
     expect(sysEl).not.toBeNull();
@@ -141,7 +141,7 @@ describe("TicketPreview (mini-bubbles)", () => {
     );
     const fu = makeFollowUp();
     const { container } = render(TicketPreview, {
-      props: { followUps: [fu] },
+      props: { ticketId: "ticket-preview-1", followUps: [fu] },
     });
     expect(container.textContent).toContain("This is a very long message");
   });
@@ -150,7 +150,7 @@ describe("TicketPreview (mini-bubbles)", () => {
     mockDecryptContent.mockReturnValue("\0DECRYPT_FAILED");
     const fu = makeFollowUp();
     const { container } = render(TicketPreview, {
-      props: { followUps: [fu] },
+      props: { ticketId: "ticket-preview-1", followUps: [fu] },
     });
     expect(container.textContent).toContain(
       "This content could not be decrypted.",
@@ -166,7 +166,7 @@ describe("TicketPreview (mini-bubbles)", () => {
       makeFollowUp({ id: "fu-2", source: "volunteer" }),
     ];
     const { container } = render(TicketPreview, {
-      props: { followUps: fus },
+      props: { ticketId: "ticket-preview-1", followUps: fus },
     });
     expect(
       container.querySelector("[data-direction='received']"),
@@ -178,7 +178,7 @@ describe("TicketPreview (mini-bubbles)", () => {
     mockDecryptContent.mockReturnValue("<script>alert('xss')</script>");
     const fu = makeFollowUp();
     const { container } = render(TicketPreview, {
-      props: { followUps: [fu] },
+      props: { ticketId: "ticket-preview-1", followUps: [fu] },
     });
     // Text should appear as escaped, not interpreted as HTML
     expect(container.innerHTML).toContain("&lt;script&gt;");

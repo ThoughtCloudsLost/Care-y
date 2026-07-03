@@ -54,6 +54,14 @@ vi.mock("$lib/shell/context.js", () => ({
 vi.mock("$lib/trpc/index.js", () => ({
   trpc: {
     tickets: {
+      resolveCreateTarget: vi
+        .fn<
+          () => Promise<{
+            openTicketId: string | null;
+            reopenTicketId: string | null;
+          }>
+        >()
+        .mockResolvedValue({ openTicketId: null, reopenTicketId: null }),
       searchClients: {
         query: vi.fn().mockResolvedValue([]),
       },
@@ -88,6 +96,14 @@ describe("NewTicketForm", () => {
       const { container } = render(NewTicketForm, {
         props: {
           queues: defaultQueues,
+          resolveCreateTarget: vi
+            .fn<
+              () => Promise<{
+                openTicketId: string | null;
+                reopenTicketId: string | null;
+              }>
+            >()
+            .mockResolvedValue({ openTicketId: null, reopenTicketId: null }),
           searchClients: mockSearchClients,
           onsubmit: vi.fn(),
           formId: "test-form",
@@ -102,6 +118,14 @@ describe("NewTicketForm", () => {
       const { container } = render(NewTicketForm, {
         props: {
           queues: defaultQueues,
+          resolveCreateTarget: vi
+            .fn<
+              () => Promise<{
+                openTicketId: string | null;
+                reopenTicketId: string | null;
+              }>
+            >()
+            .mockResolvedValue({ openTicketId: null, reopenTicketId: null }),
           searchClients: mockSearchClients,
           onsubmit: vi.fn(),
           formId: "test-form",
@@ -120,6 +144,14 @@ describe("NewTicketForm", () => {
       const { container } = render(NewTicketForm, {
         props: {
           queues: defaultQueues,
+          resolveCreateTarget: vi
+            .fn<
+              () => Promise<{
+                openTicketId: string | null;
+                reopenTicketId: string | null;
+              }>
+            >()
+            .mockResolvedValue({ openTicketId: null, reopenTicketId: null }),
           searchClients: mockSearchClients,
           onsubmit: vi.fn(),
           formId: "test-form",

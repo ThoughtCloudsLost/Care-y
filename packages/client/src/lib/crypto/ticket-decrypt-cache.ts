@@ -8,6 +8,7 @@
  * to the base class decrypt().
  */
 
+import { followupSlot } from "@care-y/crypto";
 import {
   AsyncDecryptCache,
   DECRYPT_ERROR_SENTINEL,
@@ -61,6 +62,8 @@ export class TicketDecryptCache extends AsyncDecryptCache {
 
     return this.decrypt(
       ticketId,
+      ticketId,
+      "title",
       keyWrap.ephemeralPoint,
       keyWrap.nonce,
       keyWrap.wrappedKey,
@@ -81,6 +84,8 @@ export class TicketDecryptCache extends AsyncDecryptCache {
   ): string | undefined {
     return this.decrypt(
       `fu:${ticketId}:${followupId}`,
+      ticketId,
+      followupSlot(followupId),
       keyWrap.ephemeralPoint,
       keyWrap.nonce,
       keyWrap.wrappedKey,

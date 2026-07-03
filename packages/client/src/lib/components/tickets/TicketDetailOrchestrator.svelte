@@ -179,8 +179,12 @@
     enabled: ticketId !== "",
   }));
 
+  const currentUserIdGetter = getCurrentUserId();
+  const currentUserId = $derived(currentUserIdGetter());
+
   const readCursor = createReadCursor({
     getTicketId: () => ticketId,
+    getUserId: () => currentUserId ?? "",
     getTicketKeyWrap: () => ticket?.keyWrap ?? undefined,
     getCursorData: () => readCursorQuery.data ?? undefined,
     cryptoBridge,
@@ -266,8 +270,6 @@
   // --- Shared context (used by composables and page wiring) ---
 
   const orgCache = getOrgDecryptCache();
-  const currentUserIdGetter = getCurrentUserId();
-  const currentUserId = $derived(currentUserIdGetter());
   const followUpCache = getFollowUpDecryptCache();
   const volunteersQuery = createVolunteersQuery(ticketRouter);
   const volunteerMap = $derived(buildVolunteerMap(volunteersQuery.data));
@@ -322,6 +324,7 @@
   // --- Select mode (composable) ---
 
   const selectMode = createSelectMode({
+    getTicketId: () => ticketId,
     getClientAlias: () => clientAlias,
     getVolunteerMap: () => volunteerMap,
     orgCache,

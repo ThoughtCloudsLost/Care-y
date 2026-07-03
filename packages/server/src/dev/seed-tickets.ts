@@ -1,3 +1,4 @@
+import { InternalError } from "../errors.js";
 import type { Kysely } from "kysely";
 import type { TenantDatabase } from "../db/types.js";
 import type { BlobStore } from "../storage/store.js";
@@ -5,6 +6,10 @@ import type { TicketPriority } from "@care-y/shared";
 import {
   generateContentKey,
   encryptContent,
+  buildContentAad,
+  followupSlot,
+  blobSlot,
+  filenameSlot,
   eciesEncrypt,
   toRistrettoPoint,
 } from "@care-y/crypto";
@@ -28,7 +33,7 @@ export async function seedTestTickets(
     .executeTakeFirst();
 
   if (!userKeys?.vol_public) {
-    throw new Error(
+    throw new InternalError(
       "user_keys.vol_public not found. Run registerCrypto first.",
     );
   }
@@ -59,7 +64,7 @@ export async function seedTestTickets(
     .execute();
 
   if (clients.length === 0) {
-    throw new Error("No clients found. Run seed first.");
+    throw new InternalError("No clients found. Run seed first.");
   }
 
   // Helper: minutes ago as a Date
@@ -862,7 +867,9 @@ export async function seedTestTickets(
 
     const qId = queueMap.get(def.queue);
     if (qId === undefined) {
-      throw new Error(`Queue "${def.queue}" not found. Run seed first.`);
+      throw new InternalError(
+        `Queue "${def.queue}" not found. Run seed first.`,
+      );
     }
 
     // Idempotency: skip if ticket already exists for this client
@@ -877,12 +884,19 @@ export async function seedTestTickets(
       continue;
     }
 
-    // Generate ticket key and encrypt content
+    // Generate ticket key and encrypt content. Ids are minted before
+    // encryption so the AAD can bind them (ADR-053).
     const tk = generateContentKey();
-    const encryptedTitle = encryptContent(encoder.encode(def.title), tk);
+    const ticketId = crypto.randomUUID();
+    const encryptedTitle = encryptContent(
+      encoder.encode(def.title),
+      tk,
+      buildContentAad(ticketId, "title"),
+    );
     const encryptedDescription = encryptContent(
       encoder.encode(def.description),
       tk,
+      buildContentAad(ticketId, "description"),
     );
 
     const keyGeneration = crypto.randomUUID();
@@ -891,6 +905,7 @@ export async function seedTestTickets(
     const ticket = await tDb
       .insertInto("tickets")
       .values({
+        id: ticketId,
         client_id: clientId,
         queue_id: qId,
         encrypted_title: Buffer.from(encryptedTitle),
@@ -925,12 +940,18 @@ export async function seedTestTickets(
     // which carry no encrypted content under the Proton model)
     for (const fu of def.followUps) {
       const isSystem = fu.source === "system";
+      const followUpId = crypto.randomUUID();
       const encryptedContent = isSystem
         ? new Uint8Array(0)
-        : encryptContent(encoder.encode(fu.content), tk);
+        : encryptContent(
+            encoder.encode(fu.content),
+            tk,
+            buildContentAad(ticket.id, followupSlot(followUpId)),
+          );
       const followUp = await tDb
         .insertInto("followups")
         .values({
+          id: followUpId,
           ticket_id: ticket.id,
           source: fu.source,
           type: fu.type ?? "message",
@@ -947,7 +968,12 @@ export async function seedTestTickets(
         for (const media of fu.media) {
           if (media.kind === "recording") {
             const raw = generateWav(media.durationSeconds ?? 5);
-            const encrypted = encryptContent(raw, tk);
+            const recordingId = crypto.randomUUID();
+            const encrypted = encryptContent(
+              raw,
+              tk,
+              buildContentAad(ticket.id, blobSlot(recordingId)),
+            );
             const blobKey = await blobStore.put(
               orgSchema,
               "recording",
@@ -956,6 +982,7 @@ export async function seedTestTickets(
             await tDb
               .insertInto("recordings")
               .values({
+                id: recordingId,
                 ticket_id: ticket.id,
                 followup_id: followUp.id,
                 blob_key: blobKey,
@@ -968,7 +995,12 @@ export async function seedTestTickets(
             // image or file attachment
             const raw =
               media.kind === "image" ? generatePng() : generateTextFile();
-            const encrypted = encryptContent(raw, tk);
+            const attachmentId = crypto.randomUUID();
+            const encrypted = encryptContent(
+              raw,
+              tk,
+              buildContentAad(ticket.id, blobSlot(attachmentId)),
+            );
             const category = "attachment" as const;
             const blobKey = await blobStore.put(
               orgSchema,
@@ -978,12 +1010,17 @@ export async function seedTestTickets(
             const encFilename =
               media.filename !== undefined
                 ? Buffer.from(
-                    encryptContent(encoder.encode(media.filename), tk),
+                    encryptContent(
+                      encoder.encode(media.filename),
+                      tk,
+                      buildContentAad(ticket.id, filenameSlot(attachmentId)),
+                    ),
                   )
                 : null;
             await tDb
               .insertInto("attachments")
               .values({
+                id: attachmentId,
                 ticket_id: ticket.id,
                 followup_id: followUp.id,
                 blob_key: blobKey,

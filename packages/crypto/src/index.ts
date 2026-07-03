@@ -81,6 +81,12 @@ export {
   generateContentKey,
   encryptContent,
   decryptContent,
+  buildContentAad,
+  followupSlot,
+  blobSlot,
+  filenameSlot,
+  cursorSlot,
+  fieldSlot,
 } from "./content.js";
 
 // --- Blob Encryption ---

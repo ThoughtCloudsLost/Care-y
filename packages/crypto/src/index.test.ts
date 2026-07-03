@@ -50,6 +50,7 @@ import {
   generateContentKey,
   encryptContent,
   decryptContent,
+  buildContentAad,
 
   // Blob
   encryptBlob,
@@ -243,8 +244,9 @@ describe("barrel export", () => {
       const ticketContent = new TextEncoder().encode(
         "Sensitive ticket content for integration test",
       );
-      const encrypted = encryptContent(ticketContent, tk);
-      const decrypted = decryptContent(encrypted, unwrappedTk);
+      const aad = buildContentAad("integration-ticket", "title");
+      const encrypted = encryptContent(ticketContent, tk, aad);
+      const decrypted = decryptContent(encrypted, unwrappedTk, aad);
       expect(decrypted).toEqual(ticketContent);
 
       // 7. Verify org unwrap key is different from volunteer key

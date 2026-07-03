@@ -304,9 +304,15 @@ export class CryptoBridge {
     return { volPublic: resp.volPublic };
   }
 
-  /** Decrypt ticket content. Returns UTF-8 plaintext. */
+  /**
+   * Decrypt ticket content. Returns UTF-8 plaintext.
+   * The slot names where the ciphertext was stored (ADR-053), e.g.
+   * "title" or followupSlot(id); it feeds the AEAD associated data.
+   */
   async decrypt(
     ticketId: string,
+    slot: string,
+    keyCacheId: string,
     ephemeralPoint: string,
     nonce: string,
     wrappedKey: string,
@@ -316,6 +322,8 @@ export class CryptoBridge {
       await this.sendRequest({
         type: "decryptContent",
         ticketId,
+        keyCacheId,
+        slot,
         ephemeralPoint,
         nonce,
         wrappedKey,
@@ -366,6 +374,7 @@ export class CryptoBridge {
     ticketId: string,
     ciphertext: string,
     blobKey: string,
+    blobId: string,
     category: "attachment" | "recording",
   ): Promise<{
     encryptedData: string;
@@ -379,6 +388,7 @@ export class CryptoBridge {
         ticketId,
         ciphertext,
         blobKey,
+        blobId,
         category,
       }),
       "rewrapBlob",
@@ -394,11 +404,16 @@ export class CryptoBridge {
    * Encrypt plaintext with the cached tk for this ticket.
    * Returns base64 ciphertext. The tk must have been cached by a prior decrypt.
    */
-  async encrypt(ticketId: string, plaintext: string): Promise<string> {
+  async encrypt(
+    ticketId: string,
+    slot: string,
+    plaintext: string,
+  ): Promise<string> {
     const resp = expectResponse(
       await this.sendRequest({
         type: "encryptContent",
         ticketId,
+        slot,
         plaintext,
       }),
       "encryptContent",
@@ -413,6 +428,7 @@ export class CryptoBridge {
    */
   async decryptBlob(
     ticketId: string,
+    slot: string,
     ephemeralPoint: string,
     nonce: string,
     wrappedKey: string,
@@ -422,6 +438,8 @@ export class CryptoBridge {
       await this.sendRequest({
         type: "decryptBlob",
         ticketId,
+        keyCacheId: ticketId,
+        slot,
         ephemeralPoint,
         nonce,
         wrappedKey,
@@ -480,6 +498,7 @@ export class CryptoBridge {
    */
   async unwrapTk(
     ticketId: string,
+    keyCacheId: string,
     ephemeralPoint: string,
     nonce: string,
     wrappedKey: string,
@@ -487,6 +506,7 @@ export class CryptoBridge {
     await this.sendRequest({
       type: "unwrapTk",
       ticketId,
+      keyCacheId,
       ephemeralPoint,
       nonce,
       wrappedKey,
@@ -535,6 +555,7 @@ export class CryptoBridge {
   }
 
   async createTicketEncryption(
+    ticketId: string,
     fields: readonly { name: string; plaintext: string }[],
   ): Promise<{
     encryptedFields: readonly { name: string; ciphertext: string }[];
@@ -544,6 +565,7 @@ export class CryptoBridge {
     const resp = expectResponse(
       await this.sendRequest({
         type: "createTicketKey",
+        ticketId,
         fields,
       }),
       "createTicketKey",

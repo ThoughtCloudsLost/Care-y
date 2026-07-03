@@ -11,6 +11,7 @@
  * ticket component imports.
  */
 
+import { blobSlot } from "@care-y/crypto";
 import type { CryptoBridge } from "$lib/workers/crypto-bridge.js";
 import type { TicketKeyWrap } from "$lib/crypto/ticket-decrypt-cache.js";
 import type { TRPCClient } from "@trpc/client";
@@ -50,6 +51,7 @@ export async function downloadDecryptedAttachment(
 
   const decryptedBuf = await deps.bridge.decryptBlob(
     deps.ticketId,
+    blobSlot(attachmentId),
     deps.keyWrap.ephemeralPoint,
     deps.keyWrap.nonce,
     deps.keyWrap.wrappedKey,

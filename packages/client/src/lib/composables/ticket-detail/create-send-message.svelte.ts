@@ -2,6 +2,7 @@ import type { QueryClient } from "@tanstack/svelte-query";
 import type { CryptoBridge } from "$lib/workers/crypto-bridge.js";
 import type { AsyncDecryptCache } from "$lib/crypto/async-decrypt-cache.js";
 import { CryptoWorkerError } from "$lib/workers/crypto-bridge-errors.js";
+import { followupSlot } from "@care-y/crypto";
 import { ticketKeys } from "$lib/query/keys.js";
 import { toastStore } from "$lib/stores/toast.svelte.js";
 import { extractMentions } from "$lib/utils/mentions.js";
@@ -24,6 +25,7 @@ export interface SendMessageConfig<TFollowUp> {
   readonly queryClient: QueryClient;
   readonly buildPendingEntry: (opts: PendingEntryOpts) => TFollowUp;
   readonly createFollowUpMutate: (args: {
+    id: string;
     ticketId: string;
     encryptedContent: string;
     source: "volunteer";
@@ -64,8 +66,14 @@ export function createSendMessage<TFollowUp extends { id: string }>(
     const followUpsKey = ticketKeys.followUpsInitial(ticketId);
     const pendingId = `pending-${crypto.randomUUID()}`;
 
+    const followUpId = crypto.randomUUID();
+
     try {
-      const encryptedContent = await cryptoBridge.encrypt(ticketId, text);
+      const encryptedContent = await cryptoBridge.encrypt(
+        ticketId,
+        followupSlot(followUpId),
+        text,
+      );
 
       setDraftText("");
 
@@ -85,6 +93,7 @@ export function createSendMessage<TFollowUp extends { id: string }>(
       followUpCache.seed(pendingId, text);
 
       await createFollowUpMutate({
+        id: followUpId,
         ticketId,
         encryptedContent,
         source: "volunteer" as const,

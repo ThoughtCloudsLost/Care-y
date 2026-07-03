@@ -11,6 +11,7 @@
               OrgDecryptCache (org-key tier, main thread) for display names.
 -->
 <script lang="ts">
+  import { followupSlot } from "@care-y/crypto";
   import { tick } from "svelte";
   import { createQuery, useQueryClient } from "@tanstack/svelte-query";
   import { ticketKeys } from "$lib/query/keys";
@@ -627,6 +628,8 @@
       if (item.encryptedContent === null) continue;
       followUpCache.decryptContent(
         item.id,
+        ticketId,
+        followupSlot(item.id),
         ticket.keyWrap,
         item.encryptedContent,
       );
@@ -995,7 +998,13 @@
   <TicketPlaceholder {fillerCount}>
     {#each orderedPreviews as fu (fu.id)}
       {@const previewResult = resolveAsyncDecrypt(
-        followUpCache.decryptContent(fu.id, fu.keyWrap, fu.encryptedContent),
+        followUpCache.decryptContent(
+          fu.id,
+          ticketId,
+          followupSlot(fu.id),
+          fu.keyWrap,
+          fu.encryptedContent,
+        ),
         fu.keyWrap !== null,
       )}
       <div class="fu-wrapper">

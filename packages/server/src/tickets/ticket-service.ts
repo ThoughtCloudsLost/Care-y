@@ -87,6 +87,8 @@ export interface CreateTicketKeyWrap {
 }
 
 export interface CreateTicketInput {
+  /** Client-minted ticket id the content AAD was bound to (ADR-053). */
+  readonly id: string;
   readonly clientId?: string;
   readonly clientToken?: string;
   readonly queueId: string;
@@ -122,8 +124,15 @@ export interface TicketListOpts {
   readonly cursor?: string;
 }
 
+export interface CreateTarget {
+  readonly openTicketId: string | null;
+  readonly reopenTicketId: string | null;
+}
+
 export interface TicketService {
   create(userId: string, input: CreateTicketInput): Promise<TicketRecord>;
+  /** Where a create for this client lands (open blocks, closed reopens). */
+  getCreateTarget(clientId: string): Promise<CreateTarget>;
   findById(ticketId: string, userId: string): Promise<TicketWithKeyWrap>;
   list(userId: string, opts: TicketListOpts): Promise<TicketWithKeyWrap[]>;
   update(userId: string, input: UpdateTicketInput): Promise<TicketRecord>;
@@ -290,6 +299,20 @@ export function createTicketService(
   }
 
   return {
+    async getCreateTarget(clientId): Promise<CreateTarget> {
+      const existing = await db
+        .selectFrom("tickets")
+        .select(["id", "status"])
+        .where("client_id", "=", clientId)
+        .orderBy("created_at", "desc")
+        .executeTakeFirst();
+
+      if (!existing) return { openTicketId: null, reopenTicketId: null };
+      return existing.status === "open"
+        ? { openTicketId: existing.id, reopenTicketId: null }
+        : { openTicketId: null, reopenTicketId: existing.id };
+    },
+
     async create(userId, input) {
       return db.transaction().execute(async (trx) => {
         // Resolve clientId from token if needed
@@ -353,7 +376,12 @@ export function createTicketService(
           if (existing.status === "open") {
             throw new ConflictError(ErrorCode.TICKET_ALREADY_OPEN);
           }
-          // Closed ticket exists: reopen it (ADR-018 section 2)
+          // Closed ticket exists: reopen it (ADR-018 section 2). The
+          // client must have encrypted against this exact id (ADR-053);
+          // a mismatch means its resolveCreateTarget view went stale.
+          if (existing.id !== input.id) {
+            throw new ConflictError(ErrorCode.TICKET_CREATE_TARGET_CHANGED);
+          }
           const reopened = await trx
             .updateTable("tickets")
             .set({
@@ -371,10 +399,11 @@ export function createTicketService(
           await createSystemFollowUp(trx, existing.id, "status_change");
           ticket = toRecord(reopened);
         } else {
-          // No existing ticket: create new
+          // No existing ticket: create new under the client-minted id
           const row = await trx
             .insertInto("tickets")
             .values({
+              id: input.id,
               client_id: clientId,
               queue_id: input.queueId,
               encrypted_title: input.encryptedTitle,

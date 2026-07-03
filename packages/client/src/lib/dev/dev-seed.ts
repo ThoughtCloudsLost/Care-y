@@ -10,7 +10,7 @@
  * from production builds entirely.
  */
 import { trpc } from "$lib/trpc/index.js";
-import { sealForOrgKey, encode } from "@care-y/crypto";
+import { sealForOrgKey, encode, followupSlot } from "@care-y/crypto";
 import { DEV_ORG_SLUG } from "$lib/utils/org-slug.js";
 import { ClientError, RelayError } from "$lib/errors.js";
 import type { CryptoBridge } from "$lib/workers/crypto-bridge.js";
@@ -1277,7 +1277,10 @@ export async function devSeedData(
     const ticket = generateTicket(i);
     const lookup = await phoneLookup(ticket.phone);
 
-    const encrypted = await bridge.createTicketEncryption([
+    // Seeding assumes a reset DB (step 0), so every create is fresh and
+    // the minted id is the id the row will get (AAD binding, ADR-053).
+    const mintedTicketId = crypto.randomUUID();
+    const encrypted = await bridge.createTicketEncryption(mintedTicketId, [
       { name: "title", plaintext: ticket.title },
       { name: "description", plaintext: ticket.description },
     ]);
@@ -1292,6 +1295,7 @@ export async function devSeedData(
     if (!targetQueue) continue;
 
     const result = (await ticketRouter.create.mutate({
+      id: mintedTicketId,
       ...(lookup.found
         ? { clientId: lookup.clientId }
         : { clientToken: lookup.token }),
@@ -1340,6 +1344,7 @@ export async function devSeedData(
 
     await bridge.unwrapTk(
       ticketId,
+      ticketId,
       ticketData.keyWrap.ephemeralPoint,
       ticketData.keyWrap.nonce,
       ticketData.keyWrap.wrappedKey,
@@ -1373,8 +1378,14 @@ export async function devSeedData(
           VOL_REPLY_POOL.at((ti * 2 + fi) % VOL_REPLY_POOL.length) ?? "";
       }
 
-      const encryptedContent = await bridge.encrypt(ticketId, content);
+      const followUpId = crypto.randomUUID();
+      const encryptedContent = await bridge.encrypt(
+        ticketId,
+        followupSlot(followUpId),
+        content,
+      );
       await ticketRouter.createFollowUp.mutate({
+        id: followUpId,
         ticketId,
         encryptedContent,
         source,

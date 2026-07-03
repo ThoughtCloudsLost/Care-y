@@ -3,6 +3,7 @@ import {
   generateContentKey,
   encryptContent,
   decryptContent,
+  buildContentAad,
   eciesEncrypt,
   eciesDecrypt,
   toRistrettoPoint,
@@ -32,6 +33,10 @@ import type { TenantDatabase } from "../db/types.js";
 let volPublic: RistrettoPoint;
 let volPrivate: Scalar;
 
+// The intake path binds title/description to the pre-minted ticket id;
+// these simulations reuse one title-slot AAD (ADR-053).
+const AAD = buildContentAad("ticket-stc-test", "title");
+
 beforeAll(async () => {
   const sodium = await getSodium();
   const scalar = sodium.crypto_core_ristretto255_scalar_random();
@@ -45,8 +50,8 @@ describe("server-ticket-create crypto roundtrips", () => {
   it("encrypt-then-decrypt roundtrip with generateContentKey", () => {
     const tk = generateContentKey();
     const plaintext = Buffer.from("Inbound SMS body from client");
-    const ciphertext = encryptContent(new Uint8Array(plaintext), tk);
-    const decrypted = decryptContent(ciphertext, tk);
+    const ciphertext = encryptContent(new Uint8Array(plaintext), tk, AAD);
+    const decrypted = decryptContent(ciphertext, tk, AAD);
 
     expect(Buffer.from(decrypted).toString("utf-8")).toBe(
       "Inbound SMS body from client",
@@ -70,7 +75,7 @@ describe("server-ticket-create crypto roundtrips", () => {
     const tk = generateContentKey();
     const plaintext = Buffer.from("SMS from +15551234567: I need help");
 
-    const encrypted = encryptContent(new Uint8Array(plaintext), tk);
+    const encrypted = encryptContent(new Uint8Array(plaintext), tk, AAD);
     const wrap = eciesEncrypt(tk, volPublic);
 
     const recoveredTk = eciesDecrypt(
@@ -80,7 +85,11 @@ describe("server-ticket-create crypto roundtrips", () => {
       volPrivate,
     );
 
-    const decrypted = decryptContent(encrypted, recoveredTk as SymmetricKey);
+    const decrypted = decryptContent(
+      encrypted,
+      recoveredTk as SymmetricKey,
+      AAD,
+    );
 
     expect(Buffer.from(decrypted).toString("utf-8")).toBe(
       "SMS from +15551234567: I need help",
@@ -108,12 +117,12 @@ describe("server-ticket-create crypto roundtrips", () => {
   it("tampered ciphertext fails content decryption", () => {
     const tk = generateContentKey();
     const plaintext = Buffer.from("test content");
-    const encrypted = encryptContent(new Uint8Array(plaintext), tk);
+    const encrypted = encryptContent(new Uint8Array(plaintext), tk, AAD);
 
     const tampered = new Uint8Array(encrypted);
     tampered[25] = tampered[25]! ^ 0xff;
 
-    expect(() => decryptContent(tampered as typeof encrypted, tk)).toThrow(
+    expect(() => decryptContent(tampered as typeof encrypted, tk, AAD)).toThrow(
       "Content decryption failed",
     );
   });
@@ -141,8 +150,8 @@ describe("server-ticket-create property-based tests", () => {
     fc.assert(
       fc.property(fc.uint8Array({ minLength: 0, maxLength: 1024 }), (data) => {
         const tk = generateContentKey();
-        const encrypted = encryptContent(data, tk);
-        const decrypted = decryptContent(encrypted, tk);
+        const encrypted = encryptContent(data, tk, AAD);
+        const decrypted = decryptContent(encrypted, tk, AAD);
         expect(Buffer.from(decrypted)).toEqual(Buffer.from(data));
       }),
       { numRuns: 50 },
@@ -438,6 +447,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
           typeof encryptContent
         >,
         result.tk!,
+        buildContentAad(result.ticketId, "title"),
       );
 
       const decDesc = decryptContent(
@@ -445,6 +455,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
           typeof encryptContent
         >,
         result.tk!,
+        buildContentAad(result.ticketId, "description"),
       );
 
       expect(Buffer.from(decTitle).toString("utf-8")).toBe(titleText);
