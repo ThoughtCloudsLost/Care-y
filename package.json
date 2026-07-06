@@ -67,7 +67,7 @@
     "@commitlint/config-conventional": "21.2.0",
     "@playwright/test": "1.61.1",
     "@types/node": "26.1.0",
-    "@vitest/coverage-v8": "4.1.9",
+    "@vitest/coverage-v8": "4.1.10",
     "eslint": "10.6.0",
     "istanbul-lib-coverage": "^3.2.2",
     "istanbul-lib-report": "^3.0.1",
@@ -81,6 +81,6 @@
     "typescript": "5.9.3",
     "typescript-eslint": "8.62.1",
     "v8-to-istanbul": "^9.3.0",
-    "vitest": "4.1.9"
+    "vitest": "4.1.10"
   }
 }
