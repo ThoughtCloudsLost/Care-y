@@ -10,10 +10,19 @@ import {
   toRistrettoPoint,
   toScalar,
   getSodium,
+  InvalidKeyError,
   type SymmetricKey,
   type RistrettoPoint,
   type Scalar,
 } from "@care-y/crypto";
+import type { Kysely } from "kysely";
+import type { TenantDatabase } from "../db/types.js";
+import { BlobStoreError, type BlobStore } from "../storage/store.js";
+import { TestSetupError } from "../test-utils.js";
+import {
+  createEncryptedFollowUp,
+  createFollowUpWithTk,
+} from "./server-followup-create.js";
 
 let volPublic: RistrettoPoint;
 let volPrivate: Scalar;
@@ -173,6 +182,17 @@ describe("createFollowUpWithTk crypto roundtrips", () => {
 });
 
 describe("Buffer zeroing contracts", () => {
+  // Both error-path tests fail before the first query, so any db access
+  // is a test bug, not a service behavior.
+  const dbNever = new Proxy(
+    {},
+    {
+      get(): never {
+        throw new TestSetupError("db must not be touched on this error path");
+      },
+    },
+  ) as unknown as Kysely<TenantDatabase>;
+
   it("plaintext Buffer is zeroed after encryption", () => {
     const tk = generateContentKey();
     const plaintext = Buffer.from("sensitive content");
@@ -184,5 +204,62 @@ describe("Buffer zeroing contracts", () => {
     // simulating what the handler does: zero the Buffer after encrypt.
     plaintext.fill(0);
     expect(plaintext.every((b) => b === 0)).toBe(true);
+  });
+
+  it("createFollowUpWithTk zeroes content when encryption throws", async () => {
+    const content = Buffer.from("sensitive follow-up body");
+    const shortTk = new Uint8Array(16) as SymmetricKey;
+
+    await expect(
+      createFollowUpWithTk(
+        dbNever,
+        crypto.randomUUID(),
+        shortTk,
+        content,
+        "message",
+        "system",
+      ),
+    ).rejects.toThrow(InvalidKeyError);
+
+    expect(content.every((b) => b === 0)).toBe(true);
+  });
+
+  it("createEncryptedFollowUp zeroes content and media buffers when blob storage fails", async () => {
+    const content = Buffer.from("sensitive body");
+    const attachmentOne = Buffer.from("attachment one bytes");
+    const attachmentTwo = Buffer.from("attachment two bytes");
+    const recording = Buffer.from("recording audio bytes");
+    const failingStore: BlobStore = {
+      put: () => Promise.reject(new BlobStoreError("disk full")),
+      get: () => Promise.resolve(null),
+      delete: () => Promise.resolve(),
+      exists: () => Promise.resolve(false),
+    };
+
+    await expect(
+      createEncryptedFollowUp(
+        dbNever,
+        crypto.randomUUID(),
+        content,
+        "message",
+        "system",
+        {
+          attachments: [
+            { data: attachmentOne, contentType: "image/png" },
+            { data: attachmentTwo, contentType: "image/png" },
+          ],
+          recording: { data: recording, durationSeconds: 3 },
+          blobStore: failingStore,
+          orgSchema: "org_test",
+        },
+      ),
+    ).rejects.toThrow(BlobStoreError);
+
+    // put rejects on the first attachment: the already-encrypted buffer,
+    // the never-reached ones, and the plaintext content must all be zeroed.
+    expect(content.every((b) => b === 0)).toBe(true);
+    expect(attachmentOne.every((b) => b === 0)).toBe(true);
+    expect(attachmentTwo.every((b) => b === 0)).toBe(true);
+    expect(recording.every((b) => b === 0)).toBe(true);
   });
 });

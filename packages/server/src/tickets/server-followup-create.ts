@@ -59,66 +59,74 @@ interface EncryptedMedia {
  * before encryption, because the blob AAD binds the attachments or
  * recordings row id (ADR-053). The blob storage key is minted by the
  * store after encryption and is deliberately not part of the AAD.
+ *
+ * All media input buffers are zeroed in the finally block, so plaintext
+ * does not outlive an encryption or storage failure partway through.
  */
 async function encryptAndStoreMedia(
   tk: SymmetricKey,
   ticketId: string,
   opts: EncryptedFollowUpOpts | undefined,
 ): Promise<EncryptedMedia> {
-  const attachmentRecords: AttachmentRecord[] = [];
-  if (
-    opts?.attachments &&
-    opts.blobStore !== undefined &&
-    opts.orgSchema !== undefined
-  ) {
-    for (const att of opts.attachments) {
-      const attachmentId = crypto.randomUUID();
+  try {
+    const attachmentRecords: AttachmentRecord[] = [];
+    if (
+      opts?.attachments &&
+      opts.blobStore !== undefined &&
+      opts.orgSchema !== undefined
+    ) {
+      for (const att of opts.attachments) {
+        const attachmentId = crypto.randomUUID();
+        const encrypted = encryptContent(
+          new Uint8Array(att.data),
+          tk,
+          buildContentAad(ticketId, blobSlot(attachmentId)),
+        );
+        const blobKey = await opts.blobStore.put(
+          opts.orgSchema,
+          "attachment",
+          Buffer.from(encrypted),
+        );
+        attachmentRecords.push({
+          id: attachmentId,
+          blobKey,
+          contentType: att.contentType,
+          sizeBytes: encrypted.length,
+        });
+      }
+    }
+
+    let recordingRecord: RecordingRecord | null = null;
+    if (
+      opts?.recording &&
+      opts.blobStore !== undefined &&
+      opts.orgSchema !== undefined
+    ) {
+      const recordingId = crypto.randomUUID();
       const encrypted = encryptContent(
-        new Uint8Array(att.data),
+        new Uint8Array(opts.recording.data),
         tk,
-        buildContentAad(ticketId, blobSlot(attachmentId)),
+        buildContentAad(ticketId, blobSlot(recordingId)),
       );
-      att.data.fill(0);
       const blobKey = await opts.blobStore.put(
         opts.orgSchema,
-        "attachment",
+        "recording",
         Buffer.from(encrypted),
       );
-      attachmentRecords.push({
-        id: attachmentId,
+      recordingRecord = {
+        id: recordingId,
         blobKey,
-        contentType: att.contentType,
-        sizeBytes: encrypted.length,
-      });
+        durationSeconds: opts.recording.durationSeconds,
+      };
     }
-  }
 
-  let recordingRecord: RecordingRecord | null = null;
-  if (
-    opts?.recording &&
-    opts.blobStore !== undefined &&
-    opts.orgSchema !== undefined
-  ) {
-    const recordingId = crypto.randomUUID();
-    const encrypted = encryptContent(
-      new Uint8Array(opts.recording.data),
-      tk,
-      buildContentAad(ticketId, blobSlot(recordingId)),
-    );
-    opts.recording.data.fill(0);
-    const blobKey = await opts.blobStore.put(
-      opts.orgSchema,
-      "recording",
-      Buffer.from(encrypted),
-    );
-    recordingRecord = {
-      id: recordingId,
-      blobKey,
-      durationSeconds: opts.recording.durationSeconds,
-    };
+    return { attachmentRecords, recordingRecord };
+  } finally {
+    for (const att of opts?.attachments ?? []) {
+      att.data.fill(0);
+    }
+    opts?.recording?.data.fill(0);
   }
-
-  return { attachmentRecords, recordingRecord };
 }
 
 async function insertFollowUpWithMedia(
@@ -182,8 +190,8 @@ async function insertFollowUpWithMedia(
  * Used when the server has PII content to add to a ticket it didn't just create.
  *
  * The follow-up id is minted before encryption so the AAD can bind it
- * (ADR-053). All plaintext Buffers and `tk_temp` are zeroed in the
- * finally block.
+ * (ADR-053). `content` and `tk_temp` are zeroed in the finally block;
+ * media buffers are zeroed inside encryptAndStoreMedia.
  */
 export async function createEncryptedFollowUp(
   db: Kysely<TenantDatabase>,
@@ -204,7 +212,6 @@ export async function createEncryptedFollowUp(
       tkTemp,
       buildContentAad(ticketId, followupSlot(followUpId)),
     );
-    content.fill(0);
 
     const media = await encryptAndStoreMedia(tkTemp, ticketId, opts);
 
@@ -250,13 +257,15 @@ export async function createEncryptedFollowUp(
 
     return { followUpId, keyGeneration: keyGen };
   } finally {
+    content.fill(0);
     sodium.memzero(tkTemp);
   }
 }
 
 /**
  * Create a follow-up using a caller-provided key (for new tickets where
- * the ticket's `tk` is reused). The caller must zero `tk` after use.
+ * the ticket's `tk` is reused). `content` is zeroed in the finally block;
+ * the caller must zero `tk` after use.
  *
  * Follow-up is inserted with `key_generation = null` since the ticket's
  * canonical wraps already cover this key.
@@ -271,23 +280,26 @@ export async function createFollowUpWithTk(
   opts?: EncryptedFollowUpOpts,
 ): Promise<string> {
   const followUpId = crypto.randomUUID();
-  const encryptedContent = encryptContent(
-    new Uint8Array(content),
-    tk,
-    buildContentAad(ticketId, followupSlot(followUpId)),
-  );
-  content.fill(0);
+  try {
+    const encryptedContent = encryptContent(
+      new Uint8Array(content),
+      tk,
+      buildContentAad(ticketId, followupSlot(followUpId)),
+    );
 
-  const media = await encryptAndStoreMedia(tk, ticketId, opts);
+    const media = await encryptAndStoreMedia(tk, ticketId, opts);
 
-  return insertFollowUpWithMedia(
-    db,
-    followUpId,
-    ticketId,
-    encryptedContent,
-    type,
-    source,
-    null,
-    media,
-  );
+    return await insertFollowUpWithMedia(
+      db,
+      followUpId,
+      ticketId,
+      encryptedContent,
+      type,
+      source,
+      null,
+      media,
+    );
+  } finally {
+    content.fill(0);
+  }
 }
