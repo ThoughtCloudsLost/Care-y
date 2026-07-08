@@ -6,6 +6,11 @@ import {
   encryptContent,
   decryptContent,
   buildContentAad,
+  followupSlot,
+  blobSlot,
+  filenameSlot,
+  cursorSlot,
+  fieldSlot,
 } from "./content.js";
 import { encryptBlob, decryptBlob } from "./blob.js";
 import { concatBytes } from "./bytes.js";
@@ -35,10 +40,14 @@ const AAD = buildContentAad("sec-invariant-ticket", "title");
  *      regressions (encryption becoming a passthrough, key material copied
  *      into the output).
  *   5. Callers keep ownership of their buffers: encrypt and decrypt never
- *      mutate plaintext, key, or blob arguments.
+ *      mutate plaintext, key, blob, or aad arguments.
  *   6. Context binding: a ciphertext never decrypts under a different
- *      associated data value (ticket or slot change), for any pair of
- *      distinct contexts (ADR-053).
+ *      associated data value, whether the ticket id, the slot, or any
+ *      single AAD bit differs; empty AAD is a context of its own, never
+ *      a wildcard that skips verification (ADR-053).
+ *   7. Context encoding is injective: buildContentAad maps distinct
+ *      (ticketId, slot) pairs to distinct AAD bytes for UUID ticket ids,
+ *      so no two storage contexts ever share a binding.
  *
  * These complement the roundtrip and single-example negative tests in
  * content.test.ts and blob.test.ts (SEC-052 libsodium crypto_secretbox).
@@ -66,6 +75,21 @@ function containsSubarray(haystack: Uint8Array, needle: Uint8Array): boolean {
   }
   return false;
 }
+
+/**
+ * Every canonical slot shape from content.ts, with arbitrary embedded ids.
+ * Relocation properties draw pairs from here so every run exercises the
+ * slot forms production rows actually use, not just random strings.
+ */
+const canonicalSlot = fc.oneof(
+  fc.constant("title"),
+  fc.constant("description"),
+  fc.string({ minLength: 1, maxLength: 24 }).map(followupSlot),
+  fc.string({ minLength: 1, maxLength: 24 }).map(blobSlot),
+  fc.string({ minLength: 1, maxLength: 24 }).map(filenameSlot),
+  fc.string({ minLength: 1, maxLength: 24 }).map(cursorSlot),
+  fc.string({ minLength: 1, maxLength: 24 }).map(fieldSlot),
+);
 
 describe("content encryption security invariants", () => {
   beforeAll(async () => {
@@ -257,6 +281,65 @@ describe("content encryption security invariants", () => {
       );
     });
 
+    it("never relocates between canonical slots of the same ticket", () => {
+      // The attack the AEAD exists for (ADR-053): every slot of a ticket
+      // shares one key, so an attacker with database write access could
+      // swap two ciphertexts within a row (title <-> description) or
+      // reorder follow-ups without touching key material. Only the slot
+      // half of the AAD separates these contexts. The generic property
+      // above rarely samples same-ticket pairs; this one does every run,
+      // across the canonical slot shapes.
+      fc.assert(
+        fc.property(
+          fc.uint8Array({ minLength: 0, maxLength: 256 }),
+          fc.uuid(),
+          canonicalSlot,
+          canonicalSlot,
+          (plaintext, ticketId, slotA, slotB) => {
+            fc.pre(slotA !== slotB);
+            const key = generateContentKey();
+            const blob = encryptContent(
+              plaintext,
+              key,
+              buildContentAad(ticketId, slotA),
+            );
+            expect(() =>
+              decryptContent(blob, key, buildContentAad(ticketId, slotB)),
+            ).toThrow(DecryptionError);
+          },
+        ),
+        { numRuns: FC_MEDIUM },
+      );
+    });
+
+    it("never relocates to another ticket in the same slot", () => {
+      // Cross-ticket move: an attacker who relocates a ciphertext together
+      // with its wrapped key row would otherwise get a clean decrypt on
+      // the destination ticket. The ticket half of the AAD, rebuilt from
+      // the row the ciphertext is read from, fails it closed.
+      fc.assert(
+        fc.property(
+          fc.uint8Array({ minLength: 0, maxLength: 256 }),
+          fc.uuid(),
+          fc.uuid(),
+          canonicalSlot,
+          (plaintext, ticketA, ticketB, slot) => {
+            fc.pre(ticketA !== ticketB);
+            const key = generateContentKey();
+            const blob = encryptContent(
+              plaintext,
+              key,
+              buildContentAad(ticketA, slot),
+            );
+            expect(() =>
+              decryptContent(blob, key, buildContentAad(ticketB, slot)),
+            ).toThrow(DecryptionError);
+          },
+        ),
+        { numRuns: FC_MEDIUM },
+      );
+    });
+
     it("blob API inherits context binding", () => {
       fc.assert(
         fc.property(fc.uint8Array({ minLength: 0, maxLength: 256 }), (data) => {
@@ -275,39 +358,145 @@ describe("content encryption security invariants", () => {
     });
   });
 
-  describe("caller buffer ownership", () => {
-    it("encrypt never mutates the plaintext or the key", () => {
-      // The crypto package zeroes only buffers it owns. Zeroing or
-      // encrypting in place would corrupt caller state (drafts, session
-      // keys held for reuse) in ways no roundtrip test notices.
+  describe("associated data strictness", () => {
+    it("roundtrips with arbitrary matching AAD bytes, even empty ones", () => {
+      // AAD is opaque bytes to the cipher: no canonicalization, no
+      // parsing, and empty AAD is a valid context in its own right. The
+      // two sides need nothing but byte equality, whatever produced the
+      // bytes.
       fc.assert(
         fc.property(
           fc.uint8Array({ minLength: 0, maxLength: 256 }),
-          (plaintext) => {
+          fc.uint8Array({ minLength: 0, maxLength: 64 }),
+          (plaintext, aad) => {
             const key = generateContentKey();
-            const plaintextSnapshot = plaintext.slice();
-            const keySnapshot = key.slice();
-            encryptContent(plaintext, key, AAD);
-            expect(plaintext).toEqual(plaintextSnapshot);
-            expect(key).toEqual(keySnapshot);
+            const blob = encryptContent(plaintext, key, aad);
+            expect(decryptContent(blob, key, aad)).toEqual(plaintext);
           },
         ),
         { numRuns: FC_MEDIUM },
       );
     });
 
-    it("decrypt never mutates the blob or the key", () => {
+    it("rejects a single flipped bit anywhere in the AAD", () => {
+      // Authentication must cover every AAD bit. An implementation that
+      // authenticated only a prefix, or only the AAD length, would let
+      // near-miss contexts through while every exact-mismatch test above
+      // stays green.
       fc.assert(
         fc.property(
           fc.uint8Array({ minLength: 0, maxLength: 256 }),
-          (plaintext) => {
+          fc.uint8Array({ minLength: 1, maxLength: 64 }),
+          fc.integer({ min: 0, max: 1_000_000 }),
+          (plaintext, aad, bitSeed) => {
             const key = generateContentKey();
-            const blob = encryptContent(plaintext, key, AAD);
+            const blob = encryptContent(plaintext, key, aad);
+            const perturbed = flipBit(aad, bitSeed % (aad.length * 8));
+            expect(() => decryptContent(blob, key, perturbed)).toThrow(
+              DecryptionError,
+            );
+          },
+        ),
+        { numRuns: FC_MEDIUM },
+      );
+    });
+
+    it("treats empty AAD as its own context, never a wildcard", () => {
+      // A compatibility shim that skipped AAD verification when the
+      // decryptor supplies empty bytes would make every stored ciphertext
+      // relocatable. Both directions must fail closed: bound at encrypt
+      // but not supplied at decrypt, and supplied at decrypt but not
+      // bound at encrypt.
+      fc.assert(
+        fc.property(
+          fc.uint8Array({ minLength: 0, maxLength: 256 }),
+          fc.uint8Array({ minLength: 1, maxLength: 64 }),
+          (plaintext, aad) => {
+            const key = generateContentKey();
+            const empty = new Uint8Array(0);
+            const bound = encryptContent(plaintext, key, aad);
+            expect(() => decryptContent(bound, key, empty)).toThrow(
+              DecryptionError,
+            );
+            const unbound = encryptContent(plaintext, key, empty);
+            expect(() => decryptContent(unbound, key, aad)).toThrow(
+              DecryptionError,
+            );
+          },
+        ),
+        { numRuns: FC_MEDIUM },
+      );
+    });
+
+    it("buildContentAad maps distinct (ticketId, slot) pairs to distinct bytes", () => {
+      // If two storage contexts encoded to the same AAD, the binding
+      // would silently vanish for that pair. Injectivity of
+      // `${ticketId}:${slot}` relies on ticket ids never containing ":"
+      // (a colon-bearing id would make ("a:b", "c") collide with
+      // ("a", "b:c")). Ticket ids are UUIDs at every call site today, so
+      // ids are drawn as UUIDs here; slots stay unconstrained because
+      // followup/blob/field slots embed colons routinely.
+      fc.assert(
+        fc.property(
+          fc.uuid(),
+          fc.uuid(),
+          fc.boolean(),
+          fc.string({ maxLength: 48 }),
+          fc.string({ maxLength: 48 }),
+          (idA, idB, sameTicket, slotA, slotB) => {
+            const ticketA = idA;
+            const ticketB = sameTicket ? idA : idB;
+            fc.pre(ticketA !== ticketB || slotA !== slotB);
+            expect(buildContentAad(ticketA, slotA)).not.toEqual(
+              buildContentAad(ticketB, slotB),
+            );
+          },
+        ),
+        { numRuns: FC_MEDIUM },
+      );
+    });
+  });
+
+  describe("caller buffer ownership", () => {
+    it("encrypt never mutates the plaintext, key, or aad", () => {
+      // The crypto package zeroes only buffers it owns. Zeroing or
+      // encrypting in place would corrupt caller state (drafts, session
+      // keys held for reuse, AAD values built once and shared across
+      // slots) in ways no roundtrip test notices.
+      fc.assert(
+        fc.property(
+          fc.uint8Array({ minLength: 0, maxLength: 256 }),
+          fc.uint8Array({ minLength: 0, maxLength: 64 }),
+          (plaintext, aad) => {
+            const key = generateContentKey();
+            const plaintextSnapshot = plaintext.slice();
+            const keySnapshot = key.slice();
+            const aadSnapshot = aad.slice();
+            encryptContent(plaintext, key, aad);
+            expect(plaintext).toEqual(plaintextSnapshot);
+            expect(key).toEqual(keySnapshot);
+            expect(aad).toEqual(aadSnapshot);
+          },
+        ),
+        { numRuns: FC_MEDIUM },
+      );
+    });
+
+    it("decrypt never mutates the blob, key, or aad", () => {
+      fc.assert(
+        fc.property(
+          fc.uint8Array({ minLength: 0, maxLength: 256 }),
+          fc.uint8Array({ minLength: 0, maxLength: 64 }),
+          (plaintext, aad) => {
+            const key = generateContentKey();
+            const blob = encryptContent(plaintext, key, aad);
             const blobSnapshot = blob.slice();
             const keySnapshot = key.slice();
-            decryptContent(blob, key, AAD);
+            const aadSnapshot = aad.slice();
+            decryptContent(blob, key, aad);
             expect(blob).toEqual(blobSnapshot);
             expect(key).toEqual(keySnapshot);
+            expect(aad).toEqual(aadSnapshot);
           },
         ),
         { numRuns: FC_MEDIUM },
