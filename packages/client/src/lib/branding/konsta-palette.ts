@@ -157,8 +157,12 @@ function deriveOnColor(bgHex: string): string {
 
 // --- Dual-token derivation ---
 
-// Worst-case surfaces for contrast checks.
-// Lightest dark surface and darkest light surface from riso theme.
+// Worst-case surfaces for contrast checks. Strict supersets of both the
+// riso and Ledger (default theme) surface ramps: #e5e1da is darker than
+// the Ledger's darkest light surface (--paper-deep #ede7d8), and #2c2a2c
+// is at least as light as the Ledger's lightest dark surface (the Konsta
+// overlay step #2f2a1e). konsta-palette.test.ts locks the Ledger coverage
+// explicitly, so these constants cannot silently drift below it.
 const WORST_DARK: [number, number, number] = [44, 42, 44]; // #2c2a2c
 const WORST_LIGHT: [number, number, number] = [229, 225, 218]; // #e5e1da
 const WHITE_RGB: [number, number, number] = [255, 255, 255];
@@ -310,6 +314,9 @@ function deriveDualTokens(
  * - --brand-text = --brand-primary-text
  * - --brand-fill = --brand-primary-fill
  *
+ * --brand-on is the black-or-white text color for content sitting on
+ * --brand-fill (primary buttons, brand chips, own-message send button).
+ *
  * Konsta's --k-color-primary is set to the primary fill value.
  * Browser-only (no-op during SSR).
  */
@@ -332,10 +339,15 @@ function applyPrimaryTokens(
   el.style.setProperty("--brand-primary-fill", primary.fill);
   el.style.setProperty("--brand-text", primary.text);
   el.style.setProperty("--brand-fill", primary.fill);
+  // Text-on-fill color (primary buttons, brand chips). The fill is already
+  // white-safe, so this resolves to white except for boundary fills where
+  // black measures marginally higher.
+  const primaryOn = deriveOnColor(primary.fill);
+  el.style.setProperty("--brand-on", primaryOn);
 
   if (import.meta.env.DEV) {
     console.log(
-      `[palette] primary=${brand.primary} text=${primary.text} fill=${primary.fill} dark=${String(isDark)}`,
+      `[palette] primary=${brand.primary} text=${primary.text} fill=${primary.fill} on=${primaryOn} dark=${String(isDark)}`,
     );
   }
 
@@ -430,6 +442,7 @@ export function resetKonstaPalette(): void {
     "--brand-primary-20",
     "--brand-text",
     "--brand-fill",
+    "--brand-on",
     "--brand-primary-text",
     "--brand-primary-fill",
     "--brand-accent",
