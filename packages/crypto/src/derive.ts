@@ -29,6 +29,7 @@
 
 import { requireSodium } from "./sodium.js";
 import { hkdf, hkdfDerive32 } from "./hkdf.js";
+import { zeroAll } from "./mem.js";
 import { InvalidKeyError } from "./errors.js";
 import { assertInputLength } from "./validation.js";
 import { concatBytes, encodeLabel } from "./bytes.js";
@@ -49,7 +50,7 @@ import {
  * Each field is clamped to at least the RFC 9106 Section 4 SECOND RECOMMENDED value.
  *
  * When VITE_E2E_FAST_KDF is set at build time, the floor drops to ARGON2_TEST_PARAMS
- * (1 MB / 1 iter / 1 par) so E2E tests finish in seconds instead of minutes.
+ * (1 MB / 1 iter) so E2E tests finish in seconds instead of minutes.
  * Vite statically replaces the env check; the production minifier eliminates
  * the test branch entirely (SEC-009, RFC 9106 Section 4).
  */
@@ -68,10 +69,6 @@ function enforceArgon2Floor(serverParams?: Argon2Params): Argon2Params {
     iterations: Math.max(
       serverParams?.iterations ?? floor.iterations,
       floor.iterations,
-    ),
-    parallelism: Math.max(
-      serverParams?.parallelism ?? floor.parallelism,
-      floor.parallelism,
     ),
   };
 }
@@ -127,18 +124,17 @@ export function deriveMasterKey(
     throw new InvalidKeyError("OPRF output must be 64 bytes");
   }
 
-  // When pqShared is absent, ikm aliases oprfOutput (caller's buffer).
-  // Only zero ikm when it's a new concatenated buffer we own.
-  const ikm = pqShared ? concatBytes(oprfOutput, pqShared) : oprfOutput;
+  // Always derive from an owned ikm copy so this function alone zeroes it,
+  // whether or not pqShared is present. slice() copies the OPRF output rather
+  // than aliasing it, so the caller keeps ownership of oprfOutput (and pqShared)
+  // and zeroes those buffers itself.
+  const ikm = pqShared ? concatBytes(oprfOutput, pqShared) : oprfOutput.slice();
 
-  const result = hkdfDerive32(ikm, HKDF_LABELS.MASTER_KEY);
-
-  if (pqShared) {
-    const sodium = requireSodium();
-    sodium.memzero(ikm);
+  try {
+    return hkdfDerive32(ikm, HKDF_LABELS.MASTER_KEY) as SymmetricKey;
+  } finally {
+    zeroAll(ikm);
   }
-
-  return result as SymmetricKey;
 }
 
 /**

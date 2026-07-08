@@ -80,6 +80,7 @@ describe("createSendMessage", () => {
 
     expect(config.cryptoBridge.encrypt).toHaveBeenCalledWith(
       "t-1",
+      expect.stringMatching(/^followup:/),
       "hello world",
     );
     expect(config.setDraftText).toHaveBeenCalledWith("");

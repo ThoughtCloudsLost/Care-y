@@ -49,6 +49,8 @@ export interface FollowUpRecord {
 }
 
 export interface CreateFollowUpInput {
+  /** Client-minted follow-up id the content AAD was bound to (ADR-053). */
+  readonly id: string;
   readonly ticketId: string;
   readonly encryptedContent: Buffer;
   readonly source: string;
@@ -349,6 +351,7 @@ export function createFollowUpService(
       const row = await db
         .insertInto("followups")
         .values({
+          id: input.id,
           ticket_id: input.ticketId,
           source: input.source,
           type: input.type,

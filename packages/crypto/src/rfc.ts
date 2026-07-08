@@ -62,6 +62,14 @@ export const HASH_TO_GROUP_DST = concatBytes(
  * Converts a nonneg integer to big-endian byte array of length xLen.
  */
 function i2osp(x: number, xLen: number): Uint8Array {
+  // Reject values that do not fit in xLen bytes. Without this, an oversized
+  // length (e.g. a caller-supplied input longer than 65535 bytes reaching
+  // buildFinalizeInput) would be silently truncated by the byte loop.
+  if (x >= 2 ** (8 * xLen)) {
+    throw new InvalidInputError(
+      `i2osp: value does not fit in ${String(xLen)} bytes`,
+    );
+  }
   const result = new Uint8Array(xLen);
   for (let i = xLen - 1; i >= 0; i--) {
     result[i] = x & 0xff;

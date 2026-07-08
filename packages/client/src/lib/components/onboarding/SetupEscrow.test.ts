@@ -27,7 +27,6 @@ vi.mock("@care-y/crypto", () => ({
   ARGON2_ESCROW_PARAMS: {
     memoryKiB: 262144,
     iterations: 4,
-    parallelism: 4,
   },
   requireSodium: () => ({ memzero: mockMemzero }),
 }));

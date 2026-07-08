@@ -61,6 +61,8 @@
       m.error_cannot_take_closed_ticket(withTerms()),
     [ErrorCode.TICKET_ALREADY_OPEN]: () =>
       m.error_ticket_already_open(withTerms()),
+    [ErrorCode.TICKET_CREATE_TARGET_CHANGED]: () =>
+      m.error_ticket_create_target_changed(withTerms()),
     [ErrorCode.TOKEN_EXPIRED]: () => m.error_token_expired(),
     [ErrorCode.TICKET_ALREADY_ASSIGNED]: () =>
       m.error_ticket_already_assigned(withTerms()),

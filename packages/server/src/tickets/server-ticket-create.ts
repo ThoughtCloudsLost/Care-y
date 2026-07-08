@@ -4,6 +4,7 @@ import type { TenantDatabase } from "../db/types.js";
 import {
   generateContentKey,
   encryptContent,
+  buildContentAad,
   requireSodium,
   type SymmetricKey,
 } from "@care-y/crypto";
@@ -91,16 +92,23 @@ export async function resolveOrCreateTicket(
       };
     }
 
-    // 3. No existing ticket: create with server-side ECIES
+    // 3. No existing ticket: create with server-side ECIES. The id is
+    // minted before encryption so the AAD can bind it (ADR-053).
     const sodium = requireSodium();
     const tk = generateContentKey();
     try {
       const keyGeneration = crypto.randomUUID();
+      const ticketId = crypto.randomUUID();
 
-      const encryptedTitle = encryptContent(new Uint8Array(title), tk);
+      const encryptedTitle = encryptContent(
+        new Uint8Array(title),
+        tk,
+        buildContentAad(ticketId, "title"),
+      );
       const encryptedDescription = encryptContent(
         new Uint8Array(description),
         tk,
+        buildContentAad(ticketId, "description"),
       );
 
       title.fill(0);
@@ -109,6 +117,7 @@ export async function resolveOrCreateTicket(
       const ticket = await trx
         .insertInto("tickets")
         .values({
+          id: ticketId,
           client_id: clientId,
           queue_id: intakeQueueId,
           encrypted_title: Buffer.from(encryptedTitle),

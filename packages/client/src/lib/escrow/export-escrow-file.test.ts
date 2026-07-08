@@ -12,7 +12,6 @@ vi.mock("@care-y/crypto", () => ({
   ARGON2_ESCROW_PARAMS: {
     memoryKiB: 262144,
     iterations: 4,
-    parallelism: 4,
   },
 }));
 
@@ -56,7 +55,7 @@ describe("exportEscrowFile", () => {
     expect(envelope.kdf_params).toEqual({
       opslimit: 4,
       memlimit: 268435456,
-      parallelism: 4,
+      parallelism: 1,
     });
     expect(typeof envelope.salt).toBe("string");
     expect(typeof envelope.nonce).toBe("string");

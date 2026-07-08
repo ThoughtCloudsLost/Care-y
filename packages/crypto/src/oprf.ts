@@ -25,6 +25,7 @@
 
 import { requireSodium } from "./sodium.js";
 import { InvalidInputError } from "./errors.js";
+import { assertInputLength } from "./validation.js";
 import { scalarFromInt } from "./bytes.js";
 import {
   expandMessageXMD,
@@ -117,6 +118,14 @@ export function oprfFinalize(
   input: Uint8Array,
 ): Uint8Array {
   const sodium = requireSodium();
+
+  // Validate the server response length at this trust boundary rather than
+  // relying on scalarmult to reject it downstream.
+  assertInputLength(
+    evaluatedElement,
+    sodium.crypto_core_ristretto255_BYTES,
+    "Evaluated element",
+  );
 
   // Unblind: N = r^{-1} * evaluated
   const rInverse = sodium.crypto_core_ristretto255_scalar_invert(blindState);

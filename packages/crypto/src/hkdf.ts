@@ -69,18 +69,32 @@ function hkdfExpand(
 ): Uint8Array {
   const n = Math.ceil(length / HASH_LEN);
   const okm = new Uint8Array(n * HASH_LEN);
+  // Each T(i) block is a raw HMAC output whose leading bytes become derived
+  // key material. A superseded block must not outlive the call, so it is
+  // zeroed once its successor has consumed it. okm holds every block and is
+  // zeroed in the finally after the standalone output copy is taken.
   let prev: Uint8Array = new Uint8Array(0);
 
-  for (let i = 1; i <= n; i++) {
-    const state = sodium.crypto_auth_hmacsha512_init(prk);
-    sodium.crypto_auth_hmacsha512_update(state, prev);
-    sodium.crypto_auth_hmacsha512_update(state, info);
-    sodium.crypto_auth_hmacsha512_update(state, new Uint8Array([i]));
-    prev = sodium.crypto_auth_hmacsha512_final(state);
-    okm.set(prev, (i - 1) * HASH_LEN);
-  }
+  try {
+    for (let i = 1; i <= n; i++) {
+      const state = sodium.crypto_auth_hmacsha512_init(prk);
+      sodium.crypto_auth_hmacsha512_update(state, prev);
+      sodium.crypto_auth_hmacsha512_update(state, info);
+      sodium.crypto_auth_hmacsha512_update(state, new Uint8Array([i]));
+      const next = sodium.crypto_auth_hmacsha512_final(state);
+      sodium.memzero(prev);
+      prev = next;
+      okm.set(prev, (i - 1) * HASH_LEN);
+    }
 
-  return okm.subarray(0, length);
+    // slice copies eagerly, so the returned buffer is standalone: zeroing okm
+    // below cannot clobber the caller's key, and a caller zeroing the result
+    // clears the whole backing buffer rather than a view into a larger one.
+    return okm.slice(0, length);
+  } finally {
+    sodium.memzero(prev);
+    sodium.memzero(okm);
+  }
 }
 
 /**

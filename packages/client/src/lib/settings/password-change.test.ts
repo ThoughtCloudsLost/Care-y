@@ -323,6 +323,7 @@ describe("changePassword", () => {
 
       expect(primaryBridge.unwrapTk).toHaveBeenCalledWith(
         "ticket-1",
+        "ticket-1",
         "ep-ticket-1",
         "n-ticket-1",
         "wk-ticket-1",

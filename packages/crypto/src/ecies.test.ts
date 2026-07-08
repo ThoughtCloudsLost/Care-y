@@ -2,6 +2,8 @@ import { describe, it, expect, beforeAll } from "vitest";
 import fc from "fast-check";
 import { FC_MEDIUM } from "./fc-config.js";
 import { eciesEncrypt, eciesDecrypt } from "./ecies.js";
+import { hkdfDerive32 } from "./hkdf.js";
+import { concatBytes } from "./bytes.js";
 import {
   getSodium,
   _resetSodiumForTesting,
@@ -12,6 +14,7 @@ import {
   InvalidKeyError,
   InvalidInputError,
 } from "./errors.js";
+import { HKDF_LABELS } from "./types.js";
 import type { Scalar, RistrettoPoint, Nonce } from "./types.js";
 
 /**
@@ -199,6 +202,137 @@ describe("ECIES per-volunteer wrapping", () => {
           priv,
         ),
       ).toThrow(InvalidInputError);
+    });
+  });
+
+  // These tests reconstruct the wrap key derivation independently to pin the
+  // exact KDF input: HKDF over (shared || ephemeralPoint || recipientPublic).
+  // A regression that dropped the public-key binding would either fail to
+  // decrypt a correctly bound wrap or would accept a legacy unbound wrap.
+  describe("KDF public key binding", () => {
+    it("decrypts a wrap constructed with the bound KDF", () => {
+      const { priv, pub } = generateKeypair(sodium);
+      const plaintext = new TextEncoder().encode("bound-wrap");
+
+      const ephemeral = sodium.crypto_core_ristretto255_scalar_random();
+      const ephemeralPoint = sodium.crypto_scalarmult_ristretto255_base(
+        ephemeral,
+      ) as RistrettoPoint;
+      const shared = sodium.crypto_scalarmult_ristretto255(ephemeral, pub);
+      const ikm = concatBytes(shared, ephemeralPoint, pub);
+      const wrapKey = hkdfDerive32(ikm, HKDF_LABELS.ECIES_WRAP);
+      const nonce = sodium.randombytes_buf(
+        sodium.crypto_secretbox_NONCEBYTES,
+      ) as Nonce;
+      const ciphertext = sodium.crypto_secretbox_easy(
+        plaintext,
+        nonce,
+        wrapKey,
+      );
+
+      const decrypted = eciesDecrypt(ephemeralPoint, nonce, ciphertext, priv);
+      expect(decrypted).toEqual(plaintext);
+    });
+
+    it("rejects a wrap constructed with the legacy unbound KDF", () => {
+      const { priv, pub } = generateKeypair(sodium);
+      const plaintext = new TextEncoder().encode("legacy-unbound");
+
+      const ephemeral = sodium.crypto_core_ristretto255_scalar_random();
+      const ephemeralPoint = sodium.crypto_scalarmult_ristretto255_base(
+        ephemeral,
+      ) as RistrettoPoint;
+      const shared = sodium.crypto_scalarmult_ristretto255(ephemeral, pub);
+      // Legacy construction: wrap key over the shared secret alone.
+      const wrapKey = hkdfDerive32(shared, HKDF_LABELS.ECIES_WRAP);
+      const nonce = sodium.randombytes_buf(
+        sodium.crypto_secretbox_NONCEBYTES,
+      ) as Nonce;
+      const ciphertext = sodium.crypto_secretbox_easy(
+        plaintext,
+        nonce,
+        wrapKey,
+      );
+
+      expect(() =>
+        eciesDecrypt(ephemeralPoint, nonce, ciphertext, priv),
+      ).toThrow(DecryptionError);
+    });
+
+    it("unwraps eciesEncrypt output under an independently bound key", () => {
+      const { priv, pub } = generateKeypair(sodium);
+      const plaintext = new TextEncoder().encode("encrypt-side-binding");
+
+      const encrypted = eciesEncrypt(plaintext, pub);
+      // Recompute the shared secret as priv * E, then derive the bound key.
+      const shared = sodium.crypto_scalarmult_ristretto255(
+        priv,
+        encrypted.ephemeralPoint,
+      );
+      const ikm = concatBytes(shared, encrypted.ephemeralPoint, pub);
+      const wrapKey = hkdfDerive32(ikm, HKDF_LABELS.ECIES_WRAP);
+      const opened = sodium.crypto_secretbox_open_easy(
+        encrypted.ciphertext,
+        encrypted.nonce,
+        wrapKey,
+      );
+
+      expect(opened).toEqual(plaintext);
+    });
+  });
+
+  describe("invalid point handling", () => {
+    it("throws InvalidKeyError when encrypting to the identity element", () => {
+      // 32 zero bytes is the canonical encoding of the ristretto255 identity.
+      const identity = new Uint8Array(32) as RistrettoPoint;
+      expect(() => eciesEncrypt(new Uint8Array(32), identity)).toThrow(
+        InvalidKeyError,
+      );
+    });
+
+    it("throws InvalidKeyError when encrypting to a non-canonical point", () => {
+      const bad = new Uint8Array(32);
+      bad.fill(0xff);
+      expect(() =>
+        eciesEncrypt(new Uint8Array(32), bad as RistrettoPoint),
+      ).toThrow(InvalidKeyError);
+    });
+
+    it("throws DecryptionError for an identity ephemeral point", () => {
+      const { priv } = generateKeypair(sodium);
+      const identity = new Uint8Array(32) as RistrettoPoint;
+      const nonce = sodium.randombytes_buf(
+        sodium.crypto_secretbox_NONCEBYTES,
+      ) as Nonce;
+      expect(() =>
+        eciesDecrypt(identity, nonce, new Uint8Array(48), priv),
+      ).toThrow(DecryptionError);
+    });
+
+    it("throws DecryptionError for a non-canonical ephemeral point", () => {
+      const { priv } = generateKeypair(sodium);
+      const bad = new Uint8Array(32);
+      bad.fill(0xff);
+      const nonce = sodium.randombytes_buf(
+        sodium.crypto_secretbox_NONCEBYTES,
+      ) as Nonce;
+      expect(() =>
+        eciesDecrypt(bad as RistrettoPoint, nonce, new Uint8Array(48), priv),
+      ).toThrow(DecryptionError);
+    });
+
+    it("throws DecryptionError when the recipient private scalar is zero", () => {
+      const { pub } = generateKeypair(sodium);
+      const encrypted = eciesEncrypt(new Uint8Array(32), pub);
+      const zeroScalar = new Uint8Array(32) as Scalar;
+      expect(() =>
+        eciesDecrypt(
+          encrypted.ephemeralPoint,
+          encrypted.nonce,
+          encrypted.ciphertext,
+          zeroScalar,
+        ),
+      ).toThrow(DecryptionError);
     });
   });
 

@@ -89,6 +89,8 @@ export class AsyncDecryptCache {
 
   protected decrypt(
     cacheKey: string,
+    ticketId: string,
+    slot: string,
     ephemeralPoint: string,
     nonce: string,
     wrappedKey: string,
@@ -101,6 +103,8 @@ export class AsyncDecryptCache {
     this.fireAndForget(
       cacheKey,
       this.bridge.decrypt(
+        ticketId,
+        slot,
         cacheKey,
         ephemeralPoint,
         nonce,

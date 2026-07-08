@@ -16,6 +16,7 @@
  * Recreating it when the ticket changes costs one object allocation.
  */
 
+import { followupSlot } from "@care-y/crypto";
 import type {
   TicketDecryptCache,
   TicketKeyWrap,
@@ -98,6 +99,8 @@ export function createTicketDecryptScope(
         followUpKeyWrap != null ? { followUpKeyWrap, ticketId } : undefined;
       const raw = followUpCache.decryptContent(
         followUpId,
+        ticketId,
+        followupSlot(followUpId),
         keyWrap,
         encryptedContent,
         rewrapContext,

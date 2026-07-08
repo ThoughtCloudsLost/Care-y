@@ -2,8 +2,18 @@
  * OPRF evaluation service.
  *
  * Orchestrates rate limiting, proof-of-work gating, escalating delays,
- * failure tracking, and audit logging around the threshold OPRF evaluator.
+ * attempt tracking, and audit logging around the threshold OPRF evaluator.
  * The tRPC route delegates to this service; it contains no business logic itself.
+ *
+ * The proof-of-work gate and escalating delay key off an ATTEMPT counter, not a
+ * failure counter. An OPRF is oblivious, so the server cannot tell a correct
+ * password guess from a wrong one: every well-formed blinded element evaluates
+ * successfully (SEC-012, RFC 9497). Keying the friction off failures would let a
+ * password-guessing attacker, who only ever submits well-formed elements, avoid
+ * it entirely. Counting every attempt in a sliding window applies the friction
+ * to the actual brute-force path. A legitimate login makes one evaluation, so it
+ * stays far below the threshold, and the window decays on its own, so no
+ * explicit reset is needed.
  */
 
 import {
@@ -20,30 +30,30 @@ import type { PowVerifier } from "./pow.js";
 import type { OprfAuditLogger } from "./oprf-audit.js";
 
 // ---------------------------------------------------------------------------
-// Failure tracker (sliding window per userId)
+// Attempt tracker (sliding window per userId)
 // ---------------------------------------------------------------------------
 
-export interface FailureTracker {
+export interface AttemptTracker {
   check(userId: string): number;
   increment(userId: string): number;
   reset(userId: string): void;
   dispose(): void;
 }
 
-export function createFailureTracker(
-  windowMs = 5 * 60 * 1000,
+export function createAttemptTracker(
+  windowMs = 15 * 60 * 1000,
   now: () => number = Date.now,
-): FailureTracker {
-  const failures = new Map<string, number[]>();
+): AttemptTracker {
+  const attempts = new Map<string, number[]>();
 
   const dispose = createCleanupInterval(60_000, () => {
     const cutoff = now() - windowMs;
-    for (const [key, timestamps] of failures) {
+    for (const [key, timestamps] of attempts) {
       const filtered = timestamps.filter((t) => t > cutoff);
       if (filtered.length === 0) {
-        failures.delete(key);
+        attempts.delete(key);
       } else {
-        failures.set(key, filtered);
+        attempts.set(key, filtered);
       }
     }
   });
@@ -51,18 +61,18 @@ export function createFailureTracker(
   return {
     check(userId: string): number {
       const cutoff = now() - windowMs;
-      const timestamps = failures.get(userId);
+      const timestamps = attempts.get(userId);
       if (!timestamps) return 0;
       return timestamps.filter((t) => t > cutoff).length;
     },
     increment(userId: string): number {
-      const timestamps = failures.get(userId) ?? [];
+      const timestamps = attempts.get(userId) ?? [];
       timestamps.push(now());
-      failures.set(userId, timestamps);
+      attempts.set(userId, timestamps);
       return this.check(userId);
     },
     reset(userId: string): void {
-      failures.delete(userId);
+      attempts.delete(userId);
     },
     dispose,
   };
@@ -73,19 +83,20 @@ export function createFailureTracker(
 // ---------------------------------------------------------------------------
 
 /**
- * Escalating delay tiers: as failure count rises, the delay before
- * OPRF evaluation grows. Prevents rapid brute-force without fully
- * blocking legitimate retries.
+ * Escalating delay tiers, indexed by the attempt count in the window. The Tier
+ * field is named minFailures by the shared tier helper, but the value fed here
+ * is the attempt count. Delays start above the proof-of-work threshold, so a
+ * legitimate login (one evaluation) sees no delay.
  */
 const DELAY_TIERS: readonly Tier<number>[] = [
   { minFailures: 10, value: 10_000 },
-  { minFailures: 7, value: 5_000 },
-  { minFailures: 4, value: 2_000 },
+  { minFailures: 8, value: 5_000 },
+  { minFailures: 6, value: 2_000 },
 ];
 
-/** Escalating delay in milliseconds based on failure count. */
-export function getDelayMs(failureCount: number): number {
-  return findTier(DELAY_TIERS, failureCount, 0);
+/** Escalating delay in milliseconds based on the attempt count in the window. */
+export function getDelayMs(attemptCount: number): number {
+  return findTier(DELAY_TIERS, attemptCount, 0);
 }
 
 async function delay(ms: number): Promise<void> {
@@ -123,12 +134,13 @@ export interface OprfEvaluateService {
   adminEvaluate(request: OprfEvaluateRequest): Promise<OprfEvaluateResult>;
 }
 
-const POW_FAILURE_THRESHOLD = 3;
+/** Attempts in the window at which proof-of-work becomes required. */
+const POW_ATTEMPT_THRESHOLD = 5;
 
 export function createOprfEvaluateService(
   deps: OprfEvaluateServiceDeps,
 ): OprfEvaluateService {
-  const failureTracker = createFailureTracker();
+  const attemptTracker = createAttemptTracker();
 
   /** If authenticated, the session owner must match the requested userId. */
   async function assertSessionBinding(
@@ -170,22 +182,24 @@ export function createOprfEvaluateService(
   }
 
   /**
-   * After 3+ failures, require proof-of-work before allowing evaluation.
-   * If no PoW is provided, issue a challenge. If PoW is invalid, track failure.
+   * Once attempts in the window reach the threshold, require proof-of-work
+   * before allowing evaluation. If no PoW is provided, issue a challenge. If
+   * PoW is invalid, log and reject; the attempt is already counted, so there is
+   * no separate failure counter to bump.
    */
   async function enforcePowGate(
     userId: string,
     ip: string,
-    failureCount: number,
+    attemptCount: number,
     powChallenge: string | undefined,
     powSolution: string | undefined,
   ): Promise<void> {
-    if (failureCount < POW_FAILURE_THRESHOLD) return;
+    if (attemptCount < POW_ATTEMPT_THRESHOLD) return;
 
     const noPowProvided =
       powChallenge === undefined || powSolution === undefined;
     if (noPowProvided) {
-      const challenge = deps.powVerifier.createChallenge(userId, failureCount);
+      const challenge = deps.powVerifier.createChallenge(userId, attemptCount);
       await deps.auditLogger.logFailure(userId, ip, "pow_required");
       throw new PowRequiredError(challenge.challenge, challenge.difficulty);
     }
@@ -196,13 +210,12 @@ export function createOprfEvaluateService(
       powSolution,
     );
     if (!powIsValid) {
-      failureTracker.increment(userId);
       await deps.auditLogger.logFailure(userId, ip, "pow_invalid");
       throw new ValidationError("Invalid proof-of-work solution");
     }
   }
 
-  /** Perform threshold OPRF evaluation and track success/failure. */
+  /** Perform threshold OPRF evaluation and log failures for audit. */
   async function evaluateBlindedElement(
     userId: string,
     ip: string,
@@ -211,13 +224,8 @@ export function createOprfEvaluateService(
     const blindedBuf = Buffer.from(blindedElement, "base64");
     try {
       const evaluated = await deps.evaluator.evaluate(blindedBuf);
-
-      // Only OPRF success proves identity (PoW is a gate, not proof).
-      failureTracker.reset(userId);
-
       return { evaluated: Buffer.from(evaluated).toString("base64") };
     } catch (err: unknown) {
-      failureTracker.increment(userId);
       await deps.auditLogger.logFailure(userId, ip, "oprf_failed");
       throw err;
     }
@@ -231,15 +239,15 @@ export function createOprfEvaluateService(
       await enforceUserRateLimit(userId, ip);
       await enforceIpRateLimit(userId, ip);
 
-      const failureCount = failureTracker.check(userId);
+      const attemptCount = attemptTracker.increment(userId);
       await enforcePowGate(
         userId,
         ip,
-        failureCount,
+        attemptCount,
         req.powChallenge,
         req.powSolution,
       );
-      await delay(getDelayMs(failureCount));
+      await delay(getDelayMs(attemptCount));
 
       return evaluateBlindedElement(userId, ip, blindedElement);
     },
@@ -247,8 +255,17 @@ export function createOprfEvaluateService(
     async adminEvaluate(req: OprfEvaluateRequest): Promise<OprfEvaluateResult> {
       const { userId, ip, blindedElement } = req;
 
+      // The admin path skips the session-binding check so an admin can derive
+      // keys on behalf of a manually created user, but it is still counted and
+      // delayed so a stolen MANAGE_KEYS session cannot use it as an unthrottled
+      // oracle. It has no proof-of-work gate: the admin client does not solve
+      // challenges, and the caller is already authenticated with MANAGE_KEYS, so
+      // the rate limit plus the attempt-scaled delay bound the request rate.
       await enforceUserRateLimit(userId, ip);
       await enforceIpRateLimit(userId, ip);
+
+      const attemptCount = attemptTracker.increment(userId);
+      await delay(getDelayMs(attemptCount));
 
       return evaluateBlindedElement(userId, ip, blindedElement);
     },

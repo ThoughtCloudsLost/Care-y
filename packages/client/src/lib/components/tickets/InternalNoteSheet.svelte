@@ -12,6 +12,7 @@
   import { ticketKeys } from "$lib/query/keys";
   import * as m from "$lib/paraglide/messages.js";
   import { withTerms } from "$lib/terminology/with-terms.js";
+  import { followupSlot } from "@care-y/crypto";
   import { trpc } from "$lib/trpc/index.js";
   import { getCryptoBridge, getOrgDecryptCache } from "$lib/crypto/context.js";
   import { requireRouter } from "$lib/errors.js";
@@ -154,9 +155,12 @@
 
     saving = true;
     try {
-      const encryptedContent = await cryptoBridge.encrypt(ticketId, text);
-
       if (isEditMode && editFollowUpId !== undefined) {
+        const encryptedContent = await cryptoBridge.encrypt(
+          ticketId,
+          followupSlot(editFollowUpId),
+          text,
+        );
         await ticketRouter.updateInternalNote.mutate({
           followUpId: editFollowUpId,
           encryptedContent,
@@ -164,7 +168,14 @@
         });
         toastStore.show(m.note_type_updated());
       } else {
+        const followUpId = crypto.randomUUID();
+        const encryptedContent = await cryptoBridge.encrypt(
+          ticketId,
+          followupSlot(followUpId),
+          text,
+        );
         await ticketRouter.createFollowUp.mutate({
+          id: followUpId,
           ticketId,
           type: "internal_note",
           source: "volunteer",

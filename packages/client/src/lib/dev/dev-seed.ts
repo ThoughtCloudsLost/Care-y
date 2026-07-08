@@ -10,7 +10,7 @@
  * from production builds entirely.
  */
 import { trpc } from "$lib/trpc/index.js";
-import { sealForOrgKey, encode } from "@care-y/crypto";
+import { sealForOrgKey, encode, followupSlot } from "@care-y/crypto";
 import { DEV_ORG_SLUG } from "$lib/utils/org-slug.js";
 import { ClientError, RelayError } from "$lib/errors.js";
 import type { CryptoBridge } from "$lib/workers/crypto-bridge.js";
@@ -1129,19 +1129,29 @@ export async function devSeedData(
   progress("Creating users...");
   const existingUsers = (await authRouter.listUsers.query()) as {
     id: string;
-    identifier: string;
+    encryptedIdentifier: string;
   }[];
-  const existingIdentifiers = new Set(
-    existingUsers.map((u: { identifier: string }) => u.identifier),
+  // Identifiers are org-key sealed (ADR-052); the server cannot return
+  // plaintext. Decrypt through the worker to match seed users on re-runs.
+  const decrypted = await bridge.orgDecryptBatch(
+    existingUsers.map((u) => ({
+      cacheKey: u.id,
+      ciphertext: u.encryptedIdentifier,
+    })),
   );
+  const existingIdByIdentifier = new Map<string, string>();
+  for (const r of decrypted) {
+    if (r.plaintext !== null) {
+      // care-y-ignore-next-line no-plaintext-db-write -- in-memory Map for seed idempotency, not a DB write
+      existingIdByIdentifier.set(r.plaintext, r.cacheKey);
+    }
+  }
   const seededUserIds: Record<string, string> = {};
 
   for (const user of SEED_USERS) {
-    if (existingIdentifiers.has(user.identifier)) {
-      const existing = existingUsers.find(
-        (u: { identifier: string }) => u.identifier === user.identifier,
-      );
-      if (existing) seededUserIds[user.identifier] = existing.id;
+    const existingId = existingIdByIdentifier.get(user.identifier);
+    if (existingId !== undefined) {
+      seededUserIds[user.identifier] = existingId;
       console.log(
         `[dev-seed] User "${user.identifier}" already exists, skipping`,
       );
@@ -1267,7 +1277,10 @@ export async function devSeedData(
     const ticket = generateTicket(i);
     const lookup = await phoneLookup(ticket.phone);
 
-    const encrypted = await bridge.createTicketEncryption([
+    // Seeding assumes a reset DB (step 0), so every create is fresh and
+    // the minted id is the id the row will get (AAD binding, ADR-053).
+    const mintedTicketId = crypto.randomUUID();
+    const encrypted = await bridge.createTicketEncryption(mintedTicketId, [
       { name: "title", plaintext: ticket.title },
       { name: "description", plaintext: ticket.description },
     ]);
@@ -1282,6 +1295,7 @@ export async function devSeedData(
     if (!targetQueue) continue;
 
     const result = (await ticketRouter.create.mutate({
+      id: mintedTicketId,
       ...(lookup.found
         ? { clientId: lookup.clientId }
         : { clientToken: lookup.token }),
@@ -1330,6 +1344,7 @@ export async function devSeedData(
 
     await bridge.unwrapTk(
       ticketId,
+      ticketId,
       ticketData.keyWrap.ephemeralPoint,
       ticketData.keyWrap.nonce,
       ticketData.keyWrap.wrappedKey,
@@ -1363,8 +1378,14 @@ export async function devSeedData(
           VOL_REPLY_POOL.at((ti * 2 + fi) % VOL_REPLY_POOL.length) ?? "";
       }
 
-      const encryptedContent = await bridge.encrypt(ticketId, content);
+      const followUpId = crypto.randomUUID();
+      const encryptedContent = await bridge.encrypt(
+        ticketId,
+        followupSlot(followUpId),
+        content,
+      );
       await ticketRouter.createFollowUp.mutate({
+        id: followUpId,
         ticketId,
         encryptedContent,
         source,

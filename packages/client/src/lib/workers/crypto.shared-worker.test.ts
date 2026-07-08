@@ -11,8 +11,9 @@
  * Uses real @care-y/crypto (WASM) for crypto correctness.
  */
 
-import { describe, it, expect, vi, beforeAll } from "vitest";
+import { describe, it, expect, vi, beforeAll, afterEach } from "vitest";
 import { getSodium, requireSodium, decode } from "@care-y/crypto";
+import { IDLE_SELF_ZERO_MS } from "./crypto-core.js";
 import type {
   WorkerResponse,
   WorkerEvent,
@@ -71,7 +72,11 @@ async function sendAndWaitPort(
   data: Record<string, unknown>,
 ): Promise<WorkerResponse> {
   sendToPort(port, data);
-  await new Promise((r) => setTimeout(r, 50));
+  if (vi.isFakeTimers()) {
+    await vi.advanceTimersByTimeAsync(50);
+  } else {
+    await new Promise((r) => setTimeout(r, 50));
+  }
   const call = port.postMessage.mock.calls.find(
     ([msg]) => (msg as WorkerResponse).id === data.id,
   );
@@ -263,5 +268,47 @@ describe("SharedWorker entry point", () => {
       expect(broadcasts).toHaveLength(1);
       expect(broadcasts[0]!.state).toBe("READY");
     });
+  });
+
+  describe("idle self-zero backstop", () => {
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it(
+      "broadcasts READY to every port when the idle timer fires",
+      { timeout: 30_000 },
+      async () => {
+        const port1 = createMockPort();
+        const port2 = createMockPort();
+        simulateConnect(port1);
+        simulateConnect(port2);
+        await initPort(port1);
+
+        // Reset key state under real timers. zeroAll also cancels the
+        // idle timer earlier tests armed with the real clock, so every
+        // timer this test advances was created through the fake clock.
+        await sendAndWaitPort(port1, { type: "zeroAll", id: 80 });
+
+        vi.useFakeTimers();
+        await loginViaPort(port1);
+        port1.postMessage.mockClear();
+        port2.postMessage.mockClear();
+
+        await vi.advanceTimersByTimeAsync(IDLE_SELF_ZERO_MS);
+
+        // No port sent the zero, so no port is excluded: both must learn
+        // that keys are gone.
+        for (const port of [port1, port2]) {
+          const broadcasts = port.postMessage.mock.calls
+            .map((c) => c[0] as WorkerResponse | WorkerEvent)
+            .filter(
+              (msg): msg is StateChangeEvent =>
+                "kind" in msg && msg.kind === "stateChange",
+            );
+          expect(broadcasts.some((b) => b.state === "READY")).toBe(true);
+        }
+      },
+    );
   });
 });

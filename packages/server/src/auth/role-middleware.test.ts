@@ -50,7 +50,7 @@ function makeCtx(overrides?: Partial<Context>): Context {
     },
     user: {
       id: "user-id",
-      identifier: "testuser",
+      encryptedIdentifier: "testuser",
       encryptedDisplayName: "Test User",
       encryptedPreferredLocale: null,
       roleId: RoleId.VOLUNTEER,
@@ -65,7 +65,7 @@ function makeCtxWithRole(roleId: string): Context {
   return makeCtx({
     user: {
       id: "user-id",
-      identifier: "testuser",
+      encryptedIdentifier: "testuser",
       encryptedDisplayName: "Test User",
       encryptedPreferredLocale: null,
       roleId,

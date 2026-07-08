@@ -16,6 +16,7 @@ import {
   testBlindIndexer,
   testSessionTokenizer,
   testSealedBox,
+  testUnseal,
   seedOrgPublicKey,
   TEST_ORG_ID,
   mockReq,
@@ -209,7 +210,7 @@ describe.skipIf(!HAS_DB)("auth + org routers (DB integration)", () => {
   function createAuthedCaller(
     user: {
       id: string;
-      identifier: string;
+      encryptedIdentifier: string;
       encryptedDisplayName: string;
       encryptedPreferredLocale: string | null;
       roleId: string;
@@ -306,7 +307,7 @@ describe.skipIf(!HAS_DB)("auth + org routers (DB integration)", () => {
       roleId: RoleId.VOLUNTEER,
     });
 
-    expect(result.user.identifier).toBe("invited-user");
+    expect(testUnseal(result.user.encryptedIdentifier)).toBe("invited-user");
     expect(result.user.encryptedDisplayName).toBeDefined();
     expect(result.user.roleId).toBe(RoleId.VOLUNTEER);
   });
@@ -329,7 +330,7 @@ describe.skipIf(!HAS_DB)("auth + org routers (DB integration)", () => {
       password: "login-password-long-enough",
     });
 
-    expect(result.user.identifier).toBe("loginuser");
+    expect(testUnseal(result.user.encryptedIdentifier)).toBe("loginuser");
     expect(result.user.encryptedDisplayName).toBeDefined();
     expect(result.requiresTwoFactor).toBe(false);
     expect(result.enrolledMethods).toEqual([]);
@@ -409,9 +410,47 @@ describe.skipIf(!HAS_DB)("auth + org routers (DB integration)", () => {
     const { caller } = createAuthedCaller(user, "me-token");
     const result = await caller.auth.me();
 
-    expect(result.user.identifier).toBe("meuser");
+    expect(testUnseal(result.user.encryptedIdentifier)).toBe("meuser");
     expect(result.user.encryptedDisplayName).toBeDefined();
     expect(result.user.roleId).toBe(RoleId.VOLUNTEER);
+  });
+
+  // Wire contract: no auth endpoint returns a plaintext identifier. The
+  // stored value is org-key sealed and only clients can open it (ADR-052).
+  it("auth responses carry sealed identifiers, never plaintext", async () => {
+    const authService = makeAuthService(tenantDb, orgContext.orgId);
+    await authService.register({
+      identifier: "wire-contract-user",
+      password: "wire-password-long-enough",
+      displayName: "Wire Contract",
+      roleId: RoleId.ADMIN,
+    });
+
+    loginLimiter.reset("127.0.0.1");
+    const { caller } = createTestCaller();
+    const loginResult = await caller.auth.login({
+      identifier: "wire-contract-user",
+      password: "wire-password-long-enough",
+    });
+    expect(loginResult.user).not.toHaveProperty("identifier");
+    expect(testUnseal(loginResult.user.encryptedIdentifier)).toBe(
+      "wire-contract-user",
+    );
+
+    const { caller: adminCaller } = createAuthedCaller(
+      { ...loginResult.user, isActive: true },
+      "wire-token",
+      true,
+    );
+    const meResult = await adminCaller.auth.me();
+    expect(meResult.user).not.toHaveProperty("identifier");
+
+    const users = await adminCaller.auth.listUsers();
+    const listed = users.find(
+      (u) => testUnseal(u.encryptedIdentifier) === "wire-contract-user",
+    );
+    expect(listed).toBeDefined();
+    expect(listed).not.toHaveProperty("identifier");
   });
 
   it("auth.me rejects unauthenticated caller", async () => {
@@ -447,7 +486,7 @@ describe.skipIf(!HAS_DB)("auth + org routers (DB integration)", () => {
       identifier: "xff-user",
       password: "xff-password-long-enough",
     });
-    expect(result.user.identifier).toBe("xff-user");
+    expect(testUnseal(result.user.encryptedIdentifier)).toBe("xff-user");
   });
 
   // --- register error path (throwAsTrpc on duplicate identifier) ---
@@ -506,7 +545,7 @@ describe.skipIf(!HAS_DB)("auth + org routers (DB integration)", () => {
       identifier: "no-ua-user",
       password: "no-ua-password-long-enough",
     });
-    expect(result.user.identifier).toBe("no-ua-user");
+    expect(testUnseal(result.user.encryptedIdentifier)).toBe("no-ua-user");
   });
 
   // --- Branch coverage: register with notificationEmail ---
@@ -529,7 +568,7 @@ describe.skipIf(!HAS_DB)("auth + org routers (DB integration)", () => {
       roleId: RoleId.VOLUNTEER,
     });
 
-    expect(result.user.identifier).toBe("email-user");
+    expect(testUnseal(result.user.encryptedIdentifier)).toBe("email-user");
     expect(result.user.encryptedDisplayName).toBeDefined();
   });
 

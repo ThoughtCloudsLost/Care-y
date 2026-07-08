@@ -186,6 +186,8 @@ vi.mock("@tanstack/svelte-query", () => ({
 vi.mock("$lib/crypto/context.js", () => ({
   getOrgDecryptCache: () => ({
     decrypt: () => "Decrypted Name",
+    decryptAsync: vi.fn().mockResolvedValue("decrypted-identifier"),
+    delete: vi.fn().mockReturnValue(true),
     get: vi.fn().mockReturnValue(undefined),
     has: vi.fn().mockReturnValue(false),
   }),

@@ -5,6 +5,8 @@
 -->
 <script lang="ts" module>
   export interface NewTicketPayload {
+    /** Ticket id the content was encrypted against (minted or reopen target). */
+    id: string;
     encryptedTitle: string;
     encryptedDescription: string;
     queueId: string;
@@ -40,6 +42,16 @@
     queues: { id: string; name: string }[];
     searchClients: (query: string) => Promise<ClientSearchResult[]>;
     phoneLookup?: (phone: string) => Promise<PhoneLookupResult>;
+    /**
+     * Resolves what ticket the create will land on for an existing client
+     * (open ticket blocks, closed ticket reopens under its old id). The
+     * AAD binds the ticket id at encrypt time, so the form must know the
+     * target id before encrypting (ADR-053).
+     */
+    resolveCreateTarget: (clientId: string) => Promise<{
+      openTicketId: string | null;
+      reopenTicketId: string | null;
+    }>;
     onsubmit: (payload: NewTicketPayload) => void;
     oncollision?: (info: CollisionInfo) => void;
     submitting?: boolean;
@@ -51,6 +63,7 @@
     queues,
     searchClients,
     phoneLookup,
+    resolveCreateTarget,
     onsubmit,
     oncollision,
     submitting = false,
@@ -99,12 +112,32 @@
     if (!validate() || busy) return;
     encrypting = true;
     try {
+      if (clientSelection === null) return;
+      const selection = clientSelection;
+
+      let ticketId: string;
+      if (selection.mode === "existing") {
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-argument -- ClientSelection is exported from a .svelte module script; eslint cannot resolve it and types clientId as error
+        const target = await resolveCreateTarget(selection.clientId);
+        if (target.openTicketId !== null) {
+          oncollision?.({
+            clientId: selection.clientId,
+            alias: selection.displayAlias,
+            openTicketId: target.openTicketId,
+          });
+          return;
+        }
+        ticketId = target.reopenTicketId ?? crypto.randomUUID();
+      } else {
+        ticketId = crypto.randomUUID();
+      }
+
       const fields: readonly { name: string; plaintext: string }[] = [
         { name: "title", plaintext: title.trim() },
         { name: "description", plaintext: description.trim() || "" },
       ];
 
-      const result = await bridge.createTicketEncryption(fields);
+      const result = await bridge.createTicketEncryption(ticketId, fields);
 
       const find = (name: string): string => {
         const field = result.encryptedFields.find((f) => f.name === name);
@@ -112,9 +145,8 @@
         return field.ciphertext;
       };
 
-      if (clientSelection === null) return;
-      const selection = clientSelection;
       onsubmit({
+        id: ticketId,
         encryptedTitle: find("title"),
         encryptedDescription: find("description"),
         queueId,

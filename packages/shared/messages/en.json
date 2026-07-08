@@ -157,6 +157,7 @@
   "error_cannot_assign_closed_ticket": "Cannot assign a closed {ticket}.",
   "error_cannot_take_closed_ticket": "Cannot take a closed {ticket}.",
   "error_ticket_already_open": "This {client} already has an open {ticket}.",
+  "error_ticket_create_target_changed": "The {ticket} for this {client} changed while you were writing. Please try again.",
   "error_token_expired": "The phone lookup token has expired. Please try again.",
   "error_ticket_already_assigned": "{Ticket} is already assigned.",
   "error_not_assigned_to_ticket": "You are not assigned to this {ticket}.",

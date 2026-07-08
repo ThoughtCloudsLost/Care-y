@@ -58,7 +58,7 @@ function createAuthed2faContext(): Context {
     },
     user: {
       id: USER_ID,
-      identifier: "volunteer",
+      encryptedIdentifier: "volunteer",
       encryptedDisplayName: "encrypted",
       encryptedPreferredLocale: null,
       roleId: RoleId.VOLUNTEER,

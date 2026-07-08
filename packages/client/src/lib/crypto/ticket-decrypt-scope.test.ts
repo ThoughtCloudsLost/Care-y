@@ -1,4 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
+import { followupSlot } from "@care-y/crypto";
 import { DECRYPT_ERROR_SENTINEL } from "./async-decrypt-cache.js";
 import {
   createTicketDecryptScope,
@@ -108,6 +109,8 @@ describe("TicketDecryptScope", () => {
       expect(deps.mocks.decryptContent).toHaveBeenCalledOnce();
       expect(deps.mocks.decryptContent).toHaveBeenCalledWith(
         FOLLOW_UP_ID,
+        TICKET_ID,
+        followupSlot(FOLLOW_UP_ID),
         KEY_WRAP,
         ENCRYPTED_CONTENT,
         undefined,
@@ -127,6 +130,8 @@ describe("TicketDecryptScope", () => {
 
       expect(deps.mocks.decryptContent).toHaveBeenCalledWith(
         FOLLOW_UP_ID,
+        TICKET_ID,
+        followupSlot(FOLLOW_UP_ID),
         KEY_WRAP,
         ENCRYPTED_CONTENT,
         { followUpKeyWrap: fuKeyWrap, ticketId: TICKET_ID },
@@ -141,6 +146,8 @@ describe("TicketDecryptScope", () => {
 
       expect(deps.mocks.decryptContent).toHaveBeenCalledWith(
         FOLLOW_UP_ID,
+        TICKET_ID,
+        followupSlot(FOLLOW_UP_ID),
         KEY_WRAP,
         ENCRYPTED_CONTENT,
         undefined,

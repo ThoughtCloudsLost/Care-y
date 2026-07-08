@@ -73,7 +73,7 @@ export interface AuthRouterDeps extends AuthServiceDeps {
 /** Safe response shape: no password_hash, no internal fields. */
 export interface UserResponse {
   readonly id: string;
-  readonly identifier: string;
+  readonly encryptedIdentifier: string; // base64 sealed ciphertext, client decrypts (ADR-052)
   readonly encryptedDisplayName: string; // base64 ciphertext, client decrypts
   readonly encryptedPreferredLocale: string | null; // base64 ciphertext, client decrypts
   readonly roleId: string;
@@ -84,7 +84,7 @@ export interface UserResponse {
 function toUserResponse(user: UserRecord): UserResponse {
   return {
     id: user.id,
-    identifier: user.identifier,
+    encryptedIdentifier: user.encryptedIdentifier,
     encryptedDisplayName: user.encryptedDisplayName,
     encryptedPreferredLocale: user.encryptedPreferredLocale,
     roleId: user.roleId,
@@ -327,7 +327,7 @@ export function createAuthRouter(deps: AuthRouterDeps) {
         const users = await svc.listAllForAdmin();
         return users.map((u) => ({
           id: u.id,
-          identifier: deps.encryptor.decrypt(u.encryptedIdentifier),
+          encryptedIdentifier: u.encryptedIdentifier.toString("base64"),
           encryptedDisplayName: u.encryptedDisplayName.toString("base64"),
           roleId: u.roleId,
           isActive: u.isActive,
@@ -379,16 +379,11 @@ export function createAuthRouter(deps: AuthRouterDeps) {
             )
             .mutation(
               withErrorWrapping(async ({ ctx, input }) => {
-                await ctx.org.tenantDb
-                  .updateTable("users")
-                  .set({
-                    encrypted_display_name: Buffer.from(
-                      input.encryptedDisplayName,
-                      "base64",
-                    ),
-                  })
-                  .where("id", "=", input.userId)
-                  .execute();
+                const authService = getAuthService(ctx.org, deps);
+                await authService.updateDisplayName(
+                  input.userId,
+                  Buffer.from(input.encryptedDisplayName, "base64"),
+                );
                 return { success: true as const };
               }),
             ),

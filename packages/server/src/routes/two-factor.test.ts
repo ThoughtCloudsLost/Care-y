@@ -187,7 +187,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
     function createAuthedCaller(
       user: {
         id: string;
-        identifier: string;
+        encryptedIdentifier: string;
         encryptedDisplayName: string;
         encryptedPreferredLocale: string | null;
         roleId: string;
@@ -222,7 +222,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
     function createVerifiedCaller(
       user: {
         id: string;
-        identifier: string;
+        encryptedIdentifier: string;
         encryptedDisplayName: string;
         encryptedPreferredLocale: string | null;
         roleId: string;
@@ -394,7 +394,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         });
         const userRecord = {
           id: user.id,
-          identifier: "email-send-user",
+          encryptedIdentifier: "email-send-user",
           encryptedDisplayName: "Email Send User",
           encryptedPreferredLocale: null,
           roleId: user.role_id,
@@ -430,7 +430,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         });
         const userRecord = {
           id: user.id,
-          identifier: "email-verify-user",
+          encryptedIdentifier: "email-verify-user",
           encryptedDisplayName: "Email Verify User",
           encryptedPreferredLocale: null,
           roleId: user.role_id,
@@ -589,7 +589,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         });
         const userRecord = {
           id: user.id,
-          identifier: "verify-email-user",
+          encryptedIdentifier: "verify-email-user",
           encryptedDisplayName: "Verify Email User",
           encryptedPreferredLocale: null,
           roleId: user.role_id,
@@ -671,7 +671,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         });
         const userRecord = {
           id: user.id,
-          identifier: "methods-remove-user",
+          encryptedIdentifier: "methods-remove-user",
           encryptedDisplayName: "Methods Remove User",
           encryptedPreferredLocale: null,
           roleId: user.role_id,

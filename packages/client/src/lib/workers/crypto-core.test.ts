@@ -10,7 +10,15 @@
  * handleZeroAll between logical groups.
  */
 
-import { describe, it, expect, beforeAll, beforeEach } from "vitest";
+import {
+  describe,
+  it,
+  expect,
+  beforeAll,
+  beforeEach,
+  afterEach,
+  vi,
+} from "vitest";
 import {
   getSodium,
   requireSodium,
@@ -18,8 +26,13 @@ import {
   decode,
   eciesEncrypt,
   encryptContent,
+  decryptContent,
   generateContentKey,
+  buildContentAad,
+  followupSlot,
+  type Ciphertext,
   type RistrettoPoint,
+  type SymmetricKey,
 } from "@care-y/crypto";
 import type {
   WorkerResponse,
@@ -45,6 +58,7 @@ import {
   handleZeroAll,
   handleRewrapResult,
   onStateTransition,
+  IDLE_SELF_ZERO_MS,
   type Sink,
 } from "./crypto-core.js";
 import { CryptoWorkerTestError } from "$lib/errors.js";
@@ -73,7 +87,11 @@ async function dispatchAndWait(
 ): Promise<WorkerResponse> {
   const countBefore = sinkMessages.length;
   dispatch(data as unknown as Parameters<typeof dispatch>[0]);
-  await new Promise((r) => setTimeout(r, 50));
+  if (vi.isFakeTimers()) {
+    await vi.advanceTimersByTimeAsync(50);
+  } else {
+    await new Promise((r) => setTimeout(r, 50));
+  }
   const response = sinkMessages[countBefore];
   if (!response || !("id" in response)) {
     throw new CryptoWorkerTestError("No WorkerResponse in sink after dispatch");
@@ -280,13 +298,19 @@ describe("crypto-core decrypt/encrypt roundtrip", () => {
     const sodium = requireSodium();
     const tk = generateContentKey();
     const plaintext = new TextEncoder().encode("secret message");
-    const ct = encryptContent(plaintext, tk);
+    const ct = encryptContent(
+      plaintext,
+      tk,
+      buildContentAad("t-decrypt", "title"),
+    );
     const wrap = eciesEncrypt(tk, decode(volPublicStr) as RistrettoPoint);
 
     const resp = (await dispatchAndWait({
       type: "decryptContent",
       id: 100,
       ticketId: "t-decrypt",
+      keyCacheId: "t-decrypt",
+      slot: "title",
       ephemeralPoint: encode(wrap.ephemeralPoint),
       nonce: encode(wrap.nonce),
       wrappedKey: encode(wrap.ciphertext),
@@ -298,17 +322,46 @@ describe("crypto-core decrypt/encrypt roundtrip", () => {
     sodium.memzero(tk);
   });
 
+  it("rejects content relocated to a different slot (AAD mismatch)", async () => {
+    const sodium = requireSodium();
+    const tk = generateContentKey();
+    const ct = encryptContent(
+      new TextEncoder().encode("bound to title"),
+      tk,
+      buildContentAad("t-relocate", "title"),
+    );
+    const wrap = eciesEncrypt(tk, decode(volPublicStr) as RistrettoPoint);
+
+    const resp = await dispatchAndWait({
+      type: "decryptContent",
+      id: 110,
+      ticketId: "t-relocate",
+      keyCacheId: "t-relocate",
+      slot: "description",
+      ephemeralPoint: encode(wrap.ephemeralPoint),
+      nonce: encode(wrap.nonce),
+      wrappedKey: encode(wrap.ciphertext),
+      ciphertext: encode(ct),
+    });
+
+    expect(resp.ok).toBe(false);
+    expect((resp as ErrorResponse).code).toBe("DECRYPT_FAILED");
+    sodium.memzero(tk);
+  });
+
   it("encrypts content using a cached tk", async () => {
     const sodium = requireSodium();
     const tk = generateContentKey();
     const text = new TextEncoder().encode("cache me");
-    const ct = encryptContent(text, tk);
+    const ct = encryptContent(text, tk, buildContentAad("t-enc", "title"));
     const wrap = eciesEncrypt(tk, decode(volPublicStr) as RistrettoPoint);
 
     await dispatchAndWait({
       type: "decryptContent",
       id: 101,
       ticketId: "t-enc",
+      keyCacheId: "t-enc",
+      slot: "title",
       ephemeralPoint: encode(wrap.ephemeralPoint),
       nonce: encode(wrap.nonce),
       wrappedKey: encode(wrap.ciphertext),
@@ -320,12 +373,18 @@ describe("crypto-core decrypt/encrypt roundtrip", () => {
       type: "encryptContent",
       id: 102,
       ticketId: "t-enc",
+      slot: followupSlot("fu-enc-1"),
       plaintext: "encrypt this",
     })) as EncryptContentResponse;
 
     expect(encResp.ok).toBe(true);
     expect(encResp.ciphertext).toBeDefined();
-    expect(decode(encResp.ciphertext).length).toBeGreaterThan(0);
+    const roundTripped = decryptContent(
+      decode(encResp.ciphertext) as Ciphertext,
+      tk as SymmetricKey,
+      buildContentAad("t-enc", followupSlot("fu-enc-1")),
+    );
+    expect(new TextDecoder().decode(roundTripped)).toBe("encrypt this");
     sodium.memzero(tk);
   });
 
@@ -344,13 +403,19 @@ describe("crypto-core decrypt/encrypt roundtrip", () => {
   it("evicts a cached tk", async () => {
     const sodium = requireSodium();
     const tk = generateContentKey();
-    const ct = encryptContent(new TextEncoder().encode("evict"), tk);
+    const ct = encryptContent(
+      new TextEncoder().encode("evict"),
+      tk,
+      buildContentAad("t-evict", "title"),
+    );
     const wrap = eciesEncrypt(tk, decode(volPublicStr) as RistrettoPoint);
 
     await dispatchAndWait({
       type: "decryptContent",
       id: 104,
       ticketId: "t-evict",
+      keyCacheId: "t-evict",
+      slot: "title",
       ephemeralPoint: encode(wrap.ephemeralPoint),
       nonce: encode(wrap.nonce),
       wrappedKey: encode(wrap.ciphertext),
@@ -407,6 +472,7 @@ describe("crypto-core createTicketKey", () => {
     const resp = (await dispatchAndWait({
       type: "createTicketKey",
       id: 200,
+      ticketId: "t-create-1",
       fields: [
         { name: "title", plaintext: "Test Title" },
         { name: "description", plaintext: "Test Description" },
@@ -601,6 +667,7 @@ describe("crypto-core unwrapTk", () => {
       type: "unwrapTk",
       id: 500,
       ticketId: "t-preload",
+      keyCacheId: "t-preload",
       ephemeralPoint: encode(wrap.ephemeralPoint),
       nonce: encode(wrap.nonce),
       wrappedKey: encode(wrap.ciphertext),
@@ -610,12 +677,14 @@ describe("crypto-core unwrapTk", () => {
 
     const sodium = requireSodium();
     const text = new TextEncoder().encode("after preload");
-    const ct = encryptContent(text, tk);
+    const ct = encryptContent(text, tk, buildContentAad("t-preload", "title"));
 
     const decResp = (await dispatchAndWait({
       type: "decryptContent",
       id: 501,
       ticketId: "t-preload",
+      keyCacheId: "t-preload",
+      slot: "title",
       ephemeralPoint: encode(wrap.ephemeralPoint),
       nonce: encode(wrap.nonce),
       wrappedKey: encode(wrap.ciphertext),
@@ -652,6 +721,7 @@ describe("crypto-core decryptAndRewrap", () => {
       type: "unwrapTk",
       id: 600,
       ticketId: "t-rewrap",
+      keyCacheId: "t-rewrap",
       ephemeralPoint: encode(wrapCanonical.ephemeralPoint),
       nonce: encode(wrapCanonical.nonce),
       wrappedKey: encode(wrapCanonical.ciphertext),
@@ -660,7 +730,11 @@ describe("crypto-core decryptAndRewrap", () => {
     const tkTemp = generateContentKey();
     const wrapTemp = eciesEncrypt(tkTemp, volPub);
     const tempPlaintext = new TextEncoder().encode("rewrap me");
-    const tempCt = encryptContent(tempPlaintext, tkTemp);
+    const tempCt = encryptContent(
+      tempPlaintext,
+      tkTemp,
+      buildContentAad("t-rewrap", followupSlot("fu-001")),
+    );
 
     sinkMessages = [];
     const resp = (await dispatchAndWait({
@@ -681,6 +755,15 @@ describe("crypto-core decryptAndRewrap", () => {
     expect(rewrapEvent).toBeDefined();
     expect(rewrapEvent?.followUpId).toBe("fu-001");
     expect(rewrapEvent?.ticketId).toBe("t-rewrap");
+
+    // The rewrap re-encrypts under the canonical tk with the SAME
+    // followup-slot AAD (ADR-053).
+    const reEncrypted = decryptContent(
+      decode(rewrapEvent!.encryptedContent) as Ciphertext,
+      canonicalTk as SymmetricKey,
+      buildContentAad("t-rewrap", followupSlot("fu-001")),
+    );
+    expect(new TextDecoder().decode(reEncrypted)).toBe("rewrap me");
 
     handleRewrapResult({
       kind: "rewrap-result",
@@ -1042,4 +1125,120 @@ describe("crypto-core orgDecryptBatch error branch", () => {
 
     sodium.memzero(orgSecret);
   });
+});
+
+describe("crypto-core idle self-zero", () => {
+  // Every test starts with a real-timer handleZeroAll: it resets module
+  // state AND cancels any idle timer armed under real timers by earlier
+  // tests. Only then are fake timers installed, so every timer the test
+  // advances was created through the fake clock.
+  beforeEach(() => {
+    handleZeroAll(-1, testSink);
+    sinkMessages = [];
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it(
+    "zeroes key material after the idle interval with no requests",
+    { timeout: 30_000 },
+    async () => {
+      const sodium = requireSodium();
+      await loginFlow("idle-zero-password-1", sodium.randombytes_buf(16));
+      expect(getState()).toBe("KEYED");
+
+      await vi.advanceTimersByTimeAsync(IDLE_SELF_ZERO_MS);
+
+      expect(getState()).toBe("READY");
+      expect(getPublicKeys().volPublic).toBeUndefined();
+    },
+  );
+
+  it(
+    "resets the idle clock on every request",
+    { timeout: 30_000 },
+    async () => {
+      const sodium = requireSodium();
+      await loginFlow("idle-zero-password-2", sodium.randombytes_buf(16));
+
+      await vi.advanceTimersByTimeAsync(IDLE_SELF_ZERO_MS - 60_000);
+      const resp = await dispatchAndWait({ type: "getVolPublic", id: 910 });
+      expect(resp.ok).toBe(true);
+
+      // One minute short of the interval since the last request: still keyed.
+      await vi.advanceTimersByTimeAsync(IDLE_SELF_ZERO_MS - 60_000);
+      expect(getState()).toBe("KEYED");
+
+      await vi.advanceTimersByTimeAsync(60_000);
+      expect(getState()).toBe("READY");
+    },
+  );
+
+  it(
+    "notifies the state transition callback when the idle zero fires",
+    { timeout: 30_000 },
+    async () => {
+      const sodium = requireSodium();
+      await loginFlow("idle-zero-password-3", sodium.randombytes_buf(16));
+
+      const transitions: SharedWorkerState[] = [];
+      onStateTransition((state) => {
+        transitions.push(state);
+      });
+
+      await vi.advanceTimersByTimeAsync(IDLE_SELF_ZERO_MS);
+
+      expect(transitions).toEqual(["READY"]);
+    },
+  );
+
+  it("does not zero or broadcast when no key material is held", async () => {
+    await dispatchAndWait({ type: "init", id: 920 });
+
+    const transitions: SharedWorkerState[] = [];
+    onStateTransition((state) => {
+      transitions.push(state);
+    });
+
+    await vi.advanceTimersByTimeAsync(IDLE_SELF_ZERO_MS * 2);
+
+    expect(transitions).toEqual([]);
+    expect(getState()).toBe("READY");
+  });
+
+  it(
+    "zeroes a stalled login flow before key derivation completes",
+    { timeout: 30_000 },
+    async () => {
+      await dispatchAndWait({ type: "init", id: 930 });
+
+      const pwBuf = new TextEncoder().encode("stalled-login-password");
+      const salt = requireSodium().randombytes_buf(16);
+      await dispatchAndWait({
+        type: "argon2id",
+        id: 931,
+        password: pwBuf.buffer,
+        salt: salt.buffer,
+      });
+
+      const transitions: SharedWorkerState[] = [];
+      onStateTransition((state) => {
+        transitions.push(state);
+      });
+
+      await vi.advanceTimersByTimeAsync(IDLE_SELF_ZERO_MS);
+
+      // The stretched key was zeroed and the state machine reset, so
+      // continuing the abandoned login flow fails.
+      expect(transitions).toEqual(["READY"]);
+      const resp = await dispatchAndWait({ type: "oprfBlind", id: 932 });
+      expect(resp.ok).toBe(false);
+      if (!resp.ok) {
+        expect(resp.code).toBe("INVALID_STATE");
+      }
+    },
+  );
 });

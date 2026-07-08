@@ -190,7 +190,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         },
         user: {
           id: dbRow.id,
-          identifier: dbRow.identifier_hash,
+          encryptedIdentifier: dbRow.identifier_hash,
           encryptedDisplayName: dbRow.encrypted_display_name.toString("base64"),
           encryptedPreferredLocale: null,
           roleId: dbRow.role_id,
@@ -276,6 +276,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         const caller = createAuthedCaller(user);
         const keyGen = randomUUID();
         const result = await caller.tickets.create({
+          id: crypto.randomUUID(),
           clientId: clientFixture.clientId,
           queueId: clientFixture.queueId,
           encryptedTitle: testEncryptedContent(0x01),
@@ -342,6 +343,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         const caller = createAuthedCaller(user);
 
         const followUp = await caller.tickets.createFollowUp({
+          id: crypto.randomUUID(),
           ticketId,
           encryptedContent: testEncryptedContent(),
           source: "volunteer",
@@ -359,6 +361,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         const caller = createAuthedCaller(user);
 
         await caller.tickets.createFollowUp({
+          id: crypto.randomUUID(),
           ticketId,
           encryptedContent: testEncryptedContent(),
           source: "volunteer",
@@ -378,6 +381,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         const caller = createAuthedCaller(user);
 
         const note = await caller.tickets.createFollowUp({
+          id: crypto.randomUUID(),
           ticketId,
           encryptedContent: testEncryptedContent(0x33),
           source: "volunteer",
@@ -394,6 +398,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         const caller = createAuthedCaller(user);
 
         const note = await caller.tickets.createFollowUp({
+          id: crypto.randomUUID(),
           ticketId,
           encryptedContent: testEncryptedContent(0x44),
           source: "volunteer",
@@ -414,6 +419,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         const caller = createAuthedCaller(user);
 
         const note = await caller.tickets.createFollowUp({
+          id: crypto.randomUUID(),
           ticketId,
           encryptedContent: testEncryptedContent(0x66),
           source: "volunteer",
@@ -437,6 +443,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         const caller = createUnauthCaller();
         await expectTrpcError(
           caller.tickets.createFollowUp({
+            id: crypto.randomUUID(),
             ticketId: randomUUID(),
             encryptedContent: testEncryptedContent(),
             source: "volunteer",
@@ -459,6 +466,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         const caller = createAuthedCaller(user);
 
         const note = await caller.tickets.createFollowUp({
+          id: crypto.randomUUID(),
           ticketId,
           encryptedContent: testEncryptedContent(0x77),
           source: "volunteer",

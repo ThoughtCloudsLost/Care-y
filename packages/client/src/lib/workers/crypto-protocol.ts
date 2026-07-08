@@ -70,7 +70,14 @@ export interface DeriveKeysRequest {
 export interface DecryptContentRequest {
   readonly type: "decryptContent";
   readonly id: number;
+  /** The ticket that owns the content: the first AAD component (ADR-053). */
   readonly ticketId: string;
+  /**
+   * Key-cache identity for the unwrapped key. Canonical ticket keys use
+   * the ticket id; per-followup temp keys use an isolated key so they
+   * never shadow the canonical entry.
+   */
+  readonly keyCacheId: string;
   /** ECIES ephemeral point, base64. */
   readonly ephemeralPoint: string;
   /** ECIES nonce, base64. */
@@ -79,6 +86,8 @@ export interface DecryptContentRequest {
   readonly wrappedKey: string;
   /** Encrypted content (nonce || ciphertext), base64. */
   readonly ciphertext: string;
+  /** Content slot the ciphertext was read from, e.g. "title" (ADR-053). */
+  readonly slot: string;
 }
 
 /**
@@ -119,6 +128,12 @@ export interface RewrapBlobRequest {
   /** Encrypted blob data (nonce || ciphertext), base64. */
   readonly ciphertext: string;
   readonly blobKey: string;
+  /**
+   * Attachments/recordings row id: the stable AAD component (ADR-053).
+   * The blobKey rotates when the server re-stores the rewrapped blob, so
+   * the AAD binds the row id instead.
+   */
+  readonly blobId: string;
   readonly category: "attachment" | "recording";
 }
 
@@ -128,6 +143,8 @@ export interface EncryptContentRequest {
   readonly ticketId: string;
   /** UTF-8 plaintext to encrypt. Worker uses the cached tk for this ticketId. */
   readonly plaintext: string;
+  /** Content slot the ciphertext will be stored in (ADR-053). */
+  readonly slot: string;
 }
 
 export interface EvictTkRequest {
@@ -194,6 +211,8 @@ export interface DecryptBlobRequest {
   readonly type: "decryptBlob";
   readonly id: number;
   readonly ticketId: string;
+  /** Key-cache identity (see DecryptContentRequest.keyCacheId). */
+  readonly keyCacheId: string;
   /** ECIES ephemeral point, base64. */
   readonly ephemeralPoint: string;
   /** ECIES nonce, base64. */
@@ -202,12 +221,16 @@ export interface DecryptBlobRequest {
   readonly wrappedKey: string;
   /** Encrypted binary blob (nonce || ciphertext), base64. */
   readonly ciphertext: string;
+  /** Content slot, normally "blob:<rowId>" (ADR-053). */
+  readonly slot: string;
 }
 
 export interface UnwrapTkRequest {
   readonly type: "unwrapTk";
   readonly id: number;
   readonly ticketId: string;
+  /** Key-cache identity (see DecryptContentRequest.keyCacheId). */
+  readonly keyCacheId: string;
   /** ECIES ephemeral point, base64. */
   readonly ephemeralPoint: string;
   /** ECIES nonce, base64. */
@@ -234,6 +257,13 @@ export interface RewrapTkRequest {
 export interface CreateTicketKeyRequest {
   readonly type: "createTicketKey";
   readonly id: number;
+  /**
+   * Client-generated ticket id (crypto.randomUUID). The ticket row does
+   * not exist yet, but the AAD must bind the id the row will be created
+   * with, so the client mints it and sends it with the create mutation
+   * (ADR-053).
+   */
+  readonly ticketId: string;
   readonly fields: readonly { name: string; plaintext: string }[];
 }
 

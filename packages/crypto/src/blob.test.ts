@@ -6,6 +6,7 @@ import {
   generateContentKey,
   encryptContent,
   decryptContent,
+  buildContentAad,
 } from "./content.js";
 import {
   getSodium,
@@ -14,6 +15,8 @@ import {
 } from "./sodium.js";
 import { DecryptionError } from "./errors.js";
 import type { Ciphertext } from "./types.js";
+
+const AAD = buildContentAad("ticket-blob-test", "blob:blob-key-1");
 
 describe("blob encryption", () => {
   let sodium: SodiumBackend;
@@ -28,8 +31,8 @@ describe("blob encryption", () => {
       const key = generateContentKey();
       const data = sodium.randombytes_buf(256);
 
-      const encrypted = encryptBlob(data, key);
-      const decrypted = decryptBlob(encrypted, key);
+      const encrypted = encryptBlob(data, key, AAD);
+      const decrypted = decryptBlob(encrypted, key, AAD);
 
       expect(decrypted).toEqual(data);
     });
@@ -38,8 +41,8 @@ describe("blob encryption", () => {
       const key = generateContentKey();
       const data = new Uint8Array(0);
 
-      const encrypted = encryptBlob(data, key);
-      const decrypted = decryptBlob(encrypted, key);
+      const encrypted = encryptBlob(data, key, AAD);
+      const decrypted = decryptBlob(encrypted, key, AAD);
 
       expect(decrypted).toEqual(data);
     });
@@ -50,8 +53,8 @@ describe("blob encryption", () => {
       const key = generateContentKey();
       const data = new TextEncoder().encode("cross-module-test");
 
-      const encrypted = encryptBlob(data, key);
-      const decrypted = decryptContent(encrypted, key);
+      const encrypted = encryptBlob(data, key, AAD);
+      const decrypted = decryptContent(encrypted, key, AAD);
 
       expect(decrypted).toEqual(data);
     });
@@ -60,8 +63,8 @@ describe("blob encryption", () => {
       const key = generateContentKey();
       const data = new TextEncoder().encode("reverse-interop-test");
 
-      const encrypted = encryptContent(data, key);
-      const decrypted = decryptBlob(encrypted, key);
+      const encrypted = encryptContent(data, key, AAD);
+      const decrypted = decryptBlob(encrypted, key, AAD);
 
       expect(decrypted).toEqual(data);
     });
@@ -73,15 +76,17 @@ describe("blob encryption", () => {
       const wrongKey = generateContentKey();
       const data = sodium.randombytes_buf(64);
 
-      const encrypted = encryptBlob(data, key);
-      expect(() => decryptBlob(encrypted, wrongKey)).toThrow(DecryptionError);
+      const encrypted = encryptBlob(data, key, AAD);
+      expect(() => decryptBlob(encrypted, wrongKey, AAD)).toThrow(
+        DecryptionError,
+      );
     });
 
     it("throws DecryptionError with truncated blob", () => {
       const key = generateContentKey();
       const truncated = new Uint8Array(10) as Ciphertext;
 
-      expect(() => decryptBlob(truncated, key)).toThrow(DecryptionError);
+      expect(() => decryptBlob(truncated, key, AAD)).toThrow(DecryptionError);
     });
   });
 
@@ -92,8 +97,8 @@ describe("blob encryption", () => {
         fc.property(
           fc.uint8Array({ minLength: 0, maxLength: 5_000 }),
           (data) => {
-            const encrypted = encryptBlob(data, key);
-            const decrypted = decryptBlob(encrypted, key);
+            const encrypted = encryptBlob(data, key, AAD);
+            const decrypted = decryptBlob(encrypted, key, AAD);
             expect(decrypted).toEqual(data);
           },
         ),

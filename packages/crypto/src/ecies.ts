@@ -13,12 +13,17 @@
  *   1. ephemeral = random scalar
  *   2. E = ephemeral * G  (ephemeral public point)
  *   3. shared = ephemeral * recipientPublic  (ECDH)
- *   4. K = HKDF(shared, "care-y-ecies-wrap-v1")
- *   5. nonce = randombytes(24)  (defense-in-depth; SOG-32)
+ *   4. K = HKDF(shared || E || recipientPublic, "care-y-ecies-wrap-v1")
+ *   5. nonce = randombytes(24)  (defense-in-depth)
  *   6. ciphertext = crypto_secretbox(plaintext, nonce, K)
- *   7. Zero shared, K, and ephemeral
+ *   7. Zero shared, ikm, K, and ephemeral
  *
- * Decrypt reverses steps 1-3 using the recipient's private key.
+ * The wrap key binds both public keys (E and recipientPublic), not just the
+ * raw shared secret. Binding the parties into the KDF matches standard ECIES
+ * guidance and ties each wrap to the exact ephemeral and recipient pair.
+ *
+ * Decrypt reverses steps 1-3, deriving recipientPublic from the private scalar
+ * so the same binding is reconstructed without changing the call signature.
  *
  * Nonce reuse across wraps is harmless because each wrap uses a unique
  * ephemeral scalar, producing a unique derived key K. The nonce provides
@@ -35,7 +40,9 @@
 
 import { requireSodium } from "./sodium.js";
 import { hkdfDerive32 } from "./hkdf.js";
-import { DecryptionError } from "./errors.js";
+import { concatBytes } from "./bytes.js";
+import { zeroAll } from "./mem.js";
+import { DecryptionError, InvalidKeyError } from "./errors.js";
 import { assertKeyLength, assertInputLength } from "./validation.js";
 import {
   type RistrettoPoint,
@@ -64,20 +71,38 @@ export function eciesEncrypt(
     "Recipient public key",
   );
 
-  // 1-2. Ephemeral keypair
-  const ephemeral = sodium.crypto_core_ristretto255_scalar_random();
-  const ephemeralPoint = sodium.crypto_scalarmult_ristretto255_base(ephemeral);
-
-  // 3. ECDH shared secret
-  const shared = sodium.crypto_scalarmult_ristretto255(
-    ephemeral,
-    recipientPublic,
-  );
-
-  // 4. Domain-separated key derivation
-  const wrapKey = hkdfDerive32(shared, HKDF_LABELS.ECIES_WRAP);
+  let ephemeral: Uint8Array | null = null;
+  let shared: Uint8Array | null = null;
+  let ikm: Uint8Array | null = null;
+  let wrapKey: Uint8Array | null = null;
 
   try {
+    // 1-2. Ephemeral keypair
+    ephemeral = sodium.crypto_core_ristretto255_scalar_random();
+    const ephemeralPoint =
+      sodium.crypto_scalarmult_ristretto255_base(ephemeral);
+
+    // 3. ECDH shared secret. A wrong-length key is rejected above; an
+    // identity or non-canonical point makes scalarmult fail, which we
+    // surface as a typed key error rather than a raw sodium error.
+    let sharedSecret: Uint8Array;
+    try {
+      sharedSecret = sodium.crypto_scalarmult_ristretto255(
+        ephemeral,
+        recipientPublic,
+      );
+    } catch {
+      throw new InvalidKeyError(
+        "Recipient public key is not a valid ristretto255 point",
+      );
+    }
+    shared = sharedSecret;
+
+    // 4. Domain-separated key derivation, binding both public keys so the
+    // wrap key is tied to this exact ephemeral and recipient pair.
+    ikm = concatBytes(sharedSecret, ephemeralPoint, recipientPublic);
+    wrapKey = hkdfDerive32(ikm, HKDF_LABELS.ECIES_WRAP);
+
     // 5. Random nonce (defense-in-depth)
     const nonce = sodium.randombytes_buf(sodium.crypto_secretbox_NONCEBYTES);
 
@@ -90,9 +115,7 @@ export function eciesEncrypt(
       ciphertext,
     };
   } finally {
-    sodium.memzero(ephemeral);
-    sodium.memzero(shared);
-    sodium.memzero(wrapKey);
+    zeroAll(ephemeral, shared, ikm, wrapKey);
   }
 }
 
@@ -122,24 +145,45 @@ export function eciesDecrypt(
   );
   assertInputLength(nonce, sodium.crypto_secretbox_NONCEBYTES, "Nonce");
 
-  // 1. ECDH
-  const shared = sodium.crypto_scalarmult_ristretto255(
-    recipientPrivate,
-    ephemeralPoint,
-  );
+  let shared: Uint8Array | null = null;
+  let ikm: Uint8Array | null = null;
+  let wrapKey: Uint8Array | null = null;
 
-  // 2. Derive wrap key
-  const wrapKey = hkdfDerive32(shared, HKDF_LABELS.ECIES_WRAP);
-
-  // 3. Decrypt, zeroing intermediates on all exit paths
   try {
-    return sodium.crypto_secretbox_open_easy(ciphertext, nonce, wrapKey);
-  } catch {
-    throw new DecryptionError(
-      "ECIES decryption failed: wrong key or tampered ciphertext",
-    );
+    // 1. ECDH shared secret, plus the recipient public key derived from the
+    // private scalar so the wrap key binding matches eciesEncrypt. A malformed
+    // ephemeral point or a zero private scalar makes scalarmult fail; surface
+    // it as a decryption failure so a bad point is indistinguishable from a
+    // wrong key.
+    let sharedSecret: Uint8Array;
+    let recipientPublic: Uint8Array;
+    try {
+      sharedSecret = sodium.crypto_scalarmult_ristretto255(
+        recipientPrivate,
+        ephemeralPoint,
+      );
+      recipientPublic =
+        sodium.crypto_scalarmult_ristretto255_base(recipientPrivate);
+    } catch {
+      throw new DecryptionError(
+        "ECIES decryption failed: wrong key or tampered ciphertext",
+      );
+    }
+    shared = sharedSecret;
+
+    // 2. Derive wrap key from the shared secret bound to both public keys.
+    ikm = concatBytes(sharedSecret, ephemeralPoint, recipientPublic);
+    wrapKey = hkdfDerive32(ikm, HKDF_LABELS.ECIES_WRAP);
+
+    // 3. Decrypt
+    try {
+      return sodium.crypto_secretbox_open_easy(ciphertext, nonce, wrapKey);
+    } catch {
+      throw new DecryptionError(
+        "ECIES decryption failed: wrong key or tampered ciphertext",
+      );
+    }
   } finally {
-    sodium.memzero(shared);
-    sodium.memzero(wrapKey);
+    zeroAll(shared, ikm, wrapKey);
   }
 }

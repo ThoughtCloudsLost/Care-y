@@ -12,6 +12,9 @@
 
 import { describe, it, expect, vi, beforeAll, beforeEach } from "vitest";
 import {
+  buildContentAad,
+  followupSlot,
+  blobSlot,
   getSodium,
   requireSodium,
   encode,
@@ -280,7 +283,11 @@ describe("crypto.worker", () => {
       // Encrypt test content with a fresh tk, wrap tk to the Worker's volPublic
       const tk = generateContentKey();
       const plaintext = new TextEncoder().encode("Hello, encrypted world!");
-      const ciphertext = encryptContent(plaintext, tk);
+      const ciphertext = encryptContent(
+        plaintext,
+        tk,
+        buildContentAad("ticket-abc", "title"),
+      );
 
       const wrap = eciesEncrypt(tk, decodedVP as RistrettoPoint);
 
@@ -289,6 +296,8 @@ describe("crypto.worker", () => {
         type: "decryptContent",
         id: 10,
         ticketId: "ticket-abc",
+        keyCacheId: "ticket-abc",
+        slot: "title",
         ephemeralPoint: encode(wrap.ephemeralPoint),
         nonce: encode(wrap.nonce),
         wrappedKey: encode(wrap.ciphertext),
@@ -311,7 +320,11 @@ describe("crypto.worker", () => {
 
       const tkForCache = generateContentKey();
       const text = new TextEncoder().encode("Cache test");
-      const ct = encryptContent(text, tkForCache);
+      const ct = encryptContent(
+        text,
+        tkForCache,
+        buildContentAad("ticket-cache", "title"),
+      );
 
       const wrap = eciesEncrypt(tkForCache, decodedVP as RistrettoPoint);
 
@@ -320,6 +333,8 @@ describe("crypto.worker", () => {
         type: "decryptContent",
         id: 20,
         ticketId: "ticket-cache",
+        keyCacheId: "ticket-cache",
+        slot: "title",
         ephemeralPoint: encode(wrap.ephemeralPoint),
         nonce: encode(wrap.nonce),
         wrappedKey: encode(wrap.ciphertext),
@@ -330,13 +345,19 @@ describe("crypto.worker", () => {
 
       // Encrypt new content with the same tk
       const text2 = new TextEncoder().encode("Second via cache");
-      const ct2 = encryptContent(text2, tkForCache);
+      const ct2 = encryptContent(
+        text2,
+        tkForCache,
+        buildContentAad("ticket-cache", "title"),
+      );
 
       // Second decrypt: cache hit (ECIES unwrap skipped internally)
       const resp2 = (await sendAndWait({
         type: "decryptContent",
         id: 21,
         ticketId: "ticket-cache",
+        keyCacheId: "ticket-cache",
+        slot: "title",
         ephemeralPoint: encode(wrap.ephemeralPoint),
         nonce: encode(wrap.nonce),
         wrappedKey: encode(wrap.ciphertext),
@@ -354,6 +375,7 @@ describe("crypto.worker", () => {
         type: "encryptContent",
         id: 30,
         ticketId: "ticket-cache",
+        slot: "title",
         plaintext: "Encrypt me!",
       })) as EncryptContentResponse;
 
@@ -463,7 +485,11 @@ describe("crypto.worker", () => {
 
       const tk = generateContentKey();
       const text = new TextEncoder().encode("Rewrap test");
-      const ct = encryptContent(text, tk);
+      const ct = encryptContent(
+        text,
+        tk,
+        buildContentAad("ticket-rewrap", "title"),
+      );
       const wrap = eciesEncrypt(tk, decodedVP as RistrettoPoint);
 
       // Decrypt to cache the tk
@@ -471,6 +497,8 @@ describe("crypto.worker", () => {
         type: "decryptContent",
         id: 70,
         ticketId: "ticket-rewrap",
+        keyCacheId: "ticket-rewrap",
+        slot: "title",
         ephemeralPoint: encode(wrap.ephemeralPoint),
         nonce: encode(wrap.nonce),
         wrappedKey: encode(wrap.ciphertext),
@@ -525,6 +553,7 @@ describe("crypto.worker", () => {
         type: "unwrapTk",
         id: 1101,
         ticketId: "ticket-unwrap",
+        keyCacheId: "ticket-unwrap",
         ephemeralPoint: encode(wrap.ephemeralPoint),
         nonce: encode(wrap.nonce),
         wrappedKey: encode(wrap.ciphertext),
@@ -537,6 +566,7 @@ describe("crypto.worker", () => {
         type: "encryptContent",
         id: 1102,
         ticketId: "ticket-unwrap",
+        slot: "title",
         plaintext: "Cached via unwrapTk",
       })) as EncryptContentResponse;
 
@@ -554,6 +584,7 @@ describe("crypto.worker", () => {
         type: "unwrapTk",
         id: 1112,
         ticketId: "ticket-fail",
+        keyCacheId: "ticket-fail",
         ephemeralPoint: encode(new Uint8Array(32)),
         nonce: encode(new Uint8Array(24)),
         wrappedKey: encode(new Uint8Array(48)),
@@ -631,7 +662,11 @@ describe("crypto.worker", () => {
       // Create canonical tk and cache it by decrypting some ticket content
       const canonicalTk = generateContentKey();
       const ticketText = new TextEncoder().encode("Ticket title");
-      const ticketCt = encryptContent(ticketText, canonicalTk);
+      const ticketCt = encryptContent(
+        ticketText,
+        canonicalTk,
+        buildContentAad("ticket-rewrap-flow", "title"),
+      );
       const canonicalWrap = eciesEncrypt(
         canonicalTk,
         decodedVP as RistrettoPoint,
@@ -641,6 +676,8 @@ describe("crypto.worker", () => {
         type: "decryptContent",
         id: 2001,
         ticketId: "ticket-rewrap-flow",
+        keyCacheId: "ticket-rewrap-flow",
+        slot: "title",
         ephemeralPoint: encode(canonicalWrap.ephemeralPoint),
         nonce: encode(canonicalWrap.nonce),
         wrappedKey: encode(canonicalWrap.ciphertext),
@@ -650,7 +687,11 @@ describe("crypto.worker", () => {
       // Create tk_temp and encrypt follow-up content with it
       const tkTemp = generateContentKey();
       const fuText = new TextEncoder().encode("Follow-up needing re-wrap");
-      const fuCt = encryptContent(fuText, tkTemp);
+      const fuCt = encryptContent(
+        fuText,
+        tkTemp,
+        buildContentAad("ticket-rewrap-flow", followupSlot("fu-rewrap-1")),
+      );
       const tempWrap = eciesEncrypt(tkTemp, decodedVP as RistrettoPoint);
 
       posted.length = 0;
@@ -680,6 +721,7 @@ describe("crypto.worker", () => {
       const roundtrip = decryptContent(
         reEncryptedBytes as Ciphertext,
         canonicalTk as SymmetricKey,
+        buildContentAad("ticket-rewrap-flow", followupSlot("fu-rewrap-1")),
       );
       const roundtripText = new TextDecoder().decode(roundtrip);
       expect(roundtripText).toBe("Follow-up needing re-wrap");
@@ -697,7 +739,11 @@ describe("crypto.worker", () => {
 
       const tkTemp2 = generateContentKey();
       const fuText2 = new TextEncoder().encode("Duplicate attempt");
-      const fuCt2 = encryptContent(fuText2, tkTemp2);
+      const fuCt2 = encryptContent(
+        fuText2,
+        tkTemp2,
+        buildContentAad("ticket-rewrap-flow", followupSlot("fu-rewrap-1")),
+      );
 
       // Get volPublic for wrapping
       const vpResp = (await sendAndWait({
@@ -765,6 +811,7 @@ describe("crypto.worker", () => {
       const ticketCt = encryptContent(
         new TextEncoder().encode("ticket"),
         canonicalTk,
+        buildContentAad("ticket-blob", "title"),
       );
       const canonicalWrap = eciesEncrypt(
         canonicalTk,
@@ -774,6 +821,8 @@ describe("crypto.worker", () => {
         type: "decryptContent",
         id: 2101,
         ticketId: "ticket-blob",
+        keyCacheId: "ticket-blob",
+        slot: "title",
         ephemeralPoint: encode(canonicalWrap.ephemeralPoint),
         nonce: encode(canonicalWrap.nonce),
         wrappedKey: encode(canonicalWrap.ciphertext),
@@ -785,6 +834,7 @@ describe("crypto.worker", () => {
       const fuCt = encryptContent(
         new TextEncoder().encode("follow-up body"),
         tkTemp,
+        buildContentAad("ticket-blob", followupSlot("fu-blob-1")),
       );
       const tempWrap = eciesEncrypt(tkTemp, decodedVP as RistrettoPoint);
       await sendAndWait({
@@ -800,7 +850,11 @@ describe("crypto.worker", () => {
 
       // Encrypt a blob with tk_temp
       const blobData = sodium.randombytes_buf(1024);
-      const blobCt = encryptContent(blobData, tkTemp);
+      const blobCt = encryptContent(
+        blobData,
+        tkTemp,
+        buildContentAad("ticket-blob", blobSlot("blob-row-1")),
+      );
 
       // rewrapBlob: tk_temp -> canonical tk
       const resp = (await sendAndWait({
@@ -810,6 +864,7 @@ describe("crypto.worker", () => {
         ticketId: "ticket-blob",
         ciphertext: encode(blobCt),
         blobKey: "blob-key-001",
+        blobId: "blob-row-1",
         category: "recording",
       })) as RewrapBlobResponse;
 
@@ -822,6 +877,7 @@ describe("crypto.worker", () => {
       const roundtrip = decryptContent(
         reEncryptedBytes as Ciphertext,
         canonicalTk as SymmetricKey,
+        buildContentAad("ticket-blob", blobSlot("blob-row-1")),
       );
       expect(roundtrip).toEqual(blobData);
 
@@ -839,6 +895,7 @@ describe("crypto.worker", () => {
         ticketId: "ticket-blob",
         ciphertext: encode(new Uint8Array(40)),
         blobKey: "blob-key-bad",
+        blobId: "blob-row-bad",
         category: "attachment",
       });
       expect(resp.ok).toBe(false);
@@ -888,6 +945,7 @@ describe("crypto.worker", () => {
       const resp = (await sendAndWait({
         type: "createTicketKey",
         id: 3001,
+        ticketId: "ticket-new-roundtrip",
         fields: [
           { name: "title", plaintext: "Test ticket title" },
           { name: "description", plaintext: "Detailed description here" },
@@ -915,6 +973,7 @@ describe("crypto.worker", () => {
         type: "unwrapTk",
         id: 3002,
         ticketId: "ticket-new-roundtrip",
+        keyCacheId: "ticket-new-roundtrip",
         ephemeralPoint: resp.keyWrap.ephemeralPoint,
         nonce: resp.keyWrap.nonce,
         wrappedKey: resp.keyWrap.wrappedKey,
@@ -927,6 +986,8 @@ describe("crypto.worker", () => {
           type: "decryptContent",
           id: 3003,
           ticketId: "ticket-new-roundtrip",
+          keyCacheId: "ticket-new-roundtrip",
+          slot: field.name,
           ephemeralPoint: resp.keyWrap.ephemeralPoint,
           nonce: resp.keyWrap.nonce,
           wrappedKey: resp.keyWrap.wrappedKey,
@@ -941,6 +1002,8 @@ describe("crypto.worker", () => {
         type: "decryptContent",
         id: 3004,
         ticketId: "ticket-new-roundtrip",
+        keyCacheId: "ticket-new-roundtrip",
+        slot: "title",
         ephemeralPoint: resp.keyWrap.ephemeralPoint,
         nonce: resp.keyWrap.nonce,
         wrappedKey: resp.keyWrap.wrappedKey,
@@ -952,6 +1015,8 @@ describe("crypto.worker", () => {
         type: "decryptContent",
         id: 3005,
         ticketId: "ticket-new-roundtrip",
+        keyCacheId: "ticket-new-roundtrip",
+        slot: "description",
         ephemeralPoint: resp.keyWrap.ephemeralPoint,
         nonce: resp.keyWrap.nonce,
         wrappedKey: resp.keyWrap.wrappedKey,
@@ -964,6 +1029,7 @@ describe("crypto.worker", () => {
       const resp = (await sendAndWait({
         type: "createTicketKey",
         id: 3010,
+        ticketId: "ticket-distinct",
         fields: [
           { name: "field_a", plaintext: "same content" },
           { name: "field_b", plaintext: "same content" },

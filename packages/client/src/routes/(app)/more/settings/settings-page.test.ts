@@ -199,7 +199,7 @@ describe("Settings page - Security section", () => {
     meQueryState.data = {
       user: {
         id: "user-123",
-        identifier: "testuser",
+        encryptedIdentifier: "dGVzdA==",
         encryptedDisplayName: "dGVzdA==",
       },
     };
