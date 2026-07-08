@@ -12,6 +12,7 @@ import {
   type SodiumBackend,
 } from "./sodium.js";
 import { DecryptionError } from "./errors.js";
+import { flipBit, containsSubarray } from "./test-utils.js";
 
 /**
  * Property-based security invariants for client-side branding encryption.
@@ -29,29 +30,6 @@ import { DecryptionError } from "./errors.js";
  *
  * Complements the roundtrip and wrong-key examples in branding.test.ts.
  */
-
-/** Copy buf and flip one bit, addressed by absolute bit index. */
-function flipBit(buf: Uint8Array, bitIndex: number): Uint8Array {
-  const out = buf.slice();
-  const byteIndex = Math.floor(bitIndex / 8);
-  out[byteIndex] = (out[byteIndex] ?? 0) ^ (1 << (bitIndex % 8));
-  return out;
-}
-
-/** True when needle occurs as a contiguous byte run inside haystack. */
-function containsSubarray(haystack: Uint8Array, needle: Uint8Array): boolean {
-  for (let i = 0; i + needle.length <= haystack.length; i++) {
-    let match = true;
-    for (let j = 0; j < needle.length; j++) {
-      if (haystack[i + j] !== needle[j]) {
-        match = false;
-        break;
-      }
-    }
-    if (match) return true;
-  }
-  return false;
-}
 
 describe("branding security invariants", () => {
   let sodium: SodiumBackend;
