@@ -167,12 +167,15 @@
         color: rgba(255, 255, 255, 0.85);
       }
 
-      /* --- Default theme --- */
+      /* --- Default theme (Ledger) ---
+         Splash backgrounds must match the --paper values in
+         styles/themes/default.css or the handoff from splash to
+         first paint visibly flashes. */
       .theme-default.light #splash {
-        background: #f9fafb;
+        background: #f5f1e8;
       }
       .theme-default.dark #splash {
-        background: #000000;
+        background: #1a1713;
       }
       .theme-default #splash-logo {
         border-radius: 20px;

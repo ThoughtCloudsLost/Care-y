@@ -1,59 +1,162 @@
-/* Default theme: stock Konsta UI look with system fonts, no riso effects.
-   No Konsta surface overrides (lets Konsta's built-in @theme defaults pass through). */
+/* Default theme: The Caseworker's Ledger. Ink on warm paper.
+   Canonical spec: docs/design-ref/ledger-design-language.md (ADR-055).
+   The Konsta shell wears these tokens through the surface seam below;
+   the redesign itself lives in content views (ADR-023 boundary). */
+
+@import "../fonts.css";
 
 .theme-default {
-  --theme-font-display: system-ui, sans-serif;
-  --theme-font-ui: system-ui, sans-serif;
+  --theme-font-display: "Fraunces", Georgia, serif;
+  --theme-font-ui: "Atkinson Hyperlegible", system-ui, sans-serif;
 
-  --ink: #1a1a1a;
-  --muted: #888888;
+  /* ── Ink and rules (light) ── */
+  --ink: #272319;
+  --ink-2: #4e4738;
+  --muted: #857b66;
+  --hair: #dcd5c3;
+  --hair-2: #beb49b;
 
-  /* Konsta iOS surface overrides */
-  --color-ios-light-surface: #f9fafb;
-  --color-ios-light-surface-1: #f0f1f3;
-  --color-ios-light-surface-1-shade: #e2e4e7;
-  --color-ios-light-surface-1-tint: #f9fafb;
-  --color-ios-light-surface-2: #e8eaed;
-  --color-ios-light-surface-3: #f0f1f3;
-  --color-ios-light-surface-variant: #e8eaed;
+  /* ── Semantic hues ──
+     --danger duplicates --urgent on purpose: destructive actions and
+     urgent priority are different meaning slots that happen to share a
+     hue today. Retuning one must never drag the other. Soft tints are
+     color-mix derivations so they track their base token (the brand
+     tint follows runtime org branding automatically). */
+  --urgent: #a33224;
+  --care: #7c5e00;
+  --danger: #a33224;
+  --urgent-soft: color-mix(in srgb, var(--urgent) 8%, transparent);
+  --care-soft: color-mix(in srgb, var(--care) 8%, transparent);
+  --brand-soft: color-mix(in srgb, var(--brand-fill) 10%, transparent);
 
-  --color-ios-dark-surface: #000000;
-  --color-ios-dark-surface-1: #1c1c1d;
-  --color-ios-dark-surface-1-shade: #0a0a0a;
-  --color-ios-dark-surface-1-tint: #2c2c2c;
-  --color-ios-dark-surface-2: #2c2c2c;
-  --color-ios-dark-surface-3: #1c1c1d;
-  --color-ios-dark-surface-variant: #2c2c2c;
+  /* ── Unbranded brand defaults: warm taupe (pen, not alarm) ──
+     Runtime org branding overrides these via inline style on <html>.
+     Contrast against the worst Ledger surfaces is locked by
+     konsta-palette.test.ts; adjust by lightness steps if these change. */
+  --brand-primary: #6e6553;
+  --brand-text: #635a48;
+  --brand-fill: #6e6553;
+  --brand-on: #fff9f0;
 
-  /* Konsta Material surface overrides */
-  --color-md-light-surface-1: #f0f1f3;
-  --color-md-light-surface-2: #e8eaed;
-  --color-md-light-surface-3: #f0f1f3;
-  --color-md-light-surface-variant: #e8eaed;
-  --color-md-dark-surface: #000000;
-  --color-md-dark-surface-1: #1c1c1d;
-  --color-md-dark-surface-2: #2c2c2c;
-  --color-md-dark-surface-3: #1c1c1d;
-  --color-md-dark-surface-variant: #2c2c2c;
+  /* ── Konsta seam: canonical surface hexes ──
+     The shell (navbar, tabbar, sheets, list groups) resolves to paper
+     through Konsta's own variables; nothing in shell markup changes.
+     The splash backgrounds in app.html (.theme-default.light/.dark
+     #splash) must stay in sync with the paper values here. */
+  --color-ios-light-surface: #f5f1e8; /* paper */
+  --color-ios-light-surface-1: #fcfaf3; /* raised */
+  --color-ios-light-surface-1-shade: #ede7d8; /* paper-deep (pressed step) */
+  --color-ios-light-surface-1-tint: #fcfaf3;
+  --color-ios-light-surface-2: #ede7d8; /* paper-deep (recessed wells) */
+  --color-ios-light-surface-3: #fcfaf3;
+  --color-ios-light-surface-variant: #ede7d8;
 
-  /* Semantic aliases (resolve through Konsta vars) */
+  /* Dark: Konsta elevates overlays by LIGHTENING (its dark surface-2 and
+     -1-tint tier), while the app's recessed wells DARKEN. So surface-2
+     and -1-tint carry a lighter overlay step (#2f2a1e) and the canonical
+     dark paper-deep (#141210) lives on -1-shade. Opposite polarity from
+     the light block; this is intentional, not a typo. */
+  --color-ios-dark-surface: #1a1713; /* paper */
+  --color-ios-dark-surface-1: #252017; /* raised */
+  --color-ios-dark-surface-1-shade: #141210; /* paper-deep */
+  --color-ios-dark-surface-1-tint: #2f2a1e; /* elevated overlay step */
+  --color-ios-dark-surface-2: #2f2a1e; /* elevated overlay step */
+  --color-ios-dark-surface-3: #252017;
+  --color-ios-dark-surface-variant: #2f2a1e;
+
+  /* Material mirrors iOS */
+  --color-md-light-surface-1: #fcfaf3;
+  --color-md-light-surface-2: #ede7d8;
+  --color-md-light-surface-3: #fcfaf3;
+  --color-md-light-surface-variant: #ede7d8;
+  --color-md-dark-surface: #1a1713;
+  --color-md-dark-surface-1: #252017;
+  --color-md-dark-surface-2: #2f2a1e;
+  --color-md-dark-surface-3: #252017;
+  --color-md-dark-surface-variant: #2f2a1e;
+
+  /* Warm-paper glass for the iOS liquid-glass shell. Translucency is
+     eyeballed on device at the foundation review; adjust alpha there. */
+  --color-ios-light-glass: rgba(252, 250, 243, 0.78);
+  --color-ios-dark-glass: rgba(37, 32, 23, 0.55);
+
+  /* ── Ledger canonical names, aliased through the seam ── */
   --paper: var(--color-ios-light-surface);
-  --surface-1: var(--color-ios-light-surface-1);
-  --surface-2: var(--color-ios-light-surface-2);
+  --raised: var(--color-ios-light-surface-1);
+  --paper-deep: var(--color-ios-light-surface-1-shade);
+
+  /* Legacy aliases: existing consumers keep working; they migrate to
+     canonical names view by view and these retire when the last one goes. */
+  --surface-1: var(--raised);
+  --surface-2: var(--paper-deep);
+  --divider: var(--hair);
+  --card-bg: var(--raised);
+  --card-border: var(--hair);
+  --card-shadow: none;
+
+  /* Konsta runtime vars. --k-page-bg and --k-surface-1/2 are read by app
+     code with hardcoded #fff/#1c1c1e fallbacks (sticky date headers,
+     shell, pull-to-refresh); defining them here keeps those off paper.
+     --k-color-red is defined nowhere else (verified: not in Konsta dist,
+     no other definition in src), so this re-point claims the slot for
+     destructive text until consumers migrate to --danger. */
+  --k-hairline-color: var(--hair);
+  --k-color-red: var(--danger);
+  --k-page-bg: var(--paper);
+  --k-surface-1: var(--raised);
+  --k-surface-2: var(--raised);
+
+  /* ── Ledger type scale ── */
+  --text-xs: 0.71875rem; /* 11.5px */
+  --text-sm: 0.78125rem; /* 12.5px */
+  --text-base: 0.84375rem; /* 13.5px */
+  --text-md: 0.96875rem; /* 15.5px */
+  --text-lg: 1.0625rem; /* 17px */
+}
+
+/* REQUIRED companion block. The type scale above sits on .theme-default,
+   which out-cascades shared.css's desktop :root overrides (equal
+   specificity, later import order). Without this block the desktop
+   bumps silently die. Keep in sync with shared.css
+   @media (min-width: 1024px) :root. */
+@media (min-width: 1024px) {
+  .theme-default {
+    --text-base: 0.90625rem; /* 14.5px */
+    --text-md: 1.03125rem; /* 16.5px */
+  }
 }
 
 .theme-default.dark {
-  --ink: #e5e5e5;
-  --muted: #888888;
+  --ink: #efe8d8;
+  --ink-2: #cfc5ae;
+  --muted: #978c76;
+  --hair: #373226;
+  --hair-2: #514935;
+  --urgent: #e06a55;
+  --care: #d9a93f;
+  --danger: #e06a55;
+  --urgent-soft: color-mix(in srgb, var(--urgent) 12%, transparent);
+  --care-soft: color-mix(in srgb, var(--care) 12%, transparent);
+  --brand-soft: color-mix(in srgb, var(--brand-fill) 12%, transparent);
+  --brand-text: #a89b80;
+
   --paper: var(--color-ios-dark-surface);
-  --surface-1: var(--color-ios-dark-surface-1);
-  --surface-2: var(--color-ios-dark-surface-2);
+  --raised: var(--color-ios-dark-surface-1);
+  --paper-deep: var(--color-ios-dark-surface-1-shade);
 }
 
-/* Divider: standard 1px separator instead of riso 4px thick rule */
+/* Display roles: Fraunces with the variable opsz axis engaged. */
+.theme-default .heading-display,
+.theme-default .heading-compact {
+  font-family: var(--theme-font-display);
+  font-optical-sizing: auto;
+  font-weight: 600;
+}
+
+/* Hairline rule instead of the riso 4px thick divider */
 .theme-default .divider-brand {
   height: 1px;
-  background: var(--muted);
+  background: var(--hair-2);
 }
 
 /* Default theme overrides skeleton-bar to use the pulse animation

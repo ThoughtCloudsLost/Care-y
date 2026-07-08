@@ -271,7 +271,7 @@
   }
 
   .voicemail-row:not(:last-child) {
-    border-bottom: 1px solid var(--surface-2);
+    border-bottom: 1px solid var(--hair, var(--surface-2));
     padding-bottom: 0.5rem;
     margin-bottom: 0.25rem;
   }
