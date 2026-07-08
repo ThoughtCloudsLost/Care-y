@@ -89,6 +89,7 @@
   --text-sm: 0.75rem; /* 12px - meta, captions, timestamps */
   --text-base: 0.8125rem; /* 13px - body text, descriptions */
   --text-md: 0.9375rem; /* 15px - card titles, client aliases */
+  --text-lg: 1.0625rem; /* 17px - overlay titles (dialog, action sheet) */
 }
 
 /* ── Desktop responsive tokens ── */
