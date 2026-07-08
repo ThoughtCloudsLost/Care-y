@@ -6,6 +6,7 @@ import {
   followUpTypeSchema,
   createTicketInputSchema,
   createFollowUpInputSchema,
+  resolveCreateTargetInputSchema,
   ticketListInputSchema,
   uploadAttachmentInputSchema,
   mergeClientsInputSchema,
@@ -37,6 +38,7 @@ function fakeBase64(n: number): string {
 
 const VALID_UUID = "550e8400-e29b-41d4-a716-446655440000";
 const VALID_UUID_2 = "660e8400-e29b-41d4-a716-446655440001";
+const VALID_UUID_3 = "770e8400-e29b-41d4-a716-446655440002";
 const VALID_BASE64 = fakeBase64(32);
 
 describe("ticketStatusSchema", () => {
@@ -108,6 +110,7 @@ describe("createTicketInputSchema", () => {
   };
 
   const validInput = {
+    id: VALID_UUID_3,
     queueId: VALID_UUID,
     clientId: VALID_UUID_2,
     encryptedTitle: VALID_BASE64,
@@ -151,6 +154,17 @@ describe("createTicketInputSchema", () => {
     ).toBe(false);
   });
 
+  it("rejects a non-UUID client-minted id", () => {
+    // The id is generated in the browser and bound into the content AAD
+    // before the row exists; the server accepts only UUID-shaped ids.
+    expect(
+      createTicketInputSchema.safeParse({
+        ...validInput,
+        id: "not-a-uuid",
+      }).success,
+    ).toBe(false);
+  });
+
   it("rejects non-base64 encrypted fields", () => {
     expect(
       createTicketInputSchema.safeParse({
@@ -163,6 +177,7 @@ describe("createTicketInputSchema", () => {
 
 describe("createFollowUpInputSchema", () => {
   const validInput = {
+    id: VALID_UUID_3,
     ticketId: VALID_UUID,
     encryptedContent: VALID_BASE64,
     source: "volunteer" as const,
@@ -189,6 +204,31 @@ describe("createFollowUpInputSchema", () => {
       expect(result.data.isPrivate).toBe(true);
       expect(result.data.mentionedPseudonyms).toEqual(["user-abc"]);
     }
+  });
+
+  it("rejects a non-UUID client-minted id", () => {
+    expect(
+      createFollowUpInputSchema.safeParse({
+        ...validInput,
+        id: "not-a-uuid",
+      }).success,
+    ).toBe(false);
+  });
+});
+
+describe("resolveCreateTargetInputSchema", () => {
+  it("accepts a UUID clientId", () => {
+    expect(
+      resolveCreateTargetInputSchema.safeParse({ clientId: VALID_UUID })
+        .success,
+    ).toBe(true);
+  });
+
+  it("rejects a non-UUID clientId", () => {
+    expect(
+      resolveCreateTargetInputSchema.safeParse({ clientId: "not-a-uuid" })
+        .success,
+    ).toBe(false);
   });
 });
 
