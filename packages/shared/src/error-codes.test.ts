@@ -58,6 +58,7 @@ describe("ErrorCode", () => {
       "FOLLOWUP_NOT_OWNED",
       "CANNOT_FOLLOWUP_CLOSED_TICKET",
       "TICKET_ALREADY_OPEN",
+      "TICKET_CREATE_TARGET_CHANGED",
       "TOKEN_EXPIRED",
 
       // Clients / merge
