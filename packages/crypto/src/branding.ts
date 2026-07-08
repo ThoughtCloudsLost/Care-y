@@ -31,6 +31,12 @@ import { assertKeyLength } from "./validation.js";
 import { concatBytes, encodeLabel } from "./bytes.js";
 import { BRANDING_LABEL, type SymmetricKey, type Ciphertext } from "./types.js";
 
+// Fixed associated data for the branding payload. The branding key is
+// single-purpose (one payload per org), so no per-slot binding is needed;
+// the constant still domain-separates branding ciphertext from ticket
+// content slots (ADR-053).
+const BRANDING_AAD = encodeLabel("care-y-client-branding-aad-v1");
+
 /**
  * Derive the client-side branding key from an org's public key.
  *
@@ -74,7 +80,7 @@ export function encryptClientBranding(
 ): Ciphertext {
   const key = deriveClientBrandingKey(orgPublicKey);
   try {
-    return encryptContent(payload, key);
+    return encryptContent(payload, key, BRANDING_AAD);
   } finally {
     requireSodium().memzero(key);
   }
@@ -95,7 +101,7 @@ export function decryptClientBranding(
 ): Uint8Array {
   const key = deriveClientBrandingKey(orgPublicKey);
   try {
-    return decryptContent(ciphertext, key);
+    return decryptContent(ciphertext, key, BRANDING_AAD);
   } finally {
     requireSodium().memzero(key);
   }

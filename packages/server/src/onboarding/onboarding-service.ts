@@ -136,7 +136,8 @@ export function createOnboardingService(
       const sealedBox = createSealedBoxEncryptor(orgPublicKey);
 
       const identifierHash = indexer.hash(input.identifier, input.orgId);
-      const encryptedIdentifier = encryptor.encrypt(input.identifier);
+      // ADR-052: identifier is org-key tier (sealed box, server-blind)
+      const encryptedIdentifier = sealedBox.seal(input.identifier);
       const encryptedDisplayName = sealedBox.seal(input.displayName);
       const encryptedPreferredLocale =
         input.preferredLocale !== undefined

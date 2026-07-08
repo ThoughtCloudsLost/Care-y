@@ -154,6 +154,37 @@ describe("HKDF-SHA512", () => {
     });
   });
 
+  describe("output buffer isolation", () => {
+    // The returned key must be a standalone allocation, not a view into the
+    // larger working buffer. A view would leave adjacent derived bytes in the
+    // backing store and would not be fully cleared when the caller zeroes it.
+    it("returns a standalone buffer for a single-block output", () => {
+      const ikm = new Uint8Array(32);
+      ikm.fill(0x11);
+      const info = new TextEncoder().encode("isolation");
+      const result = hkdf(ikm, info, 32);
+      expect(result.byteOffset).toBe(0);
+      expect(result.buffer.byteLength).toBe(32);
+    });
+
+    it("returns a standalone buffer for a non block-multiple length", () => {
+      const ikm = new Uint8Array(32);
+      ikm.fill(0x22);
+      const info = new TextEncoder().encode("isolation");
+      const result = hkdf(ikm, info, 82);
+      expect(result.byteOffset).toBe(0);
+      expect(result.buffer.byteLength).toBe(82);
+    });
+
+    it("hkdfDerive32 returns a standalone 32-byte buffer", () => {
+      const ikm = new Uint8Array(32);
+      ikm.fill(0x33);
+      const result = hkdfDerive32(ikm, "isolation-label");
+      expect(result.byteOffset).toBe(0);
+      expect(result.buffer.byteLength).toBe(32);
+    });
+  });
+
   describe("determinism and domain separation", () => {
     it("same inputs produce identical output", () => {
       const ikm = new Uint8Array(32);

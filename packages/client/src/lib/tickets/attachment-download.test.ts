@@ -153,6 +153,7 @@ describe("downloadDecryptedAttachment", () => {
     );
     expect(deps.bridge.decryptBlob).toHaveBeenCalledWith(
       "t-1",
+      "blob:att-1",
       "ep",
       "nc",
       "wk",

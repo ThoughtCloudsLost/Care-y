@@ -286,7 +286,7 @@ describe("requireAuth middleware (authedProcedure)", () => {
         },
         user: {
           id: "u1",
-          identifier: "testuser",
+          encryptedIdentifier: "testuser",
           encryptedDisplayName: "Test",
           encryptedPreferredLocale: null,
           roleId: "volunteer",
@@ -343,7 +343,7 @@ describe("require2fa middleware (authed2faProcedure)", () => {
         },
         user: {
           id: "u1",
-          identifier: "testuser",
+          encryptedIdentifier: "testuser",
           encryptedDisplayName: "Test",
           encryptedPreferredLocale: null,
           roleId: "volunteer",
@@ -371,7 +371,7 @@ describe("require2fa middleware (authed2faProcedure)", () => {
         },
         user: {
           id: "u1",
-          identifier: "testuser",
+          encryptedIdentifier: "testuser",
           encryptedDisplayName: "Test",
           encryptedPreferredLocale: null,
           roleId: "volunteer",
@@ -402,7 +402,7 @@ describe("withErrorWrapping resolver wrapper", () => {
     },
     user: {
       id: "u1",
-      identifier: "testuser",
+      encryptedIdentifier: "testuser",
       encryptedDisplayName: "Test",
       encryptedPreferredLocale: null,
       roleId: "volunteer",
@@ -475,7 +475,7 @@ describe("withErrorWrapping resolver wrapper", () => {
       },
       user: {
         id: "u1",
-        identifier: "testuser",
+        encryptedIdentifier: "testuser",
         encryptedDisplayName: "Test",
         encryptedPreferredLocale: null,
         roleId: "volunteer",

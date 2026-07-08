@@ -26,7 +26,7 @@ import { createInMemoryRateLimiter } from "../ratelimit/rate-limiter.js";
 import { createPowVerifier } from "../crypto/pow.js";
 import {
   createOprfEvaluateService,
-  createFailureTracker,
+  createAttemptTracker,
   getDelayMs,
   type OprfEvaluateServiceDeps,
   type OprfEvaluateRequest,
@@ -136,26 +136,23 @@ function makeRequest(
 // ---------------------------------------------------------------------------
 
 describe("getDelayMs", () => {
-  it("returns 0 for 0-3 failures", () => {
+  it("returns 0 for 0-5 attempts (below the delay floor)", () => {
     expect(getDelayMs(0)).toBe(0);
-    expect(getDelayMs(1)).toBe(0);
-    expect(getDelayMs(2)).toBe(0);
     expect(getDelayMs(3)).toBe(0);
+    expect(getDelayMs(5)).toBe(0);
   });
 
-  it("returns 2000 for 4-6 failures", () => {
-    expect(getDelayMs(4)).toBe(2_000);
-    expect(getDelayMs(5)).toBe(2_000);
+  it("returns 2000 for 6-7 attempts", () => {
     expect(getDelayMs(6)).toBe(2_000);
+    expect(getDelayMs(7)).toBe(2_000);
   });
 
-  it("returns 5000 for 7-9 failures", () => {
-    expect(getDelayMs(7)).toBe(5_000);
+  it("returns 5000 for 8-9 attempts", () => {
     expect(getDelayMs(8)).toBe(5_000);
     expect(getDelayMs(9)).toBe(5_000);
   });
 
-  it("returns 10000 for 10+ failures", () => {
+  it("returns 10000 for 10+ attempts", () => {
     expect(getDelayMs(10)).toBe(10_000);
     expect(getDelayMs(15)).toBe(10_000);
     expect(getDelayMs(100)).toBe(10_000);
@@ -227,21 +224,11 @@ describe("OprfEvaluateService", () => {
     );
   });
 
-  it("requires proof-of-work after 3 OPRF failures", async () => {
+  it("requires proof-of-work once attempts reach the threshold, even when every evaluation succeeds", async () => {
     const auditLogger = createSpyAuditLogger();
-    const failingEvaluator: OprfEvaluator = {
-      async evaluate(): Promise<Uint8Array> {
-        throw new OprfError("simulated failure");
-      },
-      close(): void {
-        /* noop */
-      },
-    };
-
     const service = createOprfEvaluateService(
       makeServiceDeps({
         auditLogger,
-        evaluator: failingEvaluator,
         userRateLimiter: createInMemoryRateLimiter({
           windowMs: 900_000,
           maxRequests: 20,
@@ -249,12 +236,17 @@ describe("OprfEvaluateService", () => {
       }),
     );
 
-    // 3 evaluator failures
-    for (let i = 0; i < 3; i++) {
-      await expect(service.evaluate(makeRequest())).rejects.toThrow(OprfError);
+    // Four successful evaluations stay below the threshold.
+    for (let i = 0; i < 4; i++) {
+      await expect(service.evaluate(makeRequest())).resolves.toEqual({
+        evaluated: VALID_BLINDED_ELEMENT,
+      });
     }
 
-    // 4th request without PoW triggers PowRequiredError
+    // The fifth attempt reaches the threshold and requires proof-of-work, even
+    // though none of the prior evaluations failed. This is the core of the fix:
+    // an oblivious OPRF cannot tell a correct guess from a wrong one, so a
+    // successful evaluation must not exempt the caller from the gate.
     await expect(service.evaluate(makeRequest())).rejects.toThrow(
       PowRequiredError,
     );
@@ -263,21 +255,11 @@ describe("OprfEvaluateService", () => {
     );
   });
 
-  it("rejects invalid proof-of-work solution with ValidationError", async () => {
+  it("rejects an invalid proof-of-work solution with ValidationError", async () => {
     const auditLogger = createSpyAuditLogger();
-    const failingEvaluator: OprfEvaluator = {
-      async evaluate(): Promise<Uint8Array> {
-        throw new OprfError("simulated failure");
-      },
-      close(): void {
-        /* noop */
-      },
-    };
-
     const service = createOprfEvaluateService(
       makeServiceDeps({
         auditLogger,
-        evaluator: failingEvaluator,
         userRateLimiter: createInMemoryRateLimiter({
           windowMs: 900_000,
           maxRequests: 20,
@@ -285,12 +267,12 @@ describe("OprfEvaluateService", () => {
       }),
     );
 
-    // 3 evaluator failures
-    for (let i = 0; i < 3; i++) {
-      await expect(service.evaluate(makeRequest())).rejects.toThrow(OprfError);
+    // Four successful evaluations bring the window to the threshold boundary.
+    for (let i = 0; i < 4; i++) {
+      await service.evaluate(makeRequest());
     }
 
-    // Submit with bogus PoW
+    // The fifth attempt is gated; a bogus PoW solution is rejected.
     await expect(
       service.evaluate(
         makeRequest({
@@ -330,7 +312,7 @@ describe("OprfEvaluateService", () => {
     expect(auditLogger.calls).toHaveLength(0);
   });
 
-  it("increments failure counter and rethrows when evaluator throws", async () => {
+  it("logs an audit failure and rethrows when the evaluator throws", async () => {
     const auditLogger = createSpyAuditLogger();
     const service = createOprfEvaluateService(
       makeServiceDeps({
@@ -367,6 +349,51 @@ describe("OprfEvaluateService", () => {
     await service.evaluate(makeRequest());
 
     expect(auditLogger.calls).toHaveLength(0);
+  });
+
+  it("adminEvaluate does not require proof-of-work at the threshold", async () => {
+    const auditLogger = createSpyAuditLogger();
+    const service = createOprfEvaluateService(
+      makeServiceDeps({
+        auditLogger,
+        userRateLimiter: createInMemoryRateLimiter({
+          windowMs: 900_000,
+          maxRequests: 20,
+        }),
+      }),
+    );
+
+    // Five admin evaluations for the same user reach the attempt threshold but
+    // never trigger the PoW gate: the admin client cannot solve challenges, and
+    // the caller is already authenticated with MANAGE_KEYS.
+    for (let i = 0; i < 5; i++) {
+      await expect(service.adminEvaluate(makeRequest())).resolves.toEqual({
+        evaluated: VALID_BLINDED_ELEMENT,
+      });
+    }
+    expect(auditLogger.calls.some((c) => c.reason === "pow_required")).toBe(
+      false,
+    );
+  });
+
+  it("adminEvaluate is still bounded by the per-user rate limit", async () => {
+    const service = createOprfEvaluateService(
+      makeServiceDeps({
+        userRateLimiter: createInMemoryRateLimiter({
+          windowMs: 900_000,
+          maxRequests: 2,
+        }),
+      }),
+    );
+
+    await service.adminEvaluate(makeRequest());
+    await service.adminEvaluate(makeRequest());
+
+    // The third call is rejected: the admin path is counted and rate-limited,
+    // so a stolen MANAGE_KEYS session cannot use it as an unthrottled oracle.
+    await expect(service.adminEvaluate(makeRequest())).rejects.toThrow(
+      RateLimitError,
+    );
   });
 });
 
@@ -462,7 +489,7 @@ describe("OPRF tRPC route", () => {
       },
       user: {
         id: "d4e5f6a7-b8c9-4d0e-af2a-3b4c5d6e7f80",
-        identifier: "session-user",
+        encryptedIdentifier: "session-user",
         encryptedDisplayName: "Session User",
         encryptedPreferredLocale: null,
         roleId: "volunteer",
@@ -567,7 +594,7 @@ describe("OPRF adminEvaluate route", () => {
       },
       user: {
         id: "admin-user-id",
-        identifier: "admin-hash",
+        encryptedIdentifier: "admin-hash",
         encryptedDisplayName: "QWRtaW4=",
         encryptedPreferredLocale: null,
         roleId: RoleId.ADMIN,
@@ -602,7 +629,7 @@ describe("OPRF adminEvaluate route", () => {
     const { caller } = buildAdminCaller({
       user: {
         id: "vol-user-id",
-        identifier: "vol-hash",
+        encryptedIdentifier: "vol-hash",
         encryptedDisplayName: "Vm9s",
         encryptedPreferredLocale: null,
         roleId: RoleId.VOLUNTEER,
@@ -647,22 +674,22 @@ describe("OPRF adminEvaluate route", () => {
 });
 
 // ---------------------------------------------------------------------------
-// 4. createFailureTracker (unit tests for cleanup interval + dispose)
+// 4. createAttemptTracker (unit tests for cleanup interval + dispose)
 // ---------------------------------------------------------------------------
 
-describe("createFailureTracker", () => {
+describe("createAttemptTracker", () => {
   afterEach(() => {
     vi.useRealTimers();
   });
 
   it("check returns 0 for unknown user", () => {
-    const tracker = createFailureTracker();
+    const tracker = createAttemptTracker();
     expect(tracker.check("unknown")).toBe(0);
     tracker.dispose();
   });
 
   it("increment returns current failure count", () => {
-    const tracker = createFailureTracker();
+    const tracker = createAttemptTracker();
     expect(tracker.increment("user-a")).toBe(1);
     expect(tracker.increment("user-a")).toBe(2);
     expect(tracker.increment("user-a")).toBe(3);
@@ -670,7 +697,7 @@ describe("createFailureTracker", () => {
   });
 
   it("reset clears failures for a user", () => {
-    const tracker = createFailureTracker();
+    const tracker = createAttemptTracker();
     tracker.increment("user-a");
     tracker.increment("user-a");
     tracker.reset("user-a");
@@ -680,7 +707,7 @@ describe("createFailureTracker", () => {
 
   it("expires failures outside the window", () => {
     let time = 1000;
-    const tracker = createFailureTracker(5000, () => time);
+    const tracker = createAttemptTracker(5000, () => time);
 
     tracker.increment("user-a");
     tracker.increment("user-a");
@@ -695,7 +722,7 @@ describe("createFailureTracker", () => {
   it("cleanup interval removes fully expired entries", () => {
     vi.useFakeTimers();
     let time = 1000;
-    const tracker = createFailureTracker(5000, () => time);
+    const tracker = createAttemptTracker(5000, () => time);
 
     tracker.increment("user-a");
     tracker.increment("user-b");
@@ -715,7 +742,7 @@ describe("createFailureTracker", () => {
   it("cleanup interval retains entries with recent timestamps", () => {
     vi.useFakeTimers();
     let time = 1000;
-    const tracker = createFailureTracker(5000, () => time);
+    const tracker = createAttemptTracker(5000, () => time);
 
     tracker.increment("user-a");
     time = 3000;
@@ -732,7 +759,7 @@ describe("createFailureTracker", () => {
 
   it("dispose stops the cleanup interval", () => {
     vi.useFakeTimers();
-    const tracker = createFailureTracker();
+    const tracker = createAttemptTracker();
     tracker.dispose();
 
     // Advancing timers should not throw (interval was cleared)

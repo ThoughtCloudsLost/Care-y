@@ -12,6 +12,7 @@
   decrypted content in memory.
 -->
 <script lang="ts">
+  import { blobSlot } from "@care-y/crypto";
   import * as m from "$lib/paraglide/messages.js";
   import { trpc } from "$lib/trpc/index.js";
   import DecryptPlaceholder from "$lib/components/DecryptPlaceholder.svelte";
@@ -59,6 +60,7 @@
 
         const decryptedBuf = await bridge.decryptBlob(
           ticketId,
+          blobSlot(attachmentId),
           keyWrap.ephemeralPoint,
           keyWrap.nonce,
           keyWrap.wrappedKey,

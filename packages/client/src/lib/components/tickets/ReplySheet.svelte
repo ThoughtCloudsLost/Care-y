@@ -8,6 +8,7 @@
 <script lang="ts">
   import { Messages, MessagesTitle } from "konsta/svelte";
   import * as m from "$lib/paraglide/messages.js";
+  import { followupSlot } from "@care-y/crypto";
   import { trpc } from "$lib/trpc/index.js";
   import {
     getCryptoBridge,
@@ -183,8 +184,14 @@
     const savedDraft = draftText;
     draftText = "";
 
+    const followUpId = crypto.randomUUID();
+
     try {
-      const encryptedContent = await cryptoBridge.encrypt(ticketId, text);
+      const encryptedContent = await cryptoBridge.encrypt(
+        ticketId,
+        followupSlot(followUpId),
+        text,
+      );
 
       // Show optimistic bubble.
       optimisticMessage = {
@@ -195,6 +202,7 @@
       };
 
       await ticketRouter.createFollowUp.mutate({
+        id: followUpId,
         ticketId,
         encryptedContent,
         source: "volunteer",
@@ -250,6 +258,8 @@
           {@const fuResult = resolveAsyncDecrypt(
             followUpCache.decryptContent(
               fu.id,
+              ticketId,
+              followupSlot(fu.id),
               fu.keyWrap,
               fu.encryptedContent,
             ),

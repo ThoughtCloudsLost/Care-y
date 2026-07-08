@@ -32,7 +32,7 @@ import { ErrorCode, RoleId } from "@care-y/shared";
 
 export interface UserRecord {
   readonly id: string;
-  readonly identifier: string; // still decrypted server-side (Tier 2, needed for login response)
+  readonly encryptedIdentifier: string; // base64 sealed ciphertext, client decrypts with org key (ADR-052)
   readonly encryptedDisplayName: string; // base64 ciphertext, client decrypts with org key
   readonly encryptedPreferredLocale: string | null; // base64 ciphertext, client decrypts with org key
   readonly roleId: string;
@@ -134,13 +134,10 @@ export interface AuthService {
 export const SESSION_COOKIE_NAME = "care_y_session" as const;
 export const SESSION_MAX_AGE_MS = 24 * 60 * 60 * 1000; // 24 hours
 
-function toUserRecord(
-  row: Selectable<UsersTable>,
-  encryptor: FieldEncryptor,
-): UserRecord {
+function toUserRecord(row: Selectable<UsersTable>): UserRecord {
   return {
     id: row.id,
-    identifier: encryptor.decrypt(row.encrypted_identifier),
+    encryptedIdentifier: row.encrypted_identifier.toString("base64"),
     encryptedDisplayName: row.encrypted_display_name.toString("base64"),
     encryptedPreferredLocale:
       row.encrypted_preferred_locale?.toString("base64") ?? null,
@@ -328,7 +325,9 @@ export function createAuthService(
     roleId: string;
   }): Promise<Selectable<UsersTable>> {
     const identifierHash = indexer.hash(input.identifier, orgId);
-    const encryptedIdentifier = encryptor.encrypt(input.identifier);
+    // ADR-052: identifier is org-key tier (sealed box, server-blind).
+    // Login never reads it back; lookup goes through identifier_hash.
+    const encryptedIdentifier = sealedBox.seal(input.identifier);
     // ADR-016: display_name is Tier 1 (sealed box with org public key)
     const encryptedDisplayName = sealedBox.seal(input.displayName);
     const encryptedNotificationAddr =
@@ -389,7 +388,7 @@ export function createAuthService(
       throw new NotFoundError(ErrorCode.USER_NOT_FOUND);
     }
 
-    return toUserRecord(row, encryptor);
+    return toUserRecord(row);
   }
 
   async function setUserActive(
@@ -421,7 +420,7 @@ export function createAuthService(
           .execute();
       }
 
-      return toUserRecord(updated, encryptor);
+      return toUserRecord(updated);
     });
   }
 
@@ -435,7 +434,7 @@ export function createAuthService(
   return {
     async register(input): Promise<UserRecord> {
       const row = await insertUserRow(input);
-      return toUserRecord(row, encryptor);
+      return toUserRecord(row);
     },
 
     async login(input): Promise<{ user: UserRecord; session: SessionData }> {
@@ -448,7 +447,7 @@ export function createAuthService(
         input.ipAddress,
         input.userAgent,
       );
-      return { user: toUserRecord(verifiedRow, encryptor), session };
+      return { user: toUserRecord(verifiedRow), session };
     },
 
     async logout(sessionToken: string): Promise<void> {
@@ -480,14 +479,14 @@ export function createAuthService(
         userAgent,
       );
       return {
-        user: toUserRecord(userRow, encryptor),
+        user: toUserRecord(userRow),
         session: updatedSession,
       };
     },
 
     async findUserById(userId: string): Promise<UserRecord | null> {
       const row = await findUserRowById(userId);
-      return row ? toUserRecord(row, encryptor) : null;
+      return row ? toUserRecord(row) : null;
     },
 
     countActiveAdmins,
@@ -553,7 +552,7 @@ export function createAuthService(
       }
 
       const newIdentifierHash = indexer.hash(newIdentifier, orgId);
-      const newEncryptedIdentifier = encryptor.encrypt(newIdentifier);
+      const newEncryptedIdentifier = sealedBox.seal(newIdentifier);
 
       try {
         const result = await db

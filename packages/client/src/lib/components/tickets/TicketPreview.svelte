@@ -10,6 +10,7 @@
   Text truncated to single-line with ellipsis.
 -->
 <script lang="ts">
+  import { followupSlot } from "@care-y/crypto";
   import {
     Mic,
     Image as ImageIcon,
@@ -36,6 +37,7 @@
   import { followUpKind } from "$lib/tickets/follow-up-utils.js";
 
   interface Props {
+    ticketId: string;
     followUps: RawFollowUpPreview[] | undefined;
     /** Allow 2-line wrapping per bubble (list mode). */
     multiline?: boolean;
@@ -46,6 +48,7 @@
   }
 
   let {
+    ticketId,
     followUps,
     multiline = false,
     followUpCount,
@@ -118,6 +121,8 @@
       {@const kind = followUpKind(fu)}
       {@const raw = followUpCache.decryptContent(
         fu.id,
+        ticketId,
+        followupSlot(fu.id),
         fu.keyWrap,
         fu.encryptedContent,
       )}

@@ -119,7 +119,11 @@ describe("createCloseResolution", () => {
       cr.start();
       await cr.submit("My note text");
 
-      expect(encrypt).toHaveBeenCalledWith("ticket-1", "My note text");
+      expect(encrypt).toHaveBeenCalledWith(
+        "ticket-1",
+        expect.stringMatching(/^followup:/),
+        "My note text",
+      );
       expect(createFollowUpMutate).toHaveBeenCalledWith(
         expect.objectContaining({
           ticketId: "ticket-1",

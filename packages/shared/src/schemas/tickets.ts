@@ -62,6 +62,8 @@ export type KeyWrap = z.infer<typeof keyWrapSchema>;
 
 export const createTicketInputSchema = z
   .object({
+    /** Client-minted ticket id the content AAD was bound to (ADR-053). */
+    id: z.uuid(),
     queueId: z.uuid(),
     clientId: z.uuid().optional(),
     clientToken: z.uuid().optional(),
@@ -77,6 +79,8 @@ export const createTicketInputSchema = z
 export type CreateTicketInput = z.infer<typeof createTicketInputSchema>;
 
 export const createFollowUpInputSchema = z.object({
+  /** Client-minted follow-up id the content AAD was bound to (ADR-053). */
+  id: z.uuid(),
   ticketId: z.uuid(),
   encryptedContent: base64String("encryptedContent"),
   source: followUpSourceSchema,
@@ -86,6 +90,13 @@ export const createFollowUpInputSchema = z.object({
   noteTypeId: z.uuid().optional(),
 });
 export type CreateFollowUpInput = z.infer<typeof createFollowUpInputSchema>;
+
+export const resolveCreateTargetInputSchema = z.object({
+  clientId: z.uuid(),
+});
+export type ResolveCreateTargetInput = z.infer<
+  typeof resolveCreateTargetInputSchema
+>;
 
 export const updateReadCursorInputSchema = z.object({
   ticketId: z.uuid(),

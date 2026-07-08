@@ -7,8 +7,9 @@
  * Passphrase-based escrow encryption for offline key backup.
  *
  * Protects OPRF keys and org keys for disaster recovery. Uses Argon2id
- * with heavier-than-login parameters (256 MB / 4 iterations / 4 parallelism)
- * since escrow decryption runs on an admin workstation, not a browser.
+ * with heavier-than-login parameters (256 MB / 4 iterations; libsodium fixes
+ * the lane count at 1) since escrow decryption runs on an admin workstation,
+ * not a browser.
  *
  * All operations use Uint8Array exclusively. No JS string conversion of key
  * material (SOG-33). The caller converts from user input via TextEncoder.
@@ -115,7 +116,7 @@ export function decryptWithPassphrase(
 
 /**
  * Escrow serialization version byte.
- * v1 = Argon2id(256MB/4i/4p) + XSalsa20-Poly1305.
+ * v1 = Argon2id(256MB/4i) + XSalsa20-Poly1305.
  * If params or cipher change, bump the version and branch in deserialize.
  */
 const ESCROW_VERSION = 0x01;

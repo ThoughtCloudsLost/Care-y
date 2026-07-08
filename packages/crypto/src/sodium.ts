@@ -40,6 +40,27 @@ export interface SodiumBackend {
   readonly crypto_secretbox_KEYBYTES: number;
   readonly crypto_secretbox_MACBYTES: number;
 
+  // --- AEAD (XChaCha20-Poly1305-ietf, for content with associated data) ---
+  // Combined mode: encrypt returns ciphertext with the 16-byte tag appended.
+  // secret_nonce (nsec) is unused by this construction and always null.
+  crypto_aead_xchacha20poly1305_ietf_encrypt(
+    message: Uint8Array,
+    additional_data: Uint8Array | null,
+    secret_nonce: Uint8Array | null,
+    public_nonce: Uint8Array,
+    key: Uint8Array,
+  ): Uint8Array;
+  crypto_aead_xchacha20poly1305_ietf_decrypt(
+    secret_nonce: Uint8Array | null,
+    ciphertext: Uint8Array,
+    additional_data: Uint8Array | null,
+    public_nonce: Uint8Array,
+    key: Uint8Array,
+  ): Uint8Array;
+  readonly crypto_aead_xchacha20poly1305_ietf_NPUBBYTES: number; // 24
+  readonly crypto_aead_xchacha20poly1305_ietf_ABYTES: number; // 16
+  readonly crypto_aead_xchacha20poly1305_ietf_KEYBYTES: number; // 32
+
   // --- HMAC-SHA512 ---
   // One-shot API (fixed 32-byte key, for authentication)
   crypto_auth_hmacsha512(message: Uint8Array, key: Uint8Array): Uint8Array;

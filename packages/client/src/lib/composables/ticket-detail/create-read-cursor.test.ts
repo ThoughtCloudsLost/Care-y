@@ -7,6 +7,7 @@ import {
 function makeConfig(overrides?: Partial<ReadCursorConfig>): ReadCursorConfig {
   return {
     getTicketId: () => "ticket-1",
+    getUserId: () => "user-1",
     getTicketKeyWrap: () => undefined,
     getCursorData: () => undefined,
     cryptoBridge: {
@@ -90,6 +91,7 @@ describe("createReadCursor", () => {
 
       expect(encrypt).toHaveBeenCalledWith(
         "ticket-1",
+        "cursor:user-1",
         JSON.stringify({ readUpTo: "2026-01-01T12:00:00Z" }),
       );
       expect(mutate).toHaveBeenCalledWith({

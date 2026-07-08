@@ -85,6 +85,16 @@ export class CryptoError extends AppError {
   }
 }
 
+/** Invalid or unsupported runtime configuration detected at startup. */
+export class ConfigError extends AppError {
+  readonly code = "CONFIG_ERROR" as const;
+  readonly httpStatus = 500;
+
+  constructor(message: string) {
+    super(message, false); // non-operational: indicates a misconfiguration
+  }
+}
+
 /** OPRF evaluation failed (process down, canary corruption, IPC timeout) */
 export class OprfError extends AppError {
   readonly code = "OPRF_ERROR" as const;

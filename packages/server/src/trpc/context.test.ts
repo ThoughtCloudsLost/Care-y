@@ -19,6 +19,7 @@ import {
   testBlindIndexer,
   testSessionTokenizer,
   testSealedBox,
+  testUnseal,
   TEST_ORG_PUBLIC_KEY,
   mockReq,
   mockRes,
@@ -395,7 +396,7 @@ describe.skipIf(!HAS_DB)("context factory (DB integration)", () => {
         roleId: "volunteer",
       });
 
-      expect(user.identifier).toBe(`scoped-svc-${suffix}`);
+      expect(testUnseal(user.encryptedIdentifier)).toBe(`scoped-svc-${suffix}`);
       expect(user.encryptedDisplayName).toBeDefined();
     });
   });

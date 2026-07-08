@@ -218,6 +218,7 @@ export {
   followUpTypeSchema,
   keyWrapSchema,
   createTicketInputSchema,
+  resolveCreateTargetInputSchema,
   createFollowUpInputSchema,
   updateReadCursorInputSchema,
   updateTicketInputSchema,

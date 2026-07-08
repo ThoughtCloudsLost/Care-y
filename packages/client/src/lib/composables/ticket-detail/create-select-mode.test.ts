@@ -27,6 +27,7 @@ function makeConfig(overrides?: Partial<SelectModeConfig>): SelectModeConfig {
     followUpCache: {
       decryptContent: vi.fn(() => undefined),
     } as unknown as SelectModeConfig["followUpCache"],
+    getTicketId: () => "ticket-select-1",
     getTicketKeyWrap: () => null,
     toastStore: mockToastStore,
     labels: defaultLabels,

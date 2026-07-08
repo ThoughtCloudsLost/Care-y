@@ -8,6 +8,7 @@
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import type { CryptoBridge } from "$lib/workers/crypto-bridge.js";
+import { followupSlot } from "@care-y/crypto";
 import { FollowUpDecryptCache } from "./follow-up-decrypt-cache.js";
 import { cacheRegistry } from "./cache-registry.js";
 import { DECRYPT_ERROR_SENTINEL } from "./async-decrypt-cache.js";
@@ -31,7 +32,9 @@ function createMockBridge(): {
   const mockDecrypt =
     vi.fn<
       (
-        id: string,
+        ticketId: string,
+        slot: string,
+        keyCacheId: string,
         ep: string,
         nonce: string,
         wk: string,
@@ -91,12 +94,16 @@ describe("FollowUpDecryptCache", () => {
     it("returns undefined and triggers bridge.decrypt() on first call", () => {
       const result = cache.decryptContent(
         FOLLOW_UP_ID,
+        TICKET_ID,
+        followupSlot(FOLLOW_UP_ID),
         KEY_WRAP,
         ENCRYPTED_CONTENT,
       );
       expect(result).toBeUndefined();
       expect(mockDecrypt).toHaveBeenCalledOnce();
       expect(mockDecrypt).toHaveBeenCalledWith(
+        TICKET_ID,
+        followupSlot(FOLLOW_UP_ID),
         FOLLOW_UP_ID,
         KEY_WRAP.ephemeralPoint,
         KEY_WRAP.nonce,
@@ -106,7 +113,13 @@ describe("FollowUpDecryptCache", () => {
     });
 
     it("returns cached plaintext after async resolve", async () => {
-      cache.decryptContent(FOLLOW_UP_ID, KEY_WRAP, ENCRYPTED_CONTENT);
+      cache.decryptContent(
+        FOLLOW_UP_ID,
+        TICKET_ID,
+        followupSlot(FOLLOW_UP_ID),
+        KEY_WRAP,
+        ENCRYPTED_CONTENT,
+      );
 
       await vi.waitFor(() => {
         expect(cache.has(FOLLOW_UP_ID)).toBe(true);
@@ -114,6 +127,8 @@ describe("FollowUpDecryptCache", () => {
 
       const result = cache.decryptContent(
         FOLLOW_UP_ID,
+        TICKET_ID,
+        followupSlot(FOLLOW_UP_ID),
         KEY_WRAP,
         ENCRYPTED_CONTENT,
       );
@@ -124,6 +139,8 @@ describe("FollowUpDecryptCache", () => {
     it("returns undefined for null keyWrap without calling bridge", () => {
       const result = cache.decryptContent(
         FOLLOW_UP_ID,
+        TICKET_ID,
+        followupSlot(FOLLOW_UP_ID),
         null,
         ENCRYPTED_CONTENT,
       );
@@ -132,8 +149,16 @@ describe("FollowUpDecryptCache", () => {
     });
 
     it("handles string encryptedContent (already base64)", () => {
-      cache.decryptContent(FOLLOW_UP_ID, KEY_WRAP, "already-base64");
+      cache.decryptContent(
+        FOLLOW_UP_ID,
+        TICKET_ID,
+        followupSlot(FOLLOW_UP_ID),
+        KEY_WRAP,
+        "already-base64",
+      );
       expect(mockDecrypt).toHaveBeenCalledWith(
+        TICKET_ID,
+        followupSlot(FOLLOW_UP_ID),
         FOLLOW_UP_ID,
         KEY_WRAP.ephemeralPoint,
         KEY_WRAP.nonce,
@@ -147,6 +172,8 @@ describe("FollowUpDecryptCache", () => {
 
       const result = cache.decryptContent(
         FOLLOW_UP_ID,
+        TICKET_ID,
+        followupSlot(FOLLOW_UP_ID),
         KEY_WRAP,
         ENCRYPTED_CONTENT,
       );
@@ -162,6 +189,8 @@ describe("FollowUpDecryptCache", () => {
     it("routes to decryptAndRewrap when rewrapContext is provided", () => {
       const result = cache.decryptContent(
         FOLLOW_UP_ID,
+        TICKET_ID,
+        followupSlot(FOLLOW_UP_ID),
         KEY_WRAP,
         ENCRYPTED_CONTENT,
         { followUpKeyWrap: FOLLOW_UP_KEY_WRAP, ticketId: TICKET_ID },
@@ -182,6 +211,8 @@ describe("FollowUpDecryptCache", () => {
     it("falls back to regular decrypt when no rewrapContext", () => {
       const result = cache.decryptContent(
         FOLLOW_UP_ID,
+        TICKET_ID,
+        followupSlot(FOLLOW_UP_ID),
         KEY_WRAP,
         ENCRYPTED_CONTENT,
       );

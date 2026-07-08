@@ -43,18 +43,22 @@ describe("key derivation", () => {
     const fixedSalt = new Uint8Array(16) as Salt;
     fixedSalt.fill(0x42);
 
+    // Argon2id at the enforced floor takes seconds per derivation, and
+    // coverage instrumentation roughly doubles that, so every test that
+    // stretches a password carries an explicit timeout (same convention as
+    // the escrow tests).
     it("returns a 32-byte stretched key", () => {
       const password = new TextEncoder().encode("test-password");
       const result = deriveAccountKey(password, fixedSalt);
       expect(result.length).toBe(32);
-    });
+    }, 60_000);
 
     it("is deterministic for same input", () => {
       const password = new TextEncoder().encode("deterministic");
       const a = deriveAccountKey(password, fixedSalt);
       const b = deriveAccountKey(password, fixedSalt);
       expect(a).toEqual(b);
-    });
+    }, 60_000);
 
     it("throws InvalidInputError for wrong-length salt", () => {
       const password = new TextEncoder().encode("test");
@@ -66,7 +70,7 @@ describe("key derivation", () => {
 
     it("enforces minimum params when server sends weaker values", () => {
       const password = new TextEncoder().encode("param-test");
-      const weakParams = { memoryKiB: 1, iterations: 1, parallelism: 1 };
+      const weakParams = { memoryKiB: 1, iterations: 1 };
 
       // With weak params (floor-enforced to minimums)
       const withWeak = deriveAccountKey(password, fixedSalt, weakParams);
@@ -75,14 +79,13 @@ describe("key derivation", () => {
 
       // Both should produce the same output since weak params get floored
       expect(withWeak).toEqual(withDefaults);
-    });
+    }, 60_000);
 
     it("accepts stronger-than-minimum params", () => {
       const password = new TextEncoder().encode("strong-test");
       const strongParams = {
         memoryKiB: ARGON2_MIN_PARAMS.memoryKiB * 2,
         iterations: ARGON2_MIN_PARAMS.iterations + 1,
-        parallelism: ARGON2_MIN_PARAMS.parallelism,
       };
 
       const withStrong = deriveAccountKey(password, fixedSalt, strongParams);
@@ -90,7 +93,7 @@ describe("key derivation", () => {
 
       // Stronger params produce different output
       expect(withStrong).not.toEqual(withDefaults);
-    });
+    }, 60_000);
 
     it("different passwords produce different outputs", () => {
       const a = deriveAccountKey(
@@ -102,7 +105,7 @@ describe("key derivation", () => {
         fixedSalt,
       );
       expect(a).not.toEqual(b);
-    });
+    }, 60_000);
 
     it("different salts produce different outputs", () => {
       const password = new TextEncoder().encode("same-password");
@@ -113,7 +116,7 @@ describe("key derivation", () => {
       const a = deriveAccountKey(password, salt1);
       const b = deriveAccountKey(password, salt2);
       expect(a).not.toEqual(b);
-    });
+    }, 60_000);
 
     it("handles empty password without crashing", () => {
       // Argon2id accepts empty passwords (libsodium does not reject them).
@@ -122,23 +125,22 @@ describe("key derivation", () => {
       const emptyPassword = new Uint8Array(0);
       const result = deriveAccountKey(emptyPassword, fixedSalt);
       expect(result.length).toBe(32);
-    });
+    }, 60_000);
 
     it("partially weak params are individually floor-enforced", () => {
       const password = new TextEncoder().encode("partial-weak-test");
-      // Only memoryKiB is weak, iterations and parallelism are above floor
+      // Only memoryKiB is weak, iterations is above floor
       const partialWeak = {
         memoryKiB: 1,
         iterations: ARGON2_MIN_PARAMS.iterations + 2,
-        parallelism: ARGON2_MIN_PARAMS.parallelism + 1,
       };
       const result = deriveAccountKey(password, fixedSalt, partialWeak);
 
-      // With iterations and parallelism above floor, the output should differ
+      // With iterations above floor, the output should differ
       // from the default (which uses floor values for everything)
       const withDefaults = deriveAccountKey(password, fixedSalt);
       expect(result).not.toEqual(withDefaults);
-    });
+    }, 60_000);
   });
 
   describe("deriveMasterKey", () => {
@@ -174,6 +176,26 @@ describe("key derivation", () => {
       const withoutPQ = deriveMasterKey(oprfOutput);
       const withPQ = deriveMasterKey(oprfOutput, pqShared);
       expect(withPQ).not.toEqual(withoutPQ);
+    });
+
+    it("does not mutate the caller's oprfOutput buffer", () => {
+      const oprfOutput = new Uint8Array(64);
+      oprfOutput.fill(0x7a);
+      const snapshot = oprfOutput.slice();
+      deriveMasterKey(oprfOutput);
+      expect(oprfOutput).toEqual(snapshot);
+    });
+
+    it("does not mutate oprfOutput or pqShared in the hybrid path", () => {
+      const oprfOutput = new Uint8Array(64);
+      oprfOutput.fill(0x11);
+      const pqShared = new Uint8Array(32);
+      pqShared.fill(0x22);
+      const oprfSnapshot = oprfOutput.slice();
+      const pqSnapshot = pqShared.slice();
+      deriveMasterKey(oprfOutput, pqShared);
+      expect(oprfOutput).toEqual(oprfSnapshot);
+      expect(pqShared).toEqual(pqSnapshot);
     });
   });
 
