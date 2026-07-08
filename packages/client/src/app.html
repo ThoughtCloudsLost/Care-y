@@ -8,6 +8,24 @@
       content="width=device-width, initial-scale=1, maximum-scale=5, viewport-fit=cover, interactive-widget=resizes-content"
     />
     <meta name="color-scheme" content="dark light" />
+    <!-- Preload the latin subsets of the two Ledger faces (body + display).
+         crossorigin is required on font preloads even same-origin; without it
+         the browser fetches the font twice (preload in anonymous CORS mode,
+         @font-face in credentialed mode never matches the cache entry). -->
+    <link
+      rel="preload"
+      href="/fonts/AtkinsonHyperlegible-latin.woff2"
+      as="font"
+      type="font/woff2"
+      crossorigin
+    />
+    <link
+      rel="preload"
+      href="/fonts/Fraunces-latin.woff2"
+      as="font"
+      type="font/woff2"
+      crossorigin
+    />
     <script nonce="%sveltekit.nonce%">
       // Blocking theme init: reads class preferences from localStorage
       // and applies them to <html> before first paint. CSS theme files
