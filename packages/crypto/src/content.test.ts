@@ -52,14 +52,24 @@ describe("content encryption", () => {
   });
 
   describe("buildContentAad", () => {
-    it("encodes ticketId and slot as UTF-8 with a colon separator", () => {
-      const aad = buildContentAad("ticket-1", "followup:fu-9");
-      expect(new TextDecoder().decode(aad)).toBe("ticket-1:followup:fu-9");
-    });
-
     it("produces different bytes for different slots", () => {
       expect(buildContentAad("t", "title")).not.toEqual(
         buildContentAad("t", "description"),
+      );
+    });
+
+    it("does not collide when a colon shifts between ticketId and slot", () => {
+      // Regression for the ambiguity of the original `${ticketId}:${slot}`
+      // encoding, where these two pairs produced identical bytes. The
+      // length-prefixed encoding keeps them distinct (ADR-054).
+      expect(buildContentAad("a:b", "c")).not.toEqual(
+        buildContentAad("a", "b:c"),
+      );
+    });
+
+    it("is deterministic for the same inputs", () => {
+      expect(buildContentAad("ticket-1", "followup:fu-9")).toEqual(
+        buildContentAad("ticket-1", "followup:fu-9"),
       );
     });
 

@@ -46,8 +46,8 @@ const AAD = buildContentAad("sec-invariant-ticket", "title");
  *      single AAD bit differs; empty AAD is a context of its own, never
  *      a wildcard that skips verification (ADR-053).
  *   7. Context encoding is injective: buildContentAad maps distinct
- *      (ticketId, slot) pairs to distinct AAD bytes for UUID ticket ids,
- *      so no two storage contexts ever share a binding.
+ *      (ticketId, slot) pairs to distinct AAD bytes for fully arbitrary
+ *      ids and slots, so no two storage contexts ever share a binding.
  *
  * These complement the roundtrip and single-example negative tests in
  * content.test.ts and blob.test.ts (SEC-052 libsodium crypto_secretbox).
@@ -257,6 +257,10 @@ describe("content encryption security invariants", () => {
 
   describe("context binding", () => {
     it("never decrypts under a different ticket/slot AAD", () => {
+      // Pair inequality is the whole precondition: the injective encoding
+      // (ADR-054) guarantees distinct pairs never share AAD bytes, so
+      // colon-shifted pairs like ("a:b", "c") vs ("a", "b:c") must fail
+      // too. Under the original colon-joined encoding they collided.
       fc.assert(
         fc.property(
           fc.uint8Array({ minLength: 0, maxLength: 256 }),
@@ -265,7 +269,7 @@ describe("content encryption security invariants", () => {
           fc.string({ minLength: 1, maxLength: 48 }),
           fc.string({ minLength: 1, maxLength: 48 }),
           (plaintext, ticketA, slotA, ticketB, slotB) => {
-            fc.pre(`${ticketA}:${slotA}` !== `${ticketB}:${slotB}`);
+            fc.pre(ticketA !== ticketB || slotA !== slotB);
             const key = generateContentKey();
             const blob = encryptContent(
               plaintext,
@@ -430,16 +434,16 @@ describe("content encryption security invariants", () => {
 
     it("buildContentAad maps distinct (ticketId, slot) pairs to distinct bytes", () => {
       // If two storage contexts encoded to the same AAD, the binding
-      // would silently vanish for that pair. Injectivity of
-      // `${ticketId}:${slot}` relies on ticket ids never containing ":"
-      // (a colon-bearing id would make ("a:b", "c") collide with
-      // ("a", "b:c")). Ticket ids are UUIDs at every call site today, so
-      // ids are drawn as UUIDs here; slots stay unconstrained because
-      // followup/blob/field slots embed colons routinely.
+      // would silently vanish for that pair. The length-prefixed encoding
+      // (ADR-054) is injective by construction, so this holds for fully
+      // arbitrary ids and slots, colons included; ids are deliberately
+      // NOT constrained to UUIDs because the decrypt path builds AADs
+      // from server-supplied strings and the server is untrusted. The
+      // sameTicket flag biases half the runs into the slot-only subspace.
       fc.assert(
         fc.property(
-          fc.uuid(),
-          fc.uuid(),
+          fc.string({ maxLength: 48 }),
+          fc.string({ maxLength: 48 }),
           fc.boolean(),
           fc.string({ maxLength: 48 }),
           fc.string({ maxLength: 48 }),

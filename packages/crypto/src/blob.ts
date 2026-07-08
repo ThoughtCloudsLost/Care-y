@@ -7,8 +7,10 @@
  * files) to target blob handling without touching content encryption.
  *
  * The associated data binds the blob to its storage slot, normally
- * buildContentAad(ticketId, `blob:<blobKey>`), so an encrypted attachment
- * relocated to another blob key or content column fails authentication.
+ * buildContentAad(ticketId, blobSlot(rowId)) with the attachments or
+ * recordings row id, which is stable across temp-key rewraps while the
+ * blob storage key is re-minted on each one. An encrypted attachment
+ * relocated to another row or content column fails authentication.
  *
  * Format: nonce (24 bytes) || ciphertext (data + 16-byte tag)
  */
