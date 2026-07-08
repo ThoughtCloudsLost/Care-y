@@ -25,11 +25,16 @@
 
 import { requireSodium } from "./sodium.js";
 import { DecryptionError } from "./errors.js";
-import { concatBytes } from "./bytes.js";
+import { concatBytes, encodeLabel } from "./bytes.js";
 import { assertKeyLength } from "./validation.js";
 import type { SymmetricKey, Ciphertext } from "./types.js";
 
 const textEncoder = new TextEncoder();
+
+// Domain label for content AADs. Separates this AAD family from other
+// fixed AADs (branding) and names the encoding version so a future format
+// change is a clean v2 instead of a silent fork.
+const CONTENT_AAD_DOMAIN = encodeLabel("care-y-content-aad-v1");
 
 /**
  * Build the associated data that binds a content ciphertext to its slot.
@@ -42,6 +47,14 @@ const textEncoder = new TextEncoder();
  *   `cursor:<userId>`           per-user read cursor payload
  *   `field:<name>`              any other named ticket field
  *
+ * Encoding: domain label || ticketId byte length (uint32 LE) || ticketId
+ * bytes || slot bytes. The fixed-width length field delimits the ticket
+ * id, so the buffer parses one way only and no two (ticketId, slot) pairs
+ * share AAD bytes, whatever characters either contains. Plain
+ * `${ticketId}:${slot}` concatenation was ambiguous ("a:b" + "c" collided
+ * with "a" + "b:c"), a canonicalization attack surface when ids are
+ * attacker-influenced (SEC-223, ADR-054).
+ *
  * The decryptor rebuilds the AAD from the stored row (ticket id plus the
  * slot the ciphertext came from), so relocating a ciphertext to another
  * slot or ticket fails authentication. Key generation is deliberately NOT
@@ -50,10 +63,19 @@ const textEncoder = new TextEncoder();
  *
  * @param ticketId - The ticket that owns the content
  * @param slot - Canonical slot identifier (see list above)
- * @returns UTF-8 bytes of `${ticketId}:${slot}`
+ * @returns Injectively encoded AAD bytes
  */
 export function buildContentAad(ticketId: string, slot: string): Uint8Array {
-  return textEncoder.encode(`${ticketId}:${slot}`);
+  const ticketIdBytes = textEncoder.encode(ticketId);
+  const slotBytes = textEncoder.encode(slot);
+  const ticketIdLength = new Uint8Array(4);
+  new DataView(ticketIdLength.buffer).setUint32(0, ticketIdBytes.length, true);
+  return concatBytes(
+    CONTENT_AAD_DOMAIN,
+    ticketIdLength,
+    ticketIdBytes,
+    slotBytes,
+  );
 }
 
 /** Slot for follow-up content. */
