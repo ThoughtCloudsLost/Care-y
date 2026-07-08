@@ -1,2 +1,22 @@
 packages:
   - "packages/*"
+
+# Dependency overrides. pnpm applies these to the whole graph, replacing the
+# range each depending package declared. Most entries are minimum-version
+# floors from security advisories. Keep an upper bound on any floor whose
+# package could ship a breaking major (see cookie below for why).
+overrides:
+  "@babel/plugin-transform-modules-systemjs": ">=7.29.4 <8.0.0"
+  # Exact pin so every workspace package resolves the same Node types.
+  "@types/node": "26.1.0"
+  brace-expansion: ">=5.0.6"
+  # cookie 2.0 (June 2026) renamed parse/serialize to parseCookie/
+  # stringifySetCookie. SvelteKit 2 imports the old names (it declares
+  # cookie ^0.6.0), so an uncapped floor resolved to 2.x and broke every
+  # SSR request. Cookie v2 support is merged for SvelteKit 3 only
+  # (sveltejs/kit#16184, version-3 branch). When migrating to SvelteKit 3,
+  # this cap must be removed or it will hold kit back in the other direction.
+  cookie: ">=0.7.0 <2"
+  devalue: ">=5.8.1"
+  fast-uri: ">=3.1.2"
+  serialize-javascript: ">=7.0.3"
