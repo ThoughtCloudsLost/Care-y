@@ -18,12 +18,25 @@
   --font-material: var(--theme-font-ui);
 }
 
-/* iOS Dynamic Type: swap body font to system font so text scales with the
-   user's preferred size in Settings > Accessibility > Display & Text Size.
-   Headings (--theme-font-display) keep the theme's custom font for branding. */
-@supports (-webkit-touch-callout: none) {
-  :root {
-    --theme-font-ui: -apple-system, system-ui, sans-serif;
+/* iOS Dynamic Type: the font shorthand with -apple-system-body carries the
+   user's preferred text size (Settings > Accessibility > Display & Text Size)
+   into the root font-size, so every rem-based token scales with it. The theme
+   font family survives because body { font-family: var(--theme-font-ui) }
+   re-applies it below the root; only the size hook lives here.
+
+   Both guard conditions matter: -webkit-touch-callout restricts the rule to
+   iOS (macOS Safari also parses font: -apple-system-body but resolves it
+   ~13px, which would shrink the whole desktop), and the font condition
+   asserts the Apple-only shorthand value actually parses. The shorthand
+   resets line-height, so the preflight value is re-asserted.
+
+   Known, accepted consequence: at the default iOS text size the root
+   resolves ~17px (~6% larger than Android/desktop). That is platform
+   correct; do not compensate. */
+@supports (-webkit-touch-callout: none) and (font: -apple-system-body) {
+  html {
+    font: -apple-system-body;
+    line-height: 1.5; /* shorthand resets it; re-assert preflight value */
   }
 }
 
