@@ -33,7 +33,7 @@ vi.mock("@material/material-color-utilities", () => {
  */
 function parseHex(hex: string): [number, number, number] {
   const m = /^#([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
-  if (!m?.[1] || !m[2] || !m[3]) throw new Error(`Invalid hex: ${hex}`);
+  if (!m?.[1] || !m[2] || !m[3]) throw new TypeError(`Invalid hex: ${hex}`);
   return [parseInt(m[1], 16), parseInt(m[2], 16), parseInt(m[3], 16)];
 }
 
@@ -121,6 +121,22 @@ describe("applyKonstaPalette", () => {
       expect(getProp("--brand-text")).toBe(getProp("--brand-primary-text"));
       expect(getProp("--brand-fill")).toBe(getProp("--brand-primary-fill"));
     });
+
+    it("sets --brand-on to white for a dark fill", async () => {
+      await applyKonstaPalette("#1a237e");
+      expect(getProp("--brand-on")).toBe("#ffffff");
+    });
+
+    it("derives --brand-on from the adjusted fill, not the raw brand hex", async () => {
+      // Gold gets darkened until white passes on it, so the on-color must
+      // be computed against the darkened fill (white), not raw #FFD700
+      // (which would pick black).
+      await applyKonstaPalette("#FFD700");
+      const fill = getProp("--brand-fill");
+      const on = getProp("--brand-on");
+      expect(on).toMatch(/^#(ffffff|000000)$/);
+      expect(contrast(on, fill)).toBeGreaterThanOrEqual(4.5);
+    });
   });
 
   describe("accent tokens", () => {
@@ -207,11 +223,13 @@ describe("resetKonstaPalette", () => {
   it("removes all --brand-* properties", async () => {
     await applyKonstaPalette({ primary: "#f05030", accent: "#2563eb" });
     expect(getProp("--brand-text")).toBeTruthy();
+    expect(getProp("--brand-on")).toBeTruthy();
     expect(getProp("--brand-accent")).toBeTruthy();
 
     resetKonstaPalette();
     expect(getProp("--brand-text")).toBe("");
     expect(getProp("--brand-fill")).toBe("");
+    expect(getProp("--brand-on")).toBe("");
     expect(getProp("--brand-accent")).toBe("");
     expect(getProp("--brand-accent-on")).toBe("");
   });
@@ -263,6 +281,13 @@ describe("WCAG contrast guarantees across brand colors", () => {
       expect(contrast(fill, "#ffffff")).toBeGreaterThanOrEqual(4.5);
     });
 
+    it(`--brand-on for ${name} passes 4.5:1 on the derived fill`, async () => {
+      await applyKonstaPalette(hex);
+      const fill = getProp("--brand-fill");
+      const on = getProp("--brand-on");
+      expect(contrast(on, fill)).toBeGreaterThanOrEqual(4.5);
+    });
+
     it(`--brand-text for ${name} passes dark-surface 4.5:1`, async () => {
       document.documentElement.classList.add("dark");
       await applyKonstaPalette(hex);
@@ -277,4 +302,86 @@ describe("WCAG contrast guarantees across brand colors", () => {
       expect(contrast(text, "#e5e1da")).toBeGreaterThanOrEqual(4.5);
     });
   }
+});
+
+describe("Ledger (default theme) surface coverage", () => {
+  // The Ledger surfaces from themes/default.css. The WORST_* constants in
+  // konsta-palette.ts must remain strict supersets of these; asserting
+  // against the Ledger hexes directly means a future constant change
+  // cannot silently drop coverage of the shipping theme.
+  const LEDGER_LIGHT_WORST = "#ede7d8"; // --paper-deep (darkest light surface)
+  const LEDGER_DARK_RAISED = "#252017"; // --raised
+  const LEDGER_DARK_OVERLAY = "#2f2a1e"; // Konsta elevated overlay step
+
+  beforeEach(() => {
+    document.documentElement.setAttribute("style", "");
+    document.documentElement.classList.remove("dark", "light");
+  });
+
+  afterEach(() => {
+    document.documentElement.setAttribute("style", "");
+    document.documentElement.classList.remove("dark", "light");
+  });
+
+  const probes = ["#FFD700", "#808080", "#F5F1E6", "#1a1a1a"];
+
+  for (const hex of probes) {
+    it(`--brand-text for ${hex} passes 4.5:1 on Ledger paper-deep (light)`, async () => {
+      document.documentElement.classList.add("light");
+      await applyKonstaPalette(hex);
+      const text = getProp("--brand-text");
+      expect(contrast(text, LEDGER_LIGHT_WORST)).toBeGreaterThanOrEqual(4.5);
+    });
+
+    it(`--brand-text for ${hex} passes 4.5:1 on Ledger dark surfaces`, async () => {
+      document.documentElement.classList.add("dark");
+      await applyKonstaPalette(hex);
+      const text = getProp("--brand-text");
+      expect(contrast(text, LEDGER_DARK_RAISED)).toBeGreaterThanOrEqual(4.5);
+      expect(contrast(text, LEDGER_DARK_OVERLAY)).toBeGreaterThanOrEqual(4.5);
+    });
+  }
+});
+
+describe("unbranded Ledger defaults (static hexes in themes/default.css)", () => {
+  // These lock the theme file's unbranded brand constants. If a value
+  // changes there, it must keep 4.5:1 here; adjust by lightness steps.
+  const LIGHT = {
+    brandText: "#635a48",
+    brandFill: "#6e6553",
+    brandOn: "#fff9f0",
+    paper: "#f5f1e8",
+    paperDeep: "#ede7d8",
+    raised: "#fcfaf3",
+  };
+  const DARK = {
+    brandText: "#a89b80",
+    paper: "#1a1713",
+    paperDeep: "#141210",
+    raised: "#252017",
+    overlay: "#2f2a1e",
+  };
+
+  it("light --brand-text passes 4.5:1 on every light surface", () => {
+    for (const surface of [LIGHT.paper, LIGHT.paperDeep, LIGHT.raised]) {
+      expect(contrast(LIGHT.brandText, surface)).toBeGreaterThanOrEqual(4.5);
+    }
+  });
+
+  it("dark --brand-text passes 4.5:1 on every dark surface", () => {
+    for (const surface of [
+      DARK.paper,
+      DARK.paperDeep,
+      DARK.raised,
+      DARK.overlay,
+    ]) {
+      expect(contrast(DARK.brandText, surface)).toBeGreaterThanOrEqual(4.5);
+    }
+  });
+
+  it("--brand-on passes 4.5:1 on the unbranded fill", () => {
+    expect(contrast(LIGHT.brandOn, LIGHT.brandFill)).toBeGreaterThanOrEqual(
+      4.5,
+    );
+  });
 });
