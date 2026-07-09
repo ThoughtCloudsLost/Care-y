@@ -20,7 +20,9 @@ function loadFromStorage(): KbViewMode {
     const stored = localStorage.getItem(STORAGE_KEY);
     if (stored !== null && isKbViewMode(stored)) return stored;
   } catch {
-    // Safari private browsing, storage quota, or restricted context
+    // Safari private browsing, storage quota, or restricted context:
+    // recover by treating it as no stored preference.
+    return "list";
   }
   return "list";
 }
@@ -39,6 +41,7 @@ function createKbViewModeStore(): {
       mode = value;
       try {
         localStorage.setItem(STORAGE_KEY, value);
+        // care-y-ignore-next-line no-swallowed-errors -- best-effort persistence: the mode already changed in memory and a full or restricted storage must stay silent
       } catch {
         // Storage full or restricted
       }
