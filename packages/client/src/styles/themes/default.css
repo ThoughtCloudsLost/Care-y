@@ -9,10 +9,13 @@
   --theme-font-display: "Fraunces", Georgia, serif;
   --theme-font-ui: "Atkinson Hyperlegible", system-ui, sans-serif;
 
-  /* ── Ink and rules (light) ── */
+  /* ── Ink and rules (light) ──
+     --muted is tuned to clear WCAG AA 4.5:1 on the darkest light surface
+     (paper-deep) while staying clearly apart from the unbranded brand
+     taupe; the static tier test in konsta-palette.test.ts locks this. */
   --ink: #272319;
   --ink-2: #4e4738;
-  --muted: #857b66;
+  --muted: #6b6250;
   --hair: #dcd5c3;
   --hair-2: #beb49b;
 
@@ -132,9 +135,11 @@
 }
 
 .theme-default.dark {
+  /* Dark --muted clears 4.5:1 on the lightest dark surface (the Konsta
+     elevated overlay step), where sheet help text renders. */
   --ink: #efe8d8;
   --ink-2: #cfc5ae;
-  --muted: #978c76;
+  --muted: #9e937e;
   --hair: #373226;
   --hair-2: #514935;
   --urgent: #e06a55;
