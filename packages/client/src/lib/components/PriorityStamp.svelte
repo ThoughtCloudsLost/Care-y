@@ -8,7 +8,7 @@
 
   let { priority }: Props = $props();
 
-  // Ledger rule: priority is the single hue channel in any list, and Normal
+  // Inkwell rule: priority is the single hue channel in any list, and Normal
   // renders nothing at all. If everything shouts, nothing does. Map lookup
   // (not object indexing) per the lint security rules.
   const labels = new Map<TicketPriority, () => string>([

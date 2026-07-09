@@ -13,8 +13,8 @@
 
   // Konsta's Segmented was considered and rejected for this slot: it styles
   // itself per platform (iOS thumb animation, Material fill) while the
-  // ledger pins one anatomy everywhere. Icon geometry comes from the
-  // approved mock (ledger-design-language.md, view switcher anatomy).
+  // Inkwell language pins one anatomy everywhere. Icon geometry comes from the
+  // approved mock (inkwell-design-language.md, view switcher anatomy).
   const groupLabel = $derived(label ?? m.view_switcher_label());
 </script>
 

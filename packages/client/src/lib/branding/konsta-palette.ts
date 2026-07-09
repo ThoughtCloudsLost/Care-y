@@ -158,10 +158,10 @@ function deriveOnColor(bgHex: string): string {
 // --- Dual-token derivation ---
 
 // Worst-case surfaces for contrast checks. Strict supersets of both the
-// riso and Ledger (default theme) surface ramps: #e5e1da is darker than
-// the Ledger's darkest light surface (--paper-deep #ede7d8), and #2c2a2c
-// is at least as light as the Ledger's lightest dark surface (the Konsta
-// overlay step #2f2a1e). konsta-palette.test.ts locks the Ledger coverage
+// riso and Inkwell (default theme) surface ramps: #e5e1da is darker than
+// the Inkwell's darkest light surface (--paper-deep #ede7d8), and #2c2a2c
+// is at least as light as the Inkwell's lightest dark surface (the Konsta
+// overlay step #2f2a1e). konsta-palette.test.ts locks the Inkwell coverage
 // explicitly, so these constants cannot silently drift below it.
 const WORST_DARK: [number, number, number] = [44, 42, 44]; // #2c2a2c
 const WORST_LIGHT: [number, number, number] = [229, 225, 218]; // #e5e1da
