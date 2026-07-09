@@ -179,6 +179,7 @@ vi.mock("$lib/shell/context.js", () => ({
 vi.mock("$lib/crypto/context.js", () => ({
   getTicketDecryptCache: () => ({
     decryptTitle: vi.fn().mockReturnValue("Decrypted Title"),
+    decryptDescription: vi.fn().mockReturnValue("Decrypted description"),
   }),
   getFollowUpDecryptCache: () => ({
     decryptContent: vi.fn().mockReturnValue("Decrypted content"),

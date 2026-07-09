@@ -132,6 +132,20 @@
       : undefined,
   );
 
+  // Description is collected at ticket creation but was never rendered
+  // anywhere. Empty descriptions decrypt to "" and stay hidden.
+  const descriptionResult = $derived(
+    ticket != null && decrypt != null
+      ? decrypt.description(ticket.encryptedDescription)
+      : undefined,
+  );
+
+  const decryptedDescription = $derived(
+    descriptionResult != null && isDecryptReady(descriptionResult)
+      ? descriptionResult.value
+      : undefined,
+  );
+
   function labelToggleInput(node: HTMLElement, label: string): void {
     const input = node.querySelector<HTMLInputElement>(
       'input[type="checkbox"]',
@@ -151,6 +165,12 @@
   {:else if decryptedTitle}
     <Block class="!my-0 !mt-2">
       <p class="ticket-title">{decryptedTitle}</p>
+    </Block>
+  {/if}
+
+  {#if decryptedDescription}
+    <Block class="!my-0 !mt-1">
+      <p class="ticket-description">{decryptedDescription}</p>
     </Block>
   {/if}
 
@@ -272,6 +292,14 @@
     font-size: var(--text-md);
     font-weight: 600;
     color: var(--ink);
+    margin: 0;
+  }
+
+  .ticket-description {
+    font-size: var(--text-base);
+    color: var(--ink-2, var(--muted));
+    line-height: 1.5;
+    white-space: pre-wrap;
     margin: 0;
   }
 

@@ -72,6 +72,42 @@ export class TicketDecryptCache extends AsyncDecryptCache {
   }
 
   /**
+   * Request decryption of a ticket description. Same trigger-and-cache
+   * pattern as decryptTitle; the "description" slot is a direct ticket
+   * field slot like "title". Cached under desc:<ticketId> so it never
+   * collides with the title entry.
+   */
+  decryptDescription(
+    ticketId: string,
+    keyWrap: TicketKeyWrap | null,
+    encryptedDescription: SerializedBuffer | string,
+  ): string | undefined {
+    const cacheKey = `desc:${ticketId}`;
+    if (keyWrap === null) {
+      if (!this.has(cacheKey)) {
+        queueMicrotask(() => {
+          if (!this.has(cacheKey)) {
+            this.setError(cacheKey);
+          }
+        });
+      }
+      return DECRYPT_ERROR_SENTINEL;
+    }
+
+    const ciphertext = serializedBufferToBase64(encryptedDescription);
+
+    return this.decrypt(
+      cacheKey,
+      ticketId,
+      "description",
+      keyWrap.ephemeralPoint,
+      keyWrap.nonce,
+      keyWrap.wrappedKey,
+      ciphertext,
+    );
+  }
+
+  /**
    * Request decryption of a follow-up's encrypted content using the
    * ticket's key wrap. Same trigger-and-cache pattern as decryptTitle.
    * The Worker reuses the ticket key cached from title decryption.
