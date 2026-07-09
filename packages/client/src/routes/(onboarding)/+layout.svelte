@@ -224,6 +224,14 @@
     gap: var(--space-xs);
     width: 100%;
     padding-inline: var(--page-pad-x);
+    padding-block: var(--space-xs);
+    /* The label sits in the navbar's subnavbar region, which Konsta's
+       blur layer does not cover; without a surface of its own, page
+       titles scrolled through the "Step N of M" text. Same glass
+       treatment as the navbar above it. */
+    background: var(--glass-surface, var(--paper));
+    -webkit-backdrop-filter: blur(16px);
+    backdrop-filter: blur(16px);
   }
 
   .step-text {
