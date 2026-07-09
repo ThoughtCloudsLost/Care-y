@@ -44,6 +44,7 @@ function createMockBridge(): {
 
   const bridge = {
     decrypt: mockDecrypt,
+    getState: () => "KEYED",
   } as unknown as CryptoBridge;
 
   return { bridge, mockDecrypt };
@@ -58,6 +59,58 @@ describe("TicketDecryptCache", () => {
     const { bridge, mockDecrypt: md } = createMockBridge();
     mockDecrypt = md;
     cache = new TicketDecryptCache(bridge);
+  });
+
+  describe("decryptDescription", () => {
+    it("returns undefined and triggers async decrypt at the description slot", () => {
+      const result = cache.decryptDescription(
+        TICKET_ID,
+        KEY_WRAP,
+        ENCRYPTED_TITLE,
+      );
+      expect(result).toBeUndefined();
+      expect(mockDecrypt).toHaveBeenCalledOnce();
+      expect(mockDecrypt).toHaveBeenCalledWith(
+        TICKET_ID,
+        "description",
+        `desc:${TICKET_ID}`,
+        KEY_WRAP.ephemeralPoint,
+        KEY_WRAP.nonce,
+        KEY_WRAP.wrappedKey,
+        expect.any(String),
+      );
+    });
+
+    it("returns cached value after async decrypt resolves", async () => {
+      cache.decryptDescription(TICKET_ID, KEY_WRAP, ENCRYPTED_TITLE);
+      await vi.waitFor(() => {
+        expect(cache.has(`desc:${TICKET_ID}`)).toBe(true);
+      });
+      const result = cache.decryptDescription(
+        TICKET_ID,
+        KEY_WRAP,
+        ENCRYPTED_TITLE,
+      );
+      expect(result).toBe("Decrypted Title");
+      expect(mockDecrypt).toHaveBeenCalledOnce();
+    });
+
+    it("returns error sentinel for null keyWrap without calling bridge", () => {
+      const result = cache.decryptDescription(TICKET_ID, null, ENCRYPTED_TITLE);
+      expect(result).toBe(DECRYPT_ERROR_SENTINEL);
+      expect(isDecryptError(result)).toBe(true);
+      expect(mockDecrypt).not.toHaveBeenCalled();
+    });
+
+    it("caches independently of the title entry for the same ticket", async () => {
+      cache.decryptTitle(TICKET_ID, KEY_WRAP, ENCRYPTED_TITLE);
+      cache.decryptDescription(TICKET_ID, KEY_WRAP, ENCRYPTED_TITLE);
+      await vi.waitFor(() => {
+        expect(cache.has(TICKET_ID)).toBe(true);
+        expect(cache.has(`desc:${TICKET_ID}`)).toBe(true);
+      });
+      expect(mockDecrypt).toHaveBeenCalledTimes(2);
+    });
   });
 
   describe("decryptTitle", () => {
