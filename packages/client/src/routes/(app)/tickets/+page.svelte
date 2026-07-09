@@ -753,8 +753,15 @@
 
   // --- SubNavbar configs ---
 
+  // This page still renders the legacy two-way card anatomy. The persisted
+  // store now also allows "cards"; until the ledger row/card/grid anatomy
+  // lands here, a "cards" preference reads as list (both are single-column).
+  const legacyViewMode = $derived<"list" | "grid">(
+    viewModeStore.mode === "grid" ? "grid" : "list",
+  );
+
   const viewConfig: ViewToggleConfig = $derived({
-    mode: viewModeStore.mode,
+    mode: legacyViewMode,
     onchange: (mode: "list" | "grid") => viewModeStore.set(mode),
     listLabel: m.tickets_view_list(),
     gridLabel: m.tickets_view_grid(),
@@ -887,7 +894,7 @@
       {#each [1, 2, 3, 4] as n (n)}
         <TicketCard
           loading={true}
-          viewMode={viewModeStore.mode}
+          viewMode={legacyViewMode}
           ticketId=""
           queueName={null}
           displayStatus="active"
@@ -941,7 +948,7 @@
               {#if dataProps}
                 <TicketCard
                   {...dataProps}
-                  viewMode={viewModeStore.mode}
+                  viewMode={legacyViewMode}
                   selected={multiSelect.selectedIds.has(item.id)}
                   multiSelectActive={multiSelect.active}
                   searchTerm={overlay.term}
