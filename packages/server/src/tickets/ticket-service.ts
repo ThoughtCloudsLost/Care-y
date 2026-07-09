@@ -15,6 +15,7 @@ import { createPhoneRepository } from "../telephony/models/phone-repo.js";
 import { createClientRepository } from "../telephony/models/client-repo.js";
 import type {
   RecentFollowUpsInput,
+  ListReadStateInput,
   TicketStatus,
   TicketPriority,
 } from "@care-y/shared";
@@ -28,6 +29,7 @@ import {
   MergeError,
 } from "../errors.js";
 import { createDependencyService } from "./dependency-service.js";
+import { createReadCursorService } from "./read-cursor-service.js";
 import { ErrorCode } from "@care-y/shared";
 import { encode } from "@care-y/crypto";
 
@@ -79,6 +81,24 @@ export interface FollowUpPreview {
   readonly hasFile: boolean;
   readonly noteTypeId: string | null;
 }
+
+/**
+ * Read state for one ticket in a list window: the user's opaque cursor
+ * ciphertext (null when the detail view never created a row) plus recent
+ * non-system follow-up timestamps. The client decrypts the cursor and
+ * counts newer timestamps; the server never learns read state.
+ */
+export interface TicketReadState {
+  readonly encryptedReadCursor: Buffer | null;
+  readonly followUpCreatedAt: Date[];
+}
+
+/**
+ * Newest non-system follow-up timestamps returned per ticket by
+ * listReadState. Bounds the payload for a 50-ticket window; client-side
+ * unread counts cap at this window size by design.
+ */
+const READ_STATE_TIMESTAMPS_PER_TICKET = 20;
 
 export interface CreateTicketKeyWrap {
   readonly ephemeralPoint: Buffer;
@@ -146,6 +166,10 @@ export interface TicketService {
     userId: string,
     input: RecentFollowUpsInput,
   ): Promise<Record<string, FollowUpPreview[]>>;
+  listReadState(
+    userId: string,
+    input: ListReadStateInput,
+  ): Promise<Record<string, TicketReadState>>;
   counts(userId: string): Promise<TicketCounts>;
 }
 
@@ -260,6 +284,7 @@ export function createTicketService(
   deps?: TicketServiceDeps,
 ): TicketService {
   const depService = createDependencyService(db);
+  const readCursors = createReadCursorService(db, access);
 
   async function createSystemFollowUp(
     trxOrDb: Kysely<TenantDatabase> | Transaction<TenantDatabase>,
@@ -1176,6 +1201,71 @@ export function createTicketService(
         } else {
           result[row.ticket_id] = [preview];
         }
+      }
+      return result;
+    },
+
+    async listReadState(
+      userId: string,
+      input: ListReadStateInput,
+    ): Promise<Record<string, TicketReadState>> {
+      const accessibleQueues = await getAccessibleQueueIds(userId);
+      if (accessibleQueues.length === 0) return {};
+
+      // Requested ids outside accessible queues are silently filtered,
+      // mirroring recentFollowUps.
+      const accessibleTickets = await db
+        .selectFrom("tickets")
+        .select("id")
+        .where("id", "in", input.ticketIds)
+        .where("queue_id", "in", [...accessibleQueues])
+        .execute();
+      const scopedIds = accessibleTickets.map((t) => t.id);
+      if (scopedIds.length === 0) return {};
+
+      // Read-only cursor fetch: never creates dummy rows. The list path
+      // must not change the "row exists = opened detail once" surface.
+      const cursors = await readCursors.getBatch(userId, scopedIds);
+
+      // Newest non-system follow-up timestamps per ticket. System events
+      // (status/hold/priority changes) are not replies, so they never
+      // count toward unread. Same ROW_NUMBER top-N-per-group pattern as
+      // recentFollowUps.
+      const ranked = db
+        .selectFrom("followups as f")
+        .select((eb) => [
+          eb.ref("f.ticket_id").as("ticket_id"),
+          eb.ref("f.created_at").as("created_at"),
+          eb.fn
+            .agg<number>("row_number")
+            .over((ob) =>
+              ob.partitionBy("f.ticket_id").orderBy("f.created_at", "desc"),
+            )
+            .as("rn"),
+        ])
+        .where("f.ticket_id", "in", scopedIds)
+        .where("f.source", "!=", "system")
+        .as("ranked_f");
+
+      const timestampRows = await db
+        .selectFrom(ranked)
+        .select(["ticket_id", "created_at"])
+        .where("rn", "<=", READ_STATE_TIMESTAMPS_PER_TICKET)
+        .orderBy("ticket_id")
+        .orderBy("created_at", "desc")
+        .execute();
+
+      const result: Record<string, TicketReadState> = Object.fromEntries(
+        scopedIds.map((id): [string, TicketReadState] => [
+          id,
+          {
+            encryptedReadCursor: cursors.get(id) ?? null,
+            followUpCreatedAt: [],
+          },
+        ]),
+      );
+      for (const row of timestampRows) {
+        result[row.ticket_id]?.followUpCreatedAt.push(row.created_at);
       }
       return result;
     },

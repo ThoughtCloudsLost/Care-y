@@ -63,6 +63,7 @@ import {
   updateTicketInputSchema,
   ticketListInputSchema,
   recentFollowUpsInputSchema,
+  listReadStateInputSchema,
   createFollowUpInputSchema,
   followUpListInputSchema,
   updateReadCursorInputSchema,
@@ -512,6 +513,13 @@ export function createTicketRouter(deps: TicketRouterDeps) {
       withErrorWrapping(async ({ ctx, input }) => {
         const { svc } = ticketSvc(ctx.org.tenantDb);
         return svc.recentFollowUps(ctx.user.id, input);
+      }),
+    ),
+
+    listReadState: volunteerProcedure.input(listReadStateInputSchema).query(
+      withErrorWrapping(async ({ ctx, input }) => {
+        const { svc } = ticketSvc(ctx.org.tenantDb);
+        return svc.listReadState(ctx.user.id, input);
       }),
     ),
 
