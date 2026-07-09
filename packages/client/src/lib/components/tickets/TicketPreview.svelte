@@ -35,6 +35,7 @@
   import ReactionTray from "./ReactionTray.svelte";
   import type { RawFollowUpPreview } from "$lib/tickets/preview-loader.svelte.js";
   import { followUpKind } from "$lib/tickets/follow-up-utils.js";
+  import { systemEventLabel } from "$lib/tickets/system-event-label.js";
 
   interface Props {
     ticketId: string;
@@ -119,80 +120,78 @@
   {:else}
     {#each ordered as fu (fu.id)}
       {@const kind = followUpKind(fu)}
-      {@const raw = followUpCache.decryptContent(
-        fu.id,
-        ticketId,
-        followupSlot(fu.id),
-        fu.keyWrap,
-        fu.encryptedContent,
-      )}
-      {@const result = resolveAsyncDecrypt(raw, fu.keyWrap !== null)}
-      {@const content = isDecryptReady(result) ? result.value : undefined}
       {#if kind === "system"}
+        <!-- System events carry no encrypted payload (the server creates
+             them without the org key), so their label derives from the
+             type field exactly like SystemEvent in the detail view.
+             Pushing them through the decrypt path rendered a decrypt
+             error as preview text. -->
         <div class="mini-system" data-type="system">
-          <DecryptPlaceholder
-            {result}
-            ciphertext={fu.encryptedContent}
-            length={20}
-            block={multiline}
-            charsPerLine={20}
-            maxLines={multiline ? 2 : 1}
-          >
-            {truncate(content ?? "", 30)}
-          </DecryptPlaceholder>
-        </div>
-      {:else if kind === "note"}
-        {@const NoteIcon = resolveIcon(fu.noteTypeId)}
-        {@const noteReactions = reactions?.[fu.id] ?? []}
-        <div
-          class="mini-note-wrap"
-          class:has-reactions={noteReactions.length > 0}
-        >
-          <div class="mini-note">
-            <NoteIcon size={10} class="mini-note-icon" />
-            <DecryptPlaceholder
-              {result}
-              ciphertext={fu.encryptedContent}
-              length={20}
-              block={multiline}
-              charsPerLine={20}
-              maxLines={multiline ? 2 : 1}
-            >
-              <span class="mini-text">{content}</span>
-            </DecryptPlaceholder>
-          </div>
-          <ReactionTray reactions={noteReactions} size="mini" />
+          {truncate(systemEventLabel(fu.type), 40)}
         </div>
       {:else}
-        <div
-          class="mini-bubble-row"
-          class:mini-row-received={fu.source === "client"}
-          class:mini-row-sent={fu.source !== "client"}
-          data-direction={fu.source === "client" ? "received" : "sent"}
-        >
+        {@const raw = followUpCache.decryptContent(
+          fu.id,
+          ticketId,
+          followupSlot(fu.id),
+          fu.keyWrap,
+          fu.encryptedContent,
+        )}
+        {@const result = resolveAsyncDecrypt(raw, fu.keyWrap !== null)}
+        {@const content = isDecryptReady(result) ? result.value : undefined}
+        {#if kind === "note"}
+          {@const NoteIcon = resolveIcon(fu.noteTypeId)}
+          {@const noteReactions = reactions?.[fu.id] ?? []}
           <div
-            class="mini-bubble"
-            class:mini-bubble-received={fu.source === "client"}
-            class:mini-bubble-sent={fu.source !== "client"}
+            class="mini-note-wrap"
+            class:has-reactions={noteReactions.length > 0}
           >
-            {#if fu.hasRecording || fu.hasImage || fu.hasFile}
-              <span class="mini-media" aria-hidden="true">
-                {#if fu.hasRecording}<Mic size={10} />{/if}
-                {#if fu.hasImage}<ImageIcon size={10} />{/if}
-                {#if fu.hasFile}<Paperclip size={10} />{/if}
-              </span>
-            {/if}
-            <DecryptPlaceholder
-              {result}
-              ciphertext={fu.encryptedContent}
-              length={20}
-              block={multiline}
-              charsPerLine={20}
-            >
-              {#if content}<span class="mini-text">{content}</span>{/if}
-            </DecryptPlaceholder>
+            <div class="mini-note">
+              <NoteIcon size={10} class="mini-note-icon" />
+              <DecryptPlaceholder
+                {result}
+                ciphertext={fu.encryptedContent}
+                length={20}
+                block={multiline}
+                charsPerLine={20}
+                maxLines={multiline ? 2 : 1}
+              >
+                <span class="mini-text">{content}</span>
+              </DecryptPlaceholder>
+            </div>
+            <ReactionTray reactions={noteReactions} size="mini" />
           </div>
-        </div>
+        {:else}
+          <div
+            class="mini-bubble-row"
+            class:mini-row-received={fu.source === "client"}
+            class:mini-row-sent={fu.source !== "client"}
+            data-direction={fu.source === "client" ? "received" : "sent"}
+          >
+            <div
+              class="mini-bubble"
+              class:mini-bubble-received={fu.source === "client"}
+              class:mini-bubble-sent={fu.source !== "client"}
+            >
+              {#if fu.hasRecording || fu.hasImage || fu.hasFile}
+                <span class="mini-media" aria-hidden="true">
+                  {#if fu.hasRecording}<Mic size={10} />{/if}
+                  {#if fu.hasImage}<ImageIcon size={10} />{/if}
+                  {#if fu.hasFile}<Paperclip size={10} />{/if}
+                </span>
+              {/if}
+              <DecryptPlaceholder
+                {result}
+                ciphertext={fu.encryptedContent}
+                length={20}
+                block={multiline}
+                charsPerLine={20}
+              >
+                {#if content}<span class="mini-text">{content}</span>{/if}
+              </DecryptPlaceholder>
+            </div>
+          </div>
+        {/if}
       {/if}
     {/each}
   {/if}
