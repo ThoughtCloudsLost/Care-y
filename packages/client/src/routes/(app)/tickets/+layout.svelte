@@ -78,8 +78,12 @@
   // the user doesn't lose the ticket they were viewing.
   $effect(() => {
     if (!layoutMode.isDesktop && selectedTicketId != null) {
+      // Capture before replaceState: clearing page.state invalidates the
+      // selectedTicketId derived, and reading it afterwards yields
+      // undefined (this used to navigate to /tickets/undefined).
+      const id = selectedTicketId;
       replaceState("", {});
-      void goto(resolve(`/tickets/${selectedTicketId}`));
+      void goto(resolve(`/tickets/${id}`));
     }
   });
 </script>
