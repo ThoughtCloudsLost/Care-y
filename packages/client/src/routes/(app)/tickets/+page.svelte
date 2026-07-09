@@ -754,7 +754,7 @@
   // --- SubNavbar configs ---
 
   // This page still renders the legacy two-way card anatomy. The persisted
-  // store now also allows "cards"; until the ledger row/card/grid anatomy
+  // store now also allows "cards"; until the Inkwell row/card/grid anatomy
   // lands here, a "cards" preference reads as list (both are single-column).
   const legacyViewMode = $derived<"list" | "grid">(
     viewModeStore.mode === "grid" ? "grid" : "list",

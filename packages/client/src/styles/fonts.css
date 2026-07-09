@@ -146,7 +146,7 @@
     U+2215, U+FEFF, U+FFFD;
 }
 
-/* Fraunces: Ledger display serif. Variable font covering 600-700 weight range
+/* Fraunces: Inkwell display serif. Variable font covering 600-700 weight range
    with the opsz axis retained (font-optical-sizing: auto works). */
 @font-face {
   font-family: "Fraunces";
@@ -171,7 +171,7 @@
     U+2215, U+FEFF, U+FFFD;
 }
 
-/* Atkinson Hyperlegible: Ledger text face for everything read.
+/* Atkinson Hyperlegible: Inkwell text face for everything read.
    Static font, separate files per weight and style. True italics are
    included because KB bodies render <em> and synthesized oblique
    defeats the hyperlegible letterforms. */

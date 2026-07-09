@@ -304,14 +304,14 @@ describe("WCAG contrast guarantees across brand colors", () => {
   }
 });
 
-describe("Ledger (default theme) surface coverage", () => {
-  // The Ledger surfaces from themes/default.css. The WORST_* constants in
+describe("Inkwell (default theme) surface coverage", () => {
+  // The Inkwell surfaces from themes/default.css. The WORST_* constants in
   // konsta-palette.ts must remain strict supersets of these; asserting
-  // against the Ledger hexes directly means a future constant change
+  // against the Inkwell hexes directly means a future constant change
   // cannot silently drop coverage of the shipping theme.
-  const LEDGER_LIGHT_WORST = "#ede7d8"; // --paper-deep (darkest light surface)
-  const LEDGER_DARK_RAISED = "#252017"; // --raised
-  const LEDGER_DARK_OVERLAY = "#2f2a1e"; // Konsta elevated overlay step
+  const INKWELL_LIGHT_WORST = "#ede7d8"; // --paper-deep (darkest light surface)
+  const INKWELL_DARK_RAISED = "#252017"; // --raised
+  const INKWELL_DARK_OVERLAY = "#2f2a1e"; // Konsta elevated overlay step
 
   beforeEach(() => {
     document.documentElement.setAttribute("style", "");
@@ -326,24 +326,24 @@ describe("Ledger (default theme) surface coverage", () => {
   const probes = ["#FFD700", "#808080", "#F5F1E6", "#1a1a1a"];
 
   for (const hex of probes) {
-    it(`--brand-text for ${hex} passes 4.5:1 on Ledger paper-deep (light)`, async () => {
+    it(`--brand-text for ${hex} passes 4.5:1 on Inkwell paper-deep (light)`, async () => {
       document.documentElement.classList.add("light");
       await applyKonstaPalette(hex);
       const text = getProp("--brand-text");
-      expect(contrast(text, LEDGER_LIGHT_WORST)).toBeGreaterThanOrEqual(4.5);
+      expect(contrast(text, INKWELL_LIGHT_WORST)).toBeGreaterThanOrEqual(4.5);
     });
 
-    it(`--brand-text for ${hex} passes 4.5:1 on Ledger dark surfaces`, async () => {
+    it(`--brand-text for ${hex} passes 4.5:1 on Inkwell dark surfaces`, async () => {
       document.documentElement.classList.add("dark");
       await applyKonstaPalette(hex);
       const text = getProp("--brand-text");
-      expect(contrast(text, LEDGER_DARK_RAISED)).toBeGreaterThanOrEqual(4.5);
-      expect(contrast(text, LEDGER_DARK_OVERLAY)).toBeGreaterThanOrEqual(4.5);
+      expect(contrast(text, INKWELL_DARK_RAISED)).toBeGreaterThanOrEqual(4.5);
+      expect(contrast(text, INKWELL_DARK_OVERLAY)).toBeGreaterThanOrEqual(4.5);
     });
   }
 });
 
-describe("unbranded Ledger defaults (static hexes in themes/default.css)", () => {
+describe("unbranded Inkwell defaults (static hexes in themes/default.css)", () => {
   // These lock the theme file's unbranded brand constants. If a value
   // changes there, it must keep 4.5:1 here; adjust by lightness steps.
   const LIGHT = {

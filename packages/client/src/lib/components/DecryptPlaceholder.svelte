@@ -513,7 +513,7 @@
 
   /* ── Search highlight ── */
   /* The highlighter is a meaning slot, so it must not wear brand color.
-     --care-soft exists only in the default (Ledger) theme; other themes
+     --care-soft exists only in the default (Inkwell) theme; other themes
      keep their previous brand-tinted highlight via the fallback. */
   .search-highlight {
     background: var(

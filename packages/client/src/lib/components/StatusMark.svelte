@@ -8,9 +8,9 @@
 
   let { status }: Props = $props();
 
-  // Ledger rule: status is a shape, never a hue. The four marks share one
+  // Inkwell rule: status is a shape, never a hue. The four marks share one
   // 13x13 viewBox and optical center so swapping status never shifts layout.
-  // Geometry is transcribed from the approved mock (ledger-design-language.md).
+  // Geometry is transcribed from the approved mock (inkwell-design-language.md).
   // Map lookup (not object indexing) per the lint security rules; the
   // fallback is unreachable with a valid DisplayStatus.
   const labels = new Map<DisplayStatus, () => string>([

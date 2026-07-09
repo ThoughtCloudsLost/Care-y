@@ -1,5 +1,5 @@
-/* Default theme: The Caseworker's Ledger. Ink on warm paper.
-   Canonical spec: docs/design-ref/ledger-design-language.md (ADR-055).
+/* Default theme: Inkwell. Ink on warm paper.
+   Canonical spec: docs/design-ref/inkwell-design-language.md (ADR-055).
    The Konsta shell wears these tokens through the surface seam below;
    the redesign itself lives in content views (ADR-023 boundary). */
 
@@ -34,7 +34,7 @@
 
   /* ── Unbranded brand defaults: warm taupe (pen, not alarm) ──
      Runtime org branding overrides these via inline style on <html>.
-     Contrast against the worst Ledger surfaces is locked by
+     Contrast against the worst Inkwell surfaces is locked by
      konsta-palette.test.ts; adjust by lightness steps if these change. */
   --brand-primary: #6e6553;
   --brand-text: #635a48;
@@ -83,7 +83,7 @@
   --color-ios-light-glass: rgba(252, 250, 243, 0.78);
   --color-ios-dark-glass: rgba(37, 32, 23, 0.55);
 
-  /* ── Ledger canonical names, aliased through the seam ── */
+  /* ── Inkwell canonical names, aliased through the seam ── */
   --paper: var(--color-ios-light-surface);
   --raised: var(--color-ios-light-surface-1);
   --paper-deep: var(--color-ios-light-surface-1-shade);
@@ -109,12 +109,12 @@
   --k-surface-1: var(--raised);
   --k-surface-2: var(--raised);
 
-  /* Shell signal tokens. --call-active keeps its pre-Ledger hue for now;
+  /* Shell signal tokens. --call-active keeps its pre-Inkwell hue for now;
      retune here (not in components) if the meaning-slot palette grows a
      warmer green. */
   --call-active: #22c55e;
 
-  /* ── Ledger type scale ── */
+  /* ── Inkwell type scale ── */
   --text-xs: 0.71875rem; /* 11.5px */
   --text-sm: 0.78125rem; /* 12.5px */
   --text-base: 0.84375rem; /* 13.5px */

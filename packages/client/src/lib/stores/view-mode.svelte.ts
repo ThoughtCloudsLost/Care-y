@@ -1,8 +1,8 @@
 /**
- * Persisted view mode stores for ledger surfaces (tickets list, dashboard).
+ * Persisted view mode stores for Inkwell surfaces (tickets list, dashboard).
  *
- * The ledger design language offers three presentations everywhere tickets
- * appear: "list" (compact ledger rows), "cards" (full-width cards with
+ * The Inkwell design language offers three presentations everywhere tickets
+ * appear: "list" (compact ruled rows), "cards" (full-width cards with
  * conversation previews), and "grid" (multi-column). Each surface persists
  * its own preference under its own localStorage key.
  *
