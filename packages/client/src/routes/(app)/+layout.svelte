@@ -73,7 +73,12 @@
     const timer = setTimeout(() => {
       cryptoTimedOut = true;
       cacheRegistry.reset();
-      void goto(resolve("/login?reauth=1"));
+      // Carry the interrupted route so login can return the user there
+      // after reauth instead of dropping them on the dashboard.
+      const next = encodeURIComponent(
+        window.location.pathname + window.location.search,
+      );
+      void goto(resolve(`/login?reauth=1&next=${next}`));
     }, 5_000);
     return () => clearTimeout(timer);
   });
