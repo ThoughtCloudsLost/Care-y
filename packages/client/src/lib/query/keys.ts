@@ -28,6 +28,15 @@ export const ticketsKeys = {
   recentActivity: () => [...ticketsKeys.all, "recentActivity"] as const,
   myQueues: () => [...ticketsKeys.all, "myQueues"] as const,
   dashboardInfo: () => [...ticketsKeys.all, "dashboardInfo"] as const,
+
+  // Read-state families for the list's unread pills. readStates() is the
+  // invalidation root for the batched loaded-window lookups; the sweep is
+  // the single global-unread completeness pass. Both are invalidated
+  // together by the detail view's cursor flush and by follow-up SSE.
+  readStates: () => [...ticketsKeys.all, "readState"] as const,
+  readState: (ticketIds: readonly string[]) =>
+    [...ticketsKeys.readStates(), ticketIds] as const,
+  readStateSweep: () => [...ticketsKeys.all, "readStateSweep"] as const,
 };
 
 export const ticketKeys = {
