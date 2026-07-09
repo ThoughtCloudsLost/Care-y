@@ -238,6 +238,17 @@ export const listReadStateInputSchema = z.object({
 });
 export type ListReadStateInput = z.infer<typeof listReadStateInputSchema>;
 
+/**
+ * Paginated sweep over all of the user's read-cursor rows (open tickets
+ * in accessible queues). The cursor is a ticket id, never a read-state
+ * derivative; the client pages this to build its global unread set.
+ */
+export const sweepReadStateInputSchema = z.object({
+  cursor: z.uuid().optional(),
+  limit: z.number().int().min(1).max(200).default(200),
+});
+export type SweepReadStateInput = z.infer<typeof sweepReadStateInputSchema>;
+
 export const followUpListDirectionSchema = z.enum(["newer", "older"]);
 
 export const mediaFlagSchema = z.enum(["recording", "image", "file"]);

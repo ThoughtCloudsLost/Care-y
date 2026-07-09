@@ -999,6 +999,203 @@ describe.skipIf(!process.env.DATABASE_URL)("TicketService (DB)", () => {
     expect(stamps[stamps.length - 1]!.getTime()).toBe(base + 5 * 60_000);
   });
 
+  // --- sweepReadState ---
+
+  async function insertCursorRow(
+    userId: string,
+    ticketId: string,
+    blob?: Buffer,
+  ): Promise<Buffer> {
+    const cursor = blob ?? crypto.randomBytes(85);
+    await testDb.db
+      .insertInto("ticket_read_cursors")
+      .values({
+        ticket_id: ticketId,
+        user_id: userId,
+        encrypted_read_cursor: cursor,
+      })
+      .execute();
+    return cursor;
+  }
+
+  async function insertKeyWrapRow(
+    ticketId: string,
+    volunteerId: string,
+    keyGeneration: string,
+  ): Promise<CreateTicketKeyWrap> {
+    const wrap: CreateTicketKeyWrap = {
+      ephemeralPoint: crypto.randomBytes(32),
+      nonce: crypto.randomBytes(24),
+      wrappedKey: crypto.randomBytes(48),
+    };
+    await testDb.db
+      .insertInto("ticket_key_wraps")
+      .values({
+        ticket_id: ticketId,
+        volunteer_id: volunteerId,
+        key_generation: keyGeneration,
+        ephemeral_point: wrap.ephemeralPoint,
+        nonce: wrap.nonce,
+        wrapped_key: wrap.wrappedKey,
+        algorithm: "ecies-ristretto255-v1",
+      })
+      .execute();
+    return wrap;
+  }
+
+  async function ticketKeyGeneration(ticketId: string): Promise<string> {
+    const row = await testDb.db
+      .selectFrom("tickets")
+      .select("key_generation")
+      .where("id", "=", ticketId)
+      .executeTakeFirstOrThrow();
+    return row.key_generation;
+  }
+
+  it("sweepReadState pages all cursor rows without gap or overlap", async () => {
+    const { userId, queueId, ticketId } = await createTicketFixture();
+    const ticketIds = [ticketId];
+    for (let i = 0; i < 4; i++) {
+      const extra = await createTestTicketFixture(testDb.db, { queueId });
+      ticketIds.push(extra.ticketId);
+    }
+    for (const id of ticketIds) {
+      await insertCursorRow(userId, id);
+    }
+
+    const pageOne = await svc.sweepReadState(userId, { limit: 3 });
+    expect(pageOne.items).toHaveLength(3);
+    expect(pageOne.nextCursor).toBe(pageOne.items[2]!.ticketId);
+
+    const pageTwo = await svc.sweepReadState(userId, {
+      cursor: pageOne.nextCursor!,
+      limit: 3,
+    });
+    expect(pageTwo.items).toHaveLength(2);
+    expect(pageTwo.nextCursor).toBeNull();
+
+    // Lowercase-hex uuid string order matches PostgreSQL's bytewise uuid
+    // order, so the walked pages must equal the sorted id set exactly.
+    const walked = [...pageOne.items, ...pageTwo.items].map((e) => e.ticketId);
+    expect(walked).toEqual([...ticketIds].sort());
+  });
+
+  it("sweepReadState silently filters tickets outside user queues", async () => {
+    const mine = await createTicketFixture();
+    const other = await createTicketFixture();
+
+    await insertCursorRow(mine.userId, mine.ticketId);
+    // Artificial out-of-scope row: the user opened this ticket while
+    // they still had queue access, then lost the queue.
+    await insertCursorRow(mine.userId, other.ticketId);
+
+    const result = await svc.sweepReadState(mine.userId, { limit: 200 });
+    const ids = result.items.map((e) => e.ticketId);
+    expect(ids).toContain(mine.ticketId);
+    expect(ids).not.toContain(other.ticketId);
+  });
+
+  it("sweepReadState excludes cursor rows on closed tickets", async () => {
+    const { userId, ticketId } = await createTicketFixture();
+
+    await testDb.db
+      .updateTable("tickets")
+      .set({ status: "closed" })
+      .where("id", "=", ticketId)
+      .execute();
+    // Close normally deletes cursor rows; insert one artificially so the
+    // sweep's status filter is proven on its own.
+    await insertCursorRow(userId, ticketId);
+
+    const result = await svc.sweepReadState(userId, { limit: 200 });
+    expect(result.items).toHaveLength(0);
+    expect(result.nextCursor).toBeNull();
+  });
+
+  it("sweepReadState returns null latestActivityAt for system-only tickets", async () => {
+    const { userId, ticketId } = await createTicketFixture();
+    await insertCursorRow(userId, ticketId);
+    await insertFollowUp(ticketId, "system");
+
+    const result = await svc.sweepReadState(userId, { limit: 200 });
+    expect(result.items).toHaveLength(1);
+    expect(result.items[0]!.latestActivityAt).toBeNull();
+  });
+
+  it("sweepReadState reports the newest non-system activity time", async () => {
+    const { userId, ticketId } = await createTicketFixture();
+    await insertCursorRow(userId, ticketId);
+
+    const base = Date.now() - 10 * 60_000;
+    await insertFollowUp(ticketId, "client", new Date(base));
+    await insertFollowUp(ticketId, "volunteer", new Date(base + 60_000));
+    // Newest overall is a system event; it must not win the max.
+    await insertFollowUp(ticketId, "system", new Date(base + 120_000));
+
+    const result = await svc.sweepReadState(userId, { limit: 200 });
+    expect(result.items[0]!.latestActivityAt?.getTime()).toBe(base + 60_000);
+  });
+
+  it("sweepReadState passes cursor ciphertext through verbatim", async () => {
+    const { userId, ticketId } = await createTicketFixture();
+    const blob = Buffer.from("opaque-cursor-bytes-for-the-sweep");
+    await insertCursorRow(userId, ticketId, blob);
+
+    const result = await svc.sweepReadState(userId, { limit: 200 });
+    expect(result.items[0]!.encryptedReadCursor.equals(blob)).toBe(true);
+  });
+
+  it("sweepReadState only returns tickets with cursor rows and creates none", async () => {
+    const { userId, ticketId } = await createTicketFixture();
+
+    const result = await svc.sweepReadState(userId, { limit: 200 });
+    expect(result.items).toHaveLength(0);
+
+    // The sweep is read-only: it must not materialize dummy rows the way
+    // the detail path's getOrCreate does.
+    const rows = await testDb.db
+      .selectFrom("ticket_read_cursors")
+      .selectAll()
+      .where("ticket_id", "=", ticketId)
+      .execute();
+    expect(rows).toHaveLength(0);
+  });
+
+  it("sweepReadState returns the key wrap at the ticket's current generation", async () => {
+    const { userId, ticketId } = await createTicketFixture();
+    await insertCursorRow(userId, ticketId);
+    const generation = await ticketKeyGeneration(ticketId);
+    const wrap = await insertKeyWrapRow(ticketId, userId, generation);
+
+    const result = await svc.sweepReadState(userId, { limit: 200 });
+    const entry = result.items[0]!;
+    expect(entry.keyWrap).not.toBeNull();
+    expect(entry.keyWrap!.ephemeralPoint).toBe(
+      encode(new Uint8Array(wrap.ephemeralPoint)),
+    );
+    expect(entry.keyWrap!.nonce).toBe(encode(new Uint8Array(wrap.nonce)));
+    expect(entry.keyWrap!.wrappedKey).toBe(
+      encode(new Uint8Array(wrap.wrappedKey)),
+    );
+  });
+
+  it("sweepReadState returns a null key wrap for an unwrapped user", async () => {
+    const { userId, queueId, ticketId } = await createTicketFixture();
+    await insertCursorRow(userId, ticketId);
+
+    // A wrap at a stale generation does not count: the join is matched
+    // to the ticket's current key_generation, so it resolves null too.
+    const stale = await createTestTicketFixture(testDb.db, { queueId });
+    await insertCursorRow(userId, stale.ticketId);
+    await insertKeyWrapRow(stale.ticketId, userId, crypto.randomUUID());
+
+    const result = await svc.sweepReadState(userId, { limit: 200 });
+    expect(result.items).toHaveLength(2);
+    for (const entry of result.items) {
+      expect(entry.keyWrap).toBeNull();
+    }
+  });
+
   it("list returns assignedDisplayName as Buffer when ticket is assigned", async () => {
     const { userId, clientId, queueId } = await createClientFixture();
 

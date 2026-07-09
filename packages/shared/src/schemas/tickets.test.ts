@@ -20,6 +20,7 @@ import {
   updateTicketInputSchema,
   followUpListInputSchema,
   listReadStateInputSchema,
+  sweepReadStateInputSchema,
   searchClientsInputSchema,
   callStatusSchema,
 } from "./tickets.js";
@@ -311,6 +312,53 @@ describe("listReadStateInputSchema", () => {
     expect(
       listReadStateInputSchema.safeParse({ ticketIds: ["not-a-uuid"] }).success,
     ).toBe(false);
+  });
+});
+
+describe("sweepReadStateInputSchema", () => {
+  it("defaults limit to 200 with no cursor", () => {
+    const result = sweepReadStateInputSchema.safeParse({});
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.limit).toBe(200);
+      expect(result.data.cursor).toBeUndefined();
+    }
+  });
+
+  it("accepts a uuid cursor with an explicit limit", () => {
+    const result = sweepReadStateInputSchema.safeParse({
+      cursor: VALID_UUID,
+      limit: 50,
+    });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.cursor).toBe(VALID_UUID);
+      expect(result.data.limit).toBe(50);
+    }
+  });
+
+  it("rejects a non-uuid cursor", () => {
+    expect(
+      sweepReadStateInputSchema.safeParse({ cursor: "not-a-uuid" }).success,
+    ).toBe(false);
+  });
+
+  it("rejects limit below 1", () => {
+    expect(sweepReadStateInputSchema.safeParse({ limit: 0 }).success).toBe(
+      false,
+    );
+  });
+
+  it("rejects limit above 200", () => {
+    expect(sweepReadStateInputSchema.safeParse({ limit: 201 }).success).toBe(
+      false,
+    );
+  });
+
+  it("rejects a non-integer limit", () => {
+    expect(sweepReadStateInputSchema.safeParse({ limit: 10.5 }).success).toBe(
+      false,
+    );
   });
 });
 

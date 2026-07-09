@@ -16,6 +16,7 @@ import { createClientRepository } from "../telephony/models/client-repo.js";
 import type {
   RecentFollowUpsInput,
   ListReadStateInput,
+  SweepReadStateInput,
   TicketStatus,
   TicketPriority,
 } from "@care-y/shared";
@@ -100,6 +101,27 @@ export interface TicketReadState {
  */
 const READ_STATE_TIMESTAMPS_PER_TICKET = 20;
 
+/**
+ * One cursor row in the global read-state sweep: the opaque cursor
+ * ciphertext (dummies included; the client AEAD-fails those to
+ * not-unread), the newest non-system activity time (null when only
+ * system events exist), and the user's key wrap at the ticket's current
+ * generation. The wrap rides along because swept tickets may not be in
+ * the loaded list window, and without it the client cannot decrypt the
+ * cursor at all.
+ */
+export interface SweepReadStateEntry {
+  readonly ticketId: string;
+  readonly encryptedReadCursor: Buffer;
+  readonly latestActivityAt: Date | null;
+  readonly keyWrap: TicketKeyWrap | null;
+}
+
+export interface SweepReadStateResult {
+  readonly items: SweepReadStateEntry[];
+  readonly nextCursor: string | null;
+}
+
 export interface CreateTicketKeyWrap {
   readonly ephemeralPoint: Buffer;
   readonly nonce: Buffer;
@@ -170,6 +192,10 @@ export interface TicketService {
     userId: string,
     input: ListReadStateInput,
   ): Promise<Record<string, TicketReadState>>;
+  sweepReadState(
+    userId: string,
+    input: SweepReadStateInput,
+  ): Promise<SweepReadStateResult>;
   counts(userId: string): Promise<TicketCounts>;
 }
 
@@ -1268,6 +1294,69 @@ export function createTicketService(
         result[row.ticket_id]?.followUpCreatedAt.push(row.created_at);
       }
       return result;
+    },
+
+    async sweepReadState(
+      userId: string,
+      input: SweepReadStateInput,
+    ): Promise<SweepReadStateResult> {
+      const accessibleQueues = await getAccessibleQueueIds(userId);
+      if (accessibleQueues.length === 0) return { items: [], nextCursor: null };
+
+      // Enumerates the user's own cursor rows for open tickets in
+      // accessible queues. Row existence is deliberate metadata ("opened
+      // the detail view once"), so the sweep reveals nothing the server
+      // does not already hold. Zero writes; out-of-scope rows are
+      // silently filtered, mirroring listReadState.
+      const afterId = input.cursor;
+      const rows = await db
+        .selectFrom("ticket_read_cursors as rc")
+        .innerJoin("tickets as t", "t.id", "rc.ticket_id")
+        .leftJoin("ticket_key_wraps as tkw", (join) =>
+          join
+            .onRef("tkw.ticket_id", "=", "t.id")
+            .on("tkw.volunteer_id", "=", userId)
+            .onRef("tkw.key_generation", "=", "t.key_generation"),
+        )
+        .select((eb) => [
+          "rc.ticket_id",
+          "rc.encrypted_read_cursor",
+          "tkw.ephemeral_point",
+          "tkw.nonce",
+          "tkw.wrapped_key",
+          // Newest non-system activity: system events are not replies
+          // (same rule as listReadState), so a system-only ticket reads
+          // as null and the client treats it as not-unread.
+          eb
+            .selectFrom("followups as f")
+            .select((sb) => sb.fn.max("f.created_at").as("max_at"))
+            .whereRef("f.ticket_id", "=", "t.id")
+            .where("f.source", "!=", "system")
+            .as("latest_activity_at"),
+        ])
+        .where("rc.user_id", "=", userId)
+        .where("t.status", "=", "open")
+        .where("t.queue_id", "in", [...accessibleQueues])
+        .$if(afterId !== undefined, (qb) => {
+          if (afterId === undefined) return qb;
+          return qb.where("rc.ticket_id", ">", afterId);
+        })
+        .orderBy("rc.ticket_id")
+        .limit(input.limit)
+        .execute();
+
+      const items = rows.map((row): SweepReadStateEntry => ({
+        ticketId: row.ticket_id,
+        encryptedReadCursor: row.encrypted_read_cursor,
+        latestActivityAt: row.latest_activity_at,
+        keyWrap: buildKeyWrap(row.ephemeral_point, row.nonce, row.wrapped_key),
+      }));
+
+      const last = items.at(-1);
+      return {
+        items,
+        nextCursor: items.length === input.limit && last ? last.ticketId : null,
+      };
     },
   };
 }
