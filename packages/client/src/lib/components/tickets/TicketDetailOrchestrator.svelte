@@ -188,7 +188,18 @@
     getTicketKeyWrap: () => ticket?.keyWrap ?? undefined,
     getCursorData: () => readCursorQuery.data ?? undefined,
     cryptoBridge,
-    mutate: async (args) => ticketRouter.updateReadCursor.mutate(args),
+    mutate: async (args) => {
+      const result = await ticketRouter.updateReadCursor.mutate(args);
+      // The tickets list derives unread pills from this cursor; refresh
+      // both read-state families so window and sweep settle together.
+      void queryClient.invalidateQueries({
+        queryKey: ticketsKeys.readStates(),
+      });
+      void queryClient.invalidateQueries({
+        queryKey: ticketsKeys.readStateSweep(),
+      });
+      return result;
+    },
   });
 
   // --- Action sheet data ---

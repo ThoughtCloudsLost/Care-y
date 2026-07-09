@@ -105,6 +105,10 @@ export class AsyncDecryptCache {
     nonce: string,
     wrappedKey: string,
     ciphertext: string,
+    // The Worker-side unwrapped-key cache id. Defaults to the cache key;
+    // callers whose cache key varies per ciphertext (read cursors) pass a
+    // stable id so the unwrapped ticket key is reused across versions.
+    keyCacheId: string = cacheKey,
   ): string | undefined {
     const cached = this.cache.get(cacheKey);
     if (cached !== undefined) return cached;
@@ -119,7 +123,7 @@ export class AsyncDecryptCache {
       this.bridge.decrypt(
         ticketId,
         slot,
-        cacheKey,
+        keyCacheId,
         ephemeralPoint,
         nonce,
         wrappedKey,
