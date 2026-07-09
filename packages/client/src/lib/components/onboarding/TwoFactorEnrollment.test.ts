@@ -92,7 +92,7 @@ describe("TwoFactorEnrollment", () => {
     render(TwoFactorEnrollment, {
       props: { username: "admin", onenrolled: vi.fn() },
     });
-    expect(screen.getByText("1 method(s) enrolled")).toBeTruthy();
+    expect(screen.getByText("1 method enrolled")).toBeTruthy();
   });
 
   it("displays available methods as list items", () => {

@@ -143,7 +143,7 @@
           onclick={() => {
             void handleCopySecret();
           }}
-          aria-label={m.twofa_backup_codes_copy()}
+          aria-label={m.twofa_totp_copy_secret()}
         >
           <Copy size={16} />
         </button>

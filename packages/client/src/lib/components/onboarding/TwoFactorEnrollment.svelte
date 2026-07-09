@@ -119,7 +119,11 @@
     {#if enrolledCount > 0}
       <div class="enrolled-badge" role="status">
         <ShieldCheck size={20} class="enrolled-icon" />
-        <span>{m.onboarding_twofa_enrolled({ count: enrolledCount })}</span>
+        <span
+          >{enrolledCount === 1
+            ? m.onboarding_twofa_enrolled_one()
+            : m.onboarding_twofa_enrolled({ count: enrolledCount })}</span
+        >
       </div>
 
       <List strong inset>

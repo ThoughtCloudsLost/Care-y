@@ -77,7 +77,9 @@
     if (!twoFactorStatusQuery.data) return m.common_loading();
     const count = twoFactorStatusQuery.data.methods.length;
     if (count === 0) return m.settings_2fa_none();
-    return m.settings_2fa_methods({ count });
+    return count === 1
+      ? m.settings_2fa_methods_one()
+      : m.settings_2fa_methods({ count });
   });
 
   // ── Dev-only seed ───────────────────────────────────────────────────
