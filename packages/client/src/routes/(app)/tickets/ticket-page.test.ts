@@ -451,10 +451,12 @@ describe("Ticket list page", () => {
       fetchNextPage: vi.fn(),
     };
 
-    render(PageModule.default);
+    const { container } = render(PageModule.default);
     // When assignedTo matches the current user ("user-001" from mock),
-    // the card displays "You" via the dashboard_assigned_you message.
-    expect(screen.getByText("You")).toBeTruthy();
+    // the card displays "You" via the dashboard_assigned_you message,
+    // rendered inside the row meta line.
+    const meta = container.querySelector("[data-testid='row-meta']");
+    expect(meta?.textContent).toContain("You");
   });
 
   it("renders on-hold ticket with hold status label", () => {
@@ -471,14 +473,13 @@ describe("Ticket list page", () => {
 
     const { container } = render(PageModule.default);
     // deriveDisplayStatus(open, onHold=true, ...) returns "hold".
-    // TicketCard renders the status label via StatusDot + text "On Hold".
-    const statusLabels = container.querySelectorAll(
-      "[data-testid='status-label']",
-    );
-    const holdLabels = Array.from(statusLabels).filter(
-      (el) => el.textContent === "On Hold",
-    );
-    expect(holdLabels.length).toBeGreaterThan(0);
+    // TicketCard renders the dashed-ring StatusMark with the status word
+    // as its accessible label, and appends "on hold" to the row meta.
+    const holdMarks = container.querySelectorAll("[data-status='hold']");
+    expect(holdMarks.length).toBeGreaterThan(0);
+    expect(holdMarks[0]?.getAttribute("aria-label")).toBe("On hold");
+    const meta = container.querySelector("[data-testid='row-meta']");
+    expect(meta?.textContent).toContain("on hold");
   });
 
   it("renders urgent priority ticket with priority badge", () => {

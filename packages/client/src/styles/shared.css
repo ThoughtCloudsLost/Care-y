@@ -122,11 +122,9 @@
     display: none;
   }
 
-  .ticket-card-selected {
-    outline: 2px solid var(--brand-primary);
-    outline-offset: -2px;
-    border-radius: var(--card-radius, 0.75rem);
-  }
+  /* Split-pane ticket selection is styled by TicketCard itself
+     (brand-soft background on the card anatomy); the page still
+     applies the .ticket-card-selected wrapper class as the hook. */
 }
 
 /* Color scheme set dynamically by the blocking script in app.html

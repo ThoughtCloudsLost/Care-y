@@ -103,6 +103,9 @@ describe("TicketCard", () => {
     onselect,
   };
 
+  const asCards = { ...defaults, viewMode: "cards" as const };
+  const asGrid = { ...defaults, viewMode: "grid" as const };
+
   afterEach(() => {
     ontap.mockClear();
     onaction.mockClear();
@@ -136,25 +139,33 @@ describe("TicketCard", () => {
     expect(dp).toBeNull();
   });
 
-  it("shows preview window in list mode even when follow-ups are empty", () => {
+  // --- Previews per mode ---
+
+  it("renders no preview window in list mode (rows stay compact)", () => {
+    const { container } = render(TicketCard, { props: defaults });
+    expect(container.querySelector("[data-preview]")).toBeNull();
+    expect(container.textContent).not.toContain("No messages yet");
+  });
+
+  it("shows preview empty state in cards mode when follow-ups array is empty", () => {
     const { container } = render(TicketCard, {
-      props: { ...defaults, previewFollowUps: [] },
+      props: { ...asCards, previewFollowUps: [] },
     });
-    const preview = container.querySelector("[data-preview]");
-    expect(preview).not.toBeNull();
+    expect(container.querySelector("[data-preview]")).not.toBeNull();
     expect(container.textContent).toContain("No messages yet");
   });
 
   it("shows preview empty state in grid mode when follow-ups array is empty", () => {
     const { container } = render(TicketCard, {
-      props: { ...defaults, viewMode: "grid" as const, previewFollowUps: [] },
+      props: { ...asGrid, previewFollowUps: [] },
     });
+    expect(container.querySelector("[data-preview]")).not.toBeNull();
     expect(container.textContent).toContain("No messages yet");
   });
 
-  it("renders DecryptPlaceholder when follow-ups are undefined (not loaded)", async () => {
+  it("renders placeholder bubbles in cards mode when follow-ups are undefined", async () => {
     const { container } = render(TicketCard, {
-      props: { ...defaults, previewFollowUps: undefined },
+      props: { ...asCards, previewFollowUps: undefined },
     });
     // Advance past the 150ms scramble delay so aria-busy appears.
     await vi.advanceTimersByTimeAsync(200);
@@ -162,89 +173,12 @@ describe("TicketCard", () => {
     expect(placeholders.length).toBeGreaterThan(0);
   });
 
-  // --- Queue badge ---
+  // --- Meta line ---
 
-  it("renders queue name in badge", () => {
+  it("renders queue name in the meta line", () => {
     const { container } = render(TicketCard, { props: defaults });
     expect(container.textContent).toContain("Intake");
   });
-
-  // --- Status indicator ---
-
-  it("shows 'new' data-status for new tickets", () => {
-    const { container } = render(TicketCard, {
-      props: { ...defaults, displayStatus: "new" as const },
-    });
-    const indicator = container.querySelector("[data-status]");
-    expect(indicator?.getAttribute("data-status")).toBe("new");
-  });
-
-  it("shows 'active' data-status for active tickets", () => {
-    const { container } = render(TicketCard, { props: defaults });
-    const indicator = container.querySelector("[data-status]");
-    expect(indicator?.getAttribute("data-status")).toBe("active");
-  });
-
-  it("shows 'hold' data-status for on-hold tickets", () => {
-    const { container } = render(TicketCard, {
-      props: { ...defaults, displayStatus: "hold" as const },
-    });
-    const indicator = container.querySelector("[data-status]");
-    expect(indicator?.getAttribute("data-status")).toBe("hold");
-  });
-
-  it("shows 'closed' data-status for closed tickets", () => {
-    const { container } = render(TicketCard, {
-      props: { ...defaults, displayStatus: "closed" as const },
-    });
-    const indicator = container.querySelector("[data-status]");
-    expect(indicator?.getAttribute("data-status")).toBe("closed");
-  });
-
-  it("renders status label text matching displayStatus", () => {
-    const { container } = render(TicketCard, {
-      props: { ...defaults, displayStatus: "new" as const },
-    });
-    expect(container.textContent).toContain("New");
-  });
-
-  // --- Priority chip ---
-
-  it("shows priority badge for urgent tickets", () => {
-    const { container } = render(TicketCard, {
-      props: { ...defaults, priority: "urgent" as const },
-    });
-    const badge = container.querySelector("[data-priority='urgent']");
-    expect(badge).not.toBeNull();
-    expect(badge!.textContent).toContain("Urgent");
-  });
-
-  it("shows priority badge for high tickets", () => {
-    const { container } = render(TicketCard, {
-      props: { ...defaults, priority: "high" as const },
-    });
-    const badge = container.querySelector("[data-priority='high']");
-    expect(badge).not.toBeNull();
-    expect(badge!.textContent).toContain("High");
-  });
-
-  it("shows priority badge for normal tickets", () => {
-    const { container } = render(TicketCard, { props: defaults });
-    const badge = container.querySelector("[data-priority='normal']");
-    expect(badge).not.toBeNull();
-    expect(badge!.textContent).toContain("Normal");
-  });
-
-  it("shows priority badge for low tickets", () => {
-    const { container } = render(TicketCard, {
-      props: { ...defaults, priority: "low" as const },
-    });
-    const badge = container.querySelector("[data-priority='low']");
-    expect(badge).not.toBeNull();
-    expect(badge!.textContent).toContain("Low");
-  });
-
-  // --- Metadata ---
 
   it("shows client alias in metadata", () => {
     const { container } = render(TicketCard, { props: defaults });
@@ -263,17 +197,125 @@ describe("TicketCard", () => {
     expect(container.textContent).toContain("Jordan");
   });
 
-  it("shows unread badge when unreadCount > 0", () => {
+  it("renders bold 'you' segment when assignedIsSelf", () => {
+    const { container } = render(TicketCard, {
+      props: { ...defaults, assignedIsSelf: true },
+    });
+    const you = container.querySelector(".meta-you");
+    expect(you).not.toBeNull();
+    expect(you?.textContent).toBe("you");
+    expect(container.textContent).not.toContain("Unassigned");
+  });
+
+  it("renders message count with plural key ('3 msgs')", () => {
+    const { container } = render(TicketCard, { props: defaults });
+    expect(container.textContent).toContain("3 msgs");
+  });
+
+  it("renders singular message count ('1 msg')", () => {
+    const { container } = render(TicketCard, {
+      props: { ...defaults, followUpCount: 1 },
+    });
+    expect(container.textContent).toContain("1 msg");
+  });
+
+  it("appends 'on hold' to the meta line for hold status", () => {
+    const { container } = render(TicketCard, {
+      props: { ...defaults, displayStatus: "hold" as const },
+    });
+    const meta = container.querySelector("[data-testid='row-meta']");
+    expect(meta?.textContent).toContain("on hold");
+  });
+
+  // --- Status marks (shape, not hue) ---
+
+  it.each(["new", "active", "hold", "closed"] as const)(
+    "renders the %s status mark with data-status",
+    (status) => {
+      const { container } = render(TicketCard, {
+        props: { ...defaults, displayStatus: status },
+      });
+      const mark = container.querySelector(`[data-status='${status}']`);
+      expect(mark).not.toBeNull();
+    },
+  );
+
+  it("carries the status word as the mark's accessible label", () => {
+    const { container } = render(TicketCard, {
+      props: { ...defaults, displayStatus: "hold" as const },
+    });
+    const mark = container.querySelector("[data-status='hold']");
+    expect(mark?.getAttribute("aria-label")).toBe("On hold");
+  });
+
+  it("fades closed tickets and strikes the title", () => {
+    const { container } = render(TicketCard, {
+      props: { ...defaults, displayStatus: "closed" as const },
+    });
+    expect(container.querySelector(".tc-closed")).not.toBeNull();
+  });
+
+  // --- Priority stamps (the single hue channel) ---
+
+  it.each([
+    ["urgent", "Urgent"],
+    ["high", "High"],
+    ["low", "Low"],
+  ] as const)("shows the %s priority stamp with its word", (priority, word) => {
+    const { container } = render(TicketCard, {
+      props: { ...defaults, priority },
+    });
+    const stamp = container.querySelector(`[data-priority='${priority}']`);
+    expect(stamp).not.toBeNull();
+    expect(stamp!.textContent).toContain(word);
+  });
+
+  it("renders no stamp at all for normal priority", () => {
+    const { container } = render(TicketCard, { props: defaults });
+    expect(container.querySelector("[data-priority]")).toBeNull();
+  });
+
+  // --- Unread channel (bold title + pill) ---
+
+  it("shows the new pill when unreadCount > 0", () => {
     const { container } = render(TicketCard, {
       props: { ...defaults, unreadCount: 5 },
     });
-    expect(container.textContent).toContain("5");
+    expect(container.textContent).toContain("5 new");
+    expect(container.querySelector(".tc-unread")).not.toBeNull();
   });
 
-  it("hides unread badge when unreadCount is 0", () => {
+  it("hides the new pill when unreadCount is 0", () => {
     const { container } = render(TicketCard, { props: defaults });
-    const unreadBadge = container.querySelector("[data-unread]");
-    expect(unreadBadge).toBeNull();
+    expect(container.querySelector(".new-pill")).toBeNull();
+    expect(container.querySelector(".tc-unread")).toBeNull();
+  });
+
+  // --- Side column: at most two of [stamp, pill, time] ---
+
+  it("shows pill and time for unread normal-priority rows", () => {
+    const { container } = render(TicketCard, {
+      props: { ...defaults, unreadCount: 2 },
+    });
+    expect(container.textContent).toContain("2 new");
+    expect(container.querySelector(".r-time")).not.toBeNull();
+  });
+
+  it("shows stamp and time for read urgent rows", () => {
+    const { container } = render(TicketCard, {
+      props: { ...defaults, priority: "urgent" as const },
+    });
+    expect(container.querySelector("[data-priority='urgent']")).not.toBeNull();
+    expect(container.querySelector(".r-time")).not.toBeNull();
+  });
+
+  it("drops the time when both stamp and pill are present", () => {
+    const { container } = render(TicketCard, {
+      props: { ...defaults, priority: "urgent" as const, unreadCount: 1 },
+    });
+    expect(container.querySelector("[data-priority='urgent']")).not.toBeNull();
+    expect(container.textContent).toContain("1 new");
+    expect(container.querySelector(".r-time")).toBeNull();
   });
 
   // --- Relative time ---
@@ -317,63 +359,82 @@ describe("TicketCard", () => {
     expect(ontap).not.toHaveBeenCalled();
   });
 
-  // --- Action buttons ---
+  // --- Quick actions: cards mode only (decision 3) ---
 
-  it("renders action icon buttons in list mode", () => {
-    const { container } = render(TicketCard, { props: defaults });
-    const actions = container.querySelectorAll(
-      '[aria-label="Reply"], [aria-label="Call"], [aria-label="Hold"], [aria-label="Take"]',
+  function actionButtons(container: HTMLElement): string[] {
+    const row = container.querySelector("[data-testid='card-actions']");
+    if (!row) return [];
+    return Array.from(row.querySelectorAll("button")).map((b) =>
+      b.textContent.trim(),
     );
-    expect(actions.length).toBe(4);
-  });
+  }
 
-  it("hides action icons in grid mode", () => {
-    const { container } = render(TicketCard, {
-      props: { ...defaults, viewMode: "grid" as const },
-    });
-    const actions = container.querySelectorAll(
-      '[aria-label="Reply"], [aria-label="Call"], [aria-label="Hold"], [aria-label="Take"], [aria-label="Assign"]',
-    );
-    expect(actions.length).toBe(0);
-  });
-
-  it("renders hold/unhold icon with correct aria-label", () => {
-    const { container } = render(TicketCard, {
-      props: { ...defaults, displayStatus: "hold" as const },
-    });
-    const unhold = container.querySelector('[aria-label="Unhold"]');
-    expect(unhold).not.toBeNull();
-  });
-
-  it("shows Take button for unassigned tickets and Assign for assigned", () => {
-    const { container: unassigned } = render(TicketCard, { props: defaults });
-    expect(unassigned.querySelector('[aria-label="Take"]')).not.toBeNull();
-    expect(unassigned.querySelector('[aria-label="Assign"]')).toBeNull();
-
-    cleanup();
-
-    const { container: assigned } = render(TicketCard, {
-      props: { ...defaults, assignedName: "Jordan" },
-    });
-    expect(assigned.querySelector('[aria-label="Assign"]')).not.toBeNull();
-    expect(assigned.querySelector('[aria-label="Take"]')).toBeNull();
-  });
-
-  it("fires onaction with 'take' when take button clicked on unassigned card", async () => {
+  it("renders no inline actions in list mode (rows stay compact)", () => {
     const { container } = render(TicketCard, { props: defaults });
-    const takeBtn = container.querySelector('[aria-label="Take"]');
-    expect(takeBtn).not.toBeNull();
+    expect(container.querySelector("[data-testid='card-actions']")).toBeNull();
+  });
+
+  it("renders no inline actions in grid mode", () => {
+    const { container } = render(TicketCard, { props: asGrid });
+    expect(container.querySelector("[data-testid='card-actions']")).toBeNull();
+  });
+
+  it("renders the full text action row in cards mode", () => {
+    const { container } = render(TicketCard, { props: asCards });
+    expect(actionButtons(container)).toEqual(["Reply", "Call", "Hold", "Take"]);
+  });
+
+  it("renders Unhold for on-hold tickets in cards mode", () => {
+    const { container } = render(TicketCard, {
+      props: { ...asCards, displayStatus: "hold" as const },
+    });
+    expect(actionButtons(container)).toContain("Unhold");
+  });
+
+  it("renders Assign instead of Take for assigned tickets", () => {
+    const { container } = render(TicketCard, {
+      props: { ...asCards, assignedName: "Jordan" },
+    });
+    const labels = actionButtons(container);
+    expect(labels).toContain("Assign");
+    expect(labels).not.toContain("Take");
+  });
+
+  it("fires onaction with 'take' when Take is clicked", async () => {
+    const { container } = render(TicketCard, { props: asCards });
+    const takeBtn = Array.from(container.querySelectorAll("button.act")).find(
+      (b) => b.textContent.trim() === "Take",
+    );
+    expect(takeBtn).toBeDefined();
     if (takeBtn) await fireEvent.click(takeBtn);
     expect(onaction).toHaveBeenCalledWith("t-001", "take");
+    expect(ontap).not.toHaveBeenCalled();
   });
 
-  it("fires onaction with correct action on icon click", async () => {
-    const { container } = render(TicketCard, { props: defaults });
-    const replyBtn = container.querySelector('[aria-label="Reply"]');
-    expect(replyBtn).not.toBeNull();
+  it("fires onaction with 'reply' when Reply is clicked", async () => {
+    const { container } = render(TicketCard, { props: asCards });
+    const replyBtn = Array.from(container.querySelectorAll("button.act")).find(
+      (b) => b.textContent.trim() === "Reply",
+    );
+    expect(replyBtn).toBeDefined();
     if (replyBtn) await fireEvent.click(replyBtn);
     expect(onaction).toHaveBeenCalledWith("t-001", "reply");
+    expect(ontap).not.toHaveBeenCalled();
   });
+
+  it("fires onaction with 'unhold' from the quiet action on held tickets", async () => {
+    const { container } = render(TicketCard, {
+      props: { ...asCards, displayStatus: "hold" as const },
+    });
+    const unholdBtn = Array.from(
+      container.querySelectorAll("button.act-quiet"),
+    ).find((b) => b.textContent.trim() === "Unhold");
+    expect(unholdBtn).toBeDefined();
+    if (unholdBtn) await fireEvent.click(unholdBtn);
+    expect(onaction).toHaveBeenCalledWith("t-001", "unhold");
+  });
+
+  // --- Open interaction ---
 
   it("fires ontap with ticketId on card click", async () => {
     const { container } = render(TicketCard, { props: defaults });
@@ -383,12 +444,13 @@ describe("TicketCard", () => {
     expect(ontap).toHaveBeenCalledWith("t-001");
   });
 
-  // --- Keyboard accessibility ---
-
-  it("card open button exists with accessible label", () => {
-    const { container } = render(TicketCard, { props: defaults });
-    const openBtn = container.querySelector("button.card-open-link");
-    expect(openBtn).not.toBeNull();
-    expect(openBtn?.getAttribute("aria-label")).toBeTruthy();
+  it("card open button exists with accessible label in every mode", () => {
+    for (const props of [defaults, asCards, asGrid]) {
+      const { container } = render(TicketCard, { props });
+      const openBtn = container.querySelector("button.card-open-link");
+      expect(openBtn).not.toBeNull();
+      expect(openBtn?.getAttribute("aria-label")).toBeTruthy();
+      cleanup();
+    }
   });
 });
