@@ -163,6 +163,7 @@
             multiline={isList}
             {followUpCount}
             reactions={previewReactions}
+            {clientAlias}
           />
         </div>
 

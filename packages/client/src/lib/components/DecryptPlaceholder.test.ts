@@ -193,6 +193,26 @@ describe("DecryptPlaceholder", () => {
       ).toBeDefined();
     });
 
+    it("errorLabel overrides the error message", () => {
+      render(DecryptPlaceholder, {
+        props: { result: ERROR, errorLabel: "Could not unlock this preview" },
+      });
+      expect(screen.getByText("Could not unlock this preview")).toBeDefined();
+      expect(
+        screen.queryByText("This content could not be decrypted."),
+      ).toBeNull();
+    });
+
+    it("errorLabel does not override the denied message", () => {
+      render(DecryptPlaceholder, {
+        props: { result: DENIED, errorLabel: "Could not unlock this preview" },
+      });
+      // Denied means missing key material, not a failed attempt; the
+      // distinction must survive any surface-specific error copy.
+      expect(screen.getByText("No access to this content")).toBeDefined();
+      expect(screen.queryByText("Could not unlock this preview")).toBeNull();
+    });
+
     it("result takes precedence over content when both provided", () => {
       const result: DecryptResult = { status: "ready", value: "From result" };
       render(DecryptPlaceholder, {
