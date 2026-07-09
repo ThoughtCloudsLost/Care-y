@@ -14,7 +14,13 @@
 import { cacheRegistry } from "./cache-registry.js";
 import type { SvelteMap } from "svelte/reactivity";
 import type { CryptoBridge } from "$lib/workers/crypto-bridge.js";
+import { CryptoWorkerError } from "$lib/workers/crypto-bridge-errors.js";
 import { isDevDelayEnabled } from "$lib/trpc/index.js";
+
+/** True for the quiet-cancellation error minted when the bridge tears down. */
+function isBridgeTeardown(err: unknown): boolean {
+  return err instanceof CryptoWorkerError && err.code === "BRIDGE_DESTROYED";
+}
 
 /**
  * Sentinel value stored in the cache when decryption permanently fails.
@@ -69,6 +75,10 @@ export class AsyncDecryptCache {
         this.cache.set(cacheKey, plaintext);
       })
       .catch((err: unknown) => {
+        // Bridge teardown cancels in-flight decrypts; the component is
+        // unmounting, so store no sentinel and log nothing (a navigation
+        // away used to spam one warning per pending entry).
+        if (isBridgeTeardown(err)) return;
         this.cache.set(cacheKey, DECRYPT_ERROR_SENTINEL);
         if (import.meta.env.DEV) {
           console.warn(
@@ -99,6 +109,10 @@ export class AsyncDecryptCache {
     const cached = this.cache.get(cacheKey);
     if (cached !== undefined) return cached;
     if (this.pending.has(cacheKey)) return undefined;
+    // Teardown renders keep calling into the cache after the bridge is
+    // gone; firing would only mint one rejection (and one warning) per
+    // render read. Report "still pending" instead; the page is leaving.
+    if (this.bridge.getState() === "DESTROYED") return undefined;
 
     this.fireAndForget(
       cacheKey,
@@ -134,6 +148,7 @@ export class AsyncDecryptCache {
     const cached = this.cache.get(cacheKey);
     if (cached !== undefined) return cached;
     if (this.pending.has(cacheKey)) return undefined;
+    if (this.bridge.getState() === "DESTROYED") return undefined;
 
     this.fireAndForget(
       cacheKey,
