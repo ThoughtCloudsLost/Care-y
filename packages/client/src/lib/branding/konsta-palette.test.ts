@@ -384,4 +384,30 @@ describe("unbranded Ledger defaults (static hexes in themes/default.css)", () =>
       4.5,
     );
   });
+
+  // Static text tiers from themes/default.css. Muted is the quiet tier but
+  // timestamps and eyebrows still convey information, so WCAG AA applies.
+  const LIGHT_TEXT = { ink: "#272319", ink2: "#4e4738", muted: "#6b6250" };
+  const DARK_TEXT = { ink: "#efe8d8", ink2: "#cfc5ae", muted: "#9e937e" };
+
+  it("light text tiers pass 4.5:1 on every light surface", () => {
+    for (const text of Object.values(LIGHT_TEXT)) {
+      for (const surface of [LIGHT.paper, LIGHT.paperDeep, LIGHT.raised]) {
+        expect(contrast(text, surface)).toBeGreaterThanOrEqual(4.5);
+      }
+    }
+  });
+
+  it("dark text tiers pass 4.5:1 on every dark surface", () => {
+    for (const text of Object.values(DARK_TEXT)) {
+      for (const surface of [
+        DARK.paper,
+        DARK.paperDeep,
+        DARK.raised,
+        DARK.overlay,
+      ]) {
+        expect(contrast(text, surface)).toBeGreaterThanOrEqual(4.5);
+      }
+    }
+  });
 });
