@@ -1,36 +1,49 @@
 /**
- * View mode store for the ticket list.
- * Persists list/grid preference to localStorage.
- * 6c.2 widens the ViewMode union to include "kanban".
+ * Persisted view mode stores for ledger surfaces (tickets list, dashboard).
+ *
+ * The ledger design language offers three presentations everywhere tickets
+ * appear: "list" (compact ledger rows), "cards" (full-width cards with
+ * conversation previews), and "grid" (multi-column). Each surface persists
+ * its own preference under its own localStorage key.
+ *
+ * Migration note: the union used to be "list" | "grid". Both legacy values
+ * remain valid members, so previously persisted preferences load unchanged;
+ * anything unrecognized falls back to "list". A future kanban board is
+ * separate work and is NOT the grid mode; it would widen this union again.
  */
 
-export type ViewMode = "list" | "grid";
-// 6c.2 widens: export type ViewMode = "list" | "grid" | "kanban";
+export type ViewMode = "list" | "cards" | "grid";
 
-const STORAGE_KEY = "care-y-view-mode";
-
-const VALID_MODES: ReadonlySet<string> = new Set<ViewMode>(["list", "grid"]);
+const VALID_MODES: ReadonlySet<string> = new Set<ViewMode>([
+  "list",
+  "cards",
+  "grid",
+]);
 
 function isViewMode(value: string): value is ViewMode {
   return VALID_MODES.has(value);
 }
 
-function loadFromStorage(): ViewMode {
+export interface ViewModeStore {
+  readonly mode: ViewMode;
+  set(value: ViewMode): void;
+}
+
+function loadFromStorage(storageKey: string): ViewMode {
   if (typeof window === "undefined") return "list";
   try {
-    const stored = localStorage.getItem(STORAGE_KEY);
+    const stored = localStorage.getItem(storageKey);
     if (stored !== null && isViewMode(stored)) return stored;
   } catch {
-    // Safari private browsing, storage quota, or restricted context
+    // Safari private browsing, storage quota, or restricted context:
+    // recover by treating it as no stored preference.
+    return "list";
   }
   return "list";
 }
 
-function createViewModeStore(): {
-  readonly mode: ViewMode;
-  set(value: ViewMode): void;
-} {
-  let mode = $state<ViewMode>(loadFromStorage());
+function createViewModeStore(storageKey: string): ViewModeStore {
+  let mode = $state<ViewMode>(loadFromStorage(storageKey));
 
   return {
     get mode(): ViewMode {
@@ -39,7 +52,7 @@ function createViewModeStore(): {
     set(value: ViewMode): void {
       mode = value;
       try {
-        localStorage.setItem(STORAGE_KEY, value);
+        localStorage.setItem(storageKey, value);
       } catch {
         // Storage full or restricted
       }
@@ -47,4 +60,10 @@ function createViewModeStore(): {
   };
 }
 
-export const viewModeStore = createViewModeStore();
+/** Tickets list view mode (key predates the three-way union). */
+export const viewModeStore = createViewModeStore("care-y-view-mode");
+
+/** Dashboard ("Now") view mode, scoped separately from the tickets list. */
+export const dashboardViewModeStore = createViewModeStore(
+  "care-y-dashboard-view-mode",
+);
