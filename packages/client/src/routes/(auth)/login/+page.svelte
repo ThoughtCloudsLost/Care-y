@@ -240,7 +240,26 @@
   async function navigateAfterAuth(): Promise<void> {
     const needsOnboarding = !pendingHasSeenBriefing || pendingNeedsEnrollment;
     phase = "done";
-    await goto(resolve(needsOnboarding ? "/complete" : "/"));
+    if (needsOnboarding) {
+      await goto(resolve("/complete"));
+      return;
+    }
+    // Reauth carries the interrupted route in ?next. Only same-app
+    // relative paths are honored: "/x" but never "//host" or "/\host",
+    // which browsers treat as protocol-relative URLs (OWASP unvalidated
+    // redirects). Anything else falls through to the dashboard.
+    const next = page.url.searchParams.get("next");
+    if (
+      next !== null &&
+      next.startsWith("/") &&
+      !next.startsWith("//") &&
+      !next.startsWith("/\\")
+    ) {
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- validated same-app relative path above
+      await goto(resolve(next as `/${string}`));
+      return;
+    }
+    await goto(resolve("/"));
   }
 
   async function handleTwofaSuccess(): Promise<void> {
