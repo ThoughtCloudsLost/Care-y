@@ -1662,5 +1662,6 @@
   "ticket_meta_msg_count_one": "{count} msg",
   "ticket_meta_msg_count_other": "{count} msgs",
   "preview_unlock_failed": "Could not unlock this preview",
-  "preview_retry": "Retry"
+  "preview_retry": "Retry",
+  "preview_note_internal": "Internal · {name}"
 }

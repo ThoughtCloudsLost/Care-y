@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { render, cleanup } from "@testing-library/svelte";
+import { render, cleanup, fireEvent } from "@testing-library/svelte";
 import TicketPreview from "./TicketPreview.svelte";
 
 // IntersectionObserver stub for DecryptPlaceholder
@@ -21,10 +21,12 @@ import type { RawFollowUpPreview } from "$lib/tickets/preview-loader.svelte.js";
 // --- Mocks ---
 
 const mockDecryptContent = vi.fn();
+const mockDeleteByPrefix = vi.fn();
 
 vi.mock("$lib/crypto/context.js", () => ({
   getFollowUpDecryptCache: () => ({
     decryptContent: mockDecryptContent,
+    deleteByPrefix: mockDeleteByPrefix,
   }),
   getOrgDecryptCache: () => ({
     decrypt: () => null,
@@ -38,6 +40,7 @@ vi.mock("$lib/trpc/index.js", () => ({
 afterEach(() => {
   cleanup();
   mockDecryptContent.mockReset();
+  mockDeleteByPrefix.mockReset();
 });
 
 function makeFollowUp(
@@ -148,15 +151,94 @@ describe("TicketPreview (mini-bubbles)", () => {
     expect(container.textContent).toContain("This is a very long message");
   });
 
-  it("renders error text when decryption fails (sentinel value)", () => {
+  it("renders the quiet unlock-failure label when decryption fails", () => {
     mockDecryptContent.mockReturnValue("\0DECRYPT_FAILED");
     const fu = makeFollowUp();
     const { container } = render(TicketPreview, {
       props: { ticketId: "ticket-preview-1", followUps: [fu] },
     });
-    expect(container.textContent).toContain(
-      "This content could not be decrypted.",
+    // De-jargon voice: never a raw crypto error as content.
+    expect(container.textContent).toContain("Could not unlock this preview");
+    expect(container.textContent).not.toContain("decrypted");
+  });
+
+  it("retry clears the follow-up's cache entry so the decrypt re-fires", async () => {
+    mockDecryptContent.mockReturnValue("\0DECRYPT_FAILED");
+    const fu = makeFollowUp({ id: "fu-retry" });
+    const { getByRole } = render(TicketPreview, {
+      props: { ticketId: "ticket-preview-1", followUps: [fu] },
+    });
+
+    const retry = getByRole("button", { name: "Retry" });
+    await fireEvent.click(retry);
+
+    expect(mockDeleteByPrefix).toHaveBeenCalledWith("fu-retry");
+  });
+
+  it("shows no retry for denied decrypts (missing key wrap)", () => {
+    mockDecryptContent.mockReturnValue(undefined);
+    const fu = makeFollowUp({ keyWrap: null });
+    const { container, queryByRole } = render(TicketPreview, {
+      props: { ticketId: "ticket-preview-1", followUps: [fu] },
+    });
+    // Denied keeps its own message; a retry cannot mint key material.
+    expect(queryByRole("button", { name: "Retry" })).toBeNull();
+    expect(container.textContent).not.toContain(
+      "Could not unlock this preview",
     );
+  });
+
+  it("shows the client alias eyebrow on caller bubbles only", () => {
+    mockDecryptContent
+      .mockReturnValueOnce("Client msg")
+      .mockReturnValueOnce("Volunteer reply");
+    const fus = [
+      makeFollowUp({ id: "fu-c", source: "client" }),
+      makeFollowUp({ id: "fu-v", source: "volunteer" }),
+    ];
+    const { container } = render(TicketPreview, {
+      props: {
+        ticketId: "ticket-preview-1",
+        followUps: fus,
+        clientAlias: "plain-dew-13",
+      },
+    });
+
+    const received = container.querySelector(
+      "[data-direction='received'] .mini-who",
+    );
+    expect(received?.textContent).toBe("plain-dew-13");
+    // Previews carry no author identity for the org side; labeling
+    // another volunteer's reply would lie, so no eyebrow at all.
+    expect(
+      container.querySelector("[data-direction='sent'] .mini-who"),
+    ).toBeNull();
+  });
+
+  it("renders no eyebrow when clientAlias is not provided", () => {
+    mockDecryptContent.mockReturnValue("Client msg");
+    const fu = makeFollowUp({ source: "client" });
+    const { container } = render(TicketPreview, {
+      props: { ticketId: "ticket-preview-1", followUps: [fu] },
+    });
+    expect(container.querySelector(".mini-who")).toBeNull();
+  });
+
+  it("renders internal notes full-width with an icon-only eyebrow when the name cannot resolve", () => {
+    mockDecryptContent.mockReturnValue("Watch for repeat calls");
+    const fu = makeFollowUp({ type: "internal_note", source: "volunteer" });
+    const { container } = render(TicketPreview, {
+      props: { ticketId: "ticket-preview-1", followUps: [fu] },
+    });
+
+    const note = container.querySelector(".mini-note");
+    expect(note).not.toBeNull();
+    expect(note?.textContent).toContain("Watch for repeat calls");
+    // noteTypes query is unavailable in this harness, so the eyebrow
+    // stays icon-only: no "Internal" text.
+    expect(note?.textContent).not.toContain("Internal");
+    // Notes are blocks, not directional bubbles.
+    expect(container.querySelector("[data-direction]")).toBeNull();
   });
 
   it("renders multiple follow-ups with correct alignment", () => {

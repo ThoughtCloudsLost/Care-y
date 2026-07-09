@@ -39,6 +39,12 @@
     children?: Snippet;
     /** When set, highlights matching text with <mark> elements in the ready state. */
     searchTerm?: string | null;
+    /**
+     * Override for the error-state label (denied keeps its own message).
+     * Lets surfaces speak their own quiet failure voice, e.g. the list
+     * preview's "Could not unlock this preview".
+     */
+    errorLabel?: string;
   }
 
   let {
@@ -53,6 +59,7 @@
     class: className = "",
     children,
     searchTerm = null,
+    errorLabel,
   }: Props = $props();
 
   interface TextSegment {
@@ -209,7 +216,7 @@
       <span class="decrypt-error"
         >{isDenied
           ? m.decrypt_placeholder_denied()
-          : m.error_decryption_failed()}</span
+          : (errorLabel ?? m.error_decryption_failed())}</span
       >
     {:else if !loading}
       {#if children}

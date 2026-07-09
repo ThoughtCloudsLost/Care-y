@@ -1,13 +1,17 @@
 <!--
-  Ticket list preview window: miniature chat bubbles matching the
-  detail view's visual language.
+  Ticket list preview window: miniature conversation bubbles in the
+  Inkwell anatomy, mirroring the detail view at reading size.
 
   Shows at most 3 follow-ups (from the recentFollowUps endpoint),
-  reversed into chronological order (oldest on top).
-  Left-aligned mini-bubbles for client messages, right-aligned for
-  volunteer messages, centered muted text for system events,
-  and left-border-accented italic text for internal notes.
-  Text truncated to single-line with ellipsis.
+  reversed into chronological order (oldest on top). Caller bubbles
+  sit left on paper with a hairline; the org side sits right on the
+  brand tint; internal notes span full width on recessed paper; system
+  events stay centered muted lines derived from the type field. Text
+  truncated to one line (two in multiline mode).
+
+  Failed bubble decrypts render a quiet "could not unlock" state with
+  a retry that clears the cache entry so the Worker decrypt re-fires;
+  raw crypto errors never surface as content.
 -->
 <script lang="ts">
   import { followupSlot } from "@care-y/crypto";
@@ -46,6 +50,10 @@
     followUpCount?: number;
     /** Reaction summaries keyed by follow-up ID (display-only). */
     reactions?: Record<string, ReactionSummary[]>;
+    /** Client alias for the caller-bubble speaker eyebrow. Volunteer
+     *  bubbles carry no eyebrow here: previews have no author identity,
+     *  and alignment plus the brand tint already mark the org side. */
+    clientAlias?: string;
   }
 
   let {
@@ -54,6 +62,7 @@
     multiline = false,
     followUpCount,
     reactions,
+    clientAlias,
   }: Props = $props();
   const followUpCache = getFollowUpDecryptCache();
   const orgCache = getOrgDecryptCache();
@@ -75,6 +84,20 @@
     if (!nt) return StickyNote;
     const slug = orgCache.decrypt(nt.id + ":icon", nt.encryptedIcon);
     return resolveNoteTypeIconComponent(slug ?? null);
+  }
+
+  /** Note-type name via the org-decrypt path; null keeps the eyebrow icon-only. */
+  function resolveNoteTypeName(noteTypeId: string | null): string | null {
+    const id = effectiveTypeId(noteTypeId);
+    if (id === undefined || !noteTypesQuery?.data) return null;
+    const nt = noteTypesQuery.data.types.find((t) => t.id === id);
+    if (!nt) return null;
+    return orgCache.decrypt(nt.id + ":name", nt.encryptedName);
+  }
+
+  /** Clear the cached failure so the next render re-fires the Worker decrypt. */
+  function retryDecrypt(followUpId: string): void {
+    followUpCache.deleteByPrefix(followUpId);
   }
 
   function truncate(text: string, maxLen: number): string {
@@ -141,13 +164,19 @@
         {@const content = isDecryptReady(result) ? result.value : undefined}
         {#if kind === "note"}
           {@const NoteIcon = resolveIcon(fu.noteTypeId)}
+          {@const noteTypeName = resolveNoteTypeName(fu.noteTypeId)}
           {@const noteReactions = reactions?.[fu.id] ?? []}
           <div
             class="mini-note-wrap"
             class:has-reactions={noteReactions.length > 0}
           >
             <div class="mini-note">
-              <NoteIcon size={10} class="mini-note-icon" />
+              <span class="mini-who mini-note-eyebrow">
+                <NoteIcon size={10} class="mini-note-icon" />
+                {#if noteTypeName !== null}
+                  {m.preview_note_internal({ name: noteTypeName })}
+                {/if}
+              </span>
               <DecryptPlaceholder
                 {result}
                 ciphertext={fu.encryptedContent}
@@ -155,9 +184,22 @@
                 block={multiline}
                 charsPerLine={20}
                 maxLines={multiline ? 2 : 1}
+                errorLabel={m.preview_unlock_failed()}
               >
                 <span class="mini-text">{content}</span>
               </DecryptPlaceholder>
+              {#if result.status === "error"}
+                <button
+                  type="button"
+                  class="preview-retry"
+                  onclick={(e) => {
+                    e.stopPropagation();
+                    retryDecrypt(fu.id);
+                  }}
+                >
+                  {m.preview_retry()}
+                </button>
+              {/if}
             </div>
             <ReactionTray reactions={noteReactions} size="mini" />
           </div>
@@ -173,6 +215,9 @@
               class:mini-bubble-received={fu.source === "client"}
               class:mini-bubble-sent={fu.source !== "client"}
             >
+              {#if fu.source === "client" && clientAlias !== undefined}
+                <span class="mini-who">{clientAlias}</span>
+              {/if}
               {#if fu.hasRecording || fu.hasImage || fu.hasFile}
                 <span class="mini-media" aria-hidden="true">
                   {#if fu.hasRecording}<Mic size={10} />{/if}
@@ -186,9 +231,22 @@
                 length={20}
                 block={multiline}
                 charsPerLine={20}
+                errorLabel={m.preview_unlock_failed()}
               >
                 {#if content}<span class="mini-text">{content}</span>{/if}
               </DecryptPlaceholder>
+              {#if result.status === "error"}
+                <button
+                  type="button"
+                  class="preview-retry"
+                  onclick={(e) => {
+                    e.stopPropagation();
+                    retryDecrypt(fu.id);
+                  }}
+                >
+                  {m.preview_retry()}
+                </button>
+              {/if}
             </div>
           </div>
         {/if}
@@ -198,23 +256,25 @@
 </div>
 
 <style>
+  /* Bubble stack: 6px gaps per the card anatomy; outer margins belong
+     to the consuming card. */
   .mini-chat {
     display: flex;
     flex-direction: column;
-    gap: 2px;
+    gap: 6px;
     padding: 0.375rem 0.5rem;
     min-height: 2rem;
   }
 
   .preview-empty {
-    font-size: 0.625rem;
+    font-size: var(--text-xs);
     color: var(--muted);
     margin: 0;
     text-align: center;
     padding: 0.375rem 0;
   }
 
-  /* --- Mini bubble rows --- */
+  /* --- Conversation bubbles (the mock's .q anatomy) --- */
 
   .mini-bubble-row {
     display: flex;
@@ -229,21 +289,38 @@
   }
 
   .mini-bubble {
-    max-width: 80%;
-    padding: 0.125rem 0.375rem;
-    border-radius: 0.375rem;
-    font-size: 0.625rem;
+    max-width: 86%;
+    padding: 7px 11px;
+    border-radius: 13px;
+    font-size: var(--text-base);
     line-height: 1.4;
   }
 
+  /* Caller: paper with a hairline, anchored bottom-left. */
   .mini-bubble-received {
-    background: var(--surface-2);
+    background: var(--paper);
+    border: 1px solid var(--hair);
+    border-bottom-left-radius: 5px;
     color: var(--ink);
   }
 
+  /* Org side: brand tint only (never full brand fill), bottom-right anchor. */
   .mini-bubble-sent {
-    background: color-mix(in srgb, var(--brand-text) 15%, var(--surface-1));
-    color: var(--ink);
+    background: var(--brand-soft);
+    border: 1px solid transparent;
+    border-bottom-right-radius: 5px;
+    color: var(--ink-2);
+  }
+
+  /* Speaker eyebrow inside a bubble (callers only in previews). */
+  .mini-who {
+    display: block;
+    font-size: 0.625rem;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 2px;
   }
 
   .mini-text {
@@ -282,7 +359,7 @@
     padding: 0 0.25rem;
   }
 
-  /* --- Internal notes (outline card style) --- */
+  /* --- Internal notes: full-width recessed paper block --- */
 
   .mini-note-wrap {
     position: relative;
@@ -293,21 +370,42 @@
   }
 
   .mini-note {
-    display: flex;
-    align-items: center;
-    gap: 0.25rem;
-    font-size: 0.625rem;
+    width: 100%;
+    padding: 7px 11px;
+    background: var(--paper-deep);
+    border: 1px solid var(--hair);
+    border-radius: 10px;
+    font-size: var(--text-base);
     line-height: 1.4;
-    color: var(--muted);
-    font-style: italic;
-    padding: 0.125rem 0.375rem;
-    border: 1px solid var(--divider);
-    border-radius: 0.25rem;
+    color: var(--ink-2);
     overflow: hidden;
   }
 
+  .mini-note-eyebrow {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+
+  /* Icons are tools on the desk: quiet ink, never brand. */
   :global(.mini-note-icon) {
-    color: var(--brand-accent, var(--brand-primary));
+    color: var(--muted);
     flex-shrink: 0;
+  }
+
+  /* --- Quiet unlock-failure retry --- */
+
+  /* Sits above the card's full-cover open button. */
+  .preview-retry {
+    position: relative;
+    z-index: 1;
+    margin-left: 6px;
+    padding: 0;
+    border: none;
+    background: none;
+    font-size: 0.6875rem;
+    font-weight: 700;
+    color: var(--brand-text);
+    cursor: pointer;
   }
 </style>
