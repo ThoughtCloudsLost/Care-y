@@ -256,6 +256,8 @@
   "tickets_view_grid": "Grid view",
   "tickets_open": "Open {ticket} {alias}",
   "tickets_empty_filter": "No {tickets} match this filter.",
+  "tickets_empty_title": "Nothing here yet",
+  "tickets_empty_body": "When a {client} reaches out, their {ticket} shows up here.",
   "tickets_filter_all": "All",
   "tickets_filter_new": "New",
   "tickets_filter_active": "Active",
@@ -300,6 +302,7 @@
   "tickets_sort_priority": "Priority",
   "tickets_sort_activity": "Recent activity",
   "tickets_sort_queue": "{Queue}",
+  "tickets_sort_new_replies_first": "New replies first",
   "saved_filter_modal_title": "Save Filter",
   "saved_filter_name_label": "Filter name",
   "saved_filter_name_placeholder": "e.g. Urgent Housing",
@@ -1654,5 +1657,10 @@
   "view_switcher_label": "View as",
   "view_switcher_rows": "Compact rows",
   "view_switcher_cards": "Cards",
-  "view_switcher_grid": "Grid"
+  "view_switcher_grid": "Grid",
+  "ticket_meta_you": "you",
+  "ticket_meta_msg_count_one": "{count} msg",
+  "ticket_meta_msg_count_other": "{count} msgs",
+  "preview_unlock_failed": "Could not unlock this preview",
+  "preview_retry": "Retry"
 }

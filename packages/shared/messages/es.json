@@ -256,6 +256,8 @@
   "tickets_view_grid": "Vista de cuadrícula",
   "tickets_open": "Abrir {ticket} {alias}",
   "tickets_empty_filter": "Ningún {ticket} coincide con este filtro.",
+  "tickets_empty_title": "Aún no hay nada aquí",
+  "tickets_empty_body": "Cuando un {client} se comunique, su {ticket} aparecerá aquí.",
   "tickets_filter_all": "Todos",
   "tickets_filter_new": "Nuevos",
   "tickets_filter_active": "Activos",
@@ -286,6 +288,7 @@
   "tickets_sort_priority": "Prioridad",
   "tickets_sort_activity": "Actividad reciente",
   "tickets_sort_queue": "{Queue}",
+  "tickets_sort_new_replies_first": "Respuestas nuevas primero",
   "tickets_filter_status": "Estado",
   "tickets_filter_queue": "{Queue}",
   "tickets_filter_priority": "Prioridad",
@@ -1654,5 +1657,10 @@
   "view_switcher_label": "Ver como",
   "view_switcher_rows": "Filas compactas",
   "view_switcher_cards": "Tarjetas",
-  "view_switcher_grid": "Cuadrícula"
+  "view_switcher_grid": "Cuadrícula",
+  "ticket_meta_you": "tú",
+  "ticket_meta_msg_count_one": "{count} mensaje",
+  "ticket_meta_msg_count_other": "{count} mensajes",
+  "preview_unlock_failed": "No se pudo desbloquear esta vista previa",
+  "preview_retry": "Reintentar"
 }
