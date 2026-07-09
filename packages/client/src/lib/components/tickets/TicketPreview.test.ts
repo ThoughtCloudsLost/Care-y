@@ -122,15 +122,17 @@ describe("TicketPreview (mini-bubbles)", () => {
     expect(row).not.toBeNull();
   });
 
-  it("renders system events as centered text without bubble", () => {
-    mockDecryptContent.mockReturnValue("Status changed to closed");
+  it("renders system events from the type label without decrypting", () => {
     const fu = makeFollowUp({ source: "system", type: "status_change" });
     const { container } = render(TicketPreview, {
       props: { ticketId: "ticket-preview-1", followUps: [fu] },
     });
     const sysEl = container.querySelector("[data-type='system']");
     expect(sysEl).not.toBeNull();
-    expect(sysEl?.textContent).toContain("Status changed to closed");
+    // The label derives from the follow-up type; system events carry no
+    // encrypted payload, so the decrypt path must never be touched.
+    expect(sysEl?.textContent).toContain("Status changed");
+    expect(mockDecryptContent).not.toHaveBeenCalled();
     // Should not be in a directional bubble row
     expect(container.querySelector("[data-direction]")).toBeNull();
   });
