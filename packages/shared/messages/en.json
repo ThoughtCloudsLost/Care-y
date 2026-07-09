@@ -1637,5 +1637,22 @@
   "user_field_login_username_pii_warning": "Login Usernames are stored with weaker encryption than display names because the server needs to be able to read them. Avoid using real names or email addresses.",
   "user_field_display_name_label": "Display Name",
   "user_field_display_name_info": "Visible to other {volunteers} in your organization. End-to-end encrypted.",
-  "user_field_display_name_e2e_hint": "End-to-end encrypted. Only your team can read this."
+  "user_field_display_name_e2e_hint": "End-to-end encrypted. Only your team can read this.",
+  "status_mark_new": "New",
+  "status_mark_active": "Active",
+  "status_mark_hold": "On hold",
+  "status_mark_closed": "Closed",
+  "priority_stamp_urgent": "Urgent",
+  "priority_stamp_high": "High",
+  "priority_stamp_low": "Low",
+  "register_note": "Note",
+  "register_careful": "Careful",
+  "register_warning": "Warning",
+  "register_protected": "Protected",
+  "new_pill_count_one": "{count} new",
+  "new_pill_count_other": "{count} new",
+  "view_switcher_label": "View as",
+  "view_switcher_rows": "Compact rows",
+  "view_switcher_cards": "Cards",
+  "view_switcher_grid": "Grid"
 }
