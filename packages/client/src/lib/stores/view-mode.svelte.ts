@@ -53,6 +53,7 @@ function createViewModeStore(storageKey: string): ViewModeStore {
       mode = value;
       try {
         localStorage.setItem(storageKey, value);
+        // care-y-ignore-next-line no-swallowed-errors -- best-effort persistence: the mode already changed in memory and a full or restricted storage must stay silent
       } catch {
         // Storage full or restricted
       }
