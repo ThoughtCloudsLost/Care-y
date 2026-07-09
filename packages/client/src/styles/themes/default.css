@@ -169,3 +169,12 @@
 .theme-default .skeleton-bar {
   animation: skeleton-pulse 2s ease-in-out infinite;
 }
+
+/* Search highlighter: the ochre pen, not alarm. Every <mark> (search
+   results, KB match highlights) reads as a highlighter stroke. */
+.theme-default mark {
+  background: var(--care-soft);
+  color: inherit;
+  border-radius: 2px;
+  padding: 0 1px;
+}

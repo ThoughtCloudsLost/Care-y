@@ -512,8 +512,14 @@
   }
 
   /* ── Search highlight ── */
+  /* The highlighter is a meaning slot, so it must not wear brand color.
+     --care-soft exists only in the default (Ledger) theme; other themes
+     keep their previous brand-tinted highlight via the fallback. */
   .search-highlight {
-    background: color-mix(in srgb, var(--brand-accent) 25%, transparent);
+    background: var(
+      --care-soft,
+      color-mix(in srgb, var(--brand-accent) 25%, transparent)
+    );
     border-radius: 2px;
     padding: 0 1px;
   }
