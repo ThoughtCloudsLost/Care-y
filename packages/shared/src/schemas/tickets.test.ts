@@ -19,6 +19,7 @@ import {
   undoMergeInputSchema,
   updateTicketInputSchema,
   followUpListInputSchema,
+  listReadStateInputSchema,
   searchClientsInputSchema,
   callStatusSchema,
 } from "./tickets.js";
@@ -269,6 +270,47 @@ describe("ticketListInputSchema", () => {
 
   it("rejects limit above 100", () => {
     expect(ticketListInputSchema.safeParse({ limit: 200 }).success).toBe(false);
+  });
+});
+
+describe("listReadStateInputSchema", () => {
+  /** Valid v4-shaped UUIDs varying only the final node segment. */
+  function uuidBatch(n: number): string[] {
+    return Array.from(
+      { length: n },
+      (_, i) => `550e8400-e29b-41d4-a716-${i.toString(16).padStart(12, "0")}`,
+    );
+  }
+
+  it("accepts a batch of valid ticket ids", () => {
+    const result = listReadStateInputSchema.safeParse({
+      ticketIds: [VALID_UUID, VALID_UUID_2],
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("accepts exactly 50 ids", () => {
+    expect(
+      listReadStateInputSchema.safeParse({ ticketIds: uuidBatch(50) }).success,
+    ).toBe(true);
+  });
+
+  it("rejects an empty batch", () => {
+    expect(listReadStateInputSchema.safeParse({ ticketIds: [] }).success).toBe(
+      false,
+    );
+  });
+
+  it("rejects more than 50 ids", () => {
+    expect(
+      listReadStateInputSchema.safeParse({ ticketIds: uuidBatch(51) }).success,
+    ).toBe(false);
+  });
+
+  it("rejects non-uuid entries", () => {
+    expect(
+      listReadStateInputSchema.safeParse({ ticketIds: ["not-a-uuid"] }).success,
+    ).toBe(false);
   });
 });
 

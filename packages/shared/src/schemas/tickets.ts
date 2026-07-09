@@ -232,6 +232,12 @@ export const recentFollowUpsInputSchema = z.object({
 });
 export type RecentFollowUpsInput = z.infer<typeof recentFollowUpsInputSchema>;
 
+/** Batched read-state lookup for the tickets list (cursor + reply times). */
+export const listReadStateInputSchema = z.object({
+  ticketIds: z.array(z.uuid()).min(1).max(50),
+});
+export type ListReadStateInput = z.infer<typeof listReadStateInputSchema>;
+
 export const followUpListDirectionSchema = z.enum(["newer", "older"]);
 
 export const mediaFlagSchema = z.enum(["recording", "image", "file"]);

@@ -888,6 +888,117 @@ describe.skipIf(!process.env.DATABASE_URL)("TicketService (DB)", () => {
     expect(withWrap!.keyWrap!.ephemeralPoint).not.toMatch(/[+/=]/);
   });
 
+  // --- listReadState ---
+
+  async function insertFollowUp(
+    ticketId: string,
+    source: "client" | "volunteer" | "system",
+    createdAt?: Date,
+  ): Promise<void> {
+    await testDb.db
+      .insertInto("followups")
+      .values({
+        ticket_id: ticketId,
+        source,
+        type: source === "system" ? "status_change" : "message",
+        encrypted_content: Buffer.alloc(0),
+        ...(createdAt ? { created_at: createdAt } : {}),
+      })
+      .execute();
+  }
+
+  it("listReadState silently filters tickets outside user queues", async () => {
+    const fixMine = await createTicketFixture();
+    const fixOther = await createTicketFixture();
+
+    const result = await svc.listReadState(fixMine.userId, {
+      ticketIds: [fixMine.ticketId, fixOther.ticketId],
+    });
+
+    expect(result[fixMine.ticketId]).toBeDefined();
+    expect(result[fixOther.ticketId]).toBeUndefined();
+  });
+
+  it("listReadState returns empty for a user with no queue access", async () => {
+    const { ticketId } = await createTicketFixture();
+    const outsider = await createTestUser(testDb.db);
+
+    const result = await svc.listReadState(outsider.id, {
+      ticketIds: [ticketId],
+    });
+    expect(result).toEqual({});
+  });
+
+  it("listReadState returns a null cursor without creating a row", async () => {
+    const { userId, ticketId } = await createTicketFixture();
+
+    const result = await svc.listReadState(userId, { ticketIds: [ticketId] });
+
+    expect(result[ticketId]).toBeDefined();
+    expect(result[ticketId]!.encryptedReadCursor).toBeNull();
+
+    // The read path must not lazily populate dummy rows; the "row exists
+    // = opened the detail view once" surface belongs to the detail path.
+    const rows = await testDb.db
+      .selectFrom("ticket_read_cursors")
+      .selectAll()
+      .where("ticket_id", "=", ticketId)
+      .execute();
+    expect(rows).toHaveLength(0);
+  });
+
+  it("listReadState passes stored cursor ciphertext through verbatim", async () => {
+    const { userId, ticketId } = await createTicketFixture();
+
+    const blob = Buffer.from("opaque-cursor-bytes-for-list-read-state");
+    await testDb.db
+      .insertInto("ticket_read_cursors")
+      .values({
+        ticket_id: ticketId,
+        user_id: userId,
+        encrypted_read_cursor: blob,
+      })
+      .execute();
+
+    const result = await svc.listReadState(userId, { ticketIds: [ticketId] });
+
+    expect(result[ticketId]!.encryptedReadCursor).not.toBeNull();
+    expect(result[ticketId]!.encryptedReadCursor!.equals(blob)).toBe(true);
+  });
+
+  it("listReadState excludes system follow-ups from timestamps", async () => {
+    const { userId, ticketId } = await createTicketFixture();
+
+    await insertFollowUp(ticketId, "client");
+    await insertFollowUp(ticketId, "volunteer");
+    await insertFollowUp(ticketId, "system");
+
+    const result = await svc.listReadState(userId, { ticketIds: [ticketId] });
+
+    expect(result[ticketId]!.followUpCreatedAt).toHaveLength(2);
+  });
+
+  it("listReadState caps timestamps at 20 per ticket, newest first", async () => {
+    const { userId, ticketId } = await createTicketFixture();
+
+    const base = Date.now() - 25 * 60_000;
+    for (let i = 0; i < 25; i++) {
+      await insertFollowUp(ticketId, "client", new Date(base + i * 60_000));
+    }
+
+    const result = await svc.listReadState(userId, { ticketIds: [ticketId] });
+
+    const stamps = result[ticketId]!.followUpCreatedAt;
+    expect(stamps).toHaveLength(20);
+    for (let i = 0; i < stamps.length - 1; i++) {
+      expect(stamps[i]!.getTime()).toBeGreaterThanOrEqual(
+        stamps[i + 1]!.getTime(),
+      );
+    }
+    // The 20 kept are the newest of the 25 inserted (the oldest 5 dropped).
+    expect(stamps[stamps.length - 1]!.getTime()).toBe(base + 5 * 60_000);
+  });
+
   it("list returns assignedDisplayName as Buffer when ticket is assigned", async () => {
     const { userId, clientId, queueId } = await createClientFixture();
 
