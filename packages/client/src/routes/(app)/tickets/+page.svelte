@@ -4,7 +4,7 @@
     createQuery,
     useQueryClient,
   } from "@tanstack/svelte-query";
-  import { ticketsKeys, volunteerKeys } from "$lib/query/keys";
+  import { ticketsKeys, ticketKeys, volunteerKeys } from "$lib/query/keys";
   import { createCountsQuery } from "$lib/tickets/queries.js";
   import { untrack } from "svelte";
   import { SvelteMap } from "svelte/reactivity";
@@ -13,7 +13,6 @@
   import { resolve } from "$app/paths";
   import SubNavbarFilterLayout from "$lib/shell/SubNavbarFilterLayout.svelte";
   import type {
-    ViewToggleConfig,
     SortConfig,
     SavedFiltersConfig,
     FilterPillsConfig,
@@ -39,11 +38,20 @@
   import { deriveDisplayStatus } from "$lib/tickets/display-status.js";
   import { filterStore } from "$lib/stores/filters.svelte.js";
   import { viewModeStore } from "$lib/stores/view-mode.svelte.js";
+  import { newRepliesFirstStore } from "$lib/stores/new-replies-first.svelte.js";
+  import {
+    createListReadState,
+    fetchReadStateWindow,
+    fetchSweepToExhaustion,
+  } from "$lib/tickets/create-list-read-state.svelte.js";
+  import { sortNewRepliesFirst } from "$lib/tickets/new-replies-sort.js";
+  import { isCryptoKeyed } from "$lib/crypto/crypto-keyed.svelte.js";
   import { toastStore } from "$lib/stores/toast.svelte.js";
   import { haptic } from "$lib/utils/haptic.js";
   import type {
     TicketCardProps,
     TicketQuickAction,
+    ViewMode,
   } from "$lib/components/tickets/ticket-types.js";
   import { requireRouter } from "$lib/errors.js";
   import { savedFilterStore } from "$lib/stores/saved-filters.svelte.js";
@@ -53,7 +61,7 @@
     type ReactionSummary,
     type SavedFilterColor,
   } from "@care-y/shared";
-  import StatusDot from "$lib/components/StatusDot.svelte";
+  import ViewSwitcher from "$lib/components/ViewSwitcher.svelte";
   import TicketCard from "$lib/components/tickets/TicketCard.svelte";
   import SwipeableCard from "$lib/components/tickets/SwipeableCard.svelte";
   import type { PillDefinition } from "$lib/components/filters/filter-types.js";
@@ -181,6 +189,129 @@
     queryFn: async () => ticketRouter.myQueues.query(),
   }));
 
+  // --- Read state (unread pills, sort, filter, global truth) ---
+
+  const loadedTicketIds = $derived(allTickets.map((t) => t.id));
+
+  // "New replies first" is a persisted presentation toggle; the unread
+  // FILTER is page state. Neither is a filterStore server param: the
+  // server cannot sort or filter by read state by design.
+  let unreadFilterOn = $state(false);
+  const wantsPinned = $derived(newRepliesFirstStore.enabled || unreadFilterOn);
+
+  const readStateSweepQuery = createQuery(() => ({
+    queryKey: ticketsKeys.readStateSweep(),
+    queryFn: async () =>
+      fetchSweepToExhaustion(async (cursor) =>
+        ticketRouter.readStateSweep.query({ cursor }),
+      ),
+    enabled: isCryptoKeyed(),
+  }));
+
+  // The window query covers every DISPLAYED row: the loaded window plus
+  // pinned unread rows, so pinned rows get real per-ticket counts from
+  // the 20-deep timestamp window rather than a made-up number. Pinned
+  // ids land here through the sync effect below the composable (they
+  // derive from the composable, which needs this query to exist first).
+  // eslint-disable-next-line svelte/prefer-writable-derived -- two-phase init: the pinned id list derives from the composable, which can only be constructed after the window query this state feeds; a writable $derived would read the composable before it exists
+  let pinnedWindowIds = $state<string[]>([]);
+  const readStateIds = $derived([...loadedTicketIds, ...pinnedWindowIds]);
+
+  const readStateQuery = createQuery(() => ({
+    queryKey: ticketsKeys.readState(readStateIds),
+    queryFn: async () =>
+      fetchReadStateWindow(readStateIds, async (ids) =>
+        ticketRouter.listReadState.query({ ticketIds: ids }),
+      ),
+    enabled: isCryptoKeyed() && readStateIds.length > 0,
+  }));
+
+  // Cursor decrypts need each row's own key wrap: list rows carry one,
+  // fetched pinned rows carry one, and sweep entries carry one for
+  // tickets that have no row yet (so pinned ids never decrypt wrapless).
+  const keyWrapById = $derived.by(() => {
+    const map = new SvelteMap<string, TicketRecord["keyWrap"]>();
+    for (const entry of readStateSweepQuery.data ?? []) {
+      if (entry.keyWrap !== null) map.set(entry.ticketId, entry.keyWrap);
+    }
+    for (const t of pinnedRecords) map.set(t.id, t.keyWrap);
+    for (const t of allTickets) map.set(t.id, t.keyWrap);
+    return map;
+  });
+
+  const listReadState = createListReadState({
+    windowQuery: readStateQuery,
+    sweepQuery: readStateSweepQuery,
+    getKeyWrap: (ticketId) => keyWrapById.get(ticketId) ?? null,
+    getUserId: () => currentUserId ?? "",
+    ticketDecryptCache: ticketCache,
+  });
+
+  // Unread-but-unloaded tickets (the sweep's global set minus the loaded
+  // window). Only materialized once the sweep settles, so the id list is
+  // stable rather than churning per cursor decrypt.
+  const unloadedUnreadIds = $derived.by(() => {
+    if (!wantsPinned || !listReadState.sweepSettled()) return [];
+    const loaded = new Set(loadedTicketIds);
+    return listReadState.unreadIds().filter((id) => !loaded.has(id));
+  });
+
+  $effect(() => {
+    pinnedWindowIds = unloadedUnreadIds;
+  });
+
+  // Pinned rows are fetched through the existing single-ticket endpoint
+  // (same record shape as list rows) in small batches, and seeded into
+  // the detail cache so opening one costs nothing extra.
+  const PINNED_FETCH_CHUNK = 10;
+
+  async function fetchTicketsByIds(
+    ids: readonly string[],
+  ): Promise<TicketRecord[]> {
+    const fetched: TicketRecord[] = [];
+    for (let i = 0; i < ids.length; i += PINNED_FETCH_CHUNK) {
+      const chunk = ids.slice(i, i + PINNED_FETCH_CHUNK);
+      const results = await Promise.all(
+        chunk.map(async (ticketId) => {
+          try {
+            const t = await ticketRouter.get.query({ ticketId });
+            queryClient.setQueryData(ticketKeys.detail(ticketId), t);
+            return t;
+          } catch (err: unknown) {
+            // Recovery path: a row that cannot load is dropped from the
+            // pinned block; the ticket stays reachable via normal paging.
+            console.error(
+              "[tickets] pinned unread fetch failed",
+              ticketId,
+              err,
+            );
+            return null;
+          }
+        }),
+      );
+      for (const t of results) {
+        if (t !== null) fetched.push(t);
+      }
+    }
+    return fetched;
+  }
+
+  const pinnedQuery = createQuery(() => ({
+    queryKey: ticketsKeys.unreadPinned(unloadedUnreadIds),
+    queryFn: async () => fetchTicketsByIds(unloadedUnreadIds),
+    enabled: unloadedUnreadIds.length > 0,
+  }));
+
+  const pinnedRecords = $derived.by(() => {
+    if (unloadedUnreadIds.length === 0) return [];
+    const loaded = new Set(loadedTicketIds);
+    return (pinnedQuery.data ?? []).filter((t) => !loaded.has(t.id));
+  });
+
+  const pinnedLoading = $derived(
+    unloadedUnreadIds.length > 0 && pinnedQuery.isLoading,
+  );
+
   // --- Derived display list (Layer C extractions) ---
 
   const displayFiltered = $derived(
@@ -236,8 +367,10 @@
   >;
 
   function toDataCardProps(t: TicketRecord): DataCardProps {
+    const assignedIsSelf =
+      t.assignedTo !== null && t.assignedTo === currentUserId;
     let assignedName: string | null = null;
-    if (t.assignedTo === currentUserId) {
+    if (assignedIsSelf) {
       assignedName = m.dashboard_assigned_you();
     } else if (t.assignedTo !== null) {
       assignedName =
@@ -256,11 +389,12 @@
       ),
       clientAlias: t.clientAlias,
       assignedName,
+      assignedIsSelf,
       createdAt: new Date(t.createdAt),
       lastActivityAt:
         t.lastActivityAt !== null ? new Date(t.lastActivityAt) : null,
       followUpCount: t.followUpCount,
-      unreadCount: 0,
+      unreadCount: listReadState.unreadCount(t.id),
       previewFollowUps: previewLoader.get(t.id),
       previewReactions: reactionsForTicket(
         previewLoader.get(t.id),
@@ -277,6 +411,9 @@
     const map = new SvelteMap<string, DataCardProps>();
     for (const t of displayFiltered) {
       map.set(t.id, toDataCardProps(t));
+    }
+    for (const t of pinnedRecords) {
+      if (!map.has(t.id)) map.set(t.id, toDataCardProps(t));
     }
     return map;
   });
@@ -342,6 +479,37 @@
       useMatchOrder,
     ),
   );
+
+  // --- Unread sort and filter (applied after the search/multiselect
+  //     derivations, immediately before the virtualizer) ---
+
+  function activityMs(t: TicketRecord): number {
+    return Date.parse(t.lastActivityAt ?? t.createdAt);
+  }
+
+  const listItems = $derived.by(() => {
+    // The unread FILTER decides membership: exactly the global unread
+    // set (loaded rows filtered, unloaded rows fetched and merged),
+    // ordered newest activity first.
+    if (unreadFilterOn) {
+      const members = [
+        ...pinnedRecords,
+        ...displayItems.filter((t) => listReadState.isUnread(t.id)),
+      ];
+      return members.sort((a, b) => activityMs(b) - activityMs(a));
+    }
+    // The sort partitions the loaded window (stable, server order kept
+    // within blocks) and pins fetched unread-but-unloaded rows above it.
+    if (newRepliesFirstStore.enabled) {
+      return [
+        ...pinnedRecords,
+        ...sortNewRepliesFirst(displayItems, (t) =>
+          listReadState.isUnread(t.id),
+        ),
+      ];
+    }
+    return displayItems;
+  });
 
   $effect(() => {
     const q = page.url.searchParams.get("q");
@@ -753,19 +921,15 @@
 
   // --- SubNavbar configs ---
 
-  // This page still renders the legacy two-way card anatomy. The persisted
-  // store now also allows "cards"; until the Inkwell row/card/grid anatomy
-  // lands here, a "cards" preference reads as list (both are single-column).
-  const legacyViewMode = $derived<"list" | "grid">(
-    viewModeStore.mode === "grid" ? "grid" : "list",
+  // Virtualizer estimate per Inkwell presentation: compact ruled rows,
+  // preview-bearing cards, multi-column grid cells.
+  const estimateHeight = $derived(
+    viewModeStore.mode === "list"
+      ? 72
+      : viewModeStore.mode === "cards"
+        ? 210
+        : 200,
   );
-
-  const viewConfig: ViewToggleConfig = $derived({
-    mode: legacyViewMode,
-    onchange: (mode: "list" | "grid") => viewModeStore.set(mode),
-    listLabel: m.tickets_view_list(),
-    gridLabel: m.tickets_view_grid(),
-  });
 
   const sortConfig: SortConfig = $derived({
     label: m.tickets_sort(),
@@ -801,6 +965,20 @@
     onclearall: dispatch.clearAll,
     oncreateshortcut: () => {
       savedFilterModalOpen = true;
+    },
+    sortToggle: {
+      label: m.tickets_sort_new_replies_first(),
+      active: newRepliesFirstStore.enabled,
+      ontoggle: () => {
+        newRepliesFirstStore.toggle();
+      },
+    },
+    unreadFilter: {
+      label: m.tickets_filter_unread(),
+      active: unreadFilterOn,
+      ontoggle: () => {
+        unreadFilterOn = !unreadFilterOn;
+      },
     },
   });
 </script>
@@ -839,21 +1017,34 @@
 {/snippet}
 
 {#snippet ticketStats()}
-  <span class="stat-item">
-    <StatusDot status="new" />
-    {newCount}
+  <span class="count-item">
+    <b>{newCount}</b>
     {m.tickets_status_new()}
   </span>
-  <span class="stat-item">
-    <StatusDot status="active" />
-    {activeCount}
+  <span class="count-item">
+    <b>{activeCount}</b>
     {m.tickets_status_active()}
   </span>
-  <span class="stat-item">
-    <StatusDot status="hold" />
-    {holdCount}
+  <span class="count-item">
+    <b>{holdCount}</b>
     {m.tickets_status_on_hold()}
   </span>
+  {#if listReadState.sweepSettled()}
+    {@const unreadTotal = listReadState.unreadTotal()}
+    <span class="count-item" data-testid="count-new-replies">
+      <b>{unreadTotal}</b>
+      {unreadTotal === 1
+        ? m.tickets_count_new_replies_one()
+        : m.tickets_count_new_replies_other()}
+    </span>
+  {/if}
+{/snippet}
+
+{#snippet switcherHeader()}
+  <ViewSwitcher
+    mode={viewModeStore.mode}
+    onchange={(mode: ViewMode) => viewModeStore.set(mode)}
+  />
 {/snippet}
 
 {#snippet searchNavigatorRow()}
@@ -875,7 +1066,7 @@
 {#snippet ticketSubnavbar()}
   <SubNavbarFilterLayout
     title={m.tickets_title(withTerms())}
-    view={viewConfig}
+    headerRight={switcherHeader}
     stats={ticketStats}
     sort={sortConfig}
     selectLabel={m.tickets_select_mode()}
@@ -890,11 +1081,16 @@
 
 <div class="ticket-page pb-20">
   {#if ticketsQuery.isLoading}
-    <div class="ticket-list" class:ticket-grid={viewModeStore.mode === "grid"}>
+    <div
+      class="ticket-list"
+      class:mode-rows={viewModeStore.mode === "list"}
+      class:mode-cards={viewModeStore.mode === "cards"}
+      class:ticket-grid={viewModeStore.mode === "grid"}
+    >
       {#each [1, 2, 3, 4] as n (n)}
         <TicketCard
           loading={true}
-          viewMode={legacyViewMode}
+          viewMode={viewModeStore.mode}
           ticketId=""
           queueName={null}
           displayStatus="active"
@@ -916,51 +1112,83 @@
   {:else if ticketsQuery.isError}
     <QueryError error={ticketsQuery.error} />
   {:else}
-    <div class="ticket-list" data-ticket-list>
-      <VirtualList
-        items={displayItems}
-        scrollContainer={scrollEl}
-        estimateHeight={viewModeStore.mode === "grid" ? 200 : 140}
-        virtualizeThreshold={200}
-        columns={gridColumns}
-        getKey={(t: TicketRecord) => t.id}
-        onloadmore={loadNextPage}
-      >
-        {#snippet children({ item }: { item: TicketRecord; index: number })}
-          <div
-            id="ticket-{item.id}"
-            class="search-target"
-            class:match-active={overlay.activeId === item.id}
-            class:ticket-card-selected={ticketsLayout.selectedTicketId() ===
-              item.id}
-            aria-current={overlay.activeId === item.id ||
-            ticketsLayout.selectedTicketId() === item.id
-              ? "true"
-              : undefined}
-          >
-            <SwipeableCard
-              ticketId={item.id}
-              disabled={multiSelect.active}
-              onaction={handleAction}
-              onlongpress={(id: string) => multiSelect.handleLongPress(id)}
+    <div
+      class="ticket-list"
+      data-ticket-list
+      class:mode-rows={viewModeStore.mode === "list"}
+      class:mode-cards={viewModeStore.mode === "cards"}
+    >
+      {#if pinnedLoading}
+        <!-- Skeleton rows for unread-but-unloaded tickets being fetched
+             into the pinned block. -->
+        {#each unloadedUnreadIds as id (id)}
+          <TicketCard
+            loading={true}
+            viewMode={viewModeStore.mode}
+            ticketId=""
+            queueName={null}
+            displayStatus="active"
+            priority="normal"
+            titleResult={{ status: "loading" }}
+            clientAlias=""
+            assignedName={null}
+            createdAt={new Date()}
+            lastActivityAt={null}
+            followUpCount={0}
+            unreadCount={0}
+            previewFollowUps={undefined}
+            ontap={() => {
+              /* loading skeleton, no-op */
+            }}
+          />
+        {/each}
+      {/if}
+      {#key viewModeStore.mode}
+        <VirtualList
+          items={listItems}
+          scrollContainer={scrollEl}
+          {estimateHeight}
+          virtualizeThreshold={200}
+          columns={gridColumns}
+          getKey={(t: TicketRecord) => t.id}
+          onloadmore={loadNextPage}
+        >
+          {#snippet children({ item }: { item: TicketRecord; index: number })}
+            <div
+              id="ticket-{item.id}"
+              class="search-target"
+              class:match-active={overlay.activeId === item.id}
+              class:ticket-card-selected={ticketsLayout.selectedTicketId() ===
+                item.id}
+              aria-current={overlay.activeId === item.id ||
+              ticketsLayout.selectedTicketId() === item.id
+                ? "true"
+                : undefined}
             >
-              {@const dataProps = cardPropsMap.get(item.id)}
-              {#if dataProps}
-                <TicketCard
-                  {...dataProps}
-                  viewMode={legacyViewMode}
-                  selected={multiSelect.selectedIds.has(item.id)}
-                  multiSelectActive={multiSelect.active}
-                  searchTerm={overlay.term}
-                />
-              {/if}
-            </SwipeableCard>
-          </div>
-        {/snippet}
-      </VirtualList>
+              <SwipeableCard
+                ticketId={item.id}
+                disabled={multiSelect.active}
+                onaction={handleAction}
+                onlongpress={(id: string) => multiSelect.handleLongPress(id)}
+              >
+                {@const dataProps = cardPropsMap.get(item.id)}
+                {#if dataProps}
+                  <TicketCard
+                    {...dataProps}
+                    viewMode={viewModeStore.mode}
+                    selected={multiSelect.selectedIds.has(item.id)}
+                    multiSelectActive={multiSelect.active}
+                    searchTerm={overlay.term}
+                  />
+                {/if}
+              </SwipeableCard>
+            </div>
+          {/snippet}
+        </VirtualList>
+      {/key}
     </div>
 
-    {#if displayItems.length === 0}
+    {#if listItems.length === 0 && !pinnedLoading}
       <div class="empty-state" role="status">
         <p>
           {overlay.active
@@ -1019,10 +1247,20 @@
     gap: var(--space-lg);
   }
 
-  .stat-item {
+  /* Counts line: bold ink numbers, ink-2 words (the mock's .counts). */
+  .count-item {
     display: inline-flex;
-    align-items: center;
+    align-items: baseline;
     gap: 0.25rem;
+    font-size: var(--text-base);
+    color: var(--ink-2);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+
+  .count-item b {
+    font-weight: 700;
+    color: var(--ink);
   }
 
   .ticket-list {
@@ -1030,6 +1268,17 @@
     flex-direction: column;
     gap: var(--space-md);
     min-width: 0;
+  }
+
+  /* Ruled rows: hairline-separated lines opened by a top rule; the
+     rows carry their own bottom hairlines. */
+  .ticket-list.mode-rows {
+    gap: 0;
+    border-top: 1px solid var(--hair);
+  }
+
+  .ticket-list.mode-cards {
+    gap: 12px;
   }
 
   .ticket-list.ticket-grid {
