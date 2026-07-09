@@ -10,7 +10,10 @@
 
 import type { Component, Snippet } from "svelte";
 import type { SavedFilterRecord } from "@care-y/shared";
-import type { PillDefinition } from "$lib/components/filters/filter-types.js";
+import type {
+  PillDefinition,
+  FilterToggleConfig,
+} from "$lib/components/filters/filter-types.js";
 
 // ── Tab identifiers ──────────────────────────────────────────────────
 
@@ -303,6 +306,10 @@ export interface FilterPillsConfig {
   readonly ondatechange: (from: Date | null, to: Date | null) => void;
   readonly onclearall: () => void;
   readonly oncreateshortcut?: () => void;
+  /** Client-side sort toggle rendered as the first pill. */
+  readonly sortToggle?: FilterToggleConfig;
+  /** Client-side membership filter rendered as the second pill. */
+  readonly unreadFilter?: FilterToggleConfig;
 }
 
 // ── Desktop responsive ──────────────────────────────────────────────

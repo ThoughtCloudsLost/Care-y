@@ -14,11 +14,15 @@
   import { withTerms } from "$lib/terminology/with-terms.js";
   import Skeleton from "$lib/components/Skeleton.svelte";
   import FilterPill from "./FilterPill.svelte";
-  import type { PillDefinition } from "./filter-types.js";
+  import type { PillDefinition, FilterToggleConfig } from "./filter-types.js";
 
   interface Props {
     pills: PillDefinition[];
     activeCount: number;
+    /** Client-side sort toggle rendered as the FIRST pill (no popover). */
+    sortToggle?: FilterToggleConfig;
+    /** Client-side membership filter rendered as the SECOND pill (no popover). */
+    unreadFilter?: FilterToggleConfig;
     /** Date "from" value as YYYY-MM-DD string (for date pill) */
     dateFrom?: string;
     /** Date "to" value as YYYY-MM-DD string (for date pill) */
@@ -50,6 +54,8 @@
   let {
     pills,
     activeCount,
+    sortToggle,
+    unreadFilter,
     dateFrom = "",
     dateTo = "",
     dateActive = false,
@@ -188,6 +194,20 @@
   }
 </script>
 
+{#snippet togglePill(toggle: FilterToggleConfig)}
+  <!-- Same pinned pill anatomy as FilterPill, minus the popover chrome:
+       these are plain on/off switches for client-side list presentation. -->
+  <button
+    type="button"
+    class="toggle-pill"
+    class:on={toggle.active}
+    aria-pressed={toggle.active}
+    onclick={() => toggle.ontoggle()}
+  >
+    {toggle.label}
+  </button>
+{/snippet}
+
 <div class="filter-pill-bar" role="toolbar" aria-label={resolvedFilterLabel}>
   {#if activeCount > 0 && oncreateshortcut}
     <Link
@@ -202,6 +222,12 @@
   {/if}
 
   <div class="pill-scroll">
+    {#if sortToggle}
+      {@render togglePill(sortToggle)}
+    {/if}
+    {#if unreadFilter}
+      {@render togglePill(unreadFilter)}
+    {/if}
     {#each pills as pill (pill.id)}
       <FilterPill
         label={pill.label}
@@ -345,6 +371,47 @@
 
   .pill-scroll::-webkit-scrollbar {
     display: none;
+  }
+
+  .toggle-pill {
+    flex-shrink: 0;
+    padding: 6px 12px;
+    border: 1px solid var(--hair-2);
+    border-radius: 999px;
+    background: transparent;
+    font: inherit;
+    font-size: var(--text-sm);
+    color: var(--ink-2);
+    white-space: nowrap;
+    cursor: pointer;
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .toggle-pill {
+      transition: border-color 150ms ease;
+    }
+  }
+
+  .toggle-pill.on {
+    border-color: var(--brand-text);
+    color: var(--brand-text);
+    font-weight: 700;
+  }
+
+  @media (prefers-contrast: more) {
+    .toggle-pill {
+      background: Canvas;
+      border-color: CanvasText;
+      color: CanvasText;
+    }
+
+    .toggle-pill.on {
+      background: CanvasText;
+      border-color: CanvasText;
+      color: Canvas;
+    }
   }
 
   :global(.bookmark-link) {

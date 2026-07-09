@@ -8,7 +8,7 @@
  */
 
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { render, cleanup } from "@testing-library/svelte";
+import { render, cleanup, fireEvent } from "@testing-library/svelte";
 import { SvelteSet } from "svelte/reactivity";
 
 // --- Mock i18n ---
@@ -166,5 +166,78 @@ describe("FilterPillBar", () => {
       clearLabel: "Reset",
     });
     expect(container.textContent).toContain("Reset");
+  });
+
+  // --- Toggle pills (client-side sort + unread filter) ---
+
+  it("renders sort and unread toggles as the first two pills", () => {
+    const { container } = render(FilterPillBar, {
+      pills: makePills(),
+      activeCount: 0,
+      ontoggle: noop,
+      onselect: noop,
+      ondatechange: noop,
+      onclearall: noop,
+      sortToggle: { label: "New replies first", active: true, ontoggle: noop },
+      unreadFilter: { label: "Unread", active: false, ontoggle: noop },
+    });
+    const scroll = container.querySelector(".pill-scroll");
+    expect(scroll).not.toBeNull();
+    const children = Array.from(scroll!.children);
+    expect(children[0]?.textContent.trim()).toBe("New replies first");
+    expect(children[1]?.textContent.trim()).toBe("Unread");
+  });
+
+  it("marks an active toggle with aria-pressed", () => {
+    const { container } = render(FilterPillBar, {
+      pills: makePills(),
+      activeCount: 0,
+      ontoggle: noop,
+      onselect: noop,
+      ondatechange: noop,
+      onclearall: noop,
+      sortToggle: { label: "New replies first", active: true, ontoggle: noop },
+      unreadFilter: { label: "Unread", active: false, ontoggle: noop },
+    });
+    const toggles = container.querySelectorAll(".toggle-pill");
+    expect(toggles.length).toBe(2);
+    expect(toggles[0]?.getAttribute("aria-pressed")).toBe("true");
+    expect(toggles[1]?.getAttribute("aria-pressed")).toBe("false");
+  });
+
+  it("fires ontoggle when a toggle pill is clicked", async () => {
+    const onSort = vi.fn();
+    const onUnread = vi.fn();
+    const { container } = render(FilterPillBar, {
+      pills: makePills(),
+      activeCount: 0,
+      ontoggle: noop,
+      onselect: noop,
+      ondatechange: noop,
+      onclearall: noop,
+      sortToggle: {
+        label: "New replies first",
+        active: false,
+        ontoggle: onSort,
+      },
+      unreadFilter: { label: "Unread", active: false, ontoggle: onUnread },
+    });
+    const toggles = container.querySelectorAll(".toggle-pill");
+    await fireEvent.click(toggles[0]!);
+    expect(onSort).toHaveBeenCalledTimes(1);
+    await fireEvent.click(toggles[1]!);
+    expect(onUnread).toHaveBeenCalledTimes(1);
+  });
+
+  it("renders no toggle pills when the configs are absent", () => {
+    const { container } = render(FilterPillBar, {
+      pills: makePills(),
+      activeCount: 0,
+      ontoggle: noop,
+      onselect: noop,
+      ondatechange: noop,
+      onclearall: noop,
+    });
+    expect(container.querySelector(".toggle-pill")).toBeNull();
   });
 });

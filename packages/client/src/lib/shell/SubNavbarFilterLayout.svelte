@@ -210,6 +210,8 @@
     <FilterPillBar
       pills={filterPills.pills}
       activeCount={filterPills.activeCount}
+      sortToggle={filterPills.sortToggle}
+      unreadFilter={filterPills.unreadFilter}
       filterLabel={filterPills.filterLabel}
       dateFrom={filterPills.dateFrom}
       dateTo={filterPills.dateTo}

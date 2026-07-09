@@ -70,6 +70,11 @@ vi.mock("$lib/trpc/index.js", () => ({
   trpc: {
     tickets: {
       list: { query: vi.fn() },
+      get: { query: vi.fn() },
+      listReadState: { query: vi.fn().mockResolvedValue({}) },
+      readStateSweep: {
+        query: vi.fn().mockResolvedValue({ items: [], nextCursor: null }),
+      },
       recentFollowUps: { query: vi.fn() },
       myQueues: { query: vi.fn() },
       listVolunteers: { query: vi.fn().mockResolvedValue([]) },
@@ -453,10 +458,12 @@ describe("Ticket list page", () => {
 
     const { container } = render(PageModule.default);
     // When assignedTo matches the current user ("user-001" from mock),
-    // the card displays "You" via the dashboard_assigned_you message,
-    // rendered inside the row meta line.
+    // the page passes assignedIsSelf and the card renders the bold
+    // lowercase "you" segment inside the row meta line.
     const meta = container.querySelector("[data-testid='row-meta']");
-    expect(meta?.textContent).toContain("You");
+    const you = meta?.querySelector(".meta-you");
+    expect(you).toBeTruthy();
+    expect(you?.textContent).toBe("you");
   });
 
   it("renders on-hold ticket with hold status label", () => {
