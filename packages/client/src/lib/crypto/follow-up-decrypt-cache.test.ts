@@ -60,6 +60,7 @@ function createMockBridge(): {
     bridge: {
       decrypt: mockDecrypt,
       decryptAndRewrap: mockDecryptAndRewrap,
+      getState: () => "KEYED",
     } as unknown as CryptoBridge,
     mockDecrypt,
     mockDecryptAndRewrap,

@@ -35,7 +35,11 @@ export type WorkerErrorCode =
   | "TK_NOT_CACHED"
   | "REWRAP_FAILED"
   | "UNWRAP_FAILED"
-  | "WORKER_ERROR";
+  | "WORKER_ERROR"
+  // Main-thread-generated: the bridge was destroyed or disconnected while
+  // requests were pending or arriving. Expected during teardown; callers
+  // treat it as quiet cancellation, not a failure worth logging.
+  | "BRIDGE_DESTROYED";
 
 // ── Request types (main thread -> Worker) ────────────────────────────
 

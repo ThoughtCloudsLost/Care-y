@@ -193,9 +193,12 @@ export class CryptoBridge {
     }
   }
 
-  private rejectAllPending(message: string): void {
+  private rejectAllPending(
+    message: string,
+    code: "WORKER_ERROR" | "BRIDGE_DESTROYED" = "WORKER_ERROR",
+  ): void {
     for (const [, entry] of this.pending) {
-      entry.reject(new CryptoWorkerError(message, "WORKER_ERROR"));
+      entry.reject(new CryptoWorkerError(message, code));
     }
     this.pending.clear();
   }
@@ -245,7 +248,7 @@ export class CryptoBridge {
         }
       }
       this.setState("DESTROYED");
-      this.rejectAllPending("Bridge disconnected");
+      this.rejectAllPending("Bridge disconnected", "BRIDGE_DESTROYED");
     } else {
       this.destroy();
     }
@@ -653,7 +656,7 @@ export class CryptoBridge {
     }
 
     this.setState("DESTROYED");
-    this.rejectAllPending("Worker destroyed");
+    this.rejectAllPending("Worker destroyed", "BRIDGE_DESTROYED");
   }
 
   /** Register a handler for Worker-initiated events (re-wrap notifications). */
@@ -694,7 +697,7 @@ export class CryptoBridge {
     transfer?: Transferable[],
   ): Promise<WorkerSuccessResponse> {
     if (this.state === "DESTROYED") {
-      throw new CryptoWorkerError("Bridge is destroyed", "WORKER_ERROR");
+      throw new CryptoWorkerError("Bridge is destroyed", "BRIDGE_DESTROYED");
     }
 
     const id = this.nextId++;

@@ -11,6 +11,7 @@
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import type { CryptoBridge } from "$lib/workers/crypto-bridge.js";
+import { CryptoWorkerError } from "$lib/workers/crypto-bridge-errors.js";
 import {
   AsyncDecryptCache,
   DECRYPT_ERROR_SENTINEL,
@@ -104,6 +105,7 @@ function createMockBridge(): {
     bridge: {
       decrypt: mockDecrypt,
       decryptAndRewrap: mockDecryptAndRewrap,
+      getState: () => "KEYED",
     } as unknown as CryptoBridge,
     mockDecrypt,
     mockDecryptAndRewrap,
@@ -348,6 +350,58 @@ describe("AsyncDecryptCache", () => {
       cache.testDecrypt("k2", EP, NONCE, WK, CT);
       await cache.whenSettled();
       expect(cache.size).toBe(2);
+    });
+  });
+
+  describe("bridge teardown", () => {
+    it("does not fire the bridge once it is destroyed", () => {
+      const destroyedDecrypt = vi.fn();
+      const destroyedBridge = {
+        decrypt: destroyedDecrypt,
+        getState: () => "DESTROYED",
+      } as unknown as CryptoBridge;
+      const teardownCache = new TestDecryptCache(
+        destroyedBridge,
+        `TeardownCache-${Date.now()}`,
+      );
+
+      const result = teardownCache.testDecrypt(CACHE_KEY, EP, NONCE, WK, CT);
+      expect(result).toBeUndefined();
+      expect(destroyedDecrypt).not.toHaveBeenCalled();
+    });
+
+    it("swallows teardown rejections without sentinel or warning", async () => {
+      const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {
+        // silenced for assertion
+      });
+      try {
+        mockDecrypt.mockRejectedValueOnce(
+          new CryptoWorkerError("Bridge is destroyed", "BRIDGE_DESTROYED"),
+        );
+        cache.testDecrypt(CACHE_KEY, EP, NONCE, WK, CT);
+        await cache.whenSettled();
+        expect(cache.has(CACHE_KEY)).toBe(false);
+        expect(warnSpy).not.toHaveBeenCalled();
+      } finally {
+        warnSpy.mockRestore();
+      }
+    });
+
+    it("still stores the sentinel and warns for real decrypt failures", async () => {
+      const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {
+        // silenced for assertion
+      });
+      try {
+        mockDecrypt.mockRejectedValueOnce(
+          new CryptoWorkerError("bad ciphertext", "DECRYPT_FAILED"),
+        );
+        cache.testDecrypt(CACHE_KEY, EP, NONCE, WK, CT);
+        await cache.whenSettled();
+        expect(isDecryptError(cache.get(CACHE_KEY))).toBe(true);
+        expect(warnSpy).toHaveBeenCalledOnce();
+      } finally {
+        warnSpy.mockRestore();
+      }
     });
   });
 });
