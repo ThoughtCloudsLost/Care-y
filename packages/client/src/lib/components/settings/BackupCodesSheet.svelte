@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Preloader, Button } from "konsta/svelte";
+  import { Preloader, Button, DialogButton } from "konsta/svelte";
   import { Copy, Check } from "@lucide/svelte";
   import * as m from "$lib/paraglide/messages.js";
   import { trpc } from "$lib/trpc/index.js";
@@ -7,6 +7,7 @@
   import { announceToLiveRegion } from "$lib/utils/announce.js";
   import { haptic } from "$lib/utils/haptic.js";
   import ShellSheet from "$lib/shell/ShellSheet.svelte";
+  import ShellDialog from "$lib/shell/ShellDialog.svelte";
 
   interface BackupCodesSheetProps {
     readonly opened: boolean;
@@ -26,17 +27,36 @@
   let wasOpen = $state(false);
   let copied = $state(false);
   let copyTimeout: ReturnType<typeof setTimeout> | undefined;
+  let confirmOpen = $state(false);
 
   $effect(() => {
     if (opened && !wasOpen) {
       codes = [];
       error = "";
       copied = false;
+      confirmOpen = false;
       clearTimeout(copyTimeout);
       void fetchCodes();
     }
     wasOpen = opened;
   });
+
+  // The codes are shown exactly once; Escape, swipe, and backdrop taps
+  // used to dismiss the sheet instantly and forever. Every dismissal
+  // path funnels through here so leaving requires an explicit
+  // confirmation while codes are on screen.
+  function requestDismiss(): void {
+    if (codes.length > 0 && error === "") {
+      confirmOpen = true;
+      return;
+    }
+    ondismiss();
+  }
+
+  function confirmSaved(): void {
+    confirmOpen = false;
+    ondismiss();
+  }
 
   async function fetchCodes(): Promise<void> {
     loading = true;
@@ -71,7 +91,7 @@
 
 <ShellSheet
   {opened}
-  {ondismiss}
+  ondismiss={requestDismiss}
   ariaLabel={m.twofa_backup_codes_title()}
   title={m.twofa_backup_codes_title()}
 >
@@ -126,6 +146,24 @@
     {/if}
   </div>
 </ShellSheet>
+
+<ShellDialog
+  opened={confirmOpen}
+  ondismiss={() => (confirmOpen = false)}
+  title={m.twofa_backup_codes_confirm_title()}
+>
+  {#snippet content()}
+    <p>{m.twofa_backup_codes_confirm_text()}</p>
+  {/snippet}
+  {#snippet buttons()}
+    <DialogButton onclick={() => (confirmOpen = false)}>
+      {m.twofa_backup_codes_confirm_back()}
+    </DialogButton>
+    <DialogButton strong onclick={confirmSaved}>
+      {m.twofa_backup_codes_confirm_saved()}
+    </DialogButton>
+  {/snippet}
+</ShellDialog>
 
 <style>
   .sheet-content {

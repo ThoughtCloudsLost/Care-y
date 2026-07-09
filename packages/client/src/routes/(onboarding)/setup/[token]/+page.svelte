@@ -313,7 +313,10 @@
     announceToLiveRegion(
       "polite",
       m.onboarding_stepper_progress({
-        current: String(step + 1),
+        // step is 0-based; advancing past the last step lands on the
+        // completion screen, which used to announce one past the total
+        // ("Step 9 of 8").
+        current: String(Math.min(step + 1, STEP_LABELS.length)),
         total: String(STEP_LABELS.length),
       }),
     );

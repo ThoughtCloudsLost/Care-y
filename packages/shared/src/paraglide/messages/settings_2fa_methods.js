@@ -6,17 +6,17 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{ count: NonNullable<unknown> }} Settings_2fa_MethodsInputs */
 
 const en_settings_2fa_methods = /** @type {(inputs: Settings_2fa_MethodsInputs) => LocalizedString} */ (i) => {
-	return /** @type {LocalizedString} */ (`${i?.count} method(s) enrolled`)
+	return /** @type {LocalizedString} */ (`${i?.count} methods enrolled`)
 };
 
 const es_settings_2fa_methods = /** @type {(inputs: Settings_2fa_MethodsInputs) => LocalizedString} */ (i) => {
-	return /** @type {LocalizedString} */ (`${i?.count} método(s) inscrito(s)`)
+	return /** @type {LocalizedString} */ (`${i?.count} métodos inscritos`)
 };
 
 /**
 * | output |
 * | --- |
-* | "{count} method(s) enrolled" |
+* | "{count} methods enrolled" |
 *
 * @param {Settings_2fa_MethodsInputs} inputs
 * @param {{ locale?: "en" | "es" }} options
