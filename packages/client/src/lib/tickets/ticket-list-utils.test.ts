@@ -13,6 +13,8 @@ import {
   buildAssigneeOptions,
   resolveEmptyKind,
   showCaughtUpLine,
+  resolveGridColumns,
+  GRID_CARD_MIN_WIDTH,
   VALID_STATUSES,
   SORT_FIELDS,
 } from "./ticket-list-utils.js";
@@ -454,5 +456,22 @@ describe("showCaughtUpLine", () => {
 
   it("hides on an empty list (the full empty state owns that)", () => {
     expect(showCaughtUpLine({ ...base, listCount: 0 })).toBe(false);
+  });
+});
+
+describe("resolveGridColumns", () => {
+  it("returns 2 before the container has been measured (width 0)", () => {
+    expect(resolveGridColumns(0)).toBe(2);
+  });
+
+  it("never collapses below 2 columns at phone widths", () => {
+    expect(resolveGridColumns(390)).toBe(2);
+    expect(resolveGridColumns(GRID_CARD_MIN_WIDTH * 2 - 1)).toBe(2);
+  });
+
+  it("grows by whole card widths past the 2 column floor", () => {
+    expect(resolveGridColumns(GRID_CARD_MIN_WIDTH * 2)).toBe(2);
+    expect(resolveGridColumns(GRID_CARD_MIN_WIDTH * 3)).toBe(3);
+    expect(resolveGridColumns(1280)).toBe(4);
   });
 });
