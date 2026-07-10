@@ -11,6 +11,8 @@ import {
   buildDateRangeLabel,
   buildFilterSummary,
   buildAssigneeOptions,
+  resolveEmptyKind,
+  showCaughtUpLine,
   VALID_STATUSES,
   SORT_FIELDS,
 } from "./ticket-list-utils.js";
@@ -368,5 +370,89 @@ describe("buildAssigneeOptions", () => {
     const result = buildAssigneeOptions("user-1", undefined, labels);
     expect(result[0]?.label).toBe("Me (0)");
     expect(result[1]?.label).toBe("Unassigned (0)");
+  });
+});
+
+describe("resolveEmptyKind", () => {
+  const base = {
+    searchActive: false,
+    unreadFilterOn: false,
+    globalCaughtUp: false,
+    ticketCount: 0,
+    activeFilterCount: 0,
+  };
+
+  it("returns 'search' when the search overlay is active", () => {
+    expect(resolveEmptyKind({ ...base, searchActive: true })).toBe("search");
+  });
+
+  it("search wins over every other branch", () => {
+    expect(
+      resolveEmptyKind({
+        ...base,
+        searchActive: true,
+        unreadFilterOn: true,
+        globalCaughtUp: true,
+      }),
+    ).toBe("search");
+  });
+
+  it("returns 'caught-up' when the unread filter is on and global unread is zero", () => {
+    expect(
+      resolveEmptyKind({ ...base, unreadFilterOn: true, globalCaughtUp: true }),
+    ).toBe("caught-up");
+  });
+
+  it("returns 'filtered' when the unread filter is on but the sweep has not settled", () => {
+    expect(
+      resolveEmptyKind({
+        ...base,
+        unreadFilterOn: true,
+        globalCaughtUp: false,
+      }),
+    ).toBe("filtered");
+  });
+
+  it("returns 'truly-empty' with zero tickets and no active filters", () => {
+    expect(resolveEmptyKind(base)).toBe("truly-empty");
+  });
+
+  it("returns 'filtered' with zero rendered rows but active filters", () => {
+    expect(resolveEmptyKind({ ...base, activeFilterCount: 2 })).toBe(
+      "filtered",
+    );
+  });
+
+  it("returns 'filtered' when tickets exist but none render", () => {
+    expect(resolveEmptyKind({ ...base, ticketCount: 5 })).toBe("filtered");
+  });
+});
+
+describe("showCaughtUpLine", () => {
+  const base = {
+    sortOn: true,
+    globalCaughtUp: true,
+    searchActive: false,
+    listCount: 3,
+  };
+
+  it("shows above a non-empty list when sort is on and global unread is zero", () => {
+    expect(showCaughtUpLine(base)).toBe(true);
+  });
+
+  it("hides when the sort toggle is off", () => {
+    expect(showCaughtUpLine({ ...base, sortOn: false })).toBe(false);
+  });
+
+  it("hides until the sweep settles at zero", () => {
+    expect(showCaughtUpLine({ ...base, globalCaughtUp: false })).toBe(false);
+  });
+
+  it("hides while searching", () => {
+    expect(showCaughtUpLine({ ...base, searchActive: true })).toBe(false);
+  });
+
+  it("hides on an empty list (the full empty state owns that)", () => {
+    expect(showCaughtUpLine({ ...base, listCount: 0 })).toBe(false);
   });
 });

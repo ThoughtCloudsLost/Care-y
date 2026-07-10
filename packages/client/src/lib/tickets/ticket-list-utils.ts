@@ -174,6 +174,54 @@ export function buildFilterSummary(
   return parts.length > 0 ? parts.join(", ") : "No filters";
 }
 
+export type TicketListEmptyKind =
+  "search" | "caught-up" | "truly-empty" | "filtered";
+
+/**
+ * Decide which empty treatment the tickets list shows when zero rows
+ * render. The caught-up stamp reads the GLOBAL unread truth (the sweep),
+ * so it never claims "caught up" from a merely empty window; the seal is
+ * reserved for a genuinely empty room (no tickets, no filters, no
+ * search, no unread filter).
+ */
+export function resolveEmptyKind(args: {
+  readonly searchActive: boolean;
+  readonly unreadFilterOn: boolean;
+  readonly globalCaughtUp: boolean;
+  readonly ticketCount: number;
+  readonly activeFilterCount: number;
+}): TicketListEmptyKind {
+  if (args.searchActive) return "search";
+  if (args.unreadFilterOn && args.globalCaughtUp) return "caught-up";
+  if (
+    args.ticketCount === 0 &&
+    args.activeFilterCount === 0 &&
+    !args.unreadFilterOn
+  ) {
+    return "truly-empty";
+  }
+  return "filtered";
+}
+
+/**
+ * The slim caught-up line above a non-empty list when the sort toggle is
+ * on. Hidden while searching: the stamp marks the list's resting state,
+ * and over match-ordered results it would read as "no matches".
+ */
+export function showCaughtUpLine(args: {
+  readonly sortOn: boolean;
+  readonly globalCaughtUp: boolean;
+  readonly searchActive: boolean;
+  readonly listCount: number;
+}): boolean {
+  return (
+    args.sortOn &&
+    args.globalCaughtUp &&
+    !args.searchActive &&
+    args.listCount > 0
+  );
+}
+
 export interface AssigneeOptionLabels {
   readonly me: (count: string) => string;
   readonly unassigned: (count: string) => string;
