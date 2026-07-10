@@ -4,12 +4,11 @@
   of follow-up records without the full detail-page features (long-press, media, editing).
 -->
 <script lang="ts">
-  import { Message } from "konsta/svelte";
-  import { formatRelativeTime } from "$lib/utils/format-time.js";
   import { followUpKind } from "$lib/tickets/follow-up-utils.js";
   import type { DecryptResult } from "$lib/crypto/decrypt-result.js";
   import type { ReactionSummary, ReactionType } from "@care-y/shared";
   import DecryptPlaceholder from "$lib/components/DecryptPlaceholder.svelte";
+  import ConversationBubble from "$lib/components/tickets/ConversationBubble.svelte";
   import SystemEvent from "$lib/components/tickets/SystemEvent.svelte";
   import PrivateNote from "$lib/components/tickets/PrivateNote.svelte";
 
@@ -65,26 +64,20 @@
     {ontogglereaction}
   />
 {:else}
-  <Message
-    type={followUp.source === "client" ? "received" : "sent"}
-    name={followUp.source === "client" ? clientAlias : undefined}
-    data-source={followUp.source === "client" ? "client" : "volunteer"}
+  <ConversationBubble
+    direction={followUp.source === "client" ? "received" : "sent"}
+    speaker={followUp.source === "client" ? clientAlias : undefined}
+    source={followUp.source === "client" ? "client" : "volunteer"}
+    timestamp={followUp.createdAt}
   >
-    {#snippet text()}
-      <span class="bubble-text">
-        <DecryptPlaceholder
-          {result}
-          ciphertext={followUp.encryptedContent}
-          length={30}
-          block
-          {searchTerm}
-        />
-      </span>
-    {/snippet}
-    {#snippet footer()}
-      <span class="bubble-time">
-        {formatRelativeTime(new Date(followUp.createdAt))}
-      </span>
-    {/snippet}
-  </Message>
+    <span class="bubble-text">
+      <DecryptPlaceholder
+        {result}
+        ciphertext={followUp.encryptedContent}
+        length={30}
+        block
+        {searchTerm}
+      />
+    </span>
+  </ConversationBubble>
 {/if}

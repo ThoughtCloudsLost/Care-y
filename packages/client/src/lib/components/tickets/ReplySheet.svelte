@@ -6,7 +6,6 @@
   After send: optimistic bubble, 1.5s delay, then auto-dismiss.
 -->
 <script lang="ts">
-  import { Messages, MessagesTitle } from "konsta/svelte";
   import * as m from "$lib/paraglide/messages.js";
   import { followupSlot } from "@care-y/crypto";
   import { trpc } from "$lib/trpc/index.js";
@@ -246,11 +245,11 @@
   </div>
 
   <div class="reply-sheet-messages">
-    <Messages>
+    <div class="thread">
       {#if moreCount > 0}
-        <MessagesTitle>
+        <p class="thread-more">
           {m.ticket_reply_sheet_more({ count: String(moreCount) })}
-        </MessagesTitle>
+        </p>
       {/if}
 
       {#if orderedPreviews}
@@ -292,7 +291,7 @@
           {clientAlias}
         />
       {/if}
-    </Messages>
+    </div>
   </div>
 
   {#if opened}
@@ -345,5 +344,22 @@
     overflow-y: auto;
     padding: 0.5rem 0;
     max-height: 40vh;
+  }
+
+  /* Same thread column as the detail view so preview bubbles align
+     identically; the sheet's inline messagebar sits in flow below,
+     so no compose bar clearance is needed here. */
+  .thread {
+    display: flex;
+    flex-direction: column;
+    gap: 13px;
+    padding: 0 16px;
+  }
+
+  .thread-more {
+    text-align: center;
+    font-size: var(--text-xs);
+    color: var(--muted);
+    margin: 0;
   }
 </style>

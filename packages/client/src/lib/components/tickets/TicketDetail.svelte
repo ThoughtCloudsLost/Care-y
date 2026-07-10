@@ -15,7 +15,7 @@
   import { tick } from "svelte";
   import { createQuery, useQueryClient } from "@tanstack/svelte-query";
   import { ticketKeys } from "$lib/query/keys";
-  import { Messages, Message, Checkbox, Button } from "konsta/svelte";
+  import { Checkbox, Button } from "konsta/svelte";
   import * as m from "$lib/paraglide/messages.js";
   import { trpc } from "$lib/trpc/index.js";
   import {
@@ -73,6 +73,7 @@
     ClusterRecord,
   } from "$lib/components/tickets/follow-up-timeline-types.js";
   import MentionAutocomplete from "$lib/components/tickets/MentionAutocomplete.svelte";
+  import ConversationBubble from "$lib/components/tickets/ConversationBubble.svelte";
   import FollowUpBubble from "$lib/components/tickets/FollowUpBubble.svelte";
   import TicketPlaceholder from "$lib/components/tickets/TicketPlaceholder.svelte";
   import GapIndicator from "$lib/components/GapIndicator.svelte";
@@ -1128,49 +1129,43 @@
                 resolveUserName={(uid: string) => resolveVolunteerName(uid)}
               />
             {:else}
-              <Message
-                type={rec.source === "client" ? "received" : "sent"}
-                name={rec.source === "client" ? clientAlias : undefined}
-                data-source={rec.source === "client" ? "client" : "volunteer"}
+              <ConversationBubble
+                direction={rec.source === "client" ? "received" : "sent"}
+                speaker={rec.source === "client" ? clientAlias : undefined}
+                source={rec.source === "client" ? "client" : "volunteer"}
+                timestamp={rec.createdAt}
               >
-                {#snippet text()}
-                  <!-- svelte-ignore a11y_no_static_element_interactions -->
-                  <span
-                    class="bubble-text"
-                    onpointerdown={startLongPress(rec)}
-                    onpointerup={cancelLongPress}
-                    onpointercancel={cancelLongPress}
-                  >
-                    <DecryptPlaceholder
-                      result={recResult}
-                      ciphertext={rec.encryptedContent}
-                      length={30}
-                      block
-                      {searchTerm}
-                    />
-                  </span>
-                  {#if rec.hasRecording || rec.hasImage || rec.hasFile}
-                    <FollowUpMedia
-                      followupId={rec.id}
-                      {ticketId}
-                      keyWrap={ticket.keyWrap}
-                      hasRecording={rec.hasRecording}
-                      hasImage={rec.hasImage}
-                      hasFile={rec.hasFile}
-                      onlightbox={(url: string) => onlightbox?.(url)}
-                    />
-                  {/if}
-                {/snippet}
-                {#snippet footer()}
-                  <time class="bubble-time" datetime={rec.createdAt}>
-                    {formatRelativeTime(new Date(rec.createdAt))}
-                  </time>
-                {/snippet}
-              </Message>
+                <!-- svelte-ignore a11y_no_static_element_interactions -->
+                <span
+                  class="bubble-text"
+                  onpointerdown={startLongPress(rec)}
+                  onpointerup={cancelLongPress}
+                  onpointercancel={cancelLongPress}
+                >
+                  <DecryptPlaceholder
+                    result={recResult}
+                    ciphertext={rec.encryptedContent}
+                    length={30}
+                    block
+                    {searchTerm}
+                  />
+                </span>
+                {#if rec.hasRecording || rec.hasImage || rec.hasFile}
+                  <FollowUpMedia
+                    followupId={rec.id}
+                    {ticketId}
+                    keyWrap={ticket.keyWrap}
+                    hasRecording={rec.hasRecording}
+                    hasImage={rec.hasImage}
+                    hasFile={rec.hasFile}
+                    onlightbox={(url: string) => onlightbox?.(url)}
+                  />
+                {/if}
+              </ConversationBubble>
             {/if}
           </div>
         {/snippet}
-        <Messages>
+        <div class="thread">
           <VirtualList
             items={displayFollowUps}
             scrollContainer={scroll.scrollContainerEl}
@@ -1297,55 +1292,46 @@
                     resolveUserName={(uid: string) => resolveVolunteerName(uid)}
                   />
                 {:else}
-                  <Message
-                    type={messageType(fu)}
-                    name={fu.source === "client" ? clientAlias : undefined}
-                    data-source={fu.source === "client"
-                      ? "client"
-                      : "volunteer"}
-                    aria-label={bubbleAriaLabel(fu, contentResult)}
+                  <ConversationBubble
+                    direction={messageType(fu)}
+                    speaker={fu.source === "client" ? clientAlias : undefined}
+                    source={fu.source === "client" ? "client" : "volunteer"}
+                    timestamp={fu.createdAt}
                   >
-                    {#snippet text()}
-                      <!-- svelte-ignore a11y_no_static_element_interactions -->
-                      <span
-                        class="bubble-text"
-                        onpointerdown={startLongPress(fu)}
-                        onpointerup={cancelLongPress}
-                        onpointercancel={cancelLongPress}
-                      >
-                        <DecryptPlaceholder
-                          result={contentResult}
-                          ciphertext={fu.encryptedContent}
-                          length={30}
-                          block
-                          {searchTerm}
-                        />
-                      </span>
+                    <!-- svelte-ignore a11y_no_static_element_interactions -->
+                    <span
+                      class="bubble-text"
+                      onpointerdown={startLongPress(fu)}
+                      onpointerup={cancelLongPress}
+                      onpointercancel={cancelLongPress}
+                    >
+                      <DecryptPlaceholder
+                        result={contentResult}
+                        ciphertext={fu.encryptedContent}
+                        length={30}
+                        block
+                        {searchTerm}
+                      />
+                    </span>
 
-                      {#if fu.hasRecording || fu.hasImage || fu.hasFile}
-                        <FollowUpMedia
-                          followupId={fu.id}
-                          {ticketId}
-                          keyWrap={ticket.keyWrap}
-                          hasRecording={fu.hasRecording}
-                          hasImage={fu.hasImage}
-                          hasFile={fu.hasFile}
-                          onlightbox={(url: string) => onlightbox?.(url)}
-                        />
-                      {/if}
-                    {/snippet}
-                    {#snippet footer()}
-                      <time class="bubble-time" datetime={fu.createdAt}>
-                        {formatRelativeTime(new Date(fu.createdAt))}
-                      </time>
-                    {/snippet}
-                  </Message>
+                    {#if fu.hasRecording || fu.hasImage || fu.hasFile}
+                      <FollowUpMedia
+                        followupId={fu.id}
+                        {ticketId}
+                        keyWrap={ticket.keyWrap}
+                        hasRecording={fu.hasRecording}
+                        hasImage={fu.hasImage}
+                        hasFile={fu.hasFile}
+                        onlightbox={(url: string) => onlightbox?.(url)}
+                      />
+                    {/if}
+                  </ConversationBubble>
                 {/if}
               </div>
             {/snippet}
           </VirtualList>
           <GapIndicator count={hiddenGaps.get("__after__") ?? 0} />
-        </Messages>
+        </div>
       </FollowUpTimeline>
     {/if}
   </div>
@@ -1377,18 +1363,27 @@
     padding-top: calc(var(--navbar-h, 0px) + var(--subnavbar-h, 0px));
   }
 
-  /* Override Konsta Messages' built-in mb-12/mb-16 with the measured
-     messagebar height so the last message clears the fixed compose bar.
-     Uses the ResizeObserver-measured value from ShellMessagebar. */
-  :global(.k-messages) {
+  /* The conversation thread: a plain flex column in place of Konsta
+     Messages. VirtualList reads the gap into its positioning math, so
+     row spacing lives here (the mock's 13px thread gap). The bottom
+     margin clears the fixed compose bar using the ResizeObserver-measured
+     value from ShellMessagebar. */
+  .thread {
+    display: flex;
+    flex-direction: column;
+    gap: 13px;
+    padding: 16px;
+    padding-left: calc(16px + env(safe-area-inset-left, 0px));
+    padding-right: calc(16px + env(safe-area-inset-right, 0px));
+    padding-bottom: 0;
     margin-bottom: var(
       --messagebar-height,
       calc(3.5rem + env(safe-area-inset-bottom, 0px))
-    ) !important;
+    );
   }
 
-  /* display:contents lets the Message flex alignment (self-end for sent)
-     work through the wrapper without breaking the Messages flex column. */
+  /* display:contents lets the bubble's flex alignment (self-end for sent)
+     work through the wrapper without breaking the thread flex column. */
   .fu-wrapper {
     display: contents;
   }
@@ -1414,8 +1409,8 @@
   }
 
   /* VirtualList wraps each item in a .virtual-row div which breaks
-     the Messages flex-col context. Make each row a flex-col so
-     Message's self-end (sent alignment) works within each row. */
+     the thread flex-col context. Make each row a flex-col so the
+     bubble's self-end (sent alignment) works within each row. */
   :global(.virtual-row:not(.virtual-row-grid)) {
     display: flex;
     flex-direction: column;
@@ -1512,10 +1507,5 @@
     -webkit-user-select: text;
     word-break: break-word;
     touch-action: pan-y;
-  }
-
-  .bubble-time {
-    font-size: 0.625rem;
-    color: var(--muted);
   }
 </style>
