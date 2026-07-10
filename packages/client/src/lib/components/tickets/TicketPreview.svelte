@@ -8,8 +8,9 @@
   brand tint; internal notes span full width on recessed paper; system
   events stay centered muted lines derived from the type field. Text
   truncated to one line (two in multiline mode). In fit mode (grid's
-  fixed-height window) the stack bottom-anchors and partial entries
-  hide, so the crop never slices a bubble mid-line.
+  fixed-height window) the stack bottom-anchors at a compact scale so
+  the three most recent entries fit whole; an entry that still cannot
+  fit hides rather than being sliced mid-line.
 
   Failed bubble decrypts render a quiet "could not unlock" state with
   a retry that clears the cache entry so the Worker decrypt re-fires;
@@ -315,17 +316,49 @@
 
   /* Whole-bubble fit (fixed-height grid window): bottom-anchored like
      the detail chat pane, so overflow spills off the top, oldest first.
-     Entries the fit effect marks as partial stay in layout but invisible;
-     the window's own overflow crop handles the rest. */
+     Compact scale (the pre-Inkwell mini sizing): three single-line rows
+     at 10px plus gaps and padding come to ~74px against the 5rem
+     window, so the three most recent follow-ups are always visible.
+     The clip effect below stays only as the no-sliced-glyphs safety
+     net for taller edge rows (reaction trays under notes). */
   .mini-chat.fit {
     height: 100%;
     justify-content: flex-end;
+    gap: 3px;
+    padding: 0.25rem 0.5rem;
   }
 
   /* data-clipped is set at runtime by the fit effect, so the child part
      must be :global or the compiler prunes the "unused" selector. */
   .mini-chat.fit > :global([data-clipped]) {
     visibility: hidden;
+  }
+
+  .mini-chat.fit .mini-bubble,
+  .mini-chat.fit .mini-note {
+    padding: 2px 7px;
+    font-size: 0.625rem;
+  }
+
+  .mini-chat.fit .mini-bubble {
+    border-radius: 9px;
+  }
+
+  .mini-chat.fit .mini-bubble-received {
+    border-bottom-left-radius: 4px;
+  }
+
+  .mini-chat.fit .mini-bubble-sent {
+    border-bottom-right-radius: 4px;
+  }
+
+  .mini-chat.fit .mini-note {
+    border-radius: 6px;
+  }
+
+  /* The grid card header already names the caller. */
+  .mini-chat.fit .mini-who {
+    display: none;
   }
 
   .preview-empty {
