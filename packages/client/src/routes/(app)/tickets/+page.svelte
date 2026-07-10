@@ -103,6 +103,7 @@
     isFilterStatus,
     resolveEmptyKind,
     showCaughtUpLine,
+    resolveGridColumns,
   } from "$lib/tickets/ticket-list-utils.js";
 
   // --- Context & services ---
@@ -755,7 +756,6 @@
 
   // --- Grid columns (dynamic based on container width) ---
 
-  const GRID_CARD_MIN_WIDTH = 320;
   let containerWidth = $state(0);
 
   $effect(() => {
@@ -771,9 +771,7 @@
   });
 
   const gridColumns = $derived(
-    viewModeStore.mode === "grid"
-      ? Math.max(1, Math.floor(containerWidth / GRID_CARD_MIN_WIDTH))
-      : 1,
+    viewModeStore.mode === "grid" ? resolveGridColumns(containerWidth) : 1,
   );
 
   // --- Filter config ---
@@ -1360,9 +1358,15 @@
     gap: 12px;
   }
 
+  /* Skeleton-only (the live grid is VirtualList-column-driven). The
+     min() keeps this at two columns minimum, matching resolveGridColumns,
+     so the layout holds steady when data replaces the skeleton. */
   .ticket-list.ticket-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    grid-template-columns: repeat(
+      auto-fill,
+      minmax(min(320px, calc(50% - var(--space-md) / 2)), 1fr)
+    );
   }
 
   /* Caught-up line: the dateline anatomy carrying the earned-state

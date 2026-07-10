@@ -222,6 +222,18 @@ export function showCaughtUpLine(args: {
   );
 }
 
+/** Preferred grid card width; the column count grows past 2 from here. */
+export const GRID_CARD_MIN_WIDTH = 320;
+
+/**
+ * Columns for the grid view at a given container width. Never below 2:
+ * a one-column grid is just a worse cards mode, so narrow screens get
+ * two slim columns instead (the whole-bubble preview handles the width).
+ */
+export function resolveGridColumns(containerWidth: number): number {
+  return Math.max(2, Math.floor(containerWidth / GRID_CARD_MIN_WIDTH));
+}
+
 export interface AssigneeOptionLabels {
   readonly me: (count: string) => string;
   readonly unassigned: (count: string) => string;
