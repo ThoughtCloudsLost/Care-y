@@ -7,7 +7,9 @@
   sit left on paper with a hairline; the org side sits right on the
   brand tint; internal notes span full width on recessed paper; system
   events stay centered muted lines derived from the type field. Text
-  truncated to one line (two in multiline mode).
+  truncated to one line (two in multiline mode). In fit mode (grid's
+  fixed-height window) the stack bottom-anchors and partial entries
+  hide, so the crop never slices a bubble mid-line.
 
   Failed bubble decrypts render a quiet "could not unlock" state with
   a retry that clears the cache entry so the Worker decrypt re-fires;
@@ -54,6 +56,10 @@
      *  bubbles carry no eyebrow here: previews have no author identity,
      *  and alignment plus the brand tint already mark the org side. */
     clientAlias?: string;
+    /** Whole-bubble fitting for a fixed-height window (grid cells):
+     *  bottom-anchor the stack and hide entries that don't fully fit,
+     *  so the window's crop never slices a bubble mid-line. */
+    fit?: boolean;
   }
 
   let {
@@ -63,6 +69,7 @@
     followUpCount,
     reactions,
     clientAlias,
+    fit = false,
   }: Props = $props();
   const followUpCache = getFollowUpDecryptCache();
   const orgCache = getOrgDecryptCache();
@@ -110,9 +117,49 @@
   const ordered = $derived(
     followUps !== undefined ? [...followUps].reverse() : undefined,
   );
+
+  let chatEl = $state<HTMLDivElement | undefined>();
+
+  // Whole-bubble fitting: the window's overflow crop stays, but only
+  // whole entries remain visible. Bottom anchoring makes overflow spill
+  // off the TOP (oldest first) so the newest reply is always intact.
+  // Measured rather than budgeted because entry heights vary (notes,
+  // media rows, reactions, Dynamic Type). Hiding uses visibility, never
+  // display: hidden entries keep their layout box, so clipping cannot
+  // reflow siblings and re-trigger the observer.
+  $effect(() => {
+    if (!fit) return;
+    const el = chatEl;
+    if (!el) return;
+    // Re-run when the rendered entry set changes (real or placeholder).
+    void ordered;
+    void followUpCount;
+
+    const applyClipping = (): void => {
+      const rootTop = el.getBoundingClientRect().top;
+      for (const child of Array.from(el.children)) {
+        if (!(child instanceof HTMLElement)) continue;
+        if (child.getBoundingClientRect().top < rootTop - 0.5) {
+          child.setAttribute("data-clipped", "");
+        } else {
+          child.removeAttribute("data-clipped");
+        }
+      }
+    };
+
+    // Decrypt settling changes entry heights; column resize changes the
+    // root's width. Both re-run the pass through one observer.
+    const ro = new ResizeObserver(applyClipping);
+    ro.observe(el);
+    for (const child of Array.from(el.children)) {
+      ro.observe(child);
+    }
+    applyClipping();
+    return () => ro.disconnect();
+  });
 </script>
 
-<div class="mini-chat" class:multiline>
+<div class="mini-chat" class:multiline class:fit bind:this={chatEl}>
   {#if ordered === undefined}
     {@const placeholderCount = Math.min(followUpCount ?? 3, 3)}
     {#each { length: placeholderCount } as _, i (i)}
@@ -264,6 +311,21 @@
     gap: 6px;
     padding: 0.375rem 0.5rem;
     min-height: 2rem;
+  }
+
+  /* Whole-bubble fit (fixed-height grid window): bottom-anchored like
+     the detail chat pane, so overflow spills off the top, oldest first.
+     Entries the fit effect marks as partial stay in layout but invisible;
+     the window's own overflow crop handles the rest. */
+  .mini-chat.fit {
+    height: 100%;
+    justify-content: flex-end;
+  }
+
+  /* data-clipped is set at runtime by the fit effect, so the child part
+     must be :global or the compiler prunes the "unused" selector. */
+  .mini-chat.fit > :global([data-clipped]) {
+    visibility: hidden;
   }
 
   .preview-empty {
