@@ -94,6 +94,16 @@ export function createReadCursor(config: ReadCursorConfig): ReadCursorState {
   });
 
   function handleProgress(latestVisibleTimestamp: string): void {
+    // Never re-persist a cursor the server already holds. The initial
+    // visibility report fires on every open of an already-read thread,
+    // and scrolling a fully-read thread reports too. Fewer cursor
+    // writes also means less row-update metadata on the server.
+    if (
+      readUpTo instanceof Date &&
+      Date.parse(latestVisibleTimestamp) <= readUpTo.getTime()
+    ) {
+      return;
+    }
     if (
       pendingReadTimestamp !== null &&
       latestVisibleTimestamp <= pendingReadTimestamp

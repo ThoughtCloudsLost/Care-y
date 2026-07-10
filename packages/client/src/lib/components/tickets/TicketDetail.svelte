@@ -919,6 +919,13 @@
           }
           scrollInitPhase = "done";
           scrollReady = true;
+          // A conversation that fits the pane never scrolls, so this is
+          // the only read report it will ever fire; for longer threads
+          // it reports the initially visible window, matching what the
+          // scroll path would say.
+          if (onreadprogress) {
+            scroll.reportVisibleProgress(followUps, onreadprogress);
+          }
         });
       });
     })();
