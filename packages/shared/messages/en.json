@@ -421,6 +421,7 @@
   "ticket_call": "Call {client}",
   "ticket_more_actions": "More actions",
   "ticket_new_messages": "New messages",
+  "ticket_new_divider": "New",
   "ticket_conversation_with": "Conversation with {alias}",
   "ticket_message_sent_by": "Message sent by {name} at {time}",
   "ticket_message_received_from": "Message received from {name} at {time}",

@@ -1214,7 +1214,7 @@
                   aria-label={m.ticket_new_messages()}
                 >
                   <span class="unread-divider-label"
-                    >{m.ticket_new_messages()}</span
+                    >{m.ticket_new_divider()}</span
                   >
                 </div>
               {/if}
@@ -1434,13 +1434,13 @@
     padding: 2rem;
   }
 
-  /* --- Date separators --- */
+  /* --- Date separators (dateline anatomy) --- */
 
+  /* No padding of its own: the .thread gap and side padding place it. */
   .date-separator {
     display: flex;
     align-items: center;
-    gap: 0.75rem;
-    padding: 0.75rem 1rem 0.25rem;
+    gap: 0.625rem;
   }
 
   .date-separator::before,
@@ -1448,17 +1448,16 @@
     content: "";
     flex: 1;
     height: 1px;
-    background: var(--muted);
-    opacity: 0.3;
+    background: var(--hair);
   }
 
   .date-separator-label {
     font-size: 0.6875rem;
-    font-weight: 600;
+    font-weight: 700;
     color: var(--muted);
     white-space: nowrap;
     text-transform: uppercase;
-    letter-spacing: 0.03em;
+    letter-spacing: 0.14em;
   }
 
   /* --- Loading older messages --- */
@@ -1471,13 +1470,12 @@
     font-size: 0.75rem;
   }
 
-  /* --- Unread divider --- */
+  /* --- Unread divider (dateline anatomy in brand ink) --- */
 
   .unread-divider {
     display: flex;
     align-items: center;
-    gap: 0.75rem;
-    padding: 0.5rem 1rem;
+    gap: 0.625rem;
     scroll-margin-top: calc(var(--navbar-h, 0px) + var(--subnavbar-h, 0px));
   }
 
@@ -1486,17 +1484,16 @@
     content: "";
     flex: 1;
     height: 1px;
-    background: var(--brand-primary, #e53e3e);
-    opacity: 0.6;
+    background: color-mix(in srgb, var(--brand-fill) 45%, transparent);
   }
 
   .unread-divider-label {
     font-size: 0.6875rem;
-    font-weight: 600;
-    color: var(--brand-primary, #e53e3e);
+    font-weight: 700;
+    color: var(--brand-text);
     white-space: nowrap;
     text-transform: uppercase;
-    letter-spacing: 0.03em;
+    letter-spacing: 0.14em;
   }
 
   /* --- Bubble content --- */
