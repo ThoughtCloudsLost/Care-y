@@ -3,7 +3,7 @@ import type { OrgDecryptCache } from "$lib/crypto/org-decrypt-cache.js";
 import type { CryptoBridge } from "$lib/workers/crypto-bridge.js";
 import type { QueryClient } from "@tanstack/svelte-query";
 import type { toastStore as ToastStoreType } from "$lib/stores/toast.svelte.js";
-import { ticketKeys } from "$lib/query/keys";
+import { ticketKeys, ticketsKeys } from "$lib/query/keys";
 import type { SerializedBuffer } from "$lib/utils/buffer-encoding.js";
 
 type ToastStore = typeof ToastStoreType;
@@ -140,6 +140,14 @@ export function createCloseResolution(
       });
       void config.queryClient.invalidateQueries({
         queryKey: ticketKeys.followUps(ticketId),
+      });
+      // The resolution note is a volunteer follow-up: refetch the list's
+      // read-state window and sweep without waiting for SSE.
+      void config.queryClient.invalidateQueries({
+        queryKey: ticketsKeys.readStates(),
+      });
+      void config.queryClient.invalidateQueries({
+        queryKey: ticketsKeys.readStateSweep(),
       });
       advance();
     } catch {

@@ -136,6 +136,28 @@ describe("createCloseResolution", () => {
       );
     });
 
+    it("invalidates the detail follow-ups and both read-state families", async () => {
+      const config = makeConfig({
+        getNoteTypes: () => [makeNoteType({ id: "nt-1" })],
+      });
+      const cr = createCloseResolution(config);
+
+      cr.start();
+      await cr.submit("My note text");
+
+      // The resolution note is a volunteer follow-up: unread truth on the
+      // list refreshes alongside the detail's follow-ups.
+      expect(config.queryClient.invalidateQueries).toHaveBeenCalledWith({
+        queryKey: ["ticket", "ticket-1", "followUps"],
+      });
+      expect(config.queryClient.invalidateQueries).toHaveBeenCalledWith({
+        queryKey: ["tickets", "readState"],
+      });
+      expect(config.queryClient.invalidateQueries).toHaveBeenCalledWith({
+        queryKey: ["tickets", "readStateSweep"],
+      });
+    });
+
     it("advances to next note type after submit", async () => {
       const cr = createCloseResolution(
         makeConfig({

@@ -1253,10 +1253,12 @@ export function createTicketService(
       // must not change the "row exists = opened detail once" surface.
       const cursors = await readCursors.getBatch(userId, scopedIds);
 
-      // Newest non-system follow-up timestamps per ticket. System events
-      // (status/hold/priority changes) are not replies, so they never
-      // count toward unread. Same ROW_NUMBER top-N-per-group pattern as
-      // recentFollowUps.
+      // Newest non-system, non-self follow-up timestamps per ticket.
+      // System events (status/hold/priority changes) are not replies, and
+      // the caller's own replies are not unread to the caller, so neither
+      // counts toward unread. IS DISTINCT FROM keeps client-authored rows,
+      // where created_by is null. Same ROW_NUMBER top-N-per-group pattern
+      // as recentFollowUps.
       const ranked = db
         .selectFrom("followups as f")
         .select((eb) => [
@@ -1271,6 +1273,7 @@ export function createTicketService(
         ])
         .where("f.ticket_id", "in", scopedIds)
         .where("f.source", "!=", "system")
+        .where("f.created_by", "is distinct from", userId)
         .as("ranked_f");
 
       const timestampRows = await db
@@ -1324,14 +1327,17 @@ export function createTicketService(
           "tkw.ephemeral_point",
           "tkw.nonce",
           "tkw.wrapped_key",
-          // Newest non-system activity: system events are not replies
-          // (same rule as listReadState), so a system-only ticket reads
-          // as null and the client treats it as not-unread.
+          // Newest non-system, non-self activity: system events are not
+          // replies and the caller's own replies are not unread to the
+          // caller (same rules as listReadState; IS DISTINCT FROM keeps
+          // null-authored client rows). A ticket with no such activity
+          // reads as null and the client treats it as not-unread.
           eb
             .selectFrom("followups as f")
             .select((sb) => sb.fn.max("f.created_at").as("max_at"))
             .whereRef("f.ticket_id", "=", "t.id")
             .where("f.source", "!=", "system")
+            .where("f.created_by", "is distinct from", userId)
             .as("latest_activity_at"),
         ])
         .where("rc.user_id", "=", userId)
