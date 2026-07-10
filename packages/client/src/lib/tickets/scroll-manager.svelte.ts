@@ -32,6 +32,14 @@ interface ScrollManager {
     followUps: FollowUpRef[],
     onreadprogress: ((ts: string) => void) | undefined,
   ) => void;
+  /** One-shot visibility report for initial render: a conversation that
+   *  fits the pane fires no scroll event, so the cursor would otherwise
+   *  never advance past the dummy row. Same visibility walk as the
+   *  scroll path, no debounce (the cursor flush downstream batches). */
+  reportVisibleProgress: (
+    followUps: FollowUpRef[],
+    onreadprogress: (ts: string) => void,
+  ) => void;
   /** Mark that initial scroll positioning has completed. */
   markScrolledInitially: () => void;
   /** Auto-scroll when new messages arrive (call from an $effect tracking followUp count). */
@@ -140,6 +148,7 @@ export function createScrollManager(
     },
     scrollToBottom,
     onScroll,
+    reportVisibleProgress: reportReadProgress,
     markScrolledInitially,
     autoScrollOnNew,
     cleanup,
