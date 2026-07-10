@@ -420,6 +420,7 @@ export * from "./ticket_compose_actions.js";
 export * from "./ticket_call.js";
 export * from "./ticket_more_actions.js";
 export * from "./ticket_new_messages.js";
+export * from "./ticket_new_divider.js";
 export * from "./ticket_conversation_with.js";
 export * from "./ticket_message_sent_by.js";
 export * from "./ticket_message_received_from.js";

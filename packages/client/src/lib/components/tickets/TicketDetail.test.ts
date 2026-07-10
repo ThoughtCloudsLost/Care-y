@@ -366,7 +366,12 @@ describe("TicketDetail", () => {
       const divider = container.querySelector("#unread-divider");
       if (divider !== null) {
         expect(divider.getAttribute("role")).toBe("separator");
-        expect(divider.getAttribute("aria-label")).toBeTruthy();
+        // Screen readers keep the full phrase; the visible label is the
+        // short "New" stamp.
+        expect(divider.getAttribute("aria-label")).toBe("New messages");
+        expect(
+          divider.querySelector(".unread-divider-label")?.textContent,
+        ).toBe("New");
       }
     });
   });
