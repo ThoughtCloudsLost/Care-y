@@ -14,6 +14,7 @@
     ArrowUpDown,
     ArrowUp,
     ArrowDown,
+    Check,
     Search,
     SquareCheckBig,
   } from "@lucide/svelte";
@@ -210,7 +211,6 @@
     <FilterPillBar
       pills={filterPills.pills}
       activeCount={filterPills.activeCount}
-      sortToggle={filterPills.sortToggle}
       unreadFilter={filterPills.unreadFilter}
       filterLabel={filterPills.filterLabel}
       dateFrom={filterPills.dateFrom}
@@ -258,6 +258,24 @@
           {/snippet}
         </ListItem>
       {/each}
+      {#if sort.toggle}
+        {@const toggle = sort.toggle}
+        <ListItem
+          title={toggle.label}
+          aria-pressed={toggle.active}
+          class="sort-toggle-item"
+          onclick={() => {
+            toggle.ontoggle();
+            sortOpen = false;
+          }}
+        >
+          {#snippet after()}
+            {#if toggle.active}
+              <Check size={14} class="sort-dir-icon" />
+            {/if}
+          {/snippet}
+        </ListItem>
+      {/if}
     </KList>
   </ShellPopover>
 {/if}
@@ -372,6 +390,12 @@
   :global(.sort-dir-icon) {
     color: var(--brand-text);
     flex-shrink: 0;
+  }
+
+  /* The presentation toggle sits apart from the field options: same list
+     anatomy, one hairline drawing the boundary. */
+  :global(.sort-toggle-item) {
+    border-top: 1px solid var(--hair);
   }
 
   :global(.view-toggle) {

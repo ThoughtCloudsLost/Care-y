@@ -983,6 +983,15 @@
     currentField: filterStore.sort.field,
     currentDirection: filterStore.sort.direction,
     onchange: dispatch.handleSortChange,
+    // Client-side presentation sort: lives in the sort popover but stays
+    // out of filterStore (the server cannot sort by read state by design).
+    toggle: {
+      label: m.tickets_sort_new_replies_first(),
+      active: newRepliesFirstStore.enabled,
+      ontoggle: () => {
+        newRepliesFirstStore.toggle();
+      },
+    },
   });
 
   const savedFiltersConfig: SavedFiltersConfig = $derived({
@@ -1006,13 +1015,6 @@
     onclearall: dispatch.clearAll,
     oncreateshortcut: () => {
       savedFilterModalOpen = true;
-    },
-    sortToggle: {
-      label: m.tickets_sort_new_replies_first(),
-      active: newRepliesFirstStore.enabled,
-      ontoggle: () => {
-        newRepliesFirstStore.toggle();
-      },
     },
     unreadFilter: {
       label: m.tickets_filter_unread(),

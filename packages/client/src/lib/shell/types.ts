@@ -261,6 +261,10 @@ export interface SortConfig {
   readonly currentField: string;
   readonly currentDirection: "asc" | "desc";
   readonly onchange: (field: string, direction: "asc" | "desc") => void;
+  /** Optional on/off item rendered under the field options. Field options
+   *  are server sort params with direction semantics; this is a client-side
+   *  presentation sort that composes with whichever field is active. */
+  readonly toggle?: FilterToggleConfig;
 }
 
 export interface SavedFiltersConfig {
@@ -306,9 +310,7 @@ export interface FilterPillsConfig {
   readonly ondatechange: (from: Date | null, to: Date | null) => void;
   readonly onclearall: () => void;
   readonly oncreateshortcut?: () => void;
-  /** Client-side sort toggle rendered as the first pill. */
-  readonly sortToggle?: FilterToggleConfig;
-  /** Client-side membership filter rendered as the second pill. */
+  /** Client-side membership filter rendered as the first pill. */
   readonly unreadFilter?: FilterToggleConfig;
 }
 

@@ -19,9 +19,7 @@
   interface Props {
     pills: PillDefinition[];
     activeCount: number;
-    /** Client-side sort toggle rendered as the FIRST pill (no popover). */
-    sortToggle?: FilterToggleConfig;
-    /** Client-side membership filter rendered as the SECOND pill (no popover). */
+    /** Client-side membership filter rendered as the FIRST pill (no popover). */
     unreadFilter?: FilterToggleConfig;
     /** Date "from" value as YYYY-MM-DD string (for date pill) */
     dateFrom?: string;
@@ -54,7 +52,6 @@
   let {
     pills,
     activeCount,
-    sortToggle,
     unreadFilter,
     dateFrom = "",
     dateTo = "",
@@ -222,9 +219,6 @@
   {/if}
 
   <div class="pill-scroll">
-    {#if sortToggle}
-      {@render togglePill(sortToggle)}
-    {/if}
     {#if unreadFilter}
       {@render togglePill(unreadFilter)}
     {/if}
