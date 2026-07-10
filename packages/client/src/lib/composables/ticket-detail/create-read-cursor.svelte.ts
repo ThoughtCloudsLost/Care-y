@@ -84,7 +84,15 @@ export function createReadCursor(config: ReadCursorConfig): ReadCursorState {
         // AEAD failure (random dummy bytes): all messages are unread.
         readUpTo = null;
       });
+  });
 
+  // Teardown-only timer cleanup, deliberately its own effect: cleanups
+  // run before every re-run, so hanging this on the decrypt effect let
+  // a cursor or key wrap refetch inside the flush window silently
+  // cancel an armed write, and a conversation that fits the pane never
+  // fires a second report to re-arm it. An effect that reads no
+  // reactive state runs once, so this cleanup fires only on unmount.
+  $effect(() => {
     return () => {
       if (cursorUpdateTimer) {
         clearTimeout(cursorUpdateTimer);
