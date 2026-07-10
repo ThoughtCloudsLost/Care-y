@@ -51,7 +51,7 @@
 </button>
 
 <style>
-  /* flex-column so Konsta Message's align-self: flex-end works for sent bubbles */
+  /* flex-column so the bubble's align-self: flex-end works for sent bubbles */
   .conversation-result {
     display: flex;
     flex-direction: column;
