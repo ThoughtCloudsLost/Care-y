@@ -62,6 +62,7 @@
     type SavedFilterColor,
   } from "@care-y/shared";
   import ViewSwitcher from "$lib/components/ViewSwitcher.svelte";
+  import StatusMark from "$lib/components/StatusMark.svelte";
   import TicketCard from "$lib/components/tickets/TicketCard.svelte";
   import SwipeableCard from "$lib/components/tickets/SwipeableCard.svelte";
   import type { PillDefinition } from "$lib/components/filters/filter-types.js";
@@ -1057,15 +1058,26 @@
 {/snippet}
 
 {#snippet ticketStats()}
+  <!-- Marks are decorative here: StatusMark self-labels via role="img",
+       and the status word already sits beside the number as text. -->
   <span class="count-item">
+    <span class="count-mark" aria-hidden="true"
+      ><StatusMark status="new" /></span
+    >
     <b>{newCount}</b>
     {m.tickets_status_new()}
   </span>
   <span class="count-item">
+    <span class="count-mark" aria-hidden="true">
+      <StatusMark status="active" />
+    </span>
     <b>{activeCount}</b>
     {m.tickets_status_active()}
   </span>
   <span class="count-item">
+    <span class="count-mark" aria-hidden="true"
+      ><StatusMark status="hold" /></span
+    >
     <b>{holdCount}</b>
     {m.tickets_status_on_hold()}
   </span>
@@ -1319,6 +1331,12 @@
   .count-item b {
     font-weight: 700;
     color: var(--ink);
+  }
+
+  /* The mark centers on the line box; the text stays baseline-aligned. */
+  .count-mark {
+    display: inline-flex;
+    align-self: center;
   }
 
   .ticket-list {

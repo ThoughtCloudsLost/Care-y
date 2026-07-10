@@ -6,17 +6,17 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Tickets_Count_New_Replies_OneInputs */
 
 const en_tickets_count_new_replies_one = /** @type {(inputs: Tickets_Count_New_Replies_OneInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`with a new reply`)
+	return /** @type {LocalizedString} */ (`new reply`)
 };
 
 const es_tickets_count_new_replies_one = /** @type {(inputs: Tickets_Count_New_Replies_OneInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`con una respuesta nueva`)
+	return /** @type {LocalizedString} */ (`respuesta nueva`)
 };
 
 /**
 * | output |
 * | --- |
-* | "with a new reply" |
+* | "new reply" |
 *
 * @param {Tickets_Count_New_Replies_OneInputs} inputs
 * @param {{ locale?: "en" | "es" }} options
