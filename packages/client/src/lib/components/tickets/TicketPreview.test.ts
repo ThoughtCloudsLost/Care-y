@@ -16,6 +16,27 @@ vi.stubGlobal(
     this.unobserve = vi.fn();
   }),
 );
+
+// ResizeObserver stub for the fit-mode clipping effect. The callback is
+// captured so tests can re-run the measurement pass after stubbing
+// element rects, the way a real resize or decrypt settle would.
+let roCallback: (() => void) | undefined;
+vi.stubGlobal(
+  "ResizeObserver",
+  vi.fn(function (
+    this: {
+      observe: () => void;
+      disconnect: () => void;
+      unobserve: () => void;
+    },
+    cb: () => void,
+  ) {
+    roCallback = cb;
+    this.observe = vi.fn();
+    this.disconnect = vi.fn();
+    this.unobserve = vi.fn();
+  }),
+);
 import type { RawFollowUpPreview } from "$lib/tickets/preview-loader.svelte.js";
 
 // --- Mocks ---
@@ -41,6 +62,7 @@ afterEach(() => {
   cleanup();
   mockDecryptContent.mockReset();
   mockDeleteByPrefix.mockReset();
+  roCallback = undefined;
 });
 
 function makeFollowUp(
@@ -266,5 +288,85 @@ describe("TicketPreview (mini-bubbles)", () => {
     });
     // Text should appear as escaped, not interpreted as HTML
     expect(container.innerHTML).toContain("&lt;script&gt;");
+  });
+});
+
+describe("TicketPreview fit mode (whole-bubble window)", () => {
+  /** Stub layout geometry: jsdom computes no layout, so rects are faked. */
+  function stubRect(el: Element, top: number): void {
+    el.getBoundingClientRect = () =>
+      ({
+        top,
+        bottom: top + 24,
+        left: 0,
+        right: 100,
+        width: 100,
+        height: 24,
+        x: 0,
+        y: top,
+        toJSON: () => ({}),
+      }) as DOMRect;
+  }
+
+  function renderFit(): { root: Element; entries: Element[] } {
+    mockDecryptContent.mockReturnValue("msg");
+    const fus = [
+      makeFollowUp({ id: "fu-old" }),
+      makeFollowUp({ id: "fu-mid" }),
+      makeFollowUp({ id: "fu-new" }),
+    ];
+    const { container } = render(TicketPreview, {
+      props: { ticketId: "ticket-preview-1", followUps: fus, fit: true },
+    });
+    const root = container.querySelector(".mini-chat.fit");
+    expect(root).not.toBeNull();
+    const entries = Array.from(root!.children);
+    expect(entries).toHaveLength(3);
+    return { root: root!, entries };
+  }
+
+  it("hides an entry that pokes above the window and keeps whole ones", () => {
+    const { root, entries } = renderFit();
+    stubRect(root, 0);
+    stubRect(entries[0]!, -20); // oldest, sliced by the top edge
+    stubRect(entries[1]!, 10);
+    stubRect(entries[2]!, 40); // newest, fully inside
+    roCallback?.();
+
+    expect(entries[0]!.hasAttribute("data-clipped")).toBe(true);
+    expect(entries[1]!.hasAttribute("data-clipped")).toBe(false);
+    expect(entries[2]!.hasAttribute("data-clipped")).toBe(false);
+  });
+
+  it("unhides an entry once a re-measure says it fits again", () => {
+    const { root, entries } = renderFit();
+    stubRect(root, 0);
+    stubRect(entries[0]!, -20);
+    stubRect(entries[1]!, 10);
+    stubRect(entries[2]!, 40);
+    roCallback?.();
+    expect(entries[0]!.hasAttribute("data-clipped")).toBe(true);
+
+    stubRect(entries[0]!, 2); // content shrank; everything fits now
+    roCallback?.();
+    expect(entries[0]!.hasAttribute("data-clipped")).toBe(false);
+  });
+
+  it("clips nothing when every entry fits the window", () => {
+    // Default jsdom rects are all zeros: nothing sits above the root.
+    const { root } = renderFit();
+    expect(root.querySelector("[data-clipped]")).toBeNull();
+  });
+
+  it("never measures or clips outside fit mode", () => {
+    mockDecryptContent.mockReturnValue("msg");
+    const { container } = render(TicketPreview, {
+      props: {
+        ticketId: "ticket-preview-1",
+        followUps: [makeFollowUp()],
+      },
+    });
+    expect(roCallback).toBeUndefined();
+    expect(container.querySelector("[data-clipped]")).toBeNull();
   });
 });

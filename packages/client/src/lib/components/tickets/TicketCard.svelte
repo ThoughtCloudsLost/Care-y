@@ -197,7 +197,12 @@
         <span class="row-top-stamp"><InlineSkeleton width="5ch" /></span>
       </div>
       <div class="preview-window">
-        <TicketPreview {ticketId} followUps={undefined} multiline={false} />
+        <TicketPreview
+          {ticketId}
+          followUps={undefined}
+          multiline={false}
+          fit={true}
+        />
       </div>
       <div class="content-group">
         <span class="client-alias"><InlineSkeleton width="8ch" /></span>
@@ -302,6 +307,7 @@
           {ticketId}
           followUps={previewFollowUps}
           multiline={false}
+          fit={true}
           {followUpCount}
           reactions={previewReactions}
           {clientAlias}

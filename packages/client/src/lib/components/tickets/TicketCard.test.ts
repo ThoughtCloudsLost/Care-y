@@ -17,6 +17,21 @@ vi.stubGlobal(
   }),
 );
 
+// ResizeObserver stub for TicketPreview's fit-mode clipping effect
+// (jsdom has none; grid cards render the preview with fit on).
+vi.stubGlobal(
+  "ResizeObserver",
+  vi.fn(function (this: {
+    observe: () => void;
+    disconnect: () => void;
+    unobserve: () => void;
+  }) {
+    this.observe = vi.fn();
+    this.disconnect = vi.fn();
+    this.unobserve = vi.fn();
+  }),
+);
+
 // --- Mocks ---
 
 vi.mock("$lib/crypto/context.js", () => ({
@@ -161,6 +176,21 @@ describe("TicketCard", () => {
     });
     expect(container.querySelector("[data-preview]")).not.toBeNull();
     expect(container.textContent).toContain("No messages yet");
+  });
+
+  it("uses the whole-bubble fit preview in grid mode", () => {
+    const { container } = render(TicketCard, {
+      props: { ...asGrid, previewFollowUps: [] },
+    });
+    expect(container.querySelector(".mini-chat.fit")).not.toBeNull();
+  });
+
+  it("keeps the cards-mode preview unfitted (no fixed window there)", () => {
+    const { container } = render(TicketCard, {
+      props: { ...asCards, previewFollowUps: [] },
+    });
+    expect(container.querySelector(".mini-chat")).not.toBeNull();
+    expect(container.querySelector(".mini-chat.fit")).toBeNull();
   });
 
   it("renders placeholder bubbles in cards mode when follow-ups are undefined", async () => {
