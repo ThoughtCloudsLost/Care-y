@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "new replies" |
+* | "replies" |
 *
 * @param {Tickets_Count_New_Replies_OtherInputs} inputs
 * @param {{ locale?: "en" | "es" }} options
