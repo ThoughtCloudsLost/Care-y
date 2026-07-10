@@ -49,6 +49,15 @@ describe("PrivateNote", () => {
     expect(container.textContent).toContain("Internal note");
   });
 
+  it("renders the note type in the eyebrow when it resolves", () => {
+    const { container } = render(PrivateNote, {
+      props: { ...baseProps, noteTypeName: "Comment" },
+    });
+    const badge = container.querySelector("[data-testid='note-badge']");
+    expect(badge?.textContent).toContain("Internal · Comment");
+    expect(badge?.textContent).not.toContain("Internal note");
+  });
+
   it("has role='article' with aria-label containing author", () => {
     const { container } = render(PrivateNote, { props: baseProps });
     const article = container.querySelector("[role='article']");
@@ -80,8 +89,14 @@ describe("PrivateNote", () => {
     const { container } = render(PrivateNote, {
       props: { ...baseProps, authorName: undefined },
     });
-    const authorEl = container.querySelector("[data-author]");
+    const authorEl = container.querySelector(".note-author");
     expect(authorEl).toBeNull();
+  });
+
+  it("shows the author element when authorName is provided", () => {
+    const { container } = render(PrivateNote, { props: baseProps });
+    const authorEl = container.querySelector(".note-author");
+    expect(authorEl?.textContent).toBe("Alice");
   });
 
   it("renders a <time> element with datetime attribute", () => {
