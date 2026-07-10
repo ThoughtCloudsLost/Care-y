@@ -444,7 +444,9 @@ describe("Ticket list page", () => {
     const line = container.querySelector("[data-testid='caught-up-line']");
     expect(line).toBeTruthy();
     expect(line?.textContent).toContain("All caught up");
-    expect(line?.textContent).toContain("You've read every new reply");
+    // The stamp stands alone on this surface; the explanatory label
+    // belongs to the caught-up EmptyState room only.
+    expect(line?.textContent).not.toContain("You've read every new reply");
   });
 
   it("keeps the caught-up line hidden until the sweep settles", () => {
