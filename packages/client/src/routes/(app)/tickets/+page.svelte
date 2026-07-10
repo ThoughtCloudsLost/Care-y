@@ -1168,10 +1168,11 @@
   {:else}
     {#if caughtUpLineVisible}
       <!-- Earned-state stamp on the dateline anatomy: the volunteer has
-           read every reply, globally, so the sort has nothing to raise. -->
+           read every reply, globally, so the sort has nothing to raise.
+           The stamp stands alone; the caught-up EmptyState room carries
+           the explanatory title and body. -->
       <div class="caught-up-line" role="status" data-testid="caught-up-line">
         <span class="caught-up-stamp">{m.tickets_unread_zero_stamp()}</span>
-        <span class="caught-up-label">{m.tickets_unread_zero_title()}</span>
       </div>
     {/if}
     <div
@@ -1392,11 +1393,6 @@
     border-radius: 3px;
     color: var(--ink);
     transform: rotate(-1deg);
-  }
-
-  .caught-up-label {
-    font-size: var(--text-sm);
-    color: var(--muted);
   }
 
   .search-target {
