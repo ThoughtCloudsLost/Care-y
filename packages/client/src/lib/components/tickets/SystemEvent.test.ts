@@ -67,4 +67,14 @@ describe("SystemEvent", () => {
     expect(timeEl).not.toBeNull();
     expect(timeEl?.getAttribute("datetime")).toBe(ts);
   });
+
+  it("renders label and time inline with a middot separator", () => {
+    const { container } = render(SystemEvent, {
+      props: { type: "status_change", timestamp: "2026-04-05T12:00:00Z" },
+    });
+    const line = container.querySelector(".system-line");
+    expect(line).not.toBeNull();
+    expect(line?.textContent).toMatch(/Status changed · \S/);
+    expect(line?.querySelector("time")).not.toBeNull();
+  });
 });
