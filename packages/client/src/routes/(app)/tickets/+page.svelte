@@ -67,6 +67,8 @@
   import type { PillDefinition } from "$lib/components/filters/filter-types.js";
   import VirtualList from "$lib/components/tickets/VirtualList.svelte";
   import QueryError from "$lib/components/QueryError.svelte";
+  import EmptyState from "$lib/components/EmptyState.svelte";
+  import { getBrandingTitle } from "$lib/branding/title.svelte.js";
   import type { CallAction } from "$lib/components/tickets/CallOptionsContent.svelte";
   import { createBulkActions } from "$lib/composables/ticket-list/create-bulk-actions.svelte.js";
   import { createFilterDispatch } from "$lib/composables/create-filter-dispatch.svelte.js";
@@ -98,6 +100,8 @@
     buildAssigneeOptions,
     isSortField,
     isFilterStatus,
+    resolveEmptyKind,
+    showCaughtUpLine,
   } from "$lib/tickets/ticket-list-utils.js";
 
   // --- Context & services ---
@@ -509,6 +513,42 @@
       ];
     }
     return displayItems;
+  });
+
+  // --- Empty states and the caught-up stamp (global truth from the sweep) ---
+
+  const globalCaughtUp = $derived(
+    listReadState.sweepSettled() && listReadState.unreadTotal() === 0,
+  );
+
+  const emptyKind = $derived(
+    resolveEmptyKind({
+      searchActive: overlay.active,
+      unreadFilterOn,
+      globalCaughtUp,
+      ticketCount: allTickets.length,
+      activeFilterCount: filterStore.activeCount,
+    }),
+  );
+
+  const caughtUpLineVisible = $derived(
+    showCaughtUpLine({
+      sortOn: newRepliesFirstStore.enabled,
+      globalCaughtUp,
+      searchActive: overlay.active,
+      listCount: listItems.length,
+    }),
+  );
+
+  // Seal initial from the org name; a nameless org gets the heading alone.
+  // First grapheme, not code unit: a name can open with a composed character.
+  const orgInitial = $derived.by(() => {
+    const name = getBrandingTitle().trim();
+    if (name === "") return undefined;
+    return new Intl.Segmenter(undefined, { granularity: "grapheme" })
+      .segment(name)
+      .containing(0)
+      ?.segment.toUpperCase();
   });
 
   $effect(() => {
@@ -1112,6 +1152,14 @@
   {:else if ticketsQuery.isError}
     <QueryError error={ticketsQuery.error} />
   {:else}
+    {#if caughtUpLineVisible}
+      <!-- Earned-state stamp on the dateline anatomy: the volunteer has
+           read every reply, globally, so the sort has nothing to raise. -->
+      <div class="caught-up-line" role="status" data-testid="caught-up-line">
+        <span class="caught-up-stamp">{m.tickets_unread_zero_stamp()}</span>
+        <span class="caught-up-label">{m.tickets_unread_zero_title()}</span>
+      </div>
+    {/if}
     <div
       class="ticket-list"
       data-ticket-list
@@ -1189,13 +1237,23 @@
     </div>
 
     {#if listItems.length === 0 && !pinnedLoading}
-      <div class="empty-state" role="status">
-        <p>
-          {overlay.active
-            ? m.search_conversation_no_matches()
-            : m.tickets_empty_filter(withTerms())}
-        </p>
-      </div>
+      {#if emptyKind === "search"}
+        <EmptyState title={m.search_conversation_no_matches()} />
+      {:else if emptyKind === "caught-up"}
+        <EmptyState
+          stamp={m.tickets_unread_zero_stamp()}
+          title={m.tickets_unread_zero_title()}
+          subtitle={m.tickets_unread_zero_body(withTerms())}
+        />
+      {:else if emptyKind === "truly-empty"}
+        <EmptyState
+          seal={orgInitial}
+          title={m.tickets_empty_title()}
+          subtitle={m.tickets_empty_body(withTerms())}
+        />
+      {:else}
+        <EmptyState title={m.tickets_empty_filter(withTerms())} />
+      {/if}
     {/if}
   {/if}
 </div>
@@ -1286,11 +1344,39 @@
     grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
   }
 
-  .empty-state {
-    text-align: center;
-    padding: 3rem 1rem;
+  /* Caught-up line: the dateline anatomy carrying the earned-state
+     stamp. Quiet ink, hairline-flanked; the list below stays intact. */
+  .caught-up-line {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 2px 0;
+  }
+
+  .caught-up-line::before,
+  .caught-up-line::after {
+    content: "";
+    flex: 1;
+    height: 1px;
+    background: var(--hair);
+  }
+
+  .caught-up-stamp {
+    display: inline-block;
+    font-size: 0.8125rem;
+    font-weight: 700;
+    letter-spacing: 0.13em;
+    text-transform: uppercase;
+    padding: 4px 10px;
+    border: 1px solid currentColor;
+    border-radius: 3px;
+    color: var(--ink);
+    transform: rotate(-1deg);
+  }
+
+  .caught-up-label {
+    font-size: var(--text-sm);
     color: var(--muted);
-    font-size: var(--text-base);
   }
 
   .search-target {

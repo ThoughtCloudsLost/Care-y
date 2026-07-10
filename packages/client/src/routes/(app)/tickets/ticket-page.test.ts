@@ -36,6 +36,10 @@ vi.mock("$app/paths", () => ({
 // Controlled infinite query state.
 let infiniteQueryState: Record<string, unknown> = {};
 
+// Controlled read-state sweep data. undefined = sweep not settled (the
+// default for tests that don't care); [] = settled with zero unread.
+let sweepQueryData: unknown = undefined;
+
 vi.mock("@tanstack/svelte-query", () => ({
   useQueryClient: () => ({
     getQueryData: vi.fn(),
@@ -48,12 +52,14 @@ vi.mock("@tanstack/svelte-query", () => ({
     return infiniteQueryState;
   },
   createQuery: (optsFn: () => Record<string, unknown>) => {
-    optsFn();
+    const opts = optsFn();
+    const key = opts.queryKey;
+    const isSweep = Array.isArray(key) && key.includes("readStateSweep");
     return {
       isLoading: false,
       isError: false,
       error: null,
-      data: undefined,
+      data: isSweep ? sweepQueryData : undefined,
     };
   },
   createMutation: () => ({
@@ -181,6 +187,9 @@ vi.mock("$lib/stores/view-mode.svelte.js", () => ({
   },
 }));
 
+// Controlled active-filter count (0 = truly empty, >0 = filtered view).
+let currentActiveCount = 0;
+
 vi.mock("$lib/stores/filters.svelte.js", () => ({
   filterStore: {
     serverParams: {
@@ -196,7 +205,9 @@ vi.mock("$lib/stores/filters.svelte.js", () => ({
     assigneeId: null,
     dateFrom: null,
     dateTo: null,
-    activeCount: 0,
+    get activeCount() {
+      return currentActiveCount;
+    },
     toggleStatus: vi.fn(),
     toggleQueue: vi.fn(),
     togglePriority: vi.fn(),
@@ -281,6 +292,8 @@ if (typeof globalThis.IntersectionObserver === "undefined") {
 beforeEach(() => {
   currentViewMode = "list";
   infiniteQueryState = {};
+  sweepQueryData = undefined;
+  currentActiveCount = 0;
 });
 
 afterEach(cleanup);
@@ -376,7 +389,8 @@ describe("Ticket list page", () => {
     expect(list).toBeTruthy();
   });
 
-  it("renders empty state when no tickets match filter", () => {
+  it("renders filtered empty text when active filters yield no tickets", () => {
+    currentActiveCount = 1;
     infiniteQueryState = {
       isLoading: false,
       isError: false,
@@ -387,8 +401,69 @@ describe("Ticket list page", () => {
       fetchNextPage: vi.fn(),
     };
 
-    render(PageModule.default);
+    const { container } = render(PageModule.default);
     expect(screen.getByText("No tickets match this filter.")).toBeTruthy();
+    // A filtered-to-zero room is not empty: no seal, quiet text only.
+    expect(container.querySelector(".empty-seal")).toBeNull();
+  });
+
+  it("renders the seal empty state when the org has no tickets and no filters", () => {
+    infiniteQueryState = {
+      isLoading: false,
+      isError: false,
+      error: null,
+      data: { pages: [[]], pageParams: [undefined] },
+      hasNextPage: false,
+      isFetchingNextPage: false,
+      fetchNextPage: vi.fn(),
+    };
+
+    const { container } = render(PageModule.default);
+    expect(screen.getByText("Nothing here yet")).toBeTruthy();
+    // Org initial from the branding title store ("CARE-Y" fallback -> "C").
+    const seal = container.querySelector(".empty-seal");
+    expect(seal).toBeTruthy();
+    expect(seal?.textContent).toBe("C");
+  });
+
+  it("shows the caught-up line when the sweep settles at zero unread over a non-empty list", () => {
+    // Empty sweep = settled with zero unread; "New replies first" defaults on.
+    sweepQueryData = [];
+    const tickets = [makeTicket(), makeTicket()];
+    infiniteQueryState = {
+      isLoading: false,
+      isError: false,
+      error: null,
+      data: { pages: [tickets], pageParams: [undefined] },
+      hasNextPage: false,
+      isFetchingNextPage: false,
+      fetchNextPage: vi.fn(),
+    };
+
+    const { container } = render(PageModule.default);
+    const line = container.querySelector("[data-testid='caught-up-line']");
+    expect(line).toBeTruthy();
+    expect(line?.textContent).toContain("All caught up");
+    expect(line?.textContent).toContain("You've read every new reply");
+  });
+
+  it("keeps the caught-up line hidden until the sweep settles", () => {
+    // sweepQueryData stays undefined: global truth unknown, no stamp.
+    const tickets = [makeTicket()];
+    infiniteQueryState = {
+      isLoading: false,
+      isError: false,
+      error: null,
+      data: { pages: [tickets], pageParams: [undefined] },
+      hasNextPage: false,
+      isFetchingNextPage: false,
+      fetchNextPage: vi.fn(),
+    };
+
+    const { container } = render(PageModule.default);
+    expect(
+      container.querySelector("[data-testid='caught-up-line']"),
+    ).toBeNull();
   });
 
   // Navbar override context shape is the shell integration contract between page and AppShell.
