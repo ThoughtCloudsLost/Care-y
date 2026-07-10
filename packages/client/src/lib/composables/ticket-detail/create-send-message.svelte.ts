@@ -3,7 +3,7 @@ import type { CryptoBridge } from "$lib/workers/crypto-bridge.js";
 import type { AsyncDecryptCache } from "$lib/crypto/async-decrypt-cache.js";
 import { CryptoWorkerError } from "$lib/workers/crypto-bridge-errors.js";
 import { followupSlot } from "@care-y/crypto";
-import { ticketKeys } from "$lib/query/keys.js";
+import { ticketKeys, ticketsKeys } from "$lib/query/keys.js";
 import { toastStore } from "$lib/stores/toast.svelte.js";
 import { extractMentions } from "$lib/utils/mentions.js";
 import * as m from "$lib/paraglide/messages.js";
@@ -104,6 +104,14 @@ export function createSendMessage<TFollowUp extends { id: string }>(
 
       await queryClient.invalidateQueries({
         queryKey: ticketKeys.followUps(ticketId),
+      });
+      // The new follow-up shifts the list's read-state window and sweep
+      // activity; refetch both families without waiting for SSE.
+      void queryClient.invalidateQueries({
+        queryKey: ticketsKeys.readStates(),
+      });
+      void queryClient.invalidateQueries({
+        queryKey: ticketsKeys.readStateSweep(),
       });
     } catch (err: unknown) {
       followUpCache.deleteByPrefix(pendingId);

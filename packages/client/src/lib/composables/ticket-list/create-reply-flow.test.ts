@@ -103,6 +103,19 @@ describe("createReplyFlow", () => {
       flow.handleReplySent("t1");
       expect(eagerLoadPreviews).toHaveBeenCalledWith(["t1"]);
     });
+
+    it("invalidates the list and both read-state families", () => {
+      const spy = vi.spyOn(qc, "invalidateQueries");
+      const flow = make();
+      flow.handleReplySent("t1");
+
+      expect(spy).toHaveBeenCalledWith({ queryKey: ["tickets", "list"] });
+      expect(spy).toHaveBeenCalledWith({ queryKey: ["tickets", "readState"] });
+      expect(spy).toHaveBeenCalledWith({
+        queryKey: ["tickets", "readStateSweep"],
+      });
+      spy.mockRestore();
+    });
   });
 
   describe("dismiss", () => {

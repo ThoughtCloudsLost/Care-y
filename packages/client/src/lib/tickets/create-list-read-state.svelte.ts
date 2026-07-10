@@ -3,8 +3,8 @@
  *
  * Two server sources feed it, both server-blind:
  * - The WINDOW query (tickets.listReadState) batches the loaded rows and
- *   carries up to 20 non-system reply timestamps per ticket. It is the
- *   authority for per-ticket unread counts on loaded rows.
+ *   carries up to 20 non-system, non-self reply timestamps per ticket.
+ *   It is the authority for per-ticket unread counts on loaded rows.
  * - The SWEEP query (tickets.readStateSweep) enumerates ALL of the user's
  *   cursor rows (open tickets in accessible queues), paged to exhaustion.
  *   It contributes existence, not counts: which unloaded tickets are
@@ -17,9 +17,11 @@
  * Nothing derived from read state is ever sent back to the server.
  *
  * Unread semantics (locked): a ticket is unread only when its cursor
- * decrypts to a real readUpTo date AND newer non-system activity exists.
- * Never-opened tickets (no cursor row) and first-open dummy rows (AEAD
- * failure) are NOT unread; their New status mark already announces them.
+ * decrypts to a real readUpTo date AND newer non-system activity BY
+ * OTHERS exists (the server excludes the caller's own replies from both
+ * sources; your own reply is not unread to you). Never-opened tickets
+ * (no cursor row) and first-open dummy rows (AEAD failure) are NOT
+ * unread; their New status mark already announces them.
  */
 
 import type { CreateQueryResult } from "@tanstack/svelte-query";

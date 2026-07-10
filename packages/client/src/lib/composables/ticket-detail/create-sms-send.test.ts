@@ -13,6 +13,10 @@ vi.mock("$lib/query/keys.js", () => ({
   ticketKeys: {
     followUps: (id: string) => ["ticket", id, "followUps"],
   },
+  ticketsKeys: {
+    readStates: () => ["tickets", "readState"],
+    readStateSweep: () => ["tickets", "readStateSweep"],
+  },
 }));
 vi.mock("$lib/errors.js", () => {
   class RateLimitError extends Error {
@@ -82,6 +86,17 @@ describe("createSmsSend", () => {
       }),
     );
     expect(config.onSuccess).toHaveBeenCalledOnce();
+    // The outbound SMS is a volunteer follow-up: the list's read-state
+    // families refetch alongside the detail's follow-ups.
+    expect(config.queryClient.invalidateQueries).toHaveBeenCalledWith({
+      queryKey: ["ticket", "t-1", "followUps"],
+    });
+    expect(config.queryClient.invalidateQueries).toHaveBeenCalledWith({
+      queryKey: ["tickets", "readState"],
+    });
+    expect(config.queryClient.invalidateQueries).toHaveBeenCalledWith({
+      queryKey: ["tickets", "readStateSweep"],
+    });
   });
 
   it("skips send when body is empty", async () => {

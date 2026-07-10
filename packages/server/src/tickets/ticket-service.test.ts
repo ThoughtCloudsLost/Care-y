@@ -894,6 +894,7 @@ describe.skipIf(!process.env.DATABASE_URL)("TicketService (DB)", () => {
     ticketId: string,
     source: "client" | "volunteer" | "system",
     createdAt?: Date,
+    createdBy?: string,
   ): Promise<void> {
     await testDb.db
       .insertInto("followups")
@@ -903,6 +904,7 @@ describe.skipIf(!process.env.DATABASE_URL)("TicketService (DB)", () => {
         type: source === "system" ? "status_change" : "message",
         encrypted_content: Buffer.alloc(0),
         ...(createdAt ? { created_at: createdAt } : {}),
+        ...(createdBy !== undefined ? { created_by: createdBy } : {}),
       })
       .execute();
   }
@@ -976,6 +978,41 @@ describe.skipIf(!process.env.DATABASE_URL)("TicketService (DB)", () => {
     const result = await svc.listReadState(userId, { ticketIds: [ticketId] });
 
     expect(result[ticketId]!.followUpCreatedAt).toHaveLength(2);
+  });
+
+  it("listReadState excludes the caller's own follow-ups from timestamps", async () => {
+    const { userId, ticketId } = await createTicketFixture();
+    const other = await createTestUser(testDb.db);
+
+    // Client-authored rows carry a null created_by and must survive the
+    // IS DISTINCT FROM filter; only the caller's own rows drop.
+    await insertFollowUp(ticketId, "client");
+    await insertFollowUp(ticketId, "volunteer", undefined, userId);
+    await insertFollowUp(ticketId, "volunteer", undefined, other.id);
+
+    const result = await svc.listReadState(userId, { ticketIds: [ticketId] });
+
+    expect(result[ticketId]!.followUpCreatedAt).toHaveLength(2);
+  });
+
+  it("listReadState keeps the same reply visible to a different caller", async () => {
+    const { userId, ticketId, queueId } = await createTicketFixture();
+    await insertFollowUp(ticketId, "volunteer", undefined, userId);
+
+    // The author sees no timestamps; a colleague on the same queue sees one.
+    const own = await svc.listReadState(userId, { ticketIds: [ticketId] });
+    expect(own[ticketId]!.followUpCreatedAt).toHaveLength(0);
+
+    const colleague = await createTestUser(testDb.db);
+    await testDb.db
+      .insertInto("queue_assignments")
+      .values({ queue_id: queueId, user_id: colleague.id })
+      .onConflict((oc) => oc.columns(["queue_id", "user_id"]).doNothing())
+      .execute();
+    const theirs = await svc.listReadState(colleague.id, {
+      ticketIds: [ticketId],
+    });
+    expect(theirs[ticketId]!.followUpCreatedAt).toHaveLength(1);
   });
 
   it("listReadState caps timestamps at 20 per ticket, newest first", async () => {
@@ -1134,6 +1171,29 @@ describe.skipIf(!process.env.DATABASE_URL)("TicketService (DB)", () => {
 
     const result = await svc.sweepReadState(userId, { limit: 200 });
     expect(result.items[0]!.latestActivityAt?.getTime()).toBe(base + 60_000);
+  });
+
+  it("sweepReadState ignores the caller's own replies for latest activity", async () => {
+    const { userId, ticketId } = await createTicketFixture();
+    await insertCursorRow(userId, ticketId);
+
+    const base = Date.now() - 10 * 60_000;
+    // A ticket whose only reply is the caller's own reads as no activity.
+    await insertFollowUp(
+      ticketId,
+      "volunteer",
+      new Date(base + 60_000),
+      userId,
+    );
+    const own = await svc.sweepReadState(userId, { limit: 200 });
+    expect(own.items).toHaveLength(1);
+    expect(own.items[0]!.latestActivityAt).toBeNull();
+
+    // An older reply by someone else still wins over the caller's newer one.
+    const other = await createTestUser(testDb.db);
+    await insertFollowUp(ticketId, "volunteer", new Date(base), other.id);
+    const withOther = await svc.sweepReadState(userId, { limit: 200 });
+    expect(withOther.items[0]!.latestActivityAt?.getTime()).toBe(base);
   });
 
   it("sweepReadState passes cursor ciphertext through verbatim", async () => {
