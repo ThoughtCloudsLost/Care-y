@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "with a new reply" |
+* | "new reply" |
 *
 * @param {Tickets_Count_New_Replies_OneInputs} inputs
 * @param {{ locale?: "en" | "es" }} options
