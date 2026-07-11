@@ -807,6 +807,9 @@
   const counts = $derived(countsQuery.data);
   const priorityCounts = $derived(counts?.byPriority);
 
+  // "Unread" rides the Status dropdown and "Needs attention" rides
+  // Priority: to a volunteer they ARE a status and a priority concern.
+  // Both toggle client-side membership flags, never filterStore.
   const statusOptions = $derived([
     {
       value: "new",
@@ -824,6 +827,7 @@
       value: "closed",
       label: `${m.tickets_filter_closed()} (${String(counts?.closed ?? 0)})`,
     },
+    { value: "unread", label: m.tickets_filter_unread() },
   ]);
 
   const priorityOptions = $derived([
@@ -843,7 +847,20 @@
       value: "urgent",
       label: `${m.tickets_filter_priority_urgent()} (${String(priorityCounts?.urgent ?? 0)})`,
     },
+    { value: "needs-attention", label: m.tickets_filter_needs_attention() },
   ]);
+
+  const statusSelected = $derived(
+    unreadFilterOn
+      ? new Set<string>([...filterStore.statuses, "unread"])
+      : filterStore.statuses,
+  );
+
+  const prioritySelected = $derived(
+    needsAttentionFilterOn
+      ? new Set<string>([...filterStore.priorities, "needs-attention"])
+      : filterStore.priorities,
+  );
 
   const queueOptions = $derived(
     (queuesQuery.data ?? []).map((q) => ({
@@ -865,7 +882,7 @@
       label: m.tickets_filter_status(),
       mode: "multi",
       options: statusOptions,
-      selected: filterStore.statuses,
+      selected: statusSelected,
     },
     {
       id: "queue",
@@ -880,7 +897,7 @@
       label: m.tickets_filter_priority(),
       mode: "multi",
       options: priorityOptions,
-      selected: filterStore.priorities,
+      selected: prioritySelected,
     },
     {
       id: "assignee",
@@ -906,7 +923,11 @@
       status: {
         type: "multi-toggle",
         toggle: (v: string) => {
-          if (isFilterStatus(v)) filterStore.toggleStatus(v);
+          if (v === "unread") {
+            unreadFilterOn = !unreadFilterOn;
+          } else if (isFilterStatus(v)) {
+            filterStore.toggleStatus(v);
+          }
         },
       },
       queue: {
@@ -916,6 +937,10 @@
       priority: {
         type: "multi-toggle",
         toggle: (v: string) => {
+          if (v === "needs-attention") {
+            needsAttentionFilterOn = !needsAttentionFilterOn;
+            return;
+          }
           const parsed = ticketPrioritySchema.safeParse(v);
           if (parsed.success) filterStore.togglePriority(parsed.data);
         },
@@ -947,7 +972,11 @@
       stateSchema: savedFilterStateSchema,
       getCurrentUserId: () => currentUserId ?? null,
     },
-    clearAll: () => filterStore.clearAll(),
+    clearAll: () => {
+      filterStore.clearAll();
+      unreadFilterOn = false;
+      needsAttentionFilterOn = false;
+    },
     onchange: () => {
       if (overlay.active) useMatchOrder = false;
     },
@@ -1030,7 +1059,10 @@
 
   const filterPillsConfig: FilterPillsConfig = $derived({
     pills: ticketPills,
-    activeCount: filterStore.activeCount,
+    activeCount:
+      filterStore.activeCount +
+      (unreadFilterOn ? 1 : 0) +
+      (needsAttentionFilterOn ? 1 : 0),
     dateFrom: dateFromStr,
     dateTo: dateToStr,
     dateActive: dateRangeActive,
@@ -1041,20 +1073,6 @@
     onclearall: dispatch.clearAll,
     oncreateshortcut: () => {
       savedFilterModalOpen = true;
-    },
-    unreadFilter: {
-      label: m.tickets_filter_unread(),
-      active: unreadFilterOn,
-      ontoggle: () => {
-        unreadFilterOn = !unreadFilterOn;
-      },
-    },
-    needsAttentionFilter: {
-      label: m.tickets_filter_needs_attention(),
-      active: needsAttentionFilterOn,
-      ontoggle: () => {
-        needsAttentionFilterOn = !needsAttentionFilterOn;
-      },
     },
   });
 </script>
