@@ -579,7 +579,7 @@ describe("Ticket list page", () => {
     };
 
     const { container } = render(PageModule.default);
-    // PriorityBadge renders data-priority="urgent" and text "Urgent".
+    // PriorityStamp renders data-priority="urgent" and the "Urgent" label.
     const badge = container.querySelector("[data-priority='urgent']");
     expect(badge).toBeTruthy();
     expect(badge?.textContent).toContain("Urgent");
