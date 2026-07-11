@@ -1,14 +1,18 @@
 <script lang="ts">
-  import { SvelteSet } from "svelte/reactivity";
-  import { createQuery } from "@tanstack/svelte-query";
+  import { SvelteSet, SvelteMap } from "svelte/reactivity";
+  import {
+    createQuery,
+    createInfiniteQuery,
+    useQueryClient,
+  } from "@tanstack/svelte-query";
   import { Notification, List, ListItem } from "konsta/svelte";
   import { goto } from "$app/navigation";
   import { resolve } from "$app/paths";
   import { trpc } from "$lib/trpc/index.js";
-  import { ticketsKeys, kbKeys } from "$lib/query/keys.js";
+  import { ticketsKeys, kbKeys, volunteerKeys } from "$lib/query/keys.js";
   import { toastStore } from "$lib/stores/toast.svelte.js";
+  import { haptic } from "$lib/utils/haptic.js";
   import { requireRouter } from "$lib/errors.js";
-  import type { TicketPreviewItemProps } from "$lib/components/dashboard/types.js";
   import {
     Ticket as TicketIcon,
     TicketMinus,
@@ -33,34 +37,63 @@
   import KBSection from "$lib/components/dashboard/KBSection.svelte";
   import TicketAlert from "$lib/components/icons/TicketAlert.svelte";
   import TicketPause from "$lib/components/icons/TicketPause.svelte";
+  import ViewSwitcher from "$lib/components/ViewSwitcher.svelte";
+  import AssignSheet from "$lib/components/tickets/AssignSheet.svelte";
+  import ReplySheet from "$lib/components/tickets/ReplySheet.svelte";
+  import ShellActionSheet from "$lib/shell/ShellActionSheet.svelte";
+  import CallOptionsContent from "$lib/components/tickets/CallOptionsContent.svelte";
+  import type { CallAction } from "$lib/components/tickets/CallOptionsContent.svelte";
   import {
     getOrgDecryptCache,
     getTicketDecryptCache,
+    getPreviewLoader,
     getCurrentUserId,
     getCurrentPermissions,
   } from "$lib/crypto/context.js";
   import { Permission } from "@care-y/shared";
+  import type { ReactionSummary } from "@care-y/shared";
+  import type { SerializedBuffer } from "$lib/utils/buffer-encoding.js";
   import ShellPopover from "$lib/shell/ShellPopover.svelte";
   import { getNavbarOverrideCtx } from "$lib/shell/context.js";
   import type { NavbarAction } from "$lib/shell/types";
-  import { resolveAsyncDecrypt } from "$lib/crypto/decrypt-result.js";
   import { bucketTickets } from "$lib/components/dashboard/filters.js";
   import {
     createSectionScroll,
     type ScrollSection,
   } from "$lib/components/useSectionScroll.svelte.js";
   import SectionScrollNav from "$lib/components/SectionScrollNav.svelte";
+  import { dashboardViewModeStore } from "$lib/stores/view-mode.svelte.js";
+  import type { ViewMode } from "$lib/stores/view-mode.svelte.js";
+  import { createCardPropsMapper } from "$lib/tickets/ticket-card-props.js";
+  import {
+    createListReadState,
+    fetchReadStateWindow,
+    fetchSweepToExhaustion,
+  } from "$lib/tickets/create-list-read-state.svelte.js";
+  import { isCryptoKeyed } from "$lib/crypto/crypto-keyed.svelte.js";
+  import type { TicketQuickAction } from "$lib/components/tickets/ticket-types.js";
+  import { createHoldAction } from "$lib/composables/ticket-list/create-hold-action.svelte.js";
+  import { createAssignFlow } from "$lib/composables/ticket-list/create-assign-flow.svelte.js";
+  import { createReplyFlow } from "$lib/composables/ticket-list/create-reply-flow.svelte.js";
+  import {
+    buildVolunteerMap,
+    resolveVolunteerName as sharedResolveVolunteerName,
+    type VolunteerRecord,
+  } from "$lib/tickets/resolve-volunteer.js";
   import * as m from "$lib/paraglide/messages.js";
   import { withTerms } from "$lib/terminology/with-terms.js";
 
   // Singletons from (app) layout context.
   const orgCache = getOrgDecryptCache();
   const ticketCache = getTicketDecryptCache();
+  const previewLoader = getPreviewLoader();
   const currentUserIdGetter = getCurrentUserId();
   const currentUserId = $derived(currentUserIdGetter());
   const permissionsGetter = getCurrentPermissions();
   const permissions = $derived(permissionsGetter());
   const navbarCtx = getNavbarOverrideCtx();
+  const queryClient = useQueryClient();
+  const ticketRouter = requireRouter(trpc.tickets, "tickets");
 
   // --- Create menu (navbar "+" popover) ---
 
@@ -162,16 +195,20 @@
     };
   });
 
-  // All open tickets for the current user's accessible queues.
-  const ticketRouter = requireRouter(trpc.tickets, "tickets");
-
-  const ticketsQuery = createQuery(() => ({
+  // All open tickets for the current user's accessible queues. A single-page
+  // infinite query so the shared quick-action composables operate on the same
+  // {pages} cache shape they use on the Tickets surface (their optimistic
+  // updates map over pages); the dashboard never fetches a second page.
+  const ticketsQuery = createInfiniteQuery(() => ({
     queryKey: ticketsKeys.list({ statuses: ["open"] }),
     queryFn: async () =>
       ticketRouter.list.query({ statuses: ["open"], limit: 100 }),
+    initialPageParam: undefined as string | undefined,
+    getNextPageParam: () => undefined,
   }));
 
-  type Ticket = NonNullable<typeof ticketsQuery.data>[number];
+  const allTickets = $derived(ticketsQuery.data?.pages.flat() ?? []);
+  type Ticket = (typeof allTickets)[number];
 
   // --- Dashboard info queries ---
 
@@ -203,13 +240,93 @@
     queryFn: async () => ticketRouter.counts.query(),
   }));
 
+  // --- Read state (per-ticket unread for the needs-attention arm + pills) ---
+
+  const loadedTicketIds = $derived(allTickets.map((t) => t.id));
+
+  // The sweep is created on the shared key so the read-state families stay
+  // in lockstep with the Tickets surface (one invalidation clears both), but
+  // it is DISABLED here: the dashboard reads only per-ticket unreadCount,
+  // which the window query answers authoritatively for loaded rows. Global
+  // truth (the caught-up stamp, the unread filter) lives on Tickets, not here.
+  const readStateSweepQuery = createQuery(() => ({
+    queryKey: ticketsKeys.readStateSweep(),
+    queryFn: async () =>
+      fetchSweepToExhaustion(async (cursor) =>
+        ticketRouter.readStateSweep.query({ cursor }),
+      ),
+    enabled: false,
+  }));
+
+  const readStateQuery = createQuery(() => ({
+    queryKey: ticketsKeys.readState(loadedTicketIds),
+    queryFn: async () =>
+      fetchReadStateWindow(loadedTicketIds, async (ids) =>
+        ticketRouter.listReadState.query({ ticketIds: ids }),
+      ),
+    enabled: isCryptoKeyed() && loadedTicketIds.length > 0,
+  }));
+
+  const ticketById = $derived.by(() => {
+    const map = new SvelteMap<string, Ticket>();
+    for (const t of allTickets) map.set(t.id, t);
+    return map;
+  });
+
+  const listReadState = createListReadState({
+    windowQuery: readStateQuery,
+    sweepQuery: readStateSweepQuery,
+    getKeyWrap: (ticketId) => ticketById.get(ticketId)?.keyWrap ?? null,
+    getUserId: () => currentUserId ?? "",
+    ticketDecryptCache: ticketCache,
+  });
+
   // --- Dashboard section filters (single-pass bucketing in filters.ts) ---
-  const allTickets = $derived(ticketsQuery.data ?? []);
-  const buckets = $derived(bucketTickets(allTickets, currentUserId));
+  const buckets = $derived(
+    bucketTickets(allTickets, currentUserId, (id) =>
+      listReadState.isUnread(id),
+    ),
+  );
   const needsAttention = $derived(buckets.needsAttention);
   const myOpen = $derived(buckets.myOpen);
   const unassigned = $derived(buckets.unassigned);
   const onHold = $derived(buckets.onHold);
+
+  // --- Quick-action composables (parity with the Tickets surface) ---
+
+  function resolveVolunteerName(userId: string): string {
+    if (userId === currentUserId) return m.dashboard_assigned_you();
+    const volunteers = queryClient.getQueryData<readonly VolunteerRecord[]>(
+      volunteerKeys.all,
+    );
+    const volunteerMap = buildVolunteerMap(volunteers);
+    return sharedResolveVolunteerName(userId, volunteerMap, orgCache) ?? "...";
+  }
+
+  const holdAction = createHoldAction({
+    queryClient,
+    getQueryKey: () => ticketsKeys.list({ statuses: ["open"] }),
+    holdMutate: async (ticketId, hold) =>
+      ticketRouter.update.mutate({ ticketId, onHold: hold }),
+  });
+
+  const assignFlow = createAssignFlow({
+    queryClient,
+    getQueryKey: () => ticketsKeys.list({ statuses: ["open"] }),
+    assignMutate: async (ticketId, targetUserId) =>
+      ticketRouter.assignTo.mutate({ ticketId, targetUserId }),
+    resolveVolunteerName,
+    getTickets: () => allTickets,
+  });
+
+  const replyFlow = createReplyFlow({
+    queryClient,
+    getTickets: () => allTickets,
+    getPreviewFollowUps: (id) => previewLoader.get(id),
+    eagerLoadPreviews: async (ids) => previewLoader.eagerLoad(ids),
+  });
+
+  let callSheetOpen = $state(false);
 
   // --- Getting Started checklist (admin-only, TanStack deduplicates with GettingStartedCard) ---
 
@@ -230,6 +347,16 @@
 
   const showOnHold = $derived(
     ticketsQuery.isLoading || (countsQuery.data?.onHold ?? onHold.length) > 0,
+  );
+
+  const showNeedsAttention = $derived(
+    ticketsQuery.isLoading || needsAttention.length > 0,
+  );
+
+  // The view switcher lives in the first VISIBLE ticket section's head, so
+  // one control drives every ticket list on the page.
+  const firstTicketSectionId = $derived(
+    showNeedsAttention ? "needs-attention" : "my-tickets",
   );
 
   const dashboardSections = $derived.by((): readonly ScrollSection[] => {
@@ -255,7 +382,7 @@
         icon: Layers,
       },
     );
-    if (ticketsQuery.isLoading || needsAttention.length > 0) {
+    if (showNeedsAttention) {
       sections.push({
         id: "needs-attention",
         label: m.dashboard_section_needs_attention,
@@ -284,7 +411,7 @@
 
   const scroll = createSectionScroll(() => dashboardSections);
 
-  // --- Pre-computed derived props (avoid inline .map() in template) ---
+  // --- Meta-section derived props (unchanged; owned by their sections) ---
 
   const activityProps = $derived(
     (activityQuery.data ?? []).map((a) => ({
@@ -309,10 +436,50 @@
     })),
   );
 
-  const needsAttentionProps = $derived(needsAttention.map(toPreviewProps));
-  const myOpenProps = $derived(myOpen.map(toPreviewProps));
-  const unassignedProps = $derived(unassigned.map(toPreviewProps));
-  const onHoldProps = $derived(onHold.map(toPreviewProps));
+  // --- Ticket card props (shared mapper, one contract with the Tickets page) ---
+
+  // Reaction summaries are display-only in previews; the Tickets surface owns
+  // their hydration. An empty map keeps the preview reaction slot inert here.
+  const previewReactionsMap = new SvelteMap<string, ReactionSummary[]>();
+
+  // The mapper hands its decrypt hooks widened `unknown` ciphertext; re-derive
+  // the typed org-cache inputs from the loaded rows, keyed the same way the
+  // mapper keys them, so the cache calls stay type-safe without a cast.
+  const orgCipherByKey = $derived.by(() => {
+    const map = new SvelteMap<string, SerializedBuffer | Uint8Array | null>();
+    for (const t of allTickets) {
+      map.set(`queue:${t.queueId}`, t.encryptedQueueName);
+      if (t.assignedTo !== null) {
+        map.set(`assignee:${t.assignedTo}`, t.assignedDisplayName);
+      }
+    }
+    return map;
+  });
+
+  const cardMapper = $derived(
+    createCardPropsMapper({
+      orgDecrypt: (cacheKey) =>
+        orgCache.decrypt(cacheKey, orgCipherByKey.get(cacheKey) ?? null),
+      decryptTitle: (ticketId) => {
+        const t = ticketById.get(ticketId);
+        return t
+          ? ticketCache.decryptTitle(t.id, t.keyWrap, t.encryptedTitle)
+          : undefined;
+      },
+      currentUserId: currentUserId ?? "",
+      unreadCount: (ticketId) => listReadState.unreadCount(ticketId),
+      getPreview: (ticketId) => previewLoader.get(ticketId),
+      previewReactionsMap,
+      ontap: handleTicketTap,
+      onaction: handleAction,
+      onencryptedhelp: showEncryptedHelp,
+    }),
+  );
+
+  const needsAttentionCards = $derived(needsAttention.map(cardMapper));
+  const myOpenCards = $derived(myOpen.map(cardMapper));
+  const unassignedCards = $derived(unassigned.map(cardMapper));
+  const onHoldCards = $derived(onHold.map(cardMapper));
 
   // --- Collapsible section state (all expanded except unassigned/on-hold) ---
   const collapsedSections = new SvelteSet<string>(["unassigned", "on-hold"]);
@@ -323,45 +490,6 @@
     } else {
       collapsedSections.add(id);
     }
-  }
-
-  // Ticket title decryption is handled by ticketCache (TicketDecryptCache).
-  // It uses a SvelteMap internally, so reads are reactive. Decryption is
-  // triggered lazily in toPreviewProps when each ticket is first rendered.
-
-  // Assignee display name decryption is handled by orgCache (OrgDecryptCache).
-  // Display names are sealed-box encrypted with the org public key.
-
-  function toPreviewProps(t: Ticket): Omit<TicketPreviewItemProps, "ontap"> {
-    // Assignee: show "You" for current user, org-key-decrypt name for
-    // others, null for unassigned (falls back to i18n "Unassigned").
-    let assignedName: string | null = null;
-    if (t.assignedTo === currentUserId) {
-      assignedName = m.dashboard_assigned_you();
-    } else if (t.assignedTo !== null) {
-      assignedName =
-        orgCache.decrypt(`assignee:${t.assignedTo}`, t.assignedDisplayName) ??
-        null;
-    }
-
-    return {
-      ticketId: t.id,
-      titleResult: resolveAsyncDecrypt(
-        ticketCache.decryptTitle(t.id, t.keyWrap, t.encryptedTitle),
-        t.keyWrap !== null,
-      ),
-      status: t.status,
-      priority: t.priority,
-      onHold: t.onHold,
-      assignedTo: t.assignedTo,
-      createdAt: new Date(t.createdAt),
-      clientAlias: t.clientAlias,
-      queueName: orgCache.decrypt(`queue:${t.queueId}`, t.encryptedQueueName),
-      lastActivityAt:
-        t.lastActivityAt !== null ? new Date(t.lastActivityAt) : null,
-      followUpCount: t.followUpCount,
-      assignedName,
-    };
   }
 
   // Navigation handlers (route file owns navigation per code standards).
@@ -389,6 +517,49 @@
     void goto(resolve(`/library/${itemId}`));
   }
 
+  // --- Quick-action dispatch (thin delegation, mirrors the Tickets page) ---
+
+  function handleAction(ticketId: string, action: TicketQuickAction): void {
+    switch (action) {
+      case "hold":
+        void holdAction.handleHold(ticketId, false);
+        break;
+      case "unhold":
+        void holdAction.handleHold(ticketId, true);
+        break;
+      case "assign":
+        assignFlow.open(ticketId);
+        break;
+      case "take":
+        void handleTake(ticketId);
+        break;
+      case "reply":
+        replyFlow.open(ticketId);
+        break;
+      case "call":
+        callSheetOpen = true;
+        break;
+    }
+  }
+
+  async function handleTake(ticketId: string): Promise<void> {
+    try {
+      await ticketRouter.take.mutate({ ticketId });
+      haptic();
+      toastStore.show(m.ticket_toast_taken(withTerms()));
+      void queryClient.invalidateQueries({ queryKey: ticketsKeys.lists() });
+    } catch (err: unknown) {
+      console.error("[dashboard] take failed", err);
+      toastStore.show(m.error_generic(), 3000);
+    }
+  }
+
+  function handleCallAction(action: CallAction): void {
+    callSheetOpen = false;
+    if (action === "cancel") return;
+    toastStore.show(m.feature_coming_soon());
+  }
+
   // Login summary notification slot (6k provides content).
   let exposureNotificationVisible = $state(false);
 
@@ -404,6 +575,13 @@
     onscroll={(id: string) =>
       void scroll.expandAndScroll(id, () => collapsedSections.delete(id))}
     ariaLabel={m.nav_home()}
+  />
+{/snippet}
+
+{#snippet viewSwitcher()}
+  <ViewSwitcher
+    mode={dashboardViewModeStore.mode}
+    onchange={(mode: ViewMode) => dashboardViewModeStore.set(mode)}
   />
 {/snippet}
 
@@ -465,7 +643,7 @@
     />
   </div>
 
-  {#if ticketsQuery.isLoading || needsAttention.length > 0}
+  {#if showNeedsAttention}
     <div id="section-needs-attention" class="scroll-target" data-column="right">
       <CollapsibleSection
         id="needs-attention"
@@ -476,14 +654,14 @@
         iconColor="var(--brand-accent)"
         expanded={!collapsedSections.has("needs-attention")}
         ontoggle={() => toggleSection("needs-attention")}
+        headerExtra={firstTicketSectionId === "needs-attention"
+          ? viewSwitcher
+          : undefined}
       >
         <TicketPreviewList
-          heading={m.dashboard_section_needs_attention()}
-          hideHeading
           loading={ticketsQuery.isLoading}
-          tickets={needsAttentionProps}
-          ontickettap={handleTicketTap}
-          onencryptedhelp={showEncryptedHelp}
+          cards={needsAttentionCards}
+          viewMode={dashboardViewModeStore.mode}
         />
       </CollapsibleSection>
     </div>
@@ -499,15 +677,15 @@
       iconColor="var(--brand-accent)"
       expanded={!collapsedSections.has("my-tickets")}
       ontoggle={() => toggleSection("my-tickets")}
+      headerExtra={firstTicketSectionId === "my-tickets"
+        ? viewSwitcher
+        : undefined}
     >
       <TicketPreviewList
-        heading={m.dashboard_section_my_tickets(withTerms())}
-        hideHeading
         loading={ticketsQuery.isLoading}
-        tickets={myOpenProps}
-        ontickettap={handleTicketTap}
+        cards={myOpenCards}
+        viewMode={dashboardViewModeStore.mode}
         onseeall={handleSeeAllMyOpen}
-        onencryptedhelp={showEncryptedHelp}
       />
     </CollapsibleSection>
   </div>
@@ -526,14 +704,11 @@
       ontoggle={() => toggleSection("unassigned")}
     >
       <TicketPreviewList
-        heading={m.dashboard_section_unassigned()}
-        hideHeading
         loading={ticketsQuery.isLoading}
-        tickets={unassignedProps}
+        cards={unassignedCards}
+        viewMode={dashboardViewModeStore.mode}
         totalCount={countsQuery.data?.unassigned}
-        ontickettap={handleTicketTap}
         onseeall={handleSeeAllUnassigned}
-        onencryptedhelp={showEncryptedHelp}
       />
     </CollapsibleSection>
   </div>
@@ -553,13 +728,10 @@
         ontoggle={() => toggleSection("on-hold")}
       >
         <TicketPreviewList
-          heading={m.dashboard_section_on_hold()}
-          hideHeading
           loading={ticketsQuery.isLoading}
-          tickets={onHoldProps}
+          cards={onHoldCards}
+          viewMode={dashboardViewModeStore.mode}
           totalCount={countsQuery.data?.onHold}
-          ontickettap={handleTicketTap}
-          onencryptedhelp={showEncryptedHelp}
         />
       </CollapsibleSection>
     </div>
@@ -587,6 +759,35 @@
     {/each}
   </List>
 </ShellPopover>
+
+<AssignSheet
+  opened={assignFlow.sheetOpen}
+  ticketId={assignFlow.targetTicketId}
+  currentAssigneeId={assignFlow.currentAssigneeId}
+  ondismiss={() => assignFlow.dismiss()}
+  onassign={(tid: string, uid: string | null) =>
+    void assignFlow.handleAssign(tid, uid)}
+/>
+
+<ReplySheet
+  opened={replyFlow.sheetOpen}
+  ticketId={replyFlow.targetTicketId}
+  clientAlias={replyFlow.clientAlias}
+  previewFollowUps={replyFlow.previewFollowUps}
+  followUpCount={replyFlow.followUpCount}
+  ondismiss={() => replyFlow.dismiss()}
+  onsent={(tid: string) => replyFlow.handleReplySent(tid)}
+/>
+
+<ShellActionSheet
+  opened={callSheetOpen}
+  ondismiss={() => {
+    callSheetOpen = false;
+  }}
+  ariaLabel={m.ticket_call_options()}
+>
+  <CallOptionsContent hasVerifiedPhone={false} onaction={handleCallAction} />
+</ShellActionSheet>
 
 <style>
   .dashboard {
