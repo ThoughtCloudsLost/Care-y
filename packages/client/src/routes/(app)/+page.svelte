@@ -433,6 +433,7 @@
       id: q.id,
       name: orgCache.decrypt(`queue:${q.id}`, q.encryptedName),
       openCount: Number(q.openCount),
+      urgentCount: Number(q.urgentCount),
     })),
   );
 

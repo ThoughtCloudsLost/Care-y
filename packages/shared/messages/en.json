@@ -359,6 +359,8 @@
   "dashboard_shift_open_with_you_other": "{count} open with you",
   "dashboard_queues_heading": "{Queues}",
   "dashboard_queues_open_count": "{count} open",
+  "dashboard_queue_urgent_one": "{count} urgent",
+  "dashboard_queue_urgent_other": "{count} urgent",
   "dashboard_queues_no_queues": "No {queues} assigned",
   "dashboard_activity_heading": "Activity",
   "dashboard_activity_summary": "{count} events in the last hour",
