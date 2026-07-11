@@ -151,6 +151,26 @@ describe.skipIf(!process.env.DATABASE_URL)("QueueService (DB)", () => {
         .where("id", "=", fixture3.ticketId)
         .execute();
 
+      // fixture4: open + urgent (counts toward urgentCount)
+      const fixture4 = await createTestTicketFixture(testDb.db, {
+        queueId: q.id,
+      });
+      await testDb.db
+        .updateTable("tickets")
+        .set({ priority: "urgent" })
+        .where("id", "=", fixture4.ticketId)
+        .execute();
+
+      // fixture5: open + urgent + on_hold (excluded from urgentCount)
+      const fixture5 = await createTestTicketFixture(testDb.db, {
+        queueId: q.id,
+      });
+      await testDb.db
+        .updateTable("tickets")
+        .set({ priority: "urgent", on_hold: true })
+        .where("id", "=", fixture5.ticketId)
+        .execute();
+
       // Add two members
       const user1 = await createTestUser(testDb.db);
       const user2 = await createTestUser(testDb.db);
@@ -165,10 +185,11 @@ describe.skipIf(!process.env.DATABASE_URL)("QueueService (DB)", () => {
       const list = await svc.listActive();
       const found = list.find((x) => x.id === q.id);
       expect(found).toBeDefined();
-      expect(Number(found!.openCount)).toBe(2); // fixture1 + fixture3 (hold is still open)
+      expect(Number(found!.openCount)).toBe(4); // fixture1 + fixture3 + fixture4 + fixture5 (hold is still open)
       expect(Number(found!.closedCount)).toBe(1);
-      expect(Number(found!.holdCount)).toBe(1);
+      expect(Number(found!.holdCount)).toBe(2); // fixture3 + fixture5
       expect(Number(found!.memberCount)).toBe(2);
+      expect(Number(found!.urgentCount)).toBe(1); // fixture4 only (fixture5 is on hold)
     });
 
     it("returns zero counts for a queue with no tickets or members", async () => {
@@ -180,6 +201,7 @@ describe.skipIf(!process.env.DATABASE_URL)("QueueService (DB)", () => {
       expect(found!.closedCount).toBe("0");
       expect(found!.holdCount).toBe("0");
       expect(found!.memberCount).toBe("0");
+      expect(found!.urgentCount).toBe("0");
     });
   });
 

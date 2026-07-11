@@ -23,6 +23,7 @@ export interface QueueRecord {
   readonly closedCount: string;
   readonly holdCount: string;
   readonly memberCount: string;
+  readonly urgentCount: string;
 }
 
 export interface QueueService {
@@ -53,6 +54,7 @@ interface QueueCounts {
   closedCount?: string;
   holdCount?: string;
   memberCount?: string;
+  urgentCount?: string;
 }
 
 function toRecord(row: QueueRow, counts: QueueCounts = {}): QueueRecord {
@@ -67,6 +69,7 @@ function toRecord(row: QueueRow, counts: QueueCounts = {}): QueueRecord {
     closedCount: counts.closedCount ?? "0",
     holdCount: counts.holdCount ?? "0",
     memberCount: counts.memberCount ?? "0",
+    urgentCount: counts.urgentCount ?? "0",
   };
 }
 
@@ -153,6 +156,14 @@ export function createQueueService(db: Kysely<TenantDatabase>): QueueService {
             .select((sb) => sb.fn.countAll<string>().as("cnt"))
             .whereRef("qa.queue_id", "=", "q.id")
             .as("memberCount"),
+          eb
+            .selectFrom("tickets as t")
+            .select((sb) => sb.fn.countAll<string>().as("cnt"))
+            .whereRef("t.queue_id", "=", "q.id")
+            .where("t.status", "=", "open")
+            .where("t.on_hold", "=", false)
+            .where("t.priority", "=", "urgent")
+            .as("urgentCount"),
         ])
         .where("q.is_active", "=", true)
         .orderBy("q.sort_order", "asc")
@@ -164,6 +175,7 @@ export function createQueueService(db: Kysely<TenantDatabase>): QueueService {
           closedCount: String(r.closedCount ?? 0),
           holdCount: String(r.holdCount ?? 0),
           memberCount: String(r.memberCount ?? 0),
+          urgentCount: String(r.urgentCount ?? 0),
         }),
       );
     },
