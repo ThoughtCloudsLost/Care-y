@@ -25,7 +25,7 @@
   import { Phone } from "@lucide/svelte";
   import * as m from "$lib/paraglide/messages.js";
   import { withTerms } from "$lib/terminology/with-terms.js";
-  import StatusDot from "$lib/components/StatusDot.svelte";
+  import StatusMark from "$lib/components/StatusMark.svelte";
   import { formatRelativeTime } from "$lib/utils/format-time.js";
   import type { DisplayStatus } from "$lib/tickets/display-status.js";
   import { createQuery } from "@tanstack/svelte-query";
@@ -190,7 +190,11 @@
           <InlineSkeleton width="6ch" />
         {:else}
           <span class="status-after">
-            <StatusDot status={displayStatus} />
+            <!-- Decorative here: the status word sits right beside it,
+                 and StatusMark self-labels via role="img". -->
+            <span class="status-mark-wrap" aria-hidden="true">
+              <StatusMark status={displayStatus} />
+            </span>
             <span class="status-label">{statusLabel}</span>
           </span>
         {/if}
@@ -314,13 +318,17 @@
     gap: 0.375rem;
   }
 
+  .status-mark-wrap {
+    display: inline-flex;
+  }
+
   .status-label {
     font-size: var(--text-sm);
     text-transform: capitalize;
   }
 
   .destructive-text {
-    color: var(--k-color-red, #ef4444);
+    color: var(--danger);
     font-size: var(--text-sm);
   }
 
