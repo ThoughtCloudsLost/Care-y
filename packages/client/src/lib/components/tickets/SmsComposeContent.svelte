@@ -1,6 +1,7 @@
 <script lang="ts">
   import { List, ListInput, Button, Block } from "konsta/svelte";
   import * as m from "$lib/paraglide/messages.js";
+  import Register from "$lib/components/Register.svelte";
 
   interface SmsComposeContentProps {
     onsend: (body: string) => void;
@@ -22,9 +23,9 @@
 </script>
 
 <Block>
-  <p class="sms-warning">
+  <Register kind="careful">
     {m.ticket_sms_plaintext_warning()}
-  </p>
+  </Register>
 </Block>
 
 <List strong inset>
@@ -65,12 +66,6 @@
 {/if}
 
 <style>
-  .sms-warning {
-    font-size: 0.75rem;
-    color: var(--k-color-gray-500);
-    margin-bottom: 0.5rem;
-  }
-
   :global(.sms-footer) {
     display: flex;
     align-items: center;
@@ -82,7 +77,7 @@
   }
 
   .sms-over-limit {
-    color: #ef4444;
+    color: var(--danger);
   }
 
   .sms-actions {
@@ -92,6 +87,6 @@
 
   .sms-error {
     font-size: 0.875rem;
-    color: #ef4444;
+    color: var(--danger);
   }
 </style>

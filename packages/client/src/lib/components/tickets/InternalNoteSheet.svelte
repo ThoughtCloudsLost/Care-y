@@ -23,6 +23,7 @@
   import { createNoteTypesQuery } from "$lib/tickets/queries.js";
   import ShellSheet from "$lib/shell/ShellSheet.svelte";
   import SoftButton from "$lib/components/inputs/SoftButton.svelte";
+  import Register from "$lib/components/Register.svelte";
 
   interface InternalNoteSheetProps {
     opened: boolean;
@@ -223,7 +224,12 @@
   {/snippet}
 
   <div class="note-sheet-body">
-    <p class="note-description">{visibilityText}</p>
+    <Register kind="note">
+      <p class="note-description">{visibilityText}</p>
+      {#if notificationHintText}
+        <p class="note-notify-hint">{notificationHintText}</p>
+      {/if}
+    </Register>
 
     {#if noteTypesResult.data && creatableTypes.length > 0}
       <List strongIos outlineIos nested class="note-type-select-list">
@@ -249,9 +255,6 @@
       </List>
       {#if typeDescription}
         <p class="note-type-desc">{typeDescription}</p>
-      {/if}
-      {#if notificationHintText}
-        <p class="note-notify-hint">{notificationHintText}</p>
       {/if}
     {:else if noteTypesResult.data && creatableTypes.length === 0}
       <p class="note-no-types">{m.ticket_note_no_creatable_types()}</p>
@@ -299,11 +302,9 @@
     gap: var(--space-md);
   }
 
+  /* Both hints speak with the Note register's voice; only spacing is ours. */
   .note-description {
-    font-size: 0.75rem;
-    color: var(--muted);
     margin: 0;
-    line-height: 1.4;
   }
 
   .note-type-desc {
@@ -315,10 +316,7 @@
   }
 
   .note-notify-hint {
-    font-size: 0.6875rem;
-    color: var(--muted);
-    margin: 0;
-    font-style: italic;
+    margin: 0.1875rem 0 0;
   }
 
   .note-no-types {

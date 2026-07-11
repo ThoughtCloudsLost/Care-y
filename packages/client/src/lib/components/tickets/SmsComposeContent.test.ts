@@ -10,6 +10,10 @@ vi.mock("$lib/paraglide/messages.js", () => ({
   ticket_sms_sending: () => "Sending...",
   ticket_sms_char_count: ({ count }: { count: string }) => `${count} / 1600`,
   common_cancel: () => "Cancel",
+  register_note: () => "Note",
+  register_careful: () => "Careful",
+  register_warning: () => "Warning",
+  register_protected: () => "Protected",
 }));
 
 vi.mock("$lib/shell/context.js", () => ({
@@ -32,6 +36,19 @@ describe("SmsComposeContent", () => {
       });
 
       expect(container.textContent).toContain(
+        "SMS messages are not encrypted.",
+      );
+    });
+
+    it("renders the warning inside a careful register", () => {
+      const { container } = render(SmsComposeContent, {
+        props: { onsend: vi.fn(), oncancel: vi.fn() },
+      });
+
+      const register = container.querySelector("[data-register='careful']");
+      expect(register).not.toBeNull();
+      expect(register?.textContent).toContain("Careful");
+      expect(register?.textContent).toContain(
         "SMS messages are not encrypted.",
       );
     });
