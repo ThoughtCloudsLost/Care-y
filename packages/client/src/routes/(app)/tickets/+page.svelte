@@ -810,6 +810,14 @@
   // "Unread" rides the Status dropdown and "Needs attention" rides
   // Priority: to a volunteer they ARE a status and a priority concern.
   // Both toggle client-side membership flags, never filterStore.
+
+  // No server aggregate exists for needs-attention; this counts the
+  // loaded window plus pinned rows, exactly the set the option shows.
+  const needsAttentionCount = $derived(
+    [...pinnedRecords, ...allTickets].filter((t) =>
+      isNeedsAttention(t, currentUserId, (id) => listReadState.isUnread(id)),
+    ).length,
+  );
   const statusOptions = $derived([
     {
       value: "new",
@@ -827,7 +835,14 @@
       value: "closed",
       label: `${m.tickets_filter_closed()} (${String(counts?.closed ?? 0)})`,
     },
-    { value: "unread", label: m.tickets_filter_unread() },
+    {
+      value: "unread",
+      // Global truth arrives with the sweep; until then the label goes
+      // bare rather than showing a placeholder number.
+      label: listReadState.sweepSettled()
+        ? `${m.tickets_filter_unread()} (${String(listReadState.unreadTotal())})`
+        : m.tickets_filter_unread(),
+    },
   ]);
 
   const priorityOptions = $derived([
@@ -847,7 +862,10 @@
       value: "urgent",
       label: `${m.tickets_filter_priority_urgent()} (${String(priorityCounts?.urgent ?? 0)})`,
     },
-    { value: "needs-attention", label: m.tickets_filter_needs_attention() },
+    {
+      value: "needs-attention",
+      label: `${m.tickets_filter_needs_attention()} (${String(needsAttentionCount)})`,
+    },
   ]);
 
   const statusSelected = $derived(
