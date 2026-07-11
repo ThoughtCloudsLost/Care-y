@@ -118,7 +118,7 @@ describe("CollapsibleSection", () => {
     expect(container.querySelector('[role="region"]')).toBeTruthy();
   });
 
-  it("shows DecryptPlaceholder in badge area when loading and count is undefined", () => {
+  it("shows DecryptPlaceholder in count area when loading and count is undefined", () => {
     const { container } = render(CollapsibleSection, {
       props: {
         heading: "My Tickets",
@@ -128,11 +128,9 @@ describe("CollapsibleSection", () => {
       },
     });
 
-    const badge = container.querySelector("[data-count]");
-    expect(badge).toBeTruthy();
-    // DecryptPlaceholder container (.dp) renders immediately; the scramble
-    // animation inside it is delayed by 150ms, so check the container only.
-    const dp = badge?.querySelector(".dp");
+    const cnt = container.querySelector(".cnt");
+    expect(cnt).toBeTruthy();
+    const dp = cnt?.querySelector(".dp");
     expect(dp).toBeTruthy();
   });
 
@@ -164,6 +162,21 @@ describe("CollapsibleSection", () => {
 
     const button = screen.getByRole("button");
     expect(button.textContent).toContain("3");
+  });
+
+  it("renders 'N of M' when both count and totalCount are provided", () => {
+    render(CollapsibleSection, {
+      props: {
+        heading: "Unassigned",
+        count: 5,
+        totalCount: 30,
+        expanded: false,
+        ontoggle: vi.fn(),
+      },
+    });
+
+    const button = screen.getByRole("button");
+    expect(button.textContent).toContain("5 of 30");
   });
 
   it("renders heading and icon regardless of loading state", () => {

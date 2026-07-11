@@ -329,6 +329,7 @@ export * from "./dashboard_section_needs_attention.js";
 export * from "./dashboard_section_my_tickets.js";
 export * from "./dashboard_section_unassigned.js";
 export * from "./dashboard_section_on_hold.js";
+export * from "./dashboard_section_count_of.js";
 export * from "./dashboard_see_all.js";
 export * from "./dashboard_empty_section.js";
 export * from "./dashboard_encrypted_ticket.js";

@@ -330,6 +330,7 @@
   "dashboard_section_my_tickets": "Mis {tickets}",
   "dashboard_section_unassigned": "Sin asignar",
   "dashboard_section_on_hold": "En espera",
+  "dashboard_section_count_of": "{shown} de {total}",
   "dashboard_see_all": "Ver todos ({count})",
   "dashboard_empty_section": "Nada aqui ahora mismo",
   "dashboard_encrypted_ticket": "{Ticket} cifrado",
