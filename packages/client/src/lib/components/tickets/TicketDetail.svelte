@@ -10,6 +10,7 @@
   Decryption: FollowUpDecryptCache (PII-tier Worker) for content,
               OrgDecryptCache (org-key tier, main thread) for display names.
 -->
+<!-- care-y-ignore no-hardcoded-user-strings, no-click-without-keyboard -- multi-line {#snippet} param type annotations read as template text, and the select-mode wrapper's onclick has a conditional onkeydown the line scanner cannot see -->
 <script lang="ts">
   import { followupSlot } from "@care-y/crypto";
   import { tick } from "svelte";
