@@ -358,6 +358,8 @@ export * from "./dashboard_shift_open_with_you_one.js";
 export * from "./dashboard_shift_open_with_you_other.js";
 export * from "./dashboard_queues_heading.js";
 export * from "./dashboard_queues_open_count.js";
+export * from "./dashboard_queue_urgent_one.js";
+export * from "./dashboard_queue_urgent_other.js";
 export * from "./dashboard_queues_no_queues.js";
 export * from "./dashboard_activity_heading.js";
 export * from "./dashboard_activity_summary.js";
