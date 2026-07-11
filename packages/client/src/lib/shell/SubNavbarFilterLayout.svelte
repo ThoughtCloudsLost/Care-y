@@ -34,6 +34,9 @@
     title: string;
     /** Use smaller title text (for detail pages vs. list pages). */
     smallTitle?: boolean;
+    /** Suppress the visible title while keeping the section aria-label
+     *  (detail pages where the case header owns the visible title). */
+    hideTitle?: boolean;
     view?: ViewToggleConfig;
     headerRight?: Snippet;
     stats?: Snippet;
@@ -53,6 +56,7 @@
   let {
     title,
     smallTitle = false,
+    hideTitle = false,
     view,
     headerRight,
     stats,
@@ -88,7 +92,9 @@
 
 <section class="subnavbar-filter-content" aria-label={title}>
   <div class="page-header">
-    {#if smallTitle}
+    {#if hideTitle}
+      <span class="page-title-spacer" aria-hidden="true"></span>
+    {:else if smallTitle}
       <span class="page-title-small">{title}</span>
     {:else}
       <BlockTitle large class="page-title">{title}</BlockTitle>
@@ -310,6 +316,11 @@
     -webkit-box-orient: vertical;
     line-clamp: 2;
     min-width: 0;
+    flex: 1;
+  }
+
+  /* Keeps the view toggle pinned right when the visible title is hidden. */
+  .page-title-spacer {
     flex: 1;
   }
 
