@@ -34,7 +34,7 @@ test.describe.serial("ticket creation (production UI)", () => {
     // After login(), we're already on /. Avoid page.goto("/") which causes
     // a full reload and resets crypto Worker state.
     if (!page.url().endsWith("/")) {
-      await page.getByRole("tab", { name: "Home" }).click();
+      await page.getByRole("tab", { name: "Now" }).click();
       await expect(page).toHaveURL("/", { timeout: 10_000 });
     }
 

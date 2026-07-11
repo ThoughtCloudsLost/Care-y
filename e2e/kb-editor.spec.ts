@@ -384,7 +384,7 @@ test.describe.serial("KB Editor (Create/Edit, Categories, ATAG)", () => {
       .waitFor({ state: "hidden", timeout: 5_000 })
       .catch(() => undefined);
     await page.waitForTimeout(500);
-    await page.getByRole("tab", { name: "Home" }).click({ force: true });
+    await page.getByRole("tab", { name: "Now" }).click({ force: true });
     await expect(page).toHaveURL("/");
     await page.getByRole("tab", { name: /knowledge base/i }).click();
     await expect(page).toHaveURL("/library", { timeout: 10_000 });

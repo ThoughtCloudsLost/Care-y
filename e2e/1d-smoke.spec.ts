@@ -31,7 +31,7 @@ test.describe.serial("1d-smoke", () => {
     const tabbar = page.getByRole("tablist");
     await expect(tabbar).toBeAttached();
 
-    for (const name of ["Home", "Tickets", "Knowledge Base"]) {
+    for (const name of ["Now", "Tickets", "Knowledge Base"]) {
       await expect(tabbar.getByRole("tab", { name })).toBeAttached();
     }
 

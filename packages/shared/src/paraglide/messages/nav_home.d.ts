@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Home" |
+* | "Now" |
 *
 * @param {Nav_HomeInputs} inputs
 * @param {{ locale?: "en" | "es" }} options
