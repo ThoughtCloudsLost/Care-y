@@ -412,6 +412,32 @@ describe("Dashboard page", () => {
       "section-kb",
     ]);
   });
+
+  it("links needs-attention overflow to the tickets needs-attention filter", async () => {
+    // Six urgent unassigned tickets exceed the five-item preview cap, so
+    // needs-attention renders its "See all" action. The two normal
+    // tickets push the unassigned section to a different total, keeping
+    // the needs-attention link's label unique on the page.
+    infiniteTicketsState = ticketsInfinite({
+      isLoading: false,
+      isError: false,
+      error: null,
+      data: [
+        ...Array.from({ length: 6 }, () =>
+          makeTicket({ assignedTo: null, priority: "urgent" }),
+        ),
+        ...Array.from({ length: 2 }, () => makeTicket({ assignedTo: null })),
+      ],
+    });
+    queryStates = buildQueryStates();
+
+    render(PageModule.default);
+
+    const seeAll = screen.getByText("See all (6)");
+    await fireEvent.click(seeAll);
+
+    expect(mockGoto).toHaveBeenCalledWith("/tickets?filter=needs-attention");
+  });
 });
 
 describe("Dashboard create popover", () => {
