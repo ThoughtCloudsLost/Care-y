@@ -103,43 +103,55 @@
 </script>
 
 <section class="shift" aria-label={m.dashboard_shift_heading()}>
-  <span class="dot" aria-hidden="true"></span>
-  {#if loading}
-    <span class="t"><InlineSkeleton width="22ch" /></span>
-  {:else}
-    <span class="t num">{timeDisplay} · {openWithYou}</span>
-    {#if shift && shift.volunteers.length > 0}
-      <span
-        class="chips"
-        aria-label={m.dashboard_shift_volunteers({
-          count: shift.volunteersOnShift,
-        })}
-      >
-        {#each shift.volunteers as vol, i (`${vol.initials}${String(i)}`)}
-          <span
-            class="chip"
-            class:chip-you={vol.isCurrentUser}
-            aria-hidden="true">{vol.initials}</span
-          >
-        {/each}
-      </span>
+  <div class="shift-main">
+    <span class="dot" aria-hidden="true"></span>
+    {#if loading}
+      <span class="t"><InlineSkeleton width="22ch" /></span>
+    {:else}
+      <span class="t num">{timeDisplay} · {openWithYou}</span>
     {/if}
+    <button
+      type="button"
+      class="end"
+      disabled={loading}
+      onclick={handleEndShift}
+    >
+      {m.dashboard_shift_end()}
+    </button>
+  </div>
+  {#if !loading && shift && shift.volunteers.length > 0}
+    <span
+      class="chips"
+      aria-label={m.dashboard_shift_volunteers({
+        count: shift.volunteersOnShift,
+      })}
+    >
+      {#each shift.volunteers as vol, i (`${vol.initials}${String(i)}`)}
+        <span class="chip" class:chip-you={vol.isCurrentUser} aria-hidden="true"
+          >{vol.initials}</span
+        >
+      {/each}
+    </span>
   {/if}
-  <button type="button" class="end" disabled={loading} onclick={handleEndShift}>
-    {m.dashboard_shift_end()}
-  </button>
 </section>
 
 <style>
   .shift {
     display: flex;
-    align-items: center;
-    gap: 10px;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
     margin: var(--space-2xl) var(--page-pad-x) 0;
     padding: 11px 14px;
     border: 1px solid var(--hair);
     border-radius: 10px;
     background: var(--raised);
+  }
+
+  .shift-main {
+    display: flex;
+    align-items: center;
+    gap: 10px;
   }
 
   .dot {

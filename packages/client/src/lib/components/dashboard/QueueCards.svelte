@@ -50,7 +50,7 @@
 <CollapsibleSection
   heading={m.dashboard_queues_heading(withTerms())}
   icon={Layers}
-  iconColor="var(--brand-accent)"
+  iconColor="var(--brand-text)"
   {loading}
   {expanded}
   {ontoggle}

@@ -187,6 +187,7 @@
       onclick: handleCreateTap,
     };
     navbarCtx.current = {
+      title: m.nav_home(),
       actions: [createAction],
       subnavbar: dashboardSubnavbar,
     };
@@ -353,12 +354,6 @@
     ticketsQuery.isLoading || needsAttention.length > 0,
   );
 
-  // The view switcher lives in the first VISIBLE ticket section's head, so
-  // one control drives every ticket list on the page.
-  const firstTicketSectionId = $derived(
-    showNeedsAttention ? "needs-attention" : "my-tickets",
-  );
-
   // Work-first order: the day's tickets lead, ambient/meta sections follow.
   const dashboardSections = $derived.by((): readonly ScrollSection[] => {
     const sections: ScrollSection[] = [];
@@ -515,6 +510,10 @@
     void goto(resolve("/tickets?filter=unassigned"));
   }
 
+  function handleSeeAllNeedsAttention(): void {
+    void goto(resolve("/tickets?filter=needs-attention"));
+  }
+
   function showEncryptedHelp(): void {
     toastStore.show(m.dashboard_encrypted_help(withTerms()), 5000);
   }
@@ -575,20 +574,19 @@
 </script>
 
 {#snippet dashboardSubnavbar()}
-  <SectionScrollNav
-    sections={dashboardSections}
-    active={scroll.active}
-    onscroll={(id: string) =>
-      void scroll.expandAndScroll(id, () => collapsedSections.delete(id))}
-    ariaLabel={m.nav_home()}
-  />
-{/snippet}
-
-{#snippet viewSwitcher()}
-  <ViewSwitcher
-    mode={dashboardViewModeStore.mode}
-    onchange={(mode: ViewMode) => dashboardViewModeStore.set(mode)}
-  />
+  <div class="subnav-row">
+    <SectionScrollNav
+      sections={dashboardSections}
+      active={scroll.active}
+      onscroll={(id: string) =>
+        void scroll.expandAndScroll(id, () => collapsedSections.delete(id))}
+      ariaLabel={m.nav_home()}
+    />
+    <ViewSwitcher
+      mode={dashboardViewModeStore.mode}
+      onchange={(mode: ViewMode) => dashboardViewModeStore.set(mode)}
+    />
+  </div>
 {/snippet}
 
 <div class="dashboard">
@@ -629,14 +627,12 @@
         iconColor="var(--brand-text)"
         expanded={!collapsedSections.has("needs-attention")}
         ontoggle={() => toggleSection("needs-attention")}
-        headerExtra={firstTicketSectionId === "needs-attention"
-          ? viewSwitcher
-          : undefined}
       >
         <TicketPreviewList
           loading={ticketsQuery.isLoading}
           cards={needsAttentionCards}
           viewMode={dashboardViewModeStore.mode}
+          onseeall={handleSeeAllNeedsAttention}
         />
       </CollapsibleSection>
     </div>
@@ -652,9 +648,6 @@
       iconColor="var(--brand-text)"
       expanded={!collapsedSections.has("my-tickets")}
       ontoggle={() => toggleSection("my-tickets")}
-      headerExtra={firstTicketSectionId === "my-tickets"
-        ? viewSwitcher
-        : undefined}
     >
       <TicketPreviewList
         loading={ticketsQuery.isLoading}
@@ -795,6 +788,18 @@
 </ShellActionSheet>
 
 <style>
+  .subnav-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding-right: var(--page-pad-x);
+  }
+
+  .subnav-row > :global(.section-scroll-nav) {
+    flex: 1;
+    min-width: 0;
+  }
+
   .dashboard {
     padding: 0.25rem 0 1rem;
   }
