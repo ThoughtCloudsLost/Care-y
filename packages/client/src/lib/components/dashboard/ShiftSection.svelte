@@ -103,44 +103,47 @@
 </script>
 
 <section class="shift" aria-label={m.dashboard_shift_heading()}>
-  <div class="shift-main">
-    <span class="dot" aria-hidden="true"></span>
-    {#if loading}
-      <span class="t"><InlineSkeleton width="22ch" /></span>
-    {:else}
-      <span class="t num">{timeDisplay} · {openWithYou}</span>
-    {/if}
-    <button
-      type="button"
-      class="end"
-      disabled={loading}
-      onclick={handleEndShift}
-    >
-      {m.dashboard_shift_end()}
-    </button>
-  </div>
-  {#if !loading && shift && shift.volunteers.length > 0}
-    <span
-      class="chips"
-      aria-label={m.dashboard_shift_volunteers({
-        count: shift.volunteersOnShift,
-      })}
-    >
-      {#each shift.volunteers as vol, i (`${vol.initials}${String(i)}`)}
-        <span class="chip" class:chip-you={vol.isCurrentUser} aria-hidden="true"
-          >{vol.initials}</span
-        >
-      {/each}
+  <div class="shift-body">
+    <span class="shift-line">
+      <span class="dot" aria-hidden="true"></span>
+      {#if loading}
+        <span class="t"><InlineSkeleton width="22ch" /></span>
+      {:else}
+        <span class="t num">{timeDisplay}</span>
+      {/if}
     </span>
-  {/if}
+    {#if !loading}
+      <span class="t t-open num">{openWithYou}</span>
+    {/if}
+    {#if !loading && shift && shift.volunteers.length > 0}
+      <span
+        class="chips"
+        aria-label={m.dashboard_shift_volunteers({
+          count: shift.volunteersOnShift,
+        })}
+      >
+        {#each shift.volunteers as vol, i (`${vol.initials}${String(i)}`)}
+          <span
+            class="chip"
+            class:chip-you={vol.isCurrentUser}
+            aria-hidden="true">{vol.initials}</span
+          >
+        {/each}
+      </span>
+    {/if}
+  </div>
+  <button type="button" class="end" disabled={loading} onclick={handleEndShift}>
+    {m.dashboard_shift_end()}
+  </button>
 </section>
 
 <style>
+  /* End shift centers against the full band height; the body stacks
+     the status line, the open-with-you line, and the chips. */
   .shift {
     display: flex;
-    flex-direction: column;
-    align-items: stretch;
-    gap: 8px;
+    align-items: center;
+    gap: 10px;
     margin: var(--space-2xl) var(--page-pad-x) 0;
     padding: 11px 14px;
     border: 1px solid var(--hair);
@@ -148,8 +151,17 @@
     background: var(--raised);
   }
 
-  .shift-main {
+  .shift-body {
     display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
+    flex: 1;
+    min-width: 0;
+  }
+
+  .shift-line {
+    display: inline-flex;
     align-items: center;
     gap: 10px;
   }

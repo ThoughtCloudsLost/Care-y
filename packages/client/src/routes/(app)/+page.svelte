@@ -5,7 +5,7 @@
     createInfiniteQuery,
     useQueryClient,
   } from "@tanstack/svelte-query";
-  import { Notification, List, ListItem } from "konsta/svelte";
+  import { Notification, List, ListItem, BlockTitle } from "konsta/svelte";
   import { goto } from "$app/navigation";
   import { resolve } from "$app/paths";
   import { trpc } from "$lib/trpc/index.js";
@@ -187,7 +187,6 @@
       onclick: handleCreateTap,
     };
     navbarCtx.current = {
-      title: m.nav_home(),
       actions: [createAction],
       subnavbar: dashboardSubnavbar,
     };
@@ -574,7 +573,17 @@
 </script>
 
 {#snippet dashboardSubnavbar()}
-  <div class="subnav-row">
+  <!-- Mirrors the tickets-page subnavbar anatomy (SubNavbarFilterLayout):
+       large page title + switcher header row, then the scroll row where
+       tickets renders its filter row. -->
+  <section class="now-subnavbar" aria-label={m.nav_home()}>
+    <div class="now-page-header">
+      <BlockTitle large class="now-page-title">{m.nav_home()}</BlockTitle>
+      <ViewSwitcher
+        mode={dashboardViewModeStore.mode}
+        onchange={(mode: ViewMode) => dashboardViewModeStore.set(mode)}
+      />
+    </div>
     <SectionScrollNav
       sections={dashboardSections}
       active={scroll.active}
@@ -582,11 +591,7 @@
         void scroll.expandAndScroll(id, () => collapsedSections.delete(id))}
       ariaLabel={m.nav_home()}
     />
-    <ViewSwitcher
-      mode={dashboardViewModeStore.mode}
-      onchange={(mode: ViewMode) => dashboardViewModeStore.set(mode)}
-    />
-  </div>
+  </section>
 {/snippet}
 
 <div class="dashboard">
@@ -624,7 +629,7 @@
         count={ticketsQuery.isLoading ? undefined : needsAttention.length}
         loading={ticketsQuery.isLoading}
         icon={TicketAlert}
-        iconColor="var(--brand-text)"
+        iconColor="var(--brand-accent)"
         expanded={!collapsedSections.has("needs-attention")}
         ontoggle={() => toggleSection("needs-attention")}
       >
@@ -645,7 +650,7 @@
       count={ticketsQuery.isLoading ? undefined : myOpen.length}
       loading={ticketsQuery.isLoading}
       icon={TicketIcon}
-      iconColor="var(--brand-text)"
+      iconColor="var(--brand-accent)"
       expanded={!collapsedSections.has("my-tickets")}
       ontoggle={() => toggleSection("my-tickets")}
     >
@@ -667,7 +672,7 @@
         : (countsQuery.data?.unassigned ?? unassigned.length)}
       loading={ticketsQuery.isLoading}
       icon={TicketMinus}
-      iconColor="var(--brand-text)"
+      iconColor="var(--brand-accent)"
       expanded={!collapsedSections.has("unassigned")}
       ontoggle={() => toggleSection("unassigned")}
     >
@@ -691,7 +696,7 @@
           : (countsQuery.data?.onHold ?? onHold.length)}
         loading={ticketsQuery.isLoading}
         icon={TicketPause}
-        iconColor="var(--brand-text)"
+        iconColor="var(--brand-accent)"
         expanded={!collapsedSections.has("on-hold")}
         ontoggle={() => toggleSection("on-hold")}
       >
@@ -788,16 +793,23 @@
 </ShellActionSheet>
 
 <style>
-  .subnav-row {
+  .now-subnavbar {
     display: flex;
-    align-items: center;
-    gap: 8px;
-    padding-right: var(--page-pad-x);
+    flex-direction: column;
+    padding-top: 0.25rem;
   }
 
-  .subnav-row > :global(.section-scroll-nav) {
-    flex: 1;
-    min-width: 0;
+  .now-page-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-md);
+    padding: 0 var(--page-pad-x);
+  }
+
+  .now-subnavbar :global(.now-page-title) {
+    margin: 0 !important;
+    padding-left: 0 !important;
   }
 
   .dashboard {

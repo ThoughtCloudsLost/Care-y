@@ -143,7 +143,7 @@
     heading={m.getting_started_heading()}
     count={totalCount - doneCount}
     icon={Rocket}
-    iconColor="var(--brand-text)"
+    iconColor="var(--brand-accent)"
     {expanded}
     {ontoggle}
   >
@@ -206,7 +206,7 @@
   }
 
   :global(.check-done) {
-    color: var(--brand-text);
+    color: var(--brand-accent);
   }
 
   :global(.check-pending) {

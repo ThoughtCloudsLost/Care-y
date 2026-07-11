@@ -63,12 +63,16 @@ describe("ShiftSection", () => {
     expect(line?.textContent).toContain("17:00");
   });
 
-  it("appends the pluralized open-with-you count from myOpenCount", () => {
+  it("shows the pluralized open-with-you count on its own line", () => {
     const { container } = render(ShiftSection, {
       props: { shift: makeShift(), loading: false, myOpenCount: 3 },
     });
-    expect(container.querySelector(".t")?.textContent).toContain(
+    expect(container.querySelector(".t-open")?.textContent).toContain(
       "3 open with you",
+    );
+    // The status line carries the window alone; the count line is separate.
+    expect(container.querySelector(".t")?.textContent).not.toContain(
+      "open with you",
     );
   });
 
@@ -76,7 +80,7 @@ describe("ShiftSection", () => {
     const { container } = render(ShiftSection, {
       props: { shift: makeShift(), loading: false, myOpenCount: 1 },
     });
-    expect(container.querySelector(".t")?.textContent).toContain(
+    expect(container.querySelector(".t-open")?.textContent).toContain(
       "1 open with you",
     );
   });
