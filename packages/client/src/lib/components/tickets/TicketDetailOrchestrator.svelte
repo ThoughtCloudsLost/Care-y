@@ -32,7 +32,7 @@
   import type { ViewToggleConfig } from "$lib/shell/types.js";
   import SubNavbarFilterLayout from "$lib/shell/SubNavbarFilterLayout.svelte";
   import TicketDetail from "$lib/components/tickets/TicketDetail.svelte";
-  import PriorityBadge from "$lib/components/PriorityBadge.svelte";
+  import CaseHeader from "$lib/components/tickets/CaseHeader.svelte";
   import type { ContextMenuEvent } from "$lib/components/tickets/context-menu-actions.js";
   import { createLightbox } from "$lib/composables/ticket-detail/create-lightbox.svelte.js";
   import { createContextMenu } from "$lib/composables/ticket-detail/create-context-menu.svelte.js";
@@ -721,9 +721,6 @@
           )}
     </span>
   {/if}
-  {#if ticket?.priority}
-    <PriorityBadge priority={ticket.priority} />
-  {/if}
 {/snippet}
 
 {#snippet searchNavigatorRow()}
@@ -748,6 +745,7 @@
   <SubNavbarFilterLayout
     title={decryptedTitle}
     smallTitle
+    hideTitle
     view={detailViewConfig}
     stats={detailStats}
     selectLabel={m.ticket_select_mode()}
@@ -762,6 +760,7 @@
 {/snippet}
 
 <div class="ticket-detail-page">
+  <CaseHeader {ticketId} />
   <TicketDetail
     {ticketId}
     knownFollowUpCount={cachedFollowUpCount}

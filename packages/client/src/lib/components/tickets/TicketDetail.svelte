@@ -1351,6 +1351,8 @@
     padding: 1rem var(--page-pad-x);
   }
 
+  /* The scroll-under-glass chrome offset lives on CaseHeader now; this
+     container starts below the pinned header. */
   .chat-container {
     flex: 1;
     min-height: 0;
@@ -1359,8 +1361,6 @@
     overscroll-behavior: contain;
     display: flex;
     flex-direction: column;
-    margin-top: calc(-1 * (var(--navbar-h, 0px) + var(--subnavbar-h, 0px)));
-    padding-top: calc(var(--navbar-h, 0px) + var(--subnavbar-h, 0px));
   }
 
   /* The conversation thread: a plain flex column in place of Konsta
@@ -1472,11 +1472,12 @@
 
   /* --- Unread divider (dateline anatomy in brand ink) --- */
 
+  /* The container top now sits below the pinned case header, so no
+     chrome compensation is needed when scroll-init targets the divider. */
   .unread-divider {
     display: flex;
     align-items: center;
     gap: 0.625rem;
-    scroll-margin-top: calc(var(--navbar-h, 0px) + var(--subnavbar-h, 0px));
   }
 
   .unread-divider::before,
