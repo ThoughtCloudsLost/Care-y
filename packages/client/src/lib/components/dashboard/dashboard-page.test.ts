@@ -382,6 +382,36 @@ describe("Dashboard page", () => {
       screen.getByRole("button", { name: /Knowledge base/i }),
     ).toBeTruthy();
   });
+
+  it("renders sections in the work-first order (tickets lead, meta follows)", () => {
+    // The urgent unassigned ticket fills the needs-attention bucket without
+    // any read-state involvement, so the section renders deterministically.
+    infiniteTicketsState = ticketsInfinite({
+      isLoading: false,
+      isError: false,
+      error: null,
+      data: [
+        makeTicket({ assignedTo: USER_ID }),
+        makeTicket({ assignedTo: null, priority: "urgent" }),
+      ],
+    });
+    queryStates = buildQueryStates();
+
+    const { container } = render(PageModule.default);
+
+    const ids = Array.from(container.querySelectorAll(".scroll-target")).map(
+      (el) => el.id,
+    );
+    expect(ids).toEqual([
+      "section-shift",
+      "section-needs-attention",
+      "section-my-tickets",
+      "section-unassigned",
+      "section-queues",
+      "section-activity",
+      "section-kb",
+    ]);
+  });
 });
 
 describe("Dashboard create popover", () => {

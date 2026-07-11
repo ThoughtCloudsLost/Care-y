@@ -36,7 +36,7 @@
 <CollapsibleSection
   heading={m.dashboard_kb_heading(withTerms())}
   icon={BookOpen}
-  iconColor="var(--brand-accent)"
+  iconColor="var(--brand-text)"
   {loading}
   {expanded}
   {ontoggle}
@@ -122,15 +122,13 @@
     color: var(--muted);
   }
 
+  /* Ruled rows: a top hairline opens the list; each row carries its own
+     bottom hairline (matches the ticket row family). */
   .kb-surface {
     display: flex;
     flex-direction: column;
     gap: 0;
-    background: var(--card-bg, var(--surface-1));
-    border-radius: var(--card-radius);
-    border: 1px solid var(--card-border, transparent);
-    box-shadow: var(--card-shadow, none);
-    overflow: hidden;
+    border-top: 1px solid var(--hair);
   }
 
   .kb-row {
@@ -140,12 +138,8 @@
     font-size: var(--text-base);
     color: var(--ink);
     padding: var(--space-lg) var(--page-pad-x);
-    border-bottom: 1px solid var(--divider);
+    border-bottom: 1px solid var(--hair);
     cursor: pointer;
-  }
-
-  .kb-row:last-child {
-    border-bottom: none;
   }
 
   .kb-icon-gutter {
@@ -155,7 +149,6 @@
     flex-shrink: 0;
     width: 1rem;
     color: var(--muted);
-    opacity: 0.55;
   }
 
   .kb-title {
@@ -163,7 +156,6 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    opacity: 0.8;
   }
 
   .kb-rating {
@@ -173,8 +165,7 @@
     flex-shrink: 0;
     font-size: 0.625rem;
     font-weight: 600;
-    color: var(--brand-accent);
-    opacity: 0.85;
+    color: var(--muted);
     white-space: nowrap;
   }
 
@@ -183,7 +174,7 @@
     margin-left: auto;
     font-size: var(--text-xs);
     color: var(--muted);
-    opacity: 0.7;
+    font-variant-numeric: tabular-nums;
   }
 
   .no-kb {
