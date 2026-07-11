@@ -77,7 +77,7 @@
 <CollapsibleSection
   heading={m.dashboard_activity_heading()}
   icon={Activity}
-  iconColor="var(--brand-accent)"
+  iconColor="var(--brand-text)"
   {loading}
   {expanded}
   {ontoggle}
@@ -162,15 +162,13 @@
     color: var(--muted);
   }
 
+  /* Ruled rows: a top hairline opens the list; each row carries its own
+     bottom hairline (matches the ticket row family). */
   .activity-surface {
     display: flex;
     flex-direction: column;
     gap: 0;
-    background: var(--card-bg, var(--surface-1));
-    border-radius: var(--card-radius);
-    border: 1px solid var(--card-border, transparent);
-    box-shadow: var(--card-shadow, none);
-    overflow: hidden;
+    border-top: 1px solid var(--hair);
   }
 
   .activity-row {
@@ -180,12 +178,8 @@
     font-size: var(--text-sm);
     color: var(--muted);
     padding: var(--space-lg) var(--page-pad-x);
-    border-bottom: 1px solid var(--divider);
+    border-bottom: 1px solid var(--hair);
     cursor: pointer;
-  }
-
-  .activity-row:last-child {
-    border-bottom: none;
   }
 
   .activity-icon-gutter {
@@ -195,7 +189,6 @@
     flex-shrink: 0;
     width: 1rem;
     color: var(--muted);
-    opacity: 0.55;
   }
 
   .activity-event {
@@ -205,15 +198,9 @@
   }
 
   .activity-alias {
-    display: inline-flex;
-    align-items: center;
-    padding: 0.0625rem 0.3125rem;
-    border-radius: 0.25rem;
-    background: color-mix(in srgb, var(--ink) 10%, transparent);
     font-size: var(--text-xs);
     font-weight: 500;
-    color: var(--ink);
-    opacity: 0.75;
+    color: var(--muted);
     white-space: nowrap;
     flex-shrink: 0;
   }
@@ -231,7 +218,8 @@
     flex-shrink: 0;
     margin-left: auto;
     font-size: var(--text-xs);
-    opacity: 0.7;
+    color: var(--muted);
+    font-variant-numeric: tabular-nums;
   }
 
   .no-activity {

@@ -359,6 +359,7 @@
     showNeedsAttention ? "needs-attention" : "my-tickets",
   );
 
+  // Work-first order: the day's tickets lead, ambient/meta sections follow.
   const dashboardSections = $derived.by((): readonly ScrollSection[] => {
     const sections: ScrollSection[] = [];
     if (showGettingStarted) {
@@ -368,20 +369,11 @@
         icon: Rocket,
       });
     }
-    sections.push(
-      { id: "shift", label: m.dashboard_shift_heading, icon: CalendarDays },
-      { id: "activity", label: m.dashboard_activity_heading, icon: Activity },
-      {
-        id: "kb",
-        label: () => m.dashboard_kb_heading(withTerms()),
-        icon: BookOpen,
-      },
-      {
-        id: "queues",
-        label: () => m.dashboard_queues_heading(withTerms()),
-        icon: Layers,
-      },
-    );
+    sections.push({
+      id: "shift",
+      label: m.dashboard_shift_heading,
+      icon: CalendarDays,
+    });
     if (showNeedsAttention) {
       sections.push({
         id: "needs-attention",
@@ -406,6 +398,19 @@
         icon: TicketPause,
       });
     }
+    sections.push(
+      {
+        id: "queues",
+        label: () => m.dashboard_queues_heading(withTerms()),
+        icon: Layers,
+      },
+      { id: "activity", label: m.dashboard_activity_heading, icon: Activity },
+      {
+        id: "kb",
+        label: () => m.dashboard_kb_heading(withTerms()),
+        icon: BookOpen,
+      },
+    );
     return sections;
   });
 
@@ -605,41 +610,11 @@
     </div>
   {/if}
 
-  <div id="section-shift" class="scroll-target" data-column="left">
+  <div id="section-shift" class="scroll-target">
     <ShiftSection
       shift={shiftQuery.data?.shift ?? null}
       loading={shiftQuery.isLoading}
       myOpenCount={myOpen.length}
-    />
-  </div>
-
-  <div id="section-activity" class="scroll-target" data-column="right">
-    <ActivitySection
-      activity={activityProps}
-      loading={activityQuery.isLoading}
-      expanded={!collapsedSections.has("activity")}
-      ontoggle={() => toggleSection("activity")}
-      ontap={handleTicketTap}
-    />
-  </div>
-
-  <div id="section-kb" class="scroll-target" data-column="left">
-    <KBSection
-      kbItems={kbProps}
-      loading={kbQuery.isLoading}
-      expanded={!collapsedSections.has("kb")}
-      ontoggle={() => toggleSection("kb")}
-      ontap={handleKBTap}
-    />
-  </div>
-
-  <div id="section-queues" class="scroll-target" data-column="left">
-    <QueueCards
-      queues={queueProps}
-      loading={queuesQuery.isLoading}
-      expanded={!collapsedSections.has("queues")}
-      ontoggle={() => toggleSection("queues")}
-      ontap={handleQueueTap}
     />
   </div>
 
@@ -651,7 +626,7 @@
         count={ticketsQuery.isLoading ? undefined : needsAttention.length}
         loading={ticketsQuery.isLoading}
         icon={TicketAlert}
-        iconColor="var(--brand-accent)"
+        iconColor="var(--brand-text)"
         expanded={!collapsedSections.has("needs-attention")}
         ontoggle={() => toggleSection("needs-attention")}
         headerExtra={firstTicketSectionId === "needs-attention"
@@ -674,7 +649,7 @@
       count={ticketsQuery.isLoading ? undefined : myOpen.length}
       loading={ticketsQuery.isLoading}
       icon={TicketIcon}
-      iconColor="var(--brand-accent)"
+      iconColor="var(--brand-text)"
       expanded={!collapsedSections.has("my-tickets")}
       ontoggle={() => toggleSection("my-tickets")}
       headerExtra={firstTicketSectionId === "my-tickets"
@@ -699,7 +674,7 @@
         : (countsQuery.data?.unassigned ?? unassigned.length)}
       loading={ticketsQuery.isLoading}
       icon={TicketMinus}
-      iconColor="var(--brand-accent)"
+      iconColor="var(--brand-text)"
       expanded={!collapsedSections.has("unassigned")}
       ontoggle={() => toggleSection("unassigned")}
     >
@@ -723,7 +698,7 @@
           : (countsQuery.data?.onHold ?? onHold.length)}
         loading={ticketsQuery.isLoading}
         icon={TicketPause}
-        iconColor="var(--brand-accent)"
+        iconColor="var(--brand-text)"
         expanded={!collapsedSections.has("on-hold")}
         ontoggle={() => toggleSection("on-hold")}
       >
@@ -736,6 +711,36 @@
       </CollapsibleSection>
     </div>
   {/if}
+
+  <div id="section-queues" class="scroll-target" data-column="left">
+    <QueueCards
+      queues={queueProps}
+      loading={queuesQuery.isLoading}
+      expanded={!collapsedSections.has("queues")}
+      ontoggle={() => toggleSection("queues")}
+      ontap={handleQueueTap}
+    />
+  </div>
+
+  <div id="section-activity" class="scroll-target" data-column="left">
+    <ActivitySection
+      activity={activityProps}
+      loading={activityQuery.isLoading}
+      expanded={!collapsedSections.has("activity")}
+      ontoggle={() => toggleSection("activity")}
+      ontap={handleTicketTap}
+    />
+  </div>
+
+  <div id="section-kb" class="scroll-target" data-column="left">
+    <KBSection
+      kbItems={kbProps}
+      loading={kbQuery.isLoading}
+      expanded={!collapsedSections.has("kb")}
+      ontoggle={() => toggleSection("kb")}
+      ontap={handleKBTap}
+    />
+  </div>
 </div>
 
 <ShellPopover
@@ -799,9 +804,14 @@
   }
 
   @media (min-width: 1024px) {
+    /* Provisional desktop treatment: the DOM keeps the mobile work-first
+       order, so dense packing must backfill the left column (sparse flow
+       would strand it below the ticket stack). The real desktop layout is
+       a pending design discussion. */
     .dashboard {
       display: grid;
       grid-template-columns: 1fr 1fr;
+      grid-auto-flow: row dense;
       gap: var(--space-xl, 1.5rem);
       max-width: none;
       padding-inline: var(--page-pad-x);

@@ -99,7 +99,7 @@
     greetings: "/admin/communications",
     sms: "/admin/communications",
     presets: "/admin/communications",
-    kb: "/kb",
+    kb: "/library",
     queues: "/admin/communications",
     retention: "/admin/organization",
   };
@@ -143,7 +143,7 @@
     heading={m.getting_started_heading()}
     count={totalCount - doneCount}
     icon={Rocket}
-    iconColor="var(--brand-accent, #f59e0b)"
+    iconColor="var(--brand-text)"
     {expanded}
     {ontoggle}
   >
@@ -206,11 +206,11 @@
   }
 
   :global(.check-done) {
-    color: var(--brand-primary, #22c55e);
+    color: var(--brand-text);
   }
 
   :global(.check-pending) {
-    color: var(--muted, #999);
+    color: var(--muted);
   }
 
   .progress-bar {
