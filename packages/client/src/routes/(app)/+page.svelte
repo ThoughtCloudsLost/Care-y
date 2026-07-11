@@ -608,8 +608,7 @@
     <ShiftSection
       shift={shiftQuery.data?.shift ?? null}
       loading={shiftQuery.isLoading}
-      expanded={!collapsedSections.has("shift")}
-      ontoggle={() => toggleSection("shift")}
+      myOpenCount={myOpen.length}
     />
   </div>
 
