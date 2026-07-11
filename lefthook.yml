@@ -11,6 +11,9 @@ pre-commit:
     banned-patterns:
       run: if [ -f .githooks/pre-commit ]; then bash .githooks/pre-commit; fi
     typecheck:
+      # Skipped when nothing staged can affect the type surface
+      # (docs-only or asset-only commits).
+      glob: "*.{ts,js,mjs,svelte,json}"
       run: |
         if git diff --cached --name-only | grep -q 'messages/.*\.json$'; then
           pnpm run typecheck
