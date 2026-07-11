@@ -267,6 +267,7 @@
   "tickets_filter_hold": "On Hold",
   "tickets_filter_closed": "Closed",
   "tickets_filter_unread": "Unread",
+  "tickets_filter_needs_attention": "Needs attention",
   "tickets_filter_status": "Status",
   "tickets_filter_queue": "{Queue}",
   "tickets_filter_priority": "Priority",

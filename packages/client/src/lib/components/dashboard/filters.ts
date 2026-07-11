@@ -14,23 +14,30 @@ export interface DashboardTicket {
   readonly followUpCount: number;
 }
 
+/** The structural subset of a ticket the needs-attention rule reads. */
+export interface NeedsAttentionInput {
+  readonly id: string;
+  readonly status: string;
+  readonly priority: string;
+  readonly onHold: boolean;
+  readonly assignedTo: string | null;
+}
+
 /**
- * Tickets that need immediate action: urgent/high priority tickets
- * that are unassigned, or assigned to the current user with unread
- * follow-ups.
+ * One rule for the needs-attention overlay: urgent/high tickets that
+ * are unassigned, or assigned to the viewer and carrying unread
+ * replies. Shared by the dashboard bucket and the tickets-page
+ * membership filter so the "See all" landing shows the same set.
  */
-export function filterNeedsAttention<T extends DashboardTicket>(
-  tickets: T[],
+export function isNeedsAttention(
+  t: NeedsAttentionInput,
   currentUserId: string | undefined,
-): T[] {
-  return tickets.filter((t) => {
-    if (t.status !== "open" || t.onHold) return false;
-    const isHighPriority = t.priority === "urgent" || t.priority === "high";
-    if (isHighPriority && t.assignedTo === null) return true;
-    if (t.assignedTo === currentUserId && t.followUpCount > 0 && isHighPriority)
-      return true;
-    return false;
-  });
+  isUnread: (ticketId: string) => boolean,
+): boolean {
+  if (t.onHold || t.status !== "open") return false;
+  if (t.priority !== "urgent" && t.priority !== "high") return false;
+  if (t.assignedTo === null) return true;
+  return t.assignedTo === currentUserId && isUnread(t.id);
 }
 
 /** Open tickets assigned to the current user (not on hold). */
@@ -97,10 +104,7 @@ export function bucketTickets<T extends DashboardTicket>(
     if (t.assignedTo === null) result.unassigned.push(t);
     if (t.assignedTo === currentUserId) result.myOpen.push(t);
 
-    const isHigh = t.priority === "urgent" || t.priority === "high";
-    if (isHigh && t.assignedTo === null) {
-      result.needsAttention.push(t);
-    } else if (isHigh && t.assignedTo === currentUserId && isUnread(t.id)) {
+    if (isNeedsAttention(t, currentUserId, isUnread)) {
       result.needsAttention.push(t);
     }
   }

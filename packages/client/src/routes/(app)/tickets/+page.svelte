@@ -45,6 +45,7 @@
     fetchSweepToExhaustion,
   } from "$lib/tickets/create-list-read-state.svelte.js";
   import { sortNewRepliesFirst } from "$lib/tickets/new-replies-sort.js";
+  import { isNeedsAttention } from "$lib/components/dashboard/filters.js";
   import { isCryptoKeyed } from "$lib/crypto/crypto-keyed.svelte.js";
   import { toastStore } from "$lib/stores/toast.svelte.js";
   import { haptic } from "$lib/utils/haptic.js";
@@ -203,6 +204,7 @@
   // FILTER is page state. Neither is a filterStore server param: the
   // server cannot sort or filter by read state by design.
   let unreadFilterOn = $state(false);
+  let needsAttentionFilterOn = $state(false);
   const wantsPinned = $derived(newRepliesFirstStore.enabled || unreadFilterOn);
 
   const readStateSweepQuery = createQuery(() => ({
@@ -494,6 +496,24 @@
   }
 
   const listItems = $derived.by(() => {
+    const isUnreadFn = (id: string) => listReadState.isUnread(id);
+    // Needs-attention membership narrows first (one rule with the
+    // dashboard bucket); the unread filter and sort then operate on
+    // the narrowed set. Pinned rows join the pool so an unread-but-
+    // unloaded urgent ticket still qualifies.
+    if (needsAttentionFilterOn) {
+      let members = [...pinnedRecords, ...displayItems].filter((t) =>
+        isNeedsAttention(t, currentUserId, isUnreadFn),
+      );
+      if (unreadFilterOn) {
+        members = members.filter((t) => isUnreadFn(t.id));
+        return members.sort((a, b) => activityMs(b) - activityMs(a));
+      }
+      if (newRepliesFirstStore.enabled) {
+        return sortNewRepliesFirst(members, (t) => isUnreadFn(t.id));
+      }
+      return members;
+    }
     // The unread FILTER decides membership: exactly the global unread
     // set (loaded rows filtered, unloaded rows fetched and merged),
     // ordered newest activity first.
@@ -530,6 +550,7 @@
       globalCaughtUp,
       ticketCount: allTickets.length,
       activeFilterCount: filterStore.activeCount,
+      needsAttentionOn: needsAttentionFilterOn,
     }),
   );
 
@@ -731,6 +752,13 @@
         filterStore.toggleStatus("new");
         filterStore.toggleStatus("active");
         filterStore.setAssignee(null);
+      } else if (filter === "needs-attention") {
+        // Client-side membership filter (same rule as the dashboard
+        // bucket); the status toggles narrow the server window to open.
+        filterStore.clearAll();
+        filterStore.toggleStatus("new");
+        filterStore.toggleStatus("active");
+        needsAttentionFilterOn = true;
       }
 
       if (action === "new-ticket") {
@@ -1019,6 +1047,13 @@
       active: unreadFilterOn,
       ontoggle: () => {
         unreadFilterOn = !unreadFilterOn;
+      },
+    },
+    needsAttentionFilter: {
+      label: m.tickets_filter_needs_attention(),
+      active: needsAttentionFilterOn,
+      ontoggle: () => {
+        needsAttentionFilterOn = !needsAttentionFilterOn;
       },
     },
   });

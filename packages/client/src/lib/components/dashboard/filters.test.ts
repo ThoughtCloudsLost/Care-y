@@ -6,7 +6,7 @@
 
 import { describe, it, expect } from "vitest";
 import {
-  filterNeedsAttention,
+  isNeedsAttention,
   filterMyOpen,
   filterUnassigned,
   filterOnHold,
@@ -28,34 +28,34 @@ function ticket(overrides: Partial<DashboardTicket> = {}): DashboardTicket {
   };
 }
 
-describe("filterNeedsAttention", () => {
-  it("includes urgent unassigned tickets", () => {
+describe("isNeedsAttention", () => {
+  const noneUnread = (): boolean => false;
+  const allUnread = (): boolean => true;
+
+  it("includes urgent unassigned tickets regardless of read state", () => {
     const t = ticket({ priority: "urgent", assignedTo: null });
-    expect(filterNeedsAttention([t], USER_ID)).toEqual([t]);
+    expect(isNeedsAttention(t, USER_ID, noneUnread)).toBe(true);
   });
 
   it("includes high-priority unassigned tickets", () => {
     const t = ticket({ priority: "high", assignedTo: null });
-    expect(filterNeedsAttention([t], USER_ID)).toEqual([t]);
+    expect(isNeedsAttention(t, USER_ID, noneUnread)).toBe(true);
   });
 
-  it("includes own high-priority tickets with follow-ups", () => {
-    const t = ticket({
-      priority: "high",
-      assignedTo: USER_ID,
-      followUpCount: 2,
-    });
-    expect(filterNeedsAttention([t], USER_ID)).toEqual([t]);
+  it("includes own high-priority tickets only when unread", () => {
+    const t = ticket({ priority: "high", assignedTo: USER_ID });
+    expect(isNeedsAttention(t, USER_ID, allUnread)).toBe(true);
+    expect(isNeedsAttention(t, USER_ID, noneUnread)).toBe(false);
   });
 
   it("excludes normal priority unassigned tickets", () => {
     const t = ticket({ priority: "normal", assignedTo: null });
-    expect(filterNeedsAttention([t], USER_ID)).toEqual([]);
+    expect(isNeedsAttention(t, USER_ID, allUnread)).toBe(false);
   });
 
   it("excludes on-hold tickets even if urgent", () => {
     const t = ticket({ priority: "urgent", assignedTo: null, onHold: true });
-    expect(filterNeedsAttention([t], USER_ID)).toEqual([]);
+    expect(isNeedsAttention(t, USER_ID, allUnread)).toBe(false);
   });
 
   it("excludes closed tickets even if urgent", () => {
@@ -64,29 +64,12 @@ describe("filterNeedsAttention", () => {
       assignedTo: null,
       status: "closed",
     });
-    expect(filterNeedsAttention([t], USER_ID)).toEqual([]);
+    expect(isNeedsAttention(t, USER_ID, allUnread)).toBe(false);
   });
 
-  it("excludes high-priority own tickets without follow-ups", () => {
-    const t = ticket({
-      priority: "high",
-      assignedTo: USER_ID,
-      followUpCount: 0,
-    });
-    expect(filterNeedsAttention([t], USER_ID)).toEqual([]);
-  });
-
-  it("excludes urgent tickets assigned to another user", () => {
-    const t = ticket({
-      priority: "urgent",
-      assignedTo: "other-user",
-      followUpCount: 0,
-    });
-    expect(filterNeedsAttention([t], USER_ID)).toEqual([]);
-  });
-
-  it("returns empty for empty input", () => {
-    expect(filterNeedsAttention([], USER_ID)).toEqual([]);
+  it("excludes urgent tickets assigned to another user even when unread", () => {
+    const t = ticket({ priority: "urgent", assignedTo: "other-user" });
+    expect(isNeedsAttention(t, USER_ID, allUnread)).toBe(false);
   });
 });
 

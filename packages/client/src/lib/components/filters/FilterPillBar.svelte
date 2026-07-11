@@ -21,6 +21,8 @@
     activeCount: number;
     /** Client-side membership filter rendered as the FIRST pill (no popover). */
     unreadFilter?: FilterToggleConfig;
+    /** Client-side needs-attention membership filter, rendered beside unread. */
+    needsAttentionFilter?: FilterToggleConfig;
     /** Date "from" value as YYYY-MM-DD string (for date pill) */
     dateFrom?: string;
     /** Date "to" value as YYYY-MM-DD string (for date pill) */
@@ -53,6 +55,7 @@
     pills,
     activeCount,
     unreadFilter,
+    needsAttentionFilter,
     dateFrom = "",
     dateTo = "",
     dateActive = false,
@@ -221,6 +224,9 @@
   <div class="pill-scroll">
     {#if unreadFilter}
       {@render togglePill(unreadFilter)}
+    {/if}
+    {#if needsAttentionFilter}
+      {@render togglePill(needsAttentionFilter)}
     {/if}
     {#each pills as pill (pill.id)}
       <FilterPill
