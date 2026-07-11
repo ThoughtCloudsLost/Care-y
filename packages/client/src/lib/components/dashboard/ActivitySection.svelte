@@ -77,7 +77,7 @@
 <CollapsibleSection
   heading={m.dashboard_activity_heading()}
   icon={Activity}
-  iconColor="var(--brand-text)"
+  iconColor="var(--brand-accent)"
   {loading}
   {expanded}
   {ontoggle}

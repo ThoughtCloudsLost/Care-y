@@ -36,7 +36,7 @@
 <CollapsibleSection
   heading={m.dashboard_kb_heading(withTerms())}
   icon={BookOpen}
-  iconColor="var(--brand-text)"
+  iconColor="var(--brand-accent)"
   {loading}
   {expanded}
   {ontoggle}
