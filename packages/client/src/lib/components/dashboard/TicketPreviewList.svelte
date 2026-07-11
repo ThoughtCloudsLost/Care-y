@@ -113,10 +113,13 @@
 {/if}
 
 <style>
+  /* Matches the tickets page's .ticket-page horizontal inset so the same
+     TicketCard renders at identical padding on both surfaces. */
   .preview-list {
     display: flex;
     flex-direction: column;
     min-width: 0;
+    padding: 0 var(--page-pad-x);
   }
 
   /* Ruled rows: a top hairline opens the list; each row carries its own
