@@ -256,7 +256,7 @@ test.describe.serial("Knowledge Base (Library Tab)", () => {
 
   test("dashboard KBSection links navigate to article detail", async () => {
     // Navigate to dashboard.
-    await page.getByRole("tab", { name: "Home" }).click();
+    await page.getByRole("tab", { name: "Now" }).click();
     await expect(page).toHaveURL("/");
 
     // The KB section may be collapsed from earlier tests. Expand it first.
@@ -283,7 +283,7 @@ test.describe.serial("Knowledge Base (Library Tab)", () => {
     });
 
     // Return to dashboard for cleanup.
-    await page.getByRole("tab", { name: "Home" }).click();
+    await page.getByRole("tab", { name: "Now" }).click();
     await expect(page).toHaveURL("/");
   });
 

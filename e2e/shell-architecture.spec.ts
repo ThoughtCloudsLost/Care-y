@@ -80,7 +80,7 @@ test.describe.serial("shell architecture", () => {
     const tablist = page.getByRole("tablist");
     await expect(tablist).toBeAttached();
 
-    for (const name of ["Home", "Tickets", "Knowledge Base"]) {
+    for (const name of ["Now", "Tickets", "Knowledge Base"]) {
       const tab = tablist.getByRole("tab", { name });
       await expect(tab).toBeAttached();
     }
@@ -90,8 +90,8 @@ test.describe.serial("shell architecture", () => {
     await expect(nav.getByRole("button", { name: /more/i })).toBeAttached();
   });
 
-  test("Home tab is selected by default", async () => {
-    const homeTab = page.getByRole("tab", { name: "Home" });
+  test("Now tab is selected by default", async () => {
+    const homeTab = page.getByRole("tab", { name: "Now" });
     await expect(homeTab).toHaveAttribute("aria-selected", "true");
   });
 
