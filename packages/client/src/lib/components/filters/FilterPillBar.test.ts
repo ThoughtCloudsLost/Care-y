@@ -8,7 +8,7 @@
  */
 
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { render, cleanup, fireEvent } from "@testing-library/svelte";
+import { render, cleanup } from "@testing-library/svelte";
 import { SvelteSet } from "svelte/reactivity";
 
 // --- Mock i18n ---
@@ -166,91 +166,5 @@ describe("FilterPillBar", () => {
       clearLabel: "Reset",
     });
     expect(container.textContent).toContain("Reset");
-  });
-
-  // --- Toggle pill (client-side unread filter) ---
-  // The "New replies first" sort toggle lives in the sort popover
-  // (SubNavbarFilterLayout), not in the pill bar.
-
-  it("renders the unread toggle as the first pill", () => {
-    const { container } = render(FilterPillBar, {
-      pills: makePills(),
-      activeCount: 0,
-      ontoggle: noop,
-      onselect: noop,
-      ondatechange: noop,
-      onclearall: noop,
-      unreadFilter: { label: "Unread", active: false, ontoggle: noop },
-    });
-    const scroll = container.querySelector(".pill-scroll");
-    expect(scroll).not.toBeNull();
-    const children = Array.from(scroll!.children);
-    expect(children[0]?.textContent.trim()).toBe("Unread");
-  });
-
-  it("marks the active unread toggle with aria-pressed", () => {
-    const { container } = render(FilterPillBar, {
-      pills: makePills(),
-      activeCount: 0,
-      ontoggle: noop,
-      onselect: noop,
-      ondatechange: noop,
-      onclearall: noop,
-      unreadFilter: { label: "Unread", active: true, ontoggle: noop },
-    });
-    const toggles = container.querySelectorAll(".toggle-pill");
-    expect(toggles.length).toBe(1);
-    expect(toggles[0]?.getAttribute("aria-pressed")).toBe("true");
-  });
-
-  it("fires ontoggle when the unread pill is clicked", async () => {
-    const onUnread = vi.fn();
-    const { container } = render(FilterPillBar, {
-      pills: makePills(),
-      activeCount: 0,
-      ontoggle: noop,
-      onselect: noop,
-      ondatechange: noop,
-      onclearall: noop,
-      unreadFilter: { label: "Unread", active: false, ontoggle: onUnread },
-    });
-    const toggle = container.querySelector(".toggle-pill");
-    await fireEvent.click(toggle!);
-    expect(onUnread).toHaveBeenCalledTimes(1);
-  });
-
-  it("renders the needs-attention toggle beside unread and fires its ontoggle", async () => {
-    const onNeedsAttention = vi.fn();
-    const { container } = render(FilterPillBar, {
-      pills: makePills(),
-      activeCount: 0,
-      ontoggle: noop,
-      onselect: noop,
-      ondatechange: noop,
-      onclearall: noop,
-      unreadFilter: { label: "Unread", active: false, ontoggle: noop },
-      needsAttentionFilter: {
-        label: "Needs attention",
-        active: false,
-        ontoggle: onNeedsAttention,
-      },
-    });
-    const toggles = container.querySelectorAll(".toggle-pill");
-    expect(toggles.length).toBe(2);
-    expect(toggles[1]?.textContent.trim()).toBe("Needs attention");
-    await fireEvent.click(toggles[1]!);
-    expect(onNeedsAttention).toHaveBeenCalledTimes(1);
-  });
-
-  it("renders no toggle pill when the config is absent", () => {
-    const { container } = render(FilterPillBar, {
-      pills: makePills(),
-      activeCount: 0,
-      ontoggle: noop,
-      onselect: noop,
-      ondatechange: noop,
-      onclearall: noop,
-    });
-    expect(container.querySelector(".toggle-pill")).toBeNull();
   });
 });

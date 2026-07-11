@@ -310,10 +310,6 @@ export interface FilterPillsConfig {
   readonly ondatechange: (from: Date | null, to: Date | null) => void;
   readonly onclearall: () => void;
   readonly oncreateshortcut?: () => void;
-  /** Client-side membership filter rendered as the first pill. */
-  readonly unreadFilter?: FilterToggleConfig;
-  /** Client-side needs-attention membership filter, rendered beside unread. */
-  readonly needsAttentionFilter?: FilterToggleConfig;
 }
 
 // ── Desktop responsive ──────────────────────────────────────────────
