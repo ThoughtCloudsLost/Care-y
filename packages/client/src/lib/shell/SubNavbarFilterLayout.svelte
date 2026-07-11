@@ -218,6 +218,7 @@
       pills={filterPills.pills}
       activeCount={filterPills.activeCount}
       unreadFilter={filterPills.unreadFilter}
+      needsAttentionFilter={filterPills.needsAttentionFilter}
       filterLabel={filterPills.filterLabel}
       dateFrom={filterPills.dateFrom}
       dateTo={filterPills.dateTo}

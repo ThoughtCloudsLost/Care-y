@@ -428,6 +428,22 @@ describe("resolveEmptyKind", () => {
   it("returns 'filtered' when tickets exist but none render", () => {
     expect(resolveEmptyKind({ ...base, ticketCount: 5 })).toBe("filtered");
   });
+
+  it("returns 'filtered', never 'truly-empty', while the needs-attention filter is on", () => {
+    expect(resolveEmptyKind({ ...base, needsAttentionOn: true })).toBe(
+      "filtered",
+    );
+  });
+
+  it("never claims 'caught-up' from the needs-attention filter alone", () => {
+    expect(
+      resolveEmptyKind({
+        ...base,
+        needsAttentionOn: true,
+        globalCaughtUp: true,
+      }),
+    ).toBe("filtered");
+  });
 });
 
 describe("showCaughtUpLine", () => {

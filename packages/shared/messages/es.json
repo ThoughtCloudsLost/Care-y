@@ -267,6 +267,7 @@
   "tickets_filter_hold": "En espera",
   "tickets_filter_closed": "Cerrados",
   "tickets_filter_unread": "Sin leer",
+  "tickets_filter_needs_attention": "Necesita atencion",
   "tickets_decrypting": "Descifrando...",
   "tickets_unassigned": "Sin asignar",
   "tickets_preview_empty": "Sin mensajes aún",

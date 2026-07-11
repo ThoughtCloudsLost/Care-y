@@ -312,6 +312,8 @@ export interface FilterPillsConfig {
   readonly oncreateshortcut?: () => void;
   /** Client-side membership filter rendered as the first pill. */
   readonly unreadFilter?: FilterToggleConfig;
+  /** Client-side needs-attention membership filter, rendered beside unread. */
+  readonly needsAttentionFilter?: FilterToggleConfig;
 }
 
 // ── Desktop responsive ──────────────────────────────────────────────

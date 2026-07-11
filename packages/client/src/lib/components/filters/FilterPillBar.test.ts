@@ -219,6 +219,29 @@ describe("FilterPillBar", () => {
     expect(onUnread).toHaveBeenCalledTimes(1);
   });
 
+  it("renders the needs-attention toggle beside unread and fires its ontoggle", async () => {
+    const onNeedsAttention = vi.fn();
+    const { container } = render(FilterPillBar, {
+      pills: makePills(),
+      activeCount: 0,
+      ontoggle: noop,
+      onselect: noop,
+      ondatechange: noop,
+      onclearall: noop,
+      unreadFilter: { label: "Unread", active: false, ontoggle: noop },
+      needsAttentionFilter: {
+        label: "Needs attention",
+        active: false,
+        ontoggle: onNeedsAttention,
+      },
+    });
+    const toggles = container.querySelectorAll(".toggle-pill");
+    expect(toggles.length).toBe(2);
+    expect(toggles[1]?.textContent.trim()).toBe("Needs attention");
+    await fireEvent.click(toggles[1]!);
+    expect(onNeedsAttention).toHaveBeenCalledTimes(1);
+  });
+
   it("renders no toggle pill when the config is absent", () => {
     const { container } = render(FilterPillBar, {
       pills: makePills(),

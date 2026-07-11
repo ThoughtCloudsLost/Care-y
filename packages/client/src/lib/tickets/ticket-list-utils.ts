@@ -190,13 +190,16 @@ export function resolveEmptyKind(args: {
   readonly globalCaughtUp: boolean;
   readonly ticketCount: number;
   readonly activeFilterCount: number;
+  /** Client-side needs-attention membership filter (empties are "filtered", never caught-up). */
+  readonly needsAttentionOn?: boolean;
 }): TicketListEmptyKind {
   if (args.searchActive) return "search";
   if (args.unreadFilterOn && args.globalCaughtUp) return "caught-up";
   if (
     args.ticketCount === 0 &&
     args.activeFilterCount === 0 &&
-    !args.unreadFilterOn
+    !args.unreadFilterOn &&
+    args.needsAttentionOn !== true
   ) {
     return "truly-empty";
   }

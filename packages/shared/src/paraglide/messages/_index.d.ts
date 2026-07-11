@@ -266,6 +266,7 @@ export * from "./tickets_filter_active.js";
 export * from "./tickets_filter_hold.js";
 export * from "./tickets_filter_closed.js";
 export * from "./tickets_filter_unread.js";
+export * from "./tickets_filter_needs_attention.js";
 export * from "./tickets_filter_status.js";
 export * from "./tickets_filter_queue.js";
 export * from "./tickets_filter_priority.js";
