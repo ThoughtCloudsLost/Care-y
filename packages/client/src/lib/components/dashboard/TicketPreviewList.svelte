@@ -1,86 +1,110 @@
 <script lang="ts">
-  import { List, ListItem, BlockTitle } from "konsta/svelte";
-  import TicketPreviewItem from "./TicketPreviewItem.svelte";
+  import TicketCard from "$lib/components/tickets/TicketCard.svelte";
   import EmptyState from "$lib/components/EmptyState.svelte";
-  import DecryptPlaceholder from "$lib/components/DecryptPlaceholder.svelte";
-  import InlineSkeleton from "$lib/components/InlineSkeleton.svelte";
+  import { resolveGridColumns } from "$lib/tickets/ticket-list-utils.js";
+  import type { ViewMode } from "$lib/stores/view-mode.svelte.js";
+  import type { DataCardProps } from "$lib/tickets/ticket-card-props.js";
   import * as m from "$lib/paraglide/messages.js";
-  import type { TicketPreviewItemProps } from "./types.js";
 
   interface TicketPreviewListProps {
-    /** Section heading (i18n label) */
-    heading: string;
-    /** Tickets to display (ontap provided separately via ontickettap) */
-    tickets: Omit<TicketPreviewItemProps, "ontap">[];
-    /** Maximum items to show before "see all" button */
+    /** Card props already mapped by the shared ticket-card mapper. */
+    cards: DataCardProps[];
+    /** Which of the three Inkwell presentations to render. */
+    viewMode: ViewMode;
+    /** Cap for list/cards; grid packs one extra row (see `cap`). */
     maxVisible?: number;
-    /** Hide the heading (when wrapped in CollapsibleSection which renders its own) */
-    hideHeading?: boolean;
-    /** Show skeleton placeholder rows instead of real tickets */
+    /** Show skeleton cards instead of real ones. */
     loading?: boolean;
     /** Callback when "see all" is tapped. Route file handles navigation. */
     onseeall?: () => void;
-    /** Total count from server (overrides tickets.length in "see all" label). */
+    /** Total count from server (overrides cards.length in the "see all" label). */
     totalCount?: number;
-    /** Callback when a ticket item is tapped. Route file handles navigation. */
-    ontickettap: (ticketId: string) => void;
-    /** Callback when encrypted help icon is tapped. Page owns the toast. */
-    onencryptedhelp?: () => void;
   }
 
   let {
-    heading,
-    tickets,
+    cards,
+    viewMode,
     maxVisible = 5,
-    hideHeading = false,
     loading = false,
     onseeall,
     totalCount,
-    ontickettap,
-    onencryptedhelp,
   }: TicketPreviewListProps = $props();
 
-  const displayCount = $derived(totalCount ?? tickets.length);
-  const visibleTickets = $derived(tickets.slice(0, maxVisible));
-  const hasMore = $derived(displayCount > maxVisible);
+  // Grid packs an even two rows; list and cards keep the five-item preview.
+  const cap = $derived(viewMode === "grid" ? 6 : maxVisible);
+  const displayCount = $derived(totalCount ?? cards.length);
+  const visibleCards = $derived(cards.slice(0, cap));
+  const hasMore = $derived(displayCount > cap);
+
+  // Grid columns track the section container width, floored at two so a
+  // narrow desktop column still reads as a grid (matches the tickets list).
+  let containerEl = $state<HTMLElement | undefined>(undefined);
+  let containerWidth = $state(0);
+
+  $effect(() => {
+    const el = containerEl;
+    if (!el) return;
+    containerWidth = el.clientWidth;
+    const ro = new ResizeObserver((entries) => {
+      const entry = entries[0];
+      if (entry) containerWidth = entry.contentRect.width;
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  });
+
+  const gridColumns = $derived(
+    viewMode === "grid" ? resolveGridColumns(containerWidth) : 1,
+  );
+
+  function noop(): void {
+    /* skeleton cards never navigate */
+  }
 </script>
 
-{#if !hideHeading}
-  <BlockTitle>{heading}</BlockTitle>
-{/if}
 {#if loading}
-  <List strongIos outlineIos class="skeleton-pulse">
-    {#each Array(maxVisible) as _, i (i)}
-      <ListItem>
-        {#snippet inner()}
-          <div class="placeholder-item">
-            <div class="placeholder-row-top">
-              <InlineSkeleton width="8ch" />
-            </div>
-            <div class="placeholder-row-title">
-              <DecryptPlaceholder length={25} />
-            </div>
-            <div class="placeholder-row-bottom">
-              <DecryptPlaceholder length={8} />
-              <InlineSkeleton width="6ch" />
-            </div>
-          </div>
-        {/snippet}
-      </ListItem>
-    {/each}
-  </List>
-{:else if tickets.length === 0}
-  <EmptyState message={m.dashboard_empty_section()} />
-{:else}
-  <List strongIos outlineIos>
-    {#each visibleTickets as ticket (ticket.ticketId)}
-      <TicketPreviewItem
-        {...ticket}
-        ontap={ontickettap}
-        onhelp={onencryptedhelp}
+  <div
+    class="preview-list"
+    class:mode-rows={viewMode === "list"}
+    class:mode-cards={viewMode === "cards"}
+    class:mode-grid={viewMode === "grid"}
+    style:--grid-cols={gridColumns}
+  >
+    {#each Array(cap) as _, i (i)}
+      <TicketCard
+        loading={true}
+        {viewMode}
+        ticketId=""
+        queueName={null}
+        displayStatus="active"
+        priority="normal"
+        titleResult={{ status: "loading" }}
+        clientAlias=""
+        assignedName={null}
+        createdAt={new Date()}
+        lastActivityAt={null}
+        followUpCount={0}
+        unreadCount={0}
+        previewFollowUps={undefined}
+        ontap={noop}
       />
     {/each}
-  </List>
+  </div>
+{:else if cards.length === 0}
+  <EmptyState message={m.dashboard_empty_section()} />
+{:else}
+  <div
+    bind:this={containerEl}
+    class="preview-list"
+    class:mode-rows={viewMode === "list"}
+    class:mode-cards={viewMode === "cards"}
+    class:mode-grid={viewMode === "grid"}
+    style:--grid-cols={gridColumns}
+  >
+    {#each visibleCards as card (card.ticketId)}
+      <TicketCard {...card} {viewMode} />
+    {/each}
+  </div>
   {#if hasMore && onseeall !== undefined}
     <button type="button" class="see-all-link" onclick={onseeall}>
       {m.dashboard_see_all({ count: displayCount })}
@@ -89,29 +113,27 @@
 {/if}
 
 <style>
-  .placeholder-item {
+  .preview-list {
     display: flex;
     flex-direction: column;
-    gap: var(--space-sm);
-    width: 100%;
-    padding: 0.25rem 0;
+    min-width: 0;
   }
 
-  .placeholder-row-top {
-    display: flex;
-    align-items: center;
+  /* Ruled rows: a top hairline opens the list; each row carries its own
+     bottom hairline (TicketCard's list mode), so the gap collapses. */
+  .preview-list.mode-rows {
+    gap: 0;
+    border-top: 1px solid var(--hair);
   }
 
-  .placeholder-row-title {
-    display: flex;
-    align-items: center;
+  .preview-list.mode-cards {
+    gap: 12px;
   }
 
-  .placeholder-row-bottom {
-    display: flex;
-    align-items: center;
-    gap: var(--space-md);
-    font-size: var(--text-sm);
+  .preview-list.mode-grid {
+    display: grid;
+    grid-template-columns: repeat(var(--grid-cols, 2), minmax(0, 1fr));
+    gap: 12px;
   }
 
   .see-all-link {
@@ -123,6 +145,7 @@
     text-align: center;
     padding: 0.5rem;
     font-size: 0.8125rem;
+    font-weight: 700;
     color: var(--brand-text);
     font-family: inherit;
     -webkit-tap-highlight-color: transparent;

@@ -29,21 +29,24 @@ export interface ViewModeStore {
   set(value: ViewMode): void;
 }
 
-function loadFromStorage(storageKey: string): ViewMode {
-  if (typeof window === "undefined") return "list";
+function loadFromStorage(storageKey: string, fallback: ViewMode): ViewMode {
+  if (typeof window === "undefined") return fallback;
   try {
     const stored = localStorage.getItem(storageKey);
     if (stored !== null && isViewMode(stored)) return stored;
   } catch {
     // Safari private browsing, storage quota, or restricted context:
     // recover by treating it as no stored preference.
-    return "list";
+    return fallback;
   }
-  return "list";
+  return fallback;
 }
 
-function createViewModeStore(storageKey: string): ViewModeStore {
-  let mode = $state<ViewMode>(loadFromStorage(storageKey));
+function createViewModeStore(
+  storageKey: string,
+  fallback: ViewMode = "list",
+): ViewModeStore {
+  let mode = $state<ViewMode>(loadFromStorage(storageKey, fallback));
 
   return {
     get mode(): ViewMode {
@@ -64,7 +67,12 @@ function createViewModeStore(storageKey: string): ViewModeStore {
 /** Tickets list view mode (key predates the three-way union). */
 export const viewModeStore = createViewModeStore("care-y-view-mode");
 
-/** Dashboard ("Now") view mode, scoped separately from the tickets list. */
+/**
+ * Dashboard ("Now") view mode, scoped separately from the tickets list.
+ * Cards are the work-mode primitive, so a first visit opens on cards;
+ * a persisted preference always wins over the fallback.
+ */
 export const dashboardViewModeStore = createViewModeStore(
   "care-y-dashboard-view-mode",
+  "cards",
 );

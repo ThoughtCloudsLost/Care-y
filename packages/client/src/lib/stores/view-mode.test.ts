@@ -130,16 +130,16 @@ describe("dashboardViewModeStore", () => {
     vi.resetModules();
   });
 
-  it("defaults to list when no stored value", async () => {
+  it("defaults to cards when no stored value (the work-mode primitive)", async () => {
     setupMocks();
     const { dashboardViewModeStore } = await import("./view-mode.svelte.ts");
-    expect(dashboardViewModeStore.mode).toBe("list");
+    expect(dashboardViewModeStore.mode).toBe("cards");
   });
 
-  it("hydrates from its own localStorage key", async () => {
-    setupMocks({ storedDashboardMode: "cards" });
+  it("hydrates a stored preference over the cards fallback", async () => {
+    setupMocks({ storedDashboardMode: "list" });
     const { dashboardViewModeStore } = await import("./view-mode.svelte.ts");
-    expect(dashboardViewModeStore.mode).toBe("cards");
+    expect(dashboardViewModeStore.mode).toBe("list");
   });
 
   it("persists under its own key without touching the tickets key", async () => {
@@ -159,6 +159,6 @@ describe("dashboardViewModeStore", () => {
       await import("./view-mode.svelte.ts");
 
     viewModeStore.set("grid");
-    expect(dashboardViewModeStore.mode).toBe("list");
+    expect(dashboardViewModeStore.mode).toBe("cards");
   });
 });

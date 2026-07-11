@@ -68,10 +68,17 @@ export interface DashboardBuckets<T> {
  * On-hold tickets go into onHold only (not duplicated into other buckets).
  * A ticket can appear in both needsAttention and myOpen/unassigned since
  * "needs attention" is a severity overlay, not a mutually exclusive state.
+ *
+ * The "mine + high" needs-attention arm keys off real read state, not the
+ * raw follow-up count: a high-priority ticket assigned to the current user
+ * qualifies only when it carries genuinely unread replies (`isUnread`).
+ * Membership settles as cursor decrypts land, so a freshly loaded dashboard
+ * fills this arm in progressively rather than all at once.
  */
 export function bucketTickets<T extends DashboardTicket>(
   tickets: T[],
   currentUserId: string | undefined,
+  isUnread: (ticketId: string) => boolean,
 ): DashboardBuckets<T> {
   const result: DashboardBuckets<T> = {
     needsAttention: [],
@@ -93,11 +100,7 @@ export function bucketTickets<T extends DashboardTicket>(
     const isHigh = t.priority === "urgent" || t.priority === "high";
     if (isHigh && t.assignedTo === null) {
       result.needsAttention.push(t);
-    } else if (
-      isHigh &&
-      t.assignedTo === currentUserId &&
-      t.followUpCount > 0
-    ) {
+    } else if (isHigh && t.assignedTo === currentUserId && isUnread(t.id)) {
       result.needsAttention.push(t);
     }
   }
