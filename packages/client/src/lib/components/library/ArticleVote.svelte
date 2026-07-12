@@ -118,7 +118,7 @@
     align-items: center;
     gap: var(--space-md);
     padding: var(--space-lg) var(--space-md);
-    border-top: 1px solid var(--divider);
+    border-top: 1px solid var(--hair, var(--divider));
   }
 
   .vote-prompt {

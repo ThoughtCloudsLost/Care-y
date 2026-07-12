@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "No articles yet" |
+* | "Nothing here yet" |
 *
 * @param {Library_Empty_ArticlesInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

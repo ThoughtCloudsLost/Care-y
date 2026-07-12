@@ -253,12 +253,16 @@
     border: none;
     border-radius: 0.5rem;
     background: none;
-    color: var(--color-red-500);
+    color: var(--danger, var(--color-red-500));
     cursor: pointer;
   }
 
   .delete-inline-btn:active {
-    background: color-mix(in srgb, var(--color-red-500) 10%, transparent);
+    background: color-mix(
+      in srgb,
+      var(--danger, var(--color-red-500)) 10%,
+      transparent
+    );
   }
 
   .add-row {
