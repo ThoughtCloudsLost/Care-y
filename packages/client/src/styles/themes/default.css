@@ -313,3 +313,44 @@
 .theme-default .k-list-input div:has(> select) > .absolute {
   inset-inline-end: 10px;
 }
+
+/* ── Segmented controls (spec: Forms anatomy) ──
+   One pinned anatomy over Konsta's strong variant: hair-2 frame,
+   flat track, hair separators, the active button raised in ink.
+   Consumers keep the strong prop because only strong mode marks the
+   active button with a class (k-segmented-strong-button-active);
+   the sliding thumb is hidden, so the fill sits on the button and
+   nothing animates sideways. */
+.theme-default .k-segmented {
+  border: 1px solid var(--hair-2);
+  border-radius: 8px;
+  background: transparent;
+  box-shadow: none;
+  padding: 0;
+  gap: 0;
+  overflow: hidden;
+}
+
+.theme-default .k-segmented > span.pointer-events-none.absolute {
+  display: none; /* the strong variant's sliding thumb */
+}
+
+.theme-default .k-segmented .k-button {
+  padding: 10px 0;
+  font-size: var(--text-base);
+  font-weight: 400;
+  color: var(--muted);
+  background: transparent;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.theme-default .k-segmented .k-button + .k-button {
+  border-inline-start: 1px solid var(--hair);
+}
+
+.theme-default .k-segmented .k-segmented-strong-button-active {
+  background: var(--raised);
+  color: var(--ink);
+  font-weight: 700;
+}

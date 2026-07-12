@@ -5,7 +5,7 @@
   arrives via props from the test; nothing here is user-facing.
 -->
 <script lang="ts">
-  import { List, ListInput } from "konsta/svelte";
+  import { List, ListInput, Segmented, SegmentedButton } from "konsta/svelte";
 
   interface Props {
     textLabel: string;
@@ -13,6 +13,8 @@
     infoText: string;
     areaLabel: string;
     selectLabel: string;
+    segmentOne: string;
+    segmentTwo: string;
     error?: string;
     outline?: boolean;
   }
@@ -23,6 +25,8 @@
     infoText,
     areaLabel,
     selectLabel,
+    segmentOne,
+    segmentTwo,
     error,
     outline,
   }: Props = $props();
@@ -43,3 +47,8 @@
     <option value="b">B</option>
   </ListInput>
 </List>
+
+<Segmented strong>
+  <SegmentedButton active>{segmentOne}</SegmentedButton>
+  <SegmentedButton>{segmentTwo}</SegmentedButton>
+</Segmented>
