@@ -1,7 +1,7 @@
 <script lang="ts">
   import { List, Preloader } from "konsta/svelte";
   import PasswordInput from "$lib/components/inputs/PasswordInput.svelte";
-  import PasswordStrengthMeter from "$lib/components/inputs/PasswordStrengthMeter.svelte";
+  import PasswordConfirmPair from "$lib/components/inputs/PasswordConfirmPair.svelte";
   import { Save } from "@lucide/svelte";
   import { useQueryClient } from "@tanstack/svelte-query";
   import { authKeys } from "$lib/query/keys.js";
@@ -52,11 +52,6 @@
 
   const newPasswordValid = $derived(newPassword.length >= 16);
   const passwordsMatch = $derived(newPassword === confirmPassword);
-  const confirmError = $derived(
-    confirmPassword.length > 0 && !passwordsMatch
-      ? m.settings_password_mismatch()
-      : undefined,
-  );
   const currentPasswordFilled = $derived(currentPassword.length >= 16);
   const canSubmit = $derived(
     currentPasswordFilled && newPasswordValid && passwordsMatch,
@@ -166,26 +161,17 @@
         disabled={isPending}
       />
     </List>
-    <List nested>
-      <PasswordInput
-        label={m.settings_password_new()}
-        placeholder={m.settings_password_new()}
-        bind:value={newPassword}
-        disabled={isPending}
-      />
-      <PasswordInput
-        label={m.settings_password_confirm()}
-        placeholder={m.settings_password_confirm()}
-        bind:value={confirmPassword}
-        disabled={isPending}
-        error={confirmError}
-      />
-    </List>
-    {#if newPassword.length > 0}
-      <div class="meter-wrap">
-        <PasswordStrengthMeter password={newPassword} minLength={16} />
-      </div>
-    {/if}
+    <PasswordConfirmPair
+      bind:password={newPassword}
+      bind:confirm={confirmPassword}
+      passwordLabel={m.settings_password_new()}
+      passwordPlaceholder={m.settings_password_new()}
+      confirmLabel={m.settings_password_confirm()}
+      confirmPlaceholder={m.settings_password_confirm()}
+      mismatchError={m.settings_password_mismatch()}
+      minLength={16}
+      disabled={isPending}
+    />
     {#if errorMessage}
       <p class="error-text" role="alert">{errorMessage}</p>
     {/if}
@@ -207,10 +193,6 @@
     padding: var(--space-sm) var(--space-lg);
     font-size: 0.85rem;
     color: var(--muted);
-  }
-
-  .meter-wrap {
-    padding: 0 var(--space-lg);
   }
 
   .error-text {

@@ -1,12 +1,11 @@
 <script lang="ts">
-  import { List, ListInput, Button, Block } from "konsta/svelte";
+  import { List, ListInput, Button } from "konsta/svelte";
   import Register from "$lib/components/Register.svelte";
   import { Save } from "@lucide/svelte";
   import { useQueryClient } from "@tanstack/svelte-query";
   import { adminKeys } from "$lib/query/keys.js";
   import { PASSWORD_MIN_LENGTH, RoleId } from "@care-y/shared";
-  import PasswordInput from "$lib/components/inputs/PasswordInput.svelte";
-  import PasswordStrengthMeter from "$lib/components/inputs/PasswordStrengthMeter.svelte";
+  import PasswordConfirmPair from "$lib/components/inputs/PasswordConfirmPair.svelte";
   import type { RoleIdValue } from "@care-y/shared";
   import * as m from "$lib/paraglide/messages.js";
   import { withTerms } from "$lib/terminology/with-terms.js";
@@ -48,11 +47,6 @@
   );
 
   const passwordsMatch = $derived(tempPassword === confirmPassword);
-  const confirmError = $derived(
-    confirmPassword.length > 0 && !passwordsMatch
-      ? m.admin_invite_password_mismatch()
-      : undefined,
-  );
 
   let savedIdentifier = $state("");
   let savedPassword = $state("");
@@ -265,31 +259,17 @@
         />
       </List>
 
-      <List nested>
-        <PasswordInput
-          label={m.admin_invite_password_label()}
-          bind:value={tempPassword}
-          disabled={!orgKeyLoaded}
-          info={passwordTooShort
-            ? m.admin_invite_password_too_short()
-            : m.admin_invite_password_hint(withTerms())}
-        />
-        <PasswordInput
-          label={m.admin_invite_confirm_password()}
-          bind:value={confirmPassword}
-          disabled={!orgKeyLoaded}
-          error={confirmError}
-        />
-      </List>
-
-      {#if tempPassword.length > 0}
-        <Block>
-          <PasswordStrengthMeter
-            password={tempPassword}
-            minLength={PASSWORD_MIN_LENGTH}
-          />
-        </Block>
-      {/if}
+      <PasswordConfirmPair
+        bind:password={tempPassword}
+        bind:confirm={confirmPassword}
+        passwordLabel={m.admin_invite_password_label()}
+        confirmLabel={m.admin_invite_confirm_password()}
+        mismatchError={m.admin_invite_password_mismatch()}
+        passwordInfo={passwordTooShort
+          ? m.admin_invite_password_too_short()
+          : m.admin_invite_password_hint(withTerms())}
+        disabled={!orgKeyLoaded}
+      />
     </div>
   {/if}
 </ShellSheet>
