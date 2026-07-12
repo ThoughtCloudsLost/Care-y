@@ -6,17 +6,17 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Library_Empty_ArticlesInputs */
 
 const en_library_empty_articles = /** @type {(inputs: Library_Empty_ArticlesInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`No articles yet`)
+	return /** @type {LocalizedString} */ (`Nothing here yet`)
 };
 
 const es_library_empty_articles = /** @type {(inputs: Library_Empty_ArticlesInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Aún no hay artículos`)
+	return /** @type {LocalizedString} */ (`Aún no hay nada aquí`)
 };
 
 /**
 * | output |
 * | --- |
-* | "No articles yet" |
+* | "Nothing here yet" |
 *
 * @param {Library_Empty_ArticlesInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

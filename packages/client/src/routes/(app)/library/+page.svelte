@@ -63,6 +63,7 @@
   import CategoryManageSheet from "$lib/components/library/CategoryManageSheet.svelte";
   import QueryError from "$lib/components/QueryError.svelte";
   import EmptyState from "$lib/components/EmptyState.svelte";
+  import { getBrandingTitle } from "$lib/branding/title.svelte.js";
   import { haptic } from "$lib/utils/haptic.js";
   import { getLibraryLayoutCtx } from "./library-layout-ctx.js";
   import { createFilterDispatch } from "$lib/composables/create-filter-dispatch.svelte.js";
@@ -733,6 +734,17 @@
   function skeletonNoop(): void {
     /* skeleton card, no interaction */
   }
+
+  // Org initial for the truly-empty room's identity seal (the tickets
+  // list's welcome-room pattern; grapheme-aware for non-Latin names).
+  const orgInitial = $derived.by(() => {
+    const name = getBrandingTitle().trim();
+    if (name === "") return undefined;
+    return new Intl.Segmenter(undefined, { granularity: "grapheme" })
+      .segment(name)
+      .containing(0)
+      ?.segment.toUpperCase();
+  });
 </script>
 
 {#snippet batchLeft()}
@@ -839,11 +851,17 @@
   {:else if articlesQuery.isError}
     <QueryError error={articlesQuery.error} />
   {:else if displayItems.length === 0}
-    <EmptyState
-      title={kbFilterStore.activeCount > 0
-        ? m.library_empty_filter()
-        : m.library_empty_articles()}
-    />
+    {#if kbFilterStore.activeCount > 0}
+      <EmptyState title={m.library_empty_filter()} />
+    {:else}
+      <!-- The truly-empty room takes the org seal (warmth at the edges),
+           mirroring the tickets list's welcome room. -->
+      <EmptyState
+        seal={orgInitial}
+        title={m.library_empty_articles()}
+        subtitle={m.library_empty_articles_body()}
+      />
+    {/if}
   {:else}
     <div class="article-list">
       <VirtualList
@@ -989,7 +1007,9 @@
   }
 
   .article-card-selected {
-    background: var(--brand-primary-20);
+    /* Split-pane selection is an identity slot: brand-soft, never a
+       stronger brand fill. */
+    background: var(--brand-soft, var(--brand-primary-20));
     border-radius: var(--card-radius);
   }
 </style>

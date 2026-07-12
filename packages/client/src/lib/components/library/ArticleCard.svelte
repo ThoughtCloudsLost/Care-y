@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Card, Chip, Checkbox } from "konsta/svelte";
+  import { Chip, Checkbox } from "konsta/svelte";
   import { ThumbsUp, ThumbsDown } from "@lucide/svelte";
   import * as m from "$lib/paraglide/messages.js";
   import { formatRelativeTime } from "$lib/utils/format-time.js";
@@ -94,7 +94,7 @@
 
 {#if loading}
   <div class="article-card-wrap skeleton-pulse">
-    <Card raised contentWrap={false} class="article-card">
+    <div class="article-card">
       <div
         class="card-inner"
         class:card-inner--list={isList}
@@ -122,11 +122,11 @@
           </span>
         </div>
       </div>
-    </Card>
+    </div>
   </div>
 {:else}
   <div class="article-card-wrap">
-    <Card raised contentWrap={false} class="article-card">
+    <div class="article-card" class:card--selected={selected}>
       <div
         class="card-inner"
         class:card-inner--list={isList}
@@ -210,7 +210,7 @@
           </span>
         </div>
       </div>
-    </Card>
+    </div>
   </div>
 {/if}
 
@@ -224,11 +224,22 @@
     border-radius: var(--card-radius, 0.75rem);
   }
 
-  .article-card-wrap :global(.k-card) {
-    margin: 0 !important;
+  /* The Inkwell card anatomy (spec: cards with bubble previews): hair-2
+     border on raised paper, no shadow. Fallback chains keep the card
+     legible under themes that predate the canonical tokens. */
+  .article-card {
+    margin: 0;
     height: 100%;
     display: flex;
     flex-direction: column;
+    background: var(--raised, var(--card-bg, transparent));
+    border: 1px solid var(--hair-2, var(--card-border, currentColor));
+    border-radius: var(--card-radius, 0.75rem);
+  }
+
+  /* Selection is an identity slot: brand-soft, never full fill. */
+  .card--selected {
+    background: var(--brand-soft, var(--brand-primary-20));
   }
 
   .card-inner {
@@ -265,6 +276,9 @@
     padding-left: var(--space-md) !important;
     padding-right: var(--space-md) !important;
     flex-shrink: 0;
+    /* Quiet bordered chip: a category is a filing fact, not a signal. */
+    color: var(--ink-2) !important;
+    border-color: var(--hair-2) !important;
   }
 
   /* ── Title ── */
@@ -299,6 +313,7 @@
     font-size: var(--text-xs);
     color: var(--muted);
     margin-top: auto;
+    font-variant-numeric: tabular-nums;
   }
 
   .meta-left {

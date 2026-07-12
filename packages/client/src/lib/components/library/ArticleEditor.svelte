@@ -1176,7 +1176,7 @@
 
   .editor-title {
     font-size: 1.5rem;
-    font-family: var(--font-display);
+    font-family: var(--theme-font-display, var(--font-display));
     font-weight: 600;
     color: var(--ink);
     border: none;
@@ -1249,7 +1249,7 @@
   :global(.pm-image-view__loading) {
     width: 200px;
     height: 120px;
-    background: var(--surface-1);
+    background: var(--paper-deep, var(--surface-1));
     border-radius: var(--card-radius);
     display: flex;
     align-items: center;
@@ -1262,7 +1262,7 @@
     font-size: var(--text-sm);
     color: var(--muted);
     font-style: italic;
-    background: var(--surface-1);
+    background: var(--paper-deep, var(--surface-1));
     border-radius: var(--card-radius);
   }
 
@@ -1315,7 +1315,7 @@
   .editor-area :global(.ProseMirror h2),
   .editor-area :global(.ProseMirror h3),
   .editor-area :global(.ProseMirror h4) {
-    font-family: var(--font-display);
+    font-family: var(--theme-font-display, var(--font-display));
     font-weight: 600;
     color: var(--ink);
     margin-top: 1.5em;
@@ -1348,14 +1348,14 @@
   }
 
   .editor-area :global(.ProseMirror code) {
-    background: var(--surface-1);
+    background: var(--paper-deep, var(--surface-1));
     padding: 0.125em 0.25em;
     border-radius: 3px;
     font-size: 0.875em;
   }
 
   .editor-area :global(.ProseMirror pre) {
-    background: var(--surface-1);
+    background: var(--paper-deep, var(--surface-1));
     padding: var(--space-lg);
     border-radius: var(--card-radius);
     overflow-x: auto;
@@ -1379,9 +1379,13 @@
     border-radius: var(--card-radius);
   }
 
+  /* WYSIWYG parity with the reader: quotes are recessed tinted blocks,
+     never the banned thick brand left border. */
   .editor-area :global(.ProseMirror blockquote) {
-    border-left: 3px solid var(--brand-primary);
-    padding-left: var(--space-lg);
+    background: var(--paper-deep, var(--surface-2));
+    border-radius: 10px;
+    padding: 10px 13px;
+    margin-bottom: 0.75em;
     color: var(--muted);
     font-style: italic;
   }
@@ -1394,19 +1398,19 @@
 
   .editor-area :global(.ProseMirror th),
   .editor-area :global(.ProseMirror td) {
-    border: 1px solid var(--divider);
+    border: 1px solid var(--hair, var(--divider));
     padding: var(--space-sm) var(--space-md);
     text-align: left;
   }
 
   .editor-area :global(.ProseMirror th) {
-    background: var(--surface-1);
+    background: var(--paper-deep, var(--surface-1));
     font-weight: 600;
   }
 
   .editor-area :global(.ProseMirror hr) {
     border: none;
-    border-top: 1px solid var(--divider);
+    border-top: 1px solid var(--hair, var(--divider));
     margin: 1.5em 0;
   }
 
