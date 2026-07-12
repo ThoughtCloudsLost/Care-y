@@ -483,4 +483,73 @@ describe("TicketCard", () => {
       cleanup();
     }
   });
+
+  // --- Search term highlighting (search results pass searchTerm) ---
+
+  describe("searchTerm highlighting", () => {
+    it("marks the matched queue segment in the list meta line", () => {
+      const { container } = render(TicketCard, {
+        props: { ...defaults, searchTerm: "intake" },
+      });
+      const meta = container.querySelector("[data-testid='row-meta']");
+      const marks = meta?.querySelectorAll("mark") ?? [];
+      expect(marks).toHaveLength(1);
+      expect(marks[0]!.textContent).toBe("Intake");
+    });
+
+    it("marks the client alias and assignee when both match", () => {
+      const { container } = render(TicketCard, {
+        props: {
+          ...defaults,
+          assignedName: "Sparrowhawk",
+          searchTerm: "sparrow",
+        },
+      });
+      const meta = container.querySelector("[data-testid='row-meta']");
+      expect(meta?.querySelectorAll("mark")).toHaveLength(2);
+    });
+
+    it("marks grid meta segments and the grid alias", () => {
+      const { container } = render(TicketCard, {
+        props: { ...asGrid, searchTerm: "intake" },
+      });
+      const metaMarks = container.querySelectorAll(".row-meta mark");
+      expect(metaMarks).toHaveLength(1);
+      expect(metaMarks[0]!.textContent).toBe("Intake");
+
+      cleanup();
+      const { container: c2 } = render(TicketCard, {
+        props: { ...asGrid, searchTerm: "sparrow" },
+      });
+      expect(c2.querySelectorAll(".client-alias mark")).toHaveLength(1);
+    });
+
+    it("marks the decrypted title through DecryptPlaceholder", () => {
+      const { container } = render(TicketCard, {
+        props: { ...defaults, searchTerm: "ticket" },
+      });
+      const title = container.querySelector(".r-title");
+      expect(title?.querySelectorAll("mark")).toHaveLength(1);
+    });
+
+    it("renders no marks without a searchTerm", () => {
+      const { container } = render(TicketCard, {
+        props: { ...defaults, assignedName: "Jordan" },
+      });
+      expect(container.querySelectorAll("mark")).toHaveLength(0);
+    });
+
+    it("never marks the bold self-assignee label", () => {
+      const { container } = render(TicketCard, {
+        props: {
+          ...defaults,
+          assignedName: null,
+          assignedIsSelf: true,
+          searchTerm: "you",
+        },
+      });
+      const meta = container.querySelector("[data-testid='row-meta']");
+      expect(meta?.querySelector(".meta-you mark")).toBeNull();
+    });
+  });
 });

@@ -85,6 +85,12 @@ describe("createTicketSearchProvider", () => {
     expect(results[0]!.id).toBe("t1");
   });
 
+  it("carries the query as searchTerm in result data", () => {
+    const provider = createProvider();
+    const { results } = provider.search("housing");
+    expect(results[0]!.data.searchTerm).toBe("housing");
+  });
+
   it("excludes tickets with undecrypted titles", () => {
     const provider = createProvider();
     const { results } = provider.search("Ana");

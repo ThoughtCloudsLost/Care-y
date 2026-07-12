@@ -25,6 +25,7 @@
   import { formatRelativeTime } from "$lib/utils/format-time.js";
   import { getPreviewLoader } from "$lib/crypto/context.js";
   import DecryptPlaceholder from "$lib/components/DecryptPlaceholder.svelte";
+  import HighlightText from "$lib/components/HighlightText.svelte";
   import InlineSkeleton from "$lib/components/InlineSkeleton.svelte";
   import PriorityStamp from "$lib/components/PriorityStamp.svelte";
   import StatusMark from "$lib/components/StatusMark.svelte";
@@ -145,9 +146,20 @@
   {/if}
 {/snippet}
 
+{#snippet hl(t: string)}<HighlightText text={t} term={searchTerm} />{/snippet}
+
 {#snippet assigneeSegment()}
-  {#if assignedIsSelf}<b class="meta-you">{m.ticket_meta_you()}</b
-    >{:else}{assignedName ?? m.tickets_unassigned()}{/if}
+  {#if assignedIsSelf}
+    <b class="meta-you">{m.ticket_meta_you()}</b>
+  {:else if assignedName != null}
+    {@render hl(assignedName)}
+  {:else}
+    {m.tickets_unassigned()}
+  {/if}
+{/snippet}
+
+{#snippet queueSegment()}
+  {#if queueName != null}{@render hl(queueName)}{:else}…{/if}
 {/snippet}
 
 {#snippet head()}
@@ -159,7 +171,8 @@
     <span class="head-main">
       <span class="r-title">{@render titleBlock()}</span>
       <span class="r-meta num" data-testid="row-meta">
-        {clientAlias} · {queueName ?? "…"} · {@render assigneeSegment()}{#if msgLabel}
+        {@render hl(clientAlias)} · {@render queueSegment()} ·
+        {@render assigneeSegment()}{#if msgLabel}
           · {msgLabel}{/if}{#if displayStatus === "hold"}
           · {m.tickets_status_on_hold()}{/if}
       </span>
@@ -249,6 +262,7 @@
           {followUpCount}
           reactions={previewReactions}
           {clientAlias}
+          {searchTerm}
         />
       </div>
       <div class="actions" data-testid="card-actions">
@@ -311,15 +325,16 @@
           {followUpCount}
           reactions={previewReactions}
           {clientAlias}
+          {searchTerm}
         />
       </div>
       <div class="content-group">
-        <span class="client-alias">{clientAlias}</span>
+        <span class="client-alias">{@render hl(clientAlias)}</span>
         <div class="row-title">{@render titleBlock()}</div>
       </div>
       <div class="row-meta num">
         <span class="meta-left">
-          {queueName ?? "…"} · {@render assigneeSegment()}
+          {@render queueSegment()} · {@render assigneeSegment()}
         </span>
         <span class="meta-right">
           <span class="r-time num">{relativeTime}</span>
@@ -428,6 +443,13 @@
 
   .meta-you {
     font-weight: 700;
+    color: var(--ink-2);
+  }
+
+  /* Matched meta segments lift to ink-2: muted fails WCAG AA 4.5:1 on
+     the care-soft highlight tint (P3 contrast pass locked this rule). */
+  .r-meta :global(.search-highlight),
+  .row-meta :global(.search-highlight) {
     color: var(--ink-2);
   }
 

@@ -58,6 +58,8 @@ export interface TicketSearchData {
   readonly followUpCount: number;
   readonly unreadCount: number;
   readonly previewFollowUps: RawFollowUpPreview[] | undefined;
+  /** The query that produced this result; renders the <mark> highlights. */
+  readonly searchTerm: string;
 }
 
 interface KeyWrap {
@@ -142,8 +144,10 @@ export function createTicketSearchProvider(
   function buildSearchData(
     raw: RawCachedTicket,
     title: string,
+    query: string,
   ): TicketSearchData {
     return {
+      searchTerm: query,
       ticketId: raw.id,
       queueName: deps.decryptQueueName(raw.queueId, raw.encryptedQueueName),
       displayStatus: deps.deriveDisplayStatus(
@@ -202,7 +206,7 @@ export function createTicketSearchProvider(
         if (!entry) continue;
         const { raw, title } = entry;
         seen.add(raw.id);
-        results.push({ id: raw.id, data: buildSearchData(raw, title) });
+        results.push({ id: raw.id, data: buildSearchData(raw, title, query) });
       }
 
       // Include content-matched tickets from fullSearch content search.
@@ -214,7 +218,7 @@ export function createTicketSearchProvider(
             seen.add(entry.raw.id);
             results.push({
               id: entry.raw.id,
-              data: buildSearchData(entry.raw, entry.title),
+              data: buildSearchData(entry.raw, entry.title, query),
             });
           }
         }

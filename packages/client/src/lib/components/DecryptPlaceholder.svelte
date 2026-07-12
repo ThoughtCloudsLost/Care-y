@@ -7,6 +7,8 @@
     ERROR,
     type DecryptResult,
   } from "$lib/crypto/decrypt-result.js";
+  import { isHighlightable } from "$lib/search/highlight.js";
+  import HighlightText from "./HighlightText.svelte";
 
   interface Props {
     /** Typed DecryptResult (preferred). When provided, takes precedence over content. */
@@ -62,37 +64,7 @@
     errorLabel,
   }: Props = $props();
 
-  interface TextSegment {
-    text: string;
-    highlight: boolean;
-  }
-
-  function splitByTerm(text: string, term: string): TextSegment[] {
-    const segments: TextSegment[] = [];
-    const lowerText = text.toLowerCase();
-    const lowerTerm = term.toLowerCase();
-    let cursor = 0;
-
-    while (cursor < text.length) {
-      const matchIdx = lowerText.indexOf(lowerTerm, cursor);
-      if (matchIdx === -1) {
-        segments.push({ text: text.slice(cursor), highlight: false });
-        break;
-      }
-      if (matchIdx > cursor) {
-        segments.push({ text: text.slice(cursor, matchIdx), highlight: false });
-      }
-      segments.push({
-        text: text.slice(matchIdx, matchIdx + term.length),
-        highlight: true,
-      });
-      cursor = matchIdx + term.length;
-    }
-
-    return segments;
-  }
-
-  const hasHighlight = $derived(searchTerm != null && searchTerm.length >= 2);
+  const hasHighlight = $derived(isHighlightable(searchTerm));
 
   // Normalize both prop forms into a single DecryptResult.
   // When result is provided it wins. Otherwise derive from the legacy content prop.
@@ -223,13 +195,7 @@
         {@render children()}
       {:else if resolved.status === "ready"}
         {#if hasHighlight}
-          {#each splitByTerm(resolved.value, searchTerm ?? "") as seg, i (i)}
-            {#if seg.highlight}
-              <mark class="search-highlight">{seg.text}</mark>
-            {:else}
-              {seg.text}
-            {/if}
-          {/each}
+          <HighlightText text={resolved.value} term={searchTerm} />
         {:else}
           {resolved.value}
         {/if}
@@ -516,19 +482,6 @@
   .decrypt-error {
     color: var(--muted);
     font-style: italic;
-  }
-
-  /* ── Search highlight ── */
-  /* The highlighter is a meaning slot, so it must not wear brand color.
-     --care-soft exists only in the default (Inkwell) theme; other themes
-     keep their previous brand-tinted highlight via the fallback. */
-  .search-highlight {
-    background: var(
-      --care-soft,
-      color-mix(in srgb, var(--brand-accent) 25%, transparent)
-    );
-    border-radius: 2px;
-    padding: 0 1px;
   }
 
   /* ── Screen reader only ── */

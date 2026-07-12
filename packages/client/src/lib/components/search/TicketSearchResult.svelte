@@ -24,6 +24,7 @@
     followUpCount={result.followUpCount}
     unreadCount={result.unreadCount}
     previewFollowUps={result.previewFollowUps}
+    searchTerm={result.searchTerm}
     selected={false}
     multiSelectActive={false}
     {ontap}
