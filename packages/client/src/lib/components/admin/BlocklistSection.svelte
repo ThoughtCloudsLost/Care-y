@@ -335,7 +335,7 @@
     </DialogButton>
     <DialogButton
       strong
-      class="text-[--color-red-500] font-semibold"
+      class="text-[color:var(--danger,var(--color-red-500))] font-semibold"
       onclick={confirmRemove}
     >
       {m.admin_blocklist_remove_button()}
@@ -425,7 +425,7 @@
     margin-left: var(--space-sm);
     border: none;
     background: transparent;
-    color: var(--color-red-500);
+    color: var(--danger, var(--color-red-500));
     border-radius: 50%;
     cursor: pointer;
     -webkit-tap-highlight-color: transparent;

@@ -131,7 +131,7 @@
   .error-msg {
     font-size: 0.875rem;
     font-weight: 500;
-    color: var(--color-red-500);
+    color: var(--danger, var(--color-red-500));
     margin: 0;
   }
 </style>

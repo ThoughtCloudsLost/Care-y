@@ -733,7 +733,7 @@
     </DialogButton>
     <DialogButton
       strong
-      class="text-[--color-red-500] font-semibold"
+      class="text-[color:var(--danger,var(--color-red-500))] font-semibold"
       onclick={confirmDelete}
     >
       {m.admin_greetings_delete()}
@@ -954,7 +954,7 @@
     padding: 0.625rem;
     border: none;
     background: transparent;
-    color: var(--color-red-500);
+    color: var(--danger, var(--color-red-500));
     font-size: var(--text-sm);
     font-weight: 500;
     font-family: inherit;

@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "OK" |
+* | "Ready" |
 *
 * @param {Admin_Hub_Badge_Keys_OkInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

@@ -813,7 +813,9 @@
     </DialogButton>
     <DialogButton
       strong
-      class={dialogIsReactivation ? "" : "text-[--color-red-500] font-semibold"}
+      class={dialogIsReactivation
+        ? ""
+        : "text-[color:var(--danger,var(--color-red-500))] font-semibold"}
       onclick={confirmActiveToggle}
     >
       {#if dialogIsReactivation}
@@ -843,7 +845,7 @@
     <!-- care-y-ignore-next-line no-click-without-keyboard -- DialogButton renders a native <button> -->
     <DialogButton
       strong
-      class="text-[--color-red-500] font-semibold"
+      class="text-[color:var(--danger,var(--color-red-500))] font-semibold"
       onclick={confirmRevoke}
     >
       {m.admin_invite_pending_revoke()}
@@ -924,7 +926,7 @@
     padding: 0.625rem;
     font-size: var(--text-sm);
     font-weight: 500;
-    color: var(--color-red-500);
+    color: var(--danger, var(--color-red-500));
     background: none;
     border: none;
     cursor: pointer;

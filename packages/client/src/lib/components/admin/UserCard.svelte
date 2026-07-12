@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Card, Chip, Checkbox } from "konsta/svelte";
+  import { Checkbox } from "konsta/svelte";
   import { Pencil } from "@lucide/svelte";
   import { RoleId } from "@care-y/shared";
   import * as m from "$lib/paraglide/messages.js";
@@ -73,13 +73,14 @@
 </script>
 
 <div class="user-card-wrap">
-  <Card raised contentWrap={false} class="user-card">
+  <div class="user-card" class:card--selected={selected && multiSelectActive}>
     <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
     <div
       class="card-inner"
       class:card-inner--list={isList}
       class:card-inner--grid={!isList}
       class:card-inner--selectable={multiSelectActive}
+      class:card-inner--inactive={!isActive}
       role={multiSelectActive ? "button" : undefined}
       tabindex={multiSelectActive ? 0 : undefined}
       aria-label={multiSelectActive
@@ -109,8 +110,8 @@
         </div>
       {/if}
 
-      <!-- Avatar circle with initials -->
-      <div class="avatar" class:avatar--inactive={!isActive}>
+      <!-- User-initial identity seal (decorative beside the name text) -->
+      <div class="avatar identity-seal" aria-hidden="true">
         <span class="avatar-initials">
           {#if displayName}
             {displayName.slice(0, 2).toUpperCase()}
@@ -137,25 +138,16 @@
         <span class="key-status {keyStatus.cls}">{keyStatus.label}</span>
       </div>
 
-      <!-- Role chip (display-only) -->
+      <!-- Role stamp: a role is who someone is (identity slot, brand ink) -->
       <div class="role-area">
-        <Chip class={isSelf ? "opacity-60" : ""} outline>
+        <span class="stamp-chip role-stamp" class:opacity-60={isSelf}>
           {roleLabel}
-        </Chip>
+        </span>
       </div>
 
-      <!-- Edit button or status dot -->
-      {#if isSelf}
-        <span
-          class="status-dot"
-          class:bg-[--color-green-500]={isActive}
-          class:bg-[--color-red-500]={!isActive}
-          aria-label={isActive
-            ? m.admin_status_active()
-            : m.admin_status_inactive()}
-          role="img"
-        ></span>
-      {:else}
+      <!-- Edit button (your own row carries no control; active state is
+           unmarked and inactive already speaks through the word + dim) -->
+      {#if !isSelf}
         <button
           class="edit-btn"
           onclick={handleEditClick}
@@ -167,7 +159,7 @@
         </button>
       {/if}
     </div>
-  </Card>
+  </div>
 </div>
 
 <style>
@@ -179,11 +171,20 @@
     flex-direction: column;
   }
 
-  .user-card-wrap :global(.k-card) {
-    margin: 0 !important;
+  /* The Inkwell card anatomy: hair-2 border on raised paper, no shadow. */
+  .user-card {
+    margin: 0;
     height: 100%;
     display: flex;
     flex-direction: column;
+    background: var(--raised, var(--card-bg, transparent));
+    border: 1px solid var(--hair-2, var(--card-border, currentColor));
+    border-radius: var(--card-radius, 0.75rem);
+  }
+
+  /* Selection is an identity slot: brand-soft, never full fill. */
+  .card--selected {
+    background: var(--brand-soft, var(--brand-primary-20));
   }
 
   /* ── Card inner (base) ── */
@@ -211,26 +212,23 @@
     border-radius: var(--card-radius);
   }
 
-  /* ── Avatar ── */
+  /* A deactivated account is a records fact: the whole card goes quiet
+     (the closed-row treatment), no alarm hue anywhere. */
+  .card-inner--inactive {
+    opacity: 0.52;
+  }
+
+  /* ── Avatar: the shared identity-seal anatomy, sized per mode ── */
   .avatar {
     width: 2.5rem;
     height: 2.5rem;
-    border-radius: 50%;
-    background: color-mix(in srgb, var(--brand-accent) 20%, transparent);
     display: flex;
     align-items: center;
     justify-content: center;
     flex-shrink: 0;
   }
 
-  .avatar--inactive {
-    opacity: 0.5;
-  }
-
   .avatar-initials {
-    font-size: var(--text-sm);
-    font-weight: 700;
-    color: var(--brand-accent);
     line-height: 1;
   }
 
@@ -253,7 +251,7 @@
 
   .inactive-badge {
     font-size: var(--text-xs);
-    color: var(--color-red-500);
+    color: var(--muted);
     font-weight: 600;
     flex-shrink: 0;
   }
@@ -263,17 +261,22 @@
     color: var(--muted);
   }
 
+  /* Ready keys are the normal state: quiet ink, never a success hue. */
   .key-ok {
-    color: var(--color-green-600);
+    color: var(--ink-2);
   }
 
   .key-warn {
     color: var(--care);
   }
 
-  /* ── Role chip ── */
+  /* ── Role stamp (identity slot: brand ink on the stamp anatomy) ── */
   .role-area {
     flex-shrink: 0;
+  }
+
+  .role-stamp {
+    color: var(--brand-text, var(--brand-primary));
   }
 
   /* ── Edit button ── */
@@ -307,15 +310,6 @@
   .edit-btn:focus-visible {
     outline: 2px solid var(--brand-text);
     outline-offset: 2px;
-  }
-
-  /* ── Status dot ── */
-  .status-dot {
-    display: inline-block;
-    width: 0.5rem;
-    height: 0.5rem;
-    border-radius: 50%;
-    flex-shrink: 0;
   }
 
   .checkbox-wrap {
@@ -373,11 +367,5 @@
     position: absolute;
     top: var(--space-sm);
     right: var(--space-sm);
-  }
-
-  .card-inner--grid .status-dot {
-    position: absolute;
-    top: var(--space-md);
-    right: var(--space-md);
   }
 </style>

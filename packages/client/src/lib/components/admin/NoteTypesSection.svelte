@@ -693,9 +693,10 @@
     gap: var(--space-sm);
   }
 
+  /* A deactivated type is a records fact, not an alarm. */
   .inactive-badge {
     font-size: var(--text-xs);
-    color: var(--color-red-500);
+    color: var(--muted);
     font-weight: 600;
     flex-shrink: 0;
   }
@@ -826,7 +827,7 @@
     padding: 0.625rem;
     font-size: var(--text-sm);
     font-weight: 500;
-    color: var(--color-red-500);
+    color: var(--danger, var(--color-red-500));
     background: none;
     border: none;
     cursor: pointer;

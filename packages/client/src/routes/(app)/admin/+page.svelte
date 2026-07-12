@@ -122,16 +122,14 @@
     }
   }
 
-  function badgeVariant(
-    destId: string,
-  ): "default" | "success" | "warning" | null {
+  function badgeVariant(destId: string): "default" | "ok" | "warning" | null {
     const data = hubStatusQuery.data;
     if (!data) return null;
     switch (destId) {
       case "keys":
-        return data.keyStatus === "ok" ? "success" : "warning";
+        return data.keyStatus === "ok" ? "ok" : "warning";
       case "telephony":
-        return data.phoneCount > 0 ? "success" : "warning";
+        return data.phoneCount > 0 ? "ok" : "warning";
       case "greetings":
         return data.greetingCount > 0 ? "default" : "warning";
       case "sms-templates":
@@ -212,7 +210,7 @@
               {#if badge}
                 <span
                   class="hub-badge"
-                  class:hub-badge-success={variant === "success"}
+                  class:hub-badge-ok={variant === "ok"}
                   class:hub-badge-warning={variant === "warning"}
                 >
                   {badge}
@@ -254,8 +252,10 @@
     white-space: nowrap;
   }
 
-  .hub-badge-success {
-    color: var(--color-green-500);
+  /* A healthy state is the normal state: firmer ink, never a success
+     hue. Problems alone carry color (with their word). */
+  .hub-badge-ok {
+    color: var(--ink-2);
   }
 
   .hub-badge-warning {

@@ -654,9 +654,10 @@
     flex-shrink: 0;
   }
 
+  /* A verified line is the normal state: quiet ink, no tint. Only the
+     pending state carries color (with its word). */
   .status-icon.ok {
-    background: color-mix(in srgb, var(--color-green-500) 15%, transparent);
-    color: var(--color-green-500);
+    color: var(--ink-2);
   }
 
   .status-icon.pending {
@@ -715,6 +716,9 @@
 
   /* ── Role badges ── */
 
+  /* Phone-number purposes are configuration facts, not identity or
+     meaning: quiet bordered chips whose words do the distinguishing.
+     (These are not the user role stamps; a number is not a person.) */
   .role-badge {
     display: inline-flex;
     align-items: center;
@@ -722,18 +726,10 @@
     font-size: var(--text-xs);
     font-weight: 500;
     padding: 2px 8px;
+    border: 1px solid var(--hair-2, currentColor);
     border-radius: 1rem;
+    color: var(--ink-2);
     white-space: nowrap;
-  }
-
-  .role-badge--outbound {
-    background: color-mix(in srgb, var(--color-blue-500) 12%, transparent);
-    color: var(--color-blue-500);
-  }
-
-  .role-badge--system {
-    background: color-mix(in srgb, var(--color-green-500) 12%, transparent);
-    color: var(--color-green-500);
   }
 
   .section-description {

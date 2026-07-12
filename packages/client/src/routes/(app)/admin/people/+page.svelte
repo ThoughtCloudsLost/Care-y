@@ -50,7 +50,6 @@
   import { createInviteFlow } from "$lib/composables/people/create-invite-flow.svelte.js";
   import { createSearchOverlay } from "$lib/search/search-overlay.svelte.js";
   import SearchNavigator from "$lib/components/search/SearchNavigator.svelte";
-  import StatusDot from "$lib/components/StatusDot.svelte";
   import ShellPopover from "$lib/shell/ShellPopover.svelte";
   import UsersSection from "$lib/components/admin/UsersSection.svelte";
   import QueuesSection from "$lib/components/admin/QueuesSection.svelte";
@@ -426,14 +425,14 @@
 {/snippet}
 
 {#snippet usersStats()}
+  <!-- Account states are words with bold counts (the tickets counts-line
+       grammar); ticket status shapes never stand in for user states. -->
   <span class="stat-item">
-    <StatusDot status="active" />
-    {usersSectionRef?.activeCount() ?? 0}
+    <b>{usersSectionRef?.activeCount() ?? 0}</b>
     {m.admin_users_stat_active()}
   </span>
   <span class="stat-item">
-    <StatusDot status="closed" />
-    {usersSectionRef?.inactiveCount() ?? 0}
+    <b>{usersSectionRef?.inactiveCount() ?? 0}</b>
     {m.admin_users_stat_inactive()}
   </span>
 {/snippet}
@@ -475,7 +474,6 @@
     )}
   </span>
   <span class="stat-item">
-    <StatusDot status="active" />
     {m.admin_queues_stat_open({
       count: Number(queuesSectionRef?.totalOpenTickets() ?? 0),
     })}
@@ -547,6 +545,7 @@
     display: inline-flex;
     align-items: center;
     gap: 0.25rem;
+    font-variant-numeric: tabular-nums;
   }
 
   .tab-toggle {
