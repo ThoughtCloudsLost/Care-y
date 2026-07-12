@@ -120,9 +120,9 @@ vi.mock("$lib/trpc/index.js", () => ({
 }));
 
 vi.mock("$lib/paraglide/messages.js", () => ({
-  mgr_page_title: () => "Manager",
+  mgr_page_title: (p: { Manager: string }) => p.Manager,
   mgr_section_role: () => "Your Role",
-  mgr_role_reports: () => "View reports and team metrics",
+  mgr_role_reports: () => "View reports and org metrics",
   mgr_role_queues: () => "See all queues, not just your assignments",
   mgr_role_tickets: () => "Elevated ticket management permissions",
   mgr_section_ops: () => "Operations Snapshot",
@@ -201,7 +201,7 @@ describe("Manager role page", () => {
     it("renders all role capability items", () => {
       renderPage();
 
-      expect(screen.getByText("View reports and team metrics")).toBeTruthy();
+      expect(screen.getByText("View reports and org metrics")).toBeTruthy();
       expect(
         screen.getByText("See all queues, not just your assignments"),
       ).toBeTruthy();
@@ -327,11 +327,11 @@ describe("Manager role page", () => {
   });
 
   describe("navbar context", () => {
-    it("sets navbar title to Manager", () => {
+    it("sets navbar title from the manager term", () => {
       renderPage();
 
       expect(mockNavbarCtx.current).toEqual(
-        expect.objectContaining({ title: "Manager" }),
+        expect.objectContaining({ title: "Coordinator" }),
       );
     });
 

@@ -14,6 +14,7 @@
     ShieldUser,
   } from "@lucide/svelte";
   import * as m from "$lib/paraglide/messages.js";
+  import { withTerms } from "$lib/terminology/with-terms.js";
   import { getNavbarOverrideCtx } from "$lib/shell/context.js";
   import {
     getCurrentPermissions,
@@ -90,7 +91,7 @@
 
   $effect(() => {
     navbarCtx.current = {
-      title: m.mgr_page_title(),
+      title: m.mgr_page_title(withTerms()),
       subnavbar: mgrSubnavbar,
     };
     return () => {
@@ -104,7 +105,7 @@
     sections={SECTIONS}
     active={scroll.active}
     onscroll={(id: string) => scroll.scrollTo(id)}
-    ariaLabel={m.mgr_page_title()}
+    ariaLabel={m.mgr_page_title(withTerms())}
   />
 {/snippet}
 
