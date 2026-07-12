@@ -6,17 +6,17 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Nav_HomeInputs */
 
 const en_nav_home = /** @type {(inputs: Nav_HomeInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Now`)
+	return /** @type {LocalizedString} */ (`Overview`)
 };
 
 const es_nav_home = /** @type {(inputs: Nav_HomeInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Ahora`)
+	return /** @type {LocalizedString} */ (`Resumen`)
 };
 
 /**
 * | output |
 * | --- |
-* | "Now" |
+* | "Overview" |
 *
 * @param {Nav_HomeInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

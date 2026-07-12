@@ -33,6 +33,8 @@ export interface SearchResultGroup<T = unknown> {
   readonly onviewall?: (query: string) => void;
   /** When present, result taps call this instead of navigating via getResultHref. */
   readonly onresulttap?: (id: string, query: string) => void;
+  /** Quiet line shown when this section has zero results ("No teammates match X."). */
+  readonly emptyText?: string;
 }
 
 /** Contract that every search provider must implement. */
@@ -102,6 +104,11 @@ export interface SearchProvider<T = unknown> {
    * cached decrypted follow-up content) to free memory.
    */
   reset?(): void;
+  /**
+   * Copy for the section's quiet empty line ("No teammates match X.").
+   * Omit to render nothing when the section is empty.
+   */
+  emptyText?(query: string): string;
 }
 
 /** Per-provider progress state for opt-in full search. Managed by the registry. */

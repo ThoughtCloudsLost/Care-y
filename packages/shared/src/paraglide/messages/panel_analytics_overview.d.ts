@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Overview" |
+* | "Impact" |
 *
 * @param {Panel_Analytics_OverviewInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Go to Dashboard" |
+* | "Go to Overview" |
 *
 * @param {Onboarding_Wizard_Complete_GoInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

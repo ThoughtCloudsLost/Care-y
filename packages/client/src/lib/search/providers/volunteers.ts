@@ -79,6 +79,7 @@ export function createVolunteerSearchProvider(
     showAllHref: (query) =>
       `/admin/people?tab=users&q=${encodeURIComponent(query)}`,
     getResultHref: (id) => `/admin/people?user=${id}`,
+    emptyText: (query: string) => m.search_empty_people({ query }),
 
     search(query) {
       if (!loaded && !loading) void loadAll();
