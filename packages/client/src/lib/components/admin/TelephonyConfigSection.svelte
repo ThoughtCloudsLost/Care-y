@@ -39,6 +39,7 @@
   import QueryError from "$lib/components/QueryError.svelte";
   import InlineSkeleton from "$lib/components/InlineSkeleton.svelte";
   import SoftButton from "$lib/components/inputs/SoftButton.svelte";
+  import PasswordInput from "$lib/components/inputs/PasswordInput.svelte";
   import ShellSheet from "$lib/shell/ShellSheet.svelte";
   import ShellDialog from "$lib/shell/ShellDialog.svelte";
   import TelephonyModePicker from "$lib/components/shared/TelephonyModePicker.svelte";
@@ -482,19 +483,12 @@
           if (target instanceof HTMLInputElement) accountIdInput = target.value;
         }}
         info={m.admin_telephony_account_id_helper({ provider: providerName })}
-        outline
       />
-      <ListInput
+      <PasswordInput
         label={m.admin_telephony_auth_token()}
-        type="password"
         placeholder={config?.maskedAuthToken ?? ""}
-        value={authTokenInput}
-        onInput={(e: Event) => {
-          const target = e.target;
-          if (target instanceof HTMLInputElement) authTokenInput = target.value;
-        }}
+        bind:value={authTokenInput}
         info={m.admin_telephony_auth_token_helper({ provider: providerName })}
-        outline
       />
     </List>
 
@@ -532,7 +526,6 @@
 
     <List nested class="purpose-list">
       <ListInput
-        outline
         label={m.admin_telephony_outbound_calls()}
         type="select"
         dropdown
@@ -553,7 +546,6 @@
       </ListInput>
 
       <ListInput
-        outline
         label={m.admin_telephony_system_messages()}
         type="select"
         dropdown

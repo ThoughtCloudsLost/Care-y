@@ -420,7 +420,6 @@
         <span class="group-desc">{group.desc()}</span>
         <List nested class="term-list">
           <ListInput
-            outline
             label={m.admin_terminology_singular()}
             type="text"
             value={editState[activeLang][group.singularField]}
@@ -442,7 +441,6 @@
           />
           {#if group.pluralField !== null}
             <ListInput
-              outline
               label={m.admin_terminology_plural()}
               type="text"
               value={editState[activeLang][group.pluralField]}

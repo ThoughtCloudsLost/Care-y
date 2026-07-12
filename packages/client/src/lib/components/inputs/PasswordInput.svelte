@@ -10,7 +10,6 @@
     readonly info?: string;
     readonly error?: string;
     readonly disabled?: boolean;
-    readonly outline?: boolean;
     readonly required?: boolean;
     readonly autocomplete?: string;
   }
@@ -22,7 +21,6 @@
     info,
     error,
     disabled = false,
-    outline,
     required,
     autocomplete,
   }: PasswordInputProps = $props();
@@ -40,7 +38,6 @@
   {info}
   {error}
   {disabled}
-  {outline}
   {required}
   {autocomplete}
 >

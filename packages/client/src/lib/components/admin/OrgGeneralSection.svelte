@@ -225,7 +225,6 @@
   <div class="sheet-inner">
     <List strong inset>
       <ListInput
-        outline
         label={m.onboarding_org_name_label()}
         type="text"
         placeholder={m.onboarding_org_name_placeholder()}
@@ -237,7 +236,6 @@
       />
 
       <ListInput
-        outline
         dropdown
         label={m.onboarding_org_language_label()}
         type="select"
@@ -254,7 +252,6 @@
       </ListInput>
 
       <ListInput
-        outline
         dropdown
         label={m.onboarding_org_country_label()}
         type="select"
@@ -309,13 +306,7 @@
     padding: 0.25rem 0;
   }
 
-  .field-label {
-    font-size: var(--text-xs);
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    color: var(--muted);
-  }
+  /* .field-label comes from the shared form primitives (shared.css) */
 
   .field-value {
     font-size: var(--text-sm);

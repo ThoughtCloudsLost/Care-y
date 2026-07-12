@@ -78,6 +78,8 @@ vi.mock("$lib/paraglide/messages.js", () => ({
   admin_telephony_auth_token: () => "Auth token",
   admin_telephony_auth_token_helper: ({ provider }: { provider: string }) =>
     `Also in your ${provider} account settings`,
+  password_show: () => "Show password",
+  password_hide: () => "Hide password",
   admin_telephony_save_credentials: () => "Save",
   admin_telephony_credentials_saved: () => "Credentials saved",
   admin_telephony_grace_period: () =>

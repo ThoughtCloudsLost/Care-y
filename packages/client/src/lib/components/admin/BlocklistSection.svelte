@@ -276,7 +276,7 @@
           bind:this={numberInputEl}
           id="bl-number"
           type="tel"
-          class="phone-input number-input"
+          class="form-input number-input"
           placeholder={m.admin_blocklist_number_placeholder()}
           value={numberInput}
           oninput={(e: Event) => {
@@ -292,7 +292,7 @@
         <input
           id="bl-country-code"
           type="tel"
-          class="phone-input country-code-input"
+          class="form-input country-code-input"
           value={countryCode}
           oninput={(e: Event) => {
             const target = e.target;
@@ -468,38 +468,10 @@
     flex: 1;
   }
 
-  .field-label {
-    display: block;
-    font-size: var(--text-sm);
-    font-weight: 500;
-    color: var(--ink);
-    margin-bottom: var(--space-xs);
-  }
-
-  .phone-input {
-    width: 100%;
-    padding: 0.625rem 0.75rem;
-    border-radius: 0.5rem;
-    border: 1px solid color-mix(in srgb, var(--ink) 15%, transparent);
-    background: transparent;
-    color: var(--ink);
-    font-size: 16px;
-    font-family: inherit;
-  }
-
-  .phone-input:focus {
-    outline: 2px solid var(--brand-text);
-    outline-offset: -1px;
-    border-color: transparent;
-  }
+  /* .field-label, .form-input, and .field-error come from the shared
+     form primitives (shared.css) */
 
   .country-code-input {
     text-align: center;
-  }
-
-  .field-error {
-    font-size: var(--text-xs);
-    color: var(--color-red-500);
-    margin: 0;
   }
 </style>

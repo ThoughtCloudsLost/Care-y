@@ -13,6 +13,8 @@ vi.mock("$lib/paraglide/messages.js", () => ({
   onboarding_telephony_sid_placeholder: () => "ACxxxxxxxx",
   onboarding_telephony_token_label: () => "Auth Token",
   onboarding_telephony_token_placeholder: () => "Your auth token",
+  password_show: () => "Show password",
+  password_hide: () => "Hide password",
 }));
 
 const { default: TelephonyModePicker } =

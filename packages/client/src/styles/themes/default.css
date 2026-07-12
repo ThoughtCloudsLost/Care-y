@@ -183,3 +183,133 @@
   border-radius: 2px;
   padding: 0 1px;
 }
+
+/* ── Inkwell form system (spec: Forms anatomy) ──
+   One input system worn by Konsta ListInput via its stable k-classes
+   and structural selectors, pinned to konsta@5.0.7 internals the same
+   way shared.css already targets div[class*="bg-ios-light-surface"].
+   Consumers render the stacked (non-outline, non-floating) variant;
+   the box lives on the field element itself. */
+
+/* Form group flattening: lists that hold inputs are invisible plumbing.
+   Fields sit directly on the surface (no boxes around form groups),
+   and the iOS grouped-list hairlines between fields go away. */
+.theme-default .k-list:has(.k-list-input) {
+  margin: 0;
+  background: transparent;
+  border-radius: 0;
+  overflow: visible; /* inset lists clip; the focus ring must not */
+}
+
+.theme-default .k-list:has(.k-list-input) .hairline-b::after,
+.theme-default .k-list:has(.k-list-input) .hairline-t::after {
+  display: none;
+}
+
+/* Konsta draws outline borders and material underlines as absolutely
+   positioned spans; the Inkwell border is on the field element, so
+   those spans never render in this theme. */
+.theme-default .k-list-input span.pointer-events-none.absolute.w-full {
+  display: none;
+}
+
+/* Neutralize the material-only item chrome (filled surface-variant box,
+   ml-4/mr-4, 56px min-height) so both Konsta themes share one anatomy.
+   The itemContent div is the first div under the li. */
+.theme-default li.k-list-input > div {
+  background: transparent;
+  min-height: 0;
+  margin-left: 0;
+  margin-right: 0;
+  border-radius: 0;
+}
+
+/* The inputWrap div carries iOS -mt-2.5/-mb-2.5 tighteners sized for
+   Konsta's short rows; the Inkwell box brings its own height. */
+.theme-default .k-list-input div:has(> input, > textarea, > select) {
+  margin-top: 0;
+  margin-bottom: 0;
+}
+
+/* Vertical rhythm between fields (the mock's 16px formwrap gap, less
+   the box's own visual weight). */
+.theme-default li.k-list-input {
+  margin-bottom: 14px;
+}
+
+/* Field label: the eyebrow. Konsta's stacked label div is uniquely
+   .duration-200.text-xs (the error/info line is .text-xs.z-10). */
+.theme-default .k-list-input .duration-200.text-xs {
+  font-size: 0.6875rem; /* 11px */
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ink-2);
+  margin-bottom: 6px;
+}
+
+/* The box. font-size floors at 16px computed: below that iOS Safari
+   zooms the viewport on focus, which the Dynamic Type pass verified
+   against; the spec's 15px reads as intent, not a hard pixel. */
+.theme-default .k-list-input input,
+.theme-default .k-list-input textarea,
+.theme-default .k-list-input select {
+  box-sizing: border-box;
+  width: 100%;
+  height: auto;
+  padding: 12px 13px;
+  border: 1px solid var(--hair-2);
+  border-radius: 8px;
+  background: var(--raised);
+  color: var(--ink);
+  font-size: max(0.9375rem, 16px);
+  line-height: 1.4;
+}
+
+.theme-default .k-list-input textarea {
+  min-height: 84px;
+}
+
+.theme-default .k-list-input input::placeholder,
+.theme-default .k-list-input textarea::placeholder {
+  color: var(--muted);
+  opacity: 1;
+}
+
+/* Focus: the brand ring (identity slot: selection). */
+.theme-default .k-list-input input:focus,
+.theme-default .k-list-input textarea:focus,
+.theme-default .k-list-input select:focus {
+  outline: none;
+  border-color: var(--brand-fill);
+  box-shadow: 0 0 0 1px var(--brand-fill);
+}
+
+/* Error state colors the box border; the message re-points Konsta's
+   hardcoded text-red-500 at --danger (same move as --k-color-red). */
+.theme-default .k-list-input:has(.text-red-500) input,
+.theme-default .k-list-input:has(.text-red-500) textarea,
+.theme-default .k-list-input:has(.text-red-500) select {
+  border-color: var(--danger);
+}
+
+.theme-default .k-list-input .text-red-500 {
+  color: var(--danger);
+}
+
+/* Help text under the box (Konsta's info line renders .opacity-50). */
+.theme-default .k-list-input .text-xs.z-10 {
+  font-size: var(--text-sm);
+  line-height: 1.45;
+  margin-top: 5px;
+}
+
+.theme-default .k-list-input .text-xs.z-10.opacity-50 {
+  opacity: 1;
+  color: var(--muted);
+}
+
+/* Select dropdown chevron: keep it inside the padded box. */
+.theme-default .k-list-input div:has(> select) > .absolute {
+  inset-inline-end: 10px;
+}

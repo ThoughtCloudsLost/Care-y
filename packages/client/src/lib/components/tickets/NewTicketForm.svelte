@@ -206,7 +206,6 @@
 
   <List nested>
     <ListInput
-      outline
       label={m.ticket_new_field_title()}
       type="text"
       placeholder={m.ticket_new_field_title_placeholder()}
@@ -224,7 +223,6 @@
     />
 
     <ListInput
-      outline
       label={m.ticket_new_field_description()}
       type="textarea"
       placeholder={m.ticket_new_field_description_placeholder()}
@@ -242,7 +240,6 @@
 
   <List nested class="new-ticket-priority-list">
     <ListInput
-      outline
       dropdown
       label={m.ticket_new_field_priority()}
       type="select"
@@ -264,7 +261,6 @@
 
   <List nested class="new-ticket-queue-list">
     <ListInput
-      outline
       dropdown
       label={m.ticket_new_field_queue(withTerms())}
       type="select"

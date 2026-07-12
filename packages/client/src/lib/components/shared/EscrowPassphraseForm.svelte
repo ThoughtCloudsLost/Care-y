@@ -94,13 +94,11 @@
 
 <List nested>
   <PasswordInput
-    outline
     label={m.admin_escrow_passphrase_label()}
     bind:value={passphrase}
     disabled={exporting || disabled}
   />
   <PasswordInput
-    outline
     label={m.admin_escrow_confirm_label()}
     bind:value={confirmPassphrase}
     info={mismatch ? m.admin_escrow_passphrase_mismatch() : undefined}
