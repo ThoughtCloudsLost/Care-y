@@ -23,15 +23,20 @@
     stamp?: string;
   } = $props();
 
-  const displayTitle = $derived(title ?? message ?? m.empty_no_data());
   const displayVariant = $derived(stamp !== undefined || seal !== undefined);
+  // A stamp or seal may stand alone (search no-matches room): when a
+  // display variant provides no title, the mark itself is the heading.
+  const displayTitle = $derived(
+    title ?? message ?? (displayVariant ? undefined : m.empty_no_data()),
+  );
+  const ariaLabel = $derived(displayTitle ?? stamp ?? m.empty_no_data());
 </script>
 
 <div
   class="empty-state"
   class:empty-state--display={displayVariant}
   role="status"
-  aria-label={displayTitle}
+  aria-label={ariaLabel}
 >
   {#if stamp !== undefined}
     <span class="empty-stamp">{stamp}</span>
@@ -43,7 +48,9 @@
       <Icon size={48} aria-hidden="true" />
     </div>
   {/if}
-  <p class="empty-title">{displayTitle}</p>
+  {#if displayTitle !== undefined}
+    <p class="empty-title">{displayTitle}</p>
+  {/if}
   {#if subtitle}
     <p class="empty-subtitle">{subtitle}</p>
   {/if}

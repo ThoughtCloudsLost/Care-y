@@ -40,6 +40,16 @@ describe("EmptyState", () => {
     expect(screen.getByText("Try different filters")).toBeTruthy();
   });
 
+  it("lets a stamp stand alone when no title is given", () => {
+    const { container } = render(EmptyState, {
+      props: { stamp: "No matches", subtitle: "Nothing here matches." },
+    });
+    expect(screen.getByText("No matches")).toBeTruthy();
+    expect(screen.getByText("Nothing here matches.")).toBeTruthy();
+    expect(container.querySelector(".empty-title")).toBeNull();
+    expect(screen.getByRole("status", { name: "No matches" })).toBeTruthy();
+  });
+
   it("does not render subtitle when not provided", () => {
     const { container } = render(EmptyState, { props: { title: "Empty" } });
     expect(container.querySelector(".empty-subtitle")).toBeNull();

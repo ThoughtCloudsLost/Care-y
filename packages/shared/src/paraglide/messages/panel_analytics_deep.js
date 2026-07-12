@@ -10,7 +10,7 @@ const en_panel_analytics_deep = /** @type {(inputs: Panel_Analytics_DeepInputs) 
 };
 
 const es_panel_analytics_deep = /** @type {(inputs: Panel_Analytics_DeepInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Investigacion`)
+	return /** @type {LocalizedString} */ (`Estudios`)
 };
 
 /**

@@ -1,8 +1,10 @@
 <script lang="ts">
+  import { untrack } from "svelte";
   import * as m from "$lib/paraglide/messages.js";
   import {
     searchAll,
     getProvider,
+    resetFullSearch,
     runFullSearchForProvider,
   } from "$lib/search/registry.svelte.js";
   import type { SearchResultGroup } from "$lib/search/types.js";
@@ -36,6 +38,16 @@
   );
   const hasAnyResults = $derived(groups.some((g) => g.results.length > 0));
   const allSettled = $derived(groups.every((g) => !g.loading));
+
+  // Each query gets its own escalation lifecycle. Without this, a done
+  // state from the previous query suppressed the auto-trigger and left
+  // its "Found N across M" summary standing under unrelated results.
+  let lastQuery = untrack(() => trimmedQuery);
+  $effect(() => {
+    if (trimmedQuery === lastQuery) return;
+    lastQuery = trimmedQuery;
+    resetFullSearch();
+  });
 
   function handleResultTap(
     id: string,
@@ -71,10 +83,10 @@
 {:else}
   {#if !hasAnyResults && allSettled}
     <!-- Nothing anywhere: the empty room stamps its verdict (Identity
-         exception recorded 2026-07-11) instead of a wall of empty sections. -->
+         exception recorded 2026-07-11) instead of a wall of empty sections.
+         The stamp stands alone; no heading doubles it (Sky, live walk). -->
     <EmptyState
       stamp={m.search_empty_stamp()}
-      title={m.search_empty_title()}
       subtitle={m.search_empty_body({ query: trimmedQuery })}
     />
   {:else}

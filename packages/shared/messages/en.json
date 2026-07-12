@@ -591,7 +591,6 @@
   "search_empty_articles": "No articles match \"{query}\".",
   "search_empty_people": "No teammates match \"{query}\".",
   "search_empty_stamp": "No matches",
-  "search_empty_title": "Nothing found",
   "search_empty_body": "Nothing unlocked on this device matches \"{query}\".",
   "search_hint": "Search {tickets} and articles unlocked on this device",
   "search_recents_heading": "Recent",
