@@ -20,6 +20,7 @@
     isSelf={result.isSelf}
     selected={false}
     multiSelectActive={false}
+    searchTerm={result.searchTerm}
     onedit={() => ontap(result.userId)}
   />
 </div>

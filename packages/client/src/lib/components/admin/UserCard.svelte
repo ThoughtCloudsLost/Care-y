@@ -18,6 +18,8 @@
     readonly isSelf: boolean;
     readonly selected?: boolean;
     readonly multiSelectActive?: boolean;
+    /** Search term to highlight in the display name (search People cell). */
+    readonly searchTerm?: string | null;
     readonly onedit: (userId: string) => void;
     readonly onselect?: (userId: string) => void;
   }
@@ -33,6 +35,7 @@
     isSelf,
     selected = false,
     multiSelectActive = false,
+    searchTerm = null,
     onedit,
     onselect,
   }: UserCardProps = $props();
@@ -128,6 +131,7 @@
             content={displayName}
             length={14}
             class="font-semibold"
+            {searchTerm}
           />
           {#if !isActive}
             <span class="inactive-badge">

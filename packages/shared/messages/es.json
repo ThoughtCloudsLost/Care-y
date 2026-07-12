@@ -613,7 +613,7 @@
   "search_full_progress": "{searched}/{total}",
   "search_full_done": "listo",
   "search_full_summary": "Se encontraron {found} resultados en {total} elementos",
-  "search_deep_nav_trigger": "Buscar cifrados",
+  "search_deep_nav_trigger": "Buscar todo lo aún no desbloqueado",
   "search_deep_nav_searching": "{searched}/{total}",
   "search_deep_nav_loading": "Cargando {count}...",
   "search_inline_trigger": "Buscar en esta pagina",

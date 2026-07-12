@@ -613,7 +613,7 @@
   "search_full_progress": "{searched}/{total}",
   "search_full_done": "done",
   "search_full_summary": "Found {found} results across {total} items",
-  "search_deep_nav_trigger": "Search encrypted",
+  "search_deep_nav_trigger": "Search everything not yet unlocked",
   "search_deep_nav_searching": "{searched}/{total}",
   "search_deep_nav_loading": "Loading {count}...",
   "search_inline_trigger": "Search this page",
