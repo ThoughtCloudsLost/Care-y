@@ -14,6 +14,7 @@
 <script lang="ts">
   import { tick } from "svelte";
   import { List, ListInput, Block, BlockTitle } from "konsta/svelte";
+  import Register from "$lib/components/Register.svelte";
   import SoftButton from "$lib/components/inputs/SoftButton.svelte";
   import {
     generateOrgKeypair,
@@ -254,9 +255,9 @@
     </List>
 
     <Block>
-      <p class="pii-warning" role="note">
+      <Register kind="careful">
         {m.user_field_login_username_pii_warning()}
-      </p>
+      </Register>
     </Block>
 
     <List strong inset>

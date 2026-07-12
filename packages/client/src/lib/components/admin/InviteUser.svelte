@@ -1,5 +1,6 @@
 <script lang="ts">
   import { List, ListInput, Button, Block } from "konsta/svelte";
+  import Register from "$lib/components/Register.svelte";
   import { Save } from "@lucide/svelte";
   import { useQueryClient } from "@tanstack/svelte-query";
   import { adminKeys } from "$lib/query/keys.js";
@@ -246,9 +247,9 @@
         />
       </List>
 
-      <p class="pii-warning" role="note">
+      <Register kind="careful">
         {m.user_field_login_username_pii_warning()}
-      </p>
+      </Register>
 
       <List nested>
         <ListInput

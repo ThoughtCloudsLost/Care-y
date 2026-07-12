@@ -7,9 +7,13 @@
   interface Props {
     kind: RegisterKind;
     children: Snippet;
+    /** ARIA role. "alert" for registers that appear dynamically and must
+     *  announce (org key missing, insecure connection); "status" for
+     *  polite live updates during editing. Default stays "note". */
+    role?: "note" | "alert" | "status";
   }
 
-  let { kind, children }: Props = $props();
+  let { kind, children, role = "note" }: Props = $props();
 
   // The four registers replace amber-for-everything callouts. Protected is
   // deliberately calm: it shares Note's surface and earns its distinction
@@ -27,7 +31,7 @@
   const eyebrow = $derived((eyebrows.get(kind) ?? m.register_note)());
 </script>
 
-<div class="register register-{kind}" data-register={kind} role="note">
+<div class="register register-{kind}" data-register={kind} {role}>
   <div class="register-eyebrow">
     {#if kind === "protected"}
       <svg width="11" height="12" viewBox="0 0 12 13" aria-hidden="true">

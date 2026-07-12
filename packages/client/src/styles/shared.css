@@ -621,14 +621,3 @@ html.glass-dark.light
   color: var(--danger, var(--k-color-red, #ff3b30));
   margin: 5px 0 0;
 }
-
-/* PII warning: amber notice for fields with weaker encryption.
-   Components with layout overrides (margin, flex) keep a scoped rule. */
-.pii-warning {
-  font-size: 0.8125rem;
-  color: var(--color-amber-500);
-  background: color-mix(in srgb, var(--color-amber-500) 10%, transparent);
-  padding: var(--space-sm) var(--space-md);
-  border-radius: 8px;
-  margin: 0;
-}

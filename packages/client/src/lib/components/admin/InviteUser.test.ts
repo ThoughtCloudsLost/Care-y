@@ -19,6 +19,10 @@ let mockOrgKeyLoaded = true;
 
 // --- Mock i18n ---
 vi.mock("$lib/paraglide/messages.js", () => ({
+  register_note: () => "Note",
+  register_careful: () => "Careful",
+  register_warning: () => "Warning",
+  register_protected: () => "Protected",
   admin_invite_title: () => "Invite User",
   admin_invite_cancel: () => "Cancel",
   admin_invite_send: () => "Create Account",
