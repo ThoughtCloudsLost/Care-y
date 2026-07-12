@@ -9,6 +9,7 @@
  */
 
 import { test, expect, type Page } from "@playwright/test";
+import AxeBuilder from "@axe-core/playwright";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { generateTotpCode } from "./helpers.js";
@@ -81,6 +82,15 @@ test.describe.serial("Volunteer First Login", () => {
     ).toBeVisible({
       timeout: CRYPTO_TIMEOUT,
     });
+  });
+
+  test("invite account step passes the axe accessibility audit", async () => {
+    // Legacy mode: the serial suite uses browser.newPage(), which axe's
+    // cross-context injection cannot target (same pattern as dashboard).
+    const results = await new AxeBuilder({ page })
+      .setLegacyMode(true)
+      .analyze();
+    expect(results.violations).toEqual([]);
   });
 
   test("fills volunteer account form and submits", async () => {
