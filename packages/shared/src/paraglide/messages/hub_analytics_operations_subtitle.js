@@ -6,17 +6,17 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Hub_Analytics_Operations_SubtitleInputs */
 
 const en_hub_analytics_operations_subtitle = /** @type {(inputs: Hub_Analytics_Operations_SubtitleInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Staffing, workload, and scheduling insights`)
+	return /** @type {LocalizedString} */ (`Coverage, shifts, and how the work is shared`)
 };
 
 const es_hub_analytics_operations_subtitle = /** @type {(inputs: Hub_Analytics_Operations_SubtitleInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Personal, carga de trabajo y programacion`)
+	return /** @type {LocalizedString} */ (`Cobertura, turnos y reparto del trabajo`)
 };
 
 /**
 * | output |
 * | --- |
-* | "Staffing, workload, and scheduling insights" |
+* | "Coverage, shifts, and how the work is shared" |
 *
 * @param {Hub_Analytics_Operations_SubtitleInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

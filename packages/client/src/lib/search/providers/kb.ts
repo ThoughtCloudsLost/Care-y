@@ -144,6 +144,7 @@ export function createKbSearchProvider(
     renderMode: "card-strip",
     showAllHref: (query) => `/library?q=${encodeURIComponent(query)}`,
     getResultHref: (id) => `/library/${id}`,
+    emptyText: (query: string) => m.search_empty_articles({ query }),
 
     search(query) {
       if (!loaded && !loading) void loadAll();

@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Before accessing the dashboard, set up a second verification method. This protects both you and the people you serve." |
+* | "Before accessing the Overview, set up a second verification method. This protects both you and the people you serve." |
 *
 * @param {Onboarding_Twofa_Vol_DescInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

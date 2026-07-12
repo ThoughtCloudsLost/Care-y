@@ -84,6 +84,7 @@ export function searchAll(
       totalResults: searchResult.totalResults,
       onviewall: provider.onviewall?.bind(provider),
       onresulttap: provider.onresulttap?.bind(provider),
+      emptyText: provider.emptyText?.(query),
     });
   }
 

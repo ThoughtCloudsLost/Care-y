@@ -50,6 +50,7 @@ export function createConversationSearchProvider(
     renderMode: "list",
     showAllHref: () => `/tickets/${deps.getTicketId()}`,
     getResultHref: (id: string) => `/tickets/${deps.getTicketId()}#fu-${id}`,
+    emptyText: () => m.search_conversation_no_matches(),
 
     search(query: string) {
       const followUps = deps.getFollowUps();

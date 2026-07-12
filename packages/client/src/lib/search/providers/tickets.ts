@@ -179,6 +179,7 @@ export function createTicketSearchProvider(
     renderMode: "card-strip",
     showAllHref: (query) => `/tickets?q=${encodeURIComponent(query)}`,
     getResultHref: (id: string) => `/tickets/${id}`,
+    emptyText: (query: string) => m.search_empty_tickets(withTerms({ query })),
 
     search(query: string) {
       const rawTickets = deps.getAllCachedTickets();

@@ -6,17 +6,17 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Onboarding_Twofa_Vol_DescInputs */
 
 const en_onboarding_twofa_vol_desc = /** @type {(inputs: Onboarding_Twofa_Vol_DescInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Before accessing the dashboard, set up a second verification method. This protects both you and the people you serve.`)
+	return /** @type {LocalizedString} */ (`Before accessing the Overview, set up a second verification method. This protects both you and the people you serve.`)
 };
 
 const es_onboarding_twofa_vol_desc = /** @type {(inputs: Onboarding_Twofa_Vol_DescInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Antes de acceder al panel, configura un segundo metodo de verificacion. Esto te protege a ti y a las personas que atiendes.`)
+	return /** @type {LocalizedString} */ (`Antes de acceder al Resumen, configura un segundo metodo de verificacion. Esto te protege a ti y a las personas que atiendes.`)
 };
 
 /**
 * | output |
 * | --- |
-* | "Before accessing the dashboard, set up a second verification method. This protects both you and the people you serve." |
+* | "Before accessing the Overview, set up a second verification method. This protects both you and the people you serve." |
 *
 * @param {Onboarding_Twofa_Vol_DescInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

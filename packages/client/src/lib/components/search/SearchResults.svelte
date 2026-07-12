@@ -36,6 +36,7 @@
     searchAll(trimmedQuery, promotedProviderId),
   );
   const hasAnyResults = $derived(groups.some((g) => g.results.length > 0));
+  const allSettled = $derived(groups.every((g) => !g.loading));
 
   function handleResultTap(
     id: string,
@@ -57,6 +58,10 @@
     }
   }
 
+  function handleShowAllNavigate(href: string): void {
+    onnavigate(`/${href.replace(/^\//, "")}`);
+  }
+
   function handleRecentTap(recentQuery: string): void {
     onselectrecent(recentQuery);
   }
@@ -65,68 +70,62 @@
 {#if trimmedQuery.length < 2}
   <SearchRecents onselect={handleRecentTap} />
 {:else}
-  {#each groups as group, i (group.providerId)}
-    {#if i > 0}
-      <hr class="section-divider" />
-    {/if}
-    <SearchSection
-      label={group.label}
-      icon={group.icon}
-      count={group.results.length}
-      totalCached={group.totalCached}
-      totalItems={group.totalItems}
-      totalResults={group.totalResults}
-      showAllHref={group.showAllHref}
-      loading={group.loading}
-      {ondismiss}
-      onviewall={group.onviewall}
-      query={trimmedQuery}
-      hasFullSearch={providerHasFullSearch(group.providerId)}
-      onFullSearch={() =>
-        runFullSearchForProvider(group.providerId, trimmedQuery)}
-      providerId={group.providerId}
-    >
-      {#if group.renderMode === "card-strip"}
-        <TicketResultStrip
-          results={group.results}
-          providerId={group.providerId}
-          ontap={(id: string) => handleResultTap(id, group.providerId, group)}
-          loading={group.loading}
-        />
-      {:else if group.renderMode === "list"}
-        {@const provider = getProvider(group.providerId)}
-        {#if provider}
-          {@const ResultItem = provider.ResultItem}
-          <div role="list" class="search-list-results">
-            {#each group.results as result (result.id)}
-              <div role="listitem">
-                <ResultItem
-                  result={result.data}
-                  ontap={(id: string) =>
-                    handleResultTap(id, group.providerId, group)}
-                />
-              </div>
-            {/each}
-          </div>
+  {#if !hasAnyResults && allSettled}
+    <!-- Nothing anywhere: the empty room stamps its verdict (Identity
+         exception recorded 2026-07-11) instead of a wall of empty sections. -->
+    <EmptyState
+      stamp={m.search_empty_stamp()}
+      title={m.search_empty_title()}
+      subtitle={m.search_empty_body({ query: trimmedQuery })}
+    />
+  {:else}
+    {#each groups as group (group.providerId)}
+      <SearchSection
+        label={group.label}
+        icon={group.icon}
+        count={group.results.length}
+        totalCached={group.totalCached}
+        totalItems={group.totalItems}
+        totalResults={group.totalResults}
+        showAllHref={group.showAllHref}
+        loading={group.loading}
+        {ondismiss}
+        onviewall={group.onviewall}
+        onnavigate={handleShowAllNavigate}
+        query={trimmedQuery}
+        hasFullSearch={providerHasFullSearch(group.providerId)}
+        onFullSearch={() =>
+          runFullSearchForProvider(group.providerId, trimmedQuery)}
+        providerId={group.providerId}
+        emptyText={group.emptyText}
+      >
+        {#if group.renderMode === "card-strip"}
+          <TicketResultStrip
+            results={group.results}
+            providerId={group.providerId}
+            ontap={(id: string) => handleResultTap(id, group.providerId, group)}
+            loading={group.loading}
+          />
+        {:else if group.renderMode === "list"}
+          {@const provider = getProvider(group.providerId)}
+          {#if provider}
+            {@const ResultItem = provider.ResultItem}
+            <div role="list" class="search-list-results">
+              {#each group.results as result (result.id)}
+                <div role="listitem">
+                  <ResultItem
+                    result={result.data}
+                    ontap={(id: string) =>
+                      handleResultTap(id, group.providerId, group)}
+                  />
+                </div>
+              {/each}
+            </div>
+          {/if}
         {/if}
-      {/if}
-    </SearchSection>
-  {/each}
-
-  {#if !hasAnyResults && groups.every((g) => !g.loading)}
-    <div role="status">
-      <EmptyState message={m.search_no_results({ query: trimmedQuery })} />
-    </div>
+      </SearchSection>
+    {/each}
   {/if}
 
   <FullSearchPanel {groups} query={trimmedQuery} {hasAnyResults} />
 {/if}
-
-<style>
-  .section-divider {
-    border: none;
-    border-top: 1px solid
-      color-mix(in srgb, var(--brand-primary) 15%, transparent);
-    margin: 0 var(--page-pad-x);
-  }
-</style>
