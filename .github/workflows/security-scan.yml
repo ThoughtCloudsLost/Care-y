@@ -38,7 +38,7 @@ jobs:
         run: pip install semgrep
 
       - name: Run CARE-Y custom rules
-        run: semgrep scan --quiet --metrics=off --config .claude/semgrep/care-y-rules.yaml packages/*/src/
+        run: semgrep scan --quiet --metrics=off --config .semgrep/care-y-rules.yaml packages/*/src/
 
   secrets:
     name: Secret scanning (Gitleaks)
