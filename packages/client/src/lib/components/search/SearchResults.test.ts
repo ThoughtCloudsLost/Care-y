@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { render, cleanup, fireEvent } from "@testing-library/svelte";
+import { render, cleanup, fireEvent, waitFor } from "@testing-library/svelte";
 import { Ticket } from "@lucide/svelte";
 import SearchResults from "./SearchResults.svelte";
 import FakeResultItem from "./test-helpers/FakeResultItem.svelte";
@@ -66,13 +66,26 @@ describe("SearchResults", () => {
       props: baseProps(),
     });
     expect(getByText("No matches")).toBeDefined();
-    expect(getByText("Nothing found")).toBeDefined();
     expect(
       getByText('Nothing unlocked on this device matches "housing".'),
     ).toBeDefined();
+    // The stamp stands alone: no heading doubles it.
+    expect(container.querySelector(".empty-title")).toBeNull();
     // The room replaces the section list entirely.
     expect(container.querySelector("h3.eb")).toBeNull();
     expect(container.querySelector(".nores")).toBeNull();
+  });
+
+  it("resets full-search state when the query changes", async () => {
+    const reset = vi.fn();
+    const provider = fakeProvider("aa", ["Alpha"]);
+    provider.reset = reset;
+    cleanups.push(registerSearchProvider(provider));
+    const { rerender } = render(SearchResults, { props: baseProps() });
+    await rerender({ query: "shelter" });
+    await waitFor(() => {
+      expect(reset).toHaveBeenCalled();
+    });
   });
 
   it("renders per-section empty lines beside sections with results", () => {
