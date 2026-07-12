@@ -27,11 +27,17 @@ const STRONG = "a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6q7r8"; // 36 chars
 const COMMON = "aaaaaaaaaaaaaaaa"; // 16 chars, single repeated character
 
 describe("PasswordStrengthMeter", () => {
-  it("renders nothing for an empty password", () => {
+  it("rests at an empty track with no label for an empty password", () => {
+    // Always-present by design: the meter must not pop into the form
+    // and reflow it when typing starts.
     const { container } = render(PasswordStrengthMeter, {
       props: { password: "" },
     });
-    expect(container.querySelector(".strength-meter")).toBeNull();
+    expect(container.querySelector(".strength-meter")).not.toBeNull();
+    const fill = container.querySelector<HTMLElement>(".strength-fill");
+    expect(fill?.style.width).toBe("0%");
+    const label = container.querySelector(".strength-label");
+    expect((label?.textContent ?? "").trim()).toBe("");
   });
 
   it("labels a password under the minimum as too short", () => {

@@ -66,26 +66,29 @@
   }
 
   const display = $derived(getStrengthDisplay(strength));
+  const resting = $derived(password.length === 0);
 </script>
 
-{#if password.length > 0}
-  <div class="strength-meter">
-    <div class="strength-track">
-      <div
-        class="strength-fill"
-        style="width: {display.width}; background: {display.color}"
-      ></div>
-    </div>
-    <span class="strength-label" style="color: {display.color}">
-      {display.label}
-    </span>
+<!-- The meter always renders (empty track while the password is empty)
+     so it never pops into the form and shifts the fields around it. -->
+<div class="strength-meter">
+  <div class="strength-track">
+    <div
+      class="strength-fill"
+      style="width: {resting
+        ? '0%'
+        : display.width}; background: {display.color}"
+    ></div>
   </div>
+  <span class="strength-label" style="color: {display.color}">
+    {resting ? "" : display.label}
+  </span>
+</div>
 
-  {#if isCommon}
-    <Register kind="careful" role="alert">
-      {m.password_common_pattern()}
-    </Register>
-  {/if}
+{#if isCommon}
+  <Register kind="careful" role="alert">
+    {m.password_common_pattern()}
+  </Register>
 {/if}
 
 <style>
@@ -118,5 +121,8 @@
   .strength-label {
     font-size: var(--text-xs);
     font-weight: 500;
+    /* Reserve the line while resting so typing never changes height. */
+    line-height: 1.4;
+    min-height: 1.4em;
   }
 </style>

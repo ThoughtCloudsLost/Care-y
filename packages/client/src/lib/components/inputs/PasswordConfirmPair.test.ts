@@ -39,20 +39,32 @@ function confirmField(): HTMLInputElement {
 }
 
 describe("PasswordConfirmPair", () => {
-  it("renders both fields and no strength meter while empty", () => {
+  it("renders both fields and a resting strength meter while empty", () => {
+    // The meter is always present so the form never reflows mid-entry.
     const { container } = render(PasswordConfirmPair, { props: BASE_PROPS });
     expect(passwordField()).toBeTruthy();
     expect(confirmField()).toBeTruthy();
-    expect(container.querySelector(".strength-meter")).toBeNull();
+    expect(container.querySelector(".strength-meter")).not.toBeNull();
+    const label = container.querySelector(".strength-label");
+    expect((label?.textContent ?? "").trim()).toBe("");
   });
 
-  it("shows the strength meter once the password has content", async () => {
-    const { container } = render(PasswordConfirmPair, { props: BASE_PROPS });
+  it("fills the strength meter once the password has content", async () => {
+    render(PasswordConfirmPair, { props: BASE_PROPS });
     await fireEvent.input(passwordField(), {
       target: { value: "a1b2c3d4e5f6g7h8" },
     });
-    expect(container.querySelector(".strength-meter")).not.toBeNull();
     expect(screen.getByText("Acceptable")).toBeTruthy();
+  });
+
+  it("anchors the eye toggle inside the input's own wrap div", () => {
+    // The toggle renders through ListInput's input snippet as the field's
+    // sibling inside Konsta's inputWrap (position: relative), so top 50%
+    // centers on the box itself, not the whole list item.
+    render(PasswordConfirmPair, { props: BASE_PROPS });
+    const wrap = passwordField().parentElement;
+    expect(wrap?.querySelector("button.eye-toggle")).not.toBeNull();
+    expect(wrap?.classList.contains("relative")).toBe(true);
   });
 
   it("shows the mismatch error while the values differ and clears it on match", async () => {

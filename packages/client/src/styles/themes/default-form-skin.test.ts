@@ -111,6 +111,16 @@ describe("default.css form skin selector contract (konsta ListInput DOM)", () =>
     expect(wrap).not.toBeNull();
   });
 
+  it("carries the w-full relative inner div the rhythm rule zeroes", () => {
+    // The vertical-rhythm rule strips Konsta's py-3 from the item inner
+    // (li.k-list-input div.w-full.relative); pin that the class pair
+    // still identifies the label/field container and nothing else.
+    const c = renderFixture();
+    const inner = c.querySelector("li.k-list-input div.w-full.relative");
+    expect(inner).not.toBeNull();
+    expect(inner?.querySelector("input, textarea, select")).not.toBeNull();
+  });
+
   it("keeps k-list on the list wrapper for the form-flattening rule", () => {
     const c = renderFixture();
     const list = c.querySelector(".k-list");

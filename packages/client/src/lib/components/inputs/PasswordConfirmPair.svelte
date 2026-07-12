@@ -2,10 +2,13 @@
   The create-password group: password + confirmation + strength meter,
   with the mismatch check owned here. Every surface that asks a user to
   set a password renders this pair (one component per data type); the
-  consumer keeps its own i18n strings and submit gating.
+  consumer keeps its own i18n strings and submit gating. The meter is
+  always present (resting empty until typing starts) so the form never
+  reflows mid-entry.
 -->
 <script lang="ts">
-  import { List, Block } from "konsta/svelte";
+  import { List } from "konsta/svelte";
+  import type { FullAutoFill } from "svelte/elements";
   import PasswordInput from "./PasswordInput.svelte";
   import PasswordStrengthMeter from "./PasswordStrengthMeter.svelte";
 
@@ -24,7 +27,7 @@
     passwordError?: string;
     /** Strength meter minimum; defaults to the meter's own minimum. */
     minLength?: number;
-    autocomplete?: string;
+    autocomplete?: FullAutoFill;
     required?: boolean;
     disabled?: boolean;
   }
@@ -48,30 +51,45 @@
   const mismatch = $derived(confirm.length > 0 && password !== confirm);
 </script>
 
-<List nested>
-  <PasswordInput
-    label={passwordLabel}
-    placeholder={passwordPlaceholder}
-    info={passwordInfo}
-    error={passwordError}
-    bind:value={password}
-    {autocomplete}
-    {required}
-    {disabled}
-  />
-  <PasswordInput
-    label={confirmLabel}
-    placeholder={confirmPlaceholder}
-    bind:value={confirm}
-    error={mismatch ? mismatchError : undefined}
-    {autocomplete}
-    {required}
-    {disabled}
-  />
-</List>
-
-{#if password.length > 0}
-  <Block>
+<div class="password-pair">
+  <List nested>
+    <PasswordInput
+      label={passwordLabel}
+      placeholder={passwordPlaceholder}
+      info={passwordInfo}
+      error={passwordError}
+      bind:value={password}
+      {autocomplete}
+      {required}
+      {disabled}
+    />
+    <PasswordInput
+      label={confirmLabel}
+      placeholder={confirmPlaceholder}
+      bind:value={confirm}
+      error={mismatch ? mismatchError : undefined}
+      {autocomplete}
+      {required}
+      {disabled}
+    />
+  </List>
+  <div class="meter-row">
     <PasswordStrengthMeter {password} {minLength} />
-  </Block>
-{/if}
+  </div>
+</div>
+
+<style>
+  /* One flex column owning the internal rhythm, so consumers treat the
+     pair as a single block; the gap matches the field rhythm the theme
+     skin sets between list items. */
+  .password-pair {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-md, 1rem);
+  }
+
+  /* Matches the x-inset Konsta gives the field boxes inside a list. */
+  .meter-row {
+    padding-inline: 1rem;
+  }
+</style>
