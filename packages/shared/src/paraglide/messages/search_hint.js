@@ -6,17 +6,17 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{ tickets: NonNullable<unknown> }} Search_HintInputs */
 
 const en_search_hint = /** @type {(inputs: Search_HintInputs) => LocalizedString} */ (i) => {
-	return /** @type {LocalizedString} */ (`Search loaded ${i?.tickets} and articles`)
+	return /** @type {LocalizedString} */ (`Search ${i?.tickets} and articles unlocked on this device`)
 };
 
 const es_search_hint = /** @type {(inputs: Search_HintInputs) => LocalizedString} */ (i) => {
-	return /** @type {LocalizedString} */ (`Buscar ${i?.tickets} y articulos cargados`)
+	return /** @type {LocalizedString} */ (`Buscar ${i?.tickets} y artículos desbloqueados en este dispositivo`)
 };
 
 /**
 * | output |
 * | --- |
-* | "Search loaded {tickets} and articles" |
+* | "Search {tickets} and articles unlocked on this device" |
 *
 * @param {Search_HintInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

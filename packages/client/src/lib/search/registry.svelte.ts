@@ -70,6 +70,7 @@ export function searchAll(
 
   for (const [, provider] of providers) {
     const searchResult = provider.search(query);
+    const fs = fullSearchStates.find((s) => s.providerId === provider.id);
 
     groups.push({
       providerId: provider.id,
@@ -85,6 +86,22 @@ export function searchAll(
       onviewall: provider.onviewall?.bind(provider),
       onresulttap: provider.onresulttap?.bind(provider),
       emptyText: provider.emptyText?.(query),
+      coverageText: provider.coverage?.({
+        searched: searchResult.totalCached,
+        total: searchResult.totalItems,
+        fullSearch: fs?.status,
+        fsSearched: fs?.searched ?? 0,
+        fsTotal: fs?.total ?? 0,
+      }),
+      // The calm escalation only offers itself before a full search has
+      // run; while searching or after done the coverage line carries it.
+      fetchMoreLabel:
+        fs === undefined || fs.status === "idle"
+          ? provider.fullSearchLabel?.(
+              searchResult.totalCached,
+              searchResult.totalItems,
+            )
+          : undefined,
     });
   }
 

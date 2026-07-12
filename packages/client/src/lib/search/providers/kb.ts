@@ -145,6 +145,26 @@ export function createKbSearchProvider(
     showAllHref: (query) => `/library?q=${encodeURIComponent(query)}`,
     getResultHref: (id) => `/library/${id}`,
     emptyText: (query: string) => m.search_empty_articles({ query }),
+    coverage: (c) => {
+      if (c.fullSearch === "searching") {
+        return m.search_coverage_searching({
+          searched: c.fsSearched,
+          total: c.fsTotal,
+        });
+      }
+      if (c.fullSearch === "done") {
+        return m.search_coverage_articles_deep({ total: c.searched });
+      }
+      if (c.searched === 0 && c.total == null) return undefined;
+      if (c.total != null && c.total > c.searched) {
+        return m.search_coverage_articles({
+          searched: c.searched,
+          total: c.total,
+        });
+      }
+      return m.search_coverage_articles_all({ total: c.searched });
+    },
+    fullSearchLabel: () => m.search_fetch_more_articles(),
 
     search(query) {
       if (!loaded && !loading) void loadAll();

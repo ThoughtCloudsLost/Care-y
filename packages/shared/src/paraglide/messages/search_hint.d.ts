@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Search loaded {tickets} and articles" |
+* | "Search {tickets} and articles unlocked on this device" |
 *
 * @param {Search_HintInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

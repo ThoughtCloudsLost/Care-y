@@ -3,6 +3,19 @@ import type { Component } from "svelte";
 /** How the search UI lays out results for this provider. */
 export type SearchRenderMode = "card-strip" | "list";
 
+/** Inputs for a provider's coverage line, computed per searchAll evaluation. */
+export interface CoverageState {
+  /** Items this device has searched (the provider's totalCached). */
+  readonly searched: number;
+  /** Total items in the dataset, when known (the provider's totalItems). */
+  readonly total: number | undefined;
+  /** Per-provider full-search status, when one has run. */
+  readonly fullSearch: "idle" | "searching" | "done" | undefined;
+  /** Full-search progress counts (meaningful while fullSearch is "searching"). */
+  readonly fsSearched: number;
+  readonly fsTotal: number;
+}
+
 /** A single search result returned by a provider. */
 export interface SearchResult<T = unknown> {
   /** Unique ID within this provider (e.g., ticket ID, article ID). */
@@ -35,6 +48,10 @@ export interface SearchResultGroup<T = unknown> {
   readonly onresulttap?: (id: string, query: string) => void;
   /** Quiet line shown when this section has zero results ("No teammates match X."). */
   readonly emptyText?: string;
+  /** Human coverage line rendered below the section's results. */
+  readonly coverageText?: string;
+  /** Label for the calm escalation button; absent hides the button. */
+  readonly fetchMoreLabel?: string;
 }
 
 /** Contract that every search provider must implement. */
@@ -109,6 +126,21 @@ export interface SearchProvider<T = unknown> {
    * Omit to render nothing when the section is empty.
    */
   emptyText?(query: string): string;
+  /**
+   * Human coverage line below the section's results ("Searched 100 of 120
+   * tickets already unlocked on this device."). Return undefined to render
+   * no line; providers own the words the way they own label().
+   */
+  coverage?(state: CoverageState): string | undefined;
+  /**
+   * Label for the calm per-section escalation button ("Search the other
+   * 20 tickets"). Return undefined to hide it; the registry also hides it
+   * while a full search runs or after it completes.
+   */
+  fullSearchLabel?(
+    searched: number,
+    total: number | undefined,
+  ): string | undefined;
 }
 
 /** Per-provider progress state for opt-in full search. Managed by the registry. */

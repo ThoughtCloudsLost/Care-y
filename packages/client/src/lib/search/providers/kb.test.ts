@@ -14,6 +14,15 @@ beforeEach(() => {
 // Mock paraglide messages
 vi.mock("$lib/paraglide/messages.js", () => ({
   search_section_kb: () => "Articles",
+  search_coverage_searching: (p: { searched: number; total: number }) =>
+    `Searching ${String(p.searched)} of ${String(p.total)}...`,
+  search_coverage_articles: (p: { searched: number; total: number }) =>
+    `Searched titles and summaries of ${String(p.searched)} of ${String(p.total)} articles.`,
+  search_coverage_articles_all: (p: { total: number }) =>
+    `Searched titles and summaries of all ${String(p.total)} articles.`,
+  search_coverage_articles_deep: (p: { total: number }) =>
+    `Searched all ${String(p.total)} articles and their full text.`,
+  search_fetch_more_articles: () => "Search inside full articles",
 }));
 
 // Mock the KBResultItem component (not needed for unit tests)
@@ -507,5 +516,48 @@ describe("KB fullSearch (body content)", () => {
 
     expect(state.matchCount).toBe(3);
     expect(allMatchDeps.fetchBodies).not.toHaveBeenCalled();
+  });
+
+  describe("coverage and escalation copy", () => {
+    const provider = createKbSearchProvider(createDeps());
+
+    it("reports the deep variant after a full-text search completes", () => {
+      expect(
+        provider.coverage?.({
+          searched: 30,
+          total: 30,
+          fullSearch: "done",
+          fsSearched: 30,
+          fsTotal: 30,
+        }),
+      ).toBe("Searched all 30 articles and their full text.");
+    });
+
+    it("reports titles-and-summaries coverage before that", () => {
+      expect(
+        provider.coverage?.({
+          searched: 12,
+          total: 30,
+          fullSearch: undefined,
+          fsSearched: 0,
+          fsTotal: 0,
+        }),
+      ).toBe("Searched titles and summaries of 12 of 30 articles.");
+      expect(
+        provider.coverage?.({
+          searched: 30,
+          total: 30,
+          fullSearch: undefined,
+          fsSearched: 0,
+          fsTotal: 0,
+        }),
+      ).toBe("Searched titles and summaries of all 30 articles.");
+    });
+
+    it("always offers the full-text escalation while idle", () => {
+      expect(provider.fullSearchLabel?.(30, 30)).toBe(
+        "Search inside full articles",
+      );
+    });
   });
 });

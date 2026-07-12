@@ -30,6 +30,9 @@ interface OverrideProps {
   count?: number;
   loading?: boolean;
   emptyText?: string;
+  coverageText?: string;
+  fetchMoreLabel?: string;
+  onFullSearch?: () => void;
   ondismiss?: () => void;
   onviewall?: (query: string) => void;
   onnavigate?: (href: string) => void;
@@ -40,7 +43,6 @@ function baseProps(overrides: OverrideProps = {}) {
     label: "Tickets",
     icon: Ticket,
     count: 3,
-    totalCached: 10,
     showAllHref: "/tickets?q=housing",
     loading: false,
     ondismiss: vi.fn(),
@@ -121,5 +123,47 @@ describe("SearchSection", () => {
     expect(
       container.querySelector("[data-testid='section-content']"),
     ).not.toBeNull();
+  });
+
+  it("renders the coverage line below the results", () => {
+    const { container, getByText } = render(SearchSection, {
+      props: baseProps({
+        coverageText:
+          "Searched 100 of 120 tickets already unlocked on this device.",
+      }),
+    });
+    expect(
+      getByText("Searched 100 of 120 tickets already unlocked on this device."),
+    ).toBeDefined();
+    const cover = container.querySelector(".cover");
+    const content = container.querySelector("[data-testid='section-content']");
+    expect(cover).not.toBeNull();
+    expect(content).not.toBeNull();
+    // Coverage sits after the results in document order.
+    expect(
+      content!.compareDocumentPosition(cover!) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+  });
+
+  it("renders the calm fetch-more button and fires onFullSearch", async () => {
+    const onFullSearch = vi.fn();
+    const { getByRole } = render(SearchSection, {
+      props: baseProps({
+        fetchMoreLabel: "Search the other 20 tickets",
+        onFullSearch,
+      }),
+    });
+    await fireEvent.click(
+      getByRole("button", { name: "Search the other 20 tickets" }),
+    );
+    expect(onFullSearch).toHaveBeenCalledOnce();
+  });
+
+  it("hides the fetch-more button without a label", () => {
+    const { queryByRole } = render(SearchSection, {
+      props: baseProps({ onFullSearch: vi.fn() }),
+    });
+    expect(queryByRole("button", { name: /search the other/i })).toBeNull();
   });
 });

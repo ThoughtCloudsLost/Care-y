@@ -180,6 +180,27 @@ export function createTicketSearchProvider(
     showAllHref: (query) => `/tickets?q=${encodeURIComponent(query)}`,
     getResultHref: (id: string) => `/tickets/${id}`,
     emptyText: (query: string) => m.search_empty_tickets(withTerms({ query })),
+    coverage: (c) => {
+      if (c.fullSearch === "searching") {
+        return m.search_coverage_searching({
+          searched: c.fsSearched,
+          total: c.fsTotal,
+        });
+      }
+      if (c.searched === 0 && c.total == null) return undefined;
+      if (c.total != null && c.total > c.searched) {
+        return m.search_coverage_tickets(
+          withTerms({ searched: c.searched, total: c.total }),
+        );
+      }
+      return m.search_coverage_tickets_all(
+        withTerms({ total: c.total ?? c.searched }),
+      );
+    },
+    fullSearchLabel: (searched, total) =>
+      total != null && total > searched
+        ? m.search_fetch_more_tickets(withTerms({ count: total - searched }))
+        : undefined,
 
     search(query: string) {
       const rawTickets = deps.getAllCachedTickets();
