@@ -210,6 +210,8 @@ describe("CaseHeader", () => {
     });
     const stamp = closedContainer.querySelector(".stamp-closed");
     expect(stamp?.textContent).toBe("Closed");
+    // The CLOSED stamp wears the shared judgment-stamp anatomy.
+    expect(stamp?.classList.contains("stamp-chip")).toBe(true);
   });
 
   it("renders no priority stamp for normal priority", () => {

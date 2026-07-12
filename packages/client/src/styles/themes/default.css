@@ -386,3 +386,25 @@
   font-optical-sizing: auto;
   letter-spacing: 0.005em;
 }
+
+/* ── Shell avatar seals (Identity: user-initial avatars) ──
+   The navbar and sidebar avatars take the seal treatment when they
+   render initials. Theme CSS only (ADR-023 boundary): shell markup is
+   untouched, so the org-logo <img> and fallback-icon <svg> cases are
+   excluded via :has() and keep today's brand disc (logos and icons
+   never tilt). The :not() arguments also lift these rules above the
+   components' scoped selectors, which tie at (0,2,0). The sidebar span
+   always holds whitespace, so :not(:empty) is a pure specificity lift
+   there, not a behavior gate. */
+.theme-default .navbar-avatar:not(:has(> img)):not(:has(> svg)),
+.theme-default .sidebar-avatar:not(:empty) {
+  background: transparent;
+  border: 2px solid color-mix(in srgb, var(--brand-fill) 45%, transparent);
+  color: var(--brand-text);
+  font-family: var(--theme-font-display);
+  font-optical-sizing: auto;
+  font-weight: 700;
+  font-size: 0.6875rem;
+  letter-spacing: normal;
+  transform: rotate(-6deg);
+}
