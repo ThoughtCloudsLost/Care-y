@@ -183,7 +183,12 @@ export function createTicketSearchProvider(
     search(query: string) {
       const rawTickets = deps.getAllCachedTickets();
 
-      const searchable: { raw: RawCachedTicket; title: string }[] = [];
+      const searchable: {
+        raw: RawCachedTicket;
+        title: string;
+        queueName: string | null;
+        assignedName: string | null;
+      }[] = [];
       for (const raw of rawTickets) {
         const title = deps.decryptTitle(
           raw.id,
@@ -191,10 +196,26 @@ export function createTicketSearchProvider(
           raw.encryptedTitle,
         );
         if (title === undefined) continue;
-        searchable.push({ raw, title });
+        searchable.push({
+          raw,
+          title,
+          queueName: deps.decryptQueueName(raw.queueId, raw.encryptedQueueName),
+          assignedName: deps.resolveAssignedName(
+            raw.assignedTo,
+            raw.assignedDisplayName,
+          ),
+        });
       }
 
-      const haystack = searchable.map((s) => `${s.title} ${s.raw.clientAlias}`);
+      // Queue and assignee resolve from shared org-tier caches (one decrypt
+      // per queue/user, not per ticket), so widening the match fields adds
+      // no per-ticket decrypt work. Null while a decrypt settles simply
+      // doesn't match until it resolves.
+      const haystack = searchable.map((s) =>
+        [s.title, s.raw.clientAlias, s.queueName ?? "", s.assignedName ?? ""]
+          .join(" ")
+          .trim(),
+      );
       const matches = fuzzySearch(haystack, query);
 
       const results: SearchResult<TicketSearchData>[] = [];
