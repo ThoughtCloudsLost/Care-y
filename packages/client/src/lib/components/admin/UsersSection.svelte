@@ -8,6 +8,7 @@
     ListItem,
     Toggle,
   } from "konsta/svelte";
+  import Register from "$lib/components/Register.svelte";
   import {
     createQuery,
     createMutation,
@@ -735,7 +736,9 @@
           disabled={adminUsernameMutation.isPending}
         />
       </List>
-      <p class="pii-warning">{m.user_field_login_username_pii_warning()}</p>
+      <Register kind="careful">
+        {m.user_field_login_username_pii_warning()}
+      </Register>
     </div>
 
     <RoleSelector

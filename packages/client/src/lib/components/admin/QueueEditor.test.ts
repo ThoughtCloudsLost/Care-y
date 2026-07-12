@@ -13,6 +13,10 @@ const { mockCreateQueue, mockUpdateQueue, mockToastShow, mockOrgCacheDelete } =
 let mockOrgKeyLoaded = true;
 
 vi.mock("$lib/paraglide/messages.js", () => ({
+  register_note: () => "Note",
+  register_careful: () => "Careful",
+  register_warning: () => "Warning",
+  register_protected: () => "Protected",
   admin_queue_editor_create_title: () => "Create Queue",
   admin_queue_editor_edit_title: () => "Edit Queue",
   admin_queue_editor_name_label: () => "Queue name",

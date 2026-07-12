@@ -73,6 +73,21 @@ describe("Register", () => {
     expect(screen.getByRole("note")).toBeTruthy();
   });
 
+  it("takes role=alert for dynamically appearing warnings", () => {
+    render(Register, {
+      props: { kind: "warning", role: "alert", children: body },
+    });
+    expect(screen.getByRole("alert")).toBeTruthy();
+    expect(screen.queryByRole("note")).toBeNull();
+  });
+
+  it("takes role=status for polite live updates", () => {
+    render(Register, {
+      props: { kind: "careful", role: "status", children: body },
+    });
+    expect(screen.getByRole("status")).toBeTruthy();
+  });
+
   it("carries no left border accent (forbidden pattern)", () => {
     const { container } = render(Register, {
       props: { kind: "warning", children: body },

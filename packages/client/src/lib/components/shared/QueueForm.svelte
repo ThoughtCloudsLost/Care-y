@@ -1,6 +1,7 @@
 <script lang="ts">
   import { untrack } from "svelte";
   import { List, ListInput, Block, Button, Preloader } from "konsta/svelte";
+  import Register from "$lib/components/Register.svelte";
   import * as m from "$lib/paraglide/messages.js";
   import { withTerms } from "$lib/terminology/with-terms.js";
   import { getOrgKeyManager } from "$lib/crypto/context.js";
@@ -161,10 +162,9 @@
   </List>
 
   <Block>
-    <div class="pii-warning" role="note">
-      <span class="pii-icon" aria-hidden="true">&#x26A0;</span>
-      <p>{m.admin_queue_editor_pii_warning(withTerms())}</p>
-    </div>
+    <Register kind="careful">
+      {m.admin_queue_editor_pii_warning(withTerms())}
+    </Register>
   </Block>
 
   {#if submitLabel}
@@ -179,21 +179,3 @@
     </Block>
   {/if}
 </form>
-
-<style>
-  .pii-warning {
-    display: flex;
-    gap: var(--space-sm);
-    line-height: 1.4;
-  }
-
-  .pii-warning p {
-    margin: 0;
-  }
-
-  .pii-icon {
-    flex-shrink: 0;
-    font-size: 1rem;
-    line-height: 1.4;
-  }
-</style>

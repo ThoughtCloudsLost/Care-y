@@ -22,6 +22,10 @@ let mockUsersData: UserData[] | undefined;
 let mockUsersLoading = false;
 
 vi.mock("$lib/paraglide/messages.js", () => ({
+  register_note: () => "Note",
+  register_careful: () => "Careful",
+  register_warning: () => "Warning",
+  register_protected: () => "Protected",
   admin_no_users: () => "No users yet",
   admin_users_empty_filter: () => "No users match filters",
   admin_role_change: () => "Change Role",

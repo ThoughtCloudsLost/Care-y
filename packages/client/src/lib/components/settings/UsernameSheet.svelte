@@ -1,5 +1,6 @@
 <script lang="ts">
   import { List, ListInput } from "konsta/svelte";
+  import Register from "$lib/components/Register.svelte";
   import { Save } from "@lucide/svelte";
   import { createMutation, useQueryClient } from "@tanstack/svelte-query";
   import { identifierSchema } from "@care-y/shared";
@@ -117,7 +118,11 @@
         disabled={isPending}
       />
     </List>
-    <p class="pii-warning">{m.user_field_login_username_pii_warning()}</p>
+    <div class="pii-register">
+      <Register kind="careful">
+        {m.user_field_login_username_pii_warning()}
+      </Register>
+    </div>
     <List nested>
       <PasswordInput
         label={m.settings_username_password()}
@@ -140,7 +145,7 @@
     flex: 1;
   }
 
-  .pii-warning {
+  .pii-register {
     margin: 0 var(--space-lg);
   }
 
