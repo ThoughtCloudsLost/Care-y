@@ -555,7 +555,7 @@
     </DialogButton>
     <DialogButton
       strong
-      class="text-[--color-red-500] font-semibold"
+      class="text-[color:var(--danger,var(--color-red-500))] font-semibold"
       onclick={confirmDelete}
     >
       {m.admin_queue_delete(withTerms())}
@@ -750,7 +750,7 @@
   }
 
   .chip-remove:hover {
-    color: var(--color-red-500);
+    color: var(--danger, var(--color-red-500));
   }
 
   .chip-remove:focus-visible {
@@ -788,7 +788,7 @@
     padding: 0.75rem;
     border: none;
     border-radius: var(--card-radius);
-    background: var(--color-red-500);
+    background: var(--danger, var(--color-red-500));
     color: white;
     font-weight: 600;
     font-size: var(--text-base);

@@ -203,7 +203,7 @@
     padding: 0.625rem;
     border: none;
     background: none;
-    color: var(--color-red-500);
+    color: var(--danger, var(--color-red-500));
     font-size: var(--text-sm);
     font-weight: 600;
     text-align: center;

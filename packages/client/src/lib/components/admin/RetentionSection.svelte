@@ -226,7 +226,7 @@
     </DialogButton>
     <DialogButton
       strong
-      class="text-[--color-red-500] font-semibold"
+      class="text-[color:var(--danger,var(--color-red-500))] font-semibold"
       onclick={confirmSet}
     >
       {m.admin_retention_confirm()}

@@ -97,9 +97,11 @@
     flex-shrink: 0;
   }
 
+  /* Loaded keys are the normal state, so the mark stays quiet ink with
+     no tint. Only the missing state carries color, and its word rides
+     along. */
   .status-icon.ok {
-    background: color-mix(in srgb, var(--color-green-500) 15%, transparent);
-    color: var(--color-green-500);
+    color: var(--ink-2);
   }
 
   .status-icon.missing {
