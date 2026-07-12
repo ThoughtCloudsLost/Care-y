@@ -9,6 +9,7 @@
  */
 
 import { test, expect, type Page } from "@playwright/test";
+import AxeBuilder from "@axe-core/playwright";
 import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { generateTotpCode } from "./helpers.js";
@@ -99,6 +100,15 @@ test.describe.serial("Admin Setup Wizard", () => {
     ).toBeVisible({
       timeout: CRYPTO_TIMEOUT,
     });
+  });
+
+  test("wizard account step passes the axe accessibility audit", async () => {
+    // Legacy mode: the serial suite uses browser.newPage(), which axe's
+    // cross-context injection cannot target (same pattern as dashboard).
+    const results = await new AxeBuilder({ page })
+      .setLegacyMode(true)
+      .analyze();
+    expect(results.violations).toEqual([]);
   });
 
   // ── Step 0: Account Creation ──

@@ -76,6 +76,15 @@ rules:
     severity: WARNING
     metadata:
       category: correctness
+    paths:
+      # The testing reference prescribes bare-Error fault-injection mocks
+      # (Kysely spies rejecting with new Error), so test files are exempt.
+      exclude:
+        - "*.test.ts"
+        - "*.spec.ts"
+        - "**/test-utils.ts"
+        - "**/test-setup.ts"
+        - "**/test-helpers/**"
 
   - id: care-y-no-any-type-assertion
     pattern: $X as any
