@@ -764,7 +764,7 @@
 
 <style>
   .error-text {
-    color: var(--k-color-red, #ef4444);
+    color: var(--danger, var(--k-color-red, #ef4444));
     font-size: 0.875rem;
     text-align: center;
     margin-bottom: 0.75rem;
@@ -781,13 +781,13 @@
   .separator::after {
     content: "";
     flex: 1;
-    border-bottom: 1px solid var(--k-color-border, #e5e7eb);
+    border-bottom: 1px solid var(--hair, var(--k-color-border, #e5e7eb));
   }
 
   .alt-method-btn {
     padding: 0.5rem 1rem;
     border-radius: 0.5rem;
-    border: 1px solid var(--k-color-border, #e5e7eb);
+    border: 1px solid var(--hair, var(--k-color-border, #e5e7eb));
     background: transparent;
     font-size: 0.875rem;
     cursor: pointer;
@@ -808,7 +808,7 @@
     width: 100%;
     background: none;
     border: none;
-    color: var(--brand-primary);
+    color: var(--brand-text, var(--brand-primary));
     font-size: var(--text-sm);
     cursor: pointer;
     padding: var(--space-lg) 0 0;

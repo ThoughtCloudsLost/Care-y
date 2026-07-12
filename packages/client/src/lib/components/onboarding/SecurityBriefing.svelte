@@ -565,8 +565,10 @@
     margin-top: 0;
   }
 
+  /* The compromise scenario is a meaning slot: urgent hue, and the
+     label word rides with it. */
   .compromise-label {
-    color: var(--k-color-red, #ef4444);
+    color: var(--urgent, var(--k-color-red, #ef4444));
   }
 
   .page-dots {
@@ -585,7 +587,7 @@
   }
 
   .page-dot--active {
-    background: var(--brand-primary);
+    background: var(--brand-fill, var(--brand-primary));
   }
 
   @media (prefers-reduced-motion: reduce) {

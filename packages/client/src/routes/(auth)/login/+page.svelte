@@ -297,7 +297,7 @@
           height="48"
         />
       {/if}
-      <h1 class="text-2xl font-bold">{orgName}</h1>
+      <h1 class="text-2xl font-bold heading-display">{orgName}</h1>
       <LanguagePicker value={uiLocale} onchange={handleLocaleChange} />
     </div>
     <TwoFactorChallenge
@@ -331,7 +331,7 @@
         height="48"
       />
     {/if}
-    <h1 class="text-2xl font-bold">{orgName}</h1>
+    <h1 class="text-2xl font-bold heading-display">{orgName}</h1>
   </div>
   <KeyDerivation {phase} {phaseLabel} />
 {:else}
@@ -346,7 +346,7 @@
           height="48"
         />
       {/if}
-      <h1 class="text-2xl font-bold">{orgName}</h1>
+      <h1 class="text-2xl font-bold heading-display">{orgName}</h1>
       <p class="mt-1 text-sm opacity-60">{m.auth_sign_in_continue()}</p>
       <LanguagePicker value={uiLocale} onchange={handleLocaleChange} />
     </div>
@@ -400,7 +400,7 @@
   .back-link {
     background: none;
     border: none;
-    color: var(--brand-primary, var(--k-color-primary, #007aff));
+    color: var(--brand-text, var(--brand-primary, #007aff));
     font-size: 0.875rem;
     cursor: pointer;
     padding: 0.5rem;

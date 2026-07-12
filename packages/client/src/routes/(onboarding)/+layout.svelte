@@ -191,7 +191,7 @@
 
   :global(.step-error) {
     font-size: var(--text-base);
-    color: var(--k-color-red, #ef4444);
+    color: var(--danger, var(--k-color-red, #ef4444));
     margin: 0;
   }
 

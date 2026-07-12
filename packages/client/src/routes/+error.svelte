@@ -30,10 +30,14 @@
     min-height: 40dvh;
   }
 
+  /* Empty-room voice: the display face in full ink. The status code is
+     a fact, not an identity mark, so brand stays out of it. */
   .error-status {
     font-size: 3rem;
-    font-weight: 700;
-    color: var(--brand-text, var(--ink));
+    font-weight: 600;
+    font-family: var(--theme-font-display, inherit);
+    font-optical-sizing: auto;
+    color: var(--ink);
     margin: 0 0 0.5rem;
   }
 
@@ -49,7 +53,7 @@
     padding: 0.625rem 1.25rem;
     border-radius: 0.5rem;
     background: var(--brand-fill, var(--brand-primary));
-    color: #ffffff;
+    color: var(--brand-on, #ffffff);
     font-weight: 500;
     text-decoration: none;
   }

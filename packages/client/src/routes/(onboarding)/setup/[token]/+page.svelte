@@ -34,6 +34,7 @@
   import { haptic } from "$lib/utils/haptic.js";
   import { requireRouter } from "$lib/errors.js";
   import { CHECKLIST_ITEMS } from "$lib/onboarding/checklist-items.js";
+  import { getBrandingTitle } from "$lib/branding/title.svelte.js";
   import WizardReauth from "$lib/components/onboarding/WizardReauth.svelte";
   import SetupAccount from "$lib/components/onboarding/SetupAccount.svelte";
   import SecurityBriefing from "$lib/components/onboarding/SecurityBriefing.svelte";
@@ -296,6 +297,18 @@
 
   const nextSteps = CHECKLIST_ITEMS;
 
+  // Org initial for the completion seal (the spec keeps the seal scarce:
+  // empty rooms, the trust surface, and this arrival). Guarded: if the
+  // branding store has no org name yet, no seal renders.
+  const orgInitial = $derived.by(() => {
+    const name = getBrandingTitle().trim();
+    if (name === "" || name === "CARE-Y") return undefined;
+    return new Intl.Segmenter(undefined, { granularity: "grapheme" })
+      .segment(name)
+      .containing(0)
+      ?.segment.toUpperCase();
+  });
+
   function isStepComplete(id: string): boolean {
     return (
       checklistQuery.data?.items.find((i) => i.id === id)?.complete ?? false
@@ -409,6 +422,12 @@
   {:else if step === 7}
     <SetupEscrow oncomplete={handleEscrowComplete} {goBack} />
   {:else if step === 8}
+    {#if orgInitial}
+      <!-- The org presses its own seal on the finished setup. -->
+      <div class="complete-seal-row">
+        <span class="identity-seal" aria-hidden="true">{orgInitial}</span>
+      </div>
+    {/if}
     <BlockTitle medium>{m.onboarding_wizard_complete_heading()}</BlockTitle>
     <Block>
       <div class="complete-screen">
@@ -424,7 +443,7 @@
             {#if complete}
               <CircleCheck
                 size={22}
-                style="color: var(--brand-primary, #22c55e)"
+                style="color: var(--brand-accent, var(--brand-primary))"
               />
             {:else}
               <Circle size={22} style="color: var(--muted, #999)" />
@@ -448,6 +467,12 @@
 {/if}
 
 <style>
+  .complete-seal-row {
+    display: flex;
+    justify-content: center;
+    padding-top: var(--space-2xl);
+  }
+
   .home-link {
     display: flex;
     justify-content: center;
