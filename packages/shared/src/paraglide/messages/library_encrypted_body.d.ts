@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "This content could not be decrypted." |
+* | "Could not unlock this content." |
 *
 * @param {Library_Encrypted_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

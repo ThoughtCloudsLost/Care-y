@@ -6,17 +6,17 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Library_Encrypted_BodyInputs */
 
 const en_library_encrypted_body = /** @type {(inputs: Library_Encrypted_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`This content could not be decrypted.`)
+	return /** @type {LocalizedString} */ (`Could not unlock this content.`)
 };
 
 const es_library_encrypted_body = /** @type {(inputs: Library_Encrypted_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`No se pudo descifrar este contenido.`)
+	return /** @type {LocalizedString} */ (`No se pudo desbloquear este contenido.`)
 };
 
 /**
 * | output |
 * | --- |
-* | "This content could not be decrypted." |
+* | "Could not unlock this content." |
 *
 * @param {Library_Encrypted_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

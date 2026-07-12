@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Your encryption keys need to be refreshed. Sign in again to continue setup." |
+* | "Sign back in to unlock your keys and continue setup." |
 *
 * @param {Onboarding_Reauth_MessageInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

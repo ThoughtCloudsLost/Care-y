@@ -35,7 +35,7 @@ export const TERMINOLOGY_DEFAULTS_EN: TerminologyLabels = {
   managers: "coordinators",
   queue: "queue",
   queues: "queues",
-  knowledgeBase: "knowledge base",
+  knowledgeBase: "library",
 };
 
 export const TERMINOLOGY_DEFAULTS: Readonly<Record<string, TerminologyLabels>> =
@@ -52,7 +52,7 @@ export const TERMINOLOGY_DEFAULTS: Readonly<Record<string, TerminologyLabels>> =
       managers: "coordinadores",
       queue: "cola",
       queues: "colas",
-      knowledgeBase: "base de conocimiento",
+      knowledgeBase: "biblioteca",
     },
   };
 
@@ -73,8 +73,8 @@ export const TERMINOLOGY_SUGGESTIONS: Readonly<
   manager: ["Coordinator", "Manager", "Supervisor", "Team Lead", "Shift Lead"],
   queue: ["Queue", "Team", "Group", "Program"],
   knowledgeBase: [
-    "Knowledge Base",
     "Library",
+    "Knowledge Base",
     "Resources",
     "Handbook",
     "Guide",

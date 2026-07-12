@@ -6,17 +6,17 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Auth_Phase_Argon2idInputs */
 
 const en_auth_phase_argon2id = /** @type {(inputs: Auth_Phase_Argon2idInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Deriving encryption keys...`)
+	return /** @type {LocalizedString} */ (`Preparing your keys...`)
 };
 
 const es_auth_phase_argon2id = /** @type {(inputs: Auth_Phase_Argon2idInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Derivando claves de cifrado...`)
+	return /** @type {LocalizedString} */ (`Preparando tus claves...`)
 };
 
 /**
 * | output |
 * | --- |
-* | "Deriving encryption keys..." |
+* | "Preparing your keys..." |
 *
 * @param {Auth_Phase_Argon2idInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

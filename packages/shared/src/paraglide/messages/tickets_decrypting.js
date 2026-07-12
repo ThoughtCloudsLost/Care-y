@@ -6,17 +6,17 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Tickets_DecryptingInputs */
 
 const en_tickets_decrypting = /** @type {(inputs: Tickets_DecryptingInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Decrypting...`)
+	return /** @type {LocalizedString} */ (`Unlocking...`)
 };
 
 const es_tickets_decrypting = /** @type {(inputs: Tickets_DecryptingInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Descifrando...`)
+	return /** @type {LocalizedString} */ (`Desbloqueando...`)
 };
 
 /**
 * | output |
 * | --- |
-* | "Decrypting..." |
+* | "Unlocking..." |
 *
 * @param {Tickets_DecryptingInputs} inputs
 * @param {{ locale?: "en" | "es" }} options
