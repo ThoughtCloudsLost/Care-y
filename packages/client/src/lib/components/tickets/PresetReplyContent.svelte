@@ -6,7 +6,7 @@
   Titles and bodies are org-key encrypted, decrypted via OrgDecryptCache.
 -->
 <script lang="ts">
-  import { List, ListItem, Block, BlockTitle } from "konsta/svelte";
+  import { List, ListItem, Block } from "konsta/svelte";
   import { createQuery } from "@tanstack/svelte-query";
   import { presetKeys } from "$lib/query/keys";
   import * as m from "$lib/paraglide/messages.js";
@@ -38,8 +38,8 @@
   const isEmpty = $derived(!presetsQuery.isLoading && presets.length === 0);
 </script>
 
-<BlockTitle medium>{m.ticket_preset_replies()}</BlockTitle>
-
+<!-- The heading lives on the hosting sheet's header (one sheet-title
+     treatment); this content renders the list only. -->
 {#if presetsQuery.isLoading}
   <Block>
     <Skeleton lines={3} />

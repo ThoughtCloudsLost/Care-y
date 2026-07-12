@@ -94,11 +94,11 @@ afterEach(() => {
 });
 
 describe("PresetReplyContent", () => {
-  it("renders the heading", () => {
+  it("renders no heading of its own (the hosting sheet's header carries it)", () => {
     const { container } = render(PresetReplyContent, {
       props: { onselect: vi.fn() },
     });
-    expect(container.textContent).toContain("Preset replies");
+    expect(container.textContent).not.toContain("Preset replies");
   });
 
   it("renders preset titles from decrypted data", () => {

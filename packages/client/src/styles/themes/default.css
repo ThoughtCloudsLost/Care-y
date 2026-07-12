@@ -354,3 +354,13 @@
   color: var(--ink);
   font-weight: 700;
 }
+
+/* ── Sheet headers ──
+   One treatment for every ShellSheet: the grabber, then the title in
+   the display face. Consumers pass title= (never a custom header);
+   ShellSheet markup itself stays untouched (ADR-023 boundary). */
+.theme-default .sheet-header-title {
+  font-family: var(--theme-font-display);
+  font-optical-sizing: auto;
+  letter-spacing: 0.005em;
+}

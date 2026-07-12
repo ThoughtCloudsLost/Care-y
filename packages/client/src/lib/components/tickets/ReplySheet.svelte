@@ -237,13 +237,11 @@
   }
 </script>
 
-<ShellSheet {opened} {ondismiss}>
-  <div class="reply-sheet-header">
-    <span class="reply-sheet-title">
-      {m.ticket_reply_sheet_title({ alias: clientAlias })}
-    </span>
-  </div>
-
+<ShellSheet
+  {opened}
+  {ondismiss}
+  title={m.ticket_reply_sheet_title({ alias: clientAlias })}
+>
   <div class="reply-sheet-messages">
     <div class="thread">
       {#if moreCount > 0}
@@ -326,15 +324,6 @@
 />
 
 <style>
-  .reply-sheet-header {
-    padding: 0.75rem 1rem 0;
-  }
-
-  .reply-sheet-title {
-    font-size: var(--text-lg);
-    font-weight: 600;
-  }
-
   .mention-anchor {
     position: relative;
   }
