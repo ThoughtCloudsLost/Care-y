@@ -222,4 +222,29 @@ describe("DecryptPlaceholder", () => {
       expect(screen.queryByText("From content")).toBeNull();
     });
   });
+
+  describe("searchTerm highlighting", () => {
+    it("wraps matches in <mark> when searchTerm is set", () => {
+      const result: DecryptResult = {
+        status: "ready",
+        value: "Emergency housing referral",
+      };
+      const { container } = render(DecryptPlaceholder, {
+        props: { result, searchTerm: "housing" },
+      });
+      const marks = container.querySelectorAll("mark");
+      expect(marks).toHaveLength(1);
+      expect(marks[0]!.textContent).toBe("housing");
+      expect(container.textContent).toContain("Emergency housing referral");
+    });
+
+    it("renders plain text for a searchTerm under 2 characters", () => {
+      const result: DecryptResult = { status: "ready", value: "abc" };
+      const { container } = render(DecryptPlaceholder, {
+        props: { result, searchTerm: "a" },
+      });
+      expect(container.querySelectorAll("mark")).toHaveLength(0);
+      expect(screen.getByText("abc")).toBeDefined();
+    });
+  });
 });

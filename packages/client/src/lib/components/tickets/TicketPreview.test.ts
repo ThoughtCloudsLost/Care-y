@@ -369,4 +369,30 @@ describe("TicketPreview fit mode (whole-bubble window)", () => {
     expect(roCallback).toBeUndefined();
     expect(container.querySelector("[data-clipped]")).toBeNull();
   });
+
+  it("marks searchTerm matches in decrypted bubble text", () => {
+    mockDecryptContent.mockReturnValue("Need housing help");
+    const { container } = render(TicketPreview, {
+      props: {
+        ticketId: "ticket-preview-1",
+        followUps: [makeFollowUp({ source: "client" })],
+        searchTerm: "housing",
+      },
+    });
+    const marks = container.querySelectorAll(".mini-text mark");
+    expect(marks).toHaveLength(1);
+    expect(marks[0]!.textContent).toBe("housing");
+  });
+
+  it("renders plain bubble text without a searchTerm", () => {
+    mockDecryptContent.mockReturnValue("Need housing help");
+    const { container } = render(TicketPreview, {
+      props: {
+        ticketId: "ticket-preview-1",
+        followUps: [makeFollowUp({ source: "client" })],
+      },
+    });
+    expect(container.querySelectorAll("mark")).toHaveLength(0);
+    expect(container.textContent).toContain("Need housing help");
+  });
 });

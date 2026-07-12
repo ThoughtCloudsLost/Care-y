@@ -39,6 +39,7 @@
   import { createNoteTypesQuery } from "$lib/tickets/queries.js";
   import { resolveNoteTypeIcon as resolveNoteTypeIconComponent } from "$lib/utils/note-type-icons.js";
   import DecryptPlaceholder from "$lib/components/DecryptPlaceholder.svelte";
+  import HighlightText from "$lib/components/HighlightText.svelte";
   import ReactionTray from "./ReactionTray.svelte";
   import type { RawFollowUpPreview } from "$lib/tickets/preview-loader.svelte.js";
   import { followUpKind } from "$lib/tickets/follow-up-utils.js";
@@ -61,6 +62,8 @@
      *  bottom-anchor the stack and hide entries that don't fully fit,
      *  so the window's crop never slices a bubble mid-line. */
     fit?: boolean;
+    /** Highlight term for decrypted bubble text (search result cards). */
+    searchTerm?: string | null;
   }
 
   let {
@@ -71,6 +74,7 @@
     reactions,
     clientAlias,
     fit = false,
+    searchTerm = null,
   }: Props = $props();
   const followUpCache = getFollowUpDecryptCache();
   const orgCache = getOrgDecryptCache();
@@ -160,6 +164,10 @@
   });
 </script>
 
+{#snippet miniText(t: string)}
+  <span class="mini-text"><HighlightText text={t} term={searchTerm} /></span>
+{/snippet}
+
 <div class="mini-chat" class:multiline class:fit bind:this={chatEl}>
   {#if ordered === undefined}
     {@const placeholderCount = Math.min(followUpCount ?? 3, 3)}
@@ -234,7 +242,7 @@
                 maxLines={multiline ? 2 : 1}
                 errorLabel={m.preview_unlock_failed()}
               >
-                <span class="mini-text">{content}</span>
+                {#if content != null}{@render miniText(content)}{/if}
               </DecryptPlaceholder>
               {#if result.status === "error"}
                 <button
@@ -281,7 +289,7 @@
                 charsPerLine={20}
                 errorLabel={m.preview_unlock_failed()}
               >
-                {#if content}<span class="mini-text">{content}</span>{/if}
+                {#if content}{@render miniText(content)}{/if}
               </DecryptPlaceholder>
               {#if result.status === "error"}
                 <button
