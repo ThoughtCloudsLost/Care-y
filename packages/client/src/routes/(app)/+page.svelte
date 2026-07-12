@@ -576,9 +576,9 @@
   <!-- Mirrors the tickets-page subnavbar anatomy (SubNavbarFilterLayout):
        large page title + switcher header row, then the scroll row where
        tickets renders its filter row. -->
-  <section class="now-subnavbar" aria-label={m.nav_home()}>
-    <div class="now-page-header">
-      <BlockTitle large class="now-page-title">{m.nav_home()}</BlockTitle>
+  <section class="overview-subnavbar" aria-label={m.nav_home()}>
+    <div class="overview-page-header">
+      <BlockTitle large class="overview-page-title">{m.nav_home()}</BlockTitle>
       <ViewSwitcher
         mode={dashboardViewModeStore.mode}
         onchange={(mode: ViewMode) => dashboardViewModeStore.set(mode)}
@@ -793,13 +793,13 @@
 </ShellActionSheet>
 
 <style>
-  .now-subnavbar {
+  .overview-subnavbar {
     display: flex;
     flex-direction: column;
     padding-top: 0.25rem;
   }
 
-  .now-page-header {
+  .overview-page-header {
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -807,7 +807,7 @@
     padding: 0 var(--page-pad-x);
   }
 
-  .now-subnavbar :global(.now-page-title) {
+  .overview-subnavbar :global(.overview-page-title) {
     margin: 0 !important;
     padding-left: 0 !important;
   }

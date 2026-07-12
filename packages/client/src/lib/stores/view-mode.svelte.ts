@@ -68,7 +68,7 @@ function createViewModeStore(
 export const viewModeStore = createViewModeStore("care-y-view-mode");
 
 /**
- * Dashboard ("Now") view mode, scoped separately from the tickets list.
+ * Dashboard ("Overview") view mode, scoped separately from the tickets list.
  * Cards are the work-mode primitive, so a first visit opens on cards;
  * a persisted preference always wins over the fallback.
  */
