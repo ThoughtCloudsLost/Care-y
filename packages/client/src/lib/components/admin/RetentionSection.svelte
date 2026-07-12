@@ -303,7 +303,7 @@
   .unsaved-hint {
     font-size: var(--text-xs);
     font-weight: 600;
-    color: var(--color-amber-500);
+    color: var(--care);
   }
 
   .retention-actions {

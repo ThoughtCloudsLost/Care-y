@@ -660,8 +660,8 @@
   }
 
   .status-icon.pending {
-    background: color-mix(in srgb, var(--color-amber-500) 15%, transparent);
-    color: var(--color-amber-500);
+    background: var(--care-soft);
+    color: var(--care);
   }
 
   .status-text {

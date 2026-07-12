@@ -259,6 +259,6 @@
   }
 
   .hub-badge-warning {
-    color: var(--color-amber-500);
+    color: var(--care);
   }
 </style>

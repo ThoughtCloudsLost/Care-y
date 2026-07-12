@@ -268,7 +268,7 @@
   }
 
   .key-warn {
-    color: var(--color-amber-600);
+    color: var(--care);
   }
 
   /* ── Role chip ── */
