@@ -642,11 +642,11 @@
               {m.admin_branding_logo_change()}
             </span>
           </label>
-          <span class="field-hint">{m.admin_branding_logo_accept()}</span>
+          <span class="field-help">{m.admin_branding_logo_accept()}</span>
           {#if logoError}
             <span class="field-error" role="alert">{logoError}</span>
           {/if}
-          <span class="field-hint"
+          <span class="field-help"
             >{m.admin_branding_logo_hint(withTerms())}</span
           >
         </div>
@@ -658,7 +658,6 @@
     <!-- Client Welcome Text -->
     <div class="sheet-field">
       <ListInput
-        outline
         label={m.admin_branding_card_text_label(withTerms())}
         type="textarea"
         value={editText}
@@ -689,7 +688,7 @@
             />
             <span class="color-hex-edit">{editColor}</span>
           </div>
-          <span class="field-hint">{m.admin_branding_color_hint()}</span>
+          <span class="field-help">{m.admin_branding_color_hint()}</span>
         </div>
 
         <div class="color-picker-group">
@@ -706,7 +705,7 @@
             />
             <span class="color-hex-edit">{editAccent}</span>
           </div>
-          <span class="field-hint">{m.admin_branding_accent_hint()}</span>
+          <span class="field-help">{m.admin_branding_accent_hint()}</span>
         </div>
 
         <div class="palette-preview">
@@ -930,17 +929,8 @@
     background: color-mix(in srgb, var(--ink) 15%, transparent);
   }
 
-  .field-hint {
-    font-size: var(--text-xs);
-    color: var(--muted);
-    line-height: 1.4;
-  }
-
-  .field-error {
-    font-size: var(--text-xs);
-    color: var(--color-red-500);
-    font-weight: 500;
-  }
+  /* .field-help and .field-error come from the shared form primitives
+     (shared.css) */
 
   /* Color: pickers and preview in a compact grid */
   .color-edit-row {

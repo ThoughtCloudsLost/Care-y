@@ -2,14 +2,8 @@
   let { message }: { message?: string } = $props();
 </script>
 
+<!-- Styling comes from the shared .field-error primitive (shared.css):
+     errors live in the danger slot, never brand. -->
 {#if message}
   <p class="field-error" role="alert">{message}</p>
 {/if}
-
-<style>
-  .field-error {
-    color: var(--brand-primary);
-    font-size: 0.75rem;
-    margin-top: 0.25rem;
-  }
-</style>

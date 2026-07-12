@@ -232,9 +232,8 @@
     </Register>
 
     {#if noteTypesResult.data && creatableTypes.length > 0}
-      <List strongIos outlineIos nested class="note-type-select-list">
+      <List nested class="note-type-select-list">
         <ListInput
-          outline
           dropdown
           label={m.note_compose_type_label()}
           type="select"
@@ -262,7 +261,6 @@
 
     <List nested class="note-input-list">
       <ListInput
-        outline
         type="textarea"
         placeholder={m.ticket_compose_note_placeholder()}
         value={noteText}

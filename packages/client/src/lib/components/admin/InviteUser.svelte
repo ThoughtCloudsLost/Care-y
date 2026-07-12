@@ -231,7 +231,6 @@
 
       <List nested>
         <ListInput
-          outline
           label={m.user_field_login_username_label()}
           type="text"
           value={identifier}
@@ -253,7 +252,6 @@
 
       <List nested>
         <ListInput
-          outline
           label={m.user_field_display_name_label()}
           type="text"
           value={displayName}
@@ -268,7 +266,6 @@
 
       <List nested>
         <PasswordInput
-          outline
           label={m.admin_invite_password_label()}
           bind:value={tempPassword}
           disabled={!orgKeyLoaded}
@@ -277,7 +274,6 @@
             : m.admin_invite_password_hint(withTerms())}
         />
         <PasswordInput
-          outline
           label={m.admin_invite_confirm_password()}
           bind:value={confirmPassword}
           disabled={!orgKeyLoaded}

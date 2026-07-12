@@ -458,7 +458,6 @@
   <div class="edit-sheet-body">
     <List nested class="edit-sheet-list">
       <ListInput
-        outline
         label={m.admin_note_types_name_label()}
         type="text"
         value={editName}
@@ -471,7 +470,6 @@
         disabled={sheetSaving}
       />
       <ListInput
-        outline
         label={m.admin_note_types_description_label()}
         type="textarea"
         placeholder={m.admin_note_types_description_placeholder()}

@@ -709,7 +709,6 @@
       <p class="section-label">{m.admin_display_name_label()}</p>
       <List nested>
         <ListInput
-          outline
           label={m.settings_display_name()}
           type="text"
           value={editDisplayName}
@@ -726,7 +725,6 @@
       <p class="section-label">{m.admin_username_label()}</p>
       <List nested>
         <ListInput
-          outline
           label={m.settings_username()}
           type="text"
           value={editUsername}

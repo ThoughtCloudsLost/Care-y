@@ -558,6 +558,70 @@ html.glass-dark.light
   display: none !important;
 }
 
+/* ── Form primitives ──
+   One anatomy for fields that cannot be Konsta ListInput (Bits UI
+   comboboxes, number rows, color rows): eyebrow label, bordered box,
+   help below, error in the danger slot. Mirrors the theme-default
+   ListInput skin; fallback chains cover themes that predate the
+   canonical tokens. The 16px computed floor on the box prevents the
+   iOS Safari focus zoom. */
+.field-label {
+  display: block;
+  font-size: 0.6875rem; /* 11px */
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ink-2, var(--ink));
+  margin-bottom: 6px;
+}
+
+.form-input {
+  box-sizing: border-box;
+  width: 100%;
+  padding: 12px 13px;
+  border: 1px solid
+    var(
+      --hair-2,
+      var(--divider, color-mix(in srgb, var(--ink) 20%, transparent))
+    );
+  border-radius: 8px;
+  background: var(--raised, var(--surface-1));
+  color: var(--ink);
+  font-family: inherit;
+  font-size: max(0.9375rem, 16px);
+  line-height: 1.4;
+}
+
+.form-input::placeholder {
+  color: var(--muted);
+  opacity: 1;
+}
+
+.form-input:focus {
+  outline: none;
+  border-color: var(--brand-fill, var(--k-color-primary));
+  box-shadow: 0 0 0 1px var(--brand-fill, var(--k-color-primary));
+}
+
+.form-input:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.field-help {
+  font-size: var(--text-sm);
+  line-height: 1.45;
+  color: var(--muted);
+  margin: 5px 0 0;
+}
+
+.field-error {
+  font-size: var(--text-sm);
+  line-height: 1.45;
+  color: var(--danger, var(--k-color-red, #ff3b30));
+  margin: 5px 0 0;
+}
+
 /* PII warning: amber notice for fields with weaker encryption.
    Components with layout overrides (margin, flex) keep a scoped rule. */
 .pii-warning {

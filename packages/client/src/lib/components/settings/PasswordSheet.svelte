@@ -160,7 +160,6 @@
 
     <List nested>
       <PasswordInput
-        outline
         label={m.settings_password_current()}
         placeholder={m.settings_password_current()}
         bind:value={currentPassword}
@@ -169,14 +168,12 @@
     </List>
     <List nested>
       <PasswordInput
-        outline
         label={m.settings_password_new()}
         placeholder={m.settings_password_new()}
         bind:value={newPassword}
         disabled={isPending}
       />
       <PasswordInput
-        outline
         label={m.settings_password_confirm()}
         placeholder={m.settings_password_confirm()}
         bind:value={confirmPassword}

@@ -136,7 +136,6 @@
 
   <List strong inset>
     <ListInput
-      outline
       label={m.admin_queue_editor_name_label(withTerms())}
       type="text"
       placeholder={m.admin_queue_editor_name_placeholder()}
@@ -148,7 +147,6 @@
     />
 
     <ListInput
-      outline
       label={m.admin_queue_editor_escalation_label()}
       type="number"
       placeholder={defaultPlaceholder}

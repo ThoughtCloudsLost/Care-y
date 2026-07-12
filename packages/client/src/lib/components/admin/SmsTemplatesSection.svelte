@@ -330,9 +330,8 @@
     </SoftButton>
   {/snippet}
   <div class="sheet-content">
-    <List strongIos outlineIos nested>
+    <List nested>
       <ListInput
-        outline
         type="select"
         dropdown
         label={m.admin_templates_type_label()}
@@ -352,7 +351,6 @@
       </ListInput>
 
       <ListInput
-        outline
         type="select"
         dropdown
         label={m.admin_templates_locale_label()}
@@ -369,7 +367,6 @@
       </ListInput>
 
       <ListInput
-        outline
         type="textarea"
         label={m.admin_templates_text_label()}
         inputId="tpl-text"
@@ -631,18 +628,8 @@
     font-weight: 600;
   }
 
-  .field-help {
-    font-size: var(--text-xs);
-    color: var(--muted);
-    margin: calc(-1 * var(--space-sm)) 0 0;
-    line-height: 1.4;
-  }
-
-  .field-error {
-    font-size: var(--text-xs);
-    color: var(--color-red-500);
-    margin: calc(-1 * var(--space-sm)) 0 0;
-  }
+  /* .field-help and .field-error come from the shared form primitives
+     (shared.css) */
 
   .sheet-actions {
     display: flex;

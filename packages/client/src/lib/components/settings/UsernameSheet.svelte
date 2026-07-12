@@ -106,7 +106,6 @@
   <div class="sheet-content">
     <List nested>
       <ListInput
-        outline
         label={m.settings_username_new()}
         type="text"
         placeholder={m.settings_username_new()}
@@ -121,7 +120,6 @@
     <p class="pii-warning">{m.user_field_login_username_pii_warning()}</p>
     <List nested>
       <PasswordInput
-        outline
         label={m.settings_username_password()}
         placeholder={m.settings_username_password_hint()}
         bind:value={currentPassword}
