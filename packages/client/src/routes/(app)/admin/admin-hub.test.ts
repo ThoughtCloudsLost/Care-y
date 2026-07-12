@@ -301,9 +301,9 @@ describe("Admin hub page", () => {
       expect(screen.getByText("3 greetings")).toBeTruthy();
       expect(screen.getByText("5 templates")).toBeTruthy();
 
-      // Telephony badge shows success when phones are provisioned
+      // Telephony badge shows ok when phones are provisioned
       const phoneBadge = screen.getByText("4 numbers");
-      expect(phoneBadge.closest(".hub-badge-success")).toBeTruthy();
+      expect(phoneBadge.closest(".hub-badge-ok")).toBeTruthy();
 
       // Greetings/templates show default (no warning) when counts > 0
       const greetingBadge = screen.getByText("3 greetings");

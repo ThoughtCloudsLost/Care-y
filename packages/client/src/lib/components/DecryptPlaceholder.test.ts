@@ -102,12 +102,12 @@ describe("DecryptPlaceholder", () => {
   it("provides screen reader text after delay", async () => {
     render(DecryptPlaceholder, { props: {} });
     await advancePastDelay();
-    expect(screen.getByText("Decrypting")).toBeDefined();
+    expect(screen.getByText("Unlocking")).toBeDefined();
   });
 
   it("does not show screen reader text before delay", () => {
     render(DecryptPlaceholder, { props: {} });
-    expect(screen.queryByText("Decrypting")).toBeNull();
+    expect(screen.queryByText("Unlocking")).toBeNull();
   });
 
   it("renders decrypted content as plain text", () => {
@@ -121,9 +121,7 @@ describe("DecryptPlaceholder", () => {
     render(DecryptPlaceholder, {
       props: { content: "\0DECRYPT_FAILED" },
     });
-    expect(
-      screen.getByText("This content could not be decrypted."),
-    ).toBeDefined();
+    expect(screen.getByText("Could not unlock this content.")).toBeDefined();
   });
 
   it("sets up IntersectionObserver on mount", () => {
@@ -171,7 +169,7 @@ describe("DecryptPlaceholder", () => {
       await advancePastDelay();
       const status = screen.getByRole("status");
       expect(status.getAttribute("aria-busy")).toBe("true");
-      expect(screen.getByText("Decrypting")).toBeDefined();
+      expect(screen.getByText("Unlocking")).toBeDefined();
     });
 
     it("shows ready content for result with value", () => {
@@ -188,9 +186,7 @@ describe("DecryptPlaceholder", () => {
 
     it("shows error message for result=ERROR", () => {
       render(DecryptPlaceholder, { props: { result: ERROR } });
-      expect(
-        screen.getByText("This content could not be decrypted."),
-      ).toBeDefined();
+      expect(screen.getByText("Could not unlock this content.")).toBeDefined();
     });
 
     it("errorLabel overrides the error message", () => {
@@ -198,9 +194,7 @@ describe("DecryptPlaceholder", () => {
         props: { result: ERROR, errorLabel: "Could not unlock this preview" },
       });
       expect(screen.getByText("Could not unlock this preview")).toBeDefined();
-      expect(
-        screen.queryByText("This content could not be decrypted."),
-      ).toBeNull();
+      expect(screen.queryByText("Could not unlock this content.")).toBeNull();
     });
 
     it("errorLabel does not override the denied message", () => {
