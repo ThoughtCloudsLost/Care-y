@@ -91,6 +91,63 @@ describe("createTicketSearchProvider", () => {
     expect(results[0]!.data.searchTerm).toBe("housing");
   });
 
+  describe("queue and assignee matching", () => {
+    const queueNames: Record<string, string> = {
+      q1: "Housing",
+      q2: "Intake",
+    };
+
+    function createFieldProvider(): ReturnType<
+      typeof createTicketSearchProvider
+    > {
+      return createTicketSearchProvider({
+        getAllCachedTickets: () => [
+          makeRawTicket({ id: "t1", queueId: "q1", clientAlias: "Maria" }),
+          makeRawTicket({
+            id: "t2",
+            queueId: "q2",
+            clientAlias: "Carlos",
+            assignedTo: "u1",
+          }),
+        ],
+        decryptTitle: (id: string) =>
+          id === "t1" ? "Shelter referral" : "Transit question",
+        decryptQueueName: (queueId: string) => queueNames[queueId] ?? null,
+        resolveAssignedName: (assignedTo: string | null) =>
+          assignedTo === "u1" ? "Jordan Rivera" : null,
+        getPreviewFollowUps: () => undefined,
+        deriveDisplayStatus: () => "open" as never,
+      });
+    }
+
+    it("matches on the decrypted queue name", () => {
+      const provider = createFieldProvider();
+      const { results } = provider.search("housing");
+      expect(results).toHaveLength(1);
+      expect(results[0]!.id).toBe("t1");
+    });
+
+    it("matches on the resolved assignee name", () => {
+      const provider = createFieldProvider();
+      const { results } = provider.search("jordan");
+      expect(results).toHaveLength(1);
+      expect(results[0]!.id).toBe("t2");
+    });
+
+    it("treats unresolved queue and assignee as non-matching without throwing", () => {
+      const provider = createTicketSearchProvider({
+        getAllCachedTickets: () => [makeRawTicket({ id: "t1" })],
+        decryptTitle: () => "Shelter referral",
+        decryptQueueName: () => null,
+        resolveAssignedName: () => null,
+        getPreviewFollowUps: () => undefined,
+        deriveDisplayStatus: () => "open" as never,
+      });
+      expect(provider.search("shelter").results).toHaveLength(1);
+      expect(provider.search("housing").results).toHaveLength(0);
+    });
+  });
+
   it("excludes tickets with undecrypted titles", () => {
     const provider = createProvider();
     const { results } = provider.search("Ana");
