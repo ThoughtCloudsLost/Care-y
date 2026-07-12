@@ -242,7 +242,7 @@
   .resend-btn {
     background: none;
     border: none;
-    color: var(--brand-primary, var(--k-color-primary, #007aff));
+    color: var(--brand-text, var(--brand-primary, #007aff));
     font-size: 0.85rem;
     cursor: pointer;
     padding: var(--space-xs);
@@ -255,7 +255,7 @@
   }
 
   .error-text {
-    color: var(--k-color-red, #ef4444);
+    color: var(--danger, var(--k-color-red, #ef4444));
     font-size: 0.85rem;
     text-align: center;
     margin-top: var(--space-sm);

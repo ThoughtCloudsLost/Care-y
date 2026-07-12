@@ -218,7 +218,7 @@
   }
 
   .error-text {
-    color: var(--k-color-red, #ef4444);
+    color: var(--danger, var(--k-color-red, #ef4444));
     font-size: 0.85rem;
     text-align: center;
     padding: var(--space-md) 0;
