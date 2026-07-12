@@ -1,10 +1,33 @@
 import { describe, it, expect, vi } from "vitest";
 import type { RawCachedTicket } from "./tickets.js";
 import { createTicketSearchProvider } from "./tickets.js";
-import type { FullSearchState } from "../types.js";
+import type { CoverageState, FullSearchState } from "../types.js";
 
 vi.mock("$lib/paraglide/messages.js", () => ({
   search_section_tickets: () => "Tickets",
+  search_coverage_searching: (p: { searched: number; total: number }) =>
+    `Searching ${String(p.searched)} of ${String(p.total)}...`,
+  search_coverage_tickets: (p: {
+    searched: number;
+    total: number;
+    tickets: string;
+  }) =>
+    `Searched ${String(p.searched)} of ${String(p.total)} ${p.tickets} already unlocked on this device.`,
+  search_coverage_tickets_all: (p: { total: number; tickets: string }) =>
+    `Searched all ${String(p.total)} ${p.tickets} unlocked on this device.`,
+  search_fetch_more_tickets: (p: { count: number; tickets: string }) =>
+    `Search the other ${String(p.count)} ${p.tickets}`,
+}));
+
+// vi.mock required: withTerms resolves org terminology through a Svelte
+// context getter (createContext), which only exists during component
+// initialization; these tests call provider.coverage() outside any
+// component, where the real getter throws.
+vi.mock("$lib/terminology/with-terms.js", () => ({
+  withTerms: (extra?: Record<string, unknown>) => ({
+    tickets: "tickets",
+    ...extra,
+  }),
 }));
 
 vi.mock("$lib/components/search/TicketSearchResult.svelte", () => ({
@@ -89,6 +112,60 @@ describe("createTicketSearchProvider", () => {
     const provider = createProvider();
     const { results } = provider.search("housing");
     expect(results[0]!.data.searchTerm).toBe("housing");
+  });
+
+  describe("coverage and escalation copy", () => {
+    const provider = createProvider();
+
+    function cov(state: Partial<CoverageState>): string | undefined {
+      return provider.coverage?.({
+        searched: 0,
+        total: undefined,
+        fullSearch: undefined,
+        fsSearched: 0,
+        fsTotal: 0,
+        ...state,
+      });
+    }
+
+    it("reports of-total coverage while the device holds a subset", () => {
+      expect(cov({ searched: 100, total: 120 })).toBe(
+        "Searched 100 of 120 tickets already unlocked on this device.",
+      );
+    });
+
+    it("reports the all variant once everything known is searched", () => {
+      expect(cov({ searched: 120, total: 120 })).toBe(
+        "Searched all 120 tickets unlocked on this device.",
+      );
+      expect(cov({ searched: 80 })).toBe(
+        "Searched all 80 tickets unlocked on this device.",
+      );
+    });
+
+    it("reports live progress while a full search runs", () => {
+      expect(
+        cov({
+          searched: 100,
+          total: 120,
+          fullSearch: "searching",
+          fsSearched: 40,
+          fsTotal: 120,
+        }),
+      ).toBe("Searching 40 of 120...");
+    });
+
+    it("stays silent before anything is cached", () => {
+      expect(cov({})).toBeUndefined();
+    });
+
+    it("offers exactly the remainder in the fetch-more label", () => {
+      expect(provider.fullSearchLabel?.(100, 120)).toBe(
+        "Search the other 20 tickets",
+      );
+      expect(provider.fullSearchLabel?.(120, 120)).toBeUndefined();
+      expect(provider.fullSearchLabel?.(100, undefined)).toBeUndefined();
+    });
   });
 
   describe("queue and assignee matching", () => {

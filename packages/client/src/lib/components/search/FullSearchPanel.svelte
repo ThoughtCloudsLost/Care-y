@@ -1,7 +1,5 @@
 <script lang="ts">
   import { Progressbar } from "konsta/svelte";
-  import { ScanSearch } from "@lucide/svelte";
-  import SoftButton from "$lib/components/inputs/SoftButton.svelte";
   import * as m from "$lib/paraglide/messages.js";
   import {
     runFullSearch,
@@ -86,24 +84,12 @@
         </p>
       </div>
     {:else}
-      <SoftButton full onclick={handleTrigger}>
-        <ScanSearch size={16} aria-hidden="true" />
-        <span>{m.search_full_trigger()}</span>
-      </SoftButton>
-
-      {#if !hasAnyResults && totalCachedItems === 0}
-        <p class="search-hint-text">
-          {m.search_full_hint_no_data()}
-        </p>
-      {:else if !hasAnyResults}
-        <p class="search-hint-text">
-          {m.search_full_hint_no_results()}
-        </p>
-      {:else}
-        <p class="search-hint-text">
-          {m.search_full_hint_default()}
-        </p>
-      {/if}
+      <button type="button" class="panel-trigger num" onclick={handleTrigger}>
+        {m.search_panel_trigger()}
+      </button>
+      <p class="search-hint-text">
+        {m.search_panel_hint()}
+      </p>
     {/if}
   </div>
 {/if}
@@ -115,6 +101,25 @@
     flex-direction: column;
     align-items: center;
     gap: var(--space-sm, 8px);
+  }
+
+  /* The calm escalation anatomy (never a red link, never brand fill). */
+  .panel-trigger {
+    display: block;
+    width: 100%;
+    padding: 11px;
+    border: 1px solid var(--hair-2);
+    border-radius: 9px;
+    background: var(--raised);
+    color: var(--ink-2);
+    font-size: var(--text-base, 0.84375rem);
+    font-weight: 700;
+    text-align: center;
+    cursor: pointer;
+  }
+
+  .num {
+    font-variant-numeric: tabular-nums;
   }
 
   .search-hint-text {

@@ -1,17 +1,12 @@
 <script lang="ts">
-  import { Progressbar } from "konsta/svelte";
-  import { ScanSearch } from "@lucide/svelte";
   import type { Component, Snippet } from "svelte";
   import * as m from "$lib/paraglide/messages.js";
   import DecryptPlaceholder from "$lib/components/DecryptPlaceholder.svelte";
-  import { getFullSearchStateForProvider } from "$lib/search/registry.svelte.js";
 
   interface SearchSectionProps {
     label: string;
     icon: Component;
     count: number;
-    totalCached: number;
-    totalItems?: number;
     totalResults?: number;
     showAllHref: string;
     loading: boolean;
@@ -20,11 +15,13 @@
     /** Show-all navigation, handled by the host (content never calls goto). */
     onnavigate?: (href: string) => void;
     query?: string;
-    hasFullSearch?: boolean;
     onFullSearch?: () => void;
-    providerId?: string;
     /** Quiet line rendered in place of results when the section is empty. */
     emptyText?: string;
+    /** Human coverage line below the results (provider-owned copy). */
+    coverageText?: string;
+    /** Calm escalation button label; absent hides the button. */
+    fetchMoreLabel?: string;
     children: Snippet;
   }
 
@@ -32,8 +29,6 @@
     label,
     icon: Icon,
     count,
-    totalCached,
-    totalItems,
     totalResults,
     showAllHref,
     loading,
@@ -41,30 +36,14 @@
     onviewall,
     onnavigate,
     query = "",
-    hasFullSearch = false,
     onFullSearch,
-    providerId,
     emptyText,
+    coverageText,
+    fetchMoreLabel,
     children,
   }: SearchSectionProps = $props();
 
   const displayCount = $derived(totalResults ?? count);
-
-  const fsStatus = $derived(
-    providerId != null && providerId !== ""
-      ? getFullSearchStateForProvider(providerId)?.status
-      : undefined,
-  );
-  const fsSearched = $derived(
-    providerId != null && providerId !== ""
-      ? (getFullSearchStateForProvider(providerId)?.searched ?? 0)
-      : 0,
-  );
-  const fsTotal = $derived(
-    providerId != null && providerId !== ""
-      ? (getFullSearchStateForProvider(providerId)?.total ?? 0)
-      : 0,
-  );
 
   function handleShowAll(): void {
     if (onviewall) {
@@ -103,57 +82,18 @@
       </button>
     {/if}
   </div>
-  <div class="scope-row">
-    {#if hasFullSearch && onFullSearch}
-      <span class="section-deep-search" aria-live="polite">
-        {#if fsStatus === "searching"}
-          <span class="section-deep-progress">
-            <Progressbar progress={fsSearched / Math.max(fsTotal, 1)} />
-            <span class="section-deep-count">
-              {m.search_section_full_searching({
-                searched: fsSearched,
-                total: fsTotal,
-              })}
-            </span>
-          </span>
-        {:else if fsStatus === "done"}
-          <ScanSearch size={12} aria-hidden="true" class="deep-done-icon" />
-        {:else}
-          <button
-            type="button"
-            class="section-deep-trigger"
-            onclick={onFullSearch}
-          >
-            <ScanSearch size={12} aria-hidden="true" />
-            {m.search_section_full_trigger({ section: label })}
-          </button>
-        {/if}
-      </span>
-    {/if}
-    <p class="scope-hint" aria-live="polite">
-      {#if totalItems != null && totalItems > totalCached}
-        {#if loading}
-          {m.search_scope_hint_of({
-            searched: totalCached,
-            total: totalItems,
-          })}
-        {:else}
-          {m.search_scope_done_of({
-            searched: totalCached,
-            total: totalItems,
-          })}
-        {/if}
-      {:else if loading}
-        {m.search_scope_hint({ count: totalCached })}
-      {:else}
-        {m.search_scope_done({ count: totalCached })}
-      {/if}
-    </p>
-  </div>
   {#if !loading && count === 0 && emptyText != null}
     <p class="nores">{emptyText}</p>
   {:else}
     {@render children()}
+  {/if}
+  {#if coverageText != null}
+    <p class="cover num" aria-live="polite">{coverageText}</p>
+  {/if}
+  {#if fetchMoreLabel != null && onFullSearch}
+    <button type="button" class="fetchmore num" onclick={onFullSearch}>
+      {fetchMoreLabel}
+    </button>
   {/if}
 </div>
 
@@ -223,53 +163,28 @@
     color: var(--muted);
   }
 
-  .scope-row {
-    display: flex;
-    align-items: center;
-    gap: var(--space-sm, 8px);
-    padding: 0 var(--page-pad-x, 0.75rem);
-    margin: 0 0 var(--space-sm, 8px);
-  }
-
-  .scope-hint {
-    font-size: var(--text-xs, 0.75rem);
+  /* Honest coverage in plain words, below what it describes. */
+  .cover {
+    padding: 6px var(--page-pad-x, 0.75rem) 0;
+    font-size: 0.75rem;
+    line-height: 1.5;
     color: var(--muted);
     margin: 0;
   }
 
-  .section-deep-search {
-    flex-shrink: 0;
-  }
-
-  .section-deep-trigger {
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
-    font-size: var(--text-xs, 0.75rem);
-    font-weight: 500;
-    color: var(--brand-text);
-    background: none;
-    border: none;
+  /* The calm escalation: a full-width quiet button, never a red link. */
+  .fetchmore {
+    display: block;
+    margin: 10px var(--page-pad-x, 0.75rem) 4px;
+    width: calc(100% - 2 * var(--page-pad-x, 0.75rem));
+    padding: 11px;
+    border: 1px solid var(--hair-2);
+    border-radius: 9px;
+    background: var(--raised);
+    color: var(--ink-2);
+    font-size: var(--text-base, 0.84375rem);
+    font-weight: 700;
+    text-align: center;
     cursor: pointer;
-    padding: 0;
-    white-space: nowrap;
-  }
-
-  .section-deep-progress {
-    display: inline-flex;
-    align-items: center;
-    gap: var(--space-xs, 4px);
-    max-width: 140px;
-  }
-
-  .section-deep-count {
-    font-size: var(--text-xs, 0.75rem);
-    color: var(--muted);
-    white-space: nowrap;
-  }
-
-  :global(.deep-done-icon) {
-    color: var(--brand-text);
-    opacity: 0.6;
   }
 </style>

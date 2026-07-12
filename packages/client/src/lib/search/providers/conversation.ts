@@ -51,6 +51,10 @@ export function createConversationSearchProvider(
     showAllHref: () => `/tickets/${deps.getTicketId()}`,
     getResultHref: (id: string) => `/tickets/${deps.getTicketId()}#fu-${id}`,
     emptyText: () => m.search_conversation_no_matches(),
+    coverage: (c) =>
+      c.total != null
+        ? m.search_conversation_scope({ searched: c.searched, total: c.total })
+        : undefined,
 
     search(query: string) {
       const followUps = deps.getFollowUps();

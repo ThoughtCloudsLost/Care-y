@@ -3,7 +3,6 @@
   import {
     searchAll,
     getProvider,
-    providerHasFullSearch,
     runFullSearchForProvider,
   } from "$lib/search/registry.svelte.js";
   import type { SearchResultGroup } from "$lib/search/types.js";
@@ -84,8 +83,6 @@
         label={group.label}
         icon={group.icon}
         count={group.results.length}
-        totalCached={group.totalCached}
-        totalItems={group.totalItems}
         totalResults={group.totalResults}
         showAllHref={group.showAllHref}
         loading={group.loading}
@@ -93,11 +90,11 @@
         onviewall={group.onviewall}
         onnavigate={handleShowAllNavigate}
         query={trimmedQuery}
-        hasFullSearch={providerHasFullSearch(group.providerId)}
         onFullSearch={() =>
           runFullSearchForProvider(group.providerId, trimmedQuery)}
-        providerId={group.providerId}
         emptyText={group.emptyText}
+        coverageText={group.coverageText}
+        fetchMoreLabel={group.fetchMoreLabel}
       >
         {#if group.renderMode === "card-strip"}
           <TicketResultStrip
