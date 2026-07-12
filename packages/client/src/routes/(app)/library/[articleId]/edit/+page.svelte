@@ -346,7 +346,7 @@
     top: calc(var(--vv-offset-top, 0px) + var(--app-height, 100dvh));
     transform: translateY(-100%);
     z-index: 500;
-    border-top: 1px solid var(--divider);
+    border-top: 1px solid var(--hair, var(--divider));
   }
 
   /* iOS: translucent glass above keyboard */

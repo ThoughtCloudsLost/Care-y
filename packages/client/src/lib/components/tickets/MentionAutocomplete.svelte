@@ -112,8 +112,8 @@
     z-index: 30;
     max-height: 12rem;
     overflow-y: auto;
-    background: var(--card-bg, var(--surface-1));
-    border-top: 1px solid var(--card-border, var(--muted));
+    background: var(--raised, var(--card-bg, var(--surface-1)));
+    border-top: 1px solid var(--hair-2, var(--card-border, var(--muted)));
     border-radius: 0.5rem 0.5rem 0 0;
     box-shadow: var(--card-shadow, 0 -2px 8px rgba(0, 0, 0, 0.1));
   }

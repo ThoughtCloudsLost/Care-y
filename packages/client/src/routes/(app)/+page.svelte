@@ -609,6 +609,10 @@
       <GettingStartedCard
         expanded={!collapsedSections.has("getting-started")}
         ontoggle={() => toggleSection("getting-started")}
+        onnavigate={(path: string) => {
+          // eslint-disable-next-line svelte/no-navigation-without-resolve -- checklist hrefs are hardcoded valid routes
+          void goto(path);
+        }}
       />
     </div>
   {/if}

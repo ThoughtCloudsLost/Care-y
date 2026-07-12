@@ -23,7 +23,9 @@ if (typeof Element.prototype.animate !== "function") {
 
 // --- Controllable mock state ---
 
-const mockGoto = vi.fn();
+// The card emits onnavigate (content components never call goto); the
+// route file owns the actual navigation.
+const mockNavigate = vi.fn();
 
 interface ChecklistItemState {
   id: string;
@@ -38,10 +40,6 @@ let mockChecklistState: {
 const mockMutate = vi.fn();
 
 // --- Mocks ---
-
-vi.mock("$app/navigation", () => ({
-  goto: mockGoto,
-}));
 
 vi.mock("$lib/trpc/index.js", () => ({
   trpc: {
@@ -99,12 +97,12 @@ const CardModule = await import("./GettingStartedCard.svelte");
 
 function renderCard() {
   return render(CardModule.default, {
-    props: { expanded: true, ontoggle: vi.fn() },
+    props: { expanded: true, ontoggle: vi.fn(), onnavigate: mockNavigate },
   });
 }
 
 beforeEach(() => {
-  mockGoto.mockClear();
+  mockNavigate.mockClear();
   mockMutate.mockClear();
   mockChecklistState = { isSuccess: false };
 });
@@ -140,7 +138,7 @@ describe("GettingStartedCard", () => {
     expect(container.querySelector(".collapsible-section")).toBeNull();
   });
 
-  it("navigates to /library when the knowledge-base item is tapped", async () => {
+  it("emits onnavigate with /library when the knowledge-base item is tapped", async () => {
     mockChecklistState = {
       isSuccess: true,
       data: { dismissed: false, items: checklistItems() },
@@ -150,7 +148,7 @@ describe("GettingStartedCard", () => {
     const kbRow = screen.getByText(/articles/);
     await fireEvent.click(kbRow);
 
-    expect(mockGoto).toHaveBeenCalledWith("/library");
+    expect(mockNavigate).toHaveBeenCalledWith("/library");
   });
 
   it("shows setup progress as done of total", () => {

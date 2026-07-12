@@ -307,7 +307,7 @@
 
   .credential-divider {
     height: 1px;
-    background: var(--surface-2, rgba(255, 255, 255, 0.08));
+    background: var(--hair, var(--surface-2, rgba(255, 255, 255, 0.08)));
   }
 
   .credential-label {

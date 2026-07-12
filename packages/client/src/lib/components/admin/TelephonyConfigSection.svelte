@@ -740,7 +740,7 @@
   }
 
   .section-divider {
-    border-top: 1px solid var(--divider);
+    border-top: 1px solid var(--hair, var(--divider));
     margin: var(--space-sm) 0;
   }
 

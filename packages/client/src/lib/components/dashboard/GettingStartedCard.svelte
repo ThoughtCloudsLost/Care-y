@@ -6,7 +6,6 @@
 -->
 <script lang="ts">
   import { List, ListItem } from "konsta/svelte";
-  import { goto } from "$app/navigation";
   import {
     createQuery,
     createMutation,
@@ -35,9 +34,11 @@
   interface Props {
     expanded: boolean;
     ontoggle: () => void;
+    /** Content components never navigate; the route wires this to goto. */
+    onnavigate: (path: string) => void;
   }
 
-  let { expanded, ontoggle }: Props = $props();
+  let { expanded, ontoggle, onnavigate }: Props = $props();
 
   const queryClient = useQueryClient();
 
@@ -133,8 +134,7 @@
 
   function handleItemTap(href: string): void {
     haptic();
-    // eslint-disable-next-line svelte/no-navigation-without-resolve -- hrefs are hardcoded valid routes in itemMeta
-    void goto(href);
+    onnavigate(href);
   }
 </script>
 

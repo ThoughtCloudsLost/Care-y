@@ -499,7 +499,7 @@
   }
 
   .sidebar-sub-item:hover {
-    background: var(--surface-1, var(--brand-primary-20));
+    background: var(--raised, var(--surface-1, var(--brand-primary-20)));
   }
 
   .sub-item-star {
@@ -531,7 +531,7 @@
   /* ── Divider ── */
   .sidebar-divider {
     height: 1px;
-    background: var(--divider);
+    background: var(--hair, var(--divider));
     margin: 0.25rem 0.75rem;
   }
 

@@ -199,7 +199,7 @@
     width: 44px;
     height: 44px;
     border-radius: 8px;
-    border: 1px solid var(--surface-1, rgba(0, 0, 0, 0.1));
+    border: 1px solid var(--hair-2, var(--surface-1, rgba(0, 0, 0, 0.1)));
     background: transparent;
     color: var(--muted);
     cursor: pointer;

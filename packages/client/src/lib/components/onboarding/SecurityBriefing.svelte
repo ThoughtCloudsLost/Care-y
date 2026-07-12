@@ -443,7 +443,7 @@
     max-width: 480px;
     display: block;
     border-radius: var(--card-radius);
-    background: var(--surface-1);
+    background: var(--raised, var(--surface-1));
     padding: var(--space-lg);
   }
 
@@ -510,7 +510,7 @@
     font-weight: 600;
     color: var(--ink);
     padding: var(--card-pad-y) var(--card-pad-x);
-    background: var(--surface-2);
+    background: var(--paper-deep, var(--surface-2));
     border-radius: var(--card-radius);
     cursor: pointer;
     list-style: none;
