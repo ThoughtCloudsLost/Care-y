@@ -1047,13 +1047,11 @@
   ondismiss={() => {
     linkSheetOpen = false;
   }}
+  title={linkUrl !== ""
+    ? m.library_editor_link_edit_title()
+    : m.library_editor_link_insert_title()}
 >
   <div class="link-form">
-    <h3 class="link-form-title">
-      {linkUrl !== ""
-        ? m.library_editor_link_edit_title()
-        : m.library_editor_link_insert_title()}
-    </h3>
     <ListInput
       label={m.library_editor_link_url()}
       type="url"
@@ -1099,9 +1097,9 @@
     altDialogOpen = false;
     pendingImageFile = null;
   }}
+  title={m.library_editor_alt_text_title()}
 >
   <div class="alt-form">
-    <h3 class="alt-form-title">{m.library_editor_alt_text_title()}</h3>
     <ListInput
       label={m.library_editor_alt_text_placeholder()}
       type="textarea"
@@ -1420,13 +1418,6 @@
     gap: var(--space-md);
   }
 
-  .link-form-title {
-    font-size: var(--text-md);
-    font-weight: 600;
-    color: var(--ink);
-    margin: 0;
-  }
-
   .link-actions {
     display: flex;
     justify-content: flex-end;
@@ -1439,13 +1430,6 @@
     display: flex;
     flex-direction: column;
     gap: var(--space-md);
-  }
-
-  .alt-form-title {
-    font-size: var(--text-md);
-    font-weight: 600;
-    color: var(--ink);
-    margin: 0;
   }
 
   .alt-actions {

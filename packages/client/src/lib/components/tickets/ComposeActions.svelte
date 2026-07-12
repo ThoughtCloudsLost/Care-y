@@ -103,6 +103,7 @@
   ondismiss={() => {
     presetSheetOpen = false;
   }}
+  title={m.ticket_preset_replies()}
 >
   <PresetReplyContent
     onselect={(body: string) => {
