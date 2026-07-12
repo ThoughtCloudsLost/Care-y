@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Generating encryption keys..." |
+* | "Creating your keys..." |
 *
 * @param {Onboarding_Account_DerivingInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

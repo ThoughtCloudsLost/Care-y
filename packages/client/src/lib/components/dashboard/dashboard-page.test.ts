@@ -378,9 +378,8 @@ describe("Dashboard page", () => {
     expect(screen.getByRole("button", { name: /My Tickets/ })).toBeTruthy();
     expect(screen.getByRole("button", { name: /Unassigned/ })).toBeTruthy();
     expect(screen.getByRole("button", { name: /Activity/ })).toBeTruthy();
-    expect(
-      screen.getByRole("button", { name: /Knowledge base/i }),
-    ).toBeTruthy();
+    // The {knowledgeBase} terminology default is "library".
+    expect(screen.getByRole("button", { name: /Library/i })).toBeTruthy();
   });
 
   it("renders sections in the work-first order (tickets lead, meta follows)", () => {

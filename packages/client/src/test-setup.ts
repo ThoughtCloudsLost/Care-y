@@ -82,7 +82,7 @@ vi.mock("$lib/terminology/context", () => {
     managers: "coordinators",
     queue: "queue",
     queues: "queues",
-    knowledgeBase: "knowledge base",
+    knowledgeBase: "library",
   };
   const resolver = () => defaults;
   return {

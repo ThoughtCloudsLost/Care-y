@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "No push subscription found. Enable notifications in your browser first." |
+* | "Notifications are off in this browser. Turn them on first, then try again." |
 *
 * @param {Twofa_Push_No_SubscriptionInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

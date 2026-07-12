@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Decrypting..." |
+* | "Unlocking..." |
 *
 * @param {Tickets_DecryptingInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

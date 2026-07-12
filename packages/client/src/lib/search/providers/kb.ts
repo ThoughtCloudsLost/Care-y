@@ -24,6 +24,7 @@ import { BookOpen } from "@lucide/svelte";
 import { cacheRegistry } from "$lib/crypto/cache-registry.js";
 import { fuzzySearch } from "../fuzzy.js";
 import * as m from "$lib/paraglide/messages.js";
+import { withTerms } from "$lib/terminology/with-terms.js";
 import KBResultItem from "$lib/components/search/KBResultItem.svelte";
 
 /** Display-ready data passed to KBResultItem (mirrors ArticleCard props). */
@@ -139,7 +140,7 @@ export function createKbSearchProvider(
 
   const provider: SearchProvider<KBSearchData> = {
     id: "kb",
-    label: () => m.search_section_kb(),
+    label: () => m.search_section_kb(withTerms()),
     icon: BookOpen,
     renderMode: "card-strip",
     showAllHref: (query) => `/library?q=${encodeURIComponent(query)}`,
