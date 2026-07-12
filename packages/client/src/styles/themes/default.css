@@ -88,23 +88,16 @@
   --raised: var(--color-ios-light-surface-1);
   --paper-deep: var(--color-ios-light-surface-1-shade);
 
-  /* Legacy aliases: existing consumers keep working; they migrate to
-     canonical names view by view and these retire when the last one goes. */
-  --surface-1: var(--raised);
-  --surface-2: var(--paper-deep);
-  --divider: var(--hair);
-  --card-bg: var(--raised);
-  --card-border: var(--hair);
-  --card-shadow: none;
+  /* Legacy aliases (--surface-1/2, --divider, --card-*, --k-color-red)
+     RETIRED at the remaining-surfaces sweep: every consumer now reads
+     canonical names first with pre-Inkwell fallback chains, so the
+     shared.css theme-neutral --divider and each dev theme's own tokens
+     serve the fallbacks. Do not reintroduce aliases here. */
 
   /* Konsta runtime vars. --k-page-bg and --k-surface-1/2 are read by app
      code with hardcoded #fff/#1c1c1e fallbacks (sticky date headers,
-     shell, pull-to-refresh); defining them here keeps those off paper.
-     --k-color-red is defined nowhere else (verified: not in Konsta dist,
-     no other definition in src), so this re-point claims the slot for
-     destructive text until consumers migrate to --danger. */
+     shell, pull-to-refresh); defining them here keeps those off paper. */
   --k-hairline-color: var(--hair);
-  --k-color-red: var(--danger);
   --k-page-bg: var(--paper);
   --k-surface-1: var(--raised);
   --k-surface-2: var(--raised);

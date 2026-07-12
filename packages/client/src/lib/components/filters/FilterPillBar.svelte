@@ -357,7 +357,8 @@
   }
 
   :global(.filter-pill-all) {
-    border-bottom: 1px solid var(--surface-1, rgba(0, 0, 0, 0.08));
+    /* Rules are hairlines, never surface tokens on borders. */
+    border-bottom: 1px solid var(--hair, var(--surface-1, rgba(0, 0, 0, 0.08)));
     font-weight: 500;
   }
 </style>

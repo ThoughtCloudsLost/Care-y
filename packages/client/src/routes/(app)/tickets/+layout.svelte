@@ -159,7 +159,7 @@
   .split-divider {
     width: 1px;
     flex-shrink: 0;
-    background: var(--divider);
+    background: var(--hair, var(--divider));
   }
 
   .split-detail-pane {

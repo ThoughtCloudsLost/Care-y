@@ -222,6 +222,9 @@
     width: 2.5rem;
     height: 2.5rem;
     border-radius: 50%;
+    /* Dev-only theme switcher: keeps legacy tokens with literal
+       fallbacks on purpose, since it renders under every bake-off
+       theme. Exempt from the canonical-first migration. */
     border: 1px solid var(--muted, #888);
     background: var(--surface-1, #1c1c1d);
     color: var(--ink, #e5e5e5);

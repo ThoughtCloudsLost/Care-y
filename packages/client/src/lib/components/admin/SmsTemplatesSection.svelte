@@ -484,7 +484,7 @@
   }
 
   .section-divider {
-    border-top: 1px solid var(--divider);
+    border-top: 1px solid var(--hair, var(--divider));
     margin: var(--space-sm) 0;
   }
 
@@ -514,8 +514,8 @@
   .tpl-surface {
     display: flex;
     flex-direction: column;
-    background: var(--card-bg, var(--surface-1));
-    border: 1px solid var(--card-border, transparent);
+    background: var(--raised, var(--card-bg, var(--surface-1)));
+    border: 1px solid var(--hair-2, var(--card-border, transparent));
     box-shadow: var(--card-shadow, none);
     border-radius: var(--card-radius);
     overflow: hidden;
@@ -546,7 +546,8 @@
     font-size: var(--text-base);
     color: var(--ink);
     padding: var(--space-sm) 0;
-    border-bottom: 1px solid color-mix(in srgb, var(--divider) 50%, transparent);
+    border-bottom: 1px solid
+      color-mix(in srgb, var(--hair, var(--divider)) 50%, transparent);
   }
 
   .tpl-row:last-child {
@@ -558,7 +559,7 @@
     align-items: center;
     gap: var(--space-sm);
     padding: var(--space-lg) var(--page-pad-x);
-    border-bottom: 1px solid var(--divider);
+    border-bottom: 1px solid var(--hair, var(--divider));
   }
 
   .tpl-row-skeleton:last-child {

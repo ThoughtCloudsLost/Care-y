@@ -308,7 +308,7 @@
   }
 
   .form-error {
-    color: var(--k-color-red, #ff3b30);
+    color: var(--danger, var(--k-color-red, #ff3b30));
     font-size: 0.875rem;
     text-align: center;
     margin: 0;

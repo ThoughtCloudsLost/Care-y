@@ -379,8 +379,8 @@
   .bl-surface {
     display: flex;
     flex-direction: column;
-    background: var(--card-bg, var(--surface-1));
-    border: 1px solid var(--card-border, transparent);
+    background: var(--raised, var(--card-bg, var(--surface-1)));
+    border: 1px solid var(--hair-2, var(--card-border, transparent));
     box-shadow: var(--card-shadow, none);
     border-radius: var(--card-radius);
     overflow: hidden;
@@ -393,7 +393,7 @@
     font-size: var(--text-base);
     color: var(--ink);
     padding: var(--space-lg) var(--page-pad-x);
-    border-bottom: 1px solid var(--divider);
+    border-bottom: 1px solid var(--hair, var(--divider));
   }
 
   .bl-row:last-child {

@@ -650,7 +650,7 @@
 
   .section-divider {
     height: 1px;
-    background: var(--surface-2);
+    background: var(--paper-deep, var(--surface-2));
     margin: var(--space-md) 0 var(--space-sm);
   }
 

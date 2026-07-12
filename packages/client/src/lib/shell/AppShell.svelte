@@ -1735,7 +1735,7 @@
     overflow-y: auto;
     -webkit-overflow-scrolling: touch;
     overscroll-behavior-y: contain;
-    border-bottom: 1px solid var(--divider);
+    border-bottom: 1px solid var(--hair, var(--divider));
     border-radius: 0 0 var(--card-radius, 0.75rem) var(--card-radius, 0.75rem);
     box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
     padding-bottom: var(--space-md, 0.75rem);
@@ -1753,7 +1753,7 @@
     right: 0;
     height: 100%;
     z-index: 1;
-    border-inline-start: 1px solid var(--divider);
+    border-inline-start: 1px solid var(--hair, var(--divider));
     overflow: hidden;
   }
 </style>
