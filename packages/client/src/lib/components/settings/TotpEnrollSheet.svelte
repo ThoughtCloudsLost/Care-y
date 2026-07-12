@@ -236,7 +236,7 @@
   .copy-btn {
     background: none;
     border: none;
-    color: var(--brand-primary, var(--k-color-primary, #007aff));
+    color: var(--brand-text, var(--brand-primary, #007aff));
     cursor: pointer;
     padding: var(--space-xs);
     min-height: 44px;
@@ -247,7 +247,7 @@
   }
 
   .error-text {
-    color: var(--k-color-red, #ef4444);
+    color: var(--danger, var(--k-color-red, #ef4444));
     font-size: 0.85rem;
     padding: 0 var(--space-lg);
     margin: 0;

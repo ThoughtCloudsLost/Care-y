@@ -178,7 +178,7 @@
   }
 
   .error-text {
-    color: var(--k-color-red, #ef4444);
+    color: var(--danger, var(--k-color-red, #ef4444));
     font-size: 0.85rem;
     text-align: center;
     margin-bottom: var(--space-md);
@@ -191,8 +191,8 @@
 
   .retry-btn {
     background: none;
-    border: 1px solid var(--brand-primary, var(--k-color-primary, #007aff));
-    color: var(--brand-primary, var(--k-color-primary, #007aff));
+    border: 1px solid var(--brand-text, var(--brand-primary, #007aff));
+    color: var(--brand-text, var(--brand-primary, #007aff));
     border-radius: 0.5rem;
     padding: var(--space-sm) var(--space-lg);
     font-size: 0.9rem;

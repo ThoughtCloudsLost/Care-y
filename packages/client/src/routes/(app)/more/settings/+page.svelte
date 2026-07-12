@@ -253,22 +253,24 @@
     padding: var(--space-md) 0;
   }
 
+  /* DEV-gated seed feedback, tokenized so even dev chrome sits on the
+     palette. */
   .dev-seed-status {
     font-size: 0.875rem;
-    color: var(--k-color-brand-green, #16a34a);
+    color: var(--care, #16a34a);
     margin-bottom: 0.5rem;
   }
 
   .dev-seed-error {
     font-size: 0.875rem;
-    color: var(--k-color-brand-red, #dc2626);
+    color: var(--danger, #dc2626);
     margin-bottom: 0.5rem;
     word-break: break-word;
   }
 
   .dev-seed-progress {
     font-size: 0.875rem;
-    color: var(--k-color-brand-blue, #2563eb);
+    color: var(--muted, #2563eb);
     margin-bottom: 0.5rem;
   }
 </style>
