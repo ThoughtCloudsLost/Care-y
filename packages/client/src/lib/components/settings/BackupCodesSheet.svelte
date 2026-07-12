@@ -1,6 +1,7 @@
 <script lang="ts">
   import { Preloader, Button, DialogButton } from "konsta/svelte";
   import { Copy, Check } from "@lucide/svelte";
+  import Register from "$lib/components/Register.svelte";
   import * as m from "$lib/paraglide/messages.js";
   import { trpc } from "$lib/trpc/index.js";
   import { toastStore } from "$lib/stores/toast.svelte.js";
@@ -104,14 +105,14 @@
       <p class="error-text" role="alert">{error}</p>
     {:else if codes.length > 0}
       {#if regenerating}
-        <div class="warning-banner regen-warning" role="alert">
-          <p>{m.twofa_backup_codes_regenerated()}</p>
-        </div>
+        <Register kind="warning" role="alert">
+          {m.twofa_backup_codes_regenerated()}
+        </Register>
       {/if}
 
-      <div class="warning-banner" role="alert">
-        <p>{m.twofa_backup_codes_warning()}</p>
-      </div>
+      <Register kind="warning" role="alert">
+        {m.twofa_backup_codes_warning()}
+      </Register>
 
       <div
         class="codes-grid"
@@ -176,34 +177,11 @@
     padding: var(--space-xl) 0;
   }
 
-  .warning-banner {
-    background: color-mix(
-      in srgb,
-      var(--k-color-red, #ef4444) 10%,
-      transparent
-    );
-    border-radius: 0.5rem;
-    padding: var(--space-sm) var(--space-md);
+  /* The one-time reveal and regeneration banners are Warning registers
+     (both state irreversible facts). */
+
+  .sheet-content :global(.register) {
     margin-bottom: var(--space-lg);
-  }
-
-  .warning-banner p {
-    color: var(--k-color-red, #ef4444);
-    font-size: 0.85rem;
-    margin: 0;
-  }
-
-  .regen-warning {
-    background: color-mix(
-      in srgb,
-      var(--k-color-orange, #ff9500) 10%,
-      transparent
-    );
-    margin-bottom: var(--space-sm);
-  }
-
-  .regen-warning p {
-    color: var(--k-color-orange, #ff9500);
   }
 
   .codes-grid {

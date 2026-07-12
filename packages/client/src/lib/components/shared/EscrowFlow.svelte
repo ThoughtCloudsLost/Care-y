@@ -13,6 +13,7 @@
   import { getOrgKeyManager } from "$lib/crypto/context.js";
   import SoftButton from "$lib/components/inputs/SoftButton.svelte";
   import EscrowPassphraseForm from "$lib/components/shared/EscrowPassphraseForm.svelte";
+  import Register from "$lib/components/Register.svelte";
   import ShellDialog from "$lib/shell/ShellDialog.svelte";
 
   interface Props {
@@ -118,7 +119,9 @@
 
 {#if showHttpsCheck && httpsBlocked}
   <Block>
-    <p class="step-error" role="alert">{m.onboarding_escrow_https_warning()}</p>
+    <Register kind="careful" role="alert">
+      {m.onboarding_escrow_https_warning()}
+    </Register>
   </Block>
 {:else}
   {#if showPageDots}
@@ -142,7 +145,7 @@
     </Block>
 
     <Block>
-      <div class="callout warning">
+      <Register kind="careful">
         <p class="callout-heading">{m.admin_escrow_browser_safety_heading()}</p>
         <ul class="callout-list">
           <li>{m.admin_escrow_browser_safety_extensions()}</li>
@@ -150,14 +153,14 @@
           <li>{m.admin_escrow_browser_safety_screen()}</li>
           <li>{m.admin_escrow_browser_safety_public()}</li>
         </ul>
-      </div>
+      </Register>
     </Block>
 
     {#if !orgKeyLoaded}
       <Block>
-        <p class="org-key-warning" role="alert">
+        <Register kind="careful" role="alert">
           {m.admin_escrow_no_org_key()}
-        </p>
+        </Register>
       </Block>
     {/if}
 
@@ -190,7 +193,7 @@
     </Block>
 
     <Block>
-      <div class="callout success">
+      <Register kind="note">
         <ul class="callout-list">
           <li>{m.admin_escrow_storage_usb()}</li>
           <li>{m.admin_escrow_storage_locked()}</li>
@@ -198,7 +201,7 @@
           <li>{m.admin_escrow_storage_copy()}</li>
           <li>{m.admin_escrow_storage_test()}</li>
         </ul>
-      </div>
+      </Register>
     </Block>
 
     {#if sha256Hex}
@@ -313,19 +316,8 @@
     font-style: italic;
   }
 
-  .callout {
-    border-radius: 8px;
-    padding: var(--space-md);
-  }
-
-  .callout.warning {
-    background: color-mix(in srgb, var(--color-amber-500) 10%, transparent);
-  }
-
-  .callout.success {
-    background: color-mix(in srgb, var(--color-green-500) 10%, transparent);
-  }
-
+  /* Callout surfaces are Register (Careful / Note); only the list
+     formatting inside the register body stays scoped. */
   .callout-heading {
     font-size: var(--text-sm);
     font-weight: 600;
@@ -355,12 +347,6 @@
     position: absolute;
     left: 0.25rem;
     color: var(--muted);
-  }
-
-  .org-key-warning {
-    font-size: 0.8125rem;
-    color: var(--color-amber-500);
-    font-weight: 500;
   }
 
   .hash-label {

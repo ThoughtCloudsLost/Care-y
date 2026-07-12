@@ -1,6 +1,7 @@
 <script lang="ts">
   import { PASSWORD_MIN_LENGTH } from "@care-y/shared";
   import * as m from "$lib/paraglide/messages.js";
+  import Register from "$lib/components/Register.svelte";
   import {
     assessPassphraseStrength,
     looksLikeCommonPattern,
@@ -81,9 +82,9 @@
   </div>
 
   {#if isCommon}
-    <p class="common-warning" role="alert">
+    <Register kind="careful" role="alert">
       {m.password_common_pattern()}
-    </p>
+    </Register>
   {/if}
 {/if}
 
@@ -117,14 +118,5 @@
   .strength-label {
     font-size: var(--text-xs);
     font-weight: 500;
-  }
-
-  .common-warning {
-    font-size: 0.8125rem;
-    color: var(--color-amber-500);
-    background: color-mix(in srgb, var(--color-amber-500) 10%, transparent);
-    padding: var(--space-sm) var(--space-md);
-    border-radius: 8px;
-    margin: 0;
   }
 </style>

@@ -129,9 +129,9 @@
 
   {#if !orgKeyLoaded}
     <Block>
-      <p class="text-sm text-[--color-amber-500] font-medium" role="alert">
+      <Register kind="careful" role="alert">
         {m.admin_queue_editor_no_org_key(withTerms())}
-      </p>
+      </Register>
     </Block>
   {/if}
 
