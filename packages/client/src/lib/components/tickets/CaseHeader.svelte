@@ -142,7 +142,10 @@
           <PriorityStamp priority={ticket.priority} />
         {/if}
         {#if ticket?.status === "closed"}
-          <span class="stamp-closed">{m.ticket_closed_stamp()}</span>
+          <!-- Shared judgment-stamp anatomy in its quiet-ink default:
+               closed is a records fact, so it stamps without a semantic
+               hue. Ink, not red. -->
+          <span class="stamp-chip stamp-closed">{m.ticket_closed_stamp()}</span>
         {/if}
       </span>
     </div>
@@ -227,22 +230,6 @@
     gap: 0.375rem;
     flex-shrink: 0;
     padding-top: 0.1875rem;
-  }
-
-  /* Judgment stamp anatomy in quiet ink: closed is a records fact, so it
-     stamps without a semantic hue. Ink, not red. */
-  .stamp-closed {
-    display: inline-block;
-    font-size: 0.625rem;
-    font-weight: 700;
-    letter-spacing: 0.13em;
-    text-transform: uppercase;
-    padding: 2.5px 7px;
-    border: 1px solid currentColor;
-    border-radius: 3px;
-    transform: rotate(-0.5deg);
-    white-space: nowrap;
-    color: var(--ink);
   }
 
   .fields {
