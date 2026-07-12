@@ -22,6 +22,8 @@ interface FixtureProps {
   infoText: string;
   areaLabel: string;
   selectLabel: string;
+  segmentOne: string;
+  segmentTwo: string;
   error?: string;
   outline?: boolean;
 }
@@ -32,6 +34,8 @@ const BASE_PROPS: FixtureProps = {
   infoText: "Help text",
   areaLabel: "Area label",
   selectLabel: "Select label",
+  segmentOne: "First segment",
+  segmentTwo: "Second segment",
 };
 
 function renderFixture(overrides: Partial<FixtureProps> = {}): HTMLElement {
@@ -112,6 +116,32 @@ describe("default.css form skin selector contract (konsta ListInput DOM)", () =>
     const list = c.querySelector(".k-list");
     expect(list).not.toBeNull();
     expect(list?.querySelector(".k-list-input")).not.toBeNull();
+  });
+});
+
+describe("default.css segmented skin selector contract (konsta Segmented DOM)", () => {
+  it("marks the container with k-segmented and buttons with k-button", () => {
+    const c = renderFixture();
+    const seg = c.querySelector(".k-segmented");
+    expect(seg).not.toBeNull();
+    expect(seg?.querySelectorAll(".k-button").length).toBe(2);
+  });
+
+  it("marks the active strong button with k-segmented-strong-button-active", () => {
+    const c = renderFixture();
+    const active = c.querySelector(
+      ".k-segmented .k-segmented-strong-button-active",
+    );
+    expect(active).not.toBeNull();
+    expect(active?.textContent).toContain("First segment");
+  });
+
+  it("keeps the strong sliding thumb matchable for the hider rule", () => {
+    const c = renderFixture();
+    const thumb = c.querySelector(
+      ".k-segmented > span.pointer-events-none.absolute",
+    );
+    expect(thumb).not.toBeNull();
   });
 });
 
