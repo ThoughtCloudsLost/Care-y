@@ -5,8 +5,10 @@ import { join } from "node:path";
 
 /** Crypto pipeline timeout: Argon2id + OPRF + ECIES + Worker decryption.
  *  With VITE_E2E_FAST_KDF=1 (set in playwright.config.ts), Argon2id takes <100ms
- *  instead of ~30s. 15s covers OPRF roundtrip, key derivation, and initial decryption. */
-export const CRYPTO_TIMEOUT = 15_000;
+ *  instead of ~30s. 30s covers OPRF roundtrip, key derivation, and initial
+ *  decryption even under heavy machine load (parallel dev server, Docker,
+ *  concurrent test workers). */
+export const CRYPTO_TIMEOUT = 30_000;
 
 /** Seed credentials (must match dev seed script: packages/server/src/scripts/seed.ts). */
 const DEV_USER = "admin.dev";
@@ -215,24 +217,33 @@ async function enrollTotp(page: Page): Promise<void> {
   await codeInput.waitFor({ state: "visible", timeout: 5_000 });
   await codeInput.fill(code);
 
-  // The verify/save button is in the sheet header (SoftButton)
-  const verifyBtn = page.locator(".sheet-header-action").getByText(/verify/i);
+  // The verify/save button is in the TOTP sheet header (SoftButton).
+  // Multiple sheets exist in the DOM simultaneously; scope to the one
+  // containing the authenticator-app title to avoid hitting a stale ref.
+  const totpSheet = page.getByRole("dialog", {
+    name: /authenticator app|scan this code/i,
+  });
+  const verifyBtn = totpSheet.getByRole("button", { name: /verify/i });
   await verifyBtn.click();
 
-  // Backup codes sheet appears after first enrollment.
-  // Target the sheet heading specifically to avoid matching body text.
+  // Backup codes sheet appears after FIRST enrollment only. On re-runs
+  // against an already-seeded org the user already has codes, so the
+  // sheet may not appear. Wait briefly, and dismiss only if it shows.
   const backupHeading = page.getByRole("heading", { name: /backup codes/i });
-  await backupHeading.waitFor({ state: "visible", timeout: 10_000 });
+  const backupVisible = await backupHeading
+    .waitFor({ state: "visible", timeout: 5_000 })
+    .then(() => true)
+    .catch(() => false);
 
-  // Dismiss the sheet. Retry Escape in a loop because the sheet's open
-  // animation may still be running, absorbing the first keypress.
-  for (let i = 0; i < 10; i++) {
-    await page.keyboard.press("Escape");
-    const hidden = await backupHeading
-      .waitFor({ state: "hidden", timeout: 1_000 })
-      .then(() => true)
-      .catch(() => false);
-    if (hidden) break;
+  if (backupVisible) {
+    for (let i = 0; i < 10; i++) {
+      await page.keyboard.press("Escape");
+      const hidden = await backupHeading
+        .waitFor({ state: "hidden", timeout: 1_000 })
+        .then(() => true)
+        .catch(() => false);
+      if (hidden) break;
+    }
   }
 }
 
