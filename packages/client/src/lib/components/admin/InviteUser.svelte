@@ -220,9 +220,9 @@
   {:else}
     <div class="sheet-content">
       {#if !orgKeyLoaded}
-        <p class="org-key-warning" role="alert">
+        <Register kind="careful" role="alert">
           {m.admin_invite_no_org_key()}
-        </p>
+        </Register>
       {/if}
 
       <RoleSelector
@@ -300,13 +300,6 @@
     flex-direction: column;
     gap: var(--space-md);
     padding: 0 var(--space-lg) var(--space-lg);
-  }
-
-  .org-key-warning {
-    font-size: 0.875rem;
-    font-weight: 500;
-    color: var(--color-amber-500);
-    margin: 0;
   }
 
   .credential-intro {

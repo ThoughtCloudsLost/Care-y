@@ -41,6 +41,10 @@ let mockQueuesData: QueueData[] | undefined;
 let mockQueuesLoading = false;
 
 vi.mock("$lib/paraglide/messages.js", () => ({
+  register_note: () => "Note",
+  register_careful: () => "Careful",
+  register_warning: () => "Warning",
+  register_protected: () => "Protected",
   admin_queues_empty: () => "No queues yet",
   admin_queue_members: ({ count }: { count: number }) => `${count} members`,
   admin_queue_no_members: () => "No members",

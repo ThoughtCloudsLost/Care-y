@@ -19,6 +19,7 @@
     ListItem,
   } from "konsta/svelte";
   import { Check } from "@lucide/svelte";
+  import Register from "$lib/components/Register.svelte";
   import * as m from "$lib/paraglide/messages.js";
   import { getOrgKeyManager } from "$lib/crypto/context.js";
   import { trpc } from "$lib/trpc/index.js";
@@ -1071,9 +1072,9 @@
       }}
     />
     {#if linkTextIsGeneric}
-      <div class="link-warning" role="alert">
+      <Register kind="careful" role="alert">
         {m.library_editor_link_generic_warning({ text: linkText.trim() })}
-      </div>
+      </Register>
     {/if}
     <div class="link-actions">
       <KButton
@@ -1424,14 +1425,6 @@
     font-weight: 600;
     color: var(--ink);
     margin: 0;
-  }
-
-  .link-warning {
-    font-size: var(--text-sm);
-    color: var(--brand-accent);
-    padding: var(--space-sm) var(--space-md);
-    border: 1px solid var(--brand-accent);
-    border-radius: var(--card-radius);
   }
 
   .link-actions {

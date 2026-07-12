@@ -62,6 +62,10 @@ const PROVISIONED_PHONES = [
 ];
 
 vi.mock("$lib/paraglide/messages.js", () => ({
+  register_note: () => "Note",
+  register_careful: () => "Careful",
+  register_warning: () => "Warning",
+  register_protected: () => "Protected",
   admin_telephony_status_ready: () => "Phone service active",
   admin_telephony_status_pending: () => "Phone service not set up",
   admin_telephony_mode_byot: ({ provider }: { provider: string }) =>
