@@ -1,6 +1,10 @@
 // @vitest-environment jsdom
 import { describe, it, expect, beforeEach, vi, afterEach } from "vitest";
-import { applyKonstaPalette, resetKonstaPalette } from "./konsta-palette";
+import {
+  applyKonstaPalette,
+  resetKonstaPalette,
+  checkBrandProximity,
+} from "./konsta-palette";
 
 // Mock the Material Color Utilities dynamic import.
 // We verify Material tokens are set; we don't test the library's color math.
@@ -409,5 +413,51 @@ describe("unbranded Inkwell defaults (static hexes in themes/default.css)", () =
         expect(contrast(text, surface)).toBeGreaterThanOrEqual(4.5);
       }
     }
+  });
+});
+
+describe("checkBrandProximity (OKLCH semantic-hue nudge)", () => {
+  it("flags the bake-off Signal red as colliding with urgent", () => {
+    const result = checkBrandProximity("#b3362b");
+    expect(result.collides).toBe(true);
+    expect(result.conflict).toBe("urgent");
+    expect(result.nudgedHex).toBeDefined();
+  });
+
+  it("flags an ochre near the care shade and names the care conflict", () => {
+    const result = checkBrandProximity("#d4a53c");
+    expect(result.collides).toBe(true);
+    expect(result.conflict).toBe("care");
+  });
+
+  it("offers a nudged shade that itself passes the check", () => {
+    for (const hex of ["#b3362b", "#d4a53c", "#a33224", "#d9a93f"]) {
+      const result = checkBrandProximity(hex);
+      expect(result.collides).toBe(true);
+      expect(result.nudgedHex).toBeDefined();
+      expect(result.nudgedHex).toMatch(/^#[0-9a-f]{6}$/);
+      expect(checkBrandProximity(result.nudgedHex ?? "").collides).toBe(false);
+    }
+  });
+
+  it("leaves the demo swatches and the unbranded defaults alone", () => {
+    // Harborlight clay sits seven hue degrees from urgent but a full
+    // lightness step away; it must never nudge (the bake-off treated it
+    // as a clean brand). Taupe and the default accent are near-neutral.
+    for (const hex of [
+      "#c05b3c",
+      "#6e6553",
+      "#8e8e93",
+      "#33755a",
+      "#41619f",
+      "#7f5483",
+    ]) {
+      expect(checkBrandProximity(hex).collides).toBe(false);
+    }
+  });
+
+  it("ignores invalid input", () => {
+    expect(checkBrandProximity("not-a-color").collides).toBe(false);
+    expect(checkBrandProximity("").collides).toBe(false);
   });
 });

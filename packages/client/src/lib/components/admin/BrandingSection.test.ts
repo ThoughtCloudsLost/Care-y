@@ -13,6 +13,13 @@ let mockBrandingData: BrandingData | undefined;
 let mockIsLoading: boolean;
 
 vi.mock("$lib/paraglide/messages.js", () => ({
+  register_note: () => "Note",
+  register_careful: () => "Careful",
+  register_warning: () => "Warning",
+  register_protected: () => "Protected",
+  branding_color_near_urgent: () => "This shade sits close to the urgent red.",
+  branding_color_near_care: () => "This shade sits close to the care ochre.",
+  branding_color_use_nudged: () => "Use the nudged shade",
   admin_branding_card_logo_label: () => "Logo",
   admin_branding_card_no_logo: () => "No logo uploaded",
   admin_branding_card_color_label: () => "Organization colors",
@@ -148,9 +155,16 @@ vi.mock("$lib/branding/color-utils.js", () => ({
   isValidHexColor: (c: string) => /^#[0-9a-fA-F]{6}$/.test(c),
 }));
 
-vi.mock("$lib/branding/konsta-palette.js", () => ({
-  applyKonstaPalette: vi.fn().mockResolvedValue(undefined),
-}));
+// Partial mock: the live-preview writer is stubbed (its Material path
+// dynamic-imports a library), but the proximity check keeps its real
+// OKLCH math so the nudge tests exercise actual behavior.
+vi.mock("$lib/branding/konsta-palette.js", async (importOriginal) => {
+  const actual = (await importOriginal()) as Record<string, unknown>;
+  return {
+    ...actual,
+    applyKonstaPalette: vi.fn().mockResolvedValue(undefined),
+  };
+});
 
 vi.mock("$lib/utils/buffer-encoding.js", () => ({
   uint8ArrayToBase64: (bytes: Uint8Array) =>
@@ -308,6 +322,45 @@ describe("BrandingSection", () => {
     ) as HTMLInputElement;
     expect(picker).toBeTruthy();
     expect(picker.getAttribute("aria-label")).toBe("Primary");
+  });
+
+  it("offers a nudged shade when the primary color nears the urgent red", async () => {
+    renderWithData();
+    const picker = document.querySelector(
+      'input[type="color"]',
+    ) as HTMLInputElement;
+    await fireEvent.input(picker, { target: { value: "#b3362b" } });
+
+    const notice = screen.getByRole("status");
+    expect(notice.getAttribute("data-register")).toBe("careful");
+    expect(
+      screen.getByText("This shade sits close to the urgent red."),
+    ).toBeTruthy();
+    expect(
+      screen.getByRole("button", { name: /use the nudged shade/i }),
+    ).toBeTruthy();
+  });
+
+  it("applies the nudged shade and the notice clears", async () => {
+    renderWithData();
+    const picker = document.querySelector(
+      'input[type="color"]',
+    ) as HTMLInputElement;
+    await fireEvent.input(picker, { target: { value: "#b3362b" } });
+
+    await fireEvent.click(
+      screen.getByRole("button", { name: /use the nudged shade/i }),
+    );
+
+    expect(screen.queryByRole("status")).toBeNull();
+    const hex = document.querySelector(".color-hex-edit");
+    expect(hex?.textContent).not.toBe("#b3362b");
+    expect(hex?.textContent).toMatch(/^#[0-9a-f]{6}$/);
+  });
+
+  it("shows no nudge for a quiet brand color", () => {
+    renderWithData();
+    expect(screen.queryByRole("status")).toBeNull();
   });
 
   it("rejects logo when processed image still exceeds 512KB", async () => {

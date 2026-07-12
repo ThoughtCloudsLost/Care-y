@@ -280,6 +280,205 @@ async function deriveMdColors(
   return colors;
 }
 
+// --- OKLCH proximity (the branding editor's semantic-hue nudge) ---
+//
+// If an org picks a brand shade that reads as the urgent red or the care
+// ochre, the editor offers a hue-nudged alternative instead of blocking
+// (spec: The org's pen). Conversion matrices are the OKLab reference set
+// (Bjorn Ottosson, public domain; adopted by CSS Color 4).
+
+interface Oklch {
+  l: number;
+  c: number;
+  h: number; // degrees
+}
+
+function srgbChannelToLinear(c: number): number {
+  const s = c / 255;
+  return s <= 0.04045 ? s / 12.92 : Math.pow((s + 0.055) / 1.055, 2.4);
+}
+
+function linearChannelToSrgb(c: number): number {
+  const v = c <= 0.0031308 ? 12.92 * c : 1.055 * Math.pow(c, 1 / 2.4) - 0.055;
+  return Math.round(Math.max(0, Math.min(1, v)) * 255);
+}
+
+function hexToOklch(hex: string): Oklch | null {
+  const rgb = hexToRgbArray(hex);
+  if (!rgb) return null;
+  const r = srgbChannelToLinear(rgb[0]);
+  const g = srgbChannelToLinear(rgb[1]);
+  const b = srgbChannelToLinear(rgb[2]);
+
+  const l = Math.cbrt(0.4122214708 * r + 0.5363325363 * g + 0.0514459929 * b);
+  const m = Math.cbrt(0.2119034982 * r + 0.6806995451 * g + 0.1073969566 * b);
+  const s = Math.cbrt(0.0883024619 * r + 0.2817188376 * g + 0.6299787005 * b);
+
+  const L = 0.2104542553 * l + 0.793617785 * m - 0.0040720468 * s;
+  const a = 1.9779984951 * l - 2.428592205 * m + 0.4505937099 * s;
+  const bb = 0.0259040371 * l + 0.7827717662 * m - 0.808675766 * s;
+
+  const c = Math.sqrt(a * a + bb * bb);
+  let h = (Math.atan2(bb, a) * 180) / Math.PI;
+  if (h < 0) h += 360;
+  return { l: L, c, h };
+}
+
+/** Inverse conversion. Returns null when the color is out of sRGB gamut. */
+function oklchToHexInGamut(ok: Oklch): string | null {
+  const hr = (ok.h * Math.PI) / 180;
+  const a = ok.c * Math.cos(hr);
+  const bb = ok.c * Math.sin(hr);
+
+  const l = Math.pow(ok.l + 0.3963377774 * a + 0.2158037573 * bb, 3);
+  const m = Math.pow(ok.l - 0.1055613458 * a - 0.0638541728 * bb, 3);
+  const s = Math.pow(ok.l - 0.0894841775 * a - 1.291485548 * bb, 3);
+
+  const r = 4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * s;
+  const g = -1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s;
+  const b = -0.0041960863 * l - 0.7034186147 * m + 1.707614701 * s;
+
+  const eps = 0.0005;
+  if (
+    r < -eps ||
+    r > 1 + eps ||
+    g < -eps ||
+    g > 1 + eps ||
+    b < -eps ||
+    b > 1 + eps
+  ) {
+    return null;
+  }
+  return rgbToHex(
+    linearChannelToSrgb(r),
+    linearChannelToSrgb(g),
+    linearChannelToSrgb(b),
+  );
+}
+
+/** Reduce chroma until the color fits the sRGB gamut (L and H kept). */
+function oklchToHexClamped(ok: Oklch): string {
+  let c = ok.c;
+  for (let i = 0; i <= 20; i++) {
+    const hex = oklchToHexInGamut({ l: ok.l, c, h: ok.h });
+    if (hex !== null) return hex;
+    c *= 0.85;
+  }
+  return oklchToHexInGamut({ l: ok.l, c: 0, h: ok.h }) ?? "#808080";
+}
+
+/** Signed shortest angular distance from a to b, in (-180, 180]. */
+function hueDelta(from: number, to: number): number {
+  let d = (to - from) % 360;
+  if (d > 180) d -= 360;
+  if (d <= -180) d += 360;
+  return d;
+}
+
+// The semantic shades an org brand must stay apart from, in both modes
+// (one brand hex serves light and dark). Values mirror default.css.
+const SEMANTIC_ANCHORS: readonly {
+  conflict: "urgent" | "care";
+  hex: string;
+}[] = [
+  { conflict: "urgent", hex: "#a33224" },
+  { conflict: "urgent", hex: "#e06a55" },
+  { conflict: "care", hex: "#7c5e00" },
+  { conflict: "care", hex: "#d9a93f" },
+];
+
+// Calibrated against the bake-off swatches: the mock's Signal red
+// (#b3362b) measures deltaE 0.035 from the urgent anchor and must
+// collide; Harborlight clay (#c05b3c) measures 0.075 at its nearest
+// anchor and must not. The chroma floor keeps near-neutrals out
+// entirely (the unbranded taupe sits at C 0.03).
+const PROXIMITY_CHROMA_FLOOR = 0.05;
+const PROXIMITY_DELTA_E = 0.06;
+const NUDGE_CLEARANCE = 0.085;
+
+export interface BrandProximity {
+  collides: boolean;
+  conflict?: "urgent" | "care";
+  nudgedHex?: string;
+}
+
+/** Euclidean distance in OKLab (deltaEOK, CSS Color 4). */
+function okDistance(a: Oklch, b: Oklch): number {
+  const ar = (a.h * Math.PI) / 180;
+  const br = (b.h * Math.PI) / 180;
+  const dl = a.l - b.l;
+  const da = a.c * Math.cos(ar) - b.c * Math.cos(br);
+  const db = a.c * Math.sin(ar) - b.c * Math.sin(br);
+  return Math.sqrt(dl * dl + da * da + db * db);
+}
+
+function nearestAnchor(ok: Oklch): {
+  conflict: "urgent" | "care";
+  h: number;
+  dist: number;
+} | null {
+  let best: { conflict: "urgent" | "care"; h: number; dist: number } | null =
+    null;
+  for (const anchor of SEMANTIC_ANCHORS) {
+    const anchorOk = hexToOklch(anchor.hex);
+    if (!anchorOk) continue;
+    const dist = okDistance(ok, anchorOk);
+    if (!best || dist < best.dist) {
+      best = { conflict: anchor.conflict, h: anchorOk.h, dist };
+    }
+  }
+  return best;
+}
+
+function minAnchorDistance(ok: Oklch): number {
+  return nearestAnchor(ok)?.dist ?? Infinity;
+}
+
+/**
+ * Check a brand hex against the semantic shades (urgent red, care ochre).
+ * When it collides, `nudgedHex` keeps the lightness and chroma and rotates
+ * the hue just far enough that the result reads apart from every semantic
+ * anchor. Never blocks: the caller offers the nudge as a suggestion.
+ */
+export function checkBrandProximity(hex: string): BrandProximity {
+  const ok = hexToOklch(hex);
+  if (!ok || ok.c < PROXIMITY_CHROMA_FLOOR) return { collides: false };
+
+  const nearest = nearestAnchor(ok);
+  if (!nearest || nearest.dist > PROXIMITY_DELTA_E) {
+    return { collides: false };
+  }
+
+  // Rotate away from the offending anchor, preferring the side the brand
+  // already leans toward; flip if that side never clears (it would run
+  // into the other semantic hue).
+  const lean = hueDelta(nearest.h, ok.h);
+  const preferred = lean >= 0 ? 1 : -1;
+  for (const direction of [preferred, -preferred]) {
+    for (let step = 6; step <= 90; step += 3) {
+      const candidate: Oklch = {
+        l: ok.l,
+        c: ok.c,
+        h: (ok.h + direction * step + 360) % 360,
+      };
+      if (minAnchorDistance(candidate) < NUDGE_CLEARANCE) continue;
+      // Gamut clamping trims chroma, which can pull the shade back
+      // toward an anchor; verify the actual deliverable hex.
+      const hexOut = oklchToHexClamped(candidate);
+      const delivered = hexToOklch(hexOut);
+      if (delivered && minAnchorDistance(delivered) > PROXIMITY_DELTA_E) {
+        return {
+          collides: true,
+          conflict: nearest.conflict,
+          nudgedHex: hexOut,
+        };
+      }
+    }
+  }
+
+  return { collides: true, conflict: nearest.conflict };
+}
+
 // --- Public API ---
 
 export interface BrandColors {
