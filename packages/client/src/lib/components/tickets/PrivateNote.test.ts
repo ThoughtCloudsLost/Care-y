@@ -80,9 +80,7 @@ describe("PrivateNote", () => {
     const { container } = render(PrivateNote, {
       props: { ...baseProps, result: { status: "error" as const } },
     });
-    expect(container.textContent).toContain(
-      "This content could not be decrypted.",
-    );
+    expect(container.textContent).toContain("Could not unlock this content.");
   });
 
   it("hides author name when authorName is undefined", () => {

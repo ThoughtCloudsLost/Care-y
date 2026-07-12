@@ -66,18 +66,14 @@ describe("MmsImage", () => {
       props: { ...baseProps, keyWrap: null },
     });
     await vi.waitFor(() => {
-      expect(container.textContent).toContain(
-        "This content could not be decrypted.",
-      );
+      expect(container.textContent).toContain("Could not unlock this content.");
     });
   });
 
   it("renders error state after fetch failure", async () => {
     const { container } = render(MmsImage, { props: baseProps });
     await vi.waitFor(() => {
-      expect(container.textContent).toContain(
-        "This content could not be decrypted.",
-      );
+      expect(container.textContent).toContain("Could not unlock this content.");
     });
   });
 

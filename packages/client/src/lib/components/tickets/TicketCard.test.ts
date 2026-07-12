@@ -148,7 +148,7 @@ describe("TicketCard", () => {
     const { container } = render(TicketCard, {
       props: { ...defaults, titleResult: { status: "error" as const } },
     });
-    expect(container.textContent).toContain("Encrypted ticket");
+    expect(container.textContent).toContain("Locked ticket");
     // Should NOT show DecryptPlaceholder (no loading indicator in the title area)
     const dp = container.querySelector("[aria-busy='true']");
     expect(dp).toBeNull();
