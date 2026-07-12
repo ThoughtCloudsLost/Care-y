@@ -238,7 +238,7 @@
     />
   </List>
 
-  <List nested class="new-ticket-priority-list">
+  <List nested>
     <ListInput
       dropdown
       label={m.ticket_new_field_priority()}
@@ -259,7 +259,7 @@
     </ListInput>
   </List>
 
-  <List nested class="new-ticket-queue-list">
+  <List nested>
     <ListInput
       dropdown
       label={m.ticket_new_field_queue(withTerms())}
@@ -305,11 +305,6 @@
   :global(.new-ticket-description) {
     min-height: 5rem;
     resize: vertical;
-  }
-
-  :global(.new-ticket-priority-list),
-  :global(.new-ticket-queue-list) {
-    margin: 0 !important;
   }
 
   .form-error {

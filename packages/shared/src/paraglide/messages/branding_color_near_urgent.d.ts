@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "This shade sits close to the red {volunteers} see on urgent {tickets}. A nudged shade keeps your identity and their signal apart." |
+* | "This shade sits close to the red {volunteers} see on urgent {tickets}. The suggested shade keeps your identity and their signal apart." |
 *
 * @param {Branding_Color_Near_UrgentInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

@@ -6,17 +6,17 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Branding_Color_Use_NudgedInputs */
 
 const en_branding_color_use_nudged = /** @type {(inputs: Branding_Color_Use_NudgedInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Use the nudged shade`)
+	return /** @type {LocalizedString} */ (`Use the suggested shade`)
 };
 
 const es_branding_color_use_nudged = /** @type {(inputs: Branding_Color_Use_NudgedInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Usar el tono ajustado`)
+	return /** @type {LocalizedString} */ (`Usar el tono sugerido`)
 };
 
 /**
 * | output |
 * | --- |
-* | "Use the nudged shade" |
+* | "Use the suggested shade" |
 *
 * @param {Branding_Color_Use_NudgedInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

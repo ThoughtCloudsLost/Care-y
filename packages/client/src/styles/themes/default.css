@@ -231,10 +231,25 @@
   margin-bottom: 0;
 }
 
-/* Vertical rhythm between fields (the mock's 16px formwrap gap, less
-   the box's own visual weight). */
+/* Vertical rhythm between fields comes from one place. Konsta's item
+   inner div carries py-3 (and the material li a py-2 of its own); both
+   are zeroed so the visible gap is exactly the item margin below, and
+   the last field in a group hands off to the form container's own
+   column gap (--space-md everywhere). Within-group and across-group
+   spacing land on the same number. */
 .theme-default li.k-list-input {
-  margin-bottom: 14px;
+  padding-top: 0;
+  padding-bottom: 0;
+  margin-bottom: var(--space-md, 16px);
+}
+
+.theme-default li.k-list-input div.w-full.relative {
+  padding-top: 0;
+  padding-bottom: 0;
+}
+
+.theme-default .k-list:has(.k-list-input) li.k-list-input:last-child {
+  margin-bottom: 0;
 }
 
 /* Field label: the eyebrow. Konsta's stacked label div is uniquely
@@ -315,13 +330,16 @@
 }
 
 /* ── Segmented controls (spec: Forms anatomy) ──
-   One pinned anatomy over Konsta's strong variant: hair-2 frame,
-   flat track, hair separators, the active button raised in ink.
+   One pinned anatomy over Konsta's strong variant: hair-2 frame, flat
+   track, hair separators, the active button raised in the brand color
+   (the same active treatment the custom view switcher wears).
    Consumers keep the strong prop because only strong mode marks the
-   active button with a class (k-segmented-strong-button-active);
-   the sliding thumb is hidden, so the fill sits on the button and
-   nothing animates sideways. */
-.theme-default .k-segmented {
+   active button with a class (k-segmented-strong-button-active); the
+   sliding thumb is hidden, so the fill sits on the button and nothing
+   animates sideways. A consumer opting out with .segmented-thumb keeps
+   Konsta's native sliding thumb: the subnavbar section nav is that
+   exception. */
+.theme-default .k-segmented:not(.segmented-thumb) {
   border: 1px solid var(--hair-2);
   border-radius: 8px;
   background: transparent;
@@ -331,11 +349,13 @@
   overflow: hidden;
 }
 
-.theme-default .k-segmented > span.pointer-events-none.absolute {
+.theme-default
+  .k-segmented:not(.segmented-thumb)
+  > span.pointer-events-none.absolute {
   display: none; /* the strong variant's sliding thumb */
 }
 
-.theme-default .k-segmented .k-button {
+.theme-default .k-segmented:not(.segmented-thumb) .k-button {
   padding: 10px 0;
   font-size: var(--text-base);
   font-weight: 400;
@@ -345,13 +365,15 @@
   box-shadow: none;
 }
 
-.theme-default .k-segmented .k-button + .k-button {
+.theme-default .k-segmented:not(.segmented-thumb) .k-button + .k-button {
   border-inline-start: 1px solid var(--hair);
 }
 
-.theme-default .k-segmented .k-segmented-strong-button-active {
+.theme-default
+  .k-segmented:not(.segmented-thumb)
+  .k-segmented-strong-button-active {
   background: var(--raised);
-  color: var(--ink);
+  color: var(--brand-text);
   font-weight: 700;
 }
 

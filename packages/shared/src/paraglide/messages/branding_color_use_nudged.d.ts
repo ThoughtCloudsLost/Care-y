@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Use the nudged shade" |
+* | "Use the suggested shade" |
 *
 * @param {Branding_Color_Use_NudgedInputs} inputs
 * @param {{ locale?: "en" | "es" }} options
