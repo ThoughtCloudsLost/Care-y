@@ -56,6 +56,12 @@ vi.mock("$lib/paraglide/messages.js", () => ({
   common_back: () => "Back",
   common_cancel: () => "Cancel",
   common_next: () => "Next",
+  // Register builds its eyebrow map from all four keys at init, so the
+  // mock needs the full set even though EscrowFlow renders two kinds.
+  register_note: () => "Note",
+  register_careful: () => "Careful",
+  register_warning: () => "Warning",
+  register_protected: () => "Protected",
   onboarding_escrow_hash_label: () => "Verification code",
   onboarding_escrow_hash_hint: () => "This code is unique to the file.",
   onboarding_escrow_https_warning: () => "HTTPS required for secure export.",
