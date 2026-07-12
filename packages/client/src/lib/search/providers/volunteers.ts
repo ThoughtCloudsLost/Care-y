@@ -35,6 +35,8 @@ export interface VolunteerSearchData {
   readonly hasKeys: boolean;
   readonly hasOrgKeyWrap: boolean;
   readonly isSelf: boolean;
+  /** The query that matched, so the card can highlight it (P7 pattern). */
+  readonly searchTerm: string;
 }
 
 /** Dependency injection for testability. */
@@ -119,6 +121,7 @@ export function createVolunteerSearchProvider(
             hasKeys: user.hasKeys,
             hasOrgKeyWrap: user.hasOrgKeyWrap,
             isSelf: user.id === currentId,
+            searchTerm: query,
           },
         });
       }

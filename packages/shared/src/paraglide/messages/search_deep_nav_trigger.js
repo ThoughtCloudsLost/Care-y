@@ -6,17 +6,17 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Search_Deep_Nav_TriggerInputs */
 
 const en_search_deep_nav_trigger = /** @type {(inputs: Search_Deep_Nav_TriggerInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Search encrypted`)
+	return /** @type {LocalizedString} */ (`Search everything not yet unlocked`)
 };
 
 const es_search_deep_nav_trigger = /** @type {(inputs: Search_Deep_Nav_TriggerInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Buscar cifrados`)
+	return /** @type {LocalizedString} */ (`Buscar todo lo aún no desbloqueado`)
 };
 
 /**
 * | output |
 * | --- |
-* | "Search encrypted" |
+* | "Search everything not yet unlocked" |
 *
 * @param {Search_Deep_Nav_TriggerInputs} inputs
 * @param {{ locale?: "en" | "es" }} options
