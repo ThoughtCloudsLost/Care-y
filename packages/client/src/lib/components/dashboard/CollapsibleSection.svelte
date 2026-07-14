@@ -75,14 +75,14 @@
             <DecryptPlaceholder length={3} />
           </span>
         {:else if count !== undefined && totalCount !== undefined}
-          <span class="cnt" aria-hidden="true"
+          <span class="cnt" aria-hidden="true" data-count={count}
             >{m.dashboard_section_count_of({
               shown: String(count),
               total: String(totalCount),
             })}</span
           >
         {:else if count !== undefined}
-          <span class="cnt" aria-hidden="true">{count}</span>
+          <span class="cnt" aria-hidden="true" data-count={count}>{count}</span>
         {/if}
         <span class="toggle-chevron" class:expanded aria-hidden="true">
           &#x276F;

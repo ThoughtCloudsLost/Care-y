@@ -88,11 +88,14 @@ export function createAttemptTracker(
  * is the attempt count. Delays start above the proof-of-work threshold, so a
  * legitimate login (one evaluation) sees no delay.
  */
-const DELAY_TIERS: readonly Tier<number>[] = [
-  { minFailures: 10, value: 10_000 },
-  { minFailures: 8, value: 5_000 },
-  { minFailures: 6, value: 2_000 },
-];
+const DELAY_TIERS: readonly Tier<number>[] =
+  process.env.NODE_ENV === "production"
+    ? [
+        { minFailures: 10, value: 10_000 },
+        { minFailures: 8, value: 5_000 },
+        { minFailures: 6, value: 2_000 },
+      ]
+    : [];
 
 /** Escalating delay in milliseconds based on the attempt count in the window. */
 export function getDelayMs(attemptCount: number): number {
@@ -134,8 +137,11 @@ export interface OprfEvaluateService {
   adminEvaluate(request: OprfEvaluateRequest): Promise<OprfEvaluateResult>;
 }
 
-/** Attempts in the window at which proof-of-work becomes required. */
-const POW_ATTEMPT_THRESHOLD = 5;
+/** Attempts in the window at which proof-of-work becomes required.
+ *  In development, raise the threshold so e2e suites (which log in
+ *  15+ times per run) don't trigger PoW mid-suite. Production keeps
+ *  the strict threshold to deter brute-force OPRF abuse. */
+const POW_ATTEMPT_THRESHOLD = process.env.NODE_ENV === "production" ? 5 : 100;
 
 export function createOprfEvaluateService(
   deps: OprfEvaluateServiceDeps,

@@ -69,7 +69,7 @@ test.describe.serial("Ticket Reply (Encrypted Message Send)", () => {
   // ── 4. Messagebar clears after send ───────────────────────────
 
   test("messagebar clears after successful send", async () => {
-    const textarea = page.getByRole("textbox");
+    const textarea = page.getByRole("textbox", { name: /type a reply/i });
     await expect(textarea).toHaveValue("", { timeout: 5000 });
   });
 

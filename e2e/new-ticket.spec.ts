@@ -56,11 +56,19 @@ test.describe.serial("New Ticket (Create Flow)", () => {
 
   // ── 3. Form fields ────────────────────────────────────────────
 
-  test("form renders priority segmented control with all options", async () => {
-    await expect(page.getByText(/low/i).first()).toBeVisible();
-    await expect(page.getByText(/normal/i).first()).toBeVisible();
-    await expect(page.getByText(/high/i).first()).toBeVisible();
-    await expect(page.getByText(/urgent/i).first()).toBeVisible();
+  test("form renders priority select with all options", async () => {
+    const sheet = page.getByRole("dialog", { name: "New Ticket" });
+    const prioritySelect = sheet
+      .locator("li")
+      .filter({ hasText: /priority/i })
+      .locator("select");
+    await expect(prioritySelect).toBeAttached();
+    const options = prioritySelect.locator("option");
+    await expect(options).toHaveCount(4);
+    await expect(options.nth(0)).toHaveText("Low");
+    await expect(options.nth(1)).toHaveText("Normal");
+    await expect(options.nth(2)).toHaveText("High");
+    await expect(options.nth(3)).toHaveText("Urgent");
   });
 
   test("form renders queue selector", async () => {
@@ -73,15 +81,14 @@ test.describe.serial("New Ticket (Create Flow)", () => {
 
   // ── 4. Cancel ──────────────────────────────────────────────────
 
-  test("dismiss closes sheet without submission", async () => {
-    // Press Escape to close the sheet (document-level listener).
-    await page.keyboard.press("Escape");
+  test("dismiss closes popup without submission", async () => {
+    // On desktop, the popup opened via the popover flow may have a stacked
+    // focus trap. Click the Konsta backdrop overlay to dismiss reliably.
+    const backdrop = page.locator(".k-popup-backdrop").last();
+    await backdrop.click({ position: { x: 10, y: 10 }, force: true });
 
-    // Sheet should close. The form fields should no longer be visible.
-    // (ShellSheet sets inert when closed, making content hidden.)
-    await expect(page.getByPlaceholder(/brief description/i)).not.toBeVisible({
-      timeout: 5000,
-    });
+    const dialog = page.getByRole("dialog", { name: "New Ticket" });
+    await expect(dialog).not.toBeVisible({ timeout: 10_000 });
   });
 
   // ── 5. Accessibility ──────────────────────────────────────────

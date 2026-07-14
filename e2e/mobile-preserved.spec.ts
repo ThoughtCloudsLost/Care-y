@@ -35,7 +35,7 @@ test.describe.serial("Mobile Layout Preserved (regression)", () => {
     const tablist = page.locator('[role="tablist"]');
     await expect(tablist).toBeVisible();
 
-    for (const name of ["Home", "Tickets", "Knowledge Base"]) {
+    for (const name of ["Overview", "Tickets", "Library"]) {
       await expect(tablist.getByRole("tab", { name })).toBeAttached();
     }
   });
@@ -65,7 +65,7 @@ test.describe.serial("Mobile Layout Preserved (regression)", () => {
 
   test("tapping ticket navigates to full-page detail", async ({}, testInfo) => {
     testInfo.setTimeout(CRYPTO_TIMEOUT * 2);
-    const card = page.locator('[data-testid="card-inner"]').first();
+    const card = page.locator("button.card-open-link").first();
     await card.click();
 
     // Full-page navigation to /tickets/{id}, not shallow routing.
@@ -80,7 +80,7 @@ test.describe.serial("Mobile Layout Preserved (regression)", () => {
 
   test("library renders full-page, not split view", async ({}, testInfo) => {
     testInfo.setTimeout(CRYPTO_TIMEOUT * 2);
-    await page.getByRole("tab", { name: "Knowledge Base" }).click();
+    await page.getByRole("tab", { name: "Library" }).click();
     await expect(page).toHaveURL("/library");
     await page.waitForTimeout(2_000);
 
@@ -91,7 +91,7 @@ test.describe.serial("Mobile Layout Preserved (regression)", () => {
   // ── Dashboard single column ────────────────────────────────────────
 
   test("dashboard is single column at mobile", async () => {
-    await page.getByRole("tab", { name: "Home" }).click();
+    await page.getByRole("tab", { name: "Overview" }).click();
     await expect(page).toHaveURL("/");
 
     const dashboard = page.locator(".dashboard");

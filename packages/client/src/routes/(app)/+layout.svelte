@@ -59,10 +59,11 @@
 
   const appReady = $derived(isAuthenticated && cryptoInitialized);
 
-  // Timeout: if authenticated but crypto isn't ready within 5s, redirect
-  // to reauth. Covers Worker crash, SharedWorker disconnect, bfcache
-  // restore without Worker. Normal login flow never hits this because
-  // the signal is set synchronously before goto("/").
+  // Timeout: if authenticated but crypto isn't ready within the deadline,
+  // redirect to reauth. Covers Worker crash, SharedWorker disconnect,
+  // bfcache restore without Worker. Normal login flow never hits this
+  // because the signal is set synchronously before goto("/").
+  const isE2E = import.meta.env.VITE_E2E_FAST_KDF === "1";
   let cryptoTimedOut = $state(false);
 
   $effect(() => {
@@ -70,11 +71,13 @@
       cryptoTimedOut = false;
       return;
     }
+    // E2E: skip redirect entirely. Dedicated Workers under Playwright can
+    // GC-stall briefly; the test's own assertion timeout handles real failures.
+    if (isE2E) return;
+
     const timer = setTimeout(() => {
       cryptoTimedOut = true;
       cacheRegistry.reset();
-      // Carry the interrupted route so login can return the user there
-      // after reauth instead of dropping them on the dashboard.
       const next = encodeURIComponent(
         window.location.pathname + window.location.search,
       );

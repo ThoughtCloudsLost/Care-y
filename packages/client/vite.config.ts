@@ -108,6 +108,13 @@ export default defineConfig({
         rewrite: (path) => path.replace(/^\/trpc/, ""),
         headers: { "x-org-slug": orgSlug },
       },
+      "/sse/events": {
+        target: "http://localhost:3000",
+        changeOrigin: true,
+        rewrite: (path) =>
+          path.replace(/^\/sse\/events/, "/notifications/stream"),
+        headers: { "x-org-slug": orgSlug },
+      },
       "/relay": {
         target: "http://localhost:3000",
         changeOrigin: true,

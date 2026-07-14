@@ -78,10 +78,19 @@ export function generateTotpCode(base32Secret: string): string {
  * Subsequent logins: credentials → inline 2FA challenge on /login →
  *   enter TOTP code (read secret from file) → crypto pipeline → dashboard.
  */
+export interface LoginOptions {
+  /** Return while the admin key-distribution gate is showing instead of
+   *  failing on the missing app shell. Fresh orgs have no
+   *  wrapped_org_keys row until the seed-data setup calls devSeedOrgKey;
+   *  only that setup should pass this. */
+  readonly allowOrgKeyWait?: boolean;
+}
+
 export async function login(
   page: Page,
   username = DEV_USER,
   password = DEV_PASSWORD,
+  options: LoginOptions = {},
 ): Promise<void> {
   // reauth=1 bypasses the session check that redirects to / if already logged in.
   // Without it, pages sharing a browser context reuse the previous session.
@@ -144,11 +153,26 @@ export async function login(
   // (meQuery must resolve) and safety-net effects can briefly redirect
   // back to /login during the first render cycle.
   console.log(`[login] waiting for tablist. URL: ${page.url()}`);
-  await page.locator('[role="tablist"]').waitFor({
-    state: "attached",
-    timeout: CRYPTO_TIMEOUT,
-  });
-  console.log("[login] tablist found, login complete");
+  const shellWaits: Promise<"shell" | "org-key-wait">[] = [
+    page
+      .locator('[role="tablist"]')
+      .waitFor({ state: "attached", timeout: CRYPTO_TIMEOUT })
+      .then(() => "shell" as const),
+  ];
+  if (options.allowOrgKeyWait === true) {
+    // Fresh org: no wrapped_org_keys row exists until devSeedOrgKey
+    // runs, so the (app) layout shows the key-distribution gate instead
+    // of the shell. Return and let the caller seed the key; the gate
+    // polls getWrappedOrgKey every 5s and then renders the shell.
+    shellWaits.push(
+      page
+        .getByRole("heading", { name: /waiting for key distribution/i })
+        .waitFor({ state: "visible", timeout: CRYPTO_TIMEOUT })
+        .then(() => "org-key-wait" as const),
+    );
+  }
+  const shellState = await Promise.race(shellWaits);
+  console.log(`[login] shell wait resolved: ${shellState}`);
 }
 
 /**
@@ -187,7 +211,7 @@ async function completeOnboarding(page: Page): Promise<void> {
     await page.locator(".k-navbar").getByText("Next").click();
   }
 
-  await page.waitForURL(/\/$/, { timeout: 15_000 });
+  await page.waitForURL(/\/$/, { timeout: CRYPTO_TIMEOUT });
 }
 
 /**
@@ -226,25 +250,57 @@ async function enrollTotp(page: Page): Promise<void> {
   const verifyBtn = totpSheet.getByRole("button", { name: /verify/i });
   await verifyBtn.click();
 
-  // Backup codes sheet appears after FIRST enrollment only. On re-runs
-  // against an already-seeded org the user already has codes, so the
-  // sheet may not appear. Wait briefly, and dismiss only if it shows.
-  const backupHeading = page.getByRole("heading", { name: /backup codes/i });
-  const backupVisible = await backupHeading
-    .waitFor({ state: "visible", timeout: 5_000 })
+  // Backup codes appear after FIRST enrollment only. On re-runs against
+  // an already-seeded org the user already has codes, so the sheet may
+  // not appear. Anchor on the copy button, not the sheet title: on
+  // desktop viewports ShellSheet renders as a ShellPopup whose navbar
+  // title is a plain div, not a heading.
+  const backupVisible = await page
+    .getByRole("button", { name: /copy all codes/i })
+    .waitFor({ state: "visible", timeout: 10_000 })
     .then(() => true)
     .catch(() => false);
 
   if (backupVisible) {
-    for (let i = 0; i < 10; i++) {
-      await page.keyboard.press("Escape");
-      const hidden = await backupHeading
-        .waitFor({ state: "hidden", timeout: 1_000 })
-        .then(() => true)
-        .catch(() => false);
-      if (hidden) break;
-    }
+    await dismissBackupCodesSheet(page);
   }
+}
+
+/**
+ * Dismiss the backup-codes sheet shown after the first TOTP enrollment.
+ *
+ * While codes are on screen the sheet routes every dismissal (Escape,
+ * backdrop tap, swipe) through a "Save your codes" confirm dialog, so
+ * closing it takes two steps: trigger a dismiss, then click "I saved
+ * them". Konsta overlays stay mounted when closed (open/closed is a
+ * class swap), so completion is asserted as "no backdrop still accepts
+ * pointer events" rather than DOM detachment: an open backdrop is a
+ * full-screen z-40 div that swallows the caller's next click.
+ */
+export async function dismissBackupCodesSheet(page: Page): Promise<void> {
+  // The confirm-on-dismiss routing only applies once the codes have
+  // loaded; wait for them so the flow is deterministic.
+  await page
+    .getByRole("button", { name: /copy all codes/i })
+    .waitFor({ state: "visible", timeout: 10_000 });
+
+  // Escape reaches the sheet's focus trap and opens the confirm dialog.
+  await page.keyboard.press("Escape");
+
+  // A closed Konsta Dialog keeps its DOM and its text, so scope to the
+  // open panel (closed panels carry pointer-events-none).
+  const confirmDialog = page.locator(".k-dialog:not(.pointer-events-none)", {
+    hasText: "Save your codes",
+  });
+  await confirmDialog.waitFor({ state: "visible", timeout: 5_000 });
+  await confirmDialog.getByRole("button", { name: /i saved them/i }).click();
+
+  // Sheet, Popup, and Dialog backdrops all share these classes and gain
+  // pointer-events-none when closed. Zero open backdrops means the
+  // navbar Next link is clickable again.
+  await expect(
+    page.locator("div.fixed.z-40.bg-black\\/50:not(.pointer-events-none)"),
+  ).toHaveCount(0, { timeout: 10_000 });
 }
 
 /**
@@ -310,13 +366,12 @@ export async function openTicketByTitle(
   const card = page.locator('[data-testid="ticket-card-wrap"]', {
     hasText: title,
   });
-  const inner = card.locator('[data-testid="card-inner"]');
 
-  await inner.click();
+  await card.locator("button.card-open-link").click();
 
-  await expect(page).toHaveURL(/\/tickets\/[0-9a-f-]{36}/, {
-    timeout: 10_000,
-  });
+  // On desktop, ticket detail opens in a split-view pane via pushState
+  // (URL stays at /tickets). On mobile, it navigates to /tickets/{uuid}.
+  // Wait for the chat log to appear in either case.
   await expect(page.locator('[role="log"]')).toBeVisible({
     timeout: CRYPTO_TIMEOUT,
   });
@@ -359,7 +414,8 @@ export async function createTicket(
   // Select client, fill form, and submit. Retries with a different client
   // if the search term has no matches or the server returns 409 (TICKET_ALREADY_OPEN).
   let needsFormFill = true;
-  for (let attempt = 0; attempt < 15; attempt++) {
+  const maxAttempts = CLIENT_SEARCH_TERMS.length;
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
     // Ensure the sheet is open before each attempt.
     if (!(await sheet.isVisible({ timeout: 500 }).catch(() => false))) {
       await newTicketBtn.click();
@@ -378,7 +434,8 @@ export async function createTicket(
     await clientInput.pressSequentially(searchTerm, { delay: 30 });
 
     // Short wait for search results. If none appear, try the next term.
-    const firstResult = page.locator("[data-testid='client-result']").first();
+    // Scope to the dialog to avoid matching results in closed Konsta overlays.
+    const firstResult = sheet.locator("[data-testid='client-result']").first();
     const resultsAppeared = await firstResult
       .waitFor({ state: "visible", timeout: 5_000 })
       .then(() => true)
@@ -416,12 +473,19 @@ export async function createTicket(
       }
       if (opts.priority && opts.priority !== "normal") {
         await sheet
-          .locator(".new-ticket-priority-list select")
+          .locator("li")
+          .filter({ hasText: /priority/i })
+          .locator("select")
           .selectOption(opts.priority);
       }
-      await sheet
-        .locator(".new-ticket-queue-list select")
-        .selectOption({ label: opts.queue });
+      const queueSelect = sheet
+        .locator("li")
+        .filter({ hasText: /queue/i })
+        .locator("select");
+      await queueSelect
+        .locator(`option:text("${opts.queue}")`)
+        .waitFor({ state: "attached", timeout: 10_000 });
+      await queueSelect.selectOption({ label: opts.queue });
       needsFormFill = false;
     }
 
@@ -440,10 +504,7 @@ export async function createTicket(
 
     const submitBtn = sheet.getByRole("button", { name: /create ticket/i });
     await expect(submitBtn).toBeEnabled({ timeout: 5_000 });
-    const formEl = page.locator("#new-ticket-form");
-    await formEl.evaluate((f: HTMLFormElement) => {
-      f.requestSubmit();
-    });
+    await submitBtn.click();
 
     const resp = await responsePromise;
     if (resp?.status() !== 409) {
@@ -458,8 +519,15 @@ export async function createTicket(
     await page.waitForTimeout(1_000);
   }
 
-  // All retries exhausted.
-  await expect(sheet).not.toBeVisible({ timeout: CRYPTO_TIMEOUT });
+  // All retries exhausted. Dismiss the sheet so subsequent tests don't
+  // start with a stale overlay, then fail with a clear message.
+  await page.keyboard.press("Escape");
+  await sheet
+    .waitFor({ state: "hidden", timeout: 5_000 })
+    .catch(() => undefined);
+  throw new Error(
+    `createTicket exhausted ${String(maxAttempts)} retries. All matched clients already have open tickets.`,
+  );
 }
 
 // Rotate through adjective prefixes to find clients without open tickets.
@@ -559,7 +627,7 @@ export async function putTicketOnHold(
 /** Navigate to /library/new via SPA tab + navbar button. Avoids full reload. */
 export async function navigateToNewArticle(page: Page): Promise<void> {
   if (!page.url().includes("/library")) {
-    await page.getByRole("tab", { name: /knowledge base/i }).click();
+    await page.getByRole("tab", { name: /library/i }).click();
     await expect(page).toHaveURL("/library", { timeout: 10_000 });
   }
   const navNewBtn = page.getByRole("button", { name: /new article/i });

@@ -29,7 +29,9 @@
   if (browser) {
     void getSodium();
 
-    const bridge = new CryptoBridge();
+    const bridgeMode =
+      import.meta.env.VITE_E2E_FAST_KDF === "1" ? "dedicated" : "shared";
+    const bridge = new CryptoBridge(bridgeMode);
     setCryptoBridge(bridge);
 
     const orgKeyManager = new OrgKeyManager(bridge);

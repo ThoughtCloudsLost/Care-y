@@ -141,7 +141,12 @@
   </div>
 
   <!-- Tab links -->
-  <div class="sidebar-tabs" role="tablist" aria-orientation="vertical">
+  <div
+    class="sidebar-tabs"
+    role="tablist"
+    aria-orientation="vertical"
+    aria-label={m.nav_main()}
+  >
     {#each allTabs as tab, i (tab.id)}
       {@const isActive = activeTab === tab.id}
       {@const Icon = tab.icon}

@@ -27,17 +27,14 @@ test.describe.serial("1d-smoke", () => {
     const main = page.locator("main");
     await expect(main).toBeAttached();
 
-    // Bottom tab bar renders with correct tabs
+    // At desktop (1280px), the sidebar replaces the bottom tabbar.
+    // Both render a tablist with the same tabs.
     const tabbar = page.getByRole("tablist");
     await expect(tabbar).toBeAttached();
 
-    for (const name of ["Now", "Tickets", "Knowledge Base"]) {
+    for (const name of ["Overview", "Tickets", "Library"]) {
       await expect(tabbar.getByRole("tab", { name })).toBeAttached();
     }
-
-    // "More" is a button outside the tablist, inside the nav
-    const nav = page.getByRole("navigation", { name: /main/i });
-    await expect(nav.getByRole("button", { name: /more/i })).toBeAttached();
   });
 
   test("default theme is iOS and dark mode", async () => {
