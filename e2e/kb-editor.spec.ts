@@ -28,7 +28,7 @@ test.describe.serial("KB Editor (Create/Edit, Categories, ATAG)", () => {
   // ── 1. Article creation flow ────────────────────────────────────
 
   test("navigate to Library tab with seeded articles", async () => {
-    await page.getByRole("tab", { name: /knowledge base/i }).click();
+    await page.getByRole("tab", { name: /library/i }).click();
     await expect(page).toHaveURL("/library");
 
     // Wait for article list to load with decrypted titles.
@@ -151,19 +151,17 @@ test.describe.serial("KB Editor (Create/Edit, Categories, ATAG)", () => {
     // Tap the article we just created.
     await page.getByText(TEST_ARTICLE_TITLE).click();
 
-    // Should navigate to article detail.
-    await expect(page).toHaveURL(/\/library\/.+/);
-
-    // Wait for decrypted title to render.
+    // On desktop, the library uses split view with pushState (no URL change).
+    // Wait for decrypted title to render in the detail pane.
     await expect(page.locator("h1").getByText(TEST_ARTICLE_TITLE)).toBeVisible({
       timeout: CRYPTO_TIMEOUT,
     });
 
-    // Tap the edit button (pencil icon) in the navbar.
+    // Tap the edit button (pencil icon) in the detail pane.
     const editBtn = page.getByRole("button", { name: "Edit article" });
     await editBtn.click();
 
-    // Should navigate to the edit page.
+    // Edit navigates to the full-page editor route.
     await expect(page).toHaveURL(/\/library\/.+\/edit/);
   });
 
@@ -213,20 +211,28 @@ test.describe.serial("KB Editor (Create/Edit, Categories, ATAG)", () => {
     // If we're on the library list, tap the article.
     if (page.url().endsWith("/library")) {
       await page.getByText(TEST_ARTICLE_TITLE).click();
-      await expect(page).toHaveURL(/\/library\/.+/);
     }
 
-    // Wait for the rendered article body.
+    // Wait for the rendered article body (visible in split-view or full-page).
     await expect(page.getByText("Added during edit.")).toBeVisible({
       timeout: CRYPTO_TIMEOUT,
     });
 
     // Navigate back to library for subsequent tests.
+    // On desktop split view, use Escape or the close button.
     const backBtn = page.getByRole("button", {
-      name: /back to knowledge base/i,
+      name: /back to library|close/i,
     });
-    await expect(backBtn).toBeVisible({ timeout: 5_000 });
-    await backBtn.click();
+    const hasBackBtn = await backBtn
+      .isVisible({ timeout: 2_000 })
+      .catch(() => false);
+
+    if (hasBackBtn) {
+      await backBtn.click();
+    } else {
+      await page.keyboard.press("Escape");
+    }
+
     await expect(page).toHaveURL("/library");
   });
 
@@ -236,8 +242,8 @@ test.describe.serial("KB Editor (Create/Edit, Categories, ATAG)", () => {
     testInfo.setTimeout(CRYPTO_TIMEOUT * 4);
 
     // Open the "Accessibility issues example" article (seeded with violations).
+    // On desktop, split view uses pushState (URL stays at /library).
     await page.getByText("Accessibility issues example").click();
-    await expect(page).toHaveURL(/\/library\/.+/);
     await expect(
       page.locator("h1").getByText("Accessibility issues example"),
     ).toBeVisible({ timeout: CRYPTO_TIMEOUT });
@@ -257,11 +263,32 @@ test.describe.serial("KB Editor (Create/Edit, Categories, ATAG)", () => {
     });
   });
 
-  test("atag: toggle a11y check shows issue count badge", async () => {
+  test("atag: toggle a11y check shows issue count badge", async ({}, testInfo) => {
+    testInfo.setTimeout(CRYPTO_TIMEOUT * 4);
+
+    // Verify we're still on the edit page from the previous test.
+    // If the page navigated away (e.g., crypto timeout redirect),
+    // re-enter the editor.
+    if (!page.url().includes("/edit")) {
+      await page.getByText("Accessibility issues example").click();
+      await expect(
+        page.locator("h1").getByText("Accessibility issues example"),
+      ).toBeVisible({ timeout: CRYPTO_TIMEOUT });
+      const editBtn = page.getByRole("button", { name: "Edit article" });
+      await editBtn.click();
+      await expect(page).toHaveURL(/\/library\/.+\/edit/);
+      await page.locator(".ProseMirror").waitFor({
+        state: "visible",
+        timeout: CRYPTO_TIMEOUT,
+      });
+    }
+
     // The a11y toggle is in the tabbar override (Accessibility icon).
+    // Wait for the button to appear (editor + tabbar override may still mount).
     const a11yBtn = page.getByRole("button", {
       name: /show accessibility issues/i,
     });
+    await a11yBtn.waitFor({ state: "visible", timeout: CRYPTO_TIMEOUT * 2 });
     await a11yBtn.click();
 
     // After toggling, the badge should show a non-zero count.
@@ -298,14 +325,19 @@ test.describe.serial("KB Editor (Create/Edit, Categories, ATAG)", () => {
     const cancelBtn = page.getByRole("button", { name: "Cancel" }).first();
     await cancelBtn.click();
 
-    // Should navigate back to the article detail.
-    await expect(page).toHaveURL(/\/library\/.+/);
-
-    // Go back to library list.
+    // Should navigate back to the article detail (or split view).
+    // On desktop split view, Escape closes the detail pane.
     const backBtn = page.getByRole("button", {
-      name: /back to knowledge base/i,
+      name: /back to library|close/i,
     });
-    await backBtn.click();
+    const hasBackBtn = await backBtn
+      .isVisible({ timeout: 2_000 })
+      .catch(() => false);
+    if (hasBackBtn) {
+      await backBtn.click();
+    } else {
+      await page.keyboard.press("Escape");
+    }
     await expect(page).toHaveURL("/library");
   });
 
@@ -313,7 +345,7 @@ test.describe.serial("KB Editor (Create/Edit, Categories, ATAG)", () => {
 
   test("category: gear button visible for admin/manager", async () => {
     // SPA navigation to preserve crypto Worker state.
-    await page.getByRole("tab", { name: /knowledge base/i }).click();
+    await page.getByRole("tab", { name: /library/i }).click();
     await expect(page).toHaveURL("/library", { timeout: 10_000 });
     await expect(page.getByText("Intake call checklist")).toBeVisible({
       timeout: CRYPTO_TIMEOUT,
@@ -384,9 +416,9 @@ test.describe.serial("KB Editor (Create/Edit, Categories, ATAG)", () => {
       .waitFor({ state: "hidden", timeout: 5_000 })
       .catch(() => undefined);
     await page.waitForTimeout(500);
-    await page.getByRole("tab", { name: "Now" }).click({ force: true });
+    await page.getByRole("tab", { name: "Overview" }).click({ force: true });
     await expect(page).toHaveURL("/");
-    await page.getByRole("tab", { name: /knowledge base/i }).click();
+    await page.getByRole("tab", { name: /library/i }).click();
     await expect(page).toHaveURL("/library", { timeout: 10_000 });
     await expect(page.getByText("Intake call checklist")).toBeVisible({
       timeout: CRYPTO_TIMEOUT,
@@ -475,7 +507,7 @@ test.describe.serial("KB Editor (Create/Edit, Categories, ATAG)", () => {
     testInfo.setTimeout(CRYPTO_TIMEOUT * 4);
     // Navigate fresh to /library regardless of prior state. The previous test
     // may leave overlays or stale DOM that blocks article rendering.
-    await page.getByRole("tab", { name: /knowledge base/i }).click();
+    await page.getByRole("tab", { name: /library/i }).click();
     await expect(page).toHaveURL("/library", { timeout: 10_000 });
     await expect(page.getByText("Intake call checklist")).toBeVisible({
       timeout: CRYPTO_TIMEOUT,

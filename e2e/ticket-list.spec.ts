@@ -41,8 +41,8 @@ test.describe.serial("Ticket List (Tickets Tab)", () => {
     await expect(page.getByText("Help with housing")).toBeVisible();
     await expect(page.getByText("Safety planning session")).toBeVisible();
 
-    // Ticket without key wrap shows "Encrypted ticket" placeholder with help icon.
-    await expect(page.getByText("Encrypted ticket")).toBeVisible();
+    // Ticket without key wrap shows "Locked ticket" placeholder with help icon.
+    await expect(page.getByText("Locked ticket")).toBeVisible();
   });
 
   test("cards show queue badges, status dots, and priority chips", async () => {
@@ -52,9 +52,9 @@ test.describe.serial("Ticket List (Tickets Tab)", () => {
     await expect(page.getByText("Crisis").first()).toBeAttached();
     await expect(page.getByText("Intake").first()).toBeAttached();
 
-    // Status labels are visible in card headers.
-    const statusLabels = page.locator('[data-testid="status-label"]');
-    await expect(statusLabels.first()).toBeAttached();
+    // Status marks render in card headers with data-status attribute.
+    const statusMarks = page.locator("[data-status]");
+    await expect(statusMarks.first()).toBeAttached();
   });
 
   // ── 2. Status filter pill ───────────────────────────────────────
@@ -128,9 +128,9 @@ test.describe.serial("Ticket List (Tickets Tab)", () => {
   // ── 4. View toggle (list <-> grid) ──────────────────────────────
 
   test("view toggle switches between list and grid layouts", async () => {
-    // Default is list mode.
-    const listBtn = page.getByRole("button", { name: "List view" });
-    const gridBtn = page.getByRole("button", { name: "Grid view" });
+    // Default is list (compact rows) mode.
+    const listBtn = page.getByRole("button", { name: "Compact rows" });
+    const gridBtn = page.getByRole("button", { name: "Grid" });
 
     // Verify list mode: cards use single-column layout (no grid rows).
     await expect(listBtn).toHaveAttribute("aria-pressed", "true");
@@ -153,29 +153,35 @@ test.describe.serial("Ticket List (Tickets Tab)", () => {
     await listBtn.click();
     await expect(listBtn).toHaveAttribute("aria-pressed", "true");
 
-    // Action buttons should reappear in list mode.
+    // Action buttons should reappear in list mode (cards mode has them).
+    const cardsBtn = page.getByRole("button", { name: "Cards" });
+    await cardsBtn.click();
+    await expect(cardsBtn).toHaveAttribute("aria-pressed", "true");
     await expect(
       page.locator('[data-testid="card-actions"]').first(),
     ).toBeVisible();
+
+    // Return to list for subsequent tests.
+    await listBtn.click();
   });
 
   test("view mode preference persists across navigation", async () => {
     // Switch to grid.
-    await page.getByRole("button", { name: "Grid view" }).click();
+    await page.getByRole("button", { name: "Grid" }).click();
 
     // Navigate away to Home tab, then back.
-    await page.getByRole("tab", { name: "Home" }).click();
+    await page.getByRole("tab", { name: "Overview" }).click();
     await expect(page).toHaveURL("/");
 
     await page.getByRole("tab", { name: "Tickets" }).click();
     await expect(page).toHaveURL("/tickets");
 
     // Grid should still be active (persisted in localStorage).
-    const gridBtn = page.getByRole("button", { name: "Grid view" });
+    const gridBtn = page.getByRole("button", { name: "Grid" });
     await expect(gridBtn).toHaveAttribute("aria-pressed", "true");
 
     // Restore list mode for other tests.
-    await page.getByRole("button", { name: "List view" }).click();
+    await page.getByRole("button", { name: "Compact rows" }).click();
   });
 
   // ── 5. Infinite scroll ──────────────────────────────────────────
@@ -208,9 +214,12 @@ test.describe.serial("Ticket List (Tickets Tab)", () => {
     const checkboxes = page.locator(".checkbox-wrap");
     await expect(checkboxes.first()).toBeVisible({ timeout: 3_000 });
 
-    // The tabbar override should show selection count.
-    // First card should be selected.
-    await expect(page.getByText(/1 selected/)).toBeVisible();
+    // The tabbar override shows selection count. The Konsta Toolbar
+    // animates in via CSS transition, so use a generous timeout.
+    // Use "attached" first since the text might be in the DOM but
+    // off-screen during the Toolbar slide-up animation.
+    await expect(page.getByText(/1 selected/)).toBeAttached({ timeout: 5_000 });
+    await expect(page.getByText(/1 selected/)).toBeVisible({ timeout: 10_000 });
 
     // Tap another card to add to selection.
     const secondCard = page.locator('[data-testid="ticket-card-wrap"]').nth(1);
@@ -243,7 +252,7 @@ test.describe.serial("Ticket List (Tickets Tab)", () => {
 
   test("tapping a card navigates to ticket detail route", async () => {
     // Click the first card's inner button area.
-    const firstCardButton = page.locator('[data-testid="card-inner"]').first();
+    const firstCardButton = page.locator("button.card-open-link").first();
     await firstCardButton.click();
 
     // Should navigate to /tickets/{uuid}. The detail page doesn't exist
@@ -333,7 +342,7 @@ test.describe.serial("Ticket List (Tickets Tab)", () => {
   });
 
   test("passes axe accessibility audit in grid mode", async () => {
-    await page.getByRole("button", { name: "Grid view" }).click();
+    await page.getByRole("button", { name: "Grid" }).click();
     await expect(
       page.locator('[data-virtual="row"][data-grid]').first(),
     ).toBeVisible();
@@ -346,7 +355,7 @@ test.describe.serial("Ticket List (Tickets Tab)", () => {
     expect(results.violations).toEqual([]);
 
     // Restore list mode.
-    await page.getByRole("button", { name: "List view" }).click();
+    await page.getByRole("button", { name: "Compact rows" }).click();
   });
 
   // ── 10. Visual themes ───────────────────────────────────────────
@@ -363,7 +372,7 @@ test.describe.serial("Ticket List (Tickets Tab)", () => {
       }, theme);
 
       // Force a re-render by navigating away and back.
-      await page.getByRole("tab", { name: "Home" }).click();
+      await page.getByRole("tab", { name: "Overview" }).click();
       await page.getByRole("tab", { name: "Tickets" }).click();
 
       // Wait for tickets to render.
@@ -378,7 +387,7 @@ test.describe.serial("Ticket List (Tickets Tab)", () => {
       ).toBeVisible();
       await expect(page.locator('[role="toolbar"]')).toBeVisible();
       await expect(
-        page.getByRole("button", { name: "List view" }),
+        page.getByRole("button", { name: "Compact rows" }),
       ).toBeVisible();
 
       // Take screenshot for manual comparison (stored by Playwright).

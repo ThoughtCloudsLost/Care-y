@@ -74,7 +74,7 @@
   });
 </script>
 
-<PageShell>
+<PageShell scrollTag="main">
   {#snippet navbar()}
     <Navbar role="banner">
       {#snippet left()}

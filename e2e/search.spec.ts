@@ -37,13 +37,17 @@ test.describe.serial("Universal Search", () => {
   // ── 2. Typing shows results ────────────────────────────────────
 
   test("typing shows ticket results in horizontal strip", async () => {
-    // Type a known seeded ticket title substring.
-    const searchbar = page.locator("input[type='text']").last();
+    // Type a known seeded ticket title substring into the search overlay input.
+    // The Konsta Searchbar is inside the .search-overlay container.
+    const searchbar = page.locator(".search-overlay input[type='text']");
+    await searchbar.waitFor({ state: "visible", timeout: 5_000 });
     await searchbar.fill("housing");
 
-    // Ticket cards should appear in the results sheet.
+    // Ticket cards should appear in the results.
     const sheet = page.locator("[role='search']");
-    await expect(sheet.getByText("Tickets", { exact: true })).toBeVisible();
+    await expect(sheet.getByText("Tickets", { exact: true })).toBeVisible({
+      timeout: CRYPTO_TIMEOUT,
+    });
     await expect(sheet.getByText("Help with housing")).toBeVisible({
       timeout: 5_000,
     });
@@ -56,17 +60,22 @@ test.describe.serial("Universal Search", () => {
     const sheet = page.locator("[role='search']");
     // Click the card's accessible overlay button (not the text, which sits
     // below the overlay in z-order and may not trigger the tap handler).
-    const cardBtn = sheet.getByRole("button", {
-      name: /open ticket/i,
-    });
+    const cardBtn = sheet
+      .getByRole("button", {
+        name: /open ticket/i,
+      })
+      .first();
     await expect(cardBtn).toBeVisible({ timeout: 5_000 });
     await cardBtn.click();
 
-    // Should navigate to the ticket detail page.
-    await expect(page).toHaveURL(/\/tickets\/.+/, { timeout: 10_000 });
+    // On desktop, ticket detail opens in split view (URL may stay at /tickets).
+    // Wait for the chat log to appear as confirmation of navigation.
+    await expect(page.locator('[role="log"]')).toBeVisible({
+      timeout: CRYPTO_TIMEOUT,
+    });
 
-    // Sheet should be dismissed (allow time for closing animation).
-    await expect(sheet).not.toBeVisible({ timeout: 5_000 });
+    // Search overlay should be dismissed.
+    await expect(sheet).not.toBeVisible({ timeout: 10_000 });
   });
 
   // ── 4. Recent searches ─────────────────────────────────────────
@@ -78,7 +87,7 @@ test.describe.serial("Universal Search", () => {
       await backBtn.click();
     }
     // Navigate to Home tab (SPA) to preserve crypto Worker state.
-    await page.getByRole("tab", { name: "Home" }).click();
+    await page.getByRole("tab", { name: "Overview" }).click();
     await expect(page).toHaveURL("/");
 
     // Open search again.
@@ -105,11 +114,21 @@ test.describe.serial("Universal Search", () => {
 
   // ── 5. Dismissal ───────────────────────────────────────────────
 
-  test("escape dismisses sheet and searchbar", async () => {
-    await page.keyboard.press("Escape");
+  test("dismiss closes sheet and searchbar", async () => {
+    // On desktop, search renders as a dropdown with a backdrop. Click
+    // the backdrop to dismiss. On mobile, the ShellSheet handles Escape.
+    // Tab-to-same-URL (Overview -> /) is a no-op and won't trigger
+    // afterNavigate, so navigate to a genuinely different route instead.
+    const backdrop = page.locator(".search-dropdown-backdrop");
+    if (await backdrop.isVisible({ timeout: 1_000 }).catch(() => false)) {
+      await backdrop.click({ force: true });
+    } else {
+      await page.getByRole("tab", { name: /tickets/i }).click();
+      await expect(page).toHaveURL("/tickets", { timeout: 5_000 });
+    }
 
     const sheet = page.locator("[role='search']");
-    await expect(sheet).not.toBeVisible();
+    await expect(sheet).not.toBeVisible({ timeout: 5_000 });
   });
 
   // ── 6. No results ──────────────────────────────────────────────

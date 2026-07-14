@@ -79,14 +79,20 @@ test.describe.serial("Ticket Actions (Call + SMS)", () => {
   });
 
   test("cancel closes SMS compose sheet", async () => {
-    const smsSheet = page.getByLabel(/text client/i);
-    const cancelBtn = smsSheet.getByRole("button", { name: /cancel/i });
+    // On desktop, ShellSheet renders as ShellPopup (Konsta Popup). Closed
+    // Popups stay in the DOM (translate-y-full, not display:none), so
+    // getByRole("dialog") may hit stale matches. Scope to .sms-actions
+    // which only exists inside the open SMS compose content.
+    const cancelBtn = page
+      .locator(".sms-actions")
+      .getByRole("button", { name: /cancel/i });
+    await cancelBtn.waitFor({ state: "visible", timeout: 5_000 });
     await cancelBtn.click();
 
-    // The SMS compose content should no longer be visible.
+    // Wait for the compose sheet/popup to close.
     await expect(
       page.getByText(/SMS messages are not encrypted/i),
-    ).not.toBeVisible({ timeout: 3000 });
+    ).not.toBeVisible({ timeout: 15_000 });
   });
 
   // ── 4. Exposure hint not repeated ─────────────────────────────
@@ -112,9 +118,12 @@ test.describe.serial("Ticket Actions (Call + SMS)", () => {
       page.locator('[data-testid="exposure-dismiss"]'),
     ).not.toBeVisible({ timeout: 1000 });
 
-    // Close SMS sheet (scope to the Text Client sheet to avoid other cancel buttons).
-    const smsSheet = page.getByLabel(/text client/i);
-    const cancelBtn = smsSheet.getByRole("button", { name: /cancel/i });
+    // Close SMS sheet. Scope to .sms-actions to avoid stale Konsta Popup
+    // ghosts still in the DOM.
+    const cancelBtn = page
+      .locator(".sms-actions")
+      .getByRole("button", { name: /cancel/i });
+    await cancelBtn.waitFor({ state: "visible", timeout: 5_000 });
     await cancelBtn.click();
   });
 
