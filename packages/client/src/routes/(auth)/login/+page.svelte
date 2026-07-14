@@ -19,6 +19,7 @@
   import { announceToLiveRegion } from "$lib/utils/announce.js";
   import { createPublicBrandingQuery } from "$lib/branding/public-branding.js";
   import { applyKonstaPalette } from "$lib/branding/konsta-palette.js";
+  import { getBrandingTitle } from "$lib/branding/title.svelte.js";
   import KeyDerivation, {
     type LoginPhaseId,
   } from "$lib/components/onboarding/KeyDerivation.svelte";
@@ -124,7 +125,11 @@
 
   const brandingQuery = createPublicBrandingQuery();
   const branding = $derived(brandingQuery.data ?? null);
-  const orgName = $derived(branding?.orgName ?? "CARE-Y");
+  const orgName = $derived(
+    branding?.orgName !== undefined && branding.orgName !== ""
+      ? branding.orgName
+      : getBrandingTitle(),
+  );
 
   $effect(() => {
     if (!browser || branding === null) return;
