@@ -17,7 +17,24 @@
   --theme-font-mono: "IBM Plex Mono", "Courier New", monospace;
 
   --ink: #1a1a1a;
+  --ink-2: #4a4845;
   --muted: #7a7672;
+  --hair: #b5b0a8;
+  --hair-2: #9a958d;
+
+  /* Semantic hues (institutional red/amber) */
+  --urgent: #b22222;
+  --care: #b8860b;
+  --danger: #b22222;
+  --urgent-soft: color-mix(in srgb, var(--urgent) 8%, transparent);
+  --care-soft: color-mix(in srgb, var(--care) 8%, transparent);
+  --brand-soft: color-mix(
+    in srgb,
+    var(--brand-fill, var(--brand-primary)) 10%,
+    transparent
+  );
+  --brand-text: var(--brand-primary);
+  --brand-fill: var(--brand-primary);
 
   /* Konsta iOS surface overrides: flat concrete, no transparency */
   --color-ios-light-surface: #d8d4ce;
@@ -50,8 +67,13 @@
 
   /* Semantic aliases (resolve through Konsta vars) */
   --paper: var(--color-ios-light-surface);
+  --raised: var(--color-ios-light-surface-1);
+  --paper-deep: var(--color-ios-light-surface-1-shade);
   --surface-1: var(--color-ios-light-surface-1);
   --surface-2: var(--color-ios-light-surface-2);
+
+  --k-hairline-color: var(--hair);
+  --k-page-bg: var(--paper);
 
   /* Card tokens: flat/sharp brutalist surfaces */
   --card-radius: 0;
@@ -60,8 +82,24 @@
 /* --- Dark mode: bunker interior, fluorescent-lit concrete --- */
 .theme-brutalist.dark {
   --ink: #c8c4be;
+  --ink-2: #9a9690;
   --muted: #6a6a6a;
+  --hair: #383838;
+  --hair-2: #505050;
+  --urgent: #e05545;
+  --care: #d4a030;
+  --danger: #e05545;
+  --urgent-soft: color-mix(in srgb, var(--urgent) 12%, transparent);
+  --care-soft: color-mix(in srgb, var(--care) 12%, transparent);
+  --brand-soft: color-mix(
+    in srgb,
+    var(--brand-fill, var(--brand-primary)) 12%,
+    transparent
+  );
+  --brand-text: var(--brand-primary);
   --paper: var(--color-ios-dark-surface);
+  --raised: var(--color-ios-dark-surface-1);
+  --paper-deep: var(--color-ios-dark-surface-1-shade);
   --surface-1: var(--color-ios-dark-surface-1);
   --surface-2: var(--color-ios-dark-surface-2);
 }
