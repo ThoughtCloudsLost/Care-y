@@ -11,7 +11,24 @@
   --theme-font-ui: "Segoe UI", system-ui, sans-serif;
 
   --ink: #0c2840;
+  --ink-2: #1e4a70;
   --muted: #4890b8;
+  --hair: rgba(0, 100, 150, 0.15);
+  --hair-2: rgba(0, 100, 150, 0.25);
+
+  /* Semantic hues (glossy warm/cool) */
+  --urgent: #e03030;
+  --care: #d4940a;
+  --danger: #e03030;
+  --urgent-soft: color-mix(in srgb, var(--urgent) 8%, transparent);
+  --care-soft: color-mix(in srgb, var(--care) 8%, transparent);
+  --brand-soft: color-mix(
+    in srgb,
+    var(--brand-fill, var(--brand-primary)) 10%,
+    transparent
+  );
+  --brand-text: var(--brand-primary);
+  --brand-fill: var(--brand-primary);
 
   /* Translucent glass + gloss tokens */
   --glass-blur: 20px;
@@ -62,8 +79,13 @@
 
   /* Semantic aliases (resolve through Konsta vars) */
   --paper: var(--color-ios-light-surface);
+  --raised: var(--color-ios-light-surface-1);
+  --paper-deep: var(--color-ios-light-surface-1-shade);
   --surface-1: var(--color-ios-light-surface-1);
   --surface-2: var(--color-ios-light-surface-2);
+
+  --k-hairline-color: var(--hair);
+  --k-page-bg: var(--paper);
 
   /* Card tokens: organic rounded glass bubbles */
   --card-radius: var(--bubble-radius);
@@ -72,8 +94,24 @@
 /* --- Dark mode: deep ocean, still glossy --- */
 .theme-frutiger.dark {
   --ink: #c0daf0;
+  --ink-2: #88b0d0;
   --muted: #4870a0;
+  --hair: rgba(60, 140, 210, 0.15);
+  --hair-2: rgba(60, 140, 210, 0.25);
+  --urgent: #f06050;
+  --care: #e0b840;
+  --danger: #f06050;
+  --urgent-soft: color-mix(in srgb, var(--urgent) 12%, transparent);
+  --care-soft: color-mix(in srgb, var(--care) 12%, transparent);
+  --brand-soft: color-mix(
+    in srgb,
+    var(--brand-fill, var(--brand-primary)) 12%,
+    transparent
+  );
+  --brand-text: var(--brand-primary);
   --paper: var(--color-ios-dark-surface);
+  --raised: var(--color-ios-dark-surface-1);
+  --paper-deep: var(--color-ios-dark-surface-1-shade);
   --surface-1: var(--color-ios-dark-surface-1);
   --surface-2: var(--color-ios-dark-surface-2);
   --glass-bg: rgba(10, 35, 70, 0.65);

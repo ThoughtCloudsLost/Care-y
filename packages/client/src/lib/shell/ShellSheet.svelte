@@ -174,14 +174,7 @@
     justify-content: space-between;
     padding: var(--space-sm) var(--space-lg);
     border-bottom: 1px solid color-mix(in srgb, var(--ink) 8%, transparent);
-    /* --surface was never defined anywhere, so this header rendered
-       transparent and scrolled content ghosted through the title.
-       Use the glass surface token (mode-aware, Canvas in high contrast)
-       with the same blur as the .glass utility so content passing
-       underneath reads as one glass sheet. */
-    background: var(--glass-surface, var(--paper));
-    -webkit-backdrop-filter: blur(16px);
-    backdrop-filter: blur(16px);
+    background: inherit;
     flex-shrink: 0;
   }
 

@@ -80,8 +80,8 @@
 
   /* Warm-paper glass for the iOS liquid-glass shell. Translucency is
      eyeballed on device at the foundation review; adjust alpha there. */
-  --color-ios-light-glass: rgba(252, 250, 243, 0.78);
-  --color-ios-dark-glass: rgba(37, 32, 23, 0.55);
+  /* --color-ios-light-glass: rgba(252, 250, 243, 0.78); */
+  /* --color-ios-dark-glass: rgba(37, 32, 23, 0.55); */
 
   /* ── Inkwell canonical names, aliased through the seam ── */
   --paper: var(--color-ios-light-surface);
