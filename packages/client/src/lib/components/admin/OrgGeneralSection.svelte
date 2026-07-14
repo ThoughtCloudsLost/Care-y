@@ -15,6 +15,8 @@
   import { announceToLiveRegion } from "$lib/utils/announce.js";
   import { getOrgDecryptCache, getOrgKeyManager } from "$lib/crypto/context.js";
   import { base64ToUint8Array } from "$lib/utils/buffer-encoding.js";
+  import { buildClientBrandingBlob } from "$lib/branding/encrypt.js";
+  import { requireRouter } from "$lib/errors.js";
   import QueryError from "$lib/components/QueryError.svelte";
   import DecryptPlaceholder from "$lib/components/DecryptPlaceholder.svelte";
   import SoftButton from "$lib/components/inputs/SoftButton.svelte";
@@ -89,6 +91,63 @@
   const countryChanged = $derived(editCountry !== serverCountry);
   const hasChanges = $derived(nameChanged || languageChanged || countryChanged);
 
+  const brandingRouter = trpc.branding
+    ? requireRouter(trpc.branding, "branding")
+    : null;
+
+  async function rebuildClientBlob(newName: string): Promise<void> {
+    if (brandingRouter === null) return;
+    const branding = await brandingRouter.getBranding.query();
+
+    function b64(v: string | null): Uint8Array | null {
+      return v !== null && v !== "" ? base64ToUint8Array(v) : null;
+    }
+
+    // Trigger cache population, then wait for all pending decrypts.
+    orgCache.decrypt("branding:color", b64(branding.encryptedPrimaryColor));
+    orgCache.decrypt("branding:accent", b64(branding.encryptedAccentColor));
+    orgCache.decrypt(
+      "branding:text",
+      b64(branding.encryptedClientText ?? null),
+    );
+    await orgCache.whenSettled();
+
+    // Re-read after settlement.
+    const color =
+      orgCache.decrypt("branding:color", b64(branding.encryptedPrimaryColor)) ??
+      "#636366";
+    const accent =
+      orgCache.decrypt("branding:accent", b64(branding.encryptedAccentColor)) ??
+      "";
+    const text =
+      orgCache.decrypt(
+        "branding:text",
+        b64(branding.encryptedClientText ?? null),
+      ) ?? "";
+
+    let clientBlob: string;
+    try {
+      clientBlob = buildClientBrandingBlob(
+        {
+          name: newName,
+          primaryColor: color,
+          accentColor: accent,
+          clientText: text,
+        },
+        orgKeyManager,
+      );
+    } catch {
+      return;
+    }
+
+    const encryptedValue = await orgKeyManager.encryptText(newName);
+    await brandingRouter.saveBrandingField.mutate({
+      field: "name",
+      encryptedValue,
+      clientEncryptedBranding: clientBlob,
+    });
+  }
+
   const saveMutation = createMutation(() => ({
     mutationFn: async (input: {
       encryptedOrgName: string;
@@ -105,6 +164,7 @@
       if (nameChanged) {
         orgCache.delete("branding:name");
         void queryClient.invalidateQueries({ queryKey: adminKeys.branding() });
+        void rebuildClientBlob(editName.trim());
         onnamechange?.();
       }
     },

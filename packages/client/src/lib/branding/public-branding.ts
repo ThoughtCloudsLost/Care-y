@@ -53,7 +53,7 @@ async function fetchPublicBranding(): Promise<PublicBranding | null> {
     : null;
 
   return {
-    orgName: sanitizeOrgName(payload.name ?? "CARE-Y"),
+    orgName: sanitizeOrgName(payload.name ?? ""),
     primaryColor: payload.primaryColor ?? "#636366",
     accentColor: payload.accentColor ?? null,
     iconUrl,

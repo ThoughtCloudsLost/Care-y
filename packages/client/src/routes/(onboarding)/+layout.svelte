@@ -15,6 +15,7 @@
   import { setTerminology } from "$lib/terminology/context.js";
   import { createPublicBrandingQuery } from "$lib/branding/public-branding.js";
   import { applyKonstaPalette } from "$lib/branding/konsta-palette.js";
+  import { getBrandingTitle } from "$lib/branding/title.svelte.js";
   import PageShell from "$lib/shell/PageShell.svelte";
   import LanguagePicker from "$lib/components/inputs/LanguagePicker.svelte";
   import {
@@ -54,7 +55,11 @@
   const isSetupRoute = $derived(page.url.pathname.includes("/setup"));
   const brandingQuery = createPublicBrandingQuery();
   const branding = $derived(isSetupRoute ? null : (brandingQuery.data ?? null));
-  const navbarTitle = $derived(branding?.orgName ?? "CARE-Y");
+  const navbarTitle = $derived(
+    branding?.orgName !== undefined && branding.orgName !== ""
+      ? branding.orgName
+      : getBrandingTitle(),
+  );
 
   let uiLocale = $state(getLocale());
 
