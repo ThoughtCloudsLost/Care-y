@@ -1379,7 +1379,7 @@
     padding: 16px;
     padding-left: calc(16px + env(safe-area-inset-left, 0px));
     padding-right: calc(16px + env(safe-area-inset-right, 0px));
-    padding-bottom: 0;
+    padding-bottom: 2rem;
     margin-bottom: var(
       --messagebar-height,
       calc(3.5rem + env(safe-area-inset-bottom, 0px))

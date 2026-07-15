@@ -35,6 +35,7 @@
     sortDirection?: "asc" | "desc";
     onsortchange?: (field: string, direction: "asc" | "desc") => void;
     ontap: (ticketId: string) => void;
+    onfullopen?: (ticketId: string) => void;
     multiSelectActive?: boolean;
     selectedIds?: ReadonlySet<string>;
     onselect?: (ticketId: string) => void;
@@ -55,6 +56,7 @@
     sortDirection = "desc",
     onsortchange,
     ontap,
+    onfullopen,
     multiSelectActive = false,
     selectedIds,
     onselect,
@@ -158,6 +160,12 @@
       ontap(ticketId);
     }
   }
+
+  function handleRowDblClick(ticketId: string): void {
+    if (!multiSelectActive) {
+      onfullopen?.(ticketId);
+    }
+  }
 </script>
 
 <div class="ticket-table-wrap">
@@ -239,6 +247,7 @@
             tabindex="0"
             aria-current={isActive || isCurrentTicket ? "true" : undefined}
             onclick={() => handleRowClick(row.ticketId)}
+            ondblclick={() => handleRowDblClick(row.ticketId)}
             onkeydown={onKeyActivate(() => handleRowClick(row.ticketId))}
           >
             {#if multiSelectActive}

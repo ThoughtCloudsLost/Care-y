@@ -324,6 +324,7 @@
   // ResizeObserver tracks the inner content height so we can set
   // padding-top on <main> and position the subnavbar correctly.
   let subnavbarInnerEl = $state<HTMLElement | undefined>();
+  let splitSubnavbarRightEl = $state<HTMLElement | undefined>();
   let subnavbarHeight = $state(0);
   let navbarHeight = $state(0);
 
@@ -338,6 +339,27 @@
     });
     ro.observe(el, { box: "border-box" });
     return () => ro.disconnect();
+  });
+
+  $effect(() => {
+    const el = splitSubnavbarRightEl;
+    if (el == null) {
+      splitNavbar.setRightHeight(0);
+      return;
+    }
+    const ro = new ResizeObserver((entries) => {
+      const entry = entries[0];
+      if (entry != null) {
+        splitNavbar.setRightHeight(
+          entry.borderBoxSize[0]?.blockSize ?? el.offsetHeight,
+        );
+      }
+    });
+    ro.observe(el, { box: "border-box" });
+    return () => {
+      ro.disconnect();
+      splitNavbar.setRightHeight(0);
+    };
   });
 
   // Navbar DOM ref, resolved from the scroll container's parent Page.
@@ -1098,8 +1120,9 @@
           </div>
           {#if layoutMode.isDesktop && splitNavbarCfg && splitRight?.subnavbar}
             <div
+              bind:this={splitSubnavbarRightEl}
               class="split-subnavbar-right"
-              style:width={splitNavbarCfg.rightWidth}
+              style:width="var(--split-right-w, {splitNavbarCfg.rightWidth})"
             >
               {@render splitRight.subnavbar()}
             </div>
@@ -1730,7 +1753,11 @@
   /* ── Split subnavbar overlay (segmented desktop view) ── */
 
   .shell-subnavbar--split > .shell-subnavbar-inner {
-    padding-inline-end: var(--split-detail-width, 480px);
+    padding-inline-end: var(--split-right-w, var(--split-detail-width, 480px));
+  }
+
+  .shell-subnavbar-inner {
+    padding-inline-end: var(--split-right-w, 0px);
   }
 
   .split-subnavbar-right {

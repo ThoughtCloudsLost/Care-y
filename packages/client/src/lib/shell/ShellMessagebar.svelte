@@ -1,16 +1,17 @@
 <!--
   Shell wrapper for Konsta Messagebar (compose bar).
 
-  Fixed at the bottom of the viewport. Supports two modes:
-  "reply" (send SMS to client) and "note" (internal note).
+  Fixed at the bottom of the viewport. Supports three modes:
+  "reply" (encrypted in-app message), "note" (internal note),
+  and "sms" (plaintext SMS to client).
 
-  Left slot: + button (compose actions), mode toggle icon.
+  When collapsed, only the + button renders. Consumers control
+  collapse state and provide header/footer snippets for mode
+  indicators, character counters, etc.
+
+  Left slot: + button (compose actions).
   Right slot: send button.
   All buttons are Konsta Link iconOnly, same as tabbar icons.
-
-  In note mode, the Glass pills get a brand-color tint via CSS custom
-  property overrides on Konsta's glass tokens. On iOS this produces
-  tinted liquid glass. On Material, the toolbar background tints.
 -->
 <script lang="ts">
   import { Messagebar, Link } from "konsta/svelte";
@@ -26,16 +27,25 @@
     oninput,
     sendDisabled = false,
     inline = false,
+    collapsed = false,
+    header,
+    footer,
   }: ShellMessagebarProps = $props();
 
   const placeholder = $derived(
     mode === "note"
       ? m.ticket_compose_note_placeholder()
-      : m.ticket_compose_reply_placeholder(),
+      : mode === "sms"
+        ? m.ticket_compose_sms_placeholder()
+        : m.ticket_compose_reply_placeholder(),
   );
 
   const sendLabel = $derived(
-    mode === "note" ? m.ticket_save_note() : m.ticket_send(),
+    mode === "note"
+      ? m.ticket_save_note()
+      : mode === "sms"
+        ? m.ticket_sms_send()
+        : m.ticket_send(),
   );
 
   // Publish the messagebar's rendered height as a CSS variable so
@@ -82,7 +92,6 @@
 
   $effect(() => {
     if (!anchorEl) return;
-    textareaEl = anchorEl.querySelector("textarea") ?? undefined;
 
     const msgbar = anchorEl.querySelector<HTMLElement>(".k-messagebar");
     if (msgbar) msgbar.style.position = "relative";
@@ -104,6 +113,13 @@
         }
       }
     }
+
+    if (collapsed) {
+      textareaEl = undefined;
+      return;
+    }
+
+    textareaEl = anchorEl.querySelector("textarea") ?? undefined;
   });
 
   const MAX_LINES = 8;
@@ -142,7 +158,9 @@
   bind:this={anchorEl}
   class="shell-messagebar-anchor"
   class:shell-messagebar-inline={inline}
+  class:shell-messagebar-collapsed={collapsed}
 >
+  {#if !collapsed && header}{@render header()}{/if}
   <Messagebar
     bind:value
     {placeholder}
@@ -175,6 +193,7 @@
       </Link>
     {/snippet}
   </Messagebar>
+  {#if !collapsed && footer}{@render footer()}{/if}
 </div>
 
 <style>
@@ -194,6 +213,40 @@
   /* Match the tabbar safe-area override: strip extra 16px Konsta adds. */
   :global(.k-ios .shell-messagebar .k-toolbar) {
     padding-bottom: var(--k-safe-area-bottom) !important;
+  }
+
+  /* Blur layer behind the messagebar, fading upward into content.
+     Mirrors the Navbar's bgBlur pattern but anchored at the bottom.
+     Hidden when collapsed (only the + button floats, no chrome). */
+  .shell-messagebar-anchor:not(.shell-messagebar-collapsed)::before {
+    content: "";
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: calc(100% + 70px);
+    backdrop-filter: saturate(180%) blur(20px);
+    -webkit-backdrop-filter: saturate(180%) blur(20px);
+    mask-image: linear-gradient(to top, black 60%, transparent);
+    -webkit-mask-image: linear-gradient(to top, black 60%, transparent);
+    pointer-events: none;
+    z-index: -1;
+  }
+
+  /* Collapsed: hide the entire messagebar but preserve its layout so the
+     + button never shifts when expanding. The left slot overrides back to
+     visible so only the + button floats above content. */
+  :global(.shell-messagebar-collapsed .k-messagebar) {
+    visibility: hidden;
+  }
+  :global(
+    .shell-messagebar-collapsed
+      .k-messagebar
+      .k-toolbar
+      > :nth-child(2)
+      > :first-child
+  ) {
+    visibility: visible;
   }
 
   :global(.shell-messagebar textarea) {

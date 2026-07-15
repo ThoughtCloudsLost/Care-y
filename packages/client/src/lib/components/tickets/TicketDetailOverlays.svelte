@@ -1,10 +1,8 @@
 <script lang="ts">
   import * as m from "$lib/paraglide/messages.js";
-  import { withTerms } from "$lib/terminology/with-terms.js";
   import ShellActionSheet from "$lib/shell/ShellActionSheet.svelte";
   import ShellPopup from "$lib/shell/ShellPopup.svelte";
   import ShellDialog from "$lib/shell/ShellDialog.svelte";
-  import ShellSheet from "$lib/shell/ShellSheet.svelte";
   import { DialogButton, ActionsGroup, ActionsButton } from "konsta/svelte";
   import TicketPanelContent from "$lib/components/tickets/TicketPanelContent.svelte";
   import AssignSheet from "$lib/components/tickets/AssignSheet.svelte";
@@ -16,7 +14,6 @@
   import InternalNoteSheet from "$lib/components/tickets/InternalNoteSheet.svelte";
   import { resolveNoteTypeIcon } from "$lib/utils/note-type-icons.js";
   import ExposureHint from "$lib/components/tickets/ExposureHint.svelte";
-  import SmsComposeContent from "$lib/components/tickets/SmsComposeContent.svelte";
   import type { TicketAction } from "$lib/tickets/types.js";
   import type {
     DeleteConfirmState,
@@ -35,9 +32,7 @@
     callSheetOpen: boolean;
     composeActionsOpen: boolean;
     composeActionsAnchor: HTMLElement | undefined;
-    smsSheetOpen: boolean;
     hasVerifiedPhone: boolean;
-    smsSending: boolean;
     currentAssigneeId: string | null;
     deleteConfirm: DeleteConfirmState;
     noteEdit: NoteEditState;
@@ -54,9 +49,8 @@
     oncallaction: (action: CallAction) => void;
     oncalldismiss: () => void;
     oncomposedismiss: () => void;
+    onreply: () => void;
     ontextclient: () => void;
-    onsmsdismiss: () => void;
-    onsmssend: (body: string) => Promise<void>;
     ondraftset: (body: string) => void;
   }
 
@@ -68,9 +62,7 @@
     callSheetOpen,
     composeActionsOpen,
     composeActionsAnchor,
-    smsSheetOpen,
     hasVerifiedPhone,
-    smsSending,
     currentAssigneeId,
     deleteConfirm,
     noteEdit,
@@ -87,9 +79,8 @@
     oncallaction,
     oncalldismiss,
     oncomposedismiss,
+    onreply,
     ontextclient,
-    onsmsdismiss,
-    onsmssend,
     ondraftset,
   }: Props = $props();
 </script>
@@ -125,21 +116,9 @@
   target={composeActionsAnchor}
   {ticketId}
   onpresetselect={ondraftset}
+  {onreply}
   {ontextclient}
 />
-
-<ShellSheet
-  opened={smsSheetOpen}
-  ondismiss={onsmsdismiss}
-  ariaLabel={m.ticket_sms_title(withTerms())}
->
-  <SmsComposeContent
-    onsend={onsmssend}
-    oncancel={onsmsdismiss}
-    sending={smsSending}
-    error={null}
-  />
-</ShellSheet>
 
 {#if exposureHint.type}
   <ExposureHint

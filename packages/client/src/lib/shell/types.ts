@@ -169,7 +169,7 @@ export interface ShellNotificationProps {
 
 // ── Compose mode ────────────────────────────────────────────────────
 
-export type ComposeMode = "reply" | "note";
+export type ComposeMode = "reply" | "note" | "sms";
 
 export interface ShellMessagebarProps {
   /** Compose text (two-way bindable). Defaults to empty string. */
@@ -189,6 +189,15 @@ export interface ShellMessagebarProps {
    *  skips the ResizeObserver that publishes --messagebar-height. Used inside
    *  sheets where the messagebar sits within the sheet's flow, not viewport-pinned. */
   inline?: boolean;
+  /** When true, hides the Messagebar and renders only the + button. The
+   *  anchor div remains for ResizeObserver height publication. */
+  collapsed?: boolean;
+  /** Snippet rendered above the Messagebar inside the anchor div. Used by
+   *  consumers for mode indicators, warnings, etc. */
+  header?: Snippet;
+  /** Snippet rendered below the Messagebar inside the anchor div. Used by
+   *  consumers for character counters, hints, etc. */
+  footer?: Snippet;
 }
 
 // ── Navbar override ─────────────────────────────────────────────────

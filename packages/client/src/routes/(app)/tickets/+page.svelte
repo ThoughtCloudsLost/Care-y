@@ -410,6 +410,7 @@
         previewReactionsMap,
       ),
       ontap: handleTicketTap,
+      onfullopen: handleTicketFullOpen,
       onselect: (id: string) => multiSelect.toggleSelection(id),
       onaction: handleAction,
       onencryptedhelp: showEncryptedHelp,
@@ -788,6 +789,10 @@
 
   function handleTicketTap(ticketId: string): void {
     ticketsLayout.openTicket(ticketId);
+  }
+
+  function handleTicketFullOpen(ticketId: string): void {
+    ticketsLayout.openTicketFull(ticketId);
   }
 
   function handleAction(ticketId: string, action: TicketQuickAction): void {
@@ -1395,6 +1400,7 @@
         sortDirection={tableSortDirection}
         onsortchange={handleTicketTableSort}
         ontap={handleTicketTap}
+        onfullopen={handleTicketFullOpen}
       />
     {:else}
       <div
@@ -1447,6 +1453,7 @@
           sortDirection={tableSortDirection}
           onsortchange={handleTicketTableSort}
           ontap={handleTicketTap}
+          onfullopen={handleTicketFullOpen}
           multiSelectActive={multiSelect.active}
           selectedIds={multiSelect.selectedIds}
           onselect={(id: string) => multiSelect.toggleSelection(id)}

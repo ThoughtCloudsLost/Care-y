@@ -37,5 +37,9 @@
 </script>
 
 {#if !layoutMode.isDesktop || fullView}
-  <TicketDetailOrchestrator {ticketId} onback={goBack} />
+  <TicketDetailOrchestrator
+    {ticketId}
+    onback={goBack}
+    desktopFull={fullView && layoutMode.isDesktop}
+  />
 {/if}

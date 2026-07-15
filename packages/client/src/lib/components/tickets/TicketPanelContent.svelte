@@ -54,10 +54,17 @@
     onnotetap?: (noteId: string) => void;
     /** Emitted when an image thumbnail is tapped. Route opens lightbox. */
     onlightbox?: (imageUrl: string) => void;
+    /** Skip title, description, and opened date (already shown by CaseHeader). */
+    compact?: boolean;
   }
 
-  let { ticketId, onaction, onnotetap, onlightbox }: TicketPanelContentProps =
-    $props();
+  let {
+    ticketId,
+    onaction,
+    onnotetap,
+    onlightbox,
+    compact = false,
+  }: TicketPanelContentProps = $props();
 
   // --- Context + caches ---
 
@@ -155,23 +162,25 @@
 </script>
 
 <div class="panel-content">
-  <!-- Ticket title / description -->
-  {#if ticketQuery.isLoading}
-    <Block class="!my-0 !mt-2">
-      <p class="ticket-title">
-        <DecryptPlaceholder length={20} />
-      </p>
-    </Block>
-  {:else if decryptedTitle}
-    <Block class="!my-0 !mt-2">
-      <p class="ticket-title">{decryptedTitle}</p>
-    </Block>
-  {/if}
+  {#if !compact}
+    <!-- Ticket title / description -->
+    {#if ticketQuery.isLoading}
+      <Block class="!my-0 !mt-2">
+        <p class="ticket-title">
+          <DecryptPlaceholder length={20} />
+        </p>
+      </Block>
+    {:else if decryptedTitle}
+      <Block class="!my-0 !mt-2">
+        <p class="ticket-title">{decryptedTitle}</p>
+      </Block>
+    {/if}
 
-  {#if decryptedDescription}
-    <Block class="!my-0 !mt-1">
-      <p class="ticket-description">{decryptedDescription}</p>
-    </Block>
+    {#if decryptedDescription}
+      <Block class="!my-0 !mt-1">
+        <p class="ticket-description">{decryptedDescription}</p>
+      </Block>
+    {/if}
   {/if}
 
   <!-- Call button -->
@@ -200,15 +209,17 @@
         {/if}
       {/snippet}
     </ListItem>
-    <ListItem title={m.ticket_panel_opened()}>
-      {#snippet after()}
-        {#if ticketQuery.isLoading}
-          <InlineSkeleton width="4ch" />
-        {:else if ticket?.createdAt}
-          {formatRelativeTime(new Date(ticket.createdAt))}
-        {/if}
-      {/snippet}
-    </ListItem>
+    {#if !compact}
+      <ListItem title={m.ticket_panel_opened()}>
+        {#snippet after()}
+          {#if ticketQuery.isLoading}
+            <InlineSkeleton width="4ch" />
+          {:else if ticket?.createdAt}
+            {formatRelativeTime(new Date(ticket.createdAt))}
+          {/if}
+        {/snippet}
+      </ListItem>
+    {/if}
   </List>
 
   <PanelNotesSection {ticketId} {keyWrap} {onnotetap} />

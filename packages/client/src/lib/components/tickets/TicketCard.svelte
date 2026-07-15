@@ -55,6 +55,7 @@
     selected = false,
     multiSelectActive = false,
     ontap,
+    onfullopen,
     onselect,
     onaction,
     onencryptedhelp,
@@ -93,6 +94,12 @@
       onselect?.(ticketId);
     } else {
       ontap(ticketId);
+    }
+  }
+
+  function handleCardDblClick(): void {
+    if (!multiSelectActive) {
+      onfullopen?.(ticketId);
     }
   }
 
@@ -262,6 +269,7 @@
       class="card-open-link"
       aria-label={m.tickets_open(withTerms({ alias: clientAlias }))}
       onclick={handleCardClick}
+      ondblclick={handleCardDblClick}
     ></button>
 
     {#if viewMode === "list"}
