@@ -671,6 +671,10 @@
     libraryLayout.openArticle(articleId);
   }
 
+  function handleArticleFullOpen(articleId: string): void {
+    libraryLayout.openArticleFull(articleId);
+  }
+
   function loadNextPage(): void {
     if (articlesQuery.hasNextPage && !articlesQuery.isFetchingNextPage) {
       void articlesQuery.fetchNextPage();
@@ -901,6 +905,7 @@
       sortDirection={kbFilterStore.sort.direction}
       onsortchange={handleTableSort}
       ontap={handleArticleTap}
+      onfullopen={handleArticleFullOpen}
       {multiSelectActive}
       {selectedIds}
       onselect={toggleSelection}
@@ -967,6 +972,7 @@
               selected={selectedIds.has(article.id)}
               {multiSelectActive}
               ontap={handleArticleTap}
+              onfullopen={handleArticleFullOpen}
               onselect={toggleSelection}
               onlongpress={handleLongPress}
               searchTerm={overlay.term}

@@ -28,6 +28,7 @@
     sortDirection: SortDirection;
     onsortchange: (field: KbSortField, direction: SortDirection) => void;
     ontap: (articleId: string) => void;
+    onfullopen?: (articleId: string) => void;
     multiSelectActive?: boolean;
     selectedIds?: ReadonlySet<string>;
     onselect?: (articleId: string) => void;
@@ -44,6 +45,7 @@
     sortDirection,
     onsortchange,
     ontap,
+    onfullopen,
     multiSelectActive = false,
     selectedIds,
     onselect,
@@ -104,6 +106,12 @@
       onselect?.(articleId);
     } else {
       ontap(articleId);
+    }
+  }
+
+  function handleRowDblClick(articleId: string): void {
+    if (!multiSelectActive) {
+      onfullopen?.(articleId);
     }
   }
 </script>
@@ -202,6 +210,7 @@
             tabindex="0"
             aria-current={isActive ? "true" : undefined}
             onclick={() => handleRowClick(row.id)}
+            ondblclick={() => handleRowDblClick(row.id)}
             onkeydown={onKeyActivate(() => handleRowClick(row.id))}
             onpointerdown={() => handlePointerDown(row.id)}
             onpointerup={() => handlePointerUp(row.id)}

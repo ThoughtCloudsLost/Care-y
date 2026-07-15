@@ -146,6 +146,7 @@ vi.mock("$lib/paraglide/messages.js", () => ({
   settings_color_scheme: () => "Color scheme",
   settings_dark_mode: () => "Dark mode",
   settings_light_mode: () => "Light mode",
+  settings_refresh_app: () => "Refresh app",
   settings_security: () => "Security",
   settings_2fa: () => "Two-factor authentication",
   settings_2fa_methods: (p: { count: number }) =>

@@ -10,7 +10,11 @@
   containers (split view), depending on the component tree ancestor.
 -->
 <script lang="ts">
-  import { getDraft, setDraft } from "$lib/tickets/draft-store.svelte.js";
+  import {
+    getDraftForMode,
+    setDraftForMode,
+    clearDraftForMode,
+  } from "$lib/tickets/draft-store.svelte.js";
   import { Link, Button } from "konsta/svelte";
   import {
     ChevronLeft,
@@ -20,6 +24,7 @@
     Maximize2,
     Copy,
     SquareCheckBig,
+    X,
   } from "@lucide/svelte";
   import BulkActionBar from "$lib/components/BulkActionBar.svelte";
   import * as m from "$lib/paraglide/messages.js";
@@ -30,10 +35,12 @@
   } from "$lib/shell/context.js";
   import { useScrollDirection } from "$lib/shell/use-scroll-direction.svelte.js";
   import { layoutMode } from "$lib/stores/layout-mode.svelte";
+  import SplitView from "$lib/shell/SplitView.svelte";
   import SubNavbarFilterLayout from "$lib/shell/SubNavbarFilterLayout.svelte";
   import IconTabToggle from "$lib/components/shared/IconTabToggle.svelte";
   import TicketDetail from "$lib/components/tickets/TicketDetail.svelte";
   import CaseHeader from "$lib/components/tickets/CaseHeader.svelte";
+  import TicketPanelContent from "$lib/components/tickets/TicketPanelContent.svelte";
   import type { ContextMenuEvent } from "$lib/components/tickets/context-menu-actions.js";
   import { createLightbox } from "$lib/composables/ticket-detail/create-lightbox.svelte.js";
   import { createContextMenu } from "$lib/composables/ticket-detail/create-context-menu.svelte.js";
@@ -97,10 +104,12 @@
     ticketId,
     onback,
     onexpand,
+    desktopFull = false,
   }: {
     ticketId: string;
     onback: () => void;
     onexpand?: () => void;
+    desktopFull?: boolean;
   } = $props();
 
   // ── Composable initialization ──
@@ -116,22 +125,30 @@
   const tabbarHidden = getTabbarHiddenCtx();
   const navbarCtx = getNavbarOverrideCtx();
 
-  // Draft compose state (shared with ShellMessagebar + TicketDetail).
-  // In-memory SvelteMap keyed by ticketId survives SPA navigations.
-  // No disk persistence (sessionStorage) to avoid plaintext PII on disk.
-  // Writable $derived: re-evaluates from store when ticketId changes,
-  // user writes from textarea bind override until next ticketId change.
-  let draftText = $derived(getDraft(ticketId));
+  // Compose mode: null = collapsed (no messagebar), "reply" or "sms" = expanded.
+  let activeComposeMode = $state<"reply" | "sms" | null>(null);
+
+  // Draft compose state keyed by ticketId + mode. Survives SPA navigations
+  // in-memory. No disk persistence to avoid plaintext PII on disk.
+  let draftText = $derived(
+    activeComposeMode !== null
+      ? getDraftForMode(ticketId, activeComposeMode)
+      : "",
+  );
   let cursorPosition = $state(0);
 
-  // Sync edits back to the store.
+  // Sync edits back to the per-mode store.
   $effect(() => {
-    setDraft(ticketId, draftText);
+    if (activeComposeMode !== null) {
+      setDraftForMode(ticketId, activeComposeMode, draftText);
+    }
   });
 
-  // Warn before page refresh/tab close when a draft exists.
+  // Warn before page refresh/tab close when any draft exists.
   $effect(() => {
-    if (!draftText.trim()) return;
+    const hasReply = getDraftForMode(ticketId, "reply").trim();
+    const hasSms = getDraftForMode(ticketId, "sms").trim();
+    if (!hasReply && !hasSms) return;
     function onBeforeUnload(e: BeforeUnloadEvent): void {
       e.preventDefault();
     }
@@ -236,16 +253,23 @@
   });
 
   // Override AppShell Navbar with ticket-specific content + subnavbar.
+  // In desktopFull mode, the subnavbar renders inline in the right pane
+  // and the panel content is inline on the left, so we skip both.
   $effect(() => {
-    navbarCtx.current = {
-      left: navLeft,
-      title: navTitle,
-      right: navRight,
-      subnavbar: ticketSubnavbar,
-      subnavbarHidden: () =>
-        // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- $state/$derived values read lazily inside callback
-        chatScrollReady && scrollDir.hidden && !overlay.active,
-    };
+    navbarCtx.current = desktopFull
+      ? {
+          left: navLeft,
+          title: navTitle,
+        }
+      : {
+          left: navLeft,
+          title: navTitle,
+          right: navRight,
+          subnavbar: ticketSubnavbar,
+          subnavbarHidden: () =>
+            // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- $state/$derived values read lazily inside callback
+            chatScrollReady && scrollDir.hidden && !overlay.active,
+        };
     return () => {
       navbarCtx.current = undefined;
     };
@@ -259,7 +283,6 @@
   let composeActionsOpen = $state(false);
   let composeActionsAnchor = $state<HTMLElement | undefined>();
   let timelineActive = $state(false);
-  let smsSheetOpen = $state(false);
 
   // --- Exposure hint (composable) ---
 
@@ -386,10 +409,10 @@
     createFollowUpMutate: async (args) =>
       ticketRouter.createFollowUp.mutate(args),
     onSuccess: () => {
-      smsSheetOpen = false;
+      clearDraftForMode(ticketId, "sms");
+      activeComposeMode = null;
     },
   });
-  const smsSending = $derived(sms.sending);
 
   // --- Call dispatch (composable) ---
 
@@ -516,10 +539,43 @@
     };
   });
 
-  // --- Compose handlers ---
+  // --- Compose mode handlers ---
 
-  const handleSend = messenger.handleSend;
-  const sending = $derived(messenger.sending);
+  const SMS_CHAR_LIMIT = 1600;
+  const smsCharCount = $derived(
+    activeComposeMode === "sms" ? draftText.length : 0,
+  );
+  const smsOverLimit = $derived(smsCharCount > SMS_CHAR_LIMIT);
+  const sending = $derived(messenger.sending || sms.sending);
+
+  function handleSend(): void {
+    if (activeComposeMode === "reply") {
+      void messenger.handleSend();
+    } else if (activeComposeMode === "sms") {
+      if (smsOverLimit) return;
+      void sms.handleSmsSend(draftText);
+    }
+  }
+
+  const sendDisabled = $derived(
+    !draftText.trim() ||
+      sending ||
+      (activeComposeMode === "sms" && smsOverLimit),
+  );
+
+  function activateReplyMode(): void {
+    activeComposeMode = "reply";
+  }
+
+  function activateSmsMode(): void {
+    exposureHint.show("sms", () => {
+      activeComposeMode = "sms";
+    });
+  }
+
+  function dismissCompose(): void {
+    activeComposeMode = null;
+  }
 
   function openComposeActions(anchor: HTMLElement): void {
     composeActionsAnchor = anchor;
@@ -588,16 +644,6 @@
       void callDispatch.executeCall();
     });
   }
-
-  // --- SMS handlers ---
-
-  function handleOpenSmsCompose(): void {
-    exposureHint.show("sms", () => {
-      smsSheetOpen = true;
-    });
-  }
-
-  const handleSmsSend = sms.handleSmsSend;
 
   // --- Delete confirm + note edit (composables) ---
 
@@ -780,9 +826,19 @@
       <Maximize2 size={16} aria-hidden="true" />
     </Link>
   {/if}
+  {#if !desktopFull}
+    <Link
+      iconOnly
+      onclick={onback}
+      role="button"
+      aria-label={m.tickets_detail_close()}
+    >
+      <X size={18} aria-hidden="true" />
+    </Link>
+  {/if}
 {/snippet}
 
-<div class="ticket-detail-page">
+{#snippet ticketMessages()}
   <TicketDetail
     {ticketId}
     knownFollowUpCount={cachedFollowUpCount}
@@ -818,16 +874,95 @@
     bind:hasMoreMessages
     bind:loadOlderPage
   />
-</div>
+{/snippet}
 
-{#if !selectMode.active}
-  <ShellMessagebar
-    bind:value={draftText}
-    onsend={handleSend}
-    onplus={openComposeActions}
-    oninput={handleInput}
-    sendDisabled={!draftText.trim() || sending}
+{#snippet composeHeader()}
+  <div class="compose-mode-indicator">
+    <span class="compose-mode-label">
+      {activeComposeMode === "sms"
+        ? m.ticket_mode_indicator_sms(withTerms())
+        : m.ticket_mode_indicator_reply()}
+    </span>
+    {#if activeComposeMode === "sms"}
+      <span class="sms-char-counter" class:sms-over-limit={smsOverLimit}>
+        {m.ticket_sms_char_count({ count: String(smsCharCount) })}
+      </span>
+    {/if}
+    <button
+      type="button"
+      class="compose-mode-dismiss"
+      onclick={dismissCompose}
+      aria-label={m.ticket_compose_dismiss_mode()}
+    >
+      <X size={16} aria-hidden="true" />
+    </button>
+  </div>
+{/snippet}
+
+{#snippet ticketCompose()}
+  {#if !selectMode.active}
+    <ShellMessagebar
+      bind:value={draftText}
+      mode={activeComposeMode === "sms" ? "sms" : "reply"}
+      collapsed={activeComposeMode === null}
+      inline={desktopFull}
+      header={activeComposeMode !== null ? composeHeader : undefined}
+      onsend={handleSend}
+      onplus={openComposeActions}
+      oninput={handleInput}
+      {sendDisabled}
+    />
+  {/if}
+{/snippet}
+
+{#snippet inlineFilterBar()}
+  <SubNavbarFilterLayout
+    title={decryptedTitle}
+    smallTitle
+    hideTitle
+    headerRight={detailViewToggle}
+    stats={detailStats}
+    selectLabel={m.ticket_select_mode()}
+    onselect={selectMode.active
+      ? () => selectMode.exit()
+      : () => selectMode.enter()}
+    filterPills={detailFilters.pills}
+    searchNavigator={overlay.active ? searchNavigatorRow : undefined}
+    bulkActions={selectMode.active ? selectActionsRow : undefined}
+    onsearch={!overlay.active ? () => overlay.enter("") : undefined}
+    searchLabel={m.search_inline_trigger()}
   />
+{/snippet}
+
+{#if desktopFull}
+  <SplitView>
+    {#snippet left()}
+      <aside class="full-desktop-sidebar">
+        <CaseHeader {ticketId} alwaysExpanded />
+        <TicketPanelContent
+          {ticketId}
+          compact
+          onaction={(action: TicketAction) => panelActions.dispatch(action)}
+          onnotetap={handleNoteTap}
+          onlightbox={handlePanelLightbox}
+        />
+      </aside>
+    {/snippet}
+    {#snippet right()}
+      <div class="full-desktop-main">
+        <div class="full-desktop-filter-bar">
+          {@render inlineFilterBar()}
+        </div>
+        {@render ticketMessages()}
+        {@render ticketCompose()}
+      </div>
+    {/snippet}
+  </SplitView>
+{:else}
+  <div class="ticket-detail-page">
+    {@render ticketMessages()}
+  </div>
+  {@render ticketCompose()}
 {/if}
 
 {#snippet selectActionsRow()}
@@ -887,9 +1022,7 @@
   {callSheetOpen}
   {composeActionsOpen}
   {composeActionsAnchor}
-  {smsSheetOpen}
   {hasVerifiedPhone}
-  {smsSending}
   currentAssigneeId={ticket?.assignedTo ?? null}
   {deleteConfirm}
   {noteEdit}
@@ -924,12 +1057,10 @@
   oncallaction={handleCallAction}
   oncalldismiss={closeCallSheet}
   oncomposedismiss={closeComposeActions}
-  ontextclient={handleOpenSmsCompose}
-  onsmsdismiss={() => {
-    smsSheetOpen = false;
-  }}
-  onsmssend={handleSmsSend}
+  onreply={activateReplyMode}
+  ontextclient={activateSmsMode}
   ondraftset={(body: string) => {
+    activeComposeMode = "reply";
     draftText = body;
   }}
 />
@@ -940,5 +1071,79 @@
     flex-direction: column;
     flex: 1;
     min-height: 0;
+  }
+
+  .compose-mode-indicator {
+    position: absolute;
+    bottom: 100%;
+    left: 0;
+    right: 0;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 6px 16px;
+    font-size: var(--text-xs);
+    color: var(--muted);
+  }
+
+  .compose-mode-label {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .compose-mode-dismiss {
+    appearance: none;
+    border: none;
+    background: none;
+    padding: 4px;
+    margin: -4px;
+    color: var(--muted);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .sms-char-counter {
+    font-size: var(--text-xs);
+    color: var(--muted);
+    margin-left: auto;
+    flex-shrink: 0;
+  }
+
+  .sms-char-counter.sms-over-limit {
+    color: var(--danger);
+    font-weight: 600;
+  }
+
+  .full-desktop-sidebar {
+    height: 100%;
+    overflow-y: auto;
+    overflow-x: hidden;
+  }
+
+  .full-desktop-main {
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+  }
+
+  .full-desktop-filter-bar {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    backdrop-filter: saturate(180%) blur(20px);
+    -webkit-backdrop-filter: saturate(180%) blur(20px);
+    background: color-mix(in srgb, var(--paper) 80%, transparent);
+    border-bottom: 1px solid var(--hair, var(--divider));
+  }
+
+  @media (prefers-contrast: more) {
+    .full-desktop-filter-bar {
+      backdrop-filter: none !important;
+      -webkit-backdrop-filter: none !important;
+      background: Canvas !important;
+    }
   }
 </style>

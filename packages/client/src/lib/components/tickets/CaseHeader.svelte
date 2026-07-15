@@ -41,9 +41,10 @@
   interface Props {
     ticketId: string;
     headerActions?: Snippet;
+    alwaysExpanded?: boolean;
   }
 
-  let { ticketId, headerActions }: Props = $props();
+  let { ticketId, headerActions, alwaysExpanded = false }: Props = $props();
 
   const ticketRouter = requireRouter(trpc.tickets, "tickets");
 
@@ -112,7 +113,7 @@
     );
   });
 
-  const folded = $derived(isCaseFolded(ticketId));
+  const folded = $derived(alwaysExpanded ? false : isCaseFolded(ticketId));
 
   function toggleFold(): void {
     setCaseFolded(ticketId, !folded);
@@ -122,7 +123,11 @@
 </script>
 
 {#if !ticketQuery.isError}
-  <header class="case-header" class:case-header--expanded={!folded}>
+  <header
+    class="case-header"
+    class:case-header--expanded={!folded}
+    class:case-header--inline={alwaysExpanded}
+  >
     <div class="title-row">
       <h2 class="case-title heading-display">
         {#if titleResult}
@@ -183,28 +188,30 @@
       </dl>
     </div>
 
-    <div
-      class="case-handle"
-      role="button"
-      tabindex="0"
-      aria-expanded={!folded}
-      aria-controls={fieldsId}
-      aria-label={folded
-        ? m.ticket_case_details()
-        : m.ticket_fold_case_details()}
-      onclick={toggleFold}
-      onkeydown={(e) => {
-        if (e.key === "Enter" || e.key === " ") {
-          e.preventDefault();
-          toggleFold();
-        }
-      }}
-    >
-      <span class="case-handle-label">
-        {folded ? m.ticket_case_details() : m.ticket_fold_case_details()}
-      </span>
-      <div class="case-handle-indicator" aria-hidden="true"></div>
-    </div>
+    {#if !alwaysExpanded}
+      <div
+        class="case-handle"
+        role="button"
+        tabindex="0"
+        aria-expanded={!folded}
+        aria-controls={fieldsId}
+        aria-label={folded
+          ? m.ticket_case_details()
+          : m.ticket_fold_case_details()}
+        onclick={toggleFold}
+        onkeydown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            toggleFold();
+          }
+        }}
+      >
+        <span class="case-handle-label">
+          {folded ? m.ticket_case_details() : m.ticket_fold_case_details()}
+        </span>
+        <div class="case-handle-indicator" aria-hidden="true"></div>
+      </div>
+    {/if}
   </header>
 {/if}
 
@@ -365,6 +372,32 @@
     border-radius: 2.5px;
     background: var(--muted, rgba(128, 128, 128, 0.4));
     opacity: 0.5;
+  }
+
+  .case-header--inline {
+    border-radius: 0;
+    border-top: none;
+    border-bottom: none;
+    border-left: none;
+    border-right: none;
+    background: transparent;
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+    box-shadow: none;
+    padding: 20px 24px 0;
+  }
+
+  .case-header--inline .case-title {
+    font-size: 1.5rem;
+  }
+
+  .case-header--inline .case-fields-wrap {
+    border-top: 1px solid var(--hair);
+    margin-top: 14px;
+  }
+
+  .case-header--inline .fld {
+    grid-template-columns: 140px 1fr;
   }
 
   @media (prefers-reduced-motion: reduce) {

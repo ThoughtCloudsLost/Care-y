@@ -26,6 +26,7 @@
     multiSelectActive?: boolean;
     loading?: boolean;
     ontap: (articleId: string) => void;
+    onfullopen?: (articleId: string) => void;
     onselect?: (articleId: string) => void;
     onlongpress?: (articleId: string) => void;
     searchTerm?: string | null;
@@ -47,6 +48,7 @@
     multiSelectActive = false,
     loading = false,
     ontap,
+    onfullopen,
     onselect,
     onlongpress,
     searchTerm = null,
@@ -90,6 +92,12 @@
       onselect?.(articleId);
     } else {
       ontap(articleId);
+    }
+  }
+
+  function handleCardDblClick(): void {
+    if (!loading && !multiSelectActive) {
+      onfullopen?.(articleId);
     }
   }
 </script>
@@ -138,6 +146,7 @@
         role="button"
         tabindex="0"
         onclick={handleCardClick}
+        ondblclick={handleCardDblClick}
         onkeydown={onKeyActivate(handleCardClick)}
         onpointerdown={handlePointerDown}
         onpointerup={handlePointerUp}

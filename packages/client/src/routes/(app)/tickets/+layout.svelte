@@ -24,6 +24,7 @@
     setScrollContainer,
   } from "$lib/shell/context.js";
   import EmptyState from "$lib/components/EmptyState.svelte";
+  import SplitView from "$lib/shell/SplitView.svelte";
   import SplitDetailPane from "./SplitDetailPane.svelte";
   import { setTicketsLayoutCtx } from "./tickets-layout-ctx.js";
 
@@ -58,6 +59,10 @@
     }
   }
 
+  function openTicketFull(ticketId: string): void {
+    void goto(resolve(`/tickets/${ticketId}?full=1`));
+  }
+
   function closeDetail(): void {
     replaceState("", {});
   }
@@ -70,6 +75,7 @@
 
   setTicketsLayoutCtx({
     openTicket,
+    openTicketFull,
     selectedTicketId: () => selectedTicketId,
   });
 
@@ -89,18 +95,11 @@
 </script>
 
 {#if isSplitView}
-  <div class="split-view-container">
-    <div class="split-list-pane" bind:this={leftPaneEl}>
+  <SplitView subnavbar bind:leftRef={leftPaneEl}>
+    {#snippet left()}
       {@render children()}
-    </div>
-
-    <div
-      class="split-divider"
-      role="separator"
-      aria-orientation="vertical"
-    ></div>
-
-    <div class="split-detail-pane">
+    {/snippet}
+    {#snippet right()}
       {#if selectedTicketId}
         {#key selectedTicketId}
           <SplitDetailPane
@@ -117,61 +116,13 @@
           />
         </div>
       {/if}
-    </div>
-  </div>
+    {/snippet}
+  </SplitView>
 {:else}
   {@render children()}
 {/if}
 
 <style>
-  /* Override the content-max-width constraint from shared.css.
-     .main-content > * sets max-width: 720px, but the split view
-     needs the full width between sidebar and viewport edge. */
-  :global(.main-content) > .split-view-container {
-    max-width: none;
-    margin-inline: 0;
-    padding-inline: 0;
-  }
-
-  /* Pull split view up into the subnavbar area so scrolling content
-     passes behind the glass-blur subnavbar (same as mobile behavior).
-     Each pane gets padding-top so initial content starts below it. */
-  :global(.main-content.has-subnavbar) > .split-view-container {
-    margin-top: calc(-1 * var(--subnavbar-h, 0px));
-  }
-
-  .split-view-container {
-    display: flex;
-    height: calc(100% + var(--subnavbar-h, 0px));
-    min-height: 0;
-    overflow: hidden;
-    width: 100%;
-  }
-
-  .split-list-pane {
-    flex: 1;
-    min-width: 0;
-    overflow-y: auto;
-    overflow-x: hidden;
-    padding-top: var(--subnavbar-h, 0px);
-  }
-
-  .split-divider {
-    width: 1px;
-    flex-shrink: 0;
-    background: var(--hair, var(--divider));
-  }
-
-  .split-detail-pane {
-    width: var(--split-detail-width, 480px);
-    flex-shrink: 0;
-    display: flex;
-    flex-direction: column;
-    height: 100%;
-    overflow: hidden;
-    padding-top: var(--subnavbar-h, 0px);
-  }
-
   .split-placeholder {
     flex: 1;
     display: flex;

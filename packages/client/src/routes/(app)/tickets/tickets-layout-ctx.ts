@@ -2,6 +2,7 @@ import { createContext } from "svelte";
 
 export interface TicketsLayoutCtx {
   readonly openTicket: (ticketId: string) => void;
+  readonly openTicketFull: (ticketId: string) => void;
   readonly selectedTicketId: () => string | undefined;
 }
 

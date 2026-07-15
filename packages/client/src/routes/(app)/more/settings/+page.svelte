@@ -181,6 +181,13 @@
         queueMicrotask(() => void applyKonstaPalette({ primary, accent }));
       }}
     />
+    <ListItem
+      title={m.settings_refresh_app()}
+      link
+      onclick={() => {
+        location.reload();
+      }}
+    />
   </List>
 
   <BlockTitle>{m.settings_security()}</BlockTitle>
