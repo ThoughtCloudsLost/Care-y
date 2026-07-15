@@ -8,6 +8,7 @@
   import type { ShellDialogProps } from "./types";
   import { useFocusTrap } from "./use-focus-trap.svelte";
   import { portal } from "./portal";
+  import ShellBackdrop from "./ShellBackdrop.svelte";
 
   let {
     opened,
@@ -33,7 +34,8 @@
   role="dialog"
   aria-modal={opened ? "true" : undefined}
 >
-  <Dialog {opened} {title} onBackdropClick={trap.handleDismiss}>
+  <ShellBackdrop {opened} ondismiss={trap.handleDismiss} />
+  <Dialog {opened} {title} backdrop={false}>
     {@render contentSnippet()}
     {#snippet buttons()}
       {@render buttonsSnippet()}

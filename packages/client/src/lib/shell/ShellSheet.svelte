@@ -18,6 +18,7 @@
   import { portal } from "./portal";
   import { layoutMode } from "$lib/stores/layout-mode.svelte";
   import ShellPopup from "./ShellPopup.svelte";
+  import ShellBackdrop from "./ShellBackdrop.svelte";
 
   let {
     opened,
@@ -87,12 +88,10 @@
   </ShellPopup>
 {:else}
   <div use:portal={".k-page"}>
-    <Sheet
-      {opened}
-      {backdrop}
-      onBackdropClick={backdrop ? trap.handleDismiss : undefined}
-      class={sheetClass}
-    >
+    {#if backdrop}
+      <ShellBackdrop {opened} ondismiss={trap.handleDismiss} />
+    {/if}
+    <Sheet {opened} backdrop={false} class={sheetClass}>
       <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
       <div
         bind:this={trap.dialogEl}

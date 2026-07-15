@@ -8,6 +8,7 @@
   import type { ShellPopoverProps } from "./types";
   import { useFocusTrap } from "./use-focus-trap.svelte";
   import { portal } from "./portal";
+  import ShellBackdrop from "./ShellBackdrop.svelte";
 
   let {
     opened,
@@ -30,13 +31,8 @@
 </script>
 
 <div use:portal={".k-page"}>
-  <Popover
-    {opened}
-    {target}
-    {angle}
-    {placement}
-    onBackdropClick={trap.handleDismiss}
-  >
+  <ShellBackdrop {opened} ondismiss={trap.handleDismiss} />
+  <Popover {opened} {target} {angle} {placement} backdrop={false}>
     <div
       bind:this={trap.dialogEl}
       role="dialog"

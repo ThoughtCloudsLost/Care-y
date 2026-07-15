@@ -9,6 +9,7 @@
   import type { ShellPopupProps } from "./types";
   import { useFocusTrap } from "./use-focus-trap.svelte";
   import { portal } from "./portal";
+  import ShellBackdrop from "./ShellBackdrop.svelte";
 
   let {
     opened,
@@ -31,11 +32,8 @@
 </script>
 
 <div use:portal={".k-page"}>
-  <Popup
-    {opened}
-    onBackdropClick={trap.handleDismiss}
-    class="glass shell-popup"
-  >
+  <ShellBackdrop {opened} ondismiss={trap.handleDismiss} />
+  <Popup {opened} backdrop={false} class="glass shell-popup">
     <div
       bind:this={trap.dialogEl}
       role="dialog"
