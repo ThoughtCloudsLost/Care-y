@@ -25,7 +25,8 @@ import type { SavedFilterState } from "./saved-filters.svelte.js";
 
 export type FilterStatus = DisplayStatus;
 
-export type SortField = "date" | "priority" | "last_activity" | "queue";
+export type SortField =
+  "date" | "priority" | "last_activity" | "queue" | "client" | "msgs";
 export type SortDirection = "asc" | "desc";
 
 export interface SortConfig {

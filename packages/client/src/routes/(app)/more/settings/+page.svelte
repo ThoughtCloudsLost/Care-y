@@ -20,6 +20,9 @@
   import { getNavbarOverrideCtx } from "$lib/shell/context.js";
   import { shellBack } from "$lib/shell/navigation.js";
   import { base64ToUint8Array } from "$lib/utils/buffer-encoding.js";
+  import { themeStore } from "$lib/stores/theme.svelte";
+  import { applyKonstaPalette } from "$lib/branding/konsta-palette";
+  import { DEFAULT_PRIMARY } from "$lib/branding/index.js";
   import { toastStore } from "$lib/stores/toast.svelte.js";
   import DisplayNameSheet from "$lib/components/settings/DisplayNameSheet.svelte";
   import UsernameSheet from "$lib/components/settings/UsernameSheet.svelte";
@@ -158,6 +161,24 @@
       link
       onclick={() => {
         passwordSheetOpen = true;
+      }}
+    />
+  </List>
+
+  <BlockTitle>{m.settings_appearance()}</BlockTitle>
+  <List strong inset>
+    <ListItem
+      title={m.settings_color_scheme()}
+      after={themeStore.resolvedScheme === "dark"
+        ? m.settings_dark_mode()
+        : m.settings_light_mode()}
+      link
+      onclick={() => {
+        themeStore.toggleColorScheme();
+        const primary =
+          localStorage.getItem("care-y-brand-primary") ?? DEFAULT_PRIMARY;
+        const accent = localStorage.getItem("care-y-brand-accent") ?? undefined;
+        queueMicrotask(() => void applyKonstaPalette({ primary, accent }));
       }}
     />
   </List>

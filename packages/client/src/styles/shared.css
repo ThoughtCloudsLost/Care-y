@@ -652,11 +652,17 @@ html.glass-dark.light
   height: 34px;
   border-radius: 50%;
   border: 2px solid
-    color-mix(in srgb, var(--brand-fill, var(--brand-primary)) 45%, transparent);
+    color-mix(in srgb, var(--brand-fill, var(--brand-primary)) 55%, transparent);
+  outline: 1px solid
+    color-mix(in srgb, var(--brand-fill, var(--brand-primary)) 30%, transparent);
+  outline-offset: 2px;
   color: var(--brand-text, var(--brand-primary));
   font-family: var(--theme-font-display, inherit);
   font-optical-sizing: auto;
-  font-weight: 700;
+  font-weight: 800;
   font-size: 0.9375rem;
+  letter-spacing: 0.03em;
+  text-shadow: 0 0 0.5px currentColor;
   transform: rotate(-6deg);
+  opacity: 0.85;
 }

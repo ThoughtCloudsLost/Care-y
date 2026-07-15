@@ -18,10 +18,10 @@ describe("kbViewModeStore", () => {
     vi.resetModules();
   });
 
-  it("defaults to list when no stored value", async () => {
+  it("defaults to cards when no stored value", async () => {
     setupMocks();
     const { kbViewModeStore } = await import("./kb-view-mode.svelte.ts");
-    expect(kbViewModeStore.mode).toBe("list");
+    expect(kbViewModeStore.mode).toBe("cards");
   });
 
   it("hydrates grid from localStorage", async () => {
@@ -36,16 +36,28 @@ describe("kbViewModeStore", () => {
     expect(kbViewModeStore.mode).toBe("list");
   });
 
-  it("defaults to list for garbage stored values", async () => {
-    setupMocks({ storedMode: "not-a-mode" });
+  it("hydrates table from localStorage", async () => {
+    setupMocks({ storedMode: "table" });
     const { kbViewModeStore } = await import("./kb-view-mode.svelte.ts");
-    expect(kbViewModeStore.mode).toBe("list");
+    expect(kbViewModeStore.mode).toBe("table");
   });
 
-  it("defaults to list for empty string", async () => {
+  it("hydrates cards from localStorage", async () => {
+    setupMocks({ storedMode: "cards" });
+    const { kbViewModeStore } = await import("./kb-view-mode.svelte.ts");
+    expect(kbViewModeStore.mode).toBe("cards");
+  });
+
+  it("defaults to cards for garbage stored values", async () => {
+    setupMocks({ storedMode: "not-a-mode" });
+    const { kbViewModeStore } = await import("./kb-view-mode.svelte.ts");
+    expect(kbViewModeStore.mode).toBe("cards");
+  });
+
+  it("defaults to cards for empty string", async () => {
     setupMocks({ storedMode: "" });
     const { kbViewModeStore } = await import("./kb-view-mode.svelte.ts");
-    expect(kbViewModeStore.mode).toBe("list");
+    expect(kbViewModeStore.mode).toBe("cards");
   });
 
   it("set() updates mode and persists to localStorage", async () => {
@@ -57,13 +69,22 @@ describe("kbViewModeStore", () => {
     expect(localStorage.getItem("care-y-kb-view-mode")).toBe("grid");
   });
 
-  it("set() back to list persists correctly", async () => {
+  it("set() to table persists correctly", async () => {
+    setupMocks();
+    const { kbViewModeStore } = await import("./kb-view-mode.svelte.ts");
+
+    kbViewModeStore.set("table");
+    expect(kbViewModeStore.mode).toBe("table");
+    expect(localStorage.getItem("care-y-kb-view-mode")).toBe("table");
+  });
+
+  it("set() back to cards persists correctly", async () => {
     setupMocks({ storedMode: "grid" });
     const { kbViewModeStore } = await import("./kb-view-mode.svelte.ts");
 
-    kbViewModeStore.set("list");
-    expect(kbViewModeStore.mode).toBe("list");
-    expect(localStorage.getItem("care-y-kb-view-mode")).toBe("list");
+    kbViewModeStore.set("cards");
+    expect(kbViewModeStore.mode).toBe("cards");
+    expect(localStorage.getItem("care-y-kb-view-mode")).toBe("cards");
   });
 
   it("handles localStorage throwing on getItem", async () => {
@@ -76,7 +97,7 @@ describe("kbViewModeStore", () => {
     });
 
     const { kbViewModeStore } = await import("./kb-view-mode.svelte.ts");
-    expect(kbViewModeStore.mode).toBe("list");
+    expect(kbViewModeStore.mode).toBe("cards");
   });
 
   it("handles localStorage throwing on setItem without crashing", async () => {

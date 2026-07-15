@@ -1,23 +1,26 @@
 /**
  * Persisted view mode stores for Inkwell surfaces (tickets list, dashboard).
  *
- * The Inkwell design language offers three presentations everywhere tickets
+ * The Inkwell design language offers four presentations everywhere tickets
  * appear: "list" (compact ruled rows), "cards" (full-width cards with
- * conversation previews), and "grid" (multi-column). Each surface persists
+ * conversation previews), "table" (columnar with headers), and "grid"
+ * (multi-column). Each surface persists
  * its own preference under its own localStorage key.
  *
  * Migration note: the union used to be "list" | "grid". Both legacy values
  * remain valid members, so previously persisted preferences load unchanged;
- * anything unrecognized falls back to "list". A future kanban board is
- * separate work and is NOT the grid mode; it would widen this union again.
+ * anything unrecognized falls back to "list". The "kanban" mode is a
+ * placeholder for a future board view; it is NOT the grid mode.
  */
 
-export type ViewMode = "list" | "cards" | "grid";
+export type ViewMode = "list" | "cards" | "table" | "grid" | "kanban";
 
 const VALID_MODES: ReadonlySet<string> = new Set<ViewMode>([
   "list",
   "cards",
+  "table",
   "grid",
+  "kanban",
 ]);
 
 function isViewMode(value: string): value is ViewMode {

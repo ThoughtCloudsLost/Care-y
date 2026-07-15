@@ -37,6 +37,7 @@
 <script lang="ts">
   import { tick } from "svelte";
   import { Combobox } from "bits-ui";
+  import { Loader } from "@lucide/svelte";
   import * as m from "$lib/paraglide/messages.js";
   import { withTerms } from "$lib/terminology/with-terms.js";
 
@@ -185,23 +186,7 @@
 
 {#snippet spinner()}
   <div class="client-select-spinner" aria-label={m.common_loading()}>
-    <svg
-      width="16"
-      height="16"
-      viewBox="0 0 16 16"
-      class="spin"
-      aria-hidden="true"
-    >
-      <circle
-        cx="8"
-        cy="8"
-        r="6"
-        fill="none"
-        stroke="currentColor"
-        stroke-width="2"
-        stroke-dasharray="20 12"
-      />
-    </svg>
+    <Loader size={16} aria-hidden="true" />
   </div>
 {/snippet}
 
@@ -454,8 +439,10 @@
     min-height: 44px;
   }
 
-  .spin {
-    animation: spin 0.8s linear infinite;
+  @media (prefers-reduced-motion: no-preference) {
+    .client-select-spinner {
+      animation: spin 0.8s linear infinite;
+    }
   }
 
   @keyframes spin {

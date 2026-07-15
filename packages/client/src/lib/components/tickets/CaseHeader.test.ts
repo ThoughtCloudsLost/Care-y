@@ -235,37 +235,45 @@ describe("CaseHeader", () => {
     expect(stamp).not.toBeNull();
   });
 
-  it("fold button collapses the field list and flips aria-expanded", async () => {
+  it("drag handle collapses the field list and flips aria-expanded", async () => {
     const { container } = render(CaseHeader, {
       props: { ticketId: "ticket-001" },
     });
-    const button = container.querySelector(".foldup button");
-    expect(button?.getAttribute("aria-expanded")).toBe("true");
-    expect(container.querySelector("dl")).not.toBeNull();
+    const handle = container.querySelector(".case-handle");
+    expect(handle?.getAttribute("aria-expanded")).toBe("true");
+    const wrap = container.querySelector(".case-fields-wrap");
+    expect(wrap?.classList.contains("case-fields-wrap--folded")).toBe(false);
 
-    button?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    handle?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
 
     await vi.waitFor(() => {
-      expect(button?.getAttribute("aria-expanded")).toBe("false");
-      expect(container.querySelector("dl")).toBeNull();
-      expect(button?.textContent).toContain("Case details");
+      expect(handle?.getAttribute("aria-expanded")).toBe("false");
+      expect(wrap?.classList.contains("case-fields-wrap--folded")).toBe(true);
     });
   });
 
   it("remembers fold state per ticket across remounts (session map)", async () => {
     const first = render(CaseHeader, { props: { ticketId: "ticket-001" } });
-    const button = first.container.querySelector(".foldup button");
-    button?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    const handle = first.container.querySelector(".case-handle");
+    handle?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     await vi.waitFor(() => {
-      expect(first.container.querySelector("dl")).toBeNull();
+      expect(
+        first.container
+          .querySelector(".case-fields-wrap")
+          ?.classList.contains("case-fields-wrap--folded"),
+      ).toBe(true);
     });
     first.unmount();
 
     const second = render(CaseHeader, { props: { ticketId: "ticket-001" } });
-    expect(second.container.querySelector("dl")).toBeNull();
     expect(
       second.container
-        .querySelector(".foldup button")
+        .querySelector(".case-fields-wrap")
+        ?.classList.contains("case-fields-wrap--folded"),
+    ).toBe(true);
+    expect(
+      second.container
+        .querySelector(".case-handle")
         ?.getAttribute("aria-expanded"),
     ).toBe("false");
   });

@@ -60,7 +60,7 @@
 <SplitPaneHeader title={splitTitle} right={splitRight} {onclose} {onexpand} />
 
 <div class="split-pane-content">
-  <TicketDetailOrchestrator {ticketId} onback={onclose} />
+  <TicketDetailOrchestrator {ticketId} onback={onclose} {onexpand} />
 </div>
 
 <style>

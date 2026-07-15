@@ -1,8 +1,8 @@
 <script lang="ts">
   import {
     Block,
+    Button,
     DialogButton,
-    Link,
     List,
     ListInput,
     ListItem,
@@ -17,7 +17,8 @@
   import { SvelteSet } from "svelte/reactivity";
   import { RoleId } from "@care-y/shared";
   import type { RoleIdValue } from "@care-y/shared";
-  import { UserMinus, X, Save } from "@lucide/svelte";
+  import { UserMinus, Save } from "@lucide/svelte";
+  import BulkActionBar from "$lib/components/BulkActionBar.svelte";
   import * as m from "$lib/paraglide/messages.js";
   import { withTerms } from "$lib/terminology/with-terms.js";
   import { trpc } from "$lib/trpc/index.js";
@@ -46,7 +47,7 @@
     computeQueueDiff,
     hasQueueChanges,
   } from "$lib/admin/users-section-utils.js";
-  import { getTabbarOverrideCtx } from "$lib/shell/context.js";
+  import type { Snippet } from "svelte";
   import QueryError from "$lib/components/QueryError.svelte";
   import ShellDialog from "$lib/shell/ShellDialog.svelte";
   import ShellSheet from "$lib/shell/ShellSheet.svelte";
@@ -515,14 +516,20 @@
   let multiSelectActive = $state(false);
   const selectedIds = new SvelteSet<string>();
 
-  const tabbarOverride = getTabbarOverrideCtx();
-
   export function toggleMultiSelect(): void {
     if (multiSelectActive) {
       exitMultiSelect();
     } else {
       multiSelectActive = true;
     }
+  }
+
+  export function isMultiSelectActive(): boolean {
+    return multiSelectActive;
+  }
+
+  export function bulkActionsSnippet(): Snippet | undefined {
+    return multiSelectActive ? bulkActionsRow : undefined;
   }
 
   function toggleSelection(userId: string): void {
@@ -537,25 +544,6 @@
     multiSelectActive = false;
     selectedIds.clear();
   }
-
-  $effect(() => {
-    if (multiSelectActive) {
-      tabbarOverride.current = {
-        left: batchLeft,
-        middle: batchMiddle,
-        right: batchRight,
-        ariaLabel: m.admin_users_selected({ count: selectedIds.size }),
-      };
-    } else {
-      tabbarOverride.current = undefined;
-    }
-  });
-
-  $effect(() => {
-    return () => {
-      tabbarOverride.current = undefined;
-    };
-  });
 
   async function handleBatchDeactivate(): Promise<void> {
     const ids = [...selectedIds];
@@ -581,30 +569,27 @@
   }
 </script>
 
-{#snippet batchLeft()}
-  <Link
-    iconOnly
-    onclick={() => void handleBatchDeactivate()}
-    aria-label={m.admin_users_batch_deactivate()}
+{#snippet bulkActionsRow()}
+  <BulkActionBar
+    countLabel={m.admin_users_selected({ count: selectedIds.size })}
+    exitLabel={m.admin_users_exit_multiselect()}
+    onexit={exitMultiSelect}
+    ariaLabel={m.admin_users_selected({ count: selectedIds.size })}
   >
-    <UserMinus size={24} aria-hidden="true" />
-  </Link>
-{/snippet}
-
-{#snippet batchMiddle()}
-  <span class="font-semibold text-sm" role="status">
-    {m.admin_users_selected({ count: selectedIds.size })}
-  </span>
-{/snippet}
-
-{#snippet batchRight()}
-  <Link
-    iconOnly
-    aria-label={m.admin_users_exit_multiselect()}
-    onclick={exitMultiSelect}
-  >
-    <X size={24} aria-hidden="true" />
-  </Link>
+    {#snippet actions()}
+      <Button
+        tonal
+        rounded
+        small
+        inline
+        class="bulk-action-btn"
+        onclick={() => void handleBatchDeactivate()}
+      >
+        <UserMinus size={16} aria-hidden="true" />
+        {m.admin_users_batch_deactivate()}
+      </Button>
+    {/snippet}
+  </BulkActionBar>
 {/snippet}
 
 <div class="users-page pb-20">

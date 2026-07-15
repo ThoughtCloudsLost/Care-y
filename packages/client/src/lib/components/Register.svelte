@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { Snippet } from "svelte";
+  import { Shield } from "@lucide/svelte";
   import * as m from "$lib/paraglide/messages.js";
 
   export type RegisterKind = "note" | "careful" | "warning" | "protected";
@@ -34,15 +35,7 @@
 <div class="register register-{kind}" data-register={kind} {role}>
   <div class="register-eyebrow">
     {#if kind === "protected"}
-      <svg width="11" height="12" viewBox="0 0 12 13" aria-hidden="true">
-        <path
-          d="M6 1l4.5 1.8v3.4c0 2.7-1.8 4.6-4.5 5.7-2.7-1.1-4.5-3-4.5-5.7V2.8L6 1z"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="1.3"
-          stroke-linejoin="round"
-        />
-      </svg>
+      <Shield size={12} aria-hidden="true" />
     {/if}
     <span>{eyebrow}</span>
   </div>
@@ -84,11 +77,6 @@
 
   .register-warning .register-eyebrow {
     color: var(--urgent);
-  }
-
-  .register-eyebrow svg {
-    display: block;
-    flex: none;
   }
 
   .register-body {

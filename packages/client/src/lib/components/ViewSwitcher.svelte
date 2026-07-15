@@ -1,132 +1,83 @@
 <script lang="ts">
   import * as m from "$lib/paraglide/messages.js";
+  import { Table2, List, CreditCard, LayoutGrid, Kanban } from "@lucide/svelte";
   import type { ViewMode } from "$lib/stores/view-mode.svelte.js";
+
+  /** The four base modes every surface shows. */
+  const BASE_MODES: readonly ViewMode[] = ["table", "list", "cards", "grid"];
 
   interface Props {
     mode: ViewMode;
     onchange: (mode: ViewMode) => void;
     /** Group label override; defaults to the shared "View as". */
     label?: string;
+    /** Which mode buttons to show, in order. Defaults to the four base modes. */
+    modes?: readonly ViewMode[];
   }
 
-  let { mode, onchange, label }: Props = $props();
+  let { mode, onchange, label, modes = BASE_MODES }: Props = $props();
 
-  // Konsta's Segmented was considered and rejected for this slot: it styles
-  // itself per platform (iOS thumb animation, Material fill) while the
-  // Inkwell language pins one anatomy everywhere. Icon geometry comes from the
-  // approved mock (inkwell-design-language.md, view switcher anatomy).
+  const visibleModes = $derived(new Set(modes));
+
   const groupLabel = $derived(label ?? m.view_switcher_label());
 </script>
 
 <div class="view-switcher" role="group" aria-label={groupLabel}>
-  <button
-    type="button"
-    class:active={mode === "list"}
-    aria-label={m.view_switcher_rows()}
-    aria-pressed={mode === "list"}
-    onclick={() => onchange("list")}
-  >
-    <svg width="15" height="14" viewBox="0 0 15 14" aria-hidden="true">
-      <line
-        x1="1.5"
-        y1="2.8"
-        x2="13.5"
-        y2="2.8"
-        stroke="currentColor"
-        stroke-width="1.7"
-        stroke-linecap="round"
-      />
-      <line
-        x1="1.5"
-        y1="7"
-        x2="13.5"
-        y2="7"
-        stroke="currentColor"
-        stroke-width="1.7"
-        stroke-linecap="round"
-      />
-      <line
-        x1="1.5"
-        y1="11.2"
-        x2="13.5"
-        y2="11.2"
-        stroke="currentColor"
-        stroke-width="1.7"
-        stroke-linecap="round"
-      />
-    </svg>
-  </button>
-  <button
-    type="button"
-    class:active={mode === "cards"}
-    aria-label={m.view_switcher_cards()}
-    aria-pressed={mode === "cards"}
-    onclick={() => onchange("cards")}
-  >
-    <svg width="15" height="14" viewBox="0 0 15 14" aria-hidden="true">
-      <rect
-        x="1.5"
-        y="1.5"
-        width="12"
-        height="11"
-        rx="2.5"
-        fill="none"
-        stroke="currentColor"
-        stroke-width="1.5"
-      />
-      <line
-        x1="4"
-        y1="9.3"
-        x2="11"
-        y2="9.3"
-        stroke="currentColor"
-        stroke-width="1.4"
-        stroke-linecap="round"
-      />
-    </svg>
-  </button>
-  <button
-    type="button"
-    class:active={mode === "grid"}
-    aria-label={m.view_switcher_grid()}
-    aria-pressed={mode === "grid"}
-    onclick={() => onchange("grid")}
-  >
-    <svg width="15" height="14" viewBox="0 0 15 14" aria-hidden="true">
-      <rect
-        x="1.5"
-        y="1.5"
-        width="5.2"
-        height="5.2"
-        rx="1.2"
-        fill="currentColor"
-      />
-      <rect
-        x="8.3"
-        y="1.5"
-        width="5.2"
-        height="5.2"
-        rx="1.2"
-        fill="currentColor"
-      />
-      <rect
-        x="1.5"
-        y="7.3"
-        width="5.2"
-        height="5.2"
-        rx="1.2"
-        fill="currentColor"
-      />
-      <rect
-        x="8.3"
-        y="7.3"
-        width="5.2"
-        height="5.2"
-        rx="1.2"
-        fill="currentColor"
-      />
-    </svg>
-  </button>
+  {#if visibleModes.has("table")}
+    <button
+      type="button"
+      class:active={mode === "table"}
+      aria-label={m.view_switcher_table()}
+      aria-pressed={mode === "table"}
+      onclick={() => onchange("table")}
+    >
+      <Table2 size={15} aria-hidden="true" />
+    </button>
+  {/if}
+  {#if visibleModes.has("list")}
+    <button
+      type="button"
+      class:active={mode === "list"}
+      aria-label={m.view_switcher_rows()}
+      aria-pressed={mode === "list"}
+      onclick={() => onchange("list")}
+    >
+      <List size={15} aria-hidden="true" />
+    </button>
+  {/if}
+  {#if visibleModes.has("cards")}
+    <button
+      type="button"
+      class:active={mode === "cards"}
+      aria-label={m.view_switcher_cards()}
+      aria-pressed={mode === "cards"}
+      onclick={() => onchange("cards")}
+    >
+      <CreditCard size={15} aria-hidden="true" />
+    </button>
+  {/if}
+  {#if visibleModes.has("grid")}
+    <button
+      type="button"
+      class:active={mode === "grid"}
+      aria-label={m.view_switcher_grid()}
+      aria-pressed={mode === "grid"}
+      onclick={() => onchange("grid")}
+    >
+      <LayoutGrid size={15} aria-hidden="true" />
+    </button>
+  {/if}
+  {#if visibleModes.has("kanban")}
+    <button
+      type="button"
+      class:active={mode === "kanban"}
+      aria-label={m.view_switcher_kanban()}
+      aria-pressed={mode === "kanban"}
+      onclick={() => onchange("kanban")}
+    >
+      <Kanban size={15} aria-hidden="true" />
+    </button>
+  {/if}
 </div>
 
 <style>
@@ -157,9 +108,5 @@
   .view-switcher button.active {
     background: var(--raised);
     color: var(--brand-text);
-  }
-
-  .view-switcher svg {
-    display: block;
   }
 </style>

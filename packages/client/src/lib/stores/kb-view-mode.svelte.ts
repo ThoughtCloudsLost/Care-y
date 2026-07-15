@@ -1,30 +1,37 @@
 /**
  * View mode store for the KB article list.
- * Persists list/grid preference to localStorage.
- * Same pattern as view-mode.svelte.ts (ticket list).
+ * Persists list/cards/grid preference to localStorage.
+ * Same three-way union as view-mode.svelte.ts (ticket list).
  */
 
-export type KbViewMode = "list" | "grid";
+import type { ViewMode } from "$lib/stores/view-mode.svelte.js";
+
+export type KbViewMode = ViewMode;
 
 const STORAGE_KEY = "care-y-kb-view-mode";
 
-const VALID_MODES: ReadonlySet<string> = new Set<KbViewMode>(["list", "grid"]);
+const VALID_MODES: ReadonlySet<string> = new Set<KbViewMode>([
+  "list",
+  "cards",
+  "table",
+  "grid",
+]);
 
 function isKbViewMode(value: string): value is KbViewMode {
   return VALID_MODES.has(value);
 }
 
 function loadFromStorage(): KbViewMode {
-  if (typeof window === "undefined") return "list";
+  if (typeof window === "undefined") return "cards";
   try {
     const stored = localStorage.getItem(STORAGE_KEY);
     if (stored !== null && isKbViewMode(stored)) return stored;
   } catch {
     // Safari private browsing, storage quota, or restricted context:
     // recover by treating it as no stored preference.
-    return "list";
+    return "cards";
   }
-  return "list";
+  return "cards";
 }
 
 function createKbViewModeStore(): {

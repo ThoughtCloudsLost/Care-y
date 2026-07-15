@@ -40,7 +40,7 @@
   data-testid="app-root"
 >
   {@render children()}
-  {#if DevPanel}
+  <!-- {#if DevPanel}
     <DevPanel />
-  {/if}
+  {/if} -->
 </App>

@@ -21,7 +21,7 @@
     voteUpCount: number;
     voteTotalCount: number;
     updatedAt: Date;
-    viewMode: "list" | "grid";
+    viewMode: "list" | "cards" | "grid";
     selected?: boolean;
     multiSelectActive?: boolean;
     loading?: boolean;
@@ -52,7 +52,9 @@
     searchTerm = null,
   }: ArticleCardProps = $props();
 
-  const isList = $derived(viewMode === "list");
+  const isCompactList = $derived(viewMode === "list");
+  const isCards = $derived(viewMode === "cards");
+  const showExcerpt = $derived(isCards);
   const relativeTime = $derived(formatRelativeTime(updatedAt));
 
   const voteLabel = $derived(
@@ -97,8 +99,9 @@
     <div class="article-card">
       <div
         class="card-inner"
-        class:card-inner--list={isList}
-        class:card-inner--grid={!isList}
+        class:card-inner--list={isCompactList}
+        class:card-inner--cards={isCards}
+        class:card-inner--grid={!isCompactList && !isCards}
         aria-hidden="true"
       >
         <div class="row-category">
@@ -109,7 +112,7 @@
         <div class="row-title">
           <DecryptPlaceholder length={20} />
         </div>
-        {#if isList}
+        {#if showExcerpt}
           <div class="row-excerpt">
             <DecryptPlaceholder length={40} />
           </div>
@@ -129,8 +132,9 @@
     <div class="article-card" class:card--selected={selected}>
       <div
         class="card-inner"
-        class:card-inner--list={isList}
-        class:card-inner--grid={!isList}
+        class:card-inner--list={isCompactList}
+        class:card-inner--cards={isCards}
+        class:card-inner--grid={!isCompactList && !isCards}
         role="button"
         tabindex="0"
         onclick={handleCardClick}
@@ -176,7 +180,7 @@
           />
         </div>
 
-        {#if isList}
+        {#if showExcerpt}
           <div class="row-excerpt">
             <DecryptPlaceholder
               result={excerptResult}
@@ -375,12 +379,29 @@
     -webkit-box-orient: vertical;
   }
 
-  /* ═══ LIST MODE ═══ */
-  .card-inner--list {
+  /* ═══ CARDS MODE (full-width card with excerpt) ═══ */
+  .card-inner--cards {
     gap: var(--space-xs);
   }
 
-  .card-inner--list .row-excerpt {
+  .card-inner--cards .row-excerpt {
     margin-bottom: var(--space-xs);
+  }
+
+  /* ═══ LIST MODE (compact ruled row, no card chrome) ═══ */
+  .card-inner--list {
+    gap: var(--space-xs);
+    padding: var(--space-sm) var(--card-pad-x);
+  }
+
+  :global(.article-compact-list) .article-card {
+    background: none;
+    border: none;
+    border-radius: 0;
+    border-bottom: 1px solid var(--hair);
+  }
+
+  .card-inner--list .row-title {
+    font-size: var(--text-base);
   }
 </style>

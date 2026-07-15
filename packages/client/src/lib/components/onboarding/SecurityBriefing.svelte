@@ -503,6 +503,14 @@
 
   .scenario-wrapper {
     margin: 0 var(--page-pad-x) var(--space-lg);
+    position: relative;
+    z-index: 0;
+  }
+
+  .scenario-wrapper details {
+    background: var(--paper-deep, var(--surface-2));
+    border-radius: var(--card-radius);
+    overflow: hidden;
   }
 
   .scenario-summary {
@@ -552,7 +560,7 @@
     margin: 0;
   }
 
-  .choice-label {
+  .scenario-body .choice-label {
     font-size: var(--text-sm);
     font-weight: 600;
     color: var(--muted);
@@ -561,7 +569,7 @@
     margin: var(--space-lg) 0 var(--space-xs);
   }
 
-  .choice-label:first-child {
+  .scenario-body .choice-label:first-child {
     margin-top: 0;
   }
 

@@ -117,7 +117,15 @@
       <div class="avatar identity-seal" aria-hidden="true">
         <span class="avatar-initials">
           {#if displayName}
-            {displayName.slice(0, 2).toUpperCase()}
+            {displayName.trim().includes(" ")
+              ? displayName
+                  .trim()
+                  .split(/\s+/)
+                  .map((w) => w[0])
+                  .slice(0, 2)
+                  .join("")
+                  .toUpperCase()
+              : displayName.slice(0, 2).toUpperCase()}
           {:else}
             ??
           {/if}

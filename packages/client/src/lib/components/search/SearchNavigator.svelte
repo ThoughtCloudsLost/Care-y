@@ -292,15 +292,14 @@
   }
 
   /* Search match highlight (global, active when this component is
-     mounted). The highlighter pen owns matches: care tint, never brand. */
+     mounted). Brand-soft tint on the wrapper, outline on inner card
+     elements. The wrapper tint shows through in list mode (no card
+     chrome); on cards/grid the outline is the primary indicator. */
 
   :global(.virtual-row:has(.match-active):not([data-grid])),
   :global(.match-active-row),
   :global(.match-active) {
-    background: var(
-      --care-soft,
-      color-mix(in srgb, var(--brand-accent) 15%, transparent)
-    );
+    background: color-mix(in srgb, var(--brand-accent) 15%, transparent);
     border-radius: var(--card-radius, 0.75rem);
   }
 
@@ -308,14 +307,19 @@
   :global(.match-active .k-card),
   :global(.match-active .article-card),
   :global(.match-active .user-card),
+  :global(.match-active .tc),
   :global(.match-active-row .k-message),
   :global(.match-active-row .k-card),
   :global(.match-active-row .article-card),
-  :global(.match-active-row .user-card) {
-    outline: 2.5px solid var(--care, var(--brand-accent)) !important;
+  :global(.match-active-row .user-card),
+  :global(.match-active-row .tc) {
+    background: color-mix(
+      in srgb,
+      var(--brand-accent) 15%,
+      transparent
+    ) !important;
+    outline: 2.5px solid var(--brand-accent) !important;
     outline-offset: -1px;
-    box-shadow: inset 0 0 12px 0
-      var(--care-soft, color-mix(in srgb, var(--brand-accent) 20%, transparent)) !important;
     border-radius: var(--card-radius, 0.75rem);
   }
 </style>

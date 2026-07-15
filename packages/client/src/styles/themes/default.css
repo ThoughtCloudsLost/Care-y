@@ -365,8 +365,8 @@
 .theme-default
   .k-segmented:not(.segmented-thumb)
   .k-segmented-strong-button-active {
-  background: var(--raised);
-  color: var(--brand-text);
+  background: var(--brand-accent) !important;
+  color: var(--brand-accent-on) !important;
   font-weight: 700;
 }
 
@@ -392,12 +392,16 @@
 .theme-default .navbar-avatar:not(:has(> img)):not(:has(> svg)),
 .theme-default .sidebar-avatar:not(:empty) {
   background: transparent;
-  border: 2px solid color-mix(in srgb, var(--brand-fill) 45%, transparent);
+  border: 2px solid color-mix(in srgb, var(--brand-fill) 55%, transparent);
+  outline: 1px solid color-mix(in srgb, var(--brand-fill) 30%, transparent);
+  outline-offset: 2px;
   color: var(--brand-text);
   font-family: var(--theme-font-display);
   font-optical-sizing: auto;
-  font-weight: 700;
+  font-weight: 800;
   font-size: 0.6875rem;
-  letter-spacing: normal;
+  letter-spacing: 0.03em;
+  text-shadow: 0 0 0.5px currentColor;
   transform: rotate(-6deg);
+  opacity: 0.85;
 }

@@ -51,8 +51,8 @@ describe("isSortField", () => {
     },
   );
 
-  it("has 4 sort fields", () => {
-    expect(SORT_FIELDS).toHaveLength(4);
+  it("has 6 sort fields", () => {
+    expect(SORT_FIELDS).toHaveLength(6);
   });
 });
 
@@ -164,6 +164,57 @@ describe("matchTitles", () => {
 
   it("returns empty array for empty entries", () => {
     expect(matchTitles([], "test", mockFuzzy)).toEqual([]);
+  });
+
+  it("matches against queueName", () => {
+    const fuzzy = (haystack: readonly string[], _q: string) =>
+      haystack
+        .map((h, i) => ({ index: i, score: i }))
+        .filter((_, i) => haystack[i]?.toLowerCase().includes("housing"));
+    const entries = [
+      {
+        id: "t1",
+        title: "Intake call",
+        clientAlias: "Alice",
+        queueName: "Housing Support",
+      },
+      { id: "t2", title: "Other ticket", clientAlias: "Bob", queueName: null },
+    ];
+    const result = matchTitles(entries, "housing", fuzzy);
+    expect(result).toEqual(["t1"]);
+  });
+
+  it("matches against assignedName", () => {
+    const fuzzy = (haystack: readonly string[], _q: string) =>
+      haystack
+        .map((h, i) => ({ index: i, score: i }))
+        .filter((_, i) => haystack[i]?.toLowerCase().includes("maria"));
+    const entries = [
+      {
+        id: "t1",
+        title: "Follow up",
+        clientAlias: "Bob",
+        assignedName: "Maria",
+      },
+      {
+        id: "t2",
+        title: "Other ticket",
+        clientAlias: "Carol",
+        assignedName: null,
+      },
+    ];
+    const result = matchTitles(entries, "maria", fuzzy);
+    expect(result).toEqual(["t1"]);
+  });
+
+  it("treats missing queueName and assignedName as empty strings", () => {
+    const fuzzy = (haystack: readonly string[], _q: string) =>
+      haystack
+        .map((h, i) => ({ index: i, score: i }))
+        .filter((_, i) => haystack[i]?.toLowerCase().includes("test"));
+    const entries = [{ id: "t1", title: "Test ticket", clientAlias: "Alice" }];
+    const result = matchTitles(entries, "test", fuzzy);
+    expect(result).toEqual(["t1"]);
   });
 });
 
