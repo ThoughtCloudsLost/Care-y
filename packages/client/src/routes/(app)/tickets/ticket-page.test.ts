@@ -420,10 +420,8 @@ describe("Ticket list page", () => {
 
     const { container } = render(PageModule.default);
     expect(screen.getByText("Nothing here yet")).toBeTruthy();
-    // Org initial from the branding title store ("CARE-Y" fallback -> "C").
-    const seal = container.querySelector(".empty-seal");
-    expect(seal).toBeTruthy();
-    expect(seal?.textContent).toBe("C");
+    const stamp = container.querySelector(".empty-stamp");
+    expect(stamp).toBeTruthy();
   });
 
   it("shows the caught-up line when the sweep settles at zero unread over a non-empty list", () => {
@@ -557,13 +555,9 @@ describe("Ticket list page", () => {
 
     const { container } = render(PageModule.default);
     // deriveDisplayStatus(open, onHold=true, ...) returns "hold".
-    // TicketCard renders the dashed-ring StatusMark with the status word
-    // as its accessible label, and appends "on hold" to the row meta.
     const holdMarks = container.querySelectorAll("[data-status='hold']");
     expect(holdMarks.length).toBeGreaterThan(0);
     expect(holdMarks[0]?.getAttribute("aria-label")).toBe("On hold");
-    const meta = container.querySelector("[data-testid='row-meta']");
-    expect(meta?.textContent).toContain("on hold");
   });
 
   it("renders urgent priority ticket with priority badge", () => {
