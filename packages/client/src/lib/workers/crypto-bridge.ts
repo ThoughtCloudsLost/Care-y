@@ -185,10 +185,10 @@ export class CryptoBridge {
         "connect",
       );
       if (resp.state === "KEYED") {
-        this.setState("KEYED");
         this.reconnected = true;
         this.reconnectVolPublic = resp.volPublic;
         this.reconnectOrgPublicKey = resp.orgPublicKey;
+        this.setState("KEYED");
       }
     }
   }

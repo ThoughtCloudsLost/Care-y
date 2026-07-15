@@ -25,7 +25,6 @@
   import { getOrgDecryptCache, getOrgKeyManager } from "$lib/crypto/context.js";
   import {
     getNavbarOverrideCtx,
-    getTabbarOverrideCtx,
     getScrollContainer,
   } from "$lib/shell/context.js";
   import { useScrollDirection } from "$lib/shell/use-scroll-direction.svelte.js";
@@ -44,7 +43,6 @@
   const orgKeyManager = getOrgKeyManager();
   const queryClient = useQueryClient();
   const navbarCtx = getNavbarOverrideCtx();
-  const tabbarOverride = getTabbarOverrideCtx();
   const ptr = usePTR();
 
   ptr.setEnabled(false);
@@ -186,16 +184,6 @@
       ptr.setEnabled(true);
     };
   });
-
-  $effect(() => {
-    tabbarOverride.current = {
-      right: a11yTabbarRight,
-      ariaLabel: m.library_editor_toolbar(),
-    };
-    return () => {
-      tabbarOverride.current = undefined;
-    };
-  });
 </script>
 
 {#snippet navLeft()}
@@ -234,6 +222,21 @@
   </Link>
   <Link
     iconOnly
+    onclick={() => bridge.setA11yVisible?.(!bridge.a11yVisible)}
+    role="button"
+    aria-label={bridge.a11yVisible
+      ? m.library_a11y_toggle_off()
+      : m.library_a11y_toggle_on()}
+    aria-pressed={bridge.a11yVisible}
+    class="relative"
+  >
+    <Accessibility size={22} aria-hidden="true" />
+    {#if bridge.a11yIssueCount > 0}
+      <span class="a11y-badge">{bridge.a11yIssueCount}</span>
+    {/if}
+  </Link>
+  <Link
+    iconOnly
     onclick={() => void bridge.save?.()}
     role="button"
     aria-label={m.common_save()}
@@ -256,24 +259,6 @@
       />
     {/if}
   {/if}
-{/snippet}
-
-{#snippet a11yTabbarRight()}
-  <Link
-    iconOnly
-    onclick={() => bridge.setA11yVisible?.(!bridge.a11yVisible)}
-    role="button"
-    aria-label={bridge.a11yVisible
-      ? m.library_a11y_toggle_off()
-      : m.library_a11y_toggle_on()}
-    aria-pressed={bridge.a11yVisible}
-    class="relative"
-  >
-    <Accessibility size={24} aria-hidden="true" />
-    {#if bridge.a11yIssueCount > 0}
-      <span class="a11y-badge">{bridge.a11yIssueCount}</span>
-    {/if}
-  </Link>
 {/snippet}
 
 {#if articleQuery.isLoading || !isReady}

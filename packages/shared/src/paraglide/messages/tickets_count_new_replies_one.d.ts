@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "reply" |
+* | "unread" |
 *
 * @param {Tickets_Count_New_Replies_OneInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

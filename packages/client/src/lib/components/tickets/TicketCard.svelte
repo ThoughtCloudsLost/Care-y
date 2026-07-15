@@ -1,3 +1,4 @@
+<!-- care-y-ignore no-hardcoded-user-strings -- component prop values (status=, unreadHighlight=) are not user-facing text -->
 <!--
   One ticket, three Inkwell presentations, driven by viewMode:
 
@@ -59,6 +60,7 @@
     onencryptedhelp,
     loading = false,
     searchTerm = null,
+    newRepliesFirst = false,
   }: TicketCardProps = $props();
 
   const previewLoader = getPreviewLoader();
@@ -74,18 +76,6 @@
     return followUpCount === 1
       ? m.ticket_meta_msg_count_one({ count: followUpCount })
       : m.ticket_meta_msg_count_other({ count: followUpCount });
-  });
-
-  // The side column carries AT MOST TWO marks so rows stay quiet. The
-  // priority order (stamp, pill, time) is transcribed from the mock's
-  // four row variants: time yields first, then the pill never does.
-  type SideSlot = "stamp" | "pill" | "time";
-  const sideSlots = $derived.by((): SideSlot[] => {
-    const slots: SideSlot[] = [];
-    if (priority !== "normal") slots.push("stamp");
-    if (isUnread) slots.push("pill");
-    slots.push("time");
-    return slots.slice(0, 2);
   });
 
   // Trigger lazy preview load when a preview-bearing card mounts (enters
@@ -162,31 +152,44 @@
   {#if queueName != null}{@render hl(queueName)}{:else}…{/if}
 {/snippet}
 
-{#snippet head()}
+{#snippet metaRow()}
+  <span class="r-meta num" data-testid="row-meta">
+    <span class="meta-left">
+      {@render queueSegment()} · {@render assigneeSegment()}
+    </span>
+    <span class="meta-right">
+      <span class="r-time num">{relativeTime}</span>
+      {#if msgLabel}
+        <span class="meta-sep">·</span>
+        <span class="r-msgs">{msgLabel}</span>
+      {/if}
+    </span>
+  </span>
+{/snippet}
+
+{#snippet head(includeMeta: boolean)}
   <div class="head" class:head-select={multiSelectActive}>
     {#if multiSelectActive}
       {@render checkboxIsland()}
     {/if}
-    <span class="mark"><StatusMark status={displayStatus} /></span>
+    <span class="mark"
+      ><StatusMark
+        status={displayStatus}
+        unreadHighlight={newRepliesFirst && isUnread}
+      /></span
+    >
     <span class="head-main">
-      <span class="r-title">{@render titleBlock()}</span>
-      <span class="r-meta num" data-testid="row-meta">
-        {@render hl(clientAlias)} · {@render queueSegment()} ·
-        {@render assigneeSegment()}{#if msgLabel}
-          · {msgLabel}{/if}{#if displayStatus === "hold"}
-          · {m.tickets_status_on_hold()}{/if}
+      <span class="r-alias-row">
+        <span class="r-alias">{@render hl(clientAlias)}</span>
+        <span class="r-side">
+          {#if priority !== "normal"}<PriorityStamp {priority} />{/if}
+          {#if isUnread}<NewPill count={unreadCount} />{/if}
+        </span>
       </span>
-    </span>
-    <span class="r-side">
-      {#each sideSlots as slot (slot)}
-        {#if slot === "stamp"}
-          <PriorityStamp {priority} />
-        {:else if slot === "pill"}
-          <NewPill count={unreadCount} />
-        {:else}
-          <span class="r-time num">{relativeTime}</span>
-        {/if}
-      {/each}
+      <span class="r-title">{@render titleBlock()}</span>
+      {#if includeMeta}
+        {@render metaRow()}
+      {/if}
     </span>
   </div>
 {/snippet}
@@ -195,10 +198,15 @@
   <div class="head">
     <span class="mark"><span class="skeleton-dot"></span></span>
     <span class="head-main">
+      <span class="r-alias-row">
+        <span class="r-alias"><InlineSkeleton width="8ch" /></span>
+      </span>
       <span class="r-title"><DecryptPlaceholder length={25} /></span>
-      <span class="r-meta"><InlineSkeleton width="14ch" /></span>
+      <span class="r-meta">
+        <span class="meta-left"><InlineSkeleton width="12ch" /></span>
+        <span class="meta-right"><InlineSkeleton width="3ch" /></span>
+      </span>
     </span>
-    <span class="r-side"><InlineSkeleton width="3ch" /></span>
   </div>
 {/snippet}
 
@@ -207,7 +215,11 @@
     {#if viewMode === "grid"}
       <div class="row-top">
         <span class="skeleton-dot"></span>
+        <span class="client-alias"><InlineSkeleton width="8ch" /></span>
         <span class="row-top-stamp"><InlineSkeleton width="5ch" /></span>
+      </div>
+      <div class="content-group">
+        <div class="row-title"><DecryptPlaceholder length={25} /></div>
       </div>
       <div class="preview-window">
         <TicketPreview
@@ -216,10 +228,6 @@
           multiline={false}
           fit={true}
         />
-      </div>
-      <div class="content-group">
-        <span class="client-alias"><InlineSkeleton width="8ch" /></span>
-        <div class="row-title"><DecryptPlaceholder length={25} /></div>
       </div>
       <div class="row-meta">
         <span class="meta-left"><InlineSkeleton width="10ch" /></span>
@@ -230,6 +238,12 @@
       {#if viewMode === "cards"}
         <div class="previews">
           <TicketPreview {ticketId} followUps={undefined} multiline={true} />
+        </div>
+        <div class="card-meta">
+          <span class="r-meta">
+            <span class="meta-left"><InlineSkeleton width="12ch" /></span>
+            <span class="meta-right"><InlineSkeleton width="5ch" /></span>
+          </span>
         </div>
       {/if}
     {/if}
@@ -251,9 +265,9 @@
     ></button>
 
     {#if viewMode === "list"}
-      {@render head()}
+      {@render head(true)}
     {:else if viewMode === "cards"}
-      {@render head()}
+      {@render head(false)}
       <div class="previews" data-preview>
         <TicketPreview
           {ticketId}
@@ -265,56 +279,70 @@
           {searchTerm}
         />
       </div>
+      <div class="card-meta">
+        {@render metaRow()}
+      </div>
       <div class="actions" data-testid="card-actions">
-        <button
-          type="button"
-          class="act"
-          onclick={(e) => fireAction(e, "reply")}
-        >
-          {m.tickets_action_reply()}
-        </button>
-        <button
-          type="button"
-          class="act"
-          onclick={(e) => fireAction(e, "call")}
-        >
-          {m.tickets_action_call()}
-        </button>
-        <button
-          type="button"
-          class="act act-quiet"
-          onclick={(e) =>
-            fireAction(e, displayStatus === "hold" ? "unhold" : "hold")}
-        >
-          {displayStatus === "hold"
-            ? m.tickets_action_unhold()
-            : m.tickets_action_hold()}
-        </button>
-        {#if isUnassigned}
+        <span class="act-group">
           <button
             type="button"
             class="act"
-            onclick={(e) => fireAction(e, "take")}
+            onclick={(e) => fireAction(e, "reply")}
           >
-            {m.tickets_action_take()}
+            {m.tickets_action_reply()}
           </button>
-        {:else}
           <button
             type="button"
             class="act"
-            onclick={(e) => fireAction(e, "assign")}
+            onclick={(e) => fireAction(e, "call")}
           >
-            {m.tickets_action_assign()}
+            {m.tickets_action_call()}
           </button>
-        {/if}
+        </span>
+        <span class="act-group">
+          <button
+            type="button"
+            class="act act-quiet"
+            onclick={(e) =>
+              fireAction(e, displayStatus === "hold" ? "unhold" : "hold")}
+          >
+            {displayStatus === "hold"
+              ? m.tickets_action_unhold()
+              : m.tickets_action_hold()}
+          </button>
+          {#if isUnassigned}
+            <button
+              type="button"
+              class="act"
+              onclick={(e) => fireAction(e, "take")}
+            >
+              {m.tickets_action_take()}
+            </button>
+          {:else}
+            <button
+              type="button"
+              class="act"
+              onclick={(e) => fireAction(e, "assign")}
+            >
+              {m.tickets_action_assign()}
+            </button>
+          {/if}
+        </span>
       </div>
     {:else}
       <div class="row-top">
         {#if multiSelectActive}
           {@render checkboxIsland()}
         {/if}
-        <StatusMark status={displayStatus} />
+        <StatusMark
+          status={displayStatus}
+          unreadHighlight={newRepliesFirst && isUnread}
+        />
+        <span class="client-alias">{@render hl(clientAlias)}</span>
         <span class="row-top-stamp"><PriorityStamp {priority} /></span>
+      </div>
+      <div class="content-group">
+        <div class="row-title">{@render titleBlock()}</div>
       </div>
       <div class="preview-window" data-preview>
         <TicketPreview
@@ -327,10 +355,6 @@
           {clientAlias}
           {searchTerm}
         />
-      </div>
-      <div class="content-group">
-        <span class="client-alias">{@render hl(clientAlias)}</span>
-        <div class="row-title">{@render titleBlock()}</div>
       </div>
       <div class="row-meta num">
         <span class="meta-left">
@@ -376,6 +400,7 @@
     position: relative;
     z-index: 1;
     flex-shrink: 0;
+    pointer-events: auto;
   }
 
   :global(.select-checkbox) {
@@ -387,19 +412,19 @@
     font-variant-numeric: tabular-nums;
   }
 
-  /* ── Row/card head: the mock's 22px / 1fr / auto grid ── */
+  /* ── Row/card head: [mark 22px] [main 1fr] ── */
   .head {
     display: grid;
-    grid-template-columns: 22px 1fr auto;
+    grid-template-columns: 22px 1fr;
     column-gap: 10px;
     align-items: start;
+    pointer-events: none;
   }
 
   .head-select {
-    grid-template-columns: auto 22px 1fr auto;
+    grid-template-columns: auto 22px 1fr;
   }
 
-  /* Nudged down to sit on the title's cap line. */
   .mark {
     margin-top: 4px;
     display: inline-flex;
@@ -409,17 +434,44 @@
     min-width: 0;
   }
 
+  .r-alias-row {
+    display: flex;
+    align-items: center;
+    gap: var(--space-md);
+    min-width: 0;
+  }
+
+  .r-alias {
+    font-weight: 600;
+    font-size: var(--text-md);
+    color: var(--ink);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    min-width: 0;
+    flex: 1;
+  }
+
+  .r-side {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-shrink: 0;
+  }
+
   .r-title {
     display: block;
-    font-size: var(--text-md);
+    font-size: var(--text-base);
     line-height: 1.35;
     color: var(--ink);
+    opacity: 0.75;
     overflow-wrap: anywhere;
   }
 
   .tc-unread .r-title,
   .tc-unread .row-title {
     font-weight: 700;
+    opacity: 1;
   }
 
   .tc-closed {
@@ -434,11 +486,34 @@
   }
 
   .r-meta {
-    display: block;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-md);
     margin-top: 3px;
     font-size: var(--text-sm);
     color: var(--muted);
-    overflow-wrap: anywhere;
+    min-width: 0;
+  }
+
+  .r-meta .meta-left {
+    flex: 1 1 0%;
+    min-width: 0;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+
+  .r-meta .meta-right {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    gap: var(--space-xs);
+    white-space: nowrap;
+  }
+
+  .meta-sep {
+    opacity: 0.5;
   }
 
   .meta-you {
@@ -446,23 +521,18 @@
     color: var(--ink-2);
   }
 
-  /* Matched meta segments lift to ink-2: muted fails WCAG AA 4.5:1 on
-     the care-soft highlight tint (P3 contrast pass locked this rule). */
   .r-meta :global(.search-highlight),
   .row-meta :global(.search-highlight) {
     color: var(--ink-2);
   }
 
-  .r-side {
-    display: flex;
-    flex-direction: column;
-    align-items: flex-end;
-    gap: 5px;
+  .r-time {
+    font-size: var(--text-xs);
+    color: var(--muted);
+    white-space: nowrap;
   }
 
-  .r-time {
-    font-size: 0.75rem;
-    color: var(--muted);
+  .r-msgs {
     white-space: nowrap;
   }
 
@@ -491,16 +561,27 @@
 
   .previews {
     margin: 10px 0 2px;
+    pointer-events: none;
+  }
+
+  .card-meta {
+    pointer-events: none;
+    margin-top: 4px;
   }
 
   .actions {
     position: relative;
     z-index: 1;
     display: flex;
-    gap: 18px;
+    justify-content: space-between;
     margin-top: 10px;
     padding-top: 9px;
     border-top: 1px solid var(--hair);
+  }
+
+  .act-group {
+    display: flex;
+    gap: 18px;
   }
 
   .act {
@@ -544,6 +625,7 @@
     display: flex;
     align-items: center;
     gap: var(--space-md);
+    pointer-events: none;
   }
 
   .row-top-stamp {
@@ -555,9 +637,11 @@
     height: 5rem;
     flex-shrink: 0;
     overflow: hidden;
+    pointer-events: none;
   }
 
   .content-group {
+    pointer-events: none;
     display: flex;
     flex-direction: column;
     gap: var(--space-xs);
@@ -566,6 +650,8 @@
   }
 
   .client-alias {
+    flex: 1;
+    min-width: 0;
     font-weight: 600;
     font-size: var(--text-base);
     color: var(--ink);
@@ -594,6 +680,7 @@
     gap: var(--space-xs) var(--space-md);
     font-size: var(--text-xs);
     color: var(--muted);
+    pointer-events: none;
   }
 
   .meta-left {

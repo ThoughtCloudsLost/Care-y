@@ -19,6 +19,7 @@ import type {
   SweepReadStateInput,
   TicketStatus,
   TicketPriority,
+  TicketSortField,
 } from "@care-y/shared";
 import type { TicketAccessChecker } from "./access.js";
 import {
@@ -149,7 +150,6 @@ export interface UpdateTicketInput {
   readonly onHold?: boolean;
 }
 
-export type TicketSortField = "date" | "priority" | "last_activity" | "queue";
 export type TicketSortDirection = "asc" | "desc";
 
 export interface TicketListOpts {
@@ -742,6 +742,52 @@ export function createTicketService(
               ]),
             ]),
           );
+        } else if (sortBy === "client") {
+          const cursorAlias = db
+            .selectFrom("tickets")
+            .innerJoin("clients", "clients.id", "tickets.client_id")
+            .select("clients.alias")
+            .where("tickets.id", "=", cursorId);
+
+          query = query.where((eb) =>
+            eb.or([
+              eb("c.alias", gt, cursorAlias),
+              eb.and([
+                eb("c.alias", "=", cursorAlias),
+                eb("t.created_at", gt, cursorCreatedAt),
+              ]),
+              eb.and([
+                eb("c.alias", "=", cursorAlias),
+                eb("t.created_at", "=", cursorCreatedAt),
+                eb("t.id", gt, cursorId),
+              ]),
+            ]),
+          );
+        } else if (sortBy === "msgs") {
+          const cursorFollowupCount = db
+            .selectFrom("followups")
+            .select((sb) => sb.fn.count<number>("followups.id").as("cnt"))
+            .where("followups.ticket_id", "=", cursorId);
+
+          query = query.where((eb) => {
+            const rowCount = eb
+              .selectFrom("followups as f3")
+              .select((sb) => sb.fn.count<number>("f3.id").as("cnt"))
+              .whereRef("f3.ticket_id", "=", "t.id");
+
+            return eb.or([
+              eb(rowCount, gt, cursorFollowupCount),
+              eb.and([
+                eb(rowCount, "=", cursorFollowupCount),
+                eb("t.created_at", gt, cursorCreatedAt),
+              ]),
+              eb.and([
+                eb(rowCount, "=", cursorFollowupCount),
+                eb("t.created_at", "=", cursorCreatedAt),
+                eb("t.id", gt, cursorId),
+              ]),
+            ]);
+          });
         } else {
           // "date": two-column keyset (created_at, id)
           query = query.where((eb) =>
@@ -793,6 +839,16 @@ export function createTicketService(
       } else if (sortBy === "queue") {
         query = query
           .orderBy("q.sort_order", sortDirection)
+          .orderBy("t.created_at", sortDirection)
+          .orderBy("t.id", "asc");
+      } else if (sortBy === "client") {
+        query = query
+          .orderBy("c.alias", sortDirection)
+          .orderBy("t.created_at", sortDirection)
+          .orderBy("t.id", "asc");
+      } else if (sortBy === "msgs") {
+        query = query
+          .orderBy("followup_count", sortDirection)
           .orderBy("t.created_at", sortDirection)
           .orderBy("t.id", "asc");
       } else {

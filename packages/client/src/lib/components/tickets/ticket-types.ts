@@ -40,4 +40,5 @@ export interface TicketCardProps {
   readonly onencryptedhelp?: () => void;
   readonly loading?: boolean;
   readonly searchTerm?: string | null;
+  readonly newRepliesFirst?: boolean;
 }

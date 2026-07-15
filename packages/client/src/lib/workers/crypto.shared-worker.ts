@@ -10,7 +10,7 @@
  *   2. Bridge sends "connect": Worker replies with current state + public keys
  *   3. Bridge sends crypto requests: dispatched via createDispatcher per-port
  *   4. Tab closing: bridge sends "disconnect", port removed from set
- *   5. Last port removed: 500ms zero timer starts
+ *   5. Last port removed: 3s zero timer starts
  *   6. New port before timer: timer cancelled, keys preserved
  *   7. Timer fires: all keys zeroed, Worker stays alive but unkeyed
  *
@@ -55,7 +55,7 @@ declare const self: SharedWorkerGlobalScope;
 const ports = new Set<MessagePort>();
 let zeroTimer: ReturnType<typeof setTimeout> | null = null;
 
-const ZERO_DELAY_MS = 500;
+const ZERO_DELAY_MS = 3000;
 
 // Tracks which port triggered the current state transition so the
 // broadcast callback can exclude it. Set before dispatching, cleared after.

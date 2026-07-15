@@ -266,7 +266,9 @@ function zeroAndClear(
 
 async function handleInit(id: number, sink: Sink): Promise<void> {
   await getSodium();
-  state = "READY";
+  if (state !== "KEYED") {
+    state = "READY";
+  }
   const msg: WorkerResponse = { id, ok: true, type: "init" };
   sink(msg);
 }

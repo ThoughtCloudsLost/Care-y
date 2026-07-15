@@ -1,20 +1,16 @@
 <!--
   Case header for the ticket detail: the Fraunces case title, judgment
   stamps, and a field list (description first, then queue/assignee and
-  opened time), pinned between the chrome and the scrolling thread.
+  opened time).
 
-  This is a CONTENT component: no shell imports. It is self-contained
-  like TicketPanelContent: reads the ticket from TanStack Query cache
-  (same key as the orchestrator, deduplicated) and decrypts through the
-  context caches. The dl is the future per-org custom-fields socket.
-
-  The header owns the scroll-under-glass offset (negative navbar and
-  subnavbar margin) that the chat container used to carry; in the
-  desktop split pane the chrome vars fall back to 0px and the offset
-  degrades to nothing.
+  Rendered inside the subnavbar snippet by TicketDetailOrchestrator,
+  so it lives in the chrome layer (glass blur, collapse-on-scroll)
+  rather than the content scroll area. The dl is the future per-org
+  custom-fields socket.
 
   Fold state is per ticket and session-only (in-memory module map,
-  never persisted, never transmitted).
+  never persisted, never transmitted). The drag handle at the bottom
+  edge mirrors ShellSheet's indicator pill but toggles fold on tap.
 -->
 <script lang="ts">
   import { createQuery } from "@tanstack/svelte-query";
@@ -40,12 +36,14 @@
     isCaseFolded,
     setCaseFolded,
   } from "$lib/tickets/case-fold-store.svelte.js";
+  import type { Snippet } from "svelte";
 
   interface Props {
     ticketId: string;
+    headerActions?: Snippet;
   }
 
-  let { ticketId }: Props = $props();
+  let { ticketId, headerActions }: Props = $props();
 
   const ticketRouter = requireRouter(trpc.tickets, "tickets");
 
@@ -124,7 +122,7 @@
 </script>
 
 {#if !ticketQuery.isError}
-  <header class="case-header">
+  <header class="case-header" class:case-header--expanded={!folded}>
     <div class="title-row">
       <h2 class="case-title heading-display">
         {#if titleResult}
@@ -142,15 +140,17 @@
           <PriorityStamp priority={ticket.priority} />
         {/if}
         {#if ticket?.status === "closed"}
-          <!-- Shared judgment-stamp anatomy in its quiet-ink default:
-               closed is a records fact, so it stamps without a semantic
-               hue. Ink, not red. -->
           <span class="stamp-chip stamp-closed">{m.ticket_closed_stamp()}</span>
         {/if}
       </span>
+      {#if headerActions}
+        <span class="title-actions">
+          {@render headerActions()}
+        </span>
+      {/if}
     </div>
 
-    {#if !folded}
+    <div class="case-fields-wrap" class:case-fields-wrap--folded={folded}>
       <dl class="fields" id={fieldsId}>
         {#if decryptedDescription}
           <div class="fld fld-desc">
@@ -181,31 +181,65 @@
           </dd>
         </div>
       </dl>
-    {/if}
+    </div>
 
-    <div class="foldup">
-      <button
-        type="button"
-        aria-expanded={!folded}
-        aria-controls={fieldsId}
-        onclick={toggleFold}
-      >
+    <div
+      class="case-handle"
+      role="button"
+      tabindex="0"
+      aria-expanded={!folded}
+      aria-controls={fieldsId}
+      aria-label={folded
+        ? m.ticket_case_details()
+        : m.ticket_fold_case_details()}
+      onclick={toggleFold}
+      onkeydown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          toggleFold();
+        }
+      }}
+    >
+      <span class="case-handle-label">
         {folded ? m.ticket_case_details() : m.ticket_fold_case_details()}
-      </button>
+      </span>
+      <div class="case-handle-indicator" aria-hidden="true"></div>
     </div>
   </header>
 {/if}
 
 <style>
-  /* The header owns the scroll-under-glass offset: it tucks under the
-     translucent navbar and pads its content back below the chrome. */
   .case-header {
-    flex-shrink: 0;
-    padding: 14px 16px 4px;
+    padding: 10px 16px 0;
     padding-left: calc(16px + env(safe-area-inset-left, 0px));
     padding-right: calc(16px + env(safe-area-inset-right, 0px));
-    margin-top: calc(-1 * (var(--navbar-h, 0px) + var(--subnavbar-h, 0px)));
-    padding-top: calc(14px + var(--navbar-h, 0px) + var(--subnavbar-h, 0px));
+    border-top: 1px solid var(--hair);
+    border-radius: 0 0 1rem 1rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    border-left: 1px solid rgba(255, 255, 255, 0.06);
+    border-right: 1px solid rgba(255, 255, 255, 0.06);
+    background: color-mix(in srgb, var(--paper) 60%, transparent);
+    box-shadow:
+      0 4px 12px rgba(0, 0, 0, 0.08),
+      inset 0 -1px 0 rgba(255, 255, 255, 0.08);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    transition:
+      backdrop-filter 300ms ease,
+      background 300ms ease,
+      box-shadow 300ms ease;
+  }
+
+  .case-header--expanded {
+    background: color-mix(in srgb, var(--paper) 85%, transparent);
+    border-bottom-color: rgba(255, 255, 255, 0.15);
+    border-left-color: rgba(255, 255, 255, 0.1);
+    border-right-color: rgba(255, 255, 255, 0.1);
+    backdrop-filter: saturate(180%) blur(40px);
+    -webkit-backdrop-filter: saturate(180%) blur(40px);
+    box-shadow:
+      0 8px 24px rgba(0, 0, 0, 0.15),
+      inset 0 -1px 0 rgba(255, 255, 255, 0.12);
   }
 
   .title-row {
@@ -220,8 +254,14 @@
     margin: 0;
     font-size: 1.25rem;
     line-height: 1.25;
-    text-wrap: balance;
     color: var(--ink);
+  }
+
+  .case-header:not(.case-header--expanded) .case-title {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
   }
 
   .title-stamps {
@@ -232,9 +272,30 @@
     padding-top: 0.1875rem;
   }
 
-  .fields {
-    margin: 10px 0 0;
+  .title-actions {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    flex-shrink: 0;
+  }
+
+  .case-fields-wrap {
+    display: grid;
+    grid-template-rows: 1fr;
+    transition: grid-template-rows 300ms cubic-bezier(0.4, 0, 0.2, 1);
+    margin-top: 10px;
     border-top: 1px solid var(--hair);
+  }
+
+  .case-fields-wrap--folded {
+    grid-template-rows: 0fr;
+    margin-top: 0;
+    border-top-color: transparent;
+  }
+
+  .fields {
+    overflow: hidden;
+    min-height: 0;
   }
 
   .fld {
@@ -265,28 +326,63 @@
     color: var(--ink);
     line-height: 1.5;
     white-space: pre-wrap;
+    max-height: 30vh;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
   }
 
   .meta-you {
     font-weight: 600;
   }
 
-  .foldup {
+  .case-handle {
     display: flex;
-    justify-content: center;
-    padding: 7px 0 0;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    padding: 6px 0 10px;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
   }
 
-  .foldup button {
+  .case-handle:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: -2px;
+    border-radius: 4px;
+  }
+
+  .case-handle-label {
     font-size: var(--text-xs);
     font-weight: 700;
     letter-spacing: 0.1em;
     text-transform: uppercase;
     color: var(--muted);
-    background: none;
-    border: none;
-    padding: 0.25rem 0.75rem;
-    cursor: pointer;
-    -webkit-tap-highlight-color: transparent;
+  }
+
+  .case-handle-indicator {
+    width: 36px;
+    height: 5px;
+    border-radius: 2.5px;
+    background: var(--muted, rgba(128, 128, 128, 0.4));
+    opacity: 0.5;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .case-fields-wrap {
+      transition: none;
+    }
+
+    .case-header {
+      transition: none;
+    }
+  }
+
+  @media (prefers-contrast: more) {
+    .case-header,
+    .case-header--expanded {
+      backdrop-filter: none !important;
+      -webkit-backdrop-filter: none !important;
+      background: Canvas !important;
+    }
   }
 </style>

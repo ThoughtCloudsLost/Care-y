@@ -3,7 +3,8 @@ import type { ReactionSummary } from "@care-y/shared";
 import type { FuzzyMatch } from "$lib/search/fuzzy.js";
 
 export type FilterStatus = DisplayStatus;
-export type SortField = "date" | "priority" | "last_activity" | "queue";
+export type SortField =
+  "date" | "priority" | "last_activity" | "queue" | "client" | "msgs";
 
 export const VALID_STATUSES: ReadonlySet<FilterStatus> = new Set<FilterStatus>([
   "new",
@@ -17,6 +18,8 @@ export const SORT_FIELDS: readonly SortField[] = [
   "priority",
   "last_activity",
   "queue",
+  "client",
+  "msgs",
 ];
 
 export function isFilterStatus(v: string): v is FilterStatus {
@@ -68,6 +71,8 @@ export interface TitleEntry {
   readonly id: string;
   readonly title: string | null;
   readonly clientAlias: string;
+  readonly queueName?: string | null;
+  readonly assignedName?: string | null;
 }
 
 export function matchTitles(
@@ -83,7 +88,16 @@ export function matchTitles(
   for (const entry of entries) {
     if (entry.title == null) continue;
     ids.push(entry.id);
-    haystack.push(`${entry.title} ${entry.clientAlias}`);
+    haystack.push(
+      [
+        entry.title,
+        entry.clientAlias,
+        entry.queueName ?? "",
+        entry.assignedName ?? "",
+      ]
+        .join(" ")
+        .trim(),
+    );
   }
   const matches = fuzzySearchFn(haystack, searchTerm);
   return matches

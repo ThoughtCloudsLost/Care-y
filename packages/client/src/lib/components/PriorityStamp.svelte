@@ -27,14 +27,13 @@
 <style>
   .stamp {
     display: inline-block;
-    font-size: 0.625rem; /* 10px */
+    font-size: 0.625rem;
     font-weight: 700;
     letter-spacing: 0.13em;
     text-transform: uppercase;
-    padding: 2.5px 7px;
+    padding: 2px 6px;
     border: 1px solid currentColor;
     border-radius: 3px;
-    transform: rotate(-0.5deg);
     white-space: nowrap;
   }
 
@@ -51,6 +50,5 @@
   .stamp-low {
     color: var(--muted);
     border-style: dashed;
-    transform: none;
   }
 </style>

@@ -1,3 +1,4 @@
+<!-- care-y-ignore no-hardcoded-user-strings -- {#snippet} parameter type annotations are TypeScript, not user-facing text -->
 <script lang="ts">
   import {
     createInfiniteQuery,
@@ -28,15 +29,15 @@
   } from "$lib/crypto/context.js";
   import {
     getScrollContainer,
-    getTabbarOverrideCtx,
     getNavbarOverrideCtx,
   } from "$lib/shell/context.js";
   import type { NavbarAction } from "$lib/shell/types";
   import { useScrollDirection } from "$lib/shell/use-scroll-direction.svelte.js";
-  import { Link } from "konsta/svelte";
-  import { UserPlus, Pause, X, TicketPlus } from "@lucide/svelte";
+  import { Button } from "konsta/svelte";
+  import { UserPlus, Pause, TicketPlus } from "@lucide/svelte";
+  import BulkActionBar from "$lib/components/BulkActionBar.svelte";
   import { deriveDisplayStatus } from "$lib/tickets/display-status.js";
-  import { filterStore } from "$lib/stores/filters.svelte.js";
+  import { filterStore, type SortField } from "$lib/stores/filters.svelte.js";
   import { viewModeStore } from "$lib/stores/view-mode.svelte.js";
   import { newRepliesFirstStore } from "$lib/stores/new-replies-first.svelte.js";
   import {
@@ -65,6 +66,7 @@
   import ViewSwitcher from "$lib/components/ViewSwitcher.svelte";
   import StatusMark from "$lib/components/StatusMark.svelte";
   import TicketCard from "$lib/components/tickets/TicketCard.svelte";
+  import TicketTable from "$lib/components/tickets/TicketTable.svelte";
   import SwipeableCard from "$lib/components/tickets/SwipeableCard.svelte";
   import type { PillDefinition } from "$lib/components/filters/filter-types.js";
   import VirtualList from "$lib/components/tickets/VirtualList.svelte";
@@ -123,7 +125,6 @@
       return scrollEl;
     },
   });
-  const tabbarOverride = getTabbarOverrideCtx();
   const navbarCtx = getNavbarOverrideCtx();
   const ticketsLayout = getTicketsLayoutCtx();
 
@@ -445,6 +446,8 @@
                 ? props.titleResult.value
                 : null,
             clientAlias: props.clientAlias,
+            queueName: props.queueName,
+            assignedName: props.assignedName,
           })),
           overlay.term,
           fuzzySearch,
@@ -536,6 +539,190 @@
     }
     return displayItems;
   });
+
+  interface PropsLike {
+    displayStatus: string;
+    priority: string;
+    clientAlias: string;
+    titleResult: { status: string; value?: string };
+    queueName: string | null;
+    assignedName: string | null;
+    lastActivityAt: Date | null;
+    createdAt: Date;
+    followUpCount: number;
+  }
+
+  function compareByField(
+    pa: PropsLike,
+    pb: PropsLike,
+    field: string,
+    dir: number,
+  ): number {
+    const rank: Record<string, number> = {
+      urgent: 0,
+      high: 1,
+      normal: 2,
+      low: 3,
+    };
+    const statusRank: Record<string, number> = {
+      new: 0,
+      active: 1,
+      hold: 2,
+      closed: 3,
+    };
+
+    switch (field) {
+      case "status":
+        return (
+          ((statusRank[pa.displayStatus] ?? 4) -
+            (statusRank[pb.displayStatus] ?? 4)) *
+          dir
+        );
+      case "priority":
+        return ((rank[pa.priority] ?? 4) - (rank[pb.priority] ?? 4)) * dir;
+      case "client":
+        return pa.clientAlias.localeCompare(pb.clientAlias) * dir;
+      case "title": {
+        const aVal =
+          pa.titleResult.status === "ready" ? (pa.titleResult.value ?? "") : "";
+        const bVal =
+          pb.titleResult.status === "ready" ? (pb.titleResult.value ?? "") : "";
+        return aVal.localeCompare(bVal) * dir;
+      }
+      case "queue":
+        return (pa.queueName ?? "").localeCompare(pb.queueName ?? "") * dir;
+      case "assignee":
+        return (
+          (pa.assignedName ?? "￿").localeCompare(pb.assignedName ?? "￿") * dir
+        );
+      case "last_activity": {
+        const aT = (pa.lastActivityAt ?? pa.createdAt).getTime();
+        const bT = (pb.lastActivityAt ?? pb.createdAt).getTime();
+        return (aT - bT) * dir;
+      }
+      case "msgs":
+        return (pa.followUpCount - pb.followUpCount) * dir;
+      default:
+        return 0;
+    }
+  }
+
+  function clientSortItems<T extends { id: string }>(
+    items: T[],
+    getProps: (item: T) => PropsLike | undefined,
+    isUnread?: (id: string) => boolean,
+  ): T[] {
+    const useClientSort =
+      !ticketsQuery.hasNextPage || CLIENT_ONLY_SORT_FIELDS.has(tableSortField);
+
+    if (!useClientSort) return items;
+
+    const dir = tableSortDirection === "asc" ? 1 : -1;
+    const preserveUnreadFirst =
+      newRepliesFirstStore.enabled && isUnread !== undefined;
+
+    if (preserveUnreadFirst) {
+      const unread: T[] = [];
+      const read: T[] = [];
+      for (const item of items) {
+        if (isUnread(item.id)) unread.push(item);
+        else read.push(item);
+      }
+
+      const sorter = (a: T, b: T): number => {
+        const pa = getProps(a);
+        const pb = getProps(b);
+        if (!pa || !pb) return 0;
+        return compareByField(pa, pb, tableSortField, dir);
+      };
+
+      unread.sort(sorter);
+      read.sort(sorter);
+      return [...unread, ...read];
+    }
+
+    const sorted = [...items];
+    sorted.sort((a, b) => {
+      const pa = getProps(a);
+      const pb = getProps(b);
+      if (!pa || !pb) return 0;
+      return compareByField(pa, pb, tableSortField, dir);
+    });
+    return sorted;
+  }
+
+  const sortedListItems = $derived(
+    clientSortItems(
+      listItems,
+      (t) => cardPropsMap.get(t.id),
+      (id) => listReadState.isUnread(id),
+    ),
+  );
+
+  const ticketTableRows = $derived(
+    sortedListItems
+      .map((t) => {
+        const props = cardPropsMap.get(t.id);
+        if (!props) return null;
+        return {
+          ticketId: props.ticketId,
+          displayStatus: props.displayStatus,
+          priority: props.priority,
+          clientAlias: props.clientAlias,
+          titleResult: props.titleResult,
+          encryptedTitle: t.encryptedTitle,
+          queueName: props.queueName,
+          assignedName: props.assignedName,
+          assignedIsSelf: props.assignedIsSelf,
+          lastActivityAt: props.lastActivityAt,
+          createdAt: props.createdAt,
+          followUpCount: props.followUpCount,
+          unreadCount: props.unreadCount,
+        };
+      })
+      .filter((r): r is NonNullable<typeof r> => r !== null),
+  );
+
+  const VALID_TICKET_SORT_FIELDS = new Set<SortField>([
+    "date",
+    "priority",
+    "last_activity",
+    "queue",
+    "client",
+    "msgs",
+  ]);
+
+  type TableSortField = SortField | "title" | "assignee" | "status";
+  let tableSortField = $state<TableSortField>(filterStore.sort.field);
+  let tableSortDirection = $state<"asc" | "desc">(filterStore.sort.direction);
+
+  const CLIENT_ONLY_SORT_FIELDS = new Set<string>([
+    "title",
+    "assignee",
+    "status",
+  ]);
+
+  function isTableSortField(v: string): v is TableSortField {
+    return isSortField(v) || CLIENT_ONLY_SORT_FIELDS.has(v);
+  }
+
+  function handleTicketTableSort(
+    field: string,
+    direction: "asc" | "desc",
+  ): void {
+    if (!isTableSortField(field)) return;
+    tableSortField = field;
+    tableSortDirection = direction;
+    if (isSortField(field)) {
+      filterStore.setSort(field, direction);
+    }
+  }
+
+  async function loadAllTickets(): Promise<void> {
+    while (ticketsQuery.hasNextPage && !ticketsQuery.isFetchingNextPage) {
+      await ticketsQuery.fetchNextPage();
+    }
+  }
 
   // --- Empty states and the caught-up stamp (global truth from the sweep) ---
 
@@ -666,28 +853,7 @@
     toastStore.show(m.saved_filter_saved());
   }
 
-  // --- Tabbar / navbar overrides ---
-
-  $effect(() => {
-    if (multiSelect.active) {
-      tabbarOverride.current = {
-        left: batchLeft,
-        middle: batchMiddle,
-        right: batchRight,
-        ariaLabel: m.tickets_selected({
-          count: multiSelect.selectedIds.size,
-        }),
-      };
-    } else {
-      tabbarOverride.current = undefined;
-    }
-  });
-
-  $effect(() => {
-    return () => {
-      tabbarOverride.current = undefined;
-    };
-  });
+  // --- Navbar overrides ---
 
   $effect(() => {
     const newTicketAction: NavbarAction = {
@@ -975,9 +1141,15 @@
       },
     },
     sort: {
-      validate: isSortField,
+      validate: (v: string) => isSortField(v) || CLIENT_ONLY_SORT_FIELDS.has(v),
       set: (field: string, dir: "asc" | "desc") => {
-        if (isSortField(field)) filterStore.setSort(field, dir);
+        if (isSortField(field)) {
+          filterStore.setSort(field, dir);
+        }
+        if (isTableSortField(field)) {
+          tableSortField = field;
+          tableSortDirection = dir;
+        }
       },
     },
     savedFilters: {
@@ -1049,12 +1221,15 @@
     label: m.tickets_sort(),
     options: [
       { field: "date", label: m.tickets_sort_newest() },
+      { field: "status", label: m.tickets_sort_status() },
       { field: "priority", label: m.tickets_sort_priority() },
       { field: "last_activity", label: m.tickets_sort_activity() },
       { field: "queue", label: m.tickets_sort_queue(withTerms()) },
+      { field: "client", label: m.tickets_sort_client() },
+      { field: "msgs", label: m.tickets_sort_msgs() },
     ],
-    currentField: filterStore.sort.field,
-    currentDirection: filterStore.sort.direction,
+    currentField: tableSortField,
+    currentDirection: tableSortDirection,
     onchange: dispatch.handleSortChange,
     // Client-side presentation sort: lives in the sort popover but stays
     // out of filterStore (the server cannot sort by read state by design).
@@ -1095,37 +1270,38 @@
   });
 </script>
 
-{#snippet batchLeft()}
-  <Link
-    iconOnly
-    onclick={handleBulkAssign}
-    aria-label={m.tickets_action_assign()}
+{#snippet bulkActionsRow()}
+  <BulkActionBar
+    countLabel={m.tickets_selected({ count: multiSelect.selectedIds.size })}
+    exitLabel={m.tickets_exit_multiselect()}
+    onexit={() => multiSelect.exit()}
+    ariaLabel={m.tickets_selected({ count: multiSelect.selectedIds.size })}
   >
-    <UserPlus size={24} aria-hidden="true" />
-  </Link>
-  <Link
-    iconOnly
-    onclick={() => void bulkActions.handleBulkHold()}
-    aria-label={m.tickets_action_hold()}
-  >
-    <Pause size={24} aria-hidden="true" />
-  </Link>
-{/snippet}
-
-{#snippet batchMiddle()}
-  <span class="font-semibold text-sm" role="status">
-    {m.tickets_selected({ count: multiSelect.selectedIds.size })}
-  </span>
-{/snippet}
-
-{#snippet batchRight()}
-  <Link
-    iconOnly
-    aria-label={m.tickets_exit_multiselect()}
-    onclick={() => multiSelect.exit()}
-  >
-    <X size={24} aria-hidden="true" />
-  </Link>
+    {#snippet actions()}
+      <Button
+        tonal
+        rounded
+        small
+        inline
+        class="bulk-action-btn"
+        onclick={handleBulkAssign}
+      >
+        <UserPlus size={16} aria-hidden="true" />
+        {m.tickets_action_assign()}
+      </Button>
+      <Button
+        tonal
+        rounded
+        small
+        inline
+        class="bulk-action-btn"
+        onclick={() => void bulkActions.handleBulkHold()}
+      >
+        <Pause size={16} aria-hidden="true" />
+        {m.tickets_action_hold()}
+      </Button>
+    {/snippet}
+  </BulkActionBar>
 {/snippet}
 
 {#snippet ticketStats()}
@@ -1167,6 +1343,7 @@
   <ViewSwitcher
     mode={viewModeStore.mode}
     onchange={(mode: ViewMode) => viewModeStore.set(mode)}
+    modes={["table", "list", "cards", "grid", "kanban"]}
   />
 {/snippet}
 
@@ -1197,6 +1374,7 @@
     savedFilters={savedFiltersConfig}
     filterPills={filterPillsConfig}
     searchNavigator={overlay.active ? searchNavigatorRow : undefined}
+    bulkActions={multiSelect.active ? bulkActionsRow : undefined}
     onsearch={!overlay.active ? () => overlay.enter("") : undefined}
     searchLabel={m.search_inline_trigger()}
   />
@@ -1204,56 +1382,28 @@
 
 <div class="ticket-page pb-20">
   {#if ticketsQuery.isLoading}
-    <div
-      class="ticket-list"
-      class:mode-rows={viewModeStore.mode === "list"}
-      class:mode-cards={viewModeStore.mode === "cards"}
-      class:ticket-grid={viewModeStore.mode === "grid"}
-    >
-      {#each [1, 2, 3, 4] as n (n)}
-        <TicketCard
-          loading={true}
-          viewMode={viewModeStore.mode}
-          ticketId=""
-          queueName={null}
-          displayStatus="active"
-          priority="normal"
-          titleResult={{ status: "loading" }}
-          clientAlias=""
-          assignedName={null}
-          createdAt={new Date()}
-          lastActivityAt={null}
-          followUpCount={0}
-          unreadCount={0}
-          previewFollowUps={undefined}
-          ontap={() => {
-            /* loading skeleton, no-op */
-          }}
-        />
-      {/each}
-    </div>
-  {:else if ticketsQuery.isError}
-    <QueryError error={ticketsQuery.error} />
-  {:else}
-    {#if caughtUpLineVisible}
-      <!-- Earned-state stamp on the dateline anatomy: the volunteer has
-           read every reply, globally, so the sort has nothing to raise.
-           The stamp stands alone; the caught-up EmptyState room carries
-           the explanatory title and body. -->
-      <div class="caught-up-line" role="status" data-testid="caught-up-line">
-        <span class="caught-up-stamp">{m.tickets_unread_zero_stamp()}</span>
-      </div>
-    {/if}
-    <div
-      class="ticket-list"
-      data-ticket-list
-      class:mode-rows={viewModeStore.mode === "list"}
-      class:mode-cards={viewModeStore.mode === "cards"}
-    >
-      {#if pinnedLoading}
-        <!-- Skeleton rows for unread-but-unloaded tickets being fetched
-             into the pinned block. -->
-        {#each unloadedUnreadIds as id (id)}
+    {#if viewModeStore.mode === "kanban"}
+      <EmptyState
+        stamp={m.kanban_coming_soon_title()}
+        subtitle={m.kanban_coming_soon_body()}
+      />
+    {:else if viewModeStore.mode === "table"}
+      <TicketTable
+        rows={[]}
+        loading={true}
+        sortField={tableSortField}
+        sortDirection={tableSortDirection}
+        onsortchange={handleTicketTableSort}
+        ontap={handleTicketTap}
+      />
+    {:else}
+      <div
+        class="ticket-list"
+        class:mode-rows={viewModeStore.mode === "list"}
+        class:mode-cards={viewModeStore.mode === "cards"}
+        class:ticket-grid={viewModeStore.mode === "grid"}
+      >
+        {#each [1, 2, 3, 4] as n (n)}
           <TicketCard
             loading={true}
             viewMode={viewModeStore.mode}
@@ -1274,69 +1424,142 @@
             }}
           />
         {/each}
+      </div>
+    {/if}
+  {:else if ticketsQuery.isError}
+    <QueryError error={ticketsQuery.error} />
+  {:else}
+    {#if viewModeStore.mode === "kanban"}
+      <EmptyState
+        stamp={m.kanban_coming_soon_title()}
+        subtitle={m.kanban_coming_soon_body()}
+      />
+    {:else}
+      {#if caughtUpLineVisible}
+        <div class="caught-up-line" role="status" data-testid="caught-up-line">
+          <span class="caught-up-stamp">{m.tickets_unread_zero_stamp()}</span>
+        </div>
       {/if}
-      {#key viewModeStore.mode}
-        <VirtualList
-          items={listItems}
-          scrollContainer={scrollEl}
-          {estimateHeight}
-          virtualizeThreshold={200}
-          columns={gridColumns}
-          getKey={(t: TicketRecord) => t.id}
-          onloadmore={loadNextPage}
-        >
-          {#snippet children({ item }: { item: TicketRecord; index: number })}
-            <div
-              id="ticket-{item.id}"
-              class="search-target"
-              class:match-active={overlay.activeId === item.id}
-              class:ticket-card-selected={ticketsLayout.selectedTicketId() ===
-                item.id}
-              aria-current={overlay.activeId === item.id ||
-              ticketsLayout.selectedTicketId() === item.id
-                ? "true"
-                : undefined}
-            >
-              <SwipeableCard
-                ticketId={item.id}
-                disabled={multiSelect.active}
-                onaction={handleAction}
-                onlongpress={(id: string) => multiSelect.handleLongPress(id)}
-              >
-                {@const dataProps = cardPropsMap.get(item.id)}
-                {#if dataProps}
-                  <TicketCard
-                    {...dataProps}
-                    viewMode={viewModeStore.mode}
-                    selected={multiSelect.selectedIds.has(item.id)}
-                    multiSelectActive={multiSelect.active}
-                    searchTerm={overlay.term}
-                  />
-                {/if}
-              </SwipeableCard>
-            </div>
-          {/snippet}
-        </VirtualList>
-      {/key}
-    </div>
-
-    {#if listItems.length === 0 && !pinnedLoading}
-      {#if emptyKind === "search"}
-        <EmptyState title={m.search_conversation_no_matches()} />
-      {:else if emptyKind === "caught-up"}
-        <EmptyState
-          stamp={m.tickets_unread_zero_stamp()}
-          title={m.tickets_unread_zero_title()}
-          subtitle={m.tickets_unread_zero_body(withTerms())}
-        />
-      {:else if emptyKind === "truly-empty"}
-        <EmptyState
-          seal={orgInitial}
-          title={m.tickets_empty_title()}
-          subtitle={m.tickets_empty_body(withTerms())}
+      {#if viewModeStore.mode === "table"}
+        <TicketTable
+          rows={ticketTableRows}
+          sortField={tableSortField}
+          sortDirection={tableSortDirection}
+          onsortchange={handleTicketTableSort}
+          ontap={handleTicketTap}
+          multiSelectActive={multiSelect.active}
+          selectedIds={multiSelect.selectedIds}
+          onselect={(id: string) => multiSelect.toggleSelection(id)}
+          searchTerm={overlay.term}
+          activeId={overlay.activeId}
+          selectedTicketId={ticketsLayout.selectedTicketId()}
+          onloadmore={ticketsQuery.hasNextPage ? loadNextPage : undefined}
+          hasMore={ticketsQuery.hasNextPage}
+          partialSort={ticketsQuery.hasNextPage &&
+            CLIENT_ONLY_SORT_FIELDS.has(tableSortField)}
+          newRepliesFirst={newRepliesFirstStore.enabled}
+          onloadall={ticketsQuery.hasNextPage ? loadAllTickets : undefined}
         />
       {:else}
-        <EmptyState title={m.tickets_empty_filter(withTerms())} />
+        <div
+          class="ticket-list"
+          data-ticket-list
+          class:mode-rows={viewModeStore.mode === "list"}
+          class:mode-cards={viewModeStore.mode === "cards"}
+        >
+          {#if pinnedLoading}
+            {#each unloadedUnreadIds as id (id)}
+              <TicketCard
+                loading={true}
+                viewMode={viewModeStore.mode}
+                ticketId=""
+                queueName={null}
+                displayStatus="active"
+                priority="normal"
+                titleResult={{ status: "loading" }}
+                clientAlias=""
+                assignedName={null}
+                createdAt={new Date()}
+                lastActivityAt={null}
+                followUpCount={0}
+                unreadCount={0}
+                previewFollowUps={undefined}
+                ontap={() => {
+                  /* loading skeleton, no-op */
+                }}
+              />
+            {/each}
+          {/if}
+          {#key viewModeStore.mode}
+            <VirtualList
+              items={sortedListItems}
+              scrollContainer={scrollEl}
+              {estimateHeight}
+              virtualizeThreshold={200}
+              columns={gridColumns}
+              getKey={(t: TicketRecord) => t.id}
+              onloadmore={loadNextPage}
+            >
+              {#snippet children({
+                item,
+              }: {
+                item: TicketRecord;
+                index: number;
+              })}
+                <div
+                  id="ticket-{item.id}"
+                  class="search-target"
+                  class:match-active={overlay.activeId === item.id}
+                  class:ticket-card-selected={ticketsLayout.selectedTicketId() ===
+                    item.id}
+                  aria-current={overlay.activeId === item.id ||
+                  ticketsLayout.selectedTicketId() === item.id
+                    ? "true"
+                    : undefined}
+                >
+                  <SwipeableCard
+                    ticketId={item.id}
+                    disabled={multiSelect.active}
+                    onaction={handleAction}
+                    onlongpress={(id: string) =>
+                      multiSelect.handleLongPress(id)}
+                  >
+                    {@const dataProps = cardPropsMap.get(item.id)}
+                    {#if dataProps}
+                      <TicketCard
+                        {...dataProps}
+                        viewMode={viewModeStore.mode}
+                        selected={multiSelect.selectedIds.has(item.id)}
+                        multiSelectActive={multiSelect.active}
+                        searchTerm={overlay.term}
+                        newRepliesFirst={newRepliesFirstStore.enabled}
+                      />
+                    {/if}
+                  </SwipeableCard>
+                </div>
+              {/snippet}
+            </VirtualList>
+          {/key}
+        </div>
+      {/if}
+
+      {#if listItems.length === 0 && !pinnedLoading}
+        {#if emptyKind === "search"}
+          <EmptyState title={m.search_conversation_no_matches()} />
+        {:else if emptyKind === "caught-up"}
+          <EmptyState
+            stamp={m.tickets_unread_zero_stamp()}
+            title={m.tickets_unread_zero_title()}
+            subtitle={m.tickets_unread_zero_body(withTerms())}
+          />
+        {:else if emptyKind === "truly-empty"}
+          <EmptyState
+            stamp={m.tickets_empty_title()}
+            subtitle={m.tickets_empty_body(withTerms())}
+          />
+        {:else}
+          <EmptyState title={m.tickets_empty_filter(withTerms())} />
+        {/if}
       {/if}
     {/if}
   {/if}
@@ -1389,12 +1612,11 @@
     gap: var(--space-lg);
   }
 
-  /* Counts line: bold ink numbers, ink-2 words (the mock's .counts). */
   .count-item {
     display: inline-flex;
     align-items: baseline;
-    gap: 0.25rem;
-    font-size: var(--text-base);
+    gap: 0.2rem;
+    font-size: var(--text-xs);
     color: var(--ink-2);
     font-variant-numeric: tabular-nums;
     white-space: nowrap;
@@ -1405,10 +1627,14 @@
     color: var(--ink);
   }
 
-  /* The mark centers on the line box; the text stays baseline-aligned. */
   .count-mark {
     display: inline-flex;
     align-self: center;
+  }
+
+  .count-mark :global(.status-mark svg) {
+    width: 10px;
+    height: 10px;
   }
 
   .ticket-list {

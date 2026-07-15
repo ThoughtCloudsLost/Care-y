@@ -41,23 +41,17 @@
     // internal state transitions. CryptoProvider is the single registrant.
     bridge.onBridgeStateChange((state) => {
       setCryptoKeyed(state === "KEYED");
+      if (state === "KEYED" && bridge.isReconnected()) {
+        const reconnect = bridge.getReconnectData();
+        if (reconnect.orgPublicKey != null) {
+          orgKeyManager.load(reconnect.orgPublicKey);
+        }
+      }
     });
 
     orgKeyManager.onLoadChange((loaded) => {
       setOrgKeyReady(loaded);
     });
-
-    // SharedWorker reconnection: if the bridge connected to an already-keyed
-    // Worker (refresh scenario), restore the org public key locally.
-    // setCryptoKeyed is handled by the bridge callback (setState("KEYED")
-    // fires during initWorker for reconnected bridges). setOrgKeyReady is
-    // handled by the orgKeyManager callback (load fires onLoadChange).
-    if (bridge.isReconnected()) {
-      const reconnect = bridge.getReconnectData();
-      if (reconnect.orgPublicKey != null) {
-        orgKeyManager.load(reconnect.orgPublicKey);
-      }
-    }
   }
 </script>
 

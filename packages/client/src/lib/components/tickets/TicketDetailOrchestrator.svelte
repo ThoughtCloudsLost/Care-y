@@ -11,26 +11,27 @@
 -->
 <script lang="ts">
   import { getDraft, setDraft } from "$lib/tickets/draft-store.svelte.js";
-  import { Link } from "konsta/svelte";
+  import { Link, Button } from "konsta/svelte";
   import {
     ChevronLeft,
     MessageSquareText,
     Timeline,
     BookUser,
-    X,
+    Maximize2,
     Copy,
     SquareCheckBig,
   } from "@lucide/svelte";
+  import BulkActionBar from "$lib/components/BulkActionBar.svelte";
   import * as m from "$lib/paraglide/messages.js";
   import { withTerms } from "$lib/terminology/with-terms.js";
   import {
     getTabbarHiddenCtx,
     getNavbarOverrideCtx,
-    getTabbarOverrideCtx,
   } from "$lib/shell/context.js";
   import { useScrollDirection } from "$lib/shell/use-scroll-direction.svelte.js";
-  import type { ViewToggleConfig } from "$lib/shell/types.js";
+  import { layoutMode } from "$lib/stores/layout-mode.svelte";
   import SubNavbarFilterLayout from "$lib/shell/SubNavbarFilterLayout.svelte";
+  import IconTabToggle from "$lib/components/shared/IconTabToggle.svelte";
   import TicketDetail from "$lib/components/tickets/TicketDetail.svelte";
   import CaseHeader from "$lib/components/tickets/CaseHeader.svelte";
   import type { ContextMenuEvent } from "$lib/components/tickets/context-menu-actions.js";
@@ -95,9 +96,11 @@
   let {
     ticketId,
     onback,
+    onexpand,
   }: {
     ticketId: string;
     onback: () => void;
+    onexpand?: () => void;
   } = $props();
 
   // ── Composable initialization ──
@@ -112,7 +115,6 @@
 
   const tabbarHidden = getTabbarHiddenCtx();
   const navbarCtx = getNavbarOverrideCtx();
-  const tabbarOverride = getTabbarOverrideCtx();
 
   // Draft compose state (shared with ShellMessagebar + TicketDetail).
   // In-memory SvelteMap keyed by ticketId survives SPA navigations.
@@ -225,22 +227,10 @@
     invert: true,
   });
 
-  // Tabbar: hidden normally, replaced with select toolbar when select mode is active.
+  // Tabbar: hidden (the compose bar occupies the bottom area).
   $effect(() => {
-    if (selectMode.active) {
-      tabbarHidden.current = false;
-      tabbarOverride.current = {
-        left: selectLeft,
-        middle: selectMiddle,
-        right: selectRight,
-        ariaLabel: m.ticket_select_mode(),
-      };
-    } else {
-      tabbarOverride.current = undefined;
-      tabbarHidden.current = true;
-    }
+    tabbarHidden.current = true;
     return () => {
-      tabbarOverride.current = undefined;
       tabbarHidden.current = false;
     };
   });
@@ -321,16 +311,12 @@
 
   // --- SubNavbar config objects ---
 
-  const detailViewConfig: ViewToggleConfig = $derived({
-    mode: timelineActive ? ("grid" as const) : ("list" as const),
-    onchange: (mode: "list" | "grid") => {
-      timelineActive = mode === "grid";
-    },
-    listLabel: m.ticket_action_messages(),
-    gridLabel: m.ticket_action_timeline(),
-    listIcon: MessageSquareText,
-    gridIcon: Timeline,
-  });
+  const detailViewTabs = [
+    { id: "chat", label: m.ticket_action_messages(), icon: MessageSquareText },
+    { id: "timeline", label: m.ticket_action_timeline(), icon: Timeline },
+  ] as const;
+
+  const detailViewActiveTab = $derived(timelineActive ? "timeline" : "chat");
 
   // --- Select mode (composable) ---
 
@@ -741,12 +727,23 @@
   />
 {/snippet}
 
+{#snippet detailViewToggle()}
+  <IconTabToggle
+    tabs={detailViewTabs}
+    active={detailViewActiveTab}
+    ariaLabel={m.ticket_action_messages()}
+    onchange={(id) => {
+      timelineActive = id === "timeline";
+    }}
+  />
+{/snippet}
+
 {#snippet ticketSubnavbar()}
   <SubNavbarFilterLayout
     title={decryptedTitle}
     smallTitle
     hideTitle
-    view={detailViewConfig}
+    headerRight={detailViewToggle}
     stats={detailStats}
     selectLabel={m.ticket_select_mode()}
     onselect={selectMode.active
@@ -754,13 +751,38 @@
       : () => selectMode.enter()}
     filterPills={detailFilters.pills}
     searchNavigator={overlay.active ? searchNavigatorRow : undefined}
+    bulkActions={selectMode.active ? selectActionsRow : undefined}
     onsearch={!overlay.active ? () => overlay.enter("") : undefined}
     searchLabel={m.search_inline_trigger()}
   />
+  <CaseHeader
+    {ticketId}
+    headerActions={layoutMode.isDesktop ? desktopCaseActions : undefined}
+  />
+{/snippet}
+
+{#snippet desktopCaseActions()}
+  <Link
+    iconOnly
+    onclick={openPanel}
+    role="button"
+    aria-label={m.ticket_more_actions()}
+  >
+    <BookUser size={18} aria-hidden="true" />
+  </Link>
+  {#if onexpand}
+    <Link
+      iconOnly
+      onclick={onexpand}
+      role="button"
+      aria-label={m.tickets_detail_expand()}
+    >
+      <Maximize2 size={16} aria-hidden="true" />
+    </Link>
+  {/if}
 {/snippet}
 
 <div class="ticket-detail-page">
-  <CaseHeader {ticketId} />
   <TicketDetail
     {ticketId}
     knownFollowUpCount={cachedFollowUpCount}
@@ -808,53 +830,53 @@
   />
 {/if}
 
-{#snippet selectLeft()}
-  <Link
-    iconOnly
-    onclick={() => {
-      if (filteredFollowUps) {
-        for (const fu of filteredFollowUps) {
-          selectMode.selectedIds.add(fu.id);
-        }
-      }
-    }}
-    aria-label={m.ticket_select_all()}
-  >
-    <SquareCheckBig size={24} aria-hidden="true" />
-  </Link>
-  <Link
-    iconOnly
-    onclick={() => {
-      if (selectMode.selectedIds.size > 0 && filteredFollowUps) {
-        void selectMode.copySelected(filteredFollowUps);
-      }
-    }}
-    aria-label={m.common_copy()}
-    class={selectMode.selectedIds.size === 0
-      ? "opacity-30 pointer-events-none"
-      : ""}
-    aria-disabled={selectMode.selectedIds.size === 0}
-  >
-    <Copy size={24} aria-hidden="true" />
-  </Link>
-{/snippet}
-
-{#snippet selectMiddle()}
-  <span class="font-semibold text-sm" role="status">
-    {selectMode.selectedIds.size <= 1
+{#snippet selectActionsRow()}
+  <BulkActionBar
+    countLabel={selectMode.selectedIds.size <= 1
       ? m.ticket_copy_one_message()
       : m.ticket_copy_messages({ count: String(selectMode.selectedIds.size) })}
-  </span>
-{/snippet}
-
-{#snippet selectRight()}
-  <Link
-    iconOnly
-    aria-label={m.ticket_select_cancel()}
-    onclick={() => selectMode.exit()}
+    exitLabel={m.ticket_select_cancel()}
+    onexit={() => selectMode.exit()}
+    ariaLabel={m.ticket_select_mode()}
   >
-    <X size={24} aria-hidden="true" />
-  </Link>
+    {#snippet actions()}
+      <Button
+        tonal
+        rounded
+        small
+        inline
+        class="bulk-action-btn"
+        onclick={() => {
+          if (filteredFollowUps) {
+            for (const fu of filteredFollowUps) {
+              selectMode.selectedIds.add(fu.id);
+            }
+          }
+        }}
+      >
+        <SquareCheckBig size={16} aria-hidden="true" />
+        {m.ticket_select_all()}
+      </Button>
+      <Button
+        tonal
+        rounded
+        small
+        inline
+        class="bulk-action-btn {selectMode.selectedIds.size === 0
+          ? 'opacity-30 pointer-events-none'
+          : ''}"
+        onclick={() => {
+          if (selectMode.selectedIds.size > 0 && filteredFollowUps) {
+            void selectMode.copySelected(filteredFollowUps);
+          }
+        }}
+        aria-disabled={selectMode.selectedIds.size === 0}
+      >
+        <Copy size={16} aria-hidden="true" />
+        {m.common_copy()}
+      </Button>
+    {/snippet}
+  </BulkActionBar>
 {/snippet}
 
 <TicketDetailOverlays

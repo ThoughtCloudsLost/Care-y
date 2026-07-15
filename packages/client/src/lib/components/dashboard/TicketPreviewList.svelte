@@ -1,5 +1,6 @@
 <script lang="ts">
   import TicketCard from "$lib/components/tickets/TicketCard.svelte";
+  import TicketTable from "$lib/components/tickets/TicketTable.svelte";
   import EmptyState from "$lib/components/EmptyState.svelte";
   import { resolveGridColumns } from "$lib/tickets/ticket-list-utils.js";
   import type { ViewMode } from "$lib/stores/view-mode.svelte.js";
@@ -57,41 +58,136 @@
     viewMode === "grid" ? resolveGridColumns(containerWidth) : 1,
   );
 
+  let tableSortField = $state<string | null>(null);
+  let tableSortDirection = $state<"asc" | "desc">("desc");
+
+  function handleTableSort(field: string, direction: "asc" | "desc"): void {
+    tableSortField = field;
+    tableSortDirection = direction;
+  }
+
+  const tableRows = $derived.by(() => {
+    const mapped = visibleCards.map((c) => ({
+      ticketId: c.ticketId,
+      displayStatus: c.displayStatus,
+      priority: c.priority,
+      clientAlias: c.clientAlias,
+      titleResult: c.titleResult,
+      encryptedTitle: c.encryptedTitle,
+      queueName: c.queueName,
+      assignedName: c.assignedName,
+      assignedIsSelf: c.assignedIsSelf,
+      lastActivityAt: c.lastActivityAt,
+      createdAt: c.createdAt,
+      followUpCount: c.followUpCount,
+      unreadCount: c.unreadCount,
+    }));
+
+    const dir = tableSortDirection === "asc" ? 1 : -1;
+
+    if (tableSortField === "status") {
+      const statusRank = { new: 0, active: 1, hold: 2, closed: 3 } as const;
+      mapped.sort(
+        (a, b) =>
+          (statusRank[a.displayStatus] - statusRank[b.displayStatus]) * dir,
+      );
+    } else if (tableSortField === "last_activity") {
+      mapped.sort((a, b) => {
+        const aTime = (a.lastActivityAt ?? a.createdAt).getTime();
+        const bTime = (b.lastActivityAt ?? b.createdAt).getTime();
+        return (aTime - bTime) * dir;
+      });
+    } else if (tableSortField === "priority") {
+      const rank = { urgent: 0, high: 1, normal: 2, low: 3 } as const;
+      mapped.sort((a, b) => (rank[a.priority] - rank[b.priority]) * dir);
+    } else if (tableSortField === "client") {
+      mapped.sort((a, b) => a.clientAlias.localeCompare(b.clientAlias) * dir);
+    } else if (tableSortField === "queue") {
+      mapped.sort(
+        (a, b) => (a.queueName ?? "").localeCompare(b.queueName ?? "") * dir,
+      );
+    } else if (tableSortField === "msgs") {
+      mapped.sort((a, b) => (a.followUpCount - b.followUpCount) * dir);
+    } else if (tableSortField === "title") {
+      mapped.sort((a, b) => {
+        const aVal =
+          a.titleResult.status === "ready" ? a.titleResult.value : "";
+        const bVal =
+          b.titleResult.status === "ready" ? b.titleResult.value : "";
+        return aVal.localeCompare(bVal) * dir;
+      });
+    } else if (tableSortField === "assignee") {
+      mapped.sort((a, b) => {
+        const aVal = a.assignedName ?? "￿";
+        const bVal = b.assignedName ?? "￿";
+        return aVal.localeCompare(bVal) * dir;
+      });
+    }
+
+    return mapped;
+  });
+
   function noop(): void {
     /* skeleton cards never navigate */
   }
 </script>
 
 {#if loading}
-  <div
-    class="preview-list"
-    class:mode-rows={viewMode === "list"}
-    class:mode-cards={viewMode === "cards"}
-    class:mode-grid={viewMode === "grid"}
-    style:--grid-cols={gridColumns}
-  >
-    {#each Array(cap) as _, i (i)}
-      <TicketCard
-        loading={true}
-        {viewMode}
-        ticketId=""
-        queueName={null}
-        displayStatus="active"
-        priority="normal"
-        titleResult={{ status: "loading" }}
-        clientAlias=""
-        assignedName={null}
-        createdAt={new Date()}
-        lastActivityAt={null}
-        followUpCount={0}
-        unreadCount={0}
-        previewFollowUps={undefined}
-        ontap={noop}
-      />
-    {/each}
-  </div>
+  {#if viewMode === "table"}
+    <TicketTable
+      rows={[]}
+      loading={true}
+      sortField={tableSortField}
+      sortDirection={tableSortDirection}
+      onsortchange={handleTableSort}
+      ontap={noop}
+    />
+  {:else}
+    <div
+      class="preview-list"
+      class:mode-rows={viewMode === "list"}
+      class:mode-cards={viewMode === "cards"}
+      class:mode-grid={viewMode === "grid"}
+      style:--grid-cols={gridColumns}
+    >
+      {#each Array(cap) as _, i (i)}
+        <TicketCard
+          loading={true}
+          {viewMode}
+          ticketId=""
+          queueName={null}
+          displayStatus="active"
+          priority="normal"
+          titleResult={{ status: "loading" }}
+          clientAlias=""
+          assignedName={null}
+          createdAt={new Date()}
+          lastActivityAt={null}
+          followUpCount={0}
+          unreadCount={0}
+          previewFollowUps={undefined}
+          ontap={noop}
+        />
+      {/each}
+    </div>
+  {/if}
 {:else if cards.length === 0}
   <EmptyState message={m.dashboard_empty_section()} />
+{:else if viewMode === "table"}
+  <div class="preview-list" style="padding: 0 var(--page-pad-x);">
+    <TicketTable
+      rows={tableRows}
+      sortField={tableSortField}
+      sortDirection={tableSortDirection}
+      onsortchange={handleTableSort}
+      ontap={visibleCards[0]?.ontap ?? noop}
+    />
+  </div>
+  {#if hasMore && onseeall !== undefined}
+    <button type="button" class="see-all-link" onclick={onseeall}>
+      {m.dashboard_see_all({ count: displayCount })}
+    </button>
+  {/if}
 {:else}
   <div
     bind:this={containerEl}

@@ -1,12 +1,14 @@
+<!-- care-y-ignore no-large-inline-svg -- pause-bars icon is a single cohesive SVG with path data; splitting it would add complexity for no render benefit -->
 <script lang="ts">
   import * as m from "$lib/paraglide/messages.js";
   import type { DisplayStatus } from "$lib/tickets/display-status.js";
 
   interface Props {
     status: DisplayStatus;
+    unreadHighlight?: boolean;
   }
 
-  let { status }: Props = $props();
+  let { status, unreadHighlight = false }: Props = $props();
 
   // Inkwell rule: status is a shape, never a hue. The four marks share one
   // 13x13 viewBox and optical center so swapping status never shifts layout.
@@ -23,7 +25,13 @@
   const label = $derived((labels.get(status) ?? m.status_mark_new)());
 </script>
 
-<span class="status-mark" role="img" aria-label={label} data-status={status}>
+<span
+  class="status-mark"
+  class:unread-highlight={unreadHighlight}
+  role="img"
+  aria-label={label}
+  data-status={status}
+>
   <svg width="13" height="13" viewBox="0 0 13 13" aria-hidden="true">
     {#if status === "new"}
       <circle cx="6.5" cy="6.5" r="5.4" fill="currentColor" />
@@ -38,14 +46,21 @@
       />
       <circle cx="6.5" cy="6.5" r="2.1" fill="currentColor" />
     {:else if status === "hold"}
-      <circle
-        cx="6.5"
-        cy="6.5"
-        r="5"
-        fill="none"
-        stroke="currentColor"
-        stroke-width="1.6"
-        stroke-dasharray="2.4 2.6"
+      <rect
+        x="3.2"
+        y="2.8"
+        width="2.2"
+        height="7.4"
+        rx="0.6"
+        fill="currentColor"
+      />
+      <rect
+        x="7.6"
+        y="2.8"
+        width="2.2"
+        height="7.4"
+        rx="0.6"
+        fill="currentColor"
       />
     {:else}
       <line
@@ -74,6 +89,10 @@
   .status-mark {
     display: inline-flex;
     color: var(--ink);
+  }
+
+  .unread-highlight {
+    color: var(--unread-blue, #3b82f6);
   }
 
   .status-mark svg {

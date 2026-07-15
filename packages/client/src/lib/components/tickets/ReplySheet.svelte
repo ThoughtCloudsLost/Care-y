@@ -241,6 +241,7 @@
   {opened}
   {ondismiss}
   title={m.ticket_reply_sheet_title({ alias: clientAlias })}
+  class="reply-shell-sheet"
 >
   <div class="reply-sheet-messages">
     <div class="thread">
@@ -324,6 +325,17 @@
 />
 
 <style>
+  /* The inline ShellMessagebar already handles safe-area bottom padding,
+     so strip the sheet-body's redundant padding and min-height that
+     together create a tall empty gap below the compose bar. */
+  :global(.reply-shell-sheet .sheet-body) {
+    padding-bottom: 0;
+  }
+
+  :global(.reply-shell-sheet .shell-sheet-content) {
+    min-height: auto;
+  }
+
   .mention-anchor {
     position: relative;
   }

@@ -33,7 +33,7 @@
     ToolbarPane,
   } from "konsta/svelte";
   import PageShell from "./PageShell.svelte";
-  import { Ellipsis, Search, User } from "@lucide/svelte";
+  import { Search, User } from "@lucide/svelte";
   import { getOrgLogoUrl } from "$lib/branding/logo-url.svelte.js";
   import CallIndicator from "./CallIndicator.svelte";
   import { tick, onMount } from "svelte";
@@ -1247,14 +1247,6 @@
               {/each}
             </ToolbarPane>
           </Toolbar>
-          <button
-            type="button"
-            class="more-btn"
-            aria-label={m.nav_more()}
-            onclick={() => (panelOpen = true)}
-          >
-            <Ellipsis size={24} aria-hidden="true" />
-          </button>
         </nav>
       {/if}
 
@@ -1366,21 +1358,8 @@
     position: static !important;
     flex: 1;
     min-width: 0;
-  }
-
-  .more-btn {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 3rem;
-    flex-shrink: 0;
-    background: none;
-    border: none;
-    cursor: pointer;
-    color: var(--glass-text);
-    padding: 0;
-    padding-bottom: var(--k-safe-area-bottom);
-    -webkit-tap-highlight-color: transparent;
+    padding-left: 2rem;
+    padding-right: 2rem;
   }
 
   /* iOS only: override Konsta's pb-safe-4 (safe-area + 16px) to match native
@@ -1751,9 +1730,7 @@
     position: absolute;
     top: 0;
     right: 0;
-    height: 100%;
     z-index: 1;
     border-inline-start: 1px solid var(--hair, var(--divider));
-    overflow: hidden;
   }
 </style>

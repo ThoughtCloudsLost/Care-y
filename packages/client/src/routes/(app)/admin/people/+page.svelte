@@ -1,11 +1,5 @@
 <script lang="ts">
-  import {
-    Segmented,
-    SegmentedButton,
-    Link,
-    List,
-    ListItem,
-  } from "konsta/svelte";
+  import { Link, List, ListItem } from "konsta/svelte";
   import { page } from "$app/state";
   import { goto, replaceState } from "$app/navigation";
   import { resolve } from "$app/paths";
@@ -13,6 +7,7 @@
   import { queueKeys, adminKeys } from "$lib/query/keys.js";
   import { Permission, RoleId } from "@care-y/shared";
   import { Users, Layers, UserPlus, LayersPlus, Link2 } from "@lucide/svelte";
+  import IconTabToggle from "$lib/components/shared/IconTabToggle.svelte";
   import * as m from "$lib/paraglide/messages.js";
   import { withTerms } from "$lib/terminology/with-terms.js";
   import {
@@ -370,36 +365,30 @@
   }
 </script>
 
-<!-- Shared tab segmented used in both subnavbar variants -->
+<!-- Shared tab toggle used in both subnavbar variants -->
 {#snippet tabSegmented()}
-  <div role="tablist" aria-label={m.admin_people_title()} class="tab-toggle">
-    <Segmented strong>
-      {#if canManageUsers}
-        <SegmentedButton
-          active={activeTab === "users"}
-          onclick={() => switchTab("users")}
-          aria-selected={activeTab === "users"}
-          aria-controls="panel-users"
-          aria-label={m.admin_tab_users()}
-          id="tab-users"
-        >
-          <Users size={16} aria-hidden="true" />
-        </SegmentedButton>
-      {/if}
-      {#if canManageQueues}
-        <SegmentedButton
-          active={activeTab === "queues"}
-          onclick={() => switchTab("queues")}
-          aria-selected={activeTab === "queues"}
-          aria-controls="panel-queues"
-          aria-label={m.admin_tab_queues(withTerms())}
-          id="tab-queues"
-        >
-          <Layers size={16} aria-hidden="true" />
-        </SegmentedButton>
-      {/if}
-    </Segmented>
-  </div>
+  {@const tabs = [
+    ...(canManageUsers
+      ? [{ id: "users", label: m.admin_tab_users(), icon: Users }]
+      : []),
+    ...(canManageQueues
+      ? [
+          {
+            id: "queues",
+            label: m.admin_tab_queues(withTerms()),
+            icon: Layers,
+          },
+        ]
+      : []),
+  ]}
+  <IconTabToggle
+    {tabs}
+    active={activeTab}
+    ariaLabel={m.admin_people_title()}
+    onchange={(id: string) => {
+      if (isPeopleTab(id)) switchTab(id);
+    }}
+  />
 {/snippet}
 
 {#snippet navRight()}
@@ -460,6 +449,7 @@
     savedFilters={savedFiltersConfig}
     filterPills={filterPillsConfig}
     searchNavigator={overlay.active ? searchNavigatorRow : undefined}
+    bulkActions={usersSectionRef?.bulkActionsSnippet()}
     onsearch={!overlay.active ? () => overlay.enter("") : undefined}
     searchLabel={m.search_inline_trigger()}
   />
@@ -546,18 +536,5 @@
     align-items: center;
     gap: 0.25rem;
     font-variant-numeric: tabular-nums;
-  }
-
-  .tab-toggle {
-    flex-shrink: 0;
-  }
-
-  .tab-toggle :global(.k-segmented) {
-    height: 1.75rem;
-  }
-
-  .tab-toggle :global(.k-segmented-button) {
-    font-size: var(--text-sm);
-    min-height: unset;
   }
 </style>

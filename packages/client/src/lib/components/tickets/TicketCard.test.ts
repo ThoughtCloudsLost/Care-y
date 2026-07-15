@@ -249,12 +249,13 @@ describe("TicketCard", () => {
     expect(container.textContent).toContain("1 msg");
   });
 
-  it("appends 'on hold' to the meta line for hold status", () => {
+  it("communicates hold via StatusMark, not meta text", () => {
     const { container } = render(TicketCard, {
       props: { ...defaults, displayStatus: "hold" as const },
     });
+    expect(container.querySelector("[data-status='hold']")).toBeTruthy();
     const meta = container.querySelector("[data-testid='row-meta']");
-    expect(meta?.textContent).toContain("on hold");
+    expect(meta?.textContent).not.toContain("on hold");
   });
 
   // --- Status marks (shape, not hue) ---
@@ -505,8 +506,10 @@ describe("TicketCard", () => {
           searchTerm: "sparrow",
         },
       });
-      const meta = container.querySelector("[data-testid='row-meta']");
-      expect(meta?.querySelectorAll("mark")).toHaveLength(2);
+      const aliasMarks = container.querySelectorAll(".r-alias mark");
+      expect(aliasMarks).toHaveLength(1);
+      const metaMarks = container.querySelector("[data-testid='row-meta']");
+      expect(metaMarks?.querySelectorAll("mark")).toHaveLength(1);
     });
 
     it("marks grid meta segments and the grid alias", () => {

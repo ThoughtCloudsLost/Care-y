@@ -69,12 +69,26 @@ describe("ArticleCard", () => {
     expect(getByText("Protocols")).toBeTruthy();
   });
 
-  it("renders title, excerpt, and category in list mode", () => {
-    const { getByText } = render(ArticleCard, defaults);
+  it("renders title, excerpt, and category in cards mode", () => {
+    const { getByText } = render(ArticleCard, {
+      ...defaults,
+      viewMode: "cards",
+    });
 
     expect(getByText("Test Article Title")).toBeTruthy();
     expect(getByText("This is the article excerpt text.")).toBeTruthy();
     expect(getByText("Protocols")).toBeTruthy();
+  });
+
+  it("renders title and category but not excerpt in compact list mode", () => {
+    const { getByText, queryByText } = render(ArticleCard, {
+      ...defaults,
+      viewMode: "list",
+    });
+
+    expect(getByText("Test Article Title")).toBeTruthy();
+    expect(getByText("Protocols")).toBeTruthy();
+    expect(queryByText("This is the article excerpt text.")).toBeNull();
   });
 
   it("renders author name", () => {

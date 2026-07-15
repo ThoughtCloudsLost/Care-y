@@ -1,16 +1,7 @@
 <script lang="ts">
   import type { Snippet } from "svelte";
+  import { BlockTitle, Button, List as KList, ListItem } from "konsta/svelte";
   import {
-    BlockTitle,
-    Button,
-    Segmented,
-    SegmentedButton,
-    List as KList,
-    ListItem,
-  } from "konsta/svelte";
-  import {
-    List,
-    LayoutGrid,
     ArrowUpDown,
     ArrowUp,
     ArrowDown,
@@ -18,6 +9,7 @@
     Search,
     SquareCheckBig,
   } from "@lucide/svelte";
+  import ViewSwitcher from "$lib/components/ViewSwitcher.svelte";
   import type {
     ViewToggleConfig,
     SortConfig,
@@ -48,6 +40,8 @@
     manage?: ManageConfig;
     /** Optional row 3: search navigator (rendered below filter pills). */
     searchNavigator?: Snippet;
+    /** Optional row 4: bulk actions bar (rendered below search navigator). */
+    bulkActions?: Snippet;
     /** When provided, shows a search button in the filter pill row. */
     onsearch?: () => void;
     searchLabel?: string;
@@ -67,6 +61,7 @@
     filterPills,
     manage,
     searchNavigator,
+    bulkActions,
     onsearch,
     searchLabel,
   }: Props = $props();
@@ -97,29 +92,14 @@
     {:else if smallTitle}
       <span class="page-title-small">{title}</span>
     {:else}
-      <BlockTitle large class="page-title">{title}</BlockTitle>
+      <BlockTitle large class="page-title heading-compact">{title}</BlockTitle>
     {/if}
     {#if view}
-      {@const ListIcon = view.listIcon ?? List}
-      {@const GridIcon = view.gridIcon ?? LayoutGrid}
-      <Segmented strong class="view-toggle">
-        <SegmentedButton
-          active={view.mode === "list"}
-          aria-pressed={view.mode === "list"}
-          aria-label={view.listLabel}
-          onclick={() => view.onchange("list")}
-        >
-          <ListIcon size={16} aria-hidden="true" />
-        </SegmentedButton>
-        <SegmentedButton
-          active={view.mode === "grid"}
-          aria-pressed={view.mode === "grid"}
-          aria-label={view.gridLabel}
-          onclick={() => view.onchange("grid")}
-        >
-          <GridIcon size={16} aria-hidden="true" />
-        </SegmentedButton>
-      </Segmented>
+      <ViewSwitcher
+        mode={view.mode}
+        onchange={view.onchange}
+        label={view.label}
+      />
     {:else if headerRight}
       {@render headerRight()}
     {/if}
@@ -146,6 +126,9 @@
               onclick={toggleSort}
             >
               <ArrowUpDown size={16} aria-hidden="true" />
+              {#if sort.toggle?.active}
+                <span class="sort-dot" aria-hidden="true"></span>
+              {/if}
             </Button>
           </span>
         {/if}
@@ -232,6 +215,9 @@
   {#if searchNavigator}
     {@render searchNavigator()}
   {/if}
+  {#if bulkActions}
+    {@render bulkActions()}
+  {/if}
 </section>
 
 {#if sort}
@@ -275,9 +261,11 @@
           }}
         >
           {#snippet after()}
-            {#if toggle.active}
-              <Check size={14} class="sort-dir-icon" />
-            {/if}
+            <span
+              class="toggle-dot"
+              class:toggle-dot-active={toggle.active}
+              aria-hidden="true"
+            ></span>
           {/snippet}
         </ListItem>
       {/if}
@@ -333,9 +321,17 @@
   .stats-counts {
     display: flex;
     align-items: center;
-    gap: var(--space-xl);
+    gap: var(--space-lg);
     font-size: var(--text-sm);
     color: var(--ink);
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    min-width: 0;
+  }
+
+  .stats-counts::-webkit-scrollbar {
+    display: none;
   }
 
   .view-controls {
@@ -367,6 +363,8 @@
     width: 1.75rem !important;
     padding-left: 0 !important;
     padding-right: 0 !important;
+    position: relative;
+    overflow: visible !important;
   }
 
   :global(.sort-btn svg),
@@ -408,14 +406,28 @@
     border-top: 1px solid var(--hair);
   }
 
-  :global(.view-toggle) {
-    flex-shrink: 0;
-    width: auto !important;
-    height: 1.75rem !important;
+  .sort-dot {
+    position: absolute;
+    top: -1px;
+    right: -1px;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--unread-blue, #3b82f6);
+    pointer-events: none;
   }
 
-  :global(.view-toggle .k-segmented-button) {
-    height: 1.75rem !important;
-    min-height: unset !important;
+  .toggle-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    border: 1.5px solid var(--hair-2);
+    background: transparent;
+    flex-shrink: 0;
+  }
+
+  .toggle-dot-active {
+    border-color: var(--unread-blue, #3b82f6);
+    background: var(--unread-blue, #3b82f6);
   }
 </style>

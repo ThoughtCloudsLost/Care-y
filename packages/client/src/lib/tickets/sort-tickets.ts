@@ -15,6 +15,8 @@ interface SortableTicket {
   readonly createdAt: string;
   readonly lastActivityAt: string | null;
   readonly queueSortOrder: number;
+  readonly clientAlias?: string;
+  readonly followUpCount?: number;
 }
 
 const PRIORITY_ORDER = new Map<string, number>([
@@ -57,6 +59,15 @@ export function sortTickets<T extends SortableTicket>(
       }
       case "queue":
         cmp = a.queueSortOrder - b.queueSortOrder;
+        break;
+      case "client": {
+        const aAlias = a.clientAlias ?? "";
+        const bAlias = b.clientAlias ?? "";
+        cmp = aAlias.localeCompare(bAlias);
+        break;
+      }
+      case "msgs":
+        cmp = (a.followUpCount ?? 0) - (b.followUpCount ?? 0);
         break;
       case "date":
       default:

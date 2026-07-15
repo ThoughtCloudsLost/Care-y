@@ -578,7 +578,9 @@
        tickets renders its filter row. -->
   <section class="overview-subnavbar" aria-label={m.nav_home()}>
     <div class="overview-page-header">
-      <BlockTitle large class="overview-page-title">{m.nav_home()}</BlockTitle>
+      <BlockTitle large class="overview-page-title heading-compact"
+        >{m.nav_home()}</BlockTitle
+      >
       <ViewSwitcher
         mode={dashboardViewModeStore.mode}
         onchange={(mode: ViewMode) => dashboardViewModeStore.set(mode)}

@@ -10,6 +10,7 @@
 
 import type { Component, Snippet } from "svelte";
 import type { SavedFilterRecord } from "@care-y/shared";
+import type { ViewMode } from "$lib/stores/view-mode.svelte.js";
 import type {
   PillDefinition,
   FilterToggleConfig,
@@ -245,14 +246,9 @@ export interface SortOption {
 }
 
 export interface ViewToggleConfig {
-  readonly mode: "list" | "grid";
-  readonly onchange: (mode: "list" | "grid") => void;
-  readonly listLabel: string;
-  readonly gridLabel: string;
-  /** Override list-mode icon (defaults to lucide List). */
-  readonly listIcon?: Component<{ size?: number }>;
-  /** Override grid-mode icon (defaults to lucide LayoutGrid). */
-  readonly gridIcon?: Component<{ size?: number }>;
+  readonly mode: ViewMode;
+  readonly onchange: (mode: ViewMode) => void;
+  readonly label?: string;
 }
 
 export interface SortConfig {

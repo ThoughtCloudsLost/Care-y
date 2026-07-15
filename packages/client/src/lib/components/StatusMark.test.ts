@@ -24,12 +24,12 @@ describe("StatusMark", () => {
     expect(circles[1]?.getAttribute("fill")).toBe("currentColor");
   });
 
-  it("renders the hold mark as a dashed ring", () => {
+  it("renders the hold mark as two pause bars", () => {
     const { container } = render(StatusMark, { props: { status: "hold" } });
-    const circles = container.querySelectorAll("circle");
-    expect(circles).toHaveLength(1);
-    expect(circles[0]?.getAttribute("stroke-dasharray")).toBe("2.4 2.6");
-    expect(circles[0]?.getAttribute("fill")).toBe("none");
+    const rects = container.querySelectorAll("rect");
+    expect(rects).toHaveLength(2);
+    expect(rects[0]?.getAttribute("fill")).toBe("currentColor");
+    expect(rects[1]?.getAttribute("fill")).toBe("currentColor");
   });
 
   it("renders the closed mark as two crossing lines", () => {
