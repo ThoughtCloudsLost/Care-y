@@ -340,13 +340,13 @@ describe("TicketCard", () => {
     expect(container.querySelector(".r-time")).not.toBeNull();
   });
 
-  it("drops the time when both stamp and pill are present", () => {
+  it("shows time alongside stamp and pill", () => {
     const { container } = render(TicketCard, {
       props: { ...defaults, priority: "urgent" as const, unreadCount: 1 },
     });
     expect(container.querySelector("[data-priority='urgent']")).not.toBeNull();
     expect(container.textContent).toContain("1 new");
-    expect(container.querySelector(".r-time")).toBeNull();
+    expect(container.querySelector(".r-time")).not.toBeNull();
   });
 
   // --- Relative time ---

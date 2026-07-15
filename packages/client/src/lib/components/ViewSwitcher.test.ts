@@ -80,7 +80,7 @@ describe("ViewSwitcher", () => {
       props: { mode: "list", onchange: vi.fn() },
     });
     const svgs = container.querySelectorAll("svg");
-    expect(svgs).toHaveLength(3);
+    expect(svgs).toHaveLength(4);
     for (const svg of svgs) {
       expect(svg.getAttribute("aria-hidden")).toBe("true");
     }

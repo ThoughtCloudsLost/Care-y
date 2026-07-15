@@ -63,10 +63,10 @@ describe("viewModeStore", () => {
     }
   });
 
-  it("defaults to list for unknown stored values", async () => {
+  it("accepts kanban as a valid stored value", async () => {
     setupMocks({ storedMode: "kanban" });
     const { viewModeStore } = await import("./view-mode.svelte.ts");
-    expect(viewModeStore.mode).toBe("list");
+    expect(viewModeStore.mode).toBe("kanban");
   });
 
   it("defaults to list for garbage stored values", async () => {

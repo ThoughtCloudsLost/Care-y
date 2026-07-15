@@ -153,7 +153,7 @@ describe("ArticleTable", () => {
       loading: true,
     });
 
-    const skeletonRows = container.querySelectorAll(".skeleton-pulse");
+    const skeletonRows = container.querySelectorAll("tr.skeleton-pulse");
     expect(skeletonRows.length).toBe(4);
   });
 

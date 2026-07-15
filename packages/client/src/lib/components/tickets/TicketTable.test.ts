@@ -127,8 +127,18 @@ describe("TicketTable", () => {
     });
 
     it("renders message count for rows with follow-ups", () => {
-      const { getByText } = render(TicketTable, defaults);
-      expect(getByText("3")).toBeTruthy();
+      const readRow = {
+        ...row1,
+        unreadCount: 0,
+        followUpCount: 3,
+      };
+      const { container } = render(TicketTable, {
+        ...defaults,
+        rows: [readRow, row2],
+      });
+      const msgsCells = container.querySelectorAll("td.col-msgs");
+      const firstMsgs = msgsCells[0];
+      expect(firstMsgs?.textContent.trim()).toBe("3");
     });
   });
 
@@ -196,7 +206,7 @@ describe("TicketTable", () => {
     it("every column header except status is a sort button", () => {
       const { container } = render(TicketTable, defaults);
       const sortButtons = container.querySelectorAll(".sort-header");
-      expect(sortButtons.length).toBe(7);
+      expect(sortButtons.length).toBe(8);
     });
 
     it("title and assignee headers are sortable", async () => {
@@ -279,7 +289,7 @@ describe("TicketTable", () => {
         rows: [],
         loading: true,
       });
-      const skeletonRows = container.querySelectorAll(".skeleton-pulse");
+      const skeletonRows = container.querySelectorAll("tr.skeleton-pulse");
       expect(skeletonRows.length).toBe(4);
     });
   });
@@ -287,20 +297,20 @@ describe("TicketTable", () => {
   // --- Partial sort hint ---
 
   describe("partial sort hint", () => {
-    it("shows partial sort text when hasMore and sortField are set", () => {
+    it("shows partial sort text when partialSort is true", () => {
       const { getByText } = render(TicketTable, {
         ...defaults,
         sortField: "priority",
-        hasMore: true,
+        partialSort: true,
       });
       expect(getByText(/2 loaded/)).toBeTruthy();
     });
 
-    it("hides partial sort hint when hasMore is false", () => {
+    it("hides partial sort hint when partialSort is false", () => {
       const { queryByText } = render(TicketTable, {
         ...defaults,
         sortField: "priority",
-        hasMore: false,
+        partialSort: false,
       });
       expect(queryByText(/loaded/)).toBeNull();
     });
@@ -310,7 +320,7 @@ describe("TicketTable", () => {
       const { getByText } = render(TicketTable, {
         ...defaults,
         sortField: "client",
-        hasMore: true,
+        partialSort: true,
         onloadall,
       });
       expect(getByText(/Load all/)).toBeTruthy();
@@ -321,7 +331,7 @@ describe("TicketTable", () => {
       const { container } = render(TicketTable, {
         ...defaults,
         sortField: "client",
-        hasMore: true,
+        partialSort: true,
         onloadall,
       });
       const loadBtn = container.querySelector(".load-all-btn");
@@ -333,7 +343,7 @@ describe("TicketTable", () => {
       const { container } = render(TicketTable, {
         ...defaults,
         sortField: "priority",
-        hasMore: true,
+        partialSort: true,
       });
       expect(container.querySelector(".load-all-btn")).toBeNull();
     });
