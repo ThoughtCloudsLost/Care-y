@@ -202,18 +202,15 @@
     }
   });
 
-  // Auto-selection logic when sheet opens.
+  // Auto-activate when only one client-reply method exists.
+  // When both are available, stay collapsed and let the volunteer tap +.
   let prevOpened = $state(false);
   $effect(() => {
     const justOpened = opened && !prevOpened;
     prevOpened = opened;
     if (!justOpened) return;
 
-    if (hasPhone) {
-      // Both reply + SMS available: show the popover so the volunteer picks.
-      composeActionsOpen = true;
-    } else {
-      // Only reply available (no phone): auto-activate reply mode.
+    if (!hasPhone) {
       activeComposeMode = "reply";
     }
   });
