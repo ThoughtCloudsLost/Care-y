@@ -24,6 +24,7 @@
     replySheetOpen: boolean;
     replyTargetTicketId: string;
     replyClientAlias: string;
+    replyHasPhone: boolean;
     replyPreviewFollowUps: RawFollowUpPreview[] | undefined;
     replyFollowUpCount: number;
     onreplydismiss: () => void;
@@ -58,6 +59,7 @@
     replySheetOpen,
     replyTargetTicketId,
     replyClientAlias,
+    replyHasPhone,
     replyPreviewFollowUps,
     replyFollowUpCount,
     onreplydismiss,
@@ -101,6 +103,7 @@
   opened={replySheetOpen}
   ticketId={replyTargetTicketId}
   clientAlias={replyClientAlias}
+  hasPhone={replyHasPhone}
   previewFollowUps={replyPreviewFollowUps}
   followUpCount={replyFollowUpCount}
   ondismiss={onreplydismiss}

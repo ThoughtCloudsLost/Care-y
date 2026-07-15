@@ -52,6 +52,7 @@ export interface TicketRecord {
 /** Enriched ticket with joined metadata for list/detail views. */
 export interface TicketListRecord extends TicketRecord {
   readonly clientAlias: string;
+  readonly hasPhone: boolean;
   readonly encryptedQueueName: Buffer;
   readonly queueSortOrder: number;
   readonly lastActivityAt: Date | null;
@@ -231,6 +232,7 @@ interface BaseTicketRow {
 
 interface EnrichedTicketRow extends BaseTicketRow {
   client_alias: string;
+  has_phone: boolean | 0 | 1;
   encrypted_queue_name: Buffer;
   queue_sort_order: number;
   last_activity_at: Date | null;
@@ -258,6 +260,7 @@ function toListRecord(row: EnrichedTicketRow): TicketListRecord {
   return {
     ...toRecord(row),
     clientAlias: row.client_alias,
+    hasPhone: Boolean(row.has_phone),
     encryptedQueueName: row.encrypted_queue_name,
     queueSortOrder: row.queue_sort_order,
     lastActivityAt: row.last_activity_at,
@@ -502,6 +505,7 @@ export function createTicketService(
         .selectAll("t")
         .select(["tkw.ephemeral_point", "tkw.nonce", "tkw.wrapped_key"])
         .select("c.alias as client_alias")
+        .select((eb) => eb("c.phone_id", "is not", null).as("has_phone"))
         .select("q.encrypted_name as encrypted_queue_name")
         .select("q.sort_order as queue_sort_order")
         .select("u.encrypted_display_name as assigned_display_name")
@@ -552,6 +556,7 @@ export function createTicketService(
         .selectAll("t")
         .select(["tkw.ephemeral_point", "tkw.nonce", "tkw.wrapped_key"])
         .select("c.alias as client_alias")
+        .select((eb) => eb("c.phone_id", "is not", null).as("has_phone"))
         .select("q.encrypted_name as encrypted_queue_name")
         .select("q.sort_order as queue_sort_order")
         .select("u.encrypted_display_name as assigned_display_name")

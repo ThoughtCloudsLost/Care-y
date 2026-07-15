@@ -128,6 +128,19 @@
   // Compose mode: null = collapsed (no messagebar), "reply" or "sms" = expanded.
   let activeComposeMode = $state<"reply" | "sms" | null>(null);
 
+  // Auto-activate when only one client-reply method exists, so the
+  // volunteer can start typing immediately without tapping +.
+  // Runs once per ticket (tracks which ticketId was auto-activated).
+  let autoActivatedForTicket = $state("");
+
+  $effect(() => {
+    if (!ticket || autoActivatedForTicket === ticketId) return;
+    autoActivatedForTicket = ticketId;
+    if (!ticket.hasPhone) {
+      activeComposeMode = "reply";
+    }
+  });
+
   // Draft compose state keyed by ticketId + mode. Survives SPA navigations
   // in-memory. No disk persistence to avoid plaintext PII on disk.
   let draftText = $derived(
@@ -1058,7 +1071,7 @@
   oncalldismiss={closeCallSheet}
   oncomposedismiss={closeComposeActions}
   onreply={activateReplyMode}
-  ontextclient={activateSmsMode}
+  ontextclient={ticket?.hasPhone === true ? activateSmsMode : undefined}
   ondraftset={(body: string) => {
     activeComposeMode = "reply";
     draftText = body;

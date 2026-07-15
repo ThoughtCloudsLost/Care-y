@@ -3,8 +3,8 @@ import { QueryClient } from "@tanstack/svelte-query";
 import { createReplyFlow } from "./create-reply-flow.svelte.js";
 
 const tickets = [
-  { id: "t1", clientAlias: "Alice", followUpCount: 3 },
-  { id: "t2", clientAlias: "Bob", followUpCount: 0 },
+  { id: "t1", clientAlias: "Alice", hasPhone: true, followUpCount: 3 },
+  { id: "t2", clientAlias: "Bob", hasPhone: false, followUpCount: 0 },
 ];
 
 const previewData = [
@@ -60,14 +60,21 @@ describe("createReplyFlow", () => {
   });
 
   describe("open", () => {
-    it("populates all 5 state vars from ticket data", () => {
+    it("populates all state vars from ticket data", () => {
       const flow = make();
       flow.open("t1");
       expect(flow.sheetOpen).toBe(true);
       expect(flow.targetTicketId).toBe("t1");
       expect(flow.clientAlias).toBe("Alice");
+      expect(flow.hasPhone).toBe(true);
       expect(flow.previewFollowUps).toBe(previewData);
       expect(flow.followUpCount).toBe(3);
+    });
+
+    it("reflects hasPhone=false for phoneless client", () => {
+      const flow = make();
+      flow.open("t2");
+      expect(flow.hasPhone).toBe(false);
     });
 
     it("calls getPreviewFollowUps with ticketId", () => {
@@ -126,6 +133,7 @@ describe("createReplyFlow", () => {
       expect(flow.sheetOpen).toBe(false);
       expect(flow.targetTicketId).toBe("");
       expect(flow.clientAlias).toBe("");
+      expect(flow.hasPhone).toBe(false);
       expect(flow.previewFollowUps).toBeUndefined();
       expect(flow.followUpCount).toBe(0);
     });
