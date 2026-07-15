@@ -10,6 +10,7 @@
   import { useFocusTrap } from "./use-focus-trap.svelte";
   import { useDragDismiss } from "./use-drag-dismiss.svelte";
   import { portal } from "./portal";
+  import ShellBackdrop from "./ShellBackdrop.svelte";
 
   let {
     opened,
@@ -49,13 +50,8 @@
 </script>
 
 <div use:portal={".k-page"}>
-  <Panel
-    {opened}
-    {side}
-    floating
-    onBackdropClick={trap.handleDismiss}
-    class="glass"
-  >
+  <ShellBackdrop {opened} ondismiss={trap.handleDismiss} />
+  <Panel {opened} {side} floating backdrop={false} class="glass">
     <div
       bind:this={trap.dialogEl}
       use:drag.action

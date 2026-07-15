@@ -351,6 +351,13 @@
 
   $effect(() => {
     const pageEl = mainEl?.closest(".k-page");
+    if (pageEl instanceof HTMLElement && navbarHeight > 0) {
+      pageEl.style.setProperty("--navbar-h", `${String(navbarHeight)}px`);
+    }
+  });
+
+  $effect(() => {
+    const pageEl = mainEl?.closest(".k-page");
     if (pageEl == null) return;
     const navbar = pageEl.querySelector<HTMLElement>(":scope > .k-navbar");
     navbarDomEl = navbar ?? undefined;
@@ -1690,7 +1697,7 @@
 
   /* Search sheet: fill from bottom up to the Navbar */
   :global(.search-sheet) {
-    height: calc(100dvh - var(--navbar-h, 64px));
+    height: calc(100dvh - var(--navbar-h, 64px) - 8px);
   }
 
   :global(.search-dropdown-backdrop) {

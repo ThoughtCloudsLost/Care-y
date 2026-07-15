@@ -8,6 +8,7 @@
   import type { ShellActionSheetProps } from "./types";
   import { useFocusTrap } from "./use-focus-trap.svelte";
   import { portal } from "./portal";
+  import ShellBackdrop from "./ShellBackdrop.svelte";
 
   let { opened, ondismiss, ariaLabel, children }: ShellActionSheetProps =
     $props();
@@ -23,11 +24,8 @@
 </script>
 
 <div use:portal={".k-page"}>
-  <Actions
-    {opened}
-    onBackdropClick={trap.handleDismiss}
-    class="shell-action-sheet"
-  >
+  <ShellBackdrop {opened} ondismiss={trap.handleDismiss} />
+  <Actions {opened} backdrop={false} class="shell-action-sheet">
     <div
       data-testid="actions-sheet"
       bind:this={trap.dialogEl}
