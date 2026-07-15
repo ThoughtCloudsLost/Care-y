@@ -50,7 +50,7 @@
     oncalldismiss: () => void;
     oncomposedismiss: () => void;
     onreply: () => void;
-    ontextclient: () => void;
+    ontextclient?: () => void;
     ondraftset: (body: string) => void;
   }
 

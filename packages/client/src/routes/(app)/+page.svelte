@@ -782,6 +782,7 @@
   opened={replyFlow.sheetOpen}
   ticketId={replyFlow.targetTicketId}
   clientAlias={replyFlow.clientAlias}
+  hasPhone={replyFlow.hasPhone}
   previewFollowUps={replyFlow.previewFollowUps}
   followUpCount={replyFlow.followUpCount}
   ondismiss={() => replyFlow.dismiss()}

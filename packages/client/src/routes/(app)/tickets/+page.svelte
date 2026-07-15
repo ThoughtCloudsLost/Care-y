@@ -1590,6 +1590,7 @@
   replySheetOpen={replyFlow.sheetOpen}
   replyTargetTicketId={replyFlow.targetTicketId}
   replyClientAlias={replyFlow.clientAlias}
+  replyHasPhone={replyFlow.hasPhone}
   replyPreviewFollowUps={replyFlow.previewFollowUps}
   replyFollowUpCount={replyFlow.followUpCount}
   onreplydismiss={() => replyFlow.dismiss()}
