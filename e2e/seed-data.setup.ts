@@ -17,7 +17,7 @@
  */
 
 import { test as setup } from "@playwright/test";
-import { CRYPTO_TIMEOUT, login } from "./helpers";
+import { CRYPTO_TIMEOUT, E2eError, login } from "./helpers";
 
 setup("seed crypto-dependent data", async ({ page }) => {
   setup.setTimeout(CRYPTO_TIMEOUT * 4);
@@ -48,7 +48,7 @@ setup("seed crypto-dependent data", async ({ page }) => {
   });
 
   if (!orgKeyResult.ok) {
-    throw new Error(`Org key seeding failed: ${orgKeyResult.error}`);
+    throw new E2eError(`Org key seeding failed: ${orgKeyResult.error}`);
   }
   console.log("[e2e-seed] org keypair + wrapped key ready");
 
@@ -80,7 +80,7 @@ setup("seed crypto-dependent data", async ({ page }) => {
   });
 
   if (!ticketResult.ok) {
-    throw new Error(`Ticket seeding failed: ${ticketResult.error}`);
+    throw new E2eError(`Ticket seeding failed: ${ticketResult.error}`);
   }
   console.log(`[e2e-seed] ${String(ticketResult.count)} tickets ready`);
 
@@ -103,7 +103,7 @@ setup("seed crypto-dependent data", async ({ page }) => {
   });
 
   if (!kbResult.ok) {
-    throw new Error(`KB seeding failed: ${kbResult.error}`);
+    throw new E2eError(`KB seeding failed: ${kbResult.error}`);
   }
   console.log(`[e2e-seed] ${String(kbResult.count)} KB articles ready`);
 });

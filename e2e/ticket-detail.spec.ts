@@ -1,8 +1,13 @@
 import { test, expect } from "./coverage-fixture";
 import { startCoverage, stopAndWriteCoverage } from "./coverage-fixture";
 import type { Page } from "@playwright/test";
-import AxeBuilder from "@axe-core/playwright";
-import { CRYPTO_TIMEOUT, login, openTicketByTitle, longPress } from "./helpers";
+import {
+  auditA11y,
+  CRYPTO_TIMEOUT,
+  login,
+  openTicketByTitle,
+  longPress,
+} from "./helpers";
 
 test.describe.serial("Ticket Detail (Chat View)", () => {
   let page: Page;
@@ -36,7 +41,6 @@ test.describe.serial("Ticket Detail (Chat View)", () => {
     await expect(aliasBtn).toBeVisible({ timeout: CRYPTO_TIMEOUT });
     const aliasText = (await aliasBtn.innerText()).trim();
     clientAlias = aliasText;
-    console.log(`[ticket-detail] client alias: "${clientAlias}"`);
   });
 
   // ── 2. Chat bubble alignment (Checkpoint 1) ─────────────────────
@@ -413,18 +417,7 @@ test.describe.serial("Ticket Detail (Chat View)", () => {
   // ── 16. Accessibility audit (axe-core) ──────────────────────────
 
   test("passes axe accessibility audit", async () => {
-    const results = await new AxeBuilder({ page })
-      .setLegacyMode(true)
-      // Konsta shell overlays (Sheet, Popup) render hidden <div role="dialog">
-      // with empty aria-label. Ticket detail has no h1 (navbar shows alias).
-      // Konsta message sender text uses 45% opacity, slightly below 4.5:1.
-      .disableRules([
-        "aria-dialog-name",
-        "page-has-heading-one",
-        "color-contrast",
-      ])
-      .analyze();
-    expect(results.violations).toEqual([]);
+    await auditA11y(page);
   });
 
   // ── 17. Navigate to ticket with media ───────────────────────────

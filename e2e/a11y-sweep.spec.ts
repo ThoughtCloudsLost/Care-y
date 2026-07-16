@@ -6,8 +6,7 @@
  * on them fail CI the same way the dashboard and ticket audits do.
  */
 import { test, expect, type Page } from "@playwright/test";
-import AxeBuilder from "@axe-core/playwright";
-import { login, CRYPTO_TIMEOUT } from "./helpers.js";
+import { auditA11y, login, CRYPTO_TIMEOUT } from "./helpers.js";
 
 test.describe.serial("Accessibility sweep", () => {
   let page: Page;
@@ -22,45 +21,9 @@ test.describe.serial("Accessibility sweep", () => {
     await page.close();
   });
 
-  // Legacy mode: this suite uses browser.newPage(), which axe's
-  // cross-context injection cannot target (same pattern as dashboard).
+  // The full audit configuration lives in auditA11y (helpers.ts).
   async function audit(): Promise<void> {
-    const results = await new AxeBuilder({ page })
-      .setLegacyMode(true)
-      // Known Konsta/shell ARIA gaps tracked outside this sweep:
-      // - aria-required-children: sidebar chevron button inside tablist
-      // - aria-allowed-attr: Konsta tab buttons use aria-selected on role=button
-      // - aria-dialog-name: closed ShellSheet/ShellDialog portals lack aria-label
-      // - page-has-heading-one: Konsta BlockTitle renders as <div>, not <h1>
-      // - scrollable-region-focusable: main scroll container lacks tabindex
-      // Exclude the splash overlay (aria-hidden but triggers contrast)
-      .exclude("#splash")
-      .disableRules([
-        "aria-required-children",
-        "aria-allowed-attr",
-        "aria-dialog-name",
-        "aria-prohibited-attr",
-        "page-has-heading-one",
-        "scrollable-region-focusable",
-        // Konsta ListInput uses <input>/<select> without <label for=>,
-        // relying on visual label text rendered via snippets.
-        "label",
-        "select-name",
-        // Konsta List renders <li> inside a styled <div>, not <ul>.
-        "listitem",
-        // Admin org sections share region labels (General/Terminology
-        // regions duplicated in view-mode and edit-sheet).
-        "landmark-unique",
-        // Closed ShellSheet/ShellDialog portals remain in DOM without
-        // labels. Not visible but axe still flags them.
-        "color-contrast",
-        // 404 page renders outside the app shell (no <main> landmark).
-        "landmark-one-main",
-        // Sidebar touch targets are below 24px on desktop.
-        "target-size",
-      ])
-      .analyze();
-    expect(results.violations).toEqual([]);
+    await auditA11y(page);
   }
 
   test("admin hub passes the axe audit", async () => {

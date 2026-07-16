@@ -12,6 +12,7 @@ import { test as setup, expect } from "@playwright/test";
 import { execSync } from "node:child_process";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { E2eError } from "./helpers";
 
 const ONBOARD_ORG_SLUG = "e2e-onboard";
 const AUTH_DIR = join(process.cwd(), ".auth");
@@ -79,7 +80,7 @@ setup("provision bare onboarding org", () => {
   ).toBeTruthy();
 
   if (orgId === undefined || setupToken === undefined) {
-    throw new Error("Seed output parsing failed (unreachable after expect)");
+    throw new E2eError("Seed output parsing failed (unreachable after expect)");
   }
 
   console.log(

@@ -1,8 +1,7 @@
 import { test, expect } from "./coverage-fixture";
 import { startCoverage, stopAndWriteCoverage } from "./coverage-fixture";
 import type { Page } from "@playwright/test";
-import AxeBuilder from "@axe-core/playwright";
-import { CRYPTO_TIMEOUT, login, openTicketByTitle } from "./helpers";
+import { auditA11y, CRYPTO_TIMEOUT, login, openTicketByTitle } from "./helpers";
 
 test.describe.serial("Ticket Actions (Call + SMS)", () => {
   let page: Page;
@@ -186,15 +185,9 @@ test.describe.serial("Ticket Actions (Call + SMS)", () => {
       { timeout: 3000 },
     );
 
-    // Scope to WCAG rules only. Exclude best-practice rules (aria-dialog-name
-    // on Konsta-internal dialogs) and color-contrast (tracked separately).
-    const results = await new AxeBuilder({ page })
-      .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"])
-      .disableRules(["color-contrast"])
-      .exclude("[role='tablist']")
-      .analyze();
-
-    expect(results.violations).toEqual([]);
+    // Konsta Tabbar internals are excluded (aria-selected on role=button
+    // links, H-011); the shell tab bar is audited by the sweep spec.
+    await auditA11y(page, { exclude: ["[role='tablist']"] });
 
     // Cleanup: dismiss the SMS compose sheet (last test, page may be closing).
     if (!page.isClosed()) {

@@ -12,6 +12,7 @@
  */
 
 import { execSync } from "node:child_process";
+import { E2eError } from "./helpers";
 
 const API_PORT = 3000;
 const API_URL = `http://localhost:${String(API_PORT)}`;
@@ -35,7 +36,7 @@ async function waitForServer(url: string, timeoutMs: number): Promise<void> {
     await new Promise((r) => setTimeout(r, POLL_INTERVAL_MS));
   }
 
-  throw new Error(
+  throw new E2eError(
     `Server at ${url} did not respond within ${String(timeoutMs)}ms. Run 'pnpm dev:setup' first.`,
   );
 }

@@ -1,4 +1,5 @@
 import { expect, type Page } from "@playwright/test";
+import AxeBuilder from "@axe-core/playwright";
 import { createHmac } from "node:crypto";
 import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
@@ -9,6 +10,14 @@ import { join } from "node:path";
  *  decryption even under heavy machine load (parallel dev server, Docker,
  *  concurrent test workers). */
 export const CRYPTO_TIMEOUT = 30_000;
+
+/** Failure in e2e infrastructure (the repo bans bare Error throws). */
+export class E2eError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "E2eError";
+  }
+}
 
 /** Seed credentials (must match dev seed script: packages/server/src/scripts/seed.ts). */
 const DEV_USER = "admin.dev";
@@ -109,8 +118,10 @@ export async function login(
 
   const loginResponse = await loginResponsePromise.catch(() => null);
   if (loginResponse) {
-    const body = await loginResponse.text().catch(() => "");
-    console.log(`[login] response (first 300): ${body.slice(0, 300)}`);
+    // Body content stays out of logs (PII rule); size is enough for flake
+    // debugging.
+    const responseBytes = (await loginResponse.text().catch(() => "")).length;
+    console.log(`[login] response received (${String(responseBytes)} bytes)`);
   }
 
   // After credential submission, three outcomes:
@@ -135,7 +146,7 @@ export async function login(
       .waitFor({ state: "visible", timeout: CRYPTO_TIMEOUT })
       .then(async () => {
         const text = await page.locator('[role="alert"]').textContent();
-        throw new Error(`Login failed: ${text ?? "(no text)"}`);
+        throw new E2eError(`Login failed: ${text ?? "(no text)"}`);
       }),
   ]);
 
@@ -231,7 +242,7 @@ async function enrollTotp(page: Page): Promise<void> {
   await secretEl.waitFor({ state: "visible", timeout: 10_000 });
   const secret = await secretEl.textContent();
   if (secret === null || secret === "")
-    throw new Error("TOTP secret not found on page");
+    throw new E2eError("TOTP secret not found on page");
 
   saveTotpSecret(secret);
 
@@ -311,7 +322,7 @@ async function completeTwofaChallenge(page: Page): Promise<void> {
   const secret = loadTotpSecret();
   // eslint-disable-next-line security/detect-possible-timing-attacks -- null check, not crypto comparison
   if (secret === null) {
-    throw new Error(
+    throw new E2eError(
       "2FA challenge shown but no TOTP secret found. " +
         "Run the seed-data setup first to enroll TOTP.",
     );
@@ -336,8 +347,10 @@ async function completeTwofaChallenge(page: Page): Promise<void> {
 
   const verifyResp = await verifyResponsePromise.catch(() => null);
   if (verifyResp) {
-    const body = await verifyResp.text().catch(() => "(read error)");
-    console.log(`[2fa] verify response: ${body.slice(0, 200)}`);
+    const responseBytes = (await verifyResp.text().catch(() => "")).length;
+    console.log(
+      `[2fa] verify response received (${String(responseBytes)} bytes)`,
+    );
   } else {
     console.log("[2fa] no verify response intercepted");
   }
@@ -514,7 +527,7 @@ export async function createTicket(
 
     // 409: client already has an open ticket. Retry with a different client.
     console.log(
-      `[createTicket] 409 on attempt ${String(attempt + 1)}, retrying with different client`,
+      `[createTicket] 409 on attempt ${String(attempt + 1)}, retrying`,
     );
     await page.waitForTimeout(1_000);
   }
@@ -525,7 +538,7 @@ export async function createTicket(
   await sheet
     .waitFor({ state: "hidden", timeout: 5_000 })
     .catch(() => undefined);
-  throw new Error(
+  throw new E2eError(
     `createTicket exhausted ${String(maxAttempts)} retries. All matched clients already have open tickets.`,
   );
 }
@@ -691,11 +704,77 @@ export async function longPress(
 ): Promise<void> {
   await locator.scrollIntoViewIfNeeded();
   const box = await locator.boundingBox();
-  if (!box) throw new Error("Element not found for long-press");
+  if (!box) throw new E2eError("Element not found for long-press");
   const cx = box.x + box.width / 2;
   const cy = box.y + box.height / 2;
   await page.mouse.move(cx, cy);
   await page.mouse.down();
   await page.waitForTimeout(600);
   await page.mouse.up();
+}
+
+/**
+ * The one home for axe rule suppressions. Every entry is a documented
+ * Konsta/shell gap that fires under the WCAG tag set; page-specific
+ * suppressions go through AuditA11yOptions.disableRules at the call site
+ * with a reason, never here.
+ *
+ * Best-practice-only rules that older per-spec audits disabled
+ * (aria-dialog-name, page-has-heading-one, landmark-unique,
+ * landmark-one-main) do not run under the WCAG tags at all, and closed
+ * overlay portals are inert + visibility: hidden, so axe never evaluates
+ * them (verified against axe-core 4.12).
+ */
+const SHARED_AXE_DISABLES: readonly string[] = [
+  // DesktopSidebar's tablist wraps each tab in a row div beside a non-tab
+  // chevron button; the grouping is deliberate shell structure.
+  "aria-required-children",
+  // Konsta internals set aria attributes on elements whose role prohibits
+  // them (H-011).
+  "aria-prohibited-attr",
+  // Konsta Page's main scroll container has no tabindex (shell-owned).
+  "scrollable-region-focusable",
+  // Konsta ListInput renders visual labels without for/id association
+  // (H-011), leaving inputs unlabeled to this rule.
+  "label",
+  // Same ListInput gap for <select> elements.
+  "select-name",
+  // Konsta List renders <li> inside styled <div> wrappers.
+  "listitem",
+];
+
+export interface AuditA11yOptions {
+  /** Restrict the audit to one selector (AxeBuilder.include). */
+  readonly include?: string;
+  /** Extra selectors to exclude; pair each call-site entry with a reason. */
+  readonly exclude?: readonly string[];
+  /** Extra rule ids to disable; pair each call-site entry with a reason. */
+  readonly disableRules?: readonly string[];
+}
+
+/**
+ * Shared axe audit: full WCAG 2.2 AA tag set, the single suppression list
+ * above, and the standard excludes (#splash is aria-hidden but still
+ * trips contrast; [inert] marks closed overlay portals). Legacy mode is
+ * kept because most suites share a browser.newPage() page, which axe's
+ * cross-context injection cannot target.
+ */
+export async function auditA11y(
+  page: Page,
+  opts: AuditA11yOptions = {},
+): Promise<void> {
+  let builder = new AxeBuilder({ page })
+    .setLegacyMode(true)
+    .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"])
+    .exclude("#splash")
+    .exclude("[inert]")
+    .disableRules([...SHARED_AXE_DISABLES, ...(opts.disableRules ?? [])]);
+  if (opts.include !== undefined) {
+    builder = builder.include(opts.include);
+  }
+  for (const selector of opts.exclude ?? []) {
+    builder = builder.exclude(selector);
+  }
+  const results = await builder.analyze();
+  expect(results.violations).toEqual([]);
 }

@@ -1,8 +1,7 @@
 import { test, expect } from "./coverage-fixture";
 import { startCoverage, stopAndWriteCoverage } from "./coverage-fixture";
 import type { Page } from "@playwright/test";
-import AxeBuilder from "@axe-core/playwright";
-import { CRYPTO_TIMEOUT, login } from "./helpers";
+import { auditA11y, CRYPTO_TIMEOUT, login } from "./helpers";
 
 test.describe.serial("Dashboard (Overview Tab)", () => {
   let page: Page;
@@ -157,25 +156,6 @@ test.describe.serial("Dashboard (Overview Tab)", () => {
     // Legacy mode avoids axe-core's cross-context injection which requires
     // pages created via browser.newContext(). The serial suite uses
     // browser.newPage() to inherit project-level config (viewport, baseURL).
-    // Exclude Konsta UI internal a11y issues (unlabeled searchbar button,
-    // toolbar outside landmark) tracked separately from dashboard tests.
-    const results = await new AxeBuilder({ page })
-      .setLegacyMode(true)
-      .exclude("#splash")
-      .disableRules([
-        "aria-required-children",
-        "aria-allowed-attr",
-        "aria-dialog-name",
-        "aria-prohibited-attr",
-        "page-has-heading-one",
-        "scrollable-region-focusable",
-        "label",
-        "select-name",
-        "listitem",
-        "landmark-unique",
-        "color-contrast",
-      ])
-      .analyze();
-    expect(results.violations).toEqual([]);
+    await auditA11y(page);
   });
 });

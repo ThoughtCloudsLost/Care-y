@@ -9,10 +9,13 @@
  */
 
 import { test, expect, type Page } from "@playwright/test";
-import AxeBuilder from "@axe-core/playwright";
 import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
-import { dismissBackupCodesSheet, generateTotpCode } from "./helpers.js";
+import {
+  auditA11y,
+  dismissBackupCodesSheet,
+  generateTotpCode,
+} from "./helpers.js";
 
 const ONBOARD_SLUG = "e2e-onboard";
 const API_PORT = "3000";
@@ -103,18 +106,7 @@ test.describe.serial("Admin Setup Wizard", () => {
   });
 
   test("wizard account step passes the axe accessibility audit", async () => {
-    // Legacy mode: the serial suite uses browser.newPage(), which axe's
-    // cross-context injection cannot target (same pattern as dashboard).
-    const results = await new AxeBuilder({ page })
-      .setLegacyMode(true)
-      // Konsta BlockTitle renders as <div>, not <h1>. The wizard uses
-      // the navbar title as the page-level heading (standard mobile
-      // app pattern). Excluding this best-practice rule is consistent
-      // with how the app shell axe audits handle Konsta semantics.
-      .exclude("#splash")
-      .disableRules(["page-has-heading-one", "color-contrast"])
-      .analyze();
-    expect(results.violations).toEqual([]);
+    await auditA11y(page);
   });
 
   // ── Step 0: Account Creation ──

@@ -1,8 +1,7 @@
 import { test, expect } from "./coverage-fixture";
 import { startCoverage, stopAndWriteCoverage } from "./coverage-fixture";
 import type { Page } from "@playwright/test";
-import AxeBuilder from "@axe-core/playwright";
-import { CRYPTO_TIMEOUT, login } from "./helpers";
+import { auditA11y, CRYPTO_TIMEOUT, login } from "./helpers";
 
 test.describe.serial("Knowledge Base (Library Tab)", () => {
   let page: Page;
@@ -308,16 +307,9 @@ test.describe.serial("Knowledge Base (Library Tab)", () => {
       timeout: CRYPTO_TIMEOUT,
     });
 
-    // Exclude Konsta UI internal a11y violations:
-    // - tablist contains role=link (More tab), aria-required-children
-    // These are tracked separately from KB-specific tests.
-    const results = await new AxeBuilder({ page })
-      .setLegacyMode(true)
-      .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"])
-      .disableRules(["target-size"])
-      .exclude("[role='tablist']")
-      .analyze();
-    expect(results.violations).toEqual([]);
+    // Konsta Tabbar internals are excluded (tablist contains role=link
+    // for the More tab, H-011); the shell tab bar is audited elsewhere.
+    await auditA11y(page, { exclude: ["[role='tablist']"] });
   });
 
   test("a11y: article detail passes axe-core audit", async () => {
@@ -332,11 +324,6 @@ test.describe.serial("Knowledge Base (Library Tab)", () => {
       timeout: 10_000,
     });
 
-    const results = await new AxeBuilder({ page })
-      .setLegacyMode(true)
-      .exclude("[role='tablist']")
-      .disableRules(["color-contrast", "aria-dialog-name"])
-      .analyze();
-    expect(results.violations).toEqual([]);
+    await auditA11y(page, { exclude: ["[role='tablist']"] });
   });
 });

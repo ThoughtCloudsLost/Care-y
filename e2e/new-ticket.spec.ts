@@ -1,8 +1,7 @@
 import { test, expect } from "./coverage-fixture";
 import { startCoverage, stopAndWriteCoverage } from "./coverage-fixture";
 import type { Page } from "@playwright/test";
-import AxeBuilder from "@axe-core/playwright";
-import { CRYPTO_TIMEOUT, login } from "./helpers";
+import { auditA11y, CRYPTO_TIMEOUT, login } from "./helpers";
 
 test.describe.serial("New Ticket (Create Flow)", () => {
   let page: Page;
@@ -104,18 +103,9 @@ test.describe.serial("New Ticket (Create Flow)", () => {
       timeout: 5000,
     });
 
-    const results = await new AxeBuilder({ page })
-      .setLegacyMode(true)
-      .include('[role="dialog"][aria-label="New Ticket"]')
-      .disableRules([
-        "color-contrast",
-        // Konsta UI ListInput renders labels as <div>, not <label>, so the
-        // inner <select> has no accessible name. Tracked as a Konsta gap.
-        "select-name",
-      ])
-      .analyze();
-
-    expect(results.violations).toEqual([]);
+    await auditA11y(page, {
+      include: '[role="dialog"][aria-label="New Ticket"]',
+    });
 
     // Close the sheet via Escape.
     await page.keyboard.press("Escape");

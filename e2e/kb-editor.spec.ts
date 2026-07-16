@@ -1,8 +1,12 @@
 import { test, expect } from "./coverage-fixture";
 import { startCoverage, stopAndWriteCoverage } from "./coverage-fixture";
 import type { Page } from "@playwright/test";
-import AxeBuilder from "@axe-core/playwright";
-import { CRYPTO_TIMEOUT, login, navigateToNewArticle } from "./helpers";
+import {
+  auditA11y,
+  CRYPTO_TIMEOUT,
+  login,
+  navigateToNewArticle,
+} from "./helpers";
 
 const SUFFIX = String(Date.now()).slice(-6);
 const TEST_ARTICLE_TITLE = `E2E Article ${SUFFIX}`;
@@ -468,23 +472,17 @@ test.describe.serial("KB Editor (Create/Edit, Categories, ATAG)", () => {
       timeout: 10_000,
     });
 
-    // Exclude known framework-level violations:
+    // Editor-specific extras on top of the shared audit:
     // - tablist: Konsta UI internal (children role mismatch)
     // - listbox: Konsta sort/filter popover structure
-    // - listitem: Konsta List renders <li> outside <ul> in some contexts
     // - meta-viewport: ArticleEditor sets maximum-scale=1 (intentional,
     //   prevents iOS auto-zoom on contenteditable which breaks keyboard
     //   toolbar positioning)
-    let violations: unknown[] = [];
     try {
-      const results = await new AxeBuilder({ page })
-        .setLegacyMode(true)
-        .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"])
-        .exclude("[role='tablist']")
-        .exclude("[role='listbox']")
-        .disableRules(["listitem", "meta-viewport"])
-        .analyze();
-      violations = results.violations;
+      await auditA11y(page, {
+        exclude: ["[role='tablist']", "[role='listbox']"],
+        disableRules: ["meta-viewport"],
+      });
     } finally {
       // Clean up: dismiss the dirty editor so subsequent tests start from /library.
       // Cancel opens a discard dialog whose Discard button triggers navigation,
@@ -500,7 +498,6 @@ test.describe.serial("KB Editor (Create/Edit, Categories, ATAG)", () => {
         await expect(page).toHaveURL("/library", { timeout: 5_000 });
       }
     }
-    expect(violations).toEqual([]);
   });
 
   test("a11y: category management sheet passes axe-core audit", async ({}, testInfo) => {
@@ -523,13 +520,10 @@ test.describe.serial("KB Editor (Create/Edit, Categories, ATAG)", () => {
       timeout: 5_000,
     });
 
-    const results = await new AxeBuilder({ page })
-      .setLegacyMode(true)
-      .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"])
-      .exclude("[role='tablist']")
-      .exclude("[role='listbox']")
-      .disableRules(["listitem", "meta-viewport"])
-      .analyze();
-    expect(results.violations).toEqual([]);
+    // Same editor-surface extras as the new-article audit above.
+    await auditA11y(page, {
+      exclude: ["[role='tablist']", "[role='listbox']"],
+      disableRules: ["meta-viewport"],
+    });
   });
 });
