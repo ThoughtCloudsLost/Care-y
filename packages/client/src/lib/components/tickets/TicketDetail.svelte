@@ -164,6 +164,7 @@
     onsearchscrollcomplete?: () => void;
     /** Two-way bindable: true when the paginator has more older messages to load. */
     hasMoreMessages?: boolean;
+    loadedFollowUpCount?: number;
     /** Two-way bindable: function to load one older page. */
     loadOlderPage?: () => Promise<void>;
   }
@@ -197,6 +198,7 @@
     searchScrollRequested = false,
     onsearchscrollcomplete,
     hasMoreMessages = $bindable(false),
+    loadedFollowUpCount = $bindable(0),
     loadOlderPage: loadOlderPageProp = $bindable(undefined),
   }: TicketDetailProps = $props();
 
@@ -347,10 +349,13 @@
   const hasMoreOlder = $derived(paginator.hasMore);
   const loadingOlder = $derived(paginator.loadingOlder);
 
-  // Expose paginator state for deep search in the route page.
+  // Expose paginator state for deep search in the route page. The loaded
+  // count is the raw paginated list, not the display-filtered one, so the
+  // deep-search counter climbs toward the ticket's total entry count.
   $effect(() => {
     hasMoreMessages = hasMoreOlder;
     loadOlderPageProp = async () => paginator.loadOlderPage();
+    loadedFollowUpCount = followUps.length;
   });
 
   // --- Conversation filter application (server-side) ---

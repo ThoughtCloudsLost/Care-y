@@ -483,11 +483,14 @@
 
   let hasMoreMessages = $state(false);
   let loadOlderPage = $state<(() => Promise<void>) | undefined>(undefined);
+  let loadedFollowUpCount = $state(0);
 
   const deepSearch = createDeepSearch({
     getOverlayTerm: () => overlay.term,
     getHasMoreMessages: () => hasMoreMessages,
     getLoadOlderPage: () => loadOlderPage,
+    getLoadedCount: () => loadedFollowUpCount,
+    getTotalCount: () => ticket?.followUpCount ?? 0,
   });
 
   $effect(() => {
@@ -781,8 +784,8 @@
       ? () => void deepSearch.trigger()
       : undefined}
     deepSearchStatus={deepSearch.phase}
-    deepSearchSearched={displayFollowUpsForSearch?.length ?? 0}
-    deepSearchTotal={displayFollowUpsForSearch?.length ?? 0}
+    deepSearchSearched={deepSearch.searched}
+    deepSearchTotal={deepSearch.total}
   />
 {/snippet}
 
@@ -886,6 +889,7 @@
     onsearchscrollcomplete={overlay.markScrollComplete}
     bind:hasMoreMessages
     bind:loadOlderPage
+    bind:loadedFollowUpCount
   />
 {/snippet}
 
