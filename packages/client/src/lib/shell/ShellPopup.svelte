@@ -37,9 +37,10 @@
     <div
       bind:this={trap.dialogEl}
       role="dialog"
-      aria-modal="true"
+      aria-modal={opened ? "true" : undefined}
       aria-label={ariaLabel ?? title}
       tabindex="-1"
+      inert={!opened ? true : undefined}
       data-testid="popup-dialog"
       class="popup-dialog"
     >
@@ -76,6 +77,25 @@
     flex-direction: column;
     height: 100%;
     width: 100%;
+  }
+
+  /* Closed popups stay mounted; inert plus delayed visibility keeps them
+     out of the accessibility tree and axe evaluation while letting the
+     close transition finish (mirrors ShellSheet). */
+  .popup-dialog:not([inert]) {
+    visibility: visible;
+    transition: none;
+  }
+
+  .popup-dialog[inert] {
+    visibility: hidden;
+    transition: visibility 0s 400ms;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .popup-dialog[inert] {
+      transition-delay: 0s;
+    }
   }
 
   .popup-scroll {

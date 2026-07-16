@@ -56,9 +56,10 @@
       bind:this={trap.dialogEl}
       use:drag.action
       role="dialog"
-      aria-modal="true"
+      aria-modal={opened ? "true" : undefined}
       aria-label={ariaLabel}
       tabindex="-1"
+      inert={!opened ? true : undefined}
       class="shell-panel-content"
     >
       <div class="panel-inner" class:handle-left={side === "right"}>
@@ -76,6 +77,25 @@
 <style>
   .shell-panel-content {
     height: 100%;
+  }
+
+  /* Closed panels stay mounted; inert plus delayed visibility keeps them
+     out of the accessibility tree and axe evaluation while letting the
+     close transition finish (mirrors ShellSheet). */
+  .shell-panel-content:not([inert]) {
+    visibility: visible;
+    transition: none;
+  }
+
+  .shell-panel-content[inert] {
+    visibility: hidden;
+    transition: visibility 0s 400ms;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .shell-panel-content[inert] {
+      transition-delay: 0s;
+    }
   }
 
   .panel-inner {

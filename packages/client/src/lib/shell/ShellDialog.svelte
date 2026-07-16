@@ -33,6 +33,8 @@
   bind:this={trap.dialogEl}
   role="dialog"
   aria-modal={opened ? "true" : undefined}
+  inert={!opened ? true : undefined}
+  class="shell-dialog-root"
 >
   <ShellBackdrop {opened} ondismiss={trap.handleDismiss} />
   <Dialog {opened} {title} backdrop={false}>
@@ -42,3 +44,24 @@
     {/snippet}
   </Dialog>
 </div>
+
+<style>
+  /* Closed dialogs stay mounted; inert plus delayed visibility keeps them
+     out of the accessibility tree and axe evaluation while letting the
+     close transition finish (mirrors ShellSheet). */
+  .shell-dialog-root:not([inert]) {
+    visibility: visible;
+    transition: none;
+  }
+
+  .shell-dialog-root[inert] {
+    visibility: hidden;
+    transition: visibility 0s 400ms;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .shell-dialog-root[inert] {
+      transition-delay: 0s;
+    }
+  }
+</style>
