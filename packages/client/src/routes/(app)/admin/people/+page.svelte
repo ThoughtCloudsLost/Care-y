@@ -385,6 +385,7 @@
     {tabs}
     active={activeTab}
     ariaLabel={m.admin_people_title()}
+    semantics="tabs"
     onchange={(id: string) => {
       if (isPeopleTab(id)) switchTab(id);
     }}
