@@ -920,6 +920,7 @@
   "admin_org_general_error": "Could not save organization details. Try again.",
   "admin_org_general_edit_button": "Edit general",
   "admin_org_general_save": "Save changes",
+  "admin_org_general_client_blob_error": "Name saved. The public login page could not be updated and will show the old name until branding is saved again.",
   "admin_tab_org_general": "General",
   "admin_tab_keys": "Keys",
   "admin_tab_branding": "Branding",

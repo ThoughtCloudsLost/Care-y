@@ -920,6 +920,7 @@
   "admin_org_general_error": "No se pudieron guardar los datos. Intente de nuevo.",
   "admin_org_general_edit_button": "Editar configuracion general",
   "admin_org_general_save": "Guardar cambios",
+  "admin_org_general_client_blob_error": "Nombre guardado. La pagina publica de inicio de sesion no se pudo actualizar y mostrara el nombre anterior hasta que se guarde la marca de nuevo.",
   "admin_tab_org_general": "General",
   "admin_tab_keys": "Claves",
   "admin_tab_branding": "Marca",

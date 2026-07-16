@@ -6,6 +6,7 @@
     useQueryClient,
   } from "@tanstack/svelte-query";
   import { Building2, Save } from "@lucide/svelte";
+  import { dev } from "$app/environment";
   import { E164_COUNTRY_CODE_OPTIONS } from "@care-y/shared";
   import * as m from "$lib/paraglide/messages.js";
   import { trpc } from "$lib/trpc/index.js";
@@ -95,6 +96,10 @@
     ? requireRouter(trpc.branding, "branding")
     : null;
 
+  // The public-page blob is rebuilt client-side by design: it is derived
+  // from org-key material the server never holds, so the server cannot
+  // rebuild it after a rename. A failure leaves the public login page
+  // showing the old name until branding is saved again.
   async function rebuildClientBlob(newName: string): Promise<void> {
     if (brandingRouter === null) return;
     const branding = await brandingRouter.getBranding.query();
@@ -125,20 +130,15 @@
         b64(branding.encryptedClientText ?? null),
       ) ?? "";
 
-    let clientBlob: string;
-    try {
-      clientBlob = buildClientBrandingBlob(
-        {
-          name: newName,
-          primaryColor: color,
-          accentColor: accent,
-          clientText: text,
-        },
-        orgKeyManager,
-      );
-    } catch {
-      return;
-    }
+    const clientBlob = buildClientBrandingBlob(
+      {
+        name: newName,
+        primaryColor: color,
+        accentColor: accent,
+        clientText: text,
+      },
+      orgKeyManager,
+    );
 
     const encryptedValue = await orgKeyManager.encryptText(newName);
     await brandingRouter.saveBrandingField.mutate({
@@ -164,7 +164,15 @@
       if (nameChanged) {
         orgCache.delete("branding:name");
         void queryClient.invalidateQueries({ queryKey: adminKeys.branding() });
-        void rebuildClientBlob(editName.trim());
+        rebuildClientBlob(editName.trim()).catch((err: unknown) => {
+          // Longer than the success toast: this failure needs reading time.
+          toastStore.show(m.admin_org_general_client_blob_error(), 6000);
+          announceToLiveRegion(
+            "polite",
+            m.admin_org_general_client_blob_error(),
+          );
+          if (dev) console.error(err);
+        });
         onnamechange?.();
       }
     },
