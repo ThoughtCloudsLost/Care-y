@@ -40,7 +40,7 @@
     "dev:mobile": "node scripts/dev-setup.mjs && pnpm --filter @care-y/client dev:mobile",
     "dev:setup": "node scripts/dev-setup.mjs",
     "dev:db:clean": "docker compose down -v",
-    "totp": "node scripts/totp.mjs",
+    "totp": "node --env-file-if-exists=.env scripts/totp.mjs",
     "postinstall": "lefthook install"
   },
   "pnpm": {
