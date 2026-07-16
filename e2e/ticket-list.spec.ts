@@ -1,8 +1,7 @@
 import { test, expect } from "./coverage-fixture";
 import { startCoverage, stopAndWriteCoverage } from "./coverage-fixture";
 import type { Page } from "@playwright/test";
-import AxeBuilder from "@axe-core/playwright";
-import { CRYPTO_TIMEOUT, login, longPress } from "./helpers";
+import { auditA11y, CRYPTO_TIMEOUT, login, longPress } from "./helpers";
 
 test.describe.serial("Ticket List (Tickets Tab)", () => {
   let page: Page;
@@ -331,14 +330,9 @@ test.describe.serial("Ticket List (Tickets Tab)", () => {
     // Ensure we're on the tickets page with content visible.
     await expect(page.getByText("Help with housing")).toBeVisible();
 
-    // Scope to WCAG rules only. Exclude best-practice rules (page-has-heading-one,
-    // aria-dialog-name on Konsta-internal dialogs) which are tracked separately.
-    const results = await new AxeBuilder({ page })
-      .setLegacyMode(true)
-      .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"])
-      .exclude("[role='tablist']")
-      .analyze();
-    expect(results.violations).toEqual([]);
+    // Konsta Tabbar internals are excluded (H-011); the shell tab bar is
+    // audited by the sweep spec.
+    await auditA11y(page, { exclude: ["[role='tablist']"] });
   });
 
   test("passes axe accessibility audit in grid mode", async () => {
@@ -347,12 +341,7 @@ test.describe.serial("Ticket List (Tickets Tab)", () => {
       page.locator('[data-virtual="row"][data-grid]').first(),
     ).toBeVisible();
 
-    const results = await new AxeBuilder({ page })
-      .setLegacyMode(true)
-      .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"])
-      .exclude("[role='tablist']")
-      .analyze();
-    expect(results.violations).toEqual([]);
+    await auditA11y(page, { exclude: ["[role='tablist']"] });
 
     // Restore list mode.
     await page.getByRole("button", { name: "Compact rows" }).click();

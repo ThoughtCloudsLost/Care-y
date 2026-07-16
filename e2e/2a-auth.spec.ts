@@ -9,8 +9,12 @@
  */
 
 import { test, expect } from "./coverage-fixture";
-import AxeBuilder from "@axe-core/playwright";
-import { CRYPTO_TIMEOUT, loadTotpSecret, generateTotpCode } from "./helpers";
+import {
+  auditA11y,
+  CRYPTO_TIMEOUT,
+  loadTotpSecret,
+  generateTotpCode,
+} from "./helpers";
 
 // Seed credentials (must match seed script: packages/server/src/scripts/seed.ts)
 const DEV_USER = "admin.dev";
@@ -147,13 +151,8 @@ test.describe("2a-auth: login page", () => {
     await expect(submitBtn).not.toBeVisible();
   });
 
-  test("login page passes WCAG 2.1 AA a11y audit", async ({ page }) => {
-    const results = await new AxeBuilder({ page })
-      .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"])
-      .exclude("#splash")
-      .analyze();
-
-    expect(results.violations).toEqual([]);
+  test("login page passes WCAG 2.2 AA a11y audit", async ({ page }) => {
+    await auditA11y(page);
   });
 
   test("error state passes WCAG 2.1 AA a11y audit", async ({ page }) => {
@@ -165,11 +164,6 @@ test.describe("2a-auth: login page", () => {
     await page.getByRole("button", { name: /sign in/i }).click();
     await expect(page.locator('[role="alert"]')).toBeVisible();
 
-    const results = await new AxeBuilder({ page })
-      .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"])
-      .exclude("#splash")
-      .analyze();
-
-    expect(results.violations).toEqual([]);
+    await auditA11y(page);
   });
 });

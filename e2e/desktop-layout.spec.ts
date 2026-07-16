@@ -1,8 +1,7 @@
 import { test, expect } from "./coverage-fixture";
 import { startCoverage, stopAndWriteCoverage } from "./coverage-fixture";
 import type { Page } from "@playwright/test";
-import AxeBuilder from "@axe-core/playwright";
-import { CRYPTO_TIMEOUT, login } from "./helpers";
+import { auditA11y, CRYPTO_TIMEOUT, login } from "./helpers";
 
 test.describe.serial("Desktop Responsive Layout", () => {
   let page: Page;
@@ -506,26 +505,7 @@ test.describe.serial("Desktop Responsive Layout", () => {
       timeout: CRYPTO_TIMEOUT,
     });
 
-    const results = await new AxeBuilder({ page })
-      .setLegacyMode(true)
-      .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"])
-      .exclude("#splash")
-      .disableRules([
-        "aria-required-children",
-        "aria-allowed-attr",
-        "aria-dialog-name",
-        "aria-prohibited-attr",
-        "page-has-heading-one",
-        "scrollable-region-focusable",
-        "label",
-        "select-name",
-        "listitem",
-        "landmark-unique",
-        "color-contrast",
-        "target-size",
-      ])
-      .analyze();
-    expect(results.violations).toEqual([]);
+    await auditA11y(page);
   });
 
   test("desktop layout passes axe audit on ticket split view", async ({}, testInfo) => {
@@ -536,26 +516,7 @@ test.describe.serial("Desktop Responsive Layout", () => {
       timeout: CRYPTO_TIMEOUT,
     });
 
-    const results = await new AxeBuilder({ page })
-      .setLegacyMode(true)
-      .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"])
-      .exclude("#splash")
-      .disableRules([
-        "aria-required-children",
-        "aria-allowed-attr",
-        "aria-dialog-name",
-        "aria-prohibited-attr",
-        "page-has-heading-one",
-        "scrollable-region-focusable",
-        "label",
-        "select-name",
-        "listitem",
-        "landmark-unique",
-        "color-contrast",
-        "target-size",
-      ])
-      .analyze();
-    expect(results.violations).toEqual([]);
+    await auditA11y(page);
   });
 
   test("desktop layout passes axe audit on library split view", async ({}, testInfo) => {
@@ -564,25 +525,6 @@ test.describe.serial("Desktop Responsive Layout", () => {
     await expect(page).toHaveURL("/library");
     await page.waitForTimeout(2_000);
 
-    const results = await new AxeBuilder({ page })
-      .setLegacyMode(true)
-      .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"])
-      .exclude("#splash")
-      .disableRules([
-        "aria-required-children",
-        "aria-allowed-attr",
-        "aria-dialog-name",
-        "aria-prohibited-attr",
-        "page-has-heading-one",
-        "scrollable-region-focusable",
-        "label",
-        "select-name",
-        "listitem",
-        "landmark-unique",
-        "color-contrast",
-        "target-size",
-      ])
-      .analyze();
-    expect(results.violations).toEqual([]);
+    await auditA11y(page);
   });
 });

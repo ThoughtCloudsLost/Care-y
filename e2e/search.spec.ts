@@ -1,8 +1,7 @@
 import { test, expect } from "./coverage-fixture";
 import { startCoverage, stopAndWriteCoverage } from "./coverage-fixture";
 import type { Page } from "@playwright/test";
-import AxeBuilder from "@axe-core/playwright";
-import { CRYPTO_TIMEOUT, login } from "./helpers";
+import { auditA11y, CRYPTO_TIMEOUT, login } from "./helpers";
 
 test.describe.serial("Universal Search", () => {
   let page: Page;
@@ -160,14 +159,7 @@ test.describe.serial("Universal Search", () => {
     });
 
     // Run axe-core on the search overlay.
-    const results = await new AxeBuilder({ page })
-      .setLegacyMode(true)
-      .include("[role='search']")
-      .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"])
-      .disableRules(["color-contrast"])
-      .analyze();
-
-    expect(results.violations).toEqual([]);
+    await auditA11y(page, { include: "[role='search']" });
 
     // Verify ARIA landmarks present.
     await expect(sheet.locator("[role='list']").first()).toBeVisible();

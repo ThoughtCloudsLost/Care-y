@@ -9,10 +9,13 @@
  */
 
 import { test, expect, type Page } from "@playwright/test";
-import AxeBuilder from "@axe-core/playwright";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { dismissBackupCodesSheet, generateTotpCode } from "./helpers.js";
+import {
+  auditA11y,
+  dismissBackupCodesSheet,
+  generateTotpCode,
+} from "./helpers.js";
 
 const ONBOARD_SLUG = "e2e-onboard";
 const API_PORT = "3000";
@@ -85,12 +88,7 @@ test.describe.serial("Volunteer First Login", () => {
   });
 
   test("invite account step passes the axe accessibility audit", async () => {
-    // Legacy mode: the serial suite uses browser.newPage(), which axe's
-    // cross-context injection cannot target (same pattern as dashboard).
-    const results = await new AxeBuilder({ page })
-      .setLegacyMode(true)
-      .analyze();
-    expect(results.violations).toEqual([]);
+    await auditA11y(page);
   });
 
   test("fills volunteer account form and submits", async () => {

@@ -71,8 +71,11 @@ export const test = base.extend({
 export { expect };
 
 export async function startCoverage(page: Page): Promise<void> {
-  if (typeof page.coverage.startJSCoverage === "function") {
-    await page.coverage.startJSCoverage({ resetOnNavigation: false });
+  // page.coverage is null at runtime outside Chromium (firefox,
+  // webkit-mobile), despite the non-null Playwright type.
+  const coverage = page.coverage as Page["coverage"] | null;
+  if (coverage && typeof coverage.startJSCoverage === "function") {
+    await coverage.startJSCoverage({ resetOnNavigation: false });
   }
 }
 
@@ -80,7 +83,9 @@ export async function stopAndWriteCoverage(
   page: Page | undefined,
   label: string,
 ): Promise<void> {
-  if (!page || typeof page.coverage.stopJSCoverage !== "function") return;
+  if (!page?.coverage || typeof page.coverage.stopJSCoverage !== "function") {
+    return;
+  }
   const coverage = await page.coverage.stopJSCoverage();
   await writeCoverage(coverage, label);
 }

@@ -1,8 +1,7 @@
 import { test, expect } from "./coverage-fixture";
 import { startCoverage, stopAndWriteCoverage } from "./coverage-fixture";
 import type { Page } from "@playwright/test";
-import AxeBuilder from "@axe-core/playwright";
-import { CRYPTO_TIMEOUT, login } from "./helpers";
+import { auditA11y, CRYPTO_TIMEOUT, login } from "./helpers";
 
 test.describe.serial("shell architecture", () => {
   let page: Page;
@@ -117,27 +116,6 @@ test.describe.serial("shell architecture", () => {
   // ── Accessibility ───────────────────────────────────────────────────
 
   test("page passes axe-core accessibility scan", async () => {
-    const results = await new AxeBuilder({ page })
-      .setLegacyMode(true)
-      // Known Konsta/shell issues tracked separately:
-      // - aria-required-children: sidebar chevron button inside tablist
-      // - page-has-heading-one: Konsta BlockTitle renders as <div>
-      // - scrollable-region-focusable: main scroll container lacks tabindex
-      .exclude("#splash")
-      .disableRules([
-        "aria-required-children",
-        "aria-allowed-attr",
-        "aria-dialog-name",
-        "aria-prohibited-attr",
-        "page-has-heading-one",
-        "scrollable-region-focusable",
-        "label",
-        "select-name",
-        "listitem",
-        "landmark-unique",
-        "color-contrast",
-      ])
-      .analyze();
-    expect(results.violations).toEqual([]);
+    await auditA11y(page);
   });
 });
