@@ -445,6 +445,7 @@
   "ticket_new_divider": "Nuevo",
   "ticket_conversation_with": "Conversacion con {alias}",
   "ticket_message_sent_by": "Mensaje enviado por {name} a las {time}",
+  "ticket_sender_volunteer": "Voluntario",
   "ticket_message_received_from": "Mensaje recibido de {name} a las {time}",
   "ticket_private_note_by": "Nota privada de {author}",
   "ticket_private_note_label": "Solo tu equipo puede ver esto",

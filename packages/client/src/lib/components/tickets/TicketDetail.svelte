@@ -789,7 +789,7 @@
     const base =
       fu.source === "client"
         ? m.ticket_message_received_from({ name: clientAlias, time })
-        : m.ticket_message_sent_by({ name: "Volunteer", time });
+        : m.ticket_message_sent_by({ name: m.ticket_sender_volunteer(), time });
     return preview ? `${base}: ${preview}` : base;
   }
 
