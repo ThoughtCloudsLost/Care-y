@@ -606,6 +606,11 @@ export function createTicketService(
 
       const gt = sortDirection === "asc" ? (">" as const) : ("<" as const);
 
+      // The id tie-break always compares with ">" regardless of direction:
+      // every ORDER BY below pins t.id ASC, so the cursor filter must walk
+      // ids ascending within equal-key groups. Flipping it with the sort
+      // direction makes descending pages skip and repeat rows on ties.
+
       if (opts.cursor !== undefined) {
         const cursorId = opts.cursor;
 
@@ -660,7 +665,7 @@ export function createTicketService(
               eb.and([
                 eb(rowKey, "=", cursorPriorityKey),
                 eb("t.created_at", "=", cursorCreatedAt),
-                eb("t.id", gt, cursorId),
+                eb("t.id", ">", cursorId),
               ]),
             ]);
           });
@@ -702,7 +707,7 @@ export function createTicketService(
                 eb.and([
                   eb(rowActivity, "=", cursorLastActivity),
                   eb("t.created_at", "=", cursorCreatedAt),
-                  eb("t.id", gt, cursorId),
+                  eb("t.id", ">", cursorId),
                 ]),
                 // (c) Row has NULL activity (NULLS LAST: after all non-NULL)
                 eb(rowActivity, "is", null),
@@ -717,7 +722,7 @@ export function createTicketService(
                 eb("t.created_at", gt, cursorCreatedAt),
                 eb.and([
                   eb("t.created_at", "=", cursorCreatedAt),
-                  eb("t.id", gt, cursorId),
+                  eb("t.id", ">", cursorId),
                 ]),
               ]),
             ]);
@@ -743,7 +748,7 @@ export function createTicketService(
               eb.and([
                 eb("q.sort_order", "=", cursorSortOrder),
                 eb("t.created_at", "=", cursorCreatedAt),
-                eb("t.id", gt, cursorId),
+                eb("t.id", ">", cursorId),
               ]),
             ]),
           );
@@ -764,7 +769,7 @@ export function createTicketService(
               eb.and([
                 eb("c.alias", "=", cursorAlias),
                 eb("t.created_at", "=", cursorCreatedAt),
-                eb("t.id", gt, cursorId),
+                eb("t.id", ">", cursorId),
               ]),
             ]),
           );
@@ -789,7 +794,7 @@ export function createTicketService(
               eb.and([
                 eb(rowCount, "=", cursorFollowupCount),
                 eb("t.created_at", "=", cursorCreatedAt),
-                eb("t.id", gt, cursorId),
+                eb("t.id", ">", cursorId),
               ]),
             ]);
           });
@@ -800,7 +805,7 @@ export function createTicketService(
               eb("t.created_at", gt, cursorCreatedAt),
               eb.and([
                 eb("t.created_at", "=", cursorCreatedAt),
-                eb("t.id", gt, cursorId),
+                eb("t.id", ">", cursorId),
               ]),
             ]),
           );
