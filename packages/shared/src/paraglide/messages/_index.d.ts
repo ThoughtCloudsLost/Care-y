@@ -919,6 +919,7 @@ export * from "./admin_org_general_saved.js";
 export * from "./admin_org_general_error.js";
 export * from "./admin_org_general_edit_button.js";
 export * from "./admin_org_general_save.js";
+export * from "./admin_org_general_client_blob_error.js";
 export * from "./admin_tab_org_general.js";
 export * from "./admin_tab_keys.js";
 export * from "./admin_tab_branding.js";
