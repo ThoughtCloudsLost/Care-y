@@ -1494,6 +1494,63 @@ describe.skipIf(!process.env.DATABASE_URL)("TicketService (DB)", () => {
     expect(ourReturned).toHaveLength(5);
   });
 
+  it("keyset pagination neither skips nor repeats rows when created_at ties", async () => {
+    const { userId, queueId } = await createClientFixture();
+
+    const ticketIds: string[] = [];
+    for (let i = 0; i < 4; i++) {
+      const c = await createTestClientFixture(testDb.db, { queueId });
+      const t = await svc.create(c.userId, {
+        id: crypto.randomUUID(),
+        clientId: c.clientId,
+        queueId,
+        encryptedTitle: Buffer.from(`tie-${i}`),
+        encryptedDescription: Buffer.from("desc"),
+        priority: "normal",
+        keyGeneration: crypto.randomUUID(),
+        keyWrap: fakeKeyWrap(),
+      });
+      ticketIds.push(t.id);
+    }
+
+    // Force an exact created_at tie so the id tie-break is the only
+    // discriminator across the page boundary. The shared fixture has no
+    // createdAt override; a direct update is fine here.
+    await testDb.db
+      .updateTable("tickets")
+      .set({ created_at: new Date("2026-01-15T12:00:00.000Z") })
+      .where("id", "in", ticketIds)
+      .execute();
+
+    // The date sort ties on created_at alone; the msgs sort additionally
+    // ties on the correlated follow-up count (zero for all four). On a
+    // descending sort the id tie-break must still walk ids ascending, or
+    // the second page repeats earlier rows and drops later ones.
+    for (const sortBy of ["date", "msgs"] as const) {
+      for (const sortDirection of ["desc", "asc"] as const) {
+        const page1 = await svc.list(userId, {
+          queueIds: [queueId],
+          sortBy,
+          sortDirection,
+          limit: 2,
+        });
+        const page2 = await svc.list(userId, {
+          queueIds: [queueId],
+          sortBy,
+          sortDirection,
+          limit: 2,
+          cursor: page1[1]!.id,
+        });
+
+        const returned = [...page1, ...page2]
+          .map((t) => t.id)
+          .filter((id) => ticketIds.includes(id));
+        expect(new Set(returned).size).toBe(4);
+        expect(returned).toHaveLength(4);
+      }
+    }
+  });
+
   it("sortBy last_activity pagination covers tickets with and without activity", async () => {
     const { userId, queueId } = await createClientFixture();
 
