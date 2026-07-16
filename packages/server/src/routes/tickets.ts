@@ -13,6 +13,7 @@
  */
 
 import { z } from "zod";
+import { getEnv } from "../env.js";
 import {
   router,
   authedProcedure,
@@ -1398,7 +1399,7 @@ export function createTicketRouter(deps: TicketRouterDeps) {
       ),
 
     // --- Dev-only: seed test tickets with real ECIES key wraps ---
-    ...(process.env.NODE_ENV === "development"
+    ...(getEnv().NODE_ENV === "development"
       ? {
           devSeedTickets: authedProcedure
             .input(
