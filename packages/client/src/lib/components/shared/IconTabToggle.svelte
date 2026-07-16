@@ -1,3 +1,12 @@
+<!--
+  Segmented icon toggle (tabs or toggle semantics).
+
+  Target-size deviation from the house 44px/8px-gap rule: segments carry
+  invisible 44px-tall hit areas, but stay horizontally connected with zero
+  gap per the segmented-control design. WCAG 2.5.8 is met on size alone
+  (each segment is 32x28 before expansion), so the 8px gap rule for
+  separated controls does not apply to the fused segments.
+-->
 <script lang="ts">
   import type { Component } from "svelte";
 
@@ -111,10 +120,12 @@
     flex-shrink: 0;
     border: 1px solid var(--hair-2);
     border-radius: 8px;
-    overflow: hidden;
+    /* No overflow: hidden here: it would clip the segments' expanded hit
+       areas. Corner rounding lives on the end segments instead. */
   }
 
   .icon-tab-toggle button {
+    position: relative;
     display: grid;
     place-items: center;
     width: 32px;
@@ -127,8 +138,23 @@
     cursor: pointer;
   }
 
+  /* Invisible 44px-tall touch hit area; see the header comment for why the
+     segments stay horizontally fused. */
+  .icon-tab-toggle button::after {
+    content: "";
+    position: absolute;
+    inset: -8px 0;
+  }
+
+  .icon-tab-toggle button:first-child {
+    border-start-start-radius: 7px;
+    border-end-start-radius: 7px;
+  }
+
   .icon-tab-toggle button:last-child {
     border-right: none;
+    border-start-end-radius: 7px;
+    border-end-end-radius: 7px;
   }
 
   .icon-tab-toggle button.active {

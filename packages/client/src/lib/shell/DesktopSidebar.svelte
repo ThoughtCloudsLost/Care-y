@@ -454,6 +454,7 @@
 
   /* ── Chevron ── */
   .sidebar-chevron {
+    position: relative;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -466,19 +467,33 @@
     border-radius: 4px;
     margin-inline-end: 0.5rem;
     flex-shrink: 0;
-    transition: transform 150ms ease;
   }
 
   .sidebar-chevron:hover {
     background: var(--brand-primary-20);
   }
 
-  .sidebar-chevron.open {
+  /* Rotation lives on the icon, not the button, so the expanded hit box
+     below stays axis-aligned. */
+  .sidebar-chevron :global(svg) {
+    transition: transform 150ms ease;
+  }
+
+  .sidebar-chevron.open :global(svg) {
     transform: rotate(0deg);
   }
 
-  .sidebar-chevron:not(.open) {
+  .sidebar-chevron:not(.open) :global(svg) {
     transform: rotate(-90deg);
+  }
+
+  /* Grows the 28px chevron hit box to the full 40px row height (desktop
+     pointer floor is 24px, WCAG 2.5.8); no horizontal reach, the tab button
+     abuts on the inline-start side. */
+  .sidebar-chevron::after {
+    content: "";
+    position: absolute;
+    inset: -6px 0;
   }
 
   /* ── Sub-items ── */
@@ -491,6 +506,9 @@
     display: flex;
     align-items: center;
     gap: 0.375rem;
+    /* WCAG 2.5.8 floor for desktop pointer targets; the computed height is
+       ~27px today, so this only guards against tighter fonts or themes. */
+    min-height: 1.5rem;
     padding: 0.375rem 0.75rem;
     padding-inline-start: 2.5rem;
     border: none;

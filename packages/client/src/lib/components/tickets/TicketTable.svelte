@@ -357,7 +357,9 @@
 
   th {
     text-align: left;
-    padding: var(--space-xs) var(--space-sm);
+    /* Vertical padding lives on .sort-header so the sortable buttons own a
+       real >=24px box (WCAG 2.5.8); the header row grows a few px for it. */
+    padding: 0 var(--space-sm);
     font-size: var(--text-xs);
     font-weight: 600;
     color: var(--muted);
@@ -495,7 +497,7 @@
     gap: 0.25rem;
     background: none;
     border: none;
-    padding: 0;
+    padding: var(--space-md) 0;
     font: inherit;
     font-size: var(--text-xs);
     font-weight: 600;
@@ -537,7 +539,9 @@
     align-items: center;
     justify-content: center;
     gap: var(--space-md);
-    padding: var(--space-sm) var(--space-md);
+    /* Vertical padding lives on .load-all-btn so the button owns a real
+       >=24px box (WCAG 2.5.8). */
+    padding: 0 var(--space-md);
     font-size: var(--text-xs);
     color: var(--muted);
   }
@@ -545,7 +549,7 @@
   .load-all-btn {
     background: none;
     border: none;
-    padding: 0;
+    padding: var(--space-md) 0;
     font: inherit;
     font-size: var(--text-xs);
     font-weight: 600;

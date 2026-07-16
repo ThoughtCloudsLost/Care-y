@@ -593,6 +593,7 @@
   }
 
   .act {
+    position: relative;
     appearance: none;
     background: none;
     border: none;
@@ -602,6 +603,15 @@
     font-weight: 700;
     color: var(--brand-text);
     cursor: pointer;
+  }
+
+  /* Invisible 44px touch hit area. Horizontal reach is capped at 5px per
+     side so neighbors inside the 18px .act-group gap keep 8px of effective
+     separation (WCAG 2.5.8 spacing). */
+  .act::after {
+    content: "";
+    position: absolute;
+    inset: -14px -5px;
   }
 
   .act-quiet {
