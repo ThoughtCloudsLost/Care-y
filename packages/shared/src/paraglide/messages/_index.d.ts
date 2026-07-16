@@ -444,6 +444,7 @@ export * from "./ticket_new_messages.js";
 export * from "./ticket_new_divider.js";
 export * from "./ticket_conversation_with.js";
 export * from "./ticket_message_sent_by.js";
+export * from "./ticket_sender_volunteer.js";
 export * from "./ticket_message_received_from.js";
 export * from "./ticket_private_note_by.js";
 export * from "./ticket_private_note_label.js";

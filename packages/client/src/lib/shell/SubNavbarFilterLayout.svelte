@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { Snippet } from "svelte";
+  import * as m from "$lib/paraglide/messages.js";
   import { BlockTitle, Button, List as KList, ListItem } from "konsta/svelte";
   import {
     ArrowUpDown,
@@ -191,7 +192,7 @@
         small
         inline
         class="filter-search-btn"
-        aria-label={searchLabel ?? "Search"}
+        aria-label={searchLabel ?? m.search_inline_trigger()}
         onclick={onsearch}
       >
         <Search size={16} aria-hidden="true" />

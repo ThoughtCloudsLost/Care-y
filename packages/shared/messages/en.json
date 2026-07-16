@@ -445,6 +445,7 @@
   "ticket_new_divider": "New",
   "ticket_conversation_with": "Conversation with {alias}",
   "ticket_message_sent_by": "Message sent by {name} at {time}",
+  "ticket_sender_volunteer": "Volunteer",
   "ticket_message_received_from": "Message received from {name} at {time}",
   "ticket_private_note_by": "Private note by {author}",
   "ticket_private_note_label": "Only your team can see this",
