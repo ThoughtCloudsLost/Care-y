@@ -11,6 +11,7 @@
 -->
 <script lang="ts">
   import type { Snippet } from "svelte";
+  import * as m from "$lib/paraglide/messages.js";
   import { splitNavbar } from "$lib/stores/split-navbar.svelte.js";
 
   let {
@@ -25,9 +26,15 @@
     leftRef?: HTMLElement | undefined;
   } = $props();
 
+  /** Smallest allowed pane width, applied to both sides of the divider. */
+  const MIN_PANE = 280;
+  /** Keyboard resize step as a percentage of the container width. */
+  const KEY_STEP_PCT = 2;
+
   let rightWidth = $state(0);
   let dragging = $state(false);
   let containerEl = $state<HTMLElement | undefined>();
+  let containerWidth = $state(0);
 
   function initWidth(): void {
     if (rightWidth === 0 && containerEl) {
@@ -38,9 +45,39 @@
     }
   }
 
+  function syncWidth(): void {
+    if (containerEl) {
+      containerWidth = containerEl.getBoundingClientRect().width;
+    }
+  }
+
+  /** One clamp for both input paths so keyboard and drag agree on bounds. */
+  function clampRight(px: number, width: number): number {
+    return Math.max(MIN_PANE, Math.min(width - MIN_PANE, px));
+  }
+
   $effect(() => {
-    if (containerEl) initWidth();
+    if (containerEl) {
+      initWidth();
+      syncWidth();
+    }
   });
+
+  $effect(() => {
+    window.addEventListener("resize", syncWidth);
+    return () => {
+      window.removeEventListener("resize", syncWidth);
+    };
+  });
+
+  // APG window-splitter value: the right pane as a percentage of the
+  // container, bounded by the same MIN_PANE clamp the drag path uses.
+  const toPct = (px: number): number => Math.round((px / containerWidth) * 100);
+  const valueNow = $derived(containerWidth > 0 ? toPct(rightWidth) : undefined);
+  const valueMin = $derived(containerWidth > 0 ? toPct(MIN_PANE) : undefined);
+  const valueMax = $derived(
+    containerWidth > 0 ? toPct(containerWidth - MIN_PANE) : undefined,
+  );
 
   $effect(() => {
     if (rightWidth > 0) {
@@ -67,14 +104,38 @@
   function onPointerMove(e: PointerEvent): void {
     if (!dragging || !containerEl) return;
     const rect = containerEl.getBoundingClientRect();
-    const newRight = rect.right - e.clientX;
-    const minPane = 280;
-    const maxRight = rect.width - minPane;
-    rightWidth = Math.max(minPane, Math.min(maxRight, newRight));
+    containerWidth = rect.width;
+    rightWidth = clampRight(rect.right - e.clientX, rect.width);
   }
 
   function onPointerUp(): void {
     dragging = false;
+  }
+
+  function onDividerKeydown(e: KeyboardEvent): void {
+    if (!containerEl) return;
+    const width = containerEl.getBoundingClientRect().width;
+    if (width <= 0) return;
+    containerWidth = width;
+    let next: number;
+    switch (e.key) {
+      case "ArrowLeft":
+        next = rightWidth + (KEY_STEP_PCT / 100) * width;
+        break;
+      case "ArrowRight":
+        next = rightWidth - (KEY_STEP_PCT / 100) * width;
+        break;
+      case "Home":
+        next = MIN_PANE;
+        break;
+      case "End":
+        next = width - MIN_PANE;
+        break;
+      default:
+        return;
+    }
+    e.preventDefault();
+    rightWidth = clampRight(next, width);
   }
 </script>
 
@@ -90,15 +151,26 @@
     {@render left()}
   </div>
 
+  <!-- APG window-splitter: a focusable separator with keyboard resize is
+       the W3C-specified pattern (WAI-ARIA APG, Window Splitter); the
+       compiler's a11y check misreads focusable separators as static. -->
+  <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
+  <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
   <div
     class="split-divider"
     class:split-divider-active={dragging}
     role="separator"
     aria-orientation="vertical"
+    aria-label={m.split_view_resize_label()}
+    aria-valuenow={valueNow}
+    aria-valuemin={valueMin}
+    aria-valuemax={valueMax}
+    tabindex="0"
     onpointerdown={onPointerDown}
     onpointermove={onPointerMove}
     onpointerup={onPointerUp}
     onpointercancel={onPointerUp}
+    onkeydown={onDividerKeydown}
   ></div>
 
   <div
@@ -175,6 +247,11 @@
     background: var(--brand-text);
     width: 2px;
     left: 1.5px;
+  }
+
+  .split-divider:focus-visible {
+    outline: 2px solid var(--brand-text);
+    outline-offset: 0;
   }
 
   .split-right-pane {
