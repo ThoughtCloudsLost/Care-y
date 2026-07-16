@@ -5,6 +5,7 @@ import {
   resetKonstaPalette,
   checkBrandProximity,
 } from "./konsta-palette";
+import { contrast } from "./test-helpers/wcag";
 
 // Mock the Material Color Utilities dynamic import.
 // We verify Material tokens are set; we don't test the library's color math.
@@ -31,38 +32,6 @@ vi.mock("@material/material-color-utilities", () => {
     hexFromArgb: () => "#336699",
   };
 });
-
-/**
- * Parse a hex color to [r, g, b].
- */
-function parseHex(hex: string): [number, number, number] {
-  const m = /^#([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
-  if (!m?.[1] || !m[2] || !m[3]) throw new TypeError(`Invalid hex: ${hex}`);
-  return [parseInt(m[1], 16), parseInt(m[2], 16), parseInt(m[3], 16)];
-}
-
-/**
- * WCAG 2.1 relative luminance.
- * Source: https://www.w3.org/TR/WCAG21/#dfn-relative-luminance
- */
-function luminance(r: number, g: number, b: number): number {
-  function lin(c: number): number {
-    const s = c / 255;
-    return s <= 0.04045 ? s / 12.92 : Math.pow((s + 0.055) / 1.055, 2.4);
-  }
-  return 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b);
-}
-
-/**
- * WCAG contrast ratio between two hex colors.
- */
-function contrast(hex1: string, hex2: string): number {
-  const l1 = luminance(...parseHex(hex1));
-  const l2 = luminance(...parseHex(hex2));
-  const lighter = Math.max(l1, l2);
-  const darker = Math.min(l1, l2);
-  return (lighter + 0.05) / (darker + 0.05);
-}
 
 function getProp(name: string): string {
   return document.documentElement.style.getPropertyValue(name);
