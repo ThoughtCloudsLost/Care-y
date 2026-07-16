@@ -99,6 +99,7 @@ export * from "./nav_more.js";
 export * from "./nav_sidebar_label.js";
 export * from "./nav_sidebar_expand.js";
 export * from "./nav_sidebar_collapse.js";
+export * from "./split_view_resize_label.js";
 export * from "./nav_main.js";
 export * from "./nav_search.js";
 export * from "./nav_account.js";
