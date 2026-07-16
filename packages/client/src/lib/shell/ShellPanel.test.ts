@@ -107,4 +107,27 @@ describe("ShellPanel", () => {
     const dialog = document.querySelector('[role="dialog"]');
     expect(dialog?.classList.contains("shell-panel-content")).toBe(true);
   });
+
+  it("marks the closed panel inert and drops aria-modal", async () => {
+    const { rerender } = render(ShellPanel, {
+      props: {
+        opened: false,
+        ondismiss: vi.fn(),
+        ariaLabel: "Admin panel",
+        children: testSnippet,
+      },
+    });
+
+    // Svelte assigns the inert IDL property; browsers reflect it to the
+    // attribute (which the [inert] CSS targets) but jsdom does not
+    // implement inert, so the test reads the property.
+    const dialog = document.querySelector('[role="dialog"]') as
+      (Element & { inert?: unknown }) | null;
+    expect(dialog?.inert).toBe(true);
+    expect(dialog?.hasAttribute("aria-modal")).toBe(false);
+
+    await rerender({ opened: true });
+    expect(dialog?.inert).toBeFalsy();
+    expect(dialog?.getAttribute("aria-modal")).toBe("true");
+  });
 });
