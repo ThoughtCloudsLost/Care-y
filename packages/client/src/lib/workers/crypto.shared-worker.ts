@@ -55,6 +55,14 @@ declare const self: SharedWorkerGlobalScope;
 const ports = new Set<MessagePort>();
 let zeroTimer: ReturnType<typeof setTimeout> | null = null;
 
+// Grace period before zeroing keys once the last port disconnects.
+// Full-page navigations (reload, the login redirect) tear down every port
+// and reconnect from the fresh document; at 500ms the reconnect regularly
+// lost the race, so the timer zeroed keys mid-navigation and forced a
+// reauth. 3000ms gives those flows comfortable headroom. Accepted cost:
+// keys survive in worker memory for up to 3s after the last tab actually
+// closes. The idle-timeout self-zero in crypto-core.ts and the explicit
+// zeroAll path are unaffected by this delay.
 const ZERO_DELAY_MS = 3000;
 
 // Tracks which port triggered the current state transition so the
