@@ -85,10 +85,12 @@
     display: flex;
     border: 1px solid var(--hair-2);
     border-radius: 8px;
-    overflow: hidden;
+    /* No overflow: hidden here: it would clip the segments' expanded hit
+       areas. Corner rounding lives on the end segments instead. */
   }
 
   .view-switcher button {
+    position: relative;
     display: grid;
     place-items: center;
     width: 32px;
@@ -101,8 +103,23 @@
     cursor: pointer;
   }
 
+  /* Invisible 44px-tall touch hit area; same segmented treatment as
+     IconTabToggle (see its header comment for the spacing rationale). */
+  .view-switcher button::after {
+    content: "";
+    position: absolute;
+    inset: -8px 0;
+  }
+
+  .view-switcher button:first-child {
+    border-start-start-radius: 7px;
+    border-end-start-radius: 7px;
+  }
+
   .view-switcher button:last-child {
     border-right: none;
+    border-start-end-radius: 7px;
+    border-end-end-radius: 7px;
   }
 
   .view-switcher button.active {

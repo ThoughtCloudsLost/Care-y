@@ -511,4 +511,13 @@
     color: var(--brand-text);
     cursor: pointer;
   }
+
+  /* Invisible ~44px touch hit area; deliberately claims part of the card's
+     cover button so a failed decrypt is easy to retry. The mini reaction
+     tray below is render-only on this surface. */
+  .preview-retry::after {
+    content: "";
+    position: absolute;
+    inset: -15px -6px;
+  }
 </style>

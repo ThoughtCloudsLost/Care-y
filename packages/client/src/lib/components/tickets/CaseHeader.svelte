@@ -343,6 +343,7 @@
   }
 
   .case-handle {
+    position: relative;
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -350,6 +351,13 @@
     padding: 6px 0 10px;
     cursor: pointer;
     -webkit-tap-highlight-color: transparent;
+  }
+
+  /* Tops the ~39px handle up to a 44px touch hit area. */
+  .case-handle::after {
+    content: "";
+    position: absolute;
+    inset: -3px 0;
   }
 
   .case-handle:focus-visible {
