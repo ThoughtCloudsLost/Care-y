@@ -11,6 +11,7 @@
  */
 
 import type { IncomingMessage, ServerResponse } from "node:http";
+import { getEnv } from "../env.js";
 import {
   loginInputSchema,
   registerInputSchema,
@@ -359,7 +360,7 @@ export function createAuthRouter(deps: AuthRouterDeps) {
 
     // Dev-only: mark the current session as 2FA-verified without completing
     // a real 2FA challenge. Route does not exist in production builds.
-    ...(process.env.NODE_ENV === "development"
+    ...(getEnv().NODE_ENV === "development"
       ? {
           devBypass2fa: authedProcedure.mutation(
             withErrorWrapping(async ({ ctx }) => {

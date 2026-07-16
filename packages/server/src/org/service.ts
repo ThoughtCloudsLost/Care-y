@@ -6,6 +6,7 @@
  * PostgreSQL schemas with tenant migrations.
  */
 
+import { getEnv } from "../env.js";
 import type { Kysely, Selectable } from "kysely";
 import { sql } from "kysely";
 import {
@@ -178,7 +179,7 @@ export function createOrgService(
       const schemaName = `org_${orgId}`;
 
       const rawToken =
-        process.env.NODE_ENV === "development"
+        getEnv().NODE_ENV === "development"
           ? "dev-setup-token"
           : randomBytes(32).toString("base64url");
       const tokenHash = hashSetupToken(rawToken);

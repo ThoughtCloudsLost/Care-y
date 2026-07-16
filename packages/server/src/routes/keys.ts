@@ -17,6 +17,7 @@ import {
   adminBootstrapUserKeysSchema,
 } from "@care-y/shared";
 import { encode } from "@care-y/crypto";
+import { getEnv } from "../env.js";
 import {
   router,
   authedProcedure,
@@ -222,7 +223,7 @@ export function createKeysRouter() {
         }),
       ),
 
-    ...(process.env.NODE_ENV === "development"
+    ...(getEnv().NODE_ENV === "development"
       ? {
           devSeedOrgKey: authedProcedure.mutation(
             withErrorWrapping(async ({ ctx }) => {

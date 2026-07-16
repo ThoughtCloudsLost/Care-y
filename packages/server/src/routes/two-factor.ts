@@ -23,6 +23,7 @@ import {
   withErrorWrapping,
 } from "../trpc/trpc.js";
 import { TRPCError } from "@trpc/server";
+import { getEnv } from "../env.js";
 import type { FieldEncryptor } from "../crypto/field-encryptor.js";
 import type { BlindIndexer } from "../crypto/field-encryptor.js";
 import type { SessionTokenizer } from "../crypto/session-tokenizer.js";
@@ -182,7 +183,7 @@ export async function createScopedTwoFactorServices(
  */
 function deriveRpId(): string {
   if (
-    process.env.NODE_ENV === "development" &&
+    getEnv().NODE_ENV === "development" &&
     process.env.CORS_ORIGIN != null &&
     process.env.CORS_ORIGIN !== ""
   ) {
@@ -201,7 +202,7 @@ function deriveRpId(): string {
  * In dev: CORS_ORIGIN (e.g. https://host.ts.net:5173, http://localhost:5173)
  */
 function deriveOrigin(org: OrgContext): string {
-  if (process.env.NODE_ENV === "development") {
+  if (getEnv().NODE_ENV === "development") {
     return process.env.CORS_ORIGIN ?? "http://localhost:5173";
   }
   return `https://${org.orgSlug}.${WEBAUTHN_RP_ID}`;

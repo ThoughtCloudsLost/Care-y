@@ -10,6 +10,7 @@
  */
 
 import { z } from "zod";
+import { getEnv } from "../env.js";
 import {
   router,
   authedProcedure,
@@ -354,7 +355,7 @@ export function createKbRouter(deps: KBRouterDeps) {
       ),
 
     // --- Dev-only: seed KB articles with sealed box encryption ---
-    ...(process.env.NODE_ENV === "development"
+    ...(getEnv().NODE_ENV === "development"
       ? {
           devSeedKb: authedProcedure.mutation(
             withErrorWrapping(async ({ ctx }) => {

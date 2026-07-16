@@ -5,6 +5,7 @@
  * The service handles config encryption, decryption, upsert, and lookup.
  */
 
+import { getEnv } from "../env.js";
 import type { Kysely } from "kysely";
 import type { PlatformDatabase, TenantDatabase } from "../db/types.js";
 import type { SecretsEncryptor } from "../config/secrets.js";
@@ -366,7 +367,7 @@ export function createTelephonyConfigService(
       }));
     },
 
-    ...(process.env.NODE_ENV === "development"
+    ...(getEnv().NODE_ENV === "development"
       ? {
           async devSeedConfigWithPhones(
             orgId: string,

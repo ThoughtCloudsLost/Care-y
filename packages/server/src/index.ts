@@ -242,7 +242,7 @@ const RATE_PASSWORD_CHANGE_MAX = 5;
 const RATE_UPLOAD_MAX = 3;
 const RATE_KB_UPLOAD_MAX = 5;
 const RATE_BRANDING_UPLOAD_MAX = 3;
-const RATE_BOOTSTRAP_MAX = process.env.NODE_ENV === "production" ? 2 : 20;
+const RATE_BOOTSTRAP_MAX = getEnv().NODE_ENV === "production" ? 2 : 20;
 
 // --- Rate limiters ---
 
@@ -258,7 +258,7 @@ interface RateLimiters {
 }
 
 function createAuthRateLimiters(): RateLimiters {
-  if (process.env.NODE_ENV === "development") {
+  if (getEnv().NODE_ENV === "development") {
     return { loginLimiter: noopLimiter, saltLimiter: noopLimiter };
   }
   return {
@@ -289,14 +289,14 @@ function createOprfInfrastructure(env: EnvVars): OprfEvaluateService {
   });
 
   const userRateLimiter =
-    process.env.NODE_ENV === "development"
+    getEnv().NODE_ENV === "development"
       ? noopLimiter
       : createInMemoryRateLimiter({
           windowMs: RATE_WINDOW_15M,
           maxRequests: RATE_OPRF_USER_MAX,
         });
   const ipRateLimiter =
-    process.env.NODE_ENV === "development"
+    getEnv().NODE_ENV === "development"
       ? noopLimiter
       : createInMemoryRateLimiter({
           windowMs: RATE_WINDOW_15M,
