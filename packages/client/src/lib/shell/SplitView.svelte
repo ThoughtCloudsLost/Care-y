@@ -172,7 +172,7 @@
 
   .split-divider:hover::after,
   .split-divider-active::after {
-    background: var(--accent, var(--primary));
+    background: var(--brand-text);
     width: 2px;
     left: 1.5px;
   }

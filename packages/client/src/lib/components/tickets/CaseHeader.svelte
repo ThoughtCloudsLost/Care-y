@@ -353,7 +353,7 @@
   }
 
   .case-handle:focus-visible {
-    outline: 2px solid var(--accent);
+    outline: 2px solid var(--brand-text);
     outline-offset: -2px;
     border-radius: 4px;
   }
