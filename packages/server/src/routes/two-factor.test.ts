@@ -34,6 +34,7 @@ import {
   type MockEmailSender,
 } from "../test-utils.js";
 import { createScryptHasher } from "../auth/password.js";
+import { _resetEnvCache } from "../env.js";
 import { createInMemoryRateLimiter } from "../ratelimit/rate-limiter.js";
 import { createDbSessionRepository } from "../auth/session-repository.js";
 import { createAuthService } from "../auth/service.js";
@@ -835,6 +836,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         const prevCors = process.env.CORS_ORIGIN;
         process.env.NODE_ENV = "development";
         process.env.CORS_ORIGIN = "http://localhost:3000";
+        _resetEnvCache();
 
         try {
           const user = await registerUser("origin-dev");
@@ -875,12 +877,14 @@ describe.skipIf(!process.env.DATABASE_URL)(
           } else {
             process.env.CORS_ORIGIN = prevCors;
           }
+          _resetEnvCache();
         }
       });
 
       it("uses https://<slug>.care-y.app in production", async () => {
         const prevEnv = process.env.NODE_ENV;
         process.env.NODE_ENV = "production";
+        _resetEnvCache();
 
         try {
           const user = await registerUser("origin-prod");
@@ -913,6 +917,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
           spy.mockRestore();
         } finally {
           process.env.NODE_ENV = prevEnv;
+          _resetEnvCache();
         }
       });
     });
