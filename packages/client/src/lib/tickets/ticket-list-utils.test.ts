@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import type { ReactionSummary } from "@care-y/shared";
+import { ticketSortFieldSchema, type ReactionSummary } from "@care-y/shared";
 import {
   isFilterStatus,
   isSortField,
@@ -51,8 +51,9 @@ describe("isSortField", () => {
     },
   );
 
-  it("has 6 sort fields", () => {
-    expect(SORT_FIELDS).toHaveLength(6);
+  it("derives the sort field list from the shared schema", () => {
+    expect(SORT_FIELDS).toEqual(ticketSortFieldSchema.options);
+    expect(SORT_FIELDS.length).toBeGreaterThan(0);
   });
 });
 
