@@ -2,7 +2,8 @@ import type { QueryClient } from "@tanstack/svelte-query";
 import type { CryptoBridge } from "$lib/workers/crypto-bridge.js";
 import { RateLimitError, RelayError } from "$lib/errors.js";
 import { followupSlot } from "@care-y/crypto";
-import { ticketKeys, ticketsKeys } from "$lib/query/keys.js";
+import { ticketKeys } from "$lib/query/keys.js";
+import { invalidateReadState } from "$lib/query/invalidate-read-state.js";
 import { toastStore } from "$lib/stores/toast.svelte.js";
 import * as m from "$lib/paraglide/messages.js";
 
@@ -79,14 +80,7 @@ export function createSmsSend(config: SmsSendConfig): SmsSend {
       void queryClient.invalidateQueries({
         queryKey: ticketKeys.followUps(ticketId),
       });
-      // The outbound SMS is a volunteer follow-up: refetch the list's
-      // read-state window and sweep without waiting for SSE.
-      void queryClient.invalidateQueries({
-        queryKey: ticketsKeys.readStates(),
-      });
-      void queryClient.invalidateQueries({
-        queryKey: ticketsKeys.readStateSweep(),
-      });
+      invalidateReadState(queryClient);
     } catch (err: unknown) {
       if (err instanceof RateLimitError) {
         toastStore.show(
