@@ -399,6 +399,8 @@ export const savedFilterStateSchema = z.object({
   dateTo: z.string().nullable(),
   sortField: ticketSortFieldSchema,
   sortDirection: sortDirectionSchema,
+  unreadOnly: z.boolean().default(false),
+  needsAttentionOnly: z.boolean().default(false),
 });
 export type SavedFilterState = z.infer<typeof savedFilterStateSchema>;
 

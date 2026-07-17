@@ -48,6 +48,10 @@ function createFilterStore(): {
   setDateRange(from: Date | null, to: Date | null): void;
   readonly sort: SortConfig;
   setSort(field: SortField, direction: SortDirection): void;
+  readonly unreadOnly: boolean;
+  setUnreadOnly(v: boolean): void;
+  readonly needsAttentionOnly: boolean;
+  setNeedsAttentionOnly(v: boolean): void;
   readonly activeCount: number;
   readonly serverParams: {
     statuses?: ("open" | "closed")[];
@@ -81,13 +85,21 @@ function createFilterStore(): {
   // Sort (server-side ORDER BY; also used as TanStack Query cache key)
   let sort = $state<SortConfig>({ field: "date", direction: "desc" });
 
+  // Client-side-only membership toggles (read state is per-viewer,
+  // not a server-queryable field). Stored here so captureState/applyState
+  // can persist them in saved filters.
+  let unreadOnly = $state(false);
+  let needsAttentionOnly = $state(false);
+
   // Count of active *dimensions* (for the badge, e.g. "2 filters applied")
   const activeCount = $derived(
     (statuses.size > 0 ? 1 : 0) +
       (queueIds.size > 0 ? 1 : 0) +
       (priorities.size > 0 ? 1 : 0) +
       (assigneeId !== undefined ? 1 : 0) +
-      (dateFrom !== null || dateTo !== null ? 1 : 0),
+      (dateFrom !== null || dateTo !== null ? 1 : 0) +
+      (unreadOnly ? 1 : 0) +
+      (needsAttentionOnly ? 1 : 0),
   );
 
   // Convert display statuses to server query params.
@@ -176,6 +188,20 @@ function createFilterStore(): {
       sort = { field, direction };
     },
 
+    get unreadOnly(): boolean {
+      return unreadOnly;
+    },
+    setUnreadOnly(v: boolean): void {
+      unreadOnly = v;
+    },
+
+    get needsAttentionOnly(): boolean {
+      return needsAttentionOnly;
+    },
+    setNeedsAttentionOnly(v: boolean): void {
+      needsAttentionOnly = v;
+    },
+
     get activeCount(): number {
       return activeCount;
     },
@@ -197,6 +223,8 @@ function createFilterStore(): {
         dateTo: dateTo?.toISOString() ?? null,
         sortField: sort.field,
         sortDirection: sort.direction,
+        unreadOnly,
+        needsAttentionOnly,
       };
     },
 
@@ -211,6 +239,8 @@ function createFilterStore(): {
       dateFrom = state.dateFrom !== null ? new Date(state.dateFrom) : null;
       dateTo = state.dateTo !== null ? new Date(state.dateTo) : null;
       sort = { field: state.sortField, direction: state.sortDirection };
+      unreadOnly = state.unreadOnly;
+      needsAttentionOnly = state.needsAttentionOnly;
     },
 
     clearAll(): void {
@@ -220,6 +250,8 @@ function createFilterStore(): {
       assigneeId = undefined;
       dateFrom = null;
       dateTo = null;
+      unreadOnly = false;
+      needsAttentionOnly = false;
     },
   };
 }
