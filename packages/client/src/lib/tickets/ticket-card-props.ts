@@ -10,6 +10,7 @@ import {
   type DecryptResult,
 } from "$lib/crypto/decrypt-result.js";
 import { reactionsForTicket } from "./ticket-list-utils.js";
+import type { QueueAppearance } from "$lib/utils/queue-appearance.js";
 import * as m from "$lib/paraglide/messages.js";
 
 export type DataCardProps = Omit<
@@ -50,6 +51,8 @@ export interface CardPropsMapperDeps {
   readonly onencryptedhelp: () => void;
   readonly onselect?: (ticketId: string) => void;
   readonly onfullopen?: (ticketId: string) => void;
+  /** Queue color/icon lookup from the surface's queues list, if it has one. */
+  readonly queueAppearance?: (queueId: string) => QueueAppearance | undefined;
 }
 
 /** The subset of mapper deps the display-field core reads. */
@@ -119,6 +122,7 @@ export function createCardPropsMapper(
 
     return {
       ...mapTicketDisplayFields(t, deps),
+      queueAppearance: deps.queueAppearance?.(t.queueId),
       unreadCount: deps.unreadCount(t.id),
       previewFollowUps: previews,
       previewReactions: reactionsForTicket(previews, deps.previewReactionsMap),

@@ -396,6 +396,13 @@ export {
   type PriorityStat,
 } from "./schemas/reports.js";
 
+// --- Recently viewed history schemas ---
+export {
+  putRecentViewsSchema,
+  RECENT_VIEWS_MAX_PAYLOAD_BYTES,
+  type PutRecentViewsInput,
+} from "./schemas/recent-views.js";
+
 // --- Branding schemas ---
 export {
   saveBrandingFieldInputSchema,

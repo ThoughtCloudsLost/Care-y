@@ -2,6 +2,16 @@
   import { untrack } from "svelte";
   import { List, ListInput, Block, Button, Preloader } from "konsta/svelte";
   import Register from "$lib/components/Register.svelte";
+  import ColorPicker from "$lib/components/inputs/ColorPicker.svelte";
+  import IconPicker from "$lib/components/inputs/IconPicker.svelte";
+  import {
+    PICKER_COLORS,
+    PICKER_ICONS,
+  } from "$lib/components/inputs/picker-options.js";
+  import {
+    QUEUE_DEFAULT_COLOR,
+    QUEUE_DEFAULT_ICON,
+  } from "$lib/utils/queue-appearance.js";
   import * as m from "$lib/paraglide/messages.js";
   import { withTerms } from "$lib/terminology/with-terms.js";
   import { getOrgKeyManager } from "$lib/crypto/context.js";
@@ -12,11 +22,15 @@
     readonly mode: "create" | "edit";
     readonly initialName?: string;
     readonly initialEscalation?: number;
+    readonly initialColor?: string;
+    readonly initialIcon?: string;
     readonly disabled?: boolean;
     readonly formId?: string;
     readonly submitLabel?: string;
     readonly onsubmit: (data: {
       encryptedName: string;
+      encryptedColor: string;
+      encryptedIcon: string;
       escalateDays: number;
     }) => void | Promise<void>;
     readonly onstatechange?: (state: {
@@ -29,6 +43,8 @@
     mode,
     initialName = "",
     initialEscalation,
+    initialColor,
+    initialIcon,
     disabled = false,
     formId,
     submitLabel,
@@ -40,6 +56,8 @@
 
   let queueName = $state("");
   let escalationDays = $state("");
+  let queueColor = $state<string>(QUEUE_DEFAULT_COLOR);
+  let queueIcon = $state<string>(QUEUE_DEFAULT_ICON);
   let error = $state("");
   let submitting = $state(false);
 
@@ -49,17 +67,27 @@
 
   let prevInitName: string | undefined;
   let prevInitEsc: number | undefined;
+  let prevInitColor: string | undefined;
+  let prevInitIcon: string | undefined;
 
   $effect(() => {
     const name = initialName;
     const esc = initialEscalation;
+    const color = initialColor;
+    const icon = initialIcon;
     const pn = untrack(() => prevInitName);
     const pe = untrack(() => prevInitEsc);
-    if (name !== pn || esc !== pe) {
+    const pc = untrack(() => prevInitColor);
+    const pi = untrack(() => prevInitIcon);
+    if (name !== pn || esc !== pe || color !== pc || icon !== pi) {
       queueName = name;
       escalationDays = esc !== undefined ? String(esc) : "";
+      queueColor = color ?? QUEUE_DEFAULT_COLOR;
+      queueIcon = icon ?? QUEUE_DEFAULT_ICON;
       prevInitName = name;
       prevInitEsc = esc;
+      prevInitColor = color;
+      prevInitIcon = icon;
     }
   });
 
@@ -80,7 +108,9 @@
     isCreate ||
       queueName !== initialName ||
       escalationDays !==
-        (initialEscalation !== undefined ? String(initialEscalation) : ""),
+        (initialEscalation !== undefined ? String(initialEscalation) : "") ||
+      queueColor !== (initialColor ?? QUEUE_DEFAULT_COLOR) ||
+      queueIcon !== (initialIcon ?? QUEUE_DEFAULT_ICON),
   );
 
   const orgKeyLoaded = $derived(isOrgKeyReady());
@@ -110,8 +140,17 @@
 
     submitting = true;
     try {
-      const encryptedName = await orgKeyManager.encryptText(queueName.trim());
-      await onsubmit({ encryptedName, escalateDays: parsedDays });
+      const [encryptedName, encryptedColor, encryptedIcon] = await Promise.all([
+        orgKeyManager.encryptText(queueName.trim()),
+        orgKeyManager.encryptText(queueColor),
+        orgKeyManager.encryptText(queueIcon),
+      ]);
+      await onsubmit({
+        encryptedName,
+        encryptedColor,
+        encryptedIcon,
+        escalateDays: parsedDays,
+      });
     } catch {
       error = m.error_generic();
     } finally {
@@ -162,6 +201,28 @@
   </List>
 
   <Block>
+    <div class="picker-section">
+      <span class="picker-label">{m.admin_queue_editor_color_label()}</span>
+      <ColorPicker
+        options={PICKER_COLORS}
+        bind:value={queueColor}
+        label={m.admin_queue_editor_color_label()}
+        disabled={!orgKeyLoaded || disabled || submitting}
+      />
+    </div>
+
+    <div class="picker-section">
+      <span class="picker-label">{m.admin_queue_editor_icon_label()}</span>
+      <IconPicker
+        options={PICKER_ICONS}
+        bind:value={queueIcon}
+        label={m.admin_queue_editor_icon_label()}
+        disabled={!orgKeyLoaded || disabled || submitting}
+      />
+    </div>
+  </Block>
+
+  <Block>
     <Register kind="careful">
       {m.admin_queue_editor_pii_warning(withTerms())}
     </Register>
@@ -179,3 +240,23 @@
     </Block>
   {/if}
 </form>
+
+<style>
+  .picker-section {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  .picker-section + .picker-section {
+    margin-top: var(--space-lg);
+  }
+
+  .picker-label {
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+</style>

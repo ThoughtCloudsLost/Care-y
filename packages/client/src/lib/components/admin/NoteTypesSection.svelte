@@ -5,7 +5,6 @@
     ListItem,
     ListInput,
     Toggle,
-    Button,
     Segmented,
     SegmentedButton,
   } from "konsta/svelte";
@@ -43,6 +42,7 @@
   import DecryptPlaceholder from "$lib/components/DecryptPlaceholder.svelte";
   import ShellSheet from "$lib/shell/ShellSheet.svelte";
   import SoftButton from "$lib/components/inputs/SoftButton.svelte";
+  import IconPicker from "$lib/components/inputs/IconPicker.svelte";
   import {
     RoleId,
     ROLE_ID_VALUES,
@@ -489,25 +489,12 @@
 
     <div class="edit-sheet-section">
       <span class="edit-sheet-label">{m.admin_note_types_icon_label()}</span>
-      <div class="icon-picker-grid">
-        {#each ICON_PICKER_ENTRIES as entry (entry.slug)}
-          {@const IconComp = entry.component}
-          <Button
-            clear
-            small
-            class="icon-picker-btn {editIcon === entry.slug
-              ? 'icon-picker-active'
-              : ''}"
-            onclick={() => {
-              editIcon = entry.slug;
-            }}
-            aria-label={entry.slug}
-            aria-pressed={editIcon === entry.slug}
-          >
-            <IconComp size={20} />
-          </Button>
-        {/each}
-      </div>
+      <IconPicker
+        options={ICON_PICKER_ENTRIES}
+        bind:value={editIcon}
+        label={m.admin_note_types_icon_label()}
+        disabled={sheetSaving}
+      />
     </div>
 
     <div class="edit-sheet-section">
@@ -773,23 +760,6 @@
     text-transform: uppercase;
     letter-spacing: 0.04em;
     color: var(--muted);
-  }
-
-  .icon-picker-grid {
-    display: grid;
-    grid-template-columns: repeat(4, 1fr);
-    gap: 0.25rem;
-  }
-
-  :global(.icon-picker-btn) {
-    aspect-ratio: 1;
-    border-radius: 0.5rem;
-    color: var(--ink);
-  }
-
-  :global(.icon-picker-active) {
-    background: var(--brand-primary) !important;
-    color: var(--paper) !important;
   }
 
   :global(.desc-textarea) {

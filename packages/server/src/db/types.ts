@@ -303,6 +303,8 @@ export interface QueuesTable {
   escalate_days: ColumnType<number, number | undefined, number>;
   is_active: ColumnType<boolean, boolean | undefined, boolean>;
   created_at: Generated<Date>;
+  encrypted_color: Buffer | null; // org-key sealed picker token, null pre-078
+  encrypted_icon: Buffer | null; // org-key sealed picker token, null pre-078
 }
 
 export interface TicketsTable {
@@ -549,6 +551,17 @@ export interface InviteTokensTable {
   created_at: Generated<Date>;
 }
 
+// --- Recently viewed history (per-user encrypted blob) ---
+// Single ECIES envelope sealed to the user's own vol_public. The server
+// stores ciphertext only; recency ordering lives inside the payload.
+// No timestamp column (metadata minimization, ADR-018).
+export interface UserRecentViewsTable {
+  user_id: string;
+  ephemeral_point: Buffer; // ristretto255, 32 bytes
+  nonce: Buffer; // 24 bytes
+  wrapped_payload: Buffer;
+}
+
 export interface TenantDatabase {
   users: UsersTable;
   sessions: SessionsTable;
@@ -598,6 +611,8 @@ export interface TenantDatabase {
   followup_reactions: FollowupReactionsTable;
   // Onboarding
   invite_tokens: InviteTokensTable;
+  // Recently viewed history
+  user_recent_views: UserRecentViewsTable;
   // Shifts (shifts, shift_occurrences)
   // Client portal (portal_channels)
 }

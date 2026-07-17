@@ -2,6 +2,10 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { render, screen, cleanup, fireEvent } from "@testing-library/svelte";
 import QueueCards from "./QueueCards.svelte";
+import {
+  resolveQueueAppearance,
+  type QueueAppearance,
+} from "$lib/utils/queue-appearance.js";
 
 // DecryptPlaceholder observes the viewport; CollapsibleSection uses a slide
 // transition. jsdom has neither the observer nor the Web Animations API.
@@ -33,6 +37,7 @@ interface QueueOverrides {
   name?: string | null;
   openCount?: number;
   urgentCount?: number;
+  appearance?: QueueAppearance;
 }
 
 function makeQueue(overrides: QueueOverrides = {}) {
@@ -128,5 +133,20 @@ describe("QueueCards", () => {
     const { container } = renderQueues([]);
     expect(container.querySelector(".no-queues")).toBeTruthy();
     expect(container.querySelector(".queue-tile")).toBeNull();
+  });
+
+  it("renders the queue glyph when an appearance is provided", () => {
+    const { container } = renderQueues([
+      makeQueue({ appearance: resolveQueueAppearance("red", "phone") }),
+    ]);
+    const glyph = container.querySelector(".queue-tile .queue-glyph");
+    expect(glyph).toBeTruthy();
+    expect(glyph?.getAttribute("aria-hidden")).toBe("true");
+    expect(glyph?.querySelector("svg")).toBeTruthy();
+  });
+
+  it("omits the glyph when no appearance is provided", () => {
+    const { container } = renderQueues([makeQueue()]);
+    expect(container.querySelector(".queue-tile .queue-glyph")).toBeNull();
   });
 });

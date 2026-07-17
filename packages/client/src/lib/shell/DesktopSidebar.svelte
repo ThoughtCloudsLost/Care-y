@@ -449,7 +449,7 @@
   }
 
   .sidebar-tab:focus-visible {
-    outline: 2px solid var(--brand-primary);
+    outline: 2px solid var(--brand-text);
     outline-offset: -2px;
   }
 
@@ -647,7 +647,7 @@
   }
 
   .sidebar-role-badge:focus-visible {
-    outline: 2px solid var(--brand-primary);
+    outline: 2px solid var(--brand-text);
     outline-offset: -2px;
   }
 
@@ -687,7 +687,7 @@
   }
 
   .sidebar-user-action:focus-visible {
-    outline: 2px solid var(--brand-primary);
+    outline: 2px solid var(--brand-text);
     outline-offset: -2px;
   }
 

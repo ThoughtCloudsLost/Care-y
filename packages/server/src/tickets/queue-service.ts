@@ -1,10 +1,12 @@
 /**
  * Queue CRUD service.
  *
- * Queue names are encrypted with the org key (org-key tier) before storage.
- * The server never sees plaintext queue names. Each queue carries a sort_order
- * for client-controlled ordering and an escalate_days threshold used by the
- * auto-escalation job.
+ * Queue names, colors, and icons are encrypted with the org key (org-key
+ * tier) before storage. The server never sees the plaintext values. Each
+ * queue carries a sort_order for client-controlled ordering and an
+ * escalate_days threshold used by the auto-escalation job. Color and icon
+ * are nullable: queues created before migration 078 have no value and the
+ * client renders defaults.
  */
 
 import type { Kysely } from "kysely";
@@ -15,6 +17,8 @@ import { ErrorCode } from "@care-y/shared";
 export interface QueueRecord {
   readonly id: string;
   readonly encryptedName: Buffer;
+  readonly encryptedColor: Buffer | null;
+  readonly encryptedIcon: Buffer | null;
   readonly sortOrder: number;
   readonly escalateDays: number;
   readonly isActive: boolean;
@@ -29,12 +33,19 @@ export interface QueueRecord {
 export interface QueueService {
   create(input: {
     encryptedName: Buffer;
+    encryptedColor: Buffer;
+    encryptedIcon: Buffer;
     escalateDays?: number;
   }): Promise<QueueRecord>;
   listActive(): Promise<QueueRecord[]>;
   update(
     queueId: string,
-    input: { encryptedName?: Buffer; escalateDays?: number },
+    input: {
+      encryptedName?: Buffer;
+      encryptedColor?: Buffer;
+      encryptedIcon?: Buffer;
+      escalateDays?: number;
+    },
   ): Promise<QueueRecord>;
   reorder(items: { queueId: string; sortOrder: number }[]): Promise<void>;
   delete(queueId: string, reassignTo?: string): Promise<void>;
@@ -43,6 +54,8 @@ export interface QueueService {
 interface QueueRow {
   id: string;
   encrypted_name: Buffer;
+  encrypted_color: Buffer | null;
+  encrypted_icon: Buffer | null;
   sort_order: number;
   escalate_days: number;
   is_active: boolean;
@@ -61,6 +74,8 @@ function toRecord(row: QueueRow, counts: QueueCounts = {}): QueueRecord {
   return {
     id: row.id,
     encryptedName: row.encrypted_name,
+    encryptedColor: row.encrypted_color,
+    encryptedIcon: row.encrypted_icon,
     sortOrder: row.sort_order,
     escalateDays: row.escalate_days,
     isActive: row.is_active,
@@ -109,6 +124,8 @@ export function createQueueService(db: Kysely<TenantDatabase>): QueueService {
         .insertInto("queues")
         .values({
           encrypted_name: input.encryptedName,
+          encrypted_color: input.encryptedColor,
+          encrypted_icon: input.encryptedIcon,
           sort_order: nextSortOrder,
           ...(input.escalateDays !== undefined
             ? { escalate_days: input.escalateDays }
@@ -126,6 +143,8 @@ export function createQueueService(db: Kysely<TenantDatabase>): QueueService {
         .select([
           "q.id",
           "q.encrypted_name",
+          "q.encrypted_color",
+          "q.encrypted_icon",
           "q.sort_order",
           "q.escalate_days",
           "q.is_active",
@@ -184,6 +203,10 @@ export function createQueueService(db: Kysely<TenantDatabase>): QueueService {
       const updates: Record<string, unknown> = {};
       if (input.encryptedName !== undefined)
         updates.encrypted_name = input.encryptedName;
+      if (input.encryptedColor !== undefined)
+        updates.encrypted_color = input.encryptedColor;
+      if (input.encryptedIcon !== undefined)
+        updates.encrypted_icon = input.encryptedIcon;
       if (input.escalateDays !== undefined)
         updates.escalate_days = input.escalateDays;
 

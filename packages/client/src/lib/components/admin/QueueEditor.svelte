@@ -13,6 +13,10 @@
   import ShellSheet from "$lib/shell/ShellSheet.svelte";
   import SoftButton from "$lib/components/inputs/SoftButton.svelte";
   import QueueForm from "$lib/components/shared/QueueForm.svelte";
+  import {
+    resolveQueueAppearance,
+    queueAppearanceCacheKeys,
+  } from "$lib/utils/queue-appearance.js";
   import type { SerializedBuffer } from "$lib/utils/buffer-encoding.js";
 
   interface QueueEditorProps {
@@ -20,6 +24,8 @@
     readonly ondismiss: () => void;
     readonly queueId: string | null;
     readonly queueEncryptedName: SerializedBuffer | Uint8Array | null;
+    readonly queueEncryptedColor: SerializedBuffer | Uint8Array | null;
+    readonly queueEncryptedIcon: SerializedBuffer | Uint8Array | null;
     readonly queueEscalateDays: number;
     readonly ondeletequeue: ((queueId: string) => void) | undefined;
   }
@@ -29,6 +35,8 @@
     ondismiss,
     queueId,
     queueEncryptedName,
+    queueEncryptedColor,
+    queueEncryptedIcon,
     queueEscalateDays,
     ondeletequeue,
   }: QueueEditorProps = $props();
@@ -42,6 +50,8 @@
   let wasOpen = $state(false);
   let decryptedName = $state("");
   let initialEscalation = $state<number | undefined>(undefined);
+  let initialColor = $state<string | undefined>(undefined);
+  let initialIcon = $state<string | undefined>(undefined);
   let formCanSubmit = $state(false);
   let formIsPending = $state(false);
 
@@ -52,11 +62,21 @@
       if (isCreateMode) {
         decryptedName = "";
         initialEscalation = undefined;
+        initialColor = undefined;
+        initialIcon = undefined;
       } else {
         const id = queueId ?? "";
         decryptedName =
           orgCache.decrypt(`queue:${id}`, queueEncryptedName) ?? "";
         initialEscalation = queueEscalateDays;
+        // Resolve through the appearance helper so unknown or legacy
+        // (null) tokens land on the canonical defaults in the form.
+        const appearance = resolveQueueAppearance(
+          orgCache.decrypt(`queue-color:${id}`, queueEncryptedColor),
+          orgCache.decrypt(`queue-icon:${id}`, queueEncryptedIcon),
+        );
+        initialColor = appearance.colorId;
+        initialIcon = appearance.iconId;
       }
     }
     wasOpen = opened;
@@ -68,6 +88,9 @@
     announceToLiveRegion("polite", message);
     if (queueId !== null) {
       orgCache.delete(`queue:${queueId}`);
+      for (const key of queueAppearanceCacheKeys(queueId)) {
+        orgCache.delete(key);
+      }
     }
     void queryClient.invalidateQueries({ queryKey: queueKeys.all });
     ondismiss();
@@ -76,6 +99,8 @@
   const createMut = createMutation(() => ({
     mutationFn: async (input: {
       encryptedName: string;
+      encryptedColor: string;
+      encryptedIcon: string;
       escalateDays: number;
     }) => ticketRouter.createQueue.mutate(input),
     onSuccess: () => onMutationSuccess(m.admin_queue_created(withTerms())),
@@ -88,6 +113,8 @@
     mutationFn: async (input: {
       queueId: string;
       encryptedName?: string;
+      encryptedColor?: string;
+      encryptedIcon?: string;
       escalateDays?: number;
     }) => ticketRouter.updateQueue.mutate(input),
     onSuccess: () => onMutationSuccess(m.admin_queue_updated(withTerms())),
@@ -102,17 +129,23 @@
 
   function handleFormSubmit(data: {
     encryptedName: string;
+    encryptedColor: string;
+    encryptedIcon: string;
     escalateDays: number;
   }): void {
     if (isCreateMode) {
       createMut.mutate({
         encryptedName: data.encryptedName,
+        encryptedColor: data.encryptedColor,
+        encryptedIcon: data.encryptedIcon,
         escalateDays: data.escalateDays,
       });
     } else if (queueId !== null) {
       updateMut.mutate({
         queueId,
         encryptedName: data.encryptedName,
+        encryptedColor: data.encryptedColor,
+        encryptedIcon: data.encryptedIcon,
         escalateDays: data.escalateDays,
       });
     }
@@ -164,6 +197,8 @@
       mode={isCreateMode ? "create" : "edit"}
       initialName={decryptedName}
       {initialEscalation}
+      {initialColor}
+      {initialIcon}
       disabled={isPending}
       formId={FORM_ID}
       onsubmit={handleFormSubmit}

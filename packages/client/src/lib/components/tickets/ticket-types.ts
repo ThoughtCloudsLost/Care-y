@@ -1,6 +1,7 @@
 import type { RawFollowUpPreview } from "$lib/tickets/preview-loader.svelte.js";
 import type { DisplayStatus } from "$lib/tickets/display-status.js";
 import type { DecryptResult } from "$lib/crypto/decrypt-result.js";
+import type { QueueAppearance } from "$lib/utils/queue-appearance.js";
 import type { ReactionSummary } from "@care-y/shared";
 
 export type TicketQuickAction =
@@ -15,6 +16,8 @@ export interface TicketCardProps {
   readonly viewMode: ViewMode;
   readonly ticketId: string;
   readonly queueName: string | null;
+  /** Queue color/icon; omitted when the surface has no queues list. */
+  readonly queueAppearance?: QueueAppearance;
   readonly displayStatus: DisplayStatus;
   readonly priority: "low" | "normal" | "high" | "urgent";
   readonly titleResult: DecryptResult;

@@ -143,6 +143,8 @@ function renderEditor(
   overrides: Partial<{
     queueId: string | null;
     queueEncryptedName: Uint8Array | null;
+    queueEncryptedColor: Uint8Array | null;
+    queueEncryptedIcon: Uint8Array | null;
     queueEscalateDays: number;
     ondeletequeue: ((id: string) => void) | undefined;
   }> = {},
@@ -153,6 +155,8 @@ function renderEditor(
       ondismiss: vi.fn(),
       queueId: overrides.queueId ?? null,
       queueEncryptedName: overrides.queueEncryptedName ?? null,
+      queueEncryptedColor: overrides.queueEncryptedColor ?? null,
+      queueEncryptedIcon: overrides.queueEncryptedIcon ?? null,
       queueEscalateDays: overrides.queueEscalateDays ?? 0,
       ondeletequeue: overrides.ondeletequeue,
     },
@@ -316,6 +320,8 @@ describe("QueueEditor", () => {
         ondismiss,
         queueId: "q-1",
         queueEncryptedName: new Uint8Array([1, 2]),
+        queueEncryptedColor: null,
+        queueEncryptedIcon: null,
         queueEscalateDays: 0,
         ondeletequeue,
       },

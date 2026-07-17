@@ -1049,6 +1049,8 @@ export function createTicketRouter(deps: TicketRouterDeps) {
         const svc = deps.createQueueSvc(ctx.org.tenantDb);
         const queue = await svc.create({
           encryptedName: Buffer.from(input.encryptedName, "base64"),
+          encryptedColor: Buffer.from(input.encryptedColor, "base64"),
+          encryptedIcon: Buffer.from(input.encryptedIcon, "base64"),
           escalateDays: input.escalateDays,
         });
         audit(ctx.org.tenantDb, {
@@ -1074,6 +1076,14 @@ export function createTicketRouter(deps: TicketRouterDeps) {
           encryptedName:
             input.encryptedName !== undefined
               ? Buffer.from(input.encryptedName, "base64")
+              : undefined,
+          encryptedColor:
+            input.encryptedColor !== undefined
+              ? Buffer.from(input.encryptedColor, "base64")
+              : undefined,
+          encryptedIcon:
+            input.encryptedIcon !== undefined
+              ? Buffer.from(input.encryptedIcon, "base64")
               : undefined,
           escalateDays: input.escalateDays,
         });
