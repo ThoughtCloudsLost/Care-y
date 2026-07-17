@@ -511,3 +511,38 @@ describe("ticket fullSearch (two-phase)", () => {
     expect(contentSearch).not.toHaveBeenCalled();
   });
 });
+
+describe("ticket resolveById", () => {
+  const rawTickets: RawCachedTicket[] = [
+    makeRawTicket({ id: "t1", clientAlias: "Maria" }),
+    makeRawTicket({ id: "t3", clientAlias: "Ana" }),
+  ];
+  const decryptedTitles: Record<string, string> = {
+    t1: "Housing assistance request",
+  };
+
+  function createProvider(): ReturnType<typeof createTicketSearchProvider> {
+    return createTicketSearchProvider({
+      getAllCachedTickets: () => rawTickets,
+      decryptTitle: (id: string) => decryptedTitles[id],
+      orgDecrypt: () => null,
+      currentUserId: () => "viewer-1",
+      getPreviewFollowUps: () => undefined,
+    });
+  }
+
+  it("resolves a cached ticket into display data with an empty search term", () => {
+    const result = createProvider().resolveById?.("t1");
+    expect(result?.id).toBe("t1");
+    expect(result?.data.searchTerm).toBe("");
+    expect(result?.data.encryptedTitle).toBe("encrypted-blob");
+  });
+
+  it("returns undefined while the title is still decrypting", () => {
+    expect(createProvider().resolveById?.("t3")).toBeUndefined();
+  });
+
+  it("returns undefined for an id not in the cache", () => {
+    expect(createProvider().resolveById?.("missing")).toBeUndefined();
+  });
+});

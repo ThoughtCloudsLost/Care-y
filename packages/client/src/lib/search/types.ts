@@ -88,6 +88,15 @@ export interface SearchProvider<T = unknown> {
    */
   readonly ResultItem: Component<{ result: T; ontap: (id: string) => void }>;
   /**
+   * Resolve a single entity into display-ready result data by ID, using
+   * the same caches and decrypt triggers as search(). Used by the
+   * recently-viewed sections. Called from $derived contexts, so reactive
+   * cache reads are tracked; return undefined while data is missing or
+   * still decrypting (the entry is simply not rendered yet). Providers
+   * without a recently-viewed surface omit it.
+   */
+  resolveById?(id: string): SearchResult<T> | undefined;
+  /**
    * Optional server-backed full search. Called when the user taps "Search all".
    * Providers that only have client-side data omit this.
    * Mutate `state` fields and call `onProgress()` to propagate changes to the UI.

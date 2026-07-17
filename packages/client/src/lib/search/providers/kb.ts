@@ -213,6 +213,15 @@ export function createKbSearchProvider(
 
     ResultItem: KBResultItem,
 
+    resolveById(id: string): SearchResult<KBSearchData> | undefined {
+      // Same lazy load as search(): the first call kicks loadAll and the
+      // $derived caller re-evaluates as decrypted articles land in cache.
+      if (!loaded && !loading) void loadAll();
+      const cached = cache.get(id);
+      if (cached === undefined) return undefined;
+      return { id, data: buildSearchData(deps, cached) };
+    },
+
     getContentMatchIds(): ReadonlySet<string> {
       return contentMatchIds;
     },

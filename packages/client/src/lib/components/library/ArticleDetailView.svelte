@@ -38,6 +38,7 @@
     type KbImageResolverDeps,
   } from "$lib/utils/resolve-kb-images.js";
   import ArticleVote from "$lib/components/library/ArticleVote.svelte";
+  import { recentViews } from "$lib/search/recent-views.js";
   import KbAttachmentChip from "$lib/components/library/KbAttachmentChip.svelte";
   import DecryptPlaceholder from "$lib/components/DecryptPlaceholder.svelte";
   import InlineSkeleton from "$lib/components/InlineSkeleton.svelte";
@@ -54,6 +55,12 @@
 
   const kbRouter = requireRouter(trpc.kb, "kb");
   const orgCache = getOrgDecryptCache();
+
+  // Recently-viewed history: an article open counts as a view. Covers the
+  // full-page route and the split pane (both mount this component).
+  $effect(() => {
+    recentViews.record("article", articleId);
+  });
   const orgKeyManager = getOrgKeyManager();
   const queryClient = useQueryClient();
   const navbarCtx = getNavbarOverrideCtx();
@@ -456,7 +463,10 @@
   </div>
 
   {#if renderedBody !== null}
-    <article class="article-body" use:resolveKbImages={imageResolverDeps}>
+    <article
+      class="article-body prose-quotes"
+      use:resolveKbImages={imageResolverDeps}
+    >
       <!-- eslint-disable-next-line svelte/no-at-html-tags -- sanitized by DOMPurify in renderArticleBody() -->
       {@html renderedBody}
     </article>
@@ -598,17 +608,6 @@
     max-width: 100%;
     height: auto;
     border-radius: var(--card-radius);
-  }
-
-  /* Quotes read as recessed tinted blocks: the thick brand left border
-     is a banned accent pattern, and brand stays out of content slots. */
-  .article-body :global(blockquote) {
-    background: var(--paper-deep, var(--surface-2));
-    border-radius: 10px;
-    padding: 10px 13px;
-    margin-bottom: 0.75em;
-    color: var(--muted);
-    font-style: italic;
   }
 
   .article-body :global(table) {

@@ -94,11 +94,13 @@
   import {
     getTicketDecryptCache,
     getOrgDecryptCache,
+    getCryptoBridge,
     getCurrentUserId,
     getCurrentUserRoleId,
     getCurrentPermissions,
     getPreviewLoader,
   } from "$lib/crypto/context.js";
+  import { initRecentViews } from "$lib/search/recent-views.js";
   import { deriveDisplayStatus } from "$lib/tickets/display-status.js";
   import type { TicketKeyWrap } from "$lib/crypto/ticket-decrypt-cache.js";
   import {
@@ -732,6 +734,42 @@
           }),
         )
       : () => undefined;
+
+    // Recently-viewed history: session list mirrored to the per-user
+    // encrypted envelope (user_recent_views), sealed and opened by the
+    // crypto Worker. Missing ticket rows are fetched individually so
+    // recents resolve on a fresh session; inaccessible tickets fail the
+    // fetch and silently drop from display.
+    const bridge = getCryptoBridge();
+    initRecentViews({
+      fetchEnvelope: async () => (await trpc.recentViews.get.query()).envelope,
+      pushEnvelope: async (envelope) => {
+        await trpc.recentViews.put.mutate(envelope);
+      },
+      seal: async (dataB64) => bridge.sealSelfBlob(dataB64),
+      open: async (envelope) => bridge.openSelfBlob(envelope),
+      prefetchTickets: async (ids) => {
+        const missing = ids.filter(
+          (id) => !flatTicketList.some((t) => t.id === id),
+        );
+        if (missing.length === 0) return;
+        const fetched = await Promise.all(
+          missing.map(async (id) =>
+            ticketsRouter.get.query({ ticketId: id }).catch(() => null),
+          ),
+        );
+        const rows: RawCachedTicket[] = [];
+        for (const row of fetched) {
+          if (row !== null) rows.push(row);
+        }
+        if (rows.length > 0) {
+          queryClient.setQueryData(
+            ticketsKeys.list({ source: "recentViews" }),
+            rows,
+          );
+        }
+      },
+    });
 
     return () => {
       unsubscribeCache();

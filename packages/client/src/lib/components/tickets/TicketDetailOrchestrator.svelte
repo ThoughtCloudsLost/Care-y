@@ -101,6 +101,7 @@
   import { fuzzySearch } from "$lib/search/fuzzy.js";
   import { createSearchOverlay } from "$lib/search/search-overlay.svelte.js";
   import SearchNavigator from "$lib/components/search/SearchNavigator.svelte";
+  import { recentViews } from "$lib/search/recent-views.js";
 
   let {
     ticketId,
@@ -142,6 +143,12 @@
     if (!ticket.hasPhone) {
       compose.activateReply();
     }
+  });
+
+  // Recently-viewed history: a detail open counts as a view. Covers the
+  // full-page route and the desktop split pane (both mount this component).
+  $effect(() => {
+    recentViews.record("ticket", ticketId);
   });
 
   // Ticket data for navbar display.

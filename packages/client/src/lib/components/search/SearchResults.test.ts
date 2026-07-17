@@ -5,6 +5,7 @@ import { Ticket } from "@lucide/svelte";
 import SearchResults from "./SearchResults.svelte";
 import FakeResultItem from "./test-helpers/FakeResultItem.svelte";
 import { registerSearchProvider } from "$lib/search/registry.svelte.js";
+import { searchRecents } from "$lib/search/recents.svelte.js";
 import type { SearchProvider } from "$lib/search/types.js";
 
 interface FakeResultData {
@@ -72,7 +73,7 @@ describe("SearchResults", () => {
     // The stamp stands alone: no heading doubles it.
     expect(container.querySelector(".empty-title")).toBeNull();
     // The room replaces the section list entirely.
-    expect(container.querySelector("h3.eb")).toBeNull();
+    expect(container.querySelector("h3.secline-eb")).toBeNull();
     expect(container.querySelector(".nores")).toBeNull();
   });
 
@@ -96,7 +97,7 @@ describe("SearchResults", () => {
     const { container, getByText } = render(SearchResults, {
       props: baseProps(),
     });
-    expect(container.querySelectorAll("h3.eb")).toHaveLength(2);
+    expect(container.querySelectorAll("h3.secline-eb")).toHaveLength(2);
     expect(getByText("Alpha result")).toBeDefined();
     expect(getByText("No bb match.")).toBeDefined();
     expect(container.querySelector(".section-divider")).toBeNull();
@@ -115,6 +116,17 @@ describe("SearchResults", () => {
     const { container } = render(SearchResults, {
       props: { ...baseProps(), query: "h" },
     });
-    expect(container.querySelector("h3.eb")).toBeNull();
+    expect(container.querySelector("h3.secline-eb")).toBeNull();
+  });
+
+  it("shows the quiet hint when there are no recents of any kind", () => {
+    // Earlier tests record recent queries through result taps; the hint
+    // only renders when both recents stores are empty.
+    searchRecents.clear();
+    const { container, getByText } = render(SearchResults, {
+      props: { ...baseProps(), query: "" },
+    });
+    expect(container.querySelector(".search-hint")).not.toBeNull();
+    expect(getByText(/unlocked on this device/)).toBeDefined();
   });
 });
