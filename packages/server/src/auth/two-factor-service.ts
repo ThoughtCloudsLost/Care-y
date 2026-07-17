@@ -48,6 +48,7 @@ import type {
 } from "./webauthn/index.js";
 import { TwoFactorMethod, ErrorCode } from "@care-y/shared";
 import type { TwoFactorMethodType } from "@care-y/shared";
+import type { TotpReplayCache } from "./totp-replay-cache.js";
 import { ValidationError } from "../errors.js";
 import { toCount } from "../db/query-utils.js";
 
@@ -191,6 +192,13 @@ export interface SmsDeps {
   readonly orgId: string;
 }
 
+export interface TotpReplayDeps {
+  /** Process-wide cache of recently accepted codes (see totp-replay-cache.ts). */
+  readonly cache: TotpReplayCache;
+  /** Tenant scope for cache keys: user IDs are only unique per org schema. */
+  readonly orgId: string;
+}
+
 export interface PushDeps {
   readonly pushChallenges: PushChallengeService;
 }
@@ -214,6 +222,7 @@ export function createTwoFactorService(
   emailCodes: EmailCodeService,
   encryptor: FieldEncryptor,
   issuer: string,
+  totpReplay: TotpReplayDeps,
   smsDeps?: SmsDeps,
   pushDeps?: PushDeps,
 ): TwoFactorService {
@@ -549,9 +558,17 @@ export function createTwoFactorService(
     async verifyTotpEnrollment(userId: string, code: string): Promise<boolean> {
       const { secret, rowId } = await loadTotpSecret(userId, false);
 
+      // Replay guard shared with verifyTotp. Enrollment itself is
+      // single-shot (the row flips to verified), but without burning the
+      // code here it would still verify at login within the drift window
+      // (RFC 6238 Section 5.2).
+      if (totpReplay.cache.isUsed(totpReplay.orgId, userId, code)) {
+        return false;
+      }
       if (!verifyTotpCode(secret, code)) {
         return false;
       }
+      totpReplay.cache.markUsed(totpReplay.orgId, userId, code);
 
       // Mark as verified and register method
       await db
@@ -566,7 +583,20 @@ export function createTwoFactorService(
 
     async verifyTotp(userId: string, code: string): Promise<boolean> {
       const { secret } = await loadTotpSecret(userId, true);
-      return verifyTotpCode(secret, code);
+
+      // Reject replays of an accepted code (RFC 6238 Section 5.2). The
+      // isUsed check, verification, and markUsed share one synchronous
+      // block with no await between them, so concurrent requests carrying
+      // the same code cannot both pass the guard. A replay returns the
+      // same false as a wrong code.
+      if (totpReplay.cache.isUsed(totpReplay.orgId, userId, code)) {
+        return false;
+      }
+      if (!verifyTotpCode(secret, code)) {
+        return false;
+      }
+      totpReplay.cache.markUsed(totpReplay.orgId, userId, code);
+      return true;
     },
 
     // --- Backup codes ---

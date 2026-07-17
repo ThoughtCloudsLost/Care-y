@@ -60,6 +60,7 @@ import type { EmailSender } from "../email/email-sender.js";
 import { createScopedTwoFactorServices } from "./two-factor.js";
 import type { ProviderFactory } from "../telephony/factory.js";
 import type { CallerIdResolver } from "../auth/sms-code.js";
+import type { TotpReplayCache } from "../auth/totp-replay-cache.js";
 
 export interface AuthRouterDeps extends AuthServiceDeps {
   readonly loginLimiter: RateLimiter;
@@ -69,6 +70,12 @@ export interface AuthRouterDeps extends AuthServiceDeps {
   readonly emailSender: EmailSender;
   readonly providerFactory: ProviderFactory;
   readonly resolveCallerId: CallerIdResolver;
+  /**
+   * Process-wide accepted-code cache. Must be the same instance the
+   * two-factor router receives, or a code accepted on one path could
+   * replay on the other.
+   */
+  readonly totpReplayCache: TotpReplayCache;
 }
 
 /** Safe response shape: no password_hash, no internal fields. */
@@ -209,6 +216,7 @@ export function createAuthRouter(deps: AuthRouterDeps) {
             resolveCallerId: deps.resolveCallerId,
             pushSender: null,
             pushHmacKey: null,
+            totpReplayCache: deps.totpReplayCache,
           },
         );
         const [enrolledMethods, hasKeys] = await Promise.all([

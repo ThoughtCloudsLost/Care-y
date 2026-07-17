@@ -24,6 +24,7 @@ import { encode, getSodium } from "@care-y/crypto";
 import { createScryptHasher } from "../auth/password.js";
 import { createAuthService } from "../auth/service.js";
 import { createInMemoryRateLimiter } from "../ratelimit/rate-limiter.js";
+import { createInMemoryTotpReplayCache } from "../auth/totp-replay-cache.js";
 import { createDbSessionRepository } from "../auth/session-repository.js";
 import { createOrgService } from "../org/service.js";
 import { createAppRouter } from "./router.js";
@@ -116,6 +117,8 @@ describe.skipIf(!process.env.DATABASE_URL)(
         testDb.platformDb,
         makeTenantDbFactory(testDb.platformDb),
       );
+      // Shared by authDeps and twoFactorDeps, matching production wiring.
+      const totpReplayCache = createInMemoryTotpReplayCache();
       return createAppRouter({
         authDeps: {
           hasher,
@@ -129,6 +132,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
           emailSender: createMockEmailSender(),
           providerFactory: createMockProviderFactory(),
           resolveCallerId: vi.fn().mockResolvedValue("+15551234567"),
+          totpReplayCache,
         },
         profileDeps: {
           hasher,
@@ -149,6 +153,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
           resolveCallerId: vi.fn().mockResolvedValue("+15551234567"),
           pushSender: null,
           pushHmacKey: null,
+          totpReplayCache,
         },
         oprfDeps: createMockOprfDeps(),
         orgService,

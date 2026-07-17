@@ -31,6 +31,7 @@ import {
 import { RoleId, TwoFactorMethod } from "@care-y/shared";
 import { createScryptHasher } from "../auth/password.js";
 import { createInMemoryRateLimiter } from "../ratelimit/rate-limiter.js";
+import { createInMemoryTotpReplayCache } from "../auth/totp-replay-cache.js";
 import { createDbSessionRepository } from "../auth/session-repository.js";
 import { createAuthService } from "../auth/service.js";
 import { createOrgService } from "../org/service.js";
@@ -138,6 +139,8 @@ describe.skipIf(!HAS_DB)("auth + org routers (DB integration)", () => {
       testDb.platformDb,
       makeTenantDbFactory(testDb.platformDb),
     );
+    // Shared by authDeps and twoFactorDeps, matching production wiring.
+    const totpReplayCache = createInMemoryTotpReplayCache();
     return createAppRouter({
       authDeps: {
         hasher,
@@ -151,6 +154,7 @@ describe.skipIf(!HAS_DB)("auth + org routers (DB integration)", () => {
         emailSender: createMockEmailSender(),
         providerFactory: createMockProviderFactory(),
         resolveCallerId: vi.fn().mockResolvedValue("+15551234567"),
+        totpReplayCache,
       },
       profileDeps: {
         hasher,
@@ -171,6 +175,7 @@ describe.skipIf(!HAS_DB)("auth + org routers (DB integration)", () => {
         resolveCallerId: vi.fn().mockResolvedValue("+15551234567"),
         pushSender: null,
         pushHmacKey: null,
+        totpReplayCache,
       },
       oprfDeps: createMockOprfDeps(),
       orgService,
