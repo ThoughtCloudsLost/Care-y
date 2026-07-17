@@ -168,6 +168,37 @@ export function createListReadState(
     return null;
   }
 
+  // Settled resolutions memoized per entry object. Identity keying is
+  // safe because a settled entry's resolution is final: its ciphertext
+  // never changes, and both queries return fresh entry objects wholesale
+  // on every refetch (no select), so key rotation and new cursors arrive
+  // as new identities and the WeakMaps self-invalidate. The structural
+  // point: memoized entries skip decryptReadCursor entirely, so the
+  // deriveds reading them stop subscribing to settled cursor keys and
+  // re-runs shrink as the sweep settles.
+  const sweepMemo = new WeakMap<SweepReadStateEntry, Date | null>();
+  const windowMemo = new WeakMap<ReadStateWindowEntry, Date | null>();
+
+  function memoizedResolve<E extends object>(
+    memo: WeakMap<E, Date | null>,
+    entry: E,
+    ticketId: string,
+    keyWrap: TicketKeyWrap | null,
+    encryptedReadCursor: SerializedBuffer | string,
+  ): Date | null | undefined {
+    const hit = memo.get(entry);
+    if (hit !== undefined) return hit;
+    const resolved = resolveReadUpTo(ticketId, keyWrap, encryptedReadCursor);
+    // Store settled results only, and never a null produced while the
+    // wrap was missing: the window path resolves through getKeyWrap and
+    // can race the wrap's arrival, and a memoized wrapless null would
+    // pin the ticket to "no cursor" even after the wrap lands.
+    if (resolved !== undefined && keyWrap !== null) {
+      memo.set(entry, resolved);
+    }
+    return resolved;
+  }
+
   // Global unread set from the sweep: ticketId -> latest unread activity.
   // Rebuilt whenever the sweep data or a cursor decrypt lands; reads of
   // the decrypt SvelteMap inside make this reactive to Worker results.
@@ -183,7 +214,9 @@ export function createListReadState(
       // Null wrap: the server has no current-generation wrap for this
       // user, so the cursor is undecryptable. Quietly not-unread.
       if (entry.keyWrap === null) continue;
-      const readUpTo = resolveReadUpTo(
+      const readUpTo = memoizedResolve(
+        sweepMemo,
+        entry,
         entry.ticketId,
         entry.keyWrap,
         entry.encryptedReadCursor,
@@ -218,7 +251,9 @@ export function createListReadState(
     // already announces the ticket, so no pill and no decrypt fired.
     if (entry.encryptedReadCursor === null) return 0;
 
-    const readUpTo = resolveReadUpTo(
+    const readUpTo = memoizedResolve(
+      windowMemo,
+      entry,
       ticketId,
       config.getKeyWrap(ticketId),
       entry.encryptedReadCursor,
