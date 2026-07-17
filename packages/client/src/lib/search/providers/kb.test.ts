@@ -561,3 +561,31 @@ describe("KB fullSearch (body content)", () => {
     });
   });
 });
+
+describe("kb resolveById", () => {
+  it("triggers the lazy load and resolves once articles are cached", async () => {
+    const deps = createDeps();
+    const provider = createKbSearchProvider(deps);
+
+    // First call kicks loadAll; nothing is cached yet.
+    expect(provider.resolveById?.("a1")).toBeUndefined();
+    expect(deps.fetchPage).toHaveBeenCalledTimes(1);
+
+    await new Promise((r) => setTimeout(r, 0));
+
+    const result = provider.resolveById?.("a1");
+    expect(result?.id).toBe("a1");
+    expect(result?.data.titleResult).toEqual({
+      status: "ready",
+      value: "Intake call checklist",
+    });
+    expect(result?.data.categoryName).toBe("Procedures");
+  });
+
+  it("returns undefined for an id not in the cache after loading", async () => {
+    const provider = createKbSearchProvider(createDeps());
+    provider.resolveById?.("a1");
+    await new Promise((r) => setTimeout(r, 0));
+    expect(provider.resolveById?.("missing")).toBeUndefined();
+  });
+});

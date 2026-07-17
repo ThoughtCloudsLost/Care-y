@@ -9,9 +9,12 @@
   } from "$lib/search/registry.svelte.js";
   import type { SearchResultGroup } from "$lib/search/types.js";
   import { searchRecents } from "$lib/search/recents.svelte.js";
+  import { recentViews } from "$lib/search/recent-views.js";
+  import { withTerms } from "$lib/terminology/with-terms.js";
   import SearchSection from "./SearchSection.svelte";
   import TicketResultStrip from "./TicketResultStrip.svelte";
   import SearchRecents from "./SearchRecents.svelte";
+  import RecentViews from "./RecentViews.svelte";
   import FullSearchPanel from "./FullSearchPanel.svelte";
   import EmptyState from "$lib/components/EmptyState.svelte";
 
@@ -49,6 +52,12 @@
     resetFullSearch();
   });
 
+  // Load the recently-viewed history (server envelope) the first time
+  // the empty-query surface shows. No-op before AppShell wires the store.
+  $effect(() => {
+    if (trimmedQuery.length < 2) recentViews.ensureHydrated();
+  });
+
   function handleResultTap(
     id: string,
     providerId: string,
@@ -79,7 +88,16 @@
 </script>
 
 {#if trimmedQuery.length < 2}
-  <SearchRecents onselect={handleRecentTap} />
+  {#if searchRecents.items.length === 0 && recentViews.entries.length === 0}
+    <!-- Truly fresh session: no queries, no viewed entities. One quiet
+         hint instead of a stack of empty sections. -->
+    <div class="search-hint">
+      <p>{m.search_hint(withTerms())}</p>
+    </div>
+  {:else}
+    <SearchRecents onselect={handleRecentTap} />
+    <RecentViews onnavigate={handleShowAllNavigate} />
+  {/if}
 {:else}
   {#if !hasAnyResults && allSettled}
     <!-- Nothing anywhere: the empty room stamps its verdict (Identity
@@ -138,3 +156,18 @@
 
   <FullSearchPanel {groups} query={trimmedQuery} {hasAnyResults} />
 {/if}
+
+<style>
+  .search-hint {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: var(--space-xl) var(--space-md);
+  }
+
+  .search-hint p {
+    color: var(--muted);
+    font-size: var(--text-sm);
+    text-align: center;
+  }
+</style>

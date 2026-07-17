@@ -45,6 +45,8 @@ import type {
   GetVolPublicResponse,
   CreateTicketKeyResponse,
   WrapWithVolPublicResponse,
+  SealSelfBlobResponse,
+  OpenSelfBlobResponse,
   UnwrapOrgKeyResponse,
   OrgEncryptResponse,
   OrgDecryptResponse,
@@ -516,6 +518,114 @@ describe("crypto-core wrapWithVolPublic", () => {
     expect(resp.ephemeralPoint).toBeDefined();
     expect(resp.nonce).toBeDefined();
     expect(resp.wrappedKey).toBeDefined();
+  });
+});
+
+describe("crypto-core self-blob operations", () => {
+  let volPublicStr: string;
+
+  beforeEach(async () => {
+    handleZeroAll(-1, testSink);
+    sinkMessages = [];
+    dispatch = createDispatcher(testSink);
+    const sodium = requireSodium();
+    const salt = sodium.randombytes_buf(16);
+    ({ volPublic: volPublicStr } = await loginFlow("self-blob-pw", salt));
+    sinkMessages = [];
+  });
+
+  it("roundtrips a payload through sealSelfBlob and openSelfBlob", async () => {
+    const payload = new TextEncoder().encode(
+      JSON.stringify({ v: 1, entries: [{ t: "ticket", id: "abc" }] }),
+    );
+
+    const sealResp = (await dispatchAndWait({
+      type: "sealSelfBlob",
+      id: 400,
+      data: encode(payload),
+    })) as SealSelfBlobResponse;
+
+    expect(sealResp.ok).toBe(true);
+    expect(sealResp.ephemeralPoint).toBeDefined();
+    expect(sealResp.nonce).toBeDefined();
+    expect(sealResp.wrappedPayload).toBeDefined();
+
+    const openResp = (await dispatchAndWait({
+      type: "openSelfBlob",
+      id: 401,
+      ephemeralPoint: sealResp.ephemeralPoint,
+      nonce: sealResp.nonce,
+      wrappedPayload: sealResp.wrappedPayload,
+    })) as OpenSelfBlobResponse;
+
+    expect(openResp.ok).toBe(true);
+    expect(openResp.data).toBe(encode(payload));
+  });
+
+  it("refuses to open a raw ECIES wrap without the domain tag (ticket-key exfiltration guard)", async () => {
+    // Same construction as a ticket key wrap: raw ECIES of key bytes to
+    // the user's own volPublic, no domain tag inside the plaintext.
+    const fakeTicketKey = requireSodium().randombytes_buf(32);
+    const wrap = eciesEncrypt(
+      fakeTicketKey,
+      decode(volPublicStr) as RistrettoPoint,
+    );
+
+    const resp = await dispatchAndWait({
+      type: "openSelfBlob",
+      id: 402,
+      ephemeralPoint: encode(wrap.ephemeralPoint),
+      nonce: encode(wrap.nonce),
+      wrappedPayload: encode(wrap.ciphertext),
+    });
+
+    expect(resp.ok).toBe(false);
+    expect((resp as ErrorResponse).code).toBe("UNWRAP_FAILED");
+  });
+
+  it("fails on a tampered envelope (flipped bit)", async () => {
+    const sealResp = (await dispatchAndWait({
+      type: "sealSelfBlob",
+      id: 403,
+      data: encode(new TextEncoder().encode("payload")),
+    })) as SealSelfBlobResponse;
+
+    const tampered = decode(sealResp.wrappedPayload);
+    tampered[0] = (tampered[0] ?? 0) ^ 0xff;
+
+    const resp = await dispatchAndWait({
+      type: "openSelfBlob",
+      id: 404,
+      ephemeralPoint: sealResp.ephemeralPoint,
+      nonce: sealResp.nonce,
+      wrappedPayload: encode(tampered),
+    });
+
+    expect(resp.ok).toBe(false);
+    expect((resp as ErrorResponse).code).toBe("UNWRAP_FAILED");
+  });
+
+  it("rejects sealSelfBlob and openSelfBlob when not keyed", async () => {
+    handleZeroAll(-1, testSink);
+    sinkMessages = [];
+
+    const sealResp = await dispatchAndWait({
+      type: "sealSelfBlob",
+      id: 405,
+      data: encode(new Uint8Array(8)),
+    });
+    expect(sealResp.ok).toBe(false);
+    expect((sealResp as ErrorResponse).code).toBe("NOT_READY");
+
+    const openResp = await dispatchAndWait({
+      type: "openSelfBlob",
+      id: 406,
+      ephemeralPoint: encode(new Uint8Array(32)),
+      nonce: encode(new Uint8Array(24)),
+      wrappedPayload: encode(new Uint8Array(16)),
+    });
+    expect(openResp.ok).toBe(false);
+    expect((openResp as ErrorResponse).code).toBe("NOT_READY");
   });
 });
 

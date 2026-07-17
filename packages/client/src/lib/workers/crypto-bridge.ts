@@ -535,6 +535,50 @@ export class CryptoBridge {
   }
 
   /**
+   * Seal a payload (base64) to the Worker's own volPublic with the
+   * self-blob domain tag inside. Used for server-stored per-user data
+   * (recently-viewed history).
+   */
+  async sealSelfBlob(data: string): Promise<{
+    ephemeralPoint: string;
+    nonce: string;
+    wrappedPayload: string;
+  }> {
+    const resp = expectResponse(
+      await this.sendRequest({ type: "sealSelfBlob", data }),
+      "sealSelfBlob",
+    );
+    return {
+      ephemeralPoint: resp.ephemeralPoint,
+      nonce: resp.nonce,
+      wrappedPayload: resp.wrappedPayload,
+    };
+  }
+
+  /**
+   * Open a self-blob envelope with the Worker's volPrivate. Rejects
+   * envelopes whose plaintext lacks the self-blob domain tag (the Worker
+   * refuses to act as a generic vol_private decrypt oracle). Returns the
+   * payload base64.
+   */
+  async openSelfBlob(envelope: {
+    ephemeralPoint: string;
+    nonce: string;
+    wrappedPayload: string;
+  }): Promise<string> {
+    const resp = expectResponse(
+      await this.sendRequest({
+        type: "openSelfBlob",
+        ephemeralPoint: envelope.ephemeralPoint,
+        nonce: envelope.nonce,
+        wrappedPayload: envelope.wrappedPayload,
+      }),
+      "openSelfBlob",
+    );
+    return resp.data;
+  }
+
+  /**
    * Re-encrypt a cached tk for a new recipient's volPublic.
    * Returns the ECIES wrapping output (ephemeralPoint, nonce, wrappedKey).
    */

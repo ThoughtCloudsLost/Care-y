@@ -3,7 +3,8 @@
 
   Full-page editor for creating a new article. Route page owns the
   shell: navbar (Cancel / New Article / Publish), subnavbar (EditorToolbar
-  with scroll collapse), and pull-to-refresh suppression. ArticleEditor
+  with scroll collapse and the a11y checker toggle), and pull-to-refresh
+  suppression. ArticleEditor
   populates the EditorBridge with toolbar state and save callback.
 -->
 <script lang="ts">
@@ -154,21 +155,6 @@
   </Link>
   <Link
     iconOnly
-    onclick={() => bridge.setA11yVisible?.(!bridge.a11yVisible)}
-    role="button"
-    aria-label={bridge.a11yVisible
-      ? m.library_a11y_toggle_off()
-      : m.library_a11y_toggle_on()}
-    aria-pressed={bridge.a11yVisible}
-    class="relative"
-  >
-    <Accessibility size={22} aria-hidden="true" />
-    {#if bridge.a11yIssueCount > 0}
-      <span class="a11y-badge">{bridge.a11yIssueCount}</span>
-    {/if}
-  </Link>
-  <Link
-    iconOnly
     onclick={() => void bridge.save?.()}
     role="button"
     aria-label={m.library_publish()}
@@ -184,12 +170,31 @@
 
 {#snippet editorSubnavbar()}
   {#if !bridge.editorFocused}
-    {#if bridge.toolbarState !== null && bridge.dispatchCommand !== null}
-      <EditorToolbar
-        toolbarState={bridge.toolbarState}
-        oncommand={bridge.dispatchCommand}
-      />
-    {/if}
+    <div class="subnav-row">
+      {#if bridge.toolbarState !== null && bridge.dispatchCommand !== null}
+        <div class="subnav-toolbar">
+          <EditorToolbar
+            toolbarState={bridge.toolbarState}
+            oncommand={bridge.dispatchCommand}
+          />
+        </div>
+      {/if}
+      <Link
+        iconOnly
+        onclick={() => bridge.setA11yVisible?.(!bridge.a11yVisible)}
+        role="button"
+        aria-label={bridge.a11yVisible
+          ? m.library_a11y_toggle_off()
+          : m.library_a11y_toggle_on()}
+        aria-pressed={bridge.a11yVisible}
+        class="relative subnav-a11y"
+      >
+        <Accessibility size={22} aria-hidden="true" />
+        {#if bridge.a11yIssueCount > 0}
+          <span class="a11y-badge">{bridge.a11yIssueCount}</span>
+        {/if}
+      </Link>
+    </div>
   {/if}
 {/snippet}
 
@@ -278,5 +283,23 @@
     padding: 0 3px;
     pointer-events: none;
     line-height: 1;
+  }
+
+  /* Subnavbar row: the toolbar scroller flexes; min-width 0 lets it
+     shrink so the a11y toggle stays pinned at the right edge. */
+  .subnav-row {
+    display: flex;
+    align-items: center;
+  }
+
+  .subnav-toolbar {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .subnav-row > :global(.subnav-a11y) {
+    flex-shrink: 0;
+    margin-inline-start: auto;
+    margin-inline-end: var(--page-pad-x, 0.75rem);
   }
 </style>

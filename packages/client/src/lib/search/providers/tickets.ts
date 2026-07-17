@@ -236,6 +236,29 @@ export function createTicketSearchProvider(
 
     ResultItem: TicketSearchResult,
 
+    resolveById(id: string): SearchResult<TicketSearchData> | undefined {
+      const raw = deps.getAllCachedTickets().find((t) => t.id === id);
+      if (!raw) return undefined;
+      // Same decrypt trigger as search(): undefined while the title is
+      // still decrypting, and the $derived caller re-evaluates when the
+      // cache settles.
+      const title = deps.decryptTitle(raw.id, raw.keyWrap, raw.encryptedTitle);
+      if (title === undefined) return undefined;
+      const fieldDeps: TicketDisplayFieldDeps = {
+        orgDecrypt: deps.orgDecrypt,
+        decryptTitle: deps.decryptTitle,
+        currentUserId: deps.currentUserId() ?? "",
+      };
+      return {
+        id,
+        data: composeSearchData(
+          raw,
+          mapTicketDisplayFields(raw, fieldDeps),
+          "",
+        ),
+      };
+    },
+
     getContentMatchIds(): ReadonlySet<string> {
       return contentMatchIds;
     },
