@@ -30,12 +30,16 @@ function readUpToPayload(iso: string): string {
   return JSON.stringify({ readUpTo: iso });
 }
 
-/** Mock query with a mutable reactive data ref (house pattern). */
+/**
+ * Mock query with a mutable reactive data ref (house pattern). Raw state:
+ * tests replace data wholesale and the memo tests assert entry-object
+ * identity, which a deep proxy would break.
+ */
 function mockQuery<T>(initialData: T | undefined): {
   query: CreateQueryResult<T>;
   setData: (next: T | undefined) => void;
 } {
-  let dataValue = $state(initialData);
+  let dataValue = $state.raw(initialData);
   const query = {
     get data() {
       return dataValue;
@@ -89,6 +93,7 @@ interface Harness {
   setWindowData: (next: ReadStateWindow | undefined) => void;
   setSweepData: (next: SweepReadStateEntry[] | undefined) => void;
   mockDecrypt: ReturnType<typeof vi.fn>;
+  cache: TicketDecryptCache;
   destroy: () => void;
 }
 
@@ -121,6 +126,7 @@ function createHarness(options: {
     setWindowData: windowMock.setData,
     setSweepData: sweepMock.setData,
     mockDecrypt,
+    cache,
     destroy,
   };
 }
@@ -303,6 +309,84 @@ describe("createListReadState", () => {
       });
       expect(harness.readState.unreadCount("t-1")).toBe(0);
       expect(harness.mockDecrypt).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("settled resolution memo", () => {
+    it("skips the decrypt cache for a settled window entry on later reads", async () => {
+      harness = createHarness({
+        responses: { "ct-memo": readUpToPayload("2026-07-01T10:00:00Z") },
+        windowData: {
+          "t-1": windowEntry("ct-memo", ["2026-07-01T11:00:00Z"]),
+        },
+      });
+      await vi.waitFor(() => {
+        expect(harness!.readState.unreadCount("t-1")).toBe(1);
+      });
+
+      const cursorSpy = vi.spyOn(harness.cache, "decryptReadCursor");
+      expect(harness.readState.unreadCount("t-1")).toBe(1);
+      expect(harness.readState.unreadCount("t-1")).toBe(1);
+      expect(cursorSpy).not.toHaveBeenCalled();
+      cursorSpy.mockRestore();
+    });
+
+    it("stops reading the decrypt cache for settled sweep entries kept across a refetch", async () => {
+      const entry = sweepEntry("t-a", "ct-a", "2026-07-01T12:00:00Z");
+      harness = createHarness({
+        responses: { "ct-a": readUpToPayload("2026-07-01T10:00:00Z") },
+        sweepData: [entry],
+      });
+      await vi.waitFor(() => {
+        expect(harness!.readState.unreadTotal()).toBe(1);
+      });
+
+      const cursorSpy = vi.spyOn(harness.cache, "decryptReadCursor");
+      // Same entry OBJECT in a fresh array: the derived re-runs, but the
+      // settled entry resolves from the memo without touching the cache.
+      harness.setSweepData([entry]);
+      expect(harness.readState.unreadTotal()).toBe(1);
+      expect(cursorSpy).not.toHaveBeenCalled();
+      cursorSpy.mockRestore();
+    });
+
+    it("resolves fresh entry objects from a refetch anew", async () => {
+      harness = createHarness({
+        responses: { "ct-a": readUpToPayload("2026-07-01T10:00:00Z") },
+        sweepData: [sweepEntry("t-a", "ct-a", "2026-07-01T12:00:00Z")],
+      });
+      await vi.waitFor(() => {
+        expect(harness!.readState.unreadTotal()).toBe(1);
+      });
+
+      const cursorSpy = vi.spyOn(harness.cache, "decryptReadCursor");
+      // A refetch delivers a NEW entry object (same ciphertext): identity
+      // keying self-invalidates, so the resolve consults the cache again.
+      harness.setSweepData([sweepEntry("t-a", "ct-a", "2026-07-01T12:00:00Z")]);
+      expect(harness.readState.unreadTotal()).toBe(1);
+      expect(cursorSpy).toHaveBeenCalled();
+      cursorSpy.mockRestore();
+    });
+
+    it("re-resolves a window entry first seen with a null wrap once the wrap arrives", async () => {
+      let wrap: TicketKeyWrap | null = null;
+      harness = createHarness({
+        responses: { "ct-late": readUpToPayload("2026-07-01T10:00:00Z") },
+        windowData: {
+          "t-1": windowEntry("ct-late", ["2026-07-01T11:00:00Z"]),
+        },
+        getKeyWrap: () => wrap,
+      });
+      // First read races ahead of the wrap and settles as "no cursor".
+      expect(harness.readState.unreadCount("t-1")).toBe(0);
+
+      // The wrap lands; the next read must resolve for real instead of
+      // replaying a memoized wrapless null.
+      wrap = WRAP;
+      harness.readState.unreadCount("t-1");
+      await vi.waitFor(() => {
+        expect(harness!.readState.unreadCount("t-1")).toBe(1);
+      });
     });
   });
 
