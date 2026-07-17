@@ -44,6 +44,7 @@
   import { deriveDisplayStatus } from "$lib/tickets/display-status.js";
   import { resolveAsyncDecrypt } from "$lib/crypto/decrypt-result.js";
   import type { SerializedBuffer } from "$lib/utils/buffer-encoding.js";
+  import { getCollator } from "$lib/utils/collator.js";
   import { filterStore, type SortField } from "$lib/stores/filters.svelte.js";
   import { viewModeStore } from "$lib/stores/view-mode.svelte.js";
   import { newRepliesFirstStore } from "$lib/stores/new-replies-first.svelte.js";
@@ -587,40 +588,47 @@
     return orgCache.decrypt(`assignee:${t.assignedTo}`, t.assignedDisplayName);
   }
 
+  // Hoisted rank maps: allocating these per comparison was measurable in
+  // list-sized sorts. Map lookup (not object indexing) per the StatusMark
+  // convention.
+  const PRIORITY_RANK = new Map<string, number>([
+    ["urgent", 0],
+    ["high", 1],
+    ["normal", 2],
+    ["low", 3],
+  ]);
+  const STATUS_RANK = new Map<string, number>([
+    ["new", 0],
+    ["active", 1],
+    ["hold", 2],
+    ["closed", 3],
+  ]);
+
   function compareByField(
     ta: TicketRecord,
     tb: TicketRecord,
     field: string,
     dir: number,
   ): number {
-    const rank: Record<string, number> = {
-      urgent: 0,
-      high: 1,
-      normal: 2,
-      low: 3,
-    };
-    const statusRank: Record<string, number> = {
-      new: 0,
-      active: 1,
-      hold: 2,
-      closed: 3,
-    };
-
     switch (field) {
       case "status":
         return (
-          ((statusRank[
-            deriveDisplayStatus(ta.status, ta.onHold, ta.followUpCount)
-          ] ?? 4) -
-            (statusRank[
-              deriveDisplayStatus(tb.status, tb.onHold, tb.followUpCount)
-            ] ?? 4)) *
+          ((STATUS_RANK.get(
+            deriveDisplayStatus(ta.status, ta.onHold, ta.followUpCount),
+          ) ?? 4) -
+            (STATUS_RANK.get(
+              deriveDisplayStatus(tb.status, tb.onHold, tb.followUpCount),
+            ) ?? 4)) *
           dir
         );
       case "priority":
-        return ((rank[ta.priority] ?? 4) - (rank[tb.priority] ?? 4)) * dir;
+        return (
+          ((PRIORITY_RANK.get(ta.priority) ?? 4) -
+            (PRIORITY_RANK.get(tb.priority) ?? 4)) *
+          dir
+        );
       case "client":
-        return ta.clientAlias.localeCompare(tb.clientAlias) * dir;
+        return getCollator().compare(ta.clientAlias, tb.clientAlias) * dir;
       case "title": {
         const ra = resolveAsyncDecrypt(
           titleById.get(ta.id),
@@ -632,18 +640,19 @@
         );
         const aVal = ra.status === "ready" ? ra.value : "";
         const bVal = rb.status === "ready" ? rb.value : "";
-        return aVal.localeCompare(bVal) * dir;
+        return getCollator().compare(aVal, bVal) * dir;
       }
       case "queue": {
         const qa =
           orgCache.decrypt(`queue:${ta.queueId}`, ta.encryptedQueueName) ?? "";
         const qb =
           orgCache.decrypt(`queue:${tb.queueId}`, tb.encryptedQueueName) ?? "";
-        return qa.localeCompare(qb) * dir;
+        return getCollator().compare(qa, qb) * dir;
       }
       case "assignee":
         return (
-          (assignedSortName(ta) ?? "￿").localeCompare(
+          getCollator().compare(
+            assignedSortName(ta) ?? "￿",
             assignedSortName(tb) ?? "￿",
           ) * dir
         );

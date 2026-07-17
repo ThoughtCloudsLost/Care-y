@@ -97,4 +97,18 @@ describe("sortTickets", () => {
     });
     expect(result.map((t) => t.id)).toEqual(["a", "z"]);
   });
+
+  it("client sort orders identically to localeCompare through the shared collator", () => {
+    const aliases = ["Zoe", "ana", "Álvaro", "ben", "Ana"];
+    const tickets = aliases.map((clientAlias, i) => ({
+      ...makeTicket(`t${String(i)}`, "normal", "2026-01-01T00:00:00Z"),
+      clientAlias,
+    }));
+    const result = sortTickets(tickets, {
+      field: "client",
+      direction: "asc",
+    });
+    const expected = [...aliases].sort((a, b) => a.localeCompare(b));
+    expect(result.map((t) => t.clientAlias)).toEqual(expected);
+  });
 });
