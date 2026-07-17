@@ -172,3 +172,13 @@ export const brandingKeys = {
 export const notificationKeys = {
   all: ["notifications"] as const,
 };
+
+// Reaction summaries for internal notes, fetched by follow-up id set.
+// The set spans tickets on the list surface and is scoped to one ticket
+// on the detail surfaces, so the family lives outside both namespaces.
+// byIds callers pass a SORTED id list so key identity is order-free.
+export const reactionKeys = {
+  all: ["reactions"] as const,
+  byIds: (followUpIds: readonly string[]) =>
+    [...reactionKeys.all, followUpIds] as const,
+};

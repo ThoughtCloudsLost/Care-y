@@ -67,7 +67,6 @@
   import {
     savedFilterStateSchema,
     ticketPrioritySchema,
-    type ReactionSummary,
     type SavedFilterColor,
   } from "@care-y/shared";
   import ViewSwitcher from "$lib/components/ViewSwitcher.svelte";
@@ -84,6 +83,7 @@
   import type { CallAction } from "$lib/components/tickets/CallOptionsContent.svelte";
   import { createBulkActions } from "$lib/composables/ticket-list/create-bulk-actions.svelte.js";
   import { createFilterDispatch } from "$lib/composables/create-filter-dispatch.svelte.js";
+  import { createReactionsQuery } from "$lib/tickets/create-reactions-query.svelte.js";
   import {
     buildVolunteerMap,
     resolveVolunteerName as sharedResolveVolunteerName,
@@ -340,39 +340,25 @@
 
   // --- Preview reactions ---
 
-  const previewReactionsMap = new SvelteMap<string, ReactionSummary[]>();
-  // eslint-disable-next-line svelte/prefer-svelte-reactivity -- tracks fetched IDs, not rendered state
-  const fetchedReactionIds = new Set<string>();
+  const previewReactions = createReactionsQuery({
+    getNoteIds: () => {
+      const ids: string[] = [];
+      for (const followUps of previewLoader.rawPreviews.values()) {
+        for (const fu of followUps) {
+          if (fu.type === "internal_note") ids.push(fu.id);
+        }
+      }
+      return ids;
+    },
+    fetchReactions: async (followUpIds, signal) =>
+      ticketRouter.getReactions.query({ followUpIds }, { signal }),
+  });
 
   $effect(() => {
     const tickets = allTickets;
     if (tickets.length > 0) {
       void previewLoader.eagerLoad(tickets.map((t) => t.id));
     }
-  });
-
-  $effect(() => {
-    const previews = previewLoader.rawPreviews;
-    const noteIds: string[] = [];
-    for (const followUps of previews.values()) {
-      for (const fu of followUps) {
-        if (fu.type === "internal_note" && !fetchedReactionIds.has(fu.id)) {
-          noteIds.push(fu.id);
-        }
-      }
-    }
-    if (noteIds.length === 0) return;
-    for (const id of noteIds) fetchedReactionIds.add(id);
-    void ticketRouter.getReactions
-      .query({ followUpIds: noteIds.slice(0, 100) })
-      .then((result) => {
-        for (const [id, summaries] of Object.entries(result)) {
-          if (summaries.length > 0) previewReactionsMap.set(id, summaries);
-        }
-      })
-      .catch(() => {
-        /* best-effort */
-      });
   });
 
   // --- Card props mapping ---
@@ -417,7 +403,9 @@
       currentUserId: currentUserId ?? "",
       unreadCount: (ticketId) => listReadState.unreadCount(ticketId),
       getPreview: (ticketId) => previewLoader.get(ticketId),
-      previewReactionsMap,
+      get previewReactionsMap() {
+        return previewReactions.byId;
+      },
       ontap: handleTicketTap,
       onfullopen: handleTicketFullOpen,
       onselect: (id: string) => multiSelect.toggleSelection(id),

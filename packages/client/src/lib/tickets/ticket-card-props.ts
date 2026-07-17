@@ -44,7 +44,7 @@ export interface CardPropsMapperDeps {
   readonly currentUserId: string;
   readonly unreadCount: (ticketId: string) => number;
   readonly getPreview: (ticketId: string) => RawFollowUpPreview[] | undefined;
-  readonly previewReactionsMap: Map<string, ReactionSummary[]>;
+  readonly previewReactionsMap: ReadonlyMap<string, ReactionSummary[]>;
   readonly ontap: (ticketId: string) => void;
   readonly onaction: (ticketId: string, action: TicketQuickAction) => void;
   readonly onencryptedhelp: () => void;

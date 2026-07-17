@@ -53,6 +53,10 @@
   } from "$lib/crypto/decrypt-result.js";
   import { createTicketDecryptScope } from "$lib/crypto/ticket-decrypt-scope.js";
   import { SvelteMap } from "svelte/reactivity";
+  import {
+    createReactionsQuery,
+    writeReactionToCache,
+  } from "$lib/tickets/create-reactions-query.svelte.js";
   import { requireRouter } from "$lib/errors.js";
   import {
     serializedBufferToBase64,
@@ -521,6 +525,8 @@
   function getReactions(followUpId: string): ReactionSummary[] {
     const override = reactionOverrides.get(followUpId);
     if (override !== undefined) return override;
+    const fetched = previewReactions.byId.get(followUpId);
+    if (fetched !== undefined) return fetched;
     const server = Object.hasOwn(reactionsData, followUpId)
       ? // eslint-disable-next-line security/detect-object-injection -- key is a UUID from our own query, not user input
         reactionsData[followUpId]
@@ -561,6 +567,7 @@
       .mutate({ followUpId, reaction })
       .then((serverReactions: ReactionSummary[]) => {
         reactionOverrides.set(followUpId, serverReactions);
+        writeReactionToCache(queryClient, followUpId, serverReactions);
       })
       .catch(() => {
         reactionOverrides.delete(followUpId);
@@ -955,19 +962,13 @@
       : [],
   );
 
-  $effect(() => {
-    const noteIds = orderedPreviews
-      .filter((fu) => fu.type === "internal_note")
-      .map((fu) => fu.id);
-    if (noteIds.length === 0) return;
-    const unfetched = noteIds.filter((id) => !reactionOverrides.has(id));
-    if (unfetched.length === 0) return;
-    void ticketRouter.getReactions
-      .query({ followUpIds: unfetched })
-      .then((result) => mergeReactions(result))
-      .catch((_e: unknown) => {
-        /* best-effort */
-      });
+  const previewReactions = createReactionsQuery({
+    getNoteIds: () =>
+      orderedPreviews
+        .filter((fu) => fu.type === "internal_note")
+        .map((fu) => fu.id),
+    fetchReactions: async (followUpIds, signal) =>
+      ticketRouter.getReactions.query({ followUpIds }, { signal }),
   });
 
   const totalSlots = $derived(
