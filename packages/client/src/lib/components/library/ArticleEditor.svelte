@@ -1026,7 +1026,7 @@
 
   <!-- Editor area (always mounted, decorations overlaid when a11y active) -->
   <div
-    class="editor-area"
+    class="editor-area prose-quotes"
     bind:this={editorMountEl}
     role="textbox"
     aria-label={m.library_article_body_placeholder()}
@@ -1377,17 +1377,6 @@
     max-width: 100%;
     height: auto;
     border-radius: var(--card-radius);
-  }
-
-  /* WYSIWYG parity with the reader: quotes are recessed tinted blocks,
-     never the banned thick brand left border. */
-  .editor-area :global(.ProseMirror blockquote) {
-    background: var(--paper-deep, var(--surface-2));
-    border-radius: 10px;
-    padding: 10px 13px;
-    margin-bottom: 0.75em;
-    color: var(--muted);
-    font-style: italic;
   }
 
   .editor-area :global(.ProseMirror table) {

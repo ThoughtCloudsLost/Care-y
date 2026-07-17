@@ -275,7 +275,7 @@
     <Card raised contentWrap={false} class="telephony-status-card">
       <div class="status-card-inner">
         <div class="status-row">
-          <div class="status-icon pending">
+          <div class="status-icon status-attention">
             <Phone size={24} aria-hidden="true" />
           </div>
           <div class="status-text">
@@ -295,7 +295,7 @@
     <Card raised contentWrap={false} class="telephony-status-card">
       <div class="status-card-inner">
         <div class="status-row">
-          <div class="status-icon pending">
+          <div class="status-icon status-attention">
             <Phone size={24} aria-hidden="true" />
           </div>
           <div class="status-text">
@@ -321,7 +321,7 @@
           <div
             class="status-icon"
             class:ok={hasPhones}
-            class:pending={!hasPhones}
+            class:status-attention={!hasPhones}
           >
             {#if hasPhones}
               <CircleCheckBig size={24} aria-hidden="true" />
@@ -642,27 +642,6 @@
     display: flex;
     align-items: center;
     gap: var(--space-md);
-  }
-
-  .status-icon {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 2.5rem;
-    height: 2.5rem;
-    border-radius: 50%;
-    flex-shrink: 0;
-  }
-
-  /* A verified line is the normal state: quiet ink, no tint. Only the
-     pending state carries color (with its word). */
-  .status-icon.ok {
-    color: var(--ink-2);
-  }
-
-  .status-icon.pending {
-    background: var(--care-soft);
-    color: var(--care);
   }
 
   .status-text {

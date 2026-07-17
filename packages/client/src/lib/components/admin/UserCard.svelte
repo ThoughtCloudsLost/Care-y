@@ -1,5 +1,7 @@
 <script lang="ts">
   import { Checkbox } from "konsta/svelte";
+  import { CHECKBOX_BRAND_COLORS } from "$lib/components/shared/konsta-classes.js";
+  import { personInitials } from "$lib/utils/initials.js";
   import { Pencil } from "@lucide/svelte";
   import { RoleId } from "@care-y/shared";
   import * as m from "$lib/paraglide/messages.js";
@@ -76,7 +78,10 @@
 </script>
 
 <div class="user-card-wrap">
-  <div class="user-card" class:card--selected={selected && multiSelectActive}>
+  <div
+    class="user-card card-elevated"
+    class:card--selected={selected && multiSelectActive}
+  >
     <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
     <div
       class="card-inner"
@@ -103,12 +108,7 @@
             checked={selected}
             onchange={() => onselect?.(userId)}
             class="select-checkbox"
-            colors={{
-              bgCheckedIos: "bg-[var(--brand-accent)]",
-              borderCheckedIos: "border-[var(--brand-accent)]",
-              bgCheckedMaterial: "bg-[var(--brand-accent)]",
-              borderCheckedMaterial: "border-[var(--brand-accent)]",
-            }}
+            colors={CHECKBOX_BRAND_COLORS}
           />
         </div>
       {/if}
@@ -117,15 +117,7 @@
       <div class="avatar identity-seal" aria-hidden="true">
         <span class="avatar-initials">
           {#if displayName}
-            {displayName.trim().includes(" ")
-              ? displayName
-                  .trim()
-                  .split(/\s+/)
-                  .map((w) => w[0])
-                  .slice(0, 2)
-                  .join("")
-                  .toUpperCase()
-              : displayName.slice(0, 2).toUpperCase()}
+            {personInitials(displayName)}
           {:else}
             ??
           {/if}
@@ -183,15 +175,12 @@
     flex-direction: column;
   }
 
-  /* The Inkwell card anatomy: hair-2 border on raised paper, no shadow. */
+  /* The card anatomy lives on .card-elevated (shared.css). */
   .user-card {
     margin: 0;
     height: 100%;
     display: flex;
     flex-direction: column;
-    background: var(--raised, var(--card-bg, transparent));
-    border: 1px solid var(--hair-2, var(--card-border, currentColor));
-    border-radius: var(--card-radius, 0.75rem);
   }
 
   /* Selection is an identity slot: brand-soft, never full fill. */

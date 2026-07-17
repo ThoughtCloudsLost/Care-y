@@ -267,4 +267,35 @@ describe("TicketPreviewList", () => {
     expect(container.querySelectorAll(".tc.skeleton-pulse").length).toBe(4);
     expect(screen.queryByText("Nothing here right now")).toBeNull();
   });
+
+  it("sorts unassigned rows last in both assignee directions", async () => {
+    const names = new Map<string, string | null>([
+      ["1", "Zoe"],
+      ["2", null],
+      ["3", "Ann"],
+    ]);
+    const assigneeMapper = (t: TicketLikeRecord): DataCardProps =>
+      makeCard(t.id, { assignedName: names.get(t.id) ?? null });
+    const { container } = render(TicketPreviewList, {
+      props: {
+        tickets: makeRecords(3),
+        mapper: assigneeMapper,
+        viewMode: "table",
+      },
+    });
+
+    const header = screen.getByRole("button", { name: /assignee/i });
+    const cellTexts = (): string[] =>
+      Array.from(container.querySelectorAll("td.col-assignee")).map((td) =>
+        td.textContent.trim(),
+      );
+
+    // First header click sorts descending; the unassigned row stays last.
+    await fireEvent.click(header);
+    expect(cellTexts()).toEqual(["Zoe", "Ann", ""]);
+
+    // Second click flips to ascending; the unassigned row still sits last.
+    await fireEvent.click(header);
+    expect(cellTexts()).toEqual(["Ann", "Zoe", ""]);
+  });
 });

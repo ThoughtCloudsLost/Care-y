@@ -1,6 +1,7 @@
 import { RoleId } from "@care-y/shared";
 import type { KeyStatus } from "$lib/stores/user-filters.svelte.js";
 import { normalizeForSearch } from "$lib/search/normalize.js";
+import { getCollator } from "$lib/utils/collator.js";
 
 export interface UserRecord {
   readonly id: string;
@@ -121,7 +122,10 @@ export function sortUsers(
       case "name":
         return (
           dir *
-          (nameCache.get(a.id) ?? "￿").localeCompare(nameCache.get(b.id) ?? "￿")
+          getCollator().compare(
+            nameCache.get(a.id) ?? "￿",
+            nameCache.get(b.id) ?? "￿",
+          )
         );
       case "role":
         return (

@@ -42,8 +42,13 @@
     type TicketDisplayFieldDeps,
   } from "$lib/tickets/ticket-card-props.js";
   import { deriveDisplayStatus } from "$lib/tickets/display-status.js";
+  import { makeSkeletonCardProps } from "$lib/tickets/skeleton-card-props.js";
   import { resolveAsyncDecrypt } from "$lib/crypto/decrypt-result.js";
   import type { SerializedBuffer } from "$lib/utils/buffer-encoding.js";
+  import {
+    decryptQueueAppearance,
+    type QueueAppearance,
+  } from "$lib/utils/queue-appearance.js";
   import { getCollator } from "$lib/utils/collator.js";
   import { filterStore, type SortField } from "$lib/stores/filters.svelte.js";
   import { viewModeStore } from "$lib/stores/view-mode.svelte.js";
@@ -393,9 +398,20 @@
     return orgCache.decrypt(cacheKey, orgCipherByKey.get(cacheKey) ?? null);
   }
 
+  // Queue color/icon resolved from the queues list (also feeds the filter
+  // pills), keyed by queue id for the card mapper.
+  const queueAppearanceById = $derived.by(() => {
+    const map = new SvelteMap<string, QueueAppearance>();
+    for (const q of queuesQuery.data ?? []) {
+      map.set(q.id, decryptQueueAppearance(orgCache, q));
+    }
+    return map;
+  });
+
   const cardPropsMapper = $derived(
     createCardPropsMapper({
       orgDecrypt: orgDecryptByKey,
+      queueAppearance: (queueId) => queueAppearanceById.get(queueId),
       decryptTitle: (ticketId) => {
         const t = mapperRecordById.get(ticketId);
         return t
@@ -706,23 +722,7 @@
 
   // One skeleton prop blob for both loading blocks (initial load and the
   // pinned-rows placeholder); the view mode is applied at the render site.
-  const SKELETON_CARD_PROPS = {
-    ticketId: "",
-    queueName: null,
-    displayStatus: "active",
-    priority: "normal",
-    titleResult: { status: "loading" },
-    clientAlias: "",
-    assignedName: null,
-    createdAt: new Date(),
-    lastActivityAt: null,
-    followUpCount: 0,
-    unreadCount: 0,
-    previewFollowUps: undefined,
-    ontap: () => {
-      /* loading skeleton, no-op */
-    },
-  } as const;
+  const SKELETON_CARD_PROPS = makeSkeletonCardProps();
 
   const VALID_TICKET_SORT_FIELDS = new Set<SortField>([
     "date",

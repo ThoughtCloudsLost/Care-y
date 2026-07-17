@@ -2,6 +2,7 @@
 <script lang="ts">
   import { untrack } from "svelte";
   import { Checkbox } from "konsta/svelte";
+  import { CHECKBOX_BRAND_COLORS } from "$lib/components/shared/konsta-classes.js";
   import * as m from "$lib/paraglide/messages.js";
   import { formatRelativeTime } from "$lib/utils/format-time.js";
   import { onKeyActivate } from "$lib/utils/a11y.js";
@@ -508,12 +509,7 @@
                       checked={isSelected}
                       onchange={() => onselect?.(row.ticketId)}
                       class="table-checkbox"
-                      colors={{
-                        bgCheckedIos: "bg-[var(--brand-accent)]",
-                        borderCheckedIos: "border-[var(--brand-accent)]",
-                        bgCheckedMaterial: "bg-[var(--brand-accent)]",
-                        borderCheckedMaterial: "border-[var(--brand-accent)]",
-                      }}
+                      colors={CHECKBOX_BRAND_COLORS}
                     />
                   </div>
                 </td>

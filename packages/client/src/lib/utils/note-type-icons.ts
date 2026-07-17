@@ -27,10 +27,11 @@ import {
   Phone,
   type LucideIcon,
 } from "@lucide/svelte";
+import type { Component } from "svelte";
 
 export interface IconEntry {
-  readonly slug: string;
-  readonly component: LucideIcon;
+  readonly id: string;
+  readonly component: Component;
 }
 
 const iconMap = new Map<string, LucideIcon>([
@@ -53,7 +54,7 @@ const iconMap = new Map<string, LucideIcon>([
 ]);
 
 export const ICON_PICKER_ENTRIES: readonly IconEntry[] = [...iconMap].map(
-  ([slug, component]) => ({ slug, component }),
+  ([id, component]) => ({ id, component }),
 );
 
 export function resolveNoteTypeIcon(name: string | null): LucideIcon {

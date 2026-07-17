@@ -27,6 +27,7 @@
   import { CircleCheck, Circle } from "@lucide/svelte";
   import * as m from "$lib/paraglide/messages.js";
   import { withTerms } from "$lib/terminology/with-terms.js";
+  import { orgInitial as deriveOrgInitial } from "$lib/utils/initials.js";
   import { trpc } from "$lib/trpc/index.js";
   import { onboardingKeys } from "$lib/query/keys.js";
   import { announceToLiveRegion } from "$lib/utils/announce.js";
@@ -301,12 +302,9 @@
   // empty rooms, the trust surface, and this arrival). Guarded: if the
   // branding store has no org name yet, no seal renders.
   const orgInitial = $derived.by(() => {
-    const name = getBrandingTitle().trim();
-    if (name === "" || name === "CARE-Y") return undefined;
-    return new Intl.Segmenter(undefined, { granularity: "grapheme" })
-      .segment(name)
-      .containing(0)
-      ?.segment.toUpperCase();
+    const name = getBrandingTitle();
+    if (name.trim() === "CARE-Y") return undefined;
+    return deriveOrgInitial(name);
   });
 
   function isStepComplete(id: string): boolean {

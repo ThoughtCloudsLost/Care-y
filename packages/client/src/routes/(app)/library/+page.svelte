@@ -9,6 +9,7 @@
   import { resolve } from "$app/paths";
   import { page } from "$app/state";
   import { DialogButton, Button } from "konsta/svelte";
+  import { DIALOG_DESTRUCTIVE_CLASS } from "$lib/components/shared/konsta-classes.js";
   import ShellDialog from "$lib/shell/ShellDialog.svelte";
   import {
     FolderInput,
@@ -65,6 +66,7 @@
   import QueryError from "$lib/components/QueryError.svelte";
   import EmptyState from "$lib/components/EmptyState.svelte";
   import { getBrandingTitle } from "$lib/branding/title.svelte.js";
+  import { orgInitial as deriveOrgInitial } from "$lib/utils/initials.js";
   import { haptic } from "$lib/utils/haptic.js";
   import { gestureMount } from "$lib/utils/gesture-focus.js";
   import { cachedDate } from "$lib/utils/date-cache.js";
@@ -753,14 +755,7 @@
 
   // Org initial for the truly-empty room's identity seal (the tickets
   // list's welcome-room pattern; grapheme-aware for non-Latin names).
-  const orgInitial = $derived.by(() => {
-    const name = getBrandingTitle().trim();
-    if (name === "") return undefined;
-    return new Intl.Segmenter(undefined, { granularity: "grapheme" })
-      .segment(name)
-      .containing(0)
-      ?.segment.toUpperCase();
-  });
+  const orgInitial = $derived(deriveOrgInitial(getBrandingTitle()));
 </script>
 
 {#snippet bulkActionsRow()}
@@ -1034,7 +1029,11 @@
     >
       {m.common_cancel()}
     </DialogButton>
-    <DialogButton strong onclick={() => void confirmBulkDelete()}>
+    <DialogButton
+      strong
+      class={DIALOG_DESTRUCTIVE_CLASS}
+      onclick={() => void confirmBulkDelete()}
+    >
       {m.common_delete()}
     </DialogButton>
   {/snippet}

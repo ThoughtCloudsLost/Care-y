@@ -34,7 +34,7 @@
   <div class="key-status-inner">
     <!-- Status row -->
     <div class="status-row">
-      <div class="status-icon" class:ok={isOk} class:missing={!isOk}>
+      <div class="status-icon" class:ok={isOk} class:status-attention={!isOk}>
         {#if isOk}
           <ShieldCheck size={24} aria-hidden="true" />
         {:else}
@@ -85,28 +85,6 @@
     display: flex;
     align-items: center;
     gap: var(--space-md);
-  }
-
-  .status-icon {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 2.5rem;
-    height: 2.5rem;
-    border-radius: 50%;
-    flex-shrink: 0;
-  }
-
-  /* Loaded keys are the normal state, so the mark stays quiet ink with
-     no tint. Only the missing state carries color, and its word rides
-     along. */
-  .status-icon.ok {
-    color: var(--ink-2);
-  }
-
-  .status-icon.missing {
-    background: var(--care-soft);
-    color: var(--care);
   }
 
   .status-label {

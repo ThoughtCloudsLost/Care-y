@@ -53,6 +53,10 @@
   import { Permission } from "@care-y/shared";
   import type { ReactionSummary } from "@care-y/shared";
   import type { SerializedBuffer } from "$lib/utils/buffer-encoding.js";
+  import {
+    decryptQueueAppearance,
+    type QueueAppearance,
+  } from "$lib/utils/queue-appearance.js";
   import ShellPopover from "$lib/shell/ShellPopover.svelte";
   import { getNavbarOverrideCtx } from "$lib/shell/context.js";
   import type { NavbarAction } from "$lib/shell/types";
@@ -433,8 +437,17 @@
       name: orgCache.decrypt(`queue:${q.id}`, q.encryptedName),
       openCount: Number(q.openCount),
       urgentCount: Number(q.urgentCount),
+      appearance: decryptQueueAppearance(orgCache, q),
     })),
   );
+
+  const queueAppearanceById = $derived.by(() => {
+    const map = new SvelteMap<string, QueueAppearance>();
+    for (const q of queuesQuery.data ?? []) {
+      map.set(q.id, decryptQueueAppearance(orgCache, q));
+    }
+    return map;
+  });
 
   // --- Ticket card props (shared mapper, one contract with the Tickets page) ---
 
@@ -460,6 +473,7 @@
     createCardPropsMapper({
       orgDecrypt: (cacheKey) =>
         orgCache.decrypt(cacheKey, orgCipherByKey.get(cacheKey) ?? null),
+      queueAppearance: (queueId) => queueAppearanceById.get(queueId),
       decryptTitle: (ticketId) => {
         const t = ticketById.get(ticketId);
         return t

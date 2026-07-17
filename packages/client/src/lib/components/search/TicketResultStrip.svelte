@@ -31,7 +31,7 @@
 >
   {#if loading}
     {#each Array(6) as _, i (i)}
-      <div class="skeleton-card" role="listitem">
+      <div class="skeleton-card card-elevated" role="listitem">
         <InlineSkeleton width="100%" />
       </div>
     {/each}
@@ -92,10 +92,6 @@
   .skeleton-card {
     width: 170px;
     height: 140px;
-    border-radius: var(--space-md, 12px);
-    background: var(--raised, var(--card-bg, var(--surface-1)));
-    border: 1px solid var(--hair-2, var(--card-border, transparent));
-    box-shadow: var(--card-shadow, none);
   }
 
   .overflow-indicator {

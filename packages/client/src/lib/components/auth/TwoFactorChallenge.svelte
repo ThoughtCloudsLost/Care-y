@@ -13,6 +13,7 @@
   import { untrack } from "svelte";
   import { List, ListInput, ListItem, Block, Preloader } from "konsta/svelte";
   import SoftButton from "$lib/components/inputs/SoftButton.svelte";
+  import FieldError from "$lib/components/FieldError.svelte";
   import * as m from "$lib/paraglide/messages.js";
   import { trpc } from "$lib/trpc/index.js";
   import { base64urlToBuffer, bufferToBase64url } from "$lib/utils/webauthn.js";
@@ -447,7 +448,9 @@
 <h1 class="text-xl font-bold text-center mb-4">{m.twofa_verify_title()}</h1>
 
 {#if error !== ""}
-  <p class="error-text" role="alert">{error}</p>
+  <div class="error-slot">
+    <FieldError message={error} />
+  </div>
 {/if}
 
 {#if activeMethod === null && methods.length > 1}
@@ -763,9 +766,7 @@
 {/if}
 
 <style>
-  .error-text {
-    color: var(--danger, var(--k-color-red, #ef4444));
-    font-size: 0.875rem;
+  .error-slot {
     text-align: center;
     margin-bottom: 0.75rem;
   }

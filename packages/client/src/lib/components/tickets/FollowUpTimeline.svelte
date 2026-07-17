@@ -722,7 +722,7 @@
   }
 
   :global(.cluster-bubble-tap:focus-visible) {
-    outline: 2px solid var(--brand-primary, #7c3aed);
+    outline: 2px solid var(--brand-text);
     outline-offset: -2px;
     border-radius: 0.5rem;
   }
