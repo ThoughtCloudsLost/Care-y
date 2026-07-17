@@ -91,6 +91,7 @@
   import { createSmsSend } from "$lib/composables/ticket-detail/create-sms-send.svelte.js";
   import { createCallDispatch } from "$lib/composables/ticket-detail/create-call-dispatch.svelte.js";
   import { haptic } from "$lib/utils/haptic.js";
+  import { gestureMount } from "$lib/utils/gesture-focus.js";
   import {
     registerSearchProvider,
     setPromotedOverride,
@@ -733,7 +734,9 @@
     filterPills={detailFilters.pills}
     searchNavigator={overlay.active ? searchNavigatorRow : undefined}
     bulkActions={selectMode.active ? selectActionsRow : undefined}
-    onsearch={!overlay.active ? () => overlay.enter("") : undefined}
+    onsearch={!overlay.active
+      ? () => gestureMount(() => overlay.enter(""))
+      : undefined}
     searchLabel={m.search_inline_trigger()}
   />
   <CaseHeader
@@ -836,7 +839,9 @@
     filterPills={detailFilters.pills}
     searchNavigator={overlay.active ? searchNavigatorRow : undefined}
     bulkActions={selectMode.active ? selectActionsRow : undefined}
-    onsearch={!overlay.active ? () => overlay.enter("") : undefined}
+    onsearch={!overlay.active
+      ? () => gestureMount(() => overlay.enter(""))
+      : undefined}
     searchLabel={m.search_inline_trigger()}
   />
 {/snippet}

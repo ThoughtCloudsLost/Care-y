@@ -10,7 +10,8 @@
 
   Fold state is per ticket and session-only (in-memory module map,
   never persisted, never transmitted). The drag handle at the bottom
-  edge mirrors ShellSheet's indicator pill but toggles fold on tap.
+  edge supports finger-tracked drag with threshold + snap (matching
+  ShellSheet/panel feel) and tap-to-toggle. Keyboard toggle preserved.
 -->
 <script lang="ts">
   import { createQuery } from "@tanstack/svelte-query";
@@ -36,6 +37,7 @@
     isCaseFolded,
     setCaseFolded,
   } from "$lib/tickets/case-fold-store.svelte.js";
+  import { useFoldDrag } from "$lib/shell/use-fold-drag.svelte.js";
   import type { Snippet } from "svelte";
 
   interface Props {
@@ -115,7 +117,17 @@
 
   const folded = $derived(alwaysExpanded ? false : isCaseFolded(ticketId));
 
+  const foldDrag = useFoldDrag({
+    get folded() {
+      return folded;
+    },
+    onsnap(shouldFold: boolean) {
+      setCaseFolded(ticketId, shouldFold);
+    },
+  });
+
   function toggleFold(): void {
+    if (foldDrag.consumeClick()) return;
     setCaseFolded(ticketId, !folded);
   }
 
@@ -198,6 +210,7 @@
         aria-label={folded
           ? m.ticket_case_details()
           : m.ticket_fold_case_details()}
+        use:foldDrag.action
         onclick={toggleFold}
         onkeydown={(e) => {
           if (e.key === "Enter" || e.key === " ") {
@@ -350,6 +363,7 @@
     gap: 4px;
     padding: 6px 0 10px;
     cursor: pointer;
+    touch-action: none;
     -webkit-tap-highlight-color: transparent;
   }
 
