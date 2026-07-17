@@ -97,6 +97,8 @@
   "library_editor_undo": "Deshacer",
   "library_editor_redo": "Rehacer",
   "nav_more": "Más",
+  "nav_schedule": "Horario",
+  "nav_area_label": "Estás en: {area}",
   "nav_sidebar_label": "Navegación lateral",
   "nav_sidebar_expand": "Expandir barra lateral",
   "nav_sidebar_collapse": "Contraer barra lateral",

@@ -9,6 +9,7 @@
 
   let {
     activeTab,
+    activeArea,
     ontabchange,
     expanded,
     subItems,
@@ -230,7 +231,9 @@
           }}
           type="button"
           class="sidebar-tab"
+          class:active={activeArea === "admin"}
           aria-label={m.admin_hub_title()}
+          aria-current={activeArea === "admin" ? "page" : undefined}
           tabindex={focusedIndex === allTabs.length ? 0 : -1}
           data-sidebar-id="admin"
         >
@@ -298,7 +301,9 @@
       onclick={onSettings}
       type="button"
       class="sidebar-user-action"
+      class:active={activeArea === "settings"}
       aria-label={m.panel_settings()}
+      aria-current={activeArea === "settings" ? "page" : undefined}
       tabindex={focusedIndex === focusableIds.length - 2 ? 0 : -1}
       data-sidebar-id="settings"
     >
@@ -673,6 +678,12 @@
 
   .sidebar-user-action:hover {
     background: var(--brand-primary-20);
+  }
+
+  .sidebar-user-action.active {
+    border-inline-start-color: var(--brand-primary);
+    background: var(--brand-primary-20);
+    color: var(--glass-text);
   }
 
   .sidebar-user-action:focus-visible {
