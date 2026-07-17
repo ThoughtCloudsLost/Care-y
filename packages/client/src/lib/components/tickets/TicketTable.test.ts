@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
 import { render, cleanup, fireEvent } from "@testing-library/svelte";
+import { tick } from "svelte";
 import TicketTable from "./TicketTable.svelte";
 
 vi.stubGlobal(
@@ -425,6 +426,213 @@ describe("TicketTable", () => {
       const priorityCells = container.querySelectorAll(".col-priority");
       const dataCell = priorityCells[priorityCells.length - 1];
       expect(dataCell?.children.length).toBe(0);
+    });
+  });
+
+  // --- Windowed rendering ---
+
+  describe("windowed rendering", () => {
+    interface WindowTestRow {
+      ticketId: string;
+      displayStatus: "active";
+      priority: "normal";
+      clientAlias: string;
+      titleResult: { status: "ready"; value: string };
+      queueName: string;
+      assignedName: null;
+      assignedIsSelf: boolean;
+      lastActivityAt: null;
+      createdAt: Date;
+      followUpCount: number;
+      unreadCount: number;
+    }
+
+    function makeWindowRows(count: number): WindowTestRow[] {
+      return Array.from({ length: count }, (_, i) => ({
+        ticketId: `t-${String(i).padStart(3, "0")}`,
+        displayStatus: "active" as const,
+        priority: "normal" as const,
+        clientAlias: `alias-${String(i)}`,
+        titleResult: { status: "ready" as const, value: `Ticket ${String(i)}` },
+        queueName: "General",
+        assignedName: null,
+        assignedIsSelf: false,
+        lastActivityAt: null,
+        createdAt: new Date("2026-04-10T08:00:00Z"),
+        followUpCount: 0,
+        unreadCount: 0,
+      }));
+    }
+
+    // jsdom reports zero rects, so the component falls back to its estimated
+    // 44px row pitch; the window math then runs off the stubbed scrollTop
+    // and clientHeight (the VirtualList test recipe).
+    const PITCH = 44;
+
+    let scrollContainer: HTMLDivElement;
+
+    beforeEach(() => {
+      vi.stubGlobal("requestAnimationFrame", (cb: FrameRequestCallback) => {
+        cb(0);
+        return 0;
+      });
+      vi.stubGlobal("cancelAnimationFrame", vi.fn());
+      vi.stubGlobal(
+        "ResizeObserver",
+        vi.fn(function (this: {
+          observe: () => void;
+          disconnect: () => void;
+          unobserve: () => void;
+        }) {
+          this.observe = vi.fn();
+          this.disconnect = vi.fn();
+          this.unobserve = vi.fn();
+        }),
+      );
+
+      scrollContainer = document.createElement("div");
+      Object.defineProperty(scrollContainer, "clientHeight", { value: 300 });
+      Object.defineProperty(scrollContainer, "scrollTop", {
+        value: 0,
+        writable: true,
+      });
+      document.body.appendChild(scrollContainer);
+    });
+
+    afterEach(() => {
+      cleanup();
+      scrollContainer.remove();
+    });
+
+    function scrollTo(top: number): void {
+      Object.defineProperty(scrollContainer, "scrollTop", { value: top });
+      scrollContainer.dispatchEvent(new Event("scroll"));
+    }
+
+    it("renders only the rows near the viewport when past the threshold", () => {
+      const { container } = render(TicketTable, {
+        ...defaults,
+        rows: makeWindowRows(100),
+        scrollContainer,
+        virtualizeThreshold: 20,
+      });
+
+      expect(container.querySelector("#ticket-t-000")).toBeTruthy();
+      expect(container.querySelector("#ticket-t-050")).toBeNull();
+      expect(container.querySelector("#ticket-t-099")).toBeNull();
+
+      const rendered = container.querySelectorAll("tr.table-row").length;
+      expect(rendered).toBeGreaterThan(0);
+      expect(rendered).toBeLessThan(30);
+
+      // The gap rows carry exactly the off-window height, so the table
+      // keeps its full scroll geometry.
+      const gapRows = Array.from(
+        container.querySelectorAll<HTMLTableRowElement>("tr.virtual-gap"),
+      );
+      expect(gapRows.length).toBeGreaterThan(0);
+      const gapTotal = gapRows.reduce(
+        (sum, tr) => sum + parseFloat(tr.style.height),
+        0,
+      );
+      expect(gapTotal).toBe((100 - rendered) * PITCH);
+    });
+
+    it("restores off-window rows when scrolled to them", async () => {
+      const { container } = render(TicketTable, {
+        ...defaults,
+        rows: makeWindowRows(100),
+        scrollContainer,
+        virtualizeThreshold: 20,
+      });
+      expect(container.querySelector("#ticket-t-050")).toBeNull();
+
+      scrollTo(50 * PITCH);
+      await tick();
+
+      expect(container.querySelector("#ticket-t-050")).toBeTruthy();
+      expect(container.querySelector("#ticket-t-000")).toBeNull();
+    });
+
+    it("keeps a focused row rendered when it scrolls out of the window", async () => {
+      const { container } = render(TicketTable, {
+        ...defaults,
+        rows: makeWindowRows(100),
+        scrollContainer,
+        virtualizeThreshold: 20,
+      });
+
+      const firstRow = container.querySelector("#ticket-t-000");
+      expect(firstRow).toBeTruthy();
+      await fireEvent.focusIn(firstRow!);
+
+      scrollTo(50 * PITCH);
+      await tick();
+
+      // The focused row survives outside the window; the window rows render
+      // alongside it, so tab order never falls back to body.
+      expect(container.querySelector("#ticket-t-000")).toBeTruthy();
+      expect(container.querySelector("#ticket-t-050")).toBeTruthy();
+
+      await fireEvent.focusOut(container.querySelector("#ticket-t-000")!, {
+        relatedTarget: null,
+      });
+      expect(container.querySelector("#ticket-t-000")).toBeNull();
+    });
+
+    it("renders flat below the threshold even with a scroll container", () => {
+      const { container } = render(TicketTable, {
+        ...defaults,
+        rows: makeWindowRows(10),
+        scrollContainer,
+        virtualizeThreshold: 20,
+      });
+
+      expect(container.querySelectorAll("tr.table-row").length).toBe(10);
+      expect(container.querySelector("tr.virtual-gap")).toBeNull();
+      expect(
+        container.querySelector("table")?.getAttribute("aria-rowcount"),
+      ).toBeNull();
+    });
+
+    it("renders flat without a scroll container regardless of row count", () => {
+      const { container } = render(TicketTable, {
+        ...defaults,
+        rows: makeWindowRows(100),
+        virtualizeThreshold: 20,
+      });
+
+      expect(container.querySelectorAll("tr.table-row").length).toBe(100);
+      expect(container.querySelector("tr.virtual-gap")).toBeNull();
+    });
+
+    it("describes the full table to assistive tech while windowed", () => {
+      const { container } = render(TicketTable, {
+        ...defaults,
+        rows: makeWindowRows(100),
+        scrollContainer,
+        virtualizeThreshold: 20,
+      });
+
+      expect(
+        container.querySelector("table")?.getAttribute("aria-rowcount"),
+      ).toBe("101");
+      expect(
+        container.querySelector("thead tr")?.getAttribute("aria-rowindex"),
+      ).toBe("1");
+      expect(
+        container.querySelector("#ticket-t-000")?.getAttribute("aria-rowindex"),
+      ).toBe("2");
+
+      const flat = render(TicketTable, {
+        ...defaults,
+        rows: [row1, row2],
+      });
+      expect(
+        flat.container
+          .querySelector(".table-row")
+          ?.getAttribute("aria-rowindex"),
+      ).toBeNull();
     });
   });
 });
