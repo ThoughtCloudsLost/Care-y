@@ -551,20 +551,12 @@
           }
           return undefined;
         },
-        decryptQueueName: (queueId, ciphertext) => {
+        orgDecrypt: (cacheKey, ciphertext) => {
           if (!isOrgCiphertext(ciphertext)) return null;
-          return orgCache.decrypt(`queue:${queueId}`, ciphertext) ?? null;
+          return orgCache.decrypt(cacheKey, ciphertext) ?? null;
         },
-        resolveAssignedName: (assignedTo, ciphertext) => {
-          if (assignedTo === null) return null;
-          if (assignedTo === currentUserIdGetter()) {
-            return m.dashboard_assigned_you();
-          }
-          if (!isOrgCiphertext(ciphertext)) return null;
-          return orgCache.decrypt(`assignee:${assignedTo}`, ciphertext) ?? null;
-        },
+        currentUserId: () => currentUserIdGetter(),
         getPreviewFollowUps: (ticketId) => previewLoader.get(ticketId),
-        deriveDisplayStatus,
         getTotalItemCount: () => {
           const counts = queryClient.getQueryData<{ total?: number }>(
             ticketsKeys.counts(),

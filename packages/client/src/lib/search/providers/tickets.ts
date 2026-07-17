@@ -5,9 +5,13 @@ import type {
   SearchResult,
 } from "../types.js";
 import { fuzzySearch } from "../fuzzy.js";
-import type { DisplayStatus } from "$lib/tickets/display-status.js";
 import type { RawFollowUpPreview } from "$lib/tickets/preview-loader.svelte.js";
-import type { DecryptResult } from "$lib/crypto/decrypt-result.js";
+import {
+  mapTicketDisplayFields,
+  type TicketDisplayFieldDeps,
+  type TicketDisplayFields,
+  type TicketLikeRecord,
+} from "$lib/tickets/ticket-card-props.js";
 import { DECRYPT_ERROR_SENTINEL } from "$lib/crypto/async-decrypt-cache.js";
 import TicketSearchResult from "$lib/components/search/TicketSearchResult.svelte";
 import { Ticket } from "@lucide/svelte";
@@ -16,46 +20,19 @@ import { withTerms } from "$lib/terminology/with-terms.js";
 
 /**
  * Raw ticket record from the TanStack Query cache. Carries encrypted
- * fields that the provider decrypts reactively during search().
- *
- * Field types are intentionally loose (unknown for encrypted blobs)
- * because the query cache stores the server's response shape. The
- * decrypt trigger functions in TicketSearchProviderDeps handle the
- * actual type narrowing.
+ * fields that the provider decrypts reactively during search(). The
+ * shape is the same record every ticket surface consumes, so it aliases
+ * the card mapper's record type (encrypted blobs stay `unknown`; the
+ * decrypt trigger functions handle the actual narrowing).
  */
-export interface RawCachedTicket {
-  readonly id: string;
-  readonly queueId: string;
-  readonly encryptedQueueName: unknown;
-  readonly status: string;
-  readonly onHold: boolean;
-  readonly priority: "low" | "normal" | "high" | "urgent";
-  readonly encryptedTitle: unknown;
-  readonly keyWrap: unknown;
-  readonly clientAlias: string;
-  readonly assignedTo: string | null;
-  readonly assignedDisplayName: unknown;
-  readonly createdAt: string;
-  readonly lastActivityAt: string | null;
-  readonly followUpCount: number;
-}
+export type RawCachedTicket = TicketLikeRecord;
 
 /**
- * Display-ready ticket data for search result rendering.
- * Subset of TicketCardProps (omits action callbacks, selection state).
+ * Display-ready ticket data for search result rendering: the shared
+ * display-field core plus the provider's search-specific extras.
  */
-export interface TicketSearchData {
-  readonly ticketId: string;
-  readonly queueName: string | null;
-  readonly displayStatus: DisplayStatus;
-  readonly priority: "low" | "normal" | "high" | "urgent";
-  readonly titleResult: DecryptResult;
+export interface TicketSearchData extends TicketDisplayFields {
   readonly encryptedTitle: unknown;
-  readonly clientAlias: string;
-  readonly assignedName: string | null;
-  readonly createdAt: Date;
-  readonly lastActivityAt: Date | null;
-  readonly followUpCount: number;
   readonly unreadCount: number;
   readonly previewFollowUps: RawFollowUpPreview[] | undefined;
   /** The query that produced this result; renders the <mark> highlights. */
@@ -84,22 +61,14 @@ export interface TicketSearchProviderDeps {
     keyWrap: unknown,
     encryptedTitle: unknown,
   ) => string | undefined;
-  readonly decryptQueueName: (
-    queueId: string,
-    ciphertext: unknown,
-  ) => string | null;
-  readonly resolveAssignedName: (
-    assignedTo: string | null,
-    ciphertext: unknown,
-  ) => string | null;
+  /** Org-tier decrypt keyed the same way the card mapper keys it
+   * (`queue:{queueId}`, `assignee:{userId}`). */
+  readonly orgDecrypt: (cacheKey: string, ciphertext: unknown) => string | null;
+  /** Viewer id for the shared core's self-assignment ("You") check. */
+  readonly currentUserId: () => string | undefined;
   readonly getPreviewFollowUps: (
     ticketId: string,
   ) => RawFollowUpPreview[] | undefined;
-  readonly deriveDisplayStatus: (
-    status: "open" | "closed",
-    onHold: boolean,
-    followUpCount: number,
-  ) => DisplayStatus;
   readonly getTotalItemCount?: () => number | undefined;
 
   // -- Full search deps --
@@ -141,32 +110,15 @@ export function createTicketSearchProvider(
   const contentMatchIds = new SvelteSet<string>();
   let lastFullSearchQuery = "";
 
-  function buildSearchData(
+  function composeSearchData(
     raw: RawCachedTicket,
-    title: string,
+    fields: TicketDisplayFields,
     query: string,
   ): TicketSearchData {
     return {
+      ...fields,
       searchTerm: query,
-      ticketId: raw.id,
-      queueName: deps.decryptQueueName(raw.queueId, raw.encryptedQueueName),
-      displayStatus: deps.deriveDisplayStatus(
-        raw.status === "closed" ? "closed" : "open",
-        raw.onHold,
-        raw.followUpCount,
-      ),
-      priority: raw.priority,
-      titleResult: { status: "ready", value: title },
       encryptedTitle: raw.encryptedTitle,
-      clientAlias: raw.clientAlias,
-      assignedName: deps.resolveAssignedName(
-        raw.assignedTo,
-        raw.assignedDisplayName,
-      ),
-      createdAt: new Date(raw.createdAt),
-      lastActivityAt:
-        raw.lastActivityAt !== null ? new Date(raw.lastActivityAt) : null,
-      followUpCount: raw.followUpCount,
       unreadCount: 0,
       previewFollowUps: deps.getPreviewFollowUps(raw.id),
     };
@@ -204,12 +156,16 @@ export function createTicketSearchProvider(
 
     search(query: string) {
       const rawTickets = deps.getAllCachedTickets();
+      const fieldDeps: TicketDisplayFieldDeps = {
+        orgDecrypt: deps.orgDecrypt,
+        decryptTitle: deps.decryptTitle,
+        currentUserId: deps.currentUserId() ?? "",
+      };
 
       const searchable: {
         raw: RawCachedTicket;
         title: string;
-        queueName: string | null;
-        assignedName: string | null;
+        fields: TicketDisplayFields;
       }[] = [];
       for (const raw of rawTickets) {
         const title = deps.decryptTitle(
@@ -221,11 +177,7 @@ export function createTicketSearchProvider(
         searchable.push({
           raw,
           title,
-          queueName: deps.decryptQueueName(raw.queueId, raw.encryptedQueueName),
-          assignedName: deps.resolveAssignedName(
-            raw.assignedTo,
-            raw.assignedDisplayName,
-          ),
+          fields: mapTicketDisplayFields(raw, fieldDeps),
         });
       }
 
@@ -234,7 +186,12 @@ export function createTicketSearchProvider(
       // no per-ticket decrypt work. Null while a decrypt settles simply
       // doesn't match until it resolves.
       const haystack = searchable.map((s) =>
-        [s.title, s.raw.clientAlias, s.queueName ?? "", s.assignedName ?? ""]
+        [
+          s.title,
+          s.raw.clientAlias,
+          s.fields.queueName ?? "",
+          s.fields.assignedName ?? "",
+        ]
           .join(" ")
           .trim(),
       );
@@ -247,9 +204,11 @@ export function createTicketSearchProvider(
       for (const match of matches) {
         const entry = searchable[match.index];
         if (!entry) continue;
-        const { raw, title } = entry;
-        seen.add(raw.id);
-        results.push({ id: raw.id, data: buildSearchData(raw, title, query) });
+        seen.add(entry.raw.id);
+        results.push({
+          id: entry.raw.id,
+          data: composeSearchData(entry.raw, entry.fields, query),
+        });
       }
 
       // Include content-matched tickets from fullSearch content search.
@@ -261,7 +220,7 @@ export function createTicketSearchProvider(
             seen.add(entry.raw.id);
             results.push({
               id: entry.raw.id,
-              data: buildSearchData(entry.raw, entry.title, query),
+              data: composeSearchData(entry.raw, entry.fields, query),
             });
           }
         }
