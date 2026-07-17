@@ -10,7 +10,7 @@
  *   2. Bridge sends "connect": Worker replies with current state + public keys
  *   3. Bridge sends crypto requests: dispatched via createDispatcher per-port
  *   4. Tab closing: bridge sends "disconnect", port removed from set
- *   5. Last port removed: 3s zero timer starts
+ *   5. Last port removed: zero timer starts (3s prod, 30s dev)
  *   6. New port before timer: timer cancelled, keys preserved
  *   7. Timer fires: all keys zeroed, Worker stays alive but unkeyed
  *
@@ -57,13 +57,16 @@ let zeroTimer: ReturnType<typeof setTimeout> | null = null;
 
 // Grace period before zeroing keys once the last port disconnects.
 // Full-page navigations (reload, the login redirect) tear down every port
-// and reconnect from the fresh document; at 500ms the reconnect regularly
-// lost the race, so the timer zeroed keys mid-navigation and forced a
-// reauth. 3000ms gives those flows comfortable headroom. Accepted cost:
-// keys survive in worker memory for up to 3s after the last tab actually
-// closes. The idle-timeout self-zero in crypto-core.ts and the explicit
-// zeroAll path are unaffected by this delay.
-const ZERO_DELAY_MS = 3000;
+// and reconnect from the fresh document. The reconnect races against this
+// timer: if the new page's CryptoBridge constructor fires before the timer,
+// onconnect cancels it and keys survive. In production (bundled JS), boot
+// is well under 3s. In Vite dev mode, the 247-module ESM waterfall can
+// take 3-18s depending on cache state, so 30s headroom is needed.
+// Accepted cost: keys survive in worker memory for up to ZERO_DELAY_MS
+// after the last tab actually closes. The idle-timeout self-zero in
+// crypto-core.ts (30min) and explicit zeroAll (logout, idle timer) are
+// unaffected by this delay.
+const ZERO_DELAY_MS = import.meta.env.DEV ? 30_000 : 3_000;
 
 // Tracks which port triggered the current state transition so the
 // broadcast callback can exclude it. Set before dispatching, cleared after.
