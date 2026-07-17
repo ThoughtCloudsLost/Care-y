@@ -243,7 +243,7 @@
     {:else}
       {@render skeletonHead()}
       {#if viewMode === "cards"}
-        <div class="previews">
+        <div class="previews preview-window">
           <TicketPreview {ticketId} followUps={undefined} multiline={true} />
         </div>
         <div class="card-meta">
@@ -276,7 +276,7 @@
       {@render head(true)}
     {:else if viewMode === "cards"}
       {@render head(false)}
-      <div class="previews" data-preview>
+      <div class="previews preview-window" data-preview>
         <TicketPreview
           {ticketId}
           followUps={previewFollowUps}
@@ -567,8 +567,13 @@
     border-radius: 12px;
   }
 
+  /* Etched-glass skin comes from the shared .preview-window class
+     (shared.css); this rule is the cards-mode geometry: a padded,
+     content-height pane around the multiline preview. */
   .previews {
     margin: 10px 0 2px;
+    padding: 8px 10px;
+    border-radius: 8px;
     pointer-events: none;
   }
 
@@ -650,7 +655,10 @@
     margin-left: auto;
   }
 
-  .preview-window {
+  /* Grid-only geometry: fixed-height crop that fit-mode TicketPreview
+     anchors against. Scoped to .tc--grid so it cannot clamp the
+     content-height cards pane, which shares the .preview-window skin. */
+  .tc--grid .preview-window {
     width: 100%;
     height: 5rem;
     flex-shrink: 0;
