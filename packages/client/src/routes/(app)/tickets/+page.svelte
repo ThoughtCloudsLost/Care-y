@@ -58,6 +58,7 @@
   import { isCryptoKeyed } from "$lib/crypto/crypto-keyed.svelte.js";
   import { toastStore } from "$lib/stores/toast.svelte.js";
   import { haptic } from "$lib/utils/haptic.js";
+  import { gestureMount } from "$lib/utils/gesture-focus.js";
   import type {
     TicketQuickAction,
     ViewMode,
@@ -208,11 +209,12 @@
 
   const loadedTicketIds = $derived(allTickets.map((t) => t.id));
 
-  // "New replies first" is a persisted presentation toggle; the unread
-  // FILTER is page state. Neither is a filterStore server param: the
-  // server cannot sort or filter by read state by design.
-  let unreadFilterOn = $state(false);
-  let needsAttentionFilterOn = $state(false);
+  // "New replies first" is a persisted presentation toggle; unread/needs-
+  // attention filters live in filterStore (so saved filters can capture
+  // them). Neither is a server param: the server cannot sort or filter
+  // by read state by design.
+  const unreadFilterOn = $derived(filterStore.unreadOnly);
+  const needsAttentionFilterOn = $derived(filterStore.needsAttentionOnly);
   const wantsPinned = $derived(newRepliesFirstStore.enabled || unreadFilterOn);
 
   const readStateSweepQuery = createQuery(() => ({
@@ -967,7 +969,7 @@
         filterStore.clearAll();
         filterStore.toggleStatus("new");
         filterStore.toggleStatus("active");
-        needsAttentionFilterOn = true;
+        filterStore.setNeedsAttentionOnly(true);
       }
 
       if (action === "new-ticket") {
@@ -1151,7 +1153,7 @@
         type: "multi-toggle",
         toggle: (v: string) => {
           if (v === "unread") {
-            unreadFilterOn = !unreadFilterOn;
+            filterStore.setUnreadOnly(!filterStore.unreadOnly);
           } else if (isFilterStatus(v)) {
             filterStore.toggleStatus(v);
           }
@@ -1165,7 +1167,7 @@
         type: "multi-toggle",
         toggle: (v: string) => {
           if (v === "needs-attention") {
-            needsAttentionFilterOn = !needsAttentionFilterOn;
+            filterStore.setNeedsAttentionOnly(!filterStore.needsAttentionOnly);
             return;
           }
           const parsed = ticketPrioritySchema.safeParse(v);
@@ -1207,8 +1209,6 @@
     },
     clearAll: () => {
       filterStore.clearAll();
-      unreadFilterOn = false;
-      needsAttentionFilterOn = false;
     },
     onchange: () => {
       if (overlay.active) useMatchOrder = false;
@@ -1245,6 +1245,8 @@
       filterStore.queueIds.size,
       filterStore.assigneeId,
       filterStore.dateFrom !== null || filterStore.dateTo !== null,
+      filterStore.unreadOnly,
+      filterStore.needsAttentionOnly,
     ),
   );
 
@@ -1295,10 +1297,7 @@
 
   const filterPillsConfig: FilterPillsConfig = $derived({
     pills: ticketPills,
-    activeCount:
-      filterStore.activeCount +
-      (unreadFilterOn ? 1 : 0) +
-      (needsAttentionFilterOn ? 1 : 0),
+    activeCount: filterStore.activeCount,
     dateFrom: dateFromStr,
     dateTo: dateToStr,
     dateActive: dateRangeActive,
@@ -1418,7 +1417,9 @@
     filterPills={filterPillsConfig}
     searchNavigator={overlay.active ? searchNavigatorRow : undefined}
     bulkActions={multiSelect.active ? bulkActionsRow : undefined}
-    onsearch={!overlay.active ? () => overlay.enter("") : undefined}
+    onsearch={!overlay.active
+      ? () => gestureMount(() => overlay.enter(""))
+      : undefined}
     searchLabel={m.search_inline_trigger()}
   />
 {/snippet}

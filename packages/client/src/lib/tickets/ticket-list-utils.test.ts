@@ -334,9 +334,17 @@ describe("buildDateRangeLabel", () => {
 
 describe("buildFilterSummary", () => {
   it("returns 'No filters' when nothing active", () => {
-    expect(buildFilterSummary(new Set(), new Set(), 0, undefined, false)).toBe(
-      "No filters",
-    );
+    expect(
+      buildFilterSummary(
+        new Set(),
+        new Set(),
+        0,
+        undefined,
+        false,
+        false,
+        false,
+      ),
+    ).toBe("No filters");
   });
 
   it("includes statuses", () => {
@@ -347,47 +355,139 @@ describe("buildFilterSummary", () => {
         0,
         undefined,
         false,
+        false,
+        false,
       ),
     ).toBe("new, active");
   });
 
   it("includes priorities", () => {
     expect(
-      buildFilterSummary(new Set(), new Set(["high"]), 0, undefined, false),
+      buildFilterSummary(
+        new Set(),
+        new Set(["high"]),
+        0,
+        undefined,
+        false,
+        false,
+        false,
+      ),
     ).toBe("high");
   });
 
   it("includes queue count with pluralization", () => {
-    expect(buildFilterSummary(new Set(), new Set(), 1, undefined, false)).toBe(
-      "1 queue",
-    );
-    expect(buildFilterSummary(new Set(), new Set(), 3, undefined, false)).toBe(
-      "3 queues",
-    );
+    expect(
+      buildFilterSummary(
+        new Set(),
+        new Set(),
+        1,
+        undefined,
+        false,
+        false,
+        false,
+      ),
+    ).toBe("1 queue");
+    expect(
+      buildFilterSummary(
+        new Set(),
+        new Set(),
+        3,
+        undefined,
+        false,
+        false,
+        false,
+      ),
+    ).toBe("3 queues");
   });
 
   it("includes assignee", () => {
-    expect(buildFilterSummary(new Set(), new Set(), 0, "user-1", false)).toBe(
-      "assigned",
-    );
+    expect(
+      buildFilterSummary(
+        new Set(),
+        new Set(),
+        0,
+        "user-1",
+        false,
+        false,
+        false,
+      ),
+    ).toBe("assigned");
   });
 
   it("does not include assignee when null", () => {
-    expect(buildFilterSummary(new Set(), new Set(), 0, null, false)).toBe(
-      "No filters",
-    );
+    expect(
+      buildFilterSummary(new Set(), new Set(), 0, null, false, false, false),
+    ).toBe("No filters");
   });
 
   it("includes date range", () => {
-    expect(buildFilterSummary(new Set(), new Set(), 0, undefined, true)).toBe(
-      "date range",
-    );
+    expect(
+      buildFilterSummary(
+        new Set(),
+        new Set(),
+        0,
+        undefined,
+        true,
+        false,
+        false,
+      ),
+    ).toBe("date range");
   });
 
   it("joins multiple parts", () => {
     expect(
-      buildFilterSummary(new Set(["new"]), new Set(["high"]), 2, "u1", true),
+      buildFilterSummary(
+        new Set(["new"]),
+        new Set(["high"]),
+        2,
+        "u1",
+        true,
+        false,
+        false,
+      ),
     ).toBe("new, high, 2 queues, assigned, date range");
+  });
+
+  it("includes Unread when unreadOnly is true", () => {
+    expect(
+      buildFilterSummary(
+        new Set(),
+        new Set(),
+        0,
+        undefined,
+        false,
+        true,
+        false,
+      ),
+    ).toBe("Unread");
+  });
+
+  it("includes Needs attention when needsAttentionOnly is true", () => {
+    expect(
+      buildFilterSummary(
+        new Set(),
+        new Set(),
+        0,
+        undefined,
+        false,
+        false,
+        true,
+      ),
+    ).toBe("Needs attention");
+  });
+
+  it("joins toggle labels with other parts", () => {
+    expect(
+      buildFilterSummary(
+        new Set(["new"]),
+        new Set(),
+        0,
+        undefined,
+        false,
+        true,
+        true,
+      ),
+    ).toBe("new, Unread, Needs attention");
   });
 });
 

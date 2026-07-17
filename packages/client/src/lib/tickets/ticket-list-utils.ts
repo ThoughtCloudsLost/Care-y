@@ -172,6 +172,8 @@ export function buildFilterSummary(
   queueCount: number,
   assigneeId: string | null | undefined,
   hasDateRange: boolean,
+  unreadOnly: boolean,
+  needsAttentionOnly: boolean,
 ): string {
   const parts: string[] = [];
   if (statuses.size > 0) parts.push([...statuses].join(", "));
@@ -181,6 +183,8 @@ export function buildFilterSummary(
   }
   if (assigneeId !== null && assigneeId !== undefined) parts.push("assigned");
   if (hasDateRange) parts.push("date range");
+  if (unreadOnly) parts.push("Unread");
+  if (needsAttentionOnly) parts.push("Needs attention");
   return parts.length > 0 ? parts.join(", ") : "No filters";
 }
 

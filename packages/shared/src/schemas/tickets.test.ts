@@ -23,6 +23,7 @@ import {
   sweepReadStateInputSchema,
   searchClientsInputSchema,
   callStatusSchema,
+  savedFilterStateSchema,
 } from "./tickets.js";
 
 /** Base64-encode a string of n arbitrary bytes. */
@@ -653,5 +654,45 @@ describe("callStatusSchema", () => {
 
   it("rejects Twilio's hyphenated format", () => {
     expect(callStatusSchema.safeParse("no-answer").success).toBe(false);
+  });
+});
+
+describe("savedFilterStateSchema", () => {
+  const base = {
+    statuses: ["new", "active"],
+    queueIds: ["q-1"],
+    priorities: ["high"],
+    assigneeId: "user-1",
+    dateFrom: "2026-01-01T00:00:00.000Z",
+    dateTo: "2026-03-01T00:00:00.000Z",
+    sortField: "date",
+    sortDirection: "desc",
+  };
+
+  it("parses with both toggle fields set", () => {
+    const result = savedFilterStateSchema.safeParse({
+      ...base,
+      unreadOnly: true,
+      needsAttentionOnly: true,
+    });
+    expect(result.success).toBe(true);
+    expect(result.data?.unreadOnly).toBe(true);
+    expect(result.data?.needsAttentionOnly).toBe(true);
+  });
+
+  it("defaults missing toggle fields to false", () => {
+    const result = savedFilterStateSchema.safeParse(base);
+    expect(result.success).toBe(true);
+    expect(result.data?.unreadOnly).toBe(false);
+    expect(result.data?.needsAttentionOnly).toBe(false);
+  });
+
+  it("round-trips through JSON serialization", () => {
+    const input = { ...base, unreadOnly: true, needsAttentionOnly: false };
+    const parsed = savedFilterStateSchema.parse(input);
+    const roundTripped = savedFilterStateSchema.parse(
+      JSON.parse(JSON.stringify(parsed)),
+    );
+    expect(roundTripped).toEqual(parsed);
   });
 });
