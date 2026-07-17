@@ -36,7 +36,11 @@
   import { Button } from "konsta/svelte";
   import { UserPlus, Pause, TicketPlus } from "@lucide/svelte";
   import BulkActionBar from "$lib/components/BulkActionBar.svelte";
-  import { deriveDisplayStatus } from "$lib/tickets/display-status.js";
+  import {
+    createCardPropsMapper,
+    type DataCardProps,
+  } from "$lib/tickets/ticket-card-props.js";
+  import type { SerializedBuffer } from "$lib/utils/buffer-encoding.js";
   import { filterStore, type SortField } from "$lib/stores/filters.svelte.js";
   import { viewModeStore } from "$lib/stores/view-mode.svelte.js";
   import { newRepliesFirstStore } from "$lib/stores/new-replies-first.svelte.js";
@@ -51,7 +55,6 @@
   import { toastStore } from "$lib/stores/toast.svelte.js";
   import { haptic } from "$lib/utils/haptic.js";
   import type {
-    TicketCardProps,
     TicketQuickAction,
     ViewMode,
   } from "$lib/components/tickets/ticket-types.js";
@@ -81,7 +84,6 @@
     resolveVolunteerName as sharedResolveVolunteerName,
     type VolunteerRecord,
   } from "$lib/tickets/resolve-volunteer.js";
-  import { resolveAsyncDecrypt } from "$lib/crypto/decrypt-result.js";
   import { createSearchOverlay } from "$lib/search/search-overlay.svelte.js";
   import { createDeepSearch } from "$lib/search/deep-search.svelte.js";
   import SearchNavigator from "$lib/components/search/SearchNavigator.svelte";
@@ -95,7 +97,6 @@
   import { createReplyFlow } from "$lib/composables/ticket-list/create-reply-flow.svelte.js";
   import {
     filterByDisplayStatus,
-    reactionsForTicket,
     matchTitles,
     mergeSearchMatches,
     applySearchOrder,
@@ -370,60 +371,59 @@
 
   // --- Card props mapping ---
 
-  type DataCardProps = Omit<
-    TicketCardProps,
-    "viewMode" | "selected" | "multiSelectActive"
-  >;
-
-  function toDataCardProps(t: TicketRecord): DataCardProps {
-    const assignedIsSelf =
-      t.assignedTo !== null && t.assignedTo === currentUserId;
-    let assignedName: string | null = null;
-    if (assignedIsSelf) {
-      assignedName = m.dashboard_assigned_you();
-    } else if (t.assignedTo !== null) {
-      assignedName =
-        orgCache.decrypt(`assignee:${t.assignedTo}`, t.assignedDisplayName) ??
-        null;
+  // The shared mapper hands its decrypt hooks widened `unknown` ciphertext;
+  // re-derive the typed inputs from the loaded rows (list plus pinned),
+  // keyed the same way the mapper keys them, so the cache calls stay
+  // type-safe without a cast (same convention as the dashboard).
+  const mapperRecordById = $derived.by(() => {
+    const map = new SvelteMap<string, TicketRecord>();
+    for (const t of allTickets) map.set(t.id, t);
+    for (const t of pinnedRecords) {
+      if (!map.has(t.id)) map.set(t.id, t);
     }
+    return map;
+  });
 
-    return {
-      ticketId: t.id,
-      queueName: orgCache.decrypt(`queue:${t.queueId}`, t.encryptedQueueName),
-      displayStatus: deriveDisplayStatus(t.status, t.onHold, t.followUpCount),
-      priority: t.priority,
-      titleResult: resolveAsyncDecrypt(
-        ticketCache.decryptTitle(t.id, t.keyWrap, t.encryptedTitle),
-        t.keyWrap !== null,
-      ),
-      clientAlias: t.clientAlias,
-      assignedName,
-      assignedIsSelf,
-      createdAt: new Date(t.createdAt),
-      lastActivityAt:
-        t.lastActivityAt !== null ? new Date(t.lastActivityAt) : null,
-      followUpCount: t.followUpCount,
-      unreadCount: listReadState.unreadCount(t.id),
-      previewFollowUps: previewLoader.get(t.id),
-      previewReactions: reactionsForTicket(
-        previewLoader.get(t.id),
-        previewReactionsMap,
-      ),
+  const orgCipherByKey = $derived.by(() => {
+    const map = new SvelteMap<string, SerializedBuffer | Uint8Array | null>();
+    for (const t of mapperRecordById.values()) {
+      map.set(`queue:${t.queueId}`, t.encryptedQueueName);
+      if (t.assignedTo !== null) {
+        map.set(`assignee:${t.assignedTo}`, t.assignedDisplayName);
+      }
+    }
+    return map;
+  });
+
+  const cardPropsMapper = $derived(
+    createCardPropsMapper({
+      orgDecrypt: (cacheKey) =>
+        orgCache.decrypt(cacheKey, orgCipherByKey.get(cacheKey) ?? null),
+      decryptTitle: (ticketId) => {
+        const t = mapperRecordById.get(ticketId);
+        return t
+          ? ticketCache.decryptTitle(t.id, t.keyWrap, t.encryptedTitle)
+          : undefined;
+      },
+      currentUserId: currentUserId ?? "",
+      unreadCount: (ticketId) => listReadState.unreadCount(ticketId),
+      getPreview: (ticketId) => previewLoader.get(ticketId),
+      previewReactionsMap,
       ontap: handleTicketTap,
       onfullopen: handleTicketFullOpen,
       onselect: (id: string) => multiSelect.toggleSelection(id),
       onaction: handleAction,
       onencryptedhelp: showEncryptedHelp,
-    };
-  }
+    }),
+  );
 
   const cardPropsMap = $derived.by(() => {
     const map = new SvelteMap<string, DataCardProps>();
     for (const t of displayFiltered) {
-      map.set(t.id, toDataCardProps(t));
+      map.set(t.id, cardPropsMapper(t));
     }
     for (const t of pinnedRecords) {
-      if (!map.has(t.id)) map.set(t.id, toDataCardProps(t));
+      if (!map.has(t.id)) map.set(t.id, cardPropsMapper(t));
     }
     return map;
   });
