@@ -304,4 +304,117 @@ describe("CaseHeader", () => {
     });
     expect(container.querySelector(".case-header")).toBeNull();
   });
+
+  it("tap on handle expands when already folded", async () => {
+    setCaseFolded("ticket-001", true);
+    const { container } = render(CaseHeader, {
+      props: { ticketId: "ticket-001" },
+    });
+    const handle = container.querySelector(".case-handle");
+    expect(handle?.getAttribute("aria-expanded")).toBe("false");
+
+    handle?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+
+    await vi.waitFor(() => {
+      expect(handle?.getAttribute("aria-expanded")).toBe("true");
+      expect(
+        container
+          .querySelector(".case-fields-wrap")
+          ?.classList.contains("case-fields-wrap--folded"),
+      ).toBe(false);
+    });
+  });
+
+  it("does not render handle when alwaysExpanded is true", () => {
+    const { container } = render(CaseHeader, {
+      props: { ticketId: "ticket-001", alwaysExpanded: true },
+    });
+    expect(container.querySelector(".case-handle")).toBeNull();
+  });
+
+  describe("drag gesture", () => {
+    function createTouch(clientY: number): Touch {
+      return {
+        clientY,
+        clientX: 0,
+        identifier: 0,
+        target: document.body,
+        pageX: 0,
+        pageY: clientY,
+        screenX: 0,
+        screenY: clientY,
+        radiusX: 0,
+        radiusY: 0,
+        rotationAngle: 0,
+        force: 0,
+      } as Touch;
+    }
+
+    function fireTouchEvent(el: Element, type: string, clientY: number): void {
+      const touch = createTouch(clientY);
+      el.dispatchEvent(
+        new TouchEvent(type, {
+          touches: type === "touchend" ? [] : [touch],
+          changedTouches: [touch],
+          bubbles: true,
+          cancelable: true,
+        }),
+      );
+    }
+
+    it("committed drag down when expanded toggles fold and suppresses click", async () => {
+      const { container } = render(CaseHeader, {
+        props: { ticketId: "ticket-001" },
+      });
+      const handle = container.querySelector(".case-handle")!;
+      expect(handle.getAttribute("aria-expanded")).toBe("true");
+
+      fireTouchEvent(handle, "touchstart", 100);
+      fireTouchEvent(handle, "touchmove", 200);
+      fireTouchEvent(handle, "touchend", 200);
+
+      await vi.waitFor(() => {
+        expect(handle.getAttribute("aria-expanded")).toBe("false");
+      });
+
+      // Click after drag should not double-toggle back to expanded.
+      handle.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      expect(handle.getAttribute("aria-expanded")).toBe("false");
+    });
+
+    it("sub-commit-delta drag does not suppress click", async () => {
+      const { container } = render(CaseHeader, {
+        props: { ticketId: "ticket-001" },
+      });
+      const handle = container.querySelector(".case-handle")!;
+      expect(handle.getAttribute("aria-expanded")).toBe("true");
+
+      // 1px movement is below the 3px commit delta.
+      fireTouchEvent(handle, "touchstart", 100);
+      fireTouchEvent(handle, "touchmove", 101);
+      fireTouchEvent(handle, "touchend", 101);
+
+      // Click still works as a tap toggle.
+      handle.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+
+      await vi.waitFor(() => {
+        expect(handle.getAttribute("aria-expanded")).toBe("false");
+      });
+    });
+
+    it("drag in wrong direction when expanded does not toggle", () => {
+      const { container } = render(CaseHeader, {
+        props: { ticketId: "ticket-001" },
+      });
+      const handle = container.querySelector(".case-handle")!;
+      expect(handle.getAttribute("aria-expanded")).toBe("true");
+
+      // Drag upward when expanded (wrong direction for fold).
+      fireTouchEvent(handle, "touchstart", 200);
+      fireTouchEvent(handle, "touchmove", 100);
+      fireTouchEvent(handle, "touchend", 100);
+
+      expect(handle.getAttribute("aria-expanded")).toBe("true");
+    });
+  });
 });
