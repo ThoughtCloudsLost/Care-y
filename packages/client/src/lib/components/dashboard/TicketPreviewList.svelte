@@ -1,15 +1,23 @@
 <script lang="ts">
   import TicketCard from "$lib/components/tickets/TicketCard.svelte";
+  import TicketCardBoundary from "$lib/components/tickets/TicketCardBoundary.svelte";
   import TicketTable from "$lib/components/tickets/TicketTable.svelte";
   import EmptyState from "$lib/components/EmptyState.svelte";
   import { resolveGridColumns } from "$lib/tickets/ticket-list-utils.js";
   import type { ViewMode } from "$lib/stores/view-mode.svelte.js";
-  import type { DataCardProps } from "$lib/tickets/ticket-card-props.js";
+  import type {
+    DataCardProps,
+    TicketLikeRecord,
+  } from "$lib/tickets/ticket-card-props.js";
   import * as m from "$lib/paraglide/messages.js";
 
   interface TicketPreviewListProps {
-    /** Card props already mapped by the shared ticket-card mapper. */
-    cards: DataCardProps[];
+    /** Raw ticket records; each row maps its own props via `mapper`. */
+    tickets: readonly TicketLikeRecord[];
+    /** Page-built card props mapper (stable identity across rows). */
+    mapper: (ticket: TicketLikeRecord) => DataCardProps;
+    /** Row tap handler for the table presentation. */
+    ontap?: (ticketId: string) => void;
     /** Which of the three Inkwell presentations to render. */
     viewMode: ViewMode;
     /** Cap for list/cards; grid packs one extra row (see `cap`). */
@@ -18,12 +26,14 @@
     loading?: boolean;
     /** Callback when "see all" is tapped. Route file handles navigation. */
     onseeall?: () => void;
-    /** Total count from server (overrides cards.length in the "see all" label). */
+    /** Total count from server (overrides tickets.length in the "see all" label). */
     totalCount?: number;
   }
 
   let {
-    cards,
+    tickets,
+    mapper,
+    ontap,
     viewMode,
     maxVisible = 5,
     loading = false,
@@ -33,8 +43,8 @@
 
   // Grid packs an even two rows; list and cards keep the five-item preview.
   const cap = $derived(viewMode === "grid" ? 6 : maxVisible);
-  const displayCount = $derived(totalCount ?? cards.length);
-  const visibleCards = $derived(cards.slice(0, cap));
+  const displayCount = $derived(totalCount ?? tickets.length);
+  const visibleTickets = $derived(tickets.slice(0, cap));
   const hasMore = $derived(displayCount > cap);
 
   // Grid columns track the section container width, floored at two so a
@@ -67,21 +77,24 @@
   }
 
   const tableRows = $derived.by(() => {
-    const mapped = visibleCards.map((c) => ({
-      ticketId: c.ticketId,
-      displayStatus: c.displayStatus,
-      priority: c.priority,
-      clientAlias: c.clientAlias,
-      titleResult: c.titleResult,
-      encryptedTitle: c.encryptedTitle,
-      queueName: c.queueName,
-      assignedName: c.assignedName,
-      assignedIsSelf: c.assignedIsSelf,
-      lastActivityAt: c.lastActivityAt,
-      createdAt: c.createdAt,
-      followUpCount: c.followUpCount,
-      unreadCount: c.unreadCount,
-    }));
+    const mapped = visibleTickets.map((t) => {
+      const c = mapper(t);
+      return {
+        ticketId: c.ticketId,
+        displayStatus: c.displayStatus,
+        priority: c.priority,
+        clientAlias: c.clientAlias,
+        titleResult: c.titleResult,
+        encryptedTitle: t.encryptedTitle,
+        queueName: c.queueName,
+        assignedName: c.assignedName,
+        assignedIsSelf: c.assignedIsSelf,
+        lastActivityAt: c.lastActivityAt,
+        createdAt: c.createdAt,
+        followUpCount: c.followUpCount,
+        unreadCount: c.unreadCount,
+      };
+    });
 
     const dir = tableSortDirection === "asc" ? 1 : -1;
 
@@ -171,7 +184,7 @@
       {/each}
     </div>
   {/if}
-{:else if cards.length === 0}
+{:else if tickets.length === 0}
   <EmptyState message={m.dashboard_empty_section()} />
 {:else if viewMode === "table"}
   <div class="preview-list" style="padding: 0 var(--page-pad-x);">
@@ -180,7 +193,7 @@
       sortField={tableSortField}
       sortDirection={tableSortDirection}
       onsortchange={handleTableSort}
-      ontap={visibleCards[0]?.ontap ?? noop}
+      ontap={ontap ?? noop}
     />
   </div>
   {#if hasMore && onseeall !== undefined}
@@ -197,8 +210,8 @@
     class:mode-grid={viewMode === "grid"}
     style:--grid-cols={gridColumns}
   >
-    {#each visibleCards as card (card.ticketId)}
-      <TicketCard {...card} {viewMode} />
+    {#each visibleTickets as ticket (ticket.id)}
+      <TicketCardBoundary {ticket} {mapper} {viewMode} />
     {/each}
   </div>
   {#if hasMore && onseeall !== undefined}

@@ -38,8 +38,11 @@
   import BulkActionBar from "$lib/components/BulkActionBar.svelte";
   import {
     createCardPropsMapper,
-    type DataCardProps,
+    mapTicketDisplayFields,
+    type TicketDisplayFieldDeps,
   } from "$lib/tickets/ticket-card-props.js";
+  import { deriveDisplayStatus } from "$lib/tickets/display-status.js";
+  import { resolveAsyncDecrypt } from "$lib/crypto/decrypt-result.js";
   import type { SerializedBuffer } from "$lib/utils/buffer-encoding.js";
   import { filterStore, type SortField } from "$lib/stores/filters.svelte.js";
   import { viewModeStore } from "$lib/stores/view-mode.svelte.js";
@@ -69,6 +72,7 @@
   import ViewSwitcher from "$lib/components/ViewSwitcher.svelte";
   import StatusMark from "$lib/components/StatusMark.svelte";
   import TicketCard from "$lib/components/tickets/TicketCard.svelte";
+  import TicketCardBoundary from "$lib/components/tickets/TicketCardBoundary.svelte";
   import TicketTable from "$lib/components/tickets/TicketTable.svelte";
   import SwipeableCard from "$lib/components/tickets/SwipeableCard.svelte";
   import type { PillDefinition } from "$lib/components/filters/filter-types.js";
@@ -98,6 +102,7 @@
   import {
     filterByDisplayStatus,
     matchTitles,
+    type TitleEntry,
     mergeSearchMatches,
     applySearchOrder,
     buildDateRangeLabel,
@@ -395,10 +400,13 @@
     return map;
   });
 
+  function orgDecryptByKey(cacheKey: string): string | null {
+    return orgCache.decrypt(cacheKey, orgCipherByKey.get(cacheKey) ?? null);
+  }
+
   const cardPropsMapper = $derived(
     createCardPropsMapper({
-      orgDecrypt: (cacheKey) =>
-        orgCache.decrypt(cacheKey, orgCipherByKey.get(cacheKey) ?? null),
+      orgDecrypt: orgDecryptByKey,
       decryptTitle: (ticketId) => {
         const t = mapperRecordById.get(ticketId);
         return t
@@ -417,16 +425,38 @@
     }),
   );
 
-  const cardPropsMap = $derived.by(() => {
-    const map = new SvelteMap<string, DataCardProps>();
+  // The ONE cross-row decrypt aggregate: id to raw title cache read over
+  // the display rows plus pinned rows. Search matching, the client sort's
+  // title case, and the table rows read titles through this map; every
+  // other decrypt subscription lives inside the per-row card boundary, so
+  // a landed decrypt re-renders one row instead of rebuilding the list.
+  const titleById = $derived.by(() => {
+    const map = new SvelteMap<string, string | undefined>();
     for (const t of displayFiltered) {
-      map.set(t.id, cardPropsMapper(t));
+      map.set(
+        t.id,
+        ticketCache.decryptTitle(t.id, t.keyWrap, t.encryptedTitle),
+      );
     }
     for (const t of pinnedRecords) {
-      if (!map.has(t.id)) map.set(t.id, cardPropsMapper(t));
+      if (!map.has(t.id)) {
+        map.set(
+          t.id,
+          ticketCache.decryptTitle(t.id, t.keyWrap, t.encryptedTitle),
+        );
+      }
     }
     return map;
   });
+
+  // Display-field deps for the cross-row aggregates (search entries and
+  // table rows): titles resolve through titleById rather than each caller
+  // touching the decrypt cache directly.
+  const tableFieldDeps = $derived({
+    orgDecrypt: orgDecryptByKey,
+    decryptTitle: (ticketId: string) => titleById.get(ticketId),
+    currentUserId: currentUserId ?? "",
+  } satisfies TicketDisplayFieldDeps);
 
   // --- Search ---
 
@@ -436,24 +466,31 @@
     scrollContainer: () => scrollEl,
   });
 
-  const titleMatchIds = $derived(
-    overlay.term == null
-      ? []
-      : matchTitles(
-          [...cardPropsMap].map(([id, props]) => ({
-            id,
-            title:
-              props.titleResult.status === "ready"
-                ? props.titleResult.value
-                : null,
-            clientAlias: props.clientAlias,
-            queueName: props.queueName,
-            assignedName: props.assignedName,
-          })),
-          overlay.term,
-          fuzzySearch,
-        ),
-  );
+  const titleMatchIds = $derived.by(() => {
+    if (overlay.term == null) return [];
+    const entries: TitleEntry[] = [];
+    const push = (t: TicketRecord): void => {
+      const fields = mapTicketDisplayFields(t, tableFieldDeps);
+      entries.push({
+        id: t.id,
+        title:
+          fields.titleResult.status === "ready"
+            ? fields.titleResult.value
+            : null,
+        clientAlias: fields.clientAlias,
+        queueName: fields.queueName,
+        assignedName: fields.assignedName,
+      });
+    };
+    for (const t of displayFiltered) {
+      push(t);
+    }
+    const seen = new Set(displayFiltered.map((t) => t.id));
+    for (const t of pinnedRecords) {
+      if (!seen.has(t.id)) push(t);
+    }
+    return matchTitles(entries, overlay.term, fuzzySearch);
+  });
 
   const deepSearch = createDeepSearch({
     overlay,
@@ -470,7 +507,7 @@
     mergeSearchMatches(
       titleMatchIds,
       deepSearch.contentMatchIds,
-      new Set(cardPropsMap.keys()),
+      new Set([...displayFiltered, ...pinnedRecords].map((t) => t.id)),
     ),
   );
 
@@ -541,21 +578,18 @@
     return displayItems;
   });
 
-  interface PropsLike {
-    displayStatus: string;
-    priority: string;
-    clientAlias: string;
-    titleResult: { status: string; value?: string };
-    queueName: string | null;
-    assignedName: string | null;
-    lastActivityAt: Date | null;
-    createdAt: Date;
-    followUpCount: number;
+  // Assignee names for sorting only; the same self-to-You mapping the
+  // display core applies, without paying for full field assembly per
+  // comparison. Org cache reads are synchronous map hits.
+  function assignedSortName(t: TicketRecord): string | null {
+    if (t.assignedTo === null) return null;
+    if (t.assignedTo === currentUserId) return m.dashboard_assigned_you();
+    return orgCache.decrypt(`assignee:${t.assignedTo}`, t.assignedDisplayName);
   }
 
   function compareByField(
-    pa: PropsLike,
-    pb: PropsLike,
+    ta: TicketRecord,
+    tb: TicketRecord,
     field: string,
     dir: number,
   ): number {
@@ -575,44 +609,60 @@
     switch (field) {
       case "status":
         return (
-          ((statusRank[pa.displayStatus] ?? 4) -
-            (statusRank[pb.displayStatus] ?? 4)) *
+          ((statusRank[
+            deriveDisplayStatus(ta.status, ta.onHold, ta.followUpCount)
+          ] ?? 4) -
+            (statusRank[
+              deriveDisplayStatus(tb.status, tb.onHold, tb.followUpCount)
+            ] ?? 4)) *
           dir
         );
       case "priority":
-        return ((rank[pa.priority] ?? 4) - (rank[pb.priority] ?? 4)) * dir;
+        return ((rank[ta.priority] ?? 4) - (rank[tb.priority] ?? 4)) * dir;
       case "client":
-        return pa.clientAlias.localeCompare(pb.clientAlias) * dir;
+        return ta.clientAlias.localeCompare(tb.clientAlias) * dir;
       case "title": {
-        const aVal =
-          pa.titleResult.status === "ready" ? (pa.titleResult.value ?? "") : "";
-        const bVal =
-          pb.titleResult.status === "ready" ? (pb.titleResult.value ?? "") : "";
+        const ra = resolveAsyncDecrypt(
+          titleById.get(ta.id),
+          ta.keyWrap !== null,
+        );
+        const rb = resolveAsyncDecrypt(
+          titleById.get(tb.id),
+          tb.keyWrap !== null,
+        );
+        const aVal = ra.status === "ready" ? ra.value : "";
+        const bVal = rb.status === "ready" ? rb.value : "";
         return aVal.localeCompare(bVal) * dir;
       }
-      case "queue":
-        return (pa.queueName ?? "").localeCompare(pb.queueName ?? "") * dir;
+      case "queue": {
+        const qa =
+          orgCache.decrypt(`queue:${ta.queueId}`, ta.encryptedQueueName) ?? "";
+        const qb =
+          orgCache.decrypt(`queue:${tb.queueId}`, tb.encryptedQueueName) ?? "";
+        return qa.localeCompare(qb) * dir;
+      }
       case "assignee":
         return (
-          (pa.assignedName ?? "￿").localeCompare(pb.assignedName ?? "￿") * dir
+          (assignedSortName(ta) ?? "￿").localeCompare(
+            assignedSortName(tb) ?? "￿",
+          ) * dir
         );
       case "last_activity": {
-        const aT = (pa.lastActivityAt ?? pa.createdAt).getTime();
-        const bT = (pb.lastActivityAt ?? pb.createdAt).getTime();
+        const aT = Date.parse(ta.lastActivityAt ?? ta.createdAt);
+        const bT = Date.parse(tb.lastActivityAt ?? tb.createdAt);
         return (aT - bT) * dir;
       }
       case "msgs":
-        return (pa.followUpCount - pb.followUpCount) * dir;
+        return (ta.followUpCount - tb.followUpCount) * dir;
       default:
         return 0;
     }
   }
 
-  function clientSortItems<T extends { id: string }>(
-    items: T[],
-    getProps: (item: T) => PropsLike | undefined,
+  function clientSortItems(
+    items: TicketRecord[],
     isUnread?: (id: string) => boolean,
-  ): T[] {
+  ): TicketRecord[] {
     const useClientSort =
       !ticketsQuery.hasNextPage || CLIENT_ONLY_SORT_FIELDS.has(tableSortField);
 
@@ -623,19 +673,15 @@
       newRepliesFirstStore.enabled && isUnread !== undefined;
 
     if (preserveUnreadFirst) {
-      const unread: T[] = [];
-      const read: T[] = [];
+      const unread: TicketRecord[] = [];
+      const read: TicketRecord[] = [];
       for (const item of items) {
         if (isUnread(item.id)) unread.push(item);
         else read.push(item);
       }
 
-      const sorter = (a: T, b: T): number => {
-        const pa = getProps(a);
-        const pb = getProps(b);
-        if (!pa || !pb) return 0;
-        return compareByField(pa, pb, tableSortField, dir);
-      };
+      const sorter = (a: TicketRecord, b: TicketRecord): number =>
+        compareByField(a, b, tableSortField, dir);
 
       unread.sort(sorter);
       read.sort(sorter);
@@ -643,46 +689,41 @@
     }
 
     const sorted = [...items];
-    sorted.sort((a, b) => {
-      const pa = getProps(a);
-      const pb = getProps(b);
-      if (!pa || !pb) return 0;
-      return compareByField(pa, pb, tableSortField, dir);
-    });
+    sorted.sort((a, b) => compareByField(a, b, tableSortField, dir));
     return sorted;
   }
 
   const sortedListItems = $derived(
-    clientSortItems(
-      listItems,
-      (t) => cardPropsMap.get(t.id),
-      (id) => listReadState.isUnread(id),
-    ),
+    clientSortItems(listItems, (id) => listReadState.isUnread(id)),
   );
 
   const ticketTableRows = $derived(
-    sortedListItems
-      .map((t) => {
-        const props = cardPropsMap.get(t.id);
-        if (!props) return null;
-        return {
-          ticketId: props.ticketId,
-          displayStatus: props.displayStatus,
-          priority: props.priority,
-          clientAlias: props.clientAlias,
-          titleResult: props.titleResult,
-          encryptedTitle: t.encryptedTitle,
-          queueName: props.queueName,
-          assignedName: props.assignedName,
-          assignedIsSelf: props.assignedIsSelf,
-          lastActivityAt: props.lastActivityAt,
-          createdAt: props.createdAt,
-          followUpCount: props.followUpCount,
-          unreadCount: props.unreadCount,
-        };
-      })
-      .filter((r): r is NonNullable<typeof r> => r !== null),
+    sortedListItems.map((t) => ({
+      ...mapTicketDisplayFields(t, tableFieldDeps),
+      encryptedTitle: t.encryptedTitle,
+      unreadCount: listReadState.unreadCount(t.id),
+    })),
   );
+
+  // One skeleton prop blob for both loading blocks (initial load and the
+  // pinned-rows placeholder); the view mode is applied at the render site.
+  const SKELETON_CARD_PROPS = {
+    ticketId: "",
+    queueName: null,
+    displayStatus: "active",
+    priority: "normal",
+    titleResult: { status: "loading" },
+    clientAlias: "",
+    assignedName: null,
+    createdAt: new Date(),
+    lastActivityAt: null,
+    followUpCount: 0,
+    unreadCount: 0,
+    previewFollowUps: undefined,
+    ontap: () => {
+      /* loading skeleton, no-op */
+    },
+  } as const;
 
   const VALID_TICKET_SORT_FIELDS = new Set<SortField>([
     "date",
@@ -1413,21 +1454,7 @@
           <TicketCard
             loading={true}
             viewMode={viewModeStore.mode}
-            ticketId=""
-            queueName={null}
-            displayStatus="active"
-            priority="normal"
-            titleResult={{ status: "loading" }}
-            clientAlias=""
-            assignedName={null}
-            createdAt={new Date()}
-            lastActivityAt={null}
-            followUpCount={0}
-            unreadCount={0}
-            previewFollowUps={undefined}
-            ontap={() => {
-              /* loading skeleton, no-op */
-            }}
+            {...SKELETON_CARD_PROPS}
           />
         {/each}
       </div>
@@ -1479,21 +1506,7 @@
               <TicketCard
                 loading={true}
                 viewMode={viewModeStore.mode}
-                ticketId=""
-                queueName={null}
-                displayStatus="active"
-                priority="normal"
-                titleResult={{ status: "loading" }}
-                clientAlias=""
-                assignedName={null}
-                createdAt={new Date()}
-                lastActivityAt={null}
-                followUpCount={0}
-                unreadCount={0}
-                previewFollowUps={undefined}
-                ontap={() => {
-                  /* loading skeleton, no-op */
-                }}
+                {...SKELETON_CARD_PROPS}
               />
             {/each}
           {/if}
@@ -1531,17 +1544,15 @@
                     onlongpress={(id: string) =>
                       multiSelect.handleLongPress(id)}
                   >
-                    {@const dataProps = cardPropsMap.get(item.id)}
-                    {#if dataProps}
-                      <TicketCard
-                        {...dataProps}
-                        viewMode={viewModeStore.mode}
-                        selected={multiSelect.selectedIds.has(item.id)}
-                        multiSelectActive={multiSelect.active}
-                        searchTerm={overlay.term}
-                        newRepliesFirst={newRepliesFirstStore.enabled}
-                      />
-                    {/if}
+                    <TicketCardBoundary
+                      ticket={item}
+                      mapper={cardPropsMapper}
+                      viewMode={viewModeStore.mode}
+                      selected={multiSelect.selectedIds.has(item.id)}
+                      multiSelectActive={multiSelect.active}
+                      searchTerm={overlay.term}
+                      newRepliesFirst={newRepliesFirstStore.enabled}
+                    />
                   </SwipeableCard>
                 </div>
               {/snippet}
