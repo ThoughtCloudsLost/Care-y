@@ -438,11 +438,28 @@ describe("createQueueInputSchema", () => {
   it("accepts valid input with default escalateDays", () => {
     const result = createQueueInputSchema.safeParse({
       encryptedName: "AQIDBA==",
+      encryptedColor: "AQIDBA==",
+      encryptedIcon: "AQIDBA==",
     });
     expect(result.success).toBe(true);
     if (result.success) {
       expect(result.data.escalateDays).toBe(0);
     }
+  });
+
+  it("rejects input missing encryptedColor or encryptedIcon", () => {
+    expect(
+      createQueueInputSchema.safeParse({
+        encryptedName: "AQIDBA==",
+        encryptedIcon: "AQIDBA==",
+      }).success,
+    ).toBe(false);
+    expect(
+      createQueueInputSchema.safeParse({
+        encryptedName: "AQIDBA==",
+        encryptedColor: "AQIDBA==",
+      }).success,
+    ).toBe(false);
   });
 
   it("rejects empty encryptedName", () => {
@@ -470,6 +487,15 @@ describe("updateQueueInputSchema", () => {
     const result = updateQueueInputSchema.safeParse({
       queueId: VALID_UUID,
       escalateDays: 7,
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("accepts color-and-icon-only update", () => {
+    const result = updateQueueInputSchema.safeParse({
+      queueId: VALID_UUID,
+      encryptedColor: "AQIDBA==",
+      encryptedIcon: "AQIDBA==",
     });
     expect(result.success).toBe(true);
   });

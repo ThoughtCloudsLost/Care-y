@@ -6,12 +6,15 @@
   import CollapsibleSection from "./CollapsibleSection.svelte";
   import DecryptPlaceholder from "$lib/components/DecryptPlaceholder.svelte";
   import InlineSkeleton from "$lib/components/InlineSkeleton.svelte";
+  import QueueGlyph from "$lib/components/shared/QueueGlyph.svelte";
+  import type { QueueAppearance } from "$lib/utils/queue-appearance.js";
 
   interface QueueInfo {
     id: string;
     name: string | null;
     openCount: number;
     urgentCount: number;
+    appearance?: QueueAppearance;
   }
 
   interface QueueCardsProps {
@@ -79,6 +82,9 @@
           aria-label={tileAriaLabel(queue)}
           onclick={() => ontap(queue.id)}
         >
+          {#if queue.appearance}
+            <QueueGlyph appearance={queue.appearance} size={18} />
+          {/if}
           <span class="queue-name">{queue.name ?? "..."}</span>
           <span class="queue-meta num">
             {m.dashboard_queues_open_count({

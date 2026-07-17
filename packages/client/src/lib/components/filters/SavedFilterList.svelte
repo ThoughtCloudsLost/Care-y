@@ -11,7 +11,7 @@
     COLOR_HEX_BY_ID,
     DEFAULT_ICON,
     DEFAULT_COLOR_HEX,
-  } from "./saved-filter-constants.js";
+  } from "$lib/components/inputs/picker-options.js";
   import type { SavedFilterRecord } from "@care-y/shared";
 
   interface Props {
@@ -203,9 +203,14 @@
     user-select: none;
     -webkit-user-select: none;
     touch-action: manipulation;
-    transition:
-      background-color 150ms linear,
-      color 150ms linear;
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .saved-filter-chip {
+      transition:
+        background-color 150ms linear,
+        color 150ms linear;
+    }
   }
 
   .saved-filter-chip:hover {
@@ -216,7 +221,12 @@
   .chip-icon {
     display: flex;
     color: var(--chip-color);
-    transition: color 150ms linear;
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .chip-icon {
+      transition: color 150ms linear;
+    }
   }
 
   .saved-filter-chip:hover .chip-icon {

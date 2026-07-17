@@ -15,13 +15,15 @@
 -->
 <script lang="ts">
   import { createQuery } from "@tanstack/svelte-query";
-  import { ticketKeys } from "$lib/query/keys";
+  import { ticketKeys, queueKeys } from "$lib/query/keys";
   import { trpc } from "$lib/trpc/index.js";
   import * as m from "$lib/paraglide/messages.js";
   import { withTerms } from "$lib/terminology/with-terms.js";
   import PriorityStamp from "$lib/components/PriorityStamp.svelte";
   import DecryptPlaceholder from "$lib/components/DecryptPlaceholder.svelte";
   import InlineSkeleton from "$lib/components/InlineSkeleton.svelte";
+  import QueueGlyph from "$lib/components/shared/QueueGlyph.svelte";
+  import { decryptQueueAppearance } from "$lib/utils/queue-appearance.js";
   import { formatRelativeTime } from "$lib/utils/format-time.js";
   import {
     getTicketDecryptCache,
@@ -101,6 +103,19 @@
       ? orgCache.decrypt(`queue:${ticket.queueId}`, ticket.encryptedQueueName)
       : null,
   );
+
+  // Queue color/icon come from the shared queues list (the ticket payload
+  // only embeds the encrypted name). The query key is shared with the
+  // admin list and pickers, so this is a cache read in practice.
+  const queuesQuery = createQuery(() => ({
+    queryKey: queueKeys.all,
+    queryFn: async () => ticketRouter.listQueues.query(),
+  }));
+
+  const queueAppearance = $derived.by(() => {
+    const q = (queuesQuery.data ?? []).find((x) => x.id === ticket?.queueId);
+    return q ? decryptQueueAppearance(orgCache, q) : undefined;
+  });
 
   const assignedIsSelf = $derived(
     ticket?.assignedTo != null && ticket.assignedTo === currentUserIdGetter(),
@@ -188,6 +203,9 @@
             {#if !ticket}
               <InlineSkeleton width="12ch" />
             {:else}
+              {#if queueAppearance}
+                <QueueGlyph appearance={queueAppearance} size={13} />
+              {/if}
               {queueName ?? "…"} ·
               {#if assignedIsSelf}<b class="meta-you">{m.ticket_meta_you()}</b
                 >{:else}{assignedName ?? m.tickets_unassigned()}{/if}

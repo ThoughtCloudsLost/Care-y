@@ -16,6 +16,27 @@ function encName(label: string): Buffer {
   return Buffer.from(label);
 }
 
+/**
+ * Helper: full create() input with placeholder color/icon ciphertexts.
+ * Color and icon are required on create; most tests only care about the name.
+ */
+function queueInput(
+  label: string,
+  extras: { escalateDays?: number } = {},
+): {
+  encryptedName: Buffer;
+  encryptedColor: Buffer;
+  encryptedIcon: Buffer;
+  escalateDays?: number;
+} {
+  return {
+    encryptedName: encName(label),
+    encryptedColor: encName("blue"),
+    encryptedIcon: encName("folder"),
+    ...extras,
+  };
+}
+
 describe.skipIf(!process.env.DATABASE_URL)("QueueService (DB)", () => {
   let testDb: TestDb;
   let svc: QueueService;
@@ -31,7 +52,7 @@ describe.skipIf(!process.env.DATABASE_URL)("QueueService (DB)", () => {
   });
 
   it("create inserts a queue with defaults", async () => {
-    const q = await svc.create({ encryptedName: encName("General") });
+    const q = await svc.create(queueInput("General"));
     expect(Buffer.isBuffer(q.encryptedName)).toBe(true);
     expect(q.encryptedName.toString()).toBe("General");
     expect(q.escalateDays).toBe(0);
@@ -42,21 +63,53 @@ describe.skipIf(!process.env.DATABASE_URL)("QueueService (DB)", () => {
   });
 
   it("create with explicit escalateDays", async () => {
-    const q = await svc.create({
-      encryptedName: encName("Urgent"),
-      escalateDays: 3,
-    });
+    const q = await svc.create(queueInput("Urgent", { escalateDays: 3 }));
     expect(q.escalateDays).toBe(3);
   });
 
+  it("create stores encryptedColor and encryptedIcon", async () => {
+    const q = await svc.create({
+      encryptedName: encName("Styled"),
+      encryptedColor: encName("red"),
+      encryptedIcon: encName("triangle-alert"),
+    });
+    expect(q.encryptedColor?.toString()).toBe("red");
+    expect(q.encryptedIcon?.toString()).toBe("triangle-alert");
+
+    const list = await svc.listActive();
+    const found = list.find((x) => x.id === q.id);
+    expect(found?.encryptedColor?.toString()).toBe("red");
+    expect(found?.encryptedIcon?.toString()).toBe("triangle-alert");
+  });
+
+  it("update modifies encryptedColor and encryptedIcon without touching the name", async () => {
+    const q = await svc.create(queueInput("Recolor"));
+    const updated = await svc.update(q.id, {
+      encryptedColor: encName("purple"),
+      encryptedIcon: encName("star"),
+    });
+    expect(updated.encryptedColor?.toString()).toBe("purple");
+    expect(updated.encryptedIcon?.toString()).toBe("star");
+    expect(updated.encryptedName.toString()).toBe("Recolor");
+  });
+
+  it("returns null color and icon for queues created before migration 078", async () => {
+    const legacy = await createTestQueue(testDb.db, { label: "LegacyStyle" });
+    const list = await svc.listActive();
+    const found = list.find((x) => x.id === legacy.id);
+    expect(found).toBeDefined();
+    expect(found!.encryptedColor).toBeNull();
+    expect(found!.encryptedIcon).toBeNull();
+  });
+
   it("create auto-increments sort_order", async () => {
-    const q1 = await svc.create({ encryptedName: encName("First") });
-    const q2 = await svc.create({ encryptedName: encName("Second") });
+    const q1 = await svc.create(queueInput("First"));
+    const q2 = await svc.create(queueInput("Second"));
     expect(q2.sortOrder).toBeGreaterThan(q1.sortOrder);
   });
 
   it("listActive returns only active queues", async () => {
-    const q = await svc.create({ encryptedName: encName("Active Queue") });
+    const q = await svc.create(queueInput("Active Queue"));
     // Deactivate it directly
     await testDb.db
       .updateTable("queues")
@@ -69,15 +122,15 @@ describe.skipIf(!process.env.DATABASE_URL)("QueueService (DB)", () => {
   });
 
   it("listActive returns queues ordered by sort_order", async () => {
-    const q1 = await svc.create({ encryptedName: encName("Earlier") });
-    const q2 = await svc.create({ encryptedName: encName("Later") });
+    const q1 = await svc.create(queueInput("Earlier"));
+    const q2 = await svc.create(queueInput("Later"));
     const list = await svc.listActive();
     const ids = list.map((q) => q.id);
     expect(ids.indexOf(q1.id)).toBeLessThan(ids.indexOf(q2.id));
   });
 
   it("update modifies encryptedName", async () => {
-    const q = await svc.create({ encryptedName: encName("Old Name") });
+    const q = await svc.create(queueInput("Old Name"));
     const updated = await svc.update(q.id, {
       encryptedName: encName("New Name"),
     });
@@ -86,16 +139,13 @@ describe.skipIf(!process.env.DATABASE_URL)("QueueService (DB)", () => {
   });
 
   it("update modifies escalateDays", async () => {
-    const q = await svc.create({
-      encryptedName: encName("Escal"),
-      escalateDays: 5,
-    });
+    const q = await svc.create(queueInput("Escal", { escalateDays: 5 }));
     const updated = await svc.update(q.id, { escalateDays: 10 });
     expect(updated.escalateDays).toBe(10);
   });
 
   it("update with no fields returns current state", async () => {
-    const q = await svc.create({ encryptedName: encName("NoChange") });
+    const q = await svc.create(queueInput("NoChange"));
     const same = await svc.update(q.id, {});
     expect(same.encryptedName.toString()).toBe("NoChange");
   });
@@ -107,8 +157,8 @@ describe.skipIf(!process.env.DATABASE_URL)("QueueService (DB)", () => {
   });
 
   it("reorder swaps sort_order values", async () => {
-    const q1 = await svc.create({ encryptedName: encName("ReorderA") });
-    const q2 = await svc.create({ encryptedName: encName("ReorderB") });
+    const q1 = await svc.create(queueInput("ReorderA"));
+    const q2 = await svc.create(queueInput("ReorderB"));
 
     // Swap their sort orders
     await svc.reorder([
@@ -193,7 +243,7 @@ describe.skipIf(!process.env.DATABASE_URL)("QueueService (DB)", () => {
     });
 
     it("returns zero counts for a queue with no tickets or members", async () => {
-      const q = await svc.create({ encryptedName: encName("EmptyCounts") });
+      const q = await svc.create(queueInput("EmptyCounts"));
       const list = await svc.listActive();
       const found = list.find((x) => x.id === q.id);
       expect(found).toBeDefined();
@@ -207,7 +257,7 @@ describe.skipIf(!process.env.DATABASE_URL)("QueueService (DB)", () => {
 
   describe("delete", () => {
     it("deletes an empty queue", async () => {
-      const q = await svc.create({ encryptedName: encName("DeleteMe") });
+      const q = await svc.create(queueInput("DeleteMe"));
       await svc.delete(q.id);
       const list = await svc.listActive();
       expect(list.find((x) => x.id === q.id)).toBeUndefined();
@@ -217,9 +267,7 @@ describe.skipIf(!process.env.DATABASE_URL)("QueueService (DB)", () => {
       const freshDb = await createTestDb();
       await seedOrgPublicKey(freshDb.db);
       const freshSvc = createQueueService(freshDb.db);
-      const only = await freshSvc.create({
-        encryptedName: encName("OnlyQueue"),
-      });
+      const only = await freshSvc.create(queueInput("OnlyQueue"));
 
       await expect(freshSvc.delete(only.id)).rejects.toBeInstanceOf(
         ValidationError,
@@ -285,7 +333,7 @@ describe.skipIf(!process.env.DATABASE_URL)("QueueService (DB)", () => {
     });
 
     it("cleans up queue_watchers on delete", async () => {
-      const q = await svc.create({ encryptedName: encName("WatchClean") });
+      const q = await svc.create(queueInput("WatchClean"));
       // Watchers table is cleaned up even if empty
       await svc.delete(q.id);
       const watchers = await testDb.db

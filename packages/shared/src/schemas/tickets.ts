@@ -117,6 +117,11 @@ export const MAX_ESCALATION_DAYS = 365;
 
 export const createQueueInputSchema = z.object({
   encryptedName: base64String("encryptedName"),
+  // Color and icon are org-key encrypted picker tokens, required on
+  // creation (the form always preselects defaults). The vocabulary is
+  // enforced client-side; the server stores opaque ciphertext.
+  encryptedColor: base64String("encryptedColor"),
+  encryptedIcon: base64String("encryptedIcon"),
   escalateDays: z.number().int().min(0).max(MAX_ESCALATION_DAYS).default(0),
 });
 export type CreateQueueInput = z.infer<typeof createQueueInputSchema>;
@@ -124,6 +129,8 @@ export type CreateQueueInput = z.infer<typeof createQueueInputSchema>;
 export const updateQueueInputSchema = z.object({
   queueId: z.uuid(),
   encryptedName: base64String("encryptedName").optional(),
+  encryptedColor: base64String("encryptedColor").optional(),
+  encryptedIcon: base64String("encryptedIcon").optional(),
   escalateDays: z.number().int().min(0).max(MAX_ESCALATION_DAYS).optional(),
 });
 export type UpdateQueueInput = z.infer<typeof updateQueueInputSchema>;

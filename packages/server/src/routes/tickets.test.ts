@@ -709,10 +709,29 @@ describe.skipIf(!process.env.DATABASE_URL)(
 
         const queue = await caller.tickets.createQueue({
           encryptedName: testEncryptedContent(0xd1),
+          encryptedColor: testEncryptedContent(0xd2),
+          encryptedIcon: testEncryptedContent(0xd3),
           escalateDays: 3,
         });
 
         expect(queue.id).toBeDefined();
+        expect(queue.encryptedColor).toBeDefined();
+        expect(queue.encryptedIcon).toBeDefined();
+      });
+
+      it("rejects queue creation without color and icon", async () => {
+        const admin = await createTestUser(tenantDb, {
+          overrides: { role_id: RoleId.ADMIN },
+        });
+        const caller = createAuthedCaller(admin);
+
+        const missingColorIcon = {
+          encryptedName: testEncryptedContent(0xd4),
+        } as unknown as Parameters<typeof caller.tickets.createQueue>[0];
+        await expectTrpcError(
+          caller.tickets.createQueue(missingColorIcon),
+          "BAD_REQUEST",
+        );
       });
 
       it("lists queues (any volunteer)", async () => {
@@ -731,9 +750,13 @@ describe.skipIf(!process.env.DATABASE_URL)(
 
         const q1 = await caller.tickets.createQueue({
           encryptedName: testEncryptedContent(0xe1),
+          encryptedColor: testEncryptedContent(0xe3),
+          encryptedIcon: testEncryptedContent(0xe4),
         });
         const q2 = await caller.tickets.createQueue({
           encryptedName: testEncryptedContent(0xe2),
+          encryptedColor: testEncryptedContent(0xe5),
+          encryptedIcon: testEncryptedContent(0xe6),
         });
 
         // Use high sort_order values to avoid collisions with queues
@@ -756,6 +779,8 @@ describe.skipIf(!process.env.DATABASE_URL)(
         await expectTrpcError(
           caller.tickets.createQueue({
             encryptedName: testEncryptedContent(0xf1),
+            encryptedColor: testEncryptedContent(0xf2),
+            encryptedIcon: testEncryptedContent(0xf3),
           }),
           "FORBIDDEN",
         );
