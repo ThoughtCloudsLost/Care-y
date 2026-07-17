@@ -1,10 +1,13 @@
 import type { DisplayStatus } from "./display-status.js";
-import type { ReactionSummary } from "@care-y/shared";
+import {
+  ticketSortFieldSchema,
+  type TicketSortField,
+  type ReactionSummary,
+} from "@care-y/shared";
 import type { FuzzyMatch } from "$lib/search/fuzzy.js";
 
 export type FilterStatus = DisplayStatus;
-export type SortField =
-  "date" | "priority" | "last_activity" | "queue" | "client" | "msgs";
+export type SortField = TicketSortField;
 
 export const VALID_STATUSES: ReadonlySet<FilterStatus> = new Set<FilterStatus>([
   "new",
@@ -13,14 +16,7 @@ export const VALID_STATUSES: ReadonlySet<FilterStatus> = new Set<FilterStatus>([
   "closed",
 ]);
 
-export const SORT_FIELDS: readonly SortField[] = [
-  "date",
-  "priority",
-  "last_activity",
-  "queue",
-  "client",
-  "msgs",
-];
+export const SORT_FIELDS: readonly SortField[] = ticketSortFieldSchema.options;
 
 export function isFilterStatus(v: string): v is FilterStatus {
   return (VALID_STATUSES as ReadonlySet<string>).has(v);

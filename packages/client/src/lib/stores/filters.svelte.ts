@@ -19,14 +19,13 @@
  */
 
 import { SvelteSet } from "svelte/reactivity";
-import type { TicketPriority } from "@care-y/shared";
+import type { TicketPriority, TicketSortField } from "@care-y/shared";
 import type { DisplayStatus } from "$lib/tickets/display-status.js";
 import type { SavedFilterState } from "./saved-filters.svelte.js";
 
 export type FilterStatus = DisplayStatus;
 
-export type SortField =
-  "date" | "priority" | "last_activity" | "queue" | "client" | "msgs";
+export type SortField = TicketSortField;
 export type SortDirection = "asc" | "desc";
 
 export interface SortConfig {
