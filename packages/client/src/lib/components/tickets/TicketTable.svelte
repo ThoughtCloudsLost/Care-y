@@ -1,15 +1,16 @@
 <!-- care-y-ignore no-hardcoded-user-strings -- aria-hidden attributes and InlineSkeleton width values are not user-facing text -->
 <script lang="ts">
   import { Checkbox } from "konsta/svelte";
-  import { ArrowUp, ArrowDown } from "@lucide/svelte";
   import * as m from "$lib/paraglide/messages.js";
   import { formatRelativeTime } from "$lib/utils/format-time.js";
   import { onKeyActivate } from "$lib/utils/a11y.js";
+  import { loadMoreObserver } from "$lib/utils/load-more-observer.svelte.js";
   import DecryptPlaceholder from "$lib/components/DecryptPlaceholder.svelte";
   import InlineSkeleton from "$lib/components/InlineSkeleton.svelte";
   import StatusMark from "$lib/components/StatusMark.svelte";
   import PriorityStamp from "$lib/components/PriorityStamp.svelte";
   import NewPill from "$lib/components/NewPill.svelte";
+  import SortHeader from "$lib/components/shared/SortHeader.svelte";
   import type { DecryptResult } from "$lib/crypto/decrypt-result.js";
   import type { DisplayStatus } from "$lib/tickets/display-status.js";
 
@@ -70,22 +71,6 @@
     onloadall,
     newRepliesFirst = false,
   }: TicketTableProps = $props();
-
-  let sentinelEl = $state<HTMLElement | undefined>(undefined);
-
-  $effect(() => {
-    const el = sentinelEl;
-    const cb = onloadmore;
-    if (!el || !cb) return;
-    const observer = new IntersectionObserver(
-      (entries) => {
-        if (entries[0]?.isIntersecting === true) cb();
-      },
-      { rootMargin: "200px" },
-    );
-    observer.observe(el);
-    return () => observer.disconnect();
-  });
 
   const columnHeaders = [
     {
@@ -168,7 +153,7 @@
   }
 </script>
 
-<div class="ticket-table-wrap">
+<div class="data-table-wrap">
   {#if partialSort}
     <div class="partial-sort-hint">
       <span class="partial-sort-text">
@@ -181,31 +166,22 @@
       {/if}
     </div>
   {/if}
-  <table class="ticket-table">
+  <table class="data-table">
     <thead>
       <tr>
         {#if multiSelectActive}
           <th class="col-checkbox" scope="col">
-            <span class="sr-only">{m.library_select_mode()}</span>
+            <span class="sr-only">{m.tickets_select_mode()}</span>
           </th>
         {/if}
         {#each columnHeaders as header (header.field)}
-          <th class={header.className} scope="col">
-            <button
-              type="button"
-              class="sort-header"
-              class:sort-active={sortField === header.field}
-              onclick={() => handleHeaderClick(header.field)}
-            >
-              {header.label()}
-              {#if sortField === header.field}
-                {#if sortDirection === "asc"}<ArrowUp
-                    size={12}
-                    aria-hidden="true"
-                  />{:else}<ArrowDown size={12} aria-hidden="true" />{/if}
-              {/if}
-            </button>
-          </th>
+          <SortHeader
+            class={header.className}
+            label={header.label()}
+            active={sortField === header.field}
+            direction={sortDirection}
+            onsort={() => handleHeaderClick(header.field)}
+          />
         {/each}
       </tr>
     </thead>
@@ -232,6 +208,12 @@
           </tr>
         {/each}
       {:else}
+        <!-- Interactive rows keep implicit table-row semantics: tabindex plus
+             Enter/Space activation (onKeyActivate), one action per row. The
+             APG grid pattern (arrow-key cell navigation, aria-selected) is
+             deliberately not implemented; tabbing row to row matches how the
+             card list behaves and a grid would claim cell-level interaction
+             the table does not have. -->
         {#each rows as row (row.ticketId)}
           {@const isSelected = selectedIds?.has(row.ticketId) ?? false}
           {@const isActive = activeId === row.ticketId}
@@ -334,49 +316,29 @@
     </tbody>
   </table>
   {#if onloadmore}
-    <div bind:this={sentinelEl} class="load-sentinel" aria-hidden="true"></div>
+    <div
+      {@attach loadMoreObserver(onloadmore)}
+      class="load-sentinel"
+      aria-hidden="true"
+    ></div>
   {/if}
 </div>
 
 <style>
-  .ticket-table-wrap {
-    width: 100%;
-    overflow-x: auto;
-  }
-
-  .ticket-table {
-    width: 100%;
-    border-collapse: collapse;
-    font-size: var(--text-sm);
-  }
-
-  /* ── Header ── */
-  thead tr {
-    border-bottom: 2px solid var(--hair-2);
-  }
-
-  th {
-    text-align: left;
-    /* Vertical padding lives on .sort-header so the sortable buttons own a
-       real >=24px box (WCAG 2.5.8); the header row grows a few px for it. */
-    padding: 0 var(--space-sm);
-    font-size: var(--text-xs);
-    font-weight: 600;
-    color: var(--muted);
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
-    white-space: nowrap;
-    position: sticky;
-    top: 0;
-    background: var(--page-bg, var(--raised));
-    z-index: 1;
-  }
+  /* Table anatomy (wrap, header, rows, sort buttons, sentinel) lives in
+     shared.css as the .data-table classes; only the ticket columns and
+     cells are styled here. Header cells render inside SortHeader, so
+     th-specific column overrides go through :global anchored on the
+     scoped table element. */
 
   /* ── Column sizing ── */
-  .col-checkbox {
-    width: 2.5rem;
-    text-align: center;
+  .data-table :global(th.col-status),
+  .data-table :global(th.col-priority) {
     padding: 0 var(--space-xs);
+  }
+
+  .data-table :global(th.col-msgs) {
+    text-align: center;
   }
 
   .col-status {
@@ -434,46 +396,9 @@
   }
 
   /* ── Rows ── */
-  .table-row {
-    border-bottom: 1px solid var(--hair);
-    cursor: pointer;
-    -webkit-tap-highlight-color: transparent;
-  }
-
-  @media (prefers-reduced-motion: no-preference) {
-    .table-row {
-      transition: background 80ms ease;
-    }
-  }
-
-  .table-row:hover {
-    background: var(--raised-hover, var(--raised));
-  }
-
-  .table-row:focus-visible {
-    outline: 2px solid var(--brand-text);
-    outline-offset: -2px;
-  }
-
-  .row-current {
-    background: var(--brand-soft, var(--brand-primary-20));
-  }
-
-  .row-selected {
-    background: var(--brand-soft, var(--brand-primary-20));
-  }
-
   .row-unread .col-title,
   .row-unread .col-client {
     font-weight: 700;
-  }
-
-  td {
-    padding: var(--space-xs) var(--space-sm);
-    vertical-align: middle;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
   }
 
   .cell-bold {
@@ -483,55 +408,6 @@
 
   .cell-title {
     color: var(--ink);
-  }
-
-  .cell-muted {
-    color: var(--muted);
-    font-size: var(--text-xs);
-  }
-
-  /* ── Sort headers ── */
-  .sort-header {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.25rem;
-    background: none;
-    border: none;
-    padding: var(--space-md) 0;
-    font: inherit;
-    font-size: var(--text-xs);
-    font-weight: 600;
-    color: var(--muted);
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
-    cursor: pointer;
-  }
-
-  .sort-header:hover {
-    color: var(--ink);
-  }
-
-  .sort-active {
-    color: var(--brand-text);
-  }
-
-  /* ── Multi-select checkbox ── */
-  :global(.table-checkbox) {
-    transform: scale(0.8);
-    transform-origin: center;
-  }
-
-  /* ── Responsive column hiding ── */
-  @media (max-width: 768px) {
-    .hide-medium {
-      display: none;
-    }
-  }
-
-  @media (max-width: 640px) {
-    .hide-narrow {
-      display: none;
-    }
   }
 
   .partial-sort-hint {
@@ -557,21 +433,5 @@
     cursor: pointer;
     text-decoration: underline;
     text-underline-offset: 2px;
-  }
-
-  .load-sentinel {
-    height: 1px;
-  }
-
-  .sr-only {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    padding: 0;
-    margin: -1px;
-    overflow: hidden;
-    clip: rect(0, 0, 0, 0);
-    white-space: nowrap;
-    border: 0;
   }
 </style>

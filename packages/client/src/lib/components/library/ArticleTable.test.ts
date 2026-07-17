@@ -202,6 +202,44 @@ describe("ArticleTable", () => {
     expect(activeSortHeader?.textContent).toContain("Updated");
   });
 
+  // --- Header semantics ---
+
+  it("renders a plain table without the grid role", () => {
+    const { container } = render(ArticleTable, defaults);
+    expect(container.querySelector("table")?.getAttribute("role")).toBeNull();
+  });
+
+  it("sets aria-sort on the active column, none on inactive sortable, absent on plain headers", () => {
+    const { container } = render(ArticleTable, {
+      ...defaults,
+      sortField: "updated_at" as const,
+      sortDirection: "desc" as const,
+    });
+
+    const updated = container.querySelector("th.col-updated");
+    expect(updated?.getAttribute("aria-sort")).toBe("descending");
+
+    const votes = container.querySelector("th.col-votes");
+    expect(votes?.getAttribute("aria-sort")).toBe("none");
+
+    const title = container.querySelector("th.col-title");
+    expect(title?.getAttribute("aria-sort")).toBeNull();
+  });
+
+  it("reports ascending aria-sort and a state-suffixed button label", () => {
+    const { container } = render(ArticleTable, {
+      ...defaults,
+      sortField: "rating" as const,
+      sortDirection: "asc" as const,
+    });
+
+    const votes = container.querySelector("th.col-votes");
+    expect(votes?.getAttribute("aria-sort")).toBe("ascending");
+    expect(
+      votes?.querySelector(".sort-header")?.getAttribute("aria-label"),
+    ).toBe("Votes, ascending");
+  });
+
   // --- Row interactions ---
 
   it("calls ontap with articleId on row click", async () => {
@@ -243,15 +281,15 @@ describe("ArticleTable", () => {
 
   // --- Active highlight ---
 
-  it("applies active class to the active article row", () => {
+  it("applies the current-row class to the active article row", () => {
     const { container } = render(ArticleTable, {
       ...defaults,
       activeId: "art-002",
     });
 
     const rows = container.querySelectorAll(".table-row");
-    expect(rows[0]?.classList.contains("row-active")).toBe(false);
-    expect(rows[1]?.classList.contains("row-active")).toBe(true);
+    expect(rows[0]?.classList.contains("row-current")).toBe(false);
+    expect(rows[1]?.classList.contains("row-current")).toBe(true);
   });
 
   // --- Decrypt states ---

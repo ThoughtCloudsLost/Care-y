@@ -1,12 +1,14 @@
 <!-- care-y-ignore no-hardcoded-user-strings -- InlineSkeleton width attributes are CSS values, not user-facing text -->
 <script lang="ts">
   import { Checkbox } from "konsta/svelte";
-  import { ThumbsUp, ThumbsDown, ArrowUp, ArrowDown } from "@lucide/svelte";
+  import { ThumbsUp, ThumbsDown } from "@lucide/svelte";
   import * as m from "$lib/paraglide/messages.js";
   import { formatRelativeTime } from "$lib/utils/format-time.js";
   import { onKeyActivate } from "$lib/utils/a11y.js";
+  import { loadMoreObserver } from "$lib/utils/load-more-observer.svelte.js";
   import DecryptPlaceholder from "$lib/components/DecryptPlaceholder.svelte";
   import InlineSkeleton from "$lib/components/InlineSkeleton.svelte";
+  import SortHeader from "$lib/components/shared/SortHeader.svelte";
   import { SvelteMap } from "svelte/reactivity";
   import type { DecryptResult } from "$lib/crypto/decrypt-result.js";
   import type { KbSortField, SortDirection } from "@care-y/shared";
@@ -56,21 +58,39 @@
     onloadmore,
   }: ArticleTableProps = $props();
 
-  let sentinelEl = $state<HTMLElement | undefined>(undefined);
+  interface ColumnHeader {
+    readonly field: KbSortField | null;
+    readonly className: string;
+    readonly label: () => string;
+  }
 
-  $effect(() => {
-    const el = sentinelEl;
-    const cb = onloadmore;
-    if (!el || !cb) return;
-    const observer = new IntersectionObserver(
-      (entries) => {
-        if (entries[0]?.isIntersecting === true) cb();
-      },
-      { rootMargin: "200px" },
-    );
-    observer.observe(el);
-    return () => observer.disconnect();
-  });
+  const columnHeaders: readonly ColumnHeader[] = [
+    {
+      field: null,
+      className: "col-title",
+      label: () => m.library_table_col_title(),
+    },
+    {
+      field: null,
+      className: "col-category hide-narrow",
+      label: () => m.library_table_col_category(),
+    },
+    {
+      field: null,
+      className: "col-author hide-medium",
+      label: () => m.library_table_col_author(),
+    },
+    {
+      field: "rating",
+      className: "col-votes hide-narrow",
+      label: () => m.library_table_col_votes(),
+    },
+    {
+      field: "updated_at",
+      className: "col-updated",
+      label: () => m.library_table_col_updated(),
+    },
+  ];
 
   function handleHeaderClick(field: KbSortField): void {
     const nextDir =
@@ -116,8 +136,8 @@
   }
 </script>
 
-<div class="article-table-wrap">
-  <table class="article-table" role="grid">
+<div class="data-table-wrap">
+  <table class="data-table">
     <thead>
       <tr>
         {#if multiSelectActive}
@@ -125,58 +145,20 @@
             <span class="sr-only">{m.library_select_mode()}</span>
           </th>
         {/if}
-        <th class="col-title" scope="col">{m.library_table_col_title()}</th>
-        <th class="col-category hide-narrow" scope="col"
-          >{m.library_table_col_category()}</th
-        >
-        <th class="col-author hide-medium" scope="col"
-          >{m.library_table_col_author()}</th
-        >
-        <th class="col-votes hide-narrow" scope="col">
-          <button
-            type="button"
-            class="sort-header"
-            class:sort-active={sortField === "rating"}
-            onclick={() => handleHeaderClick("rating")}
-            aria-label="{m.library_table_col_votes()}, {sortField === 'rating'
-              ? sortDirection === 'asc'
-                ? 'ascending'
-                : 'descending'
-              : 'unsorted'}"
-          >
-            {m.library_table_col_votes()}
-            {#if sortField === "rating"}
-              {#if sortDirection === "asc"}
-                <ArrowUp size={12} aria-hidden="true" />
-              {:else}
-                <ArrowDown size={12} aria-hidden="true" />
-              {/if}
-            {/if}
-          </button>
-        </th>
-        <th class="col-updated" scope="col">
-          <button
-            type="button"
-            class="sort-header"
-            class:sort-active={sortField === "updated_at"}
-            onclick={() => handleHeaderClick("updated_at")}
-            aria-label="{m.library_table_col_updated()}, {sortField ===
-            'updated_at'
-              ? sortDirection === 'asc'
-                ? 'ascending'
-                : 'descending'
-              : 'unsorted'}"
-          >
-            {m.library_table_col_updated()}
-            {#if sortField === "updated_at"}
-              {#if sortDirection === "asc"}
-                <ArrowUp size={12} aria-hidden="true" />
-              {:else}
-                <ArrowDown size={12} aria-hidden="true" />
-              {/if}
-            {/if}
-          </button>
-        </th>
+        {#each columnHeaders as header (header.className)}
+          {@const sortable = header.field}
+          {#if sortable === null}
+            <th class={header.className} scope="col">{header.label()}</th>
+          {:else}
+            <SortHeader
+              class={header.className}
+              label={header.label()}
+              active={sortField === sortable}
+              direction={sortDirection}
+              onsort={() => handleHeaderClick(sortable)}
+            />
+          {/if}
+        {/each}
       </tr>
     </thead>
     <tbody>
@@ -205,7 +187,7 @@
           <tr
             id="article-{row.id}"
             class="table-row"
-            class:row-active={isActive}
+            class:row-current={isActive}
             class:row-selected={isSelected}
             tabindex="0"
             aria-current={isActive ? "true" : undefined}
@@ -282,53 +264,20 @@
     </tbody>
   </table>
   {#if onloadmore}
-    <div bind:this={sentinelEl} class="load-sentinel" aria-hidden="true"></div>
+    <div
+      {@attach loadMoreObserver(onloadmore)}
+      class="load-sentinel"
+      aria-hidden="true"
+    ></div>
   {/if}
 </div>
 
 <style>
-  .load-sentinel {
-    height: 1px;
-  }
-
-  .article-table-wrap {
-    width: 100%;
-    overflow-x: auto;
-  }
-
-  .article-table {
-    width: 100%;
-    border-collapse: collapse;
-    font-size: var(--text-sm);
-  }
-
-  /* ── Header ── */
-  thead tr {
-    border-bottom: 2px solid var(--hair-2);
-  }
-
-  th {
-    text-align: left;
-    padding: var(--space-xs) var(--space-sm);
-    font-size: var(--text-xs);
-    font-weight: 600;
-    color: var(--muted);
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
-    white-space: nowrap;
-    position: sticky;
-    top: 0;
-    background: var(--page-bg, var(--raised));
-    z-index: 1;
-  }
+  /* Table anatomy (wrap, header, rows, sort buttons, sentinel) lives in
+     shared.css as the .data-table classes; only the article columns and
+     cells are styled here. */
 
   /* ── Column widths ── */
-  .col-checkbox {
-    width: 2.5rem;
-    text-align: center;
-    padding: 0 var(--space-xs);
-  }
-
   .col-title {
     width: 50%;
   }
@@ -346,77 +295,9 @@
     white-space: nowrap;
   }
 
-  /* ── Rows ── */
-  .table-row {
-    border-bottom: 1px solid var(--hair);
-    cursor: pointer;
-    -webkit-tap-highlight-color: transparent;
-  }
-
-  @media (prefers-reduced-motion: no-preference) {
-    .table-row {
-      transition: background 80ms ease;
-    }
-  }
-
-  .table-row:hover {
-    background: var(--raised-hover, var(--raised));
-  }
-
-  .table-row:focus-visible {
-    outline: 2px solid var(--brand-text);
-    outline-offset: -2px;
-  }
-
-  .row-active {
-    background: var(--brand-soft, var(--brand-primary-20));
-  }
-
-  .row-selected {
-    background: var(--brand-soft, var(--brand-primary-20));
-  }
-
-  td {
-    padding: var(--space-xs) var(--space-sm);
-    vertical-align: middle;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
   .cell-title {
     font-weight: 600;
     color: var(--ink);
-  }
-
-  .cell-muted {
-    color: var(--muted);
-    font-size: var(--text-xs);
-  }
-
-  /* ── Sort headers ── */
-  .sort-header {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.25rem;
-    background: none;
-    border: none;
-    padding: 0;
-    font: inherit;
-    font-size: var(--text-xs);
-    font-weight: 600;
-    color: var(--muted);
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
-    cursor: pointer;
-  }
-
-  .sort-header:hover {
-    color: var(--ink);
-  }
-
-  .sort-active {
-    color: var(--brand-text);
   }
 
   /* ── Votes cell ── */
@@ -429,36 +310,5 @@
 
   :global(.vote-icon) {
     opacity: 0.6;
-  }
-
-  /* ── Multi-select checkbox ── */
-  :global(.table-checkbox) {
-    transform: scale(0.8);
-    transform-origin: center;
-  }
-
-  /* ── Responsive column hiding ── */
-  @media (max-width: 768px) {
-    .hide-medium {
-      display: none;
-    }
-  }
-
-  @media (max-width: 640px) {
-    .hide-narrow {
-      display: none;
-    }
-  }
-
-  .sr-only {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    padding: 0;
-    margin: -1px;
-    overflow: hidden;
-    clip: rect(0, 0, 0, 0);
-    white-space: nowrap;
-    border: 0;
   }
 </style>
