@@ -164,6 +164,12 @@ if (typeof Element.prototype.scrollTo !== "function") {
   Element.prototype.scrollTo = vi.fn() as unknown as Element["scrollTo"];
 }
 
+// jsdom lacks Element.scrollIntoView (used by scroll-to-unread init).
+if (typeof Element.prototype.scrollIntoView !== "function") {
+  Element.prototype.scrollIntoView =
+    vi.fn() as unknown as Element["scrollIntoView"];
+}
+
 function makeFollowUp(overrides: Record<string, unknown> = {}) {
   return {
     id: `fu-${Math.random().toString(36).slice(2, 8)}`,
@@ -463,6 +469,58 @@ describe("TicketDetail", () => {
         expect(fuEl).not.toBeNull();
         expect(fuEl?.hasAttribute("tabindex")).toBe(false);
       });
+    });
+  });
+
+  describe("scroll-to-unread reinitialization", () => {
+    it("re-arms the scroll init machine when the ticket prop changes in place", async () => {
+      // Two follow-ups around the read cursor: the oldest is read (so the
+      // machine skips the load-older path) and the newest is unread (so
+      // the divider renders and the init scroll targets it).
+      const readFu = makeFollowUp({ createdAt: "2026-04-05T10:00:00Z" });
+      const unreadFu = makeFollowUp({ createdAt: "2026-04-05T11:00:00Z" });
+      followUpsQueryState = {
+        isLoading: false,
+        isError: false,
+        error: null,
+        data: [readFu, unreadFu],
+      };
+
+      const scrollSpy = Element.prototype
+        .scrollIntoView as unknown as ReturnType<typeof vi.fn>;
+      scrollSpy.mockClear();
+
+      // The init scroll runs inside a double requestAnimationFrame; run
+      // callbacks immediately so the machine reaches "done" in the test.
+      const originalRaf = globalThis.requestAnimationFrame;
+      globalThis.requestAnimationFrame = ((cb: FrameRequestCallback) => {
+        cb(0);
+        return 0;
+      }) as typeof requestAnimationFrame;
+
+      try {
+        const { rerender } = render(TicketDetail, {
+          props: {
+            ...baseProps,
+            readUpTo: new Date("2026-04-05T10:30:00Z"),
+          },
+        });
+
+        await vi.waitFor(() => {
+          expect(scrollSpy).toHaveBeenCalledTimes(1);
+        });
+
+        // The global-search path: same mounted component, new ticket prop.
+        // Without the re-arm, the machine stays "done" and never scrolls
+        // the new ticket to its unread divider.
+        await rerender({ ticketId: "ticket-002" });
+
+        await vi.waitFor(() => {
+          expect(scrollSpy).toHaveBeenCalledTimes(2);
+        });
+      } finally {
+        globalThis.requestAnimationFrame = originalRaf;
+      }
     });
   });
 
