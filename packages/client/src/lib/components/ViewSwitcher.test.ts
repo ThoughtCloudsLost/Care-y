@@ -75,6 +75,20 @@ describe("ViewSwitcher", () => {
     ).toBe("false");
   });
 
+  it("renders buttons in the order given by modes", () => {
+    render(ViewSwitcher, {
+      props: {
+        mode: "table",
+        onchange: vi.fn(),
+        modes: ["grid", "table", "list"],
+      },
+    });
+    const labels = screen
+      .getAllByRole("button")
+      .map((button) => button.getAttribute("aria-label"));
+    expect(labels).toEqual(["Grid", "Table", "Compact rows"]);
+  });
+
   it("hides the icon svgs from assistive tech (labels carry the meaning)", () => {
     const { container } = render(ViewSwitcher, {
       props: { mode: "list", onchange: vi.fn() },
