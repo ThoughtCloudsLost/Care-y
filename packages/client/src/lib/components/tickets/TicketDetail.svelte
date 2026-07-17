@@ -73,7 +73,6 @@
     TimelineItem,
     ClusterRecord,
   } from "$lib/components/tickets/follow-up-timeline-types.js";
-  import MentionAutocomplete from "$lib/components/tickets/MentionAutocomplete.svelte";
   import ConversationBubble from "$lib/components/tickets/ConversationBubble.svelte";
   import FollowUpBubble from "$lib/components/tickets/FollowUpBubble.svelte";
   import TicketPlaceholder from "$lib/components/tickets/TicketPlaceholder.svelte";
@@ -101,12 +100,6 @@
     ticketId: string;
     /** Known follow-up count from the ticket list cache (available immediately). */
     knownFollowUpCount?: number;
-    /** Compose draft text (two-way bindable). */
-    draftText?: string;
-    /** Current cursor position in the compose textarea. */
-    cursorPosition?: number;
-    /** Called when a volunteer is selected from @mention autocomplete. */
-    onmentionselect?: (userId: string, displayName: string) => void;
     /** Called when an MMS image is tapped. Route file opens lightbox. */
     onlightbox?: (imageUrl: string) => void;
     /** Called when a long-press context menu should open. */
@@ -172,9 +165,6 @@
   let {
     ticketId,
     knownFollowUpCount,
-    draftText = $bindable(""),
-    cursorPosition = 0,
-    onmentionselect,
     onlightbox,
     oncontextmenu,
     onopenedit,
@@ -256,7 +246,7 @@
       }),
   }));
 
-  // Volunteer list (cached, shared with MentionAutocomplete).
+  // Volunteer list (cached query, deduped with other consumers by key).
   const volunteersQuery = createVolunteersQuery(ticketRouter);
   const noteTypesQuery = ticketRouter.noteTypes
     ? createNoteTypesQuery(ticketRouter.noteTypes)
@@ -1341,15 +1331,6 @@
       </FollowUpTimeline>
     {/if}
   </div>
-
-  <div class="mention-anchor">
-    <MentionAutocomplete
-      {draftText}
-      {cursorPosition}
-      onselect={(userId: string, displayName: string) =>
-        onmentionselect?.(userId, displayName)}
-    />
-  </div>
 {/if}
 
 <style>
@@ -1423,14 +1404,6 @@
   :global(.virtual-row:not(.virtual-row-grid)) {
     display: flex;
     flex-direction: column;
-  }
-
-  .mention-anchor {
-    position: fixed;
-    bottom: 3.5rem;
-    left: 0;
-    right: 0;
-    z-index: 25;
   }
 
   .empty-chat {

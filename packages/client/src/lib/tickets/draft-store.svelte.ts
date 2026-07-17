@@ -3,24 +3,11 @@ import type { ComposeMode } from "$lib/shell/types.js";
 
 const drafts = new SvelteMap<string, string>();
 
+// Reply mode keys by bare ticketId. The store predates compose modes
+// and stored reply drafts under that key shape, so keeping it preserves
+// any in-memory draft across the API migration.
 function modeKey(ticketId: string, mode: ComposeMode): string {
   return mode === "reply" ? ticketId : `${ticketId}:${mode}`;
-}
-
-export function getDraft(ticketId: string): string {
-  return drafts.get(ticketId) ?? "";
-}
-
-export function setDraft(ticketId: string, text: string): void {
-  if (text) {
-    drafts.set(ticketId, text);
-  } else {
-    drafts.delete(ticketId);
-  }
-}
-
-export function clearDraft(ticketId: string): void {
-  drafts.delete(ticketId);
 }
 
 export function getDraftForMode(ticketId: string, mode: ComposeMode): string {

@@ -1,16 +1,14 @@
 <!--
   Quick reply sheet opened from ticket list cards.
 
-  Shows preview messages (from the card's already-decrypted data) and an
-  inline ShellMessagebar for composing. Volunteers choose a channel
+  Shows preview messages (from the card's already-decrypted data) and the
+  shared TicketCompose bar for composing. Volunteers choose a channel
   (Reply, Text, Internal Note) from the + menu before composing.
 
   After send: optimistic bubble, 1.5s delay, then auto-dismiss.
 -->
 <script lang="ts">
-  import { X } from "@lucide/svelte";
   import * as m from "$lib/paraglide/messages.js";
-  import { withTerms } from "$lib/terminology/with-terms.js";
   import { followupSlot } from "@care-y/crypto";
   import { trpc } from "$lib/trpc/index.js";
   import {
@@ -29,11 +27,15 @@
   import { createExposureHint } from "$lib/composables/ticket-detail/create-exposure-hint.svelte.js";
   import { useQueryClient } from "@tanstack/svelte-query";
   import ShellSheet from "$lib/shell/ShellSheet.svelte";
-  import ShellMessagebar from "$lib/shell/ShellMessagebar.svelte";
   import FollowUpBubble from "$lib/components/tickets/FollowUpBubble.svelte";
-  import MentionAutocomplete from "$lib/components/tickets/MentionAutocomplete.svelte";
+  import TicketCompose from "$lib/components/tickets/TicketCompose.svelte";
+  import type { TicketComposeHandle } from "$lib/components/tickets/ticket-compose-types.js";
   import ComposeActions from "$lib/components/tickets/ComposeActions.svelte";
   import ExposureHint from "$lib/components/tickets/ExposureHint.svelte";
+  import {
+    setDraftForMode,
+    clearDraftForMode,
+  } from "$lib/tickets/draft-store.svelte.js";
   import type { RawFollowUpPreview } from "$lib/tickets/preview-loader.svelte.js";
 
   interface ReplySheetProps {
@@ -66,20 +68,11 @@
   const currentUserId = $derived(currentUserIdGetter());
   const queryClient = useQueryClient();
 
-  // ── Draft + compose mode ──
+  // ── Compose (shared TicketCompose owns mode, drafts, and mentions) ──
 
-  let draftText = $state("");
-  let cursorPosition = $state(0);
+  let compose = $state<TicketComposeHandle>();
   let replySending = $state(false);
   let dismissTimer: ReturnType<typeof setTimeout> | null = null;
-
-  let activeComposeMode = $state<"reply" | "sms" | null>(null);
-
-  const SMS_CHAR_LIMIT = 1600;
-  const smsCharCount = $derived(
-    activeComposeMode === "sms" ? draftText.length : 0,
-  );
-  const smsOverLimit = $derived(smsCharCount > SMS_CHAR_LIMIT);
 
   // ── Exposure hint ──
 
@@ -98,7 +91,8 @@
       toastStore.show(m.ticket_toast_message_sent());
       dismissTimer = setTimeout(() => {
         dismissTimer = null;
-        activeComposeMode = null;
+        clearDraftForMode(ticketId, "sms");
+        compose?.reset();
         onsent(ticketId);
       }, 1500);
     },
@@ -179,13 +173,6 @@
     return orgCache.decrypt(nt.id + ":icon", nt.encryptedIcon) ?? undefined;
   }
 
-  const sending = $derived(replySending || sms.sending);
-  const sendDisabled = $derived(
-    !draftText.trim() ||
-      sending ||
-      (activeComposeMode === "sms" && smsOverLimit),
-  );
-
   $effect(() => {
     if (!opened && dismissTimer !== null) {
       clearTimeout(dismissTimer);
@@ -194,11 +181,12 @@
     }
   });
 
-  // Reset compose mode when sheet closes.
+  // Collapse the compose bar when the sheet closes. The stored draft
+  // survives (drafts outlive navigation); the X dismiss inside the bar
+  // is the deliberate discard.
   $effect(() => {
     if (!opened) {
-      activeComposeMode = null;
-      draftText = "";
+      compose?.reset();
     }
   });
 
@@ -211,7 +199,7 @@
     if (!justOpened) return;
 
     if (!hasPhone) {
-      activeComposeMode = "reply";
+      compose?.activateReply();
     }
   });
 
@@ -230,58 +218,16 @@
     previewFollowUps ? Math.max(0, followUpCount - previewFollowUps.length) : 0,
   );
 
-  function handleInput(e: Event): void {
-    const target = e.target;
-    if (target instanceof HTMLTextAreaElement) {
-      cursorPosition = target.selectionStart;
-    }
-  }
+  // ── Reply send pipeline ──
 
-  function handleMentionSelect(_userId: string, displayName: string): void {
-    const before = draftText.slice(0, cursorPosition);
-    const after = draftText.slice(cursorPosition);
-    const atIndex = before.lastIndexOf("@");
-    if (atIndex === -1) return;
-    const replacement = `@${displayName} `;
-    draftText = before.slice(0, atIndex) + replacement + after;
-    cursorPosition = atIndex + replacement.length;
-  }
-
-  // ── Compose mode handlers ──
-
-  function activateReplyMode(): void {
-    activeComposeMode = "reply";
-  }
-
-  function activateSmsMode(): void {
-    exposureHint.show("sms", () => {
-      activeComposeMode = "sms";
-    });
-  }
-
-  function dismissCompose(): void {
-    activeComposeMode = null;
-    draftText = "";
-  }
-
-  // ── Send dispatch ──
-
-  function handleSend(): void {
-    if (activeComposeMode === "reply") {
-      void handleReplySend();
-    } else if (activeComposeMode === "sms") {
-      if (smsOverLimit) return;
-      void sms.handleSmsSend(draftText);
-    }
-  }
-
-  async function handleReplySend(): Promise<void> {
-    const text = draftText.trim();
+  async function handleReplySend(rawText: string): Promise<void> {
+    const text = rawText.trim();
     if (text === "" || replySending) return;
     replySending = true;
 
-    const savedDraft = draftText;
-    draftText = "";
+    // Optimistic clear, mirroring the pre-send draft wipe; the catch
+    // below restores the untrimmed draft on failure.
+    clearDraftForMode(ticketId, "reply");
 
     const followUpId = crypto.randomUUID();
 
@@ -318,7 +264,7 @@
       }, 1500);
     } catch {
       optimisticMessage = null;
-      draftText = savedDraft;
+      setDraftForMode(ticketId, "reply", rawText);
       toastStore.show(m.error_generic(), 3000);
     } finally {
       replySending = false;
@@ -335,29 +281,6 @@
     composeActionsOpen = true;
   }
 </script>
-
-{#snippet composeHeader()}
-  <div class="compose-mode-indicator">
-    <span class="compose-mode-label">
-      {activeComposeMode === "sms"
-        ? m.ticket_mode_indicator_sms(withTerms())
-        : m.ticket_mode_indicator_reply()}
-    </span>
-    {#if activeComposeMode === "sms"}
-      <span class="sms-char-counter" class:sms-over-limit={smsOverLimit}>
-        {m.ticket_sms_char_count({ count: String(smsCharCount) })}
-      </span>
-    {/if}
-    <button
-      type="button"
-      class="compose-mode-dismiss"
-      onclick={dismissCompose}
-      aria-label={m.ticket_compose_dismiss_mode()}
-    >
-      <X size={16} aria-hidden="true" />
-    </button>
-  </div>
-{/snippet}
 
 <ShellSheet
   {opened}
@@ -415,28 +338,15 @@
     </div>
   </div>
 
-  {#if opened}
-    {#if activeComposeMode === "reply"}
-      <div class="mention-anchor">
-        <MentionAutocomplete
-          {draftText}
-          {cursorPosition}
-          onselect={handleMentionSelect}
-        />
-      </div>
-    {/if}
-    <ShellMessagebar
-      inline
-      bind:value={draftText}
-      mode={activeComposeMode === "sms" ? "sms" : "reply"}
-      collapsed={activeComposeMode === null}
-      header={activeComposeMode !== null ? composeHeader : undefined}
-      onsend={handleSend}
-      onplus={handlePlus}
-      oninput={handleInput}
-      {sendDisabled}
-    />
-  {/if}
+  <TicketCompose
+    bind:this={compose}
+    {ticketId}
+    inline
+    sending={replySending || sms.sending}
+    onsendreply={(text: string) => void handleReplySend(text)}
+    onsendsms={(text: string) => void sms.handleSmsSend(text)}
+    onplus={handlePlus}
+  />
 </ShellSheet>
 
 <ComposeActions
@@ -447,11 +357,13 @@
   target={composeActionsAnchor}
   {ticketId}
   onpresetselect={(body: string) => {
-    activeComposeMode = "reply";
-    draftText = body;
+    setDraftForMode(ticketId, "reply", body);
+    compose?.activateReply();
   }}
-  onreply={activateReplyMode}
-  ontextclient={hasPhone ? activateSmsMode : undefined}
+  onreply={() => compose?.activateReply()}
+  ontextclient={hasPhone
+    ? () => exposureHint.show("sms", () => compose?.activateSms())
+    : undefined}
 />
 
 {#if exposureHint.type}
@@ -469,10 +381,6 @@
 
   :global(.reply-shell-sheet .shell-sheet-content) {
     min-height: auto;
-  }
-
-  .mention-anchor {
-    position: relative;
   }
 
   .reply-sheet-messages {
@@ -494,48 +402,5 @@
     font-size: var(--text-xs);
     color: var(--muted);
     margin: 0;
-  }
-
-  .compose-mode-indicator {
-    position: absolute;
-    bottom: 100%;
-    left: 0;
-    right: 0;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 6px 16px;
-    font-size: var(--text-xs);
-    color: var(--muted);
-  }
-
-  .compose-mode-label {
-    flex: 1;
-    min-width: 0;
-  }
-
-  .compose-mode-dismiss {
-    appearance: none;
-    border: none;
-    background: none;
-    padding: 4px;
-    margin: -4px;
-    color: var(--muted);
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-  }
-
-  .sms-char-counter {
-    font-size: var(--text-xs);
-    color: var(--muted);
-    margin-left: auto;
-    flex-shrink: 0;
-  }
-
-  .sms-char-counter.sms-over-limit {
-    color: var(--danger);
-    font-weight: 600;
   }
 </style>
