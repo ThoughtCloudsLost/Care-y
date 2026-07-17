@@ -38,6 +38,7 @@
     setCaseFolded,
   } from "$lib/tickets/case-fold-store.svelte.js";
   import { useFoldDrag } from "$lib/shell/use-fold-drag.svelte.js";
+  import { requestEnhancedChrome } from "$lib/shell/chrome-glass.svelte.js";
   import type { Snippet } from "svelte";
 
   interface Props {
@@ -116,6 +117,12 @@
   });
 
   const folded = $derived(alwaysExpanded ? false : isCaseFolded(ticketId));
+
+  $effect(() => {
+    if (!folded && !alwaysExpanded) {
+      return requestEnhancedChrome();
+    }
+  });
 
   const foldDrag = useFoldDrag({
     get folded() {
@@ -233,7 +240,6 @@
     padding: 10px 16px 0;
     padding-left: calc(16px + env(safe-area-inset-left, 0px));
     padding-right: calc(16px + env(safe-area-inset-right, 0px));
-    border-top: 1px solid var(--hair);
     border-radius: 0 0 1rem 1rem;
     border-bottom: 1px solid rgba(255, 255, 255, 0.1);
     border-left: 1px solid rgba(255, 255, 255, 0.06);
