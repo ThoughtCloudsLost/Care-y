@@ -32,6 +32,10 @@ import {
   type RateLimiter,
 } from "./ratelimit/rate-limiter.js";
 import {
+  createInMemoryTotpReplayCache,
+  assertSingleInstanceTotpReplayCache,
+} from "./auth/totp-replay-cache.js";
+import {
   deriveKeys,
   createFieldEncryptor,
   createBlindIndexer,
@@ -321,9 +325,11 @@ await probeDatabase();
 
 const env: EnvVars = getEnv();
 
-// Fail fast when a multi-instance deployment is declared but only the
-// process-local in-memory rate limiter is available.
+// Fail fast when a multi-instance deployment is declared but only
+// process-local in-memory stores (rate limiter, TOTP replay cache) are
+// available.
 assertSingleInstanceRateLimiting(env.APP_MULTI_INSTANCE);
+assertSingleInstanceTotpReplayCache(env.APP_MULTI_INSTANCE);
 
 const { encryptor, indexer, fakeSaltKey, tokenizer, pushChallengeHmacKey } =
   await deriveCryptoServices(env.OPS_SECRETS_KEY);
@@ -421,6 +427,10 @@ const phoneResolver = createPhoneResolver({
 
 const pendingClients = new Map<string, PendingClient>();
 
+// One instance shared by the auth and two-factor routers so a TOTP code
+// accepted on either path is burned for both (RFC 6238 Section 5.2).
+const totpReplayCache = createInMemoryTotpReplayCache();
+
 const appRouter = createAppRouter({
   authDeps: {
     hasher,
@@ -434,6 +444,7 @@ const appRouter = createAppRouter({
     emailSender,
     providerFactory,
     resolveCallerId: phoneResolver,
+    totpReplayCache,
   },
   profileDeps: {
     hasher,
@@ -454,6 +465,7 @@ const appRouter = createAppRouter({
     resolveCallerId: phoneResolver,
     pushSender,
     pushHmacKey: pushChallengeHmacKey,
+    totpReplayCache,
   },
   oprfDeps: { oprfService },
   orgService,

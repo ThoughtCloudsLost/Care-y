@@ -38,6 +38,10 @@ import {
 } from "./two-factor-service.js";
 import { createSmsCodeService, type CallerIdResolver } from "./sms-code.js";
 import { generateTotpCode, base32Decode } from "./totp.js";
+import {
+  createInMemoryTotpReplayCache,
+  TOTP_REPLAY_TTL_MS,
+} from "./totp-replay-cache.js";
 import { TwoFactorMethod } from "@care-y/shared";
 import { ValidationError } from "../errors.js";
 import * as webauthnVerify from "./webauthn/verify.js";
@@ -69,6 +73,7 @@ describe.skipIf(!process.env.DATABASE_URL)("TwoFactorService", () => {
       emailCodes,
       noopEncryptor,
       "CARE-Y Test",
+      { cache: createInMemoryTotpReplayCache(), orgId: TEST_ORG_ID },
     );
   });
 
@@ -168,10 +173,91 @@ describe.skipIf(!process.env.DATABASE_URL)("TwoFactorService", () => {
       const user = await createTestUser(db);
       const secret = await enrollTotp(twoFactor, user.id);
 
-      // Generate a code from the enrolled secret (still within the same 30s window)
-      const validCode = generateTotpCode(secret, Date.now());
+      // Enrollment consumed the current-step code (replay guard), so use
+      // the next step's code, which the +/-1 drift window also accepts.
+      const validCode = generateTotpCode(secret, Date.now() + 30_000);
       const result = await twoFactor.verifyTotp(user.id, validCode);
       expect(result).toBe(true);
+    });
+  });
+
+  // --- TOTP replay rejection (RFC 6238 Section 5.2) ---
+
+  describe("TOTP replay rejection", () => {
+    it("rejects a second verifyTotp with an already-accepted code", async () => {
+      const user = await createTestUser(db);
+      const secret = await enrollTotp(twoFactor, user.id);
+
+      const code = generateTotpCode(secret, Date.now() + 30_000);
+      expect(await twoFactor.verifyTotp(user.id, code)).toBe(true);
+      expect(await twoFactor.verifyTotp(user.id, code)).toBe(false);
+    });
+
+    it("rejects login replay of the accepted enrollment code", async () => {
+      const user = await createTestUser(db);
+      const setup = await twoFactor.setupTotp(user.id);
+      const secret = base32Decode(setup.secret);
+
+      const code = generateTotpCode(secret, Date.now());
+      expect(await twoFactor.verifyTotpEnrollment(user.id, code)).toBe(true);
+
+      // Same code at login: burned by the cache shared across both paths.
+      // Without the guard the drift window would still accept it.
+      expect(await twoFactor.verifyTotp(user.id, code)).toBe(false);
+    });
+
+    it("rejects enrollment of a code already accepted for the user", async () => {
+      const cache = createInMemoryTotpReplayCache();
+      const emailCodes = createEmailCodeService(db, createMockEmailSender());
+      const service = createTwoFactorService(
+        db,
+        sessions,
+        emailCodes,
+        noopEncryptor,
+        "CARE-Y Test",
+        { cache, orgId: TEST_ORG_ID },
+      );
+
+      const user = await createTestUser(db);
+      const setup = await service.setupTotp(user.id);
+      const secret = base32Decode(setup.secret);
+      const code = generateTotpCode(secret, Date.now());
+
+      cache.markUsed(TEST_ORG_ID, user.id, code);
+      expect(await service.verifyTotpEnrollment(user.id, code)).toBe(false);
+
+      // The rejection did not consume the pending enrollment: a fresh
+      // adjacent-step code still enrolls.
+      const nextCode = generateTotpCode(secret, Date.now() + 30_000);
+      expect(await service.verifyTotpEnrollment(user.id, nextCode)).toBe(true);
+    });
+
+    it("allows the same code again after the replay TTL", async () => {
+      let cacheNow = 0;
+      const cache = createInMemoryTotpReplayCache(() => cacheNow);
+      const emailCodes = createEmailCodeService(db, createMockEmailSender());
+      const service = createTwoFactorService(
+        db,
+        sessions,
+        emailCodes,
+        noopEncryptor,
+        "CARE-Y Test",
+        { cache, orgId: TEST_ORG_ID },
+      );
+
+      const user = await createTestUser(db);
+      const setup = await service.setupTotp(user.id);
+      const secret = base32Decode(setup.secret);
+      const code = generateTotpCode(secret, Date.now());
+      expect(await service.verifyTotpEnrollment(user.id, code)).toBe(true);
+
+      // Inside the TTL the code is burned for login.
+      expect(await service.verifyTotp(user.id, code)).toBe(false);
+
+      // Past the TTL the cache forgets the code. It still time-verifies
+      // because the test finishes within the real drift window.
+      cacheNow = TOTP_REPLAY_TTL_MS + 1;
+      expect(await service.verifyTotp(user.id, code)).toBe(true);
     });
   });
 
@@ -1030,6 +1116,7 @@ describe.skipIf(!process.env.DATABASE_URL)("TwoFactorService", () => {
         emailCodes,
         testFieldEncryptor,
         "CARE-Y Test",
+        { cache: createInMemoryTotpReplayCache(), orgId: TEST_ORG_ID },
       );
 
       const user = await createTestUser(db);
@@ -1106,6 +1193,7 @@ describe.skipIf(!process.env.DATABASE_URL)("TwoFactorService", () => {
         emailCodes,
         noopEncryptor,
         "CARE-Y Test",
+        { cache: createInMemoryTotpReplayCache(), orgId: TEST_ORG_ID },
       );
 
       // Send a code, then extract it from the captured email
@@ -1132,6 +1220,7 @@ describe.skipIf(!process.env.DATABASE_URL)("TwoFactorService", () => {
         emailCodes,
         noopEncryptor,
         "CARE-Y Test",
+        { cache: createInMemoryTotpReplayCache(), orgId: TEST_ORG_ID },
       );
 
       await emailCodes.sendCode(user.id, "test@example.com");
@@ -1237,6 +1326,7 @@ describe.skipIf(!process.env.DATABASE_URL)("TwoFactorService", () => {
         emailCodes,
         noopEncryptor,
         "CARE-Y Test",
+        { cache: createInMemoryTotpReplayCache(), orgId: TEST_ORG_ID },
         { smsCodes, indexer: testBlindIndexer, orgId: TEST_ORG_ID },
       );
       return { service, provider };

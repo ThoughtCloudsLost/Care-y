@@ -38,6 +38,7 @@ import {
   createTwoFactorService,
   type TwoFactorService,
 } from "../auth/two-factor-service.js";
+import type { TotpReplayCache } from "../auth/totp-replay-cache.js";
 import {
   createEmailCodeService,
   type EmailCodeService,
@@ -99,6 +100,8 @@ export interface TwoFactorRouterDeps {
   readonly resolveCallerId: CallerIdResolver;
   readonly pushSender: PushNotificationSender | null;
   readonly pushHmacKey: Buffer | null;
+  /** Process-wide accepted-code cache; one instance shared by every router. */
+  readonly totpReplayCache: TotpReplayCache;
 }
 
 interface ScopedServices {
@@ -170,6 +173,7 @@ export async function createScopedTwoFactorServices(
     emailCodes,
     deps.encryptor,
     TOTP_ISSUER,
+    { cache: deps.totpReplayCache, orgId: org.orgId },
     smsDeps,
     pushServiceDeps,
   );

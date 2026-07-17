@@ -23,6 +23,7 @@ import type {
   OprfFailureReason,
 } from "../crypto/oprf-audit.js";
 import { createInMemoryRateLimiter } from "../ratelimit/rate-limiter.js";
+import { createInMemoryTotpReplayCache } from "../auth/totp-replay-cache.js";
 import { createPowVerifier } from "../crypto/pow.js";
 import {
   createOprfEvaluateService,
@@ -461,6 +462,7 @@ describe("OPRF tRPC route", () => {
         tokenizer: testSessionTokenizer,
         providerFactory: createMockProviderFactory(),
         resolveCallerId: vi.fn().mockResolvedValue("+15551234567"),
+        totpReplayCache: createInMemoryTotpReplayCache(),
       },
       profileDeps: {
         hasher: createScryptHasher(),
@@ -481,6 +483,7 @@ describe("OPRF tRPC route", () => {
         resolveCallerId: vi.fn().mockResolvedValue("+15551234567"),
         pushSender: null,
         pushHmacKey: null,
+        totpReplayCache: createInMemoryTotpReplayCache(),
       },
       oprfDeps: { oprfService: service },
       orgService: {
@@ -579,6 +582,7 @@ describe("OPRF adminEvaluate route", () => {
         tokenizer: testSessionTokenizer,
         providerFactory: createMockProviderFactory(),
         resolveCallerId: vi.fn().mockResolvedValue("+15551234567"),
+        totpReplayCache: createInMemoryTotpReplayCache(),
       },
       profileDeps: {
         hasher: createScryptHasher(),
@@ -599,6 +603,7 @@ describe("OPRF adminEvaluate route", () => {
         resolveCallerId: vi.fn().mockResolvedValue("+15551234567"),
         pushSender: null,
         pushHmacKey: null,
+        totpReplayCache: createInMemoryTotpReplayCache(),
       },
       oprfDeps: { oprfService: spiedService },
       orgService: {
@@ -838,6 +843,7 @@ describe.skipIf(!DOCKER_OPRF_AVAILABLE)(
           tokenizer: testSessionTokenizer,
           providerFactory: createMockProviderFactory(),
           resolveCallerId: vi.fn().mockResolvedValue("+15551234567"),
+          totpReplayCache: createInMemoryTotpReplayCache(),
         },
         profileDeps: {
           hasher: createScryptHasher(),
@@ -858,6 +864,7 @@ describe.skipIf(!DOCKER_OPRF_AVAILABLE)(
           resolveCallerId: vi.fn().mockResolvedValue("+15551234567"),
           pushSender: null,
           pushHmacKey: null,
+          totpReplayCache: createInMemoryTotpReplayCache(),
         },
         oprfDeps: { oprfService: service },
         orgService: {
