@@ -1,10 +1,14 @@
 /**
  * View mode store for the KB article list.
- * Persists list/cards/grid preference to localStorage.
- * Same three-way union as view-mode.svelte.ts (ticket list).
+ *
+ * Persists a list/cards/table/grid preference under its own key. The
+ * KbViewMode alias shares the tickets ViewMode union, but "kanban" is
+ * deliberately not a valid KB mode (the board view is a tickets-only
+ * concept), so a stored "kanban" falls back to cards here.
  */
 
 import type { ViewMode } from "$lib/stores/view-mode.svelte.js";
+import { createPersistedState } from "./persisted-state.svelte.js";
 
 export type KbViewMode = ViewMode;
 
@@ -21,39 +25,15 @@ function isKbViewMode(value: string): value is KbViewMode {
   return VALID_MODES.has(value);
 }
 
-function loadFromStorage(): KbViewMode {
-  if (typeof window === "undefined") return "cards";
-  try {
-    const stored = localStorage.getItem(STORAGE_KEY);
-    if (stored !== null && isKbViewMode(stored)) return stored;
-  } catch {
-    // Safari private browsing, storage quota, or restricted context:
-    // recover by treating it as no stored preference.
-    return "cards";
-  }
-  return "cards";
-}
+const state = createPersistedState<KbViewMode>(STORAGE_KEY, "cards", {
+  validate: (raw) => (isKbViewMode(raw) ? raw : undefined),
+});
 
-function createKbViewModeStore(): {
-  readonly mode: KbViewMode;
-  set(value: KbViewMode): void;
-} {
-  let mode = $state<KbViewMode>(loadFromStorage());
-
-  return {
-    get mode(): KbViewMode {
-      return mode;
-    },
-    set(value: KbViewMode): void {
-      mode = value;
-      try {
-        localStorage.setItem(STORAGE_KEY, value);
-        // care-y-ignore-next-line no-swallowed-errors -- best-effort persistence: the mode already changed in memory and a full or restricted storage must stay silent
-      } catch {
-        // Storage full or restricted
-      }
-    },
-  };
-}
-
-export const kbViewModeStore = createKbViewModeStore();
+export const kbViewModeStore = {
+  get mode(): KbViewMode {
+    return state.value;
+  },
+  set(value: KbViewMode): void {
+    state.set(value);
+  },
+};
