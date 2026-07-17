@@ -8,6 +8,7 @@
  */
 
 import type { SortConfig } from "$lib/stores/filters.svelte.js";
+import { getCollator } from "$lib/utils/collator.js";
 
 interface SortableTicket {
   readonly id: string;
@@ -63,7 +64,7 @@ export function sortTickets<T extends SortableTicket>(
       case "client": {
         const aAlias = a.clientAlias ?? "";
         const bAlias = b.clientAlias ?? "";
-        cmp = aAlias.localeCompare(bAlias);
+        cmp = getCollator().compare(aAlias, bAlias);
         break;
       }
       case "msgs":
