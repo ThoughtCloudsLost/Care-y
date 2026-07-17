@@ -23,7 +23,16 @@ export type TabId = (typeof TAB_IDS)[number];
 
 // ── Area identifiers ─────────────────────────────────────────────────
 
-export const AREA_IDS = ["admin", "settings", "schedule"] as const;
+export const AREA_IDS = [
+  "admin",
+  "admin-people",
+  "admin-communications",
+  "admin-organization",
+  "admin-manager",
+  "admin-volunteer",
+  "settings",
+  "schedule",
+] as const;
 export type AreaId = (typeof AREA_IDS)[number];
 
 // ── Shell wrapper props ──────────────────────────────────────────────

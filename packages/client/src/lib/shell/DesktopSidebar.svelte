@@ -231,9 +231,11 @@
           }}
           type="button"
           class="sidebar-tab"
-          class:active={activeArea === "admin"}
+          class:active={activeArea?.startsWith("admin") ?? false}
           aria-label={m.admin_hub_title()}
-          aria-current={activeArea === "admin" ? "page" : undefined}
+          aria-current={(activeArea?.startsWith("admin") ?? false)
+            ? "page"
+            : undefined}
           tabindex={focusedIndex === allTabs.length ? 0 : -1}
           data-sidebar-id="admin"
         >

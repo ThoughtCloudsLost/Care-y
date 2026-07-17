@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { resolveNavContext, AREA_ROUTES } from "./nav-context";
+import { resolveNavContext, areaRoute } from "./nav-context";
+import { AREA_IDS } from "./types";
 
 describe("resolveNavContext", () => {
   const cases: [string, string | null, string | null][] = [
@@ -9,10 +10,11 @@ describe("resolveNavContext", () => {
     ["/library", "library", null],
     ["/library/articles/1", "library", null],
     ["/admin", null, "admin"],
-    ["/admin/people", null, "admin"],
-    ["/admin/organization", null, "admin"],
-    ["/admin/manager", null, "admin"],
-    ["/admin/volunteer", null, "admin"],
+    ["/admin/people", null, "admin-people"],
+    ["/admin/communications", null, "admin-communications"],
+    ["/admin/organization", null, "admin-organization"],
+    ["/admin/manager", null, "admin-manager"],
+    ["/admin/volunteer", null, "admin-volunteer"],
     ["/more/settings", null, "settings"],
     ["/more/settings/profile", null, "settings"],
     ["/more/schedule", null, "schedule"],
@@ -41,6 +43,8 @@ describe("resolveNavContext", () => {
       "/library",
       "/admin",
       "/admin/people",
+      "/admin/communications",
+      "/admin/organization",
       "/more/settings",
       "/more/schedule",
       "/nonexistent",
@@ -53,19 +57,18 @@ describe("resolveNavContext", () => {
   });
 });
 
-describe("AREA_ROUTES", () => {
-  it("has an entry for every area", () => {
-    expect(Object.keys(AREA_ROUTES).sort()).toEqual([
-      "admin",
-      "schedule",
-      "settings",
-    ]);
+describe("areaRoute", () => {
+  it("returns a route for every area ID", () => {
+    for (const id of AREA_IDS) {
+      expect(areaRoute(id)).toMatch(/^\//);
+    }
   });
 
   it("routes round-trip through resolveNavContext", () => {
-    for (const [areaId, route] of Object.entries(AREA_ROUTES)) {
+    for (const id of AREA_IDS) {
+      const route = areaRoute(id);
       const ctx = resolveNavContext(route);
-      expect(ctx.area).toBe(areaId);
+      expect(ctx.area).toBe(id);
       expect(ctx.tab).toBeNull();
     }
   });
