@@ -124,6 +124,32 @@ test.describe.serial("Ticket List (Tickets Tab)", () => {
     await expect(page.getByText("Help with housing")).toBeVisible();
   });
 
+  // ── 3b. Inline search over decrypted titles ─────────────────────
+
+  test("inline search matches decrypted ticket titles", async () => {
+    // Enter search mode via the subnavbar trigger.
+    await page.getByRole("button", { name: "Search this page" }).click();
+
+    // Type a term that appears only in one decrypted title.
+    const searchInput = page.getByRole("textbox", { name: "Refine search" });
+    await searchInput.fill("safety");
+
+    // The list narrows to tickets whose decrypted title matches.
+    await expect(page.getByText("Safety planning session")).toBeVisible();
+    await expect(page.getByText("Help with housing")).not.toBeVisible();
+
+    // A different term flips the visible set, proving the match reads
+    // the decrypted titles rather than any static order.
+    await searchInput.fill("housing");
+    await expect(page.getByText("Help with housing")).toBeVisible();
+    await expect(page.getByText("Safety planning session")).not.toBeVisible();
+
+    // Exit search; the full list returns.
+    await page.getByRole("button", { name: "Cancel" }).click();
+    await expect(page.getByText("Safety planning session")).toBeVisible();
+    await expect(page.getByText("Help with housing")).toBeVisible();
+  });
+
   // ── 4. View toggle (list <-> grid) ──────────────────────────────
 
   test("view toggle switches between list and grid layouts", async () => {
