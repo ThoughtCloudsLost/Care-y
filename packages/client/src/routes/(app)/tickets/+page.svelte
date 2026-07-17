@@ -1473,6 +1473,7 @@
       {#if viewModeStore.mode === "table"}
         <TicketTable
           rows={ticketTableRows}
+          scrollContainer={scrollEl}
           sortField={tableSortField}
           sortDirection={tableSortDirection}
           onsortchange={handleTicketTableSort}
