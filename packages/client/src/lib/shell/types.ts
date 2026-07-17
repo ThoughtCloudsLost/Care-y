@@ -349,4 +349,8 @@ export interface DesktopSidebarProps {
   readonly onAdmin: () => void;
   readonly onSettings: () => void;
   readonly onLogout: () => void;
+  /** Current user's role ID. Drives the footer role badge stamp. */
+  readonly roleId: string;
+  /** Called with the role's admin hub path when the role badge is activated. */
+  readonly onNavigate: (path: `/${string}`) => void;
 }

@@ -117,6 +117,10 @@
   // Scroll container element, provided by PageShell via bindScrollEl.
   let mainEl = $state<HTMLElement | undefined>();
 
+  function navigateToPath(path: `/${string}`): void {
+    void goto(resolve(path));
+  }
+
   function handleScrollEl(el: HTMLElement | undefined): void {
     mainEl = el;
   }
@@ -982,9 +986,11 @@
       {orgName}
       userName={avatarDisplayName ?? ""}
       userInitials={userInitials ?? ""}
+      roleId={currentRoleId}
       onAdmin={() => void goto(resolve("/admin"))}
-      onSettings={() => void goto(resolve("/admin"))}
+      onSettings={() => void goto(resolve("/more/settings"))}
       onLogout={() => void goto(resolve("/logout"))}
+      onNavigate={(path: `/${string}`) => navigateToPath(path)}
     />
   {/if}
   <PageShell
