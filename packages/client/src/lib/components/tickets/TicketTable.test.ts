@@ -226,6 +226,34 @@ describe("TicketTable", () => {
       await fireEvent.click(assigneeBtn!);
       expect(onsortchange).toHaveBeenCalledWith("assignee", "desc");
     });
+
+    it("sets aria-sort on the active column and none on inactive columns", () => {
+      const { container } = render(TicketTable, {
+        ...defaults,
+        sortField: "priority",
+        sortDirection: "asc" as const,
+      });
+
+      const priority = container.querySelector("th.col-priority");
+      expect(priority?.getAttribute("aria-sort")).toBe("ascending");
+      expect(
+        priority?.querySelector(".sort-header")?.getAttribute("aria-label"),
+      ).toBe("Priority, ascending");
+
+      const client = container.querySelector("th.col-client");
+      expect(client?.getAttribute("aria-sort")).toBe("none");
+    });
+
+    it("reports descending aria-sort when direction is desc", () => {
+      const { container } = render(TicketTable, {
+        ...defaults,
+        sortField: "client",
+        sortDirection: "desc" as const,
+      });
+
+      const client = container.querySelector("th.col-client");
+      expect(client?.getAttribute("aria-sort")).toBe("descending");
+    });
   });
 
   // --- Row interactions ---
@@ -259,6 +287,16 @@ describe("TicketTable", () => {
       const rows = container.querySelectorAll(".table-row");
       expect(rows[0]?.classList.contains("row-selected")).toBe(true);
       expect(rows[1]?.classList.contains("row-selected")).toBe(false);
+    });
+
+    it("labels the checkbox column with the tickets select-mode copy", () => {
+      const { container } = render(TicketTable, {
+        ...defaults,
+        multiSelectActive: true,
+        selectedIds: new Set<string>(),
+      });
+      const srLabel = container.querySelector("th.col-checkbox .sr-only");
+      expect(srLabel?.textContent).toBe("Select");
     });
   });
 

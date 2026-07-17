@@ -66,6 +66,7 @@
   import EmptyState from "$lib/components/EmptyState.svelte";
   import { getBrandingTitle } from "$lib/branding/title.svelte.js";
   import { haptic } from "$lib/utils/haptic.js";
+  import { cachedDate } from "$lib/utils/date-cache.js";
   import { getLibraryLayoutCtx } from "./library-layout-ctx.js";
   import { createFilterDispatch } from "$lib/composables/create-filter-dispatch.svelte.js";
   import { createSearchOverlay } from "$lib/search/search-overlay.svelte.js";
@@ -727,6 +728,8 @@
     kbFilterStore.setSort(field, direction);
   }
 
+  // tableRows remaps on every decrypt settle, so Date construction goes
+  // through the memoized parser instead of allocating per row per recompute.
   const tableRows = $derived(
     displayItems.map((article) => ({
       id: article.id,
@@ -739,7 +742,7 @@
       authorName: resolveAuthorName(article.createdBy),
       voteUpCount: article.voteUpCount,
       voteTotalCount: article.voteUpCount + article.voteDownCount,
-      updatedAt: new Date(article.updatedAt),
+      updatedAt: cachedDate(article.updatedAt),
     })),
   );
 
