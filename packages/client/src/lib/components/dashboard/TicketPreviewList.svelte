@@ -4,6 +4,8 @@
   import TicketTable from "$lib/components/tickets/TicketTable.svelte";
   import EmptyState from "$lib/components/EmptyState.svelte";
   import { resolveGridColumns } from "$lib/tickets/ticket-list-utils.js";
+  import { getCollator } from "$lib/utils/collator.js";
+  import { makeSkeletonCardProps } from "$lib/tickets/skeleton-card-props.js";
   import type { ViewMode } from "$lib/stores/view-mode.svelte.js";
   import type {
     DataCardProps,
@@ -114,10 +116,13 @@
       const rank = { urgent: 0, high: 1, normal: 2, low: 3 } as const;
       mapped.sort((a, b) => (rank[a.priority] - rank[b.priority]) * dir);
     } else if (tableSortField === "client") {
-      mapped.sort((a, b) => a.clientAlias.localeCompare(b.clientAlias) * dir);
+      mapped.sort(
+        (a, b) => getCollator().compare(a.clientAlias, b.clientAlias) * dir,
+      );
     } else if (tableSortField === "queue") {
       mapped.sort(
-        (a, b) => (a.queueName ?? "").localeCompare(b.queueName ?? "") * dir,
+        (a, b) =>
+          getCollator().compare(a.queueName ?? "", b.queueName ?? "") * dir,
       );
     } else if (tableSortField === "msgs") {
       mapped.sort((a, b) => (a.followUpCount - b.followUpCount) * dir);
@@ -127,13 +132,16 @@
           a.titleResult.status === "ready" ? a.titleResult.value : "";
         const bVal =
           b.titleResult.status === "ready" ? b.titleResult.value : "";
-        return aVal.localeCompare(bVal) * dir;
+        return getCollator().compare(aVal, bVal) * dir;
       });
     } else if (tableSortField === "assignee") {
       mapped.sort((a, b) => {
-        const aVal = a.assignedName ?? "￿";
-        const bVal = b.assignedName ?? "￿";
-        return aVal.localeCompare(bVal) * dir;
+        // Unassigned rows sort last in both directions: the direct
+        // returns are deliberately not multiplied by dir.
+        if (a.assignedName == null && b.assignedName == null) return 0;
+        if (a.assignedName == null) return 1;
+        if (b.assignedName == null) return -1;
+        return getCollator().compare(a.assignedName, b.assignedName) * dir;
       });
     }
 
@@ -143,6 +151,9 @@
   function noop(): void {
     /* skeleton cards never navigate */
   }
+
+  // Same skeleton prop blob the tickets page uses for its loading blocks.
+  const SKELETON_CARD_PROPS = makeSkeletonCardProps();
 </script>
 
 {#if loading}
@@ -164,23 +175,7 @@
       style:--grid-cols={gridColumns}
     >
       {#each Array(cap) as _, i (i)}
-        <TicketCard
-          loading={true}
-          {viewMode}
-          ticketId=""
-          queueName={null}
-          displayStatus="active"
-          priority="normal"
-          titleResult={{ status: "loading" }}
-          clientAlias=""
-          assignedName={null}
-          createdAt={new Date()}
-          lastActivityAt={null}
-          followUpCount={0}
-          unreadCount={0}
-          previewFollowUps={undefined}
-          ontap={noop}
-        />
+        <TicketCard loading={true} {viewMode} {...SKELETON_CARD_PROPS} />
       {/each}
     </div>
   {/if}

@@ -137,7 +137,7 @@
       {:else}
         <button
           type="button"
-          class="deep-search-trigger"
+          class="deep-search-trigger calm-escalation"
           aria-label={m.search_deep_nav_trigger()}
           onclick={ondeepsearch}
         >
@@ -257,18 +257,14 @@
     white-space: nowrap;
   }
 
-  /* The escalation trigger takes the calm fetch-more anatomy; searching
-     the rest is an ordinary action, never a red or brand-filled one. */
+  /* Icon-sized placement of the shared calm-escalation anatomy;
+     searching the rest is an ordinary action. */
   .deep-search-trigger {
     display: inline-flex;
     align-items: center;
     justify-content: center;
     width: 1.75rem;
     height: 1.75rem;
-    color: var(--ink-2, var(--ink));
-    background: var(--raised, transparent);
-    border: 1px solid var(--hair-2, currentColor);
-    cursor: pointer;
     padding: 0;
     border-radius: 0.5625rem;
     flex-shrink: 0;

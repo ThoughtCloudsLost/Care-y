@@ -1,6 +1,7 @@
 <script lang="ts">
   import { tick } from "svelte";
   import { Card, Toggle, DialogButton } from "konsta/svelte";
+  import { DIALOG_DESTRUCTIVE_CLASS } from "$lib/components/shared/konsta-classes.js";
   import {
     createQuery,
     createMutation,
@@ -224,11 +225,7 @@
     <DialogButton onclick={() => (setDialogOpened = false)}>
       {m.common_cancel()}
     </DialogButton>
-    <DialogButton
-      strong
-      class="text-[color:var(--danger,var(--color-red-500))] font-semibold"
-      onclick={confirmSet}
-    >
+    <DialogButton strong class={DIALOG_DESTRUCTIVE_CLASS} onclick={confirmSet}>
       {m.admin_retention_confirm()}
     </DialogButton>
   {/snippet}

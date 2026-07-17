@@ -31,11 +31,19 @@
   import { haptic } from "$lib/utils/haptic.js";
   import { CHECKLIST_ITEMS } from "$lib/onboarding/checklist-items.js";
 
+  /** Checklist destinations as route literals so the host can resolve() them. */
+  type ChecklistHref =
+    | "/admin/people"
+    | "/admin/organization"
+    | "/admin/communications"
+    | "/library"
+    | "/";
+
   interface Props {
     expanded: boolean;
     ontoggle: () => void;
     /** Content components never navigate; the route wires this to goto. */
-    onnavigate: (path: string) => void;
+    onnavigate: (path: ChecklistHref) => void;
   }
 
   let { expanded, ontoggle, onnavigate }: Props = $props();
@@ -94,7 +102,7 @@
     retention: ShieldCheck,
   };
 
-  const HREFS: Record<string, string> = {
+  const HREFS: Record<string, ChecklistHref> = {
     invite: "/admin/people",
     branding: "/admin/organization",
     greetings: "/admin/communications",
@@ -132,7 +140,7 @@
     dismissMut.mutate(undefined);
   }
 
-  function handleItemTap(href: string): void {
+  function handleItemTap(href: ChecklistHref): void {
     haptic();
     onnavigate(href);
   }

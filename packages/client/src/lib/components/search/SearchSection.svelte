@@ -59,9 +59,9 @@
 <div class="search-section">
   <div class="secline">
     <Icon size={14} aria-hidden="true" class="section-icon" />
-    <h3 class="eb">{label}</h3>
-    <span class="rule" aria-hidden="true"></span>
-    <span class="cnt num" aria-live="polite">
+    <h3 class="secline-eb">{label}</h3>
+    <span class="secline-rule" aria-hidden="true"></span>
+    <span class="secline-cnt num" aria-live="polite">
       {#if loading}
         <DecryptPlaceholder length={3} />
       {:else if displayCount === 1}
@@ -71,7 +71,7 @@
       {/if}
     </span>
     {#if displayCount > 0}
-      <span class="cnt" aria-hidden="true">·</span>
+      <span class="secline-cnt" aria-hidden="true">·</span>
       <button
         type="button"
         class="show-all num"
@@ -91,7 +91,11 @@
     <p class="cover num" aria-live="polite">{coverageText}</p>
   {/if}
   {#if fetchMoreLabel != null && onFullSearch}
-    <button type="button" class="fetchmore num" onclick={onFullSearch}>
+    <button
+      type="button"
+      class="fetchmore calm-escalation num"
+      onclick={onFullSearch}
+    >
       {fetchMoreLabel}
     </button>
   {/if}
@@ -102,43 +106,10 @@
     padding-bottom: var(--space-md, 12px);
   }
 
-  /* Secline: the section-head anatomy shared with the Now page. The
-     eyebrow names the section, the hairline rule does the layout work,
-     and the count sits quiet at the end of the line. */
-  .secline {
-    display: flex;
-    align-items: baseline;
-    gap: 8px;
-    padding: 18px var(--page-pad-x, 0.75rem) 8px;
-  }
-
   .search-section :global(.section-icon) {
     flex-shrink: 0;
     align-self: center;
     color: var(--brand-accent);
-  }
-
-  .eb {
-    font-size: 13px;
-    font-weight: 700;
-    letter-spacing: 0.14em;
-    text-transform: uppercase;
-    color: var(--ink-2);
-    white-space: nowrap;
-    margin: 0;
-  }
-
-  .rule {
-    flex: 1;
-    height: 1px;
-    background: var(--hair);
-    align-self: center;
-  }
-
-  .cnt {
-    font-size: 11px;
-    color: var(--muted);
-    white-space: nowrap;
   }
 
   .num {
@@ -172,19 +143,15 @@
     margin: 0;
   }
 
-  /* The calm escalation: a full-width quiet button, never a red link. */
+  /* Full-width placement of the shared calm-escalation anatomy. */
   .fetchmore {
     display: block;
     margin: 10px var(--page-pad-x, 0.75rem) 4px;
     width: calc(100% - 2 * var(--page-pad-x, 0.75rem));
     padding: 11px;
-    border: 1px solid var(--hair-2);
     border-radius: 9px;
-    background: var(--raised);
-    color: var(--ink-2);
     font-size: var(--text-base, 0.84375rem);
     font-weight: 700;
     text-align: center;
-    cursor: pointer;
   }
 </style>

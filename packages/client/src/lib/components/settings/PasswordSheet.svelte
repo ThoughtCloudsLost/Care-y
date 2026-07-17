@@ -2,6 +2,7 @@
   import { List, Preloader } from "konsta/svelte";
   import PasswordInput from "$lib/components/inputs/PasswordInput.svelte";
   import PasswordConfirmPair from "$lib/components/inputs/PasswordConfirmPair.svelte";
+  import FieldError from "$lib/components/FieldError.svelte";
   import { Save } from "@lucide/svelte";
   import { useQueryClient } from "@tanstack/svelte-query";
   import { authKeys } from "$lib/query/keys.js";
@@ -173,7 +174,9 @@
       disabled={isPending}
     />
     {#if errorMessage}
-      <p class="error-text" role="alert">{errorMessage}</p>
+      <div class="error-slot">
+        <FieldError message={errorMessage} />
+      </div>
     {/if}
   </div>
 </ShellSheet>
@@ -195,10 +198,7 @@
     color: var(--muted);
   }
 
-  .error-text {
-    color: var(--danger, var(--k-color-red));
-    font-size: 0.85rem;
+  .error-slot {
     padding: 0 var(--space-lg);
-    margin: 0;
   }
 </style>

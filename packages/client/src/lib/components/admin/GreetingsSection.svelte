@@ -7,6 +7,7 @@
     Segmented,
     SegmentedButton,
   } from "konsta/svelte";
+  import { DIALOG_DESTRUCTIVE_CLASS } from "$lib/components/shared/konsta-classes.js";
   import {
     createQuery,
     createMutation,
@@ -428,7 +429,7 @@
 <div class="greetings-section">
   {#if phonesQuery.isLoading || greetingsQuery.isLoading}
     <div class="gr-content skeleton-pulse">
-      <div class="gr-surface">
+      <div class="gr-surface card-elevated">
         {#each { length: 3 } as _, i (i)}
           <div class="gr-row-skeleton">
             <span class="gr-badge"><InlineSkeleton width="6ch" /></span>
@@ -642,7 +643,7 @@
     {:else}
       <div class="audio-upload-area">
         {#if isEditing && editingGreeting?.isAudio === true && editingGreeting.audioBlobKey !== null}
-          <div class="audio-preview">
+          <div class="audio-preview card-elevated">
             <AudioPlayer src="/api/greetings/{editingGreeting.audioBlobKey}" />
           </div>
         {/if}
@@ -733,7 +734,7 @@
     </DialogButton>
     <DialogButton
       strong
-      class="text-[color:var(--danger,var(--color-red-500))] font-semibold"
+      class={DIALOG_DESTRUCTIVE_CLASS}
       onclick={confirmDelete}
     >
       {m.admin_greetings_delete()}
@@ -796,10 +797,6 @@
   .gr-surface {
     display: flex;
     flex-direction: column;
-    background: var(--raised, var(--card-bg, var(--surface-1)));
-    border: 1px solid var(--hair-2, var(--card-border, transparent));
-    box-shadow: var(--card-shadow, none);
-    border-radius: var(--card-radius);
     overflow: hidden;
   }
 
@@ -915,10 +912,6 @@
   }
 
   .audio-preview {
-    background: var(--raised, var(--card-bg, var(--surface-1)));
-    border: 1px solid var(--hair-2, var(--card-border, transparent));
-    box-shadow: var(--card-shadow, none);
-    border-radius: var(--card-radius);
     padding: var(--space-sm);
   }
 

@@ -382,12 +382,12 @@ html.glass-light.dark {
   font-weight: 700;
 }
 
-/* Elevated card: base surface. Each theme overrides with its visual treatment. */
+/* Elevated card: the Inkwell card anatomy. Hair-2 border on raised
+   paper, no shadow. Dev themes override with their own treatments. */
 .card-elevated {
-  background: var(--card-bg, var(--surface-1));
+  background: var(--raised);
+  border: 1px solid var(--hair-2);
   border-radius: var(--card-radius);
-  border: 1px solid var(--card-border, rgba(128, 128, 128, 0.12));
-  box-shadow: var(--card-shadow, none);
 }
 
 /* ── Ticket preview window: etched-glass pane ──────────────────────
@@ -737,6 +737,98 @@ html.glass-dark.light
   text-shadow: 0 0 0.5px currentColor;
   transform: rotate(-6deg);
   opacity: 0.85;
+}
+
+/* ── Section line anatomy ──
+   The secline: the section-head line shared by the Now page sections,
+   search sections, and search recents. The eyebrow names the section,
+   the hairline rule does the layout work, and the count sits quiet at
+   the end of the line. Consumers with their own container geometry
+   (recents) adopt the child classes only. */
+.secline {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 18px var(--page-pad-x) 8px;
+}
+
+.secline-eb {
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink-2);
+  white-space: nowrap;
+  margin: 0;
+}
+
+.secline-rule {
+  flex: 1;
+  height: 1px;
+  background: var(--hair);
+  align-self: center;
+}
+
+.secline-cnt {
+  font-size: 11px;
+  color: var(--muted);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── Calm escalation ──
+   The quiet "do more" button: raised paper, hairline border, quiet ink,
+   never a red or brand-filled action. Consumers own their geometry
+   (size, padding, radius, type). */
+.calm-escalation {
+  background: var(--raised);
+  border: 1px solid var(--hair-2);
+  color: var(--ink-2);
+  cursor: pointer;
+}
+
+/* ── Recessed note block ──
+   One step below the page surface: paper-deep on a hairline border.
+   Consumers own radius, padding, and typography. */
+.recessed-note {
+  background: var(--paper-deep);
+  border: 1px solid var(--hair);
+}
+
+/* ── Prose quotes ──
+   Quotes inside rendered article prose read as recessed tinted blocks,
+   never the banned thick brand left border. Consumers mark the prose
+   container with .prose-quotes (reader body, editor area). */
+.prose-quotes blockquote {
+  background: var(--paper-deep);
+  border-radius: 10px;
+  padding: 10px 13px;
+  margin-bottom: 0.75em;
+  color: var(--muted);
+  font-style: italic;
+}
+
+/* ── Status icon ──
+   The admin status line mark: a 2.5rem circle beside the status words.
+   The normal state is quiet ink with no tint; only the attention state
+   carries color (care tint), and its word rides along. */
+.status-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.status-icon.ok {
+  color: var(--ink-2);
+}
+
+.status-icon.status-attention {
+  background: var(--care-soft);
+  color: var(--care);
 }
 
 /* ── Data table anatomy ──

@@ -128,7 +128,7 @@ describe("CollapsibleSection", () => {
       },
     });
 
-    const cnt = container.querySelector(".cnt");
+    const cnt = container.querySelector(".secline-cnt");
     expect(cnt).toBeTruthy();
     const dp = cnt?.querySelector(".dp");
     expect(dp).toBeTruthy();

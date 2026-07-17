@@ -1,5 +1,6 @@
 <script lang="ts">
   import { Preloader, Button } from "konsta/svelte";
+  import FieldError from "$lib/components/FieldError.svelte";
   import * as m from "$lib/paraglide/messages.js";
   import { trpc } from "$lib/trpc/index.js";
   import { haptic } from "$lib/utils/haptic.js";
@@ -87,7 +88,9 @@
     </Button>
 
     {#if error !== ""}
-      <p class="error-text" role="alert">{error}</p>
+      <div class="error-slot">
+        <FieldError message={error} />
+      </div>
     {/if}
   </div>
 </ShellSheet>
@@ -109,9 +112,7 @@
     gap: var(--space-sm);
   }
 
-  .error-text {
-    color: var(--danger, var(--k-color-red, #ef4444));
-    font-size: 0.85rem;
+  .error-slot {
     text-align: center;
     margin-top: var(--space-md);
   }

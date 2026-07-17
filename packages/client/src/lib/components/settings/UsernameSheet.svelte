@@ -1,6 +1,7 @@
 <script lang="ts">
   import { List, ListInput } from "konsta/svelte";
   import Register from "$lib/components/Register.svelte";
+  import FieldError from "$lib/components/FieldError.svelte";
   import { Save } from "@lucide/svelte";
   import { createMutation, useQueryClient } from "@tanstack/svelte-query";
   import { identifierSchema } from "@care-y/shared";
@@ -132,7 +133,9 @@
       />
     </List>
     {#if errorMessage}
-      <p class="error-text" role="alert">{errorMessage}</p>
+      <div class="error-slot">
+        <FieldError message={errorMessage} />
+      </div>
     {/if}
   </div>
 </ShellSheet>
@@ -149,10 +152,7 @@
     margin: 0 var(--space-lg);
   }
 
-  .error-text {
-    color: var(--danger, var(--k-color-red));
-    font-size: 0.85rem;
+  .error-slot {
     padding: 0 var(--space-lg);
-    margin: 0;
   }
 </style>

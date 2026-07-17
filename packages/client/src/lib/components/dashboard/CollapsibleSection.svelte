@@ -68,21 +68,23 @@
             class="section-icon"
           />
         {/if}
-        <span id={headingId} class="eb">{heading}</span>
-        <span class="rule" aria-hidden="true"></span>
+        <span id={headingId} class="secline-eb">{heading}</span>
+        <span class="secline-rule" aria-hidden="true"></span>
         {#if loading && count === undefined}
-          <span class="cnt" aria-hidden="true">
+          <span class="secline-cnt" aria-hidden="true">
             <DecryptPlaceholder length={3} />
           </span>
         {:else if count !== undefined && totalCount !== undefined}
-          <span class="cnt" aria-hidden="true" data-count={count}
+          <span class="secline-cnt" aria-hidden="true" data-count={count}
             >{m.dashboard_section_count_of({
               shown: String(count),
               total: String(totalCount),
             })}</span
           >
         {:else if count !== undefined}
-          <span class="cnt" aria-hidden="true" data-count={count}>{count}</span>
+          <span class="secline-cnt" aria-hidden="true" data-count={count}
+            >{count}</span
+          >
         {/if}
         <span class="toggle-chevron" class:expanded aria-hidden="true">
           &#x276F;
@@ -139,39 +141,9 @@
     -webkit-tap-highlight-color: transparent;
   }
 
-  .secline {
-    display: flex;
-    align-items: baseline;
-    gap: 8px;
-    padding: 18px var(--page-pad-x) 8px;
-  }
-
   .section-toggle :global(.section-icon) {
     flex-shrink: 0;
     align-self: center;
-  }
-
-  .eb {
-    font-size: 13px;
-    font-weight: 700;
-    letter-spacing: 0.14em;
-    text-transform: uppercase;
-    color: var(--ink-2);
-    white-space: nowrap;
-  }
-
-  .rule {
-    flex: 1;
-    height: 1px;
-    background: var(--hair);
-    align-self: center;
-  }
-
-  .cnt {
-    font-size: 11px;
-    color: var(--muted);
-    white-space: nowrap;
-    font-variant-numeric: tabular-nums;
   }
 
   .toggle-chevron {

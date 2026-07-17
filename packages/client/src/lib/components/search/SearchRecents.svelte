@@ -2,7 +2,6 @@
   import { List, ListItem } from "konsta/svelte";
   import { Clock, X } from "@lucide/svelte";
   import * as m from "$lib/paraglide/messages.js";
-  import { withTerms } from "$lib/terminology/with-terms.js";
   import { searchRecents } from "$lib/search/recents.svelte.js";
 
   interface SearchRecentsProps {
@@ -16,8 +15,8 @@
   <!-- Secline anatomy: eyebrow, then the ruled line does the layout
        work, then the clear action in brand text. -->
   <div class="recents-secline">
-    <span class="recents-eyebrow">{m.search_recents_heading()}</span>
-    <span class="recents-rule" aria-hidden="true"></span>
+    <span class="secline-eb">{m.search_recents_heading()}</span>
+    <span class="secline-rule" aria-hidden="true"></span>
     <button
       type="button"
       class="clear-link"
@@ -48,10 +47,6 @@
       </ListItem>
     {/each}
   </List>
-{:else}
-  <div class="search-hint">
-    <p>{m.search_hint(withTerms())}</p>
-  </div>
 {/if}
 
 <style>
@@ -60,21 +55,6 @@
     align-items: center;
     gap: var(--space-md);
     padding: var(--space-xl) var(--page-pad-x) var(--space-sm);
-  }
-
-  .recents-eyebrow {
-    font-size: 0.8125rem;
-    font-weight: 700;
-    letter-spacing: 0.14em;
-    text-transform: uppercase;
-    color: var(--ink-2, inherit);
-    white-space: nowrap;
-  }
-
-  .recents-rule {
-    flex: 1;
-    height: 1px;
-    background: var(--hair, var(--divider));
   }
 
   .clear-link {
@@ -102,18 +82,5 @@
     cursor: pointer;
     color: var(--muted);
     border-radius: 50%;
-  }
-
-  .search-hint {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: var(--space-xl) var(--space-md);
-  }
-
-  .search-hint p {
-    color: var(--muted);
-    font-size: var(--text-sm);
-    text-align: center;
   }
 </style>

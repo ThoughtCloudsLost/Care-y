@@ -388,7 +388,11 @@
    never tilt). The :not() arguments also lift these rules above the
    components' scoped selectors, which tie at (0,2,0). The sidebar span
    always holds whitespace, so :not(:empty) is a pure specificity lift
-   there, not a behavior gate. */
+   there, not a behavior gate.
+
+   The values below mirror the shared .identity-seal anatomy
+   (shared.css); the markup cannot take that class here (ADR-023:
+   theme CSS only), so keep the two in step by hand. */
 .theme-default .navbar-avatar:not(:has(> img)):not(:has(> svg)),
 .theme-default .sidebar-avatar:not(:empty) {
   background: transparent;

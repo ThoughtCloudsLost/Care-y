@@ -21,6 +21,7 @@
 -->
 <script lang="ts">
   import { Checkbox } from "konsta/svelte";
+  import { CHECKBOX_BRAND_COLORS } from "$lib/components/shared/konsta-classes.js";
   import * as m from "$lib/paraglide/messages.js";
   import { withTerms } from "$lib/terminology/with-terms.js";
   import { formatRelativeTime } from "$lib/utils/format-time.js";
@@ -32,6 +33,7 @@
   import StatusMark from "$lib/components/StatusMark.svelte";
   import NewPill from "$lib/components/NewPill.svelte";
   import EncryptedTitle from "$lib/components/EncryptedTitle.svelte";
+  import QueueGlyph from "$lib/components/shared/QueueGlyph.svelte";
   import TicketPreview from "./TicketPreview.svelte";
   import type { TicketCardProps, TicketQuickAction } from "./ticket-types.js";
 
@@ -39,6 +41,7 @@
     viewMode,
     ticketId,
     queueName,
+    queueAppearance,
     displayStatus,
     priority,
     titleResult,
@@ -120,12 +123,7 @@
       checked={selected}
       onchange={() => onselect?.(ticketId)}
       class="select-checkbox"
-      colors={{
-        bgCheckedIos: "bg-[var(--brand-fill)]",
-        borderCheckedIos: "border-[var(--brand-fill)]",
-        bgCheckedMaterial: "bg-[var(--brand-fill)]",
-        borderCheckedMaterial: "border-[var(--brand-fill)]",
-      }}
+      colors={CHECKBOX_BRAND_COLORS}
     />
   </div>
 {/snippet}
@@ -156,7 +154,9 @@
 {/snippet}
 
 {#snippet queueSegment()}
-  {#if queueName != null}{@render hl(queueName)}{:else}…{/if}
+  {#if queueAppearance}<span class="queue-glyph-gap"
+      ><QueueGlyph appearance={queueAppearance} size={12} /></span
+    >{/if}{#if queueName != null}{@render hl(queueName)}{:else}…{/if}
 {/snippet}
 
 {#snippet metaRow()}
@@ -742,5 +742,12 @@
     height: 13px;
     border-radius: 50%;
     background: color-mix(in srgb, var(--ink) 12%, transparent);
+  }
+
+  /* ── Queue glyph spacing in the inline meta row ── */
+  .queue-glyph-gap {
+    display: inline-flex;
+    margin-right: 0.3em;
+    vertical-align: -0.125em;
   }
 </style>

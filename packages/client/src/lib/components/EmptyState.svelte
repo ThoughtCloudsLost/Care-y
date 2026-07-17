@@ -39,9 +39,9 @@
   aria-label={ariaLabel}
 >
   {#if stamp !== undefined}
-    <span class="empty-stamp">{stamp}</span>
+    <span class="empty-stamp stamp-chip">{stamp}</span>
   {:else if seal !== undefined}
-    <span class="empty-seal" aria-hidden="true">{seal}</span>
+    <span class="empty-seal identity-seal" aria-hidden="true">{seal}</span>
   {:else if icon}
     {@const Icon = icon}
     <div class="empty-icon">
@@ -79,37 +79,18 @@
     margin-bottom: 0.25rem;
   }
 
-  /* Identity seal: the org's mark on its own empty room. Brand belongs
-     here (identity slot); the tilt says a hand pressed it. */
+  /* Identity seal: the org's mark on its own empty room. Anatomy from
+     .identity-seal (shared.css); only the local spacing lives here. */
   .empty-seal {
-    width: 34px;
-    height: 34px;
-    border-radius: 50%;
-    border: 2px solid color-mix(in srgb, var(--brand-fill) 45%, transparent);
-    display: grid;
-    place-items: center;
-    color: var(--brand-text);
-    font-family: var(--theme-font-display);
-    font-optical-sizing: auto;
-    font-weight: 700;
-    font-size: 0.9375rem;
-    transform: rotate(-6deg);
     margin-bottom: 4px;
   }
 
-  /* Earned-state stamp: the priority-stamp anatomy scaled up, in quiet
-     ink. Never brand (brand stays scarce), never a semantic hue (nothing
-     is wrong); the slight tilt marks it as hand-applied. */
+  /* Earned-state stamp: the shared stamp-chip anatomy scaled up, in
+     quiet ink. Never brand (brand stays scarce), never a semantic hue
+     (nothing is wrong). */
   .empty-stamp {
-    display: inline-block;
     font-size: 0.8125rem;
-    font-weight: 700;
-    letter-spacing: 0.13em;
-    text-transform: uppercase;
     padding: 4px 10px;
-    border: 1px solid currentColor;
-    border-radius: 3px;
-    color: var(--ink);
     background: transparent;
     transform: rotate(-1deg);
     margin-bottom: 4px;

@@ -1,5 +1,7 @@
 <script lang="ts">
   import { Chip, Checkbox } from "konsta/svelte";
+  import { CHECKBOX_BRAND_COLORS } from "$lib/components/shared/konsta-classes.js";
+  import { longPress } from "$lib/utils/long-press.js";
   import { ThumbsUp, ThumbsDown } from "@lucide/svelte";
   import * as m from "$lib/paraglide/messages.js";
   import { formatRelativeTime } from "$lib/utils/format-time.js";
@@ -68,22 +70,10 @@
       : null,
   );
 
-  // Long press detection for entering multi-select.
-  let longPressTimer: ReturnType<typeof setTimeout> | undefined;
-
-  function handlePointerDown(): void {
+  // Long press enters multi-select; the shared attachment owns the timer.
+  function handleLongPress(): void {
     if (loading || !onlongpress) return;
-    longPressTimer = setTimeout(() => {
-      onlongpress(articleId);
-      longPressTimer = undefined;
-    }, 500);
-  }
-
-  function handlePointerUp(): void {
-    if (longPressTimer !== undefined) {
-      clearTimeout(longPressTimer);
-      longPressTimer = undefined;
-    }
+    onlongpress(articleId);
   }
 
   function handleCardClick(): void {
@@ -104,7 +94,7 @@
 
 {#if loading}
   <div class="article-card-wrap skeleton-pulse">
-    <div class="article-card">
+    <div class="article-card card-elevated">
       <div
         class="card-inner"
         class:card-inner--list={isCompactList}
@@ -137,7 +127,7 @@
   </div>
 {:else}
   <div class="article-card-wrap">
-    <div class="article-card" class:card--selected={selected}>
+    <div class="article-card card-elevated" class:card--selected={selected}>
       <div
         class="card-inner"
         class:card-inner--list={isCompactList}
@@ -148,9 +138,7 @@
         onclick={handleCardClick}
         ondblclick={handleCardDblClick}
         onkeydown={onKeyActivate(handleCardClick)}
-        onpointerdown={handlePointerDown}
-        onpointerup={handlePointerUp}
-        onpointercancel={handlePointerUp}
+        {@attach longPress(handleLongPress)}
       >
         <div class="row-category">
           {#if multiSelectActive}
@@ -164,12 +152,7 @@
                 checked={selected}
                 onchange={() => onselect?.(articleId)}
                 class="select-checkbox"
-                colors={{
-                  bgCheckedIos: "bg-[var(--brand-accent)]",
-                  borderCheckedIos: "border-[var(--brand-accent)]",
-                  bgCheckedMaterial: "bg-[var(--brand-accent)]",
-                  borderCheckedMaterial: "border-[var(--brand-accent)]",
-                }}
+                colors={CHECKBOX_BRAND_COLORS}
               />
             </div>
           {/if}
@@ -237,17 +220,12 @@
     border-radius: var(--card-radius, 0.75rem);
   }
 
-  /* The Inkwell card anatomy (spec: cards with bubble previews): hair-2
-     border on raised paper, no shadow. Fallback chains keep the card
-     legible under themes that predate the canonical tokens. */
+  /* The card anatomy lives on .card-elevated (shared.css). */
   .article-card {
     margin: 0;
     height: 100%;
     display: flex;
     flex-direction: column;
-    background: var(--raised, var(--card-bg, transparent));
-    border: 1px solid var(--hair-2, var(--card-border, currentColor));
-    border-radius: var(--card-radius, 0.75rem);
   }
 
   /* Selection is an identity slot: brand-soft, never full fill. */

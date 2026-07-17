@@ -4,6 +4,7 @@
   import ShellPopup from "$lib/shell/ShellPopup.svelte";
   import ShellDialog from "$lib/shell/ShellDialog.svelte";
   import { DialogButton, ActionsGroup, ActionsButton } from "konsta/svelte";
+  import { DIALOG_DESTRUCTIVE_CLASS } from "$lib/components/shared/konsta-classes.js";
   import TicketPanelContent from "$lib/components/tickets/TicketPanelContent.svelte";
   import AssignSheet from "$lib/components/tickets/AssignSheet.svelte";
   import ComposeActions from "$lib/components/tickets/ComposeActions.svelte";
@@ -198,7 +199,7 @@
     </DialogButton>
     <DialogButton
       onclick={() => void deleteConfirm.confirm()}
-      class="text-red-500 font-semibold"
+      class={DIALOG_DESTRUCTIVE_CLASS}
     >
       {m.common_delete()}
     </DialogButton>

@@ -1,6 +1,7 @@
 <script lang="ts">
   import { tick } from "svelte";
   import { ListInput, DialogButton } from "konsta/svelte";
+  import { DIALOG_DESTRUCTIVE_CLASS } from "$lib/components/shared/konsta-classes.js";
   import {
     createQuery,
     createMutation,
@@ -155,7 +156,7 @@
 <div class="blocklist-section">
   {#if blocklistQuery.isLoading}
     <div class="bl-content skeleton-pulse">
-      <div class="bl-surface">
+      <div class="bl-surface card-elevated">
         {#each { length: 3 } as _, i (i)}
           <div class="bl-row">
             <span class="bl-number">
@@ -204,7 +205,7 @@
         </SoftButton>
       </div>
 
-      <div class="bl-surface">
+      <div class="bl-surface card-elevated">
         {#each visibleEntries as entry (entry.id)}
           {@const number = decryptNumber(entry)}
           <div class="bl-row">
@@ -335,7 +336,7 @@
     </DialogButton>
     <DialogButton
       strong
-      class="text-[color:var(--danger,var(--color-red-500))] font-semibold"
+      class={DIALOG_DESTRUCTIVE_CLASS}
       onclick={confirmRemove}
     >
       {m.admin_blocklist_remove_button()}
@@ -379,10 +380,6 @@
   .bl-surface {
     display: flex;
     flex-direction: column;
-    background: var(--raised, var(--card-bg, var(--surface-1)));
-    border: 1px solid var(--hair-2, var(--card-border, transparent));
-    box-shadow: var(--card-shadow, none);
-    border-radius: var(--card-radius);
     overflow: hidden;
   }
 

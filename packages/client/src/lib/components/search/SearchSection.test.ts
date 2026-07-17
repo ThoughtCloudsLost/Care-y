@@ -57,7 +57,7 @@ describe("SearchSection", () => {
     const { container, getByText } = render(SearchSection, {
       props: baseProps(),
     });
-    const eb = container.querySelector("h3.eb");
+    const eb = container.querySelector("h3.secline-eb");
     expect(eb?.textContent).toBe("Tickets");
     expect(getByText("3 found")).toBeDefined();
     expect(

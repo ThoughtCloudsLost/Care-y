@@ -226,7 +226,7 @@
             class="mini-note-wrap"
             class:has-reactions={noteReactions.length > 0}
           >
-            <div class="mini-note">
+            <div class="mini-note recessed-note">
               <span class="mini-who mini-note-eyebrow">
                 <NoteIcon size={10} class="mini-note-icon" />
                 {#if noteTypeName !== null}
@@ -475,8 +475,6 @@
   .mini-note {
     width: 100%;
     padding: 7px 11px;
-    background: var(--paper-deep);
-    border: 1px solid var(--hair);
     border-radius: 10px;
     font-size: var(--text-base);
     line-height: 1.4;

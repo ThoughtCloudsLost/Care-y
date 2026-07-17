@@ -1,5 +1,6 @@
 <script lang="ts">
   import { Card, List, ListInput, DialogButton } from "konsta/svelte";
+  import { DIALOG_DESTRUCTIVE_CLASS } from "$lib/components/shared/konsta-classes.js";
   import {
     createQuery,
     createMutation,
@@ -232,7 +233,7 @@
 <div class="templates-section">
   {#if templatesQuery.isLoading}
     <div class="tpl-content skeleton-pulse">
-      <div class="tpl-surface">
+      <div class="tpl-surface card-elevated">
         {#each { length: 3 } as _, i (i)}
           <div class="tpl-row-skeleton">
             <span class="tpl-badge"><InlineSkeleton width="6ch" /></span>
@@ -449,7 +450,7 @@
     </DialogButton>
     <DialogButton
       strong
-      class="text-[color:var(--danger,var(--color-red-500))] font-semibold"
+      class={DIALOG_DESTRUCTIVE_CLASS}
       onclick={confirmDelete}
     >
       {m.admin_templates_delete()}
@@ -514,10 +515,6 @@
   .tpl-surface {
     display: flex;
     flex-direction: column;
-    background: var(--raised, var(--card-bg, var(--surface-1)));
-    border: 1px solid var(--hair-2, var(--card-border, transparent));
-    box-shadow: var(--card-shadow, none);
-    border-radius: var(--card-radius);
     overflow: hidden;
   }
 

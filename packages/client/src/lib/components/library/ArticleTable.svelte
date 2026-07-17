@@ -1,6 +1,7 @@
 <!-- care-y-ignore no-hardcoded-user-strings -- InlineSkeleton width attributes are CSS values, not user-facing text -->
 <script lang="ts">
   import { Checkbox } from "konsta/svelte";
+  import { CHECKBOX_BRAND_COLORS } from "$lib/components/shared/konsta-classes.js";
   import { ThumbsUp, ThumbsDown } from "@lucide/svelte";
   import * as m from "$lib/paraglide/messages.js";
   import { formatRelativeTime } from "$lib/utils/format-time.js";
@@ -209,12 +210,7 @@
                     checked={isSelected}
                     onchange={() => onselect?.(row.id)}
                     class="table-checkbox"
-                    colors={{
-                      bgCheckedIos: "bg-[var(--brand-accent)]",
-                      borderCheckedIos: "border-[var(--brand-accent)]",
-                      bgCheckedMaterial: "bg-[var(--brand-accent)]",
-                      borderCheckedMaterial: "border-[var(--brand-accent)]",
-                    }}
+                    colors={CHECKBOX_BRAND_COLORS}
                   />
                 </div>
               </td>

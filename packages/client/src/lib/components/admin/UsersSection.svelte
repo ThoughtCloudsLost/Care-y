@@ -8,6 +8,7 @@
     ListItem,
     Toggle,
   } from "konsta/svelte";
+  import { DIALOG_DESTRUCTIVE_CLASS } from "$lib/components/shared/konsta-classes.js";
   import Register from "$lib/components/Register.svelte";
   import {
     createQuery,
@@ -798,9 +799,7 @@
     </DialogButton>
     <DialogButton
       strong
-      class={dialogIsReactivation
-        ? ""
-        : "text-[color:var(--danger,var(--color-red-500))] font-semibold"}
+      class={dialogIsReactivation ? "" : DIALOG_DESTRUCTIVE_CLASS}
       onclick={confirmActiveToggle}
     >
       {#if dialogIsReactivation}
@@ -830,7 +829,7 @@
     <!-- care-y-ignore-next-line no-click-without-keyboard -- DialogButton renders a native <button> -->
     <DialogButton
       strong
-      class="text-[color:var(--danger,var(--color-red-500))] font-semibold"
+      class={DIALOG_DESTRUCTIVE_CLASS}
       onclick={confirmRevoke}
     >
       {m.admin_invite_pending_revoke()}

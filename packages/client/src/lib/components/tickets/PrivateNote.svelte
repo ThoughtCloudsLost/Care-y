@@ -141,7 +141,7 @@
     role="presentation"
   >
     <div
-      class="note-block"
+      class="note-block recessed-note"
       role="article"
       aria-label={m.ticket_private_note_by({ author: displayAuthor })}
     >
@@ -241,12 +241,11 @@
     --k-safe-area-top: var(--navbar-h, 44px);
   }
 
-  /* Recessed paper block: one step below the page, bubbles sit one above. */
+  /* Recessed paper block (shared .recessed-note): one step below the
+     page, bubbles sit one above. */
   .note-block {
     border-radius: 12px;
     padding: 11px 14px;
-    background: var(--paper-deep);
-    border: 1px solid var(--hair);
   }
 
   .note-badge {
