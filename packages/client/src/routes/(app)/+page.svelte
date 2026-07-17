@@ -476,11 +476,6 @@
     }),
   );
 
-  const needsAttentionCards = $derived(needsAttention.map(cardMapper));
-  const myOpenCards = $derived(myOpen.map(cardMapper));
-  const unassignedCards = $derived(unassigned.map(cardMapper));
-  const onHoldCards = $derived(onHold.map(cardMapper));
-
   // --- Collapsible section state (all expanded except unassigned/on-hold) ---
   const collapsedSections = new SvelteSet<string>(["unassigned", "on-hold"]);
 
@@ -641,7 +636,9 @@
       >
         <TicketPreviewList
           loading={ticketsQuery.isLoading}
-          cards={needsAttentionCards}
+          tickets={needsAttention}
+          mapper={cardMapper}
+          ontap={handleTicketTap}
           viewMode={dashboardViewModeStore.mode}
           onseeall={handleSeeAllNeedsAttention}
         />
@@ -662,7 +659,9 @@
     >
       <TicketPreviewList
         loading={ticketsQuery.isLoading}
-        cards={myOpenCards}
+        tickets={myOpen}
+        mapper={cardMapper}
+        ontap={handleTicketTap}
         viewMode={dashboardViewModeStore.mode}
         onseeall={handleSeeAllMyOpen}
       />
@@ -684,7 +683,9 @@
     >
       <TicketPreviewList
         loading={ticketsQuery.isLoading}
-        cards={unassignedCards}
+        tickets={unassigned}
+        mapper={cardMapper}
+        ontap={handleTicketTap}
         viewMode={dashboardViewModeStore.mode}
         totalCount={countsQuery.data?.unassigned}
         onseeall={handleSeeAllUnassigned}
@@ -708,7 +709,9 @@
       >
         <TicketPreviewList
           loading={ticketsQuery.isLoading}
-          cards={onHoldCards}
+          tickets={onHold}
+          mapper={cardMapper}
+          ontap={handleTicketTap}
           viewMode={dashboardViewModeStore.mode}
           totalCount={countsQuery.data?.onHold}
         />

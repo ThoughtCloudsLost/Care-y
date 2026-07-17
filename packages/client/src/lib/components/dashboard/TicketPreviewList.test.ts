@@ -2,7 +2,10 @@
 import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
 import { render, screen, cleanup, fireEvent } from "@testing-library/svelte";
 import TicketPreviewList from "./TicketPreviewList.svelte";
-import type { DataCardProps } from "$lib/tickets/ticket-card-props.js";
+import type {
+  DataCardProps,
+  TicketLikeRecord,
+} from "$lib/tickets/ticket-card-props.js";
 import type { ViewMode } from "$lib/stores/view-mode.svelte.js";
 
 // TicketCard (and its TicketPreview child) observe the viewport and their
@@ -112,23 +115,46 @@ function makeCard(
   };
 }
 
-function makeCards(n: number): DataCardProps[] {
-  return Array.from({ length: n }, (_, i) => makeCard(String(i + 1)));
+function makeRecord(id: string): TicketLikeRecord {
+  return {
+    id,
+    queueId: "q1",
+    encryptedQueueName: null,
+    status: "open",
+    onHold: false,
+    priority: "normal",
+    encryptedTitle: "enc-title",
+    keyWrap: null,
+    clientAlias: "Sparrow",
+    assignedTo: null,
+    assignedDisplayName: null,
+    createdAt: "2026-03-31T11:30:00Z",
+    lastActivityAt: "2026-03-31T11:45:00Z",
+    followUpCount: 1,
+  };
 }
+
+function makeRecords(n: number): TicketLikeRecord[] {
+  return Array.from({ length: n }, (_, i) => makeRecord(String(i + 1)));
+}
+
+// Rows map their own props through this stub, mirroring the page-built
+// mapper the dashboard passes down.
+const mapper = (t: TicketLikeRecord): DataCardProps => makeCard(t.id);
 
 const LIST: ViewMode = "list";
 
 describe("TicketPreviewList", () => {
-  it("shows the quiet empty state when there are no cards", () => {
+  it("shows the quiet empty state when there are no tickets", () => {
     render(TicketPreviewList, {
-      props: { cards: [], viewMode: LIST },
+      props: { tickets: [], mapper, viewMode: LIST },
     });
     expect(screen.getByText("Nothing here right now")).toBeTruthy();
   });
 
-  it("renders one TicketCard per card", () => {
+  it("renders one TicketCard per record through the row boundary", () => {
     const { container } = render(TicketPreviewList, {
-      props: { cards: makeCards(3), viewMode: LIST },
+      props: { tickets: makeRecords(3), mapper, viewMode: LIST },
     });
     const cards = container.querySelectorAll(
       "[data-testid='ticket-card-wrap']",
@@ -138,7 +164,7 @@ describe("TicketPreviewList", () => {
 
   it("caps list mode at maxVisible", () => {
     const { container } = render(TicketPreviewList, {
-      props: { cards: makeCards(8), viewMode: LIST, maxVisible: 3 },
+      props: { tickets: makeRecords(8), mapper, viewMode: LIST, maxVisible: 3 },
     });
     const cards = container.querySelectorAll(
       "[data-testid='ticket-card-wrap']",
@@ -148,7 +174,7 @@ describe("TicketPreviewList", () => {
 
   it("packs an even two rows in grid mode (cap of six)", () => {
     const { container } = render(TicketPreviewList, {
-      props: { cards: makeCards(8), viewMode: "grid" },
+      props: { tickets: makeRecords(8), mapper, viewMode: "grid" },
     });
     const cards = container.querySelectorAll(
       "[data-testid='ticket-card-wrap']",
@@ -158,7 +184,7 @@ describe("TicketPreviewList", () => {
 
   it("applies the mode class to the list container", () => {
     const { container } = render(TicketPreviewList, {
-      props: { cards: makeCards(2), viewMode: "cards" },
+      props: { tickets: makeRecords(2), mapper, viewMode: "cards" },
     });
     expect(container.querySelector(".preview-list.mode-cards")).toBeTruthy();
   });
@@ -166,7 +192,8 @@ describe("TicketPreviewList", () => {
   it("shows 'see all' when the total exceeds the cap and onseeall is set", () => {
     render(TicketPreviewList, {
       props: {
-        cards: makeCards(8),
+        tickets: makeRecords(8),
+        mapper,
         viewMode: LIST,
         maxVisible: 3,
         onseeall: vi.fn(),
@@ -176,10 +203,11 @@ describe("TicketPreviewList", () => {
     expect(button.tagName).toBe("BUTTON");
   });
 
-  it("prefers totalCount over the loaded card count in the 'see all' label", () => {
+  it("prefers totalCount over the loaded record count in the 'see all' label", () => {
     render(TicketPreviewList, {
       props: {
-        cards: makeCards(5),
+        tickets: makeRecords(5),
+        mapper,
         viewMode: LIST,
         maxVisible: 5,
         totalCount: 12,
@@ -192,16 +220,23 @@ describe("TicketPreviewList", () => {
   it("fires onseeall when the button is clicked", async () => {
     const onseeall = vi.fn();
     render(TicketPreviewList, {
-      props: { cards: makeCards(8), viewMode: LIST, maxVisible: 3, onseeall },
+      props: {
+        tickets: makeRecords(8),
+        mapper,
+        viewMode: LIST,
+        maxVisible: 3,
+        onseeall,
+      },
     });
     await fireEvent.click(screen.getByText("See all (8)"));
     expect(onseeall).toHaveBeenCalledOnce();
   });
 
-  it("omits 'see all' when the cards fit within the cap", () => {
+  it("omits 'see all' when the tickets fit within the cap", () => {
     render(TicketPreviewList, {
       props: {
-        cards: makeCards(2),
+        tickets: makeRecords(2),
+        mapper,
         viewMode: LIST,
         maxVisible: 5,
         onseeall: vi.fn(),
@@ -212,14 +247,20 @@ describe("TicketPreviewList", () => {
 
   it("omits 'see all' when onseeall is not provided", () => {
     render(TicketPreviewList, {
-      props: { cards: makeCards(8), viewMode: LIST, maxVisible: 3 },
+      props: { tickets: makeRecords(8), mapper, viewMode: LIST, maxVisible: 3 },
     });
     expect(screen.queryByText(/See all/)).toBeNull();
   });
 
   it("renders skeleton cards while loading", () => {
     const { container } = render(TicketPreviewList, {
-      props: { cards: [], viewMode: LIST, loading: true, maxVisible: 4 },
+      props: {
+        tickets: [],
+        mapper,
+        viewMode: LIST,
+        loading: true,
+        maxVisible: 4,
+      },
     });
     // Each skeleton card is an article carrying both `tc` and the pulse
     // class (inner InlineSkeletons also pulse, so scope to the article).
