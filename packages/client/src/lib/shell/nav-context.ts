@@ -12,6 +12,11 @@ type NavTarget = TabId | AreaId;
 const NAV_PREFIXES: readonly [string, NavTarget][] = [
   ["/tickets", "tickets"],
   ["/library", "library"],
+  ["/admin/people", "admin-people"],
+  ["/admin/communications", "admin-communications"],
+  ["/admin/organization", "admin-organization"],
+  ["/admin/manager", "admin-manager"],
+  ["/admin/volunteer", "admin-volunteer"],
   ["/admin", "admin"],
   ["/more/settings", "settings"],
   ["/more/schedule", "schedule"],
@@ -28,8 +33,8 @@ function isTab(id: string): id is TabId {
  * non-null on known pages; both are null on the 404 catch-all.
  *
  * The root path "/" maps to the "home" tab. Prefix matches use
- * longest-match semantics: "/more/settings/foo" hits "settings",
- * not a hypothetical "/more" entry.
+ * longest-match-first ordering: "/admin/people" hits "admin-people"
+ * before the generic "/admin" catch-all.
  */
 export function resolveNavContext(pathname: string): NavContext {
   for (const [prefix, target] of NAV_PREFIXES) {
@@ -45,9 +50,20 @@ export function resolveNavContext(pathname: string): NavContext {
   return { tab: null, area: null };
 }
 
-/** Hub route for each area (the page the area pill navigates to). */
-export const AREA_ROUTES: Record<AreaId, string> = {
-  admin: "/admin",
-  settings: "/more/settings",
-  schedule: "/more/schedule",
-};
+/** Hub route for each area (the page the area button navigates to). */
+const AREA_ROUTE_MAP = new Map<AreaId, `/${string}`>([
+  ["admin", "/admin"],
+  ["admin-people", "/admin/people"],
+  ["admin-communications", "/admin/communications"],
+  ["admin-organization", "/admin/organization"],
+  ["admin-manager", "/admin/manager"],
+  ["admin-volunteer", "/admin/volunteer"],
+  ["settings", "/more/settings"],
+  ["schedule", "/more/schedule"],
+]);
+
+export function areaRoute(id: AreaId): `/${string}` {
+  // Map is exhaustive over AreaId; non-null assertion is safe.
+  // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- exhaustive map
+  return AREA_ROUTE_MAP.get(id)!;
+}

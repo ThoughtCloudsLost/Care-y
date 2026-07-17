@@ -20,7 +20,7 @@
   import AppShell from "$lib/shell/AppShell.svelte";
   import ToastRenderer from "$lib/shell/ToastRenderer.svelte";
   import { getBrandingTitle } from "$lib/branding/title.svelte.js";
-  import { resolveNavContext } from "$lib/shell/nav-context.js";
+  import { resolveNavContext, areaRoute } from "$lib/shell/nav-context.js";
   import type { TabId, AreaId } from "$lib/shell/types";
   import type { StateChangeEvent } from "$lib/workers/crypto-protocol.js";
 
@@ -141,15 +141,8 @@
     }
   }
 
-  function areaRoute(areaId: AreaId): `/${string}` {
-    switch (areaId) {
-      case "admin":
-        return "/admin";
-      case "settings":
-        return "/more/settings";
-      case "schedule":
-        return "/more/schedule";
-    }
+  function getAreaRoute(areaId: AreaId): `/${string}` {
+    return areaRoute(areaId);
   }
 
   function handleTabChange(tabId: TabId): void {
@@ -160,7 +153,7 @@
   }
 
   function handleAreaTap(areaId: AreaId): void {
-    const route = areaRoute(areaId);
+    const route = getAreaRoute(areaId);
     if (page.url.pathname !== route) {
       void goto(resolve(route));
     }
