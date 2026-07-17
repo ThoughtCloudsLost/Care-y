@@ -57,11 +57,11 @@
   } from "$lib/composables/ticket-detail/create-overlay-state.svelte.js";
   import { copyToClipboard } from "$lib/composables/ticket-detail/clipboard-copy.js";
   import {
-    insertMentionAtCursor,
     searchFollowUps,
     lookupCachedFollowUpCount,
   } from "$lib/tickets/ticket-detail-utils.js";
-  import ShellMessagebar from "$lib/shell/ShellMessagebar.svelte";
+  import TicketCompose from "$lib/components/tickets/TicketCompose.svelte";
+  import type { TicketComposeHandle } from "$lib/components/tickets/ticket-compose-types.js";
   import type { TicketAction } from "$lib/tickets/types.js";
   import type { CallAction } from "$lib/components/tickets/CallOptionsContent.svelte";
   import TicketDetailOverlays from "$lib/components/tickets/TicketDetailOverlays.svelte";
@@ -125,8 +125,9 @@
   const tabbarHidden = getTabbarHiddenCtx();
   const navbarCtx = getNavbarOverrideCtx();
 
-  // Compose mode: null = collapsed (no messagebar), "reply" or "sms" = expanded.
-  let activeComposeMode = $state<"reply" | "sms" | null>(null);
+  // Shared compose bar. TicketCompose owns mode, drafts, and mentions;
+  // this host drives mode changes through its exported methods.
+  let compose = $state<TicketComposeHandle>();
 
   // Auto-activate when only one client-reply method exists, so the
   // volunteer can start typing immediately without tapping +.
@@ -134,47 +135,12 @@
   let autoActivatedForTicket = $state("");
 
   $effect(() => {
-    if (!ticket || autoActivatedForTicket === ticketId) return;
+    if (!ticket || !compose || autoActivatedForTicket === ticketId) return;
     autoActivatedForTicket = ticketId;
     if (!ticket.hasPhone) {
-      activeComposeMode = "reply";
+      compose.activateReply();
     }
   });
-
-  // Draft compose state keyed by ticketId + mode. Survives SPA navigations
-  // in-memory. No disk persistence to avoid plaintext PII on disk.
-  let draftText = $derived(
-    activeComposeMode !== null
-      ? getDraftForMode(ticketId, activeComposeMode)
-      : "",
-  );
-  let cursorPosition = $state(0);
-
-  // Sync edits back to the per-mode store.
-  $effect(() => {
-    if (activeComposeMode !== null) {
-      setDraftForMode(ticketId, activeComposeMode, draftText);
-    }
-  });
-
-  // Warn before page refresh/tab close when any draft exists.
-  $effect(() => {
-    const hasReply = getDraftForMode(ticketId, "reply").trim();
-    const hasSms = getDraftForMode(ticketId, "sms").trim();
-    if (!hasReply && !hasSms) return;
-    function onBeforeUnload(e: BeforeUnloadEvent): void {
-      e.preventDefault();
-    }
-    window.addEventListener("beforeunload", onBeforeUnload);
-    return () => window.removeEventListener("beforeunload", onBeforeUnload);
-  });
-
-  function handleInput(e: Event): void {
-    const target = e.target;
-    if (target instanceof HTMLTextAreaElement) {
-      cursorPosition = target.selectionStart;
-    }
-  }
 
   // Ticket data for navbar display.
   const ticketQuery = createQuery(() => ({
@@ -382,9 +348,9 @@
   const messenger = createSendMessage<FollowUpList[number]>({
     getTicketId: () => ticketId,
     getCurrentUserId: () => currentUserId ?? null,
-    getDraftText: () => draftText,
+    getDraftText: () => getDraftForMode(ticketId, "reply"),
     setDraftText: (v: string) => {
-      draftText = v;
+      setDraftForMode(ticketId, "reply", v);
     },
     cryptoBridge,
     followUpCache,
@@ -429,7 +395,7 @@
       ticketRouter.createFollowUp.mutate(args),
     onSuccess: () => {
       clearDraftForMode(ticketId, "sms");
-      activeComposeMode = null;
+      compose?.reset();
     },
   });
 
@@ -561,43 +527,7 @@
     };
   });
 
-  // --- Compose mode handlers ---
-
-  const SMS_CHAR_LIMIT = 1600;
-  const smsCharCount = $derived(
-    activeComposeMode === "sms" ? draftText.length : 0,
-  );
-  const smsOverLimit = $derived(smsCharCount > SMS_CHAR_LIMIT);
-  const sending = $derived(messenger.sending || sms.sending);
-
-  function handleSend(): void {
-    if (activeComposeMode === "reply") {
-      void messenger.handleSend();
-    } else if (activeComposeMode === "sms") {
-      if (smsOverLimit) return;
-      void sms.handleSmsSend(draftText);
-    }
-  }
-
-  const sendDisabled = $derived(
-    !draftText.trim() ||
-      sending ||
-      (activeComposeMode === "sms" && smsOverLimit),
-  );
-
-  function activateReplyMode(): void {
-    activeComposeMode = "reply";
-  }
-
-  function activateSmsMode(): void {
-    exposureHint.show("sms", () => {
-      activeComposeMode = "sms";
-    });
-  }
-
-  function dismissCompose(): void {
-    activeComposeMode = null;
-  }
+  // --- Compose actions popover ---
 
   function openComposeActions(anchor: HTMLElement): void {
     composeActionsAnchor = anchor;
@@ -605,17 +535,6 @@
   }
   function closeComposeActions(): void {
     composeActionsOpen = false;
-  }
-
-  function handleMentionSelect(_userId: string, displayName: string): void {
-    const result = insertMentionAtCursor(
-      draftText,
-      cursorPosition,
-      displayName,
-    );
-    if (result === null) return;
-    draftText = result.text;
-    cursorPosition = result.cursor;
   }
 
   // --- Action dispatchers ---
@@ -864,9 +783,6 @@
   <TicketDetail
     {ticketId}
     knownFollowUpCount={cachedFollowUpCount}
-    bind:draftText
-    {cursorPosition}
-    onmentionselect={handleMentionSelect}
     onlightbox={(url: string) => lightbox.show(url)}
     oncontextmenu={(e: ContextMenuEvent) => contextMenu.show(e)}
     onopenedit={(
@@ -899,43 +815,17 @@
   />
 {/snippet}
 
-{#snippet composeHeader()}
-  <div class="compose-mode-indicator">
-    <span class="compose-mode-label">
-      {activeComposeMode === "sms"
-        ? m.ticket_mode_indicator_sms(withTerms())
-        : m.ticket_mode_indicator_reply()}
-    </span>
-    {#if activeComposeMode === "sms"}
-      <span class="sms-char-counter" class:sms-over-limit={smsOverLimit}>
-        {m.ticket_sms_char_count({ count: String(smsCharCount) })}
-      </span>
-    {/if}
-    <button
-      type="button"
-      class="compose-mode-dismiss"
-      onclick={dismissCompose}
-      aria-label={m.ticket_compose_dismiss_mode()}
-    >
-      <X size={16} aria-hidden="true" />
-    </button>
-  </div>
-{/snippet}
-
 {#snippet ticketCompose()}
-  {#if !selectMode.active}
-    <ShellMessagebar
-      bind:value={draftText}
-      mode={activeComposeMode === "sms" ? "sms" : "reply"}
-      collapsed={activeComposeMode === null}
-      inline={desktopFull}
-      header={activeComposeMode !== null ? composeHeader : undefined}
-      onsend={handleSend}
-      onplus={openComposeActions}
-      oninput={handleInput}
-      {sendDisabled}
-    />
-  {/if}
+  <TicketCompose
+    bind:this={compose}
+    {ticketId}
+    inline={desktopFull}
+    hidden={selectMode.active}
+    sending={messenger.sending || sms.sending}
+    onsendreply={() => void messenger.handleSend()}
+    onsendsms={(text: string) => void sms.handleSmsSend(text)}
+    onplus={openComposeActions}
+  />
 {/snippet}
 
 {#snippet inlineFilterBar()}
@@ -1080,11 +970,13 @@
   oncallaction={handleCallAction}
   oncalldismiss={closeCallSheet}
   oncomposedismiss={closeComposeActions}
-  onreply={activateReplyMode}
-  ontextclient={ticket?.hasPhone === true ? activateSmsMode : undefined}
+  onreply={() => compose?.activateReply()}
+  ontextclient={ticket?.hasPhone === true
+    ? () => exposureHint.show("sms", () => compose?.activateSms())
+    : undefined}
   ondraftset={(body: string) => {
-    activeComposeMode = "reply";
-    draftText = body;
+    setDraftForMode(ticketId, "reply", body);
+    compose?.activateReply();
   }}
 />
 
@@ -1094,49 +986,6 @@
     flex-direction: column;
     flex: 1;
     min-height: 0;
-  }
-
-  .compose-mode-indicator {
-    position: absolute;
-    bottom: 100%;
-    left: 0;
-    right: 0;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 6px 16px;
-    font-size: var(--text-xs);
-    color: var(--muted);
-  }
-
-  .compose-mode-label {
-    flex: 1;
-    min-width: 0;
-  }
-
-  .compose-mode-dismiss {
-    appearance: none;
-    border: none;
-    background: none;
-    padding: 4px;
-    margin: -4px;
-    color: var(--muted);
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-  }
-
-  .sms-char-counter {
-    font-size: var(--text-xs);
-    color: var(--muted);
-    margin-left: auto;
-    flex-shrink: 0;
-  }
-
-  .sms-char-counter.sms-over-limit {
-    color: var(--danger);
-    font-weight: 600;
   }
 
   .full-desktop-sidebar {
