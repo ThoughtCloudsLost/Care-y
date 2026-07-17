@@ -38,6 +38,7 @@
 
   let debounceTimer: ReturnType<typeof setTimeout> | undefined;
   let prevFocused: HTMLElement | null = null;
+  let inputEl: HTMLInputElement | undefined = $state();
 
   $effect(() => {
     prevFocused =
@@ -47,6 +48,15 @@
     return () => {
       prevFocused?.focus();
     };
+  });
+
+  // Focus the search input on mount. When the caller wraps its state
+  // change in flushSync (gestureMount), this effect runs synchronously
+  // inside the gesture, so iOS Safari opens the keyboard.
+  $effect(() => {
+    if (inputEl != null) {
+      inputEl.focus();
+    }
   });
 
   function handleInput(e: Event): void {
@@ -90,6 +100,7 @@
     <X size={16} aria-hidden="true" />
   </Button>
   <input
+    bind:this={inputEl}
     class="search-input"
     type="text"
     value={term}
