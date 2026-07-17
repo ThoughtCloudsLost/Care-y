@@ -372,7 +372,7 @@
   .reply-sheet-messages {
     flex: 1;
     overflow-y: auto;
-    padding: 0.5rem 0;
+    padding: 0.5rem 0 1rem;
     max-height: 40vh;
   }
 

@@ -3,6 +3,7 @@
   import { SvelteSet } from "svelte/reactivity";
   import * as m from "$lib/paraglide/messages.js";
   import { getOrgLogoUrl } from "$lib/branding/logo-url.svelte.js";
+  import { getRoleInfo } from "$lib/admin/role-info.js";
   import { allTabs } from "./tabs";
   import type { TabId, DesktopSidebarProps, SidebarSubItem } from "./types";
 
@@ -17,9 +18,12 @@
     onAdmin,
     onSettings,
     onLogout,
+    roleId,
+    onNavigate,
   }: DesktopSidebarProps = $props();
 
   const navLogoUrl = $derived(getOrgLogoUrl());
+  const roleInfo = $derived(getRoleInfo(roleId));
 
   // ── Expand/collapse ────────────────────────────────────────────────
   let hoverExpanded = $state(false);
@@ -67,6 +71,7 @@
   const focusableIds = $derived([
     ...allTabs.map((t) => t.id),
     ...(hasAdmin ? (["admin"] as const) : []),
+    "role" as const,
     "settings" as const,
     "logout" as const,
   ]);
@@ -277,6 +282,18 @@
         <span class="sidebar-user-name">{userName}</span>
       {/if}
     </div>
+    <button
+      onclick={() => onNavigate(roleInfo.path)}
+      type="button"
+      class="sidebar-role-badge"
+      aria-label={m.sidebar_role_badge_label({ role: roleInfo.name })}
+      tabindex={focusedIndex === focusableIds.length - 3 ? 0 : -1}
+      data-sidebar-id="role"
+    >
+      <span class="stamp-chip sidebar-role-stamp">
+        {isExpanded ? roleInfo.name : roleInfo.name.charAt(0)}
+      </span>
+    </button>
     <button
       onclick={onSettings}
       type="button"
@@ -601,6 +618,41 @@
     overflow: hidden;
     text-overflow: ellipsis;
     min-width: 0;
+  }
+
+  /* Role badge: the AvatarPanel stamp brought to the rail. Compact form
+     shows the role's initial; the full stamp label needs expanded width.
+     Same row ergonomics as .sidebar-user-action, identity ink on the stamp. */
+  .sidebar-role-badge {
+    display: flex;
+    align-items: center;
+    padding: 0.375rem 0.75rem;
+    border: none;
+    background: transparent;
+    color: var(--brand-text, var(--brand-primary));
+    cursor: pointer;
+    text-align: start;
+    width: 100%;
+    transition: background-color 150ms ease;
+    border-inline-start: 3px solid transparent;
+  }
+
+  .sidebar-role-badge:hover {
+    background: var(--brand-primary-20);
+  }
+
+  .sidebar-role-badge:focus-visible {
+    outline: 2px solid var(--brand-primary);
+    outline-offset: -2px;
+  }
+
+  /* Compact stamp centers on the 24px icon column so it sits directly
+     beneath the avatar at rail width. The button row keeps the pointer
+     target above the 24px floor (WCAG 2.5.8); a corner overlay on the
+     28px avatar could not. */
+  .sidebar-role-stamp {
+    min-width: 24px;
+    text-align: center;
   }
 
   .sidebar-user-action {

@@ -146,10 +146,9 @@
         opacity: 1;
       }
       #splash-name {
-        font-family:
-          system-ui,
-          -apple-system,
-          sans-serif;
+        /* Theme font ships as render-blocking CSS; the raw stack is only
+           the var() fallback for dev, where Vite injects styles post-paint. */
+        font-family: var(--theme-font-ui, system-ui, -apple-system, sans-serif);
         font-size: 17px;
         font-weight: 600;
         letter-spacing: 0.02em;

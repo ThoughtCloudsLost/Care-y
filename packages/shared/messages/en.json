@@ -762,6 +762,7 @@
   "role_admin": "Admin",
   "role_manager": "{Manager}",
   "role_volunteer": "{Volunteer}",
+  "sidebar_role_badge_label": "Your role: {role}",
   "admin_people_title": "People",
   "admin_tab_users": "Users",
   "admin_tab_queues": "{Queues}",
