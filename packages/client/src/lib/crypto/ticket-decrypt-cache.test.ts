@@ -198,6 +198,39 @@ describe("TicketDecryptCache", () => {
       cache.clearFollowUps();
       expect(cache.has(CACHE_KEY)).toBe(true);
     });
+
+    it("misses and decrypts anew after the ticket's cursor prefix is evicted", async () => {
+      const otherTicketId = "ticket-002";
+      const secondCiphertext = "cursor-ct-version-two-padding";
+      const v2Key = `cursor:${TICKET_ID}:${secondCiphertext.slice(0, 24)}`;
+      const otherKey = `cursor:${otherTicketId}:${CIPHERTEXT.slice(0, 24)}`;
+
+      cache.decryptReadCursor(TICKET_ID, USER_ID, KEY_WRAP, CIPHERTEXT);
+      cache.decryptReadCursor(TICKET_ID, USER_ID, KEY_WRAP, secondCiphertext);
+      cache.decryptReadCursor(otherTicketId, USER_ID, KEY_WRAP, CIPHERTEXT);
+      await vi.waitFor(() => {
+        expect(cache.has(CACHE_KEY)).toBe(true);
+        expect(cache.has(v2Key)).toBe(true);
+        expect(cache.has(otherKey)).toBe(true);
+      });
+
+      // The flush success path evicts every version for the one ticket.
+      cache.deleteByPrefix(`cursor:${TICKET_ID}:`);
+
+      expect(cache.has(CACHE_KEY)).toBe(false);
+      expect(cache.has(v2Key)).toBe(false);
+      expect(cache.has(otherKey)).toBe(true);
+
+      mockDecrypt.mockClear();
+      const result = cache.decryptReadCursor(
+        TICKET_ID,
+        USER_ID,
+        KEY_WRAP,
+        CIPHERTEXT,
+      );
+      expect(result).toBeUndefined();
+      expect(mockDecrypt).toHaveBeenCalledOnce();
+    });
   });
 
   describe("decryptTitle", () => {
