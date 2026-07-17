@@ -1,5 +1,6 @@
 import type { QueryClient } from "@tanstack/svelte-query";
 import { ticketsKeys } from "$lib/query/keys.js";
+import { invalidateReadState } from "$lib/query/invalidate-read-state.js";
 import type { RawFollowUpPreview } from "$lib/tickets/preview-loader.svelte.js";
 
 export interface ReplyFlowDeps {
@@ -52,15 +53,7 @@ export function createReplyFlow(deps: ReplyFlowDeps): ReplyFlowState {
     void deps.queryClient.invalidateQueries({
       queryKey: ticketsKeys.lists(),
     });
-    // A new follow-up shifts the read-state timestamp window and the
-    // sweep's latest activity, so both families refetch immediately
-    // rather than waiting for the SSE broadcast round trip.
-    void deps.queryClient.invalidateQueries({
-      queryKey: ticketsKeys.readStates(),
-    });
-    void deps.queryClient.invalidateQueries({
-      queryKey: ticketsKeys.readStateSweep(),
-    });
+    invalidateReadState(deps.queryClient);
     void deps.eagerLoadPreviews([ticketId]);
   }
 

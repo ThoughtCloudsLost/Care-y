@@ -67,6 +67,7 @@
   import TicketDetailOverlays from "$lib/components/tickets/TicketDetailOverlays.svelte";
   import { createQuery, useQueryClient } from "@tanstack/svelte-query";
   import { ticketKeys, ticketsKeys, consultantKeys } from "$lib/query/keys";
+  import { invalidateReadState } from "$lib/query/invalidate-read-state.js";
   import { trpc } from "$lib/trpc/index.js";
   import {
     getCryptoBridge,
@@ -194,14 +195,7 @@
       // decrypts into a fresh entry with no mutation-during-derived
       // hazard and cursor entries stop accumulating across reads.
       ticketDecryptCache.deleteByPrefix(`cursor:${ticketId}:`);
-      // The tickets list derives unread pills from this cursor; refresh
-      // both read-state families so window and sweep settle together.
-      void queryClient.invalidateQueries({
-        queryKey: ticketsKeys.readStates(),
-      });
-      void queryClient.invalidateQueries({
-        queryKey: ticketsKeys.readStateSweep(),
-      });
+      invalidateReadState(queryClient);
       return result;
     },
   });
