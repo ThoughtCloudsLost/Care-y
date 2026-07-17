@@ -222,6 +222,12 @@
     cryptoBridge,
     mutate: async (args) => {
       const result = await ticketRouter.updateReadCursor.mutate(args);
+      // The flush stored a new cursor blob, so this ticket's older
+      // ciphertext versions in the decrypt cache are dead weight now.
+      // Evict them here, outside render reads, so the refetch below
+      // decrypts into a fresh entry with no mutation-during-derived
+      // hazard and cursor entries stop accumulating across reads.
+      ticketDecryptCache.deleteByPrefix(`cursor:${ticketId}:`);
       // The tickets list derives unread pills from this cursor; refresh
       // both read-state families so window and sweep settle together.
       void queryClient.invalidateQueries({

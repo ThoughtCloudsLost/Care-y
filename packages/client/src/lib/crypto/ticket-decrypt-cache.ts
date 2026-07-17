@@ -145,6 +145,11 @@ export class TicketDecryptCache extends AsyncDecryptCache {
    * The bridge call mirrors the detail composable's exactly: per-user
    * AAD slot, the row's own key wrap, and the ticket id as the Worker
    * key-cache id so cursor versions share one unwrapped ticket key.
+   *
+   * Lifecycle: a successful read-cursor flush evicts the ticket's
+   * cursor: prefix (detail orchestrator) so versions do not pile up as
+   * the user reads. Residual growth from sweep refetches of other-device
+   * updates remains, bounded by the user's open-ticket count; accepted.
    */
   decryptReadCursor(
     ticketId: string,
