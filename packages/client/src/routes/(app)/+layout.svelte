@@ -20,7 +20,8 @@
   import AppShell from "$lib/shell/AppShell.svelte";
   import ToastRenderer from "$lib/shell/ToastRenderer.svelte";
   import { getBrandingTitle } from "$lib/branding/title.svelte.js";
-  import type { TabId } from "$lib/shell/types";
+  import { resolveNavContext } from "$lib/shell/nav-context.js";
+  import type { TabId, AreaId } from "$lib/shell/types";
   import type { StateChangeEvent } from "$lib/workers/crypto-protocol.js";
 
   let { children } = $props();
@@ -124,31 +125,43 @@
     });
   }
 
-  // ── Tab routing ────────────────────────────────────────────────────
-  type TabRoute = "/" | "/tickets" | "/library";
+  // ── Navigation context ──────────────────────────────────────────────
+  const navCtx = $derived(resolveNavContext(page.url.pathname));
+  const activeTab = $derived(navCtx.tab);
+  const activeArea = $derived(navCtx.area);
 
-  const TAB_ROUTES = new Map<TabId, TabRoute>([
-    ["home", "/"],
-    ["tickets", "/tickets"],
-    ["library", "/library"],
-  ]);
-
-  const TAB_PREFIXES: [string, TabId][] = [
-    ["/tickets", "tickets"],
-    ["/library", "library"],
-  ];
-
-  const activeTab: TabId = $derived.by(() => {
-    const path = page.url.pathname;
-    for (const [prefix, tab] of TAB_PREFIXES) {
-      if (path === prefix || path.startsWith(prefix + "/")) return tab;
+  function tabRoute(tabId: TabId): `/${string}` {
+    switch (tabId) {
+      case "home":
+        return "/";
+      case "tickets":
+        return "/tickets";
+      case "library":
+        return "/library";
     }
-    return "home";
-  });
+  }
+
+  function areaRoute(areaId: AreaId): `/${string}` {
+    switch (areaId) {
+      case "admin":
+        return "/admin";
+      case "settings":
+        return "/more/settings";
+      case "schedule":
+        return "/more/schedule";
+    }
+  }
 
   function handleTabChange(tabId: TabId): void {
-    const route = TAB_ROUTES.get(tabId);
-    if (route !== undefined && page.url.pathname !== route) {
+    const route = tabRoute(tabId);
+    if (page.url.pathname !== route) {
+      void goto(resolve(route));
+    }
+  }
+
+  function handleAreaTap(areaId: AreaId): void {
+    const route = areaRoute(areaId);
+    if (page.url.pathname !== route) {
       void goto(resolve(route));
     }
   }
@@ -176,8 +189,10 @@
         <BrandingProvider>
           <AppShell
             {activeTab}
+            {activeArea}
             orgName={getBrandingTitle()}
             ontabchange={handleTabChange}
+            onareatap={handleAreaTap}
           >
             {@render children()}
           </AppShell>

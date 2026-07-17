@@ -18,6 +18,7 @@ function renderSidebar(overrides: Partial<DesktopSidebarProps> = {}) {
   return render(DesktopSidebar, {
     props: {
       activeTab: "home",
+      activeArea: null,
       ontabchange: vi.fn(),
       expanded: false,
       subItems: [],

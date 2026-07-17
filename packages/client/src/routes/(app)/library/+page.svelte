@@ -66,6 +66,7 @@
   import EmptyState from "$lib/components/EmptyState.svelte";
   import { getBrandingTitle } from "$lib/branding/title.svelte.js";
   import { haptic } from "$lib/utils/haptic.js";
+  import { gestureMount } from "$lib/utils/gesture-focus.js";
   import { cachedDate } from "$lib/utils/date-cache.js";
   import { getLibraryLayoutCtx } from "./library-layout-ctx.js";
   import { createFilterDispatch } from "$lib/composables/create-filter-dispatch.svelte.js";
@@ -850,7 +851,9 @@
     manage={manageConfig}
     searchNavigator={overlay.active ? searchNavigatorRow : undefined}
     bulkActions={multiSelectActive ? bulkActionsRow : undefined}
-    onsearch={!overlay.active ? () => overlay.enter("") : undefined}
+    onsearch={!overlay.active
+      ? () => gestureMount(() => overlay.enter(""))
+      : undefined}
     searchLabel={m.search_inline_trigger()}
   />
 {/snippet}

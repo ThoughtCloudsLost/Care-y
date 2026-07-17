@@ -97,6 +97,8 @@
   "library_editor_undo": "Undo",
   "library_editor_redo": "Redo",
   "nav_more": "More",
+  "nav_schedule": "Schedule",
+  "nav_area_label": "You are in: {area}",
   "nav_sidebar_label": "Sidebar navigation",
   "nav_sidebar_expand": "Expand sidebar",
   "nav_sidebar_collapse": "Collapse sidebar",

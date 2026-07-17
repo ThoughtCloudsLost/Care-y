@@ -43,6 +43,7 @@
     isKeyStatus,
   } from "$lib/admin/people-utils.js";
   import { createInviteFlow } from "$lib/composables/people/create-invite-flow.svelte.js";
+  import { gestureMount } from "$lib/utils/gesture-focus.js";
   import { createSearchOverlay } from "$lib/search/search-overlay.svelte.js";
   import SearchNavigator from "$lib/components/search/SearchNavigator.svelte";
   import ShellPopover from "$lib/shell/ShellPopover.svelte";
@@ -451,7 +452,9 @@
     filterPills={filterPillsConfig}
     searchNavigator={overlay.active ? searchNavigatorRow : undefined}
     bulkActions={usersSectionRef?.bulkActionsSnippet()}
-    onsearch={!overlay.active ? () => overlay.enter("") : undefined}
+    onsearch={!overlay.active
+      ? () => gestureMount(() => overlay.enter(""))
+      : undefined}
     searchLabel={m.search_inline_trigger()}
   />
 {/snippet}

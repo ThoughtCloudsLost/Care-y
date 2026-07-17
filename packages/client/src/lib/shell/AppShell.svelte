@@ -24,19 +24,13 @@
   - Any child route can suppress PTR via usePTR().setEnabled(false) during init.
 -->
 <script lang="ts">
-  import {
-    Navbar,
-    Link,
-    Searchbar,
-    Toolbar,
-    TabbarLink,
-    ToolbarPane,
-  } from "konsta/svelte";
+  import { Navbar, Link, Searchbar, Toolbar, ToolbarPane } from "konsta/svelte";
   import PageShell from "./PageShell.svelte";
   import { Search, User } from "@lucide/svelte";
   import { getOrgLogoUrl } from "$lib/branding/logo-url.svelte.js";
   import CallIndicator from "./CallIndicator.svelte";
-  import { tick, onMount } from "svelte";
+  import { onMount } from "svelte";
+  import { gestureMount } from "$lib/utils/gesture-focus.js";
   import { SvelteMap } from "svelte/reactivity";
   import { browser } from "$app/environment";
   import {
@@ -55,7 +49,7 @@
     SidebarSection,
     SidebarSubItem,
   } from "./types";
-  import { allTabs } from "./tabs";
+  import TabbarNav from "./TabbarNav.svelte";
   import { layoutMode } from "$lib/stores/layout-mode.svelte";
   import DesktopSidebar from "./DesktopSidebar.svelte";
   import { savedFilterStore } from "$lib/stores/saved-filters.svelte";
@@ -422,8 +416,10 @@
 
   let {
     activeTab,
+    activeArea,
     orgName = "CARE-Y",
     ontabchange,
+    onareatap,
     children,
   }: AppShellProps = $props();
 
@@ -437,13 +433,17 @@
     void setLocale(newLocale);
   }
 
-  async function openSearch(): Promise<void> {
+  function openSearch(): void {
     resetFullSearch();
-    searchOpen = true;
-    await tick();
-    searchContainerEl
-      ?.querySelector<HTMLInputElement>("input[type='text']")
-      ?.focus();
+    gestureMount(
+      () => {
+        searchOpen = true;
+      },
+      () =>
+        searchContainerEl?.querySelector<HTMLInputElement>(
+          "input[type='text']",
+        ),
+    );
   }
 
   function closeSearch(): void {
@@ -912,7 +912,7 @@
 
     if (mod && e.key === "k") {
       e.preventDefault();
-      void openSearch();
+      openSearch();
       return;
     }
 
@@ -980,6 +980,7 @@
   {#if layoutMode.isDesktop}
     <DesktopSidebar
       {activeTab}
+      {activeArea}
       {ontabchange}
       expanded={false}
       subItems={sidebarSubItems}
@@ -1241,41 +1242,7 @@
           </Toolbar>
         </div>
       {:else if !layoutMode.isDesktop}
-        <nav
-          aria-label={m.nav_main()}
-          class="tabbar-nav native-tabbar left-0 bottom-0 fixed"
-        >
-          <Toolbar
-            tabbar
-            tabbarIcons
-            class="tabbar-inner"
-            role="tablist"
-            aria-label={m.nav_main()}
-          >
-            <ToolbarPane>
-              {#each allTabs as tab (tab.id)}
-                <TabbarLink
-                  active={activeTab === tab.id}
-                  onclick={() => ontabchange(tab.id)}
-                  role="tab"
-                  aria-label={tab.label()}
-                  aria-selected={activeTab === tab.id}
-                  colors={{
-                    textIos: "text-[var(--glass-text)]",
-                    textMaterial: "text-[var(--glass-text)]",
-                    textActiveIos: "text-[var(--brand-text)]",
-                    textActiveMaterial: "text-[var(--brand-text)]",
-                  }}
-                >
-                  {#snippet icon()}{@const Icon = tab.icon}<Icon
-                      size={24}
-                      aria-hidden="true"
-                    />{/snippet}
-                </TabbarLink>
-              {/each}
-            </ToolbarPane>
-          </Toolbar>
-        </nav>
+        <TabbarNav {activeTab} {activeArea} {ontabchange} {onareatap} />
       {/if}
 
       {#if layoutMode.isDesktop}
@@ -1373,38 +1340,15 @@
     min-width: 0;
   }
 
-  /* Default tabbar nav: flex container for Toolbar + More button.
-     Fixed positioning and safe-area padding live here, not on the Toolbar. */
-  .tabbar-nav {
-    display: flex;
-    align-items: stretch;
-    z-index: 20;
-    width: 100%;
-  }
-
-  .tabbar-nav :global(.k-toolbar) {
-    position: static !important;
-    flex: 1;
-    min-width: 0;
-    padding-left: 2rem;
-    padding-right: 2rem;
-  }
-
   /* iOS only: override Konsta's pb-safe-4 (safe-area + 16px) to match native
      iOS tab bar positioning. Native uses only the safe-area inset. */
   :global(.k-ios .native-tabbar.k-toolbar) {
-    padding-bottom: var(--k-safe-area-bottom) !important;
-  }
-  :global(.k-ios) .tabbar-nav :global(.k-toolbar) {
     padding-bottom: var(--k-safe-area-bottom) !important;
   }
 
   /* iOS only: the bg layer uses calc(safe-area + 16px + 48px + 16px) = safe-area + 80px.
      Native height is safe-area + 48px (icons-only tabbar). */
   :global(.k-ios .native-tabbar.k-toolbar > div:first-child) {
-    height: calc(var(--k-safe-area-bottom) + 48px) !important;
-  }
-  :global(.k-ios) .tabbar-nav :global(.k-toolbar > div:first-child) {
     height: calc(var(--k-safe-area-bottom) + 48px) !important;
   }
 

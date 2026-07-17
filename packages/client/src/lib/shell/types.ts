@@ -21,17 +21,37 @@ import type {
 export const TAB_IDS = ["home", "tickets", "library"] as const;
 export type TabId = (typeof TAB_IDS)[number];
 
+// ── Area identifiers ─────────────────────────────────────────────────
+
+export const AREA_IDS = ["admin", "settings", "schedule"] as const;
+export type AreaId = (typeof AREA_IDS)[number];
+
 // ── Shell wrapper props ──────────────────────────────────────────────
 
 export interface AppShellProps {
-  /** Currently active tab ID. */
-  activeTab: TabId;
+  /** Currently active tab ID, or null when the path is outside all tabs. */
+  activeTab: TabId | null;
+  /** Non-tab area the current path belongs to, or null on tab pages. */
+  activeArea: AreaId | null;
   /** Org name shown in the navbar. */
   orgName?: string;
   /** Callback when a tab is tapped or arrow-keyed to. */
   ontabchange: (tabId: TabId) => void;
+  /** Callback when the area indicator pill is tapped. */
+  onareatap: (areaId: AreaId) => void;
   /** Page content rendered inside the shell. */
   children: Snippet;
+}
+
+export interface TabbarNavProps {
+  /** Currently active tab ID, or null when the path is outside all tabs. */
+  activeTab: TabId | null;
+  /** Non-tab area the current path belongs to, or null on tab pages. */
+  activeArea: AreaId | null;
+  /** Callback when a tab is tapped. */
+  ontabchange: (tabId: TabId) => void;
+  /** Callback when the area indicator pill is tapped. */
+  onareatap: (areaId: AreaId) => void;
 }
 
 export interface ShellNavbarProps {
@@ -339,7 +359,8 @@ export interface SidebarSection {
 }
 
 export interface DesktopSidebarProps {
-  readonly activeTab: TabId;
+  readonly activeTab: TabId | null;
+  readonly activeArea: AreaId | null;
   readonly ontabchange: (tabId: TabId) => void;
   readonly expanded: boolean;
   readonly subItems: readonly SidebarSection[];

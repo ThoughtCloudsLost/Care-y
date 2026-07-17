@@ -96,6 +96,8 @@ export * from "./library_editor_horizontal_rule.js";
 export * from "./library_editor_undo.js";
 export * from "./library_editor_redo.js";
 export * from "./nav_more.js";
+export * from "./nav_schedule.js";
+export * from "./nav_area_label.js";
 export * from "./nav_sidebar_label.js";
 export * from "./nav_sidebar_expand.js";
 export * from "./nav_sidebar_collapse.js";
