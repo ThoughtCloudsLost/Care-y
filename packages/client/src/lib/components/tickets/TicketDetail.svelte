@@ -883,10 +883,23 @@
   // After the initial page loads, check if there are unread messages
   // beyond the loaded range. If so, keep fetching older pages until
   // the read boundary is within the loaded range.
-  // Scroll initialization state machine. Fires once per mount:
+  // Scroll initialization state machine. Fires once per ticket:
   //   waiting -> loading (fetch unread pages) -> scrolling -> done
   type ScrollInitPhase = "waiting" | "loading" | "scrolling" | "done";
   let scrollInitPhase = $state<ScrollInitPhase>("waiting");
+
+  // Global search can swap the ticket prop without remounting this
+  // component: re-arm the machine (same shape as the orchestrator's
+  // autoActivatedForTicket) so the new ticket scrolls to its own unread
+  // divider. Every other init gate is query-derived off ticketId and
+  // resets itself.
+  let scrollInitForTicket = $state("");
+  $effect(() => {
+    if (scrollInitForTicket === ticketId) return;
+    scrollInitForTicket = ticketId;
+    scrollInitPhase = "waiting";
+    scrollReady = false;
+  });
 
   $effect(() => {
     if (scrollInitPhase !== "waiting") return;
