@@ -7,6 +7,8 @@
  * client-side partition over the loaded window.
  */
 
+import { createPersistedState } from "./persisted-state.svelte.js";
+
 const STORAGE_KEY = "care-y-new-replies-first";
 
 export interface NewRepliesFirstStore {
@@ -15,44 +17,22 @@ export interface NewRepliesFirstStore {
   toggle(): void;
 }
 
-function loadFromStorage(): boolean {
-  if (typeof window === "undefined") return true;
-  try {
-    const stored = localStorage.getItem(STORAGE_KEY);
-    if (stored === "true") return true;
-    if (stored === "false") return false;
-  } catch {
-    // Safari private browsing, storage quota, or restricted context:
-    // recover by treating it as no stored preference.
-    return true;
-  }
-  return true;
-}
+const state = createPersistedState<boolean>(STORAGE_KEY, true, {
+  validate: (raw) => {
+    if (raw === "true") return true;
+    if (raw === "false") return false;
+    return undefined;
+  },
+});
 
-function createNewRepliesFirstStore(): NewRepliesFirstStore {
-  let enabled = $state<boolean>(loadFromStorage());
-
-  function persist(value: boolean): void {
-    enabled = value;
-    try {
-      localStorage.setItem(STORAGE_KEY, String(value));
-      // care-y-ignore-next-line no-swallowed-errors -- best-effort persistence: the toggle already changed in memory and a full or restricted storage must stay silent
-    } catch {
-      // Storage full or restricted
-    }
-  }
-
-  return {
-    get enabled(): boolean {
-      return enabled;
-    },
-    set(value: boolean): void {
-      persist(value);
-    },
-    toggle(): void {
-      persist(!enabled);
-    },
-  };
-}
-
-export const newRepliesFirstStore = createNewRepliesFirstStore();
+export const newRepliesFirstStore: NewRepliesFirstStore = {
+  get enabled(): boolean {
+    return state.value;
+  },
+  set(value: boolean): void {
+    state.set(value);
+  },
+  toggle(): void {
+    state.set(!state.value);
+  },
+};

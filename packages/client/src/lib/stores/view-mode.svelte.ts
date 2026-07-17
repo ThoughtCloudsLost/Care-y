@@ -13,6 +13,8 @@
  * placeholder for a future board view; it is NOT the grid mode.
  */
 
+import { createPersistedState } from "./persisted-state.svelte.js";
+
 export type ViewMode = "list" | "cards" | "table" | "grid" | "kanban";
 
 const VALID_MODES: ReadonlySet<string> = new Set<ViewMode>([
@@ -32,42 +34,29 @@ export interface ViewModeStore {
   set(value: ViewMode): void;
 }
 
-function loadFromStorage(storageKey: string, fallback: ViewMode): ViewMode {
-  if (typeof window === "undefined") return fallback;
-  try {
-    const stored = localStorage.getItem(storageKey);
-    if (stored !== null && isViewMode(stored)) return stored;
-  } catch {
-    // Safari private browsing, storage quota, or restricted context:
-    // recover by treating it as no stored preference.
-    return fallback;
-  }
-  return fallback;
-}
-
 function createViewModeStore(
   storageKey: string,
   fallback: ViewMode = "list",
 ): ViewModeStore {
-  let mode = $state<ViewMode>(loadFromStorage(storageKey, fallback));
+  const state = createPersistedState<ViewMode>(storageKey, fallback, {
+    validate: (raw) => (isViewMode(raw) ? raw : undefined),
+  });
 
   return {
     get mode(): ViewMode {
-      return mode;
+      return state.value;
     },
     set(value: ViewMode): void {
-      mode = value;
-      try {
-        localStorage.setItem(storageKey, value);
-        // care-y-ignore-next-line no-swallowed-errors -- best-effort persistence: the mode already changed in memory and a full or restricted storage must stay silent
-      } catch {
-        // Storage full or restricted
-      }
+      state.set(value);
     },
   };
 }
 
-/** Tickets list view mode (key predates the three-way union). */
+/**
+ * Tickets list view mode. The unsuffixed key predates the per-surface
+ * keys (dashboard, kb, users) and the union's growth from the original
+ * "list" | "grid" pair; values stored back then still load unchanged.
+ */
 export const viewModeStore = createViewModeStore("care-y-view-mode");
 
 /**

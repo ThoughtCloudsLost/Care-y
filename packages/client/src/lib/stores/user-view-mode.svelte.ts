@@ -1,7 +1,9 @@
 /**
  * View mode store for the admin user list.
- * Persists list/grid preference to localStorage.
+ * Persists a list/grid preference to localStorage.
  */
+
+import { createPersistedState } from "./persisted-state.svelte.js";
 
 export type UserViewMode = "list" | "grid";
 
@@ -16,39 +18,15 @@ function isUserViewMode(value: string): value is UserViewMode {
   return VALID_MODES.has(value);
 }
 
-function loadFromStorage(): UserViewMode {
-  if (typeof window === "undefined") return "list";
-  try {
-    const stored = localStorage.getItem(STORAGE_KEY);
-    if (stored !== null && isUserViewMode(stored)) return stored;
-  } catch {
-    // Safari private browsing, storage quota, or restricted context:
-    // recover by treating it as no stored preference.
-    return "list";
-  }
-  return "list";
-}
+const state = createPersistedState<UserViewMode>(STORAGE_KEY, "list", {
+  validate: (raw) => (isUserViewMode(raw) ? raw : undefined),
+});
 
-function createUserViewModeStore(): {
-  readonly mode: UserViewMode;
-  set(value: UserViewMode): void;
-} {
-  let mode = $state<UserViewMode>(loadFromStorage());
-
-  return {
-    get mode(): UserViewMode {
-      return mode;
-    },
-    set(value: UserViewMode): void {
-      mode = value;
-      try {
-        localStorage.setItem(STORAGE_KEY, value);
-        // care-y-ignore-next-line no-swallowed-errors -- best-effort persistence: the mode already changed in memory and a full or restricted storage must stay silent
-      } catch {
-        // Storage full or restricted
-      }
-    },
-  };
-}
-
-export const userViewModeStore = createUserViewModeStore();
+export const userViewModeStore = {
+  get mode(): UserViewMode {
+    return state.value;
+  },
+  set(value: UserViewMode): void {
+    state.set(value);
+  },
+};
