@@ -23,6 +23,10 @@
   import { toastStore } from "$lib/stores/toast.svelte.js";
   import { haptic } from "$lib/utils/haptic.js";
   import { createNoteTypesQuery } from "$lib/tickets/queries.js";
+  import {
+    createReactionsQuery,
+    writeReactionToCache,
+  } from "$lib/tickets/create-reactions-query.svelte.js";
   import { createSmsSend } from "$lib/composables/ticket-detail/create-sms-send.svelte.js";
   import { createExposureHint } from "$lib/composables/ticket-detail/create-exposure-hint.svelte.js";
   import { useQueryClient } from "@tanstack/svelte-query";
@@ -100,34 +104,16 @@
 
   // ── Reactions ──
 
-  let replyReactions = $state<Record<string, ReactionSummary[]>>({});
-
-  $effect(() => {
-    if (!opened || !previewFollowUps) {
-      replyReactions = {};
-      return;
-    }
-    const noteIds = previewFollowUps
-      .filter((fu) => fu.type === "internal_note")
-      .map((fu) => fu.id);
-    if (noteIds.length === 0) return;
-    void ticketRouter.getReactions
-      .query({ followUpIds: noteIds })
-      .then((r: Record<string, ReactionSummary[]>) => {
-        replyReactions = r;
-      })
-      .catch((_e: unknown) => {
-        /* best-effort */
-      });
+  const replyReactions = createReactionsQuery({
+    getNoteIds: () =>
+      opened && previewFollowUps
+        ? previewFollowUps
+            .filter((fu) => fu.type === "internal_note")
+            .map((fu) => fu.id)
+        : [],
+    fetchReactions: async (followUpIds, signal) =>
+      ticketRouter.getReactions.query({ followUpIds }, { signal }),
   });
-
-  function getReplyReactions(followUpId: string): ReactionSummary[] {
-    const reactions = Object.hasOwn(replyReactions, followUpId)
-      ? // eslint-disable-next-line security/detect-object-injection -- key is a UUID from our own query, not user input
-        replyReactions[followUpId]
-      : undefined;
-    return reactions ?? [];
-  }
 
   function handleToggleReaction(
     followUpId: string,
@@ -136,7 +122,7 @@
     void ticketRouter.toggleReaction
       .mutate({ followUpId, reaction })
       .then((updated: ReactionSummary[]) => {
-        replyReactions = { ...replyReactions, [followUpId]: updated };
+        writeReactionToCache(queryClient, followUpId, updated);
       })
       .catch((_e: unknown) => {
         /* best-effort */
@@ -314,7 +300,7 @@
             {clientAlias}
             noteTypeName={resolveNoteTypeName(fu.noteTypeId)}
             noteTypeIcon={resolveNoteTypeIconSlug(fu.noteTypeId)}
-            reactions={getReplyReactions(fu.id)}
+            reactions={replyReactions.reactionsFor(fu.id)}
             {currentUserId}
             ontogglereaction={(reaction: ReactionType) =>
               handleToggleReaction(fu.id, reaction)}
