@@ -107,6 +107,10 @@
   } from "$lib/utils/buffer-encoding.js";
   import LanguagePicker from "$lib/components/inputs/LanguagePicker.svelte";
   import { getLocale, setLocale, type Locale } from "$lib/paraglide/runtime.js";
+  import {
+    isChromeEnhanced,
+    flashEnhancedChrome,
+  } from "./chrome-glass.svelte.js";
 
   // Scroll container element, provided by PageShell via bindScrollEl.
   let mainEl = $state<HTMLElement | undefined>();
@@ -412,6 +416,57 @@
         bgBlur.style.removeProperty("mask-image");
       }
     }
+  });
+
+  // When a child component requests enhanced chrome glass (e.g. CaseHeader
+  // expanded), increase the navbar bg layer opacity and blur intensity.
+  $effect(() => {
+    const el = navbarDomEl;
+    if (el == null) return;
+    const enhanced = isChromeEnhanced();
+    const bgBlur =
+      el.firstElementChild instanceof HTMLElement ? el.firstElementChild : null;
+    const bgLayer =
+      el.children[1] instanceof HTMLElement ? el.children[1] : null;
+    if (enhanced) {
+      if (bgBlur != null) {
+        bgBlur.style.setProperty(
+          "-webkit-backdrop-filter",
+          "saturate(180%) blur(40px)",
+        );
+        bgBlur.style.setProperty(
+          "backdrop-filter",
+          "saturate(180%) blur(40px)",
+        );
+      }
+      if (bgLayer != null) {
+        bgLayer.style.setProperty(
+          "background",
+          "color-mix(in srgb, var(--paper) 85%, transparent)",
+        );
+      }
+    } else {
+      if (bgBlur != null) {
+        bgBlur.style.removeProperty("-webkit-backdrop-filter");
+        bgBlur.style.removeProperty("backdrop-filter");
+      }
+      if (bgLayer != null) {
+        bgLayer.style.removeProperty("background");
+      }
+    }
+  });
+
+  // Flash enhanced glass on any click inside the navbar or subnavbar.
+  $effect(() => {
+    const targets = [navbarDomEl, subnavbarInnerEl].filter(
+      (el): el is HTMLElement => el != null,
+    );
+    if (targets.length === 0) return;
+    const handler = (): void => flashEnhancedChrome();
+    for (const el of targets) el.addEventListener("click", handler);
+    return (): void => {
+      for (const el of targets) el.removeEventListener("click", handler);
+    };
   });
 
   let {
