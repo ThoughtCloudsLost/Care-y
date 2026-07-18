@@ -6,7 +6,6 @@
     ArrowUpDown,
     ArrowUp,
     ArrowDown,
-    Check,
     Search,
     SquareCheckBig,
   } from "@lucide/svelte";

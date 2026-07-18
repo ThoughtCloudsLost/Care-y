@@ -725,15 +725,6 @@
   // pinned-rows placeholder); the view mode is applied at the render site.
   const SKELETON_CARD_PROPS = makeSkeletonCardProps();
 
-  const VALID_TICKET_SORT_FIELDS = new Set<SortField>([
-    "date",
-    "priority",
-    "last_activity",
-    "queue",
-    "client",
-    "msgs",
-  ]);
-
   type TableSortField = SortField | "title" | "assignee" | "status";
   let tableSortField = $state<TableSortField>(filterStore.sort.field);
   let tableSortDirection = $state<"asc" | "desc">(filterStore.sort.direction);
@@ -791,17 +782,6 @@
       listCount: listItems.length,
     }),
   );
-
-  // Seal initial from the org name; a nameless org gets the heading alone.
-  // First grapheme, not code unit: a name can open with a composed character.
-  const orgInitial = $derived.by(() => {
-    const name = getBrandingTitle().trim();
-    if (name === "") return undefined;
-    return new Intl.Segmenter(undefined, { granularity: "grapheme" })
-      .segment(name)
-      .containing(0)
-      ?.segment.toUpperCase();
-  });
 
   $effect(() => {
     const q = page.url.searchParams.get("q");
