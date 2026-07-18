@@ -9,6 +9,7 @@
   import { getCryptoBridge } from "$lib/crypto/context.js";
   import { cacheRegistry } from "$lib/crypto/cache-registry.js";
   import { isCryptoKeyed } from "$lib/crypto/crypto-keyed.svelte.js";
+  import { isCryptoSettled } from "$lib/crypto/crypto-settled.svelte.js";
   import { isAdminOrgKeyPolling } from "$lib/crypto/admin-org-key-poll.svelte.js";
   import { IdleTimer } from "$lib/auth/idle-timer.js";
   import { toastStore } from "$lib/stores/toast.svelte.js";
@@ -76,6 +77,14 @@
     // GC-stall briefly; the test's own assertion timeout handles real failures.
     if (isE2E) return;
 
+    // Fast path: bridge finished its init handshake and the SharedWorker
+    // isn't keyed. Fire immediately (delay 0) instead of waiting 5s.
+    // Covers PWA cold starts where the worker always has zeroed keys.
+    // If the bridge hasn't settled yet (Worker crash, bfcache restore),
+    // fall back to 5s. When isCryptoSettled() flips true mid-wait, the
+    // effect re-runs and the old timer is cleaned up.
+    const delay = isCryptoSettled() && !isCryptoKeyed() ? 0 : 5_000;
+
     const timer = setTimeout(() => {
       cryptoTimedOut = true;
       cacheRegistry.reset();
@@ -83,7 +92,7 @@
         window.location.pathname + window.location.search,
       );
       void goto(resolve(`/login?reauth=1&next=${next}`));
-    }, 5_000);
+    }, delay);
     return () => clearTimeout(timer);
   });
 
