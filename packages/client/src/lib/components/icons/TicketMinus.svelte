@@ -31,7 +31,7 @@
   stroke-width={sw}
   stroke-linecap="round"
   stroke-linejoin="round"
-  class={["lucide-icon lucide lucide-ticket-alert", className]
+  class={["lucide-icon lucide lucide-ticket-minus", className]
     .filter(Boolean)
     .join(" ")}
   aria-hidden={ariaHidden}
@@ -40,6 +40,5 @@
   <path
     d="M2 21.286V15a3 3 0 0 0 0-6V7a2 2 0 0 1 2-2H20a2 2 0 0 1 2 2V9a3 3 0 0 0 0 6V17a2 2 0 0 1-2 2H6.828a2 2 0 0 0-1.414.586l-2.202 2.202A.71.71 0 0 1 2 21.286Z"
   />
-  <path d="M12 9v4" />
-  <path d="M12 15h.01" />
+  <path d="M9 12h6" />
 </svg>

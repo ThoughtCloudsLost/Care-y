@@ -14,9 +14,6 @@
   import { haptic } from "$lib/utils/haptic.js";
   import { requireRouter } from "$lib/errors.js";
   import {
-    Ticket as TicketIcon,
-    TicketMinus,
-    TicketPlus,
     FilePlus,
     LayersPlus,
     FolderPlus,
@@ -28,6 +25,9 @@
     Layers,
     Rocket,
   } from "@lucide/svelte";
+  import TicketIcon from "$lib/components/icons/Ticket.svelte";
+  import TicketMinus from "$lib/components/icons/TicketMinus.svelte";
+  import TicketPlus from "$lib/components/icons/TicketPlus.svelte";
   import TicketPreviewList from "$lib/components/dashboard/TicketPreviewList.svelte";
   import CollapsibleSection from "$lib/components/dashboard/CollapsibleSection.svelte";
   import ShiftSection from "$lib/components/dashboard/ShiftSection.svelte";

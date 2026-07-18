@@ -14,7 +14,7 @@ import {
 } from "$lib/tickets/ticket-card-props.js";
 import { DECRYPT_ERROR_SENTINEL } from "$lib/crypto/async-decrypt-cache.js";
 import TicketSearchResult from "$lib/components/search/TicketSearchResult.svelte";
-import { Ticket } from "@lucide/svelte";
+import Ticket from "$lib/components/icons/Ticket.svelte";
 import * as m from "$lib/paraglide/messages.js";
 import { withTerms } from "$lib/terminology/with-terms.js";
 

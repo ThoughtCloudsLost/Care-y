@@ -242,8 +242,8 @@
         aria-expanded={!folded}
         aria-controls={fieldsId}
         aria-label={folded
-          ? m.ticket_case_details()
-          : m.ticket_fold_case_details()}
+          ? m.ticket_case_details(withTerms())
+          : m.ticket_fold_case_details(withTerms())}
         use:foldDrag.action
         onclick={toggleFold}
         onkeydown={(e) => {
@@ -254,7 +254,9 @@
         }}
       >
         <span class="case-handle-label">
-          {folded ? m.ticket_case_details() : m.ticket_fold_case_details()}
+          {folded
+            ? m.ticket_case_details(withTerms())
+            : m.ticket_fold_case_details(withTerms())}
         </span>
         <div class="case-handle-indicator" aria-hidden="true"></div>
       </div>
