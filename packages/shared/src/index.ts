@@ -318,6 +318,17 @@ export {
   type SearchClientsInput,
 } from "./schemas/tickets.js";
 
+// --- Follow-up content-type registry ---
+export {
+  CONTENT_TYPE_REGISTRY,
+  assignmentEventParamsSchema,
+  priorityEventParamsSchema,
+  type ContentCategory,
+  type ContentTypeMeta,
+  type AssignmentEventParams,
+  type PriorityEventParams,
+} from "./schemas/follow-up-registry.js";
+
 // --- Knowledge Base schemas ---
 export {
   createKbCategoryInputSchema,
