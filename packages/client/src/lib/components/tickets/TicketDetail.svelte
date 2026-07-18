@@ -364,19 +364,28 @@
   // Translate client-side pseudo-types to server filter params.
   // note_type:<uuid> entries are converted to "internal_note" for the server query;
   // client-side filtering by specific noteTypeId happens in the rendering layer.
+  const CATEGORY_EXPANSION: Record<string, FollowUpType[]> = {
+    __assignment__: ["volunteer_assigned", "volunteer_unassigned"],
+    __status__: ["status_opened", "status_closed"],
+    __priority__: ["priority_changed"],
+    __hold__: ["hold_placed", "hold_removed"],
+  };
+
   const serverFilterTypes = $derived.by((): FollowUpType[] => {
     const types: FollowUpType[] = [];
     let hasNoteTypeFilter = false;
     for (const t of filterTypes ?? []) {
       if (t.startsWith("note_type:")) {
         hasNoteTypeFilter = true;
+      } else if (t in CATEGORY_EXPANSION) {
+        // eslint-disable-next-line security/detect-object-injection -- keys are static pseudo-type strings from the filter UI
+        const expanded = CATEGORY_EXPANSION[t];
+        if (expanded !== undefined) types.push(...expanded);
       } else if (
         t !== "__images__" &&
         t !== "__recordings__" &&
         t !== "__files__"
       ) {
-        // filterTypes prop contains both FollowUpType values and media pseudo-types;
-        // after excluding pseudo-types the remainder are valid FollowUpType values.
         // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- pseudo-types excluded above
         types.push(t as FollowUpType);
       }
@@ -585,6 +594,7 @@
     readonly hasImage: boolean;
     readonly hasFile: boolean;
     readonly noteTypeId?: string | null;
+    readonly eventParams?: Record<string, unknown> | null;
     readonly callStatus?: string | null;
     readonly callDurationSeconds?: number | null;
     readonly keyGeneration?: string | null;
@@ -608,6 +618,7 @@
       fullPosition: fu.fullPosition,
       totalCount: fu.totalCount,
       noteTypeId: fu.noteTypeId ?? null,
+      eventParams: fu.eventParams ?? null,
       callStatus: fu.callStatus ?? null,
       callDurationSeconds: fu.callDurationSeconds ?? null,
       keyGeneration: fu.keyGeneration ?? null,
@@ -679,6 +690,7 @@
     hasImage: boolean;
     hasFile: boolean;
     noteTypeId?: string | null;
+    eventParams?: Record<string, unknown> | null;
     keyGeneration?: string | null;
     keyWrap?:
       | ClusterRecord["keyWrap"]
@@ -700,6 +712,7 @@
       hasImage: fu.hasImage,
       hasFile: fu.hasFile,
       noteTypeId: fu.noteTypeId ?? null,
+      eventParams: fu.eventParams ?? null,
       keyGeneration: fu.keyGeneration ?? null,
       keyWrap: fu.keyWrap ?? null,
     };
@@ -745,6 +758,7 @@
         hasImage: summary?.hasImage ?? false,
         hasFile: summary?.hasFile ?? false,
         noteTypeId: summary?.noteTypeId ?? null,
+        eventParams: summary?.eventParams ?? null,
         keyGeneration: summary?.keyGeneration ?? null,
         keyWrap: null,
       };
@@ -1116,6 +1130,8 @@
         {searchScrollRequested}
         {onsearchscrollcomplete}
         resolveNoteIcon={resolveNoteIconForTimeline}
+        resolveUserName={(uid: string) =>
+          resolveVolunteerName(uid) ?? m.ticket_system_volunteer_fallback()}
       >
         {#snippet renderExpanded({
           record: rec,
@@ -1143,7 +1159,14 @@
             }}
           >
             {#if kind === "system"}
-              <SystemEvent type={rec.type} timestamp={rec.createdAt} />
+              <SystemEvent
+                type={rec.type}
+                timestamp={rec.createdAt}
+                eventParams={rec.eventParams}
+                resolveUserName={(uid: string) =>
+                  resolveVolunteerName(uid) ??
+                  m.ticket_system_volunteer_fallback()}
+              />
             {:else if kind === "note"}
               <PrivateNote
                 result={recResult}
@@ -1296,7 +1319,14 @@
                   </div>
                 {/if}
                 {#if kind === "system"}
-                  <SystemEvent type={fu.type} timestamp={fu.createdAt} />
+                  <SystemEvent
+                    type={fu.type}
+                    timestamp={fu.createdAt}
+                    eventParams={fu.eventParams}
+                    resolveUserName={(uid: string) =>
+                      resolveVolunteerName(uid) ??
+                      m.ticket_system_volunteer_fallback()}
+                  />
                 {:else if kind === "note"}
                   <PrivateNote
                     result={contentResult}

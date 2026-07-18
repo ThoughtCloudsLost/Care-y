@@ -386,7 +386,7 @@ describe("TicketDetail", () => {
     it("renders system events with role='status'", async () => {
       const fu = makeFollowUp({
         source: "system",
-        type: "status_change",
+        type: "status_closed",
       });
 
       followUpsQueryState = {
@@ -453,7 +453,7 @@ describe("TicketDetail", () => {
     it("system events do not have tabindex (no context menu)", async () => {
       const fu = makeFollowUp({
         source: "system",
-        type: "status_change",
+        type: "status_closed",
       });
 
       followUpsQueryState = {

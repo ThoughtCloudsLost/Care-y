@@ -18,11 +18,13 @@
   interface Props {
     type: string;
     timestamp: string;
+    eventParams?: Record<string, unknown> | null;
+    resolveUserName?: (userId: string) => string;
   }
 
-  let { type, timestamp }: Props = $props();
+  let { type, timestamp, eventParams, resolveUserName }: Props = $props();
 
-  const label = $derived(systemEventLabel(type));
+  const label = $derived(systemEventLabel(type, eventParams, resolveUserName));
   const timeLabel = $derived(formatRelativeTime(new Date(timestamp)));
 </script>
 

@@ -9,7 +9,8 @@ import { DECRYPT_ERROR_SENTINEL } from "$lib/crypto/async-decrypt-cache.js";
 export interface ConversationSearchData {
   readonly followUpId: string;
   readonly source: string;
-  readonly kind: "message" | "system" | "note";
+  readonly type: string;
+  readonly kind: "message" | "system" | "note" | "article";
   readonly plaintext: string;
   readonly searchTerm: string;
   readonly authorName: string | undefined;
@@ -94,6 +95,7 @@ export function createConversationSearchProvider(
             data: {
               followUpId: entry.fu.id,
               source: entry.fu.source,
+              type: entry.fu.type,
               kind: followUpKind(entry.fu),
               plaintext: entry.plaintext,
               searchTerm: query,

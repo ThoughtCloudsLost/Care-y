@@ -64,10 +64,13 @@ export function resolveNoteTypeIcon(name: string | null): LucideIcon {
 
 const followUpTypeIcons = new Map<string, LucideIcon>([
   ["message", MessagesSquare],
-  ["status_change", ArrowLeftRight],
-  ["assignment_change", UserCheck],
-  ["priority_change", ChevronsUp],
-  ["hold_change", CirclePause],
+  ["status_opened", ArrowLeftRight],
+  ["status_closed", ArrowLeftRight],
+  ["volunteer_assigned", UserCheck],
+  ["volunteer_unassigned", UserCheck],
+  ["priority_changed", ChevronsUp],
+  ["hold_placed", CirclePause],
+  ["hold_removed", CirclePause],
   ["merge_note", Replace],
   ["internal_note", StickyNote],
   ["phone_call", Phone],
