@@ -109,10 +109,7 @@
   } from "$lib/utils/buffer-encoding.js";
   import LanguagePicker from "$lib/components/inputs/LanguagePicker.svelte";
   import { getLocale, setLocale, type Locale } from "$lib/paraglide/runtime.js";
-  import {
-    isChromeEnhanced,
-    flashEnhancedChrome,
-  } from "./chrome-glass.svelte.js";
+  import { chromeIntensity, flashOpaqueChrome } from "./chrome-glass.svelte.js";
 
   // Scroll container element, provided by PageShell via bindScrollEl.
   let mainEl = $state<HTMLElement | undefined>();
@@ -420,13 +417,14 @@
     }
   });
 
-  // Animate the navbar glass layers when enhanced chrome is requested.
-  // Matching filter function lists (saturate + blur) allow CSS interpolation.
+  // Animate the navbar glass layers to match chrome intensity (0-1).
+  // Interpolates saturate, blur, and background opacity continuously so
+  // the drag gesture can drive the glass state frame-by-frame.
   let chromeTransitionReady = false;
   $effect(() => {
     const el = navbarDomEl;
     if (el == null) return;
-    const enhanced = isChromeEnhanced();
+    const t = chromeIntensity();
     const bgBlur =
       el.firstElementChild instanceof HTMLElement ? el.firstElementChild : null;
     const bgLayer =
@@ -450,52 +448,45 @@
       }
     }
 
-    if (enhanced) {
-      if (bgBlur != null) {
-        bgBlur.style.setProperty(
-          "-webkit-backdrop-filter",
-          "saturate(180%) blur(40px)",
-        );
-        bgBlur.style.setProperty(
-          "backdrop-filter",
-          "saturate(180%) blur(40px)",
-        );
-      }
+    const saturate = Math.round(100 + t * 80);
+    const blur = Math.round(2 + t * 38);
+    const filterVal = `saturate(${String(saturate)}%) blur(${String(blur)}px)`;
+
+    if (bgBlur != null) {
+      bgBlur.style.setProperty("-webkit-backdrop-filter", filterVal);
+      bgBlur.style.setProperty("backdrop-filter", filterVal);
+    }
+
+    if (t > 0) {
+      const bgOpacity = Math.round(t * 85);
       if (bgLayer != null) {
         bgLayer.style.setProperty(
           "background",
-          "color-mix(in srgb, var(--paper) 85%, transparent)",
+          `linear-gradient(to bottom, color-mix(in srgb, var(--paper) ${String(bgOpacity)}%, transparent) 85%, transparent)`,
         );
       }
     } else {
-      if (bgBlur != null) {
-        bgBlur.style.setProperty(
-          "-webkit-backdrop-filter",
-          "saturate(100%) blur(2px)",
-        );
-        bgBlur.style.setProperty("backdrop-filter", "saturate(100%) blur(2px)");
-      }
       if (bgLayer != null) {
         bgLayer.style.removeProperty("background");
       }
     }
   });
 
-  // Flash enhanced glass on interactive element clicks inside the
-  // subnavbar only (filter pills, tabs, etc.). Navbar clicks and
-  // non-interactive areas (scrollbars, backgrounds) are excluded.
+  // Flash enhanced glass on interactive subnavbar clicks (filter pills,
+  // tabs). Excludes: CaseHeader (manages own chrome), scrollbar clicks
+  // (land outside clientWidth/clientHeight), navbar action slots.
   $effect(() => {
     const el = subnavbarInnerEl;
     if (el == null) return;
 
-    const handler = (e: Event): void => {
+    const handler = (e: MouseEvent): void => {
       if (!(e.target instanceof Element)) return;
-      if (e.target.closest(".case-header") != null) return;
+      if (e.target.closest(".case-header, .section-scroll-nav") != null) return;
       const interactive = e.target.closest(
         "button, a, [role='button'], [role='tab']",
       );
       if (interactive == null) return;
-      flashEnhancedChrome();
+      flashOpaqueChrome();
     };
     el.addEventListener("click", handler);
     return (): void => {
@@ -949,6 +940,11 @@
     if (!ptr.enabled) return;
     if (ptrPhase === "refreshing" || ptrPhase === "releasing") return;
     if (!mainEl) return;
+
+    // While the software keyboard is open, a pull-down at the top is the
+    // visual-viewport pan bringing the chrome back into view, never a
+    // refresh. Arming PTR would preventDefault the pan away.
+    if (document.documentElement.classList.contains("keyboard-open")) return;
 
     // Ignore multi-touch (pinch-to-zoom)
     if (e.touches.length > 1) return;
@@ -1455,9 +1451,17 @@
 
 <style>
   /* ── Desktop layout ── */
+  /* Fixed 100dvh, NOT var(--app-height): the layout viewport does not
+     shrink when the iOS software keyboard opens; iOS instead
+     over-scrolls the document to reveal the focused input. A shell
+     sized to the visual viewport but anchored at the document top then
+     exposes a blank band of shell background above the keyboard once
+     that scroll happens. Keeping the shell full-height means the scroll
+     can only ever show app content; keyboard-aware surfaces add their
+     own bottom inset from --keyboard-height instead. */
   .app-shell-layout {
     display: flex;
-    height: var(--app-height, 100dvh);
+    height: 100dvh;
   }
 
   .app-shell-layout > :global(:last-child) {
