@@ -122,7 +122,7 @@
     border: none;
     cursor: pointer;
     padding: 0;
-    font-size: 11px;
+    font-size: 0.6875rem;
     font-weight: 700;
     color: var(--brand-text);
     white-space: nowrap;
