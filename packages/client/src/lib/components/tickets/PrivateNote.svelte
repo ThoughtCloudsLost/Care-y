@@ -11,17 +11,18 @@
   the picker, pills cluster at the bottom-right corner.
 -->
 <script lang="ts">
-  import { Popover } from "konsta/svelte";
   import { StickyNote, Pencil } from "@lucide/svelte";
   import { formatRelativeTime } from "$lib/utils/format-time.js";
   import { resolveNoteTypeIcon } from "$lib/utils/note-type-icons.js";
   import { REACTION_ENTRIES } from "$lib/utils/reaction-icons.js";
   import { haptic } from "$lib/utils/haptic.js";
+  import { longPress } from "$lib/utils/long-press.js";
   import * as m from "$lib/paraglide/messages.js";
   import type { DecryptResult } from "$lib/crypto/decrypt-result.js";
   import type { ReactionSummary, ReactionType } from "@care-y/shared";
   import DecryptPlaceholder from "$lib/components/DecryptPlaceholder.svelte";
   import ReactionTray from "./ReactionTray.svelte";
+  import ShellPopover from "$lib/shell/ShellPopover.svelte";
 
   interface Props {
     result: DecryptResult;
@@ -81,7 +82,6 @@
 
   let pickerOpen = $state(false);
   let cardEl = $state<HTMLElement | undefined>(undefined);
-  let longPressTimer: ReturnType<typeof setTimeout> | null = null;
 
   function openPicker(): void {
     if (!ontogglereaction || !cardEl) return;
@@ -94,33 +94,21 @@
     pickerOpen = false;
   }
 
-  // ── Long-press handling ──
-
-  function handlePointerDown(e: PointerEvent): void {
-    if (!ontogglereaction && !onlongpress) return;
-    const target = e.target;
-    if (
-      target instanceof HTMLButtonElement ||
-      target instanceof HTMLAnchorElement
-    )
-      return;
-    longPressTimer = setTimeout(() => {
-      longPressTimer = null;
-      if (onlongpress) {
-        onlongpress();
-      } else {
-        openPicker();
-      }
-      haptic();
-    }, 500);
-  }
-
-  function cancelLongPress(): void {
-    if (longPressTimer !== null) {
-      clearTimeout(longPressTimer);
-      longPressTimer = null;
-    }
-  }
+  const pressAction = $derived(
+    ontogglereaction || onlongpress
+      ? longPress(
+          () => {
+            if (onlongpress) {
+              onlongpress();
+            } else {
+              openPicker();
+            }
+            haptic();
+          },
+          { ignoreInteractiveTargets: true },
+        )
+      : null,
+  );
 </script>
 
 <div
@@ -131,10 +119,7 @@
   <div
     class="note-card-wrap"
     bind:this={cardEl}
-    onpointerdown={handlePointerDown}
-    onpointerup={cancelLongPress}
-    onpointercancel={cancelLongPress}
-    onpointermove={cancelLongPress}
+    {@attach pressAction}
     oncontextmenu={(e) => {
       if (ontogglereaction) e.preventDefault();
     }}
@@ -196,12 +181,13 @@
   </div>
 </div>
 
-<Popover
+<ShellPopover
   opened={pickerOpen}
   target={cardEl}
-  onBackdropClick={() => {
+  ondismiss={() => {
     pickerOpen = false;
   }}
+  ariaLabel={m.reaction_summary()}
 >
   <div class="reaction-picker-strip">
     {#each REACTION_ENTRIES as entry (entry.type)}
@@ -220,7 +206,7 @@
       </button>
     {/each}
   </div>
-</Popover>
+</ShellPopover>
 
 <style>
   /* No margin of its own: the thread gap spaces it like every row. */
