@@ -35,7 +35,7 @@ export interface VolunteerSearchData {
   readonly hasKeys: boolean;
   readonly hasOrgKeyWrap: boolean;
   readonly isSelf: boolean;
-  /** The query that matched, so the card can highlight it (P7 pattern). */
+  /** The query that matched, so the card can highlight it. */
   readonly searchTerm: string;
 }
 
