@@ -93,7 +93,7 @@ describe("TicketTable", () => {
       expect(headers).toContain("Queue");
       expect(headers).toContain("Assignee");
       expect(headers).toContain("Activity");
-      expect(headers).toContain("Msgs");
+      expect(headers).toContain("Follow-ups");
     });
 
     it("renders status dot for each row", () => {

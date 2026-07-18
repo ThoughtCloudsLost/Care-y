@@ -1252,7 +1252,7 @@
       { field: "last_activity", label: m.tickets_sort_activity() },
       { field: "queue", label: m.tickets_sort_queue(withTerms()) },
       { field: "client", label: m.tickets_sort_client() },
-      { field: "msgs", label: m.tickets_sort_msgs() },
+      { field: "msgs", label: m.tickets_sort_followups() },
     ],
     currentField: tableSortField,
     currentDirection: tableSortDirection,
