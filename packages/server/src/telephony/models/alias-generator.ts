@@ -3,15 +3,15 @@
  * like "calm-pebble-7" or "bright-cedar-42".
  *
  * Word lists are positive/neutral adjectives and nature-themed nouns.
- * With ~80 adjectives, ~80 nouns, and numbers 1-99, the keyspace is
- * roughly 630,000 combinations. Callers must handle collisions via
- * retry (see client-repo.ts).
+ * With 80 adjectives, 80 nouns, and numbers 1-99, the keyspace is
+ * roughly 633,000 combinations (minus blocked pairs). Callers must
+ * handle collisions via retry (see client-repo.ts).
  */
 
 import { randomInt } from "node:crypto";
 import { InternalError } from "../../errors.js";
 
-const ADJECTIVES = [
+export const ADJECTIVES = [
   "bright",
   "calm",
   "clear",
@@ -25,7 +25,6 @@ const ADJECTIVES = [
   "fresh",
   "full",
   "glad",
-  "gold",
   "green",
   "hale",
   "keen",
@@ -95,7 +94,7 @@ const ADJECTIVES = [
   "vivid",
 ] as const;
 
-const NOUNS = [
+export const NOUNS = [
   "acorn",
   "aspen",
   "birch",
@@ -178,6 +177,25 @@ const NOUNS = [
   "wind",
 ] as const;
 
+// Adjective-noun pairs that produce unfortunate readings (drug slang,
+// bodily function innuendo, etc.). Checked during generation; blocked
+// pairs trigger a re-roll.
+export const BLOCKED_PAIRS: ReadonlySet<string> = new Set([
+  "cool-snow",
+  "deep-snow",
+  "fresh-snow",
+  "full-moon",
+  "pure-snow",
+  "snowy-frost",
+  "still-stone",
+  "stone-sage",
+  "warm-dew",
+  "warm-rain",
+  "warm-stream",
+]);
+
+const MAX_REROLL_ATTEMPTS = 100;
+
 function pick(arr: readonly string[]): string {
   const item = arr[randomInt(arr.length)];
   if (item === undefined) {
@@ -186,9 +204,20 @@ function pick(arr: readonly string[]): string {
   return item;
 }
 
+export function isBlockedPair(adjective: string, noun: string): boolean {
+  return BLOCKED_PAIRS.has(`${adjective}-${noun}`);
+}
+
 export function generateAlias(): string {
-  const adj = pick(ADJECTIVES);
-  const noun = pick(NOUNS);
-  const num = randomInt(1, 100);
-  return `${adj}-${noun}-${String(num)}`;
+  for (let attempt = 0; attempt < MAX_REROLL_ATTEMPTS; attempt++) {
+    const adj = pick(ADJECTIVES);
+    const noun = pick(NOUNS);
+    if (!isBlockedPair(adj, noun)) {
+      const num = randomInt(1, 100);
+      return `${adj}-${noun}-${String(num)}`;
+    }
+  }
+  throw new InternalError(
+    "Failed to generate alias: exceeded maximum re-roll attempts",
+  );
 }
