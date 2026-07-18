@@ -83,6 +83,7 @@ export interface FollowUpPreview {
   readonly hasImage: boolean;
   readonly hasFile: boolean;
   readonly noteTypeId: string | null;
+  readonly eventParams: Record<string, unknown> | null;
 }
 
 /**
@@ -319,6 +320,7 @@ export function createTicketService(
     trxOrDb: Kysely<TenantDatabase> | Transaction<TenantDatabase>,
     ticketId: string,
     type: string,
+    eventParams?: Record<string, unknown>,
   ): Promise<void> {
     await trxOrDb
       .insertInto("followups")
@@ -327,6 +329,7 @@ export function createTicketService(
         source: "system",
         type,
         encrypted_content: Buffer.alloc(0),
+        event_params: eventParams ?? null,
       })
       .execute();
   }
@@ -450,7 +453,7 @@ export function createTicketService(
             .returningAll()
             .executeTakeFirstOrThrow();
 
-          await createSystemFollowUp(trx, existing.id, "status_change");
+          await createSystemFollowUp(trx, existing.id, "status_opened");
           ticket = toRecord(reopened);
         } else {
           // No existing ticket: create new under the client-minted id
@@ -1113,13 +1116,23 @@ export function createTicketService(
 
       // Create system follow-ups for state changes
       if (input.onHold !== undefined) {
-        await createSystemFollowUp(db, input.ticketId, "hold_change");
+        await createSystemFollowUp(
+          db,
+          input.ticketId,
+          input.onHold ? "hold_placed" : "hold_removed",
+        );
       }
       if (input.priority !== undefined) {
-        await createSystemFollowUp(db, input.ticketId, "priority_change");
+        await createSystemFollowUp(db, input.ticketId, "priority_changed", {
+          to: input.priority,
+        });
       }
       if (input.status !== undefined) {
-        await createSystemFollowUp(db, input.ticketId, "status_change");
+        await createSystemFollowUp(
+          db,
+          input.ticketId,
+          input.status === "open" ? "status_opened" : "status_closed",
+        );
       }
 
       return toRecord(row);
@@ -1144,7 +1157,7 @@ export function createTicketService(
 
       if (!row) throw new NotFoundError(ErrorCode.TICKET_NOT_FOUND_OR_CLOSED);
 
-      await createSystemFollowUp(db, ticketId, "status_change");
+      await createSystemFollowUp(db, ticketId, "status_closed");
       return toRecord(row);
     },
 
@@ -1164,7 +1177,7 @@ export function createTicketService(
 
       if (!row) throw new NotFoundError(ErrorCode.TICKET_NOT_FOUND_OR_OPEN);
 
-      await createSystemFollowUp(db, ticketId, "status_change");
+      await createSystemFollowUp(db, ticketId, "status_opened");
       return toRecord(row);
     },
 
@@ -1189,6 +1202,7 @@ export function createTicketService(
           eb.ref("f.encrypted_content").as("encrypted_content"),
           eb.ref("f.created_at").as("created_at"),
           eb.ref("f.note_type_id").as("note_type_id"),
+          eb.ref("f.event_params").as("event_params"),
           eb.fn
             .agg<number>("row_number")
             .over((ob) =>
@@ -1262,6 +1276,7 @@ export function createTicketService(
           "ranked_f.has_image",
           "ranked_f.has_file",
           "ranked_f.note_type_id",
+          "ranked_f.event_params",
           "tkw.ephemeral_point",
           "tkw.nonce",
           "tkw.wrapped_key",
@@ -1290,6 +1305,7 @@ export function createTicketService(
           hasImage: Boolean(row.has_image),
           hasFile: Boolean(row.has_file),
           noteTypeId: row.note_type_id ?? null,
+          eventParams: row.event_params ?? null,
         };
         const list = result[row.ticket_id];
         if (list) {

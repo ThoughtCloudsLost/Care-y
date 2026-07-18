@@ -386,6 +386,7 @@
         callDurationSeconds: null,
         keyGeneration: null,
         keyWrap: null,
+        eventParams: null,
       }) satisfies FollowUpList[number],
     createFollowUpMutate: async (args) =>
       ticketRouter.createFollowUp.mutate(args),

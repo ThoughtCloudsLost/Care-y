@@ -77,7 +77,7 @@ export async function resolveOrCreateTicket(
         .values({
           ticket_id: closedTicket.id,
           source: "system",
-          type: "status_change",
+          type: "status_opened",
           encrypted_content: Buffer.alloc(0),
         })
         .execute();
