@@ -2,43 +2,34 @@ import { describe, it, expect } from "vitest";
 import { followUpKind } from "./follow-up-utils.js";
 
 describe("followUpKind", () => {
-  it("classifies system-sourced follow-ups as system", () => {
-    expect(followUpKind({ source: "system", type: "message" })).toBe("system");
+  it.each([
+    "hold_placed",
+    "hold_removed",
+    "volunteer_assigned",
+    "volunteer_unassigned",
+    "status_opened",
+    "status_closed",
+    "priority_changed",
+    "merge_note",
+  ])("classifies %s as system", (type) => {
+    expect(followUpKind({ type })).toBe("system");
   });
 
-  it("classifies system internal_notes as system (source takes precedence)", () => {
-    expect(followUpKind({ source: "system", type: "internal_note" })).toBe(
-      "system",
-    );
+  it("classifies internal_note as note", () => {
+    expect(followUpKind({ type: "internal_note" })).toBe("note");
   });
 
-  it("classifies volunteer internal_notes as note", () => {
-    expect(followUpKind({ source: "volunteer", type: "internal_note" })).toBe(
-      "note",
-    );
+  it.each([
+    "message",
+    "sms_outbound",
+    "sms_inbound",
+    "phone_call",
+    "voicemail",
+  ])("classifies %s as message", (type) => {
+    expect(followUpKind({ type })).toBe("message");
   });
 
-  it("classifies client internal_notes as note", () => {
-    expect(followUpKind({ source: "client", type: "internal_note" })).toBe(
-      "note",
-    );
-  });
-
-  it("classifies volunteer messages as message", () => {
-    expect(followUpKind({ source: "volunteer", type: "message" })).toBe(
-      "message",
-    );
-  });
-
-  it("classifies client messages as message", () => {
-    expect(followUpKind({ source: "client", type: "message" })).toBe("message");
-  });
-
-  it("classifies volunteer sms as message", () => {
-    expect(followUpKind({ source: "volunteer", type: "sms" })).toBe("message");
-  });
-
-  it("classifies volunteer call as message", () => {
-    expect(followUpKind({ source: "volunteer", type: "call" })).toBe("message");
+  it("falls back to message for unknown types", () => {
+    expect(followUpKind({ type: "some_future_type" })).toBe("message");
   });
 });

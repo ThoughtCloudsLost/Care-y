@@ -19,6 +19,7 @@
       readonly type: string;
       readonly encryptedContent: unknown;
       readonly createdAt: string;
+      readonly eventParams?: Record<string, unknown> | null;
     };
     result: DecryptResult;
     clientAlias?: string;
@@ -29,6 +30,7 @@
     reactions?: ReactionSummary[];
     currentUserId?: string;
     ontogglereaction?: (reaction: ReactionType) => void;
+    resolveUserName?: (userId: string) => string;
   }
 
   let {
@@ -42,13 +44,19 @@
     reactions,
     currentUserId,
     ontogglereaction,
+    resolveUserName,
   }: FollowUpBubbleProps = $props();
 
   const kind = $derived(followUpKind(followUp));
 </script>
 
 {#if kind === "system"}
-  <SystemEvent type={followUp.type} timestamp={followUp.createdAt} />
+  <SystemEvent
+    type={followUp.type}
+    timestamp={followUp.createdAt}
+    eventParams={followUp.eventParams}
+    {resolveUserName}
+  />
 {:else if kind === "note"}
   <PrivateNote
     {result}

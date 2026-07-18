@@ -83,6 +83,7 @@ function makeFollowUp(
     hasImage: false,
     hasFile: false,
     noteTypeId: null,
+    eventParams: null,
     ...overrides,
   };
 }
@@ -148,7 +149,7 @@ describe("TicketPreview (mini-bubbles)", () => {
   });
 
   it("renders system events from the type label without decrypting", () => {
-    const fu = makeFollowUp({ source: "system", type: "status_change" });
+    const fu = makeFollowUp({ source: "system", type: "status_closed" });
     const { container } = render(TicketPreview, {
       props: { ticketId: "ticket-preview-1", followUps: [fu] },
     });
@@ -156,7 +157,7 @@ describe("TicketPreview (mini-bubbles)", () => {
     expect(sysEl).not.toBeNull();
     // The label derives from the follow-up type; system events carry no
     // encrypted payload, so the decrypt path must never be touched.
-    expect(sysEl?.textContent).toContain("Status changed");
+    expect(sysEl?.textContent).toContain("Closed");
     expect(mockDecryptContent).not.toHaveBeenCalled();
     // Should not be in a directional bubble row
     expect(container.querySelector("[data-direction]")).toBeNull();

@@ -16,6 +16,7 @@ export interface TimelineItem {
   fullPosition?: number;
   totalCount?: number;
   noteTypeId: string | null;
+  eventParams: Record<string, unknown> | null;
   callStatus: string | null;
   callDurationSeconds: number | null;
   /** Non-null when this follow-up was encrypted with tk_temp (needs re-wrap). */
@@ -36,6 +37,7 @@ export interface ClusterRecord {
   hasImage: boolean;
   hasFile: boolean;
   noteTypeId: string | null;
+  eventParams: Record<string, unknown> | null;
   /** Non-null when this follow-up was encrypted with tk_temp (needs re-wrap). */
   keyGeneration: string | null;
   /** ECIES key wrap for tk_temp decryption. Present only when keyGeneration is non-null. */

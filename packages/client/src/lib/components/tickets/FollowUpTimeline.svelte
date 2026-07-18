@@ -70,6 +70,7 @@
     onsearchscrollcomplete?: () => void;
     /** Resolve a note type's icon by noteTypeId (null = use default). Returns the LucideIcon component or undefined. */
     resolveNoteIcon?: (noteTypeId: string | null) => LucideIcon | undefined;
+    resolveUserName?: (userId: string) => string;
     children: Snippet;
   }
 
@@ -85,6 +86,7 @@
     searchScrollRequested = false,
     onsearchscrollcomplete,
     resolveNoteIcon,
+    resolveUserName,
     children,
   }: FollowUpTimelineProps = $props();
 
@@ -117,7 +119,7 @@
 
   function landmarkLabel(item: TimelineItem): string {
     if (item.source === "system") {
-      return systemEventLabel(item.type);
+      return systemEventLabel(item.type, item.eventParams, resolveUserName);
     }
 
     if (item.type === "internal_note") {

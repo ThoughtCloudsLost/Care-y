@@ -56,6 +56,7 @@ function makePreview(id: string): RawFollowUpPreview {
     hasImage: false,
     hasFile: false,
     noteTypeId: null,
+    eventParams: null,
   };
 }
 

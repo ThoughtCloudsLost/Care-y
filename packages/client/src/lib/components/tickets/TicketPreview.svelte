@@ -206,7 +206,7 @@
              Pushing them through the decrypt path rendered a decrypt
              error as preview text. -->
         <div class="mini-system" data-type="system">
-          {truncate(systemEventLabel(fu.type), 40)}
+          {truncate(systemEventLabel(fu.type, fu.eventParams), 40)}
         </div>
       {:else}
         {@const raw = followUpCache.decryptContent(
