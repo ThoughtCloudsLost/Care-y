@@ -57,9 +57,9 @@
   }
 </script>
 
-<!-- The Inkwell pill anatomy is pinned (quiet bordered capsule; active =
-     the org's pen on the border and text, never a fill), so this is a
-     plain button rather than the platform-adaptive Konsta Chip. -->
+<!-- Pinned-anatomy exemption (see inkwell-design-language.md, "Pinned-anatomy
+     exemptions"): the pill is a quiet bordered capsule with the org's pen on
+     active border and text, never a fill. Konsta Chip fights this anatomy. -->
 <span bind:this={anchorEl} class="pill-anchor">
   <button
     type="button"
