@@ -414,7 +414,7 @@
     width: 6px;
     height: 6px;
     border-radius: 50%;
-    background: var(--unread-blue, #3b82f6);
+    background: var(--unread);
     pointer-events: none;
   }
 
@@ -428,7 +428,7 @@
   }
 
   .toggle-dot-active {
-    border-color: var(--unread-blue, #3b82f6);
-    background: var(--unread-blue, #3b82f6);
+    border-color: var(--unread);
+    background: var(--unread);
   }
 </style>
