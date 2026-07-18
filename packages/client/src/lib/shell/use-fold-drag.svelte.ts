@@ -1,10 +1,16 @@
 /**
  * Two-state drag gesture for fold/expand toggles.
  *
- * Finger-tracked vertical drag on a handle element with threshold + snap.
- * Drag down when expanded folds; drag up when folded expands. Matches the
- * feel of ShellSheet/panel gestures (same constants) but transforms the
- * action node itself rather than a parent overlay.
+ * Finger-tracked vertical drag on a handle element that progressively
+ * reveals or hides a content area by controlling its visible height.
+ * Drag down when folded reveals the content; drag up when expanded
+ * hides it. The finger position maps 1:1 to the content height, so the
+ * panel slides open or closed directly under the user's finger.
+ *
+ * The action attaches to the handle element. The caller passes a
+ * reference to the content wrapper (wrapEl) whose first child element's
+ * maxHeight is controlled during the drag. The wrapper's CSS
+ * grid-template-rows is temporarily overridden to allow height control.
  *
  * Touch-only: desktop mice do not fire touch events, so drag is naturally
  * inert on desktop without an explicit guard.
@@ -12,10 +18,11 @@
  * Must be called during component initialization (top-level script).
  */
 
+import { setChromeIntensity } from "./chrome-glass.svelte.js";
+
 const SNAP_THRESHOLD_PX = 80;
 const VELOCITY_SNAP_PX_MS = 0.4;
 const COMMIT_DELTA_PX = 3;
-const MAX_DRAG_PX = 120;
 
 /**
  * Pure snap-decision function. Returns true when the gesture should
@@ -37,6 +44,8 @@ export interface FoldDragConfig {
   readonly folded: boolean;
   /** Called when drag commits a state change. */
   readonly onsnap: (shouldFold: boolean) => void;
+  /** The grid wrapper element whose first child's maxHeight is controlled. */
+  readonly wrapEl?: HTMLElement;
 }
 
 export interface FoldDragReturn {
@@ -57,30 +66,41 @@ export function useFoldDrag(config: FoldDragConfig): FoldDragReturn {
   let prevTouchY = 0;
   let currentTouchY = 0;
   let dragConsumed = false;
+  let naturalHeight = 0;
 
-  function onTouchStart(e: TouchEvent, node: HTMLElement): void {
+  let wrapRef: HTMLElement | null = null;
+  let contentRef: HTMLElement | null = null;
+
+  function onTouchStart(e: TouchEvent): void {
     const touch = e.touches[0];
     if (e.touches.length !== 1 || touch == null) return;
+
+    wrapRef = config.wrapEl ?? null;
+    if (wrapRef == null) return;
+    const first = wrapRef.firstElementChild;
+    contentRef = first instanceof HTMLElement ? first : null;
+    if (contentRef == null) return;
+
+    naturalHeight = contentRef.scrollHeight;
+    if (naturalHeight <= 0) naturalHeight = 200;
 
     startY = touch.clientY;
     startTime = Date.now();
     committed = false;
     currentOffset = 0;
-
-    node.style.transition = "none";
   }
 
-  function onTouchMove(e: TouchEvent, node: HTMLElement): void {
+  function onTouchMove(e: TouchEvent): void {
     const touch = e.touches[0];
     if (e.touches.length !== 1 || touch == null) return;
+    if (wrapRef == null || contentRef == null) return;
 
     const current = touch.clientY;
     const rawDelta = current - startY;
 
-    // Only allow dragging in the toggle direction.
-    // Expanded: drag down (positive) to fold.
-    // Folded: drag up (negative) to expand.
-    const allowedSign = config.folded ? -1 : 1;
+    // Folded: drag DOWN (positive delta) to reveal.
+    // Expanded: drag UP (negative delta) to hide.
+    const allowedSign = config.folded ? 1 : -1;
 
     if (!committed) {
       if (rawDelta * allowedSign < COMMIT_DELTA_PX) return;
@@ -88,6 +108,13 @@ export function useFoldDrag(config: FoldDragConfig): FoldDragReturn {
       committed = true;
       startY = current;
       startTime = Date.now();
+
+      // Take over layout from CSS: override grid, disable transitions.
+      wrapRef.style.transition = "none";
+      wrapRef.style.gridTemplateRows = "1fr";
+      contentRef.style.transition = "none";
+      contentRef.style.maxHeight =
+        String(config.folded ? 0 : naturalHeight) + "px";
     }
 
     prevTouchY = currentTouchY;
@@ -95,64 +122,125 @@ export function useFoldDrag(config: FoldDragConfig): FoldDragReturn {
 
     const dragDelta = current - startY;
 
-    if (allowedSign === 1) {
-      currentOffset = Math.min(MAX_DRAG_PX, Math.max(0, dragDelta));
+    let targetHeight: number;
+    if (config.folded) {
+      targetHeight = Math.min(naturalHeight, Math.max(0, dragDelta));
     } else {
-      currentOffset = Math.max(-MAX_DRAG_PX, Math.min(0, dragDelta));
+      targetHeight = Math.min(
+        naturalHeight,
+        Math.max(0, naturalHeight + dragDelta),
+      );
     }
 
-    node.style.transform = `translateY(${String(currentOffset)}px)`;
+    // Track absolute displacement from the starting edge for snap decision.
+    currentOffset = config.folded ? targetHeight : naturalHeight - targetHeight;
+
+    contentRef.style.maxHeight = String(targetHeight) + "px";
+
+    const fraction = targetHeight / naturalHeight;
+
+    setChromeIntensity(fraction);
+
+    wrapRef.style.marginTop = String(Math.round(fraction * 10)) + "px";
+    wrapRef.style.borderTopColor = targetHeight > 0 ? "" : "transparent";
+
     e.preventDefault();
   }
 
-  function onTouchEnd(node: HTMLElement, reducedMotion: boolean): void {
-    if (!committed) {
-      node.style.transition = "";
+  function onTouchEnd(reducedMotion: boolean): void {
+    if (!committed || wrapRef == null || contentRef == null) {
+      resetInlineStyles();
       return;
     }
 
     const elapsed = Math.max(1, Date.now() - startTime);
-    const absOffset = Math.abs(currentOffset);
-    const velocity = absOffset / elapsed;
+    const velocity = currentOffset / elapsed;
 
-    // Swiping back = finger reversed direction.
+    // Swiping back = finger reversed from the primary drag direction.
     const swipingBack = config.folded
-      ? currentTouchY > prevTouchY
-      : currentTouchY < prevTouchY;
+      ? currentTouchY < prevTouchY
+      : currentTouchY > prevTouchY;
 
-    const shouldToggle = decideFoldSnap(absOffset, velocity, swipingBack);
+    const shouldToggle = decideFoldSnap(currentOffset, velocity, swipingBack);
+
+    // Compute target height before onsnap changes reactive state.
+    const targetHeight = shouldToggle
+      ? config.folded
+        ? naturalHeight
+        : 0
+      : config.folded
+        ? 0
+        : naturalHeight;
 
     if (shouldToggle) {
       dragConsumed = true;
       config.onsnap(!config.folded);
     }
 
-    // Snap handle back to origin.
     if (reducedMotion) {
-      node.style.transform = "";
-      node.style.transition = "";
+      resetInlineStyles();
     } else {
-      node.style.transition = "transform 0.2s ease-out";
-      node.style.transform = "";
-      node.addEventListener(
-        "transitionend",
-        () => {
-          node.style.transition = "";
-        },
-        { once: true },
-      );
+      // Animate margin alongside content height.
+      const targetMargin = targetHeight > 0 ? 10 : 0;
+      wrapRef.style.transition =
+        "margin-top 0.2s ease-out, border-top-color 0.2s ease-out";
+      wrapRef.style.marginTop = String(targetMargin) + "px";
+      wrapRef.style.borderTopColor = targetHeight > 0 ? "" : "transparent";
+
+      // Check if content is already at the target (no transition fires).
+      const currentMax = parseFloat(contentRef.style.maxHeight || "0");
+      if (Math.abs(currentMax - targetHeight) < 1) {
+        resetInlineStyles();
+      } else {
+        contentRef.style.transition = "max-height 0.2s ease-out";
+        contentRef.style.maxHeight = String(targetHeight) + "px";
+
+        contentRef.addEventListener(
+          "transitionend",
+          () => {
+            resetInlineStyles();
+          },
+          { once: true },
+        );
+      }
     }
 
     committed = false;
     currentOffset = 0;
   }
 
+  function resetInlineStyles(): void {
+    setChromeIntensity(null);
+    if (wrapRef != null) {
+      // Suppress CSS grid transition when switching from inline to class.
+      // Transition stays disabled through Svelte's reactive class update
+      // (microtask), then re-enables in the next rAF, after the class
+      // change has been committed. Without this, the class flip triggers
+      // the 300ms grid-template-rows transition and "replays" the drag.
+      const w = wrapRef;
+      w.style.transition = "none";
+      w.style.gridTemplateRows = "";
+      w.style.marginTop = "";
+      w.style.borderTopColor = "";
+      void w.offsetHeight;
+      requestAnimationFrame(() => {
+        w.style.transition = "";
+      });
+    }
+    if (contentRef != null) {
+      contentRef.style.transition = "";
+      contentRef.style.maxHeight = "";
+    }
+    wrapRef = null;
+    contentRef = null;
+  }
+
   function action(node: HTMLElement): { destroy: () => void } {
     const mql = window.matchMedia("(prefers-reduced-motion: reduce)");
 
-    const boundStart = (e: TouchEvent): void => onTouchStart(e, node);
-    const boundMove = (e: TouchEvent): void => onTouchMove(e, node);
-    const boundEnd = (): void => onTouchEnd(node, mql.matches);
+    const boundStart = (e: TouchEvent): void => onTouchStart(e);
+    const boundMove = (e: TouchEvent): void => onTouchMove(e);
+    const boundEnd = (): void => onTouchEnd(mql.matches);
     const boundCancel = boundEnd;
 
     node.addEventListener("touchstart", boundStart, { passive: true });
@@ -166,8 +254,7 @@ export function useFoldDrag(config: FoldDragConfig): FoldDragReturn {
         node.removeEventListener("touchmove", boundMove);
         node.removeEventListener("touchend", boundEnd);
         node.removeEventListener("touchcancel", boundCancel);
-        node.style.transition = "";
-        node.style.transform = "";
+        resetInlineStyles();
       },
     };
   }

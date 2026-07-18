@@ -40,7 +40,7 @@
     setCaseFolded,
   } from "$lib/tickets/case-fold-store.svelte.js";
   import { useFoldDrag } from "$lib/shell/use-fold-drag.svelte.js";
-  import { requestEnhancedChrome } from "$lib/shell/chrome-glass.svelte.js";
+  import { requestOpaqueChrome } from "$lib/shell/chrome-glass.svelte.js";
   import type { Snippet } from "svelte";
 
   interface Props {
@@ -135,9 +135,11 @@
 
   $effect(() => {
     if (!folded && !alwaysExpanded) {
-      return requestEnhancedChrome();
+      return requestOpaqueChrome();
     }
   });
+
+  let fieldsWrapEl = $state<HTMLElement>();
 
   const foldDrag = useFoldDrag({
     get folded() {
@@ -145,6 +147,9 @@
     },
     onsnap(shouldFold: boolean) {
       setCaseFolded(ticketId, shouldFold);
+    },
+    get wrapEl() {
+      return fieldsWrapEl;
     },
   });
 
@@ -189,7 +194,11 @@
       {/if}
     </div>
 
-    <div class="case-fields-wrap" class:case-fields-wrap--folded={folded}>
+    <div
+      class="case-fields-wrap"
+      class:case-fields-wrap--folded={folded}
+      bind:this={fieldsWrapEl}
+    >
       <dl class="fields" id={fieldsId}>
         {#if decryptedDescription}
           <div class="fld fld-desc">
@@ -265,15 +274,18 @@
     padding-right: calc(16px + env(safe-area-inset-right, 0px));
     border-radius: 0 0 1rem 1rem;
     border-top: none;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.15);
-    border-left: 1px solid rgba(255, 255, 255, 0.1);
-    border-right: 1px solid rgba(255, 255, 255, 0.1);
+    border-bottom: 1px solid rgba(0, 0, 0, 0.12);
+    border-left: 1px solid rgba(0, 0, 0, 0.08);
+    border-right: 1px solid rgba(0, 0, 0, 0.08);
     background: transparent;
     box-shadow: 0 20px 36px -14px rgba(0, 0, 0, 0.08);
     transition: box-shadow 300ms ease;
   }
 
   :global(.dark) .case-header {
+    border-bottom-color: rgba(255, 255, 255, 0.15);
+    border-left-color: rgba(255, 255, 255, 0.1);
+    border-right-color: rgba(255, 255, 255, 0.1);
     box-shadow: 0 20px 36px -14px rgba(0, 0, 0, 0.4);
   }
 
