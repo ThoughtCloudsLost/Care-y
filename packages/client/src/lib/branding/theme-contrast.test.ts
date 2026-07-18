@@ -360,3 +360,27 @@ for (const theme of THEMES) {
     });
   }
 }
+
+describe("semantic anchor sync", () => {
+  const defaultCss = readThemeCss("default.css");
+  const lightProps = themeProps(defaultCss, "default", "light");
+  const darkProps = themeProps(defaultCss, "default", "dark");
+
+  const EXPECTED_ANCHORS = [
+    { token: "urgent", scheme: "light", hex: "#a33224" },
+    { token: "urgent", scheme: "dark", hex: "#e06a55" },
+    { token: "care", scheme: "light", hex: "#7c5e00" },
+    { token: "care", scheme: "dark", hex: "#d9a93f" },
+  ] as const;
+
+  for (const anchor of EXPECTED_ANCHORS) {
+    it(`--${anchor.token} ${anchor.scheme} matches SEMANTIC_ANCHORS (${anchor.hex})`, () => {
+      const props = anchor.scheme === "light" ? lightProps : darkProps;
+      const themeHex = resolveOpaqueHex(anchor.token, props);
+      expect(
+        themeHex.toLowerCase(),
+        `default.css --${anchor.token} (${themeHex}) must equal the anchor in konsta-palette.ts (${anchor.hex})`,
+      ).toBe(anchor.hex);
+    });
+  }
+});
