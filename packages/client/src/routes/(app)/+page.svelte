@@ -372,6 +372,21 @@
       label: m.dashboard_shift_heading,
       icon: CalendarDays,
     });
+    sections.push({
+      id: "queues",
+      label: () => m.dashboard_queues_heading(withTerms()),
+      icon: Layers,
+    });
+    sections.push({
+      id: "activity",
+      label: m.dashboard_activity_heading,
+      icon: Activity,
+    });
+    sections.push({
+      id: "kb",
+      label: () => m.dashboard_kb_heading(withTerms()),
+      icon: BookOpen,
+    });
     if (showNeedsAttention) {
       sections.push({
         id: "needs-attention",
@@ -396,19 +411,6 @@
         icon: TicketPause,
       });
     }
-    sections.push(
-      {
-        id: "queues",
-        label: () => m.dashboard_queues_heading(withTerms()),
-        icon: Layers,
-      },
-      { id: "activity", label: m.dashboard_activity_heading, icon: Activity },
-      {
-        id: "kb",
-        label: () => m.dashboard_kb_heading(withTerms()),
-        icon: BookOpen,
-      },
-    );
     return sections;
   });
 
@@ -636,6 +638,35 @@
     />
   </div>
 
+  <div id="section-queues" class="scroll-target" data-column="left">
+    <QueueCards
+      queues={queueProps}
+      loading={queuesQuery.isLoading}
+      expanded={!collapsedSections.has("queues")}
+      ontoggle={() => toggleSection("queues")}
+      ontap={handleQueueTap}
+    />
+  </div>
+  <div id="section-activity" class="scroll-target" data-column="left">
+    <ActivitySection
+      activity={activityProps}
+      loading={activityQuery.isLoading}
+      expanded={!collapsedSections.has("activity")}
+      ontoggle={() => toggleSection("activity")}
+      ontap={handleTicketTap}
+    />
+  </div>
+
+  <div id="section-kb" class="scroll-target" data-column="left">
+    <KBSection
+      kbItems={kbProps}
+      loading={kbQuery.isLoading}
+      expanded={!collapsedSections.has("kb")}
+      ontoggle={() => toggleSection("kb")}
+      ontap={handleKBTap}
+    />
+  </div>
+
   {#if showNeedsAttention}
     <div id="section-needs-attention" class="scroll-target" data-column="right">
       <CollapsibleSection
@@ -732,36 +763,6 @@
       </CollapsibleSection>
     </div>
   {/if}
-
-  <div id="section-queues" class="scroll-target" data-column="left">
-    <QueueCards
-      queues={queueProps}
-      loading={queuesQuery.isLoading}
-      expanded={!collapsedSections.has("queues")}
-      ontoggle={() => toggleSection("queues")}
-      ontap={handleQueueTap}
-    />
-  </div>
-
-  <div id="section-activity" class="scroll-target" data-column="left">
-    <ActivitySection
-      activity={activityProps}
-      loading={activityQuery.isLoading}
-      expanded={!collapsedSections.has("activity")}
-      ontoggle={() => toggleSection("activity")}
-      ontap={handleTicketTap}
-    />
-  </div>
-
-  <div id="section-kb" class="scroll-target" data-column="left">
-    <KBSection
-      kbItems={kbProps}
-      loading={kbQuery.isLoading}
-      expanded={!collapsedSections.has("kb")}
-      ontoggle={() => toggleSection("kb")}
-      ontap={handleKBTap}
-    />
-  </div>
 </div>
 
 <ShellPopover
