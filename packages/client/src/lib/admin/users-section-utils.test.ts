@@ -246,7 +246,7 @@ describe("sortUsers", () => {
     expect(result.map((u) => u.id)).toEqual(["u2", "u3", "u1"]);
   });
 
-  it("sorts undecryptable names to the end", () => {
+  it("sorts undecryptable names to the end ascending", () => {
     const names: Record<string, string | null> = {
       u1: null,
       u2: "Alice",
@@ -258,6 +258,21 @@ describe("sortUsers", () => {
       (id) => names[id] ?? null,
     );
     expect(result.at(-1)?.id).toBe("u1");
+  });
+
+  it("sorts undecryptable names to the end descending", () => {
+    const names: Record<string, string | null> = {
+      u1: null,
+      u2: "Alice",
+      u3: "Bob",
+    };
+    const result = sortUsers(
+      users,
+      { field: "name", direction: "desc" },
+      (id) => names[id] ?? null,
+    );
+    expect(result.at(-1)?.id).toBe("u1");
+    expect(result.at(0)?.id).toBe("u3");
   });
 });
 

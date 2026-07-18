@@ -655,13 +655,14 @@
           orgCache.decrypt(`queue:${tb.queueId}`, tb.encryptedQueueName) ?? "";
         return getCollator().compare(qa, qb) * dir;
       }
-      case "assignee":
-        return (
-          getCollator().compare(
-            assignedSortName(ta) ?? "￿",
-            assignedSortName(tb) ?? "￿",
-          ) * dir
-        );
+      case "assignee": {
+        const aName = assignedSortName(ta);
+        const bName = assignedSortName(tb);
+        if (aName === null && bName === null) return 0;
+        if (aName === null) return 1;
+        if (bName === null) return -1;
+        return getCollator().compare(aName, bName) * dir;
+      }
       case "last_activity": {
         const aT = Date.parse(ta.lastActivityAt ?? ta.createdAt);
         const bT = Date.parse(tb.lastActivityAt ?? tb.createdAt);
