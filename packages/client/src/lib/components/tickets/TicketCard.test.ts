@@ -237,16 +237,16 @@ describe("TicketCard", () => {
     expect(container.textContent).not.toContain("Unassigned");
   });
 
-  it("renders message count with plural key ('3 msgs')", () => {
+  it("renders follow-up count with plural key ('3 follow-ups')", () => {
     const { container } = render(TicketCard, { props: defaults });
-    expect(container.textContent).toContain("3 msgs");
+    expect(container.textContent).toContain("3 follow-ups");
   });
 
-  it("renders singular message count ('1 msg')", () => {
+  it("renders singular follow-up count ('1 follow-up')", () => {
     const { container } = render(TicketCard, {
       props: { ...defaults, followUpCount: 1 },
     });
-    expect(container.textContent).toContain("1 msg");
+    expect(container.textContent).toContain("1 follow-up");
   });
 
   it("communicates hold via StatusMark, not meta text", () => {

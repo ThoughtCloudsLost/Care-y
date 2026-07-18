@@ -78,8 +78,8 @@
   const msgLabel = $derived.by(() => {
     if (followUpCount === 0) return null;
     return followUpCount === 1
-      ? m.ticket_meta_msg_count_one({ count: followUpCount })
-      : m.ticket_meta_msg_count_other({ count: followUpCount });
+      ? m.ticket_meta_followup_count_one({ count: followUpCount })
+      : m.ticket_meta_followup_count_other({ count: followUpCount });
   });
 
   // Trigger lazy preview load when a preview-bearing card mounts (enters

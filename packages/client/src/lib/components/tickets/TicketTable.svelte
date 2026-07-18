@@ -127,7 +127,7 @@
     {
       field: "msgs",
       className: "col-msgs hide-narrow",
-      label: () => m.ticket_table_col_msgs(),
+      label: () => m.ticket_table_col_followups(),
     },
   ] as const;
 
