@@ -254,36 +254,27 @@
 {/if}
 
 <style>
+  /* No own backdrop-filter: the navbar chrome (enhanced or not) extends
+     over the subnavbar area and provides the glass surface. Any
+     backdrop-filter on this element creates a compositing layer whose
+     top edge is visible as a seam. Downward-only shadow (negative spread)
+     avoids upward bleed. */
   .case-header {
     padding: 10px 16px 0;
     padding-left: calc(16px + env(safe-area-inset-left, 0px));
     padding-right: calc(16px + env(safe-area-inset-right, 0px));
     border-radius: 0 0 1rem 1rem;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-    border-left: 1px solid rgba(255, 255, 255, 0.06);
-    border-right: 1px solid rgba(255, 255, 255, 0.06);
-    background: color-mix(in srgb, var(--paper) 60%, transparent);
-    box-shadow:
-      0 4px 12px rgba(0, 0, 0, 0.08),
-      inset 0 -1px 0 rgba(255, 255, 255, 0.08);
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
-    transition:
-      backdrop-filter 300ms ease,
-      background 300ms ease,
-      box-shadow 300ms ease;
+    border-top: none;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.15);
+    border-left: 1px solid rgba(255, 255, 255, 0.1);
+    border-right: 1px solid rgba(255, 255, 255, 0.1);
+    background: transparent;
+    box-shadow: 0 20px 36px -14px rgba(0, 0, 0, 0.08);
+    transition: box-shadow 300ms ease;
   }
 
-  .case-header--expanded {
-    background: color-mix(in srgb, var(--paper) 85%, transparent);
-    border-bottom-color: rgba(255, 255, 255, 0.15);
-    border-left-color: rgba(255, 255, 255, 0.1);
-    border-right-color: rgba(255, 255, 255, 0.1);
-    backdrop-filter: saturate(180%) blur(40px);
-    -webkit-backdrop-filter: saturate(180%) blur(40px);
-    box-shadow:
-      0 8px 24px rgba(0, 0, 0, 0.15),
-      inset 0 -1px 0 rgba(255, 255, 255, 0.12);
+  :global(.dark) .case-header {
+    box-shadow: 0 20px 36px -14px rgba(0, 0, 0, 0.4);
   }
 
   .title-row {

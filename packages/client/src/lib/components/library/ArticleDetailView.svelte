@@ -38,6 +38,7 @@
     type KbImageResolverDeps,
   } from "$lib/utils/resolve-kb-images.js";
   import ArticleVote from "$lib/components/library/ArticleVote.svelte";
+  import { untrack } from "svelte";
   import { recentViews } from "$lib/search/recent-views.js";
   import KbAttachmentChip from "$lib/components/library/KbAttachmentChip.svelte";
   import DecryptPlaceholder from "$lib/components/DecryptPlaceholder.svelte";
@@ -58,8 +59,11 @@
 
   // Recently-viewed history: an article open counts as a view. Covers the
   // full-page route and the split pane (both mount this component).
+  // record() mutates + reads a SvelteMap internally (applyCaps -> sorted),
+  // so untrack prevents the effect from subscribing to the map and looping.
   $effect(() => {
-    recentViews.record("article", articleId);
+    const id = articleId;
+    untrack(() => recentViews.record("article", id));
   });
   const orgKeyManager = getOrgKeyManager();
   const queryClient = useQueryClient();

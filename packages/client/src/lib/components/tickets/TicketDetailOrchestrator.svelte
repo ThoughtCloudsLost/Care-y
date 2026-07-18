@@ -101,6 +101,7 @@
   import { fuzzySearch } from "$lib/search/fuzzy.js";
   import { createSearchOverlay } from "$lib/search/search-overlay.svelte.js";
   import SearchNavigator from "$lib/components/search/SearchNavigator.svelte";
+  import { untrack } from "svelte";
   import { recentViews } from "$lib/search/recent-views.js";
 
   let {
@@ -147,8 +148,11 @@
 
   // Recently-viewed history: a detail open counts as a view. Covers the
   // full-page route and the desktop split pane (both mount this component).
+  // record() mutates + reads a SvelteMap internally (applyCaps -> sorted),
+  // so untrack prevents the effect from subscribing to the map and looping.
   $effect(() => {
-    recentViews.record("ticket", ticketId);
+    const id = ticketId;
+    untrack(() => recentViews.record("ticket", id));
   });
 
   // Ticket data for navbar display.

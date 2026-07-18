@@ -420,8 +420,9 @@
     }
   });
 
-  // When a child component requests enhanced chrome glass (e.g. CaseHeader
-  // expanded), increase the navbar bg layer opacity and blur intensity.
+  // Animate the navbar glass layers when enhanced chrome is requested.
+  // Matching filter function lists (saturate + blur) allow CSS interpolation.
+  let chromeTransitionReady = false;
   $effect(() => {
     const el = navbarDomEl;
     if (el == null) return;
@@ -430,6 +431,25 @@
       el.firstElementChild instanceof HTMLElement ? el.firstElementChild : null;
     const bgLayer =
       el.children[1] instanceof HTMLElement ? el.children[1] : null;
+
+    if (!chromeTransitionReady) {
+      chromeTransitionReady = true;
+      if (bgBlur != null) {
+        bgBlur.style.setProperty(
+          "transition",
+          "backdrop-filter 300ms ease, -webkit-backdrop-filter 300ms ease",
+        );
+        bgBlur.style.setProperty(
+          "-webkit-backdrop-filter",
+          "saturate(100%) blur(2px)",
+        );
+        bgBlur.style.setProperty("backdrop-filter", "saturate(100%) blur(2px)");
+      }
+      if (bgLayer != null) {
+        bgLayer.style.setProperty("transition", "background 300ms ease");
+      }
+    }
+
     if (enhanced) {
       if (bgBlur != null) {
         bgBlur.style.setProperty(
@@ -449,8 +469,11 @@
       }
     } else {
       if (bgBlur != null) {
-        bgBlur.style.removeProperty("-webkit-backdrop-filter");
-        bgBlur.style.removeProperty("backdrop-filter");
+        bgBlur.style.setProperty(
+          "-webkit-backdrop-filter",
+          "saturate(100%) blur(2px)",
+        );
+        bgBlur.style.setProperty("backdrop-filter", "saturate(100%) blur(2px)");
       }
       if (bgLayer != null) {
         bgLayer.style.removeProperty("background");
@@ -458,16 +481,25 @@
     }
   });
 
-  // Flash enhanced glass on any click inside the navbar or subnavbar.
+  // Flash enhanced glass on interactive element clicks inside the
+  // subnavbar only (filter pills, tabs, etc.). Navbar clicks and
+  // non-interactive areas (scrollbars, backgrounds) are excluded.
   $effect(() => {
-    const targets = [navbarDomEl, subnavbarInnerEl].filter(
-      (el): el is HTMLElement => el != null,
-    );
-    if (targets.length === 0) return;
-    const handler = (): void => flashEnhancedChrome();
-    for (const el of targets) el.addEventListener("click", handler);
+    const el = subnavbarInnerEl;
+    if (el == null) return;
+
+    const handler = (e: Event): void => {
+      if (!(e.target instanceof Element)) return;
+      if (e.target.closest(".case-header") != null) return;
+      const interactive = e.target.closest(
+        "button, a, [role='button'], [role='tab']",
+      );
+      if (interactive == null) return;
+      flashEnhancedChrome();
+    };
+    el.addEventListener("click", handler);
     return (): void => {
-      for (const el of targets) el.removeEventListener("click", handler);
+      el.removeEventListener("click", handler);
     };
   });
 
