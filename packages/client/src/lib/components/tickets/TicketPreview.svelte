@@ -42,7 +42,13 @@
   import HighlightText from "$lib/components/HighlightText.svelte";
   import ReactionTray from "./ReactionTray.svelte";
   import type { RawFollowUpPreview } from "$lib/tickets/preview-loader.svelte.js";
-  import { followUpKind } from "$lib/tickets/follow-up-utils.js";
+  import {
+    followUpKind,
+    groupConsecutive,
+    isFollowUpGroup,
+    followUpGroupKey,
+    type GroupedFollowUp,
+  } from "$lib/tickets/follow-up-utils.js";
   import { systemEventLabel } from "$lib/tickets/system-event-label.js";
 
   interface Props {
@@ -123,6 +129,10 @@
     followUps !== undefined ? [...followUps].reverse() : undefined,
   );
 
+  const groupedOrdered = $derived(
+    ordered !== undefined ? groupConsecutive(ordered) : undefined,
+  );
+
   let chatEl = $state<HTMLDivElement | undefined>();
 
   // Whole-bubble fitting: the window's overflow crop stays, but only
@@ -196,115 +206,126 @@
     {/each}
   {:else if ordered.length === 0}
     <p class="preview-empty" role="status">{m.tickets_preview_empty()}</p>
-  {:else}
-    {#each ordered as fu (fu.id)}
-      {@const kind = followUpKind(fu)}
-      {#if kind === "system"}
-        <!-- System events carry no encrypted payload (the server creates
-             them without the org key), so their label derives from the
-             type field exactly like SystemEvent in the detail view.
-             Pushing them through the decrypt path rendered a decrypt
-             error as preview text. -->
+  {:else if groupedOrdered}
+    {#each groupedOrdered as entry, idx (followUpGroupKey(entry))}
+      {#if isFollowUpGroup(entry)}
+        {@const grp = entry}
+        {@const label = systemEventLabel(grp.type)}
         <div class="mini-system" data-type="system">
-          {truncate(systemEventLabel(fu.type, fu.eventParams), 40)}
+          {truncate(
+            m.ticket_system_event_grouped({
+              label,
+              count: String(grp.count),
+            }),
+            40,
+          )}
         </div>
+        <!-- eslint-disable @typescript-eslint/no-unsafe-argument, @typescript-eslint/strict-boolean-expressions, @typescript-eslint/prefer-nullish-coalescing -- svelte-eslint cannot narrow GroupedFollowUp in {:else} blocks; isFollowUpGroup guard above guarantees entry is a RawFollowUpPreview here -->
       {:else}
-        {@const raw = followUpCache.decryptContent(
-          fu.id,
-          ticketId,
-          followupSlot(fu.id),
-          fu.keyWrap,
-          fu.encryptedContent,
-        )}
-        {@const result = resolveAsyncDecrypt(raw, fu.keyWrap !== null)}
-        {@const content = isDecryptReady(result) ? result.value : undefined}
-        {#if kind === "note"}
-          {@const NoteIcon = resolveIcon(fu.noteTypeId)}
-          {@const noteTypeName = resolveNoteTypeName(fu.noteTypeId)}
-          {@const noteReactions = reactions?.[fu.id] ?? []}
-          <div
-            class="mini-note-wrap"
-            class:has-reactions={noteReactions.length > 0}
-          >
-            <div class="mini-note recessed-note">
-              <span class="mini-who mini-note-eyebrow">
-                <NoteIcon size={10} class="mini-note-icon" />
-                {#if noteTypeName !== null}
-                  {m.preview_note_internal({ name: noteTypeName })}
-                {/if}
-              </span>
-              <DecryptPlaceholder
-                {result}
-                ciphertext={fu.encryptedContent}
-                length={20}
-                block={multiline}
-                charsPerLine={20}
-                maxLines={multiline ? 2 : 1}
-                errorLabel={m.preview_unlock_failed()}
-              >
-                {#if content != null}{@render miniText(content)}{/if}
-              </DecryptPlaceholder>
-              {#if result.status === "error"}
-                <button
-                  type="button"
-                  class="preview-retry"
-                  onclick={(e) => {
-                    e.stopPropagation();
-                    retryDecrypt(fu.id);
-                  }}
-                >
-                  {m.preview_retry()}
-                </button>
-              {/if}
-            </div>
-            <ReactionTray reactions={noteReactions} size="mini" />
+        {@const fu = entry}
+        {@const kind = followUpKind(fu)}
+        {#if kind === "system"}
+          <div class="mini-system" data-type="system">
+            {truncate(systemEventLabel(fu.type, fu.eventParams), 40)}
           </div>
         {:else}
-          <div
-            class="mini-bubble-row"
-            class:mini-row-received={fu.source === "client"}
-            class:mini-row-sent={fu.source !== "client"}
-            data-direction={fu.source === "client" ? "received" : "sent"}
-          >
+          {@const raw = followUpCache.decryptContent(
+            fu.id,
+            ticketId,
+            followupSlot(fu.id),
+            fu.keyWrap,
+            fu.encryptedContent,
+          )}
+          {@const result = resolveAsyncDecrypt(raw, fu.keyWrap !== null)}
+          {@const content = isDecryptReady(result) ? result.value : undefined}
+          {#if kind === "note"}
+            {@const NoteIcon = resolveIcon(fu.noteTypeId)}
+            {@const noteTypeName = resolveNoteTypeName(fu.noteTypeId)}
+            {@const noteReactions = reactions?.[fu.id] ?? []}
             <div
-              class="mini-bubble"
-              class:mini-bubble-received={fu.source === "client"}
-              class:mini-bubble-sent={fu.source !== "client"}
+              class="mini-note-wrap"
+              class:has-reactions={noteReactions.length > 0}
             >
-              {#if fu.source === "client" && clientAlias !== undefined}
-                <span class="mini-who">{clientAlias}</span>
-              {/if}
-              {#if fu.hasRecording || fu.hasImage || fu.hasFile}
-                <span class="mini-media" aria-hidden="true">
-                  {#if fu.hasRecording}<Mic size={10} />{/if}
-                  {#if fu.hasImage}<ImageIcon size={10} />{/if}
-                  {#if fu.hasFile}<Paperclip size={10} />{/if}
+              <div class="mini-note recessed-note">
+                <span class="mini-who mini-note-eyebrow">
+                  <NoteIcon size={10} class="mini-note-icon" />
+                  {#if noteTypeName !== null}
+                    {m.preview_note_internal({ name: noteTypeName })}
+                  {/if}
                 </span>
-              {/if}
-              <DecryptPlaceholder
-                {result}
-                ciphertext={fu.encryptedContent}
-                length={20}
-                block={multiline}
-                charsPerLine={20}
-                errorLabel={m.preview_unlock_failed()}
-              >
-                {#if content}{@render miniText(content)}{/if}
-              </DecryptPlaceholder>
-              {#if result.status === "error"}
-                <button
-                  type="button"
-                  class="preview-retry"
-                  onclick={(e) => {
-                    e.stopPropagation();
-                    retryDecrypt(fu.id);
-                  }}
+                <DecryptPlaceholder
+                  {result}
+                  ciphertext={fu.encryptedContent}
+                  length={20}
+                  block={multiline}
+                  charsPerLine={20}
+                  maxLines={multiline ? 2 : 1}
+                  errorLabel={m.preview_unlock_failed()}
                 >
-                  {m.preview_retry()}
-                </button>
-              {/if}
+                  {#if content != null}{@render miniText(content)}{/if}
+                </DecryptPlaceholder>
+                {#if result.status === "error"}
+                  <button
+                    type="button"
+                    class="preview-retry"
+                    onclick={(e) => {
+                      e.stopPropagation();
+                      retryDecrypt(fu.id);
+                    }}
+                  >
+                    {m.preview_retry()}
+                  </button>
+                {/if}
+              </div>
+              <ReactionTray reactions={noteReactions} size="mini" />
             </div>
-          </div>
+          {:else}
+            <div
+              class="mini-bubble-row"
+              class:mini-row-received={fu.source === "client"}
+              class:mini-row-sent={fu.source !== "client"}
+              data-direction={fu.source === "client" ? "received" : "sent"}
+            >
+              <div
+                class="mini-bubble"
+                class:mini-bubble-received={fu.source === "client"}
+                class:mini-bubble-sent={fu.source !== "client"}
+              >
+                {#if fu.source === "client" && clientAlias !== undefined}
+                  <span class="mini-who">{clientAlias}</span>
+                {/if}
+                {#if fu.hasRecording || fu.hasImage || fu.hasFile}
+                  <span class="mini-media" aria-hidden="true">
+                    {#if fu.hasRecording}<Mic size={10} />{/if}
+                    {#if fu.hasImage}<ImageIcon size={10} />{/if}
+                    {#if fu.hasFile}<Paperclip size={10} />{/if}
+                  </span>
+                {/if}
+                <DecryptPlaceholder
+                  {result}
+                  ciphertext={fu.encryptedContent}
+                  length={20}
+                  block={multiline}
+                  charsPerLine={20}
+                  errorLabel={m.preview_unlock_failed()}
+                >
+                  {#if content}{@render miniText(content)}{/if}
+                </DecryptPlaceholder>
+                {#if result.status === "error"}
+                  <button
+                    type="button"
+                    class="preview-retry"
+                    onclick={(e) => {
+                      e.stopPropagation();
+                      retryDecrypt(fu.id);
+                    }}
+                  >
+                    {m.preview_retry()}
+                  </button>
+                {/if}
+              </div>
+            </div>
+          {/if}
         {/if}
       {/if}
     {/each}

@@ -41,6 +41,13 @@
     clearDraftForMode,
   } from "$lib/tickets/draft-store.svelte.js";
   import type { RawFollowUpPreview } from "$lib/tickets/preview-loader.svelte.js";
+  import {
+    groupConsecutive,
+    isFollowUpGroup,
+    followUpGroupKey,
+    type GroupedFollowUp,
+  } from "$lib/tickets/follow-up-utils.js";
+  import SystemEvent from "$lib/components/tickets/SystemEvent.svelte";
 
   interface ReplySheetProps {
     opened: boolean;
@@ -200,6 +207,12 @@
     previewFollowUps ? [...previewFollowUps].reverse() : undefined,
   );
 
+  const groupedPreviews = $derived(
+    orderedPreviews !== undefined
+      ? groupConsecutive(orderedPreviews)
+      : undefined,
+  );
+
   const moreCount = $derived(
     previewFollowUps ? Math.max(0, followUpCount - previewFollowUps.length) : 0,
   );
@@ -282,29 +295,39 @@
         </p>
       {/if}
 
-      {#if orderedPreviews}
-        {#each orderedPreviews as fu (fu.id)}
-          {@const fuResult = resolveAsyncDecrypt(
-            followUpCache.decryptContent(
-              fu.id,
-              ticketId,
-              followupSlot(fu.id),
-              fu.keyWrap,
-              fu.encryptedContent,
-            ),
-            fu.keyWrap !== null,
-          )}
-          <FollowUpBubble
-            followUp={fu}
-            result={fuResult}
-            {clientAlias}
-            noteTypeName={resolveNoteTypeName(fu.noteTypeId)}
-            noteTypeIcon={resolveNoteTypeIconSlug(fu.noteTypeId)}
-            reactions={replyReactions.reactionsFor(fu.id)}
-            {currentUserId}
-            ontogglereaction={(reaction: ReactionType) =>
-              handleToggleReaction(fu.id, reaction)}
-          />
+      {#if groupedPreviews}
+        {#each groupedPreviews as entry (followUpGroupKey(entry))}
+          {#if isFollowUpGroup(entry)}
+            <SystemEvent
+              type={entry.type}
+              timestamp={entry.lastTimestamp}
+              count={entry.count}
+            />
+            <!-- eslint-disable @typescript-eslint/no-unsafe-argument -- svelte-eslint cannot narrow GroupedFollowUp in {:else} blocks; isFollowUpGroup guard above guarantees entry is a RawFollowUpPreview here -->
+          {:else}
+            {@const fu = entry}
+            {@const fuResult = resolveAsyncDecrypt(
+              followUpCache.decryptContent(
+                fu.id,
+                ticketId,
+                followupSlot(fu.id),
+                fu.keyWrap,
+                fu.encryptedContent,
+              ),
+              fu.keyWrap !== null,
+            )}
+            <FollowUpBubble
+              followUp={fu}
+              result={fuResult}
+              {clientAlias}
+              noteTypeName={resolveNoteTypeName(fu.noteTypeId)}
+              noteTypeIcon={resolveNoteTypeIconSlug(fu.noteTypeId)}
+              reactions={replyReactions.reactionsFor(fu.id)}
+              {currentUserId}
+              ontogglereaction={(reaction: ReactionType) =>
+                handleToggleReaction(fu.id, reaction)}
+            />
+          {/if}
         {/each}
       {/if}
 

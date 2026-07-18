@@ -15,16 +15,30 @@
   import { formatRelativeTime } from "$lib/utils/format-time.js";
   import { systemEventLabel } from "$lib/tickets/system-event-label.js";
 
+  import * as m from "$lib/paraglide/messages.js";
+
   interface Props {
     type: string;
     timestamp: string;
     eventParams?: Record<string, unknown> | null;
     resolveUserName?: (userId: string) => string;
+    count?: number;
   }
 
-  let { type, timestamp, eventParams, resolveUserName }: Props = $props();
+  let { type, timestamp, eventParams, resolveUserName, count }: Props =
+    $props();
 
-  const label = $derived(systemEventLabel(type, eventParams, resolveUserName));
+  const baseLabel = $derived(
+    systemEventLabel(type, eventParams, resolveUserName),
+  );
+  const label = $derived(
+    count !== undefined && count > 1
+      ? m.ticket_system_event_grouped({
+          label: baseLabel,
+          count: String(count),
+        })
+      : baseLabel,
+  );
   const timeLabel = $derived(formatRelativeTime(new Date(timestamp)));
 </script>
 

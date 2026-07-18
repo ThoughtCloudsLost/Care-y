@@ -81,7 +81,13 @@
   import FollowUpBubble from "$lib/components/tickets/FollowUpBubble.svelte";
   import TicketPlaceholder from "$lib/components/tickets/TicketPlaceholder.svelte";
   import GapIndicator from "$lib/components/GapIndicator.svelte";
-  import { followUpKind } from "$lib/tickets/follow-up-utils.js";
+  import {
+    followUpKind,
+    groupConsecutive,
+    isFollowUpGroup,
+    followUpGroupKey,
+    type GroupedFollowUp,
+  } from "$lib/tickets/follow-up-utils.js";
   import { resolveNoteTypeIcon as resolveNoteTypeIconComponent } from "$lib/utils/note-type-icons.js";
 
   import { computeGaps } from "$lib/tickets/gap-indicators.js";
@@ -467,6 +473,10 @@
       return fu.noteTypeId !== null && activeNoteTypeIds.has(fu.noteTypeId);
     });
   });
+
+  const groupedDisplayFollowUps = $derived([
+    ...groupConsecutive(displayFollowUps),
+  ]);
 
   $effect(() => {
     filteredFollowUps = displayFollowUps;
@@ -1221,11 +1231,11 @@
         {/snippet}
         <div class="thread">
           <VirtualList
-            items={displayFollowUps}
+            items={groupedDisplayFollowUps}
             scrollContainer={scroll.scrollContainerEl}
             estimateHeight={80}
             columns={1}
-            getKey={(fu: FollowUpRecord) => fu.id}
+            getKey={followUpGroupKey}
             onloadprevious={hasMoreOlder
               ? async () => paginator.loadOlderPage()
               : undefined}
@@ -1234,161 +1244,198 @@
               item,
               index: i,
             }: {
-              item: FollowUpRecord;
+              item: GroupedFollowUp<FollowUpRecord>;
               index: number;
             })}
-              {@const fu = item}
-              {@const kind = followUpKind(fu)}
-              {@const contentResult =
-                decrypt != null
-                  ? decrypt.followUp(fu.id, fu.encryptedContent)
-                  : resolveAsyncDecrypt(undefined, false)}
-              {@const prevTimestamp =
-                i > 0 ? displayFollowUps[i - 1]?.createdAt : undefined}
-              {@const isSelected = selectedIds?.has(fu.id) ?? false}
-              {@const checkboxSide =
-                messageType(fu) === "sent" ? "right" : "left"}
-              {@const gapBefore = hiddenGaps.get(fu.id) ?? 0}
-
-              <GapIndicator count={gapBefore} />
-
-              {#if needsDateSeparator(fu.createdAt, prevTimestamp)}
-                <div class="date-separator" role="separator">
-                  <span class="date-separator-label"
-                    >{formatDateSeparator(fu.createdAt)}</span
-                  >
-                </div>
-              {/if}
-
-              {#if fu.id === firstUnreadId}
-                <div
-                  id="unread-divider"
-                  class="unread-divider"
-                  role="separator"
-                  aria-label={m.ticket_new_messages()}
-                >
-                  <span class="unread-divider-label"
-                    >{m.ticket_new_divider()}</span
-                  >
-                </div>
-              {/if}
-
-              <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
-              <div
-                id="fu-{fu.id}"
-                data-fu-id={fu.id}
-                class="fu-wrapper"
-                class:match-active={searchActiveMatchId === fu.id}
-                class:fu-select-mode={selectModeActive}
-                class:fu-select-left={selectModeActive &&
-                  checkboxSide === "left"}
-                class:fu-select-right={selectModeActive &&
-                  checkboxSide === "right"}
-                tabindex={kind === "system" && !selectModeActive
-                  ? undefined
-                  : 0}
-                role={selectModeActive
-                  ? "option"
-                  : kind === "system"
-                    ? undefined
-                    : "article"}
-                aria-label={kind === "system"
-                  ? undefined
-                  : bubbleAriaLabel(fu, contentResult)}
-                aria-selected={selectModeActive ? isSelected : undefined}
-                onkeydown={selectModeActive
-                  ? (e: KeyboardEvent) => {
-                      if (e.key === "Enter" || e.key === " ") {
-                        e.preventDefault();
-                        toggleSelected?.(fu.id);
-                      }
-                    }
-                  : kind === "system"
-                    ? undefined
-                    : handleBubbleKeydown(fu)}
-                onclick={selectModeActive
-                  ? () => toggleSelected?.(fu.id)
+              {#if isFollowUpGroup(item)}
+                {@const grp = item}
+                {@const prevEntry =
+                  i > 0 ? groupedDisplayFollowUps[i - 1] : undefined}
+                {@const prevTimestamp = prevEntry
+                  ? isFollowUpGroup(prevEntry)
+                    ? prevEntry.lastTimestamp
+                    : prevEntry.createdAt
                   : undefined}
-              >
-                {#if selectModeActive}
-                  <div class="select-checkbox select-checkbox-{checkboxSide}">
-                    <Checkbox
-                      checked={isSelected}
-                      onChange={() => toggleSelected?.(fu.id)}
-                    />
+
+                {#if needsDateSeparator(grp.firstTimestamp, prevTimestamp)}
+                  <div class="date-separator" role="separator">
+                    <span class="date-separator-label"
+                      >{formatDateSeparator(grp.firstTimestamp)}</span
+                    >
                   </div>
                 {/if}
-                {#if kind === "system"}
+
+                <div class="fu-wrapper">
                   <SystemEvent
-                    type={fu.type}
-                    timestamp={fu.createdAt}
-                    eventParams={fu.eventParams}
+                    type={grp.type}
+                    timestamp={grp.lastTimestamp}
+                    count={grp.count}
                     resolveUserName={(uid: string) =>
                       resolveVolunteerName(uid) ??
                       m.ticket_system_volunteer_fallback()}
                   />
-                {:else if kind === "note"}
-                  <PrivateNote
-                    result={contentResult}
-                    authorName={resolveVolunteerName(fu.createdBy)}
-                    timestamp={fu.createdAt}
-                    isOwn={fu.createdBy === currentUserId}
-                    noteTypeName={resolveNoteTypeName(fu.noteTypeId)}
-                    noteTypeIcon={resolveNoteTypeIcon(fu.noteTypeId)}
-                    onopenedit={onopenedit
-                      ? () => {
-                          const text =
-                            contentResult.status === "ready"
-                              ? contentResult.value
-                              : "";
-                          onopenedit(fu.id, text, fu.noteTypeId ?? null);
-                        }
-                      : undefined}
-                    onlongpress={() => openContextMenu(fu)}
-                    {searchTerm}
-                    reactions={getReactions(fu.id)}
-                    {currentUserId}
-                    ontogglereaction={(reaction: ReactionType) =>
-                      handleToggleReaction(fu.id, reaction)}
-                    resolveUserName={(uid: string) => resolveVolunteerName(uid)}
-                  />
-                {:else}
-                  <ConversationBubble
-                    direction={messageType(fu)}
-                    speaker={fu.source === "client" ? clientAlias : undefined}
-                    source={fu.source === "client" ? "client" : "volunteer"}
-                    timestamp={fu.createdAt}
-                  >
-                    <!-- svelte-ignore a11y_no_static_element_interactions -->
-                    <span
-                      class="bubble-text"
-                      onpointerdown={startLongPress(fu)}
-                      onpointerup={cancelLongPress}
-                      onpointercancel={cancelLongPress}
-                    >
-                      <DecryptPlaceholder
-                        result={contentResult}
-                        ciphertext={fu.encryptedContent}
-                        length={30}
-                        block
-                        {searchTerm}
-                      />
-                    </span>
+                </div>
+                <!-- eslint-disable @typescript-eslint/no-unsafe-argument, @typescript-eslint/strict-boolean-expressions, @typescript-eslint/prefer-nullish-coalescing -- svelte-eslint cannot narrow GroupedFollowUp in {:else} blocks; the isFollowUpGroup guard above guarantees item is a FollowUpRecord here -->
+              {:else}
+                {@const fu = item}
+                {@const kind = followUpKind(fu)}
+                {@const contentResult =
+                  decrypt != null
+                    ? decrypt.followUp(fu.id, fu.encryptedContent)
+                    : resolveAsyncDecrypt(undefined, false)}
+                {@const prevEntry =
+                  i > 0 ? groupedDisplayFollowUps[i - 1] : undefined}
+                {@const prevTimestamp = prevEntry
+                  ? isFollowUpGroup(prevEntry)
+                    ? prevEntry.lastTimestamp
+                    : prevEntry.createdAt
+                  : undefined}
+                {@const isSelected = selectedIds?.has(fu.id) ?? false}
+                {@const checkboxSide =
+                  messageType(fu) === "sent" ? "right" : "left"}
+                {@const gapBefore = hiddenGaps.get(fu.id) ?? 0}
 
-                    {#if fu.hasRecording || fu.hasImage || fu.hasFile}
-                      <FollowUpMedia
-                        followupId={fu.id}
-                        {ticketId}
-                        keyWrap={ticket.keyWrap}
-                        hasRecording={fu.hasRecording}
-                        hasImage={fu.hasImage}
-                        hasFile={fu.hasFile}
-                        onlightbox={(url: string) => onlightbox?.(url)}
-                      />
-                    {/if}
-                  </ConversationBubble>
+                <GapIndicator count={gapBefore} />
+
+                {#if needsDateSeparator(fu.createdAt, prevTimestamp)}
+                  <div class="date-separator" role="separator">
+                    <span class="date-separator-label"
+                      >{formatDateSeparator(fu.createdAt)}</span
+                    >
+                  </div>
                 {/if}
-              </div>
+
+                {#if fu.id === firstUnreadId}
+                  <div
+                    id="unread-divider"
+                    class="unread-divider"
+                    role="separator"
+                    aria-label={m.ticket_new_messages()}
+                  >
+                    <span class="unread-divider-label"
+                      >{m.ticket_new_divider()}</span
+                    >
+                  </div>
+                {/if}
+
+                <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
+                <div
+                  id="fu-{fu.id}"
+                  data-fu-id={fu.id}
+                  class="fu-wrapper"
+                  class:match-active={searchActiveMatchId === fu.id}
+                  class:fu-select-mode={selectModeActive}
+                  class:fu-select-left={selectModeActive &&
+                    checkboxSide === "left"}
+                  class:fu-select-right={selectModeActive &&
+                    checkboxSide === "right"}
+                  tabindex={kind === "system" && !selectModeActive
+                    ? undefined
+                    : 0}
+                  role={selectModeActive
+                    ? "option"
+                    : kind === "system"
+                      ? undefined
+                      : "article"}
+                  aria-label={kind === "system"
+                    ? undefined
+                    : bubbleAriaLabel(fu, contentResult)}
+                  aria-selected={selectModeActive ? isSelected : undefined}
+                  onkeydown={selectModeActive
+                    ? (e: KeyboardEvent) => {
+                        if (e.key === "Enter" || e.key === " ") {
+                          e.preventDefault();
+                          toggleSelected?.(fu.id);
+                        }
+                      }
+                    : kind === "system"
+                      ? undefined
+                      : handleBubbleKeydown(fu)}
+                  onclick={selectModeActive
+                    ? () => toggleSelected?.(fu.id)
+                    : undefined}
+                >
+                  {#if selectModeActive}
+                    <div class="select-checkbox select-checkbox-{checkboxSide}">
+                      <Checkbox
+                        checked={isSelected}
+                        onChange={() => toggleSelected?.(fu.id)}
+                      />
+                    </div>
+                  {/if}
+                  {#if kind === "system"}
+                    <SystemEvent
+                      type={fu.type}
+                      timestamp={fu.createdAt}
+                      eventParams={fu.eventParams}
+                      resolveUserName={(uid: string) =>
+                        resolveVolunteerName(uid) ??
+                        m.ticket_system_volunteer_fallback()}
+                    />
+                  {:else if kind === "note"}
+                    <PrivateNote
+                      result={contentResult}
+                      authorName={resolveVolunteerName(fu.createdBy)}
+                      timestamp={fu.createdAt}
+                      isOwn={fu.createdBy === currentUserId}
+                      noteTypeName={resolveNoteTypeName(fu.noteTypeId)}
+                      noteTypeIcon={resolveNoteTypeIcon(fu.noteTypeId)}
+                      onopenedit={onopenedit
+                        ? () => {
+                            const text =
+                              contentResult.status === "ready"
+                                ? contentResult.value
+                                : "";
+                            onopenedit(fu.id, text, fu.noteTypeId ?? null);
+                          }
+                        : undefined}
+                      onlongpress={() => openContextMenu(fu)}
+                      {searchTerm}
+                      reactions={getReactions(fu.id)}
+                      {currentUserId}
+                      ontogglereaction={(reaction: ReactionType) =>
+                        handleToggleReaction(fu.id, reaction)}
+                      resolveUserName={(uid: string) =>
+                        resolveVolunteerName(uid)}
+                    />
+                  {:else}
+                    <ConversationBubble
+                      direction={messageType(fu)}
+                      speaker={fu.source === "client" ? clientAlias : undefined}
+                      source={fu.source === "client" ? "client" : "volunteer"}
+                      timestamp={fu.createdAt}
+                    >
+                      <!-- svelte-ignore a11y_no_static_element_interactions -->
+                      <span
+                        class="bubble-text"
+                        onpointerdown={startLongPress(fu)}
+                        onpointerup={cancelLongPress}
+                        onpointercancel={cancelLongPress}
+                      >
+                        <DecryptPlaceholder
+                          result={contentResult}
+                          ciphertext={fu.encryptedContent}
+                          length={30}
+                          block
+                          {searchTerm}
+                        />
+                      </span>
+
+                      {#if fu.hasRecording || fu.hasImage || fu.hasFile}
+                        <FollowUpMedia
+                          followupId={fu.id}
+                          {ticketId}
+                          keyWrap={ticket.keyWrap}
+                          hasRecording={fu.hasRecording}
+                          hasImage={fu.hasImage}
+                          hasFile={fu.hasFile}
+                          onlightbox={(url: string) => onlightbox?.(url)}
+                        />
+                      {/if}
+                    </ConversationBubble>
+                  {/if}
+                </div>
+              {/if}
             {/snippet}
           </VirtualList>
           <GapIndicator count={hiddenGaps.get("__after__") ?? 0} />
