@@ -15,15 +15,20 @@
  *   });
  */
 
+import { untrack } from "svelte";
+
 let requestCount = $state(0);
 
 export function requestEnhancedChrome(): () => void {
-  requestCount++;
+  // untrack: callers invoke this from $effect bodies. requestCount++
+  // is a read+write; without untrack the caller's effect subscribes
+  // to requestCount and loops (effect_update_depth_exceeded).
+  untrack(() => requestCount++);
   let released = false;
   return (): void => {
     if (released) return;
     released = true;
-    requestCount--;
+    untrack(() => requestCount--);
   };
 }
 
