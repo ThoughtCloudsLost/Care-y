@@ -77,6 +77,9 @@
   }
 </script>
 
+<!-- Pinned-anatomy exemption (see inkwell-design-language.md, "Pinned-anatomy
+     exemptions"): ruled-row anatomy is pinned by the spec; Konsta ListItem
+     fights the grid layout and token wiring. -->
 <div class="user-card-wrap">
   <div
     class="user-card card-elevated"

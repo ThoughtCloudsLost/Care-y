@@ -34,7 +34,8 @@
   import type { NavbarAction } from "$lib/shell/types";
   import { useScrollDirection } from "$lib/shell/use-scroll-direction.svelte.js";
   import { Button } from "konsta/svelte";
-  import { UserPlus, Pause, TicketPlus } from "@lucide/svelte";
+  import { UserPlus, Pause } from "@lucide/svelte";
+  import TicketPlus from "$lib/components/icons/TicketPlus.svelte";
   import BulkActionBar from "$lib/components/BulkActionBar.svelte";
   import {
     createCardPropsMapper,
