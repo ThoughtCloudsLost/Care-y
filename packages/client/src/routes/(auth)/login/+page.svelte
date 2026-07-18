@@ -11,6 +11,7 @@
   import { getCryptoBridge, getOrgKeyManager } from "$lib/crypto/context.js";
   import { installCleanupHandler } from "$lib/auth/cleanup.js";
   import { loginCrypto } from "$lib/auth/login-crypto.js";
+  import { isValidRedirectTarget } from "$lib/auth/redirect-target.js";
   import { registerCrypto } from "$lib/auth/register-crypto.js";
   import {
     buildLoginCallbacks,
@@ -250,16 +251,10 @@
       return;
     }
     // Reauth carries the interrupted route in ?next. Only same-app
-    // relative paths are honored: "/x" but never "//host" or "/\host",
-    // which browsers treat as protocol-relative URLs (OWASP unvalidated
-    // redirects). Anything else falls through to the dashboard.
+    // relative paths are honored; protocol-relative URLs, control
+    // characters, and non-absolute paths fall through to the dashboard.
     const next = page.url.searchParams.get("next");
-    if (
-      next !== null &&
-      next.startsWith("/") &&
-      !next.startsWith("//") &&
-      !next.startsWith("/\\")
-    ) {
+    if (next !== null && isValidRedirectTarget(next)) {
       // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- validated same-app relative path above
       await goto(resolve(next as `/${string}`));
       return;
