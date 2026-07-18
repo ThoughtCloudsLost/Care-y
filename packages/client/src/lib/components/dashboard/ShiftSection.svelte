@@ -176,7 +176,7 @@
 
   .t {
     min-width: 0;
-    font-size: 13.5px;
+    font-size: var(--text-base);
     color: var(--ink-2);
   }
 
@@ -200,7 +200,7 @@
     padding: 0 6px;
     border-radius: 999px;
     background: var(--hair);
-    font-size: 11px;
+    font-size: 0.6875rem;
     font-weight: 500;
     color: var(--muted);
     white-space: nowrap;
@@ -220,7 +220,7 @@
     border: none;
     padding: 0;
     font-family: inherit;
-    font-size: 12.5px;
+    font-size: var(--text-sm);
     font-weight: 700;
     color: var(--brand-text);
     cursor: pointer;
