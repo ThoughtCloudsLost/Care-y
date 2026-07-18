@@ -20,6 +20,7 @@
     setOrgKeyManager,
   } from "$lib/crypto/context-init.js";
   import { setCryptoKeyed } from "$lib/crypto/crypto-keyed.svelte.js";
+  import { setCryptoSettled } from "$lib/crypto/crypto-settled.svelte.js";
   import { setOrgKeyReady } from "$lib/crypto/org-key-ready.svelte.js";
 
   import type { Snippet } from "svelte";
@@ -47,6 +48,10 @@
           orgKeyManager.load(reconnect.orgPublicKey);
         }
       }
+    });
+
+    bridge.onSettled(() => {
+      setCryptoSettled(true);
     });
 
     orgKeyManager.onLoadChange((loaded) => {

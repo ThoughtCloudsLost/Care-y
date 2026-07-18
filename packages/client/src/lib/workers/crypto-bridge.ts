@@ -88,6 +88,8 @@ export class CryptoBridge {
   private workerEventHandler: WorkerEventHandler | null = null;
   private stateChangeHandler: StateChangeHandler | null = null;
   private stateCallback: ((state: BridgeState) => void) | null = null;
+  private settledCallback: (() => void) | null = null;
+  private settled = false;
   private readonly mode: BridgeMode;
   private reconnected = false;
   private reconnectVolPublic: string | undefined;
@@ -191,6 +193,9 @@ export class CryptoBridge {
         this.setState("KEYED");
       }
     }
+
+    this.settled = true;
+    this.settledCallback?.();
   }
 
   private rejectAllPending(
@@ -266,6 +271,16 @@ export class CryptoBridge {
    */
   onBridgeStateChange(handler: (state: BridgeState) => void): void {
     this.stateCallback = handler;
+  }
+
+  /**
+   * Register a handler that fires once when the init handshake completes.
+   * After this point, the bridge's state reflects the SharedWorker's actual
+   * key state: KEYED if reconnected, READY if keys were zeroed.
+   */
+  onSettled(handler: () => void): void {
+    this.settledCallback = handler;
+    if (this.settled) handler();
   }
 
   // ── Public API: crypto operations ─────────────────────────────────
