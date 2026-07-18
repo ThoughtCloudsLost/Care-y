@@ -966,6 +966,27 @@
     scroll.autoScrollOnNew(followUpCount, timelineActive);
   });
 
+  // While the keyboard is open the shell keeps its full height, so the
+  // keyboard covers the bottom of the chat pane; the .thread keyboard
+  // inset below restores the scroll room. Re-pin to the bottom when the
+  // user was already there so the newest messages rise above the docked
+  // bar (Safari has no overflow-anchor to do this for us). Covers
+  // keyboard close (inset removal) too.
+  $effect(() => {
+    if (!scroll.scrollContainerEl) return;
+    const vv = window.visualViewport;
+    if (vv === null) return;
+    const onViewportResize = (): void => {
+      const el = scroll.scrollContainerEl;
+      if (!el || !scroll.isNearBottom) return;
+      requestAnimationFrame(() => {
+        el.scrollTop = el.scrollHeight;
+      });
+    };
+    vv.addEventListener("resize", onViewportResize);
+    return () => vv.removeEventListener("resize", onViewportResize);
+  });
+
   // --- Loading placeholder ---
   // Preview data from the ticket list (server returns newest-first, reverse for chat order).
   const previewData = $derived(previewLoader.get(ticketId));
@@ -1383,6 +1404,16 @@
     margin-bottom: var(
       --messagebar-height,
       calc(3.5rem + env(safe-area-inset-bottom, 0px))
+    );
+  }
+
+  /* Keyboard open: the shell stays full-height (see AppShell), so the
+     keyboard covers the bottom of this scroller. Extend the inset by the
+     keyboard height so the newest messages can scroll clear of the
+     docked compose bar. */
+  :global(html.keyboard-open) .thread {
+    margin-bottom: calc(
+      var(--messagebar-height, 3.5rem) + var(--keyboard-height, 0px)
     );
   }
 

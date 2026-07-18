@@ -211,13 +211,27 @@
 
   /* Fixed-bar hosts pin it above the live messagebar height that
      ShellMessagebar publishes. The fallback covers the frame before
-     the first ResizeObserver measurement. */
+     the first ResizeObserver measurement. Positioned the same way the
+     bar itself is (visual-viewport bottom edge, not bottom:0, which on
+     iOS anchors to the layout viewport behind the software keyboard),
+     with the matching transition so it rides the bar's glide. */
   .mention-anchor-fixed {
     position: fixed;
-    bottom: var(--messagebar-height, 3.5rem);
+    top: calc(
+      var(--vv-offset-top, 0px) + var(--app-height, 100dvh) -
+        var(--messagebar-height, 3.5rem)
+    );
+    transform: translateY(-100%);
+    transition: top 0.25s ease-out;
     left: 0;
     right: 0;
     z-index: 25;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .mention-anchor-fixed {
+      transition: none;
+    }
   }
 
   .compose-mode-indicator {

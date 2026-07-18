@@ -69,8 +69,12 @@
     padding-top: var(--subnavbar-h, 0px);
   }
 
+  /* In-flow here, so ShellMessagebar's visual-viewport top/transform
+     positioning must be reset along with position itself. */
   .split-pane-content :global(.shell-messagebar-anchor) {
     position: relative;
+    top: auto;
+    transform: none;
     z-index: auto;
     flex-shrink: 0;
   }
