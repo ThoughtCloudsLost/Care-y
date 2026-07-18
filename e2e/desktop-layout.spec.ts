@@ -96,9 +96,6 @@ test.describe.serial("Desktop Responsive Layout", () => {
     const sidebar = page.locator(".desktop-sidebar");
     // Move mouse away from sidebar to clear any hover state from prior tests.
     await page.mouse.move(640, 400);
-    await page.waitForTimeout(400);
-
-    // Collapsed sidebar does not have the .expanded class.
     await expect(sidebar).not.toHaveClass(/expanded/);
 
     // Labels are hidden when collapsed.
@@ -111,8 +108,6 @@ test.describe.serial("Desktop Responsive Layout", () => {
 
     // Hover to trigger expansion (300ms delay in component).
     await sidebar.hover();
-    await page.waitForTimeout(400);
-
     await expect(sidebar).toHaveClass(/expanded/);
 
     // Labels should now be visible.
@@ -121,7 +116,6 @@ test.describe.serial("Desktop Responsive Layout", () => {
 
     // Move mouse away to collapse.
     await page.mouse.move(640, 360);
-    await page.waitForTimeout(200);
     await expect(sidebar).not.toHaveClass(/expanded/);
   });
 
