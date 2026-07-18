@@ -17,8 +17,8 @@ import { contrast, parseHex } from "./test-helpers/wcag";
  * failing token fails the build. Dev themes are optional: a token group
  * that cannot be resolved statically (oklch color-mix, runtime
  * --brand-primary references) is skipped with the reason in the test
- * title. Extension point for --unread 3:1 pairs (WCAG 1.4.11) and the
- * SEMANTIC_ANCHORS sync assertion.
+ * title. Includes --unread 3:1 non-text pairs (WCAG 1.4.11). Extension
+ * point for the SEMANTIC_ANCHORS sync assertion.
  */
 
 const THEMES_DIR = join(
@@ -332,6 +332,28 @@ for (const theme of THEMES) {
               contrast(on, fill),
               `--brand-on (${on}) on --brand-fill (${fill})`,
             ).toBeGreaterThanOrEqual(4.5);
+          };
+        },
+      );
+
+      const UNREAD_SURFACES = ["paper", "raised"] as const;
+      itResolvable(
+        theme.mandatory,
+        `${theme.name} ${scheme} :: unread`,
+        "unread clears WCAG 1.4.11 3:1 on paper and raised",
+        () => {
+          const unreadHex = resolveOpaqueHex("unread", props);
+          const pairs = UNREAD_SURFACES.map((surface) => ({
+            surface,
+            surfaceHex: resolveOpaqueHex(surface, props),
+          }));
+          return () => {
+            for (const pair of pairs) {
+              expect(
+                contrast(unreadHex, pair.surfaceHex),
+                `--unread (${unreadHex}) on --${pair.surface} (${pair.surfaceHex})`,
+              ).toBeGreaterThanOrEqual(3);
+            }
           };
         },
       );

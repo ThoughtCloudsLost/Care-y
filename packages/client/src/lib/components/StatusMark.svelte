@@ -10,9 +10,12 @@
 
   let { status, unreadHighlight = false }: Props = $props();
 
-  // Inkwell rule: status is a shape, never a hue. The four marks share one
-  // 13x13 viewBox and optical center so swapping status never shifts layout.
-  // Geometry is transcribed from the approved mock (inkwell-design-language.md).
+  // Inkwell rule: status is a shape, never a hue. The unread highlight is
+  // a sanctioned fifth hue scoped to unread signals only (status-mark
+  // highlight, unread filter and sort dots); NewPill stays ink-on-paper.
+  // The four marks share one 13x13 viewBox and optical center so swapping
+  // status never shifts layout. Geometry is transcribed from the approved
+  // mock (inkwell-design-language.md).
   // Map lookup (not object indexing) per the lint security rules; the
   // fallback is unreachable with a valid DisplayStatus.
   const labels = new Map<DisplayStatus, () => string>([
@@ -92,7 +95,7 @@
   }
 
   .unread-highlight {
-    color: var(--unread-blue, #3b82f6);
+    color: var(--unread);
   }
 
   .status-mark svg {

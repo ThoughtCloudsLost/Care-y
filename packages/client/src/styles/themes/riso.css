@@ -16,6 +16,7 @@
   --urgent: #c0392b;
   --care: #d4a017;
   --danger: #c0392b;
+  --unread: #2563eb;
   --urgent-soft: color-mix(in srgb, var(--urgent) 8%, transparent);
   --care-soft: color-mix(in srgb, var(--care) 8%, transparent);
   --brand-soft: color-mix(
@@ -125,6 +126,7 @@
   --urgent: #e06050;
   --care: #e0b040;
   --danger: #e06050;
+  --unread: #60a5fa;
   --urgent-soft: color-mix(in srgb, var(--urgent) 12%, transparent);
   --care-soft: color-mix(in srgb, var(--care) 12%, transparent);
   --brand-soft: color-mix(
