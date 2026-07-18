@@ -325,7 +325,7 @@
   }
 
   .reaction-picker-opt:active {
-    background: var(--raised, var(--surface-1));
+    background: var(--raised);
   }
 
   .reaction-picker-active {

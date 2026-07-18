@@ -239,7 +239,7 @@
   .copy-btn {
     background: none;
     border: none;
-    color: var(--brand-text, var(--brand-primary, #007aff));
+    color: var(--brand-text);
     cursor: pointer;
     padding: var(--space-xs);
     min-height: 44px;

@@ -405,7 +405,7 @@
   .back-link {
     background: none;
     border: none;
-    color: var(--brand-text, var(--brand-primary, #007aff));
+    color: var(--brand-text);
     font-size: 0.875rem;
     cursor: pointer;
     padding: 0.5rem;

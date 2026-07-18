@@ -245,7 +245,7 @@
   .resend-btn {
     background: none;
     border: none;
-    color: var(--brand-text, var(--brand-primary, #007aff));
+    color: var(--brand-text);
     font-size: 0.85rem;
     cursor: pointer;
     padding: var(--space-xs);

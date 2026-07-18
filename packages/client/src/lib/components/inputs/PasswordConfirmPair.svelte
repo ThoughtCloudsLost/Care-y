@@ -85,7 +85,7 @@
   .password-pair {
     display: flex;
     flex-direction: column;
-    gap: var(--space-md, 1rem);
+    gap: var(--space-md);
   }
 
   /* Matches the x-inset Konsta gives the field boxes inside a list. */

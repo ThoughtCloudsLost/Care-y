@@ -196,7 +196,7 @@
 
   :global(.step-error) {
     font-size: var(--text-base);
-    color: var(--danger, var(--k-color-red, #ef4444));
+    color: var(--danger);
     margin: 0;
   }
 
@@ -234,7 +234,7 @@
        blur layer does not cover; without a surface of its own, page
        titles scrolled through the "Step N of M" text. Same glass
        treatment as the navbar above it. */
-    background: var(--glass-surface, var(--paper));
+    background: var(--glass-surface);
     -webkit-backdrop-filter: blur(16px);
     backdrop-filter: blur(16px);
   }

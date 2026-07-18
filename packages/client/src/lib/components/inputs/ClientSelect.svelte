@@ -326,7 +326,7 @@
   }
 
   .client-select-error :global(.form-input) {
-    border-color: var(--danger, var(--k-color-red, #ff3b30));
+    border-color: var(--danger);
   }
 
   .client-select-spinner {
