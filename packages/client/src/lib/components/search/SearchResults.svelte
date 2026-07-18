@@ -100,9 +100,9 @@
   {/if}
 {:else}
   {#if !hasAnyResults && allSettled}
-    <!-- Nothing anywhere: the empty room stamps its verdict (Identity
-         exception recorded 2026-07-11) instead of a wall of empty sections.
-         The stamp stands alone; no heading doubles it (Sky, live walk). -->
+    <!-- Nothing anywhere: the empty room stamps its verdict (Inkwell
+         Identity section, stamps and seals, search no-matches entry)
+         instead of a wall of empty sections. -->
     <EmptyState
       stamp={m.search_empty_stamp()}
       subtitle={m.search_empty_body({ query: trimmedQuery })}
