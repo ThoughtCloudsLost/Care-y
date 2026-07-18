@@ -1,11 +1,8 @@
 <script lang="ts">
-  import {
-    Activity,
-    TicketPlus,
-    TicketCheck,
-    TicketX,
-    MessageSquare,
-  } from "@lucide/svelte";
+  import { Activity, MessageSquare } from "@lucide/svelte";
+  import TicketPlus from "$lib/components/icons/TicketPlus.svelte";
+  import TicketCheck from "$lib/components/icons/TicketCheck.svelte";
+  import TicketX from "$lib/components/icons/TicketX.svelte";
   import type { Component } from "svelte";
   import { formatRelativeTime } from "$lib/utils/format-time.js";
   import { onKeyActivate } from "$lib/utils/a11y.js";
