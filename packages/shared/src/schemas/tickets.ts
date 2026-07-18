@@ -26,16 +26,19 @@ export type FollowUpSource = z.infer<typeof followUpSourceSchema>;
 // Follow-up type: what the follow-up represents
 export const followUpTypeSchema = z.enum([
   "message",
-  "status_change",
-  "merge_note",
-  "hold_change",
-  "priority_change",
-  "assignment_change",
   "internal_note",
   "sms_outbound",
   "sms_inbound",
   "phone_call",
   "voicemail",
+  "hold_placed",
+  "hold_removed",
+  "volunteer_assigned",
+  "volunteer_unassigned",
+  "status_opened",
+  "status_closed",
+  "priority_changed",
+  "merge_note",
 ]);
 export type FollowUpType = z.infer<typeof followUpTypeSchema>;
 

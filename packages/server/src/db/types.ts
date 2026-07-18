@@ -345,6 +345,11 @@ export interface FollowupsTable {
   call_status: string | null;
   call_duration_seconds: number | null;
   key_generation: string | null;
+  event_params: ColumnType<
+    Record<string, unknown> | null,
+    Record<string, unknown> | null | undefined,
+    Record<string, unknown> | null
+  >;
 }
 
 export interface RecordingsTable {
