@@ -609,9 +609,11 @@
     flatTicketList = rebuildFlatList();
 
     // Rebuild when ticket queries update (new data fetched, pagination, etc.).
+    // Both "updated" (existing key refreshed) and "added" (new key, e.g.
+    // recentViews prefetch on first hydration) must trigger a rebuild.
     const unsubscribeCache = queryClient.getQueryCache().subscribe((event) => {
       if (
-        event.type === "updated" &&
+        (event.type === "updated" || event.type === "added") &&
         Array.isArray(event.query.queryKey) &&
         event.query.queryKey[0] === "tickets" &&
         event.query.queryKey[1] === "list"
@@ -1407,18 +1409,20 @@
           ariaLabel={m.search_hint(withTerms())}
           class="search-sheet"
         >
-          <SearchResults
-            query={searchQuery}
-            {promotedProviderId}
-            ondismiss={closeSearch}
-            onnavigate={(href: string) => {
-              // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- dynamic href from search provider, always starts with /
-              void goto(resolve(href as `/${string}`)).then(closeSearch);
-            }}
-            onselectrecent={(q: string) => {
-              searchQuery = q;
-            }}
-          />
+          {#if searchOpen}
+            <SearchResults
+              query={searchQuery}
+              {promotedProviderId}
+              ondismiss={closeSearch}
+              onnavigate={(href: string) => {
+                // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- dynamic href from search provider, always starts with /
+                void goto(resolve(href as `/${string}`)).then(closeSearch);
+              }}
+              onselectrecent={(q: string) => {
+                searchQuery = q;
+              }}
+            />
+          {/if}
         </ShellSheet>
       {/if}
 
