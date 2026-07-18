@@ -857,6 +857,10 @@ export function createTicketService(
           .orderBy("t.created_at", sortDirection)
           .orderBy("t.id", "asc");
       } else if (sortBy === "msgs") {
+        // The count sort computes a correlated count per candidate row
+        // with no index help, fine at current org scale. If it measurably
+        // degrades, replace with a leftJoinLateral computing counts once
+        // per row, not a denormalized counter column (drift liability).
         query = query
           .orderBy("followup_count", sortDirection)
           .orderBy("t.created_at", sortDirection)
