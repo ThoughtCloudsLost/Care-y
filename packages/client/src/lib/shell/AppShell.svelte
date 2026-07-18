@@ -1570,7 +1570,7 @@
     background: var(--brand-fill, var(--brand-primary));
     /* Text sits ON the brand fill, so it needs the fill-safe on-color.
        --brand-text is surface-safe and can vanish against its own fill. */
-    color: var(--brand-on, #fff);
+    color: var(--brand-on);
     font-size: 0.625rem;
     font-weight: 600;
     letter-spacing: 0.02em;

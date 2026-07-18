@@ -235,7 +235,7 @@
 .theme-default li.k-list-input {
   padding-top: 0;
   padding-bottom: 0;
-  margin-bottom: var(--space-md, 16px);
+  margin-bottom: var(--space-md);
 }
 
 .theme-default li.k-list-input div.w-full.relative {

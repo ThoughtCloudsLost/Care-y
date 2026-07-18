@@ -192,8 +192,8 @@
 
   .retry-btn {
     background: none;
-    border: 1px solid var(--brand-text, var(--brand-primary, #007aff));
-    color: var(--brand-text, var(--brand-primary, #007aff));
+    border: 1px solid var(--brand-text);
+    color: var(--brand-text);
     border-radius: 0.5rem;
     padding: var(--space-sm) var(--space-lg);
     font-size: 0.9rem;

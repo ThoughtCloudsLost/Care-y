@@ -278,20 +278,20 @@
      palette. */
   .dev-seed-status {
     font-size: 0.875rem;
-    color: var(--care, #16a34a);
+    color: var(--care);
     margin-bottom: 0.5rem;
   }
 
   .dev-seed-error {
     font-size: 0.875rem;
-    color: var(--danger, #dc2626);
+    color: var(--danger);
     margin-bottom: 0.5rem;
     word-break: break-word;
   }
 
   .dev-seed-progress {
     font-size: 0.875rem;
-    color: var(--muted, #2563eb);
+    color: var(--muted);
     margin-bottom: 0.5rem;
   }
 </style>

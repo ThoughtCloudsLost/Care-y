@@ -53,7 +53,7 @@
     padding: 0.625rem 1.25rem;
     border-radius: 0.5rem;
     background: var(--brand-fill, var(--brand-primary));
-    color: var(--brand-on, #ffffff);
+    color: var(--brand-on);
     font-weight: 500;
     text-decoration: none;
   }

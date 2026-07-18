@@ -439,10 +439,7 @@
         <ListItem title={meta.label()} subtitle={meta.desc()}>
           {#snippet media()}
             {#if complete}
-              <CircleCheck
-                size={22}
-                style="color: var(--brand-accent, var(--brand-primary))"
-              />
+              <CircleCheck size={22} style="color: var(--brand-accent)" />
             {:else}
               <Circle size={22} style="color: var(--muted, #999)" />
             {/if}

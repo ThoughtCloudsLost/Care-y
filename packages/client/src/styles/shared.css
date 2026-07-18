@@ -634,8 +634,8 @@ html.glass-dark.light
    One anatomy for fields that cannot be Konsta ListInput (Bits UI
    comboboxes, number rows, color rows): eyebrow label, bordered box,
    help below, error in the danger slot. Mirrors the theme-default
-   ListInput skin; fallback chains cover themes that predate the
-   canonical tokens. The 16px computed floor on the box prevents the
+   ListInput skin; all themes define the canonical tokens. The 16px
+   computed floor on the box prevents the
    iOS Safari focus zoom. */
 .field-label {
   display: block;
@@ -643,7 +643,7 @@ html.glass-dark.light
   font-weight: 700;
   letter-spacing: 0.12em;
   text-transform: uppercase;
-  color: var(--ink-2, var(--ink));
+  color: var(--ink-2);
   margin-bottom: 6px;
 }
 
@@ -657,7 +657,7 @@ html.glass-dark.light
       var(--divider, color-mix(in srgb, var(--ink) 20%, transparent))
     );
   border-radius: 8px;
-  background: var(--raised, var(--surface-1));
+  background: var(--raised);
   color: var(--ink);
   font-family: inherit;
   font-size: max(0.9375rem, 16px);
@@ -671,8 +671,8 @@ html.glass-dark.light
 
 .form-input:focus {
   outline: none;
-  border-color: var(--brand-fill, var(--k-color-primary));
-  box-shadow: 0 0 0 1px var(--brand-fill, var(--k-color-primary));
+  border-color: var(--brand-fill);
+  box-shadow: 0 0 0 1px var(--brand-fill);
 }
 
 .form-input:disabled {
@@ -690,7 +690,7 @@ html.glass-dark.light
 .field-error {
   font-size: var(--text-sm);
   line-height: 1.45;
-  color: var(--danger, var(--k-color-red, #ff3b30));
+  color: var(--danger);
   margin: 5px 0 0;
 }
 
@@ -701,8 +701,8 @@ html.glass-dark.light
    something or is someone: the word always renders, and the consumer
    sets the hue (quiet ink for records facts, brand for identity).
    A seal marks who someone is: brand-bordered circle, display face,
-   hand tilt. Consumers override size with their own class; fallback
-   chains cover themes that predate the canonical tokens. */
+   hand tilt. Consumers override size with their own class; all themes
+   define the canonical tokens these classes read. */
 .stamp-chip {
   display: inline-block;
   font-size: 0.625rem; /* 10px */
@@ -723,10 +723,8 @@ html.glass-dark.light
   width: 34px;
   height: 34px;
   border-radius: 50%;
-  border: 2px solid
-    color-mix(in srgb, var(--brand-fill, var(--brand-primary)) 55%, transparent);
-  outline: 1px solid
-    color-mix(in srgb, var(--brand-fill, var(--brand-primary)) 30%, transparent);
+  border: 2px solid color-mix(in srgb, var(--brand-fill) 55%, transparent);
+  outline: 1px solid color-mix(in srgb, var(--brand-fill) 30%, transparent);
   outline-offset: 2px;
   color: var(--brand-text, var(--brand-primary));
   font-family: var(--theme-font-display, inherit);
