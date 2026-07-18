@@ -101,7 +101,7 @@ export function createReportsService(
           ),
           eb.fn.count<number>("followups.id").as("cnt"),
         ])
-        .where("followups.type", "=", "status_change")
+        .where("followups.type", "=", "status_closed")
         .where("followups.source", "=", "system")
         .where("tickets.status", "=", "closed")
         .where("followups.created_at", ">=", cutoff)
@@ -145,7 +145,7 @@ export function createReportsService(
             "avgDays",
           ),
         ])
-        .where("followups.type", "=", "status_change")
+        .where("followups.type", "=", "status_closed")
         .where("followups.source", "=", "system")
         .where("tickets.status", "=", "closed")
         .where("followups.created_at", ">=", cutoff)

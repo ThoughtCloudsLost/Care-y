@@ -89,6 +89,7 @@ export function createAssignmentService(
   async function createSystemFollowUp(
     ticketId: string,
     type: string,
+    eventParams?: Record<string, unknown>,
   ): Promise<void> {
     await db
       .insertInto("followups")
@@ -97,6 +98,7 @@ export function createAssignmentService(
         source: "system",
         type,
         encrypted_content: Buffer.alloc(0),
+        event_params: eventParams ?? null,
       })
       .execute();
   }
@@ -150,7 +152,9 @@ export function createAssignmentService(
         return { assignedTo: null };
       }
 
-      await createSystemFollowUp(ticketId, "assignment_change");
+      await createSystemFollowUp(ticketId, "volunteer_assigned", {
+        userId: chosen,
+      });
       return { assignedTo: chosen };
     },
 
@@ -183,7 +187,7 @@ export function createAssignmentService(
         throw new TicketError(ErrorCode.TICKET_ALREADY_ASSIGNED);
       }
 
-      await createSystemFollowUp(ticketId, "assignment_change");
+      await createSystemFollowUp(ticketId, "volunteer_assigned", { userId });
     },
 
     async release(userId, ticketId) {
@@ -206,7 +210,7 @@ export function createAssignmentService(
         .where("id", "=", ticketId)
         .execute();
 
-      await createSystemFollowUp(ticketId, "assignment_change");
+      await createSystemFollowUp(ticketId, "volunteer_unassigned", { userId });
     },
 
     async assignTo(actorId, ticketId, targetUserId) {
@@ -245,7 +249,15 @@ export function createAssignmentService(
         .where("id", "=", ticketId)
         .execute();
 
-      await createSystemFollowUp(ticketId, "assignment_change");
+      if (targetUserId !== null) {
+        await createSystemFollowUp(ticketId, "volunteer_assigned", {
+          userId: targetUserId,
+        });
+      } else if (ticket.assigned_to !== null) {
+        await createSystemFollowUp(ticketId, "volunteer_unassigned", {
+          userId: ticket.assigned_to,
+        });
+      }
     },
   };
 }
