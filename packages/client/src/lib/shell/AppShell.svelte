@@ -941,9 +941,8 @@
     if (ptrPhase === "refreshing" || ptrPhase === "releasing") return;
     if (!mainEl) return;
 
-    // While the software keyboard is open, a pull-down at the top is the
-    // visual-viewport pan bringing the chrome back into view, never a
-    // refresh. Arming PTR would preventDefault the pan away.
+    // While the software keyboard is open the user is composing; a
+    // pull-down at the top of a scroller must never arm a refresh.
     if (document.documentElement.classList.contains("keyboard-open")) return;
 
     // Ignore multi-touch (pinch-to-zoom)
@@ -1452,13 +1451,14 @@
 <style>
   /* ── Desktop layout ── */
   /* Fixed 100dvh, NOT var(--app-height): the layout viewport does not
-     shrink when the iOS software keyboard opens; iOS instead
-     over-scrolls the document to reveal the focused input. A shell
-     sized to the visual viewport but anchored at the document top then
-     exposes a blank band of shell background above the keyboard once
-     that scroll happens. Keeping the shell full-height means the scroll
-     can only ever show app content; keyboard-aware surfaces add their
-     own bottom inset from --keyboard-height instead. */
+     shrink when the iOS software keyboard opens. iOS reveals a focused
+     fixed-bottom input by panning the visual viewport downward inside
+     the layout viewport (visualViewport.offsetTop > 0; no API exists to
+     pan it back). A shell sized to the visual viewport but anchored at
+     the layout viewport's top then exposes a blank band of shell
+     background above the keyboard. Keeping the shell full-height means
+     the pan can only ever show app content; keyboard-aware surfaces add
+     their own bottom inset from --keyboard-height instead. */
   .app-shell-layout {
     display: flex;
     height: 100dvh;

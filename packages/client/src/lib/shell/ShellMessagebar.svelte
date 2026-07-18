@@ -197,9 +197,20 @@
 </div>
 
 <style>
+  /* Not bottom:0. On iOS, fixed bottom:0 anchors to the layout viewport,
+     which stays full-height under the software keyboard, so the bar
+     would sit behind it. vv.offsetTop + vv.height (kept in CSS variables
+     by keyboard-viewport.ts) is the visible area's bottom edge in
+     fixed-position coordinates: the viewport bottom while the keyboard
+     is closed, the keyboard's top edge while it is open. translateY
+     pins the bar's bottom edge there, and the top transition turns the
+     discrete visualViewport events into a glide that tracks the keyboard
+     animation. Same technique as the library editor's .toolbar-keyboard. */
   .shell-messagebar-anchor {
     position: fixed;
-    bottom: 0;
+    top: calc(var(--vv-offset-top, 0px) + var(--app-height, 100dvh));
+    transform: translateY(-100%);
+    transition: top 0.25s ease-out;
     left: 0;
     right: 0;
     z-index: 20;
@@ -207,7 +218,23 @@
 
   .shell-messagebar-anchor.shell-messagebar-inline {
     position: relative;
+    top: auto;
+    transform: none;
+    transition: none;
     z-index: auto;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .shell-messagebar-anchor {
+      transition: none;
+    }
+  }
+
+  /* While the keyboard is open the bar sits on top of it, so the
+     home-indicator inset inside the toolbar is dead space; native iOS
+     drops it too. */
+  :global(html.keyboard-open .k-ios .shell-messagebar .k-toolbar) {
+    padding-bottom: 0 !important;
   }
 
   /* Match the tabbar safe-area override: strip extra 16px Konsta adds. */
