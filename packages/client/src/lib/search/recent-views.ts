@@ -193,8 +193,10 @@ export function createRecentViews(deps: RecentViewsDeps): RecentViews {
         }
       }
     } catch (err: unknown) {
-      // Fetch failed: leave hydration retryable on the next overlay open.
-      hydration = "idle";
+      // Fetch failed. Mark done so the reactive $effect does not retry
+      // in a tight loop. The next initRecentViews call (re-login, effect
+      // re-run) resets hydration via clear().
+      hydration = "done";
       console.warn(
         "[recent-views] hydration failed:",
         err instanceof Error ? err.message : "unknown error",
