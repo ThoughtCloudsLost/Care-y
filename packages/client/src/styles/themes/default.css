@@ -108,6 +108,12 @@
      warmer green. */
   --call-active: #22c55e;
 
+  /* Case header glass edges and shadow. Light mode uses dark
+     translucencies; dark mode flips to white highlights. */
+  --glass-edge: rgba(0, 0, 0, 0.08);
+  --glass-edge-strong: rgba(0, 0, 0, 0.12);
+  --glass-shadow: rgba(0, 0, 0, 0.08);
+
   /* ── Inkwell type scale ── */
   --text-xs: 0.71875rem; /* 11.5px */
   --text-sm: 0.78125rem; /* 12.5px */
@@ -144,6 +150,10 @@
   --care-soft: color-mix(in srgb, var(--care) 12%, transparent);
   --brand-soft: color-mix(in srgb, var(--brand-fill) 12%, transparent);
   --brand-text: #a89b80;
+
+  --glass-edge: rgba(255, 255, 255, 0.1);
+  --glass-edge-strong: rgba(255, 255, 255, 0.15);
+  --glass-shadow: rgba(0, 0, 0, 0.4);
 
   --paper: var(--color-ios-dark-surface);
   --raised: var(--color-ios-dark-surface-1);
