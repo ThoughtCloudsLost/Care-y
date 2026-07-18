@@ -41,25 +41,25 @@
       case "too-short":
         return {
           label: m.password_strength_too_short({ min: minLength }),
-          color: "var(--color-red-500)",
+          color: "var(--danger)",
           width: "25%",
         };
       case "acceptable":
         return {
           label: m.password_strength_acceptable(),
-          color: "var(--color-amber-500)",
+          color: "var(--care)",
           width: "50%",
         };
       case "good":
         return {
           label: m.password_strength_good(),
-          color: "var(--color-green-500)",
+          color: "var(--meter-strong)",
           width: "75%",
         };
       case "strong":
         return {
           label: m.password_strength_strong(),
-          color: "var(--color-green-500)",
+          color: "var(--meter-strong)",
           width: "100%",
         };
     }

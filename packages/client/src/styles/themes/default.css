@@ -113,6 +113,7 @@
   --glass-edge: rgba(0, 0, 0, 0.08);
   --glass-edge-strong: rgba(0, 0, 0, 0.12);
   --glass-shadow: rgba(0, 0, 0, 0.08);
+  --meter-strong: #16a34a;
 
   /* ── Inkwell type scale ── */
   --text-xs: 0.71875rem; /* 11.5px */
@@ -154,6 +155,7 @@
   --glass-edge: rgba(255, 255, 255, 0.1);
   --glass-edge-strong: rgba(255, 255, 255, 0.15);
   --glass-shadow: rgba(0, 0, 0, 0.4);
+  --meter-strong: #4ade80;
 
   --paper: var(--color-ios-dark-surface);
   --raised: var(--color-ios-dark-surface-1);
