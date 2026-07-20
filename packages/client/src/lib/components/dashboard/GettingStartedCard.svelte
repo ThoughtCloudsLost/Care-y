@@ -205,7 +205,10 @@
     border-radius: 50%;
     display: flex;
     align-items: center;
+    justify-content: center;
     margin-left: auto;
+    min-width: 24px;
+    min-height: 24px;
   }
 
   .dismiss-btn:disabled {

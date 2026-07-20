@@ -384,23 +384,23 @@ test.describe.serial("KB Editor (Create/Edit, Categories, ATAG)", () => {
   });
 
   test("category: create a new category", async () => {
-    // Tap "Add Category" button inside the sheet.
-    await page.getByText("Add Category").click();
+    const dialog = page.getByRole("dialog", { name: "Manage Categories" });
+
+    // Tap "Add Category" button inside the dialog.
+    await dialog.getByText("Add Category").click();
 
     // The add form appears with Konsta ListInput fields.
-    // Target the last visible input in the sheet.
-    const nameInput = page.locator("input").last();
+    // Target the last visible input in the dialog.
+    const nameInput = dialog.locator("input").last();
     await expect(nameInput).toBeVisible({ timeout: 3_000 });
     await nameInput.fill(`E2E Cat ${SUFFIX}`);
 
-    // Save the new category. Scope to the sheet overlay to avoid
-    // hitting the hidden filter sheet's Save button.
-    const sheet = page.locator(".shell-sheet-content").last();
-    await sheet.getByRole("button", { name: "Save" }).click();
+    // Save the new category (dialog already scoped above).
+    await dialog.getByRole("button", { name: "Save" }).click();
 
-    // The new category should appear in the list after cache refresh.
-    // Use .first() because the name may also appear in an overlay element.
-    await expect(page.getByText(`E2E Cat ${SUFFIX}`).first()).toBeVisible({
+    // The new category should appear in the dialog's list after save.
+    // Scope to the dialog to avoid matching hidden Konsta Actions overlays.
+    await expect(dialog.getByText(`E2E Cat ${SUFFIX}`)).toBeVisible({
       timeout: 10_000,
     });
   });

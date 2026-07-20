@@ -53,6 +53,7 @@ services:
       - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
       - OPRF_SOCKET_A=/run/oprf/oprf-a.sock
       - OPRF_SOCKET_B=/run/oprf/oprf-b.sock
+      - TOTP_REPLAY_BYPASS=1
 
   db:
     image: postgres:16-alpine

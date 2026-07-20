@@ -73,9 +73,8 @@ test.describe.serial("Accessibility sweep", () => {
   });
 
   test("admin hub passes the axe audit via sidebar", async () => {
-    // Settings tab in the sidebar navigates to /admin.
-    const settingsTab = page.locator('[data-sidebar-id="settings"]');
-    await settingsTab.click();
+    const adminTab = page.locator('[data-sidebar-id="admin"]');
+    await adminTab.click();
     await expect(page).toHaveURL("/admin", { timeout: 10_000 });
     await expect(page.getByText(/admin/i).first()).toBeVisible({
       timeout: CRYPTO_TIMEOUT,

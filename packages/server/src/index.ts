@@ -32,7 +32,7 @@ import {
   type RateLimiter,
 } from "./ratelimit/rate-limiter.js";
 import {
-  createInMemoryTotpReplayCache,
+  createTotpReplayCache,
   assertSingleInstanceTotpReplayCache,
 } from "./auth/totp-replay-cache.js";
 import {
@@ -429,7 +429,7 @@ const pendingClients = new Map<string, PendingClient>();
 
 // One instance shared by the auth and two-factor routers so a TOTP code
 // accepted on either path is burned for both (RFC 6238 Section 5.2).
-const totpReplayCache = createInMemoryTotpReplayCache();
+const totpReplayCache = createTotpReplayCache();
 
 const appRouter = createAppRouter({
   authDeps: {

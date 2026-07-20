@@ -454,7 +454,7 @@ test.describe.serial("Admin Setup Wizard", () => {
 
     // Completion screen: no more step indicator
     await expect(
-      page.getByRole("button", { name: /go to dashboard/i }),
+      page.getByRole("button", { name: /go to overview/i }),
     ).toBeVisible({ timeout: CRYPTO_TIMEOUT });
   });
 
@@ -463,14 +463,14 @@ test.describe.serial("Admin Setup Wizard", () => {
   test("shows completion screen with checklist", async () => {
     // Verify the completion heading is visible
     const dashboardBtn = page.getByRole("button", {
-      name: /go to dashboard/i,
+      name: /go to overview/i,
     });
     await expect(dashboardBtn).toBeVisible();
   });
 
   test("navigates to dashboard from completion", async () => {
     const dashboardBtn = page.getByRole("button", {
-      name: /go to dashboard/i,
+      name: /go to overview/i,
     });
     await dashboardBtn.click();
 

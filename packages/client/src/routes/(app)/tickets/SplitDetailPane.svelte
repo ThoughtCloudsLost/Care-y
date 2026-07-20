@@ -78,4 +78,11 @@
     z-index: auto;
     flex-shrink: 0;
   }
+
+  /* The chat thread's margin-bottom reserves space for the fixed-position
+     compose bar on mobile. In split-pane the bar is in-flow (relative),
+     so the margin is dead space that pushes the bar below the viewport. */
+  .split-pane-content :global(.thread) {
+    margin-bottom: 0;
+  }
 </style>

@@ -201,9 +201,9 @@ test.describe.serial("Desktop Responsive Layout", () => {
     await expect(splitContainer).toBeVisible();
 
     // Three panes: list, divider, detail/placeholder.
-    await expect(page.locator(".split-list-pane")).toBeVisible();
+    await expect(page.locator(".split-left-pane")).toBeVisible();
     await expect(page.locator(".split-divider")).toBeVisible();
-    await expect(page.locator(".split-detail-pane")).toBeVisible();
+    await expect(page.locator(".split-right-pane")).toBeVisible();
 
     // Placeholder shown when no ticket selected.
     await expect(page.locator(".split-placeholder")).toBeVisible();
@@ -214,7 +214,7 @@ test.describe.serial("Desktop Responsive Layout", () => {
 
     // Click on a ticket card in the list pane.
     const card = page
-      .locator(".split-list-pane")
+      .locator(".split-left-pane")
       .locator("button.card-open-link")
       .first();
     await card.click();
@@ -227,7 +227,7 @@ test.describe.serial("Desktop Responsive Layout", () => {
 
     // The detail pane should render ticket content.
     // Wait for either the chat log or a loading indicator.
-    const detailPane = page.locator(".split-detail-pane");
+    const detailPane = page.locator(".split-right-pane");
     await expect(
       detailPane.locator('[role="log"], .skeleton-container'),
     ).toBeAttached({
@@ -264,8 +264,8 @@ test.describe.serial("Desktop Responsive Layout", () => {
 
     const splitContainer = page.locator(".split-view-container");
     await expect(splitContainer).toBeVisible();
-    await expect(page.locator(".split-list-pane")).toBeVisible();
-    await expect(page.locator(".split-detail-pane")).toBeVisible();
+    await expect(page.locator(".split-left-pane")).toBeVisible();
+    await expect(page.locator(".split-right-pane")).toBeVisible();
     await expect(page.locator(".split-placeholder")).toBeVisible();
   });
 
@@ -301,7 +301,7 @@ test.describe.serial("Desktop Responsive Layout", () => {
     const subnavbar = page.locator(".shell-subnavbar");
     if (await subnavbar.isVisible().catch(() => false)) {
       // Scroll down in the list pane.
-      const listPane = page.locator(".split-list-pane");
+      const listPane = page.locator(".split-left-pane");
       await listPane.evaluate((el) => {
         el.scrollBy(0, 500);
       });
@@ -418,7 +418,7 @@ test.describe.serial("Desktop Responsive Layout", () => {
     });
 
     const card = page
-      .locator(".split-list-pane")
+      .locator(".split-left-pane")
       .locator("button.card-open-link")
       .first();
     await card.click();

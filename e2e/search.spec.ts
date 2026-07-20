@@ -96,14 +96,14 @@ test.describe.serial("Universal Search", () => {
     await expect(sheet).toBeVisible();
 
     // "housing" should appear in recents (was added when we tapped the result).
-    await expect(sheet.getByText("housing")).toBeVisible();
+    await expect(sheet.getByText("housing").first()).toBeVisible();
   });
 
   test("tapping a recent search fills the searchbar and shows results", async () => {
     const sheet = page.locator("[role='search']");
 
     // Tap the "housing" recent.
-    await sheet.getByText("housing").click();
+    await sheet.getByText("housing").first().click();
 
     // Results should appear again.
     await expect(sheet.getByText("Help with housing")).toBeVisible({
@@ -114,17 +114,9 @@ test.describe.serial("Universal Search", () => {
   // ── 5. Dismissal ───────────────────────────────────────────────
 
   test("dismiss closes sheet and searchbar", async () => {
-    // On desktop, search renders as a dropdown with a backdrop. Click
-    // the backdrop to dismiss. On mobile, the ShellSheet handles Escape.
-    // Tab-to-same-URL (Overview -> /) is a no-op and won't trigger
-    // afterNavigate, so navigate to a genuinely different route instead.
-    const backdrop = page.locator(".search-dropdown-backdrop");
-    if (await backdrop.isVisible({ timeout: 1_000 }).catch(() => false)) {
-      await backdrop.click({ force: true });
-    } else {
-      await page.getByRole("tab", { name: /tickets/i }).click();
-      await expect(page).toHaveURL("/tickets", { timeout: 5_000 });
-    }
+    // Escape closes the search overlay on both desktop (dropdown) and
+    // mobile (ShellSheet).
+    await page.keyboard.press("Escape");
 
     const sheet = page.locator("[role='search']");
     await expect(sheet).not.toBeVisible({ timeout: 5_000 });
@@ -135,11 +127,12 @@ test.describe.serial("Universal Search", () => {
   test("no results state shows empty message", async () => {
     // Open search and type something that matches nothing.
     await page.getByRole("button", { name: "Search" }).click();
-    const searchbar = page.locator("input[type='text']").last();
+    const searchbar = page.locator(".search-overlay input[type='text']");
+    await searchbar.waitFor({ state: "visible", timeout: 5_000 });
     await searchbar.fill("xyznonexistent123");
 
     const sheet = page.locator("[role='search']");
-    await expect(sheet.getByText(/No results for/)).toBeVisible();
+    await expect(sheet.getByText(/no matches/i)).toBeVisible();
 
     // Close search for cleanup.
     await page.keyboard.press("Escape");
@@ -149,7 +142,7 @@ test.describe.serial("Universal Search", () => {
 
   test("accessibility: sheet has role=search, results have role=list", async () => {
     await page.getByRole("button", { name: "Search" }).click();
-    const searchbar = page.locator("input[type='text']").last();
+    const searchbar = page.locator(".search-overlay input[type='text']");
     await searchbar.fill("housing");
 
     // Wait for results to appear.

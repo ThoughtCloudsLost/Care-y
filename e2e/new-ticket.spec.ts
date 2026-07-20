@@ -81,12 +81,12 @@ test.describe.serial("New Ticket (Create Flow)", () => {
   // ── 4. Cancel ──────────────────────────────────────────────────
 
   test("dismiss closes popup without submission", async () => {
-    // On desktop, the popup opened via the popover flow may have a stacked
-    // focus trap. Click the Konsta backdrop overlay to dismiss reliably.
-    const backdrop = page.locator(".k-popup-backdrop").last();
-    await backdrop.click({ position: { x: 10, y: 10 }, force: true });
-
     const dialog = page.getByRole("dialog", { name: "New Ticket" });
+    await expect(dialog).toBeVisible();
+
+    // On desktop, ShellPopup replaces the default close button with
+    // headerRight (the submit button). Dismiss via Escape instead.
+    await page.keyboard.press("Escape");
     await expect(dialog).not.toBeVisible({ timeout: 10_000 });
   });
 

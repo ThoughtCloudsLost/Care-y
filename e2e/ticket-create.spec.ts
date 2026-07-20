@@ -53,14 +53,11 @@ test.describe.serial("ticket creation (production UI)", () => {
       timeout: 10_000,
     });
 
-    // Close the popup for subsequent tests. On desktop, the popup opened
-    // via the popover flow may have a stacked focus trap. Click the Konsta
-    // backdrop overlay to dismiss reliably.
-    const backdrop = page.locator(".k-popup-backdrop").last();
-    await backdrop.click({ position: { x: 10, y: 10 }, force: true });
-    await expect(
-      page.getByRole("dialog", { name: "New Ticket" }),
-    ).not.toBeVisible({ timeout: 10_000 });
+    // On desktop, ShellPopup replaces the default close button with
+    // headerRight (the submit button). Dismiss via Escape instead.
+    const dialog = page.getByRole("dialog", { name: "New Ticket" });
+    await page.keyboard.press("Escape");
+    await expect(dialog).not.toBeVisible({ timeout: 10_000 });
   });
 
   test("create a ticket through the production form", async () => {

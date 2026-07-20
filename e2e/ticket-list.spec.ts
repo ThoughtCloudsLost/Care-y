@@ -251,9 +251,8 @@ test.describe.serial("Ticket List (Tickets Tab)", () => {
     await secondCard.click();
     await expect(page.getByText(/2 selected/)).toBeVisible();
 
-    // Exit multi-select via the dismiss link (X icon in tabbar override).
-    // Konsta <Link> renders with role="link", not "button".
-    const dismissBtn = page.getByRole("link", {
+    // Exit multi-select via the dismiss button (X icon in tabbar override).
+    const dismissBtn = page.getByRole("button", {
       name: "Exit selection mode",
     });
     await dismissBtn.click();
@@ -270,7 +269,7 @@ test.describe.serial("Ticket List (Tickets Tab)", () => {
     await expect(page.locator(".checkbox-wrap").first()).toBeVisible();
 
     // Exit via dismiss.
-    await page.getByRole("link", { name: "Exit selection mode" }).click();
+    await page.getByRole("button", { name: "Exit selection mode" }).click();
   });
 
   // ── 7. Card tap navigation ──────────────────────────────────────
@@ -280,13 +279,19 @@ test.describe.serial("Ticket List (Tickets Tab)", () => {
     const firstCardButton = page.locator("button.card-open-link").first();
     await firstCardButton.click();
 
-    // Should navigate to /tickets/{uuid}. The detail page doesn't exist
-    // yet (6d), but the URL change is verifiable.
-    await expect(page).toHaveURL(/\/tickets\/[0-9a-f-]{36}/);
+    // On desktop, the detail opens in a split-view pane (URL stays at
+    // /tickets). On mobile, it navigates to /tickets/{uuid}. Verify by
+    // checking that the chat log appears.
+    await expect(page.locator('[role="log"]')).toBeVisible({
+      timeout: CRYPTO_TIMEOUT,
+    });
 
-    // Navigate back to the ticket list for remaining tests.
-    // The ticket detail page hides the tabbar, so use the navbar back link.
-    await page.getByRole("button", { name: /back/i }).click();
+    // Navigate back. On desktop split-view, the back button closes the
+    // detail pane. On mobile, it goes back to /tickets.
+    const backBtn = page.getByRole("button", { name: /back/i });
+    if (await backBtn.isVisible({ timeout: 2_000 }).catch(() => false)) {
+      await backBtn.click();
+    }
     await expect(page).toHaveURL("/tickets");
 
     // Wait for tickets to re-render.
@@ -325,8 +330,8 @@ test.describe.serial("Ticket List (Tickets Tab)", () => {
     await expect(toolbar).toBeAttached();
     await expect(toolbar).toHaveAttribute("aria-label", "Filter tickets");
 
-    // Each filter pill has role="button", aria-haspopup, aria-expanded.
-    const pills = page.locator('[role="toolbar"] [role="button"]');
+    // Each filter pill is a native <button> with aria-haspopup, aria-expanded.
+    const pills = toolbar.getByRole("button");
     const count = await pills.count();
     expect(count).toBeGreaterThanOrEqual(4); // status, queue, priority, assignee
 

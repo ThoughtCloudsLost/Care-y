@@ -679,7 +679,7 @@
     role="button"
     aria-label={m.ticket_more_actions()}
   >
-    <BookUser size={22} aria-hidden="true" />
+    <BookUser size={24} aria-hidden="true" />
   </Link>
 {/snippet}
 
@@ -764,7 +764,7 @@
     role="button"
     aria-label={m.ticket_more_actions()}
   >
-    <BookUser size={18} aria-hidden="true" />
+    <BookUser size={24} aria-hidden="true" />
   </Link>
   {#if onexpand}
     <Link
@@ -773,7 +773,7 @@
       role="button"
       aria-label={m.tickets_detail_expand()}
     >
-      <Maximize2 size={16} aria-hidden="true" />
+      <Maximize2 size={24} aria-hidden="true" />
     </Link>
   {/if}
   {#if !desktopFull}
@@ -783,7 +783,7 @@
       role="button"
       aria-label={m.tickets_detail_close()}
     >
-      <X size={18} aria-hidden="true" />
+      <X size={24} aria-hidden="true" />
     </Link>
   {/if}
 {/snippet}
@@ -825,16 +825,18 @@
 {/snippet}
 
 {#snippet ticketCompose()}
-  <TicketCompose
-    bind:this={compose}
-    {ticketId}
-    inline={desktopFull}
-    hidden={selectMode.active}
-    sending={messenger.sending || sms.sending}
-    onsendreply={() => void messenger.handleSend()}
-    onsendsms={(text: string) => void sms.handleSmsSend(text)}
-    onplus={openComposeActions}
-  />
+  <div class="detail-compose">
+    <TicketCompose
+      bind:this={compose}
+      {ticketId}
+      inline={desktopFull || onexpand != null}
+      hidden={selectMode.active}
+      sending={messenger.sending || sms.sending}
+      onsendreply={() => void messenger.handleSend()}
+      onsendsms={(text: string) => void sms.handleSmsSend(text)}
+      onplus={openComposeActions}
+    />
+  </div>
 {/snippet}
 
 {#snippet inlineFilterBar()}
@@ -997,6 +999,10 @@
     flex-direction: column;
     flex: 1;
     min-height: 0;
+  }
+
+  .detail-compose {
+    display: contents;
   }
 
   .full-desktop-sidebar {

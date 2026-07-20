@@ -42,7 +42,7 @@ const testFollowUps: MockFollowUp[] = [
   makeFollowUp({
     id: "fu-2",
     source: "system",
-    type: "system_event",
+    type: "volunteer_assigned",
     createdAt: "2026-03-15T11:00:00Z",
   }),
   makeFollowUp({
