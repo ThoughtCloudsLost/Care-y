@@ -436,13 +436,13 @@
     color: var(--ink-2);
   }
 
-  /* Speaker eyebrow inside a bubble (callers only in previews). */
+  /* Speaker attribution in preview bubbles (callers only). Quiet
+     title-case; structural labels keep the full uppercase treatment. */
   .mini-who {
     display: block;
     font-size: 0.625rem;
-    font-weight: 700;
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
+    font-weight: 400;
+    letter-spacing: 0.02em;
     color: var(--muted);
     margin-bottom: 2px;
   }
