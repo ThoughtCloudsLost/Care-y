@@ -168,7 +168,7 @@ describe.skipIf(!process.env.DATABASE_URL)("escalateTenantTickets (DB)", () => {
     expect(ticket.priority).toBe("low");
   });
 
-  it("creates priority_change system follow-up on escalation", async () => {
+  it("creates priority_changed system follow-up on escalation", async () => {
     const queue = await createTestQueue(testDb.db, { escalateDays: 1 });
     const ticketId = await insertTicketWithAge({
       queueId: queue.id,
@@ -183,7 +183,7 @@ describe.skipIf(!process.env.DATABASE_URL)("escalateTenantTickets (DB)", () => {
       .selectAll()
       .where("ticket_id", "=", ticketId)
       .where("source", "=", "system")
-      .where("type", "=", "priority_change")
+      .where("type", "=", "priority_changed")
       .execute();
     expect(followups.length).toBeGreaterThanOrEqual(1);
   });

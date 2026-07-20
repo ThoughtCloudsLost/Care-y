@@ -84,16 +84,19 @@ describe("followUpTypeSchema", () => {
   it("accepts all valid types", () => {
     const valid = [
       "message",
-      "status_change",
-      "merge_note",
-      "hold_change",
-      "priority_change",
-      "assignment_change",
       "internal_note",
       "sms_outbound",
       "sms_inbound",
       "phone_call",
       "voicemail",
+      "hold_placed",
+      "hold_removed",
+      "volunteer_assigned",
+      "volunteer_unassigned",
+      "status_opened",
+      "status_closed",
+      "priority_changed",
+      "merge_note",
     ];
     for (const t of valid) {
       expect(followUpTypeSchema.safeParse(t).success).toBe(true);

@@ -9,6 +9,7 @@
 
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import type { Selectable } from "kysely";
+import { encode } from "@care-y/crypto";
 import { createRecentViewsRouter } from "./recent-views.js";
 import { router, createCallerFactory } from "../trpc/trpc.js";
 import type { Context, OrgContext } from "../trpc/context.js";
@@ -22,9 +23,9 @@ import {
   type TestDb,
 } from "../test-utils.js";
 
-const EPHEMERAL_POINT = Buffer.alloc(32, 1).toString("base64");
-const NONCE = Buffer.alloc(24, 2).toString("base64");
-const PAYLOAD = Buffer.from("sealed-recents-payload").toString("base64");
+const EPHEMERAL_POINT = encode(Buffer.alloc(32, 1));
+const NONCE = encode(Buffer.alloc(24, 2));
+const PAYLOAD = encode(Buffer.from("sealed-recents-payload"));
 
 describe.skipIf(!process.env.DATABASE_URL)("recentViews router", () => {
   let testDb: TestDb;
@@ -163,7 +164,7 @@ describe.skipIf(!process.env.DATABASE_URL)("recentViews router", () => {
 
     it("overwrites the existing envelope on second put (upsert)", async () => {
       const caller = createAuthedCaller(userA);
-      const newPayload = Buffer.from("newer-sealed-payload").toString("base64");
+      const newPayload = encode(Buffer.from("newer-sealed-payload"));
       await caller.recentViews.put({
         ephemeralPoint: EPHEMERAL_POINT,
         nonce: NONCE,
