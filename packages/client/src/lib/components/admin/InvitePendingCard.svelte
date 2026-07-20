@@ -205,7 +205,7 @@
   }
 
   .invite-url {
-    font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
+    font-family: var(--theme-font-mono);
     font-size: var(--text-xs);
     color: var(--muted);
     opacity: 0.6;

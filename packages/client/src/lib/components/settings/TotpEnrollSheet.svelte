@@ -137,7 +137,7 @@
 
       <p class="manual-label">{m.twofa_totp_manual_entry()}</p>
       <div class="secret-row">
-        <code class="secret-text">{secret}</code>
+        <code class="secret-text" data-testid="totp-secret">{secret}</code>
         <button
           type="button"
           class="copy-btn"
@@ -230,7 +230,7 @@
 
   .secret-text {
     flex: 1;
-    font-family: "Space Mono", ui-monospace, monospace;
+    font-family: var(--theme-font-mono);
     font-size: 0.85rem;
     letter-spacing: 0.1em;
     word-break: break-all;

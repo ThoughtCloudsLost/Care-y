@@ -912,7 +912,7 @@
   }
 
   .color-hex {
-    font-family: ui-monospace, monospace;
+    font-family: var(--theme-font-mono);
     font-size: var(--text-sm);
     color: var(--ink);
   }
@@ -1063,7 +1063,7 @@
   }
 
   .color-hex-edit {
-    font-family: ui-monospace, monospace;
+    font-family: var(--theme-font-mono);
     font-size: var(--text-sm);
     color: var(--ink);
   }

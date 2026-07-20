@@ -202,7 +202,7 @@
   }
 
   .code-item code {
-    font-family: "Space Mono", ui-monospace, monospace;
+    font-family: var(--theme-font-mono);
     font-size: 0.9rem;
     letter-spacing: 0.05em;
   }
