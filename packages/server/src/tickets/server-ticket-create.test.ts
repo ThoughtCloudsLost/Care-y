@@ -389,7 +389,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         .selectFrom("followups")
         .selectAll()
         .where("ticket_id", "=", first.ticketId)
-        .where("type", "=", "status_change")
+        .where("type", "=", "status_opened")
         .execute();
       expect(followups.length).toBeGreaterThanOrEqual(1);
     });

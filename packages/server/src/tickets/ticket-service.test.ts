@@ -485,7 +485,7 @@ describe.skipIf(!process.env.DATABASE_URL)("TicketService (DB)", () => {
       .selectAll()
       .where("ticket_id", "=", ticketId)
       .where("source", "=", "system")
-      .where("type", "=", "status_change")
+      .where("type", "=", "status_closed")
       .execute();
     expect(followups.length).toBeGreaterThanOrEqual(1);
   });
@@ -526,13 +526,13 @@ describe.skipIf(!process.env.DATABASE_URL)("TicketService (DB)", () => {
 
     expect(updated.onHold).toBe(true);
 
-    // Verify hold_change system follow-up
+    // Verify hold_placed system follow-up
     const followups = await testDb.db
       .selectFrom("followups")
       .selectAll()
       .where("ticket_id", "=", ticketId)
       .where("source", "=", "system")
-      .where("type", "=", "hold_change")
+      .where("type", "=", "hold_placed")
       .execute();
     expect(followups.length).toBeGreaterThanOrEqual(1);
   });
