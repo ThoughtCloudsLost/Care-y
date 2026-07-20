@@ -14,7 +14,7 @@
     "lint:strict": "eslint --cache --cache-location node_modules/.cache/eslint/ packages/ --rule '@typescript-eslint/no-unused-vars: [error, { argsIgnorePattern: ^_, varsIgnorePattern: ^_, caughtErrorsIgnorePattern: ^_ }]'",
     "format": "prettier --check --ignore-path .prettierignore --ignore-path .prettierignore.local .",
     "format:fix": "prettier --write --ignore-path .prettierignore --ignore-path .prettierignore.local .",
-    "test": "vitest run",
+    "test": "vitest run --project client --project shared --project crypto && pnpm test:server:db && pnpm test:e2e",
     "test:client": "vitest run --project client",
     "test:server:db": "docker compose -f docker-compose.test.yml exec app pnpm vitest run --project server",
     "test:watch": "vitest",
