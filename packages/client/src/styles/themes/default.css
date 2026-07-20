@@ -136,11 +136,12 @@
 }
 
 .theme-default.dark {
-  /* Dark --muted clears 4.5:1 on the lightest dark surface (the Konsta
-     elevated overlay step), where sheet help text renders. */
+  /* Dark --muted clears 4.5:1 (4.62:1 computed) on the lightest dark
+     surface (Konsta elevated overlay #2f2a1e). Bumped from #9e937e
+     (4.44:1) to clear AA. */
   --ink: #efe8d8;
   --ink-2: #cfc5ae;
-  --muted: #9e937e;
+  --muted: #a2977f;
   --hair: #373226;
   --hair-2: #514935;
   --urgent: #e06a55;
@@ -260,11 +261,12 @@
 }
 
 /* Field label: the eyebrow. Konsta's stacked label div is uniquely
-   .duration-200.text-xs (the error/info line is .text-xs.z-10). */
+   .duration-200.text-xs (the error/info line is .text-xs.z-10).
+   Tracking 0.06em (quieter than section-head 0.12em). */
 .theme-default .k-list-input .duration-200.text-xs {
   font-size: 0.6875rem; /* 11px */
   font-weight: 700;
-  letter-spacing: 0.12em;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
   color: var(--ink-2);
   margin-bottom: 6px;

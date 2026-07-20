@@ -61,13 +61,12 @@
     align-items: flex-end;
   }
 
-  /* Speaker eyebrow: 10.5px sits below the type scale's smallest token,
-     so raw rem (still scales with the Dynamic Type root). */
+  /* Speaker attribution: quiet title-case so the conversation content
+     leads. Structural eyebrows (registers, section heads) keep uppercase. */
   .msg-who {
     font-size: 0.65625rem;
-    font-weight: 700;
-    letter-spacing: 0.12em;
-    text-transform: uppercase;
+    font-weight: 400;
+    letter-spacing: 0.02em;
     color: var(--muted);
     padding-left: 4px;
   }

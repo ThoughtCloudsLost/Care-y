@@ -440,7 +440,8 @@
     background: transparent;
     color: var(--glass-text);
     cursor: pointer;
-    border-inline-start: 3px solid transparent;
+    border-radius: 8px;
+    margin-inline: 0.375rem;
     transition: background-color 150ms ease;
     font-size: var(--text-base);
     text-align: start;
@@ -456,7 +457,6 @@
   }
 
   .sidebar-tab.active {
-    border-inline-start-color: var(--brand-primary);
     background: var(--brand-primary-20);
   }
 
@@ -600,7 +600,7 @@
     align-items: center;
     gap: 0.75rem;
     padding: 0.375rem 0.75rem;
-    border-inline-start: 3px solid transparent;
+    margin-inline: 0.375rem;
   }
 
   .sidebar-avatar {
@@ -639,9 +639,10 @@
     color: var(--brand-text, var(--brand-primary));
     cursor: pointer;
     text-align: start;
-    width: 100%;
+    width: calc(100% - 0.75rem);
     transition: background-color 150ms ease;
-    border-inline-start: 3px solid transparent;
+    border-radius: 8px;
+    margin-inline: 0.375rem;
   }
 
   .sidebar-role-badge:hover {
@@ -673,9 +674,10 @@
     cursor: pointer;
     font-size: var(--text-sm);
     text-align: start;
-    width: 100%;
+    width: calc(100% - 0.75rem);
     transition: background-color 150ms ease;
-    border-inline-start: 3px solid transparent;
+    border-radius: 8px;
+    margin-inline: 0.375rem;
   }
 
   .sidebar-user-action:hover {
@@ -683,7 +685,6 @@
   }
 
   .sidebar-user-action.active {
-    border-inline-start-color: var(--brand-primary);
     background: var(--brand-primary-20);
     color: var(--glass-text);
   }
