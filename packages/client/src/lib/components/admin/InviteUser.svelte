@@ -322,7 +322,7 @@
   .credential-value {
     flex: 1;
     font-size: 0.9375rem;
-    font-family: ui-monospace, monospace;
+    font-family: var(--theme-font-mono);
     color: var(--ink);
   }
 

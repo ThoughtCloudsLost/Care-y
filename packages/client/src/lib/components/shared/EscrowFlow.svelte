@@ -364,7 +364,7 @@
   }
 
   .hash-group {
-    font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
+    font-family: var(--theme-font-mono);
     font-size: var(--text-base);
     letter-spacing: 0.05em;
     color: var(--ink);
