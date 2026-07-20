@@ -387,33 +387,111 @@
   });
 
   // Extend the Navbar's blur/bg layers to cover the subnavbar region.
-  // The patched NavbarClasses reads --k-navbar-chrome-h for iOS layer heights.
-  // When no subnavbar is present or it's hidden, the variable is unset
-  // and the default (navbar-only) height applies.
+  // --k-navbar-chrome-h controls the height of both iOS layers (bgBlur
+  // for backdrop-filter, bgLayer for the paper-tinted background). In
+  // split mode the right subnavbar can be taller than the left, so the
+  // mask is split into two side-by-side gradients that fade each half
+  // at its own subnavbar height. --split-right-w tracks the divider.
+  function setMaskProp(el: HTMLElement, prop: string, val: string): void {
+    el.style.setProperty(`-webkit-${prop}`, val);
+    el.style.setProperty(prop, val);
+  }
+
+  function removeMaskProp(el: HTMLElement, prop: string): void {
+    el.style.removeProperty(`-webkit-${prop}`);
+    el.style.removeProperty(prop);
+  }
+
+  function applyMask(
+    layers: HTMLElement[],
+    maskImage: string,
+    sized: { size: string; position: string; repeat: string } | null,
+  ): void {
+    for (const layer of layers) {
+      setMaskProp(layer, "mask-image", maskImage);
+      if (sized != null) {
+        setMaskProp(layer, "mask-size", sized.size);
+        setMaskProp(layer, "mask-position", sized.position);
+        setMaskProp(layer, "mask-repeat", sized.repeat);
+        layer.style.setProperty("-webkit-mask-composite", "source-over");
+        layer.style.setProperty("mask-composite", "add");
+      } else {
+        removeMaskProp(layer, "mask-size");
+        removeMaskProp(layer, "mask-position");
+        removeMaskProp(layer, "mask-repeat");
+        removeMaskProp(layer, "mask-composite");
+      }
+    }
+  }
+
+  function clearMask(layers: HTMLElement[]): void {
+    for (const layer of layers) {
+      for (const prop of [
+        "mask-image",
+        "mask-size",
+        "mask-position",
+        "mask-repeat",
+        "mask-composite",
+      ]) {
+        removeMaskProp(layer, prop);
+      }
+    }
+  }
+
   $effect(() => {
     const el = navbarDomEl;
     if (el == null) return;
-    const hasSubnavbar = navbarOverride?.subnavbar != null;
+
+    const hasRightSub = layoutMode.isDesktop && splitRight?.subnavbar != null;
+    const hasSubnavbar = navbarOverride?.subnavbar != null || hasRightSub;
     const isHidden =
       !layoutMode.isDesktop && navbarOverride?.subnavbarHidden?.() === true;
-    // The bgBlur layer is the first child of .k-navbar (iOS only).
-    // Its gradient mask fades blur too early over the extended area.
-    const firstChild = el.firstElementChild;
-    const bgBlur = firstChild instanceof HTMLElement ? firstChild : null;
-    if (hasSubnavbar && !isHidden && subnavbarHeight > 0 && navbarHeight > 0) {
-      const chromeH = navbarHeight + subnavbarHeight + 16;
-      el.style.setProperty("--k-navbar-chrome-h", `${String(chromeH)}px`);
-      if (bgBlur != null) {
-        const mask = "linear-gradient(to bottom, black 90%, transparent)";
-        bgBlur.style.setProperty("-webkit-mask-image", mask);
-        bgBlur.style.setProperty("mask-image", mask);
-      }
-    } else {
+    const effectiveSubnavH = hasRightSub
+      ? Math.max(subnavbarHeight, splitNavbar.rightSubnavbarHeight)
+      : subnavbarHeight;
+
+    const layers = [el.firstElementChild, el.children[1]].filter(
+      (c): c is HTMLElement => c instanceof HTMLElement,
+    );
+
+    if (
+      !hasSubnavbar ||
+      isHidden ||
+      effectiveSubnavH <= 0 ||
+      navbarHeight <= 0
+    ) {
       el.style.removeProperty("--k-navbar-chrome-h");
-      if (bgBlur != null) {
-        bgBlur.style.removeProperty("-webkit-mask-image");
-        bgBlur.style.removeProperty("mask-image");
-      }
+      clearMask(layers);
+      return;
+    }
+
+    const chromeH = navbarHeight + effectiveSubnavH + 16;
+    el.style.setProperty("--k-navbar-chrome-h", `${String(chromeH)}px`);
+
+    const rightTaller =
+      hasRightSub && splitNavbar.rightSubnavbarHeight > subnavbarHeight;
+
+    if (rightTaller) {
+      const leftH = navbarHeight + subnavbarHeight + 16;
+      const splitW = "var(--split-right-w,var(--split-detail-width,480px))";
+      applyMask(
+        layers,
+        [
+          `linear-gradient(to bottom,black ${String(Math.round(leftH * 0.9))}px,transparent ${String(leftH)}px)`,
+          `linear-gradient(to bottom,black ${String(Math.round(chromeH * 0.9))}px,transparent ${String(chromeH)}px)`,
+        ].join(","),
+        {
+          size: `calc(100% - ${splitW}) 100%,${splitW} 100%`,
+          position: "left top,right top",
+          repeat: "no-repeat",
+        },
+      );
+    } else {
+      applyMask(
+        layers,
+        "linear-gradient(to bottom, black 90%, transparent)",
+        null,
+      );
     }
   });
 
