@@ -1,7 +1,7 @@
-import { expect, type Page } from "@playwright/test";
+import { expect, type Locator, type Page } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
 import { createHmac } from "node:crypto";
-import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 /** Crypto pipeline timeout: Argon2id + OPRF + ECIES + Worker decryption.
@@ -75,6 +75,14 @@ export function generateTotpCode(base32Secret: string): string {
   const binary = hmac.readUInt32BE(offset) & 0x7fffffff;
   const otp = binary % 10 ** 6;
   return otp.toString().padStart(6, "0");
+}
+
+/**
+ * Alias for generateTotpCode. The server's replay cache is bypassed in test
+ * via TOTP_REPLAY_BYPASS=1, so no deduplication is needed on the client side.
+ */
+export function generateFreshTotpCode(secret: string): string {
+  return generateTotpCode(secret);
 }
 
 /**
@@ -156,6 +164,10 @@ export async function login(
     await completeOnboarding(page);
   } else if (result === "2fa-challenge") {
     await completeTwofaChallenge(page);
+    // 2FA may redirect to /complete if onboarding is still needed.
+    if (page.url().endsWith("/complete")) {
+      await completeOnboarding(page);
+    }
   }
   // result === "done": already on /, nothing to do
 
@@ -355,9 +367,24 @@ async function completeTwofaChallenge(page: Page): Promise<void> {
     console.log("[2fa] no verify response intercepted");
   }
 
-  // After verification, crypto pipeline runs and redirects to /
+  // After verification, crypto pipeline runs and redirects to / or /complete.
+  // Race against error state: if crypto fails, the page shows role="alert".
   console.log("[2fa] waiting for URL to reach /...");
-  await page.waitForURL(/\/$/, { timeout: CRYPTO_TIMEOUT });
+  const postVerify = await Promise.race([
+    page
+      .waitForURL(/\/(complete)?$/, { timeout: CRYPTO_TIMEOUT })
+      .then(() => "navigated" as const),
+    page
+      .locator('[role="alert"]')
+      .waitFor({ state: "visible", timeout: CRYPTO_TIMEOUT })
+      .then(async () => {
+        const text = await page.locator('[role="alert"]').textContent();
+        return `error:${text ?? "(no text)"}` as const;
+      }),
+  ]);
+  if (postVerify.startsWith("error:")) {
+    throw new E2eError(`2FA crypto pipeline failed: ${postVerify.slice(6)}`);
+  }
   console.log(`[2fa] reached /. URL: ${page.url()}`);
 }
 
@@ -372,14 +399,11 @@ export async function openTicketByTitle(
     await expect(page).toHaveURL("/tickets");
   }
 
-  await expect(page.getByText(title)).toBeVisible({
-    timeout: CRYPTO_TIMEOUT,
-  });
-
   const card = page.locator('[data-testid="ticket-card-wrap"]', {
     hasText: title,
   });
 
+  await expect(card).toBeVisible({ timeout: CRYPTO_TIMEOUT });
   await card.locator("button.card-open-link").click();
 
   // On desktop, ticket detail opens in a split-view pane via pushState
@@ -388,6 +412,56 @@ export async function openTicketByTitle(
   await expect(page.locator('[role="log"]')).toBeVisible({
     timeout: CRYPTO_TIMEOUT,
   });
+}
+
+/**
+ * Locate the compose-actions (+) button in the active ticket detail pane.
+ *
+ * On desktop split-view, two compose buttons exist in the accessibility
+ * tree: one in the detail pane and one in the ReplySheet popup (inert,
+ * below the viewport in the left pane). The detail pane's compose is
+ * wrapped in a .detail-compose div (display: contents) which survives
+ * regardless of whether the split-pane container is mounted.
+ * On mobile, only one compose button exists, so page-level scope works.
+ */
+export async function getDetailComposeButton(page: Page): Promise<Locator> {
+  const detailCompose = page.locator(".detail-compose");
+  const scope = (await detailCompose.count()) > 0 ? detailCompose : page;
+  return scope.getByRole("button", { name: /compose actions/i });
+}
+
+/**
+ * Click the compose-actions (+) button and wait for the compose dialog.
+ *
+ * Dismisses residual backdrops from prior tests (serial suite state
+ * leakage), then clicks the scoped compose button and waits for the
+ * compose actions dialog.
+ *
+ * Returns the compose dialog locator for chaining (e.g., selecting a mode).
+ */
+export async function openComposeActions(page: Page): Promise<Locator> {
+  // Dismiss any residual backdrops from prior tests.
+  for (let i = 0; i < 3; i++) {
+    const backdrop = page
+      .locator(".shell-backdrop:not(.pointer-events-none)")
+      .first();
+    if (!(await backdrop.isVisible({ timeout: 500 }).catch(() => false))) break;
+    await page.keyboard.press("Escape");
+    await page.waitForTimeout(300);
+  }
+
+  const btn = await getDetailComposeButton(page);
+
+  // dispatchEvent bypasses Playwright's viewport boundary check. The
+  // compose button sits at the viewport's bottom edge by design, and
+  // Playwright's strict check can reject elements at the exact boundary.
+  // Safe here because the handler uses e.currentTarget (the element)
+  // as the popover anchor, not mouse coordinates.
+  await btn.dispatchEvent("click");
+
+  const dialog = page.getByRole("dialog", { name: /compose actions/i });
+  await expect(dialog).toBeVisible({ timeout: 3_000 });
+  return dialog;
 }
 
 // ── Production UI helpers for data creation ──────────────────────────
@@ -442,8 +516,8 @@ export async function createTicket(
         clientSearchIndex++ % CLIENT_SEARCH_TERMS.length,
       ) ?? "azure-";
     const clientInput = sheet.getByPlaceholder(/search by alias/i);
-    await clientInput.fill("");
     await clientInput.click();
+    await clientInput.fill("");
     await clientInput.pressSequentially(searchTerm, { delay: 30 });
 
     // Short wait for search results. If none appear, try the next term.
@@ -582,8 +656,59 @@ const CLIENT_SEARCH_TERMS = [
 let clientSearchIndex = process.pid % CLIENT_SEARCH_TERMS.length;
 
 /**
+ * Close any open split-view detail pane so the list gets full width.
+ * Without this, the narrow list pane may not render all cards in the
+ * virtual scroll window.
+ */
+async function closeSplitDetail(page: Page): Promise<void> {
+  const closeBtn = page.getByRole("button", { name: /close detail/i });
+  if (await closeBtn.isVisible({ timeout: 1_000 }).catch(() => false)) {
+    await closeBtn.click();
+    await closeBtn
+      .waitFor({ state: "hidden", timeout: 3_000 })
+      .catch(() => undefined);
+  }
+}
+
+/**
+ * Scroll the ticket list until a ticket with the given title is visible.
+ * The VirtualList only renders items in the scroll viewport, so cards
+ * below the fold aren't in the DOM until scrolled into view.
+ */
+async function scrollToTicket(page: Page, title: string): Promise<void> {
+  const target = page.getByText(title).first();
+  const scrollContainer = page.locator('[role="main"]');
+  for (let attempt = 0; attempt < 10; attempt++) {
+    if (await target.isVisible({ timeout: 500 }).catch(() => false)) return;
+    await scrollContainer.evaluate((el) => {
+      el.scrollBy(0, 300);
+    });
+    await page.waitForTimeout(200);
+  }
+  await expect(target).toBeVisible({ timeout: CRYPTO_TIMEOUT });
+}
+
+/**
+ * Switch ticket list to "Cards" view mode. Action buttons (Take, Hold, Reply,
+ * Call) only render in cards mode; compact list/table omit them.
+ */
+async function ensureCardsView(page: Page): Promise<void> {
+  await closeSplitDetail(page);
+  const cardsBtn = page.getByRole("button", { name: "Cards" });
+  const pressed = await cardsBtn.getAttribute("aria-pressed");
+  if (pressed !== "true") {
+    await cardsBtn.click();
+    await page
+      .locator('[data-testid="card-actions"]')
+      .first()
+      .waitFor({ state: "visible", timeout: 10_000 });
+  }
+}
+
+/**
  * Assign a ticket to self via the "Take" card action button on the ticket list.
  * Unassigned tickets show a one-tap "Take" button (no sheet, no crypto).
+ * Requires "cards" view mode since action buttons only render there.
  */
 export async function assignTicketToSelf(
   page: Page,
@@ -594,9 +719,8 @@ export async function assignTicketToSelf(
     await expect(page).toHaveURL("/tickets");
   }
 
-  await expect(page.getByText(title).first()).toBeVisible({
-    timeout: CRYPTO_TIMEOUT,
-  });
+  await ensureCardsView(page);
+  await scrollToTicket(page, title);
 
   const card = page
     .locator('[data-testid="ticket-card-wrap"]', {
@@ -605,14 +729,16 @@ export async function assignTicketToSelf(
     .first();
   await card.getByRole("button", { name: /take/i }).click();
 
-  // Wait for the assignment to complete (assignee text changes from "Unassigned").
-  await expect(card.locator(".assignee")).not.toHaveText(/unassigned/i, {
+  // Wait for the assignment to complete. Self-assignment renders "You" in
+  // a <b class="meta-you"> inside the card's meta row.
+  await expect(card.locator(".meta-you")).toBeVisible({
     timeout: CRYPTO_TIMEOUT,
   });
 }
 
 /**
  * Put a ticket on hold via the card action button on the ticket list.
+ * Requires "cards" view mode since action buttons only render there.
  */
 export async function putTicketOnHold(
   page: Page,
@@ -623,9 +749,8 @@ export async function putTicketOnHold(
     await expect(page).toHaveURL("/tickets");
   }
 
-  await expect(page.getByText(title).first()).toBeVisible({
-    timeout: CRYPTO_TIMEOUT,
-  });
+  await ensureCardsView(page);
+  await scrollToTicket(page, title);
 
   const card = page
     .locator('[data-testid="ticket-card-wrap"]', {

@@ -78,14 +78,14 @@ test.describe.serial("Knowledge Base (Library Tab)", () => {
 
   test("view toggle switches between list and grid layout", async () => {
     // Default is list mode. Switch to grid.
-    const gridBtn = page.getByRole("button", { name: "Grid view" });
+    const gridBtn = page.getByRole("button", { name: "Grid" });
     await gridBtn.click();
     await expect(gridBtn).toHaveAttribute("aria-pressed", "true");
 
-    // Switch back to list.
-    const listBtn = page.getByRole("button", { name: "List view" });
-    await listBtn.click();
-    await expect(listBtn).toHaveAttribute("aria-pressed", "true");
+    // Switch back to compact rows.
+    const rowsBtn = page.getByRole("button", { name: "Compact rows" });
+    await rowsBtn.click();
+    await expect(rowsBtn).toHaveAttribute("aria-pressed", "true");
   });
 
   // ── 4. Sort popover ───────────────────────────────────────────

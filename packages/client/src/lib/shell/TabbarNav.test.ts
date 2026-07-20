@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { render, cleanup } from "@testing-library/svelte";
+import { render, cleanup, waitFor } from "@testing-library/svelte";
 import TabbarNav from "./TabbarNav.svelte";
 
 afterEach(() => {
@@ -15,7 +15,7 @@ function renderNav(
 ): { tablist: HTMLElement } {
   render(TabbarNav, {
     props: {
-      activeTab: overrides.activeTab ?? "home",
+      activeTab: "activeTab" in overrides ? overrides.activeTab! : "home",
       activeArea: overrides.activeArea ?? null,
       ontabchange: vi.fn(),
       onareatap: vi.fn(),
@@ -45,33 +45,32 @@ describe("TabbarNav", () => {
     expect(selected[0]?.getAttribute("aria-label")).toContain("Tickets");
   });
 
-  it("deselects all tabs when an area is active", () => {
-    const { tablist } = renderNav({ activeTab: null, activeArea: "admin" });
-    const tabs = tablist.querySelectorAll('[role="tab"]');
-    const mainTabs = Array.from(tabs).slice(0, 3);
-    const mainSelected = mainTabs.filter(
-      (t) => t.getAttribute("aria-selected") === "true",
-    );
-    expect(mainSelected).toHaveLength(0);
+  it("applies no-active-tab class when an area is active", async () => {
+    renderNav({ activeTab: null, activeArea: "admin" });
+    await waitFor(() => {
+      const nav = document.querySelector(".tabbar-nav");
+      expect(nav?.classList.contains("no-active-tab")).toBe(true);
+    });
   });
 
-  it("renders 4 tabs when an area is active (3 + area pill)", () => {
-    const { tablist } = renderNav({ activeTab: null, activeArea: "admin" });
-    const tabs = tablist.querySelectorAll('[role="tab"]');
-    expect(tabs).toHaveLength(4);
+  it("shows area button when an area is active", () => {
+    renderNav({ activeTab: null, activeArea: "admin" });
+    const areaBtn = document.querySelector(".area-btn");
+    expect(areaBtn).not.toBeNull();
+    expect(areaBtn?.classList.contains("area-btn-visible")).toBe(true);
+    expect(areaBtn?.getAttribute("aria-hidden")).toBe("false");
   });
 
-  it("does not render the area pill when on a tab page", () => {
-    const { tablist } = renderNav({ activeTab: "home", activeArea: null });
-    const tabs = tablist.querySelectorAll('[role="tab"]');
-    expect(tabs).toHaveLength(3);
+  it("hides area button when on a tab page", () => {
+    renderNav({ activeTab: "home", activeArea: null });
+    const areaBtn = document.querySelector(".area-btn");
+    expect(areaBtn?.getAttribute("aria-hidden")).toBe("true");
   });
 
-  it("area pill has aria-selected=true", () => {
-    const { tablist } = renderNav({ activeTab: null, activeArea: "settings" });
-    const tabs = tablist.querySelectorAll('[role="tab"]');
-    const areaPill = tabs[tabs.length - 1];
-    expect(areaPill?.getAttribute("aria-selected")).toBe("true");
+  it("area button has accessible label with area name", () => {
+    renderNav({ activeTab: null, activeArea: "settings" });
+    const areaBtn = document.querySelector(".area-btn");
+    expect(areaBtn?.getAttribute("aria-label")).toBeTruthy();
   });
 
   it("calls ontabchange when a tab is clicked", () => {
@@ -90,7 +89,7 @@ describe("TabbarNav", () => {
     expect(ontabchange).toHaveBeenCalledWith("tickets");
   });
 
-  it("calls onareatap when the area pill is clicked", () => {
+  it("calls onareatap when the area button is clicked", () => {
     const onareatap = vi.fn();
     render(TabbarNav, {
       props: {
@@ -100,9 +99,8 @@ describe("TabbarNav", () => {
         onareatap,
       },
     });
-    const tabs = document.querySelectorAll('[role="tab"]');
-    const areaPill = tabs[tabs.length - 1] as HTMLElement;
-    areaPill.click();
+    const areaBtn = document.querySelector(".area-btn") as HTMLElement;
+    areaBtn.click();
     expect(onareatap).toHaveBeenCalledWith("admin");
   });
 });

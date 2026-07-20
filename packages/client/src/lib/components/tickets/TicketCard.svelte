@@ -608,6 +608,9 @@
     font-weight: 700;
     color: var(--brand-text);
     cursor: pointer;
+    min-height: 24px;
+    display: inline-flex;
+    align-items: center;
   }
 
   /* Invisible 44px touch hit area. Horizontal reach is capped at 5px per

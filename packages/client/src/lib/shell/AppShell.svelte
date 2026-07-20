@@ -1051,6 +1051,10 @@
     }
 
     if (e.key === "Escape") {
+      if (searchOpen) {
+        closeSearch();
+        return;
+      }
       const state = page.state;
       if (
         typeof state.ticketId === "string" ||

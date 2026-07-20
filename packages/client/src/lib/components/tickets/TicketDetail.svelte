@@ -999,7 +999,7 @@
   $effect(() => {
     if (!scroll.scrollContainerEl) return;
     const vv = window.visualViewport;
-    if (vv === null) return;
+    if (!vv) return;
     const onViewportResize = (): void => {
       const el = scroll.scrollContainerEl;
       if (!el || !scroll.isNearBottom) return;

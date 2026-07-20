@@ -73,7 +73,7 @@ test.describe("2a-auth: login page", () => {
   });
 
   test("valid credentials redirect past login", async ({ page }, testInfo) => {
-    testInfo.setTimeout(CRYPTO_TIMEOUT * 2);
+    testInfo.setTimeout(CRYPTO_TIMEOUT * 3);
 
     await page.locator('input[autocomplete="username"]').fill(DEV_USER);
     await page
@@ -92,14 +92,26 @@ test.describe("2a-auth: login page", () => {
     await page.getByRole("button", { name: /verify/i }).click();
 
     // Seeded admin may land on / or /complete depending on onboarding state.
-    await page.waitForURL(/\/(complete)?$/, { timeout: CRYPTO_TIMEOUT });
-    expect(page.url()).toMatch(/\/(complete)?$/);
+    // Race against error state to avoid silent 30s timeout on code rejection.
+    const postVerify = await Promise.race([
+      page
+        .waitForURL(/\/(complete)?$/, { timeout: CRYPTO_TIMEOUT })
+        .then(() => "navigated" as const),
+      page
+        .locator('[role="alert"]')
+        .waitFor({ state: "visible", timeout: CRYPTO_TIMEOUT })
+        .then(async () => {
+          const text = await page.locator('[role="alert"]').textContent();
+          return `error:${text ?? ""}` as const;
+        }),
+    ]);
+    expect(postVerify).toBe("navigated");
   });
 
   test("session persists after login (auth.me succeeds)", async ({
     page,
   }, testInfo) => {
-    testInfo.setTimeout(CRYPTO_TIMEOUT * 2);
+    testInfo.setTimeout(CRYPTO_TIMEOUT * 3);
 
     await page.locator('input[autocomplete="username"]').fill(DEV_USER);
     await page

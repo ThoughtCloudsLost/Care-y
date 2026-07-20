@@ -32,6 +32,7 @@
       aria-label={color.id}
       {disabled}
       onclick={() => {
+        if (disabled) return;
         value = color.id;
       }}
     >

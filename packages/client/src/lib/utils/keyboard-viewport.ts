@@ -72,6 +72,6 @@ function bindViewport(vv: VisualViewport): () => void {
 
 export function initKeyboardViewport(): () => void {
   const vv = window.visualViewport;
-  if (vv === null) return noop;
+  if (!vv) return noop;
   return bindViewport(vv);
 }

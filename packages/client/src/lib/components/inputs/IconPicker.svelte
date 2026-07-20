@@ -35,6 +35,7 @@
       aria-label={icon.id}
       {disabled}
       onclick={() => {
+        if (disabled) return;
         value = icon.id;
       }}
     >

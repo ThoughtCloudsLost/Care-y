@@ -38,14 +38,27 @@ test.describe.serial("Ticket Reply (Encrypted Message Send)", () => {
       timeout: CRYPTO_TIMEOUT,
     });
 
-    // The send button has aria-label matching i18n ticket_send ("Send message").
-    const sendBtn = page.getByRole("button", { name: /send message/i });
-    await expect(sendBtn).toBeVisible({ timeout: CRYPTO_TIMEOUT });
+    // Compose bar starts collapsed; only the + (compose actions) button is visible.
+    // Scope to main content to avoid matching the split-view secondary messagebar.
+    const composeBtn = page
+      .getByRole("main")
+      .getByRole("button", { name: /compose actions/i });
+    await expect(composeBtn).toBeVisible({ timeout: CRYPTO_TIMEOUT });
   });
 
   // ── 3. Type and send a reply ──────────────────────────────────
 
   test("can type a message in the compose bar", async () => {
+    // Activate reply mode from the collapsed compose bar.
+    const composeBtn = page
+      .getByRole("main")
+      .getByRole("button", { name: /compose actions/i });
+    await composeBtn.click();
+    await page
+      .getByRole("list")
+      .getByText(/reply to/i)
+      .click();
+
     // The messagebar textarea has a unique placeholder from i18n.
     // Use click + pressSequentially so Konsta Messagebar's value binding
     // updates (fill() sets value programmatically which may bypass it).

@@ -233,7 +233,7 @@ describe("ensureHydrated", () => {
     expect(deps.prefetchTickets).not.toHaveBeenCalled();
   });
 
-  it("retries hydration after a fetch failure", async () => {
+  it("retries hydration after a fetch failure when clear resets state", async () => {
     vi.useFakeTimers();
     const warnSpy = vi
       .spyOn(console, "warn")
@@ -245,9 +245,16 @@ describe("ensureHydrated", () => {
 
     store.ensureHydrated();
     await vi.advanceTimersByTimeAsync(0);
+    // After failure, hydration is "done" to prevent tight retry loops.
+    // A second ensureHydrated without clear is a no-op.
     store.ensureHydrated();
     await vi.advanceTimersByTimeAsync(0);
+    expect(fetchEnvelope).toHaveBeenCalledTimes(1);
 
+    // clear() resets hydration to "idle", allowing retry.
+    store.clear();
+    store.ensureHydrated();
+    await vi.advanceTimersByTimeAsync(0);
     expect(fetchEnvelope).toHaveBeenCalledTimes(2);
     warnSpy.mockRestore();
   });

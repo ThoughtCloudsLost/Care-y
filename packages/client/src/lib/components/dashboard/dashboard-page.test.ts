@@ -403,12 +403,12 @@ describe("Dashboard page", () => {
     );
     expect(ids).toEqual([
       "section-shift",
-      "section-needs-attention",
-      "section-my-tickets",
-      "section-unassigned",
       "section-queues",
       "section-activity",
       "section-kb",
+      "section-needs-attention",
+      "section-my-tickets",
+      "section-unassigned",
     ]);
   });
 

@@ -569,8 +569,12 @@ describe("kb resolveById", () => {
 
     // First call kicks loadAll; nothing is cached yet.
     expect(provider.resolveById?.("a1")).toBeUndefined();
+
+    // loadAll awaits ensureCategoriesLoaded before fetchPage, so flush microtasks.
+    await new Promise((r) => setTimeout(r, 0));
     expect(deps.fetchPage).toHaveBeenCalledTimes(1);
 
+    // After loading, resolveById returns the cached article.
     await new Promise((r) => setTimeout(r, 0));
 
     const result = provider.resolveById?.("a1");

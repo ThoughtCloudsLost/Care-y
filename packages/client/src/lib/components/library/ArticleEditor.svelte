@@ -298,7 +298,7 @@
         // wait for the visualViewport to stop resizing (keyboard fully
         // open), then check once.
         const vv = window.visualViewport;
-        if (vv !== null) {
+        if (vv) {
           const viewport = vv;
           let settleTimer = 0;
           function onVVResize(): void {

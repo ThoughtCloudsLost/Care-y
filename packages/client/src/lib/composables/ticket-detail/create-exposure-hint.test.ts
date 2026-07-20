@@ -1,8 +1,15 @@
 // @vitest-environment jsdom
-import { describe, it, expect, vi } from "vitest";
-import { createExposureHint } from "./create-exposure-hint.svelte.js";
+import { beforeEach, describe, it, expect, vi } from "vitest";
+import {
+  createExposureHint,
+  _resetSessionShown,
+} from "./create-exposure-hint.svelte.js";
 
 describe("createExposureHint", () => {
+  beforeEach(() => {
+    _resetSessionShown();
+  });
+
   describe("show", () => {
     it("opens the hint on first invocation for a type", () => {
       const hint = createExposureHint();

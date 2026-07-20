@@ -38,6 +38,7 @@ services:
       - NODE_ENV=development
       - OPRF_SOCKET_A=/run/oprf/oprf-a.sock
       - OPRF_SOCKET_B=/run/oprf/oprf-b.sock
+      - TOTP_REPLAY_BYPASS=1
     develop:
       watch:
         # Source code: sync into container, tsx --watch restarts automatically

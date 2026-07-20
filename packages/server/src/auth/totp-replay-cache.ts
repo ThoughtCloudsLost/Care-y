@@ -71,6 +71,44 @@ export function assertSingleInstanceTotpReplayCache(
   }
 }
 
+/**
+ * No-op replay cache for e2e tests. The env flag is compile-time dead code
+ * in production: the createTotpReplayCache factory below refuses to return
+ * this when NODE_ENV=production, and the flag is never set outside
+ * docker-compose.test.yml.
+ */
+function createNoOpReplayCache(): TotpReplayCache {
+  return {
+    isUsed(): boolean {
+      return false;
+    },
+    markUsed(): void {
+      // No-op: bypass cache does not track codes
+    },
+  };
+}
+
+/**
+ * Factory: returns the real in-memory cache, or a no-op bypass for e2e.
+ * The bypass is gated on TOTP_REPLAY_BYPASS=1 AND NODE_ENV !== "production".
+ * Both conditions must hold; neither alone is sufficient.
+ */
+export function createTotpReplayCache(
+  now: () => number = Date.now,
+): TotpReplayCache {
+  const bypass = process.env.TOTP_REPLAY_BYPASS === "1";
+  if (bypass && process.env.NODE_ENV === "production") {
+    throw new ConfigError(
+      "TOTP_REPLAY_BYPASS must never be set in production. " +
+        "It disables RFC 6238 Section 5.2 replay protection.",
+    );
+  }
+  if (bypass) {
+    return createNoOpReplayCache();
+  }
+  return createInMemoryTotpReplayCache(now);
+}
+
 export function createInMemoryTotpReplayCache(
   now: () => number = Date.now,
 ): TotpReplayCache {

@@ -10,15 +10,23 @@ export interface ExposureHintState {
   dismiss(): void;
 }
 
+// Module-level: survives component unmount/remount within the SPA session.
+// Resets on full page reload (new session), which is the intended behavior.
+// eslint-disable-next-line svelte/prefer-svelte-reactivity -- not reactive, used as mutable dedup tracker
+const sessionShown = new Set<string>();
+
+/** @internal Test-only: clear the session-level shown set between test cases. */
+export function _resetSessionShown(): void {
+  sessionShown.clear();
+}
+
 export function createExposureHint(): ExposureHintState {
-  // eslint-disable-next-line svelte/prefer-svelte-reactivity -- not reactive, used as mutable dedup tracker
-  const shown = new Set<string>();
   let hintType = $state<ExposureHintType | null>(null);
   let hintOpen = $state(false);
   let pendingAction: (() => void) | null = null;
 
   function show(type: ExposureHintType, callback: () => void): void {
-    if (!shouldShowHint(type, shown)) {
+    if (!shouldShowHint(type, sessionShown)) {
       callback();
       return;
     }
