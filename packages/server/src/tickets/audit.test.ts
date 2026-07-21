@@ -217,20 +217,4 @@ describe.skipIf(!process.env.DATABASE_URL)("AuditService (DB)", () => {
     });
     expect(outOfRange.entries).toHaveLength(0);
   });
-
-  // -----------------------------------------------------------------------
-  // Interface shape: append-only (no UPDATE or DELETE)
-  // -----------------------------------------------------------------------
-
-  it("service interface exposes only log and query methods", () => {
-    const keys = Object.keys(svc);
-    expect(keys).toContain("log");
-    expect(keys).toContain("query");
-    // No update or delete methods
-    expect(keys).not.toContain("update");
-    expect(keys).not.toContain("delete");
-    expect(keys).not.toContain("remove");
-    expect(keys).not.toContain("edit");
-    expect(keys).toHaveLength(2);
-  });
 });

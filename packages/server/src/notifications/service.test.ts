@@ -1,12 +1,24 @@
-import { describe, expect, it, vi } from "vitest";
-import { createNotificationService } from "./service.js";
+import { describe, expect, it, vi, beforeAll, afterAll } from "vitest";
+import {
+  createNotificationService,
+  createNotificationJobHandler,
+} from "./service.js";
 import type { SseService } from "./sse.js";
+import { createNotificationEmailSender } from "./email.js";
 import type { NotificationEmailSender } from "./email.js";
+import type { EmailSender } from "../email/email-sender.js";
 import type { PushNotificationSender } from "./push.js";
 import type { JobQueue } from "../jobs/queue.js";
 import type { NotificationRecipientList } from "../tickets/notification-recipients.js";
 import type { Kysely } from "kysely";
 import type { TenantDatabase } from "../db/types.js";
+import { notificationEventTypeSchema, sseEventSchema } from "@care-y/shared";
+import {
+  createTestDb,
+  createTestUser,
+  testFieldEncryptor,
+  type TestDb,
+} from "../test-utils.js";
 
 function mockSse(): SseService & { calls: unknown[] } {
   const calls: unknown[] = [];
@@ -175,4 +187,411 @@ describe("NotificationService.dispatch", () => {
     expect(pushSender.sendToUsers).not.toHaveBeenCalled();
     expect(jobQueue.enqueuedJobs).toHaveLength(0);
   });
+
+  it("broadcasts an SSE event that parses against the shared sseEventSchema", async () => {
+    const sse = mockSse();
+    const svc = createNotificationService({
+      sse,
+      emailSender: mockEmailSender(),
+      pushSender: mockPushSender(),
+      jobQueue: mockJobQueue(),
+    });
+
+    await svc.dispatch(
+      {} as Kysely<TenantDatabase>,
+      "org-1",
+      "myorg",
+      "followup_added",
+      crypto.randomUUID(),
+      crypto.randomUUID(),
+      TEST_RECIPIENTS,
+    );
+
+    const broadcastArgs = (sse.broadcast as ReturnType<typeof vi.fn>).mock
+      .calls[0] as unknown[];
+    // SSE payloads are wire format: connected clients validate the stream
+    // against sseEventSchema, so the dispatched event must parse (including
+    // the ISO timestamp the service stamps on it).
+    const parsed = sseEventSchema.safeParse(broadcastArgs[2]);
+    expect(parsed.success).toBe(true);
+  });
+
+  it("still broadcasts and enqueues email when push delivery rejects", async () => {
+    const sse = mockSse();
+    const jobQueue = mockJobQueue();
+    const pushSender: PushNotificationSender = {
+      sendToUsers: vi.fn(async () => {
+        throw new Error("push endpoint unreachable");
+      }),
+      removeSubscription: vi.fn(async () => {
+        // mock stub
+      }),
+    };
+    const svc = createNotificationService({
+      sse,
+      emailSender: mockEmailSender(),
+      pushSender,
+      jobQueue,
+    });
+
+    await svc.dispatch(
+      {} as Kysely<TenantDatabase>,
+      "org-1",
+      "myorg",
+      "ticket_created",
+      "ticket-uuid",
+      "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+      TEST_RECIPIENTS,
+    );
+
+    // Push is best-effort: its failure must not block the durable channels.
+    expect(sse.broadcast).toHaveBeenCalledTimes(1);
+    expect(jobQueue.enqueuedJobs).toHaveLength(1);
+
+    // Flush the microtask queue so the swallowed push rejection settles inside
+    // this test. If dispatch ever stops handling that rejection, Vitest fails
+    // the run with an unhandled rejection instead of silently passing.
+    await new Promise<void>((resolve) => {
+      setImmediate(resolve);
+    });
+  });
+
+  it("rejects when the email job cannot be enqueued (alert loss must be loud)", async () => {
+    const failingQueue: JobQueue = {
+      enqueue: vi.fn(async () => {
+        throw new Error("job queue unavailable");
+      }),
+      process: vi.fn(),
+      start: vi.fn(),
+      stop: vi.fn(async () => {
+        // mock stub
+      }),
+    };
+    const svc = createNotificationService({
+      sse: mockSse(),
+      emailSender: mockEmailSender(),
+      pushSender: mockPushSender(),
+      jobQueue: failingQueue,
+    });
+
+    // The ticket routes catch and log this rejection; dispatch itself must
+    // propagate the failure rather than swallow it, or alert loss would leave
+    // no trace anywhere.
+    await expect(
+      svc.dispatch(
+        {} as Kysely<TenantDatabase>,
+        "org-1",
+        "myorg",
+        "ticket_created",
+        "ticket-uuid",
+        "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+        TEST_RECIPIENTS,
+      ),
+    ).rejects.toThrow("job queue unavailable");
+  });
 });
+
+// ---------------------------------------------------------------------------
+// Job handler (DB integration)
+// ---------------------------------------------------------------------------
+
+const TEST_ORG_SLUG = "test-org";
+// The login link volunteers receive in every notification email. Hardcoded
+// (not derived via buildLoginUrl) so the assertion is not a tautology.
+const LOGIN_URL = "https://test-org.care-y.app/login";
+const ADDR_A = "volunteer-a@example.test";
+const ADDR_B = "volunteer-b@example.test";
+
+interface CapturedEmail {
+  readonly to: string;
+  readonly subject: string;
+  readonly text: string;
+  readonly from: string | undefined;
+}
+
+interface CapturingTransport extends EmailSender {
+  readonly sent: readonly CapturedEmail[];
+}
+
+/**
+ * Flat fake at the external SMTP boundary (EmailSender). Everything above it
+ * (NotificationEmailSender branding wrapper, encryptor, DB) is real.
+ * Captures the full message including the from header, which the shared
+ * createMockEmailSender drops.
+ */
+function createCapturingTransport(options?: {
+  failFor?: readonly string[];
+}): CapturingTransport {
+  const sent: CapturedEmail[] = [];
+  const failFor = new Set(options?.failFor ?? []);
+  return {
+    get sent(): readonly CapturedEmail[] {
+      return sent;
+    },
+    async send(message): Promise<void> {
+      if (failFor.has(message.to)) {
+        // The error message deliberately contains the address so tests can
+        // prove the handler does not echo transport errors (PII) into logs.
+        throw new Error(`SMTP rejected ${message.to}`);
+      }
+      sent.push({
+        to: message.to,
+        subject: message.subject,
+        text: message.text,
+        from: message.from,
+      });
+    },
+  };
+}
+
+describe.skipIf(!process.env.DATABASE_URL)(
+  "createNotificationJobHandler (DB)",
+  () => {
+    let testDb: TestDb;
+    let userAId: string;
+    let userBId: string;
+    let userNoAddrId: string;
+
+    beforeAll(async () => {
+      testDb = await createTestDb();
+
+      // org_config starts empty in a fresh schema. The handler reads email
+      // branding from it; the migration 040 column defaults apply on insert.
+      await testDb.db
+        .insertInto("org_config")
+        .values({ pii_retention_days: null })
+        .execute();
+
+      const userA = await createTestUser(testDb.db, {
+        overrides: {
+          encrypted_notification_addr: testFieldEncryptor.encrypt(ADDR_A),
+        },
+      });
+      const userB = await createTestUser(testDb.db, {
+        overrides: {
+          encrypted_notification_addr: testFieldEncryptor.encrypt(ADDR_B),
+        },
+      });
+      // No notification address (encrypted_notification_addr stays null).
+      const userNoAddr = await createTestUser(testDb.db);
+
+      userAId = userA.id;
+      userBId = userB.id;
+      userNoAddrId = userNoAddr.id;
+    }, 30_000);
+
+    afterAll(async () => {
+      await testDb.cleanup();
+    });
+
+    function buildJobHandler(
+      transport: EmailSender,
+    ): (payload: Record<string, unknown>) => Promise<void> {
+      return createNotificationJobHandler({
+        emailSender: createNotificationEmailSender(transport),
+        encryptor: testFieldEncryptor,
+        getTenantDb: () => testDb.db,
+      });
+    }
+
+    function jobPayload(overrides: {
+      recipientUserIds: readonly string[];
+      eventType?: string;
+    }): Record<string, unknown> {
+      return {
+        orgId: crypto.randomUUID(),
+        orgSlug: TEST_ORG_SLUG,
+        recipientUserIds: [...overrides.recipientUserIds],
+        eventType: overrides.eventType ?? "ticket_created",
+      };
+    }
+
+    function onlySent(transport: CapturingTransport): CapturedEmail {
+      expect(transport.sent).toHaveLength(1);
+      return transport.sent[0] as CapturedEmail;
+    }
+
+    it("sends one email per recipient with a notification address", async () => {
+      const transport = createCapturingTransport();
+      await buildJobHandler(transport)(
+        jobPayload({ recipientUserIds: [userAId, userBId] }),
+      );
+
+      // Recipient addresses are the SMTP wire contract: one message per
+      // opted-in recipient, addressed to their decrypted address.
+      const recipients = transport.sent.map((m) => m.to).sort();
+      expect(recipients).toEqual([ADDR_A, ADDR_B]);
+      for (const mail of transport.sent) {
+        // Subject prefix and login link are the wire content volunteers see.
+        // Exact copy is deliberately not asserted.
+        expect(mail.subject).toMatch(/^CARE-Y: .+/);
+        expect(mail.text).toContain(LOGIN_URL);
+      }
+    });
+
+    it("brands the From header from org_config defaults", async () => {
+      const transport = createCapturingTransport();
+      await buildJobHandler(transport)(
+        jobPayload({ recipientUserIds: [userAId] }),
+      );
+
+      const mail = onlySent(transport);
+      // From header is wire format. Values come from the org_config column
+      // defaults (migration 040) on the seeded row.
+      expect(mail.from).toContain("CARE-Y Hotline");
+      expect(mail.from).toContain("notify@care-y.app");
+    });
+
+    it("brands the From header with org-configured name and address", async () => {
+      await testDb.db
+        .updateTable("org_config")
+        // care-y-ignore-next-line no-plaintext-db-write -- email_from_name/email_from_address are org branding config, stored plaintext by design (migration 040), not client/volunteer PII
+        .set({
+          email_from_name: "Harbor Line",
+          email_from_address: "desk@harbor.example",
+        })
+        .execute();
+      try {
+        const transport = createCapturingTransport();
+        await buildJobHandler(transport)(
+          jobPayload({ recipientUserIds: [userAId] }),
+        );
+
+        const mail = onlySent(transport);
+        expect(mail.from).toContain("Harbor Line");
+        expect(mail.from).toContain("desk@harbor.example");
+      } finally {
+        // Restore the migration defaults for the other tests in this schema.
+        await testDb.db
+          .updateTable("org_config")
+          // care-y-ignore-next-line no-plaintext-db-write -- same org branding columns as above, plaintext by design
+          .set({
+            email_from_name: "CARE-Y Hotline",
+            email_from_address: "notify@care-y.app",
+          })
+          .execute();
+      }
+    });
+
+    it("skips recipients without a notification address and emails the rest", async () => {
+      const transport = createCapturingTransport();
+      await buildJobHandler(transport)(
+        jobPayload({ recipientUserIds: [userNoAddrId, userAId] }),
+      );
+
+      expect(transport.sent.map((m) => m.to)).toEqual([ADDR_A]);
+    });
+
+    it("resolves without sending when no recipients exist in the DB", async () => {
+      const transport = createCapturingTransport();
+      await buildJobHandler(transport)(
+        jobPayload({
+          recipientUserIds: [crypto.randomUUID(), crypto.randomUUID()],
+        }),
+      );
+
+      expect(transport.sent).toHaveLength(0);
+    });
+
+    it("sends a single email when the payload lists the same recipient twice", async () => {
+      const transport = createCapturingTransport();
+      await buildJobHandler(transport)(
+        jobPayload({ recipientUserIds: [userAId, userAId] }),
+      );
+
+      expect(transport.sent.map((m) => m.to)).toEqual([ADDR_A]);
+    });
+
+    it("delivers to remaining recipients and resolves when one send fails", async () => {
+      const errorSpy = vi
+        .spyOn(console, "error")
+        .mockImplementation(() => undefined);
+      try {
+        const transport = createCapturingTransport({ failFor: [ADDR_A] });
+        await buildJobHandler(transport)(
+          jobPayload({ recipientUserIds: [userAId, userBId] }),
+        );
+
+        expect(transport.sent.map((m) => m.to)).toEqual([ADDR_B]);
+
+        // Console assertion justification: the per-recipient failure log is a
+        // documented contract in service.ts ("failures are logged but do not
+        // fail the job"), and "never log PII" is a project-wide NEVER. The
+        // transport error message contains the address on purpose, so echoing
+        // the caught error into the log would fail this test.
+        expect(errorSpy).toHaveBeenCalled();
+        const logged = errorSpy.mock.calls
+          .map((call) => call.map(String).join(" "))
+          .join("\n");
+        expect(logged).not.toContain(ADDR_A);
+      } finally {
+        errorSpy.mockRestore();
+      }
+    });
+
+    it("contains a corrupt-address decrypt failure and emails the rest", async () => {
+      const corrupt = await createTestUser(testDb.db, {
+        overrides: {
+          // Too short to contain nonce + MAC: real decryption throws.
+          encrypted_notification_addr: Buffer.from("not-real-ciphertext"),
+        },
+      });
+      const errorSpy = vi
+        .spyOn(console, "error")
+        .mockImplementation(() => undefined);
+      try {
+        const transport = createCapturingTransport();
+        await buildJobHandler(transport)(
+          jobPayload({ recipientUserIds: [corrupt.id, userBId] }),
+        );
+
+        expect(transport.sent.map((m) => m.to)).toEqual([ADDR_B]);
+        // A recipient silently vanishing without a log line would be a
+        // dropped-alert bug; the containment must leave a trace.
+        expect(errorSpy).toHaveBeenCalled();
+      } finally {
+        errorSpy.mockRestore();
+      }
+    });
+
+    it("rejects a malformed payload without attempting any email", async () => {
+      const transport = createCapturingTransport();
+      const handler = buildJobHandler(transport);
+
+      // Bad payloads must fail the job loudly (the queue retries, then
+      // dead-letters); a silent success here would drop alerts with no trace.
+      await expect(
+        handler(
+          jobPayload({
+            recipientUserIds: [userAId],
+            eventType: "bogus_event",
+          }),
+        ),
+      ).rejects.toThrow();
+      await expect(handler({})).rejects.toThrow();
+
+      expect(transport.sent).toHaveLength(0);
+    });
+
+    it("produces a distinct subject and a login-link body for every event type", async () => {
+      const subjects: string[] = [];
+      for (const eventType of notificationEventTypeSchema.options) {
+        const transport = createCapturingTransport();
+        await buildJobHandler(transport)(
+          jobPayload({ recipientUserIds: [userAId], eventType }),
+        );
+
+        const mail = onlySent(transport);
+        expect(mail.subject).toMatch(/^CARE-Y: .+/);
+        expect(mail.text).toContain(LOGIN_URL);
+        subjects.push(mail.subject);
+      }
+
+      // Volunteers triage by subject: every event type must be
+      // distinguishable in the inbox. Exact wording is not asserted.
+      expect(new Set(subjects).size).toBe(
+        notificationEventTypeSchema.options.length,
+      );
+    });
+  },
+);

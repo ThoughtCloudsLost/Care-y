@@ -1,16 +1,30 @@
 import { test, expect } from "./coverage-fixture";
 import { startCoverage, stopAndWriteCoverage } from "./coverage-fixture";
-import type { Page } from "@playwright/test";
-import { auditA11y, CRYPTO_TIMEOUT, login } from "./helpers";
+import type { Locator, Page } from "@playwright/test";
+import { auditA11y, CRYPTO_TIMEOUT, E2eError, login } from "./helpers";
+
+/** Bounding box of a visible element; throws if the element has none. */
+async function boxOf(
+  locator: Locator,
+): Promise<{ x: number; y: number; width: number; height: number }> {
+  const box = await locator.boundingBox();
+  if (box == null) {
+    throw new E2eError("Expected element to have a bounding box");
+  }
+  return box;
+}
 
 test.describe.serial("Desktop Responsive Layout", () => {
   let page: Page;
+  /** The desktop sidebar landmark (nav with aria-label from nav_sidebar_label). */
+  let sidebar: Locator;
 
   test.beforeAll(async ({ browser }, testInfo) => {
     testInfo.setTimeout(CRYPTO_TIMEOUT * 3);
     page = await browser.newPage();
     await startCoverage(page);
     await login(page);
+    sidebar = page.getByRole("navigation", { name: "Sidebar navigation" });
 
     // Wait for dashboard to render with decrypted content.
     await expect(page.getByText("Help with housing")).toBeVisible({
@@ -26,16 +40,12 @@ test.describe.serial("Desktop Responsive Layout", () => {
   // ── Sidebar rendering ──────────────────────────────────────────────
 
   test("sidebar is visible at desktop viewport", async () => {
-    const sidebar = page.locator(".desktop-sidebar");
     await expect(sidebar).toBeVisible();
   });
 
   test("sidebar has correct ARIA structure", async () => {
-    const sidebar = page.locator(".desktop-sidebar");
-    await expect(sidebar).toHaveAttribute("aria-label");
-
-    const tablist = sidebar.locator('[role="tablist"]');
-    await expect(tablist).toBeAttached();
+    const tablist = sidebar.getByRole("tablist");
+    await expect(tablist).toBeVisible();
     await expect(tablist).toHaveAttribute("aria-orientation", "vertical");
 
     // All three main tabs are present as role="tab".
@@ -46,38 +56,38 @@ test.describe.serial("Desktop Responsive Layout", () => {
   });
 
   test("Home tab is active in sidebar by default", async () => {
-    const homeTab = page.locator('.desktop-sidebar [data-sidebar-id="home"]');
+    const homeTab = sidebar.locator('[data-sidebar-id="home"]');
     await expect(homeTab).toHaveAttribute("aria-selected", "true");
-    await expect(homeTab).toHaveClass(/active/);
   });
 
   test("bottom tabbar is hidden at desktop", async () => {
-    const tabbar = page.locator(".native-tabbar");
-    await expect(tabbar).toBeHidden();
+    // The mobile bottom tab bar and the desktop sidebar both expose a
+    // "Main navigation" tablist; at desktop only the sidebar's vertical
+    // one remains.
+    const mainTablists = page.getByRole("tablist", {
+      name: "Main navigation",
+    });
+    await expect(mainTablists).toHaveCount(1);
+    await expect(mainTablists).toHaveAttribute("aria-orientation", "vertical");
   });
 
   // ── Sidebar navigation ─────────────────────────────────────────────
 
   test("clicking sidebar tab navigates to tickets", async () => {
-    const ticketsTab = page.locator(
-      '.desktop-sidebar [data-sidebar-id="tickets"]',
-    );
+    const ticketsTab = sidebar.locator('[data-sidebar-id="tickets"]');
     await ticketsTab.click();
     await expect(page).toHaveURL("/tickets");
 
     // Active state transfers.
     await expect(ticketsTab).toHaveAttribute("aria-selected", "true");
-    await expect(ticketsTab).toHaveClass(/active/);
 
     // Previous tab is no longer active.
-    const homeTab = page.locator('.desktop-sidebar [data-sidebar-id="home"]');
+    const homeTab = sidebar.locator('[data-sidebar-id="home"]');
     await expect(homeTab).toHaveAttribute("aria-selected", "false");
   });
 
   test("clicking sidebar library tab navigates to library", async () => {
-    const libraryTab = page.locator(
-      '.desktop-sidebar [data-sidebar-id="library"]',
-    );
+    const libraryTab = sidebar.locator('[data-sidebar-id="library"]');
     await libraryTab.click();
     await expect(page).toHaveURL("/library");
     await expect(libraryTab).toHaveAttribute("aria-selected", "true");
@@ -85,7 +95,7 @@ test.describe.serial("Desktop Responsive Layout", () => {
 
   // Navigate back to home for subsequent tests.
   test("sidebar home tab navigates back to dashboard", async () => {
-    const homeTab = page.locator('.desktop-sidebar [data-sidebar-id="home"]');
+    const homeTab = sidebar.locator('[data-sidebar-id="home"]');
     await homeTab.click();
     await expect(page).toHaveURL("/");
   });
@@ -93,50 +103,50 @@ test.describe.serial("Desktop Responsive Layout", () => {
   // ── Sidebar expand/collapse ────────────────────────────────────────
 
   test("sidebar starts collapsed (icons only, no labels)", async () => {
-    const sidebar = page.locator(".desktop-sidebar");
     // Move mouse away from sidebar to clear any hover state from prior tests.
     await page.mouse.move(640, 400);
-    await expect(sidebar).not.toHaveClass(/expanded/);
 
-    // Labels are hidden when collapsed.
-    const labels = sidebar.locator(".sidebar-label");
-    await expect(labels).toHaveCount(0);
+    // The collapsed rail shows no label text; tabs stay reachable
+    // through their aria-labels (asserted in the ARIA structure test).
+    for (const label of ["Overview", "Tickets", "Library"]) {
+      await expect(sidebar.getByText(label, { exact: true })).toHaveCount(0);
+    }
   });
 
   test("sidebar expands on hover and shows labels", async () => {
-    const sidebar = page.locator(".desktop-sidebar");
+    const collapsedBox = await boxOf(sidebar);
 
     // Hover to trigger expansion (300ms delay in component).
     await sidebar.hover();
-    await expect(sidebar).toHaveClass(/expanded/);
 
-    // Labels should now be visible.
-    const firstLabel = sidebar.locator(".sidebar-label").first();
-    await expect(firstLabel).toBeVisible();
+    // Labels become visible once expanded.
+    await expect(sidebar.getByText("Overview", { exact: true })).toBeVisible();
 
-    // Move mouse away to collapse.
+    // The rail widens to fit the labels. The width transition may still
+    // be running when the label first renders, so poll.
+    await expect
+      .poll(async () => (await sidebar.boundingBox())?.width ?? 0)
+      .toBeGreaterThan(collapsedBox.width);
+
+    // Move mouse away to collapse; labels disappear again.
     await page.mouse.move(640, 360);
-    await expect(sidebar).not.toHaveClass(/expanded/);
+    await expect(sidebar.getByText("Overview", { exact: true })).toHaveCount(0);
   });
 
   // ── Sidebar keyboard navigation ────────────────────────────────────
 
   test("arrow keys navigate between sidebar tabs", async () => {
-    const homeTab = page.locator('.desktop-sidebar [data-sidebar-id="home"]');
+    const homeTab = sidebar.locator('[data-sidebar-id="home"]');
     await homeTab.focus();
 
     // ArrowDown moves to next item.
     await page.keyboard.press("ArrowDown");
-    const ticketsTab = page.locator(
-      '.desktop-sidebar [data-sidebar-id="tickets"]',
-    );
+    const ticketsTab = sidebar.locator('[data-sidebar-id="tickets"]');
     await expect(ticketsTab).toBeFocused();
 
     // ArrowDown again.
     await page.keyboard.press("ArrowDown");
-    const libraryTab = page.locator(
-      '.desktop-sidebar [data-sidebar-id="library"]',
-    );
+    const libraryTab = sidebar.locator('[data-sidebar-id="library"]');
     await expect(libraryTab).toBeFocused();
 
     // Home key jumps to first.
@@ -145,50 +155,37 @@ test.describe.serial("Desktop Responsive Layout", () => {
 
     // End key jumps to last.
     await page.keyboard.press("End");
-    const lastFocusable = page
-      .locator(".desktop-sidebar [data-sidebar-id]")
-      .last();
+    const lastFocusable = sidebar.locator("[data-sidebar-id]").last();
     await expect(lastFocusable).toBeFocused();
   });
 
   // ── Dashboard two-column grid ──────────────────────────────────────
 
-  test("dashboard renders two-column grid at desktop", async () => {
+  test("dashboard renders two-column layout at desktop", async () => {
     // Ensure we're on the dashboard.
-    await page.locator('.desktop-sidebar [data-sidebar-id="home"]').click();
+    await sidebar.locator('[data-sidebar-id="home"]').click();
     await expect(page).toHaveURL("/");
 
-    // Both column attributes exist.
-    const leftCols = page.locator("[data-column='left']");
-    const rightCols = page.locator("[data-column='right']");
-    await expect(leftCols.first()).toBeAttached();
-    await expect(rightCols.first()).toBeAttached();
+    // Both columns render content.
+    const firstLeft = page.locator("[data-column='left']").first();
+    const firstRight = page.locator("[data-column='right']").first();
+    await expect(firstLeft).toBeVisible();
+    await expect(firstRight).toBeVisible();
 
-    // Verify CSS Grid is applied. The .dashboard container should use
-    // grid layout at desktop widths.
-    const display = await page
-      .locator(".dashboard")
-      .evaluate((el) => window.getComputedStyle(el).display);
-    expect(display).toBe("grid");
-
-    // Left column elements are positioned in grid column 1.
-    const leftGridCol = await leftCols
-      .first()
-      .evaluate((el) => window.getComputedStyle(el).gridColumnStart);
-    expect(leftGridCol).toBe("1");
-
-    // Right column elements are in column 2.
-    const rightGridCol = await rightCols
-      .first()
-      .evaluate((el) => window.getComputedStyle(el).gridColumnStart);
-    expect(rightGridCol).toBe("2");
+    // Two-column proof by geometry: the right column starts after the
+    // left column ends, and the columns share vertical space (side by
+    // side, not stacked as on mobile).
+    const leftBox = await boxOf(firstLeft);
+    const rightBox = await boxOf(firstRight);
+    expect(rightBox.x).toBeGreaterThanOrEqual(leftBox.x + leftBox.width);
+    expect(rightBox.y).toBeLessThan(leftBox.y + leftBox.height);
   });
 
   // ── Ticket split view ──────────────────────────────────────────────
 
   test("ticket list renders in split view at desktop", async ({}, testInfo) => {
     testInfo.setTimeout(CRYPTO_TIMEOUT * 2);
-    await page.locator('.desktop-sidebar [data-sidebar-id="tickets"]').click();
+    await sidebar.locator('[data-sidebar-id="tickets"]').click();
     await expect(page).toHaveURL("/tickets");
 
     // Wait for decrypted ticket content.
@@ -196,38 +193,47 @@ test.describe.serial("Desktop Responsive Layout", () => {
       timeout: CRYPTO_TIMEOUT,
     });
 
-    // Split view container should be present.
-    const splitContainer = page.locator(".split-view-container");
-    await expect(splitContainer).toBeVisible();
+    // Split view with both panes and the resize divider.
+    await expect(page.locator('[data-testid="split-view"]')).toBeVisible();
+    const leftPane = page.locator('[data-testid="split-left-pane"]');
+    const rightPane = page.locator('[data-testid="split-right-pane"]');
+    await expect(leftPane).toBeVisible();
+    await expect(rightPane).toBeVisible();
+    await expect(
+      page.getByRole("separator", { name: "Resize panels" }),
+    ).toBeVisible();
 
-    // Three panes: list, divider, detail/placeholder.
-    await expect(page.locator(".split-left-pane")).toBeVisible();
-    await expect(page.locator(".split-divider")).toBeVisible();
-    await expect(page.locator(".split-right-pane")).toBeVisible();
+    // Panes sit side by side (1px tolerance for the divider's negative
+    // margins and subpixel rounding).
+    const leftBox = await boxOf(leftPane);
+    const rightBox = await boxOf(rightPane);
+    expect(rightBox.x).toBeGreaterThanOrEqual(leftBox.x + leftBox.width - 1);
 
-    // Placeholder shown when no ticket selected.
-    await expect(page.locator(".split-placeholder")).toBeVisible();
+    // Placeholder prompt shown when no ticket selected.
+    await expect(page.getByText("Select a ticket to view")).toBeVisible();
   });
 
   test("clicking ticket opens detail in right pane", async ({}, testInfo) => {
     testInfo.setTimeout(CRYPTO_TIMEOUT * 2);
 
-    // Click on a ticket card in the list pane.
+    // Click a ticket card in the list pane. Each card exposes a single
+    // "Open <ticket> <alias>" overlay button.
     const card = page
-      .locator(".split-left-pane")
-      .locator("button.card-open-link")
-      .first();
+      .locator('[data-testid="split-left-pane"]')
+      .locator('[data-testid="ticket-card-wrap"]')
+      .first()
+      .getByRole("button", { name: /^open /i });
     await card.click();
 
     // URL stays at /tickets (shallow routing).
     await expect(page).toHaveURL("/tickets");
 
-    // Placeholder should be gone, detail pane has content.
-    await expect(page.locator(".split-placeholder")).toHaveCount(0);
+    // Placeholder prompt gives way to detail content.
+    await expect(page.getByText("Select a ticket to view")).toHaveCount(0);
 
     // The detail pane should render ticket content.
     // Wait for either the chat log or a loading indicator.
-    const detailPane = page.locator(".split-right-pane");
+    const detailPane = page.locator('[data-testid="split-right-pane"]');
     await expect(
       detailPane.locator('[role="log"], .skeleton-container'),
     ).toBeAttached({
@@ -237,18 +243,18 @@ test.describe.serial("Desktop Responsive Layout", () => {
 
   test("back button (Escape) closes detail pane", async () => {
     // Detail should be open from previous test.
-    await expect(page.locator(".split-placeholder")).toHaveCount(0);
+    await expect(page.getByText("Select a ticket to view")).toHaveCount(0);
 
     // Press Escape to close.
     await page.keyboard.press("Escape");
 
-    // Placeholder should reappear.
-    await expect(page.locator(".split-placeholder")).toBeVisible();
+    // Placeholder prompt reappears.
+    await expect(page.getByText("Select a ticket to view")).toBeVisible();
   });
 
   test("split view divider has correct semantics", async () => {
-    const divider = page.locator(".split-divider");
-    await expect(divider).toHaveAttribute("role", "separator");
+    const divider = page.getByRole("separator", { name: "Resize panels" });
+    await expect(divider).toBeVisible();
     await expect(divider).toHaveAttribute("aria-orientation", "vertical");
   });
 
@@ -256,24 +262,25 @@ test.describe.serial("Desktop Responsive Layout", () => {
 
   test("library renders in split view at desktop", async ({}, testInfo) => {
     testInfo.setTimeout(CRYPTO_TIMEOUT * 2);
-    await page.locator('.desktop-sidebar [data-sidebar-id="library"]').click();
+    await sidebar.locator('[data-sidebar-id="library"]').click();
     await expect(page).toHaveURL("/library");
 
     // Wait for KB content to load and decrypt.
     await page.waitForTimeout(2_000);
 
-    const splitContainer = page.locator(".split-view-container");
-    await expect(splitContainer).toBeVisible();
-    await expect(page.locator(".split-left-pane")).toBeVisible();
-    await expect(page.locator(".split-right-pane")).toBeVisible();
-    await expect(page.locator(".split-placeholder")).toBeVisible();
+    await expect(page.locator('[data-testid="split-view"]')).toBeVisible();
+    await expect(page.locator('[data-testid="split-left-pane"]')).toBeVisible();
+    await expect(
+      page.locator('[data-testid="split-right-pane"]'),
+    ).toBeVisible();
+    await expect(page.getByText("Select an article to read")).toBeVisible();
   });
 
   // ── Content width constraints ──────────────────────────────────────
 
   test("content areas have max-width constraint", async () => {
     // Navigate to dashboard (non-split-view page).
-    await page.locator('.desktop-sidebar [data-sidebar-id="home"]').click();
+    await sidebar.locator('[data-sidebar-id="home"]').click();
     await expect(page).toHaveURL("/");
 
     // The CSS rule .main-content > * applies max-width at >=1024px.
@@ -292,7 +299,7 @@ test.describe.serial("Desktop Responsive Layout", () => {
   test("subnavbar stays visible at desktop (no collapse on scroll)", async ({}, testInfo) => {
     testInfo.setTimeout(CRYPTO_TIMEOUT * 2);
     // Navigate to tickets which has a subnavbar (filter pills).
-    await page.locator('.desktop-sidebar [data-sidebar-id="tickets"]').click();
+    await sidebar.locator('[data-sidebar-id="tickets"]').click();
     await expect(page).toHaveURL("/tickets");
     await expect(page.getByText("Help with housing")).toBeVisible({
       timeout: CRYPTO_TIMEOUT,
@@ -301,7 +308,7 @@ test.describe.serial("Desktop Responsive Layout", () => {
     const subnavbar = page.locator(".shell-subnavbar");
     if (await subnavbar.isVisible().catch(() => false)) {
       // Scroll down in the list pane.
-      const listPane = page.locator(".split-left-pane");
+      const listPane = page.locator('[data-testid="split-left-pane"]');
       await listPane.evaluate((el) => {
         el.scrollBy(0, 500);
       });
@@ -331,39 +338,33 @@ test.describe.serial("Desktop Responsive Layout", () => {
 
   // ── Overlay adaptation ─────────────────────────────────────────────
 
-  test("sheets render as popups at desktop", async ({}, testInfo) => {
-    testInfo.setTimeout(CRYPTO_TIMEOUT * 2);
-    // Navigate to dashboard and trigger a sheet-based action.
-    await page.locator('.desktop-sidebar [data-sidebar-id="home"]').click();
+  test("search opens as a navbar dropdown at desktop, not a bottom sheet", async () => {
+    // Navigate to the dashboard, where the navbar search button is shown.
+    await sidebar.locator('[data-sidebar-id="home"]').click();
     await expect(page).toHaveURL("/");
 
-    // The account/settings panel is hidden at desktop (sidebar user section
-    // replaces it), but search is available via the navbar button.
     const searchBtn = page.getByRole("button", { name: "Search" });
-    if (await searchBtn.isVisible().catch(() => false)) {
-      await searchBtn.click();
+    await expect(searchBtn).toBeVisible();
+    await searchBtn.click();
 
-      // At desktop, search renders as a dropdown, not a bottom sheet.
-      // Check for the search dropdown class or that no full-height sheet is present.
-      const searchDropdown = page.locator(".search-dropdown");
-      const sheetOpen = page.locator(".k-sheet.sheet-opened");
+    // Both search treatments expose the same search landmark, labeled
+    // from the search_hint message.
+    const searchRegion = page.getByRole("search", {
+      name: /unlocked on this device/i,
+    });
+    await expect(searchRegion).toBeVisible();
 
-      // One of these should be true: dropdown exists, OR no full sheet.
-      const hasDropdown = await searchDropdown
-        .isVisible({ timeout: 2_000 })
-        .catch(() => false);
-      const hasSheet = await sheetOpen
-        .isVisible({ timeout: 500 })
-        .catch(() => false);
+    // Desktop treatment drops down from the navbar, so it is anchored
+    // in the top half of the viewport. A bottom sheet would rise from
+    // the bottom edge and sit in the lower half.
+    const box = await boxOf(searchRegion);
+    const viewport = page.viewportSize();
+    if (viewport == null) throw new E2eError("Viewport size unavailable");
+    expect(box.y).toBeLessThan(viewport.height / 2);
 
-      // At desktop, expect dropdown treatment, not sheet.
-      if (hasDropdown || !hasSheet) {
-        expect(true).toBe(true);
-      }
-
-      // Close search.
-      await page.keyboard.press("Escape");
-    }
+    // Escape closes search.
+    await page.keyboard.press("Escape");
+    await expect(searchRegion).toBeHidden();
   });
 
   // ── Keyboard shortcuts ─────────────────────────────────────────────
@@ -375,17 +376,16 @@ test.describe.serial("Desktop Responsive Layout", () => {
 
     await page.keyboard.press("Meta+k");
 
-    // Search should open (dropdown or sheet).
-    const searchVisible = await page
-      .locator(".search-dropdown, .search-sheet")
-      .first()
-      .isVisible({ timeout: 2_000 })
-      .catch(() => false);
-    expect(searchVisible).toBe(true);
+    // The search landmark opens (dropdown at desktop, sheet at mobile;
+    // both carry the same role and label).
+    const searchRegion = page.getByRole("search", {
+      name: /unlocked on this device/i,
+    });
+    await expect(searchRegion).toBeVisible({ timeout: 2_000 });
 
-    // Close.
+    // Escape closes search again.
     await page.keyboard.press("Escape");
-    await page.waitForTimeout(300);
+    await expect(searchRegion).toBeHidden();
   });
 
   test("number keys switch tabs (1=home, 2=tickets, 3=library)", async ({}, testInfo) => {
@@ -418,30 +418,31 @@ test.describe.serial("Desktop Responsive Layout", () => {
     });
 
     const card = page
-      .locator(".split-left-pane")
-      .locator("button.card-open-link")
-      .first();
+      .locator('[data-testid="split-left-pane"]')
+      .locator('[data-testid="ticket-card-wrap"]')
+      .first()
+      .getByRole("button", { name: /^open /i });
     await card.click();
 
-    // Detail pane should have content.
-    await expect(page.locator(".split-placeholder")).toHaveCount(0);
+    // Detail pane replaces the placeholder prompt.
+    await expect(page.getByText("Select a ticket to view")).toHaveCount(0);
 
     // Escape closes detail.
     await page.keyboard.press("Escape");
-    await expect(page.locator(".split-placeholder")).toBeVisible();
+    await expect(page.getByText("Select a ticket to view")).toBeVisible();
   });
 
   // ── User section in sidebar ────────────────────────────────────────
 
   test("sidebar user section is visible", async () => {
-    const userSection = page.locator(".sidebar-user");
-    await expect(userSection).toBeAttached();
-
-    // Settings and logout buttons are present.
-    const settingsBtn = page.locator('[data-sidebar-id="settings"]');
-    const logoutBtn = page.locator('[data-sidebar-id="logout"]');
-    await expect(settingsBtn).toBeAttached();
-    await expect(logoutBtn).toBeAttached();
+    // Settings and logout controls live in the sidebar's user section
+    // and are exposed by accessible name even while collapsed.
+    await expect(
+      sidebar.getByRole("button", { name: "Settings" }),
+    ).toBeVisible();
+    await expect(
+      sidebar.getByRole("button", { name: "Log out" }),
+    ).toBeVisible();
   });
 
   test("avatar panel (ShellPanel) is hidden at desktop", async () => {
@@ -462,25 +463,20 @@ test.describe.serial("Desktop Responsive Layout", () => {
       }, theme);
 
       // Force re-render via navigation.
-      await page
-        .locator('.desktop-sidebar [data-sidebar-id="tickets"]')
-        .click();
-      await page.locator('.desktop-sidebar [data-sidebar-id="home"]').click();
+      await sidebar.locator('[data-sidebar-id="tickets"]').click();
+      await sidebar.locator('[data-sidebar-id="home"]').click();
       await expect(page).toHaveURL("/");
 
-      // Sidebar should still be visible and structurally intact.
-      const sidebar = page.locator(".desktop-sidebar");
+      // Sidebar stays visible and structurally intact under the theme:
+      // all three tabs remain and the active tab still reports state.
       await expect(sidebar).toBeVisible();
-
-      // Tab links are still present.
-      const tabs = sidebar.locator('[role="tab"]');
-      const count = await tabs.count();
-      expect(count).toBeGreaterThanOrEqual(3);
-
-      await page.screenshot({
-        path: `test-results/desktop-sidebar-${theme}.png`,
-        fullPage: false,
-      });
+      for (const name of ["Overview", "Tickets", "Library"]) {
+        await expect(sidebar.getByRole("tab", { name })).toBeVisible();
+      }
+      await expect(sidebar.locator('[data-sidebar-id="home"]')).toHaveAttribute(
+        "aria-selected",
+        "true",
+      );
     }
 
     // Restore default theme.
@@ -493,7 +489,7 @@ test.describe.serial("Desktop Responsive Layout", () => {
   // ── Accessibility ──────────────────────────────────────────────────
 
   test("desktop layout passes axe accessibility audit on dashboard", async () => {
-    await page.locator('.desktop-sidebar [data-sidebar-id="home"]').click();
+    await sidebar.locator('[data-sidebar-id="home"]').click();
     await expect(page).toHaveURL("/");
     await expect(page.getByText("Help with housing")).toBeVisible({
       timeout: CRYPTO_TIMEOUT,
@@ -504,7 +500,7 @@ test.describe.serial("Desktop Responsive Layout", () => {
 
   test("desktop layout passes axe audit on ticket split view", async ({}, testInfo) => {
     testInfo.setTimeout(CRYPTO_TIMEOUT * 2);
-    await page.locator('.desktop-sidebar [data-sidebar-id="tickets"]').click();
+    await sidebar.locator('[data-sidebar-id="tickets"]').click();
     await expect(page).toHaveURL("/tickets");
     await expect(page.getByText("Help with housing")).toBeVisible({
       timeout: CRYPTO_TIMEOUT,
@@ -515,7 +511,7 @@ test.describe.serial("Desktop Responsive Layout", () => {
 
   test("desktop layout passes axe audit on library split view", async ({}, testInfo) => {
     testInfo.setTimeout(CRYPTO_TIMEOUT * 2);
-    await page.locator('.desktop-sidebar [data-sidebar-id="library"]').click();
+    await sidebar.locator('[data-sidebar-id="library"]').click();
     await expect(page).toHaveURL("/library");
     await page.waitForTimeout(2_000);
 

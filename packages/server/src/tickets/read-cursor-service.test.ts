@@ -50,6 +50,7 @@ describe.skipIf(!process.env.DATABASE_URL)("ReadCursorService (DB)", () => {
     expect(cursor.ticketId).toBe(ticketId);
     expect(cursor.userId).toBe(userId);
     expect(Buffer.isBuffer(cursor.encryptedReadCursor)).toBe(true);
+    // Contract: XSalsa20-Poly1305 ciphertext = nonce(24) + plaintext(45) + MAC(16) = 85 bytes.
     expect(cursor.encryptedReadCursor.length).toBe(85);
   });
 

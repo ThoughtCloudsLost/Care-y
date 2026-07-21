@@ -38,10 +38,18 @@ test.describe.serial("1d-smoke", () => {
   });
 
   test("default theme is iOS and dark mode", async () => {
+    // data-ui-theme is the app's documented theme contract on the App
+    // root (ThemeProvider.svelte), asserted instead of Konsta's
+    // internal .k-* classes.
     const appRoot = page.locator('[data-testid="app-root"]').first();
-    await expect(appRoot).toHaveClass(/k-ios/);
+    await expect(appRoot).toHaveAttribute("data-ui-theme", "ios");
 
-    const html = page.locator("html");
-    await expect(html).toHaveClass(/dark/);
+    // Dark mode is observable through the root color-scheme, which the
+    // theme store sets (theme.svelte.ts applyScheme) and the browser
+    // consumes when rendering native widgets and scrollbars.
+    const colorScheme = await page.evaluate(
+      () => getComputedStyle(document.documentElement).colorScheme,
+    );
+    expect(colorScheme).toBe("dark");
   });
 });

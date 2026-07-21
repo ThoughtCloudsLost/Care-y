@@ -24,7 +24,11 @@
 {#if opened}
   <!-- svelte-ignore a11y_no_static_element_interactions -->
   <!-- svelte-ignore a11y_click_events_have_key_events -->
-  <div class="shell-backdrop" onclick={ondismiss}></div>
+  <div
+    onclick={ondismiss}
+    class="shell-backdrop"
+    data-testid="shell-backdrop"
+  ></div>
 {/if}
 
 <style>

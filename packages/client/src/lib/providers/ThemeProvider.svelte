@@ -12,6 +12,10 @@
   Sits below BrandingProvider because branding determines the color
   palette that Konsta renders. Sits above AppShell because AppShell's
   Konsta components (Page, Navbar, Toolbar) need the theme context.
+
+  The data-ui-theme attribute on the App root is the documented
+  contract for the active Konsta theme (ios/material). Tests assert it
+  instead of Konsta's internal .k-* classes.
 -->
 <script lang="ts">
   import { App } from "konsta/svelte";
@@ -38,6 +42,7 @@
   dark={themeStore.resolvedScheme === "dark"}
   class="app-shell"
   data-testid="app-root"
+  data-ui-theme={themeStore.current}
 >
   {@render children()}
   {#if DevPanel}

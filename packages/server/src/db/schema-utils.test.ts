@@ -73,6 +73,8 @@ describe("isValidOrgSchemaName", () => {
   });
 });
 
+// CLI output contract: operators grep migration logs (pnpm migrate,
+// migrate:tenant) for migration names and status.
 describe("logMigrationResults", () => {
   it("logs 'No migrations to apply' when results is undefined", () => {
     const logSpy = vi.spyOn(console, "log").mockImplementation(() => undefined);

@@ -6,6 +6,7 @@ import {
 } from "./ipc-protocol.js";
 
 describe("frameMessage", () => {
+  // Wire format: [uint32BE length][payload bytes]. Guards compatibility with OPRF subprocess IPC.
   it("produces 4-byte length prefix followed by payload", () => {
     const payload = new Uint8Array([0x01, 0x02, 0x03]);
     const frame = frameMessage(payload);
