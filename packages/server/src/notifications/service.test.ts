@@ -91,7 +91,7 @@ describe("NotificationService.dispatch", () => {
 
     await svc.dispatch(
       {} as Kysely<TenantDatabase>,
-      "org-1",
+      "org_test-1",
       "myorg",
       "ticket_assigned",
       "ticket-uuid",
@@ -102,7 +102,7 @@ describe("NotificationService.dispatch", () => {
     expect(sse.broadcast).toHaveBeenCalledTimes(1);
     const broadcastArgs = (sse.broadcast as ReturnType<typeof vi.fn>).mock
       .calls[0] as unknown[];
-    expect(broadcastArgs[0]).toBe("org-1");
+    expect(broadcastArgs[0]).toBe("org_test-1");
     expect(broadcastArgs[1]).toEqual(["user-1", "user-2"]);
 
     const event = broadcastArgs[2] as Record<string, unknown>;
@@ -122,7 +122,7 @@ describe("NotificationService.dispatch", () => {
 
     await svc.dispatch(
       {} as Kysely<TenantDatabase>,
-      "org-1",
+      "org_test-1",
       "myorg",
       "ticket_created",
       "ticket-uuid",
@@ -151,7 +151,7 @@ describe("NotificationService.dispatch", () => {
 
     await svc.dispatch(
       {} as Kysely<TenantDatabase>,
-      "org-1",
+      "org_test-1",
       "myorg",
       "ticket_assigned",
       "ticket-uuid",
@@ -175,7 +175,7 @@ describe("NotificationService.dispatch", () => {
 
     await svc.dispatch(
       {} as Kysely<TenantDatabase>,
-      "org-1",
+      "org_test-1",
       "myorg",
       "ticket_assigned",
       "ticket-uuid",
@@ -199,7 +199,7 @@ describe("NotificationService.dispatch", () => {
 
     await svc.dispatch(
       {} as Kysely<TenantDatabase>,
-      "org-1",
+      "org_test-1",
       "myorg",
       "followup_added",
       crypto.randomUUID(),
@@ -236,7 +236,7 @@ describe("NotificationService.dispatch", () => {
 
     await svc.dispatch(
       {} as Kysely<TenantDatabase>,
-      "org-1",
+      "org_test-1",
       "myorg",
       "ticket_created",
       "ticket-uuid",
@@ -280,7 +280,7 @@ describe("NotificationService.dispatch", () => {
     await expect(
       svc.dispatch(
         {} as Kysely<TenantDatabase>,
-        "org-1",
+        "org_test-1",
         "myorg",
         "ticket_created",
         "ticket-uuid",
@@ -399,7 +399,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
       eventType?: string;
     }): Record<string, unknown> {
       return {
-        orgId: crypto.randomUUID(),
+        orgSchema: `org_${crypto.randomUUID()}`,
         orgSlug: TEST_ORG_SLUG,
         recipientUserIds: [...overrides.recipientUserIds],
         eventType: overrides.eventType ?? "ticket_created",
