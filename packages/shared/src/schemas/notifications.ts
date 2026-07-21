@@ -96,6 +96,8 @@ export const auditEventTypeSchema = z.enum([
   "preset_updated",
   "note_type_created",
   "note_type_updated",
+  "merge_undone",
+  "merge_lock_changed",
 ]);
 export type AuditEventType = z.infer<typeof auditEventTypeSchema>;
 

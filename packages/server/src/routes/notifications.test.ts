@@ -21,7 +21,6 @@ import {
   type PushSubscriptionRecord,
   type PushSubscriptionService,
 } from "../notifications/push-subscriptions.js";
-import { createPushNotificationSender } from "../notifications/push.js";
 import { createCallerFactory } from "../trpc/trpc.js";
 import type { Context, OrgContext } from "../trpc/context.js";
 import type { UsersTable } from "../db/types.js";
@@ -352,19 +351,9 @@ describe.skipIf(!process.env.DATABASE_URL)(
     const ENDPOINT_A2 = "https://push.example.test/sub/device-a2";
     const ENDPOINT_B1 = "https://push.example.test/sub/device-b1";
 
-    // Real sender with placeholder key strings: the unsubscribe path only
-    // deletes rows and never reads key material or performs network I/O
-    // (VAPID signing runs only inside sendToUsers, which these tests
-    // never call).
-    const pushSender = createPushNotificationSender(
-      { publicKey: "test-vapid-public", privateKeyPem: "test-not-a-real-pem" },
-      "ops@example.test",
-    );
-
     const dbFactory = createCallerFactory(
       createNotificationRouter({
-        createPushSubSvc: (tDb) =>
-          createPushSubscriptionService(tDb, pushSender),
+        createPushSubSvc: (tDb) => createPushSubscriptionService(tDb),
         vapidPublicKey: "test-vapid-public",
       }),
     );

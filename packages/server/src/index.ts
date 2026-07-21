@@ -520,7 +520,7 @@ const appRouter = createAppRouter({
     }),
   },
   notificationDeps: {
-    createPushSubSvc: (tDb) => createPushSubscriptionService(tDb, pushSender),
+    createPushSubSvc: (tDb) => createPushSubscriptionService(tDb),
     vapidPublicKey: vapidKeys.publicKey,
   },
   brandingDeps: {
