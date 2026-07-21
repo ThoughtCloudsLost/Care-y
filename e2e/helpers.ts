@@ -580,11 +580,24 @@ export async function createTicket(
     await sheet.getByPlaceholder(/brief description/i).click();
     await page.waitForTimeout(300);
 
-    // Watch for 409 response during submission.
+    // Watch for 409 response during submission, and also capture the
+    // tickets.list refetch triggered by invalidateQueries on success.
+    // Both listeners must start BEFORE the click so neither response
+    // slips past.
     const responsePromise = page
       .waitForResponse(
         (r) =>
           r.url().includes("tickets.create") && r.request().method() === "POST",
+        { timeout: CRYPTO_TIMEOUT },
+      )
+      .catch(() => null);
+
+    const listRefetchPromise = page
+      .waitForResponse(
+        (r) =>
+          r.url().includes("tickets.list") &&
+          r.request().method() === "POST" &&
+          r.status() === 200,
         { timeout: CRYPTO_TIMEOUT },
       )
       .catch(() => null);
@@ -596,6 +609,7 @@ export async function createTicket(
     const resp = await responsePromise;
     if (resp?.status() !== 409) {
       await expect(sheet).not.toBeVisible({ timeout: CRYPTO_TIMEOUT });
+      await listRefetchPromise;
       return;
     }
 

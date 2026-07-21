@@ -90,5 +90,28 @@ export default async function globalSetup(): Promise<void> {
     console.warn("[e2e] Could not clean stale tickets (non-fatal)");
   }
 
+  // Delete all KB articles. They accumulate across runs (kb-create.spec.ts
+  // and kb-editor.spec.ts each create articles) and eventually push seeded
+  // articles past the page size, breaking tests that look for seed titles.
+  // Articles are re-created client-side by seed-data.setup.ts on each run.
+  // kb_votes and kb_attachments cascade from kb_items.
+  console.log("[e2e] Cleaning stale E2E KB articles...");
+  try {
+    const kbSql = [
+      "DO $fn$ DECLARE s TEXT; BEGIN",
+      `SELECT schema_name INTO s FROM orgs WHERE slug = '${E2E_ORG_SLUG}';`,
+      "IF s IS NOT NULL THEN",
+      "EXECUTE format('DELETE FROM %I.kb_items', s);",
+      "END IF; END $fn$;",
+    ].join("\n");
+    execSync(`${COMPOSE} exec -T db psql -U care_y -d care_y`, {
+      input: kbSql,
+      stdio: ["pipe", "inherit", "inherit"],
+      cwd: process.cwd(),
+    });
+  } catch {
+    console.warn("[e2e] Could not clean stale KB articles (non-fatal)");
+  }
+
   console.log("[e2e] E2E org ready");
 }

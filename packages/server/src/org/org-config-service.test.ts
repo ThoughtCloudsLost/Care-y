@@ -8,9 +8,10 @@
  */
 
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
-import { NoResultError, type Kysely } from "kysely";
+import type { Kysely } from "kysely";
 import { createOrgConfigService } from "./org-config-service.js";
 import { createTestDb, type TestDb } from "../test-utils.js";
+import { NotFoundError } from "../errors.js";
 import type { TenantDatabase } from "../db/types.js";
 
 /** Opaque bytes standing in for client-produced org name ciphertext. */
@@ -127,29 +128,20 @@ describe.skipIf(!process.env.DATABASE_URL)("createOrgConfigService", () => {
       await testDb.cleanup();
     });
 
-    it("getOrgGeneral rejects with NoResultError when the row is missing", async () => {
-      // Current contract: Kysely's NoResultError escapes the service
-      // unwrapped. Callers (routes/org.ts via withErrorWrapping) pass
-      // non-AppErrors through, so clients see INTERNAL_SERVER_ERROR.
+    it("getOrgGeneral rejects with NotFoundError when the row is missing", async () => {
       const svc = createOrgConfigService(testDb.db);
-      await expect(svc.getOrgGeneral()).rejects.toThrow(NoResultError);
+      await expect(svc.getOrgGeneral()).rejects.toThrow(NotFoundError);
     }, 30_000);
 
-    it("updateOrgGeneral resolves without creating the missing row", async () => {
-      // UPDATE on an empty table affects zero rows and reports nothing.
-      // Onboarding must create the singleton row; this service never does.
+    it("updateOrgGeneral rejects with NotFoundError when the row is missing", async () => {
       const svc = createOrgConfigService(testDb.db);
-      await svc.updateOrgGeneral({
-        encryptedOrgName: Buffer.from("no-row-name").toString("base64"),
-        defaultLanguage: "es",
-        countryCode: "+34",
-      });
-
-      const row = await testDb.db
-        .selectFrom("org_config")
-        .select("id")
-        .executeTakeFirst();
-      expect(row).toBeUndefined();
+      await expect(
+        svc.updateOrgGeneral({
+          encryptedOrgName: Buffer.from("no-row-name").toString("base64"),
+          defaultLanguage: "es",
+          countryCode: "+34",
+        }),
+      ).rejects.toThrow(NotFoundError);
     }, 30_000);
   });
 });

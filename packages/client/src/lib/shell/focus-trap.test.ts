@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { activateFocusTrap } from "./focus-trap";
+import { activateFocusTrap, addEscapeHandler } from "./focus-trap";
 
 function createContainer(focusableCount: number): HTMLDivElement {
   const container = document.createElement("div");
@@ -82,44 +82,31 @@ describe("activateFocusTrap", () => {
     expect(document.activeElement).toBe(buttons[2]);
   });
 
-  it("calls onEscape when Escape is pressed", () => {
+  it("removes the Tab listener on cleanup", () => {
     container = createContainer(2);
-    const onEscape = vi.fn();
+    const buttons = container.querySelectorAll("button");
 
-    activateFocusTrap({ container, onEscape });
+    const cleanup = activateFocusTrap({ container, onEscape: vi.fn() });
 
-    const event = new KeyboardEvent("keydown", {
-      key: "Escape",
-      bubbles: true,
-      cancelable: true,
-    });
-    container.dispatchEvent(event);
-
-    expect(onEscape).toHaveBeenCalledOnce();
-  });
-
-  it("removes the keydown listener on cleanup", () => {
-    container = createContainer(2);
-    const onEscape = vi.fn();
-
-    const cleanup = activateFocusTrap({ container, onEscape });
+    // Focus last button then cleanup
+    buttons[1]!.focus();
     cleanup();
 
     const event = new KeyboardEvent("keydown", {
-      key: "Escape",
+      key: "Tab",
       bubbles: true,
       cancelable: true,
     });
-    container.dispatchEvent(event);
+    const prevented = !buttons[1]!.dispatchEvent(event);
 
-    expect(onEscape).not.toHaveBeenCalled();
+    // Tab should not be prevented after cleanup
+    expect(prevented).toBe(false);
   });
 
-  it("does not interfere with non-Tab, non-Escape keys", () => {
+  it("does not interfere with non-Tab keys", () => {
     container = createContainer(2);
-    const onEscape = vi.fn();
 
-    activateFocusTrap({ container, onEscape });
+    activateFocusTrap({ container, onEscape: vi.fn() });
 
     const event = new KeyboardEvent("keydown", {
       key: "Enter",
@@ -129,6 +116,53 @@ describe("activateFocusTrap", () => {
     const prevented = !container.dispatchEvent(event);
 
     expect(prevented).toBe(false);
+  });
+});
+
+describe("addEscapeHandler", () => {
+  it("calls onEscape when Escape is pressed on document", () => {
+    const onEscape = vi.fn();
+
+    addEscapeHandler(onEscape);
+
+    const event = new KeyboardEvent("keydown", {
+      key: "Escape",
+      bubbles: true,
+      cancelable: true,
+    });
+    document.dispatchEvent(event);
+
+    expect(onEscape).toHaveBeenCalledOnce();
+  });
+
+  it("removes the listener on cleanup", () => {
+    const onEscape = vi.fn();
+
+    const cleanup = addEscapeHandler(onEscape);
+    cleanup();
+
+    const event = new KeyboardEvent("keydown", {
+      key: "Escape",
+      bubbles: true,
+      cancelable: true,
+    });
+    document.dispatchEvent(event);
+
+    expect(onEscape).not.toHaveBeenCalled();
+  });
+
+  it("does not fire for non-Escape keys", () => {
+    const onEscape = vi.fn();
+
+    addEscapeHandler(onEscape);
+
+    const event = new KeyboardEvent("keydown", {
+      key: "Enter",
+      bubbles: true,
+      cancelable: true,
+    });
+    document.dispatchEvent(event);
+
     expect(onEscape).not.toHaveBeenCalled();
   });
 });
