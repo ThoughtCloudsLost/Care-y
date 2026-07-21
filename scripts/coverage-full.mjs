@@ -194,7 +194,7 @@ async function main() {
     });
   }
 
-  // Write test results for the merge script to inject into the HTML
+  // Write sidecar files for the merge script to inject into the HTML
   mkdirSync(join(ROOT, "coverage"), { recursive: true });
   const testResults = phases.map((p) => ({
     label: p.label,
@@ -202,6 +202,9 @@ async function main() {
     secs: p.secs,
   }));
   writeFileSync(TEST_RESULTS_PATH, JSON.stringify(testResults));
+  if (failures.length > 0) {
+    writeFailures(failures);
+  }
 
   // Coverage merge (always runs, even after e2e failure)
   phases.push(
@@ -211,11 +214,6 @@ async function main() {
       }),
     ),
   );
-
-  // ── Write failure log ───────────────────────────────────────────────
-  if (failures.length > 0) {
-    writeFailures(failures);
-  }
 
   // ── Phase timing ────────────────────────────────────────────────────
   printTiming(phases);
