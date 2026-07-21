@@ -65,7 +65,11 @@ export async function uploadPwaIcons(
   await router.uploadIcons.mutate({ icon192, icon512, iconMaskable });
 
   const version = String(Date.now());
-  void updateBrandingCache({ hasIcons: true, iconVersion: version });
+  void updateBrandingCache({ hasIcons: true, iconVersion: version }).catch(
+    (err: unknown) => {
+      console.warn("branding cache update failed", err);
+    },
+  );
   const slug = getOrgSlug();
   if (slug !== null) {
     setAppleTouchIconHref(`/api/branding/${slug}/icon-192.png?v=${version}`);

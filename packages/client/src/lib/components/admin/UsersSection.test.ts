@@ -9,6 +9,7 @@ import {
   within,
 } from "@testing-library/svelte";
 import { RoleId } from "@care-y/shared";
+import type { UserRecord } from "$lib/admin/users-section-utils.js";
 
 const { mockAssignRole, mockSetUserActive, mockToastShow } = vi.hoisted(() => ({
   mockAssignRole: vi.fn().mockResolvedValue({ user: { roleId: "mgr" } }),
@@ -16,14 +17,7 @@ const { mockAssignRole, mockSetUserActive, mockToastShow } = vi.hoisted(() => ({
   mockToastShow: vi.fn(),
 }));
 
-interface UserData {
-  id: string;
-  encryptedDisplayName: string;
-  encryptedIdentifier: string;
-  roleId: string;
-  isActive: boolean;
-  hasKeys: boolean;
-  hasOrgKeyWrap: boolean;
+interface UserData extends UserRecord {
   volPublic: string | null;
 }
 

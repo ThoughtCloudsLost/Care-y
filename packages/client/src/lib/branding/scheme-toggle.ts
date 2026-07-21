@@ -11,8 +11,16 @@ import { DEFAULT_PRIMARY } from "./index.js";
  */
 export function toggleSchemeWithPalette(): void {
   themeStore.toggleColorScheme();
-  const primary =
-    localStorage.getItem("care-y-brand-primary") ?? DEFAULT_PRIMARY;
-  const accent = localStorage.getItem("care-y-brand-accent") ?? undefined;
+  let primary = DEFAULT_PRIMARY;
+  let accent: string | undefined;
+  try {
+    primary = localStorage.getItem("care-y-brand-primary") ?? DEFAULT_PRIMARY;
+    accent = localStorage.getItem("care-y-brand-accent") ?? undefined;
+  } catch (err: unknown) {
+    console.warn(
+      "localStorage unavailable for brand colors, using defaults",
+      err,
+    );
+  }
   queueMicrotask(() => void applyKonstaPalette({ primary, accent }));
 }

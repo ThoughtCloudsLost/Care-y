@@ -24,7 +24,7 @@ import {
   expectTrpcError,
   createMockEmailSender,
   createMockOprfDeps,
-  createMockProviderFactory,
+  createThrowingProviderFactory,
   registerMethodDirectly,
   type TestDb,
 } from "../test-utils.js";
@@ -152,7 +152,7 @@ describe.skipIf(!HAS_DB)("auth + org routers (DB integration)", () => {
         tokenizer: testSessionTokenizer,
         isSecureCookie: false,
         emailSender: createMockEmailSender(),
-        providerFactory: createMockProviderFactory(),
+        providerFactory: createThrowingProviderFactory(),
         resolveCallerId: vi.fn().mockResolvedValue("+15551234567"),
         totpReplayCache,
       },
@@ -171,7 +171,7 @@ describe.skipIf(!HAS_DB)("auth + org routers (DB integration)", () => {
         encryptor: testFieldEncryptor,
         indexer: testBlindIndexer,
         tokenizer: testSessionTokenizer,
-        providerFactory: createMockProviderFactory(),
+        providerFactory: createThrowingProviderFactory(),
         resolveCallerId: vi.fn().mockResolvedValue("+15551234567"),
         pushSender: null,
         pushHmacKey: null,
@@ -179,7 +179,7 @@ describe.skipIf(!HAS_DB)("auth + org routers (DB integration)", () => {
       },
       oprfDeps: createMockOprfDeps(),
       orgService,
-      providerFactory: createMockProviderFactory(),
+      providerFactory: createThrowingProviderFactory(),
     });
   }
 

@@ -14,7 +14,7 @@
 import { describe, it, expect } from "vitest";
 import sodium from "sodium-native";
 import { deriveBrandingKey, decryptBrandingBlob } from "./branding-crypto.js";
-import { TEST_ORG_PUBLIC_KEY } from "../test-utils.js";
+import { sealBrandingBlob, TEST_ORG_PUBLIC_KEY } from "../test-utils.js";
 
 /** A second, distinct org public key for cross-org negative cases. */
 const OTHER_ORG_PUBLIC_KEY = Buffer.alloc(
@@ -27,22 +27,6 @@ const PAYLOAD = Buffer.concat([
   Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
   Buffer.from("branding-payload-bytes"),
 ]);
-
-/**
- * Seals plaintext in the layout decryptBrandingBlob expects:
- * nonce (24 bytes) || crypto_secretbox_easy output (MAC + ciphertext).
- * Local on purpose; extraction candidate for test-utils.ts if the
- * branding-icons or manifest handlers grow crypto roundtrip tests.
- */
-function sealBrandingBlob(plaintext: Buffer, key: Buffer): Buffer {
-  const nonce = Buffer.alloc(sodium.crypto_secretbox_NONCEBYTES);
-  sodium.randombytes_buf(nonce);
-  const sealed = Buffer.alloc(
-    plaintext.length + sodium.crypto_secretbox_MACBYTES,
-  );
-  sodium.crypto_secretbox_easy(sealed, plaintext, nonce, key);
-  return Buffer.concat([nonce, sealed]);
-}
 
 describe("deriveBrandingKey", () => {
   it("derives a key sized for crypto_secretbox", () => {
