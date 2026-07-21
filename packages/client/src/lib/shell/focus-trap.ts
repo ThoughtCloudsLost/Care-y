@@ -28,31 +28,43 @@ export interface FocusTrapOptions {
 }
 
 /**
+ * Creates a document-level Escape keydown handler that calls onEscape.
+ * Registered synchronously so Escape works from the moment the overlay
+ * opens, without waiting for the RAF that positions focus.
+ */
+export function addEscapeHandler(onEscape: () => void): () => void {
+  function handleEscape(event: KeyboardEvent): void {
+    if (event.key === "Escape") {
+      event.preventDefault();
+      onEscape();
+    }
+  }
+  document.addEventListener("keydown", handleEscape);
+  return () => {
+    document.removeEventListener("keydown", handleEscape);
+  };
+}
+
+/**
  * Activates a focus trap on the given container.
  *
  * Moves focus to the first focusable element inside the container.
  * Tab wraps from last to first; Shift+Tab wraps from first to last.
- * Escape calls onEscape.
  *
- * Returns a cleanup function that removes the keydown listener.
+ * Does NOT add an Escape handler; callers should use addEscapeHandler
+ * separately so Escape is active before the RAF-deferred focus setup.
+ *
+ * Returns a cleanup function that removes the Tab listener.
  */
 export function activateFocusTrap(options: FocusTrapOptions): () => void {
-  const { container, onEscape } = options;
+  const { container } = options;
 
-  // Focus the first focusable element, or the container itself as fallback
   const focusables = getFocusableElements(container);
   const firstFocusable = focusables[0];
   if (firstFocusable) {
     firstFocusable.focus();
   } else {
     container.focus();
-  }
-
-  function handleEscape(event: KeyboardEvent): void {
-    if (event.key === "Escape") {
-      event.preventDefault();
-      onEscape();
-    }
   }
 
   function handleTab(event: KeyboardEvent): void {
@@ -66,13 +78,11 @@ export function activateFocusTrap(options: FocusTrapOptions): () => void {
     if (!first || !last) return;
 
     if (event.shiftKey) {
-      // Shift+Tab on first element wraps to last
       if (document.activeElement === first) {
         event.preventDefault();
         last.focus();
       }
     } else {
-      // Tab on last element wraps to first
       if (document.activeElement === last) {
         event.preventDefault();
         first.focus();
@@ -80,13 +90,9 @@ export function activateFocusTrap(options: FocusTrapOptions): () => void {
     }
   }
 
-  // Escape listens on document so it works regardless of focus position
-  // (WAI-ARIA dialog pattern: Escape always closes the topmost modal).
-  document.addEventListener("keydown", handleEscape);
   container.addEventListener("keydown", handleTab);
 
   return () => {
-    document.removeEventListener("keydown", handleEscape);
     container.removeEventListener("keydown", handleTab);
   };
 }

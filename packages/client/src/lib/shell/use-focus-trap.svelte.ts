@@ -6,7 +6,7 @@
  * to the original trigger.
  */
 
-import { activateFocusTrap } from "./focus-trap";
+import { activateFocusTrap, addEscapeHandler } from "./focus-trap";
 
 export interface UseFocusTrapOptions {
   /** Reactive getter: whether the overlay is open. */
@@ -32,6 +32,7 @@ export function useFocusTrap(options: UseFocusTrapOptions): UseFocusTrapReturn {
   let dialogEl: HTMLElement | undefined = $state(undefined);
   let triggerEl: HTMLElement | null = null;
   let cleanupTrap: (() => void) | null = null;
+  let cleanupEscape: (() => void) | null = null;
 
   $effect(() => {
     if (!options.opened || dialogEl == null) return;
@@ -40,6 +41,12 @@ export function useFocusTrap(options: UseFocusTrapOptions): UseFocusTrapReturn {
     const active = document.activeElement;
     triggerEl = active instanceof HTMLElement ? active : null;
 
+    // Escape handler registered synchronously so it's active from the
+    // moment the overlay opens, not deferred behind a RAF.
+    cleanupEscape = addEscapeHandler(handleDismiss);
+
+    // Focus movement and Tab trapping deferred to next frame so the
+    // overlay has time to position itself before we move focus into it.
     const rafId = requestAnimationFrame(() => {
       cleanupTrap = activateFocusTrap({
         container: el,
@@ -49,6 +56,10 @@ export function useFocusTrap(options: UseFocusTrapOptions): UseFocusTrapReturn {
 
     return () => {
       cancelAnimationFrame(rafId);
+      if (cleanupEscape != null) {
+        cleanupEscape();
+        cleanupEscape = null;
+      }
       if (cleanupTrap != null) {
         cleanupTrap();
         cleanupTrap = null;
