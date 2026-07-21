@@ -27,8 +27,8 @@ test.describe.serial("1d-smoke", () => {
     const main = page.locator("main");
     await expect(main).toBeAttached();
 
-    // At desktop (1280px), the sidebar replaces the bottom tabbar.
-    // Both render a tablist with the same tabs.
+    // The tablist appears as a bottom tabbar on mobile or a sidebar on desktop.
+    // Both render the same tabs; this spec runs in both viewports.
     const tabbar = page.getByRole("tablist");
     await expect(tabbar).toBeAttached();
 
