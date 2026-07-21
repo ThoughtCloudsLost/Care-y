@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { untrack } from "svelte";
   import { Link, List, ListItem } from "konsta/svelte";
   import { page } from "$app/state";
   import { goto, replaceState } from "$app/navigation";
@@ -99,7 +100,7 @@
   const urlAction = $derived(page.url.searchParams.get("action"));
   const urlUser = $derived(page.url.searchParams.get("user"));
 
-  let activeTab = $state<PeopleTab>(defaultTab(permissions));
+  let activeTab = $state<PeopleTab>(untrack(() => defaultTab(permissions)));
 
   $effect(() => {
     if (urlUser !== null && activeTab !== "users") activeTab = "users";
