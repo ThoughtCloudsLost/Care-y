@@ -38,6 +38,9 @@ const SERVER_COVERAGE = join(ROOT, "coverage", "server", "coverage-final.json");
 const E2E_RAW_DIR = join(ROOT, "coverage", "e2e", "raw");
 const MERGED_DIR = join(ROOT, "coverage", "merged");
 
+const FAILURES_PATH = join(ROOT, "test-failures.log");
+const PREV_SUMMARY_PATH = join(ROOT, ".coverage-prev-summary.json");
+const TEST_RESULTS_PATH = join(ROOT, "coverage", "test-results.json");
 const DOCKER_APP_ROOT = "/app";
 
 const VITE_ORIGIN = "http://localhost:5174";
@@ -294,6 +297,303 @@ function injectThresholds(htmlPath) {
   writeFileSync(htmlPath, html);
 }
 
+function insertBeforePush(html, content) {
+  const pushMarker = `<div class='push'></div>`;
+  const pushIdx = html.indexOf(pushMarker);
+  if (pushIdx !== -1) {
+    return html.slice(0, pushIdx) + content + "\n" + html.slice(pushIdx);
+  }
+  return html.replace("</body>", content + "\n</body>");
+}
+
+function injectFailures(htmlPath) {
+  if (!existsSync(htmlPath)) return;
+  if (!existsSync(FAILURES_PATH)) return;
+
+  let logContent;
+  try {
+    logContent = readFileSync(FAILURES_PATH, "utf-8").trim();
+  } catch {
+    return;
+  }
+  if (!logContent) return;
+
+  const phases = [];
+  const blocks = logContent.split(/^PHASE: /m).slice(1);
+  for (const block of blocks) {
+    const newlineIdx = block.indexOf("\n");
+    const name = block.slice(0, newlineIdx).trim();
+    const body = block
+      .slice(newlineIdx + 1)
+      .replace(/^-{40,}\n/, "")
+      .trim();
+    phases.push({ name, body });
+  }
+
+  if (phases.length === 0) return;
+
+  const escapedPhases = phases.map((p) => ({
+    name: p.name
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;"),
+    body: p.body
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;"),
+  }));
+
+  let phaseSections = "";
+  for (const p of escapedPhases) {
+    phaseSections += `
+    <details class="failure-phase">
+      <summary class="failure-phase-name">${p.name}</summary>
+      <pre class="failure-output">${p.body}</pre>
+    </details>`;
+  }
+
+  const injection = `
+<style>
+  .failures-section {
+    margin: 24px 20px; padding: 0;
+    border: 2px solid #c2294a; border-radius: 6px;
+    overflow: hidden;
+  }
+  .failures-header {
+    display: flex; align-items: center; gap: 8px;
+    padding: 10px 16px; margin: 0;
+    background: #FCE1E5; color: #9b1c31;
+    font-size: 14px; font-weight: 600; font-family: inherit;
+    cursor: pointer; user-select: none;
+    list-style: none;
+  }
+  .failures-header::-webkit-details-marker { display: none; }
+  .failures-header::before {
+    content: '\\25B6'; font-size: 10px;
+    transition: transform 0.15s ease;
+  }
+  details.failures-wrapper[open] > .failures-header::before {
+    transform: rotate(90deg);
+  }
+  .failures-count {
+    display: inline-block; font-size: 11px;
+    padding: 1px 7px; border-radius: 10px;
+    background: #9b1c31; color: #fff;
+  }
+  .failures-body { padding: 0; }
+  .failure-phase { border-top: 1px solid #e5e7eb; }
+  .failure-phase-name {
+    padding: 8px 16px; font-size: 13px; font-weight: 600;
+    cursor: pointer; user-select: none;
+    list-style: none;
+  }
+  .failure-phase-name::-webkit-details-marker { display: none; }
+  .failure-phase-name::before {
+    content: '\\25B6'; font-size: 9px; margin-right: 6px;
+    display: inline-block; transition: transform 0.15s ease;
+  }
+  details.failure-phase[open] > .failure-phase-name::before {
+    transform: rotate(90deg);
+  }
+  .failure-output {
+    margin: 0; padding: 12px 16px;
+    background: #fafafa;
+    font-size: 12px; line-height: 1.5;
+    overflow-x: auto; white-space: pre-wrap; word-break: break-all;
+    max-height: 600px; overflow-y: auto;
+    border-top: 1px solid #e5e7eb;
+  }
+  @media (prefers-color-scheme: dark) {
+    .failures-section { border-color: #c2294a; }
+    .failures-header { background: #3b1520; color: #fca5a5; }
+    .failures-count { background: #c2294a; }
+    .failure-phase { border-top-color: #3f3f50; }
+    .failure-phase-name { color: #fca5a5; }
+    .failure-output {
+      background: #1a1a2e; color: #d4d4d8;
+      border-top-color: #3f3f50;
+    }
+  }
+</style>
+<div class="failures-section">
+  <details class="failures-wrapper" open>
+    <summary class="failures-header">
+      Failed Tests <span class="failures-count">${String(phases.length)} phase${phases.length === 1 ? "" : "s"}</span>
+    </summary>
+    <div class="failures-body">
+      ${phaseSections}
+    </div>
+  </details>
+</div>
+`;
+
+  let html = readFileSync(htmlPath, "utf-8");
+  html = insertBeforePush(html, injection);
+  writeFileSync(htmlPath, html);
+}
+
+function injectTestResults(htmlPath) {
+  if (!existsSync(htmlPath)) return;
+  if (!existsSync(TEST_RESULTS_PATH)) return;
+
+  let results;
+  try {
+    results = JSON.parse(readFileSync(TEST_RESULTS_PATH, "utf-8"));
+  } catch {
+    return;
+  }
+  if (!Array.isArray(results) || results.length === 0) return;
+
+  const allPassed = results.every((r) => r.status === "pass");
+
+  const pills = results
+    .map((r) => {
+      const cls = r.status === "pass" ? "pass" : "fail";
+      const icon = r.status === "pass" ? "&#x2713;" : "&#x2717;";
+      return `<span class="result-pill ${cls}">${icon} ${r.label} <span class="result-time">${r.secs}s</span></span>`;
+    })
+    .join("\n      ");
+
+  const statusCls = allPassed ? "pass" : "fail";
+  const statusText = allPassed ? "All Tests Passed" : "Some Tests Failed";
+
+  const injection = `
+<style>
+  .test-results-bar {
+    display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+    padding: 10px 20px; margin: 0;
+    border-bottom: 1px solid #ddd;
+    font-size: 13px; font-family: inherit;
+  }
+  .test-results-label {
+    font-weight: 600; font-size: 13px;
+    padding: 3px 10px; border-radius: 4px;
+  }
+  .test-results-label.pass { background: rgb(230,245,208); color: #2d5016; }
+  .test-results-label.fail { background: #FCE1E5; color: #9b1c31; }
+  .result-pill {
+    display: inline-flex; align-items: center; gap: 4px;
+    padding: 3px 8px; border-radius: 4px;
+    font-size: 12px; font-weight: 500;
+  }
+  .result-pill.pass { color: #2d5016; }
+  .result-pill.fail { color: #9b1c31; font-weight: 600; }
+  .result-time { opacity: 0.6; font-size: 11px; }
+  @media (prefers-color-scheme: dark) {
+    .test-results-bar { border-bottom-color: #3f3f50; }
+    .test-results-label.pass { background: #1a2e1a; color: #86efac; }
+    .test-results-label.fail { background: #3b1520; color: #fca5a5; }
+    .result-pill.pass { color: #86efac; }
+    .result-pill.fail { color: #fca5a5; }
+  }
+</style>
+<div class="test-results-bar">
+  <span class="test-results-label ${statusCls}">${statusText}</span>
+  ${pills}
+</div>`;
+
+  let html = readFileSync(htmlPath, "utf-8");
+  html = insertBeforePush(html, injection);
+  writeFileSync(htmlPath, html);
+}
+
+function injectDelta(htmlPath, coverageMap) {
+  if (!existsSync(htmlPath)) return;
+  if (!existsSync(PREV_SUMMARY_PATH)) return;
+
+  let prevSummary;
+  try {
+    prevSummary = JSON.parse(readFileSync(PREV_SUMMARY_PATH, "utf-8"));
+  } catch {
+    return;
+  }
+
+  const pkgCoverage = {};
+  for (const filePath of coverageMap.files()) {
+    const match = filePath.match(/packages\/(\w+)\//);
+    if (!match) continue;
+    const pkg = match[1];
+    if (!pkgCoverage[pkg]) pkgCoverage[pkg] = libCoverage.createCoverageMap();
+    pkgCoverage[pkg].addFileCoverage(coverageMap.fileCoverageFor(filePath));
+  }
+
+  const deltas = [];
+  const metrics = ["statements", "branches", "functions", "lines"];
+  const labels = {
+    statements: "Stmts",
+    branches: "Branch",
+    functions: "Funcs",
+    lines: "Lines",
+  };
+
+  for (const [pkg, map] of Object.entries(pkgCoverage)) {
+    if (!prevSummary[pkg]) continue;
+    const s = map.getCoverageSummary();
+    const diffs = [];
+    for (const m of metrics) {
+      const diff = s[m].pct - prevSummary[pkg][m];
+      if (Math.abs(diff) >= 0.01) {
+        const sign = diff > 0 ? "+" : "";
+        diffs.push({
+          label: labels[m],
+          value: `${sign}${diff.toFixed(2)}%`,
+          direction: diff > 0 ? "up" : "down",
+        });
+      }
+    }
+    if (diffs.length > 0) {
+      deltas.push({ pkg, diffs });
+    }
+  }
+
+  if (deltas.length === 0) return;
+
+  const deltaPills = deltas
+    .map((d) => {
+      const diffSpans = d.diffs
+        .map(
+          (df) =>
+            `<span class="delta-metric ${df.direction}">${df.label} ${df.value}</span>`,
+        )
+        .join(" ");
+      return `<span class="delta-pkg"><span class="delta-pkg-name">${d.pkg}</span> ${diffSpans}</span>`;
+    })
+    .join("\n      ");
+
+  const injection = `
+<style>
+  .delta-bar {
+    display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+    padding: 8px 20px; margin: 0;
+    border-bottom: 1px solid #ddd;
+    font-size: 12px; font-family: inherit;
+  }
+  .delta-label { font-weight: 600; color: #71717a; font-size: 12px; }
+  .delta-pkg {
+    display: inline-flex; align-items: center; gap: 4px;
+    font-size: 12px;
+  }
+  .delta-pkg-name { font-weight: 600; }
+  .delta-metric { font-family: Consolas, 'Liberation Mono', Menlo, monospace; font-size: 11px; }
+  .delta-metric.up { color: #2d5016; }
+  .delta-metric.down { color: #9b1c31; }
+  @media (prefers-color-scheme: dark) {
+    .delta-bar { border-bottom-color: #3f3f50; }
+    .delta-label { color: #a1a1aa; }
+    .delta-metric.up { color: #86efac; }
+    .delta-metric.down { color: #fca5a5; }
+  }
+</style>
+<div class="delta-bar">
+  <span class="delta-label">Delta vs last run:</span>
+  ${deltaPills}
+</div>`;
+
+  let html = readFileSync(htmlPath, "utf-8");
+  html = insertBeforePush(html, injection);
+  writeFileSync(htmlPath, html);
+}
+
 async function main() {
   console.log("Merging coverage reports...\n");
 
@@ -366,7 +666,11 @@ async function main() {
   reports.create("lcov").execute(context);
 
   applyDarkTheme(join(MERGED_DIR, "base.css"));
-  injectThresholds(join(MERGED_DIR, "index.html"));
+  const htmlPath = join(MERGED_DIR, "index.html");
+  injectThresholds(htmlPath);
+  injectTestResults(htmlPath);
+  injectDelta(htmlPath, coverageMap);
+  injectFailures(htmlPath);
 
   console.log(`\nReports written to ${MERGED_DIR}/`);
   console.log(`  HTML: open coverage/merged/index.html for full detail`);

@@ -25,6 +25,8 @@ import { join, resolve } from "node:path";
 const ROOT = resolve(import.meta.dirname, "..");
 const SUMMARY_PATH = join(ROOT, "coverage", "merged", "summary.json");
 const FAILURES_PATH = join(ROOT, "test-failures.log");
+const PREV_SUMMARY_PATH = join(ROOT, ".coverage-prev-summary.json");
+const TEST_RESULTS_PATH = join(ROOT, "coverage", "test-results.json");
 
 function runQuiet(cmd, opts = {}) {
   try {
@@ -110,6 +112,11 @@ async function main() {
     }
   }
 
+  // ── Preserve previous summary for delta injection ───────────────────
+  if (prevSummary) {
+    writeFileSync(PREV_SUMMARY_PATH, JSON.stringify(prevSummary));
+  }
+
   // ── Clean stale data ────────────────────────────────────────────────
   rmSync(join(ROOT, "coverage"), { recursive: true, force: true });
   rmSync(FAILURES_PATH, { force: true });
@@ -187,6 +194,15 @@ async function main() {
     });
   }
 
+  // Write test results for the merge script to inject into the HTML
+  mkdirSync(join(ROOT, "coverage"), { recursive: true });
+  const testResults = phases.map((p) => ({
+    label: p.label,
+    status: p.exitCode === 0 ? "pass" : "fail",
+    secs: p.secs,
+  }));
+  writeFileSync(TEST_RESULTS_PATH, JSON.stringify(testResults));
+
   // Coverage merge (always runs, even after e2e failure)
   phases.push(
     await timed("Coverage merge", () =>
@@ -211,6 +227,9 @@ async function main() {
   if (failures.length > 0) {
     console.log(`\nTest failures saved to: test-failures.log`);
   }
+
+  // ── Cleanup temp files ──────────────────────────────────────────────
+  rmSync(PREV_SUMMARY_PATH, { force: true });
 
   // ── Auto-open HTML report ───────────────────────────────────────────
   runQuiet("open coverage/merged/index.html");
