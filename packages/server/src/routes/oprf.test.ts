@@ -40,7 +40,7 @@ import {
   mockRes,
   expectTrpcError,
   createMockEmailSender,
-  createMockProviderFactory,
+  createThrowingProviderFactory,
   testFieldEncryptor,
   testBlindIndexer,
   testSessionTokenizer,
@@ -460,7 +460,7 @@ describe("OPRF tRPC route", () => {
         isSecureCookie: false,
         emailSender: createMockEmailSender(),
         tokenizer: testSessionTokenizer,
-        providerFactory: createMockProviderFactory(),
+        providerFactory: createThrowingProviderFactory(),
         resolveCallerId: vi.fn().mockResolvedValue("+15551234567"),
         totpReplayCache: createInMemoryTotpReplayCache(),
       },
@@ -479,7 +479,7 @@ describe("OPRF tRPC route", () => {
         encryptor: testFieldEncryptor,
         indexer: testBlindIndexer,
         tokenizer: testSessionTokenizer,
-        providerFactory: createMockProviderFactory(),
+        providerFactory: createThrowingProviderFactory(),
         resolveCallerId: vi.fn().mockResolvedValue("+15551234567"),
         pushSender: null,
         pushHmacKey: null,
@@ -492,7 +492,7 @@ describe("OPRF tRPC route", () => {
           throw new OprfError("not implemented in test");
         },
       } as unknown as Parameters<typeof createAppRouter>[0]["orgService"],
-      providerFactory: createMockProviderFactory(),
+      providerFactory: createThrowingProviderFactory(),
     });
     const factory = createCallerFactory(appRouter);
     const ctx: Context = {
@@ -580,7 +580,7 @@ describe("OPRF adminEvaluate route", () => {
         isSecureCookie: false,
         emailSender: createMockEmailSender(),
         tokenizer: testSessionTokenizer,
-        providerFactory: createMockProviderFactory(),
+        providerFactory: createThrowingProviderFactory(),
         resolveCallerId: vi.fn().mockResolvedValue("+15551234567"),
         totpReplayCache: createInMemoryTotpReplayCache(),
       },
@@ -599,7 +599,7 @@ describe("OPRF adminEvaluate route", () => {
         encryptor: testFieldEncryptor,
         indexer: testBlindIndexer,
         tokenizer: testSessionTokenizer,
-        providerFactory: createMockProviderFactory(),
+        providerFactory: createThrowingProviderFactory(),
         resolveCallerId: vi.fn().mockResolvedValue("+15551234567"),
         pushSender: null,
         pushHmacKey: null,
@@ -612,7 +612,7 @@ describe("OPRF adminEvaluate route", () => {
           throw new OprfError("not implemented in test");
         },
       } as unknown as Parameters<typeof createAppRouter>[0]["orgService"],
-      providerFactory: createMockProviderFactory(),
+      providerFactory: createThrowingProviderFactory(),
     });
     const factory = createCallerFactory(appRouter);
     const ctx: Context = {
@@ -841,7 +841,7 @@ describe.skipIf(!DOCKER_OPRF_AVAILABLE)(
           isSecureCookie: false,
           emailSender: createMockEmailSender(),
           tokenizer: testSessionTokenizer,
-          providerFactory: createMockProviderFactory(),
+          providerFactory: createThrowingProviderFactory(),
           resolveCallerId: vi.fn().mockResolvedValue("+15551234567"),
           totpReplayCache: createInMemoryTotpReplayCache(),
         },
@@ -860,7 +860,7 @@ describe.skipIf(!DOCKER_OPRF_AVAILABLE)(
           encryptor: testFieldEncryptor,
           indexer: testBlindIndexer,
           tokenizer: testSessionTokenizer,
-          providerFactory: createMockProviderFactory(),
+          providerFactory: createThrowingProviderFactory(),
           resolveCallerId: vi.fn().mockResolvedValue("+15551234567"),
           pushSender: null,
           pushHmacKey: null,
@@ -873,7 +873,7 @@ describe.skipIf(!DOCKER_OPRF_AVAILABLE)(
             throw new OprfError("not implemented in test");
           },
         } as unknown as Parameters<typeof createAppRouter>[0]["orgService"],
-        providerFactory: createMockProviderFactory(),
+        providerFactory: createThrowingProviderFactory(),
       });
       const factory = createCallerFactory(appRouter);
       const ctx: Context = {

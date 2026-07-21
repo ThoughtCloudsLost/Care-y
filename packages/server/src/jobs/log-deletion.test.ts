@@ -1,8 +1,8 @@
 import { describe, it, expect, vi } from "vitest";
 import type { JobQueue } from "./queue.js";
-import type { ProviderFactory } from "../telephony/factory.js";
 import type { TelephonyProvider } from "../telephony/provider.js";
 import { ValidationError } from "../errors.js";
+import { createMockProviderFactory } from "../test-utils.js";
 import {
   registerLogDeletionHandler,
   enqueueLogDeletion,
@@ -75,13 +75,11 @@ describe("registerLogDeletionHandler", () => {
   it("calls deleteCallLog for resourceType call", async () => {
     const { jobQueue, handlers } = createMockJobQueue();
     const mockProvider = createMockProvider();
-    const mockProviderFactory: ProviderFactory = {
+    const factory = createMockProviderFactory({
       getProvider: vi.fn().mockResolvedValue(mockProvider),
-      invalidate: vi.fn(),
-      invalidateAll: vi.fn(),
-    };
+    });
 
-    registerLogDeletionHandler(jobQueue, mockProviderFactory);
+    registerLogDeletionHandler(jobQueue, factory);
     const handler = handlers.get("log-deletion");
     expect(handler).toBeDefined();
 
@@ -91,7 +89,7 @@ describe("registerLogDeletionHandler", () => {
       resourceId: "CA-abc123",
     });
 
-    expect(mockProviderFactory.getProvider).toHaveBeenCalledWith("org-001");
+    expect(factory.getProvider).toHaveBeenCalledWith("org-001");
     expect(mockProvider.deleteCallLog).toHaveBeenCalledWith("CA-abc123");
     expect(mockProvider.deleteMessageLog).not.toHaveBeenCalled();
     expect(mockProvider.deleteRecording).not.toHaveBeenCalled();
@@ -100,13 +98,11 @@ describe("registerLogDeletionHandler", () => {
   it("calls deleteMessageLog for resourceType message", async () => {
     const { jobQueue, handlers } = createMockJobQueue();
     const mockProvider = createMockProvider();
-    const mockProviderFactory: ProviderFactory = {
+    const factory = createMockProviderFactory({
       getProvider: vi.fn().mockResolvedValue(mockProvider),
-      invalidate: vi.fn(),
-      invalidateAll: vi.fn(),
-    };
+    });
 
-    registerLogDeletionHandler(jobQueue, mockProviderFactory);
+    registerLogDeletionHandler(jobQueue, factory);
     const handler = handlers.get("log-deletion")!;
 
     await handler({
@@ -123,13 +119,11 @@ describe("registerLogDeletionHandler", () => {
   it("calls deleteRecording for resourceType recording", async () => {
     const { jobQueue, handlers } = createMockJobQueue();
     const mockProvider = createMockProvider();
-    const mockProviderFactory: ProviderFactory = {
+    const factory = createMockProviderFactory({
       getProvider: vi.fn().mockResolvedValue(mockProvider),
-      invalidate: vi.fn(),
-      invalidateAll: vi.fn(),
-    };
+    });
 
-    registerLogDeletionHandler(jobQueue, mockProviderFactory);
+    registerLogDeletionHandler(jobQueue, factory);
     const handler = handlers.get("log-deletion")!;
 
     await handler({
@@ -145,13 +139,9 @@ describe("registerLogDeletionHandler", () => {
 
   it("throws ValidationError when orgId is missing", async () => {
     const { jobQueue, handlers } = createMockJobQueue();
-    const mockProviderFactory: ProviderFactory = {
-      getProvider: vi.fn(),
-      invalidate: vi.fn(),
-      invalidateAll: vi.fn(),
-    };
+    const factory = createMockProviderFactory();
 
-    registerLogDeletionHandler(jobQueue, mockProviderFactory);
+    registerLogDeletionHandler(jobQueue, factory);
     const handler = handlers.get("log-deletion")!;
 
     await expect(
@@ -161,13 +151,9 @@ describe("registerLogDeletionHandler", () => {
 
   it("throws ValidationError when resourceType is invalid", async () => {
     const { jobQueue, handlers } = createMockJobQueue();
-    const mockProviderFactory: ProviderFactory = {
-      getProvider: vi.fn(),
-      invalidate: vi.fn(),
-      invalidateAll: vi.fn(),
-    };
+    const factory = createMockProviderFactory();
 
-    registerLogDeletionHandler(jobQueue, mockProviderFactory);
+    registerLogDeletionHandler(jobQueue, factory);
     const handler = handlers.get("log-deletion")!;
 
     await expect(

@@ -14,6 +14,9 @@ import type { Kysely } from "kysely";
 import type { TenantDatabase } from "../db/types.js";
 import { notificationEventTypeSchema, sseEventSchema } from "@care-y/shared";
 import {
+  type CapturedEmail,
+  createCapturingTransport,
+  type CapturingTransport,
   createTestDb,
   createTestUser,
   testFieldEncryptor,
@@ -301,48 +304,6 @@ const TEST_ORG_SLUG = "test-org";
 const LOGIN_URL = "https://test-org.care-y.app/login";
 const ADDR_A = "volunteer-a@example.test";
 const ADDR_B = "volunteer-b@example.test";
-
-interface CapturedEmail {
-  readonly to: string;
-  readonly subject: string;
-  readonly text: string;
-  readonly from: string | undefined;
-}
-
-interface CapturingTransport extends EmailSender {
-  readonly sent: readonly CapturedEmail[];
-}
-
-/**
- * Flat fake at the external SMTP boundary (EmailSender). Everything above it
- * (NotificationEmailSender branding wrapper, encryptor, DB) is real.
- * Captures the full message including the from header, which the shared
- * createMockEmailSender drops.
- */
-function createCapturingTransport(options?: {
-  failFor?: readonly string[];
-}): CapturingTransport {
-  const sent: CapturedEmail[] = [];
-  const failFor = new Set(options?.failFor ?? []);
-  return {
-    get sent(): readonly CapturedEmail[] {
-      return sent;
-    },
-    async send(message): Promise<void> {
-      if (failFor.has(message.to)) {
-        // The error message deliberately contains the address so tests can
-        // prove the handler does not echo transport errors (PII) into logs.
-        throw new Error(`SMTP rejected ${message.to}`);
-      }
-      sent.push({
-        to: message.to,
-        subject: message.subject,
-        text: message.text,
-        from: message.from,
-      });
-    },
-  };
-}
 
 describe.skipIf(!process.env.DATABASE_URL)(
   "createNotificationJobHandler (DB)",

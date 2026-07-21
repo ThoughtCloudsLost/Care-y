@@ -6,6 +6,7 @@ import type { SecretsEncryptor } from "../config/secrets.js";
 import { createProviderFactory, type ProviderFactory } from "./factory.js";
 import { createTwilioProvider } from "./twilio.js";
 import type {
+  TelephonyProvider,
   TelephonyProviderStatic,
   MaskedTelephonyConfig,
 } from "./provider.js";
@@ -20,7 +21,12 @@ import {
   SecretCryptoError,
   TelephonyConfigError,
 } from "../errors.js";
-import { createTestDb, type TestDb, TEST_OPS_KEY } from "../test-utils.js";
+import {
+  createMockProviderFactory,
+  createTestDb,
+  type TestDb,
+  TEST_OPS_KEY,
+} from "../test-utils.js";
 import { createSecretsEncryptor } from "../config/secrets.js";
 import { twilioConfigSchema } from "./schemas.js";
 
@@ -52,31 +58,6 @@ const MASKED_CONFIG: MaskedTelephonyConfig = {
   maskedAuthToken: "********",
   phoneNumbers: [{ number: "+15551234567" }],
 };
-
-function createMockProviderFactory(
-  overrides?: Partial<ProviderFactory>,
-): ProviderFactory {
-  return {
-    getProvider: vi.fn(async () => ({
-      providerId: "twilio",
-      maskConfig: () => MASKED_CONFIG,
-      sendSms: vi.fn(),
-      initiateOutboundCall: vi.fn(),
-      initiateWebRtcCall: vi.fn(),
-      validateWebhook: vi.fn(),
-      parseIncomingCall: vi.fn(),
-      parseIncomingSms: vi.fn(),
-      generateVoiceResponse: vi.fn(),
-      getRecording: vi.fn(),
-      deleteRecording: vi.fn(),
-      deleteCallLog: vi.fn(),
-      deleteMessageLog: vi.fn(),
-    })),
-    invalidate: vi.fn(),
-    invalidateAll: vi.fn(),
-    ...overrides,
-  };
-}
 
 function createMockProviderStatic(): TelephonyProviderStatic {
   return {
@@ -159,7 +140,13 @@ describe("TelephonyConfigService", () => {
 
   describe("getMaskedConfig", () => {
     it("returns masked config from provider factory", async () => {
-      const deps = buildMockDeps();
+      const factory = createMockProviderFactory({
+        getProvider: vi.fn(async () => ({
+          ...({} as TelephonyProvider),
+          maskConfig: () => MASKED_CONFIG,
+        })),
+      });
+      const deps = buildMockDeps({ factory });
       const service = createTelephonyConfigService(deps);
 
       const result = await service.getMaskedConfig("org-test");

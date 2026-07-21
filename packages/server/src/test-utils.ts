@@ -145,6 +145,20 @@ export function testUnseal(ciphertext: Buffer | string): string {
 }
 
 /**
+ * Seals plaintext in the layout decryptBrandingBlob expects:
+ * nonce (24 bytes) || crypto_secretbox_easy output (MAC + ciphertext).
+ */
+export function sealBrandingBlob(plaintext: Buffer, key: Buffer): Buffer {
+  const nonce = Buffer.alloc(sodium.crypto_secretbox_NONCEBYTES);
+  sodium.randombytes_buf(nonce);
+  const sealed = Buffer.alloc(
+    plaintext.length + sodium.crypto_secretbox_MACBYTES,
+  );
+  sodium.crypto_secretbox_easy(sealed, plaintext, nonce, key);
+  return Buffer.concat([nonce, sealed]);
+}
+
+/**
  * Seeds the org_config singleton row in a test schema.
  * Inserts the row if it doesn't exist, then sets org_public_key.
  * Call in beforeAll after createTestDb() so that org resolution and
@@ -620,7 +634,7 @@ export function mockRes(): MockResWithCookies {
 // tRPC assertion helpers
 // ---------------------------------------------------------------------------
 
-import { expect } from "vitest";
+import { expect, vi } from "vitest";
 import { TRPCError } from "@trpc/server";
 import type { EmailSender, EmailMessage } from "./email/email-sender.js";
 import { generateTotpCode, base32Decode } from "./auth/totp.js";
@@ -687,6 +701,50 @@ export function createMockEmailSender(): MockEmailSender {
         to: message.to,
         subject: message.subject,
         text: message.text,
+      });
+    },
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Capturing email transport
+// ---------------------------------------------------------------------------
+
+export interface CapturedEmail {
+  readonly to: string;
+  readonly subject: string;
+  readonly text: string;
+  readonly from: string | undefined;
+}
+
+export interface CapturingTransport extends EmailSender {
+  readonly sent: readonly CapturedEmail[];
+}
+
+/**
+ * Flat fake at the external SMTP boundary (EmailSender). Everything above it
+ * (NotificationEmailSender branding wrapper, encryptor, DB) is real.
+ * Captures the full message including the from header, which the shared
+ * createMockEmailSender drops. Supports per-address failure injection.
+ */
+export function createCapturingTransport(options?: {
+  failFor?: readonly string[];
+}): CapturingTransport {
+  const sent: CapturedEmail[] = [];
+  const failFor = new Set(options?.failFor ?? []);
+  return {
+    get sent(): readonly CapturedEmail[] {
+      return sent;
+    },
+    async send(message): Promise<void> {
+      if (failFor.has(message.to)) {
+        throw new Error(`SMTP rejected ${message.to}`);
+      }
+      sent.push({
+        to: message.to,
+        subject: message.subject,
+        text: message.text,
+        from: message.from,
       });
     },
   };
@@ -799,7 +857,7 @@ import { NotFoundError } from "./errors.js";
  * for unconfigured orgs), so callers like createScopedTwoFactorServices
  * handle it gracefully and set SMS to unavailable.
  */
-export function createMockProviderFactory(): ProviderFactory {
+export function createThrowingProviderFactory(): ProviderFactory {
   return {
     async getProvider() {
       throw new NotFoundError("Telephony not configured (mock)");
@@ -810,6 +868,37 @@ export function createMockProviderFactory(): ProviderFactory {
     invalidateAll() {
       // no-op: cache invalidation not needed in tests
     },
+  };
+}
+
+/**
+ * Creates a ProviderFactory with vi.fn() stubs on all methods.
+ * getProvider resolves to a full mock TelephonyProvider. Pass
+ * overrides to replace individual factory methods (e.g. a custom
+ * getProvider that resolves to a specific mock provider instance).
+ */
+export function createMockProviderFactory(
+  overrides?: Partial<ProviderFactory>,
+): ProviderFactory {
+  return {
+    getProvider: vi.fn(async () => ({
+      providerId: "twilio" as const,
+      maskConfig: vi.fn(),
+      sendSms: vi.fn(),
+      initiateOutboundCall: vi.fn(),
+      initiateWebRtcCall: vi.fn(),
+      validateWebhook: vi.fn(),
+      parseIncomingCall: vi.fn(),
+      parseIncomingSms: vi.fn(),
+      generateVoiceResponse: vi.fn(),
+      getRecording: vi.fn(),
+      deleteRecording: vi.fn(),
+      deleteCallLog: vi.fn(),
+      deleteMessageLog: vi.fn(),
+    })),
+    invalidate: vi.fn(),
+    invalidateAll: vi.fn(),
+    ...overrides,
   };
 }
 

@@ -27,6 +27,7 @@ import {
   testSealedBox,
   testUnseal,
   TestSetupError,
+  TEST_OPS_KEY,
   TEST_ORG_PUBLIC_KEY,
   mockReq,
   mockRes,
@@ -54,10 +55,6 @@ import type { Context, OrgContext } from "../trpc/context.js";
 import { deriveSecretsKey, createSecretsEncryptor } from "../config/secrets.js";
 
 const HAS_DB = Boolean(process.env.DATABASE_URL);
-const TEST_OPS_KEY = Buffer.from(
-  "cafebabecafebabecafebabecafebabecafebabecafebabecafebabecafebabe",
-  "hex",
-);
 
 function makeTenantDbFactory(
   platformDb: Kysely<PlatformDatabase>,

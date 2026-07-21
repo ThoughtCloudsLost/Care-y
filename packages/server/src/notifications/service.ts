@@ -107,6 +107,7 @@ export function createNotificationJobHandler(
   return async (payload) => {
     const parsed = jobPayloadSchema.parse(payload);
     const { orgSchema, orgSlug, recipientUserIds, eventType } = parsed;
+    if (recipientUserIds.length === 0) return;
     const loginUrl = buildLoginUrl(orgSlug);
 
     const strings = getStrings("en");
@@ -127,7 +128,7 @@ export function createNotificationJobHandler(
       if (!user.encrypted_notification_addr) continue;
 
       try {
-        // care-y-ignore-next-line server-no-decrypt -- notification email is operational server-side PII (Tier 2, not E2EE)
+        // care-y-ignore-next-line server-no-decrypt -- notification email is operational server-side PII (OPS_SECRETS_KEY scope, not E2EE)
         const email = deps.encryptor.decrypt(user.encrypted_notification_addr);
         await deps.emailSender.sendTicketNotification({
           to: email,

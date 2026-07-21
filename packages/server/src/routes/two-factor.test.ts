@@ -25,7 +25,7 @@ import {
   expectTrpcError,
   createMockEmailSender,
   createMockOprfDeps,
-  createMockProviderFactory,
+  createThrowingProviderFactory,
   createTestUser,
   createTestSession,
   enrollTotp,
@@ -144,7 +144,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
           tokenizer: testSessionTokenizer,
           isSecureCookie: false,
           emailSender: mockEmail,
-          providerFactory: createMockProviderFactory(),
+          providerFactory: createThrowingProviderFactory(),
           resolveCallerId: vi.fn().mockResolvedValue("+15551234567"),
           totpReplayCache,
         },
@@ -163,7 +163,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
           encryptor: testFieldEncryptor,
           indexer: testBlindIndexer,
           tokenizer: testSessionTokenizer,
-          providerFactory: createMockProviderFactory(),
+          providerFactory: createThrowingProviderFactory(),
           resolveCallerId: vi.fn().mockResolvedValue("+15551234567"),
           pushSender: null,
           pushHmacKey: null,
@@ -171,7 +171,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         },
         oprfDeps: createMockOprfDeps(),
         orgService,
-        providerFactory: createMockProviderFactory(),
+        providerFactory: createThrowingProviderFactory(),
       });
     }
 
