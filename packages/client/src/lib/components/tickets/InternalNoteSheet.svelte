@@ -167,7 +167,12 @@
           encryptedContent,
           noteTypeId: effectiveNoteTypeId,
         });
-        toastStore.show(m.note_type_updated());
+        const typeChanged =
+          selectedNoteTypeId !== null &&
+          selectedNoteTypeId !== (editInitialNoteTypeId ?? null);
+        toastStore.show(
+          typeChanged ? m.note_type_updated() : m.ticket_note_saved(),
+        );
       } else {
         const followUpId = crypto.randomUUID();
         const encryptedContent = await cryptoBridge.encrypt(

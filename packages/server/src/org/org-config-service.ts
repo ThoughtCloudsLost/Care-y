@@ -1,5 +1,6 @@
 import type { Kysely } from "kysely";
 import type { TenantDatabase } from "../db/types.js";
+import { NotFoundError } from "../errors.js";
 
 export interface OrgGeneralResult {
   readonly encryptedName: string | null;
@@ -26,7 +27,11 @@ export function createOrgConfigService(
       const config = await tenantDb
         .selectFrom("org_config")
         .select(["encrypted_name", "default_language", "default_country_code"])
-        .executeTakeFirstOrThrow();
+        .executeTakeFirst();
+
+      if (!config) {
+        throw new NotFoundError("Org config not found");
+      }
 
       return {
         encryptedName:
@@ -39,14 +44,18 @@ export function createOrgConfigService(
     },
 
     async updateOrgGeneral(input: UpdateOrgGeneralInput): Promise<void> {
-      await tenantDb
+      const result = await tenantDb
         .updateTable("org_config")
         .set({
           encrypted_name: Buffer.from(input.encryptedOrgName, "base64"),
           default_language: input.defaultLanguage,
           default_country_code: input.countryCode,
         })
-        .execute();
+        .executeTakeFirst();
+
+      if (result.numUpdatedRows === 0n) {
+        throw new NotFoundError("Org config not found");
+      }
     },
   };
 }

@@ -402,7 +402,8 @@
 </script>
 
 {#snippet expandedBubbles(records: ClusterRecord[] | undefined)}
-  <div class="cluster-bubbles">
+  <!-- svelte-ignore a11y_no_static_element_interactions -->
+  <div class="cluster-bubbles" onclick={(e) => e.stopPropagation()}>
     {#if records !== undefined}
       {#each records as rec (rec.id)}
         {#if renderExpanded}

@@ -167,6 +167,7 @@
         full
         type="submit"
         disabled={!username || !password || submitting}
+        aria-label={submitting ? m.common_loading() : undefined}
       >
         {#if submitting}
           <Preloader class="w-5 h-5" />
