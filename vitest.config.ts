@@ -1,6 +1,10 @@
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { defineConfig, defineProject } from "vitest/config";
 import { coverageConfigDefaults } from "vitest/config";
+
+const thresholds = JSON.parse(
+  readFileSync("coverage-thresholds.json", "utf-8"),
+);
 
 // Client project requires SvelteKit deps (@sveltejs/vite-plugin-svelte) which
 // are only available on the host, not inside the Docker test container. Include
@@ -71,12 +75,7 @@ export default defineConfig({
           exclude: ["**/dist/**", "**/node_modules/**"],
           coverage: {
             provider: "v8",
-            thresholds: {
-              statements: 95,
-              branches: 95,
-              functions: 95,
-              lines: 95,
-            },
+            thresholds: thresholds.shared,
           },
         },
       }),
@@ -88,12 +87,7 @@ export default defineConfig({
           exclude: ["**/dist/**", "**/node_modules/**"],
           coverage: {
             provider: "v8",
-            thresholds: {
-              statements: 100,
-              branches: 100,
-              functions: 100,
-              lines: 100,
-            },
+            thresholds: thresholds.crypto,
           },
         },
       }),
@@ -106,12 +100,7 @@ export default defineConfig({
           exclude: ["**/dist/**", "**/node_modules/**"],
           coverage: {
             provider: "v8",
-            thresholds: {
-              statements: 90,
-              branches: 90,
-              functions: 90,
-              lines: 90,
-            },
+            thresholds: thresholds.server,
           },
         },
       }),
