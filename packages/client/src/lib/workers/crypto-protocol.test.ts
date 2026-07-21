@@ -91,6 +91,7 @@ describe("crypto-protocol types", () => {
       ? true
       : false;
 
+    // Runtime no-op: compile-time satisfies checks above are the real test
     expect(true).toBe(true);
   });
 

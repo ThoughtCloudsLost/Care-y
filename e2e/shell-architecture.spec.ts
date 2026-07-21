@@ -104,15 +104,6 @@ test.describe.serial("shell architecture", () => {
     ).toBeAttached();
   });
 
-  // ── View transitions ────────────────────────────────────────────────
-
-  test("view transitions API is available", async () => {
-    const hasViewTransitions = await page.evaluate(
-      () => "startViewTransition" in document,
-    );
-    expect(typeof hasViewTransitions).toBe("boolean");
-  });
-
   // ── Accessibility ───────────────────────────────────────────────────
 
   test("page passes axe-core accessibility scan", async () => {

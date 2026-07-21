@@ -143,11 +143,16 @@
   class="split-view-container"
   class:has-subnavbar={subnavbar}
   bind:this={containerEl}
+  data-testid="split-view"
   style:--right-w={rightWidth > 0
     ? `${String(rightWidth)}px`
     : "var(--split-detail-width, 480px)"}
 >
-  <div class="split-left-pane" bind:this={leftRef}>
+  <div
+    class="split-left-pane"
+    bind:this={leftRef}
+    data-testid="split-left-pane"
+  >
     {@render left()}
   </div>
 
@@ -175,6 +180,7 @@
 
   <div
     class="split-right-pane"
+    data-testid="split-right-pane"
     style:--subnavbar-h={splitNavbar.rightSubnavbarHeight > 0
       ? `${String(splitNavbar.rightSubnavbarHeight)}px`
       : undefined}

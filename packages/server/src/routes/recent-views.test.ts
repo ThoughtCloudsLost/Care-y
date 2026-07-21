@@ -198,6 +198,7 @@ describe.skipIf(!process.env.DATABASE_URL)("recentViews router", () => {
       expect(row.wrapped_payload.toString("base64")).toBe(
         Buffer.from("newer-sealed-payload").toString("base64"),
       );
+      // DB contract: ephemeral_point is ristretto255 (32 bytes), nonce is XSalsa20 (24 bytes).
       expect(row.ephemeral_point).toHaveLength(32);
       expect(row.nonce).toHaveLength(24);
     });

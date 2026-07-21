@@ -212,13 +212,14 @@ async function completeOnboarding(page: Page): Promise<void> {
   // Heading: "How CARE-Y Protects Your Data"
   const briefingHeading = page.getByText("How CARE-Y Protects Your Data");
   if (await briefingHeading.isVisible({ timeout: 3_000 }).catch(() => false)) {
-    // Click through 3 sub-pages via navbar "Next" link
+    // Click through 3 sub-pages via the wizard navbar's "Next" link.
+    // The onboarding layout marks its navbar with role="banner".
     for (let i = 0; i < 3; i++) {
-      await page.locator(".k-navbar").getByText("Next").click();
+      await page.getByRole("banner").getByText("Next").click();
       await page.waitForTimeout(300);
     }
     // Last page: "Confirm"
-    await page.locator(".k-navbar").getByText("Confirm").click();
+    await page.getByRole("banner").getByText("Confirm").click();
     await page.waitForTimeout(1_000);
   }
 
@@ -230,8 +231,8 @@ async function completeOnboarding(page: Page): Promise<void> {
   if (await twofaHeading.isVisible({ timeout: 3_000 }).catch(() => false)) {
     await enrollTotp(page);
 
-    // After enrollment, "Next" in navbar finishes onboarding
-    await page.locator(".k-navbar").getByText("Next").click();
+    // After enrollment, "Next" in the wizard navbar finishes onboarding
+    await page.getByRole("banner").getByText("Next").click();
   }
 
   await page.waitForURL(/\/$/, { timeout: CRYPTO_TIMEOUT });
@@ -250,7 +251,7 @@ async function enrollTotp(page: Page): Promise<void> {
   await totpOption.first().click();
 
   // Wait for the TOTP setup sheet (shows QR code + base32 secret)
-  const secretEl = page.locator(".secret-text");
+  const secretEl = page.locator('[data-testid="totp-secret"]');
   await secretEl.waitFor({ state: "visible", timeout: 10_000 });
   const secret = await secretEl.textContent();
   if (secret === null || secret === "")
@@ -295,10 +296,11 @@ async function enrollTotp(page: Page): Promise<void> {
  * While codes are on screen the sheet routes every dismissal (Escape,
  * backdrop tap, swipe) through a "Save your codes" confirm dialog, so
  * closing it takes two steps: trigger a dismiss, then click "I saved
- * them". Konsta overlays stay mounted when closed (open/closed is a
- * class swap), so completion is asserted as "no backdrop still accepts
- * pointer events" rather than DOM detachment: an open backdrop is a
- * full-screen z-40 div that swallows the caller's next click.
+ * them". Shell overlays stay mounted when closed but go inert with
+ * visibility: hidden, so their content is only reachable by role while
+ * open. Shell overlay backdrops (ShellBackdrop) render only while an
+ * overlay is open; zero backdrops means nothing swallows the caller's
+ * next click.
  */
 export async function dismissBackupCodesSheet(page: Page): Promise<void> {
   // The confirm-on-dismiss routing only applies once the codes have
@@ -310,20 +312,17 @@ export async function dismissBackupCodesSheet(page: Page): Promise<void> {
   // Escape reaches the sheet's focus trap and opens the confirm dialog.
   await page.keyboard.press("Escape");
 
-  // A closed Konsta Dialog keeps its DOM and its text, so scope to the
-  // open panel (closed panels carry pointer-events-none).
-  const confirmDialog = page.locator(".k-dialog:not(.pointer-events-none)", {
-    hasText: "Save your codes",
-  });
-  await confirmDialog.waitFor({ state: "visible", timeout: 5_000 });
-  await confirmDialog.getByRole("button", { name: /i saved them/i }).click();
+  // Closed shell dialogs are inert and hidden, so this only ever
+  // resolves to the open confirm dialog's button.
+  const confirmBtn = page.getByRole("button", { name: /i saved them/i });
+  await confirmBtn.waitFor({ state: "visible", timeout: 5_000 });
+  await confirmBtn.click();
 
-  // Sheet, Popup, and Dialog backdrops all share these classes and gain
-  // pointer-events-none when closed. Zero open backdrops means the
-  // navbar Next link is clickable again.
-  await expect(
-    page.locator("div.fixed.z-40.bg-black\\/50:not(.pointer-events-none)"),
-  ).toHaveCount(0, { timeout: 10_000 });
+  // Overlay backdrops exist in the DOM only while their overlay is
+  // open. Zero backdrops means the navbar Next link is clickable again.
+  await expect(page.locator('[data-testid="shell-backdrop"]')).toHaveCount(0, {
+    timeout: 10_000,
+  });
 }
 
 /**
@@ -404,7 +403,8 @@ export async function openTicketByTitle(
   });
 
   await expect(card).toBeVisible({ timeout: CRYPTO_TIMEOUT });
-  await card.locator("button.card-open-link").click();
+  // Each card exposes a single "Open <ticket> <alias>" overlay button.
+  await card.getByRole("button", { name: /^open /i }).click();
 
   // On desktop, ticket detail opens in a split-view pane via pushState
   // (URL stays at /tickets). On mobile, it navigates to /tickets/{uuid}.
@@ -729,9 +729,9 @@ export async function assignTicketToSelf(
     .first();
   await card.getByRole("button", { name: /take/i }).click();
 
-  // Wait for the assignment to complete. Self-assignment renders "You" in
-  // a <b class="meta-you"> inside the card's meta row.
-  await expect(card.locator(".meta-you")).toBeVisible({
+  // Wait for the assignment to complete. Self-assignment renders the
+  // literal assignee text "you" in the card's meta row.
+  await expect(card.getByText("you", { exact: true })).toBeVisible({
     timeout: CRYPTO_TIMEOUT,
   });
 }

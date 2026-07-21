@@ -372,6 +372,7 @@ describe("sendRelayError", () => {
 
 describe("MAX_RELAY_BODY", () => {
   it("is 64KB", () => {
+    // API contract: relay body limit is a security boundary; changing it requires coordinated client+server update.
     expect(MAX_RELAY_BODY).toBe(64 * 1024);
   });
 });

@@ -132,6 +132,7 @@ describe.skipIf(!IS_LINUX)("secureShare (Linux only)", () => {
   });
 });
 
+// Wire format: [uint32BE length][payload]. Guards backward compatibility with oprf-ipc client.
 describe.skipIf(!IS_LINUX)("IPC protocol (Linux only)", () => {
   const socketPath = join(tmpdir(), `oprf-test-${Date.now()}.sock`);
   let cleanup: (() => void) | undefined;
@@ -208,6 +209,7 @@ describe.skipIf(!IS_LINUX)("IPC protocol (Linux only)", () => {
   });
 });
 
+// Wire format: [uint32BE length][payload]. Guards backward compatibility with oprf-ipc client.
 describe.skipIf(!DOCKER_OPRF_AVAILABLE)(
   "IPC protocol (Docker OPRF containers)",
   () => {

@@ -24,6 +24,22 @@ export interface PriorityStat {
   readonly count: number;
 }
 
+const PRIORITY_ORDER = new Map<string, number>([
+  ["low", 0],
+  ["normal", 1],
+  ["high", 2],
+  ["urgent", 3],
+]);
+
+/**
+ * Maps a ticket priority string to its numeric chart order
+ * (low 0, normal 1, high 2, urgent 3). Unknown values fall back
+ * to 0 so a malformed row never breaks report queries.
+ */
+export function priorityToNumeric(priority: string): number {
+  return PRIORITY_ORDER.get(priority) ?? 0;
+}
+
 export interface ReportsService {
   queueStats(): Promise<readonly QueueStat[]>;
   volumeTrends(): Promise<readonly MonthlyVolume[]>;
@@ -179,16 +195,9 @@ export function createReportsService(
         .groupBy("priority")
         .execute();
 
-      const PRIORITY_ORDER: Record<string, number> = {
-        low: 0,
-        normal: 1,
-        high: 2,
-        urgent: 3,
-      };
-
       return rows
         .map((r) => ({
-          priority: PRIORITY_ORDER[r.priority] ?? 0,
+          priority: priorityToNumeric(r.priority),
           count: r.count,
         }))
         .sort((a, b) => a.priority - b.priority);

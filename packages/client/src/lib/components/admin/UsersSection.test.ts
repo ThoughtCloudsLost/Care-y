@@ -1,6 +1,14 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
-import { render, screen, cleanup } from "@testing-library/svelte";
+import {
+  render,
+  screen,
+  cleanup,
+  fireEvent,
+  waitFor,
+  within,
+} from "@testing-library/svelte";
+import { RoleId } from "@care-y/shared";
 
 const { mockAssignRole, mockSetUserActive, mockToastShow } = vi.hoisted(() => ({
   mockAssignRole: vi.fn().mockResolvedValue({ user: { roleId: "mgr" } }),
@@ -11,6 +19,7 @@ const { mockAssignRole, mockSetUserActive, mockToastShow } = vi.hoisted(() => ({
 interface UserData {
   id: string;
   encryptedDisplayName: string;
+  encryptedIdentifier: string;
   roleId: string;
   isActive: boolean;
   hasKeys: boolean;
@@ -297,6 +306,7 @@ function makeUser(id: string, overrides: Partial<UserData> = {}): UserData {
   return {
     id,
     encryptedDisplayName: btoa("encrypted"),
+    encryptedIdentifier: btoa("encrypted-ident"),
     roleId: "vol",
     isActive: true,
     hasKeys: true,
@@ -307,6 +317,24 @@ function makeUser(id: string, overrides: Partial<UserData> = {}): UserData {
 }
 
 import UsersSection from "./UsersSection.svelte";
+
+/**
+ * The edit sheet renders through the PassthroughShell stub, which carries
+ * the sheet title in data-title. The org cache mock decrypts every display
+ * name to "Decrypted Name", so an open edit sheet is the passthrough whose
+ * title matches it.
+ */
+async function findEditSheet(): Promise<HTMLElement> {
+  return waitFor(() => {
+    const sheet = screen
+      .getAllByTestId("passthrough-shell")
+      .find((el) => el.getAttribute("data-title") === "Decrypted Name");
+    if (sheet === undefined) {
+      throw new Error("edit sheet not open yet");
+    }
+    return sheet;
+  });
+}
 
 describe("UsersSection", () => {
   beforeEach(() => {
@@ -378,5 +406,179 @@ describe("UsersSection", () => {
     mockUsersData = undefined;
     render(UsersSection);
     expect(screen.queryByText("No users yet")).toBeNull();
+  });
+
+  describe("edit user sheet (role change)", () => {
+    it("opens the sheet via the editUser export with saving disabled until something changes", async () => {
+      mockUsersData = [makeUser("u-1", { roleId: RoleId.VOLUNTEER })];
+      const { component } = render(UsersSection);
+
+      component.editUser("u-1");
+      const sheet = await findEditSheet();
+
+      // Sheet header shows the decrypted display name.
+      expect(within(sheet).getByText("Decrypted Name")).toBeTruthy();
+      // No edits yet: the save action must be inert.
+      expect(
+        within(sheet)
+          .getByRole("button", { name: "Save changes" })
+          .hasAttribute("disabled"),
+      ).toBe(true);
+      expect(mockAssignRole).not.toHaveBeenCalled();
+    });
+
+    it("saves a role change through assignRole and closes the sheet", async () => {
+      mockUsersData = [makeUser("u-1", { roleId: RoleId.VOLUNTEER })];
+      const { component } = render(UsersSection);
+
+      component.editUser("u-1");
+      const sheet = await findEditSheet();
+
+      await fireEvent.click(
+        within(sheet).getByRole("button", { name: "Manager" }),
+      );
+      const saveButton = within(sheet).getByRole("button", {
+        name: "Save changes",
+      });
+      expect(saveButton.hasAttribute("disabled")).toBe(false);
+
+      await fireEvent.click(saveButton);
+
+      // Payload contract: userId + new roleId cross the tRPC wire.
+      expect(mockAssignRole).toHaveBeenCalledWith({
+        userId: "u-1",
+        roleId: RoleId.MANAGER,
+      });
+      await waitFor(() => {
+        expect(mockToastShow).toHaveBeenCalledWith("Role changed");
+      });
+      // Sheet closed: its titled header is gone.
+      expect(screen.queryByText("Decrypted Name")).toBeNull();
+    });
+  });
+
+  describe("deactivation", () => {
+    it("asks for confirmation and sends nothing when the dialog is cancelled", async () => {
+      mockUsersData = [makeUser("u-1", { isActive: true })];
+      const { component } = render(UsersSection);
+
+      component.editUser("u-1");
+      const sheet = await findEditSheet();
+
+      await fireEvent.click(
+        within(sheet).getByRole("button", { name: "Deactivate" }),
+      );
+
+      const dialog = await screen.findByTestId("stub-dialog");
+      expect(
+        within(dialog).getByText("Deactivate Decrypted Name?"),
+      ).toBeTruthy();
+      expect(mockSetUserActive).not.toHaveBeenCalled();
+
+      await fireEvent.click(
+        within(dialog).getByRole("button", { name: "Cancel" }),
+      );
+
+      expect(screen.queryByTestId("stub-dialog")).toBeNull();
+      expect(mockSetUserActive).not.toHaveBeenCalled();
+    });
+
+    it("deactivates the user after the dialog is confirmed", async () => {
+      mockUsersData = [makeUser("u-1", { isActive: true })];
+      const { component } = render(UsersSection);
+
+      component.editUser("u-1");
+      const sheet = await findEditSheet();
+
+      await fireEvent.click(
+        within(sheet).getByRole("button", { name: "Deactivate" }),
+      );
+      const dialog = await screen.findByTestId("stub-dialog");
+      await fireEvent.click(
+        within(dialog).getByRole("button", { name: "Deactivate" }),
+      );
+
+      // Payload contract: userId + isActive flag cross the tRPC wire.
+      expect(mockSetUserActive).toHaveBeenCalledWith({
+        userId: "u-1",
+        isActive: false,
+      });
+      await waitFor(() => {
+        expect(mockToastShow).toHaveBeenCalledWith("User deactivated");
+      });
+    });
+
+    it("reactivates an inactive user after the dialog is confirmed", async () => {
+      mockUsersData = [makeUser("u-1", { isActive: false })];
+      const { component } = render(UsersSection);
+
+      component.editUser("u-1");
+      const sheet = await findEditSheet();
+
+      await fireEvent.click(
+        within(sheet).getByRole("button", { name: "Reactivate" }),
+      );
+      const dialog = await screen.findByTestId("stub-dialog");
+      expect(
+        within(dialog).getByText("Reactivate Decrypted Name?"),
+      ).toBeTruthy();
+
+      await fireEvent.click(
+        within(dialog).getByRole("button", { name: "Reactivate" }),
+      );
+
+      expect(mockSetUserActive).toHaveBeenCalledWith({
+        userId: "u-1",
+        isActive: true,
+      });
+      await waitFor(() => {
+        expect(mockToastShow).toHaveBeenCalledWith("User reactivated");
+      });
+    });
+  });
+
+  describe("search and filter wiring", () => {
+    // The filter/sort matrix itself is covered by users-section-utils.test.ts.
+    // These tests only prove the component wires the searchQuery prop and the
+    // filter store into the rendered list.
+
+    it("hides users whose decrypted names do not match the search query", () => {
+      mockUsersData = [makeUser("u-1"), makeUser("u-2")];
+      const { container } = render(UsersSection, {
+        props: { searchQuery: "zzz" },
+      });
+
+      expect(container.querySelector("#user-u-1")).toBeNull();
+      expect(container.querySelector("#user-u-2")).toBeNull();
+      expect(screen.getByText("No users match filters")).toBeTruthy();
+    });
+
+    it("shows users whose decrypted names match the search query", () => {
+      mockUsersData = [makeUser("u-1"), makeUser("u-2")];
+      const { container } = render(UsersSection, {
+        props: { searchQuery: "decrypted" },
+      });
+
+      expect(container.querySelector("#user-u-1")).toBeTruthy();
+      expect(container.querySelector("#user-u-2")).toBeTruthy();
+      expect(screen.queryByText("No users match filters")).toBeNull();
+    });
+
+    it("applies the role filter from the filter store", async () => {
+      const { userFilterStore } =
+        await import("$lib/stores/user-filters.svelte.js");
+      mockUsersData = [
+        makeUser("u-vol", { roleId: RoleId.VOLUNTEER }),
+        makeUser("u-mgr", { roleId: RoleId.MANAGER }),
+      ];
+      userFilterStore.roles.add(RoleId.MANAGER);
+      try {
+        const { container } = render(UsersSection);
+        expect(container.querySelector("#user-u-vol")).toBeNull();
+        expect(container.querySelector("#user-u-mgr")).toBeTruthy();
+      } finally {
+        userFilterStore.roles.clear();
+      }
+    });
   });
 });

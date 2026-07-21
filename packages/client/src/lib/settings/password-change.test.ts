@@ -197,6 +197,8 @@ describe("changePassword", () => {
 
       await changePassword(deps);
 
+      // Ordering is a UI contract: the password-change progress UI
+      // drives off these callbacks in this sequence.
       expect(callOrder).toEqual([
         "fetchWraps",
         "deriveNewKeys",
@@ -425,6 +427,8 @@ describe("changePassword", () => {
 
       await changePassword(deps);
 
+      // zeroAll must precede argon2id: old key material is wiped
+      // before new derivation begins.
       expect(callOrder).toEqual([
         "zeroAll",
         "argon2id",

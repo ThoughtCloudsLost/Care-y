@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
+import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import pg from "pg";
 import { Kysely, PostgresDialect, sql } from "kysely";
 import type { PlatformDatabase, TenantDatabase } from "../db/types.js";
@@ -258,6 +258,48 @@ describe.skipIf(!process.env.DATABASE_URL)(
       await platformDb.destroy();
     });
 
+    /**
+     * Drop a test role, revoking its privileges first (privileges granted
+     * to a role block DROP ROLE). Safe to call when the role does not exist,
+     * so a crashed previous run cannot wedge the suite.
+     */
+    async function dropTestRole(roleName: string): Promise<void> {
+      const existing = await sql<{ rolname: string }>`
+        SELECT rolname FROM pg_roles WHERE rolname = ${roleName}
+      `.execute(platformDb);
+      if (existing.rows.length === 0) return;
+      await sql`DROP OWNED BY ${sql.id(roleName)}`.execute(platformDb);
+      await sql`DROP ROLE ${sql.id(roleName)}`.execute(platformDb);
+    }
+
+    /**
+     * Open a dedicated single-connection Kysely instance running as the
+     * given role. SET ROLE is session state, so the pool is capped at one
+     * connection (with idle disconnection off) to guarantee every statement
+     * runs under the role. Per the PostgreSQL SET ROLE docs, permission
+     * checks then use the named role even when the session user is a
+     * superuser, which the Docker test user is.
+     */
+    async function createRestrictedDb(
+      roleName: string,
+    ): Promise<Kysely<PlatformDatabase>> {
+      const pool = new pg.Pool({
+        connectionString: process.env.DATABASE_URL,
+        max: 1,
+        idleTimeoutMillis: 0,
+      });
+      const db = new Kysely<PlatformDatabase>({
+        dialect: new PostgresDialect({ pool }),
+      });
+      try {
+        await sql`SET ROLE ${sql.id(roleName)}`.execute(db);
+      } catch (err: unknown) {
+        await db.destroy();
+        throw err;
+      }
+      return db;
+    }
+
     it("rolls back org row and schema when tenant migration fails", async () => {
       // tenantDbFactory returns a Kysely instance that will fail during migration
       // because withSchema on a nonexistent schema is valid, but the Migrator
@@ -330,72 +372,88 @@ describe.skipIf(!process.env.DATABASE_URL)(
     });
 
     it("rolls back org row when CREATE SCHEMA fails", async () => {
-      // Spy on the Kysely prototype's `schema` getter to return a fake
-      // SchemaModule whose createSchema always rejects. This avoids Proxy
-      // issues with Kysely's private #props fields.
-      const realSchema = platformDb.schema;
-      const schemaSpy = vi
-        .spyOn(
-          Object.getPrototypeOf(platformDb) as Record<string, unknown>,
-          "schema",
-          "get",
-        )
-        .mockReturnValue({
-          ...realSchema,
-          createSchema: () => ({
-            execute: () =>
-              Promise.reject(new Error("simulated CREATE SCHEMA failure")),
-          }),
-        });
+      // Real failure scenario: run the service as a role that can read and
+      // write public.orgs but lacks CREATE on the database, so the CREATE
+      // SCHEMA statement fails with a genuine Postgres permission error.
+      const roleName = "test_orgsvc_no_create";
+      await dropTestRole(roleName);
+      await sql`CREATE ROLE ${sql.id(roleName)}`.execute(platformDb);
+      await sql`GRANT USAGE ON SCHEMA public TO ${sql.id(roleName)}`.execute(
+        platformDb,
+      );
+      await sql`GRANT SELECT, INSERT, DELETE ON public.orgs TO ${sql.id(roleName)}`.execute(
+        platformDb,
+      );
+
+      const restrictedDb = await createRestrictedDb(roleName);
+      const slug = `test-schema-create-fail-${Date.now()}`;
 
       function realFactory(schema: string): Kysely<TenantDatabase> {
-        return platformDb.withSchema(
+        return restrictedDb.withSchema(
           schema,
         ) as unknown as Kysely<TenantDatabase>;
       }
 
-      const service = createOrgService(platformDb, realFactory);
-      const slug = `test-schema-create-fail-${Date.now()}`;
+      try {
+        const service = createOrgService(restrictedDb, realFactory);
 
-      await expect(service.createOrg({ slug })).rejects.toThrow(InternalError);
+        await expect(service.createOrg({ slug })).rejects.toThrow(
+          InternalError,
+        );
 
-      schemaSpy.mockRestore();
-
-      // Verify org row was cleaned up by the catch block
-      const row = await platformDb
-        .selectFrom("orgs")
-        .selectAll()
-        .where("slug", "=", slug)
-        .executeTakeFirst();
-      expect(row).toBeUndefined();
+        // Verify the org row inserted before the failure was cleaned up.
+        const row = await platformDb
+          .selectFrom("orgs")
+          .selectAll()
+          .where("slug", "=", slug)
+          .executeTakeFirst();
+        expect(row).toBeUndefined();
+      } finally {
+        await restrictedDb.destroy();
+        await dropTestRole(roleName);
+      }
     });
 
     it("re-throws non-unique-violation DB errors from insertOrgRow", async () => {
-      // insertOrgRow is called BEFORE the try block in createOrg (line 153),
-      // so a non-unique-violation error propagates directly without wrapping.
-      // Mocks insertInto().values().returningAll().executeTakeFirstOrThrow(). If this chain changes, update the mock.
-      const insertSpy = vi.spyOn(platformDb, "insertInto").mockReturnValue({
-        values: () => ({
-          returningAll: () => ({
-            executeTakeFirstOrThrow: () =>
-              Promise.reject(new Error("connection reset")),
-          }),
-        }),
-      } as unknown as ReturnType<typeof platformDb.insertInto>);
+      // insertOrgRow runs before the provisioning try block in createOrg, so
+      // a DB error that is not a unique violation must reach the caller
+      // unwrapped. Real failure: a role without INSERT on public.orgs makes
+      // the insert fail with a genuine Postgres permission error
+      // (SQLSTATE 42501, not the unique violation 23505).
+      const roleName = "test_orgsvc_no_insert";
+      await dropTestRole(roleName);
+      await sql`CREATE ROLE ${sql.id(roleName)}`.execute(platformDb);
+      await sql`GRANT USAGE ON SCHEMA public TO ${sql.id(roleName)}`.execute(
+        platformDb,
+      );
+
+      const restrictedDb = await createRestrictedDb(roleName);
 
       function realFactory(schema: string): Kysely<TenantDatabase> {
-        return platformDb.withSchema(
+        return restrictedDb.withSchema(
           schema,
         ) as unknown as Kysely<TenantDatabase>;
       }
 
-      const service = createOrgService(platformDb, realFactory);
+      try {
+        const service = createOrgService(restrictedDb, realFactory);
 
-      await expect(
-        service.createOrg({ slug: "test-insert-rethrow" }),
-      ).rejects.toThrow("connection reset");
+        let caught: unknown;
+        try {
+          await service.createOrg({ slug: "test-insert-rethrow" });
+        } catch (err: unknown) {
+          caught = err;
+        }
 
-      insertSpy.mockRestore();
+        // The raw DB error propagates: not mapped to ConflictError, not
+        // wrapped in InternalError.
+        expect(caught).toBeInstanceOf(Error);
+        expect(caught).not.toBeInstanceOf(ConflictError);
+        expect(caught).not.toBeInstanceOf(InternalError);
+      } finally {
+        await restrictedDb.destroy();
+        await dropTestRole(roleName);
+      }
     });
   },
 );
