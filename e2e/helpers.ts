@@ -19,6 +19,17 @@ export class E2eError extends Error {
   }
 }
 
+/** Bounding box of a visible element; throws if the element has none. */
+export async function boxOf(
+  locator: Locator,
+): Promise<{ x: number; y: number; width: number; height: number }> {
+  const box = await locator.boundingBox();
+  if (box == null) {
+    throw new E2eError("Expected element to have a bounding box");
+  }
+  return box;
+}
+
 /** Seed credentials (must match dev seed script: packages/server/src/scripts/seed.ts). */
 const DEV_USER = "admin.dev";
 const DEV_PASSWORD = "dev-password-1234!";

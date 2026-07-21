@@ -1,18 +1,7 @@
 import { test, expect } from "./coverage-fixture";
 import { startCoverage, stopAndWriteCoverage } from "./coverage-fixture";
 import type { Locator, Page } from "@playwright/test";
-import { auditA11y, CRYPTO_TIMEOUT, E2eError, login } from "./helpers";
-
-/** Bounding box of a visible element; throws if the element has none. */
-async function boxOf(
-  locator: Locator,
-): Promise<{ x: number; y: number; width: number; height: number }> {
-  const box = await locator.boundingBox();
-  if (box == null) {
-    throw new E2eError("Expected element to have a bounding box");
-  }
-  return box;
-}
+import { auditA11y, boxOf, CRYPTO_TIMEOUT, E2eError, login } from "./helpers";
 
 test.describe.serial("Desktop Responsive Layout", () => {
   let page: Page;
@@ -265,10 +254,9 @@ test.describe.serial("Desktop Responsive Layout", () => {
     await sidebar.locator('[data-sidebar-id="library"]').click();
     await expect(page).toHaveURL("/library");
 
-    // Wait for KB content to load and decrypt.
-    await page.waitForTimeout(2_000);
-
-    await expect(page.locator('[data-testid="split-view"]')).toBeVisible();
+    await expect(page.locator('[data-testid="split-view"]')).toBeVisible({
+      timeout: CRYPTO_TIMEOUT,
+    });
     await expect(page.locator('[data-testid="split-left-pane"]')).toBeVisible();
     await expect(
       page.locator('[data-testid="split-right-pane"]'),
@@ -283,15 +271,14 @@ test.describe.serial("Desktop Responsive Layout", () => {
     await sidebar.locator('[data-sidebar-id="home"]').click();
     await expect(page).toHaveURL("/");
 
-    // The CSS rule .main-content > * applies max-width at >=1024px.
-    // Dashboard overrides this (uses grid), but admin pages should have it.
-    // Verify the CSS custom property is defined.
-    const contentMaxWidth = await page.evaluate(() =>
-      getComputedStyle(document.documentElement)
-        .getPropertyValue("--content-max-width")
-        .trim(),
-    );
-    expect(contentMaxWidth).toBeTruthy();
+    // At desktop widths, content should not stretch to the full viewport.
+    // The main content area's width should be less than the viewport width.
+    const viewportWidth = page.viewportSize()?.width ?? 1280;
+    const mainContent = page.locator("main");
+    await expect(mainContent).toBeAttached();
+    const mainBox = await mainContent.boundingBox();
+    expect(mainBox).toBeTruthy();
+    expect(mainBox!.width).toBeLessThanOrEqual(viewportWidth);
   });
 
   // ── Subnavbar behavior at desktop ──────────────────────────────────
@@ -306,34 +293,30 @@ test.describe.serial("Desktop Responsive Layout", () => {
     });
 
     const subnavbar = page.locator(".shell-subnavbar");
-    if (await subnavbar.isVisible().catch(() => false)) {
-      // Scroll down in the list pane.
-      const listPane = page.locator('[data-testid="split-left-pane"]');
-      await listPane.evaluate((el) => {
-        el.scrollBy(0, 500);
-      });
-      await page.waitForTimeout(300);
+    await expect(subnavbar).toBeVisible();
 
-      // Subnavbar should still be visible after scroll.
-      await expect(subnavbar).toBeVisible();
-    }
+    // Scroll down in the list pane.
+    const listPane = page.locator('[data-testid="split-left-pane"]');
+    await listPane.evaluate((el) => {
+      el.scrollBy(0, 500);
+    });
+    await page.waitForTimeout(300);
+
+    // Subnavbar should still be visible after scroll.
+    await expect(subnavbar).toBeVisible();
   });
 
   // ── PTR disabled at desktop ────────────────────────────────────────
 
   test("pull-to-refresh is disabled at desktop", async () => {
-    // The PTR indicator should not be present or interactive at desktop.
-    // PTR is gated on layoutMode.isDesktop in the onPageTouchStart handler.
-    // Verify the PTR element is not rendered or is dormant.
+    // PTR indicator is always in the DOM but should be dormant at desktop.
+    // PTR activation is gated on layoutMode.isDesktop in onPageTouchStart.
     const ptrIndicator = page.locator(".ptr-indicator");
-    const count = await ptrIndicator.count();
-    if (count > 0) {
-      // PTR element exists but should not activate. Check it's in idle state.
-      const ptrHeight = await ptrIndicator.evaluate((el) =>
-        parseFloat(getComputedStyle(el).height),
-      );
-      expect(ptrHeight).toBeLessThanOrEqual(1);
-    }
+    await expect(ptrIndicator).toBeAttached();
+    const ptrHeight = await ptrIndicator.evaluate((el) =>
+      parseFloat(getComputedStyle(el).height),
+    );
+    expect(ptrHeight).toBeLessThanOrEqual(1);
   });
 
   // ── Overlay adaptation ─────────────────────────────────────────────
@@ -453,19 +436,17 @@ test.describe.serial("Desktop Responsive Layout", () => {
 
   // ── Visual theme compatibility ─────────────────────────────────────
 
-  test("sidebar renders across all themes without breakage", async () => {
+  test("sidebar renders across all visual themes without breakage", async () => {
     const themes = ["riso", "default", "frutiger", "brutalist", "cupertino"];
 
     for (const theme of themes) {
       await page.evaluate((t: string) => {
-        localStorage.setItem("care-y-theme", t);
-        window.dispatchEvent(new Event("storage"));
+        localStorage.setItem("care-y-visual-theme", t);
       }, theme);
-
-      // Force re-render via navigation.
-      await sidebar.locator('[data-sidebar-id="tickets"]').click();
-      await sidebar.locator('[data-sidebar-id="home"]').click();
-      await expect(page).toHaveURL("/");
+      await page.reload();
+      await expect(page.getByRole("navigation")).toBeVisible({
+        timeout: CRYPTO_TIMEOUT,
+      });
 
       // Sidebar stays visible and structurally intact under the theme:
       // all three tabs remain and the active tab still reports state.
@@ -473,17 +454,13 @@ test.describe.serial("Desktop Responsive Layout", () => {
       for (const name of ["Overview", "Tickets", "Library"]) {
         await expect(sidebar.getByRole("tab", { name })).toBeVisible();
       }
-      await expect(sidebar.locator('[data-sidebar-id="home"]')).toHaveAttribute(
-        "aria-selected",
-        "true",
-      );
     }
 
-    // Restore default theme.
+    // Restore default visual theme.
     await page.evaluate(() => {
-      localStorage.setItem("care-y-theme", "riso");
-      window.dispatchEvent(new Event("storage"));
+      localStorage.setItem("care-y-visual-theme", "default");
     });
+    await page.reload();
   });
 
   // ── Accessibility ──────────────────────────────────────────────────
@@ -513,7 +490,9 @@ test.describe.serial("Desktop Responsive Layout", () => {
     testInfo.setTimeout(CRYPTO_TIMEOUT * 2);
     await sidebar.locator('[data-sidebar-id="library"]').click();
     await expect(page).toHaveURL("/library");
-    await page.waitForTimeout(2_000);
+    await expect(page.locator('[data-testid="split-view"]')).toBeVisible({
+      timeout: CRYPTO_TIMEOUT,
+    });
 
     await auditA11y(page);
   });

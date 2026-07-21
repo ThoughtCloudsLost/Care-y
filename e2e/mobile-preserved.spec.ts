@@ -1,18 +1,7 @@
 import { test, expect } from "./coverage-fixture";
 import { startCoverage, stopAndWriteCoverage } from "./coverage-fixture";
-import type { Locator, Page } from "@playwright/test";
-import { CRYPTO_TIMEOUT, E2eError, login } from "./helpers";
-
-/** Bounding box of a visible element; throws if the element has none. */
-async function boxOf(
-  locator: Locator,
-): Promise<{ x: number; y: number; width: number; height: number }> {
-  const box = await locator.boundingBox();
-  if (box == null) {
-    throw new E2eError("Expected element to have a bounding box");
-  }
-  return box;
-}
+import type { Page } from "@playwright/test";
+import { boxOf, CRYPTO_TIMEOUT, E2eError, login } from "./helpers";
 
 test.describe.serial("Mobile Layout Preserved (regression)", () => {
   let page: Page;
@@ -106,8 +95,10 @@ test.describe.serial("Mobile Layout Preserved (regression)", () => {
     testInfo.setTimeout(CRYPTO_TIMEOUT * 2);
     await page.getByRole("tab", { name: "Library" }).click();
     await expect(page).toHaveURL("/library");
-    await page.waitForTimeout(2_000);
-
+    // Library at mobile should not show split view; wait for page content.
+    await expect(page.getByText("Select an article to read")).toBeVisible({
+      timeout: CRYPTO_TIMEOUT,
+    });
     const splitView = page.locator('[data-testid="split-view"]');
     await expect(splitView).toHaveCount(0);
   });

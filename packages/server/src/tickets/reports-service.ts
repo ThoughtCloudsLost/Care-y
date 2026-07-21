@@ -48,6 +48,25 @@ export interface ReportsService {
   activeCount(): Promise<number>;
 }
 
+function twelveMonthCutoff(): Date {
+  const cutoff = new Date();
+  cutoff.setMonth(cutoff.getMonth() - 11);
+  cutoff.setDate(1);
+  cutoff.setHours(0, 0, 0, 0);
+  return cutoff;
+}
+
+function buildMonthlyGrid<T>(fill: (key: string) => T): T[] {
+  const months: T[] = [];
+  const now = new Date();
+  for (let i = 11; i >= 0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    const key = `${String(d.getFullYear())}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+    months.push(fill(key));
+  }
+  return months;
+}
+
 export function createReportsService(
   tenantDb: Kysely<TenantDatabase>,
 ): ReportsService {
@@ -93,18 +112,17 @@ export function createReportsService(
     },
 
     async volumeTrends(): Promise<readonly MonthlyVolume[]> {
-      const cutoff = new Date();
-      cutoff.setMonth(cutoff.getMonth() - 11);
-      cutoff.setDate(1);
-      cutoff.setHours(0, 0, 0, 0);
+      const cutoff = twelveMonthCutoff();
 
       const created = await tenantDb
         .selectFrom("tickets")
         .select((eb) => [
+          // care-y-ignore-next-line no-raw-sql-tenant-tables -- read-only aggregation; table refs go through Kysely's selectFrom, only the to_char call is raw
           sql<string>`to_char(${eb.ref("created_at")}, 'YYYY-MM')`.as("month"),
           eb.fn.count<number>("id").as("cnt"),
         ])
         .where("created_at", ">=", cutoff)
+        // care-y-ignore-next-line no-raw-sql-tenant-tables -- read-only groupBy; no table ref in the sql fragment
         .groupBy(sql`to_char(created_at, 'YYYY-MM')`)
         .execute();
 
@@ -112,6 +130,7 @@ export function createReportsService(
         .selectFrom("followups")
         .innerJoin("tickets", "tickets.id", "followups.ticket_id")
         .select((eb) => [
+          // care-y-ignore-next-line no-raw-sql-tenant-tables -- read-only aggregation; column refs via eb.ref, no table routing in the sql fragment
           sql<string>`to_char(${eb.ref("followups.created_at")}, 'YYYY-MM')`.as(
             "month",
           ),
@@ -121,32 +140,22 @@ export function createReportsService(
         .where("followups.source", "=", "system")
         .where("tickets.status", "=", "closed")
         .where("followups.created_at", ">=", cutoff)
+        // care-y-ignore-next-line no-raw-sql-tenant-tables -- read-only groupBy; no table ref in the sql fragment
         .groupBy(sql`to_char(followups.created_at, 'YYYY-MM')`)
         .execute();
 
       const createdMap = new Map(created.map((r) => [r.month, r.cnt]));
       const closedMap = new Map(closed.map((r) => [r.month, r.cnt]));
 
-      const months: MonthlyVolume[] = [];
-      const now = new Date();
-      for (let i = 11; i >= 0; i--) {
-        const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-        const key = `${String(d.getFullYear())}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-        months.push({
-          month: key,
-          created: createdMap.get(key) ?? 0,
-          closed: closedMap.get(key) ?? 0,
-        });
-      }
-
-      return months;
+      return buildMonthlyGrid((key) => ({
+        month: key,
+        created: createdMap.get(key) ?? 0,
+        closed: closedMap.get(key) ?? 0,
+      }));
     },
 
     async resolutionTrends(): Promise<readonly MonthlyResolution[]> {
-      const cutoff = new Date();
-      cutoff.setMonth(cutoff.getMonth() - 11);
-      cutoff.setDate(1);
-      cutoff.setHours(0, 0, 0, 0);
+      const cutoff = twelveMonthCutoff();
 
       // For each closed ticket, find the closing follow-up's created_at.
       // Resolution time = closing follow-up created_at - ticket created_at.
@@ -154,10 +163,12 @@ export function createReportsService(
         .selectFrom("followups")
         .innerJoin("tickets", "tickets.id", "followups.ticket_id")
         .select((eb) => [
+          // care-y-ignore-next-line no-raw-sql-tenant-tables -- read-only aggregation; column refs via eb.ref, no table routing in the sql fragment
           sql<string>`to_char(${eb.ref("followups.created_at")}, 'YYYY-MM')`.as(
             "month",
           ),
-          sql<number>`avg(extract(epoch from (${eb.ref("followups.created_at")} - ${eb.ref("tickets.created_at")})) / 86400)`.as(
+          // care-y-ignore-next-line no-raw-sql-tenant-tables -- read-only aggregation; column refs via eb.ref, no table routing in the sql fragment
+          sql<string>`avg(extract(epoch from (${eb.ref("followups.created_at")} - ${eb.ref("tickets.created_at")})) / 86400)`.as(
             "avgDays",
           ),
         ])
@@ -165,25 +176,18 @@ export function createReportsService(
         .where("followups.source", "=", "system")
         .where("tickets.status", "=", "closed")
         .where("followups.created_at", ">=", cutoff)
+        // care-y-ignore-next-line no-raw-sql-tenant-tables -- read-only groupBy; no table ref in the sql fragment
         .groupBy(sql`to_char(followups.created_at, 'YYYY-MM')`)
         .execute();
 
       const resMap = new Map(
-        rows.map((r) => [r.month, Math.round(r.avgDays * 10) / 10]),
+        rows.map((r) => [r.month, Math.round(Number(r.avgDays) * 10) / 10]),
       );
 
-      const months: MonthlyResolution[] = [];
-      const now = new Date();
-      for (let i = 11; i >= 0; i--) {
-        const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-        const key = `${String(d.getFullYear())}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-        months.push({
-          month: key,
-          avgDays: resMap.get(key) ?? 0,
-        });
-      }
-
-      return months;
+      return buildMonthlyGrid((key) => ({
+        month: key,
+        avgDays: resMap.get(key) ?? 0,
+      }));
     },
 
     async priorityBreakdown(): Promise<readonly PriorityStat[]> {
