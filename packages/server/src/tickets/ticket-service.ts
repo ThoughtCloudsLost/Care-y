@@ -30,6 +30,8 @@ import {
   TicketError,
   MergeError,
 } from "../errors.js";
+import type { FieldEncryptor } from "../crypto/field-encryptor.js";
+import { sanitizeLike, maskPhone } from "../utils/sql.js";
 import { createDependencyService } from "./dependency-service.js";
 import { createReadCursorService } from "./read-cursor-service.js";
 import { ErrorCode } from "@care-y/shared";
@@ -199,6 +201,13 @@ export interface TicketService {
     input: SweepReadStateInput,
   ): Promise<SweepReadStateResult>;
   counts(userId: string): Promise<TicketCounts>;
+  searchClients(query: string, limit: number): Promise<ClientSearchResult[]>;
+}
+
+export interface ClientSearchResult {
+  readonly id: string;
+  readonly alias: string;
+  readonly maskedPhone: string;
 }
 
 export interface TicketCounts {
@@ -305,6 +314,7 @@ export interface PendingClient {
 
 export interface TicketServiceDeps {
   readonly pendingClients?: Map<string, PendingClient>;
+  readonly fieldEncryptor?: FieldEncryptor;
 }
 
 export function createTicketService(
@@ -1449,6 +1459,33 @@ export function createTicketService(
         items,
         nextCursor: items.length === input.limit && last ? last.ticketId : null,
       };
+    },
+
+    async searchClients(query, limit) {
+      const results = await db
+        .selectFrom("clients as c")
+        .innerJoin("phones as p", "p.id", "c.phone_id")
+        .select(["c.id", "c.alias", "p.encrypted_number"])
+        .where("c.merged_into", "is", null)
+        .where("c.alias", "ilike", `%${sanitizeLike(query)}%`)
+        .orderBy("c.alias", "asc")
+        .limit(limit)
+        .execute();
+
+      const encryptor = deps?.fieldEncryptor;
+      if (!encryptor) {
+        return results.map((r) => ({
+          id: r.id,
+          alias: r.alias,
+          maskedPhone: "***",
+        }));
+      }
+
+      return results.map((r) => ({
+        id: r.id,
+        alias: r.alias,
+        maskedPhone: maskPhone(encryptor.decryptToBuffer(r.encrypted_number)),
+      }));
     },
   };
 }

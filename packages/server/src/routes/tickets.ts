@@ -27,6 +27,7 @@ import type { OrgContext } from "../trpc/context.js";
 import type { TicketAccessChecker } from "../tickets/access.js";
 import type {
   TicketService,
+  TicketServiceDeps,
   PendingClient,
 } from "../tickets/ticket-service.js";
 import type { FollowUpService } from "../tickets/followup-service.js";
@@ -57,7 +58,6 @@ import { createStubShiftProvider } from "../tickets/shift-provider.js";
 import { createUserService } from "../users/user-service.js";
 import { encode as cryptoEncode } from "@care-y/crypto";
 import { rewrapFollowUp } from "../tickets/rewrap-service.js";
-import { sanitizeLike, maskPhone } from "../utils/sql.js";
 import {
   createTicketInputSchema,
   resolveCreateTargetInputSchema,
@@ -111,7 +111,7 @@ export interface TicketRouterDeps {
     tDb: OrgContext["tenantDb"],
     access: TicketAccessChecker,
     getAccessibleQueueIds: (userId: string) => Promise<readonly string[]>,
-    deps?: { pendingClients: Map<string, PendingClient> },
+    deps?: TicketServiceDeps,
   ) => TicketService;
   readonly createFollowUpSvc: (
     tDb: OrgContext["tenantDb"],
@@ -287,7 +287,10 @@ export function createTicketRouter(deps: TicketRouterDeps) {
       tDb,
       access,
       async (userId) => qps.getUserQueues(userId),
-      deps.pendingClients ? { pendingClients: deps.pendingClients } : undefined,
+      {
+        pendingClients: deps.pendingClients,
+        fieldEncryptor: deps.fieldEncryptor,
+      },
     );
     return { access, svc };
   }
@@ -541,31 +544,8 @@ export function createTicketRouter(deps: TicketRouterDeps) {
 
     searchClients: volunteerProcedure.input(searchClientsInputSchema).query(
       withErrorWrapping(async ({ ctx, input }) => {
-        const tDb = ctx.org.tenantDb;
-        const results = await tDb
-          .selectFrom("clients as c")
-          .innerJoin("phones as p", "p.id", "c.phone_id")
-          .select(["c.id", "c.alias", "p.encrypted_number"])
-          .where("c.merged_into", "is", null)
-          .where("c.alias", "ilike", `%${sanitizeLike(input.query)}%`)
-          .orderBy("c.alias", "asc")
-          .limit(input.limit)
-          .execute();
-
-        if (!deps.fieldEncryptor) {
-          return results.map((r) => ({
-            id: r.id,
-            alias: r.alias,
-            maskedPhone: "***",
-          }));
-        }
-
-        const encryptor = deps.fieldEncryptor;
-        return results.map((r) => ({
-          id: r.id,
-          alias: r.alias,
-          maskedPhone: maskPhone(encryptor.decryptToBuffer(r.encrypted_number)),
-        }));
+        const { svc } = ticketSvc(ctx.org.tenantDb);
+        return svc.searchClients(input.query, input.limit);
       }),
     ),
 
@@ -953,10 +933,16 @@ export function createTicketRouter(deps: TicketRouterDeps) {
     undoMerge: managerProcedure.input(undoMergeInputSchema).mutation(
       withErrorWrapping(async ({ ctx, input }) => {
         const svc = deps.createMergeSvc(ctx.org.tenantDb);
-        return svc.undoMerge({
+        const result = await svc.undoMerge({
           mergeEventId: input.mergeEventId,
           encryptedSnapshot: Buffer.from(input.encryptedSnapshot, "base64"),
         });
+        audit(ctx.org.tenantDb, {
+          eventType: "merge_undone",
+          actorId: ctx.user.id,
+          metadata: { mergeEventId: input.mergeEventId },
+        });
+        return result;
       }),
     ),
 
@@ -966,6 +952,14 @@ export function createTicketRouter(deps: TicketRouterDeps) {
         withErrorWrapping(async ({ ctx, input }) => {
           const svc = deps.createMergeSvc(ctx.org.tenantDb);
           await svc.setUndoLock(input.mergeEventId, input.locked);
+          audit(ctx.org.tenantDb, {
+            eventType: "merge_lock_changed",
+            actorId: ctx.user.id,
+            metadata: {
+              mergeEventId: input.mergeEventId,
+              locked: input.locked,
+            },
+          });
         }),
       ),
 

@@ -51,7 +51,7 @@ export function createNotificationRouter(deps: NotificationRouterDeps) {
       .mutation(
         withErrorWrapping(async ({ ctx, input }) => {
           const svc = deps.createPushSubSvc(ctx.org.tenantDb);
-          await svc.unsubscribe(input.endpoint);
+          await svc.unsubscribe(ctx.user.id, input.endpoint);
           return { unsubscribed: true };
         }),
       ),

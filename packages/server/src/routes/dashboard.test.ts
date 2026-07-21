@@ -1,10 +1,10 @@
 /**
  * Tests for the dashboard tRPC router.
  *
- * The router is a thin delegation: authedProcedure plus a MANAGE_ROLES
- * permission gate inside each resolver, then the real DashboardService
- * against the org tenant DB (the service is constructed in the route,
- * not injected). Unit tests cover the auth and permission gates with
+ * The router is a thin delegation: adminProcedure (authed + 2FA +
+ * MANAGE_ROLES) then the real DashboardService against the org tenant
+ * DB (the service is constructed in the route, not injected).
+ * Unit tests cover the auth and permission gates with
  * mock contexts. The DB integration suite covers the observable
  * envelope (checklist shape, dismissal roundtrip) through the real
  * service; per-item completion logic is asserted in
@@ -87,9 +87,8 @@ function createNoOrgContext(): Context {
 
 describe("createDashboardRouter", () => {
   describe("auth and permission enforcement", () => {
-    // Both procedures are built on authedProcedure (org + session; this
-    // router carries no 2FA gate) with a MANAGE_ROLES check inside the
-    // resolver via requirePermission, so admin is the only role admitted.
+    // Both procedures use adminProcedure (org + session + 2FA +
+    // MANAGE_ROLES), so admin is the only role admitted.
     // The asserted messages are ErrorCode constants the client branches
     // on, part of the API contract rather than display copy.
     type DashboardCaller = ReturnType<typeof factory>;
