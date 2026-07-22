@@ -45,7 +45,6 @@
     groupConsecutive,
     isFollowUpGroup,
     followUpGroupKey,
-    type GroupedFollowUp,
   } from "$lib/tickets/follow-up-utils.js";
   import SystemEvent from "$lib/components/tickets/SystemEvent.svelte";
 

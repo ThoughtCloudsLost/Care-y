@@ -47,7 +47,6 @@
     groupConsecutive,
     isFollowUpGroup,
     followUpGroupKey,
-    type GroupedFollowUp,
   } from "$lib/tickets/follow-up-utils.js";
   import { systemEventLabel } from "$lib/tickets/system-event-label.js";
 
@@ -207,7 +206,7 @@
   {:else if ordered.length === 0}
     <p class="preview-empty" role="status">{m.tickets_preview_empty()}</p>
   {:else if groupedOrdered}
-    {#each groupedOrdered as entry, idx (followUpGroupKey(entry))}
+    {#each groupedOrdered as entry (followUpGroupKey(entry))}
       {#if isFollowUpGroup(entry)}
         {@const grp = entry}
         {@const label = systemEventLabel(grp.type)}

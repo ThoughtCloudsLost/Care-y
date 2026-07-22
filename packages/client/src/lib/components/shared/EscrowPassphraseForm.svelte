@@ -36,9 +36,6 @@
     passphrase.length >= ESCROW_MIN_LENGTH &&
       looksLikeCommonPattern(passphrase),
   );
-  const mismatch = $derived(
-    confirmPassphrase.length > 0 && passphrase !== confirmPassphrase,
-  );
   const canExport = $derived(
     orgKeyLoaded &&
       passphrase.length >= ESCROW_MIN_LENGTH &&

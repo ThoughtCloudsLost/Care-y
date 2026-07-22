@@ -48,7 +48,6 @@
     activeId?: string | null;
     selectedTicketId?: string | null;
     onloadmore?: () => void;
-    hasMore?: boolean;
     partialSort?: boolean;
     onloadall?: () => void;
     newRepliesFirst?: boolean;
@@ -79,7 +78,6 @@
     activeId = null,
     selectedTicketId = null,
     onloadmore,
-    hasMore = false,
     partialSort = false,
     onloadall,
     newRepliesFirst = false,

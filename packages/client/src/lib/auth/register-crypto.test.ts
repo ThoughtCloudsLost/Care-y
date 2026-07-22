@@ -13,6 +13,8 @@ import type {
   RegisterCryptoCallbacks,
   registerCrypto as RegisterCryptoFn,
 } from "./register-crypto.js";
+import type * as TrpcModule from "$lib/trpc/index.js";
+import type * as CryptoPkg from "@care-y/crypto";
 
 // ── Mocks ────────────────────────────────────────────────────────────
 
@@ -22,23 +24,33 @@ import type {
 const mockOprfEvaluate = vi.fn();
 const mockInitCryptoKeys = vi.fn();
 
-vi.mock("$lib/trpc/index.js", () => ({
-  trpc: {
+vi.mock("$lib/trpc/index.js", () => {
+  // The real `trpc` export is a TRPCClient<AppRouter> proxy; only the two
+  // procedures this flow touches are stubbed, so the deep shape is cast.
+  // The factory-level `satisfies` still pins the module's export names and
+  // the signatures of the non-proxy exports.
+  const mockTrpc = {
     oprf: {
       evaluate: { mutate: mockOprfEvaluate },
     },
     keys: {
       initCryptoKeys: { mutate: mockInitCryptoKeys },
     },
-  },
-}));
+  } as unknown as typeof TrpcModule.trpc;
+  return {
+    trpc: mockTrpc,
+    setDevDelay: vi.fn(),
+    isDevDelayEnabled: vi.fn(() => false),
+  } satisfies typeof TrpcModule;
+});
 
-// vi.mock required: @care-y/crypto barrel import triggers libsodium WASM
-// initialization via the getSodium() lazy singleton. In the Node test
-// environment this loads the JS fallback (~500ms) or fails. This test
-// mocks 10+ crypto primitives to verify call sequence and zeroing.
-// All functions are synchronous and called inline by registerCrypto,
-// so vi.spyOn after import wouldn't intercept the already-bound references.
+// vi.mock required: registerCrypto binds these functions at import time,
+// so vi.spyOn after import wouldn't intercept the already-bound references,
+// and this test must control 10+ primitives to verify call sequence and
+// zeroing. The factory spreads importOriginal so unstubbed exports (error
+// classes, constants, helpers) stay real and the mock cannot drift from
+// the module surface; the one-time libsodium load cost is already paid by
+// org-key-wrap.test.ts, which uses the real barrel.
 const mockMemzero = vi.fn();
 const mockSalt = new Uint8Array([
   1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16,
@@ -51,7 +63,8 @@ const mockMasterKey = new Uint8Array(32).fill(0xee);
 const mockVolPrivate = new Uint8Array(32).fill(0x11);
 const mockVolPublic = new Uint8Array(32).fill(0x22);
 
-vi.mock("@care-y/crypto", () => ({
+vi.mock("@care-y/crypto", async (importOriginal) => ({
+  ...(await importOriginal<typeof CryptoPkg>()),
   getSodium: vi.fn().mockResolvedValue({ memzero: mockMemzero }),
   generateSalt: vi.fn(() => mockSalt),
   deriveAccountKey: vi.fn(() => mockStretched),
@@ -252,6 +265,145 @@ describe("registerCrypto", () => {
       // Upload callback fires, but onDone does not
       expect(callbacks.onUploadStart).toHaveBeenCalled();
       expect(callbacks.onDone).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("intermediate zeroing (byte-level verification)", () => {
+    // SEC-206/SEC-207: beyond call-count verification, confirm the actual
+    // buffer bytes are zeroed after the finally block runs. Uses fresh
+    // per-test buffers so zeroing doesn't pollute module-level fixtures.
+
+    it("zeros all intermediate buffer bytes on OPRF failure", async () => {
+      // Fresh buffers so zeroing is observable without affecting other tests
+      const localStretched = new Uint8Array(32).fill(0xfa);
+
+      const { deriveAccountKey, zeroAll } = await import("@care-y/crypto");
+      (deriveAccountKey as ReturnType<typeof vi.fn>).mockReturnValueOnce(
+        localStretched,
+      );
+      // Make zeroAll actually zero the buffers for this test. All overrides
+      // in this describe use the Once variants: the file's beforeEach only
+      // clears call history (vi.clearAllMocks), so a persistent override
+      // would leak zeroed buffers into every later test in the file.
+      (zeroAll as ReturnType<typeof vi.fn>).mockImplementationOnce(
+        (...buffers: Array<Uint8Array | null>) => {
+          for (const buf of buffers) {
+            if (buf !== null) buf.fill(0);
+          }
+        },
+      );
+
+      mockOprfEvaluate.mockRejectedValue(new Error("OPRF timeout"));
+      const { callbacks } = createCallbackSpies();
+
+      await expect(
+        registerCrypto(TEST_USER_ID, TEST_PASSWORD, callbacks),
+      ).rejects.toThrow("OPRF timeout");
+
+      // stretched was the only allocated intermediate before the OPRF call
+      expect(localStretched.every((b) => b === 0)).toBe(true);
+    });
+
+    it("zeros all four intermediate buffer bytes on upload failure", async () => {
+      const localStretched = new Uint8Array(32).fill(0xf1);
+      const localOprfOut = new Uint8Array(64).fill(0xf2);
+      const localMaster = new Uint8Array(32).fill(0xf3);
+      const localVolPriv = new Uint8Array(32).fill(0xf4);
+
+      const {
+        deriveAccountKey,
+        oprfFinalize,
+        deriveMasterKey,
+        deriveVolunteerPrivateKey,
+        zeroAll,
+      } = await import("@care-y/crypto");
+
+      (deriveAccountKey as ReturnType<typeof vi.fn>).mockReturnValueOnce(
+        localStretched,
+      );
+      (oprfFinalize as ReturnType<typeof vi.fn>).mockReturnValueOnce(
+        localOprfOut,
+      );
+      (deriveMasterKey as ReturnType<typeof vi.fn>).mockReturnValueOnce(
+        localMaster,
+      );
+      (
+        deriveVolunteerPrivateKey as ReturnType<typeof vi.fn>
+      ).mockReturnValueOnce(localVolPriv);
+      (zeroAll as ReturnType<typeof vi.fn>).mockImplementationOnce(
+        (...buffers: Array<Uint8Array | null>) => {
+          for (const buf of buffers) {
+            if (buf !== null) buf.fill(0);
+          }
+        },
+      );
+
+      mockInitCryptoKeys.mockRejectedValue(new Error("server rejected"));
+      const { callbacks } = createCallbackSpies();
+
+      await expect(
+        registerCrypto(TEST_USER_ID, TEST_PASSWORD, callbacks),
+      ).rejects.toThrow("server rejected");
+
+      expect(localStretched.every((b) => b === 0)).toBe(true);
+      expect(localOprfOut.every((b) => b === 0)).toBe(true);
+      expect(localMaster.every((b) => b === 0)).toBe(true);
+      expect(localVolPriv.every((b) => b === 0)).toBe(true);
+    });
+  });
+
+  describe("callback ordering on failure", () => {
+    it("fires only argon2id + oprf-start callbacks when OPRF fails", async () => {
+      mockOprfEvaluate.mockRejectedValue(new Error("OPRF down"));
+      const { callbacks, callOrder } = createCallbackSpies();
+
+      await expect(
+        registerCrypto(TEST_USER_ID, TEST_PASSWORD, callbacks),
+      ).rejects.toThrow("OPRF down");
+
+      expect(callOrder).toEqual(["argon2idStart", "argon2idDone", "oprfStart"]);
+    });
+
+    it("fires through uploadStart but not onDone when upload fails", async () => {
+      mockInitCryptoKeys.mockRejectedValue(new Error("upload rejected"));
+      const { callbacks, callOrder } = createCallbackSpies();
+
+      await expect(
+        registerCrypto(TEST_USER_ID, TEST_PASSWORD, callbacks),
+      ).rejects.toThrow("upload rejected");
+
+      expect(callOrder).toEqual([
+        "argon2idStart",
+        "argon2idDone",
+        "oprfStart",
+        "oprfDone",
+        "deriveStart",
+        "uploadStart",
+      ]);
+      // onDone must NOT be in the list (it fires after the upload succeeds)
+      expect(callOrder).not.toContain("done");
+    });
+  });
+
+  describe("zeroAll receives exact buffer references", () => {
+    // Verifies that zeroAll is called with the exact Uint8Array instances
+    // produced by the derivation chain, not copies. If registerCrypto
+    // accidentally passed a slice or re-encoded buffer, zeroing would
+    // miss the original allocation.
+    it("passes the same buffer references that the derivation chain produced", async () => {
+      const { callbacks } = createCallbackSpies();
+      const { zeroAll } = await import("@care-y/crypto");
+
+      await registerCrypto(TEST_USER_ID, TEST_PASSWORD, callbacks);
+
+      expect(zeroAll).toHaveBeenCalledTimes(1);
+      const args = (zeroAll as ReturnType<typeof vi.fn>).mock
+        .calls[0] as Array<Uint8Array | null>;
+      // The four intermediates are passed by reference identity
+      expect(args).toContain(mockStretched);
+      expect(args).toContain(mockOprfOutput);
+      expect(args).toContain(mockMasterKey);
+      expect(args).toContain(mockVolPrivate);
     });
   });
 

@@ -86,7 +86,6 @@
   import VirtualList from "$lib/components/tickets/VirtualList.svelte";
   import QueryError from "$lib/components/QueryError.svelte";
   import EmptyState from "$lib/components/EmptyState.svelte";
-  import { getBrandingTitle } from "$lib/branding/title.svelte.js";
   import type { CallAction } from "$lib/components/tickets/CallOptionsContent.svelte";
   import { createBulkActions } from "$lib/composables/ticket-list/create-bulk-actions.svelte.js";
   import { createFilterDispatch } from "$lib/composables/create-filter-dispatch.svelte.js";
@@ -1469,7 +1468,6 @@
           activeId={overlay.activeId}
           selectedTicketId={ticketsLayout.selectedTicketId()}
           onloadmore={ticketsQuery.hasNextPage ? loadNextPage : undefined}
-          hasMore={ticketsQuery.hasNextPage}
           partialSort={ticketsQuery.hasNextPage &&
             CLIENT_ONLY_SORT_FIELDS.has(tableSortField)}
           newRepliesFirst={newRepliesFirstStore.enabled}
