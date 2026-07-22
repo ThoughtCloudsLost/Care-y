@@ -45,6 +45,18 @@ const DOCKER_APP_ROOT = "/app";
 
 const VITE_ORIGIN = "http://localhost:5174";
 
+const E2E_EXCLUDE_PATTERNS = [
+  /\/paraglide\//,
+  /\/assets\//,
+  /\.css$/,
+  /\.svg$/,
+  /\/DevThemePanel\.svelte$/,
+];
+
+function isExcludedPath(pathname) {
+  return E2E_EXCLUDE_PATTERNS.some((re) => re.test(pathname));
+}
+
 function remapDockerPaths(istanbulData) {
   const remapped = {};
   for (const [dockerPath, fileCov] of Object.entries(istanbulData)) {
@@ -67,7 +79,7 @@ function mapUrlToPath(url) {
   return join(CLIENT_ROOT, pathname);
 }
 
-async function processE2ECoverage(coverageMap) {
+async function processE2ECoverage(coverageMap, vitestFileKeys) {
   if (!existsSync(E2E_RAW_DIR)) {
     console.log("  No E2E coverage directory found at", E2E_RAW_DIR);
     return 0;
@@ -81,6 +93,13 @@ async function processE2ECoverage(coverageMap) {
 
   let converted = 0;
   let skipped = 0;
+  let overlapEntries = 0;
+  let excluded = 0;
+
+  // Separate map accumulates e2e data for files that vitest also covers.
+  // Multiple e2e entries for the same file share the same v8-to-istanbul
+  // transform, so they merge correctly with each other here.
+  const e2eOverlapMap = libCoverage.createCoverageMap();
 
   for (const file of files) {
     const filePath = join(E2E_RAW_DIR, file);
@@ -96,6 +115,13 @@ async function processE2ECoverage(coverageMap) {
     for (const entry of entries) {
       const absPath = mapUrlToPath(entry.url);
       if (!absPath) continue;
+
+      const pathname = new URL(entry.url).pathname;
+      if (isExcludedPath(pathname)) {
+        excluded++;
+        continue;
+      }
+
       if (!existsSync(absPath)) {
         skipped++;
         continue;
@@ -108,8 +134,14 @@ async function processE2ECoverage(coverageMap) {
         await converter.load();
         converter.applyCoverage(entry.functions);
         const istanbulData = converter.toIstanbul();
-        coverageMap.merge(istanbulData);
         converter.destroy();
+
+        if (vitestFileKeys.has(absPath)) {
+          e2eOverlapMap.merge(istanbulData);
+          overlapEntries++;
+        } else {
+          coverageMap.merge(istanbulData);
+        }
         converted++;
       } catch {
         skipped++;
@@ -117,7 +149,82 @@ async function processE2ECoverage(coverageMap) {
     }
   }
 
-  return { converted, skipped, files: files.length };
+  // Line-level union for overlapping files: vitest's statement map is
+  // the structural base; e2e line hits boost uncovered items without
+  // the map-concatenation bug that istanbul's merge() causes when
+  // statement maps differ between instrumentations.
+  let boosted = 0;
+  for (const filePath of e2eOverlapMap.files()) {
+    if (!coverageMap.files().includes(filePath)) continue;
+
+    const e2eFc = e2eOverlapMap.fileCoverageFor(filePath);
+    const vitestFc = coverageMap.fileCoverageFor(filePath);
+
+    const e2eHitLines = new Set();
+    for (const [stmtId, count] of Object.entries(e2eFc.s)) {
+      if (count > 0 && e2eFc.statementMap[stmtId]) {
+        const loc = e2eFc.statementMap[stmtId];
+        for (let line = loc.start.line; line <= loc.end.line; line++) {
+          e2eHitLines.add(line);
+        }
+      }
+    }
+
+    if (e2eHitLines.size === 0) continue;
+
+    let fileBoosted = false;
+
+    for (const [stmtId, loc] of Object.entries(vitestFc.statementMap)) {
+      if (vitestFc.s[stmtId] > 0) continue;
+      for (let line = loc.start.line; line <= loc.end.line; line++) {
+        if (e2eHitLines.has(line)) {
+          vitestFc.s[stmtId] = 1;
+          fileBoosted = true;
+          break;
+        }
+      }
+    }
+
+    for (const [fnId, fn] of Object.entries(vitestFc.fnMap)) {
+      if (vitestFc.f[fnId] > 0) continue;
+      const loc = fn.loc || fn.decl;
+      if (!loc) continue;
+      for (let line = loc.start.line; line <= loc.end.line; line++) {
+        if (e2eHitLines.has(line)) {
+          vitestFc.f[fnId] = 1;
+          fileBoosted = true;
+          break;
+        }
+      }
+    }
+
+    for (const [brId, br] of Object.entries(vitestFc.branchMap)) {
+      const locations = br.locations || [];
+      for (let i = 0; i < locations.length; i++) {
+        if (vitestFc.b[brId][i] > 0) continue;
+        const loc = locations[i];
+        for (let line = loc.start.line; line <= loc.end.line; line++) {
+          if (e2eHitLines.has(line)) {
+            vitestFc.b[brId][i] = 1;
+            fileBoosted = true;
+            break;
+          }
+        }
+      }
+    }
+
+    if (fileBoosted) boosted++;
+  }
+
+  return {
+    converted,
+    skipped,
+    overlapEntries,
+    overlapFiles: e2eOverlapMap.files().length,
+    boosted,
+    excluded,
+    files: files.length,
+  };
 }
 
 function applyDarkTheme(cssPath) {
@@ -609,11 +716,15 @@ async function main() {
   }
 
   const coverageMap = libCoverage.createCoverageMap();
+  const vitestFileKeys = new Set();
 
   // 1. Load host vitest coverage (client, shared, crypto)
   if (hasVitest) {
     try {
       const vitestData = JSON.parse(readFileSync(VITEST_COVERAGE, "utf-8"));
+      for (const key of Object.keys(vitestData)) {
+        vitestFileKeys.add(key);
+      }
       coverageMap.merge(vitestData);
       const fileCount = Object.keys(vitestData).length;
       console.log(`  Host vitest: ${String(fileCount)} files loaded`);
@@ -629,6 +740,9 @@ async function main() {
     try {
       const serverData = JSON.parse(readFileSync(SERVER_COVERAGE, "utf-8"));
       const remapped = remapDockerPaths(serverData);
+      for (const key of Object.keys(remapped)) {
+        vitestFileKeys.add(key);
+      }
       coverageMap.merge(remapped);
       const fileCount = Object.keys(remapped).length;
       console.log(`  Server vitest: ${String(fileCount)} files loaded`);
@@ -641,14 +755,24 @@ async function main() {
     );
   }
 
-  // 3. Process E2E coverage
+  // 3. Process E2E coverage (line-level union for vitest overlap; direct merge for e2e-only)
   console.log("  Processing E2E coverage...");
-  const e2eResult = await processE2ECoverage(coverageMap);
+  const e2eResult = await processE2ECoverage(coverageMap, vitestFileKeys);
   if (typeof e2eResult === "object") {
-    console.log(
-      `  E2E: ${String(e2eResult.converted)} entries converted from ${String(e2eResult.files)} files` +
-        (e2eResult.skipped > 0 ? `, ${String(e2eResult.skipped)} skipped` : ""),
-    );
+    const parts = [
+      `${String(e2eResult.converted)} entries converted from ${String(e2eResult.files)} files`,
+    ];
+    if (e2eResult.overlapEntries > 0)
+      parts.push(
+        `${String(e2eResult.overlapEntries)} across ${String(e2eResult.overlapFiles)} files merged via line union`,
+      );
+    if (e2eResult.boosted > 0)
+      parts.push(`${String(e2eResult.boosted)} files boosted by e2e`);
+    if (e2eResult.excluded > 0)
+      parts.push(`${String(e2eResult.excluded)} excluded (generated)`);
+    if (e2eResult.skipped > 0)
+      parts.push(`${String(e2eResult.skipped)} skipped (missing/error)`);
+    console.log(`  E2E: ${parts.join(", ")}`);
   }
 
   // 4. Generate reports

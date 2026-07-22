@@ -111,6 +111,13 @@ async function main() {
       /* corrupt file, ignore */
     }
   }
+  if (!prevSummary && existsSync(PREV_SUMMARY_PATH)) {
+    try {
+      prevSummary = JSON.parse(readFileSync(PREV_SUMMARY_PATH, "utf-8"));
+    } catch {
+      /* corrupt file, ignore */
+    }
+  }
 
   // ── Preserve previous summary for delta injection ───────────────────
   if (prevSummary) {
