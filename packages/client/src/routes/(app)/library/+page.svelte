@@ -65,8 +65,6 @@
   import CategoryManageSheet from "$lib/components/library/CategoryManageSheet.svelte";
   import QueryError from "$lib/components/QueryError.svelte";
   import EmptyState from "$lib/components/EmptyState.svelte";
-  import { getBrandingTitle } from "$lib/branding/title.svelte.js";
-  import { orgInitial as deriveOrgInitial } from "$lib/utils/initials.js";
   import { haptic } from "$lib/utils/haptic.js";
   import { gestureMount } from "$lib/utils/gesture-focus.js";
   import { cachedDate } from "$lib/utils/date-cache.js";
@@ -752,10 +750,6 @@
   function skeletonNoop(): void {
     /* skeleton card, no interaction */
   }
-
-  // Org initial for the truly-empty room's identity seal (the tickets
-  // list's welcome-room pattern; grapheme-aware for non-Latin names).
-  const orgInitial = $derived(deriveOrgInitial(getBrandingTitle()));
 </script>
 
 {#snippet bulkActionsRow()}

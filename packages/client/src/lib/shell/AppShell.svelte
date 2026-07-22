@@ -101,7 +101,6 @@
     getPreviewLoader,
   } from "$lib/crypto/context.js";
   import { initRecentViews } from "$lib/search/recent-views.js";
-  import { deriveDisplayStatus } from "$lib/tickets/display-status.js";
   import type { TicketKeyWrap } from "$lib/crypto/ticket-decrypt-cache.js";
   import {
     type SerializedBuffer,
