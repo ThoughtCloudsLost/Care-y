@@ -309,14 +309,11 @@ test.describe.serial("Desktop Responsive Layout", () => {
   // ── PTR disabled at desktop ────────────────────────────────────────
 
   test("pull-to-refresh is disabled at desktop", async () => {
-    // PTR indicator is always in the DOM but should be dormant at desktop.
-    // PTR activation is gated on layoutMode.isDesktop in onPageTouchStart.
-    const ptrIndicator = page.locator(".ptr-indicator");
-    await expect(ptrIndicator).toBeAttached();
-    const ptrHeight = await ptrIndicator.evaluate((el) =>
-      parseFloat(getComputedStyle(el).height),
-    );
-    expect(ptrHeight).toBeLessThanOrEqual(1);
+    // PTR activation is gated on layoutMode.isDesktop in onPageTouchStart,
+    // and AppShell renders .ptr-indicator only while a pull is in progress
+    // (ptrPhase !== "idle"). Since no pull can ever start at desktop, the
+    // indicator must never enter the DOM.
+    await expect(page.locator(".ptr-indicator")).toHaveCount(0);
   });
 
   // ── Overlay adaptation ─────────────────────────────────────────────
@@ -437,30 +434,44 @@ test.describe.serial("Desktop Responsive Layout", () => {
   // ── Visual theme compatibility ─────────────────────────────────────
 
   test("sidebar renders across all visual themes without breakage", async () => {
-    const themes = ["riso", "default", "frutiger", "brutalist", "cupertino"];
+    // page.reload() cannot switch themes here: a reload discards the
+    // Worker's in-memory keys, and in E2E mode the app layout skips the
+    // reauth redirect, so the shell would never return. Switch themes
+    // live through the dev panel instead; its visual pill calls
+    // themeStore.setVisualTheme, the same runtime path the app uses.
+    await page.getByRole("button", { name: "Open dev panel" }).click();
+    const panel = page.getByRole("dialog", { name: "Dev panel" });
+    await expect(panel).toBeVisible();
 
-    for (const theme of themes) {
-      await page.evaluate((t: string) => {
-        localStorage.setItem("care-y-visual-theme", t);
-      }, theme);
-      await page.reload();
-      await expect(page.getByRole("navigation")).toBeVisible({
-        timeout: CRYPTO_TIMEOUT,
-      });
+    // The visual pill's label is the active theme name. The suite runs
+    // on "default"; one click per step walks the full cycle back to it.
+    const themes: [name: string, htmlClass: RegExp][] = [
+      ["riso", /\btheme-riso\b/],
+      ["frutiger", /\btheme-frutiger\b/],
+      ["brutalist", /\btheme-brutalist\b/],
+      ["cupertino", /\btheme-cupertino\b/],
+      ["prism", /\btheme-prism\b/],
+      ["default", /\btheme-default\b/],
+    ];
+    let active = "default";
+    for (const [theme, htmlClass] of themes) {
+      await panel.getByRole("button", { name: active, exact: true }).click();
+      await expect(
+        panel.getByRole("button", { name: theme, exact: true }),
+      ).toBeVisible();
+      await expect(page.locator("html")).toHaveClass(htmlClass);
 
       // Sidebar stays visible and structurally intact under the theme:
-      // all three tabs remain and the active tab still reports state.
+      // all three tabs remain and report their roles.
       await expect(sidebar).toBeVisible();
       for (const name of ["Overview", "Tickets", "Library"]) {
         await expect(sidebar.getByRole("tab", { name })).toBeVisible();
       }
+      active = theme;
     }
 
-    // Restore default visual theme.
-    await page.evaluate(() => {
-      localStorage.setItem("care-y-visual-theme", "default");
-    });
-    await page.reload();
+    await panel.getByRole("button", { name: "Close", exact: true }).click();
+    await expect(panel).toBeHidden();
   });
 
   // ── Accessibility ──────────────────────────────────────────────────

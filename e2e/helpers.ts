@@ -485,10 +485,35 @@ export interface CreateTicketOptions {
 }
 
 /**
+ * Return to /tickets after a collision redirect landed on a ticket
+ * detail view. Desktop redirects /tickets/[id] back to /tickets on its
+ * own (deep-link handling in the [id] page), so first give the URL a
+ * moment to settle. Mobile stays on the detail view, where the navbar
+ * Back button returns to the list.
+ */
+async function returnToTicketList(page: Page): Promise<void> {
+  const settled = await expect(page)
+    .toHaveURL("/tickets", { timeout: 3_000 })
+    .then(() => true)
+    .catch(() => false);
+  if (settled) return;
+
+  const backBtn = page.getByRole("button", { name: /back/i });
+  if (await backBtn.isVisible({ timeout: 1_000 }).catch(() => false)) {
+    await backBtn.click();
+  } else {
+    await page.getByRole("tab", { name: "Tickets" }).click();
+  }
+  await expect(page).toHaveURL("/tickets", { timeout: 10_000 });
+}
+
+/**
  * Create a ticket through the production new-ticket form.
- * Navigates to /tickets?action=new-ticket, fills the form, submits,
- * and waits for the success toast. Exercises the full crypto pipeline
- * (CryptoBridge encrypts title/description in the Web Worker).
+ * Opens the sheet from the /tickets navbar, selects a client, fills the
+ * form, submits, and waits for the list refetch. Exercises the full
+ * crypto pipeline (CryptoBridge encrypts title/description in the Web
+ * Worker). Retries with a different client when the selected one already
+ * has an open ticket (client-side collision redirect or server 409).
  */
 export async function createTicket(
   page: Page,
@@ -510,7 +535,9 @@ export async function createTicket(
   await expect(sheet).toBeVisible({ timeout: 15_000 });
 
   // Select client, fill form, and submit. Retries with a different client
-  // if the search term has no matches or the server returns 409 (TICKET_ALREADY_OPEN).
+  // if the search term has no matches, the submit preflight redirects to
+  // the client's existing open ticket, or the server returns 409
+  // (TICKET_ALREADY_OPEN).
   let needsFormFill = true;
   const maxAttempts = CLIENT_SEARCH_TERMS.length;
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
@@ -591,9 +618,9 @@ export async function createTicket(
     await sheet.getByPlaceholder(/brief description/i).click();
     await page.waitForTimeout(300);
 
-    // Watch for 409 response during submission, and also capture the
-    // tickets.list refetch triggered by invalidateQueries on success.
-    // Both listeners must start BEFORE the click so neither response
+    // Watch for the tickets.create response (409 means retry), and also
+    // capture the tickets.list refetch triggered by invalidateQueries on
+    // success. All listeners must start BEFORE the click so no signal
     // slips past.
     const responsePromise = page
       .waitForResponse(
@@ -601,6 +628,16 @@ export async function createTicket(
           r.url().includes("tickets.create") && r.request().method() === "POST",
         { timeout: CRYPTO_TIMEOUT },
       )
+      .catch(() => null);
+
+    // Submit preflights resolveCreateTarget. When the selected client
+    // already has an open ticket, no tickets.create request is sent at
+    // all: the sheet closes and the app navigates to that open ticket
+    // (collision redirect). The URL change is the only observable signal
+    // on that path.
+    const collisionPromise = page
+      .waitForURL(/\/tickets\/[0-9a-f-]{36}$/, { timeout: CRYPTO_TIMEOUT })
+      .then(() => "collision" as const)
       .catch(() => null);
 
     const listRefetchPromise = page
@@ -617,8 +654,17 @@ export async function createTicket(
     await expect(submitBtn).toBeEnabled({ timeout: 5_000 });
     await submitBtn.click();
 
-    const resp = await responsePromise;
-    if (resp?.status() !== 409) {
+    const outcome = await Promise.race([responsePromise, collisionPromise]);
+
+    if (outcome === "collision") {
+      console.log(
+        `[createTicket] collision redirect for "${searchTerm}" (attempt ${String(attempt + 1)}), returning to list and retrying`,
+      );
+      await returnToTicketList(page);
+      continue;
+    }
+
+    if (outcome?.status() !== 409) {
       await expect(sheet).not.toBeVisible({ timeout: CRYPTO_TIMEOUT });
       await listRefetchPromise;
       return;
@@ -880,12 +926,12 @@ const SHARED_AXE_DISABLES: readonly string[] = [
   // chevron button; the grouping is deliberate shell structure.
   "aria-required-children",
   // Konsta internals set aria attributes on elements whose role prohibits
-  // them (H-011).
+  // them (upstream library markup).
   "aria-prohibited-attr",
   // Konsta Page's main scroll container has no tabindex (shell-owned).
   "scrollable-region-focusable",
-  // Konsta ListInput renders visual labels without for/id association
-  // (H-011), leaving inputs unlabeled to this rule.
+  // Konsta ListInput renders visual labels without for/id association,
+  // leaving inputs unlabeled to this rule.
   "label",
   // Same ListInput gap for <select> elements.
   "select-name",
