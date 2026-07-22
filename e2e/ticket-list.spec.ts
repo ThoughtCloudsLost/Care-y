@@ -361,8 +361,8 @@ test.describe.serial("Ticket List (Tickets Tab)", () => {
     // Ensure we're on the tickets page with content visible.
     await expect(page.getByText("Help with housing")).toBeVisible();
 
-    // Konsta Tabbar internals are excluded (H-011); the shell tab bar is
-    // audited by the sweep spec.
+    // Konsta Tabbar internals are excluded (upstream markup gaps); the
+    // shell tab bar is audited by the sweep spec.
     await auditA11y(page, { exclude: ["[role='tablist']"] });
   });
 
@@ -381,27 +381,47 @@ test.describe.serial("Ticket List (Tickets Tab)", () => {
   // ── 10. Visual themes ───────────────────────────────────────────
 
   test("all themes render without visual breakage", async () => {
-    const themes = ["riso", "default", "frutiger", "brutalist", "cupertino"];
-
-    for (const theme of themes) {
-      // Set theme via localStorage (same mechanism as ThemeProvider).
-      await page.evaluate((t: string) => {
-        localStorage.setItem("care-y-theme", t);
-        // Dispatch storage event to trigger reactive update.
-        window.dispatchEvent(new Event("storage"));
-      }, theme);
-
-      // Force a re-render by navigating away and back.
-      await page.getByRole("tab", { name: "Overview" }).click();
+    // Themes must be switched live: a page.reload() discards the crypto
+    // Worker's keys, and in E2E mode the app layout skips the reauth
+    // redirect, so the shell would never come back. The dev panel's
+    // visual pill calls themeStore.setVisualTheme, the same runtime
+    // path the app uses.
+    if (!page.url().endsWith("/tickets")) {
       await page.getByRole("tab", { name: "Tickets" }).click();
-
-      // Wait for tickets to render.
+      await expect(page).toHaveURL("/tickets");
       await expect(page.getByText("Help with housing")).toBeVisible({
         timeout: CRYPTO_TIMEOUT,
       });
+    }
+
+    // The visual pill's label is the active theme name. The suite runs
+    // on "default"; one click per step walks the full cycle back to it.
+    const themes: [name: string, htmlClass: RegExp][] = [
+      ["riso", /\btheme-riso\b/],
+      ["frutiger", /\btheme-frutiger\b/],
+      ["brutalist", /\btheme-brutalist\b/],
+      ["cupertino", /\btheme-cupertino\b/],
+      ["prism", /\btheme-prism\b/],
+      ["default", /\btheme-default\b/],
+    ];
+    const panel = page.getByRole("dialog", { name: "Dev panel" });
+    let active = "default";
+    for (const [theme, htmlClass] of themes) {
+      await page.getByRole("button", { name: "Open dev panel" }).click();
+      await expect(panel).toBeVisible();
+      await panel.getByRole("button", { name: active, exact: true }).click();
+      await expect(
+        panel.getByRole("button", { name: theme, exact: true }),
+      ).toBeVisible();
+      await expect(page.locator("html")).toHaveClass(htmlClass);
+
+      // Close the panel so assertions and screenshots see the page.
+      await panel.getByRole("button", { name: "Close", exact: true }).click();
+      await expect(panel).toBeHidden();
 
       // Verify no layout crash: cards are still visible, filter bar is
       // present, and the view toggle still works.
+      await expect(page.getByText("Help with housing")).toBeVisible();
       await expect(
         page.locator('[data-testid="ticket-card-wrap"]').first(),
       ).toBeVisible();
@@ -415,12 +435,8 @@ test.describe.serial("Ticket List (Tickets Tab)", () => {
         path: `test-results/theme-${theme}-tickets.png`,
         fullPage: false,
       });
-    }
 
-    // Restore default theme.
-    await page.evaluate(() => {
-      localStorage.setItem("care-y-theme", "riso");
-      window.dispatchEvent(new Event("storage"));
-    });
+      active = theme;
+    }
   });
 });
