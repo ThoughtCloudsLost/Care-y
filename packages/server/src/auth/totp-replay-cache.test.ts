@@ -7,6 +7,7 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import {
   createInMemoryTotpReplayCache,
+  createTotpReplayCache,
   assertSingleInstanceTotpReplayCache,
   TOTP_REPLAY_TTL_MS,
 } from "./totp-replay-cache.js";
@@ -102,6 +103,60 @@ describe("TotpReplayCache", () => {
       expect(() => {
         assertSingleInstanceTotpReplayCache(false);
       }).not.toThrow();
+    });
+  });
+
+  describe("createTotpReplayCache", () => {
+    it("throws ConfigError when bypass is set in production", () => {
+      const prevBypass = process.env.TOTP_REPLAY_BYPASS;
+      const prevNode = process.env.NODE_ENV;
+      process.env.TOTP_REPLAY_BYPASS = "1";
+      process.env.NODE_ENV = "production";
+
+      try {
+        expect(() => createTotpReplayCache()).toThrow(ConfigError);
+      } finally {
+        if (prevBypass === undefined) delete process.env.TOTP_REPLAY_BYPASS;
+        else process.env.TOTP_REPLAY_BYPASS = prevBypass;
+        if (prevNode === undefined) delete process.env.NODE_ENV;
+        else process.env.NODE_ENV = prevNode;
+      }
+    });
+
+    it("returns a no-op cache when bypass is set in non-production", () => {
+      const prevBypass = process.env.TOTP_REPLAY_BYPASS;
+      const prevNode = process.env.NODE_ENV;
+      process.env.TOTP_REPLAY_BYPASS = "1";
+      process.env.NODE_ENV = "test";
+
+      try {
+        const cache = createTotpReplayCache();
+
+        // No-op cache: markUsed is silent, isUsed always returns false
+        cache.markUsed("org", "user", "123456");
+        expect(cache.isUsed("org", "user", "123456")).toBe(false);
+      } finally {
+        if (prevBypass === undefined) delete process.env.TOTP_REPLAY_BYPASS;
+        else process.env.TOTP_REPLAY_BYPASS = prevBypass;
+        if (prevNode === undefined) delete process.env.NODE_ENV;
+        else process.env.NODE_ENV = prevNode;
+      }
+    });
+
+    it("returns the real in-memory cache when bypass is not set", () => {
+      const prevBypass = process.env.TOTP_REPLAY_BYPASS;
+      delete process.env.TOTP_REPLAY_BYPASS;
+
+      try {
+        const cache = createTotpReplayCache();
+
+        // Real cache: markUsed causes isUsed to return true
+        cache.markUsed("org", "user", "654321");
+        expect(cache.isUsed("org", "user", "654321")).toBe(true);
+      } finally {
+        if (prevBypass === undefined) delete process.env.TOTP_REPLAY_BYPASS;
+        else process.env.TOTP_REPLAY_BYPASS = prevBypass;
+      }
     });
   });
 });
