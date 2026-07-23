@@ -10,7 +10,7 @@ A call intake and case management system for mutual aid organizations serving at
   <img src="docs/images/ios-pwa/care-y-home-dashboard.png" alt="CARE-Y dashboard showing shift status, queue counts, and priority tickets" width="200">
   <img src="docs/images/ios-pwa/care-y-ticket-list-filtered.png" alt="Ticket list with filter pills, priority badges, and message previews" width="200">
   <img src="docs/images/ios-pwa/care-y-ticket-detail.png" alt="Ticket chat view with client messages, volunteer replies, and private notes" width="200">
-  <img src="docs/images/ios-pwa/care-y-knowledge-base-library.png" alt="Knowledge base with categorized articles and filters" width="200">
+  <img src="docs/images/ios-pwa/care-y-knowledge-base-library.png" alt="Knowledge base with categorized articles and search" width="200">
 </p>
 
 ---
@@ -46,10 +46,17 @@ CARE-Y makes that scenario architecturally impossible. The server stores only ci
 ## Features
 
 <p align="center">
-  <img src="docs/images/ios-pwa/care-y-light-mode.png" alt="CARE-Y dashboard in light mode" width="200">
-  <img src="docs/images/ios-pwa/care-y-admin-user-panel.png" alt="Admin panel with user management, telephony, and org settings" width="200">
-  <img src="docs/images/ios-pwa/care-y-universal-search.png" alt="Cross-entity search across tickets and articles" width="200">
-  <img src="docs/images/ios-pwa/care-y-kb-article-editor-typing.png" alt="Rich text editor with formatting toolbar and keyboard" width="200">
+  <img src="docs/images/ios-pwa/care-y-dark-mode.png" alt="CARE-Y dashboard in dark mode with table view and queue overview" width="200">
+  <img src="docs/images/ios-pwa/care-y-admin-panel.png" alt="Admin navigation panel with people, communications, and org settings" width="200">
+  <img src="docs/images/ios-pwa/care-y-org-settings.png" alt="Organization settings with branding, colors, and custom terminology" width="200">
+  <img src="docs/images/ios-pwa/care-y-universal-search.png" alt="Cross-entity search across tickets, articles, and volunteers" width="200">
+</p>
+
+<p align="center">
+  <img src="docs/images/ios-pwa/care-y-desktop-dashboard.png" alt="Desktop dashboard with two-column layout, sidebar navigation, and table views" width="100%">
+</p>
+<p align="center">
+  <img src="docs/images/ios-pwa/care-y-desktop-tickets.png" alt="Desktop split view with ticket list and ticket detail side by side" width="100%">
 </p>
 
 - **Encrypted case management.** Tickets, messages, case notes, and client data are encrypted with per-ticket keys in the browser before reaching the server.
@@ -96,7 +103,7 @@ The client-facing intake form and portal use a three-tier communication model. C
 
 - **SMS/Email (default).** Works on any phone. Org-side storage is encrypted, but the SMS/email channel itself is plaintext.
 - **Secure Link.** Volunteer generates a portal link with cryptographic key material in the URL fragment (never sent to the server, per RFC 3986). Client reads and sends messages in the browser with no account or password required. Optional link passphrase adds a second factor for high-risk clients.
-- **Encrypted Account.** Client creates an account with a password. Password derives a keypair, messages encrypted end-to-end. This is the strongest option for high risks clients. All comunication goes through the client portal with text/email only sending "You got a message" with a sign in link. Twilio/email subpoena gets only a login URL.
+- **Encrypted Account.** Client creates an account with a password. Password derives a keypair, messages encrypted end-to-end. This is the strongest option for high-risk clients. All communication goes through the client portal. Text and email notifications send only "You have a new message" with a sign-in link. A Twilio or email subpoena gets only a login URL.
 
 The tiers differ in channel protection, not in service quality. Clients are told what each tier's protection level means.
 
@@ -233,7 +240,7 @@ packages/
 
 ## Status
 
-CARE-Y is in active development. The backend (auth, crypto, telephony, ticket system) is functionally complete. The frontend volunteer app is roughly halfway through implementation (design system, dashboard, ticket views, knowledge base, and parts of admin are built. Onboarding, client portal, shift scheduling, and production infrastructure remain).
+CARE-Y is in active development. The backend (auth, crypto, telephony, ticket system) is functionally complete. The frontend volunteer app is nearing completion (design system, onboarding, dashboard, ticket views, knowledge base, and admin are built. Client portal, shift scheduling, and production infrastructure remain).
 
 ---
 
