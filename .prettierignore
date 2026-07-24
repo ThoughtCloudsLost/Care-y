@@ -11,6 +11,7 @@ pnpm-lock.yaml
 *.svg
 *.txt
 CODEOWNERS
+LICENSE
 Dockerfile
 Dockerfile.*
 .env*
