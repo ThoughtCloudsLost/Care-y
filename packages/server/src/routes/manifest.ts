@@ -16,41 +16,18 @@ import sodium from "sodium-native";
 import type { OrgService } from "../org/service.js";
 import { tenantDb } from "../db/db.js";
 import { extractOrgSlug } from "../org/slug-resolver.js";
+import {
+  deriveBrandingKey,
+  decryptBrandingBlob,
+} from "../branding/branding-crypto.js";
 
 export interface ManifestHandlerDeps {
   readonly orgService: OrgService;
 }
 
-const BRANDING_LABEL = "care-y-branding-v1";
 const DEFAULT_NAME = "CARE-Y";
 const DEFAULT_THEME = "#000000";
 const DEFAULT_BG = "#0C0C0C";
-
-function deriveBrandingKey(orgPublicKey: Buffer): Buffer {
-  const labelBytes = Buffer.from(BRANDING_LABEL, "utf-8");
-  const input = Buffer.concat([labelBytes, orgPublicKey]);
-  const key = Buffer.alloc(sodium.crypto_secretbox_KEYBYTES);
-  sodium.crypto_generichash(key, input);
-  return key;
-}
-
-function decryptBlob(encrypted: Buffer, key: Buffer): Buffer | null {
-  const nonceLen = sodium.crypto_secretbox_NONCEBYTES;
-  const macLen = sodium.crypto_secretbox_MACBYTES;
-  if (encrypted.length < nonceLen + macLen) return null;
-
-  const nonce = encrypted.subarray(0, nonceLen);
-  const ciphertext = encrypted.subarray(nonceLen);
-  const plaintext = Buffer.alloc(ciphertext.length - macLen);
-
-  const ok = sodium.crypto_secretbox_open_easy(
-    plaintext,
-    ciphertext,
-    nonce,
-    key,
-  );
-  return ok ? plaintext : null;
-}
 
 interface BrandingPayload {
   name?: string;
@@ -94,7 +71,7 @@ export function createManifestHandler(
           if (config?.org_public_key && config.client_encrypted_branding) {
             const key = deriveBrandingKey(config.org_public_key);
             try {
-              const plaintext = decryptBlob(
+              const plaintext = decryptBrandingBlob(
                 config.client_encrypted_branding,
                 key,
               );

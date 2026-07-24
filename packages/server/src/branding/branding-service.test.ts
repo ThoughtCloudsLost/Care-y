@@ -8,13 +8,19 @@ import {
 } from "../test-utils.js";
 import type { Kysely } from "kysely";
 import type { TenantDatabase } from "../db/types.js";
+import type * as BrandingCrypto from "./branding-crypto.js";
+import type * as AttachmentValidator from "../telephony/attachment-validator.js";
 
-vi.mock("./branding-crypto.js", () => ({
+// Spread the original so exports this file does not stub (BRANDING_AAD,
+// which test-utils imports) stay real instead of becoming undefined.
+vi.mock("./branding-crypto.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof BrandingCrypto>()),
   deriveBrandingKey: () => Buffer.alloc(32),
   decryptBrandingBlob: (_buf: Buffer) => _buf,
 }));
 
-vi.mock("../telephony/attachment-validator.js", () => ({
+vi.mock("../telephony/attachment-validator.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof AttachmentValidator>()),
   validateMagicBytes: vi.fn(),
 }));
 
