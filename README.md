@@ -2,6 +2,10 @@
 
 **Care Anonymized, Redacted, Encrypted - ████**
 
+[![CI](https://github.com/ThoughtCloudsLost/Care-y/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/ThoughtCloudsLost/Care-y/actions/workflows/ci.yml)
+[![Security Scan](https://github.com/ThoughtCloudsLost/Care-y/actions/workflows/security-scan.yml/badge.svg?branch=main)](https://github.com/ThoughtCloudsLost/Care-y/actions/workflows/security-scan.yml)
+[![License: AGPL-3.0](https://img.shields.io/github/license/ThoughtCloudsLost/Care-y)](LICENSE)
+
 > **Pre-alpha.** Under active development. Not yet released.
 
 A call intake and case management system for mutual aid organizations serving at-risk populations. Both clients and volunteers face real danger if their identities or case details are exposed. CARE-Y is built so that even a seized server reveals nothing about who sought help or who provided it.
