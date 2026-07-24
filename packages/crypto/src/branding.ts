@@ -20,8 +20,12 @@
  * The org public key is Curve25519 (from crypto_box_keypair), NOT ristretto255.
  * See org-keypair.ts and crypto-architecture-v2.md section 6 tier table.
  *
+ * Encryption and decryption run through content.ts, so branding blobs use
+ * XChaCha20-Poly1305 AEAD with a fixed AAD, not crypto_secretbox (ADR-053).
+ *
  * References:
- *   SEC-052  libsodium crypto_secretbox (via content.ts for encrypt/decrypt)
+ *   SEC-041  OWASP Key Management (nonce || ciphertext storage format)
+ *   libsodium AEAD docs (XChaCha20-Poly1305-ietf construction)
  *   B1 decision (crypto-architecture-v2.md, org branding two-tier)
  */
 
