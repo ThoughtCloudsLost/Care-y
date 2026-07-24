@@ -21,5 +21,7 @@ export function extractSubdomain(host: string): string | null {
   if (hostname === undefined || hostname === "") return null;
 
   const parts = hostname.split(".");
-  return parts.length >= 3 ? (parts[0] ?? null) : null;
+  if (parts.length < 3) return null;
+  // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- parts[0] is always defined when length >= 3
+  return parts[0]!;
 }

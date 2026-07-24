@@ -1231,4 +1231,650 @@ describe.skipIf(!process.env.DATABASE_URL)("FollowUpService (DB)", () => {
     expect(fu.callStatus).toBeNull();
     expect(fu.callDurationSeconds).toBeNull();
   });
+
+  // ── Cursor direction ──
+
+  it("listByTicket with direction=older returns results in ascending order", async () => {
+    const { userId, ticketId } = await createTicketFixture();
+
+    const ids: string[] = [];
+    for (let i = 0; i < 5; i++) {
+      const fu = await svc.create(userId, {
+        id: crypto.randomUUID(),
+        ticketId,
+        encryptedContent: Buffer.from(`older-dir-${String(i)}`),
+        source: "volunteer",
+        type: "message",
+        isPrivate: false,
+        mentionedPseudonyms: [],
+      });
+      ids.push(fu.id);
+    }
+
+    // Get the last follow-up as our cursor anchor
+    const all = await svc.listByTicket(userId, ticketId, { limit: 100 });
+    const last = all[all.length - 1]!;
+
+    // Direction "older" pages backward from the cursor
+    const older = await svc.listByTicket(userId, ticketId, {
+      limit: 3,
+      cursor: last.id,
+      direction: "older",
+    });
+    // Results should be returned in ascending order (reversed internally)
+    for (let i = 0; i < older.length - 1; i++) {
+      expect(older[i]!.createdAt.getTime()).toBeLessThanOrEqual(
+        older[i + 1]!.createdAt.getTime(),
+      );
+    }
+    // None of the "older" results should include the cursor item itself
+    expect(older.map((f) => f.id)).not.toContain(last.id);
+  });
+
+  it("listByTicket with direction=newer pages forward from cursor", async () => {
+    const { userId, ticketId } = await createTicketFixture();
+
+    for (let i = 0; i < 5; i++) {
+      await svc.create(userId, {
+        id: crypto.randomUUID(),
+        ticketId,
+        encryptedContent: Buffer.from(`newer-dir-${String(i)}`),
+        source: "volunteer",
+        type: "message",
+        isPrivate: false,
+        mentionedPseudonyms: [],
+      });
+    }
+
+    const all = await svc.listByTicket(userId, ticketId, { limit: 100 });
+    const first = all[0]!;
+
+    // Direction "newer" pages forward from the cursor
+    const newer = await svc.listByTicket(userId, ticketId, {
+      limit: 3,
+      cursor: first.id,
+      direction: "newer",
+    });
+    // All results should be newer than the cursor
+    for (const fu of newer) {
+      expect(fu.createdAt.getTime()).toBeGreaterThanOrEqual(
+        first.createdAt.getTime(),
+      );
+    }
+    expect(newer.map((f) => f.id)).not.toContain(first.id);
+  });
+
+  // ── Date range filters ──
+
+  it("listByTicket filters by dateFrom and dateTo", async () => {
+    const { userId, ticketId } = await createTicketFixture();
+
+    // Create follow-ups
+    for (let i = 0; i < 3; i++) {
+      await svc.create(userId, {
+        id: crypto.randomUUID(),
+        ticketId,
+        encryptedContent: Buffer.from(`date-filter-${String(i)}`),
+        source: "volunteer",
+        type: "message",
+        isPrivate: false,
+        mentionedPseudonyms: [],
+      });
+    }
+
+    // Future date range should return nothing
+    const futureDate = new Date(Date.now() + 86_400_000).toISOString();
+    const farFuture = new Date(Date.now() + 172_800_000).toISOString();
+    const empty = await svc.listByTicket(userId, ticketId, {
+      limit: 100,
+      dateFrom: futureDate,
+      dateTo: farFuture,
+    });
+    expect(empty).toHaveLength(0);
+
+    // Past to now range should return all
+    const pastDate = new Date(Date.now() - 86_400_000)
+      .toISOString()
+      .split("T")[0]!;
+    const today = new Date().toISOString().split("T")[0]!;
+    const withRange = await svc.listByTicket(userId, ticketId, {
+      limit: 100,
+      dateFrom: pastDate,
+      dateTo: today,
+    });
+    expect(withRange.length).toBeGreaterThanOrEqual(3);
+  });
+
+  // ── Media flag filters ──
+
+  it("listByTicket with mediaFlags=recording returns only follow-ups with recordings", async () => {
+    const { userId, ticketId } = await createTicketFixture();
+
+    const withRec = await svc.create(userId, {
+      id: crypto.randomUUID(),
+      ticketId,
+      encryptedContent: Buffer.from("has-recording"),
+      source: "client",
+      type: "message",
+      isPrivate: false,
+      mentionedPseudonyms: [],
+    });
+    await svc.create(userId, {
+      id: crypto.randomUUID(),
+      ticketId,
+      encryptedContent: Buffer.from("no-recording"),
+      source: "volunteer",
+      type: "message",
+      isPrivate: false,
+      mentionedPseudonyms: [],
+    });
+
+    await testDb.db
+      .insertInto("recordings")
+      .values({
+        ticket_id: ticketId,
+        followup_id: withRec.id,
+        blob_key: "blob-rec-filter-test",
+        size_bytes: 1024,
+        duration_seconds: 15,
+      })
+      .execute();
+
+    const filtered = await svc.listByTicket(userId, ticketId, {
+      limit: 100,
+      mediaFlags: ["recording"],
+    });
+    expect(filtered).toHaveLength(1);
+    expect(filtered[0]!.id).toBe(withRec.id);
+  });
+
+  it("listByTicket with mediaFlags=file returns follow-ups with non-image attachments", async () => {
+    const { userId, ticketId } = await createTicketFixture();
+
+    const withFile = await svc.create(userId, {
+      id: crypto.randomUUID(),
+      ticketId,
+      encryptedContent: Buffer.from("has-file"),
+      source: "client",
+      type: "message",
+      isPrivate: false,
+      mentionedPseudonyms: [],
+    });
+
+    await testDb.db
+      .insertInto("attachments")
+      .values({
+        ticket_id: ticketId,
+        followup_id: withFile.id,
+        blob_key: "blob-file-filter-test",
+        size_bytes: 2048,
+        content_type: "application/pdf",
+      })
+      .execute();
+
+    const filtered = await svc.listByTicket(userId, ticketId, {
+      limit: 100,
+      mediaFlags: ["file"],
+    });
+    expect(filtered).toHaveLength(1);
+    expect(filtered[0]!.id).toBe(withFile.id);
+  });
+
+  it("listByTicket with mediaFlags=image returns follow-ups with image attachments", async () => {
+    const { userId, ticketId } = await createTicketFixture();
+
+    const withImg = await svc.create(userId, {
+      id: crypto.randomUUID(),
+      ticketId,
+      encryptedContent: Buffer.from("has-image-att"),
+      source: "client",
+      type: "message",
+      isPrivate: false,
+      mentionedPseudonyms: [],
+    });
+
+    await testDb.db
+      .insertInto("attachments")
+      .values({
+        ticket_id: ticketId,
+        followup_id: withImg.id,
+        blob_key: "blob-img-filter-test",
+        size_bytes: 4096,
+        content_type: "image/png",
+      })
+      .execute();
+
+    const filtered = await svc.listByTicket(userId, ticketId, {
+      limit: 100,
+      mediaFlags: ["image"],
+    });
+    expect(filtered).toHaveLength(1);
+    expect(filtered[0]!.id).toBe(withImg.id);
+  });
+
+  // ── createdBy + includeClientSource filter ──
+
+  it("listByTicket filters by createdBy and includeClientSource", async () => {
+    const { userId, ticketId, queueId } = await createTicketFixture();
+    const otherUser = await createTestUser(testDb.db);
+
+    await testDb.db
+      .insertInto("queue_assignments")
+      .values({ queue_id: queueId, user_id: otherUser.id })
+      .onConflict((oc) => oc.columns(["queue_id", "user_id"]).doNothing())
+      .execute();
+
+    await svc.create(userId, {
+      id: crypto.randomUUID(),
+      ticketId,
+      encryptedContent: Buffer.from("by-user1"),
+      source: "volunteer",
+      type: "message",
+      isPrivate: false,
+      mentionedPseudonyms: [],
+    });
+    await svc.create(otherUser.id, {
+      id: crypto.randomUUID(),
+      ticketId,
+      encryptedContent: Buffer.from("by-user2"),
+      source: "volunteer",
+      type: "message",
+      isPrivate: false,
+      mentionedPseudonyms: [],
+    });
+    // Client-sourced follow-up (no created_by)
+    await testDb.db
+      .insertInto("followups")
+      .values({
+        ticket_id: ticketId,
+        source: "client",
+        type: "message",
+        encrypted_content: Buffer.from("from-client"),
+      })
+      .execute();
+
+    // Filter to userId only
+    const byUser = await svc.listByTicket(userId, ticketId, {
+      limit: 100,
+      createdBy: [userId],
+    });
+    expect(byUser.every((f) => f.createdBy === userId)).toBe(true);
+
+    // includeClientSource brings in client-sourced follow-ups
+    const withClient = await svc.listByTicket(userId, ticketId, {
+      limit: 100,
+      createdBy: [userId],
+      includeClientSource: true,
+    });
+    const sources = withClient.map((f) => f.source);
+    expect(sources).toContain("client");
+    expect(sources).toContain("volunteer");
+  });
+
+  // ── listSummary cursor + direction ──
+
+  it("listSummary with direction=older pages backward from cursor", async () => {
+    const { userId, ticketId } = await createTicketFixture();
+
+    for (let i = 0; i < 5; i++) {
+      await svc.create(userId, {
+        id: crypto.randomUUID(),
+        ticketId,
+        encryptedContent: Buffer.from(`summary-older-${String(i)}`),
+        source: "volunteer",
+        type: "message",
+        isPrivate: false,
+        mentionedPseudonyms: [],
+      });
+    }
+
+    const all = await svc.listSummary(userId, ticketId, { limit: 100 });
+    const last = all[all.length - 1]!;
+
+    const older = await svc.listSummary(userId, ticketId, {
+      limit: 3,
+      cursor: last.id,
+      direction: "older",
+    });
+
+    // Results should be in ascending order (reversed internally)
+    for (let i = 0; i < older.length - 1; i++) {
+      expect(older[i]!.createdAt.getTime()).toBeLessThanOrEqual(
+        older[i + 1]!.createdAt.getTime(),
+      );
+    }
+    expect(older.map((s) => s.id)).not.toContain(last.id);
+  });
+
+  // ── listSummary media flags from batch queries ──
+
+  it("listSummary returns correct recording duration and media flags", async () => {
+    const { userId, ticketId } = await createTicketFixture();
+
+    const fu = await svc.create(userId, {
+      id: crypto.randomUUID(),
+      ticketId,
+      encryptedContent: Buffer.from("summary-rec"),
+      source: "client",
+      type: "message",
+      isPrivate: false,
+      mentionedPseudonyms: [],
+    });
+
+    // Insert two recordings with different durations
+    await testDb.db
+      .insertInto("recordings")
+      .values([
+        {
+          ticket_id: ticketId,
+          followup_id: fu.id,
+          blob_key: "blob-rec-1",
+          size_bytes: 1024,
+          duration_seconds: 15,
+        },
+        {
+          ticket_id: ticketId,
+          followup_id: fu.id,
+          blob_key: "blob-rec-2",
+          size_bytes: 2048,
+          duration_seconds: 45,
+        },
+      ])
+      .execute();
+
+    const summaries = await svc.listSummary(userId, ticketId, { limit: 100 });
+    const found = summaries.find((s) => s.id === fu.id);
+    expect(found).toBeDefined();
+    expect(found!.hasRecording).toBe(true);
+    expect(found!.recordingDurationSeconds).toBe(45); // max of 15 and 45
+  });
+
+  it("listSummary distinguishes image vs file attachments", async () => {
+    const { userId, ticketId } = await createTicketFixture();
+
+    const fuImg = await svc.create(userId, {
+      id: crypto.randomUUID(),
+      ticketId,
+      encryptedContent: Buffer.from("has-img"),
+      source: "client",
+      type: "message",
+      isPrivate: false,
+      mentionedPseudonyms: [],
+    });
+
+    const fuFile = await svc.create(userId, {
+      id: crypto.randomUUID(),
+      ticketId,
+      encryptedContent: Buffer.from("has-file"),
+      source: "client",
+      type: "message",
+      isPrivate: false,
+      mentionedPseudonyms: [],
+    });
+
+    await testDb.db
+      .insertInto("attachments")
+      .values([
+        {
+          ticket_id: ticketId,
+          followup_id: fuImg.id,
+          blob_key: "blob-img-summary",
+          size_bytes: 4096,
+          content_type: "image/jpeg",
+        },
+        {
+          ticket_id: ticketId,
+          followup_id: fuFile.id,
+          blob_key: "blob-file-summary",
+          size_bytes: 8192,
+          content_type: "application/pdf",
+        },
+      ])
+      .execute();
+
+    const summaries = await svc.listSummary(userId, ticketId, { limit: 100 });
+    const imgSummary = summaries.find((s) => s.id === fuImg.id);
+    const fileSummary = summaries.find((s) => s.id === fuFile.id);
+
+    expect(imgSummary!.hasImage).toBe(true);
+    expect(imgSummary!.hasFile).toBe(false);
+    expect(fileSummary!.hasImage).toBe(false);
+    expect(fileSummary!.hasFile).toBe(true);
+  });
+
+  it("listSummary omits encryptedContent for plain messages", async () => {
+    const { userId, ticketId } = await createTicketFixture();
+
+    await svc.create(userId, {
+      id: crypto.randomUUID(),
+      ticketId,
+      encryptedContent: Buffer.from("system-content"),
+      source: "system",
+      type: "status_change",
+      isPrivate: false,
+      mentionedPseudonyms: [],
+    });
+    await svc.create(userId, {
+      id: crypto.randomUUID(),
+      ticketId,
+      encryptedContent: Buffer.from("plain-msg"),
+      source: "volunteer",
+      type: "message",
+      isPrivate: false,
+      mentionedPseudonyms: [],
+    });
+
+    const summaries = await svc.listSummary(userId, ticketId, { limit: 100 });
+    const system = summaries.find((s) => s.type === "status_change");
+    const plain = summaries.find((s) => s.type === "message");
+
+    // System events keep their content; plain messages do not
+    expect(system!.encryptedContent).not.toBeNull();
+    expect(plain!.encryptedContent).toBeNull();
+  });
+
+  // ── listByTicket with active filters includes position/count ──
+
+  it("listByTicket with active filters includes fullPosition and totalCount", async () => {
+    const { userId, ticketId } = await createTicketFixture();
+
+    for (let i = 0; i < 4; i++) {
+      await svc.create(userId, {
+        id: crypto.randomUUID(),
+        ticketId,
+        encryptedContent: Buffer.from(`pos-${String(i)}`),
+        source: "volunteer",
+        type: i < 2 ? "message" : "internal_note",
+        isPrivate: i >= 2,
+        mentionedPseudonyms: [],
+      });
+    }
+
+    // Filter to messages only (active filter triggers position computation)
+    const messages = await svc.listByTicket(userId, ticketId, {
+      limit: 100,
+      types: ["message"],
+    });
+    expect(messages).toHaveLength(2);
+    // fullPosition and totalCount should be defined
+    for (const fu of messages) {
+      expect(fu.fullPosition).toBeDefined();
+      expect(fu.totalCount).toBeDefined();
+      expect(typeof fu.totalCount).toBe("number");
+    }
+  });
+
+  // ── listSummary with active filters includes position/count ──
+
+  it("listSummary with active filters includes fullPosition and totalCount", async () => {
+    const { userId, ticketId } = await createTicketFixture();
+
+    for (let i = 0; i < 3; i++) {
+      await svc.create(userId, {
+        id: crypto.randomUUID(),
+        ticketId,
+        encryptedContent: Buffer.from(`sum-pos-${String(i)}`),
+        source: "volunteer",
+        type: "message",
+        isPrivate: false,
+        mentionedPseudonyms: [],
+      });
+    }
+
+    const filtered = await svc.listSummary(userId, ticketId, {
+      limit: 100,
+      types: ["message"],
+    });
+    expect(filtered.length).toBeGreaterThanOrEqual(3);
+    for (const s of filtered) {
+      expect(s.fullPosition).toBeDefined();
+      expect(s.totalCount).toBeDefined();
+    }
+  });
+
+  // ── listByIds empty ──
+
+  it("listByIds returns empty array for empty followUpIds", async () => {
+    const { userId, ticketId } = await createTicketFixture();
+
+    const result = await svc.listByIds(userId, ticketId, []);
+    expect(result).toEqual([]);
+  });
+
+  // ── toggleReaction role gating ──
+
+  it("toggleReaction rejects user below min_view_role for restricted notes", async () => {
+    const { userId, ticketId, queueId } = await createTicketFixture();
+
+    // Create a restricted note type requiring admin
+    const noteTypeId = await createNoteTypeWithViewRole(
+      testDb.db,
+      "POFKWG7erXEJ", // Admin
+    );
+
+    // Use a different user as the note author so the "own note" bypass does not mask
+    const otherUser = await createTestUser(testDb.db);
+    await testDb.db
+      .insertInto("queue_assignments")
+      .values({ queue_id: queueId, user_id: otherUser.id })
+      .onConflict((oc) => oc.columns(["queue_id", "user_id"]).doNothing())
+      .execute();
+
+    const note = await svc.create(otherUser.id, {
+      id: crypto.randomUUID(),
+      ticketId,
+      encryptedContent: Buffer.from("restricted-react-test"),
+      source: "volunteer",
+      type: "internal_note",
+      isPrivate: true,
+      mentionedPseudonyms: [],
+      noteTypeId,
+    });
+
+    // Volunteer (below admin) should be rejected
+    await expect(
+      svc.toggleReaction(userId, "dXwG0zR9BtJp", note.id, "acknowledge"),
+    ).rejects.toThrow(ForbiddenError);
+  });
+
+  // ── updateInternalNote on deleted follow-up ──
+
+  it("updateInternalNote rejects deleted follow-up", async () => {
+    const { userId, ticketId } = await createTicketFixture();
+
+    const fu = await svc.create(userId, {
+      id: crypto.randomUUID(),
+      ticketId,
+      encryptedContent: Buffer.from("delete-then-update"),
+      source: "volunteer",
+      type: "internal_note",
+      isPrivate: true,
+      mentionedPseudonyms: [],
+    });
+
+    await svc.softDeleteInternalNote(userId, fu.id, false);
+
+    await expect(
+      svc.updateInternalNote(userId, fu.id, Buffer.from("edited")),
+    ).rejects.toBeInstanceOf(NotFoundError);
+  });
+
+  // ── softDeleteInternalNote on already-deleted follow-up ──
+
+  it("softDeleteInternalNote rejects already-deleted follow-up", async () => {
+    const { userId, ticketId } = await createTicketFixture();
+
+    const fu = await svc.create(userId, {
+      id: crypto.randomUUID(),
+      ticketId,
+      encryptedContent: Buffer.from("double-delete"),
+      source: "volunteer",
+      type: "internal_note",
+      isPrivate: true,
+      mentionedPseudonyms: [],
+    });
+
+    await svc.softDeleteInternalNote(userId, fu.id, false);
+    // Second delete should throw NotFoundError
+    await expect(
+      svc.softDeleteInternalNote(userId, fu.id, false),
+    ).rejects.toBeInstanceOf(NotFoundError);
+  });
+
+  // ── toggleReaction on deleted follow-up ──
+
+  it("toggleReaction rejects deleted follow-up", async () => {
+    const { userId, ticketId } = await createTicketFixture();
+
+    const note = await svc.create(userId, {
+      id: crypto.randomUUID(),
+      ticketId,
+      encryptedContent: Buffer.from("react-delete-test"),
+      source: "volunteer",
+      type: "internal_note",
+      isPrivate: true,
+      mentionedPseudonyms: [],
+    });
+
+    await svc.softDeleteInternalNote(userId, note.id, false);
+
+    await expect(
+      svc.toggleReaction(userId, "dXwG0zR9BtJp", note.id, "acknowledge"),
+    ).rejects.toThrow(NotFoundError);
+  });
+
+  // ── toggleReaction on non-existent follow-up ──
+
+  it("toggleReaction rejects non-existent follow-up", async () => {
+    const { userId } = await createTicketFixture();
+
+    await expect(
+      svc.toggleReaction(
+        userId,
+        "dXwG0zR9BtJp",
+        crypto.randomUUID(),
+        "acknowledge",
+      ),
+    ).rejects.toThrow(NotFoundError);
+  });
+
+  // ── updateInternalNote non-existent follow-up ──
+
+  it("updateInternalNote rejects non-existent follow-up", async () => {
+    const { userId } = await createTicketFixture();
+
+    await expect(
+      svc.updateInternalNote(userId, crypto.randomUUID(), Buffer.from("x")),
+    ).rejects.toBeInstanceOf(NotFoundError);
+  });
+
+  // ── softDeleteInternalNote non-existent follow-up ──
+
+  it("softDeleteInternalNote rejects non-existent follow-up", async () => {
+    const { userId } = await createTicketFixture();
+
+    await expect(
+      svc.softDeleteInternalNote(userId, crypto.randomUUID(), false),
+    ).rejects.toBeInstanceOf(NotFoundError);
+  });
 });

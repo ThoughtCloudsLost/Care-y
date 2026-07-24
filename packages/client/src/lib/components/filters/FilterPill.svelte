@@ -43,7 +43,7 @@
       return `${label} (${String(selected.size)})`;
     }
     if (selected === null || isMultiSelected(selected)) return label;
-    return options.find((o) => o.value === selected)?.label ?? label;
+    return options.find((o) => o.value === selected)?.label ?? selected;
   });
 
   const isActive = $derived(

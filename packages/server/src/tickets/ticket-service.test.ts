@@ -1655,4 +1655,449 @@ describe.skipIf(!process.env.DATABASE_URL)("TicketService (DB)", () => {
     expect(returnedIds[1]).toBe(ticketIds[1]);
     expect(returnedIds[2]).toBe(ticketIds[0]);
   });
+
+  // --- Sort mode keyset cursor: queue ---
+
+  it("sortBy queue pagination covers all tickets without duplicates", async () => {
+    const { userId } = await createClientFixture();
+
+    // Create 2 queues with different sort_order
+    const q1 = await createTestQueue(testDb.db, {
+      label: "Q-A-" + crypto.randomUUID().slice(0, 4),
+      sortOrder: 9010,
+    });
+    const q2 = await createTestQueue(testDb.db, {
+      label: "Q-B-" + crypto.randomUUID().slice(0, 4),
+      sortOrder: 9020,
+    });
+
+    // Assign user to both queues
+    for (const qId of [q1.id, q2.id]) {
+      await testDb.db
+        .insertInto("queue_assignments")
+        .values({ queue_id: qId, user_id: userId })
+        .onConflict((oc) => oc.columns(["queue_id", "user_id"]).doNothing())
+        .execute();
+    }
+
+    const ticketIds: string[] = [];
+    // 2 tickets in q1, 2 in q2
+    for (let i = 0; i < 2; i++) {
+      const c1 = await createTestClientFixture(testDb.db, { queueId: q1.id });
+      const t1 = await svc.create(c1.userId, {
+        id: crypto.randomUUID(),
+        clientId: c1.clientId,
+        queueId: q1.id,
+        encryptedTitle: Buffer.from(`q1-${i}`),
+        encryptedDescription: Buffer.from("d"),
+        priority: "normal",
+        keyGeneration: crypto.randomUUID(),
+        keyWrap: fakeKeyWrap(),
+      });
+      ticketIds.push(t1.id);
+
+      const c2 = await createTestClientFixture(testDb.db, { queueId: q2.id });
+      const t2 = await svc.create(c2.userId, {
+        id: crypto.randomUUID(),
+        clientId: c2.clientId,
+        queueId: q2.id,
+        encryptedTitle: Buffer.from(`q2-${i}`),
+        encryptedDescription: Buffer.from("d"),
+        priority: "normal",
+        keyGeneration: crypto.randomUUID(),
+        keyWrap: fakeKeyWrap(),
+      });
+      ticketIds.push(t2.id);
+    }
+
+    // Page through with limit 2
+    const page1 = await svc.list(userId, {
+      queueIds: [q1.id, q2.id],
+      sortBy: "queue",
+      sortDirection: "asc",
+      limit: 2,
+    });
+    const page2 = await svc.list(userId, {
+      queueIds: [q1.id, q2.id],
+      sortBy: "queue",
+      sortDirection: "asc",
+      limit: 2,
+      cursor: page1[1]!.id,
+    });
+
+    const allReturned = [...page1.map((t) => t.id), ...page2.map((t) => t.id)];
+    const ours = allReturned.filter((id) => ticketIds.includes(id));
+    expect(new Set(ours).size).toBe(4);
+  });
+
+  // --- Sort mode keyset cursor: client ---
+
+  it("sortBy client pagination covers all tickets without duplicates", async () => {
+    const { userId, queueId } = await createClientFixture();
+
+    const ticketIds: string[] = [];
+    for (let i = 0; i < 4; i++) {
+      const c = await createTestClientFixture(testDb.db, { queueId });
+      const t = await svc.create(c.userId, {
+        id: crypto.randomUUID(),
+        clientId: c.clientId,
+        queueId,
+        encryptedTitle: Buffer.from(`client-sort-${i}`),
+        encryptedDescription: Buffer.from("d"),
+        priority: "normal",
+        keyGeneration: crypto.randomUUID(),
+        keyWrap: fakeKeyWrap(),
+      });
+      ticketIds.push(t.id);
+    }
+
+    const page1 = await svc.list(userId, {
+      queueIds: [queueId],
+      sortBy: "client",
+      sortDirection: "asc",
+      limit: 2,
+    });
+    const page2 = await svc.list(userId, {
+      queueIds: [queueId],
+      sortBy: "client",
+      sortDirection: "asc",
+      limit: 2,
+      cursor: page1[1]!.id,
+    });
+
+    const allReturned = [...page1.map((t) => t.id), ...page2.map((t) => t.id)];
+    const ours = allReturned.filter((id) => ticketIds.includes(id));
+    expect(new Set(ours).size).toBe(4);
+  });
+
+  // --- Sort mode keyset cursor: msgs ---
+
+  it("sortBy msgs pagination covers all tickets without duplicates", async () => {
+    const { userId, queueId } = await createClientFixture();
+
+    const ticketIds: string[] = [];
+    for (let i = 0; i < 4; i++) {
+      const c = await createTestClientFixture(testDb.db, { queueId });
+      const t = await svc.create(c.userId, {
+        id: crypto.randomUUID(),
+        clientId: c.clientId,
+        queueId,
+        encryptedTitle: Buffer.from(`msgs-sort-${i}`),
+        encryptedDescription: Buffer.from("d"),
+        priority: "normal",
+        keyGeneration: crypto.randomUUID(),
+        keyWrap: fakeKeyWrap(),
+      });
+      ticketIds.push(t.id);
+
+      // Add different numbers of follow-ups to differentiate msg counts
+      for (let j = 0; j <= i; j++) {
+        await testDb.db
+          .insertInto("followups")
+          .values({
+            ticket_id: t.id,
+            source: "volunteer",
+            type: "message",
+            encrypted_content: Buffer.from(`fu-${i}-${j}`),
+          })
+          .execute();
+      }
+    }
+
+    const page1 = await svc.list(userId, {
+      queueIds: [queueId],
+      sortBy: "msgs",
+      sortDirection: "desc",
+      limit: 2,
+    });
+    const page2 = await svc.list(userId, {
+      queueIds: [queueId],
+      sortBy: "msgs",
+      sortDirection: "desc",
+      limit: 2,
+      cursor: page1[1]!.id,
+    });
+
+    const allReturned = [...page1.map((t) => t.id), ...page2.map((t) => t.id)];
+    const ours = allReturned.filter((id) => ticketIds.includes(id));
+    expect(new Set(ours).size).toBe(4);
+  });
+
+  // --- Create: clientToken path ---
+
+  it("create with clientToken resolves pending client", async () => {
+    const { userId, queueId } = await createClientFixture();
+    const pendingClients = new Map<
+      string,
+      {
+        phoneHash: string;
+        opsEncryptedPhone: Buffer;
+        orgSchema: string;
+        createdAt: number;
+      }
+    >();
+
+    const token = crypto.randomUUID();
+    const phoneHash = `ph-pending-${crypto.randomUUID().slice(0, 8)}`;
+    pendingClients.set(token, {
+      phoneHash,
+      opsEncryptedPhone: Buffer.from("encrypted-phone"),
+      orgSchema: "test_schema",
+      createdAt: Date.now(),
+    });
+
+    // Build a new service with the pendingClients map
+    const qps = createQueuePermissionsService(testDb.db);
+    const svcWithPending = createTicketService(
+      testDb.db,
+      access,
+      (uid) => qps.getUserQueues(uid),
+      { pendingClients },
+    );
+
+    const ticket = await svcWithPending.create(userId, {
+      id: crypto.randomUUID(),
+      clientToken: token,
+      queueId,
+      encryptedTitle: Buffer.from("pending-title"),
+      encryptedDescription: Buffer.from("pending-desc"),
+      priority: "normal",
+      keyGeneration: crypto.randomUUID(),
+      keyWrap: fakeKeyWrap(),
+    });
+
+    expect(ticket.status).toBe("open");
+    expect(ticket.clientId).toBeTruthy();
+    // Token should be consumed
+    expect(pendingClients.has(token)).toBe(false);
+  });
+
+  // --- Create: neither clientId nor clientToken ---
+
+  it("create without clientId or clientToken throws ValidationError", async () => {
+    const { userId, queueId } = await createClientFixture();
+
+    const { ValidationError } = await import("../errors.js");
+    await expect(
+      svc.create(userId, {
+        id: crypto.randomUUID(),
+        queueId,
+        encryptedTitle: Buffer.from("t"),
+        encryptedDescription: Buffer.from("d"),
+        priority: "normal",
+        keyGeneration: crypto.randomUUID(),
+        keyWrap: fakeKeyWrap(),
+      }),
+    ).rejects.toBeInstanceOf(ValidationError);
+  });
+
+  // --- Create: expired clientToken ---
+
+  it("create with expired clientToken throws NotFoundError", async () => {
+    const { userId, queueId } = await createClientFixture();
+    const pendingClients = new Map<
+      string,
+      {
+        phoneHash: string;
+        opsEncryptedPhone: Buffer;
+        orgSchema: string;
+        createdAt: number;
+      }
+    >();
+
+    const qps = createQueuePermissionsService(testDb.db);
+    const svcWithPending = createTicketService(
+      testDb.db,
+      access,
+      (uid) => qps.getUserQueues(uid),
+      { pendingClients },
+    );
+
+    // Token does not exist in the map
+    await expect(
+      svcWithPending.create(userId, {
+        id: crypto.randomUUID(),
+        clientToken: "nonexistent-token",
+        queueId,
+        encryptedTitle: Buffer.from("t"),
+        encryptedDescription: Buffer.from("d"),
+        priority: "normal",
+        keyGeneration: crypto.randomUUID(),
+        keyWrap: fakeKeyWrap(),
+      }),
+    ).rejects.toBeInstanceOf(NotFoundError);
+  });
+
+  // --- Create: clientToken without pendingClients map ---
+
+  it("create with clientToken but no pendingClients map throws InternalError", async () => {
+    const { userId, queueId } = await createClientFixture();
+
+    const { InternalError } = await import("../errors.js");
+    // The default svc has no pendingClients
+    await expect(
+      svc.create(userId, {
+        id: crypto.randomUUID(),
+        clientToken: "some-token",
+        queueId,
+        encryptedTitle: Buffer.from("t"),
+        encryptedDescription: Buffer.from("d"),
+        priority: "normal",
+        keyGeneration: crypto.randomUUID(),
+        keyWrap: fakeKeyWrap(),
+      }),
+    ).rejects.toBeInstanceOf(InternalError);
+  });
+
+  // --- searchClients without encryptor ---
+
+  it("searchClients returns masked *** when no fieldEncryptor is provided", async () => {
+    const { clientId } = await createClientFixture();
+
+    // Read the client's alias to search for it
+    const clientRow = await testDb.db
+      .selectFrom("clients")
+      .select("alias")
+      .where("id", "=", clientId)
+      .executeTakeFirstOrThrow();
+
+    const results = await svc.searchClients(clientRow.alias, 10);
+    const found = results.find((r) => r.id === clientId);
+    expect(found).toBeDefined();
+    expect(found!.maskedPhone).toBe("***");
+    expect(found!.alias).toBe(clientRow.alias);
+  });
+
+  // --- counts ---
+
+  it("counts returns zero when user has no queue access", async () => {
+    const outsider = await createTestUser(testDb.db);
+    const result = await svc.counts(outsider.id);
+    expect(result.total).toBe(0);
+    expect(result.new).toBe(0);
+    expect(result.active).toBe(0);
+    expect(result.closed).toBe(0);
+    expect(result.mine).toBe(0);
+  });
+
+  // --- update with empty changes returns existing ticket ---
+
+  it("update with no changes returns existing ticket", async () => {
+    const { userId, ticketId } = await createTicketFixture();
+
+    const result = await svc.update(userId, { ticketId });
+    expect(result.id).toBe(ticketId);
+    expect(result.status).toBe("open");
+  });
+
+  it("update with non-existent ticket and no changes throws NotFoundError", async () => {
+    const { userId } = await createTicketFixture();
+
+    await expect(
+      svc.update(userId, { ticketId: crypto.randomUUID() }),
+    ).rejects.toBeInstanceOf(ForbiddenError);
+  });
+
+  // --- reopen on already-open ticket throws NotFoundError ---
+
+  it("reopen on already-open ticket throws NotFoundError", async () => {
+    const { userId, ticketId } = await createTicketFixture();
+
+    await expect(
+      svc.reopen(userId, ticketId, crypto.randomUUID()),
+    ).rejects.toBeInstanceOf(NotFoundError);
+  });
+
+  // --- close on already-closed ticket throws NotFoundError ---
+
+  it("close on already-closed ticket throws NotFoundError", async () => {
+    const { userId, ticketId } = await createTicketFixture();
+
+    await svc.close(userId, ticketId);
+    await expect(svc.close(userId, ticketId)).rejects.toBeInstanceOf(
+      NotFoundError,
+    );
+  });
+
+  // --- list filters by date ranges ---
+
+  it("list filters by createdAfter and createdBefore", async () => {
+    const { userId, queueId } = await createClientFixture();
+    const c = await createTestClientFixture(testDb.db, { queueId });
+    const ticket = await svc.create(c.userId, {
+      id: crypto.randomUUID(),
+      clientId: c.clientId,
+      queueId,
+      encryptedTitle: Buffer.from("date-range-test"),
+      encryptedDescription: Buffer.from("d"),
+      priority: "normal",
+      keyGeneration: crypto.randomUUID(),
+      keyWrap: fakeKeyWrap(),
+    });
+
+    // Filter with future range should exclude it
+    const futureDate = new Date(Date.now() + 86_400_000).toISOString();
+    const farFuture = new Date(Date.now() + 172_800_000).toISOString();
+    const empty = await svc.list(userId, {
+      queueIds: [queueId],
+      createdAfter: futureDate,
+      createdBefore: farFuture,
+      limit: 100,
+    });
+    expect(empty.some((t) => t.id === ticket.id)).toBe(false);
+
+    // Filter with past to now should include it
+    const pastDate = new Date(Date.now() - 86_400_000).toISOString();
+    const nowIsh = new Date(Date.now() + 1000).toISOString();
+    const included = await svc.list(userId, {
+      queueIds: [queueId],
+      createdAfter: pastDate,
+      createdBefore: nowIsh,
+      limit: 100,
+    });
+    expect(included.some((t) => t.id === ticket.id)).toBe(true);
+  });
+
+  // --- list with assignedTo = null ---
+
+  it("list with assignedTo=null returns only unassigned tickets", async () => {
+    const { userId, queueId } = await createClientFixture();
+
+    const c1 = await createTestClientFixture(testDb.db, { queueId });
+    const unassigned = await svc.create(c1.userId, {
+      id: crypto.randomUUID(),
+      clientId: c1.clientId,
+      queueId,
+      encryptedTitle: Buffer.from("unassigned"),
+      encryptedDescription: Buffer.from("d"),
+      priority: "normal",
+      keyGeneration: crypto.randomUUID(),
+      keyWrap: fakeKeyWrap(),
+    });
+
+    const c2 = await createTestClientFixture(testDb.db, { queueId });
+    const assigned = await svc.create(c2.userId, {
+      id: crypto.randomUUID(),
+      clientId: c2.clientId,
+      queueId,
+      encryptedTitle: Buffer.from("assigned"),
+      encryptedDescription: Buffer.from("d"),
+      priority: "normal",
+      keyGeneration: crypto.randomUUID(),
+      keyWrap: fakeKeyWrap(),
+    });
+    await testDb.db
+      .updateTable("tickets")
+      .set({ assigned_to: userId })
+      .where("id", "=", assigned.id)
+      .execute();
+
+    const results = await svc.list(userId, {
+      queueIds: [queueId],
+      assignedTo: null,
+      limit: 100,
+    });
+    expect(results.some((t) => t.id === unassigned.id)).toBe(true);
+    expect(results.some((t) => t.id === assigned.id)).toBe(false);
+  });
 });

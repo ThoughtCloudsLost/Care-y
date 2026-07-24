@@ -775,4 +775,367 @@ describe.skipIf(!process.env.DATABASE_URL)("AuthService", () => {
       ).rejects.toBeInstanceOf(NotFoundError);
     });
   });
+
+  // --- IP-change 2FA clear (line 274-275) ---
+
+  describe("validateSession IP change", () => {
+    it("clears 2FA when IP changes on a 2FA-verified session", async () => {
+      const user = await service.register({
+        identifier: "ip-change-user",
+        password: "supersecretpasswd1",
+        displayName: "IP Change",
+        roleId: RoleId.VOLUNTEER,
+      });
+
+      const { session } = await service.login({
+        identifier: "ip-change-user",
+        password: "supersecretpasswd1",
+        ipAddress: "10.0.0.1",
+        userAgent: "test-agent",
+      });
+
+      // Mark session as 2FA verified
+      await testDb.db
+        .updateTable("sessions")
+        .set({ twofa_verified: true })
+        .where("token", "=", session.token)
+        .execute();
+
+      // Validate from a different IP
+      const result = await service.validateSession(
+        session.token,
+        "10.0.0.2",
+        "test-agent",
+      );
+
+      expect(result).not.toBeNull();
+      expect(result!.user.id).toBe(user.id);
+      // 2FA should be cleared due to IP change
+      expect(result!.session.twofaVerified).toBe(false);
+    });
+
+    it("keeps 2FA when only UA changes (IP unchanged)", async () => {
+      await service.register({
+        identifier: "ua-change-user",
+        password: "supersecretpasswd1",
+        displayName: "UA Change",
+        roleId: RoleId.VOLUNTEER,
+      });
+
+      const { session } = await service.login({
+        identifier: "ua-change-user",
+        password: "supersecretpasswd1",
+        ipAddress: "10.0.0.5",
+        userAgent: "original-agent",
+      });
+
+      // Mark as 2FA verified
+      await testDb.db
+        .updateTable("sessions")
+        .set({ twofa_verified: true })
+        .where("token", "=", session.token)
+        .execute();
+
+      // Validate with same IP but different UA
+      const warnSpy = vi
+        .spyOn(console, "warn")
+        .mockImplementation(() => undefined);
+      const result = await service.validateSession(
+        session.token,
+        "10.0.0.5",
+        "different-agent",
+      );
+      warnSpy.mockRestore();
+
+      expect(result).not.toBeNull();
+      // IP did not change, so 2FA stays verified
+      expect(result!.session.twofaVerified).toBe(true);
+    });
+  });
+
+  // --- updateUsername unique constraint violation (line 569-575) ---
+
+  describe("updateUsername", () => {
+    it("throws ConflictError when new username already exists", async () => {
+      await service.register({
+        identifier: "existing-username",
+        password: "supersecretpasswd1",
+        displayName: "Existing",
+        roleId: RoleId.VOLUNTEER,
+      });
+
+      const user2 = await service.register({
+        identifier: "rename-me-user",
+        password: "supersecretpasswd1",
+        displayName: "Rename Me",
+        roleId: RoleId.VOLUNTEER,
+      });
+
+      await expect(
+        service.updateUsername(
+          user2.id,
+          "existing-username",
+          "supersecretpasswd1",
+        ),
+      ).rejects.toBeInstanceOf(ConflictError);
+    });
+
+    it("throws AuthError when current password is wrong", async () => {
+      const user = await service.register({
+        identifier: "bad-pass-rename",
+        password: "supersecretpasswd1",
+        displayName: "Bad Pass",
+        roleId: RoleId.VOLUNTEER,
+      });
+
+      await expect(
+        service.updateUsername(user.id, "new-name", "wrongpassword123"),
+      ).rejects.toBeInstanceOf(AuthError);
+    });
+
+    it("succeeds with correct password and new unique identifier", async () => {
+      const user = await service.register({
+        identifier: "good-rename-user",
+        password: "supersecretpasswd1",
+        displayName: "Good Rename",
+        roleId: RoleId.VOLUNTEER,
+      });
+
+      await service.updateUsername(
+        user.id,
+        "renamed-user",
+        "supersecretpasswd1",
+      );
+
+      // Should be able to login with the new identifier
+      const { user: loginUser } = await service.login({
+        identifier: "renamed-user",
+        password: "supersecretpasswd1",
+        ipAddress: "127.0.0.1",
+        userAgent: "test-agent",
+      });
+      expect(loginUser.id).toBe(user.id);
+    });
+
+    it("works without password verification (admin path)", async () => {
+      const user = await service.register({
+        identifier: "admin-rename-target",
+        password: "supersecretpasswd1",
+        displayName: "Admin Rename",
+        roleId: RoleId.VOLUNTEER,
+      });
+
+      // Omit currentPassword (admin-service path)
+      await service.updateUsername(user.id, "admin-renamed-user");
+
+      const { user: loginUser } = await service.login({
+        identifier: "admin-renamed-user",
+        password: "supersecretpasswd1",
+        ipAddress: "127.0.0.1",
+        userAgent: "test-agent",
+      });
+      expect(loginUser.id).toBe(user.id);
+    });
+
+    it("throws NotFoundError for inactive user", async () => {
+      const user = await service.register({
+        identifier: "inactive-rename",
+        password: "supersecretpasswd1",
+        displayName: "Inactive",
+        roleId: RoleId.VOLUNTEER,
+      });
+
+      // Deactivate user (need an actor)
+      const actor = await service.register({
+        identifier: "actor-for-deactivate",
+        password: "supersecretpasswd1",
+        displayName: "Actor",
+        roleId: RoleId.ADMIN,
+      });
+      await service.setUserActive(actor.id, user.id, false);
+
+      await expect(
+        service.updateUsername(user.id, "new-name"),
+      ).rejects.toBeInstanceOf(NotFoundError);
+    });
+  });
+
+  // --- updatePasswordHash (line 587) ---
+
+  describe("updatePasswordHash", () => {
+    it("changes password and kills other sessions", async () => {
+      const user = await service.register({
+        identifier: "pass-change-user",
+        password: "supersecretpasswd1",
+        displayName: "Pass Change",
+        roleId: RoleId.VOLUNTEER,
+      });
+
+      const { session: s1 } = await service.login({
+        identifier: "pass-change-user",
+        password: "supersecretpasswd1",
+        ipAddress: "127.0.0.1",
+        userAgent: "test-agent",
+      });
+
+      // Create a second session
+      const { session: s2 } = await service.login({
+        identifier: "pass-change-user",
+        password: "supersecretpasswd1",
+        ipAddress: "127.0.0.2",
+        userAgent: "test-agent",
+      });
+
+      await service.updatePasswordHash(
+        user.id,
+        s1.token,
+        "supersecretpasswd1",
+        "newpassword12345678",
+      );
+
+      // s1 should still be valid
+      const valid1 = await service.validateSession(
+        s1.token,
+        "127.0.0.1",
+        "test-agent",
+      );
+      expect(valid1).not.toBeNull();
+
+      // s2 should be killed
+      const valid2 = await service.validateSession(
+        s2.token,
+        "127.0.0.2",
+        "test-agent",
+      );
+      expect(valid2).toBeNull();
+
+      // New password should work
+      const { user: loggedIn } = await service.login({
+        identifier: "pass-change-user",
+        password: "newpassword12345678",
+        ipAddress: "127.0.0.1",
+        userAgent: "test-agent",
+      });
+      expect(loggedIn.id).toBe(user.id);
+    });
+
+    it("rejects wrong current password", async () => {
+      const user = await service.register({
+        identifier: "bad-pass-change",
+        password: "supersecretpasswd1",
+        displayName: "Bad Pass Change",
+        roleId: RoleId.VOLUNTEER,
+      });
+
+      const { session } = await service.login({
+        identifier: "bad-pass-change",
+        password: "supersecretpasswd1",
+        ipAddress: "127.0.0.1",
+        userAgent: "test-agent",
+      });
+
+      await expect(
+        service.updatePasswordHash(
+          user.id,
+          session.token,
+          "wrongpassword12345",
+          "newpassword12345678",
+        ),
+      ).rejects.toBeInstanceOf(AuthError);
+    });
+
+    it("rejects inactive user", async () => {
+      const user = await service.register({
+        identifier: "inactive-pass-change",
+        password: "supersecretpasswd1",
+        displayName: "Inactive Pass",
+        roleId: RoleId.VOLUNTEER,
+      });
+
+      const { session } = await service.login({
+        identifier: "inactive-pass-change",
+        password: "supersecretpasswd1",
+        ipAddress: "127.0.0.1",
+        userAgent: "test-agent",
+      });
+
+      // Deactivate user
+      const actor = await service.register({
+        identifier: "actor-pass-deact",
+        password: "supersecretpasswd1",
+        displayName: "Actor",
+        roleId: RoleId.ADMIN,
+      });
+      await service.setUserActive(actor.id, user.id, false);
+
+      await expect(
+        service.updatePasswordHash(
+          user.id,
+          session.token,
+          "supersecretpasswd1",
+          "newpassword12345678",
+        ),
+      ).rejects.toBeInstanceOf(NotFoundError);
+    });
+  });
+
+  // --- updateDisplayName (line 544) ---
+
+  describe("updateDisplayName", () => {
+    it("throws NotFoundError for inactive user", async () => {
+      const user = await service.register({
+        identifier: "dn-inactive",
+        password: "supersecretpasswd1",
+        displayName: "DN Inactive",
+        roleId: RoleId.VOLUNTEER,
+      });
+
+      // Deactivate
+      const actor = await service.register({
+        identifier: "actor-dn-deact",
+        password: "supersecretpasswd1",
+        displayName: "Actor",
+        roleId: RoleId.ADMIN,
+      });
+      await service.setUserActive(actor.id, user.id, false);
+
+      await expect(
+        service.updateDisplayName(user.id, Buffer.from("new-name")),
+      ).rejects.toBeInstanceOf(NotFoundError);
+    });
+  });
+
+  // --- validateSession with deactivated user (line 412) ---
+
+  describe("validateSession deactivated user", () => {
+    it("invalidates session when user is deactivated", async () => {
+      const user = await service.register({
+        identifier: "deact-validate",
+        password: "supersecretpasswd1",
+        displayName: "Deact Validate",
+        roleId: RoleId.VOLUNTEER,
+      });
+
+      const { session } = await service.login({
+        identifier: "deact-validate",
+        password: "supersecretpasswd1",
+        ipAddress: "127.0.0.1",
+        userAgent: "test-agent",
+      });
+
+      // Manually deactivate (bypasses session kill for test isolation)
+      await testDb.db
+        .updateTable("users")
+        .set({ is_active: false })
+        .where("id", "=", user.id)
+        .execute();
+
+      const result = await service.validateSession(
+        session.token,
+        "127.0.0.1",
+        "test-agent",
+      );
+      expect(result).toBeNull();
+    });
+  });
 });

@@ -685,4 +685,261 @@ describe.skipIf(!HAS_DB)("auth + org routers (DB integration)", () => {
     expect(result.requiresTwoFactor).toBe(true);
     expect(result.enrolledMethods).toContain(TwoFactorMethod.TOTP);
   });
+
+  // --- Auth: getSalt rate limiting ---
+
+  it("getSalt returns REQUEST_RATE_LIMITED after limiter exhaustion", async () => {
+    const isolatedSaltLimiter = createInMemoryRateLimiter({
+      windowMs: 60_000,
+      maxRequests: 2,
+    });
+
+    function makeSaltCaller() {
+      const orgService = createOrgService(
+        testDb.platformDb,
+        makeTenantDbFactory(testDb.platformDb),
+      );
+      const totpReplayCache = createInMemoryTotpReplayCache();
+      const appRouter = createAppRouter({
+        authDeps: {
+          hasher,
+          loginLimiter,
+          saltLimiter: isolatedSaltLimiter,
+          fakeSaltKey: testFakeSaltKey,
+          encryptor: testFieldEncryptor,
+          indexer: testBlindIndexer,
+          tokenizer: testSessionTokenizer,
+          isSecureCookie: false,
+          emailSender: createMockEmailSender(),
+          providerFactory: createThrowingProviderFactory(),
+          resolveCallerId: vi.fn().mockResolvedValue("+15551234567"),
+          totpReplayCache,
+        },
+        profileDeps: {
+          hasher,
+          encryptor: testFieldEncryptor,
+          indexer: testBlindIndexer,
+          tokenizer: testSessionTokenizer,
+          passwordChangeLimiter: createInMemoryRateLimiter({
+            windowMs: 60_000,
+            maxRequests: 100,
+          }),
+        },
+        twoFactorDeps: {
+          emailSender: createMockEmailSender(),
+          encryptor: testFieldEncryptor,
+          indexer: testBlindIndexer,
+          tokenizer: testSessionTokenizer,
+          providerFactory: createThrowingProviderFactory(),
+          resolveCallerId: vi.fn().mockResolvedValue("+15551234567"),
+          pushSender: null,
+          pushHmacKey: null,
+          totpReplayCache,
+        },
+        oprfDeps: createMockOprfDeps(),
+        orgService,
+        providerFactory: createThrowingProviderFactory(),
+      });
+      const factory = createCallerFactory(appRouter);
+      const ctx: Context = {
+        req: mockReq(),
+        res: mockRes(),
+        org: orgContext,
+        session: null,
+        user: null,
+      };
+      return factory(ctx);
+    }
+
+    // Exhaust the limiter (2 allowed requests).
+    await makeSaltCaller().auth.getSalt({ identifier: "salt-test-user" });
+    await makeSaltCaller().auth.getSalt({ identifier: "salt-test-user" });
+
+    // Third call hits the rate limit.
+    await expectTrpcError(
+      makeSaltCaller().auth.getSalt({ identifier: "salt-test-user" }),
+      "TOO_MANY_REQUESTS",
+      "REQUEST_RATE_LIMITED",
+    );
+  });
+
+  // --- Auth: getSalt fake vs real salt ---
+
+  it("getSalt returns a salt for a nonexistent user (fake salt, enumeration prevention)", async () => {
+    const { caller } = createTestCaller();
+    const result = await caller.auth.getSalt({
+      identifier: `nonexistent-${randomUUID().slice(0, 8)}`,
+    });
+
+    // Always returns a salt and userId, even for non-existent users.
+    expect(typeof result.salt).toBe("string");
+    expect(result.salt.length).toBeGreaterThan(0);
+    expect(typeof result.userId).toBe("string");
+    expect(result.userId.length).toBeGreaterThan(0);
+  });
+
+  it("getSalt returns the real salt for an existing user", async () => {
+    const authService = makeAuthService(tenantDb, orgContext.orgId);
+    const identifier = `salt-real-${randomUUID().slice(0, 8)}`;
+    await authService.register({
+      identifier,
+      password: "salt-real-password-long-enough",
+      displayName: "Salt Real User",
+      roleId: RoleId.VOLUNTEER,
+    });
+
+    const { caller } = createTestCaller();
+    const result = await caller.auth.getSalt({ identifier });
+
+    expect(typeof result.salt).toBe("string");
+    expect(result.salt.length).toBeGreaterThan(0);
+    expect(typeof result.userId).toBe("string");
+  });
+
+  // --- Auth: assignRole last-admin protection ---
+
+  describe("assignRole", () => {
+    it("rejects demoting the last admin with CANNOT_DEMOTE_LAST_ADMIN", async () => {
+      // Use a fresh schema so we control the exact admin count.
+      const freshDb = await createTestDb();
+      const freshTenantDb = freshDb.db;
+      await freshTenantDb
+        .insertInto("org_config")
+        .values({ pii_retention_days: null })
+        .onConflict((oc) => oc.doNothing())
+        .execute();
+      await seedOrgPublicKey(freshTenantDb);
+
+      const freshOrgService = createOrgService(
+        freshDb.platformDb,
+        makeTenantDbFactory(freshDb.platformDb),
+      );
+      const suffix = randomUUID().slice(0, 8);
+      const freshOrg = await freshOrgService.createOrg({
+        slug: `test-lastadm-${suffix}`,
+      });
+
+      const freshOrgCtx: OrgContext = {
+        orgId: freshOrg.id,
+        orgSlug: freshOrg.slug,
+        orgSchema: freshDb.schemaName,
+        tenantDb: freshTenantDb,
+        sealedBox: testSealedBox,
+      };
+
+      const freshAuthService = makeAuthService(freshTenantDb, freshOrg.id);
+
+      // Create two admins via the service (not routes).
+      const callerAdmin = await freshAuthService.register({
+        identifier: `caller-adm-${suffix}`,
+        password: "caller-admin-password-long",
+        displayName: "Caller Admin",
+        roleId: RoleId.ADMIN,
+      });
+      const soleAdmin = await freshAuthService.register({
+        identifier: `sole-adm-${suffix}`,
+        password: "sole-admin-password-long!1",
+        displayName: "Sole Admin",
+        roleId: RoleId.ADMIN,
+      });
+
+      // Deactivate callerAdmin via raw SQL. countActiveAdmins only counts
+      // active admins, so this makes soleAdmin the sole active admin.
+      // The tRPC context carries user/session info from the test fixture,
+      // not from the DB, so callerAdmin can still call adminProcedure.
+      await freshTenantDb
+        .updateTable("users")
+        .set({ is_active: false })
+        .where("id", "=", callerAdmin.id)
+        .execute();
+
+      const callerCtx: Context = {
+        req: mockReq(),
+        res: mockRes(),
+        org: freshOrgCtx,
+        session: {
+          id: `session-${callerAdmin.id}`,
+          token: `token-${callerAdmin.id}`,
+          userId: callerAdmin.id,
+          ipToken: "test-ip-token",
+          uaToken: "test-ua-token",
+          expiresAt: new Date(Date.now() + 60 * 60 * 1000),
+          twofaVerified: true,
+          webauthnChallenge: null,
+        },
+        user: { ...callerAdmin, isActive: true },
+      };
+
+      const caller = buildCaller(callerCtx);
+
+      // soleAdmin is the last active admin. Attempting to demote them
+      // should fail with CANNOT_DEMOTE_LAST_ADMIN.
+      await expectTrpcError(
+        caller.auth.assignRole({
+          userId: soleAdmin.id,
+          roleId: RoleId.VOLUNTEER,
+        }),
+        "FORBIDDEN",
+        "CANNOT_DEMOTE_LAST_ADMIN",
+      );
+
+      await freshDb.cleanup();
+    }, 60_000);
+  });
+
+  // --- Auth: setUserActive ---
+
+  describe("setUserActive", () => {
+    it("deactivates a user and then reactivates them", async () => {
+      const authService = makeAuthService(tenantDb);
+      const admin = await authService.register({
+        identifier: `active-admin-${randomUUID().slice(0, 8)}`,
+        password: "active-admin-password-long1",
+        displayName: "Active Admin",
+        roleId: RoleId.ADMIN,
+      });
+      const target = await authService.register({
+        identifier: `active-target-${randomUUID().slice(0, 8)}`,
+        password: "active-target-password-long",
+        displayName: "Active Target",
+        roleId: RoleId.VOLUNTEER,
+      });
+
+      const { caller } = createAuthedCaller(
+        { ...admin, isActive: true },
+        `active-token-${randomUUID()}`,
+        true,
+      );
+
+      // Deactivate the target user.
+      const deactivated = await caller.auth.setUserActive({
+        userId: target.id,
+        isActive: false,
+      });
+      expect(deactivated.user.id).toBe(target.id);
+
+      // Verify DB state: user should be inactive.
+      const row = await tenantDb
+        .selectFrom("users")
+        .select("is_active")
+        .where("id", "=", target.id)
+        .executeTakeFirstOrThrow();
+      expect(row.is_active).toBe(false);
+
+      // Reactivate the target user.
+      const reactivated = await caller.auth.setUserActive({
+        userId: target.id,
+        isActive: true,
+      });
+      expect(reactivated.user.id).toBe(target.id);
+
+      // Verify DB state: user should be active again.
+      const row2 = await tenantDb
+        .selectFrom("users")
+        .select("is_active")
+        .where("id", "=", target.id)
+        .executeTakeFirstOrThrow();
+      expect(row2.is_active).toBe(true);
+    });
+  });
 });

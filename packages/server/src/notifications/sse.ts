@@ -179,7 +179,6 @@ export function createSseService(): SseService {
         }
       }
       connections.clear();
-      recentEvents.length = 0;
     },
   };
 }

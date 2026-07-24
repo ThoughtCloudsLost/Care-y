@@ -19,7 +19,11 @@ test.describe.serial("KB Editor (Create/Edit, Categories, ATAG)", () => {
     page = await browser.newPage();
     await startCoverage(page);
     await login(page);
-    await expect(page.getByText("recently updated")).toBeVisible({
+    // Wait for the dashboard to finish rendering (crypto pipeline settles).
+    // WebKit's navigation events can linger longer than Chromium after
+    // the 2FA redirect, blocking locator resolution. Waiting for a
+    // known decrypted element proves the page is interactive.
+    await expect(page.getByText("Help with housing")).toBeVisible({
       timeout: CRYPTO_TIMEOUT,
     });
   });
@@ -212,7 +216,8 @@ test.describe.serial("KB Editor (Create/Edit, Categories, ATAG)", () => {
     testInfo.setTimeout(CRYPTO_TIMEOUT * 4);
 
     // Navigate to the article detail to verify saved changes.
-    // If we're on the library list, tap the article.
+    // On desktop split view, save returns to /library with the detail pane.
+    // On mobile, save navigates to /library/{id} (full-page detail).
     if (page.url().endsWith("/library")) {
       await page.getByText(TEST_ARTICLE_TITLE).click();
     }
@@ -223,9 +228,10 @@ test.describe.serial("KB Editor (Create/Edit, Categories, ATAG)", () => {
     });
 
     // Navigate back to library for subsequent tests.
-    // On desktop split view, use Escape or the close button.
+    // On desktop split view, Escape closes the detail pane (pushState).
+    // On mobile, use the back button for full-page navigation.
     const backBtn = page.getByRole("button", {
-      name: /back to library|close/i,
+      name: /back to|close/i,
     });
     const hasBackBtn = await backBtn
       .isVisible({ timeout: 2_000 })
@@ -237,7 +243,7 @@ test.describe.serial("KB Editor (Create/Edit, Categories, ATAG)", () => {
       await page.keyboard.press("Escape");
     }
 
-    await expect(page).toHaveURL("/library");
+    await expect(page).toHaveURL("/library", { timeout: 10_000 });
   });
 
   // ── 3. ATAG accessibility checks ───────────────────────────────
@@ -332,7 +338,7 @@ test.describe.serial("KB Editor (Create/Edit, Categories, ATAG)", () => {
     // Should navigate back to the article detail (or split view).
     // On desktop split view, Escape closes the detail pane.
     const backBtn = page.getByRole("button", {
-      name: /back to library|close/i,
+      name: /back to|close/i,
     });
     const hasBackBtn = await backBtn
       .isVisible({ timeout: 2_000 })

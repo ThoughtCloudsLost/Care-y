@@ -15,6 +15,8 @@ const clientAvailable = existsSync(
 
 export default defineConfig({
   test: {
+    pool: "threads",
+    maxThreads: process.env.CI ? undefined : 2,
     coverage: {
       exclude: [
         ...coverageConfigDefaults.exclude,

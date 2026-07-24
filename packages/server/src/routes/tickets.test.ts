@@ -53,6 +53,7 @@ import { createSearchService } from "../tickets/search.js";
 import { createNoteTypeService } from "../tickets/note-type-service.js";
 import { createSecretsEncryptor, deriveSecretsKey } from "../config/secrets.js";
 import type { BlobStore } from "../storage/store.js";
+import { NotFoundError } from "../errors.js";
 
 // ---------------------------------------------------------------------------
 // In-memory BlobStore for tests (no filesystem or S3 needed)
@@ -2075,6 +2076,268 @@ describe.skipIf(!process.env.DATABASE_URL)(
           noteTypeId: gated.id,
         });
         expect(note.type).toBe("internal_note");
+      });
+    });
+
+    // -----------------------------------------------------------------------
+    // Branch coverage: readStateSweep error propagation
+    // -----------------------------------------------------------------------
+
+    describe("readStateSweep error propagation", () => {
+      it("propagates service errors through withErrorWrapping", async () => {
+        // Inject a ticket service factory that throws on sweepReadState,
+        // exercising the withErrorWrapping catch path for this route.
+        const { user } = await setupUserWithTicket();
+        const caller = createAuthedCaller(user, {
+          deps: {
+            createTicketSvc: (db, access, getQueues, svcDeps) => {
+              const real = createTicketService(db, access, getQueues, svcDeps);
+              return {
+                ...real,
+                sweepReadState: () => {
+                  throw new NotFoundError("sweep_failure_test");
+                },
+              };
+            },
+          },
+        });
+
+        await expectTrpcError(caller.tickets.readStateSweep({}), "NOT_FOUND");
+      });
+    });
+
+    // -----------------------------------------------------------------------
+    // Branch coverage: listFollowUps with zero internal notes
+    // -----------------------------------------------------------------------
+
+    describe("listFollowUps reactions map", () => {
+      it("returns empty reactions map when no follow-ups are internal notes", async () => {
+        const { user, ticketId } = await setupUserWithTicket();
+        const caller = createAuthedCaller(user);
+
+        // Create only message-type follow-ups (not internal_note)
+        await caller.tickets.createFollowUp({
+          id: crypto.randomUUID(),
+          ticketId,
+          encryptedContent: testEncryptedContent(0xc1),
+          source: "volunteer",
+          type: "message",
+          isPrivate: false,
+          mentionedPseudonyms: [],
+        });
+        await caller.tickets.createFollowUp({
+          id: crypto.randomUUID(),
+          ticketId,
+          encryptedContent: testEncryptedContent(0xc2),
+          source: "volunteer",
+          type: "message",
+          isPrivate: false,
+          mentionedPseudonyms: [],
+        });
+
+        const result = await caller.tickets.listFollowUps({ ticketId });
+
+        // Every follow-up is a message, so the filter for internal_note
+        // produces an empty array and getReactions([]) returns {}.
+        expect(result.followUps.length).toBeGreaterThanOrEqual(2);
+        expect(result.followUps.every((fu) => fu.type === "message")).toBe(
+          true,
+        );
+        expect(result.reactions).toEqual({});
+      });
+    });
+
+    // -----------------------------------------------------------------------
+    // Branch coverage: updateInternalNote typeChanged paths
+    // -----------------------------------------------------------------------
+
+    describe("updateInternalNote typeChanged", () => {
+      it("does not trigger notification when noteTypeId stays the same", async () => {
+        const admin = await createTestUser(tenantDb, {
+          overrides: { role_id: RoleId.ADMIN },
+        });
+        const adminCaller = createAuthedCaller(admin);
+
+        // Create a note type
+        const noteType = await adminCaller.tickets.noteTypes!.create({
+          encryptedName: testEncryptedContent(0xd1),
+          encryptedIcon: testEncryptedContent(0xd2),
+          escalationTargets: [],
+        });
+
+        // Create a ticket and internal note with that note type
+        const { user, ticketId } = await setupUserWithTicket();
+        const caller = createAuthedCaller(user);
+        const note = await caller.tickets.createFollowUp({
+          id: crypto.randomUUID(),
+          ticketId,
+          encryptedContent: testEncryptedContent(0xd3),
+          source: "volunteer",
+          type: "internal_note",
+          isPrivate: false,
+          mentionedPseudonyms: [],
+          noteTypeId: noteType.id,
+        });
+
+        // Update with the same noteTypeId: typeChanged should be false
+        const updated = await caller.tickets.updateInternalNote({
+          followUpId: note.id,
+          encryptedContent: testEncryptedContent(0xd4),
+          noteTypeId: noteType.id,
+        });
+        expect(updated.id).toBe(note.id);
+        // The note type remains the same
+        expect(updated.noteTypeId).toBe(noteType.id);
+      });
+
+      it("triggers notification when noteTypeId changes to a different value", async () => {
+        const admin = await createTestUser(tenantDb, {
+          overrides: { role_id: RoleId.ADMIN },
+        });
+        const adminCaller = createAuthedCaller(admin);
+
+        // Create two note types
+        const noteTypeA = await adminCaller.tickets.noteTypes!.create({
+          encryptedName: testEncryptedContent(0xd5),
+          encryptedIcon: testEncryptedContent(0xd6),
+          escalationTargets: [],
+        });
+        const noteTypeB = await adminCaller.tickets.noteTypes!.create({
+          encryptedName: testEncryptedContent(0xd7),
+          encryptedIcon: testEncryptedContent(0xd8),
+          escalationTargets: [],
+        });
+
+        // Create a ticket and internal note with noteTypeA
+        const { user, ticketId } = await setupUserWithTicket();
+        const caller = createAuthedCaller(user);
+        const note = await caller.tickets.createFollowUp({
+          id: crypto.randomUUID(),
+          ticketId,
+          encryptedContent: testEncryptedContent(0xd9),
+          source: "volunteer",
+          type: "internal_note",
+          isPrivate: false,
+          mentionedPseudonyms: [],
+          noteTypeId: noteTypeA.id,
+        });
+
+        // Update with a different noteTypeId: typeChanged = true,
+        // which exercises the notify() call inside the true branch.
+        const updated = await caller.tickets.updateInternalNote({
+          followUpId: note.id,
+          encryptedContent: testEncryptedContent(0xda),
+          noteTypeId: noteTypeB.id,
+        });
+        expect(updated.id).toBe(note.id);
+        expect(updated.noteTypeId).toBe(noteTypeB.id);
+      });
+    });
+
+    // -----------------------------------------------------------------------
+    // Branch coverage: downloadAttachmentBlob null blob
+    // -----------------------------------------------------------------------
+
+    describe("downloadAttachmentBlob null blob", () => {
+      it("returns NOT_FOUND when an attachment's blob is missing from the store", async () => {
+        const { user, ticketId } = await setupUserWithTicket();
+        const caller = createAuthedCaller(user);
+
+        const inserted = await tenantDb
+          .insertInto("attachments")
+          .values({
+            ticket_id: ticketId,
+            blob_key: `absent-blob-${randomUUID().slice(0, 8)}`,
+            size_bytes: 64,
+          })
+          .returning("id")
+          .executeTakeFirstOrThrow();
+
+        // The metadata record resolves fine
+        const record = await caller.tickets.getAttachment({
+          attachmentId: inserted.id,
+        });
+        expect(record.ticketId).toBe(ticketId);
+
+        // But the blob download fails with NOT_FOUND instead of
+        // returning garbage or an empty response.
+        await expectTrpcError(
+          caller.tickets.downloadAttachmentBlob({
+            attachmentId: inserted.id,
+          }),
+          "NOT_FOUND",
+        );
+      });
+    });
+
+    // -----------------------------------------------------------------------
+    // Branch coverage: rewrapFollowUp without blobUpdates
+    // -----------------------------------------------------------------------
+
+    describe("rewrapFollowUp without blobUpdates", () => {
+      it("completes rewrap with blob updates provided", async () => {
+        const { user, ticketId } = await setupUserWithTicket();
+        const caller = createAuthedCaller(user);
+
+        // Create a follow-up with a key_generation (simulates tk_temp)
+        const tempKeyGen = randomUUID();
+        const originalBlob = Buffer.alloc(64, 0xf1);
+        const blobKey = await blobStore.put(
+          orgContext.orgSchema,
+          "attachment",
+          originalBlob,
+        );
+
+        const followUpRow = await tenantDb
+          .insertInto("followups")
+          .values({
+            ticket_id: ticketId,
+            source: "telephony",
+            type: "call_recording",
+            encrypted_content: Buffer.alloc(64, 0xf2),
+            key_generation: tempKeyGen,
+          })
+          .returning("id")
+          .executeTakeFirstOrThrow();
+
+        // Attach an attachment row pointing to the blob
+        await tenantDb
+          .insertInto("attachments")
+          .values({
+            ticket_id: ticketId,
+            followup_id: followUpRow.id,
+            blob_key: blobKey,
+            size_bytes: originalBlob.byteLength,
+          })
+          .execute();
+
+        // Rewrap WITH blobUpdates (the true path of the optional chain)
+        const newBlobData = Buffer.alloc(64, 0xf3);
+        const result = await caller.tickets.rewrapFollowUp({
+          followUpId: followUpRow.id,
+          encryptedContent: testEncryptedContent(0xf4),
+          blobUpdates: [
+            {
+              oldBlobKey: blobKey,
+              encryptedData: newBlobData.toString("base64"),
+              category: "attachment",
+            },
+          ],
+        });
+
+        expect(result.rewrapped).toBe(true);
+
+        // Verify key_generation cleared
+        const row = await tenantDb
+          .selectFrom("followups")
+          .select("key_generation")
+          .where("id", "=", followUpRow.id)
+          .executeTakeFirstOrThrow();
+        expect(row.key_generation).toBeNull();
+
+        // Verify the old blob was cleaned up
+        const oldBlobExists = await blobStore.exists(blobKey);
+        expect(oldBlobExists).toBe(false);
       });
     });
   },

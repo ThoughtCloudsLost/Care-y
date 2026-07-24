@@ -95,8 +95,10 @@ test.describe.serial("Mobile Layout Preserved (regression)", () => {
     testInfo.setTimeout(CRYPTO_TIMEOUT * 2);
     await page.getByRole("tab", { name: "Library" }).click();
     await expect(page).toHaveURL("/library");
-    // Library at mobile should not show split view; wait for page content.
-    await expect(page.getByText("Select an article to read")).toBeVisible({
+    // Wait for library content to load. On mobile, articles render
+    // directly (no split view), so wait for the article count badge
+    // that appears once the list decrypts.
+    await expect(page.locator(".stat-item")).toBeVisible({
       timeout: CRYPTO_TIMEOUT,
     });
     const splitView = page.locator('[data-testid="split-view"]');
@@ -134,7 +136,12 @@ test.describe.serial("Mobile Layout Preserved (regression)", () => {
   // ── Keyboard shortcuts not active at mobile ────────────────────────
 
   test("number key shortcuts do not switch tabs at mobile", async () => {
-    await page.locator("body").click();
+    // Ensure we start from the dashboard.
+    if (!page.url().endsWith("/")) {
+      await page.getByRole("tab", { name: "Overview" }).click();
+      await expect(page).toHaveURL("/", { timeout: 5_000 });
+    }
+
     await page.waitForTimeout(200);
 
     // Press "2" which would switch to Tickets at desktop.

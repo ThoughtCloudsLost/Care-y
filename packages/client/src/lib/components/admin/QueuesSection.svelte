@@ -118,12 +118,17 @@
   // ── Expandable sections (expanded by default) ──
 
   const expandedQueues = new SvelteSet<string>();
+  // Plain Set: tracking seen ids reactively would re-expand a queue the
+  // moment the user collapses it (the effect reads what toggleExpand writes).
+  // eslint-disable-next-line svelte/prefer-svelte-reactivity -- intentionally non-reactive to break effect loop
+  const autoExpandedQueues = new Set<string>();
 
   $effect(() => {
     const queues = queuesQuery.data;
     if (!queues) return;
     for (const q of queues) {
-      if (!expandedQueues.has(q.id)) {
+      if (!autoExpandedQueues.has(q.id)) {
+        autoExpandedQueues.add(q.id);
         expandedQueues.add(q.id);
       }
     }

@@ -8,7 +8,9 @@
  * port 3000 with the correct x-org-slug header.
  */
 
-import { test, expect, type Page } from "@playwright/test";
+import { test, expect } from "./coverage-fixture";
+import { startCoverage, stopAndWriteCoverage } from "./coverage-fixture";
+import type { Page } from "@playwright/test";
 import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
 import {
@@ -86,10 +88,12 @@ test.describe.serial("Admin Setup Wizard", () => {
 
   test.beforeAll(async ({ browser }) => {
     page = await browser.newPage();
+    await startCoverage(page);
     await routeToOnboardOrg(page);
   });
 
   test.afterAll(async () => {
+    await stopAndWriteCoverage(page, "onboarding-wizard");
     await page.unrouteAll({ behavior: "ignoreErrors" });
     await page.close();
   });

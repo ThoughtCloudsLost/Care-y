@@ -25,13 +25,17 @@ import {
   encode,
   decode,
   eciesEncrypt,
+  eciesDecrypt,
   encryptContent,
   decryptContent,
   generateContentKey,
   buildContentAad,
   followupSlot,
+  blobSlot,
   type Ciphertext,
+  type Nonce,
   type RistrettoPoint,
+  type Scalar,
   type SymmetricKey,
 } from "@care-y/crypto";
 import type {
@@ -41,6 +45,7 @@ import type {
   OprfBlindResponse,
   DeriveKeysResponse,
   DecryptContentResponse,
+  DecryptBlobResponse,
   EncryptContentResponse,
   GetVolPublicResponse,
   CreateTicketKeyResponse,
@@ -51,6 +56,8 @@ import type {
   OrgEncryptResponse,
   OrgDecryptResponse,
   OrgDecryptBatchResponse,
+  RewrapTkResponse,
+  RewrapBlobResponse,
   SharedWorkerState,
 } from "./crypto-protocol.js";
 import {
@@ -1351,4 +1358,471 @@ describe("crypto-core idle self-zero", () => {
       }
     },
   );
+});
+
+describe("crypto-core rewrapTk success", () => {
+  let volPublicStr: string;
+
+  beforeEach(async () => {
+    handleZeroAll(-1, testSink);
+    sinkMessages = [];
+    dispatch = createDispatcher(testSink);
+    const sodium = requireSodium();
+    const salt = sodium.randombytes_buf(16);
+    const result = await loginFlow("rewraptk-ok-pw", salt);
+    volPublicStr = result.volPublic;
+    sinkMessages = [];
+  });
+
+  it("re-wraps a cached tk to a recipient public key", async () => {
+    const sodium = requireSodium();
+    const volPub = decode(volPublicStr) as RistrettoPoint;
+
+    // Create and cache a tk
+    const tk = generateContentKey();
+    const wrap = eciesEncrypt(tk, volPub);
+    await dispatchAndWait({
+      type: "unwrapTk",
+      id: 1000,
+      ticketId: "t-rewraptk",
+      keyCacheId: "t-rewraptk",
+      ephemeralPoint: encode(wrap.ephemeralPoint),
+      nonce: encode(wrap.nonce),
+      wrappedKey: encode(wrap.ciphertext),
+    });
+    sinkMessages = [];
+
+    // Generate a recipient key pair
+    const recipientPrivate =
+      sodium.crypto_core_ristretto255_scalar_random() as Scalar;
+    const recipientPublic =
+      sodium.crypto_scalarmult_ristretto255_base(recipientPrivate);
+
+    const resp = (await dispatchAndWait({
+      type: "rewrapTk",
+      id: 1001,
+      ticketId: "t-rewraptk",
+      recipientVolPublic: encode(recipientPublic),
+    })) as RewrapTkResponse;
+
+    expect(resp.ok).toBe(true);
+    expect(resp.ephemeralPoint).toBeDefined();
+    expect(resp.nonce).toBeDefined();
+    expect(resp.wrappedKey).toBeDefined();
+
+    // Verify the recipient can unwrap the ticket key
+    const unwrappedTk = eciesDecrypt(
+      decode(resp.ephemeralPoint) as RistrettoPoint,
+      decode(resp.nonce) as Nonce,
+      decode(resp.wrappedKey),
+      recipientPrivate,
+    );
+    expect(unwrappedTk).toEqual(tk);
+
+    sodium.memzero(tk);
+    sodium.memzero(recipientPrivate);
+  });
+});
+
+describe("crypto-core decryptBlob success", () => {
+  let volPublicStr: string;
+
+  beforeEach(async () => {
+    handleZeroAll(-1, testSink);
+    sinkMessages = [];
+    dispatch = createDispatcher(testSink);
+    const sodium = requireSodium();
+    const salt = sodium.randombytes_buf(16);
+    const result = await loginFlow("decryptblob-ok-pw", salt);
+    volPublicStr = result.volPublic;
+    sinkMessages = [];
+  });
+
+  it("decrypts blob data and returns an ArrayBuffer", async () => {
+    const sodium = requireSodium();
+    const volPub = decode(volPublicStr) as RistrettoPoint;
+
+    // Create and cache a tk
+    const tk = generateContentKey();
+    const wrap = eciesEncrypt(tk, volPub);
+    await dispatchAndWait({
+      type: "unwrapTk",
+      id: 1100,
+      ticketId: "t-blob",
+      keyCacheId: "t-blob",
+      ephemeralPoint: encode(wrap.ephemeralPoint),
+      nonce: encode(wrap.nonce),
+      wrappedKey: encode(wrap.ciphertext),
+    });
+    sinkMessages = [];
+
+    // Encrypt a blob
+    const blobData = new TextEncoder().encode("binary blob content here");
+    const slot = blobSlot("blob-id-1");
+    const ct = encryptContent(blobData, tk, buildContentAad("t-blob", slot));
+
+    const resp = (await dispatchAndWait({
+      type: "decryptBlob",
+      id: 1101,
+      ticketId: "t-blob",
+      keyCacheId: "t-blob",
+      slot,
+      ephemeralPoint: encode(wrap.ephemeralPoint),
+      nonce: encode(wrap.nonce),
+      wrappedKey: encode(wrap.ciphertext),
+      ciphertext: encode(ct),
+    })) as DecryptBlobResponse;
+
+    expect(resp.ok).toBe(true);
+    expect(resp.data).toBeInstanceOf(ArrayBuffer);
+    const result = new TextDecoder().decode(new Uint8Array(resp.data));
+    expect(result).toBe("binary blob content here");
+
+    sodium.memzero(tk);
+  });
+
+  it("returns DECRYPT_FAILED for corrupt blob ciphertext", async () => {
+    const sodium = requireSodium();
+    const volPub = decode(volPublicStr) as RistrettoPoint;
+
+    const tk = generateContentKey();
+    const wrap = eciesEncrypt(tk, volPub);
+    await dispatchAndWait({
+      type: "unwrapTk",
+      id: 1110,
+      ticketId: "t-blob-bad",
+      keyCacheId: "t-blob-bad",
+      ephemeralPoint: encode(wrap.ephemeralPoint),
+      nonce: encode(wrap.nonce),
+      wrappedKey: encode(wrap.ciphertext),
+    });
+    sinkMessages = [];
+
+    const resp = await dispatchAndWait({
+      type: "decryptBlob",
+      id: 1111,
+      ticketId: "t-blob-bad",
+      keyCacheId: "t-blob-bad",
+      slot: blobSlot("b-corrupt"),
+      ephemeralPoint: encode(wrap.ephemeralPoint),
+      nonce: encode(wrap.nonce),
+      wrappedKey: encode(wrap.ciphertext),
+      ciphertext: encode(new Uint8Array(64)),
+    });
+
+    expect(resp.ok).toBe(false);
+    expect((resp as ErrorResponse).code).toBe("DECRYPT_FAILED");
+    sodium.memzero(tk);
+  });
+});
+
+describe("crypto-core rewrapBlob success", () => {
+  let volPublicStr: string;
+
+  beforeEach(async () => {
+    handleZeroAll(-1, testSink);
+    sinkMessages = [];
+    dispatch = createDispatcher(testSink);
+    const sodium = requireSodium();
+    const salt = sodium.randombytes_buf(16);
+    const result = await loginFlow("rewrapblob-ok-pw", salt);
+    volPublicStr = result.volPublic;
+    sinkMessages = [];
+  });
+
+  it("re-encrypts blob data from tk_temp to canonical tk", async () => {
+    const sodium = requireSodium();
+    const volPub = decode(volPublicStr) as RistrettoPoint;
+
+    // Cache the canonical tk
+    const canonicalTk = generateContentKey();
+    const wrapCanonical = eciesEncrypt(canonicalTk, volPub);
+    await dispatchAndWait({
+      type: "unwrapTk",
+      id: 1200,
+      ticketId: "t-reblob",
+      keyCacheId: "t-reblob",
+      ephemeralPoint: encode(wrapCanonical.ephemeralPoint),
+      nonce: encode(wrapCanonical.nonce),
+      wrappedKey: encode(wrapCanonical.ciphertext),
+    });
+
+    // Create a temp tk and encrypt content (follow-up from another key gen)
+    const tkTemp = generateContentKey();
+    const wrapTemp = eciesEncrypt(tkTemp, volPub);
+    const followUpId = "fu-blob-1";
+
+    // Encrypt follow-up content with tk_temp to prime the temp cache
+    const tempPlaintext = new TextEncoder().encode("followup text");
+    const tempCt = encryptContent(
+      tempPlaintext,
+      tkTemp,
+      buildContentAad("t-reblob", followupSlot(followUpId)),
+    );
+
+    sinkMessages = [];
+    await dispatchAndWait({
+      type: "decryptAndRewrap",
+      id: 1201,
+      ticketId: "t-reblob",
+      followUpId,
+      ephemeralPoint: encode(wrapTemp.ephemeralPoint),
+      nonce: encode(wrapTemp.nonce),
+      wrappedKey: encode(wrapTemp.ciphertext),
+      ciphertext: encode(tempCt),
+    });
+
+    // Now encrypt a blob with tk_temp
+    const blobData = sodium.randombytes_buf(128);
+    const blobSlotStr = blobSlot("attachment-1");
+    const blobCt = encryptContent(
+      blobData,
+      tkTemp,
+      buildContentAad("t-reblob", blobSlotStr),
+    );
+
+    sinkMessages = [];
+    const resp = (await dispatchAndWait({
+      type: "rewrapBlob",
+      id: 1202,
+      ticketId: "t-reblob",
+      followUpId,
+      ciphertext: encode(blobCt),
+      blobKey: "blob-key-1",
+      blobId: "attachment-1",
+      category: "attachment",
+    })) as RewrapBlobResponse;
+
+    expect(resp.ok).toBe(true);
+    expect(resp.encryptedData).toBeDefined();
+    expect(resp.blobKey).toBe("blob-key-1");
+    expect(resp.category).toBe("attachment");
+
+    // Verify the re-encrypted data decrypts with the canonical tk
+    const reDecrypted = decryptContent(
+      decode(resp.encryptedData) as Ciphertext,
+      canonicalTk as SymmetricKey,
+      buildContentAad("t-reblob", blobSlotStr),
+    );
+    expect(reDecrypted).toEqual(blobData);
+
+    // Clean up rewrap state
+    handleRewrapResult({
+      kind: "rewrap-result",
+      followUpId,
+      success: true,
+    });
+
+    sodium.memzero(canonicalTk);
+    sodium.memzero(tkTemp);
+  });
+
+  it("returns TK_NOT_CACHED when canonical tk is missing", async () => {
+    const sodium = requireSodium();
+    const volPub = decode(volPublicStr) as RistrettoPoint;
+
+    // Create a tk_temp via decryptAndRewrap but DO NOT cache a canonical tk
+    // for a different ticket ID.
+    const canonicalTk = generateContentKey();
+    const wrapCanonical = eciesEncrypt(canonicalTk, volPub);
+    await dispatchAndWait({
+      type: "unwrapTk",
+      id: 1210,
+      ticketId: "t-reblob-canon",
+      keyCacheId: "t-reblob-canon",
+      ephemeralPoint: encode(wrapCanonical.ephemeralPoint),
+      nonce: encode(wrapCanonical.nonce),
+      wrappedKey: encode(wrapCanonical.ciphertext),
+    });
+
+    const tkTemp = generateContentKey();
+    const wrapTemp = eciesEncrypt(tkTemp, volPub);
+    const followUpId = "fu-no-canon";
+
+    const tempPlaintext = new TextEncoder().encode("temp");
+    const tempCt = encryptContent(
+      tempPlaintext,
+      tkTemp,
+      buildContentAad("t-reblob-canon", followupSlot(followUpId)),
+    );
+
+    await dispatchAndWait({
+      type: "decryptAndRewrap",
+      id: 1211,
+      ticketId: "t-reblob-canon",
+      followUpId,
+      ephemeralPoint: encode(wrapTemp.ephemeralPoint),
+      nonce: encode(wrapTemp.nonce),
+      wrappedKey: encode(wrapTemp.ciphertext),
+      ciphertext: encode(tempCt),
+    });
+
+    sinkMessages = [];
+
+    // Request rewrapBlob with a different ticket ID (no canonical tk cached)
+    const resp = await dispatchAndWait({
+      type: "rewrapBlob",
+      id: 1212,
+      ticketId: "t-no-such-ticket",
+      followUpId,
+      ciphertext: encode(new Uint8Array(64)),
+      blobKey: "bk",
+      blobId: "b1",
+      category: "recording",
+    });
+
+    expect(resp.ok).toBe(false);
+    expect((resp as ErrorResponse).code).toBe("TK_NOT_CACHED");
+
+    handleRewrapResult({
+      kind: "rewrap-result",
+      followUpId,
+      success: false,
+    });
+    sodium.memzero(canonicalTk);
+    sodium.memzero(tkTemp);
+  });
+});
+
+describe("crypto-core init when already KEYED", () => {
+  beforeEach(async () => {
+    handleZeroAll(-1, testSink);
+    sinkMessages = [];
+    dispatch = createDispatcher(testSink);
+    const sodium = requireSodium();
+    const salt = sodium.randombytes_buf(16);
+    await loginFlow("stay-keyed-pw", salt);
+    sinkMessages = [];
+  });
+
+  it("stays KEYED after re-init (does not drop to READY)", async () => {
+    expect(getState()).toBe("KEYED");
+
+    const resp = await dispatchAndWait({ type: "init", id: 1300 });
+    expect(resp.ok).toBe(true);
+    expect(getState()).toBe("KEYED");
+    // volPublic should still be present
+    expect(getPublicKeys().volPublic).toBeDefined();
+  });
+});
+
+describe("crypto-core createTicketKey field slot branches", () => {
+  beforeEach(async () => {
+    handleZeroAll(-1, testSink);
+    sinkMessages = [];
+    dispatch = createDispatcher(testSink);
+    const sodium = requireSodium();
+    const salt = sodium.randombytes_buf(16);
+    await loginFlow("fieldslot-test-pw", salt);
+    sinkMessages = [];
+  });
+
+  it("uses 'title' and 'description' as literal slots, fieldSlot for others", async () => {
+    const resp = (await dispatchAndWait({
+      type: "createTicketKey",
+      id: 1400,
+      ticketId: "t-field-slots",
+      fields: [
+        { name: "title", plaintext: "Title Text" },
+        { name: "description", plaintext: "Desc Text" },
+        { name: "caller_phone", plaintext: "+15551234567" },
+      ],
+    })) as CreateTicketKeyResponse;
+
+    expect(resp.ok).toBe(true);
+    expect(resp.encryptedFields).toHaveLength(3);
+    expect(resp.encryptedFields[0]?.name).toBe("title");
+    expect(resp.encryptedFields[1]?.name).toBe("description");
+    expect(resp.encryptedFields[2]?.name).toBe("caller_phone");
+    // All fields should have non-empty ciphertext
+    for (const field of resp.encryptedFields) {
+      expect(field.ciphertext.length).toBeGreaterThan(0);
+    }
+  });
+});
+
+describe("crypto-core handleRewrapResult cleanup", () => {
+  it("cleans up tk_temp cache on rewrap result", async () => {
+    handleZeroAll(-1, testSink);
+    sinkMessages = [];
+    dispatch = createDispatcher(testSink);
+    const sodium = requireSodium();
+    const salt = sodium.randombytes_buf(16);
+    const { volPublic } = await loginFlow("rewrap-cleanup-pw", salt);
+    const volPub = decode(volPublic) as RistrettoPoint;
+    sinkMessages = [];
+
+    // Cache canonical tk
+    const canonicalTk = generateContentKey();
+    const wrapCanonical = eciesEncrypt(canonicalTk, volPub);
+    await dispatchAndWait({
+      type: "unwrapTk",
+      id: 1500,
+      ticketId: "t-cleanup",
+      keyCacheId: "t-cleanup",
+      ephemeralPoint: encode(wrapCanonical.ephemeralPoint),
+      nonce: encode(wrapCanonical.nonce),
+      wrappedKey: encode(wrapCanonical.ciphertext),
+    });
+
+    // Create and decrypt with tk_temp
+    const tkTemp = generateContentKey();
+    const wrapTemp = eciesEncrypt(tkTemp, volPub);
+    const followUpId = "fu-cleanup-1";
+    const tempCt = encryptContent(
+      new TextEncoder().encode("cleanup test"),
+      tkTemp,
+      buildContentAad("t-cleanup", followupSlot(followUpId)),
+    );
+
+    await dispatchAndWait({
+      type: "decryptAndRewrap",
+      id: 1501,
+      ticketId: "t-cleanup",
+      followUpId,
+      ephemeralPoint: encode(wrapTemp.ephemeralPoint),
+      nonce: encode(wrapTemp.nonce),
+      wrappedKey: encode(wrapTemp.ciphertext),
+      ciphertext: encode(tempCt),
+    });
+
+    // Dispatch the rewrap result to trigger cleanup
+    dispatch({
+      kind: "rewrap-result",
+      followUpId,
+      success: true,
+    } as unknown as Parameters<typeof dispatch>[0]);
+    await new Promise((r) => setTimeout(r, 50));
+
+    // A second rewrapBlob for the same followUpId should fail because
+    // the tk_temp was cleaned up
+    sinkMessages = [];
+    const resp = await dispatchAndWait({
+      type: "rewrapBlob",
+      id: 1502,
+      ticketId: "t-cleanup",
+      followUpId,
+      ciphertext: encode(new Uint8Array(64)),
+      blobKey: "bk",
+      blobId: "b1",
+      category: "attachment",
+    });
+
+    expect(resp.ok).toBe(false);
+    expect((resp as ErrorResponse).code).toBe("TK_NOT_CACHED");
+
+    sodium.memzero(canonicalTk);
+    sodium.memzero(tkTemp);
+  });
+
+  it("handles rewrap result for already-cleaned follow-up without error", () => {
+    // Calling handleRewrapResult for a non-existent follow-up should not crash
+    handleRewrapResult({
+      kind: "rewrap-result",
+      followUpId: "fu-nonexistent",
+      success: true,
+    });
+    // No error thrown, no state corruption
+    expect(getState()).not.toBe("UNINITIALIZED");
+  });
 });
