@@ -6,17 +6,17 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Admin_Key_Status_No_Org_KeyInputs */
 
 const en_admin_key_status_no_org_key = /** @type {(inputs: Admin_Key_Status_No_Org_KeyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Missing org key`)
+	return /** @type {LocalizedString} */ (`Needs a key share`)
 };
 
 const es_admin_key_status_no_org_key = /** @type {(inputs: Admin_Key_Status_No_Org_KeyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Falta clave de org`)
+	return /** @type {LocalizedString} */ (`Necesita una clave compartida`)
 };
 
 /**
 * | output |
 * | --- |
-* | "Missing org key" |
+* | "Needs a key share" |
 *
 * @param {Admin_Key_Status_No_Org_KeyInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

@@ -19,6 +19,7 @@
     ListItem,
   } from "konsta/svelte";
   import { Check } from "@lucide/svelte";
+  import Register from "$lib/components/Register.svelte";
   import * as m from "$lib/paraglide/messages.js";
   import { getOrgKeyManager } from "$lib/crypto/context.js";
   import { trpc } from "$lib/trpc/index.js";
@@ -297,7 +298,7 @@
         // wait for the visualViewport to stop resizing (keyboard fully
         // open), then check once.
         const vv = window.visualViewport;
-        if (vv !== null) {
+        if (vv) {
           const viewport = vv;
           let settleTimer = 0;
           function onVVResize(): void {
@@ -1025,7 +1026,7 @@
 
   <!-- Editor area (always mounted, decorations overlaid when a11y active) -->
   <div
-    class="editor-area"
+    class="editor-area prose-quotes"
     bind:this={editorMountEl}
     role="textbox"
     aria-label={m.library_article_body_placeholder()}
@@ -1046,13 +1047,11 @@
   ondismiss={() => {
     linkSheetOpen = false;
   }}
+  title={linkUrl !== ""
+    ? m.library_editor_link_edit_title()
+    : m.library_editor_link_insert_title()}
 >
   <div class="link-form">
-    <h3 class="link-form-title">
-      {linkUrl !== ""
-        ? m.library_editor_link_edit_title()
-        : m.library_editor_link_insert_title()}
-    </h3>
     <ListInput
       label={m.library_editor_link_url()}
       type="url"
@@ -1071,9 +1070,9 @@
       }}
     />
     {#if linkTextIsGeneric}
-      <div class="link-warning" role="alert">
+      <Register kind="careful" role="alert">
         {m.library_editor_link_generic_warning({ text: linkText.trim() })}
-      </div>
+      </Register>
     {/if}
     <div class="link-actions">
       <KButton
@@ -1098,9 +1097,9 @@
     altDialogOpen = false;
     pendingImageFile = null;
   }}
+  title={m.library_editor_alt_text_title()}
 >
   <div class="alt-form">
-    <h3 class="alt-form-title">{m.library_editor_alt_text_title()}</h3>
     <ListInput
       label={m.library_editor_alt_text_placeholder()}
       type="textarea"
@@ -1177,7 +1176,7 @@
 
   .editor-title {
     font-size: 1.5rem;
-    font-family: var(--font-display);
+    font-family: var(--theme-font-display, var(--font-display));
     font-weight: 600;
     color: var(--ink);
     border: none;
@@ -1250,7 +1249,7 @@
   :global(.pm-image-view__loading) {
     width: 200px;
     height: 120px;
-    background: var(--surface-1);
+    background: var(--paper-deep, var(--surface-1));
     border-radius: var(--card-radius);
     display: flex;
     align-items: center;
@@ -1263,7 +1262,7 @@
     font-size: var(--text-sm);
     color: var(--muted);
     font-style: italic;
-    background: var(--surface-1);
+    background: var(--paper-deep, var(--surface-1));
     border-radius: var(--card-radius);
   }
 
@@ -1316,7 +1315,7 @@
   .editor-area :global(.ProseMirror h2),
   .editor-area :global(.ProseMirror h3),
   .editor-area :global(.ProseMirror h4) {
-    font-family: var(--font-display);
+    font-family: var(--theme-font-display, var(--font-display));
     font-weight: 600;
     color: var(--ink);
     margin-top: 1.5em;
@@ -1349,14 +1348,14 @@
   }
 
   .editor-area :global(.ProseMirror code) {
-    background: var(--surface-1);
+    background: var(--paper-deep, var(--surface-1));
     padding: 0.125em 0.25em;
     border-radius: 3px;
     font-size: 0.875em;
   }
 
   .editor-area :global(.ProseMirror pre) {
-    background: var(--surface-1);
+    background: var(--paper-deep, var(--surface-1));
     padding: var(--space-lg);
     border-radius: var(--card-radius);
     overflow-x: auto;
@@ -1380,13 +1379,6 @@
     border-radius: var(--card-radius);
   }
 
-  .editor-area :global(.ProseMirror blockquote) {
-    border-left: 3px solid var(--brand-primary);
-    padding-left: var(--space-lg);
-    color: var(--muted);
-    font-style: italic;
-  }
-
   .editor-area :global(.ProseMirror table) {
     width: 100%;
     border-collapse: collapse;
@@ -1395,19 +1387,19 @@
 
   .editor-area :global(.ProseMirror th),
   .editor-area :global(.ProseMirror td) {
-    border: 1px solid var(--divider);
+    border: 1px solid var(--hair, var(--divider));
     padding: var(--space-sm) var(--space-md);
     text-align: left;
   }
 
   .editor-area :global(.ProseMirror th) {
-    background: var(--surface-1);
+    background: var(--paper-deep, var(--surface-1));
     font-weight: 600;
   }
 
   .editor-area :global(.ProseMirror hr) {
     border: none;
-    border-top: 1px solid var(--divider);
+    border-top: 1px solid var(--hair, var(--divider));
     margin: 1.5em 0;
   }
 
@@ -1417,21 +1409,6 @@
     display: flex;
     flex-direction: column;
     gap: var(--space-md);
-  }
-
-  .link-form-title {
-    font-size: var(--text-md);
-    font-weight: 600;
-    color: var(--ink);
-    margin: 0;
-  }
-
-  .link-warning {
-    font-size: var(--text-sm);
-    color: var(--brand-accent);
-    padding: var(--space-sm) var(--space-md);
-    border: 1px solid var(--brand-accent);
-    border-radius: var(--card-radius);
   }
 
   .link-actions {
@@ -1446,13 +1423,6 @@
     display: flex;
     flex-direction: column;
     gap: var(--space-md);
-  }
-
-  .alt-form-title {
-    font-size: var(--text-md);
-    font-weight: 600;
-    color: var(--ink);
-    margin: 0;
   }
 
   .alt-actions {

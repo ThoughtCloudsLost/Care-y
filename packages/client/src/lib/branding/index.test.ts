@@ -1,10 +1,33 @@
+// @vitest-environment jsdom
+// applyBranding writes document.title and clearBrandingCache walks
+// localStorage, so these tests need a DOM; caches stays stubbed below
+// because jsdom has no CacheStorage.
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import {
   sanitizeOrgName,
   updateBrandingCache,
   getCachedBranding,
+  loadBranding,
+  brandingIconUrl,
+  clearBrandingCache,
   DEFAULT_PRIMARY,
+  DEFAULT_ACCENT,
 } from "./index";
+import type { BrandingData } from "./types.js";
+import type * as KonstaPalette from "$lib/branding/konsta-palette.js";
+
+// vi.mock required: konsta-palette triggers dynamic import of
+// material-color-utilities which uses native ESM paths that fail
+// in Node test environment
+vi.mock(
+  "$lib/branding/konsta-palette.js",
+  () =>
+    ({
+      applyKonstaPalette: vi.fn().mockResolvedValue(undefined),
+      resetKonstaPalette: vi.fn(),
+      checkBrandProximity: vi.fn().mockReturnValue({ collides: false }),
+    }) satisfies typeof KonstaPalette,
+);
 
 // Cache API mock for branding cache tests
 const mockCache = {
@@ -20,8 +43,18 @@ const mockCaches = {
 
 vi.stubGlobal("caches", mockCaches);
 
+// Stub URL.createObjectURL / revokeObjectURL for logo blob tests
+const mockCreateObjectURL = vi.fn((): string => "blob:mock-url");
+const mockRevokeObjectURL = vi.fn();
+vi.stubGlobal("URL", {
+  ...URL,
+  createObjectURL: mockCreateObjectURL,
+  revokeObjectURL: mockRevokeObjectURL,
+});
+
 beforeEach(() => {
   vi.clearAllMocks();
+  mockCreateObjectURL.mockReturnValue("blob:mock-url");
 });
 
 describe("sanitizeOrgName", () => {
@@ -130,5 +163,209 @@ describe("getCachedBranding", () => {
     );
     const result = await getCachedBranding();
     expect(result).toBeNull();
+  });
+
+  it("returns null when data is missing orgName", async () => {
+    const noName = JSON.stringify({ primaryColor: "#000000" });
+    mockCache.match.mockResolvedValue(
+      new Response(noName, {
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+    const result = await getCachedBranding();
+    expect(result).toBeNull();
+  });
+
+  it("returns null when data is missing primaryColor", async () => {
+    const noColor = JSON.stringify({ orgName: "Test" });
+    mockCache.match.mockResolvedValue(
+      new Response(noColor, {
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+    const result = await getCachedBranding();
+    expect(result).toBeNull();
+  });
+
+  it("returns null when data is not an object", async () => {
+    mockCache.match.mockResolvedValue(
+      new Response(JSON.stringify("just a string"), {
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+    const result = await getCachedBranding();
+    expect(result).toBeNull();
+  });
+
+  it("returns null when data is null", async () => {
+    mockCache.match.mockResolvedValue(
+      new Response(JSON.stringify(null), {
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+    const result = await getCachedBranding();
+    expect(result).toBeNull();
+  });
+});
+
+describe("loadBranding", () => {
+  const orgContext = {
+    orgSlug: "test-org",
+    hasIcons: true,
+    iconVersion: "v2",
+  } as const;
+
+  it("uses valid primaryColor and accentColor from fetched data", async () => {
+    mockCache.match.mockResolvedValue(null);
+    const data: BrandingData = {
+      orgName: "Test Org",
+      primaryColor: "#ff5500",
+      accentColor: "#00cc88",
+      logoBlob: null,
+      clientText: null,
+    };
+
+    const result = await loadBranding(() => Promise.resolve(data), orgContext);
+
+    expect(result.primaryColor).toBe("#ff5500");
+    expect(result.accentColor).toBe("#00cc88");
+    expect(result.orgName).toBe("Test Org");
+    expect(result.orgSlug).toBe("test-org");
+    expect(result.hasIcons).toBe(true);
+    expect(result.iconVersion).toBe("v2");
+    expect(result.logoBlobUrl).toBeNull();
+  });
+
+  it("falls back to DEFAULT_PRIMARY when primaryColor is invalid hex", async () => {
+    mockCache.match.mockResolvedValue(null);
+    const data: BrandingData = {
+      orgName: "Bad Color Org",
+      primaryColor: "not-a-color",
+      accentColor: null,
+      logoBlob: null,
+      clientText: null,
+    };
+
+    const result = await loadBranding(() => Promise.resolve(data), orgContext);
+
+    expect(result.primaryColor).toBe(DEFAULT_PRIMARY);
+  });
+
+  it("falls back to DEFAULT_ACCENT when accentColor is null", async () => {
+    mockCache.match.mockResolvedValue(null);
+    const data: BrandingData = {
+      orgName: "Org",
+      primaryColor: "#aabbcc",
+      accentColor: null,
+      logoBlob: null,
+      clientText: null,
+    };
+
+    const result = await loadBranding(() => Promise.resolve(data), orgContext);
+
+    expect(result.accentColor).toBe(DEFAULT_ACCENT);
+  });
+
+  it("falls back to DEFAULT_ACCENT when accentColor is empty string", async () => {
+    mockCache.match.mockResolvedValue(null);
+    const data: BrandingData = {
+      orgName: "Org",
+      primaryColor: "#aabbcc",
+      accentColor: "",
+      logoBlob: null,
+      clientText: null,
+    };
+
+    const result = await loadBranding(() => Promise.resolve(data), orgContext);
+
+    expect(result.accentColor).toBe(DEFAULT_ACCENT);
+  });
+
+  it("falls back to DEFAULT_ACCENT when accentColor is invalid hex", async () => {
+    mockCache.match.mockResolvedValue(null);
+    const data: BrandingData = {
+      orgName: "Org",
+      primaryColor: "#aabbcc",
+      accentColor: "bad",
+      logoBlob: null,
+      clientText: null,
+    };
+
+    const result = await loadBranding(() => Promise.resolve(data), orgContext);
+
+    expect(result.accentColor).toBe(DEFAULT_ACCENT);
+  });
+
+  it("creates a blob URL when logoBlob is provided", async () => {
+    mockCache.match.mockResolvedValue(null);
+    const logoData = new ArrayBuffer(8);
+    const data: BrandingData = {
+      orgName: "Logo Org",
+      primaryColor: "#112233",
+      accentColor: null,
+      logoBlob: logoData,
+      clientText: null,
+    };
+
+    const result = await loadBranding(() => Promise.resolve(data), orgContext);
+
+    expect(result.logoBlobUrl).toBe("blob:mock-url");
+    expect(mockCreateObjectURL).toHaveBeenCalled();
+  });
+
+  it("revokes previous blob URL when creating a new one", async () => {
+    mockCache.match.mockResolvedValue(null);
+    const data: BrandingData = {
+      orgName: "Logo Org",
+      primaryColor: "#112233",
+      accentColor: null,
+      logoBlob: new ArrayBuffer(4),
+      clientText: null,
+    };
+
+    mockCreateObjectURL.mockReturnValue("blob:first-url");
+    await loadBranding(() => Promise.resolve(data), orgContext);
+
+    mockCreateObjectURL.mockReturnValue("blob:second-url");
+    const result = await loadBranding(() => Promise.resolve(data), orgContext);
+
+    expect(mockRevokeObjectURL).toHaveBeenCalledWith("blob:first-url");
+    expect(result.logoBlobUrl).toBe("blob:second-url");
+  });
+});
+
+describe("brandingIconUrl", () => {
+  it("appends version query parameter when version is not null", () => {
+    const url = brandingIconUrl("my-org", "192", "abc123");
+    expect(url).toBe("/api/branding/my-org/icon-192.png?v=abc123");
+  });
+
+  it("omits version query parameter when version is null", () => {
+    const url = brandingIconUrl("my-org", "512", null);
+    expect(url).toBe("/api/branding/my-org/icon-512.png");
+  });
+
+  it("handles maskable size parameter", () => {
+    const url = brandingIconUrl("test", "maskable", "v1");
+    expect(url).toBe("/api/branding/test/icon-maskable.png?v=v1");
+  });
+});
+
+describe("clearBrandingCache", () => {
+  it("deletes cache and removes all localStorage branding keys", async () => {
+    const removeItemSpy = vi.spyOn(Storage.prototype, "removeItem");
+
+    await clearBrandingCache();
+
+    expect(mockCaches.delete).toHaveBeenCalledWith("care-y-branding");
+    expect(removeItemSpy).toHaveBeenCalledWith("care-y-brand-primary");
+    expect(removeItemSpy).toHaveBeenCalledWith("care-y-brand-accent");
+    expect(removeItemSpy).toHaveBeenCalledWith("care-y-brand-name");
+    expect(removeItemSpy).toHaveBeenCalledWith("care-y-brand-slug");
+    expect(removeItemSpy).toHaveBeenCalledWith("care-y-brand-has-icons");
+    expect(removeItemSpy).toHaveBeenCalledWith("care-y-brand-icon-v");
+    expect(removeItemSpy).toHaveBeenCalledWith("care-y-brand-ts");
+
+    removeItemSpy.mockRestore();
   });
 });

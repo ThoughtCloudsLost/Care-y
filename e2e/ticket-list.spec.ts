@@ -1,8 +1,7 @@
 import { test, expect } from "./coverage-fixture";
 import { startCoverage, stopAndWriteCoverage } from "./coverage-fixture";
 import type { Page } from "@playwright/test";
-import AxeBuilder from "@axe-core/playwright";
-import { CRYPTO_TIMEOUT, login, longPress } from "./helpers";
+import { auditA11y, CRYPTO_TIMEOUT, login, longPress } from "./helpers";
 
 test.describe.serial("Ticket List (Tickets Tab)", () => {
   let page: Page;
@@ -41,8 +40,8 @@ test.describe.serial("Ticket List (Tickets Tab)", () => {
     await expect(page.getByText("Help with housing")).toBeVisible();
     await expect(page.getByText("Safety planning session")).toBeVisible();
 
-    // Ticket without key wrap shows "Encrypted ticket" placeholder with help icon.
-    await expect(page.getByText("Encrypted ticket")).toBeVisible();
+    // Ticket without key wrap shows "Locked ticket" placeholder with help icon.
+    await expect(page.getByText("Locked ticket")).toBeVisible();
   });
 
   test("cards show queue badges, status dots, and priority chips", async () => {
@@ -52,9 +51,9 @@ test.describe.serial("Ticket List (Tickets Tab)", () => {
     await expect(page.getByText("Crisis").first()).toBeAttached();
     await expect(page.getByText("Intake").first()).toBeAttached();
 
-    // Status labels are visible in card headers.
-    const statusLabels = page.locator('[data-testid="status-label"]');
-    await expect(statusLabels.first()).toBeAttached();
+    // Status marks render in card headers with data-status attribute.
+    const statusMarks = page.locator("[data-status]");
+    await expect(statusMarks.first()).toBeAttached();
   });
 
   // ── 2. Status filter pill ───────────────────────────────────────
@@ -125,12 +124,38 @@ test.describe.serial("Ticket List (Tickets Tab)", () => {
     await expect(page.getByText("Help with housing")).toBeVisible();
   });
 
+  // ── 3b. Inline search over decrypted titles ─────────────────────
+
+  test("inline search matches decrypted ticket titles", async () => {
+    // Enter search mode via the subnavbar trigger.
+    await page.getByRole("button", { name: "Search this page" }).click();
+
+    // Type a term that appears only in one decrypted title.
+    const searchInput = page.getByRole("textbox", { name: "Refine search" });
+    await searchInput.fill("safety");
+
+    // The list narrows to tickets whose decrypted title matches.
+    await expect(page.getByText("Safety planning session")).toBeVisible();
+    await expect(page.getByText("Help with housing")).not.toBeVisible();
+
+    // A different term flips the visible set, proving the match reads
+    // the decrypted titles rather than any static order.
+    await searchInput.fill("housing");
+    await expect(page.getByText("Help with housing")).toBeVisible();
+    await expect(page.getByText("Safety planning session")).not.toBeVisible();
+
+    // Exit search; the full list returns.
+    await page.getByRole("button", { name: "Cancel" }).click();
+    await expect(page.getByText("Safety planning session")).toBeVisible();
+    await expect(page.getByText("Help with housing")).toBeVisible();
+  });
+
   // ── 4. View toggle (list <-> grid) ──────────────────────────────
 
   test("view toggle switches between list and grid layouts", async () => {
-    // Default is list mode.
-    const listBtn = page.getByRole("button", { name: "List view" });
-    const gridBtn = page.getByRole("button", { name: "Grid view" });
+    // Default is list (compact rows) mode.
+    const listBtn = page.getByRole("button", { name: "Compact rows" });
+    const gridBtn = page.getByRole("button", { name: "Grid" });
 
     // Verify list mode: cards use single-column layout (no grid rows).
     await expect(listBtn).toHaveAttribute("aria-pressed", "true");
@@ -153,29 +178,35 @@ test.describe.serial("Ticket List (Tickets Tab)", () => {
     await listBtn.click();
     await expect(listBtn).toHaveAttribute("aria-pressed", "true");
 
-    // Action buttons should reappear in list mode.
+    // Action buttons should reappear in list mode (cards mode has them).
+    const cardsBtn = page.getByRole("button", { name: "Cards" });
+    await cardsBtn.click();
+    await expect(cardsBtn).toHaveAttribute("aria-pressed", "true");
     await expect(
       page.locator('[data-testid="card-actions"]').first(),
     ).toBeVisible();
+
+    // Return to list for subsequent tests.
+    await listBtn.click();
   });
 
   test("view mode preference persists across navigation", async () => {
     // Switch to grid.
-    await page.getByRole("button", { name: "Grid view" }).click();
+    await page.getByRole("button", { name: "Grid" }).click();
 
     // Navigate away to Home tab, then back.
-    await page.getByRole("tab", { name: "Home" }).click();
+    await page.getByRole("tab", { name: "Overview" }).click();
     await expect(page).toHaveURL("/");
 
     await page.getByRole("tab", { name: "Tickets" }).click();
     await expect(page).toHaveURL("/tickets");
 
     // Grid should still be active (persisted in localStorage).
-    const gridBtn = page.getByRole("button", { name: "Grid view" });
+    const gridBtn = page.getByRole("button", { name: "Grid" });
     await expect(gridBtn).toHaveAttribute("aria-pressed", "true");
 
     // Restore list mode for other tests.
-    await page.getByRole("button", { name: "List view" }).click();
+    await page.getByRole("button", { name: "Compact rows" }).click();
   });
 
   // ── 5. Infinite scroll ──────────────────────────────────────────
@@ -208,18 +239,20 @@ test.describe.serial("Ticket List (Tickets Tab)", () => {
     const checkboxes = page.locator(".checkbox-wrap");
     await expect(checkboxes.first()).toBeVisible({ timeout: 3_000 });
 
-    // The tabbar override should show selection count.
-    // First card should be selected.
-    await expect(page.getByText(/1 selected/)).toBeVisible();
+    // The tabbar override shows selection count. The Konsta Toolbar
+    // animates in via CSS transition, so use a generous timeout.
+    // Use "attached" first since the text might be in the DOM but
+    // off-screen during the Toolbar slide-up animation.
+    await expect(page.getByText(/1 selected/)).toBeAttached({ timeout: 5_000 });
+    await expect(page.getByText(/1 selected/)).toBeVisible({ timeout: 10_000 });
 
     // Tap another card to add to selection.
     const secondCard = page.locator('[data-testid="ticket-card-wrap"]').nth(1);
     await secondCard.click();
     await expect(page.getByText(/2 selected/)).toBeVisible();
 
-    // Exit multi-select via the dismiss link (X icon in tabbar override).
-    // Konsta <Link> renders with role="link", not "button".
-    const dismissBtn = page.getByRole("link", {
+    // Exit multi-select via the dismiss button (X icon in tabbar override).
+    const dismissBtn = page.getByRole("button", {
       name: "Exit selection mode",
     });
     await dismissBtn.click();
@@ -236,23 +269,29 @@ test.describe.serial("Ticket List (Tickets Tab)", () => {
     await expect(page.locator(".checkbox-wrap").first()).toBeVisible();
 
     // Exit via dismiss.
-    await page.getByRole("link", { name: "Exit selection mode" }).click();
+    await page.getByRole("button", { name: "Exit selection mode" }).click();
   });
 
   // ── 7. Card tap navigation ──────────────────────────────────────
 
   test("tapping a card navigates to ticket detail route", async () => {
     // Click the first card's inner button area.
-    const firstCardButton = page.locator('[data-testid="card-inner"]').first();
+    const firstCardButton = page.locator("button.card-open-link").first();
     await firstCardButton.click();
 
-    // Should navigate to /tickets/{uuid}. The detail page doesn't exist
-    // yet (6d), but the URL change is verifiable.
-    await expect(page).toHaveURL(/\/tickets\/[0-9a-f-]{36}/);
+    // On desktop, the detail opens in a split-view pane (URL stays at
+    // /tickets). On mobile, it navigates to /tickets/{uuid}. Verify by
+    // checking that the chat log appears.
+    await expect(page.locator('[role="log"]')).toBeVisible({
+      timeout: CRYPTO_TIMEOUT,
+    });
 
-    // Navigate back to the ticket list for remaining tests.
-    // The ticket detail page hides the tabbar, so use the navbar back link.
-    await page.getByRole("button", { name: /back/i }).click();
+    // Navigate back. On desktop split-view, the back button closes the
+    // detail pane. On mobile, it goes back to /tickets.
+    const backBtn = page.getByRole("button", { name: /back/i });
+    if (await backBtn.isVisible({ timeout: 2_000 }).catch(() => false)) {
+      await backBtn.click();
+    }
     await expect(page).toHaveURL("/tickets");
 
     // Wait for tickets to re-render.
@@ -291,8 +330,8 @@ test.describe.serial("Ticket List (Tickets Tab)", () => {
     await expect(toolbar).toBeAttached();
     await expect(toolbar).toHaveAttribute("aria-label", "Filter tickets");
 
-    // Each filter pill has role="button", aria-haspopup, aria-expanded.
-    const pills = page.locator('[role="toolbar"] [role="button"]');
+    // Each filter pill is a native <button> with aria-haspopup, aria-expanded.
+    const pills = toolbar.getByRole("button");
     const count = await pills.count();
     expect(count).toBeGreaterThanOrEqual(4); // status, queue, priority, assignee
 
@@ -322,63 +361,73 @@ test.describe.serial("Ticket List (Tickets Tab)", () => {
     // Ensure we're on the tickets page with content visible.
     await expect(page.getByText("Help with housing")).toBeVisible();
 
-    // Scope to WCAG rules only. Exclude best-practice rules (page-has-heading-one,
-    // aria-dialog-name on Konsta-internal dialogs) which are tracked separately.
-    const results = await new AxeBuilder({ page })
-      .setLegacyMode(true)
-      .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"])
-      .exclude("[role='tablist']")
-      .analyze();
-    expect(results.violations).toEqual([]);
+    // Konsta Tabbar internals are excluded (upstream markup gaps); the
+    // shell tab bar is audited by the sweep spec.
+    await auditA11y(page, { exclude: ["[role='tablist']"] });
   });
 
   test("passes axe accessibility audit in grid mode", async () => {
-    await page.getByRole("button", { name: "Grid view" }).click();
+    await page.getByRole("button", { name: "Grid" }).click();
     await expect(
       page.locator('[data-virtual="row"][data-grid]').first(),
     ).toBeVisible();
 
-    const results = await new AxeBuilder({ page })
-      .setLegacyMode(true)
-      .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"])
-      .exclude("[role='tablist']")
-      .analyze();
-    expect(results.violations).toEqual([]);
+    await auditA11y(page, { exclude: ["[role='tablist']"] });
 
     // Restore list mode.
-    await page.getByRole("button", { name: "List view" }).click();
+    await page.getByRole("button", { name: "Compact rows" }).click();
   });
 
   // ── 10. Visual themes ───────────────────────────────────────────
 
   test("all themes render without visual breakage", async () => {
-    const themes = ["riso", "default", "frutiger", "brutalist", "cupertino"];
-
-    for (const theme of themes) {
-      // Set theme via localStorage (same mechanism as ThemeProvider).
-      await page.evaluate((t: string) => {
-        localStorage.setItem("care-y-theme", t);
-        // Dispatch storage event to trigger reactive update.
-        window.dispatchEvent(new Event("storage"));
-      }, theme);
-
-      // Force a re-render by navigating away and back.
-      await page.getByRole("tab", { name: "Home" }).click();
+    // Themes must be switched live: a page.reload() discards the crypto
+    // Worker's keys, and in E2E mode the app layout skips the reauth
+    // redirect, so the shell would never come back. The dev panel's
+    // visual pill calls themeStore.setVisualTheme, the same runtime
+    // path the app uses.
+    if (!page.url().endsWith("/tickets")) {
       await page.getByRole("tab", { name: "Tickets" }).click();
-
-      // Wait for tickets to render.
+      await expect(page).toHaveURL("/tickets");
       await expect(page.getByText("Help with housing")).toBeVisible({
         timeout: CRYPTO_TIMEOUT,
       });
+    }
+
+    // The visual pill's label is the active theme name. The suite runs
+    // on "default"; one click per step walks the full cycle back to it.
+    const themes: [name: string, htmlClass: RegExp][] = [
+      ["riso", /\btheme-riso\b/],
+      ["frutiger", /\btheme-frutiger\b/],
+      ["brutalist", /\btheme-brutalist\b/],
+      ["cupertino", /\btheme-cupertino\b/],
+      ["prism", /\btheme-prism\b/],
+      ["default", /\btheme-default\b/],
+    ];
+    const panel = page.getByRole("dialog", { name: "Dev panel" });
+    let active = "default";
+    for (const [theme, htmlClass] of themes) {
+      await page.getByRole("button", { name: "Open dev panel" }).click();
+      await expect(panel).toBeVisible();
+      await panel.getByRole("button", { name: active, exact: true }).click();
+      await expect(
+        panel.getByRole("button", { name: theme, exact: true }),
+      ).toBeVisible();
+      await expect(page.locator("html")).toHaveClass(htmlClass);
+
+      // Close the panel so assertions and screenshots see the page.
+      await panel.getByRole("button", { name: "Close", exact: true }).click();
+      await expect(panel).toBeHidden();
 
       // Verify no layout crash: cards are still visible, filter bar is
       // present, and the view toggle still works.
+      await expect(page.getByText("Help with housing")).toBeVisible();
       await expect(
         page.locator('[data-testid="ticket-card-wrap"]').first(),
       ).toBeVisible();
       await expect(page.locator('[role="toolbar"]')).toBeVisible();
       await expect(
-        page.getByRole("button", { name: "List view" }),
+        page.getByRole("button", { name: "Compact rows" }),
       ).toBeVisible();
 
       // Take screenshot for manual comparison (stored by Playwright).
@@ -386,12 +435,8 @@ test.describe.serial("Ticket List (Tickets Tab)", () => {
         path: `test-results/theme-${theme}-tickets.png`,
         fullPage: false,
       });
-    }
 
-    // Restore default theme.
-    await page.evaluate(() => {
-      localStorage.setItem("care-y-theme", "riso");
-      window.dispatchEvent(new Event("storage"));
-    });
+      active = theme;
+    }
   });
 });

@@ -6,17 +6,17 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Onboarding_Reauth_MessageInputs */
 
 const en_onboarding_reauth_message = /** @type {(inputs: Onboarding_Reauth_MessageInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Your encryption keys need to be refreshed. Sign in again to continue setup.`)
+	return /** @type {LocalizedString} */ (`Sign back in to unlock your keys and continue setup.`)
 };
 
 const es_onboarding_reauth_message = /** @type {(inputs: Onboarding_Reauth_MessageInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Sus claves de cifrado necesitan actualizarse. Inicie sesion nuevamente para continuar la configuracion.`)
+	return /** @type {LocalizedString} */ (`Inicia sesión de nuevo para desbloquear tus claves y continuar la configuración.`)
 };
 
 /**
 * | output |
 * | --- |
-* | "Your encryption keys need to be refreshed. Sign in again to continue setup." |
+* | "Sign back in to unlock your keys and continue setup." |
 *
 * @param {Onboarding_Reauth_MessageInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

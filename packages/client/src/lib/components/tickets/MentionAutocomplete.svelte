@@ -94,10 +94,10 @@
       {#each filteredVolunteers as vol (vol.id)}
         <ListItem
           role="option"
+          title={vol.displayName}
+          titleWrapClass="mention-title-wrap"
           onclick={() => selectMention(vol.id, vol.displayName)}
-        >
-          {vol.displayName}
-        </ListItem>
+        />
       {/each}
     </List>
   </div>
@@ -111,10 +111,17 @@
     right: 0;
     z-index: 30;
     max-height: 12rem;
+    overflow-x: hidden;
     overflow-y: auto;
-    background: var(--card-bg, var(--surface-1));
-    border-top: 1px solid var(--card-border, var(--muted));
+    background: var(--raised);
+    border-top: 1px solid var(--hair-2);
     border-radius: 0.5rem 0.5rem 0 0;
-    box-shadow: var(--card-shadow, 0 -2px 8px rgba(0, 0, 0, 0.1));
+    box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.1);
+  }
+
+  .mention-dropdown :global(.mention-title-wrap) {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 </style>

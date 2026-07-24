@@ -23,6 +23,7 @@ import {
   ValidationError,
 } from "../errors.js";
 import { createCleanupInterval } from "../utils/intervals.js";
+import { getEnv, type EnvVars } from "../env.js";
 import { findTier, type Tier } from "../utils/tiers.js";
 import type { OprfEvaluator } from "./oprf-ipc.js";
 import type { RateLimiter } from "../ratelimit/rate-limiter.js";
@@ -87,16 +88,28 @@ export function createAttemptTracker(
  * field is named minFailures by the shared tier helper, but the value fed here
  * is the attempt count. Delays start above the proof-of-work threshold, so a
  * legitimate login (one evaluation) sees no delay.
+ *
+ * Resolved from the validated NODE_ENV at service construction, never at
+ * module load: development and test relax the tiers (local flows and e2e
+ * suites log in repeatedly), every other environment gets the strict values.
  */
-const DELAY_TIERS: readonly Tier<number>[] = [
-  { minFailures: 10, value: 10_000 },
-  { minFailures: 8, value: 5_000 },
-  { minFailures: 6, value: 2_000 },
-];
+export function resolveDelayTiers(
+  nodeEnv: EnvVars["NODE_ENV"],
+): readonly Tier<number>[] {
+  if (nodeEnv === "development" || nodeEnv === "test") return [];
+  return [
+    { minFailures: 10, value: 10_000 },
+    { minFailures: 8, value: 5_000 },
+    { minFailures: 6, value: 2_000 },
+  ];
+}
 
 /** Escalating delay in milliseconds based on the attempt count in the window. */
-export function getDelayMs(attemptCount: number): number {
-  return findTier(DELAY_TIERS, attemptCount, 0);
+export function getDelayMs(
+  tiers: readonly Tier<number>[],
+  attemptCount: number,
+): number {
+  return findTier(tiers, attemptCount, 0);
 }
 
 async function delay(ms: number): Promise<void> {
@@ -134,13 +147,24 @@ export interface OprfEvaluateService {
   adminEvaluate(request: OprfEvaluateRequest): Promise<OprfEvaluateResult>;
 }
 
-/** Attempts in the window at which proof-of-work becomes required. */
-const POW_ATTEMPT_THRESHOLD = 5;
+/** Attempts in the window at which proof-of-work becomes required.
+ *  In development and test, raise the threshold so e2e suites (which log
+ *  in 15+ times per run) don't trigger PoW mid-suite. Every other
+ *  environment keeps the strict threshold to deter brute-force OPRF abuse. */
+export function resolvePowThreshold(nodeEnv: EnvVars["NODE_ENV"]): number {
+  return nodeEnv === "development" || nodeEnv === "test" ? 100 : 5;
+}
 
 export function createOprfEvaluateService(
   deps: OprfEvaluateServiceDeps,
 ): OprfEvaluateService {
   const attemptTracker = createAttemptTracker();
+  // Resolved once here rather than at module load: construction happens after
+  // validateEnv() in index.ts, so an unset NODE_ENV fails startup instead of
+  // silently selecting the relaxed limits.
+  const nodeEnv = getEnv().NODE_ENV;
+  const delayTiers = resolveDelayTiers(nodeEnv);
+  const powThreshold = resolvePowThreshold(nodeEnv);
 
   /** If authenticated, the session owner must match the requested userId. */
   async function assertSessionBinding(
@@ -194,7 +218,7 @@ export function createOprfEvaluateService(
     powChallenge: string | undefined,
     powSolution: string | undefined,
   ): Promise<void> {
-    if (attemptCount < POW_ATTEMPT_THRESHOLD) return;
+    if (attemptCount < powThreshold) return;
 
     const noPowProvided =
       powChallenge === undefined || powSolution === undefined;
@@ -247,7 +271,7 @@ export function createOprfEvaluateService(
         req.powChallenge,
         req.powSolution,
       );
-      await delay(getDelayMs(attemptCount));
+      await delay(getDelayMs(delayTiers, attemptCount));
 
       return evaluateBlindedElement(userId, ip, blindedElement);
     },
@@ -265,7 +289,7 @@ export function createOprfEvaluateService(
       await enforceIpRateLimit(userId, ip);
 
       const attemptCount = attemptTracker.increment(userId);
-      await delay(getDelayMs(attemptCount));
+      await delay(getDelayMs(delayTiers, attemptCount));
 
       return evaluateBlindedElement(userId, ip, blindedElement);
     },

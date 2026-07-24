@@ -17,15 +17,16 @@
  */
 
 import { test as setup } from "@playwright/test";
-import { CRYPTO_TIMEOUT, login } from "./helpers";
+import { CRYPTO_TIMEOUT, E2eError, login } from "./helpers";
 
 setup("seed crypto-dependent data", async ({ page }) => {
   setup.setTimeout(CRYPTO_TIMEOUT * 4);
 
-  await login(page);
-
-  // login() already waits for the app shell (tablist), confirming
-  // crypto Worker key derivation completed and the session is valid.
+  // On a fresh org the app shell cannot render yet: the server seed
+  // creates no wrapped_org_keys row, so the (app) layout shows the
+  // key-distribution gate. allowOrgKeyWait lets login() return in that
+  // state; step 0 below seeds the key and the gate resolves itself.
+  await login(page, undefined, undefined, { allowOrgKeyWait: true });
   await page.waitForTimeout(1_000);
 
   // 0. Seed the real org keypair + wrapped entry for the admin.
@@ -47,9 +48,18 @@ setup("seed crypto-dependent data", async ({ page }) => {
   });
 
   if (!orgKeyResult.ok) {
-    throw new Error(`Org key seeding failed: ${orgKeyResult.error}`);
+    throw new E2eError(`Org key seeding failed: ${orgKeyResult.error}`);
   }
   console.log("[e2e-seed] org keypair + wrapped key ready");
+
+  // The gate polls getWrappedOrgKey every 5s; the seeded key ends the
+  // wait and the shell renders. This also proves the seeded key is
+  // unwrappable before downstream projects depend on it.
+  await page.locator('[role="tablist"]').waitFor({
+    state: "attached",
+    timeout: CRYPTO_TIMEOUT,
+  });
+  console.log("[e2e-seed] app shell rendered with seeded org key");
 
   // 1. Seed tickets (handcrafted only, no generated bulk data)
   const ticketResult = await page.evaluate(async () => {
@@ -70,7 +80,7 @@ setup("seed crypto-dependent data", async ({ page }) => {
   });
 
   if (!ticketResult.ok) {
-    throw new Error(`Ticket seeding failed: ${ticketResult.error}`);
+    throw new E2eError(`Ticket seeding failed: ${ticketResult.error}`);
   }
   console.log(`[e2e-seed] ${String(ticketResult.count)} tickets ready`);
 
@@ -93,7 +103,7 @@ setup("seed crypto-dependent data", async ({ page }) => {
   });
 
   if (!kbResult.ok) {
-    throw new Error(`KB seeding failed: ${kbResult.error}`);
+    throw new E2eError(`KB seeding failed: ${kbResult.error}`);
   }
   console.log(`[e2e-seed] ${String(kbResult.count)} KB articles ready`);
 });

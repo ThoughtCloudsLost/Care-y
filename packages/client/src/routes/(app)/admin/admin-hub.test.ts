@@ -117,9 +117,9 @@ vi.mock("$lib/paraglide/messages.js", () => ({
     `${count} templates`,
   admin_coming_soon: () => "Coming soon",
   panel_group_analytics: () => "Analytics",
-  panel_analytics_overview: () => "Overview",
+  panel_analytics_overview: () => "Impact",
   panel_analytics_operations: () => "Operations",
-  panel_analytics_deep: () => "Deep Analytics",
+  panel_analytics_deep: () => "Research",
   hub_analytics_overview_subtitle: () => "Dashboard overview",
   hub_analytics_operations_subtitle: () => "Operational metrics",
   hub_analytics_deep_subtitle: () => "Advanced analytics",
@@ -301,9 +301,9 @@ describe("Admin hub page", () => {
       expect(screen.getByText("3 greetings")).toBeTruthy();
       expect(screen.getByText("5 templates")).toBeTruthy();
 
-      // Telephony badge shows success when phones are provisioned
+      // Telephony badge shows ok when phones are provisioned
       const phoneBadge = screen.getByText("4 numbers");
-      expect(phoneBadge.closest(".hub-badge-success")).toBeTruthy();
+      expect(phoneBadge.closest(".hub-badge-ok")).toBeTruthy();
 
       // Greetings/templates show default (no warning) when counts > 0
       const greetingBadge = screen.getByText("3 greetings");

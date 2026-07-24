@@ -11,6 +11,7 @@
   import { getCryptoBridge, getOrgKeyManager } from "$lib/crypto/context.js";
   import { installCleanupHandler } from "$lib/auth/cleanup.js";
   import { loginCrypto } from "$lib/auth/login-crypto.js";
+  import { isValidRedirectTarget } from "$lib/auth/redirect-target.js";
   import { registerCrypto } from "$lib/auth/register-crypto.js";
   import {
     buildLoginCallbacks,
@@ -19,6 +20,7 @@
   import { announceToLiveRegion } from "$lib/utils/announce.js";
   import { createPublicBrandingQuery } from "$lib/branding/public-branding.js";
   import { applyKonstaPalette } from "$lib/branding/konsta-palette.js";
+  import { getBrandingTitle } from "$lib/branding/title.svelte.js";
   import KeyDerivation, {
     type LoginPhaseId,
   } from "$lib/components/onboarding/KeyDerivation.svelte";
@@ -124,7 +126,11 @@
 
   const brandingQuery = createPublicBrandingQuery();
   const branding = $derived(brandingQuery.data ?? null);
-  const orgName = $derived(branding?.orgName ?? "CARE-Y");
+  const orgName = $derived(
+    branding?.orgName !== undefined && branding.orgName !== ""
+      ? branding.orgName
+      : getBrandingTitle(),
+  );
 
   $effect(() => {
     if (!browser || branding === null) return;
@@ -240,7 +246,20 @@
   async function navigateAfterAuth(): Promise<void> {
     const needsOnboarding = !pendingHasSeenBriefing || pendingNeedsEnrollment;
     phase = "done";
-    await goto(resolve(needsOnboarding ? "/complete" : "/"));
+    if (needsOnboarding) {
+      await goto(resolve("/complete"));
+      return;
+    }
+    // Reauth carries the interrupted route in ?next. Only same-app
+    // relative paths are honored; protocol-relative URLs, control
+    // characters, and non-absolute paths fall through to the dashboard.
+    const next = page.url.searchParams.get("next");
+    if (next !== null && isValidRedirectTarget(next)) {
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- validated same-app relative path above
+      await goto(resolve(next as `/${string}`));
+      return;
+    }
+    await goto(resolve("/"));
   }
 
   async function handleTwofaSuccess(): Promise<void> {
@@ -278,7 +297,7 @@
           height="48"
         />
       {/if}
-      <h1 class="text-2xl font-bold">{orgName}</h1>
+      <h1 class="text-2xl font-bold heading-display">{orgName}</h1>
       <LanguagePicker value={uiLocale} onchange={handleLocaleChange} />
     </div>
     <TwoFactorChallenge
@@ -312,7 +331,7 @@
         height="48"
       />
     {/if}
-    <h1 class="text-2xl font-bold">{orgName}</h1>
+    <h1 class="text-2xl font-bold heading-display">{orgName}</h1>
   </div>
   <KeyDerivation {phase} {phaseLabel} />
 {:else}
@@ -327,7 +346,7 @@
           height="48"
         />
       {/if}
-      <h1 class="text-2xl font-bold">{orgName}</h1>
+      <h1 class="text-2xl font-bold heading-display">{orgName}</h1>
       <p class="mt-1 text-sm opacity-60">{m.auth_sign_in_continue()}</p>
       <LanguagePicker value={uiLocale} onchange={handleLocaleChange} />
     </div>
@@ -381,7 +400,7 @@
   .back-link {
     background: none;
     border: none;
-    color: var(--brand-primary, var(--k-color-primary, #007aff));
+    color: var(--brand-text);
     font-size: 0.875rem;
     cursor: pointer;
     padding: 0.5rem;

@@ -3,10 +3,12 @@
  * FilterPill component tests.
  *
  * Verifies pill label rendering, active state, click callback,
- * keyboard interaction, and a11y attributes.
+ * and a11y attributes.
  *
- * The Popover is now owned by FilterPillBar (hoisted out of the scroll
- * container). FilterPill only renders the Chip and calls onopen().
+ * The Popover is owned by FilterPillBar (hoisted out of the scroll
+ * container). FilterPill renders a native button in the pinned Inkwell
+ * pill anatomy and calls onopen(); keyboard activation is the native
+ * button's own behavior.
  */
 
 import { describe, it, expect, vi, afterEach } from "vitest";
@@ -109,28 +111,55 @@ describe("FilterPill", () => {
           onopen,
         },
       });
-      const chip = container.querySelector("[role='button']");
-      expect(chip).not.toBeNull();
-      await fireEvent.click(chip!);
+      const pill = container.querySelector("button.pill");
+      expect(pill).not.toBeNull();
+      await fireEvent.click(pill!);
       expect(onopen).toHaveBeenCalledOnce();
       expect(onopen.mock.calls).toHaveLength(1);
       expect(onopen.mock.calls[0]![0]).toBeInstanceOf(HTMLElement);
     });
 
-    it("calls onopen on Enter key", async () => {
-      const onopen = vi.fn();
+    it("renders a native button so keyboard activation is built in", () => {
       const { container } = render(FilterPill, {
         props: {
           label: "Status",
           options: statusOptions,
           mode: "multi" as const,
           selected: new SvelteSet<string>(),
-          onopen,
+          onopen: vi.fn(),
         },
       });
-      const chip = container.querySelector("[role='button']");
-      await fireEvent.keyDown(chip!, { key: "Enter" });
-      expect(onopen).toHaveBeenCalledOnce();
+      const pill = container.querySelector(".pill");
+      expect(pill).toBeInstanceOf(HTMLButtonElement);
+      expect((pill as HTMLButtonElement).type).toBe("button");
+    });
+  });
+
+  describe("active state", () => {
+    it("marks the pill active when a value is selected", () => {
+      const { container } = render(FilterPill, {
+        props: {
+          label: "Assignee",
+          options: [{ value: "u1", label: "Alice" }],
+          mode: "single" as const,
+          selected: "u1",
+          onopen: vi.fn(),
+        },
+      });
+      expect(container.querySelector("button.pill.on")).not.toBeNull();
+    });
+
+    it("leaves the pill quiet when nothing is selected", () => {
+      const { container } = render(FilterPill, {
+        props: {
+          label: "Status",
+          options: statusOptions,
+          mode: "multi" as const,
+          selected: new SvelteSet<string>(),
+          onopen: vi.fn(),
+        },
+      });
+      expect(container.querySelector("button.pill.on")).toBeNull();
     });
   });
 
@@ -145,8 +174,8 @@ describe("FilterPill", () => {
           onopen: vi.fn(),
         },
       });
-      const chip = container.querySelector("[role='button']");
-      expect(chip?.getAttribute("aria-haspopup")).toBe("true");
+      const pill = container.querySelector("button.pill");
+      expect(pill?.getAttribute("aria-haspopup")).toBe("true");
     });
 
     it("sets aria-haspopup to listbox for single mode", () => {
@@ -159,8 +188,8 @@ describe("FilterPill", () => {
           onopen: vi.fn(),
         },
       });
-      const chip = container.querySelector("[role='button']");
-      expect(chip?.getAttribute("aria-haspopup")).toBe("listbox");
+      const pill = container.querySelector("button.pill");
+      expect(pill?.getAttribute("aria-haspopup")).toBe("listbox");
     });
 
     it("reflects isOpen in aria-expanded", () => {
@@ -174,8 +203,8 @@ describe("FilterPill", () => {
           onopen: vi.fn(),
         },
       });
-      const chip = container.querySelector("[role='button']");
-      expect(chip?.getAttribute("aria-expanded")).toBe("true");
+      const pill = container.querySelector("button.pill");
+      expect(pill?.getAttribute("aria-expanded")).toBe("true");
     });
   });
 });

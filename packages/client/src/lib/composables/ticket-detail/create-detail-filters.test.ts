@@ -110,7 +110,7 @@ describe("createDetailFilters", () => {
       df.handlePillToggle("type", "message");
       expect(df.activeCount).toBe(1);
 
-      df.handlePillToggle("type", "status_change");
+      df.handlePillToggle("type", "__status__");
       expect(df.activeCount).toBe(1);
 
       df.handlePillToggle("author", "user-2");

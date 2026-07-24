@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Topic analysis and decrypted content insights" |
+* | "Slower, heavier reports drawn from decrypted conversations, to understand what your community needs" |
 *
 * @param {Hub_Analytics_Deep_SubtitleInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

@@ -8,7 +8,7 @@
     GlassMode,
   } from "$lib/stores/theme.svelte";
   import { onMount } from "svelte";
-  import { Settings, RefreshCw, X } from "@lucide/svelte";
+  import { Wrench, RefreshCw, X } from "@lucide/svelte";
   import { applyKonstaPalette } from "$lib/branding/konsta-palette";
   import { DEFAULT_PRIMARY } from "$lib/branding/index.js";
   import { setDevDelay } from "$lib/trpc/index.js";
@@ -18,8 +18,7 @@
     type LogLine,
     type NetEntry,
   } from "$lib/dev/log-buffer.js";
-
-  let opened = $state(false);
+  import { devPanel } from "$lib/dev/panel-state.svelte.js";
   let devDelay = $state(false);
   let activeLog = $state<"console" | "network" | null>(null);
 
@@ -70,31 +69,29 @@
     window.location.reload();
   }
 
-  function logColor(level: LogLine["level"]): string {
-    if (level === "error") return "#ff4444";
-    if (level === "warn") return "#ffaa00";
-    return "#88ff88";
+  function logLevelClass(level: LogLine["level"]): string {
+    if (level === "error") return "dev-log-error";
+    if (level === "warn") return "dev-log-warn";
+    return "dev-log-info";
   }
 </script>
 
-<!-- FAB trigger -->
 <button
-  class="dev-fab"
-  onclick={() => (opened = !opened)}
+  class="dev-trigger"
+  onclick={devPanel.toggle}
   aria-label="Open dev panel"
 >
-  <Settings size={20} aria-hidden="true" />
+  <Wrench size={14} aria-hidden="true" />
 </button>
 
-<!-- Panel -->
-{#if opened}
+{#if devPanel.opened}
   <div
     class="dev-backdrop"
     role="button"
     tabindex="0"
     aria-label="Close dev panel"
-    onclick={() => (opened = false)}
-    onkeydown={onKeyActivate(() => (opened = false))}
+    onclick={devPanel.close}
+    onkeydown={onKeyActivate(devPanel.close)}
   ></div>
   <div class="dev-panel" role="dialog" aria-label="Dev panel">
     <!-- Header -->
@@ -110,7 +107,7 @@
         </button>
         <button
           class="dev-icon-btn"
-          onclick={() => (opened = false)}
+          onclick={devPanel.close}
           aria-label="Close"
         >
           <X size={14} aria-hidden="true" />
@@ -184,7 +181,7 @@
     {#if activeLog === "console"}
       <div class="dev-console">
         {#each logs as line (line.id)}
-          <div style:color={logColor(line.level)}>{line.text}</div>
+          <div class={logLevelClass(line.level)}>{line.text}</div>
         {/each}
       </div>
     {/if}
@@ -213,28 +210,21 @@
 {/if}
 
 <style>
-  /* FAB */
-  .dev-fab {
+  /* Trigger: fixed top-right, sits in the navbar band on all pages */
+  .dev-trigger {
     position: fixed;
-    bottom: 5.5rem;
-    right: 0.75rem;
-    z-index: 99999;
-    width: 2.5rem;
-    height: 2.5rem;
-    border-radius: 50%;
-    border: 1px solid var(--muted, #888);
-    background: var(--surface-1, #1c1c1d);
-    color: var(--ink, #e5e5e5);
+    top: calc(env(safe-area-inset-top, 0px) + 10px);
+    right: 12px;
+    z-index: 99997;
+    background: none;
+    border: none;
+    color: var(--muted);
+    cursor: pointer;
+    padding: 4px;
     display: flex;
     align-items: center;
     justify-content: center;
-    cursor: pointer;
     opacity: 0.5;
-    transition: opacity 150ms;
-  }
-  .dev-fab:hover,
-  .dev-fab:active {
-    opacity: 1;
   }
 
   /* Backdrop */
@@ -252,9 +242,9 @@
     left: 0;
     right: 0;
     z-index: 99999;
-    background: var(--surface-1, #1c1c1d);
-    color: var(--ink, #e5e5e5);
-    border-top: 1px solid rgba(128, 128, 128, 0.25);
+    background: var(--raised, var(--surface-1));
+    color: var(--ink);
+    border-top: 1px solid var(--hair);
     border-radius: 1rem 1rem 0 0;
     padding: 0.75rem 0.875rem calc(0.75rem + env(safe-area-inset-bottom));
     max-height: 80vh;
@@ -275,7 +265,7 @@
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.07em;
-    color: var(--muted, #888);
+    color: var(--muted);
   }
   .dev-header-actions {
     display: flex;
@@ -285,7 +275,7 @@
   .dev-icon-btn {
     background: none;
     border: none;
-    color: var(--muted, #888);
+    color: var(--muted);
     cursor: pointer;
     padding: 0.25rem;
     display: flex;
@@ -314,9 +304,9 @@
     height: 1.75rem;
     padding: 0 0.75rem;
     border-radius: 999px;
-    border: 1px solid rgba(128, 128, 128, 0.4);
-    background: var(--surface-2, #2c2c2c);
-    color: var(--ink, #e5e5e5);
+    border: 1px solid var(--hair);
+    background: var(--paper-deep, var(--surface-2));
+    color: var(--ink);
     font-size: 0.6875rem;
     font-weight: 500;
     letter-spacing: 0.02em;
@@ -327,8 +317,8 @@
     opacity: 0.6;
   }
   .dev-pill.dev-pill-active {
-    background: var(--ink, #e5e5e5);
-    color: var(--surface-1, #1c1c1d);
+    background: var(--ink);
+    color: var(--raised, var(--surface-1));
     border-color: transparent;
   }
 
@@ -336,7 +326,7 @@
   .dev-ghost {
     background: none;
     border: none;
-    color: var(--muted, #888);
+    color: var(--muted);
     font-size: 0.6875rem;
     cursor: pointer;
     padding: 0.2rem 0.25rem;
@@ -351,26 +341,23 @@
     display: flex;
     gap: 0.375rem;
     align-items: center;
-    border-top: 1px solid rgba(128, 128, 128, 0.15);
+    border-top: 1px solid var(--hair);
     padding-top: 0.5rem;
   }
   .dev-tab {
     flex: 1;
     height: 1.875rem;
     border-radius: 0.5rem;
-    border: 1px solid rgba(128, 128, 128, 0.35);
-    background: var(--surface-2, #2c2c2c);
-    color: var(--muted, #888);
+    border: 1px solid var(--hair);
+    background: var(--paper-deep, var(--surface-2));
+    color: var(--muted);
     font-size: 0.6875rem;
     font-weight: 500;
     cursor: pointer;
-    transition:
-      background 100ms,
-      color 100ms;
   }
   .dev-tab.active {
-    background: var(--ink, #e5e5e5);
-    color: var(--surface-1, #1c1c1d);
+    background: var(--ink);
+    color: var(--raised, var(--surface-1));
     border-color: transparent;
   }
   .dev-tab:active {
@@ -383,7 +370,8 @@
 
   /* Log output */
   .dev-console {
-    background: #0a0a0a;
+    background: var(--paper-deep, var(--surface-2));
+    border: 1px solid var(--hair);
     border-radius: 0.5rem;
     padding: 0.5rem;
     max-height: 35vh;
@@ -392,19 +380,29 @@
     word-break: break-all;
   }
 
+  .dev-log-error {
+    color: var(--danger);
+  }
+  .dev-log-warn {
+    color: var(--care);
+  }
+  .dev-log-info {
+    color: var(--ink);
+  }
+
   .dev-net-entry {
-    border-bottom: 1px solid #1a1a1a;
+    border-bottom: 1px solid var(--hair);
     padding-bottom: 0.25rem;
     margin-bottom: 0.25rem;
   }
   .dev-net-meta {
-    color: #88ccff;
+    color: var(--brand-primary);
   }
   .dev-net-meta.dev-net-error {
-    color: #ff4444;
+    color: var(--danger);
   }
   .dev-net-body {
-    color: #aaaaaa;
+    color: var(--muted);
     margin-top: 0.15rem;
     white-space: pre-wrap;
   }

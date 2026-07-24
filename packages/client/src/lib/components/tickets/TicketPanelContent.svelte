@@ -25,7 +25,7 @@
   import { Phone } from "@lucide/svelte";
   import * as m from "$lib/paraglide/messages.js";
   import { withTerms } from "$lib/terminology/with-terms.js";
-  import StatusDot from "$lib/components/StatusDot.svelte";
+  import StatusMark from "$lib/components/StatusMark.svelte";
   import { formatRelativeTime } from "$lib/utils/format-time.js";
   import type { DisplayStatus } from "$lib/tickets/display-status.js";
   import { createQuery } from "@tanstack/svelte-query";
@@ -54,10 +54,17 @@
     onnotetap?: (noteId: string) => void;
     /** Emitted when an image thumbnail is tapped. Route opens lightbox. */
     onlightbox?: (imageUrl: string) => void;
+    /** Skip title, description, and opened date (already shown by CaseHeader). */
+    compact?: boolean;
   }
 
-  let { ticketId, onaction, onnotetap, onlightbox }: TicketPanelContentProps =
-    $props();
+  let {
+    ticketId,
+    onaction,
+    onnotetap,
+    onlightbox,
+    compact = false,
+  }: TicketPanelContentProps = $props();
 
   // --- Context + caches ---
 
@@ -132,6 +139,20 @@
       : undefined,
   );
 
+  // Description is collected at ticket creation but was never rendered
+  // anywhere. Empty descriptions decrypt to "" and stay hidden.
+  const descriptionResult = $derived(
+    ticket != null && decrypt != null
+      ? decrypt.description(ticket.encryptedDescription)
+      : undefined,
+  );
+
+  const decryptedDescription = $derived(
+    descriptionResult != null && isDecryptReady(descriptionResult)
+      ? descriptionResult.value
+      : undefined,
+  );
+
   function labelToggleInput(node: HTMLElement, label: string): void {
     const input = node.querySelector<HTMLInputElement>(
       'input[type="checkbox"]',
@@ -141,17 +162,25 @@
 </script>
 
 <div class="panel-content">
-  <!-- Ticket title / description -->
-  {#if ticketQuery.isLoading}
-    <Block class="!my-0 !mt-2">
-      <p class="ticket-title">
-        <DecryptPlaceholder length={20} />
-      </p>
-    </Block>
-  {:else if decryptedTitle}
-    <Block class="!my-0 !mt-2">
-      <p class="ticket-title">{decryptedTitle}</p>
-    </Block>
+  {#if !compact}
+    <!-- Ticket title / description -->
+    {#if ticketQuery.isLoading}
+      <Block class="!my-0 !mt-2">
+        <p class="ticket-title">
+          <DecryptPlaceholder length={20} />
+        </p>
+      </Block>
+    {:else if decryptedTitle}
+      <Block class="!my-0 !mt-2">
+        <p class="ticket-title">{decryptedTitle}</p>
+      </Block>
+    {/if}
+
+    {#if decryptedDescription}
+      <Block class="!my-0 !mt-1">
+        <p class="ticket-description">{decryptedDescription}</p>
+      </Block>
+    {/if}
   {/if}
 
   <!-- Call button -->
@@ -170,21 +199,27 @@
           <InlineSkeleton width="6ch" />
         {:else}
           <span class="status-after">
-            <StatusDot status={displayStatus} />
+            <!-- Decorative here: the status word sits right beside it,
+                 and StatusMark self-labels via role="img". -->
+            <span class="status-mark-wrap" aria-hidden="true">
+              <StatusMark status={displayStatus} />
+            </span>
             <span class="status-label">{statusLabel}</span>
           </span>
         {/if}
       {/snippet}
     </ListItem>
-    <ListItem title={m.ticket_panel_opened()}>
-      {#snippet after()}
-        {#if ticketQuery.isLoading}
-          <InlineSkeleton width="4ch" />
-        {:else if ticket?.createdAt}
-          {formatRelativeTime(new Date(ticket.createdAt))}
-        {/if}
-      {/snippet}
-    </ListItem>
+    {#if !compact}
+      <ListItem title={m.ticket_panel_opened()}>
+        {#snippet after()}
+          {#if ticketQuery.isLoading}
+            <InlineSkeleton width="4ch" />
+          {:else if ticket?.createdAt}
+            {formatRelativeTime(new Date(ticket.createdAt))}
+          {/if}
+        {/snippet}
+      </ListItem>
+    {/if}
   </List>
 
   <PanelNotesSection {ticketId} {keyWrap} {onnotetap} />
@@ -275,6 +310,14 @@
     margin: 0;
   }
 
+  .ticket-description {
+    font-size: var(--text-base);
+    color: var(--ink-2, var(--muted));
+    line-height: 1.5;
+    white-space: pre-wrap;
+    margin: 0;
+  }
+
   :global(.call-icon) {
     margin-right: 0.5rem;
   }
@@ -286,13 +329,17 @@
     gap: 0.375rem;
   }
 
+  .status-mark-wrap {
+    display: inline-flex;
+  }
+
   .status-label {
     font-size: var(--text-sm);
     text-transform: capitalize;
   }
 
   .destructive-text {
-    color: var(--k-color-red, #ef4444);
+    color: var(--danger);
     font-size: var(--text-sm);
   }
 

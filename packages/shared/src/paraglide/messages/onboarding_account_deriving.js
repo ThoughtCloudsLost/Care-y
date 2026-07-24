@@ -6,17 +6,17 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Onboarding_Account_DerivingInputs */
 
 const en_onboarding_account_deriving = /** @type {(inputs: Onboarding_Account_DerivingInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Generating encryption keys...`)
+	return /** @type {LocalizedString} */ (`Creating your keys...`)
 };
 
 const es_onboarding_account_deriving = /** @type {(inputs: Onboarding_Account_DerivingInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Generando claves de cifrado...`)
+	return /** @type {LocalizedString} */ (`Creando tus claves...`)
 };
 
 /**
 * | output |
 * | --- |
-* | "Generating encryption keys..." |
+* | "Creating your keys..." |
 *
 * @param {Onboarding_Account_DerivingInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

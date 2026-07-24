@@ -15,7 +15,12 @@
   import { announceToLiveRegion } from "$lib/utils/announce.js";
   import { getOrgDecryptCache, getOrgKeyManager } from "$lib/crypto/context.js";
   import { isValidHexColor } from "$lib/branding/color-utils.js";
-  import { applyKonstaPalette } from "$lib/branding/konsta-palette.js";
+  import {
+    applyKonstaPalette,
+    checkBrandProximity,
+    type BrandProximity,
+  } from "$lib/branding/konsta-palette.js";
+  import Register from "$lib/components/Register.svelte";
   import {
     updateBrandingCache,
     DEFAULT_PRIMARY,
@@ -242,6 +247,38 @@
   const hasChanges = $derived(
     colorChanged || accentChanged || textChanged || logoChanged,
   );
+
+  // ── Semantic-hue proximity (the OKLCH nudge) ──
+  // Offered, never enforced: save stays available with any valid hex.
+
+  const NO_COLLISION: BrandProximity = { collides: false };
+
+  const primaryProximity = $derived(
+    isValidHexColor(editColor) ? checkBrandProximity(editColor) : NO_COLLISION,
+  );
+  const accentProximity = $derived(
+    isValidHexColor(editAccent)
+      ? checkBrandProximity(editAccent)
+      : NO_COLLISION,
+  );
+
+  function proximityMessage(p: BrandProximity): string {
+    return p.conflict === "care"
+      ? m.branding_color_near_care(withTerms())
+      : m.branding_color_near_urgent(withTerms());
+  }
+
+  function applyNudgedPrimary(): void {
+    if (primaryProximity.nudgedHex === undefined) return;
+    editColor = primaryProximity.nudgedHex;
+    void applyKonstaPalette({ primary: editColor, accent: editAccent });
+  }
+
+  function applyNudgedAccent(): void {
+    if (accentProximity.nudgedHex === undefined) return;
+    editAccent = accentProximity.nudgedHex;
+    void applyKonstaPalette({ primary: editColor, accent: editAccent });
+  }
 
   // ── Color preview ──
 
@@ -642,11 +679,11 @@
               {m.admin_branding_logo_change()}
             </span>
           </label>
-          <span class="field-hint">{m.admin_branding_logo_accept()}</span>
+          <span class="field-help">{m.admin_branding_logo_accept()}</span>
           {#if logoError}
             <span class="field-error" role="alert">{logoError}</span>
           {/if}
-          <span class="field-hint"
+          <span class="field-help"
             >{m.admin_branding_logo_hint(withTerms())}</span
           >
         </div>
@@ -658,7 +695,6 @@
     <!-- Client Welcome Text -->
     <div class="sheet-field">
       <ListInput
-        outline
         label={m.admin_branding_card_text_label(withTerms())}
         type="textarea"
         value={editText}
@@ -689,7 +725,26 @@
             />
             <span class="color-hex-edit">{editColor}</span>
           </div>
-          <span class="field-hint">{m.admin_branding_color_hint()}</span>
+          <span class="field-help">{m.admin_branding_color_hint()}</span>
+          {#if primaryProximity.collides}
+            <Register kind="careful" role="status">
+              <p class="nudge-text">{proximityMessage(primaryProximity)}</p>
+              {#if primaryProximity.nudgedHex !== undefined}
+                <button
+                  type="button"
+                  class="nudge-action"
+                  onclick={applyNudgedPrimary}
+                >
+                  <span
+                    class="nudge-swatch"
+                    style="background: {primaryProximity.nudgedHex}"
+                    aria-hidden="true"
+                  ></span>
+                  {m.branding_color_use_nudged()}
+                </button>
+              {/if}
+            </Register>
+          {/if}
         </div>
 
         <div class="color-picker-group">
@@ -706,7 +761,26 @@
             />
             <span class="color-hex-edit">{editAccent}</span>
           </div>
-          <span class="field-hint">{m.admin_branding_accent_hint()}</span>
+          <span class="field-help">{m.admin_branding_accent_hint()}</span>
+          {#if accentProximity.collides}
+            <Register kind="careful" role="status">
+              <p class="nudge-text">{proximityMessage(accentProximity)}</p>
+              {#if accentProximity.nudgedHex !== undefined}
+                <button
+                  type="button"
+                  class="nudge-action"
+                  onclick={applyNudgedAccent}
+                >
+                  <span
+                    class="nudge-swatch"
+                    style="background: {accentProximity.nudgedHex}"
+                    aria-hidden="true"
+                  ></span>
+                  {m.branding_color_use_nudged()}
+                </button>
+              {/if}
+            </Register>
+          {/if}
         </div>
 
         <div class="palette-preview">
@@ -838,7 +912,7 @@
   }
 
   .color-hex {
-    font-family: ui-monospace, monospace;
+    font-family: var(--theme-font-mono);
     font-size: var(--text-sm);
     color: var(--ink);
   }
@@ -930,17 +1004,8 @@
     background: color-mix(in srgb, var(--ink) 15%, transparent);
   }
 
-  .field-hint {
-    font-size: var(--text-xs);
-    color: var(--muted);
-    line-height: 1.4;
-  }
-
-  .field-error {
-    font-size: var(--text-xs);
-    color: var(--color-red-500);
-    font-weight: 500;
-  }
+  /* .field-help and .field-error come from the shared form primitives
+     (shared.css) */
 
   /* Color: pickers and preview in a compact grid */
   .color-edit-row {
@@ -953,6 +1018,32 @@
     display: flex;
     flex-direction: column;
     gap: var(--space-xs);
+  }
+
+  .nudge-text {
+    margin: 0 0 var(--space-sm);
+  }
+
+  .nudge-action {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-md);
+    padding: 0;
+    border: none;
+    background: none;
+    font-family: inherit;
+    font-size: var(--text-base);
+    font-weight: 700;
+    color: var(--brand-text);
+    cursor: pointer;
+  }
+
+  .nudge-swatch {
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    border: 1px solid var(--hair-2);
+    flex-shrink: 0;
   }
 
   .color-picker-row {
@@ -972,7 +1063,7 @@
   }
 
   .color-hex-edit {
-    font-family: ui-monospace, monospace;
+    font-family: var(--theme-font-mono);
     font-size: var(--text-sm);
     color: var(--ink);
   }

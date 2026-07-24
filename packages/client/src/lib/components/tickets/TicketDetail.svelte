@@ -10,12 +10,13 @@
   Decryption: FollowUpDecryptCache (PII-tier Worker) for content,
               OrgDecryptCache (org-key tier, main thread) for display names.
 -->
+<!-- care-y-ignore no-hardcoded-user-strings, no-click-without-keyboard -- multi-line {#snippet} param type annotations read as template text, and the select-mode wrapper's onclick has a conditional onkeydown the line scanner cannot see -->
 <script lang="ts">
   import { followupSlot } from "@care-y/crypto";
   import { tick } from "svelte";
   import { createQuery, useQueryClient } from "@tanstack/svelte-query";
   import { ticketKeys } from "$lib/query/keys";
-  import { Messages, Message, Checkbox, Button } from "konsta/svelte";
+  import { Checkbox, Button } from "konsta/svelte";
   import * as m from "$lib/paraglide/messages.js";
   import { trpc } from "$lib/trpc/index.js";
   import {
@@ -52,6 +53,10 @@
   } from "$lib/crypto/decrypt-result.js";
   import { createTicketDecryptScope } from "$lib/crypto/ticket-decrypt-scope.js";
   import { SvelteMap } from "svelte/reactivity";
+  import {
+    createReactionsQuery,
+    writeReactionToCache,
+  } from "$lib/tickets/create-reactions-query.svelte.js";
   import { requireRouter } from "$lib/errors.js";
   import {
     serializedBufferToBase64,
@@ -72,11 +77,17 @@
     TimelineItem,
     ClusterRecord,
   } from "$lib/components/tickets/follow-up-timeline-types.js";
-  import MentionAutocomplete from "$lib/components/tickets/MentionAutocomplete.svelte";
+  import ConversationBubble from "$lib/components/tickets/ConversationBubble.svelte";
   import FollowUpBubble from "$lib/components/tickets/FollowUpBubble.svelte";
   import TicketPlaceholder from "$lib/components/tickets/TicketPlaceholder.svelte";
   import GapIndicator from "$lib/components/GapIndicator.svelte";
-  import { followUpKind } from "$lib/tickets/follow-up-utils.js";
+  import {
+    followUpKind,
+    groupConsecutive,
+    isFollowUpGroup,
+    followUpGroupKey,
+    type GroupedFollowUp,
+  } from "$lib/tickets/follow-up-utils.js";
   import { resolveNoteTypeIcon as resolveNoteTypeIconComponent } from "$lib/utils/note-type-icons.js";
 
   import { computeGaps } from "$lib/tickets/gap-indicators.js";
@@ -99,12 +110,6 @@
     ticketId: string;
     /** Known follow-up count from the ticket list cache (available immediately). */
     knownFollowUpCount?: number;
-    /** Compose draft text (two-way bindable). */
-    draftText?: string;
-    /** Current cursor position in the compose textarea. */
-    cursorPosition?: number;
-    /** Called when a volunteer is selected from @mention autocomplete. */
-    onmentionselect?: (userId: string, displayName: string) => void;
     /** Called when an MMS image is tapped. Route file opens lightbox. */
     onlightbox?: (imageUrl: string) => void;
     /** Called when a long-press context menu should open. */
@@ -162,6 +167,7 @@
     onsearchscrollcomplete?: () => void;
     /** Two-way bindable: true when the paginator has more older messages to load. */
     hasMoreMessages?: boolean;
+    loadedFollowUpCount?: number;
     /** Two-way bindable: function to load one older page. */
     loadOlderPage?: () => Promise<void>;
   }
@@ -169,9 +175,6 @@
   let {
     ticketId,
     knownFollowUpCount,
-    draftText = $bindable(""),
-    cursorPosition = 0,
-    onmentionselect,
     onlightbox,
     oncontextmenu,
     onopenedit,
@@ -195,6 +198,7 @@
     searchScrollRequested = false,
     onsearchscrollcomplete,
     hasMoreMessages = $bindable(false),
+    loadedFollowUpCount = $bindable(0),
     loadOlderPage: loadOlderPageProp = $bindable(undefined),
   }: TicketDetailProps = $props();
 
@@ -252,7 +256,7 @@
       }),
   }));
 
-  // Volunteer list (cached, shared with MentionAutocomplete).
+  // Volunteer list (cached query, deduped with other consumers by key).
   const volunteersQuery = createVolunteersQuery(ticketRouter);
   const noteTypesQuery = ticketRouter.noteTypes
     ? createNoteTypesQuery(ticketRouter.noteTypes)
@@ -345,10 +349,13 @@
   const hasMoreOlder = $derived(paginator.hasMore);
   const loadingOlder = $derived(paginator.loadingOlder);
 
-  // Expose paginator state for deep search in the route page.
+  // Expose paginator state for deep search in the route page. The loaded
+  // count is the raw paginated list, not the display-filtered one, so the
+  // deep-search counter climbs toward the ticket's total entry count.
   $effect(() => {
     hasMoreMessages = hasMoreOlder;
     loadOlderPageProp = async () => paginator.loadOlderPage();
+    loadedFollowUpCount = followUps.length;
   });
 
   // --- Conversation filter application (server-side) ---
@@ -363,19 +370,28 @@
   // Translate client-side pseudo-types to server filter params.
   // note_type:<uuid> entries are converted to "internal_note" for the server query;
   // client-side filtering by specific noteTypeId happens in the rendering layer.
+  const CATEGORY_EXPANSION: Record<string, FollowUpType[]> = {
+    __assignment__: ["volunteer_assigned", "volunteer_unassigned"],
+    __status__: ["status_opened", "status_closed"],
+    __priority__: ["priority_changed"],
+    __hold__: ["hold_placed", "hold_removed"],
+  };
+
   const serverFilterTypes = $derived.by((): FollowUpType[] => {
     const types: FollowUpType[] = [];
     let hasNoteTypeFilter = false;
     for (const t of filterTypes ?? []) {
       if (t.startsWith("note_type:")) {
         hasNoteTypeFilter = true;
+      } else if (t in CATEGORY_EXPANSION) {
+        // eslint-disable-next-line security/detect-object-injection -- keys are static pseudo-type strings from the filter UI
+        const expanded = CATEGORY_EXPANSION[t];
+        if (expanded !== undefined) types.push(...expanded);
       } else if (
         t !== "__images__" &&
         t !== "__recordings__" &&
         t !== "__files__"
       ) {
-        // filterTypes prop contains both FollowUpType values and media pseudo-types;
-        // after excluding pseudo-types the remainder are valid FollowUpType values.
         // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- pseudo-types excluded above
         types.push(t as FollowUpType);
       }
@@ -458,6 +474,10 @@
     });
   });
 
+  const groupedDisplayFollowUps = $derived([
+    ...groupConsecutive(displayFollowUps),
+  ]);
+
   $effect(() => {
     filteredFollowUps = displayFollowUps;
   });
@@ -524,6 +544,8 @@
   function getReactions(followUpId: string): ReactionSummary[] {
     const override = reactionOverrides.get(followUpId);
     if (override !== undefined) return override;
+    const fetched = previewReactions.byId.get(followUpId);
+    if (fetched !== undefined) return fetched;
     const server = Object.hasOwn(reactionsData, followUpId)
       ? // eslint-disable-next-line security/detect-object-injection -- key is a UUID from our own query, not user input
         reactionsData[followUpId]
@@ -564,6 +586,7 @@
       .mutate({ followUpId, reaction })
       .then((serverReactions: ReactionSummary[]) => {
         reactionOverrides.set(followUpId, serverReactions);
+        writeReactionToCache(queryClient, followUpId, serverReactions);
       })
       .catch(() => {
         reactionOverrides.delete(followUpId);
@@ -581,6 +604,7 @@
     readonly hasImage: boolean;
     readonly hasFile: boolean;
     readonly noteTypeId?: string | null;
+    readonly eventParams?: Record<string, unknown> | null;
     readonly callStatus?: string | null;
     readonly callDurationSeconds?: number | null;
     readonly keyGeneration?: string | null;
@@ -604,6 +628,7 @@
       fullPosition: fu.fullPosition,
       totalCount: fu.totalCount,
       noteTypeId: fu.noteTypeId ?? null,
+      eventParams: fu.eventParams ?? null,
       callStatus: fu.callStatus ?? null,
       callDurationSeconds: fu.callDurationSeconds ?? null,
       keyGeneration: fu.keyGeneration ?? null,
@@ -675,6 +700,7 @@
     hasImage: boolean;
     hasFile: boolean;
     noteTypeId?: string | null;
+    eventParams?: Record<string, unknown> | null;
     keyGeneration?: string | null;
     keyWrap?:
       | ClusterRecord["keyWrap"]
@@ -696,6 +722,7 @@
       hasImage: fu.hasImage,
       hasFile: fu.hasFile,
       noteTypeId: fu.noteTypeId ?? null,
+      eventParams: fu.eventParams ?? null,
       keyGeneration: fu.keyGeneration ?? null,
       keyWrap: fu.keyWrap ?? null,
     };
@@ -741,6 +768,7 @@
         hasImage: summary?.hasImage ?? false,
         hasFile: summary?.hasFile ?? false,
         noteTypeId: summary?.noteTypeId ?? null,
+        eventParams: summary?.eventParams ?? null,
         keyGeneration: summary?.keyGeneration ?? null,
         keyWrap: null,
       };
@@ -787,7 +815,7 @@
     const base =
       fu.source === "client"
         ? m.ticket_message_received_from({ name: clientAlias, time })
-        : m.ticket_message_sent_by({ name: "Volunteer", time });
+        : m.ticket_message_sent_by({ name: m.ticket_sender_volunteer(), time });
     return preview ? `${base}: ${preview}` : base;
   }
 
@@ -879,10 +907,23 @@
   // After the initial page loads, check if there are unread messages
   // beyond the loaded range. If so, keep fetching older pages until
   // the read boundary is within the loaded range.
-  // Scroll initialization state machine. Fires once per mount:
+  // Scroll initialization state machine. Fires once per ticket:
   //   waiting -> loading (fetch unread pages) -> scrolling -> done
   type ScrollInitPhase = "waiting" | "loading" | "scrolling" | "done";
   let scrollInitPhase = $state<ScrollInitPhase>("waiting");
+
+  // Global search can swap the ticket prop without remounting this
+  // component: re-arm the machine (same shape as the orchestrator's
+  // autoActivatedForTicket) so the new ticket scrolls to its own unread
+  // divider. Every other init gate is query-derived off ticketId and
+  // resets itself.
+  let scrollInitForTicket = $state("");
+  $effect(() => {
+    if (scrollInitForTicket === ticketId) return;
+    scrollInitForTicket = ticketId;
+    scrollInitPhase = "waiting";
+    scrollReady = false;
+  });
 
   $effect(() => {
     if (scrollInitPhase !== "waiting") return;
@@ -919,6 +960,13 @@
           }
           scrollInitPhase = "done";
           scrollReady = true;
+          // A conversation that fits the pane never scrolls, so this is
+          // the only read report it will ever fire; for longer threads
+          // it reports the initially visible window, matching what the
+          // scroll path would say.
+          if (onreadprogress) {
+            scroll.reportVisibleProgress(followUps, onreadprogress);
+          }
         });
       });
     })();
@@ -942,6 +990,27 @@
     scroll.autoScrollOnNew(followUpCount, timelineActive);
   });
 
+  // While the keyboard is open the shell keeps its full height, so the
+  // keyboard covers the bottom of the chat pane; the .thread keyboard
+  // inset below restores the scroll room. Re-pin to the bottom when the
+  // user was already there so the newest messages rise above the docked
+  // bar (Safari has no overflow-anchor to do this for us). Covers
+  // keyboard close (inset removal) too.
+  $effect(() => {
+    if (!scroll.scrollContainerEl) return;
+    const vv = window.visualViewport;
+    if (!vv) return;
+    const onViewportResize = (): void => {
+      const el = scroll.scrollContainerEl;
+      if (!el || !scroll.isNearBottom) return;
+      requestAnimationFrame(() => {
+        el.scrollTop = el.scrollHeight;
+      });
+    };
+    vv.addEventListener("resize", onViewportResize);
+    return () => vv.removeEventListener("resize", onViewportResize);
+  });
+
   // --- Loading placeholder ---
   // Preview data from the ticket list (server returns newest-first, reverse for chat order).
   const previewData = $derived(previewLoader.get(ticketId));
@@ -951,19 +1020,13 @@
       : [],
   );
 
-  $effect(() => {
-    const noteIds = orderedPreviews
-      .filter((fu) => fu.type === "internal_note")
-      .map((fu) => fu.id);
-    if (noteIds.length === 0) return;
-    const unfetched = noteIds.filter((id) => !reactionOverrides.has(id));
-    if (unfetched.length === 0) return;
-    void ticketRouter.getReactions
-      .query({ followUpIds: unfetched })
-      .then((result) => mergeReactions(result))
-      .catch((_e: unknown) => {
-        /* best-effort */
-      });
+  const previewReactions = createReactionsQuery({
+    getNoteIds: () =>
+      orderedPreviews
+        .filter((fu) => fu.type === "internal_note")
+        .map((fu) => fu.id),
+    fetchReactions: async (followUpIds, signal) =>
+      ticketRouter.getReactions.query({ followUpIds }, { signal }),
   });
 
   const totalSlots = $derived(
@@ -1077,6 +1140,8 @@
         {searchScrollRequested}
         {onsearchscrollcomplete}
         resolveNoteIcon={resolveNoteIconForTimeline}
+        resolveUserName={(uid: string) =>
+          resolveVolunteerName(uid) ?? m.ticket_system_volunteer_fallback()}
       >
         {#snippet renderExpanded({
           record: rec,
@@ -1104,7 +1169,14 @@
             }}
           >
             {#if kind === "system"}
-              <SystemEvent type={rec.type} timestamp={rec.createdAt} />
+              <SystemEvent
+                type={rec.type}
+                timestamp={rec.createdAt}
+                eventParams={rec.eventParams}
+                resolveUserName={(uid: string) =>
+                  resolveVolunteerName(uid) ??
+                  m.ticket_system_volunteer_fallback()}
+              />
             {:else if kind === "note"}
               <PrivateNote
                 result={recResult}
@@ -1121,55 +1193,49 @@
                 resolveUserName={(uid: string) => resolveVolunteerName(uid)}
               />
             {:else}
-              <Message
-                type={rec.source === "client" ? "received" : "sent"}
-                name={rec.source === "client" ? clientAlias : undefined}
-                data-source={rec.source === "client" ? "client" : "volunteer"}
+              <ConversationBubble
+                direction={rec.source === "client" ? "received" : "sent"}
+                speaker={rec.source === "client" ? clientAlias : undefined}
+                source={rec.source === "client" ? "client" : "volunteer"}
+                timestamp={rec.createdAt}
               >
-                {#snippet text()}
-                  <!-- svelte-ignore a11y_no_static_element_interactions -->
-                  <span
-                    class="bubble-text"
-                    onpointerdown={startLongPress(rec)}
-                    onpointerup={cancelLongPress}
-                    onpointercancel={cancelLongPress}
-                  >
-                    <DecryptPlaceholder
-                      result={recResult}
-                      ciphertext={rec.encryptedContent}
-                      length={30}
-                      block
-                      {searchTerm}
-                    />
-                  </span>
-                  {#if rec.hasRecording || rec.hasImage || rec.hasFile}
-                    <FollowUpMedia
-                      followupId={rec.id}
-                      {ticketId}
-                      keyWrap={ticket.keyWrap}
-                      hasRecording={rec.hasRecording}
-                      hasImage={rec.hasImage}
-                      hasFile={rec.hasFile}
-                      onlightbox={(url: string) => onlightbox?.(url)}
-                    />
-                  {/if}
-                {/snippet}
-                {#snippet footer()}
-                  <time class="bubble-time" datetime={rec.createdAt}>
-                    {formatRelativeTime(new Date(rec.createdAt))}
-                  </time>
-                {/snippet}
-              </Message>
+                <!-- svelte-ignore a11y_no_static_element_interactions -->
+                <span
+                  class="bubble-text"
+                  onpointerdown={startLongPress(rec)}
+                  onpointerup={cancelLongPress}
+                  onpointercancel={cancelLongPress}
+                >
+                  <DecryptPlaceholder
+                    result={recResult}
+                    ciphertext={rec.encryptedContent}
+                    length={30}
+                    block
+                    {searchTerm}
+                  />
+                </span>
+                {#if rec.hasRecording || rec.hasImage || rec.hasFile}
+                  <FollowUpMedia
+                    followupId={rec.id}
+                    {ticketId}
+                    keyWrap={ticket.keyWrap}
+                    hasRecording={rec.hasRecording}
+                    hasImage={rec.hasImage}
+                    hasFile={rec.hasFile}
+                    onlightbox={(url: string) => onlightbox?.(url)}
+                  />
+                {/if}
+              </ConversationBubble>
             {/if}
           </div>
         {/snippet}
-        <Messages>
+        <div class="thread">
           <VirtualList
-            items={displayFollowUps}
+            items={groupedDisplayFollowUps}
             scrollContainer={scroll.scrollContainerEl}
             estimateHeight={80}
             columns={1}
-            getKey={(fu: FollowUpRecord) => fu.id}
+            getKey={followUpGroupKey}
             onloadprevious={hasMoreOlder
               ? async () => paginator.loadOlderPage()
               : undefined}
@@ -1178,127 +1244,167 @@
               item,
               index: i,
             }: {
-              item: FollowUpRecord;
+              item: GroupedFollowUp<FollowUpRecord>;
               index: number;
             })}
-              {@const fu = item}
-              {@const kind = followUpKind(fu)}
-              {@const contentResult =
-                decrypt != null
-                  ? decrypt.followUp(fu.id, fu.encryptedContent)
-                  : resolveAsyncDecrypt(undefined, false)}
-              {@const prevTimestamp =
-                i > 0 ? displayFollowUps[i - 1]?.createdAt : undefined}
-              {@const isSelected = selectedIds?.has(fu.id) ?? false}
-              {@const checkboxSide =
-                messageType(fu) === "sent" ? "right" : "left"}
-              {@const gapBefore = hiddenGaps.get(fu.id) ?? 0}
-
-              <GapIndicator count={gapBefore} />
-
-              {#if needsDateSeparator(fu.createdAt, prevTimestamp)}
-                <div class="date-separator" role="separator">
-                  <span class="date-separator-label"
-                    >{formatDateSeparator(fu.createdAt)}</span
-                  >
-                </div>
-              {/if}
-
-              {#if fu.id === firstUnreadId}
-                <div
-                  id="unread-divider"
-                  class="unread-divider"
-                  role="separator"
-                  aria-label={m.ticket_new_messages()}
-                >
-                  <span class="unread-divider-label"
-                    >{m.ticket_new_messages()}</span
-                  >
-                </div>
-              {/if}
-
-              <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
-              <div
-                id="fu-{fu.id}"
-                data-fu-id={fu.id}
-                class="fu-wrapper"
-                class:match-active={searchActiveMatchId === fu.id}
-                class:fu-select-mode={selectModeActive}
-                class:fu-select-left={selectModeActive &&
-                  checkboxSide === "left"}
-                class:fu-select-right={selectModeActive &&
-                  checkboxSide === "right"}
-                tabindex={kind === "system" && !selectModeActive
-                  ? undefined
-                  : 0}
-                role={selectModeActive
-                  ? "option"
-                  : kind === "system"
-                    ? undefined
-                    : "article"}
-                aria-label={kind === "system"
-                  ? undefined
-                  : bubbleAriaLabel(fu, contentResult)}
-                aria-selected={selectModeActive ? isSelected : undefined}
-                onkeydown={selectModeActive
-                  ? (e: KeyboardEvent) => {
-                      if (e.key === "Enter" || e.key === " ") {
-                        e.preventDefault();
-                        toggleSelected?.(fu.id);
-                      }
-                    }
-                  : kind === "system"
-                    ? undefined
-                    : handleBubbleKeydown(fu)}
-                onclick={selectModeActive
-                  ? () => toggleSelected?.(fu.id)
+              {#if isFollowUpGroup(item)}
+                {@const grp = item}
+                {@const prevEntry =
+                  i > 0 ? groupedDisplayFollowUps[i - 1] : undefined}
+                {@const prevTimestamp = prevEntry
+                  ? isFollowUpGroup(prevEntry)
+                    ? prevEntry.lastTimestamp
+                    : prevEntry.createdAt
                   : undefined}
-              >
-                {#if selectModeActive}
-                  <div class="select-checkbox select-checkbox-{checkboxSide}">
-                    <Checkbox
-                      checked={isSelected}
-                      onChange={() => toggleSelected?.(fu.id)}
-                    />
+
+                {#if needsDateSeparator(grp.firstTimestamp, prevTimestamp)}
+                  <div class="date-separator" role="separator">
+                    <span class="date-separator-label"
+                      >{formatDateSeparator(grp.firstTimestamp)}</span
+                    >
                   </div>
                 {/if}
-                {#if kind === "system"}
-                  <SystemEvent type={fu.type} timestamp={fu.createdAt} />
-                {:else if kind === "note"}
-                  <PrivateNote
-                    result={contentResult}
-                    authorName={resolveVolunteerName(fu.createdBy)}
-                    timestamp={fu.createdAt}
-                    isOwn={fu.createdBy === currentUserId}
-                    noteTypeName={resolveNoteTypeName(fu.noteTypeId)}
-                    noteTypeIcon={resolveNoteTypeIcon(fu.noteTypeId)}
-                    onopenedit={onopenedit
-                      ? () => {
-                          const text =
-                            contentResult.status === "ready"
-                              ? contentResult.value
-                              : "";
-                          onopenedit(fu.id, text, fu.noteTypeId ?? null);
-                        }
-                      : undefined}
-                    onlongpress={() => openContextMenu(fu)}
-                    {searchTerm}
-                    reactions={getReactions(fu.id)}
-                    {currentUserId}
-                    ontogglereaction={(reaction: ReactionType) =>
-                      handleToggleReaction(fu.id, reaction)}
-                    resolveUserName={(uid: string) => resolveVolunteerName(uid)}
+
+                <div class="fu-wrapper">
+                  <SystemEvent
+                    type={grp.type}
+                    timestamp={grp.lastTimestamp}
+                    count={grp.count}
+                    resolveUserName={(uid: string) =>
+                      resolveVolunteerName(uid) ??
+                      m.ticket_system_volunteer_fallback()}
                   />
-                {:else}
-                  <Message
-                    type={messageType(fu)}
-                    name={fu.source === "client" ? clientAlias : undefined}
-                    data-source={fu.source === "client"
-                      ? "client"
-                      : "volunteer"}
-                    aria-label={bubbleAriaLabel(fu, contentResult)}
+                </div>
+                <!-- eslint-disable @typescript-eslint/no-unsafe-argument, @typescript-eslint/strict-boolean-expressions, @typescript-eslint/prefer-nullish-coalescing -- svelte-eslint cannot narrow GroupedFollowUp in {:else} blocks; the isFollowUpGroup guard above guarantees item is a FollowUpRecord here -->
+              {:else}
+                {@const fu = item}
+                {@const kind = followUpKind(fu)}
+                {@const contentResult =
+                  decrypt != null
+                    ? decrypt.followUp(fu.id, fu.encryptedContent)
+                    : resolveAsyncDecrypt(undefined, false)}
+                {@const prevEntry =
+                  i > 0 ? groupedDisplayFollowUps[i - 1] : undefined}
+                {@const prevTimestamp = prevEntry
+                  ? isFollowUpGroup(prevEntry)
+                    ? prevEntry.lastTimestamp
+                    : prevEntry.createdAt
+                  : undefined}
+                {@const isSelected = selectedIds?.has(fu.id) ?? false}
+                {@const checkboxSide =
+                  messageType(fu) === "sent" ? "right" : "left"}
+                {@const gapBefore = hiddenGaps.get(fu.id) ?? 0}
+
+                <GapIndicator count={gapBefore} />
+
+                {#if needsDateSeparator(fu.createdAt, prevTimestamp)}
+                  <div class="date-separator" role="separator">
+                    <span class="date-separator-label"
+                      >{formatDateSeparator(fu.createdAt)}</span
+                    >
+                  </div>
+                {/if}
+
+                {#if fu.id === firstUnreadId}
+                  <div
+                    id="unread-divider"
+                    class="unread-divider"
+                    role="separator"
+                    aria-label={m.ticket_new_messages()}
                   >
-                    {#snippet text()}
+                    <span class="unread-divider-label"
+                      >{m.ticket_new_divider()}</span
+                    >
+                  </div>
+                {/if}
+
+                <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
+                <div
+                  id="fu-{fu.id}"
+                  data-fu-id={fu.id}
+                  class="fu-wrapper"
+                  class:match-active={searchActiveMatchId === fu.id}
+                  class:fu-select-mode={selectModeActive}
+                  class:fu-select-left={selectModeActive &&
+                    checkboxSide === "left"}
+                  class:fu-select-right={selectModeActive &&
+                    checkboxSide === "right"}
+                  tabindex={kind === "system" && !selectModeActive
+                    ? undefined
+                    : 0}
+                  role={selectModeActive
+                    ? "option"
+                    : kind === "system"
+                      ? undefined
+                      : "article"}
+                  aria-label={kind === "system"
+                    ? undefined
+                    : bubbleAriaLabel(fu, contentResult)}
+                  aria-selected={selectModeActive ? isSelected : undefined}
+                  onkeydown={selectModeActive
+                    ? (e: KeyboardEvent) => {
+                        if (e.key === "Enter" || e.key === " ") {
+                          e.preventDefault();
+                          toggleSelected?.(fu.id);
+                        }
+                      }
+                    : kind === "system"
+                      ? undefined
+                      : handleBubbleKeydown(fu)}
+                  onclick={selectModeActive
+                    ? () => toggleSelected?.(fu.id)
+                    : undefined}
+                >
+                  {#if selectModeActive}
+                    <div class="select-checkbox select-checkbox-{checkboxSide}">
+                      <Checkbox
+                        checked={isSelected}
+                        onChange={() => toggleSelected?.(fu.id)}
+                      />
+                    </div>
+                  {/if}
+                  {#if kind === "system"}
+                    <SystemEvent
+                      type={fu.type}
+                      timestamp={fu.createdAt}
+                      eventParams={fu.eventParams}
+                      resolveUserName={(uid: string) =>
+                        resolveVolunteerName(uid) ??
+                        m.ticket_system_volunteer_fallback()}
+                    />
+                  {:else if kind === "note"}
+                    <PrivateNote
+                      result={contentResult}
+                      authorName={resolveVolunteerName(fu.createdBy)}
+                      timestamp={fu.createdAt}
+                      isOwn={fu.createdBy === currentUserId}
+                      noteTypeName={resolveNoteTypeName(fu.noteTypeId)}
+                      noteTypeIcon={resolveNoteTypeIcon(fu.noteTypeId)}
+                      onopenedit={onopenedit
+                        ? () => {
+                            const text =
+                              contentResult.status === "ready"
+                                ? contentResult.value
+                                : "";
+                            onopenedit(fu.id, text, fu.noteTypeId ?? null);
+                          }
+                        : undefined}
+                      onlongpress={() => openContextMenu(fu)}
+                      {searchTerm}
+                      reactions={getReactions(fu.id)}
+                      {currentUserId}
+                      ontogglereaction={(reaction: ReactionType) =>
+                        handleToggleReaction(fu.id, reaction)}
+                      resolveUserName={(uid: string) =>
+                        resolveVolunteerName(uid)}
+                    />
+                  {:else}
+                    <ConversationBubble
+                      direction={messageType(fu)}
+                      speaker={fu.source === "client" ? clientAlias : undefined}
+                      source={fu.source === "client" ? "client" : "volunteer"}
+                      timestamp={fu.createdAt}
+                    >
                       <!-- svelte-ignore a11y_no_static_element_interactions -->
                       <span
                         class="bubble-text"
@@ -1326,30 +1432,16 @@
                           onlightbox={(url: string) => onlightbox?.(url)}
                         />
                       {/if}
-                    {/snippet}
-                    {#snippet footer()}
-                      <time class="bubble-time" datetime={fu.createdAt}>
-                        {formatRelativeTime(new Date(fu.createdAt))}
-                      </time>
-                    {/snippet}
-                  </Message>
-                {/if}
-              </div>
+                    </ConversationBubble>
+                  {/if}
+                </div>
+              {/if}
             {/snippet}
           </VirtualList>
           <GapIndicator count={hiddenGaps.get("__after__") ?? 0} />
-        </Messages>
+        </div>
       </FollowUpTimeline>
     {/if}
-  </div>
-
-  <div class="mention-anchor">
-    <MentionAutocomplete
-      {draftText}
-      {cursorPosition}
-      onselect={(userId: string, displayName: string) =>
-        onmentionselect?.(userId, displayName)}
-    />
   </div>
 {/if}
 
@@ -1358,6 +1450,9 @@
     padding: 1rem var(--page-pad-x);
   }
 
+  /* Pull the container up behind the glass chrome so messages scroll
+     under the frosted blur. CaseHeader is in the subnavbar chrome;
+     this container's negative margin + padding restores the overlap. */
   .chat-container {
     flex: 1;
     min-height: 0;
@@ -1370,18 +1465,37 @@
     padding-top: calc(var(--navbar-h, 0px) + var(--subnavbar-h, 0px));
   }
 
-  /* Override Konsta Messages' built-in mb-12/mb-16 with the measured
-     messagebar height so the last message clears the fixed compose bar.
-     Uses the ResizeObserver-measured value from ShellMessagebar. */
-  :global(.k-messages) {
+  /* The conversation thread: a plain flex column in place of Konsta
+     Messages. VirtualList reads the gap into its positioning math, so
+     row spacing lives here (the mock's 13px thread gap). The bottom
+     margin clears the fixed compose bar using the ResizeObserver-measured
+     value from ShellMessagebar. */
+  .thread {
+    display: flex;
+    flex-direction: column;
+    gap: 13px;
+    padding: 16px;
+    padding-left: calc(16px + env(safe-area-inset-left, 0px));
+    padding-right: calc(16px + env(safe-area-inset-right, 0px));
+    padding-bottom: 2rem;
     margin-bottom: var(
       --messagebar-height,
       calc(3.5rem + env(safe-area-inset-bottom, 0px))
-    ) !important;
+    );
   }
 
-  /* display:contents lets the Message flex alignment (self-end for sent)
-     work through the wrapper without breaking the Messages flex column. */
+  /* Keyboard open: the shell stays full-height (see AppShell), so the
+     keyboard covers the bottom of this scroller. Extend the inset by the
+     keyboard height so the newest messages can scroll clear of the
+     docked compose bar. */
+  :global(html.keyboard-open) .thread {
+    margin-bottom: calc(
+      var(--messagebar-height, 3.5rem) + var(--keyboard-height, 0px)
+    );
+  }
+
+  /* display:contents lets the bubble's flex alignment (self-end for sent)
+     work through the wrapper without breaking the thread flex column. */
   .fu-wrapper {
     display: contents;
   }
@@ -1407,19 +1521,11 @@
   }
 
   /* VirtualList wraps each item in a .virtual-row div which breaks
-     the Messages flex-col context. Make each row a flex-col so
-     Message's self-end (sent alignment) works within each row. */
+     the thread flex-col context. Make each row a flex-col so the
+     bubble's self-end (sent alignment) works within each row. */
   :global(.virtual-row:not(.virtual-row-grid)) {
     display: flex;
     flex-direction: column;
-  }
-
-  .mention-anchor {
-    position: fixed;
-    bottom: 3.5rem;
-    left: 0;
-    right: 0;
-    z-index: 25;
   }
 
   .empty-chat {
@@ -1432,13 +1538,13 @@
     padding: 2rem;
   }
 
-  /* --- Date separators --- */
+  /* --- Date separators (dateline anatomy) --- */
 
+  /* No padding of its own: the .thread gap and side padding place it. */
   .date-separator {
     display: flex;
     align-items: center;
-    gap: 0.75rem;
-    padding: 0.75rem 1rem 0.25rem;
+    gap: 0.625rem;
   }
 
   .date-separator::before,
@@ -1446,17 +1552,16 @@
     content: "";
     flex: 1;
     height: 1px;
-    background: var(--muted);
-    opacity: 0.3;
+    background: var(--hair);
   }
 
   .date-separator-label {
     font-size: 0.6875rem;
-    font-weight: 600;
+    font-weight: 700;
     color: var(--muted);
     white-space: nowrap;
     text-transform: uppercase;
-    letter-spacing: 0.03em;
+    letter-spacing: 0.14em;
   }
 
   /* --- Loading older messages --- */
@@ -1469,13 +1574,14 @@
     font-size: 0.75rem;
   }
 
-  /* --- Unread divider --- */
+  /* --- Unread divider (dateline anatomy in brand ink) --- */
 
+  /* The container top now sits below the pinned case header, so no
+     chrome compensation is needed when scroll-init targets the divider. */
   .unread-divider {
     display: flex;
     align-items: center;
-    gap: 0.75rem;
-    padding: 0.5rem 1rem;
+    gap: 0.625rem;
     scroll-margin-top: calc(var(--navbar-h, 0px) + var(--subnavbar-h, 0px));
   }
 
@@ -1484,17 +1590,16 @@
     content: "";
     flex: 1;
     height: 1px;
-    background: var(--brand-primary, #e53e3e);
-    opacity: 0.6;
+    background: color-mix(in srgb, var(--brand-fill) 45%, transparent);
   }
 
   .unread-divider-label {
     font-size: 0.6875rem;
-    font-weight: 600;
-    color: var(--brand-primary, #e53e3e);
+    font-weight: 700;
+    color: var(--brand-text);
     white-space: nowrap;
     text-transform: uppercase;
-    letter-spacing: 0.03em;
+    letter-spacing: 0.14em;
   }
 
   /* --- Bubble content --- */
@@ -1505,10 +1610,5 @@
     -webkit-user-select: text;
     word-break: break-word;
     touch-action: pan-y;
-  }
-
-  .bubble-time {
-    font-size: 0.625rem;
-    color: var(--muted);
   }
 </style>

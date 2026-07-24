@@ -6,9 +6,10 @@
 import { z } from "zod";
 
 const envSchema = z.object({
-  NODE_ENV: z
-    .enum(["development", "test", "production"])
-    .default("development"),
+  // No default on purpose: an unset NODE_ENV must fail startup instead of
+  // silently running with development-relaxed limits (OPRF delays, PoW
+  // threshold, bootstrap rate limit, dev-only routes).
+  NODE_ENV: z.enum(["development", "test", "production"]),
 
   // The session signing key must be set even in dev to avoid accidental plaintext sessions.
   // Generate with: node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"

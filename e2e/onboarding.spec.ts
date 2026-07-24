@@ -8,10 +8,16 @@
  * port 3000 with the correct x-org-slug header.
  */
 
-import { test, expect, type Page } from "@playwright/test";
+import { test, expect } from "./coverage-fixture";
+import { startCoverage, stopAndWriteCoverage } from "./coverage-fixture";
+import type { Page } from "@playwright/test";
 import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
-import { generateTotpCode } from "./helpers.js";
+import {
+  auditA11y,
+  dismissBackupCodesSheet,
+  generateTotpCode,
+} from "./helpers.js";
 
 const ONBOARD_SLUG = "e2e-onboard";
 const API_PORT = "3000";
@@ -82,10 +88,12 @@ test.describe.serial("Admin Setup Wizard", () => {
 
   test.beforeAll(async ({ browser }) => {
     page = await browser.newPage();
+    await startCoverage(page);
     await routeToOnboardOrg(page);
   });
 
   test.afterAll(async () => {
+    await stopAndWriteCoverage(page, "onboarding-wizard");
     await page.unrouteAll({ behavior: "ignoreErrors" });
     await page.close();
   });
@@ -99,6 +107,10 @@ test.describe.serial("Admin Setup Wizard", () => {
     ).toBeVisible({
       timeout: CRYPTO_TIMEOUT,
     });
+  });
+
+  test("wizard account step passes the axe accessibility audit", async () => {
+    await auditA11y(page);
   });
 
   // ── Step 0: Account Creation ──
@@ -203,19 +215,9 @@ test.describe.serial("Admin Setup Wizard", () => {
     const verifyBtn = page.getByRole("button", { name: /verify/i });
     await verifyBtn.click();
 
-    // Backup codes sheet appears after first enrollment
-    const backupHeading = page.getByRole("heading", { name: /backup codes/i });
-    await backupHeading.waitFor({ state: "visible", timeout: 10_000 });
-
-    // Dismiss backup codes sheet
-    for (let i = 0; i < 10; i++) {
-      await page.keyboard.press("Escape");
-      const hidden = await backupHeading
-        .waitFor({ state: "hidden", timeout: 1_000 })
-        .then(() => true)
-        .catch(() => false);
-      if (hidden) break;
-    }
+    // Backup codes appear after first enrollment; dismissal goes through
+    // the "Save your codes" confirm dialog
+    await dismissBackupCodesSheet(page);
   });
 
   test("advances past 2FA step", async () => {
@@ -248,15 +250,35 @@ test.describe.serial("Admin Setup Wizard", () => {
     await orgNameInput.waitFor({ state: "visible", timeout: 5_000 });
     await orgNameInput.fill("E2E Onboarding Org");
 
-    // Save via the sheet header "Save" button (scoped to the visible sheet)
-    const saveBtn = page
-      .locator(".k-sheet")
-      .filter({ has: page.getByPlaceholder(/my organization/i) })
-      .getByRole("button", { name: /save/i });
+    // Save via the dialog header "Save" button (scoped to the visible overlay).
+    // On desktop, ShellSheet renders as a Popup (role=dialog) not a Sheet.
+    const orgDialog = page
+      .locator("[role='dialog']")
+      .filter({ has: page.getByPlaceholder(/my organization/i) });
+    const saveBtn = orgDialog.getByRole("button", { name: /save/i });
     await saveBtn.click();
 
-    // Wait for the sheet to close (org name saved)
-    await orgNameInput.waitFor({ state: "hidden", timeout: 10_000 });
+    // Wait for the overlay to close. Konsta Popup uses translate-y-full
+    // (not display:none) so Playwright's state:"hidden" never resolves.
+    // Instead wait for the open backdrop (pointer-events are active) to
+    // gain pointer-events-none. Konsta adds the class on close animation.
+    // If save fails (org key not yet available), dismiss via Close/Escape.
+    const openBackdrop = page.locator(
+      "div.fixed.z-40.bg-black\\/50:not(.pointer-events-none)",
+    );
+    const backdropGone = await expect(openBackdrop)
+      .toHaveCount(0, { timeout: 10_000 })
+      .then(() => true)
+      .catch(() => false);
+    if (!backdropGone) {
+      const closeLink = orgDialog.getByText(/close/i);
+      if (await closeLink.isVisible({ timeout: 2_000 }).catch(() => false)) {
+        await closeLink.click();
+      } else {
+        await page.keyboard.press("Escape");
+      }
+      await expect(openBackdrop).toHaveCount(0, { timeout: 10_000 });
+    }
 
     // Click Next in navbar (should be enabled now that org name is saved)
     const nextLink = page.locator('[role="banner"]').getByText("Next");
@@ -436,7 +458,7 @@ test.describe.serial("Admin Setup Wizard", () => {
 
     // Completion screen: no more step indicator
     await expect(
-      page.getByRole("button", { name: /go to dashboard/i }),
+      page.getByRole("button", { name: /go to overview/i }),
     ).toBeVisible({ timeout: CRYPTO_TIMEOUT });
   });
 
@@ -445,14 +467,14 @@ test.describe.serial("Admin Setup Wizard", () => {
   test("shows completion screen with checklist", async () => {
     // Verify the completion heading is visible
     const dashboardBtn = page.getByRole("button", {
-      name: /go to dashboard/i,
+      name: /go to overview/i,
     });
     await expect(dashboardBtn).toBeVisible();
   });
 
   test("navigates to dashboard from completion", async () => {
     const dashboardBtn = page.getByRole("button", {
-      name: /go to dashboard/i,
+      name: /go to overview/i,
     });
     await dashboardBtn.click();
 

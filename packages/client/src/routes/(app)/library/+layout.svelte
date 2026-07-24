@@ -27,6 +27,7 @@
     setScrollContainer,
   } from "$lib/shell/context.js";
   import EmptyState from "$lib/components/EmptyState.svelte";
+  import SplitView from "$lib/shell/SplitView.svelte";
   import SplitArticlePane from "./SplitArticlePane.svelte";
   import { setLibraryLayoutCtx } from "./library-layout-ctx.js";
 
@@ -59,18 +60,23 @@
     }
   }
 
+  function openArticleFull(articleId: string): void {
+    void goto(resolve(`/library/${articleId}?full=1`));
+  }
+
   function closeDetail(): void {
     replaceState("", {});
   }
 
   function expandDetail(): void {
     if (selectedArticleId != null && selectedArticleId !== "") {
-      void goto(resolve(`/library/${selectedArticleId}`));
+      void goto(resolve(`/library/${selectedArticleId}?full=1`));
     }
   }
 
   setLibraryLayoutCtx({
     openArticle,
+    openArticleFull,
     selectedArticleId: () => selectedArticleId,
   });
 
@@ -86,18 +92,11 @@
 </script>
 
 {#if isSplitView}
-  <div class="split-view-container">
-    <div class="split-list-pane" bind:this={leftPaneEl}>
+  <SplitView subnavbar bind:leftRef={leftPaneEl}>
+    {#snippet left()}
       {@render children()}
-    </div>
-
-    <div
-      class="split-divider"
-      role="separator"
-      aria-orientation="vertical"
-    ></div>
-
-    <div class="split-detail-pane">
+    {/snippet}
+    {#snippet right()}
       {#if selectedArticleId}
         {#key selectedArticleId}
           <SplitArticlePane
@@ -114,55 +113,13 @@
           />
         </div>
       {/if}
-    </div>
-  </div>
+    {/snippet}
+  </SplitView>
 {:else}
   {@render children()}
 {/if}
 
 <style>
-  :global(.main-content) > .split-view-container {
-    max-width: none;
-    margin-inline: 0;
-    padding-inline: 0;
-  }
-
-  :global(.main-content.has-subnavbar) > .split-view-container {
-    margin-top: calc(-1 * var(--subnavbar-h, 0px));
-  }
-
-  .split-view-container {
-    display: flex;
-    height: calc(100% + var(--subnavbar-h, 0px));
-    min-height: 0;
-    overflow: hidden;
-    width: 100%;
-  }
-
-  .split-list-pane {
-    flex: 1;
-    min-width: 0;
-    overflow-y: auto;
-    overflow-x: hidden;
-    padding-top: var(--subnavbar-h, 0px);
-  }
-
-  .split-divider {
-    width: 1px;
-    flex-shrink: 0;
-    background: var(--divider);
-  }
-
-  .split-detail-pane {
-    width: var(--split-detail-width, 480px);
-    flex-shrink: 0;
-    display: flex;
-    flex-direction: column;
-    height: 100%;
-    overflow: hidden;
-    padding-top: var(--subnavbar-h, 0px);
-  }
-
   .split-placeholder {
     flex: 1;
     display: flex;

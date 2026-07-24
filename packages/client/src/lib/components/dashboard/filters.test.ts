@@ -6,10 +6,11 @@
 
 import { describe, it, expect } from "vitest";
 import {
-  filterNeedsAttention,
+  isNeedsAttention,
   filterMyOpen,
   filterUnassigned,
   filterOnHold,
+  bucketTickets,
   type DashboardTicket,
 } from "./filters.js";
 
@@ -27,34 +28,34 @@ function ticket(overrides: Partial<DashboardTicket> = {}): DashboardTicket {
   };
 }
 
-describe("filterNeedsAttention", () => {
-  it("includes urgent unassigned tickets", () => {
+describe("isNeedsAttention", () => {
+  const noneUnread = (): boolean => false;
+  const allUnread = (): boolean => true;
+
+  it("includes urgent unassigned tickets regardless of read state", () => {
     const t = ticket({ priority: "urgent", assignedTo: null });
-    expect(filterNeedsAttention([t], USER_ID)).toEqual([t]);
+    expect(isNeedsAttention(t, USER_ID, noneUnread)).toBe(true);
   });
 
   it("includes high-priority unassigned tickets", () => {
     const t = ticket({ priority: "high", assignedTo: null });
-    expect(filterNeedsAttention([t], USER_ID)).toEqual([t]);
+    expect(isNeedsAttention(t, USER_ID, noneUnread)).toBe(true);
   });
 
-  it("includes own high-priority tickets with follow-ups", () => {
-    const t = ticket({
-      priority: "high",
-      assignedTo: USER_ID,
-      followUpCount: 2,
-    });
-    expect(filterNeedsAttention([t], USER_ID)).toEqual([t]);
+  it("includes own high-priority tickets only when unread", () => {
+    const t = ticket({ priority: "high", assignedTo: USER_ID });
+    expect(isNeedsAttention(t, USER_ID, allUnread)).toBe(true);
+    expect(isNeedsAttention(t, USER_ID, noneUnread)).toBe(false);
   });
 
   it("excludes normal priority unassigned tickets", () => {
     const t = ticket({ priority: "normal", assignedTo: null });
-    expect(filterNeedsAttention([t], USER_ID)).toEqual([]);
+    expect(isNeedsAttention(t, USER_ID, allUnread)).toBe(false);
   });
 
   it("excludes on-hold tickets even if urgent", () => {
     const t = ticket({ priority: "urgent", assignedTo: null, onHold: true });
-    expect(filterNeedsAttention([t], USER_ID)).toEqual([]);
+    expect(isNeedsAttention(t, USER_ID, allUnread)).toBe(false);
   });
 
   it("excludes closed tickets even if urgent", () => {
@@ -63,29 +64,12 @@ describe("filterNeedsAttention", () => {
       assignedTo: null,
       status: "closed",
     });
-    expect(filterNeedsAttention([t], USER_ID)).toEqual([]);
+    expect(isNeedsAttention(t, USER_ID, allUnread)).toBe(false);
   });
 
-  it("excludes high-priority own tickets without follow-ups", () => {
-    const t = ticket({
-      priority: "high",
-      assignedTo: USER_ID,
-      followUpCount: 0,
-    });
-    expect(filterNeedsAttention([t], USER_ID)).toEqual([]);
-  });
-
-  it("excludes urgent tickets assigned to another user", () => {
-    const t = ticket({
-      priority: "urgent",
-      assignedTo: "other-user",
-      followUpCount: 0,
-    });
-    expect(filterNeedsAttention([t], USER_ID)).toEqual([]);
-  });
-
-  it("returns empty for empty input", () => {
-    expect(filterNeedsAttention([], USER_ID)).toEqual([]);
+  it("excludes urgent tickets assigned to another user even when unread", () => {
+    const t = ticket({ priority: "urgent", assignedTo: "other-user" });
+    expect(isNeedsAttention(t, USER_ID, allUnread)).toBe(false);
   });
 });
 
@@ -142,5 +126,69 @@ describe("filterOnHold", () => {
   it("excludes non-hold tickets", () => {
     const t = ticket({ onHold: false });
     expect(filterOnHold([t])).toEqual([]);
+  });
+});
+
+describe("bucketTickets", () => {
+  const noneUnread = (): boolean => false;
+
+  it("routes on-hold tickets to onHold only", () => {
+    const t = ticket({ onHold: true, assignedTo: USER_ID });
+    const b = bucketTickets([t], USER_ID, noneUnread);
+    expect(b.onHold).toEqual([t]);
+    expect(b.myOpen).toEqual([]);
+    expect(b.unassigned).toEqual([]);
+    expect(b.needsAttention).toEqual([]);
+  });
+
+  it("buckets an open unassigned ticket into unassigned", () => {
+    const t = ticket({ assignedTo: null });
+    const b = bucketTickets([t], USER_ID, noneUnread);
+    expect(b.unassigned).toEqual([t]);
+    expect(b.myOpen).toEqual([]);
+  });
+
+  it("buckets an open ticket assigned to the current user into myOpen", () => {
+    const t = ticket({ assignedTo: USER_ID });
+    const b = bucketTickets([t], USER_ID, noneUnread);
+    expect(b.myOpen).toEqual([t]);
+  });
+
+  it("adds high-priority unassigned tickets to needsAttention regardless of read state", () => {
+    const t = ticket({ priority: "urgent", assignedTo: null });
+    const b = bucketTickets([t], USER_ID, noneUnread);
+    expect(b.needsAttention).toEqual([t]);
+  });
+
+  it("adds a high-priority own ticket to needsAttention only when it is unread", () => {
+    const t = ticket({ priority: "high", assignedTo: USER_ID });
+
+    const surfaced = bucketTickets([t], USER_ID, (id) => id === t.id);
+    expect(surfaced.needsAttention).toEqual([t]);
+
+    const quiet = bucketTickets([t], USER_ID, noneUnread);
+    expect(quiet.needsAttention).toEqual([]);
+  });
+
+  it("keys the mine+high arm off read state, not followUpCount", () => {
+    // The old heuristic surfaced any own high-priority ticket with
+    // follow-ups; the new one requires genuinely unread replies, so a read
+    // ticket with a nonzero follow-up count must stay out of needsAttention.
+    const t = ticket({
+      priority: "high",
+      assignedTo: USER_ID,
+      followUpCount: 5,
+    });
+    const b = bucketTickets([t], USER_ID, noneUnread);
+    expect(b.needsAttention).toEqual([]);
+  });
+
+  it("skips closed tickets across every bucket", () => {
+    const t = ticket({ status: "closed", assignedTo: USER_ID });
+    const b = bucketTickets([t], USER_ID, noneUnread);
+    expect(b.myOpen).toEqual([]);
+    expect(b.unassigned).toEqual([]);
+    expect(b.needsAttention).toEqual([]);
+    expect(b.onHold).toEqual([]);
   });
 });

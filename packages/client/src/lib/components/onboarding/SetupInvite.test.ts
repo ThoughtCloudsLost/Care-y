@@ -84,7 +84,12 @@ describe("SetupInvite", () => {
   });
 
   it("passes adminUserId to OnboardingCryptoBridge", () => {
-    const { container } = render(SetupInvite, { props: defaultProps });
-    expect(container.innerHTML).toBeTruthy();
+    const { getByTestId } = render(SetupInvite, { props: defaultProps });
+
+    // The stub bridge renders the prop it received, making the wiring
+    // of the admin's id into the crypto bridge observable.
+    expect(
+      getByTestId("stub-crypto-bridge").getAttribute("data-admin-user-id"),
+    ).toBe("admin-1");
   });
 });

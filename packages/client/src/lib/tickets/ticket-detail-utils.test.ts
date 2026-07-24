@@ -88,6 +88,32 @@ describe("searchFollowUps", () => {
     const result = searchFollowUps([], cache, "test", ERROR, makeFuzzy);
     expect(result).toEqual([]);
   });
+
+  it("handles fuzzy function returning out-of-bounds indices gracefully", () => {
+    const fups = [{ id: "a" }];
+    const cache = makeCache({ a: "text" });
+    // fuzzy returns an index beyond searchable array length
+    const brokenFuzzy = () => [{ index: 0 }, { index: 99 }];
+    const result = searchFollowUps(fups, cache, "text", ERROR, brokenFuzzy);
+    // index 0 maps to "a", index 99 maps to nothing (entry is undefined)
+    expect(result).toEqual(["a"]);
+  });
+
+  it("preserves result ordering by index", () => {
+    const fups = [{ id: "x" }, { id: "y" }, { id: "z" }];
+    const cache = makeCache({ x: "alpha", y: "beta", z: "alpha beta" });
+    // fuzzy returns indices in reverse order
+    const reverseFuzzy = () => [{ index: 2 }, { index: 0 }];
+    const result = searchFollowUps(fups, cache, "alpha", ERROR, reverseFuzzy);
+    expect(result).toEqual(["x", "z"]);
+  });
+
+  it("filters all entries when every plaintext is the error sentinel", () => {
+    const fups = [{ id: "a" }, { id: "b" }];
+    const cache = makeCache({ a: ERROR, b: ERROR });
+    const result = searchFollowUps(fups, cache, "anything", ERROR, makeFuzzy);
+    expect(result).toEqual([]);
+  });
 });
 
 describe("lookupCachedFollowUpCount", () => {
@@ -135,6 +161,49 @@ describe("lookupCachedFollowUpCount", () => {
       }),
     ];
     expect(lookupCachedFollowUpCount(entries, "t-2")).toBe(7);
+  });
+
+  it("skips entries with data but no pages property", () => {
+    const entries: [unknown, CachedTicketPage | undefined][] = [
+      [["tickets", "list"], {} as CachedTicketPage],
+    ];
+    expect(lookupCachedFollowUpCount(entries, "t-1")).toBeUndefined();
+  });
+
+  it("searches across multiple cache entries", () => {
+    const entries = [
+      entry({ pages: [[{ id: "t-1", followUpCount: 2 }]] }),
+      entry({ pages: [[{ id: "t-2", followUpCount: 9 }]] }),
+    ];
+    expect(lookupCachedFollowUpCount(entries, "t-2")).toBe(9);
+  });
+
+  it("returns first match when ticket appears in multiple entries", () => {
+    const entries = [
+      entry({ pages: [[{ id: "t-1", followUpCount: 3 }]] }),
+      entry({ pages: [[{ id: "t-1", followUpCount: 5 }]] }),
+    ];
+    expect(lookupCachedFollowUpCount(entries, "t-1")).toBe(3);
+  });
+
+  it("returns undefined when pages array is empty", () => {
+    const entries = [entry({ pages: [] })];
+    expect(lookupCachedFollowUpCount(entries, "t-1")).toBeUndefined();
+  });
+
+  it("returns undefined when page contains no matching ticket", () => {
+    const entries = [
+      entry({
+        pages: [
+          [
+            { id: "t-1", followUpCount: 1 },
+            { id: "t-2", followUpCount: 2 },
+          ],
+          [{ id: "t-3", followUpCount: 3 }],
+        ],
+      }),
+    ];
+    expect(lookupCachedFollowUpCount(entries, "t-99")).toBeUndefined();
   });
 });
 
@@ -188,5 +257,29 @@ describe("insertMentionAtCursor", () => {
   it("handles cursor at start with no @", () => {
     const result = insertMentionAtCursor("hello", 0, "Alice");
     expect(result).toBeNull();
+  });
+
+  it("returns null for empty string", () => {
+    const result = insertMentionAtCursor("", 0, "Alice");
+    expect(result).toBeNull();
+  });
+
+  it("handles cursor at end of text with @ elsewhere", () => {
+    const text = "Hey @partial and more";
+    const result = insertMentionAtCursor(text, text.length, "Complete");
+    // lastIndexOf("@") finds the @ at index 4
+    expect(result).toEqual({
+      text: "Hey @Complete ",
+      cursor: 14,
+    });
+  });
+
+  it("computes correct cursor position for multi-byte display names", () => {
+    const result = insertMentionAtCursor("@", 1, "SomeLongName");
+    expect(result).toEqual({
+      text: "@SomeLongName ",
+      cursor: 14,
+    });
+    expect(result!.cursor).toBe("@SomeLongName ".length);
   });
 });

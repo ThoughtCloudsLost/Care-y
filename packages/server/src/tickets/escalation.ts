@@ -83,8 +83,9 @@ export async function escalateTenantTickets(
       .values({
         ticket_id: ticket.id,
         source: "system",
-        type: "priority_change",
+        type: "priority_changed",
         encrypted_content: Buffer.alloc(0),
+        event_params: { from: ticket.priority, to: newPriority },
       })
       .execute();
 

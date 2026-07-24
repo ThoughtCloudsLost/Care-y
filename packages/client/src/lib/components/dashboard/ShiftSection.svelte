@@ -1,9 +1,8 @@
 <script lang="ts">
   import { SvelteDate } from "svelte/reactivity";
-  import { CalendarDays } from "@lucide/svelte";
   import * as m from "$lib/paraglide/messages.js";
-  import CollapsibleSection from "./CollapsibleSection.svelte";
   import InlineSkeleton from "$lib/components/InlineSkeleton.svelte";
+  import { toastStore } from "$lib/stores/toast.svelte.js";
 
   interface Volunteer {
     initials: string;
@@ -19,16 +18,11 @@
   interface ShiftSectionProps {
     shift: ShiftInfo | null;
     loading?: boolean;
-    expanded: boolean;
-    ontoggle: () => void;
+    /** Open tickets assigned to the viewer (the myOpen bucket length). */
+    myOpenCount: number;
   }
 
-  let {
-    shift,
-    loading = false,
-    expanded,
-    ontoggle,
-  }: ShiftSectionProps = $props();
+  let { shift, loading = false, myOpenCount }: ShiftSectionProps = $props();
 
   // Reactive countdown that ticks every minute.
   const now = new SvelteDate();
@@ -95,83 +89,146 @@
       end,
     });
   });
+
+  const openWithYou = $derived(
+    myOpenCount === 1
+      ? m.dashboard_shift_open_with_you_one({ count: myOpenCount })
+      : m.dashboard_shift_open_with_you_other({ count: myOpenCount }),
+  );
+
+  function handleEndShift(): void {
+    // No shift backend yet; announce the deferral rather than faking a write.
+    toastStore.show(m.feature_coming_soon());
+  }
 </script>
 
-<CollapsibleSection
-  heading={m.dashboard_shift_heading()}
-  icon={CalendarDays}
-  iconColor="var(--brand-accent)"
-  {expanded}
-  {ontoggle}
-  {loading}
->
-  {#if loading}
-    <div class="shift-content skeleton-pulse">
-      <div class="shift-time">
-        <InlineSkeleton width="18ch" />
-      </div>
-      <div class="shift-volunteers">
-        {#each [1, 2, 3] as n (n)}
-          <span class="vol-chip">
-            <InlineSkeleton width="2ch" />
-          </span>
-        {/each}
-      </div>
-    </div>
-  {:else}
-    <div class="shift-content">
-      <div class="shift-time">
-        <span>{timeDisplay}</span>
-      </div>
-
-      {#if shift && shift.volunteers.length > 0}
-        <div class="shift-volunteers">
-          {#each shift.volunteers as vol, i (`${vol.initials}${String(i)}`)}
-            <span class="vol-chip" class:vol-chip-you={vol.isCurrentUser}>
-              {vol.initials}
-            </span>
-          {/each}
-        </div>
+<section class="shift" aria-label={m.dashboard_shift_heading()}>
+  <div class="shift-body">
+    <span class="shift-line">
+      <span class="dot" aria-hidden="true"></span>
+      {#if loading}
+        <span class="t"><InlineSkeleton width="22ch" /></span>
+      {:else}
+        <span class="t num">{timeDisplay}</span>
       {/if}
-    </div>
-  {/if}
-</CollapsibleSection>
+    </span>
+    {#if !loading}
+      <span class="t t-open num">{openWithYou}</span>
+    {/if}
+    {#if !loading && shift && shift.volunteers.length > 0}
+      <span
+        class="chips"
+        aria-label={m.dashboard_shift_volunteers({
+          count: shift.volunteersOnShift,
+        })}
+      >
+        {#each shift.volunteers as vol, i (`${vol.initials}${String(i)}`)}
+          <span
+            class="chip"
+            class:chip-you={vol.isCurrentUser}
+            aria-hidden="true">{vol.initials}</span
+          >
+        {/each}
+      </span>
+    {/if}
+  </div>
+  <button type="button" class="end" disabled={loading} onclick={handleEndShift}>
+    {m.dashboard_shift_end()}
+  </button>
+</section>
 
 <style>
-  .shift-content {
+  /* End shift centers against the full band height; the body stacks
+     the status line, the open-with-you line, and the chips. */
+  .shift {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin: var(--space-md) var(--page-pad-x) 0;
+    padding: 11px 14px;
+    border: 1px solid var(--hair);
+    border-radius: 10px;
+    background: var(--raised);
+  }
+
+  .shift-body {
     display: flex;
     flex-direction: column;
-    gap: var(--space-lg);
-    padding: 0 var(--page-pad-x) var(--card-pad-y);
-    font-size: var(--text-base);
+    align-items: flex-start;
+    gap: 6px;
+    flex: 1;
+    min-width: 0;
   }
 
-  .shift-time {
-    color: var(--muted);
-    font-size: var(--text-base);
-  }
-
-  .shift-volunteers {
-    display: flex;
-    flex-wrap: wrap;
-    gap: var(--space-md);
-  }
-
-  .vol-chip {
+  .shift-line {
     display: inline-flex;
     align-items: center;
-    gap: 0.25rem;
-    padding: 0.1875rem 0.5rem;
+    gap: 10px;
+  }
+
+  .dot {
+    width: 8px;
+    height: 8px;
+    flex-shrink: 0;
+    border-radius: 50%;
+    background: var(--brand-fill);
+  }
+
+  .t {
+    min-width: 0;
+    font-size: var(--text-base);
+    color: var(--ink-2);
+  }
+
+  .num {
+    font-variant-numeric: tabular-nums;
+  }
+
+  .chips {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    flex-shrink: 0;
+  }
+
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 22px;
+    height: 22px;
+    padding: 0 6px;
     border-radius: 999px;
-    background: var(--surface-1);
-    font-size: var(--text-sm);
+    background: var(--hair);
+    font-size: 0.6875rem;
     font-weight: 500;
     color: var(--muted);
     white-space: nowrap;
   }
 
-  .vol-chip-you {
+  .chip-you {
+    background: var(--hair-2);
     color: var(--ink);
-    background: color-mix(in srgb, var(--brand-accent) 15%, var(--surface-1));
+    font-weight: 600;
+  }
+
+  .end {
+    margin-left: auto;
+    flex-shrink: 0;
+    appearance: none;
+    background: none;
+    border: none;
+    padding: 0;
+    font-family: inherit;
+    font-size: var(--text-sm);
+    font-weight: 700;
+    color: var(--brand-text);
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .end:disabled {
+    opacity: 0.5;
+    cursor: default;
   }
 </style>

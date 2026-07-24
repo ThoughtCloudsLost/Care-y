@@ -70,6 +70,7 @@
     onsearchscrollcomplete?: () => void;
     /** Resolve a note type's icon by noteTypeId (null = use default). Returns the LucideIcon component or undefined. */
     resolveNoteIcon?: (noteTypeId: string | null) => LucideIcon | undefined;
+    resolveUserName?: (userId: string) => string;
     children: Snippet;
   }
 
@@ -85,6 +86,7 @@
     searchScrollRequested = false,
     onsearchscrollcomplete,
     resolveNoteIcon,
+    resolveUserName,
     children,
   }: FollowUpTimelineProps = $props();
 
@@ -117,7 +119,7 @@
 
   function landmarkLabel(item: TimelineItem): string {
     if (item.source === "system") {
-      return systemEventLabel(item.type);
+      return systemEventLabel(item.type, item.eventParams, resolveUserName);
     }
 
     if (item.type === "internal_note") {
@@ -400,7 +402,9 @@
 </script>
 
 {#snippet expandedBubbles(records: ClusterRecord[] | undefined)}
-  <div class="cluster-bubbles">
+  <!-- svelte-ignore a11y_no_static_element_interactions -->
+  <!-- svelte-ignore a11y_click_events_have_key_events -->
+  <div class="cluster-bubbles" onclick={(e) => e.stopPropagation()}>
     {#if records !== undefined}
       {#each records as rec (rec.id)}
         {#if renderExpanded}
@@ -722,7 +726,7 @@
   }
 
   :global(.cluster-bubble-tap:focus-visible) {
-    outline: 2px solid var(--brand-primary, #7c3aed);
+    outline: 2px solid var(--brand-text);
     outline-offset: -2px;
     border-radius: 0.5rem;
   }

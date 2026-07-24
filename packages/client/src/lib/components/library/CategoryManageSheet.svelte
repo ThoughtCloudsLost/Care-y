@@ -146,14 +146,12 @@
   >
   <List nested>
     <ListInput
-      outline
       label={m.library_category_name()}
       inputId="cat-name-input"
       type="text"
       bind:value={editName}
     />
     <ListInput
-      outline
       label={m.library_category_description()}
       inputId="cat-desc-input"
       type="textarea"
@@ -255,12 +253,16 @@
     border: none;
     border-radius: 0.5rem;
     background: none;
-    color: var(--color-red-500);
+    color: var(--danger, var(--color-red-500));
     cursor: pointer;
   }
 
   .delete-inline-btn:active {
-    background: color-mix(in srgb, var(--color-red-500) 10%, transparent);
+    background: color-mix(
+      in srgb,
+      var(--danger, var(--color-red-500)) 10%,
+      transparent
+    );
   }
 
   .add-row {

@@ -24,6 +24,7 @@ import { BookOpen } from "@lucide/svelte";
 import { cacheRegistry } from "$lib/crypto/cache-registry.js";
 import { fuzzySearch } from "../fuzzy.js";
 import * as m from "$lib/paraglide/messages.js";
+import { withTerms } from "$lib/terminology/with-terms.js";
 import KBResultItem from "$lib/components/search/KBResultItem.svelte";
 
 /** Display-ready data passed to KBResultItem (mirrors ArticleCard props). */
@@ -139,11 +140,32 @@ export function createKbSearchProvider(
 
   const provider: SearchProvider<KBSearchData> = {
     id: "kb",
-    label: () => m.search_section_kb(),
+    label: () => m.search_section_kb(withTerms()),
     icon: BookOpen,
     renderMode: "card-strip",
     showAllHref: (query) => `/library?q=${encodeURIComponent(query)}`,
     getResultHref: (id) => `/library/${id}`,
+    emptyText: (query: string) => m.search_empty_articles({ query }),
+    coverage: (c) => {
+      if (c.fullSearch === "searching") {
+        return m.search_coverage_searching({
+          searched: c.fsSearched,
+          total: c.fsTotal,
+        });
+      }
+      if (c.fullSearch === "done") {
+        return m.search_coverage_articles_deep({ total: c.searched });
+      }
+      if (c.searched === 0 && c.total == null) return undefined;
+      if (c.total != null && c.total > c.searched) {
+        return m.search_coverage_articles({
+          searched: c.searched,
+          total: c.total,
+        });
+      }
+      return m.search_coverage_articles_all({ total: c.searched });
+    },
+    fullSearchLabel: () => m.search_fetch_more_articles(),
 
     search(query) {
       if (!loaded && !loading) void loadAll();
@@ -190,6 +212,15 @@ export function createKbSearchProvider(
     },
 
     ResultItem: KBResultItem,
+
+    resolveById(id: string): SearchResult<KBSearchData> | undefined {
+      // Same lazy load as search(): the first call kicks loadAll and the
+      // $derived caller re-evaluates as decrypted articles land in cache.
+      if (!loaded && !loading) void loadAll();
+      const cached = cache.get(id);
+      if (cached === undefined) return undefined;
+      return { id, data: buildSearchData(deps, cached) };
+    },
 
     getContentMatchIds(): ReadonlySet<string> {
       return contentMatchIds;

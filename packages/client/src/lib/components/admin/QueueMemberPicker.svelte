@@ -4,6 +4,7 @@
   import { queueKeys } from "$lib/query/keys.js";
   import * as m from "$lib/paraglide/messages.js";
   import { withTerms } from "$lib/terminology/with-terms.js";
+  import { getCollator } from "$lib/utils/collator.js";
   import { trpc } from "$lib/trpc/index.js";
   import { createVolunteersQuery } from "$lib/tickets/queries.js";
   import { getOrgDecryptCache } from "$lib/crypto/context.js";
@@ -71,7 +72,7 @@
     results.sort((a, b) => {
       const nameA = a.displayName ?? "\uffff";
       const nameB = b.displayName ?? "\uffff";
-      return nameA.localeCompare(nameB);
+      return getCollator().compare(nameA, nameB);
     });
 
     return results;

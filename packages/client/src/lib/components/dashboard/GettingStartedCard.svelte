@@ -6,7 +6,6 @@
 -->
 <script lang="ts">
   import { List, ListItem } from "konsta/svelte";
-  import { goto } from "$app/navigation";
   import {
     createQuery,
     createMutation,
@@ -32,12 +31,22 @@
   import { haptic } from "$lib/utils/haptic.js";
   import { CHECKLIST_ITEMS } from "$lib/onboarding/checklist-items.js";
 
+  /** Checklist destinations as route literals so the host can resolve() them. */
+  type ChecklistHref =
+    | "/admin/people"
+    | "/admin/organization"
+    | "/admin/communications"
+    | "/library"
+    | "/";
+
   interface Props {
     expanded: boolean;
     ontoggle: () => void;
+    /** Content components never navigate; the route wires this to goto. */
+    onnavigate: (path: ChecklistHref) => void;
   }
 
-  let { expanded, ontoggle }: Props = $props();
+  let { expanded, ontoggle, onnavigate }: Props = $props();
 
   const queryClient = useQueryClient();
 
@@ -93,13 +102,13 @@
     retention: ShieldCheck,
   };
 
-  const HREFS: Record<string, string> = {
+  const HREFS: Record<string, ChecklistHref> = {
     invite: "/admin/people",
     branding: "/admin/organization",
     greetings: "/admin/communications",
     sms: "/admin/communications",
     presets: "/admin/communications",
-    kb: "/kb",
+    kb: "/library",
     queues: "/admin/communications",
     retention: "/admin/organization",
   };
@@ -131,10 +140,9 @@
     dismissMut.mutate(undefined);
   }
 
-  function handleItemTap(href: string): void {
+  function handleItemTap(href: ChecklistHref): void {
     haptic();
-    // eslint-disable-next-line svelte/no-navigation-without-resolve -- hrefs are hardcoded valid routes in itemMeta
-    void goto(href);
+    onnavigate(href);
   }
 </script>
 
@@ -143,7 +151,7 @@
     heading={m.getting_started_heading()}
     count={totalCount - doneCount}
     icon={Rocket}
-    iconColor="var(--brand-accent, #f59e0b)"
+    iconColor="var(--brand-accent)"
     {expanded}
     {ontoggle}
   >
@@ -197,7 +205,10 @@
     border-radius: 50%;
     display: flex;
     align-items: center;
+    justify-content: center;
     margin-left: auto;
+    min-width: 24px;
+    min-height: 24px;
   }
 
   .dismiss-btn:disabled {
@@ -206,11 +217,11 @@
   }
 
   :global(.check-done) {
-    color: var(--brand-primary, #22c55e);
+    color: var(--brand-accent);
   }
 
   :global(.check-pending) {
-    color: var(--muted, #999);
+    color: var(--muted);
   }
 
   .progress-bar {

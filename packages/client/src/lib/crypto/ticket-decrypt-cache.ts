@@ -8,7 +8,7 @@
  * to the base class decrypt().
  */
 
-import { followupSlot } from "@care-y/crypto";
+import { cursorSlot, followupSlot } from "@care-y/crypto";
 import {
   AsyncDecryptCache,
   DECRYPT_ERROR_SENTINEL,
@@ -72,6 +72,42 @@ export class TicketDecryptCache extends AsyncDecryptCache {
   }
 
   /**
+   * Request decryption of a ticket description. Same trigger-and-cache
+   * pattern as decryptTitle; the "description" slot is a direct ticket
+   * field slot like "title". Cached under desc:<ticketId> so it never
+   * collides with the title entry.
+   */
+  decryptDescription(
+    ticketId: string,
+    keyWrap: TicketKeyWrap | null,
+    encryptedDescription: SerializedBuffer | string,
+  ): string | undefined {
+    const cacheKey = `desc:${ticketId}`;
+    if (keyWrap === null) {
+      if (!this.has(cacheKey)) {
+        queueMicrotask(() => {
+          if (!this.has(cacheKey)) {
+            this.setError(cacheKey);
+          }
+        });
+      }
+      return DECRYPT_ERROR_SENTINEL;
+    }
+
+    const ciphertext = serializedBufferToBase64(encryptedDescription);
+
+    return this.decrypt(
+      cacheKey,
+      ticketId,
+      "description",
+      keyWrap.ephemeralPoint,
+      keyWrap.nonce,
+      keyWrap.wrappedKey,
+      ciphertext,
+    );
+  }
+
+  /**
    * Request decryption of a follow-up's encrypted content using the
    * ticket's key wrap. Same trigger-and-cache pattern as decryptTitle.
    * The Worker reuses the ticket key cached from title decryption.
@@ -95,5 +131,54 @@ export class TicketDecryptCache extends AsyncDecryptCache {
 
   clearFollowUps(): void {
     this.deleteByPrefix("fu:");
+  }
+
+  /**
+   * Request decryption of a per-user read cursor blob for the tickets
+   * list. Returns the decrypted JSON payload string ({"readUpTo": ...}),
+   * undefined while pending, or the error sentinel when the blob is a
+   * first-open dummy row or otherwise fails AEAD (both read as "no real
+   * cursor" and therefore not unread).
+   *
+   * The cache key carries a ciphertext prefix so a cursor update (new
+   * random ciphertext) re-decrypts instead of serving a stale readUpTo.
+   * The bridge call mirrors the detail composable's exactly: per-user
+   * AAD slot, the row's own key wrap, and the ticket id as the Worker
+   * key-cache id so cursor versions share one unwrapped ticket key.
+   *
+   * Lifecycle: a successful read-cursor flush evicts the ticket's
+   * cursor: prefix (detail orchestrator) so versions do not pile up as
+   * the user reads. Residual growth from sweep refetches of other-device
+   * updates remains, bounded by the user's open-ticket count; accepted.
+   */
+  decryptReadCursor(
+    ticketId: string,
+    userId: string,
+    keyWrap: TicketKeyWrap | null,
+    encryptedReadCursor: SerializedBuffer | string,
+  ): string | undefined {
+    const ciphertext = serializedBufferToBase64(encryptedReadCursor);
+    const cacheKey = `cursor:${ticketId}:${ciphertext.slice(0, 24)}`;
+    if (keyWrap === null) {
+      if (!this.has(cacheKey)) {
+        queueMicrotask(() => {
+          if (!this.has(cacheKey)) {
+            this.setError(cacheKey);
+          }
+        });
+      }
+      return DECRYPT_ERROR_SENTINEL;
+    }
+
+    return this.decrypt(
+      cacheKey,
+      ticketId,
+      cursorSlot(userId),
+      keyWrap.ephemeralPoint,
+      keyWrap.nonce,
+      keyWrap.wrappedKey,
+      ciphertext,
+      ticketId,
+    );
   }
 }

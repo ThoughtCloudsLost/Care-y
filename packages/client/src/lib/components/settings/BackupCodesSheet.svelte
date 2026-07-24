@@ -1,12 +1,15 @@
 <script lang="ts">
-  import { Preloader, Button } from "konsta/svelte";
+  import { Preloader, Button, DialogButton } from "konsta/svelte";
   import { Copy, Check } from "@lucide/svelte";
+  import Register from "$lib/components/Register.svelte";
+  import FieldError from "$lib/components/FieldError.svelte";
   import * as m from "$lib/paraglide/messages.js";
   import { trpc } from "$lib/trpc/index.js";
   import { toastStore } from "$lib/stores/toast.svelte.js";
   import { announceToLiveRegion } from "$lib/utils/announce.js";
   import { haptic } from "$lib/utils/haptic.js";
   import ShellSheet from "$lib/shell/ShellSheet.svelte";
+  import ShellDialog from "$lib/shell/ShellDialog.svelte";
 
   interface BackupCodesSheetProps {
     readonly opened: boolean;
@@ -26,17 +29,36 @@
   let wasOpen = $state(false);
   let copied = $state(false);
   let copyTimeout: ReturnType<typeof setTimeout> | undefined;
+  let confirmOpen = $state(false);
 
   $effect(() => {
     if (opened && !wasOpen) {
       codes = [];
       error = "";
       copied = false;
+      confirmOpen = false;
       clearTimeout(copyTimeout);
       void fetchCodes();
     }
     wasOpen = opened;
   });
+
+  // The codes are shown exactly once; Escape, swipe, and backdrop taps
+  // used to dismiss the sheet instantly and forever. Every dismissal
+  // path funnels through here so leaving requires an explicit
+  // confirmation while codes are on screen.
+  function requestDismiss(): void {
+    if (codes.length > 0 && error === "") {
+      confirmOpen = true;
+      return;
+    }
+    ondismiss();
+  }
+
+  function confirmSaved(): void {
+    confirmOpen = false;
+    ondismiss();
+  }
 
   async function fetchCodes(): Promise<void> {
     loading = true;
@@ -71,7 +93,7 @@
 
 <ShellSheet
   {opened}
-  {ondismiss}
+  ondismiss={requestDismiss}
   ariaLabel={m.twofa_backup_codes_title()}
   title={m.twofa_backup_codes_title()}
 >
@@ -81,17 +103,19 @@
         <Preloader class="w-6 h-6" />
       </div>
     {:else if error !== ""}
-      <p class="error-text" role="alert">{error}</p>
+      <div class="error-slot">
+        <FieldError message={error} />
+      </div>
     {:else if codes.length > 0}
       {#if regenerating}
-        <div class="warning-banner regen-warning" role="alert">
-          <p>{m.twofa_backup_codes_regenerated()}</p>
-        </div>
+        <Register kind="warning" role="alert">
+          {m.twofa_backup_codes_regenerated()}
+        </Register>
       {/if}
 
-      <div class="warning-banner" role="alert">
-        <p>{m.twofa_backup_codes_warning()}</p>
-      </div>
+      <Register kind="warning" role="alert">
+        {m.twofa_backup_codes_warning()}
+      </Register>
 
       <div
         class="codes-grid"
@@ -127,6 +151,24 @@
   </div>
 </ShellSheet>
 
+<ShellDialog
+  opened={confirmOpen}
+  ondismiss={() => (confirmOpen = false)}
+  title={m.twofa_backup_codes_confirm_title()}
+>
+  {#snippet content()}
+    <p>{m.twofa_backup_codes_confirm_text()}</p>
+  {/snippet}
+  {#snippet buttons()}
+    <DialogButton onclick={() => (confirmOpen = false)}>
+      {m.twofa_backup_codes_confirm_back()}
+    </DialogButton>
+    <DialogButton strong onclick={confirmSaved}>
+      {m.twofa_backup_codes_confirm_saved()}
+    </DialogButton>
+  {/snippet}
+</ShellDialog>
+
 <style>
   .sheet-content {
     padding: var(--space-md) var(--space-lg) var(--space-lg);
@@ -138,34 +180,11 @@
     padding: var(--space-xl) 0;
   }
 
-  .warning-banner {
-    background: color-mix(
-      in srgb,
-      var(--k-color-red, #ef4444) 10%,
-      transparent
-    );
-    border-radius: 0.5rem;
-    padding: var(--space-sm) var(--space-md);
+  /* The one-time reveal and regeneration banners are Warning registers
+     (both state irreversible facts). */
+
+  .sheet-content :global(.register) {
     margin-bottom: var(--space-lg);
-  }
-
-  .warning-banner p {
-    color: var(--k-color-red, #ef4444);
-    font-size: 0.85rem;
-    margin: 0;
-  }
-
-  .regen-warning {
-    background: color-mix(
-      in srgb,
-      var(--k-color-orange, #ff9500) 10%,
-      transparent
-    );
-    margin-bottom: var(--space-sm);
-  }
-
-  .regen-warning p {
-    color: var(--k-color-orange, #ff9500);
   }
 
   .codes-grid {
@@ -183,7 +202,7 @@
   }
 
   .code-item code {
-    font-family: "Space Mono", ui-monospace, monospace;
+    font-family: var(--theme-font-mono);
     font-size: 0.9rem;
     letter-spacing: 0.05em;
   }
@@ -201,9 +220,7 @@
     opacity: 0.85;
   }
 
-  .error-text {
-    color: var(--k-color-red, #ef4444);
-    font-size: 0.85rem;
+  .error-slot {
     text-align: center;
     padding: var(--space-md) 0;
   }

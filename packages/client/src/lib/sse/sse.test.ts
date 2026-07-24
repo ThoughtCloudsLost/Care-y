@@ -108,6 +108,19 @@ describe("handleEvent", () => {
       queryKey: ["ticket", "t-100", "attachments"],
     });
   });
+
+  // Both list read-state families must refresh when a reply arrives, or
+  // unread pills and the global count go stale until a manual reload.
+  it("invalidates both list read-state families on followup:created", () => {
+    handleEvent({ type: "followup:created", ticketId: "t-100" }, qc);
+
+    expect(qc.invalidateQueries).toHaveBeenCalledWith({
+      queryKey: ["tickets", "readState"],
+    });
+    expect(qc.invalidateQueries).toHaveBeenCalledWith({
+      queryKey: ["tickets", "readStateSweep"],
+    });
+  });
 });
 
 describe("createSSEListener", () => {

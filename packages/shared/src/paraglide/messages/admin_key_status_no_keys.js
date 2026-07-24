@@ -6,17 +6,17 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Admin_Key_Status_No_KeysInputs */
 
 const en_admin_key_status_no_keys = /** @type {(inputs: Admin_Key_Status_No_KeysInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`No keys`)
+	return /** @type {LocalizedString} */ (`Hasn't signed in yet`)
 };
 
 const es_admin_key_status_no_keys = /** @type {(inputs: Admin_Key_Status_No_KeysInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Sin claves`)
+	return /** @type {LocalizedString} */ (`Aún no ha iniciado sesión`)
 };
 
 /**
 * | output |
 * | --- |
-* | "No keys" |
+* | "Hasn't signed in yet" |
 *
 * @param {Admin_Key_Status_No_KeysInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

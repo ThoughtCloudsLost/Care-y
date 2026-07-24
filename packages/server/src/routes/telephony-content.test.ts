@@ -14,6 +14,7 @@ import type { TelephonyContentService } from "../telephony/telephony-content-ser
 import type { GreetingRecord } from "../telephony/models/greeting-repo.js";
 import type { SmsResponseRecord } from "../telephony/models/sms-response-repo.js";
 import { RoleId } from "@care-y/shared";
+import { expectTrpcError } from "../test-utils.js";
 
 // --- Mock service ---
 
@@ -301,6 +302,175 @@ describe("createTelephonyContentRouter", () => {
 
       expect(result).toEqual(audioResult);
       expect(mockService.uploadGreetingAudio).toHaveBeenCalled();
+    });
+
+    it("rejects with TOO_MANY_REQUESTS when rate limiter denies", async () => {
+      const limitedRouter = createTelephonyContentRouter({
+        createService: () => mockService,
+        blobStore: createMockBlobStore(),
+        uploadLimiter: {
+          check: () => ({ allowed: false, remaining: 0, retryAfterMs: 5000 }),
+          reset: () => undefined,
+        },
+      });
+      const limitedCaller =
+        createCallerFactory(limitedRouter)(createAdminContext());
+
+      await expectTrpcError(
+        limitedCaller.uploadGreetingAudio({
+          greetingId: GREETING_ID,
+          audioBase64: "AAAA",
+          contentType: "audio/mpeg",
+        }),
+        "TOO_MANY_REQUESTS",
+      );
+    });
+
+    it("rejects with INTERNAL_SERVER_ERROR when blobStore is not configured", async () => {
+      const noBlobRouter = createTelephonyContentRouter({
+        createService: () => mockService,
+        blobStore: undefined,
+      });
+      const noBlobCaller =
+        createCallerFactory(noBlobRouter)(createAdminContext());
+
+      await expectTrpcError(
+        noBlobCaller.uploadGreetingAudio({
+          greetingId: GREETING_ID,
+          audioBase64: "AAAA",
+          contentType: "audio/mpeg",
+        }),
+        "INTERNAL_SERVER_ERROR",
+      );
+    });
+
+    it("proceeds to service when rate limiter allows", async () => {
+      const audioResult = {
+        ...GREETING_RECORD,
+        isAudio: true,
+        audioBlobKey: "blob-key-allowed",
+        audioContentType: "audio/mpeg",
+      };
+      vi.mocked(mockService.uploadGreetingAudio).mockResolvedValue(audioResult);
+
+      const allowedRouter = createTelephonyContentRouter({
+        createService: () => mockService,
+        blobStore: createMockBlobStore(),
+        uploadLimiter: {
+          check: () => ({ allowed: true, remaining: 4, retryAfterMs: 0 }),
+          reset: () => undefined,
+        },
+      });
+      const allowedCaller =
+        createCallerFactory(allowedRouter)(createAdminContext());
+
+      const result = await allowedCaller.uploadGreetingAudio({
+        greetingId: GREETING_ID,
+        audioBase64: "AAAA",
+        contentType: "audio/mpeg",
+      });
+
+      expect(result).toEqual(audioResult);
+      expect(mockService.uploadGreetingAudio).toHaveBeenCalled();
+    });
+  });
+
+  describe("createAudioGreeting", () => {
+    it("creates an audio greeting via service", async () => {
+      const audioResult = {
+        ...GREETING_RECORD,
+        isAudio: true,
+        audioBlobKey: "blob-key-new",
+        audioContentType: "audio/wav",
+      };
+      vi.mocked(mockService.createAudioGreeting).mockResolvedValue(audioResult);
+
+      const result = await caller.createAudioGreeting({
+        phoneNumber: PHONE_NUMBER,
+        locale: "en",
+        greetingType: "answer",
+        audioBase64: "AAAA",
+        contentType: "audio/wav",
+      });
+
+      expect(result).toEqual(audioResult);
+      expect(mockService.createAudioGreeting).toHaveBeenCalled();
+    });
+
+    it("rejects with TOO_MANY_REQUESTS when rate limiter denies", async () => {
+      const limitedRouter = createTelephonyContentRouter({
+        createService: () => mockService,
+        blobStore: createMockBlobStore(),
+        uploadLimiter: {
+          check: () => ({ allowed: false, remaining: 0, retryAfterMs: 12000 }),
+          reset: () => undefined,
+        },
+      });
+      const limitedCaller =
+        createCallerFactory(limitedRouter)(createAdminContext());
+
+      await expectTrpcError(
+        limitedCaller.createAudioGreeting({
+          phoneNumber: PHONE_NUMBER,
+          locale: "en",
+          greetingType: "answer",
+          audioBase64: "AAAA",
+          contentType: "audio/wav",
+        }),
+        "TOO_MANY_REQUESTS",
+      );
+    });
+
+    it("rejects with INTERNAL_SERVER_ERROR when blobStore is not configured", async () => {
+      const noBlobRouter = createTelephonyContentRouter({
+        createService: () => mockService,
+        blobStore: undefined,
+      });
+      const noBlobCaller =
+        createCallerFactory(noBlobRouter)(createAdminContext());
+
+      await expectTrpcError(
+        noBlobCaller.createAudioGreeting({
+          phoneNumber: PHONE_NUMBER,
+          locale: "en",
+          greetingType: "answer",
+          audioBase64: "AAAA",
+          contentType: "audio/wav",
+        }),
+        "INTERNAL_SERVER_ERROR",
+      );
+    });
+
+    it("proceeds to service when rate limiter allows", async () => {
+      const audioResult = {
+        ...GREETING_RECORD,
+        isAudio: true,
+        audioBlobKey: "blob-key-allowed-audio",
+        audioContentType: "audio/wav",
+      };
+      vi.mocked(mockService.createAudioGreeting).mockResolvedValue(audioResult);
+
+      const allowedRouter = createTelephonyContentRouter({
+        createService: () => mockService,
+        blobStore: createMockBlobStore(),
+        uploadLimiter: {
+          check: () => ({ allowed: true, remaining: 4, retryAfterMs: 0 }),
+          reset: () => undefined,
+        },
+      });
+      const allowedCaller =
+        createCallerFactory(allowedRouter)(createAdminContext());
+
+      const result = await allowedCaller.createAudioGreeting({
+        phoneNumber: PHONE_NUMBER,
+        locale: "en",
+        greetingType: "answer",
+        audioBase64: "AAAA",
+        contentType: "audio/wav",
+      });
+
+      expect(result).toEqual(audioResult);
+      expect(mockService.createAudioGreeting).toHaveBeenCalled();
     });
   });
 });

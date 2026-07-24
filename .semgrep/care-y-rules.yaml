@@ -1,0 +1,97 @@
+# CARE-Y custom Semgrep rules, run by the security-scan CI workflow.
+# Run locally:
+#   semgrep scan --quiet --metrics=off --config .semgrep/care-y-rules.yaml <files>
+rules:
+  - id: care-y-no-tls-reject-unauthorized
+    patterns:
+      - pattern: process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0"
+    message: |
+      TLS verification bypass detected. NODE_TLS_REJECT_UNAUTHORIZED=0 is
+      explicitly forbidden by CARE-Y security policy. Fix the underlying
+      certificate issue instead.
+    languages: [javascript, typescript]
+    severity: ERROR
+    metadata:
+      category: security
+      cwe: CWE-295
+
+  - id: care-y-no-reject-unauthorized-false
+    pattern: |
+      {rejectUnauthorized: false}
+    message: |
+      rejectUnauthorized: false disables TLS certificate validation.
+      Explicitly forbidden by CARE-Y security policy. Fix the certificate instead.
+    languages: [javascript, typescript]
+    severity: ERROR
+    metadata:
+      category: security
+      cwe: CWE-295
+
+  - id: care-y-no-url-search-params-set
+    pattern: $URL.searchParams.set($KEY, $PLAINTEXT)
+    message: |
+      Passing data as URL query parameters via searchParams.set(). If $PLAINTEXT
+      contains decrypted content, this is explicitly forbidden by CARE-Y security
+      policy. URL parameters appear in server logs, browser history, and Referer headers.
+    languages: [javascript, typescript]
+    severity: WARNING
+    metadata:
+      category: security
+      cwe: CWE-598
+
+  - id: care-y-no-url-search-params-append
+    pattern: $URL.searchParams.append($KEY, $PLAINTEXT)
+    message: |
+      Passing data as URL query parameters via searchParams.append(). If $PLAINTEXT
+      contains decrypted content, this is explicitly forbidden by CARE-Y security
+      policy. URL parameters appear in server logs, browser history, and Referer headers.
+    languages: [javascript, typescript]
+    severity: WARNING
+    metadata:
+      category: security
+      cwe: CWE-598
+
+  - id: care-y-no-console-log-pii-fields
+    patterns:
+      - pattern: console.log(..., $X, ...)
+      - metavariable-regex:
+          metavariable: $X
+          regex: .*(phone|number|alias|client|volunteer|message|body|content|plaintext).*
+    message: |
+      console.log with a variable that may contain PII ($X). Logging PII
+      (phone numbers, message content, client aliases, volunteer names) is
+      explicitly forbidden. Remove the log or redact the field.
+    languages: [javascript, typescript]
+    severity: WARNING
+    metadata:
+      category: security
+      cwe: CWE-532
+
+  - id: care-y-no-bare-error-throw
+    pattern: throw new Error($MSG)
+    message: |
+      Bare Error throw detected. CARE-Y requires custom error types (never bare
+      Error). Define a typed error class for this failure mode.
+    languages: [javascript, typescript]
+    severity: WARNING
+    metadata:
+      category: correctness
+    paths:
+      # The testing reference prescribes bare-Error fault-injection mocks
+      # (Kysely spies rejecting with new Error), so test files are exempt.
+      exclude:
+        - "*.test.ts"
+        - "*.spec.ts"
+        - "**/test-utils.ts"
+        - "**/test-setup.ts"
+        - "**/test-helpers/**"
+
+  - id: care-y-no-any-type-assertion
+    pattern: $X as any
+    message: |
+      'as any' type assertion detected. CARE-Y prohibits 'any' -- use 'unknown'
+      with type guards instead.
+    languages: [typescript]
+    severity: WARNING
+    metadata:
+      category: correctness

@@ -37,6 +37,7 @@
 <script lang="ts">
   import { tick } from "svelte";
   import { Combobox } from "bits-ui";
+  import { Loader } from "@lucide/svelte";
   import * as m from "$lib/paraglide/messages.js";
   import { withTerms } from "$lib/terminology/with-terms.js";
 
@@ -185,28 +186,12 @@
 
 {#snippet spinner()}
   <div class="client-select-spinner" aria-label={m.common_loading()}>
-    <svg
-      width="16"
-      height="16"
-      viewBox="0 0 16 16"
-      class="spin"
-      aria-hidden="true"
-    >
-      <circle
-        cx="8"
-        cy="8"
-        r="6"
-        fill="none"
-        stroke="currentColor"
-        stroke-width="2"
-        stroke-dasharray="20 12"
-      />
-    </svg>
+    <Loader size={16} aria-hidden="true" />
   </div>
 {/snippet}
 
 <div class="client-select" class:client-select-error={Boolean(error)}>
-  <span class="client-select-label" id={labelId}>
+  <span class="field-label" id={labelId}>
     {label}
   </span>
 
@@ -223,7 +208,7 @@
     >
       <div class="client-select-input-wrapper">
         <Combobox.Input
-          class="client-select-input"
+          class="client-select-input form-input"
           {placeholder}
           aria-invalid={Boolean(error)}
           aria-labelledby={labelId}
@@ -279,7 +264,7 @@
     <div class="client-create-fields">
       <div class="client-create-phone-row">
         <input
-          class="client-create-input"
+          class="form-input client-create-input"
           type="tel"
           placeholder={phonePlaceholder ??
             m.ticket_new_field_phone_placeholder()}
@@ -321,7 +306,7 @@
   {/if}
 
   {#if error}
-    <p class="client-select-error-text" role="alert">{error}</p>
+    <p class="field-error" role="alert">{error}</p>
   {/if}
 </div>
 
@@ -330,13 +315,9 @@
     padding: 0 1rem;
   }
 
-  .client-select-label {
-    display: block;
-    font-size: var(--k-list-item-label-font-size, 0.75rem);
-    color: var(--k-list-input-label-text-color, var(--muted));
-    margin-bottom: var(--space-xs, 0.25rem);
-    font-weight: 500;
-  }
+  /* The label, input box, and error text wear the shared form
+     primitives (.field-label, .form-input, .field-error in shared.css);
+     only ClientSelect-specific layout stays scoped. */
 
   .client-select-input-wrapper {
     position: relative;
@@ -344,33 +325,8 @@
     align-items: center;
   }
 
-  :global(.client-select-input),
-  .client-create-input {
-    width: 100%;
-    min-height: 2.75rem;
-    padding: 0.5rem 0.75rem;
-    border: 1px solid var(--k-hairline-color, rgba(0, 0, 0, 0.12));
-    border-radius: var(--k-list-input-outline-border-radius, 0.75rem);
-    background: transparent;
-    font-family: inherit;
-    font-size: 1rem;
-    color: var(--ink);
-  }
-
-  :global(.client-select-input:focus-visible),
-  .client-create-input:focus-visible {
-    outline: 2px solid var(--k-color-primary, #007aff);
-    outline-offset: 1px;
-  }
-
-  .client-select-error :global(.client-select-input),
-  .client-select-error .client-create-input {
-    border-color: var(--k-color-red, #ff3b30);
-  }
-
-  :global(.client-select-input::placeholder),
-  .client-create-input::placeholder {
-    color: var(--k-list-input-placeholder-color, var(--muted));
+  .client-select-error :global(.form-input) {
+    border-color: var(--danger);
   }
 
   .client-select-spinner {
@@ -483,14 +439,10 @@
     min-height: 44px;
   }
 
-  .client-select-error-text {
-    margin-top: var(--space-xs, 0.25rem);
-    font-size: 0.75rem;
-    color: var(--k-color-red, #ff3b30);
-  }
-
-  .spin {
-    animation: spin 0.8s linear infinite;
+  @media (prefers-reduced-motion: no-preference) {
+    .client-select-spinner {
+      animation: spin 0.8s linear infinite;
+    }
   }
 
   @keyframes spin {

@@ -50,6 +50,7 @@ describe.skipIf(!process.env.DATABASE_URL)("ReadCursorService (DB)", () => {
     expect(cursor.ticketId).toBe(ticketId);
     expect(cursor.userId).toBe(userId);
     expect(Buffer.isBuffer(cursor.encryptedReadCursor)).toBe(true);
+    // Contract: XSalsa20-Poly1305 ciphertext = nonce(24) + plaintext(45) + MAC(16) = 85 bytes.
     expect(cursor.encryptedReadCursor.length).toBe(85);
   });
 
@@ -152,6 +153,73 @@ describe.skipIf(!process.env.DATABASE_URL)("ReadCursorService (DB)", () => {
 
     const refetchB = await svc.getOrCreate(fixB.userId, fixB.ticketId);
     expect(refetchB.encryptedReadCursor.equals(originalB)).toBe(true);
+  });
+
+  it("getBatch returns existing cursors keyed by ticket id", async () => {
+    const fixA = await createTicketFixture();
+    const fixB = await createTicketFixture();
+
+    const cursorA = await svc.getOrCreate(fixA.userId, fixA.ticketId);
+
+    const result = await svc.getBatch(fixA.userId, [
+      fixA.ticketId,
+      fixB.ticketId,
+    ]);
+
+    expect(result.get(fixA.ticketId)?.equals(cursorA.encryptedReadCursor)).toBe(
+      true,
+    );
+    expect(result.has(fixB.ticketId)).toBe(false);
+  });
+
+  it("getBatch never creates rows for absent cursors", async () => {
+    const { userId, ticketId } = await createTicketFixture();
+
+    const result = await svc.getBatch(userId, [ticketId]);
+    expect(result.size).toBe(0);
+
+    // The read must not have populated a dummy row (read path is
+    // SELECT-only; dummy creation stays exclusive to getOrCreate).
+    const rows = await testDb.db
+      .selectFrom("ticket_read_cursors")
+      .selectAll()
+      .where("ticket_id", "=", ticketId)
+      .execute();
+    expect(rows).toHaveLength(0);
+  });
+
+  it("getBatch returns cursor bytes verbatim after an update", async () => {
+    const { userId, ticketId } = await createTicketFixture();
+
+    await svc.getOrCreate(userId, ticketId);
+    const blob = Buffer.from("opaque-ciphertext-passthrough-check");
+    await svc.update(userId, ticketId, blob);
+
+    const result = await svc.getBatch(userId, [ticketId]);
+    expect(result.get(ticketId)?.equals(blob)).toBe(true);
+  });
+
+  it("getBatch only returns the requesting user's cursors", async () => {
+    const { userId: userAId, ticketId, queueId } = await createTicketFixture();
+    const userB = await createTestUser(testDb.db);
+
+    await testDb.db
+      .insertInto("queue_assignments")
+      .values({ queue_id: queueId, user_id: userB.id })
+      .onConflict((oc) => oc.columns(["queue_id", "user_id"]).doNothing())
+      .execute();
+
+    await svc.getOrCreate(userB.id, ticketId);
+
+    const result = await svc.getBatch(userAId, [ticketId]);
+    expect(result.size).toBe(0);
+  });
+
+  it("getBatch returns an empty map for an empty id list", async () => {
+    const { userId } = await createTicketFixture();
+
+    const result = await svc.getBatch(userId, []);
+    expect(result.size).toBe(0);
   });
 
   it("getOrCreate rejects user without ticket access", async () => {

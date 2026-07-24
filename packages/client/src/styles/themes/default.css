@@ -1,63 +1,428 @@
-/* Default theme: stock Konsta UI look with system fonts, no riso effects.
-   No Konsta surface overrides (lets Konsta's built-in @theme defaults pass through). */
+/* Default theme: Inkwell. Ink on warm paper.
+   Canonical spec: docs/design-ref/inkwell-design-language.md (ADR-055).
+   The Konsta shell wears these tokens through the surface seam below;
+   the redesign itself lives in content views (ADR-023 boundary). */
+
+@import "../fonts.css";
 
 .theme-default {
-  --theme-font-display: system-ui, sans-serif;
-  --theme-font-ui: system-ui, sans-serif;
+  --theme-font-display: "Fraunces", Georgia, serif;
+  --theme-font-ui: "Atkinson Hyperlegible Next", system-ui, sans-serif;
+  --theme-font-mono: "Atkinson Hyperlegible Mono", ui-monospace, monospace;
 
-  --ink: #1a1a1a;
-  --muted: #888888;
+  /* ── Ink and rules (light) ──
+     --muted is tuned to clear WCAG AA 4.5:1 on the darkest light surface
+     (paper-deep) while staying clearly apart from the unbranded brand
+     taupe; the static tier test in konsta-palette.test.ts locks this. */
+  --ink: #272319;
+  --ink-2: #4e4738;
+  --muted: #6b6250;
+  --hair: #dcd5c3;
+  --hair-2: #beb49b;
 
-  /* Konsta iOS surface overrides */
-  --color-ios-light-surface: #f9fafb;
-  --color-ios-light-surface-1: #f0f1f3;
-  --color-ios-light-surface-1-shade: #e2e4e7;
-  --color-ios-light-surface-1-tint: #f9fafb;
-  --color-ios-light-surface-2: #e8eaed;
-  --color-ios-light-surface-3: #f0f1f3;
-  --color-ios-light-surface-variant: #e8eaed;
+  /* ── Semantic hues ──
+     --danger duplicates --urgent on purpose: destructive actions and
+     urgent priority are different meaning slots that happen to share a
+     hue today. Retuning one must never drag the other. Soft tints are
+     color-mix derivations so they track their base token (the brand
+     tint follows runtime org branding automatically). */
+  --urgent: #a33224;
+  --care: #7c5e00;
+  --danger: #a33224;
+  --unread: #3b82f6;
+  --urgent-soft: color-mix(in srgb, var(--urgent) 8%, transparent);
+  --care-soft: color-mix(in srgb, var(--care) 8%, transparent);
+  --brand-soft: color-mix(in srgb, var(--brand-fill) 10%, transparent);
 
-  --color-ios-dark-surface: #000000;
-  --color-ios-dark-surface-1: #1c1c1d;
-  --color-ios-dark-surface-1-shade: #0a0a0a;
-  --color-ios-dark-surface-1-tint: #2c2c2c;
-  --color-ios-dark-surface-2: #2c2c2c;
-  --color-ios-dark-surface-3: #1c1c1d;
-  --color-ios-dark-surface-variant: #2c2c2c;
+  /* ── Unbranded brand defaults: warm taupe (pen, not alarm) ──
+     Runtime org branding overrides these via inline style on <html>.
+     Contrast against the worst Inkwell surfaces is locked by
+     konsta-palette.test.ts; adjust by lightness steps if these change. */
+  --brand-primary: #6e6553;
+  --brand-text: #635a48;
+  --brand-fill: #6e6553;
+  --brand-on: #fff9f0;
 
-  /* Konsta Material surface overrides */
-  --color-md-light-surface-1: #f0f1f3;
-  --color-md-light-surface-2: #e8eaed;
-  --color-md-light-surface-3: #f0f1f3;
-  --color-md-light-surface-variant: #e8eaed;
-  --color-md-dark-surface: #000000;
-  --color-md-dark-surface-1: #1c1c1d;
-  --color-md-dark-surface-2: #2c2c2c;
-  --color-md-dark-surface-3: #1c1c1d;
-  --color-md-dark-surface-variant: #2c2c2c;
+  /* ── Konsta seam: canonical surface hexes ──
+     The shell (navbar, tabbar, sheets, list groups) resolves to paper
+     through Konsta's own variables; nothing in shell markup changes.
+     The splash backgrounds in app.html (.theme-default.light/.dark
+     #splash) must stay in sync with the paper values here. */
+  --color-ios-light-surface: #f5f1e8; /* paper */
+  --color-ios-light-surface-1: #fcfaf3; /* raised */
+  --color-ios-light-surface-1-shade: #ede7d8; /* paper-deep (pressed step) */
+  --color-ios-light-surface-1-tint: #fcfaf3;
+  --color-ios-light-surface-2: #ede7d8; /* paper-deep (recessed wells) */
+  --color-ios-light-surface-3: #fcfaf3;
+  --color-ios-light-surface-variant: #ede7d8;
 
-  /* Semantic aliases (resolve through Konsta vars) */
+  /* Dark: Konsta elevates overlays by LIGHTENING (its dark surface-2 and
+     -1-tint tier), while the app's recessed wells DARKEN. So surface-2
+     and -1-tint carry a lighter overlay step (#2f2a1e) and the canonical
+     dark paper-deep (#141210) lives on -1-shade. Opposite polarity from
+     the light block; this is intentional, not a typo. */
+  --color-ios-dark-surface: #1a1713; /* paper */
+  --color-ios-dark-surface-1: #252017; /* raised */
+  --color-ios-dark-surface-1-shade: #141210; /* paper-deep */
+  --color-ios-dark-surface-1-tint: #2f2a1e; /* elevated overlay step */
+  --color-ios-dark-surface-2: #2f2a1e; /* elevated overlay step */
+  --color-ios-dark-surface-3: #252017;
+  --color-ios-dark-surface-variant: #2f2a1e;
+
+  /* Material mirrors iOS */
+  --color-md-light-surface-1: #fcfaf3;
+  --color-md-light-surface-2: #ede7d8;
+  --color-md-light-surface-3: #fcfaf3;
+  --color-md-light-surface-variant: #ede7d8;
+  --color-md-dark-surface: #1a1713;
+  --color-md-dark-surface-1: #252017;
+  --color-md-dark-surface-2: #2f2a1e;
+  --color-md-dark-surface-3: #252017;
+  --color-md-dark-surface-variant: #2f2a1e;
+
+  /* Warm-paper glass for the iOS liquid-glass shell. Translucency is
+     eyeballed on device at the foundation review; adjust alpha there. */
+  /* --color-ios-light-glass: rgba(252, 250, 243, 0.78); */
+  /* --color-ios-dark-glass: rgba(37, 32, 23, 0.55); */
+
+  /* ── Inkwell canonical names, aliased through the seam ── */
   --paper: var(--color-ios-light-surface);
-  --surface-1: var(--color-ios-light-surface-1);
-  --surface-2: var(--color-ios-light-surface-2);
+  --raised: var(--color-ios-light-surface-1);
+  --paper-deep: var(--color-ios-light-surface-1-shade);
+
+  /* Legacy aliases (--surface-1/2, --divider, --card-*, --k-color-red)
+     RETIRED at the remaining-surfaces sweep: every consumer now reads
+     canonical names first with pre-Inkwell fallback chains, so the
+     shared.css theme-neutral --divider and each dev theme's own tokens
+     serve the fallbacks. Do not reintroduce aliases here. */
+
+  /* Konsta runtime vars. --k-page-bg and --k-surface-1/2 are read by app
+     code with hardcoded #fff/#1c1c1e fallbacks (sticky date headers,
+     shell, pull-to-refresh); defining them here keeps those off paper. */
+  --k-hairline-color: var(--hair);
+  --k-page-bg: var(--paper);
+  --k-surface-1: var(--raised);
+  --k-surface-2: var(--raised);
+
+  /* Shell signal tokens. --call-active keeps its pre-Inkwell hue for now;
+     retune here (not in components) if the meaning-slot palette grows a
+     warmer green. */
+  --call-active: #22c55e;
+
+  /* Case header glass edges and shadow. Light mode uses dark
+     translucencies; dark mode flips to white highlights. */
+  --glass-edge: rgba(0, 0, 0, 0.08);
+  --glass-edge-strong: rgba(0, 0, 0, 0.12);
+  --glass-shadow: rgba(0, 0, 0, 0.08);
+  --meter-strong: #16a34a;
+
+  /* ── Inkwell type scale ── */
+  --text-xs: 0.71875rem; /* 11.5px */
+  --text-sm: 0.78125rem; /* 12.5px */
+  --text-base: 0.84375rem; /* 13.5px */
+  --text-md: 0.96875rem; /* 15.5px */
+  --text-lg: 1.0625rem; /* 17px */
+}
+
+/* REQUIRED companion block. The type scale above sits on .theme-default,
+   which out-cascades shared.css's desktop :root overrides (equal
+   specificity, later import order). Without this block the desktop
+   bumps silently die. Keep in sync with shared.css
+   @media (min-width: 1024px) :root. */
+@media (min-width: 1024px) {
+  .theme-default {
+    --text-base: 0.90625rem; /* 14.5px */
+    --text-md: 1.03125rem; /* 16.5px */
+  }
 }
 
 .theme-default.dark {
-  --ink: #e5e5e5;
-  --muted: #888888;
+  /* Dark --muted clears 4.5:1 (4.62:1 computed) on the lightest dark
+     surface (Konsta elevated overlay #2f2a1e). Bumped from #9e937e
+     (4.44:1) to clear AA. */
+  --ink: #efe8d8;
+  --ink-2: #cfc5ae;
+  --muted: #a2977f;
+  --hair: #373226;
+  --hair-2: #514935;
+  --urgent: #e06a55;
+  --care: #d9a93f;
+  --danger: #e06a55;
+  --unread: #60a5fa;
+  --urgent-soft: color-mix(in srgb, var(--urgent) 12%, transparent);
+  --care-soft: color-mix(in srgb, var(--care) 12%, transparent);
+  --brand-soft: color-mix(in srgb, var(--brand-fill) 12%, transparent);
+  --brand-text: #a89b80;
+
+  --glass-edge: rgba(255, 255, 255, 0.1);
+  --glass-edge-strong: rgba(255, 255, 255, 0.15);
+  --glass-shadow: rgba(0, 0, 0, 0.4);
+  --meter-strong: #4ade80;
+
   --paper: var(--color-ios-dark-surface);
-  --surface-1: var(--color-ios-dark-surface-1);
-  --surface-2: var(--color-ios-dark-surface-2);
+  --raised: var(--color-ios-dark-surface-1);
+  --paper-deep: var(--color-ios-dark-surface-1-shade);
 }
 
-/* Divider: standard 1px separator instead of riso 4px thick rule */
+/* Display roles: Fraunces with the variable opsz axis engaged. */
+.theme-default .heading-display,
+.theme-default .heading-compact {
+  font-family: var(--theme-font-display);
+  font-optical-sizing: auto;
+  font-weight: 600;
+}
+
+/* Hairline rule instead of the riso 4px thick divider */
 .theme-default .divider-brand {
   height: 1px;
-  background: var(--muted);
+  background: var(--hair-2);
 }
 
 /* Default theme overrides skeleton-bar to use the pulse animation
    instead of the extending bar (defined globally in animations.css). */
 .theme-default .skeleton-bar {
   animation: skeleton-pulse 2s ease-in-out infinite;
+}
+
+/* Search highlighter: the ochre pen, not alarm. Every <mark> (search
+   results, KB match highlights) reads as a highlighter stroke. */
+.theme-default mark {
+  background: var(--care-soft);
+  color: inherit;
+  border-radius: 2px;
+  padding: 0 1px;
+}
+
+/* ── Inkwell form system (spec: Forms anatomy) ──
+   One input system worn by Konsta ListInput via its stable k-classes
+   and structural selectors, pinned to konsta@5.0.7 internals the same
+   way shared.css already targets div[class*="bg-ios-light-surface"].
+   Consumers render the stacked (non-outline, non-floating) variant;
+   the box lives on the field element itself. */
+
+/* Form group flattening: lists that hold inputs are invisible plumbing.
+   Fields sit directly on the surface (no boxes around form groups),
+   and the iOS grouped-list hairlines between fields go away. */
+.theme-default .k-list:has(.k-list-input) {
+  margin: 0;
+  background: transparent;
+  border-radius: 0;
+  overflow: visible; /* inset lists clip; the focus ring must not */
+}
+
+.theme-default .k-list:has(.k-list-input) .hairline-b::after,
+.theme-default .k-list:has(.k-list-input) .hairline-t::after {
+  display: none;
+}
+
+/* Konsta draws outline borders and material underlines as absolutely
+   positioned spans; the Inkwell border is on the field element, so
+   those spans never render in this theme. */
+.theme-default .k-list-input span.pointer-events-none.absolute.w-full {
+  display: none;
+}
+
+/* Neutralize the material-only item chrome (filled surface-variant box,
+   ml-4/mr-4, 56px min-height) so both Konsta themes share one anatomy.
+   The itemContent div is the first div under the li. */
+.theme-default li.k-list-input > div {
+  background: transparent;
+  min-height: 0;
+  margin-left: 0;
+  margin-right: 0;
+  border-radius: 0;
+}
+
+/* The inputWrap div carries iOS -mt-2.5/-mb-2.5 tighteners sized for
+   Konsta's short rows; the Inkwell box brings its own height. */
+.theme-default .k-list-input div:has(> input, > textarea, > select) {
+  margin-top: 0;
+  margin-bottom: 0;
+}
+
+/* Vertical rhythm between fields comes from one place. Konsta's item
+   inner div carries py-3 (and the material li a py-2 of its own); both
+   are zeroed so the visible gap is exactly the item margin below, and
+   the last field in a group hands off to the form container's own
+   column gap (--space-md everywhere). Within-group and across-group
+   spacing land on the same number. */
+.theme-default li.k-list-input {
+  padding-top: 0;
+  padding-bottom: 0;
+  margin-bottom: var(--space-md);
+}
+
+.theme-default li.k-list-input div.w-full.relative {
+  padding-top: 0;
+  padding-bottom: 0;
+}
+
+.theme-default .k-list:has(.k-list-input) li.k-list-input:last-child {
+  margin-bottom: 0;
+}
+
+/* Field label: the eyebrow. Konsta's stacked label div is uniquely
+   .duration-200.text-xs (the error/info line is .text-xs.z-10).
+   Tracking 0.06em (quieter than section-head 0.12em). */
+.theme-default .k-list-input .duration-200.text-xs {
+  font-size: 0.6875rem; /* 11px */
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-2);
+  margin-bottom: 6px;
+}
+
+/* The box. font-size floors at 16px computed: below that iOS Safari
+   zooms the viewport on focus, which the Dynamic Type pass verified
+   against; the spec's 15px reads as intent, not a hard pixel. */
+.theme-default .k-list-input input,
+.theme-default .k-list-input textarea,
+.theme-default .k-list-input select {
+  box-sizing: border-box;
+  width: 100%;
+  height: auto;
+  padding: 12px 13px;
+  border: 1px solid var(--hair-2);
+  border-radius: 8px;
+  background: var(--raised);
+  color: var(--ink);
+  font-size: max(0.9375rem, 16px);
+  line-height: 1.4;
+}
+
+.theme-default .k-list-input textarea {
+  min-height: 84px;
+}
+
+.theme-default .k-list-input input::placeholder,
+.theme-default .k-list-input textarea::placeholder {
+  color: var(--muted);
+  opacity: 1;
+}
+
+/* Focus: the brand ring (identity slot: selection). */
+.theme-default .k-list-input input:focus,
+.theme-default .k-list-input textarea:focus,
+.theme-default .k-list-input select:focus {
+  outline: none;
+  border-color: var(--brand-fill);
+  box-shadow: 0 0 0 1px var(--brand-fill);
+}
+
+/* Error state colors the box border; the message re-points Konsta's
+   hardcoded text-red-500 at --danger (same move as --k-color-red). */
+.theme-default .k-list-input:has(.text-red-500) input,
+.theme-default .k-list-input:has(.text-red-500) textarea,
+.theme-default .k-list-input:has(.text-red-500) select {
+  border-color: var(--danger);
+}
+
+.theme-default .k-list-input .text-red-500 {
+  color: var(--danger);
+}
+
+/* Help text under the box (Konsta's info line renders .opacity-50). */
+.theme-default .k-list-input .text-xs.z-10 {
+  font-size: var(--text-sm);
+  line-height: 1.45;
+  margin-top: 5px;
+}
+
+.theme-default .k-list-input .text-xs.z-10.opacity-50 {
+  opacity: 1;
+  color: var(--muted);
+}
+
+/* Select dropdown chevron: keep it inside the padded box. */
+.theme-default .k-list-input div:has(> select) > .absolute {
+  inset-inline-end: 10px;
+}
+
+/* ── Segmented controls (spec: Forms anatomy) ──
+   One pinned anatomy over Konsta's strong variant: hair-2 frame, flat
+   track, hair separators, the active button raised in the brand color
+   (the same active treatment the custom view switcher wears).
+   Consumers keep the strong prop because only strong mode marks the
+   active button with a class (k-segmented-strong-button-active); the
+   sliding thumb is hidden, so the fill sits on the button and nothing
+   animates sideways. A consumer opting out with .segmented-thumb keeps
+   Konsta's native sliding thumb: the subnavbar section nav is that
+   exception. */
+.theme-default .k-segmented:not(.segmented-thumb) {
+  border: 1px solid var(--hair-2);
+  border-radius: 8px;
+  background: transparent;
+  box-shadow: none;
+  padding: 0;
+  gap: 0;
+  overflow: hidden;
+}
+
+.theme-default
+  .k-segmented:not(.segmented-thumb)
+  > span.pointer-events-none.absolute {
+  display: none; /* the strong variant's sliding thumb */
+}
+
+.theme-default .k-segmented:not(.segmented-thumb) .k-button {
+  padding: 10px 0;
+  font-size: var(--text-base);
+  font-weight: 400;
+  color: var(--muted);
+  background: transparent;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.theme-default .k-segmented:not(.segmented-thumb) .k-button + .k-button {
+  border-inline-start: 1px solid var(--hair);
+}
+
+.theme-default
+  .k-segmented:not(.segmented-thumb)
+  .k-segmented-strong-button-active {
+  background: var(--brand-accent) !important;
+  color: var(--brand-accent-on) !important;
+  font-weight: 700;
+}
+
+/* ── Sheet headers ──
+   One treatment for every ShellSheet: the grabber, then the title in
+   the display face. Consumers pass title= (never a custom header);
+   ShellSheet markup itself stays untouched (ADR-023 boundary). */
+.theme-default .sheet-header-title {
+  font-family: var(--theme-font-display);
+  font-optical-sizing: auto;
+  letter-spacing: 0.005em;
+}
+
+/* ── Shell avatar seals (Identity: user-initial avatars) ──
+   The navbar and sidebar avatars take the seal treatment when they
+   render initials. Theme CSS only (ADR-023 boundary): shell markup is
+   untouched, so the org-logo <img> and fallback-icon <svg> cases are
+   excluded via :has() and keep today's brand disc (logos and icons
+   never tilt). The :not() arguments also lift these rules above the
+   components' scoped selectors, which tie at (0,2,0). The sidebar span
+   always holds whitespace, so :not(:empty) is a pure specificity lift
+   there, not a behavior gate.
+
+   The values below mirror the shared .identity-seal anatomy
+   (shared.css); the markup cannot take that class here (ADR-023:
+   theme CSS only), so keep the two in step by hand. */
+.theme-default .navbar-avatar:not(:has(> img)):not(:has(> svg)),
+.theme-default .sidebar-avatar:not(:empty) {
+  background: transparent;
+  border: 2px solid color-mix(in srgb, var(--brand-fill) 55%, transparent);
+  outline: 1px solid color-mix(in srgb, var(--brand-fill) 30%, transparent);
+  outline-offset: 2px;
+  color: var(--brand-text);
+  font-family: var(--theme-font-display);
+  font-optical-sizing: auto;
+  font-weight: 800;
+  font-size: 0.6875rem;
+  letter-spacing: 0.03em;
+  text-shadow: 0 0 0.5px currentColor;
+  transform: rotate(-6deg);
+  opacity: 0.85;
 }

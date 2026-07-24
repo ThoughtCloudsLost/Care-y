@@ -6,6 +6,10 @@ const mockEncryptText = vi.fn().mockResolvedValue("encrypted-text");
 let mockOrgKeyReady = true;
 
 vi.mock("$lib/paraglide/messages.js", () => ({
+  register_note: () => "Note",
+  register_careful: () => "Careful",
+  register_warning: () => "Warning",
+  register_protected: () => "Protected",
   admin_queue_editor_name_label: () => "Queue Name",
   admin_queue_editor_name_placeholder: () => "e.g. General Intake",
   admin_queue_editor_name_required: () => "Queue name is required",
@@ -16,6 +20,8 @@ vi.mock("$lib/paraglide/messages.js", () => ({
     `Escalation days must be between ${min} and 365.`,
   admin_queue_editor_pii_warning: () => "Queue names are encrypted.",
   admin_queue_editor_no_org_key: () => "Organization key not loaded.",
+  admin_queue_editor_color_label: () => "Color",
+  admin_queue_editor_icon_label: () => "Icon",
   onboarding_queue_submit: () => "Create Queue",
   error_generic: () => "Something went wrong",
 }));
@@ -93,6 +99,8 @@ describe("QueueForm", () => {
       expect(mockEncryptText).toHaveBeenCalledWith("General Intake");
       expect(onsubmit).toHaveBeenCalledWith({
         encryptedName: "encrypted-text",
+        encryptedColor: "encrypted-text",
+        encryptedIcon: "encrypted-text",
         escalateDays: 7,
       });
     });

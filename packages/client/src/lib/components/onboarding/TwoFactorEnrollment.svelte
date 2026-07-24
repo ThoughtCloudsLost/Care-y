@@ -119,7 +119,11 @@
     {#if enrolledCount > 0}
       <div class="enrolled-badge" role="status">
         <ShieldCheck size={20} class="enrolled-icon" />
-        <span>{m.onboarding_twofa_enrolled({ count: enrolledCount })}</span>
+        <span
+          >{enrolledCount === 1
+            ? m.onboarding_twofa_enrolled_one()
+            : m.onboarding_twofa_enrolled({ count: enrolledCount })}</span
+        >
       </div>
 
       <List strong inset>
@@ -212,24 +216,25 @@
     padding: var(--space-xl) 0;
   }
 
+  /* Enrolled is the earned normal state: a quiet ink line, no tint and
+     no success hue. The shield glyph plus the word carry the meaning. */
   .enrolled-badge {
     display: flex;
     align-items: center;
     gap: var(--space-xs);
     padding: var(--space-sm) var(--space-md);
     margin: 0 var(--space-md) var(--space-sm);
-    background: var(--k-color-green-tint, rgba(52, 199, 89, 0.1));
-    border-radius: 0.5rem;
     font-size: 0.875rem;
     font-weight: 500;
-    color: var(--k-color-green, #34c759);
+    color: var(--ink-2, inherit);
   }
 
   :global(.enrolled-icon) {
     flex-shrink: 0;
   }
 
+  /* Icons are tools on the desk: the accent slot, not brand text. */
   :global(.method-add-icon) {
-    color: var(--brand-primary, var(--k-color-primary, #007aff));
+    color: var(--brand-accent, var(--brand-primary, #007aff));
   }
 </style>

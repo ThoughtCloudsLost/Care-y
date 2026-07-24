@@ -5,6 +5,7 @@ coverage
 build
 playwright-report
 test-results
+.coverage-prev-summary.json
 pnpm-lock.yaml
 .git
 *.svg

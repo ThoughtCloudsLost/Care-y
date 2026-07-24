@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Setting up encryption..." |
+* | "Setting up your protection..." |
 *
 * @param {Onboarding_Account_Setting_UpInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

@@ -15,7 +15,7 @@ import { twilioConfigSchema, type TwilioConfig } from "./schemas.js";
 import { twilioHmacValidator } from "./webhook-crypto.js";
 import { createProviderHttpClient } from "./provider-http.js";
 import { renderVoiceXml } from "./voice-xml.js";
-import { TelephonyError } from "../errors.js";
+import { TelephonyConfigError, TelephonyError } from "../errors.js";
 
 const TWILIO_API_BASE = "https://api.twilio.com/2010-04-01/Accounts" as const;
 
@@ -57,8 +57,13 @@ interface TwilioPhoneNumberListResponse {
  * One instance per org; holds that org's decrypted credentials.
  */
 export function createTwilioProvider(config: unknown): TelephonyProvider {
-  const parsed: TwilioConfig = twilioConfigSchema.parse(config);
-  const { accountSid, authToken, mode, phoneNumbers } = parsed;
+  const parseResult = twilioConfigSchema.safeParse(config);
+  if (!parseResult.success) {
+    throw new TelephonyConfigError(
+      `Corrupt Twilio config: ${parseResult.error.issues.map((i) => i.message).join(", ")}`,
+    );
+  }
+  const { accountSid, authToken, mode, phoneNumbers } = parseResult.data;
 
   const http = createProviderHttpClient({
     baseUrl: accountBaseUrl(accountSid),
@@ -193,7 +198,13 @@ export function createTwilioProvider(config: unknown): TelephonyProvider {
 /** Static factory methods for the Twilio provider. */
 export const twilioProviderStatic: TelephonyProviderStatic = {
   validateConfig(raw: unknown): TwilioConfig {
-    return twilioConfigSchema.parse(raw);
+    const result = twilioConfigSchema.safeParse(raw);
+    if (!result.success) {
+      throw new TelephonyConfigError(
+        `Invalid Twilio config: ${result.error.issues.map((i) => i.message).join(", ")}`,
+      );
+    }
+    return result.data;
   },
 
   async provisionWebhooks(
@@ -201,7 +212,13 @@ export const twilioProviderStatic: TelephonyProviderStatic = {
     orgId: string,
     baseUrl: string,
   ): Promise<TwilioConfig> {
-    const parsed: TwilioConfig = twilioConfigSchema.parse(config);
+    const parseResult = twilioConfigSchema.safeParse(config);
+    if (!parseResult.success) {
+      throw new TelephonyConfigError(
+        `Invalid Twilio config for webhook provisioning: ${parseResult.error.issues.map((i) => i.message).join(", ")}`,
+      );
+    }
+    const parsed: TwilioConfig = parseResult.data;
     const { accountSid, authToken, mode } = parsed;
 
     const http = createProviderHttpClient({

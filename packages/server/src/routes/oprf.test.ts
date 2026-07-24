@@ -23,20 +23,24 @@ import type {
   OprfFailureReason,
 } from "../crypto/oprf-audit.js";
 import { createInMemoryRateLimiter } from "../ratelimit/rate-limiter.js";
+import { createInMemoryTotpReplayCache } from "../auth/totp-replay-cache.js";
 import { createPowVerifier } from "../crypto/pow.js";
 import {
   createOprfEvaluateService,
   createAttemptTracker,
   getDelayMs,
+  resolveDelayTiers,
+  type OprfEvaluateService,
   type OprfEvaluateServiceDeps,
   type OprfEvaluateRequest,
 } from "../crypto/oprf-evaluate-service.js";
+import { _resetEnvCache } from "../env.js";
 import {
   mockReq,
   mockRes,
   expectTrpcError,
   createMockEmailSender,
-  createMockProviderFactory,
+  createThrowingProviderFactory,
   testFieldEncryptor,
   testBlindIndexer,
   testSessionTokenizer,
@@ -131,31 +135,63 @@ function makeRequest(
   };
 }
 
+/**
+ * Constructs the service with NODE_ENV forced to the given value, restoring
+ * the ambient env afterwards. The limits are resolved once at construction,
+ * so the returned service keeps the forced environment's values for its
+ * whole lifetime.
+ */
+function createServiceUnderEnv(
+  nodeEnv: "development" | "test" | "production",
+  deps: OprfEvaluateServiceDeps,
+): OprfEvaluateService {
+  const prevEnv = process.env.NODE_ENV;
+  process.env.NODE_ENV = nodeEnv;
+  _resetEnvCache();
+  try {
+    return createOprfEvaluateService(deps);
+  } finally {
+    if (prevEnv === undefined) {
+      delete process.env.NODE_ENV;
+    } else {
+      process.env.NODE_ENV = prevEnv;
+    }
+    _resetEnvCache();
+  }
+}
+
 // ---------------------------------------------------------------------------
 // 1. getDelayMs (pure function, direct unit test)
 // ---------------------------------------------------------------------------
 
 describe("getDelayMs", () => {
+  const PROD_TIERS = resolveDelayTiers("production");
+
   it("returns 0 for 0-5 attempts (below the delay floor)", () => {
-    expect(getDelayMs(0)).toBe(0);
-    expect(getDelayMs(3)).toBe(0);
-    expect(getDelayMs(5)).toBe(0);
+    expect(getDelayMs(PROD_TIERS, 0)).toBe(0);
+    expect(getDelayMs(PROD_TIERS, 3)).toBe(0);
+    expect(getDelayMs(PROD_TIERS, 5)).toBe(0);
   });
 
   it("returns 2000 for 6-7 attempts", () => {
-    expect(getDelayMs(6)).toBe(2_000);
-    expect(getDelayMs(7)).toBe(2_000);
+    expect(getDelayMs(PROD_TIERS, 6)).toBe(2_000);
+    expect(getDelayMs(PROD_TIERS, 7)).toBe(2_000);
   });
 
   it("returns 5000 for 8-9 attempts", () => {
-    expect(getDelayMs(8)).toBe(5_000);
-    expect(getDelayMs(9)).toBe(5_000);
+    expect(getDelayMs(PROD_TIERS, 8)).toBe(5_000);
+    expect(getDelayMs(PROD_TIERS, 9)).toBe(5_000);
   });
 
   it("returns 10000 for 10+ attempts", () => {
-    expect(getDelayMs(10)).toBe(10_000);
-    expect(getDelayMs(15)).toBe(10_000);
-    expect(getDelayMs(100)).toBe(10_000);
+    expect(getDelayMs(PROD_TIERS, 10)).toBe(10_000);
+    expect(getDelayMs(PROD_TIERS, 15)).toBe(10_000);
+    expect(getDelayMs(PROD_TIERS, 100)).toBe(10_000);
+  });
+
+  it("returns 0 at any count when the resolved tiers are empty", () => {
+    expect(getDelayMs(resolveDelayTiers("test"), 100)).toBe(0);
+    expect(getDelayMs(resolveDelayTiers("development"), 100)).toBe(0);
   });
 });
 
@@ -226,7 +262,8 @@ describe("OprfEvaluateService", () => {
 
   it("requires proof-of-work once attempts reach the threshold, even when every evaluation succeeds", async () => {
     const auditLogger = createSpyAuditLogger();
-    const service = createOprfEvaluateService(
+    const service = createServiceUnderEnv(
+      "production",
       makeServiceDeps({
         auditLogger,
         userRateLimiter: createInMemoryRateLimiter({
@@ -257,7 +294,8 @@ describe("OprfEvaluateService", () => {
 
   it("rejects an invalid proof-of-work solution with ValidationError", async () => {
     const auditLogger = createSpyAuditLogger();
-    const service = createOprfEvaluateService(
+    const service = createServiceUnderEnv(
+      "production",
       makeServiceDeps({
         auditLogger,
         userRateLimiter: createInMemoryRateLimiter({
@@ -353,7 +391,8 @@ describe("OprfEvaluateService", () => {
 
   it("adminEvaluate does not require proof-of-work at the threshold", async () => {
     const auditLogger = createSpyAuditLogger();
-    const service = createOprfEvaluateService(
+    const service = createServiceUnderEnv(
+      "production",
       makeServiceDeps({
         auditLogger,
         userRateLimiter: createInMemoryRateLimiter({
@@ -421,8 +460,9 @@ describe("OPRF tRPC route", () => {
         isSecureCookie: false,
         emailSender: createMockEmailSender(),
         tokenizer: testSessionTokenizer,
-        providerFactory: createMockProviderFactory(),
+        providerFactory: createThrowingProviderFactory(),
         resolveCallerId: vi.fn().mockResolvedValue("+15551234567"),
+        totpReplayCache: createInMemoryTotpReplayCache(),
       },
       profileDeps: {
         hasher: createScryptHasher(),
@@ -439,10 +479,11 @@ describe("OPRF tRPC route", () => {
         encryptor: testFieldEncryptor,
         indexer: testBlindIndexer,
         tokenizer: testSessionTokenizer,
-        providerFactory: createMockProviderFactory(),
+        providerFactory: createThrowingProviderFactory(),
         resolveCallerId: vi.fn().mockResolvedValue("+15551234567"),
         pushSender: null,
         pushHmacKey: null,
+        totpReplayCache: createInMemoryTotpReplayCache(),
       },
       oprfDeps: { oprfService: service },
       orgService: {
@@ -451,7 +492,7 @@ describe("OPRF tRPC route", () => {
           throw new OprfError("not implemented in test");
         },
       } as unknown as Parameters<typeof createAppRouter>[0]["orgService"],
-      providerFactory: createMockProviderFactory(),
+      providerFactory: createThrowingProviderFactory(),
     });
     const factory = createCallerFactory(appRouter);
     const ctx: Context = {
@@ -539,8 +580,9 @@ describe("OPRF adminEvaluate route", () => {
         isSecureCookie: false,
         emailSender: createMockEmailSender(),
         tokenizer: testSessionTokenizer,
-        providerFactory: createMockProviderFactory(),
+        providerFactory: createThrowingProviderFactory(),
         resolveCallerId: vi.fn().mockResolvedValue("+15551234567"),
+        totpReplayCache: createInMemoryTotpReplayCache(),
       },
       profileDeps: {
         hasher: createScryptHasher(),
@@ -557,10 +599,11 @@ describe("OPRF adminEvaluate route", () => {
         encryptor: testFieldEncryptor,
         indexer: testBlindIndexer,
         tokenizer: testSessionTokenizer,
-        providerFactory: createMockProviderFactory(),
+        providerFactory: createThrowingProviderFactory(),
         resolveCallerId: vi.fn().mockResolvedValue("+15551234567"),
         pushSender: null,
         pushHmacKey: null,
+        totpReplayCache: createInMemoryTotpReplayCache(),
       },
       oprfDeps: { oprfService: spiedService },
       orgService: {
@@ -569,7 +612,7 @@ describe("OPRF adminEvaluate route", () => {
           throw new OprfError("not implemented in test");
         },
       } as unknown as Parameters<typeof createAppRouter>[0]["orgService"],
-      providerFactory: createMockProviderFactory(),
+      providerFactory: createThrowingProviderFactory(),
     });
     const factory = createCallerFactory(appRouter);
     const ctx: Context = {
@@ -798,8 +841,9 @@ describe.skipIf(!DOCKER_OPRF_AVAILABLE)(
           isSecureCookie: false,
           emailSender: createMockEmailSender(),
           tokenizer: testSessionTokenizer,
-          providerFactory: createMockProviderFactory(),
+          providerFactory: createThrowingProviderFactory(),
           resolveCallerId: vi.fn().mockResolvedValue("+15551234567"),
+          totpReplayCache: createInMemoryTotpReplayCache(),
         },
         profileDeps: {
           hasher: createScryptHasher(),
@@ -816,10 +860,11 @@ describe.skipIf(!DOCKER_OPRF_AVAILABLE)(
           encryptor: testFieldEncryptor,
           indexer: testBlindIndexer,
           tokenizer: testSessionTokenizer,
-          providerFactory: createMockProviderFactory(),
+          providerFactory: createThrowingProviderFactory(),
           resolveCallerId: vi.fn().mockResolvedValue("+15551234567"),
           pushSender: null,
           pushHmacKey: null,
+          totpReplayCache: createInMemoryTotpReplayCache(),
         },
         oprfDeps: { oprfService: service },
         orgService: {
@@ -828,7 +873,7 @@ describe.skipIf(!DOCKER_OPRF_AVAILABLE)(
             throw new OprfError("not implemented in test");
           },
         } as unknown as Parameters<typeof createAppRouter>[0]["orgService"],
-        providerFactory: createMockProviderFactory(),
+        providerFactory: createThrowingProviderFactory(),
       });
       const factory = createCallerFactory(appRouter);
       const ctx: Context = {

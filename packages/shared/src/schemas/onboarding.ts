@@ -2,6 +2,7 @@ import { z } from "zod";
 import { identifierSchema, passwordSchema, displayNameSchema } from "./auth.js";
 import { base64String, base64Bytes } from "./validators.js";
 import { ROLE_ID_VALUES_TUPLE } from "../roles.js";
+import { isValidCountryCode } from "../telephony/country-codes.js";
 
 /** Bootstrap the first admin account for an org with zero active users.
  *  orgPublicKey: the client generates the Curve25519 keypair before calling
@@ -20,7 +21,11 @@ export const bootstrapAdminInputSchema = z.object({
 export const updateOrgGeneralInputSchema = z.object({
   encryptedOrgName: base64String("encryptedOrgName"),
   defaultLanguage: z.string().min(2).max(10),
-  countryCode: z.string().min(1).max(5),
+  countryCode: z
+    .string()
+    .min(1)
+    .max(5)
+    .refine(isValidCountryCode, "Invalid country code"),
   encryptedTerminology: base64String("encryptedTerminology").optional(),
 });
 

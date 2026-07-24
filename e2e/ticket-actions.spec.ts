@@ -1,8 +1,13 @@
 import { test, expect } from "./coverage-fixture";
 import { startCoverage, stopAndWriteCoverage } from "./coverage-fixture";
 import type { Page } from "@playwright/test";
-import AxeBuilder from "@axe-core/playwright";
-import { CRYPTO_TIMEOUT, login, openTicketByTitle } from "./helpers";
+import {
+  auditA11y,
+  CRYPTO_TIMEOUT,
+  login,
+  openComposeActions,
+  openTicketByTitle,
+} from "./helpers";
 
 test.describe.serial("Ticket Actions (Call + SMS)", () => {
   let page: Page;
@@ -27,15 +32,10 @@ test.describe.serial("Ticket Actions (Call + SMS)", () => {
   // ── 1. Compose actions sheet ──────────────────────────────────
 
   test("compose actions button opens sheet with 'Text Client' option", async () => {
-    // The messagebar "+" button has aria-label "Compose actions".
-    const composeActionsBtn = page.getByRole("button", {
-      name: /compose actions/i,
-    });
-    await expect(composeActionsBtn).toBeVisible();
-    await composeActionsBtn.click();
+    const dialog = await openComposeActions(page);
 
     // The actions sheet should show "Text Client" among the options.
-    await expect(page.getByText(/text client/i)).toBeVisible({
+    await expect(dialog.getByText(/text client/i)).toBeVisible({
       timeout: 3000,
     });
   });
@@ -61,10 +61,10 @@ test.describe.serial("Ticket Actions (Call + SMS)", () => {
     const dismissBtn = page.locator('[data-testid="exposure-dismiss"]');
     await dismissBtn.click();
 
-    // SMS compose sheet should now be visible with the plaintext warning.
-    await expect(page.getByText(/SMS messages are not encrypted/i)).toBeVisible(
-      { timeout: 3000 },
-    );
+    // SMS compose mode indicator visible in the messagebar header.
+    await expect(page.getByText(/texting client via SMS/i)).toBeVisible({
+      timeout: 3000,
+    });
 
     // Send button should be present but disabled (empty body).
     const sendBtn = page.getByRole("button", { name: /send sms/i });
@@ -78,114 +78,101 @@ test.describe.serial("Ticket Actions (Call + SMS)", () => {
     await expect(page.getByText(/0 \/ 1600/)).toBeVisible();
   });
 
-  test("cancel closes SMS compose sheet", async () => {
-    const smsSheet = page.getByLabel(/text client/i);
-    const cancelBtn = smsSheet.getByRole("button", { name: /cancel/i });
-    await cancelBtn.click();
+  test("cancel closes SMS compose mode", async () => {
+    // SMS compose is now inline in the messagebar. The "Dismiss compose"
+    // button exits the mode.
+    const dismissBtn = page.getByRole("button", { name: /dismiss compose/i });
+    await dismissBtn.waitFor({ state: "visible", timeout: 5_000 });
+    await dismissBtn.click();
 
-    // The SMS compose content should no longer be visible.
-    await expect(
-      page.getByText(/SMS messages are not encrypted/i),
-    ).not.toBeVisible({ timeout: 3000 });
+    // Wait for the compose mode indicator to disappear.
+    await expect(page.getByText(/texting client via SMS/i)).not.toBeVisible({
+      timeout: 15_000,
+    });
   });
 
   // ── 4. Exposure hint not repeated ─────────────────────────────
 
   test("reopening SMS compose does not show exposure hint again", async () => {
     // Reopen compose actions.
-    const composeActionsBtn = page.getByRole("button", {
-      name: /compose actions/i,
-    });
-    await expect(composeActionsBtn).toBeVisible();
-    await composeActionsBtn.click();
-
-    await page.getByText(/text client/i).click();
+    const dialog = await openComposeActions(page);
+    await dialog.getByText(/text client/i).click();
 
     // Hint should NOT appear since it was already dismissed this session.
-    // The SMS Sheet should open directly.
-    await expect(page.getByText(/SMS messages are not encrypted/i)).toBeVisible(
-      { timeout: 3000 },
-    );
+    // The SMS compose mode opens directly.
+    await expect(page.getByText(/texting client via SMS/i)).toBeVisible({
+      timeout: 3000,
+    });
 
     // Verify the exposure hint is NOT showing.
     await expect(
       page.locator('[data-testid="exposure-dismiss"]'),
     ).not.toBeVisible({ timeout: 1000 });
 
-    // Close SMS sheet (scope to the Text Client sheet to avoid other cancel buttons).
-    const smsSheet = page.getByLabel(/text client/i);
-    const cancelBtn = smsSheet.getByRole("button", { name: /cancel/i });
-    await cancelBtn.click();
+    // Dismiss the inline SMS compose mode.
+    const dismissBtn = page.getByRole("button", { name: /dismiss compose/i });
+    await dismissBtn.waitFor({ state: "visible", timeout: 5_000 });
+    await dismissBtn.click();
   });
 
   // ── 5. Call options via panel ──────────────────────────────────
 
   test("call action from client panel opens call options sheet", async () => {
-    // Dismiss any lingering sheets/toasts from prior SMS compose tests.
-    await page.keyboard.press("Escape");
-    await page.waitForTimeout(300);
+    // Wait for any SMS compose overlay to fully clear from prior tests.
+    await expect(page.getByText(/texting client via SMS/i)).not.toBeVisible({
+      timeout: 5_000,
+    });
 
     // Open the client info panel via the header button.
+    // On desktop split-view, the alias button is replaced by "More actions".
     const panel = page.locator('[role="dialog"]').filter({
       hasText: "Help with housing",
     });
     if (!(await panel.isVisible().catch(() => false))) {
       const clientInfoBtn = page.getByRole("button", {
-        name: /view info/i,
+        name: /view info|more actions/i,
       });
-      await expect(clientInfoBtn).toBeVisible();
+      await expect(clientInfoBtn).toBeVisible({ timeout: 5_000 });
       await clientInfoBtn.click();
     }
     await expect(panel).toBeVisible({ timeout: 3000 });
 
     // In the panel, find the "Call" button and click it.
-    // The button may be below the viewport in the panel's scroll container,
-    // so use evaluate to click programmatically.
     const callBtn = panel.getByRole("button", { name: "Call" });
     await expect(callBtn).toBeVisible({ timeout: 3000 });
-    await callBtn.evaluate((el) => {
-      (el as HTMLElement).click();
-    });
+    await callBtn.click();
 
     // Call options sheet should show "Call via browser" at minimum.
-    await expect(page.getByText(/call via browser/i)).toBeVisible({
+    const callSheet = page.getByRole("dialog", { name: /call options/i });
+    await expect(callSheet.getByText(/call via browser/i)).toBeVisible({
       timeout: 5000,
     });
 
-    // Clean up: dismiss call sheet and panel via keyboard.
-    // Both overlays share z-40 backdrops, so backdrop clicks are unreliable.
-    // Tab to the Cancel button and press Enter, then close the panel.
+    // Clean up: dismiss call sheet. The panel was already closed by the
+    // oncall handler before the call sheet opened.
     await page.keyboard.press("Escape");
     await page.waitForTimeout(300);
-    await page.keyboard.press("Escape");
-    await page.waitForTimeout(300);
+
+    // On desktop split-view, Escape can cascade and close the detail pane.
+    // Re-open the ticket if the detail compose bar is no longer mounted.
+    if ((await page.locator(".detail-compose").count()) === 0) {
+      await openTicketByTitle(page, "Help with housing");
+    }
   });
 
   // ── 6. Accessibility scan ─────────────────────────────────────
 
   test("SMS compose sheet passes axe-core accessibility scan", async () => {
-    // Open SMS compose sheet.
-    const composeActionsBtn = page.getByRole("button", {
-      name: /compose actions/i,
+    const dialog = await openComposeActions(page);
+    await dialog.getByText(/text client/i).click();
+
+    await expect(page.getByText(/texting client via SMS/i)).toBeVisible({
+      timeout: 3000,
     });
-    await expect(composeActionsBtn).toBeVisible();
-    await composeActionsBtn.click();
 
-    await page.getByText(/text client/i).click();
-
-    await expect(page.getByText(/SMS messages are not encrypted/i)).toBeVisible(
-      { timeout: 3000 },
-    );
-
-    // Scope to WCAG rules only. Exclude best-practice rules (aria-dialog-name
-    // on Konsta-internal dialogs) and color-contrast (tracked separately).
-    const results = await new AxeBuilder({ page })
-      .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"])
-      .disableRules(["color-contrast"])
-      .exclude("[role='tablist']")
-      .analyze();
-
-    expect(results.violations).toEqual([]);
+    // Konsta Tabbar internals are excluded (aria-selected on role=button
+    // links, H-011); the shell tab bar is audited by the sweep spec.
+    await auditA11y(page, { exclude: ["[role='tablist']"] });
 
     // Cleanup: dismiss the SMS compose sheet (last test, page may be closing).
     if (!page.isClosed()) {

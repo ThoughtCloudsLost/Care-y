@@ -1,161 +1,327 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import { createReportsService } from "./reports-service.js";
+// care-y-ignore db-write-no-crypto-import -- test seeds plaintext ticket metadata (status, priority, timestamps) and empty follow-up content via noopEncryptor; no PII is written.
+import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import {
+  createTestDb,
+  createTestQueue,
+  createTestTicketFixture,
+  noopEncryptor,
+  seedOrgPublicKey,
+  type TestDb,
+} from "../test-utils.js";
+import {
+  createReportsService,
+  priorityToNumeric,
+  type ReportsService,
+} from "./reports-service.js";
 
-function createMockDb(): Parameters<typeof createReportsService>[0] {
-  const executeMock = vi.fn().mockResolvedValue([]);
-  const executeTakeFirstOrThrowMock = vi.fn().mockResolvedValue({ count: 0 });
+const DAY_MS = 24 * 60 * 60 * 1000;
 
-  const chainMock = {
-    innerJoin: vi.fn().mockReturnThis(),
-    select: vi.fn().mockReturnThis(),
-    where: vi.fn().mockReturnThis(),
-    groupBy: vi.fn().mockReturnThis(),
-    orderBy: vi.fn().mockReturnThis(),
-    execute: executeMock,
-    executeTakeFirstOrThrow: executeTakeFirstOrThrowMock,
-  };
-
-  return {
-    selectFrom: vi.fn().mockReturnValue(chainMock),
-    _executeMock: executeMock,
-    _executeTakeFirstOrThrowMock: executeTakeFirstOrThrowMock,
-    _chainMock: chainMock,
-  } as unknown as Parameters<typeof createReportsService>[0];
+/**
+ * YYYY-MM key for the month `monthsBack` months before now. Month keys are
+ * part of the tRPC wire contract: the reports charts consume them as labels.
+ */
+function monthKey(monthsBack: number): string {
+  const now = new Date();
+  const d = new Date(now.getFullYear(), now.getMonth() - monthsBack, 1);
+  return `${String(d.getFullYear())}-${String(d.getMonth() + 1).padStart(2, "0")}`;
 }
 
-describe("createReportsService", () => {
-  let db: ReturnType<typeof createMockDb>;
+/**
+ * A Date safely inside the month `monthsBack` months ago. Mid-month days at
+ * noon keep a wide margin from month boundaries in any timezone, so seeded
+ * rows land in the intended monthly bucket.
+ */
+function dateInMonth(monthsBack: number, day: number): Date {
+  const now = new Date();
+  return new Date(now.getFullYear(), now.getMonth() - monthsBack, day, 12);
+}
 
-  beforeEach(() => {
-    db = createMockDb();
+/** The 12 month keys the trend endpoints cover, oldest first. */
+function expectedMonthKeys(): string[] {
+  const keys: string[] = [];
+  for (let i = 11; i >= 0; i--) {
+    keys.push(monthKey(i));
+  }
+  return keys;
+}
+
+describe("priorityToNumeric", () => {
+  it("maps each ticket priority to its ascending numeric order", () => {
+    expect(priorityToNumeric("low")).toBe(0);
+    expect(priorityToNumeric("normal")).toBe(1);
+    expect(priorityToNumeric("high")).toBe(2);
+    expect(priorityToNumeric("urgent")).toBe(3);
   });
 
-  describe("queueStats", () => {
-    it("returns formatted queue statistics", async () => {
-      const raw = [
-        {
-          queueId: "q1",
-          encryptedQueueName: Buffer.from("encrypted-general"),
-          open: 5,
-          closed: 10,
-        },
-        {
-          queueId: "q2",
-          encryptedQueueName: Buffer.from("encrypted-evening"),
-          open: 2,
-          closed: 7,
-        },
-      ];
-      (
-        db as unknown as { _executeMock: ReturnType<typeof vi.fn> }
-      )._executeMock.mockResolvedValueOnce(raw);
-
-      const svc = createReportsService(db);
-      const result = await svc.queueStats();
-
-      expect(result).toHaveLength(2);
-      expect(result[0]).toEqual({
-        queueId: "q1",
-        encryptedQueueName: Buffer.from("encrypted-general"),
-        open: 5,
-        closed: 10,
-      });
-      expect(result[1]).toEqual({
-        queueId: "q2",
-        encryptedQueueName: Buffer.from("encrypted-evening"),
-        open: 2,
-        closed: 7,
-      });
-    });
-
-    it("returns empty array when no tickets exist", async () => {
-      const svc = createReportsService(db);
-      const result = await svc.queueStats();
-      expect(result).toEqual([]);
-    });
+  it("falls back to 0 for unknown priority values", () => {
+    expect(priorityToNumeric("medium")).toBe(0);
+    expect(priorityToNumeric("URGENT")).toBe(0);
+    expect(priorityToNumeric("")).toBe(0);
   });
+});
 
-  describe("volumeTrends", () => {
-    it("returns 12 months of data even when DB has no tickets", async () => {
-      const svc = createReportsService(db);
-      const result = await svc.volumeTrends();
+describe.skipIf(!process.env.DATABASE_URL)("ReportsService (DB)", () => {
+  describe("with no tickets", () => {
+    let testDb: TestDb;
+    let svc: ReportsService;
 
-      expect(result).toHaveLength(12);
-      for (const month of result) {
+    beforeAll(async () => {
+      testDb = await createTestDb();
+      await seedOrgPublicKey(testDb.db);
+      // A queue with no tickets, to pin that ticketless queues are omitted.
+      await createTestQueue(testDb.db, { label: "empty-queue" });
+      svc = createReportsService(testDb.db);
+    }, 30_000);
+
+    afterAll(async () => {
+      await testDb.cleanup();
+    });
+
+    it("queueStats omits queues that have no tickets", async () => {
+      expect(await svc.queueStats()).toEqual([]);
+    });
+
+    it("volumeTrends returns 12 months of zeros ending at the current month", async () => {
+      const trends = await svc.volumeTrends();
+
+      expect(trends).toHaveLength(12);
+      for (const month of trends) {
         expect(month.created).toBe(0);
         expect(month.closed).toBe(0);
+        // YYYY-MM is the wire format the reports charts consume as labels.
         expect(month.month).toMatch(/^\d{4}-\d{2}$/);
       }
+      expect(trends[11]!.month).toBe(monthKey(0));
     });
 
-    it("includes the current month as the last entry", async () => {
-      const svc = createReportsService(db);
-      const result = await svc.volumeTrends();
+    it("resolutionTrends returns 12 months with avgDays 0", async () => {
+      const trends = await svc.resolutionTrends();
 
-      const now = new Date();
-      const expected = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
-      expect(result[11]!.month).toBe(expected);
-    });
-  });
-
-  describe("resolutionTrends", () => {
-    it("returns 12 months of data even when DB has no closed tickets", async () => {
-      const svc = createReportsService(db);
-      const result = await svc.resolutionTrends();
-
-      expect(result).toHaveLength(12);
-      for (const month of result) {
+      expect(trends).toHaveLength(12);
+      for (const month of trends) {
         expect(month.avgDays).toBe(0);
+        // YYYY-MM is the wire format the reports charts consume as labels.
         expect(month.month).toMatch(/^\d{4}-\d{2}$/);
       }
+      expect(trends[11]!.month).toBe(monthKey(0));
+    });
+
+    it("priorityBreakdown returns empty array", async () => {
+      expect(await svc.priorityBreakdown()).toEqual([]);
+    });
+
+    it("activeCount returns 0", async () => {
+      expect(await svc.activeCount()).toBe(0);
     });
   });
 
-  describe("priorityBreakdown", () => {
-    it("maps string priorities to numeric order", async () => {
-      const raw = [
-        { priority: "urgent", count: 3 },
-        { priority: "low", count: 7 },
-        { priority: "normal", count: 5 },
-      ];
-      (
-        db as unknown as { _executeMock: ReturnType<typeof vi.fn> }
-      )._executeMock.mockResolvedValueOnce(raw);
+  describe("with a seeded ticket dataset", () => {
+    let testDb: TestDb;
+    let svc: ReportsService;
+    let queueA: string;
+    let queueB: string;
 
-      const svc = createReportsService(db);
-      const result = await svc.priorityBreakdown();
+    async function seedTicket(opts: {
+      queueId: string;
+      status: "open" | "closed";
+      priority: "low" | "normal" | "high" | "urgent";
+      createdAt?: Date;
+      closingFollowupAt?: Date;
+    }): Promise<void> {
+      const fix = await createTestTicketFixture(testDb.db, {
+        queueId: opts.queueId,
+      });
 
-      expect(result).toEqual([
-        { priority: 0, count: 7 },
-        { priority: 1, count: 5 },
-        { priority: 3, count: 3 },
+      await testDb.db
+        .updateTable("tickets")
+        .set({
+          status: opts.status,
+          priority: opts.priority,
+          ...(opts.createdAt !== undefined
+            ? { created_at: opts.createdAt }
+            : {}),
+        })
+        .where("id", "=", fix.ticketId)
+        .execute();
+
+      if (opts.closingFollowupAt !== undefined) {
+        // Mirror the system follow-up the ticket service writes on close:
+        // empty encrypted content (noop encrypt of "" is a zero-length
+        // Buffer, byte-identical to production's Buffer.alloc(0)).
+        await testDb.db
+          .insertInto("followups")
+          .values({
+            ticket_id: fix.ticketId,
+            source: "system",
+            type: "status_closed",
+            encrypted_content: noopEncryptor.encrypt(""),
+            created_at: opts.closingFollowupAt,
+          })
+          .execute();
+      }
+    }
+
+    beforeAll(async () => {
+      testDb = await createTestDb();
+      await seedOrgPublicKey(testDb.db);
+      svc = createReportsService(testDb.db);
+
+      // Queue B is created first with the higher sort_order to prove that
+      // queueStats orders by sort_order, not by insertion order. High
+      // sentinel values keep clear of any fixture-assigned sort_order.
+      queueB = (
+        await createTestQueue(testDb.db, { label: "QB", sortOrder: 9002 })
+      ).id;
+      queueA = (
+        await createTestQueue(testDb.db, { label: "QA", sortOrder: 9001 })
+      ).id;
+
+      const closeA3 = dateInMonth(1, 15);
+      const closeB2 = dateInMonth(1, 20);
+      const closeB3 = dateInMonth(1, 12);
+
+      // Queue A: two open low tickets (this month and last month), one
+      // urgent ticket closed in exactly 40 days, one closed ticket 11
+      // months back (oldest trend bucket), and one closed ticket 13 months
+      // back (outside the trend window but still counted by queueStats).
+      await seedTicket({ queueId: queueA, status: "open", priority: "low" });
+      await seedTicket({
+        queueId: queueA,
+        status: "open",
+        priority: "low",
+        createdAt: dateInMonth(1, 15),
+      });
+      await seedTicket({
+        queueId: queueA,
+        status: "closed",
+        priority: "urgent",
+        createdAt: new Date(closeA3.getTime() - 40 * DAY_MS),
+        closingFollowupAt: closeA3,
+      });
+      await seedTicket({
+        queueId: queueA,
+        status: "closed",
+        priority: "low",
+        createdAt: dateInMonth(11, 15),
+      });
+      await seedTicket({
+        queueId: queueA,
+        status: "closed",
+        priority: "low",
+        createdAt: dateInMonth(13, 15),
+      });
+
+      // Queue B: one open normal ticket (this month), one high ticket
+      // closed in exactly 5.25 days, and one urgent ticket that was closed
+      // but then reopened (status open again, stale closing follow-up).
+      await seedTicket({ queueId: queueB, status: "open", priority: "normal" });
+      await seedTicket({
+        queueId: queueB,
+        status: "closed",
+        priority: "high",
+        createdAt: new Date(closeB2.getTime() - 5.25 * DAY_MS),
+        closingFollowupAt: closeB2,
+      });
+      await seedTicket({
+        queueId: queueB,
+        status: "open",
+        priority: "urgent",
+        createdAt: new Date(closeB3.getTime() - 2 * DAY_MS),
+        closingFollowupAt: closeB3,
+      });
+    }, 30_000);
+
+    afterAll(async () => {
+      await testDb.cleanup();
+    });
+
+    it("queueStats aggregates open and closed counts per queue ordered by sort_order", async () => {
+      const stats = await svc.queueStats();
+
+      expect(stats).toEqual([
+        {
+          queueId: queueA,
+          encryptedQueueName: Buffer.from("QA"),
+          open: 2,
+          closed: 3,
+        },
+        {
+          queueId: queueB,
+          encryptedQueueName: Buffer.from("QB"),
+          open: 2,
+          closed: 1,
+        },
       ]);
     });
 
-    it("returns empty array when no open tickets", async () => {
-      const svc = createReportsService(db);
-      const result = await svc.priorityBreakdown();
-      expect(result).toEqual([]);
+    it("volumeTrends counts tickets created per month across the 12-month window", async () => {
+      const trends = await svc.volumeTrends();
+
+      // The 13-month-old ticket appears in no bucket; the 11-month-old one
+      // lands in the oldest bucket.
+      const createdByMonth = new Map<string, number>([
+        [monthKey(11), 1],
+        [monthKey(2), 1],
+        [monthKey(1), 3],
+        [monthKey(0), 2],
+      ]);
+      const actual = trends.map((m) => ({
+        month: m.month,
+        created: m.created,
+      }));
+      const expected = expectedMonthKeys().map((month) => ({
+        month,
+        created: createdByMonth.get(month) ?? 0,
+      }));
+      expect(actual).toEqual(expected);
     });
-  });
 
-  describe("activeCount", () => {
-    it("returns count of open tickets", async () => {
-      (
-        db as unknown as {
-          _executeTakeFirstOrThrowMock: ReturnType<typeof vi.fn>;
-        }
-      )._executeTakeFirstOrThrowMock.mockResolvedValueOnce({ count: 42 });
+    it("volumeTrends counts closures from system closing follow-ups, excluding reopened tickets", async () => {
+      const trends = await svc.volumeTrends();
 
-      const svc = createReportsService(db);
-      const result = await svc.activeCount();
-      expect(result).toBe(42);
+      // Two tickets closed last month. The reopened ticket has a closing
+      // follow-up in the same month but must not count (3 would be wrong).
+      const actual = trends.map((m) => ({
+        month: m.month,
+        closed: m.closed,
+      }));
+      const expected = expectedMonthKeys().map((month) => ({
+        month,
+        closed: month === monthKey(1) ? 2 : 0,
+      }));
+      expect(actual).toEqual(expected);
     });
 
-    it("returns 0 when no open tickets", async () => {
-      const svc = createReportsService(db);
-      const result = await svc.activeCount();
-      expect(result).toBe(0);
+    it("resolutionTrends averages days-to-close per month, rounded to one decimal", async () => {
+      const trends = await svc.resolutionTrends();
+
+      expect(trends).toHaveLength(12);
+      const byMonth = new Map(trends.map((m) => [m.month, m.avgDays]));
+      // (40 + 5.25) / 2 = 22.625 rounds to 22.6. The reopened ticket's
+      // follow-up (2 days) is excluded; including it would give 15.8.
+      expect(byMonth.get(monthKey(1))).toBe(22.6);
+      for (let i = 0; i < 12; i++) {
+        if (i === 1) continue;
+        expect(byMonth.get(monthKey(i))).toBe(0);
+      }
+    });
+
+    it("priorityBreakdown counts open tickets by priority in ascending numeric order", async () => {
+      const breakdown = await svc.priorityBreakdown();
+
+      // Open tickets only: two low (queue A), one normal, one urgent (the
+      // reopened ticket). The closed urgent and high tickets do not count,
+      // so numeric priority 2 (high) is absent entirely.
+      expect(breakdown).toEqual([
+        { priority: 0, count: 2 },
+        { priority: 1, count: 1 },
+        { priority: 3, count: 1 },
+      ]);
+    });
+
+    it("activeCount returns the number of open tickets across all queues", async () => {
+      // Two open in queue A, one open plus the reopened one in queue B.
+      expect(await svc.activeCount()).toBe(4);
     });
   });
 });

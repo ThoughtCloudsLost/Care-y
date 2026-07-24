@@ -1,13 +1,15 @@
 <script lang="ts">
   import {
     Block,
+    Button,
     DialogButton,
-    Link,
     List,
     ListInput,
     ListItem,
     Toggle,
   } from "konsta/svelte";
+  import { DIALOG_DESTRUCTIVE_CLASS } from "$lib/components/shared/konsta-classes.js";
+  import Register from "$lib/components/Register.svelte";
   import {
     createQuery,
     createMutation,
@@ -16,7 +18,8 @@
   import { SvelteSet } from "svelte/reactivity";
   import { RoleId } from "@care-y/shared";
   import type { RoleIdValue } from "@care-y/shared";
-  import { UserMinus, X, Save } from "@lucide/svelte";
+  import { UserMinus, Save } from "@lucide/svelte";
+  import BulkActionBar from "$lib/components/BulkActionBar.svelte";
   import * as m from "$lib/paraglide/messages.js";
   import { withTerms } from "$lib/terminology/with-terms.js";
   import { trpc } from "$lib/trpc/index.js";
@@ -45,7 +48,7 @@
     computeQueueDiff,
     hasQueueChanges,
   } from "$lib/admin/users-section-utils.js";
-  import { getTabbarOverrideCtx } from "$lib/shell/context.js";
+  import type { Snippet } from "svelte";
   import QueryError from "$lib/components/QueryError.svelte";
   import ShellDialog from "$lib/shell/ShellDialog.svelte";
   import ShellSheet from "$lib/shell/ShellSheet.svelte";
@@ -514,14 +517,20 @@
   let multiSelectActive = $state(false);
   const selectedIds = new SvelteSet<string>();
 
-  const tabbarOverride = getTabbarOverrideCtx();
-
   export function toggleMultiSelect(): void {
     if (multiSelectActive) {
       exitMultiSelect();
     } else {
       multiSelectActive = true;
     }
+  }
+
+  export function isMultiSelectActive(): boolean {
+    return multiSelectActive;
+  }
+
+  export function bulkActionsSnippet(): Snippet | undefined {
+    return multiSelectActive ? bulkActionsRow : undefined;
   }
 
   function toggleSelection(userId: string): void {
@@ -536,25 +545,6 @@
     multiSelectActive = false;
     selectedIds.clear();
   }
-
-  $effect(() => {
-    if (multiSelectActive) {
-      tabbarOverride.current = {
-        left: batchLeft,
-        middle: batchMiddle,
-        right: batchRight,
-        ariaLabel: m.admin_users_selected({ count: selectedIds.size }),
-      };
-    } else {
-      tabbarOverride.current = undefined;
-    }
-  });
-
-  $effect(() => {
-    return () => {
-      tabbarOverride.current = undefined;
-    };
-  });
 
   async function handleBatchDeactivate(): Promise<void> {
     const ids = [...selectedIds];
@@ -580,30 +570,27 @@
   }
 </script>
 
-{#snippet batchLeft()}
-  <Link
-    iconOnly
-    onclick={() => void handleBatchDeactivate()}
-    aria-label={m.admin_users_batch_deactivate()}
+{#snippet bulkActionsRow()}
+  <BulkActionBar
+    countLabel={m.admin_users_selected({ count: selectedIds.size })}
+    exitLabel={m.admin_users_exit_multiselect()}
+    onexit={exitMultiSelect}
+    ariaLabel={m.admin_users_selected({ count: selectedIds.size })}
   >
-    <UserMinus size={24} aria-hidden="true" />
-  </Link>
-{/snippet}
-
-{#snippet batchMiddle()}
-  <span class="font-semibold text-sm" role="status">
-    {m.admin_users_selected({ count: selectedIds.size })}
-  </span>
-{/snippet}
-
-{#snippet batchRight()}
-  <Link
-    iconOnly
-    aria-label={m.admin_users_exit_multiselect()}
-    onclick={exitMultiSelect}
-  >
-    <X size={24} aria-hidden="true" />
-  </Link>
+    {#snippet actions()}
+      <Button
+        tonal
+        rounded
+        small
+        inline
+        class="bulk-action-btn"
+        onclick={() => void handleBatchDeactivate()}
+      >
+        <UserMinus size={16} aria-hidden="true" />
+        {m.admin_users_batch_deactivate()}
+      </Button>
+    {/snippet}
+  </BulkActionBar>
 {/snippet}
 
 <div class="users-page pb-20">
@@ -709,7 +696,6 @@
       <p class="section-label">{m.admin_display_name_label()}</p>
       <List nested>
         <ListInput
-          outline
           label={m.settings_display_name()}
           type="text"
           value={editDisplayName}
@@ -726,7 +712,6 @@
       <p class="section-label">{m.admin_username_label()}</p>
       <List nested>
         <ListInput
-          outline
           label={m.settings_username()}
           type="text"
           value={editUsername}
@@ -737,7 +722,9 @@
           disabled={adminUsernameMutation.isPending}
         />
       </List>
-      <p class="pii-warning">{m.user_field_login_username_pii_warning()}</p>
+      <Register kind="careful">
+        {m.user_field_login_username_pii_warning()}
+      </Register>
     </div>
 
     <RoleSelector
@@ -812,7 +799,7 @@
     </DialogButton>
     <DialogButton
       strong
-      class={dialogIsReactivation ? "" : "text-[--color-red-500] font-semibold"}
+      class={dialogIsReactivation ? "" : DIALOG_DESTRUCTIVE_CLASS}
       onclick={confirmActiveToggle}
     >
       {#if dialogIsReactivation}
@@ -842,7 +829,7 @@
     <!-- care-y-ignore-next-line no-click-without-keyboard -- DialogButton renders a native <button> -->
     <DialogButton
       strong
-      class="text-[--color-red-500] font-semibold"
+      class={DIALOG_DESTRUCTIVE_CLASS}
       onclick={confirmRevoke}
     >
       {m.admin_invite_pending_revoke()}
@@ -923,7 +910,7 @@
     padding: 0.625rem;
     font-size: var(--text-sm);
     font-weight: 500;
-    color: var(--color-red-500);
+    color: var(--danger, var(--color-red-500));
     background: none;
     border: none;
     cursor: pointer;

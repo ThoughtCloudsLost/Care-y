@@ -115,7 +115,7 @@
     padding: 0.125rem 0.375rem;
     font-size: 0.6875rem;
     border-radius: 999px;
-    border: 1px solid var(--surface-2);
+    border: 1px solid var(--hair, var(--surface-2));
     background: var(--paper);
     color: var(--muted);
     cursor: pointer;
@@ -154,7 +154,7 @@
     width: 1.375rem;
     height: 1.375rem;
     border-radius: 999px;
-    border: 1px solid var(--surface-2);
+    border: 1px solid var(--hair, var(--surface-2));
     background: var(--paper);
     color: var(--muted);
     cursor: pointer;

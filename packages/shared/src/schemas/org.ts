@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { isValidCountryCode } from "../telephony/country-codes.js";
 
 /**
  * Slugs that conflict with infrastructure subdomains or platform routes.
@@ -63,5 +64,9 @@ export const createOrgInputSchema = z.object({
 export const updateOrgGeneralAdminInputSchema = z.object({
   encryptedOrgName: z.string().min(1),
   defaultLanguage: z.string().min(2).max(10),
-  countryCode: z.string().min(1).max(5),
+  countryCode: z
+    .string()
+    .min(1)
+    .max(5)
+    .refine(isValidCountryCode, "Invalid country code"),
 });

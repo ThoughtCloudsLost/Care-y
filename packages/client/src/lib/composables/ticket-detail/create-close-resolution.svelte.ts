@@ -4,6 +4,7 @@ import type { CryptoBridge } from "$lib/workers/crypto-bridge.js";
 import type { QueryClient } from "@tanstack/svelte-query";
 import type { toastStore as ToastStoreType } from "$lib/stores/toast.svelte.js";
 import { ticketKeys } from "$lib/query/keys";
+import { invalidateReadState } from "$lib/query/invalidate-read-state.js";
 import type { SerializedBuffer } from "$lib/utils/buffer-encoding.js";
 
 type ToastStore = typeof ToastStoreType;
@@ -141,6 +142,7 @@ export function createCloseResolution(
       void config.queryClient.invalidateQueries({
         queryKey: ticketKeys.followUps(ticketId),
       });
+      invalidateReadState(config.queryClient);
       advance();
     } catch {
       config.toastStore.show(config.labels.error, 3000);

@@ -8,13 +8,25 @@
  */
 
 import type { SortConfig } from "$lib/stores/filters.svelte.js";
+import { getCollator } from "$lib/utils/collator.js";
 
+/**
+ * Ticket shape consumed by {@link sortTickets}.
+ *
+ * Optional fields gate specific sort modes:
+ * - `clientAlias` is required by the **client** sort (omitted tickets sort last).
+ * - `followUpCount` is required by the **msgs** sort (omitted tickets sort last).
+ *
+ * All other sorts use only the required fields.
+ */
 interface SortableTicket {
   readonly id: string;
   readonly priority: string;
   readonly createdAt: string;
   readonly lastActivityAt: string | null;
   readonly queueSortOrder: number;
+  readonly clientAlias?: string;
+  readonly followUpCount?: number;
 }
 
 const PRIORITY_ORDER = new Map<string, number>([
@@ -58,6 +70,24 @@ export function sortTickets<T extends SortableTicket>(
       case "queue":
         cmp = a.queueSortOrder - b.queueSortOrder;
         break;
+      case "client": {
+        if (a.clientAlias == null && b.clientAlias != null) return 1;
+        if (a.clientAlias != null && b.clientAlias == null) return -1;
+        cmp =
+          a.clientAlias != null && b.clientAlias != null
+            ? getCollator().compare(a.clientAlias, b.clientAlias)
+            : 0;
+        break;
+      }
+      case "msgs": {
+        if (a.followUpCount == null && b.followUpCount != null) return 1;
+        if (a.followUpCount != null && b.followUpCount == null) return -1;
+        cmp =
+          a.followUpCount != null && b.followUpCount != null
+            ? a.followUpCount - b.followUpCount
+            : 0;
+        break;
+      }
       case "date":
       default:
         cmp =

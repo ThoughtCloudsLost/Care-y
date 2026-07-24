@@ -1,8 +1,7 @@
 import { test, expect } from "./coverage-fixture";
 import { startCoverage, stopAndWriteCoverage } from "./coverage-fixture";
 import type { Page } from "@playwright/test";
-import AxeBuilder from "@axe-core/playwright";
-import { CRYPTO_TIMEOUT, login } from "./helpers";
+import { auditA11y, CRYPTO_TIMEOUT, login } from "./helpers";
 
 test.describe.serial("shell architecture", () => {
   let page: Page;
@@ -76,22 +75,18 @@ test.describe.serial("shell architecture", () => {
 
   // ── Tab bar ─────────────────────────────────────────────────────────
 
-  test("tab bar has 3 tabs and a More button", async () => {
+  test("tab bar has 3 tabs", async () => {
     const tablist = page.getByRole("tablist");
     await expect(tablist).toBeAttached();
 
-    for (const name of ["Home", "Tickets", "Knowledge Base"]) {
+    for (const name of ["Overview", "Tickets", "Library"]) {
       const tab = tablist.getByRole("tab", { name });
       await expect(tab).toBeAttached();
     }
-
-    // "More" is a button outside the tablist, inside the nav
-    const nav = page.getByRole("navigation", { name: /main/i });
-    await expect(nav.getByRole("button", { name: /more/i })).toBeAttached();
   });
 
-  test("Home tab is selected by default", async () => {
-    const homeTab = page.getByRole("tab", { name: "Home" });
+  test("Overview tab is selected by default", async () => {
+    const homeTab = page.getByRole("tab", { name: "Overview" });
     await expect(homeTab).toHaveAttribute("aria-selected", "true");
   });
 
@@ -102,30 +97,16 @@ test.describe.serial("shell architecture", () => {
     await expect(navbar).toBeAttached();
     await expect(navbar).toContainText("CARE-Y");
 
-    await expect(
-      navbar.getByRole("button", { name: "Account" }),
-    ).toBeAttached();
+    // Account button only renders on mobile; desktop uses the sidebar.
     await expect(navbar.getByRole("button", { name: "Search" })).toBeAttached();
     await expect(
       navbar.getByRole("button", { name: "Create new" }),
     ).toBeAttached();
   });
 
-  // ── View transitions ────────────────────────────────────────────────
-
-  test("view transitions API is available", async () => {
-    const hasViewTransitions = await page.evaluate(
-      () => "startViewTransition" in document,
-    );
-    expect(typeof hasViewTransitions).toBe("boolean");
-  });
-
   // ── Accessibility ───────────────────────────────────────────────────
 
   test("page passes axe-core accessibility scan", async () => {
-    const results = await new AxeBuilder({ page })
-      .setLegacyMode(true)
-      .analyze();
-    expect(results.violations).toEqual([]);
+    await auditA11y(page);
   });
 });

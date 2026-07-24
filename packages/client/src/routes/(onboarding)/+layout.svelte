@@ -15,6 +15,7 @@
   import { setTerminology } from "$lib/terminology/context.js";
   import { createPublicBrandingQuery } from "$lib/branding/public-branding.js";
   import { applyKonstaPalette } from "$lib/branding/konsta-palette.js";
+  import { getBrandingTitle } from "$lib/branding/title.svelte.js";
   import PageShell from "$lib/shell/PageShell.svelte";
   import LanguagePicker from "$lib/components/inputs/LanguagePicker.svelte";
   import {
@@ -54,7 +55,11 @@
   const isSetupRoute = $derived(page.url.pathname.includes("/setup"));
   const brandingQuery = createPublicBrandingQuery();
   const branding = $derived(isSetupRoute ? null : (brandingQuery.data ?? null));
-  const navbarTitle = $derived(branding?.orgName ?? "CARE-Y");
+  const navbarTitle = $derived(
+    branding?.orgName !== undefined && branding.orgName !== ""
+      ? branding.orgName
+      : getBrandingTitle(),
+  );
 
   let uiLocale = $state(getLocale());
 
@@ -74,7 +79,7 @@
   });
 </script>
 
-<PageShell>
+<PageShell scrollTag="main">
   {#snippet navbar()}
     <Navbar role="banner">
       {#snippet left()}
@@ -191,7 +196,7 @@
 
   :global(.step-error) {
     font-size: var(--text-base);
-    color: var(--k-color-red, #ef4444);
+    color: var(--danger);
     margin: 0;
   }
 
@@ -224,6 +229,14 @@
     gap: var(--space-xs);
     width: 100%;
     padding-inline: var(--page-pad-x);
+    padding-block: var(--space-xs);
+    /* The label sits in the navbar's subnavbar region, which Konsta's
+       blur layer does not cover; without a surface of its own, page
+       titles scrolled through the "Step N of M" text. Same glass
+       treatment as the navbar above it. */
+    background: var(--glass-surface);
+    -webkit-backdrop-filter: blur(16px);
+    backdrop-filter: blur(16px);
   }
 
   .step-text {

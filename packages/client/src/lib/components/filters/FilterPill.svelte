@@ -1,7 +1,5 @@
 <script lang="ts">
-  import { Chip } from "konsta/svelte";
   import { ChevronDown } from "@lucide/svelte";
-  import { onKeyActivate } from "$lib/utils/a11y.js";
   import type { FilterOption } from "./filter-types.js";
 
   interface Props {
@@ -45,7 +43,7 @@
       return `${label} (${String(selected.size)})`;
     }
     if (selected === null || isMultiSelected(selected)) return label;
-    return options.find((o) => o.value === selected)?.label ?? label;
+    return options.find((o) => o.value === selected)?.label ?? selected;
   });
 
   const isActive = $derived(
@@ -57,20 +55,17 @@
   function handleClick(): void {
     if (anchorEl) onopen(anchorEl);
   }
-
-  const handleKeydown = onKeyActivate(() => {
-    if (anchorEl) onopen(anchorEl);
-  });
 </script>
 
+<!-- Pinned-anatomy exemption (see inkwell-design-language.md, "Pinned-anatomy
+     exemptions"): the pill is a quiet bordered capsule with the org's pen on
+     active border and text, never a fill. Konsta Chip fights this anatomy. -->
 <span bind:this={anchorEl} class="pill-anchor">
-  <Chip
-    outline={!isActive}
-    class="glass filter-pill {isActive ? 'filter-pill--active' : ''}"
+  <button
+    type="button"
+    class="pill"
+    class:on={isActive}
     onclick={handleClick}
-    onkeydown={handleKeydown}
-    role="button"
-    tabindex={0}
     aria-haspopup={mode === "multi" ? "true" : "listbox"}
     aria-expanded={isOpen}
   >
@@ -80,7 +75,7 @@
       aria-hidden="true"
       class="pill-chevron {isOpen ? 'pill-chevron--open' : ''}"
     />
-  </Chip>
+  </button>
 </span>
 
 <style>
@@ -89,79 +84,61 @@
     flex-shrink: 0;
   }
 
-  :global(.filter-pill) {
+  .pill {
+    display: inline-flex;
+    align-items: center;
+    flex-shrink: 0;
+    padding: 6px 12px;
+    border: 1px solid var(--hair-2);
+    border-radius: 999px;
+    background: transparent;
+    font: inherit;
+    font-size: var(--text-sm);
+    color: var(--ink-2);
     cursor: pointer;
     user-select: none;
-    flex-shrink: 0;
-    transition: background-color 150ms ease;
+    -webkit-tap-highlight-color: transparent;
   }
 
-  /* Konsta's glass shadow (--shadow-ios-light-glass) has a heavy 25px
-     outer shadow designed for navbar-scale surfaces. On small pills it
-     creates a visible dark blob. Replace with pill-scale highlights. */
-  :global(.k-ios .filter-pill.glass) {
-    box-shadow:
-      inset 0 1px 0 rgba(255, 255, 255, 0.5),
-      inset 0 0 0 0.5px rgba(255, 255, 255, 0.15) !important;
+  @media (prefers-reduced-motion: no-preference) {
+    .pill {
+      transition: border-color 150ms ease;
+    }
   }
 
-  /* Material: solid tonal chip */
-  :global(.k-material .filter-pill) {
-    background: var(--surface-1);
-    color: var(--ink);
+  .pill.on {
+    border-color: var(--brand-text);
+    color: var(--brand-text);
+    font-weight: 700;
   }
 
-  /* Active: solid opaque, override glass */
-  :global(.filter-pill--active) {
-    -webkit-backdrop-filter: none;
-    backdrop-filter: none;
-    box-shadow: none;
-  }
-
-  :global(.k-ios .filter-pill.filter-pill--active) {
-    background: color-mix(
-      in srgb,
-      var(--brand-accent) 40%,
-      var(--glass-surface)
-    ) !important;
-  }
-
-  :global(.k-material .filter-pill--active) {
-    background-color: var(--brand-accent) !important;
-    color: var(--paper);
-  }
-
-  /* Increased contrast: MUST come after active rules (same specificity +
-     !important, so source order decides). Overrides both .glass utility
-     and Konsta Chip color classes. */
   @media (prefers-contrast: more) {
-    :global(.k-ios .filter-pill),
-    :global(.k-material .filter-pill) {
-      background: Canvas !important;
-      color: CanvasText !important;
-      -webkit-backdrop-filter: none !important;
-      backdrop-filter: none !important;
-      box-shadow: none !important;
-      border: 1px solid CanvasText !important;
+    .pill {
+      background: Canvas;
+      border-color: CanvasText;
+      color: CanvasText;
     }
 
-    :global(.k-ios .filter-pill.filter-pill--active),
-    :global(.k-material .filter-pill.filter-pill--active) {
-      background: var(--brand-accent) !important;
-      color: Canvas !important;
-      border-color: var(--brand-accent) !important;
+    .pill.on {
+      background: CanvasText;
+      border-color: CanvasText;
+      color: Canvas;
     }
   }
 
   .pill-label {
     white-space: nowrap;
-    font-size: 0.8125rem;
   }
 
   :global(.pill-chevron) {
     margin-left: 2px;
-    transition: transform 150ms ease;
     flex-shrink: 0;
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    :global(.pill-chevron) {
+      transition: transform 150ms ease;
+    }
   }
 
   :global(.pill-chevron--open) {

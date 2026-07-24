@@ -8,6 +8,7 @@
   import {
     Paperclip,
     MessageSquareReply,
+    MessageCircleReply,
     NotepadTextDashed,
     MessageSquare,
   } from "@lucide/svelte";
@@ -25,7 +26,9 @@
     ticketId: string;
     /** Called when a preset reply is selected (caller sets draft text). */
     onpresetselect: (body: string) => void;
-    /** Called when "Text Client" is tapped. Caller handles exposure hint + SMS sheet. */
+    /** Called when "Reply to client" is tapped. Activates reply mode. */
+    onreply?: () => void;
+    /** Called when "Text Client" is tapped. Caller handles exposure hint + SMS. */
     ontextclient?: () => void;
   }
 
@@ -35,11 +38,17 @@
     target,
     ticketId,
     onpresetselect,
+    onreply,
     ontextclient,
   }: ComposeActionsProps = $props();
 
   let presetSheetOpen = $state(false);
   let noteSheetOpen = $state(false);
+
+  function handleReply(): void {
+    ondismiss();
+    onreply?.();
+  }
 
   function handleAttach(): void {
     ondismiss();
@@ -85,6 +94,16 @@
         <NotepadTextDashed size={20} aria-hidden="true" />
       {/snippet}
     </ListItem>
+    {#if onreply}
+      <ListItem
+        title={m.ticket_reply_to_client(withTerms())}
+        onclick={handleReply}
+      >
+        {#snippet media()}
+          <MessageCircleReply size={20} aria-hidden="true" />
+        {/snippet}
+      </ListItem>
+    {/if}
     {#if ontextclient}
       <ListItem
         title={m.ticket_sms_title(withTerms())}
@@ -103,6 +122,7 @@
   ondismiss={() => {
     presetSheetOpen = false;
   }}
+  title={m.ticket_preset_replies()}
 >
   <PresetReplyContent
     onselect={(body: string) => {

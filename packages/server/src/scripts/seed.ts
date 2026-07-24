@@ -263,11 +263,15 @@ async function seed(): Promise<void> {
     return ct;
   }
 
-  const queueNames = ["Intake", "Crisis", "Housing"];
+  const seedQueues = [
+    { name: "Intake", color: "blue", icon: "phone" },
+    { name: "Crisis", color: "red", icon: "triangle-alert" },
+    { name: "Housing", color: "green", icon: "house" },
+  ];
   const queueIds = new Map<string, string>();
 
-  for (let i = 0; i < queueNames.length; i++) {
-    const name = queueNames[i]!;
+  for (let i = 0; i < seedQueues.length; i++) {
+    const { name, color, icon } = seedQueues[i]!;
     const sortOrder = i + 1;
 
     // Idempotency: check by sort_order (deterministic for seed data).
@@ -286,7 +290,12 @@ async function seed(): Promise<void> {
     } else {
       const inserted = await tenantDatabase
         .insertInto("queues")
-        .values({ encrypted_name: sealName(name), sort_order: sortOrder })
+        .values({
+          encrypted_name: sealName(name),
+          encrypted_color: sealName(color),
+          encrypted_icon: sealName(icon),
+          sort_order: sortOrder,
+        })
         .returning("id")
         .executeTakeFirstOrThrow();
       queueIds.set(name, inserted.id);

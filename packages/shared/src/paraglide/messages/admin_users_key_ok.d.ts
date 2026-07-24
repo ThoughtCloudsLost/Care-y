@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Keys OK" |
+* | "Ready" |
 *
 * @param {Admin_Users_Key_OkInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

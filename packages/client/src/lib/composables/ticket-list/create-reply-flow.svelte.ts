@@ -1,5 +1,6 @@
 import type { QueryClient } from "@tanstack/svelte-query";
 import { ticketsKeys } from "$lib/query/keys.js";
+import { invalidateReadState } from "$lib/query/invalidate-read-state.js";
 import type { RawFollowUpPreview } from "$lib/tickets/preview-loader.svelte.js";
 
 export interface ReplyFlowDeps {
@@ -7,6 +8,7 @@ export interface ReplyFlowDeps {
   readonly getTickets: () => readonly {
     id: string;
     clientAlias: string;
+    hasPhone: boolean;
     followUpCount: number;
   }[];
   readonly getPreviewFollowUps: (
@@ -19,6 +21,7 @@ export interface ReplyFlowState {
   readonly sheetOpen: boolean;
   readonly targetTicketId: string;
   readonly clientAlias: string;
+  readonly hasPhone: boolean;
   readonly previewFollowUps: RawFollowUpPreview[] | undefined;
   readonly followUpCount: number;
   open(ticketId: string): void;
@@ -30,6 +33,7 @@ export function createReplyFlow(deps: ReplyFlowDeps): ReplyFlowState {
   let sheetOpen = $state(false);
   let targetTicketId = $state("");
   let clientAlias = $state("");
+  let hasPhone = $state(false);
   let previewFollowUps = $state<RawFollowUpPreview[] | undefined>(undefined);
   let followUpCount = $state(0);
 
@@ -38,6 +42,7 @@ export function createReplyFlow(deps: ReplyFlowDeps): ReplyFlowState {
     if (!ticket) return;
     targetTicketId = ticketId;
     clientAlias = ticket.clientAlias;
+    hasPhone = ticket.hasPhone;
     previewFollowUps = deps.getPreviewFollowUps(ticketId);
     followUpCount = ticket.followUpCount;
     sheetOpen = true;
@@ -48,6 +53,7 @@ export function createReplyFlow(deps: ReplyFlowDeps): ReplyFlowState {
     void deps.queryClient.invalidateQueries({
       queryKey: ticketsKeys.lists(),
     });
+    invalidateReadState(deps.queryClient);
     void deps.eagerLoadPreviews([ticketId]);
   }
 
@@ -55,6 +61,7 @@ export function createReplyFlow(deps: ReplyFlowDeps): ReplyFlowState {
     sheetOpen = false;
     targetTicketId = "";
     clientAlias = "";
+    hasPhone = false;
     previewFollowUps = undefined;
     followUpCount = 0;
   }
@@ -68,6 +75,9 @@ export function createReplyFlow(deps: ReplyFlowDeps): ReplyFlowState {
     },
     get clientAlias(): string {
       return clientAlias;
+    },
+    get hasPhone(): boolean {
+      return hasPhone;
     },
     get previewFollowUps(): RawFollowUpPreview[] | undefined {
       return previewFollowUps;

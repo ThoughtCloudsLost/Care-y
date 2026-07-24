@@ -1,11 +1,11 @@
 <script lang="ts">
-  import { List, ListInput, Button, Block } from "konsta/svelte";
+  import { List, ListInput, Button } from "konsta/svelte";
+  import Register from "$lib/components/Register.svelte";
   import { Save } from "@lucide/svelte";
   import { useQueryClient } from "@tanstack/svelte-query";
   import { adminKeys } from "$lib/query/keys.js";
   import { PASSWORD_MIN_LENGTH, RoleId } from "@care-y/shared";
-  import PasswordInput from "$lib/components/inputs/PasswordInput.svelte";
-  import PasswordStrengthMeter from "$lib/components/inputs/PasswordStrengthMeter.svelte";
+  import PasswordConfirmPair from "$lib/components/inputs/PasswordConfirmPair.svelte";
   import type { RoleIdValue } from "@care-y/shared";
   import * as m from "$lib/paraglide/messages.js";
   import { withTerms } from "$lib/terminology/with-terms.js";
@@ -47,11 +47,6 @@
   );
 
   const passwordsMatch = $derived(tempPassword === confirmPassword);
-  const confirmError = $derived(
-    confirmPassword.length > 0 && !passwordsMatch
-      ? m.admin_invite_password_mismatch()
-      : undefined,
-  );
 
   let savedIdentifier = $state("");
   let savedPassword = $state("");
@@ -219,9 +214,9 @@
   {:else}
     <div class="sheet-content">
       {#if !orgKeyLoaded}
-        <p class="org-key-warning" role="alert">
+        <Register kind="careful" role="alert">
           {m.admin_invite_no_org_key()}
-        </p>
+        </Register>
       {/if}
 
       <RoleSelector
@@ -231,7 +226,6 @@
 
       <List nested>
         <ListInput
-          outline
           label={m.user_field_login_username_label()}
           type="text"
           value={identifier}
@@ -247,13 +241,12 @@
         />
       </List>
 
-      <p class="pii-warning" role="note">
+      <Register kind="careful">
         {m.user_field_login_username_pii_warning()}
-      </p>
+      </Register>
 
       <List nested>
         <ListInput
-          outline
           label={m.user_field_display_name_label()}
           type="text"
           value={displayName}
@@ -266,33 +259,17 @@
         />
       </List>
 
-      <List nested>
-        <PasswordInput
-          outline
-          label={m.admin_invite_password_label()}
-          bind:value={tempPassword}
-          disabled={!orgKeyLoaded}
-          info={passwordTooShort
-            ? m.admin_invite_password_too_short()
-            : m.admin_invite_password_hint(withTerms())}
-        />
-        <PasswordInput
-          outline
-          label={m.admin_invite_confirm_password()}
-          bind:value={confirmPassword}
-          disabled={!orgKeyLoaded}
-          error={confirmError}
-        />
-      </List>
-
-      {#if tempPassword.length > 0}
-        <Block>
-          <PasswordStrengthMeter
-            password={tempPassword}
-            minLength={PASSWORD_MIN_LENGTH}
-          />
-        </Block>
-      {/if}
+      <PasswordConfirmPair
+        bind:password={tempPassword}
+        bind:confirm={confirmPassword}
+        passwordLabel={m.admin_invite_password_label()}
+        confirmLabel={m.admin_invite_confirm_password()}
+        mismatchError={m.admin_invite_password_mismatch()}
+        passwordInfo={passwordTooShort
+          ? m.admin_invite_password_too_short()
+          : m.admin_invite_password_hint(withTerms())}
+        disabled={!orgKeyLoaded}
+      />
     </div>
   {/if}
 </ShellSheet>
@@ -303,13 +280,6 @@
     flex-direction: column;
     gap: var(--space-md);
     padding: 0 var(--space-lg) var(--space-lg);
-  }
-
-  .org-key-warning {
-    font-size: 0.875rem;
-    font-weight: 500;
-    color: var(--color-amber-500);
-    margin: 0;
   }
 
   .credential-intro {
@@ -337,7 +307,7 @@
 
   .credential-divider {
     height: 1px;
-    background: var(--surface-2, rgba(255, 255, 255, 0.08));
+    background: var(--hair, var(--surface-2, rgba(255, 255, 255, 0.08)));
   }
 
   .credential-label {
@@ -352,7 +322,7 @@
   .credential-value {
     flex: 1;
     font-size: 0.9375rem;
-    font-family: ui-monospace, monospace;
+    font-family: var(--theme-font-mono);
     color: var(--ink);
   }
 

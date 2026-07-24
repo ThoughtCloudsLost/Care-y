@@ -92,7 +92,7 @@ describe.skipIf(!process.env.DATABASE_URL)("AssignmentService (DB)", () => {
     expect(result.assignedTo).toBe(volunteerC);
   });
 
-  it("creates assignment_change system follow-up on assign", async () => {
+  it("creates volunteer_assigned system follow-up on assign", async () => {
     const ticketId = await insertTicket();
     await svc.assignRoundRobin(ticketId);
 
@@ -101,7 +101,7 @@ describe.skipIf(!process.env.DATABASE_URL)("AssignmentService (DB)", () => {
       .selectAll()
       .where("ticket_id", "=", ticketId)
       .where("source", "=", "system")
-      .where("type", "=", "assignment_change")
+      .where("type", "=", "volunteer_assigned")
       .execute();
     expect(followups.length).toBeGreaterThanOrEqual(1);
   });
@@ -148,7 +148,7 @@ describe.skipIf(!process.env.DATABASE_URL)("AssignmentService (DB)", () => {
     expect(ticket.assigned_to).toBe(volunteerA);
   });
 
-  it("take creates assignment_change follow-up", async () => {
+  it("take creates volunteer_assigned follow-up", async () => {
     const ticketId = await insertTicket();
     await svc.take(volunteerA, ticketId);
 
@@ -157,7 +157,7 @@ describe.skipIf(!process.env.DATABASE_URL)("AssignmentService (DB)", () => {
       .selectAll()
       .where("ticket_id", "=", ticketId)
       .where("source", "=", "system")
-      .where("type", "=", "assignment_change")
+      .where("type", "=", "volunteer_assigned")
       .execute();
     expect(followups.length).toBeGreaterThanOrEqual(1);
   });
@@ -190,7 +190,7 @@ describe.skipIf(!process.env.DATABASE_URL)("AssignmentService (DB)", () => {
     expect(ticket.assigned_to).toBeNull();
   });
 
-  it("release creates assignment_change follow-up", async () => {
+  it("release creates volunteer_unassigned follow-up", async () => {
     const ticketId = await insertTicket({ assignedTo: volunteerB });
     await svc.release(volunteerB, ticketId);
 
@@ -199,7 +199,7 @@ describe.skipIf(!process.env.DATABASE_URL)("AssignmentService (DB)", () => {
       .selectAll()
       .where("ticket_id", "=", ticketId)
       .where("source", "=", "system")
-      .where("type", "=", "assignment_change")
+      .where("type", "=", "volunteer_unassigned")
       .execute();
     expect(followups.length).toBeGreaterThanOrEqual(1);
   });
@@ -262,7 +262,7 @@ describe.skipIf(!process.env.DATABASE_URL)("AssignmentService (DB)", () => {
     expect(ticket.assigned_to).toBe(volunteerC);
   });
 
-  it("assignTo creates assignment_change system follow-up", async () => {
+  it("assignTo creates volunteer_assigned system follow-up", async () => {
     const ticketId = await insertTicket();
     await svc.assignTo(volunteerA, ticketId, volunteerB);
 
@@ -271,7 +271,7 @@ describe.skipIf(!process.env.DATABASE_URL)("AssignmentService (DB)", () => {
       .selectAll()
       .where("ticket_id", "=", ticketId)
       .where("source", "=", "system")
-      .where("type", "=", "assignment_change")
+      .where("type", "=", "volunteer_assigned")
       .execute();
     expect(followups.length).toBeGreaterThanOrEqual(1);
   });
@@ -286,7 +286,7 @@ describe.skipIf(!process.env.DATABASE_URL)("AssignmentService (DB)", () => {
       .selectAll()
       .where("ticket_id", "=", ticketId)
       .where("source", "=", "system")
-      .where("type", "=", "assignment_change")
+      .where("type", "=", "volunteer_assigned")
       .execute();
     expect(followups).toHaveLength(0);
   });

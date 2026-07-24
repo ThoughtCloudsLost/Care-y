@@ -1,9 +1,13 @@
 import type { DisplayStatus } from "./display-status.js";
-import type { ReactionSummary } from "@care-y/shared";
+import {
+  ticketSortFieldSchema,
+  type TicketSortField,
+  type ReactionSummary,
+} from "@care-y/shared";
 import type { FuzzyMatch } from "$lib/search/fuzzy.js";
 
 export type FilterStatus = DisplayStatus;
-export type SortField = "date" | "priority" | "last_activity" | "queue";
+export type SortField = TicketSortField;
 
 export const VALID_STATUSES: ReadonlySet<FilterStatus> = new Set<FilterStatus>([
   "new",
@@ -12,12 +16,7 @@ export const VALID_STATUSES: ReadonlySet<FilterStatus> = new Set<FilterStatus>([
   "closed",
 ]);
 
-export const SORT_FIELDS: readonly SortField[] = [
-  "date",
-  "priority",
-  "last_activity",
-  "queue",
-];
+export const SORT_FIELDS: readonly SortField[] = ticketSortFieldSchema.options;
 
 export function isFilterStatus(v: string): v is FilterStatus {
   return (VALID_STATUSES as ReadonlySet<string>).has(v);
@@ -68,6 +67,8 @@ export interface TitleEntry {
   readonly id: string;
   readonly title: string | null;
   readonly clientAlias: string;
+  readonly queueName?: string | null;
+  readonly assignedName?: string | null;
 }
 
 export function matchTitles(
@@ -83,7 +84,16 @@ export function matchTitles(
   for (const entry of entries) {
     if (entry.title == null) continue;
     ids.push(entry.id);
-    haystack.push(`${entry.title} ${entry.clientAlias}`);
+    haystack.push(
+      [
+        entry.title,
+        entry.clientAlias,
+        entry.queueName ?? "",
+        entry.assignedName ?? "",
+      ]
+        .join(" ")
+        .trim(),
+    );
   }
   const matches = fuzzySearchFn(haystack, searchTerm);
   return matches
@@ -162,6 +172,8 @@ export function buildFilterSummary(
   queueCount: number,
   assigneeId: string | null | undefined,
   hasDateRange: boolean,
+  unreadOnly: boolean,
+  needsAttentionOnly: boolean,
 ): string {
   const parts: string[] = [];
   if (statuses.size > 0) parts.push([...statuses].join(", "));
@@ -171,7 +183,72 @@ export function buildFilterSummary(
   }
   if (assigneeId !== null && assigneeId !== undefined) parts.push("assigned");
   if (hasDateRange) parts.push("date range");
+  if (unreadOnly) parts.push("Unread");
+  if (needsAttentionOnly) parts.push("Needs attention");
   return parts.length > 0 ? parts.join(", ") : "No filters";
+}
+
+export type TicketListEmptyKind =
+  "search" | "caught-up" | "truly-empty" | "filtered";
+
+/**
+ * Decide which empty treatment the tickets list shows when zero rows
+ * render. The caught-up stamp reads the GLOBAL unread truth (the sweep),
+ * so it never claims "caught up" from a merely empty window; the seal is
+ * reserved for a genuinely empty room (no tickets, no filters, no
+ * search, no unread filter).
+ */
+export function resolveEmptyKind(args: {
+  readonly searchActive: boolean;
+  readonly unreadFilterOn: boolean;
+  readonly globalCaughtUp: boolean;
+  readonly ticketCount: number;
+  readonly activeFilterCount: number;
+  /** Client-side needs-attention membership filter (empties are "filtered", never caught-up). */
+  readonly needsAttentionOn?: boolean;
+}): TicketListEmptyKind {
+  if (args.searchActive) return "search";
+  if (args.unreadFilterOn && args.globalCaughtUp) return "caught-up";
+  if (
+    args.ticketCount === 0 &&
+    args.activeFilterCount === 0 &&
+    !args.unreadFilterOn &&
+    args.needsAttentionOn !== true
+  ) {
+    return "truly-empty";
+  }
+  return "filtered";
+}
+
+/**
+ * The slim caught-up line above a non-empty list when the sort toggle is
+ * on. Hidden while searching: the stamp marks the list's resting state,
+ * and over match-ordered results it would read as "no matches".
+ */
+export function showCaughtUpLine(args: {
+  readonly sortOn: boolean;
+  readonly globalCaughtUp: boolean;
+  readonly searchActive: boolean;
+  readonly listCount: number;
+}): boolean {
+  return (
+    args.sortOn &&
+    args.globalCaughtUp &&
+    !args.searchActive &&
+    args.listCount > 0
+  );
+}
+
+/** Preferred grid card width; the column count grows past 2 from here. */
+export const GRID_CARD_MIN_WIDTH = 320;
+
+/**
+ * Columns for the grid view at a given container width. Never below 2:
+ * a one-column grid is just a worse cards mode, so narrow screens get
+ * two slim columns instead (the whole-bubble preview handles the width).
+ */
+export function resolveGridColumns(containerWidth: number): number {
+  return Math.max(2, Math.floor(containerWidth / GRID_CARD_MIN_WIDTH));
 }
 
 export interface AssigneeOptionLabels {

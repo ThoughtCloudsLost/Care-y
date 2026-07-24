@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Decrypting message" |
+* | "Unlocking message" |
 *
 * @param {Ticket_Timeline_DecryptingInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

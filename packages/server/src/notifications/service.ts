@@ -30,7 +30,7 @@ export interface NotificationServiceDeps {
 export interface NotificationService {
   dispatch(
     tDb: Kysely<TenantDatabase>,
-    orgId: string,
+    orgSchema: string,
     orgSlug: string,
     eventType: NotificationEventType,
     ticketId: string,
@@ -45,7 +45,7 @@ export function createNotificationService(
   return {
     async dispatch(
       tDb,
-      orgId,
+      orgSchema,
       orgSlug,
       eventType,
       ticketId,
@@ -64,7 +64,7 @@ export function createNotificationService(
         queueId,
         timestamp,
       };
-      deps.sse.broadcast(orgId, userIds, sseEvent);
+      deps.sse.broadcast(orgSchema, userIds, sseEvent);
 
       // 2. Web Push (immediate, fire-and-forget)
       void deps.pushSender.sendToUsers(tDb, userIds).catch(() => {
@@ -74,7 +74,7 @@ export function createNotificationService(
 
       // 3. Email + SMS (via JobQueue for retry)
       await deps.jobQueue.enqueue("notification-email", {
-        orgId,
+        orgSchema,
         orgSlug,
         recipientUserIds: userIds,
         eventType,
@@ -98,7 +98,7 @@ export function createNotificationJobHandler(
   deps: NotificationJobHandlerDeps,
 ): (payload: Record<string, unknown>) => Promise<void> {
   const jobPayloadSchema = z.object({
-    orgId: z.uuid(),
+    orgSchema: z.string().min(1),
     orgSlug: z.string().min(1),
     recipientUserIds: z.array(z.uuid()),
     eventType: notificationEventTypeSchema,
@@ -106,14 +106,15 @@ export function createNotificationJobHandler(
 
   return async (payload) => {
     const parsed = jobPayloadSchema.parse(payload);
-    const { orgId, orgSlug, recipientUserIds, eventType } = parsed;
+    const { orgSchema, orgSlug, recipientUserIds, eventType } = parsed;
+    if (recipientUserIds.length === 0) return;
     const loginUrl = buildLoginUrl(orgSlug);
 
     const strings = getStrings("en");
     const body = getNotificationBody(strings, eventType, loginUrl);
     const subject = `${strings.emailSubjectPrefix}: ${getSubjectLine(eventType)}`;
 
-    const tDb = deps.getTenantDb(orgId);
+    const tDb = deps.getTenantDb(orgSchema);
     const branding: OrgEmailBranding = await loadOrgEmailBranding(tDb);
 
     // Fetch notification addresses for all recipients in one query
@@ -127,7 +128,7 @@ export function createNotificationJobHandler(
       if (!user.encrypted_notification_addr) continue;
 
       try {
-        // care-y-ignore-next-line server-no-decrypt -- notification email is operational server-side PII (Tier 2, not E2EE)
+        // care-y-ignore-next-line server-no-decrypt -- notification email is operational server-side PII (OPS_SECRETS_KEY scope, not E2EE)
         const email = deps.encryptor.decrypt(user.encrypted_notification_addr);
         await deps.emailSender.sendTicketNotification({
           to: email,

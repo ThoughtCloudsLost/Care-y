@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "{count} method(s) enrolled" |
+* | "{count} methods enrolled" |
 *
 * @param {Settings_2fa_MethodsInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

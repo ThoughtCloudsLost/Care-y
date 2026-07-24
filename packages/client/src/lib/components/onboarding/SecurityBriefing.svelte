@@ -1,6 +1,6 @@
 <script lang="ts">
   import { Block, BlockTitle } from "konsta/svelte";
-  import { Info } from "@lucide/svelte";
+  import Register from "$lib/components/Register.svelte";
   import { TERMINOLOGY_DEFAULTS_EN } from "@care-y/shared";
   import * as m from "$lib/paraglide/messages.js";
   import { withTerms, getTerminology } from "$lib/terminology/index.js";
@@ -257,11 +257,10 @@
   <BlockTitle medium>{m.onboarding_briefing_heading()}</BlockTitle>
 
   {#if hasCustomTerms}
-    <Block class="terminology-note">
-      <p class="terminology-note-text">
-        <Info size={14} class="terminology-note-icon" />
+    <Block>
+      <Register kind="note">
         {m.onboarding_briefing_terminology_note(withTerms())}
-      </p>
+      </Register>
     </Block>
   {/if}
 
@@ -409,32 +408,8 @@
     padding-bottom: var(--space-2xl);
   }
 
-  :global(.terminology-note) {
-    background: color-mix(
-      in srgb,
-      var(--brand-primary, #3b82f6) 8%,
-      transparent
-    );
-    border-radius: var(--card-radius);
-    border: 1px solid
-      color-mix(in srgb, var(--brand-primary, #3b82f6) 20%, transparent);
-  }
-
-  .terminology-note-text {
-    display: flex;
-    align-items: flex-start;
-    gap: var(--space-sm);
-    font-size: var(--text-sm);
-    color: var(--muted);
-    margin: 0;
-    line-height: 1.5;
-  }
-
-  .terminology-note-text :global(.terminology-note-icon) {
-    flex-shrink: 0;
-    margin-top: 0.125rem;
-    color: var(--brand-primary, #3b82f6);
-  }
+  /* The terminology note is a Note register (the old brand-tinted box
+     put brand color in a meaning slot). */
 
   .briefing-prose {
     font-size: var(--text-md);
@@ -468,7 +443,7 @@
     max-width: 480px;
     display: block;
     border-radius: var(--card-radius);
-    background: var(--surface-1);
+    background: var(--raised, var(--surface-1));
     padding: var(--space-lg);
   }
 
@@ -528,6 +503,14 @@
 
   .scenario-wrapper {
     margin: 0 var(--page-pad-x) var(--space-lg);
+    position: relative;
+    z-index: 0;
+  }
+
+  .scenario-wrapper details {
+    background: var(--paper-deep, var(--surface-2));
+    border-radius: var(--card-radius);
+    overflow: hidden;
   }
 
   .scenario-summary {
@@ -535,7 +518,7 @@
     font-weight: 600;
     color: var(--ink);
     padding: var(--card-pad-y) var(--card-pad-x);
-    background: var(--surface-2);
+    background: var(--paper-deep, var(--surface-2));
     border-radius: var(--card-radius);
     cursor: pointer;
     list-style: none;
@@ -577,7 +560,7 @@
     margin: 0;
   }
 
-  .choice-label {
+  .scenario-body .choice-label {
     font-size: var(--text-sm);
     font-weight: 600;
     color: var(--muted);
@@ -586,12 +569,14 @@
     margin: var(--space-lg) 0 var(--space-xs);
   }
 
-  .choice-label:first-child {
+  .scenario-body .choice-label:first-child {
     margin-top: 0;
   }
 
+  /* The compromise scenario is a meaning slot: urgent hue, and the
+     label word rides with it. */
   .compromise-label {
-    color: var(--k-color-red, #ef4444);
+    color: var(--urgent, var(--k-color-red, #ef4444));
   }
 
   .page-dots {
@@ -610,7 +595,7 @@
   }
 
   .page-dot--active {
-    background: var(--brand-primary);
+    background: var(--brand-fill, var(--brand-primary));
   }
 
   @media (prefers-reduced-motion: reduce) {

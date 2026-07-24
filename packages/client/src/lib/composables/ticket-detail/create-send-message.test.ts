@@ -21,6 +21,10 @@ vi.mock("$lib/query/keys.js", () => ({
     followUpsInitial: (id: string) => ["ticket", id, "followUps", "initial"],
     followUps: (id: string) => ["ticket", id, "followUps"],
   },
+  ticketsKeys: {
+    readStates: () => ["tickets", "readState"],
+    readStateSweep: () => ["tickets", "readStateSweep"],
+  },
 }));
 
 vi.mock("$lib/workers/crypto-bridge-errors.js", () => ({
@@ -96,7 +100,17 @@ describe("createSendMessage", () => {
         type: "message",
       }),
     );
-    expect(config.queryClient.invalidateQueries).toHaveBeenCalled();
+    // The detail's follow-ups plus the list's read-state families: a
+    // volunteer reply must refresh unread truth without waiting for SSE.
+    expect(config.queryClient.invalidateQueries).toHaveBeenCalledWith({
+      queryKey: ["ticket", "t-1", "followUps"],
+    });
+    expect(config.queryClient.invalidateQueries).toHaveBeenCalledWith({
+      queryKey: ["tickets", "readState"],
+    });
+    expect(config.queryClient.invalidateQueries).toHaveBeenCalledWith({
+      queryKey: ["tickets", "readStateSweep"],
+    });
   });
 
   it("passes computed mentions to buildPendingEntry", async () => {

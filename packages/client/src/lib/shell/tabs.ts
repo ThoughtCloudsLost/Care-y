@@ -1,5 +1,6 @@
 import type { Component } from "svelte";
-import { House, Ticket, BookOpen } from "@lucide/svelte";
+import { House, BookOpen } from "@lucide/svelte";
+import Ticket from "$lib/components/icons/Ticket.svelte";
 import * as m from "$lib/paraglide/messages.js";
 import { withTerms } from "$lib/terminology/with-terms.js";
 import type { TabId } from "./types";

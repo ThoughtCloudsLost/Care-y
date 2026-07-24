@@ -14,8 +14,6 @@ describe("DecryptError", () => {
 
   it("displays decryption failed message", () => {
     render(DecryptError);
-    expect(
-      screen.getByText("This content could not be decrypted."),
-    ).toBeTruthy();
+    expect(screen.getByText("Could not unlock this content.")).toBeTruthy();
   });
 });

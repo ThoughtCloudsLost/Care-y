@@ -27,10 +27,11 @@ import {
   Phone,
   type LucideIcon,
 } from "@lucide/svelte";
+import type { Component } from "svelte";
 
 export interface IconEntry {
-  readonly slug: string;
-  readonly component: LucideIcon;
+  readonly id: string;
+  readonly component: Component;
 }
 
 const iconMap = new Map<string, LucideIcon>([
@@ -53,7 +54,7 @@ const iconMap = new Map<string, LucideIcon>([
 ]);
 
 export const ICON_PICKER_ENTRIES: readonly IconEntry[] = [...iconMap].map(
-  ([slug, component]) => ({ slug, component }),
+  ([id, component]) => ({ id, component }),
 );
 
 export function resolveNoteTypeIcon(name: string | null): LucideIcon {
@@ -63,10 +64,13 @@ export function resolveNoteTypeIcon(name: string | null): LucideIcon {
 
 const followUpTypeIcons = new Map<string, LucideIcon>([
   ["message", MessagesSquare],
-  ["status_change", ArrowLeftRight],
-  ["assignment_change", UserCheck],
-  ["priority_change", ChevronsUp],
-  ["hold_change", CirclePause],
+  ["status_opened", ArrowLeftRight],
+  ["status_closed", ArrowLeftRight],
+  ["volunteer_assigned", UserCheck],
+  ["volunteer_unassigned", UserCheck],
+  ["priority_changed", ChevronsUp],
+  ["hold_placed", CirclePause],
+  ["hold_removed", CirclePause],
   ["merge_note", Replace],
   ["internal_note", StickyNote],
   ["phone_call", Phone],

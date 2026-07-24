@@ -34,7 +34,7 @@
   <div class="key-status-inner">
     <!-- Status row -->
     <div class="status-row">
-      <div class="status-icon" class:ok={isOk} class:missing={!isOk}>
+      <div class="status-icon" class:ok={isOk} class:status-attention={!isOk}>
         {#if isOk}
           <ShieldCheck size={24} aria-hidden="true" />
         {:else}
@@ -85,26 +85,6 @@
     display: flex;
     align-items: center;
     gap: var(--space-md);
-  }
-
-  .status-icon {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 2.5rem;
-    height: 2.5rem;
-    border-radius: 50%;
-    flex-shrink: 0;
-  }
-
-  .status-icon.ok {
-    background: color-mix(in srgb, var(--color-green-500) 15%, transparent);
-    color: var(--color-green-500);
-  }
-
-  .status-icon.missing {
-    background: color-mix(in srgb, var(--color-amber-500) 15%, transparent);
-    color: var(--color-amber-500);
   }
 
   .status-label {

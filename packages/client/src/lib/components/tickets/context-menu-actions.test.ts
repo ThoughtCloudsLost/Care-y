@@ -32,7 +32,7 @@ describe("getContextMenuActions", () => {
 
   it("shows only Copy for a system event", () => {
     const actions = getContextMenuActions(
-      { type: "status_change", source: "system", createdBy: null },
+      { type: "status_closed", source: "system", createdBy: null },
       "user-1",
       false,
       labels,

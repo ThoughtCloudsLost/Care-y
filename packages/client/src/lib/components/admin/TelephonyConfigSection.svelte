@@ -15,7 +15,6 @@
   import {
     CircleCheckBig,
     TriangleAlert,
-    Info,
     Save,
     Phone,
     PhoneOutgoing,
@@ -39,6 +38,8 @@
   import QueryError from "$lib/components/QueryError.svelte";
   import InlineSkeleton from "$lib/components/InlineSkeleton.svelte";
   import SoftButton from "$lib/components/inputs/SoftButton.svelte";
+  import PasswordInput from "$lib/components/inputs/PasswordInput.svelte";
+  import Register from "$lib/components/Register.svelte";
   import ShellSheet from "$lib/shell/ShellSheet.svelte";
   import ShellDialog from "$lib/shell/ShellDialog.svelte";
   import TelephonyModePicker from "$lib/components/shared/TelephonyModePicker.svelte";
@@ -274,7 +275,7 @@
     <Card raised contentWrap={false} class="telephony-status-card">
       <div class="status-card-inner">
         <div class="status-row">
-          <div class="status-icon pending">
+          <div class="status-icon status-attention">
             <Phone size={24} aria-hidden="true" />
           </div>
           <div class="status-text">
@@ -294,7 +295,7 @@
     <Card raised contentWrap={false} class="telephony-status-card">
       <div class="status-card-inner">
         <div class="status-row">
-          <div class="status-icon pending">
+          <div class="status-icon status-attention">
             <Phone size={24} aria-hidden="true" />
           </div>
           <div class="status-text">
@@ -320,7 +321,7 @@
           <div
             class="status-icon"
             class:ok={hasPhones}
-            class:pending={!hasPhones}
+            class:status-attention={!hasPhones}
           >
             {#if hasPhones}
               <CircleCheckBig size={24} aria-hidden="true" />
@@ -348,10 +349,9 @@
         </div>
 
         {#if isManaged}
-          <div class="info-block info-block--muted">
-            <Info size={18} aria-hidden="true" />
-            <p>{m.admin_telephony_managed_note()}</p>
-          </div>
+          <Register kind="note">
+            {m.admin_telephony_managed_note()}
+          </Register>
         {/if}
 
         {#if isByot}
@@ -432,17 +432,10 @@
 
         <!-- Data retention disclosure -->
         <div class="section-divider"></div>
-        <div class="info-block info-block--amber" role="note">
-          <TriangleAlert
-            size={18}
-            class="info-icon--amber"
-            aria-hidden="true"
-          />
-          <div>
-            <p class="info-title">{m.admin_telephony_data_retention_title()}</p>
-            <p class="info-body">{m.admin_telephony_data_retention_body()}</p>
-          </div>
-        </div>
+        <Register kind="careful">
+          <p class="info-title">{m.admin_telephony_data_retention_title()}</p>
+          <p class="info-body">{m.admin_telephony_data_retention_body()}</p>
+        </Register>
       </div>
     </Card>
   {/if}
@@ -482,26 +475,18 @@
           if (target instanceof HTMLInputElement) accountIdInput = target.value;
         }}
         info={m.admin_telephony_account_id_helper({ provider: providerName })}
-        outline
       />
-      <ListInput
+      <PasswordInput
         label={m.admin_telephony_auth_token()}
-        type="password"
         placeholder={config?.maskedAuthToken ?? ""}
-        value={authTokenInput}
-        onInput={(e: Event) => {
-          const target = e.target;
-          if (target instanceof HTMLInputElement) authTokenInput = target.value;
-        }}
+        bind:value={authTokenInput}
         info={m.admin_telephony_auth_token_helper({ provider: providerName })}
-        outline
       />
     </List>
 
-    <div class="info-block info-block--muted">
-      <Info size={18} aria-hidden="true" />
-      <p>{m.admin_telephony_grace_period()}</p>
-    </div>
+    <Register kind="note">
+      {m.admin_telephony_grace_period()}
+    </Register>
   </div>
 </ShellSheet>
 
@@ -532,7 +517,6 @@
 
     <List nested class="purpose-list">
       <ListInput
-        outline
         label={m.admin_telephony_outbound_calls()}
         type="select"
         dropdown
@@ -553,7 +537,6 @@
       </ListInput>
 
       <ListInput
-        outline
         label={m.admin_telephony_system_messages()}
         type="select"
         dropdown
@@ -661,26 +644,6 @@
     gap: var(--space-md);
   }
 
-  .status-icon {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 2.5rem;
-    height: 2.5rem;
-    border-radius: 50%;
-    flex-shrink: 0;
-  }
-
-  .status-icon.ok {
-    background: color-mix(in srgb, var(--color-green-500) 15%, transparent);
-    color: var(--color-green-500);
-  }
-
-  .status-icon.pending {
-    background: color-mix(in srgb, var(--color-amber-500) 15%, transparent);
-    color: var(--color-amber-500);
-  }
-
   .status-text {
     display: flex;
     flex-direction: column;
@@ -732,6 +695,9 @@
 
   /* ── Role badges ── */
 
+  /* Phone-number purposes are configuration facts, not identity or
+     meaning: quiet bordered chips whose words do the distinguishing.
+     (These are not the user role stamps; a number is not a person.) */
   .role-badge {
     display: inline-flex;
     align-items: center;
@@ -739,18 +705,10 @@
     font-size: var(--text-xs);
     font-weight: 500;
     padding: 2px 8px;
+    border: 1px solid var(--hair-2, currentColor);
     border-radius: 1rem;
+    color: var(--ink-2);
     white-space: nowrap;
-  }
-
-  .role-badge--outbound {
-    background: color-mix(in srgb, var(--color-blue-500) 12%, transparent);
-    color: var(--color-blue-500);
-  }
-
-  .role-badge--system {
-    background: color-mix(in srgb, var(--color-green-500) 12%, transparent);
-    color: var(--color-green-500);
   }
 
   .section-description {
@@ -761,7 +719,7 @@
   }
 
   .section-divider {
-    border-top: 1px solid var(--divider);
+    border-top: 1px solid var(--hair, var(--divider));
     margin: var(--space-sm) 0;
   }
 
@@ -788,46 +746,17 @@
     margin: 0;
   }
 
-  /* ── Info blocks ── */
-
-  .info-block {
-    display: flex;
-    gap: var(--space-sm);
-    align-items: flex-start;
-    padding: var(--space-md);
-    border-radius: 0.5rem;
-    font-size: var(--text-sm);
-    line-height: 1.5;
-  }
-
-  .info-block--muted {
-    background: color-mix(in srgb, var(--ink) 5%, transparent);
-    color: var(--muted);
-  }
-
-  .info-block--amber {
-    background: color-mix(in srgb, var(--color-amber-500) 10%, transparent);
-    color: var(--ink);
-  }
-
-  .info-block p {
-    margin: 0;
-  }
+  /* Info blocks are Register (Note / Careful); only the disclosure's
+     internal title/body formatting stays scoped. */
 
   .info-title {
     font-weight: 600;
-    color: var(--color-amber-500);
+    color: var(--ink);
+    margin: 0;
   }
 
   .info-body {
-    color: var(--muted);
-    margin-top: var(--space-xs);
-  }
-
-  :global(.info-icon--amber) {
-    color: var(--color-amber-500);
-    flex-shrink: 0;
-    margin-top: 2px;
+    margin: var(--space-xs) 0 0;
   }
 
   /* ── Credential sheet ── */

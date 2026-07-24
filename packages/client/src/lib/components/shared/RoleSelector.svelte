@@ -19,7 +19,7 @@
 </script>
 
 <div class="role-section">
-  <p class="section-label">
+  <p class="field-label">
     {m.admin_invite_role_label()}
   </p>
   <Segmented strong>
@@ -47,17 +47,9 @@
 </div>
 
 <style>
+  /* The label wears the shared .field-label primitive (shared.css) */
   .role-section {
     display: flex;
     flex-direction: column;
-  }
-
-  .section-label {
-    font-size: 0.75rem;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
-    color: var(--muted);
-    margin: 0 0 var(--space-sm);
   }
 </style>

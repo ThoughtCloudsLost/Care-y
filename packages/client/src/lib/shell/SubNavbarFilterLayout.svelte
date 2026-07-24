@@ -1,22 +1,15 @@
 <script lang="ts">
   import type { Snippet } from "svelte";
+  import * as m from "$lib/paraglide/messages.js";
+  import { BlockTitle, Button, List as KList, ListItem } from "konsta/svelte";
   import {
-    BlockTitle,
-    Button,
-    Segmented,
-    SegmentedButton,
-    List as KList,
-    ListItem,
-  } from "konsta/svelte";
-  import {
-    List,
-    LayoutGrid,
     ArrowUpDown,
     ArrowUp,
     ArrowDown,
     Search,
     SquareCheckBig,
   } from "@lucide/svelte";
+  import ViewSwitcher from "$lib/components/ViewSwitcher.svelte";
   import type {
     ViewToggleConfig,
     SortConfig,
@@ -33,6 +26,9 @@
     title: string;
     /** Use smaller title text (for detail pages vs. list pages). */
     smallTitle?: boolean;
+    /** Suppress the visible title while keeping the section aria-label
+     *  (detail pages where the case header owns the visible title). */
+    hideTitle?: boolean;
     view?: ViewToggleConfig;
     headerRight?: Snippet;
     stats?: Snippet;
@@ -44,6 +40,8 @@
     manage?: ManageConfig;
     /** Optional row 3: search navigator (rendered below filter pills). */
     searchNavigator?: Snippet;
+    /** Optional row 4: bulk actions bar (rendered below search navigator). */
+    bulkActions?: Snippet;
     /** When provided, shows a search button in the filter pill row. */
     onsearch?: () => void;
     searchLabel?: string;
@@ -52,6 +50,7 @@
   let {
     title,
     smallTitle = false,
+    hideTitle = false,
     view,
     headerRight,
     stats,
@@ -62,6 +61,7 @@
     filterPills,
     manage,
     searchNavigator,
+    bulkActions,
     onsearch,
     searchLabel,
   }: Props = $props();
@@ -87,32 +87,19 @@
 
 <section class="subnavbar-filter-content" aria-label={title}>
   <div class="page-header">
-    {#if smallTitle}
+    {#if hideTitle}
+      <span class="page-title-spacer" aria-hidden="true"></span>
+    {:else if smallTitle}
       <span class="page-title-small">{title}</span>
     {:else}
-      <BlockTitle large class="page-title">{title}</BlockTitle>
+      <BlockTitle large class="page-title heading-compact">{title}</BlockTitle>
     {/if}
     {#if view}
-      {@const ListIcon = view.listIcon ?? List}
-      {@const GridIcon = view.gridIcon ?? LayoutGrid}
-      <Segmented strong class="view-toggle">
-        <SegmentedButton
-          active={view.mode === "list"}
-          aria-pressed={view.mode === "list"}
-          aria-label={view.listLabel}
-          onclick={() => view.onchange("list")}
-        >
-          <ListIcon size={16} aria-hidden="true" />
-        </SegmentedButton>
-        <SegmentedButton
-          active={view.mode === "grid"}
-          aria-pressed={view.mode === "grid"}
-          aria-label={view.gridLabel}
-          onclick={() => view.onchange("grid")}
-        >
-          <GridIcon size={16} aria-hidden="true" />
-        </SegmentedButton>
-      </Segmented>
+      <ViewSwitcher
+        mode={view.mode}
+        onchange={view.onchange}
+        label={view.label}
+      />
     {:else if headerRight}
       {@render headerRight()}
     {/if}
@@ -139,6 +126,9 @@
               onclick={toggleSort}
             >
               <ArrowUpDown size={16} aria-hidden="true" />
+              {#if sort.toggle?.active}
+                <span class="sort-dot" aria-hidden="true"></span>
+              {/if}
             </Button>
           </span>
         {/if}
@@ -201,7 +191,7 @@
         small
         inline
         class="filter-search-btn"
-        aria-label={searchLabel ?? "Search"}
+        aria-label={searchLabel ?? m.search_inline_trigger()}
         onclick={onsearch}
       >
         <Search size={16} aria-hidden="true" />
@@ -224,6 +214,9 @@
   </div>
   {#if searchNavigator}
     {@render searchNavigator()}
+  {/if}
+  {#if bulkActions}
+    {@render bulkActions()}
   {/if}
 </section>
 
@@ -256,6 +249,26 @@
           {/snippet}
         </ListItem>
       {/each}
+      {#if sort.toggle}
+        {@const toggle = sort.toggle}
+        <ListItem
+          title={toggle.label}
+          aria-pressed={toggle.active}
+          class="sort-toggle-item"
+          onclick={() => {
+            toggle.ontoggle();
+            sortOpen = false;
+          }}
+        >
+          {#snippet after()}
+            <span
+              class="toggle-dot"
+              class:toggle-dot-active={toggle.active}
+              aria-hidden="true"
+            ></span>
+          {/snippet}
+        </ListItem>
+      {/if}
     </KList>
   </ShellPopover>
 {/if}
@@ -293,6 +306,11 @@
     flex: 1;
   }
 
+  /* Keeps the view toggle pinned right when the visible title is hidden. */
+  .page-title-spacer {
+    flex: 1;
+  }
+
   .stats-row {
     display: flex;
     align-items: center;
@@ -303,9 +321,17 @@
   .stats-counts {
     display: flex;
     align-items: center;
-    gap: var(--space-xl);
+    gap: var(--space-lg);
     font-size: var(--text-sm);
     color: var(--ink);
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    min-width: 0;
+  }
+
+  .stats-counts::-webkit-scrollbar {
+    display: none;
   }
 
   .view-controls {
@@ -337,6 +363,8 @@
     width: 1.75rem !important;
     padding-left: 0 !important;
     padding-right: 0 !important;
+    position: relative;
+    overflow: visible !important;
   }
 
   :global(.sort-btn svg),
@@ -372,14 +400,34 @@
     flex-shrink: 0;
   }
 
-  :global(.view-toggle) {
-    flex-shrink: 0;
-    width: auto !important;
-    height: 1.75rem !important;
+  /* The presentation toggle sits apart from the field options: same list
+     anatomy, one hairline drawing the boundary. */
+  :global(.sort-toggle-item) {
+    border-top: 1px solid var(--hair);
   }
 
-  :global(.view-toggle .k-segmented-button) {
-    height: 1.75rem !important;
-    min-height: unset !important;
+  .sort-dot {
+    position: absolute;
+    top: -1px;
+    right: -1px;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--unread);
+    pointer-events: none;
+  }
+
+  .toggle-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    border: 1.5px solid var(--hair-2);
+    background: transparent;
+    flex-shrink: 0;
+  }
+
+  .toggle-dot-active {
+    border-color: var(--unread);
+    background: var(--unread);
   }
 </style>

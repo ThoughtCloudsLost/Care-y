@@ -28,3 +28,12 @@ useDefault = true
     '''\.test\.ts$''',
     '''\.spec\.ts$''',
   ]
+
+# Per-rule allowlists for high-entropy test fixtures that lack stopword prefixes.
+# WebAuthn authenticatorData and attestation blobs are raw base64url, not mock-prefixed.
+[[rules]]
+  id = "generic-api-key"
+  [rules.allowlist]
+    paths = [
+      '''\.test\.ts$''',
+    ]

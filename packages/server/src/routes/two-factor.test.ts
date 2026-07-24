@@ -25,7 +25,9 @@ import {
   expectTrpcError,
   createMockEmailSender,
   createMockOprfDeps,
+  createThrowingProviderFactory,
   createMockProviderFactory,
+  createMockTelephonyProvider,
   createTestUser,
   createTestSession,
   enrollTotp,
@@ -34,7 +36,9 @@ import {
   type MockEmailSender,
 } from "../test-utils.js";
 import { createScryptHasher } from "../auth/password.js";
+import { _resetEnvCache } from "../env.js";
 import { createInMemoryRateLimiter } from "../ratelimit/rate-limiter.js";
+import { createInMemoryTotpReplayCache } from "../auth/totp-replay-cache.js";
 import { createDbSessionRepository } from "../auth/session-repository.js";
 import { createAuthService } from "../auth/service.js";
 import { createOrgService } from "../org/service.js";
@@ -129,6 +133,8 @@ describe.skipIf(!process.env.DATABASE_URL)(
         testDb.platformDb,
         makeTenantDbFactory(testDb.platformDb),
       );
+      // Shared by authDeps and twoFactorDeps, matching production wiring.
+      const totpReplayCache = createInMemoryTotpReplayCache();
       return createAppRouter({
         authDeps: {
           hasher,
@@ -140,8 +146,9 @@ describe.skipIf(!process.env.DATABASE_URL)(
           tokenizer: testSessionTokenizer,
           isSecureCookie: false,
           emailSender: mockEmail,
-          providerFactory: createMockProviderFactory(),
+          providerFactory: createThrowingProviderFactory(),
           resolveCallerId: vi.fn().mockResolvedValue("+15551234567"),
+          totpReplayCache,
         },
         profileDeps: {
           hasher,
@@ -158,14 +165,15 @@ describe.skipIf(!process.env.DATABASE_URL)(
           encryptor: testFieldEncryptor,
           indexer: testBlindIndexer,
           tokenizer: testSessionTokenizer,
-          providerFactory: createMockProviderFactory(),
+          providerFactory: createThrowingProviderFactory(),
           resolveCallerId: vi.fn().mockResolvedValue("+15551234567"),
           pushSender: null,
           pushHmacKey: null,
+          totpReplayCache,
         },
         oprfDeps: createMockOprfDeps(),
         orgService,
-        providerFactory: createMockProviderFactory(),
+        providerFactory: createThrowingProviderFactory(),
       });
     }
 
@@ -294,6 +302,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         emailCodes,
         testFieldEncryptor,
         "CARE-Y",
+        { cache: createInMemoryTotpReplayCache(), orgId: orgContext.orgId },
       );
     }
 
@@ -835,6 +844,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         const prevCors = process.env.CORS_ORIGIN;
         process.env.NODE_ENV = "development";
         process.env.CORS_ORIGIN = "http://localhost:3000";
+        _resetEnvCache();
 
         try {
           const user = await registerUser("origin-dev");
@@ -875,12 +885,14 @@ describe.skipIf(!process.env.DATABASE_URL)(
           } else {
             process.env.CORS_ORIGIN = prevCors;
           }
+          _resetEnvCache();
         }
       });
 
       it("uses https://<slug>.care-y.app in production", async () => {
         const prevEnv = process.env.NODE_ENV;
         process.env.NODE_ENV = "production";
+        _resetEnvCache();
 
         try {
           const user = await registerUser("origin-prod");
@@ -913,7 +925,644 @@ describe.skipIf(!process.env.DATABASE_URL)(
           spy.mockRestore();
         } finally {
           process.env.NODE_ENV = prevEnv;
+          _resetEnvCache();
         }
+      });
+    });
+
+    // =========================================================================
+    // 10. SMS enrollment and verification routes
+    // =========================================================================
+
+    describe("enroll.smsSend and verify.smsSend (smsCodes null)", () => {
+      it("enroll.smsSend rejects with PRECONDITION_FAILED when smsCodes is null", async () => {
+        const user = await registerUser("sms-enroll-null");
+        const { caller } = createAuthedCaller(user, "sms-enroll-null-token");
+        await expectTrpcError(
+          caller.twoFactor.enroll.smsSend({ phone: "+15551110000" }),
+          "PRECONDITION_FAILED",
+        );
+      });
+
+      it("verify.smsSend rejects with PRECONDITION_FAILED when smsCodes is null", async () => {
+        const user = await registerUser("sms-verify-null");
+        const { caller } = createAuthedCaller(user, "sms-verify-null-token");
+        await expectTrpcError(
+          caller.twoFactor.verify.smsSend(),
+          "PRECONDITION_FAILED",
+        );
+      });
+    });
+
+    describe("SMS-enabled routes", () => {
+      const mockProvider = createMockTelephonyProvider();
+
+      /** Builds a router with a mock telephony provider so smsCodes is non-null. */
+      function buildRouterWithSms(emailSender?: MockEmailSender) {
+        mockEmail = emailSender ?? createMockEmailSender();
+        const orgService = createOrgService(
+          testDb.platformDb,
+          makeTenantDbFactory(testDb.platformDb),
+        );
+        const totpReplayCache = createInMemoryTotpReplayCache();
+        const smsProviderFactory = createMockProviderFactory({
+          getProvider: vi.fn().mockResolvedValue(mockProvider),
+        });
+        return createAppRouter({
+          authDeps: {
+            hasher,
+            loginLimiter: createInMemoryRateLimiter({
+              windowMs: 60_000,
+              maxRequests: 100,
+            }),
+            saltLimiter,
+            fakeSaltKey,
+            encryptor: testFieldEncryptor,
+            indexer: testBlindIndexer,
+            tokenizer: testSessionTokenizer,
+            isSecureCookie: false,
+            emailSender: mockEmail,
+            providerFactory: createThrowingProviderFactory(),
+            resolveCallerId: vi.fn().mockResolvedValue("+15551234567"),
+            totpReplayCache,
+          },
+          profileDeps: {
+            hasher,
+            encryptor: testFieldEncryptor,
+            indexer: testBlindIndexer,
+            tokenizer: testSessionTokenizer,
+            passwordChangeLimiter: createInMemoryRateLimiter({
+              windowMs: 60_000,
+              maxRequests: 100,
+            }),
+          },
+          twoFactorDeps: {
+            emailSender: mockEmail,
+            encryptor: testFieldEncryptor,
+            indexer: testBlindIndexer,
+            tokenizer: testSessionTokenizer,
+            providerFactory: smsProviderFactory,
+            resolveCallerId: vi.fn().mockResolvedValue("+15551234567"),
+            pushSender: null,
+            pushHmacKey: null,
+            totpReplayCache,
+          },
+          oprfDeps: createMockOprfDeps(),
+          orgService,
+          providerFactory: createThrowingProviderFactory(),
+        });
+      }
+
+      function createSmsAuthedCaller(
+        user: {
+          id: string;
+          encryptedIdentifier: string;
+          encryptedDisplayName: string;
+          encryptedPreferredLocale: string | null;
+          roleId: string;
+          isActive: boolean;
+          hasSeenBriefing: boolean;
+        },
+        sessionToken: string,
+        emailSender?: MockEmailSender,
+      ) {
+        const appRouter = buildRouterWithSms(emailSender);
+        const factory = createCallerFactory(appRouter);
+        const ctx: Context = {
+          req: mockReq(),
+          res: mockRes(),
+          org: orgContext,
+          session: {
+            id: "test-session-id",
+            token: sessionToken,
+            userId: user.id,
+            ipToken: "test-ip-token",
+            uaToken: "test-ua-token",
+            expiresAt: new Date(Date.now() + 60 * 60 * 1000),
+            twofaVerified: false,
+            webauthnChallenge: null,
+          },
+          user,
+        };
+        return { caller: factory(ctx), emailSender: mockEmail };
+      }
+
+      describe("enroll.smsVerify", () => {
+        it("returns success: true when SMS code is valid", async () => {
+          const user = await registerUser("sms-enroll-ok");
+          const session = await createTestSession(
+            tenantDb,
+            { user_id: user.id },
+            testFieldEncryptor,
+          );
+          const { caller } = createSmsAuthedCaller(user, session.token);
+
+          // Enroll phone (sends code via mock provider)
+          await caller.twoFactor.enroll.smsSend({ phone: "+15559990001" });
+
+          // Extract code from the SMS body captured by the mock provider
+          const smsBody =
+            mockProvider.smsCalls[mockProvider.smsCalls.length - 1]?.body ?? "";
+          const codeMatch = /(\d{6})/.exec(smsBody);
+          expect(codeMatch).not.toBeNull();
+          const code = codeMatch![1] as string;
+
+          const result = await caller.twoFactor.enroll.smsVerify({ code });
+          expect(result).toEqual({ success: true });
+        });
+
+        it("returns success: false when SMS code is wrong", async () => {
+          const user = await registerUser("sms-enroll-bad");
+          const session = await createTestSession(
+            tenantDb,
+            { user_id: user.id },
+            testFieldEncryptor,
+          );
+          const { caller } = createSmsAuthedCaller(user, session.token);
+
+          await caller.twoFactor.enroll.smsSend({ phone: "+15559990002" });
+
+          const result = await caller.twoFactor.enroll.smsVerify({
+            code: "000000",
+          });
+          expect(result).toEqual({ success: false });
+        });
+      });
+
+      describe("verify.smsComplete", () => {
+        it("returns success: true and marks session verified with valid SMS code", async () => {
+          const user = await registerUser("sms-verify-ok");
+          const session = await createTestSession(
+            tenantDb,
+            { user_id: user.id },
+            testFieldEncryptor,
+          );
+          const { caller } = createSmsAuthedCaller(user, session.token);
+
+          // Enroll SMS first
+          await caller.twoFactor.enroll.smsSend({ phone: "+15559990003" });
+          const enrollBody =
+            mockProvider.smsCalls[mockProvider.smsCalls.length - 1]?.body ?? "";
+          const enrollMatch = /(\d{6})/.exec(enrollBody);
+          expect(enrollMatch).not.toBeNull();
+          await caller.twoFactor.enroll.smsVerify({
+            code: enrollMatch![1] as string,
+          });
+
+          // Send verification code
+          await caller.twoFactor.verify.smsSend();
+          const verifyBody =
+            mockProvider.smsCalls[mockProvider.smsCalls.length - 1]?.body ?? "";
+          const verifyMatch = /(\d{6})/.exec(verifyBody);
+          expect(verifyMatch).not.toBeNull();
+
+          const result = await caller.twoFactor.verify.smsComplete({
+            code: verifyMatch![1] as string,
+          });
+          expect(result).toEqual({ success: true });
+
+          const sessions = createDbSessionRepository(
+            tenantDb,
+            testSessionTokenizer,
+            testSealedBox,
+          );
+          const updated = await sessions.findByToken(session.token);
+          expect(updated?.twofaVerified).toBe(true);
+        });
+
+        it("returns success: false with invalid SMS code (session not marked verified)", async () => {
+          const user = await registerUser("sms-verify-bad");
+          const session = await createTestSession(
+            tenantDb,
+            { user_id: user.id },
+            testFieldEncryptor,
+          );
+          const { caller } = createSmsAuthedCaller(user, session.token);
+
+          // Enroll SMS
+          await caller.twoFactor.enroll.smsSend({ phone: "+15559990004" });
+          const enrollBody =
+            mockProvider.smsCalls[mockProvider.smsCalls.length - 1]?.body ?? "";
+          const enrollMatch = /(\d{6})/.exec(enrollBody);
+          expect(enrollMatch).not.toBeNull();
+          await caller.twoFactor.enroll.smsVerify({
+            code: enrollMatch![1] as string,
+          });
+
+          // Send verification code then supply wrong code
+          await caller.twoFactor.verify.smsSend();
+
+          const result = await caller.twoFactor.verify.smsComplete({
+            code: "000000",
+          });
+          expect(result).toEqual({ success: false });
+
+          const sessions = createDbSessionRepository(
+            tenantDb,
+            testSessionTokenizer,
+            testSealedBox,
+          );
+          const updated = await sessions.findByToken(session.token);
+          expect(updated?.twofaVerified).toBe(false);
+        });
+      });
+    });
+
+    // =========================================================================
+    // 11. Push-enabled routes
+    // =========================================================================
+
+    describe("push-enabled routes", () => {
+      const pushHmacKey = Buffer.alloc(32, 0xab);
+
+      /** Stub PushNotificationSender that records calls and resolves. */
+      const mockPushSender = {
+        sendToUsers: vi.fn().mockResolvedValue(undefined),
+        removeSubscription: vi.fn().mockResolvedValue(undefined),
+      };
+
+      function buildRouterWithPush(emailSender?: MockEmailSender) {
+        mockEmail = emailSender ?? createMockEmailSender();
+        const orgService = createOrgService(
+          testDb.platformDb,
+          makeTenantDbFactory(testDb.platformDb),
+        );
+        const totpReplayCache = createInMemoryTotpReplayCache();
+        return createAppRouter({
+          authDeps: {
+            hasher,
+            loginLimiter: createInMemoryRateLimiter({
+              windowMs: 60_000,
+              maxRequests: 100,
+            }),
+            saltLimiter,
+            fakeSaltKey,
+            encryptor: testFieldEncryptor,
+            indexer: testBlindIndexer,
+            tokenizer: testSessionTokenizer,
+            isSecureCookie: false,
+            emailSender: mockEmail,
+            providerFactory: createThrowingProviderFactory(),
+            resolveCallerId: vi.fn().mockResolvedValue("+15551234567"),
+            totpReplayCache,
+          },
+          profileDeps: {
+            hasher,
+            encryptor: testFieldEncryptor,
+            indexer: testBlindIndexer,
+            tokenizer: testSessionTokenizer,
+            passwordChangeLimiter: createInMemoryRateLimiter({
+              windowMs: 60_000,
+              maxRequests: 100,
+            }),
+          },
+          twoFactorDeps: {
+            emailSender: mockEmail,
+            encryptor: testFieldEncryptor,
+            indexer: testBlindIndexer,
+            tokenizer: testSessionTokenizer,
+            providerFactory: createThrowingProviderFactory(),
+            resolveCallerId: vi.fn().mockResolvedValue("+15551234567"),
+            pushSender: mockPushSender,
+            pushHmacKey,
+            totpReplayCache,
+          },
+          oprfDeps: createMockOprfDeps(),
+          orgService,
+          providerFactory: createThrowingProviderFactory(),
+        });
+      }
+
+      function createPushAuthedCaller(
+        user: {
+          id: string;
+          encryptedIdentifier: string;
+          encryptedDisplayName: string;
+          encryptedPreferredLocale: string | null;
+          roleId: string;
+          isActive: boolean;
+          hasSeenBriefing: boolean;
+        },
+        sessionToken: string,
+      ) {
+        const appRouter = buildRouterWithPush();
+        const factory = createCallerFactory(appRouter);
+        const ctx: Context = {
+          req: mockReq(),
+          res: mockRes(),
+          org: orgContext,
+          session: {
+            id: "test-session-id",
+            token: sessionToken,
+            userId: user.id,
+            ipToken: "test-ip-token",
+            uaToken: "test-ua-token",
+            expiresAt: new Date(Date.now() + 60 * 60 * 1000),
+            twofaVerified: false,
+            webauthnChallenge: null,
+          },
+          user,
+        };
+        return factory(ctx);
+      }
+
+      function createPushVerifiedCaller(
+        user: {
+          id: string;
+          encryptedIdentifier: string;
+          encryptedDisplayName: string;
+          encryptedPreferredLocale: string | null;
+          roleId: string;
+          isActive: boolean;
+          hasSeenBriefing: boolean;
+        },
+        sessionToken: string,
+      ) {
+        const appRouter = buildRouterWithPush();
+        const factory = createCallerFactory(appRouter);
+        const ctx: Context = {
+          req: mockReq(),
+          res: mockRes(),
+          org: orgContext,
+          session: {
+            id: "test-session-id",
+            token: sessionToken,
+            userId: user.id,
+            ipToken: "test-ip-token",
+            uaToken: "test-ua-token",
+            expiresAt: new Date(Date.now() + 60 * 60 * 1000),
+            twofaVerified: true,
+            webauthnChallenge: null,
+          },
+          user,
+        };
+        return factory(ctx);
+      }
+
+      /** Inserts a push subscription so the user has a device to send to. */
+      async function seedPushSubscription(userId: string): Promise<void> {
+        const uid = randomUUID().slice(0, 8);
+        await tenantDb
+          .insertInto("push_subscriptions")
+          .values({
+            user_id: userId,
+            endpoint: `https://push.example.com/${uid}`,
+            key_p256dh: `p256dh-${uid}`,
+            key_auth: `auth-${uid}`,
+          })
+          .execute();
+      }
+
+      describe("enroll.pushVerify", () => {
+        it("enrolls push method when user has working subscriptions", async () => {
+          const user = await registerUser("push-enroll-ok");
+          await seedPushSubscription(user.id);
+
+          const session = await createTestSession(
+            tenantDb,
+            { user_id: user.id },
+            testFieldEncryptor,
+          );
+          const caller = createPushAuthedCaller(user, session.token);
+          const result = await caller.twoFactor.enroll.pushVerify();
+
+          expect(result).toEqual({ success: true });
+        });
+      });
+
+      describe("verify.pushSend", () => {
+        it("sends a push challenge and returns challengeId with sent: true", async () => {
+          const user = await registerUser("push-send-ok");
+          await seedPushSubscription(user.id);
+
+          const session = await createTestSession(
+            tenantDb,
+            { user_id: user.id },
+            testFieldEncryptor,
+          );
+          const caller = createPushAuthedCaller(user, session.token);
+
+          const result = await caller.twoFactor.verify.pushSend();
+          expect(result.sent).toBe(true);
+          expect(result.challengeId).toBeTruthy();
+        });
+      });
+
+      describe("verify.pushPoll", () => {
+        it("returns pending when challenge has not been approved", async () => {
+          const user = await registerUser("push-poll-pending");
+          await seedPushSubscription(user.id);
+
+          const session = await createTestSession(
+            tenantDb,
+            { user_id: user.id },
+            testFieldEncryptor,
+          );
+          const caller = createPushAuthedCaller(user, session.token);
+
+          const sendResult = await caller.twoFactor.verify.pushSend();
+          const pollResult = await caller.twoFactor.verify.pushPoll({
+            challengeId: sendResult.challengeId,
+          });
+
+          expect(pollResult.status).toBe("pending");
+
+          // Session should NOT be marked verified
+          const sessions = createDbSessionRepository(
+            tenantDb,
+            testSessionTokenizer,
+            testSealedBox,
+          );
+          const updated = await sessions.findByToken(session.token);
+          expect(updated?.twofaVerified).toBe(false);
+        });
+
+        it("returns approved and marks session verified when challenge is approved", async () => {
+          const user = await registerUser("push-poll-approved");
+          await seedPushSubscription(user.id);
+
+          const session = await createTestSession(
+            tenantDb,
+            { user_id: user.id },
+            testFieldEncryptor,
+          );
+          const caller = createPushAuthedCaller(user, session.token);
+
+          // Send the challenge
+          const sendResult = await caller.twoFactor.verify.pushSend();
+
+          // Approve it directly in the DB (simulates the approving device)
+          await tenantDb
+            .updateTable("push_challenges")
+            .set({ status: "approved" })
+            .where("id", "=", sendResult.challengeId)
+            .execute();
+
+          // Poll should see approved and mark session verified
+          const pollResult = await caller.twoFactor.verify.pushPoll({
+            challengeId: sendResult.challengeId,
+          });
+          expect(pollResult.status).toBe("approved");
+
+          const sessions = createDbSessionRepository(
+            tenantDb,
+            testSessionTokenizer,
+            testSealedBox,
+          );
+          const updated = await sessions.findByToken(session.token);
+          expect(updated?.twofaVerified).toBe(true);
+        });
+      });
+
+      describe("verify.pushApprove", () => {
+        it("approves a pending challenge from a verified session", async () => {
+          const user = await registerUser("push-approve-ok");
+          await seedPushSubscription(user.id);
+
+          // Use an unverified caller to create the challenge
+          const session = await createTestSession(
+            tenantDb,
+            { user_id: user.id },
+            testFieldEncryptor,
+          );
+          const unverifiedCaller = createPushAuthedCaller(user, session.token);
+          const sendResult = await unverifiedCaller.twoFactor.verify.pushSend();
+
+          // Use a verified caller (different session) to approve
+          const verifiedSession = await createTestSession(
+            tenantDb,
+            { user_id: user.id },
+            testFieldEncryptor,
+          );
+          const verifiedCaller = createPushVerifiedCaller(
+            user,
+            verifiedSession.token,
+          );
+          const result = await verifiedCaller.twoFactor.verify.pushApprove({
+            challengeId: sendResult.challengeId,
+          });
+
+          expect(result).toEqual({ success: true });
+        });
+      });
+
+      describe("verify.pushDeny", () => {
+        it("denies a pending challenge from a verified session", async () => {
+          const user = await registerUser("push-deny-ok");
+          await seedPushSubscription(user.id);
+
+          const session = await createTestSession(
+            tenantDb,
+            { user_id: user.id },
+            testFieldEncryptor,
+          );
+          const unverifiedCaller = createPushAuthedCaller(user, session.token);
+          const sendResult = await unverifiedCaller.twoFactor.verify.pushSend();
+
+          const verifiedSession = await createTestSession(
+            tenantDb,
+            { user_id: user.id },
+            testFieldEncryptor,
+          );
+          const verifiedCaller = createPushVerifiedCaller(
+            user,
+            verifiedSession.token,
+          );
+          const result = await verifiedCaller.twoFactor.verify.pushDeny({
+            challengeId: sendResult.challengeId,
+          });
+
+          expect(result).toEqual({ success: true });
+        });
+      });
+    });
+
+    // =========================================================================
+    // 12. WebAuthn assertion (verify) routes
+    // =========================================================================
+
+    describe("verify.webauthn", () => {
+      /** Valid assertion input that passes the Zod schema. */
+      function fakeAssertionInput(credId: string) {
+        return {
+          id: credId,
+          rawId: Buffer.from(credId).toString("base64"),
+          type: "public-key" as const,
+          authenticatorAttachment: "platform" as const,
+          response: {
+            clientDataJSON: "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0In0",
+            authenticatorData: "SZYN5YgOjGh0NBcPZHZgW4_krrmihjLHmVzzuoMdl2M",
+            signature: "MEUCIQDTest",
+            userHandle: null,
+          },
+        };
+      }
+
+      it("verify.webauthnOptions returns a challenge and rpId", async () => {
+        const user = await registerUser("webauthn-assert-opts");
+        const session = await createTestSession(
+          tenantDb,
+          { user_id: user.id },
+          testFieldEncryptor,
+        );
+        const { caller } = createAuthedCaller(user, session.token);
+
+        const result = await caller.twoFactor.verify.webauthnOptions();
+        expect(result).toBeDefined();
+        expect(result!.challenge).toBeTruthy();
+        expect(result!.rpId).toBeTruthy();
+        expect(result!.allowCredentials).toBeDefined();
+      });
+
+      it("verify.webauthnComplete marks session verified on valid assertion", async () => {
+        const user = await registerUser("webauthn-assert-ok");
+        const session = await createTestSession(
+          tenantDb,
+          { user_id: user.id },
+          testFieldEncryptor,
+        );
+        const { caller } = createAuthedCaller(user, session.token);
+
+        // Seed a credential row so the service's DB lookup succeeds
+        await tenantDb
+          .insertInto("webauthn_credentials")
+          .values({
+            user_id: user.id,
+            credential_id: "test-cred-assert",
+            public_key: "fakePubKeyBase64url",
+            sign_count: 0,
+            ordinal: 1,
+          })
+          .execute();
+
+        // Request assertion options (stores challenge on session)
+        await caller.twoFactor.verify.webauthnOptions();
+
+        // Mock the verifyAuthentication function to return a valid result
+        const spy = vi
+          .spyOn(webauthnVerify, "verifyAuthentication")
+          .mockResolvedValue({
+            credentialId: "test-cred-assert",
+            userVerified: true,
+            signCount: 1,
+          });
+
+        await caller.twoFactor.verify.webauthnComplete(
+          fakeAssertionInput("test-cred-assert"),
+        );
+
+        expect(spy).toHaveBeenCalled();
+
+        // Session should be marked verified
+        const sessions = createDbSessionRepository(
+          tenantDb,
+          testSessionTokenizer,
+          testSealedBox,
+        );
+        const updated = await sessions.findByToken(session.token);
+        expect(updated?.twofaVerified).toBe(true);
+
+        spy.mockRestore();
       });
     });
   },

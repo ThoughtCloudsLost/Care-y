@@ -34,7 +34,7 @@ test.describe.serial("ticket creation (production UI)", () => {
     // After login(), we're already on /. Avoid page.goto("/") which causes
     // a full reload and resets crypto Worker state.
     if (!page.url().endsWith("/")) {
-      await page.getByRole("tab", { name: "Home" }).click();
+      await page.getByRole("tab", { name: "Overview" }).click();
       await expect(page).toHaveURL("/", { timeout: 10_000 });
     }
 
@@ -53,8 +53,11 @@ test.describe.serial("ticket creation (production UI)", () => {
       timeout: 10_000,
     });
 
-    // Close the sheet for subsequent tests.
+    // On desktop, ShellPopup replaces the default close button with
+    // headerRight (the submit button). Dismiss via Escape instead.
+    const dialog = page.getByRole("dialog", { name: "New Ticket" });
     await page.keyboard.press("Escape");
+    await expect(dialog).not.toBeVisible({ timeout: 10_000 });
   });
 
   test("create a ticket through the production form", async () => {

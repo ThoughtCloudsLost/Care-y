@@ -65,6 +65,7 @@ describe("SessionTokenizer.tokenize", () => {
 
   it("produces 64-character hex string (SHA-256 output)", () => {
     const token = tokenizer.tokenize("127.0.0.1");
+    // Token format: HMAC-SHA-256 hex digest. Session drift detection compares these stored values.
     expect(token).toMatch(/^[0-9a-f]{64}$/);
   });
 

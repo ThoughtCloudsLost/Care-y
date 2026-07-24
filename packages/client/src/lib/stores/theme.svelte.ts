@@ -46,6 +46,16 @@ function applyScheme(resolved: "dark" | "light"): void {
   document.documentElement.classList.toggle("dark", resolved === "dark");
   document.documentElement.classList.toggle("light", resolved === "light");
   document.documentElement.style.colorScheme = resolved;
+
+  requestAnimationFrame(() => {
+    const el = document.getElementById("theme-color");
+    if (el instanceof HTMLMetaElement) {
+      const paper = getComputedStyle(document.documentElement)
+        .getPropertyValue("--paper")
+        .trim();
+      if (paper) el.content = paper;
+    }
+  });
 }
 
 function applyGlassMode(mode: GlassMode, resolved: "dark" | "light"): void {

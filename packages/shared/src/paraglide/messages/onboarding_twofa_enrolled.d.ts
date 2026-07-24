@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "{count} method(s) enrolled" |
+* | "{count} methods enrolled" |
 *
 * @param {Onboarding_Twofa_EnrolledInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

@@ -271,7 +271,7 @@
   }
 
   .voicemail-row:not(:last-child) {
-    border-bottom: 1px solid var(--surface-2);
+    border-bottom: 1px solid var(--hair, var(--surface-2));
     padding-bottom: 0.5rem;
     margin-bottom: 0.25rem;
   }
@@ -299,7 +299,7 @@
     width: 100%;
     aspect-ratio: 1;
     border-radius: 0.375rem;
-    background: var(--surface-2);
+    background: var(--paper-deep, var(--surface-2));
   }
 
   .image-cell :global(.mms-thumbnail),
@@ -342,7 +342,7 @@
     padding-bottom: 100%;
     position: relative;
     border-radius: 0.5rem;
-    background: var(--surface-2);
+    background: var(--paper-deep, var(--surface-2));
     overflow: hidden;
     border: none;
     cursor: pointer;

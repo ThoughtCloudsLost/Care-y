@@ -7,6 +7,7 @@
     List,
     ListItem,
   } from "konsta/svelte";
+  import { DIALOG_DESTRUCTIVE_CLASS } from "$lib/components/shared/konsta-classes.js";
   import {
     createQuery,
     createQueries,
@@ -21,6 +22,7 @@
   import { adminKeys, queueKeys } from "$lib/query/keys.js";
   import { getOrgDecryptCache } from "$lib/crypto/context.js";
   import { haptic } from "$lib/utils/haptic.js";
+  import { getCollator } from "$lib/utils/collator.js";
   import { base64ToUint8Array } from "$lib/utils/buffer-encoding.js";
   import { toastStore } from "$lib/stores/toast.svelte.js";
   import { announceToLiveRegion } from "$lib/utils/announce.js";
@@ -29,6 +31,8 @@
   import QueryError from "$lib/components/QueryError.svelte";
   import DecryptPlaceholder from "$lib/components/DecryptPlaceholder.svelte";
   import SoftButton from "$lib/components/inputs/SoftButton.svelte";
+  import QueueGlyph from "$lib/components/shared/QueueGlyph.svelte";
+  import { decryptQueueAppearance } from "$lib/utils/queue-appearance.js";
   import { ErrorCode } from "@care-y/shared";
   import ShellDialog from "$lib/shell/ShellDialog.svelte";
   import ShellSheet from "$lib/shell/ShellSheet.svelte";
@@ -114,12 +118,17 @@
   // ── Expandable sections (expanded by default) ──
 
   const expandedQueues = new SvelteSet<string>();
+  // Plain Set: tracking seen ids reactively would re-expand a queue the
+  // moment the user collapses it (the effect reads what toggleExpand writes).
+  // eslint-disable-next-line svelte/prefer-svelte-reactivity -- intentionally non-reactive to break effect loop
+  const autoExpandedQueues = new Set<string>();
 
   $effect(() => {
     const queues = queuesQuery.data;
     if (!queues) return;
     for (const q of queues) {
-      if (!expandedQueues.has(q.id)) {
+      if (!autoExpandedQueues.has(q.id)) {
+        autoExpandedQueues.add(q.id);
         expandedQueues.add(q.id);
       }
     }
@@ -319,7 +328,10 @@
       sorted.sort(
         (a, b) =>
           dir *
-          (nameCache.get(a.id) ?? "").localeCompare(nameCache.get(b.id) ?? ""),
+          getCollator().compare(
+            nameCache.get(a.id) ?? "",
+            nameCache.get(b.id) ?? "",
+          ),
       );
     } else {
       function numericVal(q: (typeof sorted)[number], f: typeof field): number {
@@ -422,11 +434,17 @@
               onkeydown={onKeyActivate(() => toggleExpand(queue.id))}
             >
               <div class="queue-info">
-                <DecryptPlaceholder
-                  content={queueName}
-                  length={16}
-                  class="font-semibold"
-                />
+                <span class="queue-name-row">
+                  <QueueGlyph
+                    appearance={decryptQueueAppearance(orgCache, queue)}
+                    size={15}
+                  />
+                  <DecryptPlaceholder
+                    content={queueName}
+                    length={16}
+                    class="font-semibold"
+                  />
+                </span>
                 <span class="queue-stats">
                   {m.admin_queue_stat_open({ count: Number(queue.openCount) })}
                   /
@@ -555,7 +573,7 @@
     </DialogButton>
     <DialogButton
       strong
-      class="text-[--color-red-500] font-semibold"
+      class={DIALOG_DESTRUCTIVE_CLASS}
       onclick={confirmDelete}
     >
       {m.admin_queue_delete(withTerms())}
@@ -583,7 +601,13 @@
           onClick={() => (reassignTargetId = q.id)}
         >
           {#snippet title()}
-            <DecryptPlaceholder content={name} length={14} />
+            <span class="queue-name-row">
+              <QueueGlyph
+                appearance={decryptQueueAppearance(orgCache, q)}
+                size={14}
+              />
+              <DecryptPlaceholder content={name} length={14} />
+            </span>
           {/snippet}
         </ListItem>
       {/each}
@@ -614,6 +638,8 @@
   ondismiss={handleEditorDismiss}
   queueId={editorQueue?.id ?? null}
   queueEncryptedName={editorQueue?.encryptedName ?? null}
+  queueEncryptedColor={editorQueue?.encryptedColor ?? null}
+  queueEncryptedIcon={editorQueue?.encryptedIcon ?? null}
   queueEscalateDays={editorQueue?.escalateDays ?? 0}
   ondeletequeue={canDelete ? handleEditorDeleteQueue : undefined}
 />
@@ -667,6 +693,13 @@
     flex: 1;
   }
 
+  .queue-name-row {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    min-width: 0;
+  }
+
   .queue-stats {
     font-size: var(--text-xs);
     color: var(--muted);
@@ -697,7 +730,12 @@
     color: var(--muted);
     cursor: pointer;
     -webkit-tap-highlight-color: transparent;
-    transition: color 0.15s;
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .icon-btn {
+      transition: color 0.15s;
+    }
   }
 
   .icon-btn:hover:not(:disabled) {
@@ -750,7 +788,7 @@
   }
 
   .chip-remove:hover {
-    color: var(--color-red-500);
+    color: var(--danger, var(--color-red-500));
   }
 
   .chip-remove:focus-visible {
@@ -788,7 +826,7 @@
     padding: 0.75rem;
     border: none;
     border-radius: var(--card-radius);
-    background: var(--color-red-500);
+    background: var(--danger, var(--color-red-500));
     color: white;
     font-weight: 600;
     font-size: var(--text-base);

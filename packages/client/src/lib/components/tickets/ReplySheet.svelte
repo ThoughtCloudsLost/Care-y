@@ -1,12 +1,13 @@
 <!--
   Quick reply sheet opened from ticket list cards.
 
-  Shows preview messages (from the card's already-decrypted data) and an
-  inline ShellMessagebar for composing. Supports reply and note modes.
+  Shows preview messages (from the card's already-decrypted data) and the
+  shared TicketCompose bar for composing. Volunteers choose a channel
+  (Reply, Text, Internal Note) from the + menu before composing.
+
   After send: optimistic bubble, 1.5s delay, then auto-dismiss.
 -->
 <script lang="ts">
-  import { Messages, MessagesTitle } from "konsta/svelte";
   import * as m from "$lib/paraglide/messages.js";
   import { followupSlot } from "@care-y/crypto";
   import { trpc } from "$lib/trpc/index.js";
@@ -22,17 +23,36 @@
   import { toastStore } from "$lib/stores/toast.svelte.js";
   import { haptic } from "$lib/utils/haptic.js";
   import { createNoteTypesQuery } from "$lib/tickets/queries.js";
+  import {
+    createReactionsQuery,
+    writeReactionToCache,
+  } from "$lib/tickets/create-reactions-query.svelte.js";
+  import { createSmsSend } from "$lib/composables/ticket-detail/create-sms-send.svelte.js";
+  import { createExposureHint } from "$lib/composables/ticket-detail/create-exposure-hint.svelte.js";
+  import { useQueryClient } from "@tanstack/svelte-query";
   import ShellSheet from "$lib/shell/ShellSheet.svelte";
-  import ShellMessagebar from "$lib/shell/ShellMessagebar.svelte";
   import FollowUpBubble from "$lib/components/tickets/FollowUpBubble.svelte";
-  import MentionAutocomplete from "$lib/components/tickets/MentionAutocomplete.svelte";
+  import TicketCompose from "$lib/components/tickets/TicketCompose.svelte";
+  import type { TicketComposeHandle } from "$lib/components/tickets/ticket-compose-types.js";
   import ComposeActions from "$lib/components/tickets/ComposeActions.svelte";
+  import ExposureHint from "$lib/components/tickets/ExposureHint.svelte";
+  import {
+    setDraftForMode,
+    clearDraftForMode,
+  } from "$lib/tickets/draft-store.svelte.js";
   import type { RawFollowUpPreview } from "$lib/tickets/preview-loader.svelte.js";
+  import {
+    groupConsecutive,
+    isFollowUpGroup,
+    followUpGroupKey,
+  } from "$lib/tickets/follow-up-utils.js";
+  import SystemEvent from "$lib/components/tickets/SystemEvent.svelte";
 
   interface ReplySheetProps {
     opened: boolean;
     ticketId: string;
     clientAlias: string;
+    hasPhone: boolean;
     previewFollowUps: RawFollowUpPreview[] | undefined;
     followUpCount: number;
     ondismiss: () => void;
@@ -43,6 +63,7 @@
     opened,
     ticketId,
     clientAlias,
+    hasPhone,
     previewFollowUps,
     followUpCount,
     ondismiss,
@@ -55,35 +76,50 @@
   const orgCache = getOrgDecryptCache();
   const currentUserIdGetter = getCurrentUserId();
   const currentUserId = $derived(currentUserIdGetter());
+  const queryClient = useQueryClient();
 
-  let replyReactions = $state<Record<string, ReactionSummary[]>>({});
+  // ── Compose (shared TicketCompose owns mode, drafts, and mentions) ──
 
-  $effect(() => {
-    if (!opened || !previewFollowUps) {
-      replyReactions = {};
-      return;
-    }
-    const noteIds = previewFollowUps
-      .filter((fu) => fu.type === "internal_note")
-      .map((fu) => fu.id);
-    if (noteIds.length === 0) return;
-    void ticketRouter.getReactions
-      .query({ followUpIds: noteIds })
-      .then((r: Record<string, ReactionSummary[]>) => {
-        replyReactions = r;
-      })
-      .catch((_e: unknown) => {
-        /* best-effort */
-      });
+  let compose = $state<TicketComposeHandle>();
+  let replySending = $state(false);
+  let dismissTimer: ReturnType<typeof setTimeout> | null = null;
+
+  // ── Exposure hint ──
+
+  const exposureHint = createExposureHint();
+
+  // ── SMS send (composable) ──
+
+  const sms = createSmsSend({
+    getTicketId: () => ticketId,
+    cryptoBridge,
+    queryClient,
+    createFollowUpMutate: async (args) =>
+      ticketRouter.createFollowUp.mutate(args),
+    onSuccess: () => {
+      haptic();
+      toastStore.show(m.ticket_toast_message_sent());
+      dismissTimer = setTimeout(() => {
+        dismissTimer = null;
+        clearDraftForMode(ticketId, "sms");
+        compose?.reset();
+        onsent(ticketId);
+      }, 1500);
+    },
   });
 
-  function getReplyReactions(followUpId: string): ReactionSummary[] {
-    const reactions = Object.hasOwn(replyReactions, followUpId)
-      ? // eslint-disable-next-line security/detect-object-injection -- key is a UUID from our own query, not user input
-        replyReactions[followUpId]
-      : undefined;
-    return reactions ?? [];
-  }
+  // ── Reactions ──
+
+  const replyReactions = createReactionsQuery({
+    getNoteIds: () =>
+      opened && previewFollowUps
+        ? previewFollowUps
+            .filter((fu) => fu.type === "internal_note")
+            .map((fu) => fu.id)
+        : [],
+    fetchReactions: async (followUpIds, signal) =>
+      ticketRouter.getReactions.query({ followUpIds }, { signal }),
+  });
 
   function handleToggleReaction(
     followUpId: string,
@@ -92,12 +128,14 @@
     void ticketRouter.toggleReaction
       .mutate({ followUpId, reaction })
       .then((updated: ReactionSummary[]) => {
-        replyReactions = { ...replyReactions, [followUpId]: updated };
+        writeReactionToCache(queryClient, followUpId, updated);
       })
       .catch((_e: unknown) => {
         /* best-effort */
       });
   }
+
+  // ── Note types ──
 
   const noteTypesQuery = ticketRouter.noteTypes
     ? createNoteTypesQuery(ticketRouter.noteTypes)
@@ -127,13 +165,6 @@
     return orgCache.decrypt(nt.id + ":icon", nt.encryptedIcon) ?? undefined;
   }
 
-  let draftText = $state("");
-  let cursorPosition = $state(0);
-  let sending = $state(false);
-  let dismissTimer: ReturnType<typeof setTimeout> | null = null;
-
-  // Clear the auto-dismiss timer when the sheet closes (manual dismiss
-  // or navigation) to prevent firing onsent on a stale sheet.
   $effect(() => {
     if (!opened && dismissTimer !== null) {
       clearTimeout(dismissTimer);
@@ -142,7 +173,28 @@
     }
   });
 
-  // Optimistic sent message (shown briefly before auto-dismiss).
+  // Collapse the compose bar when the sheet closes. The stored draft
+  // survives (drafts outlive navigation); the X dismiss inside the bar
+  // is the deliberate discard.
+  $effect(() => {
+    if (!opened) {
+      compose?.reset();
+    }
+  });
+
+  // Auto-activate when only one client-reply method exists.
+  // When both are available, stay collapsed and let the volunteer tap +.
+  let prevOpened = $state(false);
+  $effect(() => {
+    const justOpened = opened && !prevOpened;
+    prevOpened = opened;
+    if (!justOpened) return;
+
+    if (!hasPhone) {
+      compose?.activateReply();
+    }
+  });
+
   let optimisticMessage = $state<{
     id: string;
     text: string;
@@ -150,39 +202,30 @@
     createdAt: string;
   } | null>(null);
 
-  // Reverse to chronological order (oldest first, matching chat convention).
   const orderedPreviews = $derived(
     previewFollowUps ? [...previewFollowUps].reverse() : undefined,
+  );
+
+  const groupedPreviews = $derived(
+    orderedPreviews !== undefined
+      ? groupConsecutive(orderedPreviews)
+      : undefined,
   );
 
   const moreCount = $derived(
     previewFollowUps ? Math.max(0, followUpCount - previewFollowUps.length) : 0,
   );
 
-  function handleInput(e: Event): void {
-    const target = e.target;
-    if (target instanceof HTMLTextAreaElement) {
-      cursorPosition = target.selectionStart;
-    }
-  }
+  // ── Reply send pipeline ──
 
-  function handleMentionSelect(_userId: string, displayName: string): void {
-    const before = draftText.slice(0, cursorPosition);
-    const after = draftText.slice(cursorPosition);
-    const atIndex = before.lastIndexOf("@");
-    if (atIndex === -1) return;
-    const replacement = `@${displayName} `;
-    draftText = before.slice(0, atIndex) + replacement + after;
-    cursorPosition = atIndex + replacement.length;
-  }
+  async function handleReplySend(rawText: string): Promise<void> {
+    const text = rawText.trim();
+    if (text === "" || replySending) return;
+    replySending = true;
 
-  async function handleSend(): Promise<void> {
-    const text = draftText.trim();
-    if (text === "" || sending) return;
-    sending = true;
-
-    const savedDraft = draftText;
-    draftText = "";
+    // Optimistic clear, mirroring the pre-send draft wipe; the catch
+    // below restores the untrimmed draft on failure.
+    clearDraftForMode(ticketId, "reply");
 
     const followUpId = crypto.randomUUID();
 
@@ -193,7 +236,6 @@
         text,
       );
 
-      // Show optimistic bubble.
       optimisticMessage = {
         id: `optimistic-${String(Date.now())}`,
         text,
@@ -213,21 +255,21 @@
       haptic();
       toastStore.show(m.ticket_toast_message_sent());
 
-      // Auto-dismiss after 1.5s so the user sees the optimistic bubble.
       dismissTimer = setTimeout(() => {
         dismissTimer = null;
         optimisticMessage = null;
         onsent(ticketId);
       }, 1500);
     } catch {
-      // Rollback: restore draft, remove optimistic bubble.
       optimisticMessage = null;
-      draftText = savedDraft;
+      setDraftForMode(ticketId, "reply", rawText);
       toastStore.show(m.error_generic(), 3000);
     } finally {
-      sending = false;
+      replySending = false;
     }
   }
+
+  // ── Compose actions popover ──
 
   let composeActionsOpen = $state(false);
   let composeActionsAnchor = $state<HTMLElement | undefined>();
@@ -238,44 +280,53 @@
   }
 </script>
 
-<ShellSheet {opened} {ondismiss}>
-  <div class="reply-sheet-header">
-    <span class="reply-sheet-title">
-      {m.ticket_reply_sheet_title({ alias: clientAlias })}
-    </span>
-  </div>
-
+<ShellSheet
+  {opened}
+  {ondismiss}
+  title={m.ticket_reply_sheet_title({ alias: clientAlias })}
+  class="reply-shell-sheet"
+>
   <div class="reply-sheet-messages">
-    <Messages>
+    <div class="thread">
       {#if moreCount > 0}
-        <MessagesTitle>
+        <p class="thread-more">
           {m.ticket_reply_sheet_more({ count: String(moreCount) })}
-        </MessagesTitle>
+        </p>
       {/if}
 
-      {#if orderedPreviews}
-        {#each orderedPreviews as fu (fu.id)}
-          {@const fuResult = resolveAsyncDecrypt(
-            followUpCache.decryptContent(
-              fu.id,
-              ticketId,
-              followupSlot(fu.id),
-              fu.keyWrap,
-              fu.encryptedContent,
-            ),
-            fu.keyWrap !== null,
-          )}
-          <FollowUpBubble
-            followUp={fu}
-            result={fuResult}
-            {clientAlias}
-            noteTypeName={resolveNoteTypeName(fu.noteTypeId)}
-            noteTypeIcon={resolveNoteTypeIconSlug(fu.noteTypeId)}
-            reactions={getReplyReactions(fu.id)}
-            {currentUserId}
-            ontogglereaction={(reaction: ReactionType) =>
-              handleToggleReaction(fu.id, reaction)}
-          />
+      {#if groupedPreviews}
+        {#each groupedPreviews as entry (followUpGroupKey(entry))}
+          {#if isFollowUpGroup(entry)}
+            <SystemEvent
+              type={entry.type}
+              timestamp={entry.lastTimestamp}
+              count={entry.count}
+            />
+            <!-- eslint-disable @typescript-eslint/no-unsafe-argument -- svelte-eslint cannot narrow GroupedFollowUp in {:else} blocks; isFollowUpGroup guard above guarantees entry is a RawFollowUpPreview here -->
+          {:else}
+            {@const fu = entry}
+            {@const fuResult = resolveAsyncDecrypt(
+              followUpCache.decryptContent(
+                fu.id,
+                ticketId,
+                followupSlot(fu.id),
+                fu.keyWrap,
+                fu.encryptedContent,
+              ),
+              fu.keyWrap !== null,
+            )}
+            <FollowUpBubble
+              followUp={fu}
+              result={fuResult}
+              {clientAlias}
+              noteTypeName={resolveNoteTypeName(fu.noteTypeId)}
+              noteTypeIcon={resolveNoteTypeIconSlug(fu.noteTypeId)}
+              reactions={replyReactions.reactionsFor(fu.id)}
+              {currentUserId}
+              ontogglereaction={(reaction: ReactionType) =>
+                handleToggleReaction(fu.id, reaction)}
+            />
+          {/if}
         {/each}
       {/if}
 
@@ -292,26 +343,18 @@
           {clientAlias}
         />
       {/if}
-    </Messages>
+    </div>
   </div>
 
-  {#if opened}
-    <div class="mention-anchor">
-      <MentionAutocomplete
-        {draftText}
-        {cursorPosition}
-        onselect={handleMentionSelect}
-      />
-    </div>
-    <ShellMessagebar
-      inline
-      bind:value={draftText}
-      onsend={() => void handleSend()}
-      onplus={handlePlus}
-      oninput={handleInput}
-      sendDisabled={sending || draftText.trim() === ""}
-    />
-  {/if}
+  <TicketCompose
+    bind:this={compose}
+    {ticketId}
+    inline
+    sending={replySending || sms.sending}
+    onsendreply={(text: string) => void handleReplySend(text)}
+    onsendsms={(text: string) => void sms.handleSmsSend(text)}
+    onplus={handlePlus}
+  />
 </ShellSheet>
 
 <ComposeActions
@@ -322,28 +365,50 @@
   target={composeActionsAnchor}
   {ticketId}
   onpresetselect={(body: string) => {
-    draftText = body;
+    setDraftForMode(ticketId, "reply", body);
+    compose?.activateReply();
   }}
+  onreply={() => compose?.activateReply()}
+  ontextclient={hasPhone
+    ? () => exposureHint.show("sms", () => compose?.activateSms())
+    : undefined}
 />
 
+{#if exposureHint.type}
+  <ExposureHint
+    type={exposureHint.type}
+    opened={exposureHint.open}
+    ondismiss={() => exposureHint.dismiss()}
+  />
+{/if}
+
 <style>
-  .reply-sheet-header {
-    padding: 0.75rem 1rem 0;
+  :global(.reply-shell-sheet .sheet-body) {
+    padding-bottom: 0;
   }
 
-  .reply-sheet-title {
-    font-size: var(--text-lg);
-    font-weight: 600;
-  }
-
-  .mention-anchor {
-    position: relative;
+  :global(.reply-shell-sheet .shell-sheet-content) {
+    min-height: auto;
   }
 
   .reply-sheet-messages {
     flex: 1;
     overflow-y: auto;
-    padding: 0.5rem 0;
+    padding: 0.5rem 0 1rem;
     max-height: 40vh;
+  }
+
+  .thread {
+    display: flex;
+    flex-direction: column;
+    gap: 13px;
+    padding: 0 16px;
+  }
+
+  .thread-more {
+    text-align: center;
+    font-size: var(--text-xs);
+    color: var(--muted);
+    margin: 0;
   }
 </style>

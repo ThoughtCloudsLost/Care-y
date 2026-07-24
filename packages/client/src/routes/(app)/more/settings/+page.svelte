@@ -20,6 +20,8 @@
   import { getNavbarOverrideCtx } from "$lib/shell/context.js";
   import { shellBack } from "$lib/shell/navigation.js";
   import { base64ToUint8Array } from "$lib/utils/buffer-encoding.js";
+  import { themeStore } from "$lib/stores/theme.svelte";
+  import { toggleSchemeWithPalette } from "$lib/branding/scheme-toggle.js";
   import { toastStore } from "$lib/stores/toast.svelte.js";
   import DisplayNameSheet from "$lib/components/settings/DisplayNameSheet.svelte";
   import UsernameSheet from "$lib/components/settings/UsernameSheet.svelte";
@@ -77,7 +79,9 @@
     if (!twoFactorStatusQuery.data) return m.common_loading();
     const count = twoFactorStatusQuery.data.methods.length;
     if (count === 0) return m.settings_2fa_none();
-    return m.settings_2fa_methods({ count });
+    return count === 1
+      ? m.settings_2fa_methods_one()
+      : m.settings_2fa_methods({ count });
   });
 
   // ── Dev-only seed ───────────────────────────────────────────────────
@@ -156,6 +160,25 @@
       link
       onclick={() => {
         passwordSheetOpen = true;
+      }}
+    />
+  </List>
+
+  <BlockTitle>{m.settings_appearance()}</BlockTitle>
+  <List strong inset>
+    <ListItem
+      title={m.settings_color_scheme()}
+      after={themeStore.resolvedScheme === "dark"
+        ? m.settings_dark_mode()
+        : m.settings_light_mode()}
+      link
+      onclick={toggleSchemeWithPalette}
+    />
+    <ListItem
+      title={m.settings_refresh_app()}
+      link
+      onclick={() => {
+        location.reload();
       }}
     />
   </List>
@@ -251,22 +274,24 @@
     padding: var(--space-md) 0;
   }
 
+  /* DEV-gated seed feedback, tokenized so even dev chrome sits on the
+     palette. */
   .dev-seed-status {
     font-size: 0.875rem;
-    color: var(--k-color-brand-green, #16a34a);
+    color: var(--care);
     margin-bottom: 0.5rem;
   }
 
   .dev-seed-error {
     font-size: 0.875rem;
-    color: var(--k-color-brand-red, #dc2626);
+    color: var(--danger);
     margin-bottom: 0.5rem;
     word-break: break-word;
   }
 
   .dev-seed-progress {
     font-size: 0.875rem;
-    color: var(--k-color-brand-blue, #2563eb);
+    color: var(--muted);
     margin-bottom: 0.5rem;
   }
 </style>

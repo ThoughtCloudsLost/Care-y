@@ -8,19 +8,21 @@
   import { goto } from "$app/navigation";
   import { resolve } from "$app/paths";
   import { page } from "$app/state";
-  import { DialogButton, Link } from "konsta/svelte";
+  import { DialogButton, Button } from "konsta/svelte";
+  import { DIALOG_DESTRUCTIVE_CLASS } from "$lib/components/shared/konsta-classes.js";
   import ShellDialog from "$lib/shell/ShellDialog.svelte";
   import {
     FolderInput,
     FolderPen,
     Trash2,
     Download,
-    X,
     FilePlus,
   } from "@lucide/svelte";
+  import BulkActionBar from "$lib/components/BulkActionBar.svelte";
   import SubNavbarFilterLayout from "$lib/shell/SubNavbarFilterLayout.svelte";
+  import ViewSwitcher from "$lib/components/ViewSwitcher.svelte";
+  import type { ViewMode } from "$lib/stores/view-mode.svelte.js";
   import type {
-    ViewToggleConfig,
     SortConfig,
     SavedFiltersConfig,
     FilterPillsConfig,
@@ -38,7 +40,6 @@
   } from "$lib/crypto/context.js";
   import {
     getScrollContainer,
-    getTabbarOverrideCtx,
     getNavbarOverrideCtx,
   } from "$lib/shell/context.js";
   import type { NavbarAction } from "$lib/shell/types";
@@ -59,11 +60,14 @@
   import CreateSavedFilter from "$lib/components/filters/CreateSavedFilter.svelte";
   import VirtualList from "$lib/components/tickets/VirtualList.svelte";
   import ArticleCard from "$lib/components/library/ArticleCard.svelte";
+  import ArticleTable from "$lib/components/library/ArticleTable.svelte";
   import MoveCategorySheet from "$lib/components/library/MoveCategorySheet.svelte";
   import CategoryManageSheet from "$lib/components/library/CategoryManageSheet.svelte";
   import QueryError from "$lib/components/QueryError.svelte";
   import EmptyState from "$lib/components/EmptyState.svelte";
   import { haptic } from "$lib/utils/haptic.js";
+  import { gestureMount } from "$lib/utils/gesture-focus.js";
+  import { cachedDate } from "$lib/utils/date-cache.js";
   import { getLibraryLayoutCtx } from "./library-layout-ctx.js";
   import { createFilterDispatch } from "$lib/composables/create-filter-dispatch.svelte.js";
   import { createSearchOverlay } from "$lib/search/search-overlay.svelte.js";
@@ -94,7 +98,6 @@
       return scrollEl;
     },
   });
-  const tabbarOverride = getTabbarOverrideCtx();
   const navbarCtx = getNavbarOverrideCtx();
 
   // --- Grid columns (dynamic based on container width) ---
@@ -189,6 +192,14 @@
   });
 
   const isOrgKeyLoaded = $derived(orgKeyManager.isLoaded);
+
+  type CardViewMode = "list" | "cards" | "grid";
+  function isCardViewMode(v: string): v is CardViewMode {
+    return v === "list" || v === "cards" || v === "grid";
+  }
+  const cardViewMode: CardViewMode = $derived(
+    isCardViewMode(kbViewModeStore.mode) ? kbViewModeStore.mode : "list",
+  );
 
   // --- Search overlay ---
 
@@ -437,26 +448,6 @@
     toastStore.show(m.feature_coming_soon());
   }
 
-  // Tabbar override for multi-select.
-  $effect(() => {
-    if (multiSelectActive) {
-      tabbarOverride.current = {
-        left: batchLeft,
-        middle: batchMiddle,
-        right: batchRight,
-        ariaLabel: m.library_selected({ count: selectedIds.size }),
-      };
-    } else {
-      tabbarOverride.current = undefined;
-    }
-  });
-
-  $effect(() => {
-    return () => {
-      tabbarOverride.current = undefined;
-    };
-  });
-
   // Subnavbar override.
   $effect(() => {
     const newArticleAction: NavbarAction = {
@@ -475,12 +466,9 @@
   });
 
   // --- SubNavbar config objects ---
-  const viewConfig: ViewToggleConfig = $derived({
-    mode: kbViewModeStore.mode,
-    onchange: (mode: "list" | "grid") => kbViewModeStore.set(mode),
-    listLabel: m.library_view_list(),
-    gridLabel: m.library_view_grid(),
-  });
+  function handleViewChange(mode: ViewMode): void {
+    kbViewModeStore.set(mode);
+  }
 
   const KB_SORT_FIELDS: readonly KbSortField[] = [
     "created_at",
@@ -685,6 +673,10 @@
     libraryLayout.openArticle(articleId);
   }
 
+  function handleArticleFullOpen(articleId: string): void {
+    libraryLayout.openArticleFull(articleId);
+  }
+
   function loadNextPage(): void {
     if (articlesQuery.hasNextPage && !articlesQuery.isFetchingNextPage) {
       void articlesQuery.fetchNextPage();
@@ -730,47 +722,81 @@
       : undefined,
   );
 
+  function handleTableSort(
+    field: KbSortField,
+    direction: "asc" | "desc",
+  ): void {
+    kbFilterStore.setSort(field, direction);
+  }
+
+  // tableRows remaps on every decrypt settle, so Date construction goes
+  // through the memoized parser instead of allocating per row per recompute.
+  const tableRows = $derived(
+    displayItems.map((article) => ({
+      id: article.id,
+      titleResult: resolveOrgDecrypt(
+        orgCache.decrypt(`kb-item:${article.id}`, article.encryptedTitle),
+        isOrgKeyLoaded,
+      ),
+      encryptedTitle: article.encryptedTitle,
+      categoryName: categoryNameMap.get(article.categoryId) ?? null,
+      authorName: resolveAuthorName(article.createdBy),
+      voteUpCount: article.voteUpCount,
+      voteTotalCount: article.voteUpCount + article.voteDownCount,
+      updatedAt: cachedDate(article.updatedAt),
+    })),
+  );
+
   function skeletonNoop(): void {
     /* skeleton card, no interaction */
   }
 </script>
 
-{#snippet batchLeft()}
-  <Link iconOnly onclick={handleBulkMove} aria-label={m.library_action_move()}>
-    <FolderInput size={24} aria-hidden="true" />
-  </Link>
-  {#if canDelete}
-    <Link
-      iconOnly
-      onclick={handleBulkDelete}
-      aria-label={m.library_action_delete()}
-    >
-      <Trash2 size={24} aria-hidden="true" />
-    </Link>
-  {/if}
-  <Link
-    iconOnly
-    onclick={handleBulkExport}
-    aria-label={m.library_action_export()}
+{#snippet bulkActionsRow()}
+  <BulkActionBar
+    countLabel={m.library_selected({ count: selectedIds.size })}
+    exitLabel={m.library_exit_multiselect()}
+    onexit={exitMultiSelect}
+    ariaLabel={m.library_selected({ count: selectedIds.size })}
   >
-    <Download size={24} aria-hidden="true" />
-  </Link>
-{/snippet}
-
-{#snippet batchMiddle()}
-  <span class="font-semibold text-sm" role="status">
-    {m.library_selected({ count: selectedIds.size })}
-  </span>
-{/snippet}
-
-{#snippet batchRight()}
-  <Link
-    iconOnly
-    aria-label={m.library_exit_multiselect()}
-    onclick={exitMultiSelect}
-  >
-    <X size={24} aria-hidden="true" />
-  </Link>
+    {#snippet actions()}
+      <Button
+        tonal
+        rounded
+        small
+        inline
+        class="bulk-action-btn"
+        onclick={handleBulkMove}
+      >
+        <FolderInput size={16} aria-hidden="true" />
+        {m.library_action_move()}
+      </Button>
+      {#if canDelete}
+        <Button
+          tonal
+          rounded
+          small
+          inline
+          class="bulk-action-btn"
+          onclick={handleBulkDelete}
+        >
+          <Trash2 size={16} aria-hidden="true" />
+          {m.library_action_delete()}
+        </Button>
+      {/if}
+      <Button
+        tonal
+        rounded
+        small
+        inline
+        class="bulk-action-btn"
+        onclick={handleBulkExport}
+      >
+        <Download size={16} aria-hidden="true" />
+        {m.library_action_export()}
+      </Button>
+    {/snippet}
+  </BulkActionBar>
 {/snippet}
 
 {#snippet libraryStats()}
@@ -797,10 +823,14 @@
   />
 {/snippet}
 
+{#snippet kbViewSwitcher()}
+  <ViewSwitcher mode={kbViewModeStore.mode} onchange={handleViewChange} />
+{/snippet}
+
 {#snippet librarySubnavbar()}
   <SubNavbarFilterLayout
     title={m.library_title(withTerms())}
-    view={viewConfig}
+    headerRight={kbViewSwitcher}
     stats={libraryStats}
     sort={sortConfig}
     selectLabel={m.library_select_mode()}
@@ -809,47 +839,86 @@
     filterPills={filterPillsConfig}
     manage={manageConfig}
     searchNavigator={overlay.active ? searchNavigatorRow : undefined}
-    onsearch={!overlay.active ? () => overlay.enter("") : undefined}
+    bulkActions={multiSelectActive ? bulkActionsRow : undefined}
+    onsearch={!overlay.active
+      ? () => gestureMount(() => overlay.enter(""))
+      : undefined}
     searchLabel={m.search_inline_trigger()}
   />
 {/snippet}
 
 <div class="library-page pb-20">
   {#if articlesQuery.isLoading}
-    <div
-      class="article-list"
-      class:article-grid={kbViewModeStore.mode === "grid"}
-    >
-      {#each [1, 2, 3, 4] as n (n)}
-        <ArticleCard
-          loading={true}
-          viewMode={kbViewModeStore.mode}
-          articleId=""
-          titleResult={{ status: "loading" }}
-          excerptResult={{ status: "loading" }}
-          categoryName={null}
-          authorName={null}
-          voteUpCount={0}
-          voteTotalCount={0}
-          updatedAt={new Date()}
-          ontap={skeletonNoop}
-        />
-      {/each}
-    </div>
+    {#if kbViewModeStore.mode === "table"}
+      <ArticleTable
+        rows={[]}
+        loading={true}
+        sortField={kbFilterStore.sort.field}
+        sortDirection={kbFilterStore.sort.direction}
+        onsortchange={handleTableSort}
+        ontap={skeletonNoop}
+        {multiSelectActive}
+      />
+    {:else}
+      <div
+        class="article-list"
+        class:article-grid={kbViewModeStore.mode === "grid"}
+        class:article-compact-list={kbViewModeStore.mode === "list"}
+      >
+        {#each [1, 2, 3, 4] as n (n)}
+          <ArticleCard
+            loading={true}
+            viewMode={cardViewMode}
+            articleId=""
+            titleResult={{ status: "loading" }}
+            excerptResult={{ status: "loading" }}
+            categoryName={null}
+            authorName={null}
+            voteUpCount={0}
+            voteTotalCount={0}
+            updatedAt={new Date()}
+            ontap={skeletonNoop}
+          />
+        {/each}
+      </div>
+    {/if}
   {:else if articlesQuery.isError}
     <QueryError error={articlesQuery.error} />
   {:else if displayItems.length === 0}
-    <EmptyState
-      title={kbFilterStore.activeCount > 0
-        ? m.library_empty_filter()
-        : m.library_empty_articles()}
+    {#if kbFilterStore.activeCount > 0}
+      <EmptyState title={m.library_empty_filter()} />
+    {:else}
+      <EmptyState
+        stamp={m.library_empty_articles()}
+        subtitle={m.library_empty_articles_body()}
+      />
+    {/if}
+  {:else if kbViewModeStore.mode === "table"}
+    <ArticleTable
+      rows={tableRows}
+      sortField={kbFilterStore.sort.field}
+      sortDirection={kbFilterStore.sort.direction}
+      onsortchange={handleTableSort}
+      ontap={handleArticleTap}
+      onfullopen={handleArticleFullOpen}
+      {multiSelectActive}
+      {selectedIds}
+      onselect={toggleSelection}
+      onlongpress={handleLongPress}
+      activeId={overlay.activeId}
+      searchTerm={overlay.term}
+      onloadmore={articlesQuery.hasNextPage ? loadNextPage : undefined}
     />
   {:else}
     <div class="article-list">
       <VirtualList
         items={displayItems}
         scrollContainer={scrollEl}
-        estimateHeight={kbViewModeStore.mode === "grid" ? 200 : 140}
+        estimateHeight={kbViewModeStore.mode === "grid"
+          ? 200
+          : kbViewModeStore.mode === "list"
+            ? 64
+            : 140}
         columns={gridColumns}
         getKey={(article: ArticleItem) => article.id}
         onloadmore={articlesQuery.hasNextPage ? loadNextPage : undefined}
@@ -873,7 +942,7 @@
           >
             <ArticleCard
               articleId={article.id}
-              viewMode={kbViewModeStore.mode}
+              viewMode={cardViewMode}
               titleResult={resolveOrgDecrypt(
                 orgCache.decrypt(
                   `kb-item:${article.id}`,
@@ -898,6 +967,7 @@
               selected={selectedIds.has(article.id)}
               {multiSelectActive}
               ontap={handleArticleTap}
+              onfullopen={handleArticleFullOpen}
               onselect={toggleSelection}
               onlongpress={handleLongPress}
               searchTerm={overlay.term}
@@ -953,7 +1023,11 @@
     >
       {m.common_cancel()}
     </DialogButton>
-    <DialogButton strong onclick={() => void confirmBulkDelete()}>
+    <DialogButton
+      strong
+      class={DIALOG_DESTRUCTIVE_CLASS}
+      onclick={() => void confirmBulkDelete()}
+    >
       {m.common_delete()}
     </DialogButton>
   {/snippet}
@@ -983,13 +1057,19 @@
     gap: var(--space-md);
   }
 
+  .article-compact-list {
+    gap: 0;
+  }
+
   .search-target {
     min-width: 0;
     overflow: hidden;
   }
 
   .article-card-selected {
-    background: var(--brand-primary-20);
+    /* Split-pane selection is an identity slot: brand-soft, never a
+       stronger brand fill. */
+    background: var(--brand-soft, var(--brand-primary-20));
     border-radius: var(--card-radius);
   }
 </style>

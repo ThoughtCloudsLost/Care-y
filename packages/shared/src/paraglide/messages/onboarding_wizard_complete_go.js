@@ -6,17 +6,17 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Onboarding_Wizard_Complete_GoInputs */
 
 const en_onboarding_wizard_complete_go = /** @type {(inputs: Onboarding_Wizard_Complete_GoInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Go to Dashboard`)
+	return /** @type {LocalizedString} */ (`Go to Overview`)
 };
 
 const es_onboarding_wizard_complete_go = /** @type {(inputs: Onboarding_Wizard_Complete_GoInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Ir al panel`)
+	return /** @type {LocalizedString} */ (`Ir al Resumen`)
 };
 
 /**
 * | output |
 * | --- |
-* | "Go to Dashboard" |
+* | "Go to Overview" |
 *
 * @param {Onboarding_Wizard_Complete_GoInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

@@ -78,11 +78,11 @@ vi.mock("$lib/terminology/context", () => {
     clients: "clients",
     ticket: "ticket",
     tickets: "tickets",
-    manager: "manager",
-    managers: "managers",
+    manager: "coordinator",
+    managers: "coordinators",
     queue: "queue",
     queues: "queues",
-    knowledgeBase: "knowledge base",
+    knowledgeBase: "library",
   };
   const resolver = () => defaults;
   return {

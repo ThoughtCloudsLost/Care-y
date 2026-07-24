@@ -19,14 +19,10 @@
   const followUp = $derived({
     id: result.followUpId,
     source: result.source,
-    type:
-      result.kind === "note"
-        ? "internal_note"
-        : result.kind === "system"
-          ? "status_change"
-          : "message",
+    type: result.type,
     encryptedContent: null,
     createdAt: result.createdAt,
+    eventParams: null as Record<string, unknown> | null,
   });
 
   const decryptResult: DecryptResult = $derived({
@@ -51,7 +47,7 @@
 </button>
 
 <style>
-  /* flex-column so Konsta Message's align-self: flex-end works for sent bubbles */
+  /* flex-column so the bubble's align-self: flex-end works for sent bubbles */
   .conversation-result {
     display: flex;
     flex-direction: column;

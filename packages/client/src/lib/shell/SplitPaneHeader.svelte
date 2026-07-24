@@ -59,7 +59,7 @@
     gap: 0.25rem;
     padding: 0.5rem;
     flex-shrink: 0;
-    border-bottom: 1px solid var(--divider);
+    border-bottom: 1px solid var(--hair, var(--divider));
     min-height: 44px;
     position: relative;
     z-index: 1;

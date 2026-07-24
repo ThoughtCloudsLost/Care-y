@@ -8,6 +8,7 @@
   import type { ShellPopoverProps } from "./types";
   import { useFocusTrap } from "./use-focus-trap.svelte";
   import { portal } from "./portal";
+  import ShellBackdrop from "./ShellBackdrop.svelte";
 
   let {
     opened,
@@ -30,21 +31,39 @@
 </script>
 
 <div use:portal={".k-page"}>
-  <Popover
-    {opened}
-    {target}
-    {angle}
-    {placement}
-    onBackdropClick={trap.handleDismiss}
-  >
+  <ShellBackdrop {opened} ondismiss={trap.handleDismiss} />
+  <Popover {opened} {target} {angle} {placement} backdrop={false}>
     <div
       bind:this={trap.dialogEl}
       role="dialog"
-      aria-modal="true"
+      aria-modal={opened ? "true" : undefined}
       aria-label={ariaLabel ?? undefined}
       tabindex="-1"
+      inert={!opened ? true : undefined}
+      class="shell-popover-content"
     >
       {@render children()}
     </div>
   </Popover>
 </div>
+
+<style>
+  /* Closed popovers stay mounted; inert plus delayed visibility keeps them
+     out of the accessibility tree and axe evaluation while letting the
+     close transition finish (mirrors ShellSheet). */
+  .shell-popover-content:not([inert]) {
+    visibility: visible;
+    transition: none;
+  }
+
+  .shell-popover-content[inert] {
+    visibility: hidden;
+    transition: visibility 0s 400ms;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .shell-popover-content[inert] {
+      transition-delay: 0s;
+    }
+  }
+</style>

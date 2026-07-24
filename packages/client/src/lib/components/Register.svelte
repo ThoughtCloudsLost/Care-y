@@ -1,0 +1,87 @@
+<script lang="ts">
+  import type { Snippet } from "svelte";
+  import { Shield } from "@lucide/svelte";
+  import * as m from "$lib/paraglide/messages.js";
+
+  export type RegisterKind = "note" | "careful" | "warning" | "protected";
+
+  interface Props {
+    kind: RegisterKind;
+    children: Snippet;
+    /** ARIA role. "alert" for registers that appear dynamically and must
+     *  announce (org key missing, insecure connection); "status" for
+     *  polite live updates during editing. Default stays "note". */
+    role?: "note" | "alert" | "status";
+  }
+
+  let { kind, children, role = "note" }: Props = $props();
+
+  // The four registers replace amber-for-everything callouts. Protected is
+  // deliberately calm: it shares Note's surface and earns its distinction
+  // from the shield glyph and the word, not from color (a protection claim
+  // is reassurance, not alarm). No left borders, no icon soup.
+  // Map lookup (not object indexing) per the lint security rules; the
+  // fallback is unreachable with a valid RegisterKind.
+  const eyebrows = new Map<RegisterKind, () => string>([
+    ["note", m.register_note],
+    ["careful", m.register_careful],
+    ["warning", m.register_warning],
+    ["protected", m.register_protected],
+  ]);
+
+  const eyebrow = $derived((eyebrows.get(kind) ?? m.register_note)());
+</script>
+
+<div class="register register-{kind}" data-register={kind} {role}>
+  <div class="register-eyebrow">
+    {#if kind === "protected"}
+      <Shield size={12} aria-hidden="true" />
+    {/if}
+    <span>{eyebrow}</span>
+  </div>
+  <div class="register-body">
+    {@render children()}
+  </div>
+</div>
+
+<style>
+  .register {
+    border-radius: 10px;
+    padding: 10px 13px;
+    background: var(--paper-deep);
+  }
+
+  .register-careful {
+    background: var(--care-soft);
+  }
+
+  .register-warning {
+    background: var(--urgent-soft);
+  }
+
+  .register-eyebrow {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 0.6875rem; /* 11px */
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 3px;
+  }
+
+  .register-careful .register-eyebrow {
+    color: var(--care);
+  }
+
+  .register-warning .register-eyebrow {
+    color: var(--urgent);
+  }
+
+  .register-body {
+    font-size: var(--text-base);
+    line-height: 1.5;
+    color: var(--ink-2);
+  }
+</style>

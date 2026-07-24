@@ -2,8 +2,8 @@
   import { List, ListItem } from "konsta/svelte";
   import { Settings as Cog, LogOut } from "@lucide/svelte";
   import * as m from "$lib/paraglide/messages.js";
-  import { withTerms } from "$lib/terminology/with-terms.js";
-  import { type Permission, RoleId } from "@care-y/shared";
+  import type { Permission } from "@care-y/shared";
+  import { getRoleInfo } from "$lib/admin/role-info.js";
   import { getOrgDecryptCache, getOrgKeyManager } from "$lib/crypto/context.js";
   import { resolveOrgDecrypt } from "$lib/crypto/decrypt-result.js";
   import DecryptPlaceholder from "$lib/components/DecryptPlaceholder.svelte";
@@ -77,13 +77,7 @@
       : null,
   );
 
-  const roleInfo = $derived(
-    roleId === RoleId.ADMIN
-      ? { name: m.role_admin(), path: "/admin" }
-      : roleId === RoleId.MANAGER
-        ? { name: m.role_manager(withTerms()), path: "/admin/manager" }
-        : { name: m.role_volunteer(withTerms()), path: "/admin/volunteer" },
-  );
+  const roleInfo = $derived(getRoleInfo(roleId));
 
   const orgLogoUrl = $derived(getOrgLogoUrl());
 
@@ -122,7 +116,11 @@
   <div class="panel-scroll">
     <!-- Profile header -->
     <div class="panel-profile">
-      <span class="panel-avatar" aria-hidden="true">
+      <span
+        class="panel-avatar"
+        class:identity-seal={orgLogoUrl === null && initials !== null}
+        aria-hidden="true"
+      >
         {#if orgLogoUrl}
           <img
             src={orgLogoUrl}
@@ -141,7 +139,11 @@
           <span class="panel-name">{nameResult.value}</span>
         {/if}
       </DecryptPlaceholder>
-      <button class="panel-role" onclick={() => onnavigate(roleInfo.path)}>
+      <!-- The role is who you are: stamp anatomy in brand ink. -->
+      <button
+        class="stamp-chip panel-role"
+        onclick={() => onnavigate(roleInfo.path)}
+      >
         {roleInfo.name}
       </button>
     </div>
@@ -201,7 +203,7 @@
     display: flex;
     gap: 8px;
     padding: 12px 12px;
-    border-top: 1px solid var(--border);
+    border-top: 1px solid var(--hair, var(--border));
   }
 
   .footer-pill {
@@ -211,7 +213,7 @@
     justify-content: center;
     gap: 6px;
     padding: 6px 10px;
-    border: 1px solid var(--border);
+    border: 1px solid var(--hair-2, var(--border));
     border-radius: 20px;
     background: transparent;
     color: inherit;
@@ -224,9 +226,10 @@
     opacity: 0.7;
   }
 
+  /* Sign out is destructive: the danger slot, never a Konsta red. */
   .footer-pill--logout {
-    color: var(--k-color-red, #ef4444);
-    border-color: var(--k-color-red, #ef4444);
+    color: var(--danger, var(--k-color-red, #ef4444));
+    border-color: var(--danger, var(--k-color-red, #ef4444));
   }
 
   .dest-icon {
@@ -248,11 +251,23 @@
     width: 48px;
     height: 48px;
     border-radius: 50%;
-    background: var(--k-color-primary);
-    color: var(--k-color-on-primary, #fff);
+    overflow: hidden;
+  }
+
+  /* The disc treatment survives only where a seal cannot apply: the org
+     logo and the fallback icon (logos and icons never tilt). */
+  .panel-avatar:not(.identity-seal) {
+    background: var(--brand-fill, var(--brand-primary));
+    color: var(--brand-on, #fff);
     font-size: 18px;
     font-weight: 600;
-    overflow: hidden;
+  }
+
+  /* Seal case: scale the shared anatomy's initial up to the 48px circle
+     and let the tilt out of the clipping box. */
+  .panel-avatar.identity-seal {
+    font-size: 1.125rem;
+    overflow: visible;
   }
 
   .panel-avatar-logo {
@@ -267,16 +282,21 @@
     text-align: center;
   }
 
+  /* Stamp anatomy comes from .stamp-chip; this sets the identity ink
+     and restores the tap ergonomics the smaller stamp would lose. */
   .panel-role {
-    display: inline-block;
-    padding: 2px 10px;
-    border: 1px solid var(--k-color-primary);
-    border-radius: 12px;
+    position: relative;
     background: transparent;
-    color: var(--k-color-primary);
-    font-size: 13px;
+    color: var(--brand-text, var(--brand-primary));
     cursor: pointer;
     -webkit-tap-highlight-color: transparent;
+  }
+
+  /* Invisible hit area: the stamp is visually small, the target is not. */
+  .panel-role::after {
+    content: "";
+    position: absolute;
+    inset: -14px;
   }
 
   .panel-role:active {

@@ -97,6 +97,7 @@ describe("PowVerifier", () => {
       const c2 = verifier.createChallenge("user-1", 3);
 
       expect(c1.challenge).not.toBe(c2.challenge);
+      // Challenge nonce is 32 bytes hex-encoded. Client PoW solver depends on this format.
       expect(c1.challenge.length).toBe(64); // 32 bytes hex
       verifier.dispose();
     });

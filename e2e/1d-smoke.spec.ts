@@ -21,30 +21,35 @@ test.describe.serial("1d-smoke", () => {
   test("page loads and renders shell structure", async () => {
     // Konsta App root renders
     const appRoot = page.locator('[data-testid="app-root"]').first();
-    await expect(appRoot).toBeVisible();
+    await expect(appRoot).toBeVisible({ timeout: CRYPTO_TIMEOUT });
 
     // Main content landmark exists
     const main = page.locator("main");
-    await expect(main).toBeAttached();
+    await expect(main).toBeAttached({ timeout: CRYPTO_TIMEOUT });
 
-    // Bottom tab bar renders with correct tabs
+    // The tablist appears as a bottom tabbar on mobile or a sidebar on desktop.
+    // Both render the same tabs; this spec runs in both viewports.
     const tabbar = page.getByRole("tablist");
-    await expect(tabbar).toBeAttached();
+    await expect(tabbar).toBeAttached({ timeout: CRYPTO_TIMEOUT });
 
-    for (const name of ["Home", "Tickets", "Knowledge Base"]) {
+    for (const name of ["Overview", "Tickets", "Library"]) {
       await expect(tabbar.getByRole("tab", { name })).toBeAttached();
     }
-
-    // "More" is a button outside the tablist, inside the nav
-    const nav = page.getByRole("navigation", { name: /main/i });
-    await expect(nav.getByRole("button", { name: /more/i })).toBeAttached();
   });
 
   test("default theme is iOS and dark mode", async () => {
+    // data-ui-theme is the app's documented theme contract on the App
+    // root (ThemeProvider.svelte), asserted instead of Konsta's
+    // internal .k-* classes.
     const appRoot = page.locator('[data-testid="app-root"]').first();
-    await expect(appRoot).toHaveClass(/k-ios/);
+    await expect(appRoot).toHaveAttribute("data-ui-theme", "ios");
 
-    const html = page.locator("html");
-    await expect(html).toHaveClass(/dark/);
+    // Dark mode is observable through the root color-scheme, which the
+    // theme store sets (theme.svelte.ts applyScheme) and the browser
+    // consumes when rendering native widgets and scrollbars.
+    const colorScheme = await page.evaluate(
+      () => getComputedStyle(document.documentElement).colorScheme,
+    );
+    expect(colorScheme).toBe("dark");
   });
 });

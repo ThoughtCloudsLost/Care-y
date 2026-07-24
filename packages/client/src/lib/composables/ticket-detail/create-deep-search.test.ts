@@ -5,10 +5,14 @@ import { createDeepSearch } from "./create-deep-search.svelte.js";
 describe("createDeepSearch", () => {
   let loadOlderPage: Mock<() => Promise<void>>;
   let hasMore: boolean;
+  let loadedCount: number;
+  let totalCount: number;
 
   beforeEach(() => {
     loadOlderPage = vi.fn<() => Promise<void>>().mockResolvedValue(undefined);
     hasMore = true;
+    loadedCount = 0;
+    totalCount = 0;
   });
 
   function make(overrides?: { overlayTerm?: string | null }) {
@@ -18,6 +22,8 @@ describe("createDeepSearch", () => {
       getOverlayTerm: () => overlayTerm,
       getHasMoreMessages: () => hasMore,
       getLoadOlderPage: () => loadOlderPage,
+      getLoadedCount: () => loadedCount,
+      getTotalCount: () => totalCount,
     });
   }
 
@@ -74,10 +80,32 @@ describe("createDeepSearch", () => {
       getOverlayTerm: () => "search",
       getHasMoreMessages: () => true,
       getLoadOlderPage: () => undefined,
+      getLoadedCount: () => 0,
+      getTotalCount: () => 0,
     });
 
     await ds.trigger();
     expect(ds.phase).toBe("idle");
+  });
+
+  it("reports the climbing loaded count against the ticket total", async () => {
+    loadedCount = 1;
+    totalCount = 3;
+    const midFlight: Array<{ searched: number; total: number }> = [];
+
+    const ds = make();
+    loadOlderPage.mockImplementation(async () => {
+      midFlight.push({ searched: ds.searched, total: ds.total });
+      loadedCount++;
+      if (loadedCount >= totalCount) hasMore = false;
+    });
+
+    await ds.trigger();
+
+    expect(midFlight[0]).toEqual({ searched: 1, total: 3 });
+    expect(midFlight.every((s) => s.searched < s.total)).toBe(true);
+    expect(ds.phase).toBe("done");
+    expect(ds.searched).toBe(ds.total);
   });
 
   describe("reset", () => {

@@ -66,6 +66,8 @@ import type {
   UnwrapOrgKeyRequest,
   UnwrapTkRequest,
   WrapWithVolPublicRequest,
+  SealSelfBlobRequest,
+  OpenSelfBlobRequest,
   RewrapTkRequest,
   CreateTicketKeyRequest,
   OrgDecryptRequest,
@@ -266,7 +268,9 @@ function zeroAndClear(
 
 async function handleInit(id: number, sink: Sink): Promise<void> {
   await getSodium();
-  state = "READY";
+  if (state !== "KEYED") {
+    state = "READY";
+  }
   const msg: WorkerResponse = { id, ok: true, type: "init" };
   sink(msg);
 }
@@ -824,6 +828,116 @@ function handleWrapWithVolPublic(
   }
 }
 
+/**
+ * Domain tag prefixed inside every self-blob plaintext before ECIES
+ * encryption to volPublic. openSelfBlob refuses plaintexts without it:
+ * ticket key wraps and org key wraps are also ECIES envelopes to
+ * volPublic, and without this check the handler would be a generic
+ * vol_private decrypt oracle able to hand raw key material to the main
+ * thread. Exported for tests.
+ */
+const SELF_BLOB_TAG_TEXT = "carey.self-blob.v1:";
+export const SELF_BLOB_TAG: Uint8Array = new TextEncoder().encode(
+  SELF_BLOB_TAG_TEXT,
+);
+
+function hasSelfBlobTag(plaintext: Uint8Array): boolean {
+  if (plaintext.length < SELF_BLOB_TAG.length) return false;
+  // The tag is pure ASCII, so UTF-8 decoding of the prefix equals the tag
+  // string exactly when the bytes match exactly. Avoids indexed access.
+  const prefix = new TextDecoder().decode(
+    plaintext.subarray(0, SELF_BLOB_TAG.length),
+  );
+  return prefix === SELF_BLOB_TAG_TEXT;
+}
+
+function handleSealSelfBlob(req: SealSelfBlobRequest, sink: Sink): void {
+  if (!requireKeyed(sink, req.id, "sealSelfBlob")) return;
+
+  const sodium = requireSodium();
+  const payload = decode(req.data);
+  const tagged = new Uint8Array(SELF_BLOB_TAG.length + payload.length);
+  tagged.set(SELF_BLOB_TAG);
+  tagged.set(payload, SELF_BLOB_TAG.length);
+
+  try {
+    const wrap = eciesEncrypt(tagged, assertPresent(volPublic, "volPublic"));
+
+    const msg: WorkerResponse = {
+      id: req.id,
+      ok: true,
+      type: "sealSelfBlob",
+      ephemeralPoint: encode(wrap.ephemeralPoint),
+      nonce: encode(wrap.nonce),
+      wrappedPayload: encode(wrap.ciphertext),
+    };
+    sink(msg);
+  } catch (err: unknown) {
+    postError(
+      sink,
+      req.id,
+      "sealSelfBlob",
+      err instanceof Error ? err.message : String(err),
+      "ENCRYPT_FAILED",
+    );
+  } finally {
+    sodium.memzero(tagged);
+    sodium.memzero(payload);
+  }
+}
+
+function handleOpenSelfBlob(req: OpenSelfBlobRequest, sink: Sink): void {
+  if (!requireKeyed(sink, req.id, "openSelfBlob")) return;
+
+  const sodium = requireSodium();
+  const ephemeralPoint = decode(req.ephemeralPoint);
+  const nonce = decode(req.nonce);
+  const wrappedPayload = decode(req.wrappedPayload);
+
+  let plaintext: Uint8Array | null = null;
+  try {
+    plaintext = eciesDecrypt(
+      ephemeralPoint as RistrettoPoint,
+      nonce as Nonce,
+      wrappedPayload,
+      assertPresent(volPrivate, "volPrivate"),
+    );
+
+    if (!hasSelfBlobTag(plaintext)) {
+      postError(
+        sink,
+        req.id,
+        "openSelfBlob",
+        "Envelope is not a self-blob",
+        "UNWRAP_FAILED",
+      );
+      return;
+    }
+
+    const payload = plaintext.slice(SELF_BLOB_TAG.length);
+    const encoded = encode(payload);
+    sodium.memzero(payload);
+
+    const msg: WorkerResponse = {
+      id: req.id,
+      ok: true,
+      type: "openSelfBlob",
+      data: encoded,
+    };
+    sink(msg);
+  } catch (err: unknown) {
+    postError(
+      sink,
+      req.id,
+      "openSelfBlob",
+      err instanceof Error ? err.message : String(err),
+      "UNWRAP_FAILED",
+    );
+  } finally {
+    if (plaintext) sodium.memzero(plaintext);
+  }
+}
+
 function handleRewrapTk(req: RewrapTkRequest, sink: Sink): void {
   if (!requireKeyed(sink, req.id, "rewrapTk")) return;
 
@@ -1101,6 +1215,12 @@ export function createDispatcher(
           break;
         case "wrapWithVolPublic":
           handleWrapWithVolPublic(req, sink);
+          break;
+        case "sealSelfBlob":
+          handleSealSelfBlob(req, sink);
+          break;
+        case "openSelfBlob":
+          handleOpenSelfBlob(req, sink);
           break;
         case "rewrapTk":
           handleRewrapTk(req, sink);

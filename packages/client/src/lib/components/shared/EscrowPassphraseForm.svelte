@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { List, Block, Preloader } from "konsta/svelte";
+  import { Block, Preloader } from "konsta/svelte";
   import { Download } from "@lucide/svelte";
   import SoftButton from "$lib/components/inputs/SoftButton.svelte";
   import { requireSodium } from "@care-y/crypto";
@@ -9,8 +9,7 @@
   import { toastStore } from "$lib/stores/toast.svelte.js";
   import { announceToLiveRegion } from "$lib/utils/announce.js";
   import { looksLikeCommonPattern } from "$lib/utils/passphrase-strength.js";
-  import PasswordInput from "$lib/components/inputs/PasswordInput.svelte";
-  import PasswordStrengthMeter from "$lib/components/inputs/PasswordStrengthMeter.svelte";
+  import PasswordConfirmPair from "$lib/components/inputs/PasswordConfirmPair.svelte";
   import {
     exportEscrowFile,
     downloadBlob,
@@ -36,9 +35,6 @@
   const isCommon = $derived(
     passphrase.length >= ESCROW_MIN_LENGTH &&
       looksLikeCommonPattern(passphrase),
-  );
-  const mismatch = $derived(
-    confirmPassphrase.length > 0 && passphrase !== confirmPassphrase,
   );
   const canExport = $derived(
     orgKeyLoaded &&
@@ -92,30 +88,15 @@
   <p class="body-text">{m.admin_escrow_passphrase_guidance()}</p>
 </Block>
 
-<List nested>
-  <PasswordInput
-    outline
-    label={m.admin_escrow_passphrase_label()}
-    bind:value={passphrase}
-    disabled={exporting || disabled}
-  />
-  <PasswordInput
-    outline
-    label={m.admin_escrow_confirm_label()}
-    bind:value={confirmPassphrase}
-    info={mismatch ? m.admin_escrow_passphrase_mismatch() : undefined}
-    disabled={exporting || disabled}
-  />
-</List>
-
-{#if passphrase.length > 0}
-  <Block>
-    <PasswordStrengthMeter
-      password={passphrase}
-      minLength={ESCROW_MIN_LENGTH}
-    />
-  </Block>
-{/if}
+<PasswordConfirmPair
+  bind:password={passphrase}
+  bind:confirm={confirmPassphrase}
+  passwordLabel={m.admin_escrow_passphrase_label()}
+  confirmLabel={m.admin_escrow_confirm_label()}
+  mismatchError={m.admin_escrow_passphrase_mismatch()}
+  minLength={ESCROW_MIN_LENGTH}
+  disabled={exporting || disabled}
+/>
 
 {#if exportError}
   <Block>

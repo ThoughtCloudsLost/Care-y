@@ -31,8 +31,9 @@ services:
     # No host ports. Tests exec into this container; nothing listens externally.
     networks: [internal]
     volumes:
-      # Vitest config (excluded by .dockerignore, needed for test runner)
+      # Vitest config + shared thresholds (excluded by .dockerignore, needed for test runner)
       - ./vitest.config.ts:/app/vitest.config.ts:ro
+      - ./coverage-thresholds.json:/app/coverage-thresholds.json:ro
       # Source dirs with test files (.dockerignore excludes *.test.ts from prod).
       # Bind-mount the full src dirs so test files sit alongside their source.
       - ./packages/server/src:/app/packages/server/src:ro
@@ -53,6 +54,7 @@ services:
       - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
       - OPRF_SOCKET_A=/run/oprf/oprf-a.sock
       - OPRF_SOCKET_B=/run/oprf/oprf-b.sock
+      - TOTP_REPLAY_BYPASS=1
 
   db:
     image: postgres:16-alpine

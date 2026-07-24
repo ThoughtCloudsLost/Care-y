@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Staffing, workload, and scheduling insights" |
+* | "Coverage, shifts, and how the work is shared" |
 *
 * @param {Hub_Analytics_Operations_SubtitleInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

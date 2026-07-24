@@ -206,7 +206,6 @@
 
   <List nested>
     <ListInput
-      outline
       label={m.ticket_new_field_title()}
       type="text"
       placeholder={m.ticket_new_field_title_placeholder()}
@@ -224,7 +223,6 @@
     />
 
     <ListInput
-      outline
       label={m.ticket_new_field_description()}
       type="textarea"
       placeholder={m.ticket_new_field_description_placeholder()}
@@ -240,9 +238,8 @@
     />
   </List>
 
-  <List nested class="new-ticket-priority-list">
+  <List nested>
     <ListInput
-      outline
       dropdown
       label={m.ticket_new_field_priority()}
       type="select"
@@ -262,9 +259,8 @@
     </ListInput>
   </List>
 
-  <List nested class="new-ticket-queue-list">
+  <List nested>
     <ListInput
-      outline
       dropdown
       label={m.ticket_new_field_queue(withTerms())}
       type="select"
@@ -311,13 +307,8 @@
     resize: vertical;
   }
 
-  :global(.new-ticket-priority-list),
-  :global(.new-ticket-queue-list) {
-    margin: 0 !important;
-  }
-
   .form-error {
-    color: var(--k-color-red, #ff3b30);
+    color: var(--danger, var(--k-color-red, #ff3b30));
     font-size: 0.875rem;
     text-align: center;
     margin: 0;

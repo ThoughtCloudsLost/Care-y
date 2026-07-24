@@ -52,9 +52,9 @@ vi.mock("$lib/shell/ShellPopup.svelte", async () => ({
 
 import CreateSavedFilter from "./CreateSavedFilter.svelte";
 import {
-  SAVED_FILTER_COLORS,
-  SAVED_FILTER_ICONS,
-} from "./saved-filter-constants.js";
+  PICKER_COLORS,
+  PICKER_ICONS,
+} from "$lib/components/inputs/picker-options.js";
 
 describe("CreateSavedFilter", () => {
   beforeEach(() => {
@@ -63,7 +63,7 @@ describe("CreateSavedFilter", () => {
 
   afterEach(cleanup);
 
-  it("renders a radio for each color in SAVED_FILTER_COLORS", () => {
+  it("renders a radio for each color in PICKER_COLORS", () => {
     render(CreateSavedFilter, {
       opened: true,
       filterSummary: "new, active, urgent",
@@ -73,10 +73,10 @@ describe("CreateSavedFilter", () => {
     const swatches = screen.getAllByRole("radio", {
       name: /grey|blue|green|orange|red|pink|purple/,
     });
-    expect(swatches).toHaveLength(SAVED_FILTER_COLORS.length);
+    expect(swatches).toHaveLength(PICKER_COLORS.length);
   });
 
-  it("renders a radio for each icon in SAVED_FILTER_ICONS", () => {
+  it("renders a radio for each icon in PICKER_ICONS", () => {
     render(CreateSavedFilter, {
       opened: true,
       filterSummary: "new, active, urgent",
@@ -86,7 +86,7 @@ describe("CreateSavedFilter", () => {
     const icons = screen.getAllByRole("radio", {
       name: /^(phone|message-square|clock|triangle-alert|user|users|folder|tag|star|pin|heart|shield|house|briefcase|circle-question-mark)$/,
     });
-    expect(icons).toHaveLength(SAVED_FILTER_ICONS.length);
+    expect(icons).toHaveLength(PICKER_ICONS.length);
   });
 
   it("renders filter preview summary from prop", () => {

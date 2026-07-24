@@ -38,6 +38,8 @@
     type KbImageResolverDeps,
   } from "$lib/utils/resolve-kb-images.js";
   import ArticleVote from "$lib/components/library/ArticleVote.svelte";
+  import { untrack } from "svelte";
+  import { recentViews } from "$lib/search/recent-views.js";
   import KbAttachmentChip from "$lib/components/library/KbAttachmentChip.svelte";
   import DecryptPlaceholder from "$lib/components/DecryptPlaceholder.svelte";
   import InlineSkeleton from "$lib/components/InlineSkeleton.svelte";
@@ -54,6 +56,15 @@
 
   const kbRouter = requireRouter(trpc.kb, "kb");
   const orgCache = getOrgDecryptCache();
+
+  // Recently-viewed history: an article open counts as a view. Covers the
+  // full-page route and the split pane (both mount this component).
+  // record() mutates + reads a SvelteMap internally (applyCaps -> sorted),
+  // so untrack prevents the effect from subscribing to the map and looping.
+  $effect(() => {
+    const id = articleId;
+    untrack(() => recentViews.record("article", id));
+  });
   const orgKeyManager = getOrgKeyManager();
   const queryClient = useQueryClient();
   const navbarCtx = getNavbarOverrideCtx();
@@ -456,7 +467,10 @@
   </div>
 
   {#if renderedBody !== null}
-    <article class="article-body" use:resolveKbImages={imageResolverDeps}>
+    <article
+      class="article-body prose-quotes"
+      use:resolveKbImages={imageResolverDeps}
+    >
       <!-- eslint-disable-next-line svelte/no-at-html-tags -- sanitized by DOMPurify in renderArticleBody() -->
       {@html renderedBody}
     </article>
@@ -500,7 +514,7 @@
 
   .article-title {
     font-size: 1.5rem;
-    font-family: var(--font-display);
+    font-family: var(--theme-font-display, var(--font-display));
     font-weight: 600;
     color: var(--ink);
     line-height: 1.3;
@@ -536,7 +550,7 @@
   .article-body :global(h2),
   .article-body :global(h3),
   .article-body :global(h4) {
-    font-family: var(--font-display);
+    font-family: var(--theme-font-display, var(--font-display));
     font-weight: 600;
     color: var(--ink);
     margin-top: 1.5em;
@@ -569,14 +583,14 @@
   }
 
   .article-body :global(code) {
-    background: var(--surface-1);
+    background: var(--paper-deep, var(--surface-1));
     padding: 0.125em 0.25em;
     border-radius: 3px;
     font-size: 0.875em;
   }
 
   .article-body :global(pre) {
-    background: var(--surface-1);
+    background: var(--paper-deep, var(--surface-1));
     padding: var(--space-lg);
     border-radius: var(--card-radius);
     overflow-x: auto;
@@ -600,13 +614,6 @@
     border-radius: var(--card-radius);
   }
 
-  .article-body :global(blockquote) {
-    border-left: 3px solid var(--brand-primary);
-    padding-left: var(--space-lg);
-    color: var(--muted);
-    font-style: italic;
-  }
-
   .article-body :global(table) {
     width: 100%;
     border-collapse: collapse;
@@ -615,19 +622,19 @@
 
   .article-body :global(th),
   .article-body :global(td) {
-    border: 1px solid var(--divider);
+    border: 1px solid var(--hair, var(--divider));
     padding: var(--space-sm) var(--space-md);
     text-align: left;
   }
 
   .article-body :global(th) {
-    background: var(--surface-1);
+    background: var(--paper-deep, var(--surface-1));
     font-weight: 600;
   }
 
   .article-body :global(hr) {
     border: none;
-    border-top: 1px solid var(--divider);
+    border-top: 1px solid var(--hair, var(--divider));
     margin: 1.5em 0;
   }
 </style>

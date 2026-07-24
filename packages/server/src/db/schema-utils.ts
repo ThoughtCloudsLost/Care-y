@@ -2,6 +2,7 @@
  * Shared helpers for org-schema discovery, validation, and migration.
  *
  * Used by migrate.ts (CLI), schema-create.ts (CLI), and org/service.ts (runtime).
+ * logMigrationResults is CLI-only (migrate.ts, schema-create.ts).
  * Keeps the Migrator construction and schema queries in one place instead of
  * duplicating them across three files.
  */

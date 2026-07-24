@@ -91,7 +91,6 @@
 
     <List nested class="close-resolution-input-list">
       <ListInput
-        outline
         type="textarea"
         placeholder={noteTypeName}
         value={resolutionText}

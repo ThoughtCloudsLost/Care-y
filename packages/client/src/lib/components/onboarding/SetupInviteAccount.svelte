@@ -12,6 +12,7 @@
 <script lang="ts">
   import { tick } from "svelte";
   import { List, ListInput, Block, BlockTitle } from "konsta/svelte";
+  import Register from "$lib/components/Register.svelte";
   import SoftButton from "$lib/components/inputs/SoftButton.svelte";
   import * as m from "$lib/paraglide/messages.js";
   import { getLocale } from "$lib/paraglide/runtime.js";
@@ -33,8 +34,7 @@
     type LoginPhaseId,
   } from "$lib/components/onboarding/KeyDerivation.svelte";
   import { PASSWORD_MIN_LENGTH, ErrorCode } from "@care-y/shared";
-  import PasswordInput from "$lib/components/inputs/PasswordInput.svelte";
-  import PasswordStrengthMeter from "$lib/components/inputs/PasswordStrengthMeter.svelte";
+  import PasswordConfirmPair from "$lib/components/inputs/PasswordConfirmPair.svelte";
 
   interface Props {
     token: string;
@@ -90,9 +90,6 @@
 
   const passwordTooShort = $derived(
     password.length > 0 && password.length < PASSWORD_MIN_LENGTH,
-  );
-  const passwordMismatch = $derived(
-    confirmPassword.length > 0 && password !== confirmPassword,
   );
 
   async function handleSubmit(e: SubmitEvent): Promise<void> {
@@ -206,9 +203,9 @@
     </List>
 
     <Block>
-      <p class="pii-warning" role="note">
+      <Register kind="careful">
         {m.user_field_login_username_pii_warning()}
-      </p>
+      </Register>
     </Block>
 
     <List strong inset>
@@ -219,34 +216,23 @@
         info={m.user_field_display_name_info(withTerms())}
         bind:value={displayName}
       />
-      <PasswordInput
-        label={m.onboarding_firstlogin_password()}
-        placeholder={m.onboarding_firstlogin_password_placeholder()}
-        info={m.onboarding_account_password_info()}
-        bind:value={password}
-        autocomplete="new-password"
-        required
-        error={passwordTooShort
-          ? m.onboarding_firstlogin_error_password_length()
-          : undefined}
-      />
-      <PasswordInput
-        label={m.onboarding_firstlogin_confirm_password()}
-        placeholder={m.onboarding_firstlogin_confirm_password_placeholder()}
-        bind:value={confirmPassword}
-        autocomplete="new-password"
-        required
-        error={passwordMismatch
-          ? m.onboarding_firstlogin_error_password_mismatch()
-          : undefined}
-      />
     </List>
 
-    {#if password.length > 0}
-      <Block>
-        <PasswordStrengthMeter {password} minLength={PASSWORD_MIN_LENGTH} />
-      </Block>
-    {/if}
+    <PasswordConfirmPair
+      bind:password
+      bind:confirm={confirmPassword}
+      passwordLabel={m.onboarding_firstlogin_password()}
+      passwordPlaceholder={m.onboarding_firstlogin_password_placeholder()}
+      passwordInfo={m.onboarding_account_password_info()}
+      passwordError={passwordTooShort
+        ? m.onboarding_firstlogin_error_password_length()
+        : undefined}
+      confirmLabel={m.onboarding_firstlogin_confirm_password()}
+      confirmPlaceholder={m.onboarding_firstlogin_confirm_password_placeholder()}
+      mismatchError={m.onboarding_firstlogin_error_password_mismatch()}
+      autocomplete="new-password"
+      required
+    />
 
     <Block>
       <SoftButton

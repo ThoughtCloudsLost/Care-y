@@ -6,17 +6,17 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{ ticket: NonNullable<unknown>, Ticket: NonNullable<unknown> }} Dashboard_Encrypted_TicketInputs */
 
 const en_dashboard_encrypted_ticket = /** @type {(inputs: Dashboard_Encrypted_TicketInputs) => LocalizedString} */ (i) => {
-	return /** @type {LocalizedString} */ (`Encrypted ${i?.ticket}`)
+	return /** @type {LocalizedString} */ (`Locked ${i?.ticket}`)
 };
 
 const es_dashboard_encrypted_ticket = /** @type {(inputs: Dashboard_Encrypted_TicketInputs) => LocalizedString} */ (i) => {
-	return /** @type {LocalizedString} */ (`${i?.Ticket} cifrado`)
+	return /** @type {LocalizedString} */ (`${i?.Ticket} bloqueado`)
 };
 
 /**
 * | output |
 * | --- |
-* | "Encrypted {ticket}" |
+* | "Locked {ticket}" |
 *
 * @param {Dashboard_Encrypted_TicketInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

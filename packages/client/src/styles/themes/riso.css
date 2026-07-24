@@ -7,12 +7,36 @@
   --theme-font-ui: "Space Grotesk", system-ui, sans-serif;
 
   --ink: #0a0a0a;
+  --ink-2: #4a4540;
   --muted: #8a8580;
+  --hair: #d5d0c8;
+  --hair-2: #b8b0a5;
+
+  /* Semantic hues (risograph ink palette) */
+  --urgent: #c0392b;
+  --care: #d4a017;
+  --danger: #c0392b;
+  --unread: #2563eb;
+  --meter-strong: #16a34a;
+  --urgent-soft: color-mix(in srgb, var(--urgent) 8%, transparent);
+  --care-soft: color-mix(in srgb, var(--care) 8%, transparent);
+  --brand-soft: color-mix(
+    in srgb,
+    var(--brand-fill, var(--brand-primary)) 10%,
+    transparent
+  );
+  --brand-text: var(--brand-primary);
+  --brand-fill: var(--brand-primary);
 
   /* Semantic aliases (resolve through Konsta vars below) */
   --paper: var(--color-ios-light-surface);
+  --raised: var(--color-ios-light-surface-1);
+  --paper-deep: var(--color-ios-light-surface-1-shade);
   --surface-1: var(--color-ios-light-surface-1);
   --surface-2: var(--color-ios-light-surface-2);
+
+  --k-hairline-color: var(--hair);
+  --k-page-bg: var(--paper);
 
   /* Konsta iOS surface overrides: brand-tinted via color-mix in oklch
      (perceptually uniform, so tinting looks natural across brand colors).
@@ -96,8 +120,26 @@
    The dark riso look is dark paper with brand color on accents/ink overlay only. --- */
 .theme-riso.dark {
   --ink: #f2ede4;
+  --ink-2: #c8c0b5;
   --muted: #7a7570;
+  --hair: #3a3530;
+  --hair-2: #554e45;
+  --urgent: #e06050;
+  --care: #e0b040;
+  --danger: #e06050;
+  --unread: #60a5fa;
+  --meter-strong: #4ade80;
+  --urgent-soft: color-mix(in srgb, var(--urgent) 12%, transparent);
+  --care-soft: color-mix(in srgb, var(--care) 12%, transparent);
+  --brand-soft: color-mix(
+    in srgb,
+    var(--brand-fill, var(--brand-primary)) 12%,
+    transparent
+  );
+  --brand-text: var(--brand-primary);
   --paper: var(--color-ios-dark-surface);
+  --raised: var(--color-ios-dark-surface-1);
+  --paper-deep: var(--color-ios-dark-surface-1-shade);
   --surface-1: var(--color-ios-dark-surface-1);
   --surface-2: var(--color-ios-dark-surface-2);
 }

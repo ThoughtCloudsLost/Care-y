@@ -53,6 +53,14 @@ export function handleEvent(event: SSEEvent, queryClient: QueryClient): void {
         void queryClient.invalidateQueries({
           queryKey: ticketKeys.attachments(event.ticketId),
         });
+        // A new follow-up changes unread state: refresh both list
+        // read-state families (loaded-window batch + global sweep).
+        void queryClient.invalidateQueries({
+          queryKey: ticketsKeys.readStates(),
+        });
+        void queryClient.invalidateQueries({
+          queryKey: ticketsKeys.readStateSweep(),
+        });
       }
       break;
     case "kb:updated":

@@ -337,6 +337,22 @@ describe("filterStore", () => {
       expect(state.assigneeId).toBeUndefined();
       expect(state.dateFrom).toBeNull();
       expect(state.dateTo).toBeNull();
+      expect(state.unreadOnly).toBe(false);
+      expect(state.needsAttentionOnly).toBe(false);
+    });
+
+    it("captures unreadOnly when set", async () => {
+      const store = await getStore();
+      store.setUnreadOnly(true);
+      expect(store.captureState().unreadOnly).toBe(true);
+      expect(store.captureState().needsAttentionOnly).toBe(false);
+    });
+
+    it("captures needsAttentionOnly when set", async () => {
+      const store = await getStore();
+      store.setNeedsAttentionOnly(true);
+      expect(store.captureState().needsAttentionOnly).toBe(true);
+      expect(store.captureState().unreadOnly).toBe(false);
     });
   });
 
@@ -353,6 +369,8 @@ describe("filterStore", () => {
         dateTo: new Date("2026-04-01").toISOString(),
         sortField: "last_activity",
         sortDirection: "asc",
+        unreadOnly: false,
+        needsAttentionOnly: false,
       });
 
       expect([...store.statuses]).toEqual(
@@ -385,11 +403,46 @@ describe("filterStore", () => {
         dateTo: null,
         sortField: "date",
         sortDirection: "desc",
+        unreadOnly: false,
+        needsAttentionOnly: false,
       });
 
       expect(store.statuses.has("new")).toBe(false);
       expect(store.queueIds.size).toBe(0);
       expect([...store.statuses]).toEqual(["closed"]);
+    });
+
+    it("restores unreadOnly and needsAttentionOnly", async () => {
+      const store = await getStore();
+
+      store.applyState({
+        statuses: [],
+        queueIds: [],
+        priorities: [],
+        assigneeId: undefined,
+        dateFrom: null,
+        dateTo: null,
+        sortField: "date",
+        sortDirection: "desc",
+        unreadOnly: true,
+        needsAttentionOnly: true,
+      });
+
+      expect(store.unreadOnly).toBe(true);
+      expect(store.needsAttentionOnly).toBe(true);
+    });
+  });
+
+  describe("clearAll", () => {
+    it("resets unreadOnly and needsAttentionOnly", async () => {
+      const store = await getStore();
+      store.setUnreadOnly(true);
+      store.setNeedsAttentionOnly(true);
+
+      store.clearAll();
+
+      expect(store.unreadOnly).toBe(false);
+      expect(store.needsAttentionOnly).toBe(false);
     });
   });
 });

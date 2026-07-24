@@ -58,13 +58,21 @@ describe("env validation", () => {
       expect(env.CORS_ORIGIN).toBe(VALID_ENV.CORS_ORIGIN);
     });
 
-    it("defaults NODE_ENV to development when not set", () => {
+    it("throws EnvValidationError when NODE_ENV is not set", () => {
       const { NODE_ENV: _, ...rest } = VALID_ENV;
       Object.assign(process.env, rest);
       delete process.env.NODE_ENV;
 
-      const env = validateEnv();
-      expect(env.NODE_ENV).toBe("development");
+      expect(() => validateEnv()).toThrow(EnvValidationError);
+    });
+
+    it("accepts each valid NODE_ENV value", () => {
+      for (const value of ["development", "test", "production"] as const) {
+        Object.assign(process.env, VALID_ENV);
+        process.env.NODE_ENV = value;
+
+        expect(validateEnv().NODE_ENV).toBe(value);
+      }
     });
 
     it("defaults CORS_ORIGIN when not set", () => {

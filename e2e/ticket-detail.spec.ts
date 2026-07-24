@@ -1,8 +1,14 @@
 import { test, expect } from "./coverage-fixture";
 import { startCoverage, stopAndWriteCoverage } from "./coverage-fixture";
 import type { Page } from "@playwright/test";
-import AxeBuilder from "@axe-core/playwright";
-import { CRYPTO_TIMEOUT, login, openTicketByTitle, longPress } from "./helpers";
+import {
+  auditA11y,
+  CRYPTO_TIMEOUT,
+  login,
+  openComposeActions,
+  openTicketByTitle,
+  longPress,
+} from "./helpers";
 
 test.describe.serial("Ticket Detail (Chat View)", () => {
   let page: Page;
@@ -28,6 +34,16 @@ test.describe.serial("Ticket Detail (Chat View)", () => {
   test("opens Help with housing ticket from ticket list", async () => {
     await openTicketByTitle(page, "Help with housing");
 
+    // On desktop, ticket opens in split-view where the navbar alias button
+    // is not rendered (inert context). Expand to full view to access it.
+    const expandBtn = page.getByRole("button", { name: /open full view/i });
+    if (await expandBtn.isVisible({ timeout: 2_000 }).catch(() => false)) {
+      await expandBtn.click();
+      await expect(page).toHaveURL(/\/tickets\/[0-9a-f-]{36}/, {
+        timeout: 5_000,
+      });
+    }
+
     // Capture the client alias from the navbar for use in subsequent tests.
     // Wait for the alias to decrypt (matches adjective-noun-number pattern).
     const aliasBtn = page.getByRole("button", {
@@ -36,7 +52,6 @@ test.describe.serial("Ticket Detail (Chat View)", () => {
     await expect(aliasBtn).toBeVisible({ timeout: CRYPTO_TIMEOUT });
     const aliasText = (await aliasBtn.innerText()).trim();
     clientAlias = aliasText;
-    console.log(`[ticket-detail] client alias: "${clientAlias}"`);
   });
 
   // ── 2. Chat bubble alignment (Checkpoint 1) ─────────────────────
@@ -60,18 +75,32 @@ test.describe.serial("Ticket Detail (Chat View)", () => {
   // ── 3. System events as centered Chips (Checkpoint 5) ───────────
 
   test("system events render with role=status", async () => {
-    // System events derive display text from the follow-up type field,
-    // not from encrypted content. "Assigned" and "Priority changed" are
-    // the i18n labels for assignment_change and priority_change types.
-    const systemEvent = page.locator('[role="status"]', {
-      hasText: "Assigned",
+    // System events are oldest follow-ups. On a 720px viewport the
+    // VirtualList may not render them until we scroll to the top.
+    const chatLog = page.locator('[role="log"]');
+    await chatLog.evaluate((el) => {
+      el.scrollTo(0, 0);
     });
-    await expect(systemEvent).toBeVisible();
+    await page.waitForTimeout(300);
 
+    const systemEvent = page.locator('[role="status"]', {
+      hasText: "assigned",
+    });
+    await expect(systemEvent.first()).toBeVisible({ timeout: 5_000 });
+
+    // Priority change is further down; scroll back to reveal it.
     const priorityEvent = page.locator('[role="status"]', {
       hasText: "Priority changed",
     });
-    await expect(priorityEvent).toBeVisible();
+    if (
+      !(await priorityEvent.isVisible({ timeout: 1_000 }).catch(() => false))
+    ) {
+      await chatLog.evaluate((el) => {
+        el.scrollTo(0, el.scrollHeight / 2);
+      });
+      await page.waitForTimeout(300);
+    }
+    await expect(priorityEvent).toBeVisible({ timeout: 5_000 });
   });
 
   // ── 4. Internal notes with private styling (Checkpoint 6) ───────
@@ -206,42 +235,51 @@ test.describe.serial("Ticket Detail (Chat View)", () => {
     const value = await textarea.inputValue();
     expect(value).toContain("Client sounds stressed");
 
-    // Dismiss the sheet to exit edit mode.
+    // Dismiss the sheet to exit edit mode. Click the textarea first to
+    // ensure focus is inside the dialog's focus trap before pressing Escape.
+    await textarea.click();
     await page.keyboard.press("Escape");
 
     // Note should be back to read mode.
-    await expect(textarea).not.toBeVisible();
+    await expect(textarea).not.toBeVisible({ timeout: 5_000 });
     await expect(note).toBeVisible();
   });
 
   // ── 10. Compose bar and mode toggle (Checkpoint 7) ──────────────
 
   test("compose bar has compose-actions, send, and textarea; tabbar is hidden", async () => {
-    // Tabbar hidden.
-    await expect(page.locator('[role="tablist"]')).not.toBeVisible();
+    // Mobile tabbar hidden on ticket detail (desktop sidebar tablist stays visible).
+    await expect(
+      page.locator('[role="tablist"]:not([aria-orientation="vertical"])'),
+    ).not.toBeVisible();
 
-    // Compose actions (+) button opens the popover with attach/preset/note.
-    const plusBtn = page.getByRole("button", { name: /compose actions/i });
-    await expect(plusBtn).toBeVisible();
+    // Compose actions (+) button visible in collapsed state.
+    // Expand compose: tap +, then "Reply to client" to activate reply mode.
+    // The send button and textarea only appear when compose mode is active.
+    const dialog = await openComposeActions(page);
+    await dialog.getByText(/reply to/i).click();
 
     // Send button.
     const sendBtn = page.getByRole("button", { name: /send/i });
-    await expect(sendBtn).toBeVisible();
+    await expect(sendBtn).toBeVisible({ timeout: 3_000 });
 
     // Compose textarea (reply mode).
     const textarea = page.getByRole("textbox", { name: /type a reply/i });
     await expect(textarea).toBeVisible();
+
+    // Dismiss compose mode for subsequent tests.
+    const dismissBtn = page.getByRole("button", { name: /dismiss compose/i });
+    await dismissBtn.click();
+    await expect(textarea).not.toBeVisible({ timeout: 3_000 });
   });
 
   // ── 11. Preset fills compose (Checkpoint 8) ────────────────────
 
   test("compose actions popover opens preset sheet", async () => {
-    // Open compose actions popover via the + button.
-    const plusBtn = page.getByRole("button", { name: /compose actions/i });
-    await plusBtn.click();
+    const dialog = await openComposeActions(page);
 
     // Click "Preset replies" from the compose actions popover.
-    const presetItem = page.getByText(/preset replies/i).first();
+    const presetItem = dialog.getByText(/preset replies/i).first();
     await expect(presetItem).toBeVisible({ timeout: 3_000 });
     await presetItem.click();
 
@@ -250,55 +288,70 @@ test.describe.serial("Ticket Detail (Chat View)", () => {
       timeout: 5_000,
     });
 
-    // Dismiss the sheet.
+    // Dismiss the preset sheet and then the compose popover (two layers).
     await page.keyboard.press("Escape");
+    await page.waitForTimeout(300);
+    await page.keyboard.press("Escape");
+    await page.waitForTimeout(300);
   });
 
   // ── 12. Action sheets (Checkpoints 9, 10, 11) ──────────────────
 
   test("more actions sheet shows ticket actions", async () => {
-    // Prior tests may leave a z-40 backdrop from compose/preset overlays.
-    // Dispatch click directly on the button to bypass any residual overlay.
+    // Full-view shows the client panel inline (complementary region),
+    // with actions directly visible. Split-view uses a "More actions" popup.
     const moreBtn = page.getByRole("button", { name: /more actions/i });
-    await moreBtn.dispatchEvent("click");
+    const isFullView = !(await moreBtn
+      .isVisible({ timeout: 1_000 })
+      .catch(() => false));
 
-    // "Help with housing" is assigned to me, so Release should show.
-    // Scope to the panel popup using the dynamically captured client alias.
-    const panel = page.locator(
-      `[data-testid="popup-dialog"][aria-label="${clientAlias}"]`,
-    );
-    await expect(panel.getByText("Release")).toBeVisible();
-    await expect(panel.getByText("Assign", { exact: true })).toBeVisible();
-
-    // Dismiss.
-    await page.keyboard.press("Escape");
+    if (isFullView) {
+      // In full-view, actions are inline in the aside panel.
+      const aside = page.locator("aside");
+      await expect(aside.getByText("Release")).toBeVisible();
+      await expect(aside.getByText("Assign", { exact: true })).toBeVisible();
+    } else {
+      await moreBtn.dispatchEvent("click");
+      const panel = page.locator(
+        `[data-testid="popup-dialog"][aria-label="${clientAlias}"]`,
+      );
+      await expect(panel.getByText("Release")).toBeVisible();
+      await expect(panel.getByText("Assign", { exact: true })).toBeVisible();
+      await page.keyboard.press("Escape");
+    }
   });
 
   test("call sheet shows browser and phone options", async () => {
-    // The Call button lives inside the panel popup. Re-open it first.
+    // Full-view shows Call inline in the aside panel; split-view uses
+    // the "More actions" popup. Detect layout and click the right Call.
     const moreBtn = page.getByRole("button", { name: /more actions/i });
-    await moreBtn.dispatchEvent("click");
-    const panel = page.locator(
-      `[data-testid="popup-dialog"][aria-label="${clientAlias}"]`,
-    );
-    await expect(panel).toBeVisible({ timeout: 5_000 });
+    const isFullView = !(await moreBtn
+      .isVisible({ timeout: 1_000 })
+      .catch(() => false));
 
-    const callBtn = panel.getByRole("button", { name: /call/i });
-    await callBtn.click();
-
-    await expect(page.getByText(/call via browser/i)).toBeVisible();
-
-    // Dismiss all overlays. Call sheet and panel may be stacked.
-    // Press Escape repeatedly until no dialogs remain (max 3 presses).
-    for (let i = 0; i < 3; i++) {
-      await page.keyboard.press("Escape");
-      await page.waitForTimeout(400);
-      const anyDialog = page.locator(
+    if (isFullView) {
+      const aside = page.locator("aside");
+      const callBtn = aside.getByRole("button", { name: /call/i });
+      await callBtn.dispatchEvent("click");
+    } else {
+      await moreBtn.dispatchEvent("click");
+      const panel = page.locator(
         `[data-testid="popup-dialog"][aria-label="${clientAlias}"]`,
       );
-      if (!(await anyDialog.isVisible({ timeout: 500 }).catch(() => false))) {
-        break;
-      }
+      await expect(panel).toBeVisible({ timeout: 5_000 });
+      const callBtn = panel.getByRole("button", { name: /call/i });
+      await callBtn.click();
+    }
+
+    const callSheet = page.getByRole("dialog", { name: /call options/i });
+    await expect(callSheet.getByText(/call via browser/i)).toBeVisible();
+
+    // Dismiss call sheet (and panel if split-view opened it).
+    await page.keyboard.press("Escape");
+    await page.waitForTimeout(300);
+    if (!isFullView) {
+      await page.keyboard.press("Escape");
+      await page.waitForTimeout(300);
     }
   });
 
@@ -387,7 +440,12 @@ test.describe.serial("Ticket Detail (Chat View)", () => {
       await page.waitForTimeout(300);
     }
 
+    // Activate reply compose mode (collapsed bar only shows + button).
+    const dialog = await openComposeActions(page);
+    await dialog.getByText(/reply to/i).click();
+
     const textarea = page.getByRole("textbox");
+    await expect(textarea).toBeVisible({ timeout: 3_000 });
     await textarea.fill("Snapshot test draft");
 
     // Blur textarea to dismiss any compose-mode overlay, then wait for
@@ -404,34 +462,31 @@ test.describe.serial("Ticket Detail (Chat View)", () => {
 
     await openTicketByTitle(page, "Help with housing");
 
-    const restored = await page.getByRole("textbox").inputValue();
+    // Reopen compose mode to check if the draft was preserved.
+    const dialog2 = await openComposeActions(page);
+    await dialog2.getByText(/reply to/i).click();
+
+    const restoredTextarea = page.getByRole("textbox");
+    await expect(restoredTextarea).toBeVisible({ timeout: 3_000 });
+    const restored = await restoredTextarea.inputValue();
     expect(restored).toBe("Snapshot test draft");
 
-    await page.getByRole("textbox").fill("");
+    await restoredTextarea.fill("");
+    const dismissBtn = page.getByRole("button", { name: /dismiss compose/i });
+    await dismissBtn.click();
   });
 
   // ── 16. Accessibility audit (axe-core) ──────────────────────────
 
   test("passes axe accessibility audit", async () => {
-    const results = await new AxeBuilder({ page })
-      .setLegacyMode(true)
-      // Konsta shell overlays (Sheet, Popup) render hidden <div role="dialog">
-      // with empty aria-label. Ticket detail has no h1 (navbar shows alias).
-      // Konsta message sender text uses 45% opacity, slightly below 4.5:1.
-      .disableRules([
-        "aria-dialog-name",
-        "page-has-heading-one",
-        "color-contrast",
-      ])
-      .analyze();
-    expect(results.violations).toEqual([]);
+    await auditA11y(page);
   });
 
   // ── 17. Navigate to ticket with media ───────────────────────────
 
   test("voicemail player renders in Safety planning session ticket", async () => {
-    // Go back and open a ticket with voicemail.
-    await page.getByRole("button", { name: /back/i }).click();
+    // Open a ticket with voicemail. In desktop split-view the ticket list
+    // is already visible, so openTicketByTitle clicks the card directly.
     await openTicketByTitle(page, "Safety planning session");
 
     // Wait for voicemail player to appear (it eagerly decrypts).

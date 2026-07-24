@@ -62,6 +62,10 @@ const PROVISIONED_PHONES = [
 ];
 
 vi.mock("$lib/paraglide/messages.js", () => ({
+  register_note: () => "Note",
+  register_careful: () => "Careful",
+  register_warning: () => "Warning",
+  register_protected: () => "Protected",
   admin_telephony_status_ready: () => "Phone service active",
   admin_telephony_status_pending: () => "Phone service not set up",
   admin_telephony_mode_byot: ({ provider }: { provider: string }) =>
@@ -78,6 +82,8 @@ vi.mock("$lib/paraglide/messages.js", () => ({
   admin_telephony_auth_token: () => "Auth token",
   admin_telephony_auth_token_helper: ({ provider }: { provider: string }) =>
     `Also in your ${provider} account settings`,
+  password_show: () => "Show password",
+  password_hide: () => "Hide password",
   admin_telephony_save_credentials: () => "Save",
   admin_telephony_credentials_saved: () => "Credentials saved",
   admin_telephony_grace_period: () =>

@@ -1,6 +1,10 @@
 name: Security Scan
 
 on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
   schedule:
     - cron: "17 4 * * 0" # Sunday 04:17 UTC (off-minute to avoid load spikes)
   workflow_dispatch:
@@ -22,6 +26,20 @@ env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
+  sast:
+    name: SAST (Semgrep custom rules)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - name: Install Semgrep
+        run: pip install semgrep
+
+      - name: Run CARE-Y custom rules
+        run: semgrep scan --quiet --metrics=off --config .semgrep/care-y-rules.yaml packages/*/src/
+
   secrets:
     name: Secret scanning (Gitleaks)
     runs-on: ubuntu-24.04
@@ -77,7 +95,7 @@ jobs:
     name: Container vulnerabilities (Trivy image)
     runs-on: ubuntu-24.04
     timeout-minutes: 20
-    if: ${{ !(github.event.inputs.skip-docker == 'true') }}
+    if: ${{ github.event_name != 'push' && github.event_name != 'pull_request' && !(github.event.inputs.skip-docker == 'true') }}
     steps:
       - name: Checkout
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0

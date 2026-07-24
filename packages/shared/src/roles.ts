@@ -49,7 +49,10 @@ export function meetsRoleThreshold(
 /** Returns all role IDs at or below the given role's level (for SQL IN filtering). */
 export function getAllowedRoleIds(userRoleId: string): RoleIdValue[] {
   const userLevel = ROLE_LEVEL.get(userRoleId) ?? 0;
-  return ROLE_ID_VALUES.filter((id) => (ROLE_LEVEL.get(id) ?? 0) <= userLevel);
+  return ROLE_ID_VALUES.filter(
+    /* v8 ignore next -- defensive fallback: ROLE_LEVEL and ROLE_ID_VALUES derive from the same enum source */
+    (id) => (ROLE_LEVEL.get(id) ?? 0) <= userLevel,
+  );
 }
 
 /**

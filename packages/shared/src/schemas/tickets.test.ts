@@ -19,8 +19,11 @@ import {
   undoMergeInputSchema,
   updateTicketInputSchema,
   followUpListInputSchema,
+  listReadStateInputSchema,
+  sweepReadStateInputSchema,
   searchClientsInputSchema,
   callStatusSchema,
+  savedFilterStateSchema,
 } from "./tickets.js";
 
 /** Base64-encode a string of n arbitrary bytes. */
@@ -81,16 +84,19 @@ describe("followUpTypeSchema", () => {
   it("accepts all valid types", () => {
     const valid = [
       "message",
-      "status_change",
-      "merge_note",
-      "hold_change",
-      "priority_change",
-      "assignment_change",
       "internal_note",
       "sms_outbound",
       "sms_inbound",
       "phone_call",
       "voicemail",
+      "hold_placed",
+      "hold_removed",
+      "volunteer_assigned",
+      "volunteer_unassigned",
+      "status_opened",
+      "status_closed",
+      "priority_changed",
+      "merge_note",
     ];
     for (const t of valid) {
       expect(followUpTypeSchema.safeParse(t).success).toBe(true);
@@ -272,6 +278,94 @@ describe("ticketListInputSchema", () => {
   });
 });
 
+describe("listReadStateInputSchema", () => {
+  /** Valid v4-shaped UUIDs varying only the final node segment. */
+  function uuidBatch(n: number): string[] {
+    return Array.from(
+      { length: n },
+      (_, i) => `550e8400-e29b-41d4-a716-${i.toString(16).padStart(12, "0")}`,
+    );
+  }
+
+  it("accepts a batch of valid ticket ids", () => {
+    const result = listReadStateInputSchema.safeParse({
+      ticketIds: [VALID_UUID, VALID_UUID_2],
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("accepts exactly 50 ids", () => {
+    expect(
+      listReadStateInputSchema.safeParse({ ticketIds: uuidBatch(50) }).success,
+    ).toBe(true);
+  });
+
+  it("rejects an empty batch", () => {
+    expect(listReadStateInputSchema.safeParse({ ticketIds: [] }).success).toBe(
+      false,
+    );
+  });
+
+  it("rejects more than 50 ids", () => {
+    expect(
+      listReadStateInputSchema.safeParse({ ticketIds: uuidBatch(51) }).success,
+    ).toBe(false);
+  });
+
+  it("rejects non-uuid entries", () => {
+    expect(
+      listReadStateInputSchema.safeParse({ ticketIds: ["not-a-uuid"] }).success,
+    ).toBe(false);
+  });
+});
+
+describe("sweepReadStateInputSchema", () => {
+  it("defaults limit to 200 with no cursor", () => {
+    const result = sweepReadStateInputSchema.safeParse({});
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.limit).toBe(200);
+      expect(result.data.cursor).toBeUndefined();
+    }
+  });
+
+  it("accepts a uuid cursor with an explicit limit", () => {
+    const result = sweepReadStateInputSchema.safeParse({
+      cursor: VALID_UUID,
+      limit: 50,
+    });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.cursor).toBe(VALID_UUID);
+      expect(result.data.limit).toBe(50);
+    }
+  });
+
+  it("rejects a non-uuid cursor", () => {
+    expect(
+      sweepReadStateInputSchema.safeParse({ cursor: "not-a-uuid" }).success,
+    ).toBe(false);
+  });
+
+  it("rejects limit below 1", () => {
+    expect(sweepReadStateInputSchema.safeParse({ limit: 0 }).success).toBe(
+      false,
+    );
+  });
+
+  it("rejects limit above 200", () => {
+    expect(sweepReadStateInputSchema.safeParse({ limit: 201 }).success).toBe(
+      false,
+    );
+  });
+
+  it("rejects a non-integer limit", () => {
+    expect(sweepReadStateInputSchema.safeParse({ limit: 10.5 }).success).toBe(
+      false,
+    );
+  });
+});
+
 describe("followUpListInputSchema", () => {
   it("requires ticketId", () => {
     expect(followUpListInputSchema.safeParse({}).success).toBe(false);
@@ -347,11 +441,28 @@ describe("createQueueInputSchema", () => {
   it("accepts valid input with default escalateDays", () => {
     const result = createQueueInputSchema.safeParse({
       encryptedName: "AQIDBA==",
+      encryptedColor: "AQIDBA==",
+      encryptedIcon: "AQIDBA==",
     });
     expect(result.success).toBe(true);
     if (result.success) {
       expect(result.data.escalateDays).toBe(0);
     }
+  });
+
+  it("rejects input missing encryptedColor or encryptedIcon", () => {
+    expect(
+      createQueueInputSchema.safeParse({
+        encryptedName: "AQIDBA==",
+        encryptedIcon: "AQIDBA==",
+      }).success,
+    ).toBe(false);
+    expect(
+      createQueueInputSchema.safeParse({
+        encryptedName: "AQIDBA==",
+        encryptedColor: "AQIDBA==",
+      }).success,
+    ).toBe(false);
   });
 
   it("rejects empty encryptedName", () => {
@@ -379,6 +490,15 @@ describe("updateQueueInputSchema", () => {
     const result = updateQueueInputSchema.safeParse({
       queueId: VALID_UUID,
       escalateDays: 7,
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("accepts color-and-icon-only update", () => {
+    const result = updateQueueInputSchema.safeParse({
+      queueId: VALID_UUID,
+      encryptedColor: "AQIDBA==",
+      encryptedIcon: "AQIDBA==",
     });
     expect(result.success).toBe(true);
   });
@@ -563,5 +683,45 @@ describe("callStatusSchema", () => {
 
   it("rejects Twilio's hyphenated format", () => {
     expect(callStatusSchema.safeParse("no-answer").success).toBe(false);
+  });
+});
+
+describe("savedFilterStateSchema", () => {
+  const base = {
+    statuses: ["new", "active"],
+    queueIds: ["q-1"],
+    priorities: ["high"],
+    assigneeId: "user-1",
+    dateFrom: "2026-01-01T00:00:00.000Z",
+    dateTo: "2026-03-01T00:00:00.000Z",
+    sortField: "date",
+    sortDirection: "desc",
+  };
+
+  it("parses with both toggle fields set", () => {
+    const result = savedFilterStateSchema.safeParse({
+      ...base,
+      unreadOnly: true,
+      needsAttentionOnly: true,
+    });
+    expect(result.success).toBe(true);
+    expect(result.data?.unreadOnly).toBe(true);
+    expect(result.data?.needsAttentionOnly).toBe(true);
+  });
+
+  it("defaults missing toggle fields to false", () => {
+    const result = savedFilterStateSchema.safeParse(base);
+    expect(result.success).toBe(true);
+    expect(result.data?.unreadOnly).toBe(false);
+    expect(result.data?.needsAttentionOnly).toBe(false);
+  });
+
+  it("round-trips through JSON serialization", () => {
+    const input = { ...base, unreadOnly: true, needsAttentionOnly: false };
+    const parsed = savedFilterStateSchema.parse(input);
+    const roundTripped = savedFilterStateSchema.parse(
+      JSON.parse(JSON.stringify(parsed)),
+    );
+    expect(roundTripped).toEqual(parsed);
   });
 });
