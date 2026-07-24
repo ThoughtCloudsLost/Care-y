@@ -83,6 +83,7 @@ jobs:
           format: sarif
           output: trivy-fs.sarif
           severity: MEDIUM,HIGH,CRITICAL
+          trivyignores: .trivyignore
 
       - name: Upload filesystem SARIF
         uses: github/codeql-action/upload-sarif@e4fba868fa4b1b91e1fdab776edc8cfbe6e9fb81 # v3
@@ -111,6 +112,7 @@ jobs:
           format: sarif
           output: trivy-image.sarif
           severity: MEDIUM,HIGH,CRITICAL
+          trivyignores: .trivyignore
 
       - name: Upload image SARIF
         uses: github/codeql-action/upload-sarif@e4fba868fa4b1b91e1fdab776edc8cfbe6e9fb81 # v3

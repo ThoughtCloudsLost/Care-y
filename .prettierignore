@@ -12,6 +12,7 @@ pnpm-lock.yaml
 *.txt
 CODEOWNERS
 LICENSE
+.trivyignore
 Dockerfile
 Dockerfile.*
 .env*
