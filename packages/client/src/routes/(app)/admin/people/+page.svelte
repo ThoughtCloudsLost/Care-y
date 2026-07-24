@@ -103,8 +103,14 @@
   let activeTab = $state<PeopleTab>(untrack(() => defaultTab(permissions)));
 
   $effect(() => {
-    if (urlUser !== null && activeTab !== "users") activeTab = "users";
-    else if (urlTab !== null) activeTab = urlTab;
+    if (urlUser !== null) {
+      // A user deep link always lands on the users tab; ignoring urlTab
+      // here keeps the two params from re-triggering each other when a
+      // link carries both (?tab=queues&user=x would otherwise oscillate).
+      if (activeTab !== "users") activeTab = "users";
+    } else if (urlTab !== null) {
+      activeTab = urlTab;
+    }
   });
 
   function switchTab(tab: PeopleTab): void {

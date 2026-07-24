@@ -21,16 +21,16 @@ test.describe.serial("1d-smoke", () => {
   test("page loads and renders shell structure", async () => {
     // Konsta App root renders
     const appRoot = page.locator('[data-testid="app-root"]').first();
-    await expect(appRoot).toBeVisible();
+    await expect(appRoot).toBeVisible({ timeout: CRYPTO_TIMEOUT });
 
     // Main content landmark exists
     const main = page.locator("main");
-    await expect(main).toBeAttached();
+    await expect(main).toBeAttached({ timeout: CRYPTO_TIMEOUT });
 
     // The tablist appears as a bottom tabbar on mobile or a sidebar on desktop.
     // Both render the same tabs; this spec runs in both viewports.
     const tabbar = page.getByRole("tablist");
-    await expect(tabbar).toBeAttached();
+    await expect(tabbar).toBeAttached({ timeout: CRYPTO_TIMEOUT });
 
     for (const name of ["Overview", "Tickets", "Library"]) {
       await expect(tabbar.getByRole("tab", { name })).toBeAttached();

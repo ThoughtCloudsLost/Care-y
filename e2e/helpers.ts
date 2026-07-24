@@ -841,6 +841,10 @@ export async function navigateToNewArticle(page: Page): Promise<void> {
   }
   const navNewBtn = page.getByRole("button", { name: /new article/i });
   await navNewBtn.waitFor({ state: "visible", timeout: CRYPTO_TIMEOUT });
+  // WebKit SPA navigations can leave click handlers unattached briefly
+  // after the element is visible. A short wait lets the $effect that
+  // wires onclick settle.
+  await page.waitForTimeout(500);
   await navNewBtn.click();
   await expect(page).toHaveURL("/library/new", { timeout: 10_000 });
   await expect(page.getByText("New Article")).toBeVisible({ timeout: 10_000 });

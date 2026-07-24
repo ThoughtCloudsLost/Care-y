@@ -656,6 +656,146 @@ describe.skipIf(!process.env.DATABASE_URL)("KBItemService (DB)", () => {
     expect(page.items[1]!.id).toBe(itemB.id);
   });
 
+  // --- Cursor keyset tests for sort modes ---
+
+  it("paginates with rating sort cursor without skips or duplication", async () => {
+    const cat = await catSvc.create({
+      encryptedName: encName("Rating Cursor"),
+    });
+    const voteSvc = createKBVoteService(testDb.db);
+
+    const ids: string[] = [];
+    for (let i = 0; i < 5; i++) {
+      const item = await svc.create("user-1", {
+        categoryId: cat.id,
+        encryptedTitle: Buffer.from(`rating-cursor-${String(i)}`),
+        encryptedBody: Buffer.from("body"),
+      });
+      ids.push(item.id);
+      // Give each item a different number of upvotes for varied ratings
+      for (let v = 0; v <= i; v++) {
+        await voteSvc.castVote(`cursor-voter-${String(i)}-${String(v)}`, {
+          itemId: item.id,
+          direction: "up",
+        });
+      }
+    }
+
+    // Page through with limit 2, sorted by rating desc
+    const page1 = await svc.list({
+      categoryId: cat.id,
+      limit: 2,
+      sortBy: "rating",
+      sortDirection: "desc",
+    });
+    expect(page1.items).toHaveLength(2);
+    expect(page1.nextCursor).not.toBeNull();
+
+    const page2 = await svc.list({
+      categoryId: cat.id,
+      limit: 2,
+      sortBy: "rating",
+      sortDirection: "desc",
+      cursor: page1.nextCursor!,
+    });
+    expect(page2.items).toHaveLength(2);
+
+    const page3 = await svc.list({
+      categoryId: cat.id,
+      limit: 2,
+      sortBy: "rating",
+      sortDirection: "desc",
+      cursor: page2.nextCursor!,
+    });
+
+    // All 5 items appear exactly once across pages
+    const allReturned = [
+      ...page1.items.map((i) => i.id),
+      ...page2.items.map((i) => i.id),
+      ...page3.items.map((i) => i.id),
+    ];
+    const ours = allReturned.filter((id) => ids.includes(id));
+    expect(new Set(ours).size).toBe(5);
+  });
+
+  it("paginates with updated_at sort cursor", async () => {
+    const cat = await catSvc.create({
+      encryptedName: encName("UpdatedAt Cursor"),
+    });
+
+    const ids: string[] = [];
+    for (let i = 0; i < 4; i++) {
+      const item = await svc.create("user-1", {
+        categoryId: cat.id,
+        encryptedTitle: Buffer.from(`upd-cursor-${String(i)}`),
+        encryptedBody: Buffer.from("body"),
+      });
+      ids.push(item.id);
+    }
+
+    // Page through with limit 2 sorted by updated_at asc
+    const page1 = await svc.list({
+      categoryId: cat.id,
+      limit: 2,
+      sortBy: "updated_at",
+      sortDirection: "asc",
+    });
+    expect(page1.nextCursor).not.toBeNull();
+    // The cursor should contain an ISO date (not a number)
+    expect(page1.nextCursor!).toContain("|");
+
+    const page2 = await svc.list({
+      categoryId: cat.id,
+      limit: 2,
+      sortBy: "updated_at",
+      sortDirection: "asc",
+      cursor: page1.nextCursor!,
+    });
+
+    const allReturned = [
+      ...page1.items.map((i) => i.id),
+      ...page2.items.map((i) => i.id),
+    ];
+    const ours = allReturned.filter((id) => ids.includes(id));
+    expect(new Set(ours).size).toBe(4);
+  });
+
+  it("cursor pagination with asc direction pages forward correctly", async () => {
+    const cat = await catSvc.create({
+      encryptedName: encName("Asc Cursor"),
+    });
+
+    const ids: string[] = [];
+    for (let i = 0; i < 3; i++) {
+      const item = await svc.create("user-1", {
+        categoryId: cat.id,
+        encryptedTitle: Buffer.from(`asc-cursor-${String(i)}`),
+        encryptedBody: Buffer.from("body"),
+      });
+      ids.push(item.id);
+    }
+
+    const page1 = await svc.list({
+      categoryId: cat.id,
+      limit: 1,
+      sortBy: "created_at",
+      sortDirection: "asc",
+    });
+    expect(page1.items).toHaveLength(1);
+    expect(page1.nextCursor).not.toBeNull();
+
+    const page2 = await svc.list({
+      categoryId: cat.id,
+      limit: 1,
+      sortBy: "created_at",
+      sortDirection: "asc",
+      cursor: page1.nextCursor!,
+    });
+
+    expect(page2.items).toHaveLength(1);
+    expect(page2.items[0]!.id).not.toBe(page1.items[0]!.id);
+  });
+
   // --- listBodies tests ---
 
   it("listBodies returns bodies for requested IDs", async () => {

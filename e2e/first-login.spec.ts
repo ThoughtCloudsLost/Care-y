@@ -8,7 +8,9 @@
  * Uses the same page.route() org-slug bypass as onboarding.spec.ts.
  */
 
-import { test, expect, type Page } from "@playwright/test";
+import { test, expect } from "./coverage-fixture";
+import { startCoverage, stopAndWriteCoverage } from "./coverage-fixture";
+import type { Page } from "@playwright/test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import {
@@ -65,10 +67,12 @@ test.describe.serial("Volunteer First Login", () => {
 
   test.beforeAll(async ({ browser }) => {
     page = await browser.newPage();
+    await startCoverage(page);
     await routeToOnboardOrg(page);
   });
 
   test.afterAll(async () => {
+    await stopAndWriteCoverage(page, "first-login");
     await page.unrouteAll({ behavior: "ignoreErrors" });
     await page.close();
   });

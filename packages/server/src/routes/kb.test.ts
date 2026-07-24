@@ -20,8 +20,11 @@ import type {
   KBItemRecord,
   KBItemPage,
   KBVoteRecord,
+  KBAuthorRecord,
+  KBItemSummary,
 } from "../kb/service.js";
-import { RoleId } from "@care-y/shared";
+import { RoleId, KB_ATTACHMENT_MAX_BYTES } from "@care-y/shared";
+import { expectTrpcError } from "../test-utils.js";
 
 // --- Mock services ---
 
@@ -404,6 +407,89 @@ describe("KB Article routes", () => {
     await caller.deleteItem({ itemId: VALID_UUID });
     expect(mockItemSvc.delete).toHaveBeenCalledWith(VALID_UUID);
   });
+
+  it("deleteItem removes all attachment blobs before deleting the article", async () => {
+    mockMediaSvc.listAttachments.mockResolvedValueOnce([
+      {
+        id: "att-a",
+        itemId: VALID_UUID,
+        blobKey: "blob-key-a",
+        sizeBytes: 100,
+        encryptedFilename: null,
+        contentType: "image/png",
+        createdAt: NOW,
+        deletedAt: null,
+      },
+      {
+        id: "att-b",
+        itemId: VALID_UUID,
+        blobKey: "blob-key-b",
+        sizeBytes: 200,
+        encryptedFilename: null,
+        contentType: "application/pdf",
+        createdAt: NOW,
+        deletedAt: null,
+      },
+    ]);
+    vi.mocked(mockItemSvc.delete).mockResolvedValue(undefined);
+    const caller = buildManagerCaller();
+
+    await caller.deleteItem({ itemId: VALID_UUID });
+
+    expect(mockBlobStore.delete).toHaveBeenCalledTimes(2);
+    expect(mockBlobStore.delete).toHaveBeenCalledWith("blob-key-a");
+    expect(mockBlobStore.delete).toHaveBeenCalledWith("blob-key-b");
+    expect(mockItemSvc.delete).toHaveBeenCalledWith(VALID_UUID);
+  });
+});
+
+// --- Author listing tests ---
+
+describe("KB listAuthors route", () => {
+  it("volunteer can list distinct article authors", async () => {
+    const mockAuthors: KBAuthorRecord[] = [
+      { id: "author-1", encryptedDisplayName: Buffer.from("enc-name-1") },
+      { id: "author-2", encryptedDisplayName: Buffer.from("enc-name-2") },
+    ];
+    vi.mocked(mockItemSvc.listAuthors).mockResolvedValue(mockAuthors);
+    const caller = buildVolunteerCaller();
+
+    const result = await caller.listAuthors();
+
+    expect(result).toHaveLength(2);
+    expect(result[0]!.id).toBe("author-1");
+    expect(result[1]!.id).toBe("author-2");
+    expect(mockItemSvc.listAuthors).toHaveBeenCalledOnce();
+  });
+});
+
+// --- Recent items tests ---
+
+describe("KB recentItems route", () => {
+  it("volunteer can fetch recently updated items with default limit", async () => {
+    const mockRecent: KBItemSummary[] = [
+      {
+        id: VALID_UUID,
+        categoryId: VALID_UUID,
+        encryptedTitle: Buffer.from("title-1"),
+        encryptedExcerpt: null,
+        createdBy: USER_ID,
+        voteUpCount: 3,
+        voteDownCount: 0,
+        rating: 3,
+        createdAt: NOW,
+        updatedAt: NOW,
+      },
+    ];
+    vi.mocked(mockItemSvc.listRecentlyUpdated).mockResolvedValue(mockRecent);
+    const caller = buildVolunteerCaller();
+
+    const result = await caller.recentItems({ limit: 2 });
+
+    expect(result).toHaveLength(1);
+    expect(result[0]!.id).toBe(VALID_UUID);
+    expect(mockItemSvc.listRecentlyUpdated).toHaveBeenCalledWith(2);
+  });
 });
 
 // --- Bulk body fetch tests ---
@@ -607,5 +693,114 @@ describe("KB Attachment routes", () => {
     ).rejects.toThrow(TRPCError);
 
     expect(mockBlobStore.put).not.toHaveBeenCalled();
+  });
+
+  it("upload rejects blob exceeding KB_ATTACHMENT_MAX_BYTES after base64 decode", async () => {
+    // Build a blob that decodes to just over the max. Declare sizeBytes small
+    // enough to pass Zod validation; the route checks actual byteLength first.
+    const oversizedBuf = Buffer.alloc(KB_ATTACHMENT_MAX_BYTES + 1, 0x41);
+    const oversizedBase64 = oversizedBuf.toString("base64");
+    const caller = buildVolunteerCaller();
+
+    await expectTrpcError(
+      caller.uploadAttachment({
+        itemId: VALID_UUID,
+        blob: oversizedBase64,
+        sizeBytes: 1024,
+        contentType: "image/png",
+      }),
+      "BAD_REQUEST",
+      "byte limit",
+    );
+
+    expect(mockBlobStore.put).not.toHaveBeenCalled();
+  });
+
+  it("upload rejects content type accepted by Zod but not in route allowlist", async () => {
+    // "application/msword" passes the Zod enum (shared KB_ALLOWED_CONTENT_TYPES)
+    // but is absent from the route's stricter local set.
+    const smallBuf = Buffer.from("fake-doc-bytes");
+    const caller = buildVolunteerCaller();
+
+    // AttachmentValidationError is not a subclass of ValidationError,
+    // so appErrorToTrpcCode maps it to INTERNAL_SERVER_ERROR.
+    await expectTrpcError(
+      caller.uploadAttachment({
+        itemId: VALID_UUID,
+        blob: smallBuf.toString("base64"),
+        sizeBytes: smallBuf.byteLength,
+        contentType: "application/msword",
+      }),
+      "INTERNAL_SERVER_ERROR",
+      "not allowed",
+    );
+
+    expect(mockBlobStore.put).not.toHaveBeenCalled();
+  });
+
+  it("upload cleans up orphaned blob when createAttachment throws", async () => {
+    const blobKey = "orphan-blob-key";
+    mockBlobStore.put.mockResolvedValueOnce(blobKey);
+    const dbError = new Error("DB insert failed");
+    mockMediaSvc.createAttachment.mockRejectedValueOnce(dbError);
+    const caller = buildVolunteerCaller();
+
+    await expect(
+      caller.uploadAttachment({
+        itemId: VALID_UUID,
+        blob: SMALL_BLOB,
+        sizeBytes: 20,
+        contentType: "image/png",
+      }),
+    ).rejects.toThrow("DB insert failed");
+
+    // Blob was stored, then cleanup attempted after DB failure
+    expect(mockBlobStore.put).toHaveBeenCalledOnce();
+    expect(mockBlobStore.delete).toHaveBeenCalledWith(blobKey);
+  });
+
+  it("upload propagates original error even when blob cleanup fails", async () => {
+    const blobKey = "cleanup-fail-key";
+    mockBlobStore.put.mockResolvedValueOnce(blobKey);
+    mockMediaSvc.createAttachment.mockRejectedValueOnce(
+      new Error("constraint violation"),
+    );
+    mockBlobStore.delete.mockRejectedValueOnce(
+      new Error("storage unavailable"),
+    );
+    const caller = buildVolunteerCaller();
+
+    // The original DB error propagates, not the cleanup error
+    await expect(
+      caller.uploadAttachment({
+        itemId: VALID_UUID,
+        blob: SMALL_BLOB,
+        sizeBytes: 20,
+        contentType: "image/png",
+      }),
+    ).rejects.toThrow("constraint violation");
+
+    expect(mockBlobStore.delete).toHaveBeenCalledWith(blobKey);
+  });
+
+  it("upload converts encryptedFilename from base64 to Buffer", async () => {
+    const filenameBase64 = Buffer.from("secret-file.pdf").toString("base64");
+    const caller = buildVolunteerCaller();
+
+    await caller.uploadAttachment({
+      itemId: VALID_UUID,
+      blob: SMALL_BLOB,
+      sizeBytes: 20,
+      contentType: "image/png",
+      encryptedFilename: filenameBase64,
+    });
+
+    expect(mockMediaSvc.createAttachment).toHaveBeenCalledWith(
+      expect.objectContaining({
+        encryptedFilename: expect.any(Buffer) as Buffer,
+      }),
+    );
+    const callArgs = vi.mocked(mockMediaSvc.createAttachment).mock.calls[0]![0];
+    expect(Buffer.isBuffer(callArgs.encryptedFilename)).toBe(true);
   });
 });

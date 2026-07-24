@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, afterEach } from "vitest";
+import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
 import { IncomingMessage, type ServerResponse } from "node:http";
 import { Socket } from "node:net";
 import type { TelephonyProvider } from "../telephony/provider.js";
@@ -1337,6 +1337,697 @@ describe("createRelayHandler", () => {
       await handler(req, res as unknown as ServerResponse);
 
       expect(res.statusCode).toBe(400);
+      spy.restore();
+    });
+  });
+
+  // -----------------------------------------------------------------------
+  // call-confirm: null orgSchema and null body paths
+  // -----------------------------------------------------------------------
+
+  describe("POST /relay/call-confirm edge cases", () => {
+    it("returns 400 when orgSchema segment is missing from URL", async () => {
+      const deps = makeDeps();
+      const handler = createRelayHandler(deps);
+      // Path with trailing slash but no schema segment
+      const req = createMockReq(
+        "POST",
+        "/relay/call-confirm/",
+        "CallSid=CA_test_1&Digits=1",
+        {
+          "content-type": "application/x-www-form-urlencoded",
+          "x-twilio-signature": "sig",
+        },
+      );
+      req.headers.cookie = "";
+      const res = createMockRes();
+
+      await handler(req, res as unknown as ServerResponse);
+
+      expect(res.statusCode).toBe(400);
+    });
+
+    it("returns 400 when body exceeds max relay size (null body)", async () => {
+      const deps = makeDeps();
+      const handler = createRelayHandler(deps);
+      // Body larger than MAX_RELAY_BODY (64KB) triggers readFormBody -> null
+      const oversizedBody = "x".repeat(65 * 1024);
+      const req = createMockReq(
+        "POST",
+        "/relay/call-confirm/org_test",
+        oversizedBody,
+        {
+          "content-type": "application/x-www-form-urlencoded",
+          "x-twilio-signature": "sig",
+        },
+      );
+      req.headers.cookie = "";
+      const res = createMockRes();
+
+      await handler(req, res as unknown as ServerResponse);
+
+      expect(res.statusCode).toBe(400);
+    });
+
+    it("returns Hangup TwiML when validation yields hangup status (null auth token)", async () => {
+      const pendingBuf = Buffer.alloc(12);
+      Buffer.from("+15553333333").copy(pendingBuf);
+      const callerBuf = Buffer.alloc(12);
+      Buffer.from("+15559999999").copy(callerBuf);
+
+      const pending: PendingCall = {
+        clientPhoneBuf: pendingBuf,
+        callerIdBuf: callerBuf,
+        orgId: "org_test",
+        createdAt: Date.now(),
+      };
+      const pendingCalls = new Map<string, PendingCall>();
+      pendingCalls.set("CA_hangup_1", pending);
+
+      const deps = makeDeps({
+        pendingCalls,
+        // Null auth token triggers hangup status in validateCallConfirmSignature
+        getAuthToken: vi.fn().mockResolvedValue(null),
+      });
+      const handler = createRelayHandler(deps);
+
+      const formBody = "CallSid=CA_hangup_1&Digits=1";
+      const req = createMockReq(
+        "POST",
+        "/relay/call-confirm/org_test",
+        formBody,
+        {
+          "content-type": "application/x-www-form-urlencoded",
+          "x-twilio-signature": "sig",
+        },
+      );
+      req.headers.cookie = "";
+      const res = createMockRes();
+
+      await handler(req, res as unknown as ServerResponse);
+
+      expect(res.statusCode).toBe(200);
+      expect(res.body).toContain("<Hangup/>");
+      // Pending call should be cleaned up (buffers zeroed)
+      expect(pendingCalls.size).toBe(0);
+      expectZeroed(pendingBuf, "clientPhoneBuf after hangup (null auth token)");
+      expectZeroed(callerBuf, "callerIdBuf after hangup (null auth token)");
+    });
+
+    it("returns Hangup TwiML when validation yields hangup status (null provider)", async () => {
+      const pendingBuf = Buffer.alloc(12);
+      Buffer.from("+15554444444").copy(pendingBuf);
+      const callerBuf = Buffer.alloc(12);
+      Buffer.from("+15559999999").copy(callerBuf);
+
+      const pending: PendingCall = {
+        clientPhoneBuf: pendingBuf,
+        callerIdBuf: callerBuf,
+        orgId: "org_test",
+        createdAt: Date.now(),
+      };
+      const pendingCalls = new Map<string, PendingCall>();
+      pendingCalls.set("CA_hangup_2", pending);
+
+      const deps = makeDeps({
+        pendingCalls,
+        // Provider returns null after auth token succeeds, triggering hangup
+        getAuthToken: vi.fn().mockResolvedValue("valid_token"),
+        getProvider: vi.fn().mockResolvedValue(null),
+      });
+      const handler = createRelayHandler(deps);
+
+      const formBody = "CallSid=CA_hangup_2&Digits=1";
+      const req = createMockReq(
+        "POST",
+        "/relay/call-confirm/org_test",
+        formBody,
+        {
+          "content-type": "application/x-www-form-urlencoded",
+          "x-twilio-signature": "sig",
+        },
+      );
+      req.headers.cookie = "";
+      const res = createMockRes();
+
+      await handler(req, res as unknown as ServerResponse);
+
+      expect(res.statusCode).toBe(200);
+      expect(res.body).toContain("<Hangup/>");
+      expect(pendingCalls.size).toBe(0);
+      expectZeroed(pendingBuf, "clientPhoneBuf after hangup (null provider)");
+      expectZeroed(callerBuf, "callerIdBuf after hangup (null provider)");
+    });
+  });
+
+  // -----------------------------------------------------------------------
+  // Pending client cleanup (TTL expiry, fake timers)
+  // -----------------------------------------------------------------------
+
+  describe("startPendingClientCleanup", () => {
+    beforeEach(() => {
+      vi.useFakeTimers();
+    });
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it("zeroes and removes expired pending client entries after TTL", () => {
+      const encryptedPhone = Buffer.alloc(16);
+      // Write non-zero data so we can verify zeroing
+      Buffer.from("ops-encrypted-ph").copy(encryptedPhone);
+
+      const pendingClients = new Map<
+        string,
+        {
+          phoneHash: string;
+          opsEncryptedPhone: Buffer;
+          orgSchema: string;
+          createdAt: number;
+        }
+      >();
+      pendingClients.set("token-expired", {
+        phoneHash: "hash-1",
+        opsEncryptedPhone: encryptedPhone,
+        orgSchema: "org_test",
+        // Created 6 minutes ago (past the 5-minute TTL)
+        createdAt: Date.now() - 6 * 60 * 1000,
+      });
+
+      // Creating the handler starts the cleanup interval
+      const handler = createRelayHandler(makeDeps({ pendingClients }));
+
+      // Verify entry exists before cleanup
+      expect(pendingClients.size).toBe(1);
+      expect(encryptedPhone.some((b) => b !== 0)).toBe(true);
+
+      // Advance past the cleanup interval (60 seconds)
+      vi.advanceTimersByTime(60_000);
+
+      // Entry should be removed and buffer zeroed
+      expect(pendingClients.size).toBe(0);
+      expectZeroed(
+        encryptedPhone,
+        "opsEncryptedPhone after TTL expiry cleanup",
+      );
+
+      handler.cleanup();
+    });
+
+    it("preserves non-expired pending client entries during cleanup", () => {
+      const freshEncrypted = Buffer.alloc(16);
+      Buffer.from("fresh-encrypted!").copy(freshEncrypted);
+      const freshCopy = Buffer.from(freshEncrypted);
+
+      const pendingClients = new Map<
+        string,
+        {
+          phoneHash: string;
+          opsEncryptedPhone: Buffer;
+          orgSchema: string;
+          createdAt: number;
+        }
+      >();
+      pendingClients.set("token-fresh", {
+        phoneHash: "hash-2",
+        opsEncryptedPhone: freshEncrypted,
+        orgSchema: "org_test",
+        // Created just now (well within 5-minute TTL)
+        createdAt: Date.now(),
+      });
+
+      const handler = createRelayHandler(makeDeps({ pendingClients }));
+
+      vi.advanceTimersByTime(60_000);
+
+      // Fresh entry should still be present and unmodified
+      expect(pendingClients.size).toBe(1);
+      expect(pendingClients.has("token-fresh")).toBe(true);
+      expect(freshEncrypted.equals(freshCopy)).toBe(true);
+
+      handler.cleanup();
+      freshCopy.fill(0);
+    });
+  });
+
+  // -----------------------------------------------------------------------
+  // Chainable tenant DB mock (used by phone-lookup and resolveClientPhone)
+  // -----------------------------------------------------------------------
+
+  /**
+   * Creates a mock tenant DB with chainable Kysely-style query builders.
+   * queryQueue provides results for successive selectFrom().executeTakeFirst() calls.
+   */
+  function createChainableTenantDb(
+    queryQueue: unknown[],
+  ): Kysely<TenantDatabase> {
+    let callIndex = 0;
+    const makeChain = (): Record<string, unknown> => {
+      const currentIndex = callIndex++;
+      const chainProxy: Record<string, unknown> = {};
+      const proxyHandler: ProxyHandler<Record<string, unknown>> = {
+        get(_target: Record<string, unknown>, prop: string) {
+          if (prop === "executeTakeFirst") {
+            return (): Promise<unknown> =>
+              Promise.resolve(queryQueue[currentIndex]);
+          }
+          if (prop === "executeTakeFirstOrThrow") {
+            const val = queryQueue[currentIndex];
+            return (): Promise<unknown> =>
+              val !== undefined
+                ? Promise.resolve(val)
+                : Promise.reject(new Error("no result"));
+          }
+          // All other chain methods (selectAll, select, where, innerJoin)
+          // return the same proxy to continue the chain
+          return (): Record<string, unknown> => new Proxy({}, proxyHandler);
+        },
+      };
+      return new Proxy(chainProxy, proxyHandler);
+    };
+
+    return {
+      selectFrom: vi.fn(() => makeChain()),
+    } as unknown as Kysely<TenantDatabase>;
+  }
+
+  // -----------------------------------------------------------------------
+  // Phone lookup (POST /relay/phone-lookup)
+  // -----------------------------------------------------------------------
+
+  describe("POST /relay/phone-lookup", () => {
+    afterEach(() => {
+      vi.restoreAllMocks();
+    });
+
+    it("returns found client with open ticket when phone matches", async () => {
+      const spy = spyOnReadRawBody();
+
+      // Query order in handlePhoneLookup:
+      // 1. phoneRepo.findByHash -> phones row (selectAll + 2 wheres)
+      // 2. clients selectFrom -> client row
+      // 3. tickets selectFrom -> ticket row
+      const mockDb = createChainableTenantDb([
+        {
+          id: "phone-1",
+          phone_hash: "fake-hash",
+          encrypted_number: Buffer.alloc(16),
+          locale: "en-US",
+          location_city: null,
+          location_region: null,
+          is_active: true,
+        },
+        { id: "client-1", alias: "C-001" },
+        { id: "ticket-1" },
+      ]);
+
+      const deps = makeDeps({
+        getTenantDb: vi.fn().mockReturnValue(mockDb),
+      });
+      const handler = createRelayHandler(deps);
+
+      // Use Buffer.alloc for phone data (security contract)
+      const phoneDataBuf = Buffer.alloc(12);
+      Buffer.from("+15551112222").copy(phoneDataBuf);
+      const bodyStr = JSON.stringify({
+        phone: phoneDataBuf.toString("utf-8"),
+      });
+
+      const req = createMockReq("POST", "/relay/phone-lookup", bodyStr);
+      const res = createMockRes();
+
+      await handler(req, res as unknown as ServerResponse);
+
+      expect(res.statusCode).toBe(200);
+      const parsed = JSON.parse(res.body) as {
+        found: boolean;
+        clientId: string;
+        alias: string;
+        openTicketId: string;
+      };
+      expect(parsed.found).toBe(true);
+      expect(parsed.clientId).toBe("client-1");
+      expect(parsed.alias).toBe("C-001");
+      expect(parsed.openTicketId).toBe("ticket-1");
+
+      // Security contract: raw body buffer zeroed in finally
+      expectZeroed(spy.getCapturedBuffer(), "rawBody after phone-lookup found");
+      spy.restore();
+      phoneDataBuf.fill(0);
+    });
+
+    it("returns found client with null openTicketId when no open ticket exists", async () => {
+      const spy = spyOnReadRawBody();
+
+      const mockDb = createChainableTenantDb([
+        {
+          id: "phone-2",
+          phone_hash: "fake-hash",
+          encrypted_number: Buffer.alloc(16),
+          locale: "en-US",
+          location_city: null,
+          location_region: null,
+          is_active: true,
+        },
+        { id: "client-2", alias: "C-002" },
+        undefined, // no open ticket
+      ]);
+
+      const deps = makeDeps({
+        getTenantDb: vi.fn().mockReturnValue(mockDb),
+      });
+      const handler = createRelayHandler(deps);
+
+      const phoneDataBuf = Buffer.alloc(12);
+      Buffer.from("+15553334444").copy(phoneDataBuf);
+
+      const req = createMockReq(
+        "POST",
+        "/relay/phone-lookup",
+        JSON.stringify({ phone: phoneDataBuf.toString("utf-8") }),
+      );
+      const res = createMockRes();
+
+      await handler(req, res as unknown as ServerResponse);
+
+      expect(res.statusCode).toBe(200);
+      const parsed = JSON.parse(res.body) as {
+        found: boolean;
+        openTicketId: string | null;
+      };
+      expect(parsed.found).toBe(true);
+      expect(parsed.openTicketId).toBe(null);
+
+      expectZeroed(
+        spy.getCapturedBuffer(),
+        "rawBody after phone-lookup found (no open ticket)",
+      );
+      spy.restore();
+      phoneDataBuf.fill(0);
+    });
+
+    it("returns pending token when phone has no matching client", async () => {
+      const spy = spyOnReadRawBody();
+
+      // phoneRepo.findByHash returns null (no phone record)
+      const mockDb = createChainableTenantDb([undefined]);
+
+      const pendingClients = new Map<
+        string,
+        {
+          phoneHash: string;
+          opsEncryptedPhone: Buffer;
+          orgSchema: string;
+          createdAt: number;
+        }
+      >();
+
+      const deps = makeDeps({
+        getTenantDb: vi.fn().mockReturnValue(mockDb),
+        pendingClients,
+      });
+      const handler = createRelayHandler(deps);
+
+      const phoneDataBuf = Buffer.alloc(12);
+      Buffer.from("+15555556666").copy(phoneDataBuf);
+
+      const req = createMockReq(
+        "POST",
+        "/relay/phone-lookup",
+        JSON.stringify({ phone: phoneDataBuf.toString("utf-8") }),
+      );
+      const res = createMockRes();
+
+      await handler(req, res as unknown as ServerResponse);
+
+      expect(res.statusCode).toBe(200);
+      const parsed = JSON.parse(res.body) as {
+        found: boolean;
+        token: string;
+      };
+      expect(parsed.found).toBe(false);
+      expect(parsed.token).toBeTruthy();
+
+      // Pending client entry should be stored with the token
+      expect(pendingClients.size).toBe(1);
+      const entry = pendingClients.get(parsed.token);
+      expect(entry).toBeDefined();
+      expect(entry!.phoneHash).toBe("fake-hash");
+      expect(entry!.orgSchema).toBe("org_test");
+
+      expectZeroed(
+        spy.getCapturedBuffer(),
+        "rawBody after phone-lookup pending token",
+      );
+      spy.restore();
+      phoneDataBuf.fill(0);
+    });
+
+    it("returns pending token when phone hash exists but no client row", async () => {
+      const spy = spyOnReadRawBody();
+
+      // Phone record exists but no client references it
+      const mockDb = createChainableTenantDb([
+        {
+          id: "phone-orphan",
+          phone_hash: "fake-hash",
+          encrypted_number: Buffer.alloc(16),
+          locale: "en-US",
+          location_city: null,
+          location_region: null,
+          is_active: true,
+        },
+        undefined, // no client row
+      ]);
+
+      const pendingClients = new Map<
+        string,
+        {
+          phoneHash: string;
+          opsEncryptedPhone: Buffer;
+          orgSchema: string;
+          createdAt: number;
+        }
+      >();
+
+      const deps = makeDeps({
+        getTenantDb: vi.fn().mockReturnValue(mockDb),
+        pendingClients,
+      });
+      const handler = createRelayHandler(deps);
+
+      const phoneDataBuf = Buffer.alloc(12);
+      Buffer.from("+15557778888").copy(phoneDataBuf);
+
+      const req = createMockReq(
+        "POST",
+        "/relay/phone-lookup",
+        JSON.stringify({ phone: phoneDataBuf.toString("utf-8") }),
+      );
+      const res = createMockRes();
+
+      await handler(req, res as unknown as ServerResponse);
+
+      expect(res.statusCode).toBe(200);
+      const parsed = JSON.parse(res.body) as { found: boolean; token: string };
+      expect(parsed.found).toBe(false);
+      expect(parsed.token).toBeTruthy();
+      expect(pendingClients.size).toBe(1);
+
+      expectZeroed(
+        spy.getCapturedBuffer(),
+        "rawBody after phone-lookup (phone exists, no client)",
+      );
+      spy.restore();
+      phoneDataBuf.fill(0);
+    });
+
+    it("returns 400 MISSING_FIELDS when phone field is absent", async () => {
+      const spy = spyOnReadRawBody();
+      const handler = createRelayHandler(makeDeps());
+
+      const req = createMockReq(
+        "POST",
+        "/relay/phone-lookup",
+        JSON.stringify({ notPhone: "irrelevant" }),
+      );
+      const res = createMockRes();
+
+      await handler(req, res as unknown as ServerResponse);
+
+      expect(res.statusCode).toBe(400);
+      expect(JSON.parse(res.body)).toEqual({ error: "MISSING_FIELDS" });
+
+      expectZeroed(
+        spy.getCapturedBuffer(),
+        "rawBody after phone-lookup MISSING_FIELDS",
+      );
+      spy.restore();
+    });
+
+    it("returns 400 MISSING_FIELDS when phone field is empty string", async () => {
+      const spy = spyOnReadRawBody();
+      const handler = createRelayHandler(makeDeps());
+
+      const req = createMockReq(
+        "POST",
+        "/relay/phone-lookup",
+        JSON.stringify({ phone: "" }),
+      );
+      const res = createMockRes();
+
+      await handler(req, res as unknown as ServerResponse);
+
+      expect(res.statusCode).toBe(400);
+      expect(JSON.parse(res.body)).toEqual({ error: "MISSING_FIELDS" });
+
+      expectZeroed(
+        spy.getCapturedBuffer(),
+        "rawBody after phone-lookup empty phone",
+      );
+      spy.restore();
+    });
+
+    it("zeroes opsEncryptedPhone buffer when client is found (not stored in pending)", async () => {
+      // Track the buffer returned by fieldEncryptor.encrypt to verify
+      // it gets zeroed when the found path skips pending storage
+      const opsEncBuf = Buffer.alloc(16);
+      Buffer.from("ops-enc-content!").copy(opsEncBuf);
+
+      const mockDb = createChainableTenantDb([
+        {
+          id: "phone-3",
+          phone_hash: "fake-hash",
+          encrypted_number: Buffer.alloc(16),
+          locale: "en-US",
+          location_city: null,
+          location_region: null,
+          is_active: true,
+        },
+        { id: "client-3", alias: "C-003" },
+        { id: "ticket-3" },
+      ]);
+
+      const deps = makeDeps({
+        getTenantDb: vi.fn().mockReturnValue(mockDb),
+        fieldEncryptor: {
+          encrypt: vi.fn().mockReturnValue(opsEncBuf),
+          decrypt: vi.fn().mockReturnValue("decrypted"),
+          decryptToBuffer: vi.fn().mockReturnValue(Buffer.from("decrypted")),
+        },
+      });
+      const handler = createRelayHandler(deps);
+
+      const phoneDataBuf = Buffer.alloc(12);
+      Buffer.from("+15559990000").copy(phoneDataBuf);
+
+      const req = createMockReq(
+        "POST",
+        "/relay/phone-lookup",
+        JSON.stringify({ phone: phoneDataBuf.toString("utf-8") }),
+      );
+      const res = createMockRes();
+
+      await handler(req, res as unknown as ServerResponse);
+
+      expect(res.statusCode).toBe(200);
+      // On the found path, opsEncryptedPhone.fill(0) is called explicitly
+      // since the buffer is not needed for pending storage
+      expectZeroed(
+        opsEncBuf,
+        "opsEncryptedPhone zeroed on found path (not stored in pending)",
+      );
+
+      phoneDataBuf.fill(0);
+      handler.cleanup();
+    });
+  });
+
+  // -----------------------------------------------------------------------
+  // resolveClientPhone (default implementation via phone-lookup)
+  // -----------------------------------------------------------------------
+
+  describe("resolveClientPhone via phone-lookup (default dep)", () => {
+    afterEach(() => {
+      vi.restoreAllMocks();
+    });
+
+    it("returns found result when ticket has an associated client phone", async () => {
+      const spy = spyOnReadRawBody();
+      const decryptedPhoneBuf = Buffer.alloc(12);
+      Buffer.from("+15551230000").copy(decryptedPhoneBuf);
+
+      // resolveClientPhone (default) queries:
+      // tickets JOIN clients JOIN phones -> encrypted_number
+      // Then calls fieldEncryptor.decryptToBuffer
+      const mockDb = createChainableTenantDb([
+        // Single joined query result
+        { encrypted_number: Buffer.from("enc-phone-data") },
+      ]);
+
+      const deps = makeDeps({
+        getTenantDb: vi.fn().mockReturnValue(mockDb),
+        fieldEncryptor: {
+          encrypt: vi.fn().mockReturnValue(Buffer.from("encrypted")),
+          decrypt: vi.fn().mockReturnValue("decrypted"),
+          decryptToBuffer: vi.fn().mockReturnValue(decryptedPhoneBuf),
+        },
+        // Omit resolveClientPhone to exercise the default implementation
+        resolveClientPhone: undefined,
+      });
+      const handler = createRelayHandler(deps);
+
+      const req = createMockReq(
+        "POST",
+        "/relay/sms",
+        '{"ticketId":"ticket-with-phone","body":"test msg"}',
+      );
+      const res = createMockRes();
+
+      await handler(req, res as unknown as ServerResponse);
+
+      expect(res.statusCode).toBe(200);
+      // The decrypted phone buffer should be zeroed in finally
+      expectZeroed(
+        decryptedPhoneBuf,
+        "decrypted phone buffer zeroed after SMS send",
+      );
+      expectZeroed(
+        spy.getCapturedBuffer(),
+        "rawBody zeroed after SMS with default resolveClientPhone",
+      );
+      spy.restore();
+    });
+
+    it("returns 404 when ticket has no associated client phone (null row)", async () => {
+      const spy = spyOnReadRawBody();
+
+      // The joined query returns no row
+      const mockDb = createChainableTenantDb([undefined]);
+
+      const deps = makeDeps({
+        getTenantDb: vi.fn().mockReturnValue(mockDb),
+        // Omit resolveClientPhone to exercise the default implementation
+        resolveClientPhone: undefined,
+      });
+      const handler = createRelayHandler(deps);
+
+      const req = createMockReq(
+        "POST",
+        "/relay/sms",
+        '{"ticketId":"ticket-no-phone","body":"test msg"}',
+      );
+      const res = createMockRes();
+
+      await handler(req, res as unknown as ServerResponse);
+
+      expect(res.statusCode).toBe(404);
+      expect(JSON.parse(res.body)).toEqual({ error: "CLIENT_PHONE_NOT_FOUND" });
+      expectZeroed(
+        spy.getCapturedBuffer(),
+        "rawBody zeroed after CLIENT_PHONE_NOT_FOUND (default resolve)",
+      );
       spy.restore();
     });
   });

@@ -836,4 +836,128 @@ describe.skipIf(!HAS_DB)("onboarding router (DB integration)", () => {
       expect(after.needsSetup).toBe(false);
     });
   });
+
+  // --- requireOrgForOnboarding: Host resolving to no org ---
+
+  describe("requireOrgForOnboarding", () => {
+    it("returns NOT_FOUND when the Host resolves to no org", async () => {
+      const { caller } = buildCaller("nonexistent-org-slug-xyz");
+      await expectTrpcError(
+        caller.onboarding.getStatus(),
+        "NOT_FOUND",
+        "Organization not found",
+      );
+    });
+  });
+
+  // --- bootstrap rate limiter exhaustion ---
+
+  describe("bootstrapAdmin rate limiting", () => {
+    it("returns BOOTSTRAP_RATE_LIMITED after limiter exhaustion", async () => {
+      const isolatedLimiter = createInMemoryRateLimiter({
+        windowMs: 3600_000,
+        maxRequests: 1,
+      });
+
+      function buildLimitedCaller(slug: string) {
+        const deps: OnboardingRouterDeps = {
+          ...buildOnboardingDeps(),
+          bootstrapLimiter: isolatedLimiter,
+        };
+        const onboardingRouter = createOnboardingRouter(deps);
+        const appRouter = router({ onboarding: onboardingRouter });
+        const factory = createCallerFactory(appRouter);
+        const res = mockRes();
+        const req = mockReq({ headers: { "x-org-slug": slug } });
+        const ctx: Context = { req, res, org: null, session: null, user: null };
+        return { caller: factory(ctx), res };
+      }
+
+      // Set up a fresh org for this test.
+      const freshDb2 = await createTestDb();
+      const freshTenantDb2 = freshDb2.db;
+      await freshTenantDb2
+        .insertInto("org_config")
+        .values({ pii_retention_days: null })
+        .onConflict((oc) => oc.doNothing())
+        .execute();
+
+      const orgService = createOrgService(
+        freshDb2.platformDb,
+        makeTenantDbFactory(freshDb2.platformDb),
+      );
+      const suffix = randomUUID().slice(0, 8);
+      const rlSlug = `test-rl-boot-${suffix}`;
+      const rlOrg = await orgService.createOrg({ slug: rlSlug });
+      createdOrgIds.push(rlOrg.id);
+      createdSchemas.push(rlOrg.schemaName);
+
+      // First call consumes the single allowed request. It will fail
+      // with UNAUTHORIZED (bad setup token), but that happens after the
+      // rate limit check, so it consumes a token.
+      await buildLimitedCaller(rlSlug)
+        .caller.onboarding.bootstrapAdmin({
+          identifier: "rl-admin",
+          password: "securepassword12345",
+          displayName: "RL Admin",
+          orgPublicKey: encode(TEST_ORG_PUBLIC_KEY),
+          setupToken: "wrong-token",
+        })
+        .catch((_err: unknown) => undefined);
+
+      // Second call hits rate limit.
+      await expectTrpcError(
+        buildLimitedCaller(rlSlug).caller.onboarding.bootstrapAdmin({
+          identifier: "rl-admin-2",
+          password: "securepassword12345",
+          displayName: "RL Admin 2",
+          orgPublicKey: encode(TEST_ORG_PUBLIC_KEY),
+          setupToken: "wrong-token",
+        }),
+        "TOO_MANY_REQUESTS",
+        ErrorCode.BOOTSTRAP_RATE_LIMITED,
+      );
+
+      await freshDb2.cleanup();
+    }, 30_000);
+  });
+
+  // --- reauthenticate: org without seeded public key ---
+
+  describe("reauthenticate without org keypair", () => {
+    it("returns ORG_KEYPAIR_MISSING when the org has no public key", async () => {
+      // Create an org without seeding a public key.
+      const freshDb3 = await createTestDb();
+      const freshTenantDb3 = freshDb3.db;
+      await freshTenantDb3
+        .insertInto("org_config")
+        .values({ pii_retention_days: null })
+        .onConflict((oc) => oc.doNothing())
+        .execute();
+      // Deliberately do NOT call seedOrgPublicKey here.
+
+      const orgService = createOrgService(
+        freshDb3.platformDb,
+        makeTenantDbFactory(freshDb3.platformDb),
+      );
+      const suffix = randomUUID().slice(0, 8);
+      const noKeySlug = `test-nokey-reauth-${suffix}`;
+      const noKeyOrg = await orgService.createOrg({ slug: noKeySlug });
+      createdOrgIds.push(noKeyOrg.id);
+      createdSchemas.push(noKeyOrg.schemaName);
+
+      const { caller } = buildCaller(noKeySlug);
+
+      await expectTrpcError(
+        caller.onboarding.reauthenticate({
+          identifier: "any-user",
+          password: "any-password-long-enough!",
+        }),
+        "PRECONDITION_FAILED",
+        ErrorCode.ORG_KEYPAIR_MISSING,
+      );
+
+      await freshDb3.cleanup();
+    }, 30_000);
+  });
 });

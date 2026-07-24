@@ -1,5 +1,7 @@
 import adapter from "@sveltejs/adapter-node";
 
+const isDev = process.env.NODE_ENV !== "production";
+
 /** @type {import('@sveltejs/kit').Config} */
 const config = {
   kit: {
@@ -20,7 +22,7 @@ const config = {
         "base-uri": ["self"],
         "form-action": ["self"],
         "frame-ancestors": ["none"],
-        "upgrade-insecure-requests": true,
+        ...(isDev ? {} : { "upgrade-insecure-requests": true }),
       },
     },
   },

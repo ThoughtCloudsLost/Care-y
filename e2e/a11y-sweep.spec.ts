@@ -5,7 +5,9 @@
  * pages is covered by unit suites; this spec exists so WCAG regressions
  * on them fail CI the same way the dashboard and ticket audits do.
  */
-import { test, expect, type Page } from "@playwright/test";
+import { test, expect } from "./coverage-fixture";
+import { startCoverage, stopAndWriteCoverage } from "./coverage-fixture";
+import type { Page } from "@playwright/test";
 import { auditA11y, login, CRYPTO_TIMEOUT } from "./helpers.js";
 
 test.describe.serial("Accessibility sweep", () => {
@@ -13,10 +15,12 @@ test.describe.serial("Accessibility sweep", () => {
 
   test.beforeAll(async ({ browser }) => {
     page = await browser.newPage();
+    await startCoverage(page);
     await login(page);
   });
 
   test.afterAll(async () => {
+    await stopAndWriteCoverage(page, "a11y-sweep");
     await page.unrouteAll({ behavior: "ignoreErrors" });
     await page.close();
   });

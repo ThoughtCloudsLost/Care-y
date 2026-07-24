@@ -3,16 +3,45 @@ import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
 import { render, screen, cleanup, fireEvent } from "@testing-library/svelte";
 import type { BrandingData } from "@care-y/shared";
 
-const { mockSaveBrandingField, mockToastShow, mockHaptic } = vi.hoisted(() => ({
+// Type-only namespace imports for importOriginal generics
+import type * as ParaglideMessages from "$lib/paraglide/messages.js";
+import type * as TrpcIndex from "$lib/trpc/index.js";
+import type * as TanstackQuery from "@tanstack/svelte-query";
+import type * as HapticMod from "$lib/utils/haptic.js";
+import type * as ToastStore from "$lib/stores/toast.svelte.js";
+import type * as AnnounceMod from "$lib/utils/announce.js";
+import type * as CryptoContext from "$lib/crypto/context.js";
+import type * as ColorUtils from "$lib/branding/color-utils.js";
+import type * as BufferEncoding from "$lib/utils/buffer-encoding.js";
+import type * as AsyncDecryptCache from "$lib/crypto/async-decrypt-cache.js";
+import type * as DecryptResult from "$lib/crypto/decrypt-result.js";
+import type * as BrandingTitle from "$lib/branding/title.svelte.js";
+import type * as OrgSlug from "$lib/utils/org-slug.js";
+import type * as ShellContext from "$lib/shell/context.js";
+
+const {
+  mockSaveBrandingField,
+  mockToastShow,
+  mockHaptic,
+  mockSetBrandingTitle,
+  mockUploadPwaIcons,
+} = vi.hoisted(() => ({
   mockSaveBrandingField: vi.fn().mockResolvedValue(undefined),
   mockToastShow: vi.fn(),
   mockHaptic: vi.fn(),
+  mockSetBrandingTitle: vi.fn(),
+  mockUploadPwaIcons: vi.fn().mockResolvedValue(undefined),
 }));
 
 let mockBrandingData: BrandingData | undefined;
 let mockIsLoading: boolean;
+let mockIsError: boolean;
 
-vi.mock("$lib/paraglide/messages.js", () => ({
+// vi.mock required: tests pin deterministic message strings for assertions.
+// Spreading importOriginal keeps every unpinned message real so the mock
+// cannot drift from the compiled message surface.
+vi.mock("$lib/paraglide/messages.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof ParaglideMessages>()),
   register_note: () => "Note",
   register_careful: () => "Careful",
   register_warning: () => "Warning",
@@ -73,7 +102,10 @@ vi.mock("$lib/paraglide/messages.js", () => ({
   error_decryption_failed: () => "Decryption failed",
 }));
 
-vi.mock("$lib/trpc/index.js", () => ({
+// vi.mock required: tRPC client construction is lazy, but the mock
+// controls query/mutation behavior for deterministic test assertions.
+vi.mock("$lib/trpc/index.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof TrpcIndex>()),
   trpc: {
     branding: {
       getBranding: { query: vi.fn() },
@@ -82,7 +114,11 @@ vi.mock("$lib/trpc/index.js", () => ({
   },
 }));
 
-vi.mock("@tanstack/svelte-query", () => ({
+// vi.mock required: @tanstack/svelte-query creates reactive query state
+// bound to a QueryClient context that does not exist in jsdom. The real
+// createQuery/createMutation hooks rely on Svelte context injection.
+vi.mock("@tanstack/svelte-query", async (importOriginal) => ({
+  ...(await importOriginal<typeof TanstackQuery>()),
   createQuery: (optsFn: () => Record<string, unknown>) => {
     optsFn();
     return {
@@ -90,9 +126,11 @@ vi.mock("@tanstack/svelte-query", () => ({
         return mockIsLoading;
       },
       get isError() {
-        return false;
+        return mockIsError;
       },
-      error: null,
+      get error() {
+        return mockIsError ? new Error("query-failed") : null;
+      },
       get data() {
         return mockBrandingData;
       },
@@ -102,16 +140,25 @@ vi.mock("@tanstack/svelte-query", () => ({
   createMutation: (optsFn: () => Record<string, unknown>) => {
     const opts = optsFn();
     const mutationFn = opts.mutationFn as (input: unknown) => Promise<unknown>;
-    const onSuccess = opts.onSuccess as (() => void) | undefined;
-    const onError = opts.onError as (() => void) | undefined;
+    const factoryOnSuccess = opts.onSuccess as (() => void) | undefined;
+    const factoryOnError = opts.onError as (() => void) | undefined;
     return {
       get isPending() {
         return false;
       },
-      mutate(input: unknown) {
+      mutate(
+        input: unknown,
+        perCall?: { onSuccess?: () => void; onError?: () => void },
+      ) {
         mutationFn(input).then(
-          () => onSuccess?.(),
-          () => onError?.(),
+          () => {
+            factoryOnSuccess?.();
+            perCall?.onSuccess?.();
+          },
+          () => {
+            factoryOnError?.();
+            perCall?.onError?.();
+          },
         );
       },
     };
@@ -122,15 +169,24 @@ vi.mock("@tanstack/svelte-query", () => ({
   }),
 }));
 
-vi.mock("$lib/utils/haptic.js", () => ({ haptic: mockHaptic }));
-vi.mock("$lib/stores/toast.svelte.js", () => ({
+vi.mock("$lib/utils/haptic.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof HapticMod>()),
+  haptic: mockHaptic,
+}));
+vi.mock("$lib/stores/toast.svelte.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof ToastStore>()),
   toastStore: { show: mockToastShow },
 }));
-vi.mock("$lib/utils/announce.js", () => ({
+vi.mock("$lib/utils/announce.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof AnnounceMod>()),
   announceToLiveRegion: vi.fn(),
 }));
 
-vi.mock("$lib/crypto/context.js", () => ({
+// vi.mock required: createContext from Svelte 5 throws "missing_context"
+// outside a live component tree. Crypto contexts are set by CryptoProvider
+// in the (app) layout, but component tests don't mount the full layout.
+vi.mock("$lib/crypto/context.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof CryptoContext>()),
   getOrgDecryptCache: () => ({
     decrypt: (_id: string, encrypted: unknown) => {
       if (encrypted instanceof Uint8Array) {
@@ -151,7 +207,8 @@ vi.mock("$lib/crypto/context.js", () => ({
   }),
 }));
 
-vi.mock("$lib/branding/color-utils.js", () => ({
+vi.mock("$lib/branding/color-utils.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof ColorUtils>()),
   isValidHexColor: (c: string) => /^#[0-9a-fA-F]{6}$/.test(c),
 }));
 
@@ -166,23 +223,27 @@ vi.mock("$lib/branding/konsta-palette.js", async (importOriginal) => {
   };
 });
 
-vi.mock("$lib/utils/buffer-encoding.js", () => ({
+vi.mock("$lib/utils/buffer-encoding.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof BufferEncoding>()),
   uint8ArrayToBase64: (bytes: Uint8Array) =>
     btoa(String.fromCharCode(...bytes)),
   base64ToUint8Array: (encoded: string) =>
     Uint8Array.from(atob(encoded), (c) => c.charCodeAt(0)),
 }));
 
+// care-y-ignore-next-line mock-factory-unguarded -- importOriginal would trigger libsodium WASM init; a partial stub cannot satisfy the full crypto export surface
 vi.mock("@care-y/crypto", () => ({
   encryptClientBranding: (payload: Uint8Array) => payload,
 }));
 
-vi.mock("$lib/crypto/async-decrypt-cache.js", () => ({
+vi.mock("$lib/crypto/async-decrypt-cache.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof AsyncDecryptCache>()),
   DECRYPT_ERROR_SENTINEL: "\0DECRYPT_FAILED",
   isDecryptError: (v: unknown) => v === "\0DECRYPT_FAILED",
 }));
 
-vi.mock("$lib/crypto/decrypt-result.js", () => ({
+vi.mock("$lib/crypto/decrypt-result.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof DecryptResult>()),
   LOADING: Object.freeze({ status: "loading" }),
   ERROR: Object.freeze({ status: "error" }),
   DENIED: Object.freeze({ status: "denied" }),
@@ -226,20 +287,63 @@ vi.stubGlobal(
   vi.fn(() => Promise.resolve({ width: 200, height: 200, close: vi.fn() })),
 );
 
+// jsdom has no CacheStorage; the save flow fire-and-forgets
+// updateBrandingCache, which rejects unhandled without this stub.
+vi.stubGlobal("caches", {
+  open: vi.fn().mockResolvedValue({
+    match: vi.fn().mockResolvedValue(undefined),
+    put: vi.fn().mockResolvedValue(undefined),
+    delete: vi.fn().mockResolvedValue(true),
+  }),
+  delete: vi.fn().mockResolvedValue(true),
+});
+
+// care-y-ignore-next-line mock-factory-unguarded -- component stub: single default export, passthrough cannot satisfy the component prop types
 vi.mock("$lib/shell/ShellSheet.svelte", async () => ({
   default: (
     await import("$lib/components/tickets/test-helpers/PassthroughShell.svelte")
   ).default,
 }));
 
+// care-y-ignore-next-line mock-factory-unguarded -- component stub: single default export, passthrough cannot satisfy the component prop types
 vi.mock("$lib/components/QueryError.svelte", async () => ({
   default: (
     await import("$lib/components/tickets/test-helpers/PassthroughShell.svelte")
   ).default,
 }));
 
-// --- Mock shell context ---
-vi.mock("$lib/shell/context.js", () => ({
+// vi.mock required: $state rune needs Svelte compiler pipeline.
+vi.mock("$lib/branding/title.svelte.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof BrandingTitle>()),
+  setBrandingTitle: mockSetBrandingTitle,
+  getBrandingTitle: vi.fn(() => "CARE-Y"),
+}));
+
+// vi.mock required: imports encryptClientBranding from @care-y/crypto,
+// which triggers libsodium WASM init on import.
+// care-y-ignore-next-line mock-factory-unguarded -- importOriginal would trigger libsodium WASM init via @care-y/crypto import
+vi.mock("$lib/branding/encrypt.js", () => ({
+  encryptLogoFile: vi.fn().mockResolvedValue("encrypted-logo-b64"),
+  buildClientBrandingBlob: vi.fn(() => "client-branding-blob"),
+}));
+
+// vi.mock required: imports encryptClientBranding from @care-y/crypto,
+// which triggers libsodium WASM init on import.
+// care-y-ignore-next-line mock-factory-unguarded -- importOriginal would trigger libsodium WASM init via @care-y/crypto import
+vi.mock("$lib/branding/icon-upload.js", () => ({
+  uploadPwaIcons: mockUploadPwaIcons,
+}));
+
+vi.mock("$lib/utils/org-slug.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof OrgSlug>()),
+  getOrgSlug: vi.fn(() => "test-org"),
+  DEV_ORG_SLUG: "test-org",
+}));
+
+// vi.mock required: createContext from Svelte 5 throws "missing_context"
+// outside a live component tree.
+vi.mock("$lib/shell/context.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof ShellContext>()),
   getScrollContainer: () => () => undefined,
   getTabbarOverrideCtx: () => ({ current: undefined }),
   getTabbarHiddenCtx: () => ({ current: false }),
@@ -267,10 +371,18 @@ function renderWithData(data?: Partial<BrandingData>): void {
   render(BrandingSection);
 }
 
+function renderWithError(): void {
+  mockIsLoading = false;
+  mockIsError = true;
+  mockBrandingData = undefined;
+  render(BrandingSection);
+}
+
 describe("BrandingSection", () => {
   beforeEach(() => {
     mockBrandingData = undefined;
     mockIsLoading = true;
+    mockIsError = false;
     vi.clearAllMocks();
   });
 
@@ -463,5 +575,227 @@ describe("BrandingSection", () => {
     ).toBeTruthy();
     expect(screen.getByText("Used for buttons and highlights.")).toBeTruthy();
     expect(screen.getByText("Shown on the client intake form.")).toBeTruthy();
+  });
+
+  it("renders error state when query fails", () => {
+    renderWithError();
+    // QueryError is replaced by PassthroughShell, which renders its children.
+    // The error state branch is exercised (not loading, isError = true).
+    const section = document.querySelector(".branding-section");
+    expect(section).toBeTruthy();
+    // Should not render the edit button (only shown in success state)
+    expect(screen.queryByRole("button", { name: /edit branding/i })).toBeNull();
+  });
+
+  it("saves color change and calls saveBrandingField with primary_color field", async () => {
+    renderWithData();
+
+    const editBtn = screen.getByRole("button", { name: /edit branding/i });
+    await fireEvent.click(editBtn);
+
+    const picker = document.querySelector(
+      'input[type="color"]',
+    ) as HTMLInputElement;
+    await fireEvent.input(picker, { target: { value: "#ff5500" } });
+
+    const saveBtn = screen.getByRole("button", { name: /save changes/i });
+    await fireEvent.click(saveBtn);
+
+    await vi.waitFor(() => {
+      expect(mockSaveBrandingField).toHaveBeenCalled();
+    });
+    const calls = mockSaveBrandingField.mock.calls as Array<
+      [{ field: string; encryptedValue: string }]
+    >;
+    const colorCall = calls.find((c) => c[0].field === "primary_color");
+    expect(colorCall).toBeTruthy();
+  });
+
+  it("saves accent color change with accent_color field", async () => {
+    renderWithData();
+
+    const editBtn = screen.getByRole("button", { name: /edit branding/i });
+    await fireEvent.click(editBtn);
+
+    // Second color picker is the accent
+    const pickers = document.querySelectorAll(
+      'input[type="color"]',
+    ) as NodeListOf<HTMLInputElement>;
+    const accentPicker = pickers[1];
+    expect(accentPicker).toBeTruthy();
+    await fireEvent.input(accentPicker!, { target: { value: "#00aa55" } });
+
+    const saveBtn = screen.getByRole("button", { name: /save changes/i });
+    await fireEvent.click(saveBtn);
+
+    await vi.waitFor(() => {
+      expect(mockSaveBrandingField).toHaveBeenCalled();
+    });
+    const calls = mockSaveBrandingField.mock.calls as Array<
+      [{ field: string; encryptedValue: string }]
+    >;
+    const accentCall = calls.find((c) => c[0].field === "accent_color");
+    expect(accentCall).toBeTruthy();
+  });
+
+  it("saves logo and triggers PWA icon upload on success", async () => {
+    canvasOutputBytes = 1024;
+    renderWithData();
+
+    const fileInput = document.querySelector(
+      'input[type="file"]',
+    ) as HTMLInputElement;
+    const file = new File([new ArrayBuffer(512)], "logo.png", {
+      type: "image/png",
+    });
+    await fireEvent.change(fileInput, { target: { files: [file] } });
+
+    // Wait for the rasterization to complete and preview to appear
+    await vi.waitFor(() => {
+      expect(
+        document.querySelector('img[alt="New logo preview"]'),
+      ).toBeTruthy();
+    });
+
+    const saveBtn = screen.getByRole("button", { name: /save changes/i });
+    await fireEvent.click(saveBtn);
+
+    await vi.waitFor(() => {
+      expect(mockSaveBrandingField).toHaveBeenCalled();
+    });
+    const calls = mockSaveBrandingField.mock.calls as Array<
+      [{ field: string }]
+    >;
+    const logoCall = calls.find((c) => c[0].field === "logo");
+    expect(logoCall).toBeTruthy();
+
+    // Per-call onSuccess triggers icon upload
+    await vi.waitFor(() => {
+      expect(mockUploadPwaIcons).toHaveBeenCalled();
+    });
+  });
+
+  it("updates branding title on successful save", async () => {
+    renderWithData({ encryptedClientText: btoa("Old Text") });
+
+    const editBtn = screen.getByRole("button", { name: /edit branding/i });
+    await fireEvent.click(editBtn);
+
+    const textarea = document.querySelector("textarea");
+    await fireEvent.change(textarea!, { target: { value: "New Text" } });
+
+    const saveBtn = screen.getByRole("button", { name: /save changes/i });
+    await fireEvent.click(saveBtn);
+
+    await vi.waitFor(() => {
+      expect(mockSetBrandingTitle).toHaveBeenCalled();
+    });
+  });
+
+  it("shows toast on save error", async () => {
+    mockSaveBrandingField.mockRejectedValue(new Error("save-failed"));
+    renderWithData({ encryptedClientText: btoa("Old Text") });
+
+    const editBtn = screen.getByRole("button", { name: /edit branding/i });
+    await fireEvent.click(editBtn);
+
+    const textarea = document.querySelector("textarea");
+    await fireEvent.change(textarea!, { target: { value: "New Text" } });
+
+    const saveBtn = screen.getByRole("button", { name: /save changes/i });
+    await fireEvent.click(saveBtn);
+
+    await vi.waitFor(() => {
+      expect(mockToastShow).toHaveBeenCalledWith(
+        "Could not save branding. Try again.",
+        3000,
+      );
+    });
+  });
+
+  it("shows accent swatch when accent color is a valid hex", () => {
+    renderWithData({
+      encryptedAccentColor: btoa("#22c55e"),
+    });
+    const swatch = screen.getByRole("img", {
+      name: /accent swatch #22c55e/i,
+    });
+    expect(swatch).toBeTruthy();
+    expect(swatch.style.background).toBe("rgb(34, 197, 94)");
+  });
+
+  it("renders decryption placeholder when primary color is encrypted but not yet decrypted", () => {
+    // encryptedPrimaryColor is set but the decrypt mock returns null
+    // for values that don't decode as valid hex (simulating pending decryption).
+    // Use a non-base64-decodable-to-hex value to hit the placeholder branch.
+    renderWithData({
+      encryptedPrimaryColor: btoa("pending"),
+    });
+    // The primary color display should not show a swatch (value is not a valid hex)
+    expect(screen.queryByRole("img", { name: /color swatch/i })).toBeNull();
+  });
+
+  it("shows client text when encryptedClientText is present", () => {
+    renderWithData({
+      encryptedClientText: btoa("Welcome to our support line."),
+    });
+    expect(screen.getByText("Welcome to our support line.")).toBeTruthy();
+  });
+
+  it("offers a nudge when accent color nears the care ochre", async () => {
+    renderWithData();
+
+    const editBtn = screen.getByRole("button", { name: /edit branding/i });
+    await fireEvent.click(editBtn);
+
+    // Second color picker is accent
+    const pickers = document.querySelectorAll(
+      'input[type="color"]',
+    ) as NodeListOf<HTMLInputElement>;
+    const accentPicker = pickers[1];
+    // #d4a53c is the konsta-palette suite's proven care-collision fixture.
+    await fireEvent.input(accentPicker!, { target: { value: "#d4a53c" } });
+
+    // Check for proximity notice
+    const notices = screen.getAllByRole("status");
+    expect(notices.length).toBeGreaterThan(0);
+  });
+
+  it("handles SVG logo upload through rasterization path", async () => {
+    canvasOutputBytes = 1024;
+    renderWithData();
+
+    const fileInput = document.querySelector(
+      'input[type="file"]',
+    ) as HTMLInputElement;
+    const svgContent = '<svg xmlns="http://www.w3.org/2000/svg"></svg>';
+    const file = new File([svgContent], "logo.svg", {
+      type: "image/svg+xml",
+    });
+    await fireEvent.change(fileInput, { target: { files: [file] } });
+
+    await vi.waitFor(() => {
+      expect(
+        document.querySelector('img[alt="New logo preview"]'),
+      ).toBeTruthy();
+    });
+    expect(document.querySelector('[role="alert"]')).toBeNull();
+  });
+
+  it("shows empty logo placeholder when no logo in sheet edit view", () => {
+    renderWithData({ encryptedLogo: null });
+    // The sheet is always rendered (PassthroughShell). The edit view
+    // shows an empty placeholder when no existing or new logo exists.
+    const emptyPlaceholder = document.querySelector(".logo-empty-sheet");
+    expect(emptyPlaceholder).toBeTruthy();
+  });
+
+  it("shows dash placeholder when no primary color is set", () => {
+    renderWithData({
+      encryptedPrimaryColor: null,
+      encryptedAccentColor: null,
+    });
+    // When no color data exists, a dash placeholder renders
+    expect(screen.getByText("-")).toBeTruthy();
   });
 });

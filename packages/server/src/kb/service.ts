@@ -12,7 +12,7 @@
  * at login.
  */
 
-import type { Kysely } from "kysely";
+import { sql, type Kysely } from "kysely";
 import type { TenantDatabase } from "../db/types.js";
 import { NotFoundError } from "../errors.js";
 import { ErrorCode } from "@care-y/shared";
@@ -435,37 +435,53 @@ export function createKBItemService(db: Kysely<TenantDatabase>): KBItemService {
       // --- Cursor keyset ---
       // Cursor format: "sortValue|id" where sortValue is ISO date or numeric rating.
       // The comparison operator flips based on sort direction.
+      const isDateSort = sortBy === "created_at" || sortBy === "updated_at";
+
       if (input.cursor !== undefined) {
         const pipeIdx = input.cursor.indexOf("|");
         if (pipeIdx > 0) {
           const cursorSortRaw = input.cursor.slice(0, pipeIdx);
           const cursorId = input.cursor.slice(pipeIdx + 1);
 
-          // For date columns, parse as Date. For rating, parse as number.
-          const cursorSortValue: Date | number =
-            sortBy === "rating"
-              ? Number(cursorSortRaw)
-              : new Date(cursorSortRaw);
-
           // "desc" pages forward with <, "asc" pages forward with >
           const op = sortDir === "desc" ? ("<" as const) : (">" as const);
 
-          query = query.where((eb) =>
-            eb.or([
-              eb(sortBy, op, cursorSortValue),
-              eb.and([
-                eb(sortBy, "=", cursorSortValue),
-                // Secondary sort by id always descending for stable ordering
-                eb("id", "<", cursorId),
+          if (isDateSort) {
+            const cursorDate = new Date(cursorSortRaw);
+            // Truncate DB timestamps to ms precision to match JS Date cursors.
+            // PG stores microseconds but JS Date only has millisecond resolution,
+            // so raw comparison can re-match items from the previous page.
+            const truncCol = sql<Date>`date_trunc('milliseconds', ${sql.ref(sortBy)})`;
+            query = query.where((eb) =>
+              eb.or([
+                eb(truncCol, op, cursorDate),
+                eb.and([
+                  eb(truncCol, "=", cursorDate),
+                  eb("id", "<", cursorId),
+                ]),
               ]),
-            ]),
-          );
+            );
+          } else {
+            const cursorNum = Number(cursorSortRaw);
+            query = query.where((eb) =>
+              eb.or([
+                eb(sortBy, op, cursorNum),
+                eb.and([eb(sortBy, "=", cursorNum), eb("id", "<", cursorId)]),
+              ]),
+            );
+          }
         }
       }
 
-      // Fetch limit + 1 to determine if there's a next page
+      // Fetch limit + 1 to determine if there's a next page.
+      // Date sorts use truncated ORDER BY matching the cursor precision.
       const rows = await query
-        .orderBy(sortBy, sortDir)
+        .orderBy(
+          isDateSort
+            ? sql`date_trunc('milliseconds', ${sql.ref(sortBy)})`
+            : sortBy,
+          sortDir,
+        )
         .orderBy("id", "desc")
         .limit(input.limit + 1)
         .execute();
