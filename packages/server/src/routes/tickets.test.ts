@@ -1826,25 +1826,67 @@ describe.skipIf(!process.env.DATABASE_URL)(
 
       it("excludes merged clients from search results", async () => {
         const { user, queueId } = await setupUserWithTicket();
-        const merged = await createTestClientFixture(tenantDb, { queueId });
-        const survivor = await createTestClientFixture(tenantDb, { queueId });
+        // Both clients get a ticket in the caller's queue, so queue scoping
+        // lets them through and the merge filter is the only thing left to
+        // exclude the merged one.
+        const merged = await createTestTicketFixture(tenantDb, { queueId });
+        const survivor = await createTestTicketFixture(tenantDb, { queueId });
         await tenantDb
           .updateTable("clients")
           .set({ merged_into: survivor.clientId })
           .where("id", "=", merged.clientId)
           .execute();
-        const mergedAlias = await tenantDb
+        const aliases = await tenantDb
+          .selectFrom("clients")
+          .select(["id", "alias"])
+          .where("id", "in", [merged.clientId, survivor.clientId])
+          .execute();
+        const mergedAlias = aliases.find((a) => a.id === merged.clientId)!;
+        const survivorAlias = aliases.find((a) => a.id === survivor.clientId)!;
+
+        const caller = createAuthedCaller(user);
+        expect(
+          await caller.tickets.searchClients({ query: mergedAlias.alias }),
+        ).toHaveLength(0);
+        // Control: the unmerged sibling is reachable through the same path.
+        expect(
+          await caller.tickets.searchClients({ query: survivorAlias.alias }),
+        ).toHaveLength(1);
+      });
+
+      it("hides clients whose tickets live in queues the volunteer is not assigned to", async () => {
+        const { user } = await setupUserWithTicket();
+        const foreign = await createTestTicketFixture(tenantDb);
+        const foreignAlias = await tenantDb
           .selectFrom("clients")
           .select("alias")
-          .where("id", "=", merged.clientId)
+          .where("id", "=", foreign.clientId)
           .executeTakeFirstOrThrow();
 
         const caller = createAuthedCaller(user);
         const results = await caller.tickets.searchClients({
-          query: mergedAlias.alias,
+          query: foreignAlias.alias,
         });
 
         expect(results).toHaveLength(0);
+      });
+
+      it("returns clients from every queue for admins", async () => {
+        const { user } = await setupUserWithTicket(RoleId.ADMIN);
+        const foreign = await createTestTicketFixture(tenantDb);
+        const foreignAlias = await tenantDb
+          .selectFrom("clients")
+          .select("alias")
+          .where("id", "=", foreign.clientId)
+          .executeTakeFirstOrThrow();
+
+        const caller = createAuthedCaller(user);
+        const results = await caller.tickets.searchClients({
+          query: foreignAlias.alias,
+        });
+
+        expect(results).toHaveLength(1);
+        expect(results[0]!.id).toBe(foreign.clientId);
       });
     });
 
